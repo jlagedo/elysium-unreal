@@ -31,7 +31,9 @@ when its consumer is built.
 `rules_tables`, `traiteffect` + `traiteffects000`, `clandoc000` + `npctemplate*`, `histories000`,
 the five `quests_*`, `experience_table`, `levelingtemplate_000`, `charcreatewizard` and
 `strings` + `strings_internal`, in
-`Source/ElysiumUE/Private/Substrate/ElysiumRulebook.{h,cpp}` behind `UElysiumRulebookSubsystem`
+`Source/ElysiumUE/Private/Substrate/ElysiumRulebook.{h,cpp}` — with the quest and
+charcreatewizard readers in `Substrate/ElysiumQuestTables.{h,cpp}` and
+`Substrate/ElysiumChargenWizard.{h,cpp}` beside it — behind `UElysiumRulebookSubsystem`
 (plus `dispositiontable.txt`, read separately by `FElysiumDispositionTable`). The row counts quoted
 below are asserted against the exported files by `Elysium.Content.Rulebook`, so a re-export that
 drifts is a test failure rather than a quietly smaller table. The remaining families have no

@@ -224,13 +224,17 @@ guards it.
 
 Entity class implementations: `ElysiumStarterClasses.cpp` (logic_auto/relay, triggers,
 `logic_pythoncheck`) over the shared `ElysiumTriggerBase.h` (`FElysiumTriggerBase`, the base every
-trigger leaf derives from), `ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case, env_fade,
-func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElysiumDoorBase`,
-`FElysiumFuncDoor`, `FElysiumButton`), `ElysiumSignClasses.cpp`, `ElysiumAmbientGeneric.cpp`,
-`ElysiumEventClasses.cpp`, `ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp`,
-`ElysiumItemClasses.{h,cpp}`
+trigger leaf derives from) and the shared keyfield-adder template `Substrate/ElysiumClassFields.h`,
+`ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case, env_fade,
+func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElysiumDoorBase` and the
+two `func_door` leaves) with `ElysiumButton.cpp`, `ElysiumElevator.cpp`, `ElysiumFuncRotating.cpp`
+and the manifest loader `ElysiumMoverSounds.cpp` beside it, `ElysiumSignClasses.cpp`, `ElysiumAmbientGeneric.cpp`,
+`ElysiumEventClasses.cpp`, `ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp` (the prop
+registration site over `ElysiumProp.{h,cpp}`, `ElysiumPropLeaves.{h,cpp}` and
+`ElysiumPhysProp.{h,cpp}`), `ElysiumItemClasses.{h,cpp}`
 (`FElysiumItem`/`FElysiumKeyring` — one registered class per `vdata/items` definition, installed at
-the rulebook's first `Items()` load; `FElysiumInventory` lives on the combat character),
+the rulebook's first `Items()` load; the loot container is `ElysiumItemContainer.{h,cpp}`, and
+`FElysiumInventory` lives on the combat character, implemented in `ElysiumInventory.cpp`),
 `ElysiumFeed.{h,cpp}` (the feed transaction and paired state machine on the combat character),
 `ElysiumChoreoScene.cpp`
 (`logic_choreographed_scene`, over the `.vcd` reader `ElysiumSceneData.{h,cpp}` and the event
@@ -313,7 +317,12 @@ pure-rules/engine-half split as `ElysiumCameraSolve.h`), `FElysiumViewState`. Ac
 fallbacks), `ElysiumPythonEntity.{h,cpp}`, `ElysiumScriptNatives.{h,cpp}`, `FElysiumScriptFS`,
 `ElysiumDlg.{h,cpp}`. Audio: `UElysiumAudioSubsystem` + `FElysiumSoundCache` +
 `FElysiumSoundSchemeManager` (every voice passes `elysium.Mute`, default 1, a gain multiplier).
-Shared readers: `ElysiumKeyValues.h`, `ElysiumRulebook.{h,cpp}`, `FElysiumSignData`.
+Shared readers: `ElysiumKeyValues.h`, `ElysiumRulebook.{h,cpp}` (the shared value types and the
+stats/feats/rules/trait-effects/clans/histories/experience/leveling/strings sections) with the
+per-section table libraries beside it — `ElysiumItemTable`, `ElysiumDiceTables`,
+`ElysiumQuestTables`, `ElysiumChargenWizard`, `ElysiumReactionTables`, `ElysiumStealthTables`,
+`ElysiumSoundVolumeTable`, `ElysiumDisciplineTargetTables`, all `{h,cpp}` under `Substrate/` over
+the shared loaders `ElysiumVdataLoad.{h,cpp}` — and `FElysiumSignData`.
 
 ## Debug layer (non-Shipping)
 
@@ -530,7 +539,7 @@ Hard-won, non-obvious, and easy to undo:
   `GetMeshObject()->GetReferenceToLocalMatrices()` (the last dynamic-data packet the render thread
   received), guarded by `HaveValidDynamicData()` — on the install frame the packet does not exist
   yet and the accessor dereferences it unchecked. The worked example is the green room's wield
-  tracking check (`ElysiumRenderedWield` in `Debug/ElysiumGreenRoomRun.cpp`).
+  tracking check (`ElysiumRenderedWield` in `Debug/ElysiumGreenRoomWield.cpp`).
 
 ## Build and test loop
 

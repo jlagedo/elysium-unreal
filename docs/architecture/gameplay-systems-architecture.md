@@ -358,7 +358,7 @@ rating to the victim roll.
 **Events:** none of its own. **Save:** the RNG stream state already rides the Session block.
 
 **Refactor:** new files only, plus the `FElysiumDiceTable` loader in
-`ElysiumRulebook.{h,cpp}`. Roadmap 9.6.
+`ElysiumDiceTables.{h,cpp}`. Roadmap 9.6.
 
 ### 5.2 Inventory and items
 
@@ -751,11 +751,11 @@ roadmap task:
 
 | # | Refactor | Where | Owner |
 |---|---|---|---|
-| 1 | `item_container*` rows move from body-only props to combat-character containers; touch-pickup ingress and player drop; `trigger_inventory_check`; `TravelsWithPlayer()` absent set | `Substrate/ElysiumPropClasses.cpp`, `Substrate/ElysiumItemClasses.{h,cpp}` | 9.8 |
+| 1 | `item_container*` rows move from body-only props to combat-character containers; touch-pickup ingress and player drop; `trigger_inventory_check`; `TravelsWithPlayer()` absent set | `Substrate/ElysiumPropClasses.cpp`, `Substrate/ElysiumItemContainer.{h,cpp}` | 9.8 |
 | 2 | Barter/loot transfer service; retire the `StartBarter` native stub and the `BarterBegin`/`End` pending inputs | `Scripting/ElysiumScriptNatives.cpp`, new barter service | 9.8/9.10 |
 | 3 | Real `React`/`SetExpression` bodies over the reaction score, and the dialogue consumer that reads it | `Scripting/ElysiumScriptNatives.cpp`, `Scripting/ElysiumDlg.{h,cpp}` | 9.9 |
-| 4 | `FElysiumTerminal`/`FElysiumPropHacking`; terminals leave the model-only prop table | `Substrate/ElysiumSkillClasses.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.4 |
-| 5 | A runtime prop `SetModel` derives its stem with `PropModelStem`, not the basename (the same defect the item side fixed) | `Substrate/ElysiumPropClasses.cpp` | props lane |
+| 4 | `FElysiumTerminal`/`FElysiumPropHacking`; terminals leave the model-only prop table | `Substrate/ElysiumTerminal.{h,cpp}`, `ElysiumPropClasses.cpp` | 13.4 |
+| 5 | A runtime prop `SetModel` derives its stem with `PropModelStem`, not the basename (the same defect the item side fixed) | `Substrate/ElysiumProp.{h,cpp}` | props lane |
 | 6 | Carry authored MDL animation events through the character bake so `OnFeedAnimEvent` and the weapon controller's contact commit bind real notifies instead of the scheduler | pipeline character export/bake, `UElysiumAnimSubsystem` | animation lane |
 
 Nothing in the ledger adds a dispatcher, a clock, an input owner, or a save path — each row is
