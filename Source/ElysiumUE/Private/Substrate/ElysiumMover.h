@@ -24,6 +24,16 @@
 class UElysiumBrushComponent;
 class FElysiumLockableEntity;
 
+// The one log category the mover family writes on. Declared here rather than defined per-file
+// because the family is split across `ElysiumMover.cpp`, `ElysiumElevator.cpp` and
+// `ElysiumMoverSounds.cpp`, and one `LogElysiumMover` filter shows the whole mover story.
+// `ElysiumMover.cpp` owns the definition.
+DECLARE_LOG_CATEGORY_EXTERN(LogElysiumMover, Log, All);
+
+// Source keyvalues (speed, lip, distance-as-inches) are raw Source inches; the exporter emits
+// geometry in cm (the UE_ convention). Linear travel must convert; angular (degrees) does not.
+inline constexpr float MoverInchToCm = 2.54f;
+
 // The CBaseToggle constant-velocity mover. Not a registered class — a pure-C++ base the door/
 // button/rotating families derive from. Drives the entity's Body transform; a bodiless mover is
 // inert (nothing to move).
