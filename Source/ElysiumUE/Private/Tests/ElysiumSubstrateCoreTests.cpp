@@ -161,6 +161,64 @@ bool FElysiumVariantTest::RunTest(const FString&)
 	return true;
 }
 
+// =====================================================================================
+// logic_pythoncheck's gate truthiness — the retail integer-only rule (RE C073/C079).
+//
+// Retail's `logic_pythoncheck` (vampire.dll FUN_10135290) decides truth by an exact
+// `ob_type == PyInt_Type` + `PyInt_AsLong` test, NOT a generic `PyObject_IsTrue`. So a result
+// is TRUE only when it is a Python integer with a non-zero value; any non-integer result — a
+// non-empty string, a list (repr'd to a String by our marshaller), even the float `1.0` — is
+// FALSE, exactly where generic truthiness (`ToBool`) would call it TRUE. Our marshaller records
+// retail's comparison-produced PyInt as either Bool (a Python bool) or Int, so both count.
+// `FElysiumVariant::IsPythonCheckTrue` owns the rule; this pins it and the divergence from
+// `ToBool` so a later "just use ToBool" cannot regress it silently.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPythonCheckTruthinessTest,
+	"Elysium.Substrate.PythonCheckTruthiness", GElysiumTestFlags)
+bool FElysiumPythonCheckTruthinessTest::RunTest(const FString&)
+{
+	// The only TRUE cases: an integer-category value that is non-zero (retail's PyInt path).
+	TestTrue(TEXT("Int(1) gates TRUE"), FElysiumVariant::Int(1).IsPythonCheckTrue());
+	TestTrue(TEXT("Int(-1) gates TRUE"), FElysiumVariant::Int(-1).IsPythonCheckTrue());
+	TestTrue(TEXT("Bool(true) gates TRUE (retail comparison PyInt 1)"),
+		FElysiumVariant::Bool(true).IsPythonCheckTrue());
+
+	// Zero integers are FALSE (both category members).
+	TestFalse(TEXT("Int(0) gates FALSE"), FElysiumVariant::Int(0).IsPythonCheckTrue());
+	TestFalse(TEXT("Bool(false) gates FALSE"), FElysiumVariant::Bool(false).IsPythonCheckTrue());
+
+	// Void (no host / error-to-false / evaluated to None) is FALSE.
+	TestFalse(TEXT("Void gates FALSE"), FElysiumVariant::Void().IsPythonCheckTrue());
+
+	// The divergence from generic truthiness: every non-integer result is FALSE under the retail
+	// gate even though ToBool would call it TRUE. Float 1.0 is the canonical trap.
+	const FElysiumVariant FloatOne = FElysiumVariant::Float(1.0f);
+	TestFalse(TEXT("Float(1.0) gates FALSE (non-integer)"), FloatOne.IsPythonCheckTrue());
+	TestTrue(TEXT("...but ToBool would call Float(1.0) TRUE"), FloatOne.ToBool());
+
+	const FElysiumVariant NonEmptyStr = FElysiumVariant::String(TEXT("open"));
+	TestFalse(TEXT("non-empty String gates FALSE"), NonEmptyStr.IsPythonCheckTrue());
+	TestTrue(TEXT("...but ToBool would call a non-empty String TRUE"), NonEmptyStr.ToBool());
+
+	// A Python list result marshals to a repr String — still a non-integer, still FALSE.
+	const FElysiumVariant ListRepr = FElysiumVariant::String(TEXT("[1, 2, 3]"));
+	TestFalse(TEXT("list-repr String gates FALSE"), ListRepr.IsPythonCheckTrue());
+
+	// Empty string is FALSE under both rules (agreement case, kept as a guard).
+	TestFalse(TEXT("empty String gates FALSE"), FElysiumVariant::String(TEXT("")).IsPythonCheckTrue());
+
+	const FElysiumVariant NonZeroVec = FElysiumVariant::Vector(FVector(1, 0, 0));
+	TestFalse(TEXT("non-zero Vector gates FALSE"), NonZeroVec.IsPythonCheckTrue());
+	TestTrue(TEXT("...but ToBool would call a non-zero Vector TRUE"), NonZeroVec.ToBool());
+
+	const FElysiumVariant SetHandle = FElysiumVariant::Handle(FElysiumEntityHandle(0, 1));
+	TestFalse(TEXT("bound Handle gates FALSE"), SetHandle.IsPythonCheckTrue());
+	TestTrue(TEXT("...but ToBool would call a bound Handle TRUE"), SetHandle.ToBool());
+
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSignDismissPolicyTest,
 	"Elysium.Substrate.SignDismissPolicy", GElysiumTestFlags)
 bool FElysiumSignDismissPolicyTest::RunTest(const FString&)

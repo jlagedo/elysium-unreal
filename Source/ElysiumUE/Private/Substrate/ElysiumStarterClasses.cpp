@@ -782,8 +782,11 @@ private:
 // ============================================================================================
 // logic_pythoncheck (P5 5.4) — a Python expression gate (51 game-wide). Its `python_script`
 // keyvalue is an expression (e.g. `G.Story_State < 110`); the `Test` input evaluates it and fires
-// OnTrue when the result is truthy, OnFalse otherwise — the standard VtMB branch node
-// (FUN_10135290, entity_io.md / python_bridge.md). Evaluation runs through the world's script host
+// OnTrue only when the result is a non-zero Python integer, OnFalse otherwise — the standard VtMB
+// branch node (FUN_10135290, entity_io.md / python_bridge.md). Retail decides truth by an exact
+// `ob_type == PyInt_Type` + `PyInt_AsLong` test, not general truthiness, so a non-integer result
+// (a non-empty string, a list, even the float 1.0) reads OnFalse (RE C073/C079); the truthiness
+// itself lives in FElysiumVariant::IsPythonCheckTrue. Evaluation runs through the world's script host
 // (EvalCondition), so error-to-false (a raise / an unresolved name) reads OnFalse, and disabling
 // live eval (`elysium.script.live 0`) makes every gate fail closed — matching retail's Py_eval_input
 // path. The incoming activator is propagated onto the fired branch (Source I/O convention).
@@ -805,7 +808,11 @@ public:
 
 		const FElysiumVariant R = World ? World->EvalCondition(PythonScript, Handle, Activator)
 			: FElysiumVariant::Void();
-		bLastResult = R.ToBool();   // Void (no host / error-to-false) -> false -> OnFalse
+		// Retail's gate (FUN_10135290) is TRUE only for a non-zero Python integer, not general
+		// truthiness: a non-integer result (string, list, float 1.0) reads OnFalse. A well-formed
+		// non-integer is an ordinary FALSE, not a failure — the host already logs any raise, and
+		// Void (no host / error-to-false) also lands here as OnFalse.
+		bLastResult = R.IsPythonCheckTrue();
 		bEverTested = true;
 		FireOutput(bLastResult ? OnTrue : OnFalse, Activator);
 	}

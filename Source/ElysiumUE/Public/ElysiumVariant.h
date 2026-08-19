@@ -61,9 +61,10 @@ struct FElysiumVariant
 	bool IsVector() const { return Type == EElysiumVariantType::Vector; }
 	bool IsHandle() const { return Type == EElysiumVariantType::Handle; }
 
-	// Python truthiness (drives logic_pythoncheck OnTrue/OnFalse; Void -> false is
-	// error-to-false). Objects are truthy in Python, so a Vector is true unless zero and
-	// a Handle is true unless unbound; scalars follow C truthiness.
+	// Generic Python truthiness (`PyObject_IsTrue` shaped; Void -> false is error-to-false).
+	// Objects are truthy in Python, so a Vector is true unless zero and a Handle is true unless
+	// unbound; scalars follow C truthiness. This is NOT the logic_pythoncheck gate rule — that
+	// leaf is stricter (see IsPythonCheckTrue); use this for the general truthiness callers.
 	bool ToBool() const
 	{
 		switch (Type)
@@ -75,6 +76,27 @@ struct FElysiumVariant
 		case EElysiumVariantType::Vector: return !AsVector.IsNearlyZero();
 		case EElysiumVariantType::Handle: return AsHandle.IsSet();
 		default:                          return false; // Void
+		}
+	}
+
+	// logic_pythoncheck's retail gate truthiness (vampire.dll `FUN_10135290`): the evaluated
+	// result is TRUE only when it is a Python **integer** with a non-zero value. That function
+	// tests `ob_type == PyInt_Type` then `PyInt_AsLong` — so any non-integer result (a non-empty
+	// string, a list, even the float `1.0`) is FALSE, where the generic `PyObject_IsTrue`/`ToBool`
+	// above would call it TRUE. A VtMB comparison gate (`G.Story_State < 110`, the common case)
+	// produced that PyInt in retail's Python; our marshaller records the same integer answer as
+	// either Bool (a Python bool, `PyBool_Check`) or Int, so both integer-category types count here
+	// while Float/String/Vector/Handle/Void (error-to-false included) read OnFalse. (Retail's test is
+	// the exact `ob_type == PyInt_Type`, which a `PyLong` would fail; our marshaller folds `PyLong`
+	// into Int, but the authored gates only ever produce small comparison ints, so this cannot
+	// diverge on the corpus.) See docs/vtmb/python_bridge.md and the RE claim rows C073/C079.
+	bool IsPythonCheckTrue() const
+	{
+		switch (Type)
+		{
+		case EElysiumVariantType::Bool:   return AsBool;
+		case EElysiumVariantType::Int:    return AsInt != 0;
+		default:                          return false; // Float/String/Vector/Handle/Void
 		}
 	}
 
