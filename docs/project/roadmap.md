@@ -308,9 +308,11 @@ The ladder:
   on every stop path, with the verdict on the selection record, the Cog row and the MCP surfaces;
   the equip funnels landed: `wieldmodel_m`/`wieldmodel_f`/`anim_prefix` parse onto
   `FElysiumItemDef` and one transaction path attaches on equip and detaches on holster for NPC
-  and player alike, selecting on the wielder's `IsMale`; visibility and weapon-state animation
-  open, and the rung's real-input draw acceptance depends on 9.8's draw input (no shipped item
-  authors `is_wieldable`, so only 9.8's hotbar reaches `SetActiveWeapon` from input).
+  and player alike, selecting on the wielder's `IsMale`; visibility landed: the pawn suppresses
+  the drawn weapon's rendering with the body's own camera draw policy, never touching the
+  attachment; weapon-state animation open, and the rung's real-input draw acceptance depends on
+  9.8's draw input (no shipped item authors `is_wieldable`, so only 9.8's hotbar reaches
+  `SetActiveWeapon` from input).
 - [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — the body-kind chain
   discriminator and the retirement of `PlayNpcActivity` as a second clip picker, then
   flinch/knockback/death, blocked/paired rules, the restart rule, the sequence-event carrier.

@@ -102,6 +102,8 @@
 #include "Components/SceneComponent.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Visual/ElysiumNpcVisual.h"
 #include "Components/DirectionalLightComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
@@ -1364,6 +1366,107 @@ bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 		Pawn->GetActorRotation().Equals(FRotator(0.f, ViewRotation.Yaw, 0.f)));
 
 	MapActor->Destroy();
+	return true;
+}
+
+// LIFE4 "Visibility": the world weapon submits or not by the camera's own gate
+// (`FElysiumCameraDrawPolicy::bWorldWeaponEligible`, published as `FElysiumCameraView::bDrawWorldWeapon`),
+// suppression-only — the attachment, its leader pose and its model survive the toggle in both
+// directions, and an NPC body never consults the local player's camera policy at all.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPawnWieldVisibilityTest,
+	"Elysium.Substrate.PawnWieldVisibility", GElysiumTestFlags)
+bool FElysiumPawnWieldVisibilityTest::RunTest(const FString&)
+{
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game)
+		|| !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	AElysiumPawn* Pawn = World ? World->SpawnActor<AElysiumPawn>(
+		FVector(0.f, 0.f, ElysiumMove::StandHeight * 0.5f), FRotator::ZeroRotator) : nullptr;
+	if (!TestNotNull(TEXT("wield-visibility fixture pawn spawned"), Pawn))
+	{
+		return false;
+	}
+
+	// A minimal stand-in for the player body InstallWieldModel's real callers build: no baked mesh
+	// is needed to prove a hidden-flag decision, only the leader-pose relationship and the tag
+	// `ElysiumNpcVisual::FindWieldModel` walks.
+	USkeletalMeshComponent* Visual = NewObject<USkeletalMeshComponent>(Pawn, TEXT("Visual"));
+	Visual->SetupAttachment(Pawn->GetRootComponent());
+	Visual->RegisterComponent();
+	Pawn->SetPlayerVisual(Visual);
+
+	USkeletalMeshComponent* Wield = NewObject<USkeletalMeshComponent>(Pawn, TEXT("Wield"));
+	Wield->ComponentTags.Add(ElysiumNpcVisual::WieldComponentTag());
+	Wield->SetupAttachment(Visual);
+	Wield->RegisterComponent();
+	Wield->AttachToComponent(Visual, FAttachmentTransformRules::SnapToTargetIncludingScale);
+	Wield->SetLeaderPoseComponent(Visual);
+
+	FElysiumCameraDrawPolicy Policy;
+	Policy.bThirdPerson = true;
+	Policy.bBodyEligible = true;
+	Policy.BodyAlpha = 1.0f;
+	Policy.bWorldWeaponEligible = true;
+	Pawn->ApplyDrawPolicy(Policy);
+
+	TestFalse(TEXT("eligible in third person: the weapon submits"), Wield->bHiddenInGame);
+	TestTrue(TEXT("the attachment is the same component found before any toggle"),
+		ElysiumNpcVisual::FindWieldModel(Visual) == Wield);
+
+	Policy.bThirdPerson = false;
+	Policy.bBodyEligible = false;
+	Policy.BodyAlpha = 0.0f;
+	Policy.bWorldWeaponEligible = false;
+	Pawn->ApplyDrawPolicy(Policy);
+
+	TestTrue(TEXT("ineligible in first person: submission is suppressed"), Wield->bHiddenInGame);
+	TestTrue(TEXT("suppression never destroys or detaches the attachment"),
+		ElysiumNpcVisual::FindWieldModel(Visual) == Wield);
+	TestTrue(TEXT("the leader-pose relationship survives suppression"),
+		Wield->LeaderPoseComponent.Get() == Visual);
+
+	Policy.bThirdPerson = true;
+	Policy.bBodyEligible = true;
+	Policy.BodyAlpha = 1.0f;
+	Policy.bWorldWeaponEligible = true;
+	Pawn->ApplyDrawPolicy(Policy);
+
+	TestFalse(TEXT("eligible again: the same component resumes drawing, not a rebuilt one"),
+		Wield->bHiddenInGame);
+	TestTrue(TEXT("still the identical attachment"),
+		ElysiumNpcVisual::FindWieldModel(Visual) == Wield);
+
+	// An NPC body sits on its own actor with its own wield model and is never reached by the
+	// player pawn's draw policy: `RefreshBodyVisibility` only ever looks at its own `PlayerVisual`.
+	AActor* NpcOwner = World->SpawnActor<AActor>();
+	USceneComponent* NpcRoot = NewObject<USceneComponent>(NpcOwner, TEXT("NpcRoot"));
+	NpcOwner->SetRootComponent(NpcRoot);
+	NpcRoot->RegisterComponent();
+	USkeletalMeshComponent* NpcBody = NewObject<USkeletalMeshComponent>(NpcOwner, TEXT("NpcBody"));
+	NpcBody->SetupAttachment(NpcRoot);
+	NpcBody->RegisterComponent();
+	USkeletalMeshComponent* NpcWield = NewObject<USkeletalMeshComponent>(NpcOwner, TEXT("NpcWield"));
+	NpcWield->ComponentTags.Add(ElysiumNpcVisual::WieldComponentTag());
+	NpcWield->SetupAttachment(NpcBody);
+	NpcWield->RegisterComponent();
+	NpcWield->AttachToComponent(NpcBody, FAttachmentTransformRules::SnapToTargetIncludingScale);
+	NpcWield->SetLeaderPoseComponent(NpcBody);
+	NpcWield->SetHiddenInGame(false);
+
+	Policy.bThirdPerson = false;
+	Policy.bBodyEligible = false;
+	Policy.BodyAlpha = 0.0f;
+	Policy.bWorldWeaponEligible = false;
+	Pawn->ApplyDrawPolicy(Policy);
+
+	TestFalse(TEXT("an NPC's wield model never consults the local player's camera policy"),
+		NpcWield->bHiddenInGame);
+
 	return true;
 }
 

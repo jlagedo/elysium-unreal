@@ -239,6 +239,18 @@ void AElysiumPawn::RefreshBodyVisibility()
 			PlayerVisual->bResetAfterTeleport = true;
 		}
 	}
+
+	// The world weapon submits by its own camera-derived gate (`FElysiumCameraView::bDrawWorldWeapon`
+	// upstream), ANDed with the same entity-hidden override the body above answers to — a dead or
+	// script-hidden player draws no weapon either, for the same reason it draws no body. Found fresh
+	// each call rather than cached: equip/holster rebuilds this component under whatever pointer a
+	// caller already held (`ElysiumNpcVisual::FindWieldModel`'s own contract). Only the hidden flag
+	// moves — the attachment, its leader pose and its model are untouched, so the frame the weapon
+	// becomes eligible again resumes the existing visual state rather than being reattached or rebuilt.
+	if (USkeletalMeshComponent* const Wield = ElysiumNpcVisual::FindWieldModel(PlayerVisual))
+	{
+		Wield->SetHiddenInGame(!(DrawPolicy.bWorldWeaponEligible && !bEntityHidden));
+	}
 }
 
 void AElysiumPawn::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)

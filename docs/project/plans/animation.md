@@ -28,9 +28,6 @@ binding metadata are `docs/architecture/wielded-weapon-integration.md`; the corp
 working tree (leader-pose follower, `(classname, sex)` resolution, the green-room `gr_wield`
 lane); what remains is making it *true*:
 
-- **Visibility.** Consume `FElysiumCameraView::bDrawWorldWeapon` (published, currently
-  reader-less): suppress submission only — never destroy the attachment or clear a model to
-  hide it.
 - **Weapon-state animation.** Draw/holster, per-weapon idle/walk translation and the aim/attack
   layer families arm through the table-declared hosts (LIFE2's tables, LIFE0's host rule), so a
   drawn weapon changes how the body stands and moves, not only what the hand holds. This rung makes
