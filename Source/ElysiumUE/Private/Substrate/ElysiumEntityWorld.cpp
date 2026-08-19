@@ -1332,14 +1332,14 @@ void FElysiumEntityWorld::AddEvent(FElysiumIOEvent&& Event)
 	const double Now = NowSeconds();
 
 	// Retail's backward-clock guard: an enqueue at a curtime below the last one observed shifts the
-	// new deadline forward by the rewind plus 0.01 rather than landing spuriously in the past
-	// (`docs/vtmb/game_runtime.md` → "Queue service order, recursion and starvation"). Applied here
-	// because this is the one enqueue every producer funnels through; the restore path uses
-	// AddRestored and is deliberately outside it.
+	// new deadline forward by the rewind plus 0.005 rather than landing spuriously in the past
+	// (`vampire.dll FUN_100ce210`, epsilon qword at 0x10454050; `docs/vtmb/game_runtime.md` → "Queue
+	// service order, recursion and starvation"). Applied here because this is the one enqueue every
+	// producer funnels through; the restore path uses AddRestored and is deliberately outside it.
 	const double LastEnqueue = EventQueue.LastEnqueueValue();
 	if (Now < LastEnqueue)
 	{
-		Event.FireTime += (LastEnqueue - Now) + 0.01;
+		Event.FireTime += (LastEnqueue - Now) + 0.005;
 	}
 	EventQueue.SetLastEnqueue(Now);
 

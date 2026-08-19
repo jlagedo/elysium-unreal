@@ -439,6 +439,76 @@ bool FElysiumQueueDrainOrderTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBackwardClockGuardTest,
+	"Elysium.Substrate.BackwardClockGuard", GElysiumTestFlags)
+bool FElysiumBackwardClockGuardTest::RunTest(const FString&)
+{
+	using namespace ElysiumEventOrderTests;
+
+	// Retail's backward-clock guard (`vampire.dll FUN_100ce210`; epsilon qword at 0x10454050 == 0.005;
+	// `docs/vtmb/game_runtime.md` → "Queue service order, recursion and starvation"). The world's
+	// AddEvent chokepoint remembers the curtime of the last enqueue; when a new event is enqueued at a
+	// curtime BELOW that (a rewound clock), it shifts the new deadline forward by the rewind amount plus
+	// this fixed epsilon, so an event cannot land spuriously in the past and equal-time ordering stays
+	// stable. The shift is (LastEnqueue - Now) + epsilon, so for a zero-delay enqueue the resulting
+	// deadline is exactly LastEnqueue + epsilon — independent of how far the clock was rewound, which is
+	// what pins the epsilon on its own. This is the C026 guard specifically: it triggers ONLY on a
+	// backward clock and its magnitude is the rewind plus 0.005 — distinct from logic_relay's re-fire
+	// lockout (its own separate 0.001) and from any zero-delay drain guard.
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__backward_clock_guard__");
+	Defs.Defs.Add(Counter(TEXT("seed")));    // inert deadline targets; nothing is ever delivered to them
+	Defs.Defs.Add(Counter(TEXT("probe")));
+
+	FElysiumEntityWorld World(nullptr, nullptr);
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	// The FireTime of the single pending event addressed at a given target, or -1 if none is queued.
+	auto PendingFireTime = [&World](const TCHAR* Target) -> double
+	{
+		for (const FElysiumIOEvent& Ev : World.Queue().Pending())
+		{
+			if (Ev.Target == Target)
+			{
+				return Ev.FireTime;
+			}
+		}
+		return -1.0;
+	};
+
+	// --- Forward clock: no shift ------------------------------------------------------------
+	// Advance the substrate clock to t=10 (headless world: NowSeconds() reads the last ticked time) and
+	// enqueue a zero-delay event through the real chokepoint. LastEnqueue starts at 0, so 10 is not
+	// below it: the deadline is the plain curtime, unshifted, and the watermark advances to 10.
+	World.Tick(10.0);
+	World.EnqueueInput(TEXT("seed"), FName(TEXT("Add")), FElysiumVariant::Void(),
+		/*Delay*/ 0.0, FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+	TestEqual(TEXT("a forward-clock enqueue takes the plain curtime, no shift"),
+		PendingFireTime(TEXT("seed")), 10.0);
+	TestEqual(TEXT("the last-enqueue watermark advanced to that curtime"),
+		World.Queue().LastEnqueueValue(), 10.0);
+
+	// --- Backward clock: shift by the rewind plus the retail epsilon ------------------------
+	// Rewind the clock to t=5 with the t=10 event still pending (not yet due), then enqueue another
+	// zero-delay event. Now (5) is below LastEnqueue (10), so the guard fires and pushes the deadline to
+	// 5 + (10 - 5) + epsilon == 10 + epsilon. Retail's epsilon is 0.005.
+	World.Tick(5.0);
+	World.EnqueueInput(TEXT("probe"), FName(TEXT("Add")), FElysiumVariant::Void(),
+		/*Delay*/ 0.0, FElysiumEntityHandle::Invalid(), FElysiumEntityHandle::Invalid());
+
+	const double RetailEpsilon = 0.005;   // vampire.dll 0x10454050 (research/.../claim-verification.md C026)
+	const double Probe = PendingFireTime(TEXT("probe"));
+	TestEqual(TEXT("a rewound-clock enqueue is shifted to LastEnqueue + the retail 0.005 epsilon"),
+		Probe, 10.0 + RetailEpsilon);
+	// The pre-fix constant was 0.01; it and 0.005 differ by 0.005. Assert well inside that gap so this
+	// pins the exact epsilon rather than merely "shifted forward by something".
+	TestTrue(TEXT("the shift is the 0.005 guard, not the 0.01 it must not be"),
+		FMath::Abs(Probe - (10.0 + 0.01)) > 0.002);
+
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRecordServiceOrderTest,
 	"Elysium.Substrate.RecordServiceOrder", GElysiumTestFlags)
 bool FElysiumRecordServiceOrderTest::RunTest(const FString&)
