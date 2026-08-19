@@ -553,11 +553,6 @@ private:
 
 	// ---------------------------------------------------------------------------------------------
 
-	// One motor sample written back into the entity. The motor is the physical authority while it
-	// holds a request: its feet/yaw land straight on Origin/Angles rather than through
-	// SetRuntimeOrigin, which would teleport the body back. Callers guarantee a motor.
-	EElysiumNpcMoveStatus SampleMotorIntoEntity();
-
 	// A suspended patrol route comes back with a fresh generation, so the leaf's own token is
 	// re-stamped wherever a release hands the body back to the route.
 	void RestampPatrolToken();

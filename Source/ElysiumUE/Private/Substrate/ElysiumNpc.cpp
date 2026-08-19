@@ -374,23 +374,6 @@ void FElysiumNpc::RestampPatrolToken()
 	}
 }
 
-EElysiumNpcMoveStatus FElysiumNpc::SampleMotorIntoEntity()
-{
-	FVector Feet = Origin;
-	float Yaw = -Angles.Y;
-	const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
-	// The motor is the physical authority while it holds a request. Its feet/yaw are written
-	// straight into the entity rather than through SetRuntimeOrigin, which would teleport the
-	// body back.
-	Origin = Feet;
-	Angles.Y = -Yaw;
-	if (World)
-	{
-		World->NotifyVisualChanged(*this);
-	}
-	return Status;
-}
-
 bool FElysiumNpc::AcquireSequenceBody(const TCHAR* Reason)
 {
 	// A pushed scripted order is DROPPED rather than parked, for the same reason dialogue drops it:

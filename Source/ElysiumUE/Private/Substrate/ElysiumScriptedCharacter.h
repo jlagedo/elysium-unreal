@@ -53,6 +53,11 @@ protected:
 
 	EElysiumScriptMove BeginScriptFacing(double Now);
 
+	// One motor sample written back into the entity. The motor is the physical authority while it
+	// holds a request: its feet/yaw land straight on Origin/Angles rather than through
+	// SetRuntimeOrigin, which would teleport the body back. Callers guarantee a motor.
+	EElysiumNpcMoveStatus SampleMotorIntoEntity();
+
 	IElysiumNpcMotor* Motor = nullptr;
 	EScriptPhase ScriptPhase = EScriptPhase::None;
 	FVector ScriptMark = FVector::ZeroVector;

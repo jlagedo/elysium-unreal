@@ -110,6 +110,23 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 	return true;
 }
 
+EElysiumNpcMoveStatus FElysiumScriptedCharacter::SampleMotorIntoEntity()
+{
+	FVector Feet = Origin;
+	float Yaw = -Angles.Y;
+	const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
+	// The motor is the physical authority while it holds a request. Its feet/yaw are written
+	// straight into the entity rather than through SetRuntimeOrigin, which would teleport the
+	// body back.
+	Origin = Feet;
+	Angles.Y = -Yaw;
+	if (World)
+	{
+		World->NotifyVisualChanged(*this);
+	}
+	return Status;
+}
+
 EElysiumScriptMove FElysiumScriptedCharacter::AdvanceScriptMove()
 {
 	if (ScriptPhase == EScriptPhase::None)
@@ -124,15 +141,7 @@ EElysiumScriptMove FElysiumScriptedCharacter::AdvanceScriptMove()
 
 	const double Now = World ? World->NowSeconds() : 0.0;
 	ScriptWatchdogAt = Now + ElysiumNpcGait::ScriptWatchdogSeconds;
-	FVector Feet = Origin;
-	float Yaw = -Angles.Y;
-	const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
-	Origin = Feet;
-	Angles.Y = -Yaw;
-	if (World)
-	{
-		World->NotifyVisualChanged(*this);
-	}
+	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
 
 	if (ScriptPhase == EScriptPhase::Facing)
 	{
