@@ -30,6 +30,7 @@
 #include "ElysiumSaveArchive.h"        // Cycle 11b — the block's one field list
 #include "ElysiumSheetSlots.h"
 #include "Substrate/ElysiumDamage.h"
+#include "Substrate/ElysiumDisciplineTargetTables.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumLaw.h"      // Cycle 10b — the law channels the commit writes through
 #include "Substrate/ElysiumNpc.h"      // Cycle 11b — the `AI_Schedule` channel's one door

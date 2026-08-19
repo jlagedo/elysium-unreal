@@ -36,6 +36,7 @@
 #include "ElysiumUserCmd.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumDiceTables.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumLaw.h"        // Cycle 10b — the pulse / interrupt law producers
 #include "Substrate/ElysiumNpc.h"        // Cycle 10c — the victim's law observation windows

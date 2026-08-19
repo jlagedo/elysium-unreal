@@ -1,7 +1,7 @@
 #include "Substrate/ElysiumDice.h"
 
 #include "ElysiumRng.h"
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumDiceTables.h"
 
 FString FElysiumRollResult::Describe() const
 {

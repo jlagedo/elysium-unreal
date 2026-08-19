@@ -71,6 +71,7 @@
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumMover.h"
 #include "Substrate/ElysiumQuestLog.h"
+#include "Substrate/ElysiumQuestTables.h"
 #include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumRelationships.h"
 #include "Substrate/ElysiumSkillClasses.h"

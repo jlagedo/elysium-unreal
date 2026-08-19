@@ -17,9 +17,9 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumPlayerBody.h"
 #include "Substrate/ElysiumItemClasses.h"   // Inventory.Active() is read for its classname
+#include "Substrate/ElysiumItemTable.h"   // FElysiumItemDef — the drawn weapon's own policy record
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcConditions.h"
-#include "Substrate/ElysiumRulebook.h"   // FElysiumItemDef — the drawn weapon's own policy record
 #include "Substrate/ElysiumSchedule.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumFacialRig.h"

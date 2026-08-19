@@ -28,7 +28,8 @@
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemClasses.h"
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumSoundVolumeTable.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumTestServices.h"
 

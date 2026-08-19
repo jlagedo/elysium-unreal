@@ -1,7 +1,7 @@
 #include "Substrate/ElysiumGameSound.h"
 
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U — the one units conversion
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumSoundVolumeTable.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumGameSound, Log, All);
 

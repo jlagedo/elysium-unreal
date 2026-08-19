@@ -22,6 +22,7 @@
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "ElysiumViewState.h"
 #include "Substrate/ElysiumWeaponClasses.h"

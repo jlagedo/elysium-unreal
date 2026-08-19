@@ -21,9 +21,11 @@
 #include "ElysiumStub.h"
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumDamage.h"
+#include "Substrate/ElysiumDisciplineTargetTables.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"        // Cycle 11b — the AI_Schedule channel's receiver
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"

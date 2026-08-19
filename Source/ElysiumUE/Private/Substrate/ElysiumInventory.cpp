@@ -3,6 +3,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumRulebook.h"
 
 // ============================================================================================

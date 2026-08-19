@@ -23,6 +23,7 @@
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
 #include "Substrate/ElysiumGameSound.h"     // the sound-event bus + its category names
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's parameter, the equipped item's record
+#include "Substrate/ElysiumItemTable.h"     // FElysiumItemDef — the equipped item's definition record
 #include "Substrate/ElysiumLaw.h"           // Cycle 11b — FireWorldEvent, the `events_world` bus
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"

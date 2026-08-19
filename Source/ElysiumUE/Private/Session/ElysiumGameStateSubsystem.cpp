@@ -8,6 +8,7 @@
 #include "ElysiumPlayer.h"
 #include "Scripting/ElysiumPythonVM.h"
 #include "Substrate/ElysiumQuestLog.h"
+#include "Substrate/ElysiumQuestTables.h"
 #include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumChargen.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"

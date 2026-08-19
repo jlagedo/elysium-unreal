@@ -3,9 +3,17 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 
+#include "Substrate/ElysiumChargenWizard.h"
+#include "Substrate/ElysiumDiceTables.h"
+#include "Substrate/ElysiumDisciplineTargetTables.h"
 #include "Substrate/ElysiumDisposition.h"
+#include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumQuestTables.h"
+#include "Substrate/ElysiumReactionTables.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSkillClasses.h"
+#include "Substrate/ElysiumSoundVolumeTable.h"
+#include "Substrate/ElysiumStealthTables.h"
 
 #include "ElysiumRulebookSubsystem.generated.h"
 

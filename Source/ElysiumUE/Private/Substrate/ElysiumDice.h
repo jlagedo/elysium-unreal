@@ -11,7 +11,7 @@
 // The recovered algorithm — the roll struct's field map, the exploding-10 loop, the two 250 caps,
 // the tiering and the health penalty — is canonical in `docs/recovered/dice-system.md` and is
 // implemented here verbatim. The die's face distribution is NOT `rand()%10`: it is a 100-entry
-// lookup the caller supplies as `FElysiumDiceTable` (`Substrate/ElysiumRulebook.h`), loaded from
+// lookup the caller supplies as `FElysiumDiceTable` (`Substrate/ElysiumDiceTables.h`), loaded from
 // `vdata/system/dicerolls.txt`.
 //
 // What this does NOT decide is what a roll MEANS. Thresholds, opposed comparisons, retry pacing and

@@ -9,6 +9,7 @@
 #include "ElysiumNpcSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumChargen.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"

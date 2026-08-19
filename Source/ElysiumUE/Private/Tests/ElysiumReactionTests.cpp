@@ -11,7 +11,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Substrate/ElysiumReaction.h"
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumReactionTables.h"
 
 namespace ElysiumReactionTests
 {

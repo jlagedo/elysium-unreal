@@ -29,6 +29,7 @@
 #include "ElysiumSheetSlots.h"
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumActivityTrigger.h"
+#include "Substrate/ElysiumDisciplineTargetTables.h"
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumRulebook.h"

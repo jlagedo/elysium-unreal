@@ -6,6 +6,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSheetSlots.h"
 #include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumDiceTables.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"

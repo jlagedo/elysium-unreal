@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumPlayer.h"
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumQuestTables.h"
 
 // What happens around a quest state change: resolving the catalogue, deciding whether the awards
 // fire, and reconciling the journal row. The awards themselves are the session's — this layer only

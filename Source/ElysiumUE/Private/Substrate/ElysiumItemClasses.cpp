@@ -15,7 +15,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumItemContainer.h"
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 
 #include "Components/StaticMeshComponent.h"

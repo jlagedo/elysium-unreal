@@ -10,7 +10,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumItemClasses.h"
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumSkillClasses.h"
 
 #include "Components/PrimitiveComponent.h"

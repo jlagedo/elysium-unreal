@@ -3,7 +3,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumViewState.h"
 #include "Substrate/ElysiumItemClasses.h"
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumItemTable.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumInvSelect, Log, All);
 

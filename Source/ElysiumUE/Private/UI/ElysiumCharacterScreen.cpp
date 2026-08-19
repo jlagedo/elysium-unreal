@@ -2,6 +2,7 @@
 
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumQuestTables.h"
 #include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"

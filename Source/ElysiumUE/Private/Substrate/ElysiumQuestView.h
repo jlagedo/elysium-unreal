@@ -4,7 +4,7 @@
 
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumQuestLog.h"
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumQuestTables.h"
 
 // The journal as a screen reads it: the player's rows joined to the catalogue, split into the three
 // columns the quest log draws, for one hub. A pure function over a catalogue and an array — no world,

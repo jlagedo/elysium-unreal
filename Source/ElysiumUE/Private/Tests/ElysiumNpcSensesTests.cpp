@@ -25,6 +25,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumSoundVolumeTable.h"
 #include "Tests/ElysiumTestServices.h"
 
 #include "Serialization/MemoryReader.h"

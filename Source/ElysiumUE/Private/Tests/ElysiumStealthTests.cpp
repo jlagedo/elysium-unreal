@@ -29,7 +29,9 @@
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumSoundVolumeTable.h"
 #include "Substrate/ElysiumStealth.h"
+#include "Substrate/ElysiumStealthTables.h"
 #include "Substrate/ElysiumStealthTrigger.h"
 #include "Tests/ElysiumTestServices.h"
 

@@ -6,9 +6,9 @@
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U — the one units conversion
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
-#include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumStealthTables.h"
 
 // The pure rule's input triplet is spelled as a literal 3 so the header stays free of the storage
 // type. This is what holds the two in step: a surface that grew a fourth sample would copy three

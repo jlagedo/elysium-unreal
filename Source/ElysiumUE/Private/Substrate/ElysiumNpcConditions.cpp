@@ -5,10 +5,10 @@
 #include "ElysiumMoveSolve.h"                  // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumItemClasses.h"      // FElysiumItem — the active weapon's record
+#include "Substrate/ElysiumItemTable.h"        // FElysiumItemDef / FElysiumWeaponMode
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcSenses.h"
 #include "Substrate/ElysiumRelationships.h"
-#include "Substrate/ElysiumRulebook.h"         // FElysiumItemDef / FElysiumWeaponMode
 #include "Substrate/ElysiumWeaponClasses.h"    // FElysiumWeapon — the reach, cone and deadlines
 
 namespace

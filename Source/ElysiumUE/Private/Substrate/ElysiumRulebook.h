@@ -658,14 +658,3 @@ struct FElysiumStrings
 	int32 Num() const { return Groups.Num(); }
 	int32 NumEntries() const;
 };
-
-// The split-out section tables; a consumer may include a section header directly instead of this
-// umbrella.
-#include "Substrate/ElysiumChargenWizard.h"
-#include "Substrate/ElysiumDiceTables.h"
-#include "Substrate/ElysiumDisciplineTargetTables.h"
-#include "Substrate/ElysiumItemTable.h"
-#include "Substrate/ElysiumQuestTables.h"
-#include "Substrate/ElysiumReactionTables.h"
-#include "Substrate/ElysiumSoundVolumeTable.h"
-#include "Substrate/ElysiumStealthTables.h"

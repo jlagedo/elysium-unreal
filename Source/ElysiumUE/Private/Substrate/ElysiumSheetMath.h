@@ -3,7 +3,9 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumSheetSlots.h"
+#include "Substrate/ElysiumDisciplineTargetTables.h"
 #include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumStealthTables.h"
 
 // The arithmetic over the character sheet's slots: the trait-effect layer a character carries
 // (`m_tEffectList`) and the feat evaluator (`Feats::FeatValue`) that reads through it.

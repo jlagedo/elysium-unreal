@@ -13,9 +13,9 @@
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumNpcWitness.h"
-#include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSignData.h"
+#include "Substrate/ElysiumSoundVolumeTable.h"
 #include "ElysiumUseIcons.h"
 
 #include "Components/SceneComponent.h"

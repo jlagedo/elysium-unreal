@@ -1,6 +1,6 @@
 #include "Substrate/ElysiumReaction.h"
 
-#include "Substrate/ElysiumRulebook.h"
+#include "Substrate/ElysiumReactionTables.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumReaction, Log, All);
 

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumChargenWizard.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 

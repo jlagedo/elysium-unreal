@@ -3,9 +3,9 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcLog.h"
-#include "Substrate/ElysiumRulebook.h"
 
 bool ElysiumNpcLoadout::IsNoneSentinel(const FString& Authored)
 {
