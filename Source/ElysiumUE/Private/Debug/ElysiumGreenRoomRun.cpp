@@ -142,6 +142,15 @@ FElysiumGreenRoomRun::~FElysiumGreenRoomRun()
 	{
 		FTSTicker::GetCoreTicker().RemoveTicker(TickHandle);
 	}
+	// A pending screenshot cannot be cancelled; CaptureLiveness dying with this object makes the
+	// callback bail instead of touching a dead run. The shot itself is lost — a capture run torn
+	// down mid-await never writes it or its metrics — so the abandonment is named here, once.
+	if (bAwaitingCapture)
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning,
+			TEXT("green room destroyed while awaiting a screenshot; the %s capture is abandoned"),
+			*CurrentLabel());
+	}
 	// The lab took the HUD off screen; it does not own it past its own lifetime. `elysium.gr` can
 	// arm a lab inside an ordinary session, so leaving the HUD hidden would look like a HUD bug
 	// long after the green room is gone.
@@ -1001,10 +1010,22 @@ void FElysiumGreenRoomRun::BeginCapture()
 	const FCameraMetric Camera = CurrentCamera;
 	bAwaitingCapture = true;
 
+	// The completion callback fires exactly once, possibly after this run has been destroyed
+	// (ElysiumScreenshot::Request has no cancellation). The weak token detects that; the
+	// destructor owns the warning for an abandoned capture, so the expired branch stays quiet
+	// beyond a trace line.
+	const TWeakPtr<uint8> Liveness(CaptureLiveness);
 	const bool bRequested = ElysiumScreenshot::Request(
-		[this, Path, Label, Fraction, ViewYaw, Metrics, Camera](
+		[this, Liveness, Path, Label, Fraction, ViewYaw, Metrics, Camera](
 			int32 Width, int32 Height, const TArray<FColor>& Bitmap)
 		{
+			if (!Liveness.IsValid())
+			{
+				UE_LOG(LogElysiumGreenRoom, Verbose,
+					TEXT("%s: capture completed after the green room was torn down; dropped"),
+					*Label);
+				return;
+			}
 			FShot Shot;
 			Shot.Label = Label;
 			Shot.File = Path;

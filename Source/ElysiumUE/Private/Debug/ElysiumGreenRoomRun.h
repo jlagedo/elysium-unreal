@@ -634,6 +634,12 @@ private:
 	bool bPlayerSurfaceActive = false;
 	bool bAwaitingCapture = false;
 	bool bAnyFailure = false;
+	// Liveness token for the deferred screenshot callback. ElysiumScreenshot::Request has no
+	// cancellation: a pending capture keeps itself alive and calls back exactly once — after this
+	// run is destroyed, if teardown lands mid-await. The callback captures a TWeakPtr of this and
+	// bails when it has expired instead of dereferencing a dead run. This is not a UObject, so a
+	// weak-object pointer cannot do the job.
+	TSharedRef<uint8> CaptureLiveness = MakeShared<uint8>(0);
 	// `-GreenRoomLive`: keep the window up after the captures instead of exiting. The stills answer
 	// whether a body is there and holds together; anything about *timing* — a garment settling, a
 	// blend easing — only reads in motion, and there is otherwise no way to watch one.
