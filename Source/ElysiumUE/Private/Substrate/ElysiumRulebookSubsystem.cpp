@@ -26,79 +26,79 @@ void UElysiumRulebookSubsystem::Deinitialize()
 	ConsoleObjects.Reset();
 	// The item catalogue is this subsystem's memory, and the class registry outlives it — so the
 	// installed table has to go before the memory does.
-	ElysiumItems::Uninstall(ItemTable);
+	ElysiumItems::Uninstall(ItemTable.Table);
 	TerminalDefinitions.Reset();
 	TerminalDefinitionErrors.Reset();
 	Super::Deinitialize();
 }
 
 template <typename T>
-const T& UElysiumRulebookSubsystem::Get(T& Table, bool& bLoaded, const TCHAR* Name, FString& Error)
+const T& UElysiumRulebookSubsystem::Get(TElysiumLazyTable<T>& Slot, const TCHAR* Name)
 {
-	if (!bLoaded)
+	if (!Slot.bLoaded)
 	{
-		bLoaded = true;            // set first: a failure is remembered, not retried per read
-		if (!Table.Load(Error))
+		Slot.bLoaded = true;       // set first: a failure is remembered, not retried per read
+		if (!Slot.Table.Load(Slot.Error))
 		{
-			UE_LOG(LogElysiumRulebook, Warning, TEXT("%s: %s"), Name, *Error);
+			UE_LOG(LogElysiumRulebook, Warning, TEXT("%s: %s"), Name, *Slot.Error);
 		}
 	}
-	return Table;
+	return Slot.Table;
 }
 
 const FElysiumStatTable& UElysiumRulebookSubsystem::Stats()
 {
-	return Get(StatTable, bStatsLoaded, TEXT("stats"), StatsError);
+	return Get(StatTable, TEXT("stats"));
 }
 
 const FElysiumFeatTable& UElysiumRulebookSubsystem::Feats()
 {
-	return Get(FeatTable, bFeatsLoaded, TEXT("feats"), FeatsError);
+	return Get(FeatTable, TEXT("feats"));
 }
 
 const FElysiumRules& UElysiumRulebookSubsystem::Rules()
 {
-	return Get(RuleData, bRulesLoaded, TEXT("rules"), RulesError);
+	return Get(RuleData, TEXT("rules"));
 }
 
 const FElysiumTraitEffects& UElysiumRulebookSubsystem::TraitEffects()
 {
-	return Get(EffectData, bEffectsLoaded, TEXT("traiteffects"), EffectsError);
+	return Get(EffectData, TEXT("traiteffects"));
 }
 
 const FElysiumClanTable& UElysiumRulebookSubsystem::Clans()
 {
-	return Get(ClanTable, bClansLoaded, TEXT("clans"), ClansError);
+	return Get(ClanTable, TEXT("clans"));
 }
 
 const FElysiumHistoryTable& UElysiumRulebookSubsystem::Histories()
 {
-	return Get(HistoryTable, bHistoriesLoaded, TEXT("histories"), HistoriesError);
+	return Get(HistoryTable, TEXT("histories"));
 }
 
 const FElysiumQuestTables& UElysiumRulebookSubsystem::Quests()
 {
-	return Get(QuestTables, bQuestsLoaded, TEXT("quests"), QuestsError);
+	return Get(QuestTables, TEXT("quests"));
 }
 
 const FElysiumExperienceTable& UElysiumRulebookSubsystem::Experience()
 {
-	return Get(ExperienceTable, bExperienceLoaded, TEXT("experience"), ExperienceError);
+	return Get(ExperienceTable, TEXT("experience"));
 }
 
 const FElysiumLevelingTemplates& UElysiumRulebookSubsystem::Leveling()
 {
-	return Get(LevelingTemplates, bLevelingLoaded, TEXT("leveling"), LevelingError);
+	return Get(LevelingTemplates, TEXT("leveling"));
 }
 
 const FElysiumWizard& UElysiumRulebookSubsystem::Wizard()
 {
-	return Get(WizardData, bWizardLoaded, TEXT("wizard"), WizardError);
+	return Get(WizardData, TEXT("wizard"));
 }
 
 const FElysiumStrings& UElysiumRulebookSubsystem::Strings()
 {
-	return Get(StringData, bStringsLoaded, TEXT("strings"), StringsError);
+	return Get(StringData, TEXT("strings"));
 }
 
 // A failed load leaves the table empty, and an empty table answers every lookup with the uniform
@@ -106,7 +106,7 @@ const FElysiumStrings& UElysiumRulebookSubsystem::Strings()
 // behavioural change.
 const FElysiumDiceTables& UElysiumRulebookSubsystem::Dice()
 {
-	return Get(DiceTables, bDiceLoaded, TEXT("dicerolls"), DiceError);
+	return Get(DiceTables, TEXT("dicerolls"));
 }
 
 // A failed load leaves the table empty, and the sound bus reads `IsValid()` before binding it — so
@@ -114,7 +114,7 @@ const FElysiumDiceTables& UElysiumRulebookSubsystem::Dice()
 // rather than warning again per category.
 const FElysiumSoundVolumeTable& UElysiumRulebookSubsystem::SoundVolumes()
 {
-	return Get(SoundVolumeTable, bSoundVolumesLoaded, TEXT("soundvolumes"), SoundVolumesError);
+	return Get(SoundVolumeTable, TEXT("soundvolumes"));
 }
 
 // A failed load leaves the neutral table — every scalar 1.0, every reduction 0 — so a missing
@@ -122,12 +122,12 @@ const FElysiumSoundVolumeTable& UElysiumRulebookSubsystem::SoundVolumes()
 // that has to test for an absent table on every pass.
 const FElysiumStealthTables& UElysiumRulebookSubsystem::Stealth()
 {
-	return Get(StealthTableSet, bStealthLoaded, TEXT("stealth"), StealthError);
+	return Get(StealthTableSet, TEXT("stealth"));
 }
 
 const FElysiumDispositionTable& UElysiumRulebookSubsystem::Dispositions()
 {
-	return Get(DispositionTable, bDispositionsLoaded, TEXT("dispositiontable"), DispositionsError);
+	return Get(DispositionTable, TEXT("dispositiontable"));
 }
 
 // A failed load leaves the catalogue empty; `ElysiumReaction::Compute` reports a structured
@@ -135,9 +135,8 @@ const FElysiumDispositionTable& UElysiumRulebookSubsystem::Dispositions()
 // export costs one warning here and nowhere else.
 const FElysiumReactionCatalogue& UElysiumRulebookSubsystem::Reactions()
 {
-	const bool bWasLoaded = bReactionsLoaded;
-	const FElysiumReactionCatalogue& Catalogue = Get(ReactionCatalogue, bReactionsLoaded,
-		TEXT("reactions"), ReactionsError);
+	const bool bWasLoaded = ReactionCatalogue.bLoaded;
+	const FElysiumReactionCatalogue& Catalogue = Get(ReactionCatalogue, TEXT("reactions"));
 	if (!bWasLoaded && !Catalogue.Modifiers.InertModifiers.IsEmpty())
 	{
 		// Carried-but-inert modifier rows: logged once here, not per `ElysiumReaction::Compute` call.
@@ -151,14 +150,13 @@ const FElysiumReactionCatalogue& UElysiumRulebookSubsystem::Reactions()
 
 const FElysiumDisciplineTargets& UElysiumRulebookSubsystem::DisciplineTargets()
 {
-	return Get(DisciplineTargetTable, bDisciplineTargetsLoaded, TEXT("disciplinetgt"),
-		DisciplineTargetsError);
+	return Get(DisciplineTargetTable, TEXT("disciplinetgt"));
 }
 
 const FElysiumItemTable& UElysiumRulebookSubsystem::Items()
 {
-	const bool bWasLoaded = bItemsLoaded;
-	const FElysiumItemTable& Table = Get(ItemTable, bItemsLoaded, TEXT("items"), ItemsError);
+	const bool bWasLoaded = ItemTable.bLoaded;
+	const FElysiumItemTable& Table = Get(ItemTable, TEXT("items"));
 	if (!bWasLoaded)
 	{
 		// The catalogue IS the class list: an `item_*` classname is a live entity class exactly
@@ -216,71 +214,71 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 	{
 		StatRows += S.Container((EElysiumTraitContainer)i).Num();
 	}
-	Out.Add({ TEXT("stats"), TEXT("system/stats.txt"), StatRows, S.IsValid(), StatsError });
+	Out.Add({ TEXT("stats"), TEXT("system/stats.txt"), StatRows, S.IsValid(), StatTable.Error });
 
 	Out.Add({ TEXT("feats"),        TEXT("system/feats.txt"),
-		Feats().Num(), Feats().IsValid(), FeatsError });
+		Feats().Num(), Feats().IsValid(), FeatTable.Error });
 
 	Out.Add({ TEXT("rules"),        TEXT("system/rules.txt + rules_tables.txt"),
-		Rules().BlockOrder.Num() + Rules().Tables.Num(), Rules().IsValid(), RulesError });
+		Rules().BlockOrder.Num() + Rules().Tables.Num(), Rules().IsValid(), RuleData.Error });
 
 	Out.Add({ TEXT("traiteffects"), TEXT("system/traiteffect.txt + traiteffects000.txt"),
-		TraitEffects().NumEffects(), TraitEffects().IsValid(), EffectsError });
+		TraitEffects().NumEffects(), TraitEffects().IsValid(), EffectData.Error });
 
 	Out.Add({ TEXT("clans"),        TEXT("system/clandoc000.txt"),
-		C.Clans.Num(), C.IsValid(), ClansError });
+		C.Clans.Num(), C.IsValid(), ClanTable.Error });
 
 	Out.Add({ TEXT("npctemplates"), FString::Printf(TEXT("system/npctemplate*.txt (%d files)"),
-		C.NpcFiles.Num()), C.NpcTemplates.Num(), !C.NpcTemplates.IsEmpty(), ClansError });
+		C.NpcFiles.Num()), C.NpcTemplates.Num(), !C.NpcTemplates.IsEmpty(), ClanTable.Error });
 
 	Out.Add({ TEXT("histories"),    TEXT("system/histories000.txt"),
-		Histories().Num(), Histories().IsValid(), HistoriesError });
+		Histories().Num(), Histories().IsValid(), HistoryTable.Error });
 
 	Out.Add({ TEXT("quests"),       TEXT("system/quests_*.txt (5 files)"),
-		Quests().NumQuests(), Quests().IsValid(), QuestsError });
+		Quests().NumQuests(), Quests().IsValid(), QuestTables.Error });
 
 	Out.Add({ TEXT("experience"),   TEXT("system/experience_table.txt"),
-		Experience().Num(), Experience().IsValid(), ExperienceError });
+		Experience().Num(), Experience().IsValid(), ExperienceTable.Error });
 
 	Out.Add({ TEXT("leveling"),     TEXT("system/levelingtemplate_000.txt"),
-		Leveling().Num(), Leveling().IsValid(), LevelingError });
+		Leveling().Num(), Leveling().IsValid(), LevelingTemplates.Error });
 
 	// Counted in popups rather than groups: the popups are the content, and the count is what a
 	// parse regression would move first.
 	Out.Add({ TEXT("wizard"),       TEXT("system/charcreatewizard.txt"),
-		Wizard().NumPopups(), Wizard().IsValid(), WizardError });
+		Wizard().NumPopups(), Wizard().IsValid(), WizardData.Error });
 
 	// Counted in entries rather than groups: a `NameMapping` resolves an INDEX, so a group that
 	// silently lost its tail is the regression that matters.
 	Out.Add({ TEXT("strings"),      TEXT("system/strings.txt + strings_internal.txt"),
-		Strings().NumEntries(), Strings().IsValid(), StringsError });
+		Strings().NumEntries(), Strings().IsValid(), StringData.Error });
 
 	Out.Add({ TEXT("dicerolls"),    TEXT("system/dicerolls.txt"),
-		Dice().Num(), Dice().IsValid(), DiceError });
+		Dice().Num(), Dice().IsValid(), DiceTables.Error });
 
 	// Counted in categories rather than levels: a producer names a category, so a parse regression
 	// that lost the `SoundTypes` block is the one that silences the whole hearing surface.
 	Out.Add({ TEXT("soundvolumes"), TEXT("system/sound_volume_table.txt"),
-		SoundVolumes().NumCategories(), SoundVolumes().IsValid(), SoundVolumesError });
+		SoundVolumes().NumCategories(), SoundVolumes().IsValid(), SoundVolumeTable.Error });
 
 	// Counted in authored values rather than sections: a section that silently lost its tail is the
 	// regression that matters, and four is not a number a status row can regress on.
 	Out.Add({ TEXT("stealth"),      TEXT("system/stealth.txt"),
-		Stealth().NumAuthoredValues(), Stealth().IsValid(), StealthError });
+		Stealth().NumAuthoredValues(), Stealth().IsValid(), StealthTableSet.Error });
 
 	Out.Add({ TEXT("items"),        TEXT("items/*.txt"),
-		Items().Num(), Items().IsValid(), ItemsError });
+		Items().Num(), Items().IsValid(), ItemTable.Error });
 
 	Out.Add({ TEXT("dispositiontable"), TEXT("system/dispositiontable.txt"),
-		Dispositions().Rows.Num(), Dispositions().IsValid(), DispositionsError });
+		Dispositions().Rows.Num(), Dispositions().IsValid(), DispositionTable.Error });
 
 	// Counted in bands rather than modifiers: the band table is load-bearing (`FElysiumReactionCatalogue::
 	// IsValid`), the modifier set is supplementary.
 	Out.Add({ TEXT("reactions"), TEXT("system/reaction.txt + reactions000.txt"),
-		Reactions().Bands.Bands.Num(), Reactions().IsValid(), ReactionsError });
+		Reactions().Bands.Bands.Num(), Reactions().IsValid(), ReactionCatalogue.Error });
 
 	Out.Add({ TEXT("disciplinetgt"), TEXT("system/disciplinetgt_*.txt (5 files)"),
-		DisciplineTargets().Num(), DisciplineTargets().IsValid(), DisciplineTargetsError });
+		DisciplineTargets().Num(), DisciplineTargets().IsValid(), DisciplineTargetTable.Error });
 }
 
 // ================================================================================================

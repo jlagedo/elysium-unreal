@@ -9,6 +9,17 @@
 
 #include "ElysiumRulebookSubsystem.generated.h"
 
+// One lazily loaded rulebook table: the parsed data, the load-attempted guard, and the remembered
+// load error. The guard is set BEFORE the load, so a failure is remembered rather than retried on
+// every read — the idiom `UElysiumAnimSubsystem` established.
+template <typename T>
+struct TElysiumLazyTable
+{
+	T Table;
+	bool bLoaded = false;
+	FString Error;
+};
+
 // GameInstance-scoped owner of VtMB's rulebook — the `vdata/system/` tables the RPG layer reads.
 //
 // Session-lifetime and never invalidated, because **no `vdata` value is ever saved**: the sheet
@@ -88,69 +99,29 @@ private:
 	void ExecRules(const TArray<FString>& Args);
 	void ExecRoll(const TArray<FString>& Args);
 
-	// The lazy-load guard is set BEFORE the load, so a failure is remembered rather than retried
-	// on every read — the idiom `UElysiumAnimSubsystem` established.
 	template <typename T>
-	const T& Get(T& Table, bool& bLoaded, const TCHAR* Name, FString& Error);
+	const T& Get(TElysiumLazyTable<T>& Slot, const TCHAR* Name);
 
-	FElysiumStatTable         StatTable;
-	FElysiumFeatTable         FeatTable;
-	FElysiumRules             RuleData;
-	FElysiumTraitEffects      EffectData;
-	FElysiumClanTable         ClanTable;
-	FElysiumHistoryTable      HistoryTable;
-	FElysiumQuestTables       QuestTables;
-	FElysiumExperienceTable   ExperienceTable;
-	FElysiumLevelingTemplates LevelingTemplates;
-	FElysiumWizard            WizardData;
-	FElysiumStrings           StringData;
-	FElysiumDiceTables        DiceTables;
-	FElysiumSoundVolumeTable  SoundVolumeTable;
-	FElysiumStealthTables     StealthTableSet;
-	FElysiumItemTable         ItemTable;
-	FElysiumDispositionTable  DispositionTable;
-	FElysiumReactionCatalogue ReactionCatalogue;
-	FElysiumDisciplineTargets DisciplineTargetTable;
+	TElysiumLazyTable<FElysiumStatTable>         StatTable;
+	TElysiumLazyTable<FElysiumFeatTable>         FeatTable;
+	TElysiumLazyTable<FElysiumRules>             RuleData;
+	TElysiumLazyTable<FElysiumTraitEffects>      EffectData;
+	TElysiumLazyTable<FElysiumClanTable>         ClanTable;
+	TElysiumLazyTable<FElysiumHistoryTable>      HistoryTable;
+	TElysiumLazyTable<FElysiumQuestTables>       QuestTables;
+	TElysiumLazyTable<FElysiumExperienceTable>   ExperienceTable;
+	TElysiumLazyTable<FElysiumLevelingTemplates> LevelingTemplates;
+	TElysiumLazyTable<FElysiumWizard>            WizardData;
+	TElysiumLazyTable<FElysiumStrings>           StringData;
+	TElysiumLazyTable<FElysiumDiceTables>        DiceTables;
+	TElysiumLazyTable<FElysiumSoundVolumeTable>  SoundVolumeTable;
+	TElysiumLazyTable<FElysiumStealthTables>     StealthTableSet;
+	TElysiumLazyTable<FElysiumItemTable>         ItemTable;
+	TElysiumLazyTable<FElysiumDispositionTable>  DispositionTable;
+	TElysiumLazyTable<FElysiumReactionCatalogue> ReactionCatalogue;
+	TElysiumLazyTable<FElysiumDisciplineTargets> DisciplineTargetTable;
 	TMap<FString, TSharedPtr<FElysiumTerminalDefinition>> TerminalDefinitions;
 	TMap<FString, FString> TerminalDefinitionErrors;
-
-	bool bStatsLoaded = false;
-	bool bFeatsLoaded = false;
-	bool bRulesLoaded = false;
-	bool bEffectsLoaded = false;
-	bool bClansLoaded = false;
-	bool bHistoriesLoaded = false;
-	bool bQuestsLoaded = false;
-	bool bExperienceLoaded = false;
-	bool bLevelingLoaded = false;
-	bool bWizardLoaded = false;
-	bool bStringsLoaded = false;
-	bool bDiceLoaded = false;
-	bool bSoundVolumesLoaded = false;
-	bool bStealthLoaded = false;
-	bool bItemsLoaded = false;
-	bool bDispositionsLoaded = false;
-	bool bReactionsLoaded = false;
-	bool bDisciplineTargetsLoaded = false;
-
-	FString StatsError;
-	FString FeatsError;
-	FString RulesError;
-	FString EffectsError;
-	FString ClansError;
-	FString HistoriesError;
-	FString QuestsError;
-	FString ExperienceError;
-	FString LevelingError;
-	FString WizardError;
-	FString StringsError;
-	FString DiceError;
-	FString SoundVolumesError;
-	FString StealthError;
-	FString ItemsError;
-	FString DispositionsError;
-	FString ReactionsError;
-	FString DisciplineTargetsError;
 
 	TArray<IConsoleObject*> ConsoleObjects;
 };
