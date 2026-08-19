@@ -20,7 +20,9 @@ namespace ElysiumActionTables
 {
 namespace
 {
-	// A row's predicates are AND-ed and `Always`-padded; the aliases are what let one fit a line.
+	// A row's predicates are AND-ed and `Always`-padded; the aliases are what let one fit a
+	// line. Unit-prefixed because the module builds adaptive-unity: this anonymous
+	// namespace is regularly merged with the player and weapon tables' own.
 	using NpcP = ENpcPredicate;
 	using NpcR = ENpcRoute;
 	using NpcS = ENpcSlot;
@@ -31,22 +33,22 @@ namespace
 	// paired-action pre-translation.
 	constexpr FNpcRule GPreTranslateTroikaRules[] =
 	{
-		{ { NpcP::GaitOverrideRun, NpcP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr, TEXT("ACT_RUN"), 19,
-			NpcR::Rewrite },
+		{ { NpcP::GaitOverrideRun, NpcP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr, TEXT("ACT_RUN"),
+			19, NpcR::Rewrite },
 		{ { NpcP::GaitOverrideRun, NpcP::Always }, 0, TEXT("ACT_HUNT_WALK"), 4373, nullptr,
 			TEXT("ACT_RUN"), 19, NpcR::Rewrite },
-		{ { NpcP::GaitOverrideWalk, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr, TEXT("ACT_WALK"), 9,
-			NpcR::Rewrite },
+		{ { NpcP::GaitOverrideWalk, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr,
+			TEXT("ACT_WALK"), 9, NpcR::Rewrite },
 		{ { NpcP::MovementPolicyFrenzy, NpcP::Always }, 0, nullptr, 0,
 			TEXT("MoveWalkRunRelaxedHuntCombat"), TEXT("ACT_RUN_FRENZY"), 3863, NpcR::Rewrite },
-		{ { NpcP::MovementPolicyRun, NpcP::Always }, 0, nullptr, 0, TEXT("MoveWalking"), TEXT("ACT_RUN"),
-			19, NpcR::Rewrite },
+		{ { NpcP::MovementPolicyRun, NpcP::Always }, 0, nullptr, 0, TEXT("MoveWalking"),
+			TEXT("ACT_RUN"), 19, NpcR::Rewrite },
 		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_FIDGET"), 3, nullptr, TEXT("ACT_IDLE"), 1,
 			NpcR::Rewrite },
-		{ { NpcP::ReloadFastCapable, NpcP::Always }, 0, TEXT("ACT_RELOAD_FAST"), 85, nullptr, nullptr, 0,
-			NpcR::Delegate, NpcS::Reload },
-		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_COVER"), 6, nullptr, nullptr, 0, NpcR::Delegate,
-			NpcS::Cover },
+		{ { NpcP::ReloadFastCapable, NpcP::Always }, 0, TEXT("ACT_RELOAD_FAST"), 85, nullptr,
+			nullptr, 0, NpcR::Delegate, NpcS::Reload },
+		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_COVER"), 6, nullptr, nullptr, 0,
+			NpcR::Delegate, NpcS::Cover },
 		{ { NpcP::CoverIdleFlagged, NpcP::Always }, 0, TEXT("ACT_IDLE"), 1, nullptr, nullptr, 0,
 			NpcR::Delegate, NpcS::Cover },
 	};
@@ -54,16 +56,16 @@ namespace
 	// PreTranslate_Human (0x103854f0) — armed/alert translation, then the common Troika body.
 	constexpr FNpcRule GPreTranslateHumanRules[] =
 	{
-		{ { NpcP::NoAimGait, NpcP::Always }, 0, TEXT("ACT_WALK_AIM"), 17, nullptr, TEXT("ACT_WALK"), 9,
-			NpcR::Rewrite },
-		{ { NpcP::NoAimGait, NpcP::Always }, 0, TEXT("ACT_RUN_AIM"), 21, nullptr, TEXT("ACT_RUN"), 19,
-			NpcR::Rewrite },
+		{ { NpcP::NoAimGait, NpcP::Always }, 0, TEXT("ACT_WALK_AIM"), 17, nullptr, TEXT("ACT_WALK"),
+			9, NpcR::Rewrite },
+		{ { NpcP::NoAimGait, NpcP::Always }, 0, TEXT("ACT_RUN_AIM"), 21, nullptr, TEXT("ACT_RUN"),
+			19, NpcR::Rewrite },
 		{ { NpcP::NotArmedAlert, NpcP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr,
 			TEXT("ACT_WALK_RELAXED"), 22, NpcR::Rewrite },
-		{ { NpcP::NotArmedAlert, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr, TEXT("ACT_RUN_RELAXED"),
-			23, NpcR::Rewrite },
-		{ { NpcP::ArmedAlert, NpcP::RangedAimCapable }, 0, TEXT("ACT_IDLE"), 1, nullptr, TEXT("ACT_AIM"),
-			5, NpcR::Rewrite },
+		{ { NpcP::NotArmedAlert, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr,
+			TEXT("ACT_RUN_RELAXED"), 23, NpcR::Rewrite },
+		{ { NpcP::ArmedAlert, NpcP::RangedAimCapable }, 0, TEXT("ACT_IDLE"), 1, nullptr,
+			TEXT("ACT_AIM"), 5, NpcR::Rewrite },
 		{ { NpcP::ArmedAlert, NpcP::Always }, 0, TEXT("ACT_TURN_LEFT"), 59, nullptr,
 			TEXT("ACT_TURN_LEFT_ALERT"), 61, NpcR::Rewrite },
 		{ { NpcP::ArmedAlert, NpcP::Always }, 0, TEXT("ACT_TURN_RIGHT"), 60, nullptr,
@@ -90,56 +92,56 @@ namespace
 	// carry replace idle and gait; otherwise human translation.
 	constexpr FNpcRule GPreTranslateHengeyokaiRules[] =
 	{
-		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_IDLE"), 1, nullptr, TEXT("ACT_PICKUP_LIGHTIDLE"),
-			296, NpcR::RewriteAndReturn },
-		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr, TEXT("ACT_PICKUP_LIGHTCARRY"),
-			297, NpcR::RewriteAndReturn },
-		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr, TEXT("ACT_PICKUP_LIGHTCARRY"),
-			297, NpcR::RewriteAndReturn },
+		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_IDLE"), 1, nullptr,
+			TEXT("ACT_PICKUP_LIGHTIDLE"), 296, NpcR::RewriteAndReturn },
+		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr,
+			TEXT("ACT_PICKUP_LIGHTCARRY"), 297, NpcR::RewriteAndReturn },
+		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr,
+			TEXT("ACT_PICKUP_LIGHTCARRY"), 297, NpcR::RewriteAndReturn },
 	};
 
 	// PreTranslate_Stalker (0x103b2e60) — walk/run/hunt-walk become ACT_COMBATMOVE; every other
 	// request is identity.
 	constexpr FNpcRule GPreTranslateStalkerRules[] =
 	{
-		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr, TEXT("ACT_COMBATMOVE"), 4385,
-			NpcR::RewriteAndReturn },
-		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr, TEXT("ACT_COMBATMOVE"), 4385,
-			NpcR::RewriteAndReturn },
-		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_HUNT_WALK"), 4373, nullptr, TEXT("ACT_COMBATMOVE"),
+		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr, TEXT("ACT_COMBATMOVE"),
 			4385, NpcR::RewriteAndReturn },
+		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr, TEXT("ACT_COMBATMOVE"),
+			4385, NpcR::RewriteAndReturn },
+		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_HUNT_WALK"), 4373, nullptr,
+			TEXT("ACT_COMBATMOVE"), 4385, NpcR::RewriteAndReturn },
 	};
 
 	// PreTranslate_Tzimisce (0x103bde40) — under its form bit, idle and gait select the body-carry
 	// variants +0x6688 sides; otherwise common Troika translation.
 	constexpr FNpcRule GPreTranslateTzimisceRules[] =
 	{
-		{ { NpcP::FormBit, NpcP::BodySideLeft }, 0, TEXT("ACT_IDLE"), 1, nullptr, TEXT("ACT_IDLE_BODY_L"),
-			253, NpcR::RewriteAndReturn },
-		{ { NpcP::FormBit, NpcP::BodySideLeft }, 0, TEXT("ACT_WALK"), 9, nullptr, TEXT("ACT_WALK_BODY_L"),
-			255, NpcR::RewriteAndReturn },
-		{ { NpcP::FormBit, NpcP::BodySideLeft }, 0, TEXT("ACT_RUN"), 19, nullptr, TEXT("ACT_WALK_BODY_L"),
-			255, NpcR::RewriteAndReturn },
-		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_IDLE"), 1, nullptr, TEXT("ACT_IDLE_BODY"), 252,
-			NpcR::RewriteAndReturn },
-		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr, TEXT("ACT_WALK_BODY"), 254,
-			NpcR::RewriteAndReturn },
-		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr, TEXT("ACT_WALK_BODY"), 254,
-			NpcR::RewriteAndReturn },
+		{ { NpcP::FormBit, NpcP::BodySideLeft }, 0, TEXT("ACT_IDLE"), 1, nullptr,
+			TEXT("ACT_IDLE_BODY_L"), 253, NpcR::RewriteAndReturn },
+		{ { NpcP::FormBit, NpcP::BodySideLeft }, 0, TEXT("ACT_WALK"), 9, nullptr,
+			TEXT("ACT_WALK_BODY_L"), 255, NpcR::RewriteAndReturn },
+		{ { NpcP::FormBit, NpcP::BodySideLeft }, 0, TEXT("ACT_RUN"), 19, nullptr,
+			TEXT("ACT_WALK_BODY_L"), 255, NpcR::RewriteAndReturn },
+		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_IDLE"), 1, nullptr, TEXT("ACT_IDLE_BODY"),
+			252, NpcR::RewriteAndReturn },
+		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_WALK"), 9, nullptr, TEXT("ACT_WALK_BODY"),
+			254, NpcR::RewriteAndReturn },
+		{ { NpcP::FormBit, NpcP::Always }, 0, TEXT("ACT_RUN"), 19, nullptr, TEXT("ACT_WALK_BODY"),
+			254, NpcR::RewriteAndReturn },
 	};
 
 	// PreTranslate_TzimisceRunner (0x103c3e10) — after common Troika translation, +0x6672 selects
 	// one of the four TZ variants.
 	constexpr FNpcRule GPreTranslateTzimisceRunnerRules[] =
 	{
-		{ { NpcP::RunnerVariantIs, NpcP::Always }, 0, nullptr, 0, nullptr, TEXT("ACT_TZ_IDLE2"), 4404,
-			NpcR::RewriteAndReturn },
-		{ { NpcP::RunnerVariantIs, NpcP::Always }, 1, nullptr, 0, nullptr, TEXT("ACT_TZ_FIDGET2"), 4405,
-			NpcR::RewriteAndReturn },
-		{ { NpcP::RunnerVariantIs, NpcP::Always }, 2, nullptr, 0, nullptr, TEXT("ACT_TZ_WALK2"), 4406,
-			NpcR::RewriteAndReturn },
-		{ { NpcP::RunnerVariantIs, NpcP::Always }, 3, nullptr, 0, nullptr, TEXT("ACT_TZ_RUN2"), 4407,
-			NpcR::RewriteAndReturn },
+		{ { NpcP::RunnerVariantIs, NpcP::Always }, 0, nullptr, 0, nullptr, TEXT("ACT_TZ_IDLE2"),
+			4404, NpcR::RewriteAndReturn },
+		{ { NpcP::RunnerVariantIs, NpcP::Always }, 1, nullptr, 0, nullptr, TEXT("ACT_TZ_FIDGET2"),
+			4405, NpcR::RewriteAndReturn },
+		{ { NpcP::RunnerVariantIs, NpcP::Always }, 2, nullptr, 0, nullptr, TEXT("ACT_TZ_WALK2"),
+			4406, NpcR::RewriteAndReturn },
+		{ { NpcP::RunnerVariantIs, NpcP::Always }, 3, nullptr, 0, nullptr, TEXT("ACT_TZ_RUN2"),
+			4407, NpcR::RewriteAndReturn },
 	};
 
 	// PreTranslate_WolfMorph (0x103dcdc0) — every request becomes ACT_WOLF_MORPH.
@@ -153,10 +155,10 @@ namespace
 	// delegates.
 	constexpr FNpcRule GClassTranslateBaseRules[] =
 	{
-		{ { NpcP::ReloadFastCapable, NpcP::Always }, 0, TEXT("ACT_RELOAD_FAST"), 85, nullptr, nullptr, 0,
-			NpcR::Delegate, NpcS::Reload },
-		{ { NpcP::CoverCapable, NpcP::Always }, 0, TEXT("ACT_COVER"), 6, nullptr, nullptr, 0, NpcR::Delegate,
-			NpcS::Cover },
+		{ { NpcP::ReloadFastCapable, NpcP::Always }, 0, TEXT("ACT_RELOAD_FAST"), 85, nullptr,
+			nullptr, 0, NpcR::Delegate, NpcS::Reload },
+		{ { NpcP::CoverCapable, NpcP::Always }, 0, TEXT("ACT_COVER"), 6, nullptr, nullptr, 0,
+			NpcR::Delegate, NpcS::Cover },
 	};
 
 	// ClassTranslate_Troika (0x10295710) — ACT_IDLE becomes ACT_LAUGH_IDLE under +0x14bc & 0x80000.
@@ -174,8 +176,8 @@ namespace
 			TEXT("ACT_TURN_LEFT"), 59, NpcR::Rewrite },
 		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_TURN_RIGHT_ALERT"), 62, nullptr,
 			TEXT("ACT_TURN_RIGHT"), 60, NpcR::Rewrite },
-		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_90_LEFT_ALERT"), 163, nullptr, TEXT("ACT_90_LEFT"),
-			161, NpcR::Rewrite },
+		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_90_LEFT_ALERT"), 163, nullptr,
+			TEXT("ACT_90_LEFT"), 161, NpcR::Rewrite },
 		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_90_RIGHT_ALERT"), 164, nullptr,
 			TEXT("ACT_90_RIGHT"), 162, NpcR::Rewrite },
 		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_180_LEFT_ALERT"), 159, nullptr,
@@ -192,8 +194,8 @@ namespace
 			TEXT("ACT_TURN_LEFT"), 59, NpcR::Rewrite },
 		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_TURN_RIGHT_ALERT"), 62, nullptr,
 			TEXT("ACT_TURN_RIGHT"), 60, NpcR::Rewrite },
-		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_90_LEFT_ALERT"), 163, nullptr, TEXT("ACT_90_LEFT"),
-			161, NpcR::Rewrite },
+		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_90_LEFT_ALERT"), 163, nullptr,
+			TEXT("ACT_90_LEFT"), 161, NpcR::Rewrite },
 		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_90_RIGHT_ALERT"), 164, nullptr,
 			TEXT("ACT_90_RIGHT"), 162, NpcR::Rewrite },
 		{ { NpcP::Always, NpcP::Always }, 0, TEXT("ACT_180_LEFT_ALERT"), 159, nullptr,
@@ -206,10 +208,10 @@ namespace
 	// otherwise available ACT_COVER, otherwise ACT_IDLE.
 	constexpr FNpcRule GCoverBaseRules[] =
 	{
-		{ { NpcP::CoverContextIs, NpcP::Always }, 100, nullptr, 0, nullptr, TEXT("ACT_COVER_MED"), 7,
-			NpcR::RewriteIfAvailable },
-		{ { NpcP::CoverContextIs, NpcP::Always }, 101, nullptr, 0, nullptr, TEXT("ACT_COVER_LOW"), 8,
-			NpcR::RewriteIfAvailable },
+		{ { NpcP::CoverContextIs, NpcP::Always }, 100, nullptr, 0, nullptr, TEXT("ACT_COVER_MED"),
+			7, NpcR::RewriteIfAvailable },
+		{ { NpcP::CoverContextIs, NpcP::Always }, 101, nullptr, 0, nullptr, TEXT("ACT_COVER_LOW"),
+			8, NpcR::RewriteIfAvailable },
 		{ { NpcP::Always, NpcP::Always }, 0, nullptr, 0, nullptr, TEXT("ACT_COVER"), 6,
 			NpcR::RewriteIfAvailable },
 		{ { NpcP::Always, NpcP::Always }, 0, nullptr, 0, nullptr, TEXT("ACT_IDLE"), 1,
@@ -222,10 +224,10 @@ namespace
 	{
 		{ { NpcP::ForcedLowCover, NpcP::Always }, 101, nullptr, 0, nullptr, nullptr, 0,
 			NpcR::ForceCoverContext },
-		{ { NpcP::CoverContextIs, NpcP::Always }, 100, nullptr, 0, nullptr, TEXT("ACT_MIDCRUNCH_IDLE"),
-			4369, NpcR::RewriteIfAvailable },
-		{ { NpcP::CoverContextIs, NpcP::Always }, 101, nullptr, 0, nullptr, TEXT("ACT_CRUNCH_IDLE"), 4365,
-			NpcR::RewriteIfAvailable },
+		{ { NpcP::CoverContextIs, NpcP::Always }, 100, nullptr, 0, nullptr,
+			TEXT("ACT_MIDCRUNCH_IDLE"), 4369, NpcR::RewriteIfAvailable },
+		{ { NpcP::CoverContextIs, NpcP::Always }, 101, nullptr, 0, nullptr, TEXT("ACT_CRUNCH_IDLE"),
+			4365, NpcR::RewriteIfAvailable },
 		{ { NpcP::CoverContextIs, NpcP::Always }, 10200, nullptr, 0, nullptr,
 			TEXT("ACT_CORNER_COVER_IDLE"), 4376, NpcR::RewriteIfAvailable },
 	};
@@ -234,10 +236,10 @@ namespace
 	// model and environment tests pass, otherwise ACT_RELOAD.
 	constexpr FNpcRule GReloadBaseRules[] =
 	{
-		{ { NpcP::CoverContextIs, NpcP::Always }, 100, nullptr, 0, nullptr, TEXT("ACT_RELOAD_LOW"), 87,
-			NpcR::RewriteIfAvailable },
-		{ { NpcP::CoverContextIs, NpcP::Always }, 101, nullptr, 0, nullptr, TEXT("ACT_RELOAD_LOW"), 87,
-			NpcR::RewriteIfAvailable },
+		{ { NpcP::CoverContextIs, NpcP::Always }, 100, nullptr, 0, nullptr, TEXT("ACT_RELOAD_LOW"),
+			87, NpcR::RewriteIfAvailable },
+		{ { NpcP::CoverContextIs, NpcP::Always }, 101, nullptr, 0, nullptr, TEXT("ACT_RELOAD_LOW"),
+			87, NpcR::RewriteIfAvailable },
 		{ { NpcP::Always, NpcP::Always }, 0, nullptr, 0, nullptr, TEXT("ACT_RELOAD"), 84,
 			NpcR::RewriteAndReturn },
 	};
@@ -248,10 +250,10 @@ namespace
 	{
 		{ { NpcP::Always, NpcP::Always }, 0, nullptr, 0, nullptr, TEXT("ACT_RELOAD_LOW"), 87,
 			NpcR::RewriteIfAvailable },
-		{ { NpcP::CoverContextIs, NpcP::Always }, 100, nullptr, 0, nullptr, TEXT("ACT_MIDCRUNCH_IDLE"),
-			4369, NpcR::RewriteThroughTranslator },
-		{ { NpcP::CoverContextIs, NpcP::Always }, 101, nullptr, 0, nullptr, TEXT("ACT_CRUNCH_IDLE"), 4365,
-			NpcR::RewriteThroughTranslator },
+		{ { NpcP::CoverContextIs, NpcP::Always }, 100, nullptr, 0, nullptr,
+			TEXT("ACT_MIDCRUNCH_IDLE"), 4369, NpcR::RewriteThroughTranslator },
+		{ { NpcP::CoverContextIs, NpcP::Always }, 101, nullptr, 0, nullptr, TEXT("ACT_CRUNCH_IDLE"),
+			4365, NpcR::RewriteThroughTranslator },
 		{ { NpcP::Always, NpcP::Always }, 0, nullptr, 0, nullptr, TEXT("ACT_RELOAD_FAST"), 85,
 			NpcR::RewriteAndReturn },
 	};
@@ -853,6 +855,7 @@ namespace
 		{ TEXT("0x103cdfb0"), ENpcTaskPhase::Run, false, 1, 2 },
 		{ TEXT("0x103e01d0"), ENpcTaskPhase::Run, false, 1, 0 },
 	};
+	static_assert(UE_ARRAY_COUNT(GTaskHandlers) == 53, "the task handler set changed");
 
 	constexpr const TCHAR* GPolicy0Tasks[] = { TEXT("TASK_CROW_TAKEOFF") };
 	constexpr const TCHAR* GPolicy0Activities[] = { TEXT("ACT_CROW_TAKEOFF") };

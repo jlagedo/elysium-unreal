@@ -2048,6 +2048,8 @@ def render_npc_cpp(model):
             (_literal(row["address"]), row["phase"].capitalize(),
              "true" if row["shared"] else "false", row["classes"], row["policies"]))
     add("\t};")
+    add("\tstatic_assert(UE_ARRAY_COUNT(GTaskHandlers) == %d, \"the task handler set changed\");"
+        % len(model["handlers"]))
 
     # --- the task policies -------------------------------------------------
     for index, row in enumerate(model["policies"]):
