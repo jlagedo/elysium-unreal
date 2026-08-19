@@ -38,8 +38,6 @@
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Kismet/GameplayStatics.h"
-#include "Materials/MaterialInstanceDynamic.h"
-#include "Engine/Texture2D.h"
 
 DEFINE_LOG_CATEGORY(LogElysium);
 

@@ -294,9 +294,10 @@ public:
 	FElysiumSoundSchemeManager* GetSchemeManager() const { return SchemeManager.Get(); }
 
 	// --- IElysiumEmbodiment: entity bodies ----------------------------------------------------
-	// All five forward to UElysiumEntityBodies, which owns the meshes, the animation resolution and
-	// the per-map asset caches. They stay declared here because this actor is the substrate's one
-	// engine seam (ElysiumWorldServices.h) — the substrate never learns that a body factory exists.
+	// Every override in this block forwards to UElysiumEntityBodies, which owns the meshes, the
+	// animation resolution and the per-map asset caches. They stay declared here because this actor
+	// is the substrate's one engine seam (ElysiumWorldServices.h) — the substrate never learns that
+	// a body factory exists.
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) override;
 	virtual IElysiumNpcMotor* BuildNpcMotor(USkeletalMeshComponent* Body,
@@ -380,10 +381,10 @@ public:
 	virtual void SetPlayerBodyEntityHidden(bool bInHidden) override;
 
 	// --- IElysiumEmbodiment: the player's body ----------------------------------------------
-	// All five resolve the pawn through this world's first player controller and report false /
-	// no-op when there is none (the menu backdrop seats no pawn). They are the substrate's only
-	// route to the player until 11.4 makes the player an entity, at which point they become
-	// ordinary entity operations and these overrides shrink to the pawn's own transform.
+	// Every override in this block resolves the pawn through this world's first player controller
+	// and reports false / no-ops when there is none (the menu backdrop seats no pawn). They are the
+	// substrate's only route to the player until 11.4 makes the player an entity, at which point
+	// they become ordinary entity operations and these overrides shrink to the pawn's own transform.
 	virtual bool GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const override;
 	virtual bool GetPlayerUseOrigin(FVector& OutLocation) const override;
 	virtual bool GetPlayerFeetTransform(FVector& OutFeetOrigin, FRotator& OutViewRotation) const override;
@@ -502,9 +503,6 @@ private:
 	UPROPERTY(Transient) TObjectPtr<UMaterialParameterCollection> EnvironmentParameters;
 	UPROPERTY(Transient) TObjectPtr<UNiagaraSystem> RainSystem;
 	UPROPERTY(Transient) TObjectPtr<UNiagaraComponent> RainFollowComponent;
-	UPROPERTY(Transient) TObjectPtr<UTexture2D> RainHeightTexture;
-	UPROPERTY(Transient) TObjectPtr<UMaterialInterface> RainMaterial;
-	UPROPERTY(Transient) TArray<TObjectPtr<UMaterialInstanceDynamic>> RainLayerMaterials;
 	UPROPERTY(Transient) TMap<int32, TObjectPtr<UNiagaraComponent>> RainComponents;
 	// Runtime-only target bounds. Brush entities register their existing body; model props receive
 	// a query-only box component and remain ordinary components of this one map actor.
@@ -538,6 +536,11 @@ private:
 	TMap<int32, FElysiumWeatherEmitterState> RainEmitterStates;
 	/** Failure identities already reported by the presentation adapter; avoids per-tick warning spam. */
 	TSet<FString> ReportedEmitterFailures;
+	/** Warn once per failure identity: on the first sighting of Key, record it in
+	    ReportedEmitterFailures and log the produced message as a LogElysium warning; on every later
+	    sighting do nothing, so a failure path that re-runs per tick cannot spam the log. The message
+	    is a producer rather than a string so a suppressed repeat pays no formatting cost. */
+	void WarnEmitterOnce(const FString& Key, TFunctionRef<FString()> Message);
 	FElysiumWeatherTransition WetnessTransition;
 	float PresentedWetness = 0.0f;
 	float PresentedWetnessScale = 1.0f;

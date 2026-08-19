@@ -127,6 +127,16 @@ static FAutoConsoleCommand GElysiumWeatherDump(
 		UE_LOG(LogElysium, Warning, TEXT("weather dump: no active map"));
 	}));
 
+void AElysiumMapActor::WarnEmitterOnce(const FString& Key, TFunctionRef<FString()> Message)
+{
+	if (ReportedEmitterFailures.Contains(Key))
+	{
+		return;
+	}
+	ReportedEmitterFailures.Add(Key);
+	UE_LOG(LogElysium, Warning, TEXT("%s"), *Message());
+}
+
 void AElysiumMapActor::ApplyWetness(const FElysiumWeatherTransition& Transition)
 {
 	WetnessTransition = Transition;
@@ -169,28 +179,26 @@ void AElysiumMapActor::ApplyEmitter(const FElysiumWeatherEmitterState& Emitter)
 		UNiagaraSystem* System = LoadObject<UNiagaraSystem>(nullptr, *Path);
 		if (!System)
 		{
-			const FString Failure = FString::Printf(TEXT("system|%d|%s"),
-				Emitter.Entity.Index, *Emitter.ParticleDefinition.ToLower());
-			if (!ReportedEmitterFailures.Contains(Failure))
-			{
-				ReportedEmitterFailures.Add(Failure);
-				UE_LOG(LogElysium, Warning,
-					TEXT("particle emitter %d on map '%s' cannot load definition '%s' from '%s'"),
-					Emitter.Entity.Index, *MapName, *Emitter.ParticleDefinition, *Path);
-			}
+			WarnEmitterOnce(FString::Printf(TEXT("system|%d|%s"),
+				Emitter.Entity.Index, *Emitter.ParticleDefinition.ToLower()),
+				[&]
+				{
+					return FString::Printf(
+						TEXT("particle emitter %d on map '%s' cannot load definition '%s' from '%s'"),
+						Emitter.Entity.Index, *MapName, *Emitter.ParticleDefinition, *Path);
+				});
 			return;
 		}
 		Component = NewObject<UNiagaraComponent>(this);
 		if (!Component)
 		{
-			const FString Failure = FString::Printf(TEXT("component|%d"), Emitter.Entity.Index);
-			if (!ReportedEmitterFailures.Contains(Failure))
-			{
-				ReportedEmitterFailures.Add(Failure);
-				UE_LOG(LogElysium, Warning,
-					TEXT("particle emitter %d ('%s') could not create a Niagara component on map '%s'"),
-					Emitter.Entity.Index, *Emitter.ParticleDefinition, *MapName);
-			}
+			WarnEmitterOnce(FString::Printf(TEXT("component|%d"), Emitter.Entity.Index),
+				[&]
+				{
+					return FString::Printf(
+						TEXT("particle emitter %d ('%s') could not create a Niagara component on map '%s'"),
+						Emitter.Entity.Index, *Emitter.ParticleDefinition, *MapName);
+				});
 			return;
 		}
 		Component->SetAsset(System);
@@ -220,12 +228,8 @@ void AElysiumMapActor::AttachEmitter(
 	}
 	auto WarnAttachmentOnce = [this, &Emitter](const TCHAR* Kind, const FString& Message)
 	{
-		const FString Failure = FString::Printf(TEXT("attach|%s|%d"), Kind, Emitter.Entity.Index);
-		if (!ReportedEmitterFailures.Contains(Failure))
-		{
-			ReportedEmitterFailures.Add(Failure);
-			UE_LOG(LogElysium, Warning, TEXT("%s"), *Message);
-		}
+		WarnEmitterOnce(FString::Printf(TEXT("attach|%s|%d"), Kind, Emitter.Entity.Index),
+			[&Message] { return Message; });
 	};
 	USceneComponent* ParentBody = nullptr;
 	FElysiumEntity* ParentEntity = nullptr;
@@ -239,15 +243,14 @@ void AElysiumMapActor::AttachEmitter(
 		}
 		if (!ParentBody)
 		{
-			const FString Failure = FString::Printf(TEXT("parent|%d|%s"),
-				Emitter.Entity.Index, *Emitter.ParentName.ToLower());
-			if (!ReportedEmitterFailures.Contains(Failure))
-			{
-				ReportedEmitterFailures.Add(Failure);
-				UE_LOG(LogElysium, Warning,
-					TEXT("particle emitter %d ('%s') cannot attach to parent '%s' on map '%s'; using map root"),
-					Emitter.Entity.Index, *Emitter.ParticleDefinition, *Emitter.ParentName, *MapName);
-			}
+			WarnEmitterOnce(FString::Printf(TEXT("parent|%d|%s"),
+				Emitter.Entity.Index, *Emitter.ParentName.ToLower()),
+				[&]
+				{
+					return FString::Printf(
+						TEXT("particle emitter %d ('%s') cannot attach to parent '%s' on map '%s'; using map root"),
+						Emitter.Entity.Index, *Emitter.ParticleDefinition, *Emitter.ParentName, *MapName);
+				});
 		}
 	}
 	if (!ParentBody)
@@ -296,16 +299,15 @@ void AElysiumMapActor::AttachEmitter(
 	Component->SetRelativeLocation(FVector::ZeroVector);
 	if (!bHasBone && !Emitter.AttachBone.IsEmpty())
 	{
-		const FString Failure = FString::Printf(TEXT("bone|%d|%s|%s"), Emitter.Entity.Index,
-			*Emitter.ParentName.ToLower(), *Emitter.AttachBone.ToLower());
-		if (!ReportedEmitterFailures.Contains(Failure))
-		{
-			ReportedEmitterFailures.Add(Failure);
-			UE_LOG(LogElysium, Warning,
-				TEXT("particle emitter %d ('%s') cannot find bone '%s' on parent '%s'; using body root"),
-				Emitter.Entity.Index, *Emitter.ParticleDefinition,
-				*Emitter.AttachBone, *Emitter.ParentName);
-		}
+		WarnEmitterOnce(FString::Printf(TEXT("bone|%d|%s|%s"), Emitter.Entity.Index,
+			*Emitter.ParentName.ToLower(), *Emitter.AttachBone.ToLower()),
+			[&]
+			{
+				return FString::Printf(
+					TEXT("particle emitter %d ('%s') cannot find bone '%s' on parent '%s'; using body root"),
+					Emitter.Entity.Index, *Emitter.ParticleDefinition,
+					*Emitter.AttachBone, *Emitter.ParentName);
+			});
 	}
 }
 
@@ -386,27 +388,25 @@ void AElysiumMapActor::RefreshFollowRain()
 		}
 		if (!RainSystem)
 		{
-			const FString Failure = TEXT("follow|system");
-			if (!ReportedEmitterFailures.Contains(Failure))
-			{
-				ReportedEmitterFailures.Add(Failure);
-				UE_LOG(LogElysium, Warning,
-					TEXT("rain_follow_emitter on map '%s' cannot load /Game/VtMB/Particles/NS_ElysiumRain"),
-					*MapName);
-			}
+			WarnEmitterOnce(TEXT("follow|system"),
+				[&]
+				{
+					return FString::Printf(
+						TEXT("rain_follow_emitter on map '%s' cannot load /Game/VtMB/Particles/NS_ElysiumRain"),
+						*MapName);
+				});
 			return;
 		}
 		RainFollowComponent = NewObject<UNiagaraComponent>(this);
 		if (!RainFollowComponent)
 		{
-			const FString Failure = TEXT("follow|component");
-			if (!ReportedEmitterFailures.Contains(Failure))
-			{
-				ReportedEmitterFailures.Add(Failure);
-				UE_LOG(LogElysium, Warning,
-					TEXT("rain_follow_emitter on map '%s' could not create a Niagara component"),
-					*MapName);
-			}
+			WarnEmitterOnce(TEXT("follow|component"),
+				[&]
+				{
+					return FString::Printf(
+						TEXT("rain_follow_emitter on map '%s' could not create a Niagara component"),
+						*MapName);
+				});
 			return;
 		}
 		RainFollowComponent->SetAsset(RainSystem);
