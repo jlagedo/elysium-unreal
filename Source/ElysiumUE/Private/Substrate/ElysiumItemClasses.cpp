@@ -15,6 +15,7 @@
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
 #include "ElysiumViewState.h"
+#include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSkillClasses.h"
 #include "Substrate/ElysiumWeaponClasses.h"
@@ -22,8 +23,6 @@
 #include "Components/StaticMeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/PrimitiveComponent.h"
-
-#include <type_traits>
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumItem, Log, All);
 
@@ -1312,43 +1311,6 @@ namespace
 	TUniquePtr<FElysiumEntity> MakeKeyring() { return MakeUnique<FElysiumKeyring>(); }
 	TUniquePtr<FElysiumEntity> MakeItemContainer() { return MakeUnique<FElysiumItemContainer>(); }
 
-	// Register a field backed by an FElysiumItem member (FElysiumClassDesc::Field only reaches
-	// FElysiumEntity members). Mirrors AddCharField / AddPropField — file-unique name so all of
-	// them can land in one unity blob.
-	template <typename TMember>
-	void AddItemField(FElysiumClassDesc& D, const TCHAR* Name, TMember FElysiumItem::* Member,
-		EElysiumField Flags = ElysiumFieldDefault)
-	{
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const FElysiumItem&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<FElysiumItem&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Acc.Type = EElysiumVariantType::String;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const FElysiumItem&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<FElysiumItem&>(E).*Member = V.ToString(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FElysiumEntityHandle>)
-		{
-			// The registry's typed helper has no handle case, and a handle is exactly what an item's
-			// owner is. The archive already drops the epoch by design and ApplySnapshot re-stamps it,
-			// so a Save-flagged handle field restores as a live reference or as Invalid.
-			Acc.Type = EElysiumVariantType::Handle;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Handle(static_cast<const FElysiumItem&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<FElysiumItem&>(E).*Member = V.ToHandle(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddItemField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
-
 	// CBaseCombatWeapon — the chain node every item classname registers under. It carries the four
 	// recovered datamap fields and nothing else: an item's INPUTS are the base chain's, and its
 	// policy is the catalogue's.
@@ -1359,11 +1321,11 @@ namespace
 			FElysiumClassDesc& D = FElysiumClassRegistry::Get().Register(
 				ElysiumItemClassName(), ElysiumAnimatingClassName(), &MakeItem);
 
-			AddItemField(D, TEXT("m_hOwner"), &FElysiumItem::Owner);
-			AddItemField(D, TEXT("m_iInvenPos"), &FElysiumItem::InvenPos);
-			AddItemField(D, TEXT("m_iItemCount"), &FElysiumItem::ItemCount);
-			AddItemField(D, TEXT("m_iAmmoTypes"), &FElysiumItem::AmmoType);
-			AddItemField(D, TEXT("m_iMagazineCurAmts"), &FElysiumItem::MagazineCount);
+			ElysiumAddClassField(D, TEXT("m_hOwner"), &FElysiumItem::Owner);
+			ElysiumAddClassField(D, TEXT("m_iInvenPos"), &FElysiumItem::InvenPos);
+			ElysiumAddClassField(D, TEXT("m_iItemCount"), &FElysiumItem::ItemCount);
+			ElysiumAddClassField(D, TEXT("m_iAmmoTypes"), &FElysiumItem::AmmoType);
+			ElysiumAddClassField(D, TEXT("m_iMagazineCurAmts"), &FElysiumItem::MagazineCount);
 		}
 	};
 
@@ -1401,18 +1363,7 @@ namespace
 			AddContainerSeedField(D, Index);
 		}
 
-		FElysiumFieldAccessor DamageModel;
-		DamageModel.ApplyFlags(ElysiumFieldDefault);
-		DamageModel.Type = EElysiumVariantType::String;
-		DamageModel.Get = [](const FElysiumEntity& E)
-		{
-			return FElysiumVariant::String(static_cast<const FElysiumItemContainer&>(E).DamageModel);
-		};
-		DamageModel.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
-		{
-			static_cast<FElysiumItemContainer&>(E).DamageModel = V.ToString();
-		};
-		D.Fields.Add(FName(TEXT("dmgmodel")), MoveTemp(DamageModel));
+		ElysiumAddClassField(D, TEXT("dmgmodel"), &FElysiumItemContainer::DamageModel);
 
 		// Shadow CBaseAnimating.skin so a key/script write repaints the container's prop body.
 		FElysiumFieldAccessor Skin;
@@ -1428,31 +1379,8 @@ namespace
 		};
 		D.Fields.Add(FName(TEXT("skin")), MoveTemp(Skin));
 
-		FElysiumFieldAccessor User;
-		User.ApplyFlags(EElysiumField::Save);
-		User.Type = EElysiumVariantType::Handle;
-		User.Get = [](const FElysiumEntity& E)
-		{
-			return FElysiumVariant::Handle(static_cast<const FElysiumItemContainer&>(E).CurrentUser);
-		};
-		User.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
-		{
-			static_cast<FElysiumItemContainer&>(E).CurrentUser = V.ToHandle();
-		};
-		D.Fields.Add(FName(TEXT("m_BCCUser")), MoveTemp(User));
-
-		FElysiumFieldAccessor Lock;
-		Lock.ApplyFlags(EElysiumField::Save);
-		Lock.Type = EElysiumVariantType::Handle;
-		Lock.Get = [](const FElysiumEntity& E)
-		{
-			return FElysiumVariant::Handle(static_cast<const FElysiumItemContainer&>(E).AttachedLock);
-		};
-		Lock.Set = [](FElysiumEntity& E, const FElysiumVariant& V)
-		{
-			static_cast<FElysiumItemContainer&>(E).AttachedLock = V.ToHandle();
-		};
-		D.Fields.Add(FName(TEXT("m_hLockEnt")), MoveTemp(Lock));
+		ElysiumAddClassField(D, TEXT("m_BCCUser"), &FElysiumItemContainer::CurrentUser, EElysiumField::Save);
+		ElysiumAddClassField(D, TEXT("m_hLockEnt"), &FElysiumItemContainer::AttachedLock, EElysiumField::Save);
 	}
 
 	struct FElysiumItemContainerRegistrar

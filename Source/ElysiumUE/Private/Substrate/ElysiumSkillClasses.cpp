@@ -11,6 +11,7 @@
 #include "ElysiumViewState.h"
 #include "ElysiumWorldServices.h"
 #include "Scripting/ElysiumScriptFS.h"
+#include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumMover.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -38,45 +39,6 @@ namespace
 		return SkillType == 1 ? TEXT("Intrusion") : SkillType == 2 ? TEXT("Hacking") : nullptr;
 	}
 
-	template <typename TObject, typename TMember>
-	void AddLeafField(FElysiumClassDesc& D, const TCHAR* Name, TMember TObject::* Member)
-	{
-		FElysiumFieldAccessor Accessor;
-		Accessor.ApplyFlags(ElysiumFieldDefault);
-		if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Accessor.Type = EElysiumVariantType::Int;
-			Accessor.Get = [Member](const FElysiumEntity& E)
-				{ return FElysiumVariant::Int(static_cast<const TObject&>(E).*Member); };
-			Accessor.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
-				{ static_cast<TObject&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Accessor.Type = EElysiumVariantType::Bool;
-			Accessor.Get = [Member](const FElysiumEntity& E)
-				{ return FElysiumVariant::Bool(static_cast<const TObject&>(E).*Member); };
-			Accessor.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
-				{ static_cast<TObject&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Accessor.Type = EElysiumVariantType::Float;
-			Accessor.Get = [Member](const FElysiumEntity& E)
-				{ return FElysiumVariant::Float(static_cast<const TObject&>(E).*Member); };
-			Accessor.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
-				{ static_cast<TObject&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Accessor.Type = EElysiumVariantType::String;
-			Accessor.Get = [Member](const FElysiumEntity& E)
-				{ return FElysiumVariant::String(static_cast<const TObject&>(E).*Member); };
-			Accessor.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
-				{ static_cast<TObject&>(E).*Member = V.ToString(); };
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Accessor));
-	}
 }
 
 void FElysiumSkillEntity::InputResetDifficulty(int32 NewDifficulty)
@@ -1426,8 +1388,8 @@ namespace
 				ElysiumBaseClassName(), &MakeSkillEntity);
 			Skill.Input(TEXT("ResetDifficulty"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 				{ static_cast<FElysiumSkillEntity&>(E).InputResetDifficulty(A.Param.ToInt()); });
-			AddLeafField(Skill, TEXT("difficulty"), &FElysiumSkillEntity::Difficulty);
-			AddLeafField(Skill, TEXT("skilltype"), &FElysiumSkillEntity::SkillType);
+			ElysiumAddClassField(Skill, TEXT("difficulty"), &FElysiumSkillEntity::Difficulty);
+			ElysiumAddClassField(Skill, TEXT("skilltype"), &FElysiumSkillEntity::SkillType);
 
 			FElysiumClassDesc& Terminal = Registry.Register(ElysiumTerminalClassName(),
 				ElysiumSkillEntityClassName(), &MakeTerminal);
@@ -1435,18 +1397,18 @@ namespace
 				{ static_cast<FElysiumTerminal&>(E).InputEnable(); });
 			Terminal.Input(TEXT("Disable"), [](FElysiumEntity& E, const FElysiumInputArgs&)
 				{ static_cast<FElysiumTerminal&>(E).InputDisable(); });
-			AddLeafField(Terminal, TEXT("start_enabled"), &FElysiumTerminal::bStartEnabled);
-			AddLeafField(Terminal, TEXT("textcolumns"), &FElysiumTerminal::TextColumns);
-			AddLeafField(Terminal, TEXT("textrows"), &FElysiumTerminal::TextRows);
-			AddLeafField(Terminal, TEXT("colorscheme"), &FElysiumTerminal::ColorScheme);
-			AddLeafField(Terminal, TEXT("soundgroup"), &FElysiumTerminal::SoundGroup);
+			ElysiumAddClassField(Terminal, TEXT("start_enabled"), &FElysiumTerminal::bStartEnabled);
+			ElysiumAddClassField(Terminal, TEXT("textcolumns"), &FElysiumTerminal::TextColumns);
+			ElysiumAddClassField(Terminal, TEXT("textrows"), &FElysiumTerminal::TextRows);
+			ElysiumAddClassField(Terminal, TEXT("colorscheme"), &FElysiumTerminal::ColorScheme);
+			ElysiumAddClassField(Terminal, TEXT("soundgroup"), &FElysiumTerminal::SoundGroup);
 
 			FElysiumClassDesc& Hacking = Registry.Register(FName(TEXT("prop_hacking")),
 				ElysiumTerminalClassName(), &MakePropHacking);
-			AddLeafField(Hacking, TEXT("hack_file"), &FElysiumPropHacking::HackFile);
-			AddLeafField(Hacking, TEXT("global_email"), &FElysiumPropHacking::bGlobalEmail);
-			AddLeafField(Hacking, TEXT("ss_delay"), &FElysiumPropHacking::ScreenSaverDelay);
-			AddLeafField(Hacking, TEXT("ss_start"), &FElysiumPropHacking::ScreenSaverStart);
+			ElysiumAddClassField(Hacking, TEXT("hack_file"), &FElysiumPropHacking::HackFile);
+			ElysiumAddClassField(Hacking, TEXT("global_email"), &FElysiumPropHacking::bGlobalEmail);
+			ElysiumAddClassField(Hacking, TEXT("ss_delay"), &FElysiumPropHacking::ScreenSaverDelay);
+			ElysiumAddClassField(Hacking, TEXT("ss_start"), &FElysiumPropHacking::ScreenSaverStart);
 
 			FElysiumClassDesc& Lockable = Registry.Register(ElysiumLockableEntityClassName(),
 				ElysiumSkillEntityClassName(), &MakeLockableEntity);
@@ -1456,10 +1418,10 @@ namespace
 				{ static_cast<FElysiumLockableEntity&>(E).InputUnlock(A.Activator); });
 			Lockable.Input(TEXT("Use"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 				{ static_cast<FElysiumLockableEntity&>(E).Use(A.Activator); });
-			AddLeafField(Lockable, TEXT("key_name"), &FElysiumLockableEntity::KeyName);
-			AddLeafField(Lockable, TEXT("delete_key"), &FElysiumLockableEntity::bDeleteKey);
-			AddLeafField(Lockable, TEXT("requires_key"), &FElysiumLockableEntity::bRequiresKey);
-			AddLeafField(Lockable, TEXT("key_icon"), &FElysiumLockableEntity::KeyIcon);
+			ElysiumAddClassField(Lockable, TEXT("key_name"), &FElysiumLockableEntity::KeyName);
+			ElysiumAddClassField(Lockable, TEXT("delete_key"), &FElysiumLockableEntity::bDeleteKey);
+			ElysiumAddClassField(Lockable, TEXT("requires_key"), &FElysiumLockableEntity::bRequiresKey);
+			ElysiumAddClassField(Lockable, TEXT("key_icon"), &FElysiumLockableEntity::KeyIcon);
 
 			Registry.Register(FName(TEXT("prop_doorknob")),
 				ElysiumLockableEntityClassName(), &MakeDoorknob);

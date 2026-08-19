@@ -52,11 +52,10 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
+#include "Substrate/ElysiumClassFields.h"
 
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
-
-#include <type_traits>
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSeq, Log, All);
 
@@ -99,38 +98,6 @@ namespace
 	// on the engine tick, so this only paces the substrate's own read of where it got to.
 	constexpr double TRAVEL_TICK_SECONDS = 0.05;
 
-	// Subclass-member field accessor. Mirrors AddNpcField / AddSignField — file-unique name so all of
-	// them can land in one unity blob.
-	template <typename TClass, typename TMember>
-	void AddSeqField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(ElysiumFieldDefault);
-		if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Acc.Type = EElysiumVariantType::String;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddSeqField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
 }
 
 // ============================================================================================
@@ -717,16 +684,16 @@ static void BuildScriptedSequenceClass(FElysiumClassDesc& D)
 	D.Input(TEXT("CancelSequence"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumScriptedSequence&>(E).InputCancelSequence(Args); });
 
-	AddSeqField(D, TEXT("m_iszEntity"),     &FElysiumScriptedSequence::TargetEntity);
-	AddSeqField(D, TEXT("m_iszIdle"),       &FElysiumScriptedSequence::PreIdle);
-	AddSeqField(D, TEXT("m_iszPreIdle"),    &FElysiumScriptedSequence::PreIdleAlt);
-	AddSeqField(D, TEXT("m_iszPlay"),       &FElysiumScriptedSequence::Play);
-	AddSeqField(D, TEXT("m_iszPostIdle"),   &FElysiumScriptedSequence::PostIdle);
-	AddSeqField(D, TEXT("m_iszCustomMove"), &FElysiumScriptedSequence::CustomMove);
-	AddSeqField(D, TEXT("m_iszNextScript"), &FElysiumScriptedSequence::NextScript);
-	AddSeqField(D, TEXT("m_fMoveTo"),       &FElysiumScriptedSequence::MoveTo);
-	AddSeqField(D, TEXT("m_flRadius"),      &FElysiumScriptedSequence::Radius);
-	AddSeqField(D, TEXT("m_flRepeat"),      &FElysiumScriptedSequence::Repeat);
+	ElysiumAddClassField(D, TEXT("m_iszEntity"),     &FElysiumScriptedSequence::TargetEntity);
+	ElysiumAddClassField(D, TEXT("m_iszIdle"),       &FElysiumScriptedSequence::PreIdle);
+	ElysiumAddClassField(D, TEXT("m_iszPreIdle"),    &FElysiumScriptedSequence::PreIdleAlt);
+	ElysiumAddClassField(D, TEXT("m_iszPlay"),       &FElysiumScriptedSequence::Play);
+	ElysiumAddClassField(D, TEXT("m_iszPostIdle"),   &FElysiumScriptedSequence::PostIdle);
+	ElysiumAddClassField(D, TEXT("m_iszCustomMove"), &FElysiumScriptedSequence::CustomMove);
+	ElysiumAddClassField(D, TEXT("m_iszNextScript"), &FElysiumScriptedSequence::NextScript);
+	ElysiumAddClassField(D, TEXT("m_fMoveTo"),       &FElysiumScriptedSequence::MoveTo);
+	ElysiumAddClassField(D, TEXT("m_flRadius"),      &FElysiumScriptedSequence::Radius);
+	ElysiumAddClassField(D, TEXT("m_flRepeat"),      &FElysiumScriptedSequence::Repeat);
 }
 
 // `aiscripted_sequence` is the same CCineNPC with a second vftable slot patched in (`101a8fe0`); the

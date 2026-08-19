@@ -183,8 +183,9 @@ namespace
 	// The lipsync half of the same pair, straight from FUN_100C42F0.
 	const TCHAR* const GPhonemeClass = TEXT("phonemes");
 
-	// Subclass-member field accessor. File-unique name so every one of these can land in one unity
-	// blob — same reason as AddSeqField / AddNpcField / AddLogicField.
+	// Subclass-member field accessor. Deliberately file-local rather than the shared
+	// ElysiumAddClassField (Substrate/ElysiumClassFields.h): its bool setter keeps Python
+	// truthiness for non-string variants, where the shared template always coerces via ToInt.
 	template <typename TClass, typename TMember>
 	void AddSceneField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member)
 	{

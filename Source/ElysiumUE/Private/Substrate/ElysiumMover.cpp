@@ -21,14 +21,13 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumClassFields.h"
 
 #include "Dom/JsonObject.h"
 #include "GameFramework/Pawn.h"
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
-
-#include <type_traits>
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMover, Log, All);
 
@@ -123,48 +122,6 @@ namespace
 		return Box;
 	}
 
-	// Register a field backed by a *subclass* member (FElysiumClassDesc::Field only takes base
-	// FElysiumEntity members; door keyfields live on FElysiumDoorBase). Mirrors AddSubclassField in
-	// ElysiumStarterClasses.cpp — the accessor static_casts, always valid since a class's field
-	// table is only walked for entities of that class or a subclass.
-	// File-unique name: ElysiumStarterClasses.cpp has an identical template, and both can land in
-	// one unity blob.
-	template <typename TClass, typename TMember>
-	void AddDoorSubclassField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Acc.Type = EElysiumVariantType::Bool;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Acc.Type = EElysiumVariantType::String;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddSubclassField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
 }
 
 // ============================================================================================
@@ -1633,13 +1590,13 @@ void ElysiumBuildCBaseDoor(FElysiumClassDesc& D)
 	D.Input(TEXT("Use"),    [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumDoorBase&>(E).DoorUse(A.Activator); });
 
 	// Keyfields (B.2).
-	AddDoorSubclassField(D, TEXT("speed"),    &FElysiumDoorBase::Speed);
-	AddDoorSubclassField(D, TEXT("distance"), &FElysiumDoorBase::Distance);
-	AddDoorSubclassField(D, TEXT("wait"),     &FElysiumDoorBase::Wait);
-	AddDoorSubclassField(D, TEXT("lip"),      &FElysiumDoorBase::Lip);
-	AddDoorSubclassField(D, TEXT("dmg"),      &FElysiumDoorBase::Dmg);
-	AddDoorSubclassField(D, TEXT("linked_door"), &FElysiumDoorBase::LinkedDoorName);
-	AddDoorSubclassField(D, TEXT("use_override"), &FElysiumDoorBase::UseOverrideName);
+	ElysiumAddClassField(D, TEXT("speed"),    &FElysiumDoorBase::Speed);
+	ElysiumAddClassField(D, TEXT("distance"), &FElysiumDoorBase::Distance);
+	ElysiumAddClassField(D, TEXT("wait"),     &FElysiumDoorBase::Wait);
+	ElysiumAddClassField(D, TEXT("lip"),      &FElysiumDoorBase::Lip);
+	ElysiumAddClassField(D, TEXT("dmg"),      &FElysiumDoorBase::Dmg);
+	ElysiumAddClassField(D, TEXT("linked_door"), &FElysiumDoorBase::LinkedDoorName);
+	ElysiumAddClassField(D, TEXT("use_override"), &FElysiumDoorBase::UseOverrideName);
 }
 
 static TUniquePtr<FElysiumEntity> MakeFuncDoorRotate() { return MakeUnique<FElysiumFuncDoorRotating>(); }
@@ -1679,11 +1636,11 @@ static FElysiumClassRegistrar GRegFuncElevator(
 			{ static_cast<FElysiumElevator&>(E).InputUnlock(); });
 		D.Input(TEXT("CallCurrentFloorOutputs"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{ static_cast<FElysiumElevator&>(E).InputCallCurrentFloorOutputs(A.Activator); });
-		AddDoorSubclassField(D, TEXT("speed"), &FElysiumElevator::Speed);
-		AddDoorSubclassField(D, TEXT("numfloors"), &FElysiumElevator::NumFloors);
-		AddDoorSubclassField(D, TEXT("locked"), &FElysiumElevator::bLocked);
-		AddDoorSubclassField(D, TEXT("startsound"), &FElysiumElevator::StartSound);
-		AddDoorSubclassField(D, TEXT("stopsound"), &FElysiumElevator::StopSound);
+		ElysiumAddClassField(D, TEXT("speed"), &FElysiumElevator::Speed);
+		ElysiumAddClassField(D, TEXT("numfloors"), &FElysiumElevator::NumFloors);
+		ElysiumAddClassField(D, TEXT("locked"), &FElysiumElevator::bLocked);
+		ElysiumAddClassField(D, TEXT("startsound"), &FElysiumElevator::StartSound);
+		ElysiumAddClassField(D, TEXT("stopsound"), &FElysiumElevator::StopSound);
 	});
 
 static TUniquePtr<FElysiumEntity> MakeFuncButton() { return MakeUnique<FElysiumButton>(); }
@@ -1699,9 +1656,9 @@ static FElysiumClassRegistrar GRegFuncButton(
 		D.Input(TEXT("Press"),  [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumButton&>(E).InputPress(A.Activator); });
 		D.Input(TEXT("Lock"),   [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumButton&>(E).InputLock(); });
 		D.Input(TEXT("Unlock"), [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumButton&>(E).InputUnlock(); });
-		AddDoorSubclassField(D, TEXT("speed"), &FElysiumButton::Speed);
-		AddDoorSubclassField(D, TEXT("wait"),  &FElysiumButton::Wait);
-		AddDoorSubclassField(D, TEXT("lip"),   &FElysiumButton::Lip);
+		ElysiumAddClassField(D, TEXT("speed"), &FElysiumButton::Speed);
+		ElysiumAddClassField(D, TEXT("wait"),  &FElysiumButton::Wait);
+		ElysiumAddClassField(D, TEXT("lip"),   &FElysiumButton::Lip);
 	});
 
 static TUniquePtr<FElysiumEntity> MakeFuncRotating() { return MakeUnique<FElysiumFuncRotating>(); }
@@ -1716,9 +1673,9 @@ static FElysiumClassRegistrar GRegFuncRotating(
 		D.Input(TEXT("Stop"),     [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumFuncRotating&>(E).InputStop(); });
 		D.Input(TEXT("Reverse"),  [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumFuncRotating&>(E).InputReverse(); });
 		D.Input(TEXT("SetSpeed"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumFuncRotating&>(E).InputSetSpeed(A.Param); });
-		AddDoorSubclassField(D, TEXT("maxspeed"),    &FElysiumFuncRotating::MaxSpeed);
-		AddDoorSubclassField(D, TEXT("fanfriction"), &FElysiumFuncRotating::FanFriction);
-		AddDoorSubclassField(D, TEXT("volume"),      &FElysiumFuncRotating::Volume);
-		AddDoorSubclassField(D, TEXT("dmg"),         &FElysiumFuncRotating::Dmg);
-		AddDoorSubclassField(D, TEXT("sounds"),      &FElysiumFuncRotating::Sounds);
+		ElysiumAddClassField(D, TEXT("maxspeed"),    &FElysiumFuncRotating::MaxSpeed);
+		ElysiumAddClassField(D, TEXT("fanfriction"), &FElysiumFuncRotating::FanFriction);
+		ElysiumAddClassField(D, TEXT("volume"),      &FElysiumFuncRotating::Volume);
+		ElysiumAddClassField(D, TEXT("dmg"),         &FElysiumFuncRotating::Dmg);
+		ElysiumAddClassField(D, TEXT("sounds"),      &FElysiumFuncRotating::Sounds);
 	});

@@ -4,44 +4,9 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumWorldServices.h"
-
-#include <type_traits>
+#include "Substrate/ElysiumClassFields.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeatherEntity, Log, All);
-
-namespace
-{
-	template <typename TClass, typename TMember>
-	void AddWeatherField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member)
-	{
-		FElysiumFieldAccessor Field;
-		if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Field.Type = EElysiumVariantType::Bool;
-			Field.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
-			Field.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Field.Type = EElysiumVariantType::Int;
-			Field.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Field.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Field.Type = EElysiumVariantType::Float;
-			Field.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Field.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Field.Type = EElysiumVariantType::String;
-			Field.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
-			Field.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Field));
-	}
-}
 
 class FElysiumEnvParticle final : public FElysiumEntity
 {
@@ -200,11 +165,13 @@ static FElysiumClassRegistrar GRegEnvParticle(
 		D.Input(TEXT("SetRateScale"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvParticle&>(E).InputSetRateScale(A.Param); });
 		D.Input(TEXT("SetRampTime"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvParticle&>(E).InputSetRampTime(A.Param); });
 		D.Input(TEXT("SetAttachType"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvParticle&>(E).InputSetAttachType(A.Param); });
-		AddWeatherField(D, TEXT("active"), &FElysiumEnvParticle::bActive);
-		AddWeatherField(D, TEXT("particle_definition"), &FElysiumEnvParticle::ParticleDefinition);
-		AddWeatherField(D, TEXT("attach_type"), &FElysiumEnvParticle::AttachType);
-		AddWeatherField(D, TEXT("bone"), &FElysiumEnvParticle::AttachBone);
-		AddWeatherField(D, TEXT("bounds"), &FElysiumEnvParticle::Bounds);
-		AddWeatherField(D, TEXT("ramp_scale"), &FElysiumEnvParticle::RampScale);
-		AddWeatherField(D, TEXT("ramp_time"), &FElysiumEnvParticle::RampTime);
+		// None: spawn-time keyvalue application ignores bKeyable, and these fields are neither
+		// runtime-writable nor save-enumerated.
+		ElysiumAddClassField(D, TEXT("active"), &FElysiumEnvParticle::bActive, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("particle_definition"), &FElysiumEnvParticle::ParticleDefinition, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("attach_type"), &FElysiumEnvParticle::AttachType, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("bone"), &FElysiumEnvParticle::AttachBone, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("bounds"), &FElysiumEnvParticle::Bounds, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("ramp_scale"), &FElysiumEnvParticle::RampScale, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("ramp_time"), &FElysiumEnvParticle::RampTime, EElysiumField::None);
 	});

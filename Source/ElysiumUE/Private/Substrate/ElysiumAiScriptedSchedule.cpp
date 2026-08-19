@@ -4,10 +4,9 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcLog.h"
-
-#include <type_traits>
 
 // ================================================================================================
 // The recovered tables
@@ -192,44 +191,6 @@ namespace
 		}
 	}
 
-	// Register a field backed by a subclass member. File-unique name so every registration site can
-	// land in one unity blob (mirrors AddNpcField / AddSeqField).
-	template <typename TClass, typename TMember>
-	void AddAiScheduleField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(ElysiumFieldDefault);
-		if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E)
-			{ return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
-			{ static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E)
-			{ return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
-			{ static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Acc.Type = EElysiumVariantType::String;
-			Acc.Get = [Member](const FElysiumEntity& E)
-			{ return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
-			{ static_cast<TClass&>(E).*Member = V.ToString(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddAiScheduleField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
 }
 
 // ================================================================================================
@@ -434,11 +395,11 @@ static void BuildAiScriptedScheduleClass(FElysiumClassDesc& D)
 	D.Input(TEXT("StartSchedule"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumAiScriptedSchedule&>(E).InputStartSchedule(Args); });
 
-	AddAiScheduleField(D, TEXT("m_iszEntity"), &FElysiumAiScriptedSchedule::TargetEntity);
-	AddAiScheduleField(D, TEXT("goalent"),     &FElysiumAiScriptedSchedule::GoalEntity);
-	AddAiScheduleField(D, TEXT("schedule"),    &FElysiumAiScriptedSchedule::Mode);
-	AddAiScheduleField(D, TEXT("forcestate"),  &FElysiumAiScriptedSchedule::ForceState);
-	AddAiScheduleField(D, TEXT("m_flRadius"),  &FElysiumAiScriptedSchedule::Radius);
+	ElysiumAddClassField(D, TEXT("m_iszEntity"), &FElysiumAiScriptedSchedule::TargetEntity);
+	ElysiumAddClassField(D, TEXT("goalent"),     &FElysiumAiScriptedSchedule::GoalEntity);
+	ElysiumAddClassField(D, TEXT("schedule"),    &FElysiumAiScriptedSchedule::Mode);
+	ElysiumAddClassField(D, TEXT("forcestate"),  &FElysiumAiScriptedSchedule::ForceState);
+	ElysiumAddClassField(D, TEXT("m_flRadius"),  &FElysiumAiScriptedSchedule::Radius);
 }
 
 // The class and its two programs install together, following the combat family's precedent: a

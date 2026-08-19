@@ -21,49 +21,12 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumWorldServices.h"
-
-#include <type_traits>
+#include "Substrate/ElysiumClassFields.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumLogic, Log, All);
 
 namespace
 {
-	// Register a field backed by a *subclass* member (FElysiumClassDesc::Field only takes base
-	// FElysiumEntity members; leaf classes carry their own state). Mirrors AddSubclassField in
-	// ElysiumStarterClasses.cpp / AddDoorSubclassField in ElysiumMover.cpp — file-unique name so all
-	// three can land in one unity blob. Always valid: a class's field table is only walked for
-	// entities of that class or a subclass.
-	template <typename TClass, typename TMember>
-	void AddLogicField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Acc.Type = EElysiumVariantType::Bool;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddLogicField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
-
 	// A raw keyvalue read (values that aren't mapped base/leaf fields stay on the def's Keys map).
 	float KeyFloat(const FElysiumEntityDef* Def, const TCHAR* Key, float Default)
 	{
@@ -748,9 +711,9 @@ static FElysiumClassRegistrar GRegMathCounter(
 		D.Input(TEXT("SetHitMax"),      [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumMathCounter&>(E).InputSetHitMax(A); });
 		D.Input(TEXT("SetHitMin"),      [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumMathCounter&>(E).InputSetHitMin(A); });
 		D.Input(TEXT("GetValue"),       [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumMathCounter&>(E).InputGetValue(A); });
-		AddLogicField(D, TEXT("startvalue"), &FElysiumMathCounter::Value);
-		AddLogicField(D, TEXT("min"),        &FElysiumMathCounter::MinValue);
-		AddLogicField(D, TEXT("max"),        &FElysiumMathCounter::MaxValue);
+		ElysiumAddClassField(D, TEXT("startvalue"), &FElysiumMathCounter::Value);
+		ElysiumAddClassField(D, TEXT("min"),        &FElysiumMathCounter::MinValue);
+		ElysiumAddClassField(D, TEXT("max"),        &FElysiumMathCounter::MaxValue);
 	});
 
 static FElysiumClassRegistrar GRegLogicTimer(
@@ -763,11 +726,11 @@ static FElysiumClassRegistrar GRegLogicTimer(
 		D.Input(TEXT("FireTimer"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumLogicTimer&>(E).InputFireTimer(A.Activator); });
 		D.Input(TEXT("RefireTimer"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumLogicTimer&>(E).InputResetTimer(); });
 		D.Input(TEXT("ResetTimer"),  [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumLogicTimer&>(E).InputResetTimer(); });
-		AddLogicField(D, TEXT("StartDisabled"),    &FElysiumLogicTimer::bDisabled);
-		AddLogicField(D, TEXT("RefireTime"),       &FElysiumLogicTimer::RefireTime);
-		AddLogicField(D, TEXT("UseRandomTime"),    &FElysiumLogicTimer::bUseRandomTime);
-		AddLogicField(D, TEXT("LowerRandomBound"), &FElysiumLogicTimer::LowerRandomBound);
-		AddLogicField(D, TEXT("UpperRandomBound"), &FElysiumLogicTimer::UpperRandomBound);
+		ElysiumAddClassField(D, TEXT("StartDisabled"),    &FElysiumLogicTimer::bDisabled);
+		ElysiumAddClassField(D, TEXT("RefireTime"),       &FElysiumLogicTimer::RefireTime);
+		ElysiumAddClassField(D, TEXT("UseRandomTime"),    &FElysiumLogicTimer::bUseRandomTime);
+		ElysiumAddClassField(D, TEXT("LowerRandomBound"), &FElysiumLogicTimer::LowerRandomBound);
+		ElysiumAddClassField(D, TEXT("UpperRandomBound"), &FElysiumLogicTimer::UpperRandomBound);
 	});
 
 // Shared Case field table for both logic_case leaves (the Case value strings are cached in Spawn()
@@ -787,7 +750,7 @@ static FElysiumClassRegistrar GRegLogicCaseToggle(
 		D.Input(TEXT("InValue"),    [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumLogicCaseToggle&>(E).InputInValue(A); });
 		D.Input(TEXT("InValueDelta"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumLogicCaseToggle&>(E).InputInValueDelta(A); });
 		D.Input(TEXT("PickRandom"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumLogicCaseToggle&>(E).InputPickRandom(A); });
-		AddLogicField(D, TEXT("InitialCase"), &FElysiumLogicCaseToggle::InitialCase);
+		ElysiumAddClassField(D, TEXT("InitialCase"), &FElysiumLogicCaseToggle::InitialCase);
 	});
 
 static FElysiumClassRegistrar GRegEnvFade(
@@ -798,8 +761,8 @@ static FElysiumClassRegistrar GRegEnvFade(
 		D.Input(TEXT("Fade"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumEnvFade&>(E).InputFade(A); });
 		// The other two of the datamap's four records (dataDesc 0x10568c54): both keyable, so a
 		// script reaches them by name through the Entity attribute namespace, not just at spawn.
-		AddLogicField(D, TEXT("duration"), &FElysiumEnvFade::Duration);
-		AddLogicField(D, TEXT("holdtime"), &FElysiumEnvFade::HoldTime);
+		ElysiumAddClassField(D, TEXT("duration"), &FElysiumEnvFade::Duration);
+		ElysiumAddClassField(D, TEXT("holdtime"), &FElysiumEnvFade::HoldTime);
 	});
 
 static FElysiumClassRegistrar GRegFuncBrush(
@@ -809,8 +772,8 @@ static FElysiumClassRegistrar GRegFuncBrush(
 		D.Input(TEXT("Enable"),  [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumFuncBrush&>(E).InputEnable(); });
 		D.Input(TEXT("Disable"), [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumFuncBrush&>(E).InputDisable(); });
 		D.Input(TEXT("Toggle"),  [](FElysiumEntity& E, const FElysiumInputArgs&) { static_cast<FElysiumFuncBrush&>(E).InputToggle(); });
-		AddLogicField(D, TEXT("Solidity"),      &FElysiumFuncBrush::Solidity);
-		AddLogicField(D, TEXT("StartDisabled"), &FElysiumFuncBrush::bStartDisabled);
+		ElysiumAddClassField(D, TEXT("Solidity"),      &FElysiumFuncBrush::Solidity);
+		ElysiumAddClassField(D, TEXT("StartDisabled"), &FElysiumFuncBrush::bStartDisabled);
 	});
 
 static FElysiumClassRegistrar GRegPointTeleport(

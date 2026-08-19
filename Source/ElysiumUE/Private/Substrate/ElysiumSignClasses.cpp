@@ -17,48 +17,10 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumSignData.h"
 
-#include <type_traits>
-
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSignEnt, Log, All);
-
-namespace
-{
-	// Register a field backed by a subclass member (the base FElysiumClassDesc::Field only reaches
-	// FElysiumEntity members). Mirrors AddSubclassField / AddLogicField / AddDoorSubclassField in
-	// the sibling class files — file-unique name so all of them can land in one unity blob.
-	template <typename TClass, typename TMember>
-	void AddSignField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Acc.Type = EElysiumVariantType::Bool;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Acc.Type = EElysiumVariantType::String;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddSignField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
-}
 
 // ============================================================================================
 // game_sign — CGameSign. Bodiless (no brush, no model): it exists only to own a definition_file
@@ -208,8 +170,8 @@ static FElysiumClassRegistrar GRegGameSign(
 			static_cast<FElysiumGameSign&>(E).InputChangeFile(Args);
 		});
 
-		AddSignField(D, TEXT("definition_file"), &FElysiumGameSign::DefinitionFile);
-		AddSignField(D, TEXT("fade_in"),         &FElysiumGameSign::FadeIn);
-		AddSignField(D, TEXT("fade_out"),        &FElysiumGameSign::FadeOut);
-		AddSignField(D, TEXT("pause"),           &FElysiumGameSign::bPause);
+		ElysiumAddClassField(D, TEXT("definition_file"), &FElysiumGameSign::DefinitionFile);
+		ElysiumAddClassField(D, TEXT("fade_in"),         &FElysiumGameSign::FadeIn);
+		ElysiumAddClassField(D, TEXT("fade_out"),        &FElysiumGameSign::FadeOut);
+		ElysiumAddClassField(D, TEXT("pause"),           &FElysiumGameSign::bPause);
 	});

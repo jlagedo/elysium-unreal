@@ -18,6 +18,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumSignData.h"
 
 #include "Components/BoxComponent.h"
@@ -31,8 +32,6 @@
 #include "Misc/Paths.h"
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
-
-#include <type_traits>
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumProp, Log, All);
 
@@ -86,46 +85,6 @@ static TAutoConsoleVariable<int32> CVarPhysicsProps(
 
 namespace
 {
-	// Register a field backed by a subclass member (the base FElysiumClassDesc::Field only reaches
-	// FElysiumEntity members). Mirrors AddNpcField — file-unique name so all of them can land in one
-	// unity blob.
-	template <typename TClass, typename TMember>
-	void AddPropField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Acc.Type = EElysiumVariantType::Bool;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Acc.Type = EElysiumVariantType::String;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddPropField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
-
 	// The `skin` field, whose setter repaints the body rather than only storing the number. VtMB
 	// makes no distinction: `skin` is one datamap record flagged both KEY and INPUT with a null
 	// inputFunc, so the keyvalue, the `Skin` wire and a script's `.skin =` all land in the same
@@ -1666,10 +1625,10 @@ static void BuildPropClass(FElysiumClassDesc& D)
 
 	// CDynamicProp's own animation keyfields. `demo_sequence` is deliberately absent: it is a
 	// Hammer/FGD field the engine never reads.
-	AddPropField(D, TEXT("LoopSequence"), &FElysiumProp::LoopSequence);
-	AddPropField(D, TEXT("RandomAnimation"), &FElysiumProp::bRandomAnimator);
-	AddPropField(D, TEXT("MinAnimTime"), &FElysiumProp::MinAnimTime);
-	AddPropField(D, TEXT("MaxAnimTime"), &FElysiumProp::MaxAnimTime);
+	ElysiumAddClassField(D, TEXT("LoopSequence"), &FElysiumProp::LoopSequence);
+	ElysiumAddClassField(D, TEXT("RandomAnimation"), &FElysiumProp::bRandomAnimator);
+	ElysiumAddClassField(D, TEXT("MinAnimTime"), &FElysiumProp::MinAnimTime);
+	ElysiumAddClassField(D, TEXT("MaxAnimTime"), &FElysiumProp::MaxAnimTime);
 }
 
 // Model-bearing leaves that only need the common body/skin surface use this descriptor helper.
@@ -1692,9 +1651,9 @@ static void BuildPropButtonClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumPropButton&>(E).InputToggleLock(); });
 	D.Input(TEXT("SetState"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 		{ static_cast<FElysiumPropButton&>(E).InputSetState(A.Param.ToInt(), A.Activator); });
-	AddPropField(D, TEXT("locked"), &FElysiumPropButton::bLocked);
-	AddPropField(D, TEXT("current_state"), &FElysiumPropButton::CurrentState);
-	AddPropField(D, TEXT("max_states"), &FElysiumPropButton::MaxStates);
+	ElysiumAddClassField(D, TEXT("locked"), &FElysiumPropButton::bLocked);
+	ElysiumAddClassField(D, TEXT("current_state"), &FElysiumPropButton::CurrentState);
+	ElysiumAddClassField(D, TEXT("max_states"), &FElysiumPropButton::MaxStates);
 }
 
 static void BuildPropSwitchClass(FElysiumClassDesc& D)
@@ -1712,14 +1671,14 @@ static void BuildPropSwitchClass(FElysiumClassDesc& D)
 		{ static_cast<FElysiumPropSwitch&>(E).InputActivate(A.Activator); });
 	D.Input(TEXT("Deactivate"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 		{ static_cast<FElysiumPropSwitch&>(E).InputDeactivate(A.Activator); });
-	AddPropField(D, TEXT("linkedswitch"), &FElysiumPropSwitch::LinkedSwitchName);
-	AddPropField(D, TEXT("reset_state"), &FElysiumPropSwitch::ResetState);
+	ElysiumAddClassField(D, TEXT("linkedswitch"), &FElysiumPropSwitch::LinkedSwitchName);
+	ElysiumAddClassField(D, TEXT("reset_state"), &FElysiumPropSwitch::ResetState);
 }
 
 static void BuildPropSignClass(FElysiumClassDesc& D)
 {
 	BuildPropBodyClass(D);
-	AddPropField(D, TEXT("definition_file"), &FElysiumPropSign::DefinitionFile);
+	ElysiumAddClassField(D, TEXT("definition_file"), &FElysiumPropSign::DefinitionFile);
 }
 
 // prop_physics (8.4): the RE'd CPhysicsProp/CBreakableProp input surface. Wake + Break are real;

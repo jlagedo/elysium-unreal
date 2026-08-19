@@ -17,61 +17,14 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
+#include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumTriggerBase.h"
 #include "ElysiumWorldServices.h"
 
 #include "Engine/GameInstance.h"
 
-#include <type_traits>
-
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumTrigger, Log, All);
-
-namespace
-{
-	// Register a field backed by a *subclass* member. FElysiumClassDesc::Field only takes members
-	// of the base FElysiumEntity; leaf classes carry their own state (bDisabled, wait), so the
-	// accessor static_casts the entity to TClass. Always valid: a class's field table is only ever
-	// walked for entities of that class or a subclass (Construct applies keyvalues through the
-	// entity's own chain, the P2 inspector reads an entity through its own chain).
-	template <typename TClass, typename TMember>
-	void AddSubclassField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Acc.Type = EElysiumVariantType::Bool;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
-			// ToInt (not ToBool): a "0" keyvalue must read false, not "non-empty -> true".
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Acc.Type = EElysiumVariantType::String;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddSubclassField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
-}
 
 // ============================================================================================
 // logic_auto — map-load ignition (678 wires across all maps; 5 instances / 13 OnMapLoad rows on
@@ -895,16 +848,16 @@ static void BuildCBaseTrigger(FElysiumClassDesc& D)
 		FElysiumTriggerBase& T = static_cast<FElysiumTriggerBase&>(E);
 		T.SetDisabled(!T.bDisabled);
 	});
-	AddSubclassField(D, TEXT("StartDisabled"), &FElysiumTriggerBase::bDisabled);
-	AddSubclassField(D, TEXT("filtername"),     &FElysiumTriggerBase::FilterName);
-	AddSubclassField(D, TEXT("wait"),          &FElysiumTriggerBase::Wait);
+	ElysiumAddClassField(D, TEXT("StartDisabled"), &FElysiumTriggerBase::bDisabled);
+	ElysiumAddClassField(D, TEXT("filtername"),     &FElysiumTriggerBase::FilterName);
+	ElysiumAddClassField(D, TEXT("wait"),          &FElysiumTriggerBase::Wait);
 }
 
 static void BuildFilterBase(FElysiumClassDesc& D)
 {
 	D.Input(TEXT("TestActivator"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumFilterBase&>(E).TestActivator(Args); });
-	AddSubclassField(D, TEXT("reverse_outcome"), &FElysiumFilterBase::bNegated);
+	ElysiumAddClassField(D, TEXT("reverse_outcome"), &FElysiumFilterBase::bNegated);
 }
 
 static FElysiumClassRegistrar GRegLogicAuto(
@@ -927,7 +880,7 @@ static FElysiumClassRegistrar GRegLogicRelay(
 		// The relay queues this at itself after firing; it is not wired by any map.
 		D.Input(TEXT("EnableRefire"), [](FElysiumEntity& E, const FElysiumInputArgs&)
 			{ static_cast<FElysiumLogicRelay&>(E).bWaitForRefire = false; });
-		AddSubclassField(D, TEXT("StartDisabled"), &FElysiumLogicRelay::bDisabled);
+		ElysiumAddClassField(D, TEXT("StartDisabled"), &FElysiumLogicRelay::bDisabled);
 	});
 
 static FElysiumClassRegistrar GRegCBaseTrigger(
@@ -940,19 +893,19 @@ static FElysiumClassRegistrar GRegFilterActivatorName(
 	TEXT("filter_activator_name"), FName(TEXT("filter_base")), &MakeFilterName,
 	[](FElysiumClassDesc& D)
 	{
-		AddSubclassField(D, TEXT("filtername"), &FElysiumFilterActivatorName::ActivatorName);
+		ElysiumAddClassField(D, TEXT("filtername"), &FElysiumFilterActivatorName::ActivatorName);
 	});
 
 static FElysiumClassRegistrar GRegFilterMulti(
 	TEXT("filter_multi"), FName(TEXT("filter_base")), &MakeFilterMulti,
 	[](FElysiumClassDesc& D)
 	{
-		AddSubclassField(D, TEXT("filtertype"), &FElysiumFilterMulti::FilterType);
-		AddSubclassField(D, TEXT("Filter01"), &FElysiumFilterMulti::Filter01);
-		AddSubclassField(D, TEXT("Filter02"), &FElysiumFilterMulti::Filter02);
-		AddSubclassField(D, TEXT("Filter03"), &FElysiumFilterMulti::Filter03);
-		AddSubclassField(D, TEXT("Filter04"), &FElysiumFilterMulti::Filter04);
-		AddSubclassField(D, TEXT("Filter05"), &FElysiumFilterMulti::Filter05);
+		ElysiumAddClassField(D, TEXT("filtertype"), &FElysiumFilterMulti::FilterType);
+		ElysiumAddClassField(D, TEXT("Filter01"), &FElysiumFilterMulti::Filter01);
+		ElysiumAddClassField(D, TEXT("Filter02"), &FElysiumFilterMulti::Filter02);
+		ElysiumAddClassField(D, TEXT("Filter03"), &FElysiumFilterMulti::Filter03);
+		ElysiumAddClassField(D, TEXT("Filter04"), &FElysiumFilterMulti::Filter04);
+		ElysiumAddClassField(D, TEXT("Filter05"), &FElysiumFilterMulti::Filter05);
 	});
 
 static FElysiumClassRegistrar GRegTriggerMultiple(
@@ -975,8 +928,8 @@ static FElysiumClassRegistrar GRegTriggerHurt(
 	TEXT("trigger_hurt"), FName(TEXT("CBaseTrigger")), &MakeTriggerHurt,
 	[](FElysiumClassDesc& D)
 	{
-		AddSubclassField(D, TEXT("damage"),     &FElysiumTriggerHurt::Damage);
-		AddSubclassField(D, TEXT("damagetype"), &FElysiumTriggerHurt::DamageType);
+		ElysiumAddClassField(D, TEXT("damage"),     &FElysiumTriggerHurt::Damage);
+		ElysiumAddClassField(D, TEXT("damagetype"), &FElysiumTriggerHurt::DamageType);
 
 		// `SetDamage` is KEY + INPUT with a null inputFunc on the recovered datamap — the keyvalue
 		// and the wire are the same direct write onto `m_flDamage`, like `skin` on CBaseAnimating.
@@ -990,8 +943,8 @@ static FElysiumClassRegistrar GRegTriggerLook(
 	TEXT("trigger_look"), FName(TEXT("CBaseTrigger")), &MakeTriggerLook,
 	[](FElysiumClassDesc& D)
 	{
-		AddSubclassField(D, TEXT("LookTime"),    &FElysiumTriggerLook::LookTime);
-		AddSubclassField(D, TEXT("FieldOfView"), &FElysiumTriggerLook::FieldOfView);
+		ElysiumAddClassField(D, TEXT("LookTime"),    &FElysiumTriggerLook::LookTime);
+		ElysiumAddClassField(D, TEXT("FieldOfView"), &FElysiumTriggerLook::FieldOfView);
 	});
 
 static FElysiumClassRegistrar GRegTriggerAutosave(
@@ -1021,8 +974,8 @@ static FElysiumClassRegistrar GRegChangeLevel(
 		{
 			static_cast<FElysiumChangeLevel&>(E).ForceChangeLevel();
 		});
-		AddSubclassField(D, TEXT("map"),      &FElysiumChangeLevel::DestMap);
-		AddSubclassField(D, TEXT("landmark"), &FElysiumChangeLevel::LandmarkName);
+		ElysiumAddClassField(D, TEXT("map"),      &FElysiumChangeLevel::DestMap);
+		ElysiumAddClassField(D, TEXT("landmark"), &FElysiumChangeLevel::LandmarkName);
 	});
 
 static FElysiumClassRegistrar GRegPythonCheck(
@@ -1033,5 +986,5 @@ static FElysiumClassRegistrar GRegPythonCheck(
 		{
 			static_cast<FElysiumPythonCheck&>(E).RunTest(Args.Activator);
 		});
-		AddSubclassField(D, TEXT("python_script"), &FElysiumPythonCheck::PythonScript);
+		ElysiumAddClassField(D, TEXT("python_script"), &FElysiumPythonCheck::PythonScript);
 	});

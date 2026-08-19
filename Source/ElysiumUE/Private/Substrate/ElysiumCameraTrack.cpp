@@ -5,10 +5,9 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
+#include "Substrate/ElysiumClassFields.h"
 
 #include "HAL/IConsoleManager.h"
-
-#include <type_traits>
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCameraTrack, Log, All);
 
@@ -235,39 +234,6 @@ namespace ElysiumCameraTrack
 
 namespace
 {
-	template <typename TClass, typename TMember>
-	void AddCameraField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>);
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(ElysiumFieldDefault);
-		if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Acc.Type = EElysiumVariantType::Bool;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Acc.Type = EElysiumVariantType::String;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
-
 	class FElysiumCameraKeyframe : public FElysiumEntity
 	{
 	public:
@@ -625,17 +591,17 @@ namespace
 
 	void BuildCameraKeyframeClass(FElysiumClassDesc& D)
 	{
-		AddCameraField(D, TEXT("NextKey"), &FElysiumCameraKeyframe::NextKey);
-		AddCameraField(D, TEXT("Roll"), &FElysiumCameraKeyframe::Roll);
-		AddCameraField(D, TEXT("FocalLength"), &FElysiumCameraKeyframe::FocalLength);
-		AddCameraField(D, TEXT("TimeControl"), &FElysiumCameraKeyframe::bTimeControl);
-		AddCameraField(D, TEXT("MoveSpeed"), &FElysiumCameraKeyframe::MoveSpeed);
-		AddCameraField(D, TEXT("MoveTime"), &FElysiumCameraKeyframe::MoveTime);
-		AddCameraField(D, TEXT("Pause"), &FElysiumCameraKeyframe::Pause);
-		AddCameraField(D, TEXT("RateIn"), &FElysiumCameraKeyframe::RateIn);
-		AddCameraField(D, TEXT("RateOut"), &FElysiumCameraKeyframe::RateOut);
-		AddCameraField(D, TEXT("Corner"), &FElysiumCameraKeyframe::bCorner);
-		AddCameraField(D, TEXT("PositionInterpolator"), &FElysiumCameraKeyframe::PositionInterpolator);
+		ElysiumAddClassField(D, TEXT("NextKey"), &FElysiumCameraKeyframe::NextKey);
+		ElysiumAddClassField(D, TEXT("Roll"), &FElysiumCameraKeyframe::Roll);
+		ElysiumAddClassField(D, TEXT("FocalLength"), &FElysiumCameraKeyframe::FocalLength);
+		ElysiumAddClassField(D, TEXT("TimeControl"), &FElysiumCameraKeyframe::bTimeControl);
+		ElysiumAddClassField(D, TEXT("MoveSpeed"), &FElysiumCameraKeyframe::MoveSpeed);
+		ElysiumAddClassField(D, TEXT("MoveTime"), &FElysiumCameraKeyframe::MoveTime);
+		ElysiumAddClassField(D, TEXT("Pause"), &FElysiumCameraKeyframe::Pause);
+		ElysiumAddClassField(D, TEXT("RateIn"), &FElysiumCameraKeyframe::RateIn);
+		ElysiumAddClassField(D, TEXT("RateOut"), &FElysiumCameraKeyframe::RateOut);
+		ElysiumAddClassField(D, TEXT("Corner"), &FElysiumCameraKeyframe::bCorner);
+		ElysiumAddClassField(D, TEXT("PositionInterpolator"), &FElysiumCameraKeyframe::PositionInterpolator);
 	}
 
 	void BuildCameraTrackClass(FElysiumClassDesc& D)
@@ -649,9 +615,9 @@ namespace
 		// Script-facing compact alias; authored map outputs use the full retail input above.
 		D.Input(TEXT("Restore"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
 			{ static_cast<FElysiumCameraTrack&>(E).InputRestore(A); });
-		AddCameraField(D, TEXT("HoldAtEnd"), &FElysiumCameraTrack::bHoldAtEnd);
-		AddCameraField(D, TEXT("FromPlayerTime"), &FElysiumCameraTrack::FromPlayerTime);
-		AddCameraField(D, TEXT("ToPlayerTime"), &FElysiumCameraTrack::ToPlayerTime);
+		ElysiumAddClassField(D, TEXT("HoldAtEnd"), &FElysiumCameraTrack::bHoldAtEnd);
+		ElysiumAddClassField(D, TEXT("FromPlayerTime"), &FElysiumCameraTrack::FromPlayerTime);
+		ElysiumAddClassField(D, TEXT("ToPlayerTime"), &FElysiumCameraTrack::ToPlayerTime);
 	}
 
 	FElysiumClassRegistrar GRegCameraKeyframe(

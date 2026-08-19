@@ -4,10 +4,9 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
+#include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumPlayerLog.h"
-
-#include <type_traits>
 
 bool FElysiumActivityTrigger::CanBeginTouch(const FElysiumEntityHandle& Activator) const
 {
@@ -153,28 +152,6 @@ namespace
 		return MakeUnique<FElysiumActivityTrigger>();
 	}
 
-	// A field backed by a subclass member. File-unique name so every one of these can land in one
-	// unity blob — the rule `AddSubclassField`/`AddEventField`/`AddStealthTriggerField` follow.
-	template <typename TClass, typename TMember>
-	void AddActivityTriggerField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member,
-		EElysiumField Flags = ElysiumFieldDefault)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>,
-			"TClass must derive from FElysiumEntity");
-		static_assert(std::is_same_v<TMember, int32>, "AddActivityTriggerField: int32 only");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		Acc.Type = EElysiumVariantType::Int;
-		Acc.Get = [Member](const FElysiumEntity& E)
-		{
-			return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member);
-		};
-		Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
-		{
-			static_cast<TClass&>(E).*Member = V.ToInt();
-		};
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
 }
 
 // A `CBaseTrigger` leaf: `Enable`/`Disable`/`Toggle`, `StartDisabled`, `filtername` and `wait` all
@@ -185,10 +162,10 @@ static FElysiumClassRegistrar GRegTriggerPlayerActivityLevel(
 	TEXT("trigger_player_activity_level"), FName(TEXT("CBaseTrigger")), &MakeActivityTrigger,
 	[](FElysiumClassDesc& D)
 	{
-		AddActivityTriggerField(D, TEXT("supernatural_level"),
+		ElysiumAddClassField(D, TEXT("supernatural_level"),
 			&FElysiumActivityTrigger::SupernaturalLevel);
-		AddActivityTriggerField(D, TEXT("criminal_level"),
+		ElysiumAddClassField(D, TEXT("criminal_level"),
 			&FElysiumActivityTrigger::CriminalLevel);
-		AddActivityTriggerField(D, TEXT("investigate_level"),
+		ElysiumAddClassField(D, TEXT("investigate_level"),
 			&FElysiumActivityTrigger::InvestigateLevel);
 	});

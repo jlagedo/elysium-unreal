@@ -32,48 +32,13 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
+#include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumLaw.h"   // Cycle 10b — the SetSafeArea world-to-player transaction
-
-#include <type_traits>
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEvents, Log, All);
 
 namespace
 {
-	// Register a field backed by a *subclass* member (FElysiumClassDesc::Field only takes base
-	// FElysiumEntity members). Mirrors AddLogicField / AddSubclassField / AddDoorSubclassField —
-	// file-unique name so all of them can land in one unity blob.
-	template <typename TClass, typename TMember>
-	void AddEventField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Acc.Type = EElysiumVariantType::Bool;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddEventField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
-
 	const TCHAR* OnOff(bool b) { return b ? TEXT("on") : TEXT("off"); }
 }
 
@@ -358,7 +323,7 @@ static FElysiumClassRegistrar GRegPlayerEvents(
 		D.Input(TEXT("RemoveDisciplinesNow"),    [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumPlayerEvents&>(E).InputRemoveDisciplinesNow(); });
 		D.Input(TEXT("MakePlayerUnkillable"),    [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumPlayerEvents&>(E).InputMakePlayerUnkillable(); });
 		D.Input(TEXT("MakePlayerKillable"),      [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumPlayerEvents&>(E).InputMakePlayerKillable(); });
-		AddEventField(D, TEXT("enabled"), &FElysiumPlayerEvents::bEnabled);
+		ElysiumAddClassField(D, TEXT("enabled"), &FElysiumPlayerEvents::bEnabled);
 	});
 
 static FElysiumClassRegistrar GRegWorldEvents(
@@ -386,9 +351,9 @@ static FElysiumClassRegistrar GRegWorldEvents(
 		// `safearea` is the one this cycle consumes on both sides (the Elysium refusal and the
 		// terminal incident guards); `copwaitarea` selects the police response's wait-area path.
 		// ----------------------------------------------------------------------------------------
-		AddEventField(D, TEXT("safearea"),            &FElysiumWorldEvents::SafeArea);
-		AddEventField(D, TEXT("copwaitarea"),         &FElysiumWorldEvents::bCopWaitArea);
-		AddEventField(D, TEXT("copgrace"),            &FElysiumWorldEvents::CopGrace);
-		AddEventField(D, TEXT("nosferatu_tolerrant"), &FElysiumWorldEvents::bNosferatuTolerant);
-		AddEventField(D, TEXT("nofrenzyarea"),        &FElysiumWorldEvents::bNoFrenzyArea);
+		ElysiumAddClassField(D, TEXT("safearea"),            &FElysiumWorldEvents::SafeArea);
+		ElysiumAddClassField(D, TEXT("copwaitarea"),         &FElysiumWorldEvents::bCopWaitArea);
+		ElysiumAddClassField(D, TEXT("copgrace"),            &FElysiumWorldEvents::CopGrace);
+		ElysiumAddClassField(D, TEXT("nosferatu_tolerrant"), &FElysiumWorldEvents::bNosferatuTolerant);
+		ElysiumAddClassField(D, TEXT("nofrenzyarea"),        &FElysiumWorldEvents::bNoFrenzyArea);
 	});

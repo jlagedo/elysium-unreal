@@ -22,12 +22,11 @@
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumClassFields.h"
 #include "Substrate/ElysiumDisciplines.h"   // Cycle 9
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Holster's carried-weapon fallback
 #include "Substrate/ElysiumPendingInput.h"
 #include "Substrate/ElysiumPlayerLog.h"
-
-#include <type_traits>
 
 // The one category the whole chain writes on. Declared in `Substrate/ElysiumPlayerLog.h` because
 // the implementations are four files; defined here, at the registration site the chain is named by.
@@ -40,52 +39,6 @@ namespace
 		TEXT("Malkavian"), TEXT("Nosferatu"), TEXT("Toreador"), TEXT("Tremere"), TEXT("Ventrue") };
 	constexpr int32 GClanMin = 2;
 	constexpr int32 GClanMax = 8;
-
-	// Register a field backed by a subclass member (FElysiumClassDesc::Field only reaches
-	// FElysiumEntity members). Mirrors AddSubclassField / AddNpcField / AddLogicField — file-unique
-	// name so all of them can land in one unity blob.
-	template <typename TClass, typename TMember>
-	void AddCharField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member, EElysiumField Flags = ElysiumFieldDefault)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>, "TClass must derive from FElysiumEntity");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		if constexpr (std::is_same_v<TMember, bool>)
-		{
-			Acc.Type = EElysiumVariantType::Bool;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Bool(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt() != 0; };
-		}
-		else if constexpr (std::is_same_v<TMember, int32>)
-		{
-			Acc.Type = EElysiumVariantType::Int;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToInt(); };
-		}
-		else if constexpr (std::is_same_v<TMember, float>)
-		{
-			Acc.Type = EElysiumVariantType::Float;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Float(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToFloat(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FVector>)
-		{
-			Acc.Type = EElysiumVariantType::Vector;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::Vector(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToVector(); };
-		}
-		else if constexpr (std::is_same_v<TMember, FString>)
-		{
-			Acc.Type = EElysiumVariantType::String;
-			Acc.Get = [Member](const FElysiumEntity& E) { return FElysiumVariant::String(static_cast<const TClass&>(E).*Member); };
-			Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V) { static_cast<TClass&>(E).*Member = V.ToString(); };
-		}
-		else
-		{
-			static_assert(sizeof(TMember) == 0, "AddCharField: unsupported member type");
-		}
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
 
 	// One trait slot on FElysiumCombatCharacter::Sheet, as VtMB's datamap exposes it: the current
 	// value under the bare name, the base under a `base_` prefix. Both halves are keyable and both
@@ -299,11 +252,11 @@ static FElysiumClassRegistrar GRegAnimating(
 	{
 		// `skin` is KEY and INPUT with a null inputFunc — the keyvalue, the wire and `.skin =` are
 		// the same direct write, so the field alone serves all three (entity_io.md).
-		AddCharField(D, TEXT("skin"), &FElysiumAnimating::Skin);
-		AddCharField(D, TEXT("default_disposition"), &FElysiumAnimating::Disposition);
+		ElysiumAddClassField(D, TEXT("skin"), &FElysiumAnimating::Skin);
+		ElysiumAddClassField(D, TEXT("default_disposition"), &FElysiumAnimating::Disposition);
 		// Project save-only companion for SetDisposition's second argument. It is deliberately not a
 		// script field: retail exposes the pair through the method, not as two writable attributes.
-		AddCharField(D, TEXT("elysium_disposition_level"),
+		ElysiumAddClassField(D, TEXT("elysium_disposition_level"),
 			&FElysiumAnimating::DispositionLevel, EElysiumField::Save);
 
 		D.Input(TEXT("SetAnimation"), [](FElysiumEntity& E, const FElysiumInputArgs& A)
@@ -379,7 +332,7 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 
 		// `money` is `m_iMoney`, the one counter `stats.txt` does not carry as a Stat. Humanity,
 		// blood, masquerade, clan and sex are all trait slots, and arrive with the rest of the sheet.
-		AddCharField(D, TEXT("money"), &FC::Money);
+		ElysiumAddClassField(D, TEXT("money"), &FC::Money);
 
 		// 13.1 — `trigger_stealth_mod`'s raw aggregate (`+0x1084`). Registered on THIS chain node
 		// rather than on the player, because the trigger's own increment is guarded by
@@ -387,7 +340,7 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		// through the ordinary field walk, which is what carries an NPC's across a map snapshot;
 		// the player entity is excluded from that snapshot, so its copy rides the player record
 		// beside the surface it feeds.
-		AddCharField(D, TEXT("m_nRawStealthModifier"), &FC::StealthModRaw);
+		ElysiumAddClassField(D, TEXT("m_nRawStealthModifier"), &FC::StealthModRaw);
 
 		// The runtime's authoritative once-only death latch. Saving it is required by npc_maker's
 		// owner notification: a dead child restored and later Kill'd must not refund a live slot.
@@ -430,14 +383,14 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		// targets and the integration rate. `m_hEyeLookTarget` is a handle, which the registry has no
 		// field type for, so the saved form is the targetname a restore would have to re-resolve
 		// anyway.
-		AddCharField(D, TEXT("m_vEyeLookTarget"), &FC::EyeLookTarget);
-		AddCharField(D, TEXT("m_vCurEyeTarget"), &FC::CurEyeTarget);
-		AddCharField(D, TEXT("m_flEyeIntegRate"), &FC::EyeIntegRate);
-		AddCharField(D, TEXT("m_hEyeLookTarget"), &FC::EyeLookTargetName);
+		ElysiumAddClassField(D, TEXT("m_vEyeLookTarget"), &FC::EyeLookTarget);
+		ElysiumAddClassField(D, TEXT("m_vCurEyeTarget"), &FC::CurEyeTarget);
+		ElysiumAddClassField(D, TEXT("m_flEyeIntegRate"), &FC::EyeIntegRate);
+		ElysiumAddClassField(D, TEXT("m_hEyeLookTarget"), &FC::EyeLookTargetName);
 		// The scripted-mode int sits at 0x0E68 and retail's datamap does NOT carry it, so a scripted
 		// look-at does not survive a save. Registered with no flags so it is inspectable but neither
 		// keyable nor saved, which reproduces that exactly.
-		AddCharField(D, TEXT("m_iEyeLookMode"), &FC::EyeLookMode, EElysiumField::None);
+		ElysiumAddClassField(D, TEXT("m_iEyeLookMode"), &FC::EyeLookMode, EElysiumField::None);
 
 		AddFeedFields(D);
 		AddSheetFields(D);

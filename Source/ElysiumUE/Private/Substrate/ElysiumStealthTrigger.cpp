@@ -4,8 +4,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumSaveArchive.h"
-
-#include <type_traits>
+#include "Substrate/ElysiumClassFields.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumStealthTrigger, Log, All);
 
@@ -131,28 +130,6 @@ namespace
 		return MakeUnique<FElysiumStealthModTrigger>();
 	}
 
-	// Register a field backed by a subclass member. File-unique name so every one of these can land
-	// in one unity blob — the rule `AddSubclassField`/`AddEventField`/`AddLeafField` already follow.
-	template <typename TClass, typename TMember>
-	void AddStealthTriggerField(FElysiumClassDesc& D, const TCHAR* Name, TMember TClass::* Member,
-		EElysiumField Flags = ElysiumFieldDefault)
-	{
-		static_assert(std::is_base_of_v<FElysiumEntity, TClass>,
-			"TClass must derive from FElysiumEntity");
-		static_assert(std::is_same_v<TMember, int32>, "AddStealthTriggerField: int32 only");
-		FElysiumFieldAccessor Acc;
-		Acc.ApplyFlags(Flags);
-		Acc.Type = EElysiumVariantType::Int;
-		Acc.Get = [Member](const FElysiumEntity& E)
-		{
-			return FElysiumVariant::Int(static_cast<const TClass&>(E).*Member);
-		};
-		Acc.Set = [Member](FElysiumEntity& E, const FElysiumVariant& V)
-		{
-			static_cast<TClass&>(E).*Member = V.ToInt();
-		};
-		D.Fields.Add(FName(Name), MoveTemp(Acc));
-	}
 }
 
 // A `CBaseTrigger` leaf: Enable/Disable/Toggle, `StartDisabled`, `filtername` and `wait` all arrive
@@ -162,6 +139,6 @@ static FElysiumClassRegistrar GRegTriggerStealthMod(
 	TEXT("trigger_stealth_mod"), FName(TEXT("CBaseTrigger")), &MakeStealthModTrigger,
 	[](FElysiumClassDesc& D)
 	{
-		AddStealthTriggerField(D, TEXT("stealth_modifier"),
+		ElysiumAddClassField(D, TEXT("stealth_modifier"),
 			&FElysiumStealthModTrigger::StealthMod);
 	});
