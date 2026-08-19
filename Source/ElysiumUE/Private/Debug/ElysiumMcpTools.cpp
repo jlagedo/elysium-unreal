@@ -639,10 +639,10 @@ namespace ElysiumMcpImpl
 	// The tools
 	// ---------------------------------------------------------------------------------------
 
-	void BuildTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
-	{
-		// --- Status ---------------------------------------------------------------------------
+	// --- Status ---------------------------------------------------------------------------
 
+	void AddStatusTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_status"),
@@ -700,9 +700,12 @@ namespace ElysiumMcpImpl
 					return Structured(Body);
 				}));
 		}
+	}
 
-		// --- Map lifecycle ------------------------------------------------------------------
+	// --- Map lifecycle ------------------------------------------------------------------
 
+	void AddMapTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_maps_list"),
@@ -838,9 +841,12 @@ namespace ElysiumMcpImpl
 					return Structured(Body);
 				}));
 		}
+	}
 
-		// --- Player -------------------------------------------------------------------------
+	// --- Player -------------------------------------------------------------------------
 
+	void AddPlayerTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_player_get"),
@@ -1205,9 +1211,12 @@ namespace ElysiumMcpImpl
 					return Structured(Body);
 				}));
 		}
+	}
 
-		// --- Entities -----------------------------------------------------------------------
+	// --- Entities -----------------------------------------------------------------------
 
+	void AddEntityTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
 		{
 			FSchema Schema;
 			Schema.Add(TEXT("name"), TEXT("string"), TEXT("Substring-match on targetname (case-insensitive)."))
@@ -1403,9 +1412,12 @@ namespace ElysiumMcpImpl
 					return Structured(Body);
 				}));
 		}
+	}
 
-		// --- Event queue --------------------------------------------------------------------
+	// --- Event queue --------------------------------------------------------------------
 
+	void AddQueueTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
 		{
 			FSchema Schema;
 			Schema.Add(TEXT("limit"), TEXT("integer"), TEXT("Max pending events to return. Default 50."));
@@ -1643,9 +1655,12 @@ namespace ElysiumMcpImpl
 					return Structured(Body);
 				}));
 		}
+	}
 
-		// --- Scripting ----------------------------------------------------------------------
+	// --- Scripting ----------------------------------------------------------------------
 
+	void AddScriptingTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
 		{
 			FSchema Schema;
 			Schema.Add(TEXT("source"), TEXT("string"), TEXT("Python source. Expression or `;`-separated simple statements; evaluates in __main__, exactly where a field-6 payload does."), true);
@@ -1746,9 +1761,12 @@ namespace ElysiumMcpImpl
 					return Structured(Body);
 				}));
 		}
+	}
 
-		// --- Audio --------------------------------------------------------------------------
+	// --- Audio --------------------------------------------------------------------------
 
+	void AddAudioTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
 		{
 			FSchema Schema;
 			Out.Add(MakeTool(TEXT("elysium_audio_state"),
@@ -1844,9 +1862,12 @@ namespace ElysiumMcpImpl
 					return Structured(Body);
 				}));
 		}
+	}
 
-		// --- Escape hatches -----------------------------------------------------------------
+	// --- Escape hatches -----------------------------------------------------------------
 
+	void AddMiscTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
 		{
 			FSchema Schema;
 			Schema.Add(TEXT("command"), TEXT("string"), TEXT("A console command line, e.g. `elysium.ent_dump elevator_door` or `stat unit`."), true);
@@ -1940,9 +1961,12 @@ namespace ElysiumMcpImpl
 					return Structured(Body);
 				}));
 		}
+	}
 
-		// --- Screenshot ---------------------------------------------------------------------
+	// --- Screenshot ---------------------------------------------------------------------
 
+	void AddScreenshotTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
 		{
 			FSchema Schema;
 			Schema.Add(TEXT("path"), TEXT("string"),
@@ -2016,6 +2040,23 @@ namespace ElysiumMcpImpl
 			};
 			Out.Add(Tool);
 		}
+	}
+
+	// ---------------------------------------------------------------------------------------
+	// Registration — one call per domain, in the order the tool list presents
+	// ---------------------------------------------------------------------------------------
+
+	void BuildTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
+	{
+		AddStatusTools(Out);
+		AddMapTools(Out);
+		AddPlayerTools(Out);
+		AddEntityTools(Out);
+		AddQueueTools(Out);
+		AddScriptingTools(Out);
+		AddAudioTools(Out);
+		AddMiscTools(Out);
+		AddScreenshotTools(Out);
 	}
 }
 
