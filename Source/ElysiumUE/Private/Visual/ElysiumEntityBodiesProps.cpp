@@ -12,7 +12,6 @@
 #endif
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
-#include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "GameFramework/Actor.h"
@@ -153,9 +152,7 @@ static TAutoConsoleVariable<int32> CVarPropSkins(
 
 FString UElysiumEntityBodies::AnimatedPropStemForModel(const FString& ModelPath) const
 {
-	const AActor* Owner = GetOwner();
-	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GetAnims();
 	const FElysiumAnimatedPropEntry* Entry = Anims
 		? (Anims->GetIndex().ManifestVersion >= 7
 			? Anims->GetIndex().FindPlacedModel(ModelPath)
@@ -165,9 +162,7 @@ FString UElysiumEntityBodies::AnimatedPropStemForModel(const FString& ModelPath)
 
 bool UElysiumEntityBodies::HasPlacedModelCatalogue() const
 {
-	const AActor* Owner = GetOwner();
-	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GetAnims();
 	return Anims && Anims->GetIndex().ManifestVersion >= 7;
 }
 
@@ -233,9 +228,7 @@ FElysiumPlacedModelBody UElysiumEntityBodies::BuildPlacedModelBody(
 
 const FElysiumAnimatedPropEntry* UElysiumEntityBodies::FindAnimatedPropEntry(const FString& Stem) const
 {
-	const AActor* Owner = GetOwner();
-	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GetAnims();
 	if (!Anims)
 	{
 		return nullptr;
@@ -276,8 +269,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisualWithStaticS
 {
 	AActor* Owner = GetOwner();
 	USceneComponent* Root = Owner ? Owner->GetRootComponent() : nullptr;
-	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GetAnims();
 	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
 	if (!Root || !Entry)
 	{
@@ -384,9 +376,7 @@ UAnimSequence* UElysiumEntityBodies::ResolveAnimatedPropClip(USkeletalMesh* Mesh
 	{
 		return nullptr;
 	}
-	const AActor* Owner = GetOwner();
-	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GetAnims();
 	const FElysiumAnimatedPropEntry* Entry = FindAnimatedPropEntry(Stem);
 	if (!Entry || !Entry->HasClip(ClipName))
 	{

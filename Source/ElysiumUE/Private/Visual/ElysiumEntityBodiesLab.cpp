@@ -12,8 +12,6 @@
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendSpace.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Engine/GameInstance.h"
-#include "GameFramework/Actor.h"
 
 bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& ClipName, float Weight, FString* OutError, FString* OutArmed,
@@ -58,9 +56,7 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 			"generated ABP is not on the mount. Run `uv run elysium export bundle policy`"));
 	}
 
-	const AActor* Owner = GetOwner();
-	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GetAnims();
 	if (Anims == nullptr)
 	{
 		return Refuse(TEXT("no animation subsystem"));
@@ -228,9 +224,7 @@ bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FStri
 		return false;
 	};
 
-	const AActor* Owner = GetOwner();
-	UGameInstance* GI = Owner ? Owner->GetGameInstance() : nullptr;
-	UElysiumAnimSubsystem* Anims = GI ? GI->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	UElysiumAnimSubsystem* Anims = GetAnims();
 	UElysiumBipedAnimInstance* Inst = Body
 		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
 	if (Anims == nullptr)
