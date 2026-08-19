@@ -258,6 +258,25 @@ void AElysiumPlayerController::RegisterCommands()
 		}
 	}));
 
+	// `holster` reaches the player class-chain's own `Holster` input (`ElysiumPlayerClasses.cpp`) —
+	// the console bridge is Tier 3, so it does not reimplement the switch-to-`item_w_unarmed` behaviour,
+	// it names the same registered input MCP's `ent_fire` or a `.dlg` action would. `AcceptInput`
+	// (chokepoint 1) rather than `EnqueueInput`, because `UElysiumCameraComponent`'s forced-third
+	// holster branch calls `Console.Execute(TEXT("holster"))` and reads the resulting camera class
+	// back on the same frame — a queued delivery would leave that check reading stale state.
+	Bindings.Add(Registry.Bind(TEXT("holster"), [this](const FElysiumCommandCall&)
+	{
+		FElysiumEntityWorld* World = CurrentEntityWorld();
+		FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr;
+		if (!Player)
+		{
+			UE_LOG(LogElysiumPC, Warning, TEXT("holster: no player entity in this world"));
+			return;
+		}
+		World->AcceptInput(Player->Handle, FName(TEXT("Holster")), FElysiumVariant::Void(),
+			Player->Handle, Player->Handle);
+	}));
+
 	// `slot2`-`slot7` are `system/items.txt`'s six displayed `InventorySections`, in its own order.
 	// `slot1` stays unbound: it addressed the `Disciplines` section that file keeps commented out,
 	// and disciplines are their own selector rather than an inventory category.

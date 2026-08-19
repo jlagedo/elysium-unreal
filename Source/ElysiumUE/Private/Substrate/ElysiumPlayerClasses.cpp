@@ -491,7 +491,11 @@ static FElysiumClassRegistrar GRegPlayer(
 		// `item_w_unarmed` and refuses every other candidate, and that is the only observed behaviour
 		// that reads as holstering. So this does exactly that much — switch the active weapon to a
 		// carried `item_w_unarmed` — and refuses audibly when the character carries none, rather
-		// than inventing an empty-handed state the inventory has no representation for.
+		// than inventing an empty-handed state the inventory has no representation for. The switch
+		// itself goes through `SetActiveWeapon`, the one equip funnel `ElysiumInventorySelect.cpp`'s
+		// selector also commits through: reimplementing its outgoing/incoming pair by hand here
+		// silently dropped `PreviousWeapon`, so `lastinv` after a holster returned to whatever was
+		// active two switches back instead of the weapon just put away.
 		D.Input(TEXT("Holster"),         [](FElysiumEntity& E, const FElysiumInputArgs&)
 			{
 				FP& Player = static_cast<FP&>(E);
@@ -504,17 +508,7 @@ static FElysiumClassRegistrar GRegPlayer(
 							"weapon is unchanged"), *Player.DebugString());
 					return;
 				}
-				if (Player.Inventory.ActiveWeapon == Unarmed->Handle)
-				{
-					return;
-				}
-				if (FElysiumItem* Previous = Player.Inventory.Active(Player))
-				{
-					Previous->OnHolstered(Player);
-				}
-				Player.Inventory.ActiveWeapon = Unarmed->Handle;
-				Unarmed->OnEquipped(Player);
-				Player.PublishEquippedCameraClass();
+				Player.Inventory.SetActiveWeapon(Player, *Unarmed);
 			});
 
 		// The three law counters as read-only fields, so `pc.criminal_level` reads a number. They

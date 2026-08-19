@@ -1231,7 +1231,22 @@ void FElysiumCogWindow_GreenRoom::RenderWield(FElysiumGreenRoomRun& Lab)
 		}
 		else
 		{
-			if (ImGui::SmallButton("Check tracking"))
+			// The check samples the Review stage's own clip loop (`LabWieldTrackStart`), so it refuses
+			// outright in Drive or Arena — a refusal that names a typed console command. Disabling the
+			// button and saying why in a hover tooltip keeps that limitation reachable without typing:
+			// the Review mode button sits one click away, above the tab bar. The check itself is
+			// unchanged; only how its Drive/Arena unavailability is surfaced moved from a caught error
+			// to a disabled control.
+			const bool bNeedsReview = Lab.IsDriving();
+			ImGui::BeginDisabled(bNeedsReview);
+			const bool bChecked = ImGui::SmallButton("Check tracking");
+			ImGui::EndDisabled();
+			if (bNeedsReview && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+			{
+				ImGui::SetTooltip("The tracking check samples the Review stage. Click Review above, "
+					"run the check, then click Arena (or Drive) to return.");
+			}
+			if (bChecked && !bNeedsReview)
 			{
 				FString Error;
 				if (!Lab.LabWieldTrackStart(0.0f, 0.0f, Error))

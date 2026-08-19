@@ -163,6 +163,10 @@ namespace ElysiumArenaCast
 		int32 Thrown = 0;
 		int32 AmmoTypes = 0;
 		int32 Refused = 0;      // records the inventory would not take (full, or an unresolved def)
+		// Whether the `item_w_unarmed` fallback landed. It is not a controllable weapon
+		// (`IsControllableWeapon()` correctly excludes `CWeaponUnarmed`) so it is not counted in
+		// Melee, but `Holster` refuses outright without one carried, so the grant is load-bearing.
+		bool bUnarmedGranted = false;
 		FString FirstError;
 	};
 

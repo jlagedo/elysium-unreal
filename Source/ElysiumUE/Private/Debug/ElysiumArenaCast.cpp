@@ -375,12 +375,32 @@ FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
 	// it. Handing someone an armoury must leave them holding whatever they were holding.
 	const FElysiumEntityHandle ActiveBefore = Player->Inventory.ActiveWeapon;
 
-	// The reduced arsenal: fists, 3 common melee, 3 common firearms. Fists are a carried weapon
-	// like any other — holster falls back to a carried `item_w_unarmed` and refuses without one —
-	// so an arena player must be granted them to cycle retail-shaped.
+	// `item_w_unarmed` is `CWeaponUnarmed`, the always-carried fallback placeholder — not one of the
+	// three controllable weapon families `IsControllableWeapon()` tests for, so the loop below
+	// correctly will not grant it (`docs/vtmb/combat-and-damage.md` § "Weapon and input surface").
+	// `Holster` still needs one carried: it switches the active weapon to a carried `item_w_unarmed`
+	// and refuses outright — logging a warning and leaving the draw unchanged — when the character
+	// holds none (`ElysiumPlayerClasses.cpp`'s `Holster` input). Grant it explicitly, ahead of and
+	// outside the controllable-weapon loop, so an arena player can holster with zero typing.
+	{
+		FString UnarmedError;
+		if (GivePlayerItem(World, TEXT("item_w_unarmed"), UnarmedError))
+		{
+			Result.bUnarmedGranted = true;
+		}
+		else
+		{
+			++Result.Refused;
+			Result.FirstError = UnarmedError;
+		}
+	}
+
+	// The full arsenal: all six wield melee weapons plus 3 common firearms. The melee set is every
+	// `CWeaponMelee_*` classname (`ElysiumWeaponActivityTables.cpp`), which is what the LIFE4
+	// acceptance sweep needs standing in the pawn's inventory: nothing wielded is left untested.
 	const FString Arsenal[] = {
-		TEXT("item_w_unarmed"),
 		TEXT("item_w_tire_iron"), TEXT("item_w_knife"), TEXT("item_w_katana"),
+		TEXT("item_w_baseball_bat"), TEXT("item_w_bush_hook"), TEXT("item_w_sledgehammer"),
 		TEXT("item_w_thirtyeight"), TEXT("item_w_glock_17c"), TEXT("item_w_ithaca_m_37")
 	};
 
@@ -435,8 +455,9 @@ FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
 	}
 
 	UE_LOG(LogElysiumArenaCast, Log,
-		TEXT("arena cast: armed the player — %d melee, %d firearm(s), %d thrown, "
+		TEXT("arena cast: armed the player — unarmed=%s, %d melee, %d firearm(s), %d thrown, "
 			 "%d ammo type(s) at %d each, %d refused"),
+		Result.bUnarmedGranted ? TEXT("granted") : TEXT("MISSING — Holster will refuse"),
 		Result.Melee, Result.Firearms, Result.Thrown, Result.AmmoTypes, ReservePerType,
 		Result.Refused);
 	return Result;
