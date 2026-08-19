@@ -23,6 +23,7 @@
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumRulebook.h"
+#include "ElysiumViewState.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
@@ -87,18 +88,23 @@ namespace
 
 		// Fists — the patch-first record's own numbers.
 		FElysiumItemDef Fists = MakeDef(GFists, EElysiumItemType::WeaponMelee);
+		// The selection order the shipped records author: melee is bucket 0, ranged bucket 1, and
+		// `bucket_position` orders the column. `item_w_fists` is 0/0 in the real catalogue.
+		Fists.Bucket = 0; Fists.BucketPosition = 0;
 		Fists.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
 			TEXT("2 Bashing Close_Combat_Brawl DMG_FIST"), /*BaseLethality*/ 8, /*Attack_Rate*/ 0.5f));
 		Table.Items.Add(MoveTemp(Fists));
 
 		// An armed melee weapon: the combo reads `Melee` rather than `Brawl`.
 		FElysiumItemDef Katana = MakeDef(GKatana, EElysiumItemType::WeaponMelee);
+		Katana.Bucket = 0; Katana.BucketPosition = 6;
 		Katana.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
 			TEXT("3 Lethal Close_Combat_Melee DMG_SLASH"), 12, 1.0f));
 		Table.Items.Add(MoveTemp(Katana));
 
 		// A firearm with two primary records and a secondary that toggles between them.
 		FElysiumItemDef Pistol = MakeDef(GPistol, EElysiumItemType::WeaponFirearm);
+		Pistol.Bucket = 1; Pistol.BucketPosition = 1;
 		Pistol.AmmoType = TEXT("TestRound");
 		Pistol.MagazineSize = 6;
 		Pistol.DefaultAmmo = 6;
@@ -118,6 +124,7 @@ namespace
 
 		// A shell-at-a-time shotgun: one round spent, eight rays emitted.
 		FElysiumItemDef Shotgun = MakeDef(GShotgun, EElysiumItemType::WeaponFirearm);
+		Shotgun.Bucket = 1; Shotgun.BucketPosition = 8;
 		Shotgun.AmmoType = TEXT("TestShell");
 		Shotgun.MagazineSize = 4;
 		Shotgun.DefaultAmmo = 4;
@@ -718,6 +725,17 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		TestEqual(TEXT("GetNumAttackSuccesses reads word 1 back"),
 			Victim->GetNumAttackSuccesses(Player->Handle), 8);
 
+		// --- The combat-stance clock: contact holds BOTH bodies for five seconds -------------
+		// `m_flLastCombatAnimTime`, stamped by the melee transaction and read by the player gait
+		// ladder's `CombatReady`/`Relaxed` predicates through `IsInCombatStance`.
+		TestTrue(TEXT("the contact puts the attacker in combat stance"),
+			Player->IsInCombatStance(World.NowSeconds()));
+		TestTrue(TEXT("...and the victim"),
+			Victim->IsInCombatStance(World.NowSeconds()));
+		TestFalse(TEXT("...and the window closes five seconds after the contact"),
+			Player->IsInCombatStance(Player->LastMeleeContactSeconds
+				+ FElysiumCombatCharacter::CombatStanceHoldSeconds));
+
 		World.Tick(0.5);
 		TestEqual(TEXT("OnDamaged fires from the commit's real producer"),
 			SaveTestCounterValue(World.FindByName(TEXT("damagedcount"))), 1.0f);
@@ -765,6 +783,9 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		TestEqual(TEXT("a commit against a dead victim misses"), DamageTaken(*Victim), 0);
 		TestTrue(TEXT("...and stages no opposed record"),
 			Victim->FindMeleeRoll(Player->Handle) == nullptr);
+		TestFalse(TEXT("...and stamps no combat stance on either body — a whiff is not contact"),
+			Player->IsInCombatStance(World.NowSeconds())
+				|| Victim->IsInCombatStance(World.NowSeconds()));
 	}
 
 	// --- A stale commit is dropped rather than fired against a replaced transaction ----------
@@ -1157,6 +1178,197 @@ bool FElysiumWeaponRangedTest::RunTest(const FString&)
 		World.Tick(0.2);
 		TestEqual(TEXT("Holster clears the active weapon back to item_w_unarmed"),
 			Player->Inventory.ActiveWeapon, Unarmed);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// Inventory selection — the selector's authority (8.9's selector clause).
+//
+// `system/items.txt` declares the categories and the section each item type files
+// under, so the cursor's vocabulary is authored rather than chosen. What this suite pins
+// is that the section decides what a selection MEANS: a wielded section reaches the equip
+// funnel by the same `SetActiveWeapon` door every other switch uses, and every other
+// section moves a cursor without touching the hand.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInventorySelectionTest,
+	"Elysium.Substrate.Inventory.Selection", GElysiumTestFlags)
+bool FElysiumInventorySelectionTest::RunTest(const FString&)
+{
+	// The authored type -> section join, asserted first because everything below rides it. Four
+	// types file under a section that is not their own name.
+	TestTrue(TEXT("a melee weapon files under Weapon (Melee)"),
+		ElysiumSectionForItemType(EElysiumItemType::WeaponMelee) == EElysiumInvSection::WeaponMelee);
+	TestTrue(TEXT("a firearm files under Weapon (Ranged)"),
+		ElysiumSectionForItemType(EElysiumItemType::WeaponFirearm) == EElysiumInvSection::WeaponRanged);
+	TestTrue(TEXT("a blood pack files under General"),
+		ElysiumSectionForItemType(EElysiumItemType::Bloodpack) == EElysiumInvSection::Generic);
+	TestTrue(TEXT("ammunition files under the undisplayed None"),
+		ElysiumSectionForItemType(EElysiumItemType::Ammo) == EElysiumInvSection::None);
+	TestFalse(TEXT("None is not browsable"), ElysiumSectionIsBrowsable(EElysiumInvSection::None));
+	TestFalse(TEXT("Hidden is not browsable"), ElysiumSectionIsBrowsable(EElysiumInvSection::Hidden));
+	TestTrue(TEXT("armour is worn"), ElysiumItemTypeIsWorn(EElysiumItemType::Armor));
+	TestTrue(TEXT("a firearm is wielded"), ElysiumItemTypeIsWielded(EElysiumItemType::WeaponFirearm));
+	// The `slotN` keys index the same block, offset by the commented-out Disciplines section.
+	TestTrue(TEXT("slot2 selects melee"),
+		ElysiumSectionForSlot(2) == EElysiumInvSection::WeaponMelee);
+	TestTrue(TEXT("slot6 selects General"),
+		ElysiumSectionForSlot(6) == EElysiumInvSection::Generic);
+	TestTrue(TEXT("slot1 addresses no surviving section"),
+		ElysiumSectionForSlot(1) == EElysiumInvSection::None);
+
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeWeaponTestDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("the player entity exists"), Player))
+	{
+		return false;
+	}
+
+	// Granted deliberately out of selection order, so an order that came from the inventory rather
+	// than from the records would be visible.
+	FElysiumWeapon* Shotgun = GiveWeapon(*Player, GShotgun);   // ranged, bucket position 8
+	FElysiumWeapon* Fists   = GiveWeapon(*Player, GFists);     // melee,  bucket position 0
+	FElysiumWeapon* Pistol  = GiveWeapon(*Player, GPistol);    // ranged, bucket position 1
+	FElysiumWeapon* Katana  = GiveWeapon(*Player, GKatana);    // melee,  bucket position 6
+	Player->Inventory.GiveNamedItem(*Player, GTrinket);        // General, and not wieldable
+	if (!TestNotNull(TEXT("the shotgun exists"), Shotgun) || !TestNotNull(TEXT("the fists exist"), Fists)
+		|| !TestNotNull(TEXT("the pistol exists"), Pistol) || !TestNotNull(TEXT("the katana exists"), Katana))
+	{
+		return false;
+	}
+
+	{
+		// Each section carries only its own types, in authored order.
+		TArray<FElysiumItem*> Melee, Ranged, General, Undisplayed;
+		ElysiumItems::CollectSection(*Player, EElysiumInvSection::WeaponMelee, Melee);
+		ElysiumItems::CollectSection(*Player, EElysiumInvSection::WeaponRanged, Ranged);
+		ElysiumItems::CollectSection(*Player, EElysiumInvSection::Generic, General);
+		ElysiumItems::CollectSection(*Player, EElysiumInvSection::Hidden, Undisplayed);
+
+		if (!TestEqual(TEXT("two melee weapons are carried"), Melee.Num(), 2)
+			|| !TestEqual(TEXT("two ranged weapons are carried"), Ranged.Num(), 2))
+		{
+			return false;
+		}
+		TestEqual(TEXT("melee sorts by bucket position"), Melee[0]->ClassName(), FString(GFists));
+		TestEqual(TEXT("melee sorts by bucket position"), Melee[1]->ClassName(), FString(GKatana));
+		TestEqual(TEXT("ranged sorts by bucket position"), Ranged[0]->ClassName(), FString(GPistol));
+		TestEqual(TEXT("ranged sorts by bucket position"), Ranged[1]->ClassName(), FString(GShotgun));
+		TestEqual(TEXT("the trinket files under General"), General.Num(), 1);
+		// An undisplayed section is empty by rule, whatever is carried.
+		TestEqual(TEXT("an undisplayed section collects nothing"), Undisplayed.Num(), 0);
+	}
+
+	{
+		// The katana was granted last, so it is in hand and its section is where a first cycle
+		// starts — the cursor does not have to be primed.
+		TestEqual(TEXT("the last grant is in hand"), Player->Inventory.ActiveWeapon, Katana->Handle);
+		TestTrue(TEXT("the first cycle succeeds"), ElysiumItems::CycleSelection(World, 1));
+		TestTrue(TEXT("the cursor started in the hand's own section"),
+			Player->Inventory.CurrentSection == EElysiumInvSection::WeaponMelee);
+		// Melee is [Fists, Katana]; forward from the katana wraps to the fists.
+		TestEqual(TEXT("forward wraps inside the section"),
+			Player->Inventory.ActiveWeapon, Fists->Handle);
+		ElysiumItems::CycleSelection(World, 1);
+		TestEqual(TEXT("forward reaches the katana"), Player->Inventory.ActiveWeapon, Katana->Handle);
+		ElysiumItems::CycleSelection(World, -1);
+		TestEqual(TEXT("backward returns to the fists"),
+			Player->Inventory.ActiveWeapon, Fists->Handle);
+		// Cycling never leaves the section: the ranged weapons are not in this rotation.
+		TestTrue(TEXT("the cursor stayed in melee"),
+			Player->Inventory.CurrentSection == EElysiumInvSection::WeaponMelee);
+	}
+
+	{
+		// `slotN` moves the category; repeating it advances inside the one already selected.
+		TestTrue(TEXT("the ranged category selects"),
+			ElysiumItems::SelectSection(World, EElysiumInvSection::WeaponRanged));
+		TestEqual(TEXT("the ranged category lands on its first entry"),
+			Player->Inventory.ActiveWeapon, Pistol->Handle);
+		ElysiumItems::SelectSection(World, EElysiumInvSection::WeaponRanged);
+		TestEqual(TEXT("repeating the category advances inside it"),
+			Player->Inventory.ActiveWeapon, Shotgun->Handle);
+
+		// An undisplayed section is refused rather than silently selected.
+		TestFalse(TEXT("an undisplayed section is refused"),
+			ElysiumItems::SelectSection(World, EElysiumInvSection::Hidden));
+		// A browsable section the player carries nothing in is a reported no-op.
+		TestFalse(TEXT("an empty category does not select"),
+			ElysiumItems::SelectSection(World, EElysiumInvSection::Powerups));
+		TestEqual(TEXT("a refused category leaves the hand alone"),
+			Player->Inventory.ActiveWeapon, Shotgun->Handle);
+	}
+
+	{
+		// **The section decides what a selection means.** Browsing General moves a cursor and leaves
+		// the hand exactly where it was — no non-weapon category can disarm the player.
+		TestTrue(TEXT("the General category selects"),
+			ElysiumItems::SelectSection(World, EElysiumInvSection::Generic));
+		TestEqual(TEXT("a non-wielded selection does not touch the hand"),
+			Player->Inventory.ActiveWeapon, Shotgun->Handle);
+		TestTrue(TEXT("a non-wielded selection moves the item cursor"),
+			Player->Inventory.SelectedItem.IsSet());
+		ElysiumItems::CycleSelection(World, 1);
+		TestEqual(TEXT("cycling General still does not touch the hand"),
+			Player->Inventory.ActiveWeapon, Shotgun->Handle);
+	}
+
+	{
+		// `lastinv` returns to the weapon held before the current one, and brings the cursor back to
+		// its section so the next cycle continues where the hand actually is.
+		TestTrue(TEXT("lastinv succeeds"), ElysiumItems::SelectLastWeapon(World));
+		TestEqual(TEXT("lastinv returns to the previously held weapon"),
+			Player->Inventory.ActiveWeapon, Pistol->Handle);
+		TestTrue(TEXT("lastinv restores the weapon's own section"),
+			Player->Inventory.CurrentSection == EElysiumInvSection::WeaponRanged);
+	}
+
+	{
+		// The projection the HUD reads. It describes the same hand and the same browsed section, and
+		// its ammunition comes off the magazine and the owner's reserve rather than off a fixture.
+		Player->Inventory.AddReserve(TEXT("TestRound"), 12);
+		FElysiumEquipmentView View;
+		ElysiumItems::BuildInventoryView(World, View);
+
+		TestTrue(TEXT("the view is valid with a player and a catalogue"), View.bValid);
+		TestTrue(TEXT("the hand projects"), View.bEquippedValid);
+		TestEqual(TEXT("the hand is the pistol"), View.Equipped.Classname, FString(GPistol));
+		TestTrue(TEXT("a firearm carries a magazine"), View.Equipped.bHasMagazine);
+		TestEqual(TEXT("the loaded magazine is the item's own"), View.Equipped.AmmoCurrent, 6);
+		TestEqual(TEXT("the reserve is the owner's"), View.Equipped.AmmoReserve, 12);
+
+		TestTrue(TEXT("the view carries the browsed section"),
+			View.Section == EElysiumInvSection::WeaponRanged);
+		if (!TestEqual(TEXT("the section's two rows project"), View.Entries.Num(), 2))
+		{
+			return false;
+		}
+		TestEqual(TEXT("the rows are in authored order"), View.Entries[0].Classname, FString(GPistol));
+		TestEqual(TEXT("the cursor names the hand"), View.SelectedIndex, 0);
+		// Nothing worn in this fixture, and an absent worn item is a cleared slot rather than a hole.
+		TestFalse(TEXT("no armour is carried, so nothing is worn"), View.bWornValid);
+	}
+
+	{
+		// A world with a player but no catalogue cannot name an item: the view stays invalid rather
+		// than claiming the player carries nothing.
+		ElysiumItems::Uninstall(Table);
+		FElysiumEquipmentView View;
+		ElysiumItems::BuildInventoryView(World, View);
+		TestFalse(TEXT("no catalogue leaves the view invalid"), View.bValid);
+		ElysiumItems::Install(Table);
 	}
 
 	return true;

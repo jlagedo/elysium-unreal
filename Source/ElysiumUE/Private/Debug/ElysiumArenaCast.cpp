@@ -375,8 +375,11 @@ FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
 	// it. Handing someone an armoury must leave them holding whatever they were holding.
 	const FElysiumEntityHandle ActiveBefore = Player->Inventory.ActiveWeapon;
 
-	// The reduced arsenal: 3 common melee, 3 common firearms.
+	// The reduced arsenal: fists, 3 common melee, 3 common firearms. Fists are a carried weapon
+	// like any other — holster falls back to a carried `item_w_unarmed` and refuses without one —
+	// so an arena player must be granted them to cycle retail-shaped.
 	const FString Arsenal[] = {
+		TEXT("item_w_unarmed"),
 		TEXT("item_w_tire_iron"), TEXT("item_w_knife"), TEXT("item_w_katana"),
 		TEXT("item_w_thirtyeight"), TEXT("item_w_glock_17c"), TEXT("item_w_ithaca_m_37")
 	};

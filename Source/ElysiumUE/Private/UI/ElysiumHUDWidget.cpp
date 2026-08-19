@@ -100,9 +100,17 @@ namespace
 			];
 	}
 
-	FText SelectorHeading(EElysiumHUDSelector Type)
+	// The browsed category's own name where the publisher supplied one — the inventory selector
+	// carries `items.txt`'s authored section name, so the heading says "Weapon (Ranged)" rather than
+	// a coarser word the file never uses. The kind's name is the fallback for the selectors that
+	// have no section behind them.
+	FText SelectorHeading(const FElysiumHUDSelectorView& Selector)
 	{
-		switch (Type)
+		if (!Selector.Heading.IsEmpty())
+		{
+			return FText::FromString(Selector.Heading.ToString().ToUpper());
+		}
+		switch (Selector.Type)
 		{
 		case EElysiumHUDSelector::Weapons:     return FText::FromString(TEXT("WEAPONS"));
 		case EElysiumHUDSelector::Disciplines: return FText::FromString(TEXT("DISCIPLINES"));
@@ -145,7 +153,8 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 			.BorderBackgroundColor_Lambda([M, Offset]()
 			{
 				return M && Offset == 0
-					? FLinearColor(ElysiumUI::Palette::Blood.R, ElysiumUI::Palette::Blood.G, ElysiumUI::Palette::Blood.B, 0.72f)
+					? FLinearColor(ElysiumUI::Palette::Blood.R, ElysiumUI::Palette::Blood.G,
+						ElysiumUI::Palette::Blood.B, 0.72f * M->Selector.Alpha)
 					: FLinearColor::Transparent;
 			})
 			.Visibility_Lambda([M, Offset]()
@@ -167,6 +176,11 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 					SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)
 					[
 						SNew(SImage)
+						// The peek fades as one: the icons ride the same alpha the highlight does.
+						.ColorAndOpacity_Lambda([M]()
+						{
+							return FLinearColor(1.0f, 1.0f, 1.0f, M ? M->Selector.Alpha : 0.0f);
+						})
 						.Image_Lambda([this, M, Offset]() -> const FSlateBrush*
 						{
 							if (!M) return nullptr;
@@ -413,14 +427,88 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 		]
 	];
 
-	// Masquerade is deliberately a neutral numeric contract until the faithful mask-state mapping
-	// is wired. It avoids inventing whether the published value means breaches or remaining marks.
+	// The two standings. They sit together, out of the action corners and permanently legible:
+	// Masquerade is a five-mark countdown whose exhaustion ends the run, and Humanity is the
+	// frenzy input. Neither changes often, and both matter when they do.
+	TSharedRef<SHorizontalBox> MasqueradePips = SNew(SHorizontalBox);
+	for (int32 Mark = 0; Mark < ElysiumHUDArt::MasqueradeMarks; ++Mark)
+	{
+		MasqueradePips->AddSlot().AutoWidth().Padding(3, 0)
+		[
+			SNew(SBox).WidthOverride(14.0f).HeightOverride(14.0f)
+			[
+				SNew(SOverlay)
+				// The mark itself. The sheet slot counts violations up, so the marks still held are
+				// the ones past the current level.
+				+ SOverlay::Slot()
+				[
+					SNew(SImage).Image(White)
+					.ColorAndOpacity_Lambda([M, Mark]()
+					{
+						if (!M || !M->bVitalsValid) return FLinearColor::Transparent;
+						return Mark >= M->Masquerade
+							? ElysiumUI::Palette::Bone
+							: FLinearColor(ElysiumUI::Palette::Ink.R, ElysiumUI::Palette::Ink.G,
+								ElysiumUI::Palette::Ink.B, 0.65f);
+					})
+				]
+				// The strike over a mark already lost, in the same blood the low-life bar takes.
+				+ SOverlay::Slot().HAlign(HAlign_Center).VAlign(VAlign_Center)
+				[
+					SNew(SBox).WidthOverride(16.0f).HeightOverride(3.0f)
+					.Visibility_Lambda([M, Mark]()
+					{
+						return M && M->bVitalsValid && Mark < M->Masquerade
+							? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+					})
+					[
+						SNew(SImage).Image(White).ColorAndOpacity(ElysiumUI::Palette::BloodLit)
+					]
+				]
+			]
+		];
+	}
+
 	Content->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Top).Padding(0, 34, 38, 0)
 	[
-		SNew(STextBlock).Font(Label).ColorAndOpacity(ElysiumUI::Palette::Gold)
-		.Text_Lambda([M]() { return M && M->bVitalsValid
-			? FText::FromString(FString::Printf(TEXT("MASQUERADE  %d"), M->Masquerade))
-			: FText::GetEmpty(); })
+		SNew(SVerticalBox)
+		.Visibility_Lambda([M]() { return M && M->bVitalsValid
+			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+		+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 10, 0))
+			[
+				SNew(STextBlock).Text(FText::FromString(TEXT("MASQUERADE"))).Font(Label)
+				.ColorAndOpacity(ElysiumUI::Palette::Gold)
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[MasqueradePips]
+		]
+		+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Right).Padding(0, 6, 0, 0)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 10, 0))
+			[
+				SNew(STextBlock).Text(FText::FromString(TEXT("HUMANITY"))).Font(Label)
+				.ColorAndOpacity(ElysiumUI::Palette::Gold)
+			]
+			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+			[
+				// A ten-point scale reads faster as a value than as ten pips, and the colour carries
+				// the part that matters: the lower it goes, the likelier the Beast takes over.
+				SNew(STextBlock).Font(Data)
+				.Text_Lambda([M]()
+				{
+					return M ? FText::AsNumber(M->Humanity) : FText::GetEmpty();
+				})
+				.ColorAndOpacity_Lambda([M]()
+				{
+					if (!M) return ElysiumUI::Palette::Bone;
+					if (M->Humanity <= 2) return ElysiumUI::Palette::BloodLit;
+					return M->Humanity <= 4 ? ElysiumUI::Palette::Amber : ElysiumUI::Palette::Bone;
+				})
+			]
+		]
 	];
 
 	// Equipment and discipline regions collapse until their real gameplay owners publish data.
@@ -484,6 +572,37 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom).Padding(FMargin(38, 0, 0, EquipmentBottomPad))
 	[
 		EquipBox
+	];
+
+	// What the player is wearing, beside the hand. Persistent and independent of the browsed
+	// category, the way retail keeps the worn clothing on screen rather than inside the selector.
+	// Its own art is a clan/sex/tier portrait this runtime cannot yet resolve, so the row leads with
+	// the category glyph and names the garment.
+	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom)
+		.Padding(FMargin(38, 0, 0, EquipmentBottomPad + 44.0f))
+	[
+		SNew(SHorizontalBox)
+		.Visibility_Lambda([M]() { return M && M->Worn.bValid
+			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 8, 0))
+		[
+			SNew(SBox).WidthOverride(28.0f).HeightOverride(28.0f)
+			[
+				SNew(SScaleBox).Stretch(EStretch::ScaleToFit).StretchDirection(EStretchDirection::DownOnly)
+				[
+					SNew(SImage)
+					.Image_Lambda([this, M]() -> const FSlateBrush*
+					{
+						return M ? HudArtBrush(M->Worn.Icon) : nullptr;
+					})
+				]
+			]
+		]
+		+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
+		[
+			SNew(STextBlock).Font(Caption).ColorAndOpacity(ElysiumUI::Palette::BoneDim)
+			.Text_Lambda([M]() { return M ? M->Worn.Name : FText::GetEmpty(); })
+		]
 	];
 
 	Content->AddSlot().HAlign(HAlign_Right).VAlign(VAlign_Bottom).Padding(FMargin(0, 0, 38, 101))
@@ -550,7 +669,7 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 					+ SVerticalBox::Slot().AutoHeight().Padding(8, 4, 8, 8)
 					[
 						SNew(STextBlock).Font(Label).ColorAndOpacity(ElysiumUI::Palette::GoldLit)
-						.Text_Lambda([M]() { return M ? SelectorHeading(M->Selector.Type) : FText::GetEmpty(); })
+						.Text_Lambda([M]() { return M ? SelectorHeading(M->Selector) : FText::GetEmpty(); })
 					]
 					+ SVerticalBox::Slot().AutoHeight()[SelectorRows]
 				]
@@ -558,6 +677,95 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 			+ SVerticalBox::Slot().AutoHeight()
 			[
 				BriefModeRow
+			]
+		]
+	];
+
+	// The stealth cluster. Situational by design: it is on screen only while the player is
+	// crouched, so a readout about being unseen never competes with the ordinary walking HUD.
+	// Bottom-centre, under the reticle, because it is the one thing being read continuously while
+	// sneaking.
+	TSharedRef<SHorizontalBox> ConcealmentSteps = SNew(SHorizontalBox);
+	for (int32 Step = 0; Step < ElysiumHUDArt::ConcealmentSteps; ++Step)
+	{
+		ConcealmentSteps->AddSlot().AutoWidth().Padding(2, 0)
+		[
+			SNew(SBox).WidthOverride(16.0f).HeightOverride(10.0f)
+			[
+				SNew(SBorder).BorderImage(White).BorderBackgroundColor(HUDOutline).Padding(1)
+				[
+					SNew(SImage).Image(White)
+					.ColorAndOpacity_Lambda([M, Step]()
+					{
+						// Unmeasured draws every step empty. An unmeasured gauge and a gauge reading
+						// zero are different statements and must not look the same.
+						if (!M || !M->Stealth.bConcealmentValid) return FLinearColor::Transparent;
+						return Step <= M->Stealth.ConcealmentStep
+							? ElysiumUI::Palette::Cyan : FLinearColor::Transparent;
+					})
+				]
+			]
+		];
+	}
+
+	Content->AddSlot().HAlign(HAlign_Center).VAlign(VAlign_Bottom).Padding(FMargin(0, 0, 0, 96))
+	[
+		SNew(SBorder).BorderImage(White)
+		.BorderBackgroundColor(FLinearColor(ElysiumUI::Palette::Ink.R, ElysiumUI::Palette::Ink.G,
+			ElysiumUI::Palette::Ink.B, 0.72f))
+		.Visibility_Lambda([M]() { return M && M->Stealth.bSneaking
+			? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+		.Padding(FMargin(14, 8))
+		[
+			SNew(SVerticalBox)
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
+			[
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(0, 0, 12, 0))
+				[
+					SNew(STextBlock).Text(FText::FromString(TEXT("SNEAKING"))).Font(Label)
+					.ColorAndOpacity(ElysiumUI::Palette::GoldLit)
+				]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)[ConcealmentSteps]
+				+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center).Padding(FMargin(10, 0, 0, 0))
+				[
+					// The gauge names its own absence rather than letting an empty row read as light.
+					SNew(STextBlock).Font(Caption).ColorAndOpacity(ElysiumUI::Palette::Disabled)
+					.Text(FText::FromString(TEXT("--")))
+					.Visibility_Lambda([M]() { return M && !M->Stealth.bConcealmentValid
+						? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+				]
+			]
+			// The observer line. An absent observer clears it: nobody eligible is looking, which is
+			// an ordinary state and not a failure to report.
+			+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0, 5, 0, 0)
+			[
+				SNew(STextBlock).Font(Caption)
+				.Visibility_Lambda([M]() { return M && M->Stealth.bObserverValid
+					? EVisibility::HitTestInvisible : EVisibility::Collapsed; })
+				.ColorAndOpacity_Lambda([M]()
+				{
+					if (!M) return ElysiumUI::Palette::Bone;
+					switch (M->Stealth.Detection)
+					{
+					case EElysiumHUDDetection::Detected:  return ElysiumUI::Palette::BloodLit;
+					case EElysiumHUDDetection::Searching: return ElysiumUI::Palette::Amber;
+					default:                              return ElysiumUI::Palette::Bone;
+					}
+				})
+				.Text_Lambda([M]()
+				{
+					if (!M || !M->Stealth.bObserverValid) return FText::GetEmpty();
+					const TCHAR* State = TEXT("UNAWARE");
+					switch (M->Stealth.Detection)
+					{
+					case EElysiumHUDDetection::Detected:  State = TEXT("SPOTTED"); break;
+					case EElysiumHUDDetection::Searching: State = TEXT("SEARCHING"); break;
+					default: break;
+					}
+					return FText::FromString(FString::Printf(TEXT("%s  %.0fm"),
+						State, M->Stealth.ObserverDistanceMetres));
+				})
 			]
 		]
 	];

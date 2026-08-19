@@ -249,6 +249,14 @@ sample, its clip time and the distance:
   while the bake-defect class this gate exists for reads at 18 cm and above. No offset is
   corrected at runtime; a placement failure names the bake as the owner of the fix.
 
+- **Mount local** — for a mount the wearer does not declare, the drawn mount's hand-local
+  transform must equal the weapon skeleton's own mount-under-hand chain, translation and rotation,
+  every frame — a constantly wrong rotation cannot ride through drift and placement.
+- **Off hand** — a two-handed carry is auto-detected from the authored pose (the game-thread
+  recipe puts the off hand within 10 cm of the weapon box); the drawn off hand must then match the
+  authored distance per frame. Clip-phase-insensitive, so a reload or swing does not false-fail; a
+  one-handed carry never arms the gate.
+
 Two guards keep a pass meaningful: the base must move the hand (a near-static or paused base closes
 as *unproven*), and the window aborts, named, when the body or the held weapon changes under it.
 An ablation that strips the prop-bone channels needs a female base to register on the mapping gate:

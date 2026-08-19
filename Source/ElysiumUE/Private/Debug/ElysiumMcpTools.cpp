@@ -20,6 +20,8 @@
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayer.h"
+#include "ElysiumPresentationSubsystem.h"
+#include "ElysiumViewState.h"
 #include "Debug/ElysiumScreenshot.h"
 #include "Debug/ElysiumWireDump.h"
 #include "ElysiumWireReport.h"
@@ -32,8 +34,10 @@
 #include "Engine/LocalPlayer.h"
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/PlatformMisc.h"
 #include "IModelContextProtocolModule.h"
 #include "IModelContextProtocolTool.h"
+#include "Misc/Paths.h"
 #include "ModelContextProtocolSession.h"
 #include "ModelContextProtocolToolResults.h"
 #include "Misc/OutputDevice.h"
@@ -250,6 +254,27 @@ namespace ElysiumMcpImpl
 	bool HasParam(const TSharedPtr<FJsonObject>& Params, const TCHAR* Key)
 	{
 		return Params.IsValid() && Params->HasField(Key);
+	}
+
+	// Validate and normalize a caller-supplied filesystem path against $ELYSIUM_WORK_ROOT — the
+	// screenshot `path` argument's one guard, so an agent cannot ask this process to write outside
+	// the sandboxed work tree. False (with `OutWorkRoot` still filled, for the error text) when
+	// ELYSIUM_WORK_ROOT is unset or `Requested` normalizes to somewhere outside it.
+	bool ResolveWorkRootPath(const FString& Requested, FString& OutWorkRoot, FString& OutFullPath)
+	{
+		OutWorkRoot = FPlatformMisc::GetEnvironmentVariable(TEXT("ELYSIUM_WORK_ROOT"));
+		if (OutWorkRoot.IsEmpty())
+		{
+			return false;
+		}
+		OutWorkRoot = FPaths::ConvertRelativePathToFull(OutWorkRoot);
+		FPaths::NormalizeDirectoryName(OutWorkRoot);
+
+		OutFullPath = FPaths::ConvertRelativePathToFull(Requested);
+		FPaths::NormalizeFilename(OutFullPath);
+
+		return OutFullPath.Equals(OutWorkRoot, ESearchCase::IgnoreCase)
+			|| OutFullPath.StartsWith(OutWorkRoot + TEXT("/"), ESearchCase::IgnoreCase);
 	}
 
 	// A JSON value as the substrate's marshalling currency. Mirrors what a map-authored output
@@ -522,12 +547,40 @@ namespace ElysiumMcpImpl
 			if (const AElysiumNpcBody* Motor =
 				Cast<AElysiumNpcBody>(SkeletalBody->GetAttachParentActor()))
 			{
+				// The same fields the Cog locomotion row shows for this body, pulled off the motor's
+				// published sample the way the row does (`ElysiumCogLocomotionRow.h`) — the settled
+				// record the selection above was classified from, not a fresh re-sample that could
+				// describe a different frame.
+				const FElysiumLocomotionSample& S = Motor->GetAnimSample();
+				TSharedRef<FJsonObject> Loco = Obj();
+				Loco->SetNumberField(TEXT("speed2d"), S.Speed2D());
+				Loco->SetObjectField(TEXT("local_velocity"), Vec(S.LocalVelocity));
+				Loco->SetNumberField(TEXT("facing_yaw"), S.FacingYaw);
+				Loco->SetNumberField(TEXT("move_yaw_wish"), S.MoveYawWish);
+				Loco->SetNumberField(TEXT("move_yaw_vel"), S.MoveYawVelocity);
+				Loco->SetBoolField(TEXT("on_ground"), S.bOnGround);
+				Loco->SetStringField(TEXT("stance"), StanceName(S.Stance));
+				Loco->SetStringField(TEXT("jump_phase"), JumpPhaseName(S.JumpPhase()));
+				Out->SetObjectField(TEXT("locomotion"), Loco);
+
 				const FElysiumAnimationSelection& Sel = Motor->GetAnimSelection();
 				TSharedRef<FJsonObject> Anim = Obj();
 				Anim->SetStringField(TEXT("activity"), Sel.ResolvedActivity);
 				Anim->SetStringField(TEXT("sequence"), Sel.SequenceLabel);
+				// LIFE4 — the same translation hops the player readout reports, so a cast body's
+				// resolution is auditable without a screenshot: the class answer, the weapon ladder
+				// rung, the availability rung.
+				Anim->SetStringField(TEXT("class_activity"), Sel.ClassActivity);
+				Anim->SetNumberField(TEXT("weapon_rung"), Sel.WeaponRung);
+				Anim->SetNumberField(TEXT("availability_rung"), Sel.AvailabilityRung);
 				Anim->SetStringField(TEXT("state"),
 					ElysiumAnimGraph::StateName(Sel.GraphState));
+				TArray<TSharedPtr<FJsonValue>> Layers;
+				for (const FString& Layer : Sel.LayerLabels)
+				{
+					Layers.Add(MakeShared<FJsonValueString>(Layer));
+				}
+				Anim->SetArrayField(TEXT("layers"), Layers);
 				Anim->SetBoolField(TEXT("base_pose_owned"), Sel.bBasePoseOwned);
 				Anim->SetStringField(TEXT("base_hold"), Sel.BaseHold);
 				Anim->SetNumberField(TEXT("base_hold_seconds"), Sel.BaseHoldSeconds);
@@ -588,6 +641,66 @@ namespace ElysiumMcpImpl
 
 	void BuildTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
+		// --- Status ---------------------------------------------------------------------------
+
+		{
+			FSchema Schema;
+			Out.Add(MakeTool(TEXT("elysium_status"),
+				TEXT("One-shot health readout, collapsing the 'am I loaded/idle, is a dialogue blocking me' poll: app state, the current map plus spawn_done/pending_travel, the event queue's pending/paused counts, whether a dialogue is open and how many choices it offers, whether a screen fade or sign panel is on screen, average FPS, and the entity world's game clock."),
+				Schema,
+				[](const TSharedPtr<FJsonObject>&) -> FModelContextProtocolToolResult
+				{
+					TSharedRef<FJsonObject> Body = Obj();
+
+					if (const UElysiumGameFlowSubsystem* Flow = Sub<UElysiumGameFlowSubsystem>())
+					{
+						Body->SetStringField(TEXT("app_state"), ElysiumAppState::Name(Flow->AppState()));
+					}
+
+					if (UElysiumMapSubsystem* Maps = Sub<UElysiumMapSubsystem>())
+					{
+						Body->SetStringField(TEXT("map"), Maps->GetCurrentMapName());
+						Body->SetBoolField(TEXT("pending"), Maps->HasPendingMapLoad());
+						Body->SetStringField(TEXT("pending_travel"), Maps->PendingTravelDesc());
+						if (const AElysiumMapActor* Map = Maps->GetCurrentMap())
+						{
+							Body->SetBoolField(TEXT("spawn_done"), Map->IsSpawnDone());
+						}
+					}
+
+					if (FElysiumEntityWorld* World = Entities())
+					{
+						TSharedRef<FJsonObject> Queue = Obj();
+						Queue->SetNumberField(TEXT("pending"), World->Queue().Num());
+						Queue->SetBoolField(TEXT("paused"), World->Queue().IsPaused());
+						Body->SetObjectField(TEXT("queue"), Queue);
+						Body->SetNumberField(TEXT("game_time"), World->NowSeconds());
+					}
+
+					if (const UWorld* World = LiveWorld())
+					{
+						if (const UElysiumPresentationSubsystem* Presentation =
+							UElysiumPresentationSubsystem::Get(World))
+						{
+							const FElysiumViewState& View = Presentation->View();
+
+							TSharedRef<FJsonObject> Dialogue = Obj();
+							Dialogue->SetBoolField(TEXT("open"), View.Dialogue.IsOpen());
+							Dialogue->SetNumberField(TEXT("choice_count"), View.Dialogue.Choices.Num());
+							Body->SetObjectField(TEXT("dialogue"), Dialogue);
+
+							// The presentation subsystem's own `elysium.viewstate` data — a fade or sign
+							// blocking the player is exactly the "why am I not moving" a poll asks.
+							Body->SetBoolField(TEXT("fade_active"), View.Fade.A > 0.0f);
+							Body->SetBoolField(TEXT("sign_active"), View.Sign != nullptr);
+						}
+					}
+
+					Body->SetNumberField(TEXT("fps"), GAverageFPS);
+					return Structured(Body);
+				}));
+		}
+
 		// --- Map lifecycle ------------------------------------------------------------------
 
 		{
@@ -886,6 +999,11 @@ namespace ElysiumMcpImpl
 						Anim->SetStringField(TEXT("resolved_activity"), Sel.ResolvedActivity);
 						Anim->SetStringField(TEXT("first_weapon_activity"), Sel.FirstWeaponActivity);
 						Anim->SetStringField(TEXT("weapon_activity"), Sel.WeaponActivity);
+						// LIFE4 — the remaining translation hops, so the readout shows which rung
+						// fired: the class answer, the weapon ladder rung, the availability rung.
+						Anim->SetStringField(TEXT("class_activity"), Sel.ClassActivity);
+						Anim->SetNumberField(TEXT("weapon_rung"), Sel.WeaponRung);
+						Anim->SetNumberField(TEXT("availability_rung"), Sel.AvailabilityRung);
 						Anim->SetNumberField(TEXT("translation_iterations"), Sel.TranslationIterations);
 						Anim->SetStringField(TEXT("label"), Sel.SequenceLabel);
 						Anim->SetStringField(TEXT("owner"), Sel.OwnerStem);
@@ -1827,20 +1945,55 @@ namespace ElysiumMcpImpl
 
 		{
 			FSchema Schema;
+			Schema.Add(TEXT("path"), TEXT("string"),
+				TEXT("Optional absolute filesystem path, under $ELYSIUM_WORK_ROOT, to save the PNG to on disk. When present the tool writes the file and returns {path,width,height} JSON instead of the inline image — use this for a capture too large to want in the conversation. A path outside $ELYSIUM_WORK_ROOT is refused."));
 			TSharedRef<FAsyncTool> Tool = MakeShared<FAsyncTool>();
 			Tool->Name = TEXT("elysium_screenshot");
-			Tool->Description = TEXT("Capture the game viewport and return it as a PNG image, including the game UI (menus, HUD). Use it to close the loop — fire an input, then look at what happened.");
+			Tool->Description = TEXT("Capture the game viewport, including the game UI (menus, HUD). With no `path`, returns the PNG inline — use it to close the loop, fire an input then look at what happened. With `path`, saves it to disk instead and returns {path,width,height}.");
 			Tool->Schema = Schema.Build();
-			Tool->Handler = [](const TSharedPtr<FJsonObject>&, const IModelContextProtocolTool::FResultCallback& OnComplete)
+			Tool->Handler = [](const TSharedPtr<FJsonObject>& Params, const IModelContextProtocolTool::FResultCallback& OnComplete)
 			{
+				const FString RequestedPath = ParamStr(Params, TEXT("path"));
+				FString SavePath;
+				if (!RequestedPath.IsEmpty())
+				{
+					FString WorkRoot;
+					if (!ResolveWorkRootPath(RequestedPath, WorkRoot, SavePath))
+					{
+						OnComplete(MakeErrorResult(WorkRoot.IsEmpty()
+							? FString(TEXT("`path` was given but ELYSIUM_WORK_ROOT is not set in this process"))
+							: FString::Printf(
+								TEXT("`path` must be under $ELYSIUM_WORK_ROOT ('%s'); got '%s'"),
+								*WorkRoot, *RequestedPath)));
+						return;
+					}
+				}
+
 				const bool bRequested = ElysiumScreenshot::Request(
-					[OnComplete](int32 Width, int32 Height, const TArray<FColor>& Bitmap)
+					[OnComplete, SavePath](int32 Width, int32 Height, const TArray<FColor>& Bitmap)
 					{
 						if (Width <= 0 || Height <= 0)
 						{
 							OnComplete(MakeErrorResult(TEXT("screenshot timed out (the viewport is not presenting frames)")));
 							return;
 						}
+
+						if (!SavePath.IsEmpty())
+						{
+							if (!ElysiumScreenshot::SavePng(Width, Height, Bitmap, SavePath))
+							{
+								OnComplete(MakeErrorResult(
+									FString::Printf(TEXT("failed to save PNG to '%s'"), *SavePath)));
+								return;
+							}
+							TSharedRef<FJsonObject> Body = Obj();
+							Body->SetStringField(TEXT("path"), SavePath);
+							Body->SetNumberField(TEXT("width"), Width);
+							Body->SetNumberField(TEXT("height"), Height);
+							OnComplete(Structured(Body));
+							return;
+						}
+
 						TArray64<uint8> Png;
 						if (!ElysiumScreenshot::EncodePng(Width, Height, Bitmap, Png))
 						{

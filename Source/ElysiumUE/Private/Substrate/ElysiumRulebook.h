@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+#include "ElysiumInventorySections.h"
 #include "ElysiumSheetSlots.h"
 
 // How a *value* used as a lookup key is normalised. The KV reader lowercases block keys already, so
@@ -1064,6 +1065,13 @@ struct FElysiumWeaponMode
 	}
 };
 
+// The section an item type files under, and whether that type is held or worn. Every column is
+// authored per `ItemType` in `system/items.txt`: `Ammo` files under `None` and is never browsable,
+// and `Bloodpack`, `Money` and `Jewelry` all file under `Generic`.
+EElysiumInvSection ElysiumSectionForItemType(EElysiumItemType Type);
+bool ElysiumItemTypeIsWielded(EElysiumItemType Type);
+bool ElysiumItemTypeIsWorn(EElysiumItemType Type);
+
 // One `vdata/items/<classname>.txt` — the `WeaponData` block every one of them hangs off, reduced
 // to what the inventory runtime and the economy read. The file carries far more (crosshair bloom,
 // muzzle particles, botch tables, sprite atlases); those belong to the systems that own them and
@@ -1088,6 +1096,14 @@ struct FElysiumItemDef
 
 	bool  bWieldable = false;           // `is_wieldable`
 	bool  bVisibleInHud = true;         // `is_visible_in_hud`
+
+	// --- Selection order (`bucket` / `bucket_position`) ---------------------------------------
+	// The weapon-selection column and the row inside it. Every `item_w_*` record authors both:
+	// bucket 0 holds the melee families and bucket 1 the ranged and thrown ones, and
+	// `bucket_position` orders the entries within a bucket. This is the ordering the weapon
+	// selector cycles in; it is authored data, not a derived sort.
+	int32 Bucket = 0;                   // `bucket`
+	int32 BucketPosition = 0;           // `bucket_position`
 
 	int32 Worth = 0;                    // `item_worth`
 	int32 PlayerSell = 0;               // `player_sell` — the vendor half is 9.10's

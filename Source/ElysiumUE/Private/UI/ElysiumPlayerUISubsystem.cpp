@@ -35,6 +35,7 @@ namespace
 		if (Name.Equals(TEXT("radial"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Radial;
 		if (Name.Equals(TEXT("brief"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Brief;
 		if (Name.Equals(TEXT("elysium"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Elysium;
+		if (Name.Equals(TEXT("sneak"), ESearchCase::IgnoreCase)) return EElysiumHUDPreview::Sneak;
 		return EElysiumHUDPreview::Off;
 	}
 
@@ -49,7 +50,8 @@ namespace
 			|| Name.Equals(TEXT("critical"), ESearchCase::IgnoreCase)
 			|| Name.Equals(TEXT("radial"), ESearchCase::IgnoreCase)
 			|| Name.Equals(TEXT("brief"), ESearchCase::IgnoreCase)
-			|| Name.Equals(TEXT("elysium"), ESearchCase::IgnoreCase);
+			|| Name.Equals(TEXT("elysium"), ESearchCase::IgnoreCase)
+			|| Name.Equals(TEXT("sneak"), ESearchCase::IgnoreCase);
 	}
 
 	bool NotificationKindFromName(const FString& Name, EElysiumNotificationKind& OutKind)
@@ -109,7 +111,7 @@ void UElysiumPlayerUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 #if !UE_BUILD_SHIPPING
 	IConsoleObject* PreviewCommand = IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.hud.preview"),
-		TEXT("elysium.hud.preview off|passive|combat|weapon|discipline|inventory|critical|radial|brief|elysium"),
+		TEXT("elysium.hud.preview off|passive|combat|weapon|discipline|inventory|critical|radial|brief|elysium|sneak"),
 		FConsoleCommandWithArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>& Args)
 		{
 			if (!Args.IsEmpty() && !IsKnownPreviewName(Args[0]))

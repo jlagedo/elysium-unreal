@@ -291,10 +291,11 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 		});
 
 	Register(TEXT("elysium.gr_bones"),
-		TEXT("Dump the standing body's evaluated local pose against its mesh bind for the "
-		     "torso-to-head chain: `elysium.gr_bones`. The proportion a retarget delivers is "
-		     "otherwise invisible."),
-		[](FElysiumGreenRoomRun& Run, const TArray<FString>&)
+		TEXT("Dump the standing body's evaluated local pose against its mesh bind. With no "
+		     "argument, the torso-to-head chain; otherwise every bone whose name contains an "
+		     "argument: `elysium.gr_bones \"L UpperArm\" \"L Hand\"`. The proportion a retarget "
+		     "delivers — and the local rotation a clip actually lands — is otherwise invisible."),
+		[](FElysiumGreenRoomRun& Run, const TArray<FString>& Args)
 		{
 			USkeletalMeshComponent* Body = Run.LabBody();
 			const USkeletalMesh* Mesh = Body ? Body->GetSkeletalMeshAsset() : nullptr;
@@ -314,24 +315,70 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 				return;
 			}
 			const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
-			static const FName Chain[] =
+			// The bones to report: the default torso-to-head chain, or — with arguments — every
+			// bone whose name contains one, so an arm or finger chain can be read without a
+			// recompile.
+			TArray<int32> Indices;
+			if (Args.Num() == 0)
 			{
-				TEXT("Bip01 Spine1"), TEXT("Bip01 Spine2"), TEXT("Bip01 Neck"), TEXT("Bip01 Head")
-			};
-			for (const FName BoneName : Chain)
+				static const FName Chain[] =
+				{
+					TEXT("Bip01 Spine1"), TEXT("Bip01 Spine2"), TEXT("Bip01 Neck"),
+					TEXT("Bip01 Head")
+				};
+				for (const FName BoneName : Chain)
+				{
+					const int32 Index = Ref.FindBoneIndex(BoneName);
+					if (Index == INDEX_NONE)
+					{
+						UE_LOG(LogElysiumGreenRoomCmd, Display,
+							TEXT("gr_bones: %s — not on this body"), *BoneName.ToString());
+						continue;
+					}
+					Indices.Add(Index);
+				}
+			}
+			else
 			{
-				const int32 Index = Ref.FindBoneIndex(BoneName);
-				if (Index == INDEX_NONE || !Locals.IsValidIndex(Index))
+				for (int32 Index = 0; Index < Ref.GetNum(); ++Index)
+				{
+					const FString Name = Ref.GetBoneName(Index).ToString();
+					for (const FString& Filter : Args)
+					{
+						if (Name.Contains(Filter))
+						{
+							Indices.Add(Index);
+							break;
+						}
+					}
+				}
+				if (Indices.Num() == 0)
+				{
+					UE_LOG(LogElysiumGreenRoomCmd, Warning,
+						TEXT("gr_bones: no bone on %s matches the filter."), *Run.LabStem());
+					return;
+				}
+			}
+			for (const int32 Index : Indices)
+			{
+				if (!Locals.IsValidIndex(Index))
 				{
 					UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_bones: %s — not on this body"),
-						*BoneName.ToString());
+						*Ref.GetBoneName(Index).ToString());
 					continue;
 				}
 				const FVector Posed = Locals[Index].GetTranslation();
-				const FVector Bind = Ref.GetRefBonePose()[Index].GetTranslation();
+				const FTransform& BindLocal = Ref.GetRefBonePose()[Index];
+				const FVector Bind = BindLocal.GetTranslation();
+				// The rotation column is the discriminating number for a clip defect: how far the
+				// evaluated LOCAL rotation sits from the mesh bind's local, in degrees.
+				const float RotDeg = FMath::RadiansToDegrees(
+					Locals[Index].GetRotation().AngularDistance(BindLocal.GetRotation()));
 				UE_LOG(LogElysiumGreenRoomCmd, Display,
-					TEXT("gr_bones: %-14s posed %7.3f cm (%.2f, %.2f, %.2f)  bind %7.3f cm"),
-					*BoneName.ToString(), Posed.Size(), Posed.X, Posed.Y, Posed.Z, Bind.Size());
+					TEXT("gr_bones: %-16s posed %7.3f cm (%.2f, %.2f, %.2f)  bind %7.3f cm  "
+					     "rot-vs-bind %7.2f deg"),
+					*Ref.GetBoneName(Index).ToString(), Posed.Size(), Posed.X, Posed.Y, Posed.Z,
+					Bind.Size(), RotDeg);
 			}
 		});
 
@@ -424,6 +471,97 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_mode: %s"), Name);
 		});
 
+	// --- arena navigation pins ----------------------------------------------------------------------
+
+	Register(TEXT("elysium.gr_pin"),
+		TEXT("Drop or update a named arena waypoint: `elysium.gr_pin corner [x y z]`. With no "
+		     "coordinates, uses the driven body's own current position. With no arguments at all, "
+		     "lists every pin."),
+		[](FElysiumGreenRoomRun& Run, const TArray<FString>& Args)
+		{
+			if (Args.Num() == 0)
+			{
+				const TArray<TPair<FName, FVector>>& Pins = Run.ArenaPins();
+				if (Pins.Num() == 0)
+				{
+					UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_pin: no pins."));
+					return;
+				}
+				for (const TPair<FName, FVector>& Pin : Pins)
+				{
+					UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  %-16s (%.1f, %.1f, %.1f)"),
+						*Pin.Key.ToString(), Pin.Value.X, Pin.Value.Y, Pin.Value.Z);
+				}
+				return;
+			}
+
+			const FName Name(*Args[0]);
+			const FVector Explicit(Arg(Args, 1, 0.0f), Arg(Args, 2, 0.0f), Arg(Args, 3, 0.0f));
+			const bool bExplicit = Args.Num() >= 4;
+			FString Error;
+			if (Run.ArenaSetPin(Name, bExplicit ? &Explicit : nullptr, Error))
+			{
+				const FVector* Placed = Run.FindArenaPin(Name);
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_pin: %s (%.1f, %.1f, %.1f)"),
+					*Args[0], Placed ? Placed->X : 0.0, Placed ? Placed->Y : 0.0,
+					Placed ? Placed->Z : 0.0);
+			}
+			else
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_pin failed: %s"), *Error);
+			}
+		});
+
+	Register(TEXT("elysium.gr_walk"),
+		TEXT("Walk a body between pins through the real motor: `elysium.gr_walk player pin1 pin2 "
+		     "[loop]`, or name an arena character's targetname in place of `player`. "
+		     "`elysium.gr_walk stop` ends it."),
+		[](FElysiumGreenRoomRun& Run, const TArray<FString>& Args)
+		{
+			if (Args.Num() == 0)
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning,
+					TEXT("gr_walk: name a target (player, or an arena character) and at least one ")
+					TEXT("pin, or 'stop'."));
+				return;
+			}
+			if (Args[0].Equals(TEXT("stop"), ESearchCase::IgnoreCase))
+			{
+				Run.ArenaWalkStop();
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_walk: stopped."));
+				return;
+			}
+			if (Args.Num() < 2)
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_walk: name at least one pin."));
+				return;
+			}
+
+			const FString Target = Args[0];
+			TArray<FName> Pins;
+			bool bLoop = false;
+			for (int32 i = 1; i < Args.Num(); ++i)
+			{
+				if (Args[i].Equals(TEXT("loop"), ESearchCase::IgnoreCase))
+				{
+					bLoop = true;
+					continue;
+				}
+				Pins.Add(FName(*Args[i]));
+			}
+
+			FString Error;
+			if (Run.ArenaWalkStart(Target, Pins, bLoop, Error))
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_walk: %s walking %d pin(s)%s"),
+					*Target, Pins.Num(), bLoop ? TEXT(" (looping)") : TEXT(""));
+			}
+			else
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Warning, TEXT("gr_walk failed: %s"), *Error);
+			}
+		});
+
 	// --- the readout ------------------------------------------------------------------------------
 
 	Register(TEXT("elysium.gr_status"),
@@ -451,6 +589,11 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 				Run.LabWieldTrackRunning() ? TEXT("(sampling)")
 				: Run.LabWieldTrackVerdict().IsEmpty() ? TEXT("(not run)")
 				: *Run.LabWieldTrackVerdict());
+			if (Run.IsArena())
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  pins   %d"), Run.ArenaPins().Num());
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  walk   %s"), *Run.ArenaWalkStatus());
+			}
 		});
 }
 

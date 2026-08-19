@@ -159,6 +159,18 @@ private:
 	// interesting event is the transition into that state, not each frame of it.
 	bool bReportedStaleCameraSample = false;
 
+	// The weapon-selection peek. Presentation owns the whole of it: the publisher notices the active
+	// weapon changing and raises the peek, then lets it fall on its own. Nothing in gameplay knows
+	// the selector is on screen, and nothing persists it.
+	// Advance the peek for this frame's equipment and return its alpha. Raises the peek whenever the
+	// weapon in hand differs from the one the last frame described.
+	float AdvanceWeaponPeek(const FElysiumEquipmentView& Equipment);
+
+	FString LastActiveWeaponClass;
+	bool bSeenActiveWeapon = false;
+	float WeaponPeekSecondsLeft = 0.0f;
+	double LastWeaponPeekRealSeconds = 0.0;
+
 	// Drained by the publish pass. A second announcement of the same kind in one frame overwrites
 	// the first, which is the same replace-the-running-one rule the world itself applies.
 	bool bPendingFade = false;

@@ -231,6 +231,49 @@ void AElysiumPlayerController::RegisterCommands()
 		}
 	}));
 
+	// The inventory selector's verbs. Selection commits immediately — there is no open/confirm state
+	// to hold — so each one is a single step through the authored order. `invnext`/`invprev` move
+	// inside whichever category the cursor is in; the `slotN` keys move the category itself.
+	Bindings.Add(Registry.Bind(TEXT("invnext"), [this](const FElysiumCommandCall&)
+	{
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			ElysiumItems::CycleSelection(*World, 1);
+		}
+	}));
+
+	Bindings.Add(Registry.Bind(TEXT("invprev"), [this](const FElysiumCommandCall&)
+	{
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			ElysiumItems::CycleSelection(*World, -1);
+		}
+	}));
+
+	Bindings.Add(Registry.Bind(TEXT("lastinv"), [this](const FElysiumCommandCall&)
+	{
+		if (FElysiumEntityWorld* World = CurrentEntityWorld())
+		{
+			ElysiumItems::SelectLastWeapon(*World);
+		}
+	}));
+
+	// `slot2`-`slot7` are `system/items.txt`'s six displayed `InventorySections`, in its own order.
+	// `slot1` stays unbound: it addressed the `Disciplines` section that file keeps commented out,
+	// and disciplines are their own selector rather than an inventory category.
+	for (int32 SlotNumber = 2; SlotNumber <= 7; ++SlotNumber)
+	{
+		const EElysiumInvSection Section = ElysiumSectionForSlot(SlotNumber);
+		Bindings.Add(Registry.Bind(FName(*FString::Printf(TEXT("slot%d"), SlotNumber)),
+			[this, Section](const FElysiumCommandCall&)
+		{
+			if (FElysiumEntityWorld* World = CurrentEntityWorld())
+			{
+				ElysiumItems::SelectSection(*World, Section);
+			}
+		}));
+	}
+
 	// The three recovered Discipline verbs (`docs/vtmb/disciplines.md` § "Selection and cast
 	// authority"). The client quickbar converts a visible ordinal to the compiled index and sends
 	// `vdiscipline_int <index>`; `vdiscipline_last` performs only the shared authority's last step

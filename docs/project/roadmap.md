@@ -199,8 +199,9 @@ it, so the readout claims a body the stage does not have.
   `docs/architecture/ui-architecture.md`.
 - [x] **8.7 Ropes** — `UCableComponent` over the RE'd rest-length arithmetic.
 - [~] **[8.8 Sign / popup panels](plans/characters-ui.md)** — screen landed; format features open.
-- [~] **[8.9 HUD on the UI foundation](plans/characters-ui.md)** — vitals and queued item/quest
-  notifications landed; selectors and subtitles open.
+- [~] **[8.9 HUD on the UI foundation](plans/characters-ui.md)** — vitals, standings, the
+  equipment/inventory selectors and the stealth slot landed; the disciplines selector, the stealth
+  producers and subtitles open.
 - [ ] **[8.10 Accessibility & options backing](plans/characters-ui.md)**
 - [x] **8.11a The player body** — clan/sex/slot resolution, dithered fade, choreography-ready.
 
@@ -310,9 +311,12 @@ The ladder:
   `FElysiumItemDef` and one transaction path attaches on equip and detaches on holster for NPC
   and player alike, selecting on the wielder's `IsMale`; visibility landed: the pawn suppresses
   the drawn weapon's rendering with the body's own camera draw policy, never touching the
-  attachment; weapon-state animation open, and the rung's real-input draw acceptance depends on
-  9.8's draw input (no shipped item authors `is_wieldable`, so only 9.8's hotbar reaches
-  `SetActiveWeapon` from input).
+  attachment; weapon-state animation landed: the player's grounded stand/gait walks the committed
+  retail ladder live with the combat-stance query, per-weapon idle/walk translation and the grip
+  autolayers arm through the table-declared hosts, and the wield check gates the mount's local
+  frame and the two-handed off hand; real-input draw works today through the command bus
+  (`elysium.cmd invnext`/`slot*`/`holster` reach `SetActiveWeapon`); the owner-played acceptance
+  sweep remains.
 - [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — the body-kind chain
   discriminator and the retirement of `PlayNpcActivity` as a second clip picker, then
   flinch/knockback/death, blocked/paired rules, the restart rule, the sequence-event carrier.
@@ -407,7 +411,10 @@ subtitled lines, live faces — and hands the player to the tutorial, unassisted
   consumers open.
 - [~] **[13.3 Firearms & melee basics](plans/gameplay.md)** — the damage spine and the weapon
   controller landed headless; the played lessons and the numeric RE joins open.
-- [ ] **[13.4 Computer terminals & tutorial hacking](plans/gameplay.md)**
+- [~] **[13.4 Computer terminals & tutorial hacking](plans/gameplay.md)** — the parser, state
+  machine, `hackcmd` path and the `tuthack` output transaction landed headless, and the console
+  projects through the model's `screen` slot; session escape, camera framing, the idle screensaver,
+  the CRT/type pass, sounds, email and the played acceptance open.
 - [~] **[13.5 Combat AI](plans/gameplay.md)** — bus, senses, conditions, the enemy transaction,
   the schedule families and `aiscripted_schedule` landed headless; the played beats, the footstep
   producer and the flinch action family open.
@@ -459,7 +466,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE36 | melee block / `+wpn_secondaryatk`; open: the `vhotkey` deferral | `docs/vtmb/controls.md`; 10.6, 13.3 | [~] |
 | RE37 | the gameplay-action selection chain | `docs/vtmb/animation_and_movers.md` A.3 | [x] |
 | RE38 | inventory ownership and transfer | `docs/vtmb/inventory.md` | [x] |
-| RE39 | computer terminals; open: TERM2/3/6–8 | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
+| RE39 | computer terminals; open: TERM1 skill-entity join, TERM2 generic use outputs + teardown exits, TERM9 player mode fields | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
 | RE40 | the core mechanics chain; open joins numeric | `docs/vtmb/combat-and-damage.md` + siblings; 13.3 | [~] |
 | RE41 | discipline authority/interpreter; activity/witness admission plus Elysium/HUD world-area authority and Bloodbuff/`LockPick` exception closed; open: native power consumers, client disable presentation and live cast matrix | `docs/vtmb/disciplines.md`; 13.2 | [~] |
 | RE42 | first-person viewmodel; static composition/pose/projection/authority and ELGVM1 harness closed, controlled retail matrix open | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; LIFE6 | [~] |

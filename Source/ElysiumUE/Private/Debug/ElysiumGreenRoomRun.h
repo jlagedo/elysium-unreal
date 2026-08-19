@@ -14,6 +14,8 @@
 
 class AActor;
 class AElysiumMapActor;
+class AElysiumNpcBody;
+class FElysiumEntityWorld;
 class UElysiumMapSubsystem;
 class UPointLightComponent;
 class USkeletalMeshComponent;
@@ -155,6 +157,34 @@ public:
 	bool ArenaPadOrigin(const FName& Pad, FVector& OutFeetWorld, float& OutYaw) const;
 	// Whether the arena's solids are drawn. They are collision either way.
 	bool ArenaVisible() const { return bGymMeshes; }
+
+	// --- arena navigation pins ---------------------------------------------------------------
+	//
+	// Named points on the arena floor, world-absolute feet positions, for `gr_pin`/`gr_walk` and
+	// their Cog equivalents. `gr_walk` commands either the driven player body or an arena-spawned
+	// character (found by targetname, the AI window's own spawns) to walk them in order, through
+	// the command path its producer already consumes: `IElysiumNpcMotor::MoveTo` for a cast body
+	// (the same door a schedule or a patrol order arms), the input router's own record/replay
+	// door for the player (11.10 — "the same mechanism as playing", not a second one this feature
+	// invents). Either way gaits and layers resolve off the real published sample, exactly as
+	// they would under a real order or a real key.
+
+	// Drop or update a named pin. `FeetWorld` null takes the driven body's current feet position.
+	bool ArenaSetPin(const FName& Name, const FVector* FeetWorld, FString& OutError);
+	// Every pin, in the order it was first dropped.
+	const TArray<TPair<FName, FVector>>& ArenaPins() const { return ArenaPinList; }
+	const FVector* FindArenaPin(const FName& Name) const;
+
+	// Command `Target` ("player", case-insensitive, or an arena character's targetname) to walk
+	// the named pins in order, looping back to the first when `bLoop`. False, with a reason, for
+	// an unknown pin or an unresolvable target.
+	bool ArenaWalkStart(const FString& Target, const TArray<FName>& PinNames, bool bLoop,
+		FString& OutError);
+	// Idempotent — safe to call with nothing running.
+	void ArenaWalkStop();
+	bool ArenaWalkRunning() const { return ArenaWalkState.bActive; }
+	// One line: who is walking, toward which pin of how many, looping or not.
+	FString ArenaWalkStatus() const;
 	// The one door into and out of drive mode. The `--drive` flag, the boot path and the window's
 	// switch all come through here, so the teardown of whichever mode is leaving cannot be half-done
 	// by one caller and whole by another.
@@ -427,6 +457,23 @@ private:
 	// one is about a BODY — its lattice, its colliders, its skeleton — and these are about the
 	// place, which is there whether anything is standing in it or not.
 	void DrawArenaOverlays() const;
+	// One arena-mode tick of whatever `gr_walk` is doing, called from TickDrive while IsArena().
+	void TickArenaWalk(float DeltaSeconds);
+	void TickArenaWalkNpc(AElysiumNpcBody& Body);
+	// Reactive rather than a precomputed command stream: a fixed frame count assumes a rate, and
+	// the lab's own frame rate is whatever the viewport is presenting at, not a chosen constant —
+	// the first version of this measured distance in "assumed frames at 60 Hz" and undershot every
+	// leg by however far the real rate outran that guess. Every tick instead reads the driven
+	// body's live position, turns and pushes forward through exactly one fresh single-frame replay
+	// command (11.10's record/replay door — never a direct ApplyUserCmd, so this never fights a
+	// live key), and advances the leg once the acceptance radius is reached — the same
+	// distance-to-target shape TickArenaWalkNpc reads off the motor's Sample(), just measured off
+	// the pawn instead of off IElysiumNpcMotor.
+	void TickArenaWalkPlayer();
+	// Issue the NPC case's current leg through the motor. No-op once the route is exhausted.
+	void IssueNextArenaWalkLeg();
+	// The arena-spawned character (the AI window's own spawns) whose targetname matches, or null.
+	AElysiumNpcBody* FindArenaCastBody(FElysiumEntityWorld& World, const FString& TargetName) const;
 	// Push FLabView::bShowHud at the local-player HUD. Called every lab frame rather than on the
 	// edge: the HUD subsystem rebuilds its root on travel and on a controller change, and a
 	// one-shot hide would lose to either.
@@ -545,6 +592,31 @@ private:
 		float WorstPlaceDistCm = 0.0f;
 		int32 WorstPlaceSample = 0;
 		float WorstPlaceTime = 0.0f;
+		// The mount's authored local in the hand's frame — the weapon ref skeleton's own
+		// mount-under-hand chain — for an undeclared mount whose hand is its skeleton ancestor.
+		// The drawn mount must hold this local every frame; a constant offset passes the drift
+		// gate while swinging the far geometry, which is the hole this gate closes.
+		FTransform ExpectedMountLocal = FTransform::Identity;
+		bool bMountLocalExpected = false;
+		float WorstMountLocalCm = 0.0f;
+		float WorstMountLocalDeg = 0.0f;
+		int32 WorstMountLocalSample = 0;
+		float WorstMountLocalTime = 0.0f;
+		// The off hand. Armed only when the AUTHORED pose (the wearer's game-thread pose composed
+		// with the weapon's own bind fallback — the verified recipe) puts the off hand on the
+		// weapon; a one-handed carry never arms it. The gate scores the DRAWN off-hand-to-box
+		// distance against the authored one, same frame, so a clip that legitimately moves the
+		// off hand does not fail.
+		FName OffHandBone;
+		bool bOffHand = false;
+		float MinAuthoredOffHandCm = FLT_MAX;
+		float PrevAuthoredOffHandCm = 0.0f;
+		bool bPrevAuthoredOffHand = false;
+		float WorstOffHandErrCm = 0.0f;
+		float WorstOffHandDrawnCm = 0.0f;
+		float WorstOffHandAuthoredCm = 0.0f;
+		int32 WorstOffHandSample = 0;
+		float WorstOffHandTime = 0.0f;
 		FString Verdict;
 	};
 	FWieldTrackProbe WieldTrack;
@@ -589,6 +661,33 @@ private:
 	// nothing to trip over, which is what the acceptance walks first.
 	FName SeatLane = TEXT("flat");
 	bool bGymMeshes = true;
+
+	// Named waypoints on the arena floor, in the order they were first dropped. Update-in-place on
+	// a repeated name, so a pin can be nudged without changing what a running `gr_walk` names.
+	TArray<TPair<FName, FVector>> ArenaPinList;
+
+	// One `gr_walk` order. `LegIndex` names the pin both cases are currently walking toward; how
+	// each case advances it differs (the NPC case waits on the motor's own Sample() status, the
+	// player case measures distance itself every tick), but both leave it pointing at the same
+	// place a status readout or an overlay wants.
+	struct FArenaWalkState
+	{
+		bool bActive = false;
+		// Which case this is, decided once at ArenaWalkStart and never re-derived from whether
+		// NpcBody still resolves — a character that dies or despawns mid-walk must stop the walk,
+		// not silently fall through and start driving the player instead.
+		bool bTargetIsPlayer = false;
+		FString TargetName;
+		TArray<FVector> Route;
+		bool bLoop = false;
+		int32 LegIndex = 0;
+		// NPC case only.
+		TWeakObjectPtr<AElysiumNpcBody> NpcBody;
+		// Whether this leg's MoveTo has been observed actually moving the body yet — an Idle status
+		// on the very first sample after MoveTo is issued is "hasn't started", not "arrived".
+		bool bLegArmed = false;
+	};
+	FArenaWalkState ArenaWalkState;
 
 	TArray<FCase> ActiveCases;
 	TArray<FBodyEntry> Bodies;

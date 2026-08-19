@@ -24,6 +24,27 @@ namespace
 		Equipment.AmmoReserve = 24;
 	}
 
+	EElysiumWeaponClass ClassFor(EElysiumViewWeaponFamily Family)
+	{
+		switch (Family)
+		{
+		case EElysiumViewWeaponFamily::Unarmed: return EElysiumWeaponClass::Unarmed;
+		case EElysiumViewWeaponFamily::Melee:   return EElysiumWeaponClass::Melee;
+		case EElysiumViewWeaponFamily::Firearm: return EElysiumWeaponClass::Ranged;
+		case EElysiumViewWeaponFamily::Thrown:  return EElysiumWeaponClass::Thrown;
+		default:                                return EElysiumWeaponClass::None;
+		}
+	}
+
+	// `6 / 24` for a weapon carrying a magazine, and nothing at all for one that does not — a tire
+	// iron's row is blank rather than reading zero.
+	FText AmmoDetail(const FElysiumInventoryEntryView& Weapon)
+	{
+		return Weapon.bHasMagazine
+			? FText::FromString(FString::Printf(TEXT("%d / %d"), Weapon.AmmoCurrent, Weapon.AmmoReserve))
+			: FText::GetEmpty();
+	}
+
 	void FillActiveBloodheal(FElysiumHUDDisciplineView& Discipline)
 	{
 		Discipline.bValid = true;
@@ -64,12 +85,35 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 	}
 	Fade = View.Fade;
 
-	// Inventory and disciplines do not have production owners yet. Invalid is the contract, not a
-	// zero-valued fake item. The preview branch below is compiled in every config so this value type
-	// remains deterministic in tests, but only the non-Shipping subsystem exposes a way to select it.
+	// Disciplines have no production owner yet. Invalid is the contract, not a zero-valued fake
+	// item. The preview branch below is compiled in every config so this value type remains
+	// deterministic in tests, but only the non-Shipping subsystem exposes a way to select it.
 	Equipment = FElysiumHUDEquipmentView();
+	Worn = FElysiumHUDEquipmentView();
 	Discipline = FElysiumHUDDisciplineView();
 	Selector = FElysiumHUDSelectorView();
+
+	// The stealth readout. Only the stance is owned today; each half carries its own validity, so
+	// the gauge renders as unmeasured rather than as a confident zero.
+	Stealth = FElysiumHUDStealthView();
+	Stealth.bSneaking = View.Stealth.bSneaking;
+	Stealth.bConcealmentValid = View.Stealth.bConcealmentValid;
+	Stealth.ConcealmentStep = FMath::Clamp(View.Stealth.ConcealmentStep, 0, ElysiumHUDArt::ConcealmentSteps - 1);
+	Stealth.bObserverValid = View.Stealth.bObserverValid;
+	Stealth.ObserverDistanceMetres = View.Stealth.ObserverDistanceCm / 100.0f;
+	switch (View.Stealth.Detection)
+	{
+	case EElysiumDetection::Searching: Stealth.Detection = EElysiumHUDDetection::Searching; break;
+	case EElysiumDetection::Detected:  Stealth.Detection = EElysiumHUDDetection::Detected; break;
+	default:                           Stealth.Detection = EElysiumHUDDetection::Unaware; break;
+	}
+
+	// The preview verb replaces the whole readout with its fixture, so production projection and the
+	// preview never half-fill each other.
+	if (Preview == EElysiumHUDPreview::Off)
+	{
+		ProjectEquipment(View.Equipment);
+	}
 
 	if (Preview != EElysiumHUDPreview::Off)
 	{
@@ -81,6 +125,19 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 		BloodPool = Preview == EElysiumHUDPreview::Critical ? 2 : 9;
 		Humanity = 6;
 		Masquerade = 1;
+
+		// The stealth cluster's preview stands in for the system PP6 owns. It carries a MEASURED
+		// gauge and an observer on purpose: the unmeasured state is what production already shows,
+		// so the fixture is the only way to see the readout the finished system will draw.
+		if (Preview == EElysiumHUDPreview::Sneak)
+		{
+			Stealth.bSneaking = true;
+			Stealth.bConcealmentValid = true;
+			Stealth.ConcealmentStep = 2;
+			Stealth.bObserverValid = true;
+			Stealth.ObserverDistanceMetres = 12.0f;
+			Stealth.Detection = EElysiumHUDDetection::Searching;
+		}
 		Reticle = EElysiumHUDReticle::Cross;
 
 		// Zone-state stub: Combat for weapon-bearing previews, Elysium for its dedicated preview,
@@ -168,4 +225,63 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 
 	++Revision;
 	OnChanged.Broadcast();
+}
+
+// The one production writer of the equipment readout, the worn slot and the inventory selector.
+//
+// All three come off the same projection, so the readout and the selector can never disagree about
+// what is in hand. The selector's own visibility is the peek's: a screen state the publisher
+// resolved, not a mode the HUD holds.
+void UElysiumHUDModel::ProjectEquipment(const FElysiumEquipmentView& View)
+{
+	if (!View.bValid)
+	{
+		return;
+	}
+
+	if (View.bEquippedValid)
+	{
+		Equipment.bValid = true;
+		Equipment.Name = FText::FromString(View.Equipped.Label);
+		Equipment.WeaponClass = ClassFor(View.Equipped.Family);
+		Equipment.Icon = ElysiumHUDArt::ItemIcon(View.Equipped.Classname, Equipment.WeaponClass);
+		Equipment.AmmoCurrent = View.Equipped.AmmoCurrent;
+		Equipment.AmmoReserve = View.Equipped.AmmoReserve;
+	}
+
+	if (View.bWornValid)
+	{
+		Worn.bValid = true;
+		Worn.Name = FText::FromString(View.Worn.Label);
+		Worn.WeaponClass = EElysiumWeaponClass::None;
+		Worn.Icon = ElysiumHUDArt::ItemIcon(View.Worn.Classname, EElysiumWeaponClass::None);
+	}
+
+	// A peek that has faded out leaves the selector closed, which is what collapses its region. The
+	// two readouts above stay up either way — they describe the body, not the switch.
+	if (View.PeekAlpha <= 0.0f || View.Entries.Num() == 0)
+	{
+		return;
+	}
+
+	// One selector type: the rows are whatever category the cursor is in, and the heading names it.
+	Selector.Type = View.Section == EElysiumInvSection::WeaponMelee
+		|| View.Section == EElysiumInvSection::WeaponRanged
+		|| View.Section == EElysiumInvSection::WeaponThrown
+		? EElysiumHUDSelector::Weapons : EElysiumHUDSelector::Inventory;
+	Selector.Heading = FText::FromString(ElysiumInvSectionName(View.Section));
+	// Barebones cycling shows the three-item peek on both devices: the full list is the
+	// hold-to-open selector's, and that is not built yet.
+	Selector.bBriefMode = true;
+	Selector.Alpha = View.PeekAlpha;
+	Selector.SelectedIndex = View.SelectedIndex;
+	Selector.Entries.Reserve(View.Entries.Num());
+	for (const FElysiumInventoryEntryView& Item : View.Entries)
+	{
+		FElysiumHUDSelectorEntry& Row = Selector.Entries.AddDefaulted_GetRef();
+		Row.Label = FText::FromString(Item.Label);
+		Row.Detail = AmmoDetail(Item);
+		Row.Quantity = Item.Quantity;
+		Row.Icon = ElysiumHUDArt::ItemIcon(Item.Classname, ClassFor(Item.Family));
+	}
 }

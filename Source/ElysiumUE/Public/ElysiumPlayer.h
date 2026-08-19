@@ -4,6 +4,7 @@
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumCameraService.h"
 #include "ElysiumEntity.h"
+#include "ElysiumInventorySections.h"
 #include "ElysiumSheetSlots.h"
 
 class USkeletalMeshComponent;
@@ -614,6 +615,16 @@ struct FElysiumInventory
 	// The currently equipped/active weapon. `HasWeaponEquipped` compares against THIS entity's
 	// classname and nothing else — it does not mean "owned".
 	FElysiumEntityHandle ActiveWeapon;
+	// The weapon held before the current one — what `lastinv` returns to. It follows every active-
+	// weapon switch, so a selector, a script grant and an NPC loadout all leave the same trail. A
+	// handle whose item is no longer carried simply fails the switch, so it needs no pruning.
+	FElysiumEntityHandle PreviousWeapon;
+	// The inventory category the player is browsing, and the item selected inside it. The `slotN`
+	// verbs move the section; `invnext`/`invprev` move the item inside whichever one is current.
+	// A wielded section commits its selection to `ActiveWeapon`; the rest park it here, which is
+	// what `inven_drop_curr` means by "the current item".
+	EElysiumInvSection CurrentSection = EElysiumInvSection::None;
+	FElysiumEntityHandle SelectedItem;
 
 	// Reserve ammunition, keyed by the item data's `Magazine.Type` folded to lower case. The
 	// asymmetry that the tutorial's `.38` beat rides on lives across these two homes: `AmmoCount`
@@ -952,6 +963,22 @@ public:
 	{
 		const FElysiumMeleeRoll* Roll = FindMeleeRoll(Attacker);
 		return Roll ? Roll->Lethality : 0;
+	}
+
+	// --- The combat-stance clock (`docs/vtmb/animation_and_movers.md` — `IsInCombatStance`) --
+	// `m_flLastCombatAnimTime` (+0x19b0): the world time of the last melee-opponent contact,
+	// stamped on both sides of the exchange by the melee transaction. Negative means never.
+	double LastMeleeContactSeconds = -1.0;
+	static constexpr double CombatStanceHoldSeconds = 5.0;
+	void StampMeleeContact(double NowSeconds) { LastMeleeContactSeconds = NowSeconds; }
+	// `IsInCombatStance` (virtual +0x66c): true while morphed, or for five seconds after the
+	// last melee-opponent contact. The morph half is Protean's (`m_bIsMorphed`, +0x1edc) and no
+	// system here can set it, so the contact window is the whole answer until that discipline
+	// exists. Read by the player gait ladder's `CombatReady`/`Relaxed` predicates.
+	bool IsInCombatStance(double NowSeconds) const
+	{
+		return LastMeleeContactSeconds >= 0.0
+			&& NowSeconds - LastMeleeContactSeconds < CombatStanceHoldSeconds;
 	}
 
 	// Whether this character soaks as a vampire — the mortal/Kindred half of the soak table. The

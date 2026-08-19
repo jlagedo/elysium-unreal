@@ -7,3 +7,5 @@ Use,+use,Use,Interaction,Boolean,True,,,Gamepad_RightShoulder
 Feed,+feed,Feed,Interaction,Boolean,True,,,Gamepad_FaceButton_Top
 Duck,+duck,Crouch,Movement,Boolean,True,,,Gamepad_LeftThumbstick
 Camera,togglecamera,Camera Mode,Camera,Boolean,False,,,Gamepad_RightThumbstick
+WeaponNext,invnext,Next Weapon,Combat,Boolean,False,,,Gamepad_DPad_Right
+WeaponPrev,invprev,Previous Weapon,Combat,Boolean,False,,,Gamepad_DPad_Left

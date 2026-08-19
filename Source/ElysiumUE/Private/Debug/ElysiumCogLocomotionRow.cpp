@@ -109,6 +109,22 @@ void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 	ImGui::TableNextColumn();
 	if (Sel->ResolvedActivity.IsEmpty()) { ImGui::TextDisabled("--"); }
 	else { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Sel->ResolvedActivity)); }
+	// LIFE4 -- the translation hops the resolver walked, on the column where the final answer
+	// already reads: which rung fired is the difference between "the weapon named this pose" and
+	// "the body fell back to what it had", and the hover is where a reader asks.
+	if (!Sel->RequestedActivity.IsEmpty() && ImGui::IsItemHovered())
+	{
+		const FString Chain = FString::Printf(
+			TEXT("requested %s\npre-translation %s\nclass %s\nweapon %s (ladder rung %d)\n")
+			TEXT("resolved %s (availability rung %d)"),
+			*Sel->RequestedActivity,
+			Sel->PreTranslationActivity.IsEmpty() ? TEXT("--") : *Sel->PreTranslationActivity,
+			Sel->ClassActivity.IsEmpty() ? TEXT("--") : *Sel->ClassActivity,
+			Sel->WeaponActivity.IsEmpty() ? TEXT("--") : *Sel->WeaponActivity,
+			Sel->WeaponRung,
+			*Sel->ResolvedActivity, Sel->AvailabilityRung);
+		ImGui::SetTooltip("%s", COG_TCHAR_TO_CHAR(*Chain));
+	}
 
 	ImGui::TableNextColumn();
 	ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(ElysiumAnimGraph::StateName(Sel->GraphState)));

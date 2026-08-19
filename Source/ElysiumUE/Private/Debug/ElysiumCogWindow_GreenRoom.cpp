@@ -1763,6 +1763,61 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 		ImGui::TextDisabled("%d solids, %d pads, %d anchors. The boxes collide either way,",
 			Room.Solids.Num(), Room.Pads.Num(), Room.Anchors.Num());
 		ImGui::TextDisabled("and they are the only thing in this runtime that breaks an eye line.");
+
+		// --- navigation pins --------------------------------------------------------------------
+		ImGui::SeparatorText("Navigation pins");
+		FCogWidgets::InputTextWithHint("##PinName", "pin name", PendingPinName);
+		ImGui::SameLine();
+		if (ImGui::Button("Drop here") && !PendingPinName.IsEmpty())
+		{
+			FString Error;
+			if (!Lab.ArenaSetPin(FName(*PendingPinName), nullptr, Error)) { LastError = Error; }
+			else { LastError.Reset(); }
+		}
+		const TArray<TPair<FName, FVector>>& Pins = Lab.ArenaPins();
+		if (Pins.Num() == 0)
+		{
+			ImGui::TextDisabled("(no pins yet — type a name above and drop one where you stand)");
+		}
+		else
+		{
+			for (const TPair<FName, FVector>& Pin : Pins)
+			{
+				ImGui::BulletText("%s  (%.0f, %.0f, %.0f)",
+					COG_TCHAR_TO_CHAR(*Pin.Key.ToString()), Pin.Value.X, Pin.Value.Y, Pin.Value.Z);
+			}
+		}
+
+		ImGui::SeparatorText("Walk");
+		if (Lab.ArenaWalkRunning())
+		{
+			ImGui::TextColored(ElysiumCogStyle::ColOk, "%s", COG_TCHAR_TO_CHAR(*Lab.ArenaWalkStatus()));
+			if (ImGui::Button("Stop"))
+			{
+				Lab.ArenaWalkStop();
+			}
+		}
+		else if (Pins.Num() == 0)
+		{
+			ImGui::TextDisabled("Drop at least one pin first.");
+		}
+		else
+		{
+			ImGui::Checkbox("Loop", &bArenaWalkLoop);
+			ImGui::SameLine();
+			if (ImGui::Button("Walk the player through every pin"))
+			{
+				TArray<FName> Route;
+				Route.Reserve(Pins.Num());
+				for (const TPair<FName, FVector>& Pin : Pins) { Route.Add(Pin.Key); }
+				FString Error;
+				if (!Lab.ArenaWalkStart(TEXT("player"), Route, bArenaWalkLoop, Error))
+				{
+					LastError = Error;
+				}
+				else { LastError.Reset(); }
+			}
+		}
 		return;
 	}
 

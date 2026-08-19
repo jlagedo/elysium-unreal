@@ -49,6 +49,12 @@ struct FElysiumAnimationDriver
 	// The body's own state. The recovered human pre-translation reads it to choose between the alert
 	// and relaxed animation sets, so it belongs to the same push and moves the discrete key with it.
 	EElysiumNpcState ActorState = EElysiumNpcState::Idle;
+	// The live `IsInCombatStance` answer (LIFE4), read off the character in the same push as the
+	// weapon because the player gait ladder's `CombatReady`/`Relaxed` predicates consume the two
+	// together. Not part of the gait key: stance moves which ladder row fires — and so the
+	// activity, which already IS the discrete key — never which fan tables answer, exactly as
+	// retail's `T` reads the walk cell in and out of stance alike.
+	bool bCombatStance = false;
 
 	// --- Per-frame state ---------------------------------------------------------------------------
 	FElysiumJumpLatch Latch;
@@ -78,6 +84,19 @@ struct FElysiumAnimationDriver
 	// in the slice's small code vocabulary, so switching on the resolved activity classifies every
 	// armed or class-translated body as "not a gait" and freezes its stride at the resolve-time cell.
 	float GaitSpeedForSelection(float MoveYawDegrees) const;
+
+	// --- The standing-with-weapon call (LIFE4, Option A) -------------------------------------------
+	// **The live selector split, stated once:** the player's grounded stand/gait comes off the
+	// COMMITTED retail gait ladder — `ElysiumActionTables::PlayerGaitLadder()` walked by
+	// `SelectRule` against a live state query — while water, the air phases and the whole cast
+	// keep `ElysiumAnimIntent::Classify`. Returns the fired row's activity (`ACT_AIM` for a
+	// combat-ready stand, the plain gaits in stance, the relaxed ones out of it — translation
+	// then renames per weapon, with no Combat special case anywhere in the chain), or empty
+	// where the grounded branch does not decide and the classifier's answer stands.
+	FString SelectPlayerGroundActivity(const FElysiumLocomotionSample& InSample) const;
+	// The ladder's last row is unconditional, so a missing-row warning is unreachable today; guarded
+	// to log once rather than per frame if a future regeneration ever makes it reachable.
+	mutable bool bWarnedNoGroundActivityRow = false;
 
 	// Read `ActorClassname`/`WeaponClassname` off the character the body embodies. One place, because
 	// the player and the cast take the same two names off the same chain node — and a body whose

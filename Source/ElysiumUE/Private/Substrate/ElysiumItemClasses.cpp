@@ -606,6 +606,7 @@ bool FElysiumInventory::SetActiveWeapon(FElysiumCombatCharacter& Char, FElysiumI
 		{
 			Previous->OnHolstered(Char);
 		}
+		PreviousWeapon = ActiveWeapon;
 		ActiveWeapon = Item.Handle;
 		Item.OnEquipped(Char);
 	}

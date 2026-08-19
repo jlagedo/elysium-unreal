@@ -658,6 +658,10 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 	// the walk has to keep going.
 	Pc.Clips.Add(TEXT("pistol_attack"),
 		MakeClip(CastBank, TEXT("ACT_RANGE_ATTACK_PISTOL"), 30, 0x0, 22));
+	// The combat-ready stand (LIFE4). The glock ladder's block-0 exception names `ACT_AIM_GLOCK`
+	// and this body carries only the shared pistol form, so a combat-ready stand answers at rung
+	// 2, the same shape as the relaxed walk above.
+	Pc.Clips.Add(TEXT("pistol_ready"), MakeClip(CastBank, TEXT("ACT_AIM_PISTOL"), 30, 0x1));
 	// **No `land_crouch`.** The controlled corpus records the one ducked ACT_LAND_CROUCH request
 	// returning -1 on a validated player body, so the fixture must not invent one.
 
@@ -1078,6 +1082,9 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 			TestEqual(TEXT("and the overlay second"), Walk.LayerLabels[1],
 				FString(TEXT("pistol_aim_overlay")));
 		}
+		// A cast request the body itself answers reads availability rung 1 off the record (LIFE4).
+		TestEqual(TEXT("a playable cast request answers at availability rung 1"),
+			Walk.AvailabilityRung, 1);
 	}
 
 	// --- A body with no vocabulary at all ------------------------------------------------------------------
@@ -1151,6 +1158,35 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("resolved outright, because the weapon table already probed availability"),
 			static_cast<int32>(ArmedSelection.Outcome),
 			static_cast<int32>(EElysiumAnimOutcome::Resolved));
+		// The hops the walk took reach the RECORD (LIFE4), so a readout shows which rung fired.
+		TestEqual(TEXT("the rung that fired is on the record"), ArmedSelection.WeaponRung, 2);
+		TestEqual(TEXT("...with no class answer on the player"), ArmedSelection.ClassActivity,
+			FString());
+		TestEqual(TEXT("...and no availability probe on the player"),
+			ArmedSelection.AvailabilityRung, 0);
+
+		// **The combat-ready stand, per weapon** (LIFE4): the gait ladder's `ACT_AIM` request
+		// reaches the weapon table like any other base — the glock's block-0 exception names
+		// `ACT_AIM_GLOCK`, which this body cannot play, so block 1's `ACT_AIM_PISTOL` stands a
+		// combat-ready glock. No Combat special case anywhere in the chain.
+		FElysiumAnimationIntent Ready = ActivityIntent(TEXT("pc_body"), TEXT("ACT_AIM"));
+		Ready.WeaponClassname = TEXT("item_w_glock_17c");
+		FElysiumAnimationSelection ReadySelection;
+		ElysiumAnimResolve::Resolve(Ready, PcCatalog, ReadySelection);
+		TestEqual(TEXT("a combat-ready glock stand resolves the shared pistol ready"),
+			ReadySelection.ResolvedActivity, FString(TEXT("ACT_AIM_PISTOL")));
+		TestEqual(TEXT("...through the ladder's second rung, readable off the record"),
+			ReadySelection.WeaponRung, 2);
+		TestEqual(TEXT("...standing the pistol ready sequence"), ReadySelection.SequenceLabel,
+			FString(TEXT("pistol_ready")));
+		// An unarmed combat-ready stand has no table and the fixture carries no bare `ACT_AIM`
+		// sequence, exactly as a shipped player body does not: the miss is named, not guessed.
+		FElysiumAnimationSelection BareReady;
+		ElysiumAnimResolve::Resolve(ActivityIntent(TEXT("pc_body"), TEXT("ACT_AIM")), PcCatalog,
+			BareReady);
+		TestEqual(TEXT("an unarmed ACT_AIM is a named miss"),
+			static_cast<int32>(BareReady.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::MissingSequence));
 
 		// A ladder whose every rung names something the body cannot play leaves the base alone, which
 		// is the same answer retail's own empty table gives.
@@ -1876,6 +1912,144 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		// would trace a body moving through a frame nothing classified.
 		Driver.Reset();
 		TestEqual(TEXT("a reset forgets the sample with the record"), Driver.Sample.Speed2D(), 0.0f);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// LIFE4, Option A - the player's grounded stand/gait comes off the committed retail ladder.
+//
+// The driver walks `PlayerGaitLadder()` with a live state query: `CombatReady` gates `ACT_AIM`
+// on an armed, in-stance, unmorphed body, and `Relaxed` selects the relaxed gaits for an armed
+// body out of stance. Water and the air phases stay with `Classify` and the latch, and the cast
+// never consults the ladder at all. All content-free: no catalog, no world.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationPlayerGaitTest,
+	"Elysium.Substrate.AnimationPlayerGait", GElysiumAnimationTestFlags)
+bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
+{
+	constexpr float Dt = 1.0f / 60.0f;
+	constexpr float ForwardWalk = 140.0f;
+	constexpr float ForwardRun = 560.0f;
+
+	auto MakeDriver = [&](EElysiumAnimSource Source)
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("pc_body");
+		Driver.Source = Source;
+		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, 70.0f, 60.0f);
+		Driver.GaitSpeeds.Run = Fan(ForwardRun, 300.0f, 240.0f);
+		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
+		return Driver;
+	};
+	auto Requested = [](FElysiumAnimationDriver& Driver, const FElysiumLocomotionSample& Sample)
+	{
+		Driver.Tick(Dt, Sample, nullptr, nullptr);
+		return Driver.Selection.RequestedActivity;
+	};
+
+	// --- The standing-with-weapon call: CombatReady gates ACT_AIM ---------------------------------
+	{
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player);
+		Driver.WeaponClassname = TEXT("item_w_glock_17c");
+
+		TestEqual(TEXT("an armed stand out of stance is an idle"),
+			Requested(Driver, Travelling(0.0f)), FString(TEXT("ACT_IDLE")));
+
+		Driver.bCombatStance = true;
+		TestEqual(TEXT("the same stand in combat stance requests ACT_AIM"),
+			Requested(Driver, Travelling(0.0f)), FString(TEXT("ACT_AIM")));
+		// ACT_AIM is outside the slice's own code vocabulary, so it projects to Idle — which is
+		// also what ranks the combat stand as a standing publish in the arbitration.
+		TestEqual(TEXT("...which stands in the Idle graph state"),
+			AsInt(Driver.Selection.GraphState), AsInt(EElysiumGraphState::Idle));
+
+		// The recovered weapon test: `item_w_unarmed` never reads combat-ready, and neither do
+		// empty hands.
+		Driver.WeaponClassname = TEXT("item_w_unarmed");
+		TestEqual(TEXT("an unarmed body in stance still idles"),
+			Requested(Driver, Travelling(0.0f)), FString(TEXT("ACT_IDLE")));
+		Driver.WeaponClassname.Reset();
+		TestEqual(TEXT("...as do empty hands"),
+			Requested(Driver, Travelling(0.0f)), FString(TEXT("ACT_IDLE")));
+	}
+
+	// --- Relaxed is an active weapon out of stance, so stance strips the relaxed forms -------------
+	{
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player);
+		Driver.WeaponClassname = TEXT("item_w_glock_17c");
+
+		TestEqual(TEXT("an armed walk out of stance is the relaxed form"),
+			Requested(Driver, Travelling(ForwardWalk)), FString(TEXT("ACT_WALK_RELAXED")));
+		TestEqual(TEXT("...and the run likewise"),
+			Requested(Driver, Travelling(ForwardRun)), FString(TEXT("ACT_RUN_RELAXED")));
+
+		Driver.bCombatStance = true;
+		TestEqual(TEXT("in stance the same run is the plain gait"),
+			Requested(Driver, Travelling(ForwardRun)), FString(TEXT("ACT_RUN")));
+		TestEqual(TEXT("...and the walk likewise"),
+			Requested(Driver, Travelling(ForwardWalk)), FString(TEXT("ACT_WALK")));
+
+		// An unarmed body satisfies neither `CombatReady` nor `Relaxed` — both require an active
+		// weapon — so it keeps the plain gait whatever the stance clock says. Downstream weapon
+		// translation would collapse the relaxed forms back to plain for `item_w_unarmed` anyway
+		// (`PlayerTranslations()`), so this is the ladder's own answer agreeing with that outcome
+		// rather than depending on it.
+		Driver.WeaponClassname = TEXT("item_w_unarmed");
+		Driver.bCombatStance = false;
+		TestEqual(TEXT("an unarmed walk out of stance is the plain gait"),
+			Requested(Driver, Travelling(ForwardWalk)), FString(TEXT("ACT_WALK")));
+		Driver.bCombatStance = true;
+		TestEqual(TEXT("...and stays the plain gait in stance"),
+			Requested(Driver, Travelling(ForwardWalk)), FString(TEXT("ACT_WALK")));
+	}
+
+	// --- The ducked rows outrank the aim row, exactly as committed --------------------------------
+	{
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player);
+		Driver.WeaponClassname = TEXT("item_w_glock_17c");
+		Driver.bCombatStance = true;
+
+		FElysiumLocomotionSample Ducked = Travelling(0.0f);
+		Ducked.Stance = EElysiumStance::Ducked;
+		TestEqual(TEXT("a ducked stand in stance crouches rather than aims"),
+			Requested(Driver, Ducked), FString(TEXT("ACT_CROUCH")));
+
+		FElysiumLocomotionSample Sneaking = Travelling(ForwardWalk);
+		Sneaking.Stance = EElysiumStance::Ducked;
+		TestEqual(TEXT("and a ducked mover sneaks, with no stance split below it"),
+			Requested(Driver, Sneaking), FString(TEXT("ACT_SNEAK")));
+	}
+
+	// --- Water and the air phases stay with the classifier and the latch --------------------------
+	{
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player);
+		Driver.WeaponClassname = TEXT("item_w_glock_17c");
+		Driver.bCombatStance = true;
+
+		FElysiumLocomotionSample Swimming = Travelling(ForwardWalk);
+		Swimming.Water = EElysiumWaterLevel::Waist;
+		TestEqual(TEXT("a swimming body swims, ladder or no ladder"),
+			Requested(Driver, Swimming), FString(TEXT("ACT_SWIM")));
+
+		FElysiumLocomotionSample Airborne = Travelling(ForwardWalk);
+		Airborne.bOnGround = false;
+		TestEqual(TEXT("a body that walked off a ledge falls — the latch's answer stands"),
+			Requested(Driver, Airborne), FString(TEXT("ACT_FALLING")));
+	}
+
+	// --- The cast never consults the ladder ---------------------------------------------------------
+	{
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Npc);
+		Driver.WeaponClassname = TEXT("item_w_glock_17c");
+		Driver.bCombatStance = true;
+
+		TestEqual(TEXT("a cast stand in stance is still an idle — the ladder is the player's"),
+			Requested(Driver, Travelling(0.0f)), FString(TEXT("ACT_IDLE")));
+		TestEqual(TEXT("...and a cast walk stays the plain cast request"),
+			Requested(Driver, Travelling(ForwardWalk)), FString(TEXT("ACT_WALK")));
 	}
 
 	return true;

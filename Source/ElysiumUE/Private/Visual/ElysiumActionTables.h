@@ -399,6 +399,12 @@ namespace ElysiumActionTables
 	// The idle/aim/crouch/sneak/walk/run choice, which is **not** inside any code's arm: the
 	// selector computes it unconditionally right after the pose writes, and codes `0`, `1` and the
 	// classifier's `-1` match no arm, so it survives to the apply path verbatim.
+	//
+	// **Live for the player's grounded branch (LIFE4, Option A):**
+	// `FElysiumAnimationDriver::SelectPlayerGroundActivity` walks these rows per frame with a
+	// live combat-stance query. The cast and the player's water/air phases keep
+	// `ElysiumAnimIntent::Classify`, so the two selectors own disjoint branches rather than both
+	// reading as the live one.
 	TArrayView<const FPlayerRule> PlayerGaitLadder();
 	TArrayView<const FPlayerPoseWrite> PlayerPoseWrites();
 	TArrayView<const FPlayerTranslation> PlayerTranslations();

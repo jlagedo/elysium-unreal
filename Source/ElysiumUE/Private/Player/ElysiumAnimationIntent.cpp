@@ -347,6 +347,13 @@ FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
 	return Next;
 }
 
+// **The live selector split (LIFE4, Option A), stated where both artifacts can cite it:** this
+// classifier is the live selector for the CAST and for the player's water and air phases. The
+// player's grounded stand/gait is NOT selected here — the player producer walks the committed
+// retail gait ladder (`ElysiumActionTables::PlayerGaitLadder()`, applied by
+// `FElysiumAnimationDriver::SelectPlayerGroundActivity`) with a live combat-stance query, and
+// overrides the grounded code this function returns. Two selectors, one owner each — neither is
+// a reference copy of the other.
 EElysiumAnimActivityCode Classify(const FElysiumLocomotionSample& Sample,
 	const FElysiumJumpLatch& Latch, const FElysiumGaitReference& Gait)
 {

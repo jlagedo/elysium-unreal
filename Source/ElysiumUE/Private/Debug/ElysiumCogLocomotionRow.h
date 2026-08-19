@@ -21,9 +21,9 @@ struct FElysiumLocomotionSample;
 // the same row while a human walks the body around the gym.
 namespace ElysiumCogLocomotion
 {
-	// The sixteen headers the row fills, in order. A caller opens a 16-column table and calls this;
-	// the count is not a caller's to know.
-	inline constexpr int32 NumColumns = 16;
+	// The seventeen headers the row fills, in order. A caller opens a 17-column table and calls
+	// this; the count is not a caller's to know.
+	inline constexpr int32 NumColumns = 17;
 	void SetupColumns();
 
 	// `Sel` is null-tolerant: a body can publish a sample before it has ever resolved anything.

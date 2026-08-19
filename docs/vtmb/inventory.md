@@ -117,6 +117,50 @@ The 244 current definitions break down as follows after preserving their hidden 
 | Weapon_Thrown | 5 |
 | Bloodpack | 3 |
 
+### The `ItemTypes` block joins each type to a section
+
+`ItemTypes` authors four columns per type, and the section join is **not** the type's own spelling —
+four of the eleven file elsewhere. `Ammo` files under the undisplayed `None` and is therefore never
+browsable; `Money`, `Jewelry` and `Bloodpack` all file under `Generic`.
+
+| Type | `InventorySection` | `IsWielded` | `IsWorn` | `IsWeapon` |
+|---|---|:--:|:--:|:--:|
+| `Weapon_Melee` | `Weapon_Melee` | 1 | 0 | 1 |
+| `Weapon_Firearm` | `Weapon_Ranged` | 1 | 0 | 1 |
+| `Weapon_Thrown` | `Weapon_Thrown` | 1 | 0 | 1 |
+| `Ammo` | `None` | 0 | 0 | 0 |
+| `Armor` | `Armor` | 0 | 1 | 0 |
+| `Money` | `Generic` | 0 | 0 | 0 |
+| `Jewelry` | `Generic` | 0 | 1 | 0 |
+| `Generic` | `Generic` | 0 | 0 | 0 |
+| `Powerup` | `Powerups` | 0 | 0 | 0 |
+| `Bloodpack` | `Generic` | 0 | 0 | 1 |
+| `Hidden` | `Hidden` | 1 | 0 | 1 |
+
+`IsWorn` is what distinguishes carried from worn, and it is authored on the type rather than on the
+item: armour and jewellery answer it and nothing else does.
+
+The section list is ordered, and that order is addressable. `InventorySections` declares `None`,
+`Weapon_Melee`, `Weapon_Ranged`, `Weapon_Thrown`, `Armor`, `Generic`, `Powerups`, `Hidden` in that
+sequence, and the `slotN` selection verbs (`docs/vtmb/controls.md`) index it offset by one, because
+`slot1` addressed a `Disciplines` section the shipped file keeps commented out. So `slot2` is
+`Weapon_Melee` through `slot7` for `Powerups`. Two further sections — `Weapon` and `Maintenance` —
+are commented out beside `Disciplines`, which is what makes the file its own layout documentation.
+
+### `bucket` and `bucket_position` are the authored selection order
+
+Every `item_w_*` record and 87 non-weapon records author `bucket` and `bucket_position`. `bucket` is
+the selection **column** — `0` for the melee families, `1` for ranged and thrown — and
+`bucket_position` orders the entries inside it. Shipped examples: `item_w_fists` is `0`/`0`,
+`item_w_tire_iron` `0`/`3`, `item_w_katana` `0`/`6`, `item_w_thirtyeight` `1`/`1`,
+`item_w_supershotgun` `1`/`8`.
+
+This is the ordering the retail weapon-selection element cycles in, and it is the one recoverable
+part of that element: the class exists by RTTI name and its layout does not
+(`docs/vtmb/vtmb-ui.md` § 3). Records sharing a position exist — several melee weapons author
+`bucket_position 3` — so the pair is an ordering, not a unique key. A record authoring neither key
+takes `0`/`0`; `item_g_bloodpack` is one such.
+
 An item record names **four** model roles, and they are not interchangeable: `viewmodel` (first
 person), `playermodel` (the loose ground model), `wieldmodel_m`/`wieldmodel_f` (the geometry a
 character of that sex holds) and `infomodel`. A melee weapon nulls its `viewmodel`, so the model a

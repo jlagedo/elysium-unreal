@@ -157,6 +157,59 @@ Related screens, same stack: `CharEditPanel` (+ `CharEditCharPanel` / `EquipPane
 / `StatsPanel`), `QuestLogPanel`, `VBarterUI`, `VItemInfoUI`, `VMapScreenUI`, `VHotkeysUI`,
 `VCharWizardUI`, `CSignUI`.
 
+### The arrangement, from capture
+
+Positions are compiled in and undecompiled, but the *arrangement* is legible from 1024x768 windowed
+captures of the retail client and is stable across them. The HUD is **two vertical rails at the
+screen edges**, each an ornate gold frame around a narrow tube, not a set of corner clusters:
+
+| Where | What |
+|---|---|
+| Left rail | the life meter — a **continuous** cyan fill, nearly full on a fresh character |
+| Above the left rail | the area icon, in an oval frame (a pistol in a combat zone) |
+| Foot of the left rail | a circular medallion — the `CHealthAnkh` |
+| Right rail | the blood pool — a red fill with **tick marks**, i.e. discrete blood points |
+| Foot of the right rail | the selected Discipline's dial, with its name set beneath (`BLOODHEAL`) |
+| Top centre | `CHudInfoBar` (`ITEM GAINED: HANDS`), flanked by its 32x32 icons |
+| Top left | the save toast, set in green |
+
+Two consequences worth stating because they are easy to get backwards. **The cyan rail is life and
+the red one is blood**, which the area icon settles: the walkthrough places that icon "on top of
+your life meter" and the capture puts it on the cyan rail. And **health is continuous where blood is
+discrete** — the tick marks on the blood tube are its points, which is why a blood readout counts
+and a health readout fills.
+
+The selection element sits top left, beside the life rail, as a stack of two: a **circular ornate
+icon** holding the current category's selected item, and beneath it a **portrait panel on a red
+curtain** showing the worn clothing. The `slotN` keys change what the circle holds
+(`docs/vtmb/controls.md`, `docs/vtmb/inventory.md` § 4).
+
+### The area icon is the zone, not the Masquerade standing
+
+`CHudAreaIcon` sits directly above the life meter and carries three states — a **mask** in an area
+where the Masquerade must be maintained, an **`E`** in an Elysium, a **gun** in a combat zone. It
+reports where the player is standing and what is permitted there; it is not the player's Masquerade
+score. That score is five marks and lives on the character sheet (§ 3's `cm_topbar`, below), and no
+HUD element draws it — there is no masquerade meter in the class inventory above.
+
+### No item record names its inventory icon
+
+`materials/hud/inventory_images` holds the item art, but nothing in `vdata/items` points at it. The
+only icon-shaped keys in the whole item corpus — `a_icons1`, `w_icons1`, `w_icons1b` — appear
+exclusively inside commented-out blocks carrying the Source sprite-atlas fields (`file`, `x`, `y`,
+`width`), so they are HL2 leftovers rather than a live join. Recovering an item's icon therefore
+means matching the classname stem against the art tree, and the two disagree often enough to matter:
+`item_w_colt_anaconda` is filed `anaconda`, `item_w_glock_17c` is `glock`,
+`item_w_remington_m_700` is `remington_m-700`, `item_g_lockpick` is `lockpicks`. `item_w_ithaca_m_37`
+has no matching art at all.
+
+Armour is filed differently again — per clan, per sex and per tier
+(`armors/brujahf/brujah_f_a0` .. `_a5`) — and no decoded field on the armour record names that tier,
+so the worn-clothing portrait cannot be resolved from the item alone.
+
+Every icon ships with a `_sel` variant beside it, which is the selected-state art the selection
+element draws for the current entry.
+
 ### `CHudInfoBar` messages
 
 The item/quest/reward notices are `CHudInfoBar`, not `CCenterPrint`. The client admits them into a
@@ -353,5 +406,10 @@ alias tables (§4), the dialog `.res` inventory (§6), the particle-scene struct
   seeds it has not been traced, so vertical anchoring is still matched by eye.
 - `CVMenuButton`'s internal text alignment (within its uniformly-sized box) is unrecovered — the
   column is centred, but whether the glyphs are centred or left-set inside each button is not.
-- The HUD element positions are compiled in and have not been decompiled; only the class
-  inventory and the art trees are recovered.
+- The HUD element positions are compiled in and have not been decompiled. The class inventory, the
+  art trees and the arrangement (§ 3, from capture) are recovered; exact coordinates are not.
+- `CHudWeaponSelection`'s and `CAmmoCounter`'s draw bodies are undecompiled, so the selection
+  element's transitions and the ammo readout's formatting are unrecovered. Its authored *ordering*
+  is known — `bucket` / `bucket_position` on the item records (`docs/vtmb/inventory.md` § 4).
+- The armour tier index that would join a worn record to its `armors/<clan><sex>/` portrait is not
+  recovered from the item data.

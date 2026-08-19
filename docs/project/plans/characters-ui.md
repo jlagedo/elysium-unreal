@@ -33,14 +33,18 @@ type; per-resolution `Font_640`…`Font_1600` overrides are dropped. *Deps:* 8.6
 
 ### 8.9 HUD on the UI foundation — remaining
 
-The stable HUD model, reticle/use icons, health, vitae droplets, Humanity/Masquerade, fade,
-cutscene suppression, contrast treatments, and queued item/quest notifications are landed.
-**Remaining:** equipment, disciplines and inventory selectors need authoritative gameplay data and
-command wiring; the PP4 stealth readout slot needs a generation-checked observer handle, distance
-and committed detection state without running perception in presentation; subtitles remain open.
-The HUD reads `FElysiumViewState` and discrete notifications from the same publisher only. PP4 owns
-the snapshot consumer and cleared/absent state; 13.1 supplies the authoritative gameplay snapshot.
-Faithful observability: `docs/vtmb/stealth.md`. *Deps:* 8.6, 4.4, 11.8.
+The stable HUD model, reticle/use icons, health, vitae droplets, the Masquerade/Humanity standings,
+fade, cutscene suppression, contrast treatments, queued item/quest notifications, the equipment and
+inventory selectors over the authored `items.txt` sections, and the stealth cluster's slot and
+stance trigger are landed. **Remaining:** the **disciplines** selector still has no production owner
+and stays invalid rather than fabricating rows; the stealth cluster's two producers — concealment
+from the light sample, and a generation-checked observer handle with distance and committed
+detection state — are PP6's, and presentation must keep running no perception of its own; subtitles
+remain open; and the worn slot draws its category glyph until an armour tier joins a record to its
+`armors/<clan><sex>/` portrait. The HUD reads `FElysiumViewState` and discrete notifications from
+the same publisher only. PP4 owns the snapshot consumer and cleared/absent state; 13.1 supplies the
+authoritative gameplay snapshot. Faithful observability: `docs/vtmb/stealth.md`; regions and their
+rules: `docs/architecture/ui-architecture.md` § 3. *Deps:* 8.6, 4.4, 11.8.
 
 ### 8.10 Accessibility & options backing
 

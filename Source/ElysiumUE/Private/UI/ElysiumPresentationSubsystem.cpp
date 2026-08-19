@@ -10,6 +10,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumPlayerCameraManager.h"
 #include "GameFramework/PlayerController.h"
+#include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumSignData.h"
 #include "UI/ElysiumUISubsystem.h"
 
@@ -24,6 +25,12 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumView, Log, All);
 namespace
 {
 	constexpr int32 MaxPendingNotifications = 64;
+
+	// How long the weapon peek stays up after a switch, and how long it takes to fade once the hold
+	// expires. Long enough to read the neighbouring entries while cycling, short enough that it is
+	// gone before the next thing the player looks at.
+	constexpr float WeaponPeekHoldSeconds = 1.5f;
+	constexpr float WeaponPeekFadeSeconds = 0.35f;
 }
 
 // --- The tick function ------------------------------------------------------------------------
@@ -288,6 +295,53 @@ bool UElysiumPresentationSubsystem::DismissSign()
 	return false;
 }
 
+// The weapon peek's whole lifetime. It is raised by the active weapon changing and by nothing else:
+// no verb announces a switch, so a script grant, a scripted holster and the selector all show the
+// same readout for the same reason.
+float UElysiumPresentationSubsystem::AdvanceWeaponPeek(const FElysiumEquipmentView& Equipment)
+{
+	const UWorld* W = GetWorld();
+	// Real time, not game time: the peek is a screen animation and keeps fading while the game is
+	// paused underneath it.
+	const double Now = W ? W->GetRealTimeSeconds() : 0.0;
+	const float Delta = LastWeaponPeekRealSeconds > 0.0
+		? static_cast<float>(FMath::Max(0.0, Now - LastWeaponPeekRealSeconds))
+		: 0.0f;
+	LastWeaponPeekRealSeconds = Now;
+
+	// The peek follows the SELECTION, not only the hand: browsing a non-weapon category moves the
+	// cursor without changing what is held, and that still deserves the readout.
+	const FElysiumInventoryEntryView* Selected = Equipment.Selected();
+	const FString ActiveClass = Selected ? Selected->Classname : FString();
+
+	if (!bSeenActiveWeapon)
+	{
+		// The first frame with a player establishes what is in hand; it is not a switch, so arriving
+		// in a map does not open the selector.
+		bSeenActiveWeapon = true;
+		LastActiveWeaponClass = ActiveClass;
+	}
+	else if (ActiveClass != LastActiveWeaponClass)
+	{
+		LastActiveWeaponClass = ActiveClass;
+		// An empty hand is a switch worth showing too: holstering should confirm itself.
+		WeaponPeekSecondsLeft = WeaponPeekHoldSeconds + WeaponPeekFadeSeconds;
+	}
+	else
+	{
+		WeaponPeekSecondsLeft = FMath::Max(0.0f, WeaponPeekSecondsLeft - Delta);
+	}
+
+	if (WeaponPeekSecondsLeft <= 0.0f)
+	{
+		return 0.0f;
+	}
+	// Full opacity through the hold, then a linear fall across the fade tail.
+	return WeaponPeekSecondsLeft >= WeaponPeekFadeSeconds
+		? 1.0f
+		: WeaponPeekSecondsLeft / WeaponPeekFadeSeconds;
+}
+
 void UElysiumPresentationSubsystem::Publish()
 {
 	const FElysiumViewState Previous = ViewState;
@@ -478,6 +532,25 @@ void UElysiumPresentationSubsystem::Publish()
 			Vit.Humanity   = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity);
 			Vit.Masquerade = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade);
 		}
+
+		// The stance half of the stealth readout, off the same locomotion sample the animation graph
+		// is steered by. The concealment gauge and the observer are PP6's and stay invalid until
+		// stealth authority commits them; presentation runs no perception of its own.
+		Next.Stealth.bSneaking = Map->IsPlayerSneaking();
+
+		// The hand, what is worn, and the browsed section. Built every frame from the inventory
+		// itself, so an item picked up, dropped or reloaded is on the readout the frame after it
+		// happened without gameplay announcing anything.
+		ElysiumItems::BuildInventoryView(*World, Next.Equipment);
+		Next.Equipment.PeekAlpha = AdvanceWeaponPeek(Next.Equipment);
+	}
+	else
+	{
+		// No entity world means no inventory to describe. The peek does not survive it: a selector
+		// still fading when the map goes away would fade over the next one.
+		bSeenActiveWeapon = false;
+		WeaponPeekSecondsLeft = 0.0f;
+		LastWeaponPeekRealSeconds = 0.0;
 	}
 
 	ViewState = MoveTemp(Next);

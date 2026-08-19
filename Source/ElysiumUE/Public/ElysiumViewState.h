@@ -5,6 +5,7 @@
 #include "ElysiumCameraSolve.h"
 #include "ElysiumEntityHandle.h"
 #include "ElysiumInteraction.h"
+#include "ElysiumInventorySections.h"
 
 class FElysiumDlgConversation;
 struct FElysiumSignData;
@@ -140,6 +141,132 @@ struct FElysiumTerminalView
 };
 
 // ============================================================================================
+// FElysiumStealthView — how exposed the player is, and who is looking (8.9's stealth slot).
+//
+// `bSneaking` is the body's own settled posture and is live today. Concealment and the observer
+// are PP6's: gameplay owns every range, cone, trace and enemy-selection decision, and this view
+// only carries the answer it committed (`docs/vtmb/stealth.md` -> "HUD observability is not
+// authority"). Each half states its own validity, so an unmeasured gauge renders as unmeasured
+// rather than as a confident zero.
+// ============================================================================================
+enum class EElysiumDetection : uint8
+{
+	Unaware,
+	Searching,
+	Detected,
+};
+
+struct FElysiumStealthView
+{
+	// The duck stance, including its ramp — one fact with one producer, the locomotion sample.
+	bool bSneaking = false;
+
+	// The concealment gauge's step, 0 (fully lit) to 4 (fully dark), mirroring the five exported
+	// `lightgauge` frames. False validity means no light sample has a producer yet.
+	bool bConcealmentValid = false;
+	int32 ConcealmentStep = 0;
+
+	// The nearest eligible hostile observer. Absent is an ordinary state and clears the readout;
+	// it is never a failure and never a reason to invent a distance.
+	bool bObserverValid = false;
+	float ObserverDistanceCm = 0.0f;
+	EElysiumDetection Detection = EElysiumDetection::Unaware;
+
+	bool operator==(const FElysiumStealthView& Other) const
+	{
+		return bSneaking == Other.bSneaking
+			&& bConcealmentValid == Other.bConcealmentValid && ConcealmentStep == Other.ConcealmentStep
+			&& bObserverValid == Other.bObserverValid
+			&& ObserverDistanceCm == Other.ObserverDistanceCm && Detection == Other.Detection;
+	}
+	bool operator!=(const FElysiumStealthView& Other) const { return !(*this == Other); }
+};
+
+// ============================================================================================
+// FElysiumEquipmentView — the carried weapons and which one is in hand (8.9's selector).
+//
+// The families are mirrored as a plain enum so this header keeps its no-UObject rule; the HUD model
+// maps them onto its own Blueprint-readable `EElysiumWeaponClass`. Rows arrive in the order the
+// item records author (`bucket`, then `bucket_position`), which is the order the selector cycles.
+// ============================================================================================
+enum class EElysiumViewWeaponFamily : uint8
+{
+	None,
+	Unarmed,
+	Melee,
+	Firearm,
+	Thrown,
+};
+
+struct FElysiumInventoryEntryView
+{
+	// The entity classname, which is what a selection intent names back to the substrate. The
+	// compact inventory position is deliberately absent: it shifts whenever any item is removed,
+	// so a row that survives one frame of looting would otherwise point at a different item.
+	FString Classname;
+	// `printname`, or the classname when the record authors none.
+	FString Label;
+	EElysiumViewWeaponFamily Family = EElysiumViewWeaponFamily::None;
+	// A stack's count. 0 for a non-stackable item, which is one of a thing rather than a stack of
+	// one, so the row shows no quantity at all.
+	int32 Quantity = 0;
+	// The loaded magazine and the owner's reserve for this weapon's ammunition type. Both stay 0
+	// for a weapon that carries no magazine, which `bHasMagazine` distinguishes from "empty".
+	int32 AmmoCurrent = 0;
+	int32 AmmoReserve = 0;
+	bool bHasMagazine = false;
+
+	bool operator==(const FElysiumInventoryEntryView& Other) const
+	{
+		return Classname == Other.Classname && Label == Other.Label && Family == Other.Family
+			&& Quantity == Other.Quantity
+			&& AmmoCurrent == Other.AmmoCurrent && AmmoReserve == Other.AmmoReserve
+			&& bHasMagazine == Other.bHasMagazine;
+	}
+	bool operator!=(const FElysiumInventoryEntryView& Other) const { return !(*this == Other); }
+};
+
+struct FElysiumEquipmentView
+{
+	// False whenever there is no player entity or no item catalogue is installed. A player carrying
+	// nothing is a valid empty list, not an invalid view.
+	bool bValid = false;
+
+	// The weapon in hand. Persistent, and independent of whichever section is being browsed.
+	bool bEquippedValid = false;
+	FElysiumInventoryEntryView Equipped;
+
+	// What the player is wearing — `items.txt` authors `IsWorn` per item type.
+	bool bWornValid = false;
+	FElysiumInventoryEntryView Worn;
+
+	// The category being browsed and its rows, in the order the records author.
+	EElysiumInvSection Section = EElysiumInvSection::None;
+	TArray<FElysiumInventoryEntryView> Entries;
+	// Index into `Entries`, or INDEX_NONE while the section's cursor names nothing carried.
+	int32 SelectedIndex = INDEX_NONE;
+
+	// The cycle peek's opacity, 0..1. The publisher raises it to 1 when the selection changes
+	// and lets it fall, so the selector shows itself on a switch and fades without the HUD owning
+	// a timer of its own. Presentation derives this; no gameplay state carries it.
+	float PeekAlpha = 0.0f;
+
+	const FElysiumInventoryEntryView* Selected() const
+	{
+		return Entries.IsValidIndex(SelectedIndex) ? &Entries[SelectedIndex] : nullptr;
+	}
+
+	bool operator==(const FElysiumEquipmentView& Other) const
+	{
+		return bValid == Other.bValid && bEquippedValid == Other.bEquippedValid
+			&& Equipped == Other.Equipped && bWornValid == Other.bWornValid && Worn == Other.Worn
+			&& Section == Other.Section && SelectedIndex == Other.SelectedIndex
+			&& PeekAlpha == Other.PeekAlpha && Entries == Other.Entries;
+	}
+	bool operator!=(const FElysiumEquipmentView& Other) const { return !(*this == Other); }
+};
+
+// ============================================================================================
 // The camera's contribution to the frame — its resolved draw policy, projected once.
 // ============================================================================================
 struct FElysiumCameraView
@@ -225,6 +352,15 @@ struct FElysiumViewState
 
 	// --- Computer terminal (13.4) ---------------------------------------------------------
 	FElysiumTerminalView Terminal;
+
+	// --- Stealth (8.9's slot; PP6 fills the observer half) ----------------------------------
+	FElysiumStealthView Stealth;
+
+	// --- Equipment and the weapon selector (8.9) --------------------------------------------
+	// The carried weapons and the one in hand. The selector renders this and submits `invnext` /
+	// `invprev` / `lastinv` / `slotN` back through the command bus; it never switches a weapon
+	// itself.
+	FElysiumEquipmentView Equipment;
 
 	// --- Meters (8.9 draws them) ------------------------------------------------------------
 	FElysiumVitals Vitals;

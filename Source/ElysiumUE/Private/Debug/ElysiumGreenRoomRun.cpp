@@ -15,17 +15,22 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"   // the arena's boot-time player loadout reads the rulebook
+#include "ElysiumInputRouter.h"   // gr_walk drives the player through its own record/replay door
 #include "ElysiumMovementComponent.h"
+#include "ElysiumMoveSolve.h"   // ElysiumMove::WalkSpeed — the arena walk's motor-speed fallback
 #include "ElysiumPawn.h"
+#include "ElysiumPlayerController.h"   // gr_walk reaches the driven body's input router through it
 #include "ElysiumPlayerUISubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayer.h"   // FElysiumSheet — the arena checks the record's clan before seeding one
 #include "ElysiumPlayerBody.h"
 #include "ElysiumSkeletalBasis.h"
+#include "ElysiumUserCmd.h"   // the synthesized command stream gr_walk feeds the player through
 #include "RenderingThread.h"   // the wield window flushes so its two render packets are one frame
 #include "SkeletalRenderPublic.h"   // the wield check reads the drawn mesh's own skinning matrices
 #include "Debug/ElysiumScreenshot.h"
+#include "Visual/ElysiumNpcBody.h"   // gr_walk commands an arena character's IElysiumNpcMotor
 #if !UE_BUILD_SHIPPING
 // The gym's and the arena's engine halves are debug-only, while their specs are not. Drive and
 // arena mode are the only things here that need a spawner, so the guard is on those calls rather
@@ -1766,6 +1771,9 @@ bool FElysiumGreenRoomRun::BuildArena(FString& OutError)
 
 void FElysiumGreenRoomRun::DestroyArena()
 {
+	// A walk targeting a character this teardown is about to clear must not be left pointing at a
+	// body that no longer exists.
+	ArenaWalkStop();
 #if !UE_BUILD_SHIPPING
 	AElysiumMapActor* Map = GetMap();
 	FElysiumEntityWorld* EntityWorld = Map != nullptr ? Map->GetEntityWorld() : nullptr;
@@ -1908,6 +1916,21 @@ bool FElysiumGreenRoomRun::LabSetDriveBody(const FString& Stem, FString& OutErro
 	// is what makes the ordinary teardown clear it.
 	bPlayerSurfaceActive = true;
 	ReviewStem = Stem;
+
+	// This lab attaches the mesh straight to the pawn rather than through the player entity's own
+	// embodiment call (`ElysiumPlayerEntity.cpp`'s `Visual = Embodiment->BuildPlayerVisual(...)`),
+	// so without this the entity's `GetSkeletalBody()` stays null for a driven body — and a real
+	// equip's wield visual then silently never attaches (`ApplyWieldVisual`'s bodiless early-out),
+	// even though the mesh is visibly rendering on the pawn. Sync the two so an equip transaction
+	// taken in drive/arena mode reaches the same attachment a map-loaded player gets.
+	if (FElysiumEntityWorld* EntityWorld = Map->GetEntityWorld())
+	{
+		if (FElysiumPlayer* Player = EntityWorld->FindPlayer())
+		{
+			Player->Visual = Visual;
+		}
+	}
+
 	// The held weapon follows the body across a mode change too — a weapon put in the hand while
 	// reviewing is the one thing worth carrying into drive mode, where it can be walked with.
 	ReapplyWield();
@@ -1978,6 +2001,7 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 	// Whatever was standing belongs to the mode that is leaving, and so does whatever floor it was
 	// standing on. Both floors are torn down unconditionally: a mode change is the one place either
 	// can be left behind, and a gym under an arena is two overlapping collision sets.
+	ArenaWalkStop();
 	DestroyBodies();
 	DestroyArena();
 	DestroyDriveGym();
@@ -2190,6 +2214,7 @@ void FElysiumGreenRoomRun::TickDrive(float DeltaSeconds)
 	DrawLabOverlays();
 	if (IsArena())
 	{
+		TickArenaWalk(DeltaSeconds);
 		DrawArenaOverlays();
 	}
 }
@@ -2242,6 +2267,369 @@ void FElysiumGreenRoomRun::DrawArenaOverlays() const
 	const FVector Start = Origin + Arena.PlayerFeet;
 	DrawDebugCircle(World, Start + FVector(0.0f, 0.0f, 2.0f), 46.0f, 24, FColor(230, 120, 120),
 		false, -1.0f, 0, 2.5f, FVector(1, 0, 0), FVector(0, 1, 0), /*bDrawAxis=*/false);
+
+	// The hand-dropped `gr_pin` waypoints and, while a walk is running, what it is doing.
+	for (const TPair<FName, FVector>& Pin : ArenaPinList)
+	{
+		DrawDebugSphere(World, Pin.Value + FVector(0.0f, 0.0f, 10.0f), 14.0f, 8,
+			FColor(255, 165, 0), false, -1.0f, 0, 2.0f);
+		DrawDebugString(World, Pin.Value + FVector(0.0f, 0.0f, 34.0f), Pin.Key.ToString(), nullptr,
+			FColor(255, 165, 0), 0.0f, /*bDrawShadow=*/true, 1.0f);
+	}
+	if (ArenaWalkState.bActive)
+	{
+		DrawDebugString(World, Origin + FVector(0.0f, 0.0f, 80.0f), ArenaWalkStatus(), nullptr,
+			FColor(255, 165, 0), 0.0f, /*bDrawShadow=*/true, 1.2f);
+	}
+}
+
+// --- arena navigation pins ------------------------------------------------------------------------
+
+bool FElysiumGreenRoomRun::ArenaSetPin(const FName& Name, const FVector* FeetWorld, FString& OutError)
+{
+	if (!IsArena())
+	{
+		OutError = TEXT("not in the arena");
+		return false;
+	}
+	if (Name.IsNone())
+	{
+		OutError = TEXT("name the pin");
+		return false;
+	}
+
+	FVector Position;
+	if (FeetWorld != nullptr)
+	{
+		Position = *FeetWorld;
+	}
+	else
+	{
+		const FDriveRefs Refs = ResolveDriveBody(GetWorld());
+		if (!Refs)
+		{
+			OutError = TEXT("no driven body to read a position from — name x y z explicitly");
+			return false;
+		}
+		Position = Refs.Pawn->GetActorLocation()
+			- FVector(0.0f, 0.0f, Refs.Body->GetBodyHalfHeight());
+	}
+
+	for (TPair<FName, FVector>& Pin : ArenaPinList)
+	{
+		if (Pin.Key == Name)
+		{
+			Pin.Value = Position;
+			return true;
+		}
+	}
+	ArenaPinList.Emplace(Name, Position);
+	return true;
+}
+
+const FVector* FElysiumGreenRoomRun::FindArenaPin(const FName& Name) const
+{
+	for (const TPair<FName, FVector>& Pin : ArenaPinList)
+	{
+		if (Pin.Key == Name)
+		{
+			return &Pin.Value;
+		}
+	}
+	return nullptr;
+}
+
+AElysiumNpcBody* FElysiumGreenRoomRun::FindArenaCastBody(FElysiumEntityWorld& World,
+	const FString& TargetName) const
+{
+	// The same targetname resolution `elysium_entity_fire`/`ent_fire` use, narrowed to a live
+	// record that actually has a skeletal body riding an `AElysiumNpcBody` motor — a brush, a
+	// prop, or an inert record names nothing this feature can walk.
+	for (const TUniquePtr<FElysiumEntity>& Entity : World.Entities())
+	{
+		if (!Entity || Entity->IsDead())
+		{
+			continue;
+		}
+		if (!Entity->TargetName.Equals(TargetName, ESearchCase::IgnoreCase))
+		{
+			continue;
+		}
+		if (USkeletalMeshComponent* Skeletal = Entity->GetSkeletalBody())
+		{
+			if (AElysiumNpcBody* Body = Cast<AElysiumNpcBody>(Skeletal->GetAttachParentActor()))
+			{
+				return Body;
+			}
+		}
+	}
+	return nullptr;
+}
+
+bool FElysiumGreenRoomRun::ArenaWalkStart(const FString& Target, const TArray<FName>& PinNames,
+	bool bLoop, FString& OutError)
+{
+	if (!IsArena())
+	{
+		OutError = TEXT("not in the arena");
+		return false;
+	}
+	if (PinNames.Num() == 0)
+	{
+		OutError = TEXT("name at least one pin");
+		return false;
+	}
+
+	TArray<FVector> Route;
+	Route.Reserve(PinNames.Num());
+	for (const FName& PinName : PinNames)
+	{
+		const FVector* Found = FindArenaPin(PinName);
+		if (Found == nullptr)
+		{
+			OutError = FString::Printf(
+				TEXT("no pin named '%s' — drop it first with elysium.gr_pin"), *PinName.ToString());
+			return false;
+		}
+		Route.Add(*Found);
+	}
+
+	// Whatever the previous order was is superseded, not stacked — a second `gr_walk` names a new
+	// whole order, the way a fresh MoveTo replaces the one before it.
+	ArenaWalkStop();
+
+	ArenaWalkState.TargetName = Target;
+	ArenaWalkState.Route = Route;
+	ArenaWalkState.bLoop = bLoop;
+	ArenaWalkState.LegIndex = 0;
+
+	if (Target.Equals(TEXT("player"), ESearchCase::IgnoreCase))
+	{
+		const FDriveRefs Refs = ResolveDriveBody(GetWorld());
+		AElysiumPlayerController* PC = Refs ? Cast<AElysiumPlayerController>(Refs.PC) : nullptr;
+		if (!Refs || PC == nullptr || PC->GetInputRouter() == nullptr)
+		{
+			OutError = TEXT("no driven player body to walk");
+			ArenaWalkState = FArenaWalkState();
+			return false;
+		}
+		ArenaWalkState.bTargetIsPlayer = true;
+		ArenaWalkState.bActive = true;
+		// The first leg is issued by the next TickArenaWalkPlayer tick, which reads the body's live
+		// position rather than one taken here — there is nothing to precompute.
+		return true;
+	}
+
+	AElysiumMapActor* Map = GetMap();
+	FElysiumEntityWorld* World = Map != nullptr ? Map->GetEntityWorld() : nullptr;
+	if (World == nullptr)
+	{
+		OutError = TEXT("no entity world loaded");
+		ArenaWalkState = FArenaWalkState();
+		return false;
+	}
+	AElysiumNpcBody* Body = FindArenaCastBody(*World, Target);
+	if (Body == nullptr)
+	{
+		OutError = FString::Printf(
+			TEXT("no arena character named '%s' — spawn one from the AI window first"), *Target);
+		ArenaWalkState = FArenaWalkState();
+		return false;
+	}
+	ArenaWalkState.NpcBody = Body;
+	ArenaWalkState.bActive = true;
+	IssueNextArenaWalkLeg();
+	return true;
+}
+
+void FElysiumGreenRoomRun::ArenaWalkStop()
+{
+	if (!ArenaWalkState.bActive)
+	{
+		return;
+	}
+	if (!ArenaWalkState.bTargetIsPlayer)
+	{
+		if (AElysiumNpcBody* Body = ArenaWalkState.NpcBody.Get())
+		{
+			Body->Stop();
+		}
+	}
+	else
+	{
+		const FDriveRefs Refs = ResolveDriveBody(GetWorld());
+		AElysiumPlayerController* PC = Refs ? Cast<AElysiumPlayerController>(Refs.PC) : nullptr;
+		if (UElysiumInputRouter* Router = PC != nullptr ? PC->GetInputRouter() : nullptr)
+		{
+			if (Router->IsReplaying())
+			{
+				Router->StopReplay();
+			}
+		}
+	}
+	ArenaWalkState = FArenaWalkState();
+}
+
+FString FElysiumGreenRoomRun::ArenaWalkStatus() const
+{
+	if (!ArenaWalkState.bActive)
+	{
+		return TEXT("(not walking)");
+	}
+	if (!ArenaWalkState.bTargetIsPlayer)
+	{
+		return FString::Printf(TEXT("%s -> pin %d/%d%s"), *ArenaWalkState.TargetName,
+			ArenaWalkState.LegIndex + 1, ArenaWalkState.Route.Num(),
+			ArenaWalkState.bLoop ? TEXT(" (loop)") : TEXT(""));
+	}
+	return FString::Printf(TEXT("player walking %d pin(s)%s"), ArenaWalkState.Route.Num(),
+		ArenaWalkState.bLoop ? TEXT(" (loop)") : TEXT(""));
+}
+
+void FElysiumGreenRoomRun::IssueNextArenaWalkLeg()
+{
+	AElysiumNpcBody* Body = ArenaWalkState.NpcBody.Get();
+	if (Body == nullptr || !ArenaWalkState.Route.IsValidIndex(ArenaWalkState.LegIndex))
+	{
+		return;
+	}
+	// Named rather than left to the fallback: a body that resolves no walk fan still gets a
+	// non-zero order, the way `ElysiumNpcGait::TravelSpeed` covers the same gap for a real order.
+	const float Speed = Body->GaitSpeed(EElysiumNpcGaitKind::Walk, 0.0f);
+	Body->MoveTo(ArenaWalkState.Route[ArenaWalkState.LegIndex], /*AcceptanceRadiusCm=*/32.0f,
+		Speed > 0.0f ? Speed : ElysiumMove::WalkSpeed, /*bAllowPartialPath=*/true,
+		EElysiumNpcGaitKind::Walk);
+	ArenaWalkState.bLegArmed = false;
+}
+
+void FElysiumGreenRoomRun::TickArenaWalkNpc(AElysiumNpcBody& Body)
+{
+	FVector Feet = FVector::ZeroVector;
+	float Yaw = 0.0f;
+	const EElysiumNpcMoveStatus Status = Body.Sample(Feet, Yaw);
+
+	if (Status == EElysiumNpcMoveStatus::Moving)
+	{
+		ArenaWalkState.bLegArmed = true;
+		return;
+	}
+	if (Status == EElysiumNpcMoveStatus::Failed)
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning,
+			TEXT("gr_walk: '%s' failed to reach pin %d of %d — stopping"),
+			*ArenaWalkState.TargetName, ArenaWalkState.LegIndex + 1, ArenaWalkState.Route.Num());
+		ArenaWalkStop();
+		return;
+	}
+	// Reached is the ordinary completion; an Idle sampled only after this leg was actually seen
+	// Moving is the same thing read off a status that does not distinguish "arrived" from "never
+	// started" on its own.
+	if (Status == EElysiumNpcMoveStatus::Reached
+		|| (Status == EElysiumNpcMoveStatus::Idle && ArenaWalkState.bLegArmed))
+	{
+		++ArenaWalkState.LegIndex;
+		if (!ArenaWalkState.Route.IsValidIndex(ArenaWalkState.LegIndex))
+		{
+			if (!ArenaWalkState.bLoop)
+			{
+				UE_LOG(LogElysiumGreenRoom, Log, TEXT("gr_walk: '%s' reached the last pin"),
+					*ArenaWalkState.TargetName);
+				ArenaWalkStop();
+				return;
+			}
+			ArenaWalkState.LegIndex = 0;
+		}
+		IssueNextArenaWalkLeg();
+	}
+}
+
+void FElysiumGreenRoomRun::TickArenaWalkPlayer()
+{
+	const FDriveRefs Refs = ResolveDriveBody(GetWorld());
+	AElysiumPlayerController* PC = Refs ? Cast<AElysiumPlayerController>(Refs.PC) : nullptr;
+	UElysiumInputRouter* Router = PC != nullptr ? PC->GetInputRouter() : nullptr;
+	if (!Refs || Router == nullptr)
+	{
+		ArenaWalkStop();
+		return;
+	}
+	if (!ArenaWalkState.Route.IsValidIndex(ArenaWalkState.LegIndex))
+	{
+		ArenaWalkStop();
+		return;
+	}
+
+	const FVector Feet = Refs.Pawn->GetActorLocation()
+		- FVector(0.0f, 0.0f, Refs.Body->GetBodyHalfHeight());
+	FVector Delta = ArenaWalkState.Route[ArenaWalkState.LegIndex] - Feet;
+	Delta.Z = 0.0f;
+	const float Distance = static_cast<float>(Delta.Size());
+
+	// The same radius IssueNextArenaWalkLeg hands the motor for the NPC case, so the two cases
+	// call a pin "reached" by the same standard.
+	constexpr float AcceptanceRadiusCm = 32.0f;
+	if (Distance <= AcceptanceRadiusCm)
+	{
+		++ArenaWalkState.LegIndex;
+		if (!ArenaWalkState.Route.IsValidIndex(ArenaWalkState.LegIndex))
+		{
+			if (!ArenaWalkState.bLoop)
+			{
+				UE_LOG(LogElysiumGreenRoom, Log, TEXT("gr_walk: player reached the last pin"));
+				ArenaWalkStop();
+				return;
+			}
+			ArenaWalkState.LegIndex = 0;
+		}
+		// The next leg's command is this same function's job, one tick from now, over the fresh
+		// position it will read then — nothing to issue on the arrival tick itself.
+		return;
+	}
+
+	// Turn and walk in the same command, recomputed fresh every tick from the live position: the
+	// turn is idempotent (a body already facing the pin gets a ~0 delta) and self-correcting, so
+	// there is no separate "aim, then walk straight" phase to fall out of step with reality.
+	const float TargetYaw = static_cast<float>(Delta.Rotation().Yaw);
+	const float CurrentYaw = static_cast<float>(Refs.PC->GetControlRotation().Yaw);
+
+	FElysiumUserCmd Cmd;
+	Cmd.LookDelta = FVector2D(FMath::FindDeltaAngleDegrees(CurrentYaw, TargetYaw), 0.0f);
+	Cmd.Move = FVector2D(1.0f, 0.0f);
+	Cmd.Buttons = static_cast<uint64>(EElysiumButton::Forward);
+
+	// One command, replayed once: `UElysiumInputRouter::SampleFrame` re-times whatever it reads
+	// off `Replay` against the real frame's own delta and consumes exactly one entry per call, so
+	// a single-entry stream reissued every tick is "drive this frame" — never a fixed span of
+	// simulated time, which is what let the first version of this drift with the frame rate.
+	FElysiumUserCmdStream OneShot;
+	OneShot.Record(Cmd);
+	Router->StartReplay(OneShot);
+}
+
+void FElysiumGreenRoomRun::TickArenaWalk(float DeltaSeconds)
+{
+	if (!ArenaWalkState.bActive)
+	{
+		return;
+	}
+	if (ArenaWalkState.bTargetIsPlayer)
+	{
+		TickArenaWalkPlayer();
+		return;
+	}
+	// An NPC case whose body no longer resolves — killed, or the room torn down under it — has
+	// nothing left to walk. This is not the player case falling through: bTargetIsPlayer above is
+	// what tells the two apart, so a dead character stops here rather than silently starting to
+	// drive the driven body instead.
+	AElysiumNpcBody* Body = ArenaWalkState.NpcBody.Get();
+	if (Body == nullptr)
+	{
+		UE_LOG(LogElysiumGreenRoom, Warning,
+			TEXT("gr_walk: '%s' no longer exists — stopping"), *ArenaWalkState.TargetName);
+		ArenaWalkStop();
+		return;
+	}
+	TickArenaWalkNpc(*Body);
 }
 
 // --- the wielded weapon (CCC10.2) ----------------------------------------------------------------
@@ -2425,10 +2813,9 @@ static constexpr float ElysiumWieldMountDeg = 5.0f;
 // literal: a centre-to-sphere-radius proxy fails a faithfully-held compact weapon (a gripped
 // pistol's wrist bone sits at the box's edge, outside the bounding sphere of a centre up at the
 // slide) while a box distance still reads the old defect's metre-scale orbit as metres.
-static float ElysiumHandToDrawnBoxCm(const USkeletalMeshComponent& Wield,
+static float ElysiumHandToDrawnBoxCm(const USkeletalMesh* Mesh,
 	const FTransform& BindToWorld, const FVector& WorldPoint)
 {
-	const USkeletalMesh* const Mesh = Wield.GetSkeletalMeshAsset();
 	if (Mesh == nullptr)
 	{
 		return 0.0f;
@@ -2439,6 +2826,74 @@ static float ElysiumHandToDrawnBoxCm(const USkeletalMeshComponent& Wield,
 	// box's own frame rather than against a world-space AABB of a rotated box.
 	return static_cast<float>(FMath::Sqrt(
 		Box.ComputeSquaredDistanceToPoint(BindToWorld.InverseTransformPosition(WorldPoint))));
+}
+
+// The mount's authored local in the HAND's frame, composed from the weapon mesh's own reference
+// skeleton — the constant the leader-pose bind fallback rides an undeclared mount on. True only
+// when the hand is the mount's skeleton ancestor (every mount the corpus grips hangs directly
+// under a hand bone); a mount anchored elsewhere has no constant hand-local to assert.
+static bool ElysiumMountLocalInHand(const USkeletalMesh& Mesh, FName Mount, FName Hand,
+	FTransform& OutLocal)
+{
+	const FReferenceSkeleton& Ref = Mesh.GetRefSkeleton();
+	const int32 MountIndex = Ref.FindBoneIndex(Mount);
+	const int32 HandIndex = Ref.FindBoneIndex(Hand);
+	if (MountIndex == INDEX_NONE || HandIndex == INDEX_NONE)
+	{
+		return false;
+	}
+	FTransform Local = Ref.GetRefBonePose()[MountIndex];
+	int32 Index = Ref.GetParentIndex(MountIndex);
+	while (Index != INDEX_NONE && Index != HandIndex)
+	{
+		Local = Local * Ref.GetRefBonePose()[Index];
+		Index = Ref.GetParentIndex(Index);
+	}
+	if (Index != HandIndex)
+	{
+		return false;
+	}
+	OutLocal = Local;
+	return true;
+}
+
+// The other hand of `Hand` — "Bip01 R Hand" <-> "Bip01 L Hand" — or NAME_None for a bone that
+// does not name a sided hand. The off-hand gate exists only for the two-handed carries, and a
+// carry's off hand is by definition the hand the mount is not riding.
+static FName ElysiumOffHandOf(FName Hand)
+{
+	FString Name = Hand.ToString();
+	if (Name.Contains(TEXT("R Hand")))
+	{
+		return FName(*Name.Replace(TEXT("R Hand"), TEXT("L Hand")));
+	}
+	if (Name.Contains(TEXT("L Hand")))
+	{
+		return FName(*Name.Replace(TEXT("L Hand"), TEXT("R Hand")));
+	}
+	return NAME_None;
+}
+
+// The bind-space -> world map the AUTHORED recipe predicts for the drawn weapon this frame: the
+// wearer's game-thread mount (its own bone when declared, else the hand carrying the weapon's
+// authored mount local) with the mount's inverse bind on the left. This is the verified retail
+// composition restated from live game-thread state, so the drawn packet can be scored against
+// it — the render diverging from this map IS the defect class this file instruments.
+static bool ElysiumAuthoredBindToWorld(const USkeletalMeshComponent& Body,
+	const USkeletalMesh& WieldMesh, FName Mount, FName Hand, bool bWearerDeclares,
+	const FTransform& MountLocalInHand, FTransform& OutBindToWorld)
+{
+	const int32 MountIndex = WieldMesh.GetRefSkeleton().FindBoneIndex(Mount);
+	const TArray<FMatrix44f>& InvBind = WieldMesh.GetRefBasesInvMatrix();
+	if (!InvBind.IsValidIndex(MountIndex))
+	{
+		return false;
+	}
+	const FTransform MountWorld = bWearerDeclares
+		? Body.GetSocketTransform(Mount, RTS_World)
+		: MountLocalInHand * Body.GetSocketTransform(Hand, RTS_World);
+	OutBindToWorld = FTransform(FMatrix(InvBind[MountIndex])) * MountWorld;
+	return true;
 }
 
 // The wearer mesh's own reference-pose transform of `Bone`, component space — the value an
@@ -2506,7 +2961,8 @@ bool FElysiumGreenRoomRun::LabWieldCheck(FString& OutReport) const
 		return false;
 	}
 	const float CentreCm = FVector::Dist(CentreAt, HandAt.GetLocation());
-	const float TouchCm = ElysiumHandToDrawnBoxCm(*Wield, BindToWorld, HandAt.GetLocation());
+	const float TouchCm =
+		ElysiumHandToDrawnBoxCm(Wield->GetSkeletalMeshAsset(), BindToWorld, HandAt.GetLocation());
 
 	// No verdict lives on this line — a single frame cannot prove tracking — but the distances
 	// are the DRAWN geometry's, so a weapon drawing away from the body reads as far away here
@@ -2527,6 +2983,39 @@ bool FElysiumGreenRoomRun::LabWieldCheck(FString& OutReport) const
 	const FTransform DrawnInHand = MountAt.GetRelativeTransform(HandAt);
 	OutReport += FString::Printf(TEXT("\n  drawn mount in hand frame: t=(%.2f %.2f %.2f)"),
 		DrawnInHand.GetLocation().X, DrawnInHand.GetLocation().Y, DrawnInHand.GetLocation().Z);
+	// The undeclared mount's authored local under the hand, from the weapon's own skeleton: the
+	// drawn local must equal it, rotation included — a wrong constant rotation holds translation
+	// and drift at zero while it swings the far geometry off the other hand.
+	FTransform MountLocal;
+	const USkeletalMesh* const WieldMesh = Wield->GetSkeletalMeshAsset();
+	if (!bWearerDeclares && WieldMesh != nullptr
+		&& ElysiumMountLocalInHand(*WieldMesh, Mount, Ref->HandBone, MountLocal))
+	{
+		OutReport += FString::Printf(
+			TEXT("; weapon's own authored local t=(%.2f %.2f %.2f), gap %.2f cm / %.2f deg"),
+			MountLocal.GetLocation().X, MountLocal.GetLocation().Y, MountLocal.GetLocation().Z,
+			FVector::Dist(DrawnInHand.GetLocation(), MountLocal.GetLocation()),
+			FMath::RadiansToDegrees(
+				DrawnInHand.GetRotation().AngularDistance(MountLocal.GetRotation())));
+	}
+	// The off hand against the drawn geometry, beside what the authored recipe predicts for the
+	// same frame — on a two-handed carry both sit near zero together.
+	const FName OffHand = ElysiumOffHandOf(Ref->HandBone);
+	FTransform OffDrawn;
+	FTransform AuthoredBindToWorld;
+	if (OffHand != NAME_None && Body->GetBoneIndex(OffHand) != INDEX_NONE && WieldMesh != nullptr
+		&& ElysiumRenderedBodyBone(*Body, OffHand, OffDrawn)
+		&& ElysiumAuthoredBindToWorld(*Body, *WieldMesh, Mount, Ref->HandBone, bWearerDeclares,
+			MountLocal, AuthoredBindToWorld))
+	{
+		OutReport += FString::Printf(
+			TEXT("\n  off hand '%s': %.1f cm from the drawn mesh's bounds (authored pose "
+			     "puts it %.1f cm)"),
+			*OffHand.ToString(),
+			ElysiumHandToDrawnBoxCm(WieldMesh, BindToWorld, OffDrawn.GetLocation()),
+			ElysiumHandToDrawnBoxCm(WieldMesh, AuthoredBindToWorld,
+				Body->GetSocketTransform(OffHand, RTS_World).GetLocation()));
+	}
 	if (bWearerDeclares)
 	{
 		const FTransform WearerInHand =
@@ -2600,6 +3089,17 @@ bool FElysiumGreenRoomRun::LabWieldTrackStart(float Seconds, float ToleranceCm, 
 		: 0.0f;
 	WieldTrack.Body = Body;
 	WieldTrack.Wield = Wield;
+	// The authored mount-under-hand local: the mount-local gate for an undeclared mount, and one
+	// half of the off-hand gate's authored recipe. NAME_None or an unanchored mount simply leaves
+	// the corresponding gate unarmed — both are structural facts of the rig, not failures.
+	const USkeletalMesh* const WieldMesh = Wield->GetSkeletalMeshAsset();
+	WieldTrack.bMountLocalExpected = !WieldTrack.bWearerDeclares && WieldMesh != nullptr
+		&& ElysiumMountLocalInHand(*WieldMesh, WieldTrack.MountBone, WieldTrack.HandBone,
+			WieldTrack.ExpectedMountLocal);
+	WieldTrack.OffHandBone = ElysiumOffHandOf(WieldTrack.HandBone);
+	WieldTrack.bOffHand = WieldTrack.OffHandBone != NAME_None
+		&& Body->GetBoneIndex(WieldTrack.OffHandBone) != INDEX_NONE && WieldMesh != nullptr
+		&& (WieldTrack.bWearerDeclares || WieldTrack.bMountLocalExpected);
 	UE_LOG(LogElysiumGreenRoom, Log,
 		TEXT("wield track: sampling '%s' mount '%s' against hand '%s' for %.1f s "
 		     "(tolerance %.1f cm)"),
@@ -2710,13 +3210,84 @@ void FElysiumGreenRoomRun::TickWieldTrack(float DeltaSeconds)
 	// centre-against-sphere-radius: a gripped pistol's hand sits at the box's edge — outside the
 	// bounding sphere of a centre up at the slide — while the old defect's metre-scale orbit
 	// still reads as metres either way.
-	const float PlaceOverCm = ElysiumHandToDrawnBoxCm(*Wield, BindToWorld, HandAt.GetLocation());
+	const USkeletalMesh* const WieldMesh = Wield->GetSkeletalMeshAsset();
+	const float PlaceOverCm =
+		ElysiumHandToDrawnBoxCm(WieldMesh, BindToWorld, HandAt.GetLocation());
 	if (PlaceOverCm > WieldTrack.WorstPlaceCm)
 	{
 		WieldTrack.WorstPlaceCm = PlaceOverCm;
 		WieldTrack.WorstPlaceDistCm = FVector::Dist(CentreAt, HandAt.GetLocation());
 		WieldTrack.WorstPlaceSample = WieldTrack.Samples;
 		WieldTrack.WorstPlaceTime = LabClipTime;
+	}
+
+	// MOUNT LOCAL — an undeclared mount's drawn local in the hand's frame must equal the weapon
+	// skeleton's own authored chain, rotation included, every frame. Both sides of this
+	// comparison come from the same rendered frame, so there is no pipeline skew to forgive —
+	// and a constant wrong rotation, which holds drift at zero and keeps the gripping hand
+	// inside the box while it swings the far geometry off the other hand, is exactly what only
+	// this gate can catch.
+	if (WieldTrack.bMountLocalExpected)
+	{
+		const FTransform DrawnLocal = MountAt.GetRelativeTransform(HandAt);
+		const float LocalCm = FVector::Dist(DrawnLocal.GetLocation(),
+			WieldTrack.ExpectedMountLocal.GetLocation());
+		const float LocalDeg = FMath::RadiansToDegrees(DrawnLocal.GetRotation().AngularDistance(
+			WieldTrack.ExpectedMountLocal.GetRotation()));
+		if (LocalCm > WieldTrack.WorstMountLocalCm)
+		{
+			WieldTrack.WorstMountLocalCm = LocalCm;
+			WieldTrack.WorstMountLocalSample = WieldTrack.Samples;
+			WieldTrack.WorstMountLocalTime = LabClipTime;
+		}
+		if (LocalDeg > WieldTrack.WorstMountLocalDeg)
+		{
+			WieldTrack.WorstMountLocalDeg = LocalDeg;
+			WieldTrack.WorstMountLocalSample = WieldTrack.Samples;
+			WieldTrack.WorstMountLocalTime = LabClipTime;
+		}
+	}
+
+	// OFF HAND — on a two-handed carry the authored pose keeps the off hand on the weapon, and
+	// the drawn frame must agree. Each sample scores the DRAWN off-hand-to-box distance against
+	// the AUTHORED one (the game-thread pose under the verified recipe) for the same frame, so a
+	// clip that legitimately swings the off hand away is not a failure — only the drawn frame
+	// disagreeing with the recipe is. Whether the carry is two-handed at all is the window's
+	// minimum authored distance, read at close.
+	if (WieldTrack.bOffHand)
+	{
+		FTransform AuthoredBindToWorld;
+		FTransform OffDrawn;
+		if (ElysiumAuthoredBindToWorld(*Body, *WieldMesh, WieldTrack.MountBone,
+				WieldTrack.HandBone, WieldTrack.bWearerDeclares, WieldTrack.ExpectedMountLocal,
+				AuthoredBindToWorld)
+			&& ElysiumRenderedBodyBone(*Body, WieldTrack.OffHandBone, OffDrawn))
+		{
+			const float AuthoredCm = ElysiumHandToDrawnBoxCm(WieldMesh, AuthoredBindToWorld,
+				Body->GetSocketTransform(WieldTrack.OffHandBone, RTS_World).GetLocation());
+			const float DrawnCm =
+				ElysiumHandToDrawnBoxCm(WieldMesh, BindToWorld, OffDrawn.GetLocation());
+			WieldTrack.MinAuthoredOffHandCm =
+				FMath::Min(WieldTrack.MinAuthoredOffHandCm, AuthoredCm);
+			// The drawn side trails the game thread by a pipeline frame, the same seam the
+			// mapping gate crosses: score against the current and previous authored values.
+			float ErrCm = FMath::Abs(DrawnCm - AuthoredCm);
+			if (WieldTrack.bPrevAuthoredOffHand)
+			{
+				ErrCm = FMath::Min(ErrCm,
+					FMath::Abs(DrawnCm - WieldTrack.PrevAuthoredOffHandCm));
+			}
+			WieldTrack.PrevAuthoredOffHandCm = AuthoredCm;
+			WieldTrack.bPrevAuthoredOffHand = true;
+			if (ErrCm > WieldTrack.WorstOffHandErrCm)
+			{
+				WieldTrack.WorstOffHandErrCm = ErrCm;
+				WieldTrack.WorstOffHandDrawnCm = DrawnCm;
+				WieldTrack.WorstOffHandAuthoredCm = AuthoredCm;
+				WieldTrack.WorstOffHandSample = WieldTrack.Samples;
+				WieldTrack.WorstOffHandTime = LabClipTime;
+			}
+		}
 	}
 
 	WieldTrack.HandPeakCm = FMath::Max(WieldTrack.HandPeakCm,
@@ -2756,6 +3327,18 @@ void FElysiumGreenRoomRun::TickWieldTrack(float DeltaSeconds)
 			*WieldTrack.MountBone.ToString(), WieldTrack.WorstMapSample, WieldTrack.WorstMapTime,
 			WieldTrack.Samples, WieldTrack.ToleranceCm, ElysiumWieldMountDeg));
 	}
+	else if (WieldTrack.bMountLocalExpected && (WieldTrack.WorstMountLocalCm > WieldTrack.ToleranceCm
+		|| WieldTrack.WorstMountLocalDeg > ElysiumWieldMountDeg))
+	{
+		CloseWieldTrack(false, FString::Printf(
+			TEXT("%s: FAIL(mountlocal) — in the hand's frame the drawn mount sat %.1f cm / "
+			     "%.1f deg off the weapon skeleton's own authored '%s'-under-'%s' local, worst "
+			     "at sample %d (clip t=%.2f s), over %d samples (tolerance %.1f cm / %.1f deg)"),
+			*WieldTrack.Classname, WieldTrack.WorstMountLocalCm, WieldTrack.WorstMountLocalDeg,
+			*WieldTrack.MountBone.ToString(), *WieldTrack.HandBone.ToString(),
+			WieldTrack.WorstMountLocalSample, WieldTrack.WorstMountLocalTime, WieldTrack.Samples,
+			WieldTrack.ToleranceCm, ElysiumWieldMountDeg));
+	}
 	else if (WieldTrack.WorstDriftCm > WieldTrack.ToleranceCm)
 	{
 		CloseWieldTrack(false, FString::Printf(
@@ -2777,18 +3360,42 @@ void FElysiumGreenRoomRun::TickWieldTrack(float DeltaSeconds)
 			WieldTrack.WorstPlaceDistCm, WieldTrack.BindRadiusCm, WieldTrack.WorstPlaceSample,
 			WieldTrack.WorstPlaceTime, WieldTrack.Samples));
 	}
+	else if (WieldTrack.bOffHand && WieldTrack.MinAuthoredOffHandCm <= ElysiumWieldTouchCm
+		&& WieldTrack.WorstOffHandErrCm > WieldTrack.ToleranceCm)
+	{
+		CloseWieldTrack(false, FString::Printf(
+			TEXT("%s: FAIL(offhand) — a two-handed carry (the authored pose keeps '%s' within "
+			     "%.1f cm of the weapon) drew that hand %.1f cm from the drawn geometry where "
+			     "the authored recipe put it %.1f cm, worst at sample %d (clip t=%.2f s), over "
+			     "%d samples (tolerance %.1f cm)"),
+			*WieldTrack.Classname, *WieldTrack.OffHandBone.ToString(),
+			WieldTrack.MinAuthoredOffHandCm, WieldTrack.WorstOffHandDrawnCm,
+			WieldTrack.WorstOffHandAuthoredCm, WieldTrack.WorstOffHandSample,
+			WieldTrack.WorstOffHandTime, WieldTrack.Samples, WieldTrack.ToleranceCm));
+	}
 	else
 	{
+		const bool bTwoHanded = WieldTrack.bOffHand
+			&& WieldTrack.MinAuthoredOffHandCm <= ElysiumWieldTouchCm;
 		CloseWieldTrack(true, FString::Printf(
 			TEXT("%s: PASS — the drawn geometry rode hand '%s' (drift %.2f cm) touching its "
-			     "bounds within %.1f cm (mesh radius %.0f cm)%s, over %d samples of an animated "
-			     "base (the hand travelled %.0f cm)"),
+			     "bounds within %.1f cm (mesh radius %.0f cm)%s%s%s, over %d samples of an "
+			     "animated base (the hand travelled %.0f cm)"),
 			*WieldTrack.Classname, *WieldTrack.HandBone.ToString(), WieldTrack.WorstDriftCm,
 			WieldTrack.WorstPlaceCm, WieldTrack.BindRadiusCm,
 			WieldTrack.bWearerDeclares
 				? *FString::Printf(TEXT(", on the wearer's '%s' within %.2f cm / %.1f deg"),
 					*WieldTrack.MountBone.ToString(), WieldTrack.WorstMapCm,
 					WieldTrack.WorstMapDeg)
+				: TEXT(""),
+			WieldTrack.bMountLocalExpected
+				? *FString::Printf(TEXT(", on its own authored local within %.2f cm / %.1f deg"),
+					WieldTrack.WorstMountLocalCm, WieldTrack.WorstMountLocalDeg)
+				: TEXT(""),
+			bTwoHanded
+				? *FString::Printf(
+					TEXT(", two-handed: off hand '%s' held its authored contact within %.1f cm"),
+					*WieldTrack.OffHandBone.ToString(), WieldTrack.WorstOffHandErrCm)
 				: TEXT(""),
 			WieldTrack.Samples, WieldTrack.HandPeakCm));
 	}

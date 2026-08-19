@@ -29,12 +29,12 @@ UI requires a Widget Blueprint or data-table asset; the generated typefaces rema
 | Type | Role |
 |---|---|
 | `UElysiumUISubsystem` | GI-scoped flow facade. It owns menu/character/chargen policy and scratch state, but delegates screen lifetime and composition to the local-player owner. Verbs: `elysium.menu [pause]`, `elysium.menu.close` |
-| `UElysiumPlayerUISubsystem` | The local-player lifetime owner and only viewport-entry surface. It owns the stable `UElysiumHUDModel`, reconciles retained dialogue/sign/loot screens and queued notifications, rebinds the current world's publisher across travel, creates the unified root, and exposes semantic `PushWidget` / `RemoveWidget` operations. A conversation or sign is one modal lifetime whose published state updates in place. Non-shipping verbs: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical`, `elysium.hud.notify item\|quest\|complete\|failure\|generic <text> [quantity]` |
+| `UElysiumPlayerUISubsystem` | The local-player lifetime owner and only viewport-entry surface. It owns the stable `UElysiumHUDModel`, reconciles retained dialogue/sign/loot screens and queued notifications, rebinds the current world's publisher across travel, creates the unified root, and exposes semantic `PushWidget` / `RemoveWidget` operations. A conversation or sign is one modal lifetime whose published state updates in place. Non-shipping verbs: `elysium.hud.preview off\|passive\|combat\|weapon\|discipline\|inventory\|critical\|radial\|brief\|elysium\|sneak`, `elysium.hud.notify item\|quest\|complete\|failure\|generic <text> [quantity]` |
 | `UElysiumUIRoot` | The single local-player root. Paint order is structural rather than numeric: passive HUD, transient stack, notification queue, game-modal stack, system-modal stack, runtime-loading stack. Every root slot explicitly fills the player viewport and every layer is instant until it owns an authored transition. Hiding the HUD collapses only its passive surface, never the root or a menu/loading screen above it. |
 | `UElysiumActivatableScreen` | Shared CommonUI screen lifecycle. It installs and releases one centrally defined Elysium screen policy on activation/deactivation while returning no CommonUI input-mode config, keeping `UElysiumInputSubsystem` the sole `SetInputMode` authority. The scope owns mode, cursor policy and gameplay contexts; CommonUI owns focus and restores the screen's desired target. |
 | `UElysiumActionButton` | The programmatic `UCommonButtonBase` used for every action. It carries a stable action id, executable state, label/caption and accessible text; mouse, CommonUI activation and shortcuts all reach the same semantic callback. A non-executable explanatory row remains focusable. |
 | `UElysiumNavigableScreen` | The focus/selection owner for interactive screens. It restores selection by action id, wraps linear lists, supports explicit neighbours and horizontal/vertical groups, synchronizes hover with focus, repairs dynamic lists, and suppresses duplicate activation until the action set transitions. |
-| `UElysiumHUDWidget` | The resolution-independent in-world surface: life, discrete vitae droplets, Masquerade readout, equipment/discipline regions, selector preview, reticle and full-viewport fade. Unowned regions collapse instead of displaying fabricated runtime data. |
+| `UElysiumHUDWidget` | The resolution-independent in-world surface — life, vitae, standings, the hand and worn slots, the inventory selector, the stealth cluster, reticle and full-viewport fade. Regions and their rules: § 3. Unowned regions collapse instead of displaying fabricated runtime data. |
 | `UElysiumNotificationScreen` | One passive item/quest/notice card in the root's CommonUI FIFO. It is top-centred, safe-zone aware, non-focusable and timed in real UI seconds; it never installs an input scope. |
 | `UElysiumMainMenu` | the main / pause / game-over menu (`UElysiumNavigableScreen`) |
 | `UElysiumCharacterScreen` | the character screen — sheet / info / quest log, one shell parameterised for chargen's tab set too. Verb: `elysium.charscreen`; keys `C` and `L` |
@@ -112,7 +112,92 @@ This is deliberately **not** the engine's `UIScaleCurve`. The curve would restat
 an ini and could then drift from the canvas the panels are authored against; `ScaleFor` is the one
 definition.
 
-## 3. Design tokens
+## 3. The HUD's regions
+
+Retail draws the HUD as two ornate vertical rails at the screen edges
+(`docs/vtmb/vtmb-ui.md` § 3). The rails are chrome and go; **the assignment they encode stays**, and
+it is the whole of what the re-skin keeps: life on the left with the area icon above it, blood on
+the right with the selected Discipline at its foot. Rotating the two rails into the bottom corners
+is the modernization — no classic mode, so the craft is replaced and the structure is not.
+
+Margins are 38 virtual px. Regions collapse when unowned rather than drawing a placeholder.
+
+```text
++--------------------------------------------------------------+
+|                     [ notifications ]      MASQUERADE  # # x x |
+|                                             HUMANITY  7        |
+|                          (reticle)                             |
+|                    +--------------------+                      |
+|                    | SNEAKING  = = = -- |  stealth, crouch only|
+|                    | SEARCHING   12m    |                      |
+|                    +--------------------+                      |
+|  < [icon] >   selection peek                                   |
+|  [icon] Light Clothing            worn                         |
+|  [icon] .38 REVOLVER  6/24        hand      (o) BLOODHEAL      |
+|  (o) MASQUERADE AREA              zone                         |
+|  LIFE  72/100                                                  |
+|  ============--                            * * * * * o o vitae |
++--------------------------------------------------------------+
+```
+
+| Region | Anchor | Rule |
+|---|---|---|
+| Life + zone icon | bottom left | The zone glyph sits directly above the life bar, which is where retail puts it. Life is a continuous bar; the value is shown for accessibility. |
+| Hand, worn, selection peek | bottom left, stacked above life | The three read as one column about what the body is carrying. The peek is directly above the readout it changes. |
+| Vitae + Discipline | bottom right | Vitae is **discrete** — one droplet per banked blood point, grouped in fives. Discipline sits above it, as retail sets its dial at the blood rail's foot. |
+| Standings | top right | Masquerade and Humanity — slow-moving character state, permanently legible, out of the action corners. |
+| Stealth cluster | bottom centre | Situational: on screen only while crouched. |
+| Feed bar | top centre | Only during a feed. |
+| Reticle, fade | centre / full | — |
+
+**Masquerade is drawn as five marks, struck.** The sheet slot counts violations up from zero and the
+fifth ends the run (`docs/vtmb/player-entity.md` § "Law, Masquerade and world response"), so the
+marks still held are `5 - level` and each loss reads as a loss rather than as a number changing.
+This is a **divergence, and the owner call is explicit**: retail carries no Masquerade element on
+the HUD at all — the five masks live on the character sheet's `cm_topbar`, and the HUD's mask glyph
+is the *area* icon, a different fact. A resource whose exhaustion ends the run is kept permanently
+visible here rather than requiring a trip to the sheet.
+
+**Humanity is a value, not pips.** It is a 0–10 scale (`docs/vtmb/game_runtime.md`), and ten dots
+read slower than a numeral; the colour carries the part that matters, warming as it falls, because
+frenzy checks roll against it.
+
+### The stealth cluster states its own validity
+
+The cluster is raised by the body's settled posture — the `Ducked`/`Lowering` stance off the same
+locomotion sample the animation graph reads, so "sneaking" has one producer. Its two halves declare
+validity separately, because they have different owners and land at different times:
+
+- **concealment** — five steps, mirroring the exported `lightgauge_0..4`;
+- **the observer** — the nearest eligible hostile, its distance and its committed detection state.
+
+Presentation runs no perception (`docs/vtmb/stealth.md` → "HUD observability is not authority"). An
+unmeasured gauge draws its steps empty with an explicit `--`: *a gauge nobody has measured and a
+gauge reading "fully lit" are different statements and must not look the same*. An absent observer
+clears its line rather than reporting a distance. `elysium.hud.preview sneak` renders the measured
+form, since the unmeasured one is what production already draws.
+
+### The selector is one cursor with two commit rules
+
+The inventory selector renders whichever category the substrate's cursor is in; the categories and
+their order are `system/items.txt`'s (`docs/vtmb/inventory.md` § 4), and the heading is that file's
+own section name. What a selection *means* is the section's: a wielded section commits through the
+equip funnel and changes the hand, and every other section moves an item cursor and does not.
+
+Cycling commits immediately — there is no open-then-confirm state — so the selector's visibility is
+a **peek**: presentation raises it when the selection changes and lets it fall (1.5 s, then a 0.35 s
+tail, on real time so it keeps fading while paused). The peek is a screen state presentation
+derived; no gameplay state knows the selector exists.
+
+### Item icons are joined by classname
+
+No item record names its icon (`docs/vtmb/vtmb-ui.md` § 3), so the join is ours: the classname stem
+against the exported art tree, plus a small alias table for the records the tree files under another
+name, falling back to the section's category glyph. A fallback glyph is a readable icon rather than
+a hole. Worn armour always takes the glyph — its portrait needs a clan/sex/tier join the item data
+does not carry.
+
+## 4. Design tokens
 
 Colours are read from the install's own `VampireScheme.res` — the scheme `client.dll` loads — not
 invented. The chrome is **gold**; blood red is an accent for the menu column, the pips and critical
@@ -150,7 +235,7 @@ are HUD-local: applying them to menu and sheet type would muddy surfaces that al
 The veils are static rather than scene-luminance adaptive, avoiding colour flips and flicker as the
 camera crosses a bright edge.
 
-## 4. Type
+## 5. Type
 
 The **Nocturne** system: **Spectral SC** for small-caps labels,
 **Spectral** for body copy, **Inter** for data and numerals. VtMB's small-caps-with-wide-tracking
@@ -172,7 +257,7 @@ Two constraints:
 - Sizes in `ElysiumUI::Type` are virtual px. The sign panel still resolves the older Plex/Zilla set
   through `ElysiumSignFonts.cpp`; 8.8 migrates it onto this ramp.
 
-## 5. The menu plate
+## 6. The menu plate
 
 The front end stays in the genuinely empty `/Game/Elysium` boot world and draws the local
 `$ELYSIUM_EXPORT_ROOT/ui/menu/elysium_main_wallpaper_4k.png` plate beneath the CommonUI menu. Cold
@@ -195,7 +280,7 @@ front-end predicate before `OpenLevel`, so `PostLogin` seats no pawn in the dest
 
 `elysium.BootMenu 0` boots straight into play for A/B; `-ElysiumMap=` bypasses the menu entirely.
 
-## 6. Screenshots and the UI
+## 7. Screenshots and the UI
 
 `ElysiumScreenshot::Request` takes **`bShowUI`**, default false.
 
@@ -210,7 +295,7 @@ all of them; HUD and modal regression captures must explicitly include UI.
 UI regression captures must request `bShowUI`; tracker work for HUD/UI coverage lives in
 `docs/project/roadmap.md` 8.9.
 
-## 7. Screen inventory
+## 8. Screen inventory
 
 Screen implementation status lives only in `docs/project/roadmap.md`. The entries below record the shared
 design shape and constraints, not a second completion ledger.

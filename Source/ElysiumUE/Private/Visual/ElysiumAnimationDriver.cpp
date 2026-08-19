@@ -2,9 +2,11 @@
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
+#include "ElysiumEntityWorld.h"             // the clock the combat-stance window is read against
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumItemClasses.h"   // Inventory.Active() is read for its classname
 #include "Substrate/ElysiumNpc.h"           // the mind's state, which the alert/relaxed branch reads
+#include "Visual/ElysiumActionTables.h"     // the committed player gait ladder (LIFE4, Option A)
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnimDriver, Log, All);
 
@@ -178,8 +180,15 @@ void FElysiumAnimationDriver::SetTranslationContext(const FElysiumCombatCharacte
 		ActorClassname.Reset();
 		WeaponClassname.Reset();
 		ActorState = EElysiumNpcState::Idle;
+		bCombatStance = false;
 		return;
 	}
+
+	// The combat-stance clock, read beside the weapon because the ladder's `CombatReady`/`Relaxed`
+	// predicates consume the two together. A character outside a world has no clock and so no
+	// stance — the ordinary gym case, not a failure.
+	bCombatStance = Char->World != nullptr
+		&& Char->IsInCombatStance(Char->World->NowSeconds());
 
 	// A body with no mind is not a cast member and has no state to read; idle is what the recovered
 	// tree answers for every state that is neither alert nor combat, so it is the honest default
@@ -252,6 +261,77 @@ bool FElysiumAnimationDriver::RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims)
 	return true;
 }
 
+FString FElysiumAnimationDriver::SelectPlayerGroundActivity(
+	const FElysiumLocomotionSample& InSample) const
+{
+	using namespace ElysiumActionTables;
+
+	// The branch's reach mirrors `Classify`: water and the committed air phases answer before the
+	// grounded ladder does, and a moving landing falls through to the gait exactly as retail's
+	// phase 8 does. Those arms live in the compact codes and the latch, not in the ladder.
+	if (InSample.Water >= EElysiumWaterLevel::Waist)
+	{
+		return FString();
+	}
+	const bool bMoving = InSample.Speed2D() > Gait.StillSpeed();
+	if (Latch.Phase == EElysiumAirPhase::Leap || Latch.Phase == EElysiumAirPhase::Falling
+		|| (Latch.Phase == EElysiumAirPhase::Landing && !bMoving))
+	{
+		return FString();
+	}
+
+	// The live state the committed rows read. `CombatReady` is the recovered gate on `ACT_AIM` —
+	// armed past `item_w_unarmed`, in stance, not morphed. `Relaxed` is NOT its negation: retail's
+	// relaxed gaits take an active weapon out of stance, so an unarmed or a morphed body in stance
+	// satisfies neither and keeps the plain gait. Morph is Protean's and constant false until that
+	// discipline exists.
+	const bool bArmed = !WeaponClassname.IsEmpty()
+		&& !WeaponClassname.Equals(TEXT("item_w_unarmed"), ESearchCase::IgnoreCase);
+	const bool bMorphed = false;
+	auto State = [&](EPlayerPredicate Predicate, int32 /*Operand*/) -> bool
+	{
+		switch (Predicate)
+		{
+		case EPlayerPredicate::Always:
+			return true;
+		case EPlayerPredicate::Ducking:
+			return InSample.Stance != EElysiumStance::Standing;
+		case EPlayerPredicate::BelowMoveThreshold:
+			return !bMoving;
+		case EPlayerPredicate::AboveGaitThreshold:
+			// The latch already holds retail's own disjunction — realized-or-commanded speed
+			// against the body's walk cell plus one unit — so the ladder and the classifier
+			// cannot come to split the same frame two ways.
+			return Latch.bLastGaitWasRun;
+		case EPlayerPredicate::CombatReady:
+			return bArmed && bCombatStance && !bMorphed;
+		case EPlayerPredicate::Relaxed:
+			return bArmed && !bCombatStance;
+		default:
+			// The gait ladder draws on the six predicates above and nothing else; the rest of
+			// the vocabulary belongs to the compact-code arms, which stay with the latch.
+			return false;
+		}
+	};
+
+	const FPlayerRule* Rule = SelectRule(PlayerGaitLadder(), State);
+	if (Rule == nullptr || Rule->Activity == nullptr)
+	{
+		// The ladder's last row is unconditional, so this is a malformed regeneration rather
+		// than a state. Logged once per body, because a broken table would otherwise warn every
+		// frame; the classifier's answer stands.
+		if (!bWarnedNoGroundActivityRow)
+		{
+			bWarnedNoGroundActivityRow = true;
+			UE_LOG(LogElysiumAnimDriver, Warning,
+				TEXT("'%s': the player gait ladder answered no activity row — the classifier's ")
+				TEXT("answer stands"), *Stem);
+		}
+		return FString();
+	}
+	return FString(Rule->Activity);
+}
+
 float FElysiumAnimationDriver::GaitSpeedForSelection(float MoveYawDegrees) const
 {
 	// Off the projected graph state, which is step 6's single answer over the LOGICAL request — not
@@ -308,6 +388,20 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	Intent.WeaponClassname = WeaponClassname;
 	Intent.ActorState = ActorState;
 	Intent.FormTag = FormTag;
+
+	// LIFE4, Option A — the player's grounded stand/gait comes off the committed retail ladder,
+	// walked live with the combat-stance query. `ACT_AIM` for a combat-ready armed stand, the
+	// plain gaits in stance, the relaxed ones out of it; translation renames per weapon
+	// downstream, so no Combat special case exists anywhere in the chain. Empty means the
+	// grounded branch does not decide this frame and `Classify`'s answer stands (water, air).
+	if (Source == EElysiumAnimSource::Player)
+	{
+		const FString GroundActivity = SelectPlayerGroundActivity(Body);
+		if (!GroundActivity.IsEmpty())
+		{
+			Intent.Activity = GroundActivity;
+		}
+	}
 
 	// The body key, resolved ahead of the request so a body that changed model this frame steers by
 	// its new speeds rather than by one frame of its old ones.

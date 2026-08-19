@@ -5399,7 +5399,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 		return false;
 	}
 
-	TestEqual(TEXT("the input slice defines exactly eight actions"), ActionSet->Actions.Num(), 8);
+	TestEqual(TEXT("the input slice defines exactly ten actions"), ActionSet->Actions.Num(), 10);
 	const FElysiumInputActionDefinition* Move = ActionSet->Find(TEXT("Move"));
 	const FElysiumInputActionDefinition* Look = ActionSet->Find(TEXT("Look"));
 	const FElysiumInputActionDefinition* Jump = ActionSet->Find(TEXT("Jump"));
@@ -5407,7 +5407,11 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	const FElysiumInputActionDefinition* Feed = ActionSet->Find(TEXT("Feed"));
 	const FElysiumInputActionDefinition* Duck = ActionSet->Find(TEXT("Duck"));
 	const FElysiumInputActionDefinition* Camera = ActionSet->Find(TEXT("Camera"));
-	if (!TestTrue(TEXT("Move definition exists"), Move && Move->Action) ||
+	const FElysiumInputActionDefinition* WeaponNext = ActionSet->Find(TEXT("WeaponNext"));
+	const FElysiumInputActionDefinition* WeaponPrev = ActionSet->Find(TEXT("WeaponPrev"));
+	if (!TestTrue(TEXT("WeaponNext definition exists"), WeaponNext && WeaponNext->Action) ||
+		!TestTrue(TEXT("WeaponPrev definition exists"), WeaponPrev && WeaponPrev->Action) ||
+		!TestTrue(TEXT("Move definition exists"), Move && Move->Action) ||
 		!TestTrue(TEXT("Look definition exists"), Look && Look->Action) ||
 		!TestTrue(TEXT("Jump definition exists"), Jump && Jump->Action) ||
 		!TestTrue(TEXT("Use definition exists"), Use && Use->Action) ||
@@ -5442,9 +5446,20 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	// would fire `-togglecamera`, which is not a verb.
 	TestEqual(TEXT("R3 fires the view toggle"), Camera->Command, FString(TEXT("togglecamera")));
 	TestFalse(TEXT("view toggle is not a press/release pair"), Camera->bButtonPair);
+	// The D-pad's weapon cycle fires the same two verbs the mouse wheel does, so the two devices
+	// cannot drift apart: there is one selection authority and both routes reach it by name. Neither
+	// is a pair — a cycle step has no release half, and binding one would fire `-invnext`.
+	TestEqual(TEXT("D-pad right cycles forward"), WeaponNext->Command, FString(TEXT("invnext")));
+	TestEqual(TEXT("D-pad left cycles back"), WeaponPrev->Command, FString(TEXT("invprev")));
+	TestFalse(TEXT("a cycle step is not a press/release pair"), WeaponNext->bButtonPair);
+	TestFalse(TEXT("a cycle step is not a press/release pair"), WeaponPrev->bButtonPair);
+	TestTrue(TEXT("WeaponNext is Boolean"),
+		WeaponNext->Action->ValueType == EInputActionValueType::Boolean);
+	TestTrue(TEXT("WeaponPrev is Boolean"),
+		WeaponPrev->Action->ValueType == EInputActionValueType::Boolean);
 	// Every mapped command names a declared verb, or the button is a no-op that logs nothing. The
 	// leading `+` is stripped first, because a pair's press edge is declared under its bare name.
-	for (const FElysiumInputActionDefinition* Definition : { Jump, Use, Feed, Duck, Camera })
+	for (const FElysiumInputActionDefinition* Definition : { Jump, Use, Feed, Duck, Camera, WeaponNext, WeaponPrev })
 	{
 		const FString Bare = Definition->Command.StartsWith(TEXT("+"))
 			? Definition->Command.Mid(1) : Definition->Command;
@@ -5453,7 +5468,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	}
 
 	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
-	TestEqual(TEXT("seven actions are gameplay-mapped"), Mappings.Num(), 7);
+	TestEqual(TEXT("nine actions are gameplay-mapped"), Mappings.Num(), 9);
 	auto FindMapping = [&Mappings](const UInputAction* Action) -> const FEnhancedActionKeyMapping*
 	{
 		return Mappings.FindByPredicate(
@@ -5466,7 +5481,11 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	const FEnhancedActionKeyMapping* FeedMapping = FindMapping(Feed->Action);
 	const FEnhancedActionKeyMapping* DuckMapping = FindMapping(Duck->Action);
 	const FEnhancedActionKeyMapping* CameraMapping = FindMapping(Camera->Action);
-	if (!TestNotNull(TEXT("Move mapping"), MoveMapping) ||
+	const FEnhancedActionKeyMapping* WeaponNextMapping = FindMapping(WeaponNext->Action);
+	const FEnhancedActionKeyMapping* WeaponPrevMapping = FindMapping(WeaponPrev->Action);
+	if (!TestNotNull(TEXT("WeaponNext mapping"), WeaponNextMapping) ||
+		!TestNotNull(TEXT("WeaponPrev mapping"), WeaponPrevMapping) ||
+		!TestNotNull(TEXT("Move mapping"), MoveMapping) ||
 		!TestNotNull(TEXT("Look mapping"), LookMapping) ||
 		!TestNotNull(TEXT("Jump mapping"), JumpMapping) ||
 		!TestNotNull(TEXT("Use mapping"), UseMapping) ||
@@ -5485,6 +5504,16 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	// movement verb on the movement stick, the view toggle is a camera verb on the camera stick.
 	TestEqual(TEXT("crouch is on L3"), DuckMapping->Key, EKeys::Gamepad_LeftThumbstick);
 	TestEqual(TEXT("the view toggle is on R3"), CameraMapping->Key, EKeys::Gamepad_RightThumbstick);
+	// The D-pad's horizontal axis is the weapon cycle; its vertical half stays free for the
+	// secondary-attack and holster pair the input design gives it.
+	TestEqual(TEXT("the forward cycle is on D-pad right"),
+		WeaponNextMapping->Key, EKeys::Gamepad_DPad_Right);
+	TestEqual(TEXT("the backward cycle is on D-pad left"),
+		WeaponPrevMapping->Key, EKeys::Gamepad_DPad_Left);
+	TestEqual(TEXT("the forward cycle carries no modifier stack"),
+		WeaponNextMapping->Modifiers.Num(), 0);
+	TestEqual(TEXT("the backward cycle carries no modifier stack"),
+		WeaponPrevMapping->Modifiers.Num(), 0);
 	TestEqual(TEXT("L3 carries no modifier stack"), DuckMapping->Modifiers.Num(), 0);
 	TestEqual(TEXT("R3 carries no modifier stack"), CameraMapping->Modifiers.Num(), 0);
 	// **The mapping carries device-frame corrections only.** Every feel term — dead zone,

@@ -281,6 +281,182 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// =====================================================================================
+// The equipment readout and the weapon selector, projected from a real published snapshot
+// rather than from the preview fixture (8.9's selector clause).
+//
+// The peek is a screen state the publisher resolved: the selector is open exactly while
+// `PeekAlpha` is up, and the readout describing the hand stays up either way.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDEquipmentProjectionTest,
+	"Elysium.Substrate.UI.HUDEquipmentProjection",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FElysiumHUDEquipmentProjectionTest::RunTest(const FString&)
+{
+	UElysiumHUDModel* Model = NewObject<UElysiumHUDModel>();
+
+	auto MakeWeapon = [](const TCHAR* Classname, const TCHAR* Label,
+		EElysiumViewWeaponFamily Family, bool bMagazine, int32 Cur, int32 Reserve)
+	{
+		FElysiumInventoryEntryView Entry;
+		Entry.Classname = Classname;
+		Entry.Label = Label;
+		Entry.Family = Family;
+		Entry.bHasMagazine = bMagazine;
+		Entry.AmmoCurrent = Cur;
+		Entry.AmmoReserve = Reserve;
+		return Entry;
+	};
+
+	FElysiumViewState View;
+	View.bPlayerSurface = true;
+	View.Camera.bShowHud = true;
+	View.Equipment.bValid = true;
+	View.Equipment.Entries = {
+		MakeWeapon(TEXT("item_w_tire_iron"), TEXT("Tire Iron"), EElysiumViewWeaponFamily::Melee, false, 0, 0),
+		MakeWeapon(TEXT("item_w_thirtyeight"), TEXT("Colt Police Positive Special"),
+			EElysiumViewWeaponFamily::Firearm, true, 6, 24),
+		MakeWeapon(TEXT("item_w_glock_17c"), TEXT("Glock 17c"), EElysiumViewWeaponFamily::Firearm, true, 0, 3),
+	};
+	View.Equipment.Section = EElysiumInvSection::WeaponRanged;
+	View.Equipment.SelectedIndex = 1;
+	View.Equipment.bEquippedValid = true;
+	View.Equipment.Equipped = View.Equipment.Entries[1];
+
+	// A published equipment view with the peek down: the readout describes the hand, the selector
+	// stays closed.
+	View.Equipment.PeekAlpha = 0.0f;
+	Model->Apply(View);
+	TestTrue(TEXT("the readout is valid from a real snapshot"), Model->Equipment.bValid);
+	TestEqual(TEXT("the readout carries the record's printname"),
+		Model->Equipment.Name.ToString(), FString(TEXT("Colt Police Positive Special")));
+	TestEqual(TEXT("a firearm maps onto the ranged class"),
+		Model->Equipment.WeaponClass, EElysiumWeaponClass::Ranged);
+	TestEqual(TEXT("the loaded magazine reaches the readout"), Model->Equipment.AmmoCurrent, 6);
+	TestEqual(TEXT("the reserve reaches the readout"), Model->Equipment.AmmoReserve, 24);
+	TestEqual(TEXT("the classname stem resolves the exported icon"),
+		Model->Equipment.Icon, ElysiumHUDArt::Inventory(TEXT("weapons_ranged/thirtyeight")));
+	TestEqual(TEXT("a faded peek leaves the selector closed"),
+		Model->Selector.Type, EElysiumHUDSelector::None);
+
+	// The peek up: the selector opens on the same list, at the same index, in the same order.
+	View.Equipment.PeekAlpha = 1.0f;
+	Model->Apply(View);
+	TestEqual(TEXT("the peek opens the weapons selector"),
+		Model->Selector.Type, EElysiumHUDSelector::Weapons);
+	TestTrue(TEXT("cycling shows the three-item peek"), Model->Selector.bBriefMode);
+	TestEqual(TEXT("the selector carries every carried weapon"), Model->Selector.Entries.Num(), 3);
+	TestEqual(TEXT("the selector agrees with the hand"), Model->Selector.SelectedIndex, 1);
+	TestEqual(TEXT("the peek carries the publisher's opacity"), Model->Selector.Alpha, 1.0f);
+	TestEqual(TEXT("a firearm row shows loaded and reserve"),
+		Model->Selector.Entries[1].Detail.ToString(), FString(TEXT("6 / 24")));
+	// A melee weapon authors no magazine, so its row is blank rather than reading `0 / 0`.
+	TestTrue(TEXT("a melee row shows no ammunition at all"),
+		Model->Selector.Entries[0].Detail.IsEmpty());
+	// The alias table: `item_w_glock_17c`'s art is filed as `glock`, which the stem alone misses.
+	TestEqual(TEXT("an aliased classname still resolves its art"),
+		Model->Selector.Entries[2].Icon, ElysiumHUDArt::Inventory(TEXT("weapons_ranged/glock")));
+
+	// A partially faded peek passes its opacity through rather than snapping.
+	View.Equipment.PeekAlpha = 0.4f;
+	Model->Apply(View);
+	TestEqual(TEXT("a fading peek keeps its opacity"), Model->Selector.Alpha, 0.4f);
+
+	// An invalid equipment view — no player, or no catalogue — leaves both regions collapsed. This
+	// is the same "invalid is the contract" rule the disciplines region still runs under.
+	View.Equipment = FElysiumEquipmentView();
+	Model->Apply(View);
+	TestFalse(TEXT("an invalid equipment view collapses the readout"), Model->Equipment.bValid);
+	TestEqual(TEXT("an invalid equipment view closes the selector"),
+		Model->Selector.Type, EElysiumHUDSelector::None);
+
+
+	// --- The stealth readout ------------------------------------------------------------------
+	// Situational: nothing is on screen unless the player is crouched, and each half of the cluster
+	// states its own validity so an unmeasured gauge never renders as a confident zero.
+	{
+		FElysiumViewState Sneak;
+		Sneak.bPlayerSurface = true;
+		Sneak.Camera.bShowHud = true;
+
+		Model->Apply(Sneak);
+		TestFalse(TEXT("standing leaves the stealth cluster down"), Model->Stealth.bSneaking);
+
+		// Crouched, with stealth authority not yet publishing: the cluster is up and the gauge
+		// declares itself unmeasured rather than reading fully lit.
+		Sneak.Stealth.bSneaking = true;
+		Model->Apply(Sneak);
+		TestTrue(TEXT("crouching raises the stealth cluster"), Model->Stealth.bSneaking);
+		TestFalse(TEXT("concealment is unmeasured until it has a producer"),
+			Model->Stealth.bConcealmentValid);
+		TestFalse(TEXT("no observer is published yet"), Model->Stealth.bObserverValid);
+
+		// PP6's committed snapshot, once it lands: the gauge and the observer project verbatim, and
+		// centimetres become metres exactly once.
+		Sneak.Stealth.bConcealmentValid = true;
+		Sneak.Stealth.ConcealmentStep = 3;
+		Sneak.Stealth.bObserverValid = true;
+		Sneak.Stealth.ObserverDistanceCm = 1250.0f;
+		Sneak.Stealth.Detection = EElysiumDetection::Searching;
+		Model->Apply(Sneak);
+		TestTrue(TEXT("a committed gauge projects"), Model->Stealth.bConcealmentValid);
+		TestEqual(TEXT("the concealment step projects verbatim"), Model->Stealth.ConcealmentStep, 3);
+		TestEqual(TEXT("the observer distance converts to metres"),
+			Model->Stealth.ObserverDistanceMetres, 12.5f);
+		TestTrue(TEXT("the detection state maps across"),
+			Model->Stealth.Detection == EElysiumHUDDetection::Searching);
+
+		// A step outside the five exported gauge frames is clamped rather than indexing past the art.
+		Sneak.Stealth.ConcealmentStep = 99;
+		Model->Apply(Sneak);
+		TestEqual(TEXT("an out-of-range step clamps to the last gauge frame"),
+			Model->Stealth.ConcealmentStep, ElysiumHUDArt::ConcealmentSteps - 1);
+	}
+
+	// --- The two standings --------------------------------------------------------------------
+	// Masquerade is a five-mark countdown the sheet stores as violations counting UP, so the marks
+	// still held are `MasqueradeMarks - Masquerade`; the fifth violation ends the run.
+	{
+		FElysiumViewState Standing;
+		Standing.bPlayerSurface = true;
+		Standing.Camera.bShowHud = true;
+		Standing.Vitals.bValid = true;
+		Standing.Vitals.Masquerade = 2;
+		Standing.Vitals.Humanity = 7;
+		Model->Apply(Standing);
+		TestEqual(TEXT("the violation count projects as stored"), Model->Masquerade, 2);
+		TestEqual(TEXT("two violations leave three marks held"),
+			ElysiumHUDArt::MasqueradeMarks - Model->Masquerade, 3);
+		TestEqual(TEXT("Humanity projects for the readout"), Model->Humanity, 7);
+	}
+
+	// The sneak preview carries a measured gauge, because the unmeasured state is what production
+	// already draws and the fixture is the only way to see the finished readout.
+	Model->Apply(FElysiumViewState(), EElysiumHUDPreview::Sneak);
+	TestTrue(TEXT("the sneak preview raises the cluster"), Model->Stealth.bSneaking);
+	TestTrue(TEXT("the sneak preview measures concealment"), Model->Stealth.bConcealmentValid);
+	TestTrue(TEXT("the sneak preview publishes an observer"), Model->Stealth.bObserverValid);
+
+	// The icon join's two branches, asserted directly so the table is a contract rather than a
+	// convenience. `item_w_ithaca_m_37` is the one judgement call in it.
+	TestEqual(TEXT("a melee stem resolves under the melee tree"),
+		ElysiumHUDArt::ItemIcon(TEXT("item_w_tire_iron"), EElysiumWeaponClass::Melee),
+		ElysiumHUDArt::Inventory(TEXT("weapons_melee/tire_iron")));
+	TestEqual(TEXT("bare hands alias onto the fists art"),
+		ElysiumHUDArt::ItemIcon(TEXT("item_w_unarmed"), EElysiumWeaponClass::Unarmed),
+		ElysiumHUDArt::Inventory(TEXT("weapons_melee/fists")));
+	TestEqual(TEXT("the dashed rifle art is reached by alias"),
+		ElysiumHUDArt::ItemIcon(TEXT("item_w_remington_m_700"), EElysiumWeaponClass::Ranged),
+		ElysiumHUDArt::Inventory(TEXT("weapons_ranged/remington_m-700")));
+	// A classname the table has never seen still resolves to a readable icon rather than a hole.
+	TestEqual(TEXT("an unknown stem still names a path"),
+		ElysiumHUDArt::ItemIcon(TEXT("item_w_invented"), EElysiumWeaponClass::Melee),
+		ElysiumHUDArt::Inventory(TEXT("weapons_melee/invented")));
+
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUIRootPushTest,
 	"Elysium.Substrate.UI.CompositionRootPush",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)

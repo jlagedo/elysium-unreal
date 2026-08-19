@@ -316,6 +316,17 @@ struct FElysiumAnimationSelection
 	// What the sequence set was actually chosen for.
 	FString ResolvedActivity;
 	FString WeaponActivity;
+	// The latest CHANGED class/NPC answer — availability rung 2. Empty when no class row rewrote
+	// anything, and empty on the player, whose chain has no class alternation.
+	FString ClassActivity;
+	// Which rung of the weapon ladder answered, 1-based over the rungs declaring the base. Zero
+	// when no rung was playable and the base passed through untranslated — the same answer
+	// retail's own empty table gives.
+	int32 WeaponRung = 0;
+	// Which rung of the cast's four-way availability probe answered — final weapon answer, class
+	// answer, first weapon answer, original request. Zero on the player, who has no probe, and
+	// zero on a request nothing could play.
+	int32 AvailabilityRung = 0;
 
 	// --- Step 4: the model vocabulary -------------------------------------------------------------
 	// The vocabulary key — `walk`, not `walk_0`. This is the key that owns the include-DAG mapping to

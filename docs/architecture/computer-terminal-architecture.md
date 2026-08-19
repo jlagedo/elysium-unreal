@@ -48,11 +48,14 @@ behavior from presentation. In particular:
   prompt, with ordinary target delivery following through the shared event queue;
 - email state remains terminal-local unless `global_email` promotes it to player state.
 
-Open retail questions stay open rather than acquiring guessed behavior. TERM4 now supplies the
-server built-ins and state dispatch, and TERM5 supplies the terminal-specific difficulty,
-password, attempt-counter and deterministic bypass join needed by the tutorial slice. TERM2 still
-gates exact generic use-output ordering and any forced cancellation outside the confirmed active
-alignment body. TERM7 and TERM8 add email and screen-saver detail without changing this
+Open retail questions stay open rather than acquiring guessed behavior. TERM4 supplies the server
+built-ins and state dispatch; TERM5 supplies the terminal-specific difficulty, password,
+attempt-counter and deterministic bypass join; TERM1 supplies the use dispatcher, its 80-unit cosine
+cone and the `0.7` attachment-driven screen-facing gate; TERM3 supplies icon eligibility and the
+stock fallback icon; TERM6 supplies the four sound cue sites; TERM7 supplies the complete email
+state machine; TERM8 supplies the screensaver. What remains open is the identity of the generic use
+outputs around entry and exit, whether death, damage or teardown reach the dispatcher's release
+branch, and the meaning of the two player mode transitions — none of which change this
 architecture.
 
 ## 3. Gameplay authority and session lifetime
@@ -80,6 +83,12 @@ Directory, function and email state are semantic values, not widget selection in
 change increments the session serial or view revision. A request carries both owner and serial; the
 world rejects stale input from a closed or superseded session.
 
+Eligibility reproduces the recovered gate. The interaction query uses an 80-unit reach inside a
+cosine cone, and the terminal's own focus predicate additionally requires the planar dot product
+between the player view and the model's `screen_axis` to exceed `0.7`, both read from the placed
+model's `screen` and `screen_axis` attachments. One predicate serves focus, availability and use-icon
+eligibility, so a terminal shows the stock use icon exactly when it can be used.
+
 Entry uses the existing `+use` focus and explicit-use-session path:
 
 1. the interaction query selects the entity and the world revalidates availability;
@@ -93,8 +102,17 @@ Normal quit, generic use cancellation, loss of eligibility, entity destruction, 
 map teardown and travel all converge on `EndPlayerUseSession`. End is idempotent: the entity clears
 its user, presentation closes, the UI releases its input scope, and the camera handle restores the
 previous view. A terminal session is transient and blocks saving while active; persistent terminal
-and email state serializes only after the session ends. TERM2 supplies any additional faithful
-damage/distance cancellation rule before that rule is implemented.
+and email state serializes only after the session ends.
+
+Retail's only recovered forced exit is the use dispatcher's release branch; it carries no distance
+rule because the session pins the player to the terminal (see §6.2). Death, damage and teardown
+exits are defensive additions on the Unreal side rather than reproductions, and stay that way until
+the corresponding native paths are recovered.
+
+Leaving a password prompt is a session transition, not a command. Retail's router compares `quit`
+against the pending password like any other text, and the prompt is escaped through the dispatcher's
+exit path instead. Escape and the Quit action therefore end the session directly and never enter the
+command router, in any input mode, including while a skill attempt is in flight.
 
 ## 4. Content and command execution
 
@@ -118,6 +136,29 @@ The terminal state machine owns built-ins, navigation, password validation, hack
 function and email actions. A successful Function executes its recovered transaction through the
 one deterministic entity queue. The UI receives only the resulting new view revision; it cannot
 optimistically fire a function or output.
+
+### 4.1 Email state
+
+Email is authority state, not a widget mode. Each terminal carries 128 per-message flags as a
+bitmask of read and deleted, plus the mail-area unlock and attempt count. Opening a message is one
+transaction: render the body, and if it was unread run its `runscript` through the shared script
+seam and then mark it read, so the script runs exactly once and never on list render. A message
+whose dependency fails, or which the player deleted, is absent from the visible list rather than
+shown disabled. The mail area asks for a password only when `email_password` is authored non-empty
+and the terminal is not already unlocked; unlocking persists as saved state. `autodelete` is
+authored in shipped content and read by nothing, so it is not implemented. A `global_email` terminal
+overwrites its local flags from the player record on entry and writes them back on exit, keyed by
+entity name; without `global_email` the flags stay entity-local. The evidence is
+`docs/vtmb/computer-terminals.md` §9.
+
+### 4.2 Terminal audio
+
+The four `soundgroup` cues are authority-side and fire at the recovered sites: `access` once on
+entry, `accept` on entering a directory whether by name or by a successful password or bypass,
+`error` on both a rejected command and every password-prompt render, and `typing` on the
+authority's character echo and on each bypass-buffer refresh. The function executor itself is
+silent. The per-keystroke click is separate and local to the typing player, matching the recovered
+split rather than merging keystroke feedback into the shared group.
 
 ## 5. Presentation contract
 
@@ -160,40 +201,50 @@ Each resolves the current entity session again before acting.
 
 ## 6. Putting the console on the computer screen
 
-### 6.1 Offline screen metadata
+### 6.1 The screen surface
 
-The current terminal models expose their display as a separate material named `screen`. During
-model export, the pipeline gathers the triangles assigned to that material and derives a
-model-local planar surface:
+A terminal model carries its display twice: as a material slot named exactly `screen`, and as the
+`screen` and `screen_axis` attachments that the recovered eligibility gate reads. Both survive the
+export and the bake — the placed-model skeleton keeps the two bones and the mesh keeps the slot — so
+the runtime derives the surface basis from the model it already has:
 
 ```text
-FElysiumTerminalScreenSpec
-    Model key
-    Local centre
-    Local normal
-    Local right / up
-    Half width / half height
-    Fit error and source material
+Screen basis (runtime, model-local, centimetres)
+    Centre      from the screen attachment
+    Normal      from the screen_axis attachment
+    Right / up  from the axis basis
+    Half width / half height  from the screen material section's bounds
 ```
 
-The basis is Unreal-native, in centimetres, and is read verbatim at runtime. The exporter rejects a
-non-planar or degenerate fit instead of inventing axes. Generated metadata remains under
-`$ELYSIUM_EXPORT_ROOT` or `/ElysiumBaked`; it is game-derived and is never tracked. A project-authored
-terminal may provide the same fields from an authored socket/sidecar in the authored-content
-namespace.
+No offline sidecar and no separate export stage participate. The basis is the same data the
+`0.7` facing gate consumes, so eligibility and camera framing can never disagree about where the
+screen is. A project-authored terminal supplies the same two attachments and the same slot name
+from the authored-content namespace.
 
-Content validation requires exactly one usable screen surface and one exact material slot named
-`screen` for every model referenced by a current `prop_hacking`. The material slot is the active
-pixel projection seam; the recovered surface basis is camera-framing metadata. A missing seam fails
-the content test. Runtime emits a warning and closes the attempted session instead of exposing a
-blind input mode or silently placing UI over the whole monitor.
+Content validation requires exactly one exact material slot named `screen` and both attachments for
+every model referenced by a live `prop_hacking`. The material slot is the pixel projection seam; the
+attachments are the geometry. A missing seam fails the content test. At runtime a missing seam is a
+logged error that ends the attempted session, never a blind input mode and never UI placed over the
+whole monitor — and the error names the entity, the model and which of the three parts is absent, so
+the failure is distinguishable from an unavailable terminal.
 
 ### 6.2 Camera framing
 
 Opening the session acquires one handle from `UElysiumCameraService` using the `Focus`/Inspect
 request class. The request targets the transformed screen centre, faces the camera down the screen
 normal, and uses the surface's up vector as camera up. Distance is solved from the screen extents,
-camera FOV and a small safe-frame margin; the player pawn is never translated or rotated.
+camera FOV and a safe-frame margin chosen so the monitor's bezel and part of the physical prop stay
+in frame — the console is read on an object in the world, not on a full-bleed panel.
+
+The faithful behavior is different and is recorded here beside the divergence. Retail's active-use
+maintenance body writes the player's origin and relinks the player at the terminal's aligned use
+position on every tick, so a VtMB terminal session physically moves the pawn to the computer and
+holds it there; that pinning is also why retail needs no distance-cancellation rule
+(`docs/vtmb/computer-terminals.md` §6). This architecture instead leaves the pawn where the player
+left it and moves only the camera. **The divergence is not yet adjudicated**: it stands as the
+current design, and the owner call that would confirm or reverse it is outstanding. Reversing it
+would replace the camera request with a pawn placement and would make the distance question moot in
+the same way retail does.
 
 The terminal request is fixed framing, not free-orbit prop inspect. A camera-channel sweep validates
 the pose. If the target is destroyed, the screen turns away, projection becomes invalid or the
@@ -214,9 +265,9 @@ only the focusable input shell. Fades, loading and system-modal screens continue
 
 `AElysiumMapActor` retains the rendered component that supplied each entity's use anchor, separately
 from any query-only box created for use tracing. The presentation seam resolves that physical
-component by terminal owner. `UElysiumTerminalScreen` requires its exact `screen` material slot,
-allocates a 1024×768 render target, and binds it through a dynamic instance of Unreal's opaque
-Slate pass-through material. It never selects a slot by substring or guesses a new plane.
+component by terminal owner. The presentation requires the exact `screen` material slot, allocates a
+1024×768 render target, and binds it through a dynamic instance of the project's CRT screen
+material. It never selects a slot by substring or guesses a new plane.
 
 The live terminal surface and local draft are retained Slate and are redrawn into that target when
 the authoritative view revision, local text or semantic selection changes. The model's existing UVs
@@ -230,10 +281,34 @@ does not reproduce VtMB's bitmap glyphs, phosphor palette, VGUI chrome or cursor
 come from the fixed render surface, and camera framing is accepted at 1920×1080, 2560×1440 and
 3840×2160 with whole-grid clipping, readable text and no bezel overlap.
 
-On close the same target is redrawn with `TerminalDefinition`'s authored `"screen saver"` label.
-The physical component retains the material instance and target after CommonUI releases its input
-scope, so the monitor does not snap back to a stock texture. A later session replaces that inactive
-surface with a fresh live target. The screensaver has no focus, command or state-machine authority.
+The CRT look lives in the screen material, not in a post-process. A project-authored material
+samples the Slate render target and applies scanlines, a phosphor tint and glow, edge vignetting and
+a slight curvature in UV space, then drives the result as emissive. Keeping the effect inside the
+material that the model's own UVs address means it is bounded to the glass, is lit and occluded like
+the rest of the prop, and cannot leak onto the viewport when another screen is on top. The
+presentation binds the render target through one texture parameter, so the effect is independent of
+everything the terminal draws. This is a Presentation-layer modernization under
+`docs/project/remaster-direction.md`: the monitor the fiction depicts is a CRT, so the treatment
+serves the original direction rather than overriding an artist decision, and it carries no classic
+mode.
+
+### 6.4 Screensaver ownership
+
+The screensaver owns the surface whenever no session does — including before the terminal's first
+use, so an idle computer reads as a working machine rather than as set dressing. Projection
+ownership therefore belongs to the terminal's presentation rather than to the session screen: the
+material instance and render target are established for a live `prop_hacking` and outlive every
+session, and CommonUI releasing its input scope hands the same target back to the screensaver
+instead of destroying it.
+
+The screensaver reproduces the recovered behavior. It reprints `TerminalDefinition`'s authored
+`"screen saver"` label at a row chosen uniformly in `[1, textrows - 1]` and a column bounded by
+`textcolumns - labelLength`, in one of two palette styles chosen at random, clearing the previous
+placement each time. `ss_start` is the idle delay before the first placement and `ss_delay` the
+interval between placements; entering a session cancels the schedule and leaving it re-arms the
+first placement. The label teleports; it does not scroll or bounce. The screensaver has no focus,
+command or state-machine authority, and its placement is authority-side state rather than a local
+animation.
 
 ## 7. Keyboard and mouse
 
@@ -318,10 +393,17 @@ Automated contracts cover:
 - exclusive entry, stale serial rejection, every exit reason and idempotent teardown;
 - line/raw/ack transport, maximum input, directory-key rules and command grammar recovered by TERM4;
 - Function execution order and queued active-user provenance;
-- password and skill-attempt policy recovered by TERM5;
-- per-terminal/global email serialization when TERM7 closes;
+- password and skill-attempt policy, including that Escape and Quit end the session from every input
+  mode and while a skill attempt is in flight;
+- the `0.7` facing gate and the 80-unit reach, at the focus, availability and use-icon boundaries
+  alike;
+- email read/deleted flags, first-open script-once, dependency and deletion filtering, and
+  per-terminal versus `global_email` serialization;
+- screensaver placement bounds, the `ss_start`/`ss_delay` schedule, and cancellation on entry;
+- the four sound cue sites and their silence inside the function executor;
 - keyboard, click and controller-action equivalence at the authoritative state/queue boundary;
-- screen-metadata planarity, exact `screen` slots, render-target projection and bezel clipping;
+- exact `screen` slots and both screen attachments on every model a live `prop_hacking` references,
+  render-target projection and bezel clipping;
 - CommonUI focus, device hot-switch, nested text entry, menu cover/restore and held-key suppression;
 - camera target loss, failed framing, out-of-order modal release and exact previous-view restoration.
 
@@ -337,16 +419,19 @@ diagnostic evidence only.
 
 The implementation lands in slices without splitting authority:
 
-1. apply the recovered TERM4/TERM5 tutorial command/password/skill contract, and close the TERM2
-   entry/forced-cancel cases required by the presented use session;
-2. add the headless `TerminalDefinition` parser, terminal state machine, `hackcmd` adapter and
-   revisioned view with Substrate tests;
-3. prove the `tuthack` Function transaction on the real entity queue;
-4. project the keyboard CommonUI surface through the model's `screen` material, then export
-   screen-surface metadata and add fixed camera framing;
-5. add the semantic action palette, controller navigation and virtual text entry;
-6. run the keyboard and gamepad tutorial acceptance at all three target resolutions.
+1. the `TerminalDefinition` parser, terminal state machine, `hackcmd` adapter and revisioned view,
+   proven headless, with the `tuthack` Function transaction on the real entity queue;
+2. session escape: Escape and Quit end the session from every input mode and during a skill attempt,
+   and a content-load failure is a named error rather than a permanently unusable prop;
+3. the screen basis derived from the model's `screen` and `screen_axis` attachments, feeding both
+   the `0.7` facing gate and the fixed `Focus` camera framing that keeps the bezel in shot;
+4. screensaver ownership of the projection surface, so an unused terminal is live before its first
+   session;
+5. the CRT screen material and the monospace type tokens;
+6. the four authority-side sound cues and the local keystroke click;
+7. email state, including the `global_email` reconciliation;
+8. the semantic action palette, controller navigation and virtual text entry;
+9. keyboard and gamepad tutorial acceptance at all three target resolutions.
 
-TERM7 email completion and the remaining TERM8 moving-screensaver behavior extend the same
-state/view contracts after the tutorial slice. Neither introduces another widget-owned parser,
-command path, camera owner or persistence model.
+Slices 1 through 3 are what the `tuthack` safe transaction requires; the rest complete the terminal
+without introducing another widget-owned parser, command path, camera owner or persistence model.

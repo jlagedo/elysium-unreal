@@ -349,7 +349,13 @@ namespace
 		if (Body == nullptr)
 		{
 			// A bodiless wearer — a headless substrate fixture, or `elysium.NpcBodies 0`. Nothing to
-			// attach geometry to; the equip transaction still completes.
+			// attach geometry to; the equip transaction still completes. Named at Verbose rather than
+			// silently, because a body built OUTSIDE the wearer's own embodiment call (a debug lab
+			// attaching straight to a pawn) reads identically to this ordinary case from here, and the
+			// two are easy to conflate without a line naming which one happened.
+			UE_LOG(LogElysiumWeapon, Verbose,
+				TEXT("%s equipped by %s: no skeletal body to attach the wield model to — deferred"),
+				*Weapon.DebugString(), *Wearer.DebugString());
 			return;
 		}
 
@@ -1062,6 +1068,17 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 {
 	const FElysiumWeaponContext Context = FElysiumWeaponContext::FromCharacter(Victim);
 	const FElysiumDmg& ModeDmg = DamageForMode(ModeIndex);
+
+	// --- The combat-stance clock (`m_flLastCombatAnimTime`) ----------------------------------
+	// A melee-opponent contact holds BOTH bodies in stance for the next five seconds
+	// (`FElysiumCombatCharacter::IsInCombatStance`, the gait ladder's `CombatReady` gate).
+	// Stamped ahead of the margin classifier below, because a blocked or fully soaked contact
+	// is still contact. `World` is non-null here — the caller resolved the victim through it.
+	{
+		const double Now = World->NowSeconds();
+		Attacker.StampMeleeContact(Now);
+		Victim.StampMeleeContact(Now);
+	}
 
 	// --- The opposed record, staged on the DEFENDER ------------------------------------------
 	FElysiumMeleeRoll Roll;

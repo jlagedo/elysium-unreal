@@ -2230,7 +2230,53 @@ namespace
 	};
 	static_assert(UE_ARRAY_COUNT(GItemTypeNames) == (int32)EElysiumItemType::Count,
 		"the item-type mirror must match system/items.txt's ItemTypes block");
+
+	// The same block's own `InventorySection` / `IsWielded` / `IsWorn` columns, one row per type in
+	// the same order. Four types file under a section that is not their own name — `Ammo` under the
+	// undisplayed `None`, and `Money`, `Jewelry` and `Bloodpack` under `Generic` — so the join is
+	// read from here rather than inferred from the type's spelling.
+	struct FItemTypeRow
+	{
+		EElysiumInvSection Section;
+		bool bWielded;
+		bool bWorn;
+	};
+	const FItemTypeRow GItemTypeRows[] = {
+		/* Weapon_Melee   */ { EElysiumInvSection::WeaponMelee,  true,  false },
+		/* Weapon_Firearm */ { EElysiumInvSection::WeaponRanged, true,  false },
+		/* Weapon_Thrown  */ { EElysiumInvSection::WeaponThrown, true,  false },
+		/* Ammo           */ { EElysiumInvSection::None,         false, false },
+		/* Armor          */ { EElysiumInvSection::Armor,        false, true  },
+		/* Money          */ { EElysiumInvSection::Generic,      false, false },
+		/* Jewelry        */ { EElysiumInvSection::Generic,      false, true  },
+		/* Generic        */ { EElysiumInvSection::Generic,      false, false },
+		/* Powerup        */ { EElysiumInvSection::Powerups,     false, false },
+		/* Bloodpack      */ { EElysiumInvSection::Generic,      false, false },
+		/* Hidden         */ { EElysiumInvSection::Hidden,       true,  false },
+	};
+	static_assert(UE_ARRAY_COUNT(GItemTypeRows) == (int32)EElysiumItemType::Count,
+		"the item-type section mirror must match system/items.txt's ItemTypes block");
 }
+
+EElysiumInvSection ElysiumSectionForItemType(EElysiumItemType Type)
+{
+	const int32 Index = (int32)Type;
+	return (Index >= 0 && Index < (int32)EElysiumItemType::Count)
+		? GItemTypeRows[Index].Section : EElysiumInvSection::None;
+}
+
+bool ElysiumItemTypeIsWielded(EElysiumItemType Type)
+{
+	const int32 Index = (int32)Type;
+	return Index >= 0 && Index < (int32)EElysiumItemType::Count && GItemTypeRows[Index].bWielded;
+}
+
+bool ElysiumItemTypeIsWorn(EElysiumItemType Type)
+{
+	const int32 Index = (int32)Type;
+	return Index >= 0 && Index < (int32)EElysiumItemType::Count && GItemTypeRows[Index].bWorn;
+}
+
 
 const TCHAR* ElysiumItemTypeName(EElysiumItemType Type)
 {
@@ -2390,6 +2436,9 @@ bool FElysiumItemTable::ParseText(const FString& Classname, const FString& Text,
 	Out.bPermanentInventory = Data->Bool(TEXT("permanent_inventory"), false);
 	Out.bWieldable = Data->Bool(TEXT("is_wieldable"), false);
 	Out.bVisibleInHud = Data->Bool(TEXT("is_visible_in_hud"), true);
+
+	Out.Bucket = Data->Int(TEXT("bucket"), 0);
+	Out.BucketPosition = Data->Int(TEXT("bucket_position"), 0);
 
 	Out.Worth = Data->Int(TEXT("item_worth"), 0);
 	Out.PlayerSell = Data->Int(TEXT("player_sell"), 0);

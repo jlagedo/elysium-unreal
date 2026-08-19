@@ -132,6 +132,12 @@ namespace
 		Out.WeaponActivity = Translation.WeaponActivity;
 		Out.TranslationIterations = Translation.Iterations;
 		Out.ResolvedActivity = Translation.Resolved;
+		// The remaining hops the walk took (LIFE4): the class answer and the two rungs. Together
+		// with the lines above they are the whole chain a readout renders, so a wrong pose names
+		// the rung that produced it rather than only the final answer.
+		Out.ClassActivity = Translation.ClassActivity;
+		Out.WeaponRung = Translation.WeaponRung;
+		Out.AvailabilityRung = Translation.AvailabilityRung;
 
 		int32 Candidates = 0;
 		FString Label = TryActivity(Catalog, Out.ResolvedActivity, Intent.Variant, Candidates);

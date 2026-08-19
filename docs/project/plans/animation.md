@@ -28,18 +28,6 @@ binding metadata are `docs/architecture/wielded-weapon-integration.md`; the corp
 working tree (leader-pose follower, `(classname, sex)` resolution, the green-room `gr_wield`
 lane); what remains is making it *true*:
 
-- **Weapon-state animation.** Draw/holster, per-weapon idle/walk translation and the aim/attack
-  layer families arm through the table-declared hosts (LIFE2's tables, LIFE0's host rule), so a
-  drawn weapon changes how the body stands and moves, not only what the hand holds. This rung makes
-  the standing-with-weapon call: either the player producer walks `PlayerGaitLadder()` with a live
-  `CombatReady`/`Relaxed` query so a combat-ready stand requests `ACT_AIM`, or the committed 8-row
-  ladder and the 17 compact codes are named beside `Classify` as this rung's, so two artifacts do
-  not both read as the live selector. A corpus case pins the combat arm: a real combatant stem with
-  a drawn glock and `ActorState == Combat` keeps its requested gait untranslated, then takes the
-  weapon ladder only. `FormTag` rides the driver, the intent and the gait key with no writer; a row
-  that reads it is pushed from `SetTranslationContext` in the same change. The translation hops the
-  resolver walked — the class answer, the availability rung, the weapon rung — reach the selection
-  record so a readout can show which rung fired.
 - `changball`/`gio_spirit` are thrown projectiles — free-standing actors playing their own
   clips, never attached. The inherited unknowns (no recovered holster-carry state,
   `item_g_stake`'s nulled models, `handleclaws` tracking) stay named in the owning doc and gate
@@ -177,7 +165,9 @@ changes regain a crossfade (the divergence CCC9 recorded).
   playing scene reproduces with its cast outside the camera, and the camera and trigger systems
   have both changed underneath the wiring. The slice re-wires the whole path — actor placement
   at marks, the scene camera, the triggers that start scenes — before any montage-migration work
-  builds on it. (The arbitration slot's claim lifecycle is proven independently of this; a
+  builds on it. A static gap analysis of the whole path — the seam inventory, the divergence
+  timeline, and the ranked gap map — is at
+  <https://claude.ai/code/artifact/c4cd94a9-eb8c-4ce8-bd56-fea738b43ca6>. (The arbitration slot's claim lifecycle is proven independently of this; a
   scene's Scene-band claims submit and release correctly even while the staging is broken.)
   Two known claim-lifecycle edges ride along for this slice: `ReleaseActorClips` early-returns
   when `elysium.SceneActors` is 0, so toggling that cvar mid-scene leaks the scene's claim and

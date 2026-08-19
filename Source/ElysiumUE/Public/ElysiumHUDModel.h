@@ -89,6 +89,19 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "HUD")
 	FElysiumHUDSelectorView Selector;
 
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	FElysiumHUDStealthView Stealth;
+
+	// What the player is wearing. Persistent and independent of the browsed category, the way
+	// retail draws the worn clothing beside the meters rather than inside the selector.
+	UPROPERTY(BlueprintReadOnly, Category = "HUD")
+	FElysiumHUDEquipmentView Worn;
+
 	UPROPERTY(BlueprintAssignable, Category = "HUD")
 	FElysiumHUDModelChanged OnChanged;
+
+private:
+	// Fill the equipment readout and the weapon selector from the published snapshot. Both are one
+	// projection so they cannot disagree about what is in hand.
+	void ProjectEquipment(const FElysiumEquipmentView& View);
 };

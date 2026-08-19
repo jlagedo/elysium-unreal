@@ -525,6 +525,17 @@ and emits an `FElysiumAnimationSelection` diagnostic record:
 2. **Choose a base activity.** Locomotion classification operates on the body sample; gameplay
    requests supply attacks, reactions and contextual actions. A direct-sequence request bypasses
    only this and activity translation.
+
+   The player's grounded stand and gait come off the **committed retail gait ladder walked live**
+   (`PlayerGaitLadder()`/`SelectRule` — the rows recovered from the pinned binary fire directly);
+   water, the air phases and the whole cast stay with the hand-written `Classify`, and the
+   live/reference split is declared beside each artifact. The ladder's `CombatReady` is armed past
+   `item_w_unarmed` ∧ `IsInCombatStance()` ∧ ¬morphed (morph constant-false until Protean exists);
+   `Relaxed` is an active weapon with the stance false. The stance clock is written by the melee
+   transaction on both bodies at contact — contact, not outcome — and holds 5 s; it is runtime
+   state, not save-persisted. A combat-ready stand requests `ACT_AIM`, which the weapon tables
+   rename per family; `ACT_AIM` has no compact code, so it projects to graph state `Idle` at
+   stride 0.
 3. **Translate the activity.** Apply the recovered actor/form and weapon tables in their witnessed
    order. Weapon rows remain ordered because a later duplicate-base row is a model-availability
    fallback. Retain the authored `required` bit as provenance and a diagnostic only: the pinned

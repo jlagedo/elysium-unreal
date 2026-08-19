@@ -40,10 +40,17 @@ def load_rows():
     # as keyboard and console input. Duck and Camera are the two stick clicks: neither is held while
     # the same stick is being used, so they remain one-shot toggles (`+duck` is normalized by the
     # router's toggle policy, and `togglecamera` is intrinsically one-shot).
-    if ids != ["Move", "Look", "MouseLook", "Jump", "Use", "Feed", "Duck", "Camera"]:
+    #
+    # WeaponNext/WeaponPrev are the D-pad's weapon cycle. They carry no keyboard default because the
+    # mouse wheel and the bracket keys already fire the same `invnext`/`invprev` verbs; the gamepad
+    # is the device that had no route to them at all.
+    expected = [
+        "Move", "Look", "MouseLook", "Jump", "Use", "Feed", "Duck", "Camera",
+        "WeaponNext", "WeaponPrev",
+    ]
+    if ids != expected:
         raise RuntimeError(
-            "the input slice must contain exactly Move, Look, MouseLook, Jump, Use, Feed, Duck and Camera; got %r"
-            % ids
+            "the input slice must contain exactly %s; got %r" % (", ".join(expected), ids)
         )
     return rows
 

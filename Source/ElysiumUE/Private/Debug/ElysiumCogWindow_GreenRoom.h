@@ -132,6 +132,11 @@ private:
 	FString LastError;
 	FString LastNotice;
 
+	// Arena navigation pins (drive/arena's own, `RenderDrive`'s arena branch): the name field a
+	// dropped pin takes, and the loop checkbox a panel-started `gr_walk` reads.
+	FString PendingPinName;
+	bool bArenaWalkLoop = false;
+
 	// Whether the two fields above are still mirroring the stage or have been steered by hand. Set
 	// by the first typed character, list click or Stand, and never cleared: once someone has picked
 	// a model, the window must stop overwriting what they picked.

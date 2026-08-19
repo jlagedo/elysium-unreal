@@ -212,6 +212,8 @@ private:
 // The catalogue -> class-registry install
 // ============================================================================================
 
+struct FElysiumEquipmentView;
+
 namespace ElysiumItems
 {
 	// Make `Table` the item data in force and register one entity class per definition. Idempotent
@@ -233,4 +235,36 @@ namespace ElysiumItems
 	// opened one container through +use; only `Take <slot>` and `Give <slot>` mutate state. Buy/Sell
 	// remain the economy slice and fail closed.
 	bool ExecuteBarter(FElysiumEntityWorld& World, const FString& Args);
+
+	// --- Inventory selection (8.9's selector, LIFE4's missing `SetActiveWeapon` caller) ----------
+	//
+	// Whether a section's selection is held in the hand. The three weapon families are the types
+	// `items.txt` marks `IsWielded` inside a browsable section, so a wielded section commits through
+	// `SetActiveWeapon` and every other section moves `SelectedItem` instead.
+	bool SectionIsWielded(EElysiumInvSection Section);
+
+	// The carried items of one section, in authored selection order — `bucket`, then
+	// `bucket_position`, then classname so records sharing a position stay stable. A record the
+	// catalogue has no row for, and one whose `is_visible_in_hud` is off, are both left out: the
+	// selector shows what the author put in front of the player. An undisplayed section is empty.
+	void CollectSection(const FElysiumCombatCharacter& Char, EElysiumInvSection Section,
+		TArray<FElysiumItem*>& OutItems);
+
+	// `invnext`/`invprev` — step `Delta` places inside the CURRENT section and commit the result.
+	// The list wraps. With no section chosen yet the cursor starts in the one the hand is already
+	// in. Returns whether anything was committed.
+	bool CycleSelection(FElysiumEntityWorld& World, int32 Delta);
+
+	// `slotN` — move the cursor to a section and select inside it. Repeating the verb while already
+	// in that section advances within it, which is what the retail category keys do.
+	bool SelectSection(FElysiumEntityWorld& World, EElysiumInvSection Section);
+
+	// `lastinv` — return to the weapon held before the current one, and to its section with it. No
+	// remembered weapon, or one no longer carried, leaves the hand alone.
+	bool SelectLastWeapon(FElysiumEntityWorld& World);
+
+	// Project the player's inventory for presentation — the weapon in hand, what is worn, and the
+	// browsed section's rows. Fills `bValid` false when there is no player or no catalogue;
+	// `PeekAlpha` is the publisher's and is not written here.
+	void BuildInventoryView(const FElysiumEntityWorld& World, FElysiumEquipmentView& Out);
 }
