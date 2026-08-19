@@ -50,7 +50,6 @@
 #include "Visual/ElysiumExpressionTable.h"
 
 #include "Components/SkeletalMeshComponent.h"
-#include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -444,7 +443,7 @@ public:
 		if (Name.Equals(TEXT("Player"), ESearchCase::IgnoreCase)
 			|| Name.Equals(TEXT("!player"), ESearchCase::IgnoreCase))
 		{
-			return reinterpret_cast<FElysiumEntity*>(World->FindPlayer());
+			return World->FindPlayer();
 		}
 		if (Name.Equals(TEXT("!playercontroller"), ESearchCase::IgnoreCase))
 		{
@@ -737,7 +736,7 @@ public:
 			{
 				continue;   // VtMB walks the NPC list, not every entity
 			}
-			if (World->FindPlayer() == reinterpret_cast<FElysiumPlayer*>(E))
+			if (World->FindPlayer() == E)
 			{
 				continue;
 			}
@@ -1243,7 +1242,7 @@ public:
 			const float Offset = FMath::Max(0.f, *Restored);
 			RestoredVoiceOffsets.Remove(Index);
 			return Offset;
-	}
+		}
 		return FMath::Max(0.f, SceneTime - Event.StartTime);
 	}
 
