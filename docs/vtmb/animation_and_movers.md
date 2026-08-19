@@ -3270,7 +3270,7 @@ player is wanted by police; B.4). `climbable`
 **Outputs**: `OnOpen`/`OnClose`/`OnFullyOpen`/`OnFullyClosed` (doors — 833 on
 `func_door_rotating` alone), `OnPressed` + **`OnIn`/`OnOut`** (buttons — the latter
 arm the `+use` reticle as the look-cursor enters/leaves; not a stock Source output),
-`OnLockedUse`, `OnBlockedClosing`, `OnReachFloorAny`/`OnReachFloorN`,
+`OnBlockedClosing`, `OnReachFloorAny`/`OnReachFloorN`,
 `OnReached`/`OnReachedKeyframe`. **~96 mover outputs carry a field-6 Python payload**
 (`docs/vtmb/entity_io.md`), e.g. `"OnPressed" ",,,0,-1,FindPlayer().ClearActiveDisciplines(),"`.
 
@@ -3292,8 +3292,9 @@ lineage (RTTI-confirmed: `CBaseDoor→CRotDoor`, `CBaseButton→CRotButton`,
   `byte[this+0x81]` since `0x81×4 = 0x204`) both keeps the door open and permits
   re-use mid-motion. Player `+use` opening is gated by the `PUSE` bit `0x100`. Cycle:
   **closed → GoUp (Linear/AngularMove) → HitTop → wait(`wait`s) → GoDown → HitBottom**;
-  `wait -1` disables autoclose. The **locked path** plays the locked/unlocked sound
-  and fires `OnLockedUse`. Blocked-while-closing deals `dmg`, reverses, and fires
+  `wait -1` disables autoclose. The **locked path** plays the locked sound and
+  fires no output (a door has no `OnLockedUse` — that output is `prop_switch`'s;
+  see `docs/vtmb/entity_io.md`). Blocked-while-closing deals `dmg`, reverses, and fires
   `OnBlockedClosing` (`CBaseDoor::Blocked` `FUN_100f14a0`).
   `CBaseDoor::Use` checks `use_override` first: a resolved override receives its normal
   `Use(activator)` with the door as caller exactly once, then the door returns without
@@ -3311,6 +3312,21 @@ lineage (RTTI-confirmed: `CBaseDoor→CRotDoor`, `CBaseButton→CRotButton`,
   lock byte, and makes the use-icon resolver (`FUN_100eedf0`) answer `0x3a` instead of the
   authored `use_icon`/`locked_icon`. Troika's FGD names the key "Block if Wanted":
   *"When player is wanted by cops, this door cannot be open."*
+  **Every `+use` re-derives the toggle state from the door's live body transform**
+  before the open/locked decision (`ResolveToggleStateFromTransform`, vtable slot
+  `+0x3e0`; `CBaseDoor::ResolveToggleStateFromTransform` `FUN_100eff90`,
+  `CRotDoor::ResolveToggleStateFromTransform` `FUN_100f2520`; unconditional, run after
+  the mid-motion self-heal and ahead of the doorknob/locked/activate branch). It reads
+  the live transform — `GetLocalAngles()` for a rotating door, `GetLocalOrigin()` for a
+  sliding one — and if all three components are within `0.001` of the closed endpoint
+  (`m_vecAngle1`/`m_vecPosition1`) it snaps `m_toggle_state` to `AT_BOTTOM (1)`; within
+  `0.001` of the open endpoint (`m_vecAngle2`/`m_vecPosition2`) it snaps to `AT_TOP (0)`;
+  otherwise the state is left mid-motion. `CRotDoor` also calls `ResetBlockedTracking`
+  on a match. The `0.001` per-component tolerance is PE-verified (`_DAT_10454b8c`); its
+  units are degrees for the rotating door and world units for the sliding one. This is
+  why a door whose body never actually moved does not stay stuck believing it is open:
+  the resync re-stamps `AT_BOTTOM` before the admission test, so the following
+  `DoorActivate` sees `AT_BOTTOM` and opens it again.
   **Uncertain**: whether the `Open`/`Close`/`Toggle` inputs pass the same gate — only
   `Use` is traced. Decompiling `LAB_1000ac4f`/`LAB_1000ecd7`/`LAB_100024f0` would settle
   it, and decompiling `FUN_101cebc0` at this call site would recover what the blocked
@@ -3352,14 +3368,64 @@ and lock byte `+0x80c`.
   inputs. Persistence resolves an in-progress move at its requested destination
   in a resting state, matching the mover save policy.
 
+### B.4.2 `func_door_rotating` swings away from the activator [VtMB — decompiled]
+
+A rotating door opens *away* from whoever activated it; the swing direction is not
+fixed. `CRotDoor::Activate` (`FUN_100f2290`) caches two swing reference centres at
+activate time, and `CRotDoor::OpenAwayFromEntity` (`FUN_100f3390`) — reached from
+`CRotDoor::DoorGoUp` (`FUN_100f3030`) when `bResolveSwing != 0` — picks between them at
+open time.
+
+- **The two centres** are each `ComputeSwingData` (`FUN_100f19b0`) evaluated at
+  `±m_vecAngle2` (the open angles): build `AngleMatrix(±m_vecAngle2)` from the Euler open
+  angles, rotate the door's **local** collision OBB's two **opposite** corners
+  (`mins`, `maxs`) by that matrix, take the per-axis min/max of just those two rotated
+  corners, then add the door's local origin (`GetLocalOrigin()`, the hinge). The forward
+  centre uses `+m_vecAngle2`, the back centre `−m_vecAngle2`; each stored centre is the
+  resulting min/max averaged (`(min+max)·0.5`, the `0.5` PE-verified). The sweep rotates
+  only the two opposite corners, not all eight, so the "AABB" is the enclosing box of
+  those two rotated corners, not a true rotated-OBB extent — a faithful reimplementation
+  reproduces this exact two-corner computation, not a correct 8-corner OBB→AABB.
+- **At open time** it takes the activator's world-space centre (activator entity vtable
+  slot `+0x300`, `WorldSpaceCenter`), measures the full 3-D Euclidean distance to each
+  centre, and swings toward the **farther** side: `b = (d1 < d2)` — `d1` to the forward
+  centre, `d2` to the back centre — selects the negated target, so the leaf opens away
+  from the activator. The target angle is `b ? −m_vecAngle2 : +m_vecAngle2`, rotated
+  about the door's local angles at `m_flSpeed` deg/s (default `100.0` when authored `0`).
+  The swing **magnitude** is the `distance` keyvalue in degrees (`m_flMoveDistance`,
+  `+0x4fc`, parsed by `CBaseDoor::KeyValue` `FUN_101c1480`, no engine default), applied
+  about `m_vecMoveAng`.
+- **This resolution runs on the open path only, behind two gates.** `DoorGoUp` reaches
+  `OpenAwayFromEntity` only when `m_hActivator` resolves, `SF_DOOR_ONEWAY (0x10)` is
+  clear, and `bResolveSwing != 0`. A block-reverse uses the fixed forward swing:
+  `CRotDoor::Blocked` (`FUN_100f3900`) is the only caller passing `bResolveSwing == 0`,
+  and it pre-issues its own fixed `AngularMove(+m_vecAngle2)`. A door with the
+  `SF_DOOR_ONEWAY` spawnflag always uses the fixed forward swing regardless of the
+  activator.
+
+**Held divergence — the blocked-latch inversion is not reproduced.** Retail also inverts
+the chosen swing when a prior block armed a latch: `CRotDoor::Blocked` sets a latch byte
+(`+0x655`) when the blocking entity's runtime field `+0x98` is non-zero, and while that
+latch is set `OpenAwayFromEntity` flips the side test from `d1 < d2` to `d2 <= d1`, so
+the next resolution swings toward the side *nearer* the activator. The predicate itself
+(blocker's 32-bit field `+0x98 != 0` ⇒ set latch) is recovered exactly and is
+byte-reproducible, but the **identity** of that blocker `+0x98` field is not statically
+recoverable from the shipped binary — it is a non-saved runtime member absent from the
+`CBaseEntity` datamap, zero-initialised in the base constructor (`FUN_1009d980`) as one
+of the `0x94..0xa0` dword block, with no named setter or accessor in the static image.
+Elysium therefore holds this inversion unreproduced pending live evidence. The hold
+closes with a dynamic (live retail) capture observing which blocker classes set the
+door's `0x655` latch at runtime.
+
 ## B.5 Spawnflag bits [VtMB — decompiled, per-bit confirmed]
 
 Each mover class's `Spawn`/handlers were decompiled and every `m_spawnflags & <mask>`
 test read out; **every spawnflag value observed in the maps reconciles exactly**.
-Bits are VtMB's own (they happen to match early-Source values). Only two bits are
-*not* tested in these entities' own code — door `0x10` and rotating `0x10` — because
-they are consumed elsewhere (NPC door-AI / the spin accel-decel ramp); those stay
-`[inferred]`.
+Bits are VtMB's own (they happen to match early-Source values). Door `0x10`
+(`SF_DOOR_ONEWAY`) is tested in `CRotDoor::DoorGoUp`, where it forces the fixed forward
+swing and skips the activator-relative resolution (B.4.2). Rotating `0x10` is the one
+bit *not* tested in these entities' own code — it is consumed elsewhere (the spin
+accel-decel ramp) — and stays `[inferred]`.
 
 **`func_door` / `func_door_rotating`** (`CBaseDoor::Spawn` `FUN_100ef260`,
 `CRotDoor::Spawn` `FUN_100f1c60`):
@@ -3369,7 +3435,7 @@ they are consumed elsewhere (NPC door-AI / the spin accel-decel ramp); those sta
 | `0x1` | START_OPEN | spawn at open position (`AT_TOP`) |
 | `0x2` | REVERSE | negate movedir (rotating) |
 | `0x8` | PASSABLE | non-solid |
-| `0x10` | ONEWAY | NPC-nav one-way *(inferred — not tested here)* |
+| `0x10` | ONEWAY | forces the fixed forward swing — `CRotDoor::DoorGoUp` skips the activator-relative resolution (B.4.2) |
 | `0x20` | NO_AUTO_RETURN | stay open; allow re-use mid-motion |
 | `0x100` | PUSE | **player `+use` opens** (the dominant door bit) |
 | `0x200` | NONPCS | blocks NPC activators (returns "locked") |

@@ -315,7 +315,7 @@ instead resolves the script's own functions but not the engine globals the scrip
 |---|---|
 | Level-script callback | `PyRun_String` / `PyObject_CallFunction`. **`vampire.dll`** holds the format string **`__main__.%s`** (`0x1055e370`, in the `CEventQueue` dispatch region) — output field 6's `journalPickup()` becomes `__main__.journalPickup()`. (`engine.dll` owns only the VM boot.) |
 | Entity output field 6 | Source's output format is extended from 5 comma fields to **7**; field 6 is a Python call string. 6,956 of 24,081 engine-loaded outputs (29%) carry one — 6,851 fire *only* Python with no I/O target, 105 do both (retail: 1,591 of 16,125, 10%; 1,500 / 91). |
-| `logic_pythoncheck` | `python_script` keyvalue is an expression → `PyRun_String` → `PyObject_IsTrue` → standard `OnTrue`/`OnFalse` I/O. |
+| `logic_pythoncheck` | `python_script` keyvalue is an expression → `PyRun_String(…, Py_eval_input)` → the integer-only condition gate below → standard `OnTrue`/`OnFalse` I/O. |
 | Dialogue | `.dlg` field 4 (condition, eval) and field 5 (action, exec). |
 | Quest completion state | a `CompletionState`'s **`"Event"`** key in `vdata/system/quests_*.txt` — *"script data, such as a flag assignment or a function call, that will be passed to the script interpreter"*. `CVPlayer::SetQuest` runs it with **`PyRun_ConsoleString(src, Py_file_input, __main__.__dict__, __main__.__dict__)`** — so a statement, not an expression, in the same namespace field 6 resolves — traced as `RUNNING PYTHON AT TIME %f: %s` and `PyErr_Print`ed on failure. It fires **after** that state's `AwardMoney` and `AwardXP`, and only when the state actually changed (`docs/vtmb/game_runtime.md` → "Quests"). **No shipped row authors one.** |
 
@@ -324,6 +324,39 @@ new Python call path. They are level-callback and `G`-key vocabulary carried by 
 output record, not new bridge functions, a Python tick or a parallel scheduler. The exhaustive
 names/examples and their manifest are in `docs/vtmb/exported-map-event-surface.md` and its generated
 survey report.
+
+### The Python condition gate — a non-zero integer, not truthiness
+
+A VtMB Python **condition/dependency** gate is true **only** when the evaluated result is a Python
+**integer** with a non-zero value. The engine runs `PyRun_String(expr, Py_eval_input, __main__, __main__)`
+with the result pre-seeded to `0`, then tests `result->ob_type == PyInt_Type` and takes
+`PyInt_AsLong`. A non-integer result — a non-empty string, a list, even the float `1.0` — or an
+error leaves the seed at `0` and reads **false**. This is **not** `PyObject_IsTrue` / general
+Python truthiness, under which a non-empty string or a non-zero float would be true.
+
+One rule, **four surfaces**, all routing through the same helper
+`CDialogDependency::CallPyDialogFunction` (`FUN_100ea2d0`, invoked with `Py_eval_input`) or its
+byte-identical twin, the `logic_pythoncheck` evaluator `FUN_10135290`:
+
+- `logic_pythoncheck`'s `Test` expression;
+- the computer-terminal `dependency` (`FUN_1021bec0` → `FUN_100ea2d0`; see `docs/vtmb/computer-terminals.md`);
+- the `game_sign` / `prop_sign` dependency (`FUN_101d2850`);
+- the `.dlg` col-4 line/choice condition (`CDialogDependency::TestPython` `FUN_100e9ff0` → `FUN_100ea2d0`).
+
+A caller that selects among gated blocks takes the first block whose dependency returns a non-zero
+integer.
+
+Two neighbouring Python paths are **not** this gate and must not be conflated with it:
+
+- the `.dlg` **action** (col 5) runs as statements (`Py_file_input`, mode `0x100`) for side effects
+  only; its return value is **discarded**, with no `ob_type` test at all.
+- the `usescript` line **selector** calls the same helper under `Py_eval_input` but uses the
+  returned integer **directly as the line id to start on**, not as a boolean.
+
+The truth test is the exact `ob_type == PyInt_Type` **identity** check, not `PyInt_Check` — so a
+Python `long` fails it exactly as a string or float does; only a genuine `PyInt` contributes. A
+Python 2.7 `bool` (`ob_type` is `PyBool_Type`, not `PyInt_Type`) fails the identity test too, so
+the reproduction must map all four surfaces through one predicate that resolves this identically.
 
 ### Synchronous calls versus queued Python
 

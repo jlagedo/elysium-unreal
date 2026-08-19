@@ -446,8 +446,10 @@ stride `0x18`. These are command channels, not skill-result tiers.
 
 A `Function` block's integer `trigger` defaults to `-1`. `0x1021b750` matches the command and calls
 dependency evaluator `0x1021bec0`. An empty dependency passes; a non-empty dependency is evaluated
-through `CDialogDependency::CallPyDialogFunc` with the active player, terminal and mode `0x102`.
-A failed dependency returns before function effects.
+through `CDialogDependency::CallPyDialogFunc` (`FUN_100ea2d0`) with the active player, terminal and
+mode `0x102` (`Py_eval_input`). The result passes only as a non-zero Python integer — the terminal
+dependency shares the integer-only condition gate owned by `docs/vtmb/python_bridge.md`, not general
+Python truthiness. A failed or non-integer dependency returns before function effects.
 
 On a passed dependency, executor `0x1021c6d0` performs this order:
 

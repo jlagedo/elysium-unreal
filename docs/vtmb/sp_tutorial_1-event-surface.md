@@ -759,12 +759,13 @@ trace, ground search, collision clearance, nearest-safe fallback, or velocity re
 and controller relationship mirror the write. Several teleports before collision reconciliation
 collapse to the final position.
 
-Retail `vampire.dll` does **not** issue touch callbacks inside `InputTeleport`; the later
-`PhysicsTouchTriggers` path delegates contact ordering through the engine collision-property
-interface. The exact old-end/new-begin callback order below that interface remains unrecovered.
-Elysium's deterministic post-movement rule—old ends, then new begins, entity-index order—is a port
-rule, not retail evidence. Enabling a disabled trigger is separate: rebuilding its overlap links can
-produce a fresh begin while a player is already contained.
+Retail `vampire.dll` does **not** issue touch callbacks inside `InputTeleport`; both the teleported
+entity's stale end and its new begin wait for its next `PhysicsTouchTriggers`. Retail's order there is
+now recovered — the new `StartTouch` fires before the old `EndTouch`, in spatial enumeration order —
+and is owned by `docs/vtmb/entity_io.md`. Elysium reproduces the begin-before-end order and iterates by
+ascending entity index as an owner-accepted deterministic substitute for retail's spatial order.
+Enabling a disabled trigger is separate: rebuilding its overlap links can produce a fresh begin while a
+player is already contained.
 
 ### 11.4 Porch geometry and landing contacts
 

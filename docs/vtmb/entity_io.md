@@ -721,9 +721,34 @@ frees the link directly, **without** `PhysicsRemoveToucher`. The dying entity ne
 `EndTouch`, so a `trigger_once` that removes itself produces no final `OnEndTouch` for occupants
 still standing inside it.
 
-What remains open is only the `engine.dll` half: which pairs the partition enumerates in a given
-frame, and the relative order of old-contact expiry against new-contact begins. Everything after
-`MarkEntitiesAsTouching`/`PhysicsImpact` is settled above.
+### New begins precede old ends within a frame
+
+The `engine.dll` half is recovered. `PhysicsTouchTriggers` calls one `IVEngineServer` slot (122,
+`+0x1e8`), whose wrapper enters the combined relink `FUN_20111f30` (`engine.dll`). That function first
+arms the mover's untouch bookkeeping — `CBaseEntity::SetCheckUntouch(true)`, which bumps `m_touchStamp`
+(`+0x1ac`) — then runs the spatial-partition enumeration and, for each returned pair, calls
+`CServerGameEnts::MarkEntitiesAsTouching` **synchronously** before advancing to the next pair. Per pair
+the two directions are marked `(element → mover)` first, then `(mover → element)`
+(`PhysicsMarkEntitiesAsTouching` calls `PhysicsMarkEntityAsTouched(this, other)` then `(other, this)`).
+
+So a **new** contact's `StartTouch` fires inside the move itself (`PhysicsMarkEntityAsTouched` →
+`PhysicsStartTouch`), while a **stale** contact's `EndTouch` is **deferred**:
+`PhysicsCheckForEntityUntouch` expires every link whose stamp no longer matches, and it is driven by an
+`IGameSystem` `FrameUpdatePostEntityThink` hook that `CServerGameDLL::GameFrame` (`FUN_1011abc0`) runs
+at **step 4** — after the entity-think pass, before `CEventQueue::ServiceEvents` at **step 6**. Both
+edges queue their outputs before that same drain, so **within a frame the new `StartTouch` precedes the
+old `EndTouch`**; with the queue's equal-time FIFO tie-break (see "Output-list and queue order") the end
+edge is the last writer of any state the two handlers share.
+
+The partition enumerates pairs in **spatial BSP-leaf order** with a per-query dedup token — not
+entity-index, spawn, or name order. The exact intra-leaf list order is not recovered; verifying it
+needs three `trigger_multiple` volumes sharing one point, authored in different `.ents` orders across
+map builds and walked into while capturing the `OnStartTouch` firing order.
+
+**Deliberate divergence (owner-accepted):** Elysium reproduces this begin-before-end order and the
+teleport deferral (see "`point_teleport`"), but within each phase it iterates by **ascending entity
+index** as a deterministic substitute for retail's spatial enumeration. No authored map is known to
+depend on the spatial order.
 
 ## Other brush-trigger leaves in the current exports
 
@@ -1133,6 +1158,28 @@ then its own state flips, then `linkedswitch` is set to the same value. `GetUseI
 (`FUN_1020dfc0`) returns `locked_icon` while locked. Spawn (`FUN_1020d850`) spawnflags: `0x2000`
 start activated (skin 1), `0x4000` start locked, `0x8000` skip the `SOLID_BBOX` model-bbox
 collision setup.
+
+## `func_door` / `func_door_rotating` locked I/O
+
+`func_door` is `CBaseDoor` and `func_door_rotating` is `CRotDoor` (which does not override `Use`, so a
+rotating door runs `CBaseDoor::Use`). The door **motion** cycle and spawnflags are owned by
+`docs/vtmb/animation_and_movers.md`; the I/O surface under lock is:
+
+- **`CBaseDoor` has no `OnLockedUse` output.** That output belongs only to `prop_switch` (and
+  `prop_button` carries the analogous `OnPressedLocked`). A locked door fires **no** output in response
+  to a refused use — there is no locked-use output to wire.
+- A direct **`Open`** input on a locked door refuses **silently**: no sound, no output, no motion.
+  (`InputOpen` gates on `!IsDoorLocked(activator)`; that test is doorknob- and NPC-aware, not the raw
+  `m_bLocked` byte. An already-open door refuses `Open` silently too.)
+- A **`+use`** on a locked door plays **only** the locked sound (`CBaseDoor::Use` →
+  `PlayDoorSound("locked")` plus the locked noise); no output, no motion.
+- **`Toggle`** on a locked door does **nothing** (`InputToggle` also gates on `!IsDoorLocked`).
+- **`Close`** has **no lock check**: a direct `Close` input closes a locked door. `InputClose` only
+  refuses when the door is already `TS_AT_BOTTOM`.
+
+`Lock` / `Unlock` write `m_bLocked` with no state guard and fire no output. `Open` and `Close` each
+fire their `OnOpen` / `OnClose` twice on an admitted edge — once at the input handler, once again inside
+the motion start.
 
 ## The lockable family (`CBaseLockableEnt` / `CBaseVampireSkillEntity`)
 
@@ -1751,22 +1798,28 @@ string `0x10558f08`) and whose body is a profiler scope push and pop with no wor
 adds nothing: re-establishing the entity's spatial links falls out of `SetAbsOrigin` itself, so
 there is no separate touch re-test in the teleport path.
 
-Touch delivery therefore does not occur inside `InputTeleport`'s event-queue delivery. The transform
-changes immediately; later collision/touch reconciliation reaches the engine collision-property
-interface from `CBaseEntity::PhysicsTouchTriggers`. `vampire.dll` establishes this boundary but not
-the engine-owned ordering of old-contact ends versus new-contact begins. Several teleports before
-that reconciliation collapse observationally to the final containment. A trigger explicitly enabled
-by a later setup event is a different operation: rebuilding its physical touch links can create a
-fresh `StartTouch` after the enabling input.
+Touch delivery therefore does not occur inside `InputTeleport`'s event-queue delivery. Retail's
+`Teleport` and `teleport_player` move the entity through `UTIL_SetOrigin` with `bFireTriggers = false`;
+`point_teleport` writes the transform directly and its trailing relink hook (`FUN_101cf600`,
+`CBaseEntity::Relink`) is empty. Either way `PhysicsTouchTriggers` never runs at teleport time, so the
+teleported entity fires **no** touch callbacks and arms **no** untouch. There is no solid-flags window —
+retail never clears `FSOLID_NOT_SOLID` around the move (that SDK-2013 mechanism is not in the 2004
+binary). Both the entity's stale `EndTouch` and its new `StartTouch` wait for its **next**
+`PhysicsTouchTriggers` — for a player, its next movement/physics step — where the begin-before-end order
+recovered under "The touch dispatch path" then applies unchanged. Several teleports before that
+reconciliation collapse observationally to the final containment. A trigger explicitly enabled by a
+later setup event is a different operation: rebuilding its physical touch links can create a fresh
+`StartTouch` after the enabling input.
 
 The faithful runtime caches live origin and all Source angles in the late entity-activation pass,
 after the frozen player placement has been synchronized into `!player`. It preserves that cache in
 map snapshots, resolves `!activator` only when the input arrives, refuses parented targets, and
 applies position plus angles as one body update. The logical player's `origin` is Source feet and
 its `angles` are the complete Source view; the Unreal body owns the one feet-to-centre conversion,
-body yaw, and full controller view. Its post-movement containment diff deliberately orders all old
-ends before all new begins, then orders by stable entity index; that is an Unreal determinism rule,
-not a recovered claim about the opaque retail engine callback order. Initial map containment remains an activation transaction:
+body yaw, and full controller view. Its post-movement containment diff reproduces retail's recovered
+begin-before-end order (see "The touch dispatch path") and then orders by stable entity index — a
+deterministic substitute for retail's spatial (BSP-leaf) enumeration, marked as an owner-accepted
+divergence. Initial map containment remains an activation transaction:
 place and freeze the pawn, synchronize and activate entities, open the entity world, reconcile
 containment immediately, then run the frozen think/event pass.
 

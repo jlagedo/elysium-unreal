@@ -224,9 +224,10 @@ entity cycles remain capable of this failure.
 The queue is serviced even when `GameFrame(simulating)` is false; that flag limits the earlier
 entity-think walk, not step 6. Deadlines still use game `curtime`: host time scaling changes their
 real-time duration, and a global pause that stops `curtime` freezes them. Enqueue also guards a
-backward clock jump: if current `curtime` is below the last observed enqueue time, the new deadline
-is shifted forward by `(lastCurtime - curtime) + 0.01` rather than being inserted spuriously in the
-past. Pending entries themselves are save/restore state.
+backward clock jump (`CEventQueue::AddEvent`, `vampire.dll FUN_100ce210`): if current `curtime` is
+below the last observed enqueue time, the new deadline is shifted forward by
+`(lastCurtime - curtime) + 0.005` rather than being inserted spuriously in the past — distinct from
+`logic_relay`'s separate 0.001 re-fire lockout. Pending entries themselves are save/restore state.
 
 **The Python "tick point" for a port:** drain this single time-ordered event queue inside the server
 step, evaluating any script/I/O entry whose time is at or before current game time. Everything else
@@ -1378,6 +1379,15 @@ lufang.dlg id322 link=331 Persuasion 7 & pc.humanity >= 5
 ji.dlg     id323 link=331 Intimidate 7 & G.Patch_Plus == 1
 doll1.dlg  id2  link=151  Seduction 3 & OneOfSet(1,4)      # 1-of-4 random variant
 ```
+
+A col-4 condition, whatever its `dlgexpr` shape, is evaluated as a Python expression and gates the
+line **true only for a non-zero integer result** — the same integer-only Python-gate truth rule
+`docs/vtmb/python_bridge.md` owns (a truthy string, list, float, or `None` all read false; an error
+reads false). This one rule governs every col-4 availability gate identically: PC-choice rows,
+NPC-line rows, and the `starting condition` sentinel rows resolved by `GetStartingLine`. Two
+neighbouring `.dlg` Python paths are **not** this boolean gate: the col-5 **action** runs for its
+side effects with the return value discarded, and the NPC `usescript` **selector** uses its returned
+integer directly as a line id.
 
 Actions (col 5, and NPC col 4) run against the live `__main__`:
 `npc.SetDisposition("lay", 1)`, `pc.SetQuest("Mercurio", 2)`, `G.Mercurio_Know = 1`,
