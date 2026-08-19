@@ -9,6 +9,7 @@
 
 #include "ElysiumPlayer.h"
 
+#include "ElysiumCameraSolve.h"        // ElysiumCam::CameraClass — the equipped camera publication
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -21,7 +22,7 @@
 #include "Substrate/ElysiumDisciplines.h"    // Cycle 9 — the interruption + teardown entries
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
 #include "Substrate/ElysiumGameSound.h"     // the sound-event bus + its category names
-#include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's entity parameter
+#include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's parameter, the equipped item's record
 #include "Substrate/ElysiumLaw.h"           // Cycle 11b — FireWorldEvent, the `events_world` bus
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -402,6 +403,44 @@ void FElysiumCombatCharacter::InputInventoryRemove(const FElysiumInputArgs& Args
 		return;
 	}
 	Inventory.Detach(*this, *Item);
+}
+
+void FElysiumCombatCharacter::PublishEquippedCameraClass() const
+{
+	// **Player only.** An NPC drawing a katana does not force the player's camera to third person;
+	// the arbitration is a property of the local player's equipped item and of nothing else.
+	if (!World || !(World->PlayerHandle() == Handle))
+	{
+		return;
+	}
+	IElysiumEmbodiment* Embodiment = World->Embodiment();
+	if (!Embodiment)
+	{
+		return;   // a headless logic world has no camera to arbitrate
+	}
+
+	// An empty hand, an item whose record the rulebook has not loaded, and an authored `noswitch` all
+	// resolve to 0, which is retail's own early-out in `ApplyWeaponCameraPref`.
+	int32 CameraClass = ElysiumCam::CameraClass::None;
+	if (FElysiumEntity* Ent = const_cast<FElysiumEntityWorld*>(World)->Resolve(Inventory.ActiveWeapon))
+	{
+		// `m_hActiveWeapon` is a script-writable handle, so what it names is not guaranteed to be an
+		// item. Checked, not assumed: a blind downcast would read a `camera_class` off whatever object
+		// a level script assigned and arbitrate the player's camera from it.
+		const FElysiumItem* Item = Ent->AsItem();
+		if (!Item)
+		{
+			UE_LOG(LogElysiumItem, Warning,
+				TEXT("m_hActiveWeapon on %s names %s, which is not an item; the equipped camera class "
+				     "resolves to none"),
+				*World->DescribeHandle(Handle), *World->DescribeHandle(Inventory.ActiveWeapon));
+		}
+		else if (const FElysiumItemDef* Record = Item->Data())
+		{
+			CameraClass = Record->CameraClass;
+		}
+	}
+	Embodiment->SetEquippedCameraClass(CameraClass);
 }
 
 // ============================================================================================
