@@ -300,21 +300,20 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	return true;
 }
 
-// Who is allowed to end a clip somebody else armed.
+// Who is allowed to end a clip somebody else armed: the record's arbitration verdict, obeyed here.
 //
 // Every body with a mover publishes a locomotion selection on every anim tick, a standing one
 // included, and a stood body resolves an idle that binds an asset — so a publish that ends the
 // DefaultSlot one-shot whenever it holds an asset ends every clip another owner armed on the frame
-// after it started. What that deletes is the ambient cast's whole stance vocabulary: the schedule
-// arms an idle, a fidget or a stance transition, the next tick kills it with a zero blend, and the
-// schedule re-arms it one clip length later for the life of the map. The body stands still, and the
-// only thing that ever reaches the frame is the single forced evaluation the arm itself performs.
-//
-// The floor asserted here is that a body which is not travelling does not make that claim. It is not
-// the whole answer — a travelling body still takes the pose back from a one-shot, and the answer to
-// that is the channel arbitration slot.
+// after it started. LIFE4's channel arbitration slot decides who wins by priority in the driver
+// and writes the verdict onto the record (`bBasePoseOwned`); the instance's whole job is to obey
+// it. Asserted here on the real generated graph: a yielded publish leaves the clip alone whatever
+// its graph state — an ambient stance holding against a standing body, a scene holding against a
+// TRAVELLING one, which is the half the retired while-locomoting rule got wrong — and a publish
+// that owns the base takes it. The verdict's computation is
+// `Elysium.Substrate.AnimationArbitration`'s.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphIdlePublishTest,
-	"Elysium.Content.GraphOneShotSurvivesIdlePublish", GElysiumMontageSlotFlags)
+	"Elysium.Content.GraphOneShotArbitration", GElysiumMontageSlotFlags)
 bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 {
 	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
@@ -379,7 +378,8 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 	}
 
 	// A resolved locomotion selection with a real asset — the record a body standing still publishes
-	// on every tick of its life.
+	// on every tick of its life — carrying the verdict the driver computed: the ambient claim the
+	// schedule's arm submitted outranks a standing publish, so the base is yielded.
 	FElysiumAnimationSelection Standing;
 	Standing.GraphState = EElysiumGraphState::Idle;
 	Standing.SequenceLabel = Pick.Label;
@@ -387,21 +387,56 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 	Standing.AnimationName = Pick.Label;
 	Standing.AssetKind = EElysiumAnimAssetKind::Sequence;
 	Standing.Outcome = EElysiumAnimOutcome::Resolved;
+	Standing.bBasePoseOwned = false;
+	Standing.BaseHold = TEXT("npc 'stance' (ambient)");
 	FElysiumResolvedAnimation Assets;
 	Assets.Sequence = Pick.Clip;
 
 	Inst->PublishSelection(Standing, Assets);
 	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
-	TestNotNull(TEXT("a standing body's locomotion publish leaves the schedule's clip playing"),
+	TestNotNull(TEXT("a yielded standing publish leaves the schedule's clip playing"),
 		Inst->GetCurrentActiveMontage());
 
-	// The same body, now travelling. Here the publish IS the claim: a walk fan underneath a live
-	// one-shot never reaches the frame, so the body would keep playing its idle while it moves.
+	// The same body, now travelling — and still yielded, which is the verdict a scene's claim
+	// produces against the travel row. The retired rule ended the clip on the graph state alone;
+	// the instance now obeys only the verdict.
 	FElysiumAnimationSelection Travelling = Standing;
 	Travelling.GraphState = EElysiumGraphState::Walk;
 	Inst->PublishSelection(Travelling, Assets);
 	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
-	TestNull(TEXT("and a travelling body's publish takes the base pose back"),
+	TestNotNull(TEXT("a yielded travelling publish leaves the clip playing too"),
+		Inst->GetCurrentActiveMontage());
+
+	// The publish that won the arbitration — the claim expired, was released or was outranked —
+	// takes the base back, travelling or not.
+	FElysiumAnimationSelection Owned = Travelling;
+	Owned.bBasePoseOwned = true;
+	Owned.BaseHold.Reset();
+	Inst->PublishSelection(Owned, Assets);
+	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
+	TestNull(TEXT("and a publish that owns the base takes the pose back"),
+		Inst->GetCurrentActiveMontage());
+
+	// LIFE4, the expiry preempt pinned as deliberate: a one-shot's channel claim holds exactly its
+	// clip's play length, so the frame the driver's expired claim hands the base to a standing
+	// publish (`Elysium.Substrate.AnimationArbitration` pins that timing), the montage has already
+	// completed its own blend-out — there is nothing left for the takeover to cut, which is why the
+	// preempt is invisible on screen.
+	if (!TestTrue(TEXT("the one-shot re-arms for the expiry run"),
+		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds)))
+	{
+		return false;
+	}
+	const int32 LengthFrames =
+		FMath::CeilToInt32(Pick.Clip->GetPlayLength() / FrameSeconds) + 2;
+	EvaluateFrames(Comp, LengthFrames, FrameSeconds, Pose);
+	TestNull(TEXT("a non-looping one-shot has finished its own blend-out by its clip length"),
+		Inst->GetCurrentActiveMontage());
+	// The publish that lands on the expiry frame therefore takes over a channel whose montage is
+	// already gone: a structural no-pop, not a tuned threshold.
+	Inst->PublishSelection(Owned, Assets);
+	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
+	TestNull(TEXT("and the expiry-frame publish has nothing to cut"),
 		Inst->GetCurrentActiveMontage());
 
 	return true;

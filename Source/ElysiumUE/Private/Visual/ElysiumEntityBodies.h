@@ -9,6 +9,7 @@
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumEyeRig.h"
 #include "Visual/ElysiumTextureCache.h"
+#include "UObject/ObjectKey.h"
 #include "ElysiumEntityBodies.generated.h"
 
 class UAnimSequence;
@@ -103,6 +104,9 @@ public:
 		const FString& BankStem, const FString& ClipName);
 	bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
 	void StopCinematicClip(USkeletalMeshComponent* Body);
+	// Give the scene's base-channel claim back without stopping the clip — the crossfade stop path
+	// releases through this so the idle's own claim is not refused by a dead scene's.
+	void ReleaseCinematicClaim(USkeletalMeshComponent* Body);
 	bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const;
 	bool ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
 
@@ -325,6 +329,18 @@ private:
 	bool BindMapMaterials(USkeletalMeshComponent* Comp, const FString& StaticStem);
 	// The manifest record for a prop stem, or null. Shared by the two query members above.
 	const struct FElysiumAnimatedPropEntry* FindAnimatedPropEntry(const FString& Stem) const;
+
+	// LIFE4 — route a channel claim to the driver of the body it is armed on: an NPC motor's driver
+	// through the visual's attach parent, the player's through the owning map actor. A body with no
+	// driver — a green-room stand, a preview, a prop — returns 0, which is a body nothing arbitrates
+	// against rather than a failure. The release mirror answers false for the same bodies.
+	uint32 SubmitBodyAnimRequest(USkeletalMeshComponent* Body,
+		const struct FElysiumAnimationRequest& Request);
+	bool ReleaseBodyAnimRequest(USkeletalMeshComponent* Body, uint32 Handle);
+	// The standing cinematic claims, keyed by body, so `StopCinematicClip` releases the claim its
+	// own `PlayCinematicClip` submitted. A scene-pinned clip has no natural end, so its claim holds
+	// until this map gives it back.
+	TMap<FObjectKey, uint32> CinematicClaims;
 
 	// Publish the selection that stands `Grid` at a point on its axes. Shared by the two grid
 	// members so the record a review body poses from is built in exactly one place.

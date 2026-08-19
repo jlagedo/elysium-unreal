@@ -349,6 +349,13 @@ public:
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) { return false; }
 	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) = 0;
 	virtual void StopCinematicClip(USkeletalMeshComponent* Body) = 0;
+	// Give the scene's base-channel claim back WITHOUT stopping the clip. The stop path that
+	// crossfades into an idle never calls StopCinematicClip — stopping the host first snaps the
+	// pose (see FElysiumAnimating::StopCinematicClip) — yet the idle it crossfades to submits its
+	// own ambient claim, which a scene claim left standing would refuse forever. Every stop path
+	// releases through this; StopCinematicClip also releases, so the reference-pose fallback needs
+	// no second call. Default no-op: an embodiment that arbitrates no channels holds no claim.
+	virtual void ReleaseCinematicClaim(USkeletalMeshComponent* Body) {}
 
 	// The free-run counterpart of SeekCinematicClip, for a caller that phases a clip against the
 	// substrate clock rather than driving it. Seek pins the body at play rate 0 and collapses any

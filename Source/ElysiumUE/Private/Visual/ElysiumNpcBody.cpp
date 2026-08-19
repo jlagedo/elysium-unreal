@@ -100,12 +100,45 @@ void AElysiumNpcBody::SetModelStem(const FString& InStem, USkeletalMeshComponent
 	// A model swap is a new body: the latch, the last request and the previous model's tables all go.
 	AnimDriver->Reset();
 
+	// A clip already playing on the visual predates this driver — `BuildNpcVisual` arms the
+	// disposition idle before the motor exists, so that arm could not claim a slot that was not
+	// there. The body therefore enters arbitration holding the ambient claim its clip stands for;
+	// without it, the first standing publish would own the base and replace the ambient cast's
+	// stance vocabulary with the resolver's generic idle.
+	if (UElysiumBipedAnimInstance* Inst = InVisual
+			? Cast<UElysiumBipedAnimInstance>(InVisual->GetAnimInstance()) : nullptr)
+	{
+		if (Inst->GetCurrentActiveMontage() != nullptr || Inst->GetPlayingClip() != nullptr)
+		{
+			FElysiumAnimationRequest Adopted;
+			Adopted.Source = EElysiumAnimSource::Npc;
+			Adopted.Channel = EElysiumAnimChannel::Base;
+			Adopted.Priority = EElysiumAnimPriority::Ambient;
+			Adopted.Label = TEXT("adopted stand");
+			AnimDriver->SubmitRequest(Adopted);
+		}
+	}
+
 	// The body's authored speeds, resolved the moment it knows which model it wears rather than at
 	// its first animation pass. A patrol or a scripted beat can issue its first travel request in the
 	// same frame this body is built, and that request reads the tables through `GaitSpeed`.
 	UElysiumAnimSubsystem* Anims = GetGameInstance()
 		? GetGameInstance()->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
 	AnimDriver->RefreshGaitSpeeds(Anims);
+}
+
+uint32 AElysiumNpcBody::SubmitAnimRequest(const FElysiumAnimationRequest& Request)
+{
+	// Built on demand: a scripted beat can claim the body in the same frame the motor is built,
+	// ahead of its first animation pass, and a dropped claim there would let the first publish end
+	// the beat's clip.
+	EnsureAnimDriver();
+	return AnimDriver->SubmitRequest(Request);
+}
+
+bool AElysiumNpcBody::ReleaseAnimRequest(uint32 Handle)
+{
+	return AnimDriver.IsValid() && AnimDriver->ReleaseRequest(Handle);
 }
 
 void AElysiumNpcBody::SetOwningEntity(AElysiumMapActor* InMap, const FElysiumEntityHandle& InOwner)

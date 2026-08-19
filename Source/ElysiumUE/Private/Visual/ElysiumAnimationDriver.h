@@ -99,6 +99,42 @@ struct FElysiumAnimationDriver
 	// tables behind it travels at a constant while the body's own cycle authors something else.
 	bool RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims);
 
+	// --- The channel arbitration slot (LIFE4) -------------------------------------------------------
+	// One request slot per channel, written by the action families and read by the arbitration:
+	// each `Tick` ranks the base slot's claim against the locomotion publish's own row of the
+	// priority table and writes the verdict onto the record (`bBasePoseOwned`/`BaseHold`), which is
+	// what the graph obeys — a publish ends a foreign one-shot only where the table says it wins.
+	// This replaces the interim while-locomoting rule, whose behaviour survives as the
+	// Ambient-vs-locomotion rows of the table.
+	struct FElysiumAnimRequestSlot
+	{
+		FElysiumAnimationRequest Request;
+		float AgeSeconds = 0.0f;
+		uint32 Handle = 0;
+		bool bActive = false;
+	};
+	FElysiumAnimRequestSlot Requests[ElysiumAnimIntent::NumChannels];
+	// Handles stay unique for the driver's life so a stale release finds nothing rather than the
+	// claim that replaced its target. Never reset.
+	uint32 RequestSerial = 0;
+
+	// Claim a channel. Replaces the channel's standing claim when the new one ranks at least as
+	// high; a lower-ranked claim is refused (returns 0) so a dialogue stance cannot displace the
+	// scene that owns the body. Returns the non-zero handle that names the claim while it stands.
+	uint32 SubmitRequest(const FElysiumAnimationRequest& Request);
+	// Give a claim back by the handle `SubmitRequest` returned. False when the claim is already
+	// gone — expired, outranked or replaced — which is an ordinary answer, not an error.
+	bool ReleaseRequest(uint32 Handle);
+	// The channel's standing claim, or null. The layer families read their channels through this.
+	const FElysiumAnimationRequest* ActiveRequest(EElysiumAnimChannel Channel) const;
+
+	// Age the slots by one frame and drop expired claims. Split from the verdict because expiry is
+	// time and the verdict is state — `Tick` runs both, in that order.
+	void AdvanceRequests(float DeltaSeconds);
+	// Write the base-channel verdict onto `Selection`. Runs on every `Tick` exit path, because a
+	// claim can expire or be outranked on a frame whose discrete request never moved.
+	void ArbitrateBase();
+
 	// --- The discrete key: what a change of request actually means ---------------------------------
 	FString LastActivity;
 	FString LastStem;

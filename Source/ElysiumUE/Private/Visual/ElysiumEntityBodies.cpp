@@ -7,7 +7,9 @@
 #include "Visual/ElysiumAnimationResolve.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
+#include "Visual/ElysiumNpcBody.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "ElysiumMapActor.h"
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -324,6 +326,47 @@ float UElysiumEntityBodies::ClipFadeSeconds(const FString& Stem, const FString& 
 	return Clip != nullptr ? Clip->FadeSeconds() : UElysiumBodyAnimInstance::DefaultBlendSeconds;
 }
 
+uint32 UElysiumEntityBodies::SubmitBodyAnimRequest(USkeletalMeshComponent* Body,
+	const FElysiumAnimationRequest& Request)
+{
+	if (Body == nullptr)
+	{
+		return 0;
+	}
+	// An NPC visual hangs off its motor's root; the player's hangs off the pawn and routes through
+	// the map actor's own driver. Anything else — a green-room stand, a preview body, a prop — has
+	// no driver publishing locomotion against it, so there is nothing to arbitrate and no claim to
+	// hold: an explicitly optional absence, not a failure.
+	if (AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
+	{
+		return Motor->SubmitAnimRequest(Request);
+	}
+	if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner()); Map != nullptr
+		&& Map->IsPlayerVisual(Body))
+	{
+		return Map->SubmitPlayerAnimRequest(Request);
+	}
+	return 0;
+}
+
+bool UElysiumEntityBodies::ReleaseBodyAnimRequest(USkeletalMeshComponent* Body, uint32 Handle)
+{
+	if (Body == nullptr || Handle == 0)
+	{
+		return false;
+	}
+	if (AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
+	{
+		return Motor->ReleaseAnimRequest(Handle);
+	}
+	if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner()); Map != nullptr
+		&& Map->IsPlayerVisual(Body))
+	{
+		return Map->ReleasePlayerAnimRequest(Handle);
+	}
+	return false;
+}
+
 bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 	const FString& ClipName, bool bLoop, float* OutSeconds)
 {
@@ -365,6 +408,22 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	}
 	UE_LOG(LogElysiumBodies, Verbose, TEXT("clip '%s' on %s (loop=%d, %.3fs)"),
 		*ClipName, *Stem, bLoop ? 1 : 0, Anim->GetPlayLength());
+
+	// LIFE4 — the clip's claim on the base channel. Everything this funnel arms today — the ambient
+	// schedule's stances and fidgets, dialogue line clips, scripted beats still on the adapter — is
+	// the ambient band: it holds the pose against a standing body's every-tick publish and yields
+	// the moment the body travels, which is the priority-table row the interim while-locomoting
+	// rule became. A looping clip holds until replaced or outranked; a one-shot's claim runs its
+	// clip length so an armer that never returns cannot park the channel. LIFE5 producers that
+	// deserve a higher band submit their own claims through the same slot.
+	FElysiumAnimationRequest Claim;
+	Claim.Source = EElysiumAnimSource::Npc;
+	Claim.Channel = EElysiumAnimChannel::Base;
+	Claim.Priority = EElysiumAnimPriority::Ambient;
+	Claim.Label = ClipName;
+	Claim.HoldSeconds = bLoop ? 0.0f : Anim->GetPlayLength();
+	SubmitBodyAnimRequest(Body, Claim);
+
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();
 	Body->SetVisibility(true, true);
@@ -828,6 +887,21 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 	{
 		Body->PlayAnimation(Anim, bLoop);
 	}
+
+	// LIFE4 — the scene's claim on the base channel. A choreographed clip is pinned to scene time
+	// and can be held past its own length, so the claim has no expiry: the scene owns the body until
+	// `StopCinematicClip` gives the claim back, and the every-tick locomotion publish — idle or
+	// travelling — yields to it in between.
+	FElysiumAnimationRequest Claim;
+	Claim.Source = EElysiumAnimSource::Scene;
+	Claim.Channel = EElysiumAnimChannel::Base;
+	Claim.Priority = EElysiumAnimPriority::Scene;
+	Claim.Label = ClipName;
+	if (const uint32 Handle = SubmitBodyAnimRequest(Body, Claim))
+	{
+		CinematicClaims.Add(FObjectKey(Body), Handle);
+	}
+
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();
 	Body->SetVisibility(true, true);
@@ -928,6 +1002,19 @@ void UElysiumEntityBodies::StopCinematicClip(USkeletalMeshComponent* Body)
 	else
 	{
 		Body->Stop();
+	}
+	// The scene gives the base channel back; the next locomotion publish takes the pose again.
+	ReleaseCinematicClaim(Body);
+}
+
+void UElysiumEntityBodies::ReleaseCinematicClaim(USkeletalMeshComponent* Body)
+{
+	// A claim that already lapsed — outranked, released once already, or the driver reset across a
+	// map epoch — releases nothing, which is the ordinary end of a claim rather than a failure.
+	uint32 Handle = 0;
+	if (Body != nullptr && CinematicClaims.RemoveAndCopyValue(FObjectKey(Body), Handle))
+	{
+		ReleaseBodyAnimRequest(Body, Handle);
 	}
 }
 

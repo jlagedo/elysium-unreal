@@ -12,8 +12,9 @@
 // What a body asks the animation layer for, and what it is told back (CCC4).
 //
 // `FElysiumAnimationIntent` in, `FElysiumAnimationSelection` out, over steps 2, 4, 5 and 6 of
-// `docs/architecture/animation-architecture.md` section 3.3. This header owns the pure half: the two
-// records, the locomotion classifier and the jump latch. It reads `FElysiumLocomotionSample` and
+// `docs/architecture/animation-architecture.md` section 3.3. This header owns the pure half: the
+// records (the intent, the channel request and the selection), step 1's priority table, the
+// locomotion classifier and the jump latch. It reads `FElysiumLocomotionSample` and
 // nothing else, so it is asserted with no world, no catalog and no UObject —
 // `Elysium.Substrate.AnimationIntent`, the same pure-rules/engine-half split as `ElysiumMoveSolve.h`
 // and `ElysiumCameraSolve.h`.
@@ -40,8 +41,10 @@ enum class EElysiumAnimSource : uint8
 	Debug,
 };
 
-// Which slot the request owns. Only `Base` is arbitrated today; the rest exist because step 1's
-// priority table is a seam this rung opens rather than invents later.
+// Which slot the request owns. The driver holds one request slot per channel
+// (`FElysiumAnimationRequest`); the base channel's slot is arbitrated against the locomotion
+// publish by the priority table below, and the other channels' slots stand ready for the layer
+// families to read.
 enum class EElysiumAnimChannel : uint8
 {
 	Base,
@@ -49,6 +52,60 @@ enum class EElysiumAnimChannel : uint8
 	UpperBody,
 	Additive,
 	Gesture,
+};
+
+namespace ElysiumAnimIntent
+{
+	// How many channels the slot array carries — one slot per `EElysiumAnimChannel` value.
+	inline constexpr int32 NumChannels = 5;
+}
+
+// Step 1's priority table, whole and in one place: the ORDER of these values IS the table, and a
+// claim owns the base pose exactly while nothing above it asks. The two locomotion rows are the
+// implicit claim every body with a mover publishes each anim tick and are never submitted as
+// requests; everything else is a band a producer writes on its request.
+//
+// The one recovered relationship inside it is Ambient vs the two locomotion rows: an ambient
+// stance, fidget or dialogue clip holds against a standing body's every-tick publish and yields
+// the moment the body travels — which is retail's own observable behaviour for the ambient cast.
+// The rest of the order is ours until capture-verified (`docs/architecture/animation-architecture.md`
+// section 3.3 step 1): a scripted beat outranks travel, a damage reaction outranks a scripted
+// beat, a choreographed scene owns the body outright, and the owner's hand outranks everything.
+enum class EElysiumAnimPriority : uint8
+{
+	// The floor: the locomotion publish of a body that is standing still. Implicit, never submitted.
+	LocomotionIdle = 0,
+	// Ambient stances, fidgets, dialogue line clips — everything the schedule arms on a body that is
+	// otherwise idle.
+	Ambient,
+	// The locomotion publish of a travelling body. Implicit, never submitted.
+	LocomotionTravel,
+	// A scripted beat: scripted_sequence phases, SetAnimation, an interaction's custom move.
+	Scripted,
+	// The damage and combat action families (LIFE5).
+	Reaction,
+	// A choreographed scene, which owns the body outright for its duration.
+	Scene,
+	// The owner's hand — a green-room or debug stand judged over a live body.
+	Debug,
+};
+
+// One producer's claim on a channel, written into the driver's request slot. The request is the
+// discrete half only — who, which channel, at what rank, for how long; the continuous state and
+// the activity resolution stay on the intent, and the slot decides nothing about WHAT plays, only
+// WHO owns the channel while it does.
+struct FElysiumAnimationRequest
+{
+	EElysiumAnimSource Source = EElysiumAnimSource::Npc;
+	EElysiumAnimChannel Channel = EElysiumAnimChannel::Base;
+	EElysiumAnimPriority Priority = EElysiumAnimPriority::Ambient;
+	// What the claim stands for — the clip or activity the producer armed. Diagnostics only: the
+	// record's `BaseHold` line is built from it, so a held pose names its holder.
+	FString Label;
+	// How long the claim stands, seconds. <= 0 holds until released, replaced or outranked — a
+	// looping clip and a scene-pinned one have no natural end; a one-shot passes its clip length so
+	// an armer that never comes back cannot park the channel.
+	float HoldSeconds = 0.0f;
 };
 
 // How the request reached the layer. **These are the producer routes the 22-map corpus actually
@@ -227,6 +284,21 @@ struct FElysiumAnimationSelection
 	EElysiumAnimRoute Route = EElysiumAnimRoute::Activity;
 	uint32 Generation = 0;
 	FString Stem;
+
+	// --- Step 1: the base-channel arbitration verdict ---------------------------------------------
+	// Whether the publish carrying this record owns the base pose. The driver computes it from the
+	// priority table — the locomotion publish's own rank (`LocomotionIdle` standing,
+	// `LocomotionTravel` travelling) against the base slot's active claim — and the graph obeys it:
+	// a publish ends a foreign one-shot or clip only when this is true. Defaults to true because a
+	// record built by hand IS a deliberate stand and takes the pose it publishes.
+	bool bBasePoseOwned = true;
+	// Who holds the base instead, as one readable line ("scene 'jack_wave' (scene)"). Empty while
+	// owned — the record's job is to make a held pose name its holder rather than read as silence.
+	FString BaseHold;
+	// How long the holding claim has stood, seconds. What separates a legitimate hold from a leaked
+	// one on the readouts: a scene mid-performance reads its own running time, a stuck claim only
+	// grows. Zero while owned.
+	float BaseHoldSeconds = 0.0f;
 
 	// --- Steps 2 and 3: the activity chain, one line per witnessed hop ---------------------------
 	// The LOGICAL request, un-translated. Retail's `m_Activity` stays this: translation changes the
@@ -495,6 +567,16 @@ namespace ElysiumAnimIntent
 	const TCHAR* AssetKindName(EElysiumAnimAssetKind Kind);
 	const TCHAR* OutcomeName(EElysiumAnimOutcome Outcome);
 	const TCHAR* AirPhaseName(EElysiumAirPhase Phase);
+	const TCHAR* PriorityName(EElysiumAnimPriority Priority);
+
+	// The band a source's requests take when the producer does not choose one — the table's own
+	// defaults, so a funnel that cannot know its caller still lands on a defensible row.
+	EElysiumAnimPriority DefaultPriority(EElysiumAnimSource Source);
+
+	// The rank of the locomotion publish itself, off the projected graph state: a standing body is
+	// the floor, and anything travelling — a gait, a jump phase — is the travel row. This is the
+	// interim while-locomoting rule restated as two rows of the one table.
+	EElysiumAnimPriority LocomotionPriority(EElysiumGraphState State);
 
 	// Advance the latch by one frame. Pure: previous latch and this frame's sample in, next latch
 	// out, so the whole transition table is asserted without a body.

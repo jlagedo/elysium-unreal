@@ -16,6 +16,7 @@
 #include "Debug/ElysiumLogTap.h"
 #include "ElysiumMapActor.h"
 #include "Visual/ElysiumMapVisuals.h"
+#include "Visual/ElysiumNpcBody.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayer.h"
@@ -512,6 +513,28 @@ namespace ElysiumMcpImpl
 			Out->SetObjectField(TEXT("live_state"), State);
 		}
 
+		// LIFE4 — the base-channel arbitration verdict for a cast body, the same fields
+		// elysium_player_get reports off the player's driver, read off the driver on the body's
+		// motor. An entity with no skeletal body or no motor — a prop, a brush, a green-room
+		// stand — simply has no verdict to report, which is an ordinary absence.
+		if (USkeletalMeshComponent* SkeletalBody = Entity.GetSkeletalBody())
+		{
+			if (const AElysiumNpcBody* Motor =
+				Cast<AElysiumNpcBody>(SkeletalBody->GetAttachParentActor()))
+			{
+				const FElysiumAnimationSelection& Sel = Motor->GetAnimSelection();
+				TSharedRef<FJsonObject> Anim = Obj();
+				Anim->SetStringField(TEXT("activity"), Sel.ResolvedActivity);
+				Anim->SetStringField(TEXT("sequence"), Sel.SequenceLabel);
+				Anim->SetStringField(TEXT("state"),
+					ElysiumAnimGraph::StateName(Sel.GraphState));
+				Anim->SetBoolField(TEXT("base_pose_owned"), Sel.bBasePoseOwned);
+				Anim->SetStringField(TEXT("base_hold"), Sel.BaseHold);
+				Anim->SetNumberField(TEXT("base_hold_seconds"), Sel.BaseHoldSeconds);
+				Out->SetObjectField(TEXT("animation"), Anim);
+			}
+		}
+
 		Out->SetBoolField(TEXT("usable"), Entity.IsUsable());
 		Out->SetNumberField(TEXT("use_icon"), Entity.GetUseIcon());
 		Out->SetBoolField(TEXT("aimed_by_player"), World.GetAimedUsable() == Entity.Handle);
@@ -901,6 +924,11 @@ namespace ElysiumMcpImpl
 						Anim->SetStringField(TEXT("outcome"),
 							ElysiumAnimIntent::OutcomeName(Sel.Outcome));
 						Anim->SetStringField(TEXT("detail"), Sel.Detail);
+						// LIFE4 — the base-channel arbitration verdict, so a held pose names its
+						// holder in the same readout every other selection fact lives in.
+						Anim->SetBoolField(TEXT("base_pose_owned"), Sel.bBasePoseOwned);
+						Anim->SetStringField(TEXT("base_hold"), Sel.BaseHold);
+						Anim->SetNumberField(TEXT("base_hold_seconds"), Sel.BaseHoldSeconds);
 						Body->SetObjectField(TEXT("animation"), Anim);
 					}
 

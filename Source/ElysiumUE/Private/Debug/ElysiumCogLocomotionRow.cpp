@@ -69,6 +69,7 @@ void ElysiumCogLocomotion::SetupColumns()
 	ImGui::TableSetupColumn("Owner bank");
 	ImGui::TableSetupColumn("Asset");
 	ImGui::TableSetupColumn("Outcome");
+	ImGui::TableSetupColumn("Base hold");
 }
 
 // The six selection columns are CCC4's, and `Owner bank` is the one that carries the acceptance
@@ -98,7 +99,7 @@ void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 
 	if (Sel == nullptr)
 	{
-		for (int32 Column = 0; Column < 6; ++Column)
+		for (int32 Column = 0; Column < 7; ++Column)
 		{
 			ImGui::TableNextColumn(); ImGui::TextDisabled("--");
 		}
@@ -130,6 +131,19 @@ void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 	if (!Sel->Detail.IsEmpty() && ImGui::IsItemHovered())
 	{
 		ImGui::SetTooltip("%s", COG_TCHAR_TO_CHAR(*Sel->Detail));
+	}
+
+	// LIFE4 -- the base-channel arbitration verdict. A held frame is correct behaviour that looks
+	// exactly like a stuck pose, so the row has to name the holder rather than leave a reader to
+	// guess which one is on screen.
+	ImGui::TableNextColumn();
+	if (Sel->bBasePoseOwned) { ImGui::TextDisabled("--"); }
+	else
+	{
+		// The age rides beside the holder: a scene mid-performance reads its own running time, a
+		// leaked claim only grows — which is the difference between correct and stuck.
+		ImGui::TextColored(ElysiumCogStyle::ColName, "%s %.1fs",
+			COG_TCHAR_TO_CHAR(*Sel->BaseHold), Sel->BaseHoldSeconds);
 	}
 }
 

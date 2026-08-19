@@ -296,16 +296,17 @@ The ladder:
   named a clip, and the acceptance patrol is `sm_hub_1`'s own cop route walked armed and unarmed at
   the cells its tables author with the selection record in the log
   (`uv run elysium debug cast --sited`; worst intra-row slide under 1 u/s). The base pose has one
-  owner at a time: every body with a mover publishes a locomotion selection each anim tick, so the
-  publish takes the pose back from a one-shot only while the body is locomoting (the floor until
-  LIFE4's arbitration slot decides it by priority), and the bind loads the asset the record names,
+  owner at a time: every body with a mover publishes a locomotion selection each anim tick, LIFE4's
+  arbitration slot decides ownership by priority, and the bind loads the asset the record names,
   warning once per `(stem, request, outcome)` when a request binds nothing.
 - [~] **[LIFE4 Weapons in hands — third person](plans/animation.md)** — corpus, masters and
   `DA_WieldModels` baked; tracking through the prop bone landed: the wield bake re-skins a
   ref-pose-overridden model's geometry into the override frame, and `elysium.gr_wield_check`
   passes mapping, tracking and placement on animated bases through locomotion and a swing, melee
-  and firearm, both sexes; the channel arbitration slot (which every attack and aim path waits
-  on), the equip funnels, visibility and weapon-state animation open.
+  and firearm, both sexes; the channel arbitration slot landed: the driver holds one request slot
+  per channel, arbitrates the base by a typed priority order each tick, and every holder releases
+  on every stop path, with the verdict on the selection record, the Cog row and the MCP surfaces;
+  the equip funnels, visibility and weapon-state animation open.
 - [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — the body-kind chain
   discriminator and the retirement of `PlayNpcActivity` as a second clip picker, then
   flinch/knockback/death, blocked/paired rules, the restart rule, the sequence-event carrier.

@@ -513,6 +513,15 @@ and emits an `FElysiumAnimationSelection` diagnostic record:
    locomotion publish that clears whatever else is playing silently outranks every other channel and
    the ambient, scripted and reaction families cannot hold a frame. A request ends a clip only where
    the table says it wins.
+
+   The priority order is declared once (`EElysiumAnimPriority`, order-is-the-table). Of its rows,
+   only the ambient-versus-locomotion relationship is recovered behaviour; every ranking above it
+   is this project's own pending capture verification, and labelling any of it retail requires that
+   capture. Two rules of the slot are deliberate: an expired claim is no claim — a non-looping
+   claim holds for its clip's play length, so the standing publish that takes over lands
+   structurally after the blend-out — and a holder releases on every stop path (a cinematic stop
+   releases its claim before the idle reset that follows it, through the embodiment seam), so a
+   claim can never outlive its producer.
 2. **Choose a base activity.** Locomotion classification operates on the body sample; gameplay
    requests supply attacks, reactions and contextual actions. A direct-sequence request bypasses
    only this and activity translation.

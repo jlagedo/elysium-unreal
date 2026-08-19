@@ -288,20 +288,16 @@ void UElysiumBipedAnimInstance::PublishSelection(const FElysiumAnimationSelectio
 	// BuildNpcVisual (and every other clip stand) arms a looping one-shot on DefaultSlot so a
 	// freshly stood body is not the bind pose. That slot sits ON TOP of the state machine, so a
 	// walk fan published underneath never reaches the frame — the body keeps playing idle while it
-	// moves. Taking the slot back is therefore correct, but only while this body is actually
-	// travelling.
+	// moves, and a publish that owns the base has to take the slot back.
 	//
-	// **A standing body is not a claim on the base pose.** Every body with a mover publishes a
-	// selection on every anim tick, and a stood one resolves an idle that binds an asset, so an
-	// unconditional end deletes whatever another owner armed on the frame after it started: the
-	// stance and fidget clips the ambient schedule arms, a scripted beat's clip, a reaction. The
-	// gait test is the graph state rather than the asset, because the asset is present either way.
-	//
-	// This is a floor, not the answer. It still ends a one-shot on a body that happens to be
-	// walking, and the answer to that is the channel arbitration slot — a request ends a clip only
-	// where the priority table says it wins (`docs/architecture/animation-architecture.md` §3.3).
-	const bool bLocomoting = Selection.GraphState != EElysiumGraphState::Idle;
-	if (bLocomoting && (PendingSequence != nullptr || PendingBlendSpace != nullptr))
+	// **Who owns the base is the record's arbitration verdict, decided nowhere else.** The driver
+	// ranked its own publish against the base channel's standing claim on the priority table
+	// (`docs/architecture/animation-architecture.md` §3.3 step 1) and wrote the answer; this obeys
+	// it. A publish whose record yielded — an ambient stance holding against a standing body, a
+	// scene holding against a travelling one — leaves the clip alone however the body moves, and a
+	// publish that won ends it. A hand-built record defaults to owning the base, because a debug or
+	// test stand IS a deliberate claim on the pose it publishes.
+	if (Selection.bBasePoseOwned && (PendingSequence != nullptr || PendingBlendSpace != nullptr))
 	{
 		// Only when it actually takes a clip away. The condition above is true on every frame a
 		// selection stays resolved, but StopOneShot nulls the montage, so a live one here is one

@@ -458,6 +458,7 @@ struct FElysiumRecordingServices final
 		return Body != nullptr;
 	}
 	virtual void StopCinematicClip(USkeletalMeshComponent*) override { Record(TEXT("StopCinematicClip")); }
+	virtual void ReleaseCinematicClaim(USkeletalMeshComponent*) override { Record(TEXT("ReleaseCinematicClaim")); }
 
 	// Where each fake body's clip is "at". A test writes an entry to stage drift and reads it back
 	// to see what a resync corrected it to. An ABSENT entry is the ordinary "this body has no anim

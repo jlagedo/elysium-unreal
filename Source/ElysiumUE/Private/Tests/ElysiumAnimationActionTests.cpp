@@ -7,6 +7,10 @@
 #include "ElysiumEntityDefs.h"               // what a map stands each cast body as
 #include "ElysiumGaitSpeeds.h"               // the per-direction speed table (CCC7)
 #include "ElysiumMoveSolve.h"                // the sv_*scale constants and the unit factor
+#include "ElysiumEntityWorld.h"              // the release-on-scene-stop fixture drives a real scene
+#include "ElysiumVariant.h"
+#include "Substrate/ElysiumSceneData.h"      // ElysiumScene::RegisterInline / ClearCache
+#include "Tests/ElysiumTestServices.h"       // FElysiumRecordingServices — the embodiment witness
 #include "Visual/ElysiumActionTables.h"
 #include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumAnimationDriver.h"
@@ -1872,6 +1876,371 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		// would trace a body moving through a frame nothing classified.
 		Driver.Reset();
 		TestEqual(TEXT("a reset forgets the sample with the record"), Driver.Sample.Speed2D(), 0.0f);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// LIFE4 - the channel arbitration slot.
+//
+// Who owns the base pose is a priority decision made in the driver and carried on the record, and
+// every one of its rows is content-free: the locomotion publish's own rank comes off the projected
+// graph state, a claim's off the request a producer wrote, and the verdict is the comparison. The
+// graph merely obeys the verdict (`Elysium.Content.GraphOneShotArbitration` proves that half), so
+// everything decided is asserted here with no catalog and no world.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationArbitrationTest,
+	"Elysium.Substrate.AnimationArbitration", GElysiumAnimationTestFlags)
+bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
+{
+	constexpr float Dt = 1.0f / 60.0f;
+	constexpr float ForwardWalk = 140.0f;
+
+	// --- The table itself: the interim rule is two rows of it, and the bands stack above ----------
+	{
+		using namespace ElysiumAnimIntent;
+		TestEqual(TEXT("a standing publish is the floor"),
+			static_cast<int32>(LocomotionPriority(EElysiumGraphState::Idle)),
+			static_cast<int32>(EElysiumAnimPriority::LocomotionIdle));
+		TestEqual(TEXT("a travelling publish is the travel row"),
+			static_cast<int32>(LocomotionPriority(EElysiumGraphState::Walk)),
+			static_cast<int32>(EElysiumAnimPriority::LocomotionTravel));
+		TestEqual(TEXT("...and so is a jump phase"),
+			static_cast<int32>(LocomotionPriority(EElysiumGraphState::Land)),
+			static_cast<int32>(EElysiumAnimPriority::LocomotionTravel));
+		// The order IS the table: ambient sits between the two locomotion rows — which is exactly
+		// the interim while-locomoting rule — and the action bands stack above travel.
+		TestTrue(TEXT("ambient holds against a standing publish"),
+			EElysiumAnimPriority::Ambient > EElysiumAnimPriority::LocomotionIdle);
+		TestTrue(TEXT("...and yields to a travelling one"),
+			EElysiumAnimPriority::Ambient < EElysiumAnimPriority::LocomotionTravel);
+		TestTrue(TEXT("a scripted beat outranks travel"),
+			EElysiumAnimPriority::Scripted > EElysiumAnimPriority::LocomotionTravel);
+		TestTrue(TEXT("a reaction outranks a scripted beat"),
+			EElysiumAnimPriority::Reaction > EElysiumAnimPriority::Scripted);
+		TestTrue(TEXT("a scene outranks a reaction"),
+			EElysiumAnimPriority::Scene > EElysiumAnimPriority::Reaction);
+		TestTrue(TEXT("and the owner's hand outranks everything"),
+			EElysiumAnimPriority::Debug > EElysiumAnimPriority::Scene);
+		// The default bands a funnel lands on when it cannot know its caller.
+		TestEqual(TEXT("an NPC-sourced claim defaults ambient"),
+			static_cast<int32>(DefaultPriority(EElysiumAnimSource::Npc)),
+			static_cast<int32>(EElysiumAnimPriority::Ambient));
+		TestEqual(TEXT("a scene-sourced claim defaults scene"),
+			static_cast<int32>(DefaultPriority(EElysiumAnimSource::Scene)),
+			static_cast<int32>(EElysiumAnimPriority::Scene));
+		TestEqual(TEXT("a damage-sourced claim defaults reaction"),
+			static_cast<int32>(DefaultPriority(EElysiumAnimSource::Damage)),
+			static_cast<int32>(EElysiumAnimPriority::Reaction));
+	}
+
+	// --- (a) The interim rule, subsumed: ambient vs the two locomotion rows ----------------------
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, 70.0f, 60.0f);
+		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
+
+		// No claim: every publish owns the base, standing or not.
+		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
+		TestTrue(TEXT("an unclaimed base belongs to the locomotion publish"),
+			Driver.Selection.bBasePoseOwned);
+		TestTrue(TEXT("...and names no holder"), Driver.Selection.BaseHold.IsEmpty());
+
+		// The schedule's stance: an ambient claim on a standing body.
+		FElysiumAnimationRequest Stance;
+		Stance.Source = EElysiumAnimSource::Npc;
+		Stance.Channel = EElysiumAnimChannel::Base;
+		Stance.Priority = EElysiumAnimPriority::Ambient;
+		Stance.Label = TEXT("Stance_Neutral_Idle_1");
+		const uint32 Handle = Driver.SubmitRequest(Stance);
+		TestTrue(TEXT("a claim on an open channel is accepted"), Handle != 0);
+
+		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
+		TestFalse(TEXT("a standing publish yields the base to the ambient claim"),
+			Driver.Selection.bBasePoseOwned);
+		TestTrue(TEXT("...and the record names the holder"),
+			Driver.Selection.BaseHold.Contains(TEXT("Stance_Neutral_Idle_1")));
+		TestNotNull(TEXT("...and the slot reads the claim back"),
+			Driver.ActiveRequest(EElysiumAnimChannel::Base));
+
+		// The verdict is continuous: the discrete request never moves, the body simply travels.
+		Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
+		TestTrue(TEXT("a travelling publish takes the base back from the ambient claim"),
+			Driver.Selection.bBasePoseOwned);
+		TestNull(TEXT("...which consumes the claim"),
+			Driver.ActiveRequest(EElysiumAnimChannel::Base));
+		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
+		TestTrue(TEXT("...so standing again does not resurrect it"),
+			Driver.Selection.bBasePoseOwned);
+	}
+
+	// --- (b) A higher band holds against the every-tick publish and releases back ----------------
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, 70.0f, 60.0f);
+		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
+
+		FElysiumAnimationRequest Beat;
+		Beat.Source = EElysiumAnimSource::Scene;
+		Beat.Channel = EElysiumAnimChannel::Base;
+		Beat.Priority = EElysiumAnimPriority::Scene;
+		Beat.Label = TEXT("jack_wave");
+		const uint32 Handle = Driver.SubmitRequest(Beat);
+		TestTrue(TEXT("the scene's claim is accepted"), Handle != 0);
+
+		// Sixty travelling publishes — a full second of the every-tick claim the interim rule let
+		// win — and the scene holds all of them.
+		for (int32 Frame = 0; Frame < 60; ++Frame)
+		{
+			Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
+		}
+		TestFalse(TEXT("a scene claim holds the base against a travelling publish"),
+			Driver.Selection.bBasePoseOwned);
+		TestTrue(TEXT("...naming itself as the holder"),
+			Driver.Selection.BaseHold.Contains(TEXT("jack_wave")));
+
+		// A lower band cannot displace it, and refusing says so by handle.
+		FElysiumAnimationRequest Stance;
+		Stance.Source = EElysiumAnimSource::Npc;
+		Stance.Channel = EElysiumAnimChannel::Base;
+		Stance.Priority = EElysiumAnimPriority::Ambient;
+		Stance.Label = TEXT("Stance_Neutral_Idle_1");
+		TestEqual(TEXT("a dialogue stance cannot displace the scene that owns the body"),
+			Driver.SubmitRequest(Stance), 0u);
+
+		// Released, the very next publish owns the base again.
+		TestTrue(TEXT("the scene gives its claim back by handle"), Driver.ReleaseRequest(Handle));
+		TestFalse(TEXT("...and a second release finds it gone"), Driver.ReleaseRequest(Handle));
+		Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
+		TestTrue(TEXT("a released base goes back to the locomotion publish"),
+			Driver.Selection.bBasePoseOwned);
+	}
+
+	// --- A one-shot's claim runs its clip length rather than parking the channel -----------------
+	// Deliberate divergence from the interim while-locomoting rule, kept on purpose: the sample
+	// here STANDS (an Idle publish) the whole time, and the standing publish still takes the base
+	// the tick the hold crosses its length. `HoldSeconds` is the clip's own play length, so the
+	// montage's blend-out has already completed when the publish lands — the visible outcome is
+	// unchanged, which `Elysium.Content.GraphOneShotArbitration` pins on the real graph.
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+
+		FElysiumAnimationRequest OneShot;
+		OneShot.Source = EElysiumAnimSource::Npc;
+		OneShot.Channel = EElysiumAnimChannel::Base;
+		OneShot.Priority = EElysiumAnimPriority::Ambient;
+		OneShot.Label = TEXT("fidget");
+		OneShot.HoldSeconds = 0.10f;
+		Driver.SubmitRequest(OneShot);
+
+		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
+		TestFalse(TEXT("the one-shot's claim holds while its clip runs"),
+			Driver.Selection.bBasePoseOwned);
+		// Minor-2 pin: the verdict carries the claim's age, so a reader can see how long the
+		// holder has stood.
+		TestTrue(TEXT("...and the verdict carries the claim's age"),
+			Driver.Selection.BaseHoldSeconds > 0.0f);
+		for (int32 Frame = 0; Frame < 4; ++Frame)    // 5 x Dt total ~= 0.083 s, still inside the hold
+		{
+			Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
+		}
+		TestFalse(TEXT("the frame before the hold's length, the claim still holds"),
+			Driver.Selection.bBasePoseOwned);
+		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);   // 6 x Dt = 0.1 s: expiry
+		TestTrue(TEXT("the tick the hold crosses its clip length, a STANDING publish takes the base"),
+			Driver.Selection.bBasePoseOwned);
+		TestNull(TEXT("...and the slot is empty"),
+			Driver.ActiveRequest(EElysiumAnimChannel::Base));
+		TestEqual(TEXT("...and the age reads zero while owned"),
+			Driver.Selection.BaseHoldSeconds, 0.0f);
+	}
+
+	// --- An unexpiring claim's age still runs, so a leaked hold is diagnosable -------------------
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+
+		FElysiumAnimationRequest Scene;
+		Scene.Source = EElysiumAnimSource::Scene;
+		Scene.Channel = EElysiumAnimChannel::Base;
+		Scene.Priority = EElysiumAnimPriority::Scene;
+		Scene.Label = TEXT("entire_scene");
+		Driver.SubmitRequest(Scene);   // HoldSeconds 0: held until released or outranked
+
+		for (int32 Frame = 0; Frame < 60; ++Frame)   // one second held
+		{
+			Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
+		}
+		TestFalse(TEXT("the unexpiring claim holds"), Driver.Selection.bBasePoseOwned);
+		TestTrue(TEXT("...and its age accumulates on the verdict"),
+			Driver.Selection.BaseHoldSeconds > 0.9f);
+	}
+
+	// --- The slot survives nothing it should not: a reset drops the claims ------------------------
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+
+		FElysiumAnimationRequest Beat;
+		Beat.Source = EElysiumAnimSource::Scene;
+		Beat.Channel = EElysiumAnimChannel::Base;
+		Beat.Priority = EElysiumAnimPriority::Scene;
+		Beat.Label = TEXT("held_across_epochs");
+		const uint32 Handle = Driver.SubmitRequest(Beat);
+		Driver.Reset();
+		TestNull(TEXT("a reset drops the standing claims"),
+			Driver.ActiveRequest(EElysiumAnimChannel::Base));
+		TestFalse(TEXT("...and a pre-reset handle releases nothing"),
+			Driver.ReleaseRequest(Handle));
+		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
+		TestTrue(TEXT("...so the next publish owns the base"), Driver.Selection.bBasePoseOwned);
+	}
+
+	// --- A non-base channel stores its claim for the layer families without touching the base -----
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+
+		FElysiumAnimationRequest Aim;
+		Aim.Source = EElysiumAnimSource::Player;
+		Aim.Channel = EElysiumAnimChannel::UpperBody;
+		Aim.Priority = EElysiumAnimPriority::Scripted;
+		Aim.Label = TEXT("aim_layer");
+		const uint32 Handle = Driver.SubmitRequest(Aim);
+		TestTrue(TEXT("an upper-body claim is accepted"), Handle != 0);
+
+		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
+		TestTrue(TEXT("it does not touch the base verdict"), Driver.Selection.bBasePoseOwned);
+		const FElysiumAnimationRequest* Held =
+			Driver.ActiveRequest(EElysiumAnimChannel::UpperBody);
+		if (TestNotNull(TEXT("the layer family reads its channel back"), Held))
+		{
+			TestEqual(TEXT("...as the claim that was written"), Held->Label, FString(TEXT("aim_layer")));
+		}
+	}
+
+	// --- Release on scene stop: EVERY stop path gives the scene's claim back ----------------------
+	// Regression: `FElysiumAnimating::StopCinematicClip` released the embodiment's cinematic claim
+	// only when the idle reset FAILED. With a resolvable idle the Scene claim outlived its scene
+	// and refused every ambient claim after it — the base channel parked forever on a scene no
+	// longer playing. Both stop routes, InputCancel and natural finish, must give the claim back
+	// BEFORE the idle crossfade submits its own.
+	{
+		ElysiumScene::RegisterInline(TEXT("test/arbitration_scene.vcd"), TEXT(
+			"// Choreo version 1\n"
+			"actor \"A\"\n"
+			"{\n"
+			"  channel \"C\"\n"
+			"  {\n"
+			"    event sequence \"body\"\n"
+			"    {\n"
+			"      time 0.000000 4.000000\n"
+			"      param \"some_clip\"\n"
+			"    }\n"
+			"  }\n"
+			"}\n"
+			"fps 60\n"
+			"snap off\n"));
+
+		auto BuildSceneWorld = [](FElysiumEntityWorld& World)
+		{
+			FElysiumEntityDefs Defs;
+			Defs.MapName = TEXT("__arbitration__");
+
+			FElysiumEntityDef Actor;
+			Actor.Classname = TEXT("npc_VHumanCombatant");
+			Actor.TargetName = TEXT("A");
+			Actor.Keys.Add(TEXT("model"), TEXT("models/character/npc/common/male_citizen.mdl"));
+			Defs.Defs.Add(MoveTemp(Actor));
+
+			FElysiumEntityDef Scene;
+			Scene.Classname = TEXT("logic_choreographed_scene");
+			Scene.TargetName = TEXT("scene1");
+			Scene.Keys.Add(TEXT("SceneFile"), TEXT("test/arbitration_scene.vcd"));
+			Scene.Keys.Add(TEXT("BaseAnim"), TEXT("models/cinematic/test_scene.mdl"));
+			Defs.Defs.Add(MoveTemp(Scene));
+
+			World.Load(MoveTemp(Defs));
+			World.Activate(0.0);
+		};
+
+		auto IndexOf = [](const FElysiumRecordingServices& Services, const TCHAR* Prefix)
+		{
+			for (int32 Index = 0; Index < Services.Calls.Num(); ++Index)
+			{
+				if (Services.Calls[Index].StartsWith(Prefix))
+				{
+					return Index;
+				}
+			}
+			return static_cast<int32>(INDEX_NONE);
+		};
+
+		// The cancel route: ReleaseActorClips off InputCancel.
+		{
+			FElysiumRecordingServices Services;
+			Services.bCinematicClipsResolve = true;
+			FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+			BuildSceneWorld(World);
+
+			World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")),
+				FElysiumVariant::Void(), 0.0, {}, {});
+			World.Tick(0.0);
+			World.Tick(0.5);
+			TestTrue(TEXT("the scene's clip is playing on the actor"),
+				Services.Saw(TEXT("PlayCinematicClip")));
+
+			Services.Calls.Reset();
+			World.EnqueueInput(TEXT("scene1"), FName(TEXT("Cancel")),
+				FElysiumVariant::Void(), 0.0, {}, {});
+			World.Tick(1.0);
+			const int32 Release = IndexOf(Services, TEXT("ReleaseCinematicClaim"));
+			const int32 Idle = IndexOf(Services, TEXT("RefreshNpcIdle"));
+			TestTrue(TEXT("Cancel gives the scene's channel claim back"), Release != INDEX_NONE);
+			TestTrue(TEXT("...and still crossfades the actor to its idle"), Idle != INDEX_NONE);
+			TestTrue(TEXT("...with the claim released BEFORE the idle claims the channel itself"),
+				Release != INDEX_NONE && Idle != INDEX_NONE && Release < Idle);
+		}
+
+		// The natural-finish route: the same release when the timeline simply ends.
+		{
+			FElysiumRecordingServices Services;
+			Services.bCinematicClipsResolve = true;
+			FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+			BuildSceneWorld(World);
+
+			World.EnqueueInput(TEXT("scene1"), FName(TEXT("Start")),
+				FElysiumVariant::Void(), 0.0, {}, {});
+			World.Tick(0.0);
+			World.Tick(0.5);
+			TestTrue(TEXT("the scene's clip is playing before the finish"),
+				Services.Saw(TEXT("PlayCinematicClip")));
+
+			Services.Calls.Reset();
+			for (double Step = 1.0; Step < 7.0; Step += 0.5)
+			{
+				World.Tick(Step);
+			}
+			const int32 Release = IndexOf(Services, TEXT("ReleaseCinematicClaim"));
+			const int32 Idle = IndexOf(Services, TEXT("RefreshNpcIdle"));
+			TestTrue(TEXT("a finished scene gives the channel claim back too"), Release != INDEX_NONE);
+			TestTrue(TEXT("...and crossfades the actor to its idle"), Idle != INDEX_NONE);
+			TestTrue(TEXT("...claim first, idle second"),
+				Release != INDEX_NONE && Idle != INDEX_NONE && Release < Idle);
+		}
+
+		ElysiumScene::ClearCache();
 	}
 
 	return true;

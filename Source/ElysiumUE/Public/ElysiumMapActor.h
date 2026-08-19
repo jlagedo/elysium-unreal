@@ -255,6 +255,15 @@ public:
 	// mover instead is describing a frame the record never saw.
 	const FElysiumLocomotionSample& GetPlayerAnimSample() const;
 
+	// LIFE4 — the player half of the channel arbitration slot: claim a channel of the player body's
+	// driver, or give a claim back. Same handle contract as `AElysiumNpcBody`'s pair; the driver is
+	// built on demand so a claim ahead of the first player anim pass is not dropped.
+	uint32 SubmitPlayerAnimRequest(const struct FElysiumAnimationRequest& Request);
+	bool ReleasePlayerAnimRequest(uint32 Handle);
+	// Whether this component is the player pawn's own visual — the body whose channel claims route
+	// to the player driver rather than to an NPC motor's.
+	bool IsPlayerVisual(const USkeletalMeshComponent* Body) const;
+
 	// B7 — the uniform scale a body built for this def takes: the 3D-skybox miniature's scale for
 	// a sky-scope entity (its origin and hulls are already carried through the transform by the
 	// def parser, but a mesh's own size is not a point), 1 for everything else.
@@ -325,6 +334,7 @@ public:
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName) override;
 	virtual bool SeekCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override;
 	virtual void StopCinematicClip(USkeletalMeshComponent* Body) override;
+	virtual void ReleaseCinematicClaim(USkeletalMeshComponent* Body) override;
 	virtual bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const override;
 	virtual bool ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds) override;
 	virtual int32 SetFlexControllers(USkeletalMeshComponent* Body,

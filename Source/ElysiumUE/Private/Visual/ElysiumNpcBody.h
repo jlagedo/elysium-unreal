@@ -83,6 +83,14 @@ public:
 	void GetAnimTranslationContext(FString& OutActorClassname, FString& OutWeaponClassname,
 		EElysiumNpcState& OutActorState) const;
 
+	// LIFE4 — the channel arbitration slot on this body's driver. An action family claims a channel
+	// here; the driver's next anim pass ranks the claim against the locomotion publish and the
+	// record carries the verdict. Builds the driver when the claim arrives ahead of the first anim
+	// pass, so a same-frame scripted beat is not dropped. Handle contract as on the driver: 0 is a
+	// refused claim, and releasing a handle that already lapsed answers false rather than failing.
+	uint32 SubmitAnimRequest(const FElysiumAnimationRequest& Request);
+	bool ReleaseAnimRequest(uint32 Handle);
+
 	// Public so a test can read the declared frame order off the class default.
 	UPROPERTY()
 	FElysiumNpcAnimTickFunction AnimTickFunction;

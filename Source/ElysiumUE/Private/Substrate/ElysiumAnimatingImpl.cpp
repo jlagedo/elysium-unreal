@@ -108,6 +108,11 @@ void FElysiumAnimating::StopCinematicClip()
 	{
 		return;
 	}
+	// The scene's base-channel claim goes back FIRST, on every stop path — cancel and natural
+	// finish both stop through here. The idle below submits its own ambient claim, and a scene
+	// claim left standing would refuse it (and every claim after it) forever, parking the base
+	// channel on a scene that no longer plays.
+	Embodiment->ReleaseCinematicClaim(Visual);
 	// Crossfade out of the cinematic pose; only tear the player down when there is no idle to go to.
 	// Stopping first empties the animation host, which makes the idle behind it SNAP in from nothing
 	// (the host has nothing to blend from, so it treats the idle as a first clip) and discards the

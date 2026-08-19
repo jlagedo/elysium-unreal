@@ -993,6 +993,14 @@ void AElysiumMapActor::StopCinematicClip(USkeletalMeshComponent* Body)
 	}
 }
 
+void AElysiumMapActor::ReleaseCinematicClaim(USkeletalMeshComponent* Body)
+{
+	if (Bodies)
+	{
+		Bodies->ReleaseCinematicClaim(Body);
+	}
+}
+
 bool AElysiumMapActor::GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const
 {
 	return Bodies && Bodies->GetCinematicClipPosition(Body, OutSeconds);
@@ -1330,6 +1338,34 @@ const FElysiumLocomotionSample& AElysiumMapActor::GetPlayerAnimSample() const
 	// and the two are always read together.
 	static const FElysiumLocomotionSample Empty;
 	return PlayerAnimDriver.IsValid() ? PlayerAnimDriver->Sample : Empty;
+}
+
+uint32 AElysiumMapActor::SubmitPlayerAnimRequest(const FElysiumAnimationRequest& Request)
+{
+	if (!PlayerAnimDriver.IsValid())
+	{
+		// The driver is normally built by the first player anim pass; a claim arriving ahead of it
+		// — a scene that opens on the load frame — builds the same driver rather than being dropped.
+		PlayerAnimDriver = MakePimpl<FElysiumAnimationDriver>();
+		PlayerAnimDriver->Source = EElysiumAnimSource::Player;
+	}
+	return PlayerAnimDriver->SubmitRequest(Request);
+}
+
+bool AElysiumMapActor::ReleasePlayerAnimRequest(uint32 Handle)
+{
+	return PlayerAnimDriver.IsValid() && PlayerAnimDriver->ReleaseRequest(Handle);
+}
+
+bool AElysiumMapActor::IsPlayerVisual(const USkeletalMeshComponent* Body) const
+{
+	if (Body == nullptr)
+	{
+		return false;
+	}
+	APawn* Pawn = ResolvePlayerPawn();
+	IElysiumPlayerBody* PlayerBody = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+	return PlayerBody != nullptr && PlayerBody->GetPlayerVisual() == Body;
 }
 
 void AElysiumMapActor::ClearPlayerVisual()

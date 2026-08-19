@@ -179,6 +179,44 @@ const TCHAR* AirPhaseName(EElysiumAirPhase Phase)
 	}
 }
 
+const TCHAR* PriorityName(EElysiumAnimPriority Priority)
+{
+	switch (Priority)
+	{
+	case EElysiumAnimPriority::Ambient:          return TEXT("ambient");
+	case EElysiumAnimPriority::LocomotionTravel: return TEXT("locomotion travel");
+	case EElysiumAnimPriority::Scripted:         return TEXT("scripted");
+	case EElysiumAnimPriority::Reaction:         return TEXT("reaction");
+	case EElysiumAnimPriority::Scene:            return TEXT("scene");
+	case EElysiumAnimPriority::Debug:            return TEXT("debug");
+	default:                                     return TEXT("locomotion idle");
+	}
+}
+
+EElysiumAnimPriority DefaultPriority(EElysiumAnimSource Source)
+{
+	switch (Source)
+	{
+	// The scheduled cast's stances and fidgets — hold against a standing publish, yield to travel.
+	case EElysiumAnimSource::Npc:         return EElysiumAnimPriority::Ambient;
+	case EElysiumAnimSource::Scene:       return EElysiumAnimPriority::Scene;
+	case EElysiumAnimSource::Damage:      return EElysiumAnimPriority::Reaction;
+	case EElysiumAnimSource::Interaction: return EElysiumAnimPriority::Scripted;
+	case EElysiumAnimSource::Debug:       return EElysiumAnimPriority::Debug;
+	// A player action request is a gameplay commitment, not an ambient decoration.
+	default:                              return EElysiumAnimPriority::Scripted;
+	}
+}
+
+EElysiumAnimPriority LocomotionPriority(EElysiumGraphState State)
+{
+	// Idle is the floor; every other projected state — a gait, a jump phase, a landing — is a body
+	// actually doing something, which is exactly the line the interim rule drew and the table keeps.
+	return State == EElysiumGraphState::Idle
+		? EElysiumAnimPriority::LocomotionIdle
+		: EElysiumAnimPriority::LocomotionTravel;
+}
+
 EElysiumWeaponGrip WeaponGrip(const FString& WeaponTag)
 {
 	for (const FElysiumWeaponGripEntry& Entry : GWeaponGrips)

@@ -36,13 +36,6 @@ lane); what remains is making it *true*:
 - **Visibility.** Consume `FElysiumCameraView::bDrawWorldWeapon` (published, currently
   reader-less): suppress submission only — never destroy the attachment or clear a model to
   hide it.
-- **The channel arbitration slot, before any layer is wired.** `FElysiumAnimationIntent` declares
-  the channels and only `Base` is arbitrated; `BuildLocomotionIntent` always writes `Base` and the
-  driver's `Tick` has no request queue, so an attack or aim request has nowhere to go but the base
-  locomotion replacement. The driver takes a request slot the action families write, with a
-  priority order that decides which channel owns the pose — and it replaces LIFE3's interim rule
-  that a locomotion publish only spares a one-shot while the body is not locomoting. Nothing in
-  this rung's attack or aim path lands before it.
 - **Weapon-state animation.** Draw/holster, per-weapon idle/walk translation and the aim/attack
   layer families arm through the table-declared hosts (LIFE2's tables, LIFE0's host rule), so a
   drawn weapon changes how the body stands and moves, not only what the hand holds. This rung makes
@@ -194,6 +187,10 @@ changes regain a crossfade (the divergence CCC9 recorded).
   at marks, the scene camera, the triggers that start scenes — before any montage-migration work
   builds on it. (The arbitration slot's claim lifecycle is proven independently of this; a
   scene's Scene-band claims submit and release correctly even while the staging is broken.)
+  Two known claim-lifecycle edges ride along for this slice: `ReleaseActorClips` early-returns
+  when `elysium.SceneActors` is 0, so toggling that cvar mid-scene leaks the scene's claim and
+  parks the body's base channel; and a body destroyed without a stop leaves its inert
+  `CinematicClaims` entry unswept.
 - **The composition weight, measured.** The four-byte autolayer record carries no weight, ramp
   or flags; the scalar lives in the game DLL and only retail answers it. The move is an
   analysis pass over the **banked** captures, not a new hook: the combine is closed arithmetic,

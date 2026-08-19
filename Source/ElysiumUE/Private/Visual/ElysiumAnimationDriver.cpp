@@ -6,6 +6,8 @@
 #include "Substrate/ElysiumItemClasses.h"   // Inventory.Active() is read for its classname
 #include "Substrate/ElysiumNpc.h"           // the mind's state, which the alert/relaxed branch reads
 
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnimDriver, Log, All);
+
 void FElysiumAnimationDriver::Reset()
 {
 	Latch = FElysiumJumpLatch();
@@ -33,6 +35,129 @@ void FElysiumAnimationDriver::Reset()
 	// And the reference built from them, for the same reason: a threshold left behind by the previous
 	// body would classify the next one against a walk it does not author.
 	Gait = FElysiumGaitReference();
+
+	// The claims go with everything else: a reset is a teleport or a map epoch, and a claim held
+	// across one would let last epoch's scene hold a body it no longer owns. The serial is NOT
+	// reset, so a handle issued before the reset releases nothing rather than a stranger's claim.
+	for (FElysiumAnimRequestSlot& Slot : Requests)
+	{
+		Slot = FElysiumAnimRequestSlot();
+	}
+}
+
+uint32 FElysiumAnimationDriver::SubmitRequest(const FElysiumAnimationRequest& Request)
+{
+	const int32 Channel = static_cast<int32>(Request.Channel);
+	if (Channel < 0 || Channel >= ElysiumAnimIntent::NumChannels)
+	{
+		UE_LOG(LogElysiumAnimDriver, Warning,
+			TEXT("'%s' refused an animation request on channel %d ('%s' from %s): no such channel"),
+			*Stem, Channel, *Request.Label, ElysiumAnimIntent::SourceName(Request.Source));
+		return 0;
+	}
+	FElysiumAnimRequestSlot& Slot = Requests[Channel];
+	if (Slot.bActive && Request.Priority < Slot.Request.Priority)
+	{
+		// An ordinary arbitration answer, not a failure: the slot holds the higher claim, and the
+		// refused producer's clip simply does not own the channel.
+		UE_LOG(LogElysiumAnimDriver, Verbose,
+			TEXT("'%s' %s claim '%s' (%s) refused: the channel is held by %s '%s' (%s)"),
+			*Stem, ElysiumAnimIntent::SourceName(Request.Source), *Request.Label,
+			ElysiumAnimIntent::PriorityName(Request.Priority),
+			ElysiumAnimIntent::SourceName(Slot.Request.Source), *Slot.Request.Label,
+			ElysiumAnimIntent::PriorityName(Slot.Request.Priority));
+		return 0;
+	}
+	Slot.Request = Request;
+	Slot.AgeSeconds = 0.0f;
+	Slot.bActive = true;
+	// Zero means "no claim", so the serial skips it on wrap.
+	if (++RequestSerial == 0)
+	{
+		++RequestSerial;
+	}
+	Slot.Handle = RequestSerial;
+	return Slot.Handle;
+}
+
+bool FElysiumAnimationDriver::ReleaseRequest(uint32 Handle)
+{
+	if (Handle == 0)
+	{
+		return false;
+	}
+	for (FElysiumAnimRequestSlot& Slot : Requests)
+	{
+		if (Slot.bActive && Slot.Handle == Handle)
+		{
+			Slot = FElysiumAnimRequestSlot();
+			return true;
+		}
+	}
+	// Already expired, outranked or replaced — the ordinary end of a claim whose owner came back
+	// late, and not a failure.
+	return false;
+}
+
+const FElysiumAnimationRequest* FElysiumAnimationDriver::ActiveRequest(
+	EElysiumAnimChannel Channel) const
+{
+	const int32 Index = static_cast<int32>(Channel);
+	if (Index < 0 || Index >= ElysiumAnimIntent::NumChannels || !Requests[Index].bActive)
+	{
+		return nullptr;
+	}
+	return &Requests[Index].Request;
+}
+
+void FElysiumAnimationDriver::AdvanceRequests(float DeltaSeconds)
+{
+	for (FElysiumAnimRequestSlot& Slot : Requests)
+	{
+		if (!Slot.bActive)
+		{
+			continue;
+		}
+		// Every claim ages — an unexpiring one too, because its age is what the verdict surface
+		// shows to tell a scene mid-performance from a claim whose owner leaked it.
+		Slot.AgeSeconds += DeltaSeconds;
+		if (Slot.Request.HoldSeconds > 0.0f && Slot.AgeSeconds >= Slot.Request.HoldSeconds)
+		{
+			// The one-shot ran its length; the channel goes back to whoever is underneath.
+			Slot = FElysiumAnimRequestSlot();
+		}
+	}
+}
+
+void FElysiumAnimationDriver::ArbitrateBase()
+{
+	FElysiumAnimRequestSlot& Slot = Requests[static_cast<int32>(EElysiumAnimChannel::Base)];
+	const EElysiumAnimPriority Locomotion =
+		ElysiumAnimIntent::LocomotionPriority(Selection.GraphState);
+	// Ties keep the holder: a claim is not churned by a publisher it merely equals.
+	if (Slot.bActive && Slot.Request.Priority >= Locomotion)
+	{
+		Selection.bBasePoseOwned = false;
+		Selection.BaseHold = FString::Printf(TEXT("%s '%s' (%s)"),
+			ElysiumAnimIntent::SourceName(Slot.Request.Source), *Slot.Request.Label,
+			ElysiumAnimIntent::PriorityName(Slot.Request.Priority));
+		Selection.BaseHoldSeconds = Slot.AgeSeconds;
+		return;
+	}
+	if (Slot.bActive)
+	{
+		// Outranked, which consumes the claim: the publish that won is about to end its clip, and a
+		// claim left standing would report a holder whose pose is no longer on screen.
+		UE_LOG(LogElysiumAnimDriver, Verbose,
+			TEXT("'%s' locomotion (%s) takes the base pose from %s '%s' (%s)"),
+			*Stem, ElysiumAnimIntent::PriorityName(Locomotion),
+			ElysiumAnimIntent::SourceName(Slot.Request.Source), *Slot.Request.Label,
+			ElysiumAnimIntent::PriorityName(Slot.Request.Priority));
+		Slot = FElysiumAnimRequestSlot();
+	}
+	Selection.bBasePoseOwned = true;
+	Selection.BaseHold.Reset();
+	Selection.BaseHoldSeconds = 0.0f;
 }
 
 void FElysiumAnimationDriver::SetTranslationContext(const FElysiumCombatCharacter* Char)
@@ -153,6 +278,9 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh,
 	EElysiumOneShotState OneShot)
 {
+	// The claims age first: a one-shot whose length has run out must not hold this frame's verdict.
+	AdvanceRequests(DeltaSeconds);
+
 	// The pose parameter is a rate, and this is the one place per body per frame — a producer's
 	// sample is a getter a readout may take twice, so it seeds the value and cannot advance it.
 	FElysiumLocomotionSample Body = InSample;
@@ -237,6 +365,10 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 			Selection.AxisValue[Axis] =
 				ElysiumAnimResolve::PoseFrom(Intent).Get(Selection.AxisName[Axis]);
 		}
+		// The verdict is continuous state too: a claim can expire, be released or be outranked on a
+		// frame whose discrete request never moved — a body that starts walking under an ambient
+		// stance changes the answer without changing what it asked for.
+		ArbitrateBase();
 		return;
 	}
 
@@ -250,6 +382,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		ElysiumAnimResolve::Resolve(Intent, FElysiumAnimationCatalog(), Selection);
 		Selection.GroundSpeedCmPerSecond = GaitSpeedForSelection(Intent.Body.MoveYaw());
 		Assets = FElysiumResolvedAnimation();
+		ArbitrateBase();
 		return;
 	}
 
@@ -257,4 +390,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	// The resolver answers with the one cell it selected; the stride the body will actually travel
 	// at is the table's reading at this direction, which is the same number the mover commands.
 	Selection.GroundSpeedCmPerSecond = GaitSpeedForSelection(Intent.Body.MoveYaw());
+	// After the resolve, which rewrote the whole record: the verdict is step 1's and rides every
+	// publish, so it is restated onto whatever the resolver wrote.
+	ArbitrateBase();
 }
