@@ -33,6 +33,39 @@ sign picks its variant from `G`. *Deps:* 4.4, 5.2 for the redirect.
 `soundgroup` on/off events and a runtime reset hook that can apply `reset_state`. Terminal
 interaction is owned separately by 13.4. → `docs/vtmb/entity_io.md`. *Deps:* 4.1, 8.3.
 
+### 4.12 Door faithfulness gaps — remaining
+
+The locked-use matrix (no `OnLockedUse` on a door — that output is `prop_switch`'s; silent `Open`,
+locked-only `+use` sound), the unconditional `+use` `ResolveToggleStateFromTransform` resync, and
+the activator-relative swing (`OpenAwayFromEntity` plus the `bResolveSwing`/`SF_DOOR_ONEWAY` gates)
+are landed and recorded in `docs/vtmb/animation_and_movers.md` B and `entity_io.md`. What remains is
+recovered-to-retail reproduce work under P4's RE-first rule:
+
+- **The full `CBaseDoor::Use` guard chain.** `+use` still routes through `InputToggle` rather than
+  retail's ordered chain: the `noopenwanted` refusal, the mid-motion self-heal step, and the
+  `{AT_BOTTOM, AT_TOP} ∪ NO_AUTO_RETURN` admission set (a `GOING_*` non-return door is a silent
+  no-op in retail, a reverse here) are unmodelled.
+- **`MoveDone` dispatches on the mutable `ToggleState`** instead of a move-start arrival callback,
+  so a locked door caught mid-close by a resync can drop a single `OnFullyClosed`. The durable fix
+  makes arrival independent of the live state.
+- **Input-level outputs and admission.** Retail fires `OnOpen` at the `Open` input and again in
+  `DoorGoUp`, and `Open`/`Close`/`Toggle` carry their own admission gates; Elysium's differ.
+- **Mover sound emission points.** Retail plays `close` at motion start (not arrival) and treats
+  `swing` as a loop; the emission points differ — owner-adjudicated against P6.
+- **`CRotDoor::Blocked` group sync and block outputs.** Retail synchronises group siblings and
+  carries `OnBlocked*`/`StartBlocked`/`EndBlocked` edges; the any-entity blocker filter is
+  NPC-pending (P13, and the 10.7 door-obstruction reaction).
+- **Held on a live-retail capture** (static evidence exhausted): the swing **blocked-latch
+  inversion** (retail flips the swing when a blocker armed a latch — the blocker field's identity
+  is not statically recoverable; capture which blocker classes set it) and the **mid-motion
+  self-heal** reissued-move arguments. Both are marked as held divergences in
+  `docs/vtmb/animation_and_movers.md`.
+- **Investigate the runtime visible rotation.** A live session showed a baked `func_door_rotating`
+  firing `OnOpen` and the swing sound while its body did not visibly rotate on screen; the substrate
+  state/collision cycle is correct, so this is a map/visual-body concern — whether the baked brush
+  body follows the mover transform. Confirm whether 4.3's brush-travel holds for a rotating leaf at
+  runtime. → `docs/vtmb/animation_and_movers.md` B. *Deps:* 4.1, 4.3.
+
 ### 9.1 `.dlg` parser + dlgexpr — remaining
 
 The remaining fidelity gap is retail `CDialog::GetStartingLine`: scan starting-condition

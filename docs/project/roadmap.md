@@ -152,6 +152,11 @@ it, so the readout claims a body the stage does not have.
 - [~] **[4.11 Trigger and `+use`-prop I/O gaps](plans/gameplay.md)** — filters,
   `prop_switch` interaction, lockables, doorknob sequences and the `trigger_hurt` cadence landed;
   the switch `soundgroup` and `reset_state` details remain open.
+- [ ] **[4.12 Door faithfulness gaps](plans/gameplay.md)** — the recovered `func_door` retail
+  divergences beyond the landed locked matrix, `+use` resync and activator-relative swing: the full
+  `Use` guard-chain reorder and admission set, `MoveDone` arrival, input-level output/sound/block
+  details, the runtime visible-rotation observation, and the swing blocked-latch inversion and
+  mid-motion self-heal held on a live capture.
 
 *Slice acceptance (met):* the tutorial elevator chain works; walking out loads `sm_pawnshop_1`.
 
@@ -473,9 +478,9 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE40 | the core mechanics chain; open joins numeric | `docs/vtmb/combat-and-damage.md` + siblings; 13.3 | [~] |
 | RE41 | discipline authority/interpreter; activity/witness admission plus Elysium/HUD world-area authority and Bloodbuff/`LockPick` exception closed; open: native power consumers, client disable presentation and live cast matrix | `docs/vtmb/disciplines.md`; 13.2 | [~] |
 | RE42 | first-person viewmodel; static composition/pose/projection/authority and ELGVM1 harness closed, controlled retail matrix open | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; LIFE6 | [~] |
-| RE43 | the tutorial event-resolution transaction; open: engine contact order, autosave txn | `docs/vtmb/sp_tutorial_1-event-surface.md` | [~] |
+| RE43 | the tutorial event-resolution transaction; engine contact order (new-begin before old-end, spatial enumeration, teleport defers) and the autosave txn recovered; open (live capture): intra-leaf trigger order, the player per-frame relink cadence, the autosave guard-field identity + save-blocked reason codes | `docs/vtmb/sp_tutorial_1-event-surface.md`, `entity_io.md` | [~] |
 | RE44 | the exported-map event surface beyond the tutorial | `docs/vtmb/exported-map-event-surface.md` | [~] |
-| RE45 | trigger touch dispatch + the script recursion bound | `docs/vtmb/entity_io.md`, `python_bridge.md` | [~] |
+| RE45 | trigger touch dispatch recovered (synchronous new StartTouch, deferred old EndTouch at the post-think pass); open: the CPython script recursion bound (stack depth undecidable statically — needs a runtime probe) | `docs/vtmb/entity_io.md`, `python_bridge.md` | [~] |
 | RE46 | the dialogue opener and camera boundary | `docs/vtmb/camera-view-modes.md`; 11.13f | [~] |
 | RE47 | the tutorial character bootstrap | `docs/vtmb/npc-ai-reverse-engineering.md` | [~] |
 | RE48 | what an NPC's enemy is — the selection chain | `docs/vtmb/npc-ai-reverse-engineering.md`; 13.3, 13.5 | [x] |
