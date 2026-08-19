@@ -145,7 +145,9 @@ private:
 		if (bLocked)
 		{
 			// Locked press: the deny sound (explicit `locked_sound`), no state change (P4.4 also shows
-			// the locked_icon on the reticle). Matches the door's locked path (OnLockedUse + locked sfx).
+			// the locked_icon on the reticle). Like the door's locked path, this plays only the locked
+			// sfx and fires no output (a locked door/button emits no OnLockedUse — that output is
+			// prop_switch's alone).
 			PlayMoverSoundRel(LockedSoundRel);
 			return;
 		}

@@ -113,6 +113,29 @@ namespace
 		return Box;
 	}
 
+	// The per-component tolerance ResolveToggleStateFromTransform matches a live body pose against an
+	// endpoint with — PE-verified `_DAT_10454b8c = 0.001f` in retail CBaseDoor/CRotDoor. Degrees for a
+	// swing, cm for a slide.
+	constexpr float DoorResyncTolerance = 0.001f;
+
+	// |a-b| <= tol on each component, mirroring retail ResolveToggleStateFromTransform's float compares.
+	bool VectorComponentsWithin(const FVector& A, const FVector& B, float Tol)
+	{
+		return FMath::Abs(A.X - B.X) <= Tol
+			&& FMath::Abs(A.Y - B.Y) <= Tol
+			&& FMath::Abs(A.Z - B.Z) <= Tol;
+	}
+
+	// Same per-component test on Euler angles, taken on the shortest signed delta so a body angle that
+	// round-trips through a 360-wrapped representation still reads as its endpoint. Retail compared raw
+	// QAngle floats; a door swing stays well under 180°, so the normalized delta is the same reading.
+	bool RotatorComponentsWithin(const FRotator& A, const FRotator& B, float Tol)
+	{
+		return FMath::Abs(FRotator::NormalizeAxis(A.Pitch - B.Pitch)) <= Tol
+			&& FMath::Abs(FRotator::NormalizeAxis(A.Yaw   - B.Yaw))   <= Tol
+			&& FMath::Abs(FRotator::NormalizeAxis(A.Roll  - B.Roll))  <= Tol;
+	}
+
 }
 
 // ============================================================================================
@@ -510,14 +533,12 @@ void FElysiumDoorBase::Think()
 
 void FElysiumDoorBase::InputOpen(const FElysiumEntityHandle& Activator)
 {
-	// Locked door: the locked path plays the `locked` sound, fires OnLockedUse, and does not move
-	// (B.4 — RE: CBaseDoor::Use FUN_100efc90 plays the locked index DAT_106eb3e4 on the locked path).
+	// Locked door: the direct `Open` input refuses SILENTLY — no sound, no output, no motion
+	// (RE: CBaseDoor::InputOpen FUN_100f0170 opens iff `!IsDoorLocked` and fires nothing on the
+	// locked path). CBaseDoor carries no OnLockedUse output — that output belongs to prop_switch —
+	// and the `locked` sound is a +use affordance played only by CBaseDoor::Use (see DoorUse).
 	if (bLocked)
 	{
-		static const FName Locked(TEXT("locked"));
-		PlayMoverSound(Locked);
-		static const FName OnLockedUse(TEXT("OnLockedUse"));
-		FireOutput(OnLockedUse, Activator);
 		return;
 	}
 	if (ToggleState == EToggleState::AtBottom || ToggleState == EToggleState::GoingDown)
@@ -536,6 +557,13 @@ void FElysiumDoorBase::InputClose(const FElysiumEntityHandle& Activator)
 
 void FElysiumDoorBase::InputToggle(const FElysiumEntityHandle& Activator)
 {
+	// Locked door: retail InputToggle (FUN_100f0210) gates on `IsDoorLocked` at the top and does
+	// nothing at all when locked — no output, no sound, no motion. The `locked` +use affordance
+	// belongs to CBaseDoor::Use, not to the Toggle input (see DoorUse).
+	if (bLocked)
+	{
+		return;
+	}
 	// Reverse in-flight or from a rest state (NO_AUTO_RETURN permits mid-motion re-use, B.4).
 	switch (ToggleState)
 	{
@@ -665,7 +693,8 @@ void FElysiumDoorBase::OnMoveBlocked(const FHitResult& Hit)
 bool FElysiumDoorBase::IsUsable() const
 {
 	// PUSE (0x100) arms the +use look-cursor. A hidden/dead door disarms (the world also re-checks
-	// IsInert, but keep the class honest). Locked doors are still "usable" — a use fires OnLockedUse.
+	// IsInert, but keep the class honest). Locked doors are still "usable" — a +use plays the
+	// `locked` sound (and fires no output).
 	return (SpawnFlags & SF_DOOR_PUSE) != 0 && !IsInert();
 }
 
@@ -686,6 +715,47 @@ FElysiumDoorBase* FElysiumDoorBase::ResolveLinkedDoor()
 		return Found->AsDoorBase();
 	}
 	return nullptr;
+}
+
+void FElysiumDoorBase::ResolveToggleStateFromTransform()
+{
+	// CBaseDoor::Use step 5 (vt +0x3e0): re-derive the toggle state from the live body transform.
+	// Ordinary bookkeeping — no motion, no output, no sound; a bodiless door has nothing to read.
+	if (!Body)
+	{
+		return;
+	}
+
+	if (ResolvesEndpointFromRotation())
+	{
+		// Rotating leaf (retail CRotDoor): compare the live body ANGLES to the two endpoints.
+		const FRotator Live = Body->GetRelativeRotation();
+		if (RotatorComponentsWithin(Live, ClosedRot, DoorResyncTolerance))
+		{
+			ToggleState = EToggleState::AtBottom;
+			// Retail CRotDoor also calls ResetBlockedTracking here; this runtime carries no
+			// swing-inversion latch (the activator-relative OpenAwayFromEntity resolution it belongs to
+			// is not modelled — swing direction is a fixed reflection), so there is nothing to reset.
+		}
+		else if (RotatorComponentsWithin(Live, OpenRot, DoorResyncTolerance))
+		{
+			ToggleState = EToggleState::AtTop;
+		}
+		// else: genuinely mid-travel — leave the GoingUp/GoingDown state as-is.
+	}
+	else
+	{
+		// Sliding leaf (retail CBaseDoor): compare the live body ORIGIN to the two endpoints.
+		const FVector Live = Body->GetRelativeLocation();
+		if (VectorComponentsWithin(Live, ClosedLoc, DoorResyncTolerance))
+		{
+			ToggleState = EToggleState::AtBottom;
+		}
+		else if (VectorComponentsWithin(Live, OpenLoc, DoorResyncTolerance))
+		{
+			ToggleState = EToggleState::AtTop;
+		}
+	}
 }
 
 void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
@@ -717,9 +787,26 @@ void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
 		return;
 	}
 
+	// CBaseDoor::Use step 5 (@0x100efc90, vt +0x3e0): UNCONDITIONAL on every +use, after the
+	// use_override delegation (step 2) and BEFORE the locked branch (step 8). Re-stamp the toggle
+	// state from the live body pose so a door whose body never actually moved snaps back to its true
+	// endpoint and the following toggle re-opens it. (Retail steps 3/4/6 — the noopenwanted refusal,
+	// the mid-motion self-heal and the doorknob delegation — are not modelled in this runtime.)
+	ResolveToggleStateFromTransform();
+
+	// CBaseDoor::Use @0x100efc90 locked branch: a locked door reached by +use plays ONLY the
+	// `locked` sound and returns — no output (CBaseDoor has no OnLockedUse) and no motion. This is
+	// the single path that voices the locked door; the direct Open/Toggle inputs stay silent.
+	if (bLocked)
+	{
+		static const FName Locked(TEXT("locked"));
+		PlayMoverSound(Locked);
+		return;
+	}
+
 	// CBaseDoor::DoorknobUse: toggle this leaf, then the linked partner (the double-door swing). The
 	// partner receives `Toggle` — NOT `Use` — so it never mirrors back (no recursion), and each leaf
-	// still runs its own locked check (a locked half fires OnLockedUse and stays put).
+	// still runs its own locked check (a locked half stays put and silent).
 	//
 	// The partner's half goes through chokepoint 1 so the sinks, the I/O ring and the queue debugger
 	// see the second leaf move; it stays synchronous because DoorUse is already inside an executing
@@ -790,6 +877,9 @@ protected:
 
 	virtual void IssueMoveToOpen() override   { AngularMove(OpenRot,   Speed); }   // Speed = deg/s
 	virtual void IssueMoveToClosed() override { AngularMove(ClosedRot, Speed); }
+
+	// A rotating door resolves its endpoint from body angles (retail CRotDoor::ResolveToggleStateFromTransform).
+	virtual bool ResolvesEndpointFromRotation() const override { return true; }
 };
 
 // ============================================================================================
@@ -822,6 +912,9 @@ protected:
 
 	virtual void IssueMoveToOpen() override   { LinearMove(OpenLoc,   Speed * MoverInchToCm); }   // Speed = in/s
 	virtual void IssueMoveToClosed() override { LinearMove(ClosedLoc, Speed * MoverInchToCm); }
+
+	// A sliding door resolves its endpoint from body origin (retail CBaseDoor::ResolveToggleStateFromTransform).
+	virtual bool ResolvesEndpointFromRotation() const override { return false; }
 };
 
 // ============================================================================================
@@ -837,8 +930,8 @@ void ElysiumBuildCBaseDoor(FElysiumClassDesc& D)
 	D.Input(TEXT("Lock"),   [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumDoorBase&>(E).InputLock(); });
 	D.Input(TEXT("Unlock"), [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumDoorBase&>(E).InputUnlock(); });
 	// Use is the +use doorknob path (P4.2 look-cursor / the pawn E key drive it in-world): a player
-	// use on an unlocked door toggles it (and its linked partner); on a locked door it fires
-	// OnLockedUse. Wired here so `ent_fire <door> Use` exercises the same path.
+	// use on an unlocked door toggles it (and its linked partner); on a locked door it plays the
+	// `locked` sound and fires no output. Wired here so `ent_fire <door> Use` exercises the same path.
 	D.Input(TEXT("Use"),    [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumDoorBase&>(E).DoorUse(A.Activator); });
 
 	// Keyfields (B.2).

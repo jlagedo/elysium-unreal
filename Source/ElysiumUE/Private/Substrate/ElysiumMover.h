@@ -14,7 +14,8 @@
 //
 // FElysiumDoorBase layers the CBaseDoor 4-state machine (m_toggle_state) + the Open/Close/Toggle/
 // Lock/Unlock inputs + the OnOpen/OnClose/OnFullyOpen/OnFullyClosed outputs + `wait` autoclose +
-// the locked path (OnLockedUse) + blocked-while-closing (deal `dmg`, reverse, OnBlockedClosing) +
+// the locked path (silent Open/Toggle inputs; +use plays only the `locked` sound, fires no output) +
+// blocked-while-closing (deal `dmg`, reverse, OnBlockedClosing) +
 // the full spawnflag table (B.5) + `linked_door` (the paired leaf) + the +use doorknob path. Two
 // leaves derive from it: func_door_rotating (swings `distance` about the hinge) and func_door
 // (slides `movedir` by its own depth, P4.3). A leaf supplies only how it computes its open transform
@@ -168,6 +169,15 @@ public:
 	// set, its partner too — the double-door swing. Reached by the +use look-cursor and `ent_fire Use`.
 	void DoorUse(const FElysiumEntityHandle& Activator);
 
+	// CBaseDoor::Use step 5 (vtable +0x3e0, FUN_100eff90 / CRotDoor FUN_100f2520): recompute
+	// m_toggle_state from the LIVE body transform. Run UNCONDITIONALLY at the top of the +use path,
+	// before the admission/locked decision. If the body sits within 0.001 per-component of the closed
+	// endpoint the state becomes AtBottom; within 0.001 of the open endpoint it becomes AtTop; a body
+	// genuinely mid-travel leaves the GoingUp/GoingDown state untouched. A door whose body never
+	// actually moved is re-stamped to its true endpoint here, so the following activation opens it
+	// again — the fix for a stale AtTop/GoingUp belief silently dropping a later +use.
+	void ResolveToggleStateFromTransform();
+
 	// --- +use / debug hooks (P4.3) -----------------------------------------------------
 	// PUSE (0x100) is the dominant door bit (105 doors): it arms the +use look-cursor. Doors fire no
 	// OnIn/OnOut (those are button-only outputs), so the cursor enter/leave stays a base no-op — only
@@ -198,6 +208,11 @@ protected:
 	// Leaf hook: issue the primitive move toward Open/Closed at Speed (AngularMove vs LinearMove).
 	virtual void IssueMoveToOpen()   = 0;
 	virtual void IssueMoveToClosed() = 0;
+
+	// Leaf hook: does this door resolve its endpoint from the body's ANGLES (a rotating door, retail
+	// CRotDoor comparing m_vecAngle1/m_vecAngle2) or its ORIGIN (a sliding door, retail CBaseDoor
+	// comparing m_vecPosition1/m_vecPosition2)? Read only by ResolveToggleStateFromTransform.
+	virtual bool ResolvesEndpointFromRotation() const = 0;
 
 	virtual void MoveDone() override;               // HitTop / HitBottom
 	virtual void OnMoveBlocked(const FHitResult& Hit) override;
