@@ -176,14 +176,7 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 	Out.QueueNextSerial = EventQueue.NextSerialValue();
 	Out.QueueLastEnqueue = EventQueue.LastEnqueueValue();
 
-	Out.Fade.bActive      = ScreenFade.bActive;
-	Out.Fade.Color        = ScreenFade.Color;
-	Out.Fade.MaxAlpha     = ScreenFade.MaxAlpha;
-	Out.Fade.Duration     = ScreenFade.Duration;
-	Out.Fade.HoldTime     = ScreenFade.HoldTime;
-	Out.Fade.bFadeIn      = ScreenFade.bFadeIn;
-	Out.Fade.bAutoReverse = ScreenFade.bAutoReverse;
-	Out.Fade.StartTime    = ScreenFade.StartTime;
+	Out.Fade = ScreenFade.ToSaved();
 	Out.Weather = WeatherState;
 
 	UE_LOG(LogElysiumWorld, Log,
@@ -209,8 +202,6 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 			TEXT("snapshot '%s' was frozen against %d defs, this build parsed %d — applying by index"),
 			*Snapshot.MapName, Snapshot.DefCount, Defs.Defs.Num());
 	}
-
-	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 
 	// Pass 1 — re-create the runtime-spawned entities (npc_maker.Spawn, CreateEntityNoSpawn) from the
 	// defs that ride along, in index order, so every one lands back on its saved index. They do land
@@ -241,99 +232,10 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	int32 Applied = 0;
 	for (const FElysiumEntityState& S : Snapshot.Entities)
 	{
-		FElysiumEntity* E = EntityList.IsValidIndex(S.Index) ? EntityList[S.Index].Get() : nullptr;
-		if (!E)
+		if (!ApplyEntityRecord(S, Snapshot.MapName))
 		{
 			continue;
 		}
-		if (!S.ClassName.IsNone() && E->Def && FName(*E->Def->Classname) != S.ClassName)
-		{
-			UE_LOG(LogElysiumWorld, Warning,
-				TEXT("snapshot '%s': #%d is %s here but was %s when saved — skipped"),
-				*Snapshot.MapName, S.Index, *E->Def->Classname, *S.ClassName.ToString());
-			continue;
-		}
-
-		// Fields first, so a leaf's Serialize sees the restored keyfields. Matched by name, never by
-		// position: a field added to a base class does not invalidate an existing payload, and a name
-		// this build no longer registers is skipped with a warning rather than failing the load.
-		if (E->Class)
-		{
-			for (const TPair<FName, FElysiumVariant>& F : S.Fields)
-			{
-				const FElysiumFieldAccessor* Acc = Reg.FindField(*E->Class, F.Key);
-				if (!Acc || !Acc->bSave || !Acc->Set)
-				{
-					UE_LOG(LogElysiumWorld, Warning,
-						TEXT("snapshot '%s': #%d has no saved field '%s' in this build — skipped"),
-						*Snapshot.MapName, S.Index, *F.Key.ToString());
-					continue;
-				}
-				if (F.Key == FName(TEXT("targetname")))
-				{
-					continue;   // the name index has to be re-keyed; handled below, once
-				}
-				if (F.Value.IsHandle())
-				{
-					// §6 — a saved handle carries a dead epoch, and re-stamping is this applier's
-					// job (the archive drops the epoch by design). An index that no longer exists
-					// reads Invalid, the same falsy value a killed entity produces.
-					Acc->Set(*E, FElysiumVariant::Handle(RebaseHandle(F.Value.AsHandle)));
-					continue;
-				}
-				Acc->Set(*E, F.Value);
-			}
-		}
-
-		if (E->TargetName != S.TargetName)
-		{
-			RenameEntity(*E, S.TargetName);
-		}
-
-		// Through the runtime writer, so a leaf's body follows the restored position exactly as it
-		// does for a live `point_teleport` — the body was built at the def origin by Spawn().
-		if (!E->Origin.Equals(S.Origin, 0.0f))
-		{
-			E->SetRuntimeOrigin(S.Origin);
-		}
-
-		E->bSpawnCalled = S.bSpawnCalled;
-		// Activate is part of entity lifecycle, not presentation reconstruction. Replaying it after
-		// restoring a live record re-arms NPC admission and replaces the saved schedule/leaf state.
-		// Records which omit this field came from an older active-map payload and default to true.
-		// point_teleport is the one class whose activation-derived cache must persist; before that
-		// cache was serialized, an empty leaf meant Activate had to rebuild it from the restored
-		// live transform. Preserve that legacy migration instead of letting the new latch skip it.
-		E->bActivateCalled = S.bActivateCalled
-			&& !(E->ActivationStateMustPersist() && S.LeafState.IsEmpty());
-		E->NextThink = S.NextThink;
-		E->SetSavedNextThink(S.SavedNextThink);
-		if (S.OutputTimesRemaining.Num() == E->OutputTimesRemaining.Num())
-		{
-			E->OutputTimesRemaining = S.OutputTimesRemaining;
-		}
-
-		if (S.LeafState.Num() > 0)
-		{
-			FMemoryReader Reader(S.LeafState, /*bIsPersistent*/ true);
-			FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
-			E->Serialize(Ar);
-		}
-
-		// Dormancy last, and written directly rather than through ScriptHide/ScriptUnhide: those are
-		// inputs with side effects (they stash and restore the think we have just restored ourselves).
-		E->bHidden = S.bHidden;
-		E->bDead = S.bDead;
-		// Registered fields can alter a class-specific physical gate (notably trigger StartDisabled)
-		// without changing hidden/dead. Re-apply unconditionally after all restored state is present.
-		E->OnDormancyChanged();
-		// Leaf deserializers and dormancy hooks may arm an entity while rebuilding transient state
-		// (NPC patrol/interesting-place recovery does both). The generic saved schedule is the later,
-		// authoritative statement: restore it last so freeze -> apply -> freeze remains identical and
-		// a loaded entity cannot think earlier than the snapshot said.
-		E->NextThink = S.NextThink;
-		E->SetSavedNextThink(S.SavedNextThink);
-		NotifyVisualChanged(*E);
 		SnapshotEntityIndices.Add(S.Index);
 		++Applied;
 	}
@@ -392,14 +294,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	// live enqueue after the load compares against the time the save was written at.
 	EventQueue.SetLastEnqueue(Snapshot.QueueLastEnqueue);
 
-	ScreenFade.bActive      = Snapshot.Fade.bActive;
-	ScreenFade.Color        = Snapshot.Fade.Color;
-	ScreenFade.MaxAlpha     = Snapshot.Fade.MaxAlpha;
-	ScreenFade.Duration     = Snapshot.Fade.Duration;
-	ScreenFade.HoldTime     = Snapshot.Fade.HoldTime;
-	ScreenFade.bFadeIn      = Snapshot.Fade.bFadeIn;
-	ScreenFade.bAutoReverse = Snapshot.Fade.bAutoReverse;
-	ScreenFade.StartTime    = Snapshot.Fade.StartTime;
+	ScreenFade = FScreenFade::FromSaved(Snapshot.Fade);
 	WeatherState = Snapshot.Weather;
 	WeatherState.Tick(NowSeconds());
 	PublishWetness();
@@ -409,6 +304,105 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		*Snapshot.MapName, Applied, Snapshot.Entities.Num(), Snapshot.AbsentEntities.Num(),
 		Snapshot.Queue.Num());
 	return Applied;
+}
+
+bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S, const FString& SnapshotMapName)
+{
+	FElysiumEntity* E = EntityList.IsValidIndex(S.Index) ? EntityList[S.Index].Get() : nullptr;
+	if (!E)
+	{
+		return false;
+	}
+	if (!S.ClassName.IsNone() && E->Def && FName(*E->Def->Classname) != S.ClassName)
+	{
+		UE_LOG(LogElysiumWorld, Warning,
+			TEXT("snapshot '%s': #%d is %s here but was %s when saved — skipped"),
+			*SnapshotMapName, S.Index, *E->Def->Classname, *S.ClassName.ToString());
+		return false;
+	}
+
+	// Fields first, so a leaf's Serialize sees the restored keyfields. Matched by name, never by
+	// position: a field added to a base class does not invalidate an existing payload, and a name
+	// this build no longer registers is skipped with a warning rather than failing the load.
+	if (E->Class)
+	{
+		const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
+		for (const TPair<FName, FElysiumVariant>& F : S.Fields)
+		{
+			const FElysiumFieldAccessor* Acc = Reg.FindField(*E->Class, F.Key);
+			if (!Acc || !Acc->bSave || !Acc->Set)
+			{
+				UE_LOG(LogElysiumWorld, Warning,
+					TEXT("snapshot '%s': #%d has no saved field '%s' in this build — skipped"),
+					*SnapshotMapName, S.Index, *F.Key.ToString());
+				continue;
+			}
+			if (F.Key == FName(TEXT("targetname")))
+			{
+				continue;   // the name index has to be re-keyed; handled below, once
+			}
+			if (F.Value.IsHandle())
+			{
+				// §6 — a saved handle carries a dead epoch, and re-stamping is this applier's
+				// job (the archive drops the epoch by design). An index that no longer exists
+				// reads Invalid, the same falsy value a killed entity produces.
+				Acc->Set(*E, FElysiumVariant::Handle(RebaseHandle(F.Value.AsHandle)));
+				continue;
+			}
+			Acc->Set(*E, F.Value);
+		}
+	}
+
+	if (E->TargetName != S.TargetName)
+	{
+		RenameEntity(*E, S.TargetName);
+	}
+
+	// Through the runtime writer, so a leaf's body follows the restored position exactly as it
+	// does for a live `point_teleport` — the body was built at the def origin by Spawn().
+	if (!E->Origin.Equals(S.Origin, 0.0f))
+	{
+		E->SetRuntimeOrigin(S.Origin);
+	}
+
+	E->bSpawnCalled = S.bSpawnCalled;
+	// Activate is part of entity lifecycle, not presentation reconstruction. Replaying it after
+	// restoring a live record re-arms NPC admission and replaces the saved schedule/leaf state.
+	// Records which omit this field came from an older active-map payload and default to true.
+	// point_teleport is the one class whose activation-derived cache must persist; before that
+	// cache was serialized, an empty leaf meant Activate had to rebuild it from the restored
+	// live transform. Preserve that legacy migration instead of letting the new latch skip it.
+	E->bActivateCalled = S.bActivateCalled
+		&& !(E->ActivationStateMustPersist() && S.LeafState.IsEmpty());
+	E->NextThink = S.NextThink;
+	E->SetSavedNextThink(S.SavedNextThink);
+	if (S.OutputTimesRemaining.Num() == E->OutputTimesRemaining.Num())
+	{
+		E->OutputTimesRemaining = S.OutputTimesRemaining;
+	}
+
+	if (S.LeafState.Num() > 0)
+	{
+		FMemoryReader Reader(S.LeafState, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+		E->Serialize(Ar);
+	}
+
+	// Dormancy last, and written directly rather than through ScriptHide/ScriptUnhide: those are
+	// inputs with side effects (they stash and restore the think we have just restored ourselves).
+	E->bHidden = S.bHidden;
+	E->bDead = S.bDead;
+	// Registered fields can alter a class-specific physical gate (notably trigger StartDisabled)
+	// without changing hidden/dead. Re-apply unconditionally after all restored state is present.
+	E->OnDormancyChanged();
+	// Leaf deserializers and dormancy hooks may arm an entity while rebuilding transient state
+	// (NPC patrol/interesting-place recovery does both). The generic saved schedule is the later,
+	// authoritative statement: restore it last so freeze -> apply -> freeze remains identical and
+	// a loaded entity cannot think earlier than the snapshot said.
+	E->NextThink = S.NextThink;
+	E->SetSavedNextThink(S.SavedNextThink);
+	NotifyVisualChanged(*E);
+	return true;
 }
 
 FElysiumEntityHandle FElysiumEntityWorld::RebaseHandle(const FElysiumEntityHandle& Saved) const

@@ -553,6 +553,11 @@ private:
 	FElysiumEntityHandle RebaseHandle(const FElysiumEntityHandle& Saved) const;
 	// One entity's full state, undiffed — the shared half of the freeze and the baseline.
 	FElysiumEntityState CaptureState(const FElysiumEntity& Ent) const;
+	// 11.9 — restore one snapshot record onto its live entity (ApplySnapshot's per-record half):
+	// fields, rename, origin, lifecycle flags, leaf state, then dormancy, in that order. Returns
+	// false — with a warning naming the snapshot — when the record has no live entity at its index
+	// or the entity's classname no longer matches the saved one.
+	bool ApplyEntityRecord(const FElysiumEntityState& S, const FString& SnapshotMapName);
 	// Record one entity's post-Load state as the omission baseline. Called for every entity at the
 	// end of Load and for each runtime entity as it spawns.
 	void CaptureBaseline(int32 Index);
@@ -665,6 +670,35 @@ private:
 		bool         bFadeIn = false;       // SF_FADE_IN: hold the colour flat, no ramp either way
 		bool         bAutoReverse = false;  // SF_FADE_STAYOUT: uncover again once the hold expires
 		double       StartTime = 0.0;
+
+		// The save type (FElysiumSavedFade) is this struct's shape field for field; Freeze and
+		// ApplySnapshot convert through these two so the pair cannot drift.
+		FElysiumSavedFade ToSaved() const
+		{
+			FElysiumSavedFade Saved;
+			Saved.bActive      = bActive;
+			Saved.Color        = Color;
+			Saved.MaxAlpha     = MaxAlpha;
+			Saved.Duration     = Duration;
+			Saved.HoldTime     = HoldTime;
+			Saved.bFadeIn      = bFadeIn;
+			Saved.bAutoReverse = bAutoReverse;
+			Saved.StartTime    = StartTime;
+			return Saved;
+		}
+		static FScreenFade FromSaved(const FElysiumSavedFade& Saved)
+		{
+			FScreenFade Fade;
+			Fade.bActive      = Saved.bActive;
+			Fade.Color        = Saved.Color;
+			Fade.MaxAlpha     = Saved.MaxAlpha;
+			Fade.Duration     = Saved.Duration;
+			Fade.HoldTime     = Saved.HoldTime;
+			Fade.bFadeIn      = Saved.bFadeIn;
+			Fade.bAutoReverse = Saved.bAutoReverse;
+			Fade.StartTime    = Saved.StartTime;
+			return Fade;
+		}
 	};
 	FScreenFade ScreenFade;
 

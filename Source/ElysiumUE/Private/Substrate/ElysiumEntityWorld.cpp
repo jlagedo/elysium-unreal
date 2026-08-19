@@ -59,6 +59,22 @@ namespace
 		}
 		return Default;
 	}
+
+	// Teardown's shared shape for the world's weak-held engine components: destroy every one still
+	// alive, then drop the list. Weak refs, because the map actor also frees them when it is
+	// destroyed — this path covers a world rebuild on a surviving actor (e.g. reload).
+	template <typename TComponent>
+	void ElysiumWorldDestroyWeakComponents(TArray<TWeakObjectPtr<TComponent>>& Components)
+	{
+		for (const TWeakObjectPtr<TComponent>& Comp : Components)
+		{
+			if (TComponent* C = Comp.Get())
+			{
+				C->DestroyComponent();
+			}
+		}
+		Components.Empty();
+	}
 }
 
 namespace ElysiumEntityWorldShared
@@ -1977,46 +1993,18 @@ void FElysiumEntityWorld::Teardown()
 
 	// Bodies are the world's embodiments — destroy them with the world. (The map actor also frees
 	// them when it is destroyed; this handles a world rebuild on a surviving actor, e.g. reload.)
-	for (const TWeakObjectPtr<UElysiumBrushComponent>& Body : Bodies)
-	{
-		if (UElysiumBrushComponent* B = Body.Get())
-		{
-			B->DestroyComponent();
-		}
-	}
-	Bodies.Empty();
+	ElysiumWorldDestroyWeakComponents(Bodies);
 
 	// NPC skeletal bodies (B3): components of the map actor, destroyed here for the same reason as
 	// Bodies — a world rebuild on a surviving actor (reload) must not leak them.
-	for (const TWeakObjectPtr<USkeletalMeshComponent>& Comp : NpcBodies)
-	{
-		if (USkeletalMeshComponent* C = Comp.Get())
-		{
-			C->DestroyComponent();
-		}
-	}
-	NpcBodies.Empty();
+	ElysiumWorldDestroyWeakComponents(NpcBodies);
 
 	// Dynamic-prop bodies (8.3): same reason as NpcBodies — components of the map actor, destroyed
 	// here so a world rebuild on a surviving actor (reload) does not leak them.
-	for (const TWeakObjectPtr<UPrimitiveComponent>& Comp : PropBodies)
-	{
-		if (UPrimitiveComponent* C = Comp.Get())
-		{
-			C->DestroyComponent();
-		}
-	}
-	PropBodies.Empty();
+	ElysiumWorldDestroyWeakComponents(PropBodies);
 
 	// phys_hinge constraints (8.4): destroyed with the map, like the bodies they wired.
-	for (const TWeakObjectPtr<UPhysicsConstraintComponent>& Comp : Constraints)
-	{
-		if (UPhysicsConstraintComponent* C = Comp.Get())
-		{
-			C->DestroyComponent();
-		}
-	}
-	Constraints.Empty();
+	ElysiumWorldDestroyWeakComponents(Constraints);
 
 	EntityList.Empty();
 	Baseline.Empty();
