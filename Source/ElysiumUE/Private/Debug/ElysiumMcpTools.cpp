@@ -199,6 +199,45 @@ namespace ElysiumMcpImpl
 		return Out;
 	}
 
+	TSharedRef<FJsonObject> Rot(const FRotator& R)
+	{
+		TSharedRef<FJsonObject> Out = Obj();
+		Out->SetNumberField(TEXT("pitch"), R.Pitch);
+		Out->SetNumberField(TEXT("yaw"), R.Yaw);
+		Out->SetNumberField(TEXT("roll"), R.Roll);
+		return Out;
+	}
+
+	// A published locomotion sample as JSON — the fields the Cog locomotion row shows, in one place
+	// so the player readout and a cast body's entity detail cannot drift apart. bFull additionally
+	// emits wish_scale, water and jump_hold, which only the player readout reports.
+	TSharedRef<FJsonObject> LocomotionJson(const FElysiumLocomotionSample& S, bool bFull)
+	{
+		TSharedRef<FJsonObject> Loco = Obj();
+		Loco->SetNumberField(TEXT("speed2d"), S.Speed2D());
+		Loco->SetObjectField(TEXT("local_velocity"), Vec(S.LocalVelocity));
+		Loco->SetNumberField(TEXT("facing_yaw"), S.FacingYaw);
+		Loco->SetNumberField(TEXT("move_yaw_wish"), S.MoveYawWish);
+		Loco->SetNumberField(TEXT("move_yaw_vel"), S.MoveYawVelocity);
+		if (bFull)
+		{
+			// Zero means the wish yaw beside it is a placeholder, not a measurement.
+			Loco->SetNumberField(TEXT("wish_scale"), S.WishScale);
+		}
+		Loco->SetBoolField(TEXT("on_ground"), S.bOnGround);
+		if (bFull)
+		{
+			Loco->SetNumberField(TEXT("water"), static_cast<int32>(S.Water));
+		}
+		Loco->SetStringField(TEXT("stance"), StanceName(S.Stance));
+		Loco->SetStringField(TEXT("jump_phase"), JumpPhaseName(S.JumpPhase()));
+		if (bFull)
+		{
+			Loco->SetNumberField(TEXT("jump_hold"), S.JumpHoldRemaining);
+		}
+		return Loco;
+	}
+
 	FModelContextProtocolToolResult Structured(const TSharedRef<FJsonObject>& Body)
 	{
 		return MakeStructuredContentResult(TSharedPtr<FJsonValue>(MakeShared<FJsonValueObject>(Body)));
@@ -547,21 +586,11 @@ namespace ElysiumMcpImpl
 			if (const AElysiumNpcBody* Motor =
 				Cast<AElysiumNpcBody>(SkeletalBody->GetAttachParentActor()))
 			{
-				// The same fields the Cog locomotion row shows for this body, pulled off the motor's
-				// published sample the way the row does (`ElysiumCogLocomotionRow.h`) — the settled
-				// record the selection above was classified from, not a fresh re-sample that could
-				// describe a different frame.
-				const FElysiumLocomotionSample& S = Motor->GetAnimSample();
-				TSharedRef<FJsonObject> Loco = Obj();
-				Loco->SetNumberField(TEXT("speed2d"), S.Speed2D());
-				Loco->SetObjectField(TEXT("local_velocity"), Vec(S.LocalVelocity));
-				Loco->SetNumberField(TEXT("facing_yaw"), S.FacingYaw);
-				Loco->SetNumberField(TEXT("move_yaw_wish"), S.MoveYawWish);
-				Loco->SetNumberField(TEXT("move_yaw_vel"), S.MoveYawVelocity);
-				Loco->SetBoolField(TEXT("on_ground"), S.bOnGround);
-				Loco->SetStringField(TEXT("stance"), StanceName(S.Stance));
-				Loco->SetStringField(TEXT("jump_phase"), JumpPhaseName(S.JumpPhase()));
-				Out->SetObjectField(TEXT("locomotion"), Loco);
+				// The motor's published sample, the way the Cog locomotion row reads it
+				// (`ElysiumCogLocomotionRow.h`) — the settled record the selection above was
+				// classified from, not a fresh re-sample that could describe a different frame.
+				Out->SetObjectField(TEXT("locomotion"),
+					LocomotionJson(Motor->GetAnimSample(), /*bFull*/ false));
 
 				const FElysiumAnimationSelection& Sel = Motor->GetAnimSelection();
 				TSharedRef<FJsonObject> Anim = Obj();
@@ -867,11 +896,7 @@ namespace ElysiumMcpImpl
 					{
 						View = Controller->GetControlRotation();
 					}
-					TSharedRef<FJsonObject> Rot = Obj();
-					Rot->SetNumberField(TEXT("pitch"), View.Pitch);
-					Rot->SetNumberField(TEXT("yaw"), View.Yaw);
-					Rot->SetNumberField(TEXT("roll"), View.Roll);
-					Body->SetObjectField(TEXT("rotation"), Rot);
+					Body->SetObjectField(TEXT("rotation"), Rot(View));
 
 					Body->SetObjectField(TEXT("velocity"), Vec(Pawn->GetVelocity()));
 					if (const IElysiumPlayerBody* PlayerBody = Cast<IElysiumPlayerBody>(Pawn))
@@ -929,11 +954,7 @@ namespace ElysiumMcpImpl
 							Director->SetNumberField(TEXT("weight"), Resolved.Weight);
 							Director->SetBoolField(TEXT("override_pose"), Request.bOverridePose);
 							Director->SetObjectField(TEXT("position"), Vec(Resolved.Location));
-							TSharedRef<FJsonObject> DirectorRotation = Obj();
-							DirectorRotation->SetNumberField(TEXT("pitch"), Resolved.Rotation.Pitch);
-							DirectorRotation->SetNumberField(TEXT("yaw"), Resolved.Rotation.Yaw);
-							DirectorRotation->SetNumberField(TEXT("roll"), Resolved.Rotation.Roll);
-							Director->SetObjectField(TEXT("rotation"), DirectorRotation);
+							Director->SetObjectField(TEXT("rotation"), Rot(Resolved.Rotation));
 							Director->SetNumberField(TEXT("fov"), Resolved.FieldOfView);
 							Director->SetStringField(TEXT("control"), CameraControlName(Request.Control));
 							Director->SetBoolField(TEXT("show_hud"), Request.bShowHud);
@@ -974,21 +995,8 @@ namespace ElysiumMcpImpl
 					// did not. An agent can drive `+forward` and check the bank without a screenshot.
 					if (const IElysiumPlayerBody* PlayerBody = Cast<IElysiumPlayerBody>(Pawn))
 					{
-						const FElysiumLocomotionSample S = PlayerBody->GetLocomotionSample();
-						TSharedRef<FJsonObject> Loco = Obj();
-						Loco->SetNumberField(TEXT("speed2d"), S.Speed2D());
-						Loco->SetObjectField(TEXT("local_velocity"), Vec(S.LocalVelocity));
-						Loco->SetNumberField(TEXT("facing_yaw"), S.FacingYaw);
-						Loco->SetNumberField(TEXT("move_yaw_wish"), S.MoveYawWish);
-						Loco->SetNumberField(TEXT("move_yaw_vel"), S.MoveYawVelocity);
-						// Zero means the wish yaw beside it is a placeholder, not a measurement.
-						Loco->SetNumberField(TEXT("wish_scale"), S.WishScale);
-						Loco->SetBoolField(TEXT("on_ground"), S.bOnGround);
-						Loco->SetNumberField(TEXT("water"), static_cast<int32>(S.Water));
-						Loco->SetStringField(TEXT("stance"), StanceName(S.Stance));
-						Loco->SetStringField(TEXT("jump_phase"), JumpPhaseName(S.JumpPhase()));
-						Loco->SetNumberField(TEXT("jump_hold"), S.JumpHoldRemaining);
-						Body->SetObjectField(TEXT("locomotion"), Loco);
+						Body->SetObjectField(TEXT("locomotion"),
+							LocomotionJson(PlayerBody->GetLocomotionSample(), /*bFull*/ true));
 					}
 					if (const AElysiumMapActor* Map = MapActor())
 					{
