@@ -70,6 +70,7 @@
 #include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumMover.h"
+#include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
 #include "Substrate/ElysiumRelationships.h"
@@ -1865,6 +1866,149 @@ bool FElysiumSignDependencyTruthinessTest::RunTest(const FString&)
 		Data.SourceFile, IntTargetLeaf);
 	TestNotEqual(TEXT("...not the truthy-string block"), Data.SourceFile, StringTargetLeaf);
 
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDialogueConditionTruthinessTest,
+	"Elysium.Substrate.DialogueConditionTruthiness", GElysiumTestFlags)
+bool FElysiumDialogueConditionTruthinessTest::RunTest(const FString&)
+{
+	// A `.dlg` col-4 PC-choice condition is offered iff it passes retail's CDialogDependency::Test ->
+	// CallPyDialogFunction gate: Py_eval_input, then TRUE only for a non-zero Python integer. That is
+	// FElysiumVariant::IsPythonCheckTrue (the shared logic_pythoncheck/terminal/sign rule), not the
+	// generic ToBool — so a truthy non-integer (a non-empty string, the float 1.0) which ToBool calls
+	// TRUE must GATE OUT the choice. This drives the real FElysiumNpc::OpenConversation lambda, whose
+	// EvalCondition lands on each variant category through the sentinel host, and reads back the
+	// world's live conversation to observe which choices survive the gate.
+	//
+	// OpenConversation loads the `dialogname` `.dlg` off disk (FElysiumContentPaths::DlgFromDialogname),
+	// so the synthetic fixture lives under a scratch content root installed for the test; a command-line
+	// -ElysiumContentRoot pin would defeat the override, so abstain.
+	const FString ScratchRoot = FPaths::ConvertRelativePathToFull(
+		FPaths::ProjectSavedDir() / TEXT("ElysiumTests") / TEXT("DlgCondTruth"));
+	const FString DialogName = TEXT("dlg/test/cond_truth.dlg");
+	const FString DlgPath = ScratchRoot / DialogName;
+
+	const FString SavedEnv = FPlatformMisc::GetEnvironmentVariable(TEXT("ELYSIUM_EXPORT_ROOT"));
+	FPlatformMisc::SetEnvironmentVar(TEXT("ELYSIUM_EXPORT_ROOT"), *ScratchRoot);
+	ON_SCOPE_EXIT
+	{
+		FPlatformMisc::SetEnvironmentVar(TEXT("ELYSIUM_EXPORT_ROOT"),
+			SavedEnv.IsEmpty() ? TEXT("") : *SavedEnv);
+		IFileManager::Get().DeleteDirectory(*ScratchRoot, /*RequireExists*/ false, /*Tree*/ true);
+	};
+
+	if (!FPaths::IsSamePath(FElysiumContentPaths::DlgFromDialogname(DialogName), DlgPath))
+	{
+		AddInfo(TEXT("content root override defeated (a -ElysiumContentRoot pin is active) — skipping"));
+		return true;
+	}
+
+	// One 13-field `.dlg` row in the on-disk `{ TAB content TAB }` shape (cols 6-11 empty, col-12
+	// Malkavian empty). Local to this file rather than reaching for the dialogue-suite helper.
+	auto Row = [](int32 Id, const TCHAR* Text, const TCHAR* Link, const TCHAR* Cond) -> FString
+	{
+		auto F = [](const FString& S) { return FString::Printf(TEXT("{\t%s\t}"), *S); };
+		FString R;
+		R += F(FString::FromInt(Id)); // 0 id
+		R += F(Text);                 // 1 male text
+		R += F(Text);                 // 2 female text
+		R += F(Link);                 // 3 link
+		R += F(Cond);                 // 4 condition (PC gate)
+		R += F(FString());            // 5 action
+		for (int32 i = 6; i <= 11; ++i) { R += F(FString()); }
+		R += F(FString());            // 12 Malkavian
+		return R;
+	};
+
+	// Entry NPC line 1 (line-1 fallback with no sentinel / usescript), then five PC choices whose
+	// col-4 evaluates to each variant category, then the target NPC line 20 that closes the response
+	// band. The sentinel host maps the (identity-normalized) condition text to a variant; an empty
+	// col-4 is an open gate that never reaches the host.
+	const TArray<FString> Rows = {
+		Row(1,  TEXT("Entry."),           TEXT("#"),  TEXT("")),
+		Row(10, TEXT("Open gate."),       TEXT("20"), TEXT("")),               // empty -> available
+		Row(11, TEXT("Non-zero int."),    TEXT("20"), TEXT("INT_NONZERO")),    // Int(7) -> available
+		Row(12, TEXT("Zero int."),        TEXT("20"), TEXT("INT_ZERO")),       // Int(0) -> gated out
+		Row(13, TEXT("Truthy string."),   TEXT("20"), TEXT("STRING_TRUTHY")),  // String -> gated out (ToBool: available)
+		Row(14, TEXT("Float one."),       TEXT("20"), TEXT("FLOAT_TRUTHY")),   // Float(1.0) -> gated out (ToBool: available)
+		Row(20, TEXT("Follow-up."),       TEXT("#"),  TEXT("")),
+	};
+	const FString Joined = FString::Join(Rows, TEXT("\r\n")) + TEXT("\r\n");
+	IFileManager::Get().MakeDirectory(*FPaths::GetPath(DlgPath), /*Tree*/ true);
+	if (!TestTrue(TEXT("dialogue fixture written"), FFileHelper::SaveStringToFile(Joined, *DlgPath)))
+	{
+		return false;
+	}
+
+	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	State->SetScriptHost(MakeUnique<FElysiumSentinelScriptHost>());
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, State, Services.Bundle());
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__dlg_condition_truth__");
+	FElysiumEntityDef NpcDef;
+	NpcDef.Classname = TEXT("npc_VVampire");
+	NpcDef.TargetName = TEXT("Truthy");
+	NpcDef.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+	NpcDef.Keys.Add(TEXT("dialogname"), DialogName);
+	Defs.Defs.Add(MoveTemp(NpcDef));
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0); // admit the NPC mind/body before dialogue acquires it
+
+	FElysiumEntity* NpcEntity = World.FindByName(TEXT("Truthy"));
+	FElysiumNpc* Npc = NpcEntity ? NpcEntity->AsNpc() : nullptr;
+	if (!TestNotNull(TEXT("the NPC entity resolves as an NPC"), Npc))
+	{
+		return false;
+	}
+
+	if (!TestTrue(TEXT("OpenConversation opens the dialogue"),
+		Npc->OpenConversation(Player, EElysiumDialogOpenerKind::Forced)))
+	{
+		return false;
+	}
+
+	FElysiumDlgConversation* Conv = World.GetOpenDialog();
+	if (!TestNotNull(TEXT("the world exposes the open conversation"), Conv))
+	{
+		return false;
+	}
+	if (TestNotNull(TEXT("the conversation opens on an NPC line"), Conv->CurrentNpcLine()))
+	{
+		TestEqual(TEXT("the line-1 fallback selects the entry line"), Conv->CurrentNpcLine()->Id, 1);
+	}
+
+	auto ChoiceVisible = [Conv](int32 LineId) -> bool
+	{
+		const TArray<int32>& Visible = Conv->VisibleChoices();
+		for (int32 i = 0; i < Visible.Num(); ++i)
+		{
+			const FElysiumDlgLine* Line = Conv->VisibleChoice(i);
+			if (Line && Line->Id == LineId)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	TestTrue(TEXT("an empty condition is offered"), ChoiceVisible(10));
+	TestTrue(TEXT("a non-zero integer condition is offered"), ChoiceVisible(11));
+	TestFalse(TEXT("a zero integer condition is gated out"), ChoiceVisible(12));
+	// The retail divergence from generic truthiness: a truthy non-integer reads FALSE, so ToBool()
+	// (which offers both) fails these two assertions until the gate uses IsPythonCheckTrue().
+	TestFalse(TEXT("a truthy string condition is gated out (integer-only rule)"), ChoiceVisible(13));
+	TestFalse(TEXT("a float 1.0 condition is gated out (integer-only rule)"), ChoiceVisible(14));
+	TestEqual(TEXT("only the open and non-zero-integer choices survive the gate"),
+		Conv->VisibleChoices().Num(), 2);
+
+	World.CloseDialog(/*bSilent=*/true);
 	return true;
 }
 

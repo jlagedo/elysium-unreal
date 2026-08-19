@@ -2303,7 +2303,13 @@ bool FElysiumNpc::OpenConversation(const FElysiumEntityHandle& Activator, EElysi
 	// obey the same live/off switch and eval log as field-6. dlgexpr -> Python via the normalizer.
 	auto Cond = [W, Self, Activator](const FString& Raw) -> bool
 	{
-		return W->EvalCondition(ElysiumDlgExpr::ConditionToPython(Raw), Self, Activator).ToBool();
+		// Retail's CDialogDependency::Test gates a col-4 condition (PC choice, NPC-line entry, and
+		// starting-line sentinel) through CallPyDialogFunction: Py_eval_input, then TRUE only for a
+		// non-zero Python integer — the exact logic_pythoncheck/terminal/sign rule, not generic
+		// truthiness. A non-integer result (a string, the float 1.0) and an eval error both read
+		// FALSE, so the line is unavailable rather than wrongly offered. Error-to-false still logs
+		// inside EvalCondition/the host; an unavailable line is ordinary, not a failure.
+		return W->EvalCondition(ElysiumDlgExpr::ConditionToPython(Raw), Self, Activator).IsPythonCheckTrue();
 	};
 	auto Act = [W, Self, Activator](const FString& Raw)
 	{
