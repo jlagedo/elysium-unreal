@@ -36,7 +36,10 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSkeletalBuild, Log, All);
 
-namespace
+// Everything in this namespace is file-local; the module builds with unity on, so a bare
+// `namespace {}` here would still collide with another translation unit's helpers of the same
+// name. The named namespace is the project's convention for that.
+namespace ElysiumSkeletalBuildImpl
 {
 	const FName ProbeMorphName(TEXT("ElysiumProbeMorph"));
 	const FName ProbeMaterialSlot(TEXT("ElysiumProbeSlot"));
@@ -98,6 +101,36 @@ namespace
 		return bDeleted;
 	}
 
+	/**
+	 * Sweep every `<Prefix>*.uasset` under PackagePath that this run did not write.
+	 *
+	 * `Written` holds the asset names the run produced; anything else carrying the prefix is an
+	 * orphan. `Owner` and `Noun` are the caller's log identity, so the one Display line names the
+	 * container the sweep belongs to.
+	 */
+	void SweepPrefix(const FString& PackagePath, const TCHAR* Prefix, const TCHAR* Noun,
+		const FString& Owner, const TSet<FString>& Written)
+	{
+		const FString Directory = FPaths::GetPath(FPackageName::LongPackageNameToFilename(
+			PackagePath / Prefix, FPackageName::GetAssetPackageExtension()));
+		TArray<FString> OnDisk;
+		IFileManager::Get().FindFiles(OnDisk, *(Directory / (FString(Prefix) + TEXT("*.uasset"))),
+			true, false);
+		int32 Swept = 0;
+		for (const FString& File : OnDisk)
+		{
+			if (!Written.Contains(FPaths::GetBaseFilename(File)))
+			{
+				Swept += SweepOrphan(PackagePath / FPaths::GetBaseFilename(File)) ? 1 : 0;
+			}
+		}
+		if (Swept > 0)
+		{
+			UE_LOG(LogElysiumSkeletalBuild, Display, TEXT("%s: swept %d orphaned %s(s)"),
+				*Owner, Swept, Noun);
+		}
+	}
+
 	bool SavePackageTo(UPackage* Package, const FString& PackageName)
 	{
 		Package->MarkPackageDirty();
@@ -106,6 +139,13 @@ namespace
 		FSavePackageArgs SaveArgs;
 		SaveArgs.TopLevelFlags = RF_Public | RF_Standalone;
 		return UPackage::SavePackage(Package, nullptr, *FileName, SaveArgs);
+	}
+
+	/** Load a skeleton asset whose short name matches its package, the way every bake stage names one. */
+	USkeleton* LoadSkeleton(const FString& PackageName)
+	{
+		return LoadObject<USkeleton>(nullptr,
+			*(PackageName + TEXT(".") + FPackageName::GetShortName(PackageName)));
 	}
 
 	/**
@@ -320,7 +360,7 @@ FString UElysiumSkeletalBuildLibrary::BuildProbeSkeletalMesh(const FString& Pack
 	TPolygonGroupAttributesRef<FName> SlotNames = Static.GetPolygonGroupMaterialSlotNames();
 
 	const FPolygonGroupID Group = MeshDescription->CreatePolygonGroup();
-	SlotNames.Set(Group, ProbeMaterialSlot);
+	SlotNames.Set(Group, ElysiumSkeletalBuildImpl::ProbeMaterialSlot);
 
 	// One triangle: enough to exercise geometry, skin weights and a morph delta at once.
 	const FVector3f Corners[3] = {
@@ -353,12 +393,13 @@ FString UElysiumSkeletalBuildLibrary::BuildProbeSkeletalMesh(const FString& Pack
 
 	// The whole point of the probe. glTFRuntime registers a morph target's NAME here and never its
 	// deltas, which is why its baked meshes lose their faces on reload.
-	if (!Attributes.RegisterMorphTargetAttribute(ProbeMorphName, /*bIncludeNormals=*/false))
+	if (!Attributes.RegisterMorphTargetAttribute(ElysiumSkeletalBuildImpl::ProbeMorphName,
+		/*bIncludeNormals=*/false))
 	{
 		return TEXT("RegisterMorphTargetAttribute failed");
 	}
 	TVertexAttributesRef<FVector3f> MorphDeltas =
-		Attributes.GetVertexMorphPositionDelta(ProbeMorphName);
+		Attributes.GetVertexMorphPositionDelta(ElysiumSkeletalBuildImpl::ProbeMorphName);
 	for (const FVertexID Vertex : Vertices)
 	{
 		MorphDeltas.Set(Vertex, FVector3f(0.0f, 0.0f, 5.0f));
@@ -368,7 +409,7 @@ FString UElysiumSkeletalBuildLibrary::BuildProbeSkeletalMesh(const FString& Pack
 
 	FSkeletalMaterial Material;
 	Material.MaterialInterface = UMaterial::GetDefaultMaterial(MD_Surface);
-	Material.MaterialSlotName = ProbeMaterialSlot;
+	Material.MaterialSlotName = ElysiumSkeletalBuildImpl::ProbeMaterialSlot;
 	Mesh->GetMaterials().Add(Material);
 
 	Skeleton->MergeAllBonesToBoneTree(Mesh);
@@ -423,7 +464,8 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	const FString SkeletonAsset = bSharedSkeleton
 		? FPackageName::GetShortName(SkeletonPackageName)
 		: FPackageName::GetShortName(PackageName) + TEXT("_Skeleton");
-	UPackage* SkeletonPackage = OpenPackage(bSharedSkeleton ? SkeletonPackageName : PackageName);
+	UPackage* SkeletonPackage =
+		ElysiumSkeletalBuildImpl::OpenPackage(bSharedSkeleton ? SkeletonPackageName : PackageName);
 	if (SkeletonPackage == nullptr)
 	{
 		return FString::Printf(TEXT("could not create package %s"), *SkeletonPackageName);
@@ -432,18 +474,18 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	const bool bNewSkeleton = Skeleton == nullptr;
 	if (bNewSkeleton)
 	{
-		ClearForRewrite(SkeletonPackage, SkeletonAsset);
+		ElysiumSkeletalBuildImpl::ClearForRewrite(SkeletonPackage, SkeletonAsset);
 		Skeleton = NewObject<USkeleton>(SkeletonPackage, *SkeletonAsset,
 			RF_Public | RF_Standalone);
 	}
 
-	UPackage* Package = OpenPackage(PackageName);
+	UPackage* Package = ElysiumSkeletalBuildImpl::OpenPackage(PackageName);
 	if (Package == nullptr)
 	{
 		return FString::Printf(TEXT("could not create package %s"), *PackageName);
 	}
 	const FString AssetName = FPackageName::GetShortName(PackageName);
-	ClearForRewrite(Package, AssetName);
+	ElysiumSkeletalBuildImpl::ClearForRewrite(Package, AssetName);
 	USkeletalMesh* Mesh = NewObject<USkeletalMesh>(Package, *AssetName, RF_Public | RF_Standalone);
 
 	// --- the reference skeleton -------------------------------------------------------------
@@ -656,8 +698,9 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		FSkeletalMaterial Material;
 		UMaterialInterface* const Parent = SlotParents.FindRef(Section.Material) != nullptr
 			? SlotParents.FindRef(Section.Material) : MaterialParent;
-		Material.MaterialInterface = MakeSectionMaterial(Parent, MaterialPackagePath,
-			AssetName, Section.Material, MaterialTextures.FindRef(Section.Material));
+		Material.MaterialInterface = ElysiumSkeletalBuildImpl::MakeSectionMaterial(Parent,
+			MaterialPackagePath, AssetName, Section.Material,
+			MaterialTextures.FindRef(Section.Material));
 		Material.MaterialSlotName = SlotName;
 		Material.ImportedMaterialSlotName = SlotName;
 		Mesh->GetMaterials().Add(Material);
@@ -774,11 +817,13 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	}
 	FAssetRegistryModule::AssetCreated(Mesh);
 
-	if (!SavePackageTo(SkeletonPackage, bSharedSkeleton ? SkeletonPackageName : PackageName))
+	if (!ElysiumSkeletalBuildImpl::SavePackageTo(SkeletonPackage,
+			bSharedSkeleton ? SkeletonPackageName : PackageName))
 	{
 		return FString::Printf(TEXT("could not save %s"), *SkeletonPackageName);
 	}
-	if (SkeletonPackage != Package && !SavePackageTo(Package, PackageName))
+	if (SkeletonPackage != Package
+		&& !ElysiumSkeletalBuildImpl::SavePackageTo(Package, PackageName))
 	{
 		return FString::Printf(TEXT("could not save %s"), *PackageName);
 	}
@@ -839,7 +884,7 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 		return FString::Printf(TEXT("%s: a rig family names no member"), *SkeletonPackageName);
 	}
 
-	UPackage* Package = OpenPackage(SkeletonPackageName);
+	UPackage* Package = ElysiumSkeletalBuildImpl::OpenPackage(SkeletonPackageName);
 	if (Package == nullptr)
 	{
 		return FString::Printf(TEXT("could not create package %s"), *SkeletonPackageName);
@@ -903,7 +948,7 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 
 	if (bNewSkeleton)
 	{
-		ClearForRewrite(Package, AssetName);
+		ElysiumSkeletalBuildImpl::ClearForRewrite(Package, AssetName);
 		Skeleton = NewObject<USkeleton>(Package, *AssetName, RF_Public | RF_Standalone);
 	}
 
@@ -1049,7 +1094,7 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	{
 		FAssetRegistryModule::AssetCreated(Skeleton);
 	}
-	if (!SavePackageTo(Package, SkeletonPackageName))
+	if (!ElysiumSkeletalBuildImpl::SavePackageTo(Package, SkeletonPackageName))
 	{
 		return FString::Printf(TEXT("could not save %s"), *SkeletonPackageName);
 	}
@@ -1070,8 +1115,7 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 	const TArray<FString>& SourceSkeletonPackageNames)
 {
 #if WITH_EDITOR
-	USkeleton* Target = LoadObject<USkeleton>(nullptr,
-		*(SkeletonPackageName + TEXT(".") + FPackageName::GetShortName(SkeletonPackageName)));
+	USkeleton* Target = ElysiumSkeletalBuildImpl::LoadSkeleton(SkeletonPackageName);
 	if (Target == nullptr)
 	{
 		return FString::Printf(TEXT("skeleton %s did not load"), *SkeletonPackageName);
@@ -1080,8 +1124,7 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 	const FReferenceSkeleton& TargetRef = Target->GetReferenceSkeleton();
 	for (const FString& SourceName : SourceSkeletonPackageNames)
 	{
-		USkeleton* Source = LoadObject<USkeleton>(nullptr,
-			*(SourceName + TEXT(".") + FPackageName::GetShortName(SourceName)));
+		USkeleton* Source = ElysiumSkeletalBuildImpl::LoadSkeleton(SourceName);
 		if (Source == nullptr)
 		{
 			return FString::Printf(TEXT("compatible skeleton %s did not load"), *SourceName);
@@ -1123,7 +1166,7 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 		}
 	}
 
-	if (!SavePackageTo(Target->GetPackage(), SkeletonPackageName))
+	if (!ElysiumSkeletalBuildImpl::SavePackageTo(Target->GetPackage(), SkeletonPackageName))
 	{
 		return FString::Printf(TEXT("could not save %s"), *SkeletonPackageName);
 	}
@@ -1147,8 +1190,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		return Error;
 	}
 
-	USkeleton* Skeleton = LoadObject<USkeleton>(nullptr,
-		*(SkeletonPackageName + TEXT(".") + FPackageName::GetShortName(SkeletonPackageName)));
+	USkeleton* Skeleton = ElysiumSkeletalBuildImpl::LoadSkeleton(SkeletonPackageName);
 	if (Skeleton == nullptr)
 	{
 		return FString::Printf(TEXT("skeleton %s did not load"), *SkeletonPackageName);
@@ -1201,9 +1243,10 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	// author it, which only a shared clip can do; a body's own clips play on that body alone, where
 	// the track states its own bind and dropping it would trade a correct authored pose for a
 	// reliance on the mesh supplying the same value.
-	const FName RetargetSource = RegisterRetargetSource(Skeleton, SourcePath, Source);
+	const FName RetargetSource =
+		ElysiumSkeletalBuildImpl::RegisterRetargetSource(Skeleton, SourcePath, Source);
 	const TSet<int32> Silent = Source.Vertices.IsEmpty()
-		? SilentAppendixBones(Source) : TSet<int32>();
+		? ElysiumSkeletalBuildImpl::SilentAppendixBones(Source) : TSet<int32>();
 
 	// --- blend masks ---------------------------------------------------------------------------
 	// A layer sequence owns some of the rig and leaves the rest to the pose it is composed over,
@@ -1294,7 +1337,8 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	// names either; a missing source silently falls back to the skeleton reference pose.
 	{
 		UPackage* SkeletonPackage = Skeleton->GetPackage();
-		if (SkeletonPackage == nullptr || !SavePackageTo(SkeletonPackage, SkeletonPackage->GetName()))
+		if (SkeletonPackage == nullptr
+			|| !ElysiumSkeletalBuildImpl::SavePackageTo(SkeletonPackage, SkeletonPackage->GetName()))
 		{
 			return FString::Printf(TEXT("could not save %s after registering retarget source %s"),
 				*SkeletonPackageName, *RetargetSource.ToString());
@@ -1357,12 +1401,12 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		}
 		const FString AssetName = TEXT("A_") + FElysiumContentPaths::BakedAssetName(Clip.Name);
 		const FString PackageName = PackagePath / AssetName;
-		UPackage* Package = OpenPackage(PackageName);
+		UPackage* Package = ElysiumSkeletalBuildImpl::OpenPackage(PackageName);
 		if (Package == nullptr)
 		{
 			return FString::Printf(TEXT("could not create package %s"), *PackageName);
 		}
-		ClearForRewrite(Package, AssetName);
+		ElysiumSkeletalBuildImpl::ClearForRewrite(Package, AssetName);
 
 		UAnimSequence* Sequence = NewObject<UAnimSequence>(Package, *AssetName,
 			RF_Public | RF_Standalone);
@@ -1544,7 +1588,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		// recorded here rather than when the package was opened.
 		BuiltByName.Add(Clip.Name, Sequence);
 		WrittenAssets.Add(AssetName);
-		if (!SavePackageTo(Package, PackageName))
+		if (!ElysiumSkeletalBuildImpl::SavePackageTo(Package, PackageName))
 		{
 			return FString::Printf(TEXT("could not save %s"), *PackageName);
 		}
@@ -1561,25 +1605,8 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	//
 	// Scoped to the `A_` prefix: blend spaces are `BS_` and are written by a later pass over the
 	// same folder, so sweeping everything here would delete assets that have not been built yet.
-	{
-		const FString Directory = FPaths::GetPath(FPackageName::LongPackageNameToFilename(
-			PackagePath / TEXT("A"), FPackageName::GetAssetPackageExtension()));
-		TArray<FString> OnDisk;
-		IFileManager::Get().FindFiles(OnDisk, *(Directory / TEXT("A_*.uasset")), true, false);
-		int32 Swept = 0;
-		for (const FString& File : OnDisk)
-		{
-			if (!WrittenAssets.Contains(FPaths::GetBaseFilename(File)))
-			{
-				Swept += SweepOrphan(PackagePath / FPaths::GetBaseFilename(File)) ? 1 : 0;
-			}
-		}
-		if (Swept > 0)
-		{
-			UE_LOG(LogElysiumSkeletalBuild, Display, TEXT("%s: swept %d orphaned sequence(s)"),
-				*FPaths::GetBaseFilename(SourcePath), Swept);
-		}
-	}
+	ElysiumSkeletalBuildImpl::SweepPrefix(PackagePath, TEXT("A_"), TEXT("sequence"),
+		FPaths::GetBaseFilename(SourcePath), WrittenAssets);
 
 	if (!Unresolved.IsEmpty())
 	{
@@ -1622,8 +1649,7 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 		return FString::Printf(TEXT("%s: %s"), *BlendsRelPath, *Error);
 	}
 
-	USkeleton* Skeleton = LoadObject<USkeleton>(nullptr,
-		*(SkeletonPackageName + TEXT(".") + FPackageName::GetShortName(SkeletonPackageName)));
+	USkeleton* Skeleton = ElysiumSkeletalBuildImpl::LoadSkeleton(SkeletonPackageName);
 	if (Skeleton == nullptr)
 	{
 		return FString::Printf(TEXT("skeleton %s did not load"), *SkeletonPackageName);
@@ -1773,12 +1799,12 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 		const FString AssetName = TEXT("BS_")
 			+ FElysiumContentPaths::BakedAssetName(Label + Suffix);
 		const FString PackageName = PackagePath / AssetName;
-		UPackage* Package = OpenPackage(PackageName);
+		UPackage* Package = ElysiumSkeletalBuildImpl::OpenPackage(PackageName);
 		if (Package == nullptr)
 		{
 			return FString::Printf(TEXT("could not create package %s"), *PackageName);
 		}
-		ClearForRewrite(Package, AssetName);
+		ElysiumSkeletalBuildImpl::ClearForRewrite(Package, AssetName);
 
 		// The class is the editor's view of the asset and what `GetAxisToScale` answers; it does not
 		// pick the evaluation path. `ResampleData` infers dimensionality from the samples' own bounding
@@ -1858,7 +1884,7 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 
 		Space->PostEditChange();
 		FAssetRegistryModule::AssetCreated(Space);
-		if (!SavePackageTo(Package, PackageName))
+		if (!ElysiumSkeletalBuildImpl::SavePackageTo(Package, PackageName))
 		{
 			return FString::Printf(TEXT("could not save %s"), *PackageName);
 		}
@@ -1870,25 +1896,8 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 	// resolving enough cells is not rewritten, so its previous asset survives -- still pointing at
 	// sequences the sequence pass may since have swept. That is a package which loads with
 	// "a sample with no/invalid animation" and fails the run, from a bake that logged nothing.
-	{
-		const FString Directory = FPaths::GetPath(FPackageName::LongPackageNameToFilename(
-			PackagePath / TEXT("BS"), FPackageName::GetAssetPackageExtension()));
-		TArray<FString> OnDisk;
-		IFileManager::Get().FindFiles(OnDisk, *(Directory / TEXT("BS_*.uasset")), true, false);
-		int32 Swept = 0;
-		for (const FString& File : OnDisk)
-		{
-			if (!WrittenSpaces.Contains(FPaths::GetBaseFilename(File)))
-			{
-				Swept += SweepOrphan(PackagePath / FPaths::GetBaseFilename(File)) ? 1 : 0;
-			}
-		}
-		if (Swept > 0)
-		{
-			UE_LOG(LogElysiumSkeletalBuild, Display, TEXT("%s: swept %d orphaned blend space(s)"),
-				*BlendsRelPath, Swept);
-		}
-	}
+	ElysiumSkeletalBuildImpl::SweepPrefix(PackagePath, TEXT("BS_"), TEXT("blend space"),
+		BlendsRelPath, WrittenSpaces);
 
 	return FString();
 #else
