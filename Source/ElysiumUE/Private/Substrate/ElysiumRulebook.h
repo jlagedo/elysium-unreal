@@ -1125,6 +1125,15 @@ struct FElysiumItemDef
 	FString PlayerModel;                // `playermodel` — the loose world (ground) model
 	FString ViewModel;
 	FString InfoModel;
+	// `wieldmodel_m` / `wieldmodel_f` — the held geometry the equip transaction applies by the
+	// wielder's sex (`docs/vtmb/wielded_weapons.md` §§1-2). `w_null.mdl` (loose or under
+	// `weapons/`) is the authored no-geometry answer, not a missing value.
+	FString WieldModelM;
+	FString WieldModelF;
+	// `anim_prefix` — the weapon-family lookup key `EventDispatch` resolves together with an
+	// activity constant into a melee impact-profile variant (§5). Consumed opaquely; never
+	// assembled into a sequence or activity name.
+	FString AnimPrefix;
 
 	bool IsValid() const { return !Classname.IsEmpty(); }
 	// The three wielded weapon families — the ones `FElysiumWeapon` controls. Policy from the parsed

@@ -2399,6 +2399,9 @@ bool FElysiumItemTable::ParseText(const FString& Classname, const FString& Text,
 	Out.PlayerModel = Data->Str(TEXT("playermodel"), FString());
 	Out.ViewModel = Data->Str(TEXT("viewmodel"), FString());
 	Out.InfoModel = Data->Str(TEXT("infomodel"), FString());
+	Out.WieldModelM = Data->Str(TEXT("wieldmodel_m"), FString());
+	Out.WieldModelF = Data->Str(TEXT("wieldmodel_f"), FString());
+	Out.AnimPrefix = Data->Str(TEXT("anim_prefix"), FString());
 
 	Out.CameraClass = ElysiumCam::ParseCameraClass(Data->Str(TEXT("camera_class"), FString()));
 

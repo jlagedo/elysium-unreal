@@ -18,6 +18,7 @@
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumVariant.h"
+#include "ElysiumWieldTable.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumDisciplines.h"
@@ -26,6 +27,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealth.h"
+#include "Visual/ElysiumNpcVisual.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeapon, Log, All);
 
@@ -333,6 +335,58 @@ const TCHAR* FElysiumWeapon::VerdictName(EVerdict Verdict)
 // Lifecycle
 // ================================================================================================
 
+namespace
+{
+	// The equip funnel: put the wield table's answer for (classname, wielder sex) in the wielder's
+	// hand, or take away whatever it was holding. This is the one door a real equip/holster
+	// transaction reaches the attachment the green room's `gr_wield` lane proves
+	// (`docs/vtmb/wielded_weapons.md` §2, `docs/architecture/wielded-weapon-integration.md` —
+	// "Player and NPC"). One path serves both: sex is read off `Wearer.Sheet.IsMale()`, which every
+	// combat character carries, so there is no player-only branch.
+	void ApplyWieldVisual(const FElysiumWeapon& Weapon, FElysiumCombatCharacter& Wearer)
+	{
+		USkeletalMeshComponent* const Body = Wearer.GetSkeletalBody();
+		if (Body == nullptr)
+		{
+			// A bodiless wearer — a headless substrate fixture, or `elysium.NpcBodies 0`. Nothing to
+			// attach geometry to; the equip transaction still completes.
+			return;
+		}
+
+		const FElysiumWieldModelRef* Ref = nullptr;
+		const EElysiumWieldResult Result = UElysiumWieldTable::FindRow(
+			FName(*Weapon.ClassName()), /*bFemale*/ !Wearer.Sheet.IsMale(), Ref);
+
+		switch (Result)
+		{
+		case EElysiumWieldResult::Found:
+			// A load miss here is a bake that did not produce a package its own table references;
+			// InstallWieldModel names it.
+			ElysiumNpcVisual::InstallWieldModel(Body, *Ref, Weapon.ClassName());
+			break;
+		case EElysiumWieldResult::NoGeometry:
+		case EElysiumWieldResult::WorldModel:
+			// The corpus's ordinary answer (`w_null.mdl` / no wield model) or the `shows_view_model`
+			// gate: either way the hand draws nothing, which is an authored answer, not a missing asset.
+			ElysiumNpcVisual::ClearWieldModel(Body);
+			break;
+		case EElysiumWieldResult::UnknownItem:
+			UE_LOG(LogElysiumWeapon, Warning,
+				TEXT("%s equipped by %s names no row in the wield table for '%s'"),
+				*Weapon.DebugString(), *Wearer.DebugString(), *Weapon.ClassName());
+			ElysiumNpcVisual::ClearWieldModel(Body);
+			break;
+		case EElysiumWieldResult::NoTable:
+			// UElysiumWieldTable::Load already warned once that the wield bake has not run.
+			break;
+		case EElysiumWieldResult::MeshMissing:
+		case EElysiumWieldResult::NoWearer:
+			// Not FindRow's vocabulary (`ElysiumWieldTable.h`) — it never answers either from this call.
+			break;
+		}
+	}
+}
+
 void FElysiumWeapon::Spawn()
 {
 	FElysiumItem::Spawn();
@@ -443,6 +497,7 @@ void FElysiumWeapon::OnEquipped(FElysiumCombatCharacter& Wearer)
 	{
 		HoldAttacksUntil(Wearer.World->NowSeconds());
 	}
+	ApplyWieldVisual(*this, Wearer);
 	UE_LOG(LogElysiumWeapon, Verbose, TEXT("%s equipped by %s"), *DebugString(),
 		*Wearer.DebugString());
 }
@@ -454,6 +509,10 @@ void FElysiumWeapon::OnHolstered(FElysiumCombatCharacter& Wearer)
 	ClearSwing();
 	bReloading = false;
 	bFireIntentDuringReload = false;
+	if (USkeletalMeshComponent* const WearerBody = Wearer.GetSkeletalBody())
+	{
+		ElysiumNpcVisual::ClearWieldModel(WearerBody);
+	}
 	UE_LOG(LogElysiumWeapon, Verbose, TEXT("%s holstered by %s"), *DebugString(),
 		*Wearer.DebugString());
 }

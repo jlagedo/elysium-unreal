@@ -28,11 +28,6 @@ binding metadata are `docs/architecture/wielded-weapon-integration.md`; the corp
 working tree (leader-pose follower, `(classname, sex)` resolution, the green-room `gr_wield`
 lane); what remains is making it *true*:
 
-- **The equip funnels.** Parse `wieldmodel_m`/`wieldmodel_f` and `anim_prefix` onto
-  `FElysiumItemDef`; attach on equip and detach on holster through
-  `FElysiumWeapon::OnEquipped`/`OnHolstered` and `FElysiumInventory::SetActiveWeapon` — no
-  second equip path. NPC bodies and the player body take one path; equip selects on the wielder
-  through `IsMale` with no player-only branch.
 - **Visibility.** Consume `FElysiumCameraView::bDrawWorldWeapon` (published, currently
   reader-less): suppress submission only — never destroy the attachment or clear a model to
   hide it.

@@ -245,6 +245,9 @@ bool FElysiumWeaponRulesTest::RunTest(const FString&)
 				"item_type"   "weapon_firearm"
 				"reload_single" "1"
 				"Disallow_FirearmsToBashing" "1"
+				"wieldmodel_m" "weapons/probe/wield/w_m_probe.mdl"
+				"wieldmodel_f" "weapons/probe/wield/w_f_probe.mdl"
+				"anim_prefix" "probe"
 				Magazine
 				{
 					"Type" "TestRound"
@@ -293,6 +296,11 @@ bool FElysiumWeaponRulesTest::RunTest(const FString&)
 		TestTrue(TEXT("`reload_single` is a WeaponData-level key"), Def.bReloadSingle);
 		TestTrue(TEXT("`Disallow_FirearmsToBashing` is read off the weapon record"),
 			Def.bDisallowFirearmsToBashing);
+		TestEqual(TEXT("wieldmodel_m parses onto the item def"), Def.WieldModelM,
+			FString(TEXT("weapons/probe/wield/w_m_probe.mdl")));
+		TestEqual(TEXT("wieldmodel_f parses onto the item def"), Def.WieldModelF,
+			FString(TEXT("weapons/probe/wield/w_f_probe.mdl")));
+		TestEqual(TEXT("anim_prefix parses onto the item def"), Def.AnimPrefix, FString(TEXT("probe")));
 		TestEqual(TEXT("every Activation block becomes a mode"), Def.Modes.Num(), 3);
 		if (Def.Modes.Num() == 3)
 		{
@@ -556,6 +564,71 @@ bool FElysiumWeaponInstallTest::RunTest(const FString&)
 		Dmg.DmgMask == ElysiumDamage::DmgClub);
 	TestEqual(TEXT("the primary mode is the first tagged Primary record"),
 		Weapon->PrimaryModeIndex, 0);
+
+	return true;
+}
+
+// =====================================================================================
+// The equip funnel: OnEquipped/OnHolstered are the ONE door a real equip/holster
+// transaction reaches the wield attach through, for an NPC and the player alike
+// (`docs/project/plans/animation.md` -> LIFE4 "The equip funnels"). This suite is
+// content-free and builds neither wearer a `model`, so neither stands a skeletal body
+// (`FElysiumAnimating::BuildBody`) and `ApplyWieldVisual`'s
+// `Wearer.GetSkeletalBody() == nullptr` early-out is what actually runs on both sides
+// (docs/architecture/wielded-weapon-integration.md's live acceptance instrument is the
+// green room's `elysium.gr_wield_check`, which does stand a body). What this proves is
+// that the real transaction — `GiveNamedItem` -> `Equip` -> `SetActiveWeapon` ->
+// `OnEquipped`/`OnHolstered` — runs the SAME call for both chain leaves with no crash and
+// no player/NPC branch in its bookkeeping.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponWieldFunnelTest, "Elysium.Substrate.Weapons.WieldFunnel",
+	GElysiumTestFlags)
+bool FElysiumWeaponWieldFunnelTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MakeWeaponTestDefs());
+	World.SpawnPlayer();
+	World.Activate(0.0);
+	World.Tick(0.0);
+
+	FElysiumPlayer* Player = World.FindPlayer();
+	FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim"));
+	if (!TestNotNull(TEXT("the player entity exists"), Player)
+		|| !TestNotNull(TEXT("the victim NPC exists"), Victim))
+	{
+		return false;
+	}
+
+	// Draw the katana on both — the real transaction (`GiveNamedItem` -> `Equip` ->
+	// `SetActiveWeapon` -> `OnEquipped`), not a direct call into the visual layer. Neither call
+	// site is guarded by `World->PlayerHandle() == ...` or any other player/NPC branch.
+	FElysiumWeapon* PlayerKatana = GiveWeapon(*Player, GKatana);
+	FElysiumWeapon* VictimKatana = GiveWeapon(*Victim, GKatana);
+	if (!TestNotNull(TEXT("the player equips the katana"), PlayerKatana)
+		|| !TestNotNull(TEXT("the NPC equips the katana"), VictimKatana))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the katana is the player's active weapon"),
+		Player->Inventory.Active(*Player) == PlayerKatana);
+	TestTrue(TEXT("the katana is the NPC's active weapon"),
+		Victim->Inventory.Active(*Victim) == VictimKatana);
+
+	// Draw the fists on both, which holsters the katana through the same `SetActiveWeapon` ->
+	// `OnHolstered` door before the fists' own `OnEquipped` runs. Nothing here should assert,
+	// warn about a null owner, or otherwise misbehave on either wearer.
+	FElysiumWeapon* PlayerFists = GiveWeapon(*Player, GFists);
+	FElysiumWeapon* VictimFists = GiveWeapon(*Victim, GFists);
+	TestTrue(TEXT("the fists become the player's active weapon"),
+		Player->Inventory.Active(*Player) == PlayerFists);
+	TestTrue(TEXT("the fists become the NPC's active weapon"),
+		Victim->Inventory.Active(*Victim) == VictimFists);
 
 	return true;
 }

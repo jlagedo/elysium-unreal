@@ -306,7 +306,11 @@ The ladder:
   and firearm, both sexes; the channel arbitration slot landed: the driver holds one request slot
   per channel, arbitrates the base by a typed priority order each tick, and every holder releases
   on every stop path, with the verdict on the selection record, the Cog row and the MCP surfaces;
-  the equip funnels, visibility and weapon-state animation open.
+  the equip funnels landed: `wieldmodel_m`/`wieldmodel_f`/`anim_prefix` parse onto
+  `FElysiumItemDef` and one transaction path attaches on equip and detaches on holster for NPC
+  and player alike, selecting on the wielder's `IsMale`; visibility and weapon-state animation
+  open, and the rung's real-input draw acceptance depends on 9.8's draw input (no shipped item
+  authors `is_wieldable`, so only 9.8's hotbar reaches `SetActiveWeapon` from input).
 - [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — the body-kind chain
   discriminator and the retirement of `PlayNpcActivity` as a second clip picker, then
   flinch/knockback/death, blocked/paired rules, the restart rule, the sequence-event carrier.
