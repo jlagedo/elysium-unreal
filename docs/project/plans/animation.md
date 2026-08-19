@@ -42,6 +42,25 @@ model; first person suppresses it and third person restores it without a rebuild
 correct in the Content Browser preview, not only in our runtime. *Deps:* LIFE0; LIFE2
 for the per-weapon translation half.
 
+### Sequence-blend fidelity — an open owner call
+
+A smoothing audit found the runtime substitutes the blend **mechanism** on sequence changes: we
+run `TLT_Inertialization` (velocity-preserving easing) with a 0.5 s ceiling where retail ran a
+plain weight crossfade (`SimpleSpline`, default 0.2 s, `max(fade)` combine) — and retail
+**hard-cuts** any clip with `flags & 0x2`, dropping everything fading: 2,642 of 5,836 clips,
+most attacks (`docs/vtmb/animation_and_movers.md` → the sequence-blend rules). Our blend
+durations and snap flags are faithful; the mechanism and the ceiling are not, and the
+substitution is recorded nowhere — an accidental engine default, surfaced by owner QA
+(retail's attack transitions visibly snap harder than ours). The call: **restore faithful**
+(standard blend + cubic curve, 0.2 s ceiling, verified true hard-cuts with dropped tails on
+`0x2` clips — touches the graph builder, the anim instance transition path, and the captured
+graph text; needs a live probe of how often the ceiling actually fires) or **declare the
+divergence** beside the faithful record. Default resolves to reproduce. Related, already
+tracked separately: gesture/layer weight ramps, the scene-path crossfade (LIFE7/CCC9), and
+retail's ~10 Hz snapshot quantization of animation advance — judged its own technical deficit,
+not recommended for reproduction. No banked capture covers the sledgehammer aggressive family,
+so a live retail side-by-side remains the repro instrument.
+
 ### LIFE5 Reactions and combat actions
 
 Directional hit, knockback and death reactions, then weapon and interaction actions; each

@@ -316,7 +316,10 @@ The ladder:
   autolayers arm through the table-declared hosts, and the wield check gates the mount's local
   frame and the two-handed off hand; real-input draw works today through the command bus
   (`elysium.cmd invnext`/`slot*`/`holster` reach `SetActiveWeapon`); the owner-played acceptance
-  sweep remains.
+  sweep remains, held by owner call until a real attack input exists (LIFE5's first family).
+- [ ] **[Sequence-blend fidelity](plans/animation.md)** — the runtime substitutes
+  inertialization for retail's weight crossfade and never hard-cuts `flags & 0x2` clips;
+  restore-faithful vs declared-divergence is an open owner call.
 - [ ] **[LIFE5 Reactions and combat actions](plans/animation.md)** — the body-kind chain
   discriminator and the retirement of `PlayNpcActivity` as a second clip picker, then
   flinch/knockback/death, blocked/paired rules, the restart rule, the sequence-event carrier.
