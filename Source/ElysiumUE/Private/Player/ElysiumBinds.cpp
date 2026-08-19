@@ -58,12 +58,17 @@ const TArray<FElysiumDefaultBind>& ElysiumBinds::Defaults()
 		{ EKeys::Nine,         TEXT("vhotkey #9"),        TEXT("9") },
 		{ EKeys::Zero,         TEXT("vhotkey #10"),       TEXT("0") },
 		{ EKeys::K,            TEXT("showhotkeys"),       TEXT("k") },
-		{ EKeys::F1,           TEXT("slot2"),             TEXT("F1") },
+		// Retail's own F1 carries `slot2` (melee), but bare F1 is also Cog's hardcoded shell toggle
+		// (`FCogWindow_Settings::Shortcut_ToggleImguiInput`) and that shortcut is not reachable through
+		// this table to move — it fires inside Cog's own input handling, ahead of anything bound here.
+		// F1 stays exclusively Cog's (`ReservedKeys` below); `slot2` moves onto F6, which retail/the
+		// patch leave carrying the dead `slot1` (the commented-out Disciplines category — see
+		// `ElysiumInventorySections.h`). Every other F-key keeps its retail/patch category verbatim.
 		{ EKeys::F2,           TEXT("slot3"),             TEXT("F2") },
 		{ EKeys::F3,           TEXT("slot5"),             TEXT("F3") },
 		{ EKeys::F4,           TEXT("slot6"),             TEXT("F4") },
 		{ EKeys::F5,           TEXT("slot4"),             TEXT("F5") },
-		{ EKeys::F6,           TEXT("slot1"),             TEXT("F6") },
+		{ EKeys::F6,           TEXT("slot2"),             TEXT("F6") },
 		{ EKeys::F8,           TEXT("vdiscipline_endall"),TEXT("F8") },
 
 		// --- UI, camera, system -----------------------------------------------------------
@@ -98,6 +103,10 @@ const TArray<FKey>& ElysiumBinds::ReservedKeys()
 		// which UE resolves to `EKeys::Apostrophe` — a bind, not the console). F7 is the one function
 		// key neither this table nor VtMB's own `default.cfg` claims.
 		EKeys::F7,
+		// Cog's shell toggle (`FCogWindow_Settings::Shortcut_ToggleImguiInput`, bare F1, no modifier).
+		// Cog reads it inside its own input handling, ahead of this table, so a default bind landing
+		// here would fire both the toggle and the game verb on the same press. `slot2` moved to F6.
+		EKeys::F1,
 	};
 	return Keys;
 }

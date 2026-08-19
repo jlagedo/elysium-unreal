@@ -31,11 +31,15 @@ namespace ElysiumBinds
 
 	// The bare keys the **development layer** occupies, which no default bind and no player rebind
 	// may take (`docs/architecture/input-architecture.md` § "Reserved keys"). Everything else the dev layer uses
-	// is a chord — Cog's shell is `Ctrl+F1`–`Ctrl+F4`, and Elysium's own dev toggles are `Ctrl+V`
-	// (noclip) and `Ctrl+T` (the 3D-skybox A/B), precisely so `v` and `t` stay the player's.
+	// is a chord — Cog's layout save/load menu items are `Ctrl+F1`–`Ctrl+F4`, and Elysium's own dev
+	// toggles are `Ctrl+V` (noclip) and `Ctrl+T` (the 3D-skybox A/B), precisely so `v` and `t` stay
+	// the player's.
 	//
 	// The console holds two of them — `` ` `` and `F7` — because `` ` `` is not on every physical
-	// layout, and F7 is the one function key neither this table nor `default.cfg` claims.
+	// layout, and F7 is the one function key neither this table nor `default.cfg` claims. `F1` is
+	// the third: Cog's own shell toggle is bare `F1` (no modifier), read inside Cog's input handling
+	// ahead of this table, so it cannot share the key with a game verb the way the layout chords
+	// share the Ctrl modifier.
 	//
 	// Distinct from *non-rebindable*: `ESCAPE` and `` ` `` are bound by `default.cfg` but appear in
 	// no `kb_act.lst`, so the player keeps `cancelselect` and `toggleconsole` and cannot move them.
