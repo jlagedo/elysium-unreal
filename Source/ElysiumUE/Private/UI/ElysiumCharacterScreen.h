@@ -4,11 +4,11 @@
 
 #include "Substrate/ElysiumChargen.h"
 #include "UI/ElysiumNavigableScreen.h"
+#include "UI/ElysiumUiArtCache.h"
 #include "UI/ElysiumUISubsystem.h"
 
 #include "ElysiumCharacterScreen.generated.h"
 
-class UTexture2D;
 struct FSlateBrush;
 
 namespace ElysiumQuestView { struct FEntry; }
@@ -99,19 +99,18 @@ private:
 	float VirtualScale() const;
 
 	// --- art ------------------------------------------------------------------------------------
-	// One cache rather than a member per image: the screen draws a dozen pieces and they all want
-	// the same load-once-guard-everywhere treatment. Returns null when the file is absent, which
-	// every caller handles by drawing the token version instead.
-	// `Uv` selects a sub-rectangle of the page — every one of these textures is a power-of-two page
-	// with the art in one corner, and several carry two usable pieces (the divider's two curled
-	// ends). The whole page is the default.
+	// Thin forwarders into the screen's art cache, so every builder draws through one name.
 	const FSlateBrush* Art(const TCHAR* RelPath, const FLinearColor& Tint,
 	                       const FBox2f& Uv = FBox2f(FVector2f::ZeroVector, FVector2f::UnitVector),
-	                       const TCHAR* Variant = nullptr);
-	// A framed panel out of one of the sheet's window textures, 9-sliced so the corner scrolls do
-	// not stretch. Falls back to a hairline border.
+	                       const TCHAR* Variant = nullptr)
+	{
+		return ArtCache.Art(RelPath, Tint, Uv, Variant);
+	}
 	TSharedRef<SWidget> Framed(const TCHAR* RelPath, const FBox2f& Uv, const FMargin& Slice,
-	                           TSharedRef<SWidget> Content);
+	                           TSharedRef<SWidget> Content)
+	{
+		return ArtCache.Framed(RelPath, Uv, Slice, Content);
+	}
 
 	// --- the shell ------------------------------------------------------------------------------
 	TSharedRef<SWidget> BuildHeader();
@@ -149,6 +148,10 @@ private:
 	                                   const TArray<FText>& Options,
 	                                   int32 Selected, TFunction<void(int32)> OnPick);
 
+	// The screen's navigation groups, declared identically on every navigation build — the full
+	// rebuild and the in-place refresh share this one registration.
+	void RegisterNavigationGroups();
+
 	void Select(EElysiumTraitContainer Container, int32 TraitSlot);
 	void TryBuy(EElysiumTraitContainer Container, int32 TraitSlot);
 	void TrySell(EElysiumTraitContainer Container, int32 TraitSlot);
@@ -168,12 +171,8 @@ private:
 	EElysiumTraitContainer SelContainer = EElysiumTraitContainer::Attributes;
 	int32 SelSlot = 1;
 
-	UPROPERTY(Transient)
-	TMap<FString, TObjectPtr<UTexture2D>> ArtTextures;
-
-	TMap<FString, TSharedPtr<FSlateBrush>> ArtBrushes;
-	// A miss is cached so a rebuild does not re-hit the disk for a file that is not there.
-	TSet<FString> ArtMissing;
+	// The decoded sheet chrome, loaded once and guarded everywhere.
+	FElysiumUiArtCache ArtCache;
 
 	// The three regions `Refresh` swaps. Held weakly-by-shared-ptr on the widget and reset in
 	// `ReleaseSlateResources` with the brushes.

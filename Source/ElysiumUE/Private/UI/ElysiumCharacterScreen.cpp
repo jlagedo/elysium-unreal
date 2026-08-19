@@ -1,6 +1,5 @@
 #include "UI/ElysiumCharacterScreen.h"
 
-#include "ElysiumContentPaths.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumQuestView.h"
@@ -8,11 +7,9 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "UI/ElysiumActionButton.h"
 #include "UI/ElysiumUIStyle.h"
-#include "UI/ElysiumUITexture.h"
 
 #include "Engine/GameInstance.h"
 #include "Engine/GameViewportClient.h"
-#include "Engine/Texture2D.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Styling/CoreStyle.h"
 #include "Widgets/Images/SImage.h"
@@ -25,8 +22,6 @@
 #include "Widgets/SOverlay.h"
 #include "Widgets/Input/SEditableTextBox.h"
 #include "Widgets/Text/STextBlock.h"
-
-DEFINE_LOG_CATEGORY_STATIC(LogElysiumCharScreen, Log, All);
 
 namespace
 {
@@ -244,6 +239,19 @@ namespace
 		UGameInstance* GI = Widget ? Widget->GetGameInstance() : nullptr;
 		return GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
 	}
+
+	// The one styling every selectable control shares: `On` while the row is its screen's current
+	// choice (`bOn`) or the live keyboard selection, `Off` otherwise. Both colours are fixed at
+	// build time; only the selection is read per frame.
+	TAttribute<FSlateColor> SelectedColor(TWeakObjectPtr<UElysiumActionButton> Button, bool bOn,
+		const FLinearColor& On, const FLinearColor& Off)
+	{
+		return TAttribute<FSlateColor>::CreateLambda([Button, bOn, On, Off]()
+		{
+			const UElysiumActionButton* Action = Button.Get();
+			return FSlateColor(bOn || (Action && Action->IsActionSelected()) ? On : Off);
+		});
+	}
 }
 
 UElysiumCharacterScreen::UElysiumCharacterScreen()
@@ -321,13 +329,7 @@ void UElysiumCharacterScreen::Refresh()
 	{
 		BeginNavigationBuild();
 		TraitActions.Reset();
-		SetNavigationGroup(ActionGroup::Tabs, true, false);
-		SetNavigationGroup(ActionGroup::Hubs, true, false);
-		SetNavigationGroup(ActionGroup::Traits, false, true, true, false);
-		SetNavigationGroup(ActionGroup::Footer, true, false);
-		SetNavigationGroup(ActionGroup::BaseClan, true, false);
-		SetNavigationGroup(ActionGroup::BaseSex, true, false);
-		SetNavigationGroup(ActionGroup::BaseHistory, true, false);
+		RegisterNavigationGroups();
 		if (TabStripHost.IsValid())
 		{
 			TabStripHost->SetContent(BuildTabStrip());
@@ -344,102 +346,15 @@ void UElysiumCharacterScreen::Refresh()
 	}
 }
 
-// ================================================================================================
-// Art
-// ================================================================================================
-
-const FSlateBrush* UElysiumCharacterScreen::Art(const TCHAR* RelPath, const FLinearColor& Tint,
-                                                const FBox2f& Uv, const TCHAR* Variant)
+void UElysiumCharacterScreen::RegisterNavigationGroups()
 {
-	const FString Key = RelPath;
-	if (ArtMissing.Contains(Key))
-	{
-		return nullptr;
-	}
-	// One texture can back several brushes (a sub-rectangle, a different tint), so the brush cache
-	// is keyed by variant while the texture cache is keyed by file.
-	const FString BrushKey = Variant ? Key + TEXT("#") + Variant : Key;
-	if (const TSharedPtr<FSlateBrush>* Found = ArtBrushes.Find(BrushKey))
-	{
-		return Found->Get();
-	}
-
-	TObjectPtr<UTexture2D>* Cached = ArtTextures.Find(Key);
-	if (!Cached)
-	{
-		const FString Path = FElysiumContentPaths::UiArt(Key);
-		UTexture2D* Loaded = ElysiumUI::LoadPngTexture(Path);
-		if (!Loaded)
-		{
-			// Not fatal anywhere: every caller draws the token version instead. Verbose because a
-			// clone with no export would otherwise log a dozen warnings per open.
-			UE_LOG(LogElysiumCharScreen, Verbose,
-				TEXT("no sheet art at %s — run: uv run elysium export bundle ui"), *Path);
-			ArtMissing.Add(Key);
-			return nullptr;
-		}
-		Cached = &ArtTextures.Add(Key, Loaded);
-	}
-
-	TSharedPtr<FSlateBrush> Brush = MakeShared<FSlateBrush>();
-	Brush->SetResourceObject(Cached->Get());
-	Brush->DrawAs = ESlateBrushDrawType::Image;
-	Brush->ImageSize = FVector2D(1.0f, 1.0f);   // stretched by the box that holds it
-	Brush->TintColor = FSlateColor(Tint);
-	Brush->SetUVRegion(FBox2f(Uv.Min, Uv.Max));
-	ArtBrushes.Add(BrushKey, Brush);
-	return Brush.Get();
-}
-
-TSharedRef<SWidget> UElysiumCharacterScreen::Framed(const TCHAR* RelPath, const FBox2f& Uv,
-                                                    const FMargin& Slice, TSharedRef<SWidget> Content)
-{
-	const FString Key = FString(RelPath) + TEXT("#box");
-	TSharedPtr<FSlateBrush>* Found = ArtBrushes.Find(Key);
-	if (!Found && !ArtMissing.Contains(FString(RelPath)))
-	{
-		// Reuse the plain loader for the texture, then build the box brush beside it.
-		if (Art(RelPath, FLinearColor::White))
-		{
-			TObjectPtr<UTexture2D>* Tex = ArtTextures.Find(RelPath);
-			if (Tex && *Tex)
-			{
-				TSharedPtr<FSlateBrush> Box = MakeShared<FSlateBrush>();
-				Box->SetResourceObject(Tex->Get());
-				Box->DrawAs = ESlateBrushDrawType::Box;
-				Box->Margin = Slice;
-				Box->SetUVRegion(FBox2f(Uv.Min, Uv.Max));
-				Box->ImageSize = FVector2D(1.0f, 1.0f);
-				Box->TintColor = FSlateColor(FLinearColor::White);
-				Found = &ArtBrushes.Add(Key, Box);
-			}
-		}
-	}
-
-	if (Found && Found->IsValid())
-	{
-		return SNew(SBorder)
-			.BorderImage(Found->Get())
-			.Padding(FMargin(ElysiumUI::Space::M, ElysiumUI::Space::M))
-			[
-				Content
-			];
-	}
-
-	// No art: a hairline in the frame's own amber, which is the same line the corner scrolls sit on.
-	return SNew(SBorder)
-		.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-		.BorderBackgroundColor(FSlateColor(ElysiumUI::Palette::Amber.CopyWithNewOpacity(0.28f)))
-		.Padding(FMargin(1.0f))
-		[
-			SNew(SBorder)
-			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-			.BorderBackgroundColor(FSlateColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.35f)))
-			.Padding(FMargin(ElysiumUI::Space::M))
-			[
-				Content
-			]
-		];
+	SetNavigationGroup(ActionGroup::Tabs, true, false);
+	SetNavigationGroup(ActionGroup::Hubs, true, false);
+	SetNavigationGroup(ActionGroup::Traits, false, true, true, false);
+	SetNavigationGroup(ActionGroup::Footer, true, false);
+	SetNavigationGroup(ActionGroup::BaseClan, true, false);
+	SetNavigationGroup(ActionGroup::BaseSex, true, false);
+	SetNavigationGroup(ActionGroup::BaseHistory, true, false);
 }
 
 // ================================================================================================
@@ -692,12 +607,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTabStrip()
 				.Text(TabLabel(T))
 				.Font(Fonts.Font(EElysiumFontRole::Label, EElysiumFontWeight::SemiBold,
 				                 ElysiumUI::Type::Heading, 1.0f))
-				.ColorAndOpacity_Lambda([WeakButton, bActive]()
-				{
-					const UElysiumActionButton* Action = WeakButton.Get();
-					return FSlateColor(bActive || (Action && Action->IsActionSelected())
-						? ElysiumUI::Palette::Cyan : ElysiumUI::Palette::BoneDim);
-				})
+				.ColorAndOpacity(SelectedColor(WeakButton, bActive,
+					ElysiumUI::Palette::Cyan, ElysiumUI::Palette::BoneDim))
 			]
 			+ SVerticalBox::Slot().AutoHeight().Padding(0.0f, ElysiumUI::Space::XS, 0.0f, 0.0f)
 			[
@@ -705,12 +616,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTabStrip()
 				[
 					SNew(SImage)
 					.Image(FCoreStyle::Get().GetBrush("WhiteBrush"))
-					.ColorAndOpacity_Lambda([WeakButton, bActive]()
-					{
-						const UElysiumActionButton* Action = WeakButton.Get();
-						return FSlateColor(bActive || (Action && Action->IsActionSelected())
-							? ElysiumUI::Palette::Cyan : FLinearColor::Transparent);
-					})
+					.ColorAndOpacity(SelectedColor(WeakButton, bActive,
+						ElysiumUI::Palette::Cyan, FLinearColor::Transparent))
 				]
 			]);
 		Row->AddSlot().AutoWidth().Padding(0.0f, 0.0f, Layout::TabGap, 0.0f)
@@ -741,16 +648,11 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildFooter()
 			.Text(Label)
 			.Font(ElysiumUIFonts().Font(EElysiumFontRole::Label, EElysiumFontWeight::SemiBold,
 			                     ElysiumUI::Type::Label, 1.0f))
-			.ColorAndOpacity_Lambda([WeakButton, bEnabled]()
-			{
-				const UElysiumActionButton* Action = WeakButton.Get();
-				if (!bEnabled)
-				{
-					return FSlateColor(ElysiumUI::Palette::Disabled);
-				}
-				return FSlateColor(Action && Action->IsActionSelected()
-					? ElysiumUI::Palette::Cyan : ElysiumUI::Palette::GoldLit);
-			}));
+			// A disabled button never lights up, selected or not.
+			.ColorAndOpacity(bEnabled
+				? SelectedColor(WeakButton, false,
+					ElysiumUI::Palette::Cyan, ElysiumUI::Palette::GoldLit)
+				: TAttribute<FSlateColor>(FSlateColor(ElysiumUI::Palette::Disabled))));
 		Buttons->AddSlot().AutoWidth().Padding(ElysiumUI::Space::L, 0.0f, 0.0f, 0.0f)
 		[
 			Button->TakeWidget()
@@ -956,13 +858,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildHubRow(const int32* HubActive)
 				.Text(HubLabel(Table))
 				.Font(Fonts.Font(EElysiumFontRole::Data, EElysiumFontWeight::SemiBold,
 				                 ElysiumUI::Type::Label, 1.0f))
-				.ColorAndOpacity_Lambda([WeakButton, bActive, Count]()
-				{
-					const UElysiumActionButton* Action = WeakButton.Get();
-					return FSlateColor(bActive || (Action && Action->IsActionSelected())
-						? ElysiumUI::Palette::Cyan
-						: (Count > 0 ? ElysiumUI::Palette::BoneDim : ElysiumUI::Palette::Disabled));
-				})
+				.ColorAndOpacity(SelectedColor(WeakButton, bActive, ElysiumUI::Palette::Cyan,
+					Count > 0 ? ElysiumUI::Palette::BoneDim : ElysiumUI::Palette::Disabled))
 			]
 			+ SHorizontalBox::Slot().AutoWidth().VAlign(VAlign_Center)
 			  .Padding(ElysiumUI::Space::S, 0.0f, 0.0f, 0.0f)
@@ -1264,13 +1161,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTraitRow(EElysiumTraitContaine
 			.Text(Label)
 			.Font(Fonts.Font(EElysiumFontRole::Data, EElysiumFontWeight::Regular,
 			                 ElysiumUI::Type::Label, 1.0f))
-			.ColorAndOpacity_Lambda([WeakButton, bSelected, bBuyable]()
-			{
-				const UElysiumActionButton* Action = WeakButton.Get();
-				return FSlateColor(bSelected || (Action && Action->IsActionSelected())
-					? ElysiumUI::Palette::Cyan
-					: (bBuyable ? ElysiumUI::Palette::Bone : ElysiumUI::Palette::BoneDim));
-			})
+			.ColorAndOpacity(SelectedColor(WeakButton, bSelected, ElysiumUI::Palette::Cyan,
+				bBuyable ? ElysiumUI::Palette::Bone : ElysiumUI::Palette::BoneDim))
 		];
 
 	if (const FSlateBrush* Leader = Art(ArtPath::Leader, FLinearColor::White))
@@ -1294,13 +1186,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildTraitRow(EElysiumTraitContaine
 		[
 			SNew(SBorder)
 			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-			.BorderBackgroundColor_Lambda([WeakButton, bSelected]()
-			{
-				const UElysiumActionButton* Action = WeakButton.Get();
-				return FSlateColor(bSelected || (Action && Action->IsActionSelected())
-					? ElysiumUI::Palette::Cyan.CopyWithNewOpacity(0.10f)
-					: FLinearColor::Transparent);
-			})
+			.BorderBackgroundColor(SelectedColor(WeakButton, bSelected,
+				ElysiumUI::Palette::Cyan.CopyWithNewOpacity(0.10f), FLinearColor::Transparent))
 			.Padding(FMargin(ElysiumUI::Space::XS, 0.0f))
 			[
 				Row
@@ -1576,25 +1463,16 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildChoiceRow(FName GroupId,
 		Button->SetSlateContent(
 			SNew(SBorder)
 			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
-			.BorderBackgroundColor_Lambda([WeakButton, bOn]()
-			{
-				const UElysiumActionButton* Action = WeakButton.Get();
-				return FSlateColor(bOn || (Action && Action->IsActionSelected())
-					? ElysiumUI::Palette::Cyan.CopyWithNewOpacity(0.12f)
-					: FLinearColor::Transparent);
-			})
+			.BorderBackgroundColor(SelectedColor(WeakButton, bOn,
+				ElysiumUI::Palette::Cyan.CopyWithNewOpacity(0.12f), FLinearColor::Transparent))
 			.Padding(FMargin(ElysiumUI::Space::S, ElysiumUI::Space::XS))
 			[
 				SNew(STextBlock)
 				.Text(Options[i])
 				.Font(Fonts.Font(EElysiumFontRole::Data, EElysiumFontWeight::SemiBold,
 				                 ElysiumUI::Type::Label, 1.0f))
-				.ColorAndOpacity_Lambda([WeakButton, bOn]()
-				{
-					const UElysiumActionButton* Action = WeakButton.Get();
-					return FSlateColor(bOn || (Action && Action->IsActionSelected())
-						? ElysiumUI::Palette::Cyan : ElysiumUI::Palette::BoneDim);
-				})
+				.ColorAndOpacity(SelectedColor(WeakButton, bOn,
+					ElysiumUI::Palette::Cyan, ElysiumUI::Palette::BoneDim))
 			]);
 		Row->AddSlot().AutoWidth().Padding(0.0f, 0.0f, Layout::ChoiceGap, 0.0f)
 		[
@@ -1756,16 +1634,10 @@ TSharedRef<SWidget> UElysiumCharacterScreen::RebuildWidget()
 	(void)Super::RebuildWidget();
 	BeginNavigationBuild();
 	TraitActions.Reset();
-	SetNavigationGroup(ActionGroup::Tabs, true, false);
-	SetNavigationGroup(ActionGroup::Hubs, true, false);
-	SetNavigationGroup(ActionGroup::Traits, false, true, true, false);
-	SetNavigationGroup(ActionGroup::Footer, true, false);
-	SetNavigationGroup(ActionGroup::BaseClan, true, false);
-	SetNavigationGroup(ActionGroup::BaseSex, true, false);
-	SetNavigationGroup(ActionGroup::BaseHistory, true, false);
+	RegisterNavigationGroups();
 
 	// Brushes are rebuilt per tree; the textures behind them stay cached on the widget.
-	ArtBrushes.Reset();
+	ArtCache.ResetBrushes();
 
 	// The hub the record remembers (`m_iCurrQuestLogArea`), or the one with the most open work the
 	// first time this character ever opens the screen.
@@ -2101,7 +1973,7 @@ void UElysiumCharacterScreen::HandleSelectedActionChanged(FName PreviousActionId
 void UElysiumCharacterScreen::ReleaseSlateResources(bool bReleaseChildren)
 {
 	Super::ReleaseSlateResources(bReleaseChildren);
-	ArtBrushes.Reset();
+	ArtCache.ResetBrushes();
 	TabStripHost.Reset();
 	BodyHost.Reset();
 	FooterHost.Reset();
