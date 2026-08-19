@@ -227,8 +227,9 @@ private:
 	}
 
 	// Capture the rest pose and derive the pressed pose once the body exists. DONTMOVE (every
-	// exported button) collapses the two. The moving path is best-effort and UNTESTED — no exported
-	// func_button clears DONTMOVE — so the movedir/travel derivation lands but is unexercised.
+	// exported button) collapses the two. The movedir derivation matches the door's shared
+	// SetMovedir helper; the moving path remains unexercised by shipped data — no exported
+	// func_button clears DONTMOVE.
 	void EnsurePositions()
 	{
 		if (bPositionsCached || !Body)
@@ -242,11 +243,9 @@ private:
 			PressedLoc = RestLoc;
 			return;
 		}
-		// Source SetMovedir: angles (0,-1,0) = up, (0,-2,0) = down, else the forward of `angles`.
-		FVector Dir;
-		if (Angles.Equals(FVector(0.f, -1.f, 0.f)))      { Dir = FVector(0.f, 0.f, 1.f); }
-		else if (Angles.Equals(FVector(0.f, -2.f, 0.f))) { Dir = FVector(0.f, 0.f, -1.f); }
-		else { Dir = FRotator(Angles.X, Angles.Y, Angles.Z).Vector(); }
+		// movedir from `angles` (Unreal space) — the same shared helper the sliding door derives
+		// its slide direction through, sentinels and the Source→Unreal Y reflection included.
+		const FVector Dir = SourceAnglesToUnrealDir(Angles);
 		// Travel = the body's depth along movedir minus the lip (both in cm). Bounds are world-axis;
 		// good enough for the axis-aligned press this approximates until content exercises it.
 		const FVector Ext = Body->Bounds.BoxExtent;

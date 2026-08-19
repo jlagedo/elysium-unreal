@@ -34,6 +34,12 @@ DECLARE_LOG_CATEGORY_EXTERN(LogElysiumMover, Log, All);
 // geometry in cm (the UE_ convention). Linear travel must convert; angular (degrees) does not.
 inline constexpr float MoverInchToCm = 2.54f;
 
+// Source movedir from raw-Source `angles`, returned in Unreal space — the one shared SetMovedir
+// derivation (sentinels + the Source→Unreal Y reflection) for every mover that slides along its
+// authored angles: the sliding door and the button. Defined (with the full semantics comment) in
+// ElysiumMover.cpp.
+FVector SourceAnglesToUnrealDir(const FVector& AnglesDeg);
+
 // The CBaseToggle constant-velocity mover. Not a registered class — a pure-C++ base the door/
 // button/rotating families derive from. Drives the entity's Body transform; a bodiless mover is
 // inert (nothing to move).

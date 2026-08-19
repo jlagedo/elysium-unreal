@@ -26,6 +26,36 @@
 
 DEFINE_LOG_CATEGORY(LogElysiumMover);
 
+// Source movedir from raw-Source `angles` (pitch,yaw,roll degrees), returned in Unreal space.
+// Mirrors Source's SetMovedir: the sentinels (0,-1,0)=up and (0,-2,0)=down, else the forward of
+// `angles`. The exporter leaves `angles` in raw Source space in the `.ents` keys (only geometry is
+// converted), so the forward is computed in Source and then Y-negated into Unreal (source_dir_to_
+// unreal), matching how the hulls were converted — the reflection preserves axis-aligned lengths.
+FVector SourceAnglesToUnrealDir(const FVector& AnglesDeg)
+{
+	FVector SrcDir;
+	if (AnglesDeg.Equals(FVector(0.f, -1.f, 0.f)))
+	{
+		SrcDir = FVector(0.f, 0.f, 1.f);    // straight up
+	}
+	else if (AnglesDeg.Equals(FVector(0.f, -2.f, 0.f)))
+	{
+		SrcDir = FVector(0.f, 0.f, -1.f);   // straight down
+	}
+	else
+	{
+		// Source AngleVectors forward: pitch=X, yaw=Y, roll=Z (degrees).
+		const float Pitch = FMath::DegreesToRadians(AnglesDeg.X);
+		const float Yaw   = FMath::DegreesToRadians(AnglesDeg.Y);
+		SrcDir = FVector(
+			FMath::Cos(Yaw) * FMath::Cos(Pitch),
+			FMath::Sin(Yaw) * FMath::Cos(Pitch),
+			-FMath::Sin(Pitch));
+	}
+	// source_dir_to_unreal: negate Y (no scale), then normalize.
+	return FVector(SrcDir.X, -SrcDir.Y, SrcDir.Z).GetSafeNormal();
+}
+
 namespace
 {
 	// Door spawnflag bits (B.5 — decompiled, per-bit confirmed against CBaseDoor::Spawn FUN_100ef260 /
@@ -63,36 +93,6 @@ namespace
 		Add(SF_DOOR_SILENT, TEXT("SILENT"));
 		Add(SF_DOOR_USE_CLOSES, TEXT("USE_CLOSES"));
 		return FString::Join(On, TEXT(" | "));
-	}
-
-	// Source movedir from raw-Source `angles` (pitch,yaw,roll degrees), returned in Unreal space.
-	// Mirrors Source's SetMovedir: the sentinels (0,-1,0)=up and (0,-2,0)=down, else the forward of
-	// `angles`. The exporter leaves `angles` in raw Source space in the `.ents` keys (only geometry is
-	// converted), so the forward is computed in Source and then Y-negated into Unreal (source_dir_to_
-	// unreal), matching how the hulls were converted — the reflection preserves axis-aligned lengths.
-	FVector SourceAnglesToUnrealDir(const FVector& AnglesDeg)
-	{
-		FVector SrcDir;
-		if (AnglesDeg.Equals(FVector(0.f, -1.f, 0.f)))
-		{
-			SrcDir = FVector(0.f, 0.f, 1.f);    // straight up
-		}
-		else if (AnglesDeg.Equals(FVector(0.f, -2.f, 0.f)))
-		{
-			SrcDir = FVector(0.f, 0.f, -1.f);   // straight down
-		}
-		else
-		{
-			// Source AngleVectors forward: pitch=X, yaw=Y, roll=Z (degrees).
-			const float Pitch = FMath::DegreesToRadians(AnglesDeg.X);
-			const float Yaw   = FMath::DegreesToRadians(AnglesDeg.Y);
-			SrcDir = FVector(
-				FMath::Cos(Yaw) * FMath::Cos(Pitch),
-				FMath::Sin(Yaw) * FMath::Cos(Pitch),
-				-FMath::Sin(Pitch));
-		}
-		// source_dir_to_unreal: negate Y (no scale), then normalize.
-		return FVector(SrcDir.X, -SrcDir.Y, SrcDir.Z).GetSafeNormal();
 	}
 
 	// The entity-local AABB (Unreal cm) of a def's convex hulls — the door's own size, available at
