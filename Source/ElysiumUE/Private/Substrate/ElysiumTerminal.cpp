@@ -394,7 +394,15 @@ void FElysiumPropHacking::EndContentSession()
 
 bool FElysiumPropHacking::DependencyPasses(const FString& Source) const
 {
-	return Source.IsEmpty() || (World && World->EvalCondition(Source, Handle, CurrentUser).ToBool());
+	// Retail's terminal dependency gate (CPropHacking::TestDependency -> the shared
+	// CDialogDependency::CallPyDialogFunction helper) short-circuits an empty string to TRUE, then
+	// evaluates the expression with Py_eval_input and converts the result to bool with the exact
+	// logic_pythoncheck rule: TRUE only for a non-zero Python integer, non-integer/null/error FALSE
+	// (docs/vtmb, RE C073/C079). That is FElysiumVariant::IsPythonCheckTrue, not the generic
+	// ToBool — a truthy non-integer (a string, the float 1.0) reads FALSE here. A raised eval is
+	// already logged by the host and lands as an ordinary Void -> FALSE.
+	return Source.IsEmpty()
+		|| (World && World->EvalCondition(Source, Handle, CurrentUser).IsPythonCheckTrue());
 }
 
 void FElysiumPropHacking::AppendLine(const FString& Line)

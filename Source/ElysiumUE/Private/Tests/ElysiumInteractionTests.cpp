@@ -85,6 +85,7 @@
 #include "Scripting/ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
 #include "Scripting/ElysiumScriptNatives.h"
+#include "Substrate/ElysiumSignData.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
@@ -104,6 +105,7 @@
 #include "Components/PointLightComponent.h"
 #include "Components/SpotLightComponent.h"
 #include "Engine/World.h"
+#include "Engine/GameInstance.h"
 #include "Camera/CameraActor.h"
 #include "GameFramework/PlayerController.h"
 #include "Camera/PlayerCameraManager.h"
@@ -1661,6 +1663,208 @@ TerminalDefinition
 	TestEqual(TEXT("successful bypass enters the same directory transition as a password"),
 		Terminal->CurrentDirectory, 0);
 	World.SubmitTerminalCommand(Terminal->Handle, SecondSerial, TEXT("quit"));
+	return true;
+}
+
+// ============================================================================================
+// The retail integer-only Python truth gate at the terminal and sign dependency surfaces.
+//
+// Retail evaluates a computer-terminal dependency (CPropHacking::TestDependency -> the shared
+// CDialogDependency::CallPyDialogFunction helper) and a sign wrapper dependency (CGameSign::
+// LoadSignData -> FUN_101d2850) with the EXACT logic_pythoncheck rule: the Py_eval_input result
+// is TRUE only when it is a non-zero Python integer; a non-integer/null/error is FALSE (RE:
+// $ELYSIUM_WORK_ROOT/research/event-surface/terminal-sign-truth-findings.md; claims C073/C079).
+// That is FElysiumVariant::IsPythonCheckTrue, not the generic ToBool — so a truthy non-integer (a
+// non-empty string, the float 1.0), which ToBool calls TRUE, must read FALSE at both surfaces.
+// These two tests drive EvalCondition onto each variant category through a sentinel host and
+// assert the observable outcome (a rendered directory, a selected wrapper block).
+// ============================================================================================
+
+// A script host whose result is fully determined by the source string, so the dependency gates
+// can be driven onto any FElysiumVariant category without a Python VM or the export corpus.
+class FElysiumSentinelScriptHost final : public IElysiumScriptHost
+{
+public:
+	virtual FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext&,
+		FString* OutError = nullptr) override
+	{
+		if (OutError)
+		{
+			OutError->Reset();
+		}
+		if (Source == TEXT("INT_NONZERO"))   { return FElysiumVariant::Int(7); }
+		if (Source == TEXT("INT_ZERO"))      { return FElysiumVariant::Int(0); }
+		if (Source == TEXT("STRING_TRUTHY")) { return FElysiumVariant::String(TEXT("open")); }
+		if (Source == TEXT("FLOAT_TRUTHY"))  { return FElysiumVariant::Float(1.0f); }
+		return FElysiumVariant::Void();
+	}
+	virtual const TCHAR* Name() const override { return TEXT("sentinel"); }
+};
+
+// UElysiumGameStateSubsystem is a UGameInstanceSubsystem (ClassWithin GameInstance), so a
+// NewObject with a package/transient outer ensures ("created in invalid Outer Package"). Outer it to
+// a throwaway UGameInstance instead to get a valid, un-Initialized game state whose SetScriptHost is
+// all these dependency-gate tests need — no running game, no subsystem collection. The instance is
+// kept alive by the returned subsystem's outer chain for the synchronous test scope.
+static UElysiumGameStateSubsystem* MakeHeadlessGameState()
+{
+	UGameInstance* GameInstance = NewObject<UGameInstance>(GetTransientPackage());
+	return NewObject<UElysiumGameStateSubsystem>(GameInstance);
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDependencyTruthinessTest,
+	"Elysium.Substrate.TerminalDependencyTruthiness", GElysiumTestFlags)
+bool FElysiumTerminalDependencyTruthinessTest::RunTest(const FString&)
+{
+	// A prop_hacking directory is visible iff its dependency passes the gate; an empty dependency
+	// short-circuits to visible without evaluating (preserved from retail).
+	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	State->SetScriptHost(MakeUnique<FElysiumSentinelScriptHost>());
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__terminal_dependency_truth__");
+	FElysiumEntityDef TerminalDef;
+	TerminalDef.Classname = TEXT("prop_hacking");
+	TerminalDef.TargetName = TEXT("terminal");
+	TerminalDef.Keys.Add(TEXT("start_enabled"), TEXT("1"));
+	Defs.Defs.Add(MoveTemp(TerminalDef));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, State, Services.Bundle());
+	AddExpectedError(TEXT("terminal content failed: hack_file is empty"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle Player = World.SpawnPlayer();
+	World.Activate(0.0);
+
+	FElysiumTerminal* Base = World.FindByName(TEXT("terminal"))
+		? World.FindByName(TEXT("terminal"))->AsTerminal() : nullptr;
+	if (!TestNotNull(TEXT("terminal entity resolves"), Base))
+	{
+		return false;
+	}
+	FElysiumPropHacking* Terminal = static_cast<FElysiumPropHacking*>(Base);
+
+	FElysiumTerminalDefinition Def;
+	Def.ScreenSaver = TEXT("Truth console");
+	auto AddDir = [&Def](const TCHAR* Name, const TCHAR* Dependency)
+	{
+		FElysiumTerminalDirectory Dir;
+		Dir.Name = Name;
+		Dir.Dependency = Dependency;
+		Def.Directories.Add(MoveTemp(Dir));
+	};
+	AddDir(TEXT("OpenDir"),    TEXT(""));               // empty -> short-circuit pass
+	AddDir(TEXT("IntYesDir"),  TEXT("INT_NONZERO"));    // non-zero int -> pass
+	AddDir(TEXT("IntZeroDir"), TEXT("INT_ZERO"));       // zero int -> fail
+	AddDir(TEXT("StrDir"),     TEXT("STRING_TRUTHY"));  // truthy string -> fail (ToBool would pass)
+	AddDir(TEXT("FloatDir"),   TEXT("FLOAT_TRUTHY"));   // float 1.0 -> fail (ToBool would pass)
+	Terminal->InstallDefinition(MoveTemp(Def));
+	Terminal->InputEnable();
+
+	const FElysiumUseBeginResult Opened = World.BeginPlayerUseSession(Terminal->Handle, Player);
+	TestEqual(TEXT("the terminal opens a session"), Opened.Outcome,
+		EElysiumUseOutcome::SessionStarted);
+
+	FElysiumTerminalView View;
+	if (!TestTrue(TEXT("the active terminal publishes a view"), World.BuildTerminalView(View)))
+	{
+		return false;
+	}
+
+	auto DirectoryVisible = [&View](const TCHAR* Name) -> bool
+	{
+		for (const FElysiumTerminalActionView& Action : View.Actions)
+		{
+			if (Action.Id.StartsWith(TEXT("dir:")) && Action.Label == Name)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+
+	TestTrue(TEXT("empty dependency short-circuits to visible"), DirectoryVisible(TEXT("OpenDir")));
+	TestTrue(TEXT("non-zero integer dependency is visible"), DirectoryVisible(TEXT("IntYesDir")));
+	TestFalse(TEXT("zero integer dependency is hidden"), DirectoryVisible(TEXT("IntZeroDir")));
+	// The retail divergence from generic truthiness: a truthy non-integer reads FALSE.
+	TestFalse(TEXT("truthy string dependency is hidden (integer-only rule)"),
+		DirectoryVisible(TEXT("StrDir")));
+	TestFalse(TEXT("float 1.0 dependency is hidden (integer-only rule)"),
+		DirectoryVisible(TEXT("FloatDir")));
+
+	World.EndPlayerUseSession(Terminal->Handle, EElysiumUseEndReason::Completed);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSignDependencyTruthinessTest,
+	"Elysium.Substrate.SignDependencyTruthiness", GElysiumTestFlags)
+bool FElysiumSignDependencyTruthinessTest::RunTest(const FString&)
+{
+	// A `Sign { dependency; filename }` wrapper selects the first block whose dependency passes the
+	// gate. The truthy-*string* block is authored FIRST and the non-zero-*integer* block second, so
+	// the integer-only rule must skip the string and select the integer, where the old ToBool()
+	// would have taken the string block first. FElysiumSignData::Load reads through
+	// FElysiumContentPaths::SignFile, so the fixture lives under a scratch content root installed
+	// for the test; a command-line -ElysiumContentRoot pin would defeat the override, so abstain.
+	const FString ScratchRoot = FPaths::ConvertRelativePathToFull(
+		FPaths::ProjectSavedDir() / TEXT("ElysiumTests") / TEXT("SignTruth"));
+	const FString ScratchSigns = ScratchRoot / TEXT("signs");
+	IFileManager::Get().MakeDirectory(*ScratchSigns, /*Tree*/ true);
+
+	const FString SavedEnv = FPlatformMisc::GetEnvironmentVariable(TEXT("ELYSIUM_EXPORT_ROOT"));
+	FPlatformMisc::SetEnvironmentVar(TEXT("ELYSIUM_EXPORT_ROOT"), *ScratchRoot);
+	ON_SCOPE_EXIT
+	{
+		FPlatformMisc::SetEnvironmentVar(TEXT("ELYSIUM_EXPORT_ROOT"),
+			SavedEnv.IsEmpty() ? TEXT("") : *SavedEnv);
+		IFileManager::Get().DeleteDirectory(*ScratchRoot, /*RequireExists*/ false, /*Tree*/ true);
+	};
+
+	if (!FPaths::IsSamePath(FElysiumContentPaths::SignsDir(), ScratchSigns))
+	{
+		AddInfo(TEXT("content root override defeated (a -ElysiumContentRoot pin is active) — skipping"));
+		return true;
+	}
+
+	const FString WrapperLeaf = TEXT("elysium_test_sign_wrapper.txt");
+	const FString StringTargetLeaf = TEXT("elysium_test_sign_string_target.txt");
+	const FString IntTargetLeaf = TEXT("elysium_test_sign_int_target.txt");
+
+	auto Write = [&ScratchSigns](const FString& Leaf, const FString& Body) -> bool
+	{
+		return FFileHelper::SaveStringToFile(Body, *(ScratchSigns / Leaf));
+	};
+
+	const bool bWrote =
+		Write(WrapperLeaf, FString::Printf(TEXT(
+			"Sign\n{\n\t\"dependency\" \"STRING_TRUTHY\"\n\t\"filename\" \"%s\"\n}\n"
+			"Sign\n{\n\t\"dependency\" \"INT_NONZERO\"\n\t\"filename\" \"%s\"\n}\n"),
+			*StringTargetLeaf, *IntTargetLeaf))
+		&& Write(StringTargetLeaf, TEXT("SignData\n{\n\t\"HideHUD\" \"0\"\n}\n"))
+		&& Write(IntTargetLeaf, TEXT("SignData\n{\n\t\"HideHUD\" \"0\"\n}\n"));
+	if (!TestTrue(TEXT("sign fixture files written"), bWrote))
+	{
+		return false;
+	}
+
+	UElysiumGameStateSubsystem* State = MakeHeadlessGameState();
+	State->SetScriptHost(MakeUnique<FElysiumSentinelScriptHost>());
+	FElysiumEntityWorld World(nullptr, State);
+	World.Activate(0.0);
+
+	FElysiumSignData Data;
+	const bool bLoaded = FElysiumSignData::Load(WrapperLeaf, Data, &World);
+	if (!TestTrue(TEXT("the wrapper resolves to a target"), bLoaded))
+	{
+		return false;
+	}
+	// Retail selects the integer block; ToBool() would have taken the truthy-string block first.
+	TestEqual(TEXT("integer-only rule selects the non-zero-integer block"),
+		Data.SourceFile, IntTargetLeaf);
+	TestNotEqual(TEXT("...not the truthy-string block"), Data.SourceFile, StringTargetLeaf);
+
 	return true;
 }
 

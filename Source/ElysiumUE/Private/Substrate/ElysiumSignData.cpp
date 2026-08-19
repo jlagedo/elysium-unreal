@@ -200,8 +200,10 @@ bool FElysiumSignData::Load(const FString& DefinitionFile, FElysiumSignData& Out
 	Out = FElysiumSignData();
 
 	// A `Sign { dependency; filename }` wrapper redirects to another file; retail evaluates each
-	// dependency with Py_eval_input and takes the first truthy one (CGameSign::LoadSignData
-	// @0x10212da0). Bounded so a cyclic/self-referential wrapper can't spin.
+	// dependency with Py_eval_input and takes the first whose result is a non-zero Python integer
+	// (CGameSign::LoadSignData @0x10212da0 -> the dependency evaluator FUN_101d2850, which converts
+	// the result with the exact logic_pythoncheck rule). Bounded so a cyclic/self-referential
+	// wrapper can't spin.
 	FString Current = DefinitionFile;
 	TSet<FString> Seen;
 	for (int32 Hop = 0; Hop < 8; ++Hop)
@@ -244,10 +246,12 @@ bool FElysiumSignData::Load(const FString& DefinitionFile, FElysiumSignData& Out
 			{
 				continue;
 			}
-			// EvalCondition goes through the installed script host, so it is Void (falsy) when
-			// scripting is off — matching retail's error-to-false on a failed eval.
+			// EvalCondition goes through the installed script host, and retail's dependency gate is
+			// TRUE only for a non-zero Python integer (FElysiumVariant::IsPythonCheckTrue, the shared
+			// logic_pythoncheck rule) — a truthy non-integer reads FALSE. Void (scripting off / a
+			// failed eval the host already logged) also lands FALSE, matching error-to-false.
 			const bool bTrue = World && World->EvalCondition(Dep, FElysiumEntityHandle(),
-				FElysiumEntityHandle()).ToBool();
+				FElysiumEntityHandle()).IsPythonCheckTrue();
 			if (bTrue)
 			{
 				Current = File;
