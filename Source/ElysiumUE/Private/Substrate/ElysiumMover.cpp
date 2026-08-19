@@ -591,7 +591,7 @@ void FElysiumDoorBase::EmitDoorGameSound()
 		/*RadiusCm, table-resolved*/ -1.f, Handle);
 }
 
-void FElysiumDoorBase::DoorGoUp(const FElysiumEntityHandle& Activator)
+void FElysiumDoorBase::DoorGoUp(const FElysiumEntityHandle& Activator, bool bResolveSwing)
 {
 	LastActivator = Activator;
 	ToggleState = EToggleState::GoingUp;
@@ -603,7 +603,7 @@ void FElysiumDoorBase::DoorGoUp(const FElysiumEntityHandle& Activator)
 	EmitDoorGameSound();
 	static const FName OnOpen(TEXT("OnOpen"));
 	FireOutput(OnOpen, Activator);
-	IssueMoveToOpen();
+	IssueMoveToOpen(bResolveSwing);
 }
 
 void FElysiumDoorBase::DoorGoDown(const FElysiumEntityHandle& Activator)
@@ -684,7 +684,10 @@ void FElysiumDoorBase::OnMoveBlocked(const FHitResult& Hit)
 		}
 		static const FName OnBlockedClosing(TEXT("OnBlockedClosing"));
 		FireOutput(OnBlockedClosing, LastActivator);
-		DoorGoUp(LastActivator);   // reverse: re-open away from the blocker
+		// Reverse to re-open. Retail CRotDoor::Blocked pre-issues its own AngularMove and calls
+		// DoorGoUp with bResolveSwing == 0 (T1.4): the block-reverse open is always fixed-forward, never
+		// activator-relative — the (possibly stale) block-path LastActivator must not steer the swing.
+		DoorGoUp(LastActivator, /*bResolveSwing*/ false);
 	}
 }
 
@@ -734,8 +737,9 @@ void FElysiumDoorBase::ResolveToggleStateFromTransform()
 		{
 			ToggleState = EToggleState::AtBottom;
 			// Retail CRotDoor also calls ResetBlockedTracking here; this runtime carries no
-			// swing-inversion latch (the activator-relative OpenAwayFromEntity resolution it belongs to
-			// is not modelled — swing direction is a fixed reflection), so there is nothing to reset.
+			// swing-inversion latch. The base swing direction IS activator-relative (the rotating leaf's
+			// ChooseOpenTarget), but the block-armed inversion that the latch gates is held — its retail
+			// field identity is unrecovered — so there is still nothing to reset here.
 		}
 		else if (RotatorComponentsWithin(Live, OpenRot, DoorResyncTolerance))
 		{
@@ -875,12 +879,104 @@ protected:
 		OutOpenRot = ClosedRot + FRotator(0.0f, -SourceSign * Distance, 0.0f);   // (Pitch, Yaw, Roll)
 	}
 
-	virtual void IssueMoveToOpen() override   { AngularMove(OpenRot,   Speed); }   // Speed = deg/s
+	// Retail CRotDoor::DoorGoUp -> OpenAwayFromEntity (FUN_100f3390, ComputeSwingData FUN_100f19b0):
+	// the leaf opens AWAY from the activator. Only the swing SIGN/axis is activator-relative here; the
+	// swing MAGNITUDE is the door's configured open pose (`distance` degrees about the hinge, already in
+	// OpenRot), never re-applied. Speed = deg/s.
+	// bResolveSwing == false (the block-reverse reissue) forces the fixed-forward OpenRot with no
+	// activator resolution and no warning; true resolves the activator-relative swing (retail T1.4).
+	virtual void IssueMoveToOpen(bool bResolveSwing) override
+	{
+		AngularMove(bResolveSwing ? ChooseOpenTarget() : OpenRot, Speed);
+	}
 	virtual void IssueMoveToClosed() override { AngularMove(ClosedRot, Speed); }
 
 	// A rotating door resolves its endpoint from body angles (retail CRotDoor::ResolveToggleStateFromTransform).
 	virtual bool ResolvesEndpointFromRotation() const override { return true; }
+
+private:
+	// The activator-relative open target — OpenRot (forward, +m_vecAngle2) or its mirror (back,
+	// -m_vecAngle2) — chosen by comparing the activator's world centre to the two swing reference
+	// centres and swinging toward the farther one. Falls back to the deterministic forward pose when
+	// there is no activator (the ordinary logic-driven open) or one that no longer resolves.
+	FRotator ChooseOpenTarget();
 };
+
+// Reference: research/event-surface/swing-centres-findings.md ITEM 1 + door-largeitems-spec.md
+// TARGET 1 (both 100%-CONFIRMED). Retail caches two swing reference centres and, at open time, swings
+// toward whichever is farther from the activator's world-space centre ("open away from the activator").
+FRotator FElysiumFuncDoorRotating::ChooseOpenTarget()
+{
+	// SF_DOOR_ONEWAY forces the fixed-forward open regardless of the activator (retail gates
+	// OpenAwayFromEntity on `!SF_DOOR_ONEWAY` in DoorGoUp, before the activator is ever resolved, T1.4):
+	// a ONEWAY door never swings activator-relatively and never enters the activator/resolve path.
+	if (SpawnFlags & SF_DOOR_ONEWAY)
+	{
+		return OpenRot;
+	}
+
+	// The two candidate open poses. OpenRot is the forward swing (retail +m_vecAngle2). Its mirror
+	// about the closed pose is the back swing (-m_vecAngle2). Deriving the back target from OpenRot's
+	// OWN closed->open delta reuses the existing open magnitude (`distance` degrees) exactly — only the
+	// sign is negated, so the swing arc is never double-applied.
+	const FQuat ClosedQ = ClosedRot.Quaternion();
+	const FQuat OpenQ   = OpenRot.Quaternion();
+	const FQuat DeltaQ  = ClosedQ.Inverse() * OpenQ;                 // closed -> forward open
+	const FRotator BackRot = (ClosedQ * DeltaQ.Inverse()).Rotator(); // closed -> back open (negated arc)
+
+	// No activator: the retail m_hActivator==INVALID branch (a relay/autoclose-driven open). Swing the
+	// deterministic forward pose. Not a failure — an ordinary absence, so no warning.
+	if (!LastActivator.IsSet())
+	{
+		return OpenRot;
+	}
+	FElysiumEntity* Activator = World ? World->Resolve(LastActivator) : nullptr;
+	if (!Activator)
+	{
+		// A bound activator handle that no longer resolves is unexpected on the open path. Runtime
+		// failures are never silent: warn, then fall back to the deterministic forward swing.
+		UE_LOG(LogElysiumMover, Warning,
+			TEXT("door %s: activator %s did not resolve at open time; using the fixed swing direction"),
+			*DebugString(), *LastActivator.ToString());
+		return OpenRot;
+	}
+
+	// ComputeSwingData (FUN_100f19b0): rotate the door's LOCAL collision OBB's two OPPOSITE corners by a
+	// candidate open rotation, take the per-axis min/max, average, and add the door's local origin (the
+	// hinge = the body's relative location, ClosedLoc). Retail rotates only those two corners, not all
+	// eight — reproduce that exactly. Everything stays in the body's parent frame, which is the same
+	// map-root frame the activator's Origin lives in, so the comparison needs no transform. When the
+	// closed pose is identity (every authored rotating door is `angles 0 0 0`) these rotations equal
+	// retail's AngleMatrix(±m_vecAngle2).
+	const FBox Local = HullLocalBounds(Def);
+	if (!Local.IsValid)
+	{
+		return OpenRot;   // no readable local bounds; a real door always has hulls
+	}
+	auto SwingCentre = [&](const FRotator& R)
+	{
+		const FVector A = R.RotateVector(Local.Min);
+		const FVector B = R.RotateVector(Local.Max);
+		const FVector Lo(FMath::Min(A.X, B.X), FMath::Min(A.Y, B.Y), FMath::Min(A.Z, B.Z));
+		const FVector Hi(FMath::Max(A.X, B.X), FMath::Max(A.Y, B.Y), FMath::Max(A.Z, B.Z));
+		return ClosedLoc + (Lo + Hi) * 0.5f;
+	};
+	const FVector ForwardCentre = SwingCentre(OpenRot);   // retail 0x6b0
+	const FVector BackCentre    = SwingCentre(BackRot);   // retail 0x6d4
+
+	// Swing toward the farther centre: b = (d1 < d2) picks the negated (back) target when the activator
+	// is nearer the forward centre. DistSquared preserves the same ordering as retail's Euclidean sqrt
+	// compare (both non-negative, monotonic), so the chosen side is identical.
+	const FVector P = Activator->Origin;   // retail activator WorldSpaceCenter (vtable +0x300)
+	const double D1 = FVector::DistSquared(P, ForwardCentre);
+	const double D2 = FVector::DistSquared(P, BackCentre);
+	const bool bSwingBack = D1 < D2;
+
+	// HELD — the blocked-latch inversion. Retail flips this choice when a prior block armed CRotDoor's
+	// 0x655 latch, set when the blocker's CBaseEntity +0x98 dword is non-zero. That field's identity is
+	// NOT-STATICALLY-RECOVERABLE (swing-centres-findings.md ITEM 3), so the inversion stays unmodelled.
+	return bSwingBack ? BackRot : OpenRot;
+}
 
 // ============================================================================================
 // func_door — the sliding door / drawer / cabinet (214 uses / 40 maps; 7 on the tutorial)
@@ -910,7 +1006,9 @@ protected:
 		OutOpenRot = ClosedRot;   // a slide does not rotate
 	}
 
-	virtual void IssueMoveToOpen() override   { LinearMove(OpenLoc,   Speed * MoverInchToCm); }   // Speed = in/s
+	// A sliding door has no activator-relative swing, so bResolveSwing is ignored — the slide is
+	// always the same fixed open pose. (Retail CBaseDoor::DoorGoUp carries no swing resolution.)
+	virtual void IssueMoveToOpen(bool /*bResolveSwing*/) override { LinearMove(OpenLoc, Speed * MoverInchToCm); }   // Speed = in/s
 	virtual void IssueMoveToClosed() override { LinearMove(ClosedLoc, Speed * MoverInchToCm); }
 
 	// A sliding door resolves its endpoint from body origin (retail CBaseDoor::ResolveToggleStateFromTransform).

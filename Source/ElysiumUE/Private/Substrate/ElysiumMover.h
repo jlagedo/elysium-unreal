@@ -206,7 +206,9 @@ protected:
 	virtual void ComputeOpenTransform(FVector& OutOpenLoc, FRotator& OutOpenRot) const = 0;
 
 	// Leaf hook: issue the primitive move toward Open/Closed at Speed (AngularMove vs LinearMove).
-	virtual void IssueMoveToOpen()   = 0;
+	// bResolveSwing carries retail CRotDoor::DoorGoUp's second arg: true resolves the activator-relative
+	// swing (the rotating leaf), false forces the fixed-forward open pose. The sliding leaf ignores it.
+	virtual void IssueMoveToOpen(bool bResolveSwing) = 0;
 	virtual void IssueMoveToClosed() = 0;
 
 	// Leaf hook: does this door resolve its endpoint from the body's ANGLES (a rotating door, retail
@@ -217,8 +219,16 @@ protected:
 	virtual void MoveDone() override;               // HitTop / HitBottom
 	virtual void OnMoveBlocked(const FHitResult& Hit) override;
 
-	void DoorGoUp(const FElysiumEntityHandle& Activator);
+	// bResolveSwing (retail CRotDoor::DoorGoUp's second arg): the normal player/logic-initiated open
+	// path passes true so the rotating leaf resolves its activator-relative swing; the block-reverse
+	// reissue (OnMoveBlocked) passes false so the leaf re-opens fixed-forward, never activator-relative.
+	void DoorGoUp(const FElysiumEntityHandle& Activator, bool bResolveSwing = true);
 	void DoorGoDown(const FElysiumEntityHandle& Activator);
+
+	// Test seam: the block-reverse open (DoorGoUp with bResolveSwing == false) is only reached in-engine
+	// through OnMoveBlocked, which needs a live pawn blocker in the swept arc. A content-free automation
+	// test drives that exact seam through this accessor. No production code references it.
+	friend struct FElysiumDoorTestAccess;
 
 	// The `DOOR_NORMAL` hearing stimulus, raised beside the audio one-shot at both motion starts.
 	// One helper rather than two call sites so the silence rule cannot drift between open and close.

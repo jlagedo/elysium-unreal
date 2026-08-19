@@ -115,6 +115,367 @@ bool FElysiumRotatingDoorHandednessTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// Activator-relative swing — retail CRotDoor::OpenAwayFromEntity (FUN_100f3390) + ComputeSwingData
+// (FUN_100f19b0). Reference: research/event-surface/swing-centres-findings.md ITEM 1 and
+// door-largeitems-spec.md TARGET 1 (both 100%-CONFIRMED). A rotating door swings toward whichever of
+// its two swing reference centres is FARTHER from the activator's world centre, i.e. it opens away
+// from the activator; the swing MAGNITUDE stays the door's configured `distance`. The blocked-latch
+// inversion is HELD (retail field identity unrecovered) and not exercised here.
+//
+// Red/green: pre-fix IssueMoveToOpen always swung the fixed forward OpenRot (yaw -90 -> tip on -Y)
+// regardless of the activator, so the south-activator case (which must now swing to +Y) fails against
+// the pre-fix code; the mirror across the two sides is the observable contract. The handedness test
+// above stays green because it opens with NO activator, which falls back to the same forward pose.
+// =====================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRotatingDoorOpensAwayFromActivatorTest,
+	"Elysium.Substrate.RotatingDoorOpensAwayFromActivator", GElysiumMoverTestFlags)
+bool FElysiumRotatingDoorOpensAwayFromActivatorTest::RunTest(const FString&)
+{
+	using EToggleState = FElysiumDoorBase::EToggleState;
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* EngineWorld = TestWorld.GetTestWorld();
+	AActor* Owner = EngineWorld ? EngineWorld->SpawnActor<AActor>() : nullptr;
+	if (!TestNotNull(TEXT("mover owner spawned"), Owner))
+	{
+		return false;
+	}
+	USceneComponent* Root = NewObject<USceneComponent>(Owner, TEXT("MoverRoot"));
+	Owner->SetRootComponent(Root);
+	Root->RegisterComponent();
+	Owner->AddInstanceComponent(Root);
+
+	// An asymmetric leaf from the hinge along local +X. The tip makes the swing observable, and the
+	// door's two swing centres straddle the Y axis, so an activator on -Y vs +Y picks opposite sides.
+	auto DoorHull = []()
+	{
+		FElysiumConvexHull Hull;
+		for (float X : { 0.0f, 100.0f })
+		{
+			for (float Y : { -5.0f, 5.0f })
+			{
+				for (float Z : { -100.0f, 100.0f })
+				{
+					Hull.Vertices.Emplace(X, Y, Z);
+				}
+			}
+		}
+		return Hull;
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__rotating_door_open_away__");
+
+	FElysiumEntityDef Door;
+	Door.Classname = TEXT("func_door_rotating");
+	Door.TargetName = TEXT("door");
+	Door.Origin = FVector::ZeroVector;
+	Door.Model = 1;
+	Door.Hulls.Add(DoorHull());
+	Door.Keys.Add(TEXT("model"), TEXT("*1"));
+	Door.Keys.Add(TEXT("distance"), TEXT("90"));
+	Door.Keys.Add(TEXT("speed"), TEXT("90"));
+	Door.Keys.Add(TEXT("wait"), TEXT("-1"));   // stay open; close explicitly between the two cases
+	Door.Keys.Add(TEXT("spawnflags"), TEXT("0"));
+	Defs.Defs.Add(MoveTemp(Door));
+
+	// Two activators, one clearly on each side of the hinge along Y. A math_counter is a bodiless
+	// point entity whose live Origin is seeded from its def — exactly the world position the swing
+	// resolution reads off the activator.
+	auto AddActivator = [&Defs](const TCHAR* Name, const FVector& Origin)
+	{
+		FElysiumEntityDef A;
+		A.Classname = TEXT("math_counter");
+		A.TargetName = Name;
+		A.Origin = Origin;
+		A.Keys.Add(TEXT("min"), TEXT("0"));
+		A.Keys.Add(TEXT("max"), TEXT("1000"));
+		Defs.Defs.Add(MoveTemp(A));
+	};
+	AddActivator(TEXT("south"), FVector(0.0f, -300.0f, 0.0f));
+	AddActivator(TEXT("north"), FVector(0.0f,  300.0f, 0.0f));
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(Owner, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	FElysiumEntity* DoorEntity = World.FindByName(TEXT("door"));
+	FElysiumDoorBase* DoorPtr = DoorEntity ? DoorEntity->AsDoorBase() : nullptr;
+	FElysiumEntity* South = World.FindByName(TEXT("south"));
+	FElysiumEntity* North = World.FindByName(TEXT("north"));
+	if (!TestNotNull(TEXT("door resolved"), DoorPtr)
+		|| !TestNotNull(TEXT("door has a body"), DoorPtr ? DoorPtr->Body : nullptr)
+		|| !TestNotNull(TEXT("south activator resolved"), South)
+		|| !TestNotNull(TEXT("north activator resolved"), North))
+	{
+		return false;
+	}
+
+	const FRotator ClosedRot = DoorPtr->Body->GetRelativeRotation();
+	auto TipY = [&]()
+	{
+		return DoorPtr->Body->GetRelativeRotation().RotateVector(FVector(100.0f, 0.0f, 0.0f)).Y;
+	};
+	auto SwingDegrees = [&]()
+	{
+		return (float)FMath::RadiansToDegrees(
+			ClosedRot.Quaternion().AngularDistance(DoorPtr->Body->GetRelativeRotation().Quaternion()));
+	};
+
+	// --- Activator on -Y: the leaf opens toward +Y (away from the activator). --------------------
+	DoorPtr->InputOpen(South->Handle);
+	World.Tick(2.0);   // 90deg at 90deg/s completes in 1s; 2s is margin
+	TestEqual(TEXT("south-opened door reaches AtTop"), DoorPtr->State(), EToggleState::AtTop);
+	TestTrue(TEXT("an activator on -Y swings the leaf toward +Y (open away)"), TipY() > 90.0f);
+	TestTrue(TEXT("the swing magnitude equals the configured distance (90 deg)"),
+		FMath::IsNearlyEqual(SwingDegrees(), 90.0f, 0.5f));
+
+	// Close back to the hinge so the mirror case starts from the same closed pose.
+	DoorPtr->InputClose(South->Handle);
+	World.Tick(4.0);
+	TestEqual(TEXT("the door closes back to AtBottom"), DoorPtr->State(), EToggleState::AtBottom);
+
+	// --- Activator on +Y: the SAME door now opens toward -Y (mirrored direction). ----------------
+	DoorPtr->InputOpen(North->Handle);
+	World.Tick(6.0);
+	TestEqual(TEXT("north-opened door reaches AtTop"), DoorPtr->State(), EToggleState::AtTop);
+	TestTrue(TEXT("an activator on +Y swings the leaf toward -Y (mirror of the -Y case)"),
+		TipY() < -90.0f);
+	TestTrue(TEXT("the mirrored swing magnitude is still the configured distance (90 deg)"),
+		FMath::IsNearlyEqual(SwingDegrees(), 90.0f, 0.5f));
+
+	return true;
+}
+
+// =====================================================================================
+// Activator-relative swing GATES — retail CRotDoor::DoorGoUp(bPropagateLinked, bResolveSwing)
+// (FUN_100f3030) reaches OpenAwayFromEntity ONLY when the activator resolves AND !SF_DOOR_ONEWAY
+// (0x10) AND bResolveSwing != 0. Reference: door-largeitems-spec.md T1.4 (CONFIRMED) and
+// swing-centres-findings.md ITEM 1. Two gates the base swing omits:
+//
+//   1. bResolveSwing: the only retail caller passing 0 is CRotDoor::Blocked (the block-reverse), which
+//      re-opens FIXED-FORWARD, never activator-relative. In this runtime that is the OnMoveBlocked ->
+//      DoorGoUp(LastActivator, false) reissue. Driving OnMoveBlocked needs a live pawn blocker seated
+//      in the swept arc, so the seam is exercised directly: DoorGoUp(activator, false) yields OpenRot
+//      while DoorGoUp(activator, true) yields the activator-relative BackRot for the SAME activator.
+//   2. SF_DOOR_ONEWAY: a ONEWAY door forces fixed-forward even with a resolved activator.
+//
+// The activator sits on -Y, which (per the OpensAwayFromActivator test above) is the side whose base
+// activator-relative swing is BackRot (tip on +Y). The fixed-forward OpenRot is a normal +90 Source
+// swing, tip on -Y. So "activator-relative" reads as TipY > +90 and "fixed-forward" as TipY < -90.
+// =====================================================================================
+
+// The block-reverse seam accessor (friended by FElysiumDoorBase). DoorGoUp(_, false) is otherwise only
+// reachable through OnMoveBlocked, which requires a pawn blocker.
+struct FElysiumDoorTestAccess
+{
+	static void DoorGoUp(FElysiumDoorBase& Door, const FElysiumEntityHandle& Activator, bool bResolveSwing)
+	{
+		Door.DoorGoUp(Activator, bResolveSwing);
+	}
+};
+
+namespace ElysiumSwingGateTests
+{
+	// An asymmetric leaf from the hinge along local +X: the tip makes the swing direction observable,
+	// and the door's two swing centres straddle the Y axis so an activator on -Y picks the BackRot side.
+	FElysiumConvexHull DoorHull()
+	{
+		FElysiumConvexHull Hull;
+		for (float X : { 0.0f, 100.0f })
+		{
+			for (float Y : { -5.0f, 5.0f })
+			{
+				for (float Z : { -100.0f, 100.0f })
+				{
+					Hull.Vertices.Emplace(X, Y, Z);
+				}
+			}
+		}
+		return Hull;
+	}
+
+	FElysiumEntityDef RotatingDoor(const TCHAR* Name, int32 Model, int32 SpawnFlags)
+	{
+		FElysiumEntityDef Door;
+		Door.Classname = TEXT("func_door_rotating");
+		Door.TargetName = Name;
+		Door.Origin = FVector::ZeroVector;
+		Door.Model = Model;
+		Door.Hulls.Add(DoorHull());
+		Door.Keys.Add(TEXT("model"), FString::Printf(TEXT("*%d"), Model));
+		Door.Keys.Add(TEXT("distance"), TEXT("90"));
+		Door.Keys.Add(TEXT("speed"), TEXT("90"));
+		Door.Keys.Add(TEXT("wait"), TEXT("-1"));   // stay open; close explicitly between cases
+		Door.Keys.Add(TEXT("spawnflags"), FString::FromInt(SpawnFlags));
+		return Door;
+	}
+
+	FElysiumEntityDef Activator(const TCHAR* Name, const FVector& Origin)
+	{
+		FElysiumEntityDef A;
+		A.Classname = TEXT("math_counter");   // a bodiless point entity; its live Origin seeds from the def
+		A.TargetName = Name;
+		A.Origin = Origin;
+		A.Keys.Add(TEXT("min"), TEXT("0"));
+		A.Keys.Add(TEXT("max"), TEXT("1000"));
+		return A;
+	}
+
+	AActor* SpawnMoverOwner(FAutomationTestBase* Test, UWorld* EngineWorld)
+	{
+		AActor* Owner = EngineWorld ? EngineWorld->SpawnActor<AActor>() : nullptr;
+		if (!Test->TestNotNull(TEXT("mover owner spawned"), Owner))
+		{
+			return nullptr;
+		}
+		USceneComponent* Root = NewObject<USceneComponent>(Owner, TEXT("MoverRoot"));
+		Owner->SetRootComponent(Root);
+		Root->RegisterComponent();
+		Owner->AddInstanceComponent(Root);
+		return Owner;
+	}
+}
+
+// GATE 1 — the block-reverse open is fixed-forward. For the SAME activator (on -Y, the BackRot side),
+// DoorGoUp(_, true) swings activator-relative to BackRot (tip +Y), but DoorGoUp(_, false) — the
+// OnMoveBlocked reissue — swings the fixed-forward OpenRot (tip -Y). Red pre-fix: DoorGoUp took no
+// bResolveSwing arg and always resolved activator-relative, so the block-reverse picked BackRot (and
+// this seam does not compile against the pre-fix signature — the gate is new by construction).
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRotatingDoorBlockReverseFixedForwardTest,
+	"Elysium.Substrate.RotatingDoorBlockReverseFixedForward", GElysiumMoverTestFlags)
+bool FElysiumRotatingDoorBlockReverseFixedForwardTest::RunTest(const FString&)
+{
+	using namespace ElysiumSwingGateTests;
+	using EToggleState = FElysiumDoorBase::EToggleState;
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	AActor* Owner = SpawnMoverOwner(this, TestWorld.GetTestWorld());
+	if (!Owner)
+	{
+		return false;
+	}
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__rotating_door_block_reverse__");
+	Defs.Defs.Add(RotatingDoor(TEXT("door"), 1, /*SpawnFlags*/ 0));
+	Defs.Defs.Add(Activator(TEXT("south"), FVector(0.0f, -300.0f, 0.0f)));   // -Y => base swing picks BackRot
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(Owner, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	FElysiumEntity* DoorEntity = World.FindByName(TEXT("door"));
+	FElysiumDoorBase* Door = DoorEntity ? DoorEntity->AsDoorBase() : nullptr;
+	FElysiumEntity* South = World.FindByName(TEXT("south"));
+	if (!TestNotNull(TEXT("door resolved"), Door)
+		|| !TestNotNull(TEXT("door has a body"), Door ? Door->Body : nullptr)
+		|| !TestNotNull(TEXT("south activator resolved"), South))
+	{
+		return false;
+	}
+
+	auto TipY = [&]()
+	{
+		return Door->Body->GetRelativeRotation().RotateVector(FVector(100.0f, 0.0f, 0.0f)).Y;
+	};
+
+	// --- bResolveSwing == true: the same activator resolves activator-relative to BackRot (tip +Y). ---
+	FElysiumDoorTestAccess::DoorGoUp(*Door, South->Handle, /*bResolveSwing*/ true);
+	World.Tick(2.0);   // 90deg at 90deg/s completes in 1s; 2s is margin
+	TestEqual(TEXT("resolve-swing open reaches AtTop"), Door->State(), EToggleState::AtTop);
+	TestTrue(TEXT("with bResolveSwing the -Y activator swings the leaf activator-relatively to +Y (BackRot)"),
+		TipY() > 90.0f);
+
+	// Close back to the hinge so the block-reverse case starts from the same closed pose.
+	Door->InputClose(South->Handle);
+	World.Tick(4.0);
+	TestEqual(TEXT("the door closes back to AtBottom"), Door->State(), EToggleState::AtBottom);
+
+	// --- bResolveSwing == false: the block-reverse reissue ignores the activator, swinging fixed-forward
+	//     OpenRot (tip -Y), NOT the activator-relative BackRot. This is the gate under test. ------------
+	FElysiumDoorTestAccess::DoorGoUp(*Door, South->Handle, /*bResolveSwing*/ false);
+	World.Tick(6.0);
+	TestEqual(TEXT("block-reverse open reaches AtTop"), Door->State(), EToggleState::AtTop);
+	TestTrue(TEXT("the block-reverse open is fixed-forward OpenRot (tip -Y), not activator-relative BackRot"),
+		TipY() < -90.0f);
+
+	return true;
+}
+
+// GATE 2 — a ONEWAY door ignores the activator. With SF_DOOR_ONEWAY (0x10) set and the activator on the
+// BackRot side (-Y), the normal player/logic open path (InputOpen) still swings the fixed-forward
+// OpenRot (tip -Y). Red pre-fix: ChooseOpenTarget had no ONEWAY gate, so it resolved activator-relative
+// to BackRot (tip +Y); green post-fix: the early return forces OpenRot.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRotatingDoorOneWayIgnoresActivatorTest,
+	"Elysium.Substrate.RotatingDoorOneWayIgnoresActivator", GElysiumMoverTestFlags)
+bool FElysiumRotatingDoorOneWayIgnoresActivatorTest::RunTest(const FString&)
+{
+	using namespace ElysiumSwingGateTests;
+	using EToggleState = FElysiumDoorBase::EToggleState;
+
+	constexpr int32 SF_DOOR_ONEWAY = 0x10;
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	AActor* Owner = SpawnMoverOwner(this, TestWorld.GetTestWorld());
+	if (!Owner)
+	{
+		return false;
+	}
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__rotating_door_oneway__");
+	Defs.Defs.Add(RotatingDoor(TEXT("door"), 1, SF_DOOR_ONEWAY));
+	Defs.Defs.Add(Activator(TEXT("south"), FVector(0.0f, -300.0f, 0.0f)));   // -Y => base swing would pick BackRot
+
+	FElysiumRecordingServices Services;
+	FElysiumEntityWorld World(Owner, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	World.Activate(0.0);
+
+	FElysiumEntity* DoorEntity = World.FindByName(TEXT("door"));
+	FElysiumDoorBase* Door = DoorEntity ? DoorEntity->AsDoorBase() : nullptr;
+	FElysiumEntity* South = World.FindByName(TEXT("south"));
+	if (!TestNotNull(TEXT("door resolved"), Door)
+		|| !TestNotNull(TEXT("door has a body"), Door ? Door->Body : nullptr)
+		|| !TestNotNull(TEXT("south activator resolved"), South))
+	{
+		return false;
+	}
+
+	auto TipY = [&]()
+	{
+		return Door->Body->GetRelativeRotation().RotateVector(FVector(100.0f, 0.0f, 0.0f)).Y;
+	};
+
+	// Normal open path with a resolved activator on the BackRot side; ONEWAY forces fixed-forward.
+	Door->InputOpen(South->Handle);
+	World.Tick(2.0);
+	TestEqual(TEXT("the ONEWAY door reaches AtTop"), Door->State(), EToggleState::AtTop);
+	TestTrue(TEXT("a ONEWAY door swings fixed-forward OpenRot (tip -Y) despite the -Y activator"),
+		TipY() < -90.0f);
+
+	return true;
+}
+
+// =====================================================================================
 // Locked-door input matrix (retail CBaseDoor, vampire.dll).
 //
 // Reference: research/event-surface/doors-receivers-findings.md (D010 note, D020, D031, D032,
