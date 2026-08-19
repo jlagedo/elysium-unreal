@@ -364,6 +364,33 @@ bool FElysiumNpc::StartWalkingAnimation(bool bRunning)
 	return PlayAnimClip(bRunning ? TEXT("run") : TEXT("walk"), /*bLoop=*/true);
 }
 
+void FElysiumNpc::RestampPatrolToken()
+{
+	// A suspended route came back with a fresh generation. The leaf's own token has to be
+	// re-stamped or the patrol executor would hold one the arbiter no longer honours.
+	if (Mind.Owner() == EElysiumBodyOwner::Patrol)
+	{
+		PatrolOwner = Mind.CurrentToken();
+	}
+}
+
+EElysiumNpcMoveStatus FElysiumNpc::SampleMotorIntoEntity()
+{
+	FVector Feet = Origin;
+	float Yaw = -Angles.Y;
+	const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
+	// The motor is the physical authority while it holds a request. Its feet/yaw are written
+	// straight into the entity rather than through SetRuntimeOrigin, which would teleport the
+	// body back.
+	Origin = Feet;
+	Angles.Y = -Yaw;
+	if (World)
+	{
+		World->NotifyVisualChanged(*this);
+	}
+	return Status;
+}
+
 bool FElysiumNpc::AcquireSequenceBody(const TCHAR* Reason)
 {
 	// A pushed scripted order is DROPPED rather than parked, for the same reason dialogue drops it:
@@ -389,10 +416,7 @@ void FElysiumNpc::ReleaseSequenceBody(const TCHAR* Reason)
 	}
 	Mind.Release(SequenceOwner, Reason);
 	SequenceOwner.Reset();
-	if (Mind.Owner() == EElysiumBodyOwner::Patrol)
-	{
-		PatrolOwner = Mind.CurrentToken();
-	}
+	RestampPatrolToken();
 }
 
 bool FElysiumNpc::ClaimScriptMove()
@@ -477,19 +501,60 @@ bool FElysiumNpc::IsFeedBusy() const
 
 void FElysiumNpc::Think()
 {
+	// The phase order is the recovered pass's own, and every bool phase keeps the power to end
+	// the think: true means it consumed this one, and nothing after it may run.
 	if (IsInert())
 	{
 		return;
 	}
-	// The activation barrier admits the mind on its first frozen-time think. Admission is a
-	// no-op for body, motor and animation; executors may run only on a later think.
-	if (Mind.Admit())
+	if (RunAdmissionBarrier())
 	{
-		// Every admitted NPC gets a next think, not just the ones with an executor: a standing
-		// character's stance machine is an executor too, and without this it would never run.
-		NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0) + 0.1);
 		return;
 	}
+	ResolveLoadout();
+	ReplayDeferredScriptedOrder();
+	RunConditionPass();
+	// B6 — a pair this NPC is part of owns the body outright: it advances the transaction from
+	// the feeder's think and nothing else moves either actor while it runs.
+	if (TickFeed(World ? World->NowSeconds() : 0.0))
+	{
+		return;
+	}
+	if (TickScriptWatchdog())
+	{
+		return;
+	}
+	if (ThinkInDialog())
+	{
+		return;
+	}
+	if (ThinkScriptOwned())
+	{
+		return;
+	}
+	if (ThinkSchedulePolicy())
+	{
+		return;
+	}
+	ThinkAutonomous();
+}
+
+bool FElysiumNpc::RunAdmissionBarrier()
+{
+	// The activation barrier admits the mind on its first frozen-time think. Admission is a
+	// no-op for body, motor and animation; executors may run only on a later think.
+	if (!Mind.Admit())
+	{
+		return false;
+	}
+	// Every admitted NPC gets a next think, not just the ones with an executor: a standing
+	// character's stance machine is an executor too, and without this it would never run.
+	NextThink = static_cast<float>((World ? World->NowSeconds() : 0.0) + 0.1);
+	return true;
+}
+
+void FElysiumNpc::ResolveLoadout()
+{
 	// --- Cycle 6: the combat loadout -------------------------------------------------------------
 	// The first ordinary think after admission, not `Spawn`: creating an item entity inside the
 	// world's range-based spawn pass would invalidate the array being iterated, which is why
@@ -501,6 +566,10 @@ void FElysiumNpc::Think()
 		Mind.RecordExternal(FString::Printf(TEXT("loadout: %s"),
 			ElysiumNpcLoadout::ResultName(Result)));
 	}
+}
+
+void FElysiumNpc::ReplayDeferredScriptedOrder()
+{
 	// --- Cycle 7: a director that fired before this NPC's first think -----------------------------
 	// The push was deferred whole (`BeginScriptedSchedule`), because admission establishes idle and
 	// would have wiped a forced state applied ahead of it. Replaying it here is the first thing an
@@ -511,11 +580,15 @@ void FElysiumNpc::Think()
 		ScriptedScheduleOrder.Reset();
 		BeginScriptedSchedule(Pending, Pending.bHasForcedState, Pending.ForcedState);
 	}
+}
+
+void FElysiumNpc::RunConditionPass()
+{
 	// --- Cycle 4: condition gathering ------------------------------------------------------------
 	// Senses run before any executor picks work, which is where the recovered pass puts them, and
 	// are suppressed exactly where retail suppresses condition gathering: a scripted owner or an
 	// in-flight scripted move is driving this body (`docs/vtmb/npc-ai-reverse-engineering.md`).
-	// The inert/dead gate is the early return above.
+	// The inert/dead gate is `Think`'s early return.
 	if (!ScriptOwner.IsSet() && ScriptPhase == EScriptPhase::None)
 	{
 		const double SenseNow = World ? World->NowSeconds() : 0.0;
@@ -533,67 +606,80 @@ void FElysiumNpc::Think()
 		// interruptible by a stimulus nobody re-observed.
 		Cognition.Conditions.Reset();
 	}
-	// B6 — a pair this NPC is part of owns the body outright: it advances the transaction from
-	// the feeder's think and nothing else moves either actor while it runs.
-	if (TickFeed(World ? World->NowSeconds() : 0.0))
+}
+
+bool FElysiumNpc::TickScriptWatchdog()
+{
+	if (ScriptPhase == EScriptPhase::None)
 	{
-		return;
+		return false;
 	}
-	if (ScriptPhase != EScriptPhase::None)
+	// The owning beat advances the move; this think only watches for a beat that stopped
+	// doing so (killed or hidden mid-travel) and releases the body rather than freezing it.
+	const double Now = World ? World->NowSeconds() : 0.0;
+	if (Now < ScriptWatchdogAt)
 	{
-		// The owning beat advances the move; this think only watches for a beat that stopped
-		// doing so (killed or hidden mid-travel) and releases the body rather than freezing it.
-		const double Now = World ? World->NowSeconds() : 0.0;
-		if (Now < ScriptWatchdogAt)
-		{
-			NextThink = static_cast<float>(ScriptWatchdogAt);
-			return;
-		}
-		UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s released an abandoned scripted move"),
-			*DebugString());
-		// Everything the beat holds leaves together, the queue lock included: a beat that stopped
-		// advancing its own move will not run its teardown either, and half a claim would leave
-		// this body suppressed and unowned for the rest of the map.
-		ReleaseScriptBody(TEXT("abandoned scripted move"));
-		EndScriptMove();
-		ScriptOwner = FElysiumEntityHandle::Invalid();
-		bScriptOwnerLocked = false;
-		ResetAnimToIdle();
-		return;
+		NextThink = static_cast<float>(ScriptWatchdogAt);
+		return true;
 	}
-	if (bInDialog)
+	UE_LOG(LogElysiumNpcEnt, Warning, TEXT("%s released an abandoned scripted move"),
+		*DebugString());
+	// Everything the beat holds leaves together, the queue lock included: a beat that stopped
+	// advancing its own move will not run its teardown either, and half a claim would leave
+	// this body suppressed and unowned for the rest of the map.
+	ReleaseScriptBody(TEXT("abandoned scripted move"));
+	EndScriptMove();
+	ScriptOwner = FElysiumEntityHandle::Invalid();
+	bScriptOwnerLocked = false;
+	ResetAnimToIdle();
+	return true;
+}
+
+bool FElysiumNpc::ThinkInDialog()
+{
+	if (!bInDialog)
 	{
-		// A per-line VCD owns the body while its sequence/gesture event is live. The ordinary
-		// dialogue stance think must not replace that one-shot with a disposition idle.
-		if (World && World->HasActiveDialogueBodyClip(Handle))
-		{
-			NextThink = static_cast<float>(World->NowSeconds() + 0.1);
-			return;
-		}
-		// A character in conversation still runs its stance machine -- retail's Talking
-		// threshold/chance pair exists precisely for this case. The selector settles it onto its
-		// current idle rather than fidgeting through a line, so the reschedule is what keeps it
-		// posed rather than what makes it move.
-		ThinkStanceOrIdle(World ? World->NowSeconds() : 0.0);
-		return;
+		return false;
 	}
-	if (ScriptOwner.IsSet())
+	// A per-line VCD owns the body while its sequence/gesture event is live. The ordinary
+	// dialogue stance think must not replace that one-shot with a disposition idle.
+	if (World && World->HasActiveDialogueBodyClip(Handle))
 	{
-		// A scripted owner — a `scripted_sequence` beat or a choreographed scene's cast — is
-		// driving this body's pose. Script ownership suppresses the ordinary condition-gathering
-		// path (`docs/vtmb/npc-ai-reverse-engineering.md`), so nothing below may select a
-		// schedule whose idle would replace the clip the owner put on the body.
-		const double Now = World ? World->NowSeconds() : 0.0;
-		if (bScriptBodyRequested && !bScriptBodyHeld
-			&& Mind.CanAcquire(EElysiumBodyOwner::Sequence))
-		{
-			// The beat asked before this NPC's admission think had run. Admission has happened
-			// by now, so the claim it is entitled to lands here.
-			bScriptBodyHeld = AcquireSequenceBody(TEXT("scripted beat claim after admission"));
-		}
-		NextThink = static_cast<float>(Now + 0.25);
-		return;
+		NextThink = static_cast<float>(World->NowSeconds() + 0.1);
+		return true;
 	}
+	// A character in conversation still runs its stance machine -- retail's Talking
+	// threshold/chance pair exists precisely for this case. The selector settles it onto its
+	// current idle rather than fidgeting through a line, so the reschedule is what keeps it
+	// posed rather than what makes it move.
+	ThinkStanceOrIdle(World ? World->NowSeconds() : 0.0);
+	return true;
+}
+
+bool FElysiumNpc::ThinkScriptOwned()
+{
+	if (!ScriptOwner.IsSet())
+	{
+		return false;
+	}
+	// A scripted owner — a `scripted_sequence` beat or a choreographed scene's cast — is
+	// driving this body's pose. Script ownership suppresses the ordinary condition-gathering
+	// path (`docs/vtmb/npc-ai-reverse-engineering.md`), so nothing after this phase may select a
+	// schedule whose idle would replace the clip the owner put on the body.
+	const double Now = World ? World->NowSeconds() : 0.0;
+	if (bScriptBodyRequested && !bScriptBodyHeld
+		&& Mind.CanAcquire(EElysiumBodyOwner::Sequence))
+	{
+		// The beat asked before this NPC's admission think had run. Admission has happened
+		// by now, so the claim it is entitled to lands here.
+		bScriptBodyHeld = AcquireSequenceBody(TEXT("scripted beat claim after admission"));
+	}
+	NextThink = static_cast<float>(Now + 0.25);
+	return true;
+}
+
+bool FElysiumNpc::ThinkSchedulePolicy()
+{
 	// --- Cycle 7: schedule selection pre-empts an autonomous executor ---------------------------
 	// A committed enemy or an authored director outranks this NPC's own patrol route and
 	// interesting-place visit. Until this branch existed, `Think` reached the executor before
@@ -604,27 +690,32 @@ void FElysiumNpc::Think()
 	// carries both hand-over shapes (patrol suspends and resumes, ambient owns a claimed place that
 	// has to be given back), and the programs are the ones cycle 6 registered.
 	const bool bScriptedPolicy = ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet();
-	if (bScriptedPolicy || Mind.State() == EElysiumNpcState::Combat)
+	if (!bScriptedPolicy && Mind.State() != EElysiumNpcState::Combat)
 	{
-		if (AmbientOwner.IsSet() || AmbientPhase != EAmbientPhase::None)
-		{
-			FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-		}
-		if (bPatrolActive && bMoveIssued && !ScheduleOwner.IsSet() && !ScriptedScheduleOwner.IsSet())
-		{
-			// The route's outstanding request stops once, on the hand-over. The TOKEN is not released
-			// here: the claim that takes the body suspends it through the arbiter, which is what lets
-			// the route resume at the same point when the program is done.
-			if (Motor != nullptr)
-			{
-				Motor->Stop();
-			}
-			bMoveIssued = false;
-			bWalkingAnimation = false;
-		}
-		ThinkStanceOrIdle(World ? World->NowSeconds() : 0.0);
-		return;
+		return false;
 	}
+	if (AmbientOwner.IsSet() || AmbientPhase != EAmbientPhase::None)
+	{
+		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+	}
+	if (bPatrolActive && bMoveIssued && !ScheduleOwner.IsSet() && !ScriptedScheduleOwner.IsSet())
+	{
+		// The route's outstanding request stops once, on the hand-over. The TOKEN is not released
+		// here: the claim that takes the body suspends it through the arbiter, which is what lets
+		// the route resume at the same point when the program is done.
+		if (Motor != nullptr)
+		{
+			Motor->Stop();
+		}
+		bMoveIssued = false;
+		bWalkingAnimation = false;
+	}
+	ThinkStanceOrIdle(World ? World->NowSeconds() : 0.0);
+	return true;
+}
+
+void FElysiumNpc::ThinkAutonomous()
+{
 	if (bPatrolActive && !PatrolOwner.IsSet())
 	{
 		if (!Mind.Acquire(EElysiumBodyOwner::Patrol, /*bSuspendCurrent=*/false,
@@ -644,8 +735,8 @@ void FElysiumNpc::Think()
 	}
 	else
 	{
-		// A standing NPC. Before this it fell off the end of Think() without touching NextThink,
-		// which is why it was never asked again and held whatever pose it spawned in.
+		// A standing NPC keeps a think: without this arm it would fall off the end of the pass
+		// without touching NextThink, never be asked again, and hold whatever pose it spawned in.
 		ThinkStanceOrIdle(World ? World->NowSeconds() : 0.0);
 	}
 }
@@ -925,17 +1016,7 @@ void FElysiumNpc::ThinkPatrol()
 		return;
 	}
 
-	FVector Feet = Origin;
-	float Yaw = -Angles.Y;
-	const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
-	// CharacterMovement is the physical authority while a patrol is active. Write its feet/yaw
-	// straight into the entity rather than calling SetRuntimeOrigin, which would teleport it back.
-	Origin = Feet;
-	Angles.Y = -Yaw;
-	if (World)
-	{
-		World->NotifyVisualChanged(*this);
-	}
+	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
 
 	if (Status == EElysiumNpcMoveStatus::Reached)
 	{
@@ -1293,31 +1374,31 @@ bool FElysiumNpc::StepAwayFromSavePosition(float DistanceCm)
 // The combat task bodies (cycle 6)
 // ================================================================================================
 
-bool FElysiumNpc::AcquireScheduleBody(const TCHAR* Reason)
+bool FElysiumNpc::AcquireProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
+	const TCHAR* Reason)
 {
-	if (ScheduleOwner.IsSet() && Mind.Owner() == EElysiumBodyOwner::Schedule
-		&& Mind.Generation() == ScheduleOwner.Generation)
+	if (Token.IsSet() && Mind.Owner() == Owner && Mind.Generation() == Token.Generation)
 	{
 		return true;
 	}
 	// A token from a claim that was displaced (a scripted beat took the body mid-chase) is retired
 	// here rather than carried: the arbiter would refuse a release against it anyway.
-	ScheduleOwner.Reset();
+	Token.Reset();
 	// A patrol route is SUSPENDED rather than taken: the arbiter parks it, the release below restores
 	// it, and the route continues from the point it reached. An interesting-place visit is not
 	// parkable in that sense — it owns a claimed place — so `Think`'s hand-over finishes it first.
 	const bool bParkPatrol = Mind.Owner() == EElysiumBodyOwner::Patrol;
-	return Mind.Acquire(EElysiumBodyOwner::Schedule, bParkPatrol, ScheduleOwner, Reason);
+	return Mind.Acquire(Owner, bParkPatrol, Token, Reason);
 }
 
-void FElysiumNpc::ReleaseScheduleBody(const TCHAR* Reason)
+void FElysiumNpc::ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
+	const TCHAR* Reason)
 {
-	if (!ScheduleOwner.IsSet())
+	if (!Token.IsSet())
 	{
 		return;
 	}
-	const bool bLive = Mind.Owner() == EElysiumBodyOwner::Schedule
-		&& Mind.Generation() == ScheduleOwner.Generation;
+	const bool bLive = Mind.Owner() == Owner && Mind.Generation() == Token.Generation;
 	if (bLive)
 	{
 		// Whatever the program had the body doing stops with the claim. A schedule that ended
@@ -1328,53 +1409,30 @@ void FElysiumNpc::ReleaseScheduleBody(const TCHAR* Reason)
 		}
 		bMoveIssued = false;
 		bWalkingAnimation = false;
-		Mind.Release(ScheduleOwner, Reason);
+		Mind.Release(Token, Reason);
 	}
-	ScheduleOwner.Reset();
-	if (Mind.Owner() == EElysiumBodyOwner::Patrol)
-	{
-		// A suspended route came back with a fresh generation. The leaf's own token has to be
-		// re-stamped or the patrol executor would hold one the arbiter no longer honours.
-		PatrolOwner = Mind.CurrentToken();
-	}
+	Token.Reset();
+	RestampPatrolToken();
+}
+
+bool FElysiumNpc::AcquireScheduleBody(const TCHAR* Reason)
+{
+	return AcquireProgramBody(EElysiumBodyOwner::Schedule, ScheduleOwner, Reason);
+}
+
+void FElysiumNpc::ReleaseScheduleBody(const TCHAR* Reason)
+{
+	ReleaseProgramBody(EElysiumBodyOwner::Schedule, ScheduleOwner, Reason);
 }
 
 bool FElysiumNpc::AcquireScriptedScheduleBody(const TCHAR* Reason)
 {
-	if (ScriptedScheduleOwner.IsSet() && Mind.Owner() == EElysiumBodyOwner::ScriptedSchedule
-		&& Mind.Generation() == ScriptedScheduleOwner.Generation)
-	{
-		return true;
-	}
-	ScriptedScheduleOwner.Reset();
-	const bool bParkPatrol = Mind.Owner() == EElysiumBodyOwner::Patrol;
-	return Mind.Acquire(EElysiumBodyOwner::ScriptedSchedule, bParkPatrol, ScriptedScheduleOwner,
-		Reason);
+	return AcquireProgramBody(EElysiumBodyOwner::ScriptedSchedule, ScriptedScheduleOwner, Reason);
 }
 
 void FElysiumNpc::ReleaseScriptedScheduleBody(const TCHAR* Reason)
 {
-	if (!ScriptedScheduleOwner.IsSet())
-	{
-		return;
-	}
-	const bool bLive = Mind.Owner() == EElysiumBodyOwner::ScriptedSchedule
-		&& Mind.Generation() == ScriptedScheduleOwner.Generation;
-	if (bLive)
-	{
-		if (Motor != nullptr)
-		{
-			Motor->Stop();
-		}
-		bMoveIssued = false;
-		bWalkingAnimation = false;
-		Mind.Release(ScriptedScheduleOwner, Reason);
-	}
-	ScriptedScheduleOwner.Reset();
-	if (Mind.Owner() == EElysiumBodyOwner::Patrol)
-	{
-		PatrolOwner = Mind.CurrentToken();
-	}
+	ReleaseProgramBody(EElysiumBodyOwner::ScriptedSchedule, ScriptedScheduleOwner, Reason);
 }
 
 // ================================================================================================
@@ -1679,18 +1737,7 @@ EElysiumMoveWatch FElysiumNpc::WaitForMovement()
 	{
 		return EElysiumMoveWatch::Failed;
 	}
-	FVector Feet = Origin;
-	float Yaw = -Angles.Y;
-	const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
-	// The motor is the physical authority while it holds a request, exactly as in the patrol
-	// executor: its feet/yaw are written straight into the entity rather than through
-	// SetRuntimeOrigin, which would teleport the body back.
-	Origin = Feet;
-	Angles.Y = -Yaw;
-	if (World)
-	{
-		World->NotifyVisualChanged(*this);
-	}
+	const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
 	switch (Status)
 	{
 	case EElysiumNpcMoveStatus::Reached:
@@ -2019,15 +2066,7 @@ void FElysiumNpc::ThinkAmbient()
 
 	if (AmbientPhase == EAmbientPhase::Moving)
 	{
-		FVector Feet = Origin;
-		float Yaw = -Angles.Y;
-		const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
-		Origin = Feet;
-		Angles.Y = -Yaw;
-		if (World)
-		{
-			World->NotifyVisualChanged(*this);
-		}
+		const EElysiumNpcMoveStatus Status = SampleMotorIntoEntity();
 		if (Status == EElysiumNpcMoveStatus::Reached)
 		{
 			BeginAmbientUse(*Spot, Now);
@@ -2141,10 +2180,7 @@ void FElysiumNpc::EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bo
 		Mind.Release(DialogueBodyOwner, bSilent ? TEXT("dialogue silent close")
 			: TEXT("dialogue normal close"));
 		DialogueBodyOwner.Reset();
-		if (Mind.Owner() == EElysiumBodyOwner::Patrol)
-		{
-			PatrolOwner = Mind.CurrentToken();
-		}
+		RestampPatrolToken();
 	}
 	if (bSilent)
 	{
@@ -2385,16 +2421,8 @@ void FElysiumNpc::Activate()
 
 void FElysiumNpc::OnRuntimeModelChanged()
 {
-	if (CVarNpcBodies.GetValueOnGameThread() == 0)
-	{
-		return;
-	}
-	// The swap destroys the motor the beat is steering, so release the hold first — the beat
-	// reads Unsupported next tick and finishes on the placement fallback.
-	EndScriptMove();
-	DestroyMotor();
-	FElysiumAnimating::OnRuntimeModelChanged();
-	BuildMotor();
+	// The rebuild is FElysiumScriptedCharacter's; the A/B gate is this leaf's.
+	RebuildForModelChange(CVarNpcBodies.GetValueOnGameThread() != 0);
 }
 
 void FElysiumNpc::OnDormancyChanged()
@@ -2445,6 +2473,34 @@ void FElysiumNpc::OnDormancyChanged()
 
 void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 {
+	// One helper per version block, in exact archive order. Only the patrol block may end the
+	// record: a payload written before ambient-place state existed carries nothing after it.
+	if (!SerializePatrolBlock(Ar))
+	{
+		return;
+	}
+	SerializeMakerBlock(Ar);
+	SerializeMindBlock(Ar);
+	SerializeScheduleBlock(Ar);
+	SerializeSocialBlock(Ar);
+	SerializeSensesBlock(Ar);
+	SerializeLoadoutBlock(Ar);
+	SerializeWitnessBlock(Ar);
+	SerializeDisciplineBlock(Ar);
+
+	if (Ar.IsLoading())
+	{
+		// Conditions are not saved (`ElysiumNpcConditions.h`): they are rebuilt from the memory
+		// above on the first think after the load. What has to be stamped is the pass CLOCK — the
+		// edge every stimulus producer measures against. Leaving it at -1 would make an hour-old
+		// remembered gunshot look new and promote a restored NPC to alert on the strength of it.
+		Cognition.Conditions.Reset();
+		Cognition.GatheredAt = World ? World->NowSeconds() : 0.0;
+	}
+}
+
+bool FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
+{
 	Ar << PatrolType;
 	Ar << PatrolPath;
 	Ar << PatrolIndex;
@@ -2465,7 +2521,7 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 		{
 			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 		}
-		return; // compatibility with snapshots written before ambient-place state existed
+		return false; // compatibility with snapshots written before ambient-place state existed
 	}
 	uint8 SavedAmbientPhase = static_cast<uint8>(AmbientPhase);
 	Ar << SavedAmbientPhase;
@@ -2501,7 +2557,11 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 			NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 		}
 	}
+	return true;
+}
 
+void FElysiumNpc::SerializeMakerBlock(FElysiumSaveArchive& Ar)
+{
 	// Version 13 appends the maker relationship after the pre-existing NPC leaf. Older saves
 	// deliberately restore legacy runtime NPCs unowned rather than guessing a maker association.
 	if (Ar.Version() >= FElysiumSaveVersion::NpcMaker)
@@ -2516,7 +2576,10 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 			bOwnerTerminationNotified = OwnerNotified != 0;
 		}
 	}
+}
 
+void FElysiumNpc::SerializeMindBlock(FElysiumSaveArchive& Ar)
+{
 	if (Ar.Version() >= FElysiumSaveVersion::NpcMind)
 	{
 		uint8 SavedState = static_cast<uint8>(Mind.State());
@@ -2567,7 +2630,10 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 			bScriptBodyHeld = false;
 		}
 	}
+}
 
+void FElysiumNpc::SerializeScheduleBlock(FElysiumSaveArchive& Ar)
+{
 	// The schedule's IDENTITY is saved; its task position is not, and that is deliberate. A task
 	// holds a playing clip, a pending motor move or a wall-clock deadline, and none of those
 	// survive a load -- so resuming at task 3 would hold a pose nothing is playing. Restarting
@@ -2602,7 +2668,10 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 			// would discard saved state and make the payload fail its own round trip.
 		}
 	}
+}
 
+void FElysiumNpc::SerializeSocialBlock(FElysiumSaveArchive& Ar)
+{
 	if (Ar.Version() >= FElysiumSaveVersion::NpcSocial)
 	{
 		Relationships.Serialize(Ar);
@@ -2611,7 +2680,10 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 			Relationships.Rebase(*World);
 		}
 	}
+}
 
+void FElysiumNpc::SerializeSensesBlock(FElysiumSaveArchive& Ar)
+{
 	// Cycle 4. The memory is what survives losing sight, so it is what a save has to carry; the
 	// resolved perception pair is not saved because it is derived from the keyfields the field
 	// walk already restored.
@@ -2619,7 +2691,10 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	{
 		Senses.Serialize(Ar, *this);
 	}
+}
 
+void FElysiumNpc::SerializeLoadoutBlock(FElysiumSaveArchive& Ar)
+{
 	// Cycle 6. The loadout latch, and only the latch: the weapon it granted is a real runtime entity
 	// the snapshot already carries with its own owner field, so re-running the resolution on a
 	// restore would hand a restored NPC a second gun. A payload that predates this restores the
@@ -2638,7 +2713,10 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 	{
 		bLoadoutResolved = false;
 	}
+}
 
+void FElysiumNpc::SerializeWitnessBlock(FElysiumSaveArchive& Ar)
+{
 	// ==================== Cycle 10c — the retained witness block =================================
 	// Appended at the very end of the NPC leaf behind its own version, so it is additive: an
 	// `NpcCombat` payload restores an NPC that has witnessed nothing and whose three windows are at
@@ -2665,7 +2743,10 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 		Witness.Reset();
 	}
 	// =============================================================================================
+}
 
+void FElysiumNpc::SerializeDisciplineBlock(FElysiumSaveArchive& Ar)
+{
 	// ============ Cycle 11b hunk 9/9 — the NPC's own tracked discipline effects ==================
 	// A targeted `disciplinetgt` cast lands its trait-effect groups on whichever character it hit
 	// (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "Active targeted effects are
@@ -2742,16 +2823,6 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 		Disciplines.Reset();
 	}
 	// =============================================================================================
-
-	if (Ar.IsLoading())
-	{
-		// Conditions are not saved (`ElysiumNpcConditions.h`): they are rebuilt from the memory
-		// above on the first think after the load. What has to be stamped is the pass CLOCK — the
-		// edge every stimulus producer measures against. Leaving it at -1 would make an hour-old
-		// remembered gunshot look new and promote a restored NPC to alert on the strength of it.
-		Cognition.Conditions.Reset();
-		Cognition.GatheredAt = World ? World->NowSeconds() : 0.0;
-	}
 }
 
 const TCHAR* FElysiumNpc::SaveBlockReason() const
@@ -2912,19 +2983,13 @@ void FElysiumPlayerControllerNpc::Spawn()
 	if (CVarNpcBodies.GetValueOnGameThread() != 0)
 	{
 		BuildBody();
-		BuildControllerMotor();
+		BuildOwnMotor();
 	}
 }
 
 void FElysiumPlayerControllerNpc::OnRuntimeModelChanged()
 {
-	if (CVarNpcBodies.GetValueOnGameThread() != 0)
-	{
-		EndScriptMove();
-		DestroyMotor();
-		FElysiumAnimating::OnRuntimeModelChanged();
-		BuildControllerMotor();
-	}
+	RebuildForModelChange(CVarNpcBodies.GetValueOnGameThread() != 0);
 }
 
 void FElysiumPlayerControllerNpc::SetIgnoreCharacterCollision(bool)
@@ -2962,7 +3027,7 @@ void FElysiumPlayerControllerNpc::GetDebugState(TArray<TPair<FString, FString>>&
 	Out.Emplace(TEXT("Motor"), Motor ? TEXT("Unreal character + Detour crowd") : TEXT("(none)"));
 }
 
-void FElysiumPlayerControllerNpc::BuildControllerMotor()
+void FElysiumPlayerControllerNpc::BuildOwnMotor()
 {
 	BuildMotor();
 	SetIgnoreCharacterCollision(true);

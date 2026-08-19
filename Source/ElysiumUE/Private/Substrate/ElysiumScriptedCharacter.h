@@ -36,6 +36,16 @@ protected:
 
 	void DestroyMotor();
 
+	// The motor this character stands beside its skeletal body: ordinary NPCs take the shared
+	// build verbatim; the player duplicate layers its non-solid variant on top.
+	virtual void BuildOwnMotor() { BuildMotor(); }
+
+	// A runtime model swap under the leaf's bodies gate. The swap destroys the motor a beat may
+	// be steering, so the scripted hold is released first — the beat reads Unsupported next tick
+	// and finishes on the placement fallback — then the animating node rebuilds the body and the
+	// motor is stood back up. Gated off, the swap leaves a bodiless record and nothing to rebuild.
+	void RebuildForModelChange(bool bBodiesEnabled);
+
 	virtual bool ClaimScriptMove() { return true; }
 	virtual void ReleaseScriptMove(const TCHAR*) {}
 

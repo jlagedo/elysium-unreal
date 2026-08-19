@@ -243,6 +243,20 @@ void FElysiumScriptedCharacter::BuildMotor()
 	}
 }
 
+void FElysiumScriptedCharacter::RebuildForModelChange(bool bBodiesEnabled)
+{
+	if (!bBodiesEnabled)
+	{
+		return;
+	}
+	// The swap destroys the motor the beat is steering, so release the hold first — the beat
+	// reads Unsupported next tick and finishes on the placement fallback.
+	EndScriptMove();
+	DestroyMotor();
+	FElysiumAnimating::OnRuntimeModelChanged();
+	BuildOwnMotor();
+}
+
 void FElysiumScriptedCharacter::DestroyMotor()
 {
 	if (Motor && World && World->Embodiment())

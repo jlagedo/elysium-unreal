@@ -174,7 +174,6 @@ public:
 	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)
 	FString PatrolPath;               // authored space-separated info_node_patrol_point names
 	int32 PatrolIndex = 0;            // next point in the looping authored sequence
-	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
 	// The sheet, the WillTalk latch, `default_disposition`, the skeletal body and everything that
 	// plays a clip on it now come from the chain (11.4): FElysiumCombatCharacter over
 	// FElysiumAnimating, which is where VtMB puts them. This leaf is the dialogue half.
@@ -506,6 +505,72 @@ public:
 	const FElysiumNpcMind& GetMind() const { return Mind; }
 
 private:
+	// --- Think(), phase by phase, in the order Think() calls them. A bool phase returns true
+	// when it consumed this think, and Think() returns with it -----------------------------------
+
+	// The activation barrier: the mind is admitted on its first frozen-time think.
+	bool RunAdmissionBarrier();
+
+	// Cycle 6: the combat loadout, resolved once on the first ordinary think after admission.
+	void ResolveLoadout();
+
+	// Cycle 7: a director's push that fired before this NPC's first think replays here.
+	void ReplayDeferredScriptedOrder();
+
+	// Cycle 4/5: senses and the recovered decision pass — or the stale-condition reset where a
+	// scripted owner suppresses gathering.
+	void RunConditionPass();
+
+	// Watches a beat that stopped advancing its own move and releases the body rather than
+	// freezing it.
+	bool TickScriptWatchdog();
+
+	// An open conversation: the per-line clip hold, else the stance machine's talking branch.
+	bool ThinkInDialog();
+
+	// A scripted owner drives this body's pose; the think only lands a deferred beat claim.
+	bool ThinkScriptOwned();
+
+	// Cycle 7: schedule selection pre-empts an autonomous executor.
+	bool ThinkSchedulePolicy();
+
+	// The autonomous executors: the patrol route, an interesting place, or the standing stance.
+	void ThinkAutonomous();
+
+	// --- Serialize(), one helper per version block, in exact archive order ----------------------
+
+	// The pre-version patrol and ambient state. Returns false for a payload written before
+	// ambient-place state existed, which is where the leaf's record ends.
+	bool SerializePatrolBlock(FElysiumSaveArchive& Ar);
+	void SerializeMakerBlock(FElysiumSaveArchive& Ar);
+	void SerializeMindBlock(FElysiumSaveArchive& Ar);
+	void SerializeScheduleBlock(FElysiumSaveArchive& Ar);
+	void SerializeSocialBlock(FElysiumSaveArchive& Ar);
+	void SerializeSensesBlock(FElysiumSaveArchive& Ar);
+	void SerializeLoadoutBlock(FElysiumSaveArchive& Ar);
+	void SerializeWitnessBlock(FElysiumSaveArchive& Ar);
+	void SerializeDisciplineBlock(FElysiumSaveArchive& Ar);
+
+	// ---------------------------------------------------------------------------------------------
+
+	// One motor sample written back into the entity. The motor is the physical authority while it
+	// holds a request: its feet/yaw land straight on Origin/Angles rather than through
+	// SetRuntimeOrigin, which would teleport the body back. Callers guarantee a motor.
+	EElysiumNpcMoveStatus SampleMotorIntoEntity();
+
+	// A suspended patrol route comes back with a fresh generation, so the leaf's own token is
+	// re-stamped wherever a release hands the body back to the route.
+	void RestampPatrolToken();
+
+	// The two program claims (`Schedule` and `ScriptedSchedule`) share one arbitration shape:
+	// idempotent for a token already held, the patrol route parked rather than taken, and the
+	// release stops whatever the program had the body doing. `Token` is the leaf's member for
+	// `Owner`; the public pairs below are thin wrappers over these two.
+	bool AcquireProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
+		const TCHAR* Reason);
+	void ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
+		const TCHAR* Reason);
+
 	FElysiumNpcMind Mind;
 	FElysiumBodyOwnerToken PatrolOwner;
 	FElysiumBodyOwnerToken AmbientOwner;
@@ -523,6 +588,8 @@ private:
 	bool bScriptBodyHeld = false;
 	bool bMoveIssued = false;
 	bool bWalkingAnimation = false;
+	// The interesting-place visit's phase machine and the state riding on it.
+	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
 	EAmbientPhase AmbientPhase = EAmbientPhase::None;
 	int32 CurrentSpotIndex = INDEX_NONE;
 	double AmbientLeaveAt = 0.0;
@@ -556,5 +623,7 @@ public:
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
 private:
-	void BuildControllerMotor();
+	// The shared motor build, made non-solid: the duplicate navigates against the world but never
+	// becomes a second solid character.
+	virtual void BuildOwnMotor() override;
 };
