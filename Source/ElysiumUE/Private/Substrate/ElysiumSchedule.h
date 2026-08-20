@@ -80,6 +80,14 @@ enum class EElysiumTask : uint8
 	// because `SCHED_SMALL_FLINCH` opens with it and dropping a step would misreport the program.
 	Remember,
 
+	// --- The death vocabulary --------------------------------------------------------------------
+	// `TASK_PLAY_DEATH_SEQUENCE` (0x149, the last identity in the recovered 441-task library). It
+	// walks the recovered ladder — the task's own argument as an activity, then `ACT_DIESIMPLE`, then
+	// `ACT_IDLE` — and hands the surviving choice to the body
+	// (`docs/vtmb/animation_and_movers.md` -> the `RunTask` activity table). The argument rides in
+	// `FElysiumTaskStep::Activity`; empty means the program named none.
+	PlayDeathSequence,
+
 	// --- The scripted-director vocabulary --------------------------------------------------------
 	// Path to the goal an `aiscripted_schedule` pushed (`TASK_GET_PATH_TO_GOAL`). It reads no
 	// operand: the goal, the route and the gait are the pushed order's, exactly as
@@ -114,6 +122,9 @@ enum class EElysiumScheduleId : uint8
 	SmallFlinch,              // 0x14 SCHED_SMALL_FLINCH
 	AlertSmallFlinch,         // 0x07 SCHED_ALERT_SMALL_FLINCH
 	TakeCoverFromOrigin,      // 0x19 SCHED_TAKE_COVER_FROM_ORIGIN
+
+	// --- The death family (`Substrate/ElysiumNpcCombatSchedules.cpp` registers it) ---------------
+	Die,                      // SCHED_DIE (number not decoded)
 
 	// --- The scripted-director family (`Substrate/ElysiumAiScriptedSchedule.cpp` registers both) --
 	ScriptedMoveToGoal,       // `aiscripted_schedule` modes 1 and 2
@@ -234,6 +245,32 @@ namespace ElysiumSchedule
 		FElysiumNpcConditions Previous;
 		bool bInstalled = false;
 	};
+
+	// Test-only: install a task's authored ACTIVITY operand on a registered program for the lifetime
+	// of the scope, restoring the previous one on destruction.
+	//
+	// Same reason as the mask scope beside it, for the same kind of value.
+	// `TASK_PLAY_DEATH_SEQUENCE` takes an activity argument and its first ladder rung is that
+	// argument, but no registered program authors one — retail spells the operand as an
+	// activity-index number and this runtime has no decoded index table — so the rung would
+	// otherwise have no content-free driver at all. Nothing outside a test may install an operand:
+	// authoring one at runtime is the behavioural change the empty default exists to refuse.
+	struct FTaskActivityScope
+	{
+		FTaskActivityScope(EElysiumScheduleId Id, int32 TaskIndex, const FString& Activity);
+		~FTaskActivityScope();
+
+		FTaskActivityScope(const FTaskActivityScope&) = delete;
+		FTaskActivityScope& operator=(const FTaskActivityScope&) = delete;
+
+		bool IsInstalled() const { return bInstalled; }
+
+	private:
+		EElysiumScheduleId Target;
+		int32 Index;
+		FString Previous;
+		bool bInstalled = false;
+	};
 }
 #endif
 
@@ -303,6 +340,15 @@ public:
 	virtual bool RangeAttack1() { return false; }
 	// `TASK_REMEMBER`, traced and otherwise inert (see `EElysiumTask::Remember`).
 	virtual void RememberFact(float What) {}
+
+	// `TASK_PLAY_DEATH_SEQUENCE`'s one rung — try ONE activity on the body and answer with its
+	// authored length, or a negative value when this body's vocabulary does not carry it. The kernel
+	// owns the ladder that calls this up to three times; the runner owns only "can this body play
+	// that, and for how long".
+	//
+	// Deliberately not `PlayActivity`: a death pose has to REPLACE whatever owns the base channel and
+	// hold it, where an idle-schedule activity is an ambient claim any locomotion publish outranks.
+	virtual float PlayDeathActivity(const FString& Activity) { return -1.f; }
 
 	// `TASK_GET_PATH_TO_GOAL` — issue the next leg of the scripted order this NPC was pushed, at the
 	// order's own gait. False means no order, no body, an exhausted route or a body that would not

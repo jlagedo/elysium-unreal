@@ -44,6 +44,14 @@ namespace ElysiumAnimGraph
 		// asked for.
 		case EElysiumAnimActivityCode::LandCrouch:
 			return EElysiumGraphState::Land;
+		// The death family (LIFE5), and it lands here for a different reason than the two below it —
+		// not "outside the slice" but "never a base-channel locomotion answer". A death pose is played
+		// on the REACTION branch, over whatever the graph is posing, so its own request never enters
+		// the state machine and this projection describes only the state underneath it. The reaction
+		// claim holds that pose and the death handoff then freezes or ragdolls the body; a ninth graph
+		// state would name a state node the authored graph does not carry.
+		case EElysiumAnimActivityCode::DieSimple:
+		case EElysiumAnimActivityCode::DieRagdoll:
 		// Reachable, and outside the slice: the controlled corpus never witnessed either, so neither
 		// has a state of its own yet. Standing is the honest answer, and the record says what was
 		// really asked for.

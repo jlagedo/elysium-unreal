@@ -111,6 +111,55 @@ void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
 	ElysiumNpcCond::AccumulateDamage(Senses.Memory, Dmg.CommittedDamage(), Now);
 }
 
+void FElysiumNpc::OnKilled()
+{
+	// Retail's own first clause: "an NPC already in the death schedule ignores a duplicate kill". The
+	// base's one-shot latch is the same guard, so it is read here rather than counted twice.
+	if (HasReportedDeath())
+	{
+		return;
+	}
+	// The shared body first — the `OnDeath` output, the owner/maker notification and the log. Its
+	// producer order is already settled there and death does not reorder it.
+	FElysiumCombatCharacter::OnKilled();
+
+	// 1. Every animation-channel claim this character holds goes back. Ahead of the mind and the
+	//    body, because a claim outliving its producer is what parks a channel: the executors below
+	//    are about to stop existing, and none of them will come back with its handle.
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment != nullptr && Visual != nullptr)
+	{
+		Embodiment->ReleaseBodyAnimClaims(Visual);
+	}
+
+	// 2. Every body-owner token, the running program, the pushed order and an open conversation, all
+	//    vacated together — "strategy and squad claims are vacated" plus the Troika override's hint
+	//    and feed/claim releases. `Mind.Invalidate(..., bDead=true)` is what makes current and ideal
+	//    state 7 (dead), and a dead mind refuses every later acquisition.
+	ReleaseAllBodyOwnership(TEXT("killed"), /*bDeadMind=*/true);
+
+	// 3. The solid-body policy. Frozen rather than hidden: a corpse stays on screen and stops
+	//    moving, which is VtMB's own SOLID_NONE + FSOLID_NOT_SOLID and NOT ScriptHide.
+	//    `SetIgnoreCharacterCollision` is stated beside it even though freezing already makes the
+	//    body non-solid, because the two are separate switches with separate lifetimes: whatever
+	//    later un-freezes a body must not also make a corpse start blocking the player again.
+	SetBodyFrozen(true);
+	SetIgnoreCharacterCollision(true);
+
+	// 4. The death schedule, selected from the death commit itself — "death sound/solid-body policy
+	//    leads to the death schedule". It is started directly rather than through `SelectSchedule`,
+	//    which is right and is also the only way: the mind is already dead, and a dead mind selects
+	//    nothing.
+	bDeathHandoffDone = false;
+	if (!ElysiumSchedule::Start(Schedule, EElysiumScheduleId::Die, *this))
+	{
+		// `Start` already reported the refusal by name. The handoff still has to happen, and the
+		// dead think below is what runs it.
+		Schedule.Clear();
+	}
+	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
+}
+
 void FElysiumNpc::InputUseInteresting(const FElysiumInputArgs& Args)
 {
 	bUseInteresting = Args.Param.ToInt() != 0;
@@ -509,6 +558,13 @@ void FElysiumNpc::Think()
 	{
 		return;
 	}
+	// Death owns the pass outright and is tested first: a corpse admits nothing, resolves no
+	// loadout, gathers no conditions and selects no schedule. Its own program is the only thing
+	// still running on it, and when that ends the body stops thinking altogether.
+	if (ThinkDead())
+	{
+		return;
+	}
 	if (RunAdmissionBarrier())
 	{
 		return;
@@ -539,6 +595,70 @@ void FElysiumNpc::Think()
 		return;
 	}
 	ThinkAutonomous();
+}
+
+bool FElysiumNpc::ThinkDead()
+{
+	if (Mind.State() != EElysiumNpcState::Dead)
+	{
+		return false;
+	}
+	const double Now = World ? World->NowSeconds() : 0.0;
+	double Delay = 0.25;
+	// No conditions are passed, and that is not an omission: gathering is suppressed for a corpse, so
+	// there is no gathered set to test, and the death program declares no interrupts for it to fire.
+	if (Schedule.IsRunning() && ElysiumSchedule::Tick(Schedule, *this, Now, Delay))
+	{
+		NextThink = static_cast<float>(Now + Delay);
+		return true;
+	}
+	Schedule.Clear();
+	// The solid-body policy, re-asserted on EVERY terminal pass rather than once with the handoff.
+	// Anything that hands a corpse's body back un-freezes it and re-arms this think — the feed
+	// pair's release is the live one, and it runs `EndFeedVictimRole` on a victim the same
+	// transaction has just killed — so the pass that turns the think off again is also the pass
+	// that takes the body back. Both setters early-return on a state that has not moved, so the
+	// ordinary single pass pays nothing.
+	SetBodyFrozen(true);
+	SetIgnoreCharacterCollision(true);
+	CompleteDeathHandoff();
+	// Nothing on a dead NPC schedules work — no selection, no executor, no stance machine — so the
+	// think is not rescheduled at all rather than being parked on a slow cadence.
+	NextThink = ELYSIUM_NEVER_THINK;
+	return true;
+}
+
+void FElysiumNpc::CompleteDeathHandoff()
+{
+	if (bDeathHandoffDone)
+	{
+		return;
+	}
+	bDeathHandoffDone = true;
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr || Visual == nullptr)
+	{
+		return;   // headless, or a bodiless record — an ordinary absence, not a failure
+	}
+	// **The named divergence.** Retail creates its ragdoll inside the shared `Event_Killed` body,
+	// from the model's own `ACT_DIERAGDOLL` seed pose and with a force envelope composed from the
+	// killing blow (`docs/vtmb/combat-and-damage.md`). Ours hands over at the END of the death
+	// program, seeded from whatever pose that program left on the body, and with no impulse: the
+	// force envelope is unrecovered (the launch slice cannot start before the impulse is), so an
+	// invented one would be a behaviour rather than a reproduction.
+	if (Embodiment->StartBodyRagdoll(Visual))
+	{
+		// Physics owns the pose now, so the animation claims mean nothing and go back.
+		Embodiment->ReleaseBodyAnimClaims(Visual);
+		Mind.RecordExternal(TEXT("death: the body handed to physics from its current pose"));
+		return;
+	}
+	// The stated fallback, and the shipped one. The claims deliberately STAY: the pose stops being
+	// evaluated at all, and releasing them would hand the base channel back to a locomotion publish
+	// on a body that no longer answers it, leaving the verdict surface naming no holder for a pose it
+	// is holding.
+	Embodiment->HoldBodyFinalPose(Visual);
+	Mind.RecordExternal(TEXT("death: no physics behind this body — holding its final frame"));
 }
 
 bool FElysiumNpc::RunAdmissionBarrier()
@@ -797,6 +917,15 @@ EElysiumScheduleId FElysiumNpc::SelectIdleSchedule()
 
 EElysiumScheduleId FElysiumNpc::SelectSchedule()
 {
+	// A dead NPC selects nothing, ever. `ThinkDead` consumes the whole pass before anything can
+	// reach here, so this is unreachable through the think — it is stated anyway because selection
+	// has a second door (`StartNamedSchedule`, which a script's `ChangeSchedule` and a discipline's
+	// `AI_Schedule` channel both reach), and "the corpse stopped choosing" has to be a property of
+	// the selector rather than of one caller's ordering.
+	if (Mind.State() == EElysiumNpcState::Dead)
+	{
+		return EElysiumScheduleId::None;
+	}
 	// =============== Cycle 10c — the law branch of schedule selection ============================
 	// "Schedule branches, not condition gathering, call the two player incident consumers." This is
 	// the only place in the runtime that reaches them from an NPC.
@@ -1346,6 +1475,21 @@ float FElysiumNpc::PlayActivity(const FString& Activity)
 	return Seconds;
 }
 
+float FElysiumNpc::PlayDeathActivity(const FString& Activity)
+{
+	FElysiumReactionPlayRequest Request;
+	Request.Activity = Activity;
+	// The ladder IS the fallback. Letting the availability probe, the disposition retry or sequence
+	// zero substitute something else would resolve a rung the body does not author and hide the
+	// ladder's own answer — which on every shipped body is that there is no death performance at all.
+	Request.bAllowFallbackLadder = false;
+	float Seconds = 0.f;
+	// A refusal is an ordinary negative the resolver's own record already names: no body, no
+	// embodiment, a vocabulary carrying no such activity, or a choreographed scene that outranks the
+	// Reaction band and keeps the body. The ladder simply tries its next rung.
+	return PlayReactionActivity(Request, &Seconds) ? FMath::Max(0.f, Seconds) : -1.f;
+}
+
 float FElysiumNpc::RandomSeconds(float Max)
 {
 	return Max > 0.f
@@ -1673,6 +1817,14 @@ bool FElysiumNpc::StartNamedSchedule(const FString& Requested, const FString& Su
 {
 	if (IsInert() || Requested.IsEmpty())
 	{
+		return false;
+	}
+	if (Mind.State() == EElysiumNpcState::Dead)
+	{
+		// The other door into schedule selection. A corpse runs the death program and nothing else,
+		// so a script's `ChangeSchedule` or a discipline's `AI_Schedule` channel arriving after the
+		// death commit is refused here rather than replacing it.
+		RecordScheduleEvent(FString::Printf(TEXT("refused '%s': this NPC is dead"), *Requested));
 		return false;
 	}
 	EElysiumScheduleId Id = EElysiumScheduleId::None;
@@ -2461,40 +2613,45 @@ void FElysiumNpc::OnRuntimeModelChanged()
 	RebuildForModelChange(CVarNpcBodies.GetValueOnGameThread() != 0);
 }
 
+void FElysiumNpc::ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind)
+{
+	if (DialogueBodyOwner.IsSet())
+	{
+		if (World && World->GetOpenDialogOwner() == Handle)
+		{
+			World->CloseDialog(/*bSilent=*/true);
+		}
+		else
+		{
+			EndDialogueBodySession(DialogueBodyOwner, /*bSilent=*/true);
+		}
+	}
+	EndScriptMove();
+	FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
+	EndScriptedSchedule(Reason);
+	ReleaseScheduleBody(Reason);
+	Schedule.Clear();
+	CombatSelector.Reset();
+	Mind.Invalidate(Reason, bDeadMind);
+	PatrolOwner.Reset();
+	AmbientOwner.Reset();
+	SequenceOwner.Reset();
+	ScheduleOwner.Reset();
+	ScriptedScheduleOwner.Reset();
+	ScriptedScheduleOrder.Reset();
+	DialogueBodyOwner.Reset();
+	// The beat's own ReleaseNpc still runs; it must find nothing left to give back rather
+	// than releasing a token this invalidation already retired.
+	bScriptBodyRequested = false;
+	bScriptBodyHeld = false;
+}
+
 void FElysiumNpc::OnDormancyChanged()
 {
 	FElysiumCombatCharacter::OnDormancyChanged();
 	if (IsInert())
 	{
-		if (DialogueBodyOwner.IsSet())
-		{
-			if (World && World->GetOpenDialogOwner() == Handle)
-			{
-				World->CloseDialog(/*bSilent=*/true);
-			}
-			else
-			{
-				EndDialogueBodySession(DialogueBodyOwner, /*bSilent=*/true);
-			}
-		}
-		EndScriptMove();
-		FinishAmbientUse(/*bFireLeft=*/bAmbientArrived);
-		EndScriptedSchedule(bDead ? TEXT("death") : TEXT("dormancy"));
-		ReleaseScheduleBody(bDead ? TEXT("death") : TEXT("dormancy"));
-		Schedule.Clear();
-		CombatSelector.Reset();
-		Mind.Invalidate(bDead ? TEXT("death") : TEXT("dormancy"), bDead);
-		PatrolOwner.Reset();
-		AmbientOwner.Reset();
-		SequenceOwner.Reset();
-		ScheduleOwner.Reset();
-		ScriptedScheduleOwner.Reset();
-		ScriptedScheduleOrder.Reset();
-		DialogueBodyOwner.Reset();
-		// The beat's own ReleaseNpc still runs; it must find nothing left to give back rather
-		// than releasing a token this invalidation already retired.
-		bScriptBodyRequested = false;
-		bScriptBodyHeld = false;
+		ReleaseAllBodyOwnership(bDead ? TEXT("death") : TEXT("dormancy"), bDead);
 	}
 	else
 	{
@@ -2532,7 +2689,37 @@ void FElysiumNpc::Serialize(FElysiumSaveArchive& Ar)
 		// remembered gunshot look new and promote a restored NPC to alert on the strength of it.
 		Cognition.Conditions.Reset();
 		Cognition.GatheredAt = World ? World->NowSeconds() : 0.0;
+		RestoreDeathBodyState();
 	}
+}
+
+void FElysiumNpc::RestoreDeathBodyState()
+{
+	if (Mind.State() != EElysiumNpcState::Dead)
+	{
+		return;
+	}
+	// A corpse's BODY state is not save state and cannot be: the motor is rebuilt at load and a held
+	// pose is a pose, not a fact about the character. So the death transaction's body half — frozen,
+	// non-solid to characters, handed to physics or held on its final frame — is re-applied rather
+	// than restored. Without it a loaded corpse stands up solid, animating its spawn idle.
+	//
+	// Re-applied HERE and not from an armed think, because a corpse's saved cadence is `never` and
+	// there is no think to arm: the snapshot applier restamps the saved `NextThink` after this
+	// returns and is the authoritative one there (the same caveat the patrol and discipline blocks
+	// state). The body already exists — `Spawn` builds it, and a snapshot is applied over a
+	// fully-spawned world.
+	bDeathHandoffDone = false;
+	SetBodyFrozen(true);
+	SetIgnoreCharacterCollision(true);
+	if (!Schedule.IsRunning())
+	{
+		// The death program had already finished when the save was taken, so nothing is coming to
+		// end it: the handoff is the load's own work.
+		CompleteDeathHandoff();
+	}
+	// Otherwise `SCHED_DIE` restarted with the schedule block, the saved think that was carrying it
+	// comes back with the record, and `ThinkDead` ends it exactly as it would have.
 }
 
 bool FElysiumNpc::SerializePatrolBlock(FElysiumSaveArchive& Ar)
@@ -2664,6 +2851,9 @@ void FElysiumNpc::SerializeMindBlock(FElysiumSaveArchive& Ar)
 			// a beat that re-stamps its queue lock has its claim taken again on the next think.
 			SequenceOwner.Reset();
 			bScriptBodyHeld = false;
+			// A restored Dead mind still owes its body the death transaction's body half. It is not
+			// re-applied here: the schedule block below decides whether the death program comes back
+			// with the record, and `RestoreDeathBodyState` runs once every block has landed.
 		}
 	}
 }

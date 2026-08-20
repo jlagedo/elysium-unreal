@@ -1639,6 +1639,271 @@ bool FElysiumNpcCombatReactionProducerTest::RunTest(const FString&)
 	return true;
 }
 
+// ================================================================================================
+// The death transaction (LIFE5).
+//
+// `docs/vtmb/combat-and-damage.md` -> "NPC and player death transaction": the shared body fires the
+// output and notifies the owner, and the NPC override vacates every claim, makes current and ideal
+// state 7 (dead), applies the solid-body policy and selects the death schedule. What follows the
+// program is ours and is a stated divergence: the handoff to Unreal's physics is seeded from the
+// pose the program left behind, and a body carrying no physics asset holds that pose instead.
+// ================================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatDeathTest,
+	"Elysium.Substrate.NpcCombat.Death", GElysiumTestFlags)
+bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
+{
+	FCombatFixture F(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
+	if (F.Fighter == nullptr)
+	{
+		return false;
+	}
+	F.RunAdmissionAndLoadout();
+	if (!TestNotNull(TEXT("the NPC carries a body to die with"), F.Fighter->Visual))
+	{
+		return false;
+	}
+	FElysiumRecordingNpcMotor* Motor = F.MotorFor(F.Fighter);
+	if (!TestNotNull(TEXT("...and a motor behind it"), Motor))
+	{
+		return false;
+	}
+	// The death sequence resolves and plays, so the transaction is asserted with a real pose on the
+	// body rather than through a vocabulary that answers nothing.
+	F.Services.bNpcActivitiesResolve = true;
+	F.Services.bNpcOneShotsPlay = true;
+	F.Services.ResolvedNpcActivityLabel = TEXT("diesimple");
+	F.Services.ResolvedNpcActivityClip = TEXT("diesimple");
+	F.Services.ResolvedNpcActivityOwner = TEXT("misc");
+	F.Services.OneShotSeconds = 2.0f;
+	F.Services.Calls.Reset();
+
+	// --- The transaction itself -------------------------------------------------------------------
+	F.Fighter->OnKilled();
+
+	TestTrue(TEXT("every animation-channel claim the character held goes back"),
+		F.Services.Saw(TEXT("ReleaseBodyAnimClaims")));
+	TestTrue(TEXT("the mind is dead, current and ideal both"),
+		F.Debug(F.Fighter, TEXT("Mind")).Contains(TEXT("current=Dead"))
+			&& F.Debug(F.Fighter, TEXT("Mind")).Contains(TEXT("ideal=Dead")));
+	TestEqual(TEXT("...and it owns nothing"),
+		F.Debug(F.Fighter, TEXT("Body owner")).Left(4), FString(TEXT("None")));
+	TestTrue(TEXT("the body is frozen where it stands"), Motor->bFrozen);
+	TestTrue(TEXT("...and stops answering the character channel"),
+		Motor->bIgnoreCharacterCollision);
+	// Frozen is NOT hidden: a corpse stays on screen. `SetEnabled(false)` is what would take it off,
+	// and death never calls it.
+	TestTrue(TEXT("...while staying enabled, because a corpse is visible"), Motor->bEnabled);
+	TestFalse(TEXT("nothing disabled the body"),
+		F.Services.Saw(TEXT("NpcMotor SetEnabled 0")));
+	TestFalse(TEXT("the entity is not killed or hidden by dying"), F.Fighter->IsInert());
+
+	TestTrue(TEXT("the death schedule is selected from the death commit itself"),
+		F.Fighter->Schedule.IsRunning());
+	TestEqual(TEXT("...and it is SCHED_DIE"),
+		FString(ElysiumScheduleName(F.Fighter->Schedule.Current)), FString(TEXT("SCHED_DIE")));
+
+	// --- The program runs, then the body hands over -----------------------------------------------
+	// **The stream, pinned exactly.** Every ladder rung goes through the Reaction producer, and that
+	// producer draws its weighted variant before it knows whether the rung resolves — so a death
+	// costs one draw per rung TRIED. The count has to be a function of the body's own vocabulary and
+	// of nothing else, or how many deaths a fight contained would silently reshuffle every reaction
+	// after it. This body answers the first rung, so the whole death is one draw.
+	FRandomStream& Reaction = ElysiumRng::Stream(EElysiumRngStream::Reaction);
+	FRandomStream OneDraw(Reaction.GetCurrentSeed());
+	OneDraw.RandHelper(MAX_int32);
+
+	F.Services.Calls.Reset();
+	F.World.Tick(0.0);
+
+	TestEqual(TEXT("the death ladder advances the Reaction stream by exactly one draw"),
+		Reaction.GetCurrentSeed(), OneDraw.GetCurrentSeed());
+
+	const FString Played = [&F]() -> FString
+	{
+		for (const FString& Call : F.Services.Calls)
+		{
+			if (Call.StartsWith(TEXT("PlayNpcOneShot")))
+			{
+				return Call;
+			}
+		}
+		return FString();
+	}();
+	TestTrue(TEXT("the death pose is played on the reaction branch, over whatever owned the base"),
+		Played.Contains(TEXT("route=reaction")) && Played.Contains(TEXT("prio=reaction")));
+	TestTrue(TEXT("the death clip holds the program open for its own length"),
+		F.Fighter->Schedule.IsRunning());
+
+	// Past the clip: the program ends and the handoff runs.
+	F.Fighter->NextThink = 0.0f;
+	F.Services.Calls.Reset();
+	F.World.Tick(F.Services.OneShotSeconds + 0.1);
+
+	TestFalse(TEXT("the program ends when the death clip does"), F.Fighter->Schedule.IsRunning());
+	TestTrue(TEXT("the body is offered to physics, seeded from its current pose"),
+		F.Services.Saw(TEXT("StartBodyRagdoll -> 0")));
+	TestTrue(TEXT("a body with no physics asset holds its final frame instead"),
+		F.Services.Saw(TEXT("HoldBodyFinalPose")));
+	TestEqual(TEXT("and nothing on a dead NPC schedules work again"),
+		F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+
+	// --- No reselection, however hard the world ticks ---------------------------------------------
+	F.Services.Calls.Reset();
+	for (int32 i = 0; i < 4; ++i)
+	{
+		// Forcing a think is the strong form of the claim: even asked directly, a corpse selects
+		// nothing and hands nothing back to physics twice.
+		F.Fighter->NextThink = 0.0f;
+		F.World.Tick(10.0 + i);
+	}
+	TestFalse(TEXT("no schedule is selected after death"),
+		F.Fighter->Schedule.IsRunning());
+	TestFalse(TEXT("...no stance machine runs"), F.Services.Saw(TEXT("ResolveStanceClips")));
+	TestFalse(TEXT("...no activity is resolved"), F.Services.Saw(TEXT("ResolveNpcActivityClip")));
+	TestFalse(TEXT("...and the handoff is not repeated"), F.Services.Saw(TEXT("StartBodyRagdoll")));
+	TestEqual(TEXT("the think stays off"), F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+
+	// Selection has a SECOND door, and the corpse has to refuse there too: a script's
+	// `ChangeSchedule` and a discipline's `AI_Schedule` channel both arrive through this one, after
+	// the death commit and outside any think ordering.
+	TestFalse(TEXT("a named schedule pushed at a corpse is refused"),
+		F.Fighter->StartNamedSchedule(TEXT("SCHED_CHASE_ENEMY"),
+			TEXT("CAI_BaseNPC.ChangeSchedule"), FString()));
+	TestFalse(TEXT("...and nothing is running afterwards"), F.Fighter->Schedule.IsRunning());
+	TestTrue(TEXT("...with the refusal named, not silent"),
+		F.Debug(F.Fighter, TEXT("Mind transition")).Contains(TEXT("this NPC is dead")));
+
+	// --- A second kill is ignored -----------------------------------------------------------------
+	F.Services.Calls.Reset();
+	F.Fighter->OnKilled();
+	TestFalse(TEXT("a duplicate kill runs no second transaction"),
+		F.Services.Saw(TEXT("ReleaseBodyAnimClaims")));
+
+	// --- A corpse the feed pair hands back is taken back ------------------------------------------
+	// The live producer is `EndFeedVictimRole`: the feed transaction kills a depleted victim and then
+	// releases the same body in the same call, which un-freezes it and re-arms its think. Anything
+	// that gives a corpse's body back has to lose, so the re-armed think is asserted to take it.
+	F.Services.Calls.Reset();
+	F.Fighter->SetBodyFrozen(false);
+	F.Fighter->NextThink = 0.0f;
+	F.World.Tick(20.0);
+	TestTrue(TEXT("a body handed back to a corpse is frozen again by its next think"),
+		Motor->bFrozen);
+	TestTrue(TEXT("...and still ignores the character channel"), Motor->bIgnoreCharacterCollision);
+	TestEqual(TEXT("...and the think goes back off"), F.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestFalse(TEXT("...without handing the body to physics a second time"),
+		F.Services.Saw(TEXT("StartBodyRagdoll")));
+	return true;
+}
+
+// ================================================================================================
+// The death transaction across a save (LIFE5).
+//
+// A corpse's body state is not save state — the motor is rebuilt at load — so the death
+// transaction's body half is RE-APPLIED on restore. It cannot be deferred to a think: the whole
+// point of the transaction is that a corpse's saved cadence is `never`, and `ApplySnapshot` restamps
+// that saved cadence after every leaf has deserialized. Without the re-application a loaded corpse
+// stands up solid, animating its spawn idle.
+// ================================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatDeathRestoreTest,
+	"Elysium.Substrate.NpcCombat.DeathRestore", GElysiumTestFlags)
+bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)
+{
+	// --- Kill one, run its program out, freeze the map --------------------------------------------
+	FElysiumMapSnapshot Snapshot;
+	{
+		FCombatFixture F(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
+		if (F.Fighter == nullptr)
+		{
+			return false;
+		}
+		F.RunAdmissionAndLoadout();
+		F.Services.bNpcActivitiesResolve = true;
+		F.Services.bNpcOneShotsPlay = true;
+		F.Services.ResolvedNpcActivityLabel = TEXT("diesimple");
+		F.Services.ResolvedNpcActivityClip = TEXT("diesimple");
+		F.Services.ResolvedNpcActivityOwner = TEXT("misc");
+		F.Services.OneShotSeconds = 2.0f;
+
+		F.Fighter->OnKilled();
+		F.World.Tick(0.0);
+		F.Fighter->NextThink = 0.0f;
+		F.World.Tick(F.Services.OneShotSeconds + 0.1);
+		if (!TestEqual(TEXT("the corpse is saved with its think off"),
+			F.Fighter->NextThink, ELYSIUM_NEVER_THINK))
+		{
+			return false;
+		}
+		// The live NPC beside it carries an ordinary cadence into the payload, so the restore's death
+		// arm can be shown not to reach it.
+		if (F.Target != nullptr)
+		{
+			F.Target->NextThink = 5.0f;
+		}
+		F.World.Freeze(Snapshot);
+	}
+	if (!TestTrue(TEXT("the frozen map carries records"), Snapshot.Entities.Num() > 0))
+	{
+		return false;
+	}
+
+	// --- Load it over a fresh world, whose bodies were just built and know nothing about a death ---
+	FCombatFixture G(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
+	if (G.Fighter == nullptr)
+	{
+		return false;
+	}
+	G.RunAdmissionAndLoadout();
+	FElysiumRecordingNpcMotor* Motor = G.MotorFor(G.Fighter);
+	if (!TestNotNull(TEXT("the freshly built corpse has a motor"), Motor))
+	{
+		return false;
+	}
+	TestFalse(TEXT("...which starts unfrozen, as a live NPC's does"), Motor->bFrozen);
+	G.Services.Calls.Reset();
+
+	TestTrue(TEXT("the snapshot applies"), G.World.ApplySnapshot(Snapshot) > 0);
+
+	TestTrue(TEXT("the restored mind is dead"),
+		G.Debug(G.Fighter, TEXT("Mind")).Contains(TEXT("current=Dead")));
+	TestTrue(TEXT("the rebuilt body is frozen again by the restore itself"), Motor->bFrozen);
+	TestTrue(TEXT("...and stops answering the character channel again"),
+		Motor->bIgnoreCharacterCollision);
+	TestTrue(TEXT("...and holds its final frame, because no baked body carries a physics asset"),
+		G.Services.Saw(TEXT("HoldBodyFinalPose")));
+	TestTrue(TEXT("...still visible, because a corpse is not hidden"), Motor->bEnabled);
+	// The restore does NOT buy a think to do this with: the saved cadence is authoritative, and for a
+	// corpse it is `never`. A restored corpse that re-armed a think would also be a restored corpse
+	// whose payload failed its own round trip.
+	TestEqual(TEXT("the saved cadence survives the restore"),
+		G.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	TestFalse(TEXT("and no schedule restarts on a corpse whose program had already ended"),
+		G.Fighter->Schedule.IsRunning());
+
+	// A live NPC restored from the same snapshot keeps its own cadence: the death arm is the corpse's
+	// alone and does not reach across the record.
+	if (G.Target != nullptr)
+	{
+		TestEqual(TEXT("a restored live NPC keeps the exact cadence its record carried"),
+			G.Target->NextThink, 5.0f);
+	}
+
+	// Ticking it hard changes nothing: the restored corpse is the same corpse.
+	G.Services.Calls.Reset();
+	for (int32 i = 0; i < 3; ++i)
+	{
+		G.Fighter->NextThink = 0.0f;
+		G.World.Tick(30.0 + i);
+	}
+	TestFalse(TEXT("no schedule is selected after a restore either"),
+		G.Fighter->Schedule.IsRunning());
+	TestFalse(TEXT("...and no activity is resolved"),
+		G.Services.Saw(TEXT("ResolveNpcActivityClip")));
+	TestEqual(TEXT("...and the think goes back off"),
+		G.Fighter->NextThink, ELYSIUM_NEVER_THINK);
+	return true;
+}
+
 }   // namespace ElysiumNpcCombatTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

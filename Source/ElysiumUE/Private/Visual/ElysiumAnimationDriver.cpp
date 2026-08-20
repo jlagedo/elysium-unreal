@@ -97,6 +97,26 @@ bool FElysiumAnimationDriver::ReleaseRequest(uint32 Handle)
 	return false;
 }
 
+int32 FElysiumAnimationDriver::ReleaseAllRequests()
+{
+	int32 Released = 0;
+	for (FElysiumAnimRequestSlot& Slot : Requests)
+	{
+		if (Slot.bActive)
+		{
+			UE_LOG(LogElysiumAnimDriver, Verbose,
+				TEXT("'%s' drops %s claim '%s' (%s) on %s: the character's claims are being released "
+					 "wholesale"),
+				*Stem, ElysiumAnimIntent::SourceName(Slot.Request.Source), *Slot.Request.Label,
+				ElysiumAnimIntent::PriorityName(Slot.Request.Priority),
+				ElysiumAnimIntent::ChannelName(Slot.Request.Channel));
+			++Released;
+		}
+		Slot = FElysiumAnimRequestSlot();
+	}
+	return Released;
+}
+
 const FElysiumAnimationRequest* FElysiumAnimationDriver::ActiveRequest(
 	EElysiumAnimChannel Channel) const
 {

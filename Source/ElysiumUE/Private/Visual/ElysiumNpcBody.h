@@ -90,6 +90,9 @@ public:
 	// refused claim, and releasing a handle that already lapsed answers false rather than failing.
 	uint32 SubmitAnimRequest(const FElysiumAnimationRequest& Request);
 	bool ReleaseAnimRequest(uint32 Handle);
+	// LIFE5 — every standing claim at once, for the death transaction. A driver that was never built
+	// holds nothing, so this does not build one.
+	int32 ReleaseAllAnimRequests();
 
 	// Public so a test can read the declared frame order off the class default.
 	UPROPERTY()

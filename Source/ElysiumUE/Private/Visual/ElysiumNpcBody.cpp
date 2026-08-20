@@ -141,6 +141,13 @@ bool AElysiumNpcBody::ReleaseAnimRequest(uint32 Handle)
 	return AnimDriver.IsValid() && AnimDriver->ReleaseRequest(Handle);
 }
 
+int32 AElysiumNpcBody::ReleaseAllAnimRequests()
+{
+	// Deliberately NOT `EnsureAnimDriver`: a body whose driver was never built has never granted a
+	// claim, and building one here would hand a corpse a locomotion publisher it never had.
+	return AnimDriver.IsValid() ? AnimDriver->ReleaseAllRequests() : 0;
+}
+
 void AElysiumNpcBody::SetOwningEntity(AElysiumMapActor* InMap, const FElysiumEntityHandle& InOwner)
 {
 	OwningMap = InMap;

@@ -2128,14 +2128,30 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 		TestEqual(TEXT("and so does an activity this slice cannot name"),
 			AsInt(StateForActivity(EElysiumAnimActivityCode::Unknown)),
 			AsInt(EElysiumGraphState::Idle));
+		// The death family (LIFE5) is in the vocabulary and is deliberately NOT a locomotion state:
+		// a death pose plays on the reaction branch over whatever the graph is posing, so this
+		// projection names the state underneath it rather than a ninth state the asset does not have.
+		TestEqual(TEXT("ACT_DIESIMPLE names the state underneath the reaction, not one of its own"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::DieSimple)),
+			AsInt(EElysiumGraphState::Idle));
+		TestEqual(TEXT("and so does the ragdoll seed label"),
+			AsInt(StateForActivity(EElysiumAnimActivityCode::DieRagdoll)),
+			AsInt(EElysiumGraphState::Idle));
+		TestEqual(TEXT("both are spelled once, in the one activity vocabulary"),
+			FString(ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::DieSimple)),
+			FString(TEXT("ACT_DIESIMPLE")));
+		TestEqual(TEXT("...including the ragdoll label"),
+			FString(ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::DieRagdoll)),
+			FString(TEXT("ACT_DIERAGDOLL")));
 
 		// --- coverage: every activity the slice can emit lands somewhere that can play it ---------
 		//
 		// Spot checks prove the rows that were argued over; this proves there is no row missing. A
 		// classifier answer with no state is what would leave a body in the reference pose with
-		// nothing in the log, so the enum is walked whole rather than sampled.
+		// nothing in the log, so the enum is walked whole rather than sampled — the bound is the
+		// LAST enumerator, so a family added to the vocabulary joins this walk with it.
 		using ElysiumAnimGraph::StateCanPlay;
-		for (uint8 Code = 0; Code <= static_cast<uint8>(EElysiumAnimActivityCode::Treadwater); ++Code)
+		for (uint8 Code = 0; Code <= static_cast<uint8>(EElysiumAnimActivityCode::DieRagdoll); ++Code)
 		{
 			const EElysiumAnimActivityCode Activity = static_cast<EElysiumAnimActivityCode>(Code);
 			const EElysiumGraphState State = StateForActivity(Activity);

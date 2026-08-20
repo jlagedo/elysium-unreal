@@ -145,6 +145,18 @@ public:
 	// body a choreographed scene owns.
 	bool PlayNpcOneShot(USkeletalMeshComponent* Body, const FElysiumOneShotClipRequest& Request,
 		float* OutSeconds);
+
+	// --- The death handoff (LIFE5) ---------------------------------------------------------------
+	// Give back every channel claim standing on this body, and the cinematic claim tracked here
+	// beside them, so a character that stops having behaviour stops owning every channel at once.
+	void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body);
+	// Start Unreal's physics simulation on this body, seeded from its current bone transforms. False
+	// when the mesh carries no physics asset to simulate — the shipped case, because the character
+	// bake writes none — and the caller then holds the final pose instead.
+	bool StartBodyRagdoll(USkeletalMeshComponent* Body);
+	// Stop advancing the pose and leave the last drawn frame on screen.
+	void HoldBodyFinalPose(USkeletalMeshComponent* Body);
+
 	// LIFE5 — where one channel of a body stands on its clip this frame, and the timeline that clip
 	// declares. Both are passthroughs: the phase is the animation host's own (only it knows whether
 	// a montage, a graph state or a fan is producing the pose), and the timeline is the owning

@@ -442,6 +442,12 @@ bool AElysiumMapActor::ReleasePlayerAnimRequest(uint32 Handle)
 	return PlayerAnimDriver.IsValid() && PlayerAnimDriver->ReleaseRequest(Handle);
 }
 
+int32 AElysiumMapActor::ReleaseAllPlayerAnimRequests()
+{
+	// Deliberately NOT built on demand, unlike the submit above: releasing nothing needs no driver.
+	return PlayerAnimDriver.IsValid() ? PlayerAnimDriver->ReleaseAllRequests() : 0;
+}
+
 bool AElysiumMapActor::IsPlayerVisual(const USkeletalMeshComponent* Body) const
 {
 	if (Body == nullptr)

@@ -18,6 +18,7 @@
 #include "Engine/SkeletalMesh.h"
 #include "GameFramework/Actor.h"
 #include "Misc/App.h"
+#include "PhysicsEngine/PhysicsAsset.h"
 
 DEFINE_LOG_CATEGORY(LogElysiumBodies);
 
@@ -841,6 +842,99 @@ void UElysiumEntityBodies::ReleaseCinematicClaim(USkeletalMeshComponent* Body)
 	{
 		ReleaseBodyAnimRequest(Body, Handle);
 	}
+}
+
+// ================================================================================================
+// The death handoff (LIFE5)
+// ================================================================================================
+
+void UElysiumEntityBodies::ReleaseBodyAnimClaims(USkeletalMeshComponent* Body)
+{
+	if (Body == nullptr)
+	{
+		return;
+	}
+	// The scene's claim is tracked HERE as well as in the driver slot, so dropping the slot alone
+	// would leave this map holding a handle naming a claim that no longer exists. Ahead of the
+	// wholesale release for that reason: after it the handle would release nothing.
+	ReleaseCinematicClaim(Body);
+	if (AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
+	{
+		Motor->ReleaseAllAnimRequests();
+		return;
+	}
+	if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner()); Map != nullptr
+		&& Map->IsPlayerVisual(Body))
+	{
+		Map->ReleaseAllPlayerAnimRequests();
+	}
+	// Anything else — a green-room stand, a preview body, a prop — has no driver arbitrating
+	// anything and therefore holds no claim. An explicitly optional absence, not a failure.
+}
+
+bool UElysiumEntityBodies::StartBodyRagdoll(USkeletalMeshComponent* Body)
+{
+	if (Body == nullptr)
+	{
+		return false;
+	}
+	const UPhysicsAsset* Physics = Body->GetPhysicsAsset();
+	if (Physics == nullptr || Physics->SkeletalBodySetups.IsEmpty())
+	{
+		// Reported ONCE per process rather than once per corpse: the character bake writes no physics
+		// asset for a body at all, so this is one absent pipeline product and not a per-body fault.
+		// The caller's stated fallback — hold the final pose — runs either way.
+		static bool bReportedMissingPhysics = false;
+		if (!bReportedMissingPhysics)
+		{
+			bReportedMissingPhysics = true;
+			UE_LOG(LogElysiumBodies, Warning,
+				TEXT("'%s' carries no physics asset, so a killed character holds its final pose "
+					 "instead of handing to a ragdoll. Reported once per process; the character bake "
+					 "writes no physics asset for any body."),
+				*GetNameSafe(Body->GetSkinnedAsset()));
+		}
+		return false;
+	}
+	// Unreal owns the physics from here: the collision profile, the solver and the constraint set are
+	// the engine's, and nothing of Source's ragdoll is reproduced. `SetSimulatePhysics` initialises
+	// every body at its CURRENT bone transform, which is what makes the pose the death sequence left
+	// behind the simulation's first frame.
+	// The engine's own shipped `Ragdoll` profile (`BaseEngine.ini`), which is `QueryAndPhysics` on the
+	// `PhysicsBody` object type and ignores the Pawn and Visibility channels — the same
+	// character-versus-character release the death transaction already made on the capsule. It has no
+	// `UCollisionProfile` constant, so the name is spelled; `bCanModify=False` keeps it stable.
+	// The profile already declares `QueryAndPhysics`; a name the engine does not know reports
+	// itself (`COLLISION PROFILE [...] is not found`, LogPhysics), so a missing profile is not a
+	// silent no-op.
+	Body->SetCollisionProfileName(TEXT("Ragdoll"));
+	Body->SetSimulatePhysics(true);
+	if (!Body->IsSimulatingPhysics())
+	{
+		// `SetSimulatePhysics` reports failure only by not simulating: an unregistered component or
+		// an asset whose bodies did not instantiate both leave it exactly where it was. Answering
+		// true here would take the caller past its own fallback and leave a corpse with a live pose
+		// nothing advances.
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("'%s' carries a physics asset but refused to simulate; the killed character holds "
+				 "its final pose instead"),
+			*GetNameSafe(Body->GetSkinnedAsset()));
+		return false;
+	}
+	Body->WakeAllRigidBodies();
+	return true;
+}
+
+void UElysiumEntityBodies::HoldBodyFinalPose(USkeletalMeshComponent* Body)
+{
+	if (Body == nullptr)
+	{
+		return;
+	}
+	// `bPauseAnims` rather than disabling the component tick: the tick also drives the transform and
+	// bounds update the render thread reads, and a body that stopped publishing those would stop
+	// being drawn correctly rather than stop moving. The last evaluated pose stays exactly as it is.
+	Body->bPauseAnims = true;
 }
 
 int32 UElysiumEntityBodies::SetFlexControllers(USkeletalMeshComponent* Body,

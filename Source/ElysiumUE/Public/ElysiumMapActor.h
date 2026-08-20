@@ -260,6 +260,9 @@ public:
 	// built on demand so a claim ahead of the first player anim pass is not dropped.
 	uint32 SubmitPlayerAnimRequest(const struct FElysiumAnimationRequest& Request);
 	bool ReleasePlayerAnimRequest(uint32 Handle);
+	// LIFE5 — every standing claim on the player driver at once. A driver that was never built holds
+	// nothing, so this does not build one.
+	int32 ReleaseAllPlayerAnimRequests();
 	// Whether this component is the player pawn's own visual — the body whose channel claims route
 	// to the player driver rather than to an NPC motor's.
 	bool IsPlayerVisual(const USkeletalMeshComponent* Body) const;
@@ -323,6 +326,9 @@ public:
 		FElysiumActivityClip& Out) override;
 	virtual bool PlayNpcOneShot(USkeletalMeshComponent* Body,
 		const FElysiumOneShotClipRequest& Request, float* OutSeconds) override;
+	virtual void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body) override;
+	virtual bool StartBodyRagdoll(USkeletalMeshComponent* Body) override;
+	virtual void HoldBodyFinalPose(USkeletalMeshComponent* Body) override;
 	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
 		EElysiumAnimBodyKind BodyKind, FString& OutAnimName,
 		float& OutGroundSpeedCmPerSecond) override;

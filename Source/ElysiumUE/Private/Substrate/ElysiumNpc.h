@@ -198,6 +198,22 @@ public:
 	// The authored `invincible` refusal, tested before anything else damage-side.
 	virtual bool RejectsAllDamage() const override { return bInvincible; }
 
+	/**
+	 * `CAI_BaseNPC::Event_Killed`'s NPC override (`0x10265ad0`) plus the Troika one over it
+	 * (`0x102bf340`) — the whole death transaction, run once (`docs/vtmb/combat-and-damage.md` ->
+	 * "NPC and player death transaction").
+	 *
+	 * The shared body's output, owner notification and log are the base's and stay there. What this
+	 * adds is everything the recovered override does with the BODY and the MIND: every animation
+	 * channel claim goes back, every body-owner token is vacated, current and ideal state become
+	 * dead, the body is frozen where it stands and stops answering the character channel, and the
+	 * death schedule starts. Nothing after this selects, senses or attacks.
+	 *
+	 * A duplicate kill is ignored, which is retail's own first clause — the base's `bDeathReported`
+	 * latch is the same guard reached through one door.
+	 */
+	virtual void OnKilled() override;
+
 	void InputUseInteresting(const FElysiumInputArgs& Args);
 
 	void InputTeleportToEntity(const FElysiumInputArgs& Args);
@@ -375,6 +391,12 @@ public:
 
 	virtual float PlayActivity(const FString& Activity) override;
 
+	// One rung of `TASK_PLAY_DEATH_SEQUENCE`'s ladder. It goes through the same Reaction-band
+	// producer every other combat reaction does, because a death pose has to replace whatever owns
+	// the base channel and hold it — `PlayActivity`'s ambient claim is outranked by the next
+	// locomotion publish, which would stand a corpse back up.
+	virtual float PlayDeathActivity(const FString& Activity) override;
+
 	virtual float RandomSeconds(float Max) override;
 
 	virtual void RecordScheduleEvent(const FString& Row) override;
@@ -508,6 +530,11 @@ private:
 	// --- Think(), phase by phase, in the order Think() calls them. A bool phase returns true
 	// when it consumed this think, and Think() returns with it -----------------------------------
 
+	// A dead NPC's whole think: advance the death program while it runs, then hand the body to
+	// physics (or freeze it) and stop thinking. It is FIRST in the pass because a corpse admits
+	// nothing, senses nothing and selects nothing.
+	bool ThinkDead();
+
 	// The activation barrier: the mind is admitted on its first frozen-time think.
 	bool RunAdmissionBarrier();
 
@@ -566,6 +593,26 @@ private:
 	void ReleaseProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
 		const TCHAR* Reason);
 
+	// Everything this NPC holds over its own body, given back at once: an open conversation, a
+	// scripted move, an interesting place, a pushed director's order, the running program, and every
+	// arbiter token behind them. Two callers — dormancy (`Kill`/`ScriptHide`) and death — because
+	// both mean "this NPC stops driving its body", and the difference between them is only whether
+	// the mind ends up dead.
+	void ReleaseAllBodyOwnership(const TCHAR* Reason, bool bDeadMind);
+
+	// The end of the death transaction, run once: hand the body to Unreal's physics, seeded from the
+	// pose it is standing in. A body with no physics asset behind it holds that pose instead — the
+	// shipped outcome, because the character bake writes none. The solid-body policy is deliberately
+	// NOT here: it is re-asserted on every terminal dead think, because a corpse's body can be handed
+	// back to it by something that took it before the kill.
+	void CompleteDeathHandoff();
+
+	// The death transaction's body half, re-applied after a restore. A load rebuilds the motor, so
+	// frozen / non-solid-to-characters / held-pose all have to be stated again on it — and a corpse's
+	// saved `NextThink` is `never`, so this cannot be deferred to a think the way the patrol and
+	// discipline blocks defer theirs.
+	void RestoreDeathBodyState();
+
 	FElysiumNpcMind Mind;
 	FElysiumBodyOwnerToken PatrolOwner;
 	FElysiumBodyOwnerToken AmbientOwner;
@@ -583,6 +630,9 @@ private:
 	bool bScriptBodyHeld = false;
 	bool bMoveIssued = false;
 	bool bWalkingAnimation = false;
+	// Whether the death handoff has already run. Session state, not save state: it is derivable from
+	// the mind's dead state, and a restored corpse re-runs the handoff on the body the load rebuilt.
+	bool bDeathHandoffDone = false;
 	// The interesting-place visit's phase machine and the state riding on it.
 	enum class EAmbientPhase : uint8 { None, Moving, Into, Dwelling, Out };
 	EAmbientPhase AmbientPhase = EAmbientPhase::None;

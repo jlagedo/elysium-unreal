@@ -1,5 +1,6 @@
 #include "Substrate/ElysiumSchedule.h"
 
+#include "ElysiumAnimationIntent.h"        // the one `ACT_*` vocabulary the death ladder's rungs come off
 #include "ElysiumWorldServices.h"          // IElysiumNpcMotor — the reachability query TASK_MOVE_AWAY_PATH asks
 #include "Substrate/ElysiumNpcGait.h"      // the authored travel speed a retreat step commands
 #include "Substrate/ElysiumNpcLog.h"       // the one `npc_*` log category a refused registration reports on
@@ -56,6 +57,13 @@ namespace
 		static const FScheduleMeta ScriptedMove{ 0, TEXT("SCHED_SCRIPTED_MOVE_TO_GOAL") };
 		static const FScheduleMeta ScriptedFollow{ 0, TEXT("SCHED_SCRIPTED_FOLLOW_PATH") };
 
+		// The death program. Its TASK is recovered by number (`TASK_PLAY_DEATH_SEQUENCE` 0x149) and
+		// its selection is recovered in prose — "death sound/solid-body policy leads to the death
+		// schedule" (`docs/vtmb/combat-and-damage.md`) — but the schedule's own registration site is
+		// not decoded, so it takes 0 and the NAME is the identity, the same posture the two combat
+		// programs with undecoded registration sites already take.
+		static const FScheduleMeta Die{ 0, TEXT("SCHED_DIE") };
+
 		switch (Id)
 		{
 		case EElysiumScheduleId::IdleDisposition:        return IdleDisposition;
@@ -80,6 +88,7 @@ namespace
 		case EElysiumScheduleId::SmallFlinch:            return SmallFlinch;
 		case EElysiumScheduleId::AlertSmallFlinch:       return AlertSmallFlinch;
 		case EElysiumScheduleId::TakeCoverFromOrigin:    return TakeCoverOrigin;
+		case EElysiumScheduleId::Die:                    return Die;
 		case EElysiumScheduleId::ScriptedMoveToGoal:     return ScriptedMove;
 		case EElysiumScheduleId::ScriptedFollowPath:     return ScriptedFollow;
 		default:                                        return None;
@@ -133,6 +142,7 @@ const TCHAR* ElysiumTaskName(EElysiumTask Task)
 	case EElysiumTask::RangeAttack1:             return TEXT("TASK_RANGE_ATTACK1");
 	case EElysiumTask::SetSchedule:              return TEXT("TASK_SET_SCHEDULE");
 	case EElysiumTask::Remember:                 return TEXT("TASK_REMEMBER");
+	case EElysiumTask::PlayDeathSequence:        return TEXT("TASK_PLAY_DEATH_SEQUENCE");
 	case EElysiumTask::GetPathToGoal:            return TEXT("TASK_GET_PATH_TO_GOAL");
 	}
 	return TEXT("TASK_?");
@@ -337,6 +347,39 @@ ElysiumSchedule::FInterruptMaskScope::~FInterruptMaskScope()
 		}
 	}
 }
+
+ElysiumSchedule::FTaskActivityScope::FTaskActivityScope(EElysiumScheduleId Id, int32 TaskIndex,
+	const FString& Activity)
+	: Target(Id)
+	, Index(TaskIndex)
+{
+	for (FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
+	{
+		if (Schedule.Id == Id && Schedule.Tasks.IsValidIndex(TaskIndex))
+		{
+			Previous = Schedule.Tasks[TaskIndex].Activity;
+			Schedule.Tasks[TaskIndex].Activity = Activity;
+			bInstalled = true;
+			return;
+		}
+	}
+}
+
+ElysiumSchedule::FTaskActivityScope::~FTaskActivityScope()
+{
+	if (!bInstalled)
+	{
+		return;
+	}
+	for (FElysiumSchedule& Schedule : ElysiumScheduleRegistryStorage())
+	{
+		if (Schedule.Id == Target && Schedule.Tasks.IsValidIndex(Index))
+		{
+			Schedule.Tasks[Index].Activity = Previous;
+			return;
+		}
+	}
+}
 #endif
 
 namespace
@@ -452,6 +495,67 @@ namespace
 			// Handled by the caller: a transfer replaces the running program, which is a change to
 			// the state this function only advances.
 			return EElysiumTaskResult::Complete;
+
+		case EElysiumTask::PlayDeathSequence:
+		{
+			// The recovered ladder, in order: "try the argument as an activity, then `ACT_DIESIMPLE`,
+			// then `ACT_IDLE`, and pass the surviving choice to `SetIdealActivity`"
+			// (`docs/vtmb/animation_and_movers.md`). Walked here rather than in the leaf so it is a
+			// kernel rule a content-free case can drive; the leaf only answers "can this body play
+			// that, and for how long".
+			// The two fixed rungs come off the one activity vocabulary rather than being respelled
+			// here: `ElysiumAnimIntent::ActivityName` is where this runtime's `ACT_*` literals live.
+			const TCHAR* const DieSimple =
+				ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::DieSimple);
+			const TCHAR* const Idle =
+				ElysiumAnimIntent::ActivityName(EElysiumAnimActivityCode::Idle);
+			const FString Argument = Step.Activity;
+			const TCHAR* const Rungs[] = { *Argument, DieSimple, Idle };
+			float Seconds = -1.f;
+			const TCHAR* Chosen = nullptr;
+			for (const TCHAR* Rung : Rungs)
+			{
+				if (Rung == nullptr || *Rung == TEXT('\0'))
+				{
+					continue;   // the program named no argument — a rung that is not there, not a miss
+				}
+				Seconds = Runner.PlayDeathActivity(FString(Rung));
+				if (Seconds >= 0.f)
+				{
+					Chosen = Rung;
+					break;
+				}
+			}
+			// Verbose, not a warning: `ACT_DIESIMPLE` is absent from the ENTIRE shipped corpus, so the
+			// ladder falling to `ACT_IDLE` is retail's own outcome on every body rather than a
+			// resolution that went wrong. An authored absence is not a failure.
+			Runner.RecordScheduleEvent(FString::Printf(
+				TEXT("TASK_PLAY_DEATH_SEQUENCE arg='%s' -> %s"),
+				Argument.IsEmpty() ? TEXT("(none)") : *Argument,
+				Chosen != nullptr ? Chosen : TEXT("(nothing resolved)")));
+			UE_LOG(LogElysiumNpcEnt, Verbose,
+				TEXT("TASK_PLAY_DEATH_SEQUENCE: argument '%s', ACT_DIESIMPLE, ACT_IDLE -> %s"),
+				Argument.IsEmpty() ? TEXT("(none)") : *Argument,
+				Chosen != nullptr ? Chosen : TEXT("(nothing resolved)"));
+			if (Chosen == nullptr)
+			{
+				// A body whose vocabulary carries none of the three. The program still COMPLETES —
+				// the ragdoll handoff that follows it is what death is, and a failed task would send
+				// a corpse to a fail schedule instead.
+				return EElysiumTaskResult::Complete;
+			}
+			// CHOSEN, NOT RECOVERED — how long the task holds. The ladder's floor is retail saying
+			// "this body has no death performance", and its ragdoll supersedes the choice at once, so
+			// waiting out an idle would be waiting on a clip that is not a death. A rung ABOVE the
+			// floor is a real death clip and is played through, which is what leaves the handoff the
+			// clip's own last frame.
+			if (FCString::Stricmp(Chosen, Idle) == 0 || Seconds <= 0.f)
+			{
+				return EElysiumTaskResult::Complete;
+			}
+			State.TaskEndsAt = Now + static_cast<double>(Seconds);
+			return EElysiumTaskResult::Running;
+		}
 		}
 		return EElysiumTaskResult::Failed;
 	}

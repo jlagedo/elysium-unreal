@@ -317,6 +317,32 @@ public:
 	{
 		return false;
 	}
+
+	// --- The death handoff (LIFE5) ---------------------------------------------------------------
+	//
+	// Three calls, because death is the one transaction that ends every claim a body holds at once
+	// and then takes the pose away from animation altogether.
+
+	// Give back EVERY channel claim standing on this body, whichever producer took it. A death is not
+	// one producer handing a channel back: the character stops having behaviour, so a scene beat, a
+	// reaction and an ambient stance all stop owning it in the same instant. A body no driver
+	// arbitrates holds nothing, which is an ordinary absence.
+	virtual void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body) {}
+
+	// Hand this body to Unreal's physics, seeded from the pose it is standing in right now — the
+	// simulation starts at the current bone transforms, so the death sequence's last frame is the
+	// ragdoll's first. **Unreal owns the physics**: nothing about Source's ragdoll solver, its force
+	// envelope or its bone mapping is reproduced.
+	//
+	// False means this body carries no physics asset to simulate, and the caller's stated fallback is
+	// `HoldBodyFinalPose`. That is the shipped case today: the character bake writes no physics
+	// asset, so the corpse holds its final frame instead of falling.
+	virtual bool StartBodyRagdoll(USkeletalMeshComponent* Body) { return false; }
+
+	// Stop evaluating animation and leave the last drawn pose on screen. The body stays visible and
+	// keeps its transform; only the pose stops advancing.
+	virtual void HoldBodyFinalPose(USkeletalMeshComponent* Body) {}
+
 	// --- The sequence-event seam (LIFE5) --------------------------------------------------------
 	//
 	// Where one channel of a body is standing on its clip THIS frame. The pose layer is the only

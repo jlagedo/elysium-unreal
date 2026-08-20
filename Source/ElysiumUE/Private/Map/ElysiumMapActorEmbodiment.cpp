@@ -156,6 +156,27 @@ bool AElysiumMapActor::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	return Bodies->PlayNpcOneShot(Body, Request, OutSeconds);
 }
 
+void AElysiumMapActor::ReleaseBodyAnimClaims(USkeletalMeshComponent* Body)
+{
+	if (Bodies)
+	{
+		Bodies->ReleaseBodyAnimClaims(Body);
+	}
+}
+
+bool AElysiumMapActor::StartBodyRagdoll(USkeletalMeshComponent* Body)
+{
+	return Bodies && Bodies->StartBodyRagdoll(Body);
+}
+
+void AElysiumMapActor::HoldBodyFinalPose(USkeletalMeshComponent* Body)
+{
+	if (Bodies)
+	{
+		Bodies->HoldBodyFinalPose(Body);
+	}
+}
+
 bool AElysiumMapActor::ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
 	EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
 {

@@ -78,6 +78,18 @@ namespace
 			return LastRetreat == ElysiumSchedule::ERetreat::Moving;
 		}
 		virtual float RandomSeconds(float Max) override { return Max * RandomFraction; }
+
+		// LIFE5 — the death ladder's one rung. `PlayableDeathActivities` is this body's vocabulary:
+		// EMPTY but for `ACT_IDLE` is the shipped corpus, where `ACT_DIESIMPLE` resolves on zero
+		// bodies. FString comparison is case-insensitive, like every other vocabulary key here.
+		TSet<FString> PlayableDeathActivities = { FString(TEXT("ACT_IDLE")) };
+		float DeathClipSeconds = 3.f;
+		virtual float PlayDeathActivity(const FString& Activity) override
+		{
+			Calls.Add(FString::Printf(TEXT("DeathActivity %s"), *Activity));
+			return PlayableDeathActivities.Contains(Activity) ? DeathClipSeconds : -1.f;
+		}
+
 		virtual void RecordScheduleEvent(const FString& Row) override
 		{
 			Calls.Add(FString::Printf(TEXT("trace: %s"), *Row));
@@ -398,6 +410,152 @@ bool FElysiumScheduleRetreatProjectionTest::RunTest(const FString&)
 		TestTrue(TEXT("...and the runner recorded why the world refused it"),
 			Runner.Saw(TEXT("no longer a retreat")));
 		TestFalse(TEXT("the body was never asked to move"), Runner.Motor.bMoving);
+	}
+	return true;
+}
+
+// ============================================================================================
+// `TASK_PLAY_DEATH_SEQUENCE` (0x149) and `SCHED_DIE`.
+//
+// The recovered ladder is "try the argument as an activity, then `ACT_DIESIMPLE`, then `ACT_IDLE`,
+// and pass the surviving choice to `SetIdealActivity`"
+// (`docs/vtmb/animation_and_movers.md` -> the `RunTask` activity table). Its outcome on the shipped
+// game is the point of these cases: `ACT_DIESIMPLE` is absent from the ENTIRE 167-body corpus, and
+// the registered program names no argument, so every death in VtMB resolves the floor rung.
+// ============================================================================================
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScheduleDeathLadderTest,
+	"Elysium.Substrate.Schedule.DeathLadder", GElysiumScheduleTestFlags)
+bool FElysiumScheduleDeathLadderTest::RunTest(const FString&)
+{
+	auto DeathRungs = [](const FRecordingRunner& Runner)
+	{
+		return Runner.Calls.FilterByPredicate([](const FString& C)
+		{
+			return C.StartsWith(TEXT("DeathActivity"));
+		});
+	};
+
+	// --- The shipped corpus: no argument, no ACT_DIESIMPLE, so the floor rung answers -------------
+	{
+		FRecordingRunner Runner;
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+
+		TestTrue(TEXT("the death schedule is registered"),
+			ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner));
+		TestTrue(TEXT("starting it traces its name"), Runner.Saw(TEXT("SCHED_DIE")));
+
+		TestFalse(TEXT("the program ends inside its first think"),
+			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+
+		const TArray<FString> Rungs = DeathRungs(Runner);
+		if (TestEqual(TEXT("the ladder tries exactly two rungs"), Rungs.Num(), 2))
+		{
+			TestEqual(TEXT("ACT_DIESIMPLE is first — an absent argument is a rung that is not "
+				"there, not a rung that missed"), Rungs[0],
+				FString(TEXT("DeathActivity ACT_DIESIMPLE")));
+			TestEqual(TEXT("and ACT_IDLE is the floor"), Rungs[1],
+				FString(TEXT("DeathActivity ACT_IDLE")));
+		}
+		TestTrue(TEXT("the trace names what the ladder resolved"),
+			Runner.Saw(TEXT("TASK_PLAY_DEATH_SEQUENCE arg='(none)' -> ACT_IDLE")));
+		// The floor rung is retail saying "this body has no death performance", and its ragdoll
+		// supersedes the choice at once — so the task does not wait out an idle.
+		TestEqual(TEXT("the floor rung completes at once rather than holding for a clip"), Now, 0.0);
+		TestFalse(TEXT("nothing is left running"), State.IsRunning());
+	}
+
+	// --- A body that DOES author ACT_DIESIMPLE stops at that rung ---------------------------------
+	{
+		FRecordingRunner Runner;
+		Runner.PlayableDeathActivities.Add(TEXT("ACT_DIESIMPLE"));
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+
+		ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner);
+		TestTrue(TEXT("a real death clip holds the task open for its own length"),
+			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+
+		const TArray<FString> Rungs = DeathRungs(Runner);
+		if (TestEqual(TEXT("the ladder stops at the first rung that resolves"), Rungs.Num(), 1))
+		{
+			TestEqual(TEXT("and that rung is ACT_DIESIMPLE"), Rungs[0],
+				FString(TEXT("DeathActivity ACT_DIESIMPLE")));
+		}
+		TestEqual(TEXT("the hold is the resolved clip's own length"), Delay,
+			static_cast<double>(Runner.DeathClipSeconds), 1e-6);
+
+		Now += Runner.DeathClipSeconds;
+		TestFalse(TEXT("and the program ends when the clip does"),
+			ElysiumSchedule::Tick(State, Runner, Now, Delay));
+	}
+
+	// --- The argument rung wins over both fixed ones ----------------------------------------------
+	// The operand is installed for the length of this case: no registered program authors one,
+	// because retail spells it as an activity-index number this runtime has no decoded table for.
+	{
+		const ElysiumSchedule::FTaskActivityScope Argument(EElysiumScheduleId::Die, 0,
+			TEXT("ACT_DEATH_INTO"));
+		TestTrue(TEXT("the death program has a task to carry the operand"), Argument.IsInstalled());
+
+		FRecordingRunner Runner;
+		Runner.PlayableDeathActivities.Add(TEXT("ACT_DIESIMPLE"));
+		Runner.PlayableDeathActivities.Add(TEXT("ACT_DEATH_INTO"));
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+
+		ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner);
+		ElysiumSchedule::Tick(State, Runner, Now, Delay);
+
+		const TArray<FString> Rungs = DeathRungs(Runner);
+		if (TestEqual(TEXT("the argument is tried alone when it resolves"), Rungs.Num(), 1))
+		{
+			TestEqual(TEXT("and it is the argument, ahead of ACT_DIESIMPLE"), Rungs[0],
+				FString(TEXT("DeathActivity ACT_DEATH_INTO")));
+		}
+	}
+
+	// --- An argument that misses falls through the whole ladder in order --------------------------
+	{
+		const ElysiumSchedule::FTaskActivityScope Argument(EElysiumScheduleId::Die, 0,
+			TEXT("ACT_DEATH_INTO"));
+		FRecordingRunner Runner;
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+
+		ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner);
+		ElysiumSchedule::Tick(State, Runner, Now, Delay);
+
+		const TArray<FString> Rungs = DeathRungs(Runner);
+		if (TestEqual(TEXT("all three rungs are tried"), Rungs.Num(), 3))
+		{
+			TestEqual(TEXT("argument first"), Rungs[0], FString(TEXT("DeathActivity ACT_DEATH_INTO")));
+			TestEqual(TEXT("then ACT_DIESIMPLE"), Rungs[1],
+				FString(TEXT("DeathActivity ACT_DIESIMPLE")));
+			TestEqual(TEXT("then ACT_IDLE"), Rungs[2], FString(TEXT("DeathActivity ACT_IDLE")));
+		}
+	}
+
+	// --- A body whose vocabulary carries none of the three still COMPLETES -------------------------
+	// The ragdoll handoff that follows the program is what death is; failing the task would send a
+	// corpse to a fail schedule instead.
+	{
+		FRecordingRunner Runner;
+		Runner.PlayableDeathActivities.Reset();
+		FElysiumScheduleState State;
+		double Now = 0.0;
+		double Delay = 0.0;
+
+		ElysiumSchedule::Start(State, EElysiumScheduleId::Die, Runner);
+		TestFalse(TEXT("the program ends"), ElysiumSchedule::Tick(State, Runner, Now, Delay));
+		TestFalse(TEXT("and it ended by completing, not by failing"),
+			Runner.Saw(TEXT("TASK_PLAY_DEATH_SEQUENCE failed")));
+		TestTrue(TEXT("the trace says nothing resolved"),
+			Runner.Saw(TEXT("-> (nothing resolved)")));
 	}
 	return true;
 }

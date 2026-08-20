@@ -28,6 +28,8 @@ namespace
 		{ EElysiumAnimActivityCode::LandCrouch,  TEXT("ACT_LAND_CROUCH") },
 		{ EElysiumAnimActivityCode::Swim,        TEXT("ACT_SWIM") },
 		{ EElysiumAnimActivityCode::Treadwater,  TEXT("ACT_TREADWATER") },
+		{ EElysiumAnimActivityCode::DieSimple,   TEXT("ACT_DIESIMPLE") },
+		{ EElysiumAnimActivityCode::DieRagdoll,  TEXT("ACT_DIERAGDOLL") },
 	};
 
 	// The one-handed roster (`docs/vtmb/animation_and_movers.md` A.4, measured over both melee

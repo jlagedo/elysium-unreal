@@ -149,6 +149,11 @@ struct FElysiumAnimationDriver
 	// Give a claim back by the handle `SubmitRequest` returned. False when the claim is already
 	// gone — expired, outranked or replaced — which is an ordinary answer, not an error.
 	bool ReleaseRequest(uint32 Handle);
+	// Give back every standing claim at once, whoever took it (LIFE5). The one caller is the death
+	// transaction: a character that stops having behaviour stops owning every channel in the same
+	// instant, and there is no producer left to come back with its handle. Returns how many claims
+	// were standing, so the caller can report an unexpectedly held body.
+	int32 ReleaseAllRequests();
 	// The channel's standing claim, or null. The layer families read their channels through this.
 	const FElysiumAnimationRequest* ActiveRequest(EElysiumAnimChannel Channel) const;
 

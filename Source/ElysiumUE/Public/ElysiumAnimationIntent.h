@@ -202,6 +202,12 @@ enum class EElysiumAnimActivityCode : uint8
 	LandCrouch,
 	Swim,
 	Treadwater,
+	// The death family (LIFE5). Neither is a locomotion answer the classifier can emit: they name the
+	// two activities the death transaction asks a body's vocabulary for — the ladder's own
+	// `ACT_DIESIMPLE` rung, and the label whose pose seeds a ragdoll rather than being performed
+	// (`docs/vtmb/animation_and_movers.md` -> "The knockback and death corpus").
+	DieSimple,
+	DieRagdoll,
 };
 
 // The latched air state. Distinct from `EElysiumJumpPhase`, which the sample derives from velocity

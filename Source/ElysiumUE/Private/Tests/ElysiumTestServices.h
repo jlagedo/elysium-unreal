@@ -476,6 +476,28 @@ struct FElysiumRecordingServices final
 		}
 		return bPlayed;
 	}
+
+	// --- LIFE5: the death handoff ----------------------------------------------------------------
+	// Whether this fixture's bodies carry a physics asset. FALSE by default, and that default is the
+	// shipped answer rather than a convenience: the character bake writes no physics asset, so every
+	// death in the game today takes the frozen-final-pose arm. A case that wants the ragdoll arm has
+	// to say so.
+	bool bBodiesRagdoll = false;
+	virtual void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body) override
+	{
+		Record(FString::Printf(TEXT("ReleaseBodyAnimClaims body=%d"), Body != nullptr ? 1 : 0));
+	}
+	virtual bool StartBodyRagdoll(USkeletalMeshComponent* Body) override
+	{
+		const bool bStarted = bBodiesRagdoll && Body != nullptr;
+		Record(FString::Printf(TEXT("StartBodyRagdoll -> %d"), bStarted ? 1 : 0));
+		return bStarted;
+	}
+	virtual void HoldBodyFinalPose(USkeletalMeshComponent* Body) override
+	{
+		Record(FString::Printf(TEXT("HoldBodyFinalPose body=%d"), Body != nullptr ? 1 : 0));
+	}
+
 	// --- LIFE5: the sequence-event seam ---------------------------------------------------------
 	//
 	// The phase is a settable CURRENT record rather than a scripted sequence of them, matching every

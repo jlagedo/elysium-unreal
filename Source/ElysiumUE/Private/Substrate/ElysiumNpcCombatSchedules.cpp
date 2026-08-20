@@ -406,6 +406,30 @@ namespace
 			S.Interrupts = MinimalCombatMask();
 			ElysiumSchedule::Register(MoveTemp(S));
 		}
+
+		// --- The death program ---------------------------------------------------------------------
+		// Selected from the death commit itself and from nowhere else: "death sound/solid-body policy
+		// leads to the death schedule" (`docs/vtmb/combat-and-damage.md` -> "NPC and player death
+		// transaction"). It lives beside the combat families because death is what a fight produces,
+		// and because `FElysiumNpc::OnKilled` is the one selector that names it.
+		//
+		// CHOSEN, NOT RECOVERED — the program's CONTENTS. Only the task identity is recovered
+		// (`TASK_PLAY_DEATH_SEQUENCE`, and its ladder); the registration site listing the program's
+		// steps is not decoded, so the one recovered task is the whole program rather than a shape
+		// invented around it. It names no argument for the same reason: the operand is a task column
+		// this runtime has no decoded activity-index table for, and inventing one would resolve a rung
+		// the corpus does not author.
+		//
+		// The EMPTY interrupt mask is load-bearing rather than an unfilled default: nothing may take
+		// the body back off a corpse, and a stimulus arriving mid-death must not return this NPC to
+		// selection. The mind is `Dead` by the time this runs, which refuses every acquisition anyway;
+		// the empty mask is the same statement made by the program.
+		{
+			FElysiumSchedule S;
+			S.Id = EId::Die;
+			S.Tasks = { Step(ETask::PlayDeathSequence) };
+			ElysiumSchedule::Register(MoveTemp(S));
+		}
 	}
 
 	struct FElysiumCombatScheduleRegistrar
