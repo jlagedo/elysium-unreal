@@ -261,6 +261,11 @@ def _clip_meta(c, bounds_radius_m=None):
     descriptors respectively out of the install's 14,012 -- because a column carried as a null on
     every ordinary clip would cost more than the fact is worth.
 
+    `swings` is the contact half of the same block: the authored segments the swing sweeps, the
+    slice of the clip cycle each one is live for, and the knockback candidates it answers with
+    (`mdl_skel.read_swing_records`, stated in Unreal centimetres by `UEK.unreal_swings`). It rides
+    on the same terms -- 574 descriptors state one, so the key is absent everywhere else.
+
     `bounds_radius_m` appears only where it has been reconciled against the baked glb
     (`clip_bounds_radius_m`). Its presence is therefore a promise that the number covers the
     geometry, which is the whole reason a consumer would trust it over the mesh's own bounds."""
@@ -270,6 +275,8 @@ def _clip_meta(c, bounds_radius_m=None):
         meta["reach_cm"] = round(c.reach * INCH_TO_CM, 4)
     if c.blocked_reaction:
         meta["blocked_reaction"] = c.blocked_reaction
+    if c.swings:
+        meta["swings"] = UEK.unreal_swings(c.swings)
     if bounds_radius_m is not None:
         meta["bounds_radius_m"] = round(bounds_radius_m, 4)
     return meta
@@ -521,7 +528,9 @@ def write_sidecars(manifest):
     fact ~4% of clips carry. `blocked_reaction` states its `ACT_*` literal inline rather than
     interning into `activities`: that array is the stem's playable vocabulary, unioned by
     conformance checks to answer "can some model play this activity", and a reaction a clip
-    only reacts to (never performs) has no business answering yes."""
+    only reacts to (never performs) has no business answering yes. `swings` closes the melee
+    trio behind them on the same terms, and its knockback candidates stay inline for the same
+    reason the reaction does -- they are activities the *victim* plays, not this stem."""
     os.makedirs(CLIPS_DIR, exist_ok=True)
     index = {
         "manifest_version": manifest["manifest_version"],
@@ -598,8 +607,18 @@ def write_sidecars(manifest):
                 act_i[act] = len(acts); acts.append(act)
             row = [owner_i[owner], act_i[act], meta["weight"], meta["flags"],
                    meta["frames"], meta["fps"], meta.get("fade", 0.2)]
-            reach, blocked = meta.get("reach_cm"), meta.get("blocked_reaction")
-            if blocked:
+            reach = meta.get("reach_cm")
+            blocked = meta.get("blocked_reaction")
+            swings = meta.get("swings")
+            if swings:
+                # Every column a stated one sits behind is held open, whatever it holds: all 574
+                # swing carriers state a reach but 427 of them name no blocked reaction, and a
+                # row that closed that column up would put a list where a literal belongs. The
+                # two placeholders differ because their readers do: `reach_cm` is read guarded
+                # against a null, `blocked_reaction` is taken as a string unconditionally, and
+                # the empty literal is what "no reaction" already means to it.
+                row += [reach, blocked or "", swings]
+            elif blocked:
                 # `reach_cm` holds the column blocked_reaction sits behind, so a sequence that
                 # named a reaction without a reach still lands its reaction in the right column.
                 # The literal is inlined rather than interned: only 147 rows carry it, and the
@@ -613,7 +632,7 @@ def write_sidecars(manifest):
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"stem": stem, "owners": owners, "activities": acts,
                        "fields": ["owner", "activity", "weight", "flags", "frames", "fps",
-                                  "fade", "reach_cm", "blocked_reaction"],
+                                  "fade", "reach_cm", "blocked_reaction", "swings"],
                        "clips": clips}, f, separators=(",", ":"))
         total += os.path.getsize(path)
     print(f"[npc] sidecars: {INDEX} ({os.path.getsize(INDEX)/1024:.0f} KB) + "

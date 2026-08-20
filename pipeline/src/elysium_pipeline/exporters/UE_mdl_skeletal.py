@@ -194,6 +194,37 @@ def unreal_eye_rig(rig):
     }
 
 
+def unreal_swings(records):
+    """`mdl_skel.read_swing_records` stated Unreal-native -> the clip sidecar's `swings` rows.
+
+    `a`/`b` are bone-local *points*, so they take `_conv_pos` -- the same inch-to-centimetre
+    scale and Y reflection that `_attachment_section` puts an attachment's bone-local translation
+    through and that `_skeleton_section` puts every bone's own bind translation through. That is
+    what keeps the segment inside the bone it is stated in: the bone frame the runtime holds is
+    the reflected one, so a segment converted any other way would sweep the mirrored side of the
+    limb.
+
+    Everything else the record carries is already frame-free. The window pair is a fraction of the
+    clip cycle and a fraction has no units, the knockback names and the bone name are names, and
+    the two bytes are raw bytes. `degenerate` is stated on every row rather than only the four it
+    is true on, because a consumer forbidden to repair authored data has to read the flag rather
+    than infer it from a window it re-tests itself.
+    """
+    return [{
+        "start": round(r.start, 6),
+        "end": round(r.end, 6),
+        "bone": r.bone,
+        # `+ 0.0` normalizes the `-0.0` the Y reflection produces on a zero component away, the
+        # same way `DRIVER_AXES` does, so a segment reads as the axis-aligned one it is.
+        "a_cm": [round(float(c) + 0.0, 4) for c in _conv_pos(r.a)],
+        "b_cm": [round(float(c) + 0.0, 4) for c in _conv_pos(r.b)],
+        "kb_names": [list(bucket) for bucket in r.knockback],
+        "b8": r.byte_b8,
+        "ba": r.byte_ba,
+        "degenerate": r.degenerate,
+    } for r in records]
+
+
 def _qmul(a, b):
     """Hamilton product, matching `FUN_1010a450` and Unreal's `FQuat::operator*` convention."""
     ax, ay, az, aw = a

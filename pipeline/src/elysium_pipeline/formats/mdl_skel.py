@@ -265,6 +265,41 @@ _SEQ_BLOCKED_REACTION_NAME = 740
 #: 14,012 shipped descriptors.
 _REACH_UNSET = struct.unpack("<f", struct.pack("<I", 0x7F7FFFFF))[0]
 
+#: The contact half of the same custom block. `numswingcentres`@708 (`+0x2C4`) and
+#: `swingcentreindex`@712 (`+0x2C8`) declare the descriptor-relative array of swing-contact
+#: records: where on the swinging limb the attack sweeps, over which slice of the clip cycle, and
+#: which knockback the victim answers it with (`docs/vtmb/combat-and-damage.md`).
+_SEQ_SWING_COUNT = 708
+_SEQ_SWING_INDEX = 712
+
+#: One swing-contact record. The layout is measured over all 1,587 shipped records; every offset
+#: named here is record-relative.
+_SWING_STRIDE = 188
+
+#: The gate on `numswingcentres`@708 — the count both runtime consumers clamp to before walking
+#: the array, so a descriptor claiming more than the runtime would ever read is refused rather
+#: than partly believed. The shipped maximum is 17 (`andrei`'s `JumpFromBlood_Attack`).
+_MAX_SWING_RECORDS = 20
+
+#: The record's knockback table: four direction buckets of up to four candidate activity names
+#: each, as `char *names[4][4]` at `+0x78`, each index relative to the record. A slot is `0` when
+#: unset (Source's usual string-index convention, unlike `szblockedreactionindex`'s `-1`).
+_SWING_KNOCKBACK_NAMES = 0x78
+_SWING_BUCKETS = 4
+_SWING_CANDIDATES = 4
+
+#: The 21 dwords at `+0x24`, carried out verbatim because only part of the region is explained.
+#: `+0x38`..`+0x74` are the sixteen knockback activity **enum** slots the runtime reads, `-1` on
+#: all 1,587 shipped records and filled by the DLL from the names at `+0x78` at model load — the
+#: same name-resolved-at-load pattern as `activity`@12 and `szblockedreactionindex`.
+#: `+0x28`..`+0x34` are the four per-bucket candidate counts and are `-1` on every record that
+#: fills all four buckets, left for the same load pass; on the other 639 the last three are
+#: stated and the first is stated on 267 of them, and every stated value's magnitude equals that
+#: bucket's candidate count — `gargoyle`'s `-2` against its two candidates included. `+0x24` is
+#: unidentified: `-1` everywhere but 18 records, which state `0`.
+_SWING_UNIDENTIFIED = 0x24
+_SWING_UNIDENTIFIED_DWORDS = 21
+
 #: `mstudiomovement_t`, addressed by one StudioAnimDesc's `nummovements`@16 and
 #: `movementindex`@20. The index is relative to the animdesc. `position` is the cumulative
 #: Source-space displacement at this record's end frame; the final record therefore carries one
@@ -276,6 +311,18 @@ Movement = namedtuple("Movement", "endframe motionflags v0 v1 angle vector posit
 #: numeric dispatch id, ``type`` is the old event-type field, and ``options`` is its decoded
 #: NUL-terminated 64-byte payload.
 Event = namedtuple("Event", "cycle event type options")
+
+#: One authored swing-contact record (see `read_swing_records`). ``start``/``end`` bound the
+#: contact window as a fraction of the clip cycle and are unitless. ``bone``/``bone_index`` name
+#: the limb the contact segment is stated in, and ``a``/``b`` are that segment's endpoints in
+#: **bone-local Source units** — no conversion happens here, exactly as `read_reach` leaves its
+#: distance in the file's units. ``knockback`` is four direction buckets of candidate activity
+#: names, ``byte_b8``/``byte_ba`` the two raw bytes the range test reads, ``degenerate`` marks a
+#: window the file states backwards, and ``unidentified`` carries the partly-explained dword
+#: region verbatim.
+SwingRecord = namedtuple(
+    "SwingRecord",
+    "start end bone_index bone a b knockback byte_b8 byte_ba degenerate unidentified")
 
 #: The scalar part a route motor needs from an in-place locomotion clip. Distances are converted
 #: from Source inches to centimetres here, at the offline seam; no coordinate direction is emitted.
@@ -311,12 +358,14 @@ _NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
 #: `autolayers` names the sequences this one is composed with (see `read_autolayers`);
 #: `events` carries the sequence timeline records (see `read_events`); `reach` is the melee
 #: swing's authored reach in Source units (see `read_reach`) and `blocked_reaction` the activity
-#: literal the attacker plays when that swing is blocked (see `read_blocked_reaction`). The last
-#: two are `None` on a sequence that states neither, which is most of the corpus.
+#: literal the attacker plays when that swing is blocked (see `read_blocked_reaction`). Those two
+#: are `None` on a sequence that states neither, which is most of the corpus; `swings` is the
+#: authored contact geometry and timing of the same swing (see `read_swing_records`), empty there.
 Seq = namedtuple("Seq",
                  "label base frames fps activity actweight flags grid bbmin bbmax fade autolayers"
-                 " events reach blocked_reaction",
-                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, (), (), None, None))
+                 " events reach blocked_reaction swings",
+                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, (), (), None, None,
+                           ()))
 
 
 def pose_parameters(d):
@@ -484,6 +533,116 @@ def read_blocked_reaction(d, sb):
     return name or None
 
 
+def _swing_knockback(d, record):
+    """One swing record's knockback table at record base `record` -> four buckets of names.
+
+    `char *names[4][4]` at `+0x78`: four direction buckets, four candidate slots each, every
+    index relative to the record and `0` where the slot is unset. A bucket yields the names its
+    filled slots resolve to, in slot order, so a bucket that names nothing yields `()`.
+
+    Four candidates per bucket is the authored shape, not the shape the corpus mostly uses: 4,286
+    of the 4,306 stated buckets name exactly one activity, and only `gargoyle`'s twenty attack
+    records put a second name in a bucket (`ACT_KNOCKBACK_BIGHIGH{RIGHT,LEFT}_MELEESHARED_ONEHAND`
+    followed by a bare `1`). It is read as an array anyway because that is what the bytes are —
+    the sixteen enum slots at `+0x38` and the four counts at `+0x28` are dimensioned the same way
+    — and a reader that took only the first slot would silently drop the twenty candidates that
+    do exist.
+
+    **The buckets are a rotation, not a fixed direction order.** Bucket 0 names a
+    `..._RIGHT` activity on 378 records, a `..._BACK` on 374 and a `..._LEFT` on 196, and each
+    grouping tracks `+0xB8` exactly: with the four directions cycling BACK, LEFT, FORWARD, RIGHT,
+    bucket `k` answers direction `(byte_b8 + k) mod 4` on all 948 records that fill every bucket.
+    So a consumer reads the direction off the byte and the buckets in order — it does not get to
+    assume bucket 0 is one particular way round.
+
+    A slot whose index is negative, lands outside the image, or opens a string with no terminator
+    is dropped rather than resolved out of someone else's bytes."""
+    buckets = []
+    for bucket in range(_SWING_BUCKETS):
+        names = []
+        for slot in range(_SWING_CANDIDATES):
+            rel = _i32(d, record + _SWING_KNOCKBACK_NAMES + (bucket * _SWING_CANDIDATES + slot) * 4)
+            if rel <= 0 or record + rel >= len(d):
+                continue
+            try:
+                name = _cstr(d, record + rel)
+            except ValueError:
+                continue
+            if name:
+                names.append(name)
+        buckets.append(tuple(names))
+    return tuple(buckets)
+
+
+def read_swing_records(d, sb, bones):
+    """One StudioSeqDesc's authored swing-contact records at descriptor base `sb` ->
+    tuple[SwingRecord, ...], empty on a sequence that states none.
+
+    This is where a melee swing stops being an animation and becomes an attack. `read_reach` is
+    the distance the swing *acquires* a target at; these records are where and when it *touches*
+    one. `numswingcentres`@708 and the descriptor-relative `swingcentreindex`@712 declare 188-byte
+    records, and 574 of the install's 14,012 descriptors carry 1,587 of them across 53 models —
+    the shared weapon banks, the player fists and claws, and the monster bodies.
+
+    One record is one contact segment for one slice of the clip:
+
+      `start`@0x00 / `end`@0x04   the contact window as a fraction of the clip cycle, unitless
+      `bone`@0x08                 the bone the segment is stated in, in this model's own indices
+      `a`@0x0C / `b`@0x18         the segment's endpoints, bone-local, in Source units
+      `+0x24`                     21 dwords carried out verbatim (see `_SWING_UNIDENTIFIED`)
+      `+0x78`                     four direction buckets x four knockback activity names
+      `+0xB8` / `+0xBA`           the two bytes the runtime's range test reads
+
+    The bone index is this model's, so the name is the durable key across the include chain
+    exactly as it is for every other bone-addressed record: an NPC and the bank it fights from are
+    separate images with separate bone tables, and the runtime remaps by name. `bones` is that
+    table (`bone_names`); an index outside it leaves `bone` empty rather than naming a bone the
+    model does not have.
+
+    Both bytes are carried raw. The range test reads them together, `+0xBA == 2` is the marker
+    that makes the knockback unconditional, and `+0xB8` is the direction bucket 0 answers (see
+    `_swing_knockback`). They are `-1` (`0xFF`) on the 639 records that fill fewer than four
+    buckets, and `+0xBB` is `0` on all 1,587.
+
+    `degenerate` marks a window the file states backwards — four records do, the `fists_attack_heavy`
+    and `fists_attack_heavy_old` swings of both player sexes, all four `start=0.302, end=0.0`. They
+    are decoded and carried verbatim under the flag: authored data is reproduced, not repaired, and
+    a consumer that must not open a contact window on them has to be told which ones they are.
+
+    Three bounds, as `read_autolayers` requires: the count is gated at the clamp both runtime
+    consumers apply, the relative index must be positive, and the array must lie inside the image.
+    A descriptor failing any of them yields no records rather than records read out of adjacent
+    bytes."""
+    count = _i32(d, sb + _SEQ_SWING_COUNT)
+    relative = _i32(d, sb + _SEQ_SWING_INDEX)
+    if not (0 < count <= _MAX_SWING_RECORDS) or relative <= 0:
+        return ()
+    base = sb + relative
+    if base < 0 or base + count * _SWING_STRIDE > len(d):
+        return ()
+
+    out = []
+    for index in range(count):
+        record = base + index * _SWING_STRIDE
+        start, end = _f32(d, record), _f32(d, record + 4)
+        bone_index = _i32(d, record + 8)
+        out.append(SwingRecord(
+            start=start, end=end,
+            bone_index=bone_index,
+            bone=bones[bone_index] if 0 <= bone_index < len(bones) else "",
+            a=_vec3(d, record + 0x0C),
+            b=_vec3(d, record + 0x18),
+            knockback=_swing_knockback(d, record),
+            byte_b8=d[record + 0xB8],
+            byte_ba=d[record + 0xBA],
+            degenerate=not (math.isfinite(start) and math.isfinite(end)
+                            and 0.0 <= start < end <= 1.0),
+            unidentified=struct.unpack_from(f"<{_SWING_UNIDENTIFIED_DWORDS}i", d,
+                                            record + _SWING_UNIDENTIFIED),
+        ))
+    return tuple(out)
+
+
 def local_animation(d, index):
     """The local animation at `index` -> (name, animdesc_base, numframes, fps), or None when
     the index falls outside `NumLocalAnims`@264. The name carries a leading '@' on the disk
@@ -587,9 +746,18 @@ def local_sequences(d):
     the swing's own target-acquisition distance and the activity the attacker plays when the
     swing is blocked (see `read_reach` and `read_blocked_reaction`). Both are `None` on a
     sequence that states neither, which is every sequence outside the weapon banks and the
-    monster bodies."""
+    monster bodies. `swings` is the contact half of the same block — where on the limb the attack
+    sweeps, over which slice of the cycle, and what knockback answers it (see
+    `read_swing_records`) — and is empty on the same sequences."""
     ns = _i32(d, 272); sbase = _i32(d, 276)
     na = _i32(d, 264); abase = _i32(d, 268)
+    # The swing records address this model's own bone table, so the table is read once for the
+    # whole walk rather than per descriptor -- and only when a descriptor declares a record at
+    # all, which 53 of the install's 4,445 models do.
+    bones = (bone_names(d)
+             if any(_i32(d, sbase + i * _SEQDESC_STRIDE + _SEQ_SWING_COUNT) > 0
+                    for i in range(ns))
+             else ())
     # Every descriptor's label by index, read before the walk because an autolayer entry
     # addresses this array directly and may name a descriptor the dedup below drops. A dropped
     # descriptor is a duplicate label, so the name it resolves to is the same either way.
@@ -615,7 +783,8 @@ def local_sequences(d):
                        autolayers=tuple(labels[t] for t in read_autolayers(d, sb, ns)),
                        events=read_events(d, sb),
                        reach=read_reach(d, sb),
-                       blocked_reaction=read_blocked_reaction(d, sb)))
+                       blocked_reaction=read_blocked_reaction(d, sb),
+                       swings=read_swing_records(d, sb, bones)))
     return out
 
 
