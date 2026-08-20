@@ -1,9 +1,16 @@
-# Ghidra RE workspace (VtMB menu / GameUI)
+# Ghidra RE workspace (the VtMB binaries)
 
-Reverse-engineers the parts of the VtMB menu that are **not** in any data file —
-the main-menu item geometry (positions, spacing, slide/fade animation) and the
-in-game pause item set, compiled into `GameUI.dll` (`CBasePanel`, `CGameMenuButton`).
-See `docs/project/rebuild-strategy.md` → *Menu — full-fidelity spec (M0)*, section E.
+Headless Ghidra against the VtMB modules: the runner, the tracked analysis scripts, and the
+passes that name a module's C runtime, global constructors, class hierarchy, datamaps and
+console variables before any case-specific work starts.
+
+**Start at *Preparing a program*.** Those passes are ordered — a later one reads the names an
+earlier one wrote — and every module already in the project has been through them.
+
+The workspace sections further down record the addresses each investigation settled on: the
+main-menu item geometry and pause item set compiled into `GameUI.dll` (`CBasePanel`,
+`CGameMenuButton`; see `docs/project/rebuild-strategy.md` → *Menu — full-fidelity spec (M0)*,
+section E), the script API surface, and the choreographed scenes.
 
 ## What's here
 

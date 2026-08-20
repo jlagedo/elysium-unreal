@@ -39,11 +39,27 @@ New-Item -ItemType Directory -Force -Path $ProjDir | Out-Null
 # -preScript's arguments as every following token up to the next option.
 $pre = @()
 if ($PreScript) { $pre += @("-preScript", "$PreScript.java") }
-if (!$NoFid -and (Test-Path $FidDb)) {
-  $pre += @("-preScript", "AttachFid.java", "fidb=$($FidDb.Replace('\', '/'))")
+$fidMissing = $false
+if (!$NoFid) {
+  if (Test-Path $FidDb) {
+    $pre += @("-preScript", "AttachFid.java", "fidb=$($FidDb.Replace('\', '/'))")
+  }
+  else {
+    # Absent is not the same as opted out. Without the database the Function ID analyzer
+    # falls back to the ones Ghidra ships, none of which covers a VC6 service pack, and the
+    # program comes out with a fraction of its C runtime named and no indication why.
+    $fidMissing = $true
+  }
+}
+function Show-MissingFidWarning {
+  if (!$fidMissing) { return }
+  Write-Warning "No FID database at $FidDb - this program's C runtime will be only partly named."
+  Write-Warning "Build it with: uv run elysium research crt_fid stage; uv run elysium research crt_fid build"
+  Write-Warning "Pass -NoFid to run without it deliberately."
 }
 
 if ($Import) {
+  Show-MissingFidWarning
   # One argument vector, built up front: splatting a possibly-empty array inline makes
   # PowerShell hand analyzeHeadless a bare "-" and the parse dies before Ghidra starts.
   $argv = @($ProjDir, $ProjName, "-import", $Import, "-overwrite")
@@ -57,6 +73,7 @@ if ($Import) {
   & $headless @argv
 }
 elseif ($AnalyzeAll) {
+  Show-MissingFidWarning
   $argv = @($ProjDir, $ProjName, "-process", "-recursive", "-scriptPath", $scriptDir) + $pre
   & $headless @argv
 }

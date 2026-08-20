@@ -4,7 +4,8 @@ This tree contains reproducible research intent and authored instruments, never 
 copied from the game or a decompiler.
 
 - `tooling/ghidra/scripts/` contains tracked analysis scripts.
-- `tooling/ghidra/driver/` contains the headless runner, context builder, and parsers.
+- `tooling/ghidra/driver/` contains the headless runner, context builder, and parsers; its
+  `README.md` is the workspace manual — read it before running a Ghidra pass.
 - `tooling/capture/` contains live hook/injector source and capture analysis.
 - `tooling/probes/` contains focused surveys and static probes.
 - `cases/` contains hash-pinned specifications grouped by topic.
