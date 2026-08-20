@@ -417,6 +417,10 @@ struct FElysiumRecordingServices final
 		Out.OwnerStem = ResolvedNpcActivityOwner;
 		Out.GroundSpeedCmPerSecond = ResolvedNpcGroundSpeedCmPerSecond;
 		Out.bLooping = ResolvedNpcActivityLoops;
+		// The authored fade rides the resolved clip, so a producer that states no blend reads it here.
+		// Carried by the double rather than left at the struct default: a seam field the stub never
+		// writes is a field whose producer cannot be asserted at all.
+		Out.FadeSeconds = ResolvedNpcActivityFadeSeconds;
 		// LIFE5 — the fan half. The axis value is the request's own hit yaw rather than a fixture
 		// constant: a producer that dropped it would answer every reaction at the fan's forward cell,
 		// and a stub that invented an angle would hide exactly that.
@@ -431,6 +435,8 @@ struct FElysiumRecordingServices final
 	bool bResolvedNpcActivityIsGrid = false;
 	FString ResolvedNpcActivityNextClip;
 	float ResolvedNpcActivityFraction = 0.0f;
+	// The fade the resolved clip reports. 0.2 is what 5,762 of the 5,836 shipped sequences carry.
+	float ResolvedNpcActivityFadeSeconds = 0.2f;
 	// LIFE5 — whether a one-shot request is played, and the length it reports. Opt-in like every
 	// other fixture flag: default false is the body that resolves no clip, which is what most
 	// Substrate cases stand.

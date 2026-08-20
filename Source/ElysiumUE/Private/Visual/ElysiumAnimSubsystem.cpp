@@ -863,6 +863,9 @@ bool UElysiumAnimSubsystem::ResolveActivityClip(const FElysiumActivityClipReques
 	Out.OwnerStem = Selection.OwnerStem;
 	Out.GroundSpeedCmPerSecond = Selection.GroundSpeedCmPerSecond;
 	Out.bLooping = Selection.bLooping;
+	// The selected row's own authored fade, already reduced to 0 by `FadeSeconds()` on a hard cut.
+	// A producer that blends the clip in reads it here rather than re-finding the clip.
+	Out.FadeSeconds = Selection.FadeSeconds;
 	// LIFE5 — the fan half, carried out so a producer can route a directional reaction without
 	// re-resolving anything. The axis value is read off the SELECTION rather than off the request: the
 	// grid states which pose parameter it binds, and a producer's `HitYaw` is the answer only for a

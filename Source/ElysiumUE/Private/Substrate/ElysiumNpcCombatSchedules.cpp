@@ -147,7 +147,15 @@ namespace
 		{
 			FElysiumSchedule S;
 			S.Id = EId::MeleePreblock;
-			S.Tasks = { Step(ETask::StopMoving), ActivityStep(TEXT("ACT_MELEE_PREBLOCK")) };
+			// `ACT_PREBLOCK` is the activity the Human family's preblock virtual requests
+			// (`docs/vtmb/animation_and_movers.md` → the Human family row: "preblock/block/heavy
+			// block/left reaction/right reaction → `ACT_PREBLOCK`, `ACT_BLOCK`, `ACT_BLOCK_HEAVY`,
+			// `ACT_BLOCKED_REACTION_LEFT`, `ACT_BLOCKED_REACTION_RIGHT`"), and the same spelling the
+			// player's compact action 13 routes to (`docs/vtmb/combat-and-damage.md` § "Block and
+			// stagger reactions"). The weapon ladder is what reaches the armed variants the corpus
+			// actually carries — `ACT_PREBLOCK_KATANA` and its four siblings on 155 stems — so the
+			// task states the base activity and the translation supplies the weapon.
+			S.Tasks = { Step(ETask::StopMoving), ActivityStep(TEXT("ACT_PREBLOCK")) };
 			S.FailSchedule = EId::MeleeIdle;
 			S.Interrupts = FElysiumNpcConditions::Of({ ECond::LostEnemy });
 			ElysiumSchedule::Register(MoveTemp(S));

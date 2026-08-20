@@ -1192,6 +1192,105 @@ bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 	return true;
 }
 
+// =====================================================================================
+// The Reaction-band producer every combat reaction goes through (LIFE5). What is pinned here is the
+// blend rule, because it is the one thing the producer decides rather than forwards: a reaction is
+// an ideal-activity write and takes the ordinary sequence-blend rules, so a request stating no blend
+// takes the resolved clip's OWN authored fade (`docs/vtmb/combat-and-damage.md` § "Block and stagger
+// reactions"). Only retail's flinch gesture hard-codes a pair, and it states one.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatReactionProducerTest,
+	"Elysium.Substrate.NpcCombat.ReactionProducer", GElysiumTestFlags)
+bool FElysiumNpcCombatReactionProducerTest::RunTest(const FString&)
+{
+	FCombatFixture F(TEXT("0"), /*bWithFists=*/false, /*bInstallCatalogue=*/false);
+	if (F.Fighter == nullptr)
+	{
+		return false;
+	}
+	F.Quiet();
+	if (!TestNotNull(TEXT("the fighter carries a body to react with"), F.Fighter->Visual))
+	{
+		return false;
+	}
+
+	auto FirstCall = [&F](const TCHAR* Prefix) -> FString
+	{
+		for (const FString& Call : F.Services.Calls)
+		{
+			if (Call.StartsWith(Prefix))
+			{
+				return Call;
+			}
+		}
+		return FString();
+	};
+
+	F.Services.bNpcActivitiesResolve = true;
+	F.Services.bNpcOneShotsPlay = true;
+	F.Services.ResolvedNpcActivityLabel = TEXT("block_heavy");
+	F.Services.ResolvedNpcActivityClip = TEXT("block_heavy");
+	F.Services.ResolvedNpcActivityOwner = TEXT("melee_bank");
+	// The lying-down and damaged stance idles author 0.45; a reaction clip authoring anything but the
+	// common 0.2 is what makes the difference between "read" and "defaulted" visible at all.
+	F.Services.ResolvedNpcActivityFadeSeconds = 0.45f;
+
+	// --- No stated blend: the clip's own authored fade -------------------------------------------
+	F.Services.Calls.Reset();
+	{
+		FElysiumReactionPlayRequest Request;
+		Request.Activity = TEXT("ACT_BLOCK_HEAVY");
+		float Seconds = 0.0f;
+		TestTrue(TEXT("the producer plays the resolved reaction"),
+			F.Fighter->PlayReactionActivity(Request, &Seconds));
+		TestTrue(TEXT("...and reports what the claim holds for"), Seconds > 0.0f);
+
+		const FString Resolve = FirstCall(TEXT("ResolveNpcActivityClip"));
+		TestTrue(TEXT("...having asked for the stated activity"),
+			Resolve.Contains(TEXT("ACT_BLOCK_HEAVY")));
+		// Non-directional: the blocked reaction is the activity the attacker's own sequence descriptor
+		// stores, so nothing here derives an angle.
+		TestTrue(TEXT("...with no hit yaw, because only the flinch is directional"),
+			Resolve.Contains(TEXT("hit=0.0")));
+
+		const FString Played = FirstCall(TEXT("PlayNpcOneShot"));
+		TestTrue(TEXT("...and blends it in over the fade its own sequence authored"),
+			Played.Contains(TEXT("in=0.45")) && Played.Contains(TEXT("out=0.45")));
+		TestTrue(TEXT("...on the reaction route"), Played.Contains(TEXT("route=reaction")));
+		TestTrue(TEXT("...in the reaction band"), Played.Contains(TEXT("prio=reaction")));
+	}
+
+	// --- A stated blend wins, which is what the flinch's hard-coded gesture pair relies on ---------
+	F.Services.Calls.Reset();
+	{
+		FElysiumReactionPlayRequest Request;
+		Request.Activity = TEXT("ACT_BLOCK_HEAVY");
+		Request.BlendInSeconds = 0.1f;
+		Request.BlendOutSeconds = 0.3f;
+		TestTrue(TEXT("the producer plays it again"), F.Fighter->PlayReactionActivity(Request));
+
+		const FString Played = FirstCall(TEXT("PlayNpcOneShot"));
+		TestTrue(TEXT("...over the stated pair rather than the authored fade"),
+			Played.Contains(TEXT("in=0.10")) && Played.Contains(TEXT("out=0.30")));
+	}
+
+	// --- A vocabulary with no such reaction is an ordinary negative, not a failure -----------------
+	F.Services.Calls.Reset();
+	F.Services.bNpcActivitiesResolve = false;
+	{
+		FElysiumReactionPlayRequest Request;
+		Request.Activity = TEXT("ACT_BLOCK_HEAVY");
+		float Seconds = 7.0f;
+		TestFalse(TEXT("a body with no such reaction reacts with nothing"),
+			F.Fighter->PlayReactionActivity(Request, &Seconds));
+		TestEqual(TEXT("...and the duration is left untouched on the miss"), Seconds, 7.0f);
+		TestFalse(TEXT("...with nothing handed to the pose layer"),
+			F.Services.Saw(TEXT("PlayNpcOneShot")));
+	}
+	return true;
+}
+
 }   // namespace ElysiumNpcCombatTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

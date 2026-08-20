@@ -978,42 +978,62 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 		return;   // horizontally coincident origins name no direction on a yaw fan
 	}
 
-	FElysiumActivityClipRequest Request;
-	FillActivityClipRequest(Request);
-	Request.Activity = Flinch.Activity();
-	// The third draw, from the same stream: retail's `SelectWeightedSequence` picks among the equal
-	// activity's variants with `random()`, so the weighted pick re-rolls with the reaction.
-	Request.Variant = Rng.RandHelper(MAX_int32);
-	Request.HitYaw = Flinch.HitYawDegrees;
-	Request.Source = EElysiumAnimSource::Damage;
-	// The chain is the BODY's, and the identity is the world's own player handle — the same test the
-	// weapon transaction uses. `AsNpc()` would answer differently: a `scripted_character` stand-in and
-	// a scene's `!playercontroller` duplicate are both cast bodies with no NPC mind.
-	Request.BodyKind = (World->PlayerHandle() == Handle)
-		? EElysiumAnimBodyKind::Player : EElysiumAnimBodyKind::Cast;
 	// Retail's flinch is a gesture call: `AddGesture` reaches `SelectWeightedSequence` and simply
 	// returns on -1, so a body with no reaction in its vocabulary flinches nothing. It never walks the
 	// availability probe, the disposition retry or sequence zero — substituting a stance for a hit
-	// reaction is exactly the behaviour this clears.
-	Request.bAllowFallbackLadder = false;
+	// reaction is exactly the behaviour this clears. The blend pair is hard-coded because the gesture
+	// path's is: every other reaction takes the resolved clip's own authored fade.
+	FElysiumReactionPlayRequest Reaction;
+	Reaction.Activity = Flinch.Activity();
+	Reaction.HitYawDegrees = Flinch.HitYawDegrees;
+	Reaction.BlendInSeconds = ElysiumReactions::FlinchBlendInSeconds;
+	Reaction.BlendOutSeconds = ElysiumReactions::FlinchBlendOutSeconds;
+	Reaction.bAllowFallbackLadder = false;
+	PlayReactionActivity(Reaction);
+}
+
+bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayRequest& Request,
+	float* OutSeconds)
+{
+	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr || Visual == nullptr)
+	{
+		return false;   // no body to react with — an ordinary negative, not a failure
+	}
+
+	FElysiumActivityClipRequest Resolve;
+	FillActivityClipRequest(Resolve);
+	Resolve.Activity = Request.Activity;
+	// Retail's `SelectWeightedSequence` picks among the equal activity's variants with `random()`, so
+	// the weighted pick re-rolls with every reaction. Off the session's own Reaction stream, whose
+	// position is in the save (S8, `docs/architecture/save-architecture.md` §8).
+	Resolve.Variant = ElysiumRng::Stream(EElysiumRngStream::Reaction).RandHelper(MAX_int32);
+	Resolve.HitYaw = Request.HitYawDegrees;
+	Resolve.Source = EElysiumAnimSource::Damage;
+	// The chain is the BODY's, and the identity is the world's own player handle — the same test the
+	// weapon transaction uses. `AsNpc()` would answer differently: a `scripted_character` stand-in and
+	// a scene's `!playercontroller` duplicate are both cast bodies with no NPC mind.
+	Resolve.BodyKind = (World->PlayerHandle() == Handle)
+		? EElysiumAnimBodyKind::Player : EElysiumAnimBodyKind::Cast;
+	Resolve.bAllowFallbackLadder = Request.bAllowFallbackLadder;
 
 	FElysiumActivityClip Clip;
-	if (!Embodiment->ResolveNpcActivityClip(Request, Clip) || Clip.AnimationName.IsEmpty())
+	if (!Embodiment->ResolveNpcActivityClip(Resolve, Clip) || Clip.AnimationName.IsEmpty())
 	{
 		// The named miss already reads on the resolver's own selection record and its Verbose line,
 		// with the class body, weapon ladder and alert branch the request selected through. A second
 		// report here would be the same fact once per hit.
-		return;
+		return false;
 	}
 
 	FElysiumOneShotClipRequest Play;
 	Play.OwnerStem = Clip.OwnerStem;
 	Play.AnimationName = Clip.AnimationName;
 	Play.Label = Clip.Label;
-	// The reaction channel, not the one-shot slot: a flinch REPLACES the pose the body is holding, and
-	// a directional one is a fan whose pose is a blend of two authored reactions — which is the thing
-	// a montage cannot hold. The body's own stem rides along because a fan is reached through the
-	// character's vocabulary rather than through the bank alone.
+	// The reaction channel, not the one-shot slot: a reaction REPLACES the pose the body is holding,
+	// and a directional one is a fan whose pose is a blend of two authored reactions — which is the
+	// thing a montage cannot hold. The body's own stem rides along because a fan is reached through
+	// the character's vocabulary rather than through the bank alone.
 	Play.Route = EElysiumOneShotRoute::Reaction;
 	Play.BodyStem = ModelStem();
 	// Both answered by the resolve above and never re-derived here: `bGrid` says the label named a fan
@@ -1021,14 +1041,23 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 	Play.bGrid = Clip.bGrid;
 	Play.AxisValue = Clip.AxisValue;
 	Play.bLoop = false;
-	Play.BlendInSeconds = ElysiumReactions::FlinchBlendInSeconds;
-	Play.BlendOutSeconds = ElysiumReactions::FlinchBlendOutSeconds;
+	// A stated blend wins; otherwise the resolved clip's own authored fade, which is the ordinary
+	// sequence-blend rule and already 0 on a `flags & 0x2` hard cut.
+	Play.BlendInSeconds = Request.BlendInSeconds >= 0.0f ? Request.BlendInSeconds : Clip.FadeSeconds;
+	Play.BlendOutSeconds = Request.BlendOutSeconds >= 0.0f ? Request.BlendOutSeconds : Clip.FadeSeconds;
 	Play.Priority = EElysiumAnimPriority::Reaction;
 	Play.Source = EElysiumAnimSource::Damage;
 	// The seam claims the base channel before it plays, so a body a choreographed scene owns refuses
 	// the reaction outright. A refusal is an ordinary negative it reports on its own Verbose line —
-	// the flinch simply does not happen, and the scene keeps the body.
-	Embodiment->PlayNpcOneShot(Visual, Play, nullptr);
+	// the reaction simply does not happen, and the scene keeps the body.
+	float Seconds = 0.0f;
+	const bool bPlayed = Embodiment->PlayNpcOneShot(Visual, Play,
+		OutSeconds != nullptr ? &Seconds : nullptr);
+	if (bPlayed && OutSeconds != nullptr)
+	{
+		*OutSeconds = Seconds;
+	}
+	return bPlayed;
 }
 
 // ============================================================================================

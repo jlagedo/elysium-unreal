@@ -46,6 +46,21 @@ struct FElysiumNpcClip
 	// damaged stance idles. A pair of clips transitions over the LARGER of the two, which is why
 	// this is carried per clip rather than tuned globally (`docs/vtmb/animation_and_movers.md`).
 	float Fade = 0.2f;
+	// The sequence's own melee reach in centimetres (`mstudioseqdesc_t`+0x2D0).
+	// `CWeaponMelee::RequestActivity` reads it off every sequence the translated activity returns and
+	// queries at the MAXIMUM (`docs/vtmb/combat-and-damage.md` § "Target acquisition, sequence commit
+	// and recovery"). Zero means the sequence states none, which is every non-melee clip.
+	float ReachCm = 0.0f;
+	// The `ACT_*` the ATTACKER plays when this sequence's swing is blocked (`mstudioseqdesc_t`+0x2E0).
+	// Authored per sequence rather than derived from a direction: the blocked-reaction callback plays
+	// what the attacker's current sequence descriptor stores, falling back to
+	// `ACT_BLOCKED_REACTION_RIGHT` (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
+	// Empty means the sequence names none.
+	FString BlockedReaction;
+
+	// Whether this sequence states a reach at all. Zero is "no claim", not a zero-length swing, so a
+	// caller maximising over an activity's sequences skips it rather than clamping to it.
+	bool HasReach() const { return ReachCm > 0.0f; }
 
 	// Authored duration. The rate is per clip and is not always 30 (54 of 1,502 surveyed
 	// sequences are 18 fps, including `run`), so this is read rather than assumed.
@@ -85,6 +100,13 @@ struct FElysiumNpcClipSet
 	// Whether any clip carries it. The weapon ladder's availability probe asks this once per rung
 	// and never wants the labels, and `ByActivity` would allocate a list per rung to answer it.
 	bool HasActivity(const FString& Activity) const;
+	// The largest reach any clip answering Activity states, in centimetres.
+	// `CWeaponMelee::RequestActivity` reads the reach off EVERY sequence the translated activity
+	// returns and queries `FindEntityFOV` at the maximum, so the answer is a property of the activity
+	// rather than of whichever variant the weighted pick lands on
+	// (`docs/vtmb/combat-and-damage.md` § "Target acquisition, sequence commit and recovery").
+	// Zero when no answering clip states one, which is the same "no claim" a single clip's zero means.
+	float MaxReachCmForActivity(const FString& Activity) const;
 	// Every ACT_DISPOSITION clip named `Stance_<AnimName>_Idle*` (the standing idles) or, with
 	// bWantTransitions, `Stance_<AnimName>_Trans*` (the authored blends between two of them).
 	TArray<FString> StanceClips(const FString& AnimName, bool bWantTransitions = false) const;
@@ -95,6 +117,10 @@ struct FElysiumNpcClipSet
 
 	// Parse out/npc/clips/<Stem>.json. Returns false and fills OutError on any failure.
 	bool Load(const FString& InStem, FString& OutError);
+	// Parse an already-loaded slice. The same schema gate as Load(), exposed so the column contract
+	// — a row truncated at its last stated column, a legal null reach — can be asserted without
+	// writing into $ELYSIUM_EXPORT_ROOT.
+	bool LoadJsonText(const FString& InStem, const FString& JsonText, FString& OutError);
 
 	// Every ACT_* literal this stem's vocabulary can answer, added to `Out` — the slice's own
 	// intern table, without building the clip map. A corpus-wide question ("which activities does

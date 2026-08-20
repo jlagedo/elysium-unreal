@@ -855,6 +855,31 @@ private:
 // rather than inventing a dispatch.
 // ============================================================================================
 
+// LIFE5 — what a reaction producer states, for the one Reaction-band play path every combat
+// reaction goes through. The flinch, the defender's block and the attacker's blocked reaction are
+// the same transaction with different activities: fill the translation context, resolve through the
+// embodiment seam, play the resolved cell on the graph's reaction branch. A parameter struct rather
+// than a boolean flag list, per `Source/ElysiumUE/CLAUDE.md` → "APIs and diagnostics".
+struct FElysiumReactionPlayRequest
+{
+	// The `ACT_*` being asked for, before the class body and weapon ladder translate it.
+	FString Activity;
+	// Where the attacker stands relative to this body's facing, in degrees, for a fan that binds
+	// `hit_yaw`. 0 on every non-directional reaction: only the flinch is directional
+	// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions" — the blocked reaction is the
+	// activity the attacker's own sequence descriptor stores, not a direction).
+	float HitYawDegrees = 0.0f;
+	// Negative takes the resolved clip's own authored fade, which is the ordinary sequence-blend rule
+	// and therefore the default. A producer states a number only where retail states one — retail's
+	// flinch gesture hard-codes its pair and nothing else does.
+	float BlendInSeconds = -1.0f;
+	float BlendOutSeconds = -1.0f;
+	// Whether a miss may walk `CAI_BaseNPC`'s recovered fallback ladder. False on the flinch: retail's
+	// gesture path (`AddGesture` -> `SelectWeightedSequence`, which simply returns on -1) never walks
+	// the availability probe, the disposition retry or sequence zero.
+	bool bAllowFallbackLadder = false;
+};
+
 class FElysiumCombatCharacter : public FElysiumAnimating
 {
 public:
@@ -977,6 +1002,21 @@ public:
 	// vocabulary carrying no reaction all mean no flinch, and the resolver's own record names the
 	// last of those.
 	void StartDamageFlinch(const FElysiumDmg& Dmg);
+
+	// LIFE5 — the one Reaction-band producer: fill the translation context, resolve one `ACT_*`
+	// through the embodiment seam, and play the resolved cell on the graph's reaction branch. Every
+	// combat reaction is this transaction, which is why it is one function rather than one per family
+	// — the fork that matters is the body kind, and `FillActivityClipRequest` already sets it.
+	//
+	// The route is fixed at `Reaction`/`Reaction`/`Damage`: a reaction REPLACES the base pose (a
+	// directional one is a blend between two authored cells, which a montage cannot hold), and the
+	// producer IS the damage/contact transaction whatever activity it names.
+	//
+	// Returns whether a clip was resolved AND handed to the seam; `OutSeconds` is what the claim
+	// holds for and is written only on success. A false is an ordinary negative — no body, no
+	// embodiment, or a vocabulary carrying no such reaction, the last of which the resolver's own
+	// selection record already names.
+	bool PlayReactionActivity(const FElysiumReactionPlayRequest& Request, float* OutSeconds = nullptr);
 
 	// LIFE5 — `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`), the body six server classes
 	// share. Its whole weapon route is a forward: every id in 3000..3999 goes to the ACTIVE weapon's

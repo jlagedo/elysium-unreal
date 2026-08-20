@@ -668,6 +668,12 @@ struct FElysiumActivityClip
 	// rather than overriding it, and a body-language idle authored as a loop is why: without it the
 	// clip plays once and then stands frozen on its last frame.
 	bool bLooping = false;
+	// What the selected row asks a transition INTO it to take, in seconds — the clip's authored fade,
+	// and 0 on a `flags & 0x2` hard cut. Carried out of the seam because a reaction is an ordinary
+	// ideal-activity write and takes the ordinary sequence-blend rules; a producer that hard-coded a
+	// blend would snap a clip the model authored a 0.45 fade for. The `max(outgoing, incoming)`
+	// combine is the graph's rule and stays there.
+	float FadeSeconds = 0.2f;
 
 	// --- what the label resolved to, when it named a FAN (LIFE5) ---------------------------------
 	//

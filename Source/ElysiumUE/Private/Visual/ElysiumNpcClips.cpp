@@ -93,18 +93,36 @@ namespace
 
 bool FElysiumNpcClipSet::Load(const FString& InStem, FString& OutError)
 {
+	const FString Path = FElysiumContentPaths::NpcClips(InStem);
+	FString JsonText;
+	if (!FFileHelper::LoadFileToString(JsonText, *Path))
+	{
+		Stem = InStem;
+		Clips.Reset();
+		OutError = FString::Printf(TEXT("not found: %s"), *Path);
+		return false;
+	}
+	return LoadJsonText(InStem, JsonText, OutError);
+}
+
+bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& JsonText, FString& OutError)
+{
 	Stem = InStem;
 	Clips.Reset();
 
 	TSharedPtr<FJsonObject> Root;
-	if (!ReadJsonFile(FElysiumContentPaths::NpcClips(InStem), Root, OutError))
+	const TSharedRef<TJsonReader<>> SliceReader = TJsonReaderFactory<>::Create(JsonText);
+	if (!FJsonSerializer::Deserialize(SliceReader, Root) || !Root.IsValid())
 	{
+		OutError = FString::Printf(TEXT("malformed JSON: %s"), *InStem);
 		return false;
 	}
 
-	// The slice interns its owner stems and activity literals into two arrays and stores each
-	// clip as [owner_i, activity_i, weight, flags, frames, fps] — the strings repeat across
-	// ~1,540 rows, and the owner column especially (31 distinct stems) pays for the indirection.
+	// The slice interns its owner stems and activity literals into two arrays and stores each clip as
+	// [owner_i, activity_i, weight, flags, frames, fps, fade, reach_cm, blocked_reaction] — the
+	// strings repeat across ~1,540 rows, and the owner column especially (31 distinct stems) pays for
+	// the indirection. The blocked-reaction literal is NOT interned: it names an activity the stem
+	// may not be able to play, and the `activities` table is the playable vocabulary.
 	TArray<FString> Owners, Activities;
 	const TArray<TSharedPtr<FJsonValue>>* Arr = nullptr;
 	if (Root->TryGetArrayField(TEXT("owners"), Arr))
@@ -157,6 +175,19 @@ bool FElysiumNpcClipSet::Load(const FString& InStem, FString& OutError)
 		if (Row->Num() > 6)
 		{
 			Clip.Fade = static_cast<float>((*Row)[6]->AsNumber());
+		}
+		// The two melee columns, on the same trailing-and-optional contract: the exporter truncates a
+		// row at its last stated column, so a row that reaches neither is an ordinary sequence stating
+		// neither. `reach_cm` holds the slot `blocked_reaction` sits behind and is written as a legal
+		// null when a sequence names a reaction without a reach, which is why the read is guarded
+		// rather than assumed numeric.
+		if (Row->Num() > 7 && !(*Row)[7]->IsNull())
+		{
+			Clip.ReachCm = static_cast<float>((*Row)[7]->AsNumber());
+		}
+		if (Row->Num() > 8)
+		{
+			Clip.BlockedReaction = (*Row)[8]->AsString();
 		}
 		Clips.Add(Pair.Key, MoveTemp(Clip));
 	}
@@ -213,6 +244,27 @@ bool FElysiumNpcClipSet::HasActivity(const FString& Activity) const
 		}
 	}
 	return false;
+}
+
+float FElysiumNpcClipSet::MaxReachCmForActivity(const FString& Activity) const
+{
+	if (Activity.IsEmpty())
+	{
+		return 0.0f;
+	}
+	// The maximum over the answering sequences, not the pick's own: retail reads the reach off every
+	// sequence the translated activity returns and queries at the largest, so a two-variant swing
+	// whose long variant was not selected still acquires at the long distance. A clip stating no
+	// reach contributes nothing rather than pinning the answer to zero.
+	float Max = 0.0f;
+	for (const TPair<FString, FElysiumNpcClip>& Pair : Clips)
+	{
+		if (Pair.Value.HasReach() && Pair.Value.Activity.Equals(Activity, ESearchCase::IgnoreCase))
+		{
+			Max = FMath::Max(Max, Pair.Value.ReachCm);
+		}
+	}
+	return Max;
 }
 
 TArray<FString> FElysiumNpcClipSet::StanceClips(const FString& AnimName, bool bWantTransitions) const
