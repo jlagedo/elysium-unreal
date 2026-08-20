@@ -762,8 +762,8 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	for (int32 Index = 0; Index < Source.Vertices.Num(); ++Index)
 	{
 		const FElysiumSourceVertex& Vertex = Source.Vertices[Index];
-		TArray<UE::AnimationCore::FBoneWeight, TInlineAllocator<3>> Influences;
-		for (int32 Slot = 0; Slot < 3; ++Slot)
+		TArray<UE::AnimationCore::FBoneWeight, TInlineAllocator<4>> Influences;
+		for (int32 Slot = 0; Slot < UE_ARRAY_COUNT(Vertex.Bones); ++Slot)
 		{
 			const int32 Bone = static_cast<int32>(Vertex.Bones[Slot]);
 			if (Vertex.Weights[Slot] > 0.0f && Bone >= 0 && Bone < BoneCount)

@@ -40,7 +40,7 @@ bytes, unterminated.
                                                                        export root, "" if none
     "MESH"  u32 vertexCount, u32 triangleCount, u32 sectionCount
             sectionCount x { string material, u32 firstTriangle, u32 triangleCount }
-            vertexCount   x { f32 p[3], f32 n[3], f32 uv[2], u16 bone[3], f32 weight[3] }
+            vertexCount   x { f32 p[3], f32 n[3], f32 uv[2], u16 bone[4], f32 weight[4] }
             triangleCount x { u32 index[3] }
     "MORF"  u32 morphCount
             morphCount x { string name, u32 deltaCount,
@@ -93,7 +93,9 @@ from elysium_pipeline.formats import bsp, mdl, mdl_secondary_motion as SM, mdl_s
 #: 7 -- the host of a derived additive carries a complete bind track for every bone the additive
 #: owns, including owned bones with seven zero RLE offsets. Both sides of Unreal's additive
 #: subtraction now state the same donor local instead of one side falling through to family bind.
-VERSION = 7
+#: 8 -- the "MESH" influence block is four slots wide, carrying the fourth bone a VtMB vertex may
+#: weight rather than the three a 2004 hardware palette could hold.
+VERSION = 8
 
 #: Separates an additive's own label from the label of the host it was composed onto, in the name
 #: of a derived clip. A VtMB sequence label never contains it, so the split is unambiguous.
@@ -101,9 +103,11 @@ BASE_SEPARATOR = "@"
 
 MAGIC = b"ESKM"
 
-#: VtMB's SKINNED StudioVertex carries exactly three `BoneWeight` slots, so an influence
-#: block is fixed-width and a reader needs no per-vertex length.
-MAX_INFLUENCES = 3
+#: A VtMB SKINNED `StudioVertex` weights up to four bones: `BoneWeight` stores three weight bytes
+#: and four bone indices, and the fourth weight is the shortfall `255 - sum` (`mdl_skel.read_skin`).
+#: The block is fixed-width at four, so a reader needs no per-vertex length and an unused slot is
+#: a zero weight.
+MAX_INFLUENCES = 4
 
 #: StudioBone flag 0x2 (`docs/vtmb/animation_and_movers.md`): the bone's ROTATION declines its
 #: parent and roots in the character, while its translation still rides the parent. One bone per
@@ -689,9 +693,12 @@ def _mesh_section(surfaces, matnames, bone_map):
             vertices += struct.pack("<3f", *_conv_pos(position))
             vertices += struct.pack("<3f", *normal)
             vertices += struct.pack("<2f", float(uv[0]), float(uv[1]))
-            vertices += struct.pack("<3H", *[bone_map[int(j)] if 0 <= int(j) < len(bone_map)
-                                             else 0 for j in joints[:MAX_INFLUENCES]])
-            vertices += struct.pack("<3f", *[float(w) for w in weights[:MAX_INFLUENCES]])
+            # `decode_skinned` already pads to four; the pad keeps a hand-built surface valid.
+            influences = list(zip(joints, weights))[:MAX_INFLUENCES]
+            influences += [(0, 0.0)] * (MAX_INFLUENCES - len(influences))
+            vertices += struct.pack("<4H", *[bone_map[int(j)] if 0 <= int(j) < len(bone_map)
+                                             else 0 for j, _w in influences])
+            vertices += struct.pack("<4f", *[float(w) for _j, w in influences])
         # The Source->Unreal Y negation is a reflection, so a triangle kept in its authored
         # order would face inward. Reversed once, here, and never again downstream.
         for i, j, k in surface["tris"]:

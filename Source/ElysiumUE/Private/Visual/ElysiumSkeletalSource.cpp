@@ -21,7 +21,8 @@ namespace
 	// Version 5 widened the "MESH" vertex record with the authored shading normal. Version 6 made
 	// every owned bone a complete donor-local pose. Version 7 also makes the host side of an
 	// additive subtraction carry every bone the additive owns, including bind-only channels.
-	constexpr uint32 EskmVersion = 7;
+	// Version 8 widened the "MESH" influence block to the four bones a VtMB vertex may weight.
+	constexpr uint32 EskmVersion = 8;
 
 	/**
 	 * A bounds-checked forward cursor over the loaded file.

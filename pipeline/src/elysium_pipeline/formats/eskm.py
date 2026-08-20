@@ -16,7 +16,7 @@ MAGIC = b"ESKM"
 #: Must match `UE_mdl_skeletal.VERSION` and `EskmVersion` in `ElysiumSkeletalSource.cpp`. This
 #: reader touches only the sections above the clips, so a bump it does not otherwise care about
 #: still lands here -- reading a stale container is what the check exists to prevent.
-VERSION = 7
+VERSION = 8
 
 
 def _string(blob, offset):

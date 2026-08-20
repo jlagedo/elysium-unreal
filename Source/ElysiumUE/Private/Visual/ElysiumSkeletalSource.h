@@ -59,9 +59,9 @@ struct FElysiumSourceVertex
 	 */
 	FVector3f Normal = FVector3f::ZAxisVector;
 	FVector2f UV = FVector2f::ZeroVector;
-	/** VtMB's skinned vertex carries exactly three influence slots; a zero weight is unused. */
-	uint16 Bones[3] = { 0, 0, 0 };
-	float Weights[3] = { 0.0f, 0.0f, 0.0f };
+	/** A VtMB skinned vertex weights up to four bones; a zero weight is an unused slot. */
+	uint16 Bones[4] = { 0, 0, 0, 0 };
+	float Weights[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 };
 
 struct FElysiumSourceMorphDelta

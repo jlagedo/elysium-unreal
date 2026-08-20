@@ -2092,7 +2092,24 @@ else:
 ```
 
 The flag test is at `0x1008ffc5`; the split-inheritance branch is
-`0x1008fff3–0x100901b5`. Thus a flagged spine keeps its positional attachment to
+`0x1008fff3–0x100901b5`. **The read encodes as displacement `0x84`, not `0x88`** — the compiler
+holds the bone cursor at `&bone[i].parent` (bone+4), so searching the image for a `+136` access
+finds nothing in `BuildTransformations`.
+
+A **second** client-side site applies the same rule: `0x1008a9f9`, inside a
+`BuildBoneChain`-shaped helper `(studiohdr, pos[], q[], boneToWorld[], boneComputed, boneIndex,
+rootToWorld)` that walks the parent chain by `LEA EAX,[EAX+EAX*4]; SHL EAX,5` and runs the
+identical split block. Its only caller is a virtual present in five vtables, against
+`BuildTransformations`' ~230 — a narrow override family, not the general path.
+
+**No renderer site applies it.** `StudioRender.dll` contains zero bit-`0x2` tests against a bone
+flags field: only two functions in that DLL walk the 160-byte bone array (`ADD reg,0xa0` at
+exactly `0x2c004e5b` and `0x2c01a5cd`), and the second is a debug wireframe-box renderer.
+`0x2c004e10` is 30 instructions whose entire call closure is itself plus `ConcatTransforms`
+`0x2c00eba0`, reading no bone field but `poseToBone`@`+0x58`. The rule is client-side only, so a
+bake that resolves it once at animation-track level does not double-apply.
+
+Thus a flagged spine keeps its positional attachment to
 its parent but does **not** inherit that parent's rotation. Its orientation is
 rooted directly in the entity transform. This is steady live pose construction,
 not a courtroom special case.
@@ -2330,12 +2347,27 @@ but does not transform local rotation.
 | +0x00 | short | source bone — **negative means write the including model's own bind pose** |
 | +0x02 | byte | branch selector |
 | +0x03 | byte | position transform — clear copies, set `TransformPoint`s |
-| +0x04 | short | chain short A |
-| +0x06 | short | chain short B |
+| +0x04 | short | the include model's bone index of the **including bone's parent**, `-1` at root |
+| +0x06 | short | the **nearest common ancestor** of `+0x00` and `+0x04` in the include model's parent chain |
 | +0x08 | matrix3x4 | the mapping matrix |
 
 This corrects two earlier readings. The `+0x04` dword recorded as loader-written is the two
-chain shorts, and the matrix sits at `+0x08` rather than `+0x0c`.
+shorts above, and the matrix sits at `+0x08` rather than `+0x0c`.
+
+**The builder is `client.dll 0x1008cfa0`** (mirrors in `vampire.dll 0x100c67b0` and
+`engine.dll 0x2000ce40`), recursive over the include DAG and carrying the diagnostic
+`chained model %s has a bone %s that …`. It resolves each `StudioModelGroup` (116 B, `hdr+404`/
+`+408`, stride `0x74`), matches bones by `stricmp` on name — `0xffff` when none matches, and
+`parent.Flags |= included.Flags & 0xfffc` on a match — sets `+0x02` when the include's parent of
+the matched bone differs from the mapped parent, sets `+0x03` when the two bind positions differ
+beyond an epsilon, and derives `+0x08` from those positions: identity when equal, a pure
+translation when either is at the origin, otherwise axis-angle from `cross(a,b)` and `atan2`
+scaled by `|b|/|a|`. It also fills the group's two `uint16[24]` pose-parameter maps at `+0x14`
+(global → local) and `+0x44` (local → global), both initialised to `0xffff`, accumulating names
+case-insensitively across the whole recursion into one global namespace; 24 is
+`MAXSTUDIOPOSEPARAM`. The group's `+0x08` virtual-sequence base seeds from `NumLocalSeq`@272 and
+accumulates, and the recursive return is the sequence count the group owns.
+**Standing: Verified.**
 
 **The array is walked only on the include-group path.** A sequence index below
 `NumLocalSeq`@272 jumps to the evaluator and returns having read no group at all, so the
@@ -2997,21 +3029,50 @@ flinch write actually touches, would resolve it.
 ## A.5 Skinning [data-verified + VtMB decompiled]
 
 All character models are `VertexListType==0` (SKINNED, 44B `StudioVertex`); the
-per-vertex `BoneWeight` (layout: `docs/vtmb/mdl_v2531.md`) *is* the skin. **`NumBones` reads 0
-on VtMB data — derive the influence count from nonzero weights** (probe: jeanette
-6389/6393 verts have `NumBones==0`). Max **3 influences**, well within a standard
-4-weight skin:
+per-vertex `BoneWeight` (layout: `docs/vtmb/mdl_v2531.md`) *is* the skin. A vertex weights **up
+to four bones**: the byte at `BoneWeight+3` is an influence selector, the count is
+`max(1, selector % 5)`, and only three weights are stored — the fourth is the shortfall.
 
 ```
-for i in 0..2:
-    if Weight[i] > 0:  influence(bone=Bone[i], weight=Weight[i]/255.0)
+count = max(1, Selector % 5)
+w     = [Weight[0], Weight[1], Weight[2], 255 - Weight[0] - Weight[1] - Weight[2]]
+for i in 0..count-1:  influence(bone=Bone[i], weight=w[i]/255.0)
 ```
+
+There is no `NumBones` field. The offset a field walk reaches for one is `BoneWeight+10`, which
+is the low half of `Bone[3]` — zero on all but the four-influence vertices, which is what makes
+it read as a plausible always-zero count. Install-wide the counts are
+`{1: 4,466,133, 2: 562,344, 3: 126,381, 4: 1,012}`.
 
 `Bone[i]` indexes the same `StudioBone` array. Retail application proves that
 `poseToBone`@88 is the inverse-bind matrix: StudioRender computes
 `boneToWorld * poseToBone`, then selects those skin matrices by `Bone[i]` and
-blends them using the stored byte weights. jeanette: 4132 verts 1-bone, 1761
-2-bone, 500 3-bone; weights sum to 255.
+blends them using the stored byte weights. The three stored weights sum to 255 except on a
+four-influence vertex, where the difference *is* the fourth weight.
+
+**Two skinning paths, and they disagree on the fourth influence.** `CStudioRender::DrawModel`
+routes per stripgroup at `0x2c01d740`: `flags & 0x01` (FLEXED) set, or `flags & 0x02`
+(HWSKINNED) clear, takes the software path; otherwise the hardware one.
+
+- **Software** — a 144-entry dispatch table at `0x2c07f9c8`, indexed by
+  `StudioModel.VertexListType`, whose entries all reach one of two shared helpers
+  (`0x2c01aff0`, `0x2c01dcc0`, 72 each). Both blend **up to four** matrices straight from the
+  44-byte `StudioVertex`. Two further tables of 8 serve `VertexListType` 1 and 2, whose compact
+  vertices carry no weights and blend a single matrix.
+- **Hardware** — a static `IMesh` built at load by `0x2c013a70` from the `.vtx`. It materialises
+  all four weights, then indexes a 65-row permutation table at `0x2c06ce30`
+  (`{i32 numUsed; i32 perm[4]}`, the lexicographic ordered injections, `1+4+12+24+24`) by the
+  record's `boneWeightIndex`, and writes only `numUsed` weights, **renormalised**. Shipped
+  `.dx80.vtx` never selects a four-keeping row, so this path blends **three**.
+
+The consequence is that the same content deformed differently by hardware class. Of the 1,012
+four-influence vertices, `.dx80.vtx` sends **957** down the hardware path (three influences, 925
+dropping the fourth and 33 dropping a different one via rows 18/20), 13 down the software path,
+1 both, and 41 are referenced by no stripgroup at all. `.dx7_2bone.vtx` — the variant loaded on
+non-shader hardware — pushes every four-influence vertex into non-HWSKINNED stripgroups with
+`boneWeightIndex = 41`, keeping all four. The three-influence result is therefore a DX8 bone-budget
+constraint of the shipped hardware path, not an authored property of the model.
+**Standing: Verified.**
 
 **The palette relation is measured, not only decompiled.** Multiplying a draw's
 own captured bone-to-world by the stored `poseToBone` returns the skin palette the

@@ -188,11 +188,39 @@ bit positions: over one actor's builds the 21-bone mask is exactly `Flags & 0x4`
 between the two sets. The partial updates are three call sites asking for different masks,
 not an anomaly.
 
-Those usage bits are loader-written — they fall inside the same rewrite that sets `0x4`,
-`0x8` and `0x20`–`0x8000` and clears nothing — so they read as unset on disk. **An offline
-reader cannot recover the masks from the installed file.** Obtaining them means recomputing
-the usage flags from hitboxes, attachments and vertex LODs the way the loader does, or
-capturing them from a running process.
+**Those usage bits are authored on disk, and an offline reader recovers them by reading them.**
+Nothing in `client.dll` or `engine.dll` derives them from hitboxes, attachments or vertex LODs;
+`studiomdl` writes them. Every write to `StudioBone.Flags`@136 in either binary is one of three
+narrow passes: the include-model merge (`host |= included & 0xfffc`, on a name match), ancestor
+propagation (`for each bone: v = flags & 0xfffc; OR v into every ancestor`), and the
+secondary-motion chain mark (`docs/vtmb/secondary_motion.md`). Measured over the 339 loose
+Unofficial Patch models — 16,781 bones — the installed flags are **already ancestor-closed under
+`0xfffc` on 338 of 338**, which is why the capture diff sees a rewrite only on the 27
+include-carrying models. Reproducing the loader offline means replaying the include merge and the
+ancestor closure, not recomputing usage from geometry.
+
+`0xfffc` is the complement of the two disk-authored bits `0x1` and `0x2`, and appears as a literal
+in all three passes plus `C_BaseAnimating::SetupBones`, where at `0x10091a60` it is ORed into the
+requested `boneMask` under two conditions. The first is `cl_SetupAllBones.GetInt()` — the object
+at `0x1049bf28` is a `ConVar` (RTTI `.?AVConVar@@`, default `"0"`), so `0x1049bf2c` is its
+`m_pParent` self-pointer, vtable slot `+4` is `ConCommandBase::IsCommand()` returning constant
+false, and `+0x2c` is `m_nValue`. Defaulting to `0`, that OR never fires in retail; it is a
+developer switch that forces every usage bit into the mask. The second condition, `this+0x48`
+being `0x1e` or `0x1f`, is unattributed. Bit attributions over that corpus:
+
+| Bit | Meaning | Standing |
+|---|---|---|
+| `0x4` | used by hitbox | **Strong** — equals the hitbox ancestor-closure on 319/338; the only mask `GetLocalRenderBounds` requests |
+| `0x8` | used by attachment | **Strong** — 316/338, zero subsets; requested by `GetAttachment`, and as `0xc` by `TestCollision` |
+| `0x20`…`0x800` | vertex LOD0…LOD6 | **Strong** — a non-increasing nest whose distinct leading levels equal the `.vtx` `numLODs` on 38/38 multi-LOD models |
+| `0x10` | — | **Unknown** — set on 99.4% of bones, yet 74 bones carry other usage bits without it, so it is not an "anything" superset |
+| `0x1000`…`0x8000` | presumed LOD7…LOD10 | **Unknown** — no shipped model exceeds `numLODs > 7`, so these never differ from the last level |
+
+The LOD attribution rests on the `numLODs` correspondence and the nesting, not on a per-LOD bone-set
+match: bit `0x20` is not "bones this model's vertices weight, ancestor-closed" (that matches only
+20/320). On `blueblood_therese` the LOD0 bit excludes all 30 finger bones despite each carrying
+weighted vertices, and includes 6 weapon bones carrying none — consistent with per-LOD sets coming
+from the `.vtx` after `bonetreecollapse` and from `$includemodel` merging.
 
 ## Verification
 

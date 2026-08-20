@@ -102,6 +102,25 @@ exercises it.
 **Standing: Verified** for construction, automatic chaining and lifetime; **Strong evidence** for
 the intended authoring meaning of the never-shipped explicit-terminal branch.
 
+## Marking chain bones used
+
+A chain's terminal bones carry little or no skin weight, so nothing in the ordinary usage
+derivation would mark them — yet the pose builder skips every bone where
+`!(boneFlags(i) & boneMask)`, and the solve needs them composed. A dedicated loader pass supplies
+that. `engine.dll 0x2000ccf0` reads the same `+396`/`+400` table at stride 28, takes each record's
+first moving bone, walks up the parent chain and down the first-child chain, and ORs `0xfffc` into
+`StudioBone.Flags`@136 on every bone it reaches. It writes no matrices and contains no
+floating-point instruction.
+
+`CModelLoader::LoadModel` calls it twice — once on the already-resident path, once after
+`Mod_LoadStudioModel` — inside the arm gated on `IDST` and version `0x9e3`. Byte-identical copies
+exist at `client.dll 0x1008ce40` and `vampire.dll 0x100c65f0`; both are **dead**, with no rel32,
+no absolute pointer, and in the server's case only an unreferenced incremental-link thunk. A third
+engine site at `0x200bbbc6` is a genuine `CALL` inside an unreferenced `LoadModel` near-duplicate,
+so the live call count is two.
+
+**Standing: Verified.** `0xfffc` and its bit attributions are `docs/vtmb/procedural_bones.md`.
+
 ## Per-frame solve
 
 The update at `0x100ac880` is stateful and time-stepped:
