@@ -1509,6 +1509,14 @@ bool FElysiumGreenRoomRun::LabSetDriveBody(const FString& Stem, FString& OutErro
 		if (FElysiumPlayer* Player = EntityWorld->FindPlayer())
 		{
 			Player->Visual = Visual;
+			// The same sync, for the other half the entity owns: `ModelStem()` is the stem every
+			// producer that resolves through the ENTITY carries — a weapon's attack activity, a
+			// damage reaction, a scripted beat — and it reads the `model` field, not the pawn. A
+			// driven body that left it empty resolved every one of those against no vocabulary,
+			// while the per-frame locomotion publish kept working off the motor's own cached stem.
+			// Written directly rather than through `SetRuntimeModel`, whose model-changed hook would
+			// tear down and rebuild the visual this call just attached.
+			Player->Model = Stem;
 		}
 	}
 
