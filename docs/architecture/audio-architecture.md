@@ -248,7 +248,7 @@ policy. They are not called faithful until RE30/RE31 settle precedence and sched
 Random sounds use the game RNG stream and game clock for deterministic replay. The authored polar
 distribution is evaluated around the scheme anchor/listener as specified by the recovered behavior.
 Until the remaining frequency curve is recovered, the faithful mode logs the unsupported behavior;
-an approximation may exist only as a named, A/B-able divergence.
+an approximation may exist only as a divergence named and recorded beside the faithful behavior.
 
 ### Dialogue, choreography and body sound
 

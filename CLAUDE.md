@@ -46,8 +46,10 @@ recreation. Three change layers, three rules:
   artist decision?* The **UI has no classic mode**: VtMB's screen structure is kept and
   re-skinned with vector type on a resolution-independent Slate/UMG stack — no VGUI port, no
   640×480 canvas, no `.fnt` bitmap atlas at runtime.
-- **Feel** (movement, camera, combat) — build the RE'd original first, keep it A/B-able, polish
-  one delta at a time by explicit owner call.
+- **Feel** (movement, camera, combat) — build the RE'd original first, polish one delta at a
+  time by explicit owner call. **No A/B mechanism, feature flag, or state-enabling cvar exists
+  without an explicit owner approval by name**; work lands as a complete change, and the
+  faithful behaviour stays recoverable through git history and the owning doc's record.
 - **Logic & content** (entity semantics, I/O, scripts, dialogue, stats, saves) — reproduce.
 
 **The governing rule: only change what we understand, and only on an explicit owner call.** RE

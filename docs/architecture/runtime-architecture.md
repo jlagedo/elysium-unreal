@@ -522,8 +522,8 @@ and the command bus. Three things become free:
 
 - **headless play** — inject a command stream with no input device (§12);
 - **replay** — record `{FElysiumUserCmd, clock, RNG seed}` and re-run it; a movement or feel
-  regression becomes a diff, which is what `docs/project/remaster-direction.md`'s "keep it A/B-able" needs to
-  actually mean something;
+  regression becomes a diff, which is how a feel delta is compared against the faithful baseline
+  without a runtime A/B mechanism (`docs/project/remaster-direction.md`);
 - **the `+speed` gait** and every other VtMB button behave as buttons, bindable like the original's.
 
 ### 8.4 The player body must be a box

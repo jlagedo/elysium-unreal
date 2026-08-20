@@ -40,7 +40,7 @@ in `docs/architecture/debug-tooling.md`.)
 | Layer | Contents | Rule |
 |---|---|---|
 | **Presentation** | UI, fonts, HUD, menus, typography, layout, iconography, textures/materials, post-processing, screen-space effects | **Modernize freely** within the art-direction test below. No approval gate. |
-| **Feel** | Movement math, camera, input response, combat pacing, animation timing, audio mix | **Faithful first, polish by explicit call.** Build the RE'd original, keep it A/B-able, then propose deltas one system at a time. |
+| **Feel** | Movement math, camera, input response, combat pacing, animation timing, audio mix | **Faithful first, polish by explicit call.** Build the RE'd original, then propose deltas one system at a time. No A/B mechanism, feature flag, or state-enabling cvar without an owner approval by name. |
 | **Logic & content** | Entity semantics, Source I/O, level scripts, dialogue trees, quests, stats, dice, save state | **Faithful.** Divergence only under the governing rule above. Bug-for-bug where the bug is load-bearing (e.g. error-to-false). |
 
 The layer boundary is *game state*, not visibility: anything the player sees that carries no
@@ -155,8 +155,11 @@ remodelling, invented hero detail) stays out of bounds.
 
 **Faithful first.** The Source `CGameMovement` math is ported line-by-line from the decompile
 (`docs/vtmb/source_movement.md`) because it *is* the known-good baseline, and because you cannot tune
-what you have not reproduced. Once it runs and is A/B-able, individual movement and combat deltas
-are proposed one at a time, each under the behaviour test, each on an explicit call.
+what you have not reproduced. Once it runs, individual movement and combat deltas
+are proposed one at a time, each under the behaviour test, each on an explicit call. A delta
+replaces the behaviour outright — no A/B mechanism, feature flag, or state-enabling cvar exists
+without an explicit owner approval by name; the faithful behaviour stays recoverable through git
+history and the owning doc's record.
 
 **Camera owner call — deliberate divergence.** VtMB's recovered camera remains the executable
 compatibility/reference evaluator, but it is not the shipped feel target. The remaster provides

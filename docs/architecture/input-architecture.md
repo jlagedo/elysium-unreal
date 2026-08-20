@@ -212,7 +212,7 @@ Two constraints:
 
 Gamepad defaults are new work with no original to reproduce (`docs/vtmb/controls.md` records that VtMB ships
 raw joystick cvars, no UI, no default binds, and a `joystick.cfg` that does not exist). They sit on
-the Feel axis: A/B-able, one delta at a time by owner call.
+the Feel axis: one delta at a time by owner call.
 
 ### The layout
 
