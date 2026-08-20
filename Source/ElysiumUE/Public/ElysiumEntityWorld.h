@@ -286,6 +286,14 @@ public:
 	// press would wait out the stealth cadence before the block engaged.
 	void SetPlayerButtons(uint64 Buttons);
 	uint64 GetPlayerButtons() const { return PlayerButtons; }
+	// The same field, translated into the FILE's own `IN_*` numbering and reduced to the bits attack
+	// selection reads — retail's `+0x2088 & 0x79A`. The authored sequence masks are exported raw, so
+	// the translation happens here rather than in the resolver: this runtime numbers its button bits
+	// differently and the two only correspond by DIRECTION.
+	//
+	// It is the player's alone. A cast body has no button field, and `FillActivityClipRequest` states
+	// `INDEX_NONE` for one rather than handing it an empty player state.
+	int32 PlayerSelectionStateMask() const;
 	bool IsPlayerBlockHeld() const
 	{
 		return (PlayerButtons & static_cast<uint64>(EElysiumButton::SecondaryAtk)) != 0;

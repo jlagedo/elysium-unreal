@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 
+#include "ElysiumComboChain.h"
 #include "ElysiumSwingRecord.h"
 
 // The NPC animation vocabulary, read off the offline sidecars (roadmap 8.5, pipeline PL4).
@@ -65,6 +66,11 @@ struct FElysiumNpcClip
 	// sequence that declares none, which is all but 574 of the install's 14,012 descriptors — an
 	// authored absence, and the reason a clip carrying none has no contact at all.
 	TArray<FElysiumSwingRecord> Swings;
+	// The chain half of the same authored block (`mstudioseqdesc_t`+0x2D4..+0x2F8): which direction
+	// key selects this attack, which attack it hands off to, and the cycles bounding the hand-off.
+	// Unstated on all but 208 of the install's descriptors, which is an authored absence — an attack
+	// carrying none is a terminal one that no press can continue.
+	FElysiumComboChain Combo;
 
 	// Whether this sequence states a reach at all. Zero is "no claim", not a zero-length swing, so a
 	// caller maximising over an activity's sequences skips it rather than clamping to it.
@@ -72,6 +78,9 @@ struct FElysiumNpcClip
 	// Whether this sequence's swing can contact anything. Retail's walk is driven by the records
 	// themselves, so a melee clip declaring none simply never opens a contact window.
 	bool HasSwings() const { return !Swings.IsEmpty(); }
+	// Whether the sidecar stated this sequence's combo block. Same shape as `HasSwings()`: an
+	// unstated block is the ordinary case and also what an export predating the column gives.
+	bool HasCombo() const { return Combo.bStated; }
 
 	// Authored duration. The rate is per clip and is not always 30 (54 of 1,502 surveyed
 	// sequences are 18 fps, including `run`), so this is read rather than assumed.

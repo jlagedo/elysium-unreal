@@ -7,6 +7,8 @@
 // record, and both are this header's types.
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumAudioSubsystem.h"   // FElysiumAudioVoiceHandle + FElysiumPlayParams (passed by value)
+// The authored combo-chain block the clip seam below hands down, by pointer.
+#include "ElysiumComboChain.h"
 #include "ElysiumEntity.h"           // FElysiumFlexWrite (passed by view)
 #include "ElysiumEntityHandle.h"
 #include "ElysiumInteraction.h"
@@ -472,6 +474,28 @@ public:
 		const FString& ClipLabel)
 	{
 		return nullptr;
+	}
+	// The authored combo-chain block of the sequence this clip realizes — the descriptor's
+	// `+0x2D4`..`+0x2F8` fields, read off the same `(stem, label)` key the swing records are
+	// (`docs/vtmb/combat-and-damage.md`). NULL is the ordinary answer and not a failure: 208 of the
+	// install's 14,012 descriptors author one, so every other attack is a terminal one whose press
+	// chains nothing.
+	//
+	// Same aliasing contract as `NpcClipSwings`: the clip vocabulary is cached whole and immutable by
+	// the animation subsystem, and a caller does not retain the pointer across a map epoch.
+	virtual const FElysiumComboChain* NpcClipCombo(const FString& Stem, const FString& ClipLabel)
+	{
+		return nullptr;
+	}
+	// The bank the include DAG named for one label of a body's vocabulary — the OWNER half of the
+	// `(owner, label)` key every phase, timeline and grid cell is addressed by.
+	//
+	// EMPTY means the body's vocabulary does not name the label at all, which is retail's
+	// `LookupSequence` returning -1. That is what a combo chain naming a sequence its own bank never
+	// defines answers with, and the caller reports it rather than substituting anything.
+	virtual FString NpcClipOwner(const FString& Stem, const FString& ClipLabel)
+	{
+		return FString();
 	}
 	// One model's disposition stance set: three idles, three fidgets and the 3x3 transition matrix
 	// for `AnimName`, with the precache fallbacks already applied. Resolved once per (stem,

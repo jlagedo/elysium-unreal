@@ -156,17 +156,34 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 		// is the mask itself and the substrate decides what it means. Sent every frame; the world
 		// ignores a repeat of the value it already holds.
 		//
-		// `Current` rather than `Sampled`: the feed gate above keeps only `+feed`, so a paired feeder
-		// forwards no combat bit at all. The mobility gate is narrower — `ClearMovement` drops the
-		// movement bits and leaves these four standing — so an immobilised player still publishes a
-		// held attack, and the refusal that matters is the substrate's own `IsMobile()` test in
-		// `FElysiumEntityWorld::UpdatePlayerWeaponFrame`. Forwarding the bit rather than hiding it is
-		// what lets that frame spend the press instead of banking it for the moment control returns.
+		// `Current` rather than `Sampled`, so both gates above reach what crosses — and they reach
+		// different halves of it. The feed gate keeps only `+feed`, so a paired feeder forwards no
+		// combat bit and no direction at all. The mobility gate is narrower: `ClearMovement` drops
+		// the movement bits and leaves the four combat bits standing, so an immobilised player still
+		// publishes a held attack while publishing no direction. Nothing is lost either way, because
+		// a direction is read only on a frame that swings and an immobilised player's whole weapon
+		// frame is refused by the substrate's own `IsMobile()` test in
+		// `FElysiumEntityWorld::UpdatePlayerWeaponFrame`. Forwarding the ATTACK bit through that gate
+		// rather than hiding it is what lets that frame spend the press instead of banking it for the
+		// moment control returns.
+		//
+		// **The movement bits are part of the field, not decoration**: direction-keyed attack
+		// selection compares each candidate sequence's authored mask against exactly the seven bits
+		// `ElysiumCombo::SelectionMask` names (retail's `+0x2088 & 0x79A`), so a field carrying only
+		// the four combat bits would resolve every attack at the neutral-mask entry and no direction
+		// could ever select one.
 		constexpr uint64 CombatMask =
 			static_cast<uint64>(EElysiumButton::Attack)
 			| static_cast<uint64>(EElysiumButton::Attack2)
 			| static_cast<uint64>(EElysiumButton::SecondaryAtk)
-			| static_cast<uint64>(EElysiumButton::Reload);
+			| static_cast<uint64>(EElysiumButton::Reload)
+			| static_cast<uint64>(EElysiumButton::Jump)
+			| static_cast<uint64>(EElysiumButton::Forward)
+			| static_cast<uint64>(EElysiumButton::Back)
+			| static_cast<uint64>(EElysiumButton::Left)
+			| static_cast<uint64>(EElysiumButton::Right)
+			| static_cast<uint64>(EElysiumButton::MoveLeft)
+			| static_cast<uint64>(EElysiumButton::MoveRight);
 		World->SetPlayerButtons(Current.Buttons & CombatMask);
 	}
 	// Edge history remains the raw physical sample. Otherwise an attack/use held through the paired

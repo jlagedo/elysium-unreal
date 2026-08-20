@@ -130,9 +130,16 @@ namespace
 		ElysiumAnimGraph::RefuseUnplayableGrid(Out);
 	}
 
-	// Step 4's weighted choice for one activity, or empty.
+	// Step 4's choice for one activity, or empty.
+	//
+	// **The direction-keyed selection stands AHEAD of the weighted draw**, which is where retail's
+	// player selector puts it: it reads the candidates' authored state masks and, when one of them
+	// answers the buttons being held, that sequence IS the answer and no draw happens
+	// (`docs/vtmb/combat-and-damage.md` § "The combo is automatic, not directional"). Every request
+	// from a body with no button field, and every activity none of whose candidates authors a mask,
+	// falls straight through to the draw unchanged.
 	FString TryActivity(const FElysiumAnimationCatalog& Catalog, const FString& Activity,
-		int32 Variant, int32& OutCandidates)
+		int32 Variant, int32 StateMask, int32& OutCandidates)
 	{
 		OutCandidates = 0;
 		if (Activity.IsEmpty())
@@ -140,7 +147,12 @@ namespace
 			return FString();
 		}
 		OutCandidates = Catalog.Clips->ByActivity(Activity).Num();
-		return OutCandidates > 0 ? PickWeighted(*Catalog.Clips, Activity, Variant) : FString();
+		if (OutCandidates <= 0)
+		{
+			return FString();
+		}
+		const FString Keyed = PickByStateMask(*Catalog.Clips, Activity, StateMask);
+		return Keyed.IsEmpty() ? PickWeighted(*Catalog.Clips, Activity, Variant) : Keyed;
 	}
 
 	void ResolveActivityRoute(const FElysiumAnimationIntent& Intent,
@@ -164,7 +176,8 @@ namespace
 		Out.AvailabilityRung = Translation.AvailabilityRung;
 
 		int32 Candidates = 0;
-		FString Label = TryActivity(Catalog, Out.ResolvedActivity, Intent.Variant, Candidates);
+		FString Label = TryActivity(Catalog, Out.ResolvedActivity, Intent.Variant, Intent.StateMask,
+			Candidates);
 
 		if (!Label.IsEmpty())
 		{
@@ -222,7 +235,10 @@ namespace
 		// the producer: a damage reaction on a cast body walks the ladder its class descends from.
 		if (Intent.BodyKind == EElysiumAnimBodyKind::Cast && Intent.bAllowFallbackLadder)
 		{
-			Label = TryActivity(Catalog, GDispositionActivity, Intent.Variant, Candidates);
+			// The disposition rung takes the same door, which costs nothing: no stance sequence in the
+			// corpus authors a state mask, so the ladder's own retry is the weighted draw it always was.
+			Label = TryActivity(Catalog, GDispositionActivity, Intent.Variant, Intent.StateMask,
+				Candidates);
 			if (!Label.IsEmpty())
 			{
 				Out.ResolvedActivity = GDispositionActivity;
@@ -575,6 +591,45 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	return Out;
 }
 
+FString PickByStateMask(const FElysiumNpcClipSet& Set, const FString& Activity, int32 StateMask)
+{
+	if (Activity.IsEmpty() || StateMask == INDEX_NONE)
+	{
+		return FString();   // a body with no button field selects by weight alone
+	}
+	TArray<FString> Candidates = Set.ByActivity(Activity);
+	if (Candidates.IsEmpty())
+	{
+		return FString();
+	}
+	// Sorted for the same reason the weighted draw is: exact identity is (owner, raw sequence index)
+	// and the character export writes no raw index, so label order is the only stable tie-break this
+	// runtime can state. It decides nothing in the shipped corpus, where an activity's candidates
+	// state at most one mask each.
+	Candidates.Sort();
+
+	FString Best;
+	ElysiumCombo::EStateMatch BestMatch = ElysiumCombo::EStateMatch::None;
+	for (const FString& Label : Candidates)
+	{
+		const FElysiumNpcClip* Clip = Set.Find(Label);
+		if (Clip == nullptr || !Clip->Combo.HasStateMask())
+		{
+			// A sequence authoring `-1`, or none at all, is not a candidate for state selection. It
+			// stays a candidate for the weighted draw, which is what the caller falls through to.
+			continue;
+		}
+		const ElysiumCombo::EStateMatch Match =
+			ElysiumCombo::RankStateMask(Clip->Combo.Mask, StateMask);
+		if (ElysiumCombo::IsBetterStateMatch(Match, BestMatch))
+		{
+			BestMatch = Match;
+			Best = Label;
+		}
+	}
+	return Best;
+}
+
 FString PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activity, int32 Variant)
 {
 	if (Activity.IsEmpty())
@@ -643,6 +698,10 @@ FElysiumAnimationIntent ActivityIntentFor(const FElysiumActivityClipRequest& Req
 	// not a directional reaction, which is the parameter's resting value and the middle of any fan
 	// bound to it.
 	Intent.HitYaw = Request.HitYaw;
+	// The player's own button field, reduced to the selection bits. It is the producer's to state for
+	// the same reason the body kind is: the player and a combatant reach this seam through the same
+	// weapon entity, and only the caller knows which one is holding it.
+	Intent.StateMask = Request.StateMask;
 	// The availability probe and the run-to-walk, disposition and sequence-zero rungs are parts of
 	// `CAI_BaseNPC`'s own translation, unconditional on the cast chain — the human pre-translation
 	// rewrites an unarmed ACT_WALK to ACT_WALK_RELAXED whatever the body can play, and rung 4 of the

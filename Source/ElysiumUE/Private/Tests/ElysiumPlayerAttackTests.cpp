@@ -4,7 +4,8 @@
 //
 // The facts asserted here are `docs/vtmb/player-entity.md` § "Recovered `PostThink` body" (the
 // controlled-use first refusal, then `ItemPostFrame`), `docs/vtmb/combat-and-damage.md` § "Weapon
-// and input surface" (the melee body polls the HELD primary bit; `CWeaponUnarmed` authors no attack
+// and input surface" (`CWeaponMelee::ItemPostFrame` reads `m_afButtonPressed` — the PRESS EDGE — so
+// one press is one swing and holding produces nothing further; `CWeaponUnarmed` authors no attack
 // table) and `docs/vtmb/controls.md` § "Attack, block and weapon commands" (`+wpn_secondaryatk` is
 // a held composite — a block bit plus the ordinary secondary-fire route).
 //
@@ -24,6 +25,7 @@
 #include "Misc/ScopeExit.h"
 
 #include "ElysiumClassRegistry.h"
+#include "ElysiumComboChain.h"   // ElysiumCombo::In* — the file's own button numbering
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumInteraction.h"
@@ -74,6 +76,13 @@ namespace
 	constexpr uint64 GAtk2   = static_cast<uint64>(EElysiumButton::Attack2);
 	constexpr uint64 GSecAtk = static_cast<uint64>(EElysiumButton::SecondaryAtk);
 	constexpr uint64 GReload = static_cast<uint64>(EElysiumButton::Reload);
+	// The movement half of the same field. Direction-keyed attack selection reads exactly these, so
+	// they are part of what the controller forwards rather than a separate channel.
+	constexpr uint64 GFwd    = static_cast<uint64>(EElysiumButton::Forward);
+	constexpr uint64 GBack   = static_cast<uint64>(EElysiumButton::Back);
+	constexpr uint64 GMoveL  = static_cast<uint64>(EElysiumButton::MoveLeft);
+	constexpr uint64 GMoveR  = static_cast<uint64>(EElysiumButton::MoveRight);
+	constexpr uint64 GJump   = static_cast<uint64>(EElysiumButton::Jump);
 
 	// Classnames are suite-local: `ElysiumItems::Install` registers a class once per process and
 	// never unregisters, so a name shared with another suite resolves to whichever ran first.
@@ -348,9 +357,10 @@ bool FElysiumPlayerAttackProducerTest::RunTest(const FString&)
 	ElysiumItems::Install(Table);
 	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
 
-	// --- Melee polls the HELD bit ---------------------------------------------------------------
-	// `CWeaponMelee::ItemPostFrame` (`0x103EAEC0`) polls the held primary-attack bit and the
-	// weapon's next-attack time (`docs/vtmb/combat-and-damage.md` § "Weapon and input surface").
+	// --- Melee is a PRESS EDGE, end to end -------------------------------------------------------
+	// `CWeaponMelee::ItemPostFrame` (`0x103EAEC0`) reads `m_afButtonPressed`, which is
+	// `(last ^ current) & current` and never the held field
+	// (`docs/vtmb/combat-and-damage.md` § "Weapon and input surface"). One press is one swing.
 	{
 		FAttackFixture F;
 		if (!F.Stand(*this, GFists))
@@ -364,23 +374,35 @@ bool FElysiumPlayerAttackProducerTest::RunTest(const FString&)
 		}
 
 		F.Frame(0.0, GAtk);
-		TestEqual(TEXT("the held primary swings"), Fists->AcceptedSwingCount(), 1);
+		TestEqual(TEXT("the press swings"), Fists->AcceptedSwingCount(), 1);
 		// Melee recovery is the resolved clip's duration over the playback rate — with no embodiment
 		// the clip falls back to the mode's authored `Attack_Rate`, so it is 0.5 / 0.70.
 		TestTrue(TEXT("recovery is the clip over the playback rate, not the authored Attack_Rate"),
 			NearlyEqual(Fists->Swing.RecoveryDeadline, 0.5 / GMeleeRate));
 
-		// Inside the recovery window the SAME held bit is refused, and refused by name.
+		// **The stuck-held case.** A button that never comes back up — a lost focus, a key the OS keeps
+		// reporting down — produces no further edge and therefore nothing at all, however many frames
+		// run and however far past the recovery deadline they reach.
 		F.Frame(0.1, GAtk);
-		TestEqual(TEXT("a held bit inside the recovery window stages no second swing"),
-			Fists->AcceptedSwingCount(), 1);
-		TestEqual(TEXT("...and the frame says why"),
-			Verdict(Fists->ItemPostFrame(EB::Primary, EB::None)), FString(TEXT("not ready")));
-
-		// Past it, the still-held bit swings again with no release in between. That is the whole
-		// difference between the melee route and the ranged one.
 		F.Frame(1.0, GAtk);
-		TestEqual(TEXT("a held bit past the recovery window swings again"), Fists->AcceptedSwingCount(), 2);
+		F.Frame(2.0, GAtk);
+		F.Frame(9.0, GAtk);
+		TestEqual(TEXT("a held primary swings exactly once, however long it is held"),
+			Fists->AcceptedSwingCount(), 1);
+		TestEqual(TEXT("...and a held-only frame asked for nothing at all"),
+			Verdict(Fists->ItemPostFrame(EB::Primary, EB::None)), FString(TEXT("idle")));
+
+		// A release and a fresh press is a fresh swing.
+		F.Frame(10.0, 0);
+		F.Frame(11.0, GAtk);
+		TestEqual(TEXT("a released-and-pressed button is a fresh swing"),
+			Fists->AcceptedSwingCount(), 2);
+
+		// And a press INSIDE the recovery window reaches the busy path rather than the plain refusal:
+		// that is where the combo lives, and a terminal attack spends the press there.
+		TestEqual(TEXT("a press while the attack is still running is busy, not `not ready`"),
+			Verdict(Fists->ItemPostFrame(EB::Primary, EB::Primary)), FString(TEXT("busy")));
+		TestEqual(TEXT("...and it stages no second swing"), Fists->AcceptedSwingCount(), 2);
 	}
 
 	// --- A firearm without `allow_autofire` acts on the press EDGE -------------------------------
@@ -444,6 +466,91 @@ bool FElysiumPlayerAttackProducerTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// The direction keys: how the movement half of the button field reaches attack selection
+//
+// The player selector compares each candidate sequence's authored mask with `+0x2088 & 0x79A`
+// (`docs/vtmb/combat-and-damage.md` § "Melee attack, combo, block and damage"), and the authored
+// masks are exported RAW in the file's own `IN_*` numbering. This runtime numbers its own button
+// bits differently, so the field has to carry the movement bits AND be translated by direction on
+// its way to the resolver — and this is where both halves are pinned.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackDirectionKeysTest,
+	"Elysium.Substrate.PlayerAttack.DirectionKeys", GElysiumTestFlags)
+bool FElysiumPlayerAttackDirectionKeysTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeAttackTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	FAttackFixture F;
+	if (!F.Stand(*this, GFists))
+	{
+		return false;
+	}
+	FElysiumWeapon* Fists = F.Active();
+	if (!TestNotNull(TEXT("the fists are the active weapon"), Fists))
+	{
+		return false;
+	}
+	// The activity request is made by a body, so the swing below needs one to make it from.
+	F.Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+
+	// --- The translation, direction by direction ---------------------------------------------------
+	struct FCase { uint64 Ours; int32 Theirs; const TCHAR* Why; };
+	const FCase Cases[] = {
+		{ GFwd,   ElysiumCombo::InForward,   TEXT("`+forward` is IN_FORWARD") },
+		{ GBack,  ElysiumCombo::InBack,      TEXT("`+back` is IN_BACK") },
+		{ GMoveL, ElysiumCombo::InMoveLeft,  TEXT("`+moveleft` is IN_MOVELEFT") },
+		{ GMoveR, ElysiumCombo::InMoveRight, TEXT("`+moveright` is IN_MOVERIGHT") },
+		{ GJump,  ElysiumCombo::InJump,      TEXT("`+jump` is IN_JUMP") },
+	};
+	for (const FCase& Case : Cases)
+	{
+		F.World->SetPlayerButtons(Case.Ours);
+		TestEqual(Case.Why, F.World->PlayerSelectionStateMask(), Case.Theirs);
+	}
+
+	// Two at once compose, and everything outside `0x79A` contributes nothing: a held attack button
+	// is not a direction, and the whole point of the selection mask is that it cannot become one.
+	F.World->SetPlayerButtons(GFwd | GMoveR);
+	TestEqual(TEXT("held directions compose"), F.World->PlayerSelectionStateMask(),
+		ElysiumCombo::InForward | ElysiumCombo::InMoveRight);
+	F.World->SetPlayerButtons(GAtk | GAtk2 | GSecAtk | GReload);
+	TestEqual(TEXT("the combat bits are invisible to attack selection"),
+		F.World->PlayerSelectionStateMask(), 0);
+	TestTrue(TEXT("...and the translated mask never leaves the selection bits"),
+		(F.World->PlayerSelectionStateMask() & ~ElysiumCombo::SelectionMask) == 0);
+
+	// --- The field reaches the resolver, on the swing's own request ---------------------------------
+	// The seam records what it was handed, so this is the plumbing end to end: the controller's field,
+	// the world's translation, `FillActivityClipRequest`, and the activity request the swing makes.
+	F.Services.bNpcActivitiesResolve = true;
+	F.Services.ResolvedNpcActivityLabel = TEXT("fists_attack_W1");
+	F.Services.ResolvedNpcActivityOwner = TEXT("fists");
+	F.Services.Calls.Reset();
+	F.Frame(0.0, 0);
+	F.Frame(0.0, GAtk | GFwd);
+	TestEqual(TEXT("the press swung"), Fists->AcceptedSwingCount(), 1);
+	TestTrue(TEXT("the swing's activity request carries the held direction, in the file's own bits"),
+		F.Services.Saw(TEXT("ResolveNpcActivityClip male_pc ACT_MELEE_ATTACK"))
+		&& F.Services.Log().Contains(
+			FString::Printf(TEXT("buttons=%d"), ElysiumCombo::InForward)));
+
+	// A player holding nothing states a mask of 0 — "no direction held", which is the neutral entry's
+	// own exact match — and never `INDEX_NONE`, which is what a body with no button field states.
+	F.Services.Calls.Reset();
+	F.Frame(5.0, 0);
+	F.Frame(5.0, GAtk);
+	TestEqual(TEXT("the second press, well past the recovery, swung"),
+		Fists->AcceptedSwingCount(), 2);
+	TestTrue(TEXT("a player holding no direction states the neutral mask, not `no buttons at all`"),
+		F.Services.Log().Contains(TEXT("buttons=0")));
+
+	return true;
+}
+
+// =====================================================================================
 // The refusals: each one by name, none of them silent
 // =====================================================================================
 
@@ -486,11 +593,14 @@ bool FElysiumPlayerAttackRefusalsTest::RunTest(const FString&)
 		TestFalse(TEXT("the click dismissed the panel"), F.World->GetOpenSign().IsSet());
 		TestEqual(TEXT("...and did not also swing"), Fists->AcceptedSwingCount(), 0);
 
-		// The button is still held on the next frame, and the panel is gone — but the press was
-		// spent, so the melee route's own held-bit poll is what swings now, not a phantom edge.
+		// The button is still held on the next frame and the panel is gone — but the press was SPENT
+		// on the dismissal, so no phantom edge follows it through to the weapon.
 		F.Frame(0.1, GAtk);
-		TestEqual(TEXT("a melee weapon's held bit swings on the frame after the dismissal"),
-			Fists->AcceptedSwingCount(), 1);
+		TestEqual(TEXT("a press spent on a dismissal does not also swing on the next frame"),
+			Fists->AcceptedSwingCount(), 0);
+		F.Frame(0.2, 0);
+		F.Frame(0.3, GAtk);
+		TestEqual(TEXT("...and the next real press does"), Fists->AcceptedSwingCount(), 1);
 	}
 
 	// --- A refused dismissal spends the press just the same --------------------------------------
@@ -530,8 +640,8 @@ bool FElysiumPlayerAttackRefusalsTest::RunTest(const FString&)
 	}
 
 	// --- An open panel refuses the whole frame, not just the dismissing press --------------------
-	// The melee route polls the HELD bit, so an edge-only refusal would let a button that is merely
-	// still down swing behind the panel. The panel owns the primary button for as long as it is up.
+	// The panel owns the primary button for as long as it is up, so a press arriving at any point
+	// while it stands — a second click at the panel, a trigger already held — is spent there.
 	{
 		FAttackFixture F;
 		if (!F.Stand(*this, GFists))
@@ -555,19 +665,24 @@ bool FElysiumPlayerAttackRefusalsTest::RunTest(const FString&)
 		Panel->MinShowTime = 5.0f;   // the enforced dwell refuses the click, so the panel stays up
 		F.World->OpenSign(Owner->Handle, Panel, 0.0f);
 
-		// The press is spent on the refused dismissal, and the button stays down across frames that
-		// are well past a melee recovery deadline.
+		// Press, release and press again, all while the panel stands and all well past a melee
+		// recovery deadline. Every one of those edges is the panel's.
 		F.Frame(0.0, GAtk);
-		F.Frame(1.0, GAtk);
+		F.Frame(1.0, 0);
 		F.Frame(2.0, GAtk);
 		TestTrue(TEXT("the dwell held the panel open"), F.World->GetOpenSign().IsSet());
-		TestEqual(TEXT("a held primary never swings behind an open panel"),
+		TestEqual(TEXT("no press reaches the weapon behind an open panel"),
 			Fists->AcceptedSwingCount(), 0);
 
-		// And the panel closing releases the button to the weapon on the ordinary held-bit poll.
+		// And the panel closing gives the button back to the weapon — on the next press, not on the
+		// one that is merely still down.
 		F.World->CloseSign(/*bSilent*/ true);
 		F.Frame(3.0, GAtk);
-		TestEqual(TEXT("...and the held bit is the weapon's again once the panel goes"),
+		TestEqual(TEXT("a button still down when the panel goes is not a fresh press"),
+			Fists->AcceptedSwingCount(), 0);
+		F.Frame(4.0, 0);
+		F.Frame(5.0, GAtk);
+		TestEqual(TEXT("...and the next press is the weapon's again"),
 			Fists->AcceptedSwingCount(), 1);
 	}
 
@@ -594,11 +709,13 @@ bool FElysiumPlayerAttackRefusalsTest::RunTest(const FString&)
 			Begun.Outcome == EElysiumUseOutcome::SessionStarted);
 
 		F.Frame(0.0, GAtk);
-		F.Frame(1.0, GAtk);
+		F.Frame(1.0, 0);
+		F.Frame(2.0, GAtk);
 		TestEqual(TEXT("a controlled use refuses every attack frame"), Fists->AcceptedSwingCount(), 0);
 
 		F.World->EndPlayerUseSession(Panel->Handle, EElysiumUseEndReason::Completed);
-		F.Frame(2.0, GAtk);
+		F.Frame(3.0, 0);
+		F.Frame(4.0, GAtk);
 		TestEqual(TEXT("...and releases them when it ends"), Fists->AcceptedSwingCount(), 1);
 	}
 
@@ -616,11 +733,13 @@ bool FElysiumPlayerAttackRefusalsTest::RunTest(const FString&)
 		}
 		F.Player->SetImmobilized(true);
 		F.Frame(0.0, GAtk);
-		F.Frame(1.0, GAtk);
+		F.Frame(1.0, 0);
+		F.Frame(2.0, GAtk);
 		TestEqual(TEXT("an immobilised player runs no weapon frame"), Fists->AcceptedSwingCount(), 0);
 
 		F.Player->SetImmobilized(false);
-		F.Frame(2.0, GAtk);
+		F.Frame(3.0, 0);
+		F.Frame(4.0, GAtk);
 		TestEqual(TEXT("...and swings again once released"), Fists->AcceptedSwingCount(), 1);
 	}
 
@@ -640,7 +759,8 @@ bool FElysiumPlayerAttackRefusalsTest::RunTest(const FString&)
 		// and running the whole death path would drag the game-over route in with it.
 		F.Player->SetDeathReportedForRestore(true);
 		F.Frame(0.0, GAtk);
-		F.Frame(1.0, GAtk);
+		F.Frame(1.0, 0);
+		F.Frame(2.0, GAtk);
 		TestEqual(TEXT("a dead player does not swing"), Fists->AcceptedSwingCount(), 0);
 	}
 

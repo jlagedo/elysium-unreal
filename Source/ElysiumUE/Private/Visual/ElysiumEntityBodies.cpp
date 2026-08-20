@@ -1474,6 +1474,28 @@ const TArray<FElysiumSwingRecord>* UElysiumEntityBodies::NpcClipSwings(const FSt
 	return (Clip != nullptr && Clip->HasSwings()) ? &Clip->Swings : nullptr;
 }
 
+const FElysiumComboChain* UElysiumEntityBodies::NpcClipCombo(const FString& Stem,
+	const FString& ClipLabel)
+{
+	UElysiumAnimSubsystem* Anims = GetAnims();
+	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
+	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipLabel) : nullptr;
+	// Null all the way down, like the two columns above: no vocabulary, no such label, a sequence
+	// declaring no block, and a slice written before the column existed are one answer to the caller
+	// — this attack hands off to nothing — and none of them is a fault.
+	return (Clip != nullptr && Clip->HasCombo()) ? &Clip->Combo : nullptr;
+}
+
+FString UElysiumEntityBodies::NpcClipOwner(const FString& Stem, const FString& ClipLabel)
+{
+	UElysiumAnimSubsystem* Anims = GetAnims();
+	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
+	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipLabel) : nullptr;
+	// Empty is `LookupSequence` answering -1: this body's vocabulary does not name the label, which
+	// is exactly what a dangling combo-chain target reads as. Nothing is substituted for it.
+	return Clip != nullptr ? Clip->Owner : FString();
+}
+
 bool UElysiumEntityBodies::GetBoneFrame(const USkeletalMeshComponent* Body,
 	const FString& BoneName, FTransform& OutWorld) const
 {

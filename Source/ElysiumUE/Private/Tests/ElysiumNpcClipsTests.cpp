@@ -68,6 +68,42 @@ namespace
 				 "b8":255,"ba":2,"degenerate":true}]]
 		}
 	})");
+
+	// The eleventh column: the authored combo-chain block. Every row here is a shipped shape —
+	// `Fists_attack_W1`'s forward-keyed entry, `fists_attack_JabLeft`'s stated `0`,
+	// `knockback_flying_into_back`'s two successors with no mask, and `katana_running_attack`'s
+	// window that outlives its own busy hold. `halfcolumn` is the one the parser must refuse.
+	const TCHAR* const GComboSlice = TEXT(R"({
+		"stem":"combo_body",
+		"owners":["melee_bank"],
+		"activities":["ACT_MELEE_ATTACK"],
+		"fields":["owner","activity","weight","flags","frames","fps","fade","reach_cm",
+		          "blocked_reaction","swings","combo"],
+		"clips":{
+			"nocolumn":[0,0,1,0,31,30.0,0.2,120.5,"",[
+				{"start":0.2,"end":0.45,"bone":"Bip01 R Hand",
+				 "a_cm":[0.0,0.0,0.0],"b_cm":[27.94,0.0,0.0],"b8":3,"ba":255}]],
+			"nullcolumn":[0,0,1,0,31,30.0,0.2,120.5,"",[
+				{"start":0.2,"end":0.45,"bone":"Bip01 R Hand",
+				 "a_cm":[0.0,0.0,0.0],"b_cm":[27.94,0.0,0.0],"b8":3,"ba":255}],null],
+			"halfcolumn":[0,0,1,0,31,30.0,0.2,120.5,"",[
+				{"start":0.2,"end":0.45,"bone":"Bip01 R Hand",
+				 "a_cm":[0.0,0.0,0.0],"b_cm":[27.94,0.0,0.0],"b8":3,"ba":255}],
+				{"mask":8,"dodge":"","chain":"Fists_attack_W2","chain_alt":"","w_open":0.5}],
+			"Fists_attack_W1":[0,0,1,0,31,30.0,0.2,282.9939,"",[],
+				{"mask":8,"dodge":"","chain":"Fists_attack_W2","chain_alt":"",
+				 "w_open":0.5,"w_close":0.9,"w_hold":0.91}],
+			"fists_attack_JabLeft":[0,0,1,0,31,30.0,0.2,282.9939,"",[],
+				{"mask":0,"dodge":"","chain":"fists_attack_longright","chain_alt":"",
+				 "w_open":0.65,"w_close":0.9,"w_hold":0.91}],
+			"knockback_flying_into_back":[0,0,1,0,31,30.0,0.2,null,"",[],
+				{"mask":-1,"dodge":"","chain":"knockback_flying_idle",
+				 "chain_alt":"knockback_flying_wall_hit","w_open":0.0,"w_close":1.0,"w_hold":1.0}],
+			"katana_running_attack":[0,0,1,0,31,30.0,0.2,282.9939,"",[],
+				{"mask":8,"dodge":"","chain":"katana_combo_C2","chain_alt":"",
+				 "w_open":0.25,"w_close":1.0,"w_hold":0.9}]
+		}
+	})");
 }
 
 // The tenth column, and the compatibility rule behind it: absent, null and empty are one answer.
@@ -138,6 +174,104 @@ bool FElysiumClipsSwingColumnTest::RunTest(const FString&)
 	TestEqual(TEXT("...with its own bone"), Second.Bone, FString(TEXT("Bip01 L Hand")));
 	TestEqual(TEXT("...and the marker byte the range test reads"), Second.Ba, 2);
 
+	return true;
+}
+
+// The eleventh column, on the same compatibility rule as the tenth.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumClipsComboColumnTest,
+	"Elysium.Substrate.Clips.ComboColumn", GElysiumTestFlags)
+bool FElysiumClipsComboColumnTest::RunTest(const FString&)
+{
+	// The one record the parser refuses: a stated column missing a window bound. The exporter writes
+	// the block WHOLE, so a half-record is a pipeline defect and is counted rather than half-read.
+	AddExpectedError(TEXT("1 combo-chain block"), EAutomationExpectedErrorFlags::Contains, 1);
+
+	FElysiumNpcClipSet Set;
+	FString Error;
+	if (!TestTrue(TEXT("the synthetic slice parses"),
+		Set.LoadJsonText(TEXT("combo_body"), GComboSlice, Error)))
+	{
+		AddError(FString::Printf(TEXT("slice refused: %s"), *Error));
+		return false;
+	}
+
+	// --- Absent, null and a dropped record are ONE answer: this attack chains nothing --------------
+	for (const TCHAR* Label : { TEXT("nocolumn"), TEXT("nullcolumn"), TEXT("halfcolumn") })
+	{
+		const FElysiumNpcClip* Clip = Set.Find(Label);
+		if (Clip == nullptr)
+		{
+			AddError(FString::Printf(TEXT("row '%s' did not parse"), Label));
+			return false;
+		}
+		TestFalse(FString::Printf(TEXT("'%s' states no combo block"), Label), Clip->HasCombo());
+		TestFalse(FString::Printf(TEXT("...so it hands off to nothing ('%s')"), Label),
+			Clip->Combo.HasChain());
+		TestFalse(FString::Printf(TEXT("...and is invisible to direction-keyed selection ('%s')"),
+			Label), Clip->Combo.HasStateMask());
+		// The column the block sits behind still reads, which is what proves the row was not shifted.
+		TestEqual(FString::Printf(TEXT("...with its swing records still in the right column ('%s')"),
+			Label), Clip->Swings.Num(), 1);
+	}
+
+	// --- The stated block, in full ----------------------------------------------------------------
+	// `Fists_attack_W1`'s own shape: a forward-keyed entry chaining to its successor over a window
+	// that closes before the busy hold releases.
+	const FElysiumNpcClip* W1 = Set.Find(TEXT("Fists_attack_W1"));
+	if (W1 == nullptr || !TestTrue(TEXT("the stated block parses"), W1->HasCombo()))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the authored mask is carried RAW, in the file's own IN_ bits"),
+		W1->Combo.Mask, ElysiumCombo::InForward);
+	TestTrue(TEXT("...so the sequence is a selection candidate"), W1->Combo.HasStateMask());
+	TestEqual(TEXT("the successor is a sequence label, not an activity"),
+		W1->Combo.Chain, FString(TEXT("Fists_attack_W2")));
+	TestTrue(TEXT("...and it can hand off"), W1->Combo.HasChain());
+	TestEqual(TEXT("the window opens where the file says"), W1->Combo.WindowOpen, 0.5f);
+	TestEqual(TEXT("...closes where the file says"), W1->Combo.WindowClose, 0.9f);
+	TestEqual(TEXT("...and the busy hold is its own value"), W1->Combo.HoldCycle, 0.91f);
+	TestTrue(TEXT("the window is closed at BOTH ends"),
+		W1->Combo.IsWindowOpen(0.5f) && W1->Combo.IsWindowOpen(0.9f));
+	TestFalse(TEXT("...and shut on either side of it"),
+		W1->Combo.IsWindowOpen(0.49f) || W1->Combo.IsWindowOpen(0.91f));
+
+	// --- `mask == 0` is a STATED mask, not an absence ---------------------------------------------
+	// 36 shipped descriptors carry it — the attack a neutral press selects — and a reader treating a
+	// falsy mask as unset would drop every one of them.
+	const FElysiumNpcClip* Jab = Set.Find(TEXT("fists_attack_JabLeft"));
+	if (Jab != nullptr)
+	{
+		TestTrue(TEXT("the neutral mask is stated"), Jab->Combo.HasStateMask());
+		TestEqual(TEXT("...and its value is zero"), Jab->Combo.Mask, 0);
+		TestEqual(TEXT("...and it chains like any other entry"),
+			Jab->Combo.Chain, FString(TEXT("fists_attack_longright")));
+	}
+
+	// --- `-1` is the marker, and the row is still a real block -------------------------------------
+	// `knockback_flying_into_back` authors no mask and no window and chains twice, which is why the
+	// marker is what gates selection rather than the block's presence.
+	const FElysiumNpcClip* Flying = Set.Find(TEXT("knockback_flying_into_back"));
+	if (Flying != nullptr)
+	{
+		TestTrue(TEXT("the block is stated"), Flying->HasCombo());
+		TestFalse(TEXT("...but the sequence is not a selection candidate"),
+			Flying->Combo.HasStateMask());
+		TestEqual(TEXT("...while its alternate successor is carried"),
+			Flying->Combo.ChainAlt, FString(TEXT("knockback_flying_wall_hit")));
+	}
+
+	// --- `w_hold` BELOW `w_close`, carried verbatim -----------------------------------------------
+	// `katana_running_attack` authors 0.25/1.0/0.9. A consumer deriving the hold from the close would
+	// disagree with the file on all four descriptors that do this.
+	const FElysiumNpcClip* Running = Set.Find(TEXT("katana_running_attack"));
+	if (Running != nullptr)
+	{
+		TestEqual(TEXT("the window closes at the end of the clip"), Running->Combo.WindowClose, 1.0f);
+		TestEqual(TEXT("...while the busy hold releases before it"), Running->Combo.HoldCycle, 0.9f);
+		TestTrue(TEXT("...and nothing reorders the pair"),
+			Running->Combo.HoldCycle < Running->Combo.WindowClose);
+	}
 	return true;
 }
 

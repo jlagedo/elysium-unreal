@@ -325,6 +325,15 @@ struct FElysiumAnimationIntent
 	float HitYaw = 0.0f;
 	// The latch's answer, which is the only thing that can distinguish retail's jump phases.
 	EElysiumAirPhase AirPhase = EElysiumAirPhase::Grounded;
+	// The player's current button field reduced to the selection bits, in the FILE's own `IN_*`
+	// numbering (`ElysiumCombo::SelectionMask`). The player selector compares it with each candidate
+	// sequence's authored mask and prefers a direction-keyed attack over the weighted draw.
+	//
+	// `INDEX_NONE` means this body has no button field at all, which is every cast body: retail's
+	// masked selection lives on `CBasePlayer`, and an NPC selects by weight alone. It is the default
+	// for exactly that reason — a body that did not state one is a body with no buttons, not a body
+	// holding nothing.
+	int32 StateMask = INDEX_NONE;
 
 	// --- Translation context ---------------------------------------------------------------------
 	// The active weapon's ENTITY CLASSNAME (`item_w_glock_17c`), which is the key authored content
@@ -702,6 +711,11 @@ struct FElysiumActivityClipRequest
 	// right-positive with zero forward, the same convention move_yaw uses. Zero on every request that
 	// is not a directional reaction (the parameter's resting value).
 	float HitYaw = 0.0f;
+	// The player's current button field reduced to the selection bits, in the FILE's own `IN_*`
+	// numbering (`ElysiumCombo::SelectionMask`) — what the player selector compares each candidate
+	// sequence's authored mask against. `INDEX_NONE` is a body with no button field, which is every
+	// cast body and the default here for that reason.
+	int32 StateMask = INDEX_NONE;
 	// Whether a miss may walk `CAI_BaseNPC`'s recovered fallback ladder. The availability probe and
 	// the run-to-walk, disposition and sequence-zero rungs are the cast activity chain's own
 	// unconditional steps, so the default is true and matches the per-frame publish — but retail's

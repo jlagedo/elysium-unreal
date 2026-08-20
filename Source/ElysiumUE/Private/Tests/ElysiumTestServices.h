@@ -420,11 +420,12 @@ struct FElysiumRecordingServices final
 		// weapon ladder and the armed/alert branch reachable, and a request that dropped it would
 		// resolve past all three with nothing to read.
 		Record(FString::Printf(
-			TEXT("ResolveNpcActivityClip %s %s var=%d class=%s weapon=%s state=%s hit=%.1f body=%s"),
+			TEXT("ResolveNpcActivityClip %s %s var=%d class=%s weapon=%s state=%s hit=%.1f ")
+			TEXT("buttons=%d body=%s"),
 			*Request.Stem, *Request.Activity, Request.Variant,
 			Request.ActorClassname.IsEmpty() ? TEXT("-") : *Request.ActorClassname,
 			Request.WeaponClassname.IsEmpty() ? TEXT("-") : *Request.WeaponClassname,
-			LexToString(Request.ActorState), Request.HitYaw,
+			LexToString(Request.ActorState), Request.HitYaw, Request.StateMask,
 			ElysiumAnimIntent::BodyKindName(Request.BodyKind)));
 		Out = FElysiumActivityClip();
 		if (!bNpcActivitiesResolve)
@@ -673,6 +674,30 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("NpcClipSwings %s %s -> %d"), *Stem, *ClipLabel,
 			Found != nullptr ? Found->Num() : 0));
 		return (Found != nullptr && !Found->IsEmpty()) ? Found : nullptr;
+	}
+	// The `combo` column a test authors, keyed by lower-cased clip label on the same terms as the
+	// three columns above. Empty by default, which is what all but 208 shipped descriptors declare
+	// and what an export predating the column gives every clip — so an unseeded case exercises the
+	// "terminal attack, no hand-off" path without arranging anything.
+	TMap<FString, FElysiumComboChain> ComboByClip;
+	virtual const FElysiumComboChain* NpcClipCombo(const FString& Stem,
+		const FString& ClipLabel) override
+	{
+		const FElysiumComboChain* Found = ComboByClip.Find(ClipLabel.ToLower());
+		Record(FString::Printf(TEXT("NpcClipCombo %s %s -> %s"), *Stem, *ClipLabel,
+			Found != nullptr ? TEXT("stated") : TEXT("-")));
+		return (Found != nullptr && Found->bStated) ? Found : nullptr;
+	}
+	// The owning bank a test declares per label, lower-cased. An unseeded label answers EMPTY, which
+	// is `LookupSequence` returning -1 — the dangling-chain case — so this is opt-in rather than
+	// defaulting to the fixture's own bank.
+	TMap<FString, FString> ClipOwnerByLabel;
+	virtual FString NpcClipOwner(const FString& Stem, const FString& ClipLabel) override
+	{
+		const FString* Found = ClipOwnerByLabel.Find(ClipLabel.ToLower());
+		Record(FString::Printf(TEXT("NpcClipOwner %s %s -> %s"), *Stem, *ClipLabel,
+			Found != nullptr ? **Found : TEXT("-")));
+		return Found != nullptr ? *Found : FString();
 	}
 	// The bone frames a test places, keyed by lower-cased bone name. A body whose bone is unseeded
 	// answers false, which is the missing-bone guard's own case.

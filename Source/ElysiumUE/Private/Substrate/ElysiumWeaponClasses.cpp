@@ -10,6 +10,7 @@
 
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumClassRegistry.h"
+#include "ElysiumComboChain.h"             // the authored combo block and its busy/window rules
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -432,6 +433,8 @@ const TCHAR* FElysiumWeapon::VerdictName(EVerdict Verdict)
 	switch (Verdict)
 	{
 	case EVerdict::Accepted:    return TEXT("accepted");
+	case EVerdict::Chained:     return TEXT("chained");
+	case EVerdict::Busy:        return TEXT("busy");
 	case EVerdict::DryFire:     return TEXT("dry fire");
 	case EVerdict::NotReady:    return TEXT("not ready");
 	case EVerdict::Reloading:   return TEXT("reloading");
@@ -1108,16 +1111,17 @@ FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCh
 bool FElysiumWeapon::WantsPrimaryPress(EElysiumWeaponButton Held,
 	EElysiumWeaponButton Pressed) const
 {
-	// Retail's melee body polls the HELD bit (`CWeaponMelee::ItemPostFrame` `0x103EAEC0`,
-	// `combat-and-damage.md` § "Weapon and input surface"), so a held click keeps swinging as fast
-	// as the recovery deadline allows. A firearm instead acts on the press edge unless its mode
-	// authors `allow_autofire`, which is the key's whole meaning: without it a held attack intent is
-	// lost after the edge (`Substrate/ElysiumItemTable.h`).
-	const FElysiumItemDef* ItemRecord = Data();
-	const bool bMelee = ItemRecord && ItemRecord->Type == EElysiumItemType::WeaponMelee;
+	// **The primary is a press EDGE, melee included.** `CWeaponMelee::ItemPostFrame` `0x103EAEC0`
+	// reads `m_afButtonPressed` — `(last ^ current) & current` — and never the held field, so one
+	// press is one swing and holding the button produces nothing further
+	// (`combat-and-damage.md` § "Weapon and input surface"). What a held button reaches instead is the
+	// busy path below, where the press either continues the combo or is spent.
+	//
+	// A firearm is the same edge, with one authored exception: `allow_autofire` is the key's whole
+	// meaning, and it is what makes the held bit the poll for that mode (`Substrate/ElysiumItemTable.h`).
 	const FElysiumWeaponMode* PrimaryMode = ModeAt(PrimaryModeIndex);
 	const bool bAutofire = PrimaryMode && PrimaryMode->bAllowAutofire;
-	return (bMelee || bAutofire)
+	return bAutofire
 		? EnumHasAnyFlags(Held, EElysiumWeaponButton::Primary)
 		: EnumHasAnyFlags(Pressed, EElysiumWeaponButton::Primary);
 }
@@ -1195,13 +1199,19 @@ FElysiumWeapon::EVerdict FElysiumWeapon::ItemPostFrame(EElysiumWeaponButton Held
 		}
 	};
 
-	// 2. Primary — the held/edge rule `WantsPrimaryPress` states.
+	// 2. Primary — the press edge `WantsPrimaryPress` states.
 	if (WantsPrimaryPress(Held, Pressed))
 	{
+		// **The busy path belongs to the PRESS, and this is the only door a press comes through.**
+		// That is what makes the combo chain the player's without a player test anywhere in it: an AI
+		// producer reaches the weapon through `AttackIntent` from a schedule task — already a decision
+		// rather than a button — and never produces the edge this branch is reached from.
+		//
 		// A player press advances the Dice stream through `BeginMeleeSwing`'s 2COMBO draw. That is
 		// correct rather than a leak: retail's combo substitution is the same draw off the same
-		// stream, and an NPC swing already spends it.
-		Note(AttackIntent(EIntent::Primary, AimTarget));
+		// stream, and an NPC swing already spends it. A press taken by the busy path spends nothing —
+		// a chain hand-off draws no combo.
+		Note(IsMeleePressBusy() ? MeleeBusyPress() : AttackIntent(EIntent::Primary, AimTarget));
 	}
 
 	// 3. Secondary — the chosen press edge `WantsSecondaryPress` states.
@@ -1263,6 +1273,7 @@ FElysiumWeapon::EVerdict FElysiumWeapon::AttackIntent(EIntent Intent,
 	const double Now = World->NowSeconds();
 	const double Deadline = (Intent == EIntent::Primary)
 		? NextPrimaryAttackTime : NextSecondaryAttackTime;
+
 	if (Now < Deadline)
 	{
 		return EVerdict::NotReady;
@@ -1411,6 +1422,178 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 		ClipLabel.IsEmpty() ? TEXT("(no clip)") : *ClipLabel,
 		Recovery, Opponent.IsSet() ? *World->DescribeHandle(Opponent) : TEXT("(none)"));
 	return EVerdict::Accepted;
+}
+
+// ================================================================================================
+// The busy path — what a press does while an attack is already running
+// ================================================================================================
+
+bool FElysiumWeapon::IsMeleePressBusy() const
+{
+	// A press with no live melee transaction behind it is not busy at all — it is either an ordinary
+	// swing or the plain deadline refusal `AttackIntent` answers, and both are that function's.
+	if (!Swing.bActive || !Swing.bMelee || World == nullptr)
+	{
+		return false;
+	}
+	// **Retail's own OR**, and the two arms really are different: `w_hold` can sit BELOW `w_close`
+	// (`katana_running_attack` authors 0.25/1.0/0.9), which releases the predicate while the hand-off
+	// window is still open, and a chain hand-off does not push the deadline, which is what leaves the
+	// predicate holding the later links of a chain open after the clock has run out.
+	const double Now = World->NowSeconds();
+	return Now < NextPrimaryAttackTime || IsMeleeBusy(Now);
+}
+
+bool FElysiumWeapon::IsMeleeBusy(double Now) const
+{
+	if (!Swing.bActive || !Swing.bMelee)
+	{
+		return false;
+	}
+	// The busy question is asked of the PRIMARY schedule, because that is the press that reaches it.
+	const double NextAttack = NextPrimaryAttackTime;
+
+	// The block family's arm reads the clock alone and needs no clip at all, which is the whole
+	// reason the arms are separate: a held block publishes no attack cycle to compare.
+	if (ElysiumCombo::BusyArmFor(Swing.Activity) == ElysiumCombo::EBusyArm::Clock)
+	{
+		return Now < NextAttack;
+	}
+
+	FElysiumCombatCharacter* Char = OwnerCharacter();
+	FElysiumClipPhase Phase;
+	if (Char == nullptr || Swing.ClipLabel.IsEmpty() || Swing.ClipOwnerStem.IsEmpty()
+		|| !Char->GetLiveClipPhase(Swing.ClipOwnerStem, Swing.ClipLabel, Phase))
+	{
+		// No clip on a polled channel is no cycle to compare, and that is NOT busy: a swing whose clip
+		// was cut short, and a headless run with no pose layer at all, must not hold the weapon shut
+		// forever. The caller's own OR still covers the recovery deadline.
+		return false;
+	}
+
+	// **The hold is the playing sequence's own.** A sequence that authors a combo block states it,
+	// including the four whose `w_hold` sits below their `w_close`; only a sequence that authors no
+	// block at all takes the stated default.
+	float HoldCycle = ElysiumCombo::DefaultHoldCycle;
+	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
+	{
+		if (const FElysiumComboChain* Combo =
+			Embodiment->NpcClipCombo(Char->ModelStem(), Swing.ClipLabel))
+		{
+			HoldCycle = Combo->HoldCycle;
+		}
+	}
+	return ElysiumCombo::IsBusy(Swing.Activity, Phase.Cycle, HoldCycle, Now, NextAttack);
+}
+
+FElysiumWeapon::EVerdict FElysiumWeapon::MeleeBusyPress()
+{
+	FElysiumCombatCharacter* Char = OwnerCharacter();
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	FElysiumClipPhase Phase;
+	if (Char == nullptr || Embodiment == nullptr || Swing.ClipLabel.IsEmpty()
+		|| Swing.ClipOwnerStem.IsEmpty()
+		|| !Char->GetLiveClipPhase(Swing.ClipOwnerStem, Swing.ClipLabel, Phase))
+	{
+		// Nothing to ask the hand-off of. The press is spent either way — retail's busy frame consumes
+		// it — and a headless swing with no pose layer is the ordinary shape of this, not a failure.
+		return EVerdict::Busy;
+	}
+
+	const FElysiumComboChain* Combo = Embodiment->NpcClipCombo(Char->ModelStem(), Swing.ClipLabel);
+	if (Combo == nullptr || !Combo->HasChain())
+	{
+		// A terminal attack, and every `2COMBO` clip: the press is IGNORED. Not queued for the moment
+		// the attack ends, and not a restart — the combo is a chain of authored links and an attack
+		// that names no successor simply ends.
+		return EVerdict::Busy;
+	}
+	if (!Combo->IsWindowOpen(Phase.Cycle))
+	{
+		return EVerdict::Busy;   // too early or too late, on a window closed at both ends
+	}
+
+	// The successor is a SEQUENCE LABEL resolved against the body's own vocabulary, case-insensitively
+	// — which is what the ten shipped links whose case disagrees with their target rely on.
+	const FString ChainOwnerStem = Embodiment->NpcClipOwner(Char->ModelStem(), Combo->Chain);
+	if (ChainOwnerStem.IsEmpty())
+	{
+		// **The dangling link.** `LookupSequence` answers -1 and the chain is silently dead. The four
+		// shipped ones — both sexes' `fists` and `katana` banks — are authoring bugs in retail's own
+		// content, not decode failures, so the press is ignored and the fact is named ONCE per
+		// (clip, body) rather than repaired.
+		if (ShouldReportOnce(FString::Printf(TEXT("chainmiss:%s@%s"), *Swing.ClipLabel,
+			*Char->ModelStem())))
+		{
+			UE_LOG(LogElysiumWeapon, Verbose,
+				TEXT("%s: attack clip '%s' chains to '%s', which body '%s' does not name — the chain is "
+					"dead and the press is ignored"),
+				*DebugString(), *Swing.ClipLabel, *Combo->Chain, *Char->ModelStem());
+		}
+		return EVerdict::Busy;
+	}
+
+	CommitMeleeChain(*Char, Combo->Chain, ChainOwnerStem);
+	return EVerdict::Chained;
+}
+
+void FElysiumWeapon::CommitMeleeChain(FElysiumCombatCharacter& Char, const FString& ChainLabel,
+	const FString& ChainOwnerStem)
+{
+	// Everything the hand-off carries forward, read off the transaction before it is torn down.
+	const int32 ModeIndex = Swing.ModeIndex;
+	// **The same playback rate.** The chain does not re-derive it from the attack feat: it continues
+	// one attack, and re-deriving would be a second `RequestActivity` this path never performs.
+	const float Rate = Swing.PlaybackRate;
+	// **The deadline is NOT pushed again.** It is what makes a combo faster than the same number of
+	// separate swings, and it is why the busy predicate rather than the clock is what holds the later
+	// links of a chain open.
+	const double Recovery = Swing.RecoveryDeadline;
+	// The aimed opponent is a reservation made by acquisition, and the chain runs no acquisition — so
+	// the reservation the swing it continues made still stands. The opposed roll is a different thing
+	// and IS restaged below, with its own query, because it is per swing.
+	const FElysiumEntityHandle Opponent = Swing.Opponent;
+	const float PreviousSeconds = Swing.ClipSeconds;
+
+	float Seconds = 0.0f;
+	if (!Char.PlayAnimClip(ChainLabel, /*bLoop*/ false, &Seconds) || Seconds <= 0.0f)
+	{
+		// The vocabulary named the label, so a body that cannot play it is a real gap rather than an
+		// authored absence — unlike the dangling link above, which is the file's own bug.
+		if (ShouldReportOnce(FString::Printf(TEXT("chainplay:%s@%s"), *ChainLabel, *Char.ModelStem())))
+		{
+			UE_LOG(LogElysiumWeapon, Warning,
+				TEXT("%s: chain successor '%s' is in body '%s' vocabulary but would not play — the "
+					"hand-off is timed off the clip it continues"),
+				*DebugString(), *ChainLabel, *Char.ModelStem());
+		}
+		Seconds = PreviousSeconds;
+	}
+
+	// The per-swing state is reset EXACTLY as a swing start resets it: a fresh serial, a cleared walk
+	// and a cleared `bContactStaged`, so the sweep meets the new clip with no inherited hit list and
+	// the opposed roll is staged again on its first batched frame. `ClearSwing` is the same door
+	// `BeginMeleeSwing` uses, which is what keeps the two from drifting apart.
+	ClearSwing();
+	Swing.bActive = true;
+	Swing.Serial = ++SwingSerialCounter;
+	Swing.ModeIndex = ModeIndex;
+	Swing.bMelee = true;
+	// The LOGICAL activity stays the ordinary attack across the whole chain, whatever link it is on.
+	Swing.Activity = GActMeleeAttack;
+	Swing.ClipLabel = ChainLabel;
+	Swing.ClipOwnerStem = ChainOwnerStem;
+	Swing.Opponent = Opponent;
+	Swing.PlaybackRate = Rate;
+	Swing.ClipSeconds = Seconds;
+	Swing.CommitTime = 0.0;
+	Swing.RecoveryDeadline = Recovery;
+	Swing.bAwaitingAnimEvent = false;
+
+	UE_LOG(LogElysiumWeapon, Verbose,
+		TEXT("%s swing #%d chains to '%s' (%s) rate %.2f clip %.3fs, deadline unchanged at %.3f"),
+		*DebugString(), Swing.Serial, *ChainLabel, *ChainOwnerStem, Swing.PlaybackRate,
+		Swing.ClipSeconds, Swing.RecoveryDeadline);
 }
 
 FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 ModeIndex,

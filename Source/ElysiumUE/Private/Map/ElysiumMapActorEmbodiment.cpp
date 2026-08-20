@@ -216,6 +216,17 @@ const TArray<FElysiumSwingRecord>* AElysiumMapActor::NpcClipSwings(const FString
 	return Bodies->NpcClipSwings(Stem, ClipLabel);
 }
 
+const FElysiumComboChain* AElysiumMapActor::NpcClipCombo(const FString& Stem,
+	const FString& ClipLabel)
+{
+	return Bodies->NpcClipCombo(Stem, ClipLabel);
+}
+
+FString AElysiumMapActor::NpcClipOwner(const FString& Stem, const FString& ClipLabel)
+{
+	return Bodies->NpcClipOwner(Stem, ClipLabel);
+}
+
 bool AElysiumMapActor::GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
 	FTransform& OutWorld) const
 {

@@ -344,6 +344,9 @@ public:
 	virtual FString NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel) override;
 	virtual const TArray<FElysiumSwingRecord>* NpcClipSwings(const FString& Stem,
 		const FString& ClipLabel) override;
+	virtual const FElysiumComboChain* NpcClipCombo(const FString& Stem,
+		const FString& ClipLabel) override;
+	virtual FString NpcClipOwner(const FString& Stem, const FString& ClipLabel) override;
 	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
 		FTransform& OutWorld) const override;
 	virtual void QuerySwingContacts(const FElysiumSwingSweep& Sweep,

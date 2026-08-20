@@ -135,6 +135,56 @@ namespace
 		return Dropped;
 	}
 
+	// The `combo` column: one object carrying the whole authored chain block. The exporter writes it
+	// WHOLE or not at all — `read_combo_chain` already answered "is any of this authored" — so a
+	// column that is stated and cannot be read is a pipeline defect and never an authored absence,
+	// exactly like a swing record that will not parse.
+	//
+	// Answers 1 when it dropped the column, so the caller can fold it into the slice's report. A
+	// half-read block is refused rather than filled with markers: a missing window would put a
+	// hand-off where the file states none, and a missing mask would enter direction-keyed selection
+	// as the neutral attack.
+	int32 ReadComboChain(const TSharedPtr<FJsonValue>& Column, FElysiumComboChain& Out)
+	{
+		const TSharedPtr<FJsonObject>* Object = nullptr;
+		if (!Column.IsValid() || !Column->TryGetObject(Object) || Object == nullptr)
+		{
+			return 1;   // a stated column that is not a record
+		}
+		const TSharedPtr<FJsonObject>& Row = *Object;
+
+		FElysiumComboChain Chain;
+		if (!Row->TryGetNumberField(TEXT("mask"), Chain.Mask))
+		{
+			return 1;
+		}
+		double Cycle = 0.0;
+		if (!Row->TryGetNumberField(TEXT("w_open"), Cycle))
+		{
+			return 1;
+		}
+		Chain.WindowOpen = static_cast<float>(Cycle);
+		if (!Row->TryGetNumberField(TEXT("w_close"), Cycle))
+		{
+			return 1;
+		}
+		Chain.WindowClose = static_cast<float>(Cycle);
+		if (!Row->TryGetNumberField(TEXT("w_hold"), Cycle))
+		{
+			return 1;
+		}
+		Chain.HoldCycle = static_cast<float>(Cycle);
+		// The three names are optional WITHIN a stated record: the exporter writes each as an empty
+		// string where the descriptor resolves none, and 12 of the 208 carriers state a dodge activity
+		// with no successor at all.
+		Row->TryGetStringField(TEXT("dodge"), Chain.Dodge);
+		Row->TryGetStringField(TEXT("chain"), Chain.Chain);
+		Row->TryGetStringField(TEXT("chain_alt"), Chain.ChainAlt);
+		Chain.bStated = true;
+		Out = MoveTemp(Chain);
+		return 0;
+	}
+
 	bool ReadJsonFile(const FString& Path, TSharedPtr<FJsonObject>& OutRoot, FString& OutError)
 	{
 		FString Raw;
@@ -217,7 +267,8 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 	}
 
 	// The slice interns its owner stems and activity literals into two arrays and stores each clip as
-	// [owner_i, activity_i, weight, flags, frames, fps, fade, reach_cm, blocked_reaction] — the
+	// [owner_i, activity_i, weight, flags, frames, fps, fade, reach_cm, blocked_reaction, swings,
+	// combo] — the
 	// strings repeat across ~1,540 rows, and the owner column especially (31 distinct stems) pays for
 	// the indirection. The blocked-reaction literal is NOT interned: it names an activity the stem
 	// may not be able to play, and the `activities` table is the playable vocabulary.
@@ -247,6 +298,7 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 	Clips.Reserve((*ClipObj)->Values.Num());
 	int32 Malformed = 0;
 	int32 DroppedSwings = 0;
+	int32 DroppedCombos = 0;
 	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*ClipObj)->Values)
 	{
 		const TArray<TSharedPtr<FJsonValue>>* Row = nullptr;
@@ -297,6 +349,15 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 		{
 			DroppedSwings += ReadSwingRecords((*Row)[9], Clip.Swings);
 		}
+		// The fourth melee column, on the same trailing-and-optional contract as the three above: a
+		// slice written before it existed ends at 9, and every such row reads as a sequence declaring
+		// no combo block — which is what all but 208 shipped descriptors are anyway. An attack with no
+		// block is a terminal one that no press can continue and that direction-keyed selection never
+		// considers, which is exactly the behaviour an unre-exported corpus should show.
+		if (Row->Num() > 10 && !(*Row)[10]->IsNull())
+		{
+			DroppedCombos += ReadComboChain((*Row)[10], Clip.Combo);
+		}
 		Clips.Add(Pair.Key, MoveTemp(Clip));
 	}
 	if (Malformed > 0)
@@ -312,6 +373,16 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 		UE_LOG(LogElysiumClips, Warning,
 			TEXT("npc clips '%s': %d swing-contact record(s) dropped — those windows will not open"),
 			*InStem, DroppedSwings);
+	}
+	if (DroppedCombos > 0)
+	{
+		// Separate again, and a different consequence: the clip is usable but its authored chain is
+		// gone, so a press inside that attack's hand-off window will start a new swing instead of
+		// continuing the combo, and the attack is invisible to direction-keyed selection.
+		UE_LOG(LogElysiumClips, Warning,
+			TEXT("npc clips '%s': %d combo-chain block(s) dropped — those attacks chain nothing and "
+				"are not direction-selectable"),
+			*InStem, DroppedCombos);
 	}
 	return !Clips.IsEmpty();
 }

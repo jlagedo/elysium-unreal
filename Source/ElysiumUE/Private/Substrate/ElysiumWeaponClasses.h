@@ -356,6 +356,8 @@ public:
 	enum class EVerdict : uint8
 	{
 		Accepted,        // a swing transaction is staged and its commit is queued
+		Chained,         // a press inside the playing attack's hand-off window committed its successor
+		Busy,            // the press reached the busy path and the playing attack refused it
 		DryFire,         // the magazine could not pay `Ammo_Cost` — the empty-fire action ran
 		NotReady,        // the next-attack deadline has not passed
 		Reloading,       // a reload is live; the fire-intent interruption latch is set
@@ -508,11 +510,10 @@ public:
 	// is what became down this frame. `AimTarget` is the ranged victim the caller acquired, and is
 	// ignored by melee, which acquires its own opponent.
 	//
-	// The order below — empty record, primary, secondary, reload — is CHOSEN (RE-A2). Retail's melee
-	// body polls the held primary bit and the next-attack time and nothing else is recovered about
-	// the relative order of the four tests, so this runtime states one: primary before secondary
-	// because a firearm's secondary is frequently a mode toggle that would otherwise eat the frame,
-	// and reload last because it is the only one that cannot produce a swing.
+	// The order below — empty record, primary, secondary, reload — is CHOSEN (RE-A2). Nothing is
+	// recovered about the relative order of the four tests, so this runtime states one: primary
+	// before secondary because a firearm's secondary is frequently a mode toggle that would otherwise
+	// eat the frame, and reload last because it is the only one that cannot produce a swing.
 	//
 	// Returns the FIRST non-`Idle` verdict, so the caller reads what the frame did rather than what
 	// the last test happened to answer. `Idle` means no button asked for anything.
@@ -562,11 +563,11 @@ public:
 	// presses — a diagnostic readout, an assertion — has to read this instead.
 	int32 AcceptedSwingCount() const { return SwingSerialCounter; }
 
-	// Whether this frame's buttons would run each attack route — the melee held-bit poll,
-	// `allow_autofire` and the secondary's chosen press edge, which is exactly what `ItemPostFrame`
-	// branches on below. Public because the player weapon frame has to know THAT a shot is about to
-	// leave before it can supply the aim query's answer, and a second copy of the button rule in the
-	// caller is how the button route and the aim route come to disagree.
+	// Whether this frame's buttons would run each attack route — the press edge, `allow_autofire`'s
+	// held poll and the secondary's chosen press edge, which is exactly what `ItemPostFrame` branches
+	// on below. Public because the player weapon frame has to know THAT a shot is about to leave
+	// before it can supply the aim query's answer, and a second copy of the button rule in the caller
+	// is how the button route and the aim route come to disagree.
 	bool WantsPrimaryPress(EElysiumWeaponButton Held, EElysiumWeaponButton Pressed) const;
 	bool WantsSecondaryPress(EElysiumWeaponButton Pressed) const;
 
@@ -603,6 +604,41 @@ public:
 private:
 	// The two halves of an accepted swing.
 	EVerdict BeginMeleeSwing(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode);
+
+	// --- The busy path: what a melee primary press does DURING an attack ------------------------
+	//
+	// Retail's melee frame does not simply refuse a press while an attack runs. A press arriving
+	// while the weapon is busy — the next-attack deadline has not passed, or the playing attack's own
+	// busy predicate still holds — takes this route instead of starting a new swing, and it is where
+	// the combo lives (`docs/vtmb/combat-and-damage.md` § "Melee attack, combo, block and damage").
+	//
+	// **It is the player's alone, and not by a player test.** The route is reached from
+	// `ItemPostFrame`'s primary PRESS EDGE and from nowhere else; an AI producer calls `AttackIntent`
+	// from a schedule task, which is already a decision rather than a button, so no NPC ever produces
+	// the edge this path hangs off — the gate is the edge itself.
+
+	// Whether this frame's primary press meets a busy weapon: a live melee transaction, and either
+	// the next-attack deadline still standing or the playing attack's own predicate still holding.
+	bool IsMeleePressBusy() const;
+
+	// Whether the playing attack still refuses a new swing on its own terms, apart from the clock.
+	// The three arms are `ElysiumCombo::IsBusy`'s; what this adds is reading the LIVE clip's cycle and
+	// the value that clip's own descriptor states for the hold.
+	bool IsMeleeBusy(double Now) const;
+
+	// One press on the busy path: commit the playing clip's authored successor when the press lands
+	// inside its hand-off window, and otherwise ignore it. There is no queue and no restart — a press
+	// outside the window, on a terminal attack, or on a chain whose target the body's vocabulary does
+	// not name is simply spent.
+	EVerdict MeleeBusyPress();
+
+	// The hand-off itself. The successor plays from cycle zero at the SAME playback rate, the logical
+	// activity stays `ACT_MELEE_ATTACK`, the next-attack deadline is NOT pushed again, and the swing
+	// transaction is restaged exactly as an accepted swing is — a fresh serial, a fresh staged roll
+	// and a walk that starts over on the new clip.
+	void CommitMeleeChain(FElysiumCombatCharacter& Char, const FString& ChainLabel,
+		const FString& ChainOwnerStem);
+
 	EVerdict BeginRangedShot(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode,
 		const FElysiumEntityHandle& Victim);
 	// The accepted swing's own identity, copied out of the transaction before the first contact

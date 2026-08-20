@@ -16,6 +16,7 @@
 #include "Serialization/MemoryWriter.h"
 
 #include "ElysiumClassRegistry.h"
+#include "ElysiumComboChain.h"  // the authored combo block the chain cases seed
 #include "ElysiumMoveSolve.h"   // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
@@ -911,6 +912,9 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		Fists->HoldAttacksUntil(1.0);
 		TestTrue(TEXT("a later deadline is never shortened"),
 			NearlyEqual(Fists->NextPrimaryAttackTime, 100.0));
+		// An AI producer's intent is refused by the deadline and nothing else. The busy path — where
+		// the combo chain lives — hangs off `ItemPostFrame`'s press edge, which a schedule task never
+		// produces, so this door still answers the plain refusal (`Elysium.Substrate.Weapons.Combo`).
 		TestEqual(TEXT("a press before the deadline is refused"),
 			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
 			FElysiumWeapon::EVerdict::NotReady);
@@ -1665,6 +1669,310 @@ bool FElysiumWeaponMeleeBatchTest::RunTest(const FString&)
 		F.World->AdvanceMeleeSwings(0.02f);
 		TestFalse(TEXT("...but a stopped clip past the recovery deadline retires it"),
 			F.Fists->Swing.bActive);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The combo chain: what a press does while an attack is already running.
+//
+// `docs/vtmb/combat-and-damage.md` § "Melee attack, combo, block and damage". A press arriving while
+// the weapon is busy takes the hand-off route instead of starting a second swing: it commits the
+// PLAYING clip's authored successor when the press lands inside that clip's window, and is ignored
+// outright otherwise. The hand-off keeps the playback rate, keeps the logical activity, does NOT
+// push the next-attack deadline, and restages the swing exactly as an accepted one — a fresh serial,
+// a fresh roll and a walk that starts over on the new clip.
+//
+// The route hangs off `ItemPostFrame`'s primary PRESS EDGE and nowhere else, which is the whole of
+// why the chain is the player's: a schedule task calls `AttackIntent` and produces no edge.
+// =====================================================================================
+
+namespace
+{
+	// The successor the fixture's attack hands off to, and the bank both clips come out of.
+	const TCHAR* const GComboNext = TEXT("Fists_attack_W2");
+
+	FElysiumComboChain ComboBlock(const TCHAR* Successor, float Open, float Close, float Hold)
+	{
+		FElysiumComboChain Block;
+		Block.bStated = true;
+		Block.Mask = ElysiumCombo::InForward;
+		Block.Chain = Successor;
+		Block.WindowOpen = Open;
+		Block.WindowClose = Close;
+		Block.HoldCycle = Hold;
+		return Block;
+	}
+
+	// A bodied player holding the fists, with the swing seam armed and the press edge driven through
+	// the world's own weapon frame — which is the only door the busy path hangs off.
+	struct FComboFixture
+	{
+		FElysiumRecordingServices Services;
+		TUniquePtr<FElysiumEntityWorld> World;
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		FElysiumWeapon* Fists = nullptr;
+
+		bool Stand(FAutomationTestBase& Test)
+		{
+			ElysiumRng::SeedAll(0x434f4d42);
+			ArmSwingSeam(Services, { SwingRec(0.30f, 0.60f) });
+			World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Services.Bundle());
+			World->Load(MakeWeaponTestDefs());
+			World->SpawnPlayer();
+			World->Activate(0.0);
+			World->Tick(0.0);
+
+			Player = World->FindPlayer();
+			Victim = FindCharacter(*World, TEXT("victim"));
+			if (!Test.TestNotNull(TEXT("the player exists"), Player)
+				|| !Test.TestNotNull(TEXT("the victim exists"), Victim))
+			{
+				return false;
+			}
+			Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+			SeedHealth(*Victim, 5000);
+			PlaceFacing(*Player, FVector::ZeroVector);
+			Services.SwingContacts = { Victim->Handle };
+			Fists = GiveWeapon(*Player, GFists);
+			return Test.TestNotNull(TEXT("the fists are granted"), Fists);
+		}
+
+		// The successor's own vocabulary entry: the bank that owns it, and the records its swing
+		// sweeps. Seeded apart from the chain block so a case can state a chain whose target the body
+		// does not name — the two shipped authoring bugs.
+		void DeclareSuccessor(const TCHAR* Label)
+		{
+			Services.ClipOwnerByLabel.Add(FString(Label).ToLower(), GSwingOwner);
+			Services.SwingsByClip.Add(FString(Label).ToLower(), { SwingRec(0.30f, 0.60f) });
+		}
+
+		void Chains(const TCHAR* Label, const FElysiumComboChain& Block)
+		{
+			Services.ComboByClip.Add(FString(Label).ToLower(), Block);
+		}
+
+		// Where the pose layer says the body is standing. `PlayId` moves with the label, because a
+		// different clip on the channel is a different play.
+		void StandOn(const TCHAR* Label, float Cycle, uint32 PlayId = 1)
+		{
+			Services.BodyClipPhase.Label = Label;
+			Services.BodyClipPhase.Cycle = Cycle;
+			Services.BodyClipPhase.PlayId = PlayId;
+		}
+
+		void Frame(double At, uint64 Buttons)
+		{
+			World->SetPlayerButtons(Buttons);
+			World->Tick(At);
+			World->UpdatePlayerWeaponFrame();
+		}
+
+		// One press: a frame with the button up, then a frame with it down. That pair IS the edge the
+		// weapon reads, and driving it any other way would not exercise the producer.
+		void Press(double At)
+		{
+			Frame(At, 0);
+			Frame(At, static_cast<uint64>(EElysiumButton::Attack));
+		}
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponComboTest, "Elysium.Substrate.Weapons.Combo",
+	GElysiumTestFlags)
+bool FElysiumWeaponComboTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	// --- The hand-off, and everything it carries across --------------------------------------------
+	{
+		FComboFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		F.Chains(GSwingClip, ComboBlock(GComboNext, 0.5f, 0.9f, 0.91f));
+		F.DeclareSuccessor(GComboNext);
+
+		F.Press(0.0);
+		if (!TestEqual(TEXT("the first press swings"), F.Fists->AcceptedSwingCount(), 1))
+		{
+			return false;
+		}
+		const int32 FirstSerial = F.Fists->Swing.Serial;
+		const double Deadline = F.Fists->Swing.RecoveryDeadline;
+		const float Rate = F.Fists->Swing.PlaybackRate;
+
+		// Walk the swing far enough that its roll is staged and its own window has opened, so the
+		// hand-off is asserted against a transaction with real state to throw away.
+		F.StandOn(GSwingClip, 0.35f);
+		F.World->AdvanceMeleeSwings(0.02f);
+		F.StandOn(GSwingClip, 0.45f);
+		F.World->AdvanceMeleeSwings(0.02f);
+		TestTrue(TEXT("the first swing staged its opposed roll"), F.Fists->Swing.bContactStaged);
+
+		// The press, inside the authored window.
+		F.StandOn(GSwingClip, 0.70f);
+		const int32 SeedBeforeChain = DiceSeed();
+		F.Press(0.10);
+
+		TestEqual(TEXT("the press committed the clip's authored successor"),
+			F.Fists->Swing.ClipLabel, FString(GComboNext));
+		TestEqual(TEXT("...off the bank the vocabulary named"),
+			F.Fists->Swing.ClipOwnerStem, FString(GSwingOwner));
+		TestEqual(TEXT("...as an accepted swing, with a fresh serial"),
+			F.Fists->Swing.Serial, FirstSerial + 1);
+		TestEqual(TEXT("...counted as one"), F.Fists->AcceptedSwingCount(), 2);
+		TestTrue(TEXT("...at the SAME playback rate"),
+			FMath::IsNearlyEqual(F.Fists->Swing.PlaybackRate, Rate));
+		TestTrue(TEXT("...without pushing the next-attack deadline"),
+			NearlyEqual(F.Fists->Swing.RecoveryDeadline, Deadline)
+			&& NearlyEqual(F.Fists->NextPrimaryAttackTime, Deadline));
+		TestEqual(TEXT("...leaving the logical activity the ordinary attack"),
+			F.Fists->Swing.Activity, FString(TEXT("ACT_MELEE_ATTACK")));
+		TestFalse(TEXT("...with a fresh roll to stage"), F.Fists->Swing.bContactStaged);
+		TestEqual(TEXT("...and a walk that has met no play yet"),
+			static_cast<int32>(F.Fists->Swing.WalkPlayId), 0);
+		TestTrue(TEXT("the successor was played from the start of its own clip"),
+			F.Services.Saw(FString::Printf(TEXT("PlayNpcClip male_pc %s loop=0"), GComboNext)));
+
+		// **The RNG pin.** A hand-off is not a new `RequestActivity`: it draws no 2COMBO chance and
+		// spends nothing off any stream.
+		TestEqual(TEXT("a chain hand-off spends no randomness"), DiceSeed(), SeedBeforeChain);
+
+		// And the sweep follows the NEW clip: a fresh play, its own records, its own roll.
+		const int32 Before = DamageTaken(*F.Victim);
+		F.StandOn(GComboNext, 0.20f, /*PlayId*/ 2);
+		F.World->AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("the walk primes on the successor's own play"),
+			static_cast<int32>(F.Fists->Swing.WalkPlayId), 2);
+		F.StandOn(GComboNext, 0.40f, /*PlayId*/ 2);
+		F.World->AdvanceMeleeSwings(0.02f);
+		TestTrue(TEXT("...and the successor's own window lands its contact"),
+			DamageTaken(*F.Victim) > Before);
+	}
+
+	// --- A press outside the window is IGNORED: no queue, no restart -------------------------------
+	{
+		FComboFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		F.Chains(GSwingClip, ComboBlock(GComboNext, 0.5f, 0.9f, 0.91f));
+		F.DeclareSuccessor(GComboNext);
+
+		F.Press(0.0);
+		F.StandOn(GSwingClip, 0.30f);   // before the window opens
+		F.Press(0.10);
+		TestEqual(TEXT("a press before the window commits nothing"), F.Fists->AcceptedSwingCount(), 1);
+		TestEqual(TEXT("...and leaves the attack on its own clip"),
+			F.Fists->Swing.ClipLabel, FString(GSwingClip));
+
+		F.StandOn(GSwingClip, 0.95f);   // after it closes
+		F.Press(0.20);
+		TestEqual(TEXT("a press after the window commits nothing either"),
+			F.Fists->AcceptedSwingCount(), 1);
+
+		// Nothing was banked: walking back INTO the window does not fire the press that missed it.
+		F.StandOn(GSwingClip, 0.70f);
+		F.Frame(0.30, static_cast<uint64>(EElysiumButton::Attack));
+		TestEqual(TEXT("a missed press is spent, not queued for the window"),
+			F.Fists->AcceptedSwingCount(), 1);
+	}
+
+	// --- A terminal attack — and every `2COMBO` clip — chains nothing ------------------------------
+	{
+		FComboFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		// No block seeded at all: the shape all but 208 of the install's descriptors have.
+		F.Press(0.0);
+		F.StandOn(GSwingClip, 0.70f);
+		F.Press(0.10);
+		TestEqual(TEXT("an attack that names no successor spends the press"),
+			F.Fists->AcceptedSwingCount(), 1);
+
+		// A stated block whose successor is empty is the same answer, and it is a different row: the
+		// 12 shipped descriptors that name a dodge activity and no chain at all.
+		F.Chains(GSwingClip, ComboBlock(TEXT(""), 0.0f, 1.0f, 1.0f));
+		F.Press(0.20);
+		TestEqual(TEXT("a block naming no successor spends it too"), F.Fists->AcceptedSwingCount(), 1);
+	}
+
+	// --- The dangling link: the target the body's own bank never defines ---------------------------
+	// Four shipped links, across both sexes' `fists` and `katana` banks, chain to a sequence their own
+	// bank does not carry. `LookupSequence` answers -1, the chain is silently dead, and the press is
+	// ignored — the authored bug is reported once and never repaired.
+	{
+		FComboFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		F.Chains(GSwingClip, ComboBlock(TEXT("Fists_attack_W3"), 0.5f, 0.9f, 0.91f));
+		// Deliberately NOT declared: the vocabulary does not name `Fists_attack_W3`.
+
+		F.Press(0.0);
+		F.StandOn(GSwingClip, 0.70f);
+		F.Press(0.10);
+		TestEqual(TEXT("a chain whose target does not resolve commits nothing"),
+			F.Fists->AcceptedSwingCount(), 1);
+		TestEqual(TEXT("...and leaves the attack where it was"),
+			F.Fists->Swing.ClipLabel, FString(GSwingClip));
+		TestTrue(TEXT("...having really asked the vocabulary for it"),
+			F.Services.Saw(TEXT("NpcClipOwner male_pc Fists_attack_W3 -> -")));
+		TestTrue(TEXT("...and nothing was played"),
+			!F.Services.Saw(TEXT("PlayNpcClip male_pc Fists_attack_W3")));
+	}
+
+	// --- `w_hold` BELOW `w_close`: the busy predicate ends before the window does ------------------
+	// `katana_running_attack` authors 0.25/1.0/0.9. Past the next-attack deadline the CLOCK arm is
+	// gone, so the predicate alone decides — and it releases at 0.9 while the hand-off window stays
+	// open to 1.0. The pair below is the whole difference between reading `w_hold` and deriving it.
+	{
+		FComboFixture Inside;
+		if (!Inside.Stand(*this))
+		{
+			return false;
+		}
+		Inside.Chains(GSwingClip, ComboBlock(GComboNext, 0.25f, 1.0f, 0.9f));
+		Inside.DeclareSuccessor(GComboNext);
+		Inside.Press(0.0);
+		const double Deadline = Inside.Fists->Swing.RecoveryDeadline;
+		TestTrue(TEXT("the press below is past the next-attack deadline"), Deadline < 1.0);
+
+		Inside.StandOn(GSwingClip, 0.50f);   // below the hold: still busy
+		Inside.Press(1.0);
+		TestEqual(TEXT("below the hold, a press past the deadline still chains"),
+			Inside.Fists->Swing.ClipLabel, FString(GComboNext));
+		TestTrue(TEXT("...and the deadline is still not pushed"),
+			NearlyEqual(Inside.Fists->Swing.RecoveryDeadline, Deadline));
+	}
+	{
+		FComboFixture Past;
+		if (!Past.Stand(*this))
+		{
+			return false;
+		}
+		Past.Chains(GSwingClip, ComboBlock(GComboNext, 0.25f, 1.0f, 0.9f));
+		Past.DeclareSuccessor(GComboNext);
+		Past.Press(0.0);
+		const double Deadline = Past.Fists->Swing.RecoveryDeadline;
+
+		Past.StandOn(GSwingClip, 0.95f);   // above the hold: the weapon is free
+		Past.Press(1.0);
+		TestEqual(TEXT("above the hold the press is an ordinary swing, not a hand-off"),
+			Past.Fists->Swing.ClipLabel, FString(GSwingClip));
+		TestEqual(TEXT("...a second accepted swing"), Past.Fists->AcceptedSwingCount(), 2);
+		TestTrue(TEXT("...which DOES push the deadline, unlike a hand-off"),
+			Past.Fists->Swing.RecoveryDeadline > Deadline);
 	}
 
 	return true;

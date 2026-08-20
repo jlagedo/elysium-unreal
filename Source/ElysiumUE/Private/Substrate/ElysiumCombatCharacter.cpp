@@ -479,6 +479,13 @@ void FElysiumCombatCharacter::FillActivityClipRequest(FElysiumActivityClipReques
 	// default rather than a placeholder.
 	const FElysiumNpc* Npc = AsNpc();
 	Request.ActorState = Npc != nullptr ? Npc->GetMind().State() : EElysiumNpcState::Idle;
+
+	// The direction-keyed selection's own input, and it is the PLAYER's alone: retail's masked
+	// selector reads `CBasePlayer`'s current button field, and a cast body has no such field to read.
+	// `INDEX_NONE` says so rather than handing an NPC an empty button state, which would read as "no
+	// direction held" and select the neutral-mask attack outright.
+	Request.StateMask = (World != nullptr && World->PlayerHandle() == Handle)
+		? World->PlayerSelectionStateMask() : INDEX_NONE;
 }
 
 // ============================================================================================

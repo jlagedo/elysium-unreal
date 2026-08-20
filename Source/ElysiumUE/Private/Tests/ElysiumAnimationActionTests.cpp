@@ -1888,6 +1888,227 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// LIFE5 — direction-keyed attack entry selection, the rung that sits AHEAD of the weighted draw.
+//
+// `docs/vtmb/combat-and-damage.md` § "Melee attack, combo, block and damage": the player selector at
+// `0x10160F90` reads each candidate sequence's authored state mask (`mstudioseqdesc_t`+0x2D4) and
+// compares it with the player's own button field reduced to `0x79A`, preferring an exact match, then
+// the two partial classes, then the neutral mask-0 attack. Only when none of those answers does the
+// activity's weighted draw decide.
+//
+// Everything below is the rule and its catalogue — no world, no weapon and no buttons — which is the
+// only way "a held direction changes WHICH attack, and spends no randomness doing it" can be stated
+// exactly.
+// =====================================================================================
+
+namespace
+{
+	FElysiumNpcClip MaskedAttack(int32 Mask, const TCHAR* Chain = TEXT(""), int32 Weight = 1)
+	{
+		FElysiumNpcClip Clip;
+		Clip.Owner = TEXT("fists");
+		Clip.Activity = TEXT("ACT_MELEE_ATTACK");
+		Clip.Weight = Weight;
+		Clip.Frames = 31;
+		Clip.Fps = 30.0f;
+		Clip.Combo.bStated = true;
+		Clip.Combo.Mask = Mask;
+		Clip.Combo.Chain = Chain;
+		Clip.Combo.WindowOpen = 0.5f;
+		Clip.Combo.WindowClose = 0.9f;
+		Clip.Combo.HoldCycle = 0.91f;
+		return Clip;
+	}
+
+	// A candidate answering the same activity that states no block at all — one of the 13,804.
+	FElysiumNpcClip PlainAttack(int32 Weight)
+	{
+		FElysiumNpcClip Clip;
+		Clip.Owner = TEXT("fists");
+		Clip.Activity = TEXT("ACT_MELEE_ATTACK");
+		Clip.Weight = Weight;
+		Clip.Frames = 31;
+		Clip.Fps = 30.0f;
+		return Clip;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationStateMaskTest,
+	"Elysium.Substrate.AnimationStateMask", GElysiumAnimationTestFlags)
+bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
+{
+	using namespace ElysiumCombo;
+
+	FElysiumNpcClipSet Pc;
+	Pc.Stem = TEXT("male_pc");
+	// The five masks the whole install states, one clip each, plus the weight-30 candidate that would
+	// win every draw and the plumbing sequence that answers nothing.
+	Pc.Clips.Add(TEXT("fists_attack_JabLeft"), MaskedAttack(0, TEXT("fists_attack_longright")));
+	Pc.Clips.Add(TEXT("Fists_attack_W1"), MaskedAttack(InForward, TEXT("Fists_attack_W2")));
+	Pc.Clips.Add(TEXT("fists_attack_back"), MaskedAttack(InBack));
+	Pc.Clips.Add(TEXT("fists_attack_left"), MaskedAttack(InMoveLeft));
+	Pc.Clips.Add(TEXT("fists_attack_right"), MaskedAttack(InMoveRight));
+	Pc.Clips.Add(TEXT("fists_attack_plain"), PlainAttack(30));
+	// A second activity whose candidates author no mask at all — the control for "the maskless path
+	// is unchanged".
+	FElysiumNpcClip Idle;
+	Idle.Owner = TEXT("misc");
+	Idle.Activity = TEXT("ACT_IDLE");
+	Idle.Weight = 30;
+	Idle.Flags = 0x1;
+	Pc.Clips.Add(TEXT("idle01"), Idle);
+	FElysiumNpcClip Fidget = Idle;
+	Fidget.Weight = 1;
+	Fidget.Flags = 0;
+	Pc.Clips.Add(TEXT("fidget01"), Fidget);
+
+	FElysiumAnimationCatalog Catalog;
+	Catalog.Clips = &Pc;
+
+	const FString Attack = TEXT("ACT_MELEE_ATTACK");
+
+	// --- The rank rule itself, boundary by boundary ------------------------------------------------
+	TestTrue(TEXT("an unset mask is never a selection candidate"),
+		RankStateMask(MaskUnset, InForward) == EStateMatch::None);
+	TestTrue(TEXT("a stated 0 against no direction held is an EXACT match, not the fallback"),
+		RankStateMask(0, 0) == EStateMatch::Exact);
+	TestTrue(TEXT("the same mask as the state is exact"),
+		RankStateMask(InForward, InForward) == EStateMatch::Exact);
+	TestTrue(TEXT("a shared forward bit under a held jump is the directional partial"),
+		RankStateMask(InForward, InForward | InJump) == EStateMatch::Directional);
+	TestTrue(TEXT("a shared strafe bit is the strafe partial"),
+		RankStateMask(InMoveLeft, InMoveLeft | InJump) == EStateMatch::Strafe);
+	TestTrue(TEXT("the neutral attack is the fallback for a direction nothing answers"),
+		RankStateMask(0, InLeft) == EStateMatch::Neutral);
+	TestTrue(TEXT("a mask sharing nothing with the state is not selectable"),
+		RankStateMask(InBack, InForward) == EStateMatch::None);
+	// Everything outside `0x79A` is invisible to the comparison, which is what makes a held attack
+	// button not a direction.
+	TestTrue(TEXT("bits outside the selection mask are not part of the state"),
+		RankStateMask(0, ~SelectionMask) == EStateMatch::Exact);
+
+	// --- The five authored masks, end to end through the resolver ---------------------------------
+	struct FCase { int32 State; const TCHAR* Label; const TCHAR* Why; };
+	const FCase Cases[] = {
+		{ 0,           TEXT("fists_attack_JabLeft"), TEXT("no direction held selects the mask-0 entry") },
+		{ InForward,   TEXT("Fists_attack_W1"),      TEXT("forward selects the forward entry") },
+		{ InBack,      TEXT("fists_attack_back"),    TEXT("back selects the back entry") },
+		{ InMoveLeft,  TEXT("fists_attack_left"),    TEXT("strafe left selects the left entry") },
+		{ InMoveRight, TEXT("fists_attack_right"),   TEXT("strafe right selects the right entry") },
+	};
+	for (const FCase& Case : Cases)
+	{
+		FElysiumAnimationIntent Intent = ActivityIntent(TEXT("male_pc"), *Attack);
+		Intent.StateMask = Case.State;
+		FElysiumAnimationSelection Out;
+		ElysiumAnimResolve::Resolve(Intent, Catalog, Out);
+		TestEqual(Case.Why, Out.SequenceLabel, FString(Case.Label));
+	}
+
+	// --- Exact beats partial, and forward/back beats strafe ---------------------------------------
+	{
+		FElysiumAnimationIntent Intent = ActivityIntent(TEXT("male_pc"), *Attack);
+		Intent.StateMask = InForward | InJump;
+		FElysiumAnimationSelection Out;
+		ElysiumAnimResolve::Resolve(Intent, Catalog, Out);
+		TestEqual(TEXT("a held jump makes the forward entry a PARTIAL match, and it still wins"),
+			Out.SequenceLabel, FString(TEXT("Fists_attack_W1")));
+
+		Intent.StateMask = InForward | InMoveLeft;
+		ElysiumAnimResolve::Resolve(Intent, Catalog, Out);
+		TestEqual(TEXT("forward and strafe held together take the forward/back partial first"),
+			Out.SequenceLabel, FString(TEXT("Fists_attack_W1")));
+
+		// Nothing authored answers a keyboard-yaw key, so the neutral entry is what is left.
+		Intent.StateMask = InLeft;
+		ElysiumAnimResolve::Resolve(Intent, Catalog, Out);
+		TestEqual(TEXT("a direction no entry answers falls back to the neutral mask-0 entry"),
+			Out.SequenceLabel, FString(TEXT("fists_attack_JabLeft")));
+	}
+
+	// --- The RNG pin: a mask-selected entry never reaches the draw ---------------------------------
+	//
+	// The weighted draw would answer `fists_attack_plain` — it carries thirty times the share of every
+	// other candidate — so the fact that no state selects it is the whole assertion. And the pick is
+	// invariant in the selection token: a draw moves with the variant, and this does not.
+	{
+		TestEqual(TEXT("the draw, left to itself, answers the heavy candidate"),
+			ElysiumAnimResolve::PickWeighted(Pc, Attack, 0), FString(TEXT("fists_attack_plain")));
+		for (int32 Variant = 0; Variant < 8; ++Variant)
+		{
+			FElysiumAnimationIntent Intent = ActivityIntent(TEXT("male_pc"), *Attack);
+			Intent.StateMask = InForward;
+			Intent.Variant = Variant;
+			FElysiumAnimationSelection Out;
+			ElysiumAnimResolve::Resolve(Intent, Catalog, Out);
+			TestEqual(TEXT("a mask-selected entry does not move with the selection token"),
+				Out.SequenceLabel, FString(TEXT("Fists_attack_W1")));
+		}
+	}
+
+	// --- The maskless paths, unchanged ------------------------------------------------------------
+	{
+		// A body with no button field at all — every cast body — selects by weight exactly as before.
+		FElysiumAnimationIntent Cast = ActivityIntent(TEXT("male_pc"), *Attack,
+			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
+		Cast.StateMask = INDEX_NONE;
+		FElysiumAnimationSelection Out;
+		ElysiumAnimResolve::Resolve(Cast, Catalog, Out);
+		TestEqual(TEXT("a body with no button field draws, and the mask column changes nothing"),
+			Out.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, Attack, 0));
+
+		// An activity none of whose candidates authors a mask falls straight through to the draw, even
+		// with a direction held.
+		FElysiumAnimationIntent Held = ActivityIntent(TEXT("male_pc"), TEXT("ACT_IDLE"));
+		Held.StateMask = InForward;
+		ElysiumAnimResolve::Resolve(Held, Catalog, Out);
+		TestEqual(TEXT("an activity with no authored masks is decided by the draw as it always was"),
+			Out.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0));
+
+		// And the selection function says so directly: empty is "nothing here is direction-keyed".
+		TestTrue(TEXT("the mask pick answers nothing for an unmasked activity"),
+			ElysiumAnimResolve::PickByStateMask(Pc, TEXT("ACT_IDLE"), InForward).IsEmpty());
+		TestTrue(TEXT("...and nothing for a body with no button field"),
+			ElysiumAnimResolve::PickByStateMask(Pc, Attack, INDEX_NONE).IsEmpty());
+	}
+
+	// --- The busy predicate's three arms -----------------------------------------------------------
+	{
+		TestTrue(TEXT("the ordinary attack takes the authored-hold arm"),
+			BusyArmFor(TEXT("ACT_MELEE_ATTACK")) == EBusyArm::Hold);
+		TestTrue(TEXT("the 2COMBO family is busy for its whole clip"),
+			BusyArmFor(TEXT("ACT_MELEE_ATTACK_2COMBO")) == EBusyArm::WholeClip);
+		TestTrue(TEXT("...and so are heavy and air"),
+			BusyArmFor(TEXT("ACT_MELEE_ATTACK_HEAVY")) == EBusyArm::WholeClip
+			&& BusyArmFor(TEXT("ACT_MELEE_AIR_ATTACK")) == EBusyArm::WholeClip);
+		TestTrue(TEXT("the block family reads the clock alone"),
+			BusyArmFor(TEXT("ACT_BLOCK")) == EBusyArm::Clock
+			&& BusyArmFor(TEXT("ACT_BLOCK_HEAVY")) == EBusyArm::Clock
+			&& BusyArmFor(TEXT("ACT_PREBLOCK")) == EBusyArm::Clock);
+		TestTrue(TEXT("anything else is not a busy family"),
+			BusyArmFor(TEXT("ACT_IDLE")) == EBusyArm::None);
+
+		// The hold arm: the per-sequence value, read and never derived.
+		TestTrue(TEXT("an ordinary attack is busy below its own hold"),
+			IsBusy(TEXT("ACT_MELEE_ATTACK"), 0.90f, 0.91f, 0.0, 0.0));
+		TestFalse(TEXT("...and free at it"),
+			IsBusy(TEXT("ACT_MELEE_ATTACK"), 0.91f, 0.91f, 0.0, 0.0));
+		// `katana_running_attack`: the hold releases at 0.9 while the window stays open to 1.0.
+		TestFalse(TEXT("a hold below the window's close releases before the window does"),
+			IsBusy(TEXT("ACT_MELEE_ATTACK"), 0.95f, 0.9f, 0.0, 0.0));
+		TestTrue(TEXT("the whole-clip arm holds to the last frame"),
+			IsBusy(TEXT("ACT_MELEE_ATTACK_2COMBO"), 0.99f, 0.5f, 0.0, 0.0));
+		TestFalse(TEXT("...and releases at it"),
+			IsBusy(TEXT("ACT_MELEE_ATTACK_2COMBO"), 1.0f, 0.5f, 0.0, 0.0));
+		TestTrue(TEXT("the block arm reads the deadline and ignores the cycle"),
+			IsBusy(TEXT("ACT_BLOCK"), 0.999f, 0.0f, 1.0, 2.0));
+		TestFalse(TEXT("...on both sides of it"),
+			IsBusy(TEXT("ACT_BLOCK"), 0.0f, 1.0f, 3.0, 2.0));
+	}
+	return true;
+}
+
+// =====================================================================================
 // CCC5 — the graph's own two rules: which state realizes a selection, and how long the transition
 // into it lasts.
 //

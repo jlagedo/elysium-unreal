@@ -1,5 +1,6 @@
 #include "ElysiumEntityWorld.h"
 
+#include "ElysiumComboChain.h"   // ElysiumCombo::In* — the FILE's own button bits the masks are in
 #include "ElysiumPlayer.h"
 #include "ElysiumUserCmd.h"   // EElysiumButton — the combat button field this file drains
 #include "ElysiumViewState.h"
@@ -180,14 +181,57 @@ void FElysiumEntityWorld::SetPlayerButtons(uint64 Buttons)
 	{
 		return;
 	}
+	// The COMBAT bits are what arms the think, not the whole field. The movement bits ride the same
+	// field because direction-keyed attack selection reads them, and they change on almost every
+	// frame a player walks — arming a deadline-driven think off those would make it a per-frame think
+	// for as long as the player is moving, which is a different scheduler than the one this arms.
+	constexpr uint64 CombatBits =
+		static_cast<uint64>(EElysiumButton::Attack)
+		| static_cast<uint64>(EElysiumButton::Attack2)
+		| static_cast<uint64>(EElysiumButton::SecondaryAtk)
+		| static_cast<uint64>(EElysiumButton::Reload);
+	const bool bCombatChanged = ((PlayerButtons ^ Buttons) & CombatBits) != 0;
 	PlayerButtons = Buttons;
-	// Arm the think on any change. The player's think is deadline-driven off the stealth cadence, so
-	// both edges would otherwise be answered up to a tenth of a second late — long enough for a
+	// Arm the think on a combat change. The player's think is deadline-driven off the stealth cadence,
+	// so both edges would otherwise be answered up to a tenth of a second late — long enough for a
 	// released block to still be blocking when a contact lands.
-	if (FElysiumPlayer* PlayerEnt = FindPlayer())
+	if (bCombatChanged)
 	{
-		PlayerEnt->NextThink = static_cast<float>(NowSeconds());
+		if (FElysiumPlayer* PlayerEnt = FindPlayer())
+		{
+			PlayerEnt->NextThink = static_cast<float>(NowSeconds());
+		}
 	}
+}
+
+int32 FElysiumEntityWorld::PlayerSelectionStateMask() const
+{
+	// The direction correspondence, stated once. Nothing here is arithmetic on a bit index: the two
+	// numberings agree on no bit at all, and the pairing is what each bit MEANS.
+	struct FDirectionBit
+	{
+		EElysiumButton Ours;
+		int32 Theirs;
+	};
+	static constexpr FDirectionBit Bits[] = {
+		{ EElysiumButton::Jump,      ElysiumCombo::InJump },
+		{ EElysiumButton::Forward,   ElysiumCombo::InForward },
+		{ EElysiumButton::Back,      ElysiumCombo::InBack },
+		{ EElysiumButton::Left,      ElysiumCombo::InLeft },
+		{ EElysiumButton::Right,     ElysiumCombo::InRight },
+		{ EElysiumButton::MoveLeft,  ElysiumCombo::InMoveLeft },
+		{ EElysiumButton::MoveRight, ElysiumCombo::InMoveRight },
+	};
+
+	int32 Mask = 0;
+	for (const FDirectionBit& Bit : Bits)
+	{
+		if ((PlayerButtons & static_cast<uint64>(Bit.Ours)) != 0)
+		{
+			Mask |= Bit.Theirs;
+		}
+	}
+	return Mask;
 }
 
 void FElysiumEntityWorld::UpdatePlayerFeed()
@@ -322,9 +366,10 @@ void FElysiumEntityWorld::UpdatePlayerWeaponFrame()
 	// not a reason to let the click through to the weapon.
 	//
 	// The refusal is the WHOLE frame's, not the dismissing press's. An open panel owns the primary
-	// button for as long as it is up, so a bit that is merely still held — after a refused
-	// dismissal, or from before the panel opened — must not reach the melee route's held-bit poll
-	// and swing behind the panel.
+	// button for as long as it is up, so a press that arrives while it is up — a second click at the
+	// panel, an autofire trigger still held — must not reach the weapon and fire behind it. The edges
+	// were already drained above, so a button held across the panel's whole life produces exactly one
+	// spent press and nothing re-presses itself when the panel closes.
 	if (GetOpenSign().IsSet())
 	{
 		if ((Pressed & static_cast<uint64>(EElysiumButton::Attack)) != 0)

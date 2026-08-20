@@ -113,6 +113,20 @@ namespace ElysiumAnimResolve
 	// about a bank silently.
 	FString PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activity, int32 Variant);
 
+	// The player selector's direction-keyed entry choice (`0x10160F90`), which runs BEFORE the draw
+	// above and replaces it when it answers: each candidate's authored state mask
+	// (`mstudioseqdesc_t`+0x2D4) against the player's current buttons, preferring an exact match, then
+	// the forward/back partial, then the strafe partial, then the neutral mask-0 attack
+	// (`docs/vtmb/combat-and-damage.md` § "Melee attack, combo, block and damage").
+	//
+	// Empty is the ordinary answer and means "nothing here is selected by direction" — a body with no
+	// button field (`StateMask == INDEX_NONE`), an activity whose candidates all author `-1`, or a
+	// held direction no candidate answers. The caller then draws, exactly as it always did.
+	//
+	// **It spends no randomness.** A mask-selected entry never reaches `PickWeighted`, so a player
+	// holding a direction and one holding none consume the same amount of every stream.
+	FString PickByStateMask(const FElysiumNpcClipSet& Set, const FString& Activity, int32 StateMask);
+
 	// The activity seam's request, as the resolver's own intent (LIFE5).
 	//
 	// This is the whole of what `UElysiumAnimSubsystem::ResolveActivityClip` does before it calls

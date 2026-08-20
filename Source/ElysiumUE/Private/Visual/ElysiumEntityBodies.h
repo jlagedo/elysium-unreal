@@ -248,6 +248,8 @@ public:
 	bool HasNpcClip(const FString& Stem, const FString& ClipName);
 	FString NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel);
 	const TArray<FElysiumSwingRecord>* NpcClipSwings(const FString& Stem, const FString& ClipLabel);
+	const FElysiumComboChain* NpcClipCombo(const FString& Stem, const FString& ClipLabel);
+	FString NpcClipOwner(const FString& Stem, const FString& ClipLabel);
 	// One named bone's current world transform on a body. False when the body carries no such bone,
 	// which the caller reports — a swing record naming a bone its own model lacks is a defect.
 	bool GetBoneFrame(const USkeletalMeshComponent* Body, const FString& BoneName,
