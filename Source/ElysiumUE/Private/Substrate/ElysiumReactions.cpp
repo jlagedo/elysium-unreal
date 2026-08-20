@@ -1,6 +1,7 @@
 #include "Substrate/ElysiumReactions.h"
 
 #include "ElysiumLocomotionSample.h"   // ElysiumLocomotion::RelativeYaw — the one facing-frame rule
+#include "Substrate/ElysiumWeaponClasses.h"   // EElysiumMeleeDefenderReaction — the classifier's own enum
 
 namespace ElysiumReactions
 {
@@ -60,6 +61,34 @@ bool BuildFlinch(const FVector& AttackerOriginCm, const FVector& VictimOriginCm,
 	// has to fold back to -165 rather than steer a fan past its own last cell.
 	Out.HitYawDegrees = FRotator::NormalizeAxis(Bearing + FlinchJitter(Rng));
 	return true;
+}
+
+const TCHAR* BlockActivityFor(EElysiumMeleeDefenderReaction Reaction)
+{
+	switch (Reaction)
+	{
+	case EElysiumMeleeDefenderReaction::BlockStagger:
+		return TEXT("ACT_BLOCK_HEAVY");
+	case EElysiumMeleeDefenderReaction::Block:
+	case EElysiumMeleeDefenderReaction::Dodge:
+	case EElysiumMeleeDefenderReaction::DodgeAttack:
+		return TEXT("ACT_BLOCK");
+	default:
+		// `HitKnockback` and `Unclassified` — neither is a blocked class, so neither names one.
+		return nullptr;
+	}
+}
+
+bool IsFrontalContact(const FVector& AttackerOriginCm, const FVector& VictimOriginCm,
+	float VictimUnrealYawDegrees)
+{
+	float Bearing = 0.0f;
+	if (!HitYawFrom(AttackerOriginCm, VictimOriginCm, VictimUnrealYawDegrees, Bearing))
+	{
+		return false;
+	}
+	// `HitYawFrom` normalizes to (-180, 180], so the absolute value IS the angle off the facing.
+	return FMath::Abs(Bearing) <= BlockFrontalHalfAngleDegrees;
 }
 
 }

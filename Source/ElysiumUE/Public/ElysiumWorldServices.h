@@ -355,6 +355,19 @@ public:
 	// transition, which is a normal absence rather than a failure -- so it probes here before ever
 	// calling PlayNpcClip, whose miss IS a logged warning for every other caller.
 	virtual bool HasNpcClip(const FString& Stem, const FString& ClipName) { return false; }
+
+	// The `ACT_*` the ATTACKER plays when the swing this clip realized is blocked — the sequence
+	// descriptor's `+0x2E0` column, read off the same `(stem, label)` key `PlayNpcClip` uses
+	// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
+	//
+	// A quiet non-resolving query like `HasNpcClip` beside it: EMPTY is the ordinary answer and not
+	// a failure. Most sequences name no blocked reaction, an unresolved swing addresses no clip at
+	// all, and the caller's own documented fallback is `ACT_BLOCKED_REACTION_RIGHT` — so a miss here
+	// is a column that was never authored rather than a lookup that went wrong.
+	virtual FString NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel)
+	{
+		return FString();
+	}
 	// One model's disposition stance set: three idles, three fidgets and the 3x3 transition matrix
 	// for `AnimName`, with the precache fallbacks already applied. Resolved once per (stem,
 	// disposition) and cached by the caller, because that is when retail resolves it — a body that
@@ -623,6 +636,17 @@ public:
 	// do not have. Replace the implementation when the predicate is recovered; the substrate's own
 	// decision stays on its side of this call either way (K13).
 	virtual bool IsPlayerSneaking() const { return false; }
+
+	// Whether the player's body has ground contact, read off the same locomotion record its mover
+	// publishes. One term of retail's block input predicate (`0x10160ec0`: the `+wpn_secondaryatk`
+	// bit, ground contact and an active melee weapon — `docs/vtmb/controls.md` § "Attack, block and
+	// weapon commands"), and the only one of the three that is a physics fact rather than a game
+	// one, so it is asked here instead of derived in the substrate.
+	//
+	// False with no body: a player who is not standing anywhere is not standing on the ground. The
+	// substrate's own predicate short-circuits ahead of this call, so a world with no pawn is never
+	// asked in the first place.
+	virtual bool IsPlayerOnGround() const { return false; }
 
 	// CNPCMaker's host geometry. The substrate owns admission order and all policy; these four calls
 	// only answer the engine-shaped questions at the point each guard is reached. Defaults are the

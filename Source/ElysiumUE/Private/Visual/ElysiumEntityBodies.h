@@ -217,6 +217,7 @@ public:
 	bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
 		EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
 	bool HasNpcClip(const FString& Stem, const FString& ClipName);
+	FString NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel);
 
 	// v4 skeletal props. The model-path lookup chooses the animated representation; building and
 	// clip resolution stay separate so ordinary props never load glTF or animation data.

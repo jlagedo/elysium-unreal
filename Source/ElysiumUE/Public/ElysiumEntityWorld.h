@@ -254,6 +254,16 @@ public:
 	// low-level button pair.
 	void QueuePlayerFeedEdge(EElysiumUseEdge Edge);
 	void UpdatePlayerFeed();
+
+	// LIFE5 — the `+wpn_secondaryatk` bit, forwarded as a LEVEL rather than as an edge pair. Retail
+	// classifies the block from the button's state on the command it is draining, not from a
+	// press/release history (`docs/vtmb/controls.md` § "Attack, block and weapon commands"), so what
+	// the world retains is the bit itself; the player's own think turns it into a decision.
+	//
+	// A change arms the player think immediately: that think is deadline-driven, so without this a
+	// press would wait out the stealth cadence before the block engaged.
+	void SetPlayerBlockHeld(bool bHeld);
+	bool IsPlayerBlockHeld() const { return bPlayerBlockHeld; }
 	// The explicit leaf/UI completion seam. Supplying the captured owner prevents a stale panel
 	// from ending a newer entity's session; Invalid intentionally means cancel whatever is active.
 	bool EndPlayerUseSession(const FElysiumEntityHandle& OwnerHandle, EElysiumUseEndReason Reason);
@@ -647,6 +657,9 @@ private:
 	FElysiumUseContext FocusContext;
 	TArray<EElysiumUseEdge, TInlineAllocator<2>> PendingUseEdges;
 	TArray<EElysiumUseEdge, TInlineAllocator<2>> PendingFeedEdges;
+	// The `+wpn_secondaryatk` level. Live input state, not simulation state: a save restores the
+	// player without a button held, which is what a load actually looks like.
+	bool bPlayerBlockHeld = false;
 	struct FActiveUse
 	{
 		FElysiumUseContext Context;

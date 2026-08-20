@@ -6,6 +6,7 @@
 
 #include <initializer_list>
 
+class FElysiumCombatCharacter;
 class FElysiumEntity;
 class FElysiumEntityWorld;
 class FElysiumNpc;
@@ -326,6 +327,11 @@ namespace ElysiumNpcCond
 	// CHOSEN, NOT RECOVERED: `WeaponThrown` takes the ranged branch. The survey names only the
 	// `0x18000` melee test and "other weapons" for everything else, so a thrown weapon is "other" by
 	// the recovered rule — but no decoded body states a thrown weapon's own capability value.
+	ECapability WeaponCapability(const FElysiumCombatCharacter& Char);
+	// The NPC spelling, kept because every AI call site reads as one. It is the same answer: the
+	// active item and its record live on the combat-character node, and the melee test is retail's
+	// `0x18000` mask whichever body is holding the weapon — the player's block predicate asks the
+	// same question of the same fields.
 	ECapability WeaponCapability(const FElysiumNpc& Npc);
 
 	// --- Attack conditions ------------------------------------------------------------------------

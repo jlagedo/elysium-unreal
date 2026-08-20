@@ -966,6 +966,22 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 		return;
 	}
 
+	// **The yield, and it is OURS rather than retail's** (`MeleeReactionHoldsBaseUntil` on the
+	// header states why). A melee contact reaction owns the base channel our flinch would take, so
+	// the flinch stands down while that hold runs instead of replacing a block that is still on
+	// screen.
+	//
+	// Ahead of BOTH draws, exactly as the coincident-origins refusal is: a flinch that does not
+	// happen is not a hit, and must advance the Reaction stream by nothing — otherwise how many
+	// blocks a fight contained would silently reshuffle every reaction after it.
+	if (World->NowSeconds() < MeleeReactionHoldsBaseUntil)
+	{
+		UE_LOG(LogElysiumPlayer, Verbose,
+			TEXT("%s yields its flinch: a melee contact reaction holds the base pose until %.3f"),
+			*DebugString(), MeleeReactionHoldsBaseUntil);
+		return;
+	}
+
 	// Retail's flinch draws at random, so this one does too — off the session's own Reaction stream,
 	// whose position is in the save (S8, `docs/architecture/save-architecture.md` §8). Every blow is a
 	// fresh pick, jitter and weighted choice; nothing here is a function of the victim or of how many

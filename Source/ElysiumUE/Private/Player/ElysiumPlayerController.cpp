@@ -149,6 +149,12 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 		{
 			World->QueuePlayerFeedEdge(EElysiumUseEdge::Released);
 		}
+		// LIFE5 — the block bit, forwarded as a LEVEL rather than as an edge pair. Retail's block
+		// classifier reads the button's state off the command it is draining, so what crosses here is
+		// the bit itself and the substrate decides what it means
+		// (`docs/vtmb/controls.md` § "Attack, block and weapon commands"). Sent every frame; the
+		// world ignores a repeat of the value it already holds.
+		World->SetPlayerBlockHeld(Current.IsDown(EElysiumButton::SecondaryAtk));
 	}
 	// Edge history remains the raw physical sample. Otherwise an attack/use held through the paired
 	// gate would look freshly pressed on the first free frame after release.

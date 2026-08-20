@@ -168,6 +168,11 @@ bool AElysiumMapActor::HasNpcClip(const FString& Stem, const FString& ClipName)
 	return Bodies->HasNpcClip(Stem, ClipName);
 }
 
+FString AElysiumMapActor::NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel)
+{
+	return Bodies->NpcClipBlockedReaction(Stem, ClipLabel);
+}
+
 bool AElysiumMapActor::GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
 	FElysiumClipPhase& Out)
 {

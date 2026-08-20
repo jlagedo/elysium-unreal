@@ -339,6 +339,11 @@ public:
 		bool bMelee = false;
 		FString Activity;                  // the LOGICAL activity (`ACT_MELEE_ATTACK_2COMBO`, ...)
 		FString ClipLabel;                 // the concrete clip the embodiment resolved, or empty
+		// The stem that OWNS that clip — the body's own or the bank the include DAG named. It is the
+		// bank a shared sequence actually came out of, which is the half of a missing-column report
+		// the body's own stem cannot state; the contact that reports it arrives after the transaction
+		// is cleared, so it is staged here rather than re-resolved.
+		FString ClipOwnerStem;
 		FElysiumEntityHandle Opponent;     // the aimed opponent, or Invalid
 		float PlaybackRate = 1.0f;
 		float ClipSeconds = 0.0f;
@@ -423,8 +428,11 @@ private:
 	EVerdict BeginMeleeSwing(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode);
 	EVerdict BeginRangedShot(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode,
 		const FElysiumEntityHandle& Victim);
+	// `SwingClipLabel`/`SwingClipOwnerStem` are the cleared transaction's, captured by the caller
+	// before `ClearSwing`: the attacker's blocked reaction is the one the SWING's own sequence
+	// descriptor stores, so the contact cannot ask the weapon what it is currently playing.
 	void MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
-		int32 ModeIndex);
+		int32 ModeIndex, const FString& SwingClipLabel, const FString& SwingClipOwnerStem);
 	void RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
 		int32 ModeIndex);
 

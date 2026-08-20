@@ -1090,6 +1090,39 @@ public:
 			&& NowSeconds - LastMeleeContactSeconds < CombatStanceHoldSeconds;
 	}
 
+	// --- The melee reaction's hold on the base channel ---------------------------------------
+	// Until when a melee contact reaction owns this body's base pose. Negative means never.
+	//
+	// **OURS, NOT RETAIL'S.** Retail's block reaction and its flinch do not contend: the flinch is a
+	// GESTURE, layered over whatever the body is doing, while the block reaction is an ordinary
+	// activity on the base channel. Ours cannot be — a directional flinch is a fan sampled between
+	// two authored cells, and a montage slot can play only one — so our flinch takes the same base
+	// channel the block reaction does. This field is the consequence of that substitution: the
+	// contact reaction wins the channel it was given, and the flinch that would have layered over it
+	// yields instead of replacing it.
+	//
+	// The RE question it stands in for is named rather than assumed: whether retail's blocked
+	// defender callback (`0x10160BC0`) reaches `DamageFlinch` (`0x103229d0`) unconditionally on the
+	// damaging path is not decoded. If it does, retail plays both at once and this yield is the
+	// closest single-channel equivalent; if it does not, this is the same outcome by a different
+	// route. Either way it is stated here as a divergence and not as a recovered rule.
+	//
+	// Live combat state like `MeleeRolls` beside it: it rides no save block, because a reaction in
+	// flight across a save is a pose, not a fact about the character.
+	double MeleeReactionHoldsBaseUntil = -1.0;
+	// Max-merge, never shorten: a second reaction landing inside an existing hold extends it to
+	// whichever ends later rather than cutting the pose already on screen short.
+	void HoldBaseForMeleeReaction(double UntilSeconds)
+	{
+		MeleeReactionHoldsBaseUntil = FMath::Max(MeleeReactionHoldsBaseUntil, UntilSeconds);
+	}
+
+	// `WasMeleeBlocked`'s player branch (`docs/vtmb/combat-and-damage.md` § "Block and stagger
+	// reactions"): "a player counts as actively blocking while its ideal activity is `ACT_PREBLOCK`
+	// or `ACT_BLOCK`". Only the player leaf can answer — a non-player defender is classified by its
+	// stored melee roll instead, which is the other half of the same fork.
+	virtual bool IsActivelyBlocking() const { return false; }
+
 	// Whether this character soaks as a vampire — the mortal/Kindred half of the soak table. The
 	// base answer is the sheet's own clan slot; the NPC leaf overrides it with the authored
 	// `Kindred` key off its resolved `npctemplate*.txt` block, which is where retail keeps the
@@ -1422,6 +1455,26 @@ public:
 	void SetImmobilized(bool bInImmobilized) { bImmobilized = bInImmobilized; }
 	void SetHiddenByController(bool bInHidden);
 	bool IsMobile() const { return !bImmobilized && !bHiddenByController; }
+
+	// --- The block intent (`docs/vtmb/controls.md` § "Attack, block and weapon commands", -----
+	//     `docs/vtmb/combat-and-damage.md` § "Block and stagger reactions") ---------------------
+	//
+	// Retail's block is a server input classification, not a weapon transaction: the predicate at
+	// `0x10160ec0` wants the dedicated `+wpn_secondaryatk` bit, ground contact and an active weapon
+	// with capability `0x18000`, and returns compact player action 13 (`PLAYER_BLOCK`), whose
+	// ordinary animation route requests `ACT_PREBLOCK`. This latch is that classification's standing
+	// answer, and it is what `WasMeleeBlocked` reads through `IsActivelyBlocking`.
+	//
+	// Live input state, like the world's own held bit: it rides no save block, because a load hands
+	// the player back with nothing held.
+	bool bBlockIntentStands = false;
+	// Retail's test is "the ideal activity is `ACT_PREBLOCK` or `ACT_BLOCK`". This latch is that
+	// test's stand-in: the player chain publishes no ideal-activity field, and the predicate above is
+	// what would have put one there.
+	virtual bool IsActivelyBlocking() const override { return bBlockIntentStands; }
+	// Re-evaluate the predicate and drive the pose across its edges. Run from `Think`, which
+	// `SetPlayerBlockHeld` arms on every change of the button.
+	void TickBlockIntent(double NowSeconds);
 
 	// Offer this player an observer, from an NPC's own sight pass. Nearest wins; an offer for the
 	// incumbent refreshes it. Nothing is published here — `Think` commits, which is what keeps the

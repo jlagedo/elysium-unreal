@@ -28,6 +28,7 @@
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumReactions.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "ElysiumViewState.h"
 #include "Substrate/ElysiumWeaponClasses.h"
@@ -430,6 +431,20 @@ bool FElysiumWeaponRulesTest::RunTest(const FString&)
 			ElysiumWeapons::ClassifyDefender(Margins, 4), ED::BlockStagger);
 		TestEqual(TEXT("everything above 4 is hit / knockback"),
 			ElysiumWeapons::ClassifyDefender(Margins, 5), ED::HitKnockback);
+
+		// The band a margin lands in decides the DEFENDER's reaction activity, so the two are
+		// asserted joined here rather than as two facts that could drift apart
+		// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
+		TestEqual(TEXT("margin 2 is the stagger band and plays ACT_BLOCK_HEAVY"),
+			FString(ElysiumReactions::BlockActivityFor(
+				ElysiumWeapons::ClassifyDefender(Margins, 2))),
+			FString(TEXT("ACT_BLOCK_HEAVY")));
+		TestEqual(TEXT("margin 1 is the block band and plays ACT_BLOCK"),
+			FString(ElysiumReactions::BlockActivityFor(
+				ElysiumWeapons::ClassifyDefender(Margins, 1))),
+			FString(TEXT("ACT_BLOCK")));
+		TestNull(TEXT("margin 5 is past every blocked class and names no block activity"),
+			ElysiumReactions::BlockActivityFor(ElysiumWeapons::ClassifyDefender(Margins, 5)));
 
 		// An absent table classifies nothing rather than inventing a band.
 		const FElysiumMeleeMargins Absent;
@@ -893,6 +908,45 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		Katana->AttackIntent(FElysiumWeapon::EIntent::Primary);
 		TestEqual(TEXT("...and substitutes once Melee reaches rank 5"), Katana->Swing.Activity,
 			FString(TEXT("ACT_MELEE_ATTACK_2COMBO")));
+	}
+
+	// --- The resolved clip's OWNER is staged with its label ----------------------------------
+	{
+		ElysiumRng::SeedAll(7373);
+		FElysiumRecordingServices Services;
+		// The shipped shape: a body's attack sequence lives on the shared bank the include DAG
+		// named, not on the body's own stem.
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityLabel = TEXT("swing_long");
+		Services.ResolvedNpcActivityClip = TEXT("swing_long");
+		Services.ResolvedNpcActivityOwner = TEXT("cast_bank");
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		if (!Player)
+		{
+			return false;
+		}
+		PlaceFacing(*Player, FVector::ZeroVector);
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!Fists)
+		{
+			return false;
+		}
+		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		TestEqual(TEXT("the staged transaction names the resolved clip"), Fists->Swing.ClipLabel,
+			FString(TEXT("swing_long")));
+		// Both halves. The label addresses the blocked-reaction row in the attacking body's own clip
+		// slice; the owner names the bank that sequence came out of, which is the half of a
+		// missing-column report the body stem cannot state. Both are read after the transaction has
+		// been cleared, so both have to be staged. `Elysium.Substrate.BlockReaction.Producer` is the
+		// other end of that carry.
+		TestEqual(TEXT("...and the stem that owns it"), Fists->Swing.ClipOwnerStem,
+			FString(TEXT("cast_bank")));
 	}
 
 	return true;
@@ -1949,6 +2003,102 @@ bool FElysiumWeaponLeafSchemaTest::RunTest(const FString&)
 		// deadline's bytes instead of its own.
 		TestNotEqual(TEXT("a blob read at the wrong schema does NOT restore the reload serial"),
 			Pistol->ReloadSerial, 7);
+	}
+
+	// --- The swing's clip owner, on both sides of its own version --------------------------------
+	//
+	// `Swing.ClipOwnerStem` is the LAST field of the swing block, so an older payload loses it
+	// rather than shifting anything — but the fields behind the block still have to read, which is
+	// what makes this a byte-layout assertion and not a field-presence one.
+	{
+		auto FreezeAt = [&](int32 Schema, FElysiumMapSnapshot& Out)
+		{
+			FElysiumRecordingServices Services;
+			FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+			World.Load(MakeLeafSchemaDefs());
+			World.Activate(0.0);
+			World.Tick(0.0);
+
+			FElysiumWeapon* Pistol = FindLooseWeapon(World);
+			if (Pistol == nullptr)
+			{
+				return false;
+			}
+			Pistol->Swing.bActive = true;
+			Pistol->Swing.Serial = 3;
+			Pistol->Swing.ClipLabel = TEXT("swing_long");
+			Pistol->Swing.ClipOwnerStem = TEXT("cast_bank");
+			Pistol->Swing.bAwaitingAnimEvent = true;
+			Pistol->ReloadSerial = 7;
+			Pistol->bFireIntentDuringReload = true;
+			World.Freeze(Out);
+
+			if (Schema != (int32)FElysiumSaveVersion::Latest)
+			{
+				FElysiumEntityState* Record = Out.Entities.FindByPredicate(
+					[](const FElysiumEntityState& S) { return S.TargetName == TEXT("loose_pistol"); });
+				if (Record == nullptr)
+				{
+					return false;
+				}
+				Record->LeafState.Reset();
+				FMemoryWriter Writer(Record->LeafState, /*bIsPersistent*/ true);
+				FElysiumSaveArchive Ar(Writer, Schema);
+				Pistol->Serialize(Ar);
+				Out.SchemaVersion = Schema;
+			}
+			return true;
+		};
+
+		auto RestoreFrom = [&](const FElysiumMapSnapshot& Snap, FString& OutStem, int32& OutSerial,
+			bool& bOutFireIntent)
+		{
+			FElysiumRecordingServices Services;
+			FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+			World.Load(MakeLeafSchemaDefs());
+			World.Activate(0.0);
+			World.ApplySnapshot(Snap);
+
+			FElysiumWeapon* Pistol = FindLooseWeapon(World);
+			if (Pistol == nullptr)
+			{
+				return false;
+			}
+			OutStem = Pistol->Swing.ClipOwnerStem;
+			OutSerial = Pistol->ReloadSerial;
+			bOutFireIntent = Pistol->bFireIntentDuringReload;
+			return true;
+		};
+
+		FString Stem;
+		int32 Serial = 0;
+		bool bFireIntent = false;
+
+		FElysiumMapSnapshot Current;
+		if (!TestTrue(TEXT("a v27 snapshot freezes"),
+			FreezeAt((int32)FElysiumSaveVersion::Latest, Current))
+			|| !TestTrue(TEXT("...and restores"), RestoreFrom(Current, Stem, Serial, bFireIntent)))
+		{
+			return false;
+		}
+		TestEqual(TEXT("a v27 payload round-trips the swing's clip owner"), Stem,
+			FString(TEXT("cast_bank")));
+		TestEqual(TEXT("...with the fields behind the swing block intact"), Serial, 7);
+
+		FElysiumMapSnapshot Legacy;
+		if (!TestTrue(TEXT("a v26 snapshot freezes"),
+			FreezeAt((int32)FElysiumSaveVersion::WeaponAnimEvent, Legacy))
+			|| !TestTrue(TEXT("...and restores"), RestoreFrom(Legacy, Stem, Serial, bFireIntent)))
+		{
+			return false;
+		}
+		// The degradation is the diagnostic alone: `ClipLabel` above still restores, and it plus the
+		// attacking body's stem are what address the blocked-reaction row, so a pre-27 swing plays
+		// the same reaction and only its log line cannot name the bank.
+		TestTrue(TEXT("a v26 payload restores an empty clip owner"), Stem.IsEmpty());
+		// And nothing shifted: the reload block sits behind the swing block in the record.
+		TestEqual(TEXT("...with every field behind the swing block still readable"), Serial, 7);
+		TestTrue(TEXT("...including the last one"), bFireIntent);
 	}
 
 	return true;

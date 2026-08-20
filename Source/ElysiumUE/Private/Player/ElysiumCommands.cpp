@@ -103,6 +103,10 @@ namespace
 		EG Group;
 		EB Button;      // EElysiumButton::None for a verb the user command does not carry
 		const TCHAR* Help;
+		// A SECOND bit the same verb latches. Retail composes exactly one pair this way, and the
+		// composite is the verb's own definition rather than a consumer's business — which is why it
+		// sits in the declaration table beside the first bit. `None` on every other row.
+		EB Also = EB::None;
 	};
 
 	// `docs/vtmb/controls.md` § "What is bindable" in declaration order. A verb with no implementation names
@@ -139,7 +143,11 @@ namespace
 		// --- Combat and items -------------------------------------------------------------
 		{ TEXT("attack"),       EK::ButtonPair, EG::Combat,   EB::Attack,       TEXT("primary fire; dismisses an open sign panel") },
 		{ TEXT("attack2"),      EK::ButtonPair, EG::Combat,   EB::Attack2,      TEXT("secondary fire -- 4.9") },
-		{ TEXT("wpn_secondaryatk"), EK::ButtonPair, EG::Combat, EB::SecondaryAtk, TEXT("secondary attack mode -- 4.9") },
+		// `+wpn_secondaryatk` forwards into `+attack2` as well as latching its own dedicated bit
+		// (`docs/vtmb/controls.md` § "Attack, block and weapon commands"). Both halves matter and
+		// they are not the same half: the block classifier wants the DEDICATED bit — `+attack2`
+		// alone does not block — while the secondary-fire consumers see the composite.
+		{ TEXT("wpn_secondaryatk"), EK::ButtonPair, EG::Combat, EB::SecondaryAtk, TEXT("secondary attack mode; also latches attack2 -- 4.9"), EB::Attack2 },
 		{ TEXT("reload"),       EK::ButtonPair, EG::Combat,   EB::Reload,       TEXT("reload -- 4.9") },
 		{ TEXT("use"),          EK::ButtonPair, EG::Combat,   EB::Use,          TEXT("world interaction -- captured after camera focus settles") },
 		{ TEXT("feed"),         EK::ButtonPair, EG::Combat,   EB::Feed,         TEXT("feeding -- first press attempts a victim; button-up is inert; second press requests release") },
@@ -242,7 +250,7 @@ void ElysiumCommands::DeclareVtmbInventory(FElysiumCommands& Registry)
 		Def.Name   = FName(Row.Name);
 		Def.Kind   = Row.Kind;
 		Def.Group  = Row.Group;
-		Def.Button = static_cast<uint64>(Row.Button);
+		Def.Button = static_cast<uint64>(Row.Button) | static_cast<uint64>(Row.Also);
 		Def.Help   = Row.Help;
 		Registry.Declare(Def);
 	}

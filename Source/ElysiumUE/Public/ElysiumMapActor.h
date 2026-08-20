@@ -327,6 +327,7 @@ public:
 		EElysiumAnimBodyKind BodyKind, FString& OutAnimName,
 		float& OutGroundSpeedCmPerSecond) override;
 	virtual bool HasNpcClip(const FString& Stem, const FString& ClipName) override;
+	virtual FString NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel) override;
 	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
 		FElysiumClipPhase& Out) override;
 	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
@@ -414,6 +415,7 @@ public:
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
 	virtual bool IsPlayerSneaking() const override;
+	virtual bool IsPlayerOnGround() const override;
 	virtual float ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 		float TraceDepthCm) const override;
 	virtual bool IsNpcMakerVisibleFromPlayer(const FVector& MakerOriginCm) const override;

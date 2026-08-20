@@ -1098,3 +1098,13 @@ bool UElysiumEntityBodies::HasNpcClip(const FString& Stem, const FString& ClipNa
 	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
 	return Set != nullptr && Set->Find(ClipName) != nullptr;
 }
+
+FString UElysiumEntityBodies::NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel)
+{
+	UElysiumAnimSubsystem* Anims = GetAnims();
+	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
+	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipLabel) : nullptr;
+	// Empty all the way down: no vocabulary, no such label, or a sequence whose descriptor names no
+	// blocked reaction all mean the same thing to the caller, and none of them is a fault.
+	return Clip != nullptr ? Clip->BlockedReaction : FString();
+}

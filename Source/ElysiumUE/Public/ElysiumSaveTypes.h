@@ -58,6 +58,13 @@ struct FElysiumSaveVersion
 		// estimate route it was actually written with.
 		WeaponAnimEvent = 26,
 
+		// The bank that owns the staged swing's resolved clip. Appended to the END of the weapon
+		// leaf's swing block behind its own version, so an older payload restores an empty stem.
+		// Degraded only in the diagnostic: the blocked reaction is addressed by the attacking body's
+		// stem and the swing's `ClipLabel`, which every supported version already writes, so a
+		// pre-27 swing resolves the same reaction and loses only the bank name on its log line.
+		WeaponSwingClipOwner = 27,
+
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
 	};

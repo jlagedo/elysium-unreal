@@ -353,23 +353,28 @@ namespace
 {
 	// The active weapon controller, or null. One resolution, shared by the capability answer and
 	// every attack condition derived from it.
-	FElysiumWeapon* NpcCondActiveWeapon(const FElysiumNpc& Npc)
+	FElysiumWeapon* NpcCondActiveWeapon(const FElysiumCombatCharacter& Char)
 	{
 		// `Active` is a const read that answers a mutable item, which is what the controller is.
-		FElysiumItem* Item = Npc.Inventory.Active(Npc);
+		FElysiumItem* Item = Char.Inventory.Active(Char);
 		return Item != nullptr ? Item->AsWeapon() : nullptr;
 	}
 }
 
 ElysiumNpcCond::ECapability ElysiumNpcCond::WeaponCapability(const FElysiumNpc& Npc)
 {
-	const FElysiumWeapon* Weapon = NpcCondActiveWeapon(Npc);
+	return WeaponCapability(static_cast<const FElysiumCombatCharacter&>(Npc));
+}
+
+ElysiumNpcCond::ECapability ElysiumNpcCond::WeaponCapability(const FElysiumCombatCharacter& Char)
+{
+	const FElysiumWeapon* Weapon = NpcCondActiveWeapon(Char);
 	const FElysiumItemDef* Record = Weapon != nullptr ? Weapon->Data() : nullptr;
 	if (Record == nullptr || !Record->IsControllableWeapon())
 	{
 		// No weapon at all, or an active item whose record is not one of the three wielded families.
-		// Retail's fists are a real `weapon_melee` record, so this is the state of an NPC the item
-		// catalogue could not arm — a headless world, or a `vdata` set with no `item_w_fists`.
+		// Retail's fists are a real `weapon_melee` record, so this is the state of a character the
+		// item catalogue could not arm — a headless world, or a `vdata` set with no `item_w_fists`.
 		return ECapability::Unarmed;
 	}
 	return Record->Type == EElysiumItemType::WeaponMelee ? ECapability::Melee : ECapability::Ranged;

@@ -1181,6 +1181,15 @@ bool AElysiumMapActor::IsPlayerSneaking() const
 	return Stance == EElysiumStance::Ducked || Stance == EElysiumStance::Lowering;
 }
 
+bool AElysiumMapActor::IsPlayerOnGround() const
+{
+	// The same locomotion record `IsPlayerSneaking` above reads, for the same reason: ground contact
+	// is the mover's own published fact, and the block predicate must not re-derive it from a trace.
+	const APawn* Pawn = ResolvePlayerPawn();
+	const IElysiumPlayerBody* Body = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+	return Body != nullptr && Body->GetLocomotionSample().bOnGround;
+}
+
 float AElysiumMapActor::ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 	float TraceDepthCm) const
 {

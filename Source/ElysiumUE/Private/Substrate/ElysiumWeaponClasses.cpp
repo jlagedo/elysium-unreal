@@ -18,6 +18,7 @@
 #include "ElysiumRng.h"
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSheetSlots.h"
+#include "ElysiumSkeletalBasis.h"          // FromSourceAngles — the defender's facing as an Unreal yaw
 #include "ElysiumVariant.h"
 #include "ElysiumWieldTable.h"
 #include "ElysiumWorldServices.h"
@@ -26,6 +27,8 @@
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumNpcConditions.h"   // ElysiumNpcCond::WeaponCapability — the `0x18000` mask
+#include "Substrate/ElysiumReactions.h"       // the block family's pure rules
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -92,6 +95,45 @@ namespace
 	bool IsPlayerSide(const FElysiumCombatCharacter& Char)
 	{
 		return Char.World != nullptr && Char.World->PlayerHandle() == Char.Handle;
+	}
+
+	// `WasMeleeBlocked` (`0x10345AB0`, `docs/vtmb/combat-and-damage.md` § "Block and stagger
+	// reactions"): whether this contact was blocked, and therefore whether the two block-reaction
+	// callbacks fire at all.
+	//
+	// Three terms, in retail's own order and ours from cheapest to most expensive:
+	//
+	//  1. **A block-capable defender holding a melee weapon.** Retail's test is the active weapon's
+	//     capability mask against `0x18000`, which is exactly the question the AI's own capability
+	//     join answers — so it is asked THROUGH that join rather than re-derived here. A firearm
+	//     fails it (ranged is `0x2000`), which is why there is no blocked-reaction analogue on the
+	//     ranged impact path.
+	//  2. **The frontal test**, whose constant is not decoded — `ElysiumReactions::IsFrontalContact`
+	//     states the hemisphere that stands in for it, and why.
+	//  3. **The defender's own answer**, and this is where the fork is. A PLAYER counts as blocking
+	//     while its ideal activity is `ACT_PREBLOCK`/`ACT_BLOCK` — a live input state, not a roll.
+	//     A NON-PLAYER uses the stored roll classifier: the four blocked classes count, and
+	//     hit/knockback does not.
+	bool WasMeleeBlocked(const FElysiumCombatCharacter& Attacker,
+		const FElysiumCombatCharacter& Defender, EElysiumMeleeDefenderReaction DefenderReaction)
+	{
+		if (ElysiumNpcCond::WeaponCapability(Defender) != ElysiumNpcCond::ECapability::Melee)
+		{
+			return false;
+		}
+		if (!ElysiumReactions::IsFrontalContact(Attacker.Origin, Defender.Origin,
+			ElysiumSkeletalBasis::FromSourceAngles(Defender.Angles).Yaw))
+		{
+			return false;
+		}
+		if (IsPlayerSide(Defender))
+		{
+			return Defender.IsActivelyBlocking();
+		}
+		return DefenderReaction == EElysiumMeleeDefenderReaction::DodgeAttack
+			|| DefenderReaction == EElysiumMeleeDefenderReaction::Dodge
+			|| DefenderReaction == EElysiumMeleeDefenderReaction::Block
+			|| DefenderReaction == EElysiumMeleeDefenderReaction::BlockStagger;
 	}
 
 	// One feat roll, returning `max(successes - botches, 0)`. Every absence fails safe at zero and
@@ -541,6 +583,14 @@ void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 	if (Ar.Version() >= FElysiumSaveVersion::WeaponAnimEvent)
 	{
 		Ar << Swing.bAwaitingAnimEvent;
+	}
+	// Additive, behind its own version, at the END of the swing block. A payload written before the
+	// field existed carries no owner; the blocked reaction still resolves off `ClipLabel` above,
+	// which every supported version writes, so what a pre-27 swing loses is the bank name on the
+	// contact's diagnostic line and nothing the player can see.
+	if (Ar.Version() >= FElysiumSaveVersion::WeaponSwingClipOwner)
+	{
+		Ar << Swing.ClipOwnerStem;
 	}
 
 	Ar << bReloading;
@@ -1127,6 +1177,7 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	Swing.bMelee = true;
 	Swing.Activity = Activity;
 	Swing.ClipLabel = ClipLabel;
+	Swing.ClipOwnerStem = ClipOwnerStem;
 	Swing.Opponent = Opponent;
 	Swing.PlaybackRate = Rate;
 	Swing.ClipSeconds = Seconds;
@@ -1174,6 +1225,7 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 	Swing.bMelee = false;
 	Swing.Activity = GActRangeAttackLayer;
 	Swing.ClipLabel = ClipLabel;
+	Swing.ClipOwnerStem = ClipOwnerStem;
 	// SEAM — the shot's world trace and its spread cone are a producer that joins with the
 	// perception and player-crosshair cycles. RE40 settled what does NOT enter the cone: the Presence
 	// bonus and the Shaky Hands penalty only print diagnostics in the shot body and leave the
@@ -1241,6 +1293,10 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 	const int32 ModeIndex = Swing.ModeIndex;
 	const bool bMelee = Swing.bMelee;
 	const FElysiumEntityHandle OpponentHandle = Swing.Opponent;
+	// Copied out BEFORE the transaction is cleared: the blocked-reaction activity is a column of the
+	// swing's own sequence descriptor, and by the time the contact runs the swing no longer exists.
+	const FString SwingClipLabel = Swing.ClipLabel;
+	const FString SwingClipOwnerStem = Swing.ClipOwnerStem;
 	ClearSwing();
 
 	FElysiumCombatCharacter* Attacker = OwnerCharacter();
@@ -1307,7 +1363,7 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 
 	if (bMelee)
 	{
-		MeleeContact(*Attacker, *Victim, ModeIndex);
+		MeleeContact(*Attacker, *Victim, ModeIndex, SwingClipLabel, SwingClipOwnerStem);
 	}
 	else
 	{
@@ -1316,7 +1372,7 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 }
 
 void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
-	int32 ModeIndex)
+	int32 ModeIndex, const FString& SwingClipLabel, const FString& SwingClipOwnerStem)
 {
 	const FElysiumWeaponContext Context = FElysiumWeaponContext::FromCharacter(Victim);
 	const FElysiumDmg& ModeDmg = DamageForMode(ModeIndex);
@@ -1379,15 +1435,91 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 			TEXT("rules.txt Melee_Reactions is unavailable — the melee reaction margin cannot be "
 				"classified; damage still resolves and no reaction is selected"));
 	}
-	// SEAM — consuming the classification is a later animation cycle: `ACT_PREBLOCK`/`ACT_BLOCK`/
-	// `ACT_BLOCK_HEAVY` on the defender, the authored left/right blocked reaction on the attacker,
-	// the blocked-contact `Dexterity` bonus soak re-roll, and the knockback impulse. The record and
-	// its classification are stored now so that cycle consumes a decided value rather than re-rolling.
+	// SEAM — the blocked-contact `Dexterity` bonus soak re-roll at `0x10160BC0` and the knockback
+	// impulse still belong to a later cycle. The re-roll is a SOAK rule, not a reaction one: it adds
+	// bonus soak dice from attribute slot 2 and re-classifies, so it changes the NUMBER the block
+	// family then reacts to. It lands with 13.3's soak work rather than here, which owns the pose and
+	// not the number (`docs/vtmb/combat-and-damage.md:485-488`, `docs/project/plans/animation.md:69-70`).
+	//
+	// The attacker's own classification stays on this line rather than branching the reaction below:
+	// retail gives the attacker ONE blocked-reaction source — the activity its swing sequence stores
+	// — and no blocked/blocked-major split over it. The band is diagnosis, not a fork.
 	UE_LOG(LogElysiumWeapon, Verbose,
 		TEXT("%s -> %s melee margin %d (lethality %d - defense %d - soak %d): attacker %s, defender %s"),
 		*Attacker.DebugString(), *Victim.DebugString(), Margin, Roll.Lethality, Roll.Defense,
 		Roll.Soak, ElysiumWeapons::AttackerReactionName(AttackerReaction),
 		ElysiumWeapons::DefenderReactionName(DefenderReaction));
+
+	// --- The two block reactions --------------------------------------------------------------
+	// Both callbacks fire on a blocked contact, and both run BEFORE the damage test below: retail's
+	// blocked path plays its reactions and only then asks whether positive damage remains
+	// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
+	if (WasMeleeBlocked(Attacker, Victim, DefenderReaction))
+	{
+		const double Now = World->NowSeconds();
+
+		// The defender (`0x10160BC0`). Class 3 is the block-stagger band and plays `ACT_BLOCK_HEAVY`;
+		// the other blocked classes play `ACT_BLOCK`. A class that names none is an ordinary answer,
+		// not a miss — a player blocking through a hit/knockback margin is exactly that case.
+		if (const TCHAR* BlockActivity = ElysiumReactions::BlockActivityFor(DefenderReaction))
+		{
+			FElysiumReactionPlayRequest Block;
+			Block.Activity = BlockActivity;
+			// The ideal-activity request walks the cast chain's weapon ladder, and it has to: the
+			// corpus carries bare `ACT_BLOCK` on one stem against `ACT_BLOCK_fists` and its siblings
+			// on 155, so a request refused the ladder would resolve nothing on almost every body.
+			Block.bAllowFallbackLadder = true;
+			// No stated blend — the block takes its resolved clip's own authored fade, which is the
+			// ordinary sequence-blend rule. Only retail's flinch gesture hard-codes a pair.
+			float Held = 0.0f;
+			if (Victim.PlayReactionActivity(Block, &Held))
+			{
+				// OURS: the reaction owns the base channel for as long as it plays, so the flinch the
+				// damage below may commit yields to it rather than replacing it mid-pose. The reason
+				// this hold exists at all is on `FElysiumCombatCharacter::MeleeReactionHoldsBaseUntil`.
+				Victim.HoldBaseForMeleeReaction(Now + static_cast<double>(Held));
+			}
+		}
+
+		// The attacker (`0x10160D00`). The activity is the one the ATTACKER's own swing sequence
+		// descriptor stores — authored per swing, never chosen from a movement direction — falling
+		// back to `ACT_BLOCKED_REACTION_RIGHT` when that sequence names none.
+		//
+		// The key is the attacking BODY's stem plus the swing's label, which is where the column is
+		// filed: the exporter writes one row per label into the body's OWN clip slice, carrying the
+		// blocked reaction of whichever bank owns the sequence. `SwingClipOwnerStem` names that bank
+		// and rides the log line alone — a shared-bank body and its bank are what a missing column
+		// has to be diagnosed across, but neither addresses the row.
+		FString Blocked;
+		if (IElysiumEmbodiment* Embodiment = World->Embodiment(); Embodiment && !SwingClipLabel.IsEmpty())
+		{
+			Blocked = Embodiment->NpcClipBlockedReaction(Attacker.ModelStem(), SwingClipLabel);
+		}
+		const bool bAuthored = !Blocked.IsEmpty();
+		if (!bAuthored)
+		{
+			Blocked = ElysiumReactions::DefaultBlockedReaction;
+		}
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s blocked by %s -> attacker plays %s (%s; swing clip '%s' off '%s')"),
+			*Attacker.DebugString(), *Victim.DebugString(), *Blocked,
+			bAuthored ? TEXT("authored") : TEXT("fallback"),
+			SwingClipLabel.IsEmpty() ? TEXT("(none)") : *SwingClipLabel,
+			SwingClipOwnerStem.IsEmpty() ? TEXT("(none)") : *SwingClipOwnerStem);
+
+		FElysiumReactionPlayRequest Reaction;
+		Reaction.Activity = Blocked;
+		Reaction.bAllowFallbackLadder = true;
+		float AttackerHeld = 0.0f;
+		if (Attacker.PlayReactionActivity(Reaction, &AttackerHeld))
+		{
+			// The same hold the defender takes above, for the same reason and on the same channel:
+			// the blocked reaction is a base-channel pose, so a blow landing on the attacker while
+			// it recoils yields rather than flinching over a pose already on screen. The two sides
+			// of one exchange cannot own the channel on different terms.
+			Attacker.HoldBaseForMeleeReaction(Now + static_cast<double>(AttackerHeld));
+		}
+	}
 
 	// A record that is not damaging exits without damage. Blocked does NOT mean zero damage: what
 	// decides is the margin, and a positive one carries on even when a block reaction played.

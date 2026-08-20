@@ -22,6 +22,7 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDisciplines.h"   // Cycle 9
 #include "Substrate/ElysiumLaw.h"          // Cycle 10b
+#include "Substrate/ElysiumNpcConditions.h"  // WeaponCapability — the block predicate's `0x18000` term
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -85,6 +86,11 @@ void FElysiumPlayer::Think()
 	// it is the one the save's clock restores, so a load cannot duplicate or skip a pulse.
 	TickFeed(Now);
 
+	// LIFE5 — the block input classification. Ahead of everything below it because it is an INPUT
+	// pass: retail runs it out of `CPlayerMove::RunCommand` while draining the command whose button
+	// bits it reads, which is the same position this think occupies.
+	TickBlockIntent(Now);
+
 	// Cycle 9 — `ShouldRemove_OnHearCombat`. The sound-event bus delivers nothing (§2.5.3), so its
 	// consumers poll it during their own think; this is the discipline domain's poll.
 	ElysiumDisciplines::PollHeardCombat(*this, Now);
@@ -128,6 +134,59 @@ void FElysiumPlayer::Think()
 	// recompute internally; ours is deadline-driven, so the surface's own 0.1 s deadline IS the
 	// heartbeat. `Min` keeps whatever the feed transaction scheduled ahead of it.
 	NextThink = FMath::Min(NextThink, static_cast<float>(Stealth.NextUpdateTime));
+}
+
+void FElysiumPlayer::TickBlockIntent(double NowSeconds)
+{
+	// Retail's three-term predicate, evaluated cheapest first. The held bit is the world's retained
+	// level; the capability is the same `0x18000` join every AI call site asks; ground contact is the
+	// mover's own published fact and is the only term that costs an engine call — so it is asked
+	// last, and a player who is not even holding the button never reaches it.
+	bool bWant = World != nullptr && World->IsPlayerBlockHeld();
+	if (bWant)
+	{
+		bWant = ElysiumNpcCond::WeaponCapability(*this) == ElysiumNpcCond::ECapability::Melee;
+	}
+	if (bWant)
+	{
+		const IElysiumEmbodiment* Embodiment = World->Embodiment();
+		bWant = Embodiment != nullptr && Embodiment->IsPlayerOnGround();
+	}
+
+	if (bWant == bBlockIntentStands)
+	{
+		return;
+	}
+	bBlockIntentStands = bWant;
+
+	if (!bWant)
+	{
+		// The falling edge releases the classification and nothing else. The reaction branch is a
+		// timed claim that expires on its own, so there is no pose to take down here.
+		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s stops blocking at %.3f"), *DebugString(),
+			NowSeconds);
+		return;
+	}
+
+	// The rising edge requests the pose ONCE, which is what compact action 13's ordinary animation
+	// route does. The weapon ladder is allowed: the corpus authors `ACT_PREBLOCK_KATANA` and its
+	// siblings on 155 stems against a bare `ACT_PREBLOCK` on almost none.
+	//
+	// **PENDING — the POSE does not stand for the whole hold, though the classification does.**
+	// Retail's ideal activity holds `ACT_PREBLOCK` for as long as the predicate is true, and the
+	// clip's own loop bit keeps it on screen. The reaction branch this producer plays through
+	// (`Private/Visual/ElysiumBipedAnimInstance.h`, `FElysiumReactionPlay`) is a TIMED claim: it
+	// seeds a phase clock from the clip's length and drops when that runs out, and it carries
+	// neither a repeat nor a stop the substrate can reach. So the pose plays in and fades while
+	// `bBlockIntentStands` — which is what decides whether a contact was blocked — stands until the
+	// button is released. Re-requesting the pose on a cadence is deliberately NOT the workaround:
+	// every request draws the weighted variant off the Reaction stream, which would make that
+	// stream's position a function of how long a button was held.
+	FElysiumReactionPlayRequest Preblock;
+	Preblock.Activity = TEXT("ACT_PREBLOCK");
+	Preblock.bAllowFallbackLadder = true;
+	UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s starts blocking at %.3f"), *DebugString(), NowSeconds);
+	PlayReactionActivity(Preblock);
 }
 
 void FElysiumPlayer::RefreshClanEffects()

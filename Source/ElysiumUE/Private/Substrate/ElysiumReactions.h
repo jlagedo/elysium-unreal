@@ -3,6 +3,13 @@
 #include "CoreMinimal.h"
 #include "Math/RandomStream.h"
 
+// The defender half of the `rules.txt` margin classifier, declared in
+// `Substrate/ElysiumWeaponClasses.h`. Forward-declared rather than included: that header pulls in
+// the entity chain and the item catalogue, and this one is world-free by design (see below). A
+// scoped enum states its own underlying type, so the declaration is complete for a by-value
+// parameter and the definition arrives in the `.cpp`.
+enum class EElysiumMeleeDefenderReaction : uint8;
+
 // The damage reaction's pure rules — `CBaseCombatCharacter::DamageFlinch` (`0x103229d0`) stated as a
 // function over two origins, a facing and a random stream (LIFE5).
 //
@@ -92,4 +99,39 @@ namespace ElysiumReactions
 	// is reset either way.
 	bool BuildFlinch(const FVector& AttackerOriginCm, const FVector& VictimOriginCm,
 		float VictimUnrealYawDegrees, FRandomStream& Rng, FElysiumFlinch& Out);
+
+	// --- The block family (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions") -----
+
+	// What the ATTACKER plays when its own swing sequence names no blocked reaction. Retail's
+	// fallback at `0x10160D00` is this one literal, not a coin: the left/right split is authored per
+	// swing in the sequence descriptor's `+0x2E0` and enters from there or not at all.
+	inline constexpr const TCHAR* DefaultBlockedReaction = TEXT("ACT_BLOCKED_REACTION_RIGHT");
+
+	// What the DEFENDER plays for a classified melee reaction. The defender callback at
+	// `0x10160BC0` classifies the record and branches once: class 3 — the block-stagger band, which
+	// is VtMB's whole melee "stagger" — plays `ACT_BLOCK_HEAVY`, and the other blocked classes play
+	// `ACT_BLOCK`.
+	//
+	// Null for `HitKnockback` and `Unclassified`: neither is a blocked class, so neither names a
+	// block activity. That is an ordinary answer — a knockback takes the separate normal-hit
+	// callback, and an unclassified record means the margin table never loaded, which the classifier
+	// itself already reported.
+	const TCHAR* BlockActivityFor(EElysiumMeleeDefenderReaction Reaction);
+
+	// CHOSEN, NOT RECOVERED. `WasMeleeBlocked` (`0x10345AB0`) applies a frontal/facing test whose
+	// constant is not decoded, so the whole forward hemisphere stands in for it: a blow arriving
+	// anywhere in front of the defender can be blocked. The hemisphere is the conservative direction
+	// — a tighter cone would REFUSE blocks retail allows, which is a visible loss of a player
+	// action, while a wider one only allows blocks retail might refuse.
+	inline constexpr float BlockFrontalHalfAngleDegrees = 90.0f;
+
+	// Whether the attacker stands within `BlockFrontalHalfAngleDegrees` of the victim's facing.
+	//
+	// Built on `HitYawFrom` so the sign convention is the flinch fan's own — one bearing rule for
+	// the whole reaction family rather than two derivations that could disagree about which side
+	// the attacker is on. False when the two origins are horizontally coincident, for the same
+	// reason: a blow from directly above names no direction on a yaw fan, so there is no facing
+	// relationship to test rather than a zero to invent.
+	bool IsFrontalContact(const FVector& AttackerOriginCm, const FVector& VictimOriginCm,
+		float VictimUnrealYawDegrees);
 }

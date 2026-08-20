@@ -171,6 +171,22 @@ void FElysiumEntityWorld::QueuePlayerFeedEdge(EElysiumUseEdge Edge)
 	}
 }
 
+void FElysiumEntityWorld::SetPlayerBlockHeld(bool bHeld)
+{
+	if (!bActive || bPlayerBlockHeld == bHeld)
+	{
+		return;
+	}
+	bPlayerBlockHeld = bHeld;
+	// Arm the think on the edge. The player's think is deadline-driven off the stealth cadence, so
+	// both edges would otherwise be answered up to a tenth of a second late — long enough for a
+	// released block to still be blocking when a contact lands.
+	if (FElysiumPlayer* PlayerEnt = FindPlayer())
+	{
+		PlayerEnt->NextThink = static_cast<float>(NowSeconds());
+	}
+}
+
 void FElysiumEntityWorld::UpdatePlayerFeed()
 {
 	if (PendingFeedEdges.IsEmpty())

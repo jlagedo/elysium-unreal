@@ -545,6 +545,19 @@ struct FElysiumRecordingServices final
 		const TSet<FString>* Known = KnownNpcClips.Find(Stem.ToLower());
 		return Known != nullptr && Known->Contains(ClipName);
 	}
+	// The blocked-reaction column a test authors, keyed by lower-cased clip label. Empty by default:
+	// most shipped sequences name none, and the producer's own fallback is what an empty answer
+	// selects. Keyed by label alone rather than by (stem, label) because a Substrate case stands one
+	// vocabulary — the STEM still rides the recorded line, so a producer that keyed off the wrong
+	// body is still visible.
+	TMap<FString, FString> BlockedReactionByClip;
+	virtual FString NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel) override
+	{
+		const FString* Found = BlockedReactionByClip.Find(ClipLabel.ToLower());
+		Record(FString::Printf(TEXT("NpcClipBlockedReaction %s %s -> %s"), *Stem, *ClipLabel,
+			Found != nullptr ? **Found : TEXT("-")));
+		return Found != nullptr ? *Found : FString();
+	}
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override
@@ -1029,6 +1042,16 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("IsPlayerSneaking -> %s"),
 			bPlayerSneaking ? TEXT("true") : TEXT("false")));
 		return bPlayerSneaking;
+	}
+	// One term of the player's block predicate. Default TRUE, unlike `bPlayerSneaking` above: a
+	// Substrate world's player stands on a floor it has no body to fall off, so "airborne" is the
+	// case a test has to ask for rather than the one it inherits.
+	bool bPlayerOnGround = true;
+	virtual bool IsPlayerOnGround() const override
+	{
+		Record(FString::Printf(TEXT("IsPlayerOnGround -> %s"),
+			bPlayerOnGround ? TEXT("true") : TEXT("false")));
+		return bPlayerOnGround;
 	}
 	virtual float ResolveNpcMakerGroundZ(const FVector& Origin, float Depth) const override
 	{
