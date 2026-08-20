@@ -1,10 +1,12 @@
 #include "ElysiumEntityWorld.h"
 
 #include "ElysiumPlayer.h"
+#include "ElysiumUserCmd.h"   // EElysiumButton — the combat button field this file drains
 #include "ElysiumViewState.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumSkillClasses.h"
+#include "Substrate/ElysiumWeaponClasses.h"
 
 void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	const FElysiumEntityHandle& Activator, bool bBegin)
@@ -171,14 +173,14 @@ void FElysiumEntityWorld::QueuePlayerFeedEdge(EElysiumUseEdge Edge)
 	}
 }
 
-void FElysiumEntityWorld::SetPlayerBlockHeld(bool bHeld)
+void FElysiumEntityWorld::SetPlayerButtons(uint64 Buttons)
 {
-	if (!bActive || bPlayerBlockHeld == bHeld)
+	if (!bActive || PlayerButtons == Buttons)
 	{
 		return;
 	}
-	bPlayerBlockHeld = bHeld;
-	// Arm the think on the edge. The player's think is deadline-driven off the stealth cadence, so
+	PlayerButtons = Buttons;
+	// Arm the think on any change. The player's think is deadline-driven off the stealth cadence, so
 	// both edges would otherwise be answered up to a tenth of a second late — long enough for a
 	// released block to still be blocking when a contact lands.
 	if (FElysiumPlayer* PlayerEnt = FindPlayer())
@@ -245,6 +247,115 @@ void FElysiumEntityWorld::UpdatePlayerFeed()
 		}
 		PlayerEnt->AttemptFeed(*Victim);
 	}
+}
+
+void FElysiumEntityWorld::UpdatePlayerWeaponFrame()
+{
+	// The world-liveness gate stands AHEAD of the edge drain, because a world that is not running is
+	// not refusing a press — it is not observing one. That is the same pairing a pause relies on
+	// (`AElysiumMapActor::PostMoveTick` carries `bTickEvenWhenPaused = false`, and the controller
+	// publishes no command while held), and switching trigger resolution off has to behave the same
+	// way rather than consuming a held button until the player releases it.
+	if (!bActive || !IsTriggerResolutionEnabled())
+	{
+		return;
+	}
+
+	// The press edges, and they are computed FIRST — before every refusal below, including the ones
+	// that return without doing anything. A press is spent by being observed, so a frame that
+	// refuses it cannot bank it for the next one and a button held across a refused frame cannot
+	// re-press itself.
+	const uint64 Pressed = PlayerButtons & ~ConsumedPlayerButtons;
+	ConsumedPlayerButtons = PlayerButtons;
+	const uint64 Held = PlayerButtons;
+
+	FElysiumPlayer* PlayerEnt = FindPlayer();
+	if (!PlayerEnt || PlayerEnt->IsInert())
+	{
+		return;
+	}
+	// RE-A6 — retail skips the whole live `PostThink` main body, and `ItemPostFrame` with it, while
+	// `m_iPlayerLocked` is set or the player is not alive (`docs/vtmb/player-entity.md` § "Recovered
+	// `PostThink` body"). This runtime publishes no such field; `IsMobile()` is the latch every other
+	// producer already gates on for the states that raise it — a cutscene, a scripted beat, a
+	// controller handover — so it stands in for it.
+	if (!PlayerEnt->IsMobile() || PlayerEnt->HasReportedDeath())
+	{
+		return;
+	}
+
+	// Retail's `ItemPostFrame` gives a controlling use entity FIRST REFUSAL
+	// (`docs/vtmb/player-entity.md` § "Recovered `PostThink` body"). An open sign panel is this
+	// runtime's other controlling surface, and mapping the first refusal onto it is CHOSEN (C4):
+	// every VtMB popup instructs "left-click to continue", so the primary press that dismisses one
+	// must not also swing. The press is spent either way — `MinShowTime` refusing the dismissal is
+	// not a reason to let the click through to the weapon.
+	//
+	// The refusal is the WHOLE frame's, not the dismissing press's. An open panel owns the primary
+	// button for as long as it is up, so a bit that is merely still held — after a refused
+	// dismissal, or from before the panel opened — must not reach the melee route's held-bit poll
+	// and swing behind the panel.
+	if (GetOpenSign().IsSet())
+	{
+		if ((Pressed & static_cast<uint64>(EElysiumButton::Attack)) != 0)
+		{
+			PlayerDismissSign();
+		}
+		return;
+	}
+	// The literal controlled-use refusal: a captured session owns the player's hands.
+	if (ActiveUse.IsSet())
+	{
+		return;
+	}
+
+	FElysiumItem* Item = PlayerEnt->Inventory.Active(*PlayerEnt);
+	FElysiumWeapon* Weapon = Item ? Item->AsWeapon() : nullptr;
+	if (!Weapon)
+	{
+		// An empty hand is an ordinary state, not a failure: the selector can legitimately hold a
+		// non-weapon or nothing at all, and a click then does nothing.
+		return;
+	}
+
+	EElysiumWeaponButton HeldMask = EElysiumWeaponButton::None;
+	EElysiumWeaponButton PressedMask = EElysiumWeaponButton::None;
+	const auto Fold = [](uint64 Bits, EElysiumWeaponButton& Out)
+	{
+		if ((Bits & static_cast<uint64>(EElysiumButton::Attack)) != 0)
+		{
+			Out |= EElysiumWeaponButton::Primary;
+		}
+		// Both secondary verbs reach the same route. `+wpn_secondaryatk` is a composite: its block
+		// half is a standing classification on the player, and this is its ordinary secondary-fire
+		// half (`docs/vtmb/controls.md` § "Attack, block and weapon commands").
+		if ((Bits & (static_cast<uint64>(EElysiumButton::Attack2)
+			| static_cast<uint64>(EElysiumButton::SecondaryAtk))) != 0)
+		{
+			Out |= EElysiumWeaponButton::Secondary;
+		}
+		if ((Bits & static_cast<uint64>(EElysiumButton::Reload)) != 0)
+		{
+			Out |= EElysiumWeaponButton::Reload;
+		}
+	};
+	Fold(Held, HeldMask);
+	Fold(Pressed, PressedMask);
+	if (HeldMask == EElysiumWeaponButton::None && PressedMask == EElysiumWeaponButton::None)
+	{
+		return;
+	}
+
+	// SEAM — the ranged victim. A firearm's shot takes an explicit handle rather than inventing a
+	// trace, and the producer that supplies one is the embodiment's crosshair query
+	// (`QueryAimTarget`), which joins with the perception cycle and is not this slice. Until it
+	// lands the frame passes Invalid, which the ranged swing already tolerates: acquisition is
+	// opponent reservation, not a damage verdict, so an unaimed shot still animates and still spends
+	// its ammunition.
+	const FElysiumWeapon::EVerdict Verdict =
+		Weapon->ItemPostFrame(HeldMask, PressedMask, FElysiumEntityHandle::Invalid());
+	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) player weapon frame %s -> %s"),
+		NowSeconds(), *Weapon->DebugString(), FElysiumWeapon::VerdictName(Verdict));
 }
 
 float FElysiumEntityWorld::InteractionPromptAlpha(double Now) const

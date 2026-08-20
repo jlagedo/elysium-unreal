@@ -149,12 +149,25 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 		{
 			World->QueuePlayerFeedEdge(EElysiumUseEdge::Released);
 		}
-		// LIFE5 — the block bit, forwarded as a LEVEL rather than as an edge pair. Retail's block
-		// classifier reads the button's state off the command it is draining, so what crosses here is
-		// the bit itself and the substrate decides what it means
-		// (`docs/vtmb/controls.md` § "Attack, block and weapon commands"). Sent every frame; the
-		// world ignores a repeat of the value it already holds.
-		World->SetPlayerBlockHeld(Current.IsDown(EElysiumButton::SecondaryAtk));
+		// LIFE5 — the combat buttons, forwarded as a LEVEL rather than as edge pairs. Retail keeps
+		// one current-button field on the player (`+0x2088`) and every consumer reads the bits it
+		// wants off it: the block classifier takes a held bit, the weapon frame derives its own press
+		// edges (`docs/vtmb/controls.md` § "Attack, block and weapon commands"). So what crosses here
+		// is the mask itself and the substrate decides what it means. Sent every frame; the world
+		// ignores a repeat of the value it already holds.
+		//
+		// `Current` rather than `Sampled`: the feed gate above keeps only `+feed`, so a paired feeder
+		// forwards no combat bit at all. The mobility gate is narrower — `ClearMovement` drops the
+		// movement bits and leaves these four standing — so an immobilised player still publishes a
+		// held attack, and the refusal that matters is the substrate's own `IsMobile()` test in
+		// `FElysiumEntityWorld::UpdatePlayerWeaponFrame`. Forwarding the bit rather than hiding it is
+		// what lets that frame spend the press instead of banking it for the moment control returns.
+		constexpr uint64 CombatMask =
+			static_cast<uint64>(EElysiumButton::Attack)
+			| static_cast<uint64>(EElysiumButton::Attack2)
+			| static_cast<uint64>(EElysiumButton::SecondaryAtk)
+			| static_cast<uint64>(EElysiumButton::Reload);
+		World->SetPlayerButtons(Current.Buttons & CombatMask);
 	}
 	// Edge history remains the raw physical sample. Otherwise an attack/use held through the paired
 	// gate would look freshly pressed on the first free frame after release.
@@ -166,30 +179,12 @@ void AElysiumPlayerController::RegisterCommands()
 {
 	FElysiumCommands& Registry = FElysiumCommands::Get();
 
-	// SEAM — the player's own attack producer. `+attack`/`+attack2`/`+wpn_secondaryatk` are already
-	// declared button-pair verbs and their bits already reach the user command, but turning a press
-	// into a weapon transaction needs the ranged half's crosshair/spread producer, which joins with
-	// the perception cycle: the transaction takes an explicit victim handle and nothing on this side
-	// can supply one yet. So the verb keeps its sign-panel job and the AI cycles and the Substrate
-	// tests are the first real producers of `FElysiumWeapon::AttackIntent`.
-	UE_LOG(LogElysiumPC, Warning,
-		TEXT("player attack producer pending — AI and tests drive the weapon transaction"));
-
-	// `+attack` — until the producer above lands, the primary click's only job is dismissing an open
-	// sign panel, which is what every VtMB popup instructs ("left-click to continue"). The world
-	// no-ops when none is up, and MinShowTime holds the panel so a click already in flight cannot
-	// skip it.
-	Bindings.Add(Registry.Bind(TEXT("attack"), [this](const FElysiumCommandCall& Call)
-	{
-		if (!Call.bPressed)
-		{
-			return;
-		}
-		if (FElysiumEntityWorld* World = CurrentEntityWorld())
-		{
-			World->PlayerDismissSign();
-		}
-	}));
+	// `+attack`, `+attack2`, `+wpn_secondaryatk` and `+reload` carry no handler here. Their bits are
+	// the whole transport: `FElysiumCommands::Invoke` latches a declared button-pair verb's bit into
+	// the user command whether or not anything has bound a handler to it, the pre-move sample
+	// forwards the combat mask to the world, and `FElysiumEntityWorld::UpdatePlayerWeaponFrame`
+	// drains it after the move — including the sign panel's first refusal, which used to live on
+	// this verb.
 
 	Bindings.Add(Registry.Bind(TEXT("noclip"), [this](const FElysiumCommandCall&)
 	{

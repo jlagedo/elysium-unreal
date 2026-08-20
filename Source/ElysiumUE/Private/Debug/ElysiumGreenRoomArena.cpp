@@ -9,9 +9,12 @@
 #include "ElysiumMapActor.h"
 #include "ElysiumMovementComponent.h"
 #include "ElysiumMoveSolve.h"   // ElysiumMove::WalkSpeed — the arena walk's motor-speed fallback
+#include "ElysiumPlayer.h"   // the driven character's inventory, for the gr_status weapon readout
 #include "ElysiumPlayerBody.h"
 #include "ElysiumPlayerController.h"   // gr_walk reaches the driven body's input router through it
 #include "ElysiumUserCmd.h"   // the synthesized command stream gr_walk feeds the player through
+#include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumWeaponClasses.h"
 #include "Visual/ElysiumNpcBody.h"   // gr_walk commands an arena character's IElysiumNpcMotor
 #if !UE_BUILD_SHIPPING
 // The arena's engine half is debug-only, while its spec is not. Standing and clearing the room
@@ -261,6 +264,39 @@ const FVector* FElysiumGreenRoomRun::FindArenaPin(const FName& Name) const
 		}
 	}
 	return nullptr;
+}
+
+FString FElysiumGreenRoomRun::LabWeaponStatus() const
+{
+	const AElysiumMapActor* Map = GetMap();
+	FElysiumEntityWorld* World = Map != nullptr ? Map->GetEntityWorld() : nullptr;
+	if (World == nullptr)
+	{
+		return FString(TEXT("(no entity world)"));
+	}
+	FElysiumPlayer* PlayerEnt = World->FindPlayer();
+	if (PlayerEnt == nullptr)
+	{
+		return FString(TEXT("(no driven character)"));
+	}
+
+	const FString Buttons = ElysiumInput::DescribeButtons(World->GetPlayerButtons());
+	FElysiumItem* Item = PlayerEnt->Inventory.Active(*PlayerEnt);
+	FElysiumWeapon* Weapon = Item != nullptr ? Item->AsWeapon() : nullptr;
+	if (Weapon == nullptr)
+	{
+		return FString::Printf(TEXT("%s  buttons %s"),
+			Item != nullptr ? *Item->ClassName() : TEXT("(empty hand)"), *Buttons);
+	}
+
+	const FString SwingText = Weapon->Swing.bActive
+		? FString::Printf(TEXT("#%d %s commit %.3f"), Weapon->Swing.Serial, *Weapon->Swing.Activity,
+			Weapon->Swing.CommitTime)
+		: FString(TEXT("(idle)"));
+	return FString::Printf(
+		TEXT("%s  next 1st %.3f / 2nd %.3f  swing %s (%d accepted)  buttons %s"),
+		*Weapon->ClassName(), Weapon->NextPrimaryAttackTime, Weapon->NextSecondaryAttackTime,
+		*SwingText, Weapon->AcceptedSwingCount(), *Buttons);
 }
 
 AElysiumNpcBody* FElysiumGreenRoomRun::FindArenaCastBody(FElysiumEntityWorld& World,

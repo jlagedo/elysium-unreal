@@ -27,6 +27,7 @@
 // there is no private timer and no second scheduler (K11).
 
 #include "CoreMinimal.h"
+#include "Misc/EnumClassFlags.h"
 
 #include "ElysiumAnimEvent.h"
 #include "ElysiumEntity.h"
@@ -285,6 +286,19 @@ namespace ElysiumWeapons
 // FElysiumWeapon — the controller
 // ================================================================================================
 
+// The three buttons a weapon frame reads, as this file's own vocabulary rather than the user
+// command's. `FElysiumEntityWorld::UpdatePlayerWeaponFrame` translates the player's button field
+// into a pair of these masks (what is HELD this frame, and what became held THIS frame); an AI
+// producer never builds one, because a schedule task is already a decision rather than a button.
+enum class EElysiumWeaponButton : uint8
+{
+	None      = 0,
+	Primary   = 1 << 0,   // `+attack`
+	Secondary = 1 << 1,   // `+attack2` / `+wpn_secondaryatk`'s composite half
+	Reload    = 1 << 2,   // `+reload`
+};
+ENUM_CLASS_FLAGS(EElysiumWeaponButton);
+
 class FElysiumWeapon : public FElysiumItem
 {
 public:
@@ -305,6 +319,7 @@ public:
 		NoMode,          // the record authors no mode for this press
 		NoOwner,         // the weapon is loose, or its owner is gone/dead
 		Unsupported,     // an authored mode type with no recovered consumer
+		Idle,            // no button asked for anything this frame
 	};
 
 	static const TCHAR* VerdictName(EVerdict Verdict);
@@ -377,6 +392,22 @@ public:
 	EVerdict AttackIntent(EIntent Intent,
 		const FElysiumEntityHandle& Victim = FElysiumEntityHandle::Invalid());
 
+	// `CWeaponMelee::ItemPostFrame` (`0x103EAEC0`) / `CWeaponRanged`'s shared frame: one frame of
+	// button state turned into at most one weapon transaction. `Held` is what is down now; `Pressed`
+	// is what became down this frame. `AimTarget` is the ranged victim the caller acquired, and is
+	// ignored by melee, which acquires its own opponent.
+	//
+	// The order below — empty record, primary, secondary, reload — is CHOSEN (RE-A2). Retail's melee
+	// body polls the held primary bit and the next-attack time and nothing else is recovered about
+	// the relative order of the four tests, so this runtime states one: primary before secondary
+	// because a firearm's secondary is frequently a mode toggle that would otherwise eat the frame,
+	// and reload last because it is the only one that cannot produce a swing.
+	//
+	// Returns the FIRST non-`Idle` verdict, so the caller reads what the frame did rather than what
+	// the last test happened to answer. `Idle` means no button asked for anything.
+	EVerdict ItemPostFrame(EElysiumWeaponButton Held, EElysiumWeaponButton Pressed,
+		const FElysiumEntityHandle& AimTarget = FElysiumEntityHandle::Invalid());
+
 	// The reload request. Starts only with reserve ammunition, reload permitted, and a magazine
 	// missing capacity. Returns whether a reload transaction began.
 	bool BeginReload();
@@ -399,6 +430,11 @@ public:
 	// write. Public because a later owner — a discipline, a scripted beat, an AI schedule — holds a
 	// weapon the same way, and must not reach the fields directly.
 	void HoldAttacksUntil(double Deadline);
+
+	// How many swing transactions this weapon has ever accepted. `Swing.Serial` is the LIVE
+	// transaction's and returns to zero the moment a commit clears it, so a caller counting accepted
+	// presses — a diagnostic readout, an assertion — has to read this instead.
+	int32 AcceptedSwingCount() const { return SwingSerialCounter; }
 
 	// The mode currently in force for a press, or null.
 	const FElysiumWeaponMode* ModeFor(EIntent Intent) const;

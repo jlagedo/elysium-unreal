@@ -565,7 +565,8 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 	// --- the readout ------------------------------------------------------------------------------
 
 	Register(TEXT("elysium.gr_status"),
-		TEXT("What the lab is currently doing: mode, body, clip, layers, grid and held weapon."),
+		TEXT("What the lab is currently doing: mode, body, clip, layers, grid, held weapon and the ")
+		TEXT("driven character's live combat state."),
 		[](FElysiumGreenRoomRun& Run, const TArray<FString>&)
 		{
 			const TCHAR* Mode = Run.IsArena() ? TEXT("arena")
@@ -589,6 +590,9 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 				Run.LabWieldTrackRunning() ? TEXT("(sampling)")
 				: Run.LabWieldTrackVerdict().IsEmpty() ? TEXT("(not run)")
 				: *Run.LabWieldTrackVerdict());
+			// The entity side of the same hand: what the driven character is actually holding and
+			// what its weapon controller is doing with the buttons the world is draining.
+			UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  combat %s"), *Run.LabWeaponStatus());
 			if (Run.IsArena())
 			{
 				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  pins   %d"), Run.ArenaPins().Num());

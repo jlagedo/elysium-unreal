@@ -428,6 +428,7 @@ const TCHAR* FElysiumWeapon::VerdictName(EVerdict Verdict)
 	case EVerdict::ZoomCycled:  return TEXT("zoom cycled");
 	case EVerdict::NoMode:      return TEXT("no mode");
 	case EVerdict::NoOwner:     return TEXT("no owner");
+	case EVerdict::Idle:        return TEXT("idle");
 	default:                    return TEXT("unsupported");
 	}
 }
@@ -1019,6 +1020,76 @@ FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCh
 // ================================================================================================
 // The attack intent — mode dispatch and the accepted swing
 // ================================================================================================
+
+FElysiumWeapon::EVerdict FElysiumWeapon::ItemPostFrame(EElysiumWeaponButton Held,
+	EElysiumWeaponButton Pressed, const FElysiumEntityHandle& AimTarget)
+{
+	// 1. The empty record. `item_w_unarmed` is always carried and is NOT the melee implementation:
+	// `CWeaponUnarmed` has no ordinary attack table at all, and `item_w_fists` is the class that
+	// punches (`docs/vtmb/combat-and-damage.md` § "Weapon and input surface"). A holstered player's
+	// first click therefore lands on a record that authors nothing, which is ordinary rather than a
+	// fault — so it short-circuits here instead of falling through to `AttackIntent`, whose `NoMode`
+	// arm warns and would turn every such click into a false alarm.
+	if (PrimaryModeIndex == INDEX_NONE && SecondaryModeIndex == INDEX_NONE)
+	{
+		if (ShouldReportOnce(FString::Printf(TEXT("noattackmodes:%s"), *ClassName())))
+		{
+			UE_LOG(LogElysiumWeapon, Verbose,
+				TEXT("%s authors no attack mode — its weapon frame is idle by design"),
+				*ClassName());
+		}
+		return EVerdict::Idle;
+	}
+
+	EVerdict First = EVerdict::Idle;
+	const auto Note = [&First](EVerdict V)
+	{
+		if (First == EVerdict::Idle)
+		{
+			First = V;
+		}
+	};
+
+	// 2. Primary. Retail's melee body polls the HELD bit (`CWeaponMelee::ItemPostFrame`
+	// `0x103EAEC0`, `combat-and-damage.md` § "Weapon and input surface"), so a held click keeps
+	// swinging as fast as the recovery deadline allows. A firearm instead acts on the press edge
+	// unless its mode authors `allow_autofire`, which is the key's whole meaning: without it a held
+	// attack intent is lost after the edge (`Substrate/ElysiumItemTable.h`).
+	const FElysiumItemDef* ItemRecord = Data();
+	const bool bMelee = ItemRecord && ItemRecord->Type == EElysiumItemType::WeaponMelee;
+	const FElysiumWeaponMode* PrimaryMode = ModeAt(PrimaryModeIndex);
+	const bool bAutofire = PrimaryMode && PrimaryMode->bAllowAutofire;
+	const bool bWantPrimary = (bMelee || bAutofire)
+		? EnumHasAnyFlags(Held, EElysiumWeaponButton::Primary)
+		: EnumHasAnyFlags(Pressed, EElysiumWeaponButton::Primary);
+	if (bWantPrimary)
+	{
+		// A player press advances the Dice stream through `BeginMeleeSwing`'s 2COMBO draw. That is
+		// correct rather than a leak: retail's combo substitution is the same draw off the same
+		// stream, and an NPC swing already spends it.
+		Note(AttackIntent(EIntent::Primary, AimTarget));
+	}
+
+	// 3. Secondary. CHOSEN press-edge (RE-A1): nothing recovered states whether the secondary route
+	// polls a held bit the way the melee primary does, and a held answer would make
+	// `+wpn_secondaryatk` a heavy-attack autofire — which no shipped weapon's recovery deadline is
+	// shaped for. The composite's OTHER half, the block bit, is a separate standing classification
+	// on the player and is not this frame's business.
+	if (EnumHasAnyFlags(Pressed, EElysiumWeaponButton::Secondary))
+	{
+		Note(AttackIntent(EIntent::Secondary, AimTarget));
+	}
+
+	// 4. Reload — the press edge, and the only button here that cannot produce a swing. A refused
+	// reload (a full magazine, no reserve, one already running) is an ordinary negative that
+	// `BeginReload` reports for itself, so it leaves the frame's verdict where it was.
+	if (EnumHasAnyFlags(Pressed, EElysiumWeaponButton::Reload) && BeginReload())
+	{
+		Note(EVerdict::Accepted);
+	}
+
+	return First;
+}
 
 FElysiumWeapon::EVerdict FElysiumWeapon::AttackIntent(EIntent Intent,
 	const FElysiumEntityHandle& Victim)

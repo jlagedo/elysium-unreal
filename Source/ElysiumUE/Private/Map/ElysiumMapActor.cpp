@@ -1517,6 +1517,14 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		// The feed request is acquired against the same settled frame the use focus is, and for the
 		// same reason: retail's victim search is a trace off the player's final view position.
 		EntityWorld->UpdatePlayerFeed();
+		// LIFE5 — the player's weapon frame, in retail's own `PostThink` order: the controlled-use
+		// first refusal and `ItemPostFrame` come after the move that just completed
+		// (`docs/vtmb/player-entity.md` § "Recovered `PostThink` body"). A swing accepted here queues
+		// its commit for the NEXT frame's queue service, which is immaterial: every commit already
+		// carries a delay or arrives from an animation event, and `CommitArrivesFromAnimEvent` reads
+		// the phase of the clip the transaction just armed, so it answers correctly on the arming
+		// frame.
+		EntityWorld->UpdatePlayerWeaponFrame();
 	}
 
 	// 11.7 — re-resolve every `Follow` camera shot against this frame's final entity positions. Same

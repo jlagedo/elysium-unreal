@@ -34,6 +34,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumSheetSlots.h"
+#include "ElysiumUserCmd.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
@@ -262,7 +263,8 @@ namespace
 			{
 				return false;
 			}
-			World->SetPlayerBlockHeld(bBlockHeld);
+			World->SetPlayerButtons(
+				bBlockHeld ? static_cast<uint64>(EElysiumButton::SecondaryAtk) : 0);
 			World->RunPlayerThink(0.0);
 			Services.Calls.Reset();
 			return true;
@@ -468,8 +470,8 @@ bool FElysiumBlockReactionProducerTest::RunTest(const FString&)
 		// The term is asked of the SEAM, not assumed: `Stand` clears the call log after its own
 		// think, so the button is re-edged to arm the next one — which is also what proves the edge
 		// arming reaches the deadline-driven player think at all.
-		F.World->SetPlayerBlockHeld(false);
-		F.World->SetPlayerBlockHeld(true);
+		F.World->SetPlayerButtons(0);
+		F.World->SetPlayerButtons(static_cast<uint64>(EElysiumButton::SecondaryAtk));
 		F.World->RunPlayerThink(0.0);
 		TestTrue(TEXT("...and the mover's own ground fact is what answered it"),
 			Saw(F.Services, TEXT("IsPlayerOnGround"), TEXT("false")));

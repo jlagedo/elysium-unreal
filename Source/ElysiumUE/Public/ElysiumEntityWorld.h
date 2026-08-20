@@ -8,6 +8,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumIOSink.h"
 #include "ElysiumSaveTypes.h"
+#include "ElysiumUserCmd.h"   // EElysiumButton — the world retains the combat button field itself
 #include "ElysiumVariant.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumWorldServices.h"
@@ -255,15 +256,28 @@ public:
 	void QueuePlayerFeedEdge(EElysiumUseEdge Edge);
 	void UpdatePlayerFeed();
 
-	// LIFE5 — the `+wpn_secondaryatk` bit, forwarded as a LEVEL rather than as an edge pair. Retail
-	// classifies the block from the button's state on the command it is draining, not from a
-	// press/release history (`docs/vtmb/controls.md` § "Attack, block and weapon commands"), so what
-	// the world retains is the bit itself; the player's own think turns it into a decision.
+	// LIFE5 — the player's own weapon frame, run once per post-move tick in retail's `PostThink`
+	// order (`docs/vtmb/player-entity.md` § "Recovered `PostThink` body": controlled-use first
+	// refusal, then `ItemPostFrame`). It computes this frame's press edges off the button field
+	// above, applies the refusals, and hands the held/pressed pair to the active weapon's
+	// `FElysiumWeapon::ItemPostFrame`. It is the player half of the attack producer; the AI half
+	// stays its schedule tasks' direct `AttackIntent` calls.
+	void UpdatePlayerWeaponFrame();
+
+	// LIFE5 — the whole combat button field, forwarded as a LEVEL rather than as an edge pair. This
+	// is retail's one current-button field at player `+0x2088`: every consumer reads bits off it and
+	// derives whatever edge it needs, rather than each verb queueing its own press/release history
+	// (`docs/vtmb/controls.md` § "Attack, block and weapon commands"). The block classifier wants a
+	// held bit, the weapon frame wants a press edge, and both come off this one field.
 	//
 	// A change arms the player think immediately: that think is deadline-driven, so without this a
 	// press would wait out the stealth cadence before the block engaged.
-	void SetPlayerBlockHeld(bool bHeld);
-	bool IsPlayerBlockHeld() const { return bPlayerBlockHeld; }
+	void SetPlayerButtons(uint64 Buttons);
+	uint64 GetPlayerButtons() const { return PlayerButtons; }
+	bool IsPlayerBlockHeld() const
+	{
+		return (PlayerButtons & static_cast<uint64>(EElysiumButton::SecondaryAtk)) != 0;
+	}
 	// The explicit leaf/UI completion seam. Supplying the captured owner prevents a stale panel
 	// from ending a newer entity's session; Invalid intentionally means cancel whatever is active.
 	bool EndPlayerUseSession(const FElysiumEntityHandle& OwnerHandle, EElysiumUseEndReason Reason);
@@ -657,9 +671,12 @@ private:
 	FElysiumUseContext FocusContext;
 	TArray<EElysiumUseEdge, TInlineAllocator<2>> PendingUseEdges;
 	TArray<EElysiumUseEdge, TInlineAllocator<2>> PendingFeedEdges;
-	// The `+wpn_secondaryatk` level. Live input state, not simulation state: a save restores the
-	// player without a button held, which is what a load actually looks like.
-	bool bPlayerBlockHeld = false;
+	// The combat button field (retail's player `+0x2088`) and the copy the last weapon frame
+	// consumed, which is what a press edge is measured against. Live input state, not simulation
+	// state: a save restores the player without a button held, which is what a load actually looks
+	// like.
+	uint64 PlayerButtons = 0;
+	uint64 ConsumedPlayerButtons = 0;
 	struct FActiveUse
 	{
 		FElysiumUseContext Context;

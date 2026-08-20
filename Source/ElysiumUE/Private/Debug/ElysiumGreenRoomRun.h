@@ -283,6 +283,13 @@ public:
 	const FString& LabWieldTrackVerdict() const { return WieldTrack.Verdict; }
 	const FString& LabWield() const { return ReviewWield; }
 	bool LabWieldFemale() const { return bReviewWieldFemale; }
+
+	// One line of the driven character's live combat state for the `gr_status` readout: the active
+	// weapon, its two next-attack deadlines, the running swing's serial and activity, and the combat
+	// button field the world currently holds. This is the *entity* side, not the wield model's —
+	// `LabWieldCheck` above answers for the geometry. Names why it cannot answer rather than
+	// returning an empty line.
+	FString LabWeaponStatus() const;
 	// Every item classname whose row carries geometry for this sex, sorted. Empty when the wield bake
 	// has not run — a caller reports that rather than drawing an empty picker.
 	static TArray<FString> LabWieldClassnames(bool bFemale);
