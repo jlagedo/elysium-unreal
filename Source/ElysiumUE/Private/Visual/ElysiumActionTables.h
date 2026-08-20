@@ -808,6 +808,46 @@ namespace ElysiumActionTables
 	// Every task policy naming one task, in table order.
 	void CollectNpcTaskPolicies(const FString& TaskName, TArray<const FNpcTaskPolicy*>& OutPolicies);
 
+	// --- The recovered restart rule ---------------------------------------------------------------
+	//
+	// `RestartIdealActivity` (`0x10289ee0`) clears the current activity before calling
+	// `SetIdealActivity`, so a request that equals what is already playing is **not** swallowed as an
+	// unchanged ideal — it restarts its sequence. Repeated attacks, reloads, pre-jumps, lands and
+	// cowers therefore re-fire from frame one (`docs/vtmb/animation_and_movers.md` → the task-route
+	// table and the paragraph under it).
+	//
+	// **It is a property of the request's route, not of requests in general**, and the complementary
+	// rule is proven by the same document: a held `ACT_CROUCH` re-requested through the ordinary ideal
+	// route runs 54 uninterrupted samples without restarting, and only re-arms once the sequence's own
+	// finished flag is set. So a caller that cannot name a route must not assume a restart.
+	bool RouteRestartsIdenticalRequest(ENpcTaskRoute Route);
+	// The same answer for a recovered task literal, over `NpcTaskPolicies()`. **False for a task the
+	// catalog does not carry**: an unknown task states no route, and inventing a restart for it would
+	// re-fire a clip retail holds. A task whose policies disagree answers true, because the restart
+	// route is the one that has to be honoured wherever it appears.
+	//
+	// The rows here are the 100 **custom** body policies. The shared `CAI_BaseNPC` dispatcher's own
+	// restart rows — `TASK_RANGE_ATTACK1/2`, `TASK_MELEE_ATTACK2`, `TASK_RELOAD`,
+	// `TASK_SPECIAL_ATTACK1/2`, `TASK_PRE_JUMP`, `TASK_LAND`, `TASK_LAND_HARD`, the cower pair — are
+	// recorded in `docs/vtmb/animation_and_movers.md` and are not in this table, so this answers for a
+	// custom body's task and not for the shared vocabulary. `TASK_MELEE_ATTACK1` is the exception that
+	// proves the split: two custom bodies intercept it, so the table carries it and this answers for
+	// those bodies.
+	bool TaskRestartsIdenticalRequest(const FString& TaskName);
+	// The same answer keyed by the LOGICAL activity rather than by the task, for a producer that names
+	// what it wants played and not the schedule task that wanted it — a weapon's attack, a reaction, a
+	// death. Retail chooses the route at the task, before any translation runs, so this reads the
+	// UNTRANSLATED request; asking it about `ACT_MELEE_ATTACK_KNIFE` answers for a name no policy row
+	// carries. True when any recovered restart-route policy names the activity.
+	//
+	// It reads the same custom rows, so the shared dispatcher's absence above reaches it too — but by
+	// ACTIVITY the overlap covers most of it: `ACT_RANGE_ATTACK1`, `ACT_MELEE_ATTACK`,
+	// `ACT_SPECIAL_ATTACK1` and the three cower activities are each named by a custom restart row and
+	// answer true. `ACT_RANGE_ATTACK2`, `ACT_MELEE_ATTACK_HEAVY`, `ACT_RELOAD`, `ACT_SPECIAL_ATTACK2`,
+	// `ACT_PRE_JUMP`, `ACT_LAND` and `ACT_LAND_HARD` are the ones only the shared dispatcher restarts,
+	// and this answers false for them until those rows are recovered into the table.
+	bool ActivityRestartsIdenticalRequest(const FString& Activity);
+
 	// Every distinct activity the NPC surface names — body rules, task policies and grapple bases —
 	// in first-named order. The 232 grapple variants are not included; `CollectGrappleVariants`
 	// generates those.

@@ -1590,6 +1590,73 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 		TArray<const FNpcTaskPolicy*> Blocking;
 		CollectNpcTaskPolicies(TEXT("TASK_MELEE_BLOCK"), Blocking);
 		TestTrue(TEXT("TASK_MELEE_BLOCK is routed by more than one body"), Blocking.Num() > 1);
+
+		// --- the restart rule, as a policy over these rows -----------------------------------------
+		//
+		// `RestartIdealActivity` (`0x10289ee0`) clears the current activity before `SetIdealActivity`,
+		// so a request equal to what is already playing is not swallowed as an unchanged ideal:
+		// repeated attacks, reloads, pre-jumps and lands restart their sequence
+		// (`docs/vtmb/animation_and_movers.md`). **It belongs to the route, not to requests in
+		// general** — the same document's controlled crouch trace proves that a held request through
+		// the ordinary ideal route runs 1.791 s uninterrupted without restarting.
+		TestTrue(TEXT("the restart helper restarts"),
+			RouteRestartsIdenticalRequest(ENpcTaskRoute::RestartIdeal));
+		TestTrue(TEXT("and so does its choice form"),
+			RouteRestartsIdenticalRequest(ENpcTaskRoute::RestartIdealChoice));
+		TestFalse(TEXT("the ordinary ideal route does not"),
+			RouteRestartsIdenticalRequest(ENpcTaskRoute::SetIdeal));
+		TestFalse(TEXT("nor the immediate commit"),
+			RouteRestartsIdenticalRequest(ENpcTaskRoute::SetActivity));
+		TestFalse(TEXT("nor the argument route"),
+			RouteRestartsIdenticalRequest(ENpcTaskRoute::SetIdealArgument));
+		TestFalse(TEXT("nor the navigator route"),
+			RouteRestartsIdenticalRequest(ENpcTaskRoute::SetIdealNavigator));
+		TestFalse(TEXT("nor a task remap"),
+			RouteRestartsIdenticalRequest(ENpcTaskRoute::RemapSharedTask));
+
+		// By task, over the rows this catalog carries — the 100 CUSTOM policies. The shared
+		// `CAI_BaseNPC` dispatcher's own restart rows (`TASK_RANGE_ATTACK1`, `TASK_RELOAD`,
+		// `TASK_PRE_JUMP`, `TASK_LAND`) are recorded in the document and are not in this table, so a
+		// caller keyed on a task gets an answer only for a custom body.
+		TestTrue(TEXT("a repeated melee attack restarts"),
+			TaskRestartsIdenticalRequest(TEXT("TASK_MELEE_ATTACK1")));
+		TestTrue(TEXT("a repeated block restarts"),
+			TaskRestartsIdenticalRequest(TEXT("TASK_MELEE_BLOCK")));
+		TestTrue(TEXT("a repeated pounce restarts"),
+			TaskRestartsIdenticalRequest(TEXT("TASK_POUNCE_ATTACK1")));
+		// The counter-cases, one per non-restart route that names a task here.
+		TestFalse(TEXT("an ordinary ideal request does not restart"),
+			TaskRestartsIdenticalRequest(TEXT("TASK_CROW_HOP")));
+		TestFalse(TEXT("nor an immediate commit"),
+			TaskRestartsIdenticalRequest(TEXT("TASK_SPECIAL_IDLE_ACTIVITY")));
+		TestFalse(TEXT("nor an argument route"),
+			TaskRestartsIdenticalRequest(TEXT("TASK_PLAY_CLAW_SEQUENCE")));
+		// A task the catalog does not carry states no route, and inventing a restart for it would
+		// re-fire a clip retail holds.
+		TestFalse(TEXT("an unknown task states no route"),
+			TaskRestartsIdenticalRequest(TEXT("TASK_NO_SUCH_THING")));
+		TestFalse(TEXT("and neither does an empty one"), TaskRestartsIdenticalRequest(FString()));
+
+		// The same answer keyed by the LOGICAL activity, which is what a weapon or a reaction can
+		// state — retail chooses the route at the task, ahead of every translation, so the key is the
+		// untranslated request.
+		TestTrue(TEXT("ACT_MELEE_ATTACK is a restart-route activity"),
+			ActivityRestartsIdenticalRequest(TEXT("ACT_MELEE_ATTACK")));
+		// Case-folded, because a producer spells the request and the table spells the row.
+		TestTrue(TEXT("and is matched case-insensitively"),
+			ActivityRestartsIdenticalRequest(TEXT("act_melee_attack")));
+		TestTrue(TEXT("so is ACT_BLOCK"), ActivityRestartsIdenticalRequest(TEXT("ACT_BLOCK")));
+		// `ACT_MELEE_ATTACK` is also named by a Manbat `SetIdeal` row, and the restart route still
+		// wins: a route that has to be honoured somewhere is honoured wherever the activity appears.
+		// `ACT_FIDGET` and `ACT_CAULDRON_DEATH` are named by non-restart rows ALONE, which is what
+		// makes them the real counter-cases rather than absent names.
+		TestFalse(TEXT("an activity only ever committed immediately does not restart"),
+			ActivityRestartsIdenticalRequest(TEXT("ACT_FIDGET")));
+		TestFalse(TEXT("nor one only ever set as an ideal"),
+			ActivityRestartsIdenticalRequest(TEXT("ACT_CAULDRON_DEATH")));
+		TestFalse(TEXT("an activity no policy names answers no route"),
+			ActivityRestartsIdenticalRequest(TEXT("ACT_NO_SUCH_ACTIVITY")));
+		TestFalse(TEXT("and so does an empty one"), ActivityRestartsIdenticalRequest(FString()));
 	}
 
 	// --- the order, which no count catches ---------------------------------------------------------

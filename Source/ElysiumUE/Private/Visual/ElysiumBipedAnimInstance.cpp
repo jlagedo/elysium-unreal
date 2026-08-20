@@ -107,20 +107,23 @@ void FElysiumBipedAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& 
 // The cinematic clip path
 // ================================================================================================
 
-void FElysiumBipedAnimProxy::PlayDirect(UAnimSequence* Sequence, bool bLoop)
+bool FElysiumBipedAnimProxy::PlayDirect(UAnimSequence* Sequence, bool bLoop, bool bRestart)
 {
 	if (Sequence == nullptr)
 	{
-		return;
+		return false;
 	}
-	if (Sequence == Playing && bLoop && bPlayingLoop)
+	// The recovered restart rule: `RestartIdealActivity` clears the current activity before setting
+	// the ideal, so a request on that route is never swallowed as an unchanged one. Every other route
+	// keeps the early-out below, which is the complementary rule the held-crouch trace proves.
+	if (Sequence == Playing && bLoop && bPlayingLoop && !bRestart)
 	{
 		// A repeated looping request must not visibly reset the clip. A body a prior Seek pinned at
 		// rate 0 must not stay frozen forever because of it, though: SetPlayRate writes the node's
 		// own member, read on every UpdateAssetPlayer, so this un-freezes without the restart the
 		// early-out exists to prevent — no reinit, and the play position is preserved.
 		ClipPlayer.SetPlayRate(1.f);
-		return;
+		return false;
 	}
 	ClipPlayer.SetSequence(Sequence);
 	ClipPlayer.SetLoopAnimation(bLoop);
@@ -129,6 +132,7 @@ void FElysiumBipedAnimProxy::PlayDirect(UAnimSequence* Sequence, bool bLoop)
 	bClipNeedsReinit = true;   // reset the play time on the worker
 	Playing = Sequence;
 	bPlayingLoop = bLoop;
+	return true;
 }
 
 void FElysiumBipedAnimProxy::Seek(float PositionSeconds)
@@ -704,7 +708,7 @@ bool UElysiumBipedAnimInstance::HasCompiledGraph() const
 }
 
 bool UElysiumBipedAnimInstance::PlayOneShot(const FElysiumClipIdentity& Identity,
-	UAnimSequence* Sequence, bool bLoop, float BlendInSeconds, float BlendOutSeconds)
+	UAnimSequence* Sequence, bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart)
 {
 	if (Sequence == nullptr)
 	{
@@ -719,9 +723,13 @@ bool UElysiumBipedAnimInstance::PlayOneShot(const FElysiumClipIdentity& Identity
 	// its footsteps like any other.
 	if (!HasCompiledGraph())
 	{
-		PlayClip(Identity, Sequence, bLoop);
+		PlayClip(Identity, Sequence, bLoop, bRestart);
 		return true;
 	}
+	// The montage route needs no restart branch: `PlaySlotAnimationAsDynamicMontage` builds a fresh
+	// montage on every call, so a repeated identical request always re-fires from frame one. That is
+	// the restart helper's own shape, and it is what a repeated attack already relies on. `bRestart`
+	// therefore reaches only the clip player above, which is the one path that holds a repeat.
 	// A clip with nothing to blend FROM snaps in, which is retail's own rule: otherwise a body would
 	// fade up out of the reference pose on map load, because the slot's source pose is a blend stack
 	// that has been handed no asset yet.
@@ -893,7 +901,7 @@ void UElysiumBipedAnimInstance::StopOneShot(float BlendSeconds)
 // ================================================================================================
 
 void UElysiumBipedAnimInstance::PlayClip(const FElysiumClipIdentity& Identity,
-	UAnimSequence* Sequence, bool bLoop)
+	UAnimSequence* Sequence, bool bLoop, bool bRestart)
 {
 	if (Sequence == nullptr)
 	{
@@ -903,11 +911,21 @@ void UElysiumBipedAnimInstance::PlayClip(const FElysiumClipIdentity& Identity,
 	// so a reaction left active behind it would be an invisible branch pinning its own assets and
 	// counting down a phase nothing is showing. The scene replaces the graph; it takes the branch too.
 	StopReaction();
-	GetProxyOnGameThread<FElysiumBipedAnimProxy>().PlayDirect(Sequence, bLoop);
+	const bool bStarted =
+		GetProxyOnGameThread<FElysiumBipedAnimProxy>().PlayDirect(Sequence, bLoop, bRestart);
+	// **The arm follows the pose.** `PlayDirect` holds a repeated identical looping clip rather than
+	// resetting it, and arming a new `PlayId` over a clip that did not restart would re-fire its whole
+	// timeline against a cycle nothing moved — a footstep per re-request on a body that never took a
+	// step. A held request keeps its standing arm, which is what leaves the dispatcher's cursor where
+	// the clip actually is.
+	//
 	// A scene clip is pinned to scene time and can be seeked backwards; the dispatcher's own rule
 	// already answers a backwards phase on a one-shot by re-anchoring and firing nothing, which is
 	// exactly what a seek should do (`Substrate/ElysiumAnimEvents.cpp`).
-	ArmBasePhase(EElysiumBasePhaseSource::Clip, Identity, Sequence->GetPlayLength(), bLoop);
+	if (bStarted)
+	{
+		ArmBasePhase(EElysiumBasePhaseSource::Clip, Identity, Sequence->GetPlayLength(), bLoop);
+	}
 }
 
 void UElysiumBipedAnimInstance::SeekClip(float PositionSeconds)

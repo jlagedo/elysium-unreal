@@ -4,6 +4,7 @@
 #include "ElysiumMoveSolve.h"          // the sv_*scale constants the gait tables are built with
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
+#include "Visual/ElysiumActionTables.h"   // the recovered task routes the restart rule reads
 #include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumNpcVisual.h"
 
@@ -875,6 +876,10 @@ bool UElysiumAnimSubsystem::ResolveActivityClip(const FElysiumActivityClipReques
 	// weapon-translated attack.
 	Out.MaxReachCm = Catalog.Clips
 		? Catalog.Clips->MaxReachCmForActivity(Selection.ResolvedActivity) : 0.0f;
+	// The recovered restart rule, asked over the UNTRANSLATED request — retail picks the route at the
+	// task, before `ActivityOverride` and the class bodies rename anything, so asking under the
+	// resolved name would answer false for every weapon-translated attack.
+	Out.bRestart = ElysiumActionTables::ActivityRestartsIdenticalRequest(Request.Activity);
 	// LIFE5 — the fan half, carried out so a producer can route a directional reaction without
 	// re-resolving anything. The axis value is read off the SELECTION rather than off the request: the
 	// grid states which pose parameter it binds, and a producer's `HitYaw` is the answer only for a

@@ -223,7 +223,15 @@ struct FElysiumBipedAnimProxy : public FElysiumBodyAnimProxy
 	// The theatre's own path: a scene starts a clip and then pins it to absolute scene time every
 	// frame. There is no crossfade here on purpose — the graph owns every blend a gait or a one-shot
 	// needs, and a scene's clip boundaries are the scene's to time.
-	void PlayDirect(UAnimSequence* Sequence, bool bLoop);
+	//
+	// **A repeated identical LOOPING request holds its clip rather than resetting it**, which is
+	// retail's own rule for the ordinary ideal route: the controlled trace re-requests a held
+	// `ACT_CROUCH` 151 times and the clip runs 1.791 s uninterrupted
+	// (`docs/vtmb/animation_and_movers.md`). `bRestart` is the recovered restart helper's answer to
+	// the same request — `RestartIdealActivity` clears the current activity first, so an attack,
+	// reload, pre-jump or land asked for again re-fires from frame one. Returns whether the clip
+	// actually (re)started, because the phase arm above it must not name a new play the pose refused.
+	bool PlayDirect(UAnimSequence* Sequence, bool bLoop, bool bRestart);
 	// Pin the current clip to an absolute authored time, freezing its play rate. A scene frame's
 	// pose becomes a function of scene time rather than of accumulated animation delta.
 	void Seek(float PositionSeconds);
@@ -447,7 +455,7 @@ public:
 	// no baked montage asset. Nothing here reaches the locomotion blend stack: a scripted clip plays
 	// OVER the gait rather than replacing the thing that owns it.
 	virtual bool PlayOneShot(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence,
-		bool bLoop, float BlendInSeconds, float BlendOutSeconds) override;
+		bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart = false) override;
 	virtual void StopOneShot(float BlendSeconds) override;
 
 	// --- the phase seam (LIFE5) ---------------------------------------------------------------
@@ -485,7 +493,12 @@ public:
 	//
 	// `Identity` is the clip's vocabulary key, on the same contract `PlayOneShot` takes it: empty is
 	// legal and publishes no phase, which is what every preview and lab stand hands over.
-	void PlayClip(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence, bool bLoop = true);
+	//
+	// `bRestart` is the recovered restart rule for this path: a repeated identical LOOPING request
+	// holds its clip by default, and a restart-route request (an attack, a reload, a pre-jump, a land)
+	// re-fires it from frame one with a new `PlayId`.
+	void PlayClip(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence, bool bLoop = true,
+		bool bRestart = false);
 	void SeekClip(float PositionSeconds);
 	void StopClip();
 	UAnimSequence* GetPlayingClip() const;

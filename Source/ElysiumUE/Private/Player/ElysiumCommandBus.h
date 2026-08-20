@@ -20,4 +20,17 @@ namespace ElysiumCommandBus
 
 	// Run one console line (`;`-separated statements allowed).
 	void Exec(const FString& Line);
+
+	// Split a **tap** line into the press line and the release line that complete one button press.
+	//
+	// A typed `+attack` latches until a typed `-attack`, exactly as retail does (`docs/vtmb/controls.md`
+	// § "The model in one paragraph": a `+cmd` runs on key-down and its `-cmd` on key-up, and a console
+	// line has no key-up). That is the faithful behaviour and it stays. A tap is the **debug** surface's
+	// way of asking for the release a key would have produced: it is not a verb of its own, and it
+	// resolves through the same registry, so an undeclared word or a `Once` verb is refused rather than
+	// turned into a press nothing releases.
+	//
+	// The sign the caller wrote is ignored — a tap always presses and then releases — and any argument
+	// tail rides on both lines, because a `+cmd` and its `-cmd` take the same arguments.
+	bool ParseTap(const FString& Line, FString& OutPressLine, FString& OutReleaseLine);
 }

@@ -16,6 +16,7 @@
 #include "Substrate/ElysiumCameraTrack.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumCommands.h"
+#include "Player/ElysiumCommandBus.h"
 #include "ElysiumContentPaths.h"
 #include "Debug/ElysiumChannelRecorder.h"
 #include "Debug/ElysiumConsole.h"
@@ -309,6 +310,50 @@ bool FElysiumCommandsTest::RunTest(const FString&)
 
 	// A pair invoked bare is a press — how a `.dlg` action or a script spells a momentary verb.
 	TestTrue(TEXT("a bare pair resolves"), Registry.Execute(TEXT("use")));
+
+	// --- The tap split ---------------------------------------------------------------------
+	// A typed `+attack` latches until a typed `-attack`, which is retail's own behaviour and is what
+	// the two assertions below the split re-state. `elysium.cmd.tap` is the debug surface's key-up,
+	// and this is the whole of its rule: one press line, one release line, resolved through the same
+	// registry the console uses.
+	FString Press;
+	FString Release;
+	TestTrue(TEXT("a button verb taps"), ElysiumCommandBus::ParseTap(TEXT("attack"), Press, Release));
+	TestEqual(TEXT("the press is the + half"), Press, FString(TEXT("+attack")));
+	TestEqual(TEXT("the release is the - half"), Release, FString(TEXT("-attack")));
+	// The sign the caller wrote is ignored: a tap always presses and then releases.
+	TestTrue(TEXT("a signed line taps the same way"),
+		ElysiumCommandBus::ParseTap(TEXT("-ATTACK"), Press, Release));
+	TestEqual(TEXT("case folds to the canonical verb"), Press, FString(TEXT("+attack")));
+	// The argument tail rides on both halves, because a `+cmd` and its `-cmd` take the same arguments.
+	TestTrue(TEXT("an argument tail taps"),
+		ElysiumCommandBus::ParseTap(TEXT("  wpn_secondaryatk  2 "), Press, Release));
+	TestEqual(TEXT("the tail rides the press"), Press, FString(TEXT("+wpn_secondaryatk 2")));
+	TestEqual(TEXT("the tail rides the release"), Release, FString(TEXT("-wpn_secondaryatk 2")));
+	// Only a pair can be tapped: a `Once` verb has no release, and an unknown word is not a verb.
+	TestFalse(TEXT("a Once verb cannot be tapped"),
+		ElysiumCommandBus::ParseTap(TEXT("togglecamera"), Press, Release));
+	TestFalse(TEXT("an unknown word cannot be tapped"),
+		ElysiumCommandBus::ParseTap(TEXT("checkFeed()"), Press, Release));
+	TestFalse(TEXT("an empty line cannot be tapped"),
+		ElysiumCommandBus::ParseTap(TEXT("   "), Press, Release));
+
+	// The faithful half, stated as a test so it cannot be "fixed" into an auto-release: the press
+	// alone latches, and only the release lifts it. That is what a real key does through the same
+	// path, and what a typed `+attack` does in retail.
+	TestTrue(TEXT("the tap's press latches"),
+		ElysiumCommandBus::ParseTap(TEXT("attack"), Press, Release));
+	TestTrue(TEXT("the press half resolves"), Registry.Execute(Press));
+	TestTrue(TEXT("the press half latches attack"), Builder.IsDown(EElysiumButton::Attack));
+	// The latch survives the frame's Build, which is why the release has to be deferred a frame
+	// rather than issued beside the press.
+	const FElysiumUserCmd Tapped = Builder.Build(1.f / 60.f);
+	TestTrue(TEXT("the sampled frame carries the press"),
+		Tapped.IsDown(EElysiumButton::Attack));
+	TestTrue(TEXT("the release half resolves"), Registry.Execute(Release));
+	TestFalse(TEXT("the release half lifts attack"), Builder.IsDown(EElysiumButton::Attack));
+	TestFalse(TEXT("the next frame carries nothing"),
+		Builder.Build(1.f / 60.f).IsDown(EElysiumButton::Attack));
 
 	// --- Implementations ----------------------------------------------------------------
 	TArray<FString> Seen;

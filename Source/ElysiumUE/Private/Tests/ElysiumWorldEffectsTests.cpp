@@ -156,13 +156,29 @@ bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
 
 	FElysiumBipedAnimProxy Proxy;
 	UAnimSequence* Sequence = NewObject<UAnimSequence>();
-	Proxy.PlayDirect(Sequence, /*bLoop=*/true);
+	TestTrue(TEXT("the first stand starts the clip"),
+		Proxy.PlayDirect(Sequence, /*bLoop=*/true, /*bRestart=*/false));
 	TestTrue(TEXT("the initial stance loops"), Proxy.IsPlayingLoop());
-	Proxy.PlayDirect(Sequence, /*bLoop=*/false);
+	TestTrue(TEXT("a loop-to-one-shot flip restarts"),
+		Proxy.PlayDirect(Sequence, /*bLoop=*/false, /*bRestart=*/false));
 	TestFalse(TEXT("the same clip can change from a loop to a one-shot"), Proxy.IsPlayingLoop());
-	Proxy.PlayDirect(Sequence, /*bLoop=*/true);
+	TestTrue(TEXT("and back"), Proxy.PlayDirect(Sequence, /*bLoop=*/true, /*bRestart=*/false));
 	TestTrue(TEXT("reset-to-idle restores looping on the same clip"), Proxy.IsPlayingLoop());
 	TestEqual(TEXT("the clip player names what it is standing"), Proxy.GetPlaying(), Sequence);
+
+	// The recovered restart rule and the rule it is the exception to
+	// (`docs/vtmb/animation_and_movers.md`). The ordinary ideal route re-requests a held clip without
+	// restarting it — the controlled crouch trace runs 1.791 s uninterrupted across 151 requests — and
+	// `RestartIdealActivity` clears the current activity first, so an attack, reload, pre-jump or land
+	// asked for again re-fires. `PlayDirect` reports which of the two happened, because the phase arm
+	// above it must not name a new play the pose refused.
+	TestFalse(TEXT("a repeated identical held request does not restart"),
+		Proxy.PlayDirect(Sequence, /*bLoop=*/true, /*bRestart=*/false));
+	TestTrue(TEXT("the same request on the restart route does"),
+		Proxy.PlayDirect(Sequence, /*bLoop=*/true, /*bRestart=*/true));
+	TestTrue(TEXT("a restart leaves the clip standing and looping"), Proxy.IsPlayingLoop());
+	TestEqual(TEXT("and standing the clip it was asked for"), Proxy.GetPlaying(), Sequence);
+
 	Proxy.StopDirect();
 	TestTrue(TEXT("a stopped clip player says it cannot answer a position"),
 		Proxy.GetClipPosition() < 0.f);

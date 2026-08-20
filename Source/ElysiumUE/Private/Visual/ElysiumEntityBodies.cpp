@@ -538,7 +538,7 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	else
 	{
 		bPlaying = Inst->PlayOneShot(Identity, Anim, Request.bLoop, Request.BlendInSeconds,
-			Request.BlendOutSeconds);
+			Request.BlendOutSeconds, Request.bRestart);
 	}
 	if (!bPlaying)
 	{

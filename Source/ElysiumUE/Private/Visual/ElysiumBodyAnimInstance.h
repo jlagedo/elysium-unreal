@@ -114,8 +114,16 @@ public:
 	// sequence is named after the animation the bake wrote; the timeline is keyed by the vocabulary
 	// label the caller resolved it through. An empty identity is legal and means the clip carries no
 	// timeline to walk — see `FElysiumClipIdentity`.
+	//
+	// `bRestart` carries the recovered restart rule (`Visual/ElysiumActionTables.h` →
+	// `RouteRestartsIdenticalRequest`): retail's `RestartIdealActivity` clears the current activity
+	// before setting the ideal, so a request equal to what is already playing re-fires instead of
+	// being swallowed. It defaults to **false** because that is what the ordinary ideal route does,
+	// and a producer that cannot name its route must not assume a restart — the held-crouch trace in
+	// `docs/vtmb/animation_and_movers.md` is the proof of the complementary rule. A host whose only
+	// route already restarts (the dynamic slot montage) ignores it.
 	virtual bool PlayOneShot(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence,
-		bool bLoop, float BlendInSeconds, float BlendOutSeconds)
+		bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart = false)
 	{
 		return false;
 	}

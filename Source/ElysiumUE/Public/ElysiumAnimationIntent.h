@@ -706,6 +706,14 @@ struct FElysiumActivityClip
 	// recovery"). Zero when no answering clip authors a reach, which is no claim rather than a
 	// zero-length reach.
 	float MaxReachCm = 0.0f;
+	// Whether the recovered task routes that request this activity take the **restart helper**
+	// (`Visual/ElysiumActionTables.h` → `ActivityRestartsIdenticalRequest`). `RestartIdealActivity`
+	// clears the current activity before setting the ideal, so a repeated identical request re-fires
+	// its sequence instead of being swallowed as an unchanged ideal — an attack, a reload, a pre-jump,
+	// a land, a cower. Answered here rather than at each producer because the route belongs to the
+	// LOGICAL request the seam was handed, which is the only place the request and the catalog are in
+	// one hand.
+	bool bRestart = false;
 
 	// --- what the label resolved to, when it named a FAN (LIFE5) ---------------------------------
 	//
@@ -751,6 +759,12 @@ struct FElysiumOneShotClipRequest
 	// The vocabulary key the cell came from, for the claim's own diagnostics line. Never re-resolved.
 	FString Label;
 	bool bLoop = false;
+	// The recovered restart rule, carried from the activity seam's own answer
+	// (`FElysiumActivityClip::bRestart`). It changes exactly one thing: whether a repeated identical
+	// request re-fires the clip from frame one or holds what is already playing. Only a HELD (looping)
+	// repeat can be held at all — a one-shot has always finished or been replaced — so this is inert
+	// on every non-looping play, and inert on the montage route, which rebuilds its montage anyway.
+	bool bRestart = false;
 	// Stated apart because retail states them apart: the flinch fades in over 0.1 and out over 0.3,
 	// and `PlaySlotAnimationAsDynamicMontage` takes the two separately.
 	float BlendInSeconds = 0.2f;

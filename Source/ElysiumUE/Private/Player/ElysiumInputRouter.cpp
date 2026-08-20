@@ -93,9 +93,56 @@ void UElysiumInputRouter::Shutdown()
 		FElysiumCommands::Get().SetUserCmdSink(nullptr);
 	}
 	CmdBuilder.Reset();
+	// `Reset` already zeroed the button field, so the owed releases have nothing left to clear and
+	// firing them here would run `-cmd` handlers after the sink is gone.
+	PendingTapReleases.Reset();
 	EnhancedActions = nullptr;
 	BoundInput.Reset();
 	PC.Reset();
+}
+
+bool UElysiumInputRouter::TapCommand(const FString& Line)
+{
+	FString Press;
+	FString Release;
+	if (!ElysiumCommandBus::ParseTap(Line, Press, Release))
+	{
+		UE_LOG(LogElysiumRouter, Warning,
+			TEXT("tap refused: '%s' does not name a declared +/- button verb, so there is nothing to "
+			     "press and release"), *Line);
+		return false;
+	}
+	if (bReplaying)
+	{
+		// A replayed frame takes its command from the stream and never samples the builder, so the
+		// press would latch where nothing reads it. Refused out loud rather than accepted and lost:
+		// a driver that thinks it clicked and did not is the whole failure this verb exists to avoid.
+		UE_LOG(LogElysiumRouter, Warning,
+			TEXT("tap '%s' refused: a command stream is replaying, and a replayed frame carries the "
+			     "recorded intent rather than anything pressed live"), *Line);
+		return false;
+	}
+	// The press goes through the ordinary bus, so an alias, a handler and the latch all behave exactly
+	// as they do for a key — the tap owns only when the release happens.
+	ElysiumCommandBus::Exec(Press);
+	PendingTapReleases.Add(MoveTemp(Release));
+	return true;
+}
+
+void UElysiumInputRouter::ReleaseTaps()
+{
+	if (PendingTapReleases.IsEmpty())
+	{
+		return;
+	}
+	// Moved out first: a `-cmd` handler that taps again must owe its release to the NEXT frame rather
+	// than have it consumed by the loop that is running.
+	TArray<FString> Owed = MoveTemp(PendingTapReleases);
+	PendingTapReleases.Reset();
+	for (const FString& Line : Owed)
+	{
+		ElysiumCommandBus::Exec(Line);
+	}
 }
 
 void UElysiumInputRouter::BindLine(UInputComponent* Input, const FInputChord& Chord, EInputEvent Event,
@@ -358,6 +405,11 @@ void UElysiumInputRouter::SampleFrame(float DeltaSeconds)
 	{
 		Current = CmdBuilder.Build(DeltaSeconds);
 	}
+
+	// The press has now been sampled into this frame's command, so the key-up it is owed runs here and
+	// the next frame's command carries the bit cleared. On a replayed frame nothing sampled the
+	// builder, and the release still runs — a latch the stream never carried must not survive it.
+	ReleaseTaps();
 
 	if (const APlayerController* Controller = PC.Get())
 	{

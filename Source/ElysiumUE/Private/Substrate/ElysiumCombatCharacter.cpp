@@ -1057,6 +1057,10 @@ bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayReq
 	Play.bGrid = Clip.bGrid;
 	Play.AxisValue = Clip.AxisValue;
 	Play.bLoop = false;
+	// The recovered restart rule, answered by the seam that resolved the clip: an activity the
+	// restart-ideal task routes request re-fires when it is asked for again, instead of being
+	// swallowed as an unchanged ideal.
+	Play.bRestart = Clip.bRestart;
 	// A stated blend wins; otherwise the resolved clip's own authored fade, which is the ordinary
 	// sequence-blend rule and already 0 on a `flags & 0x2` hard cut.
 	Play.BlendInSeconds = Request.BlendInSeconds >= 0.0f ? Request.BlendInSeconds : Clip.FadeSeconds;

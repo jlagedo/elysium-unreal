@@ -593,6 +593,52 @@ void CollectNpcTaskPolicies(const FString& TaskName, TArray<const FNpcTaskPolicy
 	}
 }
 
+bool RouteRestartsIdenticalRequest(ENpcTaskRoute Route)
+{
+	// The two restart-helper routes, and only those. `SetIdeal` and `SetIdealArgument` go straight to
+	// `SetIdealActivity`, which leaves an unchanged ideal alone; `SetActivity` commits immediately but
+	// still through the unchanged-selection test; `SetIdealNavigator` and `RemapSharedTask` end in one
+	// of the above.
+	return Route == ENpcTaskRoute::RestartIdeal || Route == ENpcTaskRoute::RestartIdealChoice;
+}
+
+bool TaskRestartsIdenticalRequest(const FString& TaskName)
+{
+	TArray<const FNpcTaskPolicy*> Policies;
+	CollectNpcTaskPolicies(TaskName, Policies);
+	for (const FNpcTaskPolicy* Policy : Policies)
+	{
+		if (Policy != nullptr && RouteRestartsIdenticalRequest(Policy->Route))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ActivityRestartsIdenticalRequest(const FString& Activity)
+{
+	if (Activity.IsEmpty())
+	{
+		return false;
+	}
+	for (const FNpcTaskPolicy& Policy : NpcTaskPolicies())
+	{
+		if (!RouteRestartsIdenticalRequest(Policy.Route))
+		{
+			continue;
+		}
+		for (int32 Index = 0; Index < Policy.ActivityCount; ++Index)
+		{
+			if (FCString::Stricmp(Policy.Activities[Index], *Activity) == 0)
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 void CollectNpcActivities(TArray<FString>& OutActivities)
 {
 	OutActivities.Reset();

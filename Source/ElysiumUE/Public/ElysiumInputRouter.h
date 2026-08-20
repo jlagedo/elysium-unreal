@@ -49,6 +49,16 @@ public:
 	const FElysiumUserCmd& CurrentCmd() const { return Current; }
 	FElysiumUserCmdBuilder& Builder() { return CmdBuilder; }
 
+	// Press a `+`/`-` button verb and release it after the frame that samples it — the key-up a typed
+	// console line has no way to produce. **This is the debug surface, not a verb**: `+attack` through
+	// the bus still latches until `-attack`, which is what retail does, and this is how a QA driver
+	// asks for the click a key would have made. Returns false — and says so — when the line does not
+	// name a declared button pair.
+	//
+	// The release is deferred rather than issued immediately because the two edges would otherwise
+	// cancel inside the builder and no frame would ever carry the bit.
+	bool TapCommand(const FString& Line);
+
 	// Apply a resolved scope to the command seam. Every transition clears held input; a scope without
 	// player contexts also replaces the body's retained command immediately, because UI-only mode may
 	// stop controller sampling before another frame can publish a neutral command.
@@ -97,6 +107,8 @@ private:
 	// builder. Once per frame, at the head of `SampleFrame`.
 	void RefreshLookTuning();
 	void PublishCurrentToBody();
+	// Fire the `-cmd` half of every tap whose press has now been sampled into `Current`.
+	void ReleaseTaps();
 
 	TWeakObjectPtr<APlayerController> PC;
 	TWeakObjectPtr<UInputComponent> BoundInput;
@@ -107,6 +119,10 @@ private:
 	FElysiumUserCmd Current;
 	ElysiumInput::FElysiumLookTuning LookTuning;
 	bool bWarnedLookCurve = false;
+
+	// The `-cmd` lines owed by taps pressed since the last sample. More than one can stand at once —
+	// a driver taps attack and reload in the same statement — and each is released exactly once.
+	TArray<FString> PendingTapReleases;
 
 	bool bRecording = false;
 	bool bReplaying = false;

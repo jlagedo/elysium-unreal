@@ -62,6 +62,50 @@ void ElysiumCommandBus::Exec(const FString& Line)
 	Console().Execute(Line);
 }
 
+bool ElysiumCommandBus::ParseTap(const FString& Line, FString& OutPressLine, FString& OutReleaseLine)
+{
+	OutPressLine.Reset();
+	OutReleaseLine.Reset();
+
+	FString Statement = Line;
+	Statement.TrimStartAndEndInline();
+	if (Statement.IsEmpty())
+	{
+		return false;
+	}
+
+	// The registry's own split: the first whitespace-delimited word is the verb, the rest is the
+	// argument tail. `Execute` does the same thing, and doing it differently here is how a tap and a
+	// typed line come to disagree about what was asked for.
+	FString Word = Statement;
+	FString Args;
+	int32 Space = INDEX_NONE;
+	if (Statement.FindChar(TEXT(' '), Space))
+	{
+		Word = Statement.Left(Space);
+		Args = Statement.Mid(Space + 1);
+		Args.TrimStartAndEndInline();
+	}
+	if (Word.StartsWith(TEXT("+")) || Word.StartsWith(TEXT("-")))
+	{
+		Word.MidInline(1);
+	}
+
+	const FName Bare = ElysiumCommands::Canonical(Word);
+	const FElysiumCommandDef* Def = FElysiumCommands::Get().Find(Bare);
+	if (Def == nullptr || Def->Kind != EElysiumCmdKind::ButtonPair)
+	{
+		// Not a failure of this function — the caller reports it with the line that was asked for.
+		return false;
+	}
+
+	const FString Tail = Args.IsEmpty() ? FString() : (TEXT(" ") + Args);
+	const FString Name = Bare.ToString();
+	OutPressLine = TEXT("+") + Name + Tail;
+	OutReleaseLine = TEXT("-") + Name + Tail;
+	return true;
+}
+
 // =====================================================================================
 // Verbs
 // =====================================================================================
@@ -129,6 +173,29 @@ namespace
 		return FPaths::ProjectSavedDir() / TEXT("Elysium/Cmds") / (Stem + TEXT(".cmds"));
 	}
 }
+
+// The debug affordance for a typed button verb. `elysium.cmd +attack` latches until `elysium.cmd
+// -attack`, which is what a typed `+cmd` does in retail — a console line produces a key-DOWN and there
+// is no key-up behind it (`docs/vtmb/controls.md` § "The model in one paragraph"). That stays. This
+// verb is the QA driver's key-up: it presses through the same bus and releases after the frame that
+// samples the press, so one call is one click. It needs the router, because the router owns the frame.
+static FAutoConsoleCommandWithWorldAndArgs GElysiumCmdTap(
+	TEXT("elysium.cmd.tap"),
+	TEXT("Press a VtMB +/- button verb for exactly one sampled frame and release it: "
+	     "`elysium.cmd.tap attack` is one click, where `elysium.cmd +attack` latches until "
+	     "`elysium.cmd -attack` (which is what retail does with a typed +cmd)."),
+	FConsoleCommandWithWorldAndArgsDelegate::CreateStatic([](const TArray<FString>& Args, UWorld* World)
+	{
+		if (Args.Num() == 0)
+		{
+			UE_LOG(LogElysiumCmdBus, Display, TEXT("usage: elysium.cmd.tap <button verb> [args]"));
+			return;
+		}
+		if (UElysiumInputRouter* Router = RouterFor(World))
+		{
+			Router->TapCommand(FString::Join(Args, TEXT(" ")));
+		}
+	}));
 
 static FAutoConsoleCommandWithWorldAndArgs GElysiumCmdRecord(
 	TEXT("elysium.cmd.record"),

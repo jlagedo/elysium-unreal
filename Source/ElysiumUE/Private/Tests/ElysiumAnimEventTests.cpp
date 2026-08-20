@@ -504,6 +504,43 @@ bool FElysiumAnimEventWindowTest::RunTest(const FString&)
 		TestEqual(TEXT("a different label re-arms at 0 too"), IdsOf(Fired), FString(TEXT("2050")));
 	}
 
+	// --- A HELD repeat keeps its play, and its timeline is not disturbed ---------------------------
+	{
+		// The counter-case to the block above, and the reason the arm follows the pose rather than the
+		// request (`Visual/ElysiumBipedAnimInstance.cpp` → `PlayClip`). The ordinary ideal route
+		// re-requests a clip it is already holding — the controlled crouch trace does it 151 times
+		// across 1.791 s (`docs/vtmb/animation_and_movers.md`) — and the pose refuses to restart. The
+		// arm therefore keeps its `PlayId` and its anchor, and what the cursor sees is one continuous
+		// play: no record fires twice, and none is skipped. Arming a new `PlayId` on a clip that did
+		// not restart is what would put a footstep under a body that never took a step.
+		TArray<FElysiumAnimEvent> Timeline;
+		Timeline.Add(Ev(0.0f, 2040));
+		Timeline.Add(Ev(0.3f, 2050));
+		Timeline.Add(Ev(0.7f, 2051));
+
+		FElysiumAnimEventCursor Cursor;
+		ElysiumAnimEvents::Advance(&Timeline, PhaseAt(0.40f, true, 1), Cursor, Fired);
+		TestEqual(TEXT("the held play walks up to 0.40"), IdsOf(Fired), FString(TEXT("2040,2050")));
+
+		// The re-request. Nothing about the published phase changes except the clock the clip kept
+		// advancing, because nothing about the play changed.
+		ElysiumAnimEvents::Advance(&Timeline, PhaseAt(0.50f, true, 1), Cursor, Fired);
+		TestEqual(TEXT("a repeat the pose refused re-fires nothing behind it"),
+			IdsOf(Fired), FString());
+		TestEqual(TEXT("...and the cursor still names the play it was already walking"),
+			Cursor.PlayId, 1u);
+
+		ElysiumAnimEvents::Advance(&Timeline, PhaseAt(0.80f, true, 1), Cursor, Fired);
+		TestEqual(TEXT("...and the record ahead of it still fires, exactly once"),
+			IdsOf(Fired), FString(TEXT("2051")));
+
+		// And the restart route, on the same clip, is the visible difference: a new `PlayId` is the
+		// only thing that can say a repeated request was a new play.
+		ElysiumAnimEvents::Advance(&Timeline, PhaseAt(0.10f, true, 2), Cursor, Fired);
+		TestEqual(TEXT("a restart-route repeat runs the timeline again from zero"),
+			IdsOf(Fired), FString(TEXT("2040")));
+	}
+
 	// --- A zero-delta frame fires nothing ----------------------------------------------------------
 	{
 		// A paused clip, a fully faded one, or a second read in the same frame. The interval is
