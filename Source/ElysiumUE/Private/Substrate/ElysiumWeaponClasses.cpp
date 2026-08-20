@@ -899,21 +899,37 @@ bool FElysiumWeapon::CommitArrivesFromAnimEvent(FElysiumCombatCharacter& Char,
 		return true;
 	}
 
-	// Degraded: the body IS being walked and this attack clip declares no commit id, so the instant
-	// is estimated where retail reads it off the sequence.
+	// No commit id on this attack clip. For MELEE that is the corpus as authored — no shipped
+	// sequence emits 3047, retail commits melee through its traced-contact path — so the estimate
+	// is the interim stand-in and the absence reports at Verbose, not as a failure. A RANGED clip
+	// without its 3030-3044 id is a genuine content gap (the move_and_ranged banks author 3031)
+	// and keeps the warning.
 	//
 	// Keyed by CLIP and process-wide, like the unclaimed-event census and for the same reason: the
 	// gap belongs to an authored sequence, not to a weapon entity, and a crowd of twenty combatants
 	// holding the same record would otherwise report one authored gap twenty times.
 	if (ShouldReportOnce(FString::Printf(TEXT("estimate:%s@%s"), *ClipLabel, *OwnerStem)))
 	{
-		UE_LOG(LogElysiumWeapon, Warning,
-			TEXT("%s: attack clip '%s'@'%s' declares %s, so the %s commit falls back to the "
-				"ContactEventCycle estimate at %.2f of the clip"),
-			*DebugString(), *ClipLabel, *OwnerStem,
-			Timeline == nullptr ? TEXT("no event timeline at all")
-				: TEXT("an event timeline with no commit id"),
-			ElysiumWeapons::OperatorBodyName(OpBody), ElysiumWeapons::ContactEventCycle);
+		if (OpBody == ElysiumWeapons::EOperatorBody::Melee)
+		{
+			UE_LOG(LogElysiumWeapon, Verbose,
+				TEXT("%s: attack clip '%s'@'%s' declares %s, so the %s commit takes the "
+					"ContactEventCycle stand-in at %.2f of the clip"),
+				*DebugString(), *ClipLabel, *OwnerStem,
+				Timeline == nullptr ? TEXT("no event timeline at all")
+					: TEXT("an event timeline with no commit id"),
+				ElysiumWeapons::OperatorBodyName(OpBody), ElysiumWeapons::ContactEventCycle);
+		}
+		else
+		{
+			UE_LOG(LogElysiumWeapon, Warning,
+				TEXT("%s: attack clip '%s'@'%s' declares %s, so the %s commit falls back to the "
+					"ContactEventCycle estimate at %.2f of the clip"),
+				*DebugString(), *ClipLabel, *OwnerStem,
+				Timeline == nullptr ? TEXT("no event timeline at all")
+					: TEXT("an event timeline with no commit id"),
+				ElysiumWeapons::OperatorBodyName(OpBody), ElysiumWeapons::ContactEventCycle);
+		}
 	}
 	return false;
 }

@@ -427,6 +427,17 @@ void FElysiumGreenRoomRun::DestroyBodies()
 	if (bPlayerSurfaceActive && Map)
 	{
 		Map->ClearPlayerVisual();
+		// The entity half of the same teardown, the pairing `FElysiumPlayer::OnRuntimeModelChanged`
+		// makes: the component the build synced onto the player has just been destroyed, so the
+		// pointer goes with it rather than staying a dangling read for everything that reaches the
+		// body through the entity. The model string is logical state and survives, as it does there.
+		if (FElysiumEntityWorld* EntityWorld = Map->GetEntityWorld())
+		{
+			if (FElysiumPlayer* Player = EntityWorld->FindPlayer())
+			{
+				Player->Visual = nullptr;
+			}
+		}
 	}
 	bPlayerSurfaceActive = false;
 	Bodies.Reset();
@@ -473,6 +484,26 @@ bool FElysiumGreenRoomRun::BuildBodies()
 			{
 				Body->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 				Body->AttachToComponent(Map->GetRootComponent(), FAttachmentTransformRules::KeepWorldTransform);
+			}
+			// The same sync `LabSetDriveBody` makes, and for the same two reasons. This builds the
+			// player's visual outside the entity's own embodiment call, so without it
+			// `GetSkeletalBody()` stays null and a real equip's wield visual silently never attaches
+			// (`ApplyWieldVisual`'s bodiless early-out) even though the mesh is visibly rendering;
+			// and `ModelStem()` reads the `model` field, not the pawn, so every producer that
+			// resolves through the ENTITY — a weapon's attack activity, a damage reaction, a
+			// scripted beat — would search no vocabulary. Written directly rather than through
+			// `SetRuntimeModel`, whose model-changed hook would tear down and rebuild the visual
+			// this branch has just attached.
+			if (Body)
+			{
+				if (FElysiumEntityWorld* EntityWorld = Map->GetEntityWorld())
+				{
+					if (FElysiumPlayer* Player = EntityWorld->FindPlayer())
+					{
+						Player->Visual = Body;
+						Player->Model = Case.MeshStem;
+					}
+				}
 			}
 		}
 		else
