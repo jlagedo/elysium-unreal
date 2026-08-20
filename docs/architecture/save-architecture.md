@@ -135,6 +135,14 @@ Three things do *not* fit the field walk and get explicit hooks:
 | bodies (meshes, MIDs, cables, constraints) | **not saved**. Bodies are disposable presentation (R1); they rebuild from the def + the restored entity state |
 | anything an engine object owns (timers, tick handles, actor transforms) | **not saved**, and nothing game-visible is allowed to live there (R4/S1) |
 
+**Animation channel state is derived, and none of it is written.** A body's reaction claims, its
+montage-slot segment claims, and the melee swing walk's per-sub-step contact bookkeeping and
+hit-once groups all belong to a body — disposable presentation under R1 — so every one of them is
+absent after a load and re-taken by whatever producer still wants the pose. The derived hostility
+rows a struck NPC accumulates are transient for a different reason: they are a five-second memory
+refreshed per hit and superseded by the stated relationships that own the durable answer, so
+persisting the memory would restore a grudge the relationships already settle.
+
 **A leaf blob carries the schema it was written at.** That blob is opaque to the payload — the
 entity is written through its own `Serialize` into a private memory archive and the bytes are
 stored — and a raw memory archive has no version container. A leaf's `Ar.Version()` gate is
@@ -153,6 +161,13 @@ or the queued contact estimate; `WeaponSwingClipOwner` (27) appends the bank tha
 swing's resolved clip. A pre-27 payload restores a swing with no clip owner, and its blocked
 reaction resolves identically off the attacking body's stem and the swing's clip label — only the
 diagnostic line loses the bank name.
+
+Both fields stay in the schema, and one of the two routes they name has no runtime implementation:
+**melee does not await a sequence event** — it walks its clip's authored contact windows — so a
+restored melee swing queued on the event route is **refused with a warning** rather than replayed
+onto a path the runtime does not have. Ranged is unaffected: its commit is its own authored event.
+Dropping the fields would raise `MinSupported`; keeping them is what lets an old payload load and
+name what it lost.
 
 ## 5. The map snapshot lifecycle
 
@@ -242,13 +257,37 @@ A save is only worth as much as the run that follows it, so three rules hold on 
   `FPlatformTime::Seconds` or `World->GetTimeSeconds` for gameplay is a save bug waiting to surface.
 - **RNG is an owned, seeded stream.** `ElysiumRng` owns one `FRandomStream` per named stream —
   `OneOfSet` (589 dialogue gates), `LogicTimer`, `LogicCase`, `Dice` (`recovered/dice-system.md`),
-  `Ambient`, `Reaction` (the damage flinch's head/torso coin, its ±30° jitter and its
-  weighted-sequence draw) — each seeded off one session seed by a fixed hash, so a new game seeds
+  `Ambient`, `Reaction` (the combat pose draws, enumerated below) — each seeded off one session seed
+  by a fixed hash, so a new game seeds
   once and every stream follows. Their state is in the `Session` block: each stream saves
   `{initial, current}` and restores by re-initialising to the saved *current* value, which is the
   only writer `FRandomStream`
   exposes and which continues the sequence exactly. `FMath::Rand()` is banned in gameplay code for
   the same reason `FTimerManager` is.
+
+  **What draws on `Reaction` is a closed list**, because a stream is only reproducible if its
+  consumers are:
+
+  - the **damage flinch** — the head/torso coin, the ±30° jitter on the hit yaw, and the weighted
+    pick among the resolved activity's equal variants;
+  - a **blocked contact**'s two poses — the defender's block or block-stagger and the attacker's own
+    blocked reaction — one weighted variant pick each, taken when the pose is taken and never again
+    on a resume: a held block that loses and re-takes the base channel replays its **cached** cell,
+    so coming back costs no draw;
+  - the **grounded knockback** cell's weighted variant pick — the cell the gate selected still goes
+    through the same reaction play, so it costs the one draw every reaction play costs;
+  - the **death ladder** — one weighted pick per rung it actually tries, spent on entry to the play
+    rather than on its success, so a body whose bank has no `ACT_DIESIMPLE` still pays that rung's
+    draw on the way past it. Only a rung the program does not name at all costs nothing.
+
+  Every one of those is the same single pick, taken in one place: a reaction play draws once for
+  the weighted variant and never again.
+
+  **What draws nothing at all is the knockback *gate*.** Admission is the margin band, the
+  eligibility filter and the direction classifier, every one of them arithmetic over stated values,
+  and the single stand-in candidate per direction bucket is deterministic by construction
+  (`docs/vtmb/combat-and-damage.md`). Consuming the authored candidate table adds a draw per
+  multi-candidate bucket, and it will be this stream's.
   *(`docs/vtmb/script_api.md` leaves open whether VtMB's `OneOfSet` counter is a per-call RNG or a frame
   counter; whichever it resolves to, ours is a named stream so the answer is a seeding decision, not
   an architecture change.)*

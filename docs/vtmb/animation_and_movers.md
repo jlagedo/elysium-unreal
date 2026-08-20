@@ -171,7 +171,8 @@ references anims through a blend grid: `szlabelindex`@0, `szactivitynameindex`@4
 bbox@28, `numblends`@52,
 then **`short anim[16][16]`@56** (512B **inline** blend grid; `MAXSTUDIOBLENDS=16`, a
 v2531 fixed-size divergence from modern Source's variable `blend[]` pointer), then a
-**196-byte trailing region** (568..763) whose blend and autolayer fields are decoded
+**196-byte trailing region** (568..763) holding the blend and autolayer fields, and — in
+its last 56 bytes — VtMB's own melee attack authoring, all decoded
 below. The **fixed stride is 764B**, established by data: it is the unique
 stride that resolves every sequence name across models of every size — jeanette
 (22: `Jeanette_Line1_Col_E`…`ragdoll`), mingxiao (29: `run`…`mingXiao_death`),
@@ -202,6 +203,52 @@ more than one owner/sequence identity. The capture inventory therefore keys an
 entry by exact owner model and raw index, retains the complete 764-byte sequence
 descriptor and 16×16 grid, and records target-model compatibility separately.
 The same rule applies to all 3,615 raw 72-byte animation descriptors.
+
+### The trailing custom block is a melee attack, authored on the sequence [data-verified]
+
+The descriptor's last fields are not animation data at all: they are how VtMB authors an attack.
+`docs/vtmb/mdl_v2531.md` owns the on-disk facts; what each field *does* is
+`docs/vtmb/combat-and-damage.md`. The map, in this document's own offsets:
+
+| Off | Field | Role |
+|---:|---|---|
+| 708 (`0x2C4`) | `numswingcentres` | how many contact records this attack declares |
+| 712 (`0x2C8`) | `swingcentreindex` | descriptor-relative base of the 188-byte record array |
+| 720 (`0x2D0`) | `reach` | target-acquisition distance, Source units |
+| 724 (`0x2D4`) | attack button mask | which direction key selects this attack |
+| 728 (`0x2D8`) | dodge activity enum | load-resolved from 732 |
+| 732 (`0x2DC`) | dodge activity name | the `ACT_DODGE_*` this sequence answers with |
+| 736 (`0x2E0`) | blocked-reaction enum | load-resolved from 740 |
+| 740 (`0x2E4`) | `szblockedreactionindex` | the attacker's blocked reaction |
+| 744 (`0x2E8`) | chain successor name | the next attack in the combo chain |
+| 748 (`0x2EC`) | alternate successor name | the flying-knockback wall branch |
+| 752/756/760 (`0x2F0`/`0x2F4`/`0x2F8`) | combo window | open, close and hold, in clip cycles |
+
+**A swing is live exactly while a playing sequence declares at least one record**, so the record
+array is simultaneously the attack's contact geometry and its window. One 188-byte record:
+
+| Off | Field |
+|---:|---|
+| `0x00` / `0x04` | `start` / `end` — the contact window as a fraction of the clip cycle |
+| `0x08` | bone index, in the declaring model's own bone table |
+| `0x0C` / `0x18` | the contact segment's two endpoints, **bone-local**, Source units |
+| `0x28`..`0x34` | four per-bucket knockback candidate counts |
+| `0x38`..`0x74` | sixteen load-resolved knockback activity enum slots |
+| `0x78` / `0x88` / `0x98` / `0xA8` | four direction buckets × four knockback activity **name** indices |
+| `0xB8` | the direction bucket 0 answers; the four cycle `BACK, LEFT, FORWARD, RIGHT` |
+| `0xBA` | `2` marks the knockback unconditional |
+
+**574 of the install's 14,012 descriptors carry 1,587 records across 53 models** — the shared weapon
+banks, the player fists and claws, and the monster bodies. The bone index is the declaring model's,
+so the **bone name** is the durable key across an include chain, exactly as it is for every other
+bone-addressed record.
+
+**The three name-index fields are resolved by the DLL at model load**, into the enum slots beside
+them, the same pattern as `activity`@12 from `szactivitynameindex`@4. The dodge pair carries a
+recovered load-time warning — "unregistered dodge activity" — for a name the activity registry does
+not know. The two chain fields are the exception to the pattern: they name **sequence labels**, not
+activities, and are resolved case-insensitively through `LookupSequence` at runtime rather than at
+load.
 
 ### The blend grid is two axes, not a raw 16×16 [data-verified + VtMB decompiled]
 
@@ -1252,6 +1299,14 @@ covers only 2…177. The Troika overrides own them:
 where the restart helper `0x10289ee0` clears `m_Activity(+0xfec)` first so the request is not
 swallowed as a no-op. **The re-evaluation cadence is therefore one selection per idle-clip loop** —
 nothing re-enters the resolver mid-sequence.
+
+**That clear is gated on the route, not on the activity.** Only the four disposition/special-idle
+tasks above reach `RestartIdealActivity`, so only they re-select on completion. An **ordinary held
+ideal activity does not restart**: it repeats its own sequence through the sequence-finished path
+instead, which is the crouch trace's counter-fact below ("Nothing else in this vocabulary holds an
+unarmed crouch") and is a separate mechanism reaching a superficially similar result. Generalizing
+the clear to every completed activity would make a held request re-run the whole selector every
+clip, and the controlled 54-sample crouch run measures that it does not.
 
 `0x102ab369` adds a pre-branch: `m_hClosestPlayer(+0x628c)` valid, `m_flPlayerDist(+0x6264) <= 128.0`
 (`DAT_1046dcd0`) and `COND_SEE_PLAYER (0x5a)` → a `SelectWeightedSequence(ACT_IDLE_PLAYER_IN_FACE)`

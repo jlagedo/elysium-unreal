@@ -522,6 +522,60 @@ and emits an `FElysiumAnimationSelection` diagnostic record:
    structurally after the blend-out — and a holder releases on every stop path (a cinematic stop
    releases its claim before the idle reset that follows it, through the embodiment seam), so a
    claim can never outlive its producer.
+
+   **A reaction claim's length is its release condition, never a wall clock.**
+   `EElysiumReactionRelease` states the three shapes the combat families have, and each names both
+   how long the claim stands and what the graph does while it stands:
+
+   - `ClipCompletion` — the resolved cell's own length less its out-fade, so the fade completes on
+     the clip's end. A cell shorter than its own out-fade answers zero and fades straight back out,
+     which is the honest reading of a clip that ends inside its own transition. This is what every
+     struck reaction means: a blocked recoil, a defender's block, a grounded knockback.
+   - `Envelope` — the stated blend-in and nothing after it. Retail's `DamageFlinch` is a linear
+     weight triangle evaluated against a static pose (`docs/vtmb/combat-and-damage.md` § "Damage
+     flinch"), so the clip's own length decides nothing: a two-frame hit cell and a long one occupy
+     the channel for exactly the same span. A stated pair that sums to nothing describes no reaction
+     at all and is refused by name rather than parked.
+   - `Predicate` — no duration whatever. The producer re-checks its own condition and hands the
+     claim back through the release seam, and the branch **repeats** its clip for as long as the
+     claim stands, because a pose that must be on screen for an unbounded hold cannot be a
+     one-shot's terminal frame.
+
+   The claim takes the condition's whole life — the hold plus the out-fade that follows it — from
+   one expression, so a claim cannot expire while the branch is still fading.
+
+   **A held claim can be lost without its predicate ending, and that is not an error.** An equal or
+   higher band takes the base channel on `>=`, which is exactly what the first blocked hit does when
+   it plays `ACT_BLOCK` on the same body at the same Reaction band. Retail has no such gap — it
+   re-derives the ideal activity every frame, so the pose and the classification fall and resume
+   together (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions"). The producer
+   reproduces that by polling one three-valued answer: **held**, **free**, or
+   **displaced**. On *free* it replays the **cached cell** straight at the play seam — no
+   re-resolution, no weighted pick, and therefore no second `Reaction` stream draw, so a resume can
+   never land on a different variant than the pose it is resuming. On *displaced* it waits instead
+   of fighting for the channel, because re-claiming at an equal band would cut short the very
+   reaction that displaced it; the next think asks again, silently, because a contested channel is
+   an ordinary state and reporting it per think would be a log line per frame for as long as a
+   button is held. Either way the classification never moves. Releasing clears the cached cell with
+   the claim: a hold whose predicate is over is not resumable, and a record left behind would let
+   the next poll re-take a dead pose.
+
+   **A montage-slot run is one claim across many clips.** `scripted_sequence`'s
+   `m_iszIdle → m_iszCustomMove → m_iszPlay → m_iszPostIdle` and an interesting place's
+   enter/hold/leave are the same shape, so they are one mechanism and not two:
+   `FElysiumClipSegment` is what a producer hands the clip funnel, and the segments of a run pass
+   the body's single `DefaultSlot` dynamic montage to each other under one claim that only the
+   run's own stop path gives back. A claim that expired with each segment's clip would drop the
+   channel — and the pose with it — in the gap between two segments of one beat.
+
+   **The band is the whole difference between the two families, which is why a segment is a record
+   rather than a flag.** A scripted beat claims `Scripted`, which outranks the travelling body's own
+   locomotion publish; that is what lets `m_iszCustomMove` play over a body walking to its mark,
+   where an `Ambient` claim would be consumed by the travel publish the instant the body left. An
+   interesting place claims `Ambient`, which deliberately does not outrank it — an ambient stance
+   yields the moment the body travels, and that is the one recovered relationship in the priority
+   table. Every caller outside a run means the band-less form: the ambient band, one clip, and a
+   claim that goes when the clip does.
 2. **Choose a base activity.** Locomotion classification operates on the body sample; gameplay
    requests supply attacks, reactions and contextual actions. A direct-sequence request bypasses
    only this and activity translation.
@@ -894,6 +948,11 @@ hand-written instance:
   the whole duration. The decision is reported once per real transition, on the blend report and
   the log, because downstream it is indistinguishable from an authored hard cut.
 
+  **There is no Inertialization node in the graph.** The stack's own crossfade *is* the transition,
+  so an inertializer would be a second answer to a question already settled — and, sitting
+  downstream of a stack that never requests inertialization, an unreached one. Anything that wants
+  a blend duration states it as a pin on the node that consumes it.
+
   **Three divergences of this reproduction, each an explicit owner call taken with the
   restore-faithful blend cutover**, recorded here beside the faithful record they depart from:
 
@@ -929,6 +988,20 @@ hand-written instance:
   grid. It is deliberately not an aim-offset node: that node's samples are mesh-space additives,
   and this family bakes as masked local poses with the split bone already resolved against its
   declaring host. The property VtMB's split bone supplied is spent at bake, not reproduced here.
+- **A reaction branch** over the locomotion source, switched by one active flag and fed exactly one
+  of a sequence or a blend space — the same "exactly one of these two" shape the base channel and
+  the upper-body overlay take, because a directional hit resolves to its baked fan and a plain
+  reaction label to a single clip. Its blend-in and blend-out are **pins, not constants**, so a
+  producer's stated envelope (the flinch's recovered 0.1 in / 0.3 out) reaches the graph as data.
+  One **loop pin** drives both players from the same value, which is what lets a held pose repeat
+  where a struck one-shot holds its terminal frame. A fan's length is the engine's own answer for
+  the axis value the branch is sampling, because a fan's cells do not share a length and the pose
+  the graph strikes is the blend of two of them.
+
+  The branch **replaces** the locomotion pose without stopping the stack under it, and it composes
+  concurrently with the montage slot below and the proxy's cinematic clip player above. All of those
+  clocks keep running while only one of them is the body's published timeline, so which arm
+  publishes changes while none of them ends.
 - **Montage slots** for one-shots: scripted-sequence clips, scene gestures, disciplines, and the
   cinematic playback path. A slot is also what keeps a gesture layered over a sequence instead of
   replacing it.

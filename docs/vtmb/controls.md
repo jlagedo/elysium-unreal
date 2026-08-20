@@ -51,6 +51,16 @@ Three layers, three owners:
 | what is bindable | `client.dll` / `vampire.dll` / `engine.dll` ConCommands + `cfg` aliases | — |
 | what is bound | `cfg/config.cfg` (live), seeded from `cfg/default.cfg` | Valve console text |
 
+**A typed `+cmd` has no key-up behind it.** A console line produces the key-down half only, so
+`+attack` typed at the console latches until `-attack` is typed. The reproduction keeps that
+exactly: `elysium.cmd +attack` latches, `elysium.cmd -attack` releases, and the `+`/`-` latch
+semantics are faithful.
+
+The reproduction adds one verb that has no retail counterpart, for QA rather than for play:
+**`elysium.cmd.tap <button verb>` presses the button through the same command bus and releases it
+after the frame that samples the press**, so one call is one click. It is the driver's missing
+key-up, not a change to how a latched button behaves.
+
 ## Key names and keynums
 
 `engine.dll` carries the `keyname_t` table at VA **`0x201a56c0`** (imagebase `0x20000000`),
@@ -213,14 +223,24 @@ block mask `0x18000`. There is no firearm block action and no firearm input-comb
 
 #### Melee weighted attacks, automatic combos and the block
 
-The pinned server does **not** select three melee combos from held movement direction. A melee
-primary request starts as `ACT_MELEE_ATTACK` (or air/kick/sneak context), then the shared melee
-request body may replace the ordinary activity with `ACT_MELEE_ATTACK_2COMBO`. The substitution
-is automatic and random: it uses saved base `Melee` for weapons or base `Brawl` for fists, with
-rank chances `0/10/25/45/70/100%`. After weapon translation, the model chooses one matching
-ordinary or `2COMBO` sequence by `actweight`. Sequence labels such as `med`, `low` and `far` are
-authored variants, not evidence of directional input. The complete activity, sequence and damage
-path is in `docs/vtmb/combat-and-damage.md`.
+**Melee is press-edge, and both stages read the edge field.** The melee frame and the busy frame
+both read `m_afButtonPressed` (`+0x208C`), so one press is one swing and holding the attack key
+never repeats it — the semi-automatic held-with-edge-gate behaviour above is the base weapon
+frame's, which firearms use and melee does not.
+
+A melee primary request starts as `ACT_MELEE_ATTACK` (or air/kick/sneak context), then the shared
+melee request body may replace the ordinary activity with `ACT_MELEE_ATTACK_2COMBO`. That
+substitution is automatic and random: it uses saved base `Melee` for weapons or base `Brawl` for
+fists, with rank chances `0/10/25/45/70/100%`. It is **not** the combo chain — the chain is a
+second press landing inside the playing sequence's own authored window, which hands off to a
+successor sequence the descriptor names.
+
+**Direction does select which attack plays**, one step later than the request: the sequence
+selector matches each candidate's authored button mask against `m_nButtons & 0x79A`, so
+`+forward`, `+back`, `+moveleft` and `+moveright` steer the choice among the weapon's authored
+attacks. It is a selection key, not a command — there is still no three-direction input state
+machine, and labels such as `med`, `low` and `far` remain authored clip variants. The complete
+activity, chain, sequence and damage path is in `docs/vtmb/combat-and-damage.md`.
 
 **The block verb is `+wpn_secondaryatk`** [VtMB decompiled]. The pinned client registers two
 independent `kbutton_t` pairs. `+attack2` alone packs held bit `0x800` and press edge `0x01000000`.

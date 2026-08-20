@@ -40,8 +40,8 @@ Each weapon mode loads two adjacent integer fields:
 
 | Key | Confirmed runtime role |
 |---|---|
-| `BaseLethality` | read by the weapon's base-lethality accessor and included in total lethality |
-| `SkillRequirement` | loaded beside it; exact runtime consumer remains open |
+| `BaseLethality` | read by the weapon's base-lethality accessor (mode `+0x3f8`) and included in total lethality |
+| `SkillRequirement` | written once to mode `+0x3d0` by `WeaponModeDataLoader` (`0x10259230`) and **read by nothing image-wide** — no gate, no penalty, no diagnostic. The item files' own comment describing it as a requirement to wield the weapon is wrong |
 
 The mode's `Dmg` string is parsed into `CVDmg_t`. Its grammar is:
 
@@ -67,8 +67,10 @@ automatic-success metadata.
 
 ### The authored knockback inputs [data-verified]
 
-Knockback is authored in three separate places, and the two weapon halves use different
-vocabularies.
+Knockback is authored in four separate places, and they do not all have consumers. **The one that
+actually selects a knockback is the sequence descriptor's own swing records** — see "Knockback"
+below; the three item/rules keys catalogued here are a dead field, a ranged distance pair and a
+player-only view-kick refractory.
 
 **`knockback_chance` is a melee key, on sixteen weapon definitions**, a probability in `0..1`:
 
@@ -85,18 +87,32 @@ Katana, knife and sheriff_sword author none, and neither does any ranged weapon.
 content, not a patch addition** — `item_w_sledgehammer.txt`, `item_w_fists.txt` and `rules.txt` all
 carry their values inside `pack101.vpk`.
 
+**`knockback_chance` is nonetheless a dead field.** The loader parses it into the weapon-data
+record — **one write site, `0x1025a41f`, and the record's own copy pair** — and **no gameplay path
+reads that storage** back: no probability draw, no knockback gate, no diagnostic. Nothing in the
+recovered knockback chain consults a per-weapon chance: the launch
+gate is the victim's hit-buildup counter and the swing record's own unconditional marker, and the
+activity is chosen from the swing record's candidate list. A remake that rolls `knockback_chance`
+invents a mechanic retail authored and then never wired.
+
 **Ranged modes author a distance pair instead**, `MajorKnockbackDist` / `MinorKnockbackDist` —
 retail's own major/minor two-tier vocabulary, not a probability. Retail (`pack101.vpk`) authors it
 on four weapons: Ithaca M37 and the super shotgun `105 / 250`; the Colt Anaconda two minor
 distances (`400`, `350`) across its two modes and no major; the Remington M700 a lone minor
 `1500`. The flaming crossbow (`105 / 250`), frag grenade (`100 / 1000`), Desert Eagle (minor
 `400`) and the M700 Bach variant (minor `1500`) are patch additions — their retail files carry no
-`KnockbackDist` line.
+`KnockbackDist` line. **What reads the pair is open** — no consumer of either distance is
+recovered (`RE-K9`).
 
-**`rules.txt` owns the refractory window**: `Knockbacks { KnockbackPreventTime 5.0 }`.
+**`rules.txt` owns a refractory window that is not a knockback window**:
+`Knockbacks { KnockbackPreventTime 5.0 }`, parsed to rules `+0x3DC`. Its only consumer is the
+**player's ordinary hit reaction** (`0x10160a60`), where it gates the size of the view kick: a hit
+landing more than `KnockbackPreventTime` after the last one takes the large kick, a hit inside the
+window takes the small one, and either re-arms the timer. It never prevents a knockback, and it
+never applies to an NPC. The name describes an intent the shipped code does not implement.
 
-Who reads each of the three, and in what order relative to contact, is open — the master
-roadmap's `RE-K1`, `RE-K6` and `RE-K9`.
+The fourth authoring — the one the runtime actually selects from — is the **per-swing knockback
+table inside each sequence descriptor's swing records**, covered under "Knockback" below.
 
 ## `CVDmg_t`: the 17-word damage descriptor
 
@@ -114,7 +130,7 @@ symbols from the retail build.
 | 9..12 | `0x24..0x30` | attack feat/reference | confirmed |
 | 13 | `0x34` | source entity handle | confirmed |
 | 14 | `0x38` | forced soak value; negative selects the normal soak resolver | confirmed |
-| 15 | `0x3c` | accumulated damage-filter/multiplier field | partial; final consumer join open |
+| 15 | `0x3c` | accumulated damage-filter float; it is the descriptor's half of the final `Multiplier` | confirmed |
 | 16 | `0x40` | resolver flags; bit `0x8` selects direct damage input instead of a damage roll | confirmed |
 
 `GetDmg` returns word 2 when it is positive, word 1 when word 2 is zero, and zero when word 2
@@ -134,8 +150,11 @@ The parser maps these strings to Source damage bits:
 | `DMG_SUPERCLAWBITE` | `0x08000000` | `DMG_CLAWBITE` | `0x10000000` |
 | `DMG_SUNLIGHT` | `0x40000000` | `DMG_FAITH` | `0x80000000` |
 
-`DMG_FIST` is authored but is not present in the recovered string-to-bit table. Its fallback
-or alias behavior remains open.
+`DMG_FIST` is authored but has **no entry in `StrToDMGFlags`**, which therefore returns `0` for it.
+It does **not** alias to `DMG_CLUB` or to anything else: a fist attack carries an empty Source
+damage mask, which is what keeps it out of the `0xC8000008` aggravated/Kindred test as an ordinary
+bashing blow. The damage *family* still comes from the `Dmg` string's `Bashing` token, not from
+this bit.
 
 ## The common `CVDmg_t::Apply` path
 
@@ -159,12 +178,19 @@ confirmed order is:
 9. Apply template-specific damage filtering and later special-immunity/relationship policy.
 10. Store the final applied result in descriptor word 2.
 
-Step 9 is not fully named. The body demonstrably reads
-`DamageFilterBashing`, `DamageFilterLethal`, `DamageFilterAggravated` and the flame filter from
-the victim's NPC template and accumulates them into descriptor word 15. It also performs
-damage-flag immunities and an attacker/victim relationship percentage. The exact point where
-word 15 becomes committed health damage is still missing, so the filters must not yet be
-implemented as a guessed direct multiply.
+Step 9 reads `DamageFilterBashing`, `DamageFilterLethal`, `DamageFilterAggravated` and the flame
+filter from the victim's NPC template and accumulates them into descriptor word 15, and also
+performs damage-flag immunities and an attacker/victim relationship percentage. **Word 15 is the
+descriptor's half of the attack's final `Multiplier`** — the melee and ranged result formulas below
+multiply the trace/volley scale by it, which is where the accumulator joins committed health
+damage. Each individual filter's own arithmetic contribution into that accumulator is unnamed
+**[open]**.
+
+The difficulties in steps 3 and 7 are authored, not compiled: `rules.txt`'s `Damage_Info` block
+states `Soak_Difficulty_PC 3` / `Soak_Difficulty_NPC 7` and `Defense_Difficulty_PC 3` /
+`Defense_Difficulty_NPC 7`. **The player soaks and defends on 3+ where an NPC needs 7+**, which is
+the single largest authored asymmetry in the whole combat system. Every roll is one d10 per feat
+point, and net successes remove lethality dice.
 
 ## Soak selection
 
@@ -180,9 +206,18 @@ falling flag:
 
 The raw selector adds one for flag `0x20`; the table above records the observed intended
 lethal/falling use, not a claim that every family-plus-flag combination is meaningful. The
-selected feat is rolled at player difficulty 3 or NPC difficulty 7 and returns
-`max(successes - botches, 0)`. Automatic soak is added by the apply callback, outside this
+selected feat is rolled at the authored `Soak_Difficulty_PC` 3 or `Soak_Difficulty_NPC` 7 and
+returns `max(successes - botches, 0)`. Automatic soak is added by the apply callback, outside this
 resolver.
+
+**The soak feats' own pools are authored, and their asymmetry is deliberate.** `feats.txt` builds
+the bashing soaks from Stamina plus `Soak_Pool` and the **lethal** soaks from `Soak_Pool` alone —
+Troika's own `Base2 Stamina` line sits commented out on the lethal rows, so excluding Stamina from
+a lethal soak is a decision the file records rather than an omission. The **aggravated** soaks take
+`Soak_Pool` only as well, and because nothing feeds `Soak_Pool` against aggravated damage for an
+ordinary character, **Fortitude's `Automatic_Soak_Successes` is the whole of an aggravated soak**.
+A remake that adds Stamina to lethal or aggravated soak makes the player materially tougher than
+retail.
 
 ## World-area weapon admission
 
@@ -348,9 +383,9 @@ There is no firearm analogue of the melee block/opposed-reaction bands in this c
 weapon reports capability `0x2000`, which does not satisfy the player's melee-block capability
 mask `0x18000`; `+wpn_secondaryatk` can still forward ordinary `attack2`, but a gun does not enter
 `ACT_PREBLOCK`. The ranged per-victim body calls a defender-specific ranged-response virtual after
-calculating its result; the base-player implementation is empty. The separate generic character
-`DamageFlinch` routine can choose `ACT_HIT_HEAD` or `ACT_HIT_TORSO` and orient `hit_yaw`, but this
-pass did not close every firearm caller or a firearm-specific stagger threshold. A remake must not
+calculating its result; the base-player implementation is empty. Firearm damage does reach the
+generic `DamageFlinch` — through the victim's `TraceAttack`, like every other damage source (see
+"Damage flinch" below) — but there is no firearm-specific stagger threshold. A remake must not
 invent a melee-style firearm stagger meter from these findings.
 
 ## Melee attack, combo, block and damage
@@ -363,8 +398,15 @@ Retail distinguishes the always-carried `item_w_unarmed` from the weapon that ac
 combo, dodge and block translation surface. Armed melee classes such as baton, knife, baseball
 bat, katana and sledgehammer inherit the same request path with their own activity translations.
 
-`CWeaponMelee::ItemPostFrame` (`0x103EAEC0`) polls the held primary-attack bit and the weapon's
-next-attack time, then enters `PrimaryAttack` (`0x103EACA0`). That body rejects a live grapple,
+**Melee is press-edge end to end.** `CWeaponMelee::ItemPostFrame` (`0x103EAEC0`) reads
+`m_afButtonPressed` (`+0x208C`), the player's `(last ^ current) & current` edge field — not the
+held-button field — and so does `CWeaponMelee::ItemBusyFrame` (`0x10254250`). **One press is one
+swing**, and holding the attack key never produces a second one; the semi-automatic
+"held-with-an-edge-gate" behaviour belongs to the base `CBaseCombatWeapon` frame that firearms use,
+not to melee.
+
+`ItemPostFrame` polls that edge and the weapon's next-attack time, then enters `PrimaryAttack`
+(`0x103EACA0`). That body rejects a live grapple,
 may start the paired sneak-attack route for a valid target, otherwise requests
 `ACT_MELEE_ATTACK`, substitutes `ACT_MELEE_AIR_ATTACK` while airborne, and may fall back to
 `ACT_KICK` when the weapon capability allows it. The melee `SecondaryAttack` body at
@@ -376,9 +418,9 @@ The command overlap is deliberate and must not be simplified to "attack2 means b
 dedicated held block bit and then forwards to `+attack2`. The complete button and compact-action
 route is in `docs/vtmb/controls.md`.
 
-### The combo is automatic, not directional
+### `2COMBO` is an activity substitution, not the combo chain
 
-`CWeaponMelee::RequestActivity` (`0x103E9E00`) has one live combo substitution. When the requested
+`CWeaponMelee::RequestActivity` (`0x103E9E00`) has one live activity substitution. When the requested
 activity is exactly `ACT_MELEE_ATTACK`, it asks virtual `+0x5D4` which base **Ability** controls
 the chance: ordinary melee returns slot 6 (`Melee`), while fists override it with slot 1
 (`Brawl`). It reads the saved base value through `CVStatList_t::GetBase`; temporary/effect-adjusted
@@ -390,9 +432,13 @@ rank table recovered from `vampire.dll`:
 | `ACT_MELEE_ATTACK_2COMBO` chance | 0% | 10% | 25% | 45% | 70% | 100% |
 
 On success the function recursively requests `ACT_MELEE_ATTACK_2COMBO`; otherwise it continues
-with the ordinary activity. There is no movement-direction read in this branch and no recovered
-three-direction input state machine. Labels such as `med`, `low`, `far` and `jump` are model
-sequence variants, not commands.
+with the ordinary activity. **This substitution is not the combo chain** — that is a separate,
+press-driven hand-off documented below — and no movement direction is read in *this* branch.
+Direction enters one step later, in sequence selection.
+
+**A `2COMBO` clip terminates a chain.** No `ACT_MELEE_ATTACK_2COMBO` sequence in the corpus names
+a chain successor, so an ability roll that promotes the swing to `2COMBO` also ends the player's
+ability to extend it.
 
 The weapon table then translates the generic activity to a weapon activity such as
 `ACT_MELEE_ATTACK_FISTS`, `ACT_MELEE_ATTACK_2COMBO_KNIFE` or
@@ -410,12 +456,77 @@ logical activity
 The hash-closed player-model inventory contains separate ordinary, `2COMBO`, heavy, air,
 preblock, block, heavy-block and left/right blocked-reaction sequences for fists and the sampled
 melee weapons. Multiple sequences can answer one activity and their `actweight` controls the
-candidate order. The player selector at `0x10160F90` then reads the custom sequence word at
-`+0x2D4` and compares it with player state `+0x2088 & 0x79A`; it prefers an exact state-mask
-match, then two partial-match classes, then a zero-mask fallback. The target argument is not read
-by this player selector. Labels such as `med`, `low`, `far` and `jump` therefore are not direct
-input commands or distance tests, but the concrete clip can still depend on the current player
-state mask.
+candidate order.
+
+### The direction key selects which attack, at swing start
+
+The player selector at `0x10160F90` reads each candidate sequence's authored button mask at
+`+0x2D4` and matches it against `m_nButtons & 0x79A` — the movement half of the current button
+field, sampled once when the swing starts. The five authored mask values and their meanings:
+
+| Mask | Meaning |
+|---:|---|
+| `0` | neutral — no direction key held |
+| `0x008` | `IN_FORWARD` |
+| `0x010` | `IN_BACK` |
+| `0x200` | `IN_MOVELEFT` |
+| `0x400` | `IN_MOVERIGHT` |
+
+The ranking is: an **exact** match wins outright; failing that a forward/back partial match;
+failing that a strafe partial; and failing all three the **zero-mask fallback**, the attack a
+neutral press selects, which any state falls back to. `-1` — the mask on 13,898 of the install's
+14,012 descriptors — is not a rank at all: it makes a sequence **no candidate for direction-keyed
+selection**, reachable only through the ordinary `actweight` path. `0` is a stated mask rather than
+an absence, which is why `-1` is the only marker tested. The target argument is not read by this
+selector.
+
+**So the attack a swing plays *is* directional**, but the direction is a sequence-selection key
+rather than a command: there is no three-direction input state machine, and labels such as `med`,
+`low`, `far` and `jump` remain authored clip variants rather than distance tests.
+
+### The combo chain is a press-edge hand-off inside the busy frame
+
+`CBasePlayer::ItemPostFrame` (`0x10174CE0`) routes to the weapon's `ItemBusyFrame` instead of its
+ordinary frame whenever `curtime < m_flNextAttack` **or** the busy predicate at `0x10161200` holds.
+That predicate is per-activity:
+
+| Current activity | Busy while |
+|---|---|
+| `ACT_MELEE_ATTACK` | `cycle < ` the sequence's own `+0x2F8` hold value |
+| the blocked and block activities | `curtime < ` next-attack |
+| `ACT_MELEE_AIR_ATTACK`, `ACT_MELEE_ATTACK_2COMBO`, `ACT_MELEE_ATTACK_HEAVY` | `cycle < 1` — i.e. for the whole clip |
+
+`CWeaponMelee::ItemBusyFrame` (`0x10254250`) is where a chain step is taken. It requires all three
+of:
+
+1. a **press edge** on `m_afButtonPressed` — the same edge field the ordinary frame reads, which is
+   why a held key never chains and why **an NPC never chains at all** (it has no button field to
+   produce an edge);
+2. the playing sequence to **name a successor** — `GetChainSequence` reads the descriptor-relative
+   name index at `+0x2E8` and resolves it through `LookupSequence`, which is case-insensitive, so
+   the successor is a **sequence label** rather than an activity. `+0x2EC` is the alternate
+   successor and is the **flying-knockback wall branch**, not a second attack;
+3. `IsInComboWindow` (`0x10160DC0`) to accept the current cycle: `+0x2F0 <= cycle <= +0x2F4`,
+   **inclusive at both ends**.
+
+When all three hold, the successor sequence is committed at **cycle 0** at the **same playback
+rate** — the swing's stored rate at `+0x1488` is reused rather than recomputed — the next-attack
+deadline is **not** pushed forward again, and `ForceMeleeReset` clears the previous swing's state.
+A chain step is therefore free of recovery cost: the whole chain is paid for by the first swing's
+deadline.
+
+**The windows are per-sequence, and one of them is not what it looks like.** The triple most
+shipped attacks carry is `0.5 / 0.9 / 0.91` (open, close, hold); a descriptor stating no window at
+all reads `0.0 / 1.0 / 1.0`, which gates nothing (`docs/vtmb/mdl_v2531.md`). Authored values
+differ — `katana_running_attack` states `0.25 / 1.0 / 0.9`, whose *hold* sits **below** its close,
+so the busy predicate releases the clip before its own combo window shuts.
+
+**Four authored chain links are broken, and are preserved as data.** Both sexes' `fists.mdl` chain
+`Fists_attack_W2` to a `Fists_attack_W3` the bank never defines, and both sexes' `katana.mdl` chain
+`katana_dodge_attack` to `tireiron_attack_med`, a label from a different weapon's bank that the
+katana's own bank does not contain. All four are Troika authoring bugs — the chain step simply
+fails to resolve — and none is repaired. Ten further links disagree with their target's case and
+resolve fine, because the lookup is case-insensitive.
 
 ### Target acquisition, sequence commit and recovery
 
@@ -433,9 +544,10 @@ translated activity and uses the maximum as the query distance. `CBaseCombatChar
 holds Source units, with `FLT_MAX` as studiomdl's unset marker (`docs/vtmb/mdl_v2531.md`), and
 **31,481 exported clip rows across the cast state one**. The per-activity maxima:
 `ACT_MELEE_ATTACK_FISTS` 578 cm, `ACT_MELEE_ATTACK_CLAWS` 682 cm, with the armed melee families
-between them and `ACT_ANDREI_DIVE_OUT` at 1,015 cm. The reproduction currently queries a flat 64
-Source units in place of the per-descriptor maximum; adopting the authored value is a separate
-decision, not implied by the census.
+between them and `ACT_ANDREI_DIVE_OUT` at 1,015 cm. The reproduction queries the resolved clip's
+own authored reach; `ElysiumWeapons::MeleeReachSourceUnits` (64) covers only the cases where no
+answer exists — a headless run, a body with no vocabulary, or a row authoring no reach — and that
+degraded path reports once per weapon.
 
 The melee predicate at `0x103EA4D0` rejects self, a missing entity and any entity whose
 `m_lifeState` is not `LIFE_ALIVE`. The shared query also rejects non-targetable and
@@ -468,38 +580,122 @@ The writes are maximum operations, so a pre-existing later deadline is not short
 also clamp the duration to a weapon-provided minimum. Melee recovery is therefore selected-clip
 timing, not the ranged mode's authored `Attack_Rate` and not one global fist or weapon cooldown.
 
-### Contact, opposed-roll and impact boundary
+### Contact is a per-frame swept walk over the clip's own swing records
 
 The ordinary player fist and katana attack sequences in the hash-closed female and male shared
-banks have `event_count == 0`. Their normal damage commit is consequently **not** a firearm-style
-server animation event and must not be made an authoritative Unreal montage notify merely because
-that is convenient. VtMB does have special creature/event attacks that construct a trace from a
-staged opponent, but that is a separate path and is not evidence for ordinary fists or weapons.
+banks have `event_count == 0`. Their damage commit is consequently **not** a firearm-style server
+animation event and must not be made an authoritative Unreal montage notify merely because that is
+convenient. VtMB does have special creature/event attacks that construct a trace from a staged
+opponent, but that is a separate path and is not evidence for ordinary fists or weapons.
 
-The downstream ordinary boundary is a real trace. `MeleeRollAndSendNoticeCallback`
-(`0x10346830`) calculates and stores the opposed result for a contacted combat character;
-`CWeapon`'s shared traced-impact virtual at `0x102579F0` reads the entity from that trace, consumes
-the defender-side record, resolves block/reactions and commits damage. Static recovery has not yet
-identified the normal swing caller that owns the contact sweep/window between those two entries.
-The dedicated `2COMBO` clip family is real, but its exact number of contact windows, sweep shape,
-refire/interruption behavior and miss timing still require that caller join or a live capture.
+**The swing caller is `CBaseCombatCharacter::MeleeSwingUpdate` (`0x10346CD0`, vt `+0x4EC`)**, and it
+runs **every frame** from `UpdateCharacter` (`0x103246D0`) — reached for the player through
+`CPlayerMove::RunPostThink` → `CBasePlayer::PostThink`, and for an NPC through
+`CAI_BaseNPCTroika`'s own think. There is no start event and no stop event:
+
+> **A swing is live exactly while the currently playing sequence declares at least one swing
+> record.** The two writers of `m_bMeleeSwingIsLive` (`+0xAA1`) are the only ones in the image, and
+> both derive it from that count. The records *are* the window.
+
+Each frame the update sub-steps the elapsed time: `N = floor(dt * 100)` against a constant `100.0`
+at `0x10450564`, producing `N` **contiguous** cycle intervals covering everything the clip advanced
+through. `MeleeSwingStep` (`0x10343020`) then, for each record and each sub-interval, tests the
+record's authored `[start, end]` window against that sub-interval, and where they overlap sweeps
+the record's bone-local segment — transformed into world space by that bone's matrix through
+`VectorTransform` — committing any hit through the weapon's traced-impact virtual `vt +0x438` =
+`0x102579F0`.
+
+**The `N < 1` branch is unreachable in retail's own environment, and reproducing it literally is a
+defect.** That branch jumps straight into the epilogue stores, which overwrite the stored timestamp
+(`+0xAA4`, one writer image-wide), position and angles and discard the short span. But the clock is
+server `curtime`, which advances in fixed ticks, and the update's `dt <= 0` early exit is the one
+path that does *not* write the timestamp — so a call either sees `dt == 0` and stores nothing, or
+sees a whole tick and walks it. **The observable is tick-batched walking**, not span-dropping; a
+literal port makes melee stop landing above 100 fps, a behaviour retail's clock cannot produce.
+(The reproduction adds two guards of its own on top of that reconciliation —
+`ElysiumSwing::MaxBatchSeconds` and `MaxBatchTravelCm` — which bound a hitched frame's sub-step
+count and refuse to sweep through an engine discontinuity such as a teleport. Retail's server never
+hands its update either case, so neither stands in for a recovered rule.)
+
+**Hit-once is per record, with a spread.** Each record carries its own victim hit list. A landed hit
+marks the victim in **every record whose window overlaps the hitting record's**, so a swing whose
+records share one window lands once; a record's list clears when its window closes, which is what
+lets a `2COMBO`'s two disjoint record groups land **twice** on the same victim. This is the
+recovered answer to the `2COMBO` contact-count question.
+
+**The opposed roll and the incoming-swing notice stage once, before any contact.** On the swing's
+first live frame — ahead of every window test — `SendIncomingSwingNotice` (`0x10346AC0`) runs its
+own `FindEntityFOV` at **60 units** and a half-cone dot of **0.7**, with
+`MeleeRollAndSendNotice` (`0x10346830`) as the per-candidate predicate that calculates and stores
+the opposed record. That query is **not** the acquisition query of the previous section: acquisition
+uses the authored per-sequence reach and a 30-degree half-angle and reserves an opponent for aim
+assistance, while this one selects whom the swing's opposed record is staged against. Collapsing
+them makes the roll follow the aim reservation, which is not what the bytes do.
+
+`ForceMeleeReset` (`0x10346760`) clears the per-swing state — **including the opposed record count
+at `+0xA94`** — at every swing start and every chain step, so a record cannot outlive the swing
+that made it.
+
+Compiled constants of the walk:
+
+| Constant | Value | Role |
+|---|---:|---|
+| sub-step rate | `100.0` Hz | `N = floor(dt * 100)` |
+| segment subdivision | `1/6` unit | how finely the swept segment is subdivided |
+| `melee_swish_sound_time_offset` | `-0.1` s | the whoosh **leads** the contact window |
+| `melee_swing_completion_percent` | `0.8` | at this cycle the victim's hit-buildup counter is cleared |
+| `IsMeleeSwingInRange` | reach `+ 100` | a **2D** (horizontal) distance test |
+
+#### No shipped sequence authors a melee commit event
+
+A corpus-wide census of all **4,445** models settles what the 3000 band actually carries:
+
+| Id | Authored by |
+|---:|---|
+| 3001 | 4+ sequences; the only retail animation-event **melee commit** is `CNPC_VDog`'s bite on it |
+| 3002 | viewmodels only |
+| 3031 | **105** sequences on `move_and_ranged` (53 male, 50 female) — the generic third-person shot carrier, and the **only** member of the 3030–3044 band any clip authors |
+| 3047 | **no shipped sequence at all** |
+| 3200 | lockpick reference only |
+
+`CWeaponMelee::Operator_HandleAnimEvent` (`0x103EA5B0`, vt `+0x5C8`) accepts 3001, 3030–3037,
+3039–3044 and 3047 — 3038 falls through to the base body and 3003 is silently swallowed — and its
+tail calls `PrimaryAttack` **only when operator `+0xA8 == 0`**, the `CBasePlayer` self-pointer, so
+3047 is an **NPC swing trigger** rather than a damage commit. Nothing authors it. `CWeaponRanged`
+(`0x10238160`) accepts the whole 3030–3044 band identically.
+
+`WEAPON_MELEE_BEGIN_SWING` / `WEAPON_MELEE_END_SWING` (3200 / 3201) are **vestigial**: no consumer
+in the image, and no authored clip. A remake must not build a melee window out of them.
 
 ### Opposed record and reaction margin
 
-Before impact, `CBaseCombatCharacter::CalcAndStore...` appends a 16-byte record to the defender's
-result array at `+0xA88`, whose active count is at `+0xA94`, and stores:
+Before impact, `CBaseCombatCharacter::CalcAndStore...` appends a 16-byte record to a result array
+at `+0xA88`, whose active count is at `+0xA94`, and stores:
 
 | Word | Stored value |
 |---:|---|
-| 0 | attacker/entity handle |
+| 0 | the other party's entity handle |
 | 1 | active weapon's total lethality |
 | 2 | defender `Defensive_Maneuvers` net successes, plus any bounded defense bonus |
 | 3 | defender soak successes selected from the weapon's active `CVDmg_t` |
 
-The record is keyed by attacker. `CBaseCombatCharacter::GetMeleeDiceRolls` searches the array and
-returns the matching record; `GetNumAttackSuccesses` returns its word 1. The signed reaction
-margin is `lethality - defense - soak`. Custom NPC `RunTask` handlers and the player block path
-use the five-way classifier at `0x103498B0`.
+**The array lives on the ATTACKER and is keyed by defender.** `ForceMeleeReset` (`0x10346760`) is
+what settles the ownership: it zeroes the count at `+0xA94` at every swing start and every chain
+step, which only makes sense for a per-swing array on the swinging character — a defender-side
+array would be cleared by its own next swing rather than by the attacker's.
+
+`CBaseCombatCharacter::GetMeleeDiceRolls` searches the array and returns the matching record;
+`GetNumAttackSuccesses` returns its word 1. The signed reaction margin is
+`lethality - defense - soak`. Custom NPC `RunTask` handlers and the player block path use the
+five-way classifier at `0x103498B0`.
+
+**The reproduction stores the record defender-side and scopes it by swing serial** — an explicit
+owner call, recorded here beside the faithful behaviour. `FElysiumMeleeRoll::SwingSerial`
+(`Source/ElysiumUE/Public/ElysiumPlayer.h`) stamps each staged record with the accepted-swing
+serial the attacking weapon was on, and a reader naming a different serial is refused. That reaches
+the same observable as `ForceMeleeReset` from the reader's end — the moment a new swing is
+accepted, every record the previous one staged stops answering — without a clear pass that would
+have to reach every body the attacker might touch.
 
 `MeleeRollA` derives defender reaction booleans and calls the defender's melee-reaction virtual.
 `rules.txt` supplies the reaction margins:
@@ -524,9 +720,16 @@ requires a block-capable defender, a held melee weapon and a frontal/facing test
 as actively blocking while its ideal activity is `ACT_PREBLOCK` or `ACT_BLOCK`; non-player
 defenders use the stored roll classifier.
 
-On a blocked contact, the defender callback at `0x10160BC0` can add bonus soak rolls from
-attribute slot 2 (`Dexterity`) when the incoming margin is positive, then classifies the updated
-record. Class 3, the **defender block stagger** band, plays `ACT_BLOCK_HEAVY`; the other blocked
+On a blocked contact, the defender callback at `0x10160BC0` rolls bonus soak dice from attribute
+slot 2 (`Dexterity`) through `AddBonusSoakRolls` (`0x10349710`), which adds them into the opposed
+record's **word 3**, then classifies the updated record. **In the shipped call ordering those dice
+do not change the triggering hit's damage** — the damage descriptor has already been resolved — so
+what blocking buys is the *reaction classification* (`ACT_BLOCK` against `ACT_BLOCK_HEAVY`) and
+nothing else. Blocking grants **no defense-roll bonus**: the only recovered modifier on the
+defence roll is the anti-move-spam bonus, whose own diagnostic reads "player is using the same move
+on this NPC" (`0x10623d18`).
+
+Class 3, the **defender block stagger** band, plays `ACT_BLOCK_HEAVY`; the other blocked
 classes play `ACT_BLOCK`. The attacker callback at `0x10160D00` plays the blocked-reaction
 activity stored at `+0x2E0` in the attacker's current sequence descriptor, falling back to
 `ACT_BLOCKED_REACTION_RIGHT`. `+0x2E0` is the **load-time enum slot**, `-1` on every descriptor on
@@ -557,25 +760,135 @@ the blocked/stagger family and recorded here beside the behaviour it departs fro
   allows, and refusing a legal block is the worse failure. Decoding the constant closes it
   (`RE-R3`).
 - **The `Dexterity` bonus-soak re-roll at `0x10160BC0` is left to the damage/soak system.** This
-  rung owns the pose, not the number.
-- **The flinch occupies the base channel where retail's `DamageFlinch` is a gesture overlay.** A
-  melee block or stagger reaction therefore *holds* the base channel for its held seconds, and the
-  flinch yields to it without advancing the `Reaction` RNG stream
+  rung owns the pose, not the number — which costs nothing against retail, where those dice do not
+  change the triggering hit either.
+- **The flinch occupies the base channel where retail's `DamageFlinch` is a 3-slot gesture
+  overlay.** A melee block or stagger reaction therefore *holds* the base channel for its held
+  seconds, and the flinch yields to it without advancing the `Reaction` RNG stream
   (`docs/architecture/save-architecture.md` § 8). Both are consequences of the channel
-  substitution rather than recovered rules, and the substitution rests on an open question: does
-  the damaging blocked path reach `DamageFlinch` (`0x103229d0`) unconditionally? The answering
-  read is `0x103302e0`'s call site (`RE-R2`).
-- **The player's block pose plays as a one-shot** while the block classification stands for the
-  whole held predicate; retail holds the ideal activity. The repair is a holdable, looping
-  reaction claim, and it is pending.
+  substitution rather than recovered rules. The envelope the substitution carries is the recovered
+  one — the 0.1 s / 0.3 s fade pair of "Damage flinch" below, in seconds. Which contacts reach the
+  flinch at all is not affected by the substitution: the flinch is requested from `TraceAttack`, not
+  from `OnTakeDamage_Alive`, so a blocked **non-damaging** melee contact never reaches
+  `DispatchTraceAttack` and therefore never flinches, while a fully-soaked damaging one does.
 - **A player blocking into the hit/knockback margin plays no defender pose**, while the attacker
   still plays its blocked reaction — the chosen reading of `WasMeleeBlocked` gating both callbacks
   off one predicate.
 
+### Knockback
+
+The hit/knockback band above is the only reaction that moves a body. Its whole chain is recovered.
+
+#### The authored table lives in the swing record, not in an item file
+
+Each 188-byte swing record (`docs/vtmb/mdl_v2531.md`, `docs/vtmb/animation_and_movers.md` A.3)
+carries, in bytes `0x28`–`0xBA`, **four direction buckets of up to four candidate knockback
+activity names each** — name indices at `0x78`, `0x88`, `0x98` and `0xA8`, record-relative, with the
+sixteen resolved enum slots at `0x38` and the four per-bucket candidate counts at `0x28`. Retail
+draws one candidate with `RandomInt`.
+
+Two single bytes complete it:
+
+- **`0xB8` is the direction bucket 0 answers.** The four directions cycle `BACK, LEFT, FORWARD,
+  RIGHT`, and bucket `k` answers direction `(byte_b8 + k) mod 4`. This holds on **948 of 948**
+  records that fill every bucket, so the buckets are a rotation rather than a fixed order and a
+  consumer must read the byte.
+- **`0xBA == 2` is the unconditional marker**, which admits the knockback past the victim's
+  hit-buildup gate below.
+
+#### Launch is a velocity assignment, in two stages
+
+There is no impulse and no physics solve. The NPC reaction body (`0x102a01b0`) computes
+`m_KnockbackVelocity` (`+0x6004`) **only** on the flying branch — `IsFlyingKnockbackActivity`, i.e.
+`0x8a < act < 0x94` — and schedules `SCHED_TROIKA_FLYING_KNOCKBACK` (`0x14d`). On the next think,
+`TASK_MELEE_FLYING_KNOCKBACK_INTO` calls `SetAbsVelocity(m_KnockbackVelocity)`, a straight
+assignment.
+
+Magnitude interpolates on `t = GetRawAttackValue * 0.1` (constants at `0x1049a1d8`–`0x1049a1e4`):
+
+```text
+horizontal = 220 + (400 - 220) * t
+vertical   = 200 + (310 - 200) * t
+```
+
+`t` is `1.0` when there is no attacker, and is forced to `0.1` for a chain reaction. **Neither the
+inputs nor the result are clamped.**
+
+Direction is `normalize(victim - attacker)` with z zeroed. With no attacker it is the victim's own
+negated facing — a body with nothing to be thrown away from goes straight backwards. In a chain
+reaction it is the attacker's velocity instead.
+
+#### Classification, yaw snap and the cell
+
+The classifier cuts `AngleMod(victimYaw - awayYaw)` into four bands. They are **not symmetric**, and
+the asymmetry is authored rather than rounding:
+
+| Relative yaw (degrees) | Bucket | Direction | Width |
+|---|---:|---|---:|
+| `> 316` or `<= 45` | 2 | `FORWARD` | 89 |
+| `<= 135` | 3 | `RIGHT` | 90 |
+| `135 <` … `<= 225` | 0 | `BACK` | 90 |
+| otherwise (`225 <` … `<= 316`) | 1 | `LEFT` | 91 |
+
+Retail then **snaps the victim's yaw** to `AngleMod(awayYaw + offset)` with offsets
+`{0: +180, 1: +270, 2: +0, 3: +90}` in Source yaw, so the authored clip's model-space direction
+points along the travel. Two gates on that snap:
+
+- the snap is **gated on victim `+0xA8 == 0`** — the `CBasePlayer` self-pointer — so **NPCs snap and
+  players never do**;
+- the flying path forces direction bucket 0 (a `+180` offset) regardless of the classification.
+
+**The body-goes token convention is CONFIRMED**: an `..._BACK` cell plays when the body travels
+backwards, i.e. for a blow to the face. When no candidate list is consulted the fallback activity is
+`0x8B`, flying-into-forward, and `TranslateFlyingKnockback` downgrades the flying range
+`0x8b..0x8e` to the grounded `0x87..0x8a` when victim `+0xA8 != 0`.
+
+#### Who may be knocked back
+
+**The player is never launched.** `CBasePlayer`'s reaction (`0x101606e0`) is an activity, a forced
+switch to `item_w_unarmed` on capability `0x6000`, and a `ViewPunch` scaled by
+`player_damage_kick_knockback_scalar` (`10.0`) times the reaction sequence's duration, plus
+`m_fNoAttackTimer` (`knockback_no_attack_time`, `1.0`) and `m_fPreventKnockbackTime`. `ShouldKnockback`
+refuses a player whose weapon capability intersects `0x6000` unless the attacker's own NPC template
+authors `KnockbackRangedPlayer` (`+0xA0`).
+
+`Disallow_Knockbacks` (template `+0x9E`) is authored `"1"` on **8** `npctemplate*.txt` files.
+
+**The NPC gate is a counter, not a chance.** A knockback is admitted when
+`m_iHitBuildupCount` (`+0x6064`) `<= npc_hit_buildup_amount` — a ConVar, default `"2"` — **or** the
+swing record's `0xBA == 2` marker is set. The counter is incremented per qualifying hit
+(`0x1029F800`) and reset at `melee_swing_completion_percent`. **Whether the count is per victim or
+per attacker/victim pair is OPEN**; that is the observable behind the widely reported "about two
+hits and then the NPC parries" feel.
+
+#### How a flying chain ends
+
+The `_INTO` / `_LAND` / `_WALL_LAND` clips end on sequence completion. The flight itself ends on
+**land detection** — the body is grounded, or it is falling and a ground probe succeeds. Wall
+contact diverts instead: the rebound velocity is the wall vector times `100.0`, a timer is armed at
+`curtime + 0.01`, and the chain enters `..._WALL_FALL`.
+
+#### The reproduction's grounded stand-ins
+
+Each is recorded beside the retail fact it stands in for
+(`Source/ElysiumUE/Private/Substrate/ElysiumReactions.h`):
+
+- **One deterministic candidate per bucket.** `StandInKnockbackSize` / `StandInKnockbackHeight`
+  select the `NORMAL`/`HIGH` cell of the classified direction, with no draw at all, pending the
+  authored swing-record table above being consumed. The `SMALL` family and the two `LOW_BACK` cells
+  stay in the vocabulary; nothing reaches them yet.
+- **The hit-buildup gate is omitted, not guessed.** `IsKnockbackAllowed` takes the alive filter and
+  `Disallow_Knockbacks` only, and the producer reports the omission once. A victim retail would have
+  spared until its counter drained is knocked back here.
+- **The second template predicate is omitted** for the same reason — it is unidentified, and a
+  guessed predicate would refuse knockbacks the content asks for.
+- **Only the grounded cells are produced.** The flying chain and the launch assignment are not
+  reproduced, so nothing here moves a body.
+
 ### Melee damage commit
 
-The shared weapon traced-impact body at `0x102579F0` is the downstream melee consumer that was
-previously open. It occupies the same base-weapon virtual in melee and ranged weapon vtables, so
+The shared weapon traced-impact body at `0x102579F0` is the downstream melee consumer. It
+occupies the same base-weapon virtual in melee and ranged weapon vtables, so
 `CWeaponMelee::MeleeImpact` is a useful semantic label for the melee branch, not a recovered class
 or symbol name.
 It copies the active mode's `CVDmg_t`, resolves the stored attack record and block reactions,
@@ -587,11 +900,32 @@ higher. Retail's own diagnostic string and the body agree on the final scalar:
 Total = DamageInflicted * (BaseDamage + DamageModifier) * Multiplier
 ```
 
-`BaseDamage` is descriptor word 1, `DamageModifier` is the descriptor's evaluated modifier
-reference, and `Multiplier` comes from the `CTakeDamageInfo`/trace envelope. The result is
-committed through the ordinary impact and health route. This closes the melee result-to-damage
-join; naming every special multiplier/filter and validating the exact live attack windows remain
-open.
+`BaseDamage` is descriptor word 1. **`DamageModifier` is the `Dmg` string's optional leading
+trait** — the `CVStatRef` at words 5..8, evaluated on the attacker — and it is **`0` on every real
+weapon in the game**: only `holy_light`, `wolf_head` and developer items author one. It is not the
+attacker's Brawl/Melee feat rating; the attack feat enters lethality, not this term.
+`Multiplier` is the trace/volley scale from the `CTakeDamageInfo` envelope **times descriptor word
+15**, the accumulated damage-filter float.
+
+Total lethality itself is:
+
+```text
+Total Lethality = max(BaseLethality + GetRawAttackValue, 0)
+```
+
+where `BaseLethality` is the weapon mode's authored value at `+0x3f8` and `GetRawAttackValue` is
+the evaluated attack feat named by `CVDmg_t` word 9 — retail's own diagnostic calls that term
+**"Feat Adjustment"**.
+
+**SUSPECTED double-soak — recovered but not to be reproduced yet.** The melee margin subtracts the
+opposed record's `soak`, and the *same* value is then carried into `CVDmg_t::Apply` as the forced
+soak (word 14), so the defender's soak appears to be spent twice on one blow. The read is
+consistent across both call sites, but a mis-decoded aliasing of one local would produce exactly
+this reading, and the difference is large enough to change every melee outcome. **One live capture
+of a melee hit with a known soak value settles it**; until then a remake reproduces a single soak
+subtraction and records the discrepancy rather than doubling it.
+
+Naming each individual damage filter's arithmetic remains open.
 
 ## Health commit
 
@@ -646,21 +980,68 @@ five seconds and notifies the active schedule. A special NPC flag can force `Eve
 authored semantic name is not yet proven and must remain an explicit flag rather than an invented
 general rule.
 
+**The reproduction carries that memory as a derived, unsaved hostility row** — a mechanism note
+beside the faithful lifetime, not a behavioural divergence. `ElysiumNpcEnemy::RememberAttacker`
+(`Source/ElysiumUE/Private/Substrate/ElysiumNpcEnemy.h`) writes a `D_HT` relationship toward the
+attacker at priority 5, expiring after `DamageMemorySeconds = 5.0` and re-stamped (not extended) by
+every qualifying hit. Retail keeps a per-actor enemy-memory component that `BestEnemy` walks; this
+runtime has no such component, so the relationship table is the eligibility surface a remembered
+attacker has to reach. The lifetime is retail's; the store is ours, and a persistent authored row
+at a higher priority still supersedes it.
+
 Five reaction concepts are independent:
 
 | Reaction | Authority |
 |---|---|
 | melee block stagger | the opposed margin's heavy-block band; selects `ACT_BLOCK_HEAVY` |
-| melee hit/knockback | the stronger unblocked outcome; reaction sequence plus impulse/timing |
+| melee hit/knockback | the stronger unblocked outcome; a swing-record-selected activity, a yaw snap and, on the flying branch, an assigned velocity |
 | light/heavy/repeated damage | AI conditions that can interrupt a schedule and select a flinch/cover response |
-| generic damage flinch | `DamageFlinch` (`0x103229d0`), random head/torso activity plus directional `hit_yaw` |
+| generic damage flinch | `DamageFlinch` (`0x103229d0`), requested from `TraceAttack`; a 0.1/0.3 s gesture triangle in its own 3-slot array |
 | death | `Health >= Max_Health`, life-state transition and `Event_Killed` |
 
-`DamageFlinch` derives hit yaw from actor yaw minus the incoming-vector angle, adds a random
-`[-30,+30]` degrees, and requests the chosen layer/gesture with 0.1/0.3 fade values. The AI's
-`SMALL_FLINCH` schedule is another owner: it remembers flinched state, stops movement and runs
-`TASK_SMALL_FLINCH`; alert AI can instead take cover from the attack origin. A remake must not
-invent one universal stagger meter or make every positive hit cancel the current action.
+### Damage flinch
+
+`CBaseCombatCharacter::DamageFlinch` (`0x103229d0`) is vtable slot 292 (`vt +0x490`) and **no leaf
+class overrides it**, so every combat character flinches the same way.
+
+**The rule.** The activity is `0x74 - (RandomInt(0,1) != 0)` — `ACT_HIT_TORSO` or `ACT_HIT_HEAD`, an
+even coin. `hit_yaw` is `actorYaw - atan2(incoming) in degrees + RandomFloat(-30, +30)`, where the
+`atan2` term is **skipped entirely unless `dir.x > 0 || dir.y > 0`**. It then calls
+`AddFlinchGesture` through `vt +0x424` with `(activity, 0.1f, 0.3f, "hit_yaw", yaw)`.
+
+**The two fades are seconds, and they are compiled constants.** They are not normalized fractions:
+the SendProps quantize the pair over `0..4.0`, and the client computes the weight as
+`w = (t - start) / fadeIn` on the way up and `(start + in + out - t) / fadeOut` on the way down —
+**a plateau-free linear triangle**. So a flinch peaks at **0.1 s** and is gone at **0.4 s**, and it
+is evaluated at cycle **literal 0**: the gesture is a static pose steered by `hit_yaw`, not a
+playing clip.
+
+**It lives in its own array.** The flinch slots are three entries of stride `0x1C` at `+0x7F4`, a
+**separate structure** from `m_AnimOverlay` (four entries of stride `0x30` at `+0x734`); `+0x730` is
+`m_bNoFlinch`. The array is newest-on-top by start time, evicts the oldest-expiring entry when
+full, is **ended by the clock only**, and a slot is never cleared — an expired entry is simply
+weighted to zero until something overwrites it.
+
+`m_bNoFlinch` has exactly one writer in the image: `CNPC_VMingXiao`'s constructor.
+
+**Where the flinch is requested from — and where it is not.** Both callers are in `TraceAttack`, at
+the **top** of `CBasePlayer`'s (`0x10162c30`) and the **bottom** of `CAI_BaseNPC`'s (`0x10266780`),
+and **both run before soak and before the health commit**. `OnTakeDamage_Alive` (`0x103302e0`)
+never calls it. Two consequences follow directly:
+
+- a **blocked and non-damaging** melee contact skips `DispatchTraceAttack` altogether, so it does
+  not flinch;
+- a hit that is **fully soaked** still flinches, because the flinch was already requested when the
+  soak ran.
+
+The AI's `SMALL_FLINCH` schedule is a separate owner: it remembers flinched state, stops movement
+and runs `TASK_SMALL_FLINCH`; alert AI can instead take cover from the attack origin. A remake must
+not invent one universal stagger meter or make every positive hit cancel the current action.
+
+**The reproduction plays the flinch on the base channel** where retail overlays it — an explicit
+owner call, recorded here beside the faithful behaviour, and detailed under "Block and stagger
+reactions" above. The envelope it carries is the recovered 0.1 s / 0.3 s triangle
+(`ElysiumReactions::FlinchBlendInSeconds` / `FlinchBlendOutSeconds`).
 
 ## NPC and player death transaction
 
@@ -747,21 +1128,24 @@ who author `invincible 0`.
   - `Presence` modifier and `Shaky Hands` penalty log diagnostic messages via `DevMsg` in `WeaponRangedShot` (`0x102387b0`) but do not alter the physical spread cone.
 - **Burst Fields and DamageFlinch Pipeline**:
   - `BurstMin` (`+0x3a4`) and `BurstMax` (`+0x3a8`) are parsed by `WeaponModeDataLoader` (`0x10259230`) from weapon script files but are unreferenced by runtime combat logic (dead fields).
-  - Firearm damage enters `DamageFlinch` (`0x103229d0`) via: `RangedDamagePerVictim` (`0x10268330`) -> `DispatchTraceAttack` (`0x101cfef0`) -> `CBaseEntity::TraceAttack` (vtable slot 101) -> `DispatchTakeDamage` -> `CBaseCombatCharacter::OnTakeDamage_Alive` (`0x103302e0`) -> `CBaseCombatCharacter::DamageFlinch`.
+  - Firearm damage enters `DamageFlinch` (`0x103229d0`) via `RangedDamagePerVictim` (`0x10268330`) -> `CBaseEntity::DispatchTraceAttack` (`0x100a7d00`, identified by its scope string) -> the victim's `TraceAttack` virtual, which requests the flinch **at the top of `CBasePlayer::TraceAttack` (`0x10162c30`) or the bottom of `CAI_BaseNPC::TraceAttack` (`0x10266780`)**, before soak and before the health commit. `OnTakeDamage_Alive` (`0x103302e0`) does **not** call `DamageFlinch`, and `0x101cfef0` is the impact-effect/decal body — it reads the trace fields, maps surface characters and calls `+0x268`/`+0x26C` — not a trace-attack dispatcher. See "Damage flinch" above.
 - **Melee Swing Pipeline and Impact Dispatch**:
-  - `CWeaponMelee::PrimaryAttack` (`0x103eaca0`) sets the attack animation activity. The resulting animation event triggers `EventDispatch` (`0x103ea510`), calling `thunk_FUN_10253b70` (the melee hit applicator / `Smack()`).
-  - Contact enumeration is handled through `thunk_FUN_10170e80`.
-  - The shared traced-impact virtual `WeaponDoImpactEffect` (vtable index 270 / `0x102579f0`) is bypassed by `CWeaponMelee`, which processes its trace impacts directly in its internal contact loop.
+  - `CWeaponMelee::PrimaryAttack` (`0x103eaca0`) sets the attack animation activity; contact is then owned by the per-frame swept walk `CBaseCombatCharacter::MeleeSwingUpdate` (`0x10346CD0`) / `MeleeSwingStep` (`0x10343020`) over the sequence's authored swing records. No animation event is involved.
+  - `0x103ea510` is **`CWeaponMelee::Deploy`** (vt `+0x4EC`, called from `Weapon_Equip` / `Weapon_Switch`), not an event dispatcher.
+  - **`CWeaponMelee` does not bypass the shared traced-impact virtual `0x102579f0`** — it inherits it, and the swing sweep calls it through `vt +0x438` to commit each contact.
 - **SkillRequirement**:
-  - `SkillRequirement` is parsed to weapon mode field `+0x3d0` in `WeaponModeDataLoader` (`0x10259230`) and is never read or checked elsewhere in engine binaries (dead field).
+  - `SkillRequirement` is parsed to weapon mode field `+0x3d0` in `WeaponModeDataLoader` (`0x10259230`) and is never read or checked elsewhere in engine binaries (dead field). The item files' own comment calling it a requirement to wield is wrong.
+- **knockback_chance**:
+  - Parsed into the weapon-data record — one write site (`0x1025a41f`), one copy pair, zero gameplay readers (dead field). The knockback gate is the victim's hit-buildup counter and the swing record's `0xBA == 2` marker; the activity comes from the swing record's candidate table.
 - **Ranged and Melee Damage Post-Soak Operations**:
-  - **Melee Damage Formula**: $\text{Final Damage} = \text{Lethality} \times (\text{BaseDamage} + \text{DmgModifier}) \times \text{Multiplier}$, where `DmgModifier` is the attacker's Feat rating (Brawl or Melee stat bonus) and Potence guarantees a minimum lethality floor.
-  - **Ranged Damage Formula**: $\text{Final Damage} = \text{Lethality} \times \text{BaseDamage} \times \text{Multiplier}$, where `Multiplier` is $(\text{Volley\_Fraction} \times \text{Hitgroup\_Scale})$. Firearm Feat scales accuracy rather than flat damage.
+  - **Melee Damage Formula**: $\text{Final Damage} = \text{Lethality} \times (\text{BaseDamage} + \text{DmgModifier}) \times \text{Multiplier}$, where `DmgModifier` is the `Dmg` string's **optional leading trait** — `0` on every real weapon, authored only on `holy_light`, `wolf_head` and developer items — and Potence guarantees a minimum lethality floor. The attack feat enters `Lethality` as retail's "Feat Adjustment", not this term.
+  - **Ranged Damage Formula**: $\text{Final Damage} = \text{Lethality} \times \text{BaseDamage} \times \text{Multiplier}$. Firearm Feat scales accuracy rather than flat damage.
+  - **`Multiplier`, both paths**, is the trace/volley scale (volley fraction × hitgroup scale) **times `CVDmg_t` word 15**, the accumulated damage-filter float.
 - **Special Predicates and CVDmg_t::Apply**:
   - `CVDmg_t::Apply` (`0x101fb200`) invokes an installable game callback (`DAT_1074e7bc`) registered via `CVDmgSetApplyCallback` (`0x101fb180`).
   - Special damage modifiers and immunities are resolved in `CBaseCombatCharacter::ApplySpecialDamageModifier` (`0x1033db30`), matching weapon/damage IDs against the entity's 224-entry lookup table to trigger condition flags (`0x400`) and reactive audio.
-- **DMG_FIST Alias**:
-  - `DMG_FIST` is not an engine damage flag; unarmed melee attacks parse and alias directly to `DMG_CLUB` (`0x80` / Bashing damage) in `FUN_101fab10`.
+- **DMG_FIST**:
+  - `DMG_FIST` is not an engine damage flag and **does not alias to `DMG_CLUB` or to anything else**. `StrToDMGFlags` carries no entry for it and returns `0`, so an unarmed attack's Source damage mask is empty; its bashing family comes from the `Dmg` string's `Bashing` token.
 - **Alive-Path Filtering and Rounding**:
   - `OnTakeDamage_Alive` (`0x103302e0`) guards against dead/invalid states (`0x168 != 0x1e/0x1f`) and non-positive incoming values (`damage <= 0.0`).
   - Final damage values truncate to integer via standard `__ftol()` (FISTP truncation toward zero) prior to deducting entity health.

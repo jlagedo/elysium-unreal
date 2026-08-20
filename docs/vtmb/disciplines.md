@@ -186,17 +186,38 @@ reset.
 |---|---|---|---|
 | Auspex | 1 blood; 20/24/28/32/36 s | Aura sight, dark vision; Wits `+1/+1/+2/+2/+3`, Perception `+0/+1/+1/+2/+3`; authored aura radii `200/324/578/872/1200` | Generic active stat applies the level trait effect; native perception/render consumers remain to be closed |
 | Blood Healing | Blood must be nonzero; 5 s nonrenewable active window | Reconstitutes damage; `VampHeal_Type` receives `Duration 8%` | Authored `BloodHealFunc` owns the transaction **[open: exact blood/health steps]** |
-| Celerity | 1 blood; 14 s at every level | Preternatural speed/world slowdown; `Fx_Motion_Trail +rank` | Active stat and timer are closed; native time/movement consumer remains open |
-| Bloodbuff (`Corpus_Vampirus`) | 3 blood; 14 s | `+2` Strength, Dexterity and Stamina, with each maximum raised to 10 | Generic trait-effect layer; normal player activation uses active value 1 |
-| Fortitude | 1 blood; 25 s | `+rank` automatic soak successes; Fortitude FX | Generic trait effect feeds the common soak resolver; help excludes fire/heat, whose exact native mask remains to be rejoined here |
+| Celerity | 1 blood; 14 s at every level | Preternatural speed/world slowdown; `Fx_Motion_Trail +rank` is the **whole** authored payload | Active stat and timer are closed; every speed/extra-action number is native and unrecovered |
+| Bloodbuff (`Corpus_Vampirus`) | 3 blood; 14 s | `+2` Strength, Dexterity and Stamina, with each maximum raised to 10 — **a patch value; retail floors each at `Min 5`** | Generic trait-effect layer; normal player activation uses active value 1 |
+| Fortitude | 1 blood; 25 s | `+rank` automatic soak successes; Fortitude FX — **the `+1`…`+5` group split is a patch value; retail re-applies one `+1` group per rank** | Generic trait effect feeds the common soak resolver; help excludes fire/heat, whose exact native mask remains to be rejoined here |
 | Obfuscate | 1 blood; 18/20/22/24/26 s | Invisibility/stealth-kill rules; translucency `10/30/50/70/90` | Native visibility and break-rule state plus trait FX; exact break matrix is partly open |
-| Potence | 1 blood; 25 s | Supernatural brawl/melee force; authored Strength `+rank` | Melee damage additionally floors remaining `DamageInflicted` up to active Potence rank before final scalar commit; that extra damage is not defended |
+| Potence | 1 blood; 25 s | Supernatural brawl/melee force; authored Strength `+rank` — **a patch value; retail authors a flat `+1` at every rank** | Melee damage additionally floors remaining `DamageInflicted` up to active Potence rank before final scalar commit; that extra damage is not defended |
 | Presence | 1 blood; 16 s | Nearby enemy penalties, attack-rate reduction and level-dependent mesmerize chance | Native active/reaction effects plus level-specific AoE target records **[inference: pulse cadence/caller open]** |
 | Protean | 1 blood; 25 s | Heat vision, claws, physical buffs and war form | Level trait effect swaps equipment/stats/model; saved transform handle/time support the native form transition **[open: full transition lifecycle]** |
 
 The common active preconditions require positive blood and a living character. Obfuscate also
 requires `ObfuscateCanInc == 1` and disallows Protean war form; Protean disallows active
 Obfuscate. These are authored increment gates, not UI-only warnings.
+
+#### Three of those payloads are Unofficial Patch values, not retail's
+
+The table above reads the patch-first corpus, as the evidence boundary states. For three powers the
+**retail** authoring is materially different, and a faithful baseline is retail's:
+
+| Power | Retail | Patch (the values in the table above) |
+|---|---|---|
+| Blood Buff | a **`Min 5` floor** on Strength, Dexterity and Stamina — the buff raises a low attribute to 5 and does nothing at all for one already at 5 or better | `+2` to each, with each maximum raised to 10 |
+| Potence | a **flat Strength `+1` at every rank** — rank buys duration and the melee floor, not force | Strength `+1`…`+5` scaling with rank |
+| Fortitude | **one `+1` trait group, re-applied per rank action** | five distinct groups, `+1`…`+5` per rank |
+
+The consequence is that retail's Blood Buff is a *floor* rather than a bonus, and retail's Potence
+and Fortitude do not scale their trait payload with rank at all. Reproducing the patch numbers is a
+divergence and needs an explicit owner call; the default resolves to retail.
+
+**Celerity authors almost nothing.** Its whole authored payload is `Fx_Motion_Trail` and a 14 s
+duration at every level. Every number a player would describe as Celerity — the movement speed
+multiplier, the world slowdown, the extra actions — is in native code with no authored surface, and
+none of it is recovered **[open]**. A remake cannot read Celerity's magnitude out of the data at
+all.
 
 ### Protean's cumulative level payload
 

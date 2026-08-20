@@ -183,9 +183,10 @@ namespace ElysiumReactions
 	};
 
 	// **STAND-IN, AND NAMED AS ONE.** Retail selects the cell out of an AUTHORED PER-ATTACK ACTIVITY
-	// TABLE — four direction buckets, up to four candidates each, one picked with `RandomInt` — whose
-	// on-disk location is still unrecovered. Until it is found, one deterministic candidate stands in
-	// per bucket: the `NORMAL`/`HIGH` cell of the classified direction.
+	// TABLE — four direction buckets, up to four candidates each, one picked with `RandomInt` — which
+	// lives on the attack clip's swing records (`docs/vtmb/combat-and-damage.md` → Knockback) and rides
+	// the clip sidecar's `swings` column. Until the runtime consumes that table, one deterministic
+	// candidate stands in per bucket: the `NORMAL`/`HIGH` cell of the classified direction.
 	//
 	// The `SMALL` family and the two `LOW_BACK` cells stay in the vocabulary, in `KnockbackActivity`
 	// and in the tests — they are authored on 155 bodies and the recovered table is what will select

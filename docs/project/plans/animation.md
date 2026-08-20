@@ -44,17 +44,10 @@ for the per-weapon translation half.
 
 ### LIFE5 Reactions and combat actions
 
-What is left of the rung, the player attack family first, then knockback and death, the
-montage-slot mechanism, paired actions, and the two reaction repairs the blocked family named.
-**Owns the pose, not the number**: lethality, soak, the damage roll and the health commit are
-13.3's; this rung consumes their outcome.
-
-**The player attack family.** The producer that turns a real press into a weapon transaction:
-press edges taken off the player's own combat button field, retail's `ItemPostFrame` refusal
-order ahead of them — a controlling surface first, then an empty hand — the melee primary polling
-the *held* bit where a firearm takes the press edge unless its mode authors `allow_autofire`, and
-the commit entering on the clip's own sequence event, 3047 for melee and 3030–3044 for ranged
-(`docs/vtmb/combat-and-damage.md`). LIFE4's owner-played acceptance sweep is held on this slice.
+What is left of the rung: the flying knockback chain, the authored knockback table the grounded
+gate currently stands in for, the ragdoll physics-asset bake, and the owner-played acceptance
+sweep. **Owns the pose, not the number**: lethality, soak, the damage roll and the health commit
+are 13.3's; this rung consumes their outcome.
 
 **A reaction is not an idle.** `StateForActivity` maps the locomotion slice plus `Unknown`,
 `Swim` and `Treadwater` onto eight states, so a knockback or a death projects to `Idle` and a
@@ -62,40 +55,71 @@ resolved asset plays as an idle overlay. Each family added here extends the acti
 the state projection in the same change, or rides a montage slot and leaves `GraphState` naming
 the held locomotion state.
 
-**Knockback and death.** The shipped corpus and the authored inputs are recorded — the ten bare
-grounded cells, the flying chain, the ragdoll seed pose and the missing get-up in
-`docs/vtmb/animation_and_movers.md`; `knockback_chance`, `KnockbackPreventTime`, the
-`Major`/`MinorKnockbackDist` pair and the two npctemplate death-policy keys in
-`docs/vtmb/combat-and-damage.md`. What gates the build is RE, not content: the open questions are
-the master roadmap's `RE-K*` and `RE-D*` rows, and the launch slice in particular cannot start
-before the impulse is recovered. Death consumes the recovered `TASK_PLAY_DEATH_SEQUENCE` ladder,
-which resolves `ACT_IDLE` on every shipped body because `ACT_DIESIMPLE` is absent from the corpus;
-the ragdoll label is a physics seed pose, not a played clip.
+**The flying knockback chain.** The grounded band lands the cell; this band moves the body. The
+recovered contract is `docs/vtmb/combat-and-damage.md` → "Launch is a velocity assignment, in two
+stages" / "How a flying chain ends", and the slice consumes it whole rather than re-deriving any
+of it:
 
-**Two reaction repairs.** The reproduction's melee block/stagger reaction holds the base channel
-for its held seconds where retail's `DamageFlinch` is a gesture overlay, and the player's block
-pose plays as a one-shot while the block classification stands for the whole held predicate. Both
-divergences are recorded beside the faithful behaviour in `docs/vtmb/combat-and-damage.md`, and
-both resolve to the same shape: a **holdable, looping reaction claim** that a predicate releases
-rather than a duration.
+- **Launch is an assignment, not an impulse.** The reaction body computes the velocity on the
+  flying branch alone and schedules the chain; the *next* think assigns it. Reproducing the
+  one-think delay is part of the behaviour — a body launched in the same think leaves before the
+  reaction cell is on screen. Magnitude interpolates the recovered horizontal/vertical pairs on
+  `t = GetRawAttackValue * 0.1` (`1.0` with no attacker, forced `0.1` for a chain reaction), and
+  neither the inputs nor the result are clamped; direction is `normalize(victim − attacker)` with
+  z zeroed, the victim's own negated facing when there is no attacker, and the attacker's velocity
+  in a chain reaction.
+- **The flying path forces direction bucket 0** — a `+180` yaw offset — regardless of what the
+  four-band classifier answered, and `TranslateFlyingKnockback` downgrades the flying range to the
+  grounded one for a victim that is the player. The player is never launched; its reaction stays
+  the view kick the grounded band already reproduces.
+- **The terminator is land detection**, not a clip end: the `_INTO`/`_LAND`/`_WALL_LAND` cells end
+  on sequence completion, while the *flight* ends when the body is grounded or is falling with a
+  successful ground probe. Wall contact is a sub-chain rather than an ending — rebound velocity is
+  the wall vector times `100.0`, a timer arms at `curtime + 0.01`, and the chain enters
+  `..._WALL_FALL`. Movement goes through the motor seam; nothing here solves physics.
 
-**The graph's Inertialization node comes out.** The blend stack owns the crossfade now, so the
-node is placed and unreached; removing it touches the graph builder and the captured graph text
-together.
+The cells this band plays are the flying half of the shipped corpus recorded in
+`docs/vtmb/animation_and_movers.md`, and the get-up the corpus does not ship stays a named absence.
 
-Recovered resolver rules the rung still owes (policy over LIFE2's catalog — none adds graph
-machinery): the restart rule that clears and restarts a repeated identical request, and
-paired-action role/size/side variant arithmetic.
+**The authored knockback table replaces the stand-in.** The swing sidecar already carries each
+record's four direction buckets of up to four candidate activity names, plus the `+0xB8` rotation
+byte and the `+0xBA == 2` unconditional marker (the `swings` column, written by
+`pipeline/src/elysium_pipeline/formats/mdl_skel.py`). The
+slice consumes them: the direction comes off the byte and bucket `k` answers direction
+`(byte_b8 + k) mod 4`, so a consumer never assumes bucket 0 is one particular way round; a bucket
+with more than one candidate draws with `RandomInt` on an owned stream. That retires
+`StandInKnockbackSize`/`StandInKnockbackHeight` — the deterministic single `NORMAL_HIGH_{dir}`
+candidate and its "no draw at all" note — and reaches the `SMALL` family and the two `LOW_BACK`
+cells the vocabulary already carries. The two named omissions of the gate stay open and stay
+reported: the hit-buildup counter, whose per-victim versus per-attacker/victim-pair accounting is
+still an open RE question, and the second, unidentified template predicate.
 
-One montage-slot mechanism serves both `scripted_sequence`'s `m_iszIdle → m_iszPlay →
-m_iszPostIdle` and an interesting place's enter/hold/leave segments — the same shape, built
-together or there come to be two.
+**The ragdoll handoff is a bake-side follow-up.** The death transaction hands off by holding the
+final pose because no baked mesh carries a physics asset. A true ragdoll needs the character bake
+to generate one per body family — bodies, constraints and a collision profile derived from the
+baked skeleton — with the runtime handoff switching to simulation at the same point it now freezes.
+Until then the held pose is the recorded stand-in, not the design.
 
-*Acceptance:* a real `+attack` press swings a held melee weapon and fires a held firearm, each
-committing on its own clip's sequence event; an NPC's ambient behaviour and a scripted beat both
-reach a pose through the intent seam, and `m_iszCustomMove` plays over a travelling body; a struck
-body is knocked back on the direction its blow states and a killed body dies and hands off to the
-ragdoll.
+**Named residuals**, each small, each real:
+
+- `FElysiumPlayer::OnRuntimeModelChanged` releases the held reaction claim before the body it was
+  taken on is torn down; `FElysiumNpc`'s sibling does not, so a cast body swapped mid-hold leaves a
+  zero-duration claim addressed to a component nothing can name again.
+- The montage route rebuilds its montage on every play, so the recovered restart rule is inert on
+  it. A held repeat re-settling onto a special idle therefore restarts where the graph route would
+  hold — visible on crouch, whose non-looping into-pose is the counter-fact the rule exists for.
+- A scripted beat restored mid-action replays its segment but does not re-take the segment claim,
+  so the restored run holds its pose on a channel it does not own.
+- `QuerySwingContacts` has live-only coverage: the swept bone segments go through the embodiment
+  seam, and the substrate double records rather than sweeps, so the sub-step batching is proven in
+  the arena and nowhere else.
+
+*Acceptance:* a real `+attack` press swings a held melee weapon and fires a held firearm — the
+melee blow committing inside its clip's **authored contact window** and the shot on its own
+authored sequence event; an NPC's ambient behaviour and a scripted beat both reach a pose through
+the intent seam, and `m_iszCustomMove` plays over a travelling body; a struck body is knocked back
+on the direction its blow states, a launched body flies and lands, and a killed body dies and hands
+off to the ragdoll.
 *Deps:* LIFE2, LIFE3, LIFE4; `docs/vtmb/combat-and-damage.md` (its open joins are numeric and
 gate 13.3, not this rung).
 
@@ -156,6 +180,12 @@ free-running (`docs/vtmb/animation_and_movers.md` A.4c), so a second scene-time-
 would reproduce timing retail does not have; whether the composite wants a montage slot or the
 weapon layers' overlay treatment is this rung's design call, as is whether a scene's clip
 changes regain a crossfade (the divergence CCC9 recorded).
+
+**Paired actions** land here — owner call, made. A paired action is two bodies posed against each
+other, which is the cinematic path's problem rather than the reaction channel's: the rung owes the
+recovered role/size/side variant arithmetic (policy over LIFE2's catalog — it adds no graph
+machinery) and the claim shape that keeps both participants' base channels held for one
+transaction. The feed transaction is the shipped consumer.
 
 - **The choreo-scene rewire (hard slice).** The scene pipeline is broken end-to-end and has not
   been exercised since the LIFE programme started: NPCs do not load at their scene marks, a

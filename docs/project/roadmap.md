@@ -321,7 +321,7 @@ The ladder:
   autolayers arm through the table-declared hosts, and the wield check gates the mount's local
   frame and the two-handed off hand; real-input draw works today through the command bus
   (`elysium.cmd invnext`/`slot*`/`holster` reach `SetActiveWeapon`); the owner-played acceptance
-  sweep remains, held by owner call until a real attack input exists (LIFE5's first family).
+  sweep remains, and rides LIFE5's sweep now that a real attack input exists.
 - [x] **Sequence-blend fidelity** — the owner call resolved restore-faithful; the mechanism, its
   one duration authority and the three named divergences of the reproduction →
   `docs/architecture/animation-architecture.md`.
@@ -330,25 +330,55 @@ The ladder:
   and the reload chain landed, and a struck body flinches on the `hit_yaw` grid off its own
   save-persisted `Reaction` stream. The sequence-event carrier is complete across its three
   slices — the core window rule plus the process census; the weapon band route, where the combat
-  character forwards 3000–3999, ranged 3030–3044 and melee 3047 commit at the authored instant,
-  the melee swallow set holds, thrown/discipline/armor take the no-route body and
-  `ContactEventCycle` is demoted to a degraded fallback; and the live phase arms, every biped
+  character forwards 3000–3999, ranged 3030–3044 commits at the authored instant, the melee
+  swallow set holds, thrown/discipline/armor take the no-route body and `ContactEventCycle`
+  survives only as the degraded fallback outside melee; and the live phase arms, every biped
   publishing its Base-channel phase from per-producer armed records carrying `AnchorCycle`. The
   blocked/stagger family landed whole: the clip `reach_cm`/`blocked_reaction` columns, the
   authored reaction fade and the one `PlayReactionActivity` producer under it; `WasMeleeBlocked`,
   the defender's `ACT_BLOCK`/`ACT_BLOCK_HEAVY`, the attacker's authored blocked reaction with its
   `ACT_BLOCKED_REACTION_RIGHT` fallback, base-channel holds on both sides, the flinch yield, the
   player's `wpn_secondaryatk` block intent, and save schemas 26/27 with the snapshot leaf-schema
-  threading. Open, the player attack family first — the producer that turns a real
-  `+attack`/`+attack2` press into a weapon transaction, and the swing and shot the player drives
-  from it, which LIFE4's owner-played acceptance sweep is held on; then knockback and death, the
-  montage-slot mechanism, paired-action wiring, the holdable/looping reaction claim and the
-  Inertialization-node removal.
+  threading. The remaining action families landed: the player attack producer turns a real
+  `+attack`/`+attack2` press into a weapon transaction off the combat button field behind retail's
+  `ItemPostFrame` refusal order, the primary a press edge melee included with a firearm mode's
+  `allow_autofire` the one held exception; the melee contact walk replaced `ContactEventCycle` for melee entirely — authored
+  per-clip swing windows tick-batched into 100 Hz sub-steps, swept bone segments through the
+  embodiment seam, per-record hit-once groups and one opposed roll staged at swing start off
+  retail's 60-unit/0.7 query, serial-scoped — while ranged commit stays on its authored 3030–3044
+  events and 3047 is claimed and inert as retail's NPC swing trigger; the combo family selects its
+  entry on the authored direction-keyed button masks (exact-first, no draw) and walks the
+  busy/chain path on the authored `w_open`/`w_close`/`w_hold` windows, successor at the same rate,
+  deadline never re-pushed, `2COMBO` terminating, dangling targets authored and reported, NPCs
+  never chaining; NPC retaliation feeds damage into a 5-second derived enemy memory that stated
+  relationships supersede, so a struck neutral reaches Combat and swings back through the same
+  weapon transaction; grounded knockback runs the verified retail gate — margin-band entry,
+  alive ∧ ¬`Disallow_Knockbacks` eligibility, the asymmetric direction bands and the NPC-only yaw
+  snap, zero RNG in the gate path — with the single `NORMAL_HIGH_{dir}` candidate and the omitted
+  hit-buildup gate reported as named stand-ins; the NPC death family lands the `OnKilled`
+  transaction (claims released, Mind Dead, frozen-not-hidden, collision off), the
+  `TASK_PLAY_DEATH_SEQUENCE` ladder (arg → `ACT_DIESIMPLE` → `ACT_IDLE`), a handoff that holds the
+  final pose because no baked mesh carries a physics asset, and corpse state restored synchronously
+  on load; the holdable reaction claim releases by condition
+  (`ClipCompletion`/`Envelope`/`Predicate`), so the player's block pose loops for the whole held
+  predicate and resumes after preemption with no re-draw and the flinch runs the recovered
+  0.1 s-in/0.3 s-out envelope; and one `DefaultSlot` montage-slot mechanism serves
+  `scripted_sequence` phases and interesting-place segments through `FElysiumClipSegment` bands,
+  released on every stop path. The route-gated restart rule, `elysium.cmd.tap`, the
+  Inertialization-node removal and the reaction-branch loop pins landed with them, and the clip
+  sidecars carry the `swings` and `combo` columns the families read. Open: the owner-played
+  acceptance sweep (which also closes LIFE4's), the flying knockback chain (RE-unblocked — launch
+  formula and land terminator recovered), consuming the authored per-attack knockback table now in
+  the sidecars, the ragdoll physics-asset bake, and the four named residuals the plan lists (the
+  NPC-side reaction-claim release on a mid-hold body swap, the montage route's inert restart rule,
+  a restored scripted beat's un-retaken segment claim, and `QuerySwingContacts`' live-only
+  coverage). Paired actions moved to LIFE7 — owner call, made.
 - [ ] **[LIFE6 The first-person viewmodel](plans/animation.md)** — the 21+17 corpus export and
   the two-component body; ranged only.
 - [ ] **[LIFE7 The cinematic path and gestures](plans/animation.md)** — the choreo-scene rewire
   hard slice (marks, camera, triggers — the pipeline is broken end-to-end and untested since the
-  LIFE programme started), then the montage migration, the gesture un-collapse, the measured
+  LIFE programme started), then the montage migration, the gesture un-collapse, paired actions
+  (role/size/side variant arithmetic and the two-body claim — owner call, made), the measured
   layer weight, the `Prince_Escort_Male` cluster.
 - [ ] **[LIFE8 Alive — played acceptance](plans/animation.md)** — the programme's owner-played
   finish line; owns the capture-tooling trim.
@@ -503,9 +533,11 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE49 | the player-stealth observer and detection transaction | `docs/vtmb/stealth.md`; 8.9, 13.1, 13.5 | [x] |
 | RE50 | stealth-kill victim selection and deaf-zone transaction | `docs/vtmb/stealth.md`; 13.1 | [x] |
 | RE51 | the player entity and world relationship; lifecycle, world-area/verb policy and law/Masquerade/police/pursuit transactions closed; open: 277-field ledger, camera/travel, area save retention and live world teardown | `docs/vtmb/player-entity.md`; 9.8, LIFE6, 13.1–13.4 | [~] |
-| RE-K1–RE-K9 | knockback, in order: who reads `knockback_chance` and where in the contact order; the normal-hit and knockback callback pair's addresses; the SMALL/NORMAL + HIGH/LOW selector; whether the direction token names where the blow came from or where the body goes; the launch impulse — magnitude, direction, mechanism (gates the launch slice); what consumes `KnockbackPreventTime`; the two `TASK_SET_KNOCKBACK_ACTIVITY` schedules and the KNOCKBACK condition's producer; what ends the flying chain; the `Major`/`MinorKnockbackDist` consumer | `docs/vtmb/combat-and-damage.md`, `animation_and_movers.md`; LIFE5 | [ ] |
+| RE52 | the suspected melee double-soak — the defender's `soak` is subtracted in the margin and carried again as the forced soak in `CVDmg_t::Apply`; one live capture of a melee hit against a known soak separates a real double spend from a mis-decoded aliased local | `docs/vtmb/combat-and-damage.md`; 13.3 | [ ] |
+| RE53 | the discipline-magnitude retail/patch delta — Blood Buff's `Min 5` floor, Potence's flat Strength `+1` and Fortitude's single re-applied group are retail's authoring where the patch-first corpus scales all three; which one a remake reproduces is an open owner call, default retail | `docs/vtmb/disciplines.md`; 13.2 | [ ] |
+| RE-K1–RE-K9 | knockback: the normal-hit/knockback callback pair and its place in the contact order, the authored per-attack candidate table's location and bucket rotation, the SMALL/NORMAL + HIGH/LOW selector, the confirmed body-goes token convention with its asymmetric bands and NPC-only yaw snap, the launch — a two-stage velocity assignment with recovered magnitude interpolation, direction and one-think delay — the `KnockbackPreventTime` consumer and the flying chain's land/wall terminator all recovered; `knockback_chance` recovered as a **dead field**, parsed by retail and read by nothing. Open: the two `TASK_SET_KNOCKBACK_ACTIVITY` schedules beyond the recovered Troika pair and the KNOCKBACK condition's producer; the `Major`/`MinorKnockbackDist` consumer; whether hit-buildup counting is per victim or per attacker/victim pair. Victim `+0xA8` is behaviourally closed — the `CBasePlayer` self-pointer, verified | `docs/vtmb/combat-and-damage.md`, `animation_and_movers.md`; LIFE5 | [~] |
 | RE-D1–RE-D5 | death, in order: the ragdoll-force envelope against the ragdoll sequence; the death schedule's number, tasks and argument; the solid-body policy; the deferral under a non-interruptible script; the two npctemplate death-policy keys' consumers | `docs/vtmb/combat-and-damage.md`, `npc-ai-reverse-engineering.md`; LIFE5 | [ ] |
-| RE-R1–RE-R4 | the reaction channel, in order: `DamageFlinch`'s fade units and order at `0x103229d0` (closes the hold-floor interim); whether `0x103302e0`'s call site reaches `DamageFlinch` unconditionally on the damaging blocked path; `0x10345AB0`'s facing constant; retail's resume phase when a base sequence is deselected and reselected | `docs/vtmb/combat-and-damage.md`, `animation_and_movers.md`; LIFE5 | [ ] |
+| RE-R1–RE-R4 | the reaction channel: `DamageFlinch`'s fade envelope at `0x103229d0` recovered as 0.1 s in / 0.3 s out with no hold, retiring the hold-floor interim; `0x103302e0`'s reach to `DamageFlinch` on the damaging blocked path settled. Open: `0x10345AB0`'s facing constant; retail's resume phase when a base sequence is deselected and reselected | `docs/vtmb/combat-and-damage.md`, `animation_and_movers.md`; LIFE5 | [~] |
 
 ## Options — evaluated, not planned
 
