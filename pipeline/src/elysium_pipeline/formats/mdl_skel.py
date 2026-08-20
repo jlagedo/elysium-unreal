@@ -44,6 +44,8 @@ import struct
 import numpy as np
 from collections import namedtuple
 
+from elysium_pipeline.formats.bsp import INCH_TO_CM
+
 _i32 = lambda b, o: struct.unpack_from("<i", b, o)[0]
 _u16 = lambda b, o: struct.unpack_from("<H", b, o)[0]
 _h16 = lambda b, o: struct.unpack_from("<h", b, o)[0]
@@ -249,6 +251,20 @@ _MAX_EVENTS = 256
 #: `docs/vtmb/animation_and_movers.md` A.3 requires. The shipped maximum is 2.
 _MAX_AUTOLAYERS = 16
 
+#: The melee half of VtMB's custom sequence-descriptor block. `reach`@720 (`+0x2D0`) is the
+#: swing's own reach in Source units, and `szblockedreactionindex`@740 (`+0x2E4`) the
+#: descriptor-relative name of the blocked-reaction activity the attacker plays when that swing
+#: is blocked (`docs/vtmb/combat-and-damage.md`). The activity's resolved enum sits at `+0x2E0`,
+#: the offset the runtime reads, and is `-1` on all 14,012 shipped descriptors — the DLL fills it
+#: from the name at model load, exactly as it fills `activity`@12 from `szactivitynameindex`@4,
+#: so the name is the durable on-disk key for both.
+_SEQ_REACH = 720
+_SEQ_BLOCKED_REACTION_NAME = 740
+
+#: studiomdl's "the QC stated no reach" marker for `reach`@720: `FLT_MAX`, on 13,431 of the
+#: 14,012 shipped descriptors.
+_REACH_UNSET = struct.unpack("<f", struct.pack("<I", 0x7F7FFFFF))[0]
+
 #: `mstudiomovement_t`, addressed by one StudioAnimDesc's `nummovements`@16 and
 #: `movementindex`@20. The index is relative to the animdesc. `position` is the cumulative
 #: Source-space displacement at this record's end frame; the final record therefore carries one
@@ -293,10 +309,14 @@ _NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
 #: sequence's own model-space bounding box in Source units (see `local_sequences`);
 #: `fade` is the authored transition duration in seconds (see `local_sequences`);
 #: `autolayers` names the sequences this one is composed with (see `read_autolayers`);
-#: `events` carries the sequence timeline records (see `read_events`).
+#: `events` carries the sequence timeline records (see `read_events`); `reach` is the melee
+#: swing's authored reach in Source units (see `read_reach`) and `blocked_reaction` the activity
+#: literal the attacker plays when that swing is blocked (see `read_blocked_reaction`). The last
+#: two are `None` on a sequence that states neither, which is most of the corpus.
 Seq = namedtuple("Seq",
-                 "label base frames fps activity actweight flags grid bbmin bbmax fade autolayers events",
-                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, (), ()))
+                 "label base frames fps activity actweight flags grid bbmin bbmax fade autolayers"
+                 " events reach blocked_reaction",
+                 defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, (), (), None, None))
 
 
 def pose_parameters(d):
@@ -418,6 +438,52 @@ def read_events(d, sb):
     return tuple(events)
 
 
+def read_reach(d, sb):
+    """One StudioSeqDesc's authored melee reach at descriptor base `sb`, in Source units, or
+    `None` when the sequence states none.
+
+    `reach`@720 is the swing's own target-acquisition distance: `CWeaponMelee::RequestActivity`
+    reads it from every sequence answering the translated activity and queries at the maximum
+    (`docs/vtmb/combat-and-damage.md`). 581 of the install's 14,012 descriptors state one, all of
+    them attack or charge sequences on the shared weapon banks and the monster bodies, spanning
+    21.9 to 768.3 units.
+
+    Two values are absent rather than short. `FLT_MAX` is studiomdl's unset marker and covers
+    13,431 descriptors. Seven single-`idle` scenery and prop models carry a wholly zeroed custom
+    block instead, and a zero query distance acquires nothing, so a non-positive or non-finite
+    reach is read as unstated too rather than as a swing that can never reach."""
+    value = _f32(d, sb + _SEQ_REACH)
+    if not math.isfinite(value) or value <= 0.0 or value >= _REACH_UNSET:
+        return None
+    return value
+
+
+def read_blocked_reaction(d, sb):
+    """One StudioSeqDesc's blocked-reaction activity literal at descriptor base `sb`, or `None`.
+
+    When a swing is blocked, the attacker callback plays the activity this sequence names,
+    falling back to `ACT_BLOCKED_REACTION_RIGHT` when it names none — which is where authored
+    left/right blocked reactions enter, rather than from a movement direction at input time
+    (`docs/vtmb/combat-and-damage.md`). 147 descriptors across 22 models name one, and the
+    vocabulary is exactly `ACT_BLOCKED_REACTION_LEFT` (93) and `ACT_BLOCKED_REACTION_RIGHT` (54);
+    every one of the 147 also states a `read_reach` distance.
+
+    The name is read the way `local_sequences` reads `activity`, because it is the same kind of
+    key: `szblockedreactionindex`@740 is descriptor-relative and the enum slot beside it at
+    `+0x2E0` is `-1` on disk everywhere, resolved by the DLL at model load. `-1` is this index's
+    unset marker rather than Source's usual `0`, so it is tested for explicitly; an index off the
+    end of the image or a string without a terminator yields no activity rather than an activity
+    read out of someone else's bytes."""
+    rel = _i32(d, sb + _SEQ_BLOCKED_REACTION_NAME)
+    if rel <= 0 or not (0 <= sb + rel < len(d)):
+        return None
+    try:
+        name = _cstr(d, sb + rel)
+    except ValueError:
+        return None
+    return name or None
+
+
 def local_animation(d, index):
     """The local animation at `index` -> (name, animdesc_base, numframes, fps), or None when
     the index falls outside `NumLocalAnims`@264. The name carries a leading '@' on the disk
@@ -470,7 +536,7 @@ def movement_summary(d, animdesc_base, frames, fps):
         return None
     cycle_seconds = (frames - 1) / fps
     position = movements[-1].position
-    ground_distance_cm = math.sqrt(sum(value * value for value in position)) * 2.54
+    ground_distance_cm = math.sqrt(sum(value * value for value in position)) * INCH_TO_CM
     if (not math.isfinite(cycle_seconds) or cycle_seconds <= 0.0
             or not math.isfinite(ground_distance_cm) or ground_distance_cm <= 0.0):
         return None
@@ -515,7 +581,13 @@ def local_sequences(d):
     engine combines across a sequence pair to time a base-sequence crossfade
     (`docs/vtmb/animation_and_movers.md`). Three floats sit at @612/@616/@620 and are
     byte-identical in every shipped sequence, so the first is read and the other two are
-    left alone."""
+    left alone.
+
+    `reach` and `blocked_reaction` are the melee half of the descriptor's custom block:
+    the swing's own target-acquisition distance and the activity the attacker plays when the
+    swing is blocked (see `read_reach` and `read_blocked_reaction`). Both are `None` on a
+    sequence that states neither, which is every sequence outside the weapon banks and the
+    monster bodies."""
     ns = _i32(d, 272); sbase = _i32(d, 276)
     na = _i32(d, 264); abase = _i32(d, 268)
     # Every descriptor's label by index, read before the walk because an autolayer entry
@@ -541,7 +613,9 @@ def local_sequences(d):
                        bbmin=_vec3(d, sb + 28), bbmax=_vec3(d, sb + 40),
                        fade=_f32(d, sb + 612),
                        autolayers=tuple(labels[t] for t in read_autolayers(d, sb, ns)),
-                       events=read_events(d, sb)))
+                       events=read_events(d, sb),
+                       reach=read_reach(d, sb),
+                       blocked_reaction=read_blocked_reaction(d, sb)))
     return out
 
 

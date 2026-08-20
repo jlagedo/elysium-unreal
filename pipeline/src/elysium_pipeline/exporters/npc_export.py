@@ -48,6 +48,7 @@ import os
 import re
 
 from elysium_pipeline.formats import install, kv, mdl, mdl_gltf
+from elysium_pipeline.formats.bsp import INCH_TO_CM
 from elysium_pipeline.exporters import UE_mdl_cloth, UE_mdl_skeletal as UEK
 from elysium_pipeline.formats import mdl_skel as S
 from elysium_pipeline.paths import export_root
@@ -253,11 +254,22 @@ def _clip_meta(c, bounds_radius_m=None):
     once per owning stem, not per NPC that resolves it -- 157 characters x ~1,400 resolved
     clips would be two orders of magnitude more rows.
 
+    `reach_cm` and `blocked_reaction` are the melee pair the same descriptor carries: the
+    swing's own target-acquisition distance, converted from the file's Source units to the
+    centimetres every sidecar is stated in, and the `ACT_*` literal the attacker plays when that
+    swing is blocked. Both are present only on the sequences that state them -- 581 and 147
+    descriptors respectively out of the install's 14,012 -- because a column carried as a null on
+    every ordinary clip would cost more than the fact is worth.
+
     `bounds_radius_m` appears only where it has been reconciled against the baked glb
     (`clip_bounds_radius_m`). Its presence is therefore a promise that the number covers the
     geometry, which is the whole reason a consumer would trust it over the mesh's own bounds."""
     meta = {"activity": c.activity, "weight": c.actweight, "flags": c.flags,
             "frames": c.frames, "fps": round(c.fps, 4), "fade": round(c.fade, 4)}
+    if c.reach is not None:
+        meta["reach_cm"] = round(c.reach * INCH_TO_CM, 4)
+    if c.blocked_reaction:
+        meta["blocked_reaction"] = c.blocked_reaction
     if bounds_radius_m is not None:
         meta["bounds_radius_m"] = round(bounds_radius_m, 4)
     return meta
@@ -499,7 +511,17 @@ def write_sidecars(manifest):
     across ~1,400 rows (67 owners, a few hundred activities), so interning pays for the
     activity column and still lands under the un-interned label->owner map it replaces.
     Index 0 of `owners` is always the NPC itself; index 0 of `activities` is always `""`
-    (a layer/plumbing sequence the engine composes rather than selects)."""
+    (a layer/plumbing sequence the engine composes rather than selects).
+
+    A row is truncated at its last stated column, which is how the schema carries a sparse
+    fact: `fields` names every column, and a reader takes a column it does not reach as
+    unstated. `fade` has always been optional that way, and the melee pair `reach_cm` /
+    `blocked_reaction` is appended behind it on the same terms -- 581 and 147 of the install's
+    14,012 sequences state them, so a fixed-width row would spend two columns per clip on a
+    fact ~4% of clips carry. `blocked_reaction` states its `ACT_*` literal inline rather than
+    interning into `activities`: that array is the stem's playable vocabulary, unioned by
+    conformance checks to answer "can some model play this activity", and a reaction a clip
+    only reacts to (never performs) has no business answering yes."""
     os.makedirs(CLIPS_DIR, exist_ok=True)
     index = {
         "manifest_version": manifest["manifest_version"],
@@ -574,13 +596,24 @@ def write_sidecars(manifest):
             act = meta["activity"]
             if act not in act_i:
                 act_i[act] = len(acts); acts.append(act)
-            clips[label] = [owner_i[owner], act_i[act], meta["weight"], meta["flags"],
-                            meta["frames"], meta["fps"], meta.get("fade", 0.2)]
+            row = [owner_i[owner], act_i[act], meta["weight"], meta["flags"],
+                   meta["frames"], meta["fps"], meta.get("fade", 0.2)]
+            reach, blocked = meta.get("reach_cm"), meta.get("blocked_reaction")
+            if blocked:
+                # `reach_cm` holds the column blocked_reaction sits behind, so a sequence that
+                # named a reaction without a reach still lands its reaction in the right column.
+                # The literal is inlined rather than interned: only 147 rows carry it, and the
+                # `activities` array is the stem's playable vocabulary the runtime unions for
+                # conformance, so a referenced-but-unselectable reaction would pollute it.
+                row += [reach, blocked]
+            elif reach is not None:
+                row.append(reach)
+            clips[label] = row
         path = os.path.join(CLIPS_DIR, stem + ".json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"stem": stem, "owners": owners, "activities": acts,
                        "fields": ["owner", "activity", "weight", "flags", "frames", "fps",
-                                  "fade"],
+                                  "fade", "reach_cm", "blocked_reaction"],
                        "clips": clips}, f, separators=(",", ":"))
         total += os.path.getsize(path)
     print(f"[npc] sidecars: {INDEX} ({os.path.getsize(INDEX)/1024:.0f} KB) + "
