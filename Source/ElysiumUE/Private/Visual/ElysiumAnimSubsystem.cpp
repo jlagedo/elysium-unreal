@@ -832,8 +832,11 @@ bool UElysiumAnimSubsystem::ResolveActivityClip(const FElysiumActivityClipReques
 	// resolver, so what this adapter forwards is asserted without a subsystem behind it.
 	const FElysiumAnimationIntent Intent = ElysiumAnimResolve::ActivityIntentFor(Request);
 
+	// Kept rather than built inline: the reach below is read back off the same vocabulary the pick
+	// ran against, and re-fetching it would be a second lookup of the one clip set.
+	const FElysiumAnimationCatalog Catalog = BuildCatalog(Request.Stem);
 	FElysiumAnimationSelection Selection;
-	ElysiumAnimResolve::Resolve(Intent, BuildCatalog(Request.Stem), Selection);
+	ElysiumAnimResolve::Resolve(Intent, Catalog, Selection);
 	if (Selection.SequenceLabel.IsEmpty() || Selection.AnimationName.IsEmpty())
 	{
 		// The record's own named miss, in words, with the classification the request selected through
@@ -866,6 +869,12 @@ bool UElysiumAnimSubsystem::ResolveActivityClip(const FElysiumActivityClipReques
 	// The selected row's own authored fade, already reduced to 0 by `FadeSeconds()` on a hard cut.
 	// A producer that blends the clip in reads it here rather than re-finding the clip.
 	Out.FadeSeconds = Selection.FadeSeconds;
+	// The activity's reach, asked over the TRANSLATED activity rather than the request's: a melee
+	// swing acquires at the maximum over every sequence the activity the vocabulary was actually
+	// searched for returns, and asking under the pre-translation name would answer 0 for every
+	// weapon-translated attack.
+	Out.MaxReachCm = Catalog.Clips
+		? Catalog.Clips->MaxReachCmForActivity(Selection.ResolvedActivity) : 0.0f;
 	// LIFE5 — the fan half, carried out so a producer can route a directional reaction without
 	// re-resolving anything. The axis value is read off the SELECTION rather than off the request: the
 	// grid states which pose parameter it binds, and a producer's `HitYaw` is the answer only for a

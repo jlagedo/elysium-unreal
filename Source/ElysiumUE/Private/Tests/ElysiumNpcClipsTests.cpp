@@ -13,6 +13,8 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "ElysiumAnimationIntent.h"
+#include "Visual/ElysiumAnimationResolve.h"
 #include "Visual/ElysiumNpcClips.h"
 
 namespace ElysiumNpcClipsTests
@@ -124,6 +126,34 @@ bool FElysiumClipsMeleeColumnsTest::RunTest(const FString&)
 		Set.MaxReachCmForActivity(TEXT("ACT_KICK")), 0.0f);
 	TestEqual(TEXT("an empty activity is not a query"),
 		Set.MaxReachCmForActivity(FString()), 0.0f);
+
+	// --- And the value reaches the seam a swing reads it off ---------------------------------------
+	// `UElysiumAnimSubsystem::ResolveActivityClip` fills `FElysiumActivityClip::MaxReachCm` by asking
+	// this vocabulary for the maximum over the TRANSLATED activity. Composed here rather than through
+	// the subsystem, which needs a game instance: the two lines below are exactly what that adapter
+	// runs, and the translated name is the resolver's answer rather than the request's — a swing that
+	// asked under the pre-translation name would acquire at 0 for every weapon-translated attack.
+	{
+		FElysiumActivityClipRequest Request;
+		Request.Stem = TEXT("reach_body");
+		Request.Activity = TEXT("ACT_MELEE_ATTACK");
+		Request.Source = EElysiumAnimSource::Player;
+		Request.BodyKind = EElysiumAnimBodyKind::Player;
+
+		FElysiumAnimationCatalog Catalog;
+		Catalog.Clips = &Set;
+		Catalog.BlendTableFor = [](const FString&) -> const FElysiumBlendTable* { return nullptr; };
+
+		FElysiumAnimationSelection Selection;
+		ElysiumAnimResolve::Resolve(
+			ElysiumAnimResolve::ActivityIntentFor(Request), Catalog, Selection);
+		if (TestFalse(TEXT("the melee activity resolves a clip at all"),
+			Selection.AnimationName.IsEmpty()))
+		{
+			TestEqual(TEXT("the reach the seam carries is the resolved activity's maximum"),
+				Set.MaxReachCmForActivity(Selection.ResolvedActivity), 282.9939f, 0.001f);
+		}
+	}
 
 	return true;
 }

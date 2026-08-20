@@ -674,6 +674,14 @@ struct FElysiumActivityClip
 	// blend would snap a clip the model authored a 0.45 fade for. The `max(outgoing, incoming)`
 	// combine is the graph's rule and stays there.
 	float FadeSeconds = 0.2f;
+	// The melee query distance this clip's ACTIVITY asks for, in centimetres — the maximum custom
+	// reach (`mstudioseqdesc_t`+0x2D0) over every clip the TRANSLATED activity answers, not the
+	// pick's own. Retail reads the reach off every sequence the activity returns and acquires at the
+	// largest, so a two-variant swing whose long variant lost the weighted pick still queries at the
+	// long distance (`docs/vtmb/combat-and-damage.md` § "Target acquisition, sequence commit and
+	// recovery"). Zero when no answering clip authors a reach, which is no claim rather than a
+	// zero-length reach.
+	float MaxReachCm = 0.0f;
 
 	// --- what the label resolved to, when it named a FAN (LIFE5) ---------------------------------
 	//

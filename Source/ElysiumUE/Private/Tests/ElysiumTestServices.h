@@ -421,6 +421,10 @@ struct FElysiumRecordingServices final
 		// Carried by the double rather than left at the struct default: a seam field the stub never
 		// writes is a field whose producer cannot be asserted at all.
 		Out.FadeSeconds = ResolvedNpcActivityFadeSeconds;
+		// The translated activity's acquisition distance, carried for the same reason as the fade: a
+		// seam field the stub never writes is a field whose consumer cannot be asserted at all, and a
+		// melee swing reads this one to decide who it reserves.
+		Out.MaxReachCm = ResolvedNpcActivityMaxReachCm;
 		// LIFE5 — the fan half. The axis value is the request's own hit yaw rather than a fixture
 		// constant: a producer that dropped it would answer every reaction at the fan's forward cell,
 		// and a stub that invented an angle would hide exactly that.
@@ -437,6 +441,10 @@ struct FElysiumRecordingServices final
 	float ResolvedNpcActivityFraction = 0.0f;
 	// The fade the resolved clip reports. 0.2 is what 5,762 of the 5,836 shipped sequences carry.
 	float ResolvedNpcActivityFadeSeconds = 0.2f;
+	// The maximum reach the resolved clip's activity reports, in centimetres. Zero is the default
+	// because it is the honest answer for a vocabulary that authors no reach column at all, and it is
+	// what puts a swing on the stated stand-in distance — the path most Substrate cases exercise.
+	float ResolvedNpcActivityMaxReachCm = 0.0f;
 	// LIFE5 — whether a one-shot request is played, and the length it reports. Opt-in like every
 	// other fixture flag: default false is the body that resolves no clip, which is what most
 	// Substrate cases stand.
@@ -1015,6 +1023,18 @@ struct FElysiumRecordingServices final
 	{
 		Record(FString::Printf(TEXT("QueryFeedTarget -> %s"), *FeedTarget.ToString()));
 		return FeedTarget;
+	}
+	// What the next ranged aim query finds. Geometry is the embodiment's, exactly as above; a
+	// substrate case drives the transaction over whatever this answers. Invalid by default, which is
+	// the ordinary headless answer and what every pre-existing case already sees.
+	FElysiumEntityHandle AimTarget;
+	virtual FElysiumEntityHandle QueryAimTarget(float MaxRangeCm) const override
+	{
+		// The range is recorded because it is the producer's own answer: a frame that queried at the
+		// stand-in distance instead of the mode's authored `Range` is otherwise indistinguishable.
+		Record(FString::Printf(TEXT("QueryAimTarget %.1f -> %s"),
+			MaxRangeCm, *AimTarget.ToString()));
+		return AimTarget;
 	}
 	// 11.15 — the two perception queries. Both default to the interface's stated headless answers,
 	// so a case that does not care about perception keeps running exactly as it did: every segment

@@ -273,13 +273,23 @@ namespace ElysiumWeapons
 	// `Attack_Rate` is preferred over this; the constant only covers a mode that authors none.
 	inline constexpr float FallbackClipSeconds = 0.5f;
 
-	// The melee query distance. Retail takes the maximum custom reach float (+0x2D0) over every
-	// sequence the translated activity returns; that field is not exported, so this stands in.
+	// The melee query distance a swing falls back to. Retail takes the maximum custom reach float
+	// (+0x2D0) over every sequence the translated activity returns, and the export carries that
+	// field as the clip slice's `reach_cm` column — so the acquired swing asks the resolved clip for
+	// it and this constant covers only the cases where no answer exists: a headless run, a body with
+	// no vocabulary, or a row that authors no reach at all. Querying at a stand-in distance is a
+	// DEGRADED path and says so once per weapon.
 	// Source units — the one conversion is at the call site.
 	inline constexpr float MeleeReachSourceUnits = 64.0f;
 
 	// `FindEntityFOV`'s 30-degree half-angle (a 60-degree full cone).
 	inline constexpr float MeleeConeHalfAngleDegrees = 30.0f;
+
+	// The ranged query distance a shot falls back to when its mode authors no `Range`. Retail's fire
+	// packet carries the mode's own authored range; a record that states none leaves the aim query
+	// with no distance to trace at all, which is the same degraded shape as the melee reach above and
+	// reports the same way. Source units — the one conversion is at the call site.
+	inline constexpr float RangedRangeSourceUnits = 1024.0f;
 }
 
 // ================================================================================================
@@ -436,6 +446,21 @@ public:
 	// presses — a diagnostic readout, an assertion — has to read this instead.
 	int32 AcceptedSwingCount() const { return SwingSerialCounter; }
 
+	// Whether this frame's buttons would run each attack route — the melee held-bit poll,
+	// `allow_autofire` and the secondary's chosen press edge, which is exactly what `ItemPostFrame`
+	// branches on below. Public because the player weapon frame has to know THAT a shot is about to
+	// leave before it can supply the aim query's answer, and a second copy of the button rule in the
+	// caller is how the button route and the aim route come to disagree.
+	bool WantsPrimaryPress(EElysiumWeaponButton Held, EElysiumWeaponButton Pressed) const;
+	bool WantsSecondaryPress(EElysiumWeaponButton Pressed) const;
+
+	// The aim query's distance for a press about to run on `Intent`, in centimetres — the mode's
+	// authored `Range`, or the stated `RangedRangeSourceUnits` stand-in with one report per
+	// (classname, mode) when a FIRING record authors none. Zero, silently, when the intent names
+	// no mode at all or names one that does not fire (a mode toggle, a zoom loop): neither is a
+	// press a shot leaves on, so neither has an aim to trace or a missing `Range` to report.
+	float AimQueryRangeCm(EIntent Intent) const;
+
 	// The mode currently in force for a press, or null.
 	const FElysiumWeaponMode* ModeFor(EIntent Intent) const;
 	const FElysiumWeaponMode* ModeAt(int32 Index) const;
@@ -478,9 +503,11 @@ private:
 	// Resolve a logical activity to a concrete clip on the owner's body and start it. Returns the
 	// clip's duration; falls back to the mode's `Attack_Rate` (then `FallbackClipSeconds`) with one
 	// warning per weapon when no embodiment/body can answer. `OutOwnerStem` receives the bank the
-	// include DAG named, which is the other half of the key a timeline is looked up by.
+	// include DAG named, which is the other half of the key a timeline is looked up by, and
+	// `OutMaxReachCm` the acquisition distance the TRANSLATED activity asks for — the maximum over
+	// every sequence answering it, which is the query distance and not the played clip's own.
 	float ResolveAndPlay(const FString& Activity, const FElysiumWeaponMode& Mode,
-		FString& OutClipLabel, FString* OutOwnerStem = nullptr);
+		FString& OutClipLabel, FString* OutOwnerStem = nullptr, float* OutMaxReachCm = nullptr);
 
 	// Which `Operator_HandleAnimEvent` body this weapon's authored record selects.
 	ElysiumWeapons::EOperatorBody OperatorBody() const;
@@ -499,11 +526,14 @@ private:
 	bool CommitFromAnimEvent(const FElysiumAnimEvent& Event);
 
 	// `FindEntityFOV` reduced to what the substrate owns: the nearest live combat character inside
-	// the reach and the 30-degree half-angle cone. SEAM — retail traces forward first and accepts a
-	// valid obstruction hit, and the shared query rejects non-targetable/`ScriptHidden` candidates
-	// through an engine visibility test; that trace is an engine query and joins with the perception
-	// cycle. Selection is distance plus facing until then.
-	FElysiumEntityHandle AcquireMeleeOpponent(const FElysiumCombatCharacter& Attacker) const;
+	// `ReachCm` and the 30-degree half-angle cone. The reach is the caller's because it is the
+	// resolved activity's, not this weapon's — a value of 0 or less takes the stated
+	// `MeleeReachSourceUnits` stand-in and reports once. SEAM — retail traces forward first and
+	// accepts a valid obstruction hit, and the shared query rejects non-targetable/`ScriptHidden`
+	// candidates through an engine visibility test; that trace is an engine query and joins with the
+	// perception cycle. Selection is distance plus facing until then.
+	FElysiumEntityHandle AcquireMeleeOpponent(const FElysiumCombatCharacter& Attacker,
+		float ReachCm) const;
 
 	// Schedule one of the two queued halves through the world's event queue.
 	void QueueSelfInput(FName Input, int32 Serial, double Delay);
@@ -513,6 +543,11 @@ private:
 	// fallback once instead of on every swing. Per entity rather than per clip because there is no
 	// clip to key on — the fact being reported is that this weapon's owner resolved nothing at all.
 	bool bReportedClipFallback = false;
+
+	// One warning per weapon ENTITY that its shots leave with no dispersion (RE-A3). Per entity for
+	// the same reason as the clip fallback: the fact being reported is about this weapon's whole
+	// firing path, not about one mode or one press.
+	bool bReportedNoSpread = false;
 
 	// Monotonic per weapon. A restore raises them past whatever the restored transactions carry, so
 	// a queued commit that survived the save can never collide with a serial minted after it.

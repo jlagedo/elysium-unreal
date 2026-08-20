@@ -752,12 +752,16 @@ void FElysiumWeapon::ClearSwing()
 // ================================================================================================
 
 float FElysiumWeapon::ResolveAndPlay(const FString& Activity, const FElysiumWeaponMode& Mode,
-	FString& OutClipLabel, FString* OutOwnerStem)
+	FString& OutClipLabel, FString* OutOwnerStem, float* OutMaxReachCm)
 {
 	OutClipLabel.Reset();
 	if (OutOwnerStem)
 	{
 		OutOwnerStem->Reset();
+	}
+	if (OutMaxReachCm)
+	{
+		*OutMaxReachCm = 0.0f;
 	}
 
 	FElysiumCombatCharacter* Char = OwnerCharacter();
@@ -798,6 +802,13 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, const FElysiumWeap
 			if (OutOwnerStem)
 			{
 				*OutOwnerStem = Clip.OwnerStem;
+			}
+			// The acquisition distance the translated activity asks for. Taken here, off the same
+			// resolution the swing is committing, because the seam is the only thing that knows which
+			// activity the vocabulary was finally searched for.
+			if (OutMaxReachCm)
+			{
+				*OutMaxReachCm = Clip.MaxReachCm;
 			}
 			float Played = 0.0f;
 			if (Char->PlayAnimClip(Clip.Label, /*bLoop*/ false, &Played) && Played > 0.0f)
@@ -969,13 +980,36 @@ bool FElysiumWeapon::OperatorHandleAnimEvent(FElysiumCombatCharacter& Operator,
 // Melee target acquisition
 // ================================================================================================
 
-FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCharacter& Attacker) const
+FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCharacter& Attacker,
+	float ReachCm) const
 {
 	if (!World)
 	{
 		return FElysiumEntityHandle::Invalid();
 	}
-	const float Reach = ElysiumWeapons::MeleeReachSourceUnits * ElysiumMove::U;
+	// The authored reach is the query distance; the constant covers only the cases that have no
+	// authored answer to give — a headless run, a body with no clip vocabulary, or a row whose
+	// descriptor states no reach. Swinging at a stand-in distance changes who is reserved, so it is
+	// a degraded path rather than a tolerance and reports once — keyed by classname through
+	// `ShouldReportOnce`, so it is one line per weapon RECORD for the whole process rather than one
+	// per entity or one per swing.
+	//
+	// `ElysiumNpcConditions`' own melee band keeps using the constant on purpose: that layer decides
+	// whether an NPC should *ask* for a swing, from a distance measured before any activity has been
+	// translated or any sequence resolved. It has no clip to read a reach off, so it is a different
+	// owner answering a different question, not a second copy of this one.
+	float Reach = ReachCm;
+	if (Reach <= 0.0f)
+	{
+		Reach = ElysiumWeapons::MeleeReachSourceUnits * ElysiumMove::U;
+		if (ShouldReportOnce(FString::Printf(TEXT("reach:%s"), *ClassName())))
+		{
+			UE_LOG(LogElysiumWeapon, Warning,
+				TEXT("%s: the swing's activity states no authored reach — acquisition queries at the "
+					"stated %.0f-unit stand-in instead of the sequence maximum"),
+				*DebugString(), ElysiumWeapons::MeleeReachSourceUnits);
+		}
+	}
 	const float ConeDot = FMath::Cos(FMath::DegreesToRadians(ElysiumWeapons::MeleeConeHalfAngleDegrees));
 	const FVector EyeOrigin = Attacker.EyePosition();
 	const FVector Forward =
@@ -1021,6 +1055,67 @@ FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCh
 // The attack intent — mode dispatch and the accepted swing
 // ================================================================================================
 
+bool FElysiumWeapon::WantsPrimaryPress(EElysiumWeaponButton Held,
+	EElysiumWeaponButton Pressed) const
+{
+	// Retail's melee body polls the HELD bit (`CWeaponMelee::ItemPostFrame` `0x103EAEC0`,
+	// `combat-and-damage.md` § "Weapon and input surface"), so a held click keeps swinging as fast
+	// as the recovery deadline allows. A firearm instead acts on the press edge unless its mode
+	// authors `allow_autofire`, which is the key's whole meaning: without it a held attack intent is
+	// lost after the edge (`Substrate/ElysiumItemTable.h`).
+	const FElysiumItemDef* ItemRecord = Data();
+	const bool bMelee = ItemRecord && ItemRecord->Type == EElysiumItemType::WeaponMelee;
+	const FElysiumWeaponMode* PrimaryMode = ModeAt(PrimaryModeIndex);
+	const bool bAutofire = PrimaryMode && PrimaryMode->bAllowAutofire;
+	return (bMelee || bAutofire)
+		? EnumHasAnyFlags(Held, EElysiumWeaponButton::Primary)
+		: EnumHasAnyFlags(Pressed, EElysiumWeaponButton::Primary);
+}
+
+bool FElysiumWeapon::WantsSecondaryPress(EElysiumWeaponButton Pressed) const
+{
+	// CHOSEN press-edge (RE-A1): nothing recovered states whether the secondary route polls a held
+	// bit the way the melee primary does, and a held answer would make `+wpn_secondaryatk` a
+	// heavy-attack autofire — which no shipped weapon's recovery deadline is shaped for. The
+	// composite's OTHER half, the block bit, is a separate standing classification on the player and
+	// is not this frame's business.
+	return EnumHasAnyFlags(Pressed, EElysiumWeaponButton::Secondary);
+}
+
+float FElysiumWeapon::AimQueryRangeCm(EIntent Intent) const
+{
+	const FElysiumWeaponMode* Mode = ModeFor(Intent);
+	if (Mode == nullptr)
+	{
+		// No mode is no press: `AttackIntent` refuses it and reports the primary case for itself, so
+		// answering 0 here would be a second report of one fact.
+		return 0.0f;
+	}
+	if (Mode->Type != EElysiumWeaponModeType::Attack
+		&& Mode->Type != EElysiumWeaponModeType::SecondaryAttack)
+	{
+		// The press names a mode that does not fire — `Toggle_Primary_Mode`, `Zoom_Out_Loop`, an
+		// unrecovered spelling. `ModeDispatch` never reaches a shot for it, so there is no aim to
+		// query and no missing `Range` to report: a firearm whose secondary swaps barrels is exactly
+		// the record that authors none, and warning about it would name a gap that does not exist.
+		return 0.0f;
+	}
+	if (Mode->Range > 0.0f)
+	{
+		return Mode->Range * ElysiumMove::U;
+	}
+	// A firing record that authors no `Range` leaves the aim query with no distance to trace, so the
+	// stated stand-in covers it — and a shot acquired at an invented distance is degraded rather than
+	// faithful, which is why it says so.
+	if (ShouldReportOnce(FString::Printf(TEXT("range:%s:%s"), *ClassName(), *Mode->Tag)))
+	{
+		UE_LOG(LogElysiumWeapon, Warning,
+			TEXT("%s: mode '%s' authors no Range — the aim query uses the stated %.0f-unit stand-in"),
+			*DebugString(), *Mode->Tag, ElysiumWeapons::RangedRangeSourceUnits);
+	}
+	return ElysiumWeapons::RangedRangeSourceUnits * ElysiumMove::U;
+}
+
 FElysiumWeapon::EVerdict FElysiumWeapon::ItemPostFrame(EElysiumWeaponButton Held,
 	EElysiumWeaponButton Pressed, const FElysiumEntityHandle& AimTarget)
 {
@@ -1050,19 +1145,8 @@ FElysiumWeapon::EVerdict FElysiumWeapon::ItemPostFrame(EElysiumWeaponButton Held
 		}
 	};
 
-	// 2. Primary. Retail's melee body polls the HELD bit (`CWeaponMelee::ItemPostFrame`
-	// `0x103EAEC0`, `combat-and-damage.md` § "Weapon and input surface"), so a held click keeps
-	// swinging as fast as the recovery deadline allows. A firearm instead acts on the press edge
-	// unless its mode authors `allow_autofire`, which is the key's whole meaning: without it a held
-	// attack intent is lost after the edge (`Substrate/ElysiumItemTable.h`).
-	const FElysiumItemDef* ItemRecord = Data();
-	const bool bMelee = ItemRecord && ItemRecord->Type == EElysiumItemType::WeaponMelee;
-	const FElysiumWeaponMode* PrimaryMode = ModeAt(PrimaryModeIndex);
-	const bool bAutofire = PrimaryMode && PrimaryMode->bAllowAutofire;
-	const bool bWantPrimary = (bMelee || bAutofire)
-		? EnumHasAnyFlags(Held, EElysiumWeaponButton::Primary)
-		: EnumHasAnyFlags(Pressed, EElysiumWeaponButton::Primary);
-	if (bWantPrimary)
+	// 2. Primary — the held/edge rule `WantsPrimaryPress` states.
+	if (WantsPrimaryPress(Held, Pressed))
 	{
 		// A player press advances the Dice stream through `BeginMeleeSwing`'s 2COMBO draw. That is
 		// correct rather than a leak: retail's combo substitution is the same draw off the same
@@ -1070,12 +1154,8 @@ FElysiumWeapon::EVerdict FElysiumWeapon::ItemPostFrame(EElysiumWeaponButton Held
 		Note(AttackIntent(EIntent::Primary, AimTarget));
 	}
 
-	// 3. Secondary. CHOSEN press-edge (RE-A1): nothing recovered states whether the secondary route
-	// polls a held bit the way the melee primary does, and a held answer would make
-	// `+wpn_secondaryatk` a heavy-attack autofire — which no shipped weapon's recovery deadline is
-	// shaped for. The composite's OTHER half, the block bit, is a separate standing classification
-	// on the player and is not this frame's business.
-	if (EnumHasAnyFlags(Pressed, EElysiumWeaponButton::Secondary))
+	// 3. Secondary — the chosen press edge `WantsSecondaryPress` states.
+	if (WantsSecondaryPress(Pressed))
 	{
 		Note(AttackIntent(EIntent::Secondary, AimTarget));
 	}
@@ -1220,14 +1300,30 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 		}
 	}
 
+	// The sequence is RESOLVED AND PLAYED first, because the acquisition distance is the
+	// resolution's answer: retail reads the maximum reach over every sequence the translated
+	// activity returns and only then runs `FindEntityFOV`
+	// (`docs/vtmb/combat-and-damage.md` § "Target acquisition, sequence commit and recovery").
+	//
+	// **A stated order divergence.** Retail computes that maximum from the whole answering set
+	// WITHOUT picking one, acquires, and only then sets the concrete sequence; this seam answers
+	// the reach and the pick together, so the clip is already playing by the time acquisition runs.
+	// It is unobservable in this runtime rather than merely tolerated: nothing acquisition reads is
+	// written by the play — `PlayAnimClip` reaches the embodiment's visual channel and never the
+	// substrate `Origin`/`Angles` the cone is measured from, or any candidate's life state — and
+	// neither half draws from an RNG stream, so the Dice draw above stays the only one this swing
+	// spends. Acquisition also cannot refuse the swing, in either order: an ordinary swing animates
+	// with no candidate found.
+	FString ClipLabel;
+	FString ClipOwnerStem;
+	float MaxReachCm = 0.0f;
+	const float Seconds = ResolveAndPlay(Activity, Mode, ClipLabel, &ClipOwnerStem, &MaxReachCm);
+
 	// Target acquisition happens before the sequence is committed. It is aim assistance and
 	// opponent reservation, not a damage verdict: an ordinary swing still animates with no
 	// candidate found.
-	const FElysiumEntityHandle Opponent = AcquireMeleeOpponent(Char);
+	const FElysiumEntityHandle Opponent = AcquireMeleeOpponent(Char, MaxReachCm);
 
-	FString ClipLabel;
-	FString ClipOwnerStem;
-	const float Seconds = ResolveAndPlay(Activity, Mode, ClipLabel, &ClipOwnerStem);
 	const bool bEventCommit =
 		CommitArrivesFromAnimEvent(Char, ClipOwnerStem, ClipLabel);
 	const int32 FeatRank = FeatRating(Char, ModeDmg.AttackFeat, Context);
@@ -1297,15 +1393,30 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 	Swing.Activity = GActRangeAttackLayer;
 	Swing.ClipLabel = ClipLabel;
 	Swing.ClipOwnerStem = ClipOwnerStem;
-	// SEAM — the shot's world trace and its spread cone are a producer that joins with the
-	// perception and player-crosshair cycles. RE40 settled what does NOT enter the cone: the Presence
+	// The victim is the caller's: the player frame gets it from the embodiment's aim query, an AI
+	// cycle from its own enemy selection, and a test states it. One handle rather than a per-ray
+	// hit set is what the transaction carries, and that is the whole of the divergence below.
+	Swing.Opponent = Victim;
+	// The shot leaves with no dispersion at all — the degenerate zero-spread member of retail's cone
+	// family rather than the cone itself. `SpreadAngle`/`SpreadAngleMax` are authored, but the live
+	// ranged-accuracy value that interpolates between them is unrecovered (RE-A3, owned by 13.3), so
+	// there is no honest dispersion to apply yet. RE40 settled what does NOT enter it: the Presence
 	// bonus and the Shaky Hands penalty only print diagnostics in the shot body and leave the
 	// physical dispersion alone, and the crosshair is a HUD mirror of `CrosshairMinSize` /
-	// `CrosshairWalkSizeMax` rather than an input. The cone itself is the authored `SpreadAngle` /
-	// `SpreadAngleMax` pair selected by the live ranged-accuracy value, whose interpolation input is
-	// still unrecovered — so the transaction takes an explicit victim handle: tests and the AI cycles
-	// supply it, and the trace producer joins here.
-	Swing.Opponent = Victim;
+	// `CrosshairWalkSizeMax` rather than an input. Reported once per weapon entity so a run that
+	// fired perfectly straight says why.
+	//
+	// Two further gaps in this transaction stay open and are NOT this report's: `Ammo_Fired` pellet
+	// volleys are committed as one victim's whole share rather than grouped per victim, and Kick
+	// (RE-A5) has no recovered producer at all.
+	if (!bReportedNoSpread)
+	{
+		bReportedNoSpread = true;
+		UE_LOG(LogElysiumWeapon, Warning,
+			TEXT("%s fires with no spread applied — the authored SpreadAngle/SpreadAngleMax pair's "
+				"interpolation input is unrecovered (RE-A3), so the shot takes the cone's "
+				"zero-spread case"), *DebugString());
+	}
 	Swing.PlaybackRate = Scale;
 	Swing.ClipSeconds = Seconds;
 	Swing.CommitTime = Commit;

@@ -5,6 +5,7 @@
 #include "ElysiumViewState.h"
 #include "Substrate/ElysiumEntityWorldShared.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Substrate/ElysiumItemTable.h"   // EElysiumItemType — the weapon frame's melee/ranged split
 #include "Substrate/ElysiumSkillClasses.h"
 #include "Substrate/ElysiumWeaponClasses.h"
 
@@ -346,14 +347,46 @@ void FElysiumEntityWorld::UpdatePlayerWeaponFrame()
 		return;
 	}
 
-	// SEAM — the ranged victim. A firearm's shot takes an explicit handle rather than inventing a
-	// trace, and the producer that supplies one is the embodiment's crosshair query
-	// (`QueryAimTarget`), which joins with the perception cycle and is not this slice. Until it
-	// lands the frame passes Invalid, which the ranged swing already tolerates: acquisition is
-	// opponent reservation, not a damage verdict, so an unaimed shot still animates and still spends
-	// its ammunition.
+	// The ranged victim. A firearm's shot takes an explicit handle rather than inventing a trace, and
+	// the producer that supplies one is the embodiment's aim query.
+	//
+	// It runs only on a button this frame's record would take an attack route for, and only for a
+	// mode that fires: a weapon merely being carried never traces. It is deliberately NOT gated on
+	// the attack being ready as well — the deadline, the reload latch and the empty magazine are
+	// `AttackIntent`'s to judge, and a second copy of any of them here is how the button route and
+	// the aim route come to disagree. The cost of that choice is a held autofire trigger tracing
+	// once per frame across its recovery gaps, which is a read-only query on a frame that is
+	// already firing.
+	//
+	// Melee is excluded because it reserves its own opponent inside the swing, on the authored
+	// sequence reach — a second acquisition here would reserve a different body than the one the
+	// swing hits.
+	//
+	// An Invalid answer is ordinary and the transaction already tolerates it: acquisition is opponent
+	// reservation, not a damage verdict, so an unaimed shot still animates and still spends its
+	// ammunition.
+	FElysiumEntityHandle AimTarget = FElysiumEntityHandle::Invalid();
+	const FElysiumItemDef* WeaponRecord = Weapon->Data();
+	const bool bMeleeRecord =
+		WeaponRecord && WeaponRecord->Type == EElysiumItemType::WeaponMelee;
+	if (!bMeleeRecord)
+	{
+		const bool bPrimary = Weapon->WantsPrimaryPress(HeldMask, PressedMask);
+		if (bPrimary || Weapon->WantsSecondaryPress(PressedMask))
+		{
+			const FElysiumWeapon::EIntent Intent = bPrimary
+				? FElysiumWeapon::EIntent::Primary : FElysiumWeapon::EIntent::Secondary;
+			// The range is the answering mode's own authored `Range`; the weapon reports for itself
+			// when the record authors none.
+			const float RangeCm = Weapon->AimQueryRangeCm(Intent);
+			if (IElysiumEmbodiment* Bodily = Embodiment(); Bodily != nullptr && RangeCm > 0.0f)
+			{
+				AimTarget = Bodily->QueryAimTarget(RangeCm);
+			}
+		}
+	}
 	const FElysiumWeapon::EVerdict Verdict =
-		Weapon->ItemPostFrame(HeldMask, PressedMask, FElysiumEntityHandle::Invalid());
+		Weapon->ItemPostFrame(HeldMask, PressedMask, AimTarget);
 	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) player weapon frame %s -> %s"),
 		NowSeconds(), *Weapon->DebugString(), FElysiumWeapon::VerdictName(Verdict));
 }

@@ -585,6 +585,25 @@ public:
 	// deliberately absent: rat feeding is out of B6's scope.
 	virtual FElysiumEntityHandle QueryFeedTarget() const { return FElysiumEntityHandle::Invalid(); }
 
+	// LIFE5 — the ranged shot's aim query: what the player's crosshair is on, out to `MaxRangeCm`.
+	//
+	// **A stated divergence, not a reproduction.** Retail's ranged attack builds a fire packet
+	// carrying a muzzle origin, an aim vector and a spread cone, and traces one ray per `Ammo_Fired`
+	// through that cone. The cone itself is the authored `SpreadAngle`/`SpreadAngleMax` pair
+	// selected by the live ranged-accuracy value, and THAT interpolation input is unrecovered
+	// (RE-A3, owned by 13.3) — so no honest reproduction of the dispersion exists to write yet.
+	// This answers the cone's degenerate zero-spread case: one ray down the aim, reduced to the
+	// single victim handle the attack transaction's `Swing.Opponent` already carries. When the input
+	// is recovered, the packet replaces this rather than wrapping it.
+	//
+	// Geometry only, like every other query on this seam: candidacy, damage and the volley share
+	// stay in the substrate. Invalid is the ORDINARY answer — a shot fired at nothing in particular
+	// is the common case, and the headless/null answer is the same Invalid for the same reason.
+	virtual FElysiumEntityHandle QueryAimTarget(float MaxRangeCm) const
+	{
+		return FElysiumEntityHandle::Invalid();
+	}
+
 	// 11.15 — the two perception queries (`docs/architecture/gameplay-systems-architecture.md`
 	// §5.5.3). Each supplies a missing WORLD TERM and never a verdict: cone, range, cadence, grace,
 	// debounce, the `vision`/`hearing`/`npc_perception` tuning and every threshold stay substrate

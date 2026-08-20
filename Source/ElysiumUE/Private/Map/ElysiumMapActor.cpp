@@ -1081,6 +1081,104 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 	return Best;
 }
 
+FElysiumEntityHandle AElysiumMapActor::QueryAimTarget(float MaxRangeCm) const
+{
+	// Eye + look, the same origin/direction pair `QueryPlayerUse` reaches the world with above: the
+	// boom is view-only, so the rendered third-person camera is behind the pawn and would answer for
+	// a ray that starts in a different room. `GetPlayerUseOrigin()` is the body's own eye and
+	// `GetViewRotation()` is the aim, and a shot leaves along exactly that.
+	//
+	// A straight ray, which is the zero-spread case of retail's fire packet — the cone's
+	// interpolation input is unrecovered (RE-A3), so what is written here is the one member of the
+	// cone family that needs no unrecovered value. The `Ammo_Fired` ray count is deliberately NOT
+	// walked: one handle is the shape the attack transaction's victim already has, and a per-victim
+	// pellet grouping is a change to that transaction rather than to this query.
+	//
+	// The standing hull a bodiless candidate is measured by is `QueryFeedTarget`'s own: VtMB's
+	// 32x32x72-unit character box, reachable with `elysium.NpcBodies 0` or a failed model, where a
+	// rendered bound does not exist.
+	constexpr float StandHalfWidthUnits = 16.0f;
+	constexpr float StandHeightUnits = 72.0f;
+
+	FVector Eye;
+	const APawn* Pawn = ResolvePlayerPawn();
+	if (!EntityWorld || !Pawn || !GetPlayerUseOrigin(Eye))
+	{
+		return FElysiumEntityHandle::Invalid();
+	}
+	const FVector Forward = Pawn->GetViewRotation().Vector().GetSafeNormal();
+	if (Forward.IsNearlyZero() || MaxRangeCm <= 0.0f)
+	{
+		// A zero direction is a pawn with no view to aim along, and a non-positive range is a caller
+		// that resolved no distance. Both are the caller's own reported cases, not this query's.
+		return FElysiumEntityHandle::Invalid();
+	}
+	const FVector End = Eye + Forward * MaxRangeCm;
+
+	UWorld* World = GetWorld();
+	FCollisionQueryParams Params(FName(TEXT("ElysiumAimTarget")), /*bTraceComplex*/ false);
+	Params.AddIgnoredActor(Pawn);
+
+	const FElysiumEntityHandle PlayerHandle = EntityWorld->PlayerHandle();
+	FElysiumEntityHandle Best = FElysiumEntityHandle::Invalid();
+	double BestDistanceSq = TNumericLimits<double>::Max();
+
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
+	{
+		FElysiumEntity* Ent = EntPtr.Get();
+		// A loot container re-registers on the combat-character base (it owns the same inventory), so
+		// it is a combat character in this runtime without being a body anything can be shot at.
+		const FElysiumCombatCharacter* AsChar = Ent ? Ent->AsCombatCharacter() : nullptr;
+		if (!Ent || Ent->IsInert() || Ent->Handle == PlayerHandle || AsChar == nullptr
+			|| Ent->AsItemContainer() != nullptr)
+		{
+			continue;
+		}
+		// A corpse is skipped HERE rather than left to the commit's own alive-path filter: it is
+		// still a rendered body standing between the muzzle and a live one, and a query that returned
+		// it would answer "nothing to shoot" for a shot that had a target behind it.
+		if (AsChar->HasReportedDeath())
+		{
+			continue;
+		}
+		FBox Candidate(ForceInit);
+		const USkeletalMeshComponent* CandidateBody = Ent->GetSkeletalBody();
+		if (CandidateBody)
+		{
+			Candidate = CandidateBody->Bounds.GetBox();
+		}
+		else
+		{
+			const FVector Half(StandHalfWidthUnits * ElysiumMove::U,
+				StandHalfWidthUnits * ElysiumMove::U, 0.0f);
+			Candidate = FBox(Ent->Origin - Half,
+				Ent->Origin + Half + FVector(0.0f, 0.0f, StandHeightUnits * ElysiumMove::U));
+		}
+		if (!FMath::LineBoxIntersection(Candidate, Eye, End, End - Eye))
+		{
+			continue;
+		}
+		const FVector Chest = Candidate.GetCenter();
+		if (World)
+		{
+			FHitResult Blocked;
+			if (World->LineTraceSingleByChannel(Blocked, Eye, Chest, ELYSIUM_USE_CHANNEL, Params)
+				&& !ElysiumFeedTargeting::HitBelongsToCandidate(
+					Blocked.GetComponent(), CandidateBody))
+			{
+				continue;   // a wall between the muzzle and the body
+			}
+		}
+		const double DistanceSq = FVector::DistSquared(Eye, Chest);
+		if (DistanceSq < BestDistanceSq)
+		{
+			BestDistanceSq = DistanceSq;
+			Best = Ent->Handle;
+		}
+	}
+	return Best;
+}
+
 bool AElysiumMapActor::QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const
 {
 	UWorld* World = GetWorld();

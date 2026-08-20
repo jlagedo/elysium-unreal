@@ -411,6 +411,8 @@ public:
 	virtual FElysiumUseQueryResult QueryPlayerUse(
 		const FElysiumEntityHandle& CurrentFocus) const override;
 	virtual FElysiumEntityHandle QueryFeedTarget() const override;
+	// LIFE5 — the ranged shot's aim query. Geometry only, and the zero-spread case of retail's cone.
+	virtual FElysiumEntityHandle QueryAimTarget(float MaxRangeCm) const override;
 	// 11.15 — the two perception queries. Geometry only; every threshold stays substrate.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;

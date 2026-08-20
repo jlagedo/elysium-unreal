@@ -16,6 +16,7 @@
 #include "Serialization/MemoryWriter.h"
 
 #include "ElysiumClassRegistry.h"
+#include "ElysiumMoveSolve.h"   // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumSaveArchive.h"
 #include "ElysiumSaveTypes.h"
 #include "ElysiumEntityDefs.h"
@@ -23,6 +24,7 @@
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumSheetSlots.h"
+#include "ElysiumUserCmd.h"   // EElysiumButton — the player weapon frame's own button field
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumAnimEvents.h"
 #include "Substrate/ElysiumDamage.h"
@@ -84,6 +86,10 @@ namespace
 
 	const TCHAR* const GFists   = TEXT("item_w_test_fists");
 	const TCHAR* const GKatana  = TEXT("item_w_test_katana");
+	// A melee record no other case swings. `ShouldReportOnce` is keyed by classname and never resets
+	// inside a process, so the once-per-weapon reach report can only be asserted on a name whose key
+	// no earlier suite has already spent.
+	const TCHAR* const GReachBlade = TEXT("item_w_test_reachblade");
 	const TCHAR* const GPistol  = TEXT("item_w_test_pistol");
 	const TCHAR* const GShotgun = TEXT("item_w_test_shotgun");
 	const TCHAR* const GTrinket = TEXT("item_g_test_trinket");
@@ -110,6 +116,13 @@ namespace
 			TEXT("3 Lethal Close_Combat_Melee DMG_SLASH"), 12, 1.0f));
 		Table.Items.Add(MoveTemp(Katana));
 
+		// The reach suite's own melee record — see `GReachBlade`.
+		FElysiumItemDef Blade = MakeDef(GReachBlade, EElysiumItemType::WeaponMelee);
+		Blade.Bucket = 0; Blade.BucketPosition = 7;
+		Blade.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
+			TEXT("3 Lethal Close_Combat_Melee DMG_SLASH"), 12, 1.0f));
+		Table.Items.Add(MoveTemp(Blade));
+
 		// A firearm with two primary records and a secondary that toggles between them.
 		FElysiumItemDef Pistol = MakeDef(GPistol, EElysiumItemType::WeaponFirearm);
 		Pistol.Bucket = 1; Pistol.BucketPosition = 1;
@@ -125,6 +138,10 @@ namespace
 		Pistol.Modes[0].BurstMin = 3;
 		Pistol.Modes[0].BurstMax = 5;
 		Pistol.Modes[0].SkillRequirement = 9;
+		// The authored ranged `Range`, in Source units — the aim query's own distance. Only this
+		// record states one: the shotgun below is deliberately left without so the stated stand-in
+		// stays observable.
+		Pistol.Modes[0].Range = 1500.0f;
 		Pistol.Modes.Add(MakeMode(TEXT("PrimaryMode2"), TEXT("Attack"),
 			TEXT("2 Lethal Ranged_Combat DMG_BULLET"), 9, 0.2f, 1, 1));
 		Pistol.Modes.Add(MakeMode(TEXT("Secondary"), TEXT("Toggle_Primary_Mode"), TEXT(""), 0, 0.3f));
@@ -195,6 +212,28 @@ namespace
 		Counter.Classname = TEXT("math_counter");
 		Counter.TargetName = TEXT("damagedcount");
 		Defs.Defs.Add(MoveTemp(Counter));
+		return Defs;
+	}
+
+	// The acquisition-distance world. Two candidates straight ahead, both OUTSIDE the stated
+	// `MeleeReachSourceUnits` stand-in (64 units = 162.56 cm) so the constant can never be what
+	// acquires either: `mid` sits inside an authored 400 cm reach and `far` outside it. No candidate
+	// stands inside the constant at all, which is what makes "the authored value is the query
+	// distance" falsifiable rather than merely consistent.
+	FElysiumEntityDefs MakeReachTestDefs()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__weapon_reach_test__");
+		for (const TPair<const TCHAR*, float>& Row :
+			{ TPair<const TCHAR*, float>(TEXT("mid"), 250.0f),
+			  TPair<const TCHAR*, float>(TEXT("far"), 900.0f) })
+		{
+			FElysiumEntityDef Candidate;
+			Candidate.Classname = TEXT("npc_VPedestrian");
+			Candidate.TargetName = Row.Key;
+			Candidate.Origin = FVector(Row.Value, 0.0f, 0.0f);
+			Defs.Defs.Add(MoveTemp(Candidate));
+		}
 		return Defs;
 	}
 
@@ -953,6 +992,151 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// Melee acquisition distance: the authored sequence reach, and the stand-in behind it.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeReachTest, "Elysium.Substrate.Weapons.MeleeReach",
+	GElysiumTestFlags)
+bool FElysiumWeaponMeleeReachTest::RunTest(const FString&)
+{
+	// The one degraded-path report, and it fires exactly once for the whole suite even though two
+	// swings below take that path — which is the "once per weapon entity" half of the contract.
+	AddExpectedError(TEXT("states no authored reach"), EAutomationExpectedErrorFlags::Contains, 1);
+
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	// The stand-in the authored value has to beat, stated as a number so the distances below are
+	// readable: 64 Source units.
+	const float StandInCm = ElysiumWeapons::MeleeReachSourceUnits * ElysiumMove::U;
+	TestTrue(TEXT("the mid candidate stands beyond the stated stand-in reach"), StandInCm < 250.0f);
+
+	// --- The authored reach is the query distance ---------------------------------------------
+	{
+		ElysiumRng::SeedAll(0x52454143);
+		FElysiumRecordingServices Services;
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityLabel = TEXT("swing_long");
+		Services.ResolvedNpcActivityClip = TEXT("swing_long");
+		Services.ResolvedNpcActivityOwner = TEXT("cast_bank");
+		// The maximum over every sequence the TRANSLATED activity answers — `andrei_rAttack`'s own
+		// order of magnitude, and far past the stand-in.
+		Services.ResolvedNpcActivityMaxReachCm = 400.0f;
+
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeReachTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Mid = FindCharacter(World, TEXT("mid"));
+		FElysiumCombatCharacter* Far = FindCharacter(World, TEXT("far"));
+		if (!TestNotNull(TEXT("the player exists"), Player)
+			|| !TestNotNull(TEXT("the mid candidate exists"), Mid)
+			|| !TestNotNull(TEXT("the far candidate exists"), Far))
+		{
+			return false;
+		}
+		PlaceFacing(*Player, FVector::ZeroVector);
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!TestNotNull(TEXT("the fists are granted"), Fists))
+		{
+			return false;
+		}
+
+		TestEqual(TEXT("the swing is accepted"),
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
+			FElysiumWeapon::EVerdict::Accepted);
+		// The whole point of the slice: a body the 64-unit stand-in could never have reached is
+		// reserved, because the activity's own sequences author a reach that reaches it.
+		TestEqual(TEXT("a candidate beyond the stand-in but inside the authored reach is acquired"),
+			Fists->Swing.Opponent, Mid->Handle);
+		TestTrue(TEXT("...and it is not the nearer-of-two accident: the far one is outside 400 cm"),
+			Fists->Swing.Opponent != Far->Handle);
+	}
+
+	// --- A candidate outside the authored reach is not acquired -------------------------------
+	// Same reach, and the only candidate now stands past it. An ordinary swing still animates with
+	// nothing reserved, so the transaction is accepted and its opponent is simply unset.
+	{
+		ElysiumRng::SeedAll(0x52454144);
+		FElysiumRecordingServices Services;
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityMaxReachCm = 400.0f;
+
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeReachTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Mid = FindCharacter(World, TEXT("mid"));
+		FElysiumCombatCharacter* Far = FindCharacter(World, TEXT("far"));
+		if (!Player || !Mid || !Far)
+		{
+			return false;
+		}
+		// Stand the player 700 cm back: `far` is then 200 cm away and `mid` 450, so the only body
+		// inside the 400 cm reach is the one the previous case could not reach.
+		PlaceFacing(*Player, FVector(700.0f, 0.0f, 0.0f));
+		Mid->Origin = FVector(1500.0f, 0.0f, 0.0f);   // pushed past the reach in both directions
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!Fists)
+		{
+			return false;
+		}
+		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		TestEqual(TEXT("a swing reserves the one body inside the authored reach"),
+			Fists->Swing.Opponent, Far->Handle);
+	}
+
+	// --- No authored reach: the stated stand-in, reported once --------------------------------
+	{
+		ElysiumRng::SeedAll(0x52454145);
+		FElysiumRecordingServices Services;
+		// The clip resolves, so this is not a body/bank miss — it is a row whose descriptor states
+		// no reach at all, which is the case the constant exists for.
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityMaxReachCm = 0.0f;
+
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeReachTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		if (!Player)
+		{
+			return false;
+		}
+		PlaceFacing(*Player, FVector::ZeroVector);
+		FElysiumWeapon* Blade = GiveWeapon(*Player, GReachBlade);
+		if (!TestNotNull(TEXT("the reach suite's own blade is granted"), Blade))
+		{
+			return false;
+		}
+
+		Blade->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		TestFalse(TEXT("the stand-in reaches neither candidate, so nothing is reserved"),
+			Blade->Swing.Opponent.IsSet());
+
+		// A second swing on the same weapon takes the same degraded path and must NOT report again;
+		// the expected-error count of 1 above is what asserts it. The clock is advanced rather than
+		// the deadline rewound — `HoldAttacksUntil` is a maximum operation and cannot shorten one.
+		World.Tick(5.0);
+		Blade->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		TestFalse(TEXT("...and the second swing is silent about it"),
+			Blade->Swing.Opponent.IsSet());
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // Ranged: the per-victim route, the ammo/ray distinction, dry fire, reload and the
 // single-round interruption latch.
 // =====================================================================================
@@ -1249,6 +1433,78 @@ bool FElysiumWeaponRangedTest::RunTest(const FString&)
 		World.Tick(0.2);
 		TestEqual(TEXT("Holster clears the active weapon back to item_w_unarmed"),
 			Player->Inventory.ActiveWeapon, Unarmed);
+	}
+
+	// --- The aim seam: the player weapon frame supplies the shot's victim --------------------
+	// The transaction has always taken an explicit handle; what is asserted here is the producer
+	// that finally supplies one on the player side. Geometry is the embodiment's, so the double
+	// answers it — and the range it was asked at is the mode's own authored `Range`, because a
+	// query at the stated stand-in would acquire over a different distance with nothing failing.
+	{
+		ElysiumRng::SeedAll(0x41494D31);
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim"));
+		if (!Player || !Victim)
+		{
+			return false;
+		}
+		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
+		if (!TestNotNull(TEXT("the pistol is the active weapon"), Pistol))
+		{
+			return false;
+		}
+		Services.AimTarget = Victim->Handle;
+		Services.Calls.Reset();
+
+		World.SetPlayerButtons(static_cast<uint64>(EElysiumButton::Attack));
+		World.UpdatePlayerWeaponFrame();
+
+		TestTrue(TEXT("the frame queried the aim seam at the mode's authored Range"),
+			Services.Saw(TEXT("QueryAimTarget 3810.0")));
+		TestTrue(TEXT("...and a shot was staged"), Pistol->Swing.bActive);
+		TestEqual(TEXT("...carrying the queried handle as the transaction's victim"),
+			Pistol->Swing.Opponent, Victim->Handle);
+
+		// A press whose mode does not FIRE takes no aim either. The pistol's secondary is a
+		// `Toggle_Primary_Mode`, which authors no `Range` for the same reason it authors no damage
+		// — nothing leaves the barrel — so a query here would both trace for a mode swap and
+		// report a missing range the record was never supposed to carry.
+		const int32 ModeBefore = Pistol->PrimaryModeIndex;
+		Services.Calls.Reset();
+		World.SetPlayerButtons(0);
+		World.UpdatePlayerWeaponFrame();
+		World.Tick(2.0);
+		World.SetPlayerButtons(static_cast<uint64>(EElysiumButton::Attack2));
+		World.UpdatePlayerWeaponFrame();
+		// The press reached the frame — asserted through its effect, so the silence below is the
+		// absence of a query rather than the absence of a press.
+		TestNotEqual(TEXT("the secondary press toggled the primary mode"),
+			Pistol->PrimaryModeIndex, ModeBefore);
+		TestFalse(TEXT("...and a mode-toggle press runs no aim query"),
+			Services.Saw(TEXT("QueryAimTarget")));
+
+		// The melee half of the same rule: a swing reserves its own opponent on the authored reach
+		// inside the transaction, so the player frame must not run a second acquisition for it.
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!Fists)
+		{
+			return false;
+		}
+		Services.Calls.Reset();
+		World.SetPlayerButtons(0);
+		World.UpdatePlayerWeaponFrame();
+		World.Tick(2.0);
+		World.SetPlayerButtons(static_cast<uint64>(EElysiumButton::Attack));
+		World.UpdatePlayerWeaponFrame();
+		TestFalse(TEXT("a melee record's frame runs no aim query"),
+			Services.Saw(TEXT("QueryAimTarget")));
 	}
 
 	return true;
