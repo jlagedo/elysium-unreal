@@ -42,84 +42,62 @@ model; first person suppresses it and third person restores it without a rebuild
 correct in the Content Browser preview, not only in our runtime. *Deps:* LIFE0; LIFE2
 for the per-weapon translation half.
 
-### Sequence-blend fidelity — an open owner call
-
-A smoothing audit found the runtime substitutes the blend **mechanism** on sequence changes: we
-run `TLT_Inertialization` (velocity-preserving easing) with a 0.5 s ceiling where retail ran a
-plain weight crossfade (`SimpleSpline`, default 0.2 s, `max(fade)` combine) — and retail
-**hard-cuts** any clip with `flags & 0x2`, dropping everything fading: 2,642 of 5,836 clips,
-most attacks (`docs/vtmb/animation_and_movers.md` → the sequence-blend rules). Our blend
-durations and snap flags are faithful; the mechanism and the ceiling are not, and the
-substitution is recorded nowhere — an accidental engine default, surfaced by owner QA
-(retail's attack transitions visibly snap harder than ours). The call: **restore faithful**
-(standard blend + cubic curve, 0.2 s ceiling, verified true hard-cuts with dropped tails on
-`0x2` clips — touches the graph builder, the anim instance transition path, and the captured
-graph text; needs a live probe of how often the ceiling actually fires) or **declare the
-divergence** beside the faithful record. Default resolves to reproduce. Related, already
-tracked separately: gesture/layer weight ramps, the scene-path crossfade (LIFE7/CCC9), and
-retail's ~10 Hz snapshot quantization of animation advance — judged its own technical deficit,
-not recommended for reproduction. No banked capture covers the sledgehammer aggressive family,
-so a live retail side-by-side remains the repro instrument.
-
 ### LIFE5 Reactions and combat actions
 
-Directional hit, knockback and death reactions, then weapon and interaction actions; each
-family closes its own reachability slice. Every remaining producer moves onto the intent seam —
-`PlayNpcActivity` stays a compatibility adapter until patrol and scripted travel cross over.
+What is left of the rung, the player attack family first, then knockback and death, the
+montage-slot mechanism, paired actions, and the two reaction repairs the blocked family named.
 **Owns the pose, not the number**: lethality, soak, the damage roll and the health commit are
 13.3's; this rung consumes their outcome.
 
-Three seams open before the first family lands:
+**The player attack family.** The producer that turns a real press into a weapon transaction:
+press edges taken off the player's own combat button field, retail's `ItemPostFrame` refusal
+order ahead of them — a controlling surface first, then an empty hand — the melee primary polling
+the *held* bit where a firearm takes the press edge unless its mode authors `allow_autofire`, and
+the commit entering on the clip's own sequence event, 3047 for melee and 3030–3044 for ranged
+(`docs/vtmb/combat-and-damage.md`). LIFE4's owner-played acceptance sweep is held on this slice.
 
-- **The cast chain is discriminated by body kind, not by producer.** `Source` is the producer, and
-  an NPC's damage reaction and its patrol address the same body through different sources; the
-  resolver forks the recovered cast chain on `Source == Npc`, so `Damage`, `Scene`, `Interaction`
-  and `Debug` take `CBasePlayer`'s one-pass chain with no `+0x5dc`, no class/weapon alternation and
-  no four-way probe. The fork moves to an explicit body-kind test and `Source` keeps arbitration and
-  diagnostics; a `Source=Damage` intent on a human combatant still walks the class body and the
-  probe.
-- **`PlayNpcActivity` stops being a second resolver.** It calls `PickActivityClip` on the raw
-  `ACT_*` — no weapon ladder, no class body, no availability probe, no selection record, no named
-  miss — and patrol, scripted travel, ambient, schedule and the weapon path all reach it. Anything
-  the driver already classifies goes through `Resolve` with classname, weapon and state; whatever
-  is left of the adapter goes through the same call or is deleted.
-- **A reaction is not an idle.** `StateForActivity` maps the locomotion slice plus `Unknown`,
-  `Swim` and `Treadwater` onto eight states, so a hit, a melee attack or a scripted custom move
-  projects to `Idle` and a resolved asset plays as an idle overlay. Each family added here extends
-  the activity codes and the state projection in the same change, or rides a montage slot and
-  leaves `GraphState` naming the held locomotion state.
+**A reaction is not an idle.** `StateForActivity` maps the locomotion slice plus `Unknown`,
+`Swim` and `Treadwater` onto eight states, so a knockback or a death projects to `Idle` and a
+resolved asset plays as an idle overlay. Each family added here extends the activity codes and
+the state projection in the same change, or rides a montage slot and leaves `GraphState` naming
+the held locomotion state.
 
-Recovered resolver rules it adds (all policy over LIFE2's catalog — none adds graph machinery).
-The class/weapon alternation and its four-way availability ladder are LIFE3's and already run;
-what this rung adds over them is the combat state their predicates read — the reload chain among
-them, whose start derives both end times from the *selected sequence's* duration over its rate
-rather than the authored `ReloadTime`; the
-restart rule that clears and restarts a repeated identical request; paired-action
-role/size/side variant arithmetic; the **authored, not directional** blocked reaction (the
-attacker plays the activity its own sequence descriptor stores, `ACT_BLOCKED_REACTION_RIGHT`
-fallback — only the flinch is directional, `ACT_HIT_HEAD`/`ACT_HIT_TORSO` by `hit_yaw`); and
-the `2COMBO` substitution keyed by base Brawl/Melee. There is no firearm stagger to build —
-ranged capability `0x2000` does not satisfy the block gate `0x18000`. There is no transition
-traversal to build either: `AdvanceToIdealActivity` reaches an ideal activity directly, because
-the graph its `FindTransitionSequence` branch walks is unauthored on every shipped model
-(`docs/vtmb/animation_and_movers.md` → "The transition graph is unauthored").
+**Knockback and death.** The shipped corpus and the authored inputs are recorded — the ten bare
+grounded cells, the flying chain, the ragdoll seed pose and the missing get-up in
+`docs/vtmb/animation_and_movers.md`; `knockback_chance`, `KnockbackPreventTime`, the
+`Major`/`MinorKnockbackDist` pair and the two npctemplate death-policy keys in
+`docs/vtmb/combat-and-damage.md`. What gates the build is RE, not content: the open questions are
+the master roadmap's `RE-K*` and `RE-D*` rows, and the launch slice in particular cannot start
+before the impulse is recovered. Death consumes the recovered `TASK_PLAY_DEATH_SEQUENCE` ladder,
+which resolves `ACT_IDLE` on every shipped body because `ACT_DIESIMPLE` is absent from the corpus;
+the ragdoll label is a physics seed pose, not a played clip.
+
+**Two reaction repairs.** The reproduction's melee block/stagger reaction holds the base channel
+for its held seconds where retail's `DamageFlinch` is a gesture overlay, and the player's block
+pose plays as a one-shot while the block classification stands for the whole held predicate. Both
+divergences are recorded beside the faithful behaviour in `docs/vtmb/combat-and-damage.md`, and
+both resolve to the same shape: a **holdable, looping reaction claim** that a predicate releases
+rather than a duration.
+
+**The graph's Inertialization node comes out.** The blend stack owns the crossfade now, so the
+node is placed and unreached; removing it touches the graph builder and the captured graph text
+together.
+
+Recovered resolver rules the rung still owes (policy over LIFE2's catalog — none adds graph
+machinery): the restart rule that clears and restarts a repeated identical request, and
+paired-action role/size/side variant arithmetic.
 
 One montage-slot mechanism serves both `scripted_sequence`'s `m_iszIdle → m_iszPlay →
 m_iszPostIdle` and an interesting place's enter/hold/leave segments — the same shape, built
 together or there come to be two.
 
-**The sequence-event carrier is built here.** Nothing in the bake emits a `UAnimNotify`, so a
-VtMB sequence event reaches no Unreal notify and the ballistics trigger has nothing to ride —
-an attack-layer event is what reaches `CWeaponRanged::Shot`, on 4–16-frame clips where a
-sub-threshold node weight during a blend drops queued notifies. The bake and the guard test
-land together; a guard before the carrier would assert against a synthetic notify and rot.
-
-*Acceptance:* an NPC's ambient behaviour and a scripted beat both reach a pose through the
-intent seam, and `m_iszCustomMove` plays over a travelling body; a struck body flinches on the
-`hit_yaw` grid the hit direction selects, and a blocked attacker plays the reaction its own
-sequence names; a weapon's attack-layer sequence event reaches the shot while the layer is
-still blending in. *Deps:* LIFE2, LIFE3, LIFE4; `docs/vtmb/combat-and-damage.md` (its open
-joins are numeric and gate 13.3, not this rung).
+*Acceptance:* a real `+attack` press swings a held melee weapon and fires a held firearm, each
+committing on its own clip's sequence event; an NPC's ambient behaviour and a scripted beat both
+reach a pose through the intent seam, and `m_iszCustomMove` plays over a travelling body; a struck
+body is knocked back on the direction its blow states and a killed body dies and hands off to the
+ragdoll.
+*Deps:* LIFE2, LIFE3, LIFE4; `docs/vtmb/combat-and-damage.md` (its open joins are numeric and
+gate 13.3, not this rung).
 
 ### LIFE6 The first-person viewmodel
 

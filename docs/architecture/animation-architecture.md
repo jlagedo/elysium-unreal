@@ -19,7 +19,7 @@ This is the load-bearing observation, because it is what makes a bespoke evaluat
 | Retail | Unreal |
 |---|---|
 | decode locals | `UAnimSequence` evaluation |
-| blend sequences, layers, transitions | blend spaces, layered blends, state machines, montages |
+| blend sequences, layers, transitions | blend spaces, layered blends, the blend stack, montages |
 | compose hierarchy, including split inheritance | ordinary FK over locals re-expressed at bake |
 | apply the procedural rule and engine-native secondary controls | post-compose tail, component space |
 | skin | skinning |
@@ -854,8 +854,10 @@ The implementation grows the path already serving both actor kinds:
   the cast alone; a second player-only clip cache would duplicate the same model vocabulary and
   shared banks.
 - `FElysiumNpcClipSet`, `ResolveActivityClip`, the baked blend spaces and the current player visual
-  are migration inputs. `PlayNpcActivity` remains a compatibility adapter while patrol/scripted
-  callers move to `FElysiumAnimationIntent`.
+  are migration inputs. There is **one activity door**: every producer — patrol, scripted travel,
+  ambient, schedules and the weapon path alike — reaches the resolver through
+  `FElysiumAnimationIntent` with classname, weapon and state, so nothing picks a clip off a raw
+  `ACT_*` without a selection record or a named miss.
 - `IElysiumEmbodiment` carries the engine-neutral intent across the substrate boundary. NPC entity
   behaviour can request an activity without knowing about an Anim Instance; player gameplay state
   uses the same call. Body-local movement sampling stays on the engine side.
@@ -863,7 +865,7 @@ The implementation grows the path already serving both actor kinds:
   continuous locomotion parameters every animation frame. Asset lookup and weighted choice do not
   repeat every tick.
 - The Animation Blueprint consumes only the resolved selection and continuous parameters. Its
-  graph owns state machines, blend spaces, layer nodes and montages; the native post-compose tail
+  graph owns the blend stack, blend spaces, layer nodes and montages; the native post-compose tail
   owns the one custom evaluator and any stock Unreal secondary controls configured by the mesh.
 
 Both movement implementations and both actor kinds must produce the same trace schema. That is the
@@ -875,11 +877,43 @@ play the same files.
 An Animation Blueprint per body archetype — biped, animal, skeletal prop — rather than a
 hand-written instance:
 
-- **A locomotion state machine** over idle, walk, run, sneak, crouch and air, with real transition
-  rules. VtMB's stance banks ship almost no authored transitions (of the gendered disposition
-  banks, one carries a single transition clip), so a short engine blend is what reproduces the
-  original's feel rather than inventing polish — but it belongs in a transition rule, not in a
-  hand-integrated scalar.
+- **One `FAnimNode_BlendStack` as the locomotion source**, fed whatever asset the resolved
+  selection names. The eight-state vocabulary — idle, walk, run, sneak, crouch, leap, falling and
+  land — survives on the selection record as `GraphState`, which the trace, the Cog row
+  and the MCP surface read; the graph itself holds no state machine and no transition rules, so a
+  readout and a pose cannot disagree. VtMB's stance banks ship almost no authored transitions (of
+  the gendered disposition banks, one carries a single transition clip), so the crossfade the
+  stack runs **is** the original's transition rather than invented polish.
+
+  `ElysiumAnimGraph::TransitionSeconds` is that crossfade's sole authority. It answers retail's
+  `max(fade(outgoing), fade(incoming))` and reaches the node's `BlendTime` pin whole, capped by
+  nothing — so a `flags & 0x2` clip's zero falls out of the same call as a hard cut instead of
+  needing a branch — and it refuses a null outgoing record exactly where retail's `FUN_1008de30`
+  refuses one (`docs/vtmb/animation_and_movers.md` A.4c). A record that resolved no asset is not
+  an outgoing operand: without that refusal the first real clip fades up out of the bind pose for
+  the whole duration. The decision is reported once per real transition, on the blend report and
+  the log, because downstream it is indistinguishable from an authored hard cut.
+
+  **Three divergences of this reproduction, each an explicit owner call taken with the
+  restore-faithful blend cutover**, recorded here beside the faithful record they depart from:
+
+  1. **nlerp where retail provably slerps.** `FAnimNode_BlendStack_Standalone::BlendWithPose`
+     accumulates the incoming pose with `AccumulateWithShortestRotation` and normalizes
+     afterwards, which is a normalized linear blend; retail's transitioner interpolates the two
+     quaternions spherically. The paths differ only in the middle of a fade and only by the
+     chord-versus-arc error — measured over the corpus's transitions, a median per-bone deviation
+     of `1.6e-6` radians against slerp's own `3.5e-8` rounding floor
+     (`docs/vtmb/animation_and_movers.md` A.4c).
+  2. **Inverted tail nesting at depth three or more.** The stack seeds its accumulation
+     oldest-player-first and blends forward; retail folds newest-previous-first. With two players
+     standing — every ordinary transition — the two orders are identical. They part only when a
+     third request lands while two are still fading, and there the intermediate weights differ
+     while both endpoints and the settled pose do not.
+  3. **A four-deep blend cap where retail's insert is unbounded.** Retail evicts a previous
+     sequence only when its own weight reaches zero and bounds the list nowhere. The node requires
+     a number, and it takes four — the deepest stack the capture ever observed, not a rule the
+     engine enforces. A fifth request accumulates the overflow into a stored pose rather than
+     discarding a player mid-fade, which would be a pop retail never produces.
 - **Layered blend per bone** over the baked blend profiles. This is where VtMB's partial-body layers
   land, and it is what makes a masked bone come from the base pose rather than from the reference
   pose. The binding — which layer rides which base — is exported data the graph consults, not a

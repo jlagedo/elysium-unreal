@@ -294,6 +294,22 @@ are `hit_torso`, whose cells are named by direction word (`hit_torso_back`,
 `hit_torso_front_left`, …) instead of by angle. `hit_torso` is also the one fan of the 107 bound to
 pose parameter 1, `hit_yaw`; the other 106 are all on `move_yaw`.
 
+**`hit_yaw` is the bearing from the victim toward the attacker, in the victim's own facing frame**
+— the same sign convention as `move_yaw` below, so an attacker standing to the victim's left is
+`−90`. Over `−180 → +180` the shared human banks author the fan in this order [data-verified]:
+
+| cell | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|---|
+| `hit_yaw` | −180 | −135 | −90 | −45 | 0 | +45 | +90 | +135 | +180 |
+| clip | `hit_torso` | `_back_left` | `_left` | `_front_left` | `_front` | `_front_right` | `_right` | `_back_right` | `hit_torso` |
+
+So `−90` selects `hit_torso_left`, and the two wrap cells share the bare `hit_torso` clip the way
+every `move_yaw` fan shares its 180° cell. `hit_head` is the same grid at five cells —
+`hit_head`, `_left`, `_front`, `_right`, `hit_head`. **`andrei` authors both fans mirrored**
+(`_back_right` at `−135`, `_right` at `−90`), the one body in the corpus that does; it is a
+monster bank with its own vocabulary, and a consumer resolving by cell index rather than by
+direction word gets a left-hit reaction for a right-side blow on it.
+
 ### `move_yaw` is right-positive and zero is forward [VtMB decompiled]
 
 The ordinary player selector at `0x10164870` differences the body's own facing against the
@@ -1579,6 +1595,79 @@ The corpus actually uses these client IDs: 5001×48, 5003×101, 5005×1, 5101×2
 `npc/blends/<stem>.json` sidecar publishes it as an `events` block keyed by sequence label. The
 Unreal bake emits **no notify**, so reproducing these side effects is runtime work over that
 timeline, not further event-format or native-dispatch RE.
+
+#### The sequence label is the join for both a fan and a timeline [data-verified]
+
+An event lives on `mstudioseqdesc_t`, not on an animation, so **a fan is one descriptor carrying
+N animations and one timeline**. Across the 51 exported blend sidecars, **629 sequence labels
+carry an event timeline** over 970 records, and **142 of those labels are a blend grid *and* a
+timeline under one key** — the worked example is andrei's `run`, which carries its cells plus
+event 2050 at cycle `0.875`. **217 of the 629 are locomotion or idle labels**, so the timeline is
+not a combat-only surface. Consuming a fan by cell and its events by label therefore reads one
+descriptor twice and must not double-fire.
+
+Ownership is concentrated: **48 sidecars carry a timeline at all — 8 NPC models authoring their
+own** (`andrei`, `bum_male`, `cal`, `dog_guard`, `mercuriodamagedstreet`, `rat`, `rat_swimming`,
+`wolf_form_2`) against **40 shared banks**.
+
+#### What the reproduction models of the dispatch, and what it does not
+
+Recorded here beside the retail record above; each is an explicit owner call, and none is baked —
+the carrier is a runtime dispatcher over the exported timeline.
+
+- **Three of the seven operator bodies are modelled**: the ranged body (3030..3044 commit), the
+  common melee body (its swallow set, and 3047 committing at the authored instant), and the
+  no-route body that carries thrown, discipline, armor and unarmed. The three per-class melee
+  overrides have no shipped record that discriminates them, and the 103 inventory/non-combat
+  classes get no controller at all.
+- **The "otherwise warn" clause is replaced by a process census.** An unrouted band is counted and
+  classified once per process rather than warned per occurrence.
+- **The foreign-source dispatch clause is unreproduced.** `0x1032e330` forwards a foreign-source
+  event to the active weapon as well as its own 3000..3999 band; every timeline the reproduction
+  walks is the playing body's own.
+- **A looping clip displaced past one full lap under-fires**, firing the skipped interval exactly
+  once. That is the wrap-once rule's own bound rather than an added approximation, but it is the
+  observable edge of reproducing it.
+
+### The knockback and death corpus [data-verified]
+
+Census over the 167 exported clip tables (`npc/clips/<stem>.json`), one row per (body, sequence
+label) pair.
+
+**Ten bare grounded knockback cells.** `ACT_KNOCKBACK_{SMALL,NORMAL}_HIGH_{FORWARD,BACK,LEFT,RIGHT}`
+plus `ACT_KNOCKBACK_{SMALL,NORMAL}_LOW_BACK`, each on **155 bodies**, and **all 1,550 rows set
+`flags & 0x2`** — the whole grounded family is authored as a hard cut, so nothing fades into a
+knockback.
+
+**A nine-activity flying chain**, also on 155 bodies:
+`ACT_KNOCKBACK_FLYING_INTO_{BACK,FORWARD,LEFT,RIGHT}` → the looping
+`ACT_KNOCKBACK_FLYING_IDLE` → `ACT_KNOCKBACK_FLYING_LAND`, or
+`ACT_KNOCKBACK_FLYING_WALL_HIT` → `..._WALL_FALL` → `..._WALL_LAND`. Every one of the nine answers
+with a **50/50 weighted pair** — the `flying` and `flyinggut` spellings of the same motion
+(`knockback_flying_idle` beside `knockback_flyinggut_idle`) — so each activity carries 310 rows
+over its 155 bodies.
+
+**The older knockback family exists on the shared banks only in its weapon-translated spelling.**
+Twelve labels carry the `_MELEESHARED_ONEHAND` suffix on those same 155 bodies —
+`BIGHIGHLEFT`/`BIGHIGHRIGHT`/`BIGLOW`, `BIGUPPERCUT`/`BIGUPPERCUTLEFT`/`BIGUPPERCUTRIGHT`,
+`LOWCOMBO`, `SMALLDAZED`, `SMALLHIGH`/`SMALLHIGHLEFT`/`SMALLHIGHRIGHT`, `SMALLLOW` — and none of
+the twelve has a bare twin on any of them. The only bare spellings anywhere in the corpus are
+**andrei's own eleven**, which are the same set minus `lowcombo`; `lowcombo` is authored in no
+bare form on any body.
+
+**No post-knockback get-up exists.** The land clip ends standing, and the two activities that
+would name one — `ACT_GETUP_FRONT`, requested by the Zombie crawl-from-ground row, and
+`ACT_GETUP_BACK`, requested by the ManBat break-spotlight row — resolve on **zero** bodies.
+
+**`ACT_DIESIMPLE` is absent from the entire corpus**, so `TASK_PLAY_DEATH_SEQUENCE`'s recovered
+ladder (the argument as an activity, then `ACT_DIESIMPLE`, then `ACT_IDLE`) resolves `ACT_IDLE` on
+every shipped body whenever its argument misses.
+
+**The ragdoll label is a physics seed pose, not a death performance.** `ACT_DIERAGDOLL` is on
+**158 bodies**, and its length distribution is the signature: 89 at 101 frames, 58 at 7 frames, 5
+at 1 frame, and a six-body tail at 61 ×2, 66, 75 ×2 and 91. Nine bodies carry none — `cabbie`,
+`heatherneardeath`, `mercuriodamaged`, `mercuriodamagedstreet`, `newscaster_male`,
+`payphonereceiver`, `rat`, `rat_swimming`, `wolf_form_2`.
 
 ### What one player body answers the selector with [data-verified, partial corpus]
 
@@ -2932,14 +3021,24 @@ A sequence change arriving mid-transition is detected at `0x10091193` and simply
 shortened, dropped early, or refused. Capture observes the count moving `0 → 1 → 2 → 3 →
 4`.
 
-### The one refusal is a property of the incoming clip
+### The refusal has three operands, ranked together
 
-When the duration is `<= 0` — which happens when the **incoming** sequence sets
-`flags & 0x2`, or when entity flag `0x10` is set — `0x1009129c` discards the entire
-previous-sequence list (`count = 0`, then `FUN_10096c30`) and appends the new record
-alone. That is an unconditional hard cut, and what decides it is the clip being entered,
-not whatever is already running. **2,642 of 5,836 sequences set `0x2`**, so the hard cut
-is the most common authored transition behaviour in the corpus.
+`FUN_1008de30`'s first line is `if (!out || !in || (in->flags & 0x2)) return 0.0f;`
+(`0x1008de4d`). A **missing outgoing descriptor**, a **missing incoming descriptor** and the
+**incoming** clip's `flags & 0x2` all answer the same zero at the same rank, ahead of any
+authored value being read — so an absent outgoing sequence gets no special case downstream. An
+entity entering its first sequence takes the hard-cut path for that reason.
+
+When the duration is `<= 0` — from any of those three, or when entity flag `0x10` is set —
+`0x1009129c` discards the entire previous-sequence list (`count = 0`, then `FUN_10096c30`) and
+appends the new record alone. That is an unconditional hard cut, and among the two clip-borne
+operands what decides it is the clip being entered, not whatever is already running. **2,642 of
+5,836 sequences set `0x2`**, so the hard cut is the most common authored transition behaviour in
+the corpus.
+
+The `!in` operand is structurally unrepresentable in the reproduction — a selection that named no
+clip never reaches a blend request — so only `!out` and the `0x2` cut carry into it
+(`docs/architecture/animation-architecture.md` § 4).
 
 ### Transitions are client-side only
 

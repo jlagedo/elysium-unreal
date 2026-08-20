@@ -103,6 +103,10 @@ and never tracked.
   `M_Wield*` masters `make_wield_materials.py` generates, and verifies each mesh's reference
   pose against its `.eskm` in the same run.
 
+`make_player_anim_bp.py` calls `main()` at module scope with no `__main__` guard, so importing it
+— to reuse a helper, or to inspect it — rebuilds and saves the Animation Blueprint as a side
+effect of the import.
+
 The virtual package names are immutable contracts. The generated `.uasset` and `.umap`
 files are ignored.
 

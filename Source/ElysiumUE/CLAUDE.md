@@ -495,6 +495,28 @@ Hard-won, non-obvious, and easy to undo:
   bones nothing drove. `Instrument.Elysium.DancerDecodeProbe3` measures both variants — the pose as
   skinned, and the same pose with `FElysiumCompositionRig` applied — because the difference between
   the two is the whole distance between a bake question and a measurement one.
+- **`FAnimNode_BlendStack`'s defaults are a minefield, and four of them fail silently.**
+  `BlendspaceUpdateMode` defaults to `InitialOnly`, which samples a hosted blend space's xy once at
+  `BlendTo` and never again — a gait fan freezes at the steering value it was entered with.
+  `BlendParametersDeltaThreshold` defaults to `0`, and a plain *sequence* player answers
+  `GetBlendParameters()` with the zero vector, so any non-zero requested parameter pushes a new
+  player every frame; a threshold no steering value can reach is what turns the comparison off.
+  `bResetOnBecomingRelevant` defaults to `true`, and it pairs with `FAnimNode_BlendListBase`'s
+  `ZERO_ANIMWEIGHT_THRESH` child skip: a full-weight blend-list sibling makes the stack
+  non-relevant, so the default `Reset()`s it and restarts the clip at frame 0 the moment the
+  sibling releases. And `bLoop` is read only inside `BlendTo` — `ConditionalBlendTo` returns early
+  when the requested asset matches the playing one, so a loop flip on the *same* asset holds the
+  pin and changes nothing; `ForceBlendNextUpdate()` is the door, and it must not be called on an
+  empty stack, where the flag survives the blend and forces a second one.
+- **`EAlphaBlendOption::HermiteCubic` is the engine's own default, so it never appears in exported
+  T3D.** A graph text round-trip cannot prove the curve, and `UAnimGraphNode_BlendStack::Serialize`
+  carries a downgrade-to-`Linear` path on an old custom version — only an assertion against the
+  compiled node proves what is actually running.
+- **`GetSlotMontageGlobalWeight` is filled during graph *evaluation*, not `TickAnimation`.** Read
+  in a tick-time path it answers the previous frame's weight or zero.
+- **`GetRelevantAnimTimeFraction` returns `0.0` both at the start of a clip and when there is no
+  relevant player at all.** The two are indistinguishable from that call alone;
+  `GetRelevantAnimLength` is what disambiguates them.
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /
   `ELYSIUM_PICK_CHANNEL`), because the walkable surface is a material-less `.hulls` collider that
   would otherwise be reported instead of the wall.

@@ -239,6 +239,15 @@ through weapon secondary-fire policy. `uv run elysium research input_action_surv
 DLLs and every instruction span in the command chain; the combat research case owns the later
 impact and reaction chain.
 
+**The reproduction composes the two bits, where retail refcounts the two keys** — an explicit
+owner call, recorded here beside the faithful behaviour. Retail presses a second `kbutton_t` and
+jumps into the `+attack2` handler, so each key carries its own held state and releasing one leaves
+the other's bit standing. Ours packs one bit mask, so `-wpn_secondaryatk` clears the `Attack2` bit
+even while `+attack2` is independently held. `Attack2` has a live consumer — the weapon frame folds
+it together with the dedicated `SecondaryAtk` bit into one secondary attack intent — so the clear
+drops a secondary-fire hold the player is still keying. The block classifier reads the dedicated
+bit alone and is unaffected.
+
 ### Camera
 
 | Command | Effect |

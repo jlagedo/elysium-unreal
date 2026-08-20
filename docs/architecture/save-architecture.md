@@ -135,6 +135,25 @@ Three things do *not* fit the field walk and get explicit hooks:
 | bodies (meshes, MIDs, cables, constraints) | **not saved**. Bodies are disposable presentation (R1); they rebuild from the def + the restored entity state |
 | anything an engine object owns (timers, tick handles, actor transforms) | **not saved**, and nothing game-visible is allowed to live there (R4/S1) |
 
+**A leaf blob carries the schema it was written at.** That blob is opaque to the payload — the
+entity is written through its own `Serialize` into a private memory archive and the bytes are
+stored — and a raw memory archive has no version container. A leaf's `Ar.Version()` gate is
+therefore meaningful only if the version the blob was *written* at travels with it, so
+`FElysiumMapSnapshot` records it and replay honours it: a snapshot frozen in memory stamps
+`Latest`, because that is what capture writes at, and a snapshot read from a file older than the
+field defaults to **that file's own version**, which is exact — every blob in it was written by
+the build that wrote the file. Without that, replaying an old blob through a `Latest` archive
+reads fields the writer never emitted and byte-shifts everything after them.
+
+It is also what makes a leaf-block addition additive instead of a floor raise: a field added
+behind its own version does not force `MinSupported` up, because an older blob is replayed
+through gates that answer for the build that wrote it. `Latest` is **27** — `WeaponAnimEvent`
+(26) records which route a staged weapon transaction is waiting on, its own clip's sequence event
+or the queued contact estimate; `WeaponSwingClipOwner` (27) appends the bank that owns that
+swing's resolved clip. A pre-27 payload restores a swing with no clip owner, and its blocked
+reaction resolves identically off the attacking body's stem and the swing's clip label — only the
+diagnostic line loses the bank name.
+
 ## 5. The map snapshot lifecycle
 
 A snapshot is produced by exactly the same code path a save uses, which is what keeps travel and save
@@ -223,9 +242,11 @@ A save is only worth as much as the run that follows it, so three rules hold on 
   `FPlatformTime::Seconds` or `World->GetTimeSeconds` for gameplay is a save bug waiting to surface.
 - **RNG is an owned, seeded stream.** `ElysiumRng` owns one `FRandomStream` per named stream —
   `OneOfSet` (589 dialogue gates), `LogicTimer`, `LogicCase`, `Dice` (`recovered/dice-system.md`),
-  `Ambient` — each seeded off one session seed by a fixed hash, so a new game seeds once and every
-  stream follows. Their state is in the `Session` block: each stream saves `{initial, current}` and
-  restores by re-initialising to the saved *current* value, which is the only writer `FRandomStream`
+  `Ambient`, `Reaction` (the damage flinch's head/torso coin, its ±30° jitter and its
+  weighted-sequence draw) — each seeded off one session seed by a fixed hash, so a new game seeds
+  once and every stream follows. Their state is in the `Session` block: each stream saves
+  `{initial, current}` and restores by re-initialising to the saved *current* value, which is the
+  only writer `FRandomStream`
   exposes and which continues the sequence exactly. `FMath::Rand()` is banned in gameplay code for
   the same reason `FTimerManager` is.
   *(`docs/vtmb/script_api.md` leaves open whether VtMB's `OneOfSet` counter is a per-call RNG or a frame

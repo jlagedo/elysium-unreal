@@ -65,6 +65,39 @@ The optional leading trait is stored as a `CVStatRef` and applied by `SetSrc`. T
 feat/reference identifies the attack feat used to adjust lethality and supply associated
 automatic-success metadata.
 
+### The authored knockback inputs [data-verified]
+
+Knockback is authored in three separate places, and the two weapon halves use different
+vocabularies.
+
+**`knockback_chance` is a melee key, on sixteen weapon definitions**, a probability in `0..1`:
+
+| Value | Weapons |
+|---:|---|
+| 0.9 | sledgehammer |
+| 0.6 | bush_hook |
+| 0.4 | baseball_bat, severed_arm, torch, zombie_fists |
+| 0.3 | fists, sabbatleader_attack |
+| 0.1 | baton, tire_iron, claws, chang_claw, claws_ghoul, wolf_head, wolf_head-null |
+| 0.05 | fireaxe |
+
+Katana, knife and sheriff_sword author none, and neither does any ranged weapon. **This is retail
+content, not a patch addition** — `item_w_sledgehammer.txt`, `item_w_fists.txt` and `rules.txt` all
+carry their values inside `pack101.vpk`.
+
+**Ranged modes author a distance pair instead**, `MajorKnockbackDist` / `MinorKnockbackDist` —
+retail's own major/minor two-tier vocabulary, not a probability. Retail (`pack101.vpk`) authors it
+on four weapons: Ithaca M37 and the super shotgun `105 / 250`; the Colt Anaconda two minor
+distances (`400`, `350`) across its two modes and no major; the Remington M700 a lone minor
+`1500`. The flaming crossbow (`105 / 250`), frag grenade (`100 / 1000`), Desert Eagle (minor
+`400`) and the M700 Bach variant (minor `1500`) are patch additions — their retail files carry no
+`KnockbackDist` line.
+
+**`rules.txt` owns the refractory window**: `Knockbacks { KnockbackPreventTime 5.0 }`.
+
+Who reads each of the three, and in what order relative to contact, is open — the master
+roadmap's `RE-K1`, `RE-K6` and `RE-K9`.
+
 ## `CVDmg_t`: the 17-word damage descriptor
 
 The structure is `0x44` bytes (`17 * 4`). Names below are semantic working names, not debug
@@ -396,6 +429,14 @@ translated activity and uses the maximum as the query distance. `CBaseCombatChar
 3. otherwise scans the reach volume and chooses the visible candidate with the highest forward
    dot product inside a 30-degree half-angle (a 60-degree full cone).
 
+**The authored reach corpus is large and far from any fixed distance** [data-verified]. `+0x2D0`
+holds Source units, with `FLT_MAX` as studiomdl's unset marker (`docs/vtmb/mdl_v2531.md`), and
+**31,481 exported clip rows across the cast state one**. The per-activity maxima:
+`ACT_MELEE_ATTACK_FISTS` 578 cm, `ACT_MELEE_ATTACK_CLAWS` 682 cm, with the armed melee families
+between them and `ACT_ANDREI_DIVE_OUT` at 1,015 cm. The reproduction currently queries a flat 64
+Source units in place of the per-descriptor maximum; adopting the authored value is a separate
+decision, not implied by the census.
+
 The melee predicate at `0x103EA4D0` rejects self, a missing entity and any entity whose
 `m_lifeState` is not `LIFE_ALIVE`. The shared query also rejects non-targetable and
 `ScriptHidden` entities. This is aim assistance and opponent reservation, not a damage verdict:
@@ -488,7 +529,9 @@ attribute slot 2 (`Dexterity`) when the incoming margin is positive, then classi
 record. Class 3, the **defender block stagger** band, plays `ACT_BLOCK_HEAVY`; the other blocked
 classes play `ACT_BLOCK`. The attacker callback at `0x10160D00` plays the blocked-reaction
 activity stored at `+0x2E0` in the attacker's current sequence descriptor, falling back to
-`ACT_BLOCKED_REACTION_RIGHT`. This is where authored left/right blocked reactions enter; they are
+`ACT_BLOCKED_REACTION_RIGHT`. `+0x2E0` is the **load-time enum slot**, `-1` on every descriptor on
+disk; the DLL resolves it at model load from the descriptor's own name index at `+0x2E4`
+(`docs/vtmb/mdl_v2531.md`). This is where authored left/right blocked reactions enter; they are
 not chosen from a movement direction at input time.
 
 If the updated record is not damaging, the impact exits without damage. If positive damage
@@ -497,6 +540,37 @@ mean **zero damage**. A stronger unblocked result takes the separate normal-hit 
 callbacks; the player knockback body selects a reaction sequence and applies impulse/timing.
 There is no recovered standalone player `STAGGER` command or compact action: the concrete melee
 stagger is the heavy-block reaction band, with hit/knockback as a separate outcome.
+
+**The authored reaction vocabulary is exactly two literals** [data-verified]. Across the exported
+clip tables **10,077 rows carry a `blocked_reaction`** — `ACT_BLOCKED_REACTION_LEFT` 5,892 and
+`ACT_BLOCKED_REACTION_RIGHT` 4,185, and nothing else — and every one of them sits on a melee-attack
+row (`ACT_MELEE_ATTACK*`, including the `2COMBO` and `MELEE_AIR_ATTACK` families). The stored value
+is always the **base** spelling; the weapon ladder supplies the armed variant, so a descriptor
+never stores a weapon-suffixed reaction.
+
+**Where the reproduction departs from that record.** Each is an explicit owner call, taken with
+the blocked/stagger family and recorded here beside the behaviour it departs from:
+
+- **The frontal test is reproduced as the full forward hemisphere, ±90° — chosen, not
+  recovered.** `0x10345AB0`'s facing constant is undecoded, so no cone angle is known. The
+  hemisphere is the deliberately permissive reading: a tighter cone would refuse blocks retail
+  allows, and refusing a legal block is the worse failure. Decoding the constant closes it
+  (`RE-R3`).
+- **The `Dexterity` bonus-soak re-roll at `0x10160BC0` is left to the damage/soak system.** This
+  rung owns the pose, not the number.
+- **The flinch occupies the base channel where retail's `DamageFlinch` is a gesture overlay.** A
+  melee block or stagger reaction therefore *holds* the base channel for its held seconds, and the
+  flinch yields to it without advancing the `Reaction` RNG stream
+  (`docs/architecture/save-architecture.md` § 8). Both are consequences of the channel
+  substitution rather than recovered rules, and the substitution rests on an open question: does
+  the damaging blocked path reach `DamageFlinch` (`0x103229d0`) unconditionally? The answering
+  read is `0x103302e0`'s call site (`RE-R2`).
+- **The player's block pose plays as a one-shot** while the block classification stands for the
+  whole held predicate; retail holds the ideal activity. The repair is a holdable, looping
+  reaction claim, and it is pending.
+- **A player blocking into the hit/knockback margin plays no defender pose**, while the attacker
+  still plays its blocked reaction — the chosen reading of `WasMeleeBlocked` gating both callbacks
+  off one predicate.
 
 ### Melee damage commit
 
@@ -605,6 +679,11 @@ The Troika NPC override (`0x102bf340`) additionally releases hints and feed/clai
 notifies owner/maker systems, invokes Python `MarkAsDead('<targetname>')`, and updates its special
 partner/owner memory. These are consequences of the one death commit; a maker child count must not
 be decremented from a hit or flinch path.
+
+**Two authored death-policy keys have no recovered consumer** [data-verified]. `npctemplate*.txt`
+states `Disallow_Kindred_Death` on **9** templates and `Has_Burning_Death` on **32** (out of 41 and
+34 authorings respectively; the rest are explicit zeros). Both are real authored content and
+neither is parsed anywhere in the reproduction; what reads them in retail is `RE-D5`.
 
 The player damage wrapper (`0x10163020`) adds player-specific refusal/protection gates and tears
 down conversation, use, grapple and special-control state before/around the shared commit. The
