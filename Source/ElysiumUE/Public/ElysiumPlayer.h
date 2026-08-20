@@ -1117,6 +1117,15 @@ public:
 		MeleeReactionHoldsBaseUntil = FMath::Max(MeleeReactionHoldsBaseUntil, UntilSeconds);
 	}
 
+	// --- Knockback eligibility -----------------------------------------------------------------
+	// The NPC template's authored `General/Disallow_Knockbacks`, which eight `npctemplate*.txt`
+	// files set on the zombies, the cabbie, the tutorial cast and the other bodies that must never
+	// be thrown. Only the NPC leaf wears a template, so the chain's own answer is no.
+	//
+	// There is no refractory window beside it. `rules.txt`'s `Knockbacks { KnockbackPreventTime }`
+	// is the PLAYER view kick's refractory and is read by nothing on this path.
+	virtual bool DisallowsKnockbacks() const { return false; }
+
 	// `WasMeleeBlocked`'s player branch (`docs/vtmb/combat-and-damage.md` § "Block and stagger
 	// reactions"): "a player counts as actively blocking while its ideal activity is `ACT_PREBLOCK`
 	// or `ACT_BLOCK`". Only the player leaf can answer — a non-player defender is classified by its

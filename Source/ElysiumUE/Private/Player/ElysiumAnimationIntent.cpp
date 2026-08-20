@@ -11,7 +11,9 @@ namespace
 		const TCHAR* Name;
 	};
 
-	// The slice's whole vocabulary, and the only place its ACT_* literals are spelled.
+	// The whole named vocabulary, and the only place its ACT_* literals are spelled. The knockback
+	// rows are the same ten `Substrate/ElysiumReactions.h` selects between; that namespace owns which
+	// cell a contact plays, and this table owns the code the record carries it as.
 	const FActivityNaming GActivityNames[] =
 	{
 		{ EElysiumAnimActivityCode::Unknown,     TEXT("") },
@@ -30,6 +32,26 @@ namespace
 		{ EElysiumAnimActivityCode::Treadwater,  TEXT("ACT_TREADWATER") },
 		{ EElysiumAnimActivityCode::DieSimple,   TEXT("ACT_DIESIMPLE") },
 		{ EElysiumAnimActivityCode::DieRagdoll,  TEXT("ACT_DIERAGDOLL") },
+		{ EElysiumAnimActivityCode::KnockbackSmallHighForward,
+			TEXT("ACT_KNOCKBACK_SMALL_HIGH_FORWARD") },
+		{ EElysiumAnimActivityCode::KnockbackSmallHighBack,
+			TEXT("ACT_KNOCKBACK_SMALL_HIGH_BACK") },
+		{ EElysiumAnimActivityCode::KnockbackSmallHighLeft,
+			TEXT("ACT_KNOCKBACK_SMALL_HIGH_LEFT") },
+		{ EElysiumAnimActivityCode::KnockbackSmallHighRight,
+			TEXT("ACT_KNOCKBACK_SMALL_HIGH_RIGHT") },
+		{ EElysiumAnimActivityCode::KnockbackNormalHighForward,
+			TEXT("ACT_KNOCKBACK_NORMAL_HIGH_FORWARD") },
+		{ EElysiumAnimActivityCode::KnockbackNormalHighBack,
+			TEXT("ACT_KNOCKBACK_NORMAL_HIGH_BACK") },
+		{ EElysiumAnimActivityCode::KnockbackNormalHighLeft,
+			TEXT("ACT_KNOCKBACK_NORMAL_HIGH_LEFT") },
+		{ EElysiumAnimActivityCode::KnockbackNormalHighRight,
+			TEXT("ACT_KNOCKBACK_NORMAL_HIGH_RIGHT") },
+		{ EElysiumAnimActivityCode::KnockbackSmallLowBack,
+			TEXT("ACT_KNOCKBACK_SMALL_LOW_BACK") },
+		{ EElysiumAnimActivityCode::KnockbackNormalLowBack,
+			TEXT("ACT_KNOCKBACK_NORMAL_LOW_BACK") },
 	};
 
 	// The one-handed roster (`docs/vtmb/animation_and_movers.md` A.4, measured over both melee
@@ -80,7 +102,8 @@ EElysiumAnimActivityCode ActivityCode(const FString& Name)
 			return Entry.Code;
 		}
 	}
-	// Everything outside the slice — every reaction, weapon and scripted activity — reads Unknown.
+	// Everything the table does not name — every weapon and scripted activity, and the reaction
+	// families no code has been added for — reads Unknown.
 	return EElysiumAnimActivityCode::Unknown;
 }
 

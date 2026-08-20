@@ -134,4 +134,175 @@ namespace ElysiumReactions
 	// relationship to test rather than a zero to invent.
 	bool IsFrontalContact(const FVector& AttackerOriginCm, const FVector& VictimOriginCm,
 		float VictimUnrealYawDegrees);
+
+	// --- The grounded knockback family (`docs/vtmb/combat-and-damage.md` § "The authored knockback
+	// inputs", `docs/vtmb/animation_and_movers.md` § "The knockback and death corpus") ------------
+	//
+	// The GROUNDED cells only, and an NPC victim only. The nine-activity flying chain and the launch
+	// impulse are a separate outcome whose magnitude, direction and mechanism are not recovered
+	// (the master roadmap's `RE-K5`), and nothing here moves a body — this namespace answers which
+	// cell plays and which yaw the body is turned to, exactly as the flinch half above answers which
+	// activity at what angle.
+	//
+	// **There is no randomness in this family at all.** Retail draws once, to pick among the
+	// candidates an authored per-attack activity table lists for the selected direction bucket; that
+	// table's on-disk location is unrecovered, so the stand-in below offers exactly one candidate per
+	// bucket and there is nothing to draw for. Every function here is a pure function of two origins
+	// and a facing, and the Reaction stream is untouched whether a knockback happens or not.
+
+	// The two authored sizes. Ten cells exist as `ACT_KNOCKBACK_{SMALL,NORMAL}_HIGH_{FORWARD,BACK,
+	// LEFT,RIGHT}` plus `ACT_KNOCKBACK_{SMALL,NORMAL}_LOW_BACK`, each on 155 bodies.
+	enum class EKnockbackSize : uint8
+	{
+		Small,
+		Normal,
+	};
+
+	// The two authored heights. `Low` exists only for `Back` — the corpus carries no `LOW_FORWARD`,
+	// `LOW_LEFT` or `LOW_RIGHT` cell on any body.
+	enum class EKnockbackHeight : uint8
+	{
+		High,
+		Low,
+	};
+
+	// Retail's four direction buckets, at retail's own indices — the activity table is indexed by
+	// them and the yaw-snap offset table below is keyed on the same number, so the values are stated
+	// rather than left to declaration order.
+	//
+	// A bucket answers where `away` points in the victim's own frame, and the token names the CELL
+	// that plays. Those are the same direction: the cell token names where the body GOES, and the
+	// body goes along `away`. (Body-goes is CONFIRMED, not inferred — a blow to the face plays
+	// `..._BACK` because that is the way the struck body travels.)
+	enum class EKnockbackDirection : uint8
+	{
+		Back = 0,      // bucket 0 — `away` points behind the victim
+		Left = 1,      // bucket 1 — `away` points to its left
+		Forward = 2,   // bucket 2 — `away` points in front of it
+		Right = 3,     // bucket 3 — `away` points to its right
+	};
+
+	// **STAND-IN, AND NAMED AS ONE.** Retail selects the cell out of an AUTHORED PER-ATTACK ACTIVITY
+	// TABLE — four direction buckets, up to four candidates each, one picked with `RandomInt` — whose
+	// on-disk location is still unrecovered. Until it is found, one deterministic candidate stands in
+	// per bucket: the `NORMAL`/`HIGH` cell of the classified direction.
+	//
+	// The `SMALL` family and the two `LOW_BACK` cells stay in the vocabulary, in `KnockbackActivity`
+	// and in the tests — they are authored on 155 bodies and the recovered table is what will select
+	// them. Nothing here reaches them, and that is the stand-in's whole extent.
+	inline constexpr EKnockbackSize StandInKnockbackSize = EKnockbackSize::Normal;
+	inline constexpr EKnockbackHeight StandInKnockbackHeight = EKnockbackHeight::High;
+
+	// Retail's recovered fallback when no candidate list is consulted: activity `0x8b`, the
+	// flying-into-forward cell, which on a GROUNDED body downgrades to this one. It is reached here
+	// only by a degenerate classification (see `KnockbackRelativeYaw`).
+	inline constexpr const TCHAR* FallbackGroundedKnockbackActivity =
+		TEXT("ACT_KNOCKBACK_NORMAL_HIGH_FORWARD");
+
+	// Retail's own degeneracy epsilon on the horizontal `away` vector, applied after the z is zeroed.
+	// It is tight enough that only exactly-coincident origins reach it.
+	inline constexpr float KnockbackDegenerateLength = 1.0e-7f;
+
+	// One knockback, whole: which cell plays, and the yaw the victim is turned to so that cell's
+	// model-space direction reads true.
+	struct FElysiumKnockback
+	{
+		// The stand-in's answer on every knockback. Not constants folded into two globals: the
+		// recovered activity table selects per candidate, so these are per-knockback fields that
+		// happen to be filled from one place today.
+		EKnockbackSize Size = StandInKnockbackSize;
+		EKnockbackHeight Height = StandInKnockbackHeight;
+		EKnockbackDirection Direction = EKnockbackDirection::Back;
+
+		// The Unreal world yaw of `away`, degrees in [0, 360) — the classifier's own input, carried
+		// for the log.
+		float AwayWorldYawDegrees = 0.0f;
+		// `AngleMod(awayYaw - victimYaw)`, degrees in [0, 360) — the value the four bands are cut on.
+		float RelativeYawDegrees = 0.0f;
+		// The Unreal world yaw the victim's facing is SET to, degrees in [0, 360). Not an offset and
+		// not a facing-frame angle: retail snaps the absolute yaw (see `KnockbackSnapYaw`).
+		float SnapYawDegrees = 0.0f;
+
+		// Whether the classification degenerated, which is the one route to
+		// `FallbackGroundedKnockbackActivity`.
+		bool bFallbackCell = false;
+
+		// The ACT_* literal, spelled once for the whole slice so the producer, the record and the
+		// test cannot drift into three spellings of one activity.
+		const TCHAR* Activity() const;
+	};
+
+	// The ten cells' literals, one function. Null for a `Low` height on any direction but `Back`:
+	// the corpus authors no such cell, so there is nothing to name rather than a spelling to invent.
+	const TCHAR* KnockbackActivity(EKnockbackSize Size, EKnockbackHeight Height,
+		EKnockbackDirection Direction);
+
+	// Whether this victim may be knocked back at all — retail's eligibility, minus two omissions
+	// that are named rather than guessed.
+	//
+	// `bVictimAlive` is the ordinary alive-path filter and `bTemplateDisallowsKnockbacks` is the NPC
+	// template's authored `General/Disallow_Knockbacks`, which eight `npctemplate*.txt` files set on
+	// zombies, cabbies, the tutorial cast and the other bodies that must not be thrown.
+	//
+	// **OPEN RE GATE 1 — a further template predicate.** Retail tests one more value off the same
+	// template beside `Disallow_Knockbacks`. It is not identified, so it is omitted rather than
+	// stood in for: a guessed predicate would refuse knockbacks the content asks for.
+	//
+	// **OPEN RE GATE 2 — the hit-buildup counter.** Retail also admits the knockback on
+	// `counter <= threshold` OR a per-attack unconditional marker. The counter's semantics are open —
+	// what increments it, what resets it and what the threshold is — so the whole term is omitted and
+	// every classified contact is admitted. The consequence is the stated divergence: a victim retail
+	// would have spared until its counter drained is knocked back here. The producer reports the
+	// omission once.
+	bool IsKnockbackAllowed(bool bVictimAlive, bool bTemplateDisallowsKnockbacks);
+
+	// The direction the victim is thrown, unnormalized and with its z zeroed: victim minus attacker.
+	// **CONFIRMED**, and the sign is the whole of it — the body travels AWAY from the blow.
+	FVector KnockbackAwayFrom(const FVector& AttackerOriginCm, const FVector& VictimOriginCm);
+
+	// The same direction when there is no attacker at all — world damage, a script, a logic entity.
+	// **CONFIRMED**: retail takes the negated forward of the victim's OWN facing, so a body with
+	// nothing to be thrown away from is thrown straight backwards.
+	FVector KnockbackAwayWithoutAttacker(float VictimUnrealYawDegrees);
+
+	// `away` and the victim's facing reduced to the one angle the bands are cut on.
+	//
+	// `OutRelativeYawDegrees` is `AngleMod(awayYaw - victimYaw)` in [0, 360). **The subtraction is
+	// that way round because Unreal yaw is Source yaw negated**: retail computes
+	// `AngleMod(victimYaw - awayYaw)` in its own frame, and the repo's Y reflection turns that into
+	// this. Getting it backwards mirrors the LEFT and RIGHT buckets and nothing else, which is
+	// exactly the failure that would survive a forward/back test.
+	//
+	// False when `away` degenerates below `KnockbackDegenerateLength`. The caller still has a
+	// knockback — retail's classifier answers bucket 0 there and its yaw snap still runs off a zero
+	// `away` yaw — but the cell comes from `FallbackGroundedKnockbackActivity` instead of the bucket.
+	// Both out-parameters are zeroed on that path.
+	bool KnockbackRelativeYaw(const FVector& AwayCm, float VictimUnrealYawDegrees,
+		float& OutAwayWorldYawDegrees, float& OutRelativeYawDegrees);
+
+	// **CONFIRMED** — retail's four bands over that angle, kept exactly as cut. They are NOT
+	// symmetric: the front band runs (316, 360) + [0, 45] and is 89 degrees wide, the right flank
+	// and the rear are 90 each, and the left flank absorbs the remaining 91. The asymmetry is
+	// reproduced rather than rounded off.
+	//
+	//   rel > 316 or rel <= 45   -> bucket 2, `Forward`
+	//   rel <= 135               -> bucket 3, `Right`
+	//   135 < rel <= 225         -> bucket 0, `Back`
+	//   otherwise (225 < rel<=316) -> bucket 1, `Left`
+	EKnockbackDirection KnockbackDirectionForRelativeYaw(float RelativeYawDegrees);
+
+	// **CONFIRMED, and it applies to grounded NPCs too.** After classifying, retail SETS the victim's
+	// yaw to `AngleMod(awayYaw + offset)` so the authored clip's model-space direction points along
+	// `away`: a `..._LEFT` cell only reads as a body thrown leftwards if the body's left IS the way
+	// it is going.
+	//
+	// Retail's offsets are `{0: +180, 1: +270, 2: +0, 3: +90}` in SOURCE yaw. Unreal yaw is Source
+	// yaw negated, so each offset negates with it and the table here is `{Back: +180, Left: +90,
+	// Forward: +0, Right: +270}`. Answers degrees in [0, 360).
+	float KnockbackSnapYaw(float AwayWorldYawDegrees, EKnockbackDirection Direction);
+
+	// The whole rule in one call: classify, snap, select. **No stream, no draw, no refusal** — a
+	// contact that reached this call is a knockback, and every term above is deterministic. `Out` is
+	// fully written.
+	void BuildKnockback(const FVector& AwayCm, float VictimUnrealYawDegrees, FElysiumKnockback& Out);
 }

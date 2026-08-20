@@ -120,6 +120,11 @@ struct FElysiumWeaponContext
 
 	FElysiumMeleeMargins Margins;
 
+	// `rules.txt` -> `RuleData/Knockbacks/KnockbackPreventTime` is deliberately NOT read here. It is
+	// the PLAYER's view-kick refractory — its only consumers are the player's own knockback reaction
+	// and its ordinary hit reaction — and not a victim re-knockback window. That system is not built
+	// in this slice, so nothing in the melee transaction reads the value.
+
 	bool HasDefenseDifficulties() const
 	{
 		return DefenseDifficultyPc != INDEX_NONE && DefenseDifficultyNpc != INDEX_NONE;
@@ -496,6 +501,20 @@ private:
 		int32 ModeIndex, const FString& SwingClipLabel, const FString& SwingClipOwnerStem);
 	void RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
 		int32 ModeIndex);
+
+	// The grounded knockback branch of an UNBLOCKED melee contact the margin classified into the
+	// hit/knockback band: test the victim's eligibility, classify the away direction, snap the
+	// victim's facing so the authored cell reads true, and play that cell as a base-channel
+	// reaction. The rules are `Substrate/ElysiumReactions.h`; this is their producer half.
+	//
+	// **No authored per-weapon chance and no refractory window.** The margin band is the whole
+	// admission — `knockback_chance` is parsed by retail and never read, and `KnockbackPreventTime`
+	// belongs to the player's view kick.
+	//
+	// Nothing here is a failure: a dead victim, a template that disallows knockbacks, a player victim
+	// (whose reaction is the unbuilt view kick) and a body whose vocabulary carries no such cell are
+	// all ordinary answers, and the last of them is named on the resolver's own selection record.
+	void KnockbackContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim);
 
 	// `CWeaponRanged::FireOnEmpty` — the mode's dry-fire action, which advances BOTH attack timers.
 	void FireOnEmpty(int32 ModeIndex, const FElysiumWeaponMode& Mode);

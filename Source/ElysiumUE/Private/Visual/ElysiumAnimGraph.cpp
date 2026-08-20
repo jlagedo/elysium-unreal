@@ -44,14 +44,35 @@ namespace ElysiumAnimGraph
 		// asked for.
 		case EElysiumAnimActivityCode::LandCrouch:
 			return EElysiumGraphState::Land;
-		// The death family (LIFE5), and it lands here for a different reason than the two below it —
-		// not "outside the slice" but "never a base-channel locomotion answer". A death pose is played
-		// on the REACTION branch, over whatever the graph is posing, so its own request never enters
-		// the state machine and this projection describes only the state underneath it. The reaction
-		// claim holds that pose and the death handoff then freezes or ragdolls the body; a ninth graph
-		// state would name a state node the authored graph does not carry.
+		// The ten grounded knockback cells. They are STATED here rather than reached through the
+		// default, because the answer is a decision and not a fall-through: a knockback plays on the
+		// reaction branch (`ReactionBranchTag`), which sits above the locomotion pose and owns the
+		// body outright for as long as its claim stands — so the locomotion state underneath is not
+		// what is on screen, and the eight-state vocabulary carries no knockback state to name it
+		// with. `Idle` is what a body whose locomotion is not driving it is doing, and the record
+		// still names the cell that was asked for.
+		//
+		// The consequence to keep in view: adding a knockback GRAPH state would be a change to the
+		// tracked graph text, and the reaction branch is what makes one unnecessary.
+		case EElysiumAnimActivityCode::KnockbackSmallHighForward:
+		case EElysiumAnimActivityCode::KnockbackSmallHighBack:
+		case EElysiumAnimActivityCode::KnockbackSmallHighLeft:
+		case EElysiumAnimActivityCode::KnockbackSmallHighRight:
+		case EElysiumAnimActivityCode::KnockbackNormalHighForward:
+		case EElysiumAnimActivityCode::KnockbackNormalHighBack:
+		case EElysiumAnimActivityCode::KnockbackNormalHighLeft:
+		case EElysiumAnimActivityCode::KnockbackNormalHighRight:
+		case EElysiumAnimActivityCode::KnockbackSmallLowBack:
+		case EElysiumAnimActivityCode::KnockbackNormalLowBack:
+		// The death family shares the answer for the same structural reason — never a base-channel
+		// locomotion answer. A death pose is played on the REACTION branch, over whatever the graph
+		// is posing, so its own request never enters the state machine and this projection describes
+		// only the state underneath it. The reaction claim holds that pose and the death handoff then
+		// freezes or ragdolls the body; a ninth graph state would name a state node the authored
+		// graph does not carry.
 		case EElysiumAnimActivityCode::DieSimple:
 		case EElysiumAnimActivityCode::DieRagdoll:
+			return EElysiumGraphState::Idle;
 		// Reachable, and outside the slice: the controlled corpus never witnessed either, so neither
 		// has a state of its own yet. Standing is the honest answer, and the record says what was
 		// really asked for.

@@ -28,7 +28,7 @@
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpcConditions.h"   // ElysiumNpcCond::WeaponCapability — the `0x18000` mask
-#include "Substrate/ElysiumReactions.h"       // the block family's pure rules
+#include "Substrate/ElysiumReactions.h"       // the block and knockback families' pure rules
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -1718,6 +1718,25 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 			Attacker.HoldBaseForMeleeReaction(Now + static_cast<double>(AttackerHeld));
 		}
 	}
+	else if (DefenderReaction == EElysiumMeleeDefenderReaction::HitKnockback)
+	{
+		// --- The grounded knockback ---------------------------------------------------------------
+		// "A stronger unblocked result takes the separate normal-hit or knockback callbacks"
+		// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions"), so this is the sibling
+		// branch of the blocked callbacks above and sits at the same point in the contact order. It
+		// therefore runs BEFORE the damage below for the same reason they do — and it has to, because
+		// the base-channel hold it takes is what makes the flinch the damage commits yield to it
+		// rather than replace a knockback already on screen.
+		//
+		// **SEAM — grounded cells only.** The nine-activity flying chain and the launch impulse are
+		// the other half of this outcome, and the impulse's magnitude, direction and mechanism are
+		// the master roadmap's `RE-K5`. Nothing here moves the victim; the pose and the facing snap
+		// it needs are what is reproduced.
+		//
+		// `Unclassified` is deliberately NOT a knockback: a margin table that never loaded names no
+		// band, and the classifier's own warning above already reported it.
+		KnockbackContact(Attacker, Victim);
+	}
 
 	// A record that is not damaging exits without damage. Blocked does NOT mean zero damage: what
 	// decides is the margin, and a positive one carries on even when a block reaction played.
@@ -1755,6 +1774,110 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 
 	const FElysiumItemDef* Record = Data();
 	Victim.TakeDamage(Dmg, &Attacker, Record && Record->bDisallowFirearmsToBashing);
+}
+
+void FElysiumWeapon::KnockbackContact(FElysiumCombatCharacter& Attacker,
+	FElysiumCombatCharacter& Victim)
+{
+	// The player's knockback is a VIEW KICK — a separate reaction reading `KnockbackPreventTime` as
+	// its refractory — and that system is not built. Refusing it here rather than playing an NPC
+	// grounded cell on the player body keeps the two apart; the omission is named once.
+	if (IsPlayerSide(Victim))
+	{
+		if (ShouldReportOnce(TEXT("knockback_player_view_kick")))
+		{
+			UE_LOG(LogElysiumWeapon, Verbose,
+				TEXT("a hit/knockback landed on the player: retail answers it with the player view "
+					"kick, which is not built, so no knockback reaction is produced"));
+		}
+		return;
+	}
+
+	// **OPEN RE GATE — the hit-buildup counter.** Retail admits the knockback on
+	// `counter <= threshold` OR a per-attack unconditional marker. The counter's semantics are not
+	// recovered, so the term is OMITTED rather than stood in for and every classified contact is
+	// admitted. Reported once so the divergence is observable rather than inferred from behaviour.
+	if (ShouldReportOnce(TEXT("knockback_hit_buildup_counter")))
+	{
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("the knockback hit-buildup gate is omitted (counter semantics unrecovered) — every "
+				"hit/knockback margin admits a knockback"));
+	}
+
+	// Eligibility. `IsAliveForCombat` is the alive half; the template half is the authored
+	// `General/Disallow_Knockbacks` that zombies, cabbies and the tutorial cast wear. A second,
+	// unidentified template predicate sits beside it in retail and is omitted — named on
+	// `ElysiumReactions::IsKnockbackAllowed`.
+	if (!ElysiumReactions::IsKnockbackAllowed(IsAliveForCombat(Victim),
+		Victim.DisallowsKnockbacks()))
+	{
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s -> %s hit/knockback: %s is not eligible to be knocked back"),
+			*Attacker.DebugString(), *Victim.DebugString(), *Victim.DebugString());
+		return;
+	}
+
+	const float VictimYaw = ElysiumSkeletalBasis::FromSourceAngles(Victim.Angles).Yaw;
+	ElysiumReactions::FElysiumKnockback Knockback;
+	ElysiumReactions::BuildKnockback(
+		ElysiumReactions::KnockbackAwayFrom(Attacker.Origin, Victim.Origin), VictimYaw, Knockback);
+
+	const TCHAR* const Activity = Knockback.Activity();
+	if (Activity == nullptr)
+	{
+		// Unreachable while the stand-in answers NORMAL/HIGH, and it must stay unreachable: `LOW` is
+		// authored on the `BACK` direction alone, so a selector that produced any other combination
+		// would be asking 155 bodies for a clip none of them carries.
+		UE_LOG(LogElysiumWeapon, Warning,
+			TEXT("%s -> %s selected a knockback cell the corpus does not author (relative yaw %.1f)"),
+			*Attacker.DebugString(), *Victim.DebugString(), Knockback.RelativeYawDegrees);
+		return;
+	}
+
+	// The yaw snap, BEFORE the clip is asked for, which is retail's own order: the authored cell is a
+	// model-space direction, so the body has to be facing the way that direction means before it
+	// plays. The door is the ordinary substrate facing writer — the same one the feed transaction
+	// aligns its pair with — so the authoritative `Angles` field moves and the body follows it.
+	// `Angles.Y` is Source yaw, which this runtime carries negated relative to Unreal's, so the write
+	// is negated once, here.
+	FVector Facing = Victim.Angles;
+	Facing.Y = -Knockback.SnapYawDegrees;
+	Victim.SetRuntimeAngles(Facing);
+
+	FElysiumReactionPlayRequest Reaction;
+	Reaction.Activity = Activity;
+	// The ideal-activity request walks the weapon ladder's availability probe, and it HAS to.
+	// `ElysiumWeaponActivityTables.cpp` declares all ten grounded cells as bases, and thirteen weapon
+	// ladders carry an explicit block-1 EXCEPTION row translating each of them to its
+	// `..._MELEESHARED_ONEHAND` spelling — a stated literal, not an inferred append. The corpus
+	// authors that spelling for the OLDER twelve knockback labels only; the ten bare cells exist bare
+	// on 155 bodies and suffixed on none (`docs/vtmb/animation_and_movers.md` § "The knockback and
+	// death corpus"). So an armed body's translated answer resolves nothing, and the probe's fourth
+	// rung — the original request — is the only thing that reaches the clip.
+	Reaction.bAllowFallbackLadder = true;
+	// No steering angle. A knockback is four authored cells, not a fan: the direction is IN the cell
+	// name and the yaw snap above is what aims it, so `hit_yaw` stays at its resting value the way
+	// the block family's does.
+	//
+	// No stated blend either — all 1,550 grounded knockback rows set `flags & 0x2`, so the whole
+	// family is a hard cut and the resolved clip's own fade is already zero.
+	float Held = 0.0f;
+	if (!Victim.PlayReactionActivity(Reaction, &Held))
+	{
+		// The named miss is already on the resolver's own selection record.
+		return;
+	}
+
+	// The base channel is held for as long as the cell runs — the same claim the block family takes,
+	// on the same channel and for the same reason: the flinch the damage below commits yields to a
+	// knockback already on screen rather than replacing it.
+	Victim.HoldBaseForMeleeReaction(World->NowSeconds() + static_cast<double>(Held));
+
+	UE_LOG(LogElysiumWeapon, Verbose,
+		TEXT("%s -> %s knocked back: %s (away yaw %.1f, relative %.1f, snapped to %.1f%s, holds %.3f s)"),
+		*Attacker.DebugString(), *Victim.DebugString(), Activity, Knockback.AwayWorldYawDegrees,
+		Knockback.RelativeYawDegrees, Knockback.SnapYawDegrees,
+		Knockback.bFallbackCell ? TEXT(", degenerate -> fallback cell") : TEXT(""), Held);
 }
 
 void FElysiumWeapon::RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,

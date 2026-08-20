@@ -176,6 +176,11 @@ struct FElysiumItemDef
 	// key here keeps the documented join and changes no shipped behaviour.
 	bool bDisallowFirearmsToBashing = false;
 
+	// `knockback_chance` is deliberately NOT read. Sixteen shipped weapon definitions author it, but
+	// retail parses the key and no gameplay path ever reads it back: the melee knockback is admitted
+	// by the `rules.txt` margin band alone. It is a dead field, and it is left unparsed for the same
+	// reason `MajorKnockbackDist`/`MinorKnockbackDist` are — a field with no consumer is not a field.
+
 	// --- The `Activation` blocks — the weapon modes ---------------------------------------------
 	TArray<FElysiumWeaponMode> Modes;
 

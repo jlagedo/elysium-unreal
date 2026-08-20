@@ -59,6 +59,7 @@ void FElysiumNpc::ApplyResolvedTemplate(const FElysiumClanTemplate& Resolved,
 	bFastFood = Resolved.GeneralInt(TEXT("FastFood")) != 0;
 	bHasKindredTemplate = true;
 	bKindredTemplate = Resolved.GeneralInt(TEXT("Kindred")) != 0;
+	bDisallowKnockbacks = Resolved.GeneralInt(TEXT("Disallow_Knockbacks")) != 0;
 
 	// The authored damage filters, kept as the template states them. Nothing multiplies them
 	// yet — the resolver only accumulates them onto the descriptor (`ElysiumDamage::Apply`
@@ -2548,6 +2549,7 @@ void FElysiumNpc::SeedSheet()
 	bFastFood = false;
 	bHasKindredTemplate = false;
 	bKindredTemplate = false;
+	bDisallowKnockbacks = false;
 	for (bool& bHas : bHasDamageFilter) { bHas = false; }
 	if (!Table)
 	{

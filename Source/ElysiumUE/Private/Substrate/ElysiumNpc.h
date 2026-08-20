@@ -123,6 +123,10 @@ public:
 	// An NPC with no resolved template falls back to the chain's clan-slot answer.
 	bool bKindredTemplate = false;
 	bool bHasKindredTemplate = false;
+	// Inherited General.Disallow_Knockbacks — the authored refusal eight template files set on the
+	// zombies, the cabbie, the crackhouse and tutorial casts and the bomberman. It is the one
+	// recovered half of the knockback's template eligibility (`Substrate/ElysiumReactions.h`).
+	bool bDisallowKnockbacks = false;
 	// Inherited General.DamageFilter{Bashing,Lethal,Aggravated,Flame}. Authored as float
 	// multipliers; absent means the template authors no filter for that family.
 	float DamageFilters[4] = { 0.f, 0.f, 0.f, 0.f };
@@ -189,6 +193,8 @@ public:
 
 	virtual bool GetTemplateDamageFilter(EElysiumDmgFamily Family, bool bFlame,
 		float& OutFilter) const override;
+
+	virtual bool DisallowsKnockbacks() const override { return bDisallowKnockbacks; }
 
 	// Retail's NPC override saves the complete incoming damage packet before composing the base
 	// transaction, and a surviving positive hit remembers its attacker. This is that record; the
