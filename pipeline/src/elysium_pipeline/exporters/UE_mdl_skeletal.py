@@ -31,6 +31,10 @@ bytes, unterminated.
             chainCount x { string firstBone, string chainEnd,
                            f32 gravityScale, f32 damping,
                            f32 angularSpring, f32 coneAngleDegrees }
+    "BDYN"  u32 bodyCount
+            bodyCount x { string boundBone,
+                           f32 gravityScale, f32 damping,
+                           f32 angularSpring, f32 coneAngleDegrees }
     "MATL"  u32 materialCount
             materialCount x { string name, string albedo }             albedo relative to the
                                                                        export root, "" if none
@@ -1205,6 +1209,11 @@ def _dynamics_section(model_path, blob, bones):
     return bytes(out), len(chains)
 
 
+def _breast_section(_model_path, _blob, _bones):
+    """Single-body breast recipes. Disabled: the host is not shipping them."""
+    return b"", 0
+
+
 def _write_container(path, blob):
     """Write one `.eskm`, skipping a byte-identical rewrite.
 
@@ -1269,6 +1278,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
 
     rows, bone_map, reparented = unreal_bones(bones)
     dynamics_payload, dynamics_count = _dynamics_section(model_path, d, bones)
+    breast_payload, breast_count = _breast_section(model_path, d, bones)
     mesh_payload, offsets = _mesh_section(surfaces, matnames, bone_map)
     morph_payload, morph_names = (_morph_section(d, mesh_map, matnames, offsets, anorms)
                                   if anorms and S.flex_descs(d) else (b"", []))
@@ -1286,6 +1296,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
         (b"SKEL", _skel_section(_ref_pose_rows(rows, bone_map, ref_pose, model_path, reparented))),
         (b"ATCH", _attachment_section(d, bone_map)),
         (b"DYNM", dynamics_payload),
+        (b"BDYN", breast_payload),
         (b"MATL", _matl_section(matnames, matinfo)),
         (b"MESH", mesh_payload),
         (b"MORF", morph_payload),
@@ -1298,12 +1309,13 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
     triangles = sum(len(s["tris"]) for s in surfaces.values())
     vertices = sum(len(s["pos"]) for s in surfaces.values())
     print(f"  eskm {stem}: {len(bones)} bones, {vertices} verts, {triangles} tris, "
-          f"{len(morph_names)} morphs, {clip_count} clips, {dynamics_count} hair POC chain(s) "
+          f"{len(morph_names)} morphs, {clip_count} clips, {dynamics_count} hair POC chain(s), "
+          f"{breast_count} breast body(ies) "
           f"-> {path} ({os.path.getsize(path) // 1024} KB)")
     return dict(stem=stem, eskm=os.path.basename(path), model=model_path,
                 bones=len(bones), vertices=vertices, triangles=triangles,
                 morphs=morph_names, materials=matnames, clips=clip_count,
-                hair_dynamics=dynamics_count)
+                hair_dynamics=dynamics_count, breast_dynamics=breast_count)
 
 
 def write_bank(idx, model_path, out_dir, stem):

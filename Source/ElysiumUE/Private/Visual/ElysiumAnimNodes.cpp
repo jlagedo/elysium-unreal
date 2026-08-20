@@ -27,6 +27,31 @@ namespace
 
 // --- stock AnimDynamics hair proof -------------------------------------------------------------
 
+namespace
+{
+	void ApplyBodyBox(FAnimPhysBodyDefinition& Body, const FReferenceSkeleton& ReferenceSkeleton,
+		float ConeAngleDegrees)
+	{
+		const int32 BoneIndex = ReferenceSkeleton.FindBoneIndex(Body.BoundBone.BoneName);
+		FVector Segment = FVector::ZeroVector;
+		if (BoneIndex != INDEX_NONE)
+		{
+			Segment = ReferenceSkeleton.GetRefBonePose()[BoneIndex].GetTranslation();
+		}
+		const float Length = FMath::Max(static_cast<float>(Segment.Size()), 2.0f);
+		Body.BoxExtents = FVector(Length * 0.5f, 1.5f, 1.5f);
+		Body.LocalJointOffset = FVector(Length * 0.5f, 0.0f, 0.0f);
+		Body.ConstraintSetup.bLinearFullyLocked = true;
+		Body.ConstraintSetup.LinearAxesMin = FVector::ZeroVector;
+		Body.ConstraintSetup.LinearAxesMax = FVector::ZeroVector;
+		Body.ConstraintSetup.AngularConstraintType = AnimPhysAngularConstraintType::Cone;
+		Body.ConstraintSetup.TwistAxis = AnimPhysTwistAxis::AxisX;
+		Body.ConstraintSetup.AngularTargetAxis = AnimPhysTwistAxis::AxisX;
+		Body.ConstraintSetup.AngularTarget = FVector::XAxisVector;
+		Body.ConstraintSetup.ConeAngle = ConeAngleDegrees;
+	}
+}
+
 void FAnimNode_ElysiumHairDynamics::Configure(
 	const FElysiumHairDynamicsChainConfig& Config, const FReferenceSkeleton& ReferenceSkeleton)
 {
@@ -89,6 +114,40 @@ void FAnimNode_ElysiumHairDynamics::Configure(
 		Body.ConstraintSetup.AngularTarget = FVector::XAxisVector;
 		Body.ConstraintSetup.ConeAngle = Config.ConeAngleDegrees;
 	}
+	RequestInitialise(ETeleportType::ResetPhysics);
+}
+
+void FAnimNode_ElysiumHairDynamics::ConfigureBody(
+	const FElysiumHairDynamicsBodyConfig& Config, const FReferenceSkeleton& ReferenceSkeleton)
+{
+	BoundBone.BoneName = Config.BoundBone;
+	ChainEnd.BoneName = Config.BoundBone;
+	bChain = false;
+	SimulationSpace = AnimPhysSimSpaceType::Component;
+	GravityScale = Config.GravityScale;
+	bOverrideLinearDamping = true;
+	bOverrideAngularDamping = true;
+	LinearDampingOverride = Config.Damping;
+	AngularDampingOverride = Config.Damping;
+	bAngularSpring = Config.AngularSpring > 0.0f;
+	AngularSpringConstant = Config.AngularSpring;
+	NumSolverIterationsPreUpdate = 8;
+	NumSolverIterationsPostUpdate = 2;
+	ComponentLinearAccScale = FVector::OneVector;
+	ComponentLinearVelScale = FVector::ZeroVector;
+	ComponentAppliedLinearAccClamp = FVector(2500.0);
+	SimSpaceSettings.SimSpaceAngularAlpha = 1.0f;
+	SimSpaceSettings.MaxAngularVelocity = 10.0f;
+	SimSpaceSettings.MaxAngularAcceleration = 100.0f;
+	bUsePlanarLimit = false;
+	bUseSphericalLimits = false;
+	bEnableWind = false;
+	LODThreshold = 2;
+
+	PhysicsBodyDefinitions.Reset();
+	FAnimPhysBodyDefinition& Body = PhysicsBodyDefinitions.AddDefaulted_GetRef();
+	Body.BoundBone.BoneName = Config.BoundBone;
+	ApplyBodyBox(Body, ReferenceSkeleton, Config.ConeAngleDegrees);
 	RequestInitialise(ETeleportType::ResetPhysics);
 }
 

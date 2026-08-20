@@ -22,6 +22,8 @@ struct FAnimNode_ElysiumHairDynamics : public FAnimNode_AnimDynamics
 
 	void Configure(const FElysiumHairDynamicsChainConfig& Config,
 		const FReferenceSkeleton& ReferenceSkeleton);
+	void ConfigureBody(const FElysiumHairDynamicsBodyConfig& Config,
+		const FReferenceSkeleton& ReferenceSkeleton);
 	void Apply(FComponentSpacePoseContext& Output);
 };
 

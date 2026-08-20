@@ -80,4 +80,74 @@ bool FElysiumHairDynamicsBakedScopeTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBreastDynamicsBakedScopeTest,
+	"Elysium.Content.Characters.BreastDynamicsBakedScope",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FElysiumBreastDynamicsBakedScopeTest::RunTest(const FString& Parameters)
+{
+	TestNull(TEXT("breast proof has no runtime feature CVar"),
+		IConsoleManager::Get().FindConsoleVariable(TEXT("elysium.BreastDynamics")));
+
+	USkeletalMesh* Jeanette = LoadObject<USkeletalMesh>(nullptr,
+		*FElysiumContentPaths::BakedCharacterMesh(TEXT("jeanette")),
+		nullptr, LOAD_NoWarn | LOAD_Quiet);
+	USkeletalMesh* Lily = LoadObject<USkeletalMesh>(nullptr,
+		*FElysiumContentPaths::BakedCharacterMesh(TEXT("lily")),
+		nullptr, LOAD_NoWarn | LOAD_Quiet);
+	if (Jeanette == nullptr && Lily == nullptr)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no breast body is baked; run a focused character export"));
+		return true;
+	}
+
+	if (Jeanette != nullptr)
+	{
+		const UElysiumHairDynamicsAssetUserData* Hair =
+			Cast<UElysiumHairDynamicsAssetUserData>(Jeanette->GetAssetUserDataOfClass(
+				UElysiumHairDynamicsAssetUserData::StaticClass()));
+		if (Hair == nullptr || Hair->Bodies.Num() == 0)
+		{
+			AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: jeanette is baked without breast bodies; re-export jeanette"));
+		}
+		else if (TestEqual(TEXT("jeanette has two breast bodies"), Hair->Bodies.Num(), 2))
+		{
+			TSet<FName> Names;
+			for (const FElysiumHairDynamicsBodyConfig& Body : Hair->Bodies)
+			{
+				Names.Add(Body.BoundBone);
+				TestTrue(TEXT("jeanette breast cone is within the bake ceiling"),
+					Body.ConeAngleDegrees >= 0.0f && Body.ConeAngleDegrees <= 90.0f);
+			}
+			TestTrue(TEXT("jeanette right breast"), Names.Contains(FName(TEXT("right breast"))));
+			TestTrue(TEXT("jeanette left breast"), Names.Contains(FName(TEXT("left breast"))));
+			TestEqual(TEXT("jeanette hair chains stay a pair"), Hair->Chains.Num(), 2);
+		}
+	}
+
+	if (Lily != nullptr)
+	{
+		const UElysiumHairDynamicsAssetUserData* Hair =
+			Cast<UElysiumHairDynamicsAssetUserData>(Lily->GetAssetUserDataOfClass(
+				UElysiumHairDynamicsAssetUserData::StaticClass()));
+		if (Hair == nullptr || Hair->Bodies.Num() == 0)
+		{
+			AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: lily is baked without breast bodies; re-export lily"));
+		}
+		else
+		{
+			TestEqual(TEXT("lily has two breast bodies"), Hair->Bodies.Num(), 2);
+			TestEqual(TEXT("lily carries no hair proof chains"), Hair->Chains.Num(), 0);
+			TSet<FName> Names;
+			for (const FElysiumHairDynamicsBodyConfig& Body : Hair->Bodies)
+			{
+				Names.Add(Body.BoundBone);
+			}
+			TestTrue(TEXT("lily BoobRight01"), Names.Contains(FName(TEXT("BoobRight01"))));
+			TestTrue(TEXT("lily BoobLeft03"), Names.Contains(FName(TEXT("BoobLeft03"))));
+		}
+	}
+	return true;
+}
+
 #endif

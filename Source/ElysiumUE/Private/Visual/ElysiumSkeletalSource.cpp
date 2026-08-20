@@ -285,6 +285,21 @@ namespace
 			Chain.ConeAngleDegrees = Cursor.Read<float>();
 		}
 	}
+
+	void ReadBreastDynamics(FCursor& Cursor, FElysiumSkeletalSource& Out)
+	{
+		const int32 Count = static_cast<int32>(Cursor.Read<uint32>());
+		Out.BreastDynamics.Reserve(FMath::Max(Count, 0));
+		for (int32 Index = 0; Index < Count && Cursor.IsValid(); ++Index)
+		{
+			FElysiumSourceAnimDynamicsBody& Body = Out.BreastDynamics.AddDefaulted_GetRef();
+			Body.BoundBone = FName(*Cursor.ReadString());
+			Body.GravityScale = Cursor.Read<float>();
+			Body.Damping = Cursor.Read<float>();
+			Body.AngularSpring = Cursor.Read<float>();
+			Body.ConeAngleDegrees = Cursor.Read<float>();
+		}
+	}
 }
 
 namespace
@@ -345,6 +360,7 @@ namespace
 	constexpr uint32 TagMask = 'K' << 24 | 'S' << 16 | 'A' << 8 | 'M';
 	constexpr uint32 TagAnim = 'M' << 24 | 'I' << 16 | 'N' << 8 | 'A';
 	constexpr uint32 TagDynm = 'M' << 24 | 'N' << 16 | 'Y' << 8 | 'D';
+	constexpr uint32 TagBdyn = 'N' << 24 | 'Y' << 16 | 'D' << 8 | 'B';
 
 	for (const FEntry& Entry : Directory)
 	{
@@ -369,6 +385,7 @@ namespace
 		case TagMask: ReadMasks(Section, Out); break;
 		case TagAnim: ReadClips(Section, Out); break;
 		case TagDynm: ReadHairDynamics(Section, Out); break;
+		case TagBdyn: ReadBreastDynamics(Section, Out); break;
 		default: continue;
 		}
 		if (!Section.IsValid())

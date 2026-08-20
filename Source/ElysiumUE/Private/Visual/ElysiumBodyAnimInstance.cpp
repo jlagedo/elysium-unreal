@@ -59,7 +59,7 @@ namespace
 
 	FAutoConsoleCommand GHairDynamicsReport(
 		TEXT("elysium.HairDynamicsReport"),
-		TEXT("Report installed stock AnimDynamics hair chains per body."),
+		TEXT("Report installed stock AnimDynamics hair chains and breast bodies per body."),
 		FConsoleCommandDelegate::CreateLambda([]()
 		{
 			int32 Bodies = 0;
@@ -75,10 +75,11 @@ namespace
 				const USkeletalMesh* Mesh = Owner != nullptr ? Owner->GetSkeletalMeshAsset() : nullptr;
 				++Bodies;
 				UE_LOG(LogElysiumComposition, Display,
-					TEXT("[hair-dynamics] instance=%s mesh=%s chains=%d"),
+					TEXT("[hair-dynamics] instance=%s mesh=%s chains=%d bodies=%d"),
 					*Instance->GetClass()->GetName(),
 					Mesh != nullptr ? *Mesh->GetName() : TEXT("<none>"),
-					Instance->GetHairDynamicsChainCount());
+					Instance->GetHairDynamicsChainCount(),
+					Instance->GetHairDynamicsBodyCount());
 			}
 			UE_LOG(LogElysiumComposition, Display,
 				TEXT("[hair-dynamics] %d posed body(ies)"), Bodies);
@@ -293,18 +294,26 @@ void FElysiumBodyAnimProxy::SetCompositionRig(TSharedPtr<const FElysiumCompositi
 
 void FElysiumBodyAnimProxy::SetHairDynamics(
 	const TArray<FElysiumHairDynamicsChainConfig>& InChains,
+	const TArray<FElysiumHairDynamicsBodyConfig>& InBodies,
 	const FReferenceSkeleton& ReferenceSkeleton)
 {
 	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
 	{
 		Node.TermPhysics();
 	}
-	HairDynamics.Reset(InChains.Num());
+	HairDynamics.Reset(InChains.Num() + InBodies.Num());
 	for (const FElysiumHairDynamicsChainConfig& Config : InChains)
 	{
 		FAnimNode_ElysiumHairDynamics& Node = HairDynamics.AddDefaulted_GetRef();
 		Node.Configure(Config, ReferenceSkeleton);
 	}
+	for (const FElysiumHairDynamicsBodyConfig& Config : InBodies)
+	{
+		FAnimNode_ElysiumHairDynamics& Node = HairDynamics.AddDefaulted_GetRef();
+		Node.ConfigureBody(Config, ReferenceSkeleton);
+	}
+	InstalledChainCount = InChains.Num();
+	InstalledBodyCount = InBodies.Num();
 	bHairNeedsInitialize = !HairDynamics.IsEmpty();
 }
 
@@ -354,15 +363,22 @@ int32 UElysiumBodyAnimInstance::GetResolvedAxisInterpRules() const
 
 void UElysiumBodyAnimInstance::SetHairDynamics(
 	const TArray<FElysiumHairDynamicsChainConfig>& InChains,
+	const TArray<FElysiumHairDynamicsBodyConfig>& InBodies,
 	const FReferenceSkeleton& ReferenceSkeleton)
 {
-	GetProxyOnGameThread<FElysiumBodyAnimProxy>().SetHairDynamics(InChains, ReferenceSkeleton);
+	GetProxyOnGameThread<FElysiumBodyAnimProxy>().SetHairDynamics(InChains, InBodies, ReferenceSkeleton);
 }
 
 int32 UElysiumBodyAnimInstance::GetHairDynamicsChainCount() const
 {
 	return const_cast<UElysiumBodyAnimInstance*>(this)
 		->GetProxyOnGameThread<FElysiumBodyAnimProxy>().NumHairDynamicsChains();
+}
+
+int32 UElysiumBodyAnimInstance::GetHairDynamicsBodyCount() const
+{
+	return const_cast<UElysiumBodyAnimInstance*>(this)
+		->GetProxyOnGameThread<FElysiumBodyAnimProxy>().NumHairDynamicsBodies();
 }
 
 bool UElysiumBodyAnimInstance::SetFlexController(const FString& Name, float Value)

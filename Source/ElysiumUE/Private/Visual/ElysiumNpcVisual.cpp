@@ -51,62 +51,77 @@ namespace ElysiumNpcVisual
 		{
 			return false;
 		}
-		if (!ProofStems.Contains(Stem.ToLower()))
-		{
-			UE_LOG(LogElysiumNpcVisual, Warning,
-				TEXT("Hair AnimDynamics metadata on out-of-scope body '%s' (%s); refusing it"),
-				*Stem, *Mesh->GetPathName());
-			return false;
-		}
-		if (Hair->Chains.IsEmpty())
-		{
-			UE_LOG(LogElysiumNpcVisual, Warning,
-				TEXT("Hair AnimDynamics metadata on '%s' carries no chains"), *Mesh->GetPathName());
-			return false;
-		}
-		const bool bExactSelection = Stem.Equals(TEXT("malkavian_female_armor_0"),
-			ESearchCase::IgnoreCase)
-			? Hair->Chains.Num() == 1
-				&& Hair->Chains[0].BoundBone == FName(TEXT("Bone05"))
-				&& Hair->Chains[0].ChainEnd == FName(TEXT("Bone09"))
-			: Hair->Chains.Num() == 2
-				&& Hair->Chains[0].BoundBone == FName(TEXT("Bone01"))
-				&& Hair->Chains[0].ChainEnd == FName(TEXT("Bone07"))
-				&& Hair->Chains[1].BoundBone == FName(TEXT("Bone09"))
-				&& Hair->Chains[1].ChainEnd == FName(TEXT("Bone13"));
-		if (!bExactSelection)
-		{
-			UE_LOG(LogElysiumNpcVisual, Warning,
-				TEXT("Hair AnimDynamics metadata on '%s' is outside the exact proof selection"),
-				*Mesh->GetPathName());
-			return false;
-		}
 
 		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
-		for (const FElysiumHairDynamicsChainConfig& Chain : Hair->Chains)
+		TArray<FElysiumHairDynamicsChainConfig> Chains;
+		if (!Hair->Chains.IsEmpty())
 		{
-			const int32 Bound = Ref.FindBoneIndex(Chain.BoundBone);
-			const int32 End = Ref.FindBoneIndex(Chain.ChainEnd);
-			bool bDescends = Bound != INDEX_NONE && End != INDEX_NONE && Bound != End;
-			for (int32 Bone = End; bDescends && Bone != Bound;)
-			{
-				Bone = Ref.GetParentIndex(Bone);
-				bDescends = Bone != INDEX_NONE;
-			}
-			const bool bFinite = FMath::IsFinite(Chain.GravityScale)
-				&& FMath::IsFinite(Chain.Damping)
-				&& FMath::IsFinite(Chain.AngularSpring)
-				&& FMath::IsFinite(Chain.ConeAngleDegrees);
-			if (!bDescends || !bFinite || Chain.GravityScale < 0.0f
-				|| Chain.Damping < 0.7f || Chain.Damping > 1.0f
-				|| Chain.AngularSpring < 0.0f
-				|| Chain.ConeAngleDegrees < 0.0f || Chain.ConeAngleDegrees > 90.0f)
+			const bool bProofStem = ProofStems.Contains(Stem.ToLower());
+			const bool bExactSelection = Stem.Equals(TEXT("malkavian_female_armor_0"),
+				ESearchCase::IgnoreCase)
+				? Hair->Chains.Num() == 1
+					&& Hair->Chains[0].BoundBone == FName(TEXT("Bone05"))
+					&& Hair->Chains[0].ChainEnd == FName(TEXT("Bone09"))
+				: Hair->Chains.Num() == 2
+					&& Hair->Chains[0].BoundBone == FName(TEXT("Bone01"))
+					&& Hair->Chains[0].ChainEnd == FName(TEXT("Bone07"))
+					&& Hair->Chains[1].BoundBone == FName(TEXT("Bone09"))
+					&& Hair->Chains[1].ChainEnd == FName(TEXT("Bone13"));
+			if (!bProofStem)
 			{
 				UE_LOG(LogElysiumNpcVisual, Warning,
-					TEXT("Hair AnimDynamics chain %s -> %s is invalid on '%s'"),
-					*Chain.BoundBone.ToString(), *Chain.ChainEnd.ToString(), *Mesh->GetPathName());
-				return false;
+					TEXT("Hair AnimDynamics chains on out-of-scope body '%s' (%s); dropping them"),
+					*Stem, *Mesh->GetPathName());
 			}
+			else if (!bExactSelection)
+			{
+				UE_LOG(LogElysiumNpcVisual, Warning,
+					TEXT("Hair AnimDynamics chains on '%s' are outside the exact proof selection"),
+					*Mesh->GetPathName());
+			}
+			else
+			{
+				bool bValid = true;
+				for (const FElysiumHairDynamicsChainConfig& Chain : Hair->Chains)
+				{
+					const int32 Bound = Ref.FindBoneIndex(Chain.BoundBone);
+					const int32 End = Ref.FindBoneIndex(Chain.ChainEnd);
+					bool bDescends = Bound != INDEX_NONE && End != INDEX_NONE && Bound != End;
+					for (int32 Bone = End; bDescends && Bone != Bound;)
+					{
+						Bone = Ref.GetParentIndex(Bone);
+						bDescends = Bone != INDEX_NONE;
+					}
+					const bool bFinite = FMath::IsFinite(Chain.GravityScale)
+						&& FMath::IsFinite(Chain.Damping)
+						&& FMath::IsFinite(Chain.AngularSpring)
+						&& FMath::IsFinite(Chain.ConeAngleDegrees);
+					if (!bDescends || !bFinite || Chain.GravityScale < 0.0f
+						|| Chain.Damping < 0.7f || Chain.Damping > 1.0f
+						|| Chain.AngularSpring < 0.0f
+						|| Chain.ConeAngleDegrees < 0.0f || Chain.ConeAngleDegrees > 90.0f)
+					{
+						UE_LOG(LogElysiumNpcVisual, Warning,
+							TEXT("Hair AnimDynamics chain %s -> %s is invalid on '%s'"),
+							*Chain.BoundBone.ToString(), *Chain.ChainEnd.ToString(),
+							*Mesh->GetPathName());
+						bValid = false;
+						break;
+					}
+				}
+				if (bValid)
+				{
+					Chains = Hair->Chains;
+				}
+			}
+		}
+
+		// Single-body breast recipes stay on the mesh if a bake wrote them; they are not installed.
+		const TArray<FElysiumHairDynamicsBodyConfig> Bodies;
+
+		if (Chains.IsEmpty() && Bodies.IsEmpty())
+		{
+			return false;
 		}
 
 		UElysiumBodyAnimInstance* const Instance =
@@ -117,7 +132,7 @@ namespace ElysiumNpcVisual
 				TEXT("Hair AnimDynamics body '%s' has no UElysiumBodyAnimInstance"), *Mesh->GetPathName());
 			return false;
 		}
-		Instance->SetHairDynamics(Hair->Chains, Ref);
+		Instance->SetHairDynamics(Chains, Bodies, Ref);
 		return true;
 	}
 

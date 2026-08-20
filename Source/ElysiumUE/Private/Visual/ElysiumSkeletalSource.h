@@ -129,6 +129,16 @@ struct FElysiumSourceHairDynamicsChain
 	float ConeAngleDegrees = 0.0f;
 };
 
+/** One baked-native single-body AnimDynamics recipe for a one-bone breast record. */
+struct FElysiumSourceAnimDynamicsBody
+{
+	FName BoundBone;
+	float GravityScale = 1.0f;
+	float Damping = 0.9f;
+	float AngularSpring = 0.0f;
+	float ConeAngleDegrees = 0.0f;
+};
+
 struct FElysiumSkeletalSource
 {
 	TArray<FElysiumSourceBone> Bones;
@@ -145,6 +155,8 @@ struct FElysiumSkeletalSource
 	TArray<FElysiumSourceClip> Clips;
 	/** Optional, exact-model allow-listed hair recipes; absent on every body outside the proof. */
 	TArray<FElysiumSourceHairDynamicsChain> HairDynamics;
+	/** Optional single-body breast recipes; absent on models that carry no one-bone breast row. */
+	TArray<FElysiumSourceAnimDynamicsBody> BreastDynamics;
 
 	/**
 	 * Read a whole `.eskm` off disk. Returns false with a reason in OutError; a truncated or

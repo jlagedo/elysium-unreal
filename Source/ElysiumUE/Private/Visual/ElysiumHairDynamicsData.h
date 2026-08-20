@@ -5,7 +5,7 @@
 
 #include "ElysiumHairDynamicsData.generated.h"
 
-/** A complete stock-AnimDynamics recipe; it contains no VtMB runtime rule. */
+/** A complete stock-AnimDynamics chain recipe; it contains no VtMB runtime rule. */
 USTRUCT()
 struct FElysiumHairDynamicsChainConfig
 {
@@ -19,7 +19,20 @@ struct FElysiumHairDynamicsChainConfig
 	UPROPERTY() float ConeAngleDegrees = 0.0f;
 };
 
-/** Generated skeletal-mesh metadata carried only by the two hair proof bodies. */
+/** A complete stock-AnimDynamics single-body recipe for a one-bone breast record. */
+USTRUCT()
+struct FElysiumHairDynamicsBodyConfig
+{
+	GENERATED_BODY()
+
+	UPROPERTY() FName BoundBone;
+	UPROPERTY() float GravityScale = 1.0f;
+	UPROPERTY() float Damping = 0.9f;
+	UPROPERTY() float AngularSpring = 0.0f;
+	UPROPERTY() float ConeAngleDegrees = 0.0f;
+};
+
+/** Generated skeletal-mesh metadata for stock AnimDynamics recipes on a body. */
 UCLASS()
 class UElysiumHairDynamicsAssetUserData : public UAssetUserData
 {
@@ -27,4 +40,5 @@ class UElysiumHairDynamicsAssetUserData : public UAssetUserData
 
 public:
 	UPROPERTY() TArray<FElysiumHairDynamicsChainConfig> Chains;
+	UPROPERTY() TArray<FElysiumHairDynamicsBodyConfig> Bodies;
 };

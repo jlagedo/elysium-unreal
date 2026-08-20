@@ -561,10 +561,10 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		PlacedAttachments.Add(SocketName, AttachmentIndex);
 	}
 
-	// The optional hair proof recipe is generated content on the mesh, not a runtime VtMB table.
-	// Validate the named route before serialising it: a typo must fail the bake instead of turning
-	// into a plausible still hairstyle at runtime.
-	if (!Source.HairDynamics.IsEmpty())
+	// Optional stock-AnimDynamics recipes are generated content on the mesh, not a runtime VtMB
+	// table. Validate named bones before serialising: a typo must fail the bake instead of a
+	// still chain or chest at runtime.
+	if (!Source.HairDynamics.IsEmpty() || !Source.BreastDynamics.IsEmpty())
 	{
 		UElysiumHairDynamicsAssetUserData* Hair =
 			NewObject<UElysiumHairDynamicsAssetUserData>(Mesh);
@@ -602,6 +602,33 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 			Chain.Damping = SourceChain.Damping;
 			Chain.AngularSpring = SourceChain.AngularSpring;
 			Chain.ConeAngleDegrees = SourceChain.ConeAngleDegrees;
+		}
+		Hair->Bodies.Reserve(Source.BreastDynamics.Num());
+		for (const FElysiumSourceAnimDynamicsBody& SourceBody : Source.BreastDynamics)
+		{
+			const int32 Bound = RefSkeleton.FindBoneIndex(SourceBody.BoundBone);
+			const bool bFinite = FMath::IsFinite(SourceBody.GravityScale)
+				&& FMath::IsFinite(SourceBody.Damping)
+				&& FMath::IsFinite(SourceBody.AngularSpring)
+				&& FMath::IsFinite(SourceBody.ConeAngleDegrees);
+			if (Bound == INDEX_NONE || !bFinite
+				|| SourceBody.GravityScale < 0.0f
+				|| SourceBody.Damping < 0.7f || SourceBody.Damping > 1.0f
+				|| SourceBody.AngularSpring < 0.0f
+				|| SourceBody.ConeAngleDegrees < 0.0f
+				|| SourceBody.ConeAngleDegrees > 90.0f)
+			{
+				return FString::Printf(
+					TEXT("%s: invalid AnimDynamics breast recipe %s"),
+					*SourcePath, *SourceBody.BoundBone.ToString());
+			}
+
+			FElysiumHairDynamicsBodyConfig& Body = Hair->Bodies.AddDefaulted_GetRef();
+			Body.BoundBone = SourceBody.BoundBone;
+			Body.GravityScale = SourceBody.GravityScale;
+			Body.Damping = SourceBody.Damping;
+			Body.AngularSpring = SourceBody.AngularSpring;
+			Body.ConeAngleDegrees = SourceBody.ConeAngleDegrees;
 		}
 		Mesh->AddAssetUserData(Hair);
 	}
