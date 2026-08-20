@@ -67,8 +67,24 @@ namespace ElysiumAnimGraph
 	// Retail's `flags & 0x400` flips the combine from `max` to `min`; no shipped sequence sets it,
 	// so that branch is unreachable and is not reproduced.
 	//
-	// `Outgoing` is null for a body that has not played anything yet, which takes the incoming fade
-	// alone rather than pretending the previous clip authored a zero.
+	// **A null `Outgoing` is the second refusal, not a missing operand.** Retail's first gate is
+	// `if (!out || !in || (in->flags & 0x2)) return 0.0f;` (`FUN_1008de30` at `0x1008de4d`, recorded
+	// in `docs/vtmb/animation_and_movers.md` A.4c), so an absent outgoing descriptor is ranked WITH
+	// the hard cut and answers zero — which is why the two are one condition here.
+	//
+	// It is also the only answer that poses correctly. A body that has published nothing has an
+	// un-entered state machine, whose un-published pin evaluates to the skeleton's bind pose; a
+	// non-zero fade therefore inertializes the first real clip up out of a T-pose for the whole
+	// duration on map load.
+	//
+	// `UElysiumBipedAnimInstance::PlayOneShot` refuses the same hazard on the montage path, but on a
+	// STRICTER predicate: `bGraphPosesAnAsset` asks what the machine is evaluating, where this asks
+	// only whether anything has been published. The two differ on one body — a first publish whose
+	// record resolved no clip is still a publish, so the generation after it presents a non-null
+	// outgoing descriptor while the machine underneath is still posing the bind pose. Widening this
+	// gate to the montage path's predicate needs the applied record's own posed-an-asset verdict
+	// latched at publish time; `FElysiumAnimationSelection::AssetKind` is not that verdict, because
+	// the assets are resolved beside the record and either can be absent while the other is not.
 	float TransitionSeconds(const FElysiumAnimationSelection* Outgoing,
 		const FElysiumAnimationSelection& Incoming);
 

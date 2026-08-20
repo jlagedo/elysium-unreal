@@ -57,6 +57,37 @@ struct FElysiumOneShotReport
 	float RemainingSeconds = -1.0f;
 };
 
+// What the graph can say back about the last REAL transition it asked for — one record per blend
+// requested, never per frame.
+//
+// A blend is decided in exactly one place (a new generation on the applied record), and the answer
+// is otherwise unobservable: `RequestSlotGroupInertialization` returns nothing, and the pose it
+// produces is a fade a reader cannot distinguish from a correct hard cut after the fact. So the
+// decision is recorded where it is made rather than sampled afterward.
+//
+// Generation-stamped for the same reason `FElysiumOneShotReport` is: the record describes the
+// transition INTO that generation, so a reader can tell a stale readout from a live one.
+struct FElysiumBlendReport
+{
+	uint32 Generation = 0;
+	// What was actually handed to the inertializer, after the combine and both refusals.
+	float RequestedSeconds = 0.0f;
+	// Zero seconds for a stated reason. `flags & 0x2` on the incoming clip is an authored hard cut.
+	bool bSnap = false;
+	// The other zero: nothing had been published, so there was no outgoing clip to fade FROM. It is
+	// carried rather than inferred from an empty `FromAnimation`, which a record that resolved no
+	// clip also leaves empty.
+	bool bFirstPublish = false;
+	// Whether the machine was leaving one state or re-entering the one it was already in — the same
+	// `bStateChanged` the graph reads, captured at the moment the blend was asked for.
+	bool bStateTransition = false;
+	FString FromAnimation;
+	FString ToAnimation;
+	// World seconds when the transition was requested. Negative is "no transition yet", the same
+	// "never" sentinel every aged readout in this repo uses; printing it as an age would read as a bug.
+	double StampSeconds = -1.0;
+};
+
 // One reaction, whole, as the graph's reaction branch needs it (LIFE5).
 //
 // **`Space` and `Sequence` are never both set**, the same "exactly one of these two" shape the base
@@ -350,6 +381,11 @@ public:
 	// next publish, so the latch consumes a report describing the request it is about to advance past.
 	const FElysiumOneShotReport& GetOneShotReport() const { return OneShot; }
 
+	// The last real transition this instance asked the inertializer for. Not a per-frame sample: it
+	// stands until the next generation change, which is what makes a settled body's readout describe
+	// the blend that produced the pose on screen rather than an empty current frame.
+	const FElysiumBlendReport& GetBlendReport() const { return Blend; }
+
 	// The last record this instance was handed, for the debug surface.
 	const FElysiumAnimationSelection& GetAppliedSelection() const { return Applied; }
 
@@ -555,4 +591,5 @@ private:
 	// asset, and a defect restated every frame by every body drowns the log it is meant to reach.
 	bool bReportedMissingMachine = false;
 	FElysiumOneShotReport OneShot;
+	FElysiumBlendReport Blend;
 };

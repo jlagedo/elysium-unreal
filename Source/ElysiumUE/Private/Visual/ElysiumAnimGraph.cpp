@@ -5,16 +5,16 @@ namespace ElysiumAnimGraph
 	float TransitionSeconds(const FElysiumAnimationSelection* Outgoing,
 		const FElysiumAnimationSelection& Incoming)
 	{
-		if (Incoming.bSnap)
+		// One gate with two operands, because retail evaluates them together: `FUN_1008de30` opens at
+		// `0x1008de4d` with `if (!out || !in || (in->flags & 0x2)) return 0.0f;`, ranking a missing
+		// outgoing descriptor WITH the hard cut rather than treating it as a fade of its own
+		// (`docs/vtmb/animation_and_movers.md` A.4c).
+		if (Incoming.bSnap || Outgoing == nullptr)
 		{
 			return 0.0f;
 		}
-		const float In = FMath::Max(0.0f, Incoming.FadeSeconds);
-		if (Outgoing == nullptr)
-		{
-			return In;
-		}
-		return FMath::Max(In, FMath::Max(0.0f, Outgoing->FadeSeconds));
+		return FMath::Max(FMath::Max(0.0f, Incoming.FadeSeconds),
+			FMath::Max(0.0f, Outgoing->FadeSeconds));
 	}
 
 	EElysiumGraphState StateForActivity(EElysiumAnimActivityCode Code)

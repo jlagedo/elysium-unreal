@@ -1935,10 +1935,12 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 		TestEqual(TEXT("the longest authored pair is the ceiling the asset bakes"),
 			TransitionSeconds(&Long, Long), TransitionCeilingSeconds);
 
-		// A fresh body has nothing to fade FROM. Taking a default-constructed record's zero would
-		// make the first clip of every map snap.
-		TestEqual(TEXT("a body that has played nothing takes the incoming fade alone"),
-			TransitionSeconds(nullptr, Idle), 0.3f);
+		// A fresh body has nothing to fade FROM, and retail refuses that outright: `FUN_1008de30`'s
+		// first gate is `!out || !in || (in->flags & 0x2)`, so a missing outgoing descriptor ranks
+		// with the hard cut. Fading instead is the T-pose defect — the un-entered state machine poses
+		// the bind pose, so a non-zero answer inertializes the first clip of every map up out of it.
+		TestEqual(TEXT("a body that has played nothing has nothing to fade from, so it snaps"),
+			TransitionSeconds(nullptr, Idle), 0.0f);
 
 		// `flags & 0x2`, the most common authored transition behaviour in the corpus, and a property
 		// of the clip being ENTERED rather than of whatever is running.
@@ -1947,6 +1949,11 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 			TransitionSeconds(&Long, Snap), 0.0f);
 		TestEqual(TEXT("and it is the incoming clip's property, so an outgoing snap does not cut"),
 			TransitionSeconds(&Snap, Long), 0.5f);
+
+		// The two refusals are independent operands of one gate, so neither may stand in for the
+		// other's absence: a hard cut arriving on a body that has played nothing still answers zero.
+		TestEqual(TEXT("both refusals at once still answer zero"),
+			TransitionSeconds(nullptr, Snap), 0.0f);
 	}
 
 	// --- The state projection ---------------------------------------------------------------------

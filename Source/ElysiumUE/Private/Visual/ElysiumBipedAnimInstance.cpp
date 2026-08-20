@@ -17,6 +17,7 @@
 #include "AnimNodes/AnimNode_LayeredBoneBlend.h"
 #include "AnimationRuntime.h"
 #include "BonePose.h"
+#include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumBipedGraph, Log, All);
@@ -579,9 +580,55 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		//
 		// A duration of 0 is a legal request rather than a refusal, so `flags & 0x2`'s hard cut falls
 		// out of the same call instead of needing a branch of its own.
-		const float Blend = ElysiumAnimGraph::TransitionSeconds(
+		const float BlendSeconds = ElysiumAnimGraph::TransitionSeconds(
 			bHasApplied ? &Applied : nullptr, Pending);
-		RequestSlotGroupInertialization(FAnimSlotGroup::DefaultGroupName, Blend);
+		RequestSlotGroupInertialization(FAnimSlotGroup::DefaultGroupName, BlendSeconds);
+
+		// The one place a blend is DECIDED, and the only place it is observable. Everything downstream
+		// is a fade already in progress, which on screen is indistinguishable from an authored hard cut
+		// or from a dropped blend — so the decision is recorded and logged here rather than sampled
+		// afterward from a pose that can no longer say which of the three it is.
+		//
+		// One line per real transition, never per frame: this branch is gated on the generation
+		// changing, so a body standing in one selection emits nothing however long it stands.
+		//
+		// The two operand strings are built inside the verbosity check rather than as arguments to
+		// it. `UE_LOG` evaluates its arguments only when the category is active, but a local built
+		// ahead of the macro allocates on every transition of every body whether anything is
+		// listening or not.
+		const bool bFirstPublish = !bHasApplied;
+		if (UE_LOG_ACTIVE(LogElysiumBipedGraph, Verbose))
+		{
+			const FString From = bFirstPublish
+				? FString(TEXT("(nothing)"))
+				: FString::Printf(TEXT("%s '%s' [%s]"),
+					Applied.ResolvedActivity.IsEmpty() ? TEXT("?") : *Applied.ResolvedActivity,
+					*Applied.AnimationName,
+					Applied.OwnerStem.IsEmpty() ? TEXT("?") : *Applied.OwnerStem);
+			const FString To = FString::Printf(TEXT("%s '%s' [%s]"),
+				Pending.ResolvedActivity.IsEmpty() ? TEXT("?") : *Pending.ResolvedActivity,
+				*Pending.AnimationName,
+				Pending.OwnerStem.IsEmpty() ? TEXT("?") : *Pending.OwnerStem);
+			UE_LOG(LogElysiumBipedGraph, Verbose,
+				TEXT("transition %s -> %s over %.3fs (%s%s)"),
+				*From, *To, BlendSeconds,
+				bStateChanged ? TEXT("state-transition") : TEXT("in-state"),
+				// The two zero-second answers named apart, because they are different facts about the
+				// same number: `flags & 0x2` is the incoming clip's authored hard cut, while a first
+				// publish simply has nothing to fade FROM (`ElysiumAnimGraph::TransitionSeconds`).
+				Pending.bSnap ? TEXT(", SNAP") : (bFirstPublish ? TEXT(", first publish") : TEXT("")));
+		}
+
+		Blend = FElysiumBlendReport();
+		Blend.Generation = Pending.Generation;
+		Blend.RequestedSeconds = BlendSeconds;
+		Blend.bSnap = Pending.bSnap;
+		Blend.bFirstPublish = bFirstPublish;
+		Blend.bStateTransition = bStateChanged;
+		Blend.FromAnimation = bFirstPublish ? FString() : Applied.AnimationName;
+		Blend.ToAnimation = Pending.AnimationName;
+		Blend.StampSeconds = GetWorld() != nullptr
+			? static_cast<double>(GetWorld()->GetTimeSeconds()) : -1.0;
 
 		Applied = Pending;
 		bHasApplied = true;

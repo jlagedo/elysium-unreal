@@ -27,6 +27,7 @@
 #include "DrawDebugHelpers.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkinnedAsset.h"
+#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
@@ -1709,6 +1710,48 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 	{
 		ImGui::TextColored(ElysiumCogStyle::ColOk, "playing '%s'",
 			COG_TCHAR_TO_CHAR(*Applied.AnimationName));
+	}
+
+	// --- the last real transition ----------------------------------------------------------------
+	//
+	// The blend that produced the pose on screen, not the current frame: a fade is over in a third of
+	// a second and is unobservable afterward, so the graph records the decision and this reads it
+	// back. `snap` is warned rather than dimmed for the same reason the held row above is — a correct
+	// hard cut and a dropped blend look exactly alike, and only the report says which one happened.
+	const FElysiumBlendReport& BlendReport = Graph->GetBlendReport();
+	if (BlendReport.StampSeconds < 0.0)
+	{
+		ImGui::TextDisabled("fade: no transition yet");
+	}
+	else
+	{
+		// Both zero-second answers are warned and NAMED, because "0.00s crossfade" is a contradiction
+		// on the row that exists to say which of the three happened: `flags & 0x2` is the incoming
+		// clip's authored hard cut, and a first publish had no outgoing clip to fade from at all.
+		if (BlendReport.bSnap)
+		{
+			ImGui::TextColored(ElysiumCogStyle::ColWarn, "fade: snap (authored hard cut)");
+		}
+		else if (BlendReport.bFirstPublish)
+		{
+			ImGui::TextColored(ElysiumCogStyle::ColWarn, "fade: snap (nothing to fade from)");
+		}
+		else
+		{
+			ImGui::Text("fade: %.2fs crossfade", BlendReport.RequestedSeconds);
+		}
+		ImGui::SameLine();
+		ImGui::Text("%s -> %s (%s)",
+			BlendReport.FromAnimation.IsEmpty()
+				? "nothing" : COG_TCHAR_TO_CHAR(*BlendReport.FromAnimation),
+			BlendReport.ToAnimation.IsEmpty()
+				? "nothing" : COG_TCHAR_TO_CHAR(*BlendReport.ToAnimation),
+			BlendReport.bStateTransition ? "state transition" : "in-state");
+		ImGui::SameLine();
+		const double NowSeconds = Graph->GetWorld() != nullptr
+			? static_cast<double>(Graph->GetWorld()->GetTimeSeconds()) : BlendReport.StampSeconds;
+		ImGui::TextColored(ElysiumCogStyle::ColDim, "%.2fs ago",
+			FMath::Max(0.0, NowSeconds - BlendReport.StampSeconds));
 	}
 
 	// --- the one-shot report the jump chain rides on --------------------------------------------
