@@ -104,6 +104,42 @@ bundle, generator, or another concrete unit. Prefer exact selectors and focused 
 never add `--force`, `--clean`, or a wider profile merely to obtain confidence. Report the
 remaining broader acceptance separately instead of silently running it.
 
+### Build slots: one engine install per concurrent checkout
+
+UnrealBuildTool takes a global single-instance mutex named from **its own assembly path**, so an
+engine installation builds one thing at a time and two checkouts sharing one installation wait for
+each other. Concurrency therefore comes from **build slots**: one complete engine installation per
+checkout that may build at the same time. The machine carries the primary installation plus
+sibling copies named with an `_agent<N>` suffix; each checkout names its own in
+`.elysium.local.env`, and `uv run elysium worktree status` reports which slot a task holds.
+
+- `worktree create --ue-root` assigns a slot and **refuses an installation another live checkout
+  already claims**. Omitting `--ue-root` inherits the primary's slot and warns, because those
+  builds then serialize.
+- `--build-jobs` writes `MaxParallelActions` into the checkout's own
+  `Saved/UnrealBuildTool/BuildConfiguration.xml`, which is the only scope that works: an installed
+  engine ignores its own `Engine/Saved` configuration, and the machine-wide `%APPDATA%` one is
+  shared by every slot. Slots are sized so their actions sum to roughly the logical core count.
+- Each checkout also gets its own UnrealBuildTool log, accelerator trace, and accelerator port.
+  Those default to one machine-wide file and a fixed port that every slot resolves identically, and
+  concurrent builds otherwise die racing the same log before reaching a compiler.
+- `worktree create` materializes the locked dependencies, so a new slot builds without a separate
+  setup step. Downloaded archives are addressed by their own hash and live in the **primary work
+  root's cache**, shared by every checkout, so a slot never re-fetches what the machine already has.
+
+**A secondary slot builds and runs focused automation tests. Export, bake, editor, play, debug,
+MCP, and authored-asset work run from the primary checkout**, which resolves to the primary
+installation — the export corpus, the baked `/ElysiumBaked` mount, and the warm derived-data cache
+all belong to it. `assert_primary_operation` enforces the checkout half, and configuration
+resolution enforces the installation half.
+
+Provisioning a slot copies the primary installation whole. **Directory exclusions must be
+path-anchored**: excluding `Intermediate`, `Saved`, or `DerivedDataCache` by name also removes the
+engine source modules that carry those names and the precompiled UnrealBuildTool rules assembly an
+installed engine refuses to regenerate, producing an installation that looks complete and fails at
+its first build. `validate_engine_root` rejects an installed engine whose rules assembly is
+missing, so a bad slot fails at `worktree create` rather than mid-build.
+
 ### Bring-your-own-game
 
 **Nothing game-sourced is committed.** The decoders read *the user's own VtMB install*; their
@@ -255,7 +291,9 @@ then use `uv run elysium` as the only public command surface.
 - `reconstruct [--clean] [--rebuild]` restores the complete project from its declared inputs.
 - `deps sync|check` restores or verifies pinned external plugins and fetched SDKs.
 - `doctor` checks repository policy, local paths, dependency ownership and generated prerequisites.
-- `worktree create|status|close` owns mutable, generated-state-isolated agent task worktrees.
+- `worktree create|status|close` owns mutable, generated-state-isolated agent task worktrees;
+  `create --ue-root <install> [--build-jobs N]` gives one its own build slot, and `close` prunes
+  a task whose checkout Git no longer owns.
 - `lane create|dispatch|status|mark` owns detached, generated-state-isolated QA worktrees.
 - `build [--rebuild|--clean|--analyze]` drives UnrealBuildTool.
 - `export grid|all` runs a complete profile; `export map|model|placed-model|bundle` handles focused work.

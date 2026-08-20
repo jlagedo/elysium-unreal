@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -55,6 +56,24 @@ def editor_executable(config, *, commandlet: bool = False) -> Path:
     return path
 
 
+#: Unreal Build Accelerator's own default, and the base of the per-checkout range below.
+ACCELERATOR_BASE_PORT = 1345
+ACCELERATOR_PORT_RANGE = 64
+
+
+def accelerator_port(config) -> int:
+    """One stable Unreal Build Accelerator port per checkout.
+
+    The accelerator's server binds a fixed port, so concurrent builds from different
+    engine copies collide on it. Deriving the port from the checkout path keeps a lane's
+    port stable across runs without any stored assignment.
+    """
+
+    seed = os.path.normcase(str(Path(config.repo_root).resolve())).encode("utf-8")
+    offset = int.from_bytes(hashlib.blake2b(seed, digest_size=2).digest(), "big")
+    return ACCELERATOR_BASE_PORT + (offset % ACCELERATOR_PORT_RANGE)
+
+
 def build(config, runner, mode: str = "", extra: Sequence[str] = ()) -> None:
     script = {
         "rebuild": "Rebuild.bat",
@@ -71,6 +90,17 @@ def build(config, runner, mode: str = "", extra: Sequence[str] = ()) -> None:
         f"-Project={config.project}",
         "-WaitMutex",
     ]
+    # UnrealBuildTool and its accelerator both default to one machine-wide log and trace
+    # under the user settings directory, which every engine copy resolves to the same path,
+    # and the accelerator's server always binds port 1345. Two checkouts building at once
+    # race to rotate the same log and die before reaching a compiler, so each checkout gets
+    # its own files and its own port.
+    log_root = getattr(config, "log_root", None)
+    if log_root is not None:
+        log_root.mkdir(parents=True, exist_ok=True)
+        arguments.append(f"-Log={log_root / 'UnrealBuildTool.log'}")
+        arguments.append(f"-UBATraceOutputFile={log_root / 'UnrealBuildAccelerator.uba'}")
+    arguments.append(f"-UBAPort={accelerator_port(config)}")
     if mode == "analyze":
         arguments.append("-StaticAnalyzer=Default")
     arguments.extend(extra)

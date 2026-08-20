@@ -11,7 +11,7 @@ under the repository's explicit authored-content namespace.
 ## Read first
 
 - **`docs/project/roadmap.md`** — the sole status and sequencing surface: the playable-path
-  ladder (PP0–PP6), phases P0–P13 and the CAP/ANM/CCC programmes as one-line task rows, the
+  ladder (PP0–PP6), phases P0–P13 and the LIFE/CCC programmes as one-line task rows, the
   pipeline + RE backlogs, and the risk register. While a task is open, its row links to its
   specification in **`docs/project/plans/<area>.md`**; a plan file carries specs only, never a
   status mark, and landing a task deletes its entry.
@@ -46,8 +46,10 @@ recreation. Three change layers, three rules:
   artist decision?* The **UI has no classic mode**: VtMB's screen structure is kept and
   re-skinned with vector type on a resolution-independent Slate/UMG stack — no VGUI port, no
   640×480 canvas, no `.fnt` bitmap atlas at runtime.
-- **Feel** (movement, camera, combat) — build the RE'd original first, keep it A/B-able, polish
-  one delta at a time by explicit owner call.
+- **Feel** (movement, camera, combat) — build the RE'd original first, polish one delta at a
+  time by explicit owner call. **No A/B mechanism, feature flag, or state-enabling cvar exists
+  without an explicit owner approval by name**; work lands as a complete change, and the
+  faithful behaviour stays recoverable through git history and the owning doc's record.
 - **Logic & content** (entity semantics, I/O, scripts, dialogue, stats, saves) — reproduce.
 
 **The governing rule: only change what we understand, and only on an explicit owner call.** RE
@@ -101,6 +103,42 @@ before exporting and ask the owner to name the scope: map, model, placed model, 
 bundle, generator, or another concrete unit. Prefer exact selectors and focused test filters;
 never add `--force`, `--clean`, or a wider profile merely to obtain confidence. Report the
 remaining broader acceptance separately instead of silently running it.
+
+### Build slots: one engine install per concurrent checkout
+
+UnrealBuildTool takes a global single-instance mutex named from **its own assembly path**, so an
+engine installation builds one thing at a time and two checkouts sharing one installation wait for
+each other. Concurrency therefore comes from **build slots**: one complete engine installation per
+checkout that may build at the same time. The machine carries the primary installation plus
+sibling copies named with an `_agent<N>` suffix; each checkout names its own in
+`.elysium.local.env`, and `uv run elysium worktree status` reports which slot a task holds.
+
+- `worktree create --ue-root` assigns a slot and **refuses an installation another live checkout
+  already claims**. Omitting `--ue-root` inherits the primary's slot and warns, because those
+  builds then serialize.
+- `--build-jobs` writes `MaxParallelActions` into the checkout's own
+  `Saved/UnrealBuildTool/BuildConfiguration.xml`, which is the only scope that works: an installed
+  engine ignores its own `Engine/Saved` configuration, and the machine-wide `%APPDATA%` one is
+  shared by every slot. Slots are sized so their actions sum to roughly the logical core count.
+- Each checkout also gets its own UnrealBuildTool log, accelerator trace, and accelerator port.
+  Those default to one machine-wide file and a fixed port that every slot resolves identically, and
+  concurrent builds otherwise die racing the same log before reaching a compiler.
+- `worktree create` materializes the locked dependencies, so a new slot builds without a separate
+  setup step. Downloaded archives are addressed by their own hash and live in the **primary work
+  root's cache**, shared by every checkout, so a slot never re-fetches what the machine already has.
+
+**A secondary slot builds and runs focused automation tests. Export, bake, editor, play, debug,
+MCP, and authored-asset work run from the primary checkout**, which resolves to the primary
+installation — the export corpus, the baked `/ElysiumBaked` mount, and the warm derived-data cache
+all belong to it. `assert_primary_operation` enforces the checkout half, and configuration
+resolution enforces the installation half.
+
+Provisioning a slot copies the primary installation whole. **Directory exclusions must be
+path-anchored**: excluding `Intermediate`, `Saved`, or `DerivedDataCache` by name also removes the
+engine source modules that carry those names and the precompiled UnrealBuildTool rules assembly an
+installed engine refuses to regenerate, producing an installation that looks complete and fails at
+its first build. `validate_engine_root` rejects an installed engine whose rules assembly is
+missing, so a bad slot fails at `worktree create` rather than mid-build.
 
 ### Bring-your-own-game
 
@@ -226,7 +264,7 @@ declared subtrackers. Cite a doc by name, with no date or task number attached.
 
 ## What runs today
 
-**Project priority and all task status: `docs/project/roadmap.md`**, including the CAP, ANM and
+**Project priority and all task status: `docs/project/roadmap.md`**, including the LIFE and
 CCC programme sections. Runtime types and where they live:
 `Source/ElysiumUE/CLAUDE.md`.
 
@@ -253,14 +291,16 @@ then use `uv run elysium` as the only public command surface.
 - `reconstruct [--clean] [--rebuild]` restores the complete project from its declared inputs.
 - `deps sync|check` restores or verifies pinned external plugins and fetched SDKs.
 - `doctor` checks repository policy, local paths, dependency ownership and generated prerequisites.
-- `worktree create|status|close` owns mutable, generated-state-isolated agent task worktrees.
+- `worktree create|status|close` owns mutable, generated-state-isolated agent task worktrees;
+  `create --ue-root <install> [--build-jobs N]` gives one its own build slot, and `close` prunes
+  a task whose checkout Git no longer owns.
 - `lane create|dispatch|status|mark` owns detached, generated-state-isolated QA worktrees.
 - `build [--rebuild|--clean|--analyze]` drives UnrealBuildTool.
 - `export grid|all` runs a complete profile; `export map|model|placed-model|bundle` handles focused work.
 - Export generates the required `/Game/Elysium`, `/Game/VtMB/**`, and
   `/ElysiumBaked/<map>/**` packages unless an explicit intermediate-only mode is selected.
 - `test [filter]` runs the `Substrate`, `Content`, or fully qualified automation tier.
-- `run editor|play` and `debug profile|probe|shots|move|greenroom|modelroom` expose the Unreal
+- `run editor|play` and `debug profile|probe|shots|move|cast|greenroom|modelroom` expose the Unreal
   development and acceptance harnesses.
 - `research <case>`, `ide vscode`, and `mcp` expose research, IDE and control tooling.
 

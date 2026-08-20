@@ -18,7 +18,12 @@ import typer
 from rich.console import Console
 
 from elysium_pipeline import lanes, task_worktrees
-from elysium_pipeline.config import ConfigError, ProjectConfig
+from elysium_pipeline.config import (
+    ConfigError,
+    ProjectConfig,
+    default_build_parallelism,
+    validate_engine_root,
+)
 from elysium_pipeline.dependencies import (
     DependencyError,
     check_dependencies,
@@ -271,6 +276,74 @@ def _execute(
     raise typer.Exit(code)
 
 
+def _shared_cache_root(config: ProjectConfig) -> Path | None:
+    """Downloaded dependency archives belong to the machine, not to one checkout.
+
+    A task worktree owns its own generated state, but a locked archive is byte-identical for
+    every checkout and is already addressed by its own hash, so giving each worktree a private
+    cache only buys a re-download. The primary work root holds the one copy.
+    """
+
+    task = task_worktrees.current_task_worktree(config.repo_root, config.work_root)
+    root = task.source_work_root if task is not None else config.work_root
+    return None if root is None else root / "cache"
+
+
+def _claimed_engines(config: ProjectConfig) -> dict[str, str]:
+    """Every engine copy a live checkout already builds against, keyed by normalised path."""
+
+    claims: dict[str, str] = {}
+    if config.ue_root is not None:
+        claims[os.path.normcase(str(config.ue_root))] = "the primary checkout"
+    if config.work_root is None:
+        return claims
+    for task in task_worktrees.task_worktree_records(config.repo_root, config.work_root):
+        if task.ue_root is not None and task.worktree.is_dir():
+            claims.setdefault(
+                os.path.normcase(str(task.ue_root)), f"task worktree {task.name!r}"
+            )
+    for lane in lanes.lane_records(config.work_root):
+        if lane.ue_root is not None and lane.worktree.is_dir():
+            claims.setdefault(os.path.normcase(str(lane.ue_root)), f"lane {lane.name!r}")
+    return claims
+
+
+def _assign_engine(config: ProjectConfig, override: Path | None, owner: str) -> Path:
+    """Choose the engine copy a new checkout builds against.
+
+    UnrealBuildTool's single-instance mutex is keyed on its own assembly path, so two
+    checkouts pointed at one engine copy wait for each other even though every other piece
+    of their state is separate. A dedicated copy is what makes their builds concurrent.
+    """
+
+    if config.ue_root is None:
+        raise RuntimeError(f"{owner} needs ELYSIUM_UE_ROOT")
+    if override is None:
+        console.print(
+            f"[yellow]warning:[/yellow] no --ue-root given, so {owner} shares "
+            f"{config.ue_root} with the primary checkout; their builds serialize on "
+            "UnrealBuildTool's global mutex"
+        )
+        return config.ue_root
+    engine = validate_engine_root(override)
+    owner_of_engine = _claimed_engines(config).get(os.path.normcase(str(engine)))
+    if owner_of_engine is not None:
+        raise RuntimeError(
+            f"{engine} is already the engine copy for {owner_of_engine}; give "
+            f"{owner} its own copy or its builds will serialize on UnrealBuildTool's "
+            "global mutex"
+        )
+    return engine
+
+
+def _resolve_build_jobs(build_jobs: int | None) -> int | None:
+    """The UBT action cap written into a new checkout, or None to leave UBT's heuristic."""
+
+    if build_jobs == 0:
+        return None
+    return default_build_parallelism() if build_jobs is None else build_jobs
+
+
 @worktree_app.command("create")
 def worktree_create(
     ctx: typer.Context,
@@ -281,19 +354,35 @@ def worktree_create(
         "--path",
         help="Worktree path; defaults to a sibling named <repo>-task-<name>.",
     ),
+    ue_root: Path | None = typer.Option(
+        None,
+        "--ue-root",
+        help="Dedicated engine copy for this task; required for builds that run "
+        "concurrently with the primary checkout.",
+    ),
+    build_jobs: int | None = typer.Option(
+        None,
+        "--build-jobs",
+        min=0,
+        help="UnrealBuildTool actions this task may run at once; 0 leaves UBT's own "
+        "heuristic in place. Defaults to one share of the machine.",
+    ),
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         if config.game_root is None or config.work_root is None or config.ue_root is None:
             raise RuntimeError("worktree creation needs the game, work, and UE roots")
+        engine = _assign_engine(config, ue_root, f"task worktree {name!r}")
+        jobs = _resolve_build_jobs(build_jobs)
         creation = task_worktrees.create_task_worktree(
             source_repo=config.repo_root,
             source_work_root=config.work_root,
             game_root=config.game_root,
-            ue_root=config.ue_root,
+            ue_root=engine,
             runner=runner,
             name=name,
             ref=at,
             worktree_path=path,
+            max_parallel_actions=jobs,
         )
         record = creation.record
         console.print(
@@ -301,13 +390,22 @@ def worktree_create(
             f"({record.base_commit[:12]})"
         )
         console.print(f"task work root: {record.work_root}")
+        console.print(f"task engine: {record.ue_root}")
+        console.print(
+            "task build parallelism: "
+            + ("UnrealBuildTool default" if jobs is None else f"{jobs} action(s)")
+        )
+        # A slot that cannot build yet is not a slot. Materializing the locked dependencies
+        # here leaves the checkout ready for `build` on its own, and the archives come from
+        # the shared cache rather than the network.
+        ready = sync_dependencies(record.worktree, cache_root=_shared_cache_root(config))
+        console.print(f"task dependencies: {', '.join(ready) or 'none locked'}")
         if creation.source_dirty:
             console.print(
                 "[yellow]warning:[/yellow] main has uncommitted changes; "
                 "the task worktree contains only the named commit"
             )
         console.print(f"assign the task agent to: {record.worktree}")
-        console.print("task agent setup: uv run elysium deps sync")
         console.print("allowed: incremental build and focused tests")
         console.print("main only: export, bake, editor, play, debug, gr, and mcp")
 
@@ -327,8 +425,10 @@ def _print_task_worktree_status(value: dict[str, Any]) -> None:
         f"{active.get('command', 'busy')} (pid {active.get('pid', '?')})"
     )
     console.print(f"{value['name']}: {value['worktree']}")
-    if value["missing"]:
-        console.print("  [red]checkout missing[/red]")
+    if value["missing"] or value["error"]:
+        detail = "checkout missing" if value["missing"] else value["error"]
+        console.print(f"  [red]{detail}[/red]")
+        console.print(f"  work root {value['work_root']}; close to prune it")
         return
     cleanliness = "clean" if not value["dirty"] else f"dirty ({len(value['dirty'])})"
     unlanded = value["unlanded_commits"]
@@ -338,6 +438,7 @@ def _print_task_worktree_status(value: dict[str, Any]) -> None:
         f"({cleanliness}, {landing})"
     )
     console.print(f"  activity {activity}; work root {value['work_root']}")
+    console.print(f"  engine {value['ue_root'] or 'inherited from the primary checkout'}")
 
 
 @worktree_app.command("status")
@@ -411,19 +512,35 @@ def lane_create(
     path: Path | None = typer.Option(
         None, "--path", help="Worktree path; defaults to a sibling named <repo>-<lane>."
     ),
+    ue_root: Path | None = typer.Option(
+        None,
+        "--ue-root",
+        help="Dedicated engine copy for this lane; required for builds that run "
+        "concurrently with the primary checkout.",
+    ),
+    build_jobs: int | None = typer.Option(
+        None,
+        "--build-jobs",
+        min=0,
+        help="UnrealBuildTool actions this lane may run at once; 0 leaves UBT's own "
+        "heuristic in place. Defaults to one share of the machine.",
+    ),
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         if config.game_root is None or config.work_root is None or config.ue_root is None:
             raise RuntimeError("lane creation needs the game, work, and UE roots")
+        engine = _assign_engine(config, ue_root, f"lane {name!r}")
+        jobs = _resolve_build_jobs(build_jobs)
         creation = lanes.create_lane(
             source_repo=config.repo_root,
             source_work_root=config.work_root,
             game_root=config.game_root,
-            ue_root=config.ue_root,
+            ue_root=engine,
             runner=runner,
             name=name,
             ref=at,
             worktree_path=path,
+            max_parallel_actions=jobs,
         )
         record = creation.record
         console.print(
@@ -431,6 +548,11 @@ def lane_create(
             f"({record.candidate_commit[:12]})"
         )
         console.print(f"lane work root: {record.work_root}")
+        console.print(f"lane engine: {record.ue_root}")
+        console.print(
+            "lane build parallelism: "
+            + ("UnrealBuildTool default" if jobs is None else f"{jobs} action(s)")
+        )
         if creation.source_dirty:
             console.print(
                 "[yellow]warning:[/yellow] the development checkout has changes; "
@@ -502,6 +624,7 @@ def _print_lane_status(value: dict[str, Any]) -> None:
         f"{value['baked_map_count']} baked map(s)"
     )
     console.print(f"  corpus {corpus}")
+    console.print(f"  engine {value['ue_root'] or 'inherited from the primary checkout'}")
     console.print(
         f"  evidence automated {value['automated']}; live {value['live']}"
         + (f"; {value['note']}" if value["note"] else "")
@@ -596,7 +719,7 @@ def lane_mark(
 @deps_app.command("sync")
 def deps_sync(ctx: typer.Context) -> None:
     def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
-        ready = sync_dependencies(config.repo_root, cache_root=config.cache_root)
+        ready = sync_dependencies(config.repo_root, cache_root=_shared_cache_root(config))
         console.print("dependencies ready: " + ", ".join(ready))
 
     _execute(
@@ -1089,7 +1212,7 @@ def reconstruct(
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager, unreal
 
-        ready = sync_dependencies(config.repo_root, cache_root=config.cache_root)
+        ready = sync_dependencies(config.repo_root, cache_root=_shared_cache_root(config))
         console.print("dependencies ready: " + ", ".join(ready))
         unreal.build(config, runner, "rebuild" if rebuild else "")
         maps = export_manager.export_profile(

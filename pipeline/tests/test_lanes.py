@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from elysium_pipeline import lanes
+from elysium_pipeline.config import UNREAL_BUILD_CONFIG
 from elysium_pipeline.process import ProcessRunner
 from elysium_pipeline.workspace_lock import (
     WorkspaceBusy,
@@ -68,6 +69,20 @@ class WorkspaceLeaseTests(unittest.TestCase):
             self.assertIsNone(active_lease(root))
 
 
+def make_engine(root: Path, name: str = "ue") -> Path:
+    """The two files `validate_engine_root` demands of an engine copy."""
+
+    engine = root / name
+    for relative in (
+        Path("Engine/Build/BatchFiles/Build.bat"),
+        Path("Engine/Binaries/Win64/UnrealEditor.exe"),
+    ):
+        path = engine / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("stub\n", encoding="utf-8")
+    return engine
+
+
 class LaneLifecycleTests(unittest.TestCase):
     def git(self, repository: Path, *arguments: str) -> str:
         result = subprocess.run(
@@ -86,7 +101,7 @@ class LaneLifecycleTests(unittest.TestCase):
         self.git(repository, "config", "user.name", "Lane Test")
         self.git(repository, "config", "user.email", "lane@example.invalid")
         (repository / ".gitignore").write_text(
-            ".elysium.local.env\nBinaries/\nPlugins/ElysiumBaked/Content/\n",
+            ".elysium.local.env\nBinaries/\nSaved/\nPlugins/ElysiumBaked/Content/\n",
             encoding="utf-8",
         )
         (repository / "ElysiumUE.uproject").write_text("{}\n", encoding="utf-8")
@@ -105,9 +120,9 @@ class LaneLifecycleTests(unittest.TestCase):
             source = self.make_repository(root)
             game = root / "game"
             work = root / "work"
-            ue = root / "ue"
-            for path in (game, work, ue):
+            for path in (game, work):
                 path.mkdir()
+            ue = make_engine(root)
             worktree = root / "qa-checkout"
             runner = ProcessRunner(cwd=source, output_sink=lambda _line: None)
 
@@ -119,6 +134,7 @@ class LaneLifecycleTests(unittest.TestCase):
                 runner=runner,
                 name="qa",
                 worktree_path=worktree,
+                max_parallel_actions=5,
             )
             record = creation.record
 
@@ -130,6 +146,13 @@ class LaneLifecycleTests(unittest.TestCase):
             environment = (worktree / ".elysium.local.env").read_text(encoding="utf-8")
             self.assertIn("ELYSIUM_LANE=qa", environment)
             self.assertIn(str(record.work_root), environment)
+            self.assertIn(f'ELYSIUM_UE_ROOT="{ue.resolve()}"', environment)
+            self.assertEqual(record.ue_root, ue.resolve())
+            self.assertEqual(lanes.LaneRecord.load(record.path).ue_root, ue.resolve())
+            self.assertIn(
+                "<MaxParallelActions>5</MaxParallelActions>",
+                (worktree / UNREAL_BUILD_CONFIG).read_text(encoding="utf-8"),
+            )
 
             (source / "tracked.txt").write_text("two\n", encoding="utf-8")
             self.git(source, "add", "tracked.txt")
