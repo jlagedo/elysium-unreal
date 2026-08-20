@@ -20,6 +20,7 @@ See `docs/project/rebuild-strategy.md` → *Menu — full-fidelity spec (M0)*, s
 | `DumpPyMethods.java` | ✅ | a CPython `PyMethodDef` table: name, `ml_doc`, thunk→body, then every body decompiled |
 | `DumpInitTable.java` | ✅ | every global constructor, ranked by data touched — the datamap and registration builders |
 | `DumpRtti.java`  | ✅ | the C++ class hierarchy with base displacements; labels each vftable with its owner |
+| `DumpDatamaps.java` | ✅ | every `datamap_t` in a module: class name, base chain, builder, record base and count |
 | `BuildCrtFid.java` | ✅ | populates a FID database from imported library objects (headless "Populate FidDb") |
 | `AttachFid.java` | ✅ | registers a FID database so the Function ID analyzer queries it; used as a pre-script |
 | `ApplyFid.java`  | ✅ | names a program's CRT functions from the database, for programs analyzed before it existed |
@@ -166,6 +167,43 @@ non-zero offset with its own locator, and its slots are reached through adjustor
 attributing an override by chasing thunk targets mis-assigns exactly those classes —
 four fifths of `client.dll`. `CAI_BaseHumanoid` is the worked example: vftables at `10497cd8`
 (+6576, `IAI_MovementSink`) and `10497cc0` (+24388, `CAI_ExpresserSink`).
+
+### The datamap census supplies `DumpDatamap`'s arguments
+
+`DumpDatamap` reads one map whose address is already known, and its `recs=`/`count=` have to be
+found first by xref'ing the builder. `DumpDatamaps` is the enumerating pass that removes that
+step: a map identifies itself in the un-run image even though its records do not, because
+`dataClassName` and `baseMap` are statically initialized while `dataDesc` and `dataNumFields`
+are written at static-init.
+
+So a scan for the shape recovers every class's map and the whole inheritance chain with no
+decompiler pass, and the builder is one xref away — it ends in `mov [map+4], <count>;
+mov [map], <recs>`, and both immediates read straight off the listing. The report emits the
+ready-to-run `parse_datamap_builder` line per class. On `vampire.dll` it reproduces the three
+maps recorded below exactly — `CBaseCombatCharacter` `1061664c` / recs `10616694` / 305,
+`CBasePlayer` `10580edc` / `10580f24` / 157, `CAI_BaseNPC` `105c9814` / `105c9874` / 102 — and
+finds 342 in total.
+
+**The `{zero, zero, name, base}` shape is not unique to `datamap_t`.** vgui's own chained
+per-class maps are identical in shape, and `GameUI.dll`, which defines no entity at all, is made
+entirely of them. A record array is what tells them apart, so a candidate is only labelled when
+one is substantiated — either a builder assigns it, or the image already holds it and the first
+`typedescription_t` carries a readable `internalName`. Everything else is listed in a separate
+section and labelled nothing, because naming one `datamap_t` would assert a type nothing
+establishes.
+
+| module | datamaps | unidentified name-and-base records |
+|---|---|---|
+| `vampire.dll` | 342 | 3 |
+| `client.dll` | 16 | 248 |
+| `engine.dll` | 1 | 21 |
+| `GameUI.dll` | 0 | 40 |
+| `vguimatsurface.dll` | 0 | 7 |
+
+Each map is labelled `datamap_<Class>` and its builder renamed `datamap_<Class>_builder`, so the
+constructor census's `staticinit_<hex>` entries become readable. A class may carry more than one
+map, and those labels are qualified by address. Re-running is idempotent, and a record the pass
+can no longer substantiate loses the label an earlier run gave it.
 
 ### Headless traps in this pipeline
 
