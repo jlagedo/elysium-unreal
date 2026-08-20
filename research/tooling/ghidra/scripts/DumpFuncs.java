@@ -17,7 +17,17 @@ import java.util.*;
 //   depth=<int>       callee recursion depth for seeds (default 1)
 //   cap=<int>         max functions to decompile (default 80)
 //   vtslots=<int>     max vtable slots to scan (default 48)
+//   crt=0             include library functions in callee recursion (default: skip them)
 public class DumpFuncs extends GhidraScript {
+
+    // The Function ID analyzer bookmarks every function it recognised from a library
+    // database, under this category and "Function ID Conflict" for ambiguous matches.
+    // A bookmarked function is Microsoft's C runtime, not Troika's code, so recursing
+    // into it spends the callee budget decompiling memcpy.
+    static final String FID_CATEGORY_PREFIX = "Function ID";
+
+    private boolean skipLibrary = true;
+    private int suppressed = 0;
 
     public void run() throws Exception {
         // Ghidra headless splits each "key=value" token on '=', so args arrive as
@@ -33,6 +43,7 @@ public class DumpFuncs extends GhidraScript {
         int depth   = Integer.parseInt(a.getOrDefault("depth", "1"));
         int cap     = Integer.parseInt(a.getOrDefault("cap", "80"));
         int vtslots = Integer.parseInt(a.getOrDefault("vtslots", "48"));
+        skipLibrary = !"0".equals(a.get("crt"));
         new File(outPath).getParentFile().mkdirs();
         PrintWriter out = new PrintWriter(new FileWriter(outPath));
 
@@ -85,6 +96,8 @@ public class DumpFuncs extends GhidraScript {
         }
 
         out.println("\n// " + targets.size() + " target functions (cap " + cap + ")");
+        if (suppressed > 0)
+            out.println("// " + suppressed + " library callees suppressed (pass crt=0 to include)");
 
         DecompInterface dec = new DecompInterface();
         dec.toggleCCode(true);
@@ -114,8 +127,20 @@ public class DumpFuncs extends GhidraScript {
         if (f == null || targets.containsKey(f)) return;
         targets.put(f, why);
         if (depth <= 0) return;
-        for (Function c : f.getCalledFunctions(monitor))
+        for (Function c : f.getCalledFunctions(monitor)) {
+            // Seeds and vtable slots are always honoured; only recursion is filtered,
+            // so asking for a CRT function by address still dumps it.
+            if (skipLibrary && isLibrary(c)) { suppressed++; continue; }
             addWithCallees(c, depth - 1, "callee<-" + f.getEntryPoint(), targets);
+        }
+    }
+
+    boolean isLibrary(Function f) {
+        for (Bookmark b : currentProgram.getBookmarkManager()
+                .getBookmarks(f.getEntryPoint(), BookmarkType.ANALYSIS)) {
+            if (b.getCategory() != null && b.getCategory().startsWith(FID_CATEGORY_PREFIX)) return true;
+        }
+        return false;
     }
 
     // Ghidra headless splits script args on ',' / ';' as well as '=', so a

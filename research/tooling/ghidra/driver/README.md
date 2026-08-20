@@ -18,8 +18,15 @@ See `docs/project/rebuild-strategy.md` → *Menu — full-fidelity spec (M0)*, s
 | `DumpConVars.java` | ✅ | the ConVar/ConCommand registration table: object address ↔ name ↔ default, for one ctor |
 | `MakeFuncs.java` | ✅ | promotes disassembled-but-unowned code into functions (CALL targets + post-padding starts) |
 | `DumpPyMethods.java` | ✅ | a CPython `PyMethodDef` table: name, `ml_doc`, thunk→body, then every body decompiled |
+| `DumpInitTable.java` | ✅ | every global constructor, ranked by data touched — the datamap and registration builders |
+| `DumpRtti.java`  | ✅ | the C++ class hierarchy with base displacements; labels each vftable with its owner |
+| `BuildCrtFid.java` | ✅ | populates a FID database from imported library objects (headless "Populate FidDb") |
+| `AttachFid.java` | ✅ | registers a FID database so the Function ID analyzer queries it; used as a pre-script |
+| `ApplyFid.java`  | ✅ | names a program's CRT functions from the database, for programs analyzed before it existed |
 | `parse_datamap_builder.py` | ✅ | reconstructs a `datamap_t` from its **decompiled builder** (the half an image read misses) |
+| `crt_fid.py`     | ✅ | builds the VC6 SP5 CRT database and applies it: `stage`, `build`, `apply` |
 | `run.ps1`        | ✅ | headless runner (import + post-script) |
+| `crt/`, `crtfid/`, `fid/` | ❌ gitignored | the staged Microsoft archives, their import projects, and the built `.fidb` |
 | `project/`       | ❌ gitignored | the analyzed Ghidra project DB (derived from the user's own binary) |
 | `$ELYSIUM_EXPORT_ROOT/`           | ❌ gitignored | decompilation dumps (game-derived) |
 
@@ -84,6 +91,94 @@ and Ghidra headless (splits on '='), so a `funcs=a;b` list arrives as separate
 tokens, silently mis-pairs every following `key=value`, and the run writes to the
 default `out=` path instead of yours. Invoke once per address and give each its
 own `out=`.
+
+## Preparing a program
+
+A freshly imported module is mostly `FUN_…`, and a large share of that is Microsoft's, not
+Troika's. Three passes make every later dump readable. They are one-time per program and
+persist in the project.
+
+```powershell
+uv run elysium research crt_fid stage          # unpack LIBC.LIB + LIBCMT.LIB, hash-verified
+uv run elysium research crt_fid build          # import, analyze and hash them into vc6sp5.fidb
+uv run elysium research crt_fid apply vampire.dll   # name the CRT, then census the constructors
+research/tooling/ghidra/driver/run.ps1 -Program vampire.dll -Script DumpRtti `
+  -ScriptArgs "out=…/rtti-vampire.dll.txt"     # class hierarchy + vftable labels
+```
+
+`build` takes about half an hour: each archive holds 638 COFF members and each becomes its own
+analyzed program. `apply` is a minute per module.
+
+**The CRT database is the VC6 SP5 one the game actually links**, built from the archives rather
+than from Ghidra's shipped approximations — which cover no VC6 service pack, and name 42
+functions in `vampire.dll` against this database's 207. `stage` verifies each archive's sha256
+before use, because a database built from the wrong service pack would describe a runtime the
+game does not link. The Microsoft archives are third-party reference material under
+`$ELYSIUM_WORK_ROOT`; they never enter the checkout.
+
+`run.ps1 -Import` attaches the database as a pre-script, so a module imported afterwards comes
+out of auto-analysis with its CRT already named and needs no `apply`. **The attachment does not
+survive the JVM** — Ghidra rewrites its preferences file at exit without the user-added-file
+keys — so the pre-script is load-bearing rather than belt-and-braces. `-NoFid` opts out;
+`-FidDb` points at another database.
+
+**`DumpFuncs` stops recursing at a library function.** It tests the Function ID analyzer's own
+bookmarks, so the test is exact rather than a name heuristic. Seeds and vtable slots are always
+honoured — only callee recursion is filtered, so asking for a CRT function by address still
+dumps it. `crt=0` includes them.
+
+### The constructor census beats grepping for a builder
+
+`DumpInitTable` reads the bounds `__cinit` hands to `__initterm` and enumerates every global
+constructor: 2393 in `vampire.dll`, 2071 in `client.dll`. Both names come from the FID pass, so
+the census cannot run on an unlabelled program — which is why `crt_fid apply` runs it second.
+
+The chain has two hops. A table slot points at an incremental-link thunk; the thunk reaches a
+16-byte per-variable initializer the compiler emitted; that initializer calls the real builder,
+again through a thunk. The census follows both and scores each initializer together with its
+direct callees, reporting whichever touches the most data. Ranking `vampire.dll` that way puts
+`FUN_1031a600` (`CBaseCombatCharacter`, 3686), `FUN_1015af10` (the player class, 1243) and
+`FUN_1027a820` (`CAI_BaseNPC`, 592) at ranks 1, 2 and 5, alongside unidentified builders of
+comparable weight — no string grep involved. Default-named initializers are renamed
+`staticinit_<hex>`, which shows up in every later dump; `name=0` censuses without writing.
+
+### RTTI gives every vftable an owner
+
+`DumpRtti` walks each complete object locator — stored in the slot *before* a vftable's first
+method — to the class hierarchy descriptor and its base array, then labels the vftable and gives
+it a plate comment carrying the base chain.
+
+| module | classes | multiple inheritance |
+|---|---|---|
+| `client.dll` | 1897 | 1556 |
+| `vampire.dll` | 875 | 192 |
+| `engine.dll` | 241 | 32 |
+| `GameUI.dll` | 123 | 2 |
+| `vguimatsurface.dll` | 19 | 0 |
+
+`MaterialSystem.dll`, `StudioRender.dll` and `stdshader_dx8.dll` carry **no RTTI at all** — built
+without `/GR`, zero type-descriptor strings in the image. The script says so explicitly, and
+raises an error in the other case (descriptors present, no locator parsed), because a bare zero
+cannot otherwise be told apart from a failed walk.
+
+Multiple inheritance is why the walk earns its keep. A secondary base's vftable sits at a
+non-zero offset with its own locator, and its slots are reached through adjustor thunks, so
+attributing an override by chasing thunk targets mis-assigns exactly those classes —
+four fifths of `client.dll`. `CAI_BaseHumanoid` is the worked example: vftables at `10497cd8`
+(+6576, `IAI_MovementSink`) and `10497cc0` (+24388, `CAI_ExpresserSink`).
+
+### Headless traps in this pipeline
+
+- **A COFF object carries no compiler identity**, so Ghidra's opinion service picks `gcc`. FID
+  refuses to build a library whose members disagree on compiler spec, which is how it surfaces.
+  Forcing `-Processor x86:LE:32:default -Cspec windows` on import fixes that *and* the members
+  the loader otherwise rejects outright.
+- **`analyzeHeadless.bat` exits 0 even when the analyzer aborts or a script throws.** The exit
+  code is not a result; `crt_fid.py` scans the log instead.
+- **`-process` matches only the project root without `-recursive`.** A program imported from a
+  container file nests under the container's own folders and is reported as not found.
+- **A `.lib` imports as a container**: `-Import <archive> -Recursive` descends it through
+  Ghidra's COFF archive filesystem, one program per member, no custom script needed.
 
 ## Disassembled ≠ owned (the plugin DLLs)
 
