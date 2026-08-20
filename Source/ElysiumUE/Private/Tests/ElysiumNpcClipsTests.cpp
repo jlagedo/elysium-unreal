@@ -42,6 +42,103 @@ namespace
 			"truncated":[0,0]
 		}
 	})");
+
+	// The tenth column: the authored swing-contact records. Two shipped shapes stand here — a
+	// sequence stating a reach, a reaction and its records, and one whose reaction column is the
+	// empty placeholder the exporter writes when only the records are stated. `degenerate` rides on
+	// `fists_attack_heavy`'s own backwards window, one of the four in the whole install.
+	const TCHAR* const GSwingSlice = TEXT(R"({
+		"stem":"swing_body",
+		"owners":["melee_bank"],
+		"activities":["ACT_MELEE_ATTACK"],
+		"fields":["owner","activity","weight","flags","frames","fps","fade","reach_cm",
+		          "blocked_reaction","swings"],
+		"clips":{
+			"nocolumn":[0,0,1,0,31,30.0,0.2,120.5,"ACT_BLOCKED_REACTION_LEFT"],
+			"nullcolumn":[0,0,1,0,31,30.0,0.2,120.5,"",null],
+			"emptycolumn":[0,0,1,0,31,30.0,0.2,120.5,"",[]],
+			"swing_two":[0,0,1,0,31,30.0,0.2,282.9939,"ACT_BLOCKED_REACTION_LEFT",[
+				{"start":0.2,"end":0.45,"bone":"Bip01 R Hand",
+				 "a_cm":[0.0,0.0,0.0],"b_cm":[27.94,-1.27,0.0],
+				 "kb_names":[["ACT_KNOCKBACK_BIGHIGHRIGHT_MELEESHARED_ONEHAND"],[],[],[]],
+				 "b8":3,"ba":255,"degenerate":false},
+				{"start":0.302,"end":0.0,"bone":"Bip01 L Hand",
+				 "a_cm":[1.0,2.0,3.0],"b_cm":[4.0,5.0,6.0],
+				 "kb_names":[[],[],[],[]],
+				 "b8":255,"ba":2,"degenerate":true}]]
+		}
+	})");
+}
+
+// The tenth column, and the compatibility rule behind it: absent, null and empty are one answer.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumClipsSwingColumnTest,
+	"Elysium.Substrate.Clips.SwingColumn", GElysiumTestFlags)
+bool FElysiumClipsSwingColumnTest::RunTest(const FString&)
+{
+	FElysiumNpcClipSet Set;
+	FString Error;
+	if (!TestTrue(TEXT("the synthetic slice parses"),
+		Set.LoadJsonText(TEXT("swing_body"), GSwingSlice, Error)))
+	{
+		AddError(FString::Printf(TEXT("slice refused: %s"), *Error));
+		return false;
+	}
+
+	// --- The column absent, null and empty are ONE answer: this clip has no contact --------------
+	// It is the whole compatibility rule. A slice written before the column existed ends at nine, and
+	// the guarded read has to leave it at "no records" rather than misread the row.
+	for (const TCHAR* Label : { TEXT("nocolumn"), TEXT("nullcolumn"), TEXT("emptycolumn") })
+	{
+		const FElysiumNpcClip* Clip = Set.Find(Label);
+		if (Clip == nullptr)
+		{
+			AddError(FString::Printf(TEXT("row '%s' did not parse"), Label));
+			return false;
+		}
+		TestTrue(FString::Printf(TEXT("'%s' states no swing records"), Label),
+			Clip->Swings.IsEmpty() && !Clip->HasSwings());
+		// The column the swings sit behind still reads, which is what proves the row was not shifted.
+		TestEqual(FString::Printf(TEXT("...with its reach still in the right column ('%s')"), Label),
+			Clip->ReachCm, 120.5f);
+	}
+
+	// --- The stated column, in full ---------------------------------------------------------------
+	const FElysiumNpcClip* Two = Set.Find(TEXT("swing_two"));
+	if (Two == nullptr || !TestEqual(TEXT("both records parse"), Two->Swings.Num(), 2))
+	{
+		return false;
+	}
+	const FElysiumSwingRecord& First = Two->Swings[0];
+	TestEqual(TEXT("the window's start"), First.Start, 0.2f);
+	TestEqual(TEXT("...and its end"), First.End, 0.45f);
+	TestEqual(TEXT("the bone the segment is stated in"), First.Bone, FString(TEXT("Bip01 R Hand")));
+	TestTrue(TEXT("the segment's endpoints are read verbatim, in centimetres"),
+		First.ACm.Equals(FVector::ZeroVector)
+		&& First.BCm.Equals(FVector(27.94, -1.27, 0.0), 0.001));
+	TestTrue(TEXT("the record states a sweepable segment"), First.HasSegment());
+	TestEqual(TEXT("all four direction buckets are kept, in file order"),
+		First.KnockbackNames.Num(), 4);
+	if (First.KnockbackNames.Num() == 4)
+	{
+		TestEqual(TEXT("...bucket 0 naming its one candidate"), First.KnockbackNames[0].Num(), 1);
+		TestTrue(TEXT("...and the three empty buckets holding their places"),
+			First.KnockbackNames[1].IsEmpty() && First.KnockbackNames[2].IsEmpty()
+			&& First.KnockbackNames[3].IsEmpty());
+	}
+	TestEqual(TEXT("the direction byte bucket 0 answers"), First.B8, 3);
+	TestEqual(TEXT("...and the unconditional-knockback marker byte"), First.Ba, 255);
+	TestFalse(TEXT("an ordinary window is not degenerate"), First.bDegenerate);
+
+	// --- The degenerate record, carried verbatim ---------------------------------------------------
+	// The file states it backwards and the export refuses to repair it, so the parser must not either.
+	const FElysiumSwingRecord& Second = Two->Swings[1];
+	TestTrue(TEXT("a backwards window is carried as written"),
+		Second.End < Second.Start && FMath::IsNearlyEqual(Second.Start, 0.302f));
+	TestTrue(TEXT("...and flagged rather than left to be inferred"), Second.bDegenerate);
+	TestEqual(TEXT("...with its own bone"), Second.Bone, FString(TEXT("Bip01 L Hand")));
+	TestEqual(TEXT("...and the marker byte the range test reads"), Second.Ba, 2);
+
+	return true;
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumClipsMeleeColumnsTest,

@@ -11,6 +11,8 @@
 #include "ElysiumEntityHandle.h"
 #include "ElysiumInteraction.h"
 #include "ElysiumLocomotionSample.h" // FElysiumLocomotionSample (returned by value)
+// The authored swing-contact record the clip seam below hands down, by array.
+#include "ElysiumSwingRecord.h"
 
 class FElysiumDlgConversation;
 class IElysiumCameraService;
@@ -207,6 +209,24 @@ public:
 // What it buys: a Substrate-tier test can drive a whole map's logic headlessly against a recording
 // stub — with no RHI, no actors and no `$ELYSIUM_EXPORT_ROOT` — which is the missing middle tier between
 // variant arithmetic and launching the game (Elysium.Substrate.WorldServices).
+
+// One sub-step of a melee swing's swept contact, as `QuerySwingContacts` takes it.
+//
+// The segment is the authored bone-local contact record placed in the world twice: where it was at
+// the start of the sub-step and where it is at its end. Both placements are the substrate's, built
+// from the bone's transform and the attacker's interpolated origin/facing, because the sub-step
+// rate is a game rule and the interpolation between two of them is arithmetic rather than a query.
+struct FElysiumSwingSweep
+{
+	// The swinging character, excluded from its own contact.
+	FElysiumEntityHandle Attacker;
+	// The segment's two endpoints at the sub-step's start, world centimetres.
+	FVector PrevA = FVector::ZeroVector;
+	FVector PrevB = FVector::ZeroVector;
+	// The same two endpoints at its end.
+	FVector CurA = FVector::ZeroVector;
+	FVector CurB = FVector::ZeroVector;
+};
 
 // --------------------------------------------------------------------------------------------
 // Embodiment — bodies, meshes, clips, skins, and the player's own body.
@@ -419,6 +439,21 @@ public:
 	{
 		return FString();
 	}
+
+	// The authored swing-contact records of the sequence this clip realizes — the descriptor's
+	// `+0x2C4`/`+0x2C8` array, read off the same `(stem, label)` key the blocked reaction above is
+	// (`docs/vtmb/combat-and-damage.md`). NULL is the ordinary answer and not a failure: 574 of the
+	// install's 14,012 descriptors declare records, so every other clip legitimately has none and a
+	// clip with none simply never opens a contact window.
+	//
+	// A pointer rather than a copy, on `GetNpcEventTimeline`'s contract: the clip vocabulary is
+	// cached whole and immutable by the animation subsystem, so this aliases storage that outlives
+	// the frame it was asked in, and a caller does not retain it across a map epoch.
+	virtual const TArray<FElysiumSwingRecord>* NpcClipSwings(const FString& Stem,
+		const FString& ClipLabel)
+	{
+		return nullptr;
+	}
 	// One model's disposition stance set: three idles, three fidgets and the 3x3 transition matrix
 	// for `AnimName`, with the precache fallbacks already applied. Resolved once per (stem,
 	// disposition) and cached by the caller, because that is when retail resolves it — a body that
@@ -528,6 +563,19 @@ public:
 	// none, so the caller needs to know which it got. False when there is no head bone.
 	virtual bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition,
 		FVector& OutForward) const { return false; }
+
+	// LIFE5 — one bone's CURRENT world transform on a body, by name.
+	//
+	// The swing's contact segment is stated bone-local, so the frame it is stated in has to be
+	// asked for rather than derived: where a limb IS this frame is the pose layer's answer and the
+	// skeleton's, not the substrate's (K13). The name is the durable key for the same reason it is
+	// on every other bone-addressed record — an NPC and the bank it fights from are separate images
+	// with separate bone tables.
+	//
+	// False means the body carries no bone by that name, which the caller reports: a swing record
+	// naming a bone its own model does not have is an authored defect, not an absence.
+	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
+		FTransform& OutWorld) const { return false; }
 
 	// v4 animated props. Model selection is explicit and manifest-backed; ordinary props stay on
 	// the existing static representation. The skeletal surface remains non-solid.
@@ -675,6 +723,29 @@ public:
 	// surface already answer on. Characters are deliberately NOT occluders here: retail's mask
 	// carries no NPC/player bits, so a body standing between two points does not break the line.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const { return true; }
+
+	// LIFE5 — one sub-step of a melee swing's swept contact: which live characters' bodies the
+	// authored contact segment passed through as it moved from where it was at the start of the
+	// sub-step to where it is at its end.
+	//
+	// Geometry only, like `QueryAimTarget` beside it: WHEN the segment is live, which record it
+	// belongs to, whether the victim has already been hit and what a hit costs all stay in the
+	// substrate. An empty answer is the ORDINARY outcome — most sub-steps of most swings touch
+	// nothing — and is also what a headless run answers, for the same reason and with the same
+	// meaning.
+	//
+	// **Boundaried, and named.** The victim volume is the candidate body's own rendered bounds and
+	// the swept segment is tested against it directly, exactly as `QueryAimTarget`/`QueryFeedTarget`
+	// test their ray and their hull; the engine trace is spent on the occlusion half, where a wall
+	// between the limb and the body is what has to be asked of the collision world. Sweeping a
+	// physics shape instead would answer with a primitive component, and this runtime keeps no
+	// component -> entity map outside the `+use` and touch anchor registries — building one is a
+	// change to the body factory rather than to this query.
+	virtual void QuerySwingContacts(const FElysiumSwingSweep& Sweep,
+		TArray<FElysiumEntityHandle>& OutHits) const
+	{
+		OutHits.Reset();
+	}
 
 	// How lit is this point, normalized 0 (dark) to 1 (fully lit)?
 	//

@@ -27,12 +27,14 @@
 #include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumGameSound.h"
 #include "Substrate/ElysiumItemTable.h"
+#include "Substrate/ElysiumNpc.h"             // the NPC leaf the incoming-swing notice is sent to
 #include "Substrate/ElysiumNpcConditions.h"   // ElysiumNpcCond::WeaponCapability — the `0x18000` mask
 #include "Substrate/ElysiumReactions.h"       // the block and knockback families' pure rules
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealth.h"
+#include "Substrate/ElysiumSwingContact.h"    // the contact walk's pure window/sub-step rules
 #include "Visual/ElysiumNpcVisual.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeapon, Log, All);
@@ -212,14 +214,23 @@ FElysiumWeaponContext FElysiumWeaponContext::FromCharacter(const FElysiumCombatC
 	FElysiumWeaponContext Context;
 	UElysiumGameStateSubsystem* GameState = Char.World ? Char.World->GetGameState() : nullptr;
 	UElysiumRulebookSubsystem* Rulebook = GameState ? GameState->Rulebook() : nullptr;
-	if (!Rulebook)
-	{
-		return Context;   // headless / bare world: every consumer below fails safe and says so
-	}
-	Context.Feats = &Rulebook->Feats();
-	Context.DiceTables = &Rulebook->Dice();
 
-	const FElysiumRules& Rules = Rulebook->Rules();
+	// **The subsystem always wins; the bound tables are the fallback** — `ElysiumSheetRules`'
+	// standing rule, and the same one the sheet's own evaluator follows. A world with no rulebook in
+	// reach is not a world with no rules: the bundle is what a headless run and a Substrate-tier case
+	// bind, and a transaction that ignored it would defend with zero and classify nothing while the
+	// tables it needed were sitting bound beside it. Every member may still be absent, and each
+	// consumer below fails safe and says so when it is.
+	const ElysiumSheetRules::FBoundTables& Bound = ElysiumSheetRules::BoundTables();
+	Context.Feats = Rulebook ? &Rulebook->Feats() : Bound.Feats;
+	Context.DiceTables = Rulebook ? &Rulebook->Dice() : nullptr;
+
+	const FElysiumRules* RulesPtr = Rulebook ? &Rulebook->Rules() : Bound.Rules;
+	if (RulesPtr == nullptr)
+	{
+		return Context;
+	}
+	const FElysiumRules& Rules = *RulesPtr;
 	if (Rules.Has(GDamageInfoBlock, TEXT("Defense_Difficulty_PC"))
 		&& Rules.Has(GDamageInfoBlock, TEXT("Defense_Difficulty_NPC")))
 	{
@@ -382,15 +393,15 @@ namespace ElysiumWeapons
 
 	bool IsCommitEvent(int32 Event, EOperatorBody Body)
 	{
-		switch (Body)
-		{
-		case EOperatorBody::Ranged:
-			return Event >= RangedShotEventFirst && Event <= RangedShotEventLast;
-		case EOperatorBody::Melee:
-			return Event == MeleeContactEvent;
-		default:
-			return false;
-		}
+		// Ranged alone. A melee contact is the swept walk over the clip's own authored swing records,
+		// so no id in the band names its instant — 3047 is the NPC swing trigger, not a commit.
+		return Body == EOperatorBody::Ranged
+			&& Event >= RangedShotEventFirst && Event <= RangedShotEventLast;
+	}
+
+	bool IsMeleeSwingTrigger(int32 Event)
+	{
+		return Event == MeleeSwingTriggerEvent;
 	}
 
 	bool IsSwallowedMeleeEvent(int32 Event)
@@ -655,9 +666,12 @@ void FElysiumWeapon::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Swing"), Swing.bActive
 		? FString::Printf(TEXT("#%d %s rate %.2f commit %s recover %.3f"), Swing.Serial,
 			*Swing.Activity, Swing.PlaybackRate,
-			Swing.bAwaitingAnimEvent
-				? TEXT("awaiting the clip's own event")
-				: *FString::Printf(TEXT("%.3f (estimated)"), Swing.CommitTime),
+			Swing.bMelee
+				? *FString::Printf(TEXT("swept walk (cycle %.3f, roll %s)"), Swing.PrevCycle,
+					Swing.bContactStaged ? TEXT("staged") : TEXT("pending"))
+				: Swing.bAwaitingAnimEvent
+					? TEXT("awaiting the clip's own event")
+					: *FString::Printf(TEXT("%.3f (estimated)"), Swing.CommitTime),
 			Swing.RecoveryDeadline)
 		: FString(TEXT("(idle)")));
 	Out.Emplace(TEXT("Reload"), bReloading
@@ -950,11 +964,13 @@ bool FElysiumWeapon::CommitFromAnimEvent(const FElysiumAnimEvent& Event)
 	// Delay 0.0, not a synchronous call: a producer enqueues and only queue service delivers (K11),
 	// so the commit serializes with everything else the frame raised instead of re-entering the
 	// damage spine from inside the animation pass.
+	//
+	// The transaction is a SHOT: the only ids that reach here are the ranged body's 3030..3044,
+	// because `IsCommitEvent` answers for that body alone.
 	QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, 0.0);
 	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s anim event %d commits %s #%d from clip '%s' at cycle %.3f"), *DebugString(),
-		Event.Event, Swing.bMelee ? TEXT("swing") : TEXT("shot"), Swing.Serial, *Swing.ClipLabel,
-		Event.Cycle);
+		TEXT("%s anim event %d commits shot #%d from clip '%s' at cycle %.3f"), *DebugString(),
+		Event.Event, Swing.Serial, *Swing.ClipLabel, Event.Cycle);
 	return true;
 }
 
@@ -980,10 +996,29 @@ bool FElysiumWeapon::OperatorHandleAnimEvent(FElysiumCombatCharacter& Operator,
 	{
 		return CommitFromAnimEvent(Event);
 	}
-	if (OpBody == ElysiumWeapons::EOperatorBody::Melee
-		&& ElysiumWeapons::IsSwallowedMeleeEvent(Event.Event))
+	if (OpBody == ElysiumWeapons::EOperatorBody::Melee)
 	{
-		return true;   // `0x103ea5b0`'s swallow set — accepted, and acted on by nothing
+		if (ElysiumWeapons::IsMeleeSwingTrigger(Event.Event))
+		{
+			// Retail's NPC swing trigger: a clip asking the character's weapon for a swing from
+			// inside its own timeline. It is CLAIMED — leaving it to the census would put a recovered
+			// id on the unclaimed work list — and it commits nothing, because the melee contact is the
+			// swept walk over this clip's authored records. Its own consumer is not built; reported
+			// once per process rather than per occurrence, like every other authored-gap report here.
+			if (ShouldReportOnce(TEXT("melee_swing_trigger")))
+			{
+				UE_LOG(LogElysiumWeapon, Verbose,
+					TEXT("%s took the melee swing trigger %d: it is retail's NPC swing request and has "
+						"no consumer here — the contact is the swept walk over the clip's own records, "
+						"which this id does not commit"),
+					*DebugString(), Event.Event);
+			}
+			return true;
+		}
+		if (ElysiumWeapons::IsSwallowedMeleeEvent(Event.Event))
+		{
+			return true;   // `0x103ea5b0`'s swallow set — accepted, and acted on by nothing
+		}
 	}
 
 	// Everything else in the band, including every id a `None` body was offered. The 4001/4002
@@ -997,7 +1032,7 @@ bool FElysiumWeapon::OperatorHandleAnimEvent(FElysiumCombatCharacter& Operator,
 // ================================================================================================
 
 FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCharacter& Attacker,
-	float ReachCm) const
+	float ReachCm, float ConeDot) const
 {
 	if (!World)
 	{
@@ -1026,7 +1061,6 @@ FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCh
 				*DebugString(), ElysiumWeapons::MeleeReachSourceUnits);
 		}
 	}
-	const float ConeDot = FMath::Cos(FMath::DegreesToRadians(ElysiumWeapons::MeleeConeHalfAngleDegrees));
 	const FVector EyeOrigin = Attacker.EyePosition();
 	const FVector Forward =
 		FRotator(Attacker.Angles.X, Attacker.Angles.Y, Attacker.Angles.Z).Vector().GetSafeNormal();
@@ -1337,11 +1371,11 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 
 	// Target acquisition happens before the sequence is committed. It is aim assistance and
 	// opponent reservation, not a damage verdict: an ordinary swing still animates with no
-	// candidate found.
-	const FElysiumEntityHandle Opponent = AcquireMeleeOpponent(Char, MaxReachCm);
+	// candidate found. It is NOT the opposed roll's own query — that one runs on the swing's first
+	// live frame at its own 60-unit reach and 0.7 cone (`StageSwingOpposedRoll`).
+	const FElysiumEntityHandle Opponent = AcquireMeleeOpponent(Char, MaxReachCm,
+		FMath::Cos(FMath::DegreesToRadians(ElysiumWeapons::MeleeConeHalfAngleDegrees)));
 
-	const bool bEventCommit =
-		CommitArrivesFromAnimEvent(Char, ClipOwnerStem, ClipLabel);
 	const int32 FeatRank = FeatRating(Char, ModeDmg.AttackFeat, Context);
 	const float Rate = FMath::Max(
 		ElysiumWeapons::MeleePlaybackRate(FeatRank) * ElysiumWeapons::AttackSpeedScale(Char),
@@ -1350,8 +1384,6 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	// Melee recovery is selected-clip timing over the playback rate — never the mode's authored
 	// `Attack_Rate` and never one global cooldown.
 	const double Recovery = Now + static_cast<double>(Seconds) / Rate;
-	const double Commit = Now
-		+ static_cast<double>(Seconds * ElysiumWeapons::ContactEventCycle) / Rate;
 
 	ClearSwing();
 	Swing.bActive = true;
@@ -1364,21 +1396,19 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	Swing.Opponent = Opponent;
 	Swing.PlaybackRate = Rate;
 	Swing.ClipSeconds = Seconds;
-	Swing.CommitTime = Commit;
+	// Nothing is scheduled and nothing is estimated: the contact is the per-frame swept walk over
+	// this clip's own authored swing records, which `AdvanceSwingContact` picks up from the first
+	// frame the pose layer reports the clip playing.
+	Swing.CommitTime = 0.0;
 	Swing.RecoveryDeadline = Recovery;
-	Swing.bAwaitingAnimEvent = bEventCommit;
+	Swing.bAwaitingAnimEvent = false;
 
 	HoldAttacksUntil(Recovery);
-	if (!bEventCommit)
-	{
-		QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, Commit - Now);
-	}
 
 	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s swing #%d %s rate %.2f clip %.3fs -> commit %s recover %.3f opponent %s"),
+		TEXT("%s swing #%d %s rate %.2f clip %.3fs -> contact walks '%s' recover %.3f opponent %s"),
 		*DebugString(), Swing.Serial, *Activity, Rate, Seconds,
-		bEventCommit ? TEXT("on the clip's own 3047")
-			: *FString::Printf(TEXT("%.3f (estimated)"), Commit),
+		ClipLabel.IsEmpty() ? TEXT("(no clip)") : *ClipLabel,
 		Recovery, Opponent.IsSet() ? *World->DescribeHandle(Opponent) : TEXT("(none)"));
 	return EVerdict::Accepted;
 }
@@ -1488,13 +1518,22 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 		return;
 	}
 
+	if (Swing.bMelee)
+	{
+		// **Melee has no queued commit.** Its contact is the swept walk over the swing clip's own
+		// authored records, so nothing in this runtime enqueues one. A payload written by a build
+		// that did can still carry one in the event queue's own save block, and it arrives here on
+		// restore; the walk owns the transaction, so the record is dropped. It is reported because a
+		// commit reaching a family that accepts none is exactly what a quiet return would hide.
+		UE_LOG(LogElysiumWeapon, Warning,
+			TEXT("%s dropped a queued melee commit #%d — a melee contact is the swept walk over the "
+				"swing clip's own records, and no queued input commits one"),
+			*DebugString(), Serial);
+		return;
+	}
+
 	const int32 ModeIndex = Swing.ModeIndex;
-	const bool bMelee = Swing.bMelee;
 	const FElysiumEntityHandle OpponentHandle = Swing.Opponent;
-	// Copied out BEFORE the transaction is cleared: the blocked-reaction activity is a column of the
-	// swing's own sequence descriptor, and by the time the contact runs the swing no longer exists.
-	const FString SwingClipLabel = Swing.ClipLabel;
-	const FString SwingClipOwnerStem = Swing.ClipOwnerStem;
 	ClearSwing();
 
 	FElysiumCombatCharacter* Attacker = OwnerCharacter();
@@ -1523,7 +1562,7 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 	// The magazine is spent HERE, at the authoritative boundary — the animation event chooses the
 	// instant, the weapon logic does the spending. `Ammo_Cost` is rounds; `Ammo_Fired` is rays, and
 	// the two never substitute for one another.
-	if (!bMelee && Mode->AmmoCost > 0)
+	if (Mode->AmmoCost > 0)
 	{
 		if (MagazineCount < Mode->AmmoCost)
 		{
@@ -1538,7 +1577,7 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 	// The gunshot stimulus, from its real producer: the shot has been paid for, so it is heard
 	// whether or not it hits. Emitted before the victim is resolved for exactly that reason — a
 	// miss is the loudest thing in the room too.
-	if (!bMelee && World != nullptr)
+	if (World != nullptr)
 	{
 		// `AdjustSoundDistForStealth`: the SOURCE's own hearing reduction, subtracted at insertion.
 		// The weapon knows its owner, so the reduction is read off that character's committed
@@ -1559,19 +1598,426 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 		return;
 	}
 
-	if (bMelee)
+	RangedImpact(*Attacker, *Victim, ModeIndex);
+}
+
+// ================================================================================================
+// The melee contact — a per-frame swept walk over the clip's own authored windows
+// ================================================================================================
+
+namespace
+{
+	// The attacker's frame partway through a walk sub-step. The sub-steps exist to place the limb
+	// where it was between two rendered frames, and the root it hangs off moved over the same
+	// interval — a segment carried on this frame's origin alone would sweep from a position the
+	// attacker had already left.
+	FTransform ElysiumSwingFrameAt(const FTransform& From, const FTransform& To, float Alpha)
 	{
-		MeleeContact(*Attacker, *Victim, ModeIndex, SwingClipLabel, SwingClipOwnerStem);
-	}
-	else
-	{
-		RangedImpact(*Attacker, *Victim, ModeIndex);
+		FTransform Out;
+		Out.Blend(From, To, Alpha);
+		return Out;
 	}
 }
 
-void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
-	int32 ModeIndex, const FString& SwingClipLabel, const FString& SwingClipOwnerStem)
+void FElysiumWeapon::StageSwingOpposedRoll(FElysiumCombatCharacter& Attacker,
+	const FSwingContact& Contact)
 {
+	const int32 ModeIndex = Contact.ModeIndex;
+
+	// `MeleeRollAndSendNoticeCallback`'s own opponent query, and it is NOT the acquisition query the
+	// accepted swing already ran: a fixed 60 Source units and a half-cone dot of 0.7, against the
+	// authored per-sequence reach and 30-degree cone that reserved `Swing.Opponent`. Two retail
+	// calls, two shapes.
+	const FElysiumEntityHandle OpponentHandle = AcquireMeleeOpponent(Attacker,
+		ElysiumWeapons::SwingRollReachSourceUnits * ElysiumMove::U,
+		ElysiumWeapons::SwingRollConeDot);
+	FElysiumEntity* OpponentEnt = OpponentHandle.IsSet() && World
+		? World->Resolve(OpponentHandle) : nullptr;
+	FElysiumCombatCharacter* Victim = OpponentEnt ? OpponentEnt->AsCombatCharacter() : nullptr;
+	if (!Victim || !IsAliveForCombat(*Victim))
+	{
+		// A swing opened on empty air. Ordinary, and deliberately not retried on a later frame:
+		// retail rolls once per swing and a body that walks into the arc afterwards is opposed by
+		// nothing. It is the reason a sweep can reach a victim with no record to consume.
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s swing #%d opened with no opponent inside the %.0f-unit roll cone — no opposed "
+				"record staged"),
+			*DebugString(), Contact.Serial, ElysiumWeapons::SwingRollReachSourceUnits);
+		return;
+	}
+
+	const FElysiumWeaponContext Context = FElysiumWeaponContext::FromCharacter(*Victim);
+	const FElysiumDmg& ModeDmg = DamageForMode(ModeIndex);
+
+	// --- The opposed record, staged on the DEFENDER ------------------------------------------
+	// Stamped with this swing's serial, which is what stands in for retail's `ForceMeleeReset`:
+	// every record an earlier swing of this attacker's staged stops answering the moment a new one
+	// is accepted, so a later sweep cannot consume a margin nobody rolled for it. `StageMeleeRoll`
+	// replaces this attacker's row rather than appending, so the previous swing's record is also
+	// physically gone from any body this one opposes.
+	FElysiumMeleeRoll Roll;
+	Roll.Attacker = Attacker.Handle;
+	Roll.SwingSerial = Contact.Serial;
+	Roll.Lethality = TotalLethality(ModeIndex, Attacker, Context);
+
+	if (Context.HasDefenseDifficulties())
+	{
+		const int32 Difficulty = IsPlayerSide(*Victim)
+			? Context.DefenseDifficultyPc : Context.DefenseDifficultyNpc;
+		// Word 2 is the defender's net successes plus any bounded defense bonus. The bonus is the
+		// blocked-contact `Dexterity` re-roll, which belongs with the block reactions at contact.
+		Roll.Defense = RollFeatNet(*Victim, GDefensiveManeuvers, Difficulty, Context);
+	}
+	else
+	{
+		UE_LOG(LogElysiumWeapon, Warning,
+			TEXT("%s: rules.txt Damage_Info defense difficulties are unavailable — '%s' is not "
+				"rolled and the defender defends with 0"),
+			*Victim->DebugString(), GDefensiveManeuvers);
+	}
+
+	// Word 3 is the defender's soak, selected from the weapon's active descriptor family.
+	if (const TCHAR* SoakFeat = ElysiumDamage::SoakFeatName(ModeDmg.Family, Victim->IsKindred(),
+		ModeDmg.IsFalling()))
+	{
+		if (Context.HasSoakDifficulties())
+		{
+			const int32 Difficulty = IsPlayerSide(*Victim)
+				? Context.SoakDifficultyPc : Context.SoakDifficultyNpc;
+			Roll.Soak = RollFeatNet(*Victim, SoakFeat, Difficulty, Context);
+		}
+	}
+
+	Victim->StageMeleeRoll(Roll);
+
+	// --- The incoming-swing notice ------------------------------------------------------------
+	// The other half of the same callback, sent from the same staging instant. A player victim has
+	// no such memory — its reaction is its own input — so a swing at the player stages the record
+	// and notices nobody, which is an ordinary negative rather than a miss.
+	if (FElysiumNpc* NpcVictim = OpponentEnt->AsNpc())
+	{
+		ElysiumNpcCond::NoticeMeleeAttack(*NpcVictim, Attacker.Handle, Attacker.Origin,
+			World->NowSeconds());
+	}
+
+	UE_LOG(LogElysiumWeapon, Verbose,
+		TEXT("%s swing #%d staged its opposed record on %s (lethality %d, defense %d, soak %d)"),
+		*DebugString(), Contact.Serial, *Victim->DebugString(), Roll.Lethality, Roll.Defense,
+		Roll.Soak);
+}
+
+void FElysiumWeapon::AdvanceSwingContact(float DeltaSeconds)
+{
+	if (!Swing.bActive || !Swing.bMelee)
+	{
+		return;
+	}
+
+	// **What retires a melee transaction.** Melee has no commit event and no queued half, so the
+	// walk is the only thing that can close it: once the clip it was walking has stopped playing and
+	// the recovery deadline has passed, the transaction is over and is cleared. Leaving it standing
+	// would let a LATER play of the same clip label — a scene, a schedule, anything that is not an
+	// accepted swing — re-open contact for a swing that ended, against a record its own serial still
+	// matches. The two conditions are both required: before the deadline the clip may simply not have
+	// been armed by the pose layer yet, which is the ordinary state of a swing's first frames.
+	const auto RetireIfRecovered = [this]()
+	{
+		if (World != nullptr && World->NowSeconds() >= Swing.RecoveryDeadline)
+		{
+			ClearSwing();
+		}
+	};
+
+	FElysiumCombatCharacter* Attacker = OwnerCharacter();
+	if (Attacker == nullptr || !IsAliveForCombat(*Attacker) || !IsActiveWeapon())
+	{
+		// The swing outlived its own attacker or was holstered away. The walk stops finding anything
+		// to sweep, and the transaction goes when its recovery does.
+		Swing.ResetWalk();
+		RetireIfRecovered();
+		return;
+	}
+
+	// A swing is LIVE for exactly as long as its own clip is playing on a channel the pose layer
+	// publishes. There is no start event and no stop event: the clip's presence is the window.
+	FElysiumClipPhase Phase;
+	if (Swing.ClipLabel.IsEmpty() || Swing.ClipOwnerStem.IsEmpty()
+		|| !Attacker->GetLiveClipPhase(Swing.ClipOwnerStem, Swing.ClipLabel, Phase))
+	{
+		Swing.ResetWalk();
+		RetireIfRecovered();
+		return;
+	}
+
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		Swing.ResetWalk();
+		return;   // a phase without an embodiment cannot happen; the guard costs nothing
+	}
+
+	// The records are filed under the ATTACKING BODY's own stem, the same key the blocked reaction
+	// is addressed by: the exporter writes one row per label into the body's own clip slice,
+	// carrying whatever the owning bank's sequence declared.
+	const TArray<FElysiumSwingRecord>* Records =
+		Embodiment->NpcClipSwings(Attacker->ModelStem(), Swing.ClipLabel);
+	if (Records == nullptr || Records->IsEmpty())
+	{
+		// **No records is no contact, and it is retail's own shape** — the swing animates and
+		// touches nothing. It is also what an export predating the `swings` column gives every clip,
+		// so it is reported once per clip at Verbose: an authored absence is not a failure, and a
+		// warning here would fire for every swing of every body on an older corpus.
+		if (ShouldReportOnce(FString::Printf(TEXT("noswings:%s@%s"), *Swing.ClipLabel,
+			*Attacker->ModelStem())))
+		{
+			UE_LOG(LogElysiumWeapon, Verbose,
+				TEXT("%s: attack clip '%s' on '%s' declares no swing-contact records, so this swing "
+					"opens no contact window"),
+				*DebugString(), *Swing.ClipLabel, *Attacker->ModelStem());
+		}
+		Swing.ResetWalk();
+		return;
+	}
+
+	// A re-armed clip is a new play, and the walk starts over on it: a hit list or a previous limb
+	// position carried across would belong to a different pass through the same timeline.
+	if (Swing.WalkPlayId != Phase.PlayId)
+	{
+		Swing.ResetWalk();
+		Swing.WalkPlayId = Phase.PlayId;
+	}
+
+	// --- The batch decision, and nothing before it is recorded --------------------------------
+	//
+	// Retail's update walks on a server tick, and a tick is never shorter than a sub-step: its
+	// `dt <= 0` exit is the only path that does not write the stored timestamp, so a call either
+	// records nothing or walks a whole tick. Under a render clock the same rule is accumulation —
+	// a frame too short to walk records NOTHING (no stamp, no cursor advance, no segment cache), so
+	// its span survives into the batch that does run and the cycle interval below still covers
+	// everything the clip passed through. Reproducing retail's own sub-step branch literally would
+	// discard the span instead, and melee would stop landing above 100 fps on a clock retail never
+	// had. `ElysiumSwing`'s header states the reconciliation in full.
+	Swing.PendingSeconds += FMath::IsFinite(DeltaSeconds) && DeltaSeconds > 0.0f
+		? DeltaSeconds : 0.0f;
+
+	bool bSpanClamped = false;
+	const float BatchSeconds = ElysiumSwing::ClampBatchSpan(Swing.PendingSeconds, bSpanClamped);
+	const int32 SubSteps = ElysiumSwing::SubStepCount(BatchSeconds);
+	if (SubSteps < 1)
+	{
+		return;   // not a batch yet: record nothing, and let the span accumulate
+	}
+	// The batch consumes the whole accumulated span. There is no remainder to carry: the sub-step
+	// COUNT is what the span buys, and the ground the sub-steps cover is the cycle interval below,
+	// which already reaches back to the last batch.
+	Swing.PendingSeconds = 0.0f;
+	if (bSpanClamped && ShouldReportOnce(FString::Printf(TEXT("swingbatch:%s"), *ClassName())))
+	{
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s: a frame longer than the stated %.0f ms cap reached the contact walk — the "
+				"batch covers the cycle it reached at the cap's sub-step count rather than at its "
+				"own, because retail's tick clock could not hand its own update that span either"),
+			*DebugString(), ElysiumSwing::MaxBatchSeconds * 1000.0f);
+	}
+
+	// The swing's own identity, copied out of the transaction before the first commit: a contact
+	// can retire the transaction, and the walk must not read a cleared one back through it.
+	FSwingContact Contact;
+	Contact.ModeIndex = Swing.ModeIndex;
+	Contact.Serial = Swing.Serial;
+	Contact.ClipLabel = Swing.ClipLabel;
+	Contact.ClipOwnerStem = Swing.ClipOwnerStem;
+
+	// **The roll and the notice are staged here, on the first BATCHED frame, before any contact
+	// test.** Retail's order, and the whole reason the contact below consumes a record instead of
+	// rolling one: the dice are spent when the swing opens, not when it lands. A frame that ran no
+	// batch is retail's `dt <= 0` call, which reaches neither.
+	if (!Swing.bContactStaged)
+	{
+		Swing.bContactStaged = true;
+		StageSwingOpposedRoll(*Attacker, Contact);
+	}
+
+	// Where every record's segment is RIGHT NOW, in the attacker's own frame. Held per record rather
+	// than per bone so the interpolation below is a straight index walk; the bone queries themselves
+	// are cached by name, because a 17-record swing names two or three bones.
+	const FTransform NowFrame(FRotator(Attacker->Angles.X, Attacker->Angles.Y, Attacker->Angles.Z),
+		Attacker->Origin);
+	TMap<FString, FTransform> BoneCache;
+	TArray<TPair<FVector, FVector>> NowSegments;
+	NowSegments.SetNum(Records->Num());
+	TBitArray<> HasSegment(false, Records->Num());
+	for (int32 Index = 0; Index < Records->Num(); ++Index)
+	{
+		const FElysiumSwingRecord& Record = (*Records)[Index];
+		if (!Record.HasSegment())
+		{
+			// A record naming no bone, or whose two endpoints coincide, has no limb to sweep. That is
+			// an authored defect rather than an absence — every shipped record states both — so it is
+			// named once per (clip, record) and produces no contact.
+			if (ShouldReportOnce(FString::Printf(TEXT("swingseg:%s@%s#%d"), *Swing.ClipLabel,
+				*Attacker->ModelStem(), Index)))
+			{
+				UE_LOG(LogElysiumWeapon, Warning,
+					TEXT("%s: swing record %d of '%s' on '%s' states no contact segment (bone '%s') — "
+						"it can never contact anything"),
+					*DebugString(), Index, *Swing.ClipLabel, *Attacker->ModelStem(), *Record.Bone);
+			}
+			continue;
+		}
+		const FTransform* BoneWorld = BoneCache.Find(Record.Bone);
+		if (BoneWorld == nullptr)
+		{
+			FTransform Resolved;
+			if (!Embodiment->GetBodyBoneTransform(Attacker->GetSkeletalBody(), Record.Bone, Resolved))
+			{
+				// The pose layer has no such bone on this body. Same severity and same reason: the
+				// record names a bone of its own model, so a body that cannot answer is a defect in
+				// the pair rather than a clip that simply declares nothing.
+				if (ShouldReportOnce(FString::Printf(TEXT("swingbone:%s@%s"), *Record.Bone,
+					*Attacker->ModelStem())))
+				{
+					UE_LOG(LogElysiumWeapon, Warning,
+						TEXT("%s: swing clip '%s' sweeps bone '%s', which body '%s' does not carry — "
+							"that record produces no contact"),
+						*DebugString(), *Swing.ClipLabel, *Record.Bone, *Attacker->ModelStem());
+				}
+				continue;
+			}
+			BoneWorld = &BoneCache.Add(Record.Bone, Resolved);
+		}
+		// The endpoints are bone-local Unreal centimetres and the bone frame is the live one, so the
+		// placement is one transform and no conversion (the `UE_` exporter already stated them in
+		// this frame). They are then expressed against the attacker's own frame, which is what lets
+		// the sub-steps carry the limb on an interpolated root.
+		NowSegments[Index] = TPair<FVector, FVector>(
+			NowFrame.InverseTransformPosition(BoneWorld->TransformPosition(Record.ACm)),
+			NowFrame.InverseTransformPosition(BoneWorld->TransformPosition(Record.BCm)));
+		HasSegment[Index] = true;
+	}
+
+	// The first batch has no previous position: it covers the instant the clip stands on and sweeps
+	// nothing, which is what an unprimed cursor means everywhere else in this runtime.
+	bool bPrimed = Swing.PrevCycle >= 0.0f && Swing.PrevSegmentsLocal.Num() == Records->Num();
+
+	// --- The discontinuity guard (OURS) --------------------------------------------------------
+	// Between two batches an engine event can move the attacker or its pose by a distance no swing
+	// produces: a teleport, a map travel, a scene handing the body back, a pose-layer hitch. Swept
+	// as motion, that reads as a limb crossing the whole intervening space — it would land on every
+	// bystander standing on the line, and the sweep's own patch would be metres wide. Re-priming
+	// instead throws away only the crossing: the batch sweeps nothing and the next one starts from
+	// where the limb actually is. The hit lists survive, so nothing re-lands because of it.
+	if (bPrimed)
+	{
+		bool bJumped = ElysiumSwing::ExceedsBatchTravel(Swing.PrevOrigin, Attacker->Origin);
+		for (int32 Index = 0; !bJumped && Index < Records->Num(); ++Index)
+		{
+			bJumped = HasSegment[Index]
+				&& (ElysiumSwing::ExceedsBatchTravel(
+						Swing.PrevSegmentsLocal[Index].Key, NowSegments[Index].Key)
+					|| ElysiumSwing::ExceedsBatchTravel(
+						Swing.PrevSegmentsLocal[Index].Value, NowSegments[Index].Value));
+		}
+		if (bJumped)
+		{
+			if (ShouldReportOnce(FString::Printf(TEXT("swingjump:%s"), *ClassName())))
+			{
+				UE_LOG(LogElysiumWeapon, Verbose,
+					TEXT("%s: the swinging body moved further than the stated %.0f cm between two "
+						"contact batches — the walk re-primes rather than sweeping through the gap"),
+					*DebugString(), ElysiumSwing::MaxBatchTravelCm);
+			}
+			Swing.RePrimePosition();
+			bPrimed = false;
+		}
+	}
+
+	const float PrevCycle = bPrimed ? Swing.PrevCycle : Phase.Cycle;
+	const FTransform PrevFrame = bPrimed
+		? FTransform(Swing.PrevAngles, Swing.PrevOrigin)
+		: NowFrame;
+
+	// A record whose window is closed over everything this batch covered forgets whom it has hit, so
+	// a later group of the same swing — a `2COMBO`'s second half — lands again.
+	if (Swing.RecordHits.Num() != Records->Num())
+	{
+		Swing.RecordHits.SetNum(Records->Num());
+	}
+	ElysiumSwing::ClearClosedRecords(*Records, PrevCycle, Phase.Cycle, Swing.RecordHits);
+
+	TArray<ElysiumSwing::FInterval> Intervals;
+	ElysiumSwing::SubStepIntervals(PrevCycle, Phase.Cycle, SubSteps, Intervals);
+
+	TArray<FElysiumEntityHandle> Contacts;
+	for (int32 Step = 0; Step < Intervals.Num() && Swing.bActive; ++Step)
+	{
+		const float U0 = static_cast<float>(Step) / static_cast<float>(SubSteps);
+		const float U1 = static_cast<float>(Step + 1) / static_cast<float>(SubSteps);
+		const FTransform FrameAt0 = ElysiumSwingFrameAt(PrevFrame, NowFrame, U0);
+		const FTransform FrameAt1 = ElysiumSwingFrameAt(PrevFrame, NowFrame, U1);
+
+		for (int32 Index = 0; Index < Records->Num() && Swing.bActive; ++Index)
+		{
+			if (!HasSegment[Index])
+			{
+				continue;
+			}
+			const FElysiumSwingRecord& Record = (*Records)[Index];
+			if (!ElysiumSwing::WindowOverlaps(Record.Start, Record.End,
+				Intervals[Step].Start, Intervals[Step].End))
+			{
+				continue;
+			}
+
+			const TPair<FVector, FVector>& From = bPrimed
+				? Swing.PrevSegmentsLocal[Index] : NowSegments[Index];
+			const TPair<FVector, FVector>& To = NowSegments[Index];
+
+			FElysiumSwingSweep Sweep;
+			Sweep.Attacker = Attacker->Handle;
+			Sweep.PrevA = FrameAt0.TransformPosition(FMath::Lerp(From.Key, To.Key, U0));
+			Sweep.PrevB = FrameAt0.TransformPosition(FMath::Lerp(From.Value, To.Value, U0));
+			Sweep.CurA = FrameAt1.TransformPosition(FMath::Lerp(From.Key, To.Key, U1));
+			Sweep.CurB = FrameAt1.TransformPosition(FMath::Lerp(From.Value, To.Value, U1));
+
+			Embodiment->QuerySwingContacts(Sweep, Contacts);
+			for (const FElysiumEntityHandle& Hit : Contacts)
+			{
+				if (!Swing.bActive)
+				{
+					// The same guard the two loops above carry, and this is where it has to hold: the
+					// hit list is the transaction's own storage, so a commit that retired the swing
+					// leaves nothing to index.
+					break;
+				}
+				if (ElysiumSwing::IsMarked(Swing.RecordHits[Index], Hit))
+				{
+					continue;   // hit-once: this record, or one sharing its window, already landed
+				}
+				FElysiumEntity* VictimEnt = World ? World->Resolve(Hit) : nullptr;
+				FElysiumCombatCharacter* Victim = VictimEnt ? VictimEnt->AsCombatCharacter() : nullptr;
+				if (!Victim || !IsAliveForCombat(*Victim))
+				{
+					continue;   // an ordinary negative: the query answers geometry, not eligibility
+				}
+				// The mark goes down BEFORE the commit, and across every record sharing this one's
+				// window: a contact that kills its victim must still count as this swing's one hit.
+				ElysiumSwing::MarkHit(*Records, Index, Hit, Swing.RecordHits);
+				MeleeContact(*Attacker, *Victim, Contact);
+			}
+		}
+	}
+
+	Swing.PrevCycle = Phase.Cycle;
+	Swing.PrevSegmentsLocal = MoveTemp(NowSegments);
+	Swing.PrevOrigin = Attacker->Origin;
+	Swing.PrevAngles = FRotator(Attacker->Angles.X, Attacker->Angles.Y, Attacker->Angles.Z);
+}
+
+void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
+	const FSwingContact& Contact)
+{
+	const int32 ModeIndex = Contact.ModeIndex;
 	const FElysiumWeaponContext Context = FElysiumWeaponContext::FromCharacter(Victim);
 	const FElysiumDmg& ModeDmg = DamageForMode(ModeIndex);
 
@@ -1586,40 +2032,26 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 		Victim.StampMeleeContact(Now);
 	}
 
-	// --- The opposed record, staged on the DEFENDER ------------------------------------------
-	FElysiumMeleeRoll Roll;
-	Roll.Attacker = Attacker.Handle;
-	Roll.Lethality = TotalLethality(ModeIndex, Attacker, Context);
-
-	if (Context.HasDefenseDifficulties())
+	// --- The opposed record, CONSUMED from the defender ---------------------------------------
+	// It was staged on this victim on the swing's first batched frame, before any contact test, by
+	// `StageSwingOpposedRoll` — which is where retail rolls it. Nothing is rolled here.
+	//
+	// The lookup is scoped to THIS SWING's serial, which is what makes the sentence above true. A
+	// sweep can reach a body the swing's own 60-unit roll query never selected; without the scope it
+	// would be judged on whatever margin an earlier swing rolled against it, which is a hit nobody
+	// rolled for. Retail closes the same hole from the attacker's end, by clearing its record array
+	// at every swing start. Either way the answer here is: no record of this swing, no contact —
+	// and inventing one would put the dice back on the path they were taken off.
+	const FElysiumMeleeRoll* Staged = Victim.FindMeleeRoll(Attacker.Handle, Contact.Serial);
+	if (Staged == nullptr)
 	{
-		const int32 Difficulty = IsPlayerSide(Victim)
-			? Context.DefenseDifficultyPc : Context.DefenseDifficultyNpc;
-		// Word 2 is the defender's net successes plus any bounded defense bonus. The bonus is the
-		// blocked-contact `Dexterity` re-roll, which belongs with the block reactions below.
-		Roll.Defense = RollFeatNet(Victim, GDefensiveManeuvers, Difficulty, Context);
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s -> %s: swing #%d swept this body and staged no opposed record against it — "
+				"no contact"),
+			*Attacker.DebugString(), *Victim.DebugString(), Contact.Serial);
+		return;
 	}
-	else
-	{
-		UE_LOG(LogElysiumWeapon, Warning,
-			TEXT("%s: rules.txt Damage_Info defense difficulties are unavailable — '%s' is not "
-				"rolled and the defender defends with 0"),
-			*Victim.DebugString(), GDefensiveManeuvers);
-	}
-
-	// Word 3 is the defender's soak, selected from the weapon's active descriptor family.
-	if (const TCHAR* SoakFeat = ElysiumDamage::SoakFeatName(ModeDmg.Family, Victim.IsKindred(),
-		ModeDmg.IsFalling()))
-	{
-		if (Context.HasSoakDifficulties())
-		{
-			const int32 Difficulty = IsPlayerSide(Victim)
-				? Context.SoakDifficultyPc : Context.SoakDifficultyNpc;
-			Roll.Soak = RollFeatNet(Victim, SoakFeat, Difficulty, Context);
-		}
-	}
-
-	Victim.StageMeleeRoll(Roll);
+	const FElysiumMeleeRoll Roll = *Staged;
 
 	// --- The `rules.txt` margin classifier ----------------------------------------------------
 	const int32 Margin = Roll.Margin();
@@ -1685,13 +2117,14 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 		//
 		// The key is the attacking BODY's stem plus the swing's label, which is where the column is
 		// filed: the exporter writes one row per label into the body's OWN clip slice, carrying the
-		// blocked reaction of whichever bank owns the sequence. `SwingClipOwnerStem` names that bank
-		// and rides the log line alone — a shared-bank body and its bank are what a missing column
-		// has to be diagnosed across, but neither addresses the row.
+		// blocked reaction of whichever bank owns the sequence. `Contact.ClipOwnerStem` names that
+		// bank and rides the log line alone — a shared-bank body and its bank are what a missing
+		// column has to be diagnosed across, but neither addresses the row.
 		FString Blocked;
-		if (IElysiumEmbodiment* Embodiment = World->Embodiment(); Embodiment && !SwingClipLabel.IsEmpty())
+		if (IElysiumEmbodiment* Embodiment = World->Embodiment();
+			Embodiment && !Contact.ClipLabel.IsEmpty())
 		{
-			Blocked = Embodiment->NpcClipBlockedReaction(Attacker.ModelStem(), SwingClipLabel);
+			Blocked = Embodiment->NpcClipBlockedReaction(Attacker.ModelStem(), Contact.ClipLabel);
 		}
 		const bool bAuthored = !Blocked.IsEmpty();
 		if (!bAuthored)
@@ -1702,8 +2135,8 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 			TEXT("%s blocked by %s -> attacker plays %s (%s; swing clip '%s' off '%s')"),
 			*Attacker.DebugString(), *Victim.DebugString(), *Blocked,
 			bAuthored ? TEXT("authored") : TEXT("fallback"),
-			SwingClipLabel.IsEmpty() ? TEXT("(none)") : *SwingClipLabel,
-			SwingClipOwnerStem.IsEmpty() ? TEXT("(none)") : *SwingClipOwnerStem);
+			Contact.ClipLabel.IsEmpty() ? TEXT("(none)") : *Contact.ClipLabel,
+			Contact.ClipOwnerStem.IsEmpty() ? TEXT("(none)") : *Contact.ClipOwnerStem);
 
 		FElysiumReactionPlayRequest Reaction;
 		Reaction.Activity = Blocked;

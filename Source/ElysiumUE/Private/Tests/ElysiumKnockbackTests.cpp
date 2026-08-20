@@ -73,9 +73,11 @@ namespace
 
 	const TCHAR* const GSwingLabel = TEXT("swing_long");
 	const TCHAR* const GSwingBank = TEXT("cast_bank");
+	// The bone the swing's authored contact segment is stated in, and which the fixture places.
+	const TCHAR* const GSwingBone = TEXT("Bip01 R Hand");
 
-	// Far enough past every commit estimate the fixture can produce; the recording seam answers a
-	// one-second clip for every activity.
+	// Where the clock stands when the contact walk runs. It is not a commit deadline — melee
+	// schedules nothing — but the base-channel holds a contact takes are measured against it.
 	constexpr double GContactTick = 1.0;
 
 	// A victim origin, an attacker origin and the victim's yaw — the three inputs every direction
@@ -244,6 +246,25 @@ namespace
 			Services.ResolvedNpcActivityOwner = GSwingBank;
 			Services.bNpcOneShotsPlay = true;
 
+			// The swing's contact is the swept walk over the clip's own authored records, so the
+			// fixture authors one: a phase standing on the swing clip, the bone its segment is stated
+			// in, and a window over the middle of the cycle.
+			Services.bBodyClipPhaseSet = true;
+			Services.BodyClipPhase = FElysiumClipPhase();
+			Services.BodyClipPhase.OwnerStem = GSwingBank;
+			Services.BodyClipPhase.Label = GSwingLabel;
+			Services.BodyClipPhase.Length = 1.0f;
+			Services.BodyClipPhase.PlayId = 1;
+			Services.BoneFrames.Add(FString(GSwingBone).ToLower(), FTransform::Identity);
+			{
+				FElysiumSwingRecord Record;
+				Record.Start = 0.30f;
+				Record.End = 0.70f;
+				Record.Bone = GSwingBone;
+				Record.BCm = FVector(30.f, 0.f, 0.f);
+				Services.SwingsByClip.Add(FString(GSwingLabel).ToLower(), { Record });
+			}
+
 			World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Services.Bundle());
 			World->Load(MakeKnockbackTestDefs());
 			World->Activate(0.0);
@@ -266,6 +287,9 @@ namespace
 			Attacker->Angles = FVector(0.0f, 180.0f, 0.0f);
 			Victim->Origin = GVictim;
 			Victim->Angles = FVector(0.0f, -VictimUnrealYawDegrees, 0.0f);
+			// Whom the sweep reaches. Geometry is the seam's answer; eligibility, the opposed record
+			// and every reaction behind it stay in the substrate.
+			Services.SwingContacts = { Victim->Handle };
 			Services.Calls.Reset();
 			return true;
 		}
@@ -319,7 +343,14 @@ namespace
 			{
 				Held->AttackIntent(FElysiumWeapon::EIntent::Primary);
 			}
+			// The clock moves FIRST, so the holds the contact takes are measured against a `now`
+			// inside the swing. Then two walked frames: the swing's first live frame stages the
+			// opposed roll and the notice, and the second carries the cycle into the authored window.
 			World->Tick(GContactTick);
+			Services.BodyClipPhase.Cycle = 0.0f;
+			World->AdvanceMeleeSwings(0.02f);
+			Services.BodyClipPhase.Cycle = 0.50f;
+			World->AdvanceMeleeSwings(0.02f);
 		}
 	};
 }

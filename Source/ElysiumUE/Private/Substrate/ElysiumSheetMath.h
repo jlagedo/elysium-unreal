@@ -212,6 +212,12 @@ namespace ElysiumSheetRules
 		const FElysiumClanTable*         Clans = nullptr;
 		const FElysiumDisciplineTargets* DisciplineTargets = nullptr;
 		const FElysiumStealthTables*     Stealth = nullptr;
+		// `rules.txt`. The combat transactions read their opposed-roll difficulties and their melee
+		// reaction margins out of it, and they are plain-C++ leaves holding no session pointer for
+		// exactly the reason the rest of this bundle exists: with no subsystem in reach a weapon
+		// context otherwise gathers nothing, the defender defends with zero and no margin can be
+		// classified at all.
+		const FElysiumRules*             Rules = nullptr;
 	};
 
 	// Bind (or, with a default-constructed value, unbind) the fallback tables. Process-wide,

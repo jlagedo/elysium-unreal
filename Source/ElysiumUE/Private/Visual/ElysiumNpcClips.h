@@ -2,6 +2,8 @@
 
 #include "CoreMinimal.h"
 
+#include "ElysiumSwingRecord.h"
+
 // The NPC animation vocabulary, read off the offline sidecars (roadmap 8.5, pipeline PL4).
 //
 // A VtMB NPC's own `.mdl` carries only its own clips (mostly dialogue); idle, locomotion and
@@ -57,10 +59,19 @@ struct FElysiumNpcClip
 	// `ACT_BLOCKED_REACTION_RIGHT` (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
 	// Empty means the sequence names none.
 	FString BlockedReaction;
+	// The authored swing-contact records of this sequence's swing (`mstudioseqdesc_t`+0x2C4/+0x2C8).
+	// This is where a melee attack stops being an animation and becomes one: `ReachCm` is the
+	// distance the swing ACQUIRES at, and these are where and when it TOUCHES. Empty on every
+	// sequence that declares none, which is all but 574 of the install's 14,012 descriptors — an
+	// authored absence, and the reason a clip carrying none has no contact at all.
+	TArray<FElysiumSwingRecord> Swings;
 
 	// Whether this sequence states a reach at all. Zero is "no claim", not a zero-length swing, so a
 	// caller maximising over an activity's sequences skips it rather than clamping to it.
 	bool HasReach() const { return ReachCm > 0.0f; }
+	// Whether this sequence's swing can contact anything. Retail's walk is driven by the records
+	// themselves, so a melee clip declaring none simply never opens a contact window.
+	bool HasSwings() const { return !Swings.IsEmpty(); }
 
 	// Authored duration. The rate is per clip and is not always 30 (54 of 1,502 surveyed
 	// sequences are 18 fps, including `run`), so this is read rather than assumed.

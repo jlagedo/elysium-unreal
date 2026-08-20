@@ -250,6 +250,35 @@ void FElysiumEntityWorld::UpdatePlayerFeed()
 	}
 }
 
+void FElysiumEntityWorld::AdvanceMeleeSwings(float DeltaSeconds)
+{
+	// Same liveness gate as the weapon frame below, and for the same reason: a world that is not
+	// running is not sweeping a swing through the air, it is not observing one at all.
+	if (!bActive || !IsTriggerResolutionEnabled())
+	{
+		return;
+	}
+
+	// The same walk the animation-event pass makes over the entity list, including the player: a
+	// swing belongs to whoever is holding the weapon, and the player has no separate contact path.
+	// Indexed rather than ranged, because a contact commits damage and a death can append to the
+	// list mid-walk.
+	for (int32 Index = 0; Index < EntityList.Num(); ++Index)
+	{
+		FElysiumEntity* Ent = EntityList[Index].Get();
+		FElysiumCombatCharacter* Character = Ent ? Ent->AsCombatCharacter() : nullptr;
+		if (Character == nullptr || Ent->IsInert())
+		{
+			continue;
+		}
+		FElysiumItem* Active = Character->Inventory.Active(*Character);
+		if (FElysiumWeapon* Weapon = Active ? Active->AsWeapon() : nullptr)
+		{
+			Weapon->AdvanceSwingContact(DeltaSeconds);
+		}
+	}
+}
+
 void FElysiumEntityWorld::UpdatePlayerWeaponFrame()
 {
 	// The world-liveness gate stands AHEAD of the edge drain, because a world that is not running is

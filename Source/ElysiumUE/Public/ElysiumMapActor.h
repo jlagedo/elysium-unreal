@@ -341,6 +341,12 @@ public:
 		float& OutGroundSpeedCmPerSecond) override;
 	virtual bool HasNpcClip(const FString& Stem, const FString& ClipName) override;
 	virtual FString NpcClipBlockedReaction(const FString& Stem, const FString& ClipLabel) override;
+	virtual const TArray<FElysiumSwingRecord>* NpcClipSwings(const FString& Stem,
+		const FString& ClipLabel) override;
+	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
+		FTransform& OutWorld) const override;
+	virtual void QuerySwingContacts(const FElysiumSwingSweep& Sweep,
+		TArray<FElysiumEntityHandle>& OutHits) const override;
 	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
 		FElysiumClipPhase& Out) override;
 	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,

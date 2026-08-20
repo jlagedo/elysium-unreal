@@ -637,6 +637,49 @@ struct FElysiumRecordingServices final
 			Found != nullptr ? **Found : TEXT("-")));
 		return Found != nullptr ? *Found : FString();
 	}
+	// The `swings` column a test authors, keyed by lower-cased clip label for the same reason the
+	// blocked reaction is: a Substrate case stands one vocabulary, and the stem still rides the
+	// recorded line. Empty by default, which is what all but 574 shipped descriptors declare and
+	// also what an export predating the column gives every clip — so an unseeded case exercises the
+	// "no records, no contact" path without arranging anything.
+	TMap<FString, TArray<FElysiumSwingRecord>> SwingsByClip;
+	virtual const TArray<FElysiumSwingRecord>* NpcClipSwings(const FString& Stem,
+		const FString& ClipLabel) override
+	{
+		const TArray<FElysiumSwingRecord>* Found = SwingsByClip.Find(ClipLabel.ToLower());
+		Record(FString::Printf(TEXT("NpcClipSwings %s %s -> %d"), *Stem, *ClipLabel,
+			Found != nullptr ? Found->Num() : 0));
+		return (Found != nullptr && !Found->IsEmpty()) ? Found : nullptr;
+	}
+	// The bone frames a test places, keyed by lower-cased bone name. A body whose bone is unseeded
+	// answers false, which is the missing-bone guard's own case.
+	TMap<FString, FTransform> BoneFrames;
+	virtual bool GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
+		FTransform& OutWorld) const override
+	{
+		OutWorld = FTransform::Identity;
+		const FTransform* Found = BoneFrames.Find(BoneName.ToLower());
+		Record(FString::Printf(TEXT("GetBodyBoneTransform %s -> %s"), *BoneName,
+			Found != nullptr ? TEXT("placed") : TEXT("-")));
+		if (Body == nullptr || Found == nullptr)
+		{
+			return false;
+		}
+		OutWorld = *Found;
+		return true;
+	}
+	// What the swing sweep answers. `SwingContacts` is the standing answer for every sub-step;
+	// `SwingContactSweeps` accumulates the segments it was asked about, so a case can assert WHERE
+	// the walk swept as well as that it swept at all. Deliberately not `Record`ed: the walk asks once
+	// per live record per sub-step, and a hundred lines a frame would bury everything a suite reads.
+	TArray<FElysiumEntityHandle> SwingContacts;
+	mutable TArray<FElysiumSwingSweep> SwingContactSweeps;
+	virtual void QuerySwingContacts(const FElysiumSwingSweep& Sweep,
+		TArray<FElysiumEntityHandle>& OutHits) const override
+	{
+		SwingContactSweeps.Add(Sweep);
+		OutHits = SwingContacts;
+	}
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override

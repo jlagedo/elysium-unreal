@@ -210,6 +210,18 @@ FString AElysiumMapActor::NpcClipBlockedReaction(const FString& Stem, const FStr
 	return Bodies->NpcClipBlockedReaction(Stem, ClipLabel);
 }
 
+const TArray<FElysiumSwingRecord>* AElysiumMapActor::NpcClipSwings(const FString& Stem,
+	const FString& ClipLabel)
+{
+	return Bodies->NpcClipSwings(Stem, ClipLabel);
+}
+
+bool AElysiumMapActor::GetBodyBoneTransform(USkeletalMeshComponent* Body, const FString& BoneName,
+	FTransform& OutWorld) const
+{
+	return Bodies ? Bodies->GetBoneFrame(Body, BoneName, OutWorld) : false;
+}
+
 bool AElysiumMapActor::GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
 	FElysiumClipPhase& Out)
 {

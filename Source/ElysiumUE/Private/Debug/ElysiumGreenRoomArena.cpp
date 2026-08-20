@@ -289,9 +289,13 @@ FString FElysiumGreenRoomRun::LabWeaponStatus() const
 			Item != nullptr ? *Item->ClassName() : TEXT("(empty hand)"), *Buttons);
 	}
 
+	// A melee transaction estimates no commit instant — its contact is the swept walk over the clip's
+	// own authored records — so the readout names where that walk stands instead.
 	const FString SwingText = Weapon->Swing.bActive
-		? FString::Printf(TEXT("#%d %s commit %.3f"), Weapon->Swing.Serial, *Weapon->Swing.Activity,
-			Weapon->Swing.CommitTime)
+		? FString::Printf(TEXT("#%d %s %s"), Weapon->Swing.Serial, *Weapon->Swing.Activity,
+			Weapon->Swing.bMelee
+				? *FString::Printf(TEXT("walk cycle %.3f"), Weapon->Swing.PrevCycle)
+				: *FString::Printf(TEXT("commit %.3f"), Weapon->Swing.CommitTime))
 		: FString(TEXT("(idle)"));
 	return FString::Printf(
 		TEXT("%s  next 1st %.3f / 2nd %.3f  swing %s (%d accepted)  buttons %s"),

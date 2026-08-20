@@ -37,6 +37,104 @@ namespace
 		}
 	}
 
+	// A bone-local point off the sidecar's `[x, y, z]` centimetre triple, read verbatim: the `UE_`
+	// exporter already stated it Unreal-native, so nothing is converted here.
+	bool ReadPointCm(const TSharedPtr<FJsonObject>& Object, const TCHAR* Field, FVector& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Components = nullptr;
+		if (!Object->TryGetArrayField(Field, Components) || Components == nullptr
+			|| Components->Num() != 3)
+		{
+			return false;
+		}
+		Out = FVector((*Components)[0]->AsNumber(), (*Components)[1]->AsNumber(),
+			(*Components)[2]->AsNumber());
+		return true;
+	}
+
+	// The `swings` column: one object per authored swing-contact record. A row that does not carry
+	// the shape is dropped rather than half-read — a record with no window or no segment is not a
+	// contact the walk could test, and inventing either would put a swing where the file states none.
+	//
+	// Answers how many rows it dropped, which the caller folds into the slice's malformed count: the
+	// column is this repository's own exporter product, so a row it cannot read is a pipeline defect
+	// and never an authored absence, and the absence has its own (silent) shape — no column at all.
+	int32 ReadSwingRecords(const TSharedPtr<FJsonValue>& Column, TArray<FElysiumSwingRecord>& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Rows = nullptr;
+		if (!Column.IsValid() || !Column->TryGetArray(Rows) || Rows == nullptr)
+		{
+			return 1;   // a stated column that is not an array of records
+		}
+		int32 Dropped = 0;
+		Out.Reserve(Rows->Num());
+		for (const TSharedPtr<FJsonValue>& RowValue : *Rows)
+		{
+			const TSharedPtr<FJsonObject>* Object = nullptr;
+			if (!RowValue.IsValid() || !RowValue->TryGetObject(Object) || Object == nullptr)
+			{
+				++Dropped;
+				continue;
+			}
+			const TSharedPtr<FJsonObject>& Row = *Object;
+
+			FElysiumSwingRecord Record;
+			double Window = 0.0;
+			if (!Row->TryGetNumberField(TEXT("start"), Window))
+			{
+				++Dropped;
+				continue;
+			}
+			Record.Start = static_cast<float>(Window);
+			if (!Row->TryGetNumberField(TEXT("end"), Window))
+			{
+				++Dropped;
+				continue;
+			}
+			Record.End = static_cast<float>(Window);
+			Row->TryGetStringField(TEXT("bone"), Record.Bone);
+			if (!ReadPointCm(Row, TEXT("a_cm"), Record.ACm)
+				|| !ReadPointCm(Row, TEXT("b_cm"), Record.BCm))
+			{
+				++Dropped;
+				continue;
+			}
+			// Four direction buckets of candidate activity names, kept in file order: bucket `k`
+			// answers direction `(b8 + k) mod 4`, so the array position is load-bearing and a
+			// bucket that names nothing has to stay in place as an empty one.
+			const TArray<TSharedPtr<FJsonValue>>* Buckets = nullptr;
+			if (Row->TryGetArrayField(TEXT("kb_names"), Buckets) && Buckets != nullptr)
+			{
+				Record.KnockbackNames.Reserve(Buckets->Num());
+				for (const TSharedPtr<FJsonValue>& BucketValue : *Buckets)
+				{
+					TArray<FString>& Names = Record.KnockbackNames.AddDefaulted_GetRef();
+					const TArray<TSharedPtr<FJsonValue>>* Candidates = nullptr;
+					if (BucketValue.IsValid() && BucketValue->TryGetArray(Candidates)
+						&& Candidates != nullptr)
+					{
+						for (const TSharedPtr<FJsonValue>& Name : *Candidates)
+						{
+							FString Text;
+							if (Name.IsValid() && Name->TryGetString(Text) && !Text.IsEmpty())
+							{
+								Names.Add(Text);
+							}
+						}
+					}
+				}
+			}
+			int32 Byte = 0;
+			Record.B8 = Row->TryGetNumberField(TEXT("b8"), Byte) ? Byte : 0;
+			Record.Ba = Row->TryGetNumberField(TEXT("ba"), Byte) ? Byte : 0;
+			// Stated on every row rather than inferred: a consumer forbidden to repair authored data
+			// reads the flag rather than re-testing the window it must reproduce.
+			Row->TryGetBoolField(TEXT("degenerate"), Record.bDegenerate);
+			Out.Add(MoveTemp(Record));
+		}
+		return Dropped;
+	}
+
 	bool ReadJsonFile(const FString& Path, TSharedPtr<FJsonObject>& OutRoot, FString& OutError)
 	{
 		FString Raw;
@@ -148,6 +246,7 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 
 	Clips.Reserve((*ClipObj)->Values.Num());
 	int32 Malformed = 0;
+	int32 DroppedSwings = 0;
 	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*ClipObj)->Values)
 	{
 		const TArray<TSharedPtr<FJsonValue>>* Row = nullptr;
@@ -189,12 +288,30 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 		{
 			Clip.BlockedReaction = (*Row)[8]->AsString();
 		}
+		// The third melee column, on the same trailing-and-optional contract as the two above: a
+		// slice written before the column existed simply ends at 8, and every such row reads as a
+		// sequence declaring no swing records — which is what all but 574 shipped descriptors are
+		// anyway. That is the whole compatibility rule, and it is why an unre-exported corpus loses
+		// contact rather than mis-reading a column.
+		if (Row->Num() > 9 && !(*Row)[9]->IsNull())
+		{
+			DroppedSwings += ReadSwingRecords((*Row)[9], Clip.Swings);
+		}
 		Clips.Add(Pair.Key, MoveTemp(Clip));
 	}
 	if (Malformed > 0)
 	{
 		UE_LOG(LogElysiumClips, Warning, TEXT("npc clips '%s': %d malformed row(s) skipped"),
 			*InStem, Malformed);
+	}
+	if (DroppedSwings > 0)
+	{
+		// Separate from the row count above because the failure is a different one: the row parsed
+		// and its clip is usable, but a swing-contact record inside it could not be read and that
+		// clip's swing now opens fewer windows than the descriptor authored.
+		UE_LOG(LogElysiumClips, Warning,
+			TEXT("npc clips '%s': %d swing-contact record(s) dropped — those windows will not open"),
+			*InStem, DroppedSwings);
 	}
 	return !Clips.IsEmpty();
 }

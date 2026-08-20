@@ -62,6 +62,8 @@ namespace
 	// resolves to — which is the key the blocked-reaction column is authored against.
 	const TCHAR* const GSwingLabel = TEXT("swing_long");
 	const TCHAR* const GSwingBank = TEXT("cast_bank");
+	// The bone the swing's authored contact segment is stated in, and which the fixture places.
+	const TCHAR* const GSwingBone = TEXT("Bip01 R Hand");
 
 	// Far enough past every commit estimate the fixture can produce. The recording seam answers a
 	// one-second clip for every activity, so a melee contact lands at 0.5/0.7 s and a shot at 0.5 s.
@@ -248,6 +250,25 @@ namespace
 			Services.bNpcOneShotsPlay = true;
 			Services.bPlayerOnGround = bOnGround;
 
+			// The swing's contact is the swept walk over the clip's own authored records, so the
+			// fixture has to author one: a phase standing on the swing clip, the bone its segment is
+			// stated in, and a window over the middle of the cycle.
+			Services.bBodyClipPhaseSet = true;
+			Services.BodyClipPhase = FElysiumClipPhase();
+			Services.BodyClipPhase.OwnerStem = GSwingBank;
+			Services.BodyClipPhase.Label = GSwingLabel;
+			Services.BodyClipPhase.Length = 1.0f;
+			Services.BodyClipPhase.PlayId = 1;
+			Services.BoneFrames.Add(FString(GSwingBone).ToLower(), FTransform::Identity);
+			{
+				FElysiumSwingRecord Record;
+				Record.Start = 0.30f;
+				Record.End = 0.70f;
+				Record.Bone = GSwingBone;
+				Record.BCm = FVector(30.f, 0.f, 0.f);
+				Services.SwingsByClip.Add(FString(GSwingLabel).ToLower(), { Record });
+			}
+
 			World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Services.Bundle());
 			World->Load(MakeBlockTestDefs());
 			World->SpawnPlayer();
@@ -289,20 +310,31 @@ namespace
 			World->SetPlayerButtons(
 				bBlockHeld ? static_cast<uint64>(EElysiumButton::SecondaryAtk) : 0);
 			World->RunPlayerThink(0.0);
+			// Whom the sweep reaches. Geometry is the seam's answer here; the substrate still decides
+			// eligibility, the opposed record and every reaction behind it.
+			Services.SwingContacts = { Player->Handle };
 			Services.Calls.Reset();
 			return true;
 		}
 
-		// One accepted melee swing by the attacker, carried through to its contact. The tick
-		// clears the whole transaction: the recording seam answers a one-second clip, so the
-		// `ContactEventCycle` estimate lands at 0.5/0.7 s and the recovery at 1/0.7.
+		// One accepted melee swing by the attacker, carried through to its contact. Two walked
+		// frames: the first is the swing's first live frame, where the opposed roll and the notice
+		// are staged, and the second carries the cycle into the authored window where the sweep
+		// lands. The tick behind them retires the transaction at its recovery deadline.
 		void Swing()
 		{
 			if (FElysiumWeapon* Weapon = GiveWeapon(*Attacker, GFists))
 			{
 				Weapon->AttackIntent(FElysiumWeapon::EIntent::Primary);
 			}
+			// The clock moves FIRST, so the base-channel holds the contact takes are measured against
+			// a `now` inside the swing rather than against zero. The walk does not advance the clock —
+			// it is a per-frame pass over a cycle, not a scheduler.
 			World->Tick(GContactTick);
+			Services.BodyClipPhase.Cycle = 0.0f;
+			World->AdvanceMeleeSwings(0.02f);
+			Services.BodyClipPhase.Cycle = 0.50f;
+			World->AdvanceMeleeSwings(0.02f);
 		}
 	};
 }
@@ -593,6 +625,10 @@ bool FElysiumBlockReactionDamageTest::RunTest(const FString&)
 			Stick->AttackIntent(FElysiumWeapon::EIntent::Primary);
 		}
 		F.World->Tick(GContactTick);
+		F.Services.BodyClipPhase.Cycle = 0.0f;
+		F.World->AdvanceMeleeSwings(0.02f);
+		F.Services.BodyClipPhase.Cycle = 0.50f;
+		F.World->AdvanceMeleeSwings(0.02f);
 
 		TestTrue(TEXT("a non-damaging blocked contact still plays the blocked reaction"),
 			Saw(F.Services, TEXT("ResolveNpcActivityClip"), TEXT("ACT_BLOCKED_REACTION")));

@@ -1193,6 +1193,127 @@ FElysiumEntityHandle AElysiumMapActor::QueryAimTarget(float MaxRangeCm) const
 	return Best;
 }
 
+void AElysiumMapActor::QuerySwingContacts(const FElysiumSwingSweep& Sweep,
+	TArray<FElysiumEntityHandle>& OutHits) const
+{
+	// The standing hull a bodiless candidate is measured by is `QueryFeedTarget`/`QueryAimTarget`'s
+	// own: VtMB's 32x32x72-unit character box, reachable with `elysium.NpcBodies 0` or a failed
+	// model, where a rendered bound does not exist.
+	constexpr float StandHalfWidthUnits = 16.0f;
+	constexpr float StandHeightUnits = 72.0f;
+
+	OutHits.Reset();
+	if (!EntityWorld.IsValid())
+	{
+		return;
+	}
+
+	// The swept segment's boundary: the segment where it started, where it ended, and the path each
+	// of its two endpoints took between. The walk sub-steps at 100 Hz, so the patch these four edges
+	// bound is thin enough that a candidate box inside it without touching an edge is not a case the
+	// authored corpus produces — and testing the edges is what keeps this a segment query rather
+	// than a bilinear-patch solver in a layer that owns no geometry.
+	const FVector Edges[4][2] = {
+		{ Sweep.PrevA, Sweep.PrevB },
+		{ Sweep.CurA,  Sweep.CurB  },
+		{ Sweep.PrevA, Sweep.CurA  },
+		{ Sweep.PrevB, Sweep.CurB  },
+	};
+
+	UWorld* World = GetWorld();
+	FCollisionQueryParams Params(FName(TEXT("ElysiumSwingContact")), /*bTraceComplex*/ false);
+	// The SWINGER is what the occlusion trace must not stop on, and the swinger is whoever holds the
+	// weapon — not the player, who is merely the source of the aim and feed queries beside this one.
+	// The trace starts on the limb, which rides inside its owner's own hull for part of every swing,
+	// and a `Pawn`-profile capsule blocks `ELYSIUM_USE_CHANNEL`: an attacker left in the query would
+	// report itself as the wall between its fist and the body it just reached.
+	if (const FElysiumEntity* AttackerEnt = EntityWorld->Resolve(Sweep.Attacker))
+	{
+		if (const USkeletalMeshComponent* AttackerBody = AttackerEnt->GetSkeletalBody())
+		{
+			if (const AActor* BodyActor = AttackerBody->GetOwner())
+			{
+				Params.AddIgnoredActor(BodyActor);
+			}
+		}
+	}
+	if (Sweep.Attacker == EntityWorld->PlayerHandle())
+	{
+		// The player's hull is the pawn's own component and stands whether or not a body was built,
+		// so it is named directly rather than reached through one.
+		if (const APawn* PlayerPawn = ResolvePlayerPawn())
+		{
+			Params.AddIgnoredActor(PlayerPawn);
+		}
+	}
+
+	for (const TUniquePtr<FElysiumEntity>& EntPtr : EntityWorld->Entities())
+	{
+		FElysiumEntity* Ent = EntPtr.Get();
+		// A loot container re-registers on the combat-character base (it owns the same inventory), so
+		// it is a combat character in this runtime without being a body a swing can land on.
+		const FElysiumCombatCharacter* AsChar = Ent ? Ent->AsCombatCharacter() : nullptr;
+		if (!Ent || Ent->IsInert() || AsChar == nullptr || Ent->AsItemContainer() != nullptr
+			|| Ent->Handle == Sweep.Attacker)
+		{
+			continue;
+		}
+		// A corpse is skipped here rather than left to the contact's own alive test, for the same
+		// reason the aim query skips one: it is still a rendered body in the way, and a swing that
+		// stopped on it would report a contact the commit then discards.
+		if (AsChar->HasReportedDeath())
+		{
+			continue;
+		}
+
+		FBox Candidate(ForceInit);
+		const USkeletalMeshComponent* CandidateBody = Ent->GetSkeletalBody();
+		if (CandidateBody)
+		{
+			Candidate = CandidateBody->Bounds.GetBox();
+		}
+		else
+		{
+			const FVector Half(StandHalfWidthUnits * ElysiumMove::U,
+				StandHalfWidthUnits * ElysiumMove::U, 0.0f);
+			Candidate = FBox(Ent->Origin - Half,
+				Ent->Origin + Half + FVector(0.0f, 0.0f, StandHeightUnits * ElysiumMove::U));
+		}
+
+		bool bTouched = false;
+		for (const FVector (&Edge)[2] : Edges)
+		{
+			if (FMath::LineBoxIntersection(Candidate, Edge[0], Edge[1], Edge[1] - Edge[0]))
+			{
+				bTouched = true;
+				break;
+			}
+		}
+		if (!bTouched)
+		{
+			continue;
+		}
+
+		// The engine's own answer to the one question the substrate cannot have: is there solid
+		// world between the limb and the body it just reached through? Same channel and same
+		// belongs-to test as the aim and feed queries, for the same reason — the walkable `.hulls`
+		// collider is material-less and would answer on the visibility channel instead of the wall.
+		const FVector LimbMid = (Sweep.CurA + Sweep.CurB) * 0.5;
+		const FVector Chest = Candidate.GetCenter();
+		if (World)
+		{
+			FHitResult Blocked;
+			if (World->LineTraceSingleByChannel(Blocked, LimbMid, Chest, ELYSIUM_USE_CHANNEL, Params)
+				&& !ElysiumFeedTargeting::HitBelongsToCandidate(
+					Blocked.GetComponent(), CandidateBody))
+			{
+				continue;   // a wall between the swing and the body
+			}
+		}
+		OutHits.Add(Ent->Handle);
+	}
+}
+
 bool AElysiumMapActor::QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const
 {
 	UWorld* World = GetWorld();
@@ -1631,12 +1752,21 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		EntityWorld->UpdatePlayerFeed();
 		// LIFE5 — the player's weapon frame, in retail's own `PostThink` order: the controlled-use
 		// first refusal and `ItemPostFrame` come after the move that just completed
-		// (`docs/vtmb/player-entity.md` § "Recovered `PostThink` body"). A swing accepted here queues
-		// its commit for the NEXT frame's queue service, which is immaterial: every commit already
+		// (`docs/vtmb/player-entity.md` § "Recovered `PostThink` body"). A shot accepted here queues
+		// its commit for the NEXT frame's queue service, which is immaterial: a ranged commit either
 		// carries a delay or arrives from an animation event, and `CommitArrivesFromAnimEvent` reads
 		// the phase of the clip the transaction just armed, so it answers correctly on the arming
 		// frame.
 		EntityWorld->UpdatePlayerWeaponFrame();
+		// LIFE5 — the melee contact walk, for the player and every swinging NPC alike. It runs
+		// AFTER the weapon frame, so a swing accepted this frame starts its walk on the next one:
+		// the body's pose layer has not ticked since the clip was armed, and the first frame that
+		// reports the clip playing is the first frame the walk has a cycle to test. That is the
+		// swing's first live frame, and the frame the opposed roll is staged on.
+		//
+		// It is the only substrate call in this pass that takes the frame's delta, because the
+		// sub-step count is `floor(dt * 100)` and nothing else in the layer measures a frame.
+		EntityWorld->AdvanceMeleeSwings(DeltaSeconds);
 	}
 
 	// 11.7 — re-resolve every `Follow` camera shot against this frame's final entity positions. Same

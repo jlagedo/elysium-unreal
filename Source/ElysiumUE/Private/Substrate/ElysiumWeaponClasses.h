@@ -11,26 +11,32 @@
 //
 // THE ATTACK IS TWO HALVES, AND THAT IS THE POINT.
 // An accepted swing is a transaction — logical activity, concrete clip, aimed opponent, playback
-// rate, recovery deadline and the commit instant. The commit is a SEPARATE later event that can
-// miss: it re-validates the owner, the weapon and the target, and only then stages the opposed
-// record and spends damage. Retail enters that second half from a server animation event on both
-// sides — ranged event ids 3030-3044 re-enter mode dispatch, and the melee swing's 3047 reaches the
-// melee hit applicator, which runs its own contact loop rather than the shared traced-impact
-// virtual (`combat-and-damage.md` § RE40 -> Melee Swing Pipeline).
+// rate and recovery deadline. The commit is a SEPARATE later event that can miss: it re-validates
+// the owner, the weapon and the target, and only then spends damage.
 //
-// THE CLIP'S OWN TIMELINE NAMES THE INSTANT; `ContactEventCycle` IS THE DEGRADED STAND-IN.
-// `OperatorHandleAnimEvent` below is retail's `Operator_HandleAnimEvent` `+0x5c8`: the sequence
-// event the playing clip declared arrives there and queues the commit with no delay. An accepted
-// transaction schedules the `ContactEventCycle` estimate ONLY where that route cannot run — a
-// headless world, a body whose pose layer publishes no phase, or a resolved attack clip whose
-// timeline names no commit id. Either way the commit rides the one event queue as a self-input, so
-// there is no private timer and no second scheduler (K11).
+// THE TWO FAMILIES REACH THAT SECOND HALF BY DIFFERENT ROUTES, AND THAT IS RETAIL'S OWN SHAPE.
+//
+//  * RANGED commits from a server animation event. `OperatorHandleAnimEvent` below is retail's
+//    `Operator_HandleAnimEvent` `+0x5c8`: ids 3030-3044 re-enter mode dispatch and queue the commit
+//    with no delay. Where that route cannot run — a headless world, a body whose pose layer
+//    publishes no phase, or a shot clip whose timeline names no id — the transaction schedules the
+//    `ContactEventCycle` estimate instead. Either way the commit rides the one event queue as a
+//    self-input, so there is no private timer and no second scheduler (K11).
+//
+//  * MELEE commits from a PER-FRAME SWEPT CONTACT WALK over the clip's own authored swing records
+//    (`AdvanceSwingContact`, the rules in `Substrate/ElysiumSwingContact.h`). There is no melee
+//    commit event and no estimate: the sequence descriptor states where on the limb the swing
+//    sweeps and over which slice of the clip cycle, and the walk tests exactly that. A melee clip
+//    declaring no records has no contact at all, which is what retail's own shape gives it. 3047 is
+//    retail's NPC swing TRIGGER rather than a commit, and is claimed here without committing
+//    anything.
 
 #include "CoreMinimal.h"
 #include "Misc/EnumClassFlags.h"
 
 #include "ElysiumAnimEvent.h"
 #include "ElysiumEntity.h"
+#include "ElysiumSwingRecord.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumItemClasses.h"
 
@@ -216,9 +222,12 @@ namespace ElysiumWeapons
 	//    fire-state transition, which re-enters `ModeDispatch` `0x102383b0` in event mode and calls
 	//    the weapon's shot virtual `CWeaponRanged::Shot` `0x102387b0`. The event chooses the instant;
 	//    the shot body spends ammunition and builds the fire packet.
-	//  * `0x103ea5b0`, the 29 common-melee classes — **3047** invokes the melee virtual, and 3001,
+	//  * `0x103ea5b0`, the 29 common-melee classes — **3047** is the NPC swing trigger, and 3001,
 	//    3003 and 3030..3037 are SWALLOWED: accepted and acted on by nothing, so a melee clip carrying
-	//    a swish or a ranged id does not fall through to a warning.
+	//    a swish or a ranged id does not fall through to a warning. **3047 commits nothing**: the
+	//    melee contact is the per-frame swept walk over the clip's authored swing records, and the
+	//    trigger's own consumer — an NPC asking its weapon for a swing from inside a clip — is not
+	//    built, so the id is claimed and reported once rather than wired to the damage spine.
 	//  * `0x1024f030`, the 17 base/discipline/armor/**thrown**/unarmed classes — **no accepted
 	//    route**. A thrown weapon is not a slow firearm: nothing in the band commits it, and this
 	//    runtime must not hand it the ranged body's ids merely because it is not melee.
@@ -231,7 +240,8 @@ namespace ElysiumWeapons
 	// is presentation and is claimed by none of them here.
 	inline constexpr int32 RangedShotEventFirst = 3030;
 	inline constexpr int32 RangedShotEventLast  = 3044;
-	inline constexpr int32 MeleeContactEvent    = 3047;
+	// Retail's NPC swing trigger on the common-melee body. Claimed, and deliberately not a commit.
+	inline constexpr int32 MeleeSwingTriggerEvent = 3047;
 
 	// Which of the three the record's authored `item_type` selects.
 	enum class EOperatorBody : uint8
@@ -247,10 +257,16 @@ namespace ElysiumWeapons
 	EOperatorBody OperatorBodyFor(EElysiumItemType Type);
 	const TCHAR* OperatorBodyName(EOperatorBody Body);
 
-	// The id that commits THIS body's transaction. Melee's commit is 3047 alone; ranged's is any of
-	// the fifteen shot ids, because the fifteen name shot slots across the weapon classes rather than
-	// distinct actions. `None` commits on nothing.
+	// The id that commits THIS body's transaction. Ranged's is any of the fifteen shot ids, because
+	// the fifteen name shot slots across the weapon classes rather than distinct actions. `Melee`
+	// and `None` commit on NOTHING: a melee contact is the swept walk over the clip's own authored
+	// swing records, so no id in the band names its instant.
 	bool IsCommitEvent(int32 Event, EOperatorBody Body);
+
+	// Retail's NPC swing trigger on the common-melee body (3047). Claimed here, and reported once
+	// rather than wired: its consumer — an NPC asking its weapon for a swing from inside a clip —
+	// is not built, and committing on it would put a second melee route beside the contact walk.
+	bool IsMeleeSwingTrigger(int32 Event);
 
 	// The common-melee body's swallow set — claimed, and deliberately without effect.
 	bool IsSwallowedMeleeEvent(int32 Event);
@@ -266,11 +282,14 @@ namespace ElysiumWeapons
 	// Each of these stands in for a value the export does not yet carry. They are named, not
 	// scattered, so the RE that closes one lands as a single replacement.
 
-	// The clip cycle the contact/shot commit enters at when — and only when — the clip's own timeline
-	// cannot supply it: a headless world, a body whose pose layer publishes no phase for the polled
-	// channel, or a resolved attack clip whose sequence declares no `IsCommitEvent` id. Retail never
-	// estimates, so every one of those is a DEGRADED path and the last of them says so once per clip.
-	// Mid-clip is the stated stand-in; the recovery names the id, never a time.
+	// The clip cycle the SHOT commit enters at when — and only when — the clip's own timeline cannot
+	// supply it: a headless world, a body whose pose layer publishes no phase for the polled channel,
+	// or a resolved shot clip whose sequence declares no `IsCommitEvent` id. Retail never estimates,
+	// so every one of those is a DEGRADED path and the last of them says so once per clip. Mid-clip
+	// is the stated stand-in; the recovery names the id, never a time.
+	//
+	// **It is the ranged path's alone.** A melee swing estimates no instant at all: its sequence
+	// descriptor authors the contact window and `AdvanceSwingContact` walks it.
 	inline constexpr float ContactEventCycle = 0.5f;
 
 	// The swing duration used when no embodiment can resolve a clip — a headless run, a bodiless
@@ -287,8 +306,19 @@ namespace ElysiumWeapons
 	// Source units — the one conversion is at the call site.
 	inline constexpr float MeleeReachSourceUnits = 64.0f;
 
-	// `FindEntityFOV`'s 30-degree half-angle (a 60-degree full cone).
+	// `FindEntityFOV`'s 30-degree half-angle (a 60-degree full cone), as the dot product the
+	// acquisition cone tests against.
 	inline constexpr float MeleeConeHalfAngleDegrees = 30.0f;
+
+	// --- The opposed roll's own opponent query -------------------------------------------------
+	// `MeleeRollAndSendNoticeCallback` runs its OWN `FindEntityFOV` before any contact test, at a
+	// fixed 60 Source units and a half-cone dot of 0.7 — not the acquisition query's authored
+	// per-sequence reach and 30-degree cone. The two are separate retail calls asking separate
+	// questions: acquisition reserves an opponent for aim assistance when the swing is accepted, and
+	// this one selects whom the swing's opposed record is staged against on its first live frame.
+	// Collapsing them would make the roll follow the aim reservation, which is not what the bytes do.
+	inline constexpr float SwingRollReachSourceUnits = 60.0f;
+	inline constexpr float SwingRollConeDot = 0.7f;
 
 	// The ranged query distance a shot falls back to when its mode authors no `Range`. Retail's fire
 	// packet carries the mode's own authored range; a record that states none leaves the aim query
@@ -377,16 +407,82 @@ public:
 		FElysiumEntityHandle Opponent;     // the aimed opponent, or Invalid
 		float PlaybackRate = 1.0f;
 		float ClipSeconds = 0.0f;
-		// The `ContactEventCycle` estimate's instant. Always recorded, because it is what the
-		// transaction WOULD have committed at and a diagnostic needs to read it; scheduled only when
-		// `bAwaitingAnimEvent` is clear.
+		// RANGED ONLY. The `ContactEventCycle` estimate's instant: what the transaction would have
+		// committed at, always recorded so a diagnostic can read it, scheduled only when
+		// `bAwaitingAnimEvent` is clear. A melee swing leaves it at zero — it estimates nothing.
 		double CommitTime = 0.0;
 		double RecoveryDeadline = 0.0;
-		// Set when the playing clip's own timeline names this family's commit id and the body
+		// RANGED ONLY. Set when the playing shot clip's own timeline names 3030..3044 and the body
 		// publishes a phase for the dispatcher to walk — so the commit will arrive from
 		// `OperatorHandleAnimEvent` and no estimate was queued. A transaction whose clip is cut short
-		// before its event then commits nothing, which is retail's own shape: the swing simply misses.
+		// before its event then commits nothing, which is retail's own shape: the shot simply misses.
 		bool bAwaitingAnimEvent = false;
+
+		// --- The melee contact walk's state (see `AdvanceSwingContact`) --------------------------
+		// All of it is TRANSIENT mid-swing state and none of it is saved, for the same reason
+		// `FElysiumCombatCharacter::MeleeRolls` is not: it exists between one frame of a playing clip
+		// and the next. A restored swing therefore meets its clip afresh — and in practice never
+		// does, because a load does not restore a body mid-clip, so the transaction expires at its
+		// recovery deadline having committed nothing. That is the same outcome retail gives any swing
+		// whose clip is cut short.
+
+		// Whether this swing's opposed record and incoming-swing notice have been staged. Both are
+		// staged ONCE per swing, on its first BATCHED frame, before any contact test — a frame that
+		// runs no batch records nothing at all, which is the point of the accumulator below.
+		bool bContactStaged = false;
+		// Elapsed time the walk has been handed and not yet walked. A frame shorter than one sub-step
+		// leaves it here rather than discarding it, so the batch that does run covers everything the
+		// clip advanced through since the last one (`ElysiumSwing::SubStepSeconds`).
+		float PendingSeconds = 0.0f;
+		// The play the walk is following. A clip re-armed is a new play whose window walk starts over,
+		// which is the same discriminator the animation-event cursor keys on. Zero is "the walk has
+		// not met a play yet".
+		uint32 WalkPlayId = 0;
+		// The cycle the last batch left off at. Negative is "not yet primed": the first batch has no
+		// previous position and covers only the instant it stands on.
+		float PrevCycle = -1.0f;
+		// Per authored record, the victims it has already landed on. Index-aligned with the playing
+		// clip's records; a record's list clears on any batch whose span leaves its window closed,
+		// which is what lets a `2COMBO`'s two disjoint groups land twice.
+		TArray<TArray<FElysiumEntityHandle>> RecordHits;
+		// The contact segments as of the last batch, in the ATTACKER's local frame and index-aligned
+		// with the records. The sweep needs where the limb was as well as where it is, and a bone
+		// query answers only for now.
+		TArray<TPair<FVector, FVector>> PrevSegmentsLocal;
+		// The attacker's own frame as of the last batch, so the sub-steps can interpolate the root
+		// the segments are carried by.
+		FVector PrevOrigin = FVector::ZeroVector;
+		FRotator PrevAngles = FRotator::ZeroRotator;
+
+		// Give up the walk's CURSOR — everything that describes where on a clip it was. Called
+		// whenever the play it was following changes or the clip stops being live, so a re-armed
+		// clip cannot inherit a stale hit list or sweep from where a different play left the limb.
+		//
+		// `bContactStaged` is deliberately NOT reset: the opposed roll is staged once per SWING, not
+		// once per play, and a clip that lost the channel and took it back must not roll twice. The
+		// whole transaction ending is what clears it, through `ClearSwing`.
+		void ResetWalk()
+		{
+			WalkPlayId = 0;
+			PendingSeconds = 0.0f;
+			PrevCycle = -1.0f;
+			RecordHits.Reset();
+			PrevSegmentsLocal.Reset();
+			PrevOrigin = FVector::ZeroVector;
+			PrevAngles = FRotator::ZeroRotator;
+		}
+
+		// Re-prime the walk's POSITION only, after an engine discontinuity: the next batch starts
+		// from where the limb actually is instead of sweeping through wherever it used to be. The
+		// hit lists survive, deliberately — a teleport is not a reason for a record whose window is
+		// still open to land a second time on a body it already hit.
+		void RePrimePosition()
+		{
+			PrevCycle = -1.0f;
+			PrevSegmentsLocal.Reset();
+			PrevOrigin = FVector::ZeroVector;
+			PrevAngles = FRotator::ZeroRotator;
+		}
 	};
 	FSwing Swing;
 
@@ -430,6 +526,21 @@ public:
 	// The queued halves. Public because the registered input thunks are free functions.
 	void CommitQueuedAttack(int32 Serial);
 	void CommitQueuedReload(int32 Serial);
+
+	// **The melee contact.** One frame of the swept walk over the staged swing's own authored
+	// records, driven for every character with a live melee transaction — the player's and every
+	// NPC's alike, because retail runs it on the CHARACTER rather than on the player's input path.
+	//
+	// Its whole shape is the clip's: the swing is live for as long as the playing attack clip
+	// declares records, the elapsed span is divided into `floor(span * 100)` sub-steps, and each
+	// record is swept on the sub-steps its authored window overlaps. Nothing here is scheduled and
+	// nothing is estimated. The rules are `Substrate/ElysiumSwingContact.h`; this is their producer
+	// half, and the bone transforms and the sweep it needs are engine services (K13).
+	//
+	// A frame that records nothing at all is the ordinary case: a span below one sub-step is
+	// accumulated rather than walked, and the batch that follows covers it. A swing whose clip
+	// declares no records is the other, and it never opens a contact window.
+	void AdvanceSwingContact(float DeltaSeconds);
 
 	// Retail's virtual `Operator_HandleAnimEvent` `+0x5c8`: one sequence-event record the OPERATOR's
 	// clip declared, forwarded here by `FElysiumCombatCharacter::HandleAnimEvent` because it fell in
@@ -494,11 +605,37 @@ private:
 	EVerdict BeginMeleeSwing(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode);
 	EVerdict BeginRangedShot(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode,
 		const FElysiumEntityHandle& Victim);
-	// `SwingClipLabel`/`SwingClipOwnerStem` are the cleared transaction's, captured by the caller
-	// before `ClearSwing`: the attacker's blocked reaction is the one the SWING's own sequence
-	// descriptor stores, so the contact cannot ask the weapon what it is currently playing.
+	// The accepted swing's own identity, copied out of the transaction before the first contact
+	// commits. A contact can retire the transaction, so the walk must not read the live one back
+	// through a reference into it — and the four values are one thing, not a parameter list.
+	struct FSwingContact
+	{
+		int32 ModeIndex = INDEX_NONE;
+		// The accepted-swing serial. It is what scopes the opposed record: a record stamped with any
+		// other serial belongs to an earlier swing of this same attacker and is refused.
+		int32 Serial = 0;
+		// The concrete clip the swing resolved, and the bank that owns it. The attacker's blocked
+		// reaction is the one the SWING's own sequence descriptor stores, so the contact cannot ask
+		// the weapon what it happens to be playing by then.
+		FString ClipLabel;
+		FString ClipOwnerStem;
+	};
+
+	// **The opposed record is CONSUMED here, never rolled here.** It was staged on the victim on the
+	// swing's first batched frame by `StageSwingOpposedRoll` below, which is where retail rolls it.
+	// A victim the sweep reached with no record of THIS swing's serial is an ordinary negative — the
+	// roll's own 60-unit query did not select them — and commits nothing.
 	void MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
-		int32 ModeIndex, const FString& SwingClipLabel, const FString& SwingClipOwnerStem);
+		const FSwingContact& Contact);
+
+	// The swing's first batched frame, BEFORE any contact test: select the opponent with the roll's
+	// own `FindEntityFOV` (60 Source units, half-cone dot 0.7), stage the opposed record on them
+	// under this swing's serial, and send the incoming-swing notice. Retail's
+	// `MeleeRollAndSendNoticeCallback`, and the reason the contact above has a record to consume.
+	//
+	// It stages at most one record per swing. Finding nobody is ordinary and is not retried on later
+	// frames: retail rolls once, and a swing that opened on empty air stays opened on empty air.
+	void StageSwingOpposedRoll(FElysiumCombatCharacter& Attacker, const FSwingContact& Contact);
 	void RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
 		int32 ModeIndex);
 
@@ -545,14 +682,18 @@ private:
 	bool CommitFromAnimEvent(const FElysiumAnimEvent& Event);
 
 	// `FindEntityFOV` reduced to what the substrate owns: the nearest live combat character inside
-	// `ReachCm` and the 30-degree half-angle cone. The reach is the caller's because it is the
+	// `ReachCm` and the caller's own cone. The reach is the caller's because it is the
 	// resolved activity's, not this weapon's — a value of 0 or less takes the stated
 	// `MeleeReachSourceUnits` stand-in and reports once. SEAM — retail traces forward first and
 	// accepts a valid obstruction hit, and the shared query rejects non-targetable/`ScriptHidden`
 	// candidates through an engine visibility test; that trace is an engine query and joins with the
 	// perception cycle. Selection is distance plus facing until then.
+	//
+	// `ConeDot` is the cosine of the half-angle the caller's own query uses: the acquisition call
+	// passes `MeleeConeHalfAngleDegrees`' cosine, and the opposed roll's call passes its own
+	// `SwingRollConeDot`. Two retail calls, two shapes, one predicate.
 	FElysiumEntityHandle AcquireMeleeOpponent(const FElysiumCombatCharacter& Attacker,
-		float ReachCm) const;
+		float ReachCm, float ConeDot) const;
 
 	// Schedule one of the two queued halves through the world's event queue.
 	void QueueSelfInput(FName Input, int32 Serial, double Delay);

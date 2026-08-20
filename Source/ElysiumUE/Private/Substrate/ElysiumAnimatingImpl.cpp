@@ -192,6 +192,15 @@ bool FElysiumAnimating::ResetAnimToIdle()
 
 bool FElysiumAnimating::HasLiveAnimEventDispatch(const FString& OwnerStem, const FString& Label) const
 {
+	FElysiumClipPhase Ignored;
+	return GetLiveClipPhase(OwnerStem, Label, Ignored);
+}
+
+bool FElysiumAnimating::GetLiveClipPhase(const FString& OwnerStem, const FString& Label,
+	FElysiumClipPhase& Out) const
+{
+	Out = FElysiumClipPhase();
+
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (!Embodiment || !Visual || OwnerStem.IsEmpty() || Label.IsEmpty())
 	{
@@ -212,6 +221,8 @@ bool FElysiumAnimating::HasLiveAnimEventDispatch(const FString& OwnerStem, const
 			&& Phase.OwnerStem.Equals(OwnerStem, ESearchCase::IgnoreCase)
 			&& Phase.Label.Equals(Label, ESearchCase::IgnoreCase))
 		{
+			Phase.Channel = Channel;
+			Out = Phase;
 			return true;
 		}
 	}

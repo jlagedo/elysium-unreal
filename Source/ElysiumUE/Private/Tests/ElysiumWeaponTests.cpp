@@ -28,6 +28,10 @@
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumAnimEvents.h"
 #include "Substrate/ElysiumDamage.h"
+#include "Substrate/ElysiumDice.h"
+#include "Substrate/ElysiumDiceTables.h"
+#include "Substrate/ElysiumSheetMath.h"
+#include "Substrate/ElysiumSwingContact.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumReactions.h"
@@ -712,9 +716,54 @@ bool FElysiumWeaponWieldFunnelTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// Melee: the accepted swing, the scheduled commit, the automatic combo, the opposed
-// record and the damage that lands through the cycle-1 path.
+// Melee: the accepted swing, the SWEPT CONTACT WALK over the clip's own authored
+// windows, the automatic combo, the opposed record and the damage that lands.
 // =====================================================================================
+
+namespace
+{
+	// The clip a melee swing resolves to in the contact cases, the bank the include DAG named, and
+	// the bone the authored record sweeps. All three matter: the records are filed under the
+	// attacking body's stem and the label, and the segment is stated in the bone's own frame.
+	const TCHAR* const GSwingOwner = TEXT("cast_bank");
+	const TCHAR* const GSwingClip = TEXT("swing_long");
+	const TCHAR* const GSwingBone = TEXT("Bip01 R Hand");
+
+	FElysiumSwingRecord SwingRec(float Start, float End)
+	{
+		FElysiumSwingRecord Record;
+		Record.Start = Start;
+		Record.End = End;
+		Record.Bone = GSwingBone;
+		Record.ACm = FVector(0.f, 0.f, 0.f);
+		Record.BCm = FVector(30.f, 0.f, 0.f);
+		return Record;
+	}
+
+	// Everything the contact walk reads, in one call: the activity seam pointed at one clip, a phase
+	// standing on it, the bone the records sweep, and the records themselves.
+	void ArmSwingSeam(FElysiumRecordingServices& Services, TArray<FElysiumSwingRecord> Records)
+	{
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityLabel = GSwingClip;
+		Services.ResolvedNpcActivityClip = GSwingClip;
+		Services.ResolvedNpcActivityOwner = GSwingOwner;
+		// The mode's own `Attack_Rate`, so the recovery arithmetic reads the same with a resolved clip
+		// as it did with the headless fallback.
+		Services.ClipSeconds = 0.5f;
+
+		Services.bBodyClipPhaseSet = true;
+		Services.BodyClipPhase = FElysiumClipPhase();
+		Services.BodyClipPhase.OwnerStem = GSwingOwner;
+		Services.BodyClipPhase.Label = GSwingClip;
+		Services.BodyClipPhase.Cycle = 0.0f;
+		Services.BodyClipPhase.Length = 0.5f;
+		Services.BodyClipPhase.PlayId = 1;
+
+		Services.BoneFrames.Add(FString(GSwingBone).ToLower(), FTransform::Identity);
+		Services.SwingsByClip.Add(FString(GSwingClip).ToLower(), MoveTemp(Records));
+	}
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeTest, "Elysium.Substrate.Weapons.Melee",
 	GElysiumTestFlags)
@@ -724,10 +773,13 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 	ElysiumItems::Install(Table);
 	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
 
-	// --- The swing, its commit, and damage through the cycle-1 route ------------------------
+	// --- The swing, its swept contact, and damage through the cycle-1 route ------------------
 	{
 		ElysiumRng::SeedAll(4242);
 		FElysiumRecordingServices Services;
+		// One authored window over the middle of the clip. Nothing schedules a commit any more: the
+		// descriptor states when the limb is live, and the walk tests exactly that.
+		ArmSwingSeam(Services, { SwingRec(0.30f, 0.60f) });
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MakeWeaponTestDefs());
 		World.SpawnPlayer();
@@ -741,8 +793,15 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		{
 			return false;
 		}
+		// The walk reads the pose off a body, so the swinger needs one.
+		Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+		if (!TestNotNull(TEXT("the player carries a body the walk can read"), Player->Visual))
+		{
+			return false;
+		}
 		SeedHealth(*Victim, 100);
 		PlaceFacing(*Player, FVector::ZeroVector);
+		Services.SwingContacts = { Victim->Handle };
 
 		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
 		if (!TestNotNull(TEXT("the fists are granted as a weapon"), Fists))
@@ -752,15 +811,28 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		TestEqual(TEXT("Weapon_Equip makes the granted weapon active"),
 			Player->Inventory.ActiveWeapon, Fists->Handle);
 
+		// The Dice stream as it stands before the press, so the draws this whole swing spends can be
+		// counted rather than described. Moving the opposed roll from contact time to swing start
+		// moves WHEN the stream is drawn from; it must not change how often.
+		FRandomStream Expected = ElysiumRng::Stream(EElysiumRngStream::Dice);
+
 		const FElysiumWeapon::EVerdict Verdict = Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
 		TestEqual(TEXT("the swing is accepted"), Verdict, FElysiumWeapon::EVerdict::Accepted);
 		TestTrue(TEXT("a transaction is staged"), Fists->Swing.bActive);
+		// The `2COMBO` substitution's draw, and nothing else: with no rulebook loaded the defence and
+		// soak difficulties are unavailable, so the opposed record is built with no roll behind it.
+		Expected.RandRange(0, 99);
+		TestEqual(TEXT("the accepted swing spends exactly the combo draw"),
+			ElysiumRng::Stream(EElysiumRngStream::Dice).GetCurrentSeed(),
+			Expected.GetCurrentSeed());
+		TestTrue(TEXT("...and stages no opposed record yet — the roll belongs to the first live frame"),
+			Victim->FindMeleeRoll(Player->Handle) == nullptr);
 		TestEqual(TEXT("...naming the logical activity"), Fists->Swing.Activity,
 			FString(TEXT("ACT_MELEE_ATTACK")));
 		TestEqual(TEXT("...and the acquired opponent"), Fists->Swing.Opponent, Victim->Handle);
 
-		// No embodiment can resolve a clip headlessly, so the duration is the mode's authored
-		// `Attack_Rate` and the rate is 0.70 (the attack-feat rating reads 0 with no rulebook).
+		// The resolved clip runs 0.5 s and the rate is 0.70 (the attack-feat rating reads 0 with no
+		// rulebook).
 		TestTrue(TEXT("the playback rate is 0.70 + 0.03 x rank"),
 			FMath::IsNearlyEqual(Fists->Swing.PlaybackRate, 0.70f));
 		TestTrue(TEXT("melee recovery is the clip duration over the playback rate"),
@@ -768,21 +840,44 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		TestTrue(TEXT("...and both deadlines are held to it"),
 			NearlyEqual(Fists->NextPrimaryAttackTime, 0.5 / 0.7)
 			&& NearlyEqual(Fists->NextSecondaryAttackTime, 0.5 / 0.7));
-		TestTrue(TEXT("the contact commit is scheduled inside the clip"),
-			NearlyEqual(Fists->Swing.CommitTime, 0.5 * 0.5 / 0.7));
+		TestTrue(TEXT("a melee swing estimates no commit instant at all"),
+			NearlyEqual(Fists->Swing.CommitTime, 0.0) && !Fists->Swing.bAwaitingAnimEvent);
 
-		// Producers enqueue; only queue service delivers.
-		TestEqual(TEXT("no damage lands inside the accepted swing"), DamageTaken(*Victim), 0);
+		// No queue service can produce a melee contact any more, however far the clock is advanced.
 		World.Tick(0.1);
-		TestEqual(TEXT("...nor before the commit instant"), DamageTaken(*Victim), 0);
-
 		World.Tick(0.4);
+		TestEqual(TEXT("no queued route commits the swing"), DamageTaken(*Victim), 0);
+		TestTrue(TEXT("...and the transaction is still standing"), Fists->Swing.bActive);
+
+		// The first live frame: the roll and the notice are staged, before any contact test, and the
+		// cycle is still outside the authored window.
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("the first live frame stages the roll and sweeps nothing"),
+			DamageTaken(*Victim), 0);
+		TestTrue(TEXT("...staging the opposed record on the defender at swing start"),
+			Victim->FindMeleeRoll(Player->Handle) != nullptr);
+
+		// A frame that walks the cycle into the authored window: the record is live and the sweep
+		// lands.
+		Services.BodyClipPhase.Cycle = 0.40f;
+		World.AdvanceMeleeSwings(0.02f);
 		// lethality 8 - defense 0 - soak 0 = 8; total = 8 x (BaseDamage 2 + DamageModifier) x 1.
 		// `DamageModifier` is the attacker's `Close_Combat_Brawl` rating, which reads 0 with no
 		// rulebook loaded — the formula itself is asserted over its whole domain in the Rules suite.
-		TestEqual(TEXT("the contact commits the melee total through the typed health commit"),
+		TestEqual(TEXT("the swept contact commits the melee total through the typed health commit"),
 			DamageTaken(*Victim), 16);
-		TestFalse(TEXT("the transaction is consumed"), Fists->Swing.bActive);
+
+		// Hit-once: the same record cannot land twice while its window stays open.
+		Services.BodyClipPhase.Cycle = 0.55f;
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("the record lands once for as long as its window is open"),
+			DamageTaken(*Victim), 16);
+
+		// The other half of the count: staging and contact together spend nothing more than the accept
+		// already did. The dice moved instant, not quantity.
+		TestEqual(TEXT("the whole swing spends the same draws it always did"),
+			ElysiumRng::Stream(EElysiumRngStream::Dice).GetCurrentSeed(),
+			Expected.GetCurrentSeed());
 
 		const FElysiumMeleeRoll* Roll = Victim->FindMeleeRoll(Player->Handle);
 		if (TestTrue(TEXT("the opposed record is staged on the defender"), Roll != nullptr))
@@ -824,10 +919,11 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 			NearlyEqual(Fists->NextSecondaryAttackTime, 200.0));
 	}
 
-	// --- The commit can miss: a victim that dies between swing and contact -------------------
+	// --- The contact can miss: a victim that dies between the swing and its window -----------
 	{
 		ElysiumRng::SeedAll(7);
 		FElysiumRecordingServices Services;
+		ArmSwingSeam(Services, { SwingRec(0.30f, 0.60f) });
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MakeWeaponTestDefs());
 		World.SpawnPlayer();
@@ -840,8 +936,10 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		{
 			return false;
 		}
+		Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
 		SeedHealth(*Victim, 100);
 		PlaceFacing(*Player, FVector::ZeroVector);
+		Services.SwingContacts = { Victim->Handle };
 		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
 		if (!Fists)
 		{
@@ -850,8 +948,10 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 
 		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
 		Victim->SetDeathReportedForRestore(true);   // it died before the contact window
-		World.Tick(0.4);
-		TestEqual(TEXT("a commit against a dead victim misses"), DamageTaken(*Victim), 0);
+		World.AdvanceMeleeSwings(0.02f);
+		Services.BodyClipPhase.Cycle = 0.40f;
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("a sweep onto a dead victim misses"), DamageTaken(*Victim), 0);
 		TestTrue(TEXT("...and stages no opposed record"),
 			Victim->FindMeleeRoll(Player->Handle) == nullptr);
 		TestFalse(TEXT("...and stamps no combat stance on either body — a whiff is not contact"),
@@ -859,10 +959,14 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 				|| Victim->IsInCombatStance(World.NowSeconds()));
 	}
 
-	// --- A stale commit is dropped rather than fired against a replaced transaction ----------
+	// --- A melee clip that declares NO records opens no contact window at all ----------------
 	{
-		ElysiumRng::SeedAll(11);
+		// Retail's own shape, and also what a corpus exported before the `swings` column gives every
+		// clip: the swing animates, recovers, and touches nothing.
+		ElysiumRng::SeedAll(31);
 		FElysiumRecordingServices Services;
+		ArmSwingSeam(Services, {});
+		Services.SwingsByClip.Reset();   // the column is absent entirely, not merely empty
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MakeWeaponTestDefs());
 		World.SpawnPlayer();
@@ -875,21 +979,183 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		{
 			return false;
 		}
+		Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
 		SeedHealth(*Victim, 100);
 		PlaceFacing(*Player, FVector::ZeroVector);
+		Services.SwingContacts = { Victim->Handle };
 		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
 		if (!Fists)
 		{
 			return false;
 		}
 		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
-		const int32 Serial = Fists->Swing.Serial;
-		Fists->CommitQueuedAttack(Serial);            // the real commit
-		TestEqual(TEXT("the first commit lands"), DamageTaken(*Victim), 16);
-		Fists->CommitQueuedAttack(Serial);            // the queued duplicate
-		TestEqual(TEXT("a repeat of the same serial is dropped"), DamageTaken(*Victim), 16);
-		World.Tick(0.4);
-		TestEqual(TEXT("...and so is the queued delivery"), DamageTaken(*Victim), 16);
+		for (float Cycle = 0.0f; Cycle <= 1.0f; Cycle += 0.1f)
+		{
+			Services.BodyClipPhase.Cycle = Cycle;
+			World.AdvanceMeleeSwings(0.02f);
+		}
+		TestEqual(TEXT("a clip with no swing records never contacts"), DamageTaken(*Victim), 0);
+		TestTrue(TEXT("...and stages no opposed record either — the walk never went live"),
+			Victim->FindMeleeRoll(Player->Handle) == nullptr);
+	}
+
+	// --- The queued commit route is gone for melee -------------------------------------------
+	{
+		// A save written before the contact walk landed can still carry a queued `WeaponAttackCommit`
+		// for a melee transaction. It is refused, loudly, and commits nothing.
+		AddExpectedError(TEXT("dropped a queued melee commit"),
+			EAutomationExpectedErrorFlags::Contains, 1);
+
+		ElysiumRng::SeedAll(11);
+		FElysiumRecordingServices Services;
+		ArmSwingSeam(Services, { SwingRec(0.30f, 0.60f) });
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim"));
+		if (!Player || !Victim)
+		{
+			return false;
+		}
+		Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+		SeedHealth(*Victim, 100);
+		PlaceFacing(*Player, FVector::ZeroVector);
+		Services.SwingContacts = { Victim->Handle };
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!Fists)
+		{
+			return false;
+		}
+		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		Fists->CommitQueuedAttack(Fists->Swing.Serial);
+		TestEqual(TEXT("a queued melee commit lands nothing"), DamageTaken(*Victim), 0);
+		TestTrue(TEXT("...and leaves the transaction for the walk"), Fists->Swing.bActive);
+	}
+
+	// --- A later swing cannot consume an earlier swing's opposed record ----------------------
+	{
+		// The hole this closes: the roll's own 60-unit query selects whom the swing OPPOSES, and the
+		// sweep can reach somebody else entirely. With the record unscoped, that body would be judged
+		// on whatever margin the previous swing rolled against it — a landed hit nobody rolled for.
+		ElysiumRng::SeedAll(4242);
+		FElysiumRecordingServices Services;
+		ArmSwingSeam(Services, { SwingRec(0.30f, 0.60f) });
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim"));
+		if (!Player || !Victim)
+		{
+			return false;
+		}
+		Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+		SeedHealth(*Victim, 500);
+		PlaceFacing(*Player, FVector::ZeroVector);
+		Services.SwingContacts = { Victim->Handle };
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!Fists)
+		{
+			return false;
+		}
+
+		// Swing 1: the victim is inside the roll cone, so a record is staged and the sweep lands.
+		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		const int32 FirstSerial = Fists->Swing.Serial;
+		World.AdvanceMeleeSwings(0.02f);
+		Services.BodyClipPhase.Cycle = 0.40f;
+		World.AdvanceMeleeSwings(0.02f);
+		const int32 AfterFirst = DamageTaken(*Victim);
+		TestTrue(TEXT("the first swing lands"), AfterFirst > 0);
+
+		// Swing 2: the victim is now far outside the roll's own 60-unit query, so nothing is staged
+		// for it — but the sweep still reaches it, which is the whole point. The record swing 1 left
+		// behind is still sitting on the body.
+		Victim->Origin = FVector(100000.0, 0.0, 0.0);
+		Fists->NextPrimaryAttackTime = 0.0;
+		Fists->NextSecondaryAttackTime = 0.0;
+		Services.BodyClipPhase.PlayId = 2;
+		Services.BodyClipPhase.Cycle = 0.0f;
+		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		TestTrue(TEXT("the second swing takes its own serial"),
+			Fists->Swing.Serial != FirstSerial);
+
+		World.AdvanceMeleeSwings(0.02f);
+		const FElysiumMeleeRoll* Stale = Victim->FindMeleeRoll(Player->Handle);
+		if (!TestTrue(TEXT("the first swing's record is still on the victim"), Stale != nullptr))
+		{
+			return false;
+		}
+		TestEqual(TEXT("...still stamped with the swing that made it"), Stale->SwingSerial,
+			FirstSerial);
+		TestTrue(TEXT("...and the second swing staged none of its own"),
+			Victim->FindMeleeRoll(Player->Handle, Fists->Swing.Serial) == nullptr);
+
+		Services.BodyClipPhase.Cycle = 0.40f;
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("a sweep with no record of ITS OWN swing commits nothing"),
+			DamageTaken(*Victim), AfterFirst);
+	}
+
+	// --- Two disjoint record groups land twice; one group's records land once ----------------
+	{
+		// The `2COMBO` shape. Records 0 and 1 share a window, so a hit through either marks both and
+		// the pair lands once; record 2 opens later with no overlap, so it lands again.
+		ElysiumRng::SeedAll(4242);
+		FElysiumRecordingServices Services;
+		ArmSwingSeam(Services, {
+			SwingRec(0.20f, 0.35f), SwingRec(0.25f, 0.40f), SwingRec(0.70f, 0.85f) });
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim"));
+		if (!Player || !Victim)
+		{
+			return false;
+		}
+		Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+		SeedHealth(*Victim, 500);
+		PlaceFacing(*Player, FVector::ZeroVector);
+		Services.SwingContacts = { Victim->Handle };
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!Fists)
+		{
+			return false;
+		}
+		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		World.AdvanceMeleeSwings(0.02f);              // the first live frame: staging, no sweep
+
+		Services.BodyClipPhase.Cycle = 0.30f;
+		World.AdvanceMeleeSwings(0.02f);
+		const int32 AfterFirstGroup = DamageTaken(*Victim);
+		TestTrue(TEXT("the overlapping pair lands exactly one contact"), AfterFirstGroup == 16);
+
+		Services.BodyClipPhase.Cycle = 0.38f;
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("...and does not land again while its window stays open"),
+			DamageTaken(*Victim), AfterFirstGroup);
+
+		// Past the first group entirely: both its records close and forget the victim.
+		Services.BodyClipPhase.Cycle = 0.55f;
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("the gap between the groups contacts nothing"),
+			DamageTaken(*Victim), AfterFirstGroup);
+
+		Services.BodyClipPhase.Cycle = 0.75f;
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("the second, disjoint group lands its own contact"),
+			DamageTaken(*Victim), AfterFirstGroup * 2);
 	}
 
 	// --- The automatic `2COMBO` substitution, at both ends of the table ----------------------
@@ -986,6 +1252,419 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		// other end of that carry.
 		TestEqual(TEXT("...and the stem that owns it"), Fists->Swing.ClipOwnerStem,
 			FString(TEXT("cast_bank")));
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// Where the melee swing spends its dice, exactly.
+//
+// The opposed roll is staged on the swing's first batched frame and CONSUMED at contact, so
+// the Dice stream has to advance at the first and not at the second. Asserting that needs a
+// rulebook: with no feat table and no `Damage_Info` difficulties, `RollFeatNet` returns before
+// it reaches the resolver and both branches draw nothing, which would make the assertion pass
+// against a build that rolled in either place.
+//
+// The tables are fabricated and bound through `ElysiumSheetRules::BindTables` — the fallback
+// seam the sheet, the Discipline and the Stealth suites already stand on, and one the rulebook
+// subsystem always outranks in a real run.
+// =====================================================================================
+
+namespace
+{
+	// The two feats a melee contact rolls, and the one it only rates. Every base names an
+	// ATTRIBUTE, which `FeatValue` floors at 1 for the first ten slots — so a pool is the number
+	// of bases and needs no stat table and no seeded sheet behind it.
+	FElysiumFeat MakeRollFeat(const TCHAR* Name, int32 Index, int32 Bases, const TCHAR* Trait)
+	{
+		FElysiumFeat Feat;
+		Feat.InternalName = Name;
+		Feat.Name = Name;
+		Feat.Index = Index;
+		Feat.MaxValue = 30;   // above the pools below, so nothing here is clamped
+		for (int32 i = 0; i < Bases; ++i)
+		{
+			FElysiumTraitRef Ref;
+			Ref.Trait = Trait;
+			Feat.Bases.Add(Ref);
+		}
+		return Feat;
+	}
+
+	// The defence pool is deliberately far above the fists' lethality, so the margin the contact
+	// classifies is negative and the transaction exits before the damage commit. That keeps the
+	// swing's OWN dice budget the only thing measured here: the damage resolver rolls soak of its
+	// own, and pinning that belongs to the damage suite rather than to this one.
+	constexpr int32 GDefencePool = 20;
+	constexpr int32 GSoakPool = 2;
+	constexpr int32 GDefenceDifficulty = 1;   // every face succeeds, so the margin cannot drift
+	constexpr int32 GSoakDifficulty = 6;
+
+	// The rulebook halves a melee transaction reads, bound for the duration of one case.
+	struct FMeleeRollRules
+	{
+		FElysiumFeatTable Feats;
+		FElysiumRules Rules;
+
+		FMeleeRollRules()
+		{
+			Feats.Feats.Add(MakeRollFeat(TEXT("Defensive_Maneuvers"), 0, GDefencePool,
+				TEXT("Dexterity")));
+			Feats.Feats.Add(MakeRollFeat(TEXT("Soak_vs_Bashing"), 1, GSoakPool, TEXT("Stamina")));
+			Feats.Feats.Add(MakeRollFeat(TEXT("Close_Combat_Brawl"), 2, 0, TEXT("Strength")));
+			// The lookup IS the index on a hand-built table, exactly as it is for the item and quest
+			// catalogues: without this every `Find` misses and both rolls silently return zero.
+			Feats.Reindex();
+
+			TMap<FString, FString>& Damage = Rules.Blocks.Add(TEXT("damage_info"));
+			Damage.Add(TEXT("defense_difficulty_pc"), FString::FromInt(GDefenceDifficulty));
+			Damage.Add(TEXT("defense_difficulty_npc"), FString::FromInt(GDefenceDifficulty));
+			Damage.Add(TEXT("soak_difficulty_pc"), FString::FromInt(GSoakDifficulty));
+			Damage.Add(TEXT("soak_difficulty_npc"), FString::FromInt(GSoakDifficulty));
+
+			// The classifier's own block, so a contact reaching it names a band instead of warning
+			// that the table never loaded.
+			TMap<FString, FString>& Melee = Rules.Blocks.Add(TEXT("melee_reactions"));
+			Melee.Add(TEXT("successesforattackerblockedmajor"), TEXT("-5"));
+			Melee.Add(TEXT("successesforattackerblocked"), TEXT("-1"));
+			Melee.Add(TEXT("successesfordefenderdodgeattack"), TEXT("-5"));
+			Melee.Add(TEXT("successesfordefenderdodge"), TEXT("-3"));
+			Melee.Add(TEXT("successesfordefenderblock"), TEXT("-1"));
+			Melee.Add(TEXT("successesfordefenderblockstagger"), TEXT("0"));
+
+			ElysiumSheetRules::FBoundTables Bound;
+			Bound.Feats = &Feats;
+			Bound.Rules = &Rules;
+			ElysiumSheetRules::BindTables(Bound);
+		}
+		~FMeleeRollRules() { ElysiumSheetRules::BindTables(ElysiumSheetRules::FBoundTables()); }
+	};
+
+	// The Dice stream's position, so a case can compare two of them rather than describe a delta.
+	int32 DiceSeed() { return ElysiumRng::Stream(EElysiumRngStream::Dice).GetCurrentSeed(); }
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeRollTest,
+	"Elysium.Substrate.Weapons.MeleeRoll", GElysiumTestFlags)
+bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	FMeleeRollRules Bound;
+	constexpr int32 Seed = 0x4D524F4C;
+
+	// The expected stream position after one accepted swing has staged its record: the `2COMBO`
+	// substitution's draw, then the defender's `Defensive_Maneuvers` roll, then its soak. Replayed
+	// on the live stream from the same seed rather than described, so this pins the COUNT, the
+	// ARGUMENTS and the ORDER together — a build that rolled defence twice, or rolled at a
+	// different difficulty, or rolled soak before defence, lands somewhere else.
+	ElysiumRng::SeedAll(Seed);
+	const int32 SeedAtStart = DiceSeed();
+	ElysiumRng::Stream(EElysiumRngStream::Dice).RandRange(0, 99);
+	const int32 SeedAfterCombo = DiceSeed();
+	ElysiumDice::Roll(GDefencePool, GDefenceDifficulty, FElysiumDiceTable::Uniform());
+	ElysiumDice::Roll(GSoakPool, GSoakDifficulty, FElysiumDiceTable::Uniform());
+	const int32 SeedAfterStaging = DiceSeed();
+	if (!TestTrue(TEXT("the replay actually spends dice, or the pin proves nothing"),
+		SeedAfterCombo != SeedAtStart && SeedAfterStaging != SeedAfterCombo))
+	{
+		return false;
+	}
+
+	// --- A swing that finds an opponent: one roll, at swing start, and none at contact ---------
+	{
+		ElysiumRng::SeedAll(Seed);
+		FElysiumRecordingServices Services;
+		ArmSwingSeam(Services, { SwingRec(0.30f, 0.60f) });
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim"));
+		if (!TestNotNull(TEXT("the player exists"), Player)
+			|| !TestNotNull(TEXT("the victim exists"), Victim))
+		{
+			return false;
+		}
+		Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+		SeedHealth(*Victim, 100);
+		PlaceFacing(*Player, FVector::ZeroVector);
+		Services.SwingContacts = { Victim->Handle };
+
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!TestNotNull(TEXT("the fists are granted"), Fists))
+		{
+			return false;
+		}
+
+		TestEqual(TEXT("the swing is accepted"),
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(TEXT("accepting spends the combo draw and nothing else"),
+			DiceSeed(), SeedAfterCombo);
+		TestTrue(TEXT("...and stages no opposed record: the roll is not the accept's"),
+			Victim->FindMeleeRoll(Player->Handle) == nullptr);
+
+		// The first batched frame. The roll and the notice are staged here, before any contact test.
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("the first batched frame spends the opposed roll, exactly once"),
+			DiceSeed(), SeedAfterStaging);
+		const FElysiumMeleeRoll* Staged = Victim->FindMeleeRoll(Player->Handle);
+		if (!TestTrue(TEXT("...and the record it produced is on the defender"), Staged != nullptr))
+		{
+			return false;
+		}
+		TestEqual(TEXT("...stamped with the accepted swing's serial"), Staged->SwingSerial,
+			Fists->Swing.Serial);
+		const int32 StagedMargin = Staged->Margin();
+		TestTrue(TEXT("...and the fixture's defence outweighs the fists, so no damage commit runs"),
+			StagedMargin <= 0);
+
+		// The contact. It CONSUMES the record; nothing here may reach the resolver again.
+		Services.BodyClipPhase.Cycle = 0.40f;
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("the contact spends no dice — it consumes the staged record"),
+			DiceSeed(), SeedAfterStaging);
+		TestTrue(TEXT("...leaving the record it consumed untouched"),
+			Victim->FindMeleeRoll(Player->Handle) != nullptr
+				&& Victim->FindMeleeRoll(Player->Handle)->Margin() == StagedMargin);
+		TestTrue(TEXT("...and the contact was real: both bodies are in combat stance"),
+			Player->IsInCombatStance(World.NowSeconds())
+				&& Victim->IsInCombatStance(World.NowSeconds()));
+		TestEqual(TEXT("...with a non-positive margin committing no damage"),
+			DamageTaken(*Victim), 0);
+	}
+
+	// --- A swing that finds nobody: no roll at all --------------------------------------------
+	{
+		ElysiumRng::SeedAll(Seed);
+		FElysiumRecordingServices Services;
+		ArmSwingSeam(Services, { SwingRec(0.30f, 0.60f) });
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim"));
+		if (!Player || !Victim)
+		{
+			return false;
+		}
+		Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+		SeedHealth(*Victim, 100);
+		PlaceFacing(*Player, FVector::ZeroVector);
+		// Well outside the roll query's own 60 Source units, and outside the acquisition reach too.
+		Victim->Origin = FVector(100000.0, 0.0, 0.0);
+
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!Fists)
+		{
+			return false;
+		}
+		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		World.AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("a swing that opens on empty air spends only the combo draw"),
+			DiceSeed(), SeedAfterCombo);
+		TestTrue(TEXT("...and stages no record anywhere"),
+			Victim->FindMeleeRoll(Player->Handle) == nullptr);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The contact walk's batching: accumulation below one sub-step, the span cap above it,
+// and the discontinuity guard between two batches.
+//
+// Retail walks on a server tick and its update either sees `dt == 0` and records nothing or
+// sees a whole tick and walks. Under a render clock the same observable is accumulation, so a
+// 144 Hz frame must not drop the span it covered — it has to survive into the batch that runs.
+// =====================================================================================
+
+namespace
+{
+	// One frame at a rate too fast for a batch to run on its own.
+	constexpr float GFastFrame = 1.0f / 144.0f;
+
+	// The whole walk fixture in one place: a bodied player, a live victim, a phase standing on the
+	// swing clip, and one accepted swing. Returns with the walk unprimed and nothing swept.
+	struct FBatchFixture
+	{
+		FElysiumRecordingServices Services;
+		TUniquePtr<FElysiumEntityWorld> World;
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		FElysiumWeapon* Fists = nullptr;
+
+		bool Stand(FAutomationTestBase& Test, TArray<FElysiumSwingRecord> Records)
+		{
+			ElysiumRng::SeedAll(0x42415443);
+			ArmSwingSeam(Services, MoveTemp(Records));
+			World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Services.Bundle());
+			World->Load(MakeWeaponTestDefs());
+			World->SpawnPlayer();
+			World->Activate(0.0);
+			World->Tick(0.0);
+
+			Player = World->FindPlayer();
+			Victim = FindCharacter(*World, TEXT("victim"));
+			if (!Test.TestNotNull(TEXT("the player exists"), Player)
+				|| !Test.TestNotNull(TEXT("the victim exists"), Victim))
+			{
+				return false;
+			}
+			Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+			SeedHealth(*Victim, 5000);
+			PlaceFacing(*Player, FVector::ZeroVector);
+			Services.SwingContacts = { Victim->Handle };
+			Fists = GiveWeapon(*Player, GFists);
+			if (!Test.TestNotNull(TEXT("the fists are granted"), Fists))
+			{
+				return false;
+			}
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
+			return true;
+		}
+
+		// One frame of the walk at a stated cycle and delta.
+		void Frame(float Cycle, float DeltaSeconds)
+		{
+			Services.BodyClipPhase.Cycle = Cycle;
+			World->AdvanceMeleeSwings(DeltaSeconds);
+		}
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeBatchTest,
+	"Elysium.Substrate.Weapons.MeleeBatch", GElysiumTestFlags)
+bool FElysiumWeaponMeleeBatchTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	// --- A frame too short to batch records NOTHING, and its span is walked by the next one ----
+	{
+		// The window sits BEHIND the cycle the un-batched frame stands on and ahead of the one the
+		// priming batch recorded, which is what makes the damage assertion below falsifying: a walk
+		// that dropped the short frame's span would batch from 0.31 and step over [0.22, 0.24]
+		// entirely, while one that batches from the last recorded cycle covers it.
+		FBatchFixture F;
+		if (!F.Stand(*this, { SwingRec(0.22f, 0.24f) }))
+		{
+			return false;
+		}
+
+		F.Frame(0.20f, 0.02f);   // the priming batch
+		TestTrue(TEXT("the priming batch records where it stands"),
+			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.20f));
+		TestEqual(TEXT("...and sweeps nothing, having no previous position"),
+			DamageTaken(*F.Victim), 0);
+
+		F.Frame(0.31f, GFastFrame);
+		TestEqual(TEXT("a 144 Hz frame runs no batch"), DamageTaken(*F.Victim), 0);
+		TestTrue(TEXT("...and records nothing at all, so its span is not lost"),
+			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.20f));
+		TestTrue(TEXT("...it is held instead"), F.Fists->Swing.PendingSeconds > 0.0f);
+
+		F.Frame(0.40f, GFastFrame);
+		TestTrue(TEXT("the frame that crosses one sub-step batches the WHOLE accumulated span"),
+			DamageTaken(*F.Victim) > 0);
+		TestTrue(TEXT("...and records the cycle it reached"),
+			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.40f));
+		TestTrue(TEXT("...having consumed what it accumulated"),
+			FMath::IsNearlyEqual(F.Fists->Swing.PendingSeconds, 0.0f));
+	}
+
+	// --- The span cap: a hitch walks at the cap rather than at hundreds of sub-steps -----------
+	{
+		FBatchFixture F;
+		if (!F.Stand(*this, { SwingRec(0.0f, 1.0f) }))
+		{
+			return false;
+		}
+		F.Frame(0.10f, 0.02f);              // prime
+		F.Services.SwingContactSweeps.Reset();
+
+		// Three seconds on one frame. Uncapped that is 300 sub-steps; the cap makes it 25, and one
+		// sweep is issued per live record per sub-step.
+		F.Frame(0.50f, 3.0f);
+		TestEqual(TEXT("a hitch is walked at the stated cap, not at its own length"),
+			F.Services.SwingContactSweeps.Num(),
+			ElysiumSwing::SubStepCount(ElysiumSwing::MaxBatchSeconds));
+		TestTrue(TEXT("...and the batch still covers the cycle the clip reached"),
+			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.50f));
+	}
+
+	// --- The discontinuity guard, with its own control ------------------------------------------
+	// Record 0's window sits between the two batched cycles, so a batch that sweeps THROUGH the gap
+	// reaches it and one that re-primes does not. Record 1 opens later, so either way the walk is
+	// still alive afterwards.
+	{
+		FBatchFixture Control;
+		if (!Control.Stand(*this, { SwingRec(0.30f, 0.35f), SwingRec(0.70f, 0.80f) }))
+		{
+			return false;
+		}
+		Control.Frame(0.20f, 0.02f);
+		Control.Frame(0.50f, 0.02f);
+		TestTrue(TEXT("without a jump, the batch sweeps through the window between two cycles"),
+			DamageTaken(*Control.Victim) > 0);
+	}
+	{
+		FBatchFixture F;
+		if (!F.Stand(*this, { SwingRec(0.30f, 0.35f), SwingRec(0.70f, 0.80f) }))
+		{
+			return false;
+		}
+		F.Frame(0.20f, 0.02f);
+
+		// A teleport between two batches. Swept as motion this would drag the limb across everything
+		// on the line; re-priming throws away the crossing and keeps the swing.
+		F.Player->Origin = FVector(50000.0, 0.0, 0.0);
+		F.Frame(0.50f, 0.02f);
+		TestEqual(TEXT("a body that jumped does not sweep through the window it crossed"),
+			DamageTaken(*F.Victim), 0);
+		TestTrue(TEXT("...and the walk re-primed rather than stopping"),
+			FMath::IsNearlyEqual(F.Fists->Swing.PrevCycle, 0.50f));
+
+		F.Frame(0.75f, 0.02f);
+		TestTrue(TEXT("the next record still lands, from where the limb actually is"),
+			DamageTaken(*F.Victim) > 0);
+	}
+
+	// --- What ends the transaction: a stopped clip, past the recovery deadline ------------------
+	// Melee has no commit event and no queued half, so the walk is the only thing that can close a
+	// swing. A transaction left standing would let a later play of the same clip label re-open
+	// contact for a swing that ended, against a record its own serial still matches.
+	{
+		FBatchFixture F;
+		if (!F.Stand(*this, { SwingRec(0.30f, 0.60f) }))
+		{
+			return false;
+		}
+		F.Frame(0.20f, 0.02f);
+		TestTrue(TEXT("the transaction stands while its clip plays"), F.Fists->Swing.bActive);
+
+		// The clip is on no polled channel, but the recovery has not passed: that is also the shape
+		// of a swing whose pose layer has not armed the clip yet, and it must not end anything.
+		F.Services.bBodyClipPhaseSet = false;
+		F.World->AdvanceMeleeSwings(0.02f);
+		TestTrue(TEXT("a clip the pose layer is not publishing does not end it on its own"),
+			F.Fists->Swing.bActive);
+
+		F.World->Tick(2.0);
+		F.World->AdvanceMeleeSwings(0.02f);
+		TestFalse(TEXT("...but a stopped clip past the recovery deadline retires it"),
+			F.Fists->Swing.bActive);
 	}
 
 	return true;
@@ -1787,7 +2466,7 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 		TestEqual(TEXT("a claimed id is not census work"), ElysiumAnimEventCensus::Num(), 0);
 	}
 
-	// --- 3047 on a melee weapon commits contact; the swallow set is claimed and does nothing ------
+	// --- 3047 is CLAIMED and commits nothing; the swallow set is claimed and does nothing ---------
 	{
 		ElysiumRng::SeedAll(4242);
 		ElysiumAnimEventCensus::Clear();
@@ -1802,9 +2481,10 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 		ArmClipSeam(Services, 0.0f);
 		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
 			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
-		// A swish and a ranged id ahead of the contact. Both are inside the common-melee body's
-		// swallow set, so they are claimed, do nothing, and never reach the census — and neither of
-		// them may commit the swing early.
+		// A swish and a ranged id ahead of the swing trigger. Both are inside the common-melee body's
+		// swallow set, so they are claimed, do nothing, and never reach the census. 3047 behind them
+		// is retail's NPC swing TRIGGER rather than a commit, and is claimed on the same terms: the
+		// contact is the swept walk over the clip's own authored records, and no id commits it.
 		Timeline.Add(WeaponEv(0.10f, 3003));
 		Timeline.Add(WeaponEv(0.20f, 3035));
 		Timeline.Add(WeaponEv(0.40f, 3047));
@@ -1818,7 +2498,7 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
 			FElysiumWeapon::EVerdict::Accepted);
 		TestEqual(TEXT("...naming the acquired opponent"), Fists->Swing.Opponent, Victim->Handle);
-		TestTrue(TEXT("...and waiting on 3047 rather than on the estimate"),
+		TestFalse(TEXT("...waiting on no event at all — melee estimates and commits on neither"),
 			Fists->Swing.bAwaitingAnimEvent);
 
 		Services.BodyClipPhase.Cycle = 0.30f;
@@ -1829,10 +2509,13 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 
 		Services.BodyClipPhase.Cycle = 0.50f;
 		World.Tick(0.2);
-		TestTrue(TEXT("3047 commits the melee contact"), DamageTaken(*Victim) > 0);
-		TestFalse(TEXT("...consuming the transaction"), Fists->Swing.bActive);
-		TestTrue(TEXT("...through the opposed record on the defender"),
-			Victim->FindMeleeRoll(Player->Handle) != nullptr);
+		TestEqual(TEXT("3047 commits nothing — it is the swing trigger, not the contact"),
+			DamageTaken(*Victim), 0);
+		TestTrue(TEXT("...leaving the transaction to the contact walk"), Fists->Swing.bActive);
+		TestTrue(TEXT("...and staging no opposed record, which the walk owns"),
+			Victim->FindMeleeRoll(Player->Handle) == nullptr);
+		TestEqual(TEXT("...but it IS claimed, so it is not census work"),
+			ElysiumAnimEventCensus::Num(), 0);
 	}
 
 	// --- An id in the band with no weapon held is an ordinary unclaimed record --------------------

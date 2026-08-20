@@ -19,6 +19,7 @@ struct FElysiumClanTemplate;
 struct FElysiumSheetEffects;   // Private/Substrate/ElysiumSheetMath.h — the trait-effect layer
 struct FElysiumDisposition;
 struct FElysiumDmg;            // Private/Substrate/ElysiumDamage.h — the typed damage descriptor
+struct FElysiumClipPhase;      // ElysiumAnimationIntent.h — one channel's place on one clip
 enum class EElysiumDmgFamily : int32;
 
 // 11.4 (S3) — the player is an entity; the pawn is its body.
@@ -725,6 +726,18 @@ struct FElysiumMeleeRoll
 	int32 Defense = 0;               // word 2 — defender `Defensive_Maneuvers` net + defense bonus
 	int32 Soak = 0;                  // word 3 — defender soak selected from the mode's descriptor
 
+	// OURS, and it is what stands in for `ForceMeleeReset`. The accepted-swing serial the attacking
+	// weapon staged this record under; a reader naming a different serial is refused.
+	//
+	// Retail keeps the array on the ATTACKER, keyed by defender, and `ForceMeleeReset` zeroes its
+	// count (+0xA94) at every swing start and every chain step — so a record cannot outlive the swing
+	// that made it. (The array's ownership is the correction: `combat-and-damage.md` describes it
+	// defender-side, and the reset path is what settles which side holds it.) This runtime stores it
+	// defender-side, where one clear-on-swing-start would have to reach every body the attacker might
+	// touch. Stamping the serial reaches the same observable from the reader's end: the moment a new
+	// swing is accepted, every record the previous one staged stops answering.
+	int32 SwingSerial = 0;
+
 	int32 Margin() const { return Lethality - Defense - Soak; }
 };
 
@@ -818,6 +831,13 @@ public:
 	// An ordinary negative on a bodiless character, in a headless world, on an idle channel, and on a
 	// channel standing on a different clip.
 	bool HasLiveAnimEventDispatch(const FString& OwnerStem, const FString& Label) const;
+
+	// The same question, answered WITH the record: the phase a polled channel is publishing for one
+	// named clip, or false when no channel stands on it. The melee swing's contact walk needs the
+	// cycle itself — it walks the interval the clip advanced through, not merely whether it is on
+	// screen — so the two callers share one lookup rather than one asking twice.
+	bool GetLiveClipPhase(const FString& OwnerStem, const FString& Label,
+		FElysiumClipPhase& Out) const;
 
 protected:
 	// Which of the three standing idles a disposition's stance set poses. Virtual because only the
@@ -1101,13 +1121,24 @@ public:
 	}
 
 	// `GetMeleeDiceRolls` — the record this attacker staged, or null.
-	const FElysiumMeleeRoll* FindMeleeRoll(const FElysiumEntityHandle& Attacker) const
+	//
+	// `SwingSerial` scopes the answer to ONE accepted swing, which is what keeps a contact from
+	// consuming a record an earlier swing left behind: a sweep can reach a body the current swing's
+	// own roll query never selected, and without the scope that body would be judged on the last
+	// margin anybody rolled against it. `INDEX_NONE` asks the unscoped question retail's
+	// `GetMeleeDiceRolls` asks, which is what the diagnostic readers want.
+	//
+	// A serial mismatch answers null rather than searching on: there is at most one row per attacker,
+	// so a row that does not match is the answer, not a near miss.
+	const FElysiumMeleeRoll* FindMeleeRoll(const FElysiumEntityHandle& Attacker,
+		int32 SwingSerial = INDEX_NONE) const
 	{
 		for (const FElysiumMeleeRoll& Roll : MeleeRolls)
 		{
 			if (Roll.Attacker == Attacker)
 			{
-				return &Roll;
+				return (SwingSerial == INDEX_NONE || Roll.SwingSerial == SwingSerial)
+					? &Roll : nullptr;
 			}
 		}
 		return nullptr;

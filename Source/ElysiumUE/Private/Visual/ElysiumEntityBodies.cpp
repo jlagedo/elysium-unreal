@@ -1413,3 +1413,34 @@ FString UElysiumEntityBodies::NpcClipBlockedReaction(const FString& Stem, const 
 	// blocked reaction all mean the same thing to the caller, and none of them is a fault.
 	return Clip != nullptr ? Clip->BlockedReaction : FString();
 }
+
+const TArray<FElysiumSwingRecord>* UElysiumEntityBodies::NpcClipSwings(const FString& Stem,
+	const FString& ClipLabel)
+{
+	UElysiumAnimSubsystem* Anims = GetAnims();
+	const FElysiumNpcClipSet* Set = Anims ? Anims->GetClipSet(Stem) : nullptr;
+	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipLabel) : nullptr;
+	// Null all the way down, like the blocked reaction above: no vocabulary, no such label, a
+	// sequence declaring no records, and a slice written before the column existed are one answer to
+	// the caller — this swing opens no contact window — and none of them is a fault.
+	return (Clip != nullptr && Clip->HasSwings()) ? &Clip->Swings : nullptr;
+}
+
+bool UElysiumEntityBodies::GetBoneFrame(const USkeletalMeshComponent* Body,
+	const FString& BoneName, FTransform& OutWorld) const
+{
+	OutWorld = FTransform::Identity;
+	if (Body == nullptr || BoneName.IsEmpty())
+	{
+		return false;
+	}
+	const int32 BoneIndex = Body->GetBoneIndex(FName(*BoneName));
+	if (BoneIndex == INDEX_NONE)
+	{
+		return false;
+	}
+	// The component transform goes in rather than being composed after, which is what makes this the
+	// bone's WORLD frame — the same call `FElysiumEyePass::GetHeadFrame` reaches the head bone with.
+	OutWorld = Body->GetBoneTransform(BoneIndex, Body->GetComponentTransform());
+	return true;
+}

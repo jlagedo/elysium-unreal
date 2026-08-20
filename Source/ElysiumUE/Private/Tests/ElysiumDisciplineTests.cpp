@@ -1039,6 +1039,29 @@ bool FElysiumDisciplinePotenceTest::RunTest(const FString&)
 	{
 		ElysiumRng::SeedAll(7100);
 		FElysiumRecordingServices Services;
+		// The melee contact is the swept walk over the swing clip's own authored records, so the
+		// fixture authors one: a resolved clip, a phase standing on it, the bone its segment is
+		// stated in, and a window over the middle of the cycle.
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityLabel = TEXT("swing_long");
+		Services.ResolvedNpcActivityClip = TEXT("swing_long");
+		Services.ResolvedNpcActivityOwner = TEXT("cast_bank");
+		Services.bBodyClipPhaseSet = true;
+		Services.BodyClipPhase = FElysiumClipPhase();
+		Services.BodyClipPhase.OwnerStem = TEXT("cast_bank");
+		Services.BodyClipPhase.Label = TEXT("swing_long");
+		Services.BodyClipPhase.Length = 1.0f;
+		Services.BodyClipPhase.PlayId = 1;
+		Services.BoneFrames.Add(TEXT("bip01 r hand"), FTransform::Identity);
+		{
+			FElysiumSwingRecord Record;
+			Record.Start = 0.30f;
+			Record.End = 0.70f;
+			Record.Bone = TEXT("Bip01 R Hand");
+			Record.BCm = FVector(30.f, 0.f, 0.f);
+			Services.SwingsByClip.Add(TEXT("swing_long"), { Record });
+		}
+
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MakeDisciplineTestDefs());
 		World.SpawnPlayer();
@@ -1051,6 +1074,9 @@ bool FElysiumDisciplinePotenceTest::RunTest(const FString&)
 		{
 			return INDEX_NONE;
 		}
+		// The walk reads the pose off a body, so the swinger needs one.
+		Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+		Services.SwingContacts = { Victim->Handle };
 		SeedCharacter(*Player, Rules.Stats);
 		SeedCharacter(*Victim, Rules.Stats);
 		Player->Origin = FVector::ZeroVector;
@@ -1077,7 +1103,13 @@ bool FElysiumDisciplinePotenceTest::RunTest(const FString&)
 		// Melee acquires its own opponent: the player stands at the origin facing +X, where
 		// `victim0` is.
 		Weapon->AttackIntent(FElysiumWeapon::EIntent::Primary);
-		World.Tick(2.0);   // the commit enters on the animation event, which the schedule supplies
+		// The contact walk: the first live frame stages the opposed record, the second carries the
+		// cycle into the authored window where the sweep lands.
+		Services.BodyClipPhase.Cycle = 0.0f;
+		World.AdvanceMeleeSwings(0.02f);
+		Services.BodyClipPhase.Cycle = 0.50f;
+		World.AdvanceMeleeSwings(0.02f);
+		World.Tick(2.0);
 		return Victim->Sheet.GetCurrent(EC::Attributes, ElysiumSlot::Health);
 	};
 

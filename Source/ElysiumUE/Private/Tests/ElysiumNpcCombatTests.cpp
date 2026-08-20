@@ -913,6 +913,31 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	TestEqual(TEXT("the melee selector takes the approach"), F.Fighter->SelectSchedule(),
 		EId::MeleeAttack1);
 
+	// The swing's contact is the per-frame swept walk over the clip's own authored records, and
+	// retail runs it on the CHARACTER — so an NPC's swing reaches contact through exactly the pass
+	// the player's does. Arming the seam before the press is what gives the transaction a clip whose
+	// records the walk can read.
+	{
+		F.Services.bNpcActivitiesResolve = true;
+		F.Services.ResolvedNpcActivityLabel = TEXT("swing_long");
+		F.Services.ResolvedNpcActivityClip = TEXT("swing_long");
+		F.Services.ResolvedNpcActivityOwner = TEXT("cast_bank");
+		F.Services.bBodyClipPhaseSet = true;
+		F.Services.BodyClipPhase = FElysiumClipPhase();
+		F.Services.BodyClipPhase.OwnerStem = TEXT("cast_bank");
+		F.Services.BodyClipPhase.Label = TEXT("swing_long");
+		F.Services.BodyClipPhase.Length = 1.0f;
+		F.Services.BodyClipPhase.PlayId = 1;
+		F.Services.BoneFrames.Add(TEXT("bip01 r hand"), FTransform::Identity);
+		FElysiumSwingRecord Record;
+		Record.Start = 0.30f;
+		Record.End = 0.70f;
+		Record.Bone = TEXT("Bip01 R Hand");
+		Record.BCm = FVector(30.f, 0.f, 0.f);
+		F.Services.SwingsByClip.Add(TEXT("swing_long"), { Record });
+		F.Services.SwingContacts = { F.Target->Handle };
+	}
+
 	// The whole approach plus its transfer to the terminal swing runs inside one think: face, stop,
 	// transfer, announce, attack.
 	TestTrue(TEXT("the approach starts"),
@@ -935,9 +960,17 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	TestEqual(TEXT("...aimed at the committed enemy"), Weapon->Swing.Opponent, F.Target->Handle);
 	TestTrue(TEXT("...and held the next-attack deadline"), Weapon->NextPrimaryAttackTime > 0.0);
 
-	// Producers enqueue; only queue service delivers.
+	// Nothing is scheduled: the accept opens no window and the clock alone commits nothing.
 	TestEqual(TEXT("no damage lands inside the accepted swing"), F.DamageTaken(F.Target), 0);
 	F.Flush(2.0);
+	TestEqual(TEXT("...and none from the clock either — melee estimates nothing"),
+		F.DamageTaken(F.Target), 0);
+	// Two walked frames on the same pass the player's swing takes: the first stages the opposed
+	// record and the notice, the second carries the cycle into the authored window.
+	F.Services.BodyClipPhase.Cycle = 0.0f;
+	F.World.AdvanceMeleeSwings(0.02f);
+	F.Services.BodyClipPhase.Cycle = 0.50f;
+	F.World.AdvanceMeleeSwings(0.02f);
 	TestTrue(TEXT("the contact commits damage through the typed health commit"),
 		F.DamageTaken(F.Target) > 0);
 	F.Flush(2.5);

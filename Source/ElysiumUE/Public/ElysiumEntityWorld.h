@@ -264,6 +264,18 @@ public:
 	// stays its schedule tasks' direct `AttackIntent` calls.
 	void UpdatePlayerWeaponFrame();
 
+	// LIFE5 — one frame of the melee contact walk, for EVERY character holding a live melee swing.
+	//
+	// Retail runs the swept contact on the CHARACTER's own update rather than on the player's input
+	// path, so this is not a sibling of the weapon frame above: the player and every swinging NPC
+	// reach it through the same walk over the entity list. It sits in the post-move pass because the
+	// sweep reads the frame's final positions and the pose the body is actually drawing.
+	//
+	// It takes the frame's delta because the sub-step count is `floor(dt * 100)` — the one place in
+	// this layer that needs a delta rather than a clock, and the reason it is driven from the map
+	// actor's tick instead of from `Tick(Now)`.
+	void AdvanceMeleeSwings(float DeltaSeconds);
+
 	// LIFE5 — the whole combat button field, forwarded as a LEVEL rather than as an edge pair. This
 	// is retail's one current-button field at player `+0x2088`: every consumer reads bits off it and
 	// derives whatever edge it needs, rather than each verb queueing its own press/release history
