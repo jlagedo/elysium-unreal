@@ -226,6 +226,14 @@ struct FElysiumNpcCognition
 	// The retail-shaped starvation warning is latched per NPC *per schedule*: a different schedule
 	// starving selection is a different fact. Retail's registered schedule number, or -1.
 	int32 StarvedScheduleNumber = -1;
+
+	// A damage memory expired and left the COMMITTED enemy with no eligible relation behind it
+	// (`ElysiumNpcEnemy::ExpireDamageMemory`, the only writer). `ShouldChooseNewEnemy` reads it, and
+	// it is cleared by the pass that gets through the interrupt gate and by any new enemy episode —
+	// so a schedule that refuses to be interrupted keeps the fact until it can be acted on rather
+	// than dropping it. Transient, like every other byte here: the row it describes cannot survive a
+	// save either.
+	bool bEnemyHostilityLapsed = false;
 };
 
 namespace ElysiumNpcCond

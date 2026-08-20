@@ -1134,8 +1134,17 @@ void FElysiumCogWindow_Npc::RenderCombat(FElysiumEntityWorld& World, FElysiumNpc
 				ElysiumRelationships::LexToString(Value), Priority)
 			: FString(TEXT("no row — neutral at the default priority 5")),
 			Value == EElysiumRelationship::Hate ? &ElysiumCogStyle::ColError : nullptr);
-		Row(TEXT("rules"), FString::Printf(TEXT("%d entity, %d class"),
-			Npc.Relationships.NumEntityRules(), Npc.Relationships.NumClassRules()));
+		Row(TEXT("rules"), FString::Printf(TEXT("%d entity, %d class, %d derived"),
+			Npc.Relationships.NumEntityRules(), Npc.Relationships.NumClassRules(),
+			Npc.Relationships.NumDerivedRules()));
+		// The damage memory is the one row with a clock on it, so it is shown as time left rather
+		// than as a value: "hostile" and "hostile for another half second" are different facts.
+		const FElysiumDerivedRelationship* DamageMemory = Npc.Relationships.FindDerived(Player);
+		Row(TEXT("damage memory"), DamageMemory == nullptr
+			? FString(TEXT("(none)"))
+			: FString::Printf(TEXT("%s, %.1fs left"),
+				ElysiumRelationships::LexToString(DamageMemory->Value),
+				DamageMemory->ExpiresAt - World.NowSeconds()));
 		ImGui::EndTable();
 	}
 

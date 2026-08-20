@@ -673,7 +673,14 @@ EElysiumScheduleId SelectLawSchedule(FElysiumNpc& Npc, double Now)
 		// the player at `IRelationPriority`'s own no-row default, and then nothing. The ordinary
 		// enemy transaction's gate, stickiness test and arbitration do the rest on the next pass, and
 		// the composed selector picks the fight's schedule.
-		if (Npc.Relationships.Resolve(Player->Handle, TEXT("player")) != EElysiumRelationship::Hate)
+		// The PERSISTENT surface is what is asked, because this row is permanent: a witnessed crime
+		// is not a stimulus with seconds on it, and a live damage memory toward the same player
+		// would otherwise stand in for this decision and then expire with it.
+		EElysiumRelationship Standing = EElysiumRelationship::Neutral;
+		int32 StandingPriority = 0;
+		Npc.Relationships.ResolvePersistentRow(Player->Handle, TEXT("player"), Standing,
+			StandingPriority);
+		if (Standing != EElysiumRelationship::Hate)
 		{
 			// The row can be REFUSED: `SetEntity` replaces an existing target only at an equal-or-higher
 			// priority, so an authored `player_reaction` written above this one keeps the street. That is
@@ -686,7 +693,7 @@ EElysiumScheduleId SelectLawSchedule(FElysiumNpc& Npc, double Now)
 				: FString::Printf(
 					TEXT("law: attack threshold passed but the D_HT row was refused — an authored "
 						"relationship at priority %d outranks it"),
-					Npc.Relationships.ResolvePriority(Player->Handle, TEXT("player"))));
+					StandingPriority));
 		}
 		// Attack outranks flee (the reasoning is on the declaration): the ordinary selection below
 		// this branch is what runs, so the NPC fights rather than retreating from the fight.

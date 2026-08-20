@@ -21,8 +21,11 @@
 #include "ElysiumNpcMindTypes.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
+#include "ElysiumSaveArchive.h"
+#include "ElysiumSaveTypes.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"
@@ -36,6 +39,9 @@
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
+
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
 
 namespace ElysiumNpcCombatTests
 {
@@ -1082,6 +1088,348 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 		F.Debug(F.Fighter, TEXT("Mind")).Contains(TEXT("current=Combat")));
 	TestNotEqual(TEXT("...and combat selects a fight program, not the idle it just left"),
 		F.Fighter->SelectSchedule(), EId::IdleDisposition);
+	return true;
+}
+
+// =====================================================================================
+// Retaliation: the whole chain from a struck neutral bystander to a pressed swing.
+//
+// Step 3 of the recovered NPC damage-to-AI transaction is "records the attack position and
+// attacker, updates enemy memory" (`docs/vtmb/combat-and-damage.md` -> "NPC damage response and
+// stagger boundaries", step 3). The store the memory half reaches in this runtime is the relationship
+// table, which is marked at `ElysiumNpcEnemy::RememberAttacker`; everything after it here is the
+// recovered transaction running unchanged.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationTest,
+	"Elysium.Substrate.NpcCombat.Retaliation", GElysiumTestFlags)
+bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
+{
+	// The authored `0` sentinel: nothing equipped, so the fists fallback is what arms the victim.
+	// That is the commonest hostile-capable shape in the corpus and the one a bystander carries.
+	FCombatFixture F(TEXT("0"));
+	if (F.Target == nullptr || F.Fighter == nullptr || F.Player == nullptr)
+	{
+		return false;
+	}
+	F.RunAdmissionAndLoadout();
+
+	FElysiumNpc& Victim = *F.Target;
+	// The player stands inside the victim's own swing reach and cone. The victim spawned at 100 cm
+	// facing +X, so a position further along +X is the faced half-space.
+	F.Player->Origin = Victim.Origin + FVector(Cm(20.0), 0.0, 0.0);
+
+	// --- The starting state: an ordinary neutral bystander ---------------------------------------
+	TestEqual(TEXT("the fists fallback armed the victim"),
+		ElysiumNpcCond::WeaponCapability(Victim), ElysiumNpcCond::ECapability::Melee);
+	TestEqual(TEXT("the victim starts neutral toward the player"),
+		static_cast<int32>(Victim.Relationships.Resolve(F.Player->Handle, TEXT("player"))),
+		static_cast<int32>(EElysiumRelationship::Neutral));
+	TestFalse(TEXT("...and holds no enemy"), Victim.Senses.Memory.Enemy.IsSet());
+	TestTrue(TEXT("the victim is running its disposition idle"),
+		ElysiumSchedule::Start(Victim.Schedule, EId::IdleDisposition, Victim));
+
+	// --- The hit, through the one typed health commit --------------------------------------------
+	// A second later than the loadout thinks, so the packet is NEW to the pass that follows: the
+	// damage condition is edge-triggered against the previous gather's timestamp.
+	F.Flush(1.0);
+	FElysiumDmg Dmg;
+	Dmg.Family = EElysiumDmgFamily::Bashing;
+	Dmg.Flags = ElysiumDamage::FlagDirectInput;
+	Dmg.ExtraInput = 10;
+	Dmg.Source = F.Player->Handle;
+	Victim.TakeDamage(Dmg, F.Player);
+
+	if (!TestTrue(TEXT("the punch committed damage"), F.DamageTaken(&Victim) > 0))
+	{
+		return false;
+	}
+	TestTrue(TEXT("the commit recorded the attacker"),
+		Victim.Senses.Memory.LastDamageAttacker == F.Player->Handle);
+	TestEqual(TEXT("...and the enemy-memory half made that attacker hostile-eligible"),
+		static_cast<int32>(Victim.Relationships.Resolve(F.Player->Handle, TEXT("player"))),
+		static_cast<int32>(EElysiumRelationship::Hate));
+	TestEqual(TEXT("...at IRelationPriority's own no-row default"),
+		Victim.Relationships.ResolvePriority(F.Player->Handle, TEXT("player")),
+		ElysiumNpcEnemy::AttackerRelationPriority);
+
+	// --- One decision pass ------------------------------------------------------------------------
+	ElysiumNpcEnemy::GatherConditions(Victim, 1.0);
+	TestTrue(TEXT("the pass raises the damage condition"),
+		Victim.Cognition.Conditions.Has(ECond::LightDamage));
+	TestTrue(TEXT("...commits the attacker as the enemy"),
+		Victim.Senses.Memory.Enemy == F.Player->Handle);
+	TestTrue(TEXT("...raises NEW_ENEMY"), Victim.Cognition.Conditions.Has(ECond::NewEnemy));
+	TestTrue(TEXT("...and an enemy inside reach and faced is attackable"),
+		Victim.Cognition.Conditions.Has(ECond::CanMeleeAttack1));
+
+	double Delay = 0.0;
+	TestFalse(TEXT("the damage interrupts the disposition idle"),
+		ElysiumSchedule::Tick(Victim.Schedule, Victim, 1.0, Delay, &Victim.Cognition.Conditions));
+	Victim.UpdateIdealState(1.0);
+	TestTrue(TEXT("the ideal-state pass takes the struck bystander to combat"),
+		F.Debug(&Victim, TEXT("Mind")).Contains(TEXT("current=Combat")));
+	TestEqual(TEXT("...and combat selection picks the melee swing, not an idle"),
+		Victim.SelectSchedule(), EId::MeleeAttack1);
+
+	// --- The terminal task presses the same weapon transaction the player uses --------------------
+	FElysiumWeapon* Fists = F.ActiveWeapon(&Victim);
+	if (!TestNotNull(TEXT("the victim holds its fists"), Fists))
+	{
+		return false;
+	}
+	// The next decision pass, in the order `ThinkStanceOrIdle` runs it: the packet that started the
+	// fight is no longer new, so the approach's own `LIGHT_DAMAGE` interrupt no longer fires and the
+	// program reaches its terminal swing. Re-gathering rather than reusing the selection pass's
+	// conditions is what makes that sequencing part of the assertion.
+	ElysiumNpcEnemy::GatherConditions(Victim, 1.1);
+	TestFalse(TEXT("the damage packet is not gathered twice"),
+		Victim.Cognition.Conditions.Has(ECond::LightDamage));
+	TestTrue(TEXT("...and the enemy stays committed"),
+		Victim.Senses.Memory.Enemy == F.Player->Handle);
+
+	const int32 SerialBefore = Fists->Swing.Serial;
+	TestTrue(TEXT("the swing program starts"),
+		ElysiumSchedule::Start(Victim.Schedule, EId::MeleeAttack1, Victim));
+	ElysiumSchedule::Tick(Victim.Schedule, Victim, 1.1, Delay, &Victim.Cognition.Conditions);
+	TestTrue(TEXT("TASK_MELEE_ATTACK1 staged a real weapon transaction"), Fists->Swing.bActive);
+	TestTrue(TEXT("...pressing the controller rather than reporting one"),
+		Fists->Swing.Serial > SerialBefore);
+	TestTrue(TEXT("...aimed at the player who struck it"),
+		Fists->Swing.Opponent == F.Player->Handle);
+
+	// --- The refusal arm: an authored relationship outranks the derived one -----------------------
+	// `SetEntity` replaces an existing target only at an equal-or-higher priority, so a character the
+	// map authored as friendly stays friendly through a punch. That is an authored decision beating a
+	// derived one, and it is the same property the law lane's attack arm carries.
+	FElysiumNpc& Friend = *F.Fighter;
+	Friend.Relationships.SetEntity(F.Player->Handle, EElysiumRelationship::Like, 10);
+	FElysiumDmg Second = Dmg;
+	Friend.TakeDamage(Second, F.Player);
+	TestTrue(TEXT("the authored character still took the damage"), F.DamageTaken(&Friend) > 0);
+	TestEqual(TEXT("...but the derived D_HT row was refused"),
+		static_cast<int32>(Friend.Relationships.Resolve(F.Player->Handle, TEXT("player"))),
+		static_cast<int32>(EElysiumRelationship::Like));
+	TestEqual(TEXT("...and a row that can never win was not stored at all"),
+		Friend.Relationships.NumDerivedRules(), 0);
+	ElysiumNpcEnemy::GatherConditions(Friend, 1.0);
+	TestFalse(TEXT("...so it acquires no enemy"), Friend.Senses.Memory.Enemy.IsSet());
+
+	// --- The arms with no attacker to remember ---------------------------------------------------
+	// Three real producers commit positive damage that names no combat character to become hostile
+	// toward: `trigger_hurt` and a crushing mover carry their own logic entity as the descriptor's
+	// source, the scalar `TakeDamage(float)` compatibility input carries none at all, and a character
+	// hurting itself names itself. All three must commit the damage and install nothing — a
+	// `trigger_hurt` that turned a room's cast hostile would be the sharpest way for this to go wrong.
+	const int32 RulesBefore = Friend.Relationships.NumEntityRules();
+	const int32 DamageBefore = F.DamageTaken(&Friend);
+	FElysiumDmg FromNowhere = Dmg;
+	FromNowhere.Source = FElysiumEntityHandle::Invalid();
+	Friend.TakeDamage(FromNowhere, nullptr);
+	FElysiumDmg FromSelf = Dmg;
+	FromSelf.Source = Friend.Handle;
+	Friend.TakeDamage(FromSelf, nullptr);
+	Friend.TakeDamage(10.f);
+	TestTrue(TEXT("the source-less and self-inflicted hits still committed damage"),
+		F.DamageTaken(&Friend) > DamageBefore);
+	TestEqual(TEXT("...and none of them installed a relationship row"),
+		Friend.Relationships.NumEntityRules(), RulesBefore);
+	TestEqual(TEXT("...on either surface"), Friend.Relationships.NumDerivedRules(), 0);
+	return true;
+}
+
+// =====================================================================================
+// The damage memory's five seconds: the recovered lifetime, its refresh, and what a fight
+// already in progress does when it runs out.
+//
+// RECOVERED (`docs/vtmb/combat-and-damage.md` -> "NPC damage response and stagger boundaries"):
+// the Troika NPC override at `0x102beda0` — "A surviving positive hit remembers the attacker for
+// five seconds and notifies the active schedule." The row the memory is kept in is this runtime's
+// stand-in (marked at `ElysiumNpcEnemy::RememberAttacker`); the five seconds are not.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationExpiryTest,
+	"Elysium.Substrate.NpcCombat.RetaliationExpiry", GElysiumTestFlags)
+bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
+{
+	// The recovered emission the de-escalation passes through, declared once: an NPC left in combat
+	// with no enemy warns and falls back to alert (`SelectIdealStateBase`'s own `case 2`). That is
+	// the state machine reporting the transition, not a fault in it.
+	AddExpectedError(TEXT("Combat state with no enemy"), EAutomationExpectedErrorFlags::Contains, 1);
+
+	FCombatFixture F(TEXT("0"));
+	if (F.Target == nullptr || F.Player == nullptr)
+	{
+		return false;
+	}
+	F.RunAdmissionAndLoadout();
+
+	FElysiumNpc& Victim = *F.Target;
+	F.Player->Origin = Victim.Origin + FVector(Cm(20.0), 0.0, 0.0);
+
+	FElysiumDmg Dmg;
+	Dmg.Family = EElysiumDmgFamily::Bashing;
+	Dmg.Flags = ElysiumDamage::FlagDirectInput;
+	Dmg.ExtraInput = 10;
+	Dmg.Source = F.Player->Handle;
+
+	// --- The window opens on the commit's own clock ----------------------------------------------
+	F.Flush(1.0);
+	Victim.TakeDamage(Dmg, F.Player);
+	const FElysiumDerivedRelationship* Memory =
+		Victim.Relationships.FindDerived(F.Player->Handle);
+	if (!TestNotNull(TEXT("the hit installed a derived row"), Memory))
+	{
+		return false;
+	}
+	TestTrue(TEXT("...expiring five seconds after the hit landed"),
+		FMath::IsNearlyEqual(Memory->ExpiresAt, 1.0 + ElysiumNpcEnemy::DamageMemorySeconds, 0.001));
+	TestEqual(TEXT("...and it is not on the saved surface"),
+		Victim.Relationships.NumEntityRules(), 0);
+
+	ElysiumNpcEnemy::GatherConditions(Victim, 1.0);
+	TestTrue(TEXT("the pass commits the attacker"), Victim.Senses.Memory.Enemy == F.Player->Handle);
+	Victim.UpdateIdealState(1.0);
+	TestTrue(TEXT("...and the struck bystander is in combat"),
+		F.Debug(&Victim, TEXT("Mind")).Contains(TEXT("current=Combat")));
+
+	// --- A pass inside the window changes nothing -------------------------------------------------
+	ElysiumNpcEnemy::GatherConditions(Victim, 5.9);
+	TestEqual(TEXT("the row is still hostile a tenth of a second before it lapses"),
+		static_cast<int32>(Victim.Relationships.Resolve(F.Player->Handle, TEXT("player"))),
+		static_cast<int32>(EElysiumRelationship::Hate));
+	TestTrue(TEXT("...and the enemy is still committed"),
+		Victim.Senses.Memory.Enemy == F.Player->Handle);
+
+	// --- A second hit RE-STAMPS the window rather than opening a second one -----------------------
+	F.Flush(5.9);
+	Victim.TakeDamage(Dmg, F.Player);
+	Memory = Victim.Relationships.FindDerived(F.Player->Handle);
+	if (!TestNotNull(TEXT("the second hit found the same row"), Memory))
+	{
+		return false;
+	}
+	TestEqual(TEXT("...it is still one row"), Victim.Relationships.NumDerivedRules(), 1);
+	TestTrue(TEXT("...re-stamped from the new hit"),
+		FMath::IsNearlyEqual(Memory->ExpiresAt, 5.9 + ElysiumNpcEnemy::DamageMemorySeconds, 0.001));
+	ElysiumNpcEnemy::GatherConditions(Victim, 6.5);
+	TestTrue(TEXT("so the pass that would have seen the first window lapse still has an enemy"),
+		Victim.Senses.Memory.Enemy == F.Player->Handle);
+
+	// --- A schedule that refuses the interrupt keeps the fight until it ends -----------------------
+	// The swing's recovered interrupt mask is EMPTY, so the pass that notices the lapse may not
+	// pre-empt it. The fact is held rather than dropped: this is the no-thrash half of the
+	// de-escalation, and losing it here would leave the NPC hostile for the rest of the map.
+	TestTrue(TEXT("the victim is mid-swing"),
+		ElysiumSchedule::Start(Victim.Schedule, EId::MeleeAttack1Swing, Victim));
+	ElysiumNpcEnemy::GatherConditions(Victim, 11.0);
+	TestEqual(TEXT("the row lapsed at the pass head"), Victim.Relationships.NumDerivedRules(), 0);
+	TestEqual(TEXT("...leaving the player neutral again"),
+		static_cast<int32>(Victim.Relationships.Resolve(F.Player->Handle, TEXT("player"))),
+		static_cast<int32>(EElysiumRelationship::Neutral));
+	TestTrue(TEXT("...but the swing keeps its enemy"),
+		Victim.Senses.Memory.Enemy == F.Player->Handle);
+	TestTrue(TEXT("...and the lapse is still owed"), Victim.Cognition.bEnemyHostilityLapsed);
+
+	// --- The next pass with nothing running de-escalates ------------------------------------------
+	ElysiumSchedule::Start(Victim.Schedule, EId::None, Victim);
+	TestFalse(TEXT("the swing ended"), Victim.Schedule.IsRunning());
+	ElysiumNpcEnemy::GatherConditions(Victim, 11.5);
+	TestFalse(TEXT("the committed enemy is dropped once a pass may search"),
+		Victim.Senses.Memory.Enemy.IsSet());
+	TestTrue(TEXT("...through the ordinary last-enemy path"),
+		Victim.Senses.Memory.LastEnemy == F.Player->Handle);
+	TestFalse(TEXT("...with the lapse consumed"), Victim.Cognition.bEnemyHostilityLapsed);
+	TestFalse(TEXT("...and no NEW_ENEMY standing with no enemy"),
+		Victim.Cognition.Conditions.Has(ECond::NewEnemy));
+	// The actor was not lost — its hostility ran out — so neither lost-actor output fires.
+	TestFalse(TEXT("...and LOST_ENEMY is not claimed"),
+		Victim.Cognition.Conditions.Has(ECond::LostEnemy));
+
+	Victim.UpdateIdealState(11.5);
+	TestTrue(TEXT("the enemy-less NPC leaves combat"),
+		F.Debug(&Victim, TEXT("Mind")).Contains(TEXT("current=Alert")));
+
+	// --- And it does not re-acquire on the next look ----------------------------------------------
+	TestFalse(TEXT("a neutral player is no longer an eligible candidate"),
+		ElysiumNpcEnemy::BestEnemy(Victim).IsSet());
+
+	// --- A fresh hit starts the whole transaction again --------------------------------------------
+	F.Flush(12.0);
+	Victim.TakeDamage(Dmg, F.Player);
+	ElysiumNpcEnemy::GatherConditions(Victim, 12.0);
+	TestTrue(TEXT("hitting it again makes it hostile again"),
+		Victim.Senses.Memory.Enemy == F.Player->Handle);
+	return true;
+}
+
+// =====================================================================================
+// The derived row is session state: it does not travel in a save, and the rows beside it do.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationSaveTest,
+	"Elysium.Substrate.NpcCombat.RetaliationSave", GElysiumTestFlags)
+bool FElysiumNpcCombatRetaliationSaveTest::RunTest(const FString&)
+{
+	FCombatFixture F(TEXT("0"));
+	if (F.Target == nullptr || F.Fighter == nullptr || F.Player == nullptr)
+	{
+		return false;
+	}
+	F.RunAdmissionAndLoadout();
+
+	FElysiumNpc& Victim = *F.Target;
+	// One row of each kind on the same store: an authored/scripted `D_HT` toward another character,
+	// and a damage memory toward the player.
+	Victim.Relationships.SetEntity(F.Fighter->Handle, EElysiumRelationship::Hate, 5);
+	FElysiumDmg Dmg;
+	Dmg.Family = EElysiumDmgFamily::Bashing;
+	Dmg.Flags = ElysiumDamage::FlagDirectInput;
+	Dmg.ExtraInput = 10;
+	Dmg.Source = F.Player->Handle;
+	F.Flush(1.0);
+	Victim.TakeDamage(Dmg, F.Player);
+	TestEqual(TEXT("the store carries one row of each kind"),
+		Victim.Relationships.NumEntityRules() * 10 + Victim.Relationships.NumDerivedRules(), 11);
+
+	TArray<uint8> Payload;
+	{
+		FMemoryWriter Writer(Payload, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::Latest);
+		Victim.Serialize(Ar);
+	}
+
+	// The destination world: the catalogue is installed once per process, so the second fixture
+	// borrows the first one's.
+	FCombatFixture G(TEXT("0"), /*bWithFists*/ true, /*bInstallCatalogue*/ false);
+	if (G.Target == nullptr || G.Fighter == nullptr || G.Player == nullptr)
+	{
+		return false;
+	}
+	// A live stimulus on the DESTINATION store, because clearing one is the direction the load's own
+	// reset exists for — an already-empty array would be left alone by a load that did nothing at
+	// all. This is the fight the player was in before the slot was loaded, and a restored character
+	// still swinging over it is what the reset prevents.
+	G.Target->Relationships.SetDerivedEntity(G.Player->Handle, EElysiumRelationship::Hate,
+		ElysiumNpcEnemy::AttackerRelationPriority, /*ExpiresAt*/ 1000.0);
+	TestEqual(TEXT("the destination store holds a damage memory before the load"),
+		G.Target->Relationships.NumDerivedRules(), 1);
+	{
+		FMemoryReader Reader(Payload, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+		G.Target->Serialize(Ar);
+	}
+
+	const FElysiumRelationships& Restored = G.Target->Relationships;
+	TestEqual(TEXT("the authored hate row survived the round trip"),
+		static_cast<int32>(Restored.Resolve(G.Fighter->Handle, TEXT("npc_VHumanCombatant"))),
+		static_cast<int32>(EElysiumRelationship::Hate));
+	TestEqual(TEXT("...as the one saved row"), Restored.NumEntityRules(), 1);
+	TestEqual(TEXT("the damage memory did not, and the destination's own was cleared"),
+		Restored.NumDerivedRules(), 0);
+	TestEqual(TEXT("...so the restored character is neutral toward the player again"),
+		static_cast<int32>(Restored.Resolve(G.Player->Handle, TEXT("player"))),
+		static_cast<int32>(EElysiumRelationship::Neutral));
 	return true;
 }
 

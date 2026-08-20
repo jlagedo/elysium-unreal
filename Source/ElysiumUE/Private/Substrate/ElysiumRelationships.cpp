@@ -43,9 +43,16 @@ bool FElysiumRelationships::SetEntity(const FElysiumEntityHandle& Target,
 		}
 		Existing->Value = Value;
 		Existing->Priority = Priority;
-		return true;
 	}
-	EntityRules.Add({ Target, Value, Priority });
+	else
+	{
+		EntityRules.Add({ Target, Value, Priority });
+	}
+	// A stated relationship supersedes any damage-derived memory of the same target: retail's
+	// relation change re-gates enemy eligibility immediately, so the lapsing row must not keep
+	// answering for a target an authored or scripted decision has just spoken for.
+	DerivedRules.RemoveAll(
+		[&Target](const FElysiumDerivedRelationship& Row) { return Row.Target == Target; });
 	return true;
 }
 
@@ -74,40 +81,121 @@ bool FElysiumRelationships::SetClass(const FString& Classname,
 	return true;
 }
 
+bool FElysiumRelationships::SetDerivedEntity(const FElysiumEntityHandle& Target,
+	EElysiumRelationship Value, int32 Priority, double ExpiresAt)
+{
+	if (!Target.IsSet())
+	{
+		return false;
+	}
+	// `SetEntity`'s replacement rule, applied across the two surfaces: an authored, scripted or
+	// dialogue-written row about this exact target beats a derived one at a HIGHER priority, and a
+	// row that can never win is not stored at all.
+	if (const FElysiumEntityRelationship* Persistent = FindEntityRow(Target))
+	{
+		if (Priority < Persistent->Priority)
+		{
+			return false;
+		}
+	}
+	if (FElysiumDerivedRelationship* Existing = DerivedRules.FindByPredicate(
+		[&Target](const FElysiumDerivedRelationship& Row) { return Row.Target == Target; }))
+	{
+		if (Priority < Existing->Priority)
+		{
+			return false;
+		}
+		Existing->Value = Value;
+		Existing->Priority = Priority;
+		Existing->ExpiresAt = ExpiresAt;   // re-stamped, not extended: the newest stimulus owns it
+		return true;
+	}
+	DerivedRules.Add({ Target, Value, Priority, ExpiresAt });
+	return true;
+}
+
+int32 FElysiumRelationships::ExpireDerived(double Now)
+{
+	return DerivedRules.RemoveAll([Now](const FElysiumDerivedRelationship& Row)
+	{
+		return Now >= Row.ExpiresAt;
+	});
+}
+
+const FElysiumDerivedRelationship* FElysiumRelationships::FindDerived(
+	const FElysiumEntityHandle& Target) const
+{
+	return DerivedRules.FindByPredicate(
+		[&Target](const FElysiumDerivedRelationship& Row) { return Row.Target == Target; });
+}
+
+const FElysiumEntityRelationship* FElysiumRelationships::FindEntityRow(
+	const FElysiumEntityHandle& Target) const
+{
+	return EntityRules.FindByPredicate(
+		[&Target](const FElysiumEntityRelationship& Row) { return Row.Target == Target; });
+}
+
+const FElysiumClassRelationship* FElysiumRelationships::FindClassRow(const FString& Classname) const
+{
+	return ClassRules.FindByPredicate([&Classname](const FElysiumClassRelationship& Row)
+	{
+		return Row.Classname.Equals(Classname, ESearchCase::IgnoreCase);
+	});
+}
+
 EElysiumRelationship FElysiumRelationships::Resolve(const FElysiumEntityHandle& Target,
 	const FString& Classname) const
 {
-	if (const FElysiumEntityRelationship* Exact = EntityRules.FindByPredicate(
-		[&Target](const FElysiumEntityRelationship& Row) { return Row.Target == Target; }))
-	{
-		return Exact->Value;
-	}
-	if (const FElysiumClassRelationship* Class = ClassRules.FindByPredicate(
-		[&Classname](const FElysiumClassRelationship& Row)
-		{
-			return Row.Classname.Equals(Classname, ESearchCase::IgnoreCase);
-		}))
-	{
-		return Class->Value;
-	}
-	return EElysiumRelationship::Neutral;
+	EElysiumRelationship Value = EElysiumRelationship::Neutral;
+	int32 Priority = 0;
+	ResolveRow(Target, Classname, Value, Priority);
+	return Value;
 }
 
 bool FElysiumRelationships::ResolveRow(const FElysiumEntityHandle& Target, const FString& Classname,
 	EElysiumRelationship& OutValue, int32& OutPriority) const
 {
-	if (const FElysiumEntityRelationship* Exact = EntityRules.FindByPredicate(
-		[&Target](const FElysiumEntityRelationship& Row) { return Row.Target == Target; }))
+	const FElysiumEntityRelationship* Exact = FindEntityRow(Target);
+	if (const FElysiumDerivedRelationship* Derived = FindDerived(Target))
+	{
+		// The derived row stands unless a persistent exact-entity row outranks it. A persistent
+		// CLASS row never does: an exact target has always outranked a class one, and a derived row
+		// is about an exact target.
+		if (Exact == nullptr || Derived->Priority >= Exact->Priority)
+		{
+			OutValue = Derived->Value;
+			OutPriority = Derived->Priority;
+			return true;
+		}
+	}
+	if (Exact != nullptr)
 	{
 		OutValue = Exact->Value;
 		OutPriority = Exact->Priority;
 		return true;
 	}
-	if (const FElysiumClassRelationship* Class = ClassRules.FindByPredicate(
-		[&Classname](const FElysiumClassRelationship& Row)
-		{
-			return Row.Classname.Equals(Classname, ESearchCase::IgnoreCase);
-		}))
+	if (const FElysiumClassRelationship* Class = FindClassRow(Classname))
+	{
+		OutValue = Class->Value;
+		OutPriority = Class->Priority;
+		return true;
+	}
+	OutValue = EElysiumRelationship::Neutral;
+	OutPriority = 0;
+	return false;
+}
+
+bool FElysiumRelationships::ResolvePersistentRow(const FElysiumEntityHandle& Target,
+	const FString& Classname, EElysiumRelationship& OutValue, int32& OutPriority) const
+{
+	if (const FElysiumEntityRelationship* Exact = FindEntityRow(Target))
+	{
+		OutValue = Exact->Value;
+		OutPriority = Exact->Priority;
+		return true;
+	}
+	if (const FElysiumClassRelationship* Class = FindClassRow(Classname))
 	{
 		OutValue = Class->Value;
 		OutPriority = Class->Priority;
@@ -132,12 +220,20 @@ int32 FElysiumRelationships::ResolvePriority(const FElysiumEntityHandle& Target,
 
 bool FElysiumRelationships::HasEntity(const FElysiumEntityHandle& Target) const
 {
-	return EntityRules.ContainsByPredicate(
-		[&Target](const FElysiumEntityRelationship& Row) { return Row.Target == Target; });
+	return FindEntityRow(Target) != nullptr;
 }
 
 void FElysiumRelationships::Serialize(FElysiumSaveArchive& Ar)
 {
+	// The derived rows are deliberately absent from the payload, and a load clears whatever the
+	// destination store was holding: a derived row is a live stimulus with seconds left on it, and a
+	// restored world starts with no stimulus at all rather than replaying one the player never
+	// produced. The same rule the law-record bus and the sound cursor already carry.
+	if (Ar.IsLoading())
+	{
+		DerivedRules.Reset();
+	}
+
 	int32 EntityCount = EntityRules.Num();
 	Ar << EntityCount;
 	if (Ar.IsLoading())
@@ -178,6 +274,7 @@ void FElysiumRelationships::Serialize(FElysiumSaveArchive& Ar)
 
 void FElysiumRelationships::Rebase(const FElysiumEntityWorld& World)
 {
+	// Only the persistent rows: a rebase happens after a load, and no derived row crosses one.
 	for (FElysiumEntityRelationship& Row : EntityRules)
 	{
 		Row.Target = World.RebaseSavedHandle(Row.Target);

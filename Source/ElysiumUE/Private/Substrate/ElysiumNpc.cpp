@@ -100,6 +100,12 @@ void FElysiumNpc::OnDamageCommitted(const FElysiumDmg& Dmg)
 	Senses.Memory.LastDamageAttacker = Dmg.Source;
 	Senses.Memory.LastDamageTime = Now;
 	Senses.Memory.LastDamageAmount = Dmg.CommittedDamage();
+	// The other half of step 3 — "records the attack position and attacker, updates enemy memory".
+	// The record above is the attacker half; this is the memory half, and it is what makes the
+	// attacker eligible for the enemy transaction the next decision pass runs. It takes the commit's
+	// own `Now` because the memory it writes is the recovered five-second one
+	// (`Substrate/ElysiumNpcEnemy.h` -> `RememberAttacker`, where the store is marked).
+	ElysiumNpcEnemy::RememberAttacker(*this, Dmg.Source, Now);
 	// Step 5 of the recovered damage-to-AI transaction: the one-second accumulation window
 	// `REPEATED_DAMAGE` is derived from. The window arithmetic is the conditions layer's rule.
 	ElysiumNpcCond::AccumulateDamage(Senses.Memory, Dmg.CommittedDamage(), Now);
@@ -2883,11 +2889,18 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		: FElysiumEntityHandle::Invalid();
 	Out.Emplace(TEXT("Disposition"), FString::Printf(TEXT("%s L%d%s"), *Disposition,
 		DispositionLevel, IsDispositionTalking() ? TEXT(" talking") : TEXT("")));
+	// The derived row is called out by its remaining seconds rather than by its presence: a hostility
+	// that is about to run out and one that was just renewed read identically otherwise.
+	const FElysiumDerivedRelationship* PlayerDamageMemory = Relationships.FindDerived(Player);
 	Out.Emplace(TEXT("Relationship to player"), FString::Printf(
-		TEXT("%s priority %d (table %d entity / %d class)"),
+		TEXT("%s priority %d (table %d entity / %d class / %d derived)%s"),
 		ElysiumRelationships::LexToString(Relationships.Resolve(Player, TEXT("player"))),
 		Relationships.ResolvePriority(Player, TEXT("player")),
-		Relationships.NumEntityRules(), Relationships.NumClassRules()));
+		Relationships.NumEntityRules(), Relationships.NumClassRules(),
+		Relationships.NumDerivedRules(),
+		PlayerDamageMemory == nullptr ? TEXT("")
+			: *FString::Printf(TEXT(" damage memory %.1fs left"),
+				PlayerDamageMemory->ExpiresAt - (World ? World->NowSeconds() : 0.0))));
 	if (!StatTemplate.IsEmpty())
 	{
 		Out.Emplace(TEXT("Stat template"), StatTemplate);
