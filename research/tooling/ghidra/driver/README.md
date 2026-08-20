@@ -15,7 +15,8 @@ See `docs/project/rebuild-strategy.md` → *Menu — full-fidelity spec (M0)*, s
 | `DumpAsm.java`   | ✅ | raw disassembly of a function, or a flat run at any address (disassembles on demand) |
 | `DumpXrefs.java` | ✅ | every reference to an address + the function containing each referencing site |
 | `DumpConst.java` | ✅ | the dword at an address as hex/int/float (the decompiler renders these as `_DAT_`) |
-| `DumpConVars.java` | ✅ | the ConVar/ConCommand registration table: object address ↔ name ↔ default, for one ctor |
+| `DumpConVars.java` | ✅ | every ConVar/ConCommand: object address ↔ name ↔ default; labels each object `cvar_<name>` |
+| `DumpAdjustorThunks.java` | ✅ | the `sub ecx,<n>; jmp` stubs in a secondary base's vftable, and the class holding each |
 | `MakeFuncs.java` | ✅ | promotes disassembled-but-unowned code into functions (CALL targets + post-padding starts) |
 | `DumpPyMethods.java` | ✅ | a CPython `PyMethodDef` table: name, `ml_doc`, thunk→body, then every body decompiled |
 | `DumpInitTable.java` | ✅ | every global constructor, ranked by data touched — the datamap and registration builders |
@@ -204,6 +205,59 @@ Each map is labelled `datamap_<Class>` and its builder renamed `datamap_<Class>_
 constructor census's `staticinit_<hex>` entries become readable. A class may carry more than one
 map, and those labels are qualified by address. Re-running is idempotent, and a record the pass
 can no longer substantiate loses the label an earlier run gave it.
+
+### The ConVar census is anchored on a vftable, not on a call-site shape
+
+`DumpConVars` with no `ctor=` finds the registration constructors itself: a constructor is a
+function that stores the `ConVar`, `ConCommand` or `ConCommandBase` vftable into its object.
+**Run `DumpRtti` first** — those labels are the anchor.
+
+Guessing from the shape of a call site does not work, and failing that way is quiet. VtMB's AI
+schedule, condition and squad-slot registrations take a static object plus a string literal
+exactly as a ConVar does; a shape-based sweep of `vampire.dll` returns 655 `"schedule"`,
+`"condition"` and `"squadslot"` rows as though they were console variables.
+
+Call sites reference the incremental-link thunk rather than the constructor, so the thunks are
+swept too — without that every constructor reports zero registrations. A default value is
+usually untyped data, so the pushed pointer is read as a C string rather than printed as an
+address:
+
+```
+20a6bb60     mat_waterswirl    "mat_waterswirl"  "0.02"
+20d63c00     r_shadowlod       "r_shadowlod"     "-1"
+106d0798     bat_attract       "bat_attract"     …
+```
+
+| module | constructors | registrations | objects labelled |
+|---|---|---|---|
+| `vampire.dll` | 11 | 704 | 695 |
+| `engine.dll` | 8 | 550 | 550 |
+| `client.dll` | 10 | 545 | 535 |
+| `GameUI.dll` | 10 | 10 | 0 |
+
+Each object is labelled `cvar_<name>`, which is the point: a reader that decompiled to
+`DAT_104d205c` now names the console variable. The script owns the `cvar_` namespace and clears
+it before writing, so re-running is idempotent and corrects an earlier run.
+
+### Adjustor thunks are rare, and the count does not follow the inheritance count
+
+A vftable slot on a secondary base holds a `sub ecx,<n>; jmp <method>` stub rather than the
+method, so following the jump attributes the override to the wrong class. `DumpAdjustorThunks`
+names those stubs and reports the class and slot holding each.
+
+**The yield is single digits** — 5 in `client.dll`, 1 in `engine.dll`, 0 in `vampire.dll` —
+even though `DumpRtti` reports 1556 and 192 multiple-inheritance classes in the first two. MSVC
+only emits a thunk where a secondary base's virtual is actually overridden, which is rare here.
+
+The byte shape alone is not the thunk: several CRT routines contain a `sub ecx,<n>` followed by
+a jump in ordinary code, and matching on that produces `_strcmp_adj-2` and a `-270762648`
+displacement. A match counts only when the pair is a whole function or stands outside every
+function *and* a data slot points at it.
+
+```
+100f2700  this-=16   FUN_100f1c40    CHudChat_at16[3]
+10184560  this-=368  FUN_101839d0    VHotkeysUI_at368[6]
+```
 
 ### Headless traps in this pipeline
 
