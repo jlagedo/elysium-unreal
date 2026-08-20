@@ -81,12 +81,30 @@ void FElysiumAnimating::BuildBody()
 
 bool FElysiumAnimating::PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds)
 {
+	// The band-less door, and it means the ambient band: one clip, one claim, and the claim goes when
+	// the clip does. Everything a run does differently it states on its own segment record.
+	FElysiumClipSegment Segment;
+	Segment.ClipName = ClipName;
+	Segment.bLoop = bLoop;
+	return PlayAnimSegment(Segment, OutSeconds);
+}
+
+bool FElysiumAnimating::PlayAnimSegment(const FElysiumClipSegment& Segment, float* OutSeconds)
+{
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (!Embodiment || !Visual || ClipName.IsEmpty())
+	if (!Embodiment || !Visual || !Segment.IsValid())
 	{
 		return false;
 	}
-	return Embodiment->PlayNpcClip(Visual, ModelStem(), ClipName, bLoop, OutSeconds);
+	return Embodiment->PlayNpcClip(Visual, ModelStem(), Segment, OutSeconds);
+}
+
+void FElysiumAnimating::ReleaseAnimSegment()
+{
+	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr; Embodiment && Visual)
+	{
+		Embodiment->ReleaseNpcSegment(Visual);
+	}
 }
 
 bool FElysiumAnimating::PreloadAnimClip(const FString& ClipName)

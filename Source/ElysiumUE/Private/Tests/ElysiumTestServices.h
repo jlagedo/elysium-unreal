@@ -369,15 +369,34 @@ struct FElysiumRecordingServices final
 	{
 		return bNpcBodyVisible;
 	}
-	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop, float* OutSeconds) override
+	// LIFE5 — the band and the hold ride at the TAIL of the line, after the tokens every existing
+	// case matches on: `Saw` is a prefix match, so a run's band is readable by a case that wants it
+	// without moving the ground under one that does not.
+	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FElysiumClipSegment& Segment, float* OutSeconds) override
 	{
-		Record(FString::Printf(TEXT("PlayNpcClip %s %s loop=%d"), *Stem, *ClipName, bLoop ? 1 : 0));
+		Record(FString::Printf(TEXT("PlayNpcClip %s %s loop=%d band=%s%s"), *Stem, *Segment.ClipName,
+			Segment.bLoop ? 1 : 0, ElysiumAnimIntent::PriorityName(Segment.Priority),
+			Segment.bHoldUntilReleased ? TEXT(" held=1") : TEXT("")));
 		if (OutSeconds)
 		{
 			*OutSeconds = ClipSeconds;   // a beat's OnEndSequence schedules off this
 		}
+		if (Body != nullptr && Segment.bHoldUntilReleased)
+		{
+			bNpcSegmentHeld = true;
+		}
 		return Body != nullptr;
+	}
+
+	// LIFE5 — whether this fixture's body is holding a montage-slot RUN claim, modelled rather than
+	// only recorded: the whole point of the run bracket is that every stop path gives the claim back,
+	// and a double that only logged the calls could not say whether one was left standing.
+	bool bNpcSegmentHeld = false;
+	virtual void ReleaseNpcSegment(USkeletalMeshComponent* Body) override
+	{
+		Record(FString::Printf(TEXT("ReleaseNpcSegment body=%d"), Body != nullptr ? 1 : 0));
+		bNpcSegmentHeld = false;
 	}
 	virtual bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName) override
@@ -535,6 +554,10 @@ struct FElysiumRecordingServices final
 	virtual void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body) override
 	{
 		Record(FString::Printf(TEXT("ReleaseBodyAnimClaims body=%d"), Body != nullptr ? 1 : 0));
+		// Death ends every claim at once, the run's included — a corpse holding a beat's segment claim
+		// is exactly the leak the wholesale release exists to close.
+		bNpcReactionHeld = false;
+		bNpcSegmentHeld = false;
 	}
 	virtual bool StartBodyRagdoll(USkeletalMeshComponent* Body) override
 	{

@@ -46,6 +46,7 @@
 // mark. It fires at the input here, which is the order every wire in the exported maps was authored
 // against — `OnEndSequence` is the one that moves.
 
+#include "ElysiumAnimationIntent.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
@@ -98,6 +99,25 @@ namespace
 	// on the engine tick, so this only paces the substrate's own read of where it got to.
 	constexpr double TRAVEL_TICK_SECONDS = 0.05;
 
+	// One segment of the beat's montage-slot run — `m_iszIdle`, `m_iszPlay`, `m_iszPostIdle`, and the
+	// travel cycle the NPC's own `BeginScriptMove` plays under the same claim.
+	//
+	// **The band is what makes it a beat rather than an ambient clip.** `Scripted` outranks the
+	// travelling body's own locomotion publish, so a beat's pose stands while the body walks to its
+	// mark; the `Ambient` band the band-less door means is consumed by that publish the instant the
+	// body leaves, which would strand `m_iszPlay` and `m_iszCustomMove` unposed on exactly the beats
+	// that travel. And the claim is HELD: it spans the whole run, so the gap between the travel cycle
+	// ending and `m_iszPlay` starting is not a frame the channel goes back to locomotion.
+	FElysiumClipSegment BeatSegment(const FString& ClipName, bool bLoop)
+	{
+		FElysiumClipSegment Segment;
+		Segment.ClipName = ClipName;
+		Segment.bLoop = bLoop;
+		Segment.Source = EElysiumAnimSource::Interaction;
+		Segment.Priority = EElysiumAnimPriority::Scripted;
+		Segment.bHoldUntilReleased = true;
+		return Segment;
+	}
 }
 
 // ============================================================================================
@@ -261,6 +281,10 @@ public:
 			}
 			if (Npc->ScriptOwner == Handle)
 			{
+				// The montage-slot run's own claim goes with them. It has no duration — it spans the
+				// whole beat, travel cycle through held post-idle — so this is the only thing that
+				// ends it, and every exit reaches here.
+				Npc->ReleaseAnimSegment();
 				// Both locks leave together. An NPC a later beat has already taken keeps that beat's
 				// claim: releasing here would strand it holding a body the arbiter says is free.
 				Npc->ReleaseScriptBody(TEXT("scripted sequence beat ended"));
@@ -349,12 +373,15 @@ public:
 		float Seconds = 0.f;
 		if (Npc != nullptr && !Play.IsEmpty())
 		{
-			Npc->PlayAnimClip(Play, /*bLoop=*/false, &Seconds);
+			Npc->PlayAnimSegment(BeatSegment(Play, /*bLoop=*/false), &Seconds);
 		}
 		else if (Npc != nullptr && bTravelled)
 		{
 			// A travel-only beat leaves the NPC standing in its walk cycle otherwise. VtMB hands the
 			// NPC back to AI here, which idles it; the stance idle is this runtime's nearest thing.
+			// The run's claim goes back FIRST: the resting pose comes in at the ambient band, and the
+			// beat's own `Scripted` claim would refuse it and leave the body in its travel cycle.
+			Npc->ReleaseAnimSegment();
 			Npc->ResetAnimToIdle();
 		}
 		UE_LOG(LogElysiumSeq, Verbose, TEXT("%s action -> %s play='%s' (%.2fs) move=%d"),
@@ -434,6 +461,8 @@ public:
 			Npc->EndScriptMove();
 			if (!Play.IsEmpty() || bTravelled)
 			{
+				// `ReleaseNpc` above already gave the run's claim back, which is what lets the ambient
+				// idle take the channel: a standing `Scripted` claim would refuse it silently.
 				Npc->ResetAnimToIdle();   // cut short; VtMB hands the NPC back to AI, which idles it
 			}
 		}
@@ -469,19 +498,6 @@ public:
 		// its last frame the moment it ended. Only 22 of the 108 name one; without it VtMB hands the
 		// NPC back to AI, which idles it, so the stance idle is what the other 30-odd action beats
 		// settle into rather than holding the action's final frame.
-		FElysiumEntity* Npc = ResolveTarget();
-		if (Npc != nullptr)
-		{
-			if (!PostIdle.IsEmpty())
-			{
-				Npc->PlayAnimClip(PostIdle, /*bLoop=*/true);
-			}
-			else if (!Play.IsEmpty())
-			{
-				Npc->ResetAnimToIdle();
-			}
-		}
-
 		// Spawnflag 256 (FUN_101a8640): with a post-idle and no live next-cine, VtMB logs
 		// "Post Idle %s finished", re-enters the post-idle and returns *before* the cleanup — so
 		// the beat never completes, OnEndSequence never fires and the chain never runs. sp_theatre's
@@ -489,7 +505,44 @@ public:
 		//
 		// The engine's condition is a live `m_hNextCine` handle; the nearest thing here is an
 		// authored chain, so an empty `m_iszNextScript` stands in for it.
-		if ((SpawnFlags & SF_SCRIPT_HOLD_POSTIDLE) != 0 && !PostIdle.IsEmpty() && NextScript.IsEmpty())
+		//
+		// **It is also what decides the post-idle's own band**, which is why it is read before the
+		// pose rather than after it. A held post-idle is the beat still owning its NPC, so it is the
+		// run's last segment at the beat's own band; a released one is what the beat LEAVES the NPC
+		// standing in after handing it back to its own behaviour, which is a resting pose exactly like
+		// a stance and takes the ambient band with the run's claim given back. A released post-idle
+		// still holding `Scripted` would park the channel on a beat that has ended.
+		const bool bHoldsPostIdle = (SpawnFlags & SF_SCRIPT_HOLD_POSTIDLE) != 0
+			&& !PostIdle.IsEmpty() && NextScript.IsEmpty();
+
+		FElysiumEntity* Npc = ResolveTarget();
+		if (Npc != nullptr)
+		{
+			if (!PostIdle.IsEmpty())
+			{
+				if (bHoldsPostIdle)
+				{
+					Npc->PlayAnimSegment(BeatSegment(PostIdle, /*bLoop=*/true));
+				}
+				else
+				{
+					// The run's claim goes back FIRST: the resting pose comes in at the ambient band,
+					// and the beat's own `Scripted` claim would refuse it and leave the body posing the
+					// action's last frame.
+					Npc->ReleaseAnimSegment();
+					Npc->PlayAnimClip(PostIdle, /*bLoop=*/true);
+				}
+			}
+			else if (!Play.IsEmpty())
+			{
+				// Same order, same reason: the stance idle is an ambient pose and cannot take a channel
+				// the beat is still holding.
+				Npc->ReleaseAnimSegment();
+				Npc->ResetAnimToIdle();
+			}
+		}
+
+		if (bHoldsPostIdle)
 		{
 			bPostIdleHeld = true;
 			UE_LOG(LogElysiumSeq, Verbose, TEXT("%s: holding post-idle '%s' (spawnflag 256)"),
@@ -596,7 +649,20 @@ public:
 		{
 			// Overrides the disposition stance 8.5 picked at spawn: this pose is authored for this
 			// NPC at this spot, and the stance idle is only the default when nothing else says.
-			Npc->PlayAnimClip(Wait, /*bLoop=*/true);
+			//
+			// **The waiting pose is a segment of the same run, at the AMBIENT band rather than the
+			// beat's own.** The beat has claimed nothing yet — `ClaimNpc` runs at BeginSequence — so
+			// until it does, the NPC's own behaviour still owns the body: a pre-idle claiming
+			// `Scripted` here would outrank the patrol or interesting-place travel that has not been
+			// taken away from it, and the NPC would slide to its next mark in its waiting pose. It
+			// yields to travel exactly as an ambient stance does, which is the priority table's one
+			// recovered relationship, and the run's own held claim starts with the beat.
+			FElysiumClipSegment Waiting;
+			Waiting.ClipName = Wait;
+			Waiting.bLoop = true;
+			Waiting.Source = EElysiumAnimSource::Npc;
+			Waiting.Priority = EElysiumAnimPriority::Ambient;
+			Npc->PlayAnimSegment(Waiting);
 		}
 	}
 

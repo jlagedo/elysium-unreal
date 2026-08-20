@@ -138,8 +138,15 @@ public:
 	bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget);
 	bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition, FVector& OutForward) const;
 
-	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop, float* OutSeconds);
+	// The one montage-slot mechanism (LIFE5). Every named clip a producer puts on a body arrives here,
+	// takes its base-channel claim at the band its segment states, and plays into the body's
+	// `DefaultSlot`; a run holds one claim across its segments and gives it back through
+	// `ReleaseNpcSegment`.
+	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FElysiumClipSegment& Segment, float* OutSeconds);
+	// LIFE5 — give back the HELD segment claim standing on this body. A body holding none releases
+	// nothing, which is the ordinary end of a run rather than a failure.
+	void ReleaseNpcSegment(USkeletalMeshComponent* Body);
 	// LIFE5 — play one already-resolved cell over whatever owns the base pose. The (owner, animation
 	// name) pair goes straight at the baked clip, never through the vocabulary. The channel claim is
 	// submitted BEFORE the clip: a refused claim plays nothing, which is how a reaction is kept off a
@@ -365,6 +372,12 @@ private:
 	// own `PlayCinematicClip` submitted. A scene-pinned clip has no natural end, so its claim holds
 	// until this map gives it back.
 	TMap<FObjectKey, uint32> CinematicClaims;
+
+	// LIFE5 — one standing HELD segment claim per body, the same shape and for the same reason as the
+	// cinematic claims above. A montage-slot RUN — a `scripted_sequence`'s idle/travel/play/post-idle,
+	// an interesting place's enter/hold/leave — holds one claim across every segment of the run, so
+	// the claim has no duration and this map is what remembers the handle to give back.
+	TMap<FObjectKey, uint32> SegmentClaims;
 
 	// LIFE5 — one standing HELD reaction claim per body, the same shape and for the same reason as
 	// the cinematic claims above: a `Predicate` play has no duration, so its claim holds until the

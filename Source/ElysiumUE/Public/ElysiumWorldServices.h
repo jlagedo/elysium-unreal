@@ -280,8 +280,27 @@ public:
 		int32 DispositionLevel) {}
 	// Crossfade a live body to a named clip; OutSeconds (optional) receives its authored length,
 	// which is what a scripted_sequence schedules its OnEndSequence off.
-	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop, float* OutSeconds) = 0;
+	//
+	// **The one montage-slot mechanism** (LIFE5): every named clip a producer puts on a body arrives
+	// here, takes its base-channel claim at the band the segment states, and plays into the body's
+	// `DefaultSlot`. A `scripted_sequence`'s idle/play/post-idle and an interesting place's
+	// enter/hold/leave are the same run through it, differing only in band and in where the run's
+	// claim is given back.
+	//
+	// The claim is taken FIRST and decides whether the clip plays at all: playing before asking would
+	// leave a refused producer's pose standing on a channel it was refused the right to replace.
+	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FElysiumClipSegment& Segment, float* OutSeconds) = 0;
+
+	// Give back the HELD segment claim standing on this body (LIFE5).
+	//
+	// The release half of a `FElysiumClipSegment::bHoldUntilReleased` run. That claim has no duration
+	// — it spans every segment of the run — so this call is the only thing that ends one, and every
+	// path that ends a run goes through it: a beat completing, a beat cancelled, an interesting place
+	// released, a body torn down. **It is also what a run must call before handing the body back to
+	// its own idle**, because the resting pose comes in at `Ambient` and a standing `Scripted` claim
+	// would refuse it. A body holding no such claim releases nothing, which is an ordinary absence.
+	virtual void ReleaseNpcSegment(USkeletalMeshComponent* Body) {}
 	// Resolve and retain a clip without changing the body's current animation. The map-load walker
 	// uses this before activation so runtime-created UAnimSequences and their compression work belong
 	// to the loading barrier, not to a choreographed scene's clock.

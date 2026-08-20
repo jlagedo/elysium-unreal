@@ -754,6 +754,11 @@ bool FElysiumNpc::TickScriptWatchdog()
 	EndScriptMove();
 	ScriptOwner = FElysiumEntityHandle::Invalid();
 	bScriptOwnerLocked = false;
+	// The beat's montage-slot run claim goes with the rest of what it held. Nothing else can give it
+	// back — the beat that took it is the thing that stopped answering — and it has no duration, so a
+	// claim left standing here would refuse the idle below at the ambient band and park this body's
+	// base channel in its travel cycle for the rest of the map.
+	ReleaseAnimSegment();
 	ResetAnimToIdle();
 	return true;
 }
@@ -1291,8 +1296,21 @@ bool FElysiumNpc::PlayAmbientActivity(const TArray<FElysiumWeightedName>& Choice
 	// the ambient callers ask for every activity with bLoop false. Without this a body-language idle
 	// authored as a loop plays once and then stands on its last frame, which is what a held one-shot
 	// means: frozen, not resting.
+	//
+	// **One segment of the spot's montage-slot run** — enter, hold, leave — and the same mechanism a
+	// `scripted_sequence`'s idle/play/post-idle takes, differing only in band. It stays `Ambient`
+	// deliberately: an ambient stance holds against a standing body's every-tick publish and yields
+	// the moment the body travels, which is the one recovered relationship in the priority table. The
+	// claim is HELD so the gap between two of the spot's segments is not a frame the channel goes
+	// back; `FinishAmbientUse` is the one place it is given back.
+	FElysiumClipSegment Segment;
+	Segment.ClipName = Clip.Label;
+	Segment.bLoop = bLoop || Clip.bLooping;
+	Segment.Source = EElysiumAnimSource::Npc;
+	Segment.Priority = EElysiumAnimPriority::Ambient;
+	Segment.bHoldUntilReleased = true;
 	float Seconds = 0.0f;
-	if (!PlayAnimClip(Clip.Label, bLoop || Clip.bLooping, &Seconds))
+	if (!PlayAnimSegment(Segment, &Seconds))
 	{
 		return false;
 	}
@@ -1370,8 +1388,8 @@ bool FElysiumNpc::SetDisposition(const FString& NewDisposition, int32 NewLevel)
 					return false;
 				}
 				float Seconds = 0.f;
-				if (!Embodiment->PlayNpcClip(Visual, ModelStem(), Clip,
-					/*bLoop=*/false, &Seconds))
+				if (!Embodiment->PlayNpcClip(Visual, ModelStem(),
+					FElysiumClipSegment(Clip, /*bLoop=*/false), &Seconds))
 				{
 					return false;
 				}
@@ -1429,7 +1447,8 @@ float FElysiumNpc::RunSpecialIdleActivity(double Now)
 		ElysiumRng::Stream(EElysiumRngStream::NpcSchedule));
 	float Seconds = 0.f;
 	if (!Choice.IsSet()
-		|| !Embodiment->PlayNpcClip(Visual, ModelStem(), Choice.Clip, Choice.bLoop, &Seconds))
+		|| !Embodiment->PlayNpcClip(Visual, ModelStem(),
+			FElysiumClipSegment(Choice.Clip, Choice.bLoop), &Seconds))
 	{
 		return -1.f;
 	}
@@ -2184,6 +2203,11 @@ void FElysiumNpc::FinishAmbientUse(bool bFireLeft)
 		Mind.Release(AmbientOwner, TEXT("interesting-place release"));
 		AmbientOwner.Reset();
 	}
+	// The spot's run ends here, whichever way it ended — a natural leave, `UseInteresting(0)`, a
+	// disabled spot, dialogue, dormancy or a patrol taking ownership all funnel through this one
+	// exit. The claim goes back BEFORE the idle below, because the resting pose comes in on the same
+	// ambient band and a standing held claim would refuse it.
+	ReleaseAnimSegment();
 	if (ScriptPhase == EScriptPhase::None)
 	{
 		ResetAnimToIdle();   // a script that owns the body owns its pose too

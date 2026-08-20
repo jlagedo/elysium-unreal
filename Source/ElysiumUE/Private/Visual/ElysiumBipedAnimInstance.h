@@ -415,7 +415,7 @@ public:
 
 	// --- the reaction branch (LIFE5) ----------------------------------------------------------------
 	//
-	// The publish surface for the branch the graph carries between the inertializer and the
+	// The publish surface for the branch the graph carries between the one-shot slot and the
 	// upper-body layer. Written by `PlayReaction`/`StopReaction` below and by nothing else — a
 	// reaction is a discrete producer event, not a per-frame projection like the locomotion half.
 	//
@@ -446,6 +446,17 @@ public:
 	float ReactionBlendInSeconds = 0.1f;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
 	float ReactionBlendOutSeconds = 0.3f;
+
+	// Whether the standing reaction REPEATS. Only a held play does — a pose that stands for the whole
+	// of a predicate has to loop rather than freeze on its terminal frame, which is the same rule
+	// `ElysiumAnimGraph::ShouldRepeatClip` states for a held stance — and every struck reaction is a
+	// one-shot whose own end releases it, so a looping flinch would never report complete.
+	//
+	// It is a graph PIN on both of the branch's players, which is what lets a held FAN repeat there at
+	// all: the two loop bits are edit-time node state the compiler folds to a constant, so a branch
+	// whose players were built non-looping can never be made to repeat at runtime.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
+	bool bReactionLoops = false;
 
 	// Whether the standing reaction is a HELD one — a claim a predicate releases rather than a
 	// duration. Not a graph pin: the branch evaluates the same way either way, and what this changes
@@ -753,8 +764,6 @@ private:
 	// Whether the standing play is released by a predicate rather than by the clock. Set by
 	// `PlayReaction`, cleared by `StopReaction` and by nothing else.
 	bool bReactionHeld = false;
-	// Whether the standing play repeats. Only a held play does; it is the phase's own wrap rule.
-	bool bReactionLoops = false;
 	// Resolved once per class, like the layer's node: the tag table is compiled state and cannot
 	// change under a live instance. `false` in the pair means "not looked up yet", never "absent".
 	mutable bool bReactionBranchResolved = false;

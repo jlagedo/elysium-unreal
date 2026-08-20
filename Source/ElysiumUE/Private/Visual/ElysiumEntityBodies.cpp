@@ -350,8 +350,10 @@ bool UElysiumEntityBodies::ReleaseBodyAnimRequest(USkeletalMeshComponent* Body, 
 }
 
 bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, bool bLoop, float* OutSeconds)
+	const FElysiumClipSegment& Segment, float* OutSeconds)
 {
+	const FString& ClipName = Segment.ClipName;
+	const bool bLoop = Segment.bLoop;
 	UAnimSequence* Anim = Body
 		? ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset())
 		: nullptr;
@@ -400,13 +402,17 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	const FElysiumClipIdentity Identity(
 		Clip == nullptr || Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner, ClipName);
 
-	// LIFE4 — the clip's claim on the base channel. Everything this funnel arms today — the ambient
-	// schedule's stances and fidgets, dialogue line clips, scripted beats still on the adapter — is
-	// the ambient band: it holds the pose against a standing body's every-tick publish and yields
-	// the moment the body travels, which is the priority-table row the interim while-locomoting
-	// rule became. A looping clip holds until replaced or outranked; a one-shot's claim runs its
-	// clip length so an armer that never returns cannot park the channel. LIFE5 producers that
-	// deserve a higher band submit their own claims through the same slot.
+	// LIFE4/LIFE5 — the segment's claim on the base channel, at the band the PRODUCER states. The
+	// band-less door means `Ambient`: it holds the pose against a standing body's every-tick publish
+	// and yields the moment the body travels, which is the priority-table row the interim
+	// while-locomoting rule became. A run states its own band instead — a scripted beat claims
+	// `Scripted`, which is what lets `m_iszCustomMove` play over a body walking to its mark.
+	//
+	// A held run's claim carries NO duration, because the run spans several clips: an expiry taken
+	// from this segment's own length would drop the channel in the gap between two segments of one
+	// beat. `ReleaseNpcSegment` is what ends it. Outside a run a looping clip holds until replaced or
+	// outranked, and a one-shot's claim runs its clip length so an armer that never returns cannot
+	// park the channel.
 	//
 	// **The claim comes FIRST, and it decides whether the clip plays at all** — the same order
 	// `PlayNpcOneShot` takes, and for the same reason. Playing first and claiming after means a
@@ -414,11 +420,11 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// fidget would take the slot from a standing reaction, be told it does not own the channel, and
 	// leave the body posing the fidget anyway with nothing reporting it.
 	FElysiumAnimationRequest Claim;
-	Claim.Source = EElysiumAnimSource::Npc;
+	Claim.Source = Segment.Source;
 	Claim.Channel = EElysiumAnimChannel::Base;
-	Claim.Priority = EElysiumAnimPriority::Ambient;
+	Claim.Priority = Segment.Priority;
 	Claim.Label = ClipName;
-	Claim.HoldSeconds = bLoop ? 0.0f : Anim->GetPlayLength();
+	Claim.HoldSeconds = (bLoop || Segment.bHoldUntilReleased) ? 0.0f : Anim->GetPlayLength();
 	uint32 ClaimHandle = 0;
 	if (SubmitBodyAnimRequest(Body, Claim, ClaimHandle) == EElysiumAnimClaim::Refused)
 	{
@@ -426,7 +432,8 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 		// owns the pose. Verbose for the same reason the one-shot seam's refusal is — a body a scene
 		// or a reaction owns refuses ambient clips for as long as it holds them.
 		UE_LOG(LogElysiumBodies, Verbose,
-			TEXT("clip '%s' on %s was refused the base channel"), *ClipName, *Stem);
+			TEXT("clip '%s' on %s was refused the base channel at the %s band"), *ClipName, *Stem,
+			ElysiumAnimIntent::PriorityName(Segment.Priority));
 		return false;
 	}
 
@@ -444,13 +451,45 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 		}
 		return false;
 	}
-	UE_LOG(LogElysiumBodies, Verbose, TEXT("clip '%s' on %s (loop=%d, %.3fs)"),
-		*ClipName, *Stem, bLoop ? 1 : 0, Anim->GetPlayLength());
+	// The run's claim is remembered so its own stop path can give it back, and the PREVIOUS segment's
+	// is dropped in the same instant: the driver replaced that slot on this submit, so a record still
+	// naming it would release a claim belonging to whoever holds the channel now. Recorded after the
+	// play started, for the same reason the claim is released when the play fails — a record naming a
+	// pose nobody is striking is the leak this map exists to make impossible.
+	//
+	// A segment that does NOT hold still drops the record: the run it belonged to has been replaced by
+	// an ordinary clip, so there is no longer a run claim to release.
+	if (Segment.bHoldUntilReleased && ClaimHandle != 0)
+	{
+		SegmentClaims.Add(FObjectKey(Body), ClaimHandle);
+	}
+	else
+	{
+		SegmentClaims.Remove(FObjectKey(Body));
+	}
+	UE_LOG(LogElysiumBodies, Verbose, TEXT("clip '%s' on %s (loop=%d, %.3fs, %s%s)"),
+		*ClipName, *Stem, bLoop ? 1 : 0, Anim->GetPlayLength(),
+		ElysiumAnimIntent::PriorityName(Segment.Priority),
+		Segment.bHoldUntilReleased ? TEXT(", held") : TEXT(""));
 
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();
 	Body->SetVisibility(true, true);
 	return true;
+}
+
+void UElysiumEntityBodies::ReleaseNpcSegment(USkeletalMeshComponent* Body)
+{
+	// A claim that already lapsed — outranked by a reaction, replaced by another run, or dropped with
+	// the driver across a map epoch — releases nothing, which is the ordinary end of a run rather
+	// than a failure. The same shape as `ReleaseCinematicClaim`, and for the same reason.
+	uint32 Handle = 0;
+	if (Body != nullptr && SegmentClaims.RemoveAndCopyValue(FObjectKey(Body), Handle))
+	{
+		ReleaseBodyAnimRequest(Body, Handle);
+		UE_LOG(LogElysiumBodies, Verbose,
+			TEXT("segment claim on %s released by its run"), *GetNameSafe(Body));
+	}
 }
 
 UAnimSequence* UElysiumEntityBodies::ResolveOneShotClip(USkeletalMesh* Mesh,
@@ -529,17 +568,17 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	// body without one — the plain native host, or a generated class built before the branch existed —
 	// falls back to the montage slot with a single cell, which is a lesser pose rather than none.
 	UElysiumBipedAnimInstance* Biped = Cast<UElysiumBipedAnimInstance>(Inst);
-	// A HELD reaction — one a predicate releases — has to REPEAT for as long as it stands, and the
-	// graph's reaction branch cannot: its sequence player's `bLoopAnimation` is edit-time state the
-	// compiler folds to a constant, so nothing at runtime can flip it and a finished cell freezes on
-	// its terminal frame. The DefaultSlot montage is the one host in this runtime that repeats a clip
-	// (`PlayOneShot` already asks for it), and it covers the blend stack exactly as the branch does,
-	// so a held single-cell reaction is played there.
+	// A HELD reaction — one a predicate releases — has to REPEAT for as long as it stands. Both hosts
+	// can: the branch's two players take their loop bit off the `bReactionLoops` pin (LIFE5), and the
+	// DefaultSlot montage has always repeated one (`PlayOneShot` already asks for it).
 	//
-	// A held FAN would still need the branch — a montage plays one sequence — so the fork is on the
-	// grid, not on the hold. Nothing produces a held fan today: the block family is authored per
-	// activity and carries no direction (`docs/vtmb/combat-and-damage.md` § "Block and stagger
-	// reactions"), which is why this is a fork rather than a refusal.
+	// **The fork is on the GRID, and it is a fork rather than a refusal because a montage plays one
+	// sequence.** A held fan is a blend of two cells and only the branch can strike it; a held single
+	// cell is one sequence, and the montage covers the blend stack exactly as the branch does while
+	// carrying the restart and blend-pair bookkeeping the slot route already owns. Nothing produces a
+	// held fan today — the block family is authored per activity and carries no direction
+	// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions") — so the grid arm is reached
+	// only by a producer that authors one.
 	const bool bHeldReaction = Request.Route == EElysiumOneShotRoute::Reaction
 		&& Request.Release == EElysiumReactionRelease::Predicate;
 	const bool bReactionBranch = Request.Route == EElysiumOneShotRoute::Reaction
@@ -803,6 +842,9 @@ void UElysiumEntityBodies::ForgetNpcVisuals()
 	// a component nothing holds any more can never be released by its producer, which is the inert
 	// entry a claim map has to be swept of rather than left to a map epoch.
 	HeldReactionClaims.Empty();
+	// And the run claims, for exactly that reason: a segment claim keyed on a component nothing holds
+	// any more can never be released by the run that took it.
+	SegmentClaims.Empty();
 	UE_LOG(LogElysiumBodies, Log, TEXT("forgot %d cached NPC visual(s); the next build re-resolves"),
 		Meshes);
 }
@@ -1069,6 +1111,9 @@ void UElysiumEntityBodies::ReleaseBodyAnimClaims(USkeletalMeshComponent* Body)
 	// that ends every claim at once — a corpse holding a block pose is a predicate nobody will ever
 	// release.
 	ReleaseNpcReaction(Body);
+	// And the run's own claim, tracked here for the third time for the third identical reason: a
+	// scripted beat or an ambient spot that dies mid-run holds a claim its stop path will never reach.
+	ReleaseNpcSegment(Body);
 	if (AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
 	{
 		Motor->ReleaseAllAnimRequests();
@@ -1202,7 +1247,10 @@ bool UElysiumEntityBodies::RefreshNpcIdle(USkeletalMeshComponent* Body, const FS
 	EElysiumIdleTier Tier = EElysiumIdleTier::None;
 	const FString Clip = Anims->PickIdleClip(
 		Stem, Disposition, Tier, IdleVariant, DispositionLevel);
-	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Clip, /*bLoop=*/true, /*OutSeconds=*/nullptr);
+	FElysiumClipSegment Segment;
+	Segment.ClipName = Clip;
+	Segment.bLoop = true;
+	return !Clip.IsEmpty() && PlayNpcClip(Body, Stem, Segment, /*OutSeconds=*/nullptr);
 }
 
 bool UElysiumEntityBodies::ResolveStanceClips(const FString& Stem, const FString& AnimName,

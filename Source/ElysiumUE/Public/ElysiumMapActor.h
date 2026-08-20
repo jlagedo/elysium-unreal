@@ -320,8 +320,9 @@ public:
 	virtual bool ResolveDisposition(const FString& Disposition, int32 DispositionLevel,
 		FElysiumDisposition& OutRow) override;
 	virtual bool IsNpcBodyVisible(USkeletalMeshComponent* Body) override;
-	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
-		bool bLoop, float* OutSeconds) override;
+	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
+		const FElysiumClipSegment& Segment, float* OutSeconds) override;
+	virtual void ReleaseNpcSegment(USkeletalMeshComponent* Body) override;
 	virtual bool PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& ClipName) override;
 	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,

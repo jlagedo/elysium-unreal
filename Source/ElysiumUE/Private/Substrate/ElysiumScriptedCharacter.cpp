@@ -5,6 +5,26 @@
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpcLog.h"
 
+namespace
+{
+	// One segment of the beat's montage-slot run, stated here for the travel cycle exactly as
+	// `ElysiumScriptedSequence.cpp` states it for `m_iszIdle`/`m_iszPlay`/`m_iszPostIdle` — the same
+	// mechanism, the same band, the same held claim. `Scripted` is what puts the cycle over a
+	// TRAVELLING body: the ambient band the band-less door means is consumed by the body's own
+	// locomotion publish the instant it leaves, so `m_iszCustomMove` would be replaced by an ordinary
+	// gait on precisely the beats that move.
+	FElysiumClipSegment TravelSegment(const FString& ClipName)
+	{
+		FElysiumClipSegment Segment;
+		Segment.ClipName = ClipName;
+		Segment.bLoop = true;
+		Segment.Source = EElysiumAnimSource::Interaction;
+		Segment.Priority = EElysiumAnimPriority::Scripted;
+		Segment.bHoldUntilReleased = true;
+		return Segment;
+	}
+}
+
 FElysiumScriptedCharacter::~FElysiumScriptedCharacter()
 {
 	DestroyMotor();
@@ -113,11 +133,11 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 	bool bTravelCycleStarted = false;
 	if (Gait == EElysiumScriptGait::Custom)
 	{
-		bTravelCycleStarted = PlayAnimClip(CustomClip, /*bLoop=*/true);
+		bTravelCycleStarted = PlayAnimSegment(TravelSegment(CustomClip));
 	}
 	else if (Gait == EElysiumScriptGait::Walk && !ScriptWalkLabel.IsEmpty())
 	{
-		bTravelCycleStarted = PlayAnimClip(ScriptWalkLabel, /*bLoop=*/true);
+		bTravelCycleStarted = PlayAnimSegment(TravelSegment(ScriptWalkLabel));
 	}
 	if (!bTravelCycleStarted)
 	{
@@ -293,6 +313,12 @@ void FElysiumScriptedCharacter::DestroyMotor()
 	Motor = nullptr;
 }
 
+// The fallback gait, reached when the beat authored no clip for this leg — every `Run`, and a
+// `Walk`/`Custom` whose own label did not resolve. It is the BODY's own gait rather than a pose the
+// beat asked for, so it goes through the band-less door and yields to the locomotion publish exactly
+// as it always has: a `Scripted` claim here would pin one resolved cell on the slot for the whole
+// leg and stop the body's own animation pass re-deriving the fan as the leg turns, which is what
+// `BeginScriptMove` states a scripted Run rides.
 bool FElysiumScriptedCharacter::StartScriptWalkingAnimation(bool bRunning)
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;

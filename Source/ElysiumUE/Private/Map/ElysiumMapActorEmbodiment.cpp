@@ -235,9 +235,17 @@ const TArray<FElysiumAnimEvent>* AElysiumMapActor::GetNpcEventTimeline(const FSt
 }
 
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& ClipName, bool bLoop, float* OutSeconds)
+	const FElysiumClipSegment& Segment, float* OutSeconds)
 {
-	return Bodies->PlayNpcClip(Body, Stem, ClipName, bLoop, OutSeconds);
+	return Bodies->PlayNpcClip(Body, Stem, Segment, OutSeconds);
+}
+
+void AElysiumMapActor::ReleaseNpcSegment(USkeletalMeshComponent* Body)
+{
+	if (Bodies)
+	{
+		Bodies->ReleaseNpcSegment(Body);
+	}
 }
 
 bool AElysiumMapActor::PreloadNpcClip(USkeletalMeshComponent* Body, const FString& Stem,

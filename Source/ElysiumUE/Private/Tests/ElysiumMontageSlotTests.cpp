@@ -32,6 +32,7 @@
 #include "Animation/AnimClassInterface.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "Animation/AnimNode_Inertialization.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimStateMachineTypes.h"     // FBakedAnimationStateMachine
 #include "Animation/AnimSubsystem_Tag.h"
@@ -770,10 +771,31 @@ bool FElysiumGraphBlendStackTest::RunTest(const FString&)
 		static_cast<int32>(Stack->BlendOption),
 		static_cast<int32>(EAlphaBlendOption::HermiteCubic));
 
-	// The stack cross-fades its own players. Routing the blend to the inertializer instead would
-	// hand one node's request to another and make the duration on the pin advisory.
-	TestFalse(TEXT("the stack blends itself rather than asking the inertializer"),
+	// The stack cross-fades its own players. True would make it RAISE an inertialization request
+	// instead of blending, and this graph carries no node that answers one — the request would be
+	// logged unserviced and the authored duration on the pin would decide nothing.
+	TestFalse(TEXT("the stack blends itself rather than raising an inertialization request"),
 		Stack->bUseInertialBlend);
+
+	// **And there is no inertialization node to answer one** (LIFE5). Every crossfade this graph
+	// performs belongs to a node that owns it already — the stack's own `BlendTime`, the reaction
+	// branch's two per-pose times, the slot montage's blend pair — so the node was placed and
+	// unreached. It is asserted on the COMPILED class because that is the only place it can be:
+	// the tracked graph text says what was built, and this says what the runtime actually carries.
+	if (AnimClass != nullptr)
+	{
+		int32 Inertializers = 0;
+		for (const FStructProperty* Property : AnimClass->GetAnimNodeProperties())
+		{
+			if (Property != nullptr && Property->Struct != nullptr
+				&& Property->Struct->IsChildOf(FAnimNode_Inertialization::StaticStruct()))
+			{
+				++Inertializers;
+			}
+		}
+		TestEqual(TEXT("the compiled graph carries no inertialization node at all"),
+			Inertializers, 0);
+	}
 
 	TestEqual(TEXT("four concurrent players"), Stack->GetMaxActiveBlends(), 4);
 

@@ -48,7 +48,7 @@ namespace ElysiumAnimGraph
 	// generator that stamps it and by anything that has to find the node on a compiled class, so the
 	// two cannot drift into two spellings of one node.
 	//
-	// The branch sits between the inertializer and the upper-body layer: `bReactionActive` picks
+	// The branch sits between the one-shot slot and the upper-body layer: `bReactionActive` picks
 	// either the reaction pose (a directional hit fan or a single clip) or the locomotion pose
 	// underneath it. Its two per-pose blend times ARE the asymmetric fade — `FAnimNode_BlendListBase`
 	// takes the newly-active child's own time, so entering the reaction uses the in-fade and
@@ -74,7 +74,7 @@ namespace ElysiumAnimGraph
 	//
 	// It is also the only answer that poses correctly. A body that has published nothing has an
 	// un-entered state machine, whose un-published pin evaluates to the skeleton's bind pose; a
-	// non-zero fade therefore inertializes the first real clip up out of a T-pose for the whole
+	// non-zero fade therefore cross-fades the first real clip up out of a T-pose for the whole
 	// duration on map load.
 	//
 	// **Whether an outgoing record is an operand at all is the CALLER's question, and it is stricter

@@ -1389,6 +1389,135 @@ bool FElysiumScriptedSequenceSelfChainTest::RunTest(const FString&)
 	return true;
 }
 
+// LIFE5 — the montage-slot RUN: one mechanism, the producer's band, and a claim every exit gives back.
+//
+// `scripted_sequence`'s `m_iszIdle` -> travel cycle -> `m_iszPlay` -> `m_iszPostIdle` and an
+// interesting place's enter/hold/leave are the same shape and reach the frame through the same funnel
+// (`UElysiumEntityBodies::PlayNpcClip` -> the body's `DefaultSlot` montage). What differs is the BAND
+// and where the run's claim is given back, and both are what this asserts — on the beat family,
+// because it is the one of the two a content-free world can drive end to end: the ambient family's
+// enter/hold/leave activities are named by `interestingplacetypelist.txt`, which is export corpus.
+//
+// The band is not decoration. `Scripted` outranks the travelling body's own locomotion publish and
+// `Ambient` deliberately does not (`EElysiumAnimPriority`), so a beat whose segments claimed `Ambient`
+// would have `m_iszCustomMove` and `m_iszPlay` consumed by the travel publish on exactly the beats
+// that move — and a beat whose WAITING pose claimed `Scripted` would freeze the NPC's own patrol in a
+// pre-idle the beat has not started yet.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMontageSlotRunTest,
+	"Elysium.Substrate.MontageSlotRun", GElysiumTestFlags)
+bool FElysiumMontageSlotRunTest::RunTest(const FString&)
+{
+	auto BuildDefs = [](FElysiumEntityDefs& Defs, int32 SpawnFlags, const TCHAR* PostIdle)
+	{
+		Defs.MapName = TEXT("__slotrun__");
+
+		FElysiumEntityDef Npc;
+		Npc.Classname = TEXT("npc_VVampire");
+		Npc.TargetName = TEXT("Damsel");
+		Npc.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/downtown/damsel/damsel.mdl"));
+		Defs.Defs.Add(MoveTemp(Npc));
+
+		FElysiumEntityDef Seq;
+		Seq.Classname = TEXT("scripted_sequence");
+		Seq.TargetName = TEXT("beat");
+		Seq.Keys.Add(TEXT("m_iszEntity"), TEXT("Damsel"));
+		Seq.Keys.Add(TEXT("m_fMoveTo"), TEXT("0"));
+		Seq.Keys.Add(TEXT("m_iszIdle"), TEXT("wait_idle"));
+		Seq.Keys.Add(TEXT("m_iszPlay"), TEXT("praying_idle"));
+		if (PostIdle != nullptr)
+		{
+			Seq.Keys.Add(TEXT("m_iszPostIdle"), PostIdle);
+		}
+		Seq.Keys.Add(TEXT("spawnflags"), *FString::FromInt(SpawnFlags));
+		Defs.Defs.Add(MoveTemp(Seq));
+	};
+
+	// --- the ordinary beat: ambient wait, scripted run, and the claim back at the end -------------
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, /*spawnflags*/ 0, TEXT("rest_idle"));
+
+		FElysiumRecordingServices Services;
+		Services.ClipSeconds = 0.5f;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
+		if (!TestNotNull(TEXT("the beat resolved"), Seq))
+		{
+			return false;
+		}
+
+		// The waiting pose, taken at map load. It is the AMBIENT band and holds nothing: the beat has
+		// claimed no NPC yet, so the body's own patrol or interesting-place travel still owns it and a
+		// `Scripted` pre-idle would refuse the travel clip and slide the NPC to its next mark praying.
+		TestTrue(TEXT("the waiting pose plays on the ambient band"),
+			Services.Saw(TEXT("PlayNpcClip damsel wait_idle loop=1 band=ambient")));
+		TestFalse(TEXT("...and takes no run claim, because the beat owns nothing yet"),
+			Services.bNpcSegmentHeld);
+
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+		World.Tick(0.0);
+
+		// The action is the run proper: the beat's own band, and a claim with no duration so the gap
+		// between two of its segments is never a frame the channel goes back to locomotion.
+		TestTrue(TEXT("the action plays on the scripted band, holding the channel"),
+			Services.Saw(TEXT("PlayNpcClip damsel praying_idle loop=0 band=scripted held=1")));
+		TestTrue(TEXT("...and the body is holding the run's claim"), Services.bNpcSegmentHeld);
+
+		// The action runs out. A post-idle the beat does NOT hold is what it LEAVES the NPC standing
+		// in after handing the body back, so it drops to the ambient band with the claim given back —
+		// a released beat still holding `Scripted` would park the channel on a beat that has ended.
+		double Now = 0.1;
+		for (int32 i = 0; i < 12; ++i) { World.Tick(Now); Now += 0.1; }
+		TestTrue(TEXT("the run's claim is given back when the beat ends"),
+			Services.Saw(TEXT("ReleaseNpcSegment body=1")));
+		TestFalse(TEXT("...and nothing is left holding it"), Services.bNpcSegmentHeld);
+		TestTrue(TEXT("the released post-idle is a resting pose on the ambient band"),
+			Services.Saw(TEXT("PlayNpcClip damsel rest_idle loop=1 band=ambient")));
+	}
+
+	// --- spawnflag 256: the beat goes on owning its NPC, so the post-idle stays part of the run ----
+	{
+		FElysiumEntityDefs Defs;
+		BuildDefs(Defs, /*spawnflags*/ 256, TEXT("rest_idle"));
+
+		FElysiumRecordingServices Services;
+		Services.ClipSeconds = 0.5f;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.Activate(0.0);
+
+		FElysiumEntity* Seq = World.FindByName(TEXT("beat"));
+		if (!TestNotNull(TEXT("the held beat resolved"), Seq))
+		{
+			return false;
+		}
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+		double Now = 0.0;
+		for (int32 i = 0; i < 12; ++i) { World.Tick(Now); Now += 0.1; }
+
+		TestTrue(TEXT("a held post-idle is the run's last segment, at the beat's own band"),
+			Services.Saw(TEXT("PlayNpcClip damsel rest_idle loop=1 band=scripted held=1")));
+		TestTrue(TEXT("...and the claim is still standing, because the beat never finished"),
+			Services.bNpcSegmentHeld);
+
+		// Cancelling is the way out of a held post-idle, and it is a stop path like any other: the
+		// claim goes back or the channel is parked on a beat nothing will ever end.
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("CancelSequence")), FElysiumVariant::Void(), 0.0,
+			FElysiumEntityHandle::Invalid(), Seq->Handle);
+		World.Tick(Now);
+		TestTrue(TEXT("cancelling a held beat gives the run's claim back"),
+			Services.Saw(TEXT("ReleaseNpcSegment body=1")));
+		TestFalse(TEXT("...and leaves nothing holding the base channel"), Services.bNpcSegmentHeld);
+	}
+
+	return true;
+}
+
 } // namespace ElysiumSequenceTests
 
 #endif // WITH_DEV_AUTOMATION_TESTS

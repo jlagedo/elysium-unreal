@@ -120,6 +120,47 @@ struct FElysiumAnimationRequest
 	float HoldSeconds = 0.0f;
 };
 
+// One segment of a montage-slot run: what a producer hands the clip funnel, band and all (LIFE5).
+//
+// **`scripted_sequence`'s `m_iszIdle` -> `m_iszCustomMove` -> `m_iszPlay` -> `m_iszPostIdle` and an
+// interesting place's enter/hold/leave are the same shape**, and they play through one mechanism —
+// the body's `DefaultSlot` dynamic montage, under one base-channel claim the run's own stop path
+// gives back. There is no second slot node and no second funnel: the segments of a run hand the slot
+// to each other, and only the band and the release point differ between the two families.
+//
+// **The band is the whole difference, and it is why this is a record rather than a flag.** A
+// scripted beat claims `Scripted`, which outranks the travelling body's own locomotion publish —
+// that is what lets `m_iszCustomMove` play over a body walking to its mark, where an `Ambient` claim
+// would be consumed by the travel publish the instant the body left. An interesting place claims
+// `Ambient`, which deliberately does not outrank it: an ambient stance yields the moment the body
+// travels, and that is the one recovered relationship in the priority table above.
+struct FElysiumClipSegment
+{
+	// The vocabulary label this segment plays, resolved through the body's own clip manifest exactly
+	// as every other clip request is.
+	FString ClipName;
+	bool bLoop = false;
+	EElysiumAnimSource Source = EElysiumAnimSource::Npc;
+	EElysiumAnimPriority Priority = EElysiumAnimPriority::Ambient;
+	// Whether the claim outlives this segment. A run's segments hand the slot to each other under one
+	// claim only `ReleaseNpcSegment` gives back, because a claim that expired with its own clip would
+	// drop the channel in the gap between two segments of one beat — and the pose with it. The
+	// default is false, which is what every caller that is not a run means: one clip, one claim, and
+	// the claim goes when the clip does.
+	bool bHoldUntilReleased = false;
+
+	FElysiumClipSegment() = default;
+	// The band-less clip, which is what every caller outside a run means: the ambient band, one clip,
+	// and a claim that goes when the clip does.
+	FElysiumClipSegment(const FString& InClipName, bool bInLoop)
+		: ClipName(InClipName)
+		, bLoop(bInLoop)
+	{
+	}
+
+	bool IsValid() const { return !ClipName.IsEmpty(); }
+};
+
 // How the request reached the layer. **These are the producer routes the 22-map corpus actually
 // contains** (`docs/vtmb/animation_and_movers.md`), and collapsing any of them into "activity" would
 // erase behaviour already confirmed: 198 map-authored exact labels and 18 `SetAnimation` wires do not

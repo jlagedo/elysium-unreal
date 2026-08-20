@@ -312,6 +312,18 @@ public:
 	// `GetAttachBody` is here). OutSeconds receives the clip's authored length — a
 	// `scripted_sequence` times its `OnEndSequence` off it.
 	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) { return false; }
+
+	// The same seam with the producer's own band on it — one segment of a montage-slot run (LIFE5).
+	//
+	// `PlayAnimClip` above is the band-less door: it means `Ambient`, one clip, one claim that goes
+	// when the clip does. A **run** — a `scripted_sequence`'s idle/travel/play/post-idle, an
+	// interesting place's enter/hold/leave — states its band and holds one claim across every
+	// segment, because a claim that expired between two segments would drop the pose in the gap.
+	// `ReleaseAnimSegment` is the run's stop path, and every exit from a run takes it.
+	virtual bool PlayAnimSegment(const struct FElysiumClipSegment& Segment,
+		float* OutSeconds = nullptr) { return false; }
+	virtual void ReleaseAnimSegment() {}
+
 	virtual bool PreloadAnimClip(const FString& ClipName) { return false; }
 
 	// Hand the body back to its resting pose — the disposition idle 8.5 picked for it. What a

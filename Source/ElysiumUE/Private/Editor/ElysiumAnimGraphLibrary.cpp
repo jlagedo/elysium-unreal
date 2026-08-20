@@ -514,11 +514,14 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 
 		// --- the spine ---------------------------------------------------------------------------
 		//
-		// The blend stack owns the body, one-shots layer over it on a slot, and the inertialization
-		// node sits between the slot and the reaction branch. The composition tail runs after the
-		// output pose, in the proxy, so it deliberately sits OUTSIDE the inertializer: axis
-		// interpolation is a rig rule over the finished pose, and inertializing it would lag the
-		// forearm twist behind the blend.
+		// The blend stack owns the body and one-shots layer over it on a slot. **There is no
+		// inertialization node**, and that is a decision rather than an omission: every crossfade this
+		// graph performs already belongs to a node that owns it -- the stack cross-fades its own
+		// players on the authored `BlendTime`, the reaction branch takes its own two per-pose times,
+		// and the slot's dynamic montage carries its own blend pair. An inertializer between them
+		// serves requests nobody raises: nothing in this graph is an `IInertializationRequester`, so
+		// the node was placed and unreached. The composition tail runs after the output pose, in the
+		// proxy, because axis interpolation is a rig rule over the finished pose.
 		//
 		// **The stack IS the locomotion transitioner** (S2), which is why nothing below places a
 		// state, a conduit or a transition rule. It carries no vocabulary and no edges: the
@@ -530,9 +533,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 		UEdGraphNode* Stack = Place(*Graph,
 			TEXT("/Script/BlendStackEditor.AnimGraphNode_BlendStack"), -900, 0);
 		UEdGraphNode* Slot = Place(*Graph, TEXT("/Script/AnimGraph.AnimGraphNode_Slot"), -560, 0);
-		UEdGraphNode* Inertia = Place(*Graph,
-			TEXT("/Script/AnimGraph.AnimGraphNode_Inertialization"), -280, 0);
-		if (Stack == nullptr || Slot == nullptr || Inertia == nullptr)
+		if (Stack == nullptr || Slot == nullptr)
 		{
 			UE_LOG(LogTemp, Error, TEXT("[animbp] a spine node class was not found"));
 			return;
@@ -577,8 +578,10 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// transition takes the duration `TransitionSeconds` answered for it.
 			Wire(SetNodeValue<float>(Stack, TEXT("PlayerDepthBlendInTimeMultiplier"), 1.f),
 				TEXT("stack PlayerDepthBlendInTimeMultiplier"));
-			// The stack cross-fades its own players. Routing the blend to the inertializer instead
-			// would hand one node's request to another and make the duration on the pin advisory.
+			// The stack cross-fades its own players. True would make it RAISE an inertialization
+			// request instead of blending, and this graph carries no node that answers one -- the
+			// request would be logged as unserviced and the authored duration on the pin would decide
+			// nothing.
 			Wire(SetNodeBool(Stack, TEXT("bUseInertialBlend"), false), TEXT("stack bUseInertialBlend"));
 			// **The most dangerous default in the node.** `InitialOnly` samples a blend space's xy
 			// once, at `BlendTo`, and never again — so a gait fan would freeze at the steering value
@@ -641,13 +644,11 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 
 		Wire(Link(FirstPin(Stack, EGPD_Output), FirstPin(Slot, EGPD_Input)),
 			TEXT("blend stack -> slot"));
-		Wire(Link(FirstPin(Slot, EGPD_Output), FirstPin(Inertia, EGPD_Input)),
-			TEXT("slot -> inertialization"));
 
 		// --- the reaction branch (LIFE5) -----------------------------------------------------------
 		//
 		// A reaction REPLACES the locomotion pose rather than riding over it, so it sits on the base
-		// channel between the inertializer and the upper-body layer: `bReactionActive` picks either
+		// channel between the one-shot slot and the upper-body layer: `bReactionActive` picks either
 		// the reaction pose or everything the blend stack and the one-shot slot produced.
 		//
 		// The two per-pose blend times ARE the asymmetric fade. `FAnimNode_BlendListBase` takes the
@@ -675,13 +676,24 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				return;
 			}
 
-			// A reaction ENDS, so neither player repeats: a looping flinch never reports complete and
-			// would hold the body in its reaction forever. Written as a node value rather than exposed
-			// as a pin because it is a property of the channel and not of the selection — the value
-			// folds into the compiled constant at compile time.
-			Wire(SetNodeBool(ReactionSpace, TEXT("bLoop"), false), TEXT("reaction blend space bLoop"));
-			Wire(SetNodeBool(ReactionSequence, TEXT("bLoopAnimation"), false),
-				TEXT("reaction sequence bLoopAnimation"));
+			// **Whether the reaction repeats is a PIN on both players, not a folded constant** (LIFE5).
+			// A struck reaction ends and must not loop — a looping flinch never reports complete and
+			// would hold the body in its reaction forever — but a HELD one stands for exactly as long
+			// as the predicate that asked for it, and a pose that does not repeat freezes on its
+			// terminal frame instead. That is the same rule `ElysiumAnimGraph::ShouldRepeatClip`
+			// states for a held stance, and it is a property of the PLAY rather than of the channel.
+			//
+			// Both bits are edit-time node state the compiler folds, so a branch built non-looping can
+			// never be made to repeat at runtime: exposing them is the only thing that lets a held FAN
+			// play here at all, where a montage cannot go — a montage plays one sequence, and a fan is
+			// a blend of two cells. `bReactionLoops` is false unless the play is held, so every struck
+			// reaction still runs once and reports complete.
+			ExposePin(ReactionSpace, TEXT("bLoop"));
+			Wire(DriveFromBool(*Graph, PinNamed(ReactionSpace, TEXT("bLoop")),
+				TEXT("bReactionLoops"), -460, -460), TEXT("reaction blend space bLoop pin"));
+			ExposePin(ReactionSequence, TEXT("bLoopAnimation"));
+			Wire(DriveFromBool(*Graph, PinNamed(ReactionSequence, TEXT("bLoopAnimation")),
+				TEXT("bReactionLoops"), -460, -300), TEXT("reaction sequence bLoopAnimation pin"));
 
 			ExposePin(ReactionSpace, TEXT("BlendSpace"));
 			Wire(DriveFromBool(*Graph, PinNamed(ReactionSpace, TEXT("BlendSpace")),
@@ -720,16 +732,16 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				TEXT("ReactionBlendOutSeconds"), -20, 60), TEXT("reaction blend out time pin"));
 			Wire(Link(FirstPin(ReactionPick, EGPD_Output),
 				PinNamed(ReactionBlend, TEXT("BlendPose_0"))), TEXT("reaction pick -> true pose"));
-			Wire(Link(FirstPin(Inertia, EGPD_Output), PinNamed(ReactionBlend, TEXT("BlendPose_1"))),
-				TEXT("inertialization -> reaction false pose"));
+			Wire(Link(FirstPin(Slot, EGPD_Output), PinNamed(ReactionBlend, TEXT("BlendPose_1"))),
+				TEXT("slot -> reaction false pose"));
 
 			// `ChildUpateMode` stays at the engine's `Default`. Its `ResetChildOnActivate` alternative
 			// looks like the retrigger fix and is not one: `FAnimNode_BlendListBase` reinitializes a
 			// newly-active child only when that child's weight is still <= `ZERO_ANIMWEIGHT_THRESH`, so
 			// a reaction that fires again while its own fan is still fading is never covered — and when
 			// a full-weight reaction ends, the reset lands on the BASE child instead, re-initializing
-			// the whole base spine at elapsed zero: the blend stack starts its gait again from frame 0,
-			// the inertializer's pose history is wiped and the slot's bookkeeping is reset. That is a
+			// the whole base spine at elapsed zero: the blend stack starts its gait again from frame 0
+			// and the slot's bookkeeping is reset. That is a
 			// hard cut on release, which is the opposite of what the out-fade exists for. The restart a
 			// retrigger needs comes from republishing the asset: a sequence player whose `Sequence` pin
 			// changes restarts, and so does the blend space player on a new `BlendSpace`.
@@ -744,16 +756,17 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// The transition type and the blend curve stay at the engine's own defaults on purpose:
 			// choosing a curve here would pre-empt the separate sequence-blend-fidelity call, which
 			// owns what every fade in this graph is shaped like. The transition type in particular must
-			// stay `StandardBlend` — the graph's inertialization node is a DESCENDANT of this branch, so
-			// an `Inertialization` type here would search its ancestors for an `IInertializationRequester`,
-			// find none, and log a request failure every time the reaction fires.
+			// stay `StandardBlend` — this graph carries no inertialization node at all, so an
+			// `Inertialization` type here would search its ancestors for an `IInertializationRequester`,
+			// find none, and log a request failure every time the reaction fires. The branch's own two
+			// per-pose blend times ARE its fade, and they need no requester.
 			Wire(SetOwnValue<FName>(ReactionBlend, TEXT("Tag"),
 				FName(ElysiumAnimGraph::ReactionBranchTag)), TEXT("reaction blend tag"));
 		}
 
 		// --- the upper-body layer (CCC10) ----------------------------------------------------------
 		//
-		// Sits after the inertializer, outside the base channel: a weapon layer rides beside the
+		// Sits after the reaction branch, outside the base channel: a weapon layer rides beside the
 		// locomotion state rather than through it, so it does not wait on a gait transition or
 		// interrupt one. Both riders are grip-agnostic and asset-driven, matching every other node
 		// in this graph — the resolver decides what plays, the graph only composes it.
@@ -839,9 +852,9 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				TEXT("additive sequence -> additive"));
 			Wire(DriveFromBool(*Graph, PinNamed(Additive, TEXT("Alpha")),
 				TEXT("AdditiveLayerWeight"), 520, 160), TEXT("additive Alpha pin"));
-			// Additive's Pose output is left unconnected on purpose: it becomes the graph's new sole
-			// terminal, the same way Inertia's was before this block, and ImportGraphFromText wires
-			// whichever single output pose pin nothing else took to the schema's own output node.
+			// Additive's Pose output is left unconnected on purpose: it is the graph's sole terminal,
+			// and ImportGraphFromText wires whichever single output pose pin nothing else took to the
+			// schema's own output node.
 		}
 
 		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);

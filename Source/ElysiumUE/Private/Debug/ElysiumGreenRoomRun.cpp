@@ -529,7 +529,8 @@ bool FElysiumGreenRoomRun::BuildBodies()
 			? Map->PlayAnimatedPropClip(Body, Case.MeshStem, Case.AnimSetModel,
 				Case.bLoop, &Duration)
 			: Case.bResolvedClip
-				? Map->PlayNpcClip(Body, Case.MeshStem, ClipName, Case.bLoop, &Duration)
+				? Map->PlayNpcClip(Body, Case.MeshStem,
+					FElysiumClipSegment(ClipName, Case.bLoop), &Duration)
 				: Map->PlayCinematicClip(Body, Case.MeshStem, Case.AnimSetModel, Case.BoneRoot,
 					ClipName, Case.bLoop, &Duration);
 		if (!bPlayed)
@@ -1277,8 +1278,8 @@ void FElysiumGreenRoomRun::Finish()
 				? Map->PlayAnimatedPropClip(Body, Entry.Case.MeshStem, Entry.Case.AnimSetModel,
 					/*bLoop=*/true, &Duration)
 				: Entry.Case.bResolvedClip
-					? Map->PlayNpcClip(Body, Entry.Case.MeshStem, ClipName,
-						/*bLoop=*/true, &Duration)
+					? Map->PlayNpcClip(Body, Entry.Case.MeshStem,
+						FElysiumClipSegment(ClipName, /*bLoop=*/true), &Duration)
 					: Map->PlayCinematicClip(Body, Entry.Case.MeshStem, Entry.Case.AnimSetModel,
 						Entry.Case.BoneRoot, ClipName, /*bLoop=*/true, &Duration);
 			Playing += bPlayed ? 1 : 0;
@@ -1374,7 +1375,7 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	Body->SetComponentTickEnabled(true);
 
 	float Duration = 0.0f;
-	if (!Map->PlayNpcClip(Body, Stem, ResolvedClip, /*bLoop=*/true, &Duration))
+	if (!Map->PlayNpcClip(Body, Stem, FElysiumClipSegment(ResolvedClip, /*bLoop=*/true), &Duration))
 	{
 		Body->DestroyComponent();
 		OutError = FString::Printf(TEXT("%s has no clip '%s'"), *Stem, *ResolvedClip);
