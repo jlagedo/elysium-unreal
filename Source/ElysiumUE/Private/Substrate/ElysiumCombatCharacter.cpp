@@ -967,13 +967,24 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 	}
 
 	// **The yield, and it is OURS rather than retail's** (`MeleeReactionHoldsBaseUntil` on the
-	// header states why). A melee contact reaction owns the base channel our flinch would take, so
-	// the flinch stands down while that hold runs instead of replacing a block that is still on
-	// screen.
+	// header states why). A reaction claim owns the base channel our flinch would take, so the flinch
+	// stands down while that claim stands instead of replacing a pose that is still on screen.
+	//
+	// **Both expressions of "a reaction claim is standing" answer here**, because the yield is about
+	// the channel and not about which condition will release it: a struck reaction's timed hold, and
+	// a HELD claim a predicate releases — the player's own block, which stands for as long as the
+	// button does and whose classification is what decided the contact was blocked in the first
+	// place.
 	//
 	// Ahead of BOTH draws, exactly as the coincident-origins refusal is: a flinch that does not
 	// happen is not a hit, and must advance the Reaction stream by nothing — otherwise how many
 	// blocks a fight contained would silently reshuffle every reaction after it.
+	if (bHoldsReactionClaim)
+	{
+		UE_LOG(LogElysiumPlayer, Verbose,
+			TEXT("%s yields its flinch: a held reaction claim owns the base pose"), *DebugString());
+		return;
+	}
 	if (World->NowSeconds() < MeleeReactionHoldsBaseUntil)
 	{
 		UE_LOG(LogElysiumPlayer, Verbose,
@@ -999,13 +1010,101 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 	// availability probe, the disposition retry or sequence zero — substituting a stance for a hit
 	// reaction is exactly the behaviour this clears. The blend pair is hard-coded because the gesture
 	// path's is: every other reaction takes the resolved clip's own authored fade.
+	//
+	// **The envelope IS the flinch's whole life**, which is why it names its own release condition:
+	// retail's fade values are compiled constants in seconds with no hold between them, so the weight
+	// is a linear triangle that peaks at `FlinchBlendInSeconds` and is gone at the sum of the pair.
+	// The clip's own length decides nothing — retail evaluates a static pose under that envelope — so
+	// a two-frame hit cell and a long one occupy the channel for exactly the same 0.4 s.
 	FElysiumReactionPlayRequest Reaction;
 	Reaction.Activity = Flinch.Activity();
 	Reaction.HitYawDegrees = Flinch.HitYawDegrees;
 	Reaction.BlendInSeconds = ElysiumReactions::FlinchBlendInSeconds;
 	Reaction.BlendOutSeconds = ElysiumReactions::FlinchBlendOutSeconds;
 	Reaction.bAllowFallbackLadder = false;
+	Reaction.Release = EElysiumReactionRelease::Envelope;
 	PlayReactionActivity(Reaction);
+}
+
+void FElysiumCombatCharacter::ReleaseHeldReaction()
+{
+	const bool bHadClaim = bHoldsReactionClaim;
+	if (!bHadClaim && !HeldReactionPlay.IsValid())
+	{
+		return;
+	}
+	// Cleared FIRST, so a release that cannot reach a body still ends the character's own answer to
+	// `IsHoldingReaction`. A flinch yielding forever to a claim nothing can give back is the failure
+	// this ordering closes. The cached cell goes with it: a released hold is not resumable, and a
+	// record left behind would let the next poll re-take a pose whose predicate is over.
+	bHoldsReactionClaim = false;
+	HeldReactionPlay = FElysiumOneShotClipRequest();
+	// Only when a claim was actually outstanding. A hold that had already been DISPLACED owns nothing
+	// on the body, and asking the seam to give back a claim it does not hold would report a release
+	// that did not happen.
+	if (!bHadClaim)
+	{
+		return;
+	}
+	if (IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+		Embodiment != nullptr && Visual != nullptr)
+	{
+		Embodiment->ReleaseNpcReaction(Visual);
+	}
+}
+
+bool FElysiumCombatCharacter::TickHeldReaction()
+{
+	if (!HeldReactionPlay.IsValid())
+	{
+		// Nothing was ever held, or it has been released. Not a state to report — most characters are
+		// in it for their whole lives.
+		bHoldsReactionClaim = false;
+		return false;
+	}
+	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr || Visual == nullptr)
+	{
+		// The body went away under a standing hold. The claim went with it, so the character's answer
+		// has to follow — otherwise the flinch yields forever to a pose nothing is striking.
+		bHoldsReactionClaim = false;
+		return false;
+	}
+
+	const EElysiumHeldReactionState State = Embodiment->QueryNpcReactionHold(Visual);
+	if (State == EElysiumHeldReactionState::Held)
+	{
+		bHoldsReactionClaim = true;
+		return true;
+	}
+
+	// Displaced, either way: the claim is gone even though the predicate has not moved.
+	bHoldsReactionClaim = false;
+	if (State == EElysiumHeldReactionState::Displaced)
+	{
+		// Another producer owns the base channel. Re-claiming now would take it from a reaction that
+		// is still playing — an equal band replaces on `>=` — so the resume waits for the channel
+		// rather than fighting for it, and the next think asks again. Silent on purpose: a contested
+		// channel is an ordinary state, and reporting it once per think would be a log per frame for
+		// as long as a button is held.
+		return false;
+	}
+
+	// The channel is free and the predicate still stands, so the pose goes back on. **The CACHED
+	// cell, replayed straight at the play seam** — no `FillActivityClipRequest`, no
+	// `ResolveNpcActivityClip`, no weighted pick, and therefore no `Reaction` stream draw.
+	if (!Embodiment->PlayNpcOneShot(Visual, HeldReactionPlay, nullptr))
+	{
+		// The seam refused or the host would not play it — both already reported at their own owner.
+		// The cached cell is kept: the predicate has not moved, so the next think tries again.
+		return false;
+	}
+	bHoldsReactionClaim = true;
+	UE_LOG(LogElysiumPlayer, Verbose,
+		TEXT("%s resumes its held reaction '%s'@'%s' — the base channel came free while the "
+			"predicate still stands"),
+		*DebugString(), *HeldReactionPlay.AnimationName, *HeldReactionPlay.OwnerStem);
+	return true;
 }
 
 bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayRequest& Request,
@@ -1056,7 +1155,11 @@ bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayReq
 	// at all, and the axis value is where on that fan's own parameter it was sampled.
 	Play.bGrid = Clip.bGrid;
 	Play.AxisValue = Clip.AxisValue;
-	Play.bLoop = false;
+	// The release condition the producer stated, and the loop that follows from it: a pose held for a
+	// whole predicate repeats, a struck reaction plays once. One decision, taken here, so the seam is
+	// never handed a held claim that is also a one-shot.
+	Play.Release = Request.Release;
+	Play.bLoop = Request.Release == EElysiumReactionRelease::Predicate;
 	// The recovered restart rule, answered by the seam that resolved the clip: an activity the
 	// restart-ideal task routes request re-fires when it is asked for again, instead of being
 	// swallowed as an unchanged ideal.
@@ -1076,6 +1179,16 @@ bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayReq
 	if (bPlayed && OutSeconds != nullptr)
 	{
 		*OutSeconds = Seconds;
+	}
+	// A HELD claim the seam accepted is now this character's to give back. A refused one is not: the
+	// channel was never taken, so there is nothing outstanding and the flinch must not yield to it.
+	//
+	// The resolved cell is cached with it, and that cache is the whole of what makes a resume free of
+	// a draw: the weighted pick above ran ONCE, and everything after it replays `Play` as written.
+	if (bPlayed && Request.Release == EElysiumReactionRelease::Predicate)
+	{
+		bHoldsReactionClaim = true;
+		HeldReactionPlay = Play;
 	}
 	return bPlayed;
 }
@@ -1134,6 +1247,12 @@ void FElysiumCombatCharacter::OnKilled()
 		return;
 	}
 	bDeathReported = true;
+	// LIFE5 — the held reaction claim goes back on the death commit, ahead of every output. A held
+	// claim is released by a predicate its producer re-checks, and a dead character re-checks nothing:
+	// leaving it standing parks the base channel of a body whose death schedule is about to ask for
+	// it. The NPC leaf's wholesale `ReleaseBodyAnimClaims` releases the driver slot too; this is what
+	// makes the character's own answer to `IsHoldingReaction` agree with it, on both leaves.
+	ReleaseHeldReaction();
 	static const FName OnDeath(TEXT("OnDeath"));
 	FireOutput(OnDeath, Handle);   // one of CAI_BaseNPC's 16 outputs; the player wires none
 	// Preserve producer order: the child's own OnDeath rows enter the queue before its maker's

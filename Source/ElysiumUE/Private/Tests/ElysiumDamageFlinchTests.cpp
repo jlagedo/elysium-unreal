@@ -24,6 +24,7 @@
 #include "Tests/ElysiumSaveTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
 #include "Visual/ElysiumAnimationResolve.h"
+#include "Visual/ElysiumBipedAnimInstance.h"   // FElysiumReactionPlay — the release condition's arithmetic
 
 namespace ElysiumDamageFlinchTests
 {
@@ -474,6 +475,51 @@ bool FElysiumDamageFlinchRuleTest::RunTest(const FString&)
 		TestEqual(TEXT("...and the fade out its 0.3"),
 			ElysiumReactions::FlinchBlendOutSeconds, 0.3f);
 
+		// --- The envelope those two numbers ARE ---------------------------------------------------
+		//
+		// Retail's `DamageFlinch` weight is a linear triangle over a separate overlay slot: it rises
+		// for the first value, peaks, falls for the second, and is gone at their sum. There is no hold
+		// anywhere in it and the clip is evaluated as a static pose, so the CELL'S OWN LENGTH cannot
+		// enter the arithmetic — which is exactly what the `Envelope` release condition states, and
+		// what a shipped two-frame hit cell makes checkable.
+		{
+			FElysiumReactionPlay Flinch;
+			Flinch.LengthSeconds = 1.0f / 30.0f * 2.0f;   // the two frames every shipped hit cell bakes to
+			Flinch.BlendInSeconds = ElysiumReactions::FlinchBlendInSeconds;
+			Flinch.BlendOutSeconds = ElysiumReactions::FlinchBlendOutSeconds;
+			Flinch.Release = EElysiumReactionRelease::Envelope;
+			TestEqual(TEXT("the flinch peaks at the fade in"), Flinch.ActiveSeconds(), 0.1f);
+			TestEqual(TEXT("...and is gone at the sum of the pair"), Flinch.TotalSeconds(), 0.4f);
+			// The same play timed off its clip instead: the two-frame cell is shorter than the out-fade
+			// alone, so the branch would be dropped by the update that armed it. Asserted as the
+			// contrast, because it is the failure the release condition exists to name.
+			Flinch.Release = EElysiumReactionRelease::ClipCompletion;
+			TestEqual(TEXT("a clip-timed two-frame cell holds for nothing at all"),
+				Flinch.ActiveSeconds(), 0.0f);
+
+			// A struck reaction — a block, a knockback — is the ordinary case: its clip's own length,
+			// with the fade completing ON that length rather than after it.
+			FElysiumReactionPlay Struck;
+			Struck.LengthSeconds = 1.2f;
+			Struck.BlendInSeconds = 0.0f;
+			Struck.BlendOutSeconds = 0.2f;
+			TestEqual(TEXT("a struck reaction stands for its clip less the out-fade"),
+				Struck.ActiveSeconds(), 1.0f);
+			TestEqual(TEXT("...and its whole life is the clip"), Struck.TotalSeconds(), 1.2f);
+
+			// A HELD play answers neither: it is released by a predicate, so there is no span to state
+			// and the negative is the same "never" sentinel every aged readout in this repo uses. A
+			// zero here would read to the channel claim as "hold forever" by accident rather than by
+			// statement, and to the phase clock as "expire immediately".
+			FElysiumReactionPlay Held;
+			Held.LengthSeconds = 1.2f;
+			Held.Release = EElysiumReactionRelease::Predicate;
+			TestTrue(TEXT("a held play states no active span"), Held.ActiveSeconds() < 0.0f);
+			TestTrue(TEXT("...and no life at all"), Held.TotalSeconds() < 0.0f);
+			TestTrue(TEXT("...and says so by name"), Held.IsHeld());
+			TestFalse(TEXT("a struck reaction is not held"), Struck.IsHeld());
+		}
+
 		const FVector Left(0.0f, -100.0f, 0.0f);
 
 		int32 Heads = 0;
@@ -713,6 +759,13 @@ bool FElysiumDamageFlinchProducerTest::RunTest(const FString&)
 		TestTrue(TEXT("...with retail's two fades"),
 			Played.Contains(TEXT("in=0.10")) && Played.Contains(TEXT("out=0.30")));
 		TestTrue(TEXT("...in the reaction band"), Played.Contains(TEXT("prio=reaction")));
+		// **And released by that fade pair alone.** Retail's `DamageFlinch` envelope is a linear
+		// weight triangle with NO hold between its two compiled fades, evaluated against a static
+		// pose — so what ends the flinch is the clock over 0.1 + 0.3, and the cell's own length
+		// decides nothing. A producer that left the release at `clip` would time a two-frame hit cell
+		// off two frames.
+		TestTrue(TEXT("...released by retail's own weight envelope rather than by its clip"),
+			Played.Contains(TEXT("release=envelope")));
 		// **The route, which is what makes the flinch a blend rather than a montage.** A reaction
 		// REPLACES the base pose on the graph's own branch; the one-shot slot rides over it and can
 		// play only one cell, so a producer that left the route at its default would snap the body

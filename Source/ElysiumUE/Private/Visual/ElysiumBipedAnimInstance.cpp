@@ -449,14 +449,20 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		// seeded from `ActiveSeconds` and says when to ask for the fade back, while the phase needs
 		// where in the CLIP the branch is standing.
 		ReactionElapsedSeconds += DeltaSeconds;
-		ReactionSecondsLeft -= DeltaSeconds;
-		if (ReactionSecondsLeft <= 0.0f)
+		// A HELD play is released by its producer, so it has no countdown to advance: the elapsed
+		// clock above still runs (the phase has to keep walking a repeating clip), and the branch
+		// stands until `StopReaction`.
+		if (!bReactionHeld)
 		{
-			// The fan is left on its pins deliberately: the engine is still fading the branch OUT over
-			// `ReactionBlendOutSeconds`, and clearing the asset here would evaluate the fade against a
-			// null pose — the reference pose — for its whole length.
-			bReactionActive = false;
-			ReactionSecondsLeft = 0.0f;
+			ReactionSecondsLeft -= DeltaSeconds;
+			if (ReactionSecondsLeft <= 0.0f)
+			{
+				// The fan is left on its pins deliberately: the engine is still fading the branch OUT
+				// over `ReactionBlendOutSeconds`, and clearing the asset here would evaluate the fade
+				// against a null pose — the reference pose — for its whole length.
+				bReactionActive = false;
+				ReactionSecondsLeft = 0.0f;
+			}
 		}
 	}
 
@@ -801,9 +807,12 @@ bool UElysiumBipedAnimInstance::PlayReaction(const FElysiumReactionPlay& Play)
 	if (!Play.IsValid())
 	{
 		UE_LOG(LogElysiumBipedGraph, Warning,
-			TEXT("[elysium] reaction refused: space='%s' sequence='%s' length %.3fs -- exactly one "
-				"asset and a positive length are required"),
-			*GetNameSafe(Play.Space), *GetNameSafe(Play.Sequence), Play.LengthSeconds);
+			TEXT("[elysium] reaction refused: space='%s' sequence='%s' length %.3fs release=%s "
+				"(in %.2f out %.2f) -- exactly one asset and a positive length are required, and an "
+				"envelope play needs a positive fade pair"),
+			*GetNameSafe(Play.Space), *GetNameSafe(Play.Sequence), Play.LengthSeconds,
+			ElysiumAnimIntent::ReactionReleaseName(Play.Release), Play.BlendInSeconds,
+			Play.BlendOutSeconds);
 		return false;
 	}
 	if (!HasCompiledReactionBranch())
@@ -840,24 +849,26 @@ bool UElysiumBipedAnimInstance::PlayReaction(const FElysiumReactionPlay& Play)
 	// buy it with a worse failure.
 	// The play owns the arithmetic, because the channel claim reads the other half of it: the claim's
 	// `HoldSeconds` is `TotalSeconds`, this is `ActiveSeconds`, and one expression is what stops a
-	// claim expiring while the branch is still fading. The minimum hold and why it is PENDING RE are
-	// on `ActiveSeconds` itself.
-	ReactionSecondsLeft = Play.ActiveSeconds();
+	// claim expiring while the branch is still fading. What each release condition answers, and why,
+	// is on `ActiveSeconds` itself.
+	bReactionHeld = Play.IsHeld();
+	bReactionLoops = Play.bLoop;
+	ReactionSecondsLeft = bReactionHeld ? 0.0f : Play.ActiveSeconds();
 	ReactionElapsedSeconds = 0.0f;
 	bReactionActive = true;
 	// The branch owns the base pose while it stands, so it owns the base channel's phase with it.
 	// The length is the CLIP's (a fan's engine-blended length at the sampled parameter), not the
-	// branch's own hold — `ActiveSeconds` is shorter than the clip by an out-fade and floored below
-	// it on a two-frame cell, and a cycle divided by either would name the wrong frame.
+	// branch's own hold — `ActiveSeconds` is a different span for every release condition, and a cycle
+	// divided by any of them would name the wrong frame.
 	ArmBasePhase(EElysiumBasePhaseSource::Reaction,
-		FElysiumClipIdentity(Play.OwnerStem, Play.Label), Play.LengthSeconds, /*bLoop=*/false);
+		FElysiumClipIdentity(Play.OwnerStem, Play.Label), Play.LengthSeconds, Play.bLoop);
 
 	UE_LOG(LogElysiumBipedGraph, Verbose,
-		TEXT("reaction %s '%s' at %.1f (%.3fs, in %.2f out %.2f, active for %.3fs)"),
+		TEXT("reaction %s '%s' at %.1f (%.3fs, in %.2f out %.2f, release=%s, active for %.3fs)"),
 		Play.Space != nullptr ? TEXT("fan") : TEXT("clip"),
 		Play.Space != nullptr ? *GetNameSafe(Play.Space) : *GetNameSafe(Play.Sequence),
 		Play.AxisValue, Play.LengthSeconds, ReactionBlendInSeconds, ReactionBlendOutSeconds,
-		ReactionSecondsLeft);
+		ElysiumAnimIntent::ReactionReleaseName(Play.Release), ReactionSecondsLeft);
 	return true;
 }
 
@@ -866,6 +877,8 @@ void UElysiumBipedAnimInstance::StopReaction()
 	// The assets stay on their pins for the fade the engine is about to run — the same reason the
 	// phase clock's own expiry leaves them. They are replaced by the next `PlayReaction`.
 	bReactionActive = false;
+	bReactionHeld = false;
+	bReactionLoops = false;
 	ReactionSecondsLeft = 0.0f;
 	ReactionElapsedSeconds = 0.0f;
 	// Only this producer's arm. A montage or a scene clip standing under the reaction goes on
@@ -1072,9 +1085,12 @@ float UElysiumBipedAnimInstance::LiveBaseCycle(EElysiumBasePhaseSource Source,
 			: FMath::Clamp(Position / Arm.LengthSeconds, 0.0f, 1.0f);
 	}
 	case EElysiumBasePhaseSource::Reaction:
-		// A reaction never loops, so its phase saturates at 1 — the terminal position a finished
-		// one-shot has, and the one place a phase is legally not below 1.
-		return FMath::Clamp(ReactionElapsedSeconds / Arm.LengthSeconds, 0.0f, 1.0f);
+		// A struck reaction never loops, so its phase saturates at 1 — the terminal position a
+		// finished one-shot has, and the one place a phase is legally not below 1. A HELD reaction
+		// repeats, so its phase wraps like any other looping clip and its timeline fires once a pass.
+		return bReactionLoops
+			? FMath::Frac(ReactionElapsedSeconds / Arm.LengthSeconds)
+			: FMath::Clamp(ReactionElapsedSeconds / Arm.LengthSeconds, 0.0f, 1.0f);
 	case EElysiumBasePhaseSource::Montage:
 	{
 		// The montage's position runs `0 .. LoopCount * clip length`, so the CLIP's phase is the

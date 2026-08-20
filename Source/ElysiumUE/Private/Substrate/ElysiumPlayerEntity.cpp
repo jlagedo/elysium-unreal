@@ -155,16 +155,31 @@ void FElysiumPlayer::TickBlockIntent(double NowSeconds)
 
 	if (bWant == bBlockIntentStands)
 	{
+		// **The predicate has not moved, but the POSE may have.** An equal or higher band takes the
+		// base channel on `>=`, so the first blocked hit's own `ACT_BLOCK` displaces the block pose
+		// while the button is still down — and retail has no such gap, because it re-derives the ideal
+		// activity every frame and its pose and classification fall and resume together
+		// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
+		//
+		// This poll IS that re-derivation, on the think this producer already runs on: it refreshes the
+		// character's answer against the seam and re-takes the pose the moment the channel comes free,
+		// replaying the cell the rising edge already resolved so nothing is drawn.
+		if (bWant)
+		{
+			TickHeldReaction();
+		}
 		return;
 	}
 	bBlockIntentStands = bWant;
 
 	if (!bWant)
 	{
-		// The falling edge releases the classification and nothing else. The reaction branch is a
-		// timed claim that expires on its own, so there is no pose to take down here.
+		// **The falling edge releases the claim, and that is the whole release condition.** The pose is
+		// held by this predicate rather than by a duration, so the button coming up is what ends it —
+		// there is no clock to wait out and no second producer to agree with.
 		UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s stops blocking at %.3f"), *DebugString(),
 			NowSeconds);
+		ReleaseHeldReaction();
 		return;
 	}
 
@@ -172,19 +187,21 @@ void FElysiumPlayer::TickBlockIntent(double NowSeconds)
 	// route does. The weapon ladder is allowed: the corpus authors `ACT_PREBLOCK_KATANA` and its
 	// siblings on 155 stems against a bare `ACT_PREBLOCK` on almost none.
 	//
-	// **PENDING — the POSE does not stand for the whole hold, though the classification does.**
-	// Retail's ideal activity holds `ACT_PREBLOCK` for as long as the predicate is true, and the
-	// clip's own loop bit keeps it on screen. The reaction branch this producer plays through
-	// (`Private/Visual/ElysiumBipedAnimInstance.h`, `FElysiumReactionPlay`) is a TIMED claim: it
-	// seeds a phase clock from the clip's length and drops when that runs out, and it carries
-	// neither a repeat nor a stop the substrate can reach. So the pose plays in and fades while
-	// `bBlockIntentStands` — which is what decides whether a contact was blocked — stands until the
-	// button is released. Re-requesting the pose on a cadence is deliberately NOT the workaround:
-	// every request draws the weighted variant off the Reaction stream, which would make that
-	// stream's position a function of how long a button was held.
+	// **The pose stands for the whole hold, exactly as the classification does.** Retail's ideal
+	// activity holds `ACT_PREBLOCK` while the predicate is true and the clip's own loop bit keeps it
+	// on screen; the request below is that hold, stated as the claim's release condition
+	// (`EElysiumReactionRelease::Predicate`) rather than as a duration. The claim carries no
+	// `HoldSeconds` at all, the pose repeats while it stands, and the falling edge above gives it
+	// back.
+	//
+	// **Requested ONCE, on the edge, and that is load-bearing.** Every request draws the weighted
+	// variant off the Reaction stream, so re-requesting on a cadence would make that stream's
+	// position a function of how long a button was held — which is why the hold is a claim rather
+	// than a repeat.
 	FElysiumReactionPlayRequest Preblock;
 	Preblock.Activity = TEXT("ACT_PREBLOCK");
 	Preblock.bAllowFallbackLadder = true;
+	Preblock.Release = EElysiumReactionRelease::Predicate;
 	UE_LOG(LogElysiumPlayer, Verbose, TEXT("%s starts blocking at %.3f"), *DebugString(), NowSeconds);
 	PlayReactionActivity(Preblock);
 }
@@ -539,6 +556,17 @@ void FElysiumPlayer::OnRuntimeModelChanged()
 	{
 		return; // a headless world still keeps the logical model string
 	}
+	// LIFE5 — the held reaction goes back BEFORE the body it was taken on is torn down, because the
+	// release is addressed by body: after the swap below, `Visual` names a component the claim was
+	// never recorded against, and the old one's zero-duration claim would stand on the player driver
+	// (which outlives the body) with nothing able to name it again.
+	//
+	// The classification is re-armed with it. Retail re-derives the ideal activity every frame, so a
+	// new model resolves `ACT_PREBLOCK` through its OWN vocabulary and weapon ladder; clearing the
+	// edge is what makes the next think ask for that rather than resume a cell the previous body's
+	// bank named. The cached cell is not replayed across a body for the same reason.
+	ReleaseHeldReaction();
+	bBlockIntentStands = false;
 	Embodiment->ClearPlayerVisual();
 	Visual = nullptr;
 	if (!Model.IsEmpty())

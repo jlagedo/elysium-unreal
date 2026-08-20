@@ -227,6 +227,26 @@ const TCHAR* PriorityName(EElysiumAnimPriority Priority)
 	}
 }
 
+const TCHAR* ReactionReleaseName(EElysiumReactionRelease Release)
+{
+	switch (Release)
+	{
+	case EElysiumReactionRelease::Envelope:  return TEXT("envelope");
+	case EElysiumReactionRelease::Predicate: return TEXT("predicate");
+	default:                                 return TEXT("clip");
+	}
+}
+
+const TCHAR* HeldReactionStateName(EElysiumHeldReactionState State)
+{
+	switch (State)
+	{
+	case EElysiumHeldReactionState::Free:      return TEXT("free");
+	case EElysiumHeldReactionState::Displaced: return TEXT("displaced");
+	default:                                   return TEXT("held");
+	}
+}
+
 EElysiumAnimPriority DefaultPriority(EElysiumAnimSource Source)
 {
 	switch (Source)

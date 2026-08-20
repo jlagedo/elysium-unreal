@@ -121,33 +121,62 @@ struct FElysiumReactionPlay
 	float BlendInSeconds = 0.1f;
 	float BlendOutSeconds = 0.3f;
 
+	// What ends this play. The whole arithmetic below forks on it, because the three families end for
+	// three different reasons and none of them is a wall-clock stamp.
+	EElysiumReactionRelease Release = EElysiumReactionRelease::ClipCompletion;
+
+	// Whether the branch repeats its clip for as long as it stands. True only for a `Predicate` play:
+	// a pose that has to be on screen for an unbounded hold cannot be a one-shot's terminal frame.
+	bool bLoop = false;
+
+	// A `Predicate` play is released by its producer, never by a clock.
+	bool IsHeld() const { return Release == EElysiumReactionRelease::Predicate; }
+
 	bool IsValid() const
 	{
-		return (Space != nullptr) != (Sequence != nullptr) && LengthSeconds > 0.0f;
+		if ((Space != nullptr) == (Sequence != nullptr) || !(LengthSeconds > 0.0f))
+		{
+			return false;
+		}
+		// An `Envelope` play's whole life IS its stated fades, so a pair that sums to nothing describes
+		// no reaction at all — and the claim it would take reads a non-positive hold as "until
+		// released", which parks the channel. Refused by name rather than parked.
+		return !(Release == EElysiumReactionRelease::Envelope && !(TotalSeconds() > 0.0f));
 	}
 
-	// How long `bReactionActive` stands — the phase clock's own seed. It is the clip's length less
-	// the out-fade, floored at a MINIMUM HOLD equal to the blend-in, so the pose is on screen for at
-	// least the time it takes to fade to it. Identity for any clip longer than
-	// `BlendInSeconds + BlendOutSeconds`. The floor is the blend-in the producer STATED, not the one
-	// the instance ends up using: a body with nothing to blend from snaps in and holds it anyway.
+	// How long `bReactionActive` stands — the phase clock's own seed, and one of three answers:
 	//
-	// **PENDING RE.** The floor is here because every hit cell VtMB ships bakes to 0.033s — two
-	// frames — which is shorter than the out-fade alone, so the unfloored seed is zero and the branch
-	// is dropped on the update that armed it. The recovered 0.1/0.3 may be `CAnimationLayer` cycle
-	// FRACTIONS rather than seconds, which would make a two-frame cell's real fade two frames long
-	// and this floor unnecessary; the decomp read of `DamageFlinch`'s layer setup closes it. Until
-	// then this is the measured-safe interim.
+	// - `ClipCompletion`: the clip's own length less the out-fade, so the fade completes ON the clip's
+	//   end. A cell shorter than its own out-fade answers zero and fades straight back out, which is
+	//   the honest reading of a clip that ends inside its own transition.
+	// - `Envelope`: the stated blend-in, and NOTHING after it. This is retail's `DamageFlinch` weight
+	//   triangle — fade in over 0.1, fade out over 0.3, no hold, ended by the clock alone — so the
+	//   peak is at the blend-in and the whole thing is gone at 0.4 whatever the cell's own length is.
+	//   The value used is the blend-in the producer STATED, not the one the instance ends up applying:
+	//   a body with nothing to blend from snaps in and holds the peak for the same span.
+	// - `Predicate`: no answer. Negative is the sentinel every "never" in this repo uses, and the
+	//   instance never seeds a countdown from it.
 	float ActiveSeconds() const
 	{
-		return FMath::Max(LengthSeconds - FMath::Max(BlendOutSeconds, 0.0f),
-			FMath::Max(BlendInSeconds, 0.0f));
+		switch (Release)
+		{
+		case EElysiumReactionRelease::Predicate:
+			return -1.0f;
+		case EElysiumReactionRelease::Envelope:
+			return FMath::Max(BlendInSeconds, 0.0f);
+		default:
+			return FMath::Max(LengthSeconds - FMath::Max(BlendOutSeconds, 0.0f), 0.0f);
+		}
 	}
 
 	// The branch's whole life: the hold above, then the out-fade that follows it. The channel claim
 	// takes this rather than the clip's length, so a claim cannot expire while the branch is still
-	// fading — one expression, so the two cannot disagree.
-	float TotalSeconds() const { return ActiveSeconds() + FMath::Max(BlendOutSeconds, 0.0f); }
+	// fading — one expression, so the two cannot disagree. Negative for a held play, which has no
+	// life to state: its claim stands until the producer gives it back.
+	float TotalSeconds() const
+	{
+		return IsHeld() ? -1.0f : ActiveSeconds() + FMath::Max(BlendOutSeconds, 0.0f);
+	}
 };
 
 // Which producer a base-channel phase is being read off (LIFE5), in the order the pose composes.
@@ -417,6 +446,17 @@ public:
 	float ReactionBlendInSeconds = 0.1f;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
 	float ReactionBlendOutSeconds = 0.3f;
+
+	// Whether the standing reaction is a HELD one — a claim a predicate releases rather than a
+	// duration. Not a graph pin: the branch evaluates the same way either way, and what this changes
+	// is the phase clock, which never counts down while it is set.
+	bool IsReactionHeld() const { return bReactionActive && bReactionHeld; }
+
+	// The montage the one-shot seam is running RIGHT NOW, or null — an identity, not a handle.
+	// `StopOneShot` ends whatever the slot currently holds, which after a later arm is somebody else's
+	// play; a caller that armed a one-shot earlier and has to stop only its own compares against this
+	// first.
+	const UAnimMontage* GetActiveSlotMontage() const { return ActiveSlotMontage; }
 
 	// --- the seam ---------------------------------------------------------------------------------
 	//
@@ -700,11 +740,21 @@ private:
 	// expires and the locomotion publish takes the base back. The zero-blend stop that publish
 	// performs therefore finds a branch that has already faded, which is why the handover is
 	// structurally invisible rather than a tuned threshold.
+	//
+	// **A HELD play has no countdown at all.** `FElysiumReactionPlay::TotalSeconds` answers negative
+	// for one, and the flag below is what makes the tick skip the subtraction rather than a sentinel
+	// smuggled through the same float: a clock that expired would drop the pose while the predicate
+	// that asked for it still stands, which is the exact defect the held claim exists to close.
 	float ReactionSecondsLeft = 0.0f;
 	// How long the branch has been standing, counted UP. The countdown above is seeded from
-	// `ActiveSeconds` — the clip's length less its out-fade, floored at the blend-in — so it cannot
-	// answer where in the CLIP the branch is; the phase needs elapsed against the clip's own length.
+	// `ActiveSeconds`, which is a different span for each release condition, so it cannot answer where
+	// in the CLIP the branch is; the phase needs elapsed against the clip's own length.
 	float ReactionElapsedSeconds = 0.0f;
+	// Whether the standing play is released by a predicate rather than by the clock. Set by
+	// `PlayReaction`, cleared by `StopReaction` and by nothing else.
+	bool bReactionHeld = false;
+	// Whether the standing play repeats. Only a held play does; it is the phase's own wrap rule.
+	bool bReactionLoops = false;
 	// Resolved once per class, like the layer's node: the tag table is compiled state and cannot
 	// change under a live instance. `false` in the pair means "not looked up yet", never "absent".
 	mutable bool bReactionBranchResolved = false;

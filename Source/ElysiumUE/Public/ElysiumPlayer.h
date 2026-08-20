@@ -3,6 +3,9 @@
 #include "CoreMinimal.h"
 // By value: CBaseAnimating owns one event cursor per polled channel.
 #include "ElysiumAnimEvent.h"
+// By value: a reaction request states its own release condition (`EElysiumReactionRelease`), and a
+// scoped enum used as a defaulted member needs its definition rather than a forward declaration.
+#include "ElysiumAnimationIntent.h"
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumCameraService.h"
 #include "ElysiumEntity.h"
@@ -878,6 +881,13 @@ struct FElysiumReactionPlayRequest
 	// gesture path (`AddGesture` -> `SelectWeightedSequence`, which simply returns on -1) never walks
 	// the availability probe, the disposition retry or sequence zero.
 	bool bAllowFallbackLadder = false;
+	// What ENDS the play, which is the one thing that differs between the three reaction families:
+	//
+	//  - a struck reaction ends when its clip does (`ClipCompletion`, the default);
+	//  - the flinch ends with retail's own weight envelope and has no hold at all (`Envelope`);
+	//  - a held pose ends when the predicate that asked for it goes false (`Predicate`), and its
+	//    producer must call `FElysiumCombatCharacter::ReleaseHeldReaction` on every path that ends it.
+	EElysiumReactionRelease Release = EElysiumReactionRelease::ClipCompletion;
 };
 
 class FElysiumCombatCharacter : public FElysiumAnimating
@@ -1017,6 +1027,42 @@ public:
 	// embodiment, or a vocabulary carrying no such reaction, the last of which the resolver's own
 	// selection record already names.
 	bool PlayReactionActivity(const FElysiumReactionPlayRequest& Request, float* OutSeconds = nullptr);
+
+	// LIFE5 — give back a HELD reaction claim this character took, on the one door every release path
+	// uses: the predicate going false, the character dying, its body being taken away.
+	//
+	// Idempotent, and deliberately so — a character that holds nothing releases nothing rather than
+	// reporting. The arbitration below it answers the same way: a claim already displaced by a higher
+	// band is an ordinary end, not a failure. It also drops the cached cell, so a released hold cannot
+	// be resumed.
+	void ReleaseHeldReaction();
+
+	// LIFE5 — re-derive the held claim against the body, and RE-TAKE it once the channel comes free.
+	// Called by the producer whose predicate still stands, on the think it already has.
+	//
+	// **The gap this closes is ours, not retail's.** An equal or higher band takes the base channel on
+	// `>=`, so the first blocked hit's own `ACT_BLOCK` displaces a standing block pose while the button
+	// is still down. Retail re-derives the ideal activity every frame, so its pose and its
+	// classification fall and resume together; polling here is that, on the cadence this runtime has.
+	//
+	// **No draw, ever.** The resume replays the CELL the once-only request already resolved, straight
+	// at the play seam — no translation, no weighted pick, no `Reaction` stream access. A resume that
+	// re-resolved would make the stream's position a function of how many times a body was hit while
+	// blocking, which is the same defect a re-request cadence would have had.
+	//
+	// Returns whether a claim stands after the pass. A body whose channel another producer still owns
+	// answers false and is retried on the next think — with no re-request and no report, because a
+	// contested channel is an ordinary state rather than a failure.
+	bool TickHeldReaction();
+
+	// Whether this character has a held reaction claim it has not given back. Read by the flinch gate:
+	// a reaction claim standing on the base channel is what the flinch yields to, whether that claim
+	// is the struck families' timed hold or this one.
+	//
+	// It is a CACHE of the seam's own answer, refreshed by `TickHeldReaction`: the claim can be
+	// displaced without this character doing anything, so the poll is what keeps the two in step and
+	// a producer that never polls would go on yielding its flinches to a claim nobody holds.
+	bool IsHoldingReaction() const { return bHoldsReactionClaim; }
 
 	// LIFE5 — `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`), the body six server classes
 	// share. Its whole weapon route is a forward: every id in 3000..3999 goes to the ACTIVE weapon's
@@ -1407,6 +1453,25 @@ protected:
 
 	bool bUnkillable = false;
 	bool bDeathReported = false;   // OnKilled fires once, however much damage arrives after
+
+	// LIFE5 — whether a HELD reaction claim this character took is still outstanding. Set by a
+	// `Predicate` play the seam accepted, refreshed against the seam by `TickHeldReaction`, cleared by
+	// `ReleaseHeldReaction`.
+	//
+	// Live pose state, like `MeleeRolls` beside it: it rides no save block, because a load hands the
+	// player back with nothing held and every predicate re-evaluates from the restored input.
+	bool bHoldsReactionClaim = false;
+
+	// The cell that hold resolved to, kept so the pose can be RE-TAKEN without resolving again.
+	//
+	// **This is what makes the resume free of a draw.** The once-only request spent the weighted pick
+	// off the `Reaction` stream; replaying this record spends nothing, because it names the baked
+	// (owner, animation) pair outright and the play seam consults no vocabulary. Valid exactly while a
+	// hold is outstanding OR displaced — `ReleaseHeldReaction` clears it, and an invalid one is how
+	// `TickHeldReaction` knows there is nothing to resume.
+	//
+	// Session state for the same reason the flag is: a load hands the player back holding nothing.
+	FElysiumOneShotClipRequest HeldReactionPlay;
 
 	// Rebuilt from `Effects`, never copied between characters: it is a resolution of the names, and
 	// the names are the truth. Null until something puts a group on this character.

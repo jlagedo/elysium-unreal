@@ -93,6 +93,9 @@ public:
 	// LIFE5 — every standing claim at once, for the death transaction. A driver that was never built
 	// holds nothing, so this does not build one.
 	int32 ReleaseAllAnimRequests();
+	// LIFE5 — the claim standing on one channel, or null. Read-only, and deliberately not building a
+	// driver either, for the same reason: a body that has never been claimed on holds nothing.
+	const FElysiumAnimationRequest* ActiveAnimRequest(EElysiumAnimChannel Channel) const;
 
 	// Public so a test can read the declared frame order off the class default.
 	UPROPERTY()

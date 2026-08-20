@@ -318,6 +318,31 @@ public:
 		return false;
 	}
 
+	// Give back the HELD reaction claim standing on this body and take its pose down (LIFE5).
+	//
+	// The release half of a `EElysiumReactionRelease::Predicate` play. That claim carries no duration
+	// at all — the pose stands for exactly as long as the predicate that asked for it — so this call
+	// is the only thing that ends one, and every path that ends the predicate goes through it: the
+	// button releasing, the character dying, the body being torn down. A body holding no such claim
+	// releases nothing, which is an ordinary absence rather than a failure.
+	virtual void ReleaseNpcReaction(USkeletalMeshComponent* Body) {}
+
+	// Whether the HELD reaction claim taken on this body still stands, and if not, whether the base
+	// channel is free for one to be re-taken (LIFE5).
+	//
+	// **A query, not a callback**, which is the direction this seam runs in: the substrate asks the
+	// engine and nothing in the engine reaches back into an entity — a presentation backchannel is
+	// one of the shapes the gameplay contract forbids outright. A producer holding a
+	// predicate-released pose therefore POLLS this on the think it already has, rather than being
+	// notified when its claim is displaced.
+	//
+	// `Free` is the honest default and the honest answer for a body nothing arbitrates: it holds no
+	// claim, so nothing can be holding the channel against a resume either.
+	virtual EElysiumHeldReactionState QueryNpcReactionHold(USkeletalMeshComponent* Body) const
+	{
+		return EElysiumHeldReactionState::Free;
+	}
+
 	// --- The death handoff (LIFE5) ---------------------------------------------------------------
 	//
 	// Three calls, because death is the one transaction that ends every claim a body holds at once

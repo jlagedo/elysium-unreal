@@ -744,6 +744,52 @@ enum class EElysiumOneShotRoute : uint8
 	Reaction,
 };
 
+// What ENDS a Reaction-band play — the claim's release condition, stated by the producer (LIFE5).
+//
+// **A reaction ends because its own condition is met, never because a wall-clock stamp expired.** The
+// three conditions are the three shapes the combat families actually have, and each one names both the
+// claim's duration and what the graph does while it stands.
+//
+// `docs/vtmb/combat-and-damage.md` § "Block and stagger reactions" owns the behaviour.
+enum class EElysiumReactionRelease : uint8
+{
+	// The clip's own completion. A struck reaction — a blocked recoil, a defender's block, a grounded
+	// knockback — plays once and gives the channel back when the cell it resolved has run.
+	ClipCompletion,
+	// The stated blend envelope alone, with NO hold beyond it. This is retail's `DamageFlinch`
+	// (`0x103229d0`): a linear weight triangle that fades in over its first value, peaks, and is gone
+	// at the sum of the two — evaluated against a static pose, so the clip's own length decides
+	// nothing. The producer states the pair; the claim is exactly as long as the envelope.
+	Envelope,
+	// A predicate the producer re-checks, which releases the claim when it goes false. The player's
+	// held block: the classification stands for the whole hold, so the pose does too, and the claim has
+	// no duration at all — it is given back by `ReleaseNpcReaction`.
+	Predicate,
+};
+
+// What a body's base channel says about a `Predicate` play the producer took (LIFE5).
+//
+// **A held claim can be lost without its predicate ending**, and that is not an error: an equal or
+// higher band takes the base channel on `>=`, which is exactly what the first blocked hit does when
+// it plays `ACT_BLOCK` on the same body at the same Reaction priority. Retail has no such gap — it
+// re-derives the ideal activity every frame, so the pose and the classification fall and RESUME
+// together (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions"). This is the answer a
+// producer polls to reproduce that: the pose is re-taken as soon as the channel comes free, and the
+// classification never had to move.
+//
+// One enum rather than two booleans, per `Source/ElysiumUE/CLAUDE.md` → "APIs and diagnostics": the
+// three states are exclusive and the producer branches on all three.
+enum class EElysiumHeldReactionState : uint8
+{
+	// The claim this producer took still stands. Nothing to do.
+	Held,
+	// It does not, and nothing holds the base channel — a resume can take it back now.
+	Free,
+	// It does not, and another producer holds the base channel. The resume waits: re-claiming here
+	// would cut short the very reaction that displaced it, because an equal band replaces on `>=`.
+	Displaced,
+};
+
 // One already-resolved cell, ready to play over whatever owns the base pose (LIFE5).
 //
 // It carries no translation context and no activity, because nothing here resolves: the (owner,
@@ -775,6 +821,14 @@ struct FElysiumOneShotClipRequest
 	// Which channel plays it. `Slot` by default, because that is what every producer that predates the
 	// reaction branch means and what a body with no branch falls back to either way.
 	EElysiumOneShotRoute Route = EElysiumOneShotRoute::Slot;
+
+	// What ends the play, on the `Reaction` route. Meaningless on `Slot`, whose montage ends with its
+	// own clip. `ClipCompletion` is the default because that is what every struck reaction means.
+	//
+	// `Predicate` also decides `bLoop`: a pose that stands for a whole hold repeats rather than
+	// freezing on its terminal frame, which is the rule `ElysiumAnimGraph::ShouldRepeatClip` already
+	// states for a held stance.
+	EElysiumReactionRelease Release = EElysiumReactionRelease::ClipCompletion;
 
 	// The BODY's own model stem, which is a different thing from `OwnerStem`: the owner is the bank the
 	// clip is baked into, and this is the character whose vocabulary named the label. The reaction
@@ -909,6 +963,8 @@ namespace ElysiumAnimIntent
 	const TCHAR* OutcomeName(EElysiumAnimOutcome Outcome);
 	const TCHAR* AirPhaseName(EElysiumAirPhase Phase);
 	const TCHAR* PriorityName(EElysiumAnimPriority Priority);
+	const TCHAR* ReactionReleaseName(EElysiumReactionRelease Release);
+	const TCHAR* HeldReactionStateName(EElysiumHeldReactionState State);
 
 	// The band a source's requests take when the producer does not choose one — the table's own
 	// defaults, so a funnel that cannot know its caller still lands on a defensible row.

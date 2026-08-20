@@ -148,6 +148,12 @@ int32 AElysiumNpcBody::ReleaseAllAnimRequests()
 	return AnimDriver.IsValid() ? AnimDriver->ReleaseAllRequests() : 0;
 }
 
+const FElysiumAnimationRequest* AElysiumNpcBody::ActiveAnimRequest(
+	EElysiumAnimChannel Channel) const
+{
+	return AnimDriver.IsValid() ? AnimDriver->ActiveRequest(Channel) : nullptr;
+}
+
 void AElysiumNpcBody::SetOwningEntity(AElysiumMapActor* InMap, const FElysiumEntityHandle& InOwner)
 {
 	OwningMap = InMap;

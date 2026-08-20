@@ -13,6 +13,7 @@
 #include "UObject/ObjectKey.h"
 #include "ElysiumEntityBodies.generated.h"
 
+class UAnimMontage;
 class UAnimSequence;
 class UElysiumPropSkinSet;
 class USkeletalMesh;
@@ -145,6 +146,15 @@ public:
 	// body a choreographed scene owns.
 	bool PlayNpcOneShot(USkeletalMeshComponent* Body, const FElysiumOneShotClipRequest& Request,
 		float* OutSeconds);
+	// LIFE5 — give back the HELD reaction claim standing on this body and take its pose down. The
+	// release half of a `EElysiumReactionRelease::Predicate` play: that claim carries no duration, so
+	// this call is the only thing that ends it. A body holding none releases nothing, which is the
+	// ordinary end of a claim whose producer came back late rather than a failure.
+	void ReleaseNpcReaction(USkeletalMeshComponent* Body);
+	// LIFE5 — whether the held reaction claim on this body still stands, and if not whether the base
+	// channel is free for a resume. The poll a predicate-holding producer answers its own claim
+	// against; the seam's own header states why it is a query rather than a notification.
+	EElysiumHeldReactionState QueryNpcReactionHold(USkeletalMeshComponent* Body) const;
 
 	// --- The death handoff (LIFE5) ---------------------------------------------------------------
 	// Give back every channel claim standing on this body, and the cinematic claim tracked here
@@ -340,10 +350,51 @@ private:
 	// unplayable — so a reaction re-armed every time a body is hit warns once rather than per hit.
 	TSet<FString> ReportedMissingOneShots;
 	bool ReleaseBodyAnimRequest(USkeletalMeshComponent* Body, uint32 Handle);
+	// LIFE5 — the standing claim on one of a body's channels, or null. Read-only mirror of the two
+	// submit/release routes above, and it never BUILDS a driver: a body that has never been claimed
+	// on holds nothing, and building one to answer a question would hand it a locomotion publisher it
+	// never had.
+	const struct FElysiumAnimationRequest* ActiveBodyAnimRequest(USkeletalMeshComponent* Body,
+		EElysiumAnimChannel Channel) const;
 	// The standing cinematic claims, keyed by body, so `StopCinematicClip` releases the claim its
 	// own `PlayCinematicClip` submitted. A scene-pinned clip has no natural end, so its claim holds
 	// until this map gives it back.
 	TMap<FObjectKey, uint32> CinematicClaims;
+
+	// LIFE5 — one standing HELD reaction claim per body, the same shape and for the same reason as
+	// the cinematic claims above: a `Predicate` play has no duration, so its claim holds until the
+	// producer gives it back and this map is what remembers the handle to give back.
+	//
+	// It also remembers WHICH host is posing it. A held reaction with no fan is played into the
+	// DefaultSlot montage rather than the graph's reaction branch, because a montage is the one host
+	// in this runtime that can repeat a clip — so the release has to stop the right one rather than
+	// stopping both and taking down whatever else the other was doing.
+	struct FElysiumHeldReaction
+	{
+		uint32 Handle = 0;
+		bool bOnReactionBranch = false;
+		float BlendOutSeconds = 0.0f;
+		// The exact montage the held pose was played into, on the slot route. Weak because it is an
+		// identity check and nothing here owns the asset: a montage the instance has already replaced
+		// is a montage this record must NOT stop.
+		//
+		// **Never assigned and collected are opposite instructions**, and only `IsExplicitlyNull`
+		// separates them. Never assigned means the host named no montage (the clip-player fallback),
+		// where stopping unconditionally is the only answer; collected means the slot has certainly
+		// moved on, which is the case this record must NOT stop.
+		TWeakObjectPtr<UAnimMontage> Montage;
+	};
+	TMap<FObjectKey, FElysiumHeldReaction> HeldReactionClaims;
+	// Drop a body's held-reaction record WITHOUT releasing its claim — for the one case where the
+	// claim is already gone: a higher or equal band took the base slot, which replaces the standing
+	// claim outright. Returns whether a record was dropped.
+	bool ForgetHeldReaction(USkeletalMeshComponent* Body, uint32 GrantedHandle);
+	// The preemption hook, run on every GRANTED claim: a base-channel grant displaces a standing held
+	// reaction, so its record is dropped and its pose taken down in the same instant.
+	void NoteHeldReactionPreempted(USkeletalMeshComponent* Body,
+		const struct FElysiumAnimationRequest& Request, uint32 GrantedHandle);
+	// Take a held reaction's pose down on whichever host is posing it.
+	void StopHeldReactionPose(USkeletalMeshComponent* Body, const FElysiumHeldReaction& Held);
 
 	// Publish the selection that stands `Grid` at a point on its axes. Shared by the two grid
 	// members so the record a review body poses from is built in exactly one place.

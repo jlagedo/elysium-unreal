@@ -448,6 +448,14 @@ int32 AElysiumMapActor::ReleaseAllPlayerAnimRequests()
 	return PlayerAnimDriver.IsValid() ? PlayerAnimDriver->ReleaseAllRequests() : 0;
 }
 
+const FElysiumAnimationRequest* AElysiumMapActor::ActivePlayerAnimRequest(
+	EElysiumAnimChannel Channel) const
+{
+	// Not built on demand either, and for the same reason: a driver that does not exist has granted
+	// nothing, so the honest answer is null rather than a fresh empty slot.
+	return PlayerAnimDriver.IsValid() ? PlayerAnimDriver->ActiveRequest(Channel) : nullptr;
+}
+
 bool AElysiumMapActor::IsPlayerVisual(const USkeletalMeshComponent* Body) const
 {
 	if (Body == nullptr)

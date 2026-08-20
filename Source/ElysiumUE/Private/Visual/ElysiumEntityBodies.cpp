@@ -216,15 +216,119 @@ EElysiumAnimClaim UElysiumEntityBodies::SubmitBodyAnimRequest(USkeletalMeshCompo
 	if (AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
 	{
 		OutHandle = Motor->SubmitAnimRequest(Request);
+		NoteHeldReactionPreempted(Body, Request, OutHandle);
 		return OutHandle != 0 ? EElysiumAnimClaim::Granted : EElysiumAnimClaim::Refused;
 	}
 	if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner()); Map != nullptr
 		&& Map->IsPlayerVisual(Body))
 	{
 		OutHandle = Map->SubmitPlayerAnimRequest(Request);
+		NoteHeldReactionPreempted(Body, Request, OutHandle);
 		return OutHandle != 0 ? EElysiumAnimClaim::Granted : EElysiumAnimClaim::Refused;
 	}
 	return EElysiumAnimClaim::NoArbiter;
+}
+
+void UElysiumEntityBodies::NoteHeldReactionPreempted(USkeletalMeshComponent* Body,
+	const FElysiumAnimationRequest& Request, uint32 GrantedHandle)
+{
+	// A granted BASE claim replaces whatever the slot held (`FElysiumAnimationDriver::SubmitRequest`
+	// takes the slot on `>=`), so a held reaction standing on that slot is gone the moment this
+	// returns. The record here has to go with it, or the release path would hand the driver a handle
+	// naming a claim that belongs to someone else now.
+	//
+	// **The pose goes down with the claim.** A held reaction that no longer owns the channel must not
+	// keep posing over the producer that took it — the block pose outliving its claim is the same
+	// defect as the claim outliving its pose, read the other way round.
+	if (GrantedHandle == 0 || Request.Channel != EElysiumAnimChannel::Base)
+	{
+		return;
+	}
+	if (ForgetHeldReaction(Body, GrantedHandle))
+	{
+		UE_LOG(LogElysiumBodies, Verbose,
+			TEXT("held reaction on %s released: %s '%s' (%s) took the base channel"),
+			*GetNameSafe(Body), ElysiumAnimIntent::SourceName(Request.Source), *Request.Label,
+			ElysiumAnimIntent::PriorityName(Request.Priority));
+	}
+}
+
+bool UElysiumEntityBodies::ForgetHeldReaction(USkeletalMeshComponent* Body, uint32 GrantedHandle)
+{
+	if (Body == nullptr)
+	{
+		return false;
+	}
+	const FElysiumHeldReaction* Held = HeldReactionClaims.Find(FObjectKey(Body));
+	if (Held == nullptr || Held->Handle == GrantedHandle)
+	{
+		return false;
+	}
+	const FElysiumHeldReaction Record = *Held;
+	HeldReactionClaims.Remove(FObjectKey(Body));
+	StopHeldReactionPose(Body, Record);
+	return true;
+}
+
+void UElysiumEntityBodies::StopHeldReactionPose(USkeletalMeshComponent* Body,
+	const FElysiumHeldReaction& Held)
+{
+	UElysiumBodyAnimInstance* Inst = Body != nullptr
+		? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	if (Inst == nullptr)
+	{
+		return;
+	}
+	if (Held.bOnReactionBranch)
+	{
+		if (UElysiumBipedAnimInstance* Biped = Cast<UElysiumBipedAnimInstance>(Inst))
+		{
+			Biped->StopReaction();
+		}
+		return;
+	}
+	// The montage half. `StopOneShot` ends whatever montage the one-shot seam is running on this body
+	// — which is THIS play's only until something else arms the slot — so the identity is checked
+	// first rather than assumed. The ordinary route to a later arm is a producer that claimed the base
+	// channel, which drops this record before it ever gets here; a body nothing arbitrates has no such
+	// gate, and that is the case this comparison actually covers.
+	//
+	// **`IsExplicitlyNull`, not `!IsValid`.** The two answers a null weak pointer can carry are
+	// opposite instructions here: never assigned means the host named no montage (the clip-player
+	// fallback), where stopping is the only answer, while a montage that has since been collected is
+	// proof the slot moved on — the exact case this guard exists for, and the one `IsValid` alone
+	// would answer by stopping somebody else's play.
+	const UElysiumBipedAnimInstance* Biped = Cast<UElysiumBipedAnimInstance>(Inst);
+	if (Biped != nullptr && !Held.Montage.IsExplicitlyNull()
+		&& Biped->GetActiveSlotMontage() != Held.Montage.Get())
+	{
+		UE_LOG(LogElysiumBodies, Verbose,
+			TEXT("held reaction on %s is not stopped: the one-shot slot has moved on to another play"),
+			*GetNameSafe(Body));
+		return;
+	}
+	Inst->StopOneShot(Held.BlendOutSeconds);
+}
+
+const FElysiumAnimationRequest* UElysiumEntityBodies::ActiveBodyAnimRequest(
+	USkeletalMeshComponent* Body, EElysiumAnimChannel Channel) const
+{
+	if (Body == nullptr)
+	{
+		return nullptr;
+	}
+	if (const AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
+	{
+		return Motor->ActiveAnimRequest(Channel);
+	}
+	if (const AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner()); Map != nullptr
+		&& Map->IsPlayerVisual(Body))
+	{
+		return Map->ActivePlayerAnimRequest(Channel);
+	}
+	// A body with no driver arbitrates nothing and therefore holds nothing. An explicitly optional
+	// absence, exactly as the submit and release routes above answer it.
+	return nullptr;
 }
 
 bool UElysiumEntityBodies::ReleaseBodyAnimRequest(USkeletalMeshComponent* Body, uint32 Handle)
@@ -295,16 +399,6 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipName) : nullptr;
 	const FElysiumClipIdentity Identity(
 		Clip == nullptr || Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner, ClipName);
-	if (!Inst->PlayOneShot(Identity, Anim, bLoop, Fade, Fade))
-	{
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("npc '%s' clip '%s' (loop=%d, %.3fs): the animation host refused to play it, so the "
-			     "body keeps posing whatever it already held"),
-			*Stem, *ClipName, bLoop ? 1 : 0, Anim->GetPlayLength());
-		return false;
-	}
-	UE_LOG(LogElysiumBodies, Verbose, TEXT("clip '%s' on %s (loop=%d, %.3fs)"),
-		*ClipName, *Stem, bLoop ? 1 : 0, Anim->GetPlayLength());
 
 	// LIFE4 — the clip's claim on the base channel. Everything this funnel arms today — the ambient
 	// schedule's stances and fidgets, dialogue line clips, scripted beats still on the adapter — is
@@ -313,6 +407,12 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// rule became. A looping clip holds until replaced or outranked; a one-shot's claim runs its
 	// clip length so an armer that never returns cannot park the channel. LIFE5 producers that
 	// deserve a higher band submit their own claims through the same slot.
+	//
+	// **The claim comes FIRST, and it decides whether the clip plays at all** — the same order
+	// `PlayNpcOneShot` takes, and for the same reason. Playing first and claiming after means a
+	// refused claim has already stomped the pose it was refused the right to replace: an ambient
+	// fidget would take the slot from a standing reaction, be told it does not own the channel, and
+	// leave the body posing the fidget anyway with nothing reporting it.
 	FElysiumAnimationRequest Claim;
 	Claim.Source = EElysiumAnimSource::Npc;
 	Claim.Channel = EElysiumAnimChannel::Base;
@@ -320,7 +420,32 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	Claim.Label = ClipName;
 	Claim.HoldSeconds = bLoop ? 0.0f : Anim->GetPlayLength();
 	uint32 ClaimHandle = 0;
-	SubmitBodyAnimRequest(Body, Claim, ClaimHandle);
+	if (SubmitBodyAnimRequest(Body, Claim, ClaimHandle) == EElysiumAnimClaim::Refused)
+	{
+		// An ordinary negative outcome, not a failure: the priority table answered and a higher band
+		// owns the pose. Verbose for the same reason the one-shot seam's refusal is — a body a scene
+		// or a reaction owns refuses ambient clips for as long as it holds them.
+		UE_LOG(LogElysiumBodies, Verbose,
+			TEXT("clip '%s' on %s was refused the base channel"), *ClipName, *Stem);
+		return false;
+	}
+
+	if (!Inst->PlayOneShot(Identity, Anim, bLoop, Fade, Fade))
+	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("npc '%s' clip '%s' (loop=%d, %.3fs): the animation host refused to play it, so the "
+			     "body keeps posing whatever it already held"),
+			*Stem, *ClipName, bLoop ? 1 : 0, Anim->GetPlayLength());
+		// The claim it was granted goes straight back: a channel held for a clip that never started
+		// is exactly the leaked claim the hold report exists to make visible.
+		if (ClaimHandle != 0)
+		{
+			ReleaseBodyAnimRequest(Body, ClaimHandle);
+		}
+		return false;
+	}
+	UE_LOG(LogElysiumBodies, Verbose, TEXT("clip '%s' on %s (loop=%d, %.3fs)"),
+		*ClipName, *Stem, bLoop ? 1 : 0, Anim->GetPlayLength());
 
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();
@@ -404,7 +529,21 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	// body without one — the plain native host, or a generated class built before the branch existed —
 	// falls back to the montage slot with a single cell, which is a lesser pose rather than none.
 	UElysiumBipedAnimInstance* Biped = Cast<UElysiumBipedAnimInstance>(Inst);
+	// A HELD reaction — one a predicate releases — has to REPEAT for as long as it stands, and the
+	// graph's reaction branch cannot: its sequence player's `bLoopAnimation` is edit-time state the
+	// compiler folds to a constant, so nothing at runtime can flip it and a finished cell freezes on
+	// its terminal frame. The DefaultSlot montage is the one host in this runtime that repeats a clip
+	// (`PlayOneShot` already asks for it), and it covers the blend stack exactly as the branch does,
+	// so a held single-cell reaction is played there.
+	//
+	// A held FAN would still need the branch — a montage plays one sequence — so the fork is on the
+	// grid, not on the hold. Nothing produces a held fan today: the block family is authored per
+	// activity and carries no direction (`docs/vtmb/combat-and-damage.md` § "Block and stagger
+	// reactions"), which is why this is a fork rather than a refusal.
+	const bool bHeldReaction = Request.Route == EElysiumOneShotRoute::Reaction
+		&& Request.Release == EElysiumReactionRelease::Predicate;
 	const bool bReactionBranch = Request.Route == EElysiumOneShotRoute::Reaction
+		&& !(bHeldReaction && !Request.bGrid)
 		&& Biped != nullptr && Biped->HasCompiledGraph() && Biped->HasCompiledReactionBranch();
 
 	// The fan, when the branch can evaluate one. `ResolveGrid` answers the baked `UBlendSpace` and the
@@ -483,9 +622,8 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	}
 
 	// The reaction, built before the claim because the claim's own duration is derived from it: the
-	// branch's phase clock has a minimum hold, so a reaction stands longer than its clip whenever the
-	// clip is shorter than the two fades. One expression answers both (`ActiveSeconds`/`TotalSeconds`
-	// on the play), which is what stops the claim expiring mid-fade.
+	// three release conditions each state a different life, and one expression answers both halves
+	// (`ActiveSeconds`/`TotalSeconds` on the play), which is what stops the claim expiring mid-fade.
 	// LIFE5 — the identity both routes publish their phase under. The LABEL is the vocabulary key the
 	// request was addressed by, which is what `FElysiumBlendTable::Events` is keyed on; a request
 	// that carries none was addressed by the animation name directly, so that is the key. It is the
@@ -502,17 +640,26 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	Play.LengthSeconds = LengthSeconds;
 	Play.BlendInSeconds = Request.BlendInSeconds;
 	Play.BlendOutSeconds = Request.BlendOutSeconds;
+	Play.Release = Request.Route == EElysiumOneShotRoute::Reaction
+		? Request.Release : EElysiumReactionRelease::ClipCompletion;
+	// A held pose repeats; every other reaction is a one-shot whose own end is what releases it. The
+	// caller's `bLoop` stands for the routes that predate the release condition.
+	Play.bLoop = bHeldReaction || Request.bLoop;
 
 	// **The claim first, and it decides whether the clip plays at all.** A body a choreographed scene
 	// owns refuses a Reaction claim, and a reaction must not ride over a scene — so a refusal returns
 	// before the montage rather than arming a clip whose channel it does not hold. A body with no
 	// driver has nothing arbitrating, and plays.
+	//
+	// A HELD reaction claims with no duration at all (`HoldSeconds <= 0` is "until released, replaced
+	// or outranked"), which is the whole repair: the pose stands exactly as long as the predicate
+	// that asked for it, and `ReleaseNpcReaction` is what gives it back.
 	FElysiumAnimationRequest Claim;
 	Claim.Source = Request.Source;
 	Claim.Channel = EElysiumAnimChannel::Base;
 	Claim.Priority = Request.Priority;
 	Claim.Label = Identity.Label;
-	Claim.HoldSeconds = Request.bLoop
+	Claim.HoldSeconds = (Play.bLoop || bHeldReaction)
 		? 0.0f
 		: (bReactionBranch ? Play.TotalSeconds() : LengthSeconds);
 	uint32 Handle = 0;
@@ -537,7 +684,7 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	}
 	else
 	{
-		bPlaying = Inst->PlayOneShot(Identity, Anim, Request.bLoop, Request.BlendInSeconds,
+		bPlaying = Inst->PlayOneShot(Identity, Anim, Play.bLoop, Request.BlendInSeconds,
 			Request.BlendOutSeconds, Request.bRestart);
 	}
 	if (!bPlaying)
@@ -556,19 +703,45 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 		return false;
 	}
 	UE_LOG(LogElysiumBodies, Verbose,
-		TEXT("one-shot '%s'@'%s' (loop=%d, %.3fs, in %.2f out %.2f, %s%s)"),
-		*AnimationName, *Request.OwnerStem, Request.bLoop ? 1 : 0, LengthSeconds,
+		TEXT("one-shot '%s'@'%s' (loop=%d, %.3fs, in %.2f out %.2f, %s%s, release=%s)"),
+		*AnimationName, *Request.OwnerStem, Play.bLoop ? 1 : 0, LengthSeconds,
 		Request.BlendInSeconds, Request.BlendOutSeconds,
 		bReactionBranch ? TEXT("reaction") : TEXT("slot"),
-		Fan.Space != nullptr ? TEXT(" fan") : TEXT(""));
+		Fan.Space != nullptr ? TEXT(" fan") : TEXT(""),
+		ElysiumAnimIntent::ReactionReleaseName(Play.Release));
+
+	// The held claim is remembered so its producer can give it back. Recorded AFTER the play started,
+	// for the same reason the claim is released when the play fails: a record naming a pose nobody is
+	// striking is the leak this map exists to make impossible.
+	//
+	// Recorded even on a ZERO handle, which is the body nothing arbitrates — a preview stand, a lab
+	// body. It holds no claim to give back, but it IS striking a repeating pose, and the release path
+	// is the only thing that can ever take that pose down.
+	if (bHeldReaction)
+	{
+		FElysiumHeldReaction Record;
+		Record.Handle = Handle;
+		Record.bOnReactionBranch = bReactionBranch;
+		Record.BlendOutSeconds = Request.BlendOutSeconds;
+		// The montage this play just armed, read back off the host rather than guessed: it is the
+		// identity the release compares against, and the clip-player fallback names none.
+		Record.Montage = (!bReactionBranch && Biped != nullptr)
+			? const_cast<UAnimMontage*>(Biped->GetActiveSlotMontage()) : nullptr;
+		HeldReactionClaims.Add(FObjectKey(Body), MoveTemp(Record));
+	}
 
 	// Written on the success path alone. A caller that schedules off the length — a reaction whose
 	// recovery beat waits it out — must not be handed the length of a clip that a refused claim or a
 	// refused montage means is not playing. It is the same number the claim holds for, which on the
 	// reaction route is the branch's whole life rather than the clip's own length.
+	//
+	// A HELD reaction answers ZERO seconds, and that is the answer rather than a missing one: its
+	// claim has no duration, so there is no time for a caller to schedule against — the predicate is.
 	if (OutSeconds != nullptr)
 	{
-		*OutSeconds = bReactionBranch ? Play.TotalSeconds() : LengthSeconds;
+		*OutSeconds = bHeldReaction
+			? 0.0f
+			: (bReactionBranch ? Play.TotalSeconds() : LengthSeconds);
 	}
 
 	Body->TickAnimation(0.0f, false);
@@ -626,6 +799,10 @@ void UElysiumEntityBodies::ForgetNpcVisuals()
 	// The warn-once set goes with them: a re-export that fixes a missing one-shot must be able to
 	// report the next miss rather than staying silent about it.
 	ReportedMissingOneShots.Empty();
+	// And the held-reaction records, whose bodies are exactly what is being forgotten: a record naming
+	// a component nothing holds any more can never be released by its producer, which is the inert
+	// entry a claim map has to be swept of rather than left to a map epoch.
+	HeldReactionClaims.Empty();
 	UE_LOG(LogElysiumBodies, Log, TEXT("forgot %d cached NPC visual(s); the next build re-resolves"),
 		Meshes);
 }
@@ -848,6 +1025,36 @@ void UElysiumEntityBodies::ReleaseCinematicClaim(USkeletalMeshComponent* Body)
 // The death handoff (LIFE5)
 // ================================================================================================
 
+void UElysiumEntityBodies::ReleaseNpcReaction(USkeletalMeshComponent* Body)
+{
+	FElysiumHeldReaction Held;
+	if (Body == nullptr || !HeldReactionClaims.RemoveAndCopyValue(FObjectKey(Body), Held))
+	{
+		// No held reaction on this body — released already, outranked, or never taken because the
+		// producer had no body. The ordinary end of a claim, not a failure.
+		return;
+	}
+	StopHeldReactionPose(Body, Held);
+	ReleaseBodyAnimRequest(Body, Held.Handle);
+	UE_LOG(LogElysiumBodies, Verbose, TEXT("held reaction on %s released by its producer (%s)"),
+		*GetNameSafe(Body), Held.bOnReactionBranch ? TEXT("reaction branch") : TEXT("slot"));
+}
+
+EElysiumHeldReactionState UElysiumEntityBodies::QueryNpcReactionHold(
+	USkeletalMeshComponent* Body) const
+{
+	if (Body != nullptr && HeldReactionClaims.Contains(FObjectKey(Body)))
+	{
+		return EElysiumHeldReactionState::Held;
+	}
+	// The claim is gone. WHY decides what the producer may do next: a base channel another producer
+	// holds must not be taken back, because an equal band replaces on `>=` and the resume would cut
+	// short the very reaction that displaced it.
+	return ActiveBodyAnimRequest(Body, EElysiumAnimChannel::Base) != nullptr
+		? EElysiumHeldReactionState::Displaced
+		: EElysiumHeldReactionState::Free;
+}
+
 void UElysiumEntityBodies::ReleaseBodyAnimClaims(USkeletalMeshComponent* Body)
 {
 	if (Body == nullptr)
@@ -858,6 +1065,10 @@ void UElysiumEntityBodies::ReleaseBodyAnimClaims(USkeletalMeshComponent* Body)
 	// would leave this map holding a handle naming a claim that no longer exists. Ahead of the
 	// wholesale release for that reason: after it the handle would release nothing.
 	ReleaseCinematicClaim(Body);
+	// The held reaction is tracked here for exactly the same reason, and death is the one transaction
+	// that ends every claim at once — a corpse holding a block pose is a predicate nobody will ever
+	// release.
+	ReleaseNpcReaction(Body);
 	if (AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
 	{
 		Motor->ReleaseAllAnimRequests();

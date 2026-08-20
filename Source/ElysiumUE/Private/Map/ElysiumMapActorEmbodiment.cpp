@@ -156,6 +156,22 @@ bool AElysiumMapActor::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	return Bodies->PlayNpcOneShot(Body, Request, OutSeconds);
 }
 
+void AElysiumMapActor::ReleaseNpcReaction(USkeletalMeshComponent* Body)
+{
+	if (Bodies)
+	{
+		Bodies->ReleaseNpcReaction(Body);
+	}
+}
+
+EElysiumHeldReactionState AElysiumMapActor::QueryNpcReactionHold(
+	USkeletalMeshComponent* Body) const
+{
+	// A map with no body factory arbitrates nothing, so nothing is held and nothing stands in a
+	// resume's way — the same answer the seam's own default gives.
+	return Bodies ? Bodies->QueryNpcReactionHold(Body) : EElysiumHeldReactionState::Free;
+}
+
 void AElysiumMapActor::ReleaseBodyAnimClaims(USkeletalMeshComponent* Body)
 {
 	if (Bodies)

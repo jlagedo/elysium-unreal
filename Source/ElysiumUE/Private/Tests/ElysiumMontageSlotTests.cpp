@@ -1046,6 +1046,10 @@ namespace
 		Play.LengthSeconds = LengthSeconds;
 		Play.BlendInSeconds = BlendIn;
 		Play.BlendOutSeconds = BlendOut;
+		// A hit fan IS the flinch, and the flinch's release condition is retail's own weight envelope:
+		// fade in, peak, fade out, no hold between them, with the cell's own length deciding nothing.
+		// Driving it any other way here would time the branch off a clip retail never advances.
+		Play.Release = EElysiumReactionRelease::Envelope;
 		return Play;
 	}
 }
@@ -1056,9 +1060,11 @@ namespace
 // directional flinch replaces the base channel instead of riding the one-shot slot.
 //
 // It runs on the REAL cell length, which is the other thing only this test can see: every hit cell
-// VtMB ships bakes to two frames, shorter than the out-fade alone, so what keeps a flinch on screen
-// at all is the branch's own minimum hold (`FElysiumReactionPlay::ActiveSeconds`, PENDING RE). A
-// seed without that floor is zero and the branch is dropped by the update that armed it.
+// VtMB ships bakes to two frames, shorter than the out-fade alone. What keeps a flinch on screen at
+// all is therefore NOT the cell — it is retail's own weight envelope, which the play states as its
+// release condition (`EElysiumReactionRelease::Envelope`): fade in over 0.1, peak, fade out over
+// 0.3, no hold between them. A branch timed off the cell instead is dropped by the update that
+// armed it.
 //
 // Everything else here is the handover: the branch fades in rather than snapping, the phase clock
 // drops `bReactionActive` one out-fade before the branch's end so the fade completes ON that end,
@@ -1172,10 +1178,11 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 	constexpr float BlendIn = 0.1f;
 	constexpr float BlendOut = 0.3f;
 	// The branch's own hold, restated so the frame counts below read against it. It is
-	// `FElysiumReactionPlay::ActiveSeconds` — the clip less the out-fade, floored at the blend-in —
-	// and on a shipped two-frame cell the floor is what answers.
-	const float HoldSeconds = FMath::Max(LengthSeconds - BlendOut, BlendIn);
-	// At least three, because the floor is the blend-in and the blend-in is three frames.
+	// `FElysiumReactionPlay::ActiveSeconds` for an `Envelope` play — the recovered `DamageFlinch`
+	// triangle, which peaks at the blend-in and carries no hold after it, whatever the cell's own
+	// length is.
+	const float HoldSeconds = BlendIn;
+	// At least three, because the envelope's peak is the blend-in and the blend-in is three frames.
 	const int32 HoldFrames = FMath::CeilToInt32(HoldSeconds / FrameSeconds);
 	AddInfo(FString::Printf(TEXT("clip %.4fs, in %.2f, out %.2f -> hold %.4fs (%d frames)"),
 		LengthSeconds, BlendIn, BlendOut, HoldSeconds, HoldFrames));
@@ -1227,8 +1234,8 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 	TestTrue(TEXT("...as a fan rather than a clip"), Mid.Inst->bReactionHasBlendSpace);
 
 	// **The blocker this seed exists for.** A two-frame cell less the out-fade is a negative number:
-	// without the minimum hold the clock seeds at zero and the very first update drops the branch, so
-	// a real flinch never reaches the frame at all.
+	// a branch timed off the CELL seeds its clock at zero and the very first update drops it, so a
+	// real flinch never reaches the frame at all. The envelope is what it is timed off instead.
 	TickAll(1);
 	const ElysiumPose::FDeviation FirstFrame =
 		ElysiumPose::Measure(BasePose, Mid.Comp->GetComponentSpaceTransforms());

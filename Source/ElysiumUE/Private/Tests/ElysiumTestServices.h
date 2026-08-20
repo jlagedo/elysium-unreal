@@ -454,17 +454,25 @@ struct FElysiumRecordingServices final
 		const FElysiumOneShotClipRequest& Request, float* OutSeconds) override
 	{
 		// The three LIFE5 fields sit BEFORE `prio=`, which several suites already split on as the
-		// line's tail: a reader that took the last token would otherwise start reading the axis.
+		// line's tail: a reader that took the last token would otherwise start reading the axis. The
+		// release condition is appended AFTER it for the same reason, in the other direction.
 		Record(FString::Printf(
-			TEXT("PlayNpcOneShot %s %s loop=%d in=%.2f out=%.2f route=%s grid=%d axis=%.1f prio=%s"),
+			TEXT("PlayNpcOneShot %s %s loop=%d in=%.2f out=%.2f route=%s grid=%d axis=%.1f prio=%s "
+				"release=%s"),
 			*Request.OwnerStem, *Request.AnimationName, Request.bLoop ? 1 : 0,
 			Request.BlendInSeconds, Request.BlendOutSeconds,
 			Request.Route == EElysiumOneShotRoute::Reaction ? TEXT("reaction") : TEXT("slot"),
 			Request.bGrid ? 1 : 0, Request.AxisValue,
-			ElysiumAnimIntent::PriorityName(Request.Priority)));
+			ElysiumAnimIntent::PriorityName(Request.Priority),
+			ElysiumAnimIntent::ReactionReleaseName(Request.Release)));
 		if (OutSeconds != nullptr)
 		{
-			*OutSeconds = OneShotSeconds;
+			// A HELD claim has no duration, and the double says so rather than answering the fixture's
+			// nominal clip length: a caller that scheduled off a held reaction's "length" would be
+			// scheduling against a number the real seam does not produce.
+			*OutSeconds = Request.Route == EElysiumOneShotRoute::Reaction
+				&& Request.Release == EElysiumReactionRelease::Predicate
+				? 0.0f : OneShotSeconds;
 		}
 		const bool bPlayed = bNpcOneShotsPlay && Body != nullptr;
 		// The visibility tail, through the SAME named rule the real body factory branches on rather
@@ -474,7 +482,48 @@ struct FElysiumRecordingServices final
 		{
 			Body->SetVisibility(true, true);
 		}
+		// The held claim, MODELLED rather than only recorded — the producer polls it back, so a double
+		// that always answered the same thing would prove nothing about the resume.
+		if (bPlayed && Request.Route == EElysiumOneShotRoute::Reaction
+			&& Request.Release == EElysiumReactionRelease::Predicate)
+		{
+			bNpcReactionHeld = true;
+		}
 		return bPlayed;
+	}
+
+	// --- LIFE5: the held reaction claim ------------------------------------------------------------
+	//
+	// The body-side half of a `Predicate` play, in the smallest form a Substrate case needs: whether
+	// this fixture's body is holding one, and whether anything else stands on the base channel. The
+	// real arbitration is the driver's (`Elysium.Substrate.Animation`); what is modelled here is only
+	// the ANSWER a producer polls, so a case can put the fixture into each of the three states.
+	bool bNpcReactionHeld = false;
+	// Whether the base channel is free once the hold is gone. A case sets it false to stand in for a
+	// still-playing preemptor — the blocked hit's own `ACT_BLOCK`, which takes the channel at the same
+	// Reaction band and must not be cut short by a resume.
+	bool bNpcReactionChannelFree = true;
+	// What the body factory's own preemption hook does: drop the record without releasing a claim that
+	// is already gone. The one door a case should use to simulate being outranked.
+	void PreemptNpcReaction() { bNpcReactionHeld = false; }
+
+	// LIFE5 — the release half of a held reaction claim.
+	virtual void ReleaseNpcReaction(USkeletalMeshComponent* Body) override
+	{
+		Record(FString::Printf(TEXT("ReleaseNpcReaction body=%d"), Body != nullptr ? 1 : 0));
+		bNpcReactionHeld = false;
+	}
+
+	virtual EElysiumHeldReactionState QueryNpcReactionHold(
+		USkeletalMeshComponent* Body) const override
+	{
+		const EElysiumHeldReactionState State = bNpcReactionHeld
+			? EElysiumHeldReactionState::Held
+			: (bNpcReactionChannelFree ? EElysiumHeldReactionState::Free
+			                           : EElysiumHeldReactionState::Displaced);
+		Record(FString::Printf(TEXT("QueryNpcReactionHold body=%d -> %s"),
+			Body != nullptr ? 1 : 0, ElysiumAnimIntent::HeldReactionStateName(State)));
+		return State;
 	}
 
 	// --- LIFE5: the death handoff ----------------------------------------------------------------
