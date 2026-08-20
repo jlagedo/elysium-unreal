@@ -529,6 +529,55 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	}
 	TestEqual(TEXT("the world placement survived"), Back.World.PlayerYaw, 45.0f);
 
+	// --- The snapshot's leaf schema -------------------------------------------------------------
+	// A snapshot built in memory carries `Latest`, because `CaptureState` writes its blobs at
+	// `Latest`, and the payload has to bring that number back — a leaf's own version gate reads it,
+	// and a blob carries no version of its own.
+	if (const FElysiumMapSnapshot* BackSnap = Back.Maps.Find(TEXT("sp_tutorial_1")))
+	{
+		TestEqual(TEXT("the snapshot's leaf schema survived the round trip"),
+			BackSnap->SchemaVersion, (int32)FElysiumSaveVersion::Latest);
+	}
+	else
+	{
+		AddError(TEXT("the map snapshot did not survive the round trip"));
+	}
+
+	// The other half, and the one that matters for an old save: a payload written before the field
+	// existed has to answer with the FILE's version rather than with this build's, because that is
+	// what its blobs were written at. Built manually for the same reason the v6 player stream below
+	// is — asking the current writer to emit a pre-26 snapshot would test today's field list.
+	{
+		FElysiumMapSnapshot Legacy;
+		Legacy.MapName = TEXT("sp_tutorial_1");
+		Legacy.DefCount = 12;
+		Legacy.QueueNextSerial = 9;
+		Legacy.SchemaVersion = FElysiumSaveVersion::Latest;   // must NOT survive; the file decides
+
+		TArray<uint8> LegacyBytes;
+		{
+			FMemoryWriter Writer(LegacyBytes, /*bIsPersistent*/ true);
+			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::NpcDisciplines);
+			// The pre-26 field list, in order. Every earlier gate is already on at 25.
+			Ar << Legacy.MapName << Legacy.DefCount << Legacy.FrozenAt;
+			Ar << Legacy.Entities;
+			Ar << Legacy.AbsentEntities;
+			Ar << Legacy.Queue << Legacy.QueueNextSerial;
+			Ar << Legacy.QueueLastEnqueue;
+			Ar << Legacy.Fade;
+			Ar << Legacy.Weather;
+		}
+
+		FMemoryReader Reader(LegacyBytes, /*bIsPersistent*/ true);
+		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::NpcDisciplines);
+		FElysiumMapSnapshot Restored;
+		Ar << Restored;
+		TestFalse(TEXT("a pre-26 snapshot reads without running off the end"), Ar.IsError());
+		TestEqual(TEXT("...and reports its blobs' schema as the file's own version"),
+			Restored.SchemaVersion, (int32)FElysiumSaveVersion::NpcDisciplines);
+		TestEqual(TEXT("...with the fields before it intact"), Restored.DefCount, 12);
+	}
+
 	// Determinism: the same state writes the same bytes (§8).
 	TArray<uint8> Again;
 	TestTrue(TEXT("a second write succeeds"), ElysiumSave::Write(Payload, Again, Error));
@@ -597,8 +646,21 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	// on it, their groups and expiry serials, and the per-record recovery deadlines — to the END of
 	// the NPC leaf behind its own version. Additive: an `NpcWitness` payload restores an NPC
 	// carrying no discipline state, which is exactly what the build before it wrote.
+	//
+	// `WeaponAnimEvent` writes which route a staged weapon transaction is waiting on — the playing
+	// clip's own sequence event, or the `ContactEventCycle` estimate the accept already queued. The
+	// flag sits mid-record inside the weapon leaf's swing block, behind its own version.
+	//
+	// **A leaf's version gate is only meaningful because the snapshot now records the schema its
+	// blobs were written at.** `FElysiumEntityState::LeafState` is opaque bytes replayed through a
+	// private archive that has no version of its own, so before `FElysiumMapSnapshot::SchemaVersion`
+	// every leaf gate from `NpcMaker` onwards read as `Latest` no matter how old the payload was —
+	// which byte-shifts an old blob rather than skipping the field. With the schema recorded, an
+	// `NpcDisciplines` blob is replayed at 25, its gate is false, and the flag defaults to the
+	// estimate route, which is the only route a build before it could have written.
+	// `Elysium.Substrate.Weapons.LeafSchema` is that mechanism end to end.
 	TestEqual(TEXT("the newest schema is the one this test knows about"),
-		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::NpcDisciplines);
+		(int32)FElysiumSaveVersion::Latest, (int32)FElysiumSaveVersion::WeaponAnimEvent);
 	for (const TPair<const TCHAR*, int32>& Appended : {
 		TPair<const TCHAR*, int32>(TEXT("npc_maker ownership"), (int32)FElysiumSaveVersion::NpcMaker),
 		TPair<const TCHAR*, int32>(TEXT("npc mind state"), (int32)FElysiumSaveVersion::NpcMind),
@@ -618,7 +680,9 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 		TPair<const TCHAR*, int32>(TEXT("the NPC's retained law witness block"),
 			(int32)FElysiumSaveVersion::NpcWitness),
 		TPair<const TCHAR*, int32>(TEXT("the NPC's tracked discipline effects"),
-			(int32)FElysiumSaveVersion::NpcDisciplines) })
+			(int32)FElysiumSaveVersion::NpcDisciplines),
+		TPair<const TCHAR*, int32>(TEXT("the weapon transaction's commit route"),
+			(int32)FElysiumSaveVersion::WeaponAnimEvent) })
 	{
 		TestTrue(*FString::Printf(TEXT("%s is additive"), Appended.Key),
 			(int32)FElysiumSaveVersion::MinSupported < Appended.Value);

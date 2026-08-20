@@ -1177,9 +1177,15 @@ void FElysiumEntityWorld::Tick(double Now)
 		PlayerEnt->SyncFromBody();
 	}
 	// LIFE5 — the sequence-event pass, immediately before the thinks. Retail dispatches a body's
-	// animation events out of the animating object's own frame advance, ahead of the AI that reads
-	// what they set, so a footstep, an attachment toggle or a weapon-state event is already applied
-	// when the think that depends on it runs.
+	// animation events out of the animating object's own frame advance, ahead of the AI, so the
+	// position in the frame is the recovered one.
+	//
+	// What that position guarantees is SAME-FRAME delivery, not pre-think application. A handler
+	// that acts directly — an attachment toggle, a bodygroup — is applied before the thinks read it.
+	// A handler that raises work instead enqueues it (K11: producers enqueue, only queue service
+	// delivers), and a zero-delay input raised here is due at this frame's `Now`, so `ServiceEvents`
+	// below delivers it one phase later in this same tick. The weapon band's shot and melee commits
+	// are that second shape.
 	//
 	// **Inert in production this slice**: nothing publishes a clip phase yet, so
 	// `GetBodyClipPhase` answers false on every body and every cursor stays unarmed. The pass is

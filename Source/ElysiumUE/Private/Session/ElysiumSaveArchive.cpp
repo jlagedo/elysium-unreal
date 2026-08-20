@@ -395,6 +395,22 @@ FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 	{
 		Ar << M.Weather;
 	}
+	// The schema the snapshot's opaque leaf blobs were written at. It has to be recorded rather than
+	// assumed, because a leaf archive is constructed from bytes and carries no version of its own —
+	// see `FElysiumMapSnapshot::SchemaVersion`.
+	//
+	// A file older than this field predates the record, and every blob in it was written by the build
+	// that wrote the file, so the file's own version IS the blobs' version. Reading it back that way
+	// repairs every leaf gate from `NpcMaker` onwards for old payloads, which until now all read as
+	// `Latest` and consumed bytes their writer never emitted.
+	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::WeaponAnimEvent)
+	{
+		Ar << M.SchemaVersion;
+	}
+	else
+	{
+		M.SchemaVersion = Ar.CustomVer(FElysiumSaveVersion::GUID);
+	}
 	return Ar;
 }
 
@@ -717,9 +733,10 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 	for (const FString& Name : MapNames)
 	{
 		const FElysiumMapSnapshot& Snap = Payload.Maps[Name];
-		OutLines.Add(FString::Printf(TEXT("map[%s] entities=%d defs=%d queue=%d absent=%d frozen=%.3f"),
+		OutLines.Add(FString::Printf(
+			TEXT("map[%s] entities=%d defs=%d queue=%d absent=%d frozen=%.3f leafschema=%d"),
 			*Name, Snap.Entities.Num(), Snap.DefCount, Snap.Queue.Num(), Snap.AbsentEntities.Num(),
-			Snap.FrozenAt));
+			Snap.FrozenAt, Snap.SchemaVersion));
 		if (Snap.Fade.bActive)
 		{
 			OutLines.Add(FString::Printf(TEXT("map[%s].fade a=%.2f dur=%.2f hold=%.2f start=%.3f"),

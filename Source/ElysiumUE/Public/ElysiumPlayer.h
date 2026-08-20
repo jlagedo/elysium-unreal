@@ -802,6 +802,20 @@ public:
 	// recovered dispatcher runs, because `Visual` is the only body a character has.
 	virtual void AdvanceAnimEvents(double Now) override;
 
+	// Whether the events of ONE named clip — `(OwnerStem, Label)`, the same identity the cursor is
+	// keyed by — can reach `HandleAnimEvent` on this body: true only when a channel the pass above
+	// polls is publishing a phase for that clip. A producer that would otherwise stand a scheduled
+	// estimate down in favour of the clip's own event has to ask, because a timeline nothing walks
+	// fires nothing and would swallow the work the estimate was covering.
+	//
+	// It is the clip's question and not the body's. A body playing some OTHER clip on the polled
+	// channel walks that clip's timeline and never reaches this one's, so "a phase is published"
+	// would be the wrong answer to give a caller that named a clip.
+	//
+	// An ordinary negative on a bodiless character, in a headless world, on an idle channel, and on a
+	// channel standing on a different clip.
+	bool HasLiveAnimEventDispatch(const FString& OwnerStem, const FString& Label) const;
+
 protected:
 	// Which of the three standing idles a disposition's stance set poses. Virtual because only the
 	// NPC chain carries VtMB's stance machine — the `+0x98` self-pointer that reaches it is set in
@@ -963,6 +977,23 @@ public:
 	// vocabulary carrying no reaction all mean no flinch, and the resolver's own record names the
 	// last of those.
 	void StartDamageFlinch(const FElysiumDmg& Dmg);
+
+	// LIFE5 — `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`), the body six server classes
+	// share. Its whole weapon route is a forward: every id in 3000..3999 goes to the ACTIVE weapon's
+	// `Operator_HandleAnimEvent` `+0x5c8` and the answer is the weapon's. Nothing about the id is
+	// read here — a shot commit and a melee contact are the weapon's vocabulary, not the character's.
+	//
+	// A character holding nothing answers false for the whole band, which is an ordinary negative and
+	// not a failure: the record joins the unclaimed census the same way an id no handler owns does.
+	// The body's other routes — weapon state 4006/4007, sound 4020, attached models 4100..4102 — are
+	// not claimed yet and reach the census by the same door.
+	//
+	// SEAM — retail forwards on a second condition beside the band: an event whose SOURCE pointer is
+	// not this animating object also goes to the weapon, whatever its id. `FElysiumAnimEvent` carries
+	// the record's cycle, id, type and options and no source, because every timeline this runtime
+	// walks is the body's own; a second producer that plays one character's clip through another's
+	// dispatcher is what would make the clause reachable.
+	virtual bool HandleAnimEvent(const struct FElysiumAnimEvent& Event) override;
 
 	// --- The melee opposed records (`combat-and-damage.md` § "Opposed record and reaction margin")
 	// The defender's own array, keyed by attacker. A second contact from the same attacker REPLACES

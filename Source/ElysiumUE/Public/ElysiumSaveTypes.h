@@ -52,6 +52,12 @@ struct FElysiumSaveVersion
 		// the END of the NPC leaf behind its own version, so it is additive.
 		NpcDisciplines = 25,
 
+		// The weapon transaction's commit route: whether the staged swing waits on its clip's own
+		// sequence event or on the `ContactEventCycle` estimate the accept already queued. Additive
+		// inside the weapon leaf and read behind this version, so an older payload restores the
+		// estimate route it was actually written with.
+		WeaponAnimEvent = 26,
+
 		LatestPlusOne,
 		Latest = LatestPlusOne - 1
 	};
@@ -146,6 +152,19 @@ struct FElysiumMapSnapshot
 	FString MapName;
 	int32   DefCount = 0;             // the def array's size when frozen; a mismatch is logged
 	double  FrozenAt = 0.0;           // game seconds at freeze, for the readable dump
+
+	// **The schema every `FElysiumEntityState::LeafState` blob in this snapshot was written at.**
+	//
+	// A leaf blob is opaque to the payload: it is captured by writing the entity through its own
+	// `Serialize` into a private memory archive and stored as bytes. That archive has no version of
+	// its own, so a leaf's `Ar.Version()` gate is only meaningful if the version the blob was WRITTEN
+	// at is carried alongside it. Replaying an old blob through a `Latest` archive reads fields the
+	// writer never emitted and byte-shifts everything after them.
+	//
+	// Freezing a map in memory stamps `Latest`, because `CaptureState` writes the blobs at `Latest`.
+	// A snapshot read from a file older than `WeaponAnimEvent` defaults to that FILE's version, which
+	// is exact: every blob in it was written by the build that wrote the file.
+	int32 SchemaVersion = FElysiumSaveVersion::Latest;
 
 	TArray<FElysiumEntityState> Entities;
 

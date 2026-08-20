@@ -559,7 +559,11 @@ private:
 	// fields, rename, origin, lifecycle flags, leaf state, then dormancy, in that order. Returns
 	// false — with a warning naming the snapshot — when the record has no live entity at its index
 	// or the entity's classname no longer matches the saved one.
-	bool ApplyEntityRecord(const FElysiumEntityState& S, const FString& SnapshotMapName);
+	// `LeafSchemaVersion` is the snapshot's own `SchemaVersion` — the schema `S.LeafState` was
+	// written at. It is a parameter rather than a constant because a blob carries no version of its
+	// own and a leaf's `Ar.Version()` gate is meaningless without it.
+	bool ApplyEntityRecord(const FElysiumEntityState& S, const FString& SnapshotMapName,
+		int32 LeafSchemaVersion);
 	// Record one entity's post-Load state as the omission baseline. Called for every entity at the
 	// end of Load and for each runtime entity as it spawns.
 	void CaptureBaseline(int32 Index);

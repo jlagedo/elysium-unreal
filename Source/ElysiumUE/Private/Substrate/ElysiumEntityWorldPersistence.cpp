@@ -232,7 +232,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	int32 Applied = 0;
 	for (const FElysiumEntityState& S : Snapshot.Entities)
 	{
-		if (!ApplyEntityRecord(S, Snapshot.MapName))
+		if (!ApplyEntityRecord(S, Snapshot.MapName, Snapshot.SchemaVersion))
 		{
 			continue;
 		}
@@ -306,7 +306,8 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 	return Applied;
 }
 
-bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S, const FString& SnapshotMapName)
+bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
+	const FString& SnapshotMapName, int32 LeafSchemaVersion)
 {
 	FElysiumEntity* E = EntityList.IsValidIndex(S.Index) ? EntityList[S.Index].Get() : nullptr;
 	if (!E)
@@ -384,8 +385,23 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S, const 
 	if (S.LeafState.Num() > 0)
 	{
 		FMemoryReader Reader(S.LeafState, /*bIsPersistent*/ true);
-		FElysiumSaveArchive Ar(Reader, FElysiumSaveVersion::Latest);
+		// The schema the blob was WRITTEN at, not the one this build writes. A leaf that gates a
+		// field on its own version can only be right if the archive it reads through reports the
+		// writer's version; handing it `Latest` makes every such gate read true and consumes bytes
+		// the writer never emitted.
+		FElysiumSaveArchive Ar(Reader, LeafSchemaVersion);
 		E->Serialize(Ar);
+		// A blob that ran short, or one whose fields no longer line up, sets the archive's error
+		// flag. It must never restore quietly: what comes back is a half-read entity whose remaining
+		// fields hold whatever the overrun produced.
+		if (Ar.IsError())
+		{
+			UE_LOG(LogElysiumWorld, Error,
+				TEXT("snapshot '%s': the leaf state of #%d %s(%s) failed to read (%d bytes at schema "
+					"v%d) — the entity is restored only as far as the read got"),
+				*SnapshotMapName, S.Index, *S.TargetName, *S.ClassName.ToString(),
+				S.LeafState.Num(), LeafSchemaVersion);
+		}
 	}
 
 	// Dormancy last, and written directly rather than through ScriptHide/ScriptUnhide: those are

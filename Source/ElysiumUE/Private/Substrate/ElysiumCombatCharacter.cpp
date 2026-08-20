@@ -21,6 +21,7 @@
 #include "ElysiumSkeletalBasis.h"      // FromSourceAngles — the entity's facing as an Unreal yaw
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumAnimEvents.h"    // LIFE5 — the recovered dispatch bands
 #include "Substrate/ElysiumDamage.h"        // FElysiumDmg + the shared apply path
 #include "Substrate/ElysiumDisciplines.h"    // Cycle 9 — the interruption + teardown entries
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
@@ -35,6 +36,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealth.h"
+#include "Substrate/ElysiumWeaponClasses.h"  // FElysiumWeapon — the operator hop the weapon band takes
 
 // ============================================================================================
 // FElysiumCombatCharacter — CBaseCombatCharacter
@@ -1027,6 +1029,31 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 	// the reaction outright. A refusal is an ordinary negative it reports on its own Verbose line —
 	// the flinch simply does not happen, and the scene keeps the body.
 	Embodiment->PlayNpcOneShot(Visual, Play, nullptr);
+}
+
+// ============================================================================================
+// The sequence-event weapon route
+// ============================================================================================
+
+bool FElysiumCombatCharacter::HandleAnimEvent(const FElysiumAnimEvent& Event)
+{
+	if (!ElysiumAnimEvents::IsWeaponBand(Event.Event))
+	{
+		return FElysiumAnimating::HandleAnimEvent(Event);
+	}
+
+	// The active weapon, and only it. Retail reads `m_hActiveWeapon` and calls the virtual on
+	// whatever it names, so a holstered weapon whose clip is still running receives nothing.
+	FElysiumItem* Held = Inventory.Active(*this);
+	FElysiumWeapon* Weapon = Held ? Held->AsWeapon() : nullptr;
+	if (!Weapon)
+	{
+		// Empty-handed, or holding something with no weapon controller (`item_w_unarmed` authors no
+		// `Activation` block at all). An ordinary negative: there is nothing to route to, and the
+		// census is what records that the id went unclaimed.
+		return false;
+	}
+	return Weapon->OperatorHandleAnimEvent(*this, Event);
 }
 
 void FElysiumCombatCharacter::EndBloodshield()

@@ -12,14 +12,19 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "Misc/ScopeExit.h"
+#include "Serialization/MemoryReader.h"
+#include "Serialization/MemoryWriter.h"
 
 #include "ElysiumClassRegistry.h"
+#include "ElysiumSaveArchive.h"
+#include "ElysiumSaveTypes.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
 #include "ElysiumSheetSlots.h"
 #include "ElysiumVariant.h"
+#include "Substrate/ElysiumAnimEvents.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
@@ -82,6 +87,7 @@ namespace
 	const TCHAR* const GShotgun = TEXT("item_w_test_shotgun");
 	const TCHAR* const GTrinket = TEXT("item_g_test_trinket");
 	const TCHAR* const GUnarmed = TEXT("item_w_unarmed");
+	const TCHAR* const GThrown  = TEXT("item_w_test_grenade");
 
 	FElysiumItemTable MakeWeaponTable()
 	{
@@ -133,6 +139,16 @@ namespace
 		Shotgun.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
 			TEXT("2 Lethal Ranged_Combat DMG_BUCKSHOT"), 10, 0.8f, /*Ammo_Cost*/ 1, /*Ammo_Fired*/ 8));
 		Table.Items.Add(MoveTemp(Shotgun));
+
+		// The third controllable family. It is a weapon controller like the other two, and it takes a
+		// DIFFERENT `Operator_HandleAnimEvent` body from either: `0x1024f030`, which accepts nothing
+		// in the 3000..3999 band. Without a record of this type "non-melee means ranged" is
+		// unfalsifiable.
+		FElysiumItemDef Grenade = MakeDef(GThrown, EElysiumItemType::WeaponThrown);
+		Grenade.Bucket = 1; Grenade.BucketPosition = 4;
+		Grenade.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
+			TEXT("4 Lethal Ranged_Combat DMG_BLAST"), 6, 1.0f));
+		Table.Items.Add(MoveTemp(Grenade));
 
 		// Not a weapon family: it must stay a plain item.
 		Table.Items.Add(MakeDef(GTrinket, EElysiumItemType::Generic, /*bWieldable*/ false));
@@ -1314,6 +1330,548 @@ bool FElysiumWeaponAnimBodyKindTest::RunTest(const FString&)
 			FElysiumWeapon::EVerdict::Accepted);
 		TestEqual(TEXT("a stand-in wearing the player's model still resolves through the cast chain"),
 			ChainOf(Services), FString(TEXT("cast")));
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The sequence-event weapon route (LIFE5 slice 2).
+//
+// `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`) forwards the whole 3000..3999
+// band to its active weapon's `Operator_HandleAnimEvent` `+0x5c8`; the 17 ranged classes'
+// body (`0x10238160`) commits the shot on 3030..3044 and the 29 common-melee classes'
+// (`0x103ea5b0`) commits contact on 3047 and swallows 3001/3003/3030..3037
+// (`docs/vtmb/animation_and_movers.md` → "Sequence events and native dispatch").
+//
+// Every case below drives the REAL producer path: the world's own event pass reads a clip
+// phase off the recording body, walks the timeline the fixture declared for that clip, and
+// dispatches into the character. Nothing calls a handler directly.
+// =====================================================================================
+
+namespace
+{
+	// The clip the attack activity resolves to in these cases, and the bank the include DAG named.
+	// Both halves matter: a timeline is keyed by (owner, label), so a route that carried only the
+	// label would read the wrong bank's sequence.
+	const TCHAR* const GAttackOwner = TEXT("move_and_ranged");
+	const TCHAR* const GAttackLabel = TEXT("attack_layer");
+
+	FElysiumAnimEvent WeaponEv(float Cycle, int32 Event, const TCHAR* Options = TEXT(""))
+	{
+		FElysiumAnimEvent Record;
+		Record.Cycle = Cycle;
+		Record.Event = Event;
+		Record.Options = Options;
+		return Record;
+	}
+
+	// Point the activity seam at one named clip and stand a phase on the body for it, which is what
+	// makes the event pass walk that clip's timeline.
+	void ArmClipSeam(FElysiumRecordingServices& Services, float Cycle)
+	{
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityLabel = GAttackLabel;
+		Services.ResolvedNpcActivityClip = TEXT("attack_layer_0");
+		Services.ResolvedNpcActivityOwner = GAttackOwner;
+
+		Services.bBodyClipPhaseSet = true;
+		Services.BodyClipPhase = FElysiumClipPhase();
+		Services.BodyClipPhase.OwnerStem = GAttackOwner;
+		Services.BodyClipPhase.Label = GAttackLabel;
+		Services.BodyClipPhase.Cycle = Cycle;
+		Services.BodyClipPhase.Length = 1.0f;
+		Services.BodyClipPhase.bLooping = false;
+		Services.BodyClipPhase.PlayId = 1;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponAnimEventTest, "Elysium.Substrate.Weapons.AnimEvent",
+	GElysiumTestFlags)
+bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	// Stand a bodied player, a live victim and (optionally) the clip seam. The player is the shooter
+	// because it carries no AI that would arm clips of its own between the frames a case drives.
+	auto Stand = [this](FElysiumRecordingServices& Services, FElysiumEntityWorld& World,
+		FElysiumPlayer*& OutPlayer, FElysiumCombatCharacter*& OutVictim) -> bool
+	{
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		OutPlayer = World.FindPlayer();
+		OutVictim = FindCharacter(World, TEXT("victim"));
+		if (!TestNotNull(TEXT("the player exists"), OutPlayer)
+			|| !TestNotNull(TEXT("the victim exists"), OutVictim))
+		{
+			return false;
+		}
+		// The world's pass skips anything with no skeletal body, so the shooter needs one. The model
+		// goes on through the ordinary runtime writer, which is the door `SetModel` uses.
+		OutPlayer->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+		if (!TestNotNull(TEXT("the player carries a body the pass can walk"), OutPlayer->Visual))
+		{
+			return false;
+		}
+		SeedHealth(*OutVictim, 100);
+		PlaceFacing(*OutPlayer, FVector::ZeroVector);
+		return true;
+	};
+
+	// --- 3030..3044 on a ranged weapon commits the shot, through the queue -----------------------
+	{
+		ElysiumRng::SeedAll(4242);
+		// The census is process-wide by design (a work list across a session, not per-map state), so
+		// every case that reads a row count starts from a known state — including the first.
+		ElysiumAnimEventCensus::Clear();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		if (!Stand(Services, World, Player, Victim))
+		{
+			return false;
+		}
+		ArmClipSeam(Services, 0.0f);
+		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
+			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
+		// 3038 rather than the first id of the band, so nothing can pass by matching 3030 alone.
+		Timeline.Add(WeaponEv(0.30f, 3038, TEXT("0")));
+
+		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
+		if (!TestNotNull(TEXT("the pistol is granted"), Pistol))
+		{
+			return false;
+		}
+		const int32 MagazineBefore = Pistol->MagazineCount;
+
+		TestEqual(TEXT("the shot is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Victim->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestTrue(TEXT("...and waits on the clip's own event rather than the estimate"),
+			Pistol->Swing.bAwaitingAnimEvent);
+
+		// Past the `ContactEventCycle` instant the estimate WOULD have used (0.5 of a 1.0s clip) and
+		// nothing has happened: the estimate stood down, and no event has fired yet.
+		Services.BodyClipPhase.Cycle = 0.2f;
+		World.Tick(0.6);
+		TestEqual(TEXT("the suppressed estimate commits nothing at its own instant"),
+			DamageTaken(*Victim), 0);
+		TestEqual(TEXT("...and spends no ammunition"), Pistol->MagazineCount, MagazineBefore);
+		TestTrue(TEXT("...leaving the transaction staged"), Pistol->Swing.bActive);
+
+		// The frame whose interval contains 0.30. The record reaches the character, the character
+		// forwards the band to the active weapon, the weapon queues the commit at delay 0.0 — and
+		// queue service runs later in this same tick, so the shot lands on this frame.
+		Services.BodyClipPhase.Cycle = 0.4f;
+		World.Tick(0.7);
+		TestTrue(TEXT("the clip's own shot event commits the transaction"), DamageTaken(*Victim) > 0);
+		TestEqual(TEXT("...spending Ammo_Cost at the authoritative boundary"),
+			Pistol->MagazineCount, MagazineBefore - 1);
+		TestFalse(TEXT("...and consuming it"), Pistol->Swing.bActive);
+		TestEqual(TEXT("a claimed id is not census work"), ElysiumAnimEventCensus::Num(), 0);
+	}
+
+	// --- 3047 on a melee weapon commits contact; the swallow set is claimed and does nothing ------
+	{
+		ElysiumRng::SeedAll(4242);
+		ElysiumAnimEventCensus::Clear();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		if (!Stand(Services, World, Player, Victim))
+		{
+			return false;
+		}
+		ArmClipSeam(Services, 0.0f);
+		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
+			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
+		// A swish and a ranged id ahead of the contact. Both are inside the common-melee body's
+		// swallow set, so they are claimed, do nothing, and never reach the census — and neither of
+		// them may commit the swing early.
+		Timeline.Add(WeaponEv(0.10f, 3003));
+		Timeline.Add(WeaponEv(0.20f, 3035));
+		Timeline.Add(WeaponEv(0.40f, 3047));
+
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!TestNotNull(TEXT("the fists are granted"), Fists))
+		{
+			return false;
+		}
+		TestEqual(TEXT("the swing is accepted"),
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(TEXT("...naming the acquired opponent"), Fists->Swing.Opponent, Victim->Handle);
+		TestTrue(TEXT("...and waiting on 3047 rather than on the estimate"),
+			Fists->Swing.bAwaitingAnimEvent);
+
+		Services.BodyClipPhase.Cycle = 0.30f;
+		World.Tick(0.1);
+		TestEqual(TEXT("the swallowed swish and shot ids commit nothing"), DamageTaken(*Victim), 0);
+		TestEqual(TEXT("...and are claimed, so neither reaches the census"),
+			ElysiumAnimEventCensus::Num(), 0);
+
+		Services.BodyClipPhase.Cycle = 0.50f;
+		World.Tick(0.2);
+		TestTrue(TEXT("3047 commits the melee contact"), DamageTaken(*Victim) > 0);
+		TestFalse(TEXT("...consuming the transaction"), Fists->Swing.bActive);
+		TestTrue(TEXT("...through the opposed record on the defender"),
+			Victim->FindMeleeRoll(Player->Handle) != nullptr);
+	}
+
+	// --- An id in the band with no weapon held is an ordinary unclaimed record --------------------
+	{
+		ElysiumAnimEventCensus::Clear();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		if (!Stand(Services, World, Player, Victim))
+		{
+			return false;
+		}
+		ArmClipSeam(Services, 0.0f);
+		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
+			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
+		Timeline.Add(WeaponEv(0.20f, 3038, TEXT("0")));
+		Timeline.Add(WeaponEv(0.25f, 3047));
+
+		TestNull(TEXT("the player holds nothing"), Player->Inventory.Active(*Player));
+
+		Services.BodyClipPhase.Cycle = 0.50f;
+		World.Tick(0.1);
+
+		// Empty-handed is a negative query, not a failure: the band resolves to no receiver, the
+		// character says so by answering false, and the census is the whole report.
+		TArray<ElysiumAnimEventCensus::FRow> Rows;
+		ElysiumAnimEventCensus::Collect(Rows);
+		TestEqual(TEXT("both band ids land in the unclaimed census"), Rows.Num(), 2);
+		for (const ElysiumAnimEventCensus::FRow& Row : Rows)
+		{
+			TestFalse(TEXT("...reported as refused rather than as out of band"), Row.bAboveServerBand);
+			TestEqual(TEXT("...naming the clip they fired from"), Row.Label, FString(GAttackLabel));
+			TestEqual(TEXT("...and its owning bank"), Row.OwnerStem, FString(GAttackOwner));
+		}
+		TestEqual(TEXT("the victim takes nothing from a record nothing claimed"),
+			DamageTaken(*Victim), 0);
+	}
+
+	// --- A clip with no commit id keeps the estimate, and says so exactly once --------------------
+	{
+		// The degraded path. The body IS being walked, so the event route was available and the clip
+		// simply does not name its instant — which retail never does. One warning per clip, however
+		// many swings take it.
+		AddExpectedError(TEXT("falls back to the ContactEventCycle estimate"),
+			EAutomationExpectedErrorFlags::Contains, 1);
+
+		ElysiumRng::SeedAll(4242);
+		ElysiumAnimEventCensus::Clear();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		if (!Stand(Services, World, Player, Victim))
+		{
+			return false;
+		}
+		ArmClipSeam(Services, 0.0f);
+		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
+			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
+		// A footstep and nothing else: a real timeline that names no commit for either family.
+		Timeline.Add(WeaponEv(0.20f, 2050));
+
+		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
+		if (!TestNotNull(TEXT("the pistol is granted"), Pistol))
+		{
+			return false;
+		}
+		TestEqual(TEXT("the shot is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Victim->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestFalse(TEXT("...on the estimate, because the clip names no commit id"),
+			Pistol->Swing.bAwaitingAnimEvent);
+		TestTrue(TEXT("...scheduled at ContactEventCycle of the resolved clip"),
+			NearlyEqual(Pistol->Swing.CommitTime, 1.0 * ElysiumWeapons::ContactEventCycle));
+
+		Services.BodyClipPhase.Cycle = 0.30f;
+		World.Tick(0.6);
+		TestTrue(TEXT("the estimate still commits the shot"), DamageTaken(*Victim) > 0);
+
+		// A second swing past the recovery deadline takes the same degraded route and restates
+		// nothing: the warning is keyed by clip, and the expected-error count above is what asserts it.
+		World.Tick(2.0);
+		TestEqual(TEXT("a second shot is accepted too"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Victim->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestFalse(TEXT("...on the estimate again"), Pistol->Swing.bAwaitingAnimEvent);
+	}
+
+	// --- A phase for a DIFFERENT clip is not this clip's dispatcher -------------------------------
+	{
+		// The body is being walked, the resolved clip's timeline carries a shot id, and the estimate
+		// must STILL stand: the polled channel is standing on some other clip, so the pass walks that
+		// clip's timeline and never reaches this one's. "A phase is published" is the wrong question.
+		ElysiumRng::SeedAll(4242);
+		ElysiumAnimEventCensus::Clear();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		if (!Stand(Services, World, Player, Victim))
+		{
+			return false;
+		}
+		ArmClipSeam(Services, 0.0f);
+		// The attack resolves to `attack_layer`, whose timeline names the commit — but the channel is
+		// left standing on the idle the body was already playing.
+		Services.BodyClipPhase.Label = TEXT("idle01");
+		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
+			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
+		Timeline.Add(WeaponEv(0.30f, 3038, TEXT("0")));
+
+		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
+		if (!TestNotNull(TEXT("the pistol is granted"), Pistol))
+		{
+			return false;
+		}
+		TestEqual(TEXT("the shot is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Victim->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestFalse(TEXT("a phase for another clip does not stand the estimate down"),
+			Pistol->Swing.bAwaitingAnimEvent);
+
+		Services.BodyClipPhase.Cycle = 0.50f;
+		World.Tick(0.6);
+		TestTrue(TEXT("...so the estimate is what commits the shot"), DamageTaken(*Victim) > 0);
+		// And the other clip's own walk fired nothing, because it declares no timeline at all.
+		TestEqual(TEXT("the clip the channel actually stands on contributes no records"),
+			ElysiumAnimEventCensus::Num(), 0);
+	}
+
+	// --- A thrown weapon takes the body that accepts nothing --------------------------------------
+	{
+		// `0x1024f030` — the 17 base/discipline/armor/thrown/unarmed classes. A thrown weapon is not
+		// a slow firearm: the shot band commits nothing on it, so the ids land on the census and its
+		// transaction stays on the estimate. The pure assignment is asserted first, because the
+		// routing below is only meaningful if the record decides it.
+		TestTrue(TEXT("a firearm record takes the ranged body"),
+			ElysiumWeapons::OperatorBodyFor(EElysiumItemType::WeaponFirearm)
+				== ElysiumWeapons::EOperatorBody::Ranged);
+		TestTrue(TEXT("a melee record takes the common melee body"),
+			ElysiumWeapons::OperatorBodyFor(EElysiumItemType::WeaponMelee)
+				== ElysiumWeapons::EOperatorBody::Melee);
+		TestTrue(TEXT("a thrown record takes the body with no accepted route"),
+			ElysiumWeapons::OperatorBodyFor(EElysiumItemType::WeaponThrown)
+				== ElysiumWeapons::EOperatorBody::None);
+		TestFalse(TEXT("...which commits on no id in the band"),
+			ElysiumWeapons::IsCommitEvent(3038, ElysiumWeapons::EOperatorBody::None)
+			|| ElysiumWeapons::IsCommitEvent(3047, ElysiumWeapons::EOperatorBody::None));
+
+		ElysiumRng::SeedAll(4242);
+		ElysiumAnimEventCensus::Clear();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		if (!Stand(Services, World, Player, Victim))
+		{
+			return false;
+		}
+		ArmClipSeam(Services, 0.0f);
+		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
+			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
+		// Both families' commit ids, on a clip a thrown weapon is playing. Neither may commit it.
+		Timeline.Add(WeaponEv(0.20f, 3038, TEXT("0")));
+		Timeline.Add(WeaponEv(0.25f, 3047));
+
+		FElysiumWeapon* Grenade = GiveWeapon(*Player, GThrown);
+		if (!TestNotNull(TEXT("the thrown weapon is granted as a weapon"), Grenade))
+		{
+			return false;
+		}
+		TestEqual(TEXT("the throw is accepted"),
+			Grenade->AttackIntent(FElysiumWeapon::EIntent::Primary, Victim->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestFalse(TEXT("...on the estimate, because its body accepts no commit id"),
+			Grenade->Swing.bAwaitingAnimEvent);
+
+		Services.BodyClipPhase.Cycle = 0.30f;
+		World.Tick(0.1);
+		TArray<ElysiumAnimEventCensus::FRow> Rows;
+		ElysiumAnimEventCensus::Collect(Rows);
+		TestEqual(TEXT("both band ids go unclaimed on a thrown weapon"), Rows.Num(), 2);
+		TestFalse(TEXT("...and neither committed the transaction early"),
+			DamageTaken(*Victim) > 0);
+		TestTrue(TEXT("...leaving it staged for its own estimate"), Grenade->Swing.bActive);
+
+		World.Tick(0.6);
+		TestTrue(TEXT("the estimate commits it, exactly as it did before this slice"),
+			DamageTaken(*Victim) > 0);
+	}
+
+	ElysiumAnimEventCensus::Clear();
+	return true;
+}
+
+// =====================================================================================
+// The leaf blob's schema (11.9 rider).
+//
+// A `FElysiumEntityState::LeafState` is opaque bytes: the freeze writes the entity
+// through its own `Serialize` into a private memory archive and stores the result. That
+// archive carries no version, so a leaf that gates a field on `Ar.Version()` is only
+// correct if the version its blob was WRITTEN at travels with it —
+// `FElysiumMapSnapshot::SchemaVersion`, threaded into the replay archive by
+// `ApplyEntityRecord`.
+//
+// The weapon leaf is the concrete case: `Swing.bAwaitingAnimEvent` sits mid-record, so a
+// pre-`WeaponAnimEvent` blob read at `Latest` does not lose one field — it shifts every
+// field after it and runs off the end.
+// =====================================================================================
+
+namespace
+{
+	// A world holding one loose pistol and nothing else, so the record under test has a stable def
+	// index, no owner to rebase and no AI to move it. Its own defs rather than the shared ones,
+	// because adding a row to those would shift every other suite's indices.
+	FElysiumEntityDefs MakeLeafSchemaDefs()
+	{
+		FElysiumEntityDefs Defs;
+		Defs.MapName = TEXT("__weapon_leaf_test__");
+
+		FElysiumEntityDef Loose;
+		Loose.Classname = GPistol;
+		Loose.TargetName = TEXT("loose_pistol");
+		Defs.Defs.Add(MoveTemp(Loose));
+		return Defs;
+	}
+
+	FElysiumWeapon* FindLooseWeapon(FElysiumEntityWorld& World)
+	{
+		FElysiumEntity* Ent = World.FindByName(TEXT("loose_pistol"));
+		FElysiumItem* Item = Ent ? Ent->AsItem() : nullptr;
+		return Item ? Item->AsWeapon() : nullptr;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponLeafSchemaTest, "Elysium.Substrate.Weapons.LeafSchema",
+	GElysiumTestFlags)
+bool FElysiumWeaponLeafSchemaTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	// Freeze a weapon carrying state on both sides of the new field, then re-write its blob at the
+	// schema a pre-26 build would have written — which is exactly what an old save file holds.
+	FElysiumMapSnapshot Snapshot;
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeLeafSchemaDefs());
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumWeapon* Pistol = FindLooseWeapon(World);
+		if (!TestNotNull(TEXT("the loose pistol installs as a weapon"), Pistol))
+		{
+			return false;
+		}
+		// Fields on BOTH sides of `bAwaitingAnimEvent`: the two ahead of it prove the read reached
+		// the right place, and the four behind it are what a shifted read destroys.
+		Pistol->NextPrimaryAttackTime = 2.25;
+		Pistol->NextSecondaryAttackTime = 3.75;
+		Pistol->bReloading = true;
+		Pistol->ReloadSerial = 7;
+		Pistol->ReloadEndTime = 11.5;
+		Pistol->bFireIntentDuringReload = true;
+
+		World.Freeze(Snapshot);
+		TestEqual(TEXT("a snapshot frozen in memory stamps this build's schema"),
+			Snapshot.SchemaVersion, (int32)FElysiumSaveVersion::Latest);
+
+		FElysiumEntityState* Record = Snapshot.Entities.FindByPredicate(
+			[](const FElysiumEntityState& S) { return S.TargetName == TEXT("loose_pistol"); });
+		if (!TestTrue(TEXT("the weapon was frozen with a leaf blob"),
+			Record != nullptr && Record->LeafState.Num() > 0))
+		{
+			return false;
+		}
+
+		// The pre-26 blob. Written through the leaf's own `Serialize` at the older schema, so it is
+		// byte-for-byte what that build produced rather than a hand-built approximation.
+		Record->LeafState.Reset();
+		{
+			FMemoryWriter Writer(Record->LeafState, /*bIsPersistent*/ true);
+			FElysiumSaveArchive Ar(Writer, FElysiumSaveVersion::NpcDisciplines);
+			Pistol->Serialize(Ar);
+		}
+		Snapshot.SchemaVersion = FElysiumSaveVersion::NpcDisciplines;
+	}
+
+	// --- Replayed at the schema it was written at ------------------------------------------------
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeLeafSchemaDefs());
+		World.Activate(0.0);
+		World.ApplySnapshot(Snapshot);
+
+		FElysiumWeapon* Pistol = FindLooseWeapon(World);
+		if (!TestNotNull(TEXT("the weapon restored"), Pistol))
+		{
+			return false;
+		}
+		TestTrue(TEXT("the field ahead of the new one is intact"),
+			NearlyEqual(Pistol->NextPrimaryAttackTime, 2.25));
+		TestTrue(TEXT("...and its neighbour"),
+			NearlyEqual(Pistol->NextSecondaryAttackTime, 3.75));
+		// The four behind it. A blob read one field out of step turns every one of these into
+		// garbage, which is the whole failure the recorded schema exists to prevent.
+		TestTrue(TEXT("the reload latch behind the new field is intact"), Pistol->bReloading);
+		TestEqual(TEXT("...its serial"), Pistol->ReloadSerial, 7);
+		TestTrue(TEXT("...its deadline"), NearlyEqual(Pistol->ReloadEndTime, 11.5));
+		TestTrue(TEXT("...and the fire-intent latch after it"), Pistol->bFireIntentDuringReload);
+		// And the field the old build never wrote defaults to the only route it could have taken.
+		TestFalse(TEXT("a pre-26 transaction restores on the estimate route"),
+			Pistol->Swing.bAwaitingAnimEvent);
+	}
+
+	// --- The control: the same blob replayed at `Latest` -----------------------------------------
+	{
+		// What every leaf gate did before the schema was recorded. This is not a supported path —
+		// it is the failure being fixed, reproduced deliberately so the fix is shown to be
+		// load-bearing rather than decorative. The read runs off the end of the blob, and that must
+		// be reported rather than restoring a half-read weapon in silence.
+		AddExpectedError(TEXT("failed to read"), EAutomationExpectedErrorFlags::Contains, 1);
+		// The engine notices the shift before the overrun does: a `bool` field landing on bytes that
+		// spell neither 0 nor 1 is refused by `FArchive::SerializeBool`. How many do that depends on
+		// the byte layout, so this is expected without a count.
+		AddExpectedError(TEXT("Invalid boolean encountered"), EAutomationExpectedErrorFlags::Contains, 0);
+
+		FElysiumMapSnapshot Mislabelled = Snapshot;
+		Mislabelled.SchemaVersion = FElysiumSaveVersion::Latest;
+
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeLeafSchemaDefs());
+		World.Activate(0.0);
+		World.ApplySnapshot(Mislabelled);
+
+		FElysiumWeapon* Pistol = FindLooseWeapon(World);
+		if (!TestNotNull(TEXT("the weapon still exists after a failed leaf read"), Pistol))
+		{
+			return false;
+		}
+		// The shift, stated as the concrete thing it destroys: the reload serial reads out of the
+		// deadline's bytes instead of its own.
+		TestNotEqual(TEXT("a blob read at the wrong schema does NOT restore the reload serial"),
+			Pistol->ReloadSerial, 7);
 	}
 
 	return true;

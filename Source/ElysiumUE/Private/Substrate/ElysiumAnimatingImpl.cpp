@@ -190,6 +190,34 @@ bool FElysiumAnimating::ResetAnimToIdle()
 		Visual, ModelStem(), Disposition, DispositionLevel, IdleVariant());
 }
 
+bool FElysiumAnimating::HasLiveAnimEventDispatch(const FString& OwnerStem, const FString& Label) const
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || !Visual || OwnerStem.IsEmpty() || Label.IsEmpty())
+	{
+		return false;
+	}
+	// The same channel list the pass walks, asked the same way, and matched on the same identity the
+	// cursor uses — a phase for SOME clip proves nothing about the clip the caller named. The
+	// comparison is case-insensitive because `ElysiumAnimEvents::Advance` compares the cursor's own
+	// (owner, label) that way, and content spells a label however it likes.
+	//
+	// `PlayId` is deliberately not part of this test: the caller is asking whether the clip it just
+	// started is on a channel the pass polls, and the play it is asking about is the one standing
+	// there now.
+	for (const EElysiumAnimChannel Channel : GPolledEventChannels)
+	{
+		FElysiumClipPhase Phase;
+		if (Embodiment->GetBodyClipPhase(Visual, Channel, Phase)
+			&& Phase.OwnerStem.Equals(OwnerStem, ESearchCase::IgnoreCase)
+			&& Phase.Label.Equals(Label, ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void FElysiumAnimating::AdvanceAnimEvents(double Now)
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;

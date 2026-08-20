@@ -315,6 +315,62 @@ namespace ElysiumWeapons
 		}
 	}
 
+	EOperatorBody OperatorBodyFor(EElysiumItemType Type)
+	{
+		switch (Type)
+		{
+		case EElysiumItemType::WeaponMelee:   return EOperatorBody::Melee;
+		case EElysiumItemType::WeaponFirearm: return EOperatorBody::Ranged;
+		// A thrown weapon takes the base body with the 17 discipline/armor/unarmed classes, which
+		// accepts nothing. Its commit stays on the `ContactEventCycle` estimate, which is not a
+		// degraded path for it — retail names no event that would commit one.
+		default:                              return EOperatorBody::None;
+		}
+	}
+
+	const TCHAR* OperatorBodyName(EOperatorBody Body)
+	{
+		switch (Body)
+		{
+		case EOperatorBody::Ranged: return TEXT("ranged");
+		case EOperatorBody::Melee:  return TEXT("melee");
+		default:                    return TEXT("no accepted route");
+		}
+	}
+
+	bool IsCommitEvent(int32 Event, EOperatorBody Body)
+	{
+		switch (Body)
+		{
+		case EOperatorBody::Ranged:
+			return Event >= RangedShotEventFirst && Event <= RangedShotEventLast;
+		case EOperatorBody::Melee:
+			return Event == MeleeContactEvent;
+		default:
+			return false;
+		}
+	}
+
+	bool IsSwallowedMeleeEvent(int32 Event)
+	{
+		// `0x103ea5b0`'s own swallow set, exactly: the two body/swish ids and the ranged shot ids a
+		// melee clip may still carry. Nothing acts on them, and reaching the census with them would
+		// put a recovered no-op on the work list.
+		return Event == 3001 || Event == 3003 || (Event >= 3030 && Event <= 3037);
+	}
+
+	bool TimelineHasCommitEvent(const TArray<FElysiumAnimEvent>& Timeline, EOperatorBody Body)
+	{
+		for (const FElysiumAnimEvent& Record : Timeline)
+		{
+			if (IsCommitEvent(Record.Event, Body))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	TUniquePtr<FElysiumEntity> MakeWeapon() { return MakeUnique<FElysiumWeapon>(); }
 }
 
@@ -480,6 +536,12 @@ void FElysiumWeapon::Serialize(FElysiumSaveArchive& Ar)
 	Ar << Swing.ClipSeconds;
 	Ar << Swing.CommitTime;
 	Ar << Swing.RecoveryDeadline;
+	// Additive, behind its own version: a payload written before the event route existed carries a
+	// transaction whose estimate IS queued, which is exactly what the default false describes.
+	if (Ar.Version() >= FElysiumSaveVersion::WeaponAnimEvent)
+	{
+		Ar << Swing.bAwaitingAnimEvent;
+	}
 
 	Ar << bReloading;
 	Ar << ReloadSerial;
@@ -540,8 +602,12 @@ void FElysiumWeapon::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Next attack"), FString::Printf(TEXT("primary %.3f  secondary %.3f"),
 		NextPrimaryAttackTime, NextSecondaryAttackTime));
 	Out.Emplace(TEXT("Swing"), Swing.bActive
-		? FString::Printf(TEXT("#%d %s rate %.2f commit %.3f recover %.3f"), Swing.Serial,
-			*Swing.Activity, Swing.PlaybackRate, Swing.CommitTime, Swing.RecoveryDeadline)
+		? FString::Printf(TEXT("#%d %s rate %.2f commit %s recover %.3f"), Swing.Serial,
+			*Swing.Activity, Swing.PlaybackRate,
+			Swing.bAwaitingAnimEvent
+				? TEXT("awaiting the clip's own event")
+				: *FString::Printf(TEXT("%.3f (estimated)"), Swing.CommitTime),
+			Swing.RecoveryDeadline)
 		: FString(TEXT("(idle)")));
 	Out.Emplace(TEXT("Reload"), bReloading
 		? FString::Printf(TEXT("#%d ends %.3f%s"), ReloadSerial, ReloadEndTime,
@@ -635,9 +701,13 @@ void FElysiumWeapon::ClearSwing()
 // ================================================================================================
 
 float FElysiumWeapon::ResolveAndPlay(const FString& Activity, const FElysiumWeaponMode& Mode,
-	FString& OutClipLabel)
+	FString& OutClipLabel, FString* OutOwnerStem)
 {
 	OutClipLabel.Reset();
+	if (OutOwnerStem)
+	{
+		OutOwnerStem->Reset();
+	}
 
 	FElysiumCombatCharacter* Char = OwnerCharacter();
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
@@ -671,6 +741,13 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, const FElysiumWeap
 		if (Embodiment->ResolveNpcActivityClip(Request, Clip) && !Clip.Label.IsEmpty())
 		{
 			OutClipLabel = Clip.Label;
+			// The bank the include DAG named. A timeline is keyed by (owner, label) the same way a
+			// grid cell is, so handing back only the label would look the sequence up on whichever
+			// bank happened to answer last.
+			if (OutOwnerStem)
+			{
+				*OutOwnerStem = Clip.OwnerStem;
+			}
 			float Played = 0.0f;
 			if (Char->PlayAnimClip(Clip.Label, /*bLoop*/ false, &Played) && Played > 0.0f)
 			{
@@ -697,6 +774,130 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, const FElysiumWeap
 			Mode.AttackRate > 0.0f ? TEXT("the mode's Attack_Rate") : TEXT("the stated constant"));
 	}
 	return Mode.AttackRate > 0.0f ? Mode.AttackRate : ElysiumWeapons::FallbackClipSeconds;
+}
+
+// ================================================================================================
+// Which route names the commit instant
+// ================================================================================================
+
+ElysiumWeapons::EOperatorBody FElysiumWeapon::OperatorBody() const
+{
+	const FElysiumItemDef* Record = Data();
+	return Record ? ElysiumWeapons::OperatorBodyFor(Record->Type)
+		: ElysiumWeapons::EOperatorBody::None;
+}
+
+bool FElysiumWeapon::CommitArrivesFromAnimEvent(FElysiumCombatCharacter& Char,
+	const FString& OwnerStem, const FString& ClipLabel)
+{
+	const ElysiumWeapons::EOperatorBody OpBody = OperatorBody();
+	if (OpBody == ElysiumWeapons::EOperatorBody::None)
+	{
+		// This weapon's operator body accepts nothing in the band, so no clip can name its commit
+		// instant. The estimate is the only route there is and taking it is not degraded — reporting
+		// it as a gap would name a clip for a fact about the weapon.
+		return false;
+	}
+
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || ClipLabel.IsEmpty() || OwnerStem.IsEmpty())
+	{
+		// Nothing resolved a clip at all — a headless run, a bodiless character, or a bank with no
+		// sequence for the activity. `ResolveAndPlay` already named it once; there is no clip to
+		// carry a timeline, so this is the ordinary estimate rather than a degraded one.
+		return false;
+	}
+
+	// The dispatcher's own precondition, asked about THIS clip. `FElysiumAnimating::AdvanceAnimEvents`
+	// walks the timeline of whatever clip a polled channel is standing on, so a body playing a
+	// different clip there never reaches this one's events — and the estimate standing down for it
+	// would swallow the whole transaction.
+	if (!Char.HasLiveAnimEventDispatch(OwnerStem, ClipLabel))
+	{
+		return false;
+	}
+
+	const TArray<FElysiumAnimEvent>* Timeline = Embodiment->GetNpcEventTimeline(OwnerStem, ClipLabel);
+	if (Timeline != nullptr && ElysiumWeapons::TimelineHasCommitEvent(*Timeline, OpBody))
+	{
+		return true;
+	}
+
+	// Degraded: the body IS being walked and this attack clip declares no commit id, so the instant
+	// is estimated where retail reads it off the sequence.
+	//
+	// Keyed by CLIP and process-wide, like the unclaimed-event census and for the same reason: the
+	// gap belongs to an authored sequence, not to a weapon entity, and a crowd of twenty combatants
+	// holding the same record would otherwise report one authored gap twenty times.
+	if (ShouldReportOnce(FString::Printf(TEXT("estimate:%s@%s"), *ClipLabel, *OwnerStem)))
+	{
+		UE_LOG(LogElysiumWeapon, Warning,
+			TEXT("%s: attack clip '%s'@'%s' declares %s, so the %s commit falls back to the "
+				"ContactEventCycle estimate at %.2f of the clip"),
+			*DebugString(), *ClipLabel, *OwnerStem,
+			Timeline == nullptr ? TEXT("no event timeline at all")
+				: TEXT("an event timeline with no commit id"),
+			ElysiumWeapons::OperatorBodyName(OpBody), ElysiumWeapons::ContactEventCycle);
+	}
+	return false;
+}
+
+bool FElysiumWeapon::CommitFromAnimEvent(const FElysiumAnimEvent& Event)
+{
+	if (!Swing.bActive)
+	{
+		// The id fired with nothing staged. Retail's ranged body still accepts it and re-enters mode
+		// dispatch, which finds no attack in flight; an aim or idle clip carrying a shot id lands
+		// here. Claimed, and an ordinary negative rather than a fault.
+		UE_LOG(LogElysiumWeapon, Verbose,
+			TEXT("%s took anim event %d with no transaction staged — nothing to commit"),
+			*DebugString(), Event.Event);
+		return true;
+	}
+
+	// Delay 0.0, not a synchronous call: a producer enqueues and only queue service delivers (K11),
+	// so the commit serializes with everything else the frame raised instead of re-entering the
+	// damage spine from inside the animation pass.
+	QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, 0.0);
+	UE_LOG(LogElysiumWeapon, Verbose,
+		TEXT("%s anim event %d commits %s #%d from clip '%s' at cycle %.3f"), *DebugString(),
+		Event.Event, Swing.bMelee ? TEXT("swing") : TEXT("shot"), Swing.Serial, *Swing.ClipLabel,
+		Event.Cycle);
+	return true;
+}
+
+bool FElysiumWeapon::OperatorHandleAnimEvent(FElysiumCombatCharacter& Operator,
+	const FElysiumAnimEvent& Event)
+{
+	// The character hands the band to its OWN active weapon, so the operator is this weapon's owner.
+	// Anything else means a record crossed characters on its way here, which cannot pass quietly: the
+	// commit it would queue belongs to a transaction a different body staged.
+	if (Operator.Handle != Owner)
+	{
+		UE_LOG(LogElysiumWeapon, Warning,
+			TEXT("%s was handed anim event %d by %s, which does not own it — refused"),
+			*DebugString(), Event.Event, *Operator.DebugString());
+		return false;
+	}
+
+	// WHICH body answers is the record's, never the classname's. A thrown weapon takes `0x1024f030`
+	// and accepts nothing here, which is why this is not a two-way melee/ranged test.
+	const ElysiumWeapons::EOperatorBody OpBody = OperatorBody();
+
+	if (ElysiumWeapons::IsCommitEvent(Event.Event, OpBody))
+	{
+		return CommitFromAnimEvent(Event);
+	}
+	if (OpBody == ElysiumWeapons::EOperatorBody::Melee
+		&& ElysiumWeapons::IsSwallowedMeleeEvent(Event.Event))
+	{
+		return true;   // `0x103ea5b0`'s swallow set — accepted, and acted on by nothing
+	}
+
+	// Everything else in the band, including every id a `None` body was offered. The 4001/4002
+	// bodygroup routes the accepting bodies carry are presentation and are not claimed; the census
+	// names whatever else the corpus actually fires.
+	return false;
 }
 
 // ================================================================================================
@@ -890,7 +1091,10 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	const FElysiumEntityHandle Opponent = AcquireMeleeOpponent(Char);
 
 	FString ClipLabel;
-	const float Seconds = ResolveAndPlay(Activity, Mode, ClipLabel);
+	FString ClipOwnerStem;
+	const float Seconds = ResolveAndPlay(Activity, Mode, ClipLabel, &ClipOwnerStem);
+	const bool bEventCommit =
+		CommitArrivesFromAnimEvent(Char, ClipOwnerStem, ClipLabel);
 	const int32 FeatRank = FeatRating(Char, ModeDmg.AttackFeat, Context);
 	const float Rate = FMath::Max(
 		ElysiumWeapons::MeleePlaybackRate(FeatRank) * ElysiumWeapons::AttackSpeedScale(Char),
@@ -914,14 +1118,20 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	Swing.ClipSeconds = Seconds;
 	Swing.CommitTime = Commit;
 	Swing.RecoveryDeadline = Recovery;
+	Swing.bAwaitingAnimEvent = bEventCommit;
 
 	HoldAttacksUntil(Recovery);
-	QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, Commit - Now);
+	if (!bEventCommit)
+	{
+		QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, Commit - Now);
+	}
 
 	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s swing #%d %s rate %.2f clip %.3fs -> commit %.3f recover %.3f opponent %s"),
-		*DebugString(), Swing.Serial, *Activity, Rate, Seconds, Commit, Recovery,
-		Opponent.IsSet() ? *World->DescribeHandle(Opponent) : TEXT("(none)"));
+		TEXT("%s swing #%d %s rate %.2f clip %.3fs -> commit %s recover %.3f opponent %s"),
+		*DebugString(), Swing.Serial, *Activity, Rate, Seconds,
+		bEventCommit ? TEXT("on the clip's own 3047")
+			: *FString::Printf(TEXT("%.3f (estimated)"), Commit),
+		Recovery, Opponent.IsSet() ? *World->DescribeHandle(Opponent) : TEXT("(none)"));
 	return EVerdict::Accepted;
 }
 
@@ -932,7 +1142,10 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 	const double Now = World->NowSeconds();
 
 	FString ClipLabel;
-	const float Seconds = ResolveAndPlay(GActRangeAttackLayer, Mode, ClipLabel);
+	FString ClipOwnerStem;
+	const float Seconds = ResolveAndPlay(GActRangeAttackLayer, Mode, ClipLabel, &ClipOwnerStem);
+	const bool bEventCommit =
+		CommitArrivesFromAnimEvent(Char, ClipOwnerStem, ClipLabel);
 	const float Scale = FMath::Max(ElysiumWeapons::AttackSpeedScale(Char), KINDA_SMALL_NUMBER);
 
 	// The ranged schedule advances by the authored `Attack_Rate`, scaled by the owner's attack-speed
@@ -960,14 +1173,20 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 	Swing.ClipSeconds = Seconds;
 	Swing.CommitTime = Commit;
 	Swing.RecoveryDeadline = Recovery;
+	Swing.bAwaitingAnimEvent = bEventCommit;
 
 	HoldAttacksUntil(Recovery);
-	QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, Commit - Now);
+	if (!bEventCommit)
+	{
+		QueueSelfInput(ElysiumWeaponCommitInput(), Swing.Serial, Commit - Now);
+	}
 
 	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s shot #%d %s (mode '%s' intent %d) -> commit %.3f recover %.3f victim %s"),
-		*DebugString(), Swing.Serial, *Swing.Activity, *Mode.Tag, (int32)Intent, Commit, Recovery,
-		Victim.IsSet() ? *World->DescribeHandle(Victim) : TEXT("(none)"));
+		TEXT("%s shot #%d %s (mode '%s' intent %d) -> commit %s recover %.3f victim %s"),
+		*DebugString(), Swing.Serial, *Swing.Activity, *Mode.Tag, (int32)Intent,
+		bEventCommit ? TEXT("on the clip's own 3030..3044")
+			: *FString::Printf(TEXT("%.3f (estimated)"), Commit),
+		Recovery, Victim.IsSet() ? *World->DescribeHandle(Victim) : TEXT("(none)"));
 	return EVerdict::Accepted;
 }
 

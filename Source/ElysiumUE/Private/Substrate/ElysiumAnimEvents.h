@@ -31,6 +31,20 @@ namespace ElysiumAnimEvents
 	// everything at or above it is a client-side id the server dispatcher never routes.
 	inline constexpr int32 ServerDispatchCeiling = 5000;
 
+	// The WEAPON band. `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`, the body six classes
+	// share) acts on none of 3000..3999 itself: it hands every id in that range to the active
+	// weapon's virtual `Operator_HandleAnimEvent` `+0x5c8` and answers with what the weapon said.
+	// The band is the CHARACTER's routing rule; which ids inside it mean anything belongs to the
+	// weapon family that receives them (`docs/vtmb/animation_and_movers.md` → "Sequence events and
+	// native dispatch").
+	inline constexpr int32 WeaponBandFirst = 3000;
+	inline constexpr int32 WeaponBandLast  = 3999;
+
+	inline bool IsWeaponBand(int32 Event)
+	{
+		return Event >= WeaponBandFirst && Event <= WeaponBandLast;
+	}
+
 	// Advance one cursor by one frame and collect what the interval contained, in file order.
 	//
 	// `Timeline` may be null or empty — most sequences declare no timeline at all, which is an
