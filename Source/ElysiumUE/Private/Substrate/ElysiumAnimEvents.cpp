@@ -60,10 +60,17 @@ namespace ElysiumAnimEvents
 		const float Cycle = FMath::IsFinite(Phase.Cycle)
 			? FMath::Clamp(Phase.Cycle, 0.0f, 1.0f)
 			: 0.0f;
-		// A new play is anchored at zero, so its first frame is the interval `[0, Cycle)` — which is
-		// what makes a record authored at cycle 0 fire on the first advance rather than being
-		// stepped over.
-		const float Last = bSamePlay ? InOut.LastCycle : 0.0f;
+		// A play the cursor has not seen before is anchored where the PRODUCER says its timeline
+		// resumes from, which is zero for anything a play seam started — so its first frame is the
+		// interval `[0, Cycle)`, and a record authored at cycle 0 fires on the first advance rather
+		// than being stepped over. A producer that found its clip already running says so instead,
+		// and the first frame then walks only what the clip passed through since it was last
+		// dispatched (`FElysiumClipPhase::AnchorCycle`). Clamped and NaN-anchored exactly like the
+		// cycle above, and for the same reason: it is one end of the same interval.
+		const float Anchor = FMath::IsFinite(Phase.AnchorCycle)
+			? FMath::Clamp(Phase.AnchorCycle, 0.0f, 1.0f)
+			: 0.0f;
+		const float Last = bSamePlay ? InOut.LastCycle : Anchor;
 
 		InOut.OwnerStem = Phase.OwnerStem;
 		InOut.Label = Phase.Label;
@@ -142,7 +149,14 @@ namespace ElysiumAnimEventCensus
 		{
 			if (A.Count != B.Count) { return A.Count > B.Count; }
 			if (A.Event != B.Event) { return A.Event < B.Event; }
-			if (!A.OwnerStem.Equals(B.OwnerStem)) { return A.OwnerStem < B.OwnerStem; }
+			// Case-INSENSITIVELY, which is what both the ordering and the row key already are:
+			// `FString::operator<` compares that way and the map hashing the rows compares that way,
+			// so a case-sensitive discriminator here would claim two rows differ and then order them
+			// by a comparison that says they do not.
+			if (A.OwnerStem.Compare(B.OwnerStem, ESearchCase::IgnoreCase) != 0)
+			{
+				return A.OwnerStem < B.OwnerStem;
+			}
 			return A.Label < B.Label;
 		});
 	}

@@ -425,7 +425,9 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 	}
 	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
-		Inst->PlayClip(Anim, bLoop);
+		// LIFE5 — a skeletal prop owns every clip it can play, so its own stem IS the owner; there is
+		// no bank indirection to resolve (`FElysiumPropClip`).
+		Inst->PlayClip(FElysiumClipIdentity(Stem, ClipName), Anim, bLoop);
 	}
 	else
 	{

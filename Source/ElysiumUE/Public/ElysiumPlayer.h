@@ -800,7 +800,7 @@ public:
 	// dispatch what the interval contained: an id inside the server band is offered to
 	// `HandleAnimEvent`, and anything unclaimed is counted in the census. This is the only place the
 	// recovered dispatcher runs, because `Visual` is the only body a character has.
-	virtual void AdvanceAnimEvents(double Now) override;
+	virtual void AdvanceAnimEvents() override;
 
 	// Whether the events of ONE named clip — `(OwnerStem, Label)`, the same identity the cursor is
 	// keyed by — can reach `HandleAnimEvent` on this body: true only when a channel the pass above

@@ -74,9 +74,10 @@ struct FElysiumBlendReport
 	float RequestedSeconds = 0.0f;
 	// Zero seconds for a stated reason. `flags & 0x2` on the incoming clip is an authored hard cut.
 	bool bSnap = false;
-	// The other zero: nothing had been published, so there was no outgoing clip to fade FROM. It is
-	// carried rather than inferred from an empty `FromAnimation`, which a record that resolved no
-	// clip also leaves empty.
+	// The other zero: there was no outgoing CLIP to fade FROM — either nothing had ever been
+	// published, or what was published resolved no asset and left the machine posing the bind pose.
+	// The two are one fact for this purpose, and both refuse the fade. It is carried rather than
+	// inferred from an empty `FromAnimation`, which a record that resolved no clip also leaves empty.
 	bool bFirstPublish = false;
 	// Whether the machine was leaving one state or re-entering the one it was already in — the same
 	// `bStateChanged` the graph reads, captured at the moment the blend was asked for.
@@ -97,10 +98,16 @@ struct FElysiumBlendReport
 // `LengthSeconds` is what the phase clock is armed from, and it is the ENGINE's answer for a fan —
 // the blended length of the samples the axis value selects — because a fan's cells do not share a
 // length and the pose the graph strikes is the blend of two of them.
+//
+// `OwnerStem`/`Label` are the clip identity the branch publishes as its phase — the vocabulary key
+// the fan or the clip was reached by, never the resolved cell (`FElysiumClipIdentity`). Empty is
+// legal and means this reaction carries no timeline to walk.
 struct FElysiumReactionPlay
 {
 	UBlendSpace* Space = nullptr;
 	UAnimSequence* Sequence = nullptr;
+	FString OwnerStem;
+	FString Label;
 	// Where the fan is sampled, in the pose parameter's own degrees. Ignored when `Sequence` is set.
 	float AxisValue = 0.0f;
 	float LengthSeconds = 0.0f;
@@ -134,6 +141,46 @@ struct FElysiumReactionPlay
 	// takes this rather than the clip's length, so a claim cannot expire while the branch is still
 	// fading — one expression, so the two cannot disagree.
 	float TotalSeconds() const { return ActiveSeconds() + FMath::Max(BlendOutSeconds, 0.0f); }
+};
+
+// Which producer a base-channel phase is being read off (LIFE5), in the order the pose composes.
+//
+// The four run CONCURRENTLY, which is the whole reason this is an enumeration of arms rather than a
+// mode: a reaction replaces the locomotion pose without stopping the montage under it, and that
+// montage rides over a state machine which never stopped either. Only one of them can be the body's
+// server timeline at a time — retail has exactly one — but all four clocks keep running, so which
+// one publishes changes while none of them ends.
+enum class EElysiumBasePhaseSource : uint8
+{
+	None = 0,
+	Clip,       // the proxy's cinematic clip player, which replaces the graph outright
+	Reaction,   // the graph's reaction branch, which replaces the locomotion pose
+	Montage,    // the DefaultSlot dynamic montage, which rides over the state machine
+	Machine,    // the locomotion state machine underneath everything
+	Count
+};
+
+// One clip a single producer has standing on the base channel.
+//
+// **One record per producer, never one shared record.** A single slot would let the newest arm
+// erase a clip that is still playing, and the displaced one could never take the channel back — so
+// a swing armed while a flinch stands would publish, be overwritten on the next update, and its
+// commit event would never fire. The four records are independent; precedence decides which one is
+// published, not which one exists.
+struct FElysiumArmedClip
+{
+	FElysiumClipIdentity Identity;
+	float LengthSeconds = 0.0f;
+	bool bLooping = false;
+	// Bumped once per genuine (re)start. **A displaced arm keeps its id**: the same play resumed is
+	// not a new play, and a bump would restart its timeline and re-fire every record behind it.
+	uint32 PlayId = 0;
+	// Where the dispatcher last saw this arm — `FElysiumClipPhase::AnchorCycle`, published with the
+	// phase and frozen the moment a higher arm takes the channel. It is zero for a clip a play seam
+	// started, and the observed fraction for the state machine, which starts nothing.
+	float AnchorCycle = 0.0f;
+
+	bool IsArmed() const { return Identity.IsValid(); }
 };
 
 USTRUCT()
@@ -183,6 +230,11 @@ struct FElysiumBipedAnimProxy : public FElysiumBodyAnimProxy
 	void StopDirect();
 	UAnimSequence* GetPlaying() const { return Playing; }
 	bool IsPlayingLoop() const { return bPlayingLoop; }
+	// Whether the position above still belongs to the PREVIOUS clip. `SetSequence` does not reset the
+	// time accumulator, so between a `PlayDirect`/`Seek` and the worker consuming the restart,
+	// `GetClipPosition` answers where the clip that was replaced had run to. A caller that divides
+	// that by the NEW clip's length gets a phase for a clip nobody played.
+	bool HasPendingClipRestart() const { return bClipNeedsReinit; }
 
 private:
 	// Standalone (not `_Standalone`-suffixed by accident): the plain-C++ variant of the sequence
@@ -401,9 +453,16 @@ public:
 	// Answered over a dynamic slot montage, which is the design's own shape for a one-shot and needs
 	// no baked montage asset. Nothing here reaches the locomotion state machine: a scripted clip
 	// plays OVER the gait rather than replacing the thing that owns it.
-	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendInSeconds,
-		float BlendOutSeconds) override;
+	virtual bool PlayOneShot(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence,
+		bool bLoop, float BlendInSeconds, float BlendOutSeconds) override;
 	virtual void StopOneShot(float BlendSeconds) override;
+
+	// --- the phase seam (LIFE5) ---------------------------------------------------------------
+	//
+	// Where the base channel stands on its clip. A pure member read: the snapshot is armed at play
+	// time and its cycle refreshed once per update, so every reader in a frame — the event pass, the
+	// weapon's `HasLiveAnimEventDispatch`, a debug surface — is handed the same record.
+	virtual bool GetClipPhase(EElysiumAnimChannel Channel, FElysiumClipPhase& Out) const override;
 
 	// --- the reaction seam (LIFE5) ----------------------------------------------------------------
 	//
@@ -430,7 +489,10 @@ public:
 	// Stand one clip as the whole body pose, over the proxy's own player rather than over the graph.
 	// A choreographed scene owns the body outright for its duration and pins the clip to scene time,
 	// which is the one thing the slot-montage seam above cannot do.
-	void PlayClip(UAnimSequence* Sequence, bool bLoop = true);
+	//
+	// `Identity` is the clip's vocabulary key, on the same contract `PlayOneShot` takes it: empty is
+	// legal and publishes no phase, which is what every preview and lab stand hands over.
+	void PlayClip(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence, bool bLoop = true);
 	void SeekClip(float PositionSeconds);
 	void StopClip();
 	UAnimSequence* GetPlayingClip() const;
@@ -526,6 +588,48 @@ private:
 	// weights, so writing it every frame would rebuild them every frame.
 	void ApplyUpperBodyMask();
 
+	// --- the base channel's phase clock (LIFE5) ---------------------------------------------------
+
+	// Stand a new play on one producer's arm: identity, length and loop bit in, a fresh `PlayId`,
+	// and an anchor of zero because a play seam STARTED this clip. It writes that producer's slot
+	// and nothing else — no other producer's clock is touched — then republishes whichever arm is
+	// live, so the phase names the new clip at the instant the seam accepted it.
+	//
+	// **`LengthSeconds` is the SEQUENCE's own length**, never a montage's — a looping dynamic
+	// montage is `LoopingHoldCount` segments long, and a cycle divided by that never leaves zero.
+	//
+	// An identity naming no clip disarms that producer instead, which is the ordinary stand for a
+	// preview or lab body.
+	void ArmBasePhase(EElysiumBasePhaseSource Source, const FElysiumClipIdentity& Identity,
+		float LengthSeconds, bool bLoop);
+	// Disarm one producer. The others are untouched, so a stop hands the channel back to whatever is
+	// still playing underneath rather than emptying it.
+	void DisarmBasePhase(EElysiumBasePhaseSource Source);
+
+	// Which producer is posing the body right now, in the order the pose itself composes. It takes
+	// the proxy because two of the four answers live on it, and one fetch per update is one
+	// parallel-evaluation barrier instead of several.
+	EElysiumBasePhaseSource LiveBaseSource(FElysiumBipedAnimProxy& InProxy);
+	// The live producer's cycle, off whatever clock it owns.
+	float LiveBaseCycle(EElysiumBasePhaseSource Source, FElysiumBipedAnimProxy& InProxy) const;
+	// Copy the live producer's armed record into `BasePhase`, cycle included, and remember where the
+	// dispatcher was left. `bReadClocks` false publishes each arm's own anchor instead of asking the
+	// engine — which is what a play seam needs, because the node it just armed has not run yet.
+	void PublishBasePhase(bool bReadClocks);
+	// Re-arm the locomotion arm off the applied record, then publish. Once per update.
+	void RefreshBasePhase();
+	// The locomotion arm alone: it is a per-frame projection rather than a discrete play, so nothing
+	// calls a seam for it and it maintains its own record here — live or not.
+	void RefreshMachineArm();
+	FElysiumArmedClip& Armed(EElysiumBasePhaseSource Source)
+	{
+		return ArmedClips[static_cast<uint8>(Source)];
+	}
+	const FElysiumArmedClip& Armed(EElysiumBasePhaseSource Source) const
+	{
+		return ArmedClips[static_cast<uint8>(Source)];
+	}
+
 	UPROPERTY(Transient) FElysiumBipedAnimProxy Proxy;
 
 	// The record whole rather than scattered scalars: the transition duration needs the OUTGOING
@@ -577,6 +681,10 @@ private:
 	// performs therefore finds a branch that has already faded, which is why the handover is
 	// structurally invisible rather than a tuned threshold.
 	float ReactionSecondsLeft = 0.0f;
+	// How long the branch has been standing, counted UP. The countdown above is seeded from
+	// `ActiveSeconds` — the clip's length less its out-fade, floored at the blend-in — so it cannot
+	// answer where in the CLIP the branch is; the phase needs elapsed against the clip's own length.
+	float ReactionElapsedSeconds = 0.0f;
 	// Resolved once per class, like the layer's node: the tag table is compiled state and cannot
 	// change under a live instance. `false` in the pair means "not looked up yet", never "absent".
 	mutable bool bReactionBranchResolved = false;
@@ -592,4 +700,30 @@ private:
 	bool bReportedMissingMachine = false;
 	FElysiumOneShotReport OneShot;
 	FElysiumBlendReport Blend;
+
+	// --- what the base channel publishes (LIFE5) --------------------------------------------------
+	//
+	// One PUBLISHED record, because retail has one server timeline per body: `DispatchAnimEvents`
+	// stores the last checked cycle on the animating object itself at `+0x658`, and nothing advances
+	// a LAYER's cycle server-side (`docs/vtmb/animation_and_movers.md` → "Sequence events and native
+	// dispatch"). The DefaultSlot montage realizes what retail selects as the base sequence, so it
+	// publishes AS the base rather than as a second channel.
+	//
+	// Four ARMED records behind it, one per producer, because the four clocks run concurrently even
+	// though only one of them is the timeline — see `FElysiumArmedClip`.
+	FElysiumClipPhase BasePhase;
+	FElysiumArmedClip ArmedClips[static_cast<uint8>(EElysiumBasePhaseSource::Count)];
+	// The restart discriminator, drawn once per genuine (re)start across every arm. It is what makes
+	// a repeated attack fire its timeline again: the owner, the label and even the phase are
+	// identical between two plays of one clip, and only this tells the cursor that the second is a
+	// new play rather than a lap.
+	uint32 NextPlayId = 0;
+	// Which producer `BasePhase` was last read off. A readout, not a gate — precedence decides who
+	// publishes, and this records who did.
+	EElysiumBasePhaseSource PhaseSource = EElysiumBasePhaseSource::None;
+	// Whether the APPLIED record actually put an asset on a pin. `bHasApplied` cannot answer it: a
+	// record that resolved nothing is still a record applied, so the generation after a resolved-
+	// nothing first publish would present a non-null outgoing descriptor while the machine beneath
+	// is still posing the bind pose — and inertialize the first real clip up out of a T-pose.
+	bool bAppliedPosedAnAsset = false;
 };

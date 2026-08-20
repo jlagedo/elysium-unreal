@@ -1654,6 +1654,83 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 			ElysiumAnimEventCensus::Num(), 0);
 	}
 
+	// --- A flinch takes the channel mid-swing, and the commit still arrives ------------------------
+	{
+		// The combat consequence of arm precedence, driven through the substrate as the pose layer
+		// publishes it. A body swings — the attack clip's timeline names the commit, so the estimate
+		// stands DOWN and nothing is queued — and then something hits it. The reaction owns the base
+		// channel while it stands, so the pass walks the flinch's timeline instead; if the attack
+		// clip's own arm were discarded rather than displaced, its commit id would never fire and the
+		// swing would expire on its recovery deadline with the damage silently gone.
+		//
+		// What the instance publishes when the flinch ends is scripted here exactly: the same clip,
+		// the SAME `PlayId` (it never stopped), a cycle that advanced while it was off screen, and an
+		// anchor at the phase the dispatcher last saw. That is what makes the skipped interval fire
+		// once instead of being lost or replayed.
+		ElysiumRng::SeedAll(4242);
+		ElysiumAnimEventCensus::Clear();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		if (!Stand(Services, World, Player, Victim))
+		{
+			return false;
+		}
+		ArmClipSeam(Services, 0.0f);
+		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
+			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
+		// An early record the swing passes BEFORE the hit, and the commit it has not reached yet.
+		// The early one is what makes the resumption assertion discriminate: an arm that resumed from
+		// zero instead of from its anchor would walk `[0, 0.45)` — which still contains the commit,
+		// so the commit alone proves nothing — and fire this footstep a second time for a step the
+		// body took once.
+		Timeline.Add(WeaponEv(0.05f, 2050));
+		Timeline.Add(WeaponEv(0.30f, 3038, TEXT("0")));
+
+		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
+		if (!TestNotNull(TEXT("the pistol is granted"), Pistol))
+		{
+			return false;
+		}
+		TestEqual(TEXT("the shot is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Victim->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestTrue(TEXT("...on the clip's own commit id, so no estimate is queued"),
+			Pistol->Swing.bAwaitingAnimEvent);
+
+		// Still short of the commit record, and past the early one.
+		Services.BodyClipPhase.Cycle = 0.10f;
+		World.Tick(0.2);
+		TestEqual(TEXT("nothing has committed yet"), DamageTaken(*Victim), 0);
+		TArray<ElysiumAnimEventCensus::FRow> Walked;
+		ElysiumAnimEventCensus::Collect(Walked);
+		TestEqual(TEXT("the early record fired once on the way in"), Walked.Num(), 1);
+
+		// The hit lands. The flinch is a different clip and a different play, and it owns the base
+		// channel for as long as it stands.
+		Services.BodyClipPhase.Label = TEXT("hit_torso");
+		Services.BodyClipPhase.Cycle = 0.40f;
+		Services.BodyClipPhase.PlayId = 2;
+		World.Tick(0.3);
+		TestEqual(TEXT("the flinch's own timeline commits nothing for the swing"),
+			DamageTaken(*Victim), 0);
+		TestTrue(TEXT("...and the swing is still staged rather than dropped"), Pistol->Swing.bActive);
+
+		// The flinch ends. The attack clip never stopped, so it takes the channel back as the same
+		// play, advanced, resuming from where the dispatcher left it.
+		Services.BodyClipPhase.Label = GAttackLabel;
+		Services.BodyClipPhase.PlayId = 1;
+		Services.BodyClipPhase.AnchorCycle = 0.10f;
+		Services.BodyClipPhase.Cycle = 0.45f;
+		World.Tick(0.4);
+		TestTrue(TEXT("the resumed clip fires the commit it passed, and the shot lands"),
+			DamageTaken(*Victim) > 0);
+		ElysiumAnimEventCensus::Collect(Walked);
+		TestEqual(TEXT("...and it resumes from its anchor, so the record behind it does not re-fire"),
+			Walked.Num() == 1 ? Walked[0].Count : -1, 1);
+	}
+
 	// --- A thrown weapon takes the body that accepts nothing --------------------------------------
 	{
 		// `0x1024f030` — the 17 base/discipline/armor/thrown/unarmed classes. A thrown weapon is not

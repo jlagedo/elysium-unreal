@@ -539,7 +539,10 @@ private:
 	void AddEvent(FElysiumIOEvent&& Event);
 	void ServiceEvents(double Now);
 	// LIFE5 — one frame of every bodied entity's sequence-event timelines, run before the thinks.
-	void AdvanceAnimEvents(double Now);
+	//
+	// It takes no clock: the dispatcher's whole rule is an interval over a NORMALIZED cycle the pose
+	// layer publishes, so nothing in the walk reads world time (`Substrate/ElysiumAnimEvents.h`).
+	void AdvanceAnimEvents();
 	void RunThinks(double Now);
 	void DeliverEvent(const FElysiumIOEvent& Event, double Now);
 	void DeliverInputTo(FElysiumEntity& Target, const FElysiumIOEvent& Event, double Now);

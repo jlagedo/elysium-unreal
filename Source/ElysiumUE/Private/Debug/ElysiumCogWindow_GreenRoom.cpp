@@ -1727,7 +1727,8 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 	{
 		// Both zero-second answers are warned and NAMED, because "0.00s crossfade" is a contradiction
 		// on the row that exists to say which of the three happened: `flags & 0x2` is the incoming
-		// clip's authored hard cut, and a first publish had no outgoing clip to fade from at all.
+		// clip's authored hard cut, and the other is an outgoing record that posed no clip — either
+		// nothing had ever been published, or what was published resolved no asset.
 		if (BlendReport.bSnap)
 		{
 			ImGui::TextColored(ElysiumCogStyle::ColWarn, "fade: snap (authored hard cut)");

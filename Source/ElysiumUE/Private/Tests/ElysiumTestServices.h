@@ -25,6 +25,7 @@
 #include "ElysiumWorldServices.h"
 #include "ElysiumStanceTypes.h"
 #include "Substrate/ElysiumDisposition.h"
+#include "Visual/ElysiumBodyAnimInstance.h"   // the live clip-phase forward below
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -282,11 +283,21 @@ struct FElysiumRecordingServices final
 	// --- IElysiumEmbodiment ----------------------------------------------------------------
 	virtual float BodyScaleFor(const FElysiumEntityDef& Def) const override { return Def.bSky ? 16.f : 1.f; }
 
+	// A body the CASE stood, handed to whatever entity asks for one. Null by default, which is every
+	// Substrate case: those want the bare component below. A Content case that needs the real pose
+	// layer under the substrate's own pass — a graph-backed body on a baked mesh — sets this, and
+	// the entity chain then drives that body instead of a stand-in it cannot animate.
+	USkeletalMeshComponent* PrebuiltNpcVisual = nullptr;
+
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) override
 	{
 		Record(FString::Printf(TEXT("BuildNpcVisual %s %s scale=%.2f disp=%s var=%d"),
 			*Stem, *Location.ToString(), UniformScale, *Disposition, IdleVariant));
+		if (PrebuiltNpcVisual != nullptr)
+		{
+			return PrebuiltNpcVisual;
+		}
 		// A real component (transient, never registered — no RHI is touched) rather than null, so
 		// the leaf classes take their body-carrying path: they register it for teardown, gate it on
 		// dormancy, and route SetAnimation/SetDisposition through it.
@@ -460,13 +471,28 @@ struct FElysiumRecordingServices final
 	// Substrate body stands on nothing this seam can see.
 	bool bBodyClipPhaseSet = false;
 	FElysiumClipPhase BodyClipPhase;
+	// The other half, for a Content case standing a REAL animation host: ask that host, exactly the
+	// two lines `UElysiumEntityBodies::GetBodyClipPhase` performs. It is opt-in rather than automatic
+	// because the fixture above is what every Substrate case drives, and a body whose host answers
+	// for itself cannot be scripted frame by frame.
+	bool bLiveClipPhase = false;
 	// Deliberately not recorded: the world's event pass asks this of every bodied entity every
 	// frame, and a line per body per frame would bury every call a suite is actually reading.
 	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
 		FElysiumClipPhase& Out) override
 	{
 		Out = FElysiumClipPhase();
-		if (!bBodyClipPhaseSet || Body == nullptr)
+		if (Body == nullptr)
+		{
+			return false;
+		}
+		if (bLiveClipPhase)
+		{
+			const UElysiumBodyAnimInstance* Inst =
+				Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
+			return Inst != nullptr && Inst->GetClipPhase(Channel, Out);
+		}
+		if (!bBodyClipPhaseSet)
 		{
 			return false;
 		}

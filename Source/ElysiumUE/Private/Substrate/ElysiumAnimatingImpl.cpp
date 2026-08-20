@@ -218,7 +218,7 @@ bool FElysiumAnimating::HasLiveAnimEventDispatch(const FString& OwnerStem, const
 	return false;
 }
 
-void FElysiumAnimating::AdvanceAnimEvents(double Now)
+void FElysiumAnimating::AdvanceAnimEvents()
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (!Embodiment || !Visual)

@@ -534,7 +534,10 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 		Inst->SetCompositionRig(Anims ? Anims->GetCompositionRig(Stem) : nullptr);
 		if (Anim != nullptr)
 		{
-			Inst->PlayClip(Anim, /*bLoop=*/true);
+			// No identity: a preview body stands one named clip and publishes no phase, so the event
+			// pass sees a channel standing on nothing. Deliberate — the green room is not a game
+			// body, and firing a footstep out of a Content Browser stand would be a fault.
+			Inst->PlayClip(FElysiumClipIdentity(), Anim, /*bLoop=*/true);
 		}
 	}
 	else if (Anim != nullptr)
@@ -618,7 +621,9 @@ bool UElysiumNpcSubsystem::PlayClipOn(int32 Index, const FString& ClipName, FStr
 	}
 	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Component->GetAnimInstance()))
 	{
-		Inst->PlayClip(Anim, /*bLoop=*/true);
+		// No identity, for the same reason the stand above carries none: `npc.play` is a preview
+		// verb, and a preview body publishes no clip phase.
+		Inst->PlayClip(FElysiumClipIdentity(), Anim, /*bLoop=*/true);
 	}
 	else
 	{

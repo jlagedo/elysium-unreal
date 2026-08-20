@@ -1187,11 +1187,11 @@ void FElysiumEntityWorld::Tick(double Now)
 	// below delivers it one phase later in this same tick. The weapon band's shot and melee commits
 	// are that second shape.
 	//
-	// **Inert in production this slice**: nothing publishes a clip phase yet, so
-	// `GetBodyClipPhase` answers false on every body and every cursor stays unarmed. The pass is
-	// here now so the real arms land against a walk that already exists rather than against a walk
-	// and a pass at once.
-	AdvanceAnimEvents(Now);
+	// The pose layer publishes the base channel's phase for every body it stands a clip on
+	// (`Visual/ElysiumBipedAnimInstance.cpp` → the base channel's phase clock), so this walk is live
+	// on any body whose animation host named the clip it armed. A body standing on a clip nobody
+	// named — a preview stand, a lab grid — publishes nothing, and its cursor stays unarmed.
+	AdvanceAnimEvents();
 	RunThinks(Now);
 	ServiceEvents(Now);
 	// Auto-Link/Auto-End observes the exact submitted voice handle after world events have had their
@@ -1279,8 +1279,16 @@ void FElysiumEntityWorld::PublishWetness()
 	}
 }
 
-void FElysiumEntityWorld::AdvanceAnimEvents(double Now)
+void FElysiumEntityWorld::AdvanceAnimEvents()
 {
+	// A headless world has no pose layer to ask, so no entity in it can be standing on a clip. This
+	// is the ONE early-out the pass takes: an inert, hidden or dying body is still dispatched,
+	// because retail dispatches on all three and a death clip's footfalls are as real as a walk's.
+	if (Embodiment() == nullptr)
+	{
+		return;
+	}
+
 	// The same walk `RunThinks` makes, and deliberately so: an entity's timeline belongs to the same
 	// list its think does, in the same order. It differs in its two gates — a body rather than a due
 	// think, and no player skip, because the player's clips carry events too and there is no
@@ -1292,7 +1300,7 @@ void FElysiumEntityWorld::AdvanceAnimEvents(double Now)
 		{
 			continue;   // nothing without a skeletal body has a clip to advance
 		}
-		EntPtr->AdvanceAnimEvents(Now);
+		EntPtr->AdvanceAnimEvents();
 	}
 }
 

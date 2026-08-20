@@ -77,14 +77,15 @@ namespace ElysiumAnimGraph
 	// non-zero fade therefore inertializes the first real clip up out of a T-pose for the whole
 	// duration on map load.
 	//
-	// `UElysiumBipedAnimInstance::PlayOneShot` refuses the same hazard on the montage path, but on a
-	// STRICTER predicate: `bGraphPosesAnAsset` asks what the machine is evaluating, where this asks
-	// only whether anything has been published. The two differ on one body — a first publish whose
-	// record resolved no clip is still a publish, so the generation after it presents a non-null
-	// outgoing descriptor while the machine underneath is still posing the bind pose. Widening this
-	// gate to the montage path's predicate needs the applied record's own posed-an-asset verdict
-	// latched at publish time; `FElysiumAnimationSelection::AssetKind` is not that verdict, because
-	// the assets are resolved beside the record and either can be absent while the other is not.
+	// **Whether an outgoing record is an operand at all is the CALLER's question, and it is stricter
+	// than "is the pointer null".** A first publish whose record resolved no clip is still a publish,
+	// so the generation after it would otherwise hand this function a non-null descriptor while the
+	// machine underneath is still posing the bind pose — the same T-pose fade through the front door.
+	// `UElysiumBipedAnimInstance` therefore latches the applied record's own posed-an-asset verdict at
+	// publish time (`bAppliedPosedAnAsset`) and passes null here when it is false, which is the same
+	// predicate `PlayOneShot`'s `bGraphPosesAnAsset` applies on the montage path.
+	// `FElysiumAnimationSelection::AssetKind` cannot answer it: the assets are resolved beside the
+	// record and either can be absent while the other is not.
 	float TransitionSeconds(const FElysiumAnimationSelection* Outgoing,
 		const FElysiumAnimationSelection& Incoming);
 

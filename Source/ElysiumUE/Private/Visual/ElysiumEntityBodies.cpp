@@ -278,7 +278,23 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// The authored fade both ways: this funnel carries one number and passes it as both (in = the
 	// fade, out = the fade unless the clip loops).
 	const float Fade = ClipFadeSeconds(Stem, ClipName);
-	if (!Inst->PlayOneShot(Anim, bLoop, Fade, Fade))
+	// LIFE5 — the identity the clip's event timeline is keyed by. The OWNER is the include DAG's
+	// answer (this body's own stem, or the bank that carries the clip) and the label is the name the
+	// caller asked for, never the animation the cell resolved to. It is the same vocabulary lookup
+	// `ClipFadeSeconds` just made; a clip the vocabulary does not carry falls back to this stem,
+	// which is what a prop, a bank clip reached by name and the green room all are.
+	//
+	// **The expression is `FElysiumAnimationSelection::OwnerStem`'s, character for character**
+	// (`Visual/ElysiumAnimationResolve.cpp`). A weapon stands its estimate down by asking whether the
+	// clip it just played is the one a polled channel is standing on, and that question joins the
+	// owner the resolver recorded against the owner published here — so two spellings of one rule is
+	// a silently lost commit, not a cosmetic difference.
+	UElysiumAnimSubsystem* Anims = GetAnims();
+	const FElysiumNpcClipSet* Set = Anims != nullptr ? Anims->GetClipSet(Stem) : nullptr;
+	const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(ClipName) : nullptr;
+	const FElysiumClipIdentity Identity(
+		Clip == nullptr || Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner, ClipName);
+	if (!Inst->PlayOneShot(Identity, Anim, bLoop, Fade, Fade))
 	{
 		UE_LOG(LogElysiumBodies, Warning,
 			TEXT("npc '%s' clip '%s' (loop=%d, %.3fs): the animation host refused to play it, so the "
@@ -469,9 +485,18 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	// branch's phase clock has a minimum hold, so a reaction stands longer than its clip whenever the
 	// clip is shorter than the two fades. One expression answers both (`ActiveSeconds`/`TotalSeconds`
 	// on the play), which is what stops the claim expiring mid-fade.
+	// LIFE5 — the identity both routes publish their phase under. The LABEL is the vocabulary key the
+	// request was addressed by, which is what `FElysiumBlendTable::Events` is keyed on; a request
+	// that carries none was addressed by the animation name directly, so that is the key. It is the
+	// same expression the channel claim below takes for the same reason.
+	const FElysiumClipIdentity Identity(Request.OwnerStem,
+		Request.Label.IsEmpty() ? AnimationName : Request.Label);
+
 	FElysiumReactionPlay Play;
 	Play.Space = Fan.Space;                 // null on the single-clip reaction
 	Play.Sequence = Fan.Space != nullptr ? nullptr : Anim;
+	Play.OwnerStem = Identity.OwnerStem;
+	Play.Label = Identity.Label;
 	Play.AxisValue = Request.AxisValue;
 	Play.LengthSeconds = LengthSeconds;
 	Play.BlendInSeconds = Request.BlendInSeconds;
@@ -485,7 +510,7 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	Claim.Source = Request.Source;
 	Claim.Channel = EElysiumAnimChannel::Base;
 	Claim.Priority = Request.Priority;
-	Claim.Label = Request.Label.IsEmpty() ? AnimationName : Request.Label;
+	Claim.Label = Identity.Label;
 	Claim.HoldSeconds = Request.bLoop
 		? 0.0f
 		: (bReactionBranch ? Play.TotalSeconds() : LengthSeconds);
@@ -511,7 +536,7 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	}
 	else
 	{
-		bPlaying = Inst->PlayOneShot(Anim, Request.bLoop, Request.BlendInSeconds,
+		bPlaying = Inst->PlayOneShot(Identity, Anim, Request.bLoop, Request.BlendInSeconds,
 			Request.BlendOutSeconds);
 	}
 	if (!bPlaying)
@@ -684,7 +709,9 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 	}
 	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
-		Inst->PlayClip(Anim, bLoop);
+		// LIFE5 — the cinematic bank owns the clip and the scene addressed it by name, so the two
+		// together are the key its event timeline is filed under.
+		Inst->PlayClip(FElysiumClipIdentity(BankStem, ClipName), Anim, bLoop);
 	}
 	else
 	{

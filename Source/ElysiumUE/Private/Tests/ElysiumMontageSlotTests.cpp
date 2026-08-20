@@ -248,7 +248,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	// first separates "the slot poses nothing at all" from "the LOOPING length is wrong", which are
 	// different repairs behind one identical T-pose.
 	TestTrue(TEXT("a one-shot clip is accepted by the slot"),
-		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds));
+		Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds));
 	TArray<FTransform> OneShotPose;
 	Evaluate(/*Frames=*/6, FrameSeconds, OneShotPose);
 	const ElysiumPose::FDeviation OneShot = ElysiumPose::Measure(BindPose, OneShotPose);
@@ -263,7 +263,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	// null and logs nothing, so the call below returning false IS the defect, with the reference pose
 	// two assertions down as its only other symptom.
 	TestTrue(TEXT("a looping clip is accepted by the slot"),
-		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/true, Pick.FadeSeconds, Pick.FadeSeconds));
+		Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/true, Pick.FadeSeconds, Pick.FadeSeconds));
 	TArray<FTransform> LoopPose;
 	Evaluate(/*Frames=*/12, FrameSeconds, LoopPose);   // 0.4 s, past the authored fade
 	const ElysiumPose::FDeviation Looping = ElysiumPose::Measure(BindPose, LoopPose);
@@ -325,7 +325,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 		// Still nothing published in this test, and `StopOneShot` above left the slot empty: the
 		// snapping arm of the rule.
 		if (TestTrue(TEXT("a one-shot with distinct fades is accepted by the slot"),
-			Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, FadeIn, FadeOut)))
+			Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, FadeIn, FadeOut)))
 		{
 			UAnimMontage* Snapped = Inst->GetCurrentActiveMontage();
 			if (TestNotNull(TEXT("and the dynamic montage exists"), Snapped))
@@ -354,7 +354,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 		Evaluate(/*Frames=*/2, FrameSeconds, StoppedPose);
 
 		if (TestTrue(TEXT("the same one-shot re-arms over the applied selection"),
-			Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, FadeIn, FadeOut)))
+			Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, FadeIn, FadeOut)))
 		{
 			UAnimMontage* Blended = Inst->GetCurrentActiveMontage();
 			if (TestNotNull(TEXT("and its dynamic montage exists"), Blended))
@@ -438,7 +438,7 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 
 	// The stance clip, armed the way the ambient schedule arms one.
 	if (!TestTrue(TEXT("the schedule's clip is accepted by the slot"),
-		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds)))
+		Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds)))
 	{
 		return false;
 	}
@@ -494,7 +494,7 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 	// completed its own blend-out — there is nothing left for the takeover to cut, which is why the
 	// preempt is invisible on screen.
 	if (!TestTrue(TEXT("the one-shot re-arms for the expiry run"),
-		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds)))
+		Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds)))
 	{
 		return false;
 	}
@@ -1123,7 +1123,7 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 		Low.Inst->PlayReaction(FanPlay(Fan.Space, AxisLow, LengthSeconds, BlendIn, BlendOut)));
 	TickAll(2);
 	TestTrue(TEXT("...and is running"), Low.Inst->bReactionActive);
-	Low.Inst->PlayClip(BaseClip, /*bLoop=*/true);
+	Low.Inst->PlayClip(FElysiumClipIdentity(), BaseClip, /*bLoop=*/true);
 	TestFalse(TEXT("a scene clip stops the reaction outright"), Low.Inst->bReactionActive);
 
 	return true;
@@ -1269,6 +1269,141 @@ bool FElysiumReactionCellMasksTest::RunTest(const FString&)
 	AddInfo(FString::Printf(TEXT("fan '%s'@'%s': %d sample(s), %d masked, %d additive"),
 		*Fan.Label, *Fan.Owner, Samples, Masked, Additive));
 	TestTrue(TEXT("the fan carries samples to check"), Samples > 0);
+
+	return true;
+}
+
+// The residual half of the null-outgoing refusal: a publish that resolved NOTHING is not an operand.
+//
+// `ElysiumAnimGraph::TransitionSeconds` refuses a null outgoing descriptor because a body that has
+// published nothing poses the skeleton's bind pose, and fading up out of that is a T-pose on screen
+// for the whole blend. `bHasApplied` is not the fact that answers it: it goes true on the FIRST
+// update of any body, asset or no asset, so a first publish whose record resolved no clip presents a
+// non-null descriptor to the generation after it — while the machine underneath is still evaluating
+// an un-published pin. The same T-pose, through the front door.
+//
+// It is asserted on the real generated graph because the rule it guards is about what the graph is
+// EVALUATING, which the pure function cannot see. `GetBlendReport` is the observable: the decision is
+// recorded where it is made, because the fade it produces is indistinguishable after the fact from a
+// correct hard cut.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphFirstAssetBlendTest,
+	"Elysium.Content.GraphFirstAssetBlend", GElysiumMontageSlotFlags)
+bool FElysiumGraphFirstAssetBlendTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		return true;
+	}
+	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
+		*FElysiumContentPaths::PlayerAnimBlueprintClass());
+	if (Graph == nullptr)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
+			"(run: uv run elysium export bundle policy)"));
+		return true;
+	}
+	FLoopingClipPick Pick;
+	if (!FindLoopingClip(Pick))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	Pick.Mesh->AddToRoot();
+	Pick.Clip->AddToRoot();
+	ON_SCOPE_EXIT
+	{
+		Pick.Clip->RemoveFromRoot();
+		Pick.Mesh->RemoveFromRoot();
+	};
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
+	if (!TestNotNull(TEXT("body owner spawned"), Owner))
+	{
+		return false;
+	}
+	USkeletalMeshComponent* Comp = nullptr;
+	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
+	if (Inst == nullptr)
+	{
+		return false;
+	}
+	constexpr float FrameSeconds = 1.f / 30.f;
+	TArray<FTransform> Pose;
+
+	// **The body arrives in the defect's own state without being put there.** A registered instance
+	// updates whether or not anything has published, so its first update applies the default record
+	// — no sequence, no blend space — and `bHasApplied` goes true on it. That is generation 0, and
+	// from here on every resolved-nothing publish is HELD rather than applied, which is the correct
+	// behaviour and the reason the state persists: the applied record goes on naming no asset while
+	// the machine goes on posing the bind pose.
+	EvaluateFrames(Comp, /*Frames=*/2, FrameSeconds, Pose);
+	TestTrue(TEXT("a body that has published nothing is posing the bind pose"),
+		Inst->GetAppliedSelection().AssetKind == EElysiumAnimAssetKind::None);
+
+	// A request that resolved nothing, which is not a contrived record: the controlled corpus records
+	// exactly one on a validated player body, a ducked phase-8 landing asking for ACT_LAND_CROUCH
+	// whose selection returns -1 (`docs/vtmb/animation_and_movers.md`). It is held, and holding is
+	// what keeps the applied record describing a body that poses nothing.
+	FElysiumAnimationSelection Missed;
+	Missed.Generation = 1;
+	Missed.GraphState = EElysiumGraphState::Idle;
+	Missed.SequenceLabel = Pick.Label;
+	Missed.OwnerStem = Pick.Owner;
+	Missed.AssetKind = EElysiumAnimAssetKind::None;
+	Missed.Outcome = EElysiumAnimOutcome::MissingSequence;
+	Missed.FadeSeconds = UElysiumBodyAnimInstance::DefaultBlendSeconds;
+	Inst->PublishSelection(Missed, FElysiumResolvedAnimation());
+	EvaluateFrames(Comp, /*Frames=*/2, FrameSeconds, Pose);
+	TestTrue(TEXT("a publish that resolved no asset holds the pose it had"), Inst->IsHoldingPose());
+
+	// The first record that carries a real clip. Its outgoing operand exists and names a non-zero
+	// authored fade, so a gate asking only "has anything been published" hands the inertializer that
+	// whole duration of blending up out of the bind pose the machine is still evaluating. The fade is
+	// stated on the record rather than taken off the clip, because a clip that authors a hard cut
+	// answers zero for a different reason and the two must not be confused here.
+	FElysiumAnimationSelection Resolved = Missed;
+	Resolved.Generation = 2;
+	Resolved.AnimationName = Pick.Label;
+	Resolved.AssetKind = EElysiumAnimAssetKind::Sequence;
+	Resolved.Outcome = EElysiumAnimOutcome::Resolved;
+	Resolved.bSnap = false;
+	Resolved.FadeSeconds = UElysiumBodyAnimInstance::DefaultBlendSeconds;
+	FElysiumResolvedAnimation Assets;
+	Assets.Sequence = Pick.Clip;
+	Inst->PublishSelection(Resolved, Assets);
+	EvaluateFrames(Comp, /*Frames=*/2, FrameSeconds, Pose);
+
+	const FElysiumBlendReport& Blend = Inst->GetBlendReport();
+	AddInfo(FString::Printf(
+		TEXT("first real clip over a body that had posed nothing: %.3fs requested (snap=%d, "
+		     "nothing-to-fade-from=%d)"),
+		Blend.RequestedSeconds, Blend.bSnap ? 1 : 0, Blend.bFirstPublish ? 1 : 0));
+	TestEqual(TEXT("the real clip's own generation is the one reported"), Blend.Generation, 2u);
+	TestEqual(TEXT("and it snaps in rather than inertializing up out of the bind pose"),
+		Blend.RequestedSeconds, 0.f);
+	TestTrue(TEXT("...named as having no outgoing clip to fade from, not as an authored hard cut"),
+		Blend.bFirstPublish && !Blend.bSnap);
+
+	// The control, and it is what makes the assertion above about the POSED-AN-ASSET verdict rather
+	// than about first publishes: the next generation follows a record that DID pose a clip, so it
+	// fades over the authored duration.
+	FElysiumAnimationSelection Again = Resolved;
+	Again.Generation = 3;
+	Inst->PublishSelection(Again, Assets);
+	EvaluateFrames(Comp, /*Frames=*/2, FrameSeconds, Pose);
+	TestEqual(TEXT("the generation after a posed record fades over the authored duration"),
+		Inst->GetBlendReport().RequestedSeconds, UElysiumBodyAnimInstance::DefaultBlendSeconds);
+	TestFalse(TEXT("...and is not reported as having nothing to fade from"),
+		Inst->GetBlendReport().bFirstPublish);
 
 	return true;
 }

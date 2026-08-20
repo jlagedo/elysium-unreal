@@ -109,8 +109,13 @@ public:
 	//
 	// The two fades are stated apart because retail states them apart — the flinch fades in over 0.1
 	// and out over 0.3 — and because `PlaySlotAnimationAsDynamicMontage` takes them separately.
-	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendInSeconds,
-		float BlendOutSeconds)
+	//
+	// **`Identity` is what the event dispatcher walks, and only the caller knows it** (LIFE5). The
+	// sequence is named after the animation the bake wrote; the timeline is keyed by the vocabulary
+	// label the caller resolved it through. An empty identity is legal and means the clip carries no
+	// timeline to walk — see `FElysiumClipIdentity`.
+	virtual bool PlayOneShot(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence,
+		bool bLoop, float BlendInSeconds, float BlendOutSeconds)
 	{
 		return false;
 	}

@@ -814,6 +814,20 @@ bool FElysiumWeapon::CommitArrivesFromAnimEvent(FElysiumCombatCharacter& Char,
 	// would swallow the whole transaction.
 	if (!Char.HasLiveAnimEventDispatch(OwnerStem, ClipLabel))
 	{
+		// **Verbose, because this is an ordinary refusal rather than a gap.** A scene owns the base
+		// channel of the body it is posing and refuses the clip the attack asked for, so no polled
+		// channel stands on it and no timeline of its can be walked; the estimate is then the right
+		// answer, not a degraded one. Keyed apart from `estimate:` — that key names an authored
+		// sequence with no commit id, and reading the two as one work list would fold a body-state
+		// answer into a content gap.
+		if (ShouldReportOnce(FString::Printf(TEXT("wrongclip:%s@%s"), *ClipLabel, *OwnerStem)))
+		{
+			UE_LOG(LogElysiumWeapon, Verbose,
+				TEXT("%s: '%s'@'%s' was armed but no polled channel stands on it, so the %s commit "
+					"keeps the ContactEventCycle estimate"),
+				*DebugString(), *ClipLabel, *OwnerStem,
+				ElysiumWeapons::OperatorBodyName(OpBody));
+		}
 		return false;
 	}
 

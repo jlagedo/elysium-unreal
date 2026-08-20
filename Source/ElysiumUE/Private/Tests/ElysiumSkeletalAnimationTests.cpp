@@ -1181,7 +1181,7 @@ bool FElysiumTheatreSequenceEvaluationTest::RunTest(const FString&)
 
 	const auto PoseAt = [Comp, Inst, Anim](float Seconds, TArray<FTransform>& OutPose)
 	{
-		Inst->PlayClip(Anim, /*bLoop=*/false);
+		Inst->PlayClip(FElysiumClipIdentity(), Anim, /*bLoop=*/false);
 		Inst->SeekClip(Seconds);
 		// Seek is consumed by UpdateAnimationNode; refresh synchronously so the transforms copied below
 		// are this authored pose rather than the component's previous evaluation.

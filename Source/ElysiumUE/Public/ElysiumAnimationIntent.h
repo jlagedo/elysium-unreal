@@ -759,6 +759,35 @@ namespace ElysiumAnimIntent
 	}
 }
 
+// WHICH clip a play seam is arming, in the vocabulary the event dispatcher is keyed on (LIFE5).
+//
+// It travels beside the asset because the asset cannot answer it. A baked `UAnimSequence` is named
+// after the ANIMATION the bake wrote, while `FElysiumBlendTable::Events` is keyed by the SEQUENCE
+// LABEL the caller reached it by — and the two are different strings wherever a grid label selects
+// a cell, or a bank owns the clip a body plays. A phase built from the asset's own name would
+// therefore address a timeline that does not exist.
+//
+// An EMPTY identity is legal and means "no timeline to walk": a preview stand, a green-room grid or
+// a lab clip names no vocabulary key, and the channel it plays on publishes no phase at all. That
+// is an ordinary absence, not a refusal — `FElysiumClipPhase::IsValid` says the same thing on the
+// other side of the seam.
+struct FElysiumClipIdentity
+{
+	// The bank the clip is baked into — the body's own stem, or the bank the include DAG named.
+	FString OwnerStem;
+	// The vocabulary key, never the resolved cell or animation name.
+	FString Label;
+
+	FElysiumClipIdentity() = default;
+	FElysiumClipIdentity(FString InOwnerStem, FString InLabel)
+		: OwnerStem(MoveTemp(InOwnerStem))
+		, Label(MoveTemp(InLabel))
+	{
+	}
+
+	bool IsValid() const { return !OwnerStem.IsEmpty() && !Label.IsEmpty(); }
+};
+
 // Where one channel of a body is standing on its clip, this frame (LIFE5).
 //
 // **`Cycle` is a phase, never a time.** VtMB's event dispatcher stores and compares a normalized
@@ -781,6 +810,18 @@ struct FElysiumClipPhase
 	// a finished one-shot reports exactly 1, which is the one position it has and nowhere to wrap
 	// from. Anything outside `[0,1]` is not a phase, and the pass that reads it says so.
 	float Cycle = 0.0f;
+	// Where this play's timeline is resumed FROM when a cursor meets it for the first time — the
+	// lower bound of the interval its first frame walks. Zero, the default, is "this clip started
+	// here", which is every clip a play seam started and is the only answer the rule had before.
+	//
+	// It is not always zero, because not every clip a channel presents was started by the thing
+	// presenting it. A pose source that only OBSERVES a running clip — the locomotion state
+	// machine, which nothing starts and nothing clocks — first sees it mid-flight, and a clip that
+	// was displaced by a higher-priority pose and then took the channel back has been advancing the
+	// whole time it was off. Anchoring either at zero would fire every record below the current
+	// phase in one burst; anchoring at the phase they were last dispatched from walks exactly the
+	// interval they really passed through.
+	float AnchorCycle = 0.0f;
 	// The clip's authored length in seconds, for readouts. Nothing in the firing rule reads it.
 	float Length = 0.0f;
 	bool bLooping = false;

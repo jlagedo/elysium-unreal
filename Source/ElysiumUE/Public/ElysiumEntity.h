@@ -292,7 +292,7 @@ public:
 	// thinks; the base is a no-op because only an entity that owns a skeletal body has a clip to
 	// advance. Declared here for the same no-RTTI reason `GetSkeletalBody` is — the world's pass
 	// walks `FElysiumEntity`s and must not know which leaves carry bodies.
-	virtual void AdvanceAnimEvents(double Now) {}
+	virtual void AdvanceAnimEvents() {}
 
 	// Retail's virtual `HandleAnimEvent` `+0x40c`: one fired record, offered to the entity whose
 	// clip declared it. True means this entity claimed the id and acted on it; false means it did
