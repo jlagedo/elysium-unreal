@@ -55,55 +55,45 @@ cherry-picks and validates it on `main`, `worktree close <name>` removes the che
 regenerable work root. Close refuses an active Unreal process, a busy or dirty checkout, merge
 commits, a changed ancestry, or any commit whose patch Git cannot find on `main`.
 
-Task worktrees and QA lanes share Git objects, Git LFS storage, the UE installation, and the
-read-only VtMB installation. They never share `$ELYSIUM_EXPORT_ROOT`, `Binaries`, `Intermediate`,
-`Saved`, generated or baked `Content`, `.venv`, `Plugins/External`, or a mutable checkout. A task
-worktree is mutable development state; a QA lane is an immutable candidate and the two lifecycles
-are not interchangeable.
+Task worktrees share Git objects, Git LFS storage, the read-only VtMB installation, and the
+downloaded-dependency cache. They never share `$ELYSIUM_EXPORT_ROOT`, `Binaries`, `Intermediate`,
+`Saved`, generated or baked `Content`, `.venv`, `Plugins/External`, a mutable checkout, or — for
+any two that build at the same time — an Unreal installation.
 
-## Parallel QA lanes
+## Build slots
 
-`uv run elysium lane` owns persistent detached Git worktrees used for export, bake,
-automation, and live acceptance while development continues on `main`. A lane has two
-independent roots:
+UnrealBuildTool takes a global single-instance mutex named from its own assembly path, so one
+Unreal installation builds one thing at a time and two checkouts sharing it wait on each other.
+Concurrency comes from **build slots**: one complete installation per checkout that may build
+concurrently. The machine carries the primary installation and sibling copies suffixed `_agent<N>`.
 
-- a sibling checkout, defaulting to `<development-checkout>-<lane>`;
-- `$ELYSIUM_WORK_ROOT/lanes/<lane>`, containing that checkout's export corpus, reports,
-  logs, caches, and lane record.
+`worktree create --ue-root <install>` assigns a slot, refuses one another live checkout already
+claims, and warns when a checkout inherits the primary's and therefore serializes.
+`--build-jobs N` writes `MaxParallelActions` into that checkout's own
+`Saved/UnrealBuildTool/BuildConfiguration.xml` — the only scope that binds, because an installed
+engine skips its own `Engine/Saved` configuration and the `%APPDATA%` one is shared by every slot.
+Size the slots so their actions sum to roughly the logical core count. `worktree status` reports
+which slot each task holds.
 
-`lane create <name> [--at <ref>]` creates the detached worktree, writes its ignored
-`.elysium.local.env`, adopts its dedicated `work/exports` root, and records the exact
-candidate commit. It does not copy mutable generated packages from another checkout.
-Run `deps sync` and a real `build` in the new worktree before exporting or launching it.
-Creation and dispatch reject a commit that predates the lane runtime, because commands from
-that checkout could not participate in its ownership lease.
+Each checkout also receives its own UnrealBuildTool log, accelerator trace, and accelerator port.
+All three otherwise default to a single machine-wide file or a fixed port that every installation
+resolves identically, and concurrent builds die racing the same log before reaching a compiler.
 
-`lane dispatch <name> [--at <ref>]` advances an existing clean lane to another exact
-commit and resets its automated and live evidence to `pending`. Dispatch refuses a dirty
-worktree, a different Git object store, an active lane command, or an Unreal process with
-that lane's project open. Ignored generated output survives the detached switch, preserving
-that lane's incremental export and bake state.
+Provisioning a slot copies the primary installation whole. **Directory exclusions must be
+path-anchored**: excluding `Intermediate`, `Saved`, or `DerivedDataCache` by name also strips the
+engine source modules carrying those names and the precompiled UnrealBuildTool rules assembly an
+installed engine refuses to regenerate, producing an installation that inspects clean and fails on
+its first build. `validate_engine_root` rejects such a copy at `worktree create`.
 
-`lane status [<name>]` reports source/candidate agreement, dirtiness, the active owner,
-disk-build readiness, corpus completeness, baked-map count, and the two evidence states.
-`lane mark [<name>] --automated pending|passed|failed --live pending|passed|failed` records
-the owner verdict and a snapshot of the commit, editor module, export manifest, and promoted
-bake receipts. Marking records evidence; it does not run or reinterpret a test.
-`passed` requires a successful managed automation/verification or play/debug run for the
-same candidate, so a label cannot outrun its evidence.
-Any later dependency, build, export, verification, automation, editor, play, or debug
-activity resets the evidence domains it can invalidate before it starts.
+A secondary slot builds and runs focused automation tests. Export, bake, editor, play, debug, MCP,
+and authored-asset work run from the primary checkout, which resolves to the primary installation —
+the export corpus, the baked mount, and the warm derived-data cache all belong to it.
 
 Build, dependency restore, project-file generation, export, bake, verification, automation,
-editor, play, and debug commands take one OS-released lease below the resolved export root.
-The lease serializes all mutable activity within one lane and reports its command and PID;
-different export roots remain independent. Directly launched Unreal processes are also
-detected before managed activity starts.
-
-Git objects and Git LFS storage, the UE installation, and the read-only VtMB installation
-are shared. `$ELYSIUM_EXPORT_ROOT`, `Plugins/ElysiumBaked/Content`, generated `Content/`,
-`Binaries`, `Intermediate`, `Saved`, `.venv`, and `Plugins/External` remain lane-local. Never
-hardlink or junction those mutable trees between lanes.
+editor, play, and debug commands take one OS-released lease below the resolved export root. The
+lease serializes all mutable activity within one checkout and reports its command and PID;
+different export roots remain independent. Directly launched Unreal processes are also detected
+before managed activity starts, matched on the checkout's own project path.
 
 ## Git boundary
 
@@ -145,8 +135,8 @@ ownership marker. Never place project source in `Plugins/External/`.
 
 `uv run elysium` is the sole development entrypoint. It owns dependency synchronization,
 repository diagnostics, UE compilation, export and bake orchestration, tests, play,
-profiling, probes, screenshots, movement, greenroom, modelroom, QA lanes, research, IDE
-setup, task worktrees, and MCP startup. `uv run elysium reconstruct --clean --rebuild` is the clean-checkout path
+profiling, probes, screenshots, movement, greenroom, modelroom, research, IDE
+setup, task worktrees and their build slots, and MCP startup. `uv run elysium reconstruct --clean --rebuild` is the clean-checkout path
 that restores dependencies, compiles the editor, exports and bakes the corpus, verifies
 the products, and runs the required tests. No compatibility wrappers exist.
 

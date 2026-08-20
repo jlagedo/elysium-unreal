@@ -1,4 +1,4 @@
-"""Cross-process ownership for one mutable generated-content lane."""
+"""Cross-process ownership of one checkout's mutable generated content."""
 
 from __future__ import annotations
 
@@ -10,13 +10,55 @@ import tempfile
 from typing import Any, BinaryIO
 from uuid import uuid4
 
+import psutil
+
 
 LOCK_FILE = ".elysium-activity.lock"
 OWNER_FILE = ".elysium-activity.json"
+_UNREAL_PROCESSES = {
+    "livecodingconsole.exe",
+    "unrealeditor.exe",
+    "unrealeditor-cmd.exe",
+}
 
 
 class WorkspaceBusy(RuntimeError):
     """Another command owns the mutable state rooted at this export corpus."""
+
+
+class ProjectBusy(RuntimeError):
+    """Unreal still holds this checkout's project open."""
+
+
+def active_unreal_processes(project: Path) -> tuple[dict[str, Any], ...]:
+    """Every Unreal process holding this exact project, matched on its command line.
+
+    The match is per project path, so a checkout only ever sees its own editors and never
+    the ones belonging to another checkout building or running beside it.
+    """
+
+    needle = os.path.normcase(str(project.resolve()))
+    found: list[dict[str, Any]] = []
+    for process in psutil.process_iter(("pid", "name", "cmdline")):
+        try:
+            name = str(process.info.get("name") or "").lower()
+            if name not in _UNREAL_PROCESSES:
+                continue
+            command = " ".join(process.info.get("cmdline") or ())
+            if needle not in os.path.normcase(command):
+                continue
+            found.append({"pid": process.pid, "name": process.info.get("name") or name})
+        except (psutil.AccessDenied, psutil.NoSuchProcess, OSError):
+            continue
+    return tuple(found)
+
+
+def assert_project_idle(project: Path) -> None:
+    processes = active_unreal_processes(project)
+    if not processes:
+        return
+    detail = ", ".join(f"{item['name']} pid {item['pid']}" for item in processes)
+    raise ProjectBusy(f"Unreal still has this project open: {detail}")
 
 
 def _lock(handle: BinaryIO, *, blocking: bool) -> None:

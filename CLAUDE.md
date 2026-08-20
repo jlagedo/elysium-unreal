@@ -294,7 +294,6 @@ then use `uv run elysium` as the only public command surface.
 - `worktree create|status|close` owns mutable, generated-state-isolated agent task worktrees;
   `create --ue-root <install> [--build-jobs N]` gives one its own build slot, and `close` prunes
   a task whose checkout Git no longer owns.
-- `lane create|dispatch|status|mark` owns detached, generated-state-isolated QA worktrees.
 - `build [--rebuild|--clean|--analyze]` drives UnrealBuildTool.
 - `export grid|all` runs a complete profile; `export map|model|placed-model|bundle` handles focused work.
 - Export generates the required `/Game/Elysium`, `/Game/VtMB/**`, and

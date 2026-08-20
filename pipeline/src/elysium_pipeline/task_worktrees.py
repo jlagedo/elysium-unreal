@@ -14,9 +14,12 @@ from typing import Any
 
 from elysium_pipeline.clean import adopt_export_root, mark_incomplete
 from elysium_pipeline.config import validate_engine_root, write_build_parallelism
-from elysium_pipeline.lanes import assert_project_idle
 from elysium_pipeline.process import ProcessRunner
-from elysium_pipeline.workspace_lock import WorkspaceLease, active_lease
+from elysium_pipeline.workspace_lock import (
+    WorkspaceLease,
+    active_lease,
+    assert_project_idle,
+)
 
 
 TASK_RECORD_FILE = ".elysium-task-worktree.json"
