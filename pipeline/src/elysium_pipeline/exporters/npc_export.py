@@ -266,6 +266,13 @@ def _clip_meta(c, bounds_radius_m=None):
     (`mdl_skel.read_swing_records`, stated in Unreal centimetres by `UEK.unreal_swings`). It rides
     on the same terms -- 574 descriptors state one, so the key is absent everywhere else.
 
+    `combo` is its chain half (`mdl_skel.read_combo_chain`), on the same terms again at 208
+    descriptors: the button-state mask direction-keyed attack selection matches, the DODGE
+    activity the sequence answers with, the two successor sequence labels the attack hands off to,
+    and the three cycle fractions bounding the hand-off. Nothing in it is a length or a direction,
+    so unlike `reach_cm` and `swings` it crosses the seam unconverted -- a button mask is a mask,
+    an activity and a sequence label are names, and a fraction of a clip cycle has no units.
+
     `bounds_radius_m` appears only where it has been reconciled against the baked glb
     (`clip_bounds_radius_m`). Its presence is therefore a promise that the number covers the
     geometry, which is the whole reason a consumer would trust it over the mesh's own bounds."""
@@ -277,9 +284,32 @@ def _clip_meta(c, bounds_radius_m=None):
         meta["blocked_reaction"] = c.blocked_reaction
     if c.swings:
         meta["swings"] = UEK.unreal_swings(c.swings)
+    if c.combo:
+        # The whole record or nothing: `read_combo_chain` already answered "is any of this
+        # authored", and once it says yes every field is stated -- including a window that reads
+        # as the file's unauthored default, which a consumer cannot re-derive and must not guess.
+        meta["combo"] = {"mask": c.combo.mask, "dodge": c.combo.dodge, "chain": c.combo.chain,
+                         "chain_alt": c.combo.chain_alt,
+                         "w_open": round(c.combo.w_open, 6),
+                         "w_close": round(c.combo.w_close, 6),
+                         "w_hold": round(c.combo.w_hold, 6)}
     if bounds_radius_m is not None:
         meta["bounds_radius_m"] = round(bounds_radius_m, 4)
     return meta
+
+
+def warn_combo_chain_orphans(model, clips):
+    """Name every chain successor `clips` states that the same model does not define -> the count.
+
+    The four shipped dangling links are authoring bugs in retail's own banks, not decode
+    failures, so the sidecar carries the string verbatim and this says so out loud rather than
+    dropping it (`mdl_skel.combo_chain_orphans`). A silent hand-off to a sequence that is not
+    there is exactly the kind of missing prerequisite the runtime would otherwise meet as a
+    no-op, and only the exporter is in a position to see both ends of the link."""
+    orphans = S.combo_chain_orphans(clips)
+    for label, target in orphans:
+        print(f"  ! {model}: '{label}' chains to '{target}', which the model does not define")
+    return len(orphans)
 
 
 def authored_radius_m(c):
@@ -528,9 +558,11 @@ def write_sidecars(manifest):
     fact ~4% of clips carry. `blocked_reaction` states its `ACT_*` literal inline rather than
     interning into `activities`: that array is the stem's playable vocabulary, unioned by
     conformance checks to answer "can some model play this activity", and a reaction a clip
-    only reacts to (never performs) has no business answering yes. `swings` closes the melee
-    trio behind them on the same terms, and its knockback candidates stay inline for the same
-    reason the reaction does -- they are activities the *victim* plays, not this stem."""
+    only reacts to (never performs) has no business answering yes. `swings` sits behind them on
+    the same terms, and its knockback candidates stay inline for the same reason the reaction
+    does -- they are activities the *victim* plays, not this stem. `combo` closes the melee set
+    at column 10, 208 sequences wide, and its two successor labels stay inline too because they
+    are sequence labels rather than activities and `activities` is not a table they index."""
     os.makedirs(CLIPS_DIR, exist_ok=True)
     index = {
         "manifest_version": manifest["manifest_version"],
@@ -610,7 +642,16 @@ def write_sidecars(manifest):
             reach = meta.get("reach_cm")
             blocked = meta.get("blocked_reaction")
             swings = meta.get("swings")
-            if swings:
+            combo = meta.get("combo")
+            if combo:
+                # The combo column reaches past all three, and 28 of the 208 carriers -- the
+                # `meleeshared_onehand` flying-knockback reaction chain, which is what the victim
+                # plays rather than an attack -- state none of them. So all three placeholders
+                # are needed, and the third is the empty list for the same reason the second is
+                # the empty literal: that is what "no swing" already means to a reader taking
+                # column 9 as an array.
+                row += [reach, blocked or "", swings or [], combo]
+            elif swings:
                 # Every column a stated one sits behind is held open, whatever it holds: all 574
                 # swing carriers state a reach but 427 of them name no blocked reaction, and a
                 # row that closed that column up would put a list where a literal belongs. The
@@ -632,7 +673,7 @@ def write_sidecars(manifest):
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"stem": stem, "owners": owners, "activities": acts,
                        "fields": ["owner", "activity", "weight", "flags", "frames", "fps",
-                                  "fade", "reach_cm", "blocked_reaction", "swings"],
+                                  "fade", "reach_cm", "blocked_reaction", "swings", "combo"],
                        "clips": clips}, f, separators=(",", ":"))
         total += os.path.getsize(path)
     print(f"[npc] sidecars: {INDEX} ({os.path.getsize(INDEX)/1024:.0f} KB) + "
@@ -737,6 +778,11 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
     print(f"[npc] resolving include trees for {len(npcs)} NPC model(s) ...", flush=True)
     npc_records = {}
     banks_needed = {}  # bank model_key -> bank_stem
+    # A shared bank is reached from every NPC that fights out of it, so its chain census is
+    # reported against the model that declares the link and only the first time the walk
+    # arrives -- one line per authoring bug, not one per character.
+    chain_censused = set()
+    dangling_chains = 0
     for m in npcs:
         tree = S.resolve_tree(load_mdl, m)
         assigned, clips = {}, {}
@@ -744,6 +790,9 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
             is_npc = (key == m)
             stem = npc_stem[m] if is_npc else bank_stem(key)
             seqs = S.local_sequences(d)
+            if key not in chain_censused:
+                chain_censused.add(key)
+                dangling_chains += warn_combo_chain_orphans(key, seqs)
             if not is_npc and seqs:
                 banks_needed.setdefault(key, stem)
             for c in seqs:
@@ -753,6 +802,9 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
                 assigned[ll] = stem
                 clips[c.label] = stem
         npc_records[m] = clips
+    if dangling_chains:
+        print(f"[npc] {dangling_chains} combo chain link(s) name a sequence their own model does "
+              "not define; the sidecars carry the authored string")
 
     # Export the shared banks once each (the heavy decode pass -- ~one 90 MB set shared by all).
     print(f"[npc] exporting {len(banks_needed)} shared bank(s) -> {NPC_DIR}/banks/ ...", flush=True)

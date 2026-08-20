@@ -300,6 +300,45 @@ _SWING_CANDIDATES = 4
 _SWING_UNIDENTIFIED = 0x24
 _SWING_UNIDENTIFIED_DWORDS = 21
 
+#: The combo half of the same custom block — the fields that say which attack a direction key
+#: selects, which attack this one hands off to, and when the hand-off may be asked for
+#: (`docs/vtmb/combat-and-damage.md`). All seven sit in the descriptor's last 44 bytes and 208 of
+#: the install's 14,012 descriptors author at least one, across the 22 shared weapon banks.
+#:
+#: `+0x2D4` is the authored button-state mask direction-keyed attack selection matches against.
+#: `+0x2DC` names the DODGE activity the sequence answers with, load-resolved into the enum slot
+#: at `+0x2D8` the same way `szblockedreactionindex`@740 is resolved into `+0x2E0`. `+0x2E8` names
+#: the CHAIN successor and `+0x2EC` the ALTERNATE successor; both are sequence *labels* rather
+#: than activities, matched case-insensitively at runtime. The three trailing floats are the
+#: hand-off window in clip cycles.
+_SEQ_ATTACK_BUTTONS = 724          # +0x2D4
+_SEQ_DODGE_ACTIVITY_NAME = 732     # +0x2DC (resolved enum at +0x2D8)
+_SEQ_CHAIN_NAME = 744              # +0x2E8
+_SEQ_CHAIN_ALT_NAME = 748          # +0x2EC
+_SEQ_COMBO_WINDOW = 752            # +0x2F0/+0x2F4/+0x2F8, the descriptor's last twelve bytes
+
+#: `+0x2D4`'s "this sequence is not a candidate for direction-keyed selection" marker, on 13,898
+#: descriptors. The six values the corpus states are `-1` and the five masks below.
+_BUTTONS_UNSET = -1
+
+#: The button bits the shipped masks are built from — the file's own **Source-side** `IN_*`
+#: usercmd bits, one direction each, plus the neutral `0` an attack with no direction held selects
+#: on. The whole install states exactly these: `0` (36 descriptors), `IN_FORWARD` (24),
+#: `IN_BACK` (18), `IN_MOVELEFT` (16) and `IN_MOVERIGHT` (20). The mask is exported raw, so this
+#: table names what the bits are rather than gating what may be read — and it is not the runtime's
+#: own button enum, which numbers its bits differently and has to map onto these by direction.
+IN_FORWARD = 0x008
+IN_BACK = 0x010
+IN_MOVELEFT = 0x200
+IN_MOVERIGHT = 0x400
+
+#: What `+0x2F0`..`+0x2F8` read as when the QC states no window: open at the start of the cycle,
+#: close at the end, hold to the end — a window that gates nothing. 13,841 descriptors carry it.
+#: The seven single-`idle` scenery and prop models `read_reach` names zero the whole custom block
+#: instead, so their triple is all-zero; both are unauthored.
+_WINDOW_DEFAULT = (0.0, 1.0, 1.0)
+_WINDOW_ZEROED = (0.0, 0.0, 0.0)
+
 #: `mstudiomovement_t`, addressed by one StudioAnimDesc's `nummovements`@16 and
 #: `movementindex`@20. The index is relative to the animdesc. `position` is the cumulative
 #: Source-space displacement at this record's end frame; the final record therefore carries one
@@ -323,6 +362,15 @@ Event = namedtuple("Event", "cycle event type options")
 SwingRecord = namedtuple(
     "SwingRecord",
     "start end bone_index bone a b knockback byte_b8 byte_ba degenerate unidentified")
+
+#: One sequence's authored combo-chain and reaction block (see `read_combo_chain`). ``mask`` is
+#: the raw button-state mask, ``dodge`` the DODGE activity literal, ``chain`` and ``chain_alt``
+#: the successor sequence *labels*, and ``w_open``/``w_close``/``w_hold`` the hand-off window in
+#: clip cycles. Every field is the file's own value: the three names are `""` where the
+#: descriptor states none, and the three floats are carried verbatim even when they read as the
+#: unauthored default, because a consumer told the block is authored may not then be told a
+#: window it can only get from the file.
+ComboChain = namedtuple("ComboChain", "mask dodge chain chain_alt w_open w_close w_hold")
 
 #: The scalar part a route motor needs from an in-place locomotion clip. Distances are converted
 #: from Source inches to centimetres here, at the offline seam; no coordinate direction is emitted.
@@ -361,11 +409,13 @@ _NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
 #: literal the attacker plays when that swing is blocked (see `read_blocked_reaction`). Those two
 #: are `None` on a sequence that states neither, which is most of the corpus; `swings` is the
 #: authored contact geometry and timing of the same swing (see `read_swing_records`), empty there.
+#: `combo` is the same block's chain half — which direction key selects this attack, which attack
+#: it hands off to, and over which slice of the cycle (see `read_combo_chain`) — `None` there too.
 Seq = namedtuple("Seq",
                  "label base frames fps activity actweight flags grid bbmin bbmax fade autolayers"
-                 " events reach blocked_reaction swings",
+                 " events reach blocked_reaction swings combo",
                  defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, (), (), None, None,
-                           ()))
+                           (), None))
 
 
 def pose_parameters(d):
@@ -507,6 +557,24 @@ def read_reach(d, sb):
     return value
 
 
+def _descriptor_name(d, sb, field_off):
+    """A descriptor-relative name index at `field_off` -> its string, or `None` where the
+    descriptor states none.
+
+    Every name in VtMB's custom sequence block is stored this way and shares one unset marker:
+    `-1`, rather than Source's usual `0`, so it is tested for explicitly. An index off the end of
+    the image or a string without a terminator yields no name rather than a name read out of
+    someone else's bytes."""
+    rel = _i32(d, sb + field_off)
+    if rel <= 0 or not (0 <= sb + rel < len(d)):
+        return None
+    try:
+        name = _cstr(d, sb + rel)
+    except ValueError:
+        return None
+    return name or None
+
+
 def read_blocked_reaction(d, sb):
     """One StudioSeqDesc's blocked-reaction activity literal at descriptor base `sb`, or `None`.
 
@@ -519,18 +587,87 @@ def read_blocked_reaction(d, sb):
 
     The name is read the way `local_sequences` reads `activity`, because it is the same kind of
     key: `szblockedreactionindex`@740 is descriptor-relative and the enum slot beside it at
-    `+0x2E0` is `-1` on disk everywhere, resolved by the DLL at model load. `-1` is this index's
-    unset marker rather than Source's usual `0`, so it is tested for explicitly; an index off the
-    end of the image or a string without a terminator yields no activity rather than an activity
-    read out of someone else's bytes."""
-    rel = _i32(d, sb + _SEQ_BLOCKED_REACTION_NAME)
-    if rel <= 0 or not (0 <= sb + rel < len(d)):
+    `+0x2E0` is `-1` on disk everywhere, resolved by the DLL at model load. `_descriptor_name`
+    owns the read, and with it this block's `-1` unset marker and its two refusals."""
+    return _descriptor_name(d, sb, _SEQ_BLOCKED_REACTION_NAME)
+
+
+def read_combo_chain(d, sb):
+    """One StudioSeqDesc's authored combo-chain and reaction block at descriptor base `sb` ->
+    ComboChain, or `None` on a sequence that authors none of it.
+
+    `read_reach` is how far a swing acquires and `read_swing_records` where it touches; this is
+    what the *next* button press does with it. Seven fields in the descriptor's last 44 bytes,
+    208 of the install's 14,012 descriptors authoring at least one, all of them on the 22 shared
+    weapon banks (both player sexes' `fists`, `claws`, `knife`, `tireiron`, `baseball`, `katana`,
+    `bushhook`, `sledgehammer`, `sheriffsword`, `stake` and `meleeshared_onehand`):
+
+      `mask`@+0x2D4        the button-state mask direction-keyed attack selection matches
+      `dodge`@+0x2DC       the DODGE activity this sequence answers with
+      `chain`@+0x2E8       the successor sequence this attack hands off to
+      `chain_alt`@+0x2EC   the alternate successor
+      `w_open`@+0x2F0      the cycle the hand-off window opens at
+      `w_close`@+0x2F4     the cycle it closes at
+      `w_hold`@+0x2F8      the cycle the busy hold is released at
+
+    **The mask is exported raw.** It is `-1` on 13,898 descriptors, meaning the sequence is not a
+    candidate for direction-keyed selection at all, and one of five values on the other 114: `0`
+    (36) for the attack a neutral press selects, then `IN_FORWARD` (24), `IN_BACK` (18),
+    `IN_MOVELEFT` (16) and `IN_MOVERIGHT` (20). `0` is a stated mask, not an absence, which is why
+    `-1` is the only marker tested — `fists_attack_JabLeft` states `0` and chains, and a reader
+    that treated a falsy mask as unset would drop 36 authored selections.
+
+    `dodge` is an activity literal (`ACT_DODGE_DUCK` on all 12 that state one) and is resolved
+    from the name for the same reason `read_blocked_reaction` is: the enum slot at `+0x2D8` is
+    `-1` on all 14,012 shipped descriptors, filled by the DLL at model load.
+
+    `chain` and `chain_alt` are **sequence labels, not activities** — the runtime looks the
+    successor up by name against the model's own sequences, case-insensitively, which is what the
+    ten shipped links whose case disagrees with the label they name rely on
+    (`knife_attack_Slash2` -> `Knife_attack_med`). They are resolved to strings here and never
+    dropped: four shipped links name a sequence that does not exist, and the string is the whole
+    evidence of the authoring bug (see `combo_chain_orphans`). `chain_alt` is the flying-knockback
+    wall branch, on 28 descriptors of `meleeshared_onehand` — the victim's own reaction chain,
+    which is why those 28 are the only combo carriers stating no reach, reaction or swing.
+
+    The three floats are **per-sequence and carried verbatim**, including where they read as the
+    unauthored default: no ordering is assumed and none is repaired. `w_hold` sits below `w_close`
+    on four shipped descriptors — `katana_running_attack` authors 0.25/1.0/0.9 and
+    `baseballbat_attack_jump` 0.5/0.9/0.8 — so a consumer deriving a hold from the close would
+    disagree with the file on all four.
+
+    The whole block is unauthored when the mask is `-1`, no name resolves, and the window reads as
+    the default `(0.0, 1.0, 1.0)` or as the all-zero triple the seven wholly zeroed custom blocks
+    carry. That is 13,804 descriptors, and they yield `None` rather than a row of markers."""
+    mask = _i32(d, sb + _SEQ_ATTACK_BUTTONS)
+    dodge = _descriptor_name(d, sb, _SEQ_DODGE_ACTIVITY_NAME)
+    chain = _descriptor_name(d, sb, _SEQ_CHAIN_NAME)
+    chain_alt = _descriptor_name(d, sb, _SEQ_CHAIN_ALT_NAME)
+    window = struct.unpack_from("<3f", d, sb + _SEQ_COMBO_WINDOW)
+    if (mask == _BUTTONS_UNSET and not (dodge or chain or chain_alt)
+            and window in (_WINDOW_DEFAULT, _WINDOW_ZEROED)):
         return None
-    try:
-        name = _cstr(d, sb + rel)
-    except ValueError:
-        return None
-    return name or None
+    return ComboChain(mask=mask, dodge=dodge or "", chain=chain or "", chain_alt=chain_alt or "",
+                      w_open=window[0], w_close=window[1], w_hold=window[2])
+
+
+def combo_chain_orphans(clips):
+    """The chain successors none of `clips` defines -> sorted ((label, target), ...).
+
+    A `read_combo_chain` successor names a sequence of the declaring model's own array, resolved
+    by name at runtime, so it should be a label of the same model. Four shipped links are not, and
+    they are authoring bugs rather than decode failures: both sexes' `fists.mdl` chain
+    `Fists_attack_W2` to a `Fists_attack_W3` the bank never defines, and both sexes' `katana.mdl`
+    chain `katana_dodge_attack` to `tireiron_attack_med`, a label from a different weapon's bank
+    entirely. The sidecar still carries the string, because the file states it — this is the
+    census that names them, exactly as `autolayer_orphans` names its own dangling bindings.
+
+    The match is case-insensitive because the runtime's is: ten further links disagree with their
+    target's case (`tireiron_attack_slash` -> `tireiron_attack_Heavy`) and resolve fine."""
+    local = {c.label.lower() for c in clips}
+    return tuple(sorted({(c.label, target) for c in clips if c.combo
+                         for target in (c.combo.chain, c.combo.chain_alt)
+                         if target and target.lower() not in local}))
 
 
 def _swing_knockback(d, record):
@@ -748,7 +885,9 @@ def local_sequences(d):
     sequence that states neither, which is every sequence outside the weapon banks and the
     monster bodies. `swings` is the contact half of the same block — where on the limb the attack
     sweeps, over which slice of the cycle, and what knockback answers it (see
-    `read_swing_records`) — and is empty on the same sequences."""
+    `read_swing_records`) — and is empty on the same sequences. `combo` is its chain half: which
+    direction key selects this attack, which attack it hands off to, and over which slice of the
+    cycle the hand-off may be asked for (see `read_combo_chain`)."""
     ns = _i32(d, 272); sbase = _i32(d, 276)
     na = _i32(d, 264); abase = _i32(d, 268)
     # The swing records address this model's own bone table, so the table is read once for the
@@ -784,7 +923,8 @@ def local_sequences(d):
                        events=read_events(d, sb),
                        reach=read_reach(d, sb),
                        blocked_reaction=read_blocked_reaction(d, sb),
-                       swings=read_swing_records(d, sb, bones)))
+                       swings=read_swing_records(d, sb, bones),
+                       combo=read_combo_chain(d, sb)))
     return out
 
 

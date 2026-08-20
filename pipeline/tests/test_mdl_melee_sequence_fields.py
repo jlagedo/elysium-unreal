@@ -10,6 +10,11 @@ DLL at model load exactly as `activity`@12 is filled from `szactivitynameindex`@
 `numswingcentres`@708 (`+0x2C4`) and `swingcentreindex`@712 (`+0x2C8`) are the contact half of
 the same block: the 188-byte records saying where on the limb the swing sweeps, over which slice
 of the clip cycle, and which knockback the victim answers it with.
+
+The chain half closes the descriptor: the button-state mask at `+0x2D4`, the DODGE activity name
+at `+0x2DC` (load-resolved into `+0x2D8`, `-1` on disk like `+0x2E0`), the CHAIN and ALTERNATE
+successor sequence labels at `+0x2E8`/`+0x2EC`, and the hand-off window at
+`+0x2F0`/`+0x2F4`/`+0x2F8` — the descriptor's last twelve bytes.
 """
 
 from __future__ import annotations
@@ -31,14 +36,24 @@ SWING_STRIDE = 188
 FLT_MAX = struct.unpack("<f", struct.pack("<I", 0x7F7FFFFF))[0]
 
 _ANIM_BASE = 512
-#: Where an `swingcentreindex` read as a file offset instead of a descriptor-relative one would
-#: land, kept clear of every other block so a decoy record can be planted there.
-_DECOY_BASE = 764
 _BONE_BASE = 1300
 _SEQ_BASE = 2048
-_SWING_BASE = _SEQ_BASE + SEQ_STRIDE
+#: Room for the primary descriptor plus the sibling sequences a chain link resolves against.
+_SEQ_CAPACITY = 4
+_SWING_BASE = 8192
 _SWING_CAPACITY = 4
 _STRINGS = _SWING_BASE + _SWING_CAPACITY * SWING_STRIDE
+
+#: Where a `swingcentreindex` read as a file offset instead of a descriptor-relative one would
+#: land. The gap between the descriptor array and the swing array is kept clear of every other
+#: block so a decoy record can be planted exactly there.
+_DECOY_BASE = _SWING_BASE - _SEQ_BASE
+assert _SEQ_BASE + _SEQ_CAPACITY * SEQ_STRIDE <= _DECOY_BASE
+assert _DECOY_BASE + SWING_STRIDE <= _SWING_BASE
+
+#: What `+0x2F0`..`+0x2F8` read as on a sequence whose QC states no hand-off window: open at the
+#: start of the cycle, close at the end, hold to the end. 13,841 shipped descriptors carry it.
+WINDOW_DEFAULT = (0.0, 1.0, 1.0)
 
 BONES = ("Bip01", "Bip01 R Forearm", "Bip01 R Hand")
 
@@ -57,20 +72,26 @@ def _swing(*, window=(0.26, 0.47), bone=1, a=(25.0, 0.0, 0.0), b=(0.0, 0.0, 0.0)
 
 def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
            reach=FLT_MAX, blocked="ACT_BLOCKED_REACTION_LEFT", blocked_index=None,
-           swings=(), swing_count=None, swing_index=None, decoy_swing=False):
-    """A one-sequence, one-animation v2531 image `local_sequences` can walk.
+           swings=(), swing_count=None, swing_index=None, decoy_swing=False,
+           mask=-1, dodge=None, dodge_index=None, chain=None, chain_index=None,
+           chain_alt=None, window=None, siblings=()):
+    """A one-animation v2531 image `local_sequences` can walk, carrying one authored sequence
+    plus any `siblings` a chain link resolves against.
 
     `blocked_index` overrides the stored `szblockedreactionindex` outright, which is how the
-    unset marker and an index off the end of the image are exercised. `swing_count` and
+    unset marker and an index off the end of the image are exercised; `dodge_index` and
+    `chain_index` do the same for the chain half's own name indices. `swing_count` and
     `swing_index` override the swing array's declaration the same way. `decoy_swing` plants a
     second, differently-windowed record at the offset an absolute reading of `swingcentreindex`
-    would resolve to.
+    would resolve to. A `siblings` entry is a bare label with the whole custom block unset, which
+    is what every non-attack sequence of a weapon bank carries.
     """
     image = bytearray(_STRINGS)
     struct.pack_into("<4sI", image, 0, b"IDST", 2531)
     struct.pack_into("<ii", image, 240, len(BONES), _BONE_BASE)  # NumBones / BoneIndex
     struct.pack_into("<ii", image, 264, 1, _ANIM_BASE)     # NumLocalAnims / LocalAnimIndex
-    struct.pack_into("<ii", image, 272, 1, _SEQ_BASE)      # NumLocalSeq / LocalSeqIndex
+    assert 1 + len(siblings) <= _SEQ_CAPACITY, siblings
+    struct.pack_into("<ii", image, 272, 1 + len(siblings), _SEQ_BASE)  # NumLocalSeq / index
 
     strings = bytearray()
 
@@ -87,19 +108,30 @@ def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
     struct.pack_into("<f", image, _ANIM_BASE + 4, 30.0)    # fps
     struct.pack_into("<i", image, _ANIM_BASE + 12, 21)     # numframes
 
-    struct.pack_into("<i", image, _SEQ_BASE, intern(label) - _SEQ_BASE)
-    struct.pack_into("<i", image, _SEQ_BASE + 4, intern(activity) - _SEQ_BASE)
-    struct.pack_into("<i", image, _SEQ_BASE + 16, 3)       # actweight
-    struct.pack_into("<i", image, _SEQ_BASE + 52, 1)       # numblends
-    struct.pack_into("<h", image, _SEQ_BASE + 56, 0)       # anim[0][0]
-    struct.pack_into("<ii", image, _SEQ_BASE + 572, 1, 1)  # groupsize
-    struct.pack_into("<ii", image, _SEQ_BASE + 580, -1, -1)
-    struct.pack_into("<f", image, _SEQ_BASE + 612, 0.2)    # fade
-    struct.pack_into("<f", image, _SEQ_BASE + 720, reach)
-
-    if blocked_index is None:
-        blocked_index = intern(blocked) - _SEQ_BASE if blocked else -1
-    struct.pack_into("<i", image, _SEQ_BASE + 740, blocked_index)
+    def write_seq(index, seq_label, *, seq_activity="", seq_reach=FLT_MAX, blocked_at=-1,
+                  buttons=-1, dodge_at=-1, chain_at=-1, chain_alt_at=-1,
+                  seq_window=WINDOW_DEFAULT, swings_declared=(0, 0)):
+        sb = _SEQ_BASE + index * SEQ_STRIDE
+        struct.pack_into("<i", image, sb, intern(seq_label) - sb)
+        if seq_activity:
+            struct.pack_into("<i", image, sb + 4, intern(seq_activity) - sb)
+        struct.pack_into("<i", image, sb + 16, 3)          # actweight
+        struct.pack_into("<i", image, sb + 52, 1)          # numblends
+        struct.pack_into("<h", image, sb + 56, 0)          # anim[0][0]
+        struct.pack_into("<ii", image, sb + 572, 1, 1)     # groupsize
+        struct.pack_into("<ii", image, sb + 580, -1, -1)
+        struct.pack_into("<f", image, sb + 612, 0.2)       # fade
+        struct.pack_into("<f", image, sb + 720, seq_reach)
+        struct.pack_into("<i", image, sb + 740, blocked_at)
+        struct.pack_into("<ii", image, sb + 708, *swings_declared)
+        struct.pack_into("<i", image, sb + 724, buttons)   # +0x2D4
+        # +0x2D8, the resolved DODGE enum: -1 on all 14,012 shipped descriptors, filled by the
+        # DLL from the name beside it, exactly as +0x2E0 is filled from +0x2E4.
+        struct.pack_into("<i", image, sb + 728, -1)
+        struct.pack_into("<i", image, sb + 732, dodge_at)      # +0x2DC
+        struct.pack_into("<i", image, sb + 744, chain_at)      # +0x2E8
+        struct.pack_into("<i", image, sb + 748, chain_alt_at)  # +0x2EC
+        struct.pack_into("<3f", image, sb + 752, *seq_window)  # +0x2F0 / +0x2F4 / +0x2F8
 
     def write_swing(record, spec):
         struct.pack_into("<2f", image, record, *spec["window"])
@@ -118,10 +150,21 @@ def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
         image[record + 0xBA] = spec["ba"]
 
     assert len(swings) <= _SWING_CAPACITY, swings
-    struct.pack_into("<i", image, _SEQ_BASE + 708,
-                     len(swings) if swing_count is None else swing_count)
-    struct.pack_into("<i", image, _SEQ_BASE + 712,
-                     (_SWING_BASE - _SEQ_BASE) if swing_index is None else swing_index)
+    if blocked_index is None:
+        blocked_index = intern(blocked) - _SEQ_BASE if blocked else -1
+    if dodge_index is None:
+        dodge_index = intern(dodge) - _SEQ_BASE if dodge else -1
+    if chain_index is None:
+        chain_index = intern(chain) - _SEQ_BASE if chain else -1
+    write_seq(0, label, seq_activity=activity, seq_reach=reach, blocked_at=blocked_index,
+              buttons=mask, dodge_at=dodge_index, chain_at=chain_index,
+              chain_alt_at=intern(chain_alt) - _SEQ_BASE if chain_alt else -1,
+              seq_window=WINDOW_DEFAULT if window is None else window,
+              swings_declared=(len(swings) if swing_count is None else swing_count,
+                               (_SWING_BASE - _SEQ_BASE) if swing_index is None
+                               else swing_index))
+    for position, sibling in enumerate(siblings, start=1):
+        write_seq(position, sibling)
     for index, spec in enumerate(swings):
         write_swing(_SWING_BASE + index * SWING_STRIDE, spec)
     if decoy_swing:
@@ -132,10 +175,16 @@ def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
     return bytes(image)
 
 
-def _sequence(**kwargs):
+def _sequences(**kwargs):
+    """Every sequence of the synthesised image, in declaration order: the authored one first,
+    then its `siblings`."""
     sequences = mdl_skel.local_sequences(_image(**kwargs))
-    assert len(sequences) == 1, sequences
-    return sequences[0]
+    assert len(sequences) == 1 + len(kwargs.get("siblings", ())), sequences
+    return sequences
+
+
+def _sequence(**kwargs):
+    return _sequences(**kwargs)[0]
 
 
 class MeleeSequenceDescriptorTests(unittest.TestCase):
@@ -165,6 +214,159 @@ class MeleeSequenceDescriptorTests(unittest.TestCase):
         seq = _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None)
         self.assertEqual((seq.reach, seq.blocked_reaction), (None, None))
         self.assertEqual(seq.swings, ())
+        self.assertIsNone(seq.combo)
+
+
+class ComboChainTests(unittest.TestCase):
+    """`read_combo_chain` -- the descriptor's last 44 bytes: which key selects this attack,
+    which attack it hands off to, and when the hand-off may be asked for."""
+
+    def test_the_first_fists_link_states_its_mask_chain_and_window(self) -> None:
+        # Both player sexes' `fists.mdl` `Fists_attack_W1`, verbatim.
+        combo = _sequence(label="Fists_attack_W1", mask=0x008, chain="Fists_attack_W2",
+                          window=(0.5, 0.9, 0.91)).combo
+        self.assertEqual(combo.mask, 0x008)
+        self.assertEqual(combo.chain, "Fists_attack_W2")
+        self.assertAlmostEqual(combo.w_open, 0.5, places=6)
+        self.assertAlmostEqual(combo.w_close, 0.9, places=6)
+        self.assertAlmostEqual(combo.w_hold, 0.91, places=6)
+        # The two names it does not state are absent, not missing keys.
+        self.assertEqual((combo.dodge, combo.chain_alt), ("", ""))
+
+    def test_the_mask_is_carried_raw(self) -> None:
+        # The five stated masks are the neutral `0` and one `IN_*` direction bit each. They are
+        # exported as the file's int: nothing here maps a bit to a direction.
+        for mask in (0, mdl_skel.IN_FORWARD, mdl_skel.IN_BACK,
+                     mdl_skel.IN_MOVELEFT, mdl_skel.IN_MOVERIGHT):
+            self.assertEqual(_sequence(mask=mask).combo.mask, mask)
+
+    def test_a_neutral_mask_is_a_stated_mask_not_an_absence(self) -> None:
+        # `fists_attack_JabLeft` states `0` -- the attack a press with no direction held
+        # selects -- and chains. 36 descriptors do; a reader treating a falsy mask as unset
+        # would drop every one of them.
+        combo = _sequence(label="fists_attack_JabLeft", mask=0, chain="fists_attack_longright",
+                          window=(0.65, 0.9, 0.91)).combo
+        self.assertIsNotNone(combo)
+        self.assertEqual((combo.mask, combo.chain), (0, "fists_attack_longright"))
+
+    def test_an_unset_mask_alone_authors_nothing(self) -> None:
+        # -1 at +0x2D4 with no name and the default window is what 13,804 descriptors carry.
+        self.assertIsNone(_sequence(mask=-1).combo)
+
+    def test_the_default_window_is_what_unauthored_reads_as(self) -> None:
+        # 13,841 descriptors state 0.0 / 1.0 / 1.0 -- open at the start, close at the end, hold
+        # to the end. It gates nothing, and on its own it is not an authored block.
+        self.assertIsNone(_sequence(window=WINDOW_DEFAULT).combo)
+
+    def test_a_wholly_zeroed_custom_block_authors_nothing(self) -> None:
+        # The seven single-`idle` scenery and prop models zero the block rather than marking it
+        # unset, so their window triple is all-zero rather than the default.
+        self.assertIsNone(_sequence(window=(0.0, 0.0, 0.0)).combo)
+
+    def test_the_default_window_is_still_carried_beside_an_authored_field(self) -> None:
+        # 20 `meleeshared_onehand` reaction links chain on the default window. Once the block is
+        # authored every field is stated, because a consumer cannot re-derive a window.
+        combo = _sequence(label="knockback_flying_into_back", chain="knockback_flying_idle",
+                          chain_alt="knockback_flying_wall_hit").combo
+        self.assertEqual((combo.w_open, combo.w_close, combo.w_hold), WINDOW_DEFAULT)
+        self.assertEqual(combo.mask, -1)
+
+    def test_a_hold_below_the_close_is_carried_verbatim(self) -> None:
+        # `katana_running_attack` authors 0.25 / 1.0 / 0.9 and `baseballbat_attack_jump`
+        # 0.5 / 0.9 / 0.8. The three floats are per-sequence: nothing orders or repairs them.
+        combo = _sequence(label="katana_running_attack", mask=0x008, chain="katana_combo_C2",
+                          window=(0.25, 1.0, 0.9)).combo
+        self.assertAlmostEqual(combo.w_open, 0.25, places=6)
+        self.assertAlmostEqual(combo.w_close, 1.0, places=6)
+        self.assertAlmostEqual(combo.w_hold, 0.9, places=6)
+        self.assertLess(combo.w_hold, combo.w_close)
+
+    def test_the_dodge_activity_resolves_from_its_name(self) -> None:
+        # `ACT_DODGE_DUCK` on all 12 that state one. The enum slot at +0x2D8 beside it is -1 on
+        # disk everywhere, filled by the DLL at load, so the name is the durable key.
+        combo = _sequence(label="katana_attack_Left_Right2", dodge="ACT_DODGE_DUCK").combo
+        self.assertEqual(combo.dodge, "ACT_DODGE_DUCK")
+        self.assertEqual((combo.chain, combo.chain_alt), ("", ""))
+
+    def test_the_alternate_successor_is_read_from_its_own_offset(self) -> None:
+        # The flying-knockback wall branch: 28 `meleeshared_onehand` descriptors name a second
+        # successor at +0x2EC beside the ordinary one at +0x2E8.
+        combo = _sequence(chain="knockback_flying_idle",
+                          chain_alt="knockback_flying_wall_hit").combo
+        self.assertEqual(combo.chain, "knockback_flying_idle")
+        self.assertEqual(combo.chain_alt, "knockback_flying_wall_hit")
+
+    def test_a_name_index_off_the_image_is_refused(self) -> None:
+        self.assertIsNone(_sequence(chain_index=1 << 20).combo)
+        self.assertIsNone(_sequence(dodge_index=1 << 20).combo)
+
+    def test_the_names_are_addressed_from_the_descriptor(self) -> None:
+        # Every index in this block is descriptor-relative, so a sibling descriptor reading the
+        # same absolute string would need a different index. Resolving from the wrong base on the
+        # second descriptor would name whatever bytes happen to sit there.
+        seq, sibling = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
+                                  siblings=("fists_attack_Roundhouse",))
+        self.assertEqual(seq.combo.chain, "fists_attack_Roundhouse")
+        self.assertIsNone(sibling.combo)
+
+
+class ComboChainOrphanTests(unittest.TestCase):
+    """`combo_chain_orphans` -- the census of links naming a sequence the model does not have."""
+
+    def test_a_link_resolving_to_a_local_sequence_is_no_orphan(self) -> None:
+        clips = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
+                           siblings=("fists_attack_Roundhouse",))
+        self.assertEqual(mdl_skel.combo_chain_orphans(clips), ())
+
+    def test_the_match_is_case_insensitive(self) -> None:
+        # Ten shipped links disagree with their target's case and resolve fine at runtime --
+        # `tireiron_attack_slash` -> `tireiron_attack_Heavy` against the label
+        # `tireiron_attack_heavy`.
+        clips = _sequences(label="tireiron_attack_slash", chain="tireiron_attack_Heavy",
+                           window=(0.5, 0.9, 0.91), siblings=("tireiron_attack_heavy",))
+        self.assertEqual(mdl_skel.combo_chain_orphans(clips), ())
+
+    def test_a_dangling_chain_keeps_its_string_and_is_named(self) -> None:
+        # `Fists_attack_W2` chains to a `Fists_attack_W3` neither sex's `fists.mdl` defines.
+        # The string is authored data and stays; the census is what says it goes nowhere.
+        clips = _sequences(label="Fists_attack_W2", mask=0x008, chain="Fists_attack_W3",
+                           window=(0.5, 0.9, 0.91), siblings=("Fists_attack_W1",))
+        self.assertEqual(clips[0].combo.chain, "Fists_attack_W3")
+        self.assertEqual(mdl_skel.combo_chain_orphans(clips),
+                         (("Fists_attack_W2", "Fists_attack_W3"),))
+
+    def test_a_chain_into_another_weapons_bank_is_named_too(self) -> None:
+        # `katana_dodge_attack` chains to `tireiron_attack_med`, a label from a different
+        # weapon's bank entirely.
+        clips = _sequences(label="katana_dodge_attack", mask=0x008, chain="tireiron_attack_med",
+                           window=(0.5, 0.9, 0.91), siblings=("katana_attack_med",))
+        self.assertEqual(mdl_skel.combo_chain_orphans(clips),
+                         (("katana_dodge_attack", "tireiron_attack_med"),))
+
+    def test_a_dangling_alternate_is_censused_on_the_same_terms(self) -> None:
+        clips = _sequences(chain="knockback_flying_idle", chain_alt="knockback_flying_wall_hit",
+                           siblings=("knockback_flying_idle",))
+        self.assertEqual(mdl_skel.combo_chain_orphans(clips),
+                         (("fists_attack_JabLeft", "knockback_flying_wall_hit"),))
+
+    def test_the_exporter_warns_naming_model_sequence_and_target(self) -> None:
+        clips = _sequences(label="Fists_attack_W2", mask=0x008, chain="Fists_attack_W3",
+                           window=(0.5, 0.9, 0.91), siblings=("Fists_attack_W1",))
+        with mock.patch("builtins.print") as printed:
+            count = npc_export.warn_combo_chain_orphans(
+                "models/character/shared/male/fists.mdl", clips)
+        self.assertEqual(count, 1)
+        line, = (call.args[0] for call in printed.call_args_list)
+        for fragment in ("models/character/shared/male/fists.mdl", "Fists_attack_W2",
+                         "Fists_attack_W3"):
+            self.assertIn(fragment, line)
+
+    def test_a_model_with_no_dangling_link_warns_nothing(self) -> None:
+        clips = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
+                           siblings=("fists_attack_Roundhouse",))
+        with mock.patch("builtins.print") as printed:
+            self.assertEqual(npc_export.warn_combo_chain_orphans("models/x.mdl", clips), 0)
+        printed.assert_not_called()
 
 
 class SwingContactRecordTests(unittest.TestCase):
@@ -268,6 +470,30 @@ class ClipMetaTests(unittest.TestCase):
         self.assertNotIn("reach_cm", meta)
         self.assertNotIn("blocked_reaction", meta)
         self.assertNotIn("swings", meta)
+        self.assertNotIn("combo", meta)
+
+    def test_the_combo_block_crosses_the_seam_whole_and_unconverted(self) -> None:
+        # Nothing in it is a length or a direction: a button mask is a mask, an activity and a
+        # sequence label are names, and a fraction of a clip cycle has no units.
+        meta = npc_export._clip_meta(
+            _sequence(label="Fists_attack_W1", mask=0x008, chain="Fists_attack_W2",
+                      window=(0.5, 0.9, 0.91)))
+        self.assertEqual(meta["combo"], {"mask": 0x008, "dodge": "", "chain": "Fists_attack_W2",
+                                         "chain_alt": "", "w_open": 0.5, "w_close": 0.9,
+                                         "w_hold": 0.91})
+
+    def test_a_hold_below_the_close_crosses_verbatim(self) -> None:
+        combo = npc_export._clip_meta(
+            _sequence(label="katana_running_attack", mask=0x008, chain="katana_combo_C2",
+                      window=(0.25, 1.0, 0.9)))["combo"]
+        self.assertEqual((combo["w_open"], combo["w_close"], combo["w_hold"]), (0.25, 1.0, 0.9))
+
+    def test_a_dangling_chain_label_still_crosses_the_seam(self) -> None:
+        # The exporter warns; the data stays authored.
+        combo = npc_export._clip_meta(
+            _sequence(label="Fists_attack_W2", mask=0x008, chain="Fists_attack_W3",
+                      window=(0.5, 0.9, 0.91)))["combo"]
+        self.assertEqual(combo["chain"], "Fists_attack_W3")
 
     def test_a_swing_segment_crosses_the_seam_as_a_bone_local_point(self) -> None:
         # The same `source_to_unreal` an attachment's bone-local translation and every bone's
@@ -320,7 +546,7 @@ class ClipSidecarRowTests(unittest.TestCase):
             _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None))})
         self.assertEqual(written["fields"],
                          ["owner", "activity", "weight", "flags", "frames", "fps", "fade",
-                          "reach_cm", "blocked_reaction", "swings"])
+                          "reach_cm", "blocked_reaction", "swings", "combo"])
         self.assertEqual(written["clips"]["idle"], [0, 1, 3, 0, 21, 30.0, 0.2])
 
     def test_a_reach_without_a_reaction_adds_one_column(self) -> None:
@@ -392,6 +618,45 @@ class ClipSidecarRowTests(unittest.TestCase):
         written = self._slice({"claw": npc_export._clip_meta(
             _sequence(label="claw", reach=FLT_MAX, blocked=None, swings=[_swing()]))})
         self.assertEqual(written["activities"], ["", "ACT_MELEE_ATTACK"])
+
+    def test_a_combo_lands_behind_the_swing(self) -> None:
+        written = self._slice({"jab": npc_export._clip_meta(
+            _sequence(reach=64.0, swings=[_swing()], mask=0x008, chain="Fists_attack_W2",
+                      window=(0.5, 0.9, 0.91)))})
+        row = written["clips"]["jab"]
+        self.assertEqual(len(row), 11)
+        self.assertEqual(row[7:9], [162.56, "ACT_BLOCKED_REACTION_LEFT"])
+        self.assertEqual(row[9][0]["bone"], "Bip01 R Forearm")
+        self.assertEqual(row[10]["chain"], "Fists_attack_W2")
+
+    def test_a_combo_without_the_melee_trio_holds_all_three_columns_open(self) -> None:
+        # 28 of the 208 carriers -- the `meleeshared_onehand` flying-knockback reaction chain --
+        # state no reach, no reaction and no swing. The row holds those columns rather than
+        # closing them up and putting a dict where a list belongs.
+        written = self._slice({"flung": npc_export._clip_meta(
+            _sequence(label="flung", reach=FLT_MAX, blocked=None,
+                      chain="knockback_flying_idle",
+                      chain_alt="knockback_flying_wall_hit"))})
+        row = written["clips"]["flung"]
+        self.assertEqual(len(row), 11)
+        self.assertIsNone(row[7])
+        self.assertEqual(row[8], "")
+        self.assertEqual(row[9], [])
+        self.assertEqual(row[10]["chain_alt"], "knockback_flying_wall_hit")
+
+    def test_a_clip_authoring_no_combo_truncates_before_the_column(self) -> None:
+        written = self._slice({"jab": npc_export._clip_meta(
+            _sequence(reach=64.0, swings=[_swing()]))})
+        self.assertEqual(len(written["clips"]["jab"]), 10)
+
+    def test_a_chain_label_never_joins_the_activities_table(self) -> None:
+        # A successor is a sequence label, not an activity, so `activities` is not a table it
+        # indexes -- and the runtime conformance union must not learn it as playable.
+        written = self._slice({"jab": npc_export._clip_meta(
+            _sequence(mask=0x008, chain="Fists_attack_W2", dodge="ACT_DODGE_DUCK",
+                      window=(0.5, 0.9, 0.91)))})
+        self.assertEqual(written["activities"], ["", "ACT_MELEE_ATTACK"])
+        self.assertEqual(written["clips"]["jab"][10]["dodge"], "ACT_DODGE_DUCK")
 
 
 if __name__ == "__main__":
