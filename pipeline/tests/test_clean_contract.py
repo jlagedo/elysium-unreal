@@ -30,6 +30,10 @@ class CleanContractTests(unittest.TestCase):
             (repo / "Content" / "VtMB" / "generated.uasset").write_text("derived")
             (repo / "Content" / "Fonts").mkdir(parents=True)
             (repo / "Content" / "Fonts" / "source.ttf").write_text("licensed")
+            (repo / "Content" / "InputPrompts" / "Kenney").mkdir(parents=True)
+            (repo / "Content" / "InputPrompts" / "Kenney" / "glyph.png").write_text("licensed")
+            (repo / "Content" / "Input").mkdir(parents=True)
+            (repo / "Content" / "Input" / "generated.uasset").write_text("derived")
             (repo / "Content" / "Elysium.umap").write_text("derived")
             baked = repo / "Plugins" / "ElysiumBaked" / "Content"
             baked.mkdir(parents=True)
@@ -47,9 +51,13 @@ class CleanContractTests(unittest.TestCase):
             incomplete = clean.clean_generated(targets)
 
             self.assertFalse((repo / "Content" / "VtMB").exists())
+            self.assertFalse((repo / "Content" / "Input").exists())
             self.assertFalse((repo / "Content" / "Elysium.umap").exists())
             self.assertFalse(baked.exists())
             self.assertTrue((repo / "Content" / "Fonts" / "source.ttf").is_file())
+            self.assertTrue(
+                (repo / "Content" / "InputPrompts" / "Kenney" / "glyph.png").is_file()
+            )
             self.assertTrue((external / "source.cpp").is_file())
             self.assertTrue((export / clean.OWNERSHIP_FILE).is_file())
             self.assertTrue((export / LOCK_FILE).is_file())

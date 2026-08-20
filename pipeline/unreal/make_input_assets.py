@@ -36,17 +36,17 @@ def load_rows():
     # smaller mapping context that still loads, and the first sign of it would be a button that does
     # nothing in a live run. `Elysium.Content.InputAssets` asserts the same set from the other side.
     #
-    # Use, Jump and Feed are press/release pairs so their edges survive the same command/replay seam
-    # as keyboard and console input. Duck and Camera are the two stick clicks: neither is held while
-    # the same stick is being used, so they remain one-shot toggles (`+duck` is normalized by the
-    # router's toggle policy, and `togglecamera` is intrinsically one-shot).
+    # Every `+` command remains a press/release pair so its edges survive the same command/replay
+    # seam as keyboard and console input. Duck is a pair because the mover turns its press edge into
+    # the game's crouch latch; Camera and the selection verbs are genuine one-shots.
     #
-    # WeaponNext/WeaponPrev are the D-pad's weapon cycle. They carry no keyboard default because the
-    # mouse wheel and the bracket keys already fire the same `invnext`/`invprev` verbs; the gamepad
-    # is the device that had no route to them at all.
+    # The D-pad is the weapon cluster: direct melee/ranged categories, last weapon and holster.
+    # Repeating a category verb advances inside that category. These rows carry no keyboard default
+    # because the legacy keyboard front already fires the same command strings.
     expected = [
         "Move", "Look", "MouseLook", "Jump", "Use", "Feed", "Duck", "Camera",
-        "WeaponNext", "WeaponPrev",
+        "WalkRun", "Attack", "SecondaryAttack", "Reload", "DisciplineCast",
+        "WeaponRanged", "WeaponMelee", "WeaponLast", "Holster", "Character", "Pause",
     ]
     if ids != expected:
         raise RuntimeError(
@@ -84,6 +84,25 @@ def make_modifier(cls, outer, name, properties=None):
     for prop, value in (properties or {}).items():
         modifier.set_editor_property(prop, value)
     return modifier
+
+
+def triggers_for(action_id, key_name, context):
+    """Turn an analog shoulder trigger into one digital command edge.
+
+    GameInput publishes LT/RT as axes. The commands they carry are Boolean actions, so their
+    physical half-pull crosses one explicit threshold and stays down until it falls back below
+    it. Without a Down trigger, tiny resting noise can start the action and a later full pull has
+    no new edge to deliver.
+    """
+    if key_name not in ("Gamepad_LeftTriggerAxis", "Gamepad_RightTriggerAxis"):
+        return []
+    trigger = unreal.new_object(
+        unreal.InputTriggerDown,
+        outer=context,
+        name=action_id + "_Down",
+    )
+    trigger.set_editor_property("actuation_threshold", 0.5)
+    return [trigger]
 
 
 def modifiers_for(action_id, device, context):
@@ -142,6 +161,8 @@ def make_context(name, device, key_column, rows, actions):
         mapping.set_editor_property("key", key)
         mapping.set_editor_property(
             "modifiers", modifiers_for(row["Id"].strip(), device, context))
+        mapping.set_editor_property(
+            "triggers", triggers_for(row["Id"].strip(), key_name, context))
         mappings.append(mapping)
     mapping_data = unreal.InputMappingContextMappingData()
     mapping_data.set_editor_property("mappings", mappings)

@@ -133,7 +133,7 @@ namespace ElysiumInteraction
 
 	inline FText UseBindingText(bool bGamepad)
 	{
-		return FText::FromString(bGamepad ? TEXT("RB") : TEXT("E"));
+		return FText::FromString(bGamepad ? TEXT("RT") : TEXT("E"));
 	}
 }
 

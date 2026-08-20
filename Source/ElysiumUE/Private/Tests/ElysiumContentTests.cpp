@@ -30,6 +30,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Tests/AutomationCommon.h"           // FTestWorldWrapper
 #include "ElysiumInputAssets.h"
+#include "UI/ElysiumInputGlyphControllerData.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumPlayer.h"
 #include "Visual/ElysiumNpcClips.h"
@@ -62,6 +63,7 @@
 #include "ElysiumTestServices.h"
 #include "Tests/ElysiumNpcTestHooks.h"
 #include "Animation/AnimSequence.h"
+#include "CommonInputBaseTypes.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/Texture.h"
@@ -82,6 +84,7 @@
 #include "InputActionValue.h"
 #include "InputMappingContext.h"
 #include "InputModifiers.h"
+#include "InputTriggers.h"
 #include "NiagaraSystem.h"
 #include "RHIShaderPlatform.h"
 #include "Misc/ConfigCacheIni.h"
@@ -5389,6 +5392,92 @@ bool FElysiumMouseInputAssetsContentTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInputGlyphAssetsContentTest,
+	"Elysium.Content.InputGlyphs", GElysiumContentTestFlags)
+
+bool FElysiumInputGlyphAssetsContentTest::RunTest(const FString&)
+{
+	UCommonInputPlatformSettings* Platform = UCommonInputPlatformSettings::Get();
+	if (!TestNotNull(TEXT("CommonInput Windows platform policy"), Platform))
+	{
+		return false;
+	}
+	TestEqual(TEXT("Windows starts with Xbox glyphs until hardware identifies another pad"),
+		Platform->GetDefaultGamepadName(), FName(TEXT("Xbox")));
+	TestEqual(TEXT("GameInput DualSense hardware selects PlayStation glyphs"),
+		Platform->GetBestGamepadNameForHardware(
+			TEXT("Xbox"), TEXT("GameInput"), TEXT("DualSense")), FName(TEXT("DualSense")));
+	TestEqual(TEXT("GameInput Xbox One hardware selects Xbox glyphs"),
+		Platform->GetBestGamepadNameForHardware(
+			TEXT("DualSense"), TEXT("GameInput"), TEXT("XboxOne")), FName(TEXT("Xbox")));
+
+	const UElysiumKeyboardControllerData* Keyboard = GetDefault<UElysiumKeyboardControllerData>();
+	const UElysiumXboxControllerData* Xbox = GetDefault<UElysiumXboxControllerData>();
+	const UElysiumDualSenseControllerData* DualSense =
+		GetDefault<UElysiumDualSenseControllerData>();
+	if (!TestNotNull(TEXT("keyboard glyph policy"), Keyboard) ||
+		!TestNotNull(TEXT("Xbox glyph policy"), Xbox) ||
+		!TestNotNull(TEXT("DualSense glyph policy"), DualSense))
+	{
+		return false;
+	}
+
+	const TArray<const UCommonInputBaseControllerData*> KeyboardPolicies =
+		Platform->GetControllerDataForInputType(ECommonInputType::MouseAndKeyboard, NAME_None);
+	const TArray<const UCommonInputBaseControllerData*> XboxPolicies =
+		Platform->GetControllerDataForInputType(ECommonInputType::Gamepad, TEXT("Xbox"));
+	const TArray<const UCommonInputBaseControllerData*> DualSensePolicies =
+		Platform->GetControllerDataForInputType(ECommonInputType::Gamepad, TEXT("DualSense"));
+	TestTrue(TEXT("Windows policy registers keyboard glyph data"), KeyboardPolicies.Contains(Keyboard));
+	TestTrue(TEXT("Windows policy registers Xbox glyph data"), XboxPolicies.Contains(Xbox));
+	TestTrue(TEXT("Windows policy registers DualSense glyph data"),
+		DualSensePolicies.Contains(DualSense));
+
+	auto TestGlyphs = [this](const UElysiumInputGlyphControllerData* Policy,
+		const TArray<FKey>& Keys, const TCHAR* Family)
+	{
+		for (const FKey& Key : Keys)
+		{
+			FSlateBrush Brush;
+			const FString Label = FString::Printf(TEXT("%s has a glyph for %s"), Family, *Key.ToString());
+			if (!TestTrue(Label, Policy->TryGetInputBrush(Brush, Key)))
+			{
+				continue;
+			}
+			UTexture2D* Texture = Cast<UTexture2D>(Brush.GetResourceObject());
+			if (TestNotNull(*FString::Printf(TEXT("%s resolves a texture"), *Label), Texture))
+			{
+				TestEqual(*FString::Printf(TEXT("%s source width"), *Label),
+					Texture->Source.GetSizeX(), int64(128));
+				TestEqual(*FString::Printf(TEXT("%s source height"), *Label),
+					Texture->Source.GetSizeY(), int64(128));
+				TestTrue(*FString::Printf(TEXT("%s comes from Kenney policy content"), *Label),
+					Texture->GetPathName().Contains(
+						FString::Printf(TEXT("/Game/Input/Glyphs/Kenney/%s/"), Family)));
+			}
+		}
+	};
+
+	TestGlyphs(Keyboard, {EKeys::E, EKeys::Enter, EKeys::Escape}, TEXT("Keyboard"));
+	const TArray<FKey> StandardGamepadKeys = {
+		EKeys::Gamepad_FaceButton_Bottom, EKeys::Gamepad_FaceButton_Right,
+		EKeys::Gamepad_FaceButton_Left, EKeys::Gamepad_FaceButton_Top,
+		EKeys::Gamepad_LeftShoulder, EKeys::Gamepad_RightShoulder,
+		EKeys::Gamepad_LeftTriggerAxis, EKeys::Gamepad_RightTriggerAxis,
+		EKeys::Gamepad_LeftThumbstick, EKeys::Gamepad_RightThumbstick,
+		EKeys::Gamepad_Left2D, EKeys::Gamepad_Right2D,
+		EKeys::Gamepad_DPad_Up, EKeys::Gamepad_DPad_Down,
+		EKeys::Gamepad_DPad_Left, EKeys::Gamepad_DPad_Right,
+		EKeys::Gamepad_Special_Left, EKeys::Gamepad_Special_Right,
+	};
+	TestGlyphs(Xbox, StandardGamepadKeys, TEXT("Xbox"));
+	TArray<FKey> DualSenseKeys = StandardGamepadKeys;
+	DualSenseKeys.Add(FKey(ElysiumInputAssets::DualSenseCreateKey));
+	DualSenseKeys.Add(FKey(ElysiumInputAssets::DualSenseMuteKey));
+	TestGlyphs(DualSense, DualSenseKeys, TEXT("PlayStation"));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGamepadInputAssetsContentTest,
 	"Elysium.Content.GamepadInputAssets", GElysiumContentTestFlags)
 
@@ -5404,7 +5493,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 		return false;
 	}
 
-	TestEqual(TEXT("the input slice defines exactly ten actions"), ActionSet->Actions.Num(), 10);
+	TestEqual(TEXT("the input policy defines exactly nineteen actions"), ActionSet->Actions.Num(), 19);
 	const FElysiumInputActionDefinition* Move = ActionSet->Find(TEXT("Move"));
 	const FElysiumInputActionDefinition* Look = ActionSet->Find(TEXT("Look"));
 	const FElysiumInputActionDefinition* Jump = ActionSet->Find(TEXT("Jump"));
@@ -5412,17 +5501,35 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	const FElysiumInputActionDefinition* Feed = ActionSet->Find(TEXT("Feed"));
 	const FElysiumInputActionDefinition* Duck = ActionSet->Find(TEXT("Duck"));
 	const FElysiumInputActionDefinition* Camera = ActionSet->Find(TEXT("Camera"));
-	const FElysiumInputActionDefinition* WeaponNext = ActionSet->Find(TEXT("WeaponNext"));
-	const FElysiumInputActionDefinition* WeaponPrev = ActionSet->Find(TEXT("WeaponPrev"));
-	if (!TestTrue(TEXT("WeaponNext definition exists"), WeaponNext && WeaponNext->Action) ||
-		!TestTrue(TEXT("WeaponPrev definition exists"), WeaponPrev && WeaponPrev->Action) ||
+	const FElysiumInputActionDefinition* WalkRun = ActionSet->Find(TEXT("WalkRun"));
+	const FElysiumInputActionDefinition* Attack = ActionSet->Find(TEXT("Attack"));
+	const FElysiumInputActionDefinition* SecondaryAttack = ActionSet->Find(TEXT("SecondaryAttack"));
+	const FElysiumInputActionDefinition* Reload = ActionSet->Find(TEXT("Reload"));
+	const FElysiumInputActionDefinition* DisciplineCast = ActionSet->Find(TEXT("DisciplineCast"));
+	const FElysiumInputActionDefinition* WeaponRanged = ActionSet->Find(TEXT("WeaponRanged"));
+	const FElysiumInputActionDefinition* WeaponMelee = ActionSet->Find(TEXT("WeaponMelee"));
+	const FElysiumInputActionDefinition* WeaponLast = ActionSet->Find(TEXT("WeaponLast"));
+	const FElysiumInputActionDefinition* Holster = ActionSet->Find(TEXT("Holster"));
+	const FElysiumInputActionDefinition* Character = ActionSet->Find(TEXT("Character"));
+	const FElysiumInputActionDefinition* Pause = ActionSet->Find(TEXT("Pause"));
+	if (!TestTrue(TEXT("Attack definition exists"), Attack && Attack->Action) ||
+		!TestTrue(TEXT("SecondaryAttack definition exists"), SecondaryAttack && SecondaryAttack->Action) ||
+		!TestTrue(TEXT("Reload definition exists"), Reload && Reload->Action) ||
+		!TestTrue(TEXT("DisciplineCast definition exists"), DisciplineCast && DisciplineCast->Action) ||
+		!TestTrue(TEXT("WeaponRanged definition exists"), WeaponRanged && WeaponRanged->Action) ||
+		!TestTrue(TEXT("WeaponMelee definition exists"), WeaponMelee && WeaponMelee->Action) ||
+		!TestTrue(TEXT("WeaponLast definition exists"), WeaponLast && WeaponLast->Action) ||
+		!TestTrue(TEXT("Holster definition exists"), Holster && Holster->Action) ||
+		!TestTrue(TEXT("Character definition exists"), Character && Character->Action) ||
+		!TestTrue(TEXT("Pause definition exists"), Pause && Pause->Action) ||
 		!TestTrue(TEXT("Move definition exists"), Move && Move->Action) ||
 		!TestTrue(TEXT("Look definition exists"), Look && Look->Action) ||
 		!TestTrue(TEXT("Jump definition exists"), Jump && Jump->Action) ||
 		!TestTrue(TEXT("Use definition exists"), Use && Use->Action) ||
 		!TestTrue(TEXT("Feed definition exists"), Feed && Feed->Action) ||
 		!TestTrue(TEXT("Duck definition exists"), Duck && Duck->Action) ||
-		!TestTrue(TEXT("Camera definition exists"), Camera && Camera->Action))
+		!TestTrue(TEXT("Camera definition exists"), Camera && Camera->Action) ||
+		!TestTrue(TEXT("WalkRun definition exists"), WalkRun && WalkRun->Action))
 	{
 		return false;
 	}
@@ -5433,38 +5540,60 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	TestTrue(TEXT("Feed is Boolean"), Feed->Action->ValueType == EInputActionValueType::Boolean);
 	TestTrue(TEXT("Duck is Boolean"), Duck->Action->ValueType == EInputActionValueType::Boolean);
 	TestTrue(TEXT("Camera is Boolean"), Camera->Action->ValueType == EInputActionValueType::Boolean);
+	TestTrue(TEXT("Attack is Boolean"), Attack->Action->ValueType == EInputActionValueType::Boolean);
+	TestTrue(TEXT("SecondaryAttack is Boolean"),
+		SecondaryAttack->Action->ValueType == EInputActionValueType::Boolean);
 	TestEqual(TEXT("Jump preserves its command identity"), Jump->Command, FString(TEXT("+jump")));
 	TestTrue(TEXT("Jump is a press/release pair"), Jump->bButtonPair);
-	TestEqual(TEXT("RB preserves the ordinary use command identity"), Use->Command, FString(TEXT("+use")));
+	TestEqual(TEXT("RT preserves the ordinary use command identity"), Use->Command, FString(TEXT("+use")));
 	TestTrue(TEXT("Use is a press/release pair"), Use->bButtonPair);
 	TestEqual(TEXT("Y/Triangle preserves the ordinary feed command identity"),
 		Feed->Command, FString(TEXT("+feed")));
 	TestTrue(TEXT("Feed keeps the low-level press/release command pair"), Feed->bButtonPair);
-
-	// **L3 fires the ordinary `+duck` pair, and the crouch is a toggle anyway.** The retention is the
-	// mover's — `IN_DUCK`'s press edge flips `bDuckRequested` — so there is no gamepad-only crouch
-	// verb to keep in step with the keyboard's, and a stick click that cannot be held costs nothing.
-	// The pair is what makes the press edge exist at all, which is the thing the toggle reads.
-	TestEqual(TEXT("L3 fires the ordinary crouch verb"), Duck->Command, FString(TEXT("+duck")));
+	TestEqual(TEXT("B/Circle fires the ordinary crouch verb"), Duck->Command, FString(TEXT("+duck")));
 	TestTrue(TEXT("crouch is a press/release pair like the keyboard's"), Duck->bButtonPair);
 	// R3 is a genuine one-shot: `togglecamera` has no release half, so binding a Completed edge
 	// would fire `-togglecamera`, which is not a verb.
 	TestEqual(TEXT("R3 fires the view toggle"), Camera->Command, FString(TEXT("togglecamera")));
 	TestFalse(TEXT("view toggle is not a press/release pair"), Camera->bButtonPair);
-	// The D-pad's weapon cycle fires the same two verbs the mouse wheel does, so the two devices
-	// cannot drift apart: there is one selection authority and both routes reach it by name. Neither
-	// is a pair — a cycle step has no release half, and binding one would fire `-invnext`.
-	TestEqual(TEXT("D-pad right cycles forward"), WeaponNext->Command, FString(TEXT("invnext")));
-	TestEqual(TEXT("D-pad left cycles back"), WeaponPrev->Command, FString(TEXT("invprev")));
-	TestFalse(TEXT("a cycle step is not a press/release pair"), WeaponNext->bButtonPair);
-	TestFalse(TEXT("a cycle step is not a press/release pair"), WeaponPrev->bButtonPair);
-	TestTrue(TEXT("WeaponNext is Boolean"),
-		WeaponNext->Action->ValueType == EInputActionValueType::Boolean);
-	TestTrue(TEXT("WeaponPrev is Boolean"),
-		WeaponPrev->Action->ValueType == EInputActionValueType::Boolean);
+	TestEqual(TEXT("RB preserves primary attack"), Attack->Command, FString(TEXT("+attack")));
+	TestTrue(TEXT("primary attack is a press/release pair"), Attack->bButtonPair);
+	TestEqual(TEXT("LT preserves the composite secondary command"),
+		SecondaryAttack->Command, FString(TEXT("+wpn_secondaryatk")));
+	TestTrue(TEXT("the composite secondary is a press/release pair"), SecondaryAttack->bButtonPair);
+	TestEqual(TEXT("X/Square preserves reload"), Reload->Command, FString(TEXT("+reload")));
+	TestTrue(TEXT("reload is a press/release pair"), Reload->bButtonPair);
+	TestEqual(TEXT("LB casts the selected discipline"),
+		DisciplineCast->Command, FString(TEXT("vdiscipline_last")));
+	TestFalse(TEXT("the discipline cast is a one-shot"), DisciplineCast->bButtonPair);
+
+	// The D-pad is one weapon cluster. Left and right enter the melee/ranged categories, and the
+	// selector advances inside a category when its verb repeats. All four are one-shots.
+	TestEqual(TEXT("D-pad right selects ranged weapons"),
+		WeaponRanged->Command, FString(TEXT("slot3")));
+	TestEqual(TEXT("D-pad left selects melee weapons"),
+		WeaponMelee->Command, FString(TEXT("slot2")));
+	TestEqual(TEXT("D-pad up recalls the last weapon"), WeaponLast->Command, FString(TEXT("lastinv")));
+	TestEqual(TEXT("D-pad down holsters"), Holster->Command, FString(TEXT("holster")));
+	TestFalse(TEXT("ranged selection is not a press/release pair"), WeaponRanged->bButtonPair);
+	TestFalse(TEXT("melee selection is not a press/release pair"), WeaponMelee->bButtonPair);
+	TestFalse(TEXT("last weapon is not a press/release pair"), WeaponLast->bButtonPair);
+	TestFalse(TEXT("holster is not a press/release pair"), Holster->bButtonPair);
+	TestEqual(TEXT("View opens the character screen"), Character->Command, FString(TEXT("+chareditor")));
+	TestTrue(TEXT("character screen preserves its command pair"), Character->bButtonPair);
+	TestEqual(TEXT("Menu preserves Escape's pause/cancel verb"),
+		Pause->Command, FString(TEXT("cancelselect")));
+	TestFalse(TEXT("pause/cancel is a one-shot"), Pause->bButtonPair);
+	TestEqual(TEXT("L3 preserves the patch walk/run alias"),
+		WalkRun->Command, FString(TEXT("autospeed")));
+	TestFalse(TEXT("walk/run is a one-shot alias"), WalkRun->bButtonPair);
 	// Every mapped command names a declared verb, or the button is a no-op that logs nothing. The
 	// leading `+` is stripped first, because a pair's press edge is declared under its bare name.
-	for (const FElysiumInputActionDefinition* Definition : { Jump, Use, Feed, Duck, Camera, WeaponNext, WeaponPrev })
+	// `autospeed` is the patch's cfg alias, so it deliberately resolves in the console's alias tier
+	// rather than this compiled inventory.
+	for (const FElysiumInputActionDefinition* Definition : {
+		Jump, Use, Feed, Duck, Camera, Attack, SecondaryAttack, Reload, DisciplineCast,
+		WeaponRanged, WeaponMelee, WeaponLast, Holster, Character, Pause })
 	{
 		const FString Bare = Definition->Command.StartsWith(TEXT("+"))
 			? Definition->Command.Mid(1) : Definition->Command;
@@ -5473,7 +5602,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	}
 
 	const TArray<FEnhancedActionKeyMapping>& Mappings = Context->GetMappings();
-	TestEqual(TEXT("nine actions are gameplay-mapped"), Mappings.Num(), 9);
+	TestEqual(TEXT("eighteen actions are gamepad-mapped"), Mappings.Num(), 18);
 	auto FindMapping = [&Mappings](const UInputAction* Action) -> const FEnhancedActionKeyMapping*
 	{
 		return Mappings.FindByPredicate(
@@ -5486,41 +5615,84 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	const FEnhancedActionKeyMapping* FeedMapping = FindMapping(Feed->Action);
 	const FEnhancedActionKeyMapping* DuckMapping = FindMapping(Duck->Action);
 	const FEnhancedActionKeyMapping* CameraMapping = FindMapping(Camera->Action);
-	const FEnhancedActionKeyMapping* WeaponNextMapping = FindMapping(WeaponNext->Action);
-	const FEnhancedActionKeyMapping* WeaponPrevMapping = FindMapping(WeaponPrev->Action);
-	if (!TestNotNull(TEXT("WeaponNext mapping"), WeaponNextMapping) ||
-		!TestNotNull(TEXT("WeaponPrev mapping"), WeaponPrevMapping) ||
+	const FEnhancedActionKeyMapping* WalkRunMapping = FindMapping(WalkRun->Action);
+	const FEnhancedActionKeyMapping* AttackMapping = FindMapping(Attack->Action);
+	const FEnhancedActionKeyMapping* SecondaryAttackMapping = FindMapping(SecondaryAttack->Action);
+	const FEnhancedActionKeyMapping* ReloadMapping = FindMapping(Reload->Action);
+	const FEnhancedActionKeyMapping* DisciplineCastMapping = FindMapping(DisciplineCast->Action);
+	const FEnhancedActionKeyMapping* WeaponRangedMapping = FindMapping(WeaponRanged->Action);
+	const FEnhancedActionKeyMapping* WeaponMeleeMapping = FindMapping(WeaponMelee->Action);
+	const FEnhancedActionKeyMapping* WeaponLastMapping = FindMapping(WeaponLast->Action);
+	const FEnhancedActionKeyMapping* HolsterMapping = FindMapping(Holster->Action);
+	const FEnhancedActionKeyMapping* CharacterMapping = FindMapping(Character->Action);
+	const FEnhancedActionKeyMapping* PauseMapping = FindMapping(Pause->Action);
+	if (!TestNotNull(TEXT("Attack mapping"), AttackMapping) ||
+		!TestNotNull(TEXT("SecondaryAttack mapping"), SecondaryAttackMapping) ||
+		!TestNotNull(TEXT("Reload mapping"), ReloadMapping) ||
+		!TestNotNull(TEXT("DisciplineCast mapping"), DisciplineCastMapping) ||
+		!TestNotNull(TEXT("WeaponRanged mapping"), WeaponRangedMapping) ||
+		!TestNotNull(TEXT("WeaponMelee mapping"), WeaponMeleeMapping) ||
+		!TestNotNull(TEXT("WeaponLast mapping"), WeaponLastMapping) ||
+		!TestNotNull(TEXT("Holster mapping"), HolsterMapping) ||
+		!TestNotNull(TEXT("Character mapping"), CharacterMapping) ||
+		!TestNotNull(TEXT("Pause mapping"), PauseMapping) ||
 		!TestNotNull(TEXT("Move mapping"), MoveMapping) ||
 		!TestNotNull(TEXT("Look mapping"), LookMapping) ||
 		!TestNotNull(TEXT("Jump mapping"), JumpMapping) ||
 		!TestNotNull(TEXT("Use mapping"), UseMapping) ||
 		!TestNotNull(TEXT("Feed mapping"), FeedMapping) ||
 		!TestNotNull(TEXT("Duck mapping"), DuckMapping) ||
-		!TestNotNull(TEXT("Camera mapping"), CameraMapping))
+		!TestNotNull(TEXT("Camera mapping"), CameraMapping) ||
+		!TestNotNull(TEXT("WalkRun mapping"), WalkRunMapping))
 	{
 		return false;
 	}
 	TestEqual(TEXT("Move uses the left stick"), MoveMapping->Key, EKeys::Gamepad_Left2D);
 	TestEqual(TEXT("Look uses the right stick"), LookMapping->Key, EKeys::Gamepad_Right2D);
 	TestEqual(TEXT("Jump uses A/Cross"), JumpMapping->Key, EKeys::Gamepad_FaceButton_Bottom);
-	TestEqual(TEXT("Use is on RB"), UseMapping->Key, EKeys::Gamepad_RightShoulder);
+	TestEqual(TEXT("Use is on RT"), UseMapping->Key, EKeys::Gamepad_RightTriggerAxis);
 	TestEqual(TEXT("Feed is on Y/Triangle"), FeedMapping->Key, EKeys::Gamepad_FaceButton_Top);
-	// L3 and R3 are the stick *clicks*, and each sits on the stick whose job it serves: crouch is a
-	// movement verb on the movement stick, the view toggle is a camera verb on the camera stick.
-	TestEqual(TEXT("crouch is on L3"), DuckMapping->Key, EKeys::Gamepad_LeftThumbstick);
+	TestEqual(TEXT("crouch is on B/Circle"), DuckMapping->Key, EKeys::Gamepad_FaceButton_Right);
+	TestEqual(TEXT("walk/run is on L3"), WalkRunMapping->Key, EKeys::Gamepad_LeftThumbstick);
 	TestEqual(TEXT("the view toggle is on R3"), CameraMapping->Key, EKeys::Gamepad_RightThumbstick);
-	// The D-pad's horizontal axis is the weapon cycle; its vertical half stays free for the
-	// secondary-attack and holster pair the input design gives it.
-	TestEqual(TEXT("the forward cycle is on D-pad right"),
-		WeaponNextMapping->Key, EKeys::Gamepad_DPad_Right);
-	TestEqual(TEXT("the backward cycle is on D-pad left"),
-		WeaponPrevMapping->Key, EKeys::Gamepad_DPad_Left);
-	TestEqual(TEXT("the forward cycle carries no modifier stack"),
-		WeaponNextMapping->Modifiers.Num(), 0);
-	TestEqual(TEXT("the backward cycle carries no modifier stack"),
-		WeaponPrevMapping->Modifiers.Num(), 0);
-	TestEqual(TEXT("L3 carries no modifier stack"), DuckMapping->Modifiers.Num(), 0);
+	TestEqual(TEXT("primary attack is on RB"), AttackMapping->Key, EKeys::Gamepad_RightShoulder);
+	TestEqual(TEXT("block/weapon-secondary is on LT"),
+		SecondaryAttackMapping->Key, EKeys::Gamepad_LeftTriggerAxis);
+	TestEqual(TEXT("reload is on X/Square"), ReloadMapping->Key, EKeys::Gamepad_FaceButton_Left);
+	TestEqual(TEXT("discipline cast is on LB"),
+		DisciplineCastMapping->Key, EKeys::Gamepad_LeftShoulder);
+	TestEqual(TEXT("ranged weapon selection is on D-pad right"),
+		WeaponRangedMapping->Key, EKeys::Gamepad_DPad_Right);
+	TestEqual(TEXT("melee weapon selection is on D-pad left"),
+		WeaponMeleeMapping->Key, EKeys::Gamepad_DPad_Left);
+	TestEqual(TEXT("last weapon is on D-pad up"), WeaponLastMapping->Key, EKeys::Gamepad_DPad_Up);
+	TestEqual(TEXT("holster is on D-pad down"), HolsterMapping->Key, EKeys::Gamepad_DPad_Down);
+	TestEqual(TEXT("character screen is on View/touchpad"),
+		CharacterMapping->Key, EKeys::Gamepad_Special_Left);
+	TestEqual(TEXT("pause/cancel is on Menu/Options"),
+		PauseMapping->Key, EKeys::Gamepad_Special_Right);
+	TestEqual(TEXT("ranged selection carries no modifier stack"),
+		WeaponRangedMapping->Modifiers.Num(), 0);
+	TestEqual(TEXT("melee selection carries no modifier stack"),
+		WeaponMeleeMapping->Modifiers.Num(), 0);
+	TestEqual(TEXT("L3 carries no modifier stack"), WalkRunMapping->Modifiers.Num(), 0);
 	TestEqual(TEXT("R3 carries no modifier stack"), CameraMapping->Modifiers.Num(), 0);
+	TestEqual(TEXT("RT carries one explicit down trigger"), UseMapping->Triggers.Num(), 1);
+	TestEqual(TEXT("LT carries one explicit down trigger"), SecondaryAttackMapping->Triggers.Num(), 1);
+	for (const FEnhancedActionKeyMapping* Mapping : { UseMapping, SecondaryAttackMapping })
+	{
+		if (Mapping->Triggers.Num() == 1)
+		{
+			const UInputTriggerDown* Down = Cast<UInputTriggerDown>(Mapping->Triggers[0]);
+			TestNotNull(TEXT("an analog trigger uses UInputTriggerDown"), Down);
+			if (Down)
+			{
+				TestEqual(TEXT("the analog trigger crosses at half pull"),
+					Down->ActuationThreshold, 0.5f);
+			}
+		}
+	}
+	TestEqual(TEXT("RB attack needs no trigger object"), AttackMapping->Triggers.Num(), 0);
 	// **The mapping carries device-frame corrections only.** Every feel term — dead zone,
 	// saturation, response curve, rate, filter, turn ramp — is `ElysiumInput::ShapeStickLook` /
 	// `ShapeStickMove` at the command seam (`Elysium.Substrate.StickLook`), because the filter is a

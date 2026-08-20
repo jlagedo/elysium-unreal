@@ -24,7 +24,7 @@ UElysiumCommonUIInputData::UElysiumCommonUIInputData()
 
 	FElysiumCommonInputActionData Use;
 	Use.DisplayName = NSLOCTEXT("ElysiumUI", "Use", "Use");
-	Use.SetKeys(EKeys::E, EKeys::Gamepad_RightShoulder);
+	Use.SetKeys(EKeys::E, EKeys::Gamepad_RightTriggerAxis);
 	ActionTable->AddRow(TEXT("Use"), Use);
 	UseAction.DataTable = ActionTable;
 	UseAction.RowName = TEXT("Use");

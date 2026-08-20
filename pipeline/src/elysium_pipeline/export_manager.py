@@ -355,6 +355,10 @@ def _policy_fingerprint(config, *, exclude_generators: Sequence[str] = ()) -> st
     scripts = [
         *_policy_script_paths(config, exclude_generators=exclude_generators),
         config.repo_root / "Content" / "Fonts",
+        # The Kenney PNGs are the source for generated CommonInput textures. Keep the source
+        # directory beside Fonts in the policy fingerprint so replacing or extending a glyph
+        # cannot leave a cached Unreal texture behind.
+        config.repo_root / "Content" / "InputPrompts",
         # `make_input_assets.py` reads this CSV, and script discovery above only walks imports --
         # so without naming it here, editing the committed input table alone leaves the task
         # cached and the generated actions, mapping context and action set stale. The failure is

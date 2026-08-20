@@ -68,11 +68,12 @@ Two tiers:
 
 ### Triggers, and the `Canceled` hazard
 
-Modifiers shape a value; **triggers decide when an action fires**. The gamepad layout needs four:
+Modifiers shape a value; **triggers decide when an action fires**. The gamepad layout uses these
+four shapes:
 
 | Trigger | Used for |
 |---|---|
-| `UInputTriggerPressed` + `ActuationThreshold` | an analog `Gamepad_*TriggerAxis` acting as a button |
+| `UInputTriggerDown` + `ActuationThreshold = 0.5` | an analog `Gamepad_*TriggerAxis` held as a button until physical release |
 | `UInputTriggerTap` | the short press of a dual-purpose button (`LB` tap = cast) |
 | `UInputTriggerHold` | the long press of the same button (`LB` hold = the radial) |
 | `UInputTriggerChordAction` | any modifier layer |
@@ -194,10 +195,10 @@ the standard `Gamepad_Special_Left`; Create, PS and Mute have distinct registere
 `Elysium_DualSense_Create`, `Elysium_DualSense_PS`, and `Elysium_DualSense_Mute`.
 
 **Accept every control** means every stick, trigger, switch and button exposed by GameInput produces
-an Unreal key/axis value, while each standard control has one publisher. Only LS, RS and Cross are
-mapped to gameplay in this slice. The single-publisher rule is also a focus-safety rule: one
-processor owns each analog state and clears it when the application is deactivated. Touch
-coordinates, motion sensors and output features are not input controls in that contract.
+an Unreal key/axis value, while each standard control has one publisher. The single-publisher rule
+is also a focus-safety rule: one processor owns each analog state and clears it when the application
+is deactivated. Touch coordinates, motion sensors and output features are not input controls in
+that contract.
 
 Two constraints:
 
@@ -226,34 +227,41 @@ never on a face button** — that is attack, block, `+use` and the discipline ca
 | `LS` click | `autospeed` | the patch's own walk/run toggle alias |
 | `RS` | `IA_Look` | in third person this *is* the orbit, so the `cam_*` verbs need no binds |
 | `RS` click | `togglecamera` | |
-| `RT` | `+attack` | `Pressed` with an actuation threshold |
-| `LT` | **block** (melee/unarmed) · **zoom** (ranged) | contextual by weapon class |
+| `RB` | `+attack` | one stable primary-attack button for melee and firearms |
+| `LT` | `+wpn_secondaryatk` | held from half pull to physical release; the weapon interprets the faithful composite |
 | `LB` | tap → `vdiscipline_last` · hold → the quickbar radial | the two-stage cast as one button |
-| `RB` | `+use` | |
+| `RT` | `+use` | held from half pull to physical release |
 | `A` / `B` / `X` / `Y` | `+jump` / `+duck` / `+reload` / `+feed` | |
-| D-pad ← / → | `invprev` / `invnext` | |
-| D-pad ↑ / ↓ | `+wpn_secondaryatk` / `holster` | |
+| D-pad ← / → | `slot2` melee / `slot3` ranged | first press enters and equips from that category; repeat presses advance within it |
+| D-pad ↑ / ↓ | `lastinv` / `holster` | |
 | `Start` | `cancelselect` | |
-| `Back` | the character screen | the quest log is a tab on it |
+| `Back` | `+chareditor` | the quest log is a tab on the character screen |
 
 Everything absent from that table resolves to a **surface** rather than a gameplay binding:
-`slot1`–`slot6`, `lastinv` and `dropitem` are semantic actions inside the CommonUI character
+`slot1`–`slot6` and `dropitem` are semantic actions inside the CommonUI character
 screen; `skip` is a cinematic action; `save quick` / `load quick` are pause-menu actions; and
 dialogue responses are CommonUI actions. Those UI actions are not duplicated in Enhanced Input.
 
-**`LT` is contextual because the game already is.** `camera_prefs` forces third person for weapon
-class 1 and first person for classes 2 and 4 (`docs/vtmb/camera-view-modes.md`), so branching a
-binding on weapon class uses the original's own arbitration rather than inventing a mode; unarmed
-has no zoom, so the two meanings never collide. It requires the weapon-class bitmask to be
-readable by the input layer, which is a seam the substrate does not expose today.
+**The default does not move primary attack when the weapon changes.** `RB` always emits `+attack`,
+so switching between fists, melee and firearms never moves the player's attack muscle memory.
+`RT` carries the lower-frequency `+use` action and keeps the camera thumb planted for exact focus.
+This is the owner-called gamepad presentation; it changes no VtMB command or combat rule, and both
+actions remain independently remappable.
+
+**`LT` needs no input-layer weapon branch.** Retail `+wpn_secondaryatk` is already the held
+composite: it asserts the dedicated block bit and forwards into ordinary `+attack2`; releasing it
+clears both. The server accepts the block bit only while grounded with an eligible active weapon,
+while a ranged weapon's ordinary secondary policy interprets `+attack2`. Mapping that command
+directly keeps the input layer ignorant of weapon class and lets the existing weapon authority
+decide whether the gesture blocks, zooms or changes a secondary mode.
 
 **The radial subsumes three things.** It *is* `showhotkeys` — VtMB's own `VHotkeysUI`, so the
-surface is not an invention; it removes the need for `toggleuiside`, because the D-pad cycles
-weapons and the radial owns powers, leaving the wheel no mode to switch; and it fires selection
+surface is not an invention; it removes the need for `toggleuiside`, because the D-pad directly
+selects melee/ranged categories and the radial owns powers, leaving the wheel no mode to switch; and it fires selection
 and cast as one action instead of reproducing the one-frame `vhotkey` deferral.
 
-Three **divergences**, all additive, each pending an explicit owner call. The faithful behaviour
-is `docs/vtmb/controls.md`:
+Three **additive gamepad calls** accompany the layout. The faithful keyboard behaviour is
+`docs/vtmb/controls.md`:
 
 - **`+duck` is a toggle on gamepad**, not a hold. Crouch is VtMB's stealth mode and Obfuscate
   breaks on moving while standing, so it is held for minutes at a time and a hold binding is not
@@ -261,12 +269,6 @@ is `docs/vtmb/controls.md`:
 - **`toggleuiside` is unbound on gamepad** — it has nothing left to switch.
 - **The one-frame `vhotkey` deferral is not reproduced.** It is the defect the community's
   `wait 1` idiom exists to work around, not a behaviour worth carrying.
-
-The input RE gate for `LT` and D-pad ↑ is cleared. Retail `+wpn_secondaryatk` is a held composite:
-it asserts the dedicated block bit and forwards into ordinary `+attack2`; releasing it clears both.
-The server accepts the block bit only while grounded with an eligible active weapon. The mapping
-above is therefore a design choice about presenting one faithful composite through contextual
-gamepad actions, not a guess about which retail verb blocks.
 
 ### Melee combos need the stick quantised
 
@@ -512,6 +514,21 @@ the `Debug` scope's `Contexts` set doing nothing: contexts are declared on `FEly
 (11.5) and applied here, so the arbiter that already pushes and pops the scope is what adds and
 removes the mapping.
 
+## Button glyphs
+
+CommonUI and CommonInput own button prompts. `UElysiumCommonUIInputData` supplies native
+Accept/Back/Use actions, while three native `CommonInputBaseControllerData` policies map those
+keys to generated Kenney CC0 textures under `/Game/Input/Glyphs/Kenney/**`. The Windows platform
+policy defaults to Xbox art, maps `GameInput/XboxOne|Xbox360` to that set, and maps the overridden
+`GameInput/DualSense` hardware id to PlayStation art. Keyboard prompts use the same source pack.
+The world-interaction prompt asks CommonInput for its current brush and falls back to `E`/`RT`
+text if the policy package is absent; a failed mapped texture load emits a warning with the key
+and asset path.
+
+The tracked source PNGs and upstream licence live in `Content/InputPrompts/Kenney/`;
+`pipeline/unreal/make_input_glyphs.py` rebuilds the ignored Unreal textures. The art policy does
+not change action ownership or input-mode routing.
+
 ## Verification
 
 - **Automation** (Substrate tier): user-command analog/digital composition and stick-axis swizzle;
@@ -522,9 +539,9 @@ removes the mapping.
   action stay Triggered while either is held and fire Completed only on the last release, matching
   VtMB's one-key-owns-the-press rule); the `config.cfg` writer round-trip; rebind → save → load →
   rebuild.
-- **Generated content** (Content tier): the three action types and keys, exact modifier order and
-  values, command-pair metadata, registered DualSense keys, and the `054C:0CE6` single-publisher
-  device configuration.
+- **Generated content** (Content tier): the action types and keys, exact modifier order and
+  values, command-pair metadata, registered DualSense keys, the `054C:0CE6` single-publisher
+  device configuration, and keyboard/Xbox/DualSense CommonInput glyph policies.
 - **Injection**: `UEnhancedInputLocalPlayerSubsystem::InjectInputForAction` drives scripted input in
   tests, and backs an `elysium_input_*` MCP tool so an agent can drive the tutorial end to end
   (`docs/architecture/debug-tooling.md` Layer 3).
@@ -533,14 +550,6 @@ removes the mapping.
   modifier output — under the F1-first rule every other capability follows.
 
 ## Open
-
-**Button glyphs.** CommonUI and CommonInput are adopted: `UElysiumCommonUIInputData` supplies the
-keyboard and generic-gamepad Accept/Back/Use actions natively, and CommonUI owns focus and Back
-routing while the input-scope stack stays the sole input-mode writer
-(`docs/architecture/ui-architecture.md`). What is **not** authored is
-`CommonInputBaseControllerData`, which turns the `"DualSense"` hardware id above into the right
-button art; the world-interaction prompt therefore shows the CommonInput icon when one resolves and
-falls back to `E`/`RB` text when it does not.
 
 **Combat aim assist.** `sv_aim` defaults to off and ranged-combat assist is not implemented. VtMB is
 a mouse game, so ranged combat on a stick has no original pad baseline to reproduce; that remains a

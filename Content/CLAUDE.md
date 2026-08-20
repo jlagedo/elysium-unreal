@@ -9,14 +9,16 @@ deliberately separate package classes:
   game-derived art, transforms, timings, scripts, map data, or converted assets.
 - **Generated local packages** are products of the pipeline and remain ignored/regenerable.
 
-The tracked files under `Content/Fonts/` are licensed, loose source fonts and their licence texts.
+The tracked files under `Content/Fonts/` and `Content/InputPrompts/` are licensed, loose source
+assets and their licence texts.
 
 `uv run elysium export bundle policy` generates the local project packages:
 
 - `/Game/Elysium` from `Content/Elysium.umap`;
 - `/Game/VtMB/Materials/**`;
 - `/Game/VtMB/Audio/**`;
-- `/Game/VtMB/UI/Fonts/**`.
+- `/Game/VtMB/UI/Fonts/**`;
+- `/Game/Input/**`.
 
 Their physical `.uasset` and `.umap` files are ignored. Edit the corresponding generator under
 `pipeline/unreal/`, then regenerate; never hand-author or commit a replacement for a generated
@@ -37,3 +39,11 @@ their included SIL OFL licences. `pipeline/unreal/make_ui_fonts.py` imports the 
 faces as local `UFontFace` packages during the Slate-enabled content pass. Runtime
 sign and popup code also reads the licensed loose faces through
 `FElysiumContentPaths::FontFile`.
+
+## Input prompts
+
+The selected PNG sources in `Content/InputPrompts/Kenney/` are redistributable under their
+included Creative Commons Zero licence. `pipeline/unreal/make_input_glyphs.py` imports them as
+local UI textures; native CommonInput controller-data classes map their generated paths to
+keyboard, Xbox and DualSense keys. Keep the upstream licence and provenance file beside any
+future additions.

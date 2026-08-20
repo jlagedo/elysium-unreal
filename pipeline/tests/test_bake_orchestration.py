@@ -406,6 +406,25 @@ class BakeOrchestrationTests(unittest.TestCase):
             generator.write_text("VALUE = 2\n", encoding="utf-8")
             self.assertNotEqual(export_manager._policy_fingerprint(config), initial)
 
+    def test_policy_fingerprint_includes_input_prompt_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self._config(temporary)
+            unreal_root = config.repo_root / "pipeline" / "unreal"
+            unreal_root.mkdir(parents=True)
+            (unreal_root / "build_content.py").write_text(
+                'GENERATORS = ["make_input_glyphs.py"]\n', encoding="utf-8"
+            )
+            (unreal_root / "make_input_glyphs.py").write_text(
+                "VALUE = 1\n", encoding="utf-8"
+            )
+            source = config.repo_root / "Content" / "InputPrompts" / "Kenney" / "glyph.png"
+            source.parent.mkdir(parents=True)
+            source.write_bytes(b"first")
+
+            initial = export_manager._policy_fingerprint(config)
+            source.write_bytes(b"replacement")
+            self.assertNotEqual(export_manager._policy_fingerprint(config), initial)
+
     def test_world_material_policy_has_its_own_fingerprint(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)

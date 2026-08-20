@@ -66,7 +66,9 @@ public class ElysiumUE : ModuleRules
 			// *visual trees* are still built in C++ Slate inside UCommonActivatableWidget
 			// subclasses. Back/Accept defaults come from the native CommonUIInputData class,
 			// so the source-authored foundation requires no Widget Blueprint or data assets.
-			"UMG", "CommonUI", "CommonInput",
+			// DeveloperSettings owns UPlatformSettingsManager, read directly by the generated-glyph
+			// regression to prove the Windows CommonInput controller-data configuration resolves.
+			"UMG", "CommonUI", "CommonInput", "DeveloperSettings",
 			// 11.3 the loading screen. The engine's own movie player is the only thing that can
 			// draw while the game thread is blocked inside LoadMap. It resolves to
 			// FNullGameMoviePlayer in the editor and under -nullrhi, so the hook is an automatic

@@ -3,9 +3,18 @@ Move,,Move,Movement,Axis2D,False,,,Gamepad_Left2D
 Look,,Look,Camera,Axis2D,False,,,Gamepad_Right2D
 MouseLook,,Mouse Look,Camera,Axis2D,False,Mouse2D,,
 Jump,+jump,Jump,Movement,Boolean,True,,,Gamepad_FaceButton_Bottom
-Use,+use,Use,Interaction,Boolean,True,,,Gamepad_RightShoulder
+Use,+use,Use,Interaction,Boolean,True,,,Gamepad_RightTriggerAxis
 Feed,+feed,Feed,Interaction,Boolean,True,,,Gamepad_FaceButton_Top
-Duck,+duck,Crouch,Movement,Boolean,True,,,Gamepad_LeftThumbstick
+Duck,+duck,Crouch,Movement,Boolean,True,,,Gamepad_FaceButton_Right
 Camera,togglecamera,Camera Mode,Camera,Boolean,False,,,Gamepad_RightThumbstick
-WeaponNext,invnext,Next Weapon,Combat,Boolean,False,,,Gamepad_DPad_Right
-WeaponPrev,invprev,Previous Weapon,Combat,Boolean,False,,,Gamepad_DPad_Left
+WalkRun,autospeed,Walk / Run,Movement,Boolean,False,,,Gamepad_LeftThumbstick
+Attack,+attack,Attack,Combat,Boolean,True,,,Gamepad_RightShoulder
+SecondaryAttack,+wpn_secondaryatk,Block / Weapon Secondary,Combat,Boolean,True,,,Gamepad_LeftTriggerAxis
+Reload,+reload,Reload,Combat,Boolean,True,,,Gamepad_FaceButton_Left
+DisciplineCast,vdiscipline_last,Cast Selected Discipline,Combat,Boolean,False,,,Gamepad_LeftShoulder
+WeaponRanged,slot3,Ranged Weapons,Combat,Boolean,False,,,Gamepad_DPad_Right
+WeaponMelee,slot2,Melee Weapons,Combat,Boolean,False,,,Gamepad_DPad_Left
+WeaponLast,lastinv,Last Weapon,Combat,Boolean,False,,,Gamepad_DPad_Up
+Holster,holster,Holster,Combat,Boolean,False,,,Gamepad_DPad_Down
+Character,+chareditor,Character,Interface,Boolean,True,,,Gamepad_Special_Left
+Pause,cancelselect,Pause / Cancel,Interface,Boolean,False,,,Gamepad_Special_Right

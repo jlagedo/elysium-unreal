@@ -410,8 +410,9 @@ The ladder:
   **[10.3 Floor validation](plans/world.md)** `[needs 4060]`
 - [ ] **[10.4 Async travel state machine](plans/spine.md)** — trigger: when hitches matter.
 - [ ] **[10.5 Packaged-build content path](plans/spine.md)**
-- [~] **[10.6 Input path — Enhanced Input, remapping, gamepad](plans/input.md)** — partial
-  slice live; keyboard migration, pad layout, projection open.
+- [~] **[10.6 Input path — Enhanced Input, remapping, gamepad](plans/input.md)** — gameplay pad
+  layout and generated Xbox/DualSense glyph switching live; keyboard migration, Discipline radial,
+  remapping/profile projection and physical Xbox/DualSense acceptance open.
 - [P] **[10.7 Long tail](plans/gameplay.md)** — door-obstruction producers,
   follower/return-to-initial, vdata-driven systems; promote per item when reached.
 - [x] **10.8 OpenLevel map lifecycle** → `docs/architecture/map-architecture.md`.

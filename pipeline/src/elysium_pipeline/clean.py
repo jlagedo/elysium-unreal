@@ -112,6 +112,7 @@ def adopt_export_root(export_root: Path, work_root: Path) -> Path:
 class CleanTargets:
     export_root: Path
     project_content: Path
+    project_input_content: Path
     boot_map: Path
     baked_content: Path
 
@@ -129,17 +130,19 @@ def validate_clean_targets(
         if _same(export, dangerous):
             raise UnsafeClean(f"refusing dangerous export root: {export}")
     project_content = (repo / "Content" / "VtMB").resolve()
+    project_input_content = (repo / "Content" / "Input").resolve()
     boot_map = (repo / "Content" / "Elysium.umap").resolve()
     baked_content = (repo / "Plugins" / "ElysiumBaked" / "Content").resolve()
     expected = (
         repo / "Content" / "VtMB",
+        repo / "Content" / "Input",
         repo / "Content" / "Elysium.umap",
         repo / "Plugins" / "ElysiumBaked" / "Content",
     )
-    actual = (project_content, boot_map, baked_content)
+    actual = (project_content, project_input_content, boot_map, baked_content)
     if any(not _same(left, right) for left, right in zip(expected, actual, strict=True)):
         raise UnsafeClean("generated Unreal targets did not resolve to the exact project paths")
-    return CleanTargets(export, project_content, boot_map, baked_content)
+    return CleanTargets(export, project_content, project_input_content, boot_map, baked_content)
 
 
 def clean_generated(targets: CleanTargets) -> Path:
@@ -158,6 +161,8 @@ def clean_generated(targets: CleanTargets) -> Path:
             child.unlink()
     if targets.project_content.exists():
         shutil.rmtree(targets.project_content)
+    if targets.project_input_content.exists():
+        shutil.rmtree(targets.project_input_content)
     if targets.boot_map.exists():
         targets.boot_map.unlink()
     if targets.baked_content.exists():

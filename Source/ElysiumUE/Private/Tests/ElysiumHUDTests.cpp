@@ -156,7 +156,7 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("keyboard use binding text"),
 		ElysiumInteraction::UseBindingText(false).ToString(), FString(TEXT("E")));
 	TestEqual(TEXT("gamepad use binding text"),
-		ElysiumInteraction::UseBindingText(true).ToString(), FString(TEXT("RB")));
+		ElysiumInteraction::UseBindingText(true).ToString(), FString(TEXT("RT")));
 
 	View.Feed.bVisible = true;
 	View.Feed.bPaired = true;
@@ -1017,8 +1017,8 @@ bool FElysiumUICompositionPolicyTest::RunTest(const FString& Parameters)
 		Use.GetRow<FElysiumCommonInputActionData>(TEXT("HUD test"));
 	TestTrue(TEXT("native Use action binds keyboard E"),
 		UseData && UseData->IsKeyBoundToInputActionData(EKeys::E));
-	TestTrue(TEXT("native Use action binds gamepad RB"),
-		UseData && UseData->IsKeyBoundToInputActionData(EKeys::Gamepad_RightShoulder));
+	TestTrue(TEXT("native Use action binds gamepad RT"),
+		UseData && UseData->IsKeyBoundToInputActionData(EKeys::Gamepad_RightTriggerAxis));
 
 	const FString SourceRoot = FPaths::ConvertRelativePathToFull(
 		FPaths::ProjectDir() / TEXT("Source/ElysiumUE"));

@@ -1007,7 +1007,7 @@ FText UElysiumHUDWidget::UseBindingText() const
 	if (Action && CommonInput)
 	{
 		const FKey Key = Action->GetCurrentInputTypeInfo(CommonInput).GetKey();
-		if (Key == EKeys::E || Key == EKeys::Gamepad_RightShoulder)
+		if (Key == EKeys::E || Key == EKeys::Gamepad_RightTriggerAxis)
 		{
 			return ElysiumInteraction::UseBindingText(bGamepad);
 		}

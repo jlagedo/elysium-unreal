@@ -13,14 +13,6 @@ Input is the driver, the VtMB console command string stays the action's identity
 `FElysiumConsole` on `Started`/`Completed` (so patch aliases bind exactly like compiled verbs).
 `EPlayerMappableKeySlot` First/Second/Third = VtMB's Key/Alternate + Gamepad.
 
-**Current partial slice:** the committed action table and generator emit `IA_Move`, `IA_Look`,
-`IA_MouseLook`, `IA_Jump`, `IA_Feed`, both IMCs and the runtime action set; the router folds
-LS/RS into `FElysiumUserCmd`, Mouse2D through `Smooth`, Cross/A through `+jump`/`-jump`,
-Y/Triangle through `+feed`/`-feed`; `GameInputWindows` is the sole preferred pad API (native
-Xbox + configured standard DualSense `054C:0CE6`), generic-Controller processor
-extra-buttons-only; UI navigation deliberately adds no Enhanced Input contexts. Keyboard and
-non-look mouse binds still use the legacy front end.
-
 **Remaining sub-steps:**
 
 - **b (rest).** `SetAnalogUp`, keyboard movement and the remaining keyboard/mouse binds onto
@@ -29,11 +21,10 @@ non-look mouse binds still use the legacy front end.
 - **c. Reserved keys** — console on `` ` `` plus `F7`, Cog shell shortcuts on
   `Ctrl+F1`–`Ctrl+F4`, dev keys on `BindDebugKey`; enforced by a Substrate-tier test over every
   generated IMC, `elysium.input.ReserveDebugKeys 0` to A/B in dev builds.
-- **e (rest).** Additional DS4/Edge `FGameInputDeviceConfiguration` entries; glyph swapping off
-  the overridden hardware id; the full pad layout (`docs/architecture/input-architecture.md`
-  § "The layout") — the contextual `LT`, the quickbar radial, melee stick quantised to four
-  directions on a combat deadzone, RE36's `+wpn_secondaryatk` composite; adaptive
-  triggers/haptics deferred; `GameInputRedist.msi` joins 10.5's packaging story.
+- **e (rest).** Additional DS4/Edge `FGameInputDeviceConfiguration` and glyph entries; LB hold →
+  quickbar radial; melee stick quantised to four directions
+  on a combat deadzone; adaptive triggers/haptics deferred; `GameInputRedist.msi` joins 10.5's
+  packaging story.
 - **f. `UElysiumInputUserSettings` + `config.cfg` projection** — the key profile is
   authoritative; `FElysiumConfigWriter` emits Valve-format text so `vamputil.py`'s
   `FixKeyBindings` reads a faithful view (imported once on first run; slot Third excluded).
