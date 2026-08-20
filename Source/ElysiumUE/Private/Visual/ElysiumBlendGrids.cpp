@@ -397,6 +397,42 @@ FElysiumBlendPick ElysiumBlendGrids::SelectCell(const FElysiumBlendGrid& Grid,
 	return Pick;
 }
 
+FElysiumBlendPick ElysiumBlendGrids::NearerCell(const FElysiumBlendPick& Pick,
+	const FElysiumBlendGrid& Grid)
+{
+	FElysiumBlendPick Nearer = Pick;
+	bool bStepped = false;
+	for (int32 Axis = 0; Axis < 2; ++Axis)
+	{
+		// The collapse has no second half by construction: whichever cell it lands on is the whole
+		// answer, so the fraction is cleared on both axes rather than only on the one that moved.
+		if (Nearer.Fraction[Axis] < 0.5f)
+		{
+			Nearer.Fraction[Axis] = 0.f;
+			continue;
+		}
+		Nearer.Index[Axis] =
+			FMath::Min(Nearer.Index[Axis] + 1, FMath::Max(Grid.GroupSize[Axis] - 1, 0));
+		Nearer.Fraction[Axis] = 0.f;
+		bStepped = true;
+	}
+	if (!bStepped)
+	{
+		return Nearer;
+	}
+
+	const FElysiumBlendCell* Cell = Grid.CellAt(Nearer.Index[0], Nearer.Index[1]);
+	if (Cell == nullptr || Cell->Clip.IsEmpty())
+	{
+		// The neighbour did not bake. The floor pick is kept whole — fractions included — because
+		// `SelectCell` may itself have walked past a hole to reach it, and re-deriving anything from a
+		// half-cleared pick would describe a cell nothing selected.
+		return Pick;
+	}
+	Nearer.Cell = Cell;
+	return Nearer;
+}
+
 bool ElysiumBlendGrids::SpeedFan(const FElysiumBlendGrid& Grid, const FElysiumBlendTable& Table,
 	float Scale, FElysiumGaitSpeedTable& Out)
 {

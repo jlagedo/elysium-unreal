@@ -596,6 +596,11 @@ namespace ElysiumMcpImpl
 				TSharedRef<FJsonObject> Anim = Obj();
 				Anim->SetStringField(TEXT("activity"), Sel.ResolvedActivity);
 				Anim->SetStringField(TEXT("sequence"), Sel.SequenceLabel);
+				// The pair a fan evaluates, beside the label that named it: `animation` alone reads as
+				// a snap onto one cell, which is a different pose from the one on screen.
+				Anim->SetStringField(TEXT("animation"), Sel.AnimationName);
+				Anim->SetStringField(TEXT("next_animation"), Sel.NextAnimationName);
+				Anim->SetNumberField(TEXT("axis_fraction"), Sel.AxisFraction[0]);
 				// LIFE4 — the same translation hops the player readout reports, so a cast body's
 				// resolution is auditable without a screenshot: the class answer, the weapon ladder
 				// rung, the availability rung.
@@ -1004,6 +1009,10 @@ namespace ElysiumMcpImpl
 						TSharedRef<FJsonObject> Anim = Obj();
 						Anim->SetStringField(TEXT("stem"), Sel.Stem);
 						Anim->SetStringField(TEXT("source"), ElysiumAnimIntent::SourceName(Sel.Source));
+						// Beside the producer, because they answer different questions: which chain
+						// the translation below walked is the body's, not the asker's.
+						Anim->SetStringField(TEXT("body_kind"),
+							ElysiumAnimIntent::BodyKindName(Sel.BodyKind));
 						Anim->SetStringField(TEXT("channel"), ElysiumAnimIntent::ChannelName(Sel.Channel));
 						Anim->SetStringField(TEXT("route"), ElysiumAnimIntent::RouteName(Sel.Route));
 						Anim->SetNumberField(TEXT("generation"), Sel.Generation);
@@ -1032,6 +1041,10 @@ namespace ElysiumMcpImpl
 						Anim->SetStringField(TEXT("asset"),
 							ElysiumAnimIntent::AssetKindName(Sel.AssetKind));
 						Anim->SetStringField(TEXT("animation"), Sel.AnimationName);
+						// The other half of the pair a fan evaluates, and its weight. Without them a
+						// reader cannot tell a two-cell mix from the snap onto one cell that a body
+						// with no reaction branch actually performs.
+						Anim->SetStringField(TEXT("next_animation"), Sel.NextAnimationName);
 						Anim->SetBoolField(TEXT("looping"), Sel.bLooping);
 						Anim->SetBoolField(TEXT("snap"), Sel.bSnap);
 						Anim->SetBoolField(TEXT("additive"), Sel.bAdditive);
@@ -1044,6 +1057,7 @@ namespace ElysiumMcpImpl
 							TSharedRef<FJsonObject> One = Obj();
 							One->SetStringField(TEXT("name"), Sel.AxisName[Axis]);
 							One->SetNumberField(TEXT("value"), Sel.AxisValue[Axis]);
+							One->SetNumberField(TEXT("fraction"), Sel.AxisFraction[Axis]);
 							Axes.Add(MakeShared<FJsonValueObject>(One));
 						}
 						Anim->SetArrayField(TEXT("axes"), Axes);

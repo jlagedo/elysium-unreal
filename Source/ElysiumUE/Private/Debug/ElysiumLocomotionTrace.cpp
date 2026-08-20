@@ -119,8 +119,18 @@ void FTotals::Observe(const FElysiumLocomotionSample& Sample,
 		// A course's manifest naming the bank it resolved through IS the bank-ownership claim, in
 		// text, in the run's own output.
 		Banks.Add(Selection.OwnerStem);
-		Selections.Add(FString::Printf(TEXT("%s=%s@%s:%s"), *Selection.ResolvedActivity,
-			*Selection.SequenceLabel, *Selection.OwnerStem, *Selection.AnimationName));
+		// The PAIR a fan evaluates, not the floor cell alone: a manifest that named one cell would read
+		// as a snap on every frame the body was between two of them, which is most of them. A label
+		// that names one animation carries no second half and reads exactly as it did.
+		//
+		// The FRACTION is deliberately not in the identity — this is a SET of the identities a course
+		// visited, and a continuous weight would make every frame its own entry.
+		Selections.Add(Selection.NextAnimationName.IsEmpty()
+			? FString::Printf(TEXT("%s=%s@%s:%s"), *Selection.ResolvedActivity,
+				*Selection.SequenceLabel, *Selection.OwnerStem, *Selection.AnimationName)
+			: FString::Printf(TEXT("%s=%s@%s:%s+%s"), *Selection.ResolvedActivity,
+				*Selection.SequenceLabel, *Selection.OwnerStem, *Selection.AnimationName,
+				*Selection.NextAnimationName));
 	}
 }
 

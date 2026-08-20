@@ -186,8 +186,9 @@ void UElysiumAnimSubsystem::ReportGaitFanMiss(const FElysiumGaitSpeedRequest& Re
 
 	UE_LOG(LogElysiumAnim, Warning,
 		TEXT("[elysium] '%s' resolves no %s fan (%s): it will travel at the stated constant while ")
-		TEXT("its record names a cell (class '%s', weapon '%s', state %d, label '%s'@'%s')"),
+		TEXT("its record names a cell (%s chain, class '%s', weapon '%s', state %d, label '%s'@'%s')"),
 		*Request.Stem, ElysiumAnimIntent::ActivityName(Code), Reason,
+		ElysiumAnimIntent::BodyKindName(Request.BodyKind),
 		Request.ActorClassname.IsEmpty() ? TEXT("(none)") : *Request.ActorClassname,
 		Request.WeaponClassname.IsEmpty() ? TEXT("(empty hands)") : *Request.WeaponClassname,
 		static_cast<int32>(Request.ActorState),
@@ -756,11 +757,12 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 		Intent.Variant = Request.Variant;
 		Intent.WeaponClassname = Request.WeaponClassname;
 		Intent.FormTag = Request.FormTag;
-		// **The same chain the pose walks** (LIFE3). The source selects the pre-translation body,
+		// **The same chain the pose walks** (LIFE3). The body kind selects the pre-translation body,
 		// the classname finds the recovered `+0x5dc`/`+0x5e0` class rows and the state picks the
 		// alert or the relaxed set — so a cast body's speeds come off the sequences that body is
 		// actually about to play rather than off the player fan the request happens to name.
 		Intent.Source = Request.Source;
+		Intent.BodyKind = Request.BodyKind;
 		Intent.ActorClassname = Request.ActorClassname;
 		Intent.ActorState = Request.ActorState;
 		// A gait that resolves through the fallback ladder is not that gait. Reaching `walk` for a
@@ -819,41 +821,84 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 	return Out.IsValid();
 }
 
-bool UElysiumAnimSubsystem::ResolveActivityClip(const FString& Stem, const FString& Activity,
-	int32 Variant, FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+bool UElysiumAnimSubsystem::ResolveActivityClip(const FElysiumActivityClipRequest& Request,
+	FElysiumActivityClip& Out)
 {
-	OutLabel.Reset();
-	OutAnimName.Reset();
-	OutGroundSpeedCmPerSecond = 0.f;
+	Out = FElysiumActivityClip();
 
 	// Expressed over the one resolver rather than beside it: two implementations of one weighted pick
 	// and one owner rule are exactly how the player path and the cast path come to disagree about a
-	// bank with nothing reporting it.
-	FElysiumAnimationIntent Intent;
-	Intent.Stem = Stem;
-	Intent.Activity = Activity;
-	Intent.Variant = Variant;
-	Intent.Source = EElysiumAnimSource::Npc;
-	// This adapter's contract predates the fallback ladder and its callers read the miss — a scripted
-	// walk gait takes a false return as "no authored speed" and keeps its own. The ladder arrives with
-	// those callers when they move onto the intent seam, not underneath them.
-	Intent.bAllowFallbackLadder = false;
+	// bank with nothing reporting it. The request-to-intent mapping is pure and lives with the
+	// resolver, so what this adapter forwards is asserted without a subsystem behind it.
+	const FElysiumAnimationIntent Intent = ElysiumAnimResolve::ActivityIntentFor(Request);
 
 	FElysiumAnimationSelection Selection;
-	ElysiumAnimResolve::Resolve(Intent, BuildCatalog(Stem), Selection);
+	ElysiumAnimResolve::Resolve(Intent, BuildCatalog(Request.Stem), Selection);
 	if (Selection.SequenceLabel.IsEmpty() || Selection.AnimationName.IsEmpty())
 	{
+		// The record's own named miss, in words, with the classification the request selected through
+		// — the same four facts the gait-fan miss renders, because "ACT_WALK missed on jack" is a
+		// different report depending on which class body, weapon ladder and alert branch ran.
+		//
+		// Verbose rather than a warning because a body whose vocabulary carries no sequence for an
+		// activity is asked again every time its schedule comes round, and one warning per ask would
+		// bury the load it belongs to; the caller's fallback is the behaviour, and this line is why it
+		// was taken.
+		UE_LOG(LogElysiumAnim, Verbose,
+			TEXT("'%s' resolved no clip for %s (%s): %s (%s chain, class '%s', weapon '%s', state %d)"),
+			*Request.Stem, *Request.Activity, ElysiumAnimIntent::OutcomeName(Selection.Outcome),
+			Selection.Detail.IsEmpty() ? TEXT("no detail recorded") : *Selection.Detail,
+			ElysiumAnimIntent::BodyKindName(Request.BodyKind),
+			Request.ActorClassname.IsEmpty() ? TEXT("(none)") : *Request.ActorClassname,
+			Request.WeaponClassname.IsEmpty() ? TEXT("(empty hands)") : *Request.WeaponClassname,
+			static_cast<int32>(Request.ActorState));
 		return false;
 	}
 
-	OutLabel = Selection.SequenceLabel;
-	OutAnimName = Selection.AnimationName;
-	OutGroundSpeedCmPerSecond = Selection.GroundSpeedCmPerSecond;
+	Out.Label = Selection.SequenceLabel;
+	Out.AnimationName = Selection.AnimationName;
+	// The include DAG's own answer, carried out with the cell. A caller that re-derived the owner from
+	// the label would re-resolve the grid at neutral pose parameters and collapse a directional fan
+	// onto its forward cell.
+	Out.OwnerStem = Selection.OwnerStem;
+	Out.GroundSpeedCmPerSecond = Selection.GroundSpeedCmPerSecond;
+	Out.bLooping = Selection.bLooping;
+	// LIFE5 — the fan half, carried out so a producer can route a directional reaction without
+	// re-resolving anything. The axis value is read off the SELECTION rather than off the request: the
+	// grid states which pose parameter it binds, and a producer's `HitYaw` is the answer only for a
+	// fan that binds `hit_yaw`.
+	Out.bGrid = Selection.AssetKind == EElysiumAnimAssetKind::BlendSpace;
+	Out.AxisValue = Selection.AxisValue[0];
+	Out.NextAnimationName = Selection.NextAnimationName;
+	Out.AxisFraction = Selection.AxisFraction[0];
 	return true;
 }
 
+FString UElysiumAnimSubsystem::ResolveNearestGridClip(const FString& OwnerStem, const FString& Label,
+	float AxisValue)
+{
+	const TSharedPtr<const FElysiumBlendTable> Table = GetBlendTable(OwnerStem);
+	const FElysiumBlendGrid* Grid = Table.IsValid() ? Table->Find(Label) : nullptr;
+	if (Grid == nullptr)
+	{
+		// Not a defect: most labels name one animation and declare no grid to collapse.
+		return FString();
+	}
+	// The axis the GRID binds, under its own declared name — the same binding `SelectCell` reads, so a
+	// fan bound to a sidecar's second pose parameter is steered by the value it was handed rather than
+	// by a name this caller guessed.
+	FElysiumPoseParams Pose;
+	if (const FElysiumPoseParamDesc* Desc = Table->Param(Grid->ParamIndex[0]))
+	{
+		Pose.Set(Desc->Name, AxisValue);
+	}
+	const FElysiumBlendPick Nearer = ElysiumBlendGrids::NearerCell(
+		ElysiumBlendGrids::SelectCell(*Grid, *Table, Pose), *Grid);
+	return Nearer.Cell != nullptr ? Nearer.Cell->Clip : FString();
+}
+
 bool UElysiumAnimSubsystem::ResolveSequenceClip(const FString& Stem, const FString& ClipName,
-	FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+	EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
 {
 	OutAnimName.Reset();
 	OutGroundSpeedCmPerSecond = 0.f;
@@ -866,6 +911,10 @@ bool UElysiumAnimSubsystem::ResolveSequenceClip(const FString& Stem, const FStri
 	Intent.SequenceLabel = ClipName;
 	Intent.Route = EElysiumAnimRoute::ExactLabel;
 	Intent.Source = EElysiumAnimSource::Npc;
+	// Threaded through for the same reason as `ResolveActivityClip`. The exact-label route runs no
+	// translation, so nothing forks on it here — but the record it produces names the chain, and two
+	// adapters that answered that differently would be two answers for one body.
+	Intent.BodyKind = BodyKind;
 	// Same reason as ResolveActivityClip: this adapter's caller reads the miss and keeps its own
 	// speed, so the fallback ladder does not run underneath it.
 	Intent.bAllowFallbackLadder = false;
@@ -1029,15 +1078,6 @@ bool UElysiumAnimSubsystem::ResolveStanceClips(const FString& Stem, const FStrin
 
 	ElysiumStance::ApplyPrecacheFallbacks(OutClips);
 	return OutClips.IsValid();
-}
-
-FString UElysiumAnimSubsystem::PickActivityClip(const FString& Stem, const FString& Activity,
-	int32 Variant)
-{
-	// The pick itself is a pure rule over a vocabulary, so it lives with the resolver and this is the
-	// cache lookup in front of it.
-	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
-	return Set != nullptr ? ElysiumAnimResolve::PickWeighted(*Set, Activity, Variant) : FString();
 }
 
 const TCHAR* UElysiumAnimSubsystem::TierName(EElysiumIdleTier Tier)

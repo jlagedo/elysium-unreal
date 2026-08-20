@@ -1,10 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+// By value: the phase seam below answers one `FElysiumClipPhase` and is keyed by channel.
+#include "ElysiumAnimationIntent.h"
 #include "ElysiumEntity.h"   // FElysiumFlexWrite (passed by view)
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "Visual/ElysiumAnimNodes.h"
+#include "Visual/ElysiumHairDynamicsData.h"
 // By value: the eye input is a member, so the rig's own header rather than a forward declaration.
 #include "Visual/ElysiumFacialRig.h"
 
@@ -46,8 +49,10 @@ struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
 	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
 	int32 NumAxisInterpRules() const { return AxisInterp.NumResolvedRules(); }
 	void SetHairDynamics(const TArray<FElysiumHairDynamicsChainConfig>& InChains,
+		const TArray<FElysiumHairDynamicsBodyConfig>& InBodies,
 		const FReferenceSkeleton& ReferenceSkeleton);
-	int32 NumHairDynamicsChains() const { return HairDynamics.Num(); }
+	int32 NumHairDynamicsChains() const { return InstalledChainCount; }
+	int32 NumHairDynamicsBodies() const { return InstalledBodyCount; }
 
 	// The facial morph track (12.3): the rig's evaluated morph weights, published from the game
 	// thread and emitted as morph-target anim curves over whatever pose the body produced. Two
@@ -73,6 +78,8 @@ private:
 	// are driven through `ResolveBones`/`CacheBones` + `Apply` rather than through pose links.
 	UPROPERTY(Transient) FAnimNode_ElysiumAxisInterp AxisInterp;
 	UPROPERTY(Transient) TArray<FAnimNode_ElysiumHairDynamics> HairDynamics;
+	int32 InstalledChainCount = 0;
+	int32 InstalledBodyCount = 0;
 	bool bHairNeedsInitialize = false;
 
 };
@@ -99,8 +106,31 @@ public:
 	//
 	// False when this instance cannot play the clip at all, which is an ordinary answer: a body
 	// whose visual has no vocabulary is not an error.
-	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds) { return false; }
+	//
+	// The two fades are stated apart because retail states them apart — the flinch fades in over 0.1
+	// and out over 0.3 — and because `PlaySlotAnimationAsDynamicMontage` takes them separately.
+	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendInSeconds,
+		float BlendOutSeconds)
+	{
+		return false;
+	}
 	virtual void StopOneShot(float BlendSeconds) {}
+
+	// --- the phase seam (LIFE5) -----------------------------------------------------------------
+	//
+	// Where one channel of this body stands on its clip, as the normalized cycle VtMB's own event
+	// dispatcher compares (`docs/vtmb/animation_and_movers.md` → "Sequence events and native
+	// dispatch"). Only the host knows: a montage, a graph state and a blended fan each carry their
+	// own position, and none of them is readable from outside.
+	//
+	// False here is the ordinary answer for a host with no phase clock — this base has none, and a
+	// body playing nothing on that channel has no phase either. `Out` is cleared either way, so a
+	// negative answer can never be read as a stale record.
+	virtual bool GetClipPhase(EElysiumAnimChannel Channel, FElysiumClipPhase& Out) const
+	{
+		Out = FElysiumClipPhase();
+		return false;
+	}
 
 	// --- the facial flex track (roadmap 12.3) ------------------------------------------------
 	//
@@ -159,11 +189,14 @@ public:
 	// reports, and what distinguishes "no table" from "a table whose bones this skeleton lacks".
 	int32 GetResolvedAxisInterpRules() const;
 
-	// Install the generated mesh's stock-AnimDynamics recipes. Empty is the ordinary answer for
-	// every body outside the deliberately narrow two-character proof.
+	// Install the generated mesh's stock-AnimDynamics recipes. Empty chains are the ordinary
+	// answer outside the two-character hair proof; empty bodies are the ordinary answer on a
+	// model with no one-bone breast row.
 	void SetHairDynamics(const TArray<FElysiumHairDynamicsChainConfig>& InChains,
+		const TArray<FElysiumHairDynamicsBodyConfig>& InBodies,
 		const FReferenceSkeleton& ReferenceSkeleton);
 	int32 GetHairDynamicsChainCount() const;
+	int32 GetHairDynamicsBodyCount() const;
 
 	// Read-back for the debug surface: the normalized controller inputs, the flexdesc weights the
 	// rules produced from them, and the ramped weight each morph target is driven at.

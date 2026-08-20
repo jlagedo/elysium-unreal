@@ -204,18 +204,33 @@ public:
 	bool ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Request, FElysiumGaitSpeeds& Out);
 
 	// Resolve one ACT_* request all the way through its character vocabulary and the owning bank's
-	// neutral blend-grid cell. OutLabel is the vocabulary key (for example `walk`) that preserves
-	// bank ownership for playback; OutAnimName is the concrete glb animation (`walk_0`), and the
-	// speed is zero when that cell carries no authored movement metadata.
-	bool ResolveActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
-		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
+	// neutral blend-grid cell. `Out.Label` is the vocabulary key (for example `walk`) that preserves
+	// bank ownership for playback; `Out.AnimationName` is the concrete glb animation (`walk_0`), the
+	// speed is zero when that cell carries no authored movement metadata, and `Out.bLooping` is the
+	// selected row's own flag.
+	//
+	// The request states the whole translation context — body kind, actor classname, weapon
+	// classname, actor state — because the translation forks on every one of them: a resolve that
+	// assumed any would answer for a different body than the one being posed.
+	bool ResolveActivityClip(const FElysiumActivityClipRequest& Request, FElysiumActivityClip& Out);
+
+	// LIFE5 — the one cell a body that cannot evaluate a fan collapses one onto: the grid resolved at
+	// `AxisValue` on the axis it binds, taken to the NEARER of the two cells the parameter sits
+	// between (`ElysiumBlendGrids::NearerCell`, which owns the arithmetic). Empty when the label names
+	// no grid, which tells the caller there was nothing to collapse.
+	//
+	// It is not a second grid resolver: every body with a reaction branch plays the fan itself, and
+	// this exists only so a graphless one poses a neighbour of the direction it was hit from instead
+	// of the fan's own base cell.
+	FString ResolveNearestGridClip(const FString& OwnerStem, const FString& Label, float AxisValue);
 
 	// The label-route sibling: ClipName is already exact (a scripted m_iszCustomMove and the like),
 	// so no weighted choice and no translation run over it. OutAnimName is the concrete cell ClipName
 	// resolves to -- itself, unless ClipName names a blend grid -- and the speed is zero when that
-	// cell carries no authored movement metadata.
+	// cell carries no authored movement metadata. BodyKind still travels, because the record it
+	// produces names the chain the body belongs to.
 	bool ResolveSequenceClip(const FString& Stem, const FString& ClipName,
-		FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
+		EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
 
 	// The standing idle for a stem at a disposition, by VtMB's own chain:
 	//   default_disposition -> dispositiontable "Animation Name" -> Stance_<Name>_Idle_* (by weight)
@@ -234,9 +249,6 @@ public:
 	// machine read this rather than deriving the labels twice.
 	bool ResolveStanceClips(const FString& Stem, const FString& AnimName,
 		struct FElysiumStanceClips& OutClips);
-	// Deterministic weighted activity selection. VData interesting places name ACT_* values and
-	// frequencies; the clip manifest supplies the per-sequence weights within that activity.
-	FString PickActivityClip(const FString& Stem, const FString& Activity, int32 Variant = 0);
 
 	// Every candidate the idle policy considered, best first — the debug/verification view.
 	TArray<FString> IdleCandidates(const FString& Stem, const FString& Disposition,

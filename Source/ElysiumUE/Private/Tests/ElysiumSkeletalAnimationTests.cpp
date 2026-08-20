@@ -1444,6 +1444,198 @@ bool FElysiumBlendGridCorpusTest::RunTest(const FString&)
 	return true;
 }
 
+// LIFE5 — the directional flinch fan, as the shipped export declares it.
+//
+// A damage reaction is not one clip. `hit_torso` names a nine-cell fan steered by a pose parameter
+// of its own, `hit_yaw`, and every fact this test asserts is a fact a producer depends on: the fan
+// is single-axis so one angle selects it, it is bound to the SECOND declared parameter so a
+// resolver reading index 0 would steer a flinch by the walk direction, it spans the whole circle so
+// a hit from any side has a cell, and the four cardinals reach four DIFFERENT cells — a fan whose
+// directions collapsed onto one clip would play a plausible flinch and be invisible.
+//
+// The nine cell names are logged rather than asserted. They are a recovered fact about the shipped
+// content, and pinning them here would turn a re-export into a test failure; what has to hold is
+// that each of them is on the baked mount, which is what a producer actually asks for.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageFlinchGridTest,
+	"Elysium.Content.DamageFlinchGrid", GElysiumSkeletalContentFlags)
+bool FElysiumDamageFlinchGridTest::RunTest(const FString&)
+{
+	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc/npc_index.json (run: uv run elysium export bundle npc)"));
+		return true;
+	}
+	FElysiumNpcIndex Index;
+	FString Error;
+	if (!TestTrue(TEXT("npc_index parses"), Index.Load(Error)))
+	{
+		AddError(Error);
+		return false;
+	}
+
+	// Which bank owns the reaction for each carrier, and one BAKED carrier per bank to load its
+	// cells against — a bank clip is retargeted onto a body's skeleton, so the load needs a body.
+	TArray<FString> Stems;
+	Index.Npcs.GenerateKeyArray(Stems);
+	Stems.Sort();
+	TMap<FString, FString> BodyForOwner;
+	int32 Carriers = 0;
+	for (const FString& Stem : Stems)
+	{
+		FElysiumNpcClipSet Clips;
+		FString ClipError;
+		if (!Clips.Load(Stem, ClipError))
+		{
+			continue;
+		}
+		const FElysiumNpcClip* Hit = Clips.Find(TEXT("hit_torso"));
+		if (Hit == nullptr)
+		{
+			continue;
+		}
+		++Carriers;
+		const FString Owner = Hit->IsOwnedBy(Stem) ? Stem : Hit->Owner;
+		if (!BodyForOwner.Contains(Owner) && ElysiumNpcVisual::IsStemBaked(Stem))
+		{
+			BodyForOwner.Add(Owner, Stem);
+		}
+	}
+	if (Carriers == 0)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no indexed body carries `hit_torso`; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+
+	TArray<FString> Owners;
+	BodyForOwner.GenerateKeyArray(Owners);
+	Owners.Sort();
+	AddInfo(FString::Printf(TEXT("%d indexed bod(ies) carry `hit_torso`, owned by %d bank(s)"),
+		Carriers, Owners.Num()));
+	if (Owners.IsEmpty())
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no carrier of `hit_torso` stands on the baked mount; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+
+	TArray<UObject*> KeepAlive;
+	for (const FString& Owner : Owners)
+	{
+		const FString BodyStem = BodyForOwner[Owner];
+		FElysiumBlendTable Table;
+		FString TableError;
+		if (!Table.Load(FString::Printf(TEXT("blends/%s.json"), *Owner), TableError))
+		{
+			AddError(FString::Printf(TEXT("'%s' owns `hit_torso` and has no blend sidecar (%s)"),
+				*Owner, *TableError));
+			continue;
+		}
+		const FElysiumBlendGrid* Grid = Table.Find(TEXT("hit_torso"));
+		if (!TestNotNull(*FString::Printf(TEXT("'%s' declares a `hit_torso` grid"), *Owner), Grid))
+		{
+			continue;
+		}
+
+		// --- the shape -------------------------------------------------------------------------
+		TestEqual(*FString::Printf(TEXT("%s: `hit_torso` is a nine-cell fan"), *Owner),
+			Grid->Cells.Num(), 9);
+		TestEqual(*FString::Printf(TEXT("%s: nine cells on axis 0"), *Owner), Grid->GroupSize[0], 9);
+		TestEqual(*FString::Printf(TEXT("%s: and one on axis 1, so it is single-axis"), *Owner),
+			Grid->GroupSize[1], 1);
+		TestEqual(*FString::Printf(TEXT("%s: bound to pose parameter index 1"), *Owner),
+			Grid->ParamIndex[0], 1);
+		TestEqual(*FString::Printf(TEXT("%s: with no second axis parameter"), *Owner),
+			Grid->ParamIndex[1], static_cast<int32>(INDEX_NONE));
+		TestEqual(*FString::Printf(TEXT("%s: spanning -180 degrees"), *Owner), Grid->ParamStart[0],
+			-180.0f);
+		TestEqual(*FString::Printf(TEXT("%s: to +180"), *Owner), Grid->ParamEnd[0], 180.0f);
+
+		const FElysiumPoseParamDesc* Desc = Table.Param(Grid->ParamIndex[0]);
+		if (!TestNotNull(*FString::Printf(TEXT("%s: the bound parameter is declared"), *Owner), Desc))
+		{
+			continue;
+		}
+		TestEqual(*FString::Printf(TEXT("%s: and it is `hit_yaw`"), *Owner), Desc->Name,
+			FString(TEXT("hit_yaw")));
+		TestEqual(*FString::Printf(TEXT("%s: which wraps over the whole circle"), *Owner), Desc->Loop,
+			360.0f);
+		TestEqual(*FString::Printf(TEXT("%s: from -180"), *Owner), Desc->Start, -180.0f);
+		TestEqual(*FString::Printf(TEXT("%s: to +180"), *Owner), Desc->End, 180.0f);
+
+		// --- the four cardinals reach four different cells --------------------------------------
+		static const float Cardinals[4] = { 0.0f, 90.0f, 180.0f, -90.0f };
+		static const TCHAR* const CardinalNames[4] = {
+			TEXT("front"), TEXT("right"), TEXT("back"), TEXT("left") };
+		TSet<int32> Selected;
+		for (int32 Which = 0; Which < 4; ++Which)
+		{
+			FElysiumPoseParams Pose;
+			Pose.Set(TEXT("hit_yaw"), Cardinals[Which]);
+			const FElysiumBlendPick Pick = ElysiumBlendGrids::SelectCell(*Grid, Table, Pose);
+			if (!TestNotNull(*FString::Printf(TEXT("%s: a hit from the %s selects a cell"),
+				*Owner, CardinalNames[Which]), Pick.Cell))
+			{
+				continue;
+			}
+			TestFalse(*FString::Printf(TEXT("%s: the %s cell names an animation"), *Owner,
+				CardinalNames[Which]), Pick.Cell->Clip.IsEmpty());
+			Selected.Add(Pick.Index[0]);
+		}
+		TestEqual(*FString::Printf(
+			TEXT("%s: the four cardinals reach four DIFFERENT cells"), *Owner), Selected.Num(), 4);
+
+		// --- every cell is on the mount, against a body that resolves this bank ------------------
+		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(BodyStem);
+		if (Mesh == nullptr)
+		{
+			AddError(FString::Printf(TEXT("%s: carrier '%s' is not on the baked mount"), *Owner,
+				*BodyStem));
+			continue;
+		}
+		Mesh->AddToRoot();
+		KeepAlive.Add(Mesh);
+
+		// In AXIS order, which is the fan's own order and not the sidecar's declaration order.
+		TArray<FString> Readout;
+		int32 Loaded = 0;
+		for (int32 Cell = 0; Cell < Grid->GroupSize[0]; ++Cell)
+		{
+			const FElysiumBlendCell* Entry = Grid->CellAt(Cell, 0);
+			if (Entry == nullptr || Entry->Clip.IsEmpty())
+			{
+				AddError(FString::Printf(TEXT("%s: `hit_torso` cell %d names no animation"), *Owner,
+					Cell));
+				Readout.Add(TEXT("-"));
+				continue;
+			}
+			Readout.Add(Entry->Clip);
+			if (ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, Entry->Clip) != nullptr)
+			{
+				++Loaded;
+			}
+			else
+			{
+				AddError(FString::Printf(
+					TEXT("%s: `hit_torso` cell %d ('%s') did not load off the mount for '%s'"),
+					*Owner, Cell, *Entry->Clip, *BodyStem));
+			}
+		}
+		TestEqual(*FString::Printf(TEXT("%s: all nine cells load off the baked mount"), *Owner),
+			Loaded, Grid->GroupSize[0]);
+
+		// The recovered readout: which authored reaction each direction of the fan actually names.
+		AddInfo(FString::Printf(TEXT("%s (via '%s'), -180 -> +180: %s"), *Owner, *BodyStem,
+			*FString::Join(Readout, TEXT(", "))));
+	}
+
+	for (UObject* Object : KeepAlive)
+	{
+		Object->RemoveFromRoot();
+	}
+	return true;
+}
+
 // The autolayer binding: which clips a host sequence is composed with, and in what order.
 //
 // Every assertion here crosses the table against something ANOTHER export declares — an animation

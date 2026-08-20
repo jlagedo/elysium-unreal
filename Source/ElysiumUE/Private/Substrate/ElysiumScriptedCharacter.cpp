@@ -1,5 +1,6 @@
 #include "Substrate/ElysiumScriptedCharacter.h"
 
+#include "ElysiumAnimationIntent.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumNpcLog.h"
@@ -46,15 +47,31 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 	if (Gait == EElysiumScriptGait::Walk)
 	{
 		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-		float AuthoredSpeed = 0.f;
-		if (Embodiment && Embodiment->ResolveNpcActivityClip(ModelStem(), TEXT("ACT_WALK"),
-			FMath::Max(0, Handle.Index), ScriptWalkLabel, ScriptWalkAnim, AuthoredSpeed)
-			&& FMath::IsFinite(AuthoredSpeed) && AuthoredSpeed > 0.f)
+		// A scripted character is a `CAI_BaseNPC` descendant whatever it is standing in for, so the
+		// chain is the cast's and the call states it.
+		FElysiumActivityClipRequest Request;
+		FillActivityClipRequest(Request);
+		Request.Activity = TEXT("ACT_WALK");
+		Request.Variant = FMath::Max(0, Handle.Index);
+		// A scripted beat asked for this leg, not the body's own AI, and the record names the
+		// producer rather than the body.
+		Request.Source = EElysiumAnimSource::Scene;
+		Request.BodyKind = EElysiumAnimBodyKind::Cast;
+
+		FElysiumActivityClip Walk;
+		if (Embodiment && Embodiment->ResolveNpcActivityClip(Request, Walk))
 		{
-			Speed = AuthoredSpeed;
-			UE_LOG(LogElysiumNpcEnt, Verbose,
-				TEXT("%s scripted walk uses '%s' -> '%s' authored ground speed %.1fcm/s"),
-				*DebugString(), *ScriptWalkLabel, *ScriptWalkAnim, Speed);
+			// The label travels even when the cell carries no motion record: it is what the travel
+			// cycle below plays, and only the SPEED is conditional on the authored number.
+			ScriptWalkLabel = Walk.Label;
+			ScriptWalkAnim = Walk.AnimationName;
+			if (FMath::IsFinite(Walk.GroundSpeedCmPerSecond) && Walk.GroundSpeedCmPerSecond > 0.f)
+			{
+				Speed = Walk.GroundSpeedCmPerSecond;
+				UE_LOG(LogElysiumNpcEnt, Verbose,
+					TEXT("%s scripted walk uses '%s' -> '%s' authored ground speed %.1fcm/s"),
+					*DebugString(), *ScriptWalkLabel, *ScriptWalkAnim, Speed);
+			}
 		}
 	}
 	else if (Gait == EElysiumScriptGait::Custom)
@@ -65,8 +82,9 @@ bool FElysiumScriptedCharacter::BeginScriptMove(const FVector& Mark, const FVect
 		IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 		float AuthoredSpeed = 0.f;
 		FString CustomAnim;
-		if (Embodiment && Embodiment->ResolveNpcSequenceClip(ModelStem(), CustomClip, CustomAnim,
-			AuthoredSpeed) && FMath::IsFinite(AuthoredSpeed) && AuthoredSpeed > 0.f)
+		if (Embodiment && Embodiment->ResolveNpcSequenceClip(ModelStem(), CustomClip,
+			EElysiumAnimBodyKind::Cast, CustomAnim, AuthoredSpeed)
+			&& FMath::IsFinite(AuthoredSpeed) && AuthoredSpeed > 0.f)
 		{
 			Speed = AuthoredSpeed;
 			UE_LOG(LogElysiumNpcEnt, Verbose,
@@ -278,11 +296,22 @@ void FElysiumScriptedCharacter::DestroyMotor()
 bool FElysiumScriptedCharacter::StartScriptWalkingAnimation(bool bRunning)
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment && Visual && Embodiment->PlayNpcActivity(Visual, ModelStem(),
-		bRunning ? TEXT("ACT_RUN") : TEXT("ACT_WALK"), FMath::Max(0, Handle.Index),
-		/*bLoop=*/true, nullptr))
+	if (Embodiment && Visual)
 	{
-		return true;
+		FElysiumActivityClipRequest Request;
+		FillActivityClipRequest(Request);
+		Request.Activity = bRunning ? TEXT("ACT_RUN") : TEXT("ACT_WALK");
+		Request.Variant = FMath::Max(0, Handle.Index);
+		// The scripted beat is the producer here too — this is the travel cycle its own move started.
+		Request.Source = EElysiumAnimSource::Scene;
+		Request.BodyKind = EElysiumAnimBodyKind::Cast;
+
+		FElysiumActivityClip Clip;
+		if (Embodiment->ResolveNpcActivityClip(Request, Clip)
+			&& PlayAnimClip(Clip.Label, /*bLoop=*/true))
+		{
+			return true;
+		}
 	}
 	return PlayAnimClip(bRunning ? TEXT("run") : TEXT("walk"), /*bLoop=*/true);
 }

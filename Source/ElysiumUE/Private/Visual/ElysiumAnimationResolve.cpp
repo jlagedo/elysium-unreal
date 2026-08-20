@@ -17,6 +17,14 @@ namespace
 	// `CAI_BaseNPC::TranslateActivity`'s own bound on the class/weapon alternation.
 	constexpr int32 GMaxAlternations = 5;
 
+	// Add one more fact to the record's line without erasing what is already there. The outcome
+	// reports below are written AFTER `ApplyLabel` may have noted a cell-level fallback, and a plain
+	// assignment would erase the note the fallback exists to make visible.
+	void AppendDetail(FElysiumAnimationSelection& Out, FString&& Note)
+	{
+		Out.Detail = Out.Detail.IsEmpty() ? MoveTemp(Note) : Out.Detail + TEXT("; ") + Note;
+	}
+
 	// Fill the asset half of the record from a resolved label. The owner is the include DAG's answer
 	// and is never re-derived: `Clip->Owner` names the bank offline, and a resolver keyed on the label
 	// alone hands the player the cast's gait.
@@ -71,8 +79,15 @@ namespace
 			return;
 		}
 
-		// A grid, resolved at the body's own pose parameters. The cell is named even for a blend space,
-		// because a record that says only "a blend space" cannot be checked against a capture.
+		// A grid, resolved at the body's own pose parameters. **One rule for every fan**: the floor
+		// cell, with the fraction to the next riding on the pick — which is what a blend space
+		// evaluates, and it is the same answer whether the axis is `move_yaw` or `hit_yaw`. A
+		// directional hit is a blend between two authored reactions exactly as a strafing walk is a
+		// blend between two authored gaits; quantizing one of them to its nearest cell would be a
+		// snap the graph is perfectly able not to perform.
+		//
+		// The cell is named even for a blend space, because a record that says only "a blend space"
+		// cannot be checked against a capture.
 		const FElysiumPoseParams Pose = PoseFrom(Intent);
 		const FElysiumBlendPick Pick = ElysiumBlendGrids::SelectCell(*Grid, *Table, Pose);
 		if (Pick.Cell != nullptr && !Pick.Cell->Clip.IsEmpty())
@@ -81,6 +96,14 @@ namespace
 			if (Pick.Cell->Motion.IsUsable())
 			{
 				Out.GroundSpeedCmPerSecond = Pick.Cell->Motion.GroundSpeedCmPerSecond;
+			}
+			// The second half of the pair, along axis 0 — the cell `AxisFraction[0]` weighs. Empty at
+			// the top of a fan: `ResolveAxis` clamps there and the fraction is zero, so there is no
+			// second cell and nothing to weigh.
+			const FElysiumBlendCell* Next = Grid->CellAt(Pick.Index[0] + 1, Pick.Index[1]);
+			if (Next != nullptr && !Next->Clip.IsEmpty())
+			{
+				Out.NextAnimationName = Next->Clip;
 			}
 		}
 		else
@@ -98,6 +121,7 @@ namespace
 			const FElysiumPoseParamDesc* Desc = Table->Param(Grid->ParamIndex[Axis]);
 			Out.AxisName[Axis] = Desc != nullptr ? Desc->Name : FString::Printf(TEXT("axis%d"), Axis);
 			Out.AxisValue[Axis] = Pose.Get(Out.AxisName[Axis]);
+			Out.AxisFraction[Axis] = Pick.Fraction[Axis];
 		}
 		Out.Outcome = EElysiumAnimOutcome::Resolved;
 		// A grid whose activity routes to a sequence-only state would play a null sequence — full
@@ -157,9 +181,9 @@ namespace
 			if (Translation.bRunToWalk)
 			{
 				Out.Outcome = EElysiumAnimOutcome::RunToWalk;
-				Out.Detail = FString::Printf(
+				AppendDetail(Out, FString::Printf(
 					TEXT("nothing the translation named is on '%s'; the recovered ACT_RUN fallback ")
-					TEXT("took ACT_WALK"), *Intent.Stem);
+					TEXT("took ACT_WALK"), *Intent.Stem));
 			}
 			else if (Translation.AvailabilityRung > 1)
 			{
@@ -167,10 +191,10 @@ namespace
 				// availability fallback, and which one answered is what separates "the body plays
 				// what the weapon named" from "the body plays what it had".
 				Out.Outcome = EElysiumAnimOutcome::TranslatedFallback;
-				Out.Detail = FString::Printf(
+				AppendDetail(Out, FString::Printf(
 					TEXT("'%s' has no sequence on '%s'; availability rung %d took '%s'"),
 					*Translation.WeaponActivity, *Intent.Stem, Translation.AvailabilityRung,
-					*Out.ResolvedActivity);
+					*Out.ResolvedActivity));
 			}
 			return;
 		}
@@ -194,8 +218,9 @@ namespace
 		// retry lives in the translation, where retail puts it; what is left here is the whole
 		// request as a disposition, then sequence zero. The player's chain has no ladder at all —
 		// the controlled corpus records a ducked ACT_LAND_CROUCH request simply returning -1 — so a
-		// player miss is reported as the named miss it is.
-		if (Intent.Source == EElysiumAnimSource::Npc && Intent.bAllowFallbackLadder)
+		// player miss is reported as the named miss it is. It forks on the body's own chain, not on
+		// the producer: a damage reaction on a cast body walks the ladder its class descends from.
+		if (Intent.BodyKind == EElysiumAnimBodyKind::Cast && Intent.bAllowFallbackLadder)
 		{
 			Label = TryActivity(Catalog, GDispositionActivity, Intent.Variant, Candidates);
 			if (!Label.IsEmpty())
@@ -206,9 +231,9 @@ namespace
 				if (Out.Outcome == EElysiumAnimOutcome::Resolved)
 				{
 					Out.Outcome = EElysiumAnimOutcome::Disposition;
-					Out.Detail = FString::Printf(
+					AppendDetail(Out, FString::Printf(
 						TEXT("'%s' resolved nothing on '%s'; retried as ACT_DISPOSITION"),
-						*Translation.Resolved, *Intent.Stem);
+						*Translation.Resolved, *Intent.Stem));
 				}
 				return;
 			}
@@ -347,10 +372,12 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	const FWeaponLadder* Ladder = Intent.WeaponClassname.IsEmpty()
 		? nullptr : FindLadderByEntityClass(Intent.WeaponClassname);
 
-	// **The chain a request takes is its source**, the same discriminator the fallback ladder below
+	// **The chain a request takes is its BODY's**, the same discriminator the fallback ladder below
 	// uses: `CBasePlayer` and `CAI_BaseNPC` are two different translators, not two configurations of
-	// one.
-	const bool bCast = Intent.Source == EElysiumAnimSource::Npc;
+	// one, and retail picks between them on the receiver's RTTI class rather than on who asked. So a
+	// damage reaction, a scene beat, an interaction and a debug stand all walk the cast chain on a
+	// cast body, and every one of them walks the player's one pass on the player.
+	const bool bCast = Intent.BodyKind == EElysiumAnimBodyKind::Cast;
 	const FNpcClass* Class = (bCast && !Intent.ActorClassname.IsEmpty())
 		? FindNpcClassByEntityClass(Intent.ActorClassname) : nullptr;
 	const int32 PreBody = Class != nullptr ? Class->PreTranslate : INDEX_NONE;
@@ -589,7 +616,46 @@ FElysiumPoseParams PoseFrom(const FElysiumAnimationIntent& Intent)
 	Pose.Set(TEXT("move_yaw"), Intent.Body.MoveYaw());
 	Pose.Set(TEXT("aim_yaw"), Intent.AimYaw);
 	Pose.Set(TEXT("aim_pitch"), Intent.AimPitch);
+	Pose.Set(TEXT("hit_yaw"), Intent.HitYaw);
 	return Pose;
+}
+
+FElysiumAnimationIntent ActivityIntentFor(const FElysiumActivityClipRequest& Request)
+{
+	FElysiumAnimationIntent Intent;
+	Intent.Stem = Request.Stem;
+	Intent.Activity = Request.Activity;
+	Intent.Variant = Request.Variant;
+	// The producer the caller named, not a guess: a player-owned weapon resolving an attack is a
+	// `Player` request, a scripted beat is a `Scene` one, and a record naming `Npc` for all three
+	// would report a producer that never asked.
+	Intent.Source = Request.Source;
+	// The caller's own body, not a guess: `FElysiumWeapon` is the same entity on a player and on a
+	// combatant, so a kind stamped here would walk the cast chain for the player.
+	Intent.BodyKind = Request.BodyKind;
+	// **The whole translation context, not a subset.** The `+0x5dc` class body reads the classname,
+	// the committed ladders read the weapon and the armed/alert branch reads the state; a request
+	// stamped with any of them here would select for a different body than the producer's.
+	Intent.ActorClassname = Request.ActorClassname;
+	Intent.WeaponClassname = Request.WeaponClassname;
+	Intent.ActorState = Request.ActorState;
+	// Where the hit came from, in the `hit_yaw` parameter's own degrees. Zero on every request that is
+	// not a directional reaction, which is the parameter's resting value and the middle of any fan
+	// bound to it.
+	Intent.HitYaw = Request.HitYaw;
+	// The availability probe and the run-to-walk, disposition and sequence-zero rungs are parts of
+	// `CAI_BaseNPC`'s own translation, unconditional on the cast chain — the human pre-translation
+	// rewrites an unarmed ACT_WALK to ACT_WALK_RELAXED whatever the body can play, and rung 4 of the
+	// probe is what hands a body carrying only the plain walk its gait back. Refusing the ladder here
+	// would make this seam's answer differ from the per-frame publish's for the same request. It
+	// reaches only cast bodies: the player chain has no ladder at either gate.
+	//
+	// **The exception is the gesture path**, and it is why the request states this rather than this
+	// mapping hard-coding true: `AddGesture` reaches `SelectWeightedSequence` and simply returns on
+	// -1, walking no rung at all, so a reaction producer on that path clears the flag and reads the
+	// miss it was given.
+	Intent.bAllowFallbackLadder = Request.bAllowFallbackLadder;
+	return Intent;
 }
 
 void Resolve(const FElysiumAnimationIntent& Intent, const FElysiumAnimationCatalog& Catalog,
@@ -597,6 +663,7 @@ void Resolve(const FElysiumAnimationIntent& Intent, const FElysiumAnimationCatal
 {
 	Out = FElysiumAnimationSelection();
 	Out.Source = Intent.Source;
+	Out.BodyKind = Intent.BodyKind;
 	Out.Channel = Intent.Channel;
 	Out.Route = Intent.Route;
 	Out.Generation = Intent.Generation;

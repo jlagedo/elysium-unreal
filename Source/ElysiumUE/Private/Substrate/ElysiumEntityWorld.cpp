@@ -1176,6 +1176,16 @@ void FElysiumEntityWorld::Tick(double Now)
 	{
 		PlayerEnt->SyncFromBody();
 	}
+	// LIFE5 — the sequence-event pass, immediately before the thinks. Retail dispatches a body's
+	// animation events out of the animating object's own frame advance, ahead of the AI that reads
+	// what they set, so a footstep, an attachment toggle or a weapon-state event is already applied
+	// when the think that depends on it runs.
+	//
+	// **Inert in production this slice**: nothing publishes a clip phase yet, so
+	// `GetBodyClipPhase` answers false on every body and every cursor stays unarmed. The pass is
+	// here now so the real arms land against a walk that already exists rather than against a walk
+	// and a pass at once.
+	AdvanceAnimEvents(Now);
 	RunThinks(Now);
 	ServiceEvents(Now);
 	// Auto-Link/Auto-End observes the exact submitted voice handle after world events have had their
@@ -1260,6 +1270,23 @@ void FElysiumEntityWorld::PublishWetness()
 		Value.StartTime = WeatherState.TransitionStart;
 		Value.Duration = WeatherState.TransitionDuration;
 		Service->ApplyWetness(Value);
+	}
+}
+
+void FElysiumEntityWorld::AdvanceAnimEvents(double Now)
+{
+	// The same walk `RunThinks` makes, and deliberately so: an entity's timeline belongs to the same
+	// list its think does, in the same order. It differs in its two gates — a body rather than a due
+	// think, and no player skip, because the player's clips carry events too and there is no
+	// pre-move pass that already advanced them.
+	for (int32 Index = 0; Index < EntityList.Num(); ++Index)
+	{
+		const TUniquePtr<FElysiumEntity>& EntPtr = EntityList[Index];
+		if (!EntPtr || EntPtr->GetSkeletalBody() == nullptr)
+		{
+			continue;   // nothing without a skeletal body has a clip to advance
+		}
+		EntPtr->AdvanceAnimEvents(Now);
 	}
 }
 

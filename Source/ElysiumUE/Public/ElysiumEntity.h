@@ -286,6 +286,24 @@ public:
 	// returns its standing `Visual`. Declared here for the same no-RTTI reason `GetAttachBody` is.
 	virtual class USkeletalMeshComponent* GetSkeletalBody() const { return nullptr; }
 
+	// --- The sequence-event chain (LIFE5) -------------------------------------------------
+	// Walk this entity's playing clips one frame further along their own timelines and dispatch
+	// whatever the interval contained. Called once per frame by the world's event pass, before the
+	// thinks; the base is a no-op because only an entity that owns a skeletal body has a clip to
+	// advance. Declared here for the same no-RTTI reason `GetSkeletalBody` is — the world's pass
+	// walks `FElysiumEntity`s and must not know which leaves carry bodies.
+	virtual void AdvanceAnimEvents(double Now) {}
+
+	// Retail's virtual `HandleAnimEvent` `+0x40c`: one fired record, offered to the entity whose
+	// clip declared it. True means this entity claimed the id and acted on it; false means it did
+	// not, and the caller counts the record in the census instead.
+	//
+	// The base answers false for every id, which is exactly what retail's own empty handler bodies
+	// do — two of the twenty recovered bodies accept nothing at all, the combat-weapon body and the
+	// camera-NPC family (`docs/vtmb/animation_and_movers.md` → "Sequence events and native
+	// dispatch"). Same no-RTTI rationale again: the dispatcher holds a `FElysiumEntity&`.
+	virtual bool HandleAnimEvent(const struct FElysiumAnimEvent& Event) { return false; }
+
 	// The animation seam (8.5). Play a named sequence on this entity's body, resolved through the
 	// NPC clip manifest. Base answers false — only an entity that owns a skeletal body can play
 	// one. Every script-facing animation call lands here: the `SetAnimation` input (21 sites), the

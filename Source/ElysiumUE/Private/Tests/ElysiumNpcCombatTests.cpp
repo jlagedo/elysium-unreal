@@ -849,8 +849,9 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 		F.Services.Log().Contains(FString::Printf(TEXT("radius=%.1f"), 24.0f * ElysiumMove::U)));
 	TestTrue(TEXT("...and at running speed"),
 		FMath::IsNearlyEqual(Motor->RequestedSpeedCmPerSecond, ElysiumNpcGait::RunSpeed));
-	TestTrue(TEXT("run locomotion went onto the body"),
-		F.Services.Saw(TEXT("PlayNpcActivity")) || F.Services.Saw(TEXT("PlayNpcClip")));
+	// The chase asks the activity seam for ACT_RUN and plays whatever label it answers with; this
+	// fixture resolves none, so what reaches the body is the stated retail-label fallback.
+	TestTrue(TEXT("run locomotion went onto the body"), F.Services.Saw(TEXT("PlayNpcClip")));
 
 	// Still travelling: the watch holds the task rather than advancing it.
 	TestTrue(TEXT("an in-flight path keeps the schedule open"),

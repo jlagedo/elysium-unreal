@@ -12,6 +12,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSkeletalBasis.h"
 #include "ElysiumWorldServices.h"
+#include "Substrate/ElysiumAnimEvents.h"
 #include "Substrate/ElysiumDisposition.h"
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Visual/ElysiumExpressionTable.h"
@@ -21,6 +22,27 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/SceneComponent.h"
 #include "Misc/Paths.h"
+
+namespace
+{
+	// Which channels the event pass polls. The base channel alone: it is the only one any producer
+	// publishes a phase for, and a channel nothing answers for costs one seam call per body per
+	// frame to learn nothing.
+	constexpr EElysiumAnimChannel GPolledEventChannels[] = { EElysiumAnimChannel::Base };
+
+	// A phase the seam answered TRUE for but that names no clip, or sits outside `[0,1)`, is a
+	// producer defect: the dispatcher's whole rule is an interval over that number, so a bad one
+	// silently mis-fires or drops a timeline. Warned once per spelling — a body republishes its
+	// phase every frame, and a defect restated sixty times a second buries everything else.
+	bool ShouldReportBadPhase(const FElysiumClipPhase& Phase)
+	{
+		static TSet<FString> Reported;
+		const FString Key = FString::Printf(TEXT("%s|%s"), *Phase.OwnerStem, *Phase.Label);
+		bool bAlready = false;
+		Reported.Add(Key, &bAlready);
+		return !bAlready;
+	}
+}
 
 // ============================================================================================
 // FElysiumAnimating — CBaseAnimating
@@ -166,6 +188,87 @@ bool FElysiumAnimating::ResetAnimToIdle()
 	}
 	return Embodiment->RefreshNpcIdle(
 		Visual, ModelStem(), Disposition, DispositionLevel, IdleVariant());
+}
+
+void FElysiumAnimating::AdvanceAnimEvents(double Now)
+{
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (!Embodiment || !Visual)
+	{
+		return;   // a bodiless character, a headless world, or bodies off — nothing is playing
+	}
+
+	// Reused across channels and across bodies within the frame: the array holds borrowed pointers
+	// into the timeline the seam handed back, and `Advance` resets it before every walk.
+	TArray<const FElysiumAnimEvent*> Fired;
+
+	constexpr int32 NumPolled = static_cast<int32>(UE_ARRAY_COUNT(GPolledEventChannels));
+	if (EventCursors.Num() != NumPolled)
+	{
+		EventCursors.SetNum(NumPolled);
+	}
+
+	for (int32 Slot = 0; Slot < NumPolled; ++Slot)
+	{
+		FElysiumAnimEventCursor& Cursor = EventCursors[Slot];
+
+		FElysiumClipPhase Phase;
+		if (!Embodiment->GetBodyClipPhase(Visual, GPolledEventChannels[Slot], Phase))
+		{
+			// This channel is playing nothing. The cursor forgets where it was, so the next clip to
+			// arm here cannot inherit a position from a different timeline.
+			Cursor.Reset();
+			continue;
+		}
+		Phase.Channel = GPolledEventChannels[Slot];
+
+		// `1.0` is legal and is the terminal position of a finished one-shot, which has nowhere to
+		// wrap to; anything outside `[0,1]` is not a phase at all. A non-finite cycle is tested
+		// explicitly because it satisfies neither comparison — a length-zero clip divided into a
+		// position is the way one arrives — and would otherwise pass this gate unremarked.
+		if (!Phase.IsValid() || !FMath::IsFinite(Phase.Cycle)
+			|| Phase.Cycle < 0.0f || Phase.Cycle > 1.0f)
+		{
+			// The seam said a clip is playing and then described one that cannot be walked. The pass
+			// runs on with what it was given — `Advance` clamps and a nameless clip fires nothing —
+			// but the defect is named here, where the body it came from can be identified.
+			if (ShouldReportBadPhase(Phase))
+			{
+				UE_LOG(LogElysiumPlayer, Warning,
+					TEXT("anim events on '%s': the pose layer reported clip '%s'@'%s' at cycle %.4f, "
+					     "which is not a normalized [0,1) phase — its timeline cannot be walked "
+					     "faithfully"),
+					*ModelStem(), *Phase.Label, *Phase.OwnerStem, Phase.Cycle);
+			}
+		}
+
+		const TArray<FElysiumAnimEvent>* Timeline =
+			Embodiment->GetNpcEventTimeline(Phase.OwnerStem, Phase.Label);
+		ElysiumAnimEvents::Advance(Timeline, Phase, Cursor, Fired);
+
+		for (const FElysiumAnimEvent* Record : Fired)
+		{
+			// The server band, exactly as `DispatchAnimEvents` applies it: an id at or above the
+			// ceiling is never offered to a handler at all.
+			const bool bAboveBand = Record->Event >= ElysiumAnimEvents::ServerDispatchCeiling;
+			if (!bAboveBand && HandleAnimEvent(*Record))
+			{
+				continue;   // claimed and acted on; the handler owns its own observability
+			}
+			// Unclaimed. The census IS the report for this — an id with no handler is work that has
+			// not landed, not a fault, and a line per occurrence would fire every footstep of every
+			// walking body. One Verbose line the first time each (id, owner, label) is seen.
+			if (ElysiumAnimEventCensus::Record(*Record, Phase.OwnerStem, Phase.Label, bAboveBand))
+			{
+				UE_LOG(LogElysiumPlayer, Verbose,
+					TEXT("anim event %d on '%s'@'%s' is unclaimed%s%s"),
+					Record->Event, *Phase.Label, *Phase.OwnerStem,
+					bAboveBand ? TEXT(" (above the server dispatch band)") : TEXT(""),
+					Record->Options.IsEmpty()
+						? TEXT("") : *FString::Printf(TEXT(", options '%s'"), *Record->Options));
+			}
+		}
+	}
 }
 
 bool FElysiumAnimating::SetDispositionName(const FString& NewDisposition)

@@ -12,6 +12,11 @@
 // plain C++ leaves (a `logic_case`'s pick, `OneOfSet`'s per-frame roll) that hold no session
 // pointer. Their *lifetime* is still the session's: `SeedAll` runs at New Game and at EndSession,
 // and Snapshot/Restore are the save block.
+// **The ORDER is a save format.** `Snapshot`/`Restore` walk the streams in enumerator order and the
+// save block is that array, so an enumerator inserted or removed in the middle re-points every
+// stream after it at another one's recorded position — a load that reports success and hands the run
+// a different sequence than the one that was saved. Add at the END, before `Count`, and never
+// reorder or delete.
 enum class EElysiumRngStream : uint8
 {
 	OneOfSet,      // the 589 dialogue gates' 1-of-N selector (9.7d)
@@ -22,6 +27,8 @@ enum class EElysiumRngStream : uint8
 	Chargen,       // which phrasing of a wizard question the quiz asks (9.4f)
 	NpcMaker,      // npc_maker's transient-admission retry interval
 	NpcSchedule,   // the NPC idle branch: schedule selection and the disposition stance rolls
+	Reaction,      // the damage flinch's head/torso coin, its +-30 degree jitter and its
+	               // weighted-sequence draw (LIFE5)
 	Count
 };
 

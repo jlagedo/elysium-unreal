@@ -538,6 +538,8 @@ private:
 	// The queue.Add wrapper: assigns time/serial upstream, notifies OnQueued.
 	void AddEvent(FElysiumIOEvent&& Event);
 	void ServiceEvents(double Now);
+	// LIFE5 — one frame of every bodied entity's sequence-event timelines, run before the thinks.
+	void AdvanceAnimEvents(double Now);
 	void RunThinks(double Now);
 	void DeliverEvent(const FElysiumIOEvent& Event, double Now);
 	void DeliverInputTo(FElysiumEntity& Target, const FElysiumIOEvent& Event, double Now);

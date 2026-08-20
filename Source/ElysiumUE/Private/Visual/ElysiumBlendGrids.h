@@ -1,6 +1,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+// The timeline record this file parses, which crosses the outbound service seam and therefore
+// lives in `Public/`.
+#include "ElysiumAnimEvent.h"
 #include "ElysiumGaitSpeeds.h"   // FElysiumGaitSpeedTable — what a locomotion fan's motion becomes
 
 // What a model's own sequence descriptors declare beside their clips, off `npc/blends/<stem>.json`
@@ -126,25 +129,6 @@ struct FElysiumAutoLayerBinding
 	TArray<FString> Clips;
 };
 
-// One record on a sequence's own timeline, read from the same descriptor as the grids and the
-// bindings (`docs/vtmb/animation_and_movers.md` → "Sequence events and native dispatch").
-//
-// `Cycle` is normalized over the sequence, so it is a *phase* and not a time: the dispatcher fires
-// a record when the interval the sequence advanced through contains it, which means a looping
-// sequence visits the wrapped interval too. `Event` is the numeric dispatch id the handler
-// switches on, and `Options` is the record's 64-byte payload — the whole argument a handler gets,
-// spelled however the id's own family reads it (an integer, a bodygroup name, an `ACT_*` literal).
-//
-// The record carries no side effect of its own. What an id means belongs to the handler that
-// claims it, which is why nothing here interprets `Event` or parses `Options`.
-struct FElysiumAnimEvent
-{
-	float Cycle = 0.f;
-	int32 Event = 0;
-	int32 Type = 0;
-	FString Options;
-};
-
 struct FElysiumBlendTable
 {
 	FString Stem;
@@ -209,6 +193,20 @@ namespace ElysiumBlendGrids
 	// missing animation.
 	FElysiumBlendPick SelectCell(const FElysiumBlendGrid& Grid, const FElysiumBlendTable& Table,
 		const FElysiumPoseParams& Pose);
+
+	// The single cell a body that cannot evaluate a fan collapses one onto (LIFE5): the floor pick,
+	// stepped to its neighbour on whichever axis sat past the half-cell, with the fractions cleared.
+	//
+	// It exists for exactly one caller — a body with no compiled reaction branch, which has a montage
+	// or a clip player and therefore one sequence to play. Flooring such a body would bias every
+	// collapsed reaction a cell counter-clockwise; the nearer cell quantizes to +-22.5 degrees on a
+	// nine-cell fan. A body that CAN blend never comes through here: the pair and the fraction on the
+	// record are what the graph evaluates.
+	//
+	// The step clamps to the last cell, so a fan whose axis has already been wrapped and clamped
+	// cannot be walked off the end. A neighbour that did not bake keeps the floor pick, which
+	// `SelectCell` has already walked past the hole to reach.
+	FElysiumBlendPick NearerCell(const FElysiumBlendPick& Pick, const FElysiumBlendGrid& Grid);
 
 	// One locomotion fan's authored per-cell ground speeds, as the table the mover steers by (CCC7).
 	//

@@ -319,13 +319,18 @@ public:
 		const FString& ClipName) override;
 	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
 		const FString& ClipName) override;
-	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) override;
-	virtual bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
-		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override;
+	virtual bool ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
+		FElysiumActivityClip& Out) override;
+	virtual bool PlayNpcOneShot(USkeletalMeshComponent* Body,
+		const FElysiumOneShotClipRequest& Request, float* OutSeconds) override;
 	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
-		FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override;
+		EElysiumAnimBodyKind BodyKind, FString& OutAnimName,
+		float& OutGroundSpeedCmPerSecond) override;
 	virtual bool HasNpcClip(const FString& Stem, const FString& ClipName) override;
+	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
+		FElysiumClipPhase& Out) override;
+	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
+		const FString& Label) override;
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) override;

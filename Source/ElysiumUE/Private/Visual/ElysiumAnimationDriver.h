@@ -27,6 +27,11 @@ struct FElysiumAnimationDriver
 	// --- Identity, set once when the body is built ------------------------------------------------
 	FString Stem;
 	EElysiumAnimSource Source = EElysiumAnimSource::Player;
+	// The chain this body's requests translate through, set beside `Source` by whoever builds the
+	// driver: the map actor drives the player pawn, an `AElysiumNpcBody` drives a cast stem. Every
+	// intent this driver publishes carries it, so a reaction or a scene beat arriving on the same
+	// body walks the same translator its locomotion does.
+	EElysiumAnimBodyKind BodyKind = EElysiumAnimBodyKind::Player;
 	FElysiumEntityHandle Character;
 	// The repeatable selection token. Fixed per body — the entity handle's index — because
 	// repeatability is the contract: the same body picks the same idle every load. Ambient re-rolls

@@ -327,6 +327,9 @@ void UElysiumEntityBodies::StandGridSelection(UElysiumBipedAnimInstance& Inst,
 
 	FElysiumAnimationSelection Selection;
 	Selection.Source = EElysiumAnimSource::Debug;
+	// The owner's hand, held over a cast body: the record names both, so a readout of a debug stand
+	// says which chain the body it is standing belongs to.
+	Selection.BodyKind = EElysiumAnimBodyKind::Cast;
 	Selection.Route = EElysiumAnimRoute::ExactLabel;
 	// The state is explicit so a grid can be stood in any of the eight. Walk remains the default:
 	// no one-shot completion contract. The activity is named beside it because every readout of the
@@ -370,6 +373,7 @@ void UElysiumEntityBodies::StopNpcGrid(USkeletalMeshComponent* Body)
 	// clip ended.
 	FElysiumAnimationSelection Cleared;
 	Cleared.Source = EElysiumAnimSource::Debug;
+	Cleared.BodyKind = EElysiumAnimBodyKind::Cast;
 	Cleared.Outcome = EElysiumAnimOutcome::NoAsset;
 	Cleared.Generation = ++StandingGridGeneration;
 	Inst->PublishSelection(Cleared, FElysiumResolvedAnimation());

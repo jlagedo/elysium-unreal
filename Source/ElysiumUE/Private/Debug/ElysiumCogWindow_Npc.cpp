@@ -16,6 +16,7 @@
 #include "ElysiumNpcSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "ElysiumPlayerBody.h"
+#include "Substrate/ElysiumAnimEvents.h"    // the unclaimed sequence-event census
 #include "Substrate/ElysiumItemClasses.h"   // Inventory.Active() is read for its classname
 #include "Substrate/ElysiumItemTable.h"   // FElysiumItemDef — the drawn weapon's own policy record
 #include "Substrate/ElysiumNpc.h"
@@ -1419,6 +1420,78 @@ void FElysiumCogWindow_Npc::RenderLocomotion()
 		}
 	}
 
+	ImGui::EndTable();
+
+	RenderAnimEventCensus();
+}
+
+// The unclaimed-id work list, drawn under the locomotion table because it is the same question from
+// the other side: what the clips a body is playing are announcing, and how much of it nothing is
+// listening to yet. Global rather than per-character — it is a work list across the session, which
+// is why it is not one of the selected-character tabs.
+void FElysiumCogWindow_Npc::RenderAnimEventCensus()
+{
+	if (!ImGui::CollapsingHeader("Sequence events (unclaimed)"))
+	{
+		return;
+	}
+
+	TArray<ElysiumAnimEventCensus::FRow> Rows;
+	ElysiumAnimEventCensus::Collect(Rows);
+	ImGui::SameLine();
+	if (ImGui::SmallButton("Clear##AnimEventCensus"))
+	{
+		ElysiumAnimEventCensus::Clear();
+		Rows.Reset();
+	}
+	if (Rows.Num() == 0)
+	{
+		ImGui::TextDisabled("No unclaimed sequence event has fired since load.");
+		return;
+	}
+
+	const ImGuiTableFlags Flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
+		ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp;
+	if (!ImGui::BeginTable("##AnimEvents", 5, Flags, ImVec2(0, GetDpiScale() * 160.f)))
+	{
+		return;
+	}
+	ImGui::TableSetupScrollFreeze(0, 1);
+	ImGui::TableSetupColumn("Fires", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 44.f);
+	ImGui::TableSetupColumn("Id", ImGuiTableColumnFlags_WidthFixed, GetDpiScale() * 44.f);
+	ImGui::TableSetupColumn("Label");
+	ImGui::TableSetupColumn("Owner");
+	ImGui::TableSetupColumn("Options");
+	ImGui::TableHeadersRow();
+
+	for (const ElysiumAnimEventCensus::FRow& Row : Rows)
+	{
+		ImGui::TableNextRow();
+		ImGui::TableNextColumn();
+		ImGui::Text("%d", Row.Count);
+		ImGui::TableNextColumn();
+		// An id above the server band never reached a handler at all, which is a different repair
+		// from one a handler saw and refused — so the two never read the same on the list.
+		if (Row.bAboveServerBand)
+		{
+			ImGui::TextDisabled("%d", Row.Event);
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("At or above the 5000 server dispatch ceiling: never offered to a "
+					"handler.");
+			}
+		}
+		else
+		{
+			ImGui::Text("%d", Row.Event);
+		}
+		ImGui::TableNextColumn();
+		ImGui::TextColored(ElysiumCogStyle::ColName, "%s", COG_TCHAR_TO_CHAR(*Row.Label));
+		ImGui::TableNextColumn();
+		ImGui::TextDisabled("%s", COG_TCHAR_TO_CHAR(*Row.OwnerStem));
+		ImGui::TableNextColumn();
+		ImGui::TextDisabled("%s", COG_TCHAR_TO_CHAR(*Row.Options));
+	}
 	ImGui::EndTable();
 }
 

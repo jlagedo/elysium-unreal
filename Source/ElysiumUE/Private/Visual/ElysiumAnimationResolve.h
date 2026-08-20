@@ -100,16 +100,29 @@ namespace ElysiumAnimResolve
 	// The two orders are `docs/vtmb/animation_and_movers.md` A.3. The player's is one pass —
 	// `+0x5f4` then `+0x5e0`. The cast's is `+0x5dc`, the weapon translator whose first answer is
 	// preserved, then up to five (`+0x5e0`, `+0x5f4`) alternations, then the four-way availability
-	// probe. Which one a request takes is its SOURCE, the same discriminator the fallback ladder
-	// below already uses.
+	// probe. Which one a request takes is its BODY KIND, the same discriminator the fallback ladder
+	// below already uses — retail forks on the receiver's own class, so the producer that asked
+	// changes nothing about the chain.
 	FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Intent,
 		const FElysiumAnimationCatalog& Catalog);
 
 	// VtMB's own deterministic weighted choice, reproduced exactly: candidates sorted by label, each
-	// weight floored at 1, and the seed `hash(stem lowered) ^ variant`. Exposed because
-	// `UElysiumAnimSubsystem::PickActivityClip` is expressed over it — two implementations of one
-	// pick are how the player path and the cast path come to disagree about a bank silently.
+	// weight floored at 1, and the seed `hash(stem lowered) ^ variant`. The activity route's own pick,
+	// exposed so the rule can be asserted directly — every producer reaches it through `Resolve`,
+	// because two entries into one pick are how the player path and the cast path come to disagree
+	// about a bank silently.
 	FString PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activity, int32 Variant);
+
+	// The activity seam's request, as the resolver's own intent (LIFE5).
+	//
+	// This is the whole of what `UElysiumAnimSubsystem::ResolveActivityClip` does before it calls
+	// `Resolve`, split out so the forwarding is a pure function that can be asserted with no
+	// subsystem, no game instance and no export corpus. Every field it carries is one a producer
+	// cannot restate later: a reaction's hit angle steers the `hit_yaw` fan, and its cleared fallback
+	// ladder is what stops a miss being answered with a disposition — an adapter that dropped either
+	// would resolve a directional reaction at the fan's forward cell with a stance substituted under
+	// it, and both failures look like content bugs.
+	FElysiumAnimationIntent ActivityIntentFor(const FElysiumActivityClipRequest& Request);
 
 	// The whole of steps 4, 5 and 6. Always fills `Out` — a record that resolved nothing still names
 	// what it was asked for and why it missed, because "no pose" with no line explaining it is the

@@ -1185,6 +1185,141 @@ bool FElysiumWeaponRangedTest::RunTest(const FString&)
 }
 
 // =====================================================================================
+// The attack clip's chain: one weapon entity, two bodies (LIFE5).
+//
+// `FElysiumWeapon` is the same class in the player's hand and in a combatant's, so the
+// activity it asks for cannot pick its translator off the weapon or off the stem. It picks
+// it off the OWNER: `CBasePlayer` walks its one pass, `CAI_BaseNPC` walks the alternation
+// and the availability probe. With the kind stamped rather than threaded, a player attack
+// would resolve through the cast chain and `TranslatePlayerActivity` would never run.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponAnimBodyKindTest,
+	"Elysium.Substrate.Weapons.AnimBodyKind", GElysiumTestFlags)
+bool FElysiumWeaponAnimBodyKindTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	// The resolve line for one attack, whichever stem the headless body reports: the chain is the
+	// last token, so the assertion reads it without depending on a model being exported.
+	auto ChainOf = [](const FElysiumRecordingServices& Services) -> FString
+	{
+		for (const FString& Call : Services.Calls)
+		{
+			if (Call.StartsWith(TEXT("ResolveNpcActivityClip")))
+			{
+				FString Chain;
+				Call.Split(TEXT("body="), nullptr, &Chain);
+				return Chain;
+			}
+		}
+		return FString();
+	};
+
+	// --- The player's own weapon walks the player chain ---------------------------------------
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Victim = FindCharacter(World, TEXT("victim"));
+		if (!Player || !Victim)
+		{
+			return false;
+		}
+		SeedHealth(*Victim, 100);
+
+		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
+		if (!TestNotNull(TEXT("the player is armed"), Pistol))
+		{
+			return false;
+		}
+		// The arming itself resolves clips; `ChainOf` reads the FIRST resolve line, so the record has
+		// to start at the attack or the assertion below would be reading the equip's.
+		Services.Calls.Reset();
+		TestEqual(TEXT("the shot is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Victim->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestTrue(TEXT("the attack asked for its clip"),
+			Services.Saw(TEXT("ResolveNpcActivityClip")));
+		TestEqual(TEXT("a player-owned weapon resolves through the player chain"),
+			ChainOf(Services), FString(TEXT("player")));
+	}
+
+	// --- The same weapon in a cast hand walks the cast chain -----------------------------------
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumCombatCharacter* Shooter = FindCharacter(World, TEXT("victim"));
+		if (!Player || !Shooter)
+		{
+			return false;
+		}
+		SeedHealth(*Player, 100);
+
+		FElysiumWeapon* Pistol = GiveWeapon(*Shooter, GPistol);
+		if (!TestNotNull(TEXT("the NPC is armed with the same record"), Pistol))
+		{
+			return false;
+		}
+		Services.Calls.Reset();
+		TestEqual(TEXT("its shot is accepted too"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Player->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(TEXT("an NPC-owned weapon resolves through the cast chain"),
+			ChainOf(Services), FString(TEXT("cast")));
+	}
+
+	// --- The scene stand-in is a cast body, not the player it stands in for ---------------------
+	// `!playercontroller` wears the player's model and is a `CAI_BaseNPC` duplicate, so a weapon in
+	// its hand walks the cast chain. It is the one body where reading the kind off the stem or off
+	// the model would answer `player` and be wrong.
+	{
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		FElysiumEntity* Stand = World.Resolve(World.CreatePlayerControllerEntity());
+		FElysiumCombatCharacter* Controller = Stand ? Stand->AsCombatCharacter() : nullptr;
+		if (!Player || !TestNotNull(TEXT("the scene stand-in spawned"), Controller))
+		{
+			return false;
+		}
+		SeedHealth(*Player, 100);
+
+		FElysiumWeapon* Pistol = GiveWeapon(*Controller, GPistol);
+		if (!TestNotNull(TEXT("the stand-in is armed with the same record"), Pistol))
+		{
+			return false;
+		}
+		Services.Calls.Reset();
+		TestEqual(TEXT("the stand-in's shot is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Player->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(TEXT("a stand-in wearing the player's model still resolves through the cast chain"),
+			ChainOf(Services), FString(TEXT("cast")));
+	}
+
+	return true;
+}
+
+// =====================================================================================
 // Inventory selection — the selector's authority (8.9's selector clause).
 //
 // `system/items.txt` declares the categories and the section each item type files

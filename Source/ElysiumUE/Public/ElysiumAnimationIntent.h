@@ -30,7 +30,8 @@
 // is a guess.
 
 // Who asked. The producer, not the body: an NPC's damage reaction and its patrol both address the
-// same body through different sources.
+// same body through different sources. It carries arbitration and diagnostics — the priority band a
+// request defaults to, the holder a held pose names — and decides no translation.
 enum class EElysiumAnimSource : uint8
 {
 	Player,
@@ -39,6 +40,17 @@ enum class EElysiumAnimSource : uint8
 	Damage,
 	Interaction,
 	Debug,
+};
+
+// Which chain the body itself translates through. **The body, not the producer**: `CBasePlayer` and
+// `CAI_BaseNPC` are two different translators, not two configurations of one, and every source
+// addresses either kind — a `Damage` reaction on a human combatant walks the cast's `+0x5dc`
+// pre-translation, its class/weapon alternation and its four-way availability probe, while a
+// `Scene` beat on the player walks the same one-pass chain the player's own locomotion does.
+enum class EElysiumAnimBodyKind : uint8
+{
+	Player,
+	Cast,
 };
 
 // Which slot the request owns. The driver holds one request slot per channel
@@ -211,6 +223,11 @@ struct FElysiumAnimationIntent
 	// world and no exported model behind it.
 	FString Stem;
 	EElysiumAnimSource Source = EElysiumAnimSource::Player;
+	// Which translator the request walks, stated by the producer from the body it drives rather than
+	// read off `Source`. It is the fork the recovered cast chain and its fallback ladder are
+	// discriminated by, so a producer that leaves it at the default hands a cast body the player's
+	// one-pass chain.
+	EElysiumAnimBodyKind BodyKind = EElysiumAnimBodyKind::Player;
 	EElysiumAnimChannel Channel = EElysiumAnimChannel::Base;
 	// Advances only when the DISCRETE request changes. Two things need it: a completed one-shot must
 	// not cancel its replacement, and the driver must be able to tell "the same request, still
@@ -237,6 +254,10 @@ struct FElysiumAnimationIntent
 	// Zero until the weapon rung: the sample carries no aim, because nothing aims yet.
 	float AimYaw = 0.0f;
 	float AimPitch = 0.0f;
+	// Where the hit came from, in the `hit_yaw` pose parameter's own degrees — (-180,180],
+	// right-positive with zero forward, the same convention move_yaw uses. Zero on every request that
+	// is not a directional reaction (the parameter's resting value).
+	float HitYaw = 0.0f;
 	// The latch's answer, which is the only thing that can distinguish retail's jump phases.
 	EElysiumAirPhase AirPhase = EElysiumAirPhase::Grounded;
 
@@ -246,8 +267,8 @@ struct FElysiumAnimationIntent
 	// its translation is the empty table retail's own unarmed body walks.
 	FString WeaponClassname;
 	// The actor's entity classname (`npc_gangbanger_a`), which selects its recovered translation
-	// bodies. Empty on the player, whose actor translation is the two committed `CBasePlayer` rows
-	// rather than a class body.
+	// bodies. On the player it is the registered class's own name (`player`), which reaches no
+	// recovered class body — the player's actor translation is the two committed `CBasePlayer` rows.
 	FString ActorClassname;
 	// The cast body's own state, which the recovered human pre-translation reads as `m_NPCState` to
 	// decide whether the body stands in its alert set or its relaxed one. Meaningless on the player,
@@ -263,8 +284,8 @@ struct FElysiumAnimationIntent
 	// four-way availability probe and its run-to-walk last resort, then the whole request as a
 	// disposition, then sequence zero. It is an NPC rule and the player has none (the controlled
 	// corpus records a ducked ACT_LAND_CROUCH request simply returning -1), so the ladder needs both
-	// this and an `Npc` source. A caller clears it when its own contract predates the ladder and its
-	// callers read the miss: a gait resolved through a fallback rung is not that gait, and the
+	// this and a `Cast` body kind. A caller clears it when its own contract predates the ladder and
+	// its callers read the miss: a gait resolved through a fallback rung is not that gait, and the
 	// weighted pick would hand the body walking speeds while it plays a crouch.
 	bool bAllowFallbackLadder = true;
 	EElysiumAnimSource CompletionOwner = EElysiumAnimSource::Player;
@@ -280,6 +301,10 @@ struct FElysiumAnimationSelection
 {
 	// --- Who asked ------------------------------------------------------------------------------
 	EElysiumAnimSource Source = EElysiumAnimSource::Player;
+	// Which chain the walk below actually took. Carried beside the producer because the two answer
+	// different questions on the same readout — a `Damage` request that walked the cast chain and
+	// one that walked the player's are the same source and different translations.
+	EElysiumAnimBodyKind BodyKind = EElysiumAnimBodyKind::Player;
 	EElysiumAnimChannel Channel = EElysiumAnimChannel::Base;
 	EElysiumAnimRoute Route = EElysiumAnimRoute::Activity;
 	uint32 Generation = 0;
@@ -348,8 +373,12 @@ struct FElysiumAnimationSelection
 	// --- Step 5: the asset shape ------------------------------------------------------------------
 	EElysiumAnimAssetKind AssetKind = EElysiumAnimAssetKind::None;
 	// The concrete animation in the owner's glb — `walk_0`. Not in the character's vocabulary and not
-	// to be looked up there.
+	// to be looked up there. On a grid it is the FLOOR cell of the pair below.
 	FString AnimationName;
+	// The second half of that pair — the cell one step along axis 0, which `AxisFraction[0]` weighs.
+	// Empty when the selection names one animation, and empty at the top of a fan, where the axis
+	// clamps and the fraction is zero.
+	FString NextAnimationName;
 	// The ideal being advanced to. Equal to SequenceLabel until a state machine exists to advance.
 	FString TargetSequence;
 	// ACT_TRANSITION's intermediate. Always empty: the graph retail would traverse to fill it is
@@ -389,6 +418,11 @@ struct FElysiumAnimationSelection
 	float GroundSpeedCmPerSecond = 0.0f;
 	FString AxisName[2];
 	float AxisValue[2] = { 0.0f, 0.0f };
+	// How far past the named cell the parameters sat, per axis, 0..1. Together with the pair below it
+	// is what makes the record a statement about a BLEND rather than about a snap: a fan is sampled
+	// between two cells, and a record naming only the floor cell describes a pose the graph never
+	// strikes. Zero on a selection that is not a grid.
+	float AxisFraction[2] = { 0.0f, 0.0f };
 	int32 Axes = 0;
 
 	// --- The verdict ------------------------------------------------------------------------------
@@ -513,18 +547,21 @@ enum class EElysiumOneShotState : uint8
 // current gait, the current `move_yaw` and the body's speed are all missing, which is what lets one
 // resolve serve every frame until the body itself changes.
 //
-// The source, the actor classname and the actor state are members for exactly that reason: they
+// The body kind, the actor classname and the actor state are members for exactly that reason: they
 // select the `+0x5dc`/`+0x5e0` class bodies and the alert/relaxed branch, so a set resolved without
 // them is a set resolved for a different body than the one being posed.
 struct FElysiumGaitSpeedRequest
 {
 	FString Stem;
-	// Which pre-translation chain the request walks — the two committed `CBasePlayer` rows for
-	// `Player`, the recovered NPC class bodies for `Npc`. The pose walks one of them; the speeds
-	// have to walk the same one.
+	// Which producer asked, for the diagnostics the miss report renders.
 	EElysiumAnimSource Source = EElysiumAnimSource::Player;
-	// The actor's own entity classname, which is what finds its recovered class bodies. Empty on the
-	// player, whose actor translation is the two committed rows rather than a class body.
+	// Which pre-translation chain the request walks — the two committed `CBasePlayer` rows for
+	// `Player`, the recovered NPC class bodies for `Cast`. The pose walks one of them; the speeds
+	// have to walk the same one, which is why this is part of the key.
+	EElysiumAnimBodyKind BodyKind = EElysiumAnimBodyKind::Player;
+	// The actor's own entity classname, which is what finds its recovered class bodies. On the player
+	// it is the registered class's own name (`player`), which reaches no recovered class body — the
+	// player's actor translation is the two committed rows.
 	FString ActorClassname;
 	// The active weapon's entity classname and the body's form, exactly as the intent spells them —
 	// they change which sequence `ACT_WALK` resolves to, which is the whole membership rule here.
@@ -545,6 +582,7 @@ struct FElysiumGaitSpeedRequest
 	{
 		return Variant == Other.Variant
 			&& Source == Other.Source
+			&& BodyKind == Other.BodyKind
 			&& ActorState == Other.ActorState
 			&& FMath::IsNearlyEqual(SpeedScale, Other.SpeedScale)
 			&& Stem.Equals(Other.Stem, ESearchCase::IgnoreCase)
@@ -555,6 +593,204 @@ struct FElysiumGaitSpeedRequest
 	bool operator!=(const FElysiumGaitSpeedRequest& Other) const { return !(*this == Other); }
 
 	bool IsValid() const { return !Stem.IsEmpty(); }
+};
+
+// One producer's ACT_* request, stated whole (LIFE5).
+//
+// **The same membership key as `FElysiumGaitSpeedRequest` above**, plus the activity being asked
+// for: everything that decides which sequence an `ACT_*` resolves to travels together, so a
+// producer selects through the same chain the body's own per-frame publish does. A producer that
+// stated only the stem and the activity would resolve past the recovered `+0x5dc` class body, the
+// committed weapon ladders and the armed/alert branch with nothing saying they never ran.
+struct FElysiumActivityClipRequest
+{
+	FString Stem;
+	// A stable ACT_* name — the logical request, before any translation.
+	FString Activity;
+	// The repeatable selection token weighted choice keys on. Same token, same pick, forever.
+	int32 Variant = 0;
+	// Who asked, carried onto the record so a resolve names its true producer. It decides no
+	// translation — that is `BodyKind`'s fork — and defaults to `Npc` because plain NPC AI (patrol,
+	// ambient, a schedule task) is what most of these requests are; a player-owned weapon and a
+	// scripted beat state their own.
+	EElysiumAnimSource Source = EElysiumAnimSource::Npc;
+	// Which chain the BODY translates through. Stated by the producer from the body it drives: a
+	// player weapon and an NPC's are the same `FElysiumWeapon` entity, so nothing downstream can
+	// derive it.
+	//
+	// The default is the CAST chain, the pair of the `Npc` source above: the two answer for one body,
+	// and a default pair that named an NPC producer walking `CBasePlayer`'s one pass would describe a
+	// body that does not exist. Every producer states both explicitly; this is what an unstated
+	// request means, not what one is expected to leave.
+	EElysiumAnimBodyKind BodyKind = EElysiumAnimBodyKind::Cast;
+	// The actor's own entity classname, which finds its recovered class bodies. On the player it is
+	// the registered class's own name (`player`), which reaches no recovered class body — the player's
+	// actor translation is the two committed `CBasePlayer` rows.
+	FString ActorClassname;
+	// The active weapon's entity classname — the key the committed ladders are joined to. Empty is a
+	// body with empty hands, and its translation is the empty table retail's unarmed body walks.
+	FString WeaponClassname;
+	// The cast body's own state, which the recovered human pre-translation reads to choose between
+	// the alert animation set and the relaxed one. Meaningless on the player.
+	EElysiumNpcState ActorState = EElysiumNpcState::Idle;
+	// Where the hit came from, in the `hit_yaw` pose parameter's own degrees — (-180,180],
+	// right-positive with zero forward, the same convention move_yaw uses. Zero on every request that
+	// is not a directional reaction (the parameter's resting value).
+	float HitYaw = 0.0f;
+	// Whether a miss may walk `CAI_BaseNPC`'s recovered fallback ladder. The availability probe and
+	// the run-to-walk, disposition and sequence-zero rungs are the cast activity chain's own
+	// unconditional steps, so the default is true and matches the per-frame publish — but retail's
+	// gesture path (`AddGesture` -> `SelectWeightedSequence`, which simply returns on -1) never walks
+	// any of them, so a reaction producer on that path sets this false and reads the miss.
+	bool bAllowFallbackLadder = true;
+
+	bool IsValid() const { return !Stem.IsEmpty() && !Activity.IsEmpty(); }
+};
+
+// What the activity seam answers with — one selection, reduced to the four things a producer acts
+// on. The whole `FElysiumAnimationSelection` stays behind the seam: it is the diagnostic record,
+// and a substrate caller that could read it would be a second reader of the resolution.
+struct FElysiumActivityClip
+{
+	// The vocabulary key (`walk`). **This is what goes back through the clip player**: it owns the
+	// include-DAG mapping to a bank, and the concrete cell below identifies nothing.
+	FString Label;
+	// The concrete cell in the owning bank (`walk_0`), whose authored ground speed configures a motor.
+	FString AnimationName;
+	// The bank the include DAG named. A grid cell is addressed by (owner, animation name), and this
+	// is the owner half: handing the vocabulary LABEL back instead re-resolves the grid at neutral
+	// pose parameters, which collapses a nine-cell directional fan onto its forward cell.
+	FString OwnerStem;
+	// Zero when that cell carries no authored movement record.
+	float GroundSpeedCmPerSecond = 0.0f;
+	// The selected row's OWN loop bit. VtMB reads `m_bSequenceLoops` off the sequence's flags, so an
+	// authored loop keeps looping however it was asked for — a caller ORs this into its own request
+	// rather than overriding it, and a body-language idle authored as a loop is why: without it the
+	// clip plays once and then stands frozen on its last frame.
+	bool bLooping = false;
+
+	// --- what the label resolved to, when it named a FAN (LIFE5) ---------------------------------
+	//
+	// Whether the label names a multi-cell grid at all. A producer routing a reaction needs it: a fan
+	// is played as a blend space steered by its axis, and a single cell as a plain clip.
+	bool bGrid = false;
+	// Where the fan was sampled, in the axis parameter's own degrees — `hit_yaw` on a hit fan. This is
+	// the value the graph steers the blend space by, so it is the axis the grid BINDS rather than
+	// whatever the producer happened to state.
+	float AxisValue = 0.0f;
+	// The pair the fan evaluates: `AnimationName` is the floor cell, this is the one after it, and
+	// `AxisFraction` is the second one's weight. Carried out of the seam because a producer that saw
+	// only the floor cell could not tell a two-cell mix from a snap — and a body with no fan to
+	// evaluate has to collapse the pair itself.
+	FString NextAnimationName;
+	float AxisFraction = 0.0f;
+};
+
+// Which channel of the graph a one-shot is played through (LIFE5).
+//
+// **Two doors, not one with a flag.** `Slot` rides the DefaultSlot montage OVER the locomotion pose,
+// which is what a scripted beat or an ambient stance wants. `Reaction` REPLACES the base pose on the
+// graph's own reaction branch, which is the only channel that can hold a directional fan: a montage
+// plays one sequence, and a hit reaction is a blend between the two cells its angle sits between.
+enum class EElysiumOneShotRoute : uint8
+{
+	Slot,
+	Reaction,
+};
+
+// One already-resolved cell, ready to play over whatever owns the base pose (LIFE5).
+//
+// It carries no translation context and no activity, because nothing here resolves: the (owner,
+// animation name) pair names one baked clip outright, and the label rides only so the channel claim
+// can say what it stands for. A producer builds one from a `FElysiumActivityClip` the activity seam
+// already answered.
+struct FElysiumOneShotClipRequest
+{
+	// The bank the clip is baked into, and the concrete cell in it. Both, because a cell is addressed
+	// by the pair — the animation name alone identifies nothing.
+	FString OwnerStem;
+	FString AnimationName;
+	// The vocabulary key the cell came from, for the claim's own diagnostics line. Never re-resolved.
+	FString Label;
+	bool bLoop = false;
+	// Stated apart because retail states them apart: the flinch fades in over 0.1 and out over 0.3,
+	// and `PlaySlotAnimationAsDynamicMontage` takes the two separately.
+	float BlendInSeconds = 0.2f;
+	float BlendOutSeconds = 0.2f;
+	EElysiumAnimPriority Priority = EElysiumAnimPriority::Reaction;
+	EElysiumAnimSource Source = EElysiumAnimSource::Damage;
+
+	// Which channel plays it. `Slot` by default, because that is what every producer that predates the
+	// reaction branch means and what a body with no branch falls back to either way.
+	EElysiumOneShotRoute Route = EElysiumOneShotRoute::Slot;
+
+	// The BODY's own model stem, which is a different thing from `OwnerStem`: the owner is the bank the
+	// clip is baked into, and this is the character whose vocabulary named the label. The reaction
+	// route needs it because a fan is reached through the vocabulary, not through the bank alone.
+	FString BodyStem;
+	// Whether the label names a multi-cell fan, and where on its axis to sample — the two facts the
+	// activity seam already answered, carried rather than re-derived. Both are meaningless on the
+	// `Slot` route, whose montage plays exactly the cell the record names.
+	bool bGrid = false;
+	float AxisValue = 0.0f;
+
+	bool IsValid() const { return !OwnerStem.IsEmpty() && !AnimationName.IsEmpty(); }
+};
+
+namespace ElysiumAnimIntent
+{
+	// Whether arming a one-shot on this route may force its body visible.
+	//
+	// The `Slot` route may, and does: it inherits the tail of the ordinary clip funnel, where a clip
+	// is armed by something that also means the body to be seen — a stance, a scripted beat, a
+	// dialogue line.
+	//
+	// **A `Reaction` may not.** It is involuntary, and the bodies it lands on include ones
+	// deliberately taken off screen: `IElysiumNpcMotor::SetEnabled(false)` hides as well as
+	// immobilises (`Source/ElysiumUE/CLAUDE.md` → Engine gotchas), so forcing visibility here would
+	// flicker a disabled body into the world for the length of a flinch, on a hit nobody was meant
+	// to see.
+	//
+	// One named rule with one owner rather than a branch inside the body factory, so the seam's
+	// implementation and anything asserting the contract read the same statement.
+	inline bool OneShotForcesVisibility(EElysiumOneShotRoute Route)
+	{
+		return Route != EElysiumOneShotRoute::Reaction;
+	}
+}
+
+// Where one channel of a body is standing on its clip, this frame (LIFE5).
+//
+// **`Cycle` is a phase, never a time.** VtMB's event dispatcher stores and compares a normalized
+// `[0,1)` position, and the whole firing rule is an interval test over that number
+// (`docs/vtmb/animation_and_movers.md` → "Sequence events and native dispatch"). A reader handed
+// seconds would have to divide by a length that a blended fan does not have, so the pose layer
+// answers the phase directly and `Length` rides only for diagnostics.
+//
+// `(OwnerStem, Label, PlayId)` is the identity a cursor is keyed on. The first two name WHICH clip
+// — the bank that owns it and the vocabulary key — and `PlayId` is the restart discriminator: the
+// same clip re-armed is a new play whose timeline has to fire again from zero, and nothing else on
+// the record can tell that from a clip that simply looped.
+struct FElysiumClipPhase
+{
+	// The bank the playing clip is baked into, and the vocabulary key it was reached by — the pair
+	// `FElysiumBlendTable::FindEvents` is addressed with.
+	FString OwnerStem;
+	FString Label;
+	// Normalized. A looping clip lives in `[0,1)` and reports the phase it wrapped to rather than 1;
+	// a finished one-shot reports exactly 1, which is the one position it has and nowhere to wrap
+	// from. Anything outside `[0,1]` is not a phase, and the pass that reads it says so.
+	float Cycle = 0.0f;
+	// The clip's authored length in seconds, for readouts. Nothing in the firing rule reads it.
+	float Length = 0.0f;
+	bool bLooping = false;
+	// Bumped on every (re)start of a clip on this channel. Zero is "nothing has ever played here".
+	uint32 PlayId = 0;
+	EElysiumAnimChannel Channel = EElysiumAnimChannel::Base;
+
+	// A phase names a clip when it names the pair a timeline is addressed by. A body standing on
+	// nothing answers a default-constructed record, which is an absence rather than a fault.
+	bool IsValid() const { return !OwnerStem.IsEmpty() && !Label.IsEmpty(); }
 };
 
 namespace ElysiumAnimIntent
@@ -573,6 +809,7 @@ namespace ElysiumAnimIntent
 	// The record's enums as words. One spelling each, shared by Cog, the MCP surface and any log
 	// line, so a reader comparing two of them is comparing the same vocabulary.
 	const TCHAR* SourceName(EElysiumAnimSource Source);
+	const TCHAR* BodyKindName(EElysiumAnimBodyKind BodyKind);
 	const TCHAR* ChannelName(EElysiumAnimChannel Channel);
 	const TCHAR* RouteName(EElysiumAnimRoute Route);
 	const TCHAR* AssetKindName(EElysiumAnimAssetKind Kind);
@@ -627,8 +864,11 @@ namespace ElysiumAnimIntent
 	// Build the frame's intent from the settled sample. The player path and the NPC motor both come
 	// through here, which is what stops the cast's locomotion and the player's becoming two systems
 	// that happen to play the same files.
+	//
+	// `BodyKind` has no default: it is the fork the whole translation chain turns on, and a caller
+	// that does not state it is a caller whose body kind nobody checked.
 	FElysiumAnimationIntent BuildLocomotionIntent(const FElysiumLocomotionSample& Sample,
 		const FElysiumJumpLatch& Latch, const FElysiumGaitReference& Gait,
-		EElysiumAnimSource Source, const FString& Stem, const FElysiumEntityHandle& Character,
-		int32 Variant);
+		EElysiumAnimSource Source, EElysiumAnimBodyKind BodyKind, const FString& Stem,
+		const FElysiumEntityHandle& Character, int32 Variant);
 }

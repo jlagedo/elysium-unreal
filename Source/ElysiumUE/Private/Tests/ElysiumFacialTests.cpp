@@ -3076,6 +3076,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 		Intent.Stem = Stem;
 		Intent.Activity = Activity;
 		Intent.Source = EElysiumAnimSource::Player;
+		Intent.BodyKind = EElysiumAnimBodyKind::Player;
 		Intent.Generation = Generation;
 		// The ladder is an NPC rule, and a miss is exactly what the second half of this asserts on.
 		Intent.bAllowFallbackLadder = false;

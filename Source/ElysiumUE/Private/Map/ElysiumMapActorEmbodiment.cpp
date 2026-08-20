@@ -144,28 +144,40 @@ bool AElysiumMapActor::IsNpcBodyVisible(USkeletalMeshComponent* Body)
 	return Bodies->IsNpcBodyVisible(Body);
 }
 
-bool AElysiumMapActor::PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds)
+bool AElysiumMapActor::ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
+	FElysiumActivityClip& Out)
 {
-	return Bodies->PlayNpcActivity(Body, Stem, Activity, Variant, bLoop, OutSeconds);
+	return Bodies->ResolveNpcActivityClip(Request, Out);
 }
 
-bool AElysiumMapActor::ResolveNpcActivityClip(const FString& Stem, const FString& Activity,
-	int32 Variant, FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+bool AElysiumMapActor::PlayNpcOneShot(USkeletalMeshComponent* Body,
+	const FElysiumOneShotClipRequest& Request, float* OutSeconds)
 {
-	return Bodies->ResolveNpcActivityClip(Stem, Activity, Variant, OutLabel, OutAnimName,
-		OutGroundSpeedCmPerSecond);
+	return Bodies->PlayNpcOneShot(Body, Request, OutSeconds);
 }
 
 bool AElysiumMapActor::ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
-	FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+	EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
 {
-	return Bodies->ResolveNpcSequenceClip(Stem, ClipName, OutAnimName, OutGroundSpeedCmPerSecond);
+	return Bodies->ResolveNpcSequenceClip(Stem, ClipName, BodyKind, OutAnimName,
+		OutGroundSpeedCmPerSecond);
 }
 
 bool AElysiumMapActor::HasNpcClip(const FString& Stem, const FString& ClipName)
 {
 	return Bodies->HasNpcClip(Stem, ClipName);
+}
+
+bool AElysiumMapActor::GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
+	FElysiumClipPhase& Out)
+{
+	return Bodies->GetBodyClipPhase(Body, Channel, Out);
+}
+
+const TArray<FElysiumAnimEvent>* AElysiumMapActor::GetNpcEventTimeline(const FString& OwnerStem,
+	const FString& Label)
+{
+	return Bodies->GetNpcEventTimeline(OwnerStem, Label);
 }
 
 bool AElysiumMapActor::PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,

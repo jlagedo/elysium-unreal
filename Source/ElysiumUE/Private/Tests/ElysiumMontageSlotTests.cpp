@@ -18,14 +18,24 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumAnimGraph.h"       // ElysiumAnimGraph::ReactionBranchTag
+#include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumAnimSubsystem.h"   // FElysiumResolvedAnimation
 #include "Visual/ElysiumBipedAnimInstance.h"
+#include "Visual/ElysiumBlendGrids.h"
+#include "Visual/ElysiumEntityBodies.h"    // ElysiumEntityAnimation::BlendedGridLengthSeconds
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Visual/ElysiumPoseDeviation.h"
 
+#include "Animation/AnimClassInterface.h"
 #include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/AnimSubsystem_Tag.h"
+#include "Animation/BlendSpace.h"
+#include "AnimNodes/AnimNode_BlendListBase.h"     // EBlendListChildUpdateMode
+#include "AnimNodes/AnimNode_BlendListByBool.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -238,7 +248,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	// first separates "the slot poses nothing at all" from "the LOOPING length is wrong", which are
 	// different repairs behind one identical T-pose.
 	TestTrue(TEXT("a one-shot clip is accepted by the slot"),
-		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds));
+		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds));
 	TArray<FTransform> OneShotPose;
 	Evaluate(/*Frames=*/6, FrameSeconds, OneShotPose);
 	const ElysiumPose::FDeviation OneShot = ElysiumPose::Measure(BindPose, OneShotPose);
@@ -253,7 +263,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	// null and logs nothing, so the call below returning false IS the defect, with the reference pose
 	// two assertions down as its only other symptom.
 	TestTrue(TEXT("a looping clip is accepted by the slot"),
-		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/true, Pick.FadeSeconds));
+		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/true, Pick.FadeSeconds, Pick.FadeSeconds));
 	TArray<FTransform> LoopPose;
 	Evaluate(/*Frames=*/12, FrameSeconds, LoopPose);   // 0.4 s, past the authored fade
 	const ElysiumPose::FDeviation Looping = ElysiumPose::Measure(BindPose, LoopPose);
@@ -296,6 +306,67 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 		Stopped.MovedBones, PosedBones, Stopped.MaxDegrees));
 	TestTrue(TEXT("and stopping it hands the frame back to the state machine underneath"),
 		Stopped.MovedBones < Looped.MovedBones);
+
+	// --- LIFE5: two fades, stated apart, and the source pose that gates the blend IN ---------------
+	//
+	// Retail fades a flinch in over 0.1 and out over 0.3, and `PlaySlotAnimationAsDynamicMontage`
+	// takes the two separately — so the seam takes them separately too, and both have to survive the
+	// trip onto the dynamic montage rather than one being derived from the other.
+	//
+	// The blend IN is additionally gated by what the slot's SOURCE pose is. A one-shot over a state
+	// machine that has been handed no asset has nothing to blend from — that source is the reference
+	// pose — so it snaps; a one-shot over a graph holding a real selection blends, and snapping onto
+	// a posed body is exactly the pop the rule exists to avoid. The predicate is therefore the
+	// applied selection, not "is this the first montage on this body".
+	{
+		constexpr float FadeIn = 0.1f;
+		constexpr float FadeOut = 0.3f;
+
+		// Still nothing published in this test, and `StopOneShot` above left the slot empty: the
+		// snapping arm of the rule.
+		if (TestTrue(TEXT("a one-shot with distinct fades is accepted by the slot"),
+			Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, FadeIn, FadeOut)))
+		{
+			UAnimMontage* Snapped = Inst->GetCurrentActiveMontage();
+			if (TestNotNull(TEXT("and the dynamic montage exists"), Snapped))
+			{
+				TestEqual(TEXT("a clip over a graph holding no asset snaps in"),
+					Snapped->BlendIn.GetBlendTime(), 0.f);
+				TestEqual(TEXT("while its blend OUT is the fade it asked for"),
+					Snapped->BlendOut.GetBlendTime(), FadeOut);
+			}
+		}
+		Inst->StopOneShot(0.f);
+		Evaluate(/*Frames=*/2, FrameSeconds, StoppedPose);
+
+		// Hand the graph a real selection, which is the state every body in the running game is in
+		// the moment anything hits it.
+		FElysiumAnimationSelection Standing;
+		Standing.GraphState = EElysiumGraphState::Idle;
+		Standing.SequenceLabel = Pick.Label;
+		Standing.OwnerStem = Pick.Owner;
+		Standing.AnimationName = Pick.Label;
+		Standing.AssetKind = EElysiumAnimAssetKind::Sequence;
+		Standing.Outcome = EElysiumAnimOutcome::Resolved;
+		FElysiumResolvedAnimation Assets;
+		Assets.Sequence = Pick.Clip;
+		Inst->PublishSelection(Standing, Assets);
+		Evaluate(/*Frames=*/2, FrameSeconds, StoppedPose);
+
+		if (TestTrue(TEXT("the same one-shot re-arms over the applied selection"),
+			Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, FadeIn, FadeOut)))
+		{
+			UAnimMontage* Blended = Inst->GetCurrentActiveMontage();
+			if (TestNotNull(TEXT("and its dynamic montage exists"), Blended))
+			{
+				TestEqual(TEXT("a clip over a graph that HAS an asset blends in rather than snapping"),
+					Blended->BlendIn.GetBlendTime(), FadeIn);
+				TestEqual(TEXT("and the two fades reach the montage independently"),
+					Blended->BlendOut.GetBlendTime(), FadeOut);
+			}
+		}
+		Inst->StopOneShot(0.f);
+	}
 
 	return true;
 }
@@ -367,7 +438,7 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 
 	// The stance clip, armed the way the ambient schedule arms one.
 	if (!TestTrue(TEXT("the schedule's clip is accepted by the slot"),
-		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds)))
+		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds)))
 	{
 		return false;
 	}
@@ -423,7 +494,7 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 	// completed its own blend-out — there is nothing left for the takeover to cut, which is why the
 	// preempt is invisible on screen.
 	if (!TestTrue(TEXT("the one-shot re-arms for the expiry run"),
-		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds)))
+		Inst->PlayOneShot(Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds)))
 	{
 		return false;
 	}
@@ -438,6 +509,766 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
 	TestNull(TEXT("and the expiry-frame publish has nothing to cut"),
 		Inst->GetCurrentActiveMontage());
+
+	return true;
+}
+
+// The reaction branch is on the compiled graph, and it is INERT (LIFE5 slice B1).
+//
+// The branch replaces the base channel rather than riding over it, so a defect in it is a body
+// posing nothing at all -- and every symptom of that is identical to the ones the two tests above
+// already guard. What only this test can see is that the branch was compiled in the first place: a
+// tag the generator did not stamp, a blend-time pin nothing drove, or an `bActiveValue` bound to a
+// property the native class no longer declares all leave a graph that loads, compiles and poses.
+//
+// Three claims, and no more: the tagged node exists on the compiled class, its two blend times are
+// the two the instance publishes rather than the node's own 0.1 default, and with `bReactionActive`
+// false the base pose still reaches the output. The reaction pose itself has no producer yet; that
+// coverage belongs to the slice that gives it one.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphReactionBranchTest,
+	"Elysium.Content.GraphReactionBranch", GElysiumMontageSlotFlags)
+bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		return true;
+	}
+	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
+		*FElysiumContentPaths::PlayerAnimBlueprintClass());
+	if (Graph == nullptr)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
+			"(run: uv run elysium export bundle policy)"));
+		return true;
+	}
+	FLoopingClipPick Pick;
+	if (!FindLoopingClip(Pick))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	Pick.Mesh->AddToRoot();
+	Pick.Clip->AddToRoot();
+	ON_SCOPE_EXIT
+	{
+		Pick.Clip->RemoveFromRoot();
+		Pick.Mesh->RemoveFromRoot();
+	};
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
+	if (!TestNotNull(TEXT("body owner spawned"), Owner))
+	{
+		return false;
+	}
+	USkeletalMeshComponent* Comp = nullptr;
+	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
+	if (Inst == nullptr)
+	{
+		return false;
+	}
+	constexpr float FrameSeconds = 1.f / 30.f;
+
+	// Nothing publishes to the branch, so the off switch is a default rather than a written value.
+	TestFalse(TEXT("the reaction branch is inert -- nothing has activated it"),
+		Inst->bReactionActive);
+
+	// **Moved off the property default before the first frame, deliberately.** The engine's own
+	// `BlendTime` default is 0.1, which is also this property's default — so an in-time pin that was
+	// never wired would read back the number the test expected and pass. 0.17 is a value nothing but
+	// the pin can produce.
+	Inst->ReactionBlendInSeconds = 0.17f;
+
+	// The bind pose, taken with nothing published: the pose a base channel the branch swallowed
+	// would leave on screen, which is what the last assertion below is measured against.
+	TArray<FTransform> BindPose;
+	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, BindPose);
+	const int32 PosedBones = BindPose.Num() - 1;
+	if (!TestTrue(TEXT("the graph evaluates the whole skeleton"),
+		BindPose.Num() == Pick.Mesh->GetRefSkeleton().GetNum() && PosedBones > 0))
+	{
+		return false;
+	}
+
+	// The compiled class's tag table, read the same way `ApplyUpperBodyMask` reads it.
+	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(Inst->GetClass());
+	const FAnimSubsystem_Tag* Tags = AnimClass != nullptr
+		? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
+	if (!TestNotNull(TEXT("the compiled graph carries a tag table"), Tags))
+	{
+		return false;
+	}
+	const FAnimNode_BlendListByBool* Branch = Tags->FindNodeByTag<FAnimNode_BlendListByBool>(
+		FName(ElysiumAnimGraph::ReactionBranchTag), Inst);
+	if (!TestNotNull(TEXT("and the reaction branch is on it under its own tag"), Branch))
+	{
+		return false;
+	}
+
+	// Read AFTER a frame, deliberately: both blend times arrive through a driven pin, so the values
+	// on the node are the instance's own only once the graph has copied its exposed inputs. Reading
+	// them before the first update would assert against whatever the pin's literal happened to be.
+	const TArray<float>& BlendTimes = Branch->GetBlendTimes();
+	if (TestEqual(TEXT("the branch has exactly the two poses it was built with"),
+		BlendTimes.Num(), 2))
+	{
+		AddInfo(FString::Printf(TEXT("reaction blend times: in %.3fs, out %.3fs"),
+			BlendTimes[0], BlendTimes[1]));
+		// Index 0 is the TRUE pose, so its time is the fade INTO the reaction.
+		TestEqual(TEXT("the fade into a reaction is the published in-time"),
+			BlendTimes[0], Inst->ReactionBlendInSeconds);
+		TestEqual(TEXT("and the fade back to the locomotion pose is the published out-time"),
+			BlendTimes[1], Inst->ReactionBlendOutSeconds);
+		TestTrue(TEXT("the two are stated apart rather than one value used twice"),
+			!FMath::IsNearlyEqual(BlendTimes[0], BlendTimes[1]));
+		TestTrue(TEXT("...and the in-time is the moved value, not the node's own 0.1 default"),
+			FMath::IsNearlyEqual(BlendTimes[0], 0.17f, 0.001f));
+	}
+
+	// The child update mode is the engine's `Default`, and that is a decision rather than an
+	// omission. `ResetChildOnActivate` reinitializes a newly-active child only while its weight is
+	// still at zero, so it never covers the overlapping retrigger it looks like the fix for — and
+	// when a full-weight reaction ENDS it lands on the base child instead, resetting the state
+	// machine to its entry state, wiping the inertializer's pose history and hard-cutting the very
+	// release the out-fade exists for.
+	TestEqual(TEXT("the branch reinitializes no child on activation"),
+		static_cast<int32>(Branch->GetChildUpdateMode()),
+		static_cast<int32>(EBlendListChildUpdateMode::Default));
+
+	// The pose still gets through. A branch whose false pose was mis-wired -- or one whose blend
+	// never settled onto the base child -- evaluates the reaction half instead, whose asset pins are
+	// both null, and the body stands in its bind pose with nothing logged.
+	FElysiumAnimationSelection Standing;
+	Standing.GraphState = EElysiumGraphState::Idle;
+	Standing.SequenceLabel = Pick.Label;
+	Standing.OwnerStem = Pick.Owner;
+	Standing.AnimationName = Pick.Label;
+	Standing.AssetKind = EElysiumAnimAssetKind::Sequence;
+	Standing.Outcome = EElysiumAnimOutcome::Resolved;
+	FElysiumResolvedAnimation Assets;
+	Assets.Sequence = Pick.Clip;
+	Inst->PublishSelection(Standing, Assets);
+
+	TArray<FTransform> BasePose;
+	EvaluateFrames(Comp, /*Frames=*/8, FrameSeconds, BasePose);
+	const ElysiumPose::FDeviation Base = ElysiumPose::Measure(BindPose, BasePose);
+	AddInfo(FString::Printf(
+		TEXT("with the branch inert: %d of %d non-root bones left the bind pose (max %.1f deg)"),
+		Base.MovedBones, PosedBones, Base.MaxDegrees));
+	TestTrue(TEXT("an inert reaction branch passes the locomotion pose straight through"),
+		Base.MovedBones > PosedBones / 4 && Base.MaxDegrees > 5.f);
+
+	return true;
+}
+
+// ================================================================================================
+// LIFE5 slice B2 — the reaction branch DRIVEN, over a real directional hit fan
+// ================================================================================================
+
+namespace
+{
+	// A baked body carrying a real reaction FAN — a hit activity whose label names a multi-cell grid
+	// and whose blend space is on the mount. The table is held rather than borrowed: the grid it
+	// answers points into it.
+	struct FReactionFanPick
+	{
+		FString Stem;
+		FString Label;
+		FString Owner;
+		USkeletalMesh* Mesh = nullptr;
+		UBlendSpace* Space = nullptr;
+		TSharedPtr<FElysiumBlendTable> Table;
+		const FElysiumBlendGrid* Grid = nullptr;
+
+		// The axis value cell `Index` sits at. The cells are the range's ENDPOINTS, not its buckets,
+		// which is the same rule `ElysiumBlendGrids::ResolveAxis` scales by — so a fractional index is
+		// exactly the parameter a blend between two cells is sampled at.
+		float AxisAt(float Index) const
+		{
+			const int32 Count = Grid != nullptr ? Grid->GroupSize[0] : 0;
+			if (Count < 2)
+			{
+				return 0.f;
+			}
+			return Grid->ParamStart[0]
+				+ (Index / static_cast<float>(Count - 1)) * (Grid->ParamEnd[0] - Grid->ParamStart[0]);
+		}
+	};
+
+	bool TryReactionFan(const FElysiumNpcIndex& Index, const TCHAR* Stem, const TCHAR* Activity,
+		FReactionFanPick& Out)
+	{
+		USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(Stem);
+		FElysiumNpcClipSet Vocabulary;
+		FString Error;
+		if (Mesh == nullptr || !Vocabulary.Load(Stem, Error))
+		{
+			return false;
+		}
+		TArray<FString> Labels;
+		Vocabulary.Clips.GetKeys(Labels);
+		Labels.Sort([](const FString& A, const FString& B) { return A < B; });
+		for (const FString& Label : Labels)
+		{
+			const FElysiumNpcClip& Clip = Vocabulary.Clips[Label];
+			// By the ACTIVITY the flinch producer asks for, never by the label's spelling — which is
+			// the bank's business and not a contract.
+			if (!Clip.Activity.Equals(Activity, ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			const FString Owner = Clip.IsOwnedBy(Stem) ? FString(Stem) : Clip.Owner;
+			const FElysiumNpcIndexEntry* Entry = Index.Npcs.Find(Owner);
+			if (Entry == nullptr)
+			{
+				Entry = Index.Banks.Find(Owner);
+			}
+			if (Entry == nullptr || Entry->Blends.IsEmpty())
+			{
+				continue;
+			}
+			TSharedPtr<FElysiumBlendTable> Table = MakeShared<FElysiumBlendTable>();
+			if (!Table->Load(Entry->Blends, Error))
+			{
+				continue;
+			}
+			const FElysiumBlendGrid* Grid = Table->Find(Label);
+			if (Grid == nullptr || !Grid->IsMultiCell() || Grid->GroupSize[0] < 3)
+			{
+				continue;
+			}
+			UBlendSpace* Space = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, Owner, Label);
+			if (Space == nullptr)
+			{
+				continue;
+			}
+			if (Space->GetBlendSamples().IsEmpty())
+			{
+				continue;
+			}
+			Out.Stem = Stem;
+			Out.Label = Label;
+			Out.Owner = Owner;
+			Out.Mesh = Mesh;
+			Out.Space = Space;
+			Out.Table = Table;
+			Out.Grid = Grid;
+			return true;
+		}
+		return false;
+	}
+
+	bool FindReactionFan(FReactionFanPick& Out)
+	{
+		FElysiumNpcIndex Index;
+		FString Error;
+		if (!Index.Load(Error) || !Index.IsValid())
+		{
+			return false;
+		}
+		static const TCHAR* const Activities[] = { TEXT("ACT_HIT_TORSO"), TEXT("ACT_HIT_HEAD") };
+		for (const TCHAR* Activity : Activities)
+		{
+			for (const TCHAR* Stem : GBodyStems)
+			{
+				if (TryReactionFan(Index, Stem, Activity, Out))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	// A looping base clip on the FAN's own body — never whichever body `FindLoopingClip` reached
+	// first, because a sequence is bound to one rig family's skeleton and the two picks are
+	// independent searches over the same stem list.
+	UAnimSequence* FindBaseClipFor(const FReactionFanPick& Fan)
+	{
+		FElysiumNpcClipSet Vocabulary;
+		FString Error;
+		if (!Vocabulary.Load(Fan.Stem, Error))
+		{
+			return nullptr;
+		}
+		TArray<FString> Labels;
+		Vocabulary.Clips.GetKeys(Labels);
+		Labels.Sort([](const FString& A, const FString& B) { return A < B; });
+		for (const FString& Label : Labels)
+		{
+			const FElysiumNpcClip& Clip = Vocabulary.Clips[Label];
+			if ((Clip.Flags & 0x1) == 0 || Clip.IsAdditive()
+				|| Clip.Seconds() < GMinClipSeconds || Clip.Seconds() > GMaxClipSeconds)
+			{
+				continue;
+			}
+			const FString Owner = Clip.IsOwnedBy(Fan.Stem) ? Fan.Stem : Clip.Owner;
+			UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Fan.Mesh, Owner, Label);
+			if (Baked != nullptr && Baked->GetPlayLength() >= GMinClipSeconds)
+			{
+				return Baked;
+			}
+		}
+		return nullptr;
+	}
+
+	// One graph-backed body, standing on a resolved locomotion selection. The publish matters: the
+	// reaction's blend IN is gated on the graph already posing an asset, exactly as the one-shot
+	// slot's is, so a body handed nothing would snap and the fade under test would not run.
+	struct FReactionStand
+	{
+		USkeletalMeshComponent* Comp = nullptr;
+		UElysiumBipedAnimInstance* Inst = nullptr;
+	};
+
+	bool StandReactionBody(UWorld* World, UClass* Graph, const FReactionFanPick& Fan,
+		UAnimSequence* BaseClip, FAutomationTestBase& Test, FReactionStand& Out)
+	{
+		AActor* Owner = World != nullptr ? World->SpawnActor<AActor>() : nullptr;
+		if (!Test.TestNotNull(TEXT("reaction body owner spawned"), Owner))
+		{
+			return false;
+		}
+		Out.Inst = StandGraphBody(Owner, Fan.Mesh, Graph, Test, Out.Comp);
+		if (Out.Inst == nullptr)
+		{
+			return false;
+		}
+		FElysiumAnimationSelection Standing;
+		Standing.GraphState = EElysiumGraphState::Idle;
+		Standing.SequenceLabel = TEXT("idle");
+		Standing.OwnerStem = Fan.Owner;
+		Standing.AnimationName = TEXT("idle");
+		Standing.AssetKind = EElysiumAnimAssetKind::Sequence;
+		Standing.Outcome = EElysiumAnimOutcome::Resolved;
+		FElysiumResolvedAnimation Assets;
+		Assets.Sequence = BaseClip;
+		Out.Inst->PublishSelection(Standing, Assets);
+		return true;
+	}
+
+	FElysiumReactionPlay FanPlay(UBlendSpace* Space, float AxisValue, float LengthSeconds,
+		float BlendIn, float BlendOut)
+	{
+		FElysiumReactionPlay Play;
+		Play.Space = Space;
+		Play.AxisValue = AxisValue;
+		Play.LengthSeconds = LengthSeconds;
+		Play.BlendInSeconds = BlendIn;
+		Play.BlendOutSeconds = BlendOut;
+		return Play;
+	}
+}
+
+// The reaction branch, DRIVEN. What only this test can see is that the branch is a fan rather than a
+// clip: the pose at an angle BETWEEN two authored reactions differs measurably from both of them,
+// which is exactly the pose a snap-to-nearest resolver could never strike and the whole reason a
+// directional flinch replaces the base channel instead of riding the one-shot slot.
+//
+// It runs on the REAL cell length, which is the other thing only this test can see: every hit cell
+// VtMB ships bakes to two frames, shorter than the out-fade alone, so what keeps a flinch on screen
+// at all is the branch's own minimum hold (`FElysiumReactionPlay::ActiveSeconds`, PENDING RE). A
+// seed without that floor is zero and the branch is dropped by the update that armed it.
+//
+// Everything else here is the handover: the branch fades in rather than snapping, the phase clock
+// drops `bReactionActive` one out-fade before the branch's end so the fade completes ON that end,
+// and a Scene-band clip takes the branch back with nothing left holding it.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphReactionDriveTest,
+	"Elysium.Content.GraphReactionDrive", GElysiumMontageSlotFlags)
+bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		return true;
+	}
+	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
+		*FElysiumContentPaths::PlayerAnimBlueprintClass());
+	if (Graph == nullptr)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
+			"(run: uv run elysium export bundle policy)"));
+		return true;
+	}
+	FReactionFanPick Fan;
+	if (!FindReactionFan(Fan))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a directional hit fan; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	UAnimSequence* BaseClip = FindBaseClipFor(Fan);
+	if (BaseClip == nullptr)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the fan's body carries no looping base clip to stand on"));
+		return true;
+	}
+	Fan.Mesh->AddToRoot();
+	Fan.Space->AddToRoot();
+	BaseClip->AddToRoot();
+	ON_SCOPE_EXIT
+	{
+		BaseClip->RemoveFromRoot();
+		Fan.Space->RemoveFromRoot();
+		Fan.Mesh->RemoveFromRoot();
+	};
+
+	// Two adjacent cells that are genuinely different clips, and the parameter halfway between them.
+	int32 LowCell = INDEX_NONE;
+	for (int32 Cell = 0; Cell + 1 < Fan.Grid->GroupSize[0]; ++Cell)
+	{
+		const FElysiumBlendCell* A = Fan.Grid->CellAt(Cell, 0);
+		const FElysiumBlendCell* B = Fan.Grid->CellAt(Cell + 1, 0);
+		if (A != nullptr && B != nullptr && !A->Clip.IsEmpty() && !B->Clip.IsEmpty()
+			&& !A->Clip.Equals(B->Clip, ESearchCase::IgnoreCase))
+		{
+			LowCell = Cell;
+			break;
+		}
+	}
+	if (LowCell == INDEX_NONE)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the fan carries no two adjacent distinct cells"));
+		return true;
+	}
+	const float AxisLow = Fan.AxisAt(static_cast<float>(LowCell));
+	const float AxisMid = Fan.AxisAt(static_cast<float>(LowCell) + 0.5f);
+	const float AxisHigh = Fan.AxisAt(static_cast<float>(LowCell) + 1.0f);
+	const float ClipSeconds = ElysiumEntityAnimation::BlendedGridLengthSeconds(Fan.Space, AxisMid);
+	AddInfo(FString::Printf(
+		TEXT("'%s' plays fan '%s'@'%s': cells %d/%d at %.1f / %.1f, midpoint %.1f, clip %.3fs"),
+		*Fan.Stem, *Fan.Label, *Fan.Owner, LowCell, LowCell + 1, AxisLow, AxisHigh, AxisMid,
+		ClipSeconds));
+	if (!TestTrue(TEXT("the fan reports a blended length"), ClipSeconds > 0.f))
+	{
+		return false;
+	}
+	// **The cell's own length, driven as it ships.** `PlayReaction`'s contract is that the caller
+	// states the length — the branch has no clip of its own to ask — and the number the producer
+	// states is exactly this one (`Elysium.Content.ReactionGridLength` asserts it against the assets).
+	// On a two-frame cell that is shorter than the out-fade, so the branch stands for its minimum
+	// hold instead; a stand-in length here would prove the mechanism on a clip the game does not have.
+	const float LengthSeconds = ClipSeconds;
+	// The asset's own axis and samples, reported rather than assumed: a fan whose baked axis range
+	// disagrees with the sidecar's would be steered outside its samples and evaluate one cell at every
+	// angle, which reads on screen as a snap and reads here as three identical poses.
+	{
+		const FBlendParameter& Parameter = Fan.Space->GetBlendParameter(0);
+		FString Line = FString::Printf(TEXT("%s axis [%.1f, %.1f]: "), *Fan.Space->GetName(),
+			Parameter.Min, Parameter.Max);
+		for (const FBlendSample& Sample : Fan.Space->GetBlendSamples())
+		{
+			Line += FString::Printf(TEXT("%.1f=%s(%.3fs) "), Sample.SampleValue.X,
+				*GetNameSafe(Sample.Animation),
+				Sample.Animation != nullptr ? Sample.Animation->GetPlayLength() : 0.f);
+		}
+		AddInfo(Line);
+	}
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+
+	// Four bodies, ticked in lockstep so their base clips share a phase: the two cells the midpoint
+	// sits between, the midpoint itself, and a CONTROL that is never hit. The control is what the
+	// return to the base pose is measured against — a body that keeps playing its idle for the
+	// reaction's whole length is not standing where it stood when it was hit, so the pre-hit pose
+	// answers a question about the base clip's own motion rather than about the branch.
+	constexpr float FrameSeconds = 1.f / 30.f;
+	constexpr float BlendIn = 0.1f;
+	constexpr float BlendOut = 0.3f;
+	// The branch's own hold, restated so the frame counts below read against it. It is
+	// `FElysiumReactionPlay::ActiveSeconds` — the clip less the out-fade, floored at the blend-in —
+	// and on a shipped two-frame cell the floor is what answers.
+	const float HoldSeconds = FMath::Max(LengthSeconds - BlendOut, BlendIn);
+	// At least three, because the floor is the blend-in and the blend-in is three frames.
+	const int32 HoldFrames = FMath::CeilToInt32(HoldSeconds / FrameSeconds);
+	AddInfo(FString::Printf(TEXT("clip %.4fs, in %.2f, out %.2f -> hold %.4fs (%d frames)"),
+		LengthSeconds, BlendIn, BlendOut, HoldSeconds, HoldFrames));
+	if (!TestTrue(TEXT("the hold outlasts the two measurement frames"), HoldFrames >= 3))
+	{
+		return false;
+	}
+	FReactionStand Low, Mid, High, Control;
+	if (!StandReactionBody(World, Graph, Fan, BaseClip, *this, Low)
+		|| !StandReactionBody(World, Graph, Fan, BaseClip, *this, Mid)
+		|| !StandReactionBody(World, Graph, Fan, BaseClip, *this, High)
+		|| !StandReactionBody(World, Graph, Fan, BaseClip, *this, Control))
+	{
+		return false;
+	}
+	FReactionStand* const Stands[] = { &Low, &Mid, &High, &Control };
+	auto TickAll = [&Stands](int32 Frames)
+	{
+		for (int32 Frame = 0; Frame < Frames; ++Frame)
+		{
+			for (FReactionStand* Stand : Stands)
+			{
+				Stand->Comp->TickAnimation(FrameSeconds, /*bNeedsValidRootMotion=*/false);
+				Stand->Comp->RefreshBoneTransforms(/*TickFunction=*/nullptr);
+			}
+		}
+	};
+
+	// The locomotion pose, with the branch still inert. Also what arms the blend IN: the reaction's
+	// in-fade is gated on the graph already posing an asset, exactly as the montage slot's is.
+	TickAll(3);
+	const TArray<FTransform> BasePose = Mid.Comp->GetComponentSpaceTransforms();
+	const int32 PosedBones = BasePose.Num() - 1;
+	if (!TestTrue(TEXT("the graph evaluates the whole skeleton"), PosedBones > 0))
+	{
+		return false;
+	}
+
+	TestTrue(TEXT("the compiled graph carries the reaction branch"),
+		Mid.Inst->HasCompiledReactionBranch());
+	TestTrue(TEXT("the low cell's reaction is accepted"),
+		Low.Inst->PlayReaction(FanPlay(Fan.Space, AxisLow, LengthSeconds, BlendIn, BlendOut)));
+	TestTrue(TEXT("the midpoint's reaction is accepted"),
+		Mid.Inst->PlayReaction(FanPlay(Fan.Space, AxisMid, LengthSeconds, BlendIn, BlendOut)));
+	TestTrue(TEXT("the high cell's reaction is accepted"),
+		High.Inst->PlayReaction(FanPlay(Fan.Space, AxisHigh, LengthSeconds, BlendIn, BlendOut)));
+	TestTrue(TEXT("the branch reports itself active"), Mid.Inst->bReactionActive);
+	TestEqual(TEXT("...steered at the angle it was handed"), Mid.Inst->ReactionAxis0, AxisMid);
+	TestTrue(TEXT("...as a fan rather than a clip"), Mid.Inst->bReactionHasBlendSpace);
+
+	// **The blocker this seed exists for.** A two-frame cell less the out-fade is a negative number:
+	// without the minimum hold the clock seeds at zero and the very first update drops the branch, so
+	// a real flinch never reaches the frame at all.
+	TickAll(1);
+	const ElysiumPose::FDeviation FirstFrame =
+		ElysiumPose::Measure(BasePose, Mid.Comp->GetComponentSpaceTransforms());
+	TestTrue(TEXT("the branch survives the update that armed it"), Mid.Inst->bReactionActive);
+
+	TickAll(1);
+	const TArray<FTransform> LowPose = Low.Comp->GetComponentSpaceTransforms();
+	const TArray<FTransform> MidPose = Mid.Comp->GetComponentSpaceTransforms();
+	const TArray<FTransform> HighPose = High.Comp->GetComponentSpaceTransforms();
+	TestTrue(TEXT("...and is still holding two frames in"), Mid.Inst->bReactionActive);
+
+	const ElysiumPose::FDeviation TookTheFrame = ElysiumPose::Measure(BasePose, MidPose);
+	AddInfo(FString::Printf(TEXT("reaction vs locomotion: %d of %d bones moved (max %.1f deg)"),
+		TookTheFrame.MovedBones, PosedBones, TookTheFrame.MaxDegrees));
+	TestTrue(TEXT("the reaction replaces the locomotion pose"),
+		TookTheFrame.MovedBones > PosedBones / 4 && TookTheFrame.MaxDegrees > 5.f);
+
+	// **It FADES in rather than snapping**, which is the whole of what `BlendTime_0` being driven off
+	// `ReactionBlendInSeconds` buys: a branch handed a zero in-time — an unwired pin, a pin folded to
+	// the node's own default — would be at full weight on the first frame and identical on the
+	// second. The out-fade's own shape is asserted by the return to base below.
+	AddInfo(FString::Printf(TEXT("in-fade: %.1f deg after one frame, %.1f deg after two"),
+		FirstFrame.MaxDegrees, TookTheFrame.MaxDegrees));
+	TestTrue(TEXT("the branch fades in over its own blend time rather than snapping"),
+		TookTheFrame.MaxDegrees > FirstFrame.MaxDegrees);
+
+	// **The two-cell mix, which is the whole point.** The midpoint is an even blend of two authored
+	// reactions, so it is a pose neither of them strikes. A resolver that quantized the angle to its
+	// nearest cell — or a branch that played one sequence instead of the fan — would make one of
+	// these two deviations vanish.
+	const ElysiumPose::FDeviation FromLow = ElysiumPose::Measure(LowPose, MidPose);
+	const ElysiumPose::FDeviation FromHigh = ElysiumPose::Measure(HighPose, MidPose);
+	AddInfo(FString::Printf(
+		TEXT("midpoint vs cell %d: max %.1f deg (%d bones); vs cell %d: max %.1f deg (%d bones)"),
+		LowCell, FromLow.MaxDegrees, FromLow.MovedBones,
+		LowCell + 1, FromHigh.MaxDegrees, FromHigh.MovedBones));
+	TestTrue(TEXT("the mid-cell pose differs from the cell below it"), FromLow.MaxDegrees > 1.f);
+	TestTrue(TEXT("...and from the cell above it"), FromHigh.MaxDegrees > 1.f);
+
+	// **The de-snap.** The phase clock drops `bReactionActive` one out-fade before the branch's end,
+	// so the fade back completes ON that end — the same instant the Reaction claim's `TotalSeconds`
+	// expires and the locomotion publish resumes. A branch that stayed active until the end would
+	// still be fading 0.3s after the base had been handed back.
+	if (HoldFrames - 1 > 2)
+	{
+		TickAll(HoldFrames - 1 - 2);
+	}
+	TestTrue(TEXT("the branch is still active a frame short of the hold"),
+		Mid.Inst->bReactionActive);
+	TickAll(2);
+	TestFalse(TEXT("and drops at the hold"), Mid.Inst->bReactionActive);
+
+	// Past the branch's whole life: the out-fade has run and the locomotion pose owns the frame
+	// again. Measured against the CONTROL rather than against the pre-hit pose, because the base
+	// child keeps advancing under the fades — a body that has been reacting for 0.4s is standing
+	// where the idle put it, not where it was hit.
+	TickAll(FMath::CeilToInt32(BlendOut / FrameSeconds) + 2);
+	const TArray<FTransform> BackPose = Mid.Comp->GetComponentSpaceTransforms();
+	const TArray<FTransform> ControlPose = Control.Comp->GetComponentSpaceTransforms();
+	const ElysiumPose::FDeviation Returned = ElysiumPose::Measure(ControlPose, BackPose);
+	const ElysiumPose::FDeviation Drift = ElysiumPose::Measure(BasePose, ControlPose);
+	AddInfo(FString::Printf(
+		TEXT("after %.3fs: %d bones off the un-hit control (max %.1f deg); the idle itself moved "
+		     "%.1f deg over the same span, against %.1f deg at the height of the reaction"),
+		HoldSeconds + BlendOut, Returned.MovedBones, Returned.MaxDegrees, Drift.MaxDegrees,
+		TookTheFrame.MaxDegrees));
+	TestTrue(TEXT("the reacting body is back on the locomotion pose the control holds"),
+		Returned.MaxDegrees < TookTheFrame.MaxDegrees * 0.25f);
+
+	// A Scene-band clip owns the body outright, and it takes the branch with it: a reaction left
+	// active behind a standing clip would pin its own assets and count down a phase nothing is
+	// showing.
+	TestTrue(TEXT("the low body's reaction is re-armed for the scene case"),
+		Low.Inst->PlayReaction(FanPlay(Fan.Space, AxisLow, LengthSeconds, BlendIn, BlendOut)));
+	TickAll(2);
+	TestTrue(TEXT("...and is running"), Low.Inst->bReactionActive);
+	Low.Inst->PlayClip(BaseClip, /*bLoop=*/true);
+	TestFalse(TEXT("a scene clip stops the reaction outright"), Low.Inst->bReactionActive);
+
+	return true;
+}
+
+// The length a reaction is timed by is the ENGINE's, not the base cell's.
+//
+// A hit fan's cells are separate authored reactions that do not share a length, and the graph plays
+// a blend of the two the angle sits between — so the only honest duration at a mid-cell parameter is
+// the one the blend space itself reports. A caller timing off the label's own clip ends the reaction
+// early or late by exactly the difference between two cells.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionGridLengthTest,
+	"Elysium.Content.ReactionGridLength", GElysiumMontageSlotFlags)
+bool FElysiumReactionGridLengthTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		return true;
+	}
+	FReactionFanPick Fan;
+	if (!FindReactionFan(Fan))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a directional hit fan; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	Fan.Mesh->AddToRoot();
+	Fan.Space->AddToRoot();
+	ON_SCOPE_EXIT
+	{
+		Fan.Space->RemoveFromRoot();
+		Fan.Mesh->RemoveFromRoot();
+	};
+
+	TestTrue(TEXT("a null space reports no length rather than an instant clip"),
+		ElysiumEntityAnimation::BlendedGridLengthSeconds(nullptr, 0.f) <= 0.f);
+
+	int32 Checked = 0;
+	for (int32 Cell = 0; Cell + 1 < Fan.Grid->GroupSize[0]; ++Cell)
+	{
+		const FElysiumBlendCell* Low = Fan.Grid->CellAt(Cell, 0);
+		const FElysiumBlendCell* High = Fan.Grid->CellAt(Cell + 1, 0);
+		if (Low == nullptr || High == nullptr || Low->Clip.IsEmpty() || High->Clip.IsEmpty())
+		{
+			continue;
+		}
+		UAnimSequence* LowClip = ElysiumNpcVisual::LoadBakedClip(Fan.Mesh, Fan.Owner, Low->Clip);
+		UAnimSequence* HighClip = ElysiumNpcVisual::LoadBakedClip(Fan.Mesh, Fan.Owner, High->Clip);
+		if (LowClip == nullptr || HighClip == nullptr)
+		{
+			continue;
+		}
+		++Checked;
+
+		// At a cell, the engine's answer IS that cell's clip. Asserted first because it is what makes
+		// the bracket below a statement about interpolation rather than about arithmetic.
+		const float AtLow = ElysiumEntityAnimation::BlendedGridLengthSeconds(
+			Fan.Space, Fan.AxisAt(static_cast<float>(Cell)));
+		TestTrue(*FString::Printf(TEXT("cell %d reports its own clip's length (%.4f vs %.4f)"),
+			Cell, AtLow, LowClip->GetPlayLength()),
+			FMath::IsNearlyEqual(AtLow, LowClip->GetPlayLength(), 0.01f));
+
+		// Between them it is bracketed by the pair, which is what "blended length" means.
+		const float Mid = ElysiumEntityAnimation::BlendedGridLengthSeconds(
+			Fan.Space, Fan.AxisAt(static_cast<float>(Cell) + 0.5f));
+		const float Lower = FMath::Min(LowClip->GetPlayLength(), HighClip->GetPlayLength());
+		const float Upper = FMath::Max(LowClip->GetPlayLength(), HighClip->GetPlayLength());
+		TestTrue(*FString::Printf(
+			TEXT("the midpoint of cells %d/%d is bracketed by them (%.4f in [%.4f, %.4f])"),
+			Cell, Cell + 1, Mid, Lower, Upper),
+			Mid >= Lower - 0.01f && Mid <= Upper + 0.01f);
+		TestTrue(*FString::Printf(TEXT("...and is a positive duration (%.4f)"), Mid), Mid > 0.f);
+	}
+	AddInfo(FString::Printf(TEXT("fan '%s'@'%s': %d adjacent cell pair(s) checked"),
+		*Fan.Label, *Fan.Owner, Checked));
+	TestTrue(TEXT("at least one adjacent pair was checked"), Checked > 0);
+
+	return true;
+}
+
+// The shipped hit cells carry no layer mask — a design assumption, turned into a check.
+//
+// The reaction branch replaces the WHOLE base pose. A cell that shipped as a partial-body overlay
+// (a `UElysiumAnimLayerMask` naming the bones it owns) would compose correctly only through the
+// layered blend, and standing it as a base pose would hold every bone outside its gate at bind — a
+// body reacting with a frozen lower half. Nothing in the branch reads a mask, so this is what says
+// the content never needed one.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionCellMasksTest,
+	"Elysium.Content.ReactionCellMasks", GElysiumMontageSlotFlags)
+bool FElysiumReactionCellMasksTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		return true;
+	}
+	FReactionFanPick Fan;
+	if (!FindReactionFan(Fan))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a directional hit fan; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	Fan.Mesh->AddToRoot();
+	Fan.Space->AddToRoot();
+	ON_SCOPE_EXIT
+	{
+		Fan.Space->RemoveFromRoot();
+		Fan.Mesh->RemoveFromRoot();
+	};
+
+	// The blend space's own samples rather than the sidecar's cells: what the branch evaluates is the
+	// asset, so the asset is what is asked.
+	int32 Samples = 0;
+	int32 Masked = 0;
+	int32 Additive = 0;
+	for (const FBlendSample& Sample : Fan.Space->GetBlendSamples())
+	{
+		if (Sample.Animation == nullptr)
+		{
+			continue;
+		}
+		++Samples;
+		if (const UElysiumAnimLayerMask* Mask =
+			Sample.Animation->FindMetaDataByClass<UElysiumAnimLayerMask>())
+		{
+			++Masked;
+			AddError(FString::Printf(
+				TEXT("reaction cell '%s' carries the layer mask '%s' (%d bones); the reaction branch "
+				     "poses the whole body and would hold every bone outside it at bind"),
+				*Sample.Animation->GetName(), *Mask->Profile.ToString(), Mask->OwnedBones));
+		}
+		if (Sample.Animation->IsValidAdditive())
+		{
+			++Additive;
+			AddError(FString::Printf(
+				TEXT("reaction cell '%s' is an additive; the branch stands it as a base pose, which "
+				     "folds the skeleton rather than animating it"),
+				*Sample.Animation->GetName()));
+		}
+	}
+	AddInfo(FString::Printf(TEXT("fan '%s'@'%s': %d sample(s), %d masked, %d additive"),
+		*Fan.Label, *Fan.Owner, Samples, Masked, Additive));
+	TestTrue(TEXT("the fan carries samples to check"), Samples > 0);
 
 	return true;
 }

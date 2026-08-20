@@ -1,11 +1,7 @@
 #include "Visual/ElysiumAnimationDriver.h"
 
-#include "ElysiumClassRegistry.h"
-#include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"             // the clock the combat-stance window is read against
 #include "ElysiumPlayer.h"
-#include "Substrate/ElysiumItemClasses.h"   // Inventory.Active() is read for its classname
-#include "Substrate/ElysiumNpc.h"           // the mind's state, which the alert/relaxed branch reads
 #include "Visual/ElysiumActionTables.h"     // the committed player gait ladder (LIFE4, Option A)
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnimDriver, Log, All);
@@ -190,45 +186,39 @@ void FElysiumAnimationDriver::SetTranslationContext(const FElysiumCombatCharacte
 	bCombatStance = Char->World != nullptr
 		&& Char->IsInCombatStance(Char->World->NowSeconds());
 
-	// A body with no mind is not a cast member and has no state to read; idle is what the recovered
-	// tree answers for every state that is neither alert nor combat, so it is the honest default
-	// rather than a placeholder.
-	const FElysiumNpc* Npc = Char->AsNpc();
-	ActorState = Npc != nullptr ? Npc->GetMind().State() : EElysiumNpcState::Idle;
-
-	// The classname a map AUTHORS, which is the key both committed ledgers are joined to. The
-	// registered descriptor answers for a character no def produced, which is the player's case.
-	if (Char->Def != nullptr)
-	{
-		Adopt(ActorClassname, Char->Def->Classname);
-	}
-	else if (Char->Class != nullptr)
-	{
-		Adopt(ActorClassname, Char->Class->ClassName.ToString());
-	}
-	else
+	// **One read of the classification, asked of the character that owns it.** The per-frame publish
+	// and a producer's activity resolve have to select through the same class body, the same weapon
+	// ladder and the same alert/relaxed branch, and a second copy of those reads here is exactly how
+	// the two come to pose different walks for one body.
+	FElysiumActivityClipRequest Context;
+	Char->FillActivityClipRequest(Context);
+	ActorState = Context.ActorState;
+	if (Context.ActorClassname.IsEmpty())
 	{
 		ActorClassname.Reset();
 	}
-
-	const FElysiumItem* Active = Char->Inventory.Active(*Char);
-	if (Active != nullptr && Active->Def != nullptr)
+	else
 	{
-		Adopt(WeaponClassname, Active->Def->Classname);
+		Adopt(ActorClassname, Context.ActorClassname);
+	}
+	if (Context.WeaponClassname.IsEmpty())
+	{
+		WeaponClassname.Reset();
 	}
 	else
 	{
-		WeaponClassname.Reset();
+		Adopt(WeaponClassname, Context.WeaponClassname);
 	}
 }
 
 FElysiumGaitSpeedRequest FElysiumAnimationDriver::BuildGaitKey() const
 {
 	// **The whole translation context, not a subset.** The tables are resolved through the same
-	// chain the pose is: same source, same class body, same alert/relaxed branch.
+	// chain the pose is: same body kind, same class body, same alert/relaxed branch.
 	FElysiumGaitSpeedRequest Key;
 	Key.Stem = Stem;
 	Key.Source = Source;
+	Key.BodyKind = BodyKind;
 	Key.ActorClassname = ActorClassname;
 	Key.WeaponClassname = WeaponClassname;
 	Key.FormTag = FormTag;
@@ -374,14 +364,14 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	// body's mover reports itself airborne for reasons that are never a jump — a mode it has not been
 	// given yet, a lift, a frame mid-teleport — and retail answers none of them with an activity: its
 	// NPC surface has no ground poll at all, and the air activities that exist are requested by a
-	// scripted task. Passing the producer here is what keeps that a stated rule rather than a
-	// coincidence of what the movers happen to report.
-	const bool bCommandsJumps = Source == EElysiumAnimSource::Player;
+	// scripted task. It is a `CBasePlayer` capability, so it reads the BODY: a scene beat driving the
+	// player pawn still commands jumps, and a player-sourced request on a cast body never does.
+	const bool bCommandsJumps = BodyKind == EElysiumAnimBodyKind::Player;
 	Latch = ElysiumAnimIntent::AdvanceJumpLatch(Latch, Body, DeltaSeconds, Gait, OneShot,
 		bCommandsJumps);
 
 	FElysiumAnimationIntent Intent = ElysiumAnimIntent::BuildLocomotionIntent(Body, Latch, Gait,
-		Source, Stem, Character, Variant);
+		Source, BodyKind, Stem, Character, Variant);
 	// The translation context, which the classifier has no business knowing: it answers what the body
 	// did, and these answer which sequence set realizes it.
 	Intent.ActorClassname = ActorClassname;
@@ -394,7 +384,10 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	// plain gaits in stance, the relaxed ones out of it; translation renames per weapon
 	// downstream, so no Combat special case exists anywhere in the chain. Empty means the
 	// grounded branch does not decide this frame and `Classify`'s answer stands (water, air).
-	if (Source == EElysiumAnimSource::Player)
+	//
+	// The ladder is `CBasePlayer`'s own committed rows, so it gates on the body rather than on who
+	// asked — the same fork the translation and the fallback ladder take.
+	if (BodyKind == EElysiumAnimBodyKind::Player)
 	{
 		const FString GroundActivity = SelectPlayerGroundActivity(Body);
 		if (!GroundActivity.IsEmpty())

@@ -9,13 +9,16 @@
 
 #include "ElysiumPlayer.h"
 
+#include "ElysiumAnimationIntent.h"    // FElysiumActivityClipRequest — the activity seam's context
 #include "ElysiumCameraSolve.h"        // ElysiumCam::CameraClass — the equipped camera publication
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U / StandViewZ — the one units conversion
+#include "ElysiumRng.h"                // the session's owned random streams (S8)
 #include "ElysiumSheetSlots.h"
+#include "ElysiumSkeletalBasis.h"      // FromSourceAngles — the entity's facing as an Unreal yaw
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumDamage.h"        // FElysiumDmg + the shared apply path
@@ -25,7 +28,9 @@
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's parameter, the equipped item's record
 #include "Substrate/ElysiumItemTable.h"     // FElysiumItemDef — the equipped item's definition record
 #include "Substrate/ElysiumLaw.h"           // Cycle 11b — FireWorldEvent, the `events_world` bus
+#include "Substrate/ElysiumNpc.h"           // FElysiumNpc::GetMind — the cast body's own state
 #include "Substrate/ElysiumPlayerLog.h"
+#include "Substrate/ElysiumReactions.h"     // LIFE5 — the damage flinch's pure rules
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
@@ -442,6 +447,36 @@ void FElysiumCombatCharacter::PublishEquippedCameraClass() const
 		}
 	}
 	Embodiment->SetEquippedCameraClass(CameraClass);
+}
+
+void FElysiumCombatCharacter::FillActivityClipRequest(FElysiumActivityClipRequest& Request) const
+{
+	Request.Stem = ModelStem();
+
+	// The classname a map AUTHORS, which is the key the recovered class bodies are joined to. The
+	// registered descriptor answers for a character no def produced, which is the player's case.
+	if (Def != nullptr)
+	{
+		Request.ActorClassname = Def->Classname;
+	}
+	else if (Class != nullptr)
+	{
+		Request.ActorClassname = Class->ClassName.ToString();
+	}
+	else
+	{
+		Request.ActorClassname.Reset();
+	}
+
+	const FElysiumItem* Active = Inventory.Active(*this);
+	Request.WeaponClassname = (Active != nullptr && Active->Def != nullptr)
+		? Active->Def->Classname : FString();
+
+	// A character with no mind is not a cast member and has no state to read; idle is what the
+	// recovered tree answers for every state that is neither alert nor combat, so it is the honest
+	// default rather than a placeholder.
+	const FElysiumNpc* Npc = AsNpc();
+	Request.ActorState = Npc != nullptr ? Npc->GetMind().State() : EElysiumNpcState::Idle;
 }
 
 // ============================================================================================
@@ -875,6 +910,11 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 	// The senses/memory record the schedule kernel reads. A no-op on the base.
 	OnDamageCommitted(Dmg);
 
+	// The generic damage flinch, from the one commit and BEFORE the death test below. A killing blow
+	// still flinches: death is `TASK_PLAY_DEATH_SEQUENCE`, a schedule task, so the death family's own
+	// later claim replaces this one on the base channel rather than racing it here.
+	StartDamageFlinch(Dmg);
+
 	// Cycle 9 — `ShouldRemove_OnTakeDamage`, from the one typed health commit. It also reconciles
 	// the Bloodshield teardown above: `EndBloodshield` drops the power's trait group when the buffer
 	// exhausts, and this is where the tracked targeted effect that installed it is retired with it.
@@ -900,6 +940,93 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 	{
 		OnKilled();
 	}
+}
+
+void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
+{
+	IElysiumEmbodiment* Embodiment = World != nullptr ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr || Visual == nullptr)
+	{
+		return;   // no body to flinch — an ordinary negative, not a failure
+	}
+
+	// **The gate.** Retail derives the direction from the attack's own world position, and a hit with
+	// no attacker in the world hands that derivation a zero vector — which orients the flinch at the
+	// world origin rather than at anything. `trigger_hurt`, a crushing mover, the scalar
+	// `TakeDamage(float)` route and a character hurting itself all reach this commit that way. The
+	// conservative reading is taken: a hit with no distinct attacking character flinches nothing,
+	// rather than reproducing a world-frame artefact as if it were a direction.
+	const FElysiumEntity* SourceEntity = World->Resolve(Dmg.Source);
+	const FElysiumCombatCharacter* Attacker =
+		SourceEntity != nullptr ? SourceEntity->AsCombatCharacter() : nullptr;
+	if (Attacker == nullptr || Attacker == this)
+	{
+		return;
+	}
+
+	// Retail's flinch draws at random, so this one does too — off the session's own Reaction stream,
+	// whose position is in the save (S8, `docs/architecture/save-architecture.md` §8). Every blow is a
+	// fresh pick, jitter and weighted choice; nothing here is a function of the victim or of how many
+	// times it has been hit.
+	FRandomStream& Rng = ElysiumRng::Stream(EElysiumRngStream::Reaction);
+	ElysiumReactions::FElysiumFlinch Flinch;
+	if (!ElysiumReactions::BuildFlinch(Attacker->Origin, Origin,
+		ElysiumSkeletalBasis::FromSourceAngles(Angles).Yaw, Rng, Flinch))
+	{
+		return;   // horizontally coincident origins name no direction on a yaw fan
+	}
+
+	FElysiumActivityClipRequest Request;
+	FillActivityClipRequest(Request);
+	Request.Activity = Flinch.Activity();
+	// The third draw, from the same stream: retail's `SelectWeightedSequence` picks among the equal
+	// activity's variants with `random()`, so the weighted pick re-rolls with the reaction.
+	Request.Variant = Rng.RandHelper(MAX_int32);
+	Request.HitYaw = Flinch.HitYawDegrees;
+	Request.Source = EElysiumAnimSource::Damage;
+	// The chain is the BODY's, and the identity is the world's own player handle — the same test the
+	// weapon transaction uses. `AsNpc()` would answer differently: a `scripted_character` stand-in and
+	// a scene's `!playercontroller` duplicate are both cast bodies with no NPC mind.
+	Request.BodyKind = (World->PlayerHandle() == Handle)
+		? EElysiumAnimBodyKind::Player : EElysiumAnimBodyKind::Cast;
+	// Retail's flinch is a gesture call: `AddGesture` reaches `SelectWeightedSequence` and simply
+	// returns on -1, so a body with no reaction in its vocabulary flinches nothing. It never walks the
+	// availability probe, the disposition retry or sequence zero — substituting a stance for a hit
+	// reaction is exactly the behaviour this clears.
+	Request.bAllowFallbackLadder = false;
+
+	FElysiumActivityClip Clip;
+	if (!Embodiment->ResolveNpcActivityClip(Request, Clip) || Clip.AnimationName.IsEmpty())
+	{
+		// The named miss already reads on the resolver's own selection record and its Verbose line,
+		// with the class body, weapon ladder and alert branch the request selected through. A second
+		// report here would be the same fact once per hit.
+		return;
+	}
+
+	FElysiumOneShotClipRequest Play;
+	Play.OwnerStem = Clip.OwnerStem;
+	Play.AnimationName = Clip.AnimationName;
+	Play.Label = Clip.Label;
+	// The reaction channel, not the one-shot slot: a flinch REPLACES the pose the body is holding, and
+	// a directional one is a fan whose pose is a blend of two authored reactions — which is the thing
+	// a montage cannot hold. The body's own stem rides along because a fan is reached through the
+	// character's vocabulary rather than through the bank alone.
+	Play.Route = EElysiumOneShotRoute::Reaction;
+	Play.BodyStem = ModelStem();
+	// Both answered by the resolve above and never re-derived here: `bGrid` says the label named a fan
+	// at all, and the axis value is where on that fan's own parameter it was sampled.
+	Play.bGrid = Clip.bGrid;
+	Play.AxisValue = Clip.AxisValue;
+	Play.bLoop = false;
+	Play.BlendInSeconds = ElysiumReactions::FlinchBlendInSeconds;
+	Play.BlendOutSeconds = ElysiumReactions::FlinchBlendOutSeconds;
+	Play.Priority = EElysiumAnimPriority::Reaction;
+	Play.Source = EElysiumAnimSource::Damage;
+	// The seam claims the base channel before it plays, so a body a choreographed scene owns refuses
+	// the reaction outright. A refusal is an ordinary negative it reports on its own Verbose line —
+	// the flinch simply does not happen, and the scene keeps the body.
+	Embodiment->PlayNpcOneShot(Visual, Play, nullptr);
 }
 
 void FElysiumCombatCharacter::EndBloodshield()

@@ -71,6 +71,7 @@
 #include "Substrate/ElysiumInterestingPlaces.h"
 #include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumMover.h"
+#include "Substrate/ElysiumNpc.h"           // FElysiumNpc::PlayActivity — the schedule's activity task
 #include "Substrate/ElysiumNpcGait.h"       // the travel-speed fallback a body with no fan takes
 #include "Substrate/ElysiumQuestLog.h"
 #include "Substrate/ElysiumQuestView.h"
@@ -1184,6 +1185,153 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		FMath::IsNearlyEqual(Gait.RunSplitSpeed(), AuthoredWalk + ElysiumMove::U, 0.01f));
 	TestTrue(TEXT("...which the authored walk itself cannot reach"),
 		AuthoredWalk < Gait.RunSplitSpeed());
+
+	return true;
+}
+
+// LIFE5 — the one activity seam, from the producer's side.
+//
+// Patrol travel, the schedule's activity task and the ambient interesting-place cycle share one
+// shape: state the whole translation context, resolve, then play the vocabulary label that came
+// back. What is asserted here is that shape — the classification really travels (it is what makes
+// the recovered class body, the weapon ladder and the armed/alert branch reachable at all), the
+// LABEL is what reaches the clip player rather than the concrete bank cell, the selected row's own
+// loop bit beats the caller's request, and the clip's length is what a waiting task is told.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcActivityResolveTest,
+	"Elysium.Substrate.Npc.ActivityResolve", GElysiumTestFlags)
+bool FElysiumNpcActivityResolveTest::RunTest(const FString&)
+{
+	auto BuildWalker = [](FElysiumEntityDefs& Defs)
+	{
+		Defs.MapName = TEXT("__npc_activity_resolve__");
+
+		FElysiumEntityDef Walker;
+		Walker.Classname = TEXT("npc_VVampire");
+		Walker.TargetName = TEXT("walker");
+		Walker.Keys.Add(TEXT("model"), TEXT("models/character/npc/unique/jack/Jack.mdl"));
+		Defs.Defs.Add(MoveTemp(Walker));
+
+		for (int32 PointIndex = 1; PointIndex <= 2; ++PointIndex)
+		{
+			FElysiumEntityDef Point;
+			Point.Classname = TEXT("info_node_patrol_point");
+			Point.TargetName = FString::Printf(TEXT("route_%d"), PointIndex);
+			Point.Origin = FVector(static_cast<float>(PointIndex * 100), 25.0f, 0.0f);
+			Defs.Defs.Add(MoveTemp(Point));
+		}
+	};
+
+	// --- Patrol travel: resolve through the whole chain, then play what it answered ---------------
+	{
+		FElysiumEntityDefs Defs;
+		BuildWalker(Defs);
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.bProvideNpcMotor = true;
+		Services.bNpcActivitiesResolve = true;
+		// Deliberately not `walk`: a caller that played the raw ACT_* name, or the concrete cell,
+		// would still look right against the default fixture.
+		Services.ResolvedNpcActivityLabel = TEXT("relaxed_walk");
+		Services.ResolvedNpcActivityClip = TEXT("relaxed_walk_0");
+		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+
+		FElysiumEntity* WalkerEnt = World.FindByName(TEXT("walker"));
+		if (!TestNotNull(TEXT("the walker resolved"), WalkerEnt))
+		{
+			return false;
+		}
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("SetupPatrolType")),
+			FElysiumVariant::String(TEXT("255 0 FOLLOW_PATROL_PATH_WALK")), 0.0,
+			FElysiumEntityHandle::Invalid(), WalkerEnt->Handle);
+		World.EnqueueInput(TEXT("!self"), FName(TEXT("FollowPatrolPath")),
+			FElysiumVariant::String(TEXT("route_1 route_2")), 0.0,
+			FElysiumEntityHandle::Invalid(), WalkerEnt->Handle);
+		World.Tick(0.0);
+		World.Tick(0.05);
+
+		FString Resolve;
+		for (const FString& Call : Services.Calls)
+		{
+			if (Call.StartsWith(TEXT("ResolveNpcActivityClip jack ACT_WALK")))
+			{
+				Resolve = Call;
+				break;
+			}
+		}
+		if (!TestFalse(TEXT("the patrol leg asked the one activity seam"), Resolve.IsEmpty()))
+		{
+			return false;
+		}
+		TestTrue(TEXT("...stating the classname its recovered class bodies are found by"),
+			Resolve.Contains(TEXT("class=npc_VVampire")));
+		TestTrue(TEXT("...stating its empty hands, which is the empty ladder retail walks"),
+			Resolve.Contains(TEXT("weapon=-")));
+		TestTrue(TEXT("...stating the state the armed/alert branch reads"),
+			Resolve.Contains(TEXT("state=Idle")));
+		TestTrue(TEXT("...and walking the cast chain, not the player's one pass"),
+			Resolve.EndsWith(TEXT("body=cast")));
+
+		TestTrue(TEXT("the resolved vocabulary label is what reaches the clip player"),
+			Services.Saw(TEXT("PlayNpcClip jack relaxed_walk loop=1")));
+		TestFalse(TEXT("the concrete bank cell is not mistaken for a vocabulary label"),
+			Services.Saw(TEXT("PlayNpcClip jack relaxed_walk_0")));
+	}
+
+	// --- The schedule's activity task: the authored loop bit, and the length it waits on ----------
+	{
+		FElysiumEntityDefs Defs;
+		BuildWalker(Defs);
+
+		FElysiumRecordingServices Services;
+		Services.bHasPlayer = true;
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityLabel = TEXT("smoke");
+		Services.ResolvedNpcActivityClip = TEXT("smoke_0");
+		Services.ClipSeconds = 3.25f;
+		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Services.Bundle());
+		World.Load(MoveTemp(Defs));
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumEntity* WalkerEnt = World.FindByName(TEXT("walker"));
+		FElysiumNpc* Walker = WalkerEnt ? WalkerEnt->AsNpc() : nullptr;
+		if (!TestNotNull(TEXT("the walker is an NPC"), Walker))
+		{
+			return false;
+		}
+
+		// `TASK_SET_ACTIVITY` asks for a one-shot. The CLIP still decides: VtMB reads
+		// `m_bSequenceLoops` off the sequence's own flags, and without that a body-language idle
+		// authored as a loop plays once and then stands on its last frame — frozen, not resting.
+		Services.ResolvedNpcActivityLoops = true;
+		const float Looped = Walker->PlayActivity(TEXT("ACT_SMOKING"));
+		TestTrue(TEXT("an authored loop keeps looping however the task asked for it"),
+			Services.Saw(TEXT("PlayNpcClip jack smoke loop=1")));
+		// The schedule executor's wait IS this number, so the task has to be told the clip's own
+		// length rather than a success flag.
+		TestTrue(TEXT("...and the task is told how long that clip runs"),
+			FMath::IsNearlyEqual(Looped, 3.25f, 0.01f));
+
+		Services.Calls.Reset();
+		Services.ResolvedNpcActivityLoops = false;
+		Walker->PlayActivity(TEXT("ACT_SMOKING"));
+		TestTrue(TEXT("a row authoring no loop plays as the one-shot the task asked for"),
+			Services.Saw(TEXT("PlayNpcClip jack smoke loop=0")));
+
+		// A miss is the resolver's named miss plus the task's own stated failure — never an invented
+		// clip and never an invented duration.
+		Services.Calls.Reset();
+		Services.bNpcActivitiesResolve = false;
+		TestTrue(TEXT("an unresolved activity fails the task with a negative wait"),
+			Walker->PlayActivity(TEXT("ACT_SMOKING")) < 0.f);
+		TestFalse(TEXT("...and nothing was played on the body"),
+			Services.Saw(TEXT("PlayNpcClip")));
+	}
 
 	return true;
 }

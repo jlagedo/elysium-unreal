@@ -8,6 +8,7 @@
 
 #include "Substrate/ElysiumWeaponClasses.h"
 
+#include "ElysiumAnimationIntent.h"
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -644,18 +645,34 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, const FElysiumWeap
 	float Seconds = 0.0f;
 	if (Char && Embodiment)
 	{
-		FString Label;
-		FString AnimName;
-		float GroundSpeed = 0.0f;
 		// The activity route: the embodiment weighs the manifest's candidates and answers with the
 		// vocabulary key that has to go back through the clip player, which is what preserves the
 		// shared-bank owner.
-		if (Embodiment->ResolveNpcActivityClip(Char->ModelStem(), Activity, FMath::Max(Handle.Index, 0),
-			Label, AnimName, GroundSpeed) && !Label.IsEmpty())
+		//
+		// The chain is the OWNER's, and this one entity has both owners: a player weapon and an
+		// NPC's are the same `FElysiumWeapon`, so the attack activity walks `CBasePlayer`'s one pass
+		// on the player and the cast's alternation and probe on everyone else. The rest of the
+		// context — the owner's classname, its equipped weapon and its state — is the owner's own,
+		// which is why it is filled from the character rather than from this weapon.
+		FElysiumActivityClipRequest Request;
+		Char->FillActivityClipRequest(Request);
+		Request.Activity = Activity;
+		Request.Variant = FMath::Max(Handle.Index, 0);
+		// The producer and the chain are one answer, taken from the same owner: a player-owned
+		// weapon's attack is the player's own request walking `CBasePlayer`'s one pass, and everyone
+		// else's is the cast's. Stating one without the other would record a producer whose translation
+		// belongs to a different body.
+		const bool bPlayerOwned = IsPlayerSide(*Char);
+		Request.Source = bPlayerOwned ? EElysiumAnimSource::Player : EElysiumAnimSource::Npc;
+		Request.BodyKind = bPlayerOwned
+			? EElysiumAnimBodyKind::Player : EElysiumAnimBodyKind::Cast;
+
+		FElysiumActivityClip Clip;
+		if (Embodiment->ResolveNpcActivityClip(Request, Clip) && !Clip.Label.IsEmpty())
 		{
-			OutClipLabel = Label;
+			OutClipLabel = Clip.Label;
 			float Played = 0.0f;
-			if (Char->PlayAnimClip(Label, /*bLoop*/ false, &Played) && Played > 0.0f)
+			if (Char->PlayAnimClip(Clip.Label, /*bLoop*/ false, &Played) && Played > 0.0f)
 			{
 				Seconds = Played;
 			}

@@ -115,6 +115,15 @@ const TCHAR* SourceName(EElysiumAnimSource Source)
 	}
 }
 
+const TCHAR* BodyKindName(EElysiumAnimBodyKind BodyKind)
+{
+	switch (BodyKind)
+	{
+	case EElysiumAnimBodyKind::Cast: return TEXT("cast");
+	default:                         return TEXT("player");
+	}
+}
+
 const TCHAR* ChannelName(EElysiumAnimChannel Channel)
 {
 	switch (Channel)
@@ -416,8 +425,8 @@ EElysiumAnimActivityCode Classify(const FElysiumLocomotionSample& Sample,
 
 FElysiumAnimationIntent BuildLocomotionIntent(const FElysiumLocomotionSample& Sample,
 	const FElysiumJumpLatch& Latch, const FElysiumGaitReference& Gait,
-	EElysiumAnimSource Source, const FString& Stem, const FElysiumEntityHandle& Character,
-	int32 Variant)
+	EElysiumAnimSource Source, EElysiumAnimBodyKind BodyKind, const FString& Stem,
+	const FElysiumEntityHandle& Character, int32 Variant)
 {
 	EElysiumAnimActivityCode Code = Classify(Sample, Latch, Gait);
 
@@ -425,8 +434,9 @@ FElysiumAnimationIntent BuildLocomotionIntent(const FElysiumLocomotionSample& Sa
 	// locomotion classifier: a schedule task requests `ACT_WALK` or `ACT_RUN` outright, and the two
 	// rows that turn a relaxed request back into a plain one are `CBasePlayer::NPC_TranslateActivity`
 	// — a player virtual no cast body reaches. A cast body therefore asks for the plain activity,
-	// because nothing downstream of it would ever undo the relaxed form.
-	if (Source == EElysiumAnimSource::Npc)
+	// because nothing downstream of it would ever undo the relaxed form. It is the body's chain that
+	// decides this, not the producer that asked.
+	if (BodyKind == EElysiumAnimBodyKind::Cast)
 	{
 		if (Code == EElysiumAnimActivityCode::WalkRelaxed)
 		{
@@ -442,6 +452,7 @@ FElysiumAnimationIntent BuildLocomotionIntent(const FElysiumLocomotionSample& Sa
 	Out.Character = Character;
 	Out.Stem = Stem;
 	Out.Source = Source;
+	Out.BodyKind = BodyKind;
 	Out.Channel = EElysiumAnimChannel::Base;
 	Out.Activity = ActivityName(Code);
 	Out.Route = EElysiumAnimRoute::Activity;

@@ -337,6 +337,7 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 	{
 		PlayerAnimDriver = MakePimpl<FElysiumAnimationDriver>();
 		PlayerAnimDriver->Source = EElysiumAnimSource::Player;
+		PlayerAnimDriver->BodyKind = EElysiumAnimBodyKind::Player;
 	}
 
 	PlayerAnimDriver->Stem = PlayerVisualStem;
@@ -431,6 +432,7 @@ uint32 AElysiumMapActor::SubmitPlayerAnimRequest(const FElysiumAnimationRequest&
 		// — a scene that opens on the load frame — builds the same driver rather than being dropped.
 		PlayerAnimDriver = MakePimpl<FElysiumAnimationDriver>();
 		PlayerAnimDriver->Source = EElysiumAnimSource::Player;
+		PlayerAnimDriver->BodyKind = EElysiumAnimBodyKind::Player;
 	}
 	return PlayerAnimDriver->SubmitRequest(Request);
 }

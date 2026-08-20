@@ -410,6 +410,21 @@ namespace ElysiumAnimGraphBootstrap
 		return nullptr;
 	}
 
+	// The literal an unconnected exposed pin carries into the compiled node. The pin — not the
+	// property behind it — is what the compiler folds for a shown pin, so a value meant to survive
+	// compilation is written here; returns false when the pin does not exist, so a misspelled name
+	// refuses the export like a dead wire does.
+	bool SetPinDefault(UEdGraphNode* Node, const TCHAR* PinName, const TCHAR* Value)
+	{
+		UEdGraphPin* Pin = PinNamed(Node, PinName);
+		if (Pin == nullptr)
+		{
+			return false;
+		}
+		Pin->DefaultValue = Value;
+		return true;
+	}
+
 	// Returns whether the wire was actually made. Both pins are looked up by name, and a name that
 	// does not exist yields null — so an unchecked call is a dead wire that builds, compiles and
 	// exports clean, and shows up only as a reference pose on a live body. Every caller checks.
@@ -536,6 +551,106 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 		Wire(Link(FirstPin(Slot, EGPD_Output), FirstPin(Inertia, EGPD_Input)),
 			TEXT("slot -> inertialization"));
 
+		// --- the reaction branch (LIFE5) -----------------------------------------------------------
+		//
+		// A reaction REPLACES the locomotion pose rather than riding over it, so it sits on the base
+		// channel between the inertializer and the upper-body layer: `bReactionActive` picks either
+		// the reaction pose or everything the machine and the one-shot slot produced.
+		//
+		// The two per-pose blend times ARE the asymmetric fade. `FAnimNode_BlendListBase` takes the
+		// NEWLY ACTIVE child's own time, so entering the reaction uses the in-fade and returning to
+		// the base uses the out-fade, from one node and with no second blend to keep in step.
+		//
+		// Nothing publishes to it yet: `bReactionActive` defaults false, the branch holds full weight
+		// on the base pose from its first update, and the reaction half is never evaluated.
+		UEdGraphNode* ReactionBlend = Place(*Graph,
+			TEXT("/Script/AnimGraph.AnimGraphNode_BlendListByBool"), 140, -140);
+		{
+			// The reaction's own pose source, the same "exactly one of these two" shape every other
+			// channel in this graph takes: a directional hit fan (steered by `hit_yaw`) or a single
+			// reaction clip. The resolver decides which; the graph only composes it.
+			UEdGraphNode* ReactionSpace = Place(*Graph,
+				TEXT("/Script/AnimGraph.AnimGraphNode_BlendSpacePlayer"), -160, -380);
+			UEdGraphNode* ReactionSequence = Place(*Graph,
+				TEXT("/Script/AnimGraph.AnimGraphNode_SequencePlayer"), -160, -240);
+			UEdGraphNode* ReactionPick = Place(*Graph,
+				TEXT("/Script/AnimGraph.AnimGraphNode_BlendListByBool"), -20, -300);
+			if (ReactionSpace == nullptr || ReactionSequence == nullptr || ReactionPick == nullptr
+				|| ReactionBlend == nullptr)
+			{
+				UE_LOG(LogTemp, Error, TEXT("[animbp] a reaction branch node class was not found"));
+				return;
+			}
+
+			// A reaction ENDS, so neither player repeats: a looping flinch never reports complete and
+			// would hold the body in its reaction forever. Written as a node value rather than exposed
+			// as a pin because it is a property of the channel and not of the selection — the value
+			// folds into the compiled constant at compile time.
+			Wire(SetNodeBool(ReactionSpace, TEXT("bLoop"), false), TEXT("reaction blend space bLoop"));
+			Wire(SetNodeBool(ReactionSequence, TEXT("bLoopAnimation"), false),
+				TEXT("reaction sequence bLoopAnimation"));
+
+			ExposePin(ReactionSpace, TEXT("BlendSpace"));
+			Wire(DriveFromBool(*Graph, PinNamed(ReactionSpace, TEXT("BlendSpace")),
+				TEXT("RequestedReactionBlendSpace"), -460, -420), TEXT("reaction BlendSpace pin"));
+			// One axis only. Every hit fan VtMB ships is 9x1, so a second axis would be a steering
+			// value with nothing behind it; a two-axis reaction grid is refused by name elsewhere
+			// rather than half-steered here.
+			Wire(DriveFromBool(*Graph, PinNamed(ReactionSpace, TEXT("X")), TEXT("ReactionAxis0"),
+				-460, -360), TEXT("reaction X (ReactionAxis0) pin"));
+
+			ExposePin(ReactionSequence, TEXT("Sequence"));
+			Wire(DriveFromBool(*Graph, PinNamed(ReactionSequence, TEXT("Sequence")),
+				TEXT("RequestedReactionSequence"), -460, -240), TEXT("reaction Sequence pin"));
+
+			// Index 0 is the TRUE branch, the convention `UAnimGraphNode_BlendListByBool` sets and
+			// every other pick in this graph follows.
+			Wire(DriveFromBool(*Graph, PinNamed(ReactionPick, TEXT("bActiveValue")),
+				TEXT("bReactionHasBlendSpace"), -460, -160), TEXT("reaction pick bActiveValue"));
+			Wire(Link(FirstPin(ReactionSpace, EGPD_Output), PinNamed(ReactionPick, TEXT("BlendPose_0"))),
+				TEXT("reaction blend space -> true pose"));
+			Wire(Link(FirstPin(ReactionSequence, EGPD_Output),
+				PinNamed(ReactionPick, TEXT("BlendPose_1"))), TEXT("reaction sequence -> false pose"));
+			// Both halves are the SAME reaction, chosen once by what the resolver answered with — a
+			// fade between them would be a fade between two answers to one question. The pin default
+			// is what the compiler folds, so it is written on the pin rather than on the node.
+			Wire(SetPinDefault(ReactionPick, TEXT("BlendTime_0"), TEXT("0.000000")),
+				TEXT("reaction pick BlendTime_0 default"));
+			Wire(SetPinDefault(ReactionPick, TEXT("BlendTime_1"), TEXT("0.000000")),
+				TEXT("reaction pick BlendTime_1 default"));
+
+			Wire(DriveFromBool(*Graph, PinNamed(ReactionBlend, TEXT("bActiveValue")),
+				TEXT("bReactionActive"), -20, -60), TEXT("reaction blend bActiveValue"));
+			Wire(DriveFromBool(*Graph, PinNamed(ReactionBlend, TEXT("BlendTime_0")),
+				TEXT("ReactionBlendInSeconds"), -20, 0), TEXT("reaction blend in time pin"));
+			Wire(DriveFromBool(*Graph, PinNamed(ReactionBlend, TEXT("BlendTime_1")),
+				TEXT("ReactionBlendOutSeconds"), -20, 60), TEXT("reaction blend out time pin"));
+			Wire(Link(FirstPin(ReactionPick, EGPD_Output),
+				PinNamed(ReactionBlend, TEXT("BlendPose_0"))), TEXT("reaction pick -> true pose"));
+			Wire(Link(FirstPin(Inertia, EGPD_Output), PinNamed(ReactionBlend, TEXT("BlendPose_1"))),
+				TEXT("inertialization -> reaction false pose"));
+
+			// `ChildUpateMode` stays at the engine's `Default`. Its `ResetChildOnActivate` alternative
+			// looks like the retrigger fix and is not one: `FAnimNode_BlendListBase` reinitializes a
+			// newly-active child only when that child's weight is still <= `ZERO_ANIMWEIGHT_THRESH`, so
+			// a reaction that fires again while its own fan is still fading is never covered — and when
+			// a full-weight reaction ends, the reset lands on the BASE child instead, re-initializing
+			// the state machine to its entry state at elapsed zero, wiping the inertializer's pose
+			// history and resetting the slot's bookkeeping. That is a hard cut on release, which is the
+			// opposite of what the out-fade exists for. The restart a retrigger needs comes from
+			// republishing the asset: a sequence player whose `Sequence` pin changes restarts, and so
+			// does the blend space player on a new `BlendSpace`.
+			//
+			// The transition type and the blend curve stay at the engine's own defaults on purpose:
+			// choosing a curve here would pre-empt the separate sequence-blend-fidelity call, which
+			// owns what every fade in this graph is shaped like. The transition type in particular must
+			// stay `StandardBlend` — the graph's inertialization node is a DESCENDANT of this branch, so
+			// an `Inertialization` type here would search its ancestors for an `IInertializationRequester`,
+			// find none, and log a request failure every time the reaction fires.
+			Wire(SetOwnValue<FName>(ReactionBlend, TEXT("Tag"),
+				FName(ElysiumAnimGraph::ReactionBranchTag)), TEXT("reaction blend tag"));
+		}
+
 		// --- the upper-body layer (CCC10) ----------------------------------------------------------
 		//
 		// Sits after the inertializer, outside the machine: a weapon layer rides beside the
@@ -605,8 +720,8 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// keeps a generated, game-derived profile asset out of the tracked graph.
 			SetOwnValue<FName>(Layer, TEXT("Tag"), FName(ElysiumAnimGraph::UpperBodyLayerTag));
 
-			Wire(Link(FirstPin(Inertia, EGPD_Output), PinNamed(Layer, TEXT("BasePose"))),
-				TEXT("inertialization -> layer base pose"));
+			Wire(Link(FirstPin(ReactionBlend, EGPD_Output), PinNamed(Layer, TEXT("BasePose"))),
+				TEXT("reaction blend -> layer base pose"));
 			Wire(Link(FirstPin(UpperBodyPick, EGPD_Output), PinNamed(Layer, TEXT("BlendPoses_0"))),
 				TEXT("layer pick -> layer blend pose 0"));
 			Wire(DriveFromBool(*Graph, PinNamed(Layer, TEXT("BlendWeights_0")),

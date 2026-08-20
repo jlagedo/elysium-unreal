@@ -90,6 +90,10 @@ private:
 	// filling one `FElysiumLocomotionSample`. Side by side on purpose — the contract's whole claim is
 	// that the cast's locomotion and the player's are the same record.
 	void RenderLocomotion();
+	// The unclaimed sequence-event work list (LIFE5), drawn under the locomotion table. Session-wide
+	// rather than per-character, which is why it is a section there rather than a selected-character
+	// tab; `elysium.animevents` reads the same rows.
+	void RenderAnimEventCensus();
 
 	// The over-the-head readout: state, running schedule, and a line to the committed enemy. Drawn
 	// in the world because a fight is watched in the world; everything it says is also in the tabs.

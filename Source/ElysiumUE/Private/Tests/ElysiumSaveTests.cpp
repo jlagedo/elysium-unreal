@@ -869,6 +869,52 @@ bool FElysiumSaveSchemaTest::RunTest(const FString&)
 		ElysiumRng::Stream(EElysiumRngStream::NpcMaker).FRandRange(1.0f, 2.0f),
 		NextMakerRetry);
 
+	// --- The stream table itself: every enumerator is named, seeded and carried ------------------
+	// The block is a length-prefixed array and Restore truncates, so adding a stream is not a format
+	// change — but a stream with no name would hand the readable dump a null, and a stream the
+	// snapshot did not carry would silently reset across a load. Both are checked over the whole
+	// table rather than per stream, so the next enumerator is covered the day it is added.
+	{
+		const int32 StreamCount = static_cast<int32>(EElysiumRngStream::Count);
+		bool bEveryStreamNamed = true;
+		for (int32 i = 0; i < StreamCount; ++i)
+		{
+			const TCHAR* Named = ElysiumRng::Name(static_cast<EElysiumRngStream>(i));
+			bEveryStreamNamed = bEveryStreamNamed && Named != nullptr && *Named != TEXT('\0');
+		}
+		TestTrue(TEXT("every declared stream has a readable name"), bEveryStreamNamed);
+		TestEqual(TEXT("the flinch's own stream is named"),
+			FString(ElysiumRng::Name(EElysiumRngStream::Reaction)), FString(TEXT("Reaction")));
+
+		ElysiumRng::SeedAll(0x52454143);
+		TArray<int32> FirstPass;
+		for (int32 i = 0; i < StreamCount; ++i)
+		{
+			FirstPass.Add(
+				ElysiumRng::Stream(static_cast<EElysiumRngStream>(i)).RandHelper(MAX_int32));
+		}
+		ElysiumRng::SeedAll(0x52454143);
+		bool bReproduced = true;
+		for (int32 i = 0; i < StreamCount; ++i)
+		{
+			bReproduced = bReproduced
+				&& ElysiumRng::Stream(static_cast<EElysiumRngStream>(i)).RandHelper(MAX_int32)
+					== FirstPass[i];
+		}
+		TestTrue(TEXT("one session seed reproduces every stream"), bReproduced);
+
+		TArray<ElysiumRng::FState> Whole;
+		ElysiumRng::Snapshot(Whole);
+		TestEqual(TEXT("the snapshot carries one entry per declared stream"),
+			Whole.Num(), StreamCount);
+		const int32 AfterRestore =
+			ElysiumRng::Stream(EElysiumRngStream::Reaction).RandHelper(MAX_int32);
+		ElysiumRng::Stream(EElysiumRngStream::Reaction).RandHelper(MAX_int32);
+		ElysiumRng::Restore(Whole);
+		TestEqual(TEXT("...and restoring it puts the new stream back where it stood"),
+			ElysiumRng::Stream(EElysiumRngStream::Reaction).RandHelper(MAX_int32), AfterRestore);
+	}
+
 	return true;
 }
 

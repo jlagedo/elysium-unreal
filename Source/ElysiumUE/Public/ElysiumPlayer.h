@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+// By value: CBaseAnimating owns one event cursor per polled channel.
+#include "ElysiumAnimEvent.h"
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumCameraService.h"
 #include "ElysiumEntity.h"
@@ -792,6 +794,14 @@ public:
 	// The model stem the clip manifest is keyed by: the model file's lowercased basename.
 	FString ModelStem() const;
 
+	// --- The sequence-event pass (LIFE5), implemented once for every character ---------------
+	//
+	// Pull each polled channel's phase off the body, walk its clip's own timeline that far, and
+	// dispatch what the interval contained: an id inside the server band is offered to
+	// `HandleAnimEvent`, and anything unclaimed is counted in the census. This is the only place the
+	// recovered dispatcher runs, because `Visual` is the only body a character has.
+	virtual void AdvanceAnimEvents(double Now) override;
+
 protected:
 	// Which of the three standing idles a disposition's stance set poses. Virtual because only the
 	// NPC chain carries VtMB's stance machine — the `+0x98` self-pointer that reaches it is set in
@@ -809,6 +819,12 @@ protected:
 private:
 	bool bDispositionTalking = false;
 	TMap<FString, float> DispositionFacialPose;
+
+	// One cursor per channel actually polled — the base channel alone today, which is the only
+	// channel any producer publishes a phase for. It is an array rather than a fixed
+	// `ElysiumAnimIntent::NumChannels` block because a channel nothing polls owns no timeline
+	// position, and a slot standing at cycle 0 forever would read as a clip that never advances.
+	TArray<FElysiumAnimEventCursor> EventCursors;
 };
 
 // ============================================================================================
@@ -844,6 +860,17 @@ public:
 	// this**, including the save reconcile — miss that one and a loaded game arbitrates against the
 	// class of whatever the last run was holding. A no-op for anything that is not the player.
 	void PublishEquippedCameraClass() const;
+
+	// LIFE5 — fill the translation context an `ACT_*` request resolves through: this character's
+	// model stem, the classname a map authored it under, its active weapon's classname and its own
+	// state. Those are the three keys the recovered `+0x5dc` class body, the committed weapon
+	// ladders and the armed/alert branch are joined to, so every producer that asks for an activity
+	// fills them here rather than reading them four ways.
+	//
+	// The activity, the variant and the body kind stay the caller's: the first two are what it is
+	// asking for, and the body kind is the fork the whole chain turns on — the same `FElysiumWeapon`
+	// entity is a player's and a combatant's, so no reader can derive it from the character alone.
+	void FillActivityClipRequest(struct FElysiumActivityClipRequest& Request) const;
 
 	int32 Money = 0;              // m_iMoney — the one counter `stats.txt` does not carry as a Stat
 
@@ -925,6 +952,17 @@ public:
 	// aggravated tracking, then the outputs and the death test. Nothing else writes the health
 	// slots from a damage path.
 	void CommitDamage(const FElysiumDmg& Dmg);
+
+	// LIFE5 — `CBaseCombatCharacter::DamageFlinch`, from the one health commit. Picks the head or
+	// torso hit activity, steers the `hit_yaw` fan by where the attacker stands relative to this
+	// body's facing, and plays the resolved cell as a Reaction-band one-shot over whatever owns the
+	// base pose. The pure rules are `Substrate/ElysiumReactions.h`; this is the gate and the
+	// resolution.
+	//
+	// Nothing here is a failure: a hit with no attacking character, a body with no visual and a
+	// vocabulary carrying no reaction all mean no flinch, and the resolver's own record names the
+	// last of those.
+	void StartDamageFlinch(const FElysiumDmg& Dmg);
 
 	// --- The melee opposed records (`combat-and-damage.md` § "Opposed record and reaction margin")
 	// The defender's own array, keyed by attacker. A second contact from the same attacker REPLACES

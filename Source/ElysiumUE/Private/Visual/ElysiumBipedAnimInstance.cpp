@@ -13,6 +13,7 @@
 #include "Animation/BlendProfile.h"
 #include "Animation/BlendSpace.h"
 #include "Animation/Skeleton.h"
+#include "AnimNodes/AnimNode_BlendListByBool.h"
 #include "AnimNodes/AnimNode_LayeredBoneBlend.h"
 #include "AnimationRuntime.h"
 #include "BonePose.h"
@@ -311,6 +312,10 @@ void UElysiumBipedAnimInstance::PublishSelection(const FElysiumAnimationSelectio
 		}
 		StopOneShot(0.f);
 		StopClip();
+		// LIFE5 — and the reaction branch with them. A publish that has WON the base pose owns the
+		// base pose; leaving the branch holding a fan would leave the body reacting to a hit the
+		// arbitration has already handed away, with the reaction's own assets pinned behind it.
+		StopReaction();
 	}
 	PendingUpperBodySpace = Assets.OverlaySpace;
 	PendingUpperBodySequence = Assets.OverlaySequence;
@@ -485,6 +490,24 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// two are independent requests that happen to arrive on one record.
 	ProjectUpperBodyLayer();
 
+	// --- the reaction's phase clock, advanced AHEAD of the hold branch too (LIFE5) -----------------
+	//
+	// Same reason as the layer above: a base pose that is being HELD is a locomotion answer, and a
+	// reaction is a separate request that must not be frozen by it. A held base with a running
+	// reaction is the ordinary case for a body whose landing resolved nothing while something shot it.
+	if (bReactionActive)
+	{
+		ReactionSecondsLeft -= DeltaSeconds;
+		if (ReactionSecondsLeft <= 0.0f)
+		{
+			// The fan is left on its pins deliberately: the engine is still fading the branch OUT over
+			// `ReactionBlendOutSeconds`, and clearing the asset here would evaluate the fade against a
+			// null pose — the reference pose — for its whole length.
+			bReactionActive = false;
+			ReactionSecondsLeft = 0.0f;
+		}
+	}
+
 	// A blend space whose compiled target state has no blend-space player is a null sequence pin
 	// — full-body reference pose — and the pointer would defeat `ShouldHoldPose`. Refuse first so
 	// the hold sees nothing to play. This is the compiled-class check: the pure resolver asks the
@@ -610,7 +633,8 @@ bool UElysiumBipedAnimInstance::HasCompiledGraph() const
 	return Cast<UAnimBlueprintGeneratedClass>(GetClass()) != nullptr;
 }
 
-bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds)
+bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop,
+	float BlendInSeconds, float BlendOutSeconds)
 {
 	if (Sequence == nullptr)
 	{
@@ -624,10 +648,20 @@ bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop,
 		PlayClip(Sequence, bLoop);
 		return true;
 	}
-	// The FIRST clip has nothing to blend from and snaps in regardless, which is retail's own rule:
-	// otherwise every body would fade up out of the reference pose on map load, because the slot's
-	// source pose is a state machine that has been handed no asset yet.
-	const float BlendIn = Montage_IsPlaying(ActiveSlotMontage) ? BlendSeconds : 0.0f;
+	// A clip with nothing to blend FROM snaps in, which is retail's own rule: otherwise a body would
+	// fade up out of the reference pose on map load, because the slot's source pose is a state
+	// machine that has been handed no asset yet.
+	//
+	// **The predicate is that source pose, not "is this the first montage".** The slot blends the
+	// clip against whatever the machine holds, so a graph already posing a real asset has something
+	// to blend from even when nothing has been on the slot before — and snapping onto a posed body
+	// is the pop this rule exists to avoid. `bHasApplied` is NOT the fact to ask: it goes true on the
+	// first update of any body, asset or no asset, because a record that resolved nothing is still a
+	// record applied. The assets the graph is actually evaluating are.
+	const bool bGraphPosesAnAsset =
+		RequestedSequence != nullptr || RequestedBlendSpace != nullptr;
+	const float BlendIn =
+		(bGraphPosesAnAsset || Montage_IsPlaying(ActiveSlotMontage)) ? BlendInSeconds : 0.0f;
 	// A loop count of 0 is infinite. The blend IN is the clip's own authored fade — the same number
 	// the locomotion transition uses, so one authority serves both consumers.
 	//
@@ -637,7 +671,7 @@ bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop,
 	// source pose is the state machine underneath, which for a body that has been handed no
 	// selection is the REFERENCE pose — so the dip shows as a single frame of the authored bind
 	// pose. A clip that never ends has nothing to blend out to; only the one-shot does.
-	const float BlendOut = bLoop ? 0.0f : BlendSeconds;
+	const float BlendOut = bLoop ? 0.0f : BlendOutSeconds;
 	// A loop count of 0 is NOT infinite here: the dynamic montage's length is
 	// `LoopingCount * segment length`, and `Montage_Play` refuses a zero-length montage without
 	// logging. A looping clip therefore asks for a segment long enough to outlast any lab or
@@ -646,6 +680,92 @@ bool UElysiumBipedAnimInstance::PlayOneShot(UAnimSequence* Sequence, bool bLoop,
 	ActiveSlotMontage = PlaySlotAnimationAsDynamicMontage(Sequence, FAnimSlotGroup::DefaultSlotName,
 		BlendIn, BlendOut, /*InPlayRate=*/1.0f, /*LoopCount=*/ bLoop ? LoopingHoldCount : 1);
 	return ActiveSlotMontage != nullptr;
+}
+
+bool UElysiumBipedAnimInstance::HasCompiledReactionBranch() const
+{
+	if (bReactionBranchResolved)
+	{
+		return bHasReactionBranch;
+	}
+	// The compiled class's tag table, the same door `ApplyUpperBodyMask` uses. It is compiled state,
+	// so one lookup answers for the instance's whole life — and a class with no table (the plain
+	// native host) answers false without another lookup every time something is hit.
+	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(GetClass());
+	const FAnimSubsystem_Tag* Tags = AnimClass != nullptr
+		? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
+	bHasReactionBranch = Tags != nullptr
+		&& Tags->FindNodeByTag<FAnimNode_BlendListByBool>(
+			FName(ElysiumAnimGraph::ReactionBranchTag),
+			const_cast<UElysiumBipedAnimInstance*>(this)) != nullptr;
+	bReactionBranchResolved = true;
+	return bHasReactionBranch;
+}
+
+bool UElysiumBipedAnimInstance::PlayReaction(const FElysiumReactionPlay& Play)
+{
+	if (!Play.IsValid())
+	{
+		UE_LOG(LogElysiumBipedGraph, Warning,
+			TEXT("[elysium] reaction refused: space='%s' sequence='%s' length %.3fs -- exactly one "
+				"asset and a positive length are required"),
+			*GetNameSafe(Play.Space), *GetNameSafe(Play.Sequence), Play.LengthSeconds);
+		return false;
+	}
+	if (!HasCompiledReactionBranch())
+	{
+		// A real case rather than a guard: a generated graph package built before the branch existed
+		// loads, compiles and poses. The caller collapses to a single clip on this answer, so it is
+		// reported once here and acted on there.
+		UE_LOG(LogElysiumBipedGraph, Warning,
+			TEXT("[elysium] '%s' carries no reaction branch tagged '%s'; the reaction cannot be "
+				"played on this class"),
+			*GetClass()->GetName(), ElysiumAnimGraph::ReactionBranchTag);
+		return false;
+	}
+
+	// The blend IN takes the same predicate `PlayOneShot` does, and for the same reason: the branch's
+	// false pose is the locomotion pose, so a graph that has been handed no asset is blending up out
+	// of the reference pose. A body with nothing to blend FROM snaps in.
+	const bool bGraphPosesAnAsset = RequestedSequence != nullptr || RequestedBlendSpace != nullptr;
+	ReactionBlendInSeconds = bGraphPosesAnAsset ? FMath::Max(Play.BlendInSeconds, 0.0f) : 0.0f;
+	ReactionBlendOutSeconds = FMath::Max(Play.BlendOutSeconds, 0.0f);
+
+	// The assets, republished whole. **This is also the retrigger**: a sequence player whose
+	// `Sequence` pin changes restarts from the top, and so does the blend space player on a new
+	// `BlendSpace`, so a second hit on a body already reacting plays its own clip from frame one.
+	RequestedReactionBlendSpace = Play.Space;
+	RequestedReactionSequence = Play.Sequence;
+	bReactionHasBlendSpace = Play.Space != nullptr;
+	ReactionAxis0 = Play.AxisValue;
+
+	// **A retrigger onto the SAME fan continues its phase**, because the pin did not change and a
+	// blend space player only restarts on a new asset. That is a named residual rather than a
+	// defect: it costs a second hit from the same direction its own wind-up, and the alternatives
+	// (a per-play generation on the pin, or a child reset that hard-cuts the base on release) both
+	// buy it with a worse failure.
+	// The play owns the arithmetic, because the channel claim reads the other half of it: the claim's
+	// `HoldSeconds` is `TotalSeconds`, this is `ActiveSeconds`, and one expression is what stops a
+	// claim expiring while the branch is still fading. The minimum hold and why it is PENDING RE are
+	// on `ActiveSeconds` itself.
+	ReactionSecondsLeft = Play.ActiveSeconds();
+	bReactionActive = true;
+
+	UE_LOG(LogElysiumBipedGraph, Verbose,
+		TEXT("reaction %s '%s' at %.1f (%.3fs, in %.2f out %.2f, active for %.3fs)"),
+		Play.Space != nullptr ? TEXT("fan") : TEXT("clip"),
+		Play.Space != nullptr ? *GetNameSafe(Play.Space) : *GetNameSafe(Play.Sequence),
+		Play.AxisValue, Play.LengthSeconds, ReactionBlendInSeconds, ReactionBlendOutSeconds,
+		ReactionSecondsLeft);
+	return true;
+}
+
+void UElysiumBipedAnimInstance::StopReaction()
+{
+	// The assets stay on their pins for the fade the engine is about to run — the same reason the
+	// phase clock's own expiry leaves them. They are replaced by the next `PlayReaction`.
+	bReactionActive = false;
+	ReactionSecondsLeft = 0.0f;
 }
 
 void UElysiumBipedAnimInstance::StopOneShot(float BlendSeconds)
@@ -675,6 +795,10 @@ void UElysiumBipedAnimInstance::PlayClip(UAnimSequence* Sequence, bool bLoop)
 	{
 		return;
 	}
+	// A standing clip IS the body pose and the graph's output is not consumed at all while it holds,
+	// so a reaction left active behind it would be an invisible branch pinning its own assets and
+	// counting down a phase nothing is showing. The scene replaces the graph; it takes the branch too.
+	StopReaction();
 	GetProxyOnGameThread<FElysiumBipedAnimProxy>().PlayDirect(Sequence, bLoop);
 }
 

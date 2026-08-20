@@ -8,14 +8,21 @@ namespace
 	int32 GSessionSeed = 0;
 	bool bGSeeded = false;
 
-	const TCHAR* const GStreamNames[GStreamCount] =
+	// Unsized deliberately: a sized declaration would pad a missing entry with a null and hand the
+	// readable dump a nullptr for the new stream. The static_assert below is what makes adding an
+	// enumerator without a name a compile error instead.
+	const TCHAR* const GStreamNames[] =
 	{
 		TEXT("OneOfSet"), TEXT("LogicTimer"), TEXT("LogicCase"), TEXT("Dice"), TEXT("Ambient"),
-		TEXT("Chargen"), TEXT("NpcMaker"), TEXT("NpcSchedule")
+		TEXT("Chargen"), TEXT("NpcMaker"), TEXT("NpcSchedule"), TEXT("Reaction")
 	};
+	static_assert(UE_ARRAY_COUNT(GStreamNames) == GStreamCount,
+		"every EElysiumRngStream enumerator needs its own name in GStreamNames");
 
-	// Each stream's seed is derived from the session seed by a distinct odd multiplier, so a save's
-	// one recorded session seed reproduces all five and no two streams walk the same sequence.
+	// Each stream's seed is the session seed through one shared odd multiplier plus a per-stream
+	// ADDITIVE offset — the multiplier is the same for every stream and the offset is what separates
+	// them. A save's one recorded session seed therefore reproduces every stream, and no two walk the
+	// same sequence.
 	int32 DerivedSeed(int32 SessionSeed, int32 StreamIndex)
 	{
 		return static_cast<int32>(static_cast<uint32>(SessionSeed) * 2654435761u

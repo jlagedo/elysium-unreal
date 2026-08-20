@@ -1,6 +1,11 @@
 #pragma once
 
 #include "CoreMinimal.h"
+// The sequence-event record the timeline seam below hands down, by array.
+#include "ElysiumAnimEvent.h"
+// By value: the activity-resolve seam below takes one request record and answers with one clip
+// record, and both are this header's types.
+#include "ElysiumAnimationIntent.h"
 #include "ElysiumAudioSubsystem.h"   // FElysiumAudioVoiceHandle + FElysiumPlayParams (passed by value)
 #include "ElysiumEntity.h"           // FElysiumFlexWrite (passed by view)
 #include "ElysiumEntityHandle.h"
@@ -267,19 +272,24 @@ public:
 	// has to be made resident from the player's model stem without spawning the stand-in early.
 	virtual bool PreloadNpcClipForModel(const FString& Stem, bool bPlayerMaterial,
 		const FString& ClipName) { return false; }
-	// Select and play a manifest clip by VtMB ACT_* activity. Ambient interesting-place data is
-	// authored in activities rather than clip labels; Variant makes its weighted pick repeatable.
-	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) { return false; }
-	// Resolve the same deterministic activity selection without playing it. OutLabel is the NPC
-	// vocabulary key that must go back through PlayNpcClip so the shared-bank owner is preserved;
-	// OutAnimName is the concrete neutral-pose cell whose optional authored speed configures the motor.
-	virtual bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
-		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+	// **The one activity seam.** Resolve a VtMB `ACT_*` request through the body's whole translation
+	// chain and answer with the clip it selected — the vocabulary key that has to go back through
+	// PlayNpcClip so the shared-bank owner is preserved, the concrete neutral-pose cell whose
+	// optional authored speed configures a motor, and the row's own loop bit. Ambient
+	// interesting-place data, the schedule's activities and patrol travel are all authored in
+	// activities rather than clip labels; `Request.Variant` makes the weighted pick repeatable.
+	//
+	// The request carries the whole translation context because none of it is derivable here: a
+	// player weapon and an NPC's are the same `FElysiumWeapon` entity, and the stem names a model
+	// rather than the character standing in it, so a seam that filled any of it itself would resolve
+	// for a different body than the one being posed.
+	//
+	// A negative answer is a named miss on the resolver's own selection record, not a failure the
+	// caller has to restate: each caller keeps its own stated fallback.
+	virtual bool ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
+		FElysiumActivityClip& Out)
 	{
-		OutLabel.Reset();
-		OutAnimName.Reset();
-		OutGroundSpeedCmPerSecond = 0.f;
+		Out = FElysiumActivityClip();
 		return false;
 	}
 	// The label-route sibling of ResolveNpcActivityClip, for a caller that already names an exact
@@ -288,12 +298,58 @@ public:
 	// is zero when that cell carries no authored movement metadata, which is the ordinary case for a
 	// single-cell clip today.
 	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
-		FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+		EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
 	{
 		OutAnimName.Reset();
 		OutGroundSpeedCmPerSecond = 0.f;
 		return false;
 	}
+	// Play one already-resolved cell over whatever owns the base pose (LIFE5). The (owner, animation
+	// name) pair addresses the baked clip directly, so nothing here consults the clip vocabulary — a
+	// vocabulary lookup would re-resolve the label at neutral pose parameters and collapse a
+	// directional fan onto its forward cell.
+	//
+	// The claim is taken first and decides whether the clip plays at all: a body a choreographed
+	// scene owns refuses a Reaction claim, and a reaction must not ride over a scene. `OutSeconds`
+	// (optional) receives the clip's authored length.
+	virtual bool PlayNpcOneShot(USkeletalMeshComponent* Body,
+		const FElysiumOneShotClipRequest& Request, float* OutSeconds)
+	{
+		return false;
+	}
+	// --- The sequence-event seam (LIFE5) --------------------------------------------------------
+	//
+	// Where one channel of a body is standing on its clip THIS frame. The pose layer is the only
+	// thing that knows: a montage, a graph state and a blended fan all carry their own position, and
+	// a substrate reader that timed a clip off its own clock would drift from the frame the body is
+	// actually drawing.
+	//
+	// **A phase, never a time** — the recovered dispatcher compares normalized cycles, and a fan has
+	// no single length to divide by (`docs/vtmb/animation_and_movers.md` → "Sequence events and
+	// native dispatch").
+	//
+	// False is the ordinary answer for a body whose channel is playing nothing, and the answer every
+	// implementation that has no phase clock gives. `Out` is cleared either way, so a caller cannot
+	// read a stale record off a negative answer.
+	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
+		FElysiumClipPhase& Out)
+	{
+		Out = FElysiumClipPhase();
+		return false;
+	}
+	// The timeline one sequence declares, off the owning model's own blend sidecar — the array
+	// `FElysiumBlendTable::FindEvents` answers, in the file's own order. Null when that sequence
+	// declares none, which is most of them and an absence rather than a fault.
+	//
+	// A pointer rather than a copy: the table is cached whole and immutable by the animation
+	// subsystem, so this aliases storage that outlives the frame it was asked in. Same frame rule as
+	// the other cached-sidecar getters — a caller does not retain it across a map epoch.
+	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
+		const FString& Label)
+	{
+		return nullptr;
+	}
+
 	// A quiet vocabulary probe: does Stem's clip vocabulary name ClipName, with no play attempted and
 	// no warning logged either way. The one caller today is an unauthored cross-disposition stance
 	// transition, which is a normal absence rather than a failure -- so it probes here before ever

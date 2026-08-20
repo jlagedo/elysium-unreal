@@ -139,6 +139,17 @@ void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 
 	ImGui::TableNextColumn();
 	ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(ElysiumAnimIntent::AssetKindName(Sel->AssetKind)));
+	// LIFE5 -- the pair a fan actually evaluates, where the reader is already looking at what shape
+	// the asset is. A row naming one cell reads as a snap, and a snap is a different pose from the
+	// two-cell mix the graph strikes.
+	if (!Sel->AnimationName.IsEmpty() && ImGui::IsItemHovered())
+	{
+		const FString Pair = Sel->NextAnimationName.IsEmpty()
+			? FString::Printf(TEXT("%s"), *Sel->AnimationName)
+			: FString::Printf(TEXT("%s -> %s (%.0f%%)"), *Sel->AnimationName,
+				*Sel->NextAnimationName, Sel->AxisFraction[0] * 100.0f);
+		ImGui::SetTooltip("%s", COG_TCHAR_TO_CHAR(*Pair));
+	}
 
 	ImGui::TableNextColumn();
 	ImGui::TextColored(OutcomeColor(Sel->Outcome), "%s",

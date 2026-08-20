@@ -13,6 +13,7 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
+#include "ElysiumAnimationIntent.h" // EElysiumAnimBodyKind + BodyKindName (the recorded chain)
 #include "ElysiumCameraSolve.h"   // FElysiumCameraShot (full type; ElysiumWorldServices.h only forward-declares it)
 #include "ElysiumDlg.h"
 #include "ElysiumEntity.h"
@@ -261,7 +262,12 @@ struct FElysiumRecordingServices final
 	bool bNpcActivitiesResolve = false;
 	FString ResolvedNpcActivityLabel = TEXT("walk");
 	FString ResolvedNpcActivityClip = TEXT("walk_0");
+	// The bank the include DAG named, which a one-shot producer addresses the cell through.
+	FString ResolvedNpcActivityOwner = TEXT("move_and_ranged");
 	float ResolvedNpcGroundSpeedCmPerSecond = 0.f;
+	// The selected row's own loop bit, which a producer ORs into its own request. False by default:
+	// the ambient and schedule callers ask for one-shots, and that is the shape most cases assert.
+	bool ResolvedNpcActivityLoops = false;
 	// CCC7/LIFE3 — the authored forward cells every motor this service builds answers with. Zero,
 	// the default, is a body whose export resolves no fan: its travel requests fall back to the
 	// stated `ElysiumNpcGait` constants, which is the path most Substrate cases exercise.
@@ -375,37 +381,123 @@ struct FElysiumRecordingServices final
 			*Stem, bPlayerMaterial ? 1 : 0, *ClipName));
 		return !Stem.IsEmpty() && !ClipName.IsEmpty();
 	}
-	virtual bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds) override
+	virtual bool ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
+		FElysiumActivityClip& Out) override
 	{
-		Record(FString::Printf(TEXT("PlayNpcActivity %s %s var=%d loop=%d"), *Stem, *Activity,
-			Variant, bLoop ? 1 : 0));
-		if (OutSeconds)
+		// The stem and the activity stay the first two fields — `Saw` is a prefix match — and the
+		// chain stays the LAST token, so a reader that splits on `body=` takes it whole. The
+		// classification the producer filled sits between them: it is what makes the class body, the
+		// weapon ladder and the armed/alert branch reachable, and a request that dropped it would
+		// resolve past all three with nothing to read.
+		Record(FString::Printf(
+			TEXT("ResolveNpcActivityClip %s %s var=%d class=%s weapon=%s state=%s hit=%.1f body=%s"),
+			*Request.Stem, *Request.Activity, Request.Variant,
+			Request.ActorClassname.IsEmpty() ? TEXT("-") : *Request.ActorClassname,
+			Request.WeaponClassname.IsEmpty() ? TEXT("-") : *Request.WeaponClassname,
+			LexToString(Request.ActorState), Request.HitYaw,
+			ElysiumAnimIntent::BodyKindName(Request.BodyKind)));
+		Out = FElysiumActivityClip();
+		if (!bNpcActivitiesResolve)
 		{
-			*OutSeconds = ClipSeconds;
+			return false;
 		}
-		return bNpcActivitiesResolve && Body != nullptr;
+		Out.Label = ResolvedNpcActivityLabel;
+		Out.AnimationName = ResolvedNpcActivityClip;
+		Out.OwnerStem = ResolvedNpcActivityOwner;
+		Out.GroundSpeedCmPerSecond = ResolvedNpcGroundSpeedCmPerSecond;
+		Out.bLooping = ResolvedNpcActivityLoops;
+		// LIFE5 — the fan half. The axis value is the request's own hit yaw rather than a fixture
+		// constant: a producer that dropped it would answer every reaction at the fan's forward cell,
+		// and a stub that invented an angle would hide exactly that.
+		Out.bGrid = bResolvedNpcActivityIsGrid;
+		Out.AxisValue = Request.HitYaw;
+		Out.NextAnimationName = ResolvedNpcActivityNextClip;
+		Out.AxisFraction = ResolvedNpcActivityFraction;
+		return true;
 	}
-	virtual bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
-		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override
+	// Whether the resolved label names a fan, and the pair it names when it does. Off by default,
+	// because most Substrate cases stand a body whose activity resolves one animation.
+	bool bResolvedNpcActivityIsGrid = false;
+	FString ResolvedNpcActivityNextClip;
+	float ResolvedNpcActivityFraction = 0.0f;
+	// LIFE5 — whether a one-shot request is played, and the length it reports. Opt-in like every
+	// other fixture flag: default false is the body that resolves no clip, which is what most
+	// Substrate cases stand.
+	bool bNpcOneShotsPlay = false;
+	float OneShotSeconds = 1.0f;
+	virtual bool PlayNpcOneShot(USkeletalMeshComponent* Body,
+		const FElysiumOneShotClipRequest& Request, float* OutSeconds) override
 	{
-		Record(FString::Printf(TEXT("ResolveNpcActivityClip %s %s var=%d"), *Stem, *Activity,
-			Variant));
-		OutLabel = bNpcActivitiesResolve ? ResolvedNpcActivityLabel : FString();
-		OutAnimName = bNpcActivitiesResolve ? ResolvedNpcActivityClip : FString();
-		OutGroundSpeedCmPerSecond = bNpcActivitiesResolve
-			? ResolvedNpcGroundSpeedCmPerSecond : 0.f;
-		return bNpcActivitiesResolve;
+		// The three LIFE5 fields sit BEFORE `prio=`, which several suites already split on as the
+		// line's tail: a reader that took the last token would otherwise start reading the axis.
+		Record(FString::Printf(
+			TEXT("PlayNpcOneShot %s %s loop=%d in=%.2f out=%.2f route=%s grid=%d axis=%.1f prio=%s"),
+			*Request.OwnerStem, *Request.AnimationName, Request.bLoop ? 1 : 0,
+			Request.BlendInSeconds, Request.BlendOutSeconds,
+			Request.Route == EElysiumOneShotRoute::Reaction ? TEXT("reaction") : TEXT("slot"),
+			Request.bGrid ? 1 : 0, Request.AxisValue,
+			ElysiumAnimIntent::PriorityName(Request.Priority)));
+		if (OutSeconds != nullptr)
+		{
+			*OutSeconds = OneShotSeconds;
+		}
+		const bool bPlayed = bNpcOneShotsPlay && Body != nullptr;
+		// The visibility tail, through the SAME named rule the real body factory branches on rather
+		// than a copy of its condition — a hidden body must survive an involuntary reaction, and that
+		// is only assertable headless if the double answers off the rule instead of mirroring it.
+		if (bPlayed && ElysiumAnimIntent::OneShotForcesVisibility(Request.Route))
+		{
+			Body->SetVisibility(true, true);
+		}
+		return bPlayed;
 	}
+	// --- LIFE5: the sequence-event seam ---------------------------------------------------------
+	//
+	// The phase is a settable CURRENT record rather than a scripted sequence of them, matching every
+	// other fixture in this file: a suite drives the pass frame by frame anyway, so mutating
+	// `BodyClipPhase.Cycle` between calls says exactly what a scripted list would and lets a case
+	// re-arm, seek or stop mid-run without rewriting the script. Off by default — the ordinary
+	// Substrate body stands on nothing this seam can see.
+	bool bBodyClipPhaseSet = false;
+	FElysiumClipPhase BodyClipPhase;
+	// Deliberately not recorded: the world's event pass asks this of every bodied entity every
+	// frame, and a line per body per frame would bury every call a suite is actually reading.
+	virtual bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
+		FElysiumClipPhase& Out) override
+	{
+		Out = FElysiumClipPhase();
+		if (!bBodyClipPhaseSet || Body == nullptr)
+		{
+			return false;
+		}
+		Out = BodyClipPhase;
+		Out.Channel = Channel;
+		return true;
+	}
+	// The timelines a fixture declares, keyed `<owner>|<label>` and matched case-insensitively the
+	// way the real sidecar's own map is. Absent is the ordinary answer: most sequences declare none.
+	TMap<FString, TArray<FElysiumAnimEvent>> NpcEventTimelines;
+	static FString EventTimelineKey(const FString& OwnerStem, const FString& Label)
+	{
+		return FString::Printf(TEXT("%s|%s"), *OwnerStem.ToLower(), *Label.ToLower());
+	}
+	virtual const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
+		const FString& Label) override
+	{
+		return NpcEventTimelines.Find(EventTimelineKey(OwnerStem, Label));
+	}
+
 	// The label-route sibling's fixture, mirroring bNpcActivitiesResolve above: opt-in so most
 	// Substrate tests keep exercising the supported "no motion for this exact clip" fallback.
 	bool bNpcSequenceClipsResolve = false;
 	FString ResolvedNpcSequenceAnimName = TEXT("walk_0");
 	float ResolvedNpcSequenceGroundSpeedCmPerSecond = 0.f;
 	virtual bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
-		FString& OutAnimName, float& OutGroundSpeedCmPerSecond) override
+		EElysiumAnimBodyKind BodyKind, FString& OutAnimName,
+		float& OutGroundSpeedCmPerSecond) override
 	{
-		Record(FString::Printf(TEXT("ResolveNpcSequenceClip %s %s"), *Stem, *ClipName));
+		Record(FString::Printf(TEXT("ResolveNpcSequenceClip %s %s body=%s"), *Stem, *ClipName,
+			ElysiumAnimIntent::BodyKindName(BodyKind)));
 		OutAnimName = bNpcSequenceClipsResolve ? ResolvedNpcSequenceAnimName : FString();
 		OutGroundSpeedCmPerSecond = bNpcSequenceClipsResolve
 			? ResolvedNpcSequenceGroundSpeedCmPerSecond : 0.f;

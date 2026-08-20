@@ -9,6 +9,7 @@
 
 #include "Substrate/ElysiumNpc.h"
 
+#include "ElysiumAnimationIntent.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumDlg.h"
 #include "ElysiumEntityDefs.h"
@@ -353,11 +354,23 @@ bool FElysiumNpc::IssuePatrolMove()
 bool FElysiumNpc::StartWalkingAnimation(bool bRunning)
 {
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
-	if (Embodiment && Visual && Embodiment->PlayNpcActivity(Visual, ModelStem(),
-		bRunning ? TEXT("ACT_RUN") : TEXT("ACT_WALK"),
-		FMath::Max(0, Handle.Index), /*bLoop=*/true, nullptr))
+	if (Embodiment && Visual)
 	{
-		return true;
+		// The one activity seam: the gait is chosen through this body's whole translation chain, so a
+		// class body's alert walk and a weapon's own gait reach a patrol leg exactly as they reach the
+		// frame publish. A travel cycle always loops, whatever the selected row's own flag says.
+		FElysiumActivityClipRequest Request;
+		FillActivityClipRequest(Request);
+		Request.Activity = bRunning ? TEXT("ACT_RUN") : TEXT("ACT_WALK");
+		Request.Variant = FMath::Max(0, Handle.Index);
+		Request.BodyKind = EElysiumAnimBodyKind::Cast;
+
+		FElysiumActivityClip Clip;
+		if (Embodiment->ResolveNpcActivityClip(Request, Clip)
+			&& PlayAnimClip(Clip.Label, /*bLoop=*/true))
+		{
+			return true;
+		}
 	}
 	// A few early manifests only carry the retail label. Keep them mobile while the animation
 	// catalog remains strict for every model that does expose ACT_WALK.
@@ -1122,9 +1135,28 @@ bool FElysiumNpc::PlayAmbientActivity(const TArray<FElysiumWeightedName>& Choice
 	const uint32 Seed = HashCombineFast(static_cast<uint32>(FMath::Max(0, Handle.Index)),
 		static_cast<uint32>(AmbientActivityCycle++));
 	const FString Activity = TypeRow->PickActivity(Choices, Seed);
+	if (Activity.IsEmpty())
+	{
+		return false;
+	}
+	FElysiumActivityClipRequest Request;
+	FillActivityClipRequest(Request);
+	Request.Activity = Activity;
+	Request.Variant = AmbientActivityCycle;
+	Request.BodyKind = EElysiumAnimBodyKind::Cast;
+
+	FElysiumActivityClip Clip;
+	if (!Embodiment->ResolveNpcActivityClip(Request, Clip))
+	{
+		return false;
+	}
+	// The CLIP decides whether it loops, not the caller. VtMB reads `m_bSequenceLoops` off the
+	// sequence's own flags (RE35), so an authored loop keeps looping however it was asked for — and
+	// the ambient callers ask for every activity with bLoop false. Without this a body-language idle
+	// authored as a loop plays once and then stands on its last frame, which is what a held one-shot
+	// means: frozen, not resting.
 	float Seconds = 0.0f;
-	if (Activity.IsEmpty() || !Embodiment->PlayNpcActivity(Visual, ModelStem(), Activity,
-		AmbientActivityCycle, bLoop, &Seconds))
+	if (!PlayAnimClip(Clip.Label, bLoop || Clip.bLooping, &Seconds))
 	{
 		return false;
 	}
@@ -1290,9 +1322,18 @@ float FElysiumNpc::PlayActivity(const FString& Activity)
 	{
 		return -1.f;
 	}
+	FElysiumActivityClipRequest Request;
+	FillActivityClipRequest(Request);
+	Request.Activity = Activity;
+	Request.Variant = ScheduleActivityCycle++;
+	Request.BodyKind = EElysiumAnimBodyKind::Cast;
+
+	FElysiumActivityClip Clip;
 	float Seconds = 0.f;
-	if (!Embodiment->PlayNpcActivity(Visual, ModelStem(), Activity, ScheduleActivityCycle++,
-		/*bLoop=*/false, &Seconds))
+	// The task asks for a one-shot; the selected row's own loop bit still wins, and the length it
+	// plays for is what the schedule executor waits on.
+	if (!Embodiment->ResolveNpcActivityClip(Request, Clip)
+		|| !PlayAnimClip(Clip.Label, Clip.bLooping, &Seconds))
 	{
 		return -1.f;
 	}

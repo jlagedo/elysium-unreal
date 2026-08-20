@@ -342,6 +342,8 @@ void FElysiumMoveRun::Sample()
 	// mover's own carries the unfiltered input it was seeded with. In the gym there is no map actor
 	// and therefore no driver, so the mover's sample is the only sample and the record is empty —
 	// which is the same split the selection already reads.
+	// The gym body is the player pawn, so the record's default `Player` chain is the one this
+	// harness records — the empty selection names the right body, not merely a default.
 	static const FElysiumAnimationSelection EmptySelection;
 	const FElysiumLocomotionSample& Locomotion = Body.Map
 		? Body.Map->GetPlayerAnimSample() : Body.Move->GetLocomotionSample();

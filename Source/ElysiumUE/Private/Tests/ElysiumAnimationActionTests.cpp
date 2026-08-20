@@ -492,8 +492,8 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 		Latch = AdvanceJumpLatch(Latch, Sample, 1.0f / 60.0f, Gait);
 
 		const FElysiumAnimationIntent Intent = BuildLocomotionIntent(Sample, Latch, Gait,
-			EElysiumAnimSource::Player, TEXT("tremere_Male_Armor_0"),
-			FElysiumEntityHandle(7, 1), 3);
+			EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player,
+			TEXT("tremere_Male_Armor_0"), FElysiumEntityHandle(7, 1), 3);
 
 		TestTrue(TEXT("an activity request names no label"), Intent.IsWellFormed());
 		TestEqual(TEXT("it carries the classified activity"), Intent.Activity,
@@ -509,25 +509,29 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 		FElysiumJumpLatch Landing;
 		Landing.Phase = EElysiumAirPhase::Landing;
 		const FElysiumAnimationIntent Land = BuildLocomotionIntent(Moving(0.0f), Landing, Gait,
-			EElysiumAnimSource::Player, TEXT("tremere_Male_Armor_0"),
-			FElysiumEntityHandle(7, 1), 0);
+			EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player,
+			TEXT("tremere_Male_Armor_0"), FElysiumEntityHandle(7, 1), 0);
 		TestEqual(TEXT("the land is a one-shot"), Land.bLoop, false);
 
 		FElysiumJumpLatch Grounded;
 		FElysiumLocomotionSample Crouching = Moving(0.0f);
 		Crouching.Stance = EElysiumStance::Ducked;
 		const FElysiumAnimationIntent Crouch = BuildLocomotionIntent(Crouching, Grounded, Gait,
-			EElysiumAnimSource::Npc, TEXT("regular_cop"), FElysiumEntityHandle(), 0);
+			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast, TEXT("regular_cop"),
+			FElysiumEntityHandle(), 0);
 		TestTrue(TEXT("a held crouch is not"), Crouch.bLoop);
 		TestEqual(TEXT("and the cast comes through the same builder"),
 			static_cast<int32>(Crouch.Source), static_cast<int32>(EElysiumAnimSource::Npc));
+		TestEqual(TEXT("carrying the body kind whose chain it will translate through"),
+			static_cast<int32>(Crouch.BodyKind), static_cast<int32>(EElysiumAnimBodyKind::Cast));
 
 		// The same body sample, asked for by the cast: the relaxed forms are the player selector's
 		// own output, and the two rows that undo them are a `CBasePlayer` virtual no cast body
 		// reaches. A cast gait request is therefore the plain activity, or nothing downstream would
 		// ever turn it back into one.
 		const FElysiumAnimationIntent CastRun = BuildLocomotionIntent(Sample, Latch, Gait,
-			EElysiumAnimSource::Npc, TEXT("regular_cop"), FElysiumEntityHandle(), 0);
+			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast, TEXT("regular_cop"),
+			FElysiumEntityHandle(), 0);
 		TestEqual(TEXT("a cast body asks for the plain run"), CastRun.Activity,
 			FString(TEXT("ACT_RUN")));
 	}
@@ -604,13 +608,18 @@ namespace
 		return Desc;
 	}
 
+	// The producer and the body are stated apart, because the resolver forks on the second and not
+	// the first — a fixture that could only spell them together could not express the case this
+	// suite is about.
 	FElysiumAnimationIntent ActivityIntent(const TCHAR* Stem, const TCHAR* Activity,
-		EElysiumAnimSource Source = EElysiumAnimSource::Player)
+		EElysiumAnimSource Source = EElysiumAnimSource::Player,
+		EElysiumAnimBodyKind BodyKind = EElysiumAnimBodyKind::Player)
 	{
 		FElysiumAnimationIntent Intent;
 		Intent.Stem = Stem;
 		Intent.Activity = Activity;
 		Intent.Source = Source;
+		Intent.BodyKind = BodyKind;
 		Intent.Route = EElysiumAnimRoute::Activity;
 		return Intent;
 	}
@@ -711,7 +720,8 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 	// --- The acceptance clause: one label, two banks ------------------------------------------------
 	ElysiumAnimResolve::Resolve(ActivityIntent(TEXT("pc_body"), TEXT("ACT_RUN")), PcCatalog, Player);
 	ElysiumAnimResolve::Resolve(
-		ActivityIntent(TEXT("cast_body"), TEXT("ACT_RUN"), EElysiumAnimSource::Npc),
+		ActivityIntent(TEXT("cast_body"), TEXT("ACT_RUN"), EElysiumAnimSource::Npc,
+			EElysiumAnimBodyKind::Cast),
 		CastCatalog, Npc);
 
 	TestEqual(TEXT("the player resolves the label `run`"), Player.SequenceLabel, FString(TEXT("run")));
@@ -881,7 +891,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		StalkerCatalog.BlendTableFor = Tables;
 
 		FElysiumAnimationIntent Prowl = ActivityIntent(TEXT("stalker_body"), TEXT("ACT_WALK"),
-			EElysiumAnimSource::Npc);
+			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
 		Prowl.ActorClassname = TEXT("npc_VStalker");
 		const ElysiumAnimResolve::FElysiumTranslationResult Walked =
 			ElysiumAnimResolve::TranslateActivity(Prowl, StalkerCatalog);
@@ -910,10 +920,119 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		// the whole of its actor translation, and a miss after them is a named miss.
 		FElysiumAnimationIntent AsPlayer = Prowl;
 		AsPlayer.Source = EElysiumAnimSource::Player;
+		AsPlayer.BodyKind = EElysiumAnimBodyKind::Player;
 		const ElysiumAnimResolve::FElysiumTranslationResult PlayerWalk =
 			ElysiumAnimResolve::TranslateActivity(AsPlayer, StalkerCatalog);
 		TestEqual(TEXT("the player runs no pre-translation"), PlayerWalk.PreTranslation, FString());
 		TestEqual(TEXT("and no availability probe"), PlayerWalk.AvailabilityRung, 0);
+	}
+
+	// --- The chain forks on the BODY, not on the producer (LIFE5) ------------------------------------
+	{
+		// Retail discriminates on the receiver's own class: `CAI_BaseNPC` descendants run the cast
+		// chain and `CBasePlayer` runs its one pass. `Source` is who asked, and an NPC's damage
+		// reaction and its patrol address the same body — so a resolver forked on the producer would
+		// hand a wounded combatant the player's translator mid-fight.
+		FElysiumNpcClipSet Turner;
+		Turner.Stem = TEXT("turner_body");
+		// The one form this body carries is the ALERT turn, which is exactly what the class body
+		// (`ClassTranslate_Human`) normalizes away — so the probe has to walk past its own first
+		// rungs to pose anything at all.
+		Turner.Clips.Add(TEXT("turn_left_alert"),
+			MakeClip(CastBank, TEXT("ACT_TURN_LEFT_ALERT"), 30, 0x0));
+		FElysiumAnimationCatalog TurnerCatalog;
+		TurnerCatalog.Clips = &Turner;
+		TurnerCatalog.BlendTableFor = Tables;
+
+		FElysiumAnimationIntent Hurt = ActivityIntent(TEXT("turner_body"), TEXT("ACT_TURN_LEFT"),
+			EElysiumAnimSource::Damage, EElysiumAnimBodyKind::Cast);
+		Hurt.ActorClassname = TEXT("npc_VHumanCombatant");
+		Hurt.WeaponClassname = TEXT("item_w_glock_17c");
+		Hurt.ActorState = EElysiumNpcState::Alert;
+
+		const ElysiumAnimResolve::FElysiumTranslationResult Reaction =
+			ElysiumAnimResolve::TranslateActivity(Hurt, TurnerCatalog);
+		TestEqual(TEXT("a Damage request on a cast body still pre-translates through +0x5dc"),
+			Reaction.PreTranslation, FString(TEXT("ACT_TURN_LEFT_ALERT")));
+		TestTrue(TEXT("...alternates class and weapon rather than passing once"),
+			Reaction.Iterations > 1);
+		TestEqual(TEXT("...remembers the class body's own answer"), Reaction.ClassActivity,
+			FString(TEXT("ACT_TURN_LEFT")));
+		TestEqual(TEXT("...and walks the four-way probe past the two rungs this body cannot play"),
+			Reaction.AvailabilityRung, 3);
+		TestEqual(TEXT("...landing on the alert form it does carry"), Reaction.Resolved,
+			FString(TEXT("ACT_TURN_LEFT_ALERT")));
+
+		FElysiumAnimationSelection Reacted;
+		ElysiumAnimResolve::Resolve(Hurt, TurnerCatalog, Reacted);
+		TestEqual(TEXT("and the record names the clip the probe reached"), Reacted.SequenceLabel,
+			FString(TEXT("turn_left_alert")));
+		TestEqual(TEXT("beside the chain that reached it"), static_cast<int32>(Reacted.BodyKind),
+			static_cast<int32>(EElysiumAnimBodyKind::Cast));
+		TestEqual(TEXT("without losing who asked"), static_cast<int32>(Reacted.Source),
+			static_cast<int32>(EElysiumAnimSource::Damage));
+
+		// The same producer, the same request, the same body vocabulary — only the body kind moves.
+		FElysiumAnimationIntent HurtPlayer = Hurt;
+		HurtPlayer.BodyKind = EElysiumAnimBodyKind::Player;
+		const ElysiumAnimResolve::FElysiumTranslationResult PlayerReaction =
+			ElysiumAnimResolve::TranslateActivity(HurtPlayer, TurnerCatalog);
+		TestEqual(TEXT("the same Damage request on a player body runs no pre-translation"),
+			PlayerReaction.PreTranslation, FString());
+		TestEqual(TEXT("...no class answer"), PlayerReaction.ClassActivity, FString());
+		TestEqual(TEXT("...and no probe"), PlayerReaction.AvailabilityRung, 0);
+
+		// Every source on a player body takes that one pass. The producer rides along; it decides
+		// nothing about the chain.
+		const EElysiumAnimSource EverySource[] = { EElysiumAnimSource::Player,
+			EElysiumAnimSource::Npc, EElysiumAnimSource::Scene, EElysiumAnimSource::Damage,
+			EElysiumAnimSource::Interaction, EElysiumAnimSource::Debug };
+		for (const EElysiumAnimSource Asked : EverySource)
+		{
+			FElysiumAnimationIntent OnPlayer = HurtPlayer;
+			OnPlayer.Source = Asked;
+			const ElysiumAnimResolve::FElysiumTranslationResult Once =
+				ElysiumAnimResolve::TranslateActivity(OnPlayer, TurnerCatalog);
+			TestEqual(FString::Printf(TEXT("'%s' on a player body is one pass"),
+				ElysiumAnimIntent::SourceName(Asked)), Once.Iterations, 1);
+			TestEqual(FString::Printf(TEXT("'%s' on a player body runs no probe"),
+				ElysiumAnimIntent::SourceName(Asked)), Once.AvailabilityRung, 0);
+
+			// And the same source on the cast body reaches the probe, whichever one it is.
+			FElysiumAnimationIntent OnCast = Hurt;
+			OnCast.Source = Asked;
+			TestEqual(FString::Printf(TEXT("'%s' on a cast body reaches the probe"),
+				ElysiumAnimIntent::SourceName(Asked)),
+				ElysiumAnimResolve::TranslateActivity(OnCast, TurnerCatalog).AvailabilityRung, 3);
+		}
+
+		// The fallback ladder follows the same fork. This body carries only ACT_WALK, so a cast
+		// request nothing answers reaches the sequence-zero rung whoever asked, and a player body is
+		// handed the named miss it always was.
+		FElysiumNpcClipSet Bare;
+		Bare.Stem = TEXT("bare_walker");
+		Bare.Clips.Add(TEXT("walk"), MakeClip(CastBank, TEXT("ACT_WALK"), 30, 0x1));
+		FElysiumAnimationCatalog BareCatalog;
+		BareCatalog.Clips = &Bare;
+		BareCatalog.BlendTableFor = Tables;
+
+		FElysiumAnimationSelection CastLadder;
+		ElysiumAnimResolve::Resolve(
+			ActivityIntent(TEXT("bare_walker"), TEXT("ACT_COWER"), EElysiumAnimSource::Damage,
+				EElysiumAnimBodyKind::Cast),
+			BareCatalog, CastLadder);
+		TestEqual(TEXT("a Damage miss on a cast body walks the ladder to sequence zero"),
+			static_cast<int32>(CastLadder.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::SequenceZero));
+
+		FElysiumAnimationSelection PlayerLadder;
+		ElysiumAnimResolve::Resolve(
+			ActivityIntent(TEXT("bare_walker"), TEXT("ACT_COWER"), EElysiumAnimSource::Npc,
+				EElysiumAnimBodyKind::Player),
+			BareCatalog, PlayerLadder);
+		TestEqual(TEXT("and an Npc-sourced miss on a player body takes no ladder at all"),
+			static_cast<int32>(PlayerLadder.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::MissingSequence));
 	}
 
 	// --- The cast's fallback ladder, in the recovered order ---------------------------------------------
@@ -929,7 +1048,8 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 
 		FElysiumAnimationSelection Retried;
 		ElysiumAnimResolve::Resolve(
-			ActivityIntent(TEXT("walker"), TEXT("ACT_RUN"), EElysiumAnimSource::Npc),
+			ActivityIntent(TEXT("walker"), TEXT("ACT_RUN"), EElysiumAnimSource::Npc,
+				EElysiumAnimBodyKind::Cast),
 			WalkCatalog, Retried);
 		TestEqual(TEXT("a missing run retries the walk"), static_cast<int32>(Retried.Outcome),
 			static_cast<int32>(EElysiumAnimOutcome::RunToWalk));
@@ -940,7 +1060,8 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 
 		FElysiumAnimationSelection Disposed;
 		ElysiumAnimResolve::Resolve(
-			ActivityIntent(TEXT("cast_body"), TEXT("ACT_COWER"), EElysiumAnimSource::Npc),
+			ActivityIntent(TEXT("cast_body"), TEXT("ACT_COWER"), EElysiumAnimSource::Npc,
+				EElysiumAnimBodyKind::Cast),
 			CastCatalog, Disposed);
 		TestEqual(TEXT("a remaining miss retries the whole request as a disposition"),
 			static_cast<int32>(Disposed.Outcome),
@@ -950,7 +1071,8 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 
 		FElysiumAnimationSelection Zero;
 		ElysiumAnimResolve::Resolve(
-			ActivityIntent(TEXT("walker"), TEXT("ACT_COWER"), EElysiumAnimSource::Npc),
+			ActivityIntent(TEXT("walker"), TEXT("ACT_COWER"), EElysiumAnimSource::Npc,
+				EElysiumAnimBodyKind::Cast),
 			WalkCatalog, Zero);
 		TestEqual(TEXT("and with no disposition either, the hard sequence-zero fallback"),
 			static_cast<int32>(Zero.Outcome), static_cast<int32>(EElysiumAnimOutcome::SequenceZero));
@@ -1072,7 +1194,8 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		// sorted, deduped or assumed overlay-first would compose the host differently from retail.
 		FElysiumAnimationSelection Walk;
 		ElysiumAnimResolve::Resolve(
-			ActivityIntent(TEXT("cast_body"), TEXT("ACT_WALK"), EElysiumAnimSource::Npc),
+			ActivityIntent(TEXT("cast_body"), TEXT("ACT_WALK"), EElysiumAnimSource::Npc,
+				EElysiumAnimBodyKind::Cast),
 			CastCatalog, Walk);
 		if (TestEqual(TEXT("the host's two layers travel with the selection"), Walk.LayerLabels.Num(),
 			2))
@@ -1207,7 +1330,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		// player row, so it survives to the availability probe and is answered at rung 4 — the
 		// original request — only if the body carries it. This one does not, and the miss is named.
 		FElysiumAnimationIntent CastRelaxed = ActivityIntent(TEXT("cast_body"),
-			TEXT("ACT_WALK_RELAXED"), EElysiumAnimSource::Npc);
+			TEXT("ACT_WALK_RELAXED"), EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
 		const FElysiumTranslationResult CastWalk = TranslateActivity(CastRelaxed, CastCatalog);
 		TestEqual(TEXT("no class body is reached without an actor classname"),
 			CastWalk.PreTranslation, FString(TEXT("ACT_WALK_RELAXED")));
@@ -1218,7 +1341,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		// The recovered last resort is keyed on the ORIGINAL request. `ACT_SNEAK` is not on the cast
 		// fixture and is not `ACT_RUN`, so it stays a miss; `ACT_RUN` would have taken `ACT_WALK`.
 		FElysiumAnimationIntent CastSneak = ActivityIntent(TEXT("cast_body"), TEXT("ACT_SNEAK"),
-			EElysiumAnimSource::Npc);
+			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
 		const FElysiumTranslationResult Sneak = TranslateActivity(CastSneak, CastCatalog);
 		TestFalse(TEXT("a missing sneak does not take the run fallback"), Sneak.bRunToWalk);
 
@@ -1252,7 +1375,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		GuardCatalog.BlendTableFor = Tables;
 
 		FElysiumAnimationIntent Armed = ActivityIntent(TEXT("guard_body"), TEXT("ACT_WALK"),
-			EElysiumAnimSource::Npc);
+			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
 		Armed.ActorClassname = TEXT("npc_VHumanCombatant");
 		Armed.WeaponClassname = TEXT("item_w_glock_17c");
 
@@ -1301,6 +1424,65 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("an unarmed body is never armed/alert, whatever its state"),
 			ElysiumAnimResolve::TranslateActivity(Bare, GuardCatalog).PreTranslation,
 			FString(TEXT("ACT_WALK_RELAXED")));
+
+		// **The availability probe is part of the translation, not an opt-in.** That unarmed rewrite
+		// runs whatever the body can play, so a cast body carrying only the plain `ACT_WALK` — which is
+		// most of the shipped cast — depends on rung 4 of the probe, the original request, to travel at
+		// all. A producer that resolved with the probe off would get the named miss and its own stated
+		// fallback where retail poses the walk the body actually authors.
+		FElysiumNpcClipSet Plain;
+		Plain.Stem = TEXT("plain_body");
+		Plain.Clips.Add(TEXT("walk"), MakeClip(CastBank, TEXT("ACT_WALK"), 30, 0x1));
+		FElysiumAnimationCatalog PlainCatalog;
+		PlainCatalog.Clips = &Plain;
+		PlainCatalog.BlendTableFor = Tables;
+
+		FElysiumAnimationIntent PlainWalk = ActivityIntent(TEXT("plain_body"), TEXT("ACT_WALK"),
+			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
+		PlainWalk.ActorClassname = TEXT("npc_VHumanCombatant");
+		const ElysiumAnimResolve::FElysiumTranslationResult PlainTranslation =
+			ElysiumAnimResolve::TranslateActivity(PlainWalk, PlainCatalog);
+		TestEqual(TEXT("the unarmed rewrite names a relaxed walk this body cannot play"),
+			PlainTranslation.PreTranslation, FString(TEXT("ACT_WALK_RELAXED")));
+		TestEqual(TEXT("so the probe answers at rung 4, the original request"),
+			PlainTranslation.AvailabilityRung, 4);
+		TestEqual(TEXT("...which is the plain walk"), PlainTranslation.Resolved,
+			FString(TEXT("ACT_WALK")));
+
+		FElysiumAnimationSelection PlainClip;
+		ElysiumAnimResolve::Resolve(PlainWalk, PlainCatalog, PlainClip);
+		TestEqual(TEXT("and the body poses the walk it authors"), PlainClip.SequenceLabel,
+			FString(TEXT("walk")));
+		TestEqual(TEXT("...recorded as the rung that answered rather than as a clean resolve"),
+			static_cast<int32>(PlainClip.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::TranslatedFallback));
+
+		// LIFE5 — the same classification taken all the way to a CLIP. What a producer plays is the
+		// translated label, never the raw request's own weighted pick, so a seam that dropped the
+		// classname, the weapon or the state would pose a different body's walk with nothing said.
+		Armed.ActorState = EElysiumNpcState::Alert;
+		FElysiumAnimationSelection AlertClip;
+		ElysiumAnimResolve::Resolve(Armed, GuardCatalog, AlertClip);
+		TestEqual(TEXT("an alert armed body plays its weapon's own walk"),
+			AlertClip.SequenceLabel, FString(TEXT("glock_walk")));
+
+		Armed.ActorState = EElysiumNpcState::Idle;
+		FElysiumAnimationSelection RelaxedClip;
+		ElysiumAnimResolve::Resolve(Armed, GuardCatalog, RelaxedClip);
+		TestEqual(TEXT("and the same request, same body, relaxed plays the shared pistol walk"),
+			RelaxedClip.SequenceLabel, FString(TEXT("pistol_relaxed_walk")));
+
+		// State alone is not what made the difference: with no classification stated at all the class
+		// body never runs, `ACT_WALK` reaches a vocabulary carrying no untranslated walk, and the
+		// answer is the named miss rather than either of the two above.
+		FElysiumAnimationIntent Unclassified = ActivityIntent(TEXT("guard_body"), TEXT("ACT_WALK"),
+			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
+		Unclassified.bAllowFallbackLadder = false;
+		FElysiumAnimationSelection NoClassification;
+		ElysiumAnimResolve::Resolve(Unclassified, GuardCatalog, NoClassification);
+		TestTrue(TEXT("a request stating no classification resolves no clip at all"),
+			NoClassification.SequenceLabel.IsEmpty());
+		TestFalse(TEXT("...and says so rather than posing something"), NoClassification.IsResolved());
 	}
 
 	// --- CCC10 — the activity-keyed upper-body path, reached by weapon translation -------------------
@@ -1315,6 +1497,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		Attack.Route = EElysiumAnimRoute::Activity;
 		Attack.Channel = EElysiumAnimChannel::UpperBody;
 		Attack.Source = EElysiumAnimSource::Debug;
+		Attack.BodyKind = EElysiumAnimBodyKind::Player;
 
 		FElysiumAnimationSelection Fired;
 		ElysiumAnimResolve::Resolve(Attack, PcCatalog, Fired);
@@ -1430,6 +1613,274 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 			ElysiumAnimResolve::DescribeLayerArmedForm(
 				ElysiumAnimResolve::ELayerAssetForm::None, FString(), FString()),
 			FString(TEXT("nothing")));
+	}
+
+	// --- LIFE5 — the directional hit fan, as the PAIR its angle sits between ---------------------
+	//
+	// The shipped shape, reproduced exactly: a nine-cell fan bound to a SECOND declared pose
+	// parameter named `hit_yaw`. Two rules meet here — the parameter reaches the grid at all, and the
+	// fan resolves to a floor cell plus a fraction to the next, which is what a blend space evaluates.
+	// **One rule for every fan**: the same table's `move_yaw` grid is asserted the same way beside it,
+	// so a resolver that grew a per-parameter special case would fail rather than merely be untested.
+	{
+		FElysiumPoseParamDesc HitYawParam;
+		HitYawParam.Name = TEXT("hit_yaw");
+		HitYawParam.Start = -180.0f;
+		HitYawParam.End = 180.0f;
+		HitYawParam.Loop = 360.0f;
+
+		FElysiumBlendGrid HitFan;
+		HitFan.Label = TEXT("hit_torso");
+		HitFan.GroupSize[0] = 9;
+		HitFan.GroupSize[1] = 1;
+		// Index 1: the shipped sidecar declares `move_yaw` first and binds this fan to the second
+		// parameter, so a resolver that assumed index 0 would steer a flinch by the walk direction.
+		HitFan.ParamIndex[0] = 1;
+		HitFan.ParamIndex[1] = INDEX_NONE;
+		HitFan.ParamStart[0] = -180.0f;
+		HitFan.ParamEnd[0] = 180.0f;
+		static const TCHAR* const HitCells[9] = {
+			TEXT("hit_torso"), TEXT("hit_torso_back_left"), TEXT("hit_torso_left"),
+			TEXT("hit_torso_front_left"), TEXT("hit_torso_front"), TEXT("hit_torso_front_right"),
+			TEXT("hit_torso_right"), TEXT("hit_torso_back_right"), TEXT("hit_torso")
+		};
+		for (int32 Index = 0; Index < 9; ++Index)
+		{
+			FElysiumBlendCell Cell;
+			Cell.Axis[0] = Index;
+			Cell.Axis[1] = 0;
+			Cell.Clip = HitCells[Index];
+			HitFan.Cells.Add(Cell);
+		}
+
+		FElysiumBlendTable HitTable;
+		HitTable.Stem = MiscBank;
+		HitTable.PoseParams.Add(MoveYawParam());
+		HitTable.PoseParams.Add(HitYawParam);
+		HitTable.Grids.Add(TEXT("hit_torso"), HitFan);
+		// The same bank's locomotion fan, which the guard must leave flooring.
+		HitTable.Grids.Add(TEXT("walk"), MakeFan(TEXT("walk"), TEXT("walk"), 200.0f, 254.0f));
+
+		FElysiumNpcClipSet HitBody;
+		HitBody.Stem = TEXT("hit_body");
+		HitBody.Clips.Add(TEXT("hit_torso"), MakeClip(MiscBank, TEXT("ACT_HIT_TORSO"), 30, 0x0));
+		HitBody.Clips.Add(TEXT("walk"), MakeClip(MiscBank, TEXT("ACT_WALK"), 30, 0x1));
+
+		auto HitTables = [&HitTable](const FString& Owner) -> const FElysiumBlendTable*
+		{
+			return Owner.Equals(MiscBank, ESearchCase::IgnoreCase) ? &HitTable : nullptr;
+		};
+		FElysiumAnimationCatalog HitCatalog;
+		HitCatalog.Clips = &HitBody;
+		HitCatalog.BlendTableFor = HitTables;
+
+		auto HitIntent = [](float HitYaw)
+		{
+			FElysiumAnimationIntent Intent = ActivityIntent(TEXT("hit_body"), TEXT("ACT_HIT_TORSO"),
+				EElysiumAnimSource::Damage, EElysiumAnimBodyKind::Cast);
+			Intent.HitYaw = HitYaw;
+			return Intent;
+		};
+
+		// The parameter reaches the pose set at all, at its own value and under its own name.
+		const FElysiumPoseParams Pose = ElysiumAnimResolve::PoseFrom(HitIntent(113.0f));
+		TestEqual(TEXT("the intent's hit yaw reaches the pose parameters"),
+			Pose.Get(TEXT("hit_yaw")), 113.0f);
+		TestEqual(TEXT("and it does not disturb move_yaw"), Pose.Get(TEXT("move_yaw")), 0.0f);
+
+		FElysiumAnimationSelection Hit;
+		ElysiumAnimResolve::Resolve(HitIntent(0.0f), HitCatalog, Hit);
+		TestEqual(TEXT("a hit from straight ahead resolves the fan"),
+			static_cast<int32>(Hit.Outcome), static_cast<int32>(EElysiumAnimOutcome::Resolved));
+		TestEqual(TEXT("...on the axis the sidecar's SECOND parameter declares"), Hit.AxisName[0],
+			FString(TEXT("hit_yaw")));
+		TestEqual(TEXT("...with one axis"), Hit.Axes, 1);
+		TestEqual(TEXT("...owned by the bank the include DAG named"), Hit.OwnerStem,
+			FString(MiscBank));
+		TestEqual(TEXT("...and it is the forward cell, not the fan's -180 base"), Hit.AnimationName,
+			FString(TEXT("hit_torso_front")));
+
+		// A cell the angle lands EXACTLY on: the fan's own value, no second half to weigh. The pair is
+		// still named, because the graph's blend space still samples between two samples and a record
+		// that stopped naming the neighbour at a boundary would be describing a different asset there.
+		ElysiumAnimResolve::Resolve(HitIntent(90.0f), HitCatalog, Hit);
+		TestEqual(TEXT("a hit from the right lands exactly on cell 6"), Hit.AnimationName,
+			FString(TEXT("hit_torso_right")));
+		TestEqual(TEXT("...with the next cell named"), Hit.NextAnimationName,
+			FString(TEXT("hit_torso_back_right")));
+		TestEqual(TEXT("...carrying none of its weight"), Hit.AxisFraction[0], 0.0f);
+		TestEqual(TEXT("...and the axis value the producer asked for"), Hit.AxisValue[0], 90.0f);
+
+		// The exact boundary. A nine-cell fan over 360 degrees is 45 degrees a cell, so the midpoint
+		// between cells 6 and 7 is 112.5 — an EVEN MIX of the two named cells, which is exactly the
+		// pose a snap-to-nearest rule cannot strike and the whole reason the branch plays a fan.
+		ElysiumAnimResolve::Resolve(HitIntent(112.5f), HitCatalog, Hit);
+		TestEqual(TEXT("the exact half-cell midpoint names the lower cell of the pair"),
+			Hit.AnimationName, FString(TEXT("hit_torso_right")));
+		TestEqual(TEXT("...and the upper one"), Hit.NextAnimationName,
+			FString(TEXT("hit_torso_back_right")));
+		TestTrue(TEXT("...as an even mix of the two"),
+			FMath::IsNearlyEqual(Hit.AxisFraction[0], 0.5f, 0.001f));
+
+		// Either side of it: the pair does not move, only its weight does. A rule that quantized would
+		// name two different cells here and a fraction of zero on both.
+		ElysiumAnimResolve::Resolve(HitIntent(113.0f), HitCatalog, Hit);
+		TestEqual(TEXT("just past the midpoint the pair is unchanged"), Hit.AnimationName,
+			FString(TEXT("hit_torso_right")));
+		TestTrue(TEXT("...and leans onto the upper cell"), Hit.AxisFraction[0] > 0.5f);
+		ElysiumAnimResolve::Resolve(HitIntent(111.0f), HitCatalog, Hit);
+		TestEqual(TEXT("just short of it the pair is the same again"), Hit.AnimationName,
+			FString(TEXT("hit_torso_right")));
+		TestTrue(TEXT("...leaning onto the lower cell"), Hit.AxisFraction[0] < 0.5f);
+
+		// The wrap seam: `ResolveAxis` folds +180 onto -180, so a hit from directly behind lands on the
+		// fan's BASE cell rather than on its last one — the two carry the same clip, which is what the
+		// seam means. It sits exactly on a cell, so nothing is weighed onto its neighbour.
+		ElysiumAnimResolve::Resolve(HitIntent(180.0f), HitCatalog, Hit);
+		TestEqual(TEXT("a hit from directly behind takes the wrapped seam cell"), Hit.AnimationName,
+			FString(TEXT("hit_torso")));
+		TestEqual(TEXT("...with nothing weighed onto its neighbour"), Hit.AxisFraction[0], 0.0f);
+		// Just inside the seam, which is where the fan's last pair actually is.
+		ElysiumAnimResolve::Resolve(HitIntent(179.0f), HitCatalog, Hit);
+		TestEqual(TEXT("just inside the seam the pair is the fan's last two cells"), Hit.AnimationName,
+			FString(TEXT("hit_torso_back_right")));
+		TestEqual(TEXT("...ending on the shared seam clip"), Hit.NextAnimationName,
+			FString(TEXT("hit_torso")));
+
+		ElysiumAnimResolve::Resolve(HitIntent(-90.0f), HitCatalog, Hit);
+		TestEqual(TEXT("and one from the left takes cell 2"), Hit.AnimationName,
+			FString(TEXT("hit_torso_left")));
+		TestEqual(TEXT("...paired with cell 3"), Hit.NextAnimationName,
+			FString(TEXT("hit_torso_front_left")));
+
+		// **One rule for both fans.** The same table's `move_yaw` grid, sampled the same fraction past
+		// a cell, answers in exactly the same shape — a floor cell, its neighbour, and the weight
+		// between them. This used to be a guard asserting that the hit fan behaved DIFFERENTLY; it is
+		// now the positive statement that it does not.
+		FElysiumAnimationIntent Strafing = ActivityIntent(TEXT("hit_body"), TEXT("ACT_WALK"),
+			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
+		Strafing.Body.MoveYawVelocity = 115.0f;
+		Strafing.Body.MoveYawPose = 115.0f;
+		FElysiumAnimationSelection Strafe;
+		ElysiumAnimResolve::Resolve(Strafing, HitCatalog, Strafe);
+		TestEqual(TEXT("a move_yaw fan names its floor cell"), Strafe.AnimationName,
+			FString(TEXT("walk_90")));
+		TestEqual(TEXT("...on its own axis"), Strafe.AxisName[0], FString(TEXT("move_yaw")));
+		TestEqual(TEXT("...paired with the next"), Strafe.NextAnimationName,
+			FString(TEXT("walk_135")));
+		TestTrue(TEXT("...weighted past the half-cell, exactly as the hit fan is"),
+			Strafe.AxisFraction[0] > 0.5f);
+
+		// --- the gesture path's cleared ladder ---------------------------------------------------
+		//
+		// A body with no reaction in its vocabulary at all, but with the disposition the ladder would
+		// substitute. The two answers below are the whole point of the flag: retail's gesture call
+		// walks no rung and animates nothing, and the activity chain walks every rung it has.
+		FElysiumNpcClipSet NoReaction;
+		NoReaction.Stem = TEXT("stoic_body");
+		NoReaction.Clips.Add(TEXT("Stance_Normal_Idle_1"),
+			MakeClip(TEXT("stances"), TEXT("ACT_DISPOSITION"), 30, 0x1));
+		FElysiumAnimationCatalog StoicCatalog;
+		StoicCatalog.Clips = &NoReaction;
+		StoicCatalog.BlendTableFor = HitTables;
+
+		FElysiumAnimationIntent Gesture = ActivityIntent(TEXT("stoic_body"), TEXT("ACT_HIT_TORSO"),
+			EElysiumAnimSource::Damage, EElysiumAnimBodyKind::Cast);
+		Gesture.bAllowFallbackLadder = false;
+		FElysiumAnimationSelection GestureMiss;
+		ElysiumAnimResolve::Resolve(Gesture, StoicCatalog, GestureMiss);
+		TestEqual(TEXT("a reaction with the ladder cleared misses by name"),
+			static_cast<int32>(GestureMiss.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::MissingSequence));
+		TestTrue(TEXT("...and substitutes nothing at all"), GestureMiss.SequenceLabel.IsEmpty());
+
+		FElysiumAnimationIntent Laddered = Gesture;
+		Laddered.bAllowFallbackLadder = true;
+		FElysiumAnimationSelection Substituted;
+		ElysiumAnimResolve::Resolve(Laddered, StoicCatalog, Substituted);
+		TestEqual(TEXT("while the same request WITH the ladder retries as a disposition"),
+			static_cast<int32>(Substituted.Outcome),
+			static_cast<int32>(EElysiumAnimOutcome::Disposition));
+		TestEqual(TEXT("...which is exactly the substitution the gesture path must not make"),
+			Substituted.SequenceLabel, FString(TEXT("Stance_Normal_Idle_1")));
+
+		// The seam's own default is the activity chain's, not the gesture path's: the ladder is part
+		// of `CAI_BaseNPC`'s translation and every ordinary producer walks it.
+		TestTrue(TEXT("an activity request allows the fallback ladder by default"),
+			FElysiumActivityClipRequest().bAllowFallbackLadder);
+		TestEqual(TEXT("and states a resting hit yaw"), FElysiumActivityClipRequest().HitYaw, 0.0f);
+		// The default pair answers for ONE body: an NPC producer on the cast chain. A default naming
+		// the player's one-pass translation under an `Npc` source would describe a body that does not
+		// exist, and every producer states both explicitly anyway.
+		TestEqual(TEXT("...and the default source/chain pair is the cast's"),
+			static_cast<int32>(FElysiumActivityClipRequest().BodyKind),
+			static_cast<int32>(EElysiumAnimBodyKind::Cast));
+		TestEqual(TEXT("...paired with the NPC producer"),
+			static_cast<int32>(FElysiumActivityClipRequest().Source),
+			static_cast<int32>(EElysiumAnimSource::Npc));
+
+		// --- The seam's own forwarding ------------------------------------------------------------
+		//
+		// The resolver-level rules above are proven; what is NOT proven by them is that the activity
+		// seam carries a producer's request onto an intent whole. Both of the reaction fields are the
+		// ones a dropped forward would hide: a lost `HitYaw` resolves every directional reaction at
+		// the fan's forward cell, and a lost cleared ladder substitutes a stance for a missing hit
+		// clip. Asserted as the pure mapping `UElysiumAnimSubsystem::ResolveActivityClip` is
+		// expressed over, so no subsystem, game instance or export corpus is involved.
+		{
+			FElysiumActivityClipRequest Reaction;
+			Reaction.Stem = TEXT("hit_body");
+			Reaction.Activity = TEXT("ACT_HIT_TORSO");
+			Reaction.Variant = 4;
+			Reaction.Source = EElysiumAnimSource::Damage;
+			Reaction.BodyKind = EElysiumAnimBodyKind::Cast;
+			Reaction.ActorClassname = TEXT("npc_gangbanger_a");
+			Reaction.WeaponClassname = TEXT("item_w_glock_17c");
+			Reaction.ActorState = EElysiumNpcState::Combat;
+			Reaction.HitYaw = -113.0f;
+			Reaction.bAllowFallbackLadder = false;
+
+			const FElysiumAnimationIntent Threaded =
+				ElysiumAnimResolve::ActivityIntentFor(Reaction);
+			TestEqual(TEXT("the seam threads the hit yaw onto the intent"),
+				Threaded.HitYaw, -113.0f);
+			TestFalse(TEXT("...and the cleared fallback ladder with it"),
+				Threaded.bAllowFallbackLadder);
+			// The rest of the key, because a forward that carried only the two reaction fields would
+			// select for a different body than the producer's.
+			TestEqual(TEXT("...the stem"), Threaded.Stem, FString(TEXT("hit_body")));
+			TestEqual(TEXT("...the activity"), Threaded.Activity, FString(TEXT("ACT_HIT_TORSO")));
+			TestEqual(TEXT("...the variant"), Threaded.Variant, 4);
+			TestEqual(TEXT("...the producer"), static_cast<int32>(Threaded.Source),
+				static_cast<int32>(EElysiumAnimSource::Damage));
+			TestEqual(TEXT("...the chain"), static_cast<int32>(Threaded.BodyKind),
+				static_cast<int32>(EElysiumAnimBodyKind::Cast));
+			TestEqual(TEXT("...the actor classname"), Threaded.ActorClassname,
+				FString(TEXT("npc_gangbanger_a")));
+			TestEqual(TEXT("...the weapon classname"), Threaded.WeaponClassname,
+				FString(TEXT("item_w_glock_17c")));
+			TestEqual(TEXT("...and the alert/relaxed state"), static_cast<int32>(Threaded.ActorState),
+				static_cast<int32>(EElysiumNpcState::Combat));
+			// The route is the activity one, never the label's: this seam weighs candidates.
+			TestEqual(TEXT("...over the activity route"), static_cast<int32>(Threaded.Route),
+				static_cast<int32>(EElysiumAnimRoute::Activity));
+
+			// And the threading is real end to end: a request resolved through the seam's own mapping
+			// lands on the fan cell its angle names rather than on the forward one. Stated on a bare
+			// request so the assertion is about the forwarding and not about a translation row.
+			FElysiumActivityClipRequest Bare;
+			Bare.Stem = TEXT("hit_body");
+			Bare.Activity = TEXT("ACT_HIT_TORSO");
+			Bare.Source = EElysiumAnimSource::Damage;
+			Bare.BodyKind = EElysiumAnimBodyKind::Cast;
+			Bare.HitYaw = -113.0f;
+			Bare.bAllowFallbackLadder = false;
+			FElysiumAnimationSelection Threading;
+			ElysiumAnimResolve::Resolve(ElysiumAnimResolve::ActivityIntentFor(Bare), HitCatalog,
+				Threading);
+			TestEqual(TEXT("a threaded hit yaw steers the fan"), Threading.AnimationName,
+				FString(TEXT("hit_torso_back_left")));
+		}
 	}
 
 	return true;
@@ -1762,6 +2213,7 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("gangbanger_a");
 		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
 		Driver.ActorClassname = TEXT("npc_gangbanger_a");
 		Driver.WeaponClassname = TEXT("item_w_glock_17c");
 		Driver.FormTag = TEXT("human");
@@ -1769,7 +2221,9 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		Driver.Variant = 3;
 
 		const FElysiumGaitSpeedRequest Key = Driver.BuildGaitKey();
-		TestEqual(TEXT("the gait key walks the body's own pre-translation source"),
+		TestEqual(TEXT("the gait key walks the body's own pre-translation chain"),
+			static_cast<int32>(Key.BodyKind), static_cast<int32>(EElysiumAnimBodyKind::Cast));
+		TestEqual(TEXT("...beside the producer that drives it"),
 			static_cast<int32>(Key.Source), static_cast<int32>(EElysiumAnimSource::Npc));
 		TestEqual(TEXT("...carries the actor classname that finds its class bodies"),
 			Key.ActorClassname, Driver.ActorClassname);
@@ -1781,8 +2235,8 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		// Each of the three is a different set of sequences, so each of the three has to move the
 		// key. A key that compares equal across them resolves one body's speeds for another's pose.
 		FElysiumGaitSpeedRequest Player = Key;
-		Player.Source = EElysiumAnimSource::Player;
-		TestTrue(TEXT("a player-sourced key is not the same key"), Player != Key);
+		Player.BodyKind = EElysiumAnimBodyKind::Player;
+		TestTrue(TEXT("a player-chain key is not the same key"), Player != Key);
 
 		FElysiumGaitSpeedRequest OtherClass = Key;
 		OtherClass.ActorClassname = TEXT("npc_thug_a");
@@ -1806,6 +2260,7 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		FElysiumGaitSpeedRequest Rebuilt;
 		Rebuilt.Stem = TEXT("gangbanger_a");
 		Rebuilt.Source = EElysiumAnimSource::Npc;
+		Rebuilt.BodyKind = EElysiumAnimBodyKind::Cast;
 		Rebuilt.ActorClassname = TEXT("npc_gangbanger_a");
 		Rebuilt.WeaponClassname = TEXT("item_w_glock_17c");
 		Rebuilt.FormTag = TEXT("human");
@@ -1819,6 +2274,7 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("gangbanger_a");
 		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
 		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, SideWalk, BackWalk);
 		Driver.GaitSpeeds.Run = Fan(ForwardRun, 300.0f, 240.0f);
 
@@ -1853,6 +2309,7 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("gangbanger_a");
 		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
 		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, SideWalk, BackWalk);
 		Driver.GaitSpeeds.Run = Fan(ForwardRun, 300.0f, 240.0f);
 		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
@@ -1914,6 +2371,45 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		TestEqual(TEXT("a reset forgets the sample with the record"), Driver.Sample.Speed2D(), 0.0f);
 	}
 
+	// --- LIFE5 — a reaction's verdict rides the published record, not a second channel -------------
+	// The flinch is armed off the damage commit and the graph obeys the record, so the two facts a
+	// graph reads have to be on the record the driver publishes every frame: that the base is not the
+	// publish's to take, and who is holding it. Asserted on the ordinary tick path, because that is
+	// the only path the graph ever reads.
+	{
+		constexpr float Dt = 1.0f / 60.0f;
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
+		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, SideWalk, BackWalk);
+		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
+
+		Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
+		TestTrue(TEXT("an unclaimed travelling publish owns the base"),
+			Driver.Selection.bBasePoseOwned);
+
+		FElysiumAnimationRequest Flinch;
+		Flinch.Source = EElysiumAnimSource::Damage;
+		Flinch.Channel = EElysiumAnimChannel::Base;
+		Flinch.Priority = EElysiumAnimPriority::Reaction;
+		Flinch.Label = TEXT("hit_torso_back_right");
+		Flinch.HoldSeconds = 0.5f;
+		TestTrue(TEXT("the reaction claims the base"), Driver.SubmitRequest(Flinch) != 0u);
+
+		Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
+		TestFalse(TEXT("the published record says the publish does not own the base"),
+			Driver.Selection.bBasePoseOwned);
+		TestTrue(TEXT("...and names the flinch that is holding it"),
+			Driver.Selection.BaseHold.Contains(TEXT("hit_torso_back_right")));
+		TestTrue(TEXT("...as a reaction"), Driver.Selection.BaseHold.Contains(TEXT("reaction")));
+		// The rest of the record is untouched: the body is still travelling, and a held base must not
+		// be reported as a body that stopped.
+		TestEqual(TEXT("...while the body keeps travelling on the same record"),
+			AsInt(Driver.Selection.GraphState), AsInt(EElysiumGraphState::Walk));
+		TestEqual(TEXT("...at its own stride"), Driver.Selection.GroundSpeedCmPerSecond, ForwardWalk);
+	}
+
 	return true;
 }
 
@@ -1934,11 +2430,12 @@ bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
 	constexpr float ForwardWalk = 140.0f;
 	constexpr float ForwardRun = 560.0f;
 
-	auto MakeDriver = [&](EElysiumAnimSource Source)
+	auto MakeDriver = [&](EElysiumAnimSource Source, EElysiumAnimBodyKind BodyKind)
 	{
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("pc_body");
 		Driver.Source = Source;
+		Driver.BodyKind = BodyKind;
 		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, 70.0f, 60.0f);
 		Driver.GaitSpeeds.Run = Fan(ForwardRun, 300.0f, 240.0f);
 		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
@@ -1952,7 +2449,8 @@ bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
 
 	// --- The standing-with-weapon call: CombatReady gates ACT_AIM ---------------------------------
 	{
-		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player);
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player,
+			EElysiumAnimBodyKind::Player);
 		Driver.WeaponClassname = TEXT("item_w_glock_17c");
 
 		TestEqual(TEXT("an armed stand out of stance is an idle"),
@@ -1978,7 +2476,8 @@ bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
 
 	// --- Relaxed is an active weapon out of stance, so stance strips the relaxed forms -------------
 	{
-		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player);
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player,
+			EElysiumAnimBodyKind::Player);
 		Driver.WeaponClassname = TEXT("item_w_glock_17c");
 
 		TestEqual(TEXT("an armed walk out of stance is the relaxed form"),
@@ -2008,7 +2507,8 @@ bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
 
 	// --- The ducked rows outrank the aim row, exactly as committed --------------------------------
 	{
-		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player);
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player,
+			EElysiumAnimBodyKind::Player);
 		Driver.WeaponClassname = TEXT("item_w_glock_17c");
 		Driver.bCombatStance = true;
 
@@ -2025,7 +2525,8 @@ bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
 
 	// --- Water and the air phases stay with the classifier and the latch --------------------------
 	{
-		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player);
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Player,
+			EElysiumAnimBodyKind::Player);
 		Driver.WeaponClassname = TEXT("item_w_glock_17c");
 		Driver.bCombatStance = true;
 
@@ -2042,7 +2543,8 @@ bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
 
 	// --- The cast never consults the ladder ---------------------------------------------------------
 	{
-		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Npc);
+		FElysiumAnimationDriver Driver = MakeDriver(EElysiumAnimSource::Npc,
+			EElysiumAnimBodyKind::Cast);
 		Driver.WeaponClassname = TEXT("item_w_glock_17c");
 		Driver.bCombatStance = true;
 
@@ -2115,6 +2617,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("gangbanger_a");
 		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
 		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, 70.0f, 60.0f);
 		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
 
@@ -2157,6 +2660,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("gangbanger_a");
 		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
 		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, 70.0f, 60.0f);
 		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
 
@@ -2206,6 +2710,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("gangbanger_a");
 		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
 
 		FElysiumAnimationRequest OneShot;
 		OneShot.Source = EElysiumAnimSource::Npc;
@@ -2237,11 +2742,100 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 			Driver.Selection.BaseHoldSeconds, 0.0f);
 	}
 
+	// --- (c) LIFE5 — the Reaction band, which is the flinch's own claim -------------------------
+	//
+	// One band, three relationships, and each is a behaviour a player sees: a flinch interrupts a
+	// walking body and a scripted beat, it cannot interrupt a choreographed scene, and it hands the
+	// base back when its clip is done rather than parking the channel on a reaction.
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
+		Driver.GaitSpeeds.Walk = Fan(ForwardWalk, 70.0f, 60.0f);
+		Driver.Gait = ElysiumAnimIntent::GaitFrom(Driver.GaitSpeeds);
+
+		// A scripted beat holds the base first — the band a flinch has to be able to displace.
+		FElysiumAnimationRequest Beat;
+		Beat.Source = EElysiumAnimSource::Scene;
+		Beat.Channel = EElysiumAnimChannel::Base;
+		Beat.Priority = EElysiumAnimPriority::Scripted;
+		Beat.Label = TEXT("scripted_gesture");
+		TestTrue(TEXT("the scripted beat claims the base"), Driver.SubmitRequest(Beat) != 0u);
+
+		FElysiumAnimationRequest Flinch;
+		Flinch.Source = EElysiumAnimSource::Damage;
+		Flinch.Channel = EElysiumAnimChannel::Base;
+		Flinch.Priority = EElysiumAnimPriority::Reaction;
+		Flinch.Label = TEXT("hit_torso_left");
+		Flinch.HoldSeconds = 0.10f;
+		const uint32 Handle = Driver.SubmitRequest(Flinch);
+		TestTrue(TEXT("a reaction displaces a scripted beat"), Handle != 0u);
+
+		// And it holds against the locomotion publish — a TRAVELLING one, which is the row the
+		// ambient band yields to.
+		Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
+		TestFalse(TEXT("a reaction holds the base against a travelling publish"),
+			Driver.Selection.bBasePoseOwned);
+		TestTrue(TEXT("...and the record names the flinch as the holder"),
+			Driver.Selection.BaseHold.Contains(TEXT("hit_torso_left")));
+		TestTrue(TEXT("...naming the producer that armed it"),
+			Driver.Selection.BaseHold.Contains(TEXT("damage")));
+		TestTrue(TEXT("...with the claim's age on the verdict"),
+			Driver.Selection.BaseHoldSeconds > 0.0f);
+
+		// It expires at its clip length rather than parking the channel: an armer that never comes
+		// back cannot leave a body standing in a hit reaction.
+		for (int32 Frame = 0; Frame < 4; ++Frame)   // 5 x Dt ~= 0.083 s, still inside the hold
+		{
+			Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
+		}
+		TestFalse(TEXT("the frame before its length, the reaction still holds"),
+			Driver.Selection.bBasePoseOwned);
+		Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);   // 6 x Dt = 0.1 s: expiry
+		TestTrue(TEXT("the tick the hold crosses its clip length, the publish takes the base back"),
+			Driver.Selection.bBasePoseOwned);
+		TestNull(TEXT("...and the slot is empty"),
+			Driver.ActiveRequest(EElysiumAnimChannel::Base));
+		TestFalse(TEXT("...so the expired handle releases nothing"), Driver.ReleaseRequest(Handle));
+	}
+
+	// --- (d) LIFE5 — a scene-held base REFUSES a flinch ------------------------------------------
+	// The claim is submitted BEFORE the clip is played, so a refusal here is the whole of "a reaction
+	// must not ride over a choreographed scene": nothing plays at all.
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("gangbanger_a");
+		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
+
+		FElysiumAnimationRequest Scene;
+		Scene.Source = EElysiumAnimSource::Scene;
+		Scene.Channel = EElysiumAnimChannel::Base;
+		Scene.Priority = EElysiumAnimPriority::Scene;
+		Scene.Label = TEXT("jack_wave");
+		TestTrue(TEXT("the scene owns the body"), Driver.SubmitRequest(Scene) != 0u);
+
+		FElysiumAnimationRequest Flinch;
+		Flinch.Source = EElysiumAnimSource::Damage;
+		Flinch.Channel = EElysiumAnimChannel::Base;
+		Flinch.Priority = EElysiumAnimPriority::Reaction;
+		Flinch.Label = TEXT("hit_torso_front");
+		Flinch.HoldSeconds = 0.10f;
+		TestEqual(TEXT("a flinch on a scene-held body is refused"),
+			Driver.SubmitRequest(Flinch), 0u);
+
+		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
+		TestTrue(TEXT("...and the scene is still the holder the record names"),
+			Driver.Selection.BaseHold.Contains(TEXT("jack_wave")));
+	}
+
 	// --- An unexpiring claim's age still runs, so a leaked hold is diagnosable -------------------
 	{
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("gangbanger_a");
 		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
 
 		FElysiumAnimationRequest Scene;
 		Scene.Source = EElysiumAnimSource::Scene;
@@ -2264,6 +2858,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("gangbanger_a");
 		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
 
 		FElysiumAnimationRequest Beat;
 		Beat.Source = EElysiumAnimSource::Scene;
@@ -2285,6 +2880,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		FElysiumAnimationDriver Driver;
 		Driver.Stem = TEXT("gangbanger_a");
 		Driver.Source = EElysiumAnimSource::Npc;
+		Driver.BodyKind = EElysiumAnimBodyKind::Cast;
 
 		FElysiumAnimationRequest Aim;
 		Aim.Source = EElysiumAnimSource::Player;
@@ -2502,8 +3098,8 @@ namespace
 	// is exactly what several of the assertions below are about. The cast's own coverage turns it on,
 	// because that is the chain a cast body actually resolves through at runtime.
 	FElysiumAnimationSelection ResolveOn(const FElysiumNpcClipSet& Set, FRealTables& Tables,
-		const TCHAR* Activity, EElysiumAnimSource Source, bool bLadder = false,
-		const FCastContext& Context = FCastContext())
+		const TCHAR* Activity, EElysiumAnimSource Source, EElysiumAnimBodyKind BodyKind,
+		bool bLadder = false, const FCastContext& Context = FCastContext())
 	{
 		FElysiumAnimationCatalog Catalog;
 		Catalog.Clips = &Set;
@@ -2513,6 +3109,7 @@ namespace
 		Intent.Stem = Set.Stem;
 		Intent.Activity = Activity;
 		Intent.Source = Source;
+		Intent.BodyKind = BodyKind;
 		Intent.bAllowFallbackLadder = bLadder;
 		Intent.ActorClassname = Context.ActorClassname;
 		Intent.WeaponClassname = Context.WeaponClassname;
@@ -2648,11 +3245,11 @@ bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 		return true;
 	}
 	const FElysiumAnimationSelection Run = ResolveOn(Player, Tables, TEXT("ACT_RUN"),
-		EElysiumAnimSource::Player);
+		EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 	const FElysiumAnimationSelection Walk = ResolveOn(Player, Tables, TEXT("ACT_WALK"),
-		EElysiumAnimSource::Player);
+		EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 	const FElysiumAnimationSelection Sneak = ResolveOn(Player, Tables, TEXT("ACT_SNEAK"),
-		EElysiumAnimSource::Player);
+		EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 
 	// --- The acceptance clause, against the export ------------------------------------------------
 	{
@@ -2683,7 +3280,7 @@ bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 	// --- The idle, and the fade its own bank authored -------------------------------------------------
 	{
 		const FElysiumAnimationSelection Idle = ResolveOn(Player, Tables, TEXT("ACT_IDLE"),
-			EElysiumAnimSource::Player);
+			EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 		TestTrue(FString::Printf(TEXT("the idle resolves one of the weighted set ('%s')"),
 			*Idle.SequenceLabel),
 			Idle.SequenceLabel.StartsWith(TEXT("idle")) || Idle.SequenceLabel.StartsWith(TEXT("fidget")));
@@ -2695,7 +3292,7 @@ bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 	// --- The crouch is an into-pose, not a loop ---------------------------------------------------------
 	{
 		const FElysiumAnimationSelection Crouch = ResolveOn(Player, Tables, TEXT("ACT_CROUCH"),
-			EElysiumAnimSource::Player);
+			EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 		TestEqual(TEXT("the crouch resolves"), Crouch.SequenceLabel, FString(TEXT("crouch")));
 		TestEqual(TEXT("and it does not loop, so something has to hold its final frame"),
 			Crouch.bLooping, false);
@@ -2706,7 +3303,7 @@ bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 		for (const TCHAR* Activity : { TEXT("ACT_LEAP"), TEXT("ACT_FALLING"), TEXT("ACT_LAND") })
 		{
 			const FElysiumAnimationSelection Air = ResolveOn(Player, Tables, Activity,
-				EElysiumAnimSource::Player);
+				EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 			TestEqual(FString::Printf(TEXT("%s resolves"), Activity),
 				static_cast<int32>(Air.Outcome), static_cast<int32>(EElysiumAnimOutcome::Resolved));
 		}
@@ -2714,7 +3311,7 @@ bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 		// The controlled corpus records the one ducked state-8 request returning -1. The export has to
 		// agree with the capture, and the record has to name the miss rather than substitute ACT_LAND.
 		const FElysiumAnimationSelection LandCrouch = ResolveOn(Player, Tables,
-			TEXT("ACT_LAND_CROUCH"), EElysiumAnimSource::Player);
+			TEXT("ACT_LAND_CROUCH"), EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 		TestEqual(TEXT("ACT_LAND_CROUCH resolves nothing on a validated player body"),
 			static_cast<int32>(LandCrouch.Outcome),
 			static_cast<int32>(EElysiumAnimOutcome::MissingSequence));
@@ -2740,12 +3337,14 @@ bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 		Request.Stem = Player.Stem;
 		Request.Activity = TEXT("ACT_RUN_RELAXED");
 		Request.Source = EElysiumAnimSource::Player;
+		Request.BodyKind = EElysiumAnimBodyKind::Player;
 		const ElysiumAnimResolve::FElysiumTranslationResult T =
 			ElysiumAnimResolve::TranslateActivity(Request, Catalog);
 		TestEqual(TEXT("which the player rows turn into ACT_RUN"), T.Resolved,
 			FString(TEXT("ACT_RUN")));
 		TestTrue(TEXT("and that one does resolve"),
-			ResolveOn(Player, Tables, *T.Resolved, EElysiumAnimSource::Player).IsResolved());
+			ResolveOn(Player, Tables, *T.Resolved, EElysiumAnimSource::Player,
+				EElysiumAnimBodyKind::Player).IsResolved());
 	}
 
 	// --- The cast's half: the same label, the other bank ------------------------------------------------
@@ -2777,7 +3376,7 @@ bool FElysiumGaitSpeedCorpusTest::RunTest(const FString&)
 		else
 		{
 			const FElysiumAnimationSelection CastRun = ResolveOn(Cast, Tables, TEXT("ACT_RUN"),
-				EElysiumAnimSource::Npc);
+				EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
 			TestTrue(FString::Printf(TEXT("'%s' runs off the shared bank (owner was '%s')"),
 				*CastStem, *CastRun.OwnerStem),
 				CastRun.OwnerStem.Contains(TEXT("move_and_ranged")));
@@ -3036,7 +3635,8 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 					{
 						const TCHAR* Requested = ElysiumAnimIntent::ActivityName(Code);
 						const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Requested,
-							EElysiumAnimSource::Npc, /*bLadder=*/ true, Context);
+							EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast, /*bLadder=*/ true,
+							Context);
 						++CastRequests;
 						CastArmedRequests += Weapon.IsEmpty() ? 0 : 1;
 
@@ -3098,7 +3698,7 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 		{
 			const TCHAR* Requested = ElysiumAnimIntent::ActivityName(Requirement.Code);
 			const FElysiumAnimationSelection Sel = ResolveOn(Body, Tables, Requested,
-				EElysiumAnimSource::Player);
+				EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 			Cover(Sel, Stem, Requested);
 			if (Requirement.bExpectedMiss)
 			{
@@ -3125,7 +3725,8 @@ bool FElysiumAnimationSliceCoverageTest::RunTest(const FString&)
 		for (const EElysiumAnimActivityCode Code : Unwitnessed)
 		{
 			const TCHAR* Requested = ElysiumAnimIntent::ActivityName(Code);
-			Cover(ResolveOn(Body, Tables, Requested, EElysiumAnimSource::Player), Stem, Requested);
+			Cover(ResolveOn(Body, Tables, Requested, EElysiumAnimSource::Player,
+				EElysiumAnimBodyKind::Player), Stem, Requested);
 		}
 	}
 
@@ -3259,9 +3860,9 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 	for (const TCHAR* (&Pair)[2] : Pairs)
 	{
 		const FElysiumAnimationSelection Out = ResolveOn(Body, Tables, Pair[0],
-			EElysiumAnimSource::Player);
+			EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 		const FElysiumAnimationSelection In = ResolveOn(Body, Tables, Pair[1],
-			EElysiumAnimSource::Player);
+			EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player);
 		if (!Out.IsResolved() || !In.IsResolved())
 		{
 			continue;   // an activity this body does not carry is the coverage test's business
@@ -3337,6 +3938,7 @@ bool FElysiumWeaponGaitConformanceTest::RunTest(const FString&)
 	// guaranteed on whichever player armor `FindPlayerStem` happens to pick.
 	FString GlockStem;
 	EElysiumAnimSource GlockSource = EElysiumAnimSource::Npc;
+	EElysiumAnimBodyKind GlockBodyKind = EElysiumAnimBodyKind::Cast;
 	FElysiumNpcClipSet GlockBody;
 	{
 		TArray<FString> Stems;
@@ -3351,8 +3953,12 @@ bool FElysiumWeaponGaitConformanceTest::RunTest(const FString&)
 				continue;
 			}
 			GlockStem = Stem;
-			GlockSource = (Stem.Contains(TEXT("_Male_Armor_")) || Stem.Contains(TEXT("_Female_Armor_")))
-				? EElysiumAnimSource::Player : EElysiumAnimSource::Npc;
+			// An armor stem is a player body, and the body is what picks the chain.
+			const bool bPlayerBody = Stem.Contains(TEXT("_Male_Armor_"))
+				|| Stem.Contains(TEXT("_Female_Armor_"));
+			GlockSource = bPlayerBody ? EElysiumAnimSource::Player : EElysiumAnimSource::Npc;
+			GlockBodyKind = bPlayerBody
+				? EElysiumAnimBodyKind::Player : EElysiumAnimBodyKind::Cast;
 			GlockBody = MoveTemp(Candidate);
 			break;
 		}
@@ -3373,6 +3979,7 @@ bool FElysiumWeaponGaitConformanceTest::RunTest(const FString&)
 		Intent.Stem = GlockBody.Stem;
 		Intent.Activity = TEXT("ACT_WALK_RELAXED");
 		Intent.Source = GlockSource;
+		Intent.BodyKind = GlockBodyKind;
 		Intent.WeaponClassname = TEXT("item_w_glock_17c");
 
 		const ElysiumAnimResolve::FElysiumTranslationResult Result =
@@ -3435,13 +4042,15 @@ bool FElysiumWeaponGaitConformanceTest::RunTest(const FString&)
 	{
 		const FElysiumNpcClipSet* Clips;
 		EElysiumAnimSource Source;
+		EElysiumAnimBodyKind BodyKind;
 		const TCHAR* Name;
 	};
 	TArray<FBody> Bodies;
-	Bodies.Add({ &Player, EElysiumAnimSource::Player, TEXT("player") });
+	Bodies.Add({ &Player, EElysiumAnimSource::Player, EElysiumAnimBodyKind::Player,
+		TEXT("player") });
 	if (!GlockStem.IsEmpty())
 	{
-		Bodies.Add({ &GlockBody, GlockSource, TEXT("cast") });
+		Bodies.Add({ &GlockBody, GlockSource, GlockBodyKind, TEXT("cast") });
 	}
 
 	int32 ArmedRequests = 0;
@@ -3462,6 +4071,7 @@ bool FElysiumWeaponGaitConformanceTest::RunTest(const FString&)
 				Intent.Stem = Body.Clips->Stem;
 				Intent.Activity = Activity;
 				Intent.Source = Body.Source;
+				Intent.BodyKind = Body.BodyKind;
 				Intent.WeaponClassname = Classname;
 
 				const ElysiumAnimResolve::FElysiumTranslationResult Result =

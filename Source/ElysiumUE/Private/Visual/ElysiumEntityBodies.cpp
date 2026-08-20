@@ -12,6 +12,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 
 #include "Animation/AnimSequence.h"
+#include "Animation/BlendSpace.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/GameInstance.h"
 #include "Engine/SkeletalMesh.h"
@@ -86,6 +87,27 @@ FString ElysiumEntityAnimation::CinematicClipCacheKey(
 	const FString& Stem, const FString& BankStem, const FString& ClipName)
 {
 	return Stem + TEXT("|") + BankStem + TEXT("|") + ClipName;
+}
+
+float ElysiumEntityAnimation::BlendedGridLengthSeconds(UBlendSpace* Space, float AxisValue)
+{
+	if (Space == nullptr)
+	{
+		return 0.f;
+	}
+	// The same two calls `FAnimNode_BlendSpacePlayerBase` makes to find the length it plays at, in the
+	// same order: the samples the blend input selects, then the length those samples blend to. Asking
+	// the asset anything else would be a second answer to a question the evaluator already has one for.
+	TArray<FBlendSampleData> Samples;
+	int32 CachedTriangulationIndex = INDEX_NONE;
+	if (!Space->GetSamplesFromBlendInput(FVector(AxisValue, 0.f, 0.f), Samples,
+		CachedTriangulationIndex, /*bCombineAnimations=*/true))
+	{
+		// A space with no samples, or one whose `ResampleData` never ran, answers nothing here rather
+		// than reporting a zero-length clip. The caller reads it as "cannot say" and refuses.
+		return 0.f;
+	}
+	return Space->GetAnimationLengthFromSampleData(Samples);
 }
 
 FString UElysiumEntityBodies::NpcVisualKeyForMesh(const FString& Stem, const USkeletalMesh* Mesh) const
@@ -175,27 +197,33 @@ float UElysiumEntityBodies::ClipFadeSeconds(const FString& Stem, const FString& 
 	return Clip != nullptr ? Clip->FadeSeconds() : UElysiumBodyAnimInstance::DefaultBlendSeconds;
 }
 
-uint32 UElysiumEntityBodies::SubmitBodyAnimRequest(USkeletalMeshComponent* Body,
-	const FElysiumAnimationRequest& Request)
+EElysiumAnimClaim UElysiumEntityBodies::SubmitBodyAnimRequest(USkeletalMeshComponent* Body,
+	const FElysiumAnimationRequest& Request, uint32& OutHandle)
 {
+	OutHandle = 0;
 	if (Body == nullptr)
 	{
-		return 0;
+		return EElysiumAnimClaim::NoArbiter;
 	}
 	// An NPC visual hangs off its motor's root; the player's hangs off the pawn and routes through
 	// the map actor's own driver. Anything else — a green-room stand, a preview body, a prop — has
 	// no driver publishing locomotion against it, so there is nothing to arbitrate and no claim to
 	// hold: an explicitly optional absence, not a failure.
+	//
+	// A driver that answers 0 REFUSED the claim — a lower band asking for a channel a scene owns —
+	// which is the opposite instruction to a body that has no driver at all.
 	if (AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
 	{
-		return Motor->SubmitAnimRequest(Request);
+		OutHandle = Motor->SubmitAnimRequest(Request);
+		return OutHandle != 0 ? EElysiumAnimClaim::Granted : EElysiumAnimClaim::Refused;
 	}
 	if (AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner()); Map != nullptr
 		&& Map->IsPlayerVisual(Body))
 	{
-		return Map->SubmitPlayerAnimRequest(Request);
+		OutHandle = Map->SubmitPlayerAnimRequest(Request);
+		return OutHandle != 0 ? EElysiumAnimClaim::Granted : EElysiumAnimClaim::Refused;
 	}
-	return 0;
+	return EElysiumAnimClaim::NoArbiter;
 }
 
 bool UElysiumEntityBodies::ReleaseBodyAnimRequest(USkeletalMeshComponent* Body, uint32 Handle)
@@ -247,7 +275,10 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// the reference pose: on a graph-backed body the slot's source is the state machine, so a refused
 	// montage poses whatever that machine holds -- which for a body handed no selection is the bind
 	// pose, advancing nothing. Discarding the answer made that a silent T-pose.
-	if (!Inst->PlayOneShot(Anim, bLoop, ClipFadeSeconds(Stem, ClipName)))
+	// The authored fade both ways: this funnel carries one number and passes it as both (in = the
+	// fade, out = the fade unless the clip loops).
+	const float Fade = ClipFadeSeconds(Stem, ClipName);
+	if (!Inst->PlayOneShot(Anim, bLoop, Fade, Fade))
 	{
 		UE_LOG(LogElysiumBodies, Warning,
 			TEXT("npc '%s' clip '%s' (loop=%d, %.3fs): the animation host refused to play it, so the "
@@ -271,12 +302,290 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	Claim.Priority = EElysiumAnimPriority::Ambient;
 	Claim.Label = ClipName;
 	Claim.HoldSeconds = bLoop ? 0.0f : Anim->GetPlayLength();
-	SubmitBodyAnimRequest(Body, Claim);
+	uint32 ClaimHandle = 0;
+	SubmitBodyAnimRequest(Body, Claim, ClaimHandle);
 
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();
 	Body->SetVisibility(true, true);
 	return true;
+}
+
+UAnimSequence* UElysiumEntityBodies::ResolveOneShotClip(USkeletalMesh* Mesh,
+	const FString& OwnerStem, const FString& AnimationName)
+{
+	if (Mesh == nullptr || OwnerStem.IsEmpty() || AnimationName.IsEmpty())
+	{
+		return nullptr;
+	}
+	UElysiumAnimSubsystem* Anims = GetAnims();
+	if (Anims == nullptr)
+	{
+		return nullptr;
+	}
+
+	// Keyed on the MESH rather than on a stem: a one-shot request names no model, and a material
+	// permutation is a distinct runtime mesh and USkeleton — so the object's own path is the identity
+	// that keeps two bodies' retargeted sequences apart.
+	const FString Key = ElysiumEntityAnimation::CinematicClipCacheKey(
+		Mesh->GetPathName(), OwnerStem, AnimationName);
+	if (const TObjectPtr<UAnimSequence>* Found = NpcAnimCache.Find(Key))
+	{
+		return Found->Get();
+	}
+
+	// The owner+name door, which never consults the clip vocabulary: the cell is already resolved,
+	// and a vocabulary lookup would re-resolve the label at neutral pose parameters.
+	FString Error;
+	UAnimSequence* Anim = Anims->ResolveClipFromBank(OwnerStem, AnimationName, Mesh, Error);
+	if (Anim == nullptr && !ReportedMissingOneShots.Contains(Key))
+	{
+		// A missing bank or asset is a real failure — the body plays nothing where content says it
+		// should — so it is warned. Once per (mesh, owner, clip): a reaction re-arms on every hit.
+		ReportedMissingOneShots.Add(Key);
+		UE_LOG(LogElysiumBodies, Warning, TEXT("one-shot '%s'@'%s' on %s: %s"),
+			*AnimationName, *OwnerStem, *GetNameSafe(Mesh), *Error);
+	}
+	NpcAnimCache.Add(Key, Anim);
+	return Anim;
+}
+
+bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
+	const FElysiumOneShotClipRequest& Request, float* OutSeconds)
+{
+	if (Body == nullptr || !Request.IsValid())
+	{
+		// Neither is an ordinary negative: this seam takes an ALREADY-RESOLVED cell, so a null body or
+		// a request missing half the (owner, animation name) pair is a producer that built its request
+		// wrong. Once per spelling, because a reaction re-arms on every hit.
+		const FString Key = FString::Printf(TEXT("defect|%s|%s|%d"),
+			*Request.OwnerStem, *Request.AnimationName, Body != nullptr ? 1 : 0);
+		if (!ReportedMissingOneShots.Contains(Key))
+		{
+			ReportedMissingOneShots.Add(Key);
+			UE_LOG(LogElysiumBodies, Warning,
+				TEXT("one-shot request is not playable: owner '%s', animation '%s', body %s"),
+				Request.OwnerStem.IsEmpty() ? TEXT("(none)") : *Request.OwnerStem,
+				Request.AnimationName.IsEmpty() ? TEXT("(none)") : *Request.AnimationName,
+				Body != nullptr ? TEXT("present") : TEXT("null"));
+		}
+		return false;
+	}
+
+	UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
+	if (Inst == nullptr)
+	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("one-shot '%s'@'%s': this body carries no Elysium animation host, so nothing can "
+			     "play it"), *Request.AnimationName, *Request.OwnerStem);
+		return false;
+	}
+
+	// --- which channel plays it, decided before anything is resolved (LIFE5) ----------------------
+	//
+	// The reaction route needs the graph's own branch, which only a compiled biped class carries. A
+	// body without one — the plain native host, or a generated class built before the branch existed —
+	// falls back to the montage slot with a single cell, which is a lesser pose rather than none.
+	UElysiumBipedAnimInstance* Biped = Cast<UElysiumBipedAnimInstance>(Inst);
+	const bool bReactionBranch = Request.Route == EElysiumOneShotRoute::Reaction
+		&& Biped != nullptr && Biped->HasCompiledGraph() && Biped->HasCompiledReactionBranch();
+
+	// The fan, when the branch can evaluate one. `ResolveGrid` answers the baked `UBlendSpace` and the
+	// axis binding; the LENGTH is asked of the engine at the sampled parameter, because a fan's cells
+	// do not share a length and the pose the graph strikes is a blend of two of them.
+	FElysiumResolvedGrid Fan;
+	UAnimSequence* Anim = nullptr;
+	float LengthSeconds = 0.0f;
+	FString AnimationName = Request.AnimationName;
+	USkeletalMesh* Mesh = Body->GetSkeletalMeshAsset();
+	// Once per (mesh, label): a reaction re-arms on every hit, and a defect restated per blow buries
+	// the load it belongs to.
+	auto ReportOnce = [this, Mesh, &Request](const TCHAR* Kind, FString&& Line)
+	{
+		const FString Key = FString::Printf(TEXT("%s|%s|%s|%s"), Kind, *GetNameSafe(Mesh),
+			*Request.OwnerStem, *Request.Label);
+		if (!ReportedMissingOneShots.Contains(Key))
+		{
+			ReportedMissingOneShots.Add(Key);
+			UE_LOG(LogElysiumBodies, Warning, TEXT("reaction '%s'@'%s' on %s: %s"), *Request.Label,
+				*Request.OwnerStem, *GetNameSafe(Mesh), *Line);
+		}
+	};
+
+	if (bReactionBranch && Request.bGrid)
+	{
+		UElysiumAnimSubsystem* Anims = GetAnims();
+		FString Why;
+		if (Anims == nullptr
+			|| !Anims->ResolveGrid(Request.BodyStem, Request.Label, Mesh, Fan,
+				/*Host=*/FString(), &Why))
+		{
+			ReportOnce(TEXT("fan"), FString::Printf(TEXT("the fan is not on the mount: %s"),
+				Why.IsEmpty() ? TEXT("no animation subsystem") : *Why));
+			return false;
+		}
+		LengthSeconds = ElysiumEntityAnimation::BlendedGridLengthSeconds(Fan.Space, Request.AxisValue);
+		if (LengthSeconds <= 0.0f)
+		{
+			ReportOnce(TEXT("fanlen"), FString::Printf(
+				TEXT("'%s' reports no blended length at %.1f, so nothing can be timed off it"),
+				*GetNameSafe(Fan.Space), Request.AxisValue));
+			return false;
+		}
+	}
+	else
+	{
+		// The single-cell path, both routes. A reaction that cannot reach the branch collapses its fan
+		// to the NEARER of the two cells the angle sits between rather than to the floor cell, which
+		// would bias every such reaction one cell counter-clockwise.
+		if (Request.Route == EElysiumOneShotRoute::Reaction && Request.bGrid)
+		{
+			UElysiumAnimSubsystem* Anims = GetAnims();
+			const FString Cell = Anims != nullptr
+				? Anims->ResolveNearestGridClip(Request.OwnerStem, Request.Label, Request.AxisValue)
+				: FString();
+			if (!Cell.IsEmpty())
+			{
+				AnimationName = Cell;
+			}
+			// A real loss of fidelity, named rather than taken quietly: the body strikes one authored
+			// direction instead of the blend between two, which is +-22.5 degrees of error on a
+			// nine-cell fan. The repair is a graph that carries the branch, not a resolver change.
+			ReportOnce(TEXT("collapse"), FString::Printf(
+				TEXT("this body has no reaction branch, so the fan collapses to its nearest cell "
+				     "'%s' at %.1f"),
+				Cell.IsEmpty() ? *Request.AnimationName : *Cell, Request.AxisValue));
+		}
+		Anim = ResolveOneShotClip(Mesh, Request.OwnerStem, AnimationName);
+		if (Anim == nullptr)
+		{
+			// `ResolveOneShotClip` already warned once per (mesh, owner, clip) naming the bank or asset.
+			return false;
+		}
+		LengthSeconds = Anim->GetPlayLength();
+	}
+
+	// The reaction, built before the claim because the claim's own duration is derived from it: the
+	// branch's phase clock has a minimum hold, so a reaction stands longer than its clip whenever the
+	// clip is shorter than the two fades. One expression answers both (`ActiveSeconds`/`TotalSeconds`
+	// on the play), which is what stops the claim expiring mid-fade.
+	FElysiumReactionPlay Play;
+	Play.Space = Fan.Space;                 // null on the single-clip reaction
+	Play.Sequence = Fan.Space != nullptr ? nullptr : Anim;
+	Play.AxisValue = Request.AxisValue;
+	Play.LengthSeconds = LengthSeconds;
+	Play.BlendInSeconds = Request.BlendInSeconds;
+	Play.BlendOutSeconds = Request.BlendOutSeconds;
+
+	// **The claim first, and it decides whether the clip plays at all.** A body a choreographed scene
+	// owns refuses a Reaction claim, and a reaction must not ride over a scene — so a refusal returns
+	// before the montage rather than arming a clip whose channel it does not hold. A body with no
+	// driver has nothing arbitrating, and plays.
+	FElysiumAnimationRequest Claim;
+	Claim.Source = Request.Source;
+	Claim.Channel = EElysiumAnimChannel::Base;
+	Claim.Priority = Request.Priority;
+	Claim.Label = Request.Label.IsEmpty() ? AnimationName : Request.Label;
+	Claim.HoldSeconds = Request.bLoop
+		? 0.0f
+		: (bReactionBranch ? Play.TotalSeconds() : LengthSeconds);
+	uint32 Handle = 0;
+	const EElysiumAnimClaim Verdict = SubmitBodyAnimRequest(Body, Claim, Handle);
+	if (Verdict == EElysiumAnimClaim::Refused)
+	{
+		// An ordinary negative outcome, not a failure: the priority table answered, and the caller
+		// keeps whatever fallback it stated. Verbose so a refused reaction is still readable, without
+		// a warning per hit on a body a scene owns.
+		UE_LOG(LogElysiumBodies, Verbose,
+			TEXT("one-shot '%s'@'%s' (%s, %s) was refused the base channel"),
+			*AnimationName, *Request.OwnerStem,
+			ElysiumAnimIntent::SourceName(Request.Source),
+			ElysiumAnimIntent::PriorityName(Request.Priority));
+		return false;
+	}
+
+	bool bPlaying = false;
+	if (bReactionBranch)
+	{
+		bPlaying = Biped->PlayReaction(Play);
+	}
+	else
+	{
+		bPlaying = Inst->PlayOneShot(Anim, Request.bLoop, Request.BlendInSeconds,
+			Request.BlendOutSeconds);
+	}
+	if (!bPlaying)
+	{
+		UE_LOG(LogElysiumBodies, Warning,
+			TEXT("one-shot '%s'@'%s' (loop=%d, %.3fs, %s): the animation host refused to play it, so "
+			     "the body keeps posing whatever it already held"),
+			*AnimationName, *Request.OwnerStem, Request.bLoop ? 1 : 0, LengthSeconds,
+			bReactionBranch ? TEXT("reaction") : TEXT("slot"));
+		// The claim it was granted goes straight back: a channel held for a clip that never started
+		// is exactly the leaked claim the hold report exists to make visible.
+		if (Handle != 0)
+		{
+			ReleaseBodyAnimRequest(Body, Handle);
+		}
+		return false;
+	}
+	UE_LOG(LogElysiumBodies, Verbose,
+		TEXT("one-shot '%s'@'%s' (loop=%d, %.3fs, in %.2f out %.2f, %s%s)"),
+		*AnimationName, *Request.OwnerStem, Request.bLoop ? 1 : 0, LengthSeconds,
+		Request.BlendInSeconds, Request.BlendOutSeconds,
+		bReactionBranch ? TEXT("reaction") : TEXT("slot"),
+		Fan.Space != nullptr ? TEXT(" fan") : TEXT(""));
+
+	// Written on the success path alone. A caller that schedules off the length — a reaction whose
+	// recovery beat waits it out — must not be handed the length of a clip that a refused claim or a
+	// refused montage means is not playing. It is the same number the claim holds for, which on the
+	// reaction route is the branch's whole life rather than the clip's own length.
+	if (OutSeconds != nullptr)
+	{
+		*OutSeconds = bReactionBranch ? Play.TotalSeconds() : LengthSeconds;
+	}
+
+	Body->TickAnimation(0.0f, false);
+	Body->RefreshBoneTransforms();
+	// The Slot route alone forces the body visible; the rule and why it is a rule are stated once, in
+	// `ElysiumAnimIntent::OneShotForcesVisibility`.
+	if (ElysiumAnimIntent::OneShotForcesVisibility(Request.Route))
+	{
+		Body->SetVisibility(true, true);
+	}
+	return true;
+}
+
+bool UElysiumEntityBodies::GetBodyClipPhase(USkeletalMeshComponent* Body,
+	EElysiumAnimChannel Channel, FElysiumClipPhase& Out)
+{
+	Out = FElysiumClipPhase();
+	const UElysiumBodyAnimInstance* Inst = Body != nullptr
+		? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance())
+		: nullptr;
+	if (Inst == nullptr)
+	{
+		// A body with no Elysium animation host has no phase to report. Ordinary rather than a
+		// failure: a prop body, a body built before its host was installed, and every body in a
+		// headless run answer here.
+		return false;
+	}
+	return Inst->GetClipPhase(Channel, Out);
+}
+
+const TArray<FElysiumAnimEvent>* UElysiumEntityBodies::GetNpcEventTimeline(const FString& OwnerStem,
+	const FString& Label)
+{
+	UElysiumAnimSubsystem* Anims = GetAnims();
+	if (Anims == nullptr || OwnerStem.IsEmpty() || Label.IsEmpty())
+	{
+		return nullptr;
+	}
+	// The table is cached whole and immutable by the subsystem, so the array this points into
+	// outlives the frame the caller asked in. A model that declares no sidecar at all answers null
+	// here, which is the same absence as a sequence that declares no timeline.
+	const TSharedPtr<const FElysiumBlendTable> Table = Anims->GetBlendTable(OwnerStem);
+	return Table.IsValid() ? Table->FindEvents(Label) : nullptr;
 }
 
 void UElysiumEntityBodies::ForgetNpcVisuals()
@@ -288,6 +597,9 @@ void UElysiumEntityBodies::ForgetNpcVisuals()
 	const int32 Meshes = NpcMeshCache.Num();
 	NpcMeshCache.Empty();
 	NpcAnimCache.Empty();
+	// The warn-once set goes with them: a re-export that fixes a missing one-shot must be able to
+	// report the next miss rather than staying silent about it.
+	ReportedMissingOneShots.Empty();
 	UE_LOG(LogElysiumBodies, Log, TEXT("forgot %d cached NPC visual(s); the next build re-resolves"),
 		Meshes);
 }
@@ -347,6 +659,25 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 	{
 		return false;
 	}
+
+	// **The claim first, and it decides whether the clip plays at all** — the same order
+	// `PlayNpcOneShot` takes, and for the same reason: a body another scene already owns must not have
+	// its pose replaced by a second one, and standing the clip before asking would make the refusal a
+	// report about a body that had already been taken over.
+	FElysiumAnimationRequest Claim;
+	Claim.Source = EElysiumAnimSource::Scene;
+	Claim.Channel = EElysiumAnimChannel::Base;
+	Claim.Priority = EElysiumAnimPriority::Scene;
+	Claim.Label = ClipName;
+	uint32 Handle = 0;
+	const EElysiumAnimClaim Verdict = SubmitBodyAnimRequest(Body, Claim, Handle);
+	if (Verdict == EElysiumAnimClaim::Refused)
+	{
+		UE_LOG(LogElysiumBodies, Verbose,
+			TEXT("cinematic clip '%s'@'%s' was refused the base channel"), *ClipName, *BankStem);
+		return false;
+	}
+
 	if (OutSeconds != nullptr)
 	{
 		*OutSeconds = Anim->GetPlayLength();
@@ -364,12 +695,7 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 	// and can be held past its own length, so the claim has no expiry: the scene owns the body until
 	// `StopCinematicClip` gives the claim back, and the every-tick locomotion publish — idle or
 	// travelling — yields to it in between.
-	FElysiumAnimationRequest Claim;
-	Claim.Source = EElysiumAnimSource::Scene;
-	Claim.Channel = EElysiumAnimChannel::Base;
-	Claim.Priority = EElysiumAnimPriority::Scene;
-	Claim.Label = ClipName;
-	if (const uint32 Handle = SubmitBodyAnimRequest(Body, Claim))
+	if (Handle != 0)
 	{
 		CinematicClaims.Add(FObjectKey(Body), Handle);
 	}
@@ -713,48 +1039,20 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	return Comp;
 }
 
-bool UElysiumEntityBodies::PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-	const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds)
-{
-	UElysiumAnimSubsystem* Anims = GetAnims();
-	const FString Clip = Anims ? Anims->PickActivityClip(Stem, Activity, Variant) : FString();
-	if (Clip.IsEmpty())
-	{
-		return false;
-	}
-	// The CLIP decides whether it loops, not the caller. VtMB reads `m_bSequenceLoops` off the
-	// sequence's own flags (RE35, `FElysiumNpcClip::IsLooping`), so an authored loop keeps looping
-	// however it was asked for -- and the ambient callers ask for every activity with bLoop false.
-	// Without this a body-language idle authored as a loop plays once and then stands on its last
-	// frame, which is what a held one-shot means: frozen, not resting.
-	bool bLoops = bLoop;
-	if (const FElysiumNpcClipSet* Set = Anims->GetClipSet(Stem))
-	{
-		if (const FElysiumNpcClip* Row = Set->Find(Clip))
-		{
-			bLoops = bLoop || Row->IsLooping();
-		}
-	}
-	return PlayNpcClip(Body, Stem, Clip, bLoops, OutSeconds);
-}
-
-bool UElysiumEntityBodies::ResolveNpcActivityClip(const FString& Stem, const FString& Activity,
-	int32 Variant, FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+bool UElysiumEntityBodies::ResolveNpcActivityClip(const FElysiumActivityClipRequest& Request,
+	FElysiumActivityClip& Out)
 {
 	UElysiumAnimSubsystem* Anims = GetAnims();
 	if (Anims == nullptr)
 	{
-		OutLabel.Reset();
-		OutAnimName.Reset();
-		OutGroundSpeedCmPerSecond = 0.f;
+		Out = FElysiumActivityClip();
 		return false;
 	}
-	return Anims->ResolveActivityClip(Stem, Activity, Variant, OutLabel, OutAnimName,
-		OutGroundSpeedCmPerSecond);
+	return Anims->ResolveActivityClip(Request, Out);
 }
 
 bool UElysiumEntityBodies::ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
-	FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
+	EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond)
 {
 	UElysiumAnimSubsystem* Anims = GetAnims();
 	if (Anims == nullptr)
@@ -763,7 +1061,8 @@ bool UElysiumEntityBodies::ResolveNpcSequenceClip(const FString& Stem, const FSt
 		OutGroundSpeedCmPerSecond = 0.f;
 		return false;
 	}
-	return Anims->ResolveSequenceClip(Stem, ClipName, OutAnimName, OutGroundSpeedCmPerSecond);
+	return Anims->ResolveSequenceClip(Stem, ClipName, BodyKind, OutAnimName,
+		OutGroundSpeedCmPerSecond);
 }
 
 bool UElysiumEntityBodies::HasNpcClip(const FString& Stem, const FString& ClipName)

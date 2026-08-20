@@ -530,8 +530,10 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 			Services.Saw(TEXT("PlayNpcClip isaac walk loop=1")));
 		TestFalse(TEXT("the concrete bank cell was not mistaken for a vocabulary label"),
 			Services.Saw(TEXT("PlayNpcClip isaac walk_0")));
-		TestFalse(TEXT("the resolved scripted walk was not selected a second time"),
-			Services.Saw(TEXT("PlayNpcActivity isaac ACT_WALK")));
+		// The beat resolves the gait ONCE. Its travel-cycle fallback reaches the same seam, so a
+		// second line here would be the beat re-selecting a clip it already chose.
+		TestEqual(TEXT("the resolved scripted walk was not selected a second time"),
+			Services.Count(TEXT("ResolveNpcActivityClip isaac ACT_WALK")), 1);
 		TestFalse(TEXT("the NPC was not teleported onto the mark"), Npc->Origin.Equals(Mark, 0.01));
 		TestEqual(TEXT("OnEndSequence is held while the NPC is still walking"),
 			CounterValue(Count), 0.f);

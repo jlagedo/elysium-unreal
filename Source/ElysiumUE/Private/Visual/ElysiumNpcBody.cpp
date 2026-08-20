@@ -153,6 +153,7 @@ void AElysiumNpcBody::EnsureAnimDriver()
 	{
 		AnimDriver = MakePimpl<FElysiumAnimationDriver>();
 		AnimDriver->Source = EElysiumAnimSource::Npc;
+		AnimDriver->BodyKind = EElysiumAnimBodyKind::Cast;
 	}
 	AnimDriver->Stem = ModelStem;
 	AnimDriver->Variant = AnimVariant;
@@ -350,7 +351,14 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 
 const FElysiumAnimationSelection& AElysiumNpcBody::GetAnimSelection() const
 {
-	static const FElysiumAnimationSelection Empty;
+	// A body with no driver yet still has a chain, and a readout that reported the record's default
+	// would name every cast body a player one. Built once so the accessor stays a reference return.
+	static const FElysiumAnimationSelection Empty = []
+	{
+		FElysiumAnimationSelection Blank;
+		Blank.BodyKind = EElysiumAnimBodyKind::Cast;
+		return Blank;
+	}();
 	return AnimDriver.IsValid() ? AnimDriver->Selection : Empty;
 }
 

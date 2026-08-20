@@ -35,6 +35,17 @@ namespace ElysiumPropBounds
 		FVector& OutPositive, FVector& OutNegative);
 }
 
+// What a channel claim was answered with. Three values rather than a handle-or-zero, because "this
+// body has no driver arbitrating anything" and "the driver refused this claim" are opposite
+// instructions to the caller: the first plays (a green-room stand, a preview, a prop), the second
+// must not (a body a higher-ranked claim already owns).
+enum class EElysiumAnimClaim : uint8
+{
+	NoArbiter,
+	Refused,
+	Granted,
+};
+
 // The BODY FACTORY behind IElysiumEmbodiment's mesh half: every render component an entity stands
 // in the world, plus the per-map asset caches behind them. AElysiumMapActor stays the interface's
 // implementer — the substrate's engine side is the actor (`ElysiumWorldServices.h`) — and forwards
@@ -128,6 +139,20 @@ public:
 
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& ClipName,
 		bool bLoop, float* OutSeconds);
+	// LIFE5 — play one already-resolved cell over whatever owns the base pose. The (owner, animation
+	// name) pair goes straight at the baked clip, never through the vocabulary. The channel claim is
+	// submitted BEFORE the clip: a refused claim plays nothing, which is how a reaction is kept off a
+	// body a choreographed scene owns.
+	bool PlayNpcOneShot(USkeletalMeshComponent* Body, const FElysiumOneShotClipRequest& Request,
+		float* OutSeconds);
+	// LIFE5 — where one channel of a body stands on its clip this frame, and the timeline that clip
+	// declares. Both are passthroughs: the phase is the animation host's own (only it knows whether
+	// a montage, a graph state or a fan is producing the pose), and the timeline is the owning
+	// model's blend sidecar, cached whole by `UElysiumAnimSubsystem`.
+	bool GetBodyClipPhase(USkeletalMeshComponent* Body, EElysiumAnimChannel Channel,
+		FElysiumClipPhase& Out);
+	const TArray<FElysiumAnimEvent>* GetNpcEventTimeline(const FString& OwnerStem,
+		const FString& Label);
 	// Compose an autolayer over whatever this body is already playing — a `_delta` additive, a masked
 	// partial-body `_layer`, or a masked aim grid, decided from the asset. Same resolution chain as
 	// PlayNpcClip, so a layer owned by a shared bank is reached by label; the layer itself is
@@ -187,12 +212,10 @@ public:
 	// fade, or 0 when it carries the no-transition bit. The host takes the larger of this and the
 	// clip already playing, so this answers for one clip rather than for the pair.
 	float ClipFadeSeconds(const FString& Stem, const FString& ClipName) const;
-	bool PlayNpcActivity(USkeletalMeshComponent* Body, const FString& Stem,
-		const FString& Activity, int32 Variant, bool bLoop, float* OutSeconds);
-	bool ResolveNpcActivityClip(const FString& Stem, const FString& Activity, int32 Variant,
-		FString& OutLabel, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
+	bool ResolveNpcActivityClip(const struct FElysiumActivityClipRequest& Request,
+		struct FElysiumActivityClip& Out);
 	bool ResolveNpcSequenceClip(const FString& Stem, const FString& ClipName,
-		FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
+		EElysiumAnimBodyKind BodyKind, FString& OutAnimName, float& OutGroundSpeedCmPerSecond);
 	bool HasNpcClip(const FString& Stem, const FString& ClipName);
 
 	// v4 skeletal props. The model-path lookup chooses the animated representation; building and
@@ -291,10 +314,18 @@ private:
 
 	// LIFE4 — route a channel claim to the driver of the body it is armed on: an NPC motor's driver
 	// through the visual's attach parent, the player's through the owning map actor. A body with no
-	// driver — a green-room stand, a preview, a prop — returns 0, which is a body nothing arbitrates
-	// against rather than a failure. The release mirror answers false for the same bodies.
-	uint32 SubmitBodyAnimRequest(USkeletalMeshComponent* Body,
-		const struct FElysiumAnimationRequest& Request);
+	// driver — a green-room stand, a preview, a prop — answers `NoArbiter`, which is a body nothing
+	// arbitrates against rather than a failure. The release mirror answers false for the same bodies.
+	// `OutHandle` is non-zero only on `Granted`.
+	EElysiumAnimClaim SubmitBodyAnimRequest(USkeletalMeshComponent* Body,
+		const struct FElysiumAnimationRequest& Request, uint32& OutHandle);
+	// LIFE5 — the baked clip one already-resolved (owner, animation name) pair names, cached per
+	// (mesh, owner, animation) exactly as the cinematic path is. Never consults the vocabulary.
+	UAnimSequence* ResolveOneShotClip(USkeletalMesh* Mesh, const FString& OwnerStem,
+		const FString& AnimationName);
+	// One-shot requests already reported — a missing bank or asset, and a request a producer built
+	// unplayable — so a reaction re-armed every time a body is hit warns once rather than per hit.
+	TSet<FString> ReportedMissingOneShots;
 	bool ReleaseBodyAnimRequest(USkeletalMeshComponent* Body, uint32 Handle);
 	// The standing cinematic claims, keyed by body, so `StopCinematicClip` releases the claim its
 	// own `PlayCinematicClip` submitted. A scene-pinned clip has no natural end, so its claim holds
@@ -370,4 +401,14 @@ namespace ElysiumEntityAnimation
 	FString NpcVisualCacheKey(const FString& Stem, bool bPlayerMaterial);
 	FString NpcClipCacheKey(const FString& Stem, const FString& ClipName);
 	FString CinematicClipCacheKey(const FString& Stem, const FString& BankStem, const FString& ClipName);
+
+	// How long the pose a fan strikes at `AxisValue` actually lasts (LIFE5) — **the engine's own
+	// answer**, over the samples the blend input selects and weighted the way it weights them.
+	//
+	// It is not the longest cell, the base cell's length, or an average: a nine-cell hit fan's
+	// reactions differ by frames, the graph plays a blend of the two the angle sits between, and a
+	// caller timing a reaction off anything else ends it early or late by exactly that difference.
+	// Zero when the space is null, carries no samples, or was never resampled — all of which are
+	// "cannot say", and a caller must not read one as an instant clip.
+	float BlendedGridLengthSeconds(class UBlendSpace* Space, float AxisValue);
 }

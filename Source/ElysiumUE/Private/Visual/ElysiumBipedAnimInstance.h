@@ -57,6 +57,54 @@ struct FElysiumOneShotReport
 	float RemainingSeconds = -1.0f;
 };
 
+// One reaction, whole, as the graph's reaction branch needs it (LIFE5).
+//
+// **`Space` and `Sequence` are never both set**, the same "exactly one of these two" shape the base
+// channel and the upper-body overlay take: a directional hit resolves to its baked fan and a plain
+// reaction label to a single clip.
+//
+// `LengthSeconds` is what the phase clock is armed from, and it is the ENGINE's answer for a fan —
+// the blended length of the samples the axis value selects — because a fan's cells do not share a
+// length and the pose the graph strikes is the blend of two of them.
+struct FElysiumReactionPlay
+{
+	UBlendSpace* Space = nullptr;
+	UAnimSequence* Sequence = nullptr;
+	// Where the fan is sampled, in the pose parameter's own degrees. Ignored when `Sequence` is set.
+	float AxisValue = 0.0f;
+	float LengthSeconds = 0.0f;
+	float BlendInSeconds = 0.1f;
+	float BlendOutSeconds = 0.3f;
+
+	bool IsValid() const
+	{
+		return (Space != nullptr) != (Sequence != nullptr) && LengthSeconds > 0.0f;
+	}
+
+	// How long `bReactionActive` stands — the phase clock's own seed. It is the clip's length less
+	// the out-fade, floored at a MINIMUM HOLD equal to the blend-in, so the pose is on screen for at
+	// least the time it takes to fade to it. Identity for any clip longer than
+	// `BlendInSeconds + BlendOutSeconds`. The floor is the blend-in the producer STATED, not the one
+	// the instance ends up using: a body with nothing to blend from snaps in and holds it anyway.
+	//
+	// **PENDING RE.** The floor is here because every hit cell VtMB ships bakes to 0.033s — two
+	// frames — which is shorter than the out-fade alone, so the unfloored seed is zero and the branch
+	// is dropped on the update that armed it. The recovered 0.1/0.3 may be `CAnimationLayer` cycle
+	// FRACTIONS rather than seconds, which would make a two-frame cell's real fade two frames long
+	// and this floor unnecessary; the decomp read of `DamageFlinch`'s layer setup closes it. Until
+	// then this is the measured-safe interim.
+	float ActiveSeconds() const
+	{
+		return FMath::Max(LengthSeconds - FMath::Max(BlendOutSeconds, 0.0f),
+			FMath::Max(BlendInSeconds, 0.0f));
+	}
+
+	// The branch's whole life: the hold above, then the out-fade that follows it. The channel claim
+	// takes this rather than the clip's length, so a claim cannot expire while the branch is still
+	// fading — one expression, so the two cannot disagree.
+	float TotalSeconds() const { return ActiveSeconds() + FMath::Max(BlendOutSeconds, 0.0f); }
+};
+
 USTRUCT()
 struct FElysiumBipedAnimProxy : public FElysiumBodyAnimProxy
 {
@@ -224,6 +272,40 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	float AimPitch = 0.0f;
 
+	// --- the reaction branch (LIFE5) ----------------------------------------------------------------
+	//
+	// The publish surface for the branch the graph carries between the inertializer and the
+	// upper-body layer. Written by `PlayReaction`/`StopReaction` below and by nothing else — a
+	// reaction is a discrete producer event, not a per-frame projection like the locomotion half.
+	//
+	// The pair is the same "exactly one of these two" shape the base channel and the overlay take: a
+	// directional hit resolves to its baked fan and a plain reaction label to a single sequence, and
+	// `bReactionHasBlendSpace` is which of the two the graph should evaluate.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
+	TObjectPtr<UBlendSpace> RequestedReactionBlendSpace = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
+	TObjectPtr<UAnimSequence> RequestedReactionSequence = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
+	bool bReactionHasBlendSpace = false;
+
+	// Where the reaction fan is sampled, in the pose parameters' own degrees — `hit_yaw` for a
+	// directional flinch. The fans VtMB ships are one-dimensional, so the grid's second axis is not
+	// exposed: a two-axis reaction is refused by name rather than half-steered.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
+	float ReactionAxis0 = 0.0f;
+
+	// Whether the reaction pose owns the body at all. False here is the whole branch's off switch.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
+	bool bReactionActive = false;
+
+	// Retail's own flinch fade, stated as two values because the blend list takes the newly-active
+	// child's time: entering the reaction uses the first, returning to the locomotion pose the
+	// second.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
+	float ReactionBlendInSeconds = 0.1f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
+	float ReactionBlendOutSeconds = 0.3f;
+
 	// --- the transition rules ---------------------------------------------------------------------
 	//
 	// Every rule in the machine is a single read of one of these, and nothing else. The comparison
@@ -283,8 +365,29 @@ public:
 	// Answered over a dynamic slot montage, which is the design's own shape for a one-shot and needs
 	// no baked montage asset. Nothing here reaches the locomotion state machine: a scripted clip
 	// plays OVER the gait rather than replacing the thing that owns it.
-	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendSeconds) override;
+	virtual bool PlayOneShot(UAnimSequence* Sequence, bool bLoop, float BlendInSeconds,
+		float BlendOutSeconds) override;
 	virtual void StopOneShot(float BlendSeconds) override;
+
+	// --- the reaction seam (LIFE5) ----------------------------------------------------------------
+	//
+	// Hand the graph's reaction branch a fan or a clip and switch it on. The branch REPLACES the base
+	// pose rather than riding over it, so this is not a second one-shot slot: nothing the state
+	// machine or the montage slot is doing is stopped, and the moment the branch fades back out the
+	// locomotion pose is exactly where it would have been.
+	//
+	// Returns false for a malformed play or a class with no compiled branch. Both are real refusals a
+	// caller acts on — the second is a stale generated asset, and the caller's own fallback is what
+	// keeps the body reacting at all.
+	bool PlayReaction(const FElysiumReactionPlay& Play);
+	// Drop the branch. The engine's own out-fade still runs: this clears `bReactionActive`, which is
+	// what makes the base child the newly-active one, and the blend list takes `BlendTime_1` from
+	// there. A caller wanting an instant stop is asking for a hard cut and does not have one.
+	void StopReaction();
+	// Whether this compiled class actually carries the tagged reaction branch. False on the plain
+	// native class and on a generated class built before the branch existed — a real case, and the
+	// reason the caller has a collapse path rather than an assertion.
+	bool HasCompiledReactionBranch() const;
 
 	// --- the cinematic clip path ------------------------------------------------------------------
 	//
@@ -423,6 +526,25 @@ private:
 	// The montage the one-shot seam is currently running, so `StopOneShot` ends that one rather than
 	// whatever else the slot may have picked up.
 	UPROPERTY(Transient) TObjectPtr<UAnimMontage> ActiveSlotMontage = nullptr;
+
+	// --- the reaction's phase clock (LIFE5) --------------------------------------------------------
+	//
+	// **A phase clock, not a weight.** The engine owns every frame of the fade: `FAnimNode_BlendListBase`
+	// takes the newly-active child's own blend time and drives the weight itself, and nothing here ever
+	// writes one. What this counts down is when to ask for the fade BACK, which is the one thing the
+	// node cannot know — a reaction ends because its clip ended, and the node has no clip.
+	//
+	// It is seeded from `FElysiumReactionPlay::ActiveSeconds`, so `bReactionActive` drops exactly one
+	// out-fade before the branch's own end and the fade completes ON that end — the same instant the
+	// Reaction claim's `HoldSeconds` (`TotalSeconds`, the one other reading of that expression)
+	// expires and the locomotion publish takes the base back. The zero-blend stop that publish
+	// performs therefore finds a branch that has already faded, which is why the handover is
+	// structurally invisible rather than a tuned threshold.
+	float ReactionSecondsLeft = 0.0f;
+	// Resolved once per class, like the layer's node: the tag table is compiled state and cannot
+	// change under a live instance. `false` in the pair means "not looked up yet", never "absent".
+	mutable bool bReactionBranchResolved = false;
+	mutable bool bHasReactionBranch = false;
 
 	int32 MachineIndex = INDEX_NONE;
 	int32 StateIndex[ElysiumAnimGraph::NumGraphStates];

@@ -44,6 +44,17 @@ namespace ElysiumAnimGraph
 	// text free of any reference to a generated, game-derived profile asset.
 	inline constexpr const TCHAR* UpperBodyLayerTag = TEXT("ElysiumUpperBodyLayer");
 
+	// The graph tag on the reaction branch's own `FAnimNode_BlendListByBool` (LIFE5), read by the
+	// generator that stamps it and by anything that has to find the node on a compiled class, so the
+	// two cannot drift into two spellings of one node.
+	//
+	// The branch sits between the inertializer and the upper-body layer: `bReactionActive` picks
+	// either the reaction pose (a directional hit fan or a single clip) or the locomotion pose
+	// underneath it. Its two per-pose blend times ARE the asymmetric fade — `FAnimNode_BlendListBase`
+	// takes the newly-active child's own time, so entering the reaction uses the in-fade and
+	// returning to the base uses the out-fade.
+	inline constexpr const TCHAR* ReactionBranchTag = TEXT("ElysiumReactionBranch");
+
 	// Retail's own combine (`docs/vtmb/animation_and_movers.md` A.4c): the transition takes the
 	// LARGER of the outgoing clip's authored fade and the incoming clip's, scored right on 80 of 80
 	// recorded transitions where a current-only rule scores 20 of 26.
