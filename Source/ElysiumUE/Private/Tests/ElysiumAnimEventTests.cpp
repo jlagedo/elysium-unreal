@@ -75,7 +75,7 @@ namespace
 		return Phase;
 	}
 
-	// The same phase from a producer that found its clip already running — the state machine, or an
+	// The same phase from a producer that found its clip already running — the blend stack, or an
 	// arm resuming after a higher one displaced it. `AnchorCycle` is where its timeline was last
 	// dispatched from rather than the zero a started clip carries.
 	FElysiumClipPhase PhaseFrom(float Anchor, float Cycle, bool bLooping = true, uint32 PlayId = 1)
@@ -219,7 +219,7 @@ namespace
 	constexpr int32 GMinEventClipFrames = 4;
 	constexpr int32 GMaxEventClipFrames = 16;
 	// How late in the clip the tracked record may sit. The walk stops before the montage's own end —
-	// a one-shot that finishes hands the base back to the state machine, which is a different play —
+	// a one-shot that finishes hands the base back to the blend stack, which is a different play —
 	// so a record in the last quarter would need a walk that runs past the thing it is measuring.
 	constexpr float GMaxEventCycle = 0.7f;
 
@@ -599,7 +599,7 @@ bool FElysiumAnimEventWindowTest::RunTest(const FString&)
 
 	// --- A play found MID-FLIGHT resumes from its anchor, not from zero ----------------------------
 	{
-		// The producer that cannot start anything: the locomotion state machine is already advancing
+		// The producer that cannot start anything: the locomotion blend stack is already advancing
 		// its clip by the time anything looks at it, and an arm a higher-priority pose displaced has
 		// been advancing the whole time it was off. Both present a play the cursor has never seen at
 		// a cycle well past zero, and seeding `[0, cycle)` for them fires every record behind the
@@ -622,10 +622,10 @@ bool FElysiumAnimEventWindowTest::RunTest(const FString&)
 			IdsOf(Fired), FString(TEXT("2052")));
 	}
 
-	// --- A one-shot ending over a machine clip does not replay that clip's head ---------------------
+	// --- A one-shot ending over a locomotion clip does not replay that clip's head ------------------
 	{
 		// The reachable shape of the same defect, in the order it happens: a montage owns the channel,
-		// it ends, and the state machine underneath takes the channel back mid-clip as a play this
+		// it ends, and the blend stack underneath takes the channel back mid-clip as a play this
 		// cursor has never seen. The early record must not fire — the body passed it while the
 		// one-shot was posing, not now.
 		TArray<FElysiumAnimEvent> Timeline;
@@ -639,9 +639,9 @@ bool FElysiumAnimEventWindowTest::RunTest(const FString&)
 		ElysiumAnimEvents::Advance(&Timeline, Montage, Cursor, Fired);
 		TestEqual(TEXT("the one-shot walks its own timeline"), IdsOf(Fired), FString(TEXT("2050")));
 
-		// The montage ends; the machine's `walk` re-asserts at 0.62 as a play id 8.
+		// The montage ends; the stack's `walk` re-asserts at 0.62 as a play id 8.
 		ElysiumAnimEvents::Advance(&Timeline, PhaseFrom(0.62f, 0.62f, true, 8), Cursor, Fired);
-		TestEqual(TEXT("the machine taking the channel back fires nothing behind its phase"),
+		TestEqual(TEXT("the locomotion arm taking the channel back fires nothing behind its phase"),
 			IdsOf(Fired), FString());
 		TestEqual(TEXT("...and now names that play"), Cursor.PlayId, 8u);
 	}
@@ -1129,8 +1129,8 @@ bool FElysiumSequenceEventCarrierTest::RunTest(const FString&)
 
 	// A resolved locomotion selection first, which is the state every body in the running game is in
 	// before anything arms a clip on it. It is what gives the montage something to blend FROM — a
-	// one-shot over a machine holding no asset snaps in, and the still-blending half below would then
-	// be unobservable. Its label is deliberately one no timeline is filed under: the machine arm
+	// one-shot over a stack holding no asset snaps in, and the still-blending half below would then
+	// be unobservable. Its label is deliberately one no timeline is filed under: the locomotion arm
 	// publishes that label whenever the montage is not playing, and a base standing on the SAME label
 	// would fire the clip's records a second time from underneath.
 	FElysiumAnimationSelection Standing;
@@ -1185,7 +1185,7 @@ bool FElysiumSequenceEventCarrierTest::RunTest(const FString&)
 	// --- the walk ---------------------------------------------------------------------------------
 	//
 	// Ticked to just past the target record and no further. A non-looping montage that ENDS hands the
-	// base back to the state machine, which is a new play of a different clip — correct behaviour,
+	// base back to the blend stack, which is a new play of a different clip — correct behaviour,
 	// and not what this half is measuring.
 	const int32 TargetFrame = FMath::CeilToInt(TargetSeconds / FrameSeconds) + 1;
 	const int32 Frames = FMath::Min(TargetFrame + 2, FMath::FloorToInt(ClipSeconds / FrameSeconds));

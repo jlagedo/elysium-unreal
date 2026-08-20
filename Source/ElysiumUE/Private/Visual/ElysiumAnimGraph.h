@@ -18,15 +18,15 @@
 
 namespace ElysiumAnimGraph
 {
-	// The duration baked into every transition in the authored graph, as its inertialization
-	// request. It is a CEILING and never a value read off VtMB: the authored fade arrives at runtime
-	// through `TransitionSeconds` below, and requests merge by taking the smaller, so the runtime
-	// answer always wins. It exists so a frame whose request did not land blends visibly wrong
-	// rather than hard-cutting invisibly.
+	// The graph tag on the locomotion `FAnimNode_BlendStack` (S2), read by the generator that stamps
+	// it and by the native instance that looks the node up, so the two cannot drift into two
+	// spellings of one node.
 	//
-	// It is also the reason the graph asset encodes no game-derived timing, which
-	// `Content/ElysiumAuthored/README.md` forbids outright.
-	inline constexpr float TransitionCeilingSeconds = 0.5f;
+	// The stack IS the transitioner: one node holds the base channel, every request arrives on its
+	// four exposed pins, and the fade duration is the authored value on the `BlendTime` pin rather
+	// than a duration baked into a graph edge. The graph asset therefore encodes no game-derived
+	// timing at all, which `Content/ElysiumAuthored/README.md` forbids outright.
+	inline constexpr const TCHAR* LocomotionStackTag = TEXT("ElysiumLocomotionStack");
 
 	// The graph tag on the upper-body `FAnimNode_LayeredBoneBlend` (CCC10), read by both the
 	// generator that stamps it and the native instance that looks the node up, so the two cannot
@@ -141,15 +141,30 @@ namespace ElysiumAnimGraph
 	// no world and no body — every one of them failed in a way that compiled, exported and ran green.
 	// =============================================================================================
 
-	// Whether a `GetRelevantAnimTimeRemaining` answer describes the clip that was asked for.
+	// Whether a remaining-time answer describes the clip that was asked for.
 	//
-	// **The engine's failure value is `MAX_flt`, not zero.** Both
-	// `FAnimNode_StateMachine::GetRelevantAnimTimeRemaining` and `FAnimInstanceProxy`'s wrapper
-	// return it when no relevant asset player or no state machine is found. Read as a duration that
-	// is "a very long time left", it reports a clip as still playing forever — which parks whatever
-	// consumes it. Bounding against the clip's own length is what separates an answer from a
-	// refusal, because no honest remaining time exceeds the sequence it belongs to.
+	// **The bound is two-sided, because a producer can fail in either direction.** The blend stack's
+	// remaining time is its current player's own length less its adjusted time, so an empty stack —
+	// or one whose asset is not the one that was requested — answers ZERO: the clip reads as
+	// *finished*. The opposite failure is `MAX_flt`, which reads as *never finishing* and parks
+	// whatever waits on it. Neither is an answer, and this predicate rejects both: no honest
+	// remaining time exceeds the sequence it belongs to, and none is negative.
+	//
+	// A zero is indistinguishable from a genuinely completed clip, so the bound alone cannot catch the
+	// stack's failure direction. **The identity gate is what does, and it has to run first** — the
+	// caller asks whether the stack's own `GetAnimAsset()` is the asset it requested BEFORE reading
+	// any clock off it. Bounding an answer that was never about the right clip only makes it plausible.
 	bool IsPlayableRemaining(float RemainingSeconds, float ClipLengthSeconds);
+
+	// Whether a request has to force the blend stack to re-blend even though the asset did not change.
+	//
+	// `FAnimNode_BlendStack::ConditionalBlendTo` compares the requested asset against the playing one
+	// and returns without doing anything when they match — and `bLoop` is consumed only inside
+	// `BlendTo`, as an argument to the player it constructs. So a loop bit that flips on the SAME
+	// asset is silently ignored: the pin holds the new value, the player goes on with the old one, and
+	// nothing logs. `Crouch` is exactly that case (a non-looping into-pose republished as a held
+	// stance, `ShouldRepeatClip` above), so the predicate is what keeps the `bLoop` pin honest.
+	bool NeedsForcedReblend(bool bSameAsset, bool bLoopChanged);
 
 	// Whether a request that resolved no asset should hold the pose it already has.
 	//

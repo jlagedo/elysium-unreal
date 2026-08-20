@@ -2,8 +2,9 @@
 
 #if WITH_EDITOR
 
+#include "AlphaBlend.h"
 #include "Animation/AnimNodeBase.h"
-#include "Animation/AnimStateMachineTypes.h"
+#include "BlendStack/AnimNode_BlendStack.h"   // EBlendStack_BlendspaceUpdateMode
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
 #include "EdGraph/EdGraphPin.h"
@@ -105,11 +106,11 @@ namespace
 // The bootstrap that produced the tracked graph text, and what regenerates it when an engine upgrade
 // changes a node's layout.
 //
-// A state machine cannot be hand-written as T3D with any confidence: the text has to carry the
-// machine's own graph, every state's bound graph and every transition's rule graph as nested
-// objects, and `UAnimGraphNode_StateMachineBase::PostPasteNode` only fixes up a bound graph the text
-// already carries. So the shape is built once here, through the engine's own construction path, and
-// exported.
+// A node that owns a sub-graph cannot be hand-written as T3D with any confidence: the text has to
+// carry that graph and its terminal nodes as nested objects, and the node's own `PostPasteNode` only
+// fixes up a bound graph the text already carries. The blend stack is exactly such a node —
+// `UAnimGraphNode_BlendStack_Base::PostPlacedNewNode` builds its per-sample graph — so the shape is
+// built once here, through the engine's own construction path, and exported.
 //
 // It goes through reflection rather than through the editor AnimGraph module's types on purpose:
 // every step is a virtual on `UEdGraphNode` that the concrete node overrides, so the whole thing
@@ -135,24 +136,10 @@ namespace ElysiumAnimGraphBootstrap
 		Node->CreateNewGuid();
 		Node->NodePosX = X;
 		Node->NodePosY = Y;
-		// Virtual: this is what creates a state machine's own graph and a state's bound graph.
+		// Virtual: this is what creates a node's own sub-graph, such as the blend stack's sample graph.
 		Node->PostPlacedNewNode();
 		Node->AllocateDefaultPins();
 		return Node;
-	}
-
-	// A graph a node owns, by property name — `EditorStateMachineGraph` on a machine, `BoundGraph` on
-	// a state or a transition.
-	UEdGraph* OwnedGraph(UEdGraphNode* Node, const TCHAR* PropertyName)
-	{
-		if (Node == nullptr)
-		{
-			return nullptr;
-		}
-		const FObjectPropertyBase* Prop = CastField<FObjectPropertyBase>(
-			Node->GetClass()->FindPropertyByName(FName(PropertyName)));
-		return Prop != nullptr
-			? Cast<UEdGraph>(Prop->GetObjectPropertyValue_InContainer(Node)) : nullptr;
 	}
 
 	UEdGraphPin* FirstPin(UEdGraphNode* Node, EEdGraphPinDirection Direction)
@@ -346,8 +333,8 @@ namespace ElysiumAnimGraphBootstrap
 		return true;
 	}
 
-	// A plain property on the node itself rather than inside its runtime struct — a transition's
-	// `LogicType` and `CrossfadeDuration` are node-level editor settings.
+	// A plain property on the node itself rather than inside its runtime struct — `Tag` is declared
+	// on `UAnimGraphNode_Base` and is what the compiled tag table is keyed by.
 	template <typename T>
 	bool SetOwnValue(UEdGraphNode* Node, const TCHAR* Member, const T& Value)
 	{
@@ -438,9 +425,9 @@ namespace ElysiumAnimGraphBootstrap
 		return true;
 	}
 
-	// One `Get <variable>` feeding one pin. Every transition rule in the machine is exactly this, and
-	// so is every asset pin, so the graph never computes anything: the decision happened in C++ where
-	// it is asserted.
+	// One `Get <variable>` feeding one pin. Every driven input in this graph is exactly this — the
+	// base channel's four, every overlay asset, every blend time — so the graph never computes
+	// anything: the decision happened in C++ where it is asserted.
 	bool DriveFromBool(UEdGraph& Graph, UEdGraphPin* Target, const TCHAR* VariableName, int32 X, int32 Y)
 	{
 		if (Target == nullptr)
@@ -512,8 +499,9 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 
 		// Every wire is checked and a single miss refuses the export. A pin looked up by a name the
 		// node does not have is null, both `Link` and `DriveFromBool` no-op on null, and the graph
-		// still compiles — an unwired state evaluates to the reference pose, so the failure reaches
-		// the owner as a T-posed body rather than as an error. Nothing unwired becomes tracked text.
+		// still compiles — an unwired asset pin evaluates to the reference pose, so the failure
+		// reaches the owner as a T-posed body rather than as an error. Nothing unwired becomes
+		// tracked text.
 		int32 Failures = 0;
 		auto Wire = [&Failures](bool bLinked, const TCHAR* What)
 		{
@@ -526,28 +514,133 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 
 		// --- the spine ---------------------------------------------------------------------------
 		//
-		// The machine owns the body, one-shots layer over it on a slot, and one inertialization node
-		// carries every blend. The composition tail runs after the output pose, in the proxy, so it
-		// deliberately sits OUTSIDE the inertializer: axis interpolation is a rig rule over the
-		// finished pose, and inertializing it would lag the forearm twist behind the blend.
-		UEdGraphNode* Machine = Place(*Graph,
-			TEXT("/Script/AnimGraph.AnimGraphNode_StateMachine"), -900, 0);
+		// The blend stack owns the body, one-shots layer over it on a slot, and the inertialization
+		// node sits between the slot and the reaction branch. The composition tail runs after the
+		// output pose, in the proxy, so it deliberately sits OUTSIDE the inertializer: axis
+		// interpolation is a rig rule over the finished pose, and inertializing it would lag the
+		// forearm twist behind the blend.
+		//
+		// **The stack IS the locomotion transitioner** (S2), which is why nothing below places a
+		// state, a conduit or a transition rule. It carries no vocabulary and no edges: the
+		// resolver's answer arrives whole on four pins — the asset, its loop bit, the authored fade
+		// and the grid's steering pair — and `FAnimNode_BlendStack` pushes one player per request
+		// and cross-fades the ones already standing on it. That is retail's own transitioner: a
+		// selection names a sequence, the previous one keeps playing while it fades out, and the
+		// fade duration is the authored value rather than an edge property.
+		UEdGraphNode* Stack = Place(*Graph,
+			TEXT("/Script/BlendStackEditor.AnimGraphNode_BlendStack"), -900, 0);
 		UEdGraphNode* Slot = Place(*Graph, TEXT("/Script/AnimGraph.AnimGraphNode_Slot"), -560, 0);
 		UEdGraphNode* Inertia = Place(*Graph,
 			TEXT("/Script/AnimGraph.AnimGraphNode_Inertialization"), -280, 0);
-		if (Machine == nullptr || Slot == nullptr || Inertia == nullptr)
+		if (Stack == nullptr || Slot == nullptr || Inertia == nullptr)
 		{
 			UE_LOG(LogTemp, Error, TEXT("[animbp] a spine node class was not found"));
 			return;
 		}
+
+		// --- the stack's own settings ---------------------------------------------------------------
+		//
+		// Every one of these is a HIDDEN property rather than a shown pin, so the value on the node
+		// is what the compiler bakes — `SetPinDefault` above would write a pin that does not exist.
+		// Each write is `Wire`-checked for the same reason every link is: a property an engine
+		// upgrade renamed answers false, and the export is refused rather than shipping a node
+		// silently running an engine default.
+		{
+			// Retail's transition curve, recorded at `0x10225158` as the constant the blend's alpha
+			// is shaped by (`docs/vtmb/animation_and_movers.md`): `3t^2 - 2t^3`, which is exactly
+			// `EAlphaBlendOption::HermiteCubic`. It equals the engine's own default, so it does not
+			// appear in the exported text at all — the compiled-asset test is the only proof it is
+			// what the node carries, and it is load-bearing because `UAnimGraphNode_BlendStack`'s
+			// own `Serialize` downgrades this property to `Linear` on an old custom version.
+			Wire(SetNodeValue<uint8>(Stack, TEXT("BlendOption"),
+				static_cast<uint8>(EAlphaBlendOption::HermiteCubic)), TEXT("stack BlendOption"));
+			// The requested start time, and the default is a trap: `-1` is not "wherever the clip
+			// is", it is the value `MaxAnimationDeltaTime` would be compared against and the time a
+			// new player is seeded at. Every clip this graph plays starts at its head.
+			Wire(SetNodeValue<float>(Stack, TEXT("AnimationTime"), 0.f), TEXT("stack AnimationTime"));
+			// **A named divergence.** Retail caps concurrent transitions at NOTHING: the append path
+			// is `EnsureCapacity(1)` plus `InsertMultiple` with no bound check, and a record leaves
+			// only when its own weight reaches zero (`docs/vtmb/animation_and_movers.md`). Four is
+			// the deepest stack the capture ever observed (`0 -> 1 -> 2 -> 3 -> 4`), not a rule the
+			// engine enforces. This node needs a number, so it takes the observed maximum — and
+			// `bStoreBlendedPose` below is what keeps the divergence from being a dropped clip: a
+			// fifth request accumulates the overflow into a stored pose instead of discarding a
+			// player mid-fade, which would be a pop retail never produces.
+			Wire(SetNodeValue<int32>(Stack, TEXT("MaxActiveBlends"), 4), TEXT("stack MaxActiveBlends"));
+			Wire(SetNodeBool(Stack, TEXT("bStoreBlendedPose"), true), TEXT("stack bStoreBlendedPose"));
+			// A new request never takes the most recent player's slot: retail's transitioner adds
+			// the incoming clip and leaves the outgoing one fading, so overwriting a player that is
+			// still blending in would drop a clip retail keeps.
+			Wire(SetNodeValue<float>(Stack, TEXT("MaxBlendInTimeToOverrideAnimation"), 0.f),
+				TEXT("stack MaxBlendInTimeToOverrideAnimation"));
+			// Deeper players fade at their own stated rate rather than accelerated, so a nested
+			// transition takes the duration `TransitionSeconds` answered for it.
+			Wire(SetNodeValue<float>(Stack, TEXT("PlayerDepthBlendInTimeMultiplier"), 1.f),
+				TEXT("stack PlayerDepthBlendInTimeMultiplier"));
+			// The stack cross-fades its own players. Routing the blend to the inertializer instead
+			// would hand one node's request to another and make the duration on the pin advisory.
+			Wire(SetNodeBool(Stack, TEXT("bUseInertialBlend"), false), TEXT("stack bUseInertialBlend"));
+			// **The most dangerous default in the node.** `InitialOnly` samples a blend space's xy
+			// once, at `BlendTo`, and never again — so a gait fan would freeze at the steering value
+			// it was entered with and `move_yaw` would stop turning the body.
+			Wire(SetNodeValue<uint8>(Stack, TEXT("BlendspaceUpdateMode"),
+				static_cast<uint8>(EBlendStack_BlendspaceUpdateMode::UpdateActiveOnly)),
+				TEXT("stack BlendspaceUpdateMode"));
+			// The other dangerous default, and it is 0. `ConditionalBlendTo` re-blends whenever the
+			// requested parameters differ from the playing player's by more than this — and a
+			// SEQUENCE player answers `GetBlendParameters()` with the zero vector, so a body walking
+			// with a non-zero `move_yaw` on a plain clip would push a new player every single frame.
+			// A threshold no steering value can reach is what turns the comparison off; the fan's
+			// own steering is applied by `UpdateBlendspaceParameters` above instead.
+			Wire(SetNodeValue<float>(Stack, TEXT("BlendParametersDeltaThreshold"), 1.0e6f),
+				TEXT("stack BlendParametersDeltaThreshold"));
+			// **False, against the engine's `true`.** The reaction branch makes this node
+			// non-relevant while a full-weight flinch stands — `FAnimNode_BlendListBase` skips a
+			// child under `ZERO_ANIMWEIGHT_THRESH` — so the true default would `Reset()` the stack
+			// on the frame the flinch releases and restart the gait at frame 0 on every hit. False
+			// keeps the frozen clip, which is what a body standing mid-gait actually looks like.
+			Wire(SetNodeBool(Stack, TEXT("bResetOnBecomingRelevant"), false),
+				TEXT("stack bResetOnBecomingRelevant"));
+			// `MaxAnimationDeltaTime` stays at its `-1` (the desync re-blend is off, because nothing
+			// drives `AnimationTime`), and the notify filter, the mirror table, the blend profile and
+			// the experimental stitch fields stay at their own defaults. The sync-group fields are
+			// **not written**: they are `WITH_EDITORONLY_DATA` `FoldProperty` members, so a
+			// reflection write there is invisible to the runtime and breaks compile validation —
+			// and `DoNotSync` is already the answer, because two clips of different lengths must not
+			// be forced onto a shared normalized time.
+			Wire(SetOwnValue<FName>(Stack, TEXT("Tag"),
+				FName(ElysiumAnimGraph::LocomotionStackTag)), TEXT("stack tag"));
+		}
+
+		// --- the four pins the whole base channel arrives on ----------------------------------------
+		//
+		// Same rule as every other node in this graph: it holds no asset and decides nothing. The
+		// resolver answered, the native instance projected the answer, and these carry it.
+		ExposePin(Stack, TEXT("AnimationAsset"));
+		Wire(DriveFromBool(*Graph, PinNamed(Stack, TEXT("AnimationAsset")),
+			TEXT("RequestedAsset"), -1200, -120), TEXT("stack AnimationAsset pin"));
+		ExposePin(Stack, TEXT("bLoop"));
+		Wire(DriveFromBool(*Graph, PinNamed(Stack, TEXT("bLoop")),
+			TEXT("bRequestedLooping"), -1200, -40), TEXT("stack bLoop pin"));
+		// The authored fade, whole and unclamped. Nothing in the graph caps it, which is the point:
+		// `ElysiumAnimGraph::TransitionSeconds` is the only authority on how long a transition takes.
+		ExposePin(Stack, TEXT("BlendTime"));
+		Wire(DriveFromBool(*Graph, PinNamed(Stack, TEXT("BlendTime")),
+			TEXT("RequestedBlendSeconds"), -1200, 40), TEXT("stack BlendTime pin"));
+		// The grid's steering pair as one vector, because that is the shape the node takes it in.
+		// Ignored outright when the asset is a sequence.
+		ExposePin(Stack, TEXT("BlendParameters"));
+		Wire(DriveFromBool(*Graph, PinNamed(Stack, TEXT("BlendParameters")),
+			TEXT("RequestedBlendParameters"), -1200, 120), TEXT("stack BlendParameters pin"));
+
 		// `DefaultSlot` belongs to `DefaultGroup` on every skeleton by construction, so no bake has
 		// to register a slot for the one-shot seam to land.
 		SetNodeValue<FName>(Slot, TEXT("SlotName"), FName(TEXT("DefaultSlot")));
 		// Without this a one-shot freezes the gait underneath it and the return to walking pops.
 		SetNodeBool(Slot, TEXT("bAlwaysUpdateSourcePose"), true);
 
-		Wire(Link(FirstPin(Machine, EGPD_Output), FirstPin(Slot, EGPD_Input)),
-			TEXT("machine -> slot"));
+		Wire(Link(FirstPin(Stack, EGPD_Output), FirstPin(Slot, EGPD_Input)),
+			TEXT("blend stack -> slot"));
 		Wire(Link(FirstPin(Slot, EGPD_Output), FirstPin(Inertia, EGPD_Input)),
 			TEXT("slot -> inertialization"));
 
@@ -555,7 +648,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 		//
 		// A reaction REPLACES the locomotion pose rather than riding over it, so it sits on the base
 		// channel between the inertializer and the upper-body layer: `bReactionActive` picks either
-		// the reaction pose or everything the machine and the one-shot slot produced.
+		// the reaction pose or everything the blend stack and the one-shot slot produced.
 		//
 		// The two per-pose blend times ARE the asymmetric fade. `FAnimNode_BlendListBase` takes the
 		// NEWLY ACTIVE child's own time, so entering the reaction uses the in-fade and returning to
@@ -635,11 +728,18 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// newly-active child only when that child's weight is still <= `ZERO_ANIMWEIGHT_THRESH`, so
 			// a reaction that fires again while its own fan is still fading is never covered — and when
 			// a full-weight reaction ends, the reset lands on the BASE child instead, re-initializing
-			// the state machine to its entry state at elapsed zero, wiping the inertializer's pose
-			// history and resetting the slot's bookkeeping. That is a hard cut on release, which is the
-			// opposite of what the out-fade exists for. The restart a retrigger needs comes from
-			// republishing the asset: a sequence player whose `Sequence` pin changes restarts, and so
-			// does the blend space player on a new `BlendSpace`.
+			// the whole base spine at elapsed zero: the blend stack starts its gait again from frame 0,
+			// the inertializer's pose history is wiped and the slot's bookkeeping is reset. That is a
+			// hard cut on release, which is the opposite of what the out-fade exists for. The restart a
+			// retrigger needs comes from republishing the asset: a sequence player whose `Sequence` pin
+			// changes restarts, and so does the blend space player on a new `BlendSpace`.
+			//
+			// **It is one half of a pair, and the other half is on the stack.** The same
+			// `ZERO_ANIMWEIGHT_THRESH` skip that makes the base child un-updated also makes the blend
+			// stack NON-RELEVANT for the duration of a full-weight flinch, and
+			// `FAnimNode_BlendStack::NeedsReset` would then reset it on the frame it becomes relevant
+			// again. `bResetOnBecomingRelevant = false` above is what refuses that; together the two
+			// are what stops a flinch release restarting the gait.
 			//
 			// The transition type and the blend curve stay at the engine's own defaults on purpose:
 			// choosing a curve here would pre-empt the separate sequence-blend-fidelity call, which
@@ -653,7 +753,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 
 		// --- the upper-body layer (CCC10) ----------------------------------------------------------
 		//
-		// Sits after the inertializer, outside the machine: a weapon layer rides beside the
+		// Sits after the inertializer, outside the base channel: a weapon layer rides beside the
 		// locomotion state rather than through it, so it does not wait on a gait transition or
 		// interrupt one. Both riders are grip-agnostic and asset-driven, matching every other node
 		// in this graph — the resolver decides what plays, the graph only composes it.
@@ -744,185 +844,6 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// whichever single output pose pin nothing else took to the schema's own output node.
 		}
 
-		UEdGraph* MachineGraph = OwnedGraph(Machine, TEXT("EditorStateMachineGraph"));
-		if (MachineGraph == nullptr)
-		{
-			UE_LOG(LogTemp, Error, TEXT("[animbp] the state machine built no graph"));
-			return;
-		}
-		// The name `UAnimInstance::GetStateMachineIndex` is asked for.
-		MachineGraph->Rename(TEXT("Locomotion"), nullptr,
-			REN_DontCreateRedirectors | REN_NonTransactional);
-
-		// --- the eight states ----------------------------------------------------------------------
-		//
-		// Every state takes the sequence-or-blend-space pair. A grid-shaped selection whose activity
-		// routes here plays the fan; a plain label plays the sequence. The graph knows only which
-		// asset it was handed — Idle, Crouch, Leap, Falling and Land are not sequence-only.
-		struct FStateSpec { const TCHAR* Name; const TCHAR* Wants; };
-		const FStateSpec Specs[] = {
-			{ TEXT("Idle"),    TEXT("bWantsIdle") },
-			{ TEXT("Walk"),    TEXT("bWantsWalk") },
-			{ TEXT("Run"),     TEXT("bWantsRun") },
-			{ TEXT("Sneak"),   TEXT("bWantsSneak") },
-			{ TEXT("Crouch"),  TEXT("bWantsCrouch") },
-			{ TEXT("Leap"),    TEXT("bWantsLeap") },
-			{ TEXT("Falling"), TEXT("bWantsFalling") },
-			{ TEXT("Land"),    TEXT("bWantsLand") },
-		};
-		const int32 NumStates = UE_ARRAY_COUNT(Specs);
-		UEdGraphNode* StateNodes[UE_ARRAY_COUNT(Specs)] = {};
-
-		for (int32 i = 0; i < NumStates; ++i)
-		{
-			UEdGraphNode* State = Place(*MachineGraph, TEXT("/Script/AnimGraph.AnimStateNode"),
-				(i % 4) * 340 - 500, (i / 4) * 340 - 300);
-			StateNodes[i] = State;
-			UEdGraph* Inner = OwnedGraph(State, TEXT("BoundGraph"));
-			if (Inner == nullptr)
-			{
-				UE_LOG(LogTemp, Error, TEXT("[animbp] a state built no graph"));
-				return;
-			}
-			// A state's name IS its bound graph's name, which is what the native side resolves by.
-			Inner->Rename(Specs[i].Name, nullptr, REN_DontCreateRedirectors | REN_NonTransactional);
-
-			UEdGraphPin* ResultPin = nullptr;
-			for (UEdGraphNode* Node : Inner->Nodes)
-			{
-				if (Node != nullptr && !Node->CanUserDeleteNode())
-				{
-					ResultPin = FirstPin(Node, EGPD_Input);
-				}
-			}
-
-			// Every player takes its asset from a pin and holds none itself. That is what lets one
-			// graph pose every model the resolver picks assets for, and what keeps the tracked graph
-			// text free of any reference to generated content.
-			UEdGraphNode* Sequence = Place(*Inner,
-				TEXT("/Script/AnimGraph.AnimGraphNode_SequencePlayer"), -420, 0);
-			ExposePin(Sequence, TEXT("Sequence"));
-			ExposePin(Sequence, TEXT("bLoopAnimation"));
-			Wire(DriveFromBool(*Inner, PinNamed(Sequence, TEXT("Sequence")),
-				TEXT("RequestedSequence"), -720, -40), TEXT("state Sequence pin"));
-			Wire(DriveFromBool(*Inner, PinNamed(Sequence, TEXT("bLoopAnimation")),
-				TEXT("bRequestedLooping"), -720, 60), TEXT("state bLoopAnimation pin"));
-
-			// A grid stands on its baked fan, steered by `move_yaw`. The sequence player beside it is
-			// for a label with no baked fan: the resolver answers with the single selected cell and the
-			// same state plays it.
-			UEdGraphNode* Space = Place(*Inner,
-				TEXT("/Script/AnimGraph.AnimGraphNode_BlendSpacePlayer"), -420, -220);
-			ExposePin(Space, TEXT("BlendSpace"));
-			Wire(DriveFromBool(*Inner, PinNamed(Space, TEXT("BlendSpace")),
-				TEXT("RequestedBlendSpace"), -720, -260), TEXT("state BlendSpace pin"));
-			Wire(DriveFromBool(*Inner, PinNamed(Space, TEXT("X")), TEXT("GridAxis0"), -720, -180),
-				TEXT("state X pin"));
-
-			UEdGraphNode* Pick = Place(*Inner,
-				TEXT("/Script/AnimGraph.AnimGraphNode_BlendListByBool"), -160, -100);
-			Wire(DriveFromBool(*Inner, PinNamed(Pick, TEXT("bActiveValue")),
-				TEXT("bHasBlendSpace"), -420, 180), TEXT("state bActiveValue"));
-			// `BlendPose` is an array property, so the pins are `BlendPose_<index>`; "True Pose" and
-			// "False Pose" are only friendly labels and match no pin. Index 0 is the TRUE branch —
-			// `UAnimGraphNode_BlendListByBool::CustomizePinData` flips the pair deliberately so that
-			// true reads topmost in the editor.
-			Wire(Link(FirstPin(Space, EGPD_Output), PinNamed(Pick, TEXT("BlendPose_0"))),
-				TEXT("state blend space -> true pose"));
-			Wire(Link(FirstPin(Sequence, EGPD_Output), PinNamed(Pick, TEXT("BlendPose_1"))),
-				TEXT("state sequence -> false pose"));
-			Wire(Link(FirstPin(Pick, EGPD_Output), ResultPin), TEXT("state pick -> result"));
-		}
-
-		// --- the hub -------------------------------------------------------------------------------
-		//
-		// Every state exits to one conduit when the request stops matching what is playing, and the
-		// conduit enters whichever state does match. Sixteen transitions instead of fifty-six, with
-		// every pair still reachable, because `FindValidTransition` recurses through a conduit and
-		// resolves to the conduit-to-state transition's own settings.
-		UEdGraphNode* Dispatch = Place(*MachineGraph,
-			TEXT("/Script/AnimGraph.AnimStateConduitNode"), 60, 60);
-		if (Dispatch == nullptr)
-		{
-			UE_LOG(LogTemp, Error, TEXT("[animbp] no conduit class"));
-			return;
-		}
-		if (UEdGraph* ConduitGraph = OwnedGraph(Dispatch, TEXT("BoundGraph")))
-		{
-			ConduitGraph->Rename(TEXT("Dispatch"), nullptr,
-				REN_DontCreateRedirectors | REN_NonTransactional);
-			// A conduit carries its own rule, and an unconnected one never fires. This one is a pure
-			// junction, so it always passes and the decision stays on the edges either side of it.
-			for (UEdGraphNode* Node : ConduitGraph->Nodes)
-			{
-				if (Node != nullptr && !Node->CanUserDeleteNode())
-				{
-					if (UEdGraphPin* Enter = FirstPin(Node, EGPD_Input))
-					{
-						Enter->DefaultValue = TEXT("true");
-					}
-				}
-			}
-		}
-
-		// Entry goes to Idle: a body that has not been told anything stands.
-		for (UEdGraphNode* Node : MachineGraph->Nodes)
-		{
-			if (Node != nullptr && !Node->CanUserDeleteNode() && Node != Dispatch)
-			{
-				Wire(Link(FirstPin(Node, EGPD_Output), FirstPin(StateNodes[0], EGPD_Input)),
-					TEXT("entry -> Idle"));
-			}
-		}
-
-		auto MakeTransition = [&MachineGraph, &Wire, &Failures](UEdGraphNode* From, UEdGraphNode* To,
-			const TCHAR* Rule, int32 X, int32 Y)
-		{
-			UEdGraphNode* T = Place(*MachineGraph,
-				TEXT("/Script/AnimGraph.AnimStateTransitionNode"), X, Y);
-			if (T == nullptr)
-			{
-				++Failures;
-				UE_LOG(LogTemp, Error, TEXT("[animbp] no transition class"));
-				return;
-			}
-			Wire(Link(FirstPin(From, EGPD_Output), FirstPin(T, EGPD_Input)), TEXT("-> transition"));
-			Wire(Link(FirstPin(T, EGPD_Output), FirstPin(To, EGPD_Input)), TEXT("transition ->"));
-
-			// Inertialization, at a CEILING rather than an authored value. The real duration arrives
-			// at runtime through `RequestSlotGroupInertialization`, and requests merge by taking the
-			// smaller, so the runtime answer always wins. The ceiling exists so a frame whose request
-			// did not land blends visibly wrong rather than hard-cutting invisibly — and so the graph
-			// asset encodes no game-derived timing, which the authored-content policy forbids.
-			SetOwnValue<uint8>(T, TEXT("LogicType"),
-				static_cast<uint8>(ETransitionLogicType::TLT_Inertialization));
-			SetOwnValue<float>(T, TEXT("CrossfadeDuration"),
-				ElysiumAnimGraph::TransitionCeilingSeconds);
-
-			if (UEdGraph* Rules = OwnedGraph(T, TEXT("BoundGraph")))
-			{
-				// The result node is found BEFORE anything is added: `DriveFromBool` places a node
-				// into this same array, and walking it while it grows is an ensure.
-				UEdGraphPin* Enter = nullptr;
-				for (UEdGraphNode* Node : Rules->Nodes)
-				{
-					if (Node != nullptr && !Node->CanUserDeleteNode())
-					{
-						Enter = FirstPin(Node, EGPD_Input);
-					}
-				}
-				Wire(DriveFromBool(*Rules, Enter, Rule, -320, 0), Rule);
-			}
-		};
-
-		for (int32 i = 0; i < NumStates; ++i)
-		{
-			MakeTransition(StateNodes[i], Dispatch, TEXT("bStateChanged"),
-				(i % 4) * 200 - 420, (i / 4) * 120 - 180);
-			MakeTransition(Dispatch, StateNodes[i], Specs[i].Wants,
-				(i % 4) * 200 - 360, (i / 4) * 120 - 120);
-		}
-
 		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);
 
 		TSet<UObject*> Nodes;
@@ -943,8 +864,8 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 		FString Text;
 		FEdGraphUtilities::ExportNodesToText(Nodes, Text);
 		FFileHelper::SaveStringToFile(Text, *Args[1]);
-		UE_LOG(LogTemp, Display, TEXT("[animbp] built %d states, every wire connected, wrote %d chars"),
-			NumStates, Text.Len());
+		UE_LOG(LogTemp, Display, TEXT("[animbp] built %d node(s), every wire connected, wrote %d chars"),
+			Nodes.Num(), Text.Len());
 	}));
 
 #else

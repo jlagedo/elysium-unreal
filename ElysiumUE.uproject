@@ -36,6 +36,10 @@
 			"Enabled": true
 		},
 		{
+			"Name": "BlendStack",
+			"Enabled": true
+		},
+		{
 			"Name": "ElysiumBaked",
 			"Enabled": true
 		},

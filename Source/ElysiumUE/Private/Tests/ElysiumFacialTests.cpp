@@ -3086,8 +3086,8 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 		return Out;
 	};
 
-	// Second pose: a resolved idle, settled past the transition ceiling so what is measured is the
-	// clip rather than the inertialization still ramping out of the bind pose.
+	// Second pose: a resolved idle, settled well past the longest authored fade so what is measured
+	// is the clip rather than a blend still ramping out of the bind pose.
 	const FElysiumAnimationSelection Idle = ResolveFor(TEXT("ACT_IDLE"), /*Generation=*/1);
 	FElysiumResolvedAnimation Assets;
 	Assets.Sequence = ElysiumNpcVisual::LoadBakedClip(Mesh, Idle.OwnerStem, Idle.AnimationName);
@@ -3100,7 +3100,7 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 	Biped->PublishSelection(Idle, Assets);
 	TArray<FTransform> IdlePose;
 	Evaluate(/*Frames=*/24, 1.f / 30.f,
-		IdlePose);   // 0.8 s, past ElysiumAnimGraph::TransitionCeilingSeconds
+		IdlePose);   // 0.8 s, past the corpus's longest authored fade (0.5 s)
 
 	const ElysiumPose::FDeviation FromBind = ElysiumPose::Measure(BindPose, IdlePose);
 	AddInfo(FString::Printf(TEXT("'%s' stood '%s'@'%s': %d of %d non-root bones left the bind pose "
@@ -3165,6 +3165,123 @@ bool FElysiumPlayerGraphInstanceTest::RunTest(const FString&)
 		HeldFromBind.MovedBones > PosedBones / 4);
 	TestEqual(TEXT("and the graph still holds the selection it was actually playing"),
 		Biped->GetAppliedSelection().AnimationName, StandingName);
+
+	// --- the hard cut, on the frame it lands (S2) --------------------------------------------------
+	//
+	// `flags & 0x2` is the most common authored transition behaviour in the corpus — 2,642 of 5,836
+	// sequences — and it is the one blend a fade cannot be mistaken for after the fact. It is the
+	// blend stack that has to honour it now: a `BlendTime` of zero makes the new player full-weight
+	// on its first update, so the very next evaluated frame IS the incoming clip and nothing of the
+	// outgoing one survives. A `BlendTime` pin the generator never wired, or a node left on its own
+	// 0.2 default, both leave a visible cross-fade here instead — and a cross-fade halfway between
+	// two real clips is a plausible pose that nothing logs.
+	//
+	// The reference is a SECOND body of the same mesh and the same generated class, standing the
+	// same clip as its own first publish — which snaps for the "nothing to fade from" reason and so
+	// poses that clip's head. Comparing against the graph's own answer rather than against a
+	// hand-composed track read is what keeps this an assertion about the transition and not about
+	// pose reconstruction.
+	{
+		// A second clip, resolved the same way the first was. It has to be a plain sequence and a
+		// different one: a fan would put the comparison at the mercy of two steering values, and the
+		// same clip would make a failed cut indistinguishable from a correct one.
+		const TCHAR* const Candidates[] = {
+			TEXT("ACT_RUN"), TEXT("ACT_WALK"), TEXT("ACT_CROUCH"), TEXT("ACT_SNEAK"),
+			TEXT("ACT_LEAP"), TEXT("ACT_LAND"),
+		};
+		FElysiumAnimationSelection Cut;
+		UAnimSequence* CutClip = nullptr;
+		for (const TCHAR* Activity : Candidates)
+		{
+			const FElysiumAnimationSelection Candidate = ResolveFor(Activity, /*Generation=*/5);
+			if (!Candidate.IsResolved()
+				|| Candidate.AssetKind != EElysiumAnimAssetKind::Sequence
+				|| Candidate.AnimationName.Equals(Idle.AnimationName, ESearchCase::IgnoreCase))
+			{
+				continue;
+			}
+			if (UAnimSequence* Loaded = ElysiumNpcVisual::LoadBakedClip(Mesh, Candidate.OwnerStem,
+				Candidate.AnimationName))
+			{
+				Cut = Candidate;
+				CutClip = Loaded;
+				break;
+			}
+		}
+
+		if (CutClip == nullptr)
+		{
+			AddWarning(FString::Printf(
+				TEXT("the hard cut is unproven: '%s' resolves no second single-clip activity"), *Stem));
+		}
+		else
+		{
+			// Back onto the idle, settled, so the outgoing pose is a real clip rather than the held
+			// miss above.
+			FElysiumResolvedAnimation IdleAgain;
+			IdleAgain.Sequence = Assets.Sequence;
+			FElysiumAnimationSelection Standing = Idle;
+			Standing.Generation = 4;
+			Biped->PublishSelection(Standing, IdleAgain);
+			TArray<FTransform> BeforeCut;
+			Evaluate(/*Frames=*/24, 1.f / 30.f, BeforeCut);
+
+			Cut.bSnap = true;
+			// Stated apart from the snap on purpose: a non-zero authored fade is what the hard cut
+			// has to override, so a rule that merely forwarded `FadeSeconds` would pass on zero.
+			Cut.FadeSeconds = 0.3f;
+			FElysiumResolvedAnimation CutAssets;
+			CutAssets.Sequence = CutClip;
+			Biped->PublishSelection(Cut, CutAssets);
+			// A zero delta: what is under test is the weight the new player entered at, not how far
+			// it has since advanced.
+			TArray<FTransform> AfterCut;
+			Evaluate(/*Frames=*/1, 0.f, AfterCut);
+
+			const FElysiumBlendReport& CutBlend = Biped->GetBlendReport();
+			TestEqual(TEXT("the hard cut asks for no fade at all"), CutBlend.RequestedSeconds, 0.f);
+			TestTrue(TEXT("...named as the incoming clip's authored snap"),
+				CutBlend.bSnap && !CutBlend.bFirstPublish);
+
+			// The reference body: same mesh, same generated class, this clip as its first publish.
+			AActor* RefOwner = World->SpawnActor<AActor>();
+			USkeletalMeshComponent* RefComp = NewObject<USkeletalMeshComponent>(RefOwner);
+			RefComp->SetMobility(EComponentMobility::Movable);
+			RefComp->SetSkeletalMeshAsset(Mesh);
+			RefComp->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+			RefComp->SetAnimInstanceClass(Graph);
+			RefOwner->SetRootComponent(RefComp);
+			RefComp->RegisterComponent();
+			RefComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			UElysiumBipedAnimInstance* RefInst =
+				Cast<UElysiumBipedAnimInstance>(RefComp->GetAnimInstance());
+			if (!TestNotNull(TEXT("the reference body stands on the same generated graph"), RefInst))
+			{
+				return false;
+			}
+			// The compressed data has to be resident before the clip is posed, or the same call
+			// answers out of the raw model on one run and the compressed one on the next.
+			CutClip->WaitOnExistingCompression();
+			FElysiumAnimationSelection RefStanding = Cut;
+			RefStanding.Generation = 1;
+			RefStanding.bSnap = false;
+			RefInst->PublishSelection(RefStanding, CutAssets);
+			RefComp->TickAnimation(0.f, /*bNeedsValidRootMotion=*/false);
+			RefComp->RefreshBoneTransforms(/*TickFunction=*/nullptr);
+			const TArray<FTransform> CutHead = RefComp->GetComponentSpaceTransforms();
+
+			const ElysiumPose::FDeviation Moved = ElysiumPose::Measure(BeforeCut, AfterCut);
+			const ElysiumPose::FDeviation Landed = ElysiumPose::Measure(CutHead, AfterCut);
+			AddInfo(FString::Printf(
+				TEXT("'%s' -> '%s' snapped: %.1f deg from the outgoing pose, %.3f deg from the "
+				     "incoming clip's head"),
+				*Idle.AnimationName, *Cut.AnimationName, Moved.MaxDegrees, Landed.MaxDegrees));
+			TestTrue(TEXT("a hard cut leaves the pose it was playing on the very next frame"),
+				Moved.MaxDegrees > 5.f);
+			TestTrue(TEXT("...and lands exactly on the incoming clip rather than halfway to it"),
+				Landed.MaxDegrees < 0.5f);
+		}
+	}
 
 	// The composition stage, installed the way BuildNpcVisual installs it.
 	Inst->SetCompositionRig(Rig);

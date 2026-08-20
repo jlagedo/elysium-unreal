@@ -1679,8 +1679,11 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 
 	// --- what the graph is posing from ---------------------------------------------------------
 	ImGui::SeparatorText("Graph");
+	// The transition flag comes off the blend REPORT rather than off a live property: the graph
+	// carries no state machine to be mid-transition in, so the only place the crossing is still
+	// stated is the record written when the blend was asked for.
 	ImGui::Text("state %s%s", ElysiumAnimGraph::StateName(Graph->RequestedState),
-		Graph->bStateChanged ? "  (changing)" : "");
+		Graph->GetBlendReport().bStateTransition ? "  (changing)" : "");
 	ImGui::Text("move_yaw %.1f    speed %.1f    axis0 %.1f    %s",
 		Graph->MoveYaw, Graph->Speed, Graph->GridAxis0,
 		Graph->bHasBlendSpace ? "blend space" : "one clip");

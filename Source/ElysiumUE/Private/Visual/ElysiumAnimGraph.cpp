@@ -187,6 +187,13 @@ namespace ElysiumAnimGraph
 			&& RemainingSeconds <= ClipLengthSeconds + UE_KINDA_SMALL_NUMBER;
 	}
 
+	bool NeedsForcedReblend(bool bSameAsset, bool bLoopChanged)
+	{
+		// Only on the same asset: a different asset re-blends on its own, and forcing one there would
+		// ask the stack to push a second player for the transition it is already performing.
+		return bSameAsset && bLoopChanged;
+	}
+
 	bool ShouldHoldPose(bool bHasAppliedOnce, bool bHasSequence, bool bHasBlendSpace)
 	{
 		return bHasAppliedOnce && !bHasSequence && !bHasBlendSpace;

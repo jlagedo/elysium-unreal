@@ -3,13 +3,13 @@
 // `UElysiumBipedAnimInstance::PlayOneShot` answers a graph-backed body over a dynamic slot montage,
 // and a dynamic montage's length is `LoopCount x segment length` -- so a looping clip asking for
 // LoopCount 0 builds a ZERO-LENGTH montage, which `Montage_Play` refuses without logging. The slot's
-// source pose is the locomotion state machine, and for a body that has been handed no selection that
+// source pose is the locomotion blend stack, and for a body that has been handed no selection that
 // is the reference pose. The whole failure is therefore invisible: the call returns, the lab clock
 // advances, the log stays clean, and the body stands in its bind pose.
 //
 // Nothing above the seam can see it. The Substrate tier never builds a montage; the Content Browser
-// preview runs no anim graph; `Elysium.Content.PlayerGraphInstance` drives the graph's own state
-// machine through `PublishSelection` and never touches the slot. The evaluated bone transforms are
+// preview runs no anim graph; `Elysium.Content.PlayerGraphInstance` drives the graph's own blend
+// stack through `PublishSelection` and never touches the slot. The evaluated bone transforms are
 // the only observable, which is what this reads -- on the real generated graph, a real baked body and
 // a clip the content itself flags as looping.
 
@@ -28,14 +28,17 @@
 #include "Visual/ElysiumNpcVisual.h"
 #include "Visual/ElysiumPoseDeviation.h"
 
+#include "AlphaBlend.h"
 #include "Animation/AnimClassInterface.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/AnimStateMachineTypes.h"     // FBakedAnimationStateMachine
 #include "Animation/AnimSubsystem_Tag.h"
 #include "Animation/BlendSpace.h"
 #include "AnimNodes/AnimNode_BlendListBase.h"     // EBlendListChildUpdateMode
 #include "AnimNodes/AnimNode_BlendListByBool.h"
+#include "BlendStack/AnimNode_BlendStack.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
@@ -225,7 +228,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	};
 	constexpr float FrameSeconds = 1.f / 30.f;
 
-	// **Nothing is published, deliberately.** The reference is taken with the state machine holding no
+	// **Nothing is published, deliberately.** The reference is taken with the blend stack holding no
 	// selection, which is the bind pose by construction and is exactly the pose a refused montage
 	// leaves on screen -- so what the assertions below compare against is the defect's own output
 	// rather than a computed ideal.
@@ -274,7 +277,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 
 	// Past the clip's own length, which is the half a plain "does it pose" check cannot reach: a
 	// montage built for a single segment ends here, drops the slot's weight to zero and hands the
-	// frame back to a state machine holding nothing. A clip that loops is still posing.
+	// frame back to a blend stack holding nothing. A clip that loops is still posing.
 	//
 	// **A HALF cycle past it, not a whole one.** Advancing by a multiple of the clip's own length
 	// lands the loop back on the phase the first sample already read, so the two poses agree for a
@@ -304,7 +307,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	const ElysiumPose::FDeviation Stopped = ElysiumPose::Measure(BindPose, StoppedPose);
 	AddInfo(FString::Printf(TEXT("stopped: %d of %d bones off the bind pose (max %.1f deg)"),
 		Stopped.MovedBones, PosedBones, Stopped.MaxDegrees));
-	TestTrue(TEXT("and stopping it hands the frame back to the state machine underneath"),
+	TestTrue(TEXT("and stopping it hands the frame back to the blend stack underneath"),
 		Stopped.MovedBones < Looped.MovedBones);
 
 	// --- LIFE5: two fades, stated apart, and the source pose that gates the blend IN ---------------
@@ -314,7 +317,7 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	// trip onto the dynamic montage rather than one being derived from the other.
 	//
 	// The blend IN is additionally gated by what the slot's SOURCE pose is. A one-shot over a state
-	// machine that has been handed no asset has nothing to blend from — that source is the reference
+	// stack that has been handed no asset has nothing to blend from — that source is the reference
 	// pose — so it snaps; a one-shot over a graph holding a real selection blends, and snapping onto
 	// a posed body is exactly the pop the rule exists to avoid. The predicate is therefore the
 	// applied selection, not "is this the first montage on this body".
@@ -636,9 +639,14 @@ bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
 	// The child update mode is the engine's `Default`, and that is a decision rather than an
 	// omission. `ResetChildOnActivate` reinitializes a newly-active child only while its weight is
 	// still at zero, so it never covers the overlapping retrigger it looks like the fix for — and
-	// when a full-weight reaction ENDS it lands on the base child instead, resetting the state
-	// machine to its entry state, wiping the inertializer's pose history and hard-cutting the very
+	// when a full-weight reaction ENDS it lands on the base child instead, restarting the blend
+	// stack's gait at frame 0, wiping the inertializer's pose history and hard-cutting the very
 	// release the out-fade exists for.
+	//
+	// It is one half of a pair: the same `ZERO_ANIMWEIGHT_THRESH` skip also makes the blend stack
+	// non-relevant while a full-weight flinch stands, so `bResetOnBecomingRelevant` on the stack has
+	// to be false as well or the reset arrives through that door instead.
+	// `Elysium.Content.GraphBlendStack` asserts the other half.
 	TestEqual(TEXT("the branch reinitializes no child on activation"),
 		static_cast<int32>(Branch->GetChildUpdateMode()),
 		static_cast<int32>(EBlendListChildUpdateMode::Default));
@@ -665,6 +673,180 @@ bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
 		Base.MovedBones, PosedBones, Base.MaxDegrees));
 	TestTrue(TEXT("an inert reaction branch passes the locomotion pose straight through"),
 		Base.MovedBones > PosedBones / 4 && Base.MaxDegrees > 5.f);
+
+	return true;
+}
+
+// S2 — the locomotion blend stack, on the compiled class, with the settings it was built with.
+//
+// **Almost every value asserted here is invisible in the tracked graph text**, which is the whole
+// reason this test exists. A node property equal to the engine's own default is not written into
+// T3D at all, and three of the settings below are exactly that: `BlendOption` IS the engine
+// default, and the two engine defaults that are *wrong* for this graph (`BlendspaceUpdateMode`,
+// `bResetOnBecomingRelevant`) leave no trace when written correctly either. A generator that
+// stopped writing them, or an engine upgrade that renamed one so the `Wire` guard was never
+// reached in the first place, produces a graph that exports clean and poses a frozen fan or
+// restarts the gait on every flinch.
+//
+// The other half is the negative: the base channel is one node now, so a compiled class carrying a
+// state machine at all means an old package is on the mount.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphBlendStackTest,
+	"Elysium.Content.GraphBlendStack", GElysiumMontageSlotFlags)
+bool FElysiumGraphBlendStackTest::RunTest(const FString&)
+{
+	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+		return true;
+	}
+	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
+		*FElysiumContentPaths::PlayerAnimBlueprintClass());
+	if (Graph == nullptr)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
+			"(run: uv run elysium export bundle policy)"));
+		return true;
+	}
+	FLoopingClipPick Pick;
+	if (!FindLoopingClip(Pick))
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
+			"run: uv run elysium export characters"));
+		return true;
+	}
+	Pick.Mesh->AddToRoot();
+	Pick.Clip->AddToRoot();
+	ON_SCOPE_EXIT
+	{
+		Pick.Clip->RemoveFromRoot();
+		Pick.Mesh->RemoveFromRoot();
+	};
+
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* World = TestWorld.GetTestWorld();
+	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
+	if (!TestNotNull(TEXT("body owner spawned"), Owner))
+	{
+		return false;
+	}
+	USkeletalMeshComponent* Comp = nullptr;
+	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
+	if (Inst == nullptr)
+	{
+		return false;
+	}
+	constexpr float FrameSeconds = 1.f / 30.f;
+
+	// The compiled class's tag table, read the same way the runtime reads it.
+	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(Inst->GetClass());
+	const FAnimSubsystem_Tag* Tags = AnimClass != nullptr
+		? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
+	if (!TestNotNull(TEXT("the compiled graph carries a tag table"), Tags))
+	{
+		return false;
+	}
+	const FAnimNode_BlendStack* Stack = Tags->FindNodeByTag<FAnimNode_BlendStack>(
+		FName(ElysiumAnimGraph::LocomotionStackTag), Inst);
+	if (!TestNotNull(TEXT("and the locomotion blend stack is on it under its own tag"), Stack))
+	{
+		return false;
+	}
+	// The instance's own predicate answers the same question, and every caller that refuses a body
+	// with no base channel goes through it rather than through a tag lookup of its own.
+	TestTrue(TEXT("the instance reports the stack it just found"),
+		Inst->HasCompiledLocomotionStack());
+
+	// **The curve, and it is load-bearing twice over.** `EAlphaBlendOption::HermiteCubic` is
+	// retail's own `3t^2 - 2t^3` (`docs/vtmb/animation_and_movers.md`, the constant at
+	// `0x10225158`) — and it is also the engine's default, so it is absent from the graph text and
+	// nothing else can see it. `UAnimGraphNode_BlendStack::Serialize` additionally downgrades this
+	// property to `Linear` on an old custom version, which is a live path rather than a hypothetical.
+	TestEqual(TEXT("the stack blends on retail's own Hermite-cubic curve"),
+		static_cast<int32>(Stack->BlendOption),
+		static_cast<int32>(EAlphaBlendOption::HermiteCubic));
+
+	// The stack cross-fades its own players. Routing the blend to the inertializer instead would
+	// hand one node's request to another and make the duration on the pin advisory.
+	TestFalse(TEXT("the stack blends itself rather than asking the inertializer"),
+		Stack->bUseInertialBlend);
+
+	TestEqual(TEXT("four concurrent players"), Stack->GetMaxActiveBlends(), 4);
+
+	// **The default that would restart the gait on every flinch.** A full-weight reaction makes
+	// this node non-relevant — `FAnimNode_BlendListBase` skips a child under
+	// `ZERO_ANIMWEIGHT_THRESH` — and `FAnimNode_BlendStack::NeedsReset` would then `Reset()` it on
+	// the frame the flinch releases, dropping the walk back to frame 0.
+	TestFalse(TEXT("the stack is not reset when the reaction hands the base pose back"),
+		Stack->bResetOnBecomingRelevant);
+
+	// **The default that would freeze a gait fan's steering.** `InitialOnly` samples the blend
+	// space's xy once, at `BlendTo`, so `move_yaw` would stop turning the body after the transition
+	// that entered the fan.
+	TestEqual(TEXT("a fan's steering is re-sampled every frame"),
+		static_cast<int32>(Stack->BlendspaceUpdateMode),
+		static_cast<int32>(EBlendStack_BlendspaceUpdateMode::UpdateActiveOnly));
+
+	// **The default that would re-blend every frame.** `ConditionalBlendTo` compares the requested
+	// blend parameters against the playing player's, and a SEQUENCE player answers the zero vector
+	// — so at the engine's 0 threshold a body walking with a non-zero `move_yaw` on a plain clip
+	// pushes a new player on every single update.
+	TestTrue(TEXT("no steering value can reach the re-blend threshold"),
+		Stack->BlendParametersDeltaThreshold > 1000.f);
+
+	// `-1` is the constructed default and is not "wherever the clip is": it is the time a new
+	// player is seeded at. Every clip this graph plays starts at its head.
+	TestEqual(TEXT("a new player starts at the clip's head"), Stack->AnimationTime, 0.f);
+
+	// The negative, and the one thing only a compiled class can answer: no state machine survives
+	// the cutover, so nothing carries a baked `TLT_Inertialization` transition or an eight-state
+	// vocabulary any more. A non-empty list here is a stale generated package on the mount.
+	if (TestNotNull(TEXT("the compiled class answers the anim-class interface"), AnimClass))
+	{
+		const TArray<FBakedAnimationStateMachine>& Machines = AnimClass->GetBakedStateMachines();
+		AddInfo(FString::Printf(TEXT("baked state machines on the compiled class: %d"),
+			Machines.Num()));
+		TestEqual(TEXT("the base channel is one blend stack and no state machine at all"),
+			Machines.Num(), 0);
+	}
+
+	// --- the BlendTime pin is really driven -------------------------------------------------------
+	//
+	// The property behind a shown pin is dead: the compiler folds the PIN, so a value the generator
+	// wrote onto the node would be overwritten by the pin's literal every update. The only proof is
+	// to publish a number nothing else in the graph can produce and read it back off the node.
+	FElysiumAnimationSelection First;
+	First.Generation = 1;
+	First.GraphState = EElysiumGraphState::Idle;
+	First.SequenceLabel = Pick.Label;
+	First.OwnerStem = Pick.Owner;
+	First.AnimationName = Pick.Label;
+	First.AssetKind = EElysiumAnimAssetKind::Sequence;
+	First.Outcome = EElysiumAnimOutcome::Resolved;
+	First.FadeSeconds = 0.1f;
+	FElysiumResolvedAnimation Assets;
+	Assets.Sequence = Pick.Clip;
+	Inst->PublishSelection(First, Assets);
+	TArray<FTransform> Pose;
+	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
+
+	// 0.4271 is a value no default, no clip and no other rule in this graph produces; the combine
+	// is `max`, so the outgoing 0.1 above cannot mask it.
+	constexpr float Unique = 0.4271f;
+	FElysiumAnimationSelection Second = First;
+	Second.Generation = 2;
+	Second.FadeSeconds = Unique;
+	Inst->PublishSelection(Second, Assets);
+	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
+
+	TestEqual(TEXT("the authored fade reaches the node's BlendTime pin whole"),
+		Stack->BlendTime, Unique, 1e-4f);
+	TestEqual(TEXT("...and it is the value the instance reported asking for"),
+		Inst->GetBlendReport().RequestedSeconds, Unique, 1e-4f);
 
 	return true;
 }
@@ -1279,7 +1461,7 @@ bool FElysiumReactionCellMasksTest::RunTest(const FString&)
 // published nothing poses the skeleton's bind pose, and fading up out of that is a T-pose on screen
 // for the whole blend. `bHasApplied` is not the fact that answers it: it goes true on the FIRST
 // update of any body, asset or no asset, so a first publish whose record resolved no clip presents a
-// non-null descriptor to the generation after it — while the machine underneath is still evaluating
+// non-null descriptor to the generation after it — while the stack underneath is still evaluating
 // an un-published pin. The same T-pose, through the front door.
 //
 // It is asserted on the real generated graph because the rule it guards is about what the graph is
@@ -1344,7 +1526,7 @@ bool FElysiumGraphFirstAssetBlendTest::RunTest(const FString&)
 	// — no sequence, no blend space — and `bHasApplied` goes true on it. That is generation 0, and
 	// from here on every resolved-nothing publish is HELD rather than applied, which is the correct
 	// behaviour and the reason the state persists: the applied record goes on naming no asset while
-	// the machine goes on posing the bind pose.
+	// the stack goes on posing the bind pose.
 	EvaluateFrames(Comp, /*Frames=*/2, FrameSeconds, Pose);
 	TestTrue(TEXT("a body that has published nothing is posing the bind pose"),
 		Inst->GetAppliedSelection().AssetKind == EElysiumAnimAssetKind::None);
@@ -1367,7 +1549,7 @@ bool FElysiumGraphFirstAssetBlendTest::RunTest(const FString&)
 
 	// The first record that carries a real clip. Its outgoing operand exists and names a non-zero
 	// authored fade, so a gate asking only "has anything been published" hands the inertializer that
-	// whole duration of blending up out of the bind pose the machine is still evaluating. The fade is
+	// whole duration of blending up out of the bind pose the stack is still evaluating. The fade is
 	// stated on the record rather than taken off the clip, because a clip that authors a hard cut
 	// answers zero for a different reason and the two must not be confused here.
 	FElysiumAnimationSelection Resolved = Missed;
@@ -1396,6 +1578,10 @@ bool FElysiumGraphFirstAssetBlendTest::RunTest(const FString&)
 	// The control, and it is what makes the assertion above about the POSED-AN-ASSET verdict rather
 	// than about first publishes: the next generation follows a record that DID pose a clip, so it
 	// fades over the authored duration.
+	//
+	// It also re-publishes the SAME clip, which the blend stack refuses to re-blend onto — retail's
+	// own reselect-without-reset, reached here by the node's asset comparison rather than by a rule
+	// of ours. What is asserted is the duration the instance asked for; the pose does not restart.
 	FElysiumAnimationSelection Again = Resolved;
 	Again.Generation = 3;
 	Inst->PublishSelection(Again, Assets);

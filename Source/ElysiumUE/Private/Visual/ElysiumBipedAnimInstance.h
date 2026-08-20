@@ -7,10 +7,12 @@
 
 #include "ElysiumBipedAnimInstance.generated.h"
 
+class UAnimationAsset;
 class UAnimMontage;
 class UAnimSequence;
 class UBlendSpace;
 class UElysiumAnimLayerMask;
+struct FAnimNode_BlendStack;
 struct FElysiumResolvedAnimation;
 
 // Every VtMB body's animation host — the native base an Animation Blueprint compiles against, and
@@ -61,26 +63,31 @@ struct FElysiumOneShotReport
 // requested, never per frame.
 //
 // A blend is decided in exactly one place (a new generation on the applied record), and the answer
-// is otherwise unobservable: `RequestSlotGroupInertialization` returns nothing, and the pose it
-// produces is a fade a reader cannot distinguish from a correct hard cut after the fact. So the
-// decision is recorded where it is made rather than sampled afterward.
+// is otherwise unobservable: the duration goes out on a graph pin and the pose it produces is a fade
+// a reader cannot distinguish from a correct hard cut after the fact. So the decision is recorded
+// where it is made rather than sampled afterward.
 //
 // Generation-stamped for the same reason `FElysiumOneShotReport` is: the record describes the
 // transition INTO that generation, so a reader can tell a stale readout from a live one.
 struct FElysiumBlendReport
 {
 	uint32 Generation = 0;
-	// What was actually handed to the inertializer, after the combine and both refusals.
+	// What was actually put on the stack's `BlendTime` pin, after the combine and both refusals.
 	float RequestedSeconds = 0.0f;
 	// Zero seconds for a stated reason. `flags & 0x2` on the incoming clip is an authored hard cut.
 	bool bSnap = false;
 	// The other zero: there was no outgoing CLIP to fade FROM — either nothing had ever been
-	// published, or what was published resolved no asset and left the machine posing the bind pose.
+	// published, or what was published resolved no asset and left the stack holding nothing at all.
 	// The two are one fact for this purpose, and both refuse the fade. It is carried rather than
 	// inferred from an empty `FromAnimation`, which a record that resolved no clip also leaves empty.
 	bool bFirstPublish = false;
-	// Whether the machine was leaving one state or re-entering the one it was already in — the same
-	// `bStateChanged` the graph reads, captured at the moment the blend was asked for.
+	// Whether this blend crossed the state vocabulary or stayed inside it — `Pending.GraphState`
+	// against `Applied.GraphState`, taken at the moment the blend was asked for.
+	//
+	// **A readout, not a rule.** The graph carries no state machine to leave, so nothing reads this
+	// to decide anything; it is recorded because the trace, the Cog row and the channel recorder all
+	// report a walk-to-run transition differently from a walk-to-walk republish, and this record is
+	// the only place that distinction is stated.
 	bool bStateTransition = false;
 	FString FromAnimation;
 	FString ToAnimation;
@@ -147,16 +154,16 @@ struct FElysiumReactionPlay
 //
 // The four run CONCURRENTLY, which is the whole reason this is an enumeration of arms rather than a
 // mode: a reaction replaces the locomotion pose without stopping the montage under it, and that
-// montage rides over a state machine which never stopped either. Only one of them can be the body's
+// montage rides over a blend stack which never stopped either. Only one of them can be the body's
 // server timeline at a time — retail has exactly one — but all four clocks keep running, so which
 // one publishes changes while none of them ends.
 enum class EElysiumBasePhaseSource : uint8
 {
 	None = 0,
-	Clip,       // the proxy's cinematic clip player, which replaces the graph outright
-	Reaction,   // the graph's reaction branch, which replaces the locomotion pose
-	Montage,    // the DefaultSlot dynamic montage, which rides over the state machine
-	Machine,    // the locomotion state machine underneath everything
+	Clip,        // the proxy's cinematic clip player, which replaces the graph outright
+	Reaction,    // the graph's reaction branch, which replaces the locomotion pose
+	Montage,     // the DefaultSlot dynamic montage, which rides over the blend stack
+	Locomotion,  // the locomotion blend stack underneath everything
 	Count
 };
 
@@ -177,7 +184,7 @@ struct FElysiumArmedClip
 	uint32 PlayId = 0;
 	// Where the dispatcher last saw this arm — `FElysiumClipPhase::AnchorCycle`, published with the
 	// phase and frozen the moment a higher arm takes the channel. It is zero for a clip a play seam
-	// started, and the observed fraction for the state machine, which starts nothing.
+	// started, and the observed fraction for the blend stack, which starts nothing this class sees.
 	float AnchorCycle = 0.0f;
 
 	bool IsArmed() const { return Identity.IsValid(); }
@@ -263,18 +270,31 @@ public:
 	// latch — there is no second copy on the proxy, because a member the graph never reads would be
 	// exactly the dead scaffolding this rung exists not to build.
 
-	// Which of the eight states should own the body. The transition rules are equality tests against
-	// this and nothing else, so the graph holds no classification of its own.
+	// Which of the eight states should own the body. **Read by no pin.** The base channel is one
+	// blend stack rather than eight states, so nothing in the graph branches on this; it is published
+	// because the record, the Cog row, the trace and the channel recorder all name the state the
+	// resolver projected, and they must all name the same one.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	EElysiumGraphState RequestedState = EElysiumGraphState::Idle;
 
-	// The resolved assets. Exactly one is non-null: a movement fan resolves to its baked blend space
-	// and a plain label to a sequence. A label with no baked fan arrives here as a sequence with no
-	// blend space, so the graph needs no knowledge beyond an "is valid" branch.
+	// The resolved base-channel asset, whichever shape it took: a movement fan is a `UBlendSpace` and
+	// a plain label a `UAnimSequence`, and the blend stack plays either off this one pin. The two are
+	// staged separately below because `ShouldHoldPose` asks about the pair; only the answer is joined.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	TObjectPtr<UBlendSpace> RequestedBlendSpace = nullptr;
+	TObjectPtr<UAnimationAsset> RequestedAsset = nullptr;
+
+	// The authored fade this request is entitled to, as `ElysiumAnimGraph::TransitionSeconds`
+	// combined it — whole, and capped by nothing. Written only when a new generation actually asks
+	// for a blend, because the stack consumes it at the instant it pushes a player and a value that
+	// drifted between requests would be read by the wrong one.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	TObjectPtr<UAnimSequence> RequestedSequence = nullptr;
+	float RequestedBlendSeconds = 0.0f;
+
+	// Where a fan is sampled, in the shape the stack takes it: `(GridAxis0, GridAxis1, 0)`. Ignored
+	// outright when the asset is a sequence — a sequence player reports the zero vector back, which
+	// is why the node's re-blend threshold is set past anything this can reach.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	FVector RequestedBlendParameters = FVector::ZeroVector;
 
 	// **Whether the graph should repeat this clip** — which is the model's own loop bit for
 	// everything except a held stance. `crouch` is a 61-frame NON-looping into-pose while `walk_0`
@@ -309,8 +329,9 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	float MoveYaw = 0.0f;
 
-	// Whether the resolver answered with a fan or with a single cell. The gait states branch on this
-	// — the graph knows only which asset it was handed.
+	// Whether the resolver answered with a fan or with a single cell. **Read by no pin either**: the
+	// stack takes one asset and asks the asset what it is. Published for the same reason the state
+	// is — the debug surface and the channel recorder read what the graph was given.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	bool bHasBlendSpace = false;
 
@@ -389,34 +410,6 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Reaction")
 	float ReactionBlendOutSeconds = 0.3f;
 
-	// --- the transition rules ---------------------------------------------------------------------
-	//
-	// Every rule in the machine is a single read of one of these, and nothing else. The comparison
-	// that produces them happens here, in C++, where it is asserted — a rule graph that computed
-	// anything would be a second place the body's state is decided.
-	//
-	// The machine is a hub: each state exits to one conduit when the request no longer matches what
-	// is playing, and the conduit enters whichever state does match. That is sixteen transitions
-	// instead of fifty-six, with every pair still reachable.
-	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	bool bStateChanged = false;
-	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	bool bWantsIdle = true;
-	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	bool bWantsWalk = false;
-	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	bool bWantsRun = false;
-	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	bool bWantsSneak = false;
-	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	bool bWantsCrouch = false;
-	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	bool bWantsLeap = false;
-	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	bool bWantsFalling = false;
-	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	bool bWantsLand = false;
-
 	// --- the seam ---------------------------------------------------------------------------------
 	//
 	// Pushed once per frame by whichever pass owns the driver — the map actor's post-move pass for
@@ -425,7 +418,7 @@ public:
 	// carry a null branch for every map that seats no pawn.
 	//
 	// A playable asset ends the DefaultSlot one-shot `BuildNpcVisual` armed as a standing idle: that
-	// slot covers the state machine, which is the pose the driver is publishing.
+	// slot covers the blend stack, which is the pose the driver is publishing.
 	void PublishSelection(const FElysiumAnimationSelection& Selection,
 		const FElysiumResolvedAnimation& Assets);
 
@@ -433,7 +426,7 @@ public:
 	// next publish, so the latch consumes a report describing the request it is about to advance past.
 	const FElysiumOneShotReport& GetOneShotReport() const { return OneShot; }
 
-	// The last real transition this instance asked the inertializer for. Not a per-frame sample: it
+	// The last real transition this instance asked the blend stack for. Not a per-frame sample: it
 	// stands until the next generation change, which is what makes a settled body's readout describe
 	// the blend that produced the pose on screen rather than an empty current frame.
 	const FElysiumBlendReport& GetBlendReport() const { return Blend; }
@@ -451,8 +444,8 @@ public:
 	// --- the shared one-shot seam -----------------------------------------------------------------
 	//
 	// Answered over a dynamic slot montage, which is the design's own shape for a one-shot and needs
-	// no baked montage asset. Nothing here reaches the locomotion state machine: a scripted clip
-	// plays OVER the gait rather than replacing the thing that owns it.
+	// no baked montage asset. Nothing here reaches the locomotion blend stack: a scripted clip plays
+	// OVER the gait rather than replacing the thing that owns it.
 	virtual bool PlayOneShot(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence,
 		bool bLoop, float BlendInSeconds, float BlendOutSeconds) override;
 	virtual void StopOneShot(float BlendSeconds) override;
@@ -467,8 +460,8 @@ public:
 	// --- the reaction seam (LIFE5) ----------------------------------------------------------------
 	//
 	// Hand the graph's reaction branch a fan or a clip and switch it on. The branch REPLACES the base
-	// pose rather than riding over it, so this is not a second one-shot slot: nothing the state
-	// machine or the montage slot is doing is stopped, and the moment the branch fades back out the
+	// pose rather than riding over it, so this is not a second one-shot slot: nothing the blend stack
+	// or the montage slot is doing is stopped, and the moment the branch fades back out the
 	// locomotion pose is exactly where it would have been.
 	//
 	// Returns false for a malformed play or a class with no compiled branch. Both are real refusals a
@@ -551,27 +544,34 @@ public:
 
 	// Whether this instance was built from a compiled Animation Blueprint. False for the plain
 	// native class, which is what a body falls back to when the generated graph package is not on
-	// the mount: there is no state machine and no montage slot to play into, so the one-shot seam
+	// the mount: there is no blend stack and no montage slot to play into, so the one-shot seam
 	// routes through the clip player instead.
 	bool HasCompiledGraph() const;
 
-	// Whether this compiled class's named state actually has a blend-space player. The authored
-	// helper `ElysiumAnimGraph::StateCanPlayBlendSpace` is the same question against the live
-	// pair list; this one reads the baked state so a stale generated class cannot silently
-	// evaluate a grid as a null sequence.
-	bool CompiledStateCanPlayBlendSpace(EElysiumGraphState State) const;
+	// Whether this compiled class actually carries the tagged locomotion blend stack. False on the
+	// plain native class and on a generated class built before the stack existed — a real case, and
+	// the reason a caller that needs the base channel has a refusal rather than an assertion. The
+	// same shape as `HasCompiledReactionBranch` above, resolved once and reported once.
+	bool HasCompiledLocomotionStack() const;
 
 protected:
-	virtual void NativeInitializeAnimation() override;
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override { return &Proxy; }
 	virtual void DestroyAnimInstanceProxy(FAnimInstanceProxy*) override {}
 
 private:
-	// Resolve the state machine and its eight states once, by the names `ElysiumAnimGraph::StateName`
-	// spells. A graph whose states were renamed reports no completion rather than reporting a wrong
-	// one, and the asset test is what catches the rename.
-	void CacheStateMachine();
+	// The compiled graph's locomotion `FAnimNode_BlendStack`, found through `FAnimSubsystem_Tag`
+	// under `ElysiumAnimGraph::LocomotionStackTag` — the same door `ApplyUpperBodyMask` uses. Null
+	// on the plain native class, which is a state rather than a failure; null on a class that DOES
+	// carry a compiled graph is a defect, and it is reported once per instance.
+	//
+	// **The lookup has no barrier of its own.** It reads compiled class data — the tag table and the
+	// node property's offset — so resolving the POINTER is safe anywhere on the game thread, which is
+	// what lets `HasCompiledLocomotionStack` above answer without one. Reading node STATE off the
+	// result is not: that races an in-flight parallel evaluation, so `NativeUpdateAnimation` and
+	// `PublishBasePhase` resolve it beside their `GetProxyOnGameThread` and thread the node down
+	// rather than letting each reader ask.
+	FAnimNode_BlendStack* FindLocomotionStack();
 
 	// Project the upper-body half of the record — the layer, its mask, the aim pair and the two
 	// weights — with the lab's hand driver overriding it. Separate from the base projection because
@@ -607,20 +607,27 @@ private:
 	void DisarmBasePhase(EElysiumBasePhaseSource Source);
 
 	// Which producer is posing the body right now, in the order the pose itself composes. It takes
-	// the proxy because two of the four answers live on it, and one fetch per update is one
+	// the proxy and the stack because the four answers live on them, and one fetch per update is one
 	// parallel-evaluation barrier instead of several.
-	EElysiumBasePhaseSource LiveBaseSource(FElysiumBipedAnimProxy& InProxy);
+	EElysiumBasePhaseSource LiveBaseSource(FElysiumBipedAnimProxy& InProxy,
+		const FAnimNode_BlendStack* Stack) const;
 	// The live producer's cycle, off whatever clock it owns.
-	float LiveBaseCycle(EElysiumBasePhaseSource Source, FElysiumBipedAnimProxy& InProxy) const;
+	float LiveBaseCycle(EElysiumBasePhaseSource Source, FElysiumBipedAnimProxy& InProxy,
+		const FAnimNode_BlendStack* Stack) const;
 	// Copy the live producer's armed record into `BasePhase`, cycle included, and remember where the
 	// dispatcher was left. `bReadClocks` false publishes each arm's own anchor instead of asking the
 	// engine — which is what a play seam needs, because the node it just armed has not run yet.
+	//
+	// The one-argument form is what every play seam calls: it takes the proxy barrier and resolves
+	// the stack inside it, then hands both to the threaded form.
 	void PublishBasePhase(bool bReadClocks);
+	void PublishBasePhase(FElysiumBipedAnimProxy& InProxy, const FAnimNode_BlendStack* Stack,
+		bool bReadClocks);
 	// Re-arm the locomotion arm off the applied record, then publish. Once per update.
-	void RefreshBasePhase();
+	void RefreshBasePhase(FElysiumBipedAnimProxy& InProxy, const FAnimNode_BlendStack* Stack);
 	// The locomotion arm alone: it is a per-frame projection rather than a discrete play, so nothing
 	// calls a seam for it and it maintains its own record here — live or not.
-	void RefreshMachineArm();
+	void RefreshLocomotionArm(const FAnimNode_BlendStack* Stack);
 	FElysiumArmedClip& Armed(EElysiumBasePhaseSource Source)
 	{
 		return ArmedClips[static_cast<uint8>(Source)];
@@ -690,14 +697,14 @@ private:
 	mutable bool bReactionBranchResolved = false;
 	mutable bool bHasReactionBranch = false;
 
-	int32 MachineIndex = INDEX_NONE;
-	int32 StateIndex[ElysiumAnimGraph::NumGraphStates];
-	bool bStateHasBlendSpacePlayer[ElysiumAnimGraph::NumGraphStates] = {};
-	bool bRecordedAnyBlendSpacePlayer = false;
-	// A compiled class that does not carry the machine is reported once per instance. The lookup
-	// itself still retries — a class can answer later — but the report is a defect in the generated
-	// asset, and a defect restated every frame by every body drowns the log it is meant to reach.
-	bool bReportedMissingMachine = false;
+	// The stack's own pair, exactly the reaction branch's idiom above. An instance's class is fixed
+	// at construction and the tag table is compiled state on it, so the answer is invariant for the
+	// instance's whole life; the first flag distinguishes "not looked up yet" from "absent", which
+	// `false` in the second cannot. A compiled class that does not carry the stack is a defect in the
+	// generated asset, and it is reported ONCE — a defect restated every frame by every body drowns
+	// the log it is meant to reach.
+	bool bLocomotionStackResolved = false;
+	bool bHasLocomotionStack = false;
 	FElysiumOneShotReport OneShot;
 	FElysiumBlendReport Blend;
 
@@ -721,9 +728,9 @@ private:
 	// Which producer `BasePhase` was last read off. A readout, not a gate — precedence decides who
 	// publishes, and this records who did.
 	EElysiumBasePhaseSource PhaseSource = EElysiumBasePhaseSource::None;
-	// Whether the APPLIED record actually put an asset on a pin. `bHasApplied` cannot answer it: a
+	// Whether the APPLIED record actually put an asset on the pin. `bHasApplied` cannot answer it: a
 	// record that resolved nothing is still a record applied, so the generation after a resolved-
-	// nothing first publish would present a non-null outgoing descriptor while the machine beneath
-	// is still posing the bind pose — and inertialize the first real clip up out of a T-pose.
+	// nothing first publish would present a non-null outgoing descriptor while the stack beneath is
+	// still holding nothing — and fade the first real clip up out of a T-pose.
 	bool bAppliedPosedAnAsset = false;
 };

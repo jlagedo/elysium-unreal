@@ -242,11 +242,12 @@ bool UElysiumEntityBodies::PlayNpcGrid(USkeletalMeshComponent* Body, const FStri
 		return Refuse(TEXT("this body is on the native host, which carries no compiled graph — the "
 			"generated ABP is not on the mount. Run `uv run elysium export bundle policy`"));
 	}
-	if (!Inst->CompiledStateCanPlayBlendSpace(State))
+	if (!Inst->HasCompiledLocomotionStack())
 	{
-		return Refuse(FString::Printf(
-			TEXT("compiled state %s cannot play a blend space"),
-			ElysiumAnimGraph::StateName(State)));
+		// The base channel is one tagged blend stack, so a class carrying the graph but not the node
+		// poses nothing at all — and a grid stood on it would be a silent bind pose.
+		return Refuse(TEXT("this body's compiled graph carries no locomotion blend stack — the "
+			"generated ABP is stale. Run `uv run elysium export bundle policy`"));
 	}
 
 	FString Standing = Inst->GetAppliedSelection().SequenceLabel;

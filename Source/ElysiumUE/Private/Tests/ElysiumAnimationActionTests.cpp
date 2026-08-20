@@ -16,6 +16,7 @@
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumAnimationResolve.h"
 
+#include "AlphaBlend.h"                      // the transition curve S2 pins the blend stack to
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 
@@ -1930,10 +1931,12 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 		TestEqual(TEXT("and idle -> walk takes it too, because the combine is max and not incoming"),
 			TransitionSeconds(&Idle, Walk), 0.3f);
 
-		// The lying-down and damaged stance idles, the corpus's longest.
+		// The lying-down and damaged stance idles, the corpus's longest. It reaches the blend
+		// stack's `BlendTime` pin at exactly this value: the graph carries no authored duration of
+		// its own, so there is nothing left that could min-merge it down to a cap.
 		const FElysiumAnimationSelection Long = Faded(0.5f);
-		TestEqual(TEXT("the longest authored pair is the ceiling the asset bakes"),
-			TransitionSeconds(&Long, Long), TransitionCeilingSeconds);
+		TestEqual(TEXT("the longest authored pair reaches the graph unclamped"),
+			TransitionSeconds(&Long, Long), 0.5f);
 
 		// A fresh body has nothing to fade FROM, and retail refuses that outright: `FUN_1008de30`'s
 		// first gate is `!out || !in || (in->flags & 0x2)`, so a missing outgoing descriptor ranks
@@ -2010,9 +2013,10 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 			using ElysiumAnimGraph::OneShotStateFor;
 			using EOne = EElysiumOneShotState;
 
-			// **`MAX_flt` is the engine's refusal, not a long clip.** Read as a duration it reports
-			// a clip as playing forever, which parks whatever waits on it — the body sat in ACT_LAND
-			// for fourteen seconds before this was bounded.
+			// **`MAX_flt` is a refusal, not a long clip.** Read as a duration it reports a clip as
+			// playing forever, which parks whatever waits on it — the body sat in ACT_LAND for
+			// fourteen seconds before this was bounded. The bound holds for any producer, because
+			// nothing honest exceeds the clip it belongs to.
 			TestFalse(TEXT("MAX_flt is a refusal, not a remaining time"),
 				IsPlayableRemaining(MAX_flt, 1.5f));
 			TestFalse(TEXT("and so is anything past the clip's own length"),
@@ -2073,6 +2077,49 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 				OneAsInt(EOne::Playing));
 			TestEqual(TEXT("and a finished one is Complete"),
 				OneAsInt(OneShotStateFor(true, true, true, true)), OneAsInt(EOne::Complete));
+
+			// --- the loop bit the blend stack cannot notice on its own (S2) ----------------------
+			//
+			// `FAnimNode_BlendStack::ConditionalBlendTo` returns early when the requested asset
+			// matches the playing one, and `bLoop` is consumed only inside `BlendTo`. So the pin
+			// holds a new value the node never reads, silently — and `Crouch` is exactly that
+			// request, republished as a held stance over its own non-looping into-pose.
+			using ElysiumAnimGraph::NeedsForcedReblend;
+			TestTrue(TEXT("the same asset with a flipped loop bit has to be forced"),
+				NeedsForcedReblend(/*bSameAsset*/ true, /*bLoopChanged*/ true));
+			TestFalse(TEXT("the same asset with the same loop bit is already what is playing"),
+				NeedsForcedReblend(true, false));
+			// A different asset re-blends on its own; forcing there would ask the stack to push a
+			// second player for the transition it is already performing.
+			TestFalse(TEXT("a new asset needs no force -- the node notices that itself"),
+				NeedsForcedReblend(/*bSameAsset*/ false, /*bLoopChanged*/ true));
+			TestFalse(TEXT("and neither does a new asset with an unchanged loop bit"),
+				NeedsForcedReblend(false, false));
+		}
+
+		// --- the transition curve the stack is pinned to (S2) ---------------------------------
+		//
+		// Retail's own blend shape, recorded at `0x10225158` as the constant its alpha is passed
+		// through (`docs/vtmb/animation_and_movers.md`): `3t^2 - 2t^3`. The engine spells it
+		// `EAlphaBlendOption::HermiteCubic`, which the generator writes onto the node — and because
+		// that value equals the engine's own default it appears NOWHERE in the exported graph text,
+		// so this is the only place the identity itself is stated. `Elysium.Content.GraphBlendStack`
+		// asserts the node carries it; this asserts what carrying it means.
+		{
+			const float Ts[] = { 0.0f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 1.0f };
+			for (const float T : Ts)
+			{
+				const float Retail = 3.0f * T * T - 2.0f * T * T * T;
+				TestEqual(*FString::Printf(TEXT("HermiteCubic(%.2f) is retail's 3t^2-2t^3"), T),
+					FAlphaBlend::AlphaToBlendOption(T, EAlphaBlendOption::HermiteCubic), Retail,
+					1e-6f);
+			}
+			// Both ends clamp rather than extrapolating, which is what makes a fade that overshoots
+			// its own duration hold the pose instead of pulling past it.
+			TestEqual(TEXT("an alpha below zero clamps to zero"),
+				FAlphaBlend::AlphaToBlendOption(-0.5f, EAlphaBlendOption::HermiteCubic), 0.0f, 1e-6f);
+			TestEqual(TEXT("and one past one clamps to one"),
+				FAlphaBlend::AlphaToBlendOption(1.5f, EAlphaBlendOption::HermiteCubic), 1.0f, 1e-6f);
 		}
 
 		// Reachable but outside the slice. Standing is a stated answer, not a hole.
@@ -3876,15 +3923,12 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 		}
 		++Checked;
 		const float Expected = In.bSnap ? 0.0f : FMath::Max(Out.FadeSeconds, In.FadeSeconds);
+		// The exact value, and there is nothing left to compare it against: the graph asset carries
+		// no authored duration of its own, so the combine's answer reaches the blend stack's
+		// `BlendTime` pin whole and nothing downstream can min-merge it down to a cap.
 		TestEqual(*FString::Printf(TEXT("%s -> %s combines the authored fades (%.2f, %.2f)"),
 			Pair[0], Pair[1], Out.FadeSeconds, In.FadeSeconds),
 			ElysiumAnimGraph::TransitionSeconds(&Out, In), Expected);
-
-		// The runtime answer has to stay under the ceiling the graph asset bakes, or the min-merge
-		// that makes the ceiling a safety net silently becomes a cap on the authored value.
-		TestTrue(*FString::Printf(TEXT("%s -> %s stays under the baked ceiling"), Pair[0], Pair[1]),
-			ElysiumAnimGraph::TransitionSeconds(&Out, In)
-				<= ElysiumAnimGraph::TransitionCeilingSeconds);
 	}
 	TestTrue(TEXT("at least one slice transition was measured"), Checked > 0);
 	AddInfo(FString::Printf(TEXT("%d of 6 slice transitions measured on '%s'"), Checked, *Chosen));
