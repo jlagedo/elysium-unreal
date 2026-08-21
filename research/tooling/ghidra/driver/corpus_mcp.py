@@ -112,9 +112,23 @@ TOOLS = [
             "slot": {"type": "integer"}, "module": {"type": "string"}}},
     },
     {
+        "name": "vtmb_iface",
+        "description": "Named interfaces — how a call LEAVES its binary. Source publishes each "
+                       "module's services by versioned name (VEngineServer014), and both ends "
+                       "are literals in the image, so a dispatch through an interface global "
+                       "resolves to a real function in another DLL. Pass a pattern, or nothing "
+                       "for the whole map. vtmb_callers and vtmb_callees report these edges in "
+                       "their own CROSS-MODULE section.",
+        "inputSchema": {"type": "object", "properties": {
+            "pattern": {"type": "string", "description": "e.g. VEngineServer"}}},
+    },
+    {
         "name": "vtmb_globals",
         "description": "A named global in .data/.rdata -- a cvar object, a vftable, a datamap, a "
-                       "counter -- and every function that reaches it.",
+                       "counter -- and every function that reaches it. Also answers for an "
+                       "UNNAMED datum by bare address (20b42980), listing which functions write "
+                       "it apart from those that read it: what a singleton is, is stated by "
+                       "whatever assigns it.",
         "inputSchema": {"type": "object", "required": ["text"], "properties": {
             "text": {"type": "string"}, "limit": {"type": "integer"}}},
     },
@@ -243,6 +257,8 @@ def _call(name: str, arguments: dict) -> str:
             corpus.command_vtable(_text(arguments, "cls", name))
         elif name == "vtmb_slot":
             corpus.command_slot(_slot(arguments), arguments.get("module"))
+        elif name == "vtmb_iface":
+            corpus.command_iface(arguments.get("pattern") or None)
         elif name == "vtmb_globals":
             corpus.command_globals(_text(arguments, "text", name), _count(arguments, "limit", 20))
         elif name == "vtmb_twin":

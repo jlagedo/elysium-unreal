@@ -1171,8 +1171,9 @@ tail after axis interpolation and before skinning, the same ordering Epic docume
 2. it writes a complete native recipe into the generated skeletal mesh. Breast records, the other
    Malkavian armours, and Jeanette's renderer-cloth skirt produce no recipe;
 3. one chain node takes the first and last bone, allowing AnimDynamics to generate the intermediate
-   bodies. It uses component simulation space so a teleport cannot inject the unbounded world-space
-   motion Epic warns about;
+   bodies. It simulates relative to the first moving bone's animated parent (`Bip01 Head` on the
+   admitted chains), so a blended head pose moves the simulation frame instead of sweeping the
+   chain constraints through component space;
 4. constraints use the authored maximum as a cone limit, the reference segment to size each narrow
    body, locked linear motion, an X-axis angular target, 8 pre-update and 2 post-update iterations,
    no wind, and LOD threshold 2. The 4:1 iteration ratio follows Epic's solver guidance. A cone
@@ -1188,14 +1189,15 @@ tail after axis interpolation and before skinning, the same ordering Epic docume
    constraints rather than actual collision geometry, so head/shoulder intersection remains a
    known proof limitation.
 
-The baked recipe retains authored gravity, damping, spring exponent and maximum angle. The current
-hair-chain runtime deliberately replaces those values with a diagnostic lock: zero gravity, a
-zero-degree cone, full linear and angular damping, a `1000` angular spring, and no component-space
-linear or angular motion injection. Single-body dynamics keep their authored mapping. **This is an
-owner-directed diagnostic presentation divergence, not final tuning or an equivalence statement.**
-Its live acceptance has one purpose: prove whether this AnimDynamics stage owns the visible wild
-motion before calibration resumes. The parked calibration slice (LIFE9) supplies fitted settings;
-it cannot promote AnimDynamics into a faithful solver without the game-independent retail replay.
+The hair-chain node applies the baked recipe's authored gravity, damping, spring coefficient and
+maximum angle. It admits `0.15` of component linear acceleration, clamped to `200 cm/s²` per axis,
+and `0.25` of bone-relative angular motion, with the source frame clamped to `3 rad/s` and
+`25 rad/s²`. Component velocity drag remains zero. The animated parent therefore carries most of
+the frame while a bounded share produces visible follow-through inside it. Single-body dynamics
+keep their separate component-space mapping. This presentation choice prevents clip and blend-grid
+acceleration from becoming an unbounded physics impulse; it is not an equivalence statement. The
+parked calibration slice (LIFE9) supplies fitted settings, and cannot promote AnimDynamics into a
+faithful solver without the game-independent retail replay.
 
 **The persistent partial-update behaviour is a divergence.** Retail refreshes only the bones a mask
 selects, so bones legitimately carry matrices composed against older roots; those mask bits are

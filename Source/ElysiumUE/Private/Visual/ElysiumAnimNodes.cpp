@@ -4,17 +4,18 @@
 
 #include "Animation/AnimInstanceProxy.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumHairDynamics, Log, All);
+
 namespace
 {
-	// Owner-directed diagnostic lock: make the stock chain effectively rigid so the next live pass
-	// can prove whether this node owns the visible motion. These are intentionally not final tuning.
-	constexpr float HairDiagnosticGravityScale = 0.0f;
-	constexpr float HairDiagnosticDamping = 1.0f;
-	constexpr float HairDiagnosticAngularSpring = 1000.0f;
-	constexpr float HairDiagnosticConeAngleDegrees = 0.0f;
-	constexpr float HairDiagnosticSimSpaceAngularAlpha = 0.0f;
-	constexpr float HairDiagnosticMaxAngularVelocity = 0.0f;
-	constexpr float HairDiagnosticMaxAngularAcceleration = 0.0f;
+	// The chain lives in its animated parent's frame, so clip/grid motion moves the frame instead of
+	// dragging the constraints through component space. Admit only a small, bounded share of that
+	// frame's acceleration: enough follow-through to read, below the impulse that made it fly out.
+	constexpr float HairAnimationMotionAlpha = 0.25f;
+	constexpr float HairMaxAnimationAngularVelocity = 3.0f;
+	constexpr float HairMaxAnimationAngularAcceleration = 25.0f;
+	constexpr float HairComponentLinearAccelerationScale = 0.15f;
+	constexpr float HairMaxComponentLinearAcceleration = 200.0f;
 
 	// The component-space transform a bone has at this point in the pass, preferring a correction
 	// this pass has already produced over what the incoming pose holds. Retail composes bone by bone
@@ -107,22 +108,39 @@ void FAnimNode_ElysiumHairDynamics::Configure(
 	BoundBone.BoneName = Config.BoundBone;
 	ChainEnd.BoneName = Config.ChainEnd;
 	bChain = true;
-	SimulationSpace = AnimPhysSimSpaceType::Component;
-	GravityScale = HairDiagnosticGravityScale;
+	const int32 BoundIndex = ReferenceSkeleton.FindBoneIndex(Config.BoundBone);
+	const int32 RelativeIndex = BoundIndex != INDEX_NONE
+		? ReferenceSkeleton.GetParentIndex(BoundIndex)
+		: INDEX_NONE;
+	if (RelativeIndex == INDEX_NONE)
+	{
+		UE_LOG(LogElysiumHairDynamics, Warning,
+			TEXT("Hair AnimDynamics chain %s -> %s has no valid parent simulation bone; disabling it"),
+			*Config.BoundBone.ToString(), *Config.ChainEnd.ToString());
+		BoundBone.BoneName = NAME_None;
+		ChainEnd.BoneName = NAME_None;
+		bChain = false;
+		PhysicsBodyDefinitions.Reset();
+		RequestInitialise(ETeleportType::ResetPhysics);
+		return;
+	}
+	SimulationSpace = AnimPhysSimSpaceType::BoneRelative;
+	RelativeSpaceBone.BoneName = ReferenceSkeleton.GetBoneName(RelativeIndex);
+	GravityScale = Config.GravityScale;
 	bOverrideLinearDamping = true;
 	bOverrideAngularDamping = true;
-	LinearDampingOverride = HairDiagnosticDamping;
-	AngularDampingOverride = HairDiagnosticDamping;
-	bAngularSpring = true;
-	AngularSpringConstant = HairDiagnosticAngularSpring;
+	LinearDampingOverride = Config.Damping;
+	AngularDampingOverride = Config.Damping;
+	bAngularSpring = Config.AngularSpring > 0.0f;
+	AngularSpringConstant = Config.AngularSpring;
 	NumSolverIterationsPreUpdate = 8;
 	NumSolverIterationsPostUpdate = 2;
-	ComponentLinearAccScale = FVector::ZeroVector;
+	ComponentLinearAccScale = FVector(HairComponentLinearAccelerationScale);
 	ComponentLinearVelScale = FVector::ZeroVector;
-	ComponentAppliedLinearAccClamp = FVector::ZeroVector;
-	SimSpaceSettings.SimSpaceAngularAlpha = HairDiagnosticSimSpaceAngularAlpha;
-	SimSpaceSettings.MaxAngularVelocity = HairDiagnosticMaxAngularVelocity;
-	SimSpaceSettings.MaxAngularAcceleration = HairDiagnosticMaxAngularAcceleration;
+	ComponentAppliedLinearAccClamp = FVector(HairMaxComponentLinearAcceleration);
+	SimSpaceSettings.SimSpaceAngularAlpha = HairAnimationMotionAlpha;
+	SimSpaceSettings.MaxAngularVelocity = HairMaxAnimationAngularVelocity;
+	SimSpaceSettings.MaxAngularAcceleration = HairMaxAnimationAngularAcceleration;
 	bUsePlanarLimit = false;
 	bUseSphericalLimits = false;
 	bEnableWind = false;
@@ -161,7 +179,7 @@ void FAnimNode_ElysiumHairDynamics::Configure(
 		Body.ConstraintSetup.TwistAxis = AnimPhysTwistAxis::AxisX;
 		Body.ConstraintSetup.AngularTargetAxis = AnimPhysTwistAxis::AxisX;
 		Body.ConstraintSetup.AngularTarget = FVector::XAxisVector;
-		Body.ConstraintSetup.ConeAngle = HairDiagnosticConeAngleDegrees;
+		Body.ConstraintSetup.ConeAngle = Config.ConeAngleDegrees;
 	}
 	RequestInitialise(ETeleportType::ResetPhysics);
 }

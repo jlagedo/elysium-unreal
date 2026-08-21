@@ -154,28 +154,32 @@ bool FElysiumHairDynamicsPresentationTuningTest::RunTest(const FString& Paramete
 
 	FAnimNode_ElysiumHairDynamics Node;
 	Node.Configure(Chain, Skeleton->GetReferenceSkeleton());
-	TestEqual(TEXT("diagnostic hair gravity is disabled"), Node.GravityScale, 0.0f);
-	TestEqual(TEXT("diagnostic hair linear damping is maximal"),
-		Node.LinearDampingOverride, 1.0f);
-	TestEqual(TEXT("diagnostic hair angular damping is maximal"),
-		Node.AngularDampingOverride, 1.0f);
-	TestTrue(TEXT("diagnostic hair angular spring is enabled"), Node.bAngularSpring);
-	TestEqual(TEXT("diagnostic hair angular spring is intentionally rigid"),
-		Node.AngularSpringConstant, 1000.0f);
-	TestTrue(TEXT("diagnostic hair ignores component linear acceleration"),
-		Node.ComponentLinearAccScale.IsZero());
-	TestTrue(TEXT("diagnostic hair has no component linear acceleration allowance"),
-		Node.ComponentAppliedLinearAccClamp.IsZero());
-	TestEqual(TEXT("diagnostic hair ignores simulation-space rotation"),
-		Node.SimSpaceSettings.SimSpaceAngularAlpha, 0.0f);
-	TestEqual(TEXT("diagnostic hair angular velocity is zero"),
-		Node.SimSpaceSettings.MaxAngularVelocity, 0.0f);
-	TestEqual(TEXT("diagnostic hair angular acceleration is zero"),
-		Node.SimSpaceSettings.MaxAngularAcceleration, 0.0f);
-	TestTrue(TEXT("diagnostic hair locks every chain cone"),
-		Algo::AllOf(Node.PhysicsBodyDefinitions, [](const FAnimPhysBodyDefinition& Body)
+	TestEqual(TEXT("hair uses the bound root parent as its simulation frame"),
+		Node.SimulationSpace, AnimPhysSimSpaceType::BoneRelative);
+	TestEqual(TEXT("hair simulation frame is the anchor parent"),
+		Node.RelativeSpaceBone.BoneName, FName(TEXT("root")));
+	TestEqual(TEXT("hair keeps authored gravity"), Node.GravityScale, Chain.GravityScale);
+	TestEqual(TEXT("hair keeps authored linear damping"),
+		Node.LinearDampingOverride, Chain.Damping);
+	TestEqual(TEXT("hair keeps authored angular damping"),
+		Node.AngularDampingOverride, Chain.Damping);
+	TestFalse(TEXT("zero authored spring stays disabled"), Node.bAngularSpring);
+	TestEqual(TEXT("hair keeps the authored angular spring"),
+		Node.AngularSpringConstant, Chain.AngularSpring);
+	TestTrue(TEXT("hair admits a bounded component linear acceleration share"),
+		Node.ComponentLinearAccScale.Equals(FVector(0.15f)));
+	TestTrue(TEXT("hair clamps component linear acceleration"),
+		Node.ComponentAppliedLinearAccClamp.Equals(FVector(200.0f)));
+	TestEqual(TEXT("hair admits a bounded animation-frame angular share"),
+		Node.SimSpaceSettings.SimSpaceAngularAlpha, 0.25f);
+	TestEqual(TEXT("hair clamps animation angular velocity"),
+		Node.SimSpaceSettings.MaxAngularVelocity, 3.0f);
+	TestEqual(TEXT("hair clamps animation angular acceleration"),
+		Node.SimSpaceSettings.MaxAngularAcceleration, 25.0f);
+	TestTrue(TEXT("hair keeps the authored cone on every chain body"),
+		Algo::AllOf(Node.PhysicsBodyDefinitions, [&Chain](const FAnimPhysBodyDefinition& Body)
 		{
-			return Body.ConstraintSetup.ConeAngle == 0.0f;
+			return Body.ConstraintSetup.ConeAngle == Chain.ConeAngleDegrees;
 		}));
 	return true;
 }

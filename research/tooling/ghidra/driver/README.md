@@ -47,7 +47,7 @@ section E), the script API surface, and the choreographed scenes.
 | `crt_fid.py`     | ✅ | builds the VC6 SP5 CRT database and applies it: `stage`, `build`, `apply` |
 | `symbol_sweep.py` | ✅ | drives `NameFromStrings`: `survey`, `apply`, `clear` |
 | `datamap_types.py` | ✅ | drives `ApplyDatamapTypes`: `report`, `apply` |
-| `corpus.py`      | ✅ | drives `DumpCorpus`, `DumpVtables`, `DumpExternals`, `DumpListing` and `ApplyPythonApi`, loads SQLite, and answers every corpus query |
+| `corpus.py`      | ✅ | drives `DumpCorpus`, `DumpVtables`, `DumpExternals`, `DumpListing` and `ApplyPythonApi`, loads SQLite, resolves the named-interface graph, and answers every corpus query |
 | `repair.py`      | ✅ | drives the repair passes: `boundaries`, `jumptables`, `thiscall`, `signatures`, each `report` then `apply` |
 | `pyapi.py`       | ✅ | extracts the CPython 2.1.2 C API from `Include/*.h` into the prototype file `ApplyPythonApi` applies |
 | `corpus_mcp.py`  | ✅ | the same queries as MCP tools (`vtmb_*`), registered in `.mcp.json` as `vtmb-corpus` |
@@ -339,8 +339,8 @@ uv run elysium research corpus closure CBasePlayer --out <path>
 virtual half of the call graph — without re-reading a dump, which is how a change to *those rules*
 costs seconds instead of an overnight run.
 
-`corpus` also answers `func`, `code`, `asm`, `callers`, `callees`, `vtable`, `slot`, `grep`,
-`str`, `globals`, `fields`, `twin`, `outliers`, `suggest` and `stat`; `corpus_mcp.py` exposes the
+`corpus` also answers `func`, `code`, `asm`, `callers`, `callees`, `vtable`, `slot`, `iface`,
+`grep`, `str`, `globals`, `fields`, `twin`, `outliers`, `suggest` and `stat`; `corpus_mcp.py` exposes the
 same set as `vtmb_*` MCP tools. It is launched directly rather than through
 `uv run elysium research`, because the CLI writes a run report to stdout and stdout there carries
 only protocol messages — so it reads `.elysium.local.env` itself.
@@ -532,6 +532,59 @@ minimum is invisible until *both* are fixed, which is why `ApplyPythonApi` does 
 
 Unpack the tree under `$ELYSIUM_WORK_ROOT/research/reference-source/Python-2.1.2/`. It is
 third-party reference source and is never committed.
+
+### A call that leaves the binary is still an edge
+
+Source publishes each module's services by **versioned name**, and both ends of that handshake
+are literals the image carries:
+
+```
+provider (engine.dll)   InterfaceReg::InterfaceReg(&reg, FUN_2010ad70, "VEngineServer014")
+factory  (engine.dll)   undefined4 * FUN_2010ad70(void) { return &DAT_213057f4; }
+ctor     (engine.dll)   DAT_213057f4 = &vftable_CVEngineServer;
+consumer (vampire.dll)  DAT_1070b22c = (*param_1)("VEngineServer014", 0)
+```
+
+`corpus build` walks that chain, so a dispatch through a global singleton resolves to a real
+function in another DLL: **3,983 cross-module edges**, 2,906 of them `vampire.dll → engine.dll`.
+`VEngineServer014` alone carries 1,941 over 88 slots. `callers` and `callees` report them in
+their own **CROSS-MODULE** section — never merged with the local graph, because the callee is in
+a different address space.
+
+**The class is read from the constructor, not from the image.** A global C++ object's vftable
+pointer is written at static-init, so the dword in the file is zero or linker residue — the same
+trap `docs/vtmb/script_api.md` records for datamaps, where an image read reports `INPUTS (0)` for
+a class carrying 25. `_object_class` reads whatever assigns it instead. Construction writes each
+base's vftable before the most-derived one, so several names can appear for one object
+(`&vftable_CVEngineServer` *and* `&vftable_IVEngineServer`); the `staticinit_*` writer wins,
+then the widest table.
+
+`corpus iface [pattern]` prints the map: 49 interfaces registered, 35 resolved to a class, 43
+consuming globals. An interface with no class recovered says so rather than resolving to
+something plausible.
+
+### The most-dispatched objects in the game have no name
+
+`DumpCorpus` skips dynamic labels on purpose — Ghidra mints `DAT_<addr>` for anything referenced
+at all, and tens of thousands of those rows would bury `cvar_<name>` and `datamap_<Class>`. But
+the objects VtMB dispatches through hardest are exactly the unnamed ones: `*DAT_1070b22c` carries
+1,941 virtual calls and had **no row in `globals` and no referrers in `global_refs`**, so
+`corpus globals` answered "no global name matches" — reporting the index's blind spot as a fact
+about the game.
+
+`data_refs` indexes them from the decompiled C instead, into its own table so the named ones stay
+readable: 130,570 references over 44,776 distinct addresses, with **writes recorded apart from
+reads**. That split is the point — what a singleton *is* is stated by whatever assigns it, and
+`corpus globals <addr>` lists the writers first:
+
+```
+engine.dll  20b42980  unnamed datum — 26 referrer(s), 1 of them write it
+    1 writes it:
+      engine.dll  2008e450  FUN_2008e450        ← _Host_RunFrame, by its VProf scopes
+```
+
+A write is an assignment to the datum, not through it: `*DAT_x = 0` writes what the pointer
+points at and says nothing about the pointer, so the lookbehind keeps those out.
 
 ### Names come from the strings the compiler left
 

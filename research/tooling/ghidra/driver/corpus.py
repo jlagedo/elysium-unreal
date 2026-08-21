@@ -88,6 +88,14 @@ CREATE TABLE IF NOT EXISTS fields (
     module TEXT, cls TEXT, off INTEGER, name TEXT, len INTEGER, type TEXT, note TEXT);
 CREATE TABLE IF NOT EXISTS accesses (
     module TEXT, func_addr TEXT, cls TEXT, off INTEGER, field TEXT, kind TEXT);
+CREATE TABLE IF NOT EXISTS interfaces (
+    name TEXT PRIMARY KEY, module TEXT, factory TEXT, object TEXT, cls TEXT, slots INTEGER);
+CREATE TABLE IF NOT EXISTS iface_globals (
+    module TEXT, addr TEXT, name TEXT, PRIMARY KEY (module, addr));
+CREATE TABLE IF NOT EXISTS xedges (
+    module TEXT, caller TEXT, slot INTEGER, iface TEXT, to_module TEXT, to_addr TEXT);
+CREATE TABLE IF NOT EXISTS data_refs (
+    module TEXT, addr TEXT, func_addr TEXT, writes INTEGER);
 CREATE TABLE IF NOT EXISTS externals (
     module TEXT, addr TEXT, lib TEXT, name TEXT, imported TEXT, PRIMARY KEY (module, addr));
 CREATE TABLE IF NOT EXISTS meta (
@@ -120,6 +128,10 @@ INDICES = {
     "string_refs_str": "string_refs (module, str_addr)",
     "globals_name": "globals (name)",
     "externals_name": "externals (name)",
+    "data_refs_addr": "data_refs (module, addr, writes)",
+    "xedges_caller": "xedges (module, caller)",
+    "xedges_to": "xedges (to_module, to_addr)",
+    "data_refs_func": "data_refs (module, func_addr)",
     "global_refs_addr": "global_refs (module, addr)",
     "global_refs_func": "global_refs (func_addr)",
     "fields_cls": "fields (cls, off)",
@@ -186,6 +198,45 @@ VCALL = re.compile(r"\(\*\*\(code \*\*\)\s*\(?"
 VCALL_ZERO = re.compile(r"\(\*\*\(code \*\*\)\s*\*"
                         r"(?:\([A-Za-z_][\w ]*\*+\))?\s*"
                         r"([A-Za-z_]\w*)\s*\)\s*\)")
+# An unnamed datum, as the decompiler writes it. `DumpCorpus` deliberately skips these: Ghidra
+# mints a dynamic label for anything referenced at all, and tens of thousands of `DAT_<addr>`
+# rows would bury the labels that mean something (`cvar_<name>`, `datamap_<Class>`). But the
+# objects VtMB dispatches through hardest are exactly the unnamed ones -- `*DAT_1070b22c` alone
+# carries 1,941 virtual calls -- so they are indexed HERE, from the decompiled C, into their own
+# table rather than into `globals`.
+DATA_TOKEN = re.compile(r"\b(_{0,2}(?:DAT|UNK|PTR|FLOAT|DOUBLE|BYTE|WORD|DWORD|QWORD|UINT|INT)"
+                        r"[A-Za-z0-9_]*?_([0-9a-fA-F]{8}))\b")
+# The same token on the left of a single `=`, and not through a dereference. Which function
+# ASSIGNS a singleton is what names its type; `*DAT_x = 0` writes through the pointer and says
+# nothing about what the pointer is, so the lookbehind keeps those out.
+DATA_WRITE = re.compile(r"(?<![*&\w])" + DATA_TOKEN.pattern + r"\s*(?:\[[^\]]*\])?\s*=(?!=)")
+# Source publishes a module's services by VERSIONED NAME, and both halves of that handshake are
+# stated in the decompiled C.
+#
+#   provider (engine.dll):  InterfaceReg::InterfaceReg(&reg, FUN_2010ad70, "VEngineServer014")
+#   factory  (engine.dll):  undefined4 * FUN_2010ad70(void) { return &DAT_213057f4; }
+#   consumer (vampire.dll): DAT_1070b22c = (*param_1)("VEngineServer014", 0)
+#
+# That chain is what makes a dispatch through a global singleton resolvable: the object's first
+# dword is its vftable, the vftable names its class, and the class's slot N is the function
+# 1,941 sites in another module are actually calling. Nothing here is inferred -- every link is
+# a literal the image carries.
+IFACE_REGISTER = re.compile(
+    r"InterfaceReg::InterfaceReg\s*\(\s*&?\w*?_?[0-9a-fA-F]{8}\s*,\s*"
+    r"(?:thunk_)?FUN_([0-9a-fA-F]{8})\s*,\s*&?s_([A-Za-z_][A-Za-z0-9_]*?)_[0-9a-fA-F]{8}\s*\)")
+IFACE_FACTORY = re.compile(r"return\s+\(?[^;]*?&\w*?_?([0-9a-fA-F]{8})\s*;")
+# `DAT_x = <anything>("Name", ...)`. Deliberately loose about what stands between the datum and
+# the name -- the decompiler writes the factory call four different ways, `(*param_1)`,
+# `(*(code *)param_1)`, `(*DAT_21300c7c)`, each under its own cast. Precision comes from the
+# NAME instead: a match is only kept when it is an interface some module actually registers.
+IFACE_ACQUIRE = re.compile(
+    r"(_{0,2}(?:DAT|PTR|UNK)[A-Za-z0-9_]*?_([0-9a-fA-F]{8}))\s*=\s*"
+    r"[^;]{0,120}?&?s_([A-Za-z_][A-Za-z0-9_]*?)_[0-9a-fA-F]{8}")
+
+# Below this, an "address" is a small constant the decompiler happened to render as a datum
+# (`DAT_00000018` is a read through a null pointer, not a global).
+LOWEST_IMAGE = 0x400000
+
 # The last identifier of a receiver expression, and whether the expression indexes.
 RECEIVER = re.compile(r"([A-Za-z_]\w*)\s*(\[[^\]]*\])?\s*$")
 # Ghidra declares its locals at the top of the body, so a receiver that is not `this` still
@@ -410,7 +461,7 @@ def _load_module(connection: sqlite3.Connection, module: str, corpus: Path) -> t
     if not functions.is_file():
         raise FileNotFoundError(f"{module}: no dump at {functions}; run `corpus dump {module}`")
     for table in ("functions", "edges", "strings", "string_refs", "fields", "accesses",
-                  "vtables", "vcalls", "globals", "global_refs"):
+                  "vtables", "vcalls", "globals", "global_refs", "data_refs", "externals"):
         connection.execute(f"DELETE FROM {table} WHERE module = ?", (module,))
 
     # The vtable classes are read before the functions, because a dispatch site's receiver type
@@ -445,6 +496,7 @@ def _load_module(connection: sqlite3.Connection, module: str, corpus: Path) -> t
                                    (module, record["a"], callee))
                 edges += 1
             accesses += _derive_accesses(connection, module, record, code)
+            _derive_data_refs(connection, module, record, code)
             _derive_vcalls(connection, module, record, code, classes)
 
     _load_externals(connection, module, corpus)
@@ -535,6 +587,23 @@ def _derive_accesses(connection: sqlite3.Connection, module: str,
     return len(seen)
 
 
+def _derive_data_refs(connection: sqlite3.Connection, module: str, record: dict,
+                      code: str) -> int:
+    """Which functions touch each unnamed datum, and which of them write it."""
+    if not code:
+        return 0
+    writes = {addr.lower() for _, addr in DATA_WRITE.findall(code)}
+    rows = []
+    for _, addr in DATA_TOKEN.findall(code):
+        addr = addr.lower()
+        if int(addr, 16) < LOWEST_IMAGE:
+            continue
+        rows.append((module, addr, record["a"], 1 if addr in writes else 0))
+    rows = list(dict.fromkeys(rows))
+    connection.executemany("INSERT INTO data_refs VALUES (?,?,?,?)", rows)
+    return len(rows)
+
+
 def _derive_vcalls(connection: sqlite3.Connection, module: str, record: dict,
                    code: str, classes: set[str]) -> int:
     """Every virtual dispatch the function performs, as (receiver, slot).
@@ -591,6 +660,117 @@ def _derive_vcalls(connection: sqlite3.Connection, module: str, record: dict,
         connection.execute("INSERT INTO vcalls VALUES (?,?,?,?,?,?)",
                            (module, record["a"], receiver, offset, slot, cls))
     return len(sites)
+
+
+VFTABLE_ASSIGN = re.compile(r"&vftable_([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def _object_class(connection: sqlite3.Connection, bodies: dict, module: str,
+                  obj: str) -> tuple[str, int]:
+    """The class of a singleton, read from whatever assigns its vftable.
+
+    NOT read from the image. A global C++ object's vftable pointer is written by its constructor
+    at static-init, so the dword in the file is zero or whatever the linker left -- the same trap
+    `docs/vtmb/script_api.md` records for datamaps, where an image read reports `INPUTS (0)` for a
+    class carrying 25. The constructor states it in plain text instead:
+
+        DAT_213057f4 = &vftable_CVEngineServer;
+
+    Construction writes each base's vftable before the most-derived one, so more than one name
+    can appear. `staticinit_*` is Ghidra's label for the global's own initializer and is
+    preferred; otherwise the widest table wins, and a tie is left to the first by name so the
+    answer does not depend on row order.
+    """
+    candidates: list[tuple[bool, str]] = []
+    for row in connection.execute(
+            "SELECT func_addr FROM data_refs WHERE module = ? AND addr = ? AND writes = 1",
+            (module, obj)):
+        code = bodies.get((module, row["func_addr"]))
+        if not code:
+            continue
+        owner = connection.execute("SELECT name FROM functions WHERE module = ? AND addr = ?",
+                                   (module, row["func_addr"])).fetchone()
+        initializer = bool(owner and owner["name"].startswith("staticinit_"))
+        for line in code.splitlines():
+            if not re.search(r"(?<![*&\w])\w*_%s\b\s*=(?!=)" % obj, line):
+                continue
+            for name in VFTABLE_ASSIGN.findall(line):
+                candidates.append((initializer, name.split("_at")[0]))
+    if not candidates:
+        return "", 0
+    widths = {}
+    for _, name in candidates:
+        found = connection.execute(
+            "SELECT count(*) n FROM vtables WHERE module = ? AND cls = ? AND sub = 0",
+            (module, name)).fetchone()
+        widths[name] = found["n"] if found else 0
+    best = sorted(candidates, key=lambda one: (not one[0], -widths[one[1]], one[1]))[0][1]
+    return best, widths[best]
+
+
+def _resolve_interfaces(connection: sqlite3.Connection) -> tuple[int, int, int]:
+    """The cross-module half of the call graph: who provides each named interface, which global
+    in each consuming module holds it, and what a dispatch through that global actually reaches.
+    """
+    connection.execute("DELETE FROM interfaces")
+    connection.execute("DELETE FROM iface_globals")
+    connection.execute("DELETE FROM xedges")
+
+    # --- provider side ---------------------------------------------------------------------
+    bodies = {(row["module"], row["addr"]): row["code"] for row in connection.execute(
+        "SELECT module, addr, code FROM functions WHERE code != ''")}
+    provided = 0
+    for (module, _), code in list(bodies.items()):
+        if "InterfaceReg::InterfaceReg" not in code:
+            continue
+        for factory, name in IFACE_REGISTER.findall(code):
+            factory = factory.lower()
+            body = bodies.get((module, factory))
+            if not body:
+                continue
+            match = IFACE_FACTORY.search(body)
+            if not match:
+                continue
+            obj = match.group(1).lower()
+            cls, slots = _object_class(connection, bodies, module, obj)
+            connection.execute(
+                "INSERT OR REPLACE INTO interfaces VALUES (?,?,?,?,?,?)",
+                (name, module, factory, obj, cls, slots))
+            provided += 1
+
+    # --- consumer side ---------------------------------------------------------------------
+    known = {row[0] for row in connection.execute("SELECT name FROM interfaces")}
+    held = 0
+    for (module, _), code in bodies.items():
+        if "= (" not in code:
+            continue
+        for _, datum, name in IFACE_ACQUIRE.findall(code):
+            if name not in known:
+                continue
+            connection.execute("INSERT OR REPLACE INTO iface_globals VALUES (?,?,?)",
+                               (module, datum.lower(), name))
+            held += 1
+
+    # --- the edges -------------------------------------------------------------------------
+    written = 0
+    for row in connection.execute(
+            """SELECT g.module, g.addr, g.name, i.module AS provider, i.cls
+               FROM iface_globals g JOIN interfaces i ON i.name = g.name
+               WHERE i.cls != ''""").fetchall():
+        sites = connection.execute(
+            "SELECT DISTINCT caller, slot FROM vcalls WHERE module = ? AND cls = '' "
+            "AND recv LIKE ?", (row["module"], f"%{row['addr']}%")).fetchall()
+        for site in sites:
+            target = connection.execute(
+                "SELECT func FROM vtables WHERE module = ? AND cls = ? AND slot = ? AND sub = 0",
+                (row["provider"], row["cls"], site["slot"])).fetchone()
+            if not target:
+                continue
+            connection.execute("INSERT INTO xedges VALUES (?,?,?,?,?,?)",
+                               (row["module"], site["caller"], site["slot"], row["name"],
+                                row["provider"], target["func"]))
+            written += 1
+    return provided, held, written
 
 
 def _resolve_virtual_edges(connection: sqlite3.Connection) -> tuple[int, int]:
@@ -671,6 +851,10 @@ def build(programs: list[str]) -> int:
           f"holds more than one function at that slot, {unknown} carry no class (queryable by "
           f"slot with `corpus slot <N>`)")
 
+    provided, held, crossed = _resolve_interfaces(connection)
+    connection.commit()
+    print(f"named interfaces: {provided} provided, held by {held} global(s) in the consuming "
+          f"modules, {crossed} cross-module dispatch edge(s)")
     _build_index(connection)
     # The planner picks between these indices by guesswork until it has seen their shape, and
     # guesses badly on a table whose rows carry a decompilation each.
@@ -707,6 +891,10 @@ def reindex() -> int:
     connection.commit()
     print(f"virtual call graph: {virtual} edges, {ambiguous} sites left unresolved because the "
           f"class holds more than one function at that slot")
+    provided, held, crossed = _resolve_interfaces(connection)
+    connection.commit()
+    print(f"named interfaces: {provided} provided, held by {held} global(s) in the consuming "
+          f"modules, {crossed} cross-module dispatch edge(s)")
     _build_index(connection)
     connection.execute("ANALYZE")
     connection.commit()
@@ -1135,9 +1323,27 @@ def command_hop(reference: str, direction: str) -> int:
                     # pass, rather than printing a synthetic address and no explanation.
                     print(f"    {one['callee']}  <no name — run `corpus externals "
                           f"{row['module']}`>")
+        # A dispatch through a named interface leaves the module entirely, so it is neither a
+        # local edge nor an unresolved site -- it is an answer, in another binary.
+        crossing = connection.execute(
+            """SELECT DISTINCT x.slot, x.iface, x.to_module, x.to_addr, f.ns, f.name
+               FROM xedges x LEFT JOIN functions f
+                 ON f.module = x.to_module AND f.addr = x.to_addr
+               WHERE x.module = ? AND x.caller = ? ORDER BY x.iface, x.slot""",
+            (row["module"], row["addr"])).fetchall()
+        if crossing:
+            print(f"\n{len(crossing)} call(s) into another module through a named interface:")
+            for one in crossing:
+                owner = f"{one['ns']}::" if one["ns"] and one["ns"] != "Global" else ""
+                print(f"    {one['iface']:24} slot {one['slot']:4}  {one['to_module']:14} "
+                      f"{one['to_addr']}  {owner}{one['name'] or '<not a function>'}")
+
         unresolved = connection.execute(
-            "SELECT DISTINCT slot, recv FROM vcalls WHERE module = ? AND caller = ? AND cls = ''"
-            " ORDER BY slot", (row["module"], row["addr"])).fetchall()
+            """SELECT DISTINCT slot, recv FROM vcalls WHERE module = ? AND caller = ? AND cls = ''
+               AND NOT EXISTS (SELECT 1 FROM iface_globals g
+                               WHERE g.module = vcalls.module AND vcalls.recv LIKE '%' || g.addr
+                                     || '%')
+               ORDER BY slot""", (row["module"], row["addr"])).fetchall()
         if unresolved:
             print(f"\n{len(unresolved)} virtual dispatch(es) whose receiver class the code does "
                   f"not state:")
@@ -1166,6 +1372,19 @@ def command_hop(reference: str, direction: str) -> int:
           f"at that slot:")
     for one in virtual:
         print("  " + _label(one))
+
+    crossing = connection.execute(
+        """SELECT f.*, x.iface, x.slot, x.module AS from_module FROM xedges x JOIN functions f
+           ON f.module = x.module AND f.addr = x.caller
+           WHERE x.to_module = ? AND x.to_addr = ? ORDER BY x.module, f.addr""",
+        (row["module"], row["addr"])).fetchall()
+    if crossing:
+        print(f"\n{len(crossing)} CROSS-MODULE caller(s) — another binary reaches this through a "
+              f"named interface, so no local reference exists:")
+        for one in crossing[:60]:
+            print(f"  {_label(one)}  via {one['iface']} slot {one['slot']}")
+        if len(crossing) > 60:
+            print(f"  … {len(crossing) - 60} more")
 
     # Every table this function sits in, so the possible set is the union of its slots.
     slots = connection.execute(
@@ -1394,6 +1613,60 @@ def command_slot(slot: int, module: str | None) -> int:
     return 0
 
 
+def _unnamed_datum(connection: sqlite3.Connection, text: str) -> int:
+    """A datum by bare address, from the references derived out of the decompiled C.
+
+    The objects VtMB dispatches through hardest carry no label at all -- `DAT_1070b22c` alone
+    takes 1,941 virtual calls -- so `globals` has no row for them and answering "no global name
+    matches" would be reporting the index's blind spot as a fact about the game. Writers are
+    listed first and separately: what a singleton IS is stated by whatever assigns it.
+    """
+    candidate = text.lower().removeprefix("0x")
+    for prefix in ("dat_", "_dat_", "ptr_", "unk_"):
+        if candidate.startswith(prefix):
+            candidate = candidate[len(prefix):]
+    if not re.fullmatch(r"[0-9a-f]{6,8}", candidate):
+        return 1
+    candidate = candidate.rjust(8, "0")
+    rows = connection.execute(
+        "SELECT module, writes, func_addr FROM data_refs WHERE addr = ? ORDER BY module, writes "
+        "DESC, func_addr", (candidate,)).fetchall()
+    if not rows:
+        return 1
+    for module in dict.fromkeys(row["module"] for row in rows):
+        here = [row for row in rows if row["module"] == module]
+        writers = [row for row in here if row["writes"]]
+        dispatch = connection.execute(
+            "SELECT count(*) n, count(DISTINCT slot) s FROM vcalls WHERE module = ? AND "
+            "recv LIKE ?", (module, f"%{candidate}%")).fetchone()
+        print(f"{module:18} {candidate}  unnamed datum — {len(here)} referrer(s), "
+              f"{len(writers)} of them write it"
+              + (f"; {dispatch['n']} virtual call(s) dispatch through it over "
+                 f"{dispatch['s']} distinct slot(s)" if dispatch["n"] else ""))
+        iface = connection.execute(
+            """SELECT g.name, i.module AS provider, i.cls, i.slots FROM iface_globals g
+               LEFT JOIN interfaces i ON i.name = g.name
+               WHERE g.module = ? AND g.addr = ?""", (module, candidate)).fetchone()
+        if iface:
+            print(f"    holds the named interface {iface['name']!r}"
+                  + (f", provided by {iface['provider']} as {iface['cls']} "
+                     f"({iface['slots']} slots)" if iface["cls"] else
+                     " — no provider in the corpus, so its dispatches cannot be resolved"))
+        for label, group in (("writes it", writers),
+                             ("reads it", [row for row in here if not row["writes"]])):
+            if not group:
+                continue
+            print(f"    {len(group)} {label}:")
+            for row in group[:20]:
+                owner = connection.execute(
+                    "SELECT * FROM functions WHERE module = ? AND addr = ?",
+                    (module, row["func_addr"])).fetchone()
+                print("      " + (_label(owner) if owner else f"{module} {row['func_addr']}"))
+            if len(group) > 20:
+                print(f"      … {len(group) - 20} more")
+    return 0
+
+
 def command_globals(text: str, limit: int) -> int:
     """A global datum and every function that reaches it."""
     connection = _connect()
@@ -1401,7 +1674,9 @@ def command_globals(text: str, limit: int) -> int:
         "SELECT * FROM globals WHERE name LIKE ? ESCAPE '\\' ORDER BY module, addr LIMIT ?",
         (_contains(text), max(1, limit))).fetchall()
     if not rows:
-        print(f"no global name matches {text!r}")
+        if _unnamed_datum(connection, text) == 0:
+            return 0
+        print(f"no global name matches {text!r}, and no unnamed datum at that address either")
         return 1
     for row in rows:
         referencing = connection.execute(
@@ -1415,6 +1690,44 @@ def command_globals(text: str, limit: int) -> int:
             print("    " + _label(one))
         if len(referencing) > 40:
             print(f"    … {len(referencing) - 40} more")
+    return 0
+
+
+def command_iface(pattern: str | None) -> int:
+    """Every named interface: who provides it, as what class, and who dispatches through it.
+
+    Source publishes a module's services by versioned name, and both ends of that handshake are
+    literals in the image — `InterfaceReg::InterfaceReg(&reg, factory, "VEngineServer014")` on
+    the provider, `DAT_x = (*factory)("VEngineServer014", 0)` on the consumer. Joining them is
+    what makes a call that leaves the binary an edge rather than an unresolved dispatch.
+    """
+    connection = _connect()
+    query = "SELECT * FROM interfaces"
+    parameters: list = []
+    if pattern:
+        query += " WHERE name LIKE ? ESCAPE '\\'"
+        parameters.append(_contains(pattern))
+    rows = connection.execute(query + " ORDER BY module, name", parameters).fetchall()
+    if not rows:
+        print(f"no named interface matches {pattern!r}" if pattern
+              else "no interface registrations in the corpus")
+        return 1
+    for row in rows:
+        holders = connection.execute(
+            "SELECT module, addr FROM iface_globals WHERE name = ? ORDER BY module",
+            (row["name"],)).fetchall()
+        edges = connection.execute(
+            "SELECT count(*) n, count(DISTINCT slot) s FROM xedges WHERE iface = ?",
+            (row["name"],)).fetchone()
+        print(f"{row['name']:28} {row['module']:16} "
+              + (f"{row['cls']} ({row['slots']} slots)" if row["cls"]
+                 else "<class not recovered — no constructor assigns its vftable>"))
+        if holders:
+            print("    held by: " + ", ".join(f"{one['module']} {one['addr']}"
+                                              for one in holders))
+        if edges["n"]:
+            print(f"    {edges['n']} dispatch(es) over {edges['s']} slot(s) resolve through it")
+    print(f"\n{len(rows)} interface(s)")
     return 0
 
 
@@ -1654,7 +1967,7 @@ def command_stat() -> int:
         print(f"  {row['module']:20} {row['functions']:7} functions, "
               f"{row['decompiled']:7} decompiled, {row['warned']:5} warned")
     for table in ("edges", "vtables", "vcalls", "strings", "string_refs", "globals",
-                  "global_refs", "externals", "fields", "accesses"):
+                  "global_refs", "externals", "data_refs", "fields", "accesses"):
         count = connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
         print(f"  {table:20} {count}")
     for row in connection.execute(
@@ -1754,6 +2067,9 @@ def main() -> int:
     globals_parser.add_argument("text")
     globals_parser.add_argument("--limit", type=int, default=20)
 
+    iface_parser = sub.add_parser("iface", help="named interfaces: provider, class, consumers")
+    iface_parser.add_argument("pattern", nargs="?", default=None)
+
     outliers_parser = sub.add_parser("outliers", help="oversized bodies and damaged C")
     outliers_parser.add_argument("--min", dest="minimum", type=int, default=4096)
 
@@ -1819,6 +2135,8 @@ def main() -> int:
         return command_slot(_offset(args.slot), args.module)
     if args.command == "globals":
         return command_globals(args.text, args.limit)
+    if args.command == "iface":
+        return command_iface(args.pattern)
     if args.command == "outliers":
         return command_outliers(args.minimum)
     if args.command == "suggest":

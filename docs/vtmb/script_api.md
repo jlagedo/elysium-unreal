@@ -198,12 +198,30 @@ opening another.
 reads *the same* roll, so a per-call draw is ruled out by the content: over a 7-row set it would
 show no row 34% of the time and two or more 40% of the time. `DAT_1070b22c`'s vtable slot `+0x1e0`
 must therefore hand back a value that is stable for at least the burst in which a turn's gates are
-evaluated. *Still pending:* the identity of that global — which fixes how *long* the value holds,
-and so how often a repeated visit to the same set re-picks.
+evaluated.
+
+**The roll is the host frame counter.** `DAT_1070b22c` is the engine-server interface —
+`vampire.dll` acquires it as `VEngineServer014`, which `engine.dll` registers with
+`InterfaceReg` and implements as `CVEngineServer` (124 slots). Slot `0x1e0 / 4 = 120` is
+`CVEngineServer::vfunc120` at `engine.dll 0x2010acf0`, whose whole body is:
+
+```c
+undefined4 CVEngineServer::vfunc120(void) { return DAT_20b42980; }
+```
+
+`DAT_20b42980` has exactly one writer in the module, `_Host_RunFrame` (`0x2008e450`, identified
+by its own VProf scopes `_Host_RunFrame_Input` / `_Server` / `_Client` / `_Sound`), and what it
+does there is `DAT_20b42980 = DAT_20b42980 + 1` — **one increment per host frame**.
+
+So the value holds for exactly one frame, which is the unit a turn's whole choice list is
+gathered in, and a repeated visit to the same set re-picks on the next frame. The set-shape
+argument above predicted a value stable across the burst; the binary says the burst is the
+frame.
 
 The runtime implements the selector verbatim and draws **one roll per engine frame**
 (`ElysiumScriptNatives::OneOfSetRoll`), the frame being the unit a turn's whole choice list is
-gathered in (`FElysiumDlgConversation::EnterNpcLine` runs the gates in one synchronous burst).
+gathered in (`FElysiumDlgConversation::EnterNpcLine` runs the gates in one synchronous burst) —
+which is what retail does, now verified rather than reasoned.
 `elysium.script.oneofset <roll>` pins it; `-1` restores the live draw.
 Tested by `Elysium.Substrate.OneOfSet` (roadmap 9.7d).
 
