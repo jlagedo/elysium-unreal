@@ -189,7 +189,7 @@ it, so the readout claims a body the stage does not have.
   **[7.6 Bloom/glow tuning](plans/world.md)** · **[7.7 Shadow quality](plans/world.md)** ·
   **[7.8 A/B capture harness](plans/world.md)** · **[7.9 Weather & wetness](plans/world.md)**
 
-*Slice acceptance:* side-by-side A/B match with the original's reference captures (RE17).
+*Slice acceptance:* side-by-side A/B match with the original's reference captures.
 
 ## P8 — Characters & UI *(detail: [plans/characters-ui.md](plans/characters-ui.md))*
 
@@ -513,9 +513,8 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE4 | Ghidra datamap export vs retail tables | optional, valuable | [~] |
 | RE5, RE6, RE8–RE16 | dice; survey counts; fades; the sky chain | owning docs; rows in git history | [x] |
 | RE7 | retail `.sav` wire format | 10.7 import (non-goal) | [P] |
-| RE17 | owner-run reference captures at the shared vantages | 3.6/3.7, 7.8; gate cleared, captures unrun | [ ] |
 | RE18–RE22 | script API; scenes; facial formats; frame order; hulls | owning docs | [x] |
-| RE23 | particle format + wetness — retail evidence for units/semantics | `docs/vtmb/weather.md`; 7.9, PL12 | [ ] |
+| RE23 | particle format — open: the `frames`/`fps` semantics and the `v(n)` keyframe position unit, each a reading the data supports and nothing confirms | `docs/vtmb/weather.md`; 7.9, PL12 | [ ] |
 | RE24–RE29 | sheet; chargen; traits; quests; genesis exit; name matching | `docs/vtmb/game_runtime.md`, `entity_io.md` | [x] |
 | RE30, RE31 | env-audio DSP precedence; RandomSound scheduler | `docs/vtmb/audio_pipeline.md`; 6.7 | [ ] |
 | RE32 | source-attributed `sp_theatre` run joined to bytes/export | `docs/vtmb/vtmb-animation-reverse-engineering.md`; 12.1 | [~] |
@@ -527,18 +526,17 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE38 | inventory ownership and transfer | `docs/vtmb/inventory.md` | [x] |
 | RE39 | computer terminals; open: TERM1 skill-entity join, TERM2 generic use outputs + teardown exits, TERM9 player mode fields | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
 | RE40 | the core mechanics chain; open joins numeric | `docs/vtmb/combat-and-damage.md` + siblings; 13.3 | [~] |
-| RE41 | discipline authority/interpreter; activity/witness admission plus Elysium/HUD world-area authority and Bloodbuff/`LockPick` exception closed; open: native power consumers, client disable presentation and live cast matrix | `docs/vtmb/disciplines.md`; 13.2 | [~] |
-| RE42 | first-person viewmodel; static composition/pose/projection/authority and ELGVM1 harness closed, controlled retail matrix open | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; LIFE6 | [~] |
-| RE43 | the tutorial event-resolution transaction; engine contact order (new-begin before old-end, spatial enumeration, teleport defers) and the autosave txn recovered; open (live capture): intra-leaf trigger order, the player per-frame relink cadence, the autosave guard-field identity + save-blocked reason codes | `docs/vtmb/sp_tutorial_1-event-surface.md`, `entity_io.md` | [~] |
+| RE41 | discipline authority/interpreter; activity/witness admission plus Elysium/HUD world-area authority and Bloodbuff/`LockPick` exception closed; open: native power consumers and client disable presentation | `docs/vtmb/disciplines.md`; 13.2 | [~] |
+| RE42 | first-person viewmodel; static composition/pose/projection/authority and the ELGVM1 harness closed | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; LIFE6 | [x] |
+| RE43 | the tutorial event-resolution transaction; engine contact order (new-begin before old-end, spatial enumeration, teleport defers) and the autosave txn recovered | `docs/vtmb/sp_tutorial_1-event-surface.md`, `entity_io.md` | [x] |
 | RE44 | the exported-map event surface beyond the tutorial | `docs/vtmb/exported-map-event-surface.md` | [~] |
-| RE45 | trigger touch dispatch recovered (synchronous new StartTouch, deferred old EndTouch at the post-think pass); open: the CPython script recursion bound (stack depth undecidable statically — needs a runtime probe) | `docs/vtmb/entity_io.md`, `python_bridge.md` | [~] |
+| RE45 | trigger touch dispatch recovered (synchronous new StartTouch, deferred old EndTouch at the post-think pass) | `docs/vtmb/entity_io.md`, `python_bridge.md` | [x] |
 | RE46 | the dialogue opener and camera boundary | `docs/vtmb/camera-view-modes.md`; 11.13f | [~] |
 | RE47 | the tutorial character bootstrap | `docs/vtmb/npc-ai-reverse-engineering.md` | [~] |
 | RE48 | what an NPC's enemy is — the selection chain | `docs/vtmb/npc-ai-reverse-engineering.md`; 13.3, 13.5 | [x] |
 | RE49 | the player-stealth observer and detection transaction | `docs/vtmb/stealth.md`; 8.9, 13.1, 13.5 | [x] |
 | RE50 | stealth-kill victim selection and deaf-zone transaction | `docs/vtmb/stealth.md`; 13.1 | [x] |
 | RE51 | the player entity and world relationship; lifecycle, world-area/verb policy and law/Masquerade/police/pursuit transactions closed; open: 277-field ledger, camera/travel, area save retention and live world teardown | `docs/vtmb/player-entity.md`; 9.8, LIFE6, 13.1–13.4 | [~] |
-| RE52 | the suspected melee double-soak — the defender's `soak` is subtracted in the margin and carried again as the forced soak in `CVDmg_t::Apply`; one live capture of a melee hit against a known soak separates a real double spend from a mis-decoded aliased local | `docs/vtmb/combat-and-damage.md`; 13.3 | [ ] |
 | RE53 | the discipline-magnitude retail/patch delta — Blood Buff's `Min 5` floor, Potence's flat Strength `+1` and Fortitude's single re-applied group are retail's authoring where the patch-first corpus scales all three; which one a remake reproduces is an open owner call, default retail | `docs/vtmb/disciplines.md`; 13.2 | [ ] |
 | RE-K1–RE-K9 | knockback: the normal-hit/knockback callback pair and its place in the contact order, the authored per-attack candidate table's location and bucket rotation, the SMALL/NORMAL + HIGH/LOW selector, the confirmed body-goes token convention with its asymmetric bands and NPC-only yaw snap, the launch — a two-stage velocity assignment with recovered magnitude interpolation, direction and one-think delay — the `KnockbackPreventTime` consumer and the flying chain's land/wall terminator all recovered; `knockback_chance` recovered as a **dead field**, parsed by retail and read by nothing. Open: the two `TASK_SET_KNOCKBACK_ACTIVITY` schedules beyond the recovered Troika pair and the KNOCKBACK condition's producer; the `Major`/`MinorKnockbackDist` consumer; whether hit-buildup counting is per victim or per attacker/victim pair. Victim `+0xA8` is behaviourally closed — the `CBasePlayer` self-pointer, verified | `docs/vtmb/combat-and-damage.md`, `animation_and_movers.md`; LIFE5 | [~] |
 | RE-D1–RE-D5 | death, in order: the ragdoll-force envelope against the ragdoll sequence; the death schedule's number, tasks and argument; the solid-body policy; the deferral under a non-interruptible script; the two npctemplate death-policy keys' consumers | `docs/vtmb/combat-and-damage.md`, `npc-ai-reverse-engineering.md`; LIFE5 | [ ] |

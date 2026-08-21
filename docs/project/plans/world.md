@@ -109,9 +109,9 @@ Contact shadows on hero lights, penumbra softness, within 0.1 ms budget. *Deps:*
 
 ### 7.8 A/B capture harness
 
-Scripted fixed-camera captures vs **the original game** at the shared vantages (RE17's
-protocol). The local half exists (2.9 + `shots_diff.py`); respect its measured noise floor —
-re-baseline after any bake or content rebuild. *Deps:* 0.3, 3.9, RE17.
+Scripted fixed-camera captures vs **the original game** at the shared vantages. The local
+half exists (2.9 + `shots_diff.py`); respect its measured noise floor —
+re-baseline after any bake or content rebuild. *Deps:* 0.3, 3.9.
 
 ### 7.9 Weather & wetness
 

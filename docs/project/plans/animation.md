@@ -165,8 +165,7 @@ reload and the M37 begin/per-shell/complete phases on both components for every 
 firearm family, proving clan/shield selection, matching sequence/cycle, `Camera01`/right-hand
 alignment, both FOV/aspect policies, visibility suppression/resume and the empty melee view —
 without spending ammunition, creating a projectile or originating a VtMB event. *Deps:* LIFE2
-(catalog), LIFE5 (event carrier for real fire timing), 11.13d, RE42's remaining controlled
-matrix for final verification. Recovered contracts: `docs/vtmb/animation_and_movers.md`,
+(catalog), LIFE5 (event carrier for real fire timing), 11.13d. Recovered contracts: `docs/vtmb/animation_and_movers.md`,
 `docs/vtmb/camera-view-modes.md`.
 
 ### LIFE7 The cinematic path and gestures

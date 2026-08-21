@@ -9,8 +9,7 @@ live in the tracker set:
 - **Status and next work:** `docs/project/roadmap.md` — the SKY row (done), and the open residue promoted
   to **3.6/3.7** (the measured tonemapper toe — the one remaining visible gap to displayed
   parity), **3.10** (volumetric fog layer calibration), **3.11** (`elysium.LumenDiffuseBoost`
-  verification), **3.12** (`sm_hub_1` fill adjudication), **3.13** (decal fog liveness), and
-  **RE17** (owner-run reference captures, gated on the `snapshot` pre/post-gamma-ramp check).
+  verification), **3.12** (`sm_hub_1` fill adjudication), and **3.13** (decal fog liveness).
 - **The decisions** (D1–D7; D6 dissolved, D4 amended, D3 corrected) are stated as facts in the
   sections below.
 

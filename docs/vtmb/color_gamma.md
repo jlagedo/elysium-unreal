@@ -94,7 +94,7 @@ shaderapidx8.cpp` + `shaderdevicedx8.cpp`, mirrored at `nillerusr/source-engine`
 the same 2004-era DX8 architecture this doc's rest is drawn from via Ghidra, but not this
 specific finding. What would raise it to verified: decompiling `engine.dll`'s own
 `TakeSnapshotTGA`/`ReadPixels` and confirming it never calls `SetGammaRamp`/reads a
-ramp-corrected surface. Practical consequence for **RE17**: an original-game reference
+ramp-corrected surface. Practical consequence: an original-game reference
 screenshot used for quantitative calibration needs the `mat_monitorgamma`/`cl_v_gamma` curve
 re-applied as a post-process step before comparison, or the capture session's ramp cvars
 pinned to engine default so the raw file and the on-screen image already match.
