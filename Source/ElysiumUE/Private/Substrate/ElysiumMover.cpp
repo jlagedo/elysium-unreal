@@ -631,16 +631,25 @@ void FElysiumDoorBase::InputOpen(const FElysiumEntityHandle& Activator)
 	{
 		return;
 	}
-	if (ToggleState == EToggleState::AtBottom || ToggleState == EToggleState::GoingDown)
+	// Admission is `!= AT_TOP`, so the input also re-issues from GOING_DOWN *and* GOING_UP — wider
+	// than the +use path, which refuses a moving door outright.
+	if (ToggleState != EToggleState::AtTop)
 	{
+		// Retail fires OnOpen twice on an admitted edge: once here at the input, once again inside
+		// DoorGoUp. The +use path reaches DoorGoUp without this handler, so a +use fires it once.
+		static const FName OnOpen(TEXT("OnOpen"));
+		FireOutput(OnOpen, Activator);
 		DoorGoUp(Activator);
 	}
 }
 
 void FElysiumDoorBase::InputClose(const FElysiumEntityHandle& Activator)
 {
-	if (ToggleState == EToggleState::AtTop || ToggleState == EToggleState::GoingUp)
+	// FUN_100f00a0 carries NO lock test at all — a direct Close shuts a locked door.
+	if (ToggleState != EToggleState::AtBottom)
 	{
+		static const FName OnClose(TEXT("OnClose"));
+		FireOutput(OnClose, Activator);
 		DoorGoDown(Activator);
 	}
 }
@@ -654,16 +663,18 @@ void FElysiumDoorBase::InputToggle(const FElysiumEntityHandle& Activator)
 	{
 		return;
 	}
-	// Reverse in-flight or from a rest state (NO_AUTO_RETURN permits mid-motion re-use, B.4).
+	// FUN_100f0210 reaches the motion helpers DIRECTLY rather than routing through the Open/Close
+	// handlers, so Toggle fires OnOpen/OnClose once where those two fire twice. It reverses
+	// in-flight from either direction.
 	switch (ToggleState)
 	{
 	case EToggleState::AtBottom:
 	case EToggleState::GoingDown:
-		InputOpen(Activator);
+		DoorGoUp(Activator);
 		break;
 	case EToggleState::AtTop:
 	case EToggleState::GoingUp:
-		InputClose(Activator);
+		DoorGoDown(Activator);
 		break;
 	}
 }
@@ -861,6 +872,12 @@ void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
 	// the queue's (or +use's) already-executing Use handler, which is §2.5.1's sanctioned seam, and
 	// the recovered behaviour is a direct in-handler call that lands "exactly once" — hence the
 	// single resolved target rather than a by-name fan-out over every entity sharing the name.
+	// Step 1 — record the activator, before the override redirect and before any early return.
+	// This is not bookkeeping: DoorGoUp/DoorGoDown fire their outputs with it, and the rotating
+	// leaf resolves its swing away from it, so a door +used by a second character must re-aim at
+	// that character and not at whoever opened it last. A null activator clears it.
+	LastActivator = Activator;
+
 	if (!UseOverrideName.IsEmpty())
 	{
 		if (World)
@@ -881,43 +898,174 @@ void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
 		return;
 	}
 
-	// CBaseDoor::Use step 5 (@0x100efc90, vt +0x3e0): UNCONDITIONAL on every +use, after the
-	// use_override delegation (step 2) and BEFORE the locked branch (step 8). Re-stamp the toggle
-	// state from the live body pose so a door whose body never actually moved snaps back to its true
-	// endpoint and the following toggle re-opens it. (Retail steps 3/4/6 — the noopenwanted refusal,
-	// the mid-motion self-heal and the doorknob delegation — are not modelled in this runtime.)
+	// Step 3 — the `noopenwanted` refusal (FUN_100eef10). The key alone never refuses: retail also
+	// requires a live player whose police-response counter is above zero, so a flagged exit only
+	// shuts while the player is actually being hunted. Nothing else runs — no output, no sound, no
+	// state change — which is what stops a hunted player leaving through a wired transition.
+	if (bNoOpenWanted)
+	{
+		const FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr;
+		if (Player && Player->Police.CopsInPursuit > 0)
+		{
+			// DIVERGENCE: retail also sends the refused player a usermessage here (FUN_101cebc0,
+			// a CSingleUserRecipientFilter carrying DAT_10726084). That message's registered name
+			// is not recovered, so the refusal is reproduced without its player feedback.
+			return;
+		}
+	}
+
+	// Step 4 — the mid-motion self-heal. Retail re-issues the move the door is already making, so a
+	// leaf whose move was interrupted re-bases it from the current pose (disassembled at
+	// 0x100efdc0 / 0x100efddf). Retail gates this on `m_movementType == 0`; the field ledger shows
+	// that member (+0x558) is READ in CBaseDoor::Use and written nowhere in the image, so it is
+	// permanently zero and the gate is always taken.
+	//
+	// DIVERGENCE: retail's reissue also propagates to the `linked_door` partner (the first argument
+	// of DoorGoUp/DoorGoDown is that flag). This runtime carries partner propagation in
+	// DoorActivate instead, so the self-heal does not reach the partner.
+	if (ToggleState == EToggleState::GoingDown)
+	{
+		DoorGoDown(LastActivator);
+	}
+	else if (ToggleState == EToggleState::GoingUp)
+	{
+		DoorGoUp(LastActivator, /*bResolveSwing*/ true);
+	}
+
+	// Step 5 (@0x100efc90, vt +0x3e0): UNCONDITIONAL, after the use_override delegation and the
+	// self-heal, BEFORE the admission and locked branches. Re-stamp the toggle state from the live
+	// body pose so a door whose body never actually moved snaps back to its true endpoint and the
+	// following toggle re-opens it. A genuinely mid-travel body is left alone — which, combined
+	// with step 7's admission set, is why a moving non-NO_AUTO_RETURN door is a silent no-op.
 	ResolveToggleStateFromTransform();
 
-	// CBaseDoor::Use @0x100efc90 locked branch: a locked door reached by +use plays ONLY the
-	// `locked` sound and returns — no output (CBaseDoor has no OnLockedUse) and no motion. This is
-	// the single path that voices the locked door; the direct Open/Toggle inputs stay silent.
+	// Step 6 — the doorknob route. Retail branches on whether the FIRST knob handle still resolves,
+	// not on whether one was ever registered, and returns — so a knobbed door never reaches the
+	// admission test below. Pruning first keeps a destroyed knob's stale handle from routing a door
+	// down this path and thereby skipping step 7.
+	PruneDoorknobs();
+	if (Doorknobs.Num() > 0)
+	{
+		DoorknobUse(Activator);
+		return;
+	}
+
+	// Step 7 — admission. Only a resting door, or one flagged NO_AUTO_RETURN, is admitted; a
+	// GOING_* leaf without that flag drops out here.
 	//
-	// A knobbed door asks its nearest knob, not its own byte (CBaseDoor::IsUseRefused FUN_100eec70,
-	// reached from DoorknobUse FUN_100eef50). That is what keeps a keypad or padlock gating a door
-	// whose spawnflags carry no LOCKED bit.
-	if (IsUseRefused(Activator))
+	// It is not a *silent* no-op: step 4 has already re-issued the move, replayed the motion-start
+	// sound and re-fired OnOpen/OnClose. That is retail's own behaviour, not an artefact — a +use
+	// on a moving door is audible and observable on the wire even though the door does not change
+	// what it is doing.
+	if (ToggleState != EToggleState::AtTop && ToggleState != EToggleState::AtBottom
+		&& (SpawnFlags & SF_DOOR_NO_AUTO_RETURN) == 0)
+	{
+		return;
+	}
+
+	// Step 8 — the knobless locked branch: a locked door reached by +use plays ONLY the `locked`
+	// sound and returns — no output (CBaseDoor has no OnLockedUse) and no motion. This is the
+	// single path that voices the locked door; the direct Open/Toggle inputs stay silent.
+	if (bLocked)
+	{
+		static const FName Locked(TEXT("locked"));
+		PlayMoverSound(Locked);
+		// A refused door is audible to NPCs as well as to the player: retail raises the CSoundEnt
+		// stimulus beside the one-shot on this branch too, not only on the doorknob refusal, and
+		// only when the activator is a character.
+		if (ResolveUser(Activator))
+		{
+			EmitDoorGameSound();
+		}
+		return;
+	}
+
+	DoorActivate(Activator);
+}
+
+void FElysiumDoorBase::DoorknobUse(const FElysiumEntityHandle& Activator)
+{
+	// Retail requires the activator's character sub-object (+0xa8) and DevMsg's
+	// "Non player entity %s trying to use ..." otherwise, without touching the door. Display, not
+	// Warning: it is a routine refusal of a non-player user, and an authored relay can drive it
+	// every press.
+	if (!ResolveUser(Activator))
+	{
+		UE_LOG(LogElysiumMover, Display,
+			TEXT("%s: non-character activator reached the doorknob path; no knob can be selected "
+				 "for it, so the use is dropped"), *DebugString());
+		return;
+	}
+
+	FElysiumLockableEntity* Knob = FindNearestDoorknob(Activator);
+	const bool bRefused = Knob ? Knob->IsUseLocked() : bLocked;
+	if (!bRefused)
+	{
+		DoorActivate(Activator);
+		return;
+	}
+	if (Knob)
 	{
 		// Retail re-poses the handle on exactly this branch, and only on the knob the user reached
 		// for (FUN_100eef50 @0x100eef88) — not on every knob and not on every use, or the clip
 		// restarts from frame 0 each press.
-		if (FElysiumLockableEntity* Knob = FindNearestDoorknob(Activator))
-		{
-			Knob->RefreshHandlePose();
-		}
-		static const FName Locked(TEXT("locked"));
-		PlayMoverSound(Locked);
-		return;
+		Knob->RefreshHandlePose();
+	}
+	static const FName Locked(TEXT("locked"));
+	PlayMoverSound(Locked);
+	// The refusal is audible to NPCs too: retail raises a CSoundEnt stimulus beside the one-shot.
+	EmitDoorGameSound();
+}
+
+void FElysiumDoorBase::DoorActivate(const FElysiumEntityHandle& Activator)
+{
+	// FUN_100f0340: no lock test and no admission test of its own — the caller already made both
+	// decisions. AT_TOP/GOING_UP close, AT_BOTTOM/GOING_DOWN open.
+	switch (ToggleState)
+	{
+	case EToggleState::AtBottom:
+	case EToggleState::GoingDown:
+		DoorGoUp(Activator);
+		break;
+	case EToggleState::AtTop:
+	case EToggleState::GoingUp:
+		DoorGoDown(Activator);
+		break;
 	}
 
-	// CBaseDoor::DoorknobUse: toggle this leaf, then the linked partner (the double-door swing). The
-	// partner receives `Toggle` — NOT `Use` — so it never mirrors back (no recursion), and each leaf
-	// still runs its own locked check (a locked half stays put and silent).
+	// Retail re-poses every registered knob's handle here (+0x444 per knob), so the handle-turn clip
+	// plays on a successful open and not only on a refusal. Iterate a copy: a knob can die during
+	// this pass and unregister itself, mutating Doorknobs.
 	//
-	// The partner's half goes through chokepoint 1 so the sinks, the I/O ring and the queue debugger
-	// see the second leaf move; it stays synchronous because DoorUse is already inside an executing
-	// handler (§2.5.1's seam) and the swing is one action. `linked_door`'s transport is not itself
-	// recovered — the conservative call preserves the current timing and only adds visibility.
-	InputToggle(Activator);
+	// OPEN RE QUESTION, deliberately not reproduced: each of those +0x444 calls is preceded by
+	// `thunk_FUN_10224170`, which resolves to CBaseLockableEnt::InputUnlock -> vtable +0x450 ->
+	// FUN_10224950 — the single function in the image that writes `m_LastRoll = 3`. Taken at face
+	// value that would mean opening a door unlocks both its knobs, but FUN_10224950 *ends* by
+	// calling its owner's +0x3c8 (DoorActivate), so DoorActivate unlocking its knobs would recurse
+	// without a terminating condition. The call is also emitted with one argument where
+	// InputUnlock takes two. Something in that reading is wrong, so the unlock half is left out
+	// until it is understood; only the pose, which is unambiguous and cannot recurse, is applied.
+	const TArray<FElysiumEntityHandle> KnobsAtActivate = Doorknobs;
+	for (const FElysiumEntityHandle& Knob : KnobsAtActivate)
+	{
+		FElysiumEntity* Entity = World ? World->Resolve(Knob) : nullptr;
+		if (FElysiumLockableEntity* Doorknob = Entity ? Entity->AsLockableEntity() : nullptr)
+		{
+			Doorknob->RefreshHandlePose();
+		}
+	}
+
+	// The linked partner (the double-door swing) receives `Toggle` — NOT `Use` — so it never
+	// mirrors back (no recursion), and each leaf still runs its own locked check.
+	//
+	// DIVERGENCE: retail's partner transport is not a Toggle. CBaseDoor::DoorGoUp/DoorGoDown each
+	// stamp their own activator onto the partner, call the partner's SAME-direction helper with the
+	// propagate flag cleared, then restore its activator — so two leaves that are out of sync are
+	// driven the same way rather than opposite ways, the partner gets no lock test, and the
+	// propagation happens at every motion start rather than only on the +use path. Reproducing that
+	// belongs with the DoorGoUp/DoorGoDown work; this call preserves the current timing and keeps
+	// the second leaf visible on the wire (chokepoint 1, synchronous because this is already inside
+	// an executing handler — §2.5.1's seam).
 	if (FElysiumDoorBase* Partner = ResolveLinkedDoor())
 	{
 		World->AcceptInput(Partner->Handle, FName(TEXT("Toggle")), FElysiumVariant::Void(),
@@ -1148,6 +1296,7 @@ void ElysiumBuildCBaseDoor(FElysiumClassDesc& D)
 	ElysiumAddClassField(D, TEXT("dmg"),      &FElysiumDoorBase::Dmg);
 	ElysiumAddClassField(D, TEXT("linked_door"), &FElysiumDoorBase::LinkedDoorName);
 	ElysiumAddClassField(D, TEXT("use_override"), &FElysiumDoorBase::UseOverrideName);
+	ElysiumAddClassField(D, TEXT("noopenwanted"), &FElysiumDoorBase::bNoOpenWanted);
 }
 
 static TUniquePtr<FElysiumEntity> MakeFuncDoorRotate() { return MakeUnique<FElysiumFuncDoorRotating>(); }

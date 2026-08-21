@@ -726,8 +726,11 @@ bool FElysiumLockedOpenDoorCloseMatrixTest::RunTest(const FString&)
 	TestEqual(TEXT("a direct Close on a locked door begins closing (no lock gate)"), Door->State(),
 		FElysiumDoorBase::EToggleState::GoingDown);
 	TestTrue(TEXT("the direct Close actually issued a move"), Door->IsMoving());
-	TestEqual(TEXT("the direct Close fires OnClose once"),
-		Sink->CountOf(TEXT("fire"), TEXT("OnClose")), 1);
+	// Retail fires OnClose twice on an admitted Close: once in InputClose (FUN_100f00a0), once
+	// again inside DoorGoDown. Only the +use and Toggle paths fire it once, because neither goes
+	// through the input handler.
+	TestEqual(TEXT("the direct Close fires OnClose twice — input then motion start"),
+		Sink->CountOf(TEXT("fire"), TEXT("OnClose")), 2);
 
 	return true;
 }
@@ -960,6 +963,230 @@ bool FElysiumDoorStaleAtTopReopensTest::RunTest(const FString&)
 		Sink->CountOf(TEXT("fire"), TEXT("OnOpen")), 1);
 	TestEqual(TEXT("stale +use fires no OnClose"),
 		Sink->CountOf(TEXT("fire"), TEXT("OnClose")), 0);
+
+	return true;
+}
+
+// CBaseDoor::Use's guard chain: the noopenwanted refusal, the mid-motion self-heal, and the
+// admission set that makes a moving door drop out. Bodiless — every assertion here is about state
+// and outputs, not geometry.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorUseGuardChainTest,
+	"Elysium.Substrate.DoorUseGuardChain", GElysiumMoverTestFlags)
+bool FElysiumDoorUseGuardChainTest::RunTest(const FString&)
+{
+	using EToggleState = FElysiumDoorBase::EToggleState;
+
+	// Embodied: a bodiless mover's BeginMove early-returns, so nothing is ever in flight and no
+	// move ever completes. Every assertion below is about a move actually being under way.
+	FTestWorldWrapper TestWorld;
+	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	{
+		TestWorld.ForwardErrorMessages(this);
+		return false;
+	}
+	UWorld* EngineWorld = TestWorld.GetTestWorld();
+	AActor* Owner = ElysiumDoorResyncTests::SpawnMoverOwner(this, EngineWorld);
+	if (!Owner)
+	{
+		return false;
+	}
+
+	auto MakeDoor = [](const TCHAR* Name, int32 Model, const FVector& Origin, const TCHAR* SpawnFlags,
+		const TCHAR* NoOpenWanted)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("func_door_rotating");
+		Def.TargetName = Name;
+		Def.Model = Model;
+		Def.Origin = Origin;
+		FElysiumConvexHull Hull;
+		for (float X : { 0.0f, 100.0f })
+		{
+			for (float Y : { -5.0f, 5.0f })
+			{
+				for (float Z : { -100.0f, 100.0f })
+				{
+					Hull.Vertices.Emplace(Origin.X + X, Origin.Y + Y, Origin.Z + Z);
+				}
+			}
+		}
+		Def.Hulls.Add(MoveTemp(Hull));
+		Def.Keys.Add(TEXT("model"), FString::Printf(TEXT("*%d"), Model));
+		Def.Keys.Add(TEXT("spawnflags"), SpawnFlags);
+		Def.Keys.Add(TEXT("distance"), TEXT("90"));
+		Def.Keys.Add(TEXT("wait"), TEXT("-1"));
+		Def.Keys.Add(TEXT("speed"), TEXT("9"));   // 10 s for 90 deg — stays in flight across ticks
+		Def.Keys.Add(TEXT("noopenwanted"), NoOpenWanted);
+		return Def;
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__door_use_guard_chain__");
+	Defs.Defs.Add(MakeDoor(TEXT("wanted_door"), 1, FVector::ZeroVector, TEXT("256"), TEXT("1")));
+	Defs.Defs.Add(MakeDoor(TEXT("plain_door"), 2, FVector(500, 0, 0), TEXT("256"), TEXT("0")));
+	// PUSE | NO_AUTO_RETURN (0x100 | 0x20)
+	Defs.Defs.Add(MakeDoor(TEXT("noreturn_door"), 3, FVector(1000, 0, 0), TEXT("288"), TEXT("0")));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(Owner, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	World.Activate(0.0);
+
+	auto Door = [&World](const TCHAR* Name)
+	{
+		FElysiumEntity* E = World.FindByName(Name);
+		return E ? E->AsDoorBase() : nullptr;
+	};
+	FElysiumDoorBase* Wanted = Door(TEXT("wanted_door"));
+	FElysiumDoorBase* Plain = Door(TEXT("plain_door"));
+	FElysiumDoorBase* NoReturn = Door(TEXT("noreturn_door"));
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("wanted door resolves"), Wanted)
+		|| !TestNotNull(TEXT("plain door resolves"), Plain)
+		|| !TestNotNull(TEXT("no-return door resolves"), NoReturn)
+		|| !TestNotNull(TEXT("player resolves"), Player))
+	{
+		return false;
+	}
+
+	// --- Step 3: noopenwanted refuses only while the player is actually hunted -----------------
+	TestEqual(TEXT("the noopenwanted keyfield parsed"), Wanted->bNoOpenWanted, true);
+	Player->Police.CopsInPursuit = 0;
+	Wanted->DoorUse(PlayerHandle);
+	TestEqual(TEXT("noopenwanted does not refuse an unhunted player"), Wanted->State(),
+		EToggleState::GoingUp);
+
+	// Tick takes an ABSOLUTE time, so every wait below only moves forward. 90 deg at 9 deg/s is a
+	// ten-second swing, which is what keeps a move observably in flight.
+	Wanted->InputClose(PlayerHandle);
+	World.Tick(30.0);   // let it settle closed
+	TestEqual(TEXT("the wanted door is closed again"), Wanted->State(), EToggleState::AtBottom);
+	Player->Police.CopsInPursuit = 1;
+	Wanted->DoorUse(PlayerHandle);
+	TestEqual(TEXT("noopenwanted refuses a hunted player outright"), Wanted->State(),
+		EToggleState::AtBottom);
+	TestFalse(TEXT("the refused door issued no move"), Wanted->IsMoving());
+	Player->Police.CopsInPursuit = 0;
+
+	// --- Steps 4 + 7: a +use on a moving door re-issues, then drops out of admission ------------
+	Plain->DoorUse(PlayerHandle);
+	TestEqual(TEXT("the plain door starts opening"), Plain->State(), EToggleState::GoingUp);
+	World.Tick(30.5);   // half a second into a ten-second swing
+	TestTrue(TEXT("the plain door is still moving"), Plain->IsMoving());
+	Plain->DoorUse(PlayerHandle);
+	// Step 4 re-issued the SAME direction, step 5 could not resolve a mid-travel body, and step 7
+	// then refused the toggle: the door keeps opening rather than reversing.
+	TestEqual(TEXT("a +use on a moving door does not reverse it"), Plain->State(),
+		EToggleState::GoingUp);
+	TestTrue(TEXT("the re-issued move is still in flight"), Plain->IsMoving());
+
+	// --- Step 7: NO_AUTO_RETURN is admitted mid-motion, so it DOES reverse ----------------------
+	NoReturn->DoorUse(PlayerHandle);
+	TestEqual(TEXT("the no-return door starts opening"), NoReturn->State(), EToggleState::GoingUp);
+	World.Tick(31.0);
+	TestTrue(TEXT("the no-return door is still moving"), NoReturn->IsMoving());
+	NoReturn->DoorUse(PlayerHandle);
+	TestEqual(TEXT("NO_AUTO_RETURN admits a mid-motion +use and reverses"), NoReturn->State(),
+		EToggleState::GoingDown);
+
+	return true;
+}
+
+// The output arity of the three inputs versus the +use path. Retail fires OnOpen/OnClose twice on
+// an admitted Open/Close — once at the input, once at the motion start — while Toggle and +use
+// reach the motion helpers directly and fire once. Easy to "fix" back by accident.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorInputOutputArityTest,
+	"Elysium.Substrate.DoorInputOutputArity", GElysiumMoverTestFlags)
+bool FElysiumDoorInputOutputArityTest::RunTest(const FString&)
+{
+	auto Counter = [](const TCHAR* Name)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("math_counter");
+		Def.TargetName = Name;
+		Def.Keys.Add(TEXT("min"), TEXT("0"));
+		Def.Keys.Add(TEXT("max"), TEXT("100"));
+		return Def;
+	};
+
+	// Outputs only fire down authored rows, so every door here wires OnOpen and OnClose at a
+	// counter. Bodiless is fine — the arity is decided before any move is issued.
+	auto ArityDoor = [](const TCHAR* Name)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("func_door");
+		Def.TargetName = Name;
+		Def.Keys.Add(TEXT("spawnflags"), TEXT("256"));
+		Def.Keys.Add(TEXT("wait"), TEXT("-1"));
+		for (const TCHAR* Output : { TEXT("OnOpen"), TEXT("OnClose") })
+		{
+			FElysiumOutputDef Row;
+			Row.Name = Output;
+			Row.Target = TEXT("sink");
+			Row.Input = TEXT("Add");
+			Row.Param = TEXT("1");
+			Row.Times = -1;
+			Def.Outputs.Add(MoveTemp(Row));
+		}
+		return Def;
+	};
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__door_input_output_arity__");
+	Defs.Defs.Add(ArityDoor(TEXT("arity_door")));
+	// A second leaf, left at rest, so the +use case runs the DoorActivate path rather than the
+	// self-heal a mid-motion door would take.
+	Defs.Defs.Add(ArityDoor(TEXT("use_door")));
+	Defs.Defs.Add(Counter(TEXT("sink")));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	TUniquePtr<FElysiumOrderedIOSink> OwnedSink = MakeUnique<FElysiumOrderedIOSink>();
+	FElysiumOrderedIOSink* Sink = OwnedSink.Get();
+	World.AddSink(MoveTemp(OwnedSink));
+	World.Activate(0.0);
+
+	FElysiumEntity* Entity = World.FindByName(TEXT("arity_door"));
+	FElysiumDoorBase* Door2 = Entity ? Entity->AsDoorBase() : nullptr;
+	if (!TestNotNull(TEXT("door resolves"), Door2))
+	{
+		return false;
+	}
+
+	Door2->InputOpen(PlayerHandle);
+	TestEqual(TEXT("an admitted Open fires OnOpen twice — input then motion start"),
+		Sink->CountOf(TEXT("fire"), TEXT("OnOpen")), 2);
+
+	// Admission is `!= AtBottom`, so this Close is admitted from GoingUp.
+	Sink->Reset();
+	Door2->InputClose(PlayerHandle);
+	TestEqual(TEXT("an admitted Close fires OnClose twice"),
+		Sink->CountOf(TEXT("fire"), TEXT("OnClose")), 2);
+
+	// Toggle reaches DoorGoUp/DoorGoDown directly, so it fires once.
+	Sink->Reset();
+	Door2->InputToggle(PlayerHandle);
+	TestEqual(TEXT("Toggle fires its output exactly once"),
+		Sink->CountOf(TEXT("fire"), TEXT("OnOpen")) + Sink->CountOf(TEXT("fire"), TEXT("OnClose")),
+		1);
+
+	// +use on a resting leaf likewise bypasses the input handlers.
+	FElysiumEntity* UseEntity = World.FindByName(TEXT("use_door"));
+	FElysiumDoorBase* UseDoor = UseEntity ? UseEntity->AsDoorBase() : nullptr;
+	if (!TestNotNull(TEXT("use door resolves"), UseDoor))
+	{
+		return false;
+	}
+	Sink->Reset();
+	UseDoor->DoorUse(PlayerHandle);
+	TestEqual(TEXT("+use fires its output exactly once"),
+		Sink->CountOf(TEXT("fire"), TEXT("OnOpen")) + Sink->CountOf(TEXT("fire"), TEXT("OnClose")),
+		1);
 
 	return true;
 }

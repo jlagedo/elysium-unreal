@@ -145,6 +145,10 @@ public:
 
 	bool  bLocked  = false;    // Lock/Unlock + LOCKED spawnflag (0x800)
 
+	// `noopenwanted` (Troika's FGD: "Block if Wanted"). Refuses +use only while the player is
+	// actually being hunted — the key alone is never sufficient. See DoorUse step 3.
+	bool  bNoOpenWanted = false;
+
 	// `linked_door` (B.2, 485 uses): the targetname of the paired leaf of a double door. Movement I/O
 	// (Open/Close) is wired to both leaves by the map data; the runtime link is the +use doorknob —
 	// a player +use on one leaf toggles both (VtMB's CBaseDoor::DoorknobUse). Resolved lazily.
@@ -168,6 +172,16 @@ public:
 	// The +use doorknob path (CBaseDoor::DoorknobUse): toggle this leaf and, if a `linked_door` is
 	// set, its partner too — the double-door swing. Reached by the +use look-cursor and `ent_fire Use`.
 	void DoorUse(const FElysiumEntityHandle& Activator);
+
+	// CBaseDoor::DoorknobUse (FUN_100eef50, the datamap's CBaseDoorDoorknobUse). Reached from Use
+	// on the mere EXISTENCE of a knob handle, before the admission test — so a knobbed door toggles
+	// without the {AtTop, AtBottom} ∪ NO_AUTO_RETURN gate a knobless one is held to. Requires a
+	// character activator; anything else is a logged no-op.
+	void DoorknobUse(const FElysiumEntityHandle& Activator);
+
+	// CBaseDoor::DoorActivate (FUN_100f0340, vtable +0x3c8): the toggle itself, with no lock or
+	// admission test of its own — both are the caller's job.
+	void DoorActivate(const FElysiumEntityHandle& Activator);
 
 	// CBaseDoor::Use step 5 (vtable +0x3e0, FUN_100eff90 / CRotDoor FUN_100f2520): recompute
 	// m_toggle_state from the LIVE body transform. Run UNCONDITIONALLY at the top of the +use path,
