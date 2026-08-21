@@ -68,6 +68,7 @@ PROGRAMS = (
     "MaterialSystem.dll",
     "StudioRender.dll",
     "stdshader_dx8.dll",
+    "vphysics.dll",
 )
 
 LOCK_DELAY_SECONDS = 9.0
@@ -668,8 +669,14 @@ def _load_module(connection: sqlite3.Connection, module: str, corpus: Path) -> t
         for line in stream:
             record = json.loads(line)
             code = record.get("c") or ""
+            # Named columns, not positional: the overlay's `name_src`/`name_dump` are set after
+            # a load rather than by it, and a bare VALUES list breaks the moment the table
+            # gains one. `INSERT OR REPLACE` clears them, which is correct -- a fresh dump is
+            # the new ground truth, and `_apply_overlay` re-applies the overlay on top.
             connection.execute(
-                "INSERT OR REPLACE INTO functions VALUES (?,?,?,?,?,?,?,?,?)",
+                "INSERT OR REPLACE INTO functions "
+                "(module, addr, name, ns, size, cc, thunk, code, warn) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
                 (module, record["a"], record["n"], record.get("ns") or "", record.get("sz") or 0,
                  record.get("cc") or "", 1 if record.get("thunk") else 0, code,
                  "; ".join(record.get("w") or [])))
