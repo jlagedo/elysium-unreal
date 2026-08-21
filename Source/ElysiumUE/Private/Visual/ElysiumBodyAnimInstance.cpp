@@ -170,6 +170,11 @@ void FElysiumHairDynamicsResetNode::ResetDynamics(ETeleportType InTeleportType)
 	{
 		Owner->ResetHairDynamics(InTeleportType);
 	}
+	else
+	{
+		UE_LOG(LogElysiumComposition, Warning,
+			TEXT("Hair dynamics reset bridge has no body animation proxy owner"));
+	}
 }
 
 void FElysiumBodyAnimProxy::Initialize(UAnimInstance* InAnimInstance)
