@@ -41,6 +41,37 @@ built-in module inits (`initmath`, `initcPickle`, `initnt`, `initthread`, …). 
 interpreter itself carries no VtMB semantics**: the divergence is a console I/O path and one
 dead stub, and everything a script can observe is bound in `vampire.dll`.
 
+### Which build it is, and why every offset depends on it
+
+Three of CPython 2.1's compile-time switches change **struct layout**, so reading any bridge
+body means knowing which way each was set. Each is settled against the shipped DLL, not assumed:
+
+| Switch | State | Evidence | Consequence |
+|---|---|---|---|
+| `Py_TRACE_REFS` | **off** | `#define`d only inside `#ifdef Py_DEBUG`, and a trace-refs build must export `_Py_NewReference`, `_Py_ForgetReference`, `_Py_Dealloc`. The DLL exports none. | The object header is the two-word form. **`PyObject` is 8 bytes, not 16** — with it on, every member offset in every object shifts by 8. |
+| `COUNT_ALLOCS` | **off** | never `#define`d, and a counting build would export its counters. | `PyTypeObject` ends at `tp_weaklistoffset` and is **108 bytes**; `tp_alloc`, `tp_free`, `tp_maxalloc`, `tp_next` are not in the object. |
+| `CACHE_HASH`, `INTERN_STRINGS` | **on** | `#define`d unconditionally at the top of `stringobject.h`. | `PyStringObject` carries `ob_shash` and `ob_sinterned` and is **21 bytes**. |
+
+The layouts that follow, as `ApplyPythonApi` builds them into the Ghidra project:
+
+| Struct | Size | Struct | Size |
+|---|---:|---|---:|
+| `PyObject` | 8 | `PyClassObject` | 32 |
+| `PyVarObject` | 12 | `PyInstanceObject` | 20 |
+| `PyTypeObject` | 108 | `PyMethodObject` | 24 |
+| **`PyMethodDef`** | **16** | `PyStringObject` | 21 |
+| `PyCFunctionObject` | 16 | `PyIntObject` | 12 |
+| `PyTupleObject` | 16 | `PyFloatObject` | 16 |
+| `PyListObject` | 16 | `PyFunctionObject` | 40 |
+| `PyFrameObject` | 332 | `PyTryBlock` | 12 |
+
+`PyMethodDef` at 16 bytes is the cross-check: it was hand-decoded from the binary long before
+the source was on hand, and the two agree.
+
+**2.7's headers would have been wrong here.** `PyTypeObject` has 50 members in 2.7 against 2.1's
+27, because new-style classes landed in 2.2; `PyClassObject` gained `cl_weakreflist`. Only the
+2.1.2 tree describes this DLL.
+
 `engine.dll`'s 5 unique symbols are `Py_Initialize`, `Py_Finalize`, `Py_SetProgramName`,
 `Py_SetGameInterface`, `PyType_Type`. It sets the interpreter search path to
 `\vampire\python` and can run a string. **The name `Py_SetGameInterface` is a decoy** —

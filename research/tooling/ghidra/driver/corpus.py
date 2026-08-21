@@ -805,6 +805,17 @@ def _resolve_virtual_edges(connection: sqlite3.Connection) -> tuple[int, int]:
     return written, ambiguous
 
 
+def _report_interfaces(connection: sqlite3.Connection) -> None:
+    """Resolve the named-interface graph and say what came of it."""
+    provided, held, crossed = _resolve_interfaces(connection)
+    connection.commit()
+    distinct = connection.execute("SELECT count(*) FROM interfaces").fetchone()[0]
+    typed = connection.execute("SELECT count(*) FROM interfaces WHERE cls != ''").fetchone()[0]
+    print(f"named interfaces: {provided} registration(s) naming {distinct} interface(s), "
+          f"{typed} of them resolved to a class; held by {held} global(s) in the consuming "
+          f"modules, {crossed} cross-module dispatch edge(s)")
+
+
 def build(programs: list[str]) -> int:
     corpus = _corpus_dir()
     connection = sqlite3.connect(_database())
@@ -851,10 +862,7 @@ def build(programs: list[str]) -> int:
           f"holds more than one function at that slot, {unknown} carry no class (queryable by "
           f"slot with `corpus slot <N>`)")
 
-    provided, held, crossed = _resolve_interfaces(connection)
-    connection.commit()
-    print(f"named interfaces: {provided} provided, held by {held} global(s) in the consuming "
-          f"modules, {crossed} cross-module dispatch edge(s)")
+    _report_interfaces(connection)
     _build_index(connection)
     # The planner picks between these indices by guesswork until it has seen their shape, and
     # guesses badly on a table whose rows carry a decompilation each.
@@ -891,10 +899,7 @@ def reindex() -> int:
     connection.commit()
     print(f"virtual call graph: {virtual} edges, {ambiguous} sites left unresolved because the "
           f"class holds more than one function at that slot")
-    provided, held, crossed = _resolve_interfaces(connection)
-    connection.commit()
-    print(f"named interfaces: {provided} provided, held by {held} global(s) in the consuming "
-          f"modules, {crossed} cross-module dispatch edge(s)")
+    _report_interfaces(connection)
     _build_index(connection)
     connection.execute("ANALYZE")
     connection.commit()

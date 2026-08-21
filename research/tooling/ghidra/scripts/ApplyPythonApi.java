@@ -1,6 +1,8 @@
 import ghidra.app.cmd.function.ApplyFunctionSignatureCmd;
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.data.ArrayDataType;
+import ghidra.program.model.data.CategoryPath;
 import ghidra.program.model.data.CharDataType;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.data.DoubleDataType;
@@ -12,6 +14,7 @@ import ghidra.program.model.data.LongLongDataType;
 import ghidra.program.model.data.ParameterDefinition;
 import ghidra.program.model.data.ParameterDefinitionImpl;
 import ghidra.program.model.data.PointerDataType;
+import ghidra.program.model.data.StructureDataType;
 import ghidra.program.model.data.Undefined4DataType;
 import ghidra.program.model.data.UnsignedIntegerDataType;
 import ghidra.program.model.data.UnsignedLongDataType;
@@ -33,6 +36,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -64,6 +68,11 @@ import java.util.Set;
 //   report=<path> human-readable summary
 public class ApplyPythonApi extends GhidraScript {
 
+    private static final CategoryPath CATEGORY = new CategoryPath("/python21");
+
+    /** The CPython structures this pass built, by name, so a `PyObject *` parameter resolves. */
+    private final Map<String, DataType> defined = new LinkedHashMap<>();
+
     private static final int LOOKBACK = 16;
     private static final int MAX_STRING = 64;
 
@@ -87,10 +96,17 @@ public class ApplyPythonApi extends GhidraScript {
                 + ".txt");
 
         Map<String, String> prototypes = new HashMap<>();
+        List<String> structures = new ArrayList<>();
         for (String line : Files.readAllLines(new File(apiPath).toPath(),
                 StandardCharsets.UTF_8)) {
             line = line.trim();
             if (line.isEmpty() || line.startsWith("//")) continue;
+            // A struct DEFINITION, not a prototype that happens to return one: the extractor
+            // reduces `struct node *` to a bare `struct *`, so the brace is what tells them apart.
+            if (line.startsWith("struct ") && line.indexOf('{') > 0) {
+                structures.add(line);
+                continue;
+            }
             int open = line.indexOf('(');
             if (open < 0) continue;
             String head = line.substring(0, open).trim();
@@ -106,6 +122,56 @@ public class ApplyPythonApi extends GhidraScript {
         PrintWriter report = new PrintWriter(reportPath, "UTF-8");
         report.println("// " + currentProgram.getName() + "  " + prototypes.size()
                 + " declared prototypes" + (apply ? "  [applying]" : "  [report only]"));
+
+        // ---- pass 0: the structures -------------------------------------------------------
+        // Two sweeps, because these types reference each other: `PyObject` names `PyTypeObject`
+        // in its own second word, and `PyTypeObject`'s head IS a `PyObject`. Every name is
+        // registered empty first so a member can resolve to a structure defined further down.
+        Map<String, StructureDataType> building = new LinkedHashMap<>();
+        for (String line : structures) {
+            String name = line.substring("struct ".length(), line.indexOf('{')).trim();
+            StructureDataType structure = new StructureDataType(CATEGORY, name, 0);
+            building.put(name, structure);
+            defined.put(name, structure);
+        }
+        int built = 0, members = 0, loose = 0;
+        for (String line : structures) {
+            String name = line.substring("struct ".length(), line.indexOf('{')).trim();
+            StructureDataType structure = building.get(name);
+            String body = line.substring(line.indexOf('{') + 1, line.lastIndexOf('}')).trim();
+            for (String member : body.split(";")) {
+                member = member.trim();
+                if (member.isEmpty()) continue;
+                int cut = member.lastIndexOf(' ');
+                if (cut < 0) continue;
+                String kind = member.substring(0, cut).trim();
+                String field = member.substring(cut + 1).trim();
+                int count = 1;
+                int bracket = field.indexOf('[');
+                if (bracket >= 0) {
+                    count = Integer.parseInt(field.substring(bracket + 1, field.indexOf(']')));
+                    field = field.substring(0, bracket);
+                }
+                DataType resolved = type(kind);
+                if (resolved == null) {
+                    // A callback typedef -- `destructor`, `PyCFunction`. Pointer-sized and
+                    // carrying no layout of its own, so the SLOT is kept at the right width
+                    // rather than the member being dropped, which would shift everything after.
+                    resolved = Undefined4DataType.dataType;
+                    loose++;
+                }
+                if (count > 1) resolved = new ArrayDataType(resolved, count, resolved.getLength());
+                structure.add(resolved, field, null);
+                members++;
+            }
+            if (apply) {
+                currentProgram.getDataTypeManager().addDataType(
+                        structure, ghidra.program.model.data.DataTypeConflictHandler
+                                .REPLACE_HANDLER);
+            }
+            report.println("struct " + name + "  " + structure.getLength() + " bytes");
+            built++;
+        }
 
         // ---- pass 1: signatures ----------------------------------------------------------
         List<Function> imported = new ArrayList<>();
@@ -192,7 +258,9 @@ public class ApplyPythonApi extends GhidraScript {
             }
         }
 
-        String summary = applied + " import(s) given their declared signature, " + unknown
+        String summary = built + " structure(s) built (" + members + " members, " + loose
+                + " callback typedefs kept at pointer width); " + applied
+                + " import(s) given their declared signature, " + unknown
                 + " not declared by CPython 2.1.2 (Troika's own additions and ordinal imports), "
                 + unparsed + " failed to parse; " + takesString.size()
                 + " of them take a char *, and " + made + " string(s) "
@@ -252,6 +320,12 @@ public class ApplyPythonApi extends GhidraScript {
         while (text.endsWith("*")) { stars++; text = text.substring(0, text.length() - 1).trim(); }
         if (text.startsWith("const ")) text = text.substring(6).trim();
         DataType base;
+        DataType structure = defined.get(text);
+        if (structure != null) {
+            DataType kind = structure;
+            for (int i = 0; i < stars; i++) kind = new PointerDataType(kind);
+            return kind;
+        }
         switch (text) {
             case "void":            base = VoidDataType.dataType; break;
             case "char":            base = CharDataType.dataType; break;

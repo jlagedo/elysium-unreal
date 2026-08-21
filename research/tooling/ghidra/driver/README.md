@@ -457,7 +457,7 @@ Measured on `vampire.dll`:
 | `signatures` | **2,201** functions corrected; `CBaseCombatCharacter::MeleeSwingStep` goes from **114 invented parameters to 4** | the large one. 7,024 functions state their argument bytes in their own `RET <imm16>`, which is exact, not inferred |
 | `boundaries` | **0 of 16** oversized functions split | the outliers are *real*: `datamap_*_builder` static-init, and `FUN_104126e0` — 68 KB that turns out to be VtMB's complete `ACT_*` activity registry, every activity name paired with its ID |
 | `jumptables` | **6** tables read from the image | small. 265 of the 605 computed jumps state no base at all — they are register-indirect tail calls, not switches, and are left alone |
-| `thiscall` | **699** methods in `vampire.dll`, **1,379** in `engine.dll` | `engine.dll` had **2** before, so nearly every method there was decompiling its receiver as `in_ECX` |
+| `thiscall` | **699** methods in `vampire.dll`, **1,379** in `engine.dll`, **2,997** in `client.dll` | `engine.dll` had **2** before and `client.dll` **367**, so nearly every method in both was decompiling its receiver as `in_ECX` |
 
 The order matters: boundaries first because every later pass reads function bodies; `thiscall`
 before `signatures`, because the convention decides whether the receiver is a stack parameter at
@@ -520,6 +520,25 @@ reads the external function list alone (seconds, no decompilation) and `callees`
 their own section. Before it, `PyServerSystem::vfunc0` read as "3 callees, one of them `_strstr`";
 after, it reads as `Py_InitModule4`, `PyCFunction_New`, `PyClass_New`, `PyModule_AddObject` — the
 Python bridge's module registration.
+
+### A header that answers conditionally cannot be handed to Ghidra
+
+`ApplyPythonApi` builds CPython's own structures into the project, and three preprocessor
+switches decide their layout. Ghidra has no preprocessor, so `pyapi.py` has to resolve each one
+before emitting anything — and it resolves them against the shipped DLL rather than by guessing.
+`Py_TRACE_REFS` alone is the difference between an 8-byte and a 16-byte `PyObject`, which shifts
+every member offset in every object. The verdicts and their evidence are in
+`docs/vtmb/python_bridge.md`; what belongs here is the shape of the rule:
+
+- a macro known **on** keeps its members, known **off** drops them;
+- an array bound that names a constant is resolved from the headers' own `#define`s;
+- **anything undecidable makes the struct unusable, not approximate** — `_members` raises and
+  the struct is skipped with its reason printed. A dropped member is not a smaller struct; it is
+  a struct whose every later offset is wrong, applied silently to every access.
+
+A callback typedef (`destructor`, `PyCFunction`) is the one thing kept without knowing it: it is
+pointer-sized and carries no layout, so the slot stays at the right width instead of the member
+being dropped. 66 of the 169 members are these, and the count is reported.
 
 ### The embedded interpreter is CPython 2.1.2, and the source is an exact oracle
 
