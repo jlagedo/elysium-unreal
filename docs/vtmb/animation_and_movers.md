@@ -3720,10 +3720,19 @@ lineage (RTTI-confirmed: `CBaseDoor→CRotDoor`, `CBaseButton→CRotButton`,
   why a door whose body never actually moved does not stay stuck believing it is open:
   the resync re-stamps `AT_BOTTOM` before the admission test, so the following
   `DoorActivate` sees `AT_BOTTOM` and opens it again.
-  **Uncertain**: whether the `Open`/`Close`/`Toggle` inputs pass the same gate — only
-  `Use` is traced. Decompiling `LAB_1000ac4f`/`LAB_1000ecd7`/`LAB_100024f0` would settle
-  it, and decompiling `FUN_101cebc0` at this call site would recover what the blocked
-  attempt shows the player.
+  The three input thunks are `LAB_1000ac4f` → `InputOpen` `FUN_100f0170`, `LAB_1000ecd7` →
+  `InputClose` `FUN_100f00a0`, `LAB_100024f0` → `InputToggle` `FUN_100f0210`, and they do
+  **not** share one gate. `Open` and `Toggle` both call `IsUseRefused` (`FUN_100eec70`,
+  the doorknob- and NPC-aware predicate owned by `docs/vtmb/entity_io.md`); **`Close`
+  carries no lock test at all**. Their admission is also wider than `Use`'s: `Open` runs
+  whenever `m_toggle_state != AT_TOP` and `Close` whenever `!= AT_BOTTOM`, so each also
+  re-issues from the *opposite* in-flight state, where `Use` refuses a moving door
+  outright. `Toggle` reaches `DoorGoUp`/`DoorGoDown` directly rather than through the
+  other two handlers, which is why only `Open`/`Close` double-fire their output.
+  `FUN_101cebc0` — the `noopenwanted` refusal's player feedback — builds a
+  `CSingleUserRecipientFilter` for the refused player and sends usermessage
+  `DAT_10726084`, gated on `player+0x1e00 == 0`; the message's registered name is not yet
+  recovered, which is what remains to identify what the player actually sees.
   PASSABLE (`0x8`) changes
   solidity, not usability: player/physics collision is disabled while use/debug traces
   can still address the door.
@@ -3808,7 +3817,86 @@ recoverable from the shipped binary — it is a non-saved runtime member absent 
 of the `0x94..0xa0` dword block, with no named setter or accessor in the static image.
 Elysium therefore holds this inversion unreproduced pending live evidence. The hold
 closes with a dynamic (live retail) capture observing which blocker classes set the
-door's `0x655` latch at runtime.
+door's `0x655` latch at runtime. Narrowing evidence, not a resolution: the adjacent
+`+0x94` in the same zero-initialised block is the entity's `CAI_BaseNPC` pointer — its
+consumers index `0x5bb0`–`0x5da4` and `CBaseDoor::IsUseRefused` tests it for the NONPCS
+refusal — so `+0x98` is one of the same family of cached derived-type self-pointers. That
+narrows the candidate set to a class family without naming the member, and the capture is
+still what closes it.
+
+### B.4.3 The arrival half of the cycle [VtMB — decompiled]
+
+**Arrival is bound at move start, not dispatched on the live state.** `DoorGoUp`
+(`FUN_100f05e0`) and `DoorGoDown` (`FUN_100f0f50`) each write `m_pfnMoveDone` (`+0x114`)
+before issuing their move — the datamap registers the two targets as `CBaseDoorDoorHitTop`
+(`FUN_100f0860`) and `CBaseDoorDoorHitBottom` (`FUN_100f11b0`). The arrival callback
+therefore belongs to the move that was issued, and a `m_toggle_state` mutated mid-flight
+cannot redirect it.
+
+**`DoorHitTop`** sets `AT_TOP`, clears the `CRotDoor` swing latch (`+0x655`) and
+`m_flNpcFailedTimer` (`+0x640`), notifies the activator's NPC, and re-arms `m_pfnTouch`
+when `NO_AUTO_RETURN | 0x400` is set. Its autoclose is *scheduled*, not performed:
+`m_flNextThink = curtime + m_flWait` with think `CloseWhenUnblocked` (`FUN_100f09d0`), or
+`DoorGoDownThink` (`FUN_100f0f30`) when `SF_DOOR_USE_CLOSES (0x2000)` is set; `m_flWait ==
+-1` writes a never-think instead. `NO_AUTO_RETURN (0x20)` skips the scheduling entirely.
+
+**`CloseWhenUnblocked` is a retry loop.** It calls `IsCloseBlocked()` and, while blocked,
+re-arms itself at `curtime + 0.0` (the next tick) without closing; only once the sweep is
+clear does it clear the think and call `DoorGoDown`. `DoorGoDownThink` is the
+unconditional variant. So an obstructed door does not force itself shut — it waits.
+
+**`DoorHitBottom`** sets `AT_BOTTOM` and re-arms `m_pfnTouch`.
+
+**`SF_DOOR_START_OPEN (0x1)` swaps the arrival outputs.** `DoorHitTop` fires
+`OnFullyClosed` and `DoorHitBottom` fires `OnFullyOpen` when the bit is set, because the
+endpoints are authored swapped. `DoorHitTop`'s START_OPEN branch passes **the door itself**
+as the output activator rather than the stored `m_hActivator`.
+
+**Sound emission points.** `DoorGoUp` emits `open` then `swing` at motion start;
+`DoorGoDown` emits `swing` only; **`close` is emitted at arrival, by `DoorHitBottom`**.
+`locked` comes only from `Use` / `DoorknobUse`. All four go through one emitter
+(`FUN_100ee4e0`), which is a single sound-group event with no stop call — retail starts no
+loop and stops none, so any looping belongs to the soundgroup definition rather than the
+mover code. `m_spawnflags & 0x1000` (SILENT) suppresses all of them.
+
+### B.4.4 Blocked, StartBlocked and EndBlocked [VtMB — decompiled]
+
+`CBaseDoor::Blocked` (`FUN_100f14a0`) does three things, in order:
+
+1. **Damage, in both directions.** `TakeDamage(CTakeDamageInfo(this, this, m_flBlockDamage,
+   DMG_CRUSH))` whenever `m_flBlockDamage != 0` — opening as well as closing.
+2. **A conditional self-reverse**: `m_flWait >= 0 && <byte +0x654> && m_toggle_state !=
+   GOING_UP` → `DoorGoUp(1,1)`. The gate byte is written **only** by `CRotDoor::Blocked`
+   (1 on entry, 0 while the leaf is moving, 1 on exit) as a re-entrancy guard so the
+   rotating leaf's own direction decision wins. A plain `func_door` leaves it
+   zero-initialised, so **a non-rotating door never self-reverses when blocked** — it
+   damages and syncs its group and nothing else.
+3. **Group synchronisation, not group reversal.** `GetDoorMovementGroup` (`FUN_100f12a0`)
+   collects targetname siblings, capped at 64. For each sibling with `m_flWait >= 0` and a
+   matching `m_vecMoveDir`, if the two agree on absolute and angular velocity it copies
+   this door's origin/angles onto the sibling and zeroes its velocity; then it drives the
+   sibling to the **same** direction as self. (HL2's `CBaseDoor::Blocked` reverses its
+   group here; VtMB synchronises it.)
+
+`StartBlocked` (`FUN_100f1340`): while `GOING_DOWN` it fires `OnBlockedClosing(pBlocker)`
+and returns. Otherwise it records the NPC-failure bits — `m_bfNpcFailedFlags |= 2` for an
+NPC activator, `|= 0x80` for an NPC blocker, the latter stamping `curtime + 5.0` into
+`m_flNpcFailedTimer` — and then fires `OnBlockedOpening(pBlocker)`.
+
+`EndBlocked` (`FUN_100f1830`, vtable `+0x3e4`): `GOING_DOWN` fires `OnUnblockedClosing`,
+anything else `OnUnblockedOpening` — both with **the door itself** as activator, unlike
+`StartBlocked`'s blocker.
+
+**`CRotDoor::Blocked` adds stuck detection.** The first block sets `m_iBlockedCount = 1`.
+On each later block it compares the current swing angle against `m_fLastBlockedAngle`: a
+difference below `1.0°` (`_DAT_104546c0`) calls `EndBlocked` immediately, otherwise the
+count increments, and once it passes **14** it calls `EndBlocked` and writes
+`m_iBlockedForcedState` to the opposite of the current direction — which overrides the
+geometric swing decision on the next block.
+
+**`DoorTouch` (`FUN_100efae0`) is a block feeder, not an open-on-touch.** It requires a
+resolved activator carrying `+0xa8`, a rotating door, a toucher carrying `+0x9c`, and a
+`GOING_UP`/`GOING_DOWN` state — and then calls `Blocked(pOther)`.
 
 ## B.5 Spawnflag bits [VtMB — decompiled, per-bit confirmed]
 

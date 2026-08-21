@@ -1282,6 +1282,45 @@ rotating door runs `CBaseDoor::Use`). The door **motion** cycle and spawnflags a
 fire their `OnOpen` / `OnClose` twice on an admitted edge — once at the input handler, once again inside
 the motion start.
 
+### The lock authority is the knob's, not the door's [VtMB — decompiled]
+
+`IsDoorLocked` is `CBaseDoor::IsUseRefused` (`FUN_100eec70`), and the door's own `m_bLocked` byte is
+only the **last** of its four answers:
+
+```c
+if (NoOpenWantedRefusal(this))                        return true;   // FUN_100eef10
+if ((m_spawnflags & 0x200) && pUser && pUser->+0x94)  return true;   // NONPCS: the user is an NPC
+h = GetNearestDoorknob(this, pUser);                                 // FUN_100ee950
+if (h) return IsKnobLocked(h);          // knob->+0x780 < 3 — the KNOB decides
+return m_bLocked;                       // the door's byte only when there is NO knob
+```
+
+So a `func_door` whose spawnflags carry no `LOCKED` bit is still refused when its knob is locked, and
+a door that *does* carry `LOCKED` is still admitted when its knob has been picked or keyed open. The
+two states are independent and are never reconciled: `Lock`/`Unlock` on the door write only the door,
+`Lock`/`Unlock` on the knob write only the knob (`FUN_10224190` / `FUN_10224950`). Map data is authored
+for this — `sm_warehouse_1`'s `train_door1` carries `LOCKED` *and* a padlock, and wires
+`train_padlock.OnSkillSuccess → train_door1.Unlock()` so that picking the padlock clears the door byte
+before the padlock deletes itself.
+
+**`GetNearestDoorknob` (`FUN_100ee950`)** picks between the two knob handles `+0x628` / `+0x62c`:
+
+- distance is **Manhattan** — the per-axis absolute differences of `WorldSpaceCenter()` (vtable
+  `+0x304`) summed, not a Euclidean length;
+- the comparison is `<=`, so an exact draw goes to the **second** handle (`+0x62c`);
+- with only one valid handle, that one wins by default;
+- **a null user returns null**, before the handles are read at all. This is load-bearing: an I/O- or
+  script-fired `Open`/`Toggle` carries no user, so it never consults a knob and falls straight through
+  to `m_bLocked`. The "user" is not the activator entity either — the input handlers pass
+  `activator->+0x9c` and `DoorknobUse` passes `+0xa8`, both null for anything that is not a character,
+  so a relay or trigger propagating itself as activator is also "no user".
+
+`CBaseDoor::DoorknobUse` (`FUN_100eef50`, the datamap's `CBaseDoorDoorknobUse`) is the `+use` half:
+it requires `activator->+0xa8` or `DevMsg`s *"Non player entity %s trying to use…"*, then opens when
+the nearest knob is unlocked, and otherwise plays the knob's refuse pose (`+0x444`), the `locked`
+sound, and a `CSoundEnt::InsertSound(type 4, …)` stimulus — louder and longer when the user is
+player-controlled.
+
 ## The lockable family (`CBaseLockableEnt` / `CBaseVampireSkillEntity`)
 
 `prop_doorknob`, `prop_doorknob_electronic`, `prop_padlock` and `item_container_lock` are four
@@ -1412,9 +1451,17 @@ else if (m_nSequence != idx) { m_flCycle = 0; m_nSequence = idx;
                                ResetSequenceInfo(); StudioFrameAdvance(); }
 ```
 
-It is **not** called from `Lock`/`Unlock`. `CBaseDoor`/`CRotDoor` push the state down to every
-registered doorknob — the call sites are `0x100eef88`, `0x100f0485`, `0x100f0524`, `0x100f2877`,
-`0x100f2916`. `CPropPadlock` overrides the same slot with an empty stub (`FUN_10225ce0`).
+It is **not** called from `Lock`/`Unlock`. `CBaseDoor`/`CRotDoor` re-pose their registered doorknobs
+from the door's own use/activate path — the call sites are `0x100eef88` (inside `DoorknobUse`, on the
+nearest knob only, on the refused branch), `0x100f0485`/`0x100f0524` (`CBaseDoor::DoorActivate`, both
+knobs, each preceded by vtable `+0x450`) and `0x100f2877`/`0x100f2916` (`CRotDoor::DoorActivate`).
+`CPropPadlock` overrides the same slot with an empty stub (`FUN_10225ce0`).
+
+**What travels down that slot is the handle pose, not the lock.** `+0x444` reads the knob's *own*
+`IsLocked()` to pick the sequence; no door path anywhere writes a knob's `m_LastRoll`. The authority
+runs the other way — see *The lock authority is the knob's* below. Reading these call sites as a
+lock-state push is the exact mistake that opens every key-gated door whose door entity happens to
+carry no `LOCKED` spawnflag.
 
 `CPropDoorknob::Spawn` (`FUN_102259e0`) seeds the state from the keyfield: `difficulty != 0` spawns
 locked (`m_LastRoll = 1`) with bodygroup 1; `difficulty == 0` spawns unlocked (`m_LastRoll = 3`) with

@@ -49,17 +49,33 @@ recovered-to-retail reproduce work under P4's RE-first rule:
   so a locked door caught mid-close by a resync can drop a single `OnFullyClosed`. The durable fix
   makes arrival independent of the live state.
 - **Input-level outputs and admission.** Retail fires `OnOpen` at the `Open` input and again in
-  `DoorGoUp`, and `Open`/`Close`/`Toggle` carry their own admission gates; Elysium's differ.
-- **Mover sound emission points.** Retail plays `close` at motion start (not arrival) and treats
-  `swing` as a loop; the emission points differ — owner-adjudicated against P6.
-- **`CRotDoor::Blocked` group sync and block outputs.** Retail synchronises group siblings and
-  carries `OnBlocked*`/`StartBlocked`/`EndBlocked` edges; the any-entity blocker filter is
-  NPC-pending (P13, and the 10.7 door-obstruction reaction).
-- **Held on a live-retail capture** (static evidence exhausted): the swing **blocked-latch
-  inversion** (retail flips the swing when a blocker armed a latch — the blocker field's identity
-  is not statically recoverable; capture which blocker classes set it) and the **mid-motion
-  self-heal** reissued-move arguments. Both are marked as held divergences in
-  `docs/vtmb/animation_and_movers.md`.
+  `DoorGoUp`, and `Open`/`Close`/`Toggle` carry their own admission gates; Elysium's differ. The
+  three handlers are now decompiled (`FUN_100f0170`/`FUN_100f00a0`/`FUN_100f0210`): `Open` and
+  `Toggle` gate on `IsUseRefused`, **`Close` carries no lock test**, admission is
+  `!= AT_TOP` / `!= AT_BOTTOM` so each also runs from the opposite in-flight state, and `Toggle`
+  reaches the motion helpers directly so only `Open`/`Close` double-fire.
+  → `animation_and_movers.md` B.4.
+- **Mover sound emission points.** Retail emits `close` at **arrival** (`DoorHitBottom`), not at
+  motion start, and starts no loop and stops none — `swing` is one event like the others, so any
+  looping is the soundgroup's. Elysium plays `close` at motion start and owns the loop in code;
+  both differ — owner-adjudicated against P6. → `animation_and_movers.md` B.4.3.
+- **The blocked family.** Retail's `Blocked` damages in **both** directions, self-reverses only
+  behind `CRotDoor`'s re-entrancy byte (so a plain `func_door` never reverses), and **synchronises**
+  its targetname group to its own direction rather than reversing it; `StartBlocked`/`EndBlocked`
+  carry the `OnBlocked*`/`OnUnblocked*` edges with different activators, and `CRotDoor::Blocked`
+  adds a stuck detector. All recorded in `animation_and_movers.md` B.4.4. The any-entity blocker
+  filter is NPC-pending (P13, and the 10.7 door-obstruction reaction). **Blocking constraint:** a
+  pure rotation is never swept — `UPrimitiveComponent::MoveComponentImpl` skips the sweep on a zero
+  translation delta — so `OnMoveBlocked` is unreachable for a rotating leaf and none of this is
+  observable there until a rotating-sweep mechanism exists.
+- **Held on a live-retail capture**: the swing **blocked-latch inversion**. The flip itself and its
+  arming predicate are recovered; what is not statically recoverable is the *identity* of the
+  blocker's `+0x98`, zero-initialised in the `CBaseEntity` constructor with no setter or accessor in
+  the image. The adjacent `+0x94` is the `CAI_BaseNPC` pointer, which narrows `+0x98` to the same
+  cached derived-type family without naming it. Capture which blocker classes set it.
+  (The **mid-motion self-heal** reissued-move arguments are **closed**: disassembly at
+  `0x100efdc0`/`0x100efddf` shows `DoorGoDown(1)` and `DoorGoUp(1,1)` — both reissues propagate to
+  the linked leaf and the open one re-resolves its swing.)
 - **Investigate the runtime visible rotation.** A live session showed a baked `func_door_rotating`
   firing `OnOpen` and the swing sound while its body did not visibly rotate on screen; the substrate
   state/collision cycle is correct, so this is a map/visual-body concern — whether the baked brush

@@ -152,11 +152,15 @@ it, so the readout claims a body the stage does not have.
 - [~] **[4.11 Trigger and `+use`-prop I/O gaps](plans/gameplay.md)** — filters,
   `prop_switch` interaction, lockables, doorknob sequences and the `trigger_hurt` cadence landed;
   the switch `soundgroup` and `reset_state` details remain open.
-- [ ] **[4.12 Door faithfulness gaps](plans/gameplay.md)** — the recovered `func_door` retail
-  divergences beyond the landed locked matrix, `+use` resync and activator-relative swing: the full
-  `Use` guard-chain reorder and admission set, `MoveDone` arrival, input-level output/sound/block
-  details, the runtime visible-rotation observation, and the swing blocked-latch inversion and
-  mid-motion self-heal held on a live capture.
+- [~] **[4.12 Door faithfulness gaps](plans/gameplay.md)** — the doorknob lock authority landed: a
+  knob owns its own lock and the door consults its nearest one (`IsUseRefused`), instead of the door
+  writing its state onto every knob, which had opened every key- and lockpick-gated door whose door
+  entity carried no `LOCKED` spawnflag. The remaining retail divergences are recovered and recorded
+  but not yet reproduced: the full `Use` guard-chain reorder and admission set, `MoveDone` arrival
+  binding, input-level outputs/admission, `close`-at-arrival plus the `CloseWhenUnblocked` retry
+  think, and the blocked family. The runtime visible-rotation observation is open and reproduced;
+  the swing blocked-latch inversion stays held on a live capture (the mid-motion self-heal arguments
+  are closed).
 
 *Slice acceptance (met):* the tutorial elevator chain works; walking out loads `sm_pawnshop_1`.
 
