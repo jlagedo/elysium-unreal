@@ -92,7 +92,10 @@ enum class EElysiumAnimPriority : uint8
 	Ambient,
 	// The locomotion publish of a travelling body. Implicit, never submitted.
 	LocomotionTravel,
-	// A scripted beat: scripted_sequence phases, SetAnimation, an interaction's custom move.
+	// A scripted beat: scripted_sequence phases, SetAnimation, an interaction's custom move — and a
+	// melee swing, which shares the band. The tie is retail's own outcome: nothing on the attack path
+	// consults the cine handle, so a swing displaces a standing beat's pose there too
+	// (`docs/vtmb/animation_and_movers.md` → "Protected activities and player paired-action modes").
 	Scripted,
 	// The damage and combat action families (LIFE5).
 	Reaction,
@@ -114,6 +117,15 @@ struct FElysiumAnimationRequest
 	// What the claim stands for — the clip or activity the producer armed. Diagnostics only: the
 	// record's `BaseHold` line is built from it, so a held pose names its holder.
 	FString Label;
+	// The LOGICAL activity the claim FORCES onto the body, un-translated — retail's
+	// `ForcePreTranslatedSequenceAndActivity`, which sets `m_IdealActivity` itself rather than
+	// leaving the body's own classifier to keep answering underneath the clip.
+	//
+	// **Not diagnostics, unlike `Label` above.** It is the ideal activity every reader of "what is
+	// this body doing" takes while the claim stands — the melee movement lock and its reselection
+	// guard, and the airborne-attack fork's own self-latch. A claim that states none leaves the
+	// body's classification alone, which is what every producer outside the action families means.
+	FString Activity;
 	// How long the claim stands, seconds. <= 0 holds until released, replaced or outranked — a
 	// looping clip and a scene-pinned one have no natural end; a one-shot passes its clip length so
 	// an armer that never comes back cannot park the channel.
@@ -142,6 +154,26 @@ struct FElysiumClipSegment
 	bool bLoop = false;
 	EElysiumAnimSource Source = EElysiumAnimSource::Npc;
 	EElysiumAnimPriority Priority = EElysiumAnimPriority::Ambient;
+	// `m_flPlaybackRate` — the speed the HOST plays this clip at, not a timing hint. Retail's
+	// `ResetSequenceInfo` puts it back to 1.0 before anything writes it, so 1.0 is the value a
+	// producer that never sets one means, and the write that follows is the authority: a melee
+	// swing's is `max(m_flSpeedScale, floor) * (0.7 + 0.03 * rank)`, written by
+	// `CWeaponMelee::RequestActivity`.
+	//
+	// It travels with the clip because retail has ONE rate — the drawn speed, the cycle advance and
+	// therefore the authored lunge all scale off it together, and a rate that reached only the
+	// transaction's own deadline would leave the visible swing running at a different speed from the
+	// one the recovery is timed against.
+	float PlaybackRate = 1.0f;
+	// The LOGICAL activity this segment forces onto the body while it plays, carried through onto
+	// the base-channel claim (`FElysiumAnimationRequest::Activity`). A segment that names one is
+	// retail's `ForcePreTranslatedSequenceAndActivity`: the clip AND the ideal activity are set
+	// together, so the body's own classifier stops answering for the body while it runs.
+	//
+	// Empty is the default and means the segment plays a clip without claiming to be an activity —
+	// a scripted beat's `m_iszPlay`, an ambient stance, a dialogue line. Those really are clips
+	// rather than activities in retail too, so leaving the classification alone is faithful.
+	FString Activity;
 	// Whether the claim outlives this segment. A run's segments hand the slot to each other under one
 	// claim only `ReleaseNpcSegment` gives back, because a claim that expired with its own clip would
 	// drop the channel in the gap between two segments of one beat — and the pose with it. The
@@ -160,6 +192,38 @@ struct FElysiumClipSegment
 
 	bool IsValid() const { return !ClipName.IsEmpty(); }
 };
+
+namespace ElysiumAnimIntent
+{
+	// The segment -> base-channel claim conversion, in one place because it is a HINGE rather than a
+	// copy: `Activity` is what carries retail's `ForcePreTranslatedSequenceAndActivity` from the
+	// producer that armed the clip to every reader of "what is this body doing" — the melee movement
+	// lock, its reselection guard and the airborne-attack self-latch. Dropping that one field leaves
+	// a clip that plays, a claim that holds the channel, and three mechanisms silently dead.
+	//
+	// `PlayLengthSeconds` is the resolved clip's own AUTHORED length. A looping or held segment claims
+	// with no duration — a run spans several clips and only its stop path ends the claim — while a
+	// one-shot claims for exactly its play so an armer that never comes back cannot park the channel.
+	//
+	// **The hold is a wall-clock duration, so it is the length over the playback rate.** A swing at
+	// rate 0.70 occupies the channel for 1/0.7 of the clip's authored length, and a claim that
+	// expired at the authored length instead would hand the base pose back at cycle 0.70 — releasing
+	// the forced ideal activity, and with it the movement lock, a third of the way before `w_hold`.
+	inline FElysiumAnimationRequest ClaimForSegment(const FElysiumClipSegment& Segment,
+		float PlayLengthSeconds)
+	{
+		FElysiumAnimationRequest Claim;
+		Claim.Source = Segment.Source;
+		Claim.Channel = EElysiumAnimChannel::Base;
+		Claim.Priority = Segment.Priority;
+		Claim.Label = Segment.ClipName;
+		Claim.Activity = Segment.Activity;
+		Claim.HoldSeconds = (Segment.bLoop || Segment.bHoldUntilReleased)
+			? 0.0f
+			: PlayLengthSeconds / FMath::Max(Segment.PlaybackRate, UE_KINDA_SMALL_NUMBER);
+		return Claim;
+	}
+}
 
 // How the request reached the layer. **These are the producer routes the 22-map corpus actually
 // contains** (`docs/vtmb/animation_and_movers.md`), and collapsing any of them into "activity" would
@@ -985,6 +1049,10 @@ struct FElysiumClipPhase
 	float AnchorCycle = 0.0f;
 	// The clip's authored length in seconds, for readouts. Nothing in the firing rule reads it.
 	float Length = 0.0f;
+	// `m_flPlaybackRate` as the host is actually playing it. The cycle above is a fraction of the
+	// clip's own length, so `PlayRate / Length` is the cycles-per-second a consumer sampling a window
+	// forward from `Cycle` needs — `Length` alone answers for a rate nobody asked for.
+	float PlayRate = 1.0f;
 	bool bLooping = false;
 	// Bumped on every (re)start of a clip on this channel. Zero is "nothing has ever played here".
 	uint32 PlayId = 0;

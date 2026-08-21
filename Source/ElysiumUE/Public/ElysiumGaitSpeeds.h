@@ -81,8 +81,9 @@ struct FElysiumGaitSpeeds
 	FElysiumGaitSpeedTable Run;
 	FElysiumGaitSpeedTable Sneak;
 
-	// Valid when at least one gait resolved. A body missing one fan still steers by the others
-	// rather than falling back wholesale to the constants.
+	// Valid when at least one gait resolved. A body missing one fan still steers by the others: the
+	// tables are per gait, exactly as retail's six are, and an unresolved one answers zero on its own
+	// without touching the two that did resolve.
 	bool IsValid() const;
 
 	// The ceiling across every gait — `m_flMaxspeed`.
@@ -121,8 +122,20 @@ namespace ElysiumGait
 	const FElysiumGaitSpeedTable& TableFor(const FElysiumGaitSpeeds& Speeds, bool bDucked,
 		bool bWalkKey);
 
-	// The whole seam. Falls back to `ElysiumMove::WalkSpeed`/`RunSpeed` (and Source's ducked third)
-	// whenever the authority is off or the selected gait resolved no fan — per gait, not wholesale,
-	// so a body with a walk fan and no sneak fan still walks at its authored speed.
+	// The whole seam. A selected gait that resolved no fan commands **zero** — retail's gait fill is
+	// conditional on a 9-blend grid, writes nothing when there is not one, and `Spawn` is the only
+	// site that ever clears the slot, so an unwritten cell on a fresh body reads zero and no constant
+	// stands in for it. The decision is per gait, not wholesale: a body with a walk fan and no sneak
+	// fan still walks at its authored speed and only its crouch is silent.
 	float WishSpeedFrom(const FElysiumWishSpeedInput& In, const FElysiumGaitSpeeds& Speeds);
+
+	// `m_flMaxspeed` — the **ceiling** over the cells, which is a different question from
+	// `WishSpeedFrom`'s "which cell". Grounded it is the peak over every gait; while the jump phase
+	// is live retail's `PreThink` pins it to `sv_jump_maxspeed` instead, so an airborne body is
+	// bounded higher than a standing one.
+	//
+	// It reads only the body half of the input — `bNoclip`, `bOnGround`, `JumpMaxSpeed`,
+	// `NoclipSpeed`. A ceiling is a property of the body, so neither the commanded direction nor the
+	// command's deflection enters it.
+	float MaxSpeedFrom(const FElysiumWishSpeedInput& In, const FElysiumGaitSpeeds& Speeds);
 }

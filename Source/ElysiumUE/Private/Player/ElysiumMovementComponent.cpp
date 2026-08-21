@@ -14,6 +14,8 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/WorldSettings.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumMovement, Log, All);
+
 // How long the jump's push keeps being applied. 0 = use `rules.txt`'s `JumpHoldTime` (0.2). This
 // is **ours, not a VtMB cvar** — it exists because `rules.txt` carries two candidate windows
 // (`JumpHoldTime` 0.2 and the Feat-indexed `JumpDuration`, 0.11 at rank 1) and which one the
@@ -34,26 +36,31 @@ UElysiumMovementComponent::UElysiumMovementComponent()
 	PrimaryComponentTick.TickGroup = TG_PrePhysics;
 }
 
+FElysiumWishSpeedInput UElysiumMovementComponent::BodySpeedInput() const
+{
+	FElysiumWishSpeedInput In;
+	In.bNoclip = bNoclip;
+	In.bOnGround = bOnGround;
+	In.bDucked = bDucked || bDucking;
+	In.bWalkKey = PendingCmd.IsDown(EElysiumButton::Speed);
+	In.LastGroundedWishSpeed = LastGroundedWishSpeed;
+	In.JumpMaxSpeed = Tuning.JumpMaxSpeed;
+	In.NoclipSpeed = ElysiumMove::NoclipSpeed
+		* (In.bWalkKey ? ElysiumMove::NoclipBoost : 1.0f);
+	return In;
+}
+
 float UElysiumMovementComponent::GetMaxSpeed() const
 {
 	// **The ceiling, not the gait.** This is retail's `m_flMaxspeed`: the peak over every cell of
-	// every gait table, published for `UNavMovementComponent`'s contract and for readouts, and read
-	// by nothing inside the solve — which asks `WishSpeed()` for a direction instead. The peak is
-	// >= every cell by construction, so a clamp against it can never fire.
-	if (bNoclip)
-	{
-		return ElysiumMove::NoclipSpeed * (PendingCmd.IsDown(EElysiumButton::Speed) ? ElysiumMove::NoclipBoost : 1.0f);
-	}
-	if (!bOnGround)
-	{
-		return Tuning.JumpMaxSpeed;
-	}
-	if (GaitSpeeds.IsValid())
-	{
-		return GaitSpeeds.Peak();
-	}
-	// The fallback for a body whose fan has not been pushed yet.
-	return FMath::Max(ElysiumMove::WalkSpeed, ElysiumMove::RunSpeed);
+	// every gait table while grounded, `sv_jump_maxspeed` while the jump phase is live, published
+	// for `UNavMovementComponent`'s contract and for readouts.
+	//
+	// It is also the cap the solve clamps against, at exactly one place — `SetupMove` bounds the
+	// wish it substitutes from a playing sequence (`CheckParameters`). An authored lunge is the only
+	// input that can exceed every gait cell: a player-driven wish IS a cell, so the clamp reaches
+	// nothing else in the solve, which asks `WishSpeed()` for a direction instead.
+	return ElysiumGait::MaxSpeedFrom(BodySpeedInput(), GaitSpeeds);
 }
 
 const FElysiumGaitSpeedTable& UElysiumMovementComponent::GaitTableForCommand() const
@@ -64,11 +71,16 @@ const FElysiumGaitSpeedTable& UElysiumMovementComponent::GaitTableForCommand() c
 
 float UElysiumMovementComponent::WishSpeed(const FVector& WishDir, float Scale) const
 {
-	FElysiumWishSpeedInput In;
-	In.bNoclip = bNoclip;
-	In.bOnGround = bOnGround;
-	In.bDucked = bDucked || bDucking;
-	In.bWalkKey = PendingCmd.IsDown(EElysiumButton::Speed);
+	if (bSubstitutedMove)
+	{
+		// The sequence's own speed, and it is not a gait: retail's `SetupMove` writes the authored
+		// displacement over the frame straight into the command, so there is no table cell to read
+		// and no `+speed` ladder to walk. It answers here rather than at each move function so the
+		// walk, the air move and the water move all take it — which is the level retail substitutes
+		// at.
+		return static_cast<float>(SubstitutedWish.Size());
+	}
+	FElysiumWishSpeedInput In = BodySpeedInput();
 	// The **commanded** direction, not the realized one: retail picks the cell from the keys being
 	// held, before the move integrates. The pose parameter the graph steers on is a different angle
 	// and is deliberately filtered; this one never is.
@@ -76,11 +88,26 @@ float UElysiumMovementComponent::WishSpeed(const FVector& WishDir, float Scale) 
 		static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(WishDir.Y, WishDir.X))),
 		static_cast<float>(ViewFrame().Yaw));
 	In.Scale = Scale;
-	In.LastGroundedWishSpeed = LastGroundedWishSpeed;
-	In.JumpMaxSpeed = Tuning.JumpMaxSpeed;
-	In.NoclipSpeed = ElysiumMove::NoclipSpeed
-		* (In.bWalkKey ? ElysiumMove::NoclipBoost : 1.0f);
-	return ElysiumGait::WishSpeedFrom(In, GaitSpeeds);
+	const float Commanded = ElysiumGait::WishSpeedFrom(In, GaitSpeeds);
+
+	// **A command erased by tables nothing ever published.** A gait that resolved no fan commands
+	// zero on purpose — that is retail's unwritten slot, and `UElysiumAnimSubsystem::ResolveGaitSpeeds`
+	// has already named the body and the gait it could not answer for. A mover that was never handed
+	// tables at all is a different thing and nobody else's to report: retail's player always wears a
+	// model, so there is no faithful behaviour being reproduced here, just a body that cannot walk.
+	// Latched, and only when a real grounded command is what got erased — a body standing still with
+	// no tables is not failing at anything.
+	if (!bReportedNoGaitAuthority && !bGaitSpeedsPublished && In.bOnGround && !In.bNoclip
+		&& Scale > 0.0f)
+	{
+		bReportedNoGaitAuthority = true;
+		UE_LOG(LogElysiumMovement, Warning,
+			TEXT("'%s' commands no speed: nothing has published gait tables to this mover, so every ")
+			TEXT("grounded command resolves to zero. The body's visual, and with it the speed ")
+			TEXT("authority, was never built."),
+			PawnOwner ? *PawnOwner->GetName() : TEXT("(no pawn)"));
+	}
+	return Commanded;
 }
 
 void UElysiumMovementComponent::SetNoclip(bool bEnable)
@@ -113,6 +140,12 @@ void UElysiumMovementComponent::ResetState()
 	// but the speed carried out of the last frame does not.
 	LastGroundedWishSpeed = 0.0f;
 	CommandedSpeed = 0.0f;
+
+	// The swing that owned the command goes with the carried motion. A body arriving somewhere new is
+	// not mid-lunge, and the animation pass re-pushes the lock next frame if it really still is.
+	AnimLock = FElysiumAnimMovementLock();
+	bSubstitutedMove = false;
+	SubstitutedWish = FVector::ZeroVector;
 
 	// Stand up if we were crouched, so the hull the body arrives with is the standing one. The
 	// retained request has to be cleared with it: a toggle survives a keypress by design, so a body
@@ -150,6 +183,15 @@ void UElysiumMovementComponent::SetFrozen(bool bInFrozen)
 	if (bFrozen)
 	{
 		Velocity = FVector::ZeroVector;
+		// The swing that owned the command goes with the carried motion, exactly as it does through
+		// `ResetState`. Clearing only the derived `bSubstitutedMove` — which the frozen tick branch
+		// does every frame — leaves the INPUT standing, so a body unfrozen after a swing ended would
+		// resample a window frozen at the cycle it was locked at and assign one constant velocity
+		// forever. The animation pass re-pushes the lock next frame if the body really is still
+		// mid-swing.
+		AnimLock = FElysiumAnimMovementLock();
+		bSubstitutedMove = false;
+		SubstitutedWish = FVector::ZeroVector;
 	}
 }
 
@@ -163,6 +205,19 @@ FRotator UElysiumMovementComponent::ViewFrame() const
 FVector UElysiumMovementComponent::WishDirection(const FElysiumUserCmd& Cmd, float& OutScale,
 	bool bForcePitch)
 {
+	// The substituted command, when `SetupMove` refilled one. It goes through this member rather than
+	// past it so the published sample reports the wish the solve actually used — retail writes
+	// `cmdMoveMag` from the substituted values too, and a body lunging on an authored path that
+	// reported no wish at all would read as standing still.
+	if (bSubstitutedMove)
+	{
+		const FVector Wish = SubstitutedWish.GetSafeNormal();
+		OutScale = Wish.IsNearlyZero() ? 0.0f : 1.0f;
+		CapturedWish = Wish;
+		CapturedWishScale = OutScale;
+		return Wish;
+	}
+
 	// Walking is on the ground plane; noclip flies along the aim and swimming aims where you look,
 	// both pitch included.
 	const FVector Wish = ElysiumMove::WishDirection(Cmd.Move, Cmd.Up, ViewFrame(),
@@ -170,6 +225,73 @@ FVector UElysiumMovementComponent::WishDirection(const FElysiumUserCmd& Cmd, flo
 	CapturedWish = Wish;
 	CapturedWishScale = OutScale;
 	return Wish;
+}
+
+void UElysiumMovementComponent::SetupMove(float DeltaTime)
+{
+	bSubstitutedMove = false;
+	SubstitutedWish = FVector::ZeroVector;
+	if (!AnimLock.bActive || DeltaTime <= 0.0f)
+	{
+		return;
+	}
+
+	// **The discard comes first and is unconditional.** Retail zeroes the three movement axes before
+	// it asks the sequence for anything, so a locked body whose clip authors no displacement still
+	// stops — the command is gone either way, and only the refill is conditional. The BUTTONS are
+	// untouched: `+speed`, `+duck` and the attack bits are not movement axes, and retail leaves them
+	// alone as well.
+	PendingCmd.Move = FVector2D::ZeroVector;
+	PendingCmd.Up = 0.0f;
+
+	if (!AnimLock.HasPath())
+	{
+		// A clip that authors no `mstudiomovement_t` record at all. `Studio_AnimMovement` returns
+		// false, nothing refills the command, and what holds the body in place is the ordinary
+		// friction of a zero wish — not an assignment. That is a value the file states, not a gap.
+		return;
+	}
+
+	// The window this step will advance through, clamped into the clip exactly as retail's is: the
+	// lower bound cannot go below zero and the upper cannot run past the clip's end.
+	const float CycleFrom = FMath::Max(0.0f, AnimLock.Cycle);
+	const float CycleTo = FMath::Min(1.0f, CycleFrom + AnimLock.CycleRate * DeltaTime);
+	FVector DeltaCm = FVector::ZeroVector;
+	if (!ElysiumClipMovement::SampleDelta(*AnimLock.Path, AnimLock.FrameCount, CycleFrom, CycleTo,
+		DeltaCm))
+	{
+		// `Studio_AnimMovement` said there is nothing to sample at all. The discarded command stays
+		// unrefilled and the body is held by ordinary friction. A window that merely does not ADVANCE
+		// is not this case: it answers true with a zero delta, which substitutes a stop.
+		return;
+	}
+
+	// The delta is in the clip's own local frame — X forward, Y right, Z up, already Unreal-native —
+	// so it is carried into the world by the same view frame the ordinary wish is built in. Retail
+	// composes the identical basis out of `forwardmove`/`sidemove`, which is what its `x` and `-y`
+	// assignments are: the negation there IS the reflection this export already spent.
+	const FRotator Frame(0.0f, static_cast<float>(ViewFrame().Yaw), 0.0f);
+	SubstitutedWish = Frame.RotateVector(DeltaCm) / DeltaTime;
+
+	// **`CheckParameters`' clamp, and the substituted command is what it was written for.** Retail
+	// bounds the refilled `forwardmove`/`sidemove`/`upmove` as one 3-vector against `m_flMaxspeed`
+	// before any move function runs, and `WalkMove` bounds the same ceiling again in the wishvel
+	// slots its direct-assignment fork reads — so BOTH of retail's clamps sit above the fork and the
+	// assignment is capped. The 3-vector form is the stricter (it counts `up`, which `WalkMove`
+	// zeroes first), and 56 shipped records author a non-zero `pos_z_cm`, so it is the one to run.
+	//
+	// The ceiling is re-read every step rather than latched when the lock armed: `PreThink` refills
+	// the gait tables ahead of the lock predicate and is not gated by it — `FElysiumAnimationDriver::
+	// Tick` refreshes its fan above the same guard — so the cap keeps tracking the live run peak for
+	// the whole of a grounded swing — and `sv_jump_maxspeed` for an airborne
+	// one, which `GetMaxSpeed` answers off the `bOnGround` the previous step settled, exactly where
+	// retail's `PreThink` reads its jump phase.
+	//
+	// Only the substituted wish is clamped, because only it is in cm/s. An ordinary command's axes
+	// are deflections and its speed enters later, off a gait cell the ceiling covers by
+	// construction.
+	ElysiumMove::ClampCommandSpeed(SubstitutedWish, GetMaxSpeed());
+	bSubstitutedMove = true;
 }
 
 void UElysiumMovementComponent::PublishLocomotionSample(bool bSolved)
@@ -308,13 +430,33 @@ void UElysiumMovementComponent::WalkMove(float DeltaTime)
 	float Scale = 0.0f;
 	const FVector WishDir = WishDirection(PendingCmd, Scale);
 	const float Commanded = WishSpeed(WishDir, Scale);
-	// What an airborne body keeps commanding, because retail's tables stop refreshing for the jump.
-	// Written from the grounded solve rather than from `CategorizePosition`, so it is the speed that
-	// was actually integrated and not the one the state says should have been.
-	LastGroundedWishSpeed = Commanded;
 	CommandedSpeed = Commanded;
-	ElysiumMove::ApplyAccelerate(Velocity, WishDir, Commanded, Tuning.Accelerate,
-		SurfaceFriction, DeltaTime);
+	if (!bSubstitutedMove)
+	{
+		// What an airborne body keeps commanding, because retail's tables stop refreshing for the
+		// jump. Written from the grounded solve rather than from `CategorizePosition`, so it is the
+		// speed that was actually integrated and not the one the state says should have been.
+		//
+		// **A substituted command is deliberately excluded.** It is a sequence's authored
+		// displacement clamped to `m_flMaxspeed`, not a gait cell, and retail's carried value is the
+		// gait ladder's own answer. Letting a swing write it would have a body that left the ground
+		// mid-lunge keep commanding the lunge's speed through the whole of `AirMove`.
+		LastGroundedWishSpeed = Commanded;
+	}
+	if (bSubstitutedMove)
+	{
+		// **`CMoveData+0xD0`.** A refilled command is a displacement the sequence already authored,
+		// not a target to accelerate toward: `WalkMove` assigns the wish to the velocity outright and
+		// skips `Accelerate` entirely, which is what makes a lunge cover its authored distance rather
+		// than a friction-and-acceleration approximation of it. Everything downstream is unchanged —
+		// the move is swept, clipped and stepped exactly as any other.
+		Velocity = WishDir * Commanded;
+	}
+	else
+	{
+		ElysiumMove::ApplyAccelerate(Velocity, WishDir, Commanded, Tuning.Accelerate,
+			SurfaceFriction, DeltaTime);
+	}
 	Velocity.Z = 0.0f;
 
 	const FVector Start = UpdatedComponent->GetComponentLocation();
@@ -560,6 +702,10 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	if (bFrozen)
 	{
 		Velocity = FVector::ZeroVector;
+		// No step ran, so no command was substituted this frame. Left standing, the flag would have a
+		// readout reporting a lunge on a body nailed to the floor.
+		bSubstitutedMove = false;
+		SubstitutedWish = FVector::ZeroVector;
 		// A frozen body is settled, not unknown: it publishes a standing-still sample rather than
 		// holding the last moving one, which would animate a spawn hold as a walk. No move function
 		// ran, so the wish is reported as absent rather than as whatever the last live frame asked.
@@ -621,6 +767,11 @@ void UElysiumMovementComponent::PlayerMove(float DeltaTime)
 		NoclipMove(DeltaTime);
 		return;
 	}
+
+	// `SetupMove` runs ahead of the whole step, which is where retail runs it: it rewrites the
+	// command every move function below reads, so substituting inside one of them would leave the
+	// other two commanding what the player asked for while the sequence drove the third.
+	SetupMove(DeltaTime);
 
 	// PlayerMove's own order (`docs/vtmb/source_movement.md` → "Where each move function lives"): the timers
 	// and the duck run first, so the ground trace below sees the hull this step will move with.
@@ -755,6 +906,24 @@ void UElysiumMovementComponent::CheckJumpButton()
 	}
 	if (!bOnGround)
 	{
+		return;
+	}
+	if (AnimLock.bRefusesJump)
+	{
+		// **`vt+0x670`, which is NOT the bit the movement substitution reads.** The movement lock is
+		// `vt+0x674` — the same predicate OR `m_IdealActivity == ACT_LAND_HARD` — so during a hard
+		// landing retail drives the body from the clip and still permits the jump. Every row this
+		// rung implements is a melee one, and none of them is `ACT_LAND_HARD`, so the two flags agree
+		// on every frame today; they are read apart so the landing and knockback families can land
+		// without inheriting a refusal retail does not have.
+		//
+		// The press is NOT consumed. Retail's busy bail in `CheckJumpButton` jumps to a plain `ret`
+		// and skips the `m_nOldButtons |= IN_JUMP` the water-jump bail runs, so a held jump key fires
+		// the instant the lock releases — which is why this returns without touching `OldButtons`.
+		//
+		// Deliberately only the press edge, below the held-push branch above: the air attack is
+		// animation-driven for its whole clip, and refusing the push would cut the jump the attack is
+		// being swung from.
 		return;
 	}
 

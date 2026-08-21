@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumAnimationIntent.h"
+#include "ElysiumClipMovement.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 
 class FElysiumCombatCharacter;
@@ -157,6 +158,22 @@ struct FElysiumAnimationDriver
 	// The channel's standing claim, or null. The layer families read their channels through this.
 	const FElysiumAnimationRequest* ActiveRequest(EElysiumAnimChannel Channel) const;
 
+	// --- The forced ideal activity, and the movement lock over it (LIFE5) --------------------------
+	// Where the base channel's clip stands, read off the pose layer by the body's owner and pushed
+	// here before `Tick` — the driver never reaches for an anim instance, because it also serves
+	// bodies that have none. Zeroed by `Reset`, like every other per-frame input.
+	FElysiumBaseClipCycle BaseClipCycle;
+
+	// **Retail's `m_IdealActivity`, assembled**: the activity the base-channel claim FORCES onto this
+	// body plus the cycle its clip is standing on. The claim's `Activity` is the whole difference
+	// between a body that is swinging and a body that is walking underneath a swing clip, and it is
+	// what the movement lock, the reselection guard and the airborne-attack fork all read.
+	//
+	// Rebuilt every call rather than remembered. That is the recovered mechanism and not an
+	// optimisation: bit `0x80` has one write site with both arms present, so a reaction that
+	// overwrites the ideal activity mid-swing releases the lock in the same frame.
+	FElysiumIdealActivityState ForcedIdealActivity() const;
+
 	// Age the slots by one frame and drop expired claims. Split from the verdict because expiry is
 	// time and the verdict is state — `Tick` runs both, in that order.
 	void AdvanceRequests(float DeltaSeconds);
@@ -183,6 +200,17 @@ struct FElysiumAnimationDriver
 	// the MCP surface — can read this unconditionally rather than testing a pointer.
 	FElysiumAnimationSelection Selection;
 	FElysiumResolvedAnimation Assets;
+	// The ideal activity that stood while this frame's record was produced, and whether the
+	// animation-driven predicate held over it. Published beside the record because both answers are
+	// consumed OUTSIDE the driver — the mover's substituted command and the weapon's airborne fork —
+	// and a second evaluation of the predicate elsewhere is two answers waiting to disagree.
+	FElysiumIdealActivityState IdealActivity;
+	// `vt+0x670` — the raw predicate. It gates reselection here and the JUMP refusal in the mover.
+	bool bAnimationDriven = false;
+	// `vt+0x674` — the same predicate OR `ideal == ACT_LAND_HARD`, which is the arm the MOVEMENT
+	// substitution reads. Identical to the flag above on every row this rung implements, because all
+	// of them are melee rows and `ACT_LAND_HARD` is not one.
+	bool bMovementLocked = false;
 	// **The sample this driver classified**, filtered pose parameter and all. A producer's own
 	// locomotion getter recomputes from live component state, so a reader that calls one after this
 	// has ticked is describing a different frame than the record beside it; the trace's contract is

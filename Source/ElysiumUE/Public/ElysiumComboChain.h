@@ -42,13 +42,6 @@ namespace ElysiumCombo
 	// only value tested; treating a falsy mask as unset would drop 36 authored selections.
 	inline constexpr int32 MaskUnset = -1;
 
-	// The cycle an ordinary `ACT_MELEE_ATTACK` holds its busy state until when the playing sequence
-	// authors no combo block of its own to state one. It is what the shipped attacks carry, and it is
-	// named here rather than inlined so the one case that cannot read a per-sequence value is visible.
-	// **A sequence that states a block is read, never assumed**, including where its `w_hold` sits
-	// below its `w_close` (`katana_running_attack` authors 0.25/1.0/0.9).
-	inline constexpr float DefaultHoldCycle = 0.91f;
-
 	// Which class of match a candidate sequence's mask makes against the player's current state. The
 	// ORDER is the preference: an exact match wins, then the two partial classes, then the neutral
 	// fallback. `None` is not a rank — it means the candidate is not selectable by state at all.
@@ -136,8 +129,15 @@ namespace ElysiumCombo
 	}
 
 	// The busy predicate itself. `Cycle` is the playing clip's own normalized position, `HoldCycle`
-	// the value that clip's descriptor states (or `DefaultHoldCycle` where it states none), and the
+	// the value that clip's descriptor states (1.0 where it states no combo block at all), and the
 	// two times are the substrate clock and the weapon's next-attack deadline.
+	//
+	// **An unauthored `w_hold` is 1.0, and that makes the `Hold` arm degenerate into `WholeClip`.**
+	// The retail predicate reads `+0x2F8` with no substitution and no clamp, so the file's own value
+	// is the whole rule; 10,597 of the 14,012 shipped descriptors state exactly 1.00 and the 126
+	// stating 0.91 are the directional attacks. With 1.0 in hand `Cycle < HoldCycle` and the melee
+	// rows' outer `Cycle < 1.0` guard are the same condition, so `ACT_MELEE_ATTACK` degrades cleanly
+	// to what the three unconditional arms already do.
 	inline bool IsBusy(const FString& Activity, float Cycle, float HoldCycle, double Now,
 		double NextAttackTime)
 	{

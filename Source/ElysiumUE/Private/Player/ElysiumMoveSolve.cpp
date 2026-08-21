@@ -143,6 +143,22 @@ FVector WishDirection(const FVector2D& Move, float Up, const FRotator& Frame,
 	return Wish.GetSafeNormal();
 }
 
+bool ClampCommandSpeed(FVector& CommandCmS, float MaxSpeed)
+{
+	const double Speed = CommandCmS.Size();
+	// An unordered compare is false, so a non-finite command falls out here rather than being scaled
+	// by a non-finite ratio.
+	if (!(Speed > static_cast<double>(MaxSpeed)))
+	{
+		return false;
+	}
+	// Retail scales the three components by one ratio rather than rebuilding the vector from a
+	// normalized direction, so the commanded bearing survives the clamp as authored instead of as a
+	// re-derivation of itself.
+	CommandCmS *= MaxSpeed > 0.0f ? static_cast<double>(MaxSpeed) / Speed : 0.0;
+	return true;
+}
+
 // --------------------------------------------------------------------------------------------
 
 static const FCvarDef GMoveCvars[] =

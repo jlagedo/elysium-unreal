@@ -44,8 +44,10 @@ namespace ElysiumMove
 	inline constexpr float JumpHoldSeconds       = 0.2f;         // rules.txt JumpHoldTime
 
 	// The retail player speed is animation-driven and no ConVar holds it; `speed_walk` /
-	// `speed_runbase` are Troika's stated intent and are registered-but-never-read, which makes them
-	// what a body with no resolved gait fan falls back to.
+	// `speed_runbase` are Troika's stated intent and are registered-but-never-read. **Neither is on
+	// the mover's path**: a gait with no resolved fan commands zero, which is what retail's unwritten
+	// table slot holds. What still reads them is the animation classifier's reference gait
+	// (`FElysiumGaitReference`), which needs a walk/run split even for a body that publishes no fan.
 	inline constexpr float WalkSpeed    = 100.0f * U; // speed_walk
 	inline constexpr float RunSpeed     = 225.0f * U; // speed_runbase (+5 per Athletics at 9.4)
 
@@ -142,6 +144,18 @@ namespace ElysiumMove
 	// FRotator rather than a controller, which is what makes it testable.
 	FVector WishDirection(const FVector2D& Move, float Up, const FRotator& Frame,
 		bool bIncludePitch, float& OutScale);
+
+	// `CheckParameters`' command clamp (0x1011f140) — the move command's own speed ceiling, and it
+	// is the **3-vector** magnitude: `forwardmove`, `sidemove` and `upmove` together, scaled by one
+	// ratio so the commanded direction survives untouched. Returns whether it bound.
+	//
+	// Retail clamps the same ceiling a second time inside `WalkMove`, in the wishvel slots the
+	// direct-assignment fork then reads (0x101214cb). That one forces `z` to zero first, so it
+	// bounds a 2D magnitude this has already bounded — `sqrt(x^2+y^2) <= sqrt(x^2+y^2+z^2)`. This
+	// is the stricter of the pair, and reproducing it reproduces both.
+	//
+	// A `MaxSpeed` of zero zeroes the command, which is retail's own arithmetic at that value.
+	bool ClampCommandSpeed(FVector& CommandCmS, float MaxSpeed);
 }
 
 // --------------------------------------------------------------------------------------------

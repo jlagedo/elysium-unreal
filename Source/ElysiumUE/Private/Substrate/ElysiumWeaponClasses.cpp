@@ -44,15 +44,25 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeapon, Log, All);
 // The logical activities the controller requests
 // ================================================================================================
 //
-// `CWeaponMelee::PrimaryAttack` requests `ACT_MELEE_ATTACK`, its secondary requests
-// `ACT_MELEE_ATTACK_HEAVY`, and `RequestActivity`'s one live substitution promotes the first to
-// `ACT_MELEE_ATTACK_2COMBO`. The ordinary ranged selector realizes `ACT_RANGE_ATTACK1_LAYER`, which
+// `CWeaponMelee::PrimaryAttack` requests `ACT_MELEE_ATTACK` and substitutes
+// `ACT_MELEE_AIR_ATTACK` for a player whose ideal activity is one of the recovered airborne
+// phases, its secondary requests `ACT_MELEE_ATTACK_HEAVY`,
+// and `RequestActivity`'s one live substitution promotes an exactly-ordinary `ACT_MELEE_ATTACK` to
+// `ACT_MELEE_ATTACK_2COMBO`. The two substitutions are ordered, and that order is what keeps them
+// exclusive: the air form is chosen first and is not the ordinary activity, so it never reaches the
+// combo test. The ordinary ranged selector realizes `ACT_RANGE_ATTACK1_LAYER`, which
 // the weapon activity table then translates per family. The translation is the embodiment's — the
 // substrate names the LOGICAL activity and nothing else.
 
 namespace
 {
 	const TCHAR* const GActMeleeAttack       = TEXT("ACT_MELEE_ATTACK");
+	// The air form the melee primary substitutes, keyed on the player's ideal activity
+	// (`ElysiumWeapons::IsAirborneMeleeActivity`). It is the player's alone — the cast's activity
+	// chain has no air fork. The clip that answers it on the baseball bat is `BaseballBat_air`;
+	// `baseballbat_attack_jump` is the grounded back-key attack and declares
+	// `ACT_MELEE_ATTACK_BASEBALLBAT`, so the two names read the opposite way round.
+	const TCHAR* const GActMeleeAirAttack    = TEXT("ACT_MELEE_AIR_ATTACK");
 	const TCHAR* const GActMeleeAttack2Combo = TEXT("ACT_MELEE_ATTACK_2COMBO");
 	const TCHAR* const GActMeleeAttackHeavy  = TEXT("ACT_MELEE_ATTACK_HEAVY");
 	const TCHAR* const GActRangeAttackLayer  = TEXT("ACT_RANGE_ATTACK1_LAYER");
@@ -261,6 +271,39 @@ namespace ElysiumWeapons
 		static constexpr int32 Chances[] = { 0, 10, 25, 45, 70, 100 };
 		const int32 Clamped = FMath::Clamp(BaseRank, 0, (int32)UE_ARRAY_COUNT(Chances) - 1);
 		return Chances[Clamped];
+	}
+
+	bool IsAirborneMeleeActivity(const FString& IdealActivity)
+	{
+		if (IdealActivity.IsEmpty())
+		{
+			return false;
+		}
+		// The recovered switch's cases, in its own order. The five entry activities are exactly the
+		// player selector's jump arm (`ElysiumActionTables`' `PLAYER_JUMP` rows), minus the four
+		// phases that arm names and this switch does not: the two landings, `ACT_LAND_HARD`, and
+		// the two `ACT_LEAP_*` halves. Their absence is the rule, not an omission — a body mid-land
+		// is off the ground and swings the GROUNDED form.
+		//
+		// The sixth is the self-latch: once the air attack is the ideal, a follow-up press stays on
+		// the air form until the activity moves off it.
+		static const TCHAR* const Entries[] =
+		{
+			TEXT("ACT_HOP"),
+			TEXT("ACT_HOP_UP"),
+			TEXT("ACT_HOP_DOWN"),
+			TEXT("ACT_LEAP"),
+			TEXT("ACT_FALLING"),
+			TEXT("ACT_MELEE_AIR_ATTACK"),
+		};
+		for (const TCHAR* const Entry : Entries)
+		{
+			if (IdealActivity.Equals(Entry, ESearchCase::IgnoreCase))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	float MeleePlaybackRate(int32 AttackFeatRank)
@@ -768,8 +811,9 @@ void FElysiumWeapon::ClearSwing()
 // Clip resolution — the one door to the animation half
 // ================================================================================================
 
-float FElysiumWeapon::ResolveAndPlay(const FString& Activity, const FElysiumWeaponMode& Mode,
-	FString& OutClipLabel, FString* OutOwnerStem, float* OutMaxReachCm)
+float FElysiumWeapon::ResolveAndPlay(const FString& Activity, EElysiumAnimPriority Band,
+	const FElysiumWeaponMode& Mode, FString& OutClipLabel, FString* OutOwnerStem,
+	float* OutMaxReachCm, float PlaybackRate)
 {
 	OutClipLabel.Reset();
 	if (OutOwnerStem)
@@ -827,8 +871,45 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, const FElysiumWeap
 			{
 				*OutMaxReachCm = Clip.MaxReachCm;
 			}
+			// The claim is STATED, never left to the band-less door — which means `Ambient`, and an
+			// ambient claim is consumed by a travelling body's own `LocomotionTravel` publish, so a
+			// swing armed through it would lose the base channel the instant the attacker walked
+			// (`ElysiumAnimIntent::LocomotionPriority`, `FElysiumAnimationDriver::ArbitrateBase`).
+			//
+			// The band is the caller's because the two attack families disagree about the base pose:
+			// a melee swing replaces it, a ranged or reload layer leaves it to the gait ladder.
+			//
+			// The source is the OWNER's, the same answer the request above already took: a claim
+			// naming a producer the resolution did not walk describes a body that is not the one
+			// swinging. It is stated rather than read out of
+			// `ElysiumAnimIntent::DefaultPriority(Source)`, which answers `Ambient` for `Npc` and
+			// would leave a travelling NPC's swing with exactly the defect this states away.
+			//
+			// The claim is not held: a swing is one clip, and `PlayNpcClip` gives a non-looping,
+			// non-held segment a hold of exactly its own play length, so an armer that never comes
+			// back cannot park the channel.
+			FElysiumClipSegment Segment;
+			Segment.ClipName = Clip.Label;
+			Segment.bLoop = false;
+			Segment.Source = Request.Source;
+			Segment.Priority = Band;
+			// **The forced ideal activity, carried with the clip.** This is the half retail's
+			// `ForcePreTranslatedSequenceAndActivity` performs beside the sequence commit: the body's
+			// ideal activity BECOMES the attack, and its own locomotion classifier stops answering
+			// for it. The LOGICAL request travels, never the translated name — a
+			// `ACT_MELEE_ATTACK_BASEBALLBAT` says which sequence set answered, not what the body is
+			// doing, and every consumer of the ideal activity is asking the second question.
+			Segment.Activity = Activity;
+			// **`m_flPlaybackRate`, written onto the play rather than kept beside it.**
+			// `ResetSequenceInfo` resets the rate to 1.0 and `RequestActivity` then writes the
+			// weapon's, so the weapon's write is the authority for the whole play: the clip's drawn
+			// speed, its cycle advance and therefore the authored lunge all scale off this one
+			// number. A caller that names no rate (every ranged and reload layer, whose schedules are
+			// authored rather than clip-timed) leaves the authored 1.0 in place.
+			Segment.PlaybackRate = PlaybackRate;
+
 			float Played = 0.0f;
-			if (Char->PlayAnimClip(Clip.Label, /*bLoop*/ false, &Played) && Played > 0.0f)
+			if (Char->PlayAnimSegment(Segment, &Played) && Played > 0.0f)
 			{
 				Seconds = Played;
 			}
@@ -837,6 +918,8 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, const FElysiumWeap
 
 	if (Seconds > 0.0f)
 	{
+		// The clip's AUTHORED length, never the wall-clock duration of this play: the caller's own
+		// schedule divides it by the same rate, so scaling it here would apply the rate twice.
 		return Seconds;
 	}
 
@@ -1293,7 +1376,7 @@ FElysiumWeapon::EVerdict FElysiumWeapon::AttackIntent(EIntent Intent,
 		PrimaryModeIndex = PrimaryModeSlots[Next];
 		// The mode-change activity plays and the weapon timers refresh.
 		FString Label;
-		ResolveAndPlay(GActRangeAttackLayer, *Mode, Label);
+		ResolveAndPlay(GActRangeAttackLayer, EElysiumAnimPriority::Ambient, *Mode, Label);
 		HoldAttacksUntil(Now + Mode->AttackRate / FMath::Max(ElysiumWeapons::AttackSpeedScale(*Char), KINDA_SMALL_NUMBER));
 		return EVerdict::ModeToggled;
 	}
@@ -1345,9 +1428,39 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 
 	FString Activity = (Intent == EIntent::Secondary) ? GActMeleeAttackHeavy : GActMeleeAttack;
 
-	// The one live combo substitution: only for an exactly-ordinary `ACT_MELEE_ATTACK`. The
-	// controlling Ability is read as a BASE value — a temporary or effect-adjusted current value
-	// does not enter this test.
+	// **The air fork, and it is the PLAYER's alone.** `CWeaponMelee::PrimaryAttack` substitutes the
+	// air form for a body whose IDEAL ACTIVITY is one of five airborne phases, or already the air
+	// attack — not for a body that merely lacks ground contact
+	// (`docs/vtmb/animation_and_movers.md` § "Player action selection is code around the model
+	// table"). `ElysiumWeapons::IsAirborneMeleeActivity` is that set. The fork is the player's: the
+	// cast's activity chain carries no air fork, and a cast body reports itself airborne for reasons
+	// that are never a jump — the same reason `ElysiumAnimIntent::AdvanceJumpLatch` holds a producer
+	// with no jump command on the ground.
+	//
+	// The ideal activity is the driver's own published fact, asked of the embodiment rather than
+	// derived here, exactly as the block predicate asks for ground contact. A world with no
+	// embodiment publishes no activity, so the grounded form stands and nothing is missing.
+	//
+	// **Only the primary forks.** The melee `SecondaryAttack` body requests `ACT_MELEE_ATTACK_HEAVY`
+	// and substitutes nothing; no recovered weapon ladder declares an airborne heavy base and no
+	// authored clip answers one, so the grounded heavy IS the heavy answer in the air. An authored
+	// absence, not a gap.
+	if (Activity == GActMeleeAttack && IsPlayerSide(Char))
+	{
+		const IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+		if (Embodiment != nullptr
+			&& ElysiumWeapons::IsAirborneMeleeActivity(Embodiment->GetPlayerBaseActivity()))
+		{
+			Activity = GActMeleeAirAttack;
+		}
+	}
+
+	// The one live combo substitution: only for an exactly-ordinary `ACT_MELEE_ATTACK` — so the air
+	// form above, which is a different activity, never reaches it and spends no draw. That is the
+	// recovered order rather than a convenience: `PrimaryAttack` chooses the air form and only then
+	// calls `RequestActivity`, whose substitution tests the requested activity for equality with the
+	// ordinary one. The controlling Ability is read as a BASE value — a temporary or effect-adjusted
+	// current value does not enter this test.
 	if (Activity == GActMeleeAttack)
 	{
 		const bool bBrawl = ModeDmg.AttackFeat.Equals(GFeatCloseCombatBrawl, ESearchCase::IgnoreCase);
@@ -1370,15 +1483,37 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	// WITHOUT picking one, acquires, and only then sets the concrete sequence; this seam answers
 	// the reach and the pick together, so the clip is already playing by the time acquisition runs.
 	// It is unobservable in this runtime rather than merely tolerated: nothing acquisition reads is
-	// written by the play — `PlayAnimClip` reaches the embodiment's visual channel and never the
+	// written by the play — `PlayAnimSegment` reaches the embodiment's visual channel and never the
 	// substrate `Origin`/`Angles` the cone is measured from, or any candidate's life state — and
 	// neither half draws from an RNG stream, so the Dice draw above stays the only one this swing
 	// spends. Acquisition also cannot refuse the swing, in either order: an ordinary swing animates
 	// with no candidate found.
+	//
+	// **`Scripted` is the swing's band**, and it is the whole difference between a swing that plays
+	// and one that is swallowed. It is the first row above the `LocomotionTravel` publish a moving
+	// body makes every anim tick, which is what makes a melee attack replace the base pose rather
+	// than yield to a walk — and the smallest band that does.
+	//
+	// It also loses to `Reaction`, and the asymmetry is the point: a hit reaction takes the body out
+	// of a swing, while a swing cannot take the channel back from a standing reaction. The
+	// combat-action band would make that mutual — a claim replaces on `>=` — so a press would cut
+	// short the flinch that answered it, and the player's held-block `Predicate` claim, which is
+	// already arbitrated against `ACT_BLOCK` at its own band, would gain a second contender.
+	// **The playback rate is decided BEFORE the play, because it is part of the play.** Retail's
+	// `CWeaponMelee::RequestActivity` writes `max(m_flSpeedScale, floor) * (0.7 + 0.03 * rank)` onto
+	// the animating object as it commits the sequence, over the 1.0 `ResetSequenceInfo` had just put
+	// there — so one number governs the drawn swing, its cycle, the authored lunge that cycle
+	// samples, and the recovery deadline below.
+	const int32 FeatRank = FeatRating(Char, ModeDmg.AttackFeat, Context);
+	const float Rate = FMath::Max(
+		ElysiumWeapons::MeleePlaybackRate(FeatRank) * ElysiumWeapons::AttackSpeedScale(Char),
+		KINDA_SMALL_NUMBER);
+
 	FString ClipLabel;
 	FString ClipOwnerStem;
 	float MaxReachCm = 0.0f;
-	const float Seconds = ResolveAndPlay(Activity, Mode, ClipLabel, &ClipOwnerStem, &MaxReachCm);
+	const float Seconds = ResolveAndPlay(Activity, EElysiumAnimPriority::Scripted, Mode, ClipLabel,
+		&ClipOwnerStem, &MaxReachCm, Rate);
 
 	// Target acquisition happens before the sequence is committed. It is aim assistance and
 	// opponent reservation, not a damage verdict: an ordinary swing still animates with no
@@ -1387,13 +1522,10 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	const FElysiumEntityHandle Opponent = AcquireMeleeOpponent(Char, MaxReachCm,
 		FMath::Cos(FMath::DegreesToRadians(ElysiumWeapons::MeleeConeHalfAngleDegrees)));
 
-	const int32 FeatRank = FeatRating(Char, ModeDmg.AttackFeat, Context);
-	const float Rate = FMath::Max(
-		ElysiumWeapons::MeleePlaybackRate(FeatRank) * ElysiumWeapons::AttackSpeedScale(Char),
-		KINDA_SMALL_NUMBER);
-
 	// Melee recovery is selected-clip timing over the playback rate — never the mode's authored
-	// `Attack_Rate` and never one global cooldown.
+	// `Attack_Rate` and never one global cooldown. `Seconds` is the clip's authored length and the
+	// play is already running at `Rate`, so this division is the play's wall-clock duration rather
+	// than a second application of the rate.
 	const double Recovery = Now + static_cast<double>(Seconds) / Rate;
 
 	ClearSwing();
@@ -1471,10 +1603,13 @@ bool FElysiumWeapon::IsMeleeBusy(double Now) const
 		return false;
 	}
 
-	// **The hold is the playing sequence's own.** A sequence that authors a combo block states it,
-	// including the four whose `w_hold` sits below their `w_close`; only a sequence that authors no
-	// block at all takes the stated default.
-	float HoldCycle = ElysiumCombo::DefaultHoldCycle;
+	// **The hold is the playing sequence's own, and there is no substitution behind it.** The retail
+	// predicate compares the cycle against `seqdesc+0x2F8` verbatim — no default path and no clamp —
+	// so a sequence that authors no combo block authors no `w_hold` either and the field reads 1.0,
+	// which is what 10,597 of the 14,012 shipped descriptors state outright. A sequence that DOES
+	// author a block is read as written, including the four whose `w_hold` sits below their
+	// `w_close`.
+	float HoldCycle = 1.0f;
 	if (IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr)
 	{
 		if (const FElysiumComboChain* Combo =
@@ -1555,8 +1690,27 @@ void FElysiumWeapon::CommitMeleeChain(FElysiumCombatCharacter& Char, const FStri
 	const FElysiumEntityHandle Opponent = Swing.Opponent;
 	const float PreviousSeconds = Swing.ClipSeconds;
 
+	// **The hand-off claims the base channel at the same band the swing it continues did.** A chain
+	// link is one more frame of the same melee attack, so it replaces the base pose for the same
+	// reason: an `Ambient` claim — what the band-less door means — is consumed by a travelling
+	// body's own locomotion publish, and a combo landed while moving would animate nothing at all.
+	// The band is stated rather than taken from `DefaultPriority(Source)`, which answers `Ambient`
+	// for an NPC and would leave a travelling combatant's chain with exactly that defect.
+	FElysiumClipSegment Segment;
+	Segment.ClipName = ChainLabel;
+	Segment.bLoop = false;
+	Segment.Source = IsPlayerSide(Char) ? EElysiumAnimSource::Player : EElysiumAnimSource::Npc;
+	Segment.Priority = EElysiumAnimPriority::Scripted;
+	// The forced ideal activity is the ordinary attack for every link of the chain, exactly as
+	// `Swing.Activity` below records — a hand-off is one more frame of the same melee attack, so the
+	// body's ideal activity does not move and each link's own `w_hold` decides its lock.
+	Segment.Activity = GActMeleeAttack;
+	// The same `m_flPlaybackRate` the swing this link continues is running at. The chain performs no
+	// second `RequestActivity`, so it re-writes the rate it inherited rather than re-deriving one.
+	Segment.PlaybackRate = Rate;
+
 	float Seconds = 0.0f;
-	if (!Char.PlayAnimClip(ChainLabel, /*bLoop*/ false, &Seconds) || Seconds <= 0.0f)
+	if (!Char.PlayAnimSegment(Segment, &Seconds) || Seconds <= 0.0f)
 	{
 		// The vocabulary named the label, so a body that cannot play it is a real gap rather than an
 		// authored absence — unlike the dangling link above, which is the file's own bug.
@@ -1604,7 +1758,8 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 
 	FString ClipLabel;
 	FString ClipOwnerStem;
-	const float Seconds = ResolveAndPlay(GActRangeAttackLayer, Mode, ClipLabel, &ClipOwnerStem);
+	const float Seconds = ResolveAndPlay(GActRangeAttackLayer, EElysiumAnimPriority::Ambient, Mode,
+		ClipLabel, &ClipOwnerStem);
 	const bool bEventCommit =
 		CommitArrivesFromAnimEvent(Char, ClipOwnerStem, ClipLabel);
 	const float Scale = FMath::Max(ElysiumWeapons::AttackSpeedScale(Char), KINDA_SMALL_NUMBER);
@@ -1675,7 +1830,7 @@ void FElysiumWeapon::FireOnEmpty(int32 ModeIndex, const FElysiumWeaponMode& Mode
 	// `CWeaponRanged::FireOnEmpty` plays the mode-specific dry-fire activity through the same
 	// resolution seam an attack uses and advances BOTH attack timers.
 	FString Label;
-	ResolveAndPlay(GActRangeDryFire, Mode, Label);
+	ResolveAndPlay(GActRangeDryFire, EElysiumAnimPriority::Ambient, Mode, Label);
 
 	const float Scale = Char
 		? FMath::Max(ElysiumWeapons::AttackSpeedScale(*Char), KINDA_SMALL_NUMBER) : 1.0f;
@@ -2598,7 +2753,8 @@ bool FElysiumWeapon::BeginReload()
 	FString Label;
 	const FElysiumWeaponMode* Mode = ModeAt(PrimaryModeIndex);
 	static const FElysiumWeaponMode EmptyMode;
-	const float Seconds = ResolveAndPlay(GActReloadLayer, Mode ? *Mode : EmptyMode, Label);
+	const float Seconds = ResolveAndPlay(GActReloadLayer, EElysiumAnimPriority::Ambient,
+		Mode ? *Mode : EmptyMode, Label);
 	const float Rate = FMath::Max(ElysiumWeapons::AttackSpeedScale(*Char), KINDA_SMALL_NUMBER);
 
 	bReloading = true;

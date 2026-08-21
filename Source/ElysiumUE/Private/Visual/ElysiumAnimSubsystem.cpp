@@ -185,9 +185,13 @@ void UElysiumAnimSubsystem::ReportGaitFanMiss(const FElysiumGaitSpeedRequest& Re
 	}
 	ReportedGaitMisses.Add(Key);
 
+	// Retail's own answer to a gait with no 9-blend fan is an unwritten table slot, which on a fresh
+	// body reads zero — so this is reported rather than substituted, and the reason string is what
+	// separates a body that declares no such activity from a fan that failed to resolve.
 	UE_LOG(LogElysiumAnim, Warning,
-		TEXT("[elysium] '%s' resolves no %s fan (%s): it will travel at the stated constant while ")
-		TEXT("its record names a cell (%s chain, class '%s', weapon '%s', state %d, label '%s'@'%s')"),
+		TEXT("[elysium] '%s' resolves no %s fan (%s): that gait commands zero, exactly as retail's ")
+		TEXT("unwritten table slot does (%s chain, class '%s', weapon '%s', state %d, label ")
+		TEXT("'%s'@'%s')"),
 		*Request.Stem, ElysiumAnimIntent::ActivityName(Code), Reason,
 		ElysiumAnimIntent::BodyKindName(Request.BodyKind),
 		Request.ActorClassname.IsEmpty() ? TEXT("(none)") : *Request.ActorClassname,
@@ -367,7 +371,29 @@ TSharedPtr<const FElysiumBlendTable> UElysiumAnimSubsystem::GetBlendTable(const 
 	{
 		TSharedPtr<FElysiumBlendTable> Table = MakeShared<FElysiumBlendTable>();
 		FString Error;
-		if (!Table->Load(RelPath, Error) || !Table->IsValid())
+		const bool bLoaded = Table->Load(RelPath, Error) && Table->IsValid();
+		// **Reported whether or not the table loaded, because neither of these makes it fail.** A
+		// sidecar with an unreadable movement schema and a valid grid installs and serves poses; the
+		// only symptom is that no clip of the bank can say whether it authors a lunge. Logged here,
+		// at the one place that turns a path into a table, so it is said once per bank per session
+		// rather than once per swing.
+		if (Table->bMovementSchemaUnreadable)
+		{
+			UE_LOG(LogElysiumAnim, Warning,
+				TEXT("blends '%s' (%s): the sidecar states a `movement_fields` schema this build "
+					 "cannot address, so no clip of this bank can say whether it authors a lunge — "
+					 "the READER is behind the file's column set, and re-exporting will not change "
+					 "it"), *Stem, *RelPath);
+		}
+		if (Table->MalformedMovementRows > 0)
+		{
+			UE_LOG(LogElysiumAnim, Warning,
+				TEXT("blends '%s' (%s): %d malformed `movement` row(s) were dropped from a table that "
+					 "still installed, so the clips they belonged to author a short or empty "
+					 "displacement path"),
+				*Stem, *RelPath, Table->MalformedMovementRows);
+		}
+		if (!bLoaded)
 		{
 			UE_LOG(LogElysiumAnim, Warning, TEXT("blends '%s': %s"), *Stem,
 				Error.IsEmpty() ? TEXT("no usable grid, binding or timeline") : *Error);
@@ -772,14 +798,16 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 		// walking pace while playing a crouch.
 		Intent.bAllowFallbackLadder = false;
 
-		// Every way out of here is a body that will travel at a constant while its record names a
-		// cell, so every one of them says so once rather than returning a quiet false into a caller
-		// that discards it.
+		// Every way out of here is a gait that will command zero while its record names a cell, so
+		// every one of them says so once rather than returning a quiet false into a caller that
+		// discards it.
 		FElysiumAnimationSelection Selection;
 		ElysiumAnimResolve::Resolve(Intent, Catalog, Selection);
 		if (Selection.SequenceLabel.IsEmpty() || Selection.OwnerStem.IsEmpty())
 		{
-			ReportGaitFanMiss(Request, Code, TEXT("the request named no sequence"), Selection);
+			ReportGaitFanMiss(Request, Code,
+				TEXT("the body declares no such activity — an authored absence, not a defect"),
+				Selection);
 			return false;
 		}
 		// The fan belongs to the bank the weighted pick landed in, not to the body — one body's walk

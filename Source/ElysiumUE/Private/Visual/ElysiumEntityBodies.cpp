@@ -419,12 +419,14 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// refused claim has already stomped the pose it was refused the right to replace: an ambient
 	// fidget would take the slot from a standing reaction, be told it does not own the channel, and
 	// leave the body posing the fidget anyway with nothing reporting it.
-	FElysiumAnimationRequest Claim;
-	Claim.Source = Segment.Source;
-	Claim.Channel = EElysiumAnimChannel::Base;
-	Claim.Priority = Segment.Priority;
-	Claim.Label = ClipName;
-	Claim.HoldSeconds = (bLoop || Segment.bHoldUntilReleased) ? 0.0f : Anim->GetPlayLength();
+	//
+	// The conversion itself is `ElysiumAnimIntent::ClaimForSegment` — one place, because the forced
+	// ideal activity it carries is the only route by which retail's
+	// `ForcePreTranslatedSequenceAndActivity` reaches the movement lock, the reselection guard and
+	// the airborne self-latch. `Elysium.Substrate.MeleeMovementLock` drives that field from a segment
+	// through this conversion into the predicate, so the hinge cannot be removed quietly.
+	const FElysiumAnimationRequest Claim =
+		ElysiumAnimIntent::ClaimForSegment(Segment, Anim->GetPlayLength());
 	uint32 ClaimHandle = 0;
 	if (SubmitBodyAnimRequest(Body, Claim, ClaimHandle) == EElysiumAnimClaim::Refused)
 	{
@@ -437,7 +439,11 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 		return false;
 	}
 
-	if (!Inst->PlayOneShot(Identity, Anim, bLoop, Fade, Fade))
+	// The producer's `m_flPlaybackRate` goes to the host with the clip. Every caller that names none
+	// hands over 1.0, which is the value `ResetSequenceInfo` leaves behind, so nothing that never set
+	// a rate is changed by one that does.
+	if (!Inst->PlayOneShot(Identity, Anim, bLoop, Fade, Fade, /*bRestart=*/false,
+		Segment.PlaybackRate))
 	{
 		UE_LOG(LogElysiumBodies, Warning,
 			TEXT("npc '%s' clip '%s' (loop=%d, %.3fs): the animation host refused to play it, so the "
@@ -467,10 +473,12 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	{
 		SegmentClaims.Remove(FObjectKey(Body));
 	}
-	UE_LOG(LogElysiumBodies, Verbose, TEXT("clip '%s' on %s (loop=%d, %.3fs, %s%s)"),
-		*ClipName, *Stem, bLoop ? 1 : 0, Anim->GetPlayLength(),
+	UE_LOG(LogElysiumBodies, Verbose, TEXT("clip '%s' on %s (loop=%d, %.3fs, rate %.2f, %s%s%s)"),
+		*ClipName, *Stem, bLoop ? 1 : 0, Anim->GetPlayLength(), Segment.PlaybackRate,
 		ElysiumAnimIntent::PriorityName(Segment.Priority),
-		Segment.bHoldUntilReleased ? TEXT(", held") : TEXT(""));
+		Segment.bHoldUntilReleased ? TEXT(", held") : TEXT(""),
+		Segment.Activity.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(", ideal %s"),
+			*Segment.Activity));
 
 	Body->TickAnimation(0.0f, false);
 	Body->RefreshBoneTransforms();

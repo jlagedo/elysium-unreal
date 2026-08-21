@@ -207,6 +207,10 @@ struct FElysiumArmedClip
 {
 	FElysiumClipIdentity Identity;
 	float LengthSeconds = 0.0f;
+	// `m_flPlaybackRate` for this arm. The length is the clip's own and the position the host reports
+	// is in clip time, so the cycle is still `position / length`; the rate is carried so a consumer
+	// timing a window FORWARD from that cycle knows how fast it is advancing.
+	float PlayRate = 1.0f;
 	bool bLooping = false;
 	// Bumped once per genuine (re)start. **A displaced arm keeps its id**: the same play resumed is
 	// not a new play, and a bump would restart its timeline and re-fire every record behind it.
@@ -260,7 +264,7 @@ struct FElysiumBipedAnimProxy : public FElysiumBodyAnimProxy
 	// the same request — `RestartIdealActivity` clears the current activity first, so an attack,
 	// reload, pre-jump or land asked for again re-fires from frame one. Returns whether the clip
 	// actually (re)started, because the phase arm above it must not name a new play the pose refused.
-	bool PlayDirect(UAnimSequence* Sequence, bool bLoop, bool bRestart);
+	bool PlayDirect(UAnimSequence* Sequence, bool bLoop, bool bRestart, float PlayRate = 1.0f);
 	// Pin the current clip to an absolute authored time, freezing its play rate. A scene frame's
 	// pose becomes a function of scene time rather than of accumulated animation delta.
 	void Seek(float PositionSeconds);
@@ -506,7 +510,8 @@ public:
 	// no baked montage asset. Nothing here reaches the locomotion blend stack: a scripted clip plays
 	// OVER the gait rather than replacing the thing that owns it.
 	virtual bool PlayOneShot(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence,
-		bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart = false) override;
+		bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart = false,
+		float PlayRate = 1.0f) override;
 	virtual void StopOneShot(float BlendSeconds) override;
 
 	// --- the phase seam (LIFE5) ---------------------------------------------------------------
@@ -549,7 +554,7 @@ public:
 	// holds its clip by default, and a restart-route request (an attack, a reload, a pre-jump, a land)
 	// re-fires it from frame one with a new `PlayId`.
 	void PlayClip(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence, bool bLoop = true,
-		bool bRestart = false);
+		bool bRestart = false, float PlayRate = 1.0f);
 	void SeekClip(float PositionSeconds);
 	void StopClip();
 	UAnimSequence* GetPlayingClip() const;
@@ -665,7 +670,7 @@ private:
 	// An identity naming no clip disarms that producer instead, which is the ordinary stand for a
 	// preview or lab body.
 	void ArmBasePhase(EElysiumBasePhaseSource Source, const FElysiumClipIdentity& Identity,
-		float LengthSeconds, bool bLoop);
+		float LengthSeconds, bool bLoop, float PlayRate = 1.0f);
 	// Disarm one producer. The others are untouched, so a stop hands the channel back to whatever is
 	// still playing underneath rather than emptying it.
 	void DisarmBasePhase(EElysiumBasePhaseSource Source);

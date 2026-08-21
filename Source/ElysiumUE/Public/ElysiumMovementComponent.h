@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "ElysiumClipMovement.h"
 #include "ElysiumGaitSpeeds.h"
 #include "ElysiumMoveSolve.h"
 #include "ElysiumUserCmd.h"
@@ -45,12 +46,42 @@ public:
 	// than pulled per frame: the tables depend on the body, not on the frame, and the mover runs
 	// ahead of the resolver that could answer for one.
 	//
-	// Absent tables are an ordinary state, not a failure — the gym before a body is built, a menu
-	// backdrop, a body whose export has no fan — and the mover falls back to
-	// `ElysiumMove::WalkSpeed`/`RunSpeed` **per gait**.
-	void SetGaitSpeeds(const FElysiumGaitSpeeds& InSpeeds) { GaitSpeeds = InSpeeds; }
-	void ClearGaitSpeeds() { GaitSpeeds = FElysiumGaitSpeeds(); }
+	// A gait whose fan did not resolve commands **zero**, which is what retail's unwritten table slot
+	// holds, and the resolver has already named the body and the gait that failed. A mover nothing
+	// ever pushed tables onto is the different case — a state retail has no equivalent of, because a
+	// player there always wears a model — so it is latched and reported once by `WishSpeed` when a
+	// real command is erased by it, rather than being silently indistinguishable from an authored
+	// absence.
+	void SetGaitSpeeds(const FElysiumGaitSpeeds& InSpeeds)
+	{
+		GaitSpeeds = InSpeeds;
+		bGaitSpeedsPublished = true;
+	}
+	void ClearGaitSpeeds()
+	{
+		GaitSpeeds = FElysiumGaitSpeeds();
+		bGaitSpeedsPublished = false;
+	}
 	const FElysiumGaitSpeeds& GetGaitSpeeds() const { return GaitSpeeds; }
+
+	// --- Animation-driven movement (`CPlayerMove::SetupMove`) --------------------------------------
+	// The swing that owns this body's command, pushed by the animation pass exactly as the gait
+	// tables above are and for the same reason: the mover runs before the driver that knows the
+	// answer, so it is told one frame later — which is where retail reads the cycle from too.
+	//
+	// While the pushed lock is active the command's three movement axes are DISCARDED and refilled
+	// from the playing sequence's authored displacement, and `WalkMove` assigns the resulting wish to
+	// the velocity instead of accelerating toward it. The move is still swept: nothing teleports.
+	//
+	// The refill is bounded by `GetMaxSpeed()` — `CheckParameters`' clamp — so a clip whose authored
+	// blocks outrun the body's own peak carries it a shorter distance than the animation states.
+	void SetAnimMovementLock(const FElysiumAnimMovementLock& InLock) { AnimLock = InLock; }
+	void ClearAnimMovementLock() { AnimLock = FElysiumAnimMovementLock(); }
+	const FElysiumAnimMovementLock& GetAnimMovementLock() const { return AnimLock; }
+	// Whether this frame's command was actually refilled from a sequence. False while the lock holds
+	// over a clip that authors no movement records at all — the command is still discarded, so the
+	// body is held where it stands by ordinary friction rather than by an assignment.
+	bool IsMoveAnimationDriven() const { return bSubstitutedMove; }
 
 	// What the body is commanding this frame, cm/s — the wish speed the last solved substep used.
 	// Published so the animation classifier can take retail's `cmdMoveMag` term without recomputing
@@ -118,6 +149,12 @@ private:
 	void CategorizePosition();
 	void CheckJumpButton();
 
+	// `CPlayerMove::SetupMove`'s one recovered behaviour: while the body is animation-driven, zero
+	// the command's `forwardmove`/`sidemove`/`upmove` and refill them from the window of the playing
+	// sequence this frame will advance through. Runs once per step, ahead of every move function, so
+	// the walk, the air move and the water move all read the same substituted command retail's do.
+	void SetupMove(float DeltaTime);
+
 	// `FullWalkMove` — the gravity half-step split lives here, not in the caller.
 	void FullWalkMove(float DeltaTime);
 	void AirMove(float DeltaTime);
@@ -169,6 +206,12 @@ private:
 	// grounded cell; 350 is a clamp that never fires at default settings.
 	float WishSpeed(const FVector& WishDir, float Scale) const;
 
+	// The body half of the speed input — everything true of the body rather than of the command.
+	// `WishSpeed` completes it with a direction and a deflection to pick a cell; `GetMaxSpeed` asks
+	// for the ceiling over those cells and needs no more than this. One builder, so the cell and the
+	// ceiling can never be answered about two different bodies.
+	FElysiumWishSpeedInput BodySpeedInput() const;
+
 	// Which gait the command selects, for `WishSpeed` and for a readout. `+speed` picks the *slow*
 	// gait and a ducked body is always sneaking, which is retail's ladder minus the speed test the
 	// animation classifier owns.
@@ -200,6 +243,20 @@ private:
 
 	// The animation's per-direction speeds for this body, or invalid tables when nothing pushed any.
 	FElysiumGaitSpeeds GaitSpeeds;
+	// Whether any body ever published the tables above, which is what separates "this body authored
+	// no fan for that gait" (the resolver reported it, and zero is retail's own answer) from "no body
+	// ever answered at all" (ours, and nobody else's to report).
+	bool bGaitSpeedsPublished = false;
+	// The one-shot latch for that report. `WishSpeed` is const because asking a table a question
+	// changes nothing; the latch is what keeps the answer from being a log line per frame.
+	mutable bool bReportedNoGaitAuthority = false;
+
+	// The pushed swing, and what `SetupMove` made of it this step. `SubstitutedWish` is a WORLD
+	// velocity in cm/s — the authored displacement over the step, divided by the step — so the
+	// direction and the magnitude the move functions read come from one expression rather than two.
+	FElysiumAnimMovementLock AnimLock;
+	bool bSubstitutedMove = false;
+	FVector SubstitutedWish = FVector::ZeroVector;
 
 	// The wish speed the last grounded substep commanded, cm/s. Retail's tables stop refreshing for
 	// the duration of a jump, so this is what an airborne body keeps commanding — the held value is

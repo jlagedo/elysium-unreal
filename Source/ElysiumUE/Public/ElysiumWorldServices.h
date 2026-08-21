@@ -832,6 +832,25 @@ public:
 	// asked in the first place.
 	virtual bool IsPlayerOnGround() const { return false; }
 
+	// The LOGICAL activity the player's body is currently classified into — retail's ideal activity
+	// (`m_IdealActivity`), un-translated. The melee primary's airborne fork switches on exactly this
+	// (`docs/vtmb/animation_and_movers.md` § "Player action selection is code around the model
+	// table"), so the substrate asks for the published value rather than re-deriving a body state
+	// of its own.
+	//
+	// It is the same shape and the same reason as `IsPlayerOnGround` above: one producer publishes
+	// the fact, and a substrate predicate reads it. Deliberately a single string rather than the
+	// whole selection record — that record is the resolution's diagnostic, and a substrate caller
+	// able to read it would be a second reader of the resolution.
+	//
+	// **Translation stays out of it.** The value is the request as classified, never the sequence
+	// set that realizes it: an `ACT_FALLING` translated per weapon is still a falling body.
+	//
+	// Empty is the honest answer for a world with no body, a body whose driver has never ticked, and
+	// a headless run. An empty activity matches no fork, so a caller reads the grounded form — which
+	// is what a player who is not airborne anywhere gets.
+	virtual FString GetPlayerBaseActivity() const { return FString(); }
+
 	// CNPCMaker's host geometry. The substrate owns admission order and all policy; these four calls
 	// only answer the engine-shaped questions at the point each guard is reached. Defaults are the
 	// supported headless/fail-open posture.

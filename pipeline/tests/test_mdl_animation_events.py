@@ -85,9 +85,49 @@ class EventTableTests(unittest.TestCase):
         self.assertNotIn("autolayers", sidecar)
         self.assertEqual(sorted(sidecar["events"]), ["run", "walk"])
 
-    def test_a_model_authoring_none_of_the_three_ships_no_sidecar(self):
+    def test_a_model_authoring_none_of_the_four_ships_no_sidecar(self):
         image = bytearray(1024)
         self.assertEqual(mdl_skel.blend_sidecar(image, {}, (_seq("idle", ()),)), {})
+
+
+class MovementTableTests(unittest.TestCase):
+    """The per-owning-model displacement paths the same sidecar carries.
+
+    A `Seq` built outside `local_sequences` from a raw animation carries `movement=None` and
+    was never asked; `()` is the model's own answer that the animation authors no displacement.
+    The sidecar has to keep those apart, because the second is what makes retail's
+    `Studio_AnimMovement` refuse and the first is a reader looking at an older file.
+    """
+
+    RECORD = mdl_skel.Movement(endframe=4, motionflags=0x1040, v0=2.0, v1=4.0, angle=0.0,
+                               vector=(1.0, 0.0, 0.0), position=(3.0, 0.0, 0.0))
+
+    def test_a_clip_nobody_asked_about_authors_no_table(self):
+        self.assertEqual(mdl_skel.movement_table((_seq("idle", ()),)), {})
+
+    def test_asked_and_empty_ships_the_columns_with_no_rows(self):
+        clip = _seq("idle", ())._replace(movement=())
+        table = mdl_skel.movement_table((clip,))
+        self.assertEqual(table["movement_fields"][0], "end_frame")
+        self.assertNotIn("movement", table)
+
+    def test_only_sequences_carrying_a_record_appear(self):
+        clips = (_seq("idle", ())._replace(movement=()),
+                 _seq("lunge", ())._replace(movement=(self.RECORD,)))
+        table = mdl_skel.movement_table(clips)
+        self.assertEqual(sorted(table["movement"]), ["lunge"])
+        self.assertEqual(table["movement"]["lunge"],
+                         [[4, 0x1040, 5.08, 10.16, 0.0, 1.0, 0.0, 0.0, 7.62, 0.0, 0.0]])
+
+    def test_movement_alone_is_reason_enough_to_write_the_sidecar(self):
+        # An attack bank authors no grid at all -- every melee sequence is a single cell -- so a
+        # sidecar gated on the other three would drop the only place the lunge is stated.
+        image = bytearray(1024)
+        sidecar = mdl_skel.blend_sidecar(image, {}, (_seq("lunge", ())._replace(
+            movement=(self.RECORD,)),))
+        self.assertEqual(sidecar["grids"], {})
+        self.assertNotIn("events", sidecar)
+        self.assertEqual(sorted(sidecar["movement"]), ["lunge"])
 
 
 if __name__ == "__main__":

@@ -515,13 +515,27 @@ and emits an `FElysiumAnimationSelection` diagnostic record:
    the table says it wins.
 
    The priority order is declared once (`EElysiumAnimPriority`, order-is-the-table). Of its rows,
-   only the ambient-versus-locomotion relationship is recovered behaviour; every ranking above it
-   is this project's own pending capture verification, and labelling any of it retail requires that
-   capture. Two rules of the slot are deliberate: an expired claim is no claim — a non-looping
+   two relationships are recovered behaviour: ambient-versus-locomotion, and the **tie** between a
+   melee swing and a scripted beat, which both claim `Scripted`. Retail's attack path consults no
+   cine handle and `ForcePreTranslatedSequenceAndActivity` refuses nothing, so a player's swing
+   overwrites a beat's pose there as it does here, and an NPC's is suppressed by the beat owning its
+   schedule rather than by an animation test (`docs/vtmb/animation_and_movers.md` → "Protected
+   activities and player paired-action modes"). Every other ranking is this project's own pending
+   capture verification, and labelling any of it retail requires that capture. Two rules of the slot are deliberate: an expired claim is no claim — a non-looping
    claim holds for its clip's play length, so the standing publish that takes over lands
    structurally after the blend-out — and a holder releases on every stop path (a cinematic stop
    releases its claim before the idle reset that follows it, through the embodiment seam), so a
    claim can never outlive its producer.
+
+   **One table, two comparisons, and each decides a different contest.** `ArbitrateBase` weighs the
+   standing claim against the locomotion publish's own rank and **keeps the holder on a tie** — the
+   base stays claimed while `Slot.Request.Priority >= LocomotionPriority(GraphState)` — so a
+   publisher that merely equals a claim never churns it. `SubmitRequest` refuses only a strictly
+   lower claim (`Request.Priority < Slot.Request.Priority`), so between two claims **an equal one
+   displaces the standing one**. Claim-versus-claim contention is decided by the second rule, which
+   is what lets the first blocked hit take the base from a reaction already playing at the same
+   band — and, at the shared `Scripted` band, what lets a melee swing take it from a standing
+   scripted beat, which is the faithful outcome and not a gap.
 
    **A reaction claim's length is its release condition, never a wall clock.**
    `EElysiumReactionRelease` states the three shapes the combat families have, and each names both

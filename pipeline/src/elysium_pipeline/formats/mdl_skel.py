@@ -44,7 +44,8 @@ import struct
 import numpy as np
 from collections import namedtuple
 
-from elysium_pipeline.formats.bsp import INCH_TO_CM
+from elysium_pipeline.formats.bsp import (INCH_TO_CM, source_dir_to_unreal,
+                                          source_to_unreal)
 
 _i32 = lambda b, o: struct.unpack_from("<i", b, o)[0]
 _u16 = lambda b, o: struct.unpack_from("<H", b, o)[0]
@@ -321,12 +322,18 @@ _SEQ_COMBO_WINDOW = 752            # +0x2F0/+0x2F4/+0x2F8, the descriptor's last
 #: descriptors. The six values the corpus states are `-1` and the five masks below.
 _BUTTONS_UNSET = -1
 
-#: The button bits the shipped masks are built from — the file's own **Source-side** `IN_*`
-#: usercmd bits, one direction each, plus the neutral `0` an attack with no direction held selects
-#: on. The whole install states exactly these: `0` (36 descriptors), `IN_FORWARD` (24),
-#: `IN_BACK` (18), `IN_MOVELEFT` (16) and `IN_MOVERIGHT` (20). The mask is exported raw, so this
-#: table names what the bits are rather than gating what may be read — and it is not the runtime's
-#: own button enum, which numbers its bits differently and has to map onto these by direction.
+#: The button bits the shipped masks are built from — stock Source `IN_*` usercmd bits, one
+#: direction each, plus the neutral `0` an attack with no direction held selects on. The whole
+#: install states exactly these: `0` (36 descriptors), `IN_FORWARD` (24), `IN_BACK` (18),
+#: `IN_MOVELEFT` (16) and `IN_MOVERIGHT` (20). The mask is exported raw, so this table names what
+#: the bits are rather than gating what may be read.
+#:
+#: **The mask is stated in the runtime's own button bits, not in a parallel authoring enum.**
+#: `PlayerSelectMeleeSequence` ANDs the player's live button state against this field directly and
+#: takes no remapping step, so a consumer matches the mask against its own `IN_*` value verbatim.
+#: The same binary numbers those bits the stock Source way throughout: the attack press tests bit
+#: `1` (`IN_ATTACK`), and the ladder push tests `8` for up and `0x10` for down (`IN_FORWARD`,
+#: `IN_BACK`) while gating the strafe pair on `0x600` (`IN_MOVELEFT|IN_MOVERIGHT`).
 IN_FORWARD = 0x008
 IN_BACK = 0x010
 IN_MOVELEFT = 0x200
@@ -345,6 +352,14 @@ _WINDOW_ZEROED = (0.0, 0.0, 0.0)
 #: complete cycle's travel.
 _MOVEMENT_STRIDE = 44
 Movement = namedtuple("Movement", "endframe motionflags v0 v1 angle vector position")
+
+#: The columns of a movement row (see `movement_table`), stated in the sidecar so a reader never
+#: positions them from memory — the same contract `_EVENT_FIELDS` carries. The frame and the
+#: units are in the names, because this payload is the one thing in the sidecar a consumer could
+#: plausibly mistake for the file's own Source values: `movement_table` converts, and a reader that
+#: converted again would mirror the clip.
+_MOVEMENT_FIELDS = ("end_frame", "flags", "v0_cm", "v1_cm", "yaw_deg",
+                    "dir_x", "dir_y", "dir_z", "pos_x_cm", "pos_y_cm", "pos_z_cm")
 
 #: One sequence-timeline event. ``cycle`` is normalized over the sequence, ``event`` is the
 #: numeric dispatch id, ``type`` is the old event-type field, and ``options`` is its decoded
@@ -411,11 +426,16 @@ _NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
 #: authored contact geometry and timing of the same swing (see `read_swing_records`), empty there.
 #: `combo` is the same block's chain half — which direction key selects this attack, which attack
 #: it hands off to, and over which slice of the cycle (see `read_combo_chain`) — `None` there too.
+#: `movement` is the base animation's authored `mstudiomovement_t` array (see `read_movements`),
+#: in the file's own Source units. Its default is `None` — **not asked**, which is what a `Seq`
+#: built outside `local_sequences` from a raw animation carries — and `()` is the distinct answer
+#: "asked, and this animation authors no displacement at all", which is what
+#: `baseballbat_attack_heavy_a` states and what makes retail's `Studio_AnimMovement` refuse.
 Seq = namedtuple("Seq",
                  "label base frames fps activity actweight flags grid bbmin bbmax fade autolayers"
-                 " events reach blocked_reaction swings combo",
+                 " events reach blocked_reaction swings combo movement",
                  defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, (), (), None, None,
-                           (), None))
+                           (), None, None))
 
 
 def pose_parameters(d):
@@ -796,8 +816,17 @@ def read_movements(d, animdesc_base):
 
     `movementindex` is relative to the descriptor, like `animindex`. A malformed count/range is
     treated as no movement: callers retain their existing gait fallback rather than reading past a
-    damaged model image. The raw values remain in Source units because they are format data; use
-    :func:`movement_summary` for the centimetre scalar exported to Unreal.
+    damaged model image. The raw values remain in Source units because they are format data:
+    :func:`movement_summary` reduces them to the centimetre scalars a grid cell exports, and
+    :func:`movement_table` states the whole array Unreal-native for the sidecar.
+
+    The array is a piecewise path, not a single displacement. `position` is cumulative at each
+    record's own `endframe`, and between two records retail eases along `vector` by
+    `v0 * f + 0.5 * (v1 - v0) * f * f` over the block fraction `f`, which is why `v0`/`v1` are
+    lengths rather than rates: the block's whole travel is `0.5 * (v0 + v1)`, exact on every
+    shipped record. A clip can therefore travel and come back — `baseballbat_attack_med` lunges
+    18.4 units forward and ends on a cumulative `position` of exactly zero — so the scalar
+    summary is not a lossy view of this array, it is a different question.
     """
     count = _i32(d, animdesc_base + 16)
     relative = _i32(d, animdesc_base + 20)
@@ -887,7 +916,13 @@ def local_sequences(d):
     sweeps, over which slice of the cycle, and what knockback answers it (see
     `read_swing_records`) — and is empty on the same sequences. `combo` is its chain half: which
     direction key selects this attack, which attack it hands off to, and over which slice of the
-    cycle the hand-off may be asked for (see `read_combo_chain`)."""
+    cycle the hand-off may be asked for (see `read_combo_chain`).
+
+    `movement` is the base cell animation's authored displacement path (see `read_movements`),
+    read for every declared sequence rather than only for the cells of a blend grid: a melee
+    attack is a single-cell sequence, and its lunge lives in this array and nowhere in the bone
+    track. Every sequence this walk yields has been asked, so `()` here means the animation
+    authors no displacement, never that nobody looked."""
     ns = _i32(d, 272); sbase = _i32(d, 276)
     na = _i32(d, 264); abase = _i32(d, 268)
     # The swing records address this model's own bone table, so the table is read once for the
@@ -924,7 +959,8 @@ def local_sequences(d):
                        reach=read_reach(d, sb),
                        blocked_reaction=read_blocked_reaction(d, sb),
                        swings=read_swing_records(d, sb, bones),
-                       combo=read_combo_chain(d, sb)))
+                       combo=read_combo_chain(d, sb),
+                       movement=read_movements(d, ab)))
     return out
 
 
@@ -1505,7 +1541,8 @@ def blend_clip_plan(d, clips):
                 taken.add(clip.lower())
                 by_base[ab] = clip
                 extra.append(Seq(label=clip, base=ab, frames=frames, fps=fps,
-                                   activity="", actweight=0, flags=0))
+                                   activity="", actweight=0, flags=0,
+                                   movement=read_movements(d, ab)))
             exported = {
                 "axis": [cell.axis0, cell.axis1], "anim": cell.anim,
                 "clip": by_base[ab],
@@ -1565,9 +1602,85 @@ def event_table(clips):
     return {"event_fields": list(_EVENT_FIELDS), "event_options": options, "events": events}
 
 
+def movement_table(clips):
+    """The authored displacement paths `clips` declare, stated Unreal-native -> the sidecar's two
+    movement keys, or `{}` when not one of them was asked.
+
+    Keyed by clip label beside `events`, and per **owning model** for the same reason: a bank
+    sequence's path would otherwise be copied into every one of the 157 characters that resolve
+    the label. Measured over the shipped corpus, that is 13,505 records in 0.9 MB across 52
+    models here, against 942,739 records in ~83 MB once the same paths ride the per-character
+    clip slices.
+
+    **Absence is a value, and the two absences are different.** `movement_fields` is emitted
+    whenever any clip was asked, so a reader that finds the key knows this model was decoded by
+    something that reads the array; a label missing from `movement` under a present
+    `movement_fields` authors no record at all, which is what makes retail's
+    `Studio_AnimMovement` return false and produce no displacement. A sidecar with no
+    `movement_fields` was written by something that never looked, and says nothing either way.
+    No zero record is ever synthesized, because a synthesized record is a claim.
+
+    ## Frame and units
+
+    **Every emitted value is Unreal-native, and the runtime converts nothing.** The sidecar
+    contract is that a reader consumes it verbatim, and `position` and `vector` are the one part
+    of this record that has a frame at all, so they go through `bsp.source_to_unreal` and
+    `bsp.source_dir_to_unreal` here — a point takes the inch-to-centimetre scale and the Y
+    reflection, a unit direction takes the reflection alone. The reflection is observable and not
+    a formality: 8,169 of the corpus's 13,505 records state a non-zero Y, every strafing and
+    diagonal locomotion clip among them (`dog_guard`'s `run_45` travels (113.2, -113.5, 0)
+    Source, which is (287.6, 288.2, 0) cm here).
+
+    That has one consequence a consumer must be told out loud. Retail reads the delta this array
+    produces as `x -> forwardmove`, `-y -> sidemove`, `z -> upmove`; the negation in the middle of
+    that **is** this reflection, spent at the point of use. It is spent here instead, once, so a
+    reader takes `pos_*_cm` and `dir_*` as ordinary Unreal axes — X forward, Y right, Z up — and
+    must **not** negate Y a second time. Doing both mirrors every sideways attack and strafe.
+
+    The frame is the **clip's own local frame**, not a world position: retail yaw-rotates the
+    windowed delta into the frame the window opened in before anything consumes it. A consumer
+    composes these values into the actor's own basis; nothing here is a place in the level.
+
+    `v0_cm`/`v1_cm` are lengths, not rates — the ease coefficients of
+    `v0 * f + 0.5 * (v1 - v0) * f * f` over a block fraction, whose total is `0.5 * (v0 + v1)` —
+    so they take the same centimetre scale as the position and carry no direction of their own.
+    `yaw_deg` is a rotation about Z, and the Y reflection reverses the sense of one, so it is
+    negated to state the same turn in Unreal's frame. It costs nothing to check: **every one of
+    the 13,505 shipped records states a yaw of exactly zero**, so retail's own yaw branch is
+    unexercised by retail's own content, and the sign is stated correctly rather than proven.
+    `end_frame` and `flags` are an index and a bit field, and cross unchanged.
+    """
+    rows = {}
+    asked = False
+    for c in clips:
+        if c.movement is None:
+            continue
+        asked = True
+        if not c.movement:
+            continue
+        rows[c.label] = [_movement_row(r) for r in c.movement]
+    if not asked:
+        return {}
+    return {"movement_fields": list(_MOVEMENT_FIELDS),
+            **({"movement": rows} if rows else {})}
+
+
+def _movement_row(record):
+    """One `Movement` as the `_MOVEMENT_FIELDS` row `movement_table` documents."""
+    position = source_to_unreal(*record.position)
+    direction = source_dir_to_unreal(*record.vector)
+    # `+ 0.0` normalizes away the `-0.0` the Y reflection makes of a zero component, the same way
+    # `UE_mdl_skeletal.unreal_swings` does, so an axis-aligned path reads as one.
+    return [record.endframe, record.motionflags,
+            round(record.v0 * INCH_TO_CM, 4), round(record.v1 * INCH_TO_CM, 4),
+            round(-record.angle, 4) + 0.0,
+            *(round(float(c), 6) + 0.0 for c in direction),
+            *(round(float(c), 4) + 0.0 for c in position)]
+
+
 def blend_sidecar(d, blends, clips):
-    """The blend table, autolayer binding and event timelines a model ships beside its clips,
-    or `{}` when it authors none of the three.
+    """The blend table, autolayer binding, event timelines and authored displacement paths a
+    model ships beside its clips, or `{}` when it authors none of the four.
 
     The pose parameters travel with it because a grid's `paramindex` is an index into this
     model's own array — the axis cannot be named, wrapped or normalized without it.
@@ -1582,10 +1695,17 @@ def blend_sidecar(d, blends, clips):
     `events` comes off the same descriptor again (`numevents`/`eventindex`@20/24) and is keyed
     by the same sequence labels, which is why all three ship in one file. It is per owning model
     rather than per resolving character: a bank sequence's timeline would otherwise be duplicated
-    across every character that resolves the label."""
+    across every character that resolves the label.
+
+    `movement` is the fourth, on exactly those terms (see `movement_table`), and it is a fourth
+    reason to write the file: an attack bank whose every sequence is a single cell authors no
+    grid, and dropping the sidecar would drop the only place the lunge is stated. A model that
+    authors none of the four still ships nothing — `movement_fields` alone is a column list about
+    an empty table, and a file carrying only that would say no more than its own absence."""
     autolayers = {c.label: list(c.autolayers) for c in clips if c.autolayers}
     events = event_table(clips)
-    if not blends and not autolayers and not events:
+    movement = movement_table(clips)
+    if not blends and not autolayers and not events and not movement.get("movement"):
         return {}
     return {
         "pose_parameters": [
@@ -1596,6 +1716,7 @@ def blend_sidecar(d, blends, clips):
         "grids": blends,
         **({"autolayers": autolayers} if autolayers else {}),
         **events,
+        **movement,
     }
 
 

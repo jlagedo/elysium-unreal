@@ -39,6 +39,8 @@
 #include "Substrate/ElysiumRulebook.h"
 #include "ElysiumViewState.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Visual/ElysiumActionTables.h"      // the recovered player selector, for the name join
+#include "Visual/ElysiumAnimationDriver.h"   // the real base-channel arbitration
 #include "Tests/ElysiumSaveTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
 
@@ -95,6 +97,10 @@ namespace
 	// inside a process, so the once-per-weapon reach report can only be asserted on a name whose key
 	// no earlier suite has already spent.
 	const TCHAR* const GReachBlade = TEXT("item_w_test_reachblade");
+	// A melee record authoring BOTH attack modes, which is what makes the heavy intent reachable.
+	// Its own classname because a second mode added to a record another case swings would move that
+	// case's mode indices.
+	const TCHAR* const GHeavyBlade = TEXT("item_w_test_heavyblade");
 	const TCHAR* const GPistol  = TEXT("item_w_test_pistol");
 	const TCHAR* const GShotgun = TEXT("item_w_test_shotgun");
 	const TCHAR* const GTrinket = TEXT("item_g_test_trinket");
@@ -127,6 +133,17 @@ namespace
 		Blade.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
 			TEXT("3 Lethal Close_Combat_Melee DMG_SLASH"), 12, 1.0f));
 		Table.Items.Add(MoveTemp(Blade));
+
+		// The two-mode melee record — see `GHeavyBlade`. The secondary is a real `Secondary_Attack`,
+		// so the press reaches `BeginMeleeSwing` with the heavy intent rather than being refused for
+		// having no mode.
+		FElysiumItemDef HeavyBlade = MakeDef(GHeavyBlade, EElysiumItemType::WeaponMelee);
+		HeavyBlade.Bucket = 0; HeavyBlade.BucketPosition = 9;
+		HeavyBlade.Modes.Add(MakeMode(TEXT("Primary"), TEXT("Attack"),
+			TEXT("3 Lethal Close_Combat_Melee DMG_SLASH"), 12, 1.0f));
+		HeavyBlade.Modes.Add(MakeMode(TEXT("Secondary"), TEXT("Secondary_Attack"),
+			TEXT("4 Lethal Close_Combat_Melee DMG_SLASH"), 14, 1.2f));
+		Table.Items.Add(MoveTemp(HeavyBlade));
 
 		// A firearm with two primary records and a secondary that toggles between them.
 		FElysiumItemDef Pistol = MakeDef(GPistol, EElysiumItemType::WeaponFirearm);
@@ -836,6 +853,16 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		// rulebook).
 		TestTrue(TEXT("the playback rate is 0.70 + 0.03 x rank"),
 			FMath::IsNearlyEqual(Fists->Swing.PlaybackRate, 0.70f));
+		// **Both of them crossed the play seam**, and neither is inferable from the transaction: the
+		// forced ideal activity is what arms the movement lock, the reselection guard and the air
+		// self-latch, and the rate is what makes the drawn clip, its cycle and its authored lunge run
+		// at one speed. A play that carried neither would look identical everywhere else.
+		// Joined, because `Saw` matches a PREFIX of one line and both of these ride at the tail.
+		const FString PlayLog = Services.Log();
+		TestTrue(FString::Printf(TEXT("the swing's playback rate reaches the play (%s)"), *PlayLog),
+			Services.Saw(TEXT("PlayNpcClip")) && PlayLog.Contains(TEXT("rate=0.70")));
+		TestTrue(TEXT("...as does the forced ideal activity, LOGICAL rather than translated"),
+			PlayLog.Contains(TEXT("act=ACT_MELEE_ATTACK")));
 		TestTrue(TEXT("melee recovery is the clip duration over the playback rate"),
 			NearlyEqual(Fists->Swing.RecoveryDeadline, 0.5 / 0.7));
 		TestTrue(TEXT("...and both deadlines are held to it"),
@@ -1973,6 +2000,553 @@ bool FElysiumWeaponComboTest::RunTest(const FString&)
 		TestEqual(TEXT("...a second accepted swing"), Past.Fists->AcceptedSwingCount(), 2);
 		TestTrue(TEXT("...which DOES push the deadline, unlike a hand-off"),
 			Past.Fists->Swing.RecoveryDeadline > Deadline);
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The band a melee swing claims the base channel at, and the air fork (LIFE5).
+//
+// A melee swing replaces the BASE pose, while the ranged and reload arms write only a layer and
+// leave the base to the gait ladder. Two consequences are asserted here, because both are invisible
+// in the swing's own state and visible only in what the play seam was handed:
+//
+//  * a swing claims the base channel ABOVE a travelling body's own locomotion publish, or the
+//    arbitration consumes it and the attacker walks through an attack that animates nothing;
+//  * a player whose ideal activity is one of the recovered airborne phases swings the air form, and
+//    nobody else ever does.
+// =====================================================================================
+
+namespace
+{
+	// The band token a recorded `PlayNpcClip` line states. The band rides at the tail of the line
+	// (`Tests/ElysiumTestServices.h`), so this reads what the PRODUCER claimed rather than which door
+	// it went through.
+	FString BandOfPlay(const FElysiumRecordingServices& Services, const FString& Prefix)
+	{
+		for (const FString& Call : Services.Calls)
+		{
+			FString Tail;
+			if (!Call.StartsWith(Prefix) || !Call.Split(TEXT("band="), nullptr, &Tail))
+			{
+				continue;
+			}
+			FString Band;
+			return Tail.Split(TEXT(" "), &Band, nullptr) ? Band : Tail;
+		}
+		return FString();
+	}
+
+	// The band token back as the enum. Read back rather than assumed: the arbitration below is only a
+	// statement about the swing if it ranks the band the swing actually claimed.
+	bool ParsePriority(const FString& Name, EElysiumAnimPriority& Out)
+	{
+		for (uint8 I = 0; I <= static_cast<uint8>(EElysiumAnimPriority::Debug); ++I)
+		{
+			const EElysiumAnimPriority Band = static_cast<EElysiumAnimPriority>(I);
+			if (!Name.IsEmpty() && Name.Equals(ElysiumAnimIntent::PriorityName(Band)))
+			{
+				Out = Band;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	// A base-channel claim as a producer submits one.
+	FElysiumAnimationRequest BaseClaim(EElysiumAnimPriority Band, EElysiumAnimSource Source,
+		const TCHAR* Label)
+	{
+		FElysiumAnimationRequest Claim;
+		Claim.Source = Source;
+		Claim.Channel = EElysiumAnimChannel::Base;
+		Claim.Priority = Band;
+		Claim.Label = Label;
+		Claim.HoldSeconds = 0.5f;
+		return Claim;
+	}
+
+	// A driver standing a body that is TRAVELLING, which is the publish the swing has to survive.
+	FElysiumAnimationDriver TravellingDriver()
+	{
+		FElysiumAnimationDriver Driver;
+		Driver.Stem = TEXT("male_pc");
+		Driver.Source = EElysiumAnimSource::Player;
+		Driver.BodyKind = EElysiumAnimBodyKind::Player;
+		Driver.Selection.GraphState = EElysiumGraphState::Run;
+		return Driver;
+	}
+
+	// A bodied swinger holding the fists, with the swing seam armed. The body is what makes the play
+	// reach `PlayNpcClip` at all — a bodiless character resolves a clip and plays nothing.
+	struct FBandFixture
+	{
+		FElysiumRecordingServices Services;
+		TUniquePtr<FElysiumEntityWorld> World;
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+
+		bool Stand(FAutomationTestBase& Test)
+		{
+			ElysiumRng::SeedAll(0x42414e44);
+			ArmSwingSeam(Services, { SwingRec(0.30f, 0.60f) });
+			World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Services.Bundle());
+			World->Load(MakeWeaponTestDefs());
+			World->SpawnPlayer();
+			World->Activate(0.0);
+			World->Tick(0.0);
+
+			Player = World->FindPlayer();
+			Victim = FindCharacter(*World, TEXT("victim"));
+			if (!Test.TestNotNull(TEXT("the player exists"), Player)
+				|| !Test.TestNotNull(TEXT("the victim exists"), Victim))
+			{
+				return false;
+			}
+			Player->SetRuntimeModel(TEXT("models/character/pc/male/male_pc.mdl"));
+			Victim->SetRuntimeModel(TEXT("models/character/npc/male/gangbanger_a.mdl"));
+			SeedHealth(*Victim, 5000);
+			SeedHealth(*Player, 5000);
+			PlaceFacing(*Player, FVector::ZeroVector);
+			return Test.TestNotNull(TEXT("the swinger carries a body the play can reach"),
+				Player->Visual);
+		}
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeBandTest, "Elysium.Substrate.Weapons.MeleeBand",
+	GElysiumTestFlags)
+bool FElysiumWeaponMeleeBandTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	const FString PlayerSwingPlay =
+		FString::Printf(TEXT("PlayNpcClip male_pc %s loop=0 "), GSwingClip);
+	EElysiumAnimPriority SwingBand = EElysiumAnimPriority::Ambient;
+
+	// --- The player's swing states its band, and it is not the band-less door's -----------------
+	{
+		FBandFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		FElysiumWeapon* Fists = GiveWeapon(*F.Player, GFists);
+		if (!TestNotNull(TEXT("the fists are granted"), Fists))
+		{
+			return false;
+		}
+		F.Services.Calls.Reset();
+		TestEqual(TEXT("the swing is accepted"),
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
+			FElysiumWeapon::EVerdict::Accepted);
+
+		const FString Band = BandOfPlay(F.Services, PlayerSwingPlay);
+		TestTrue(TEXT("the swing's play states a band"), ParsePriority(Band, SwingBand));
+		TestEqual(TEXT("...and it is Scripted, not the band-less door's Ambient"),
+			Band, FString(ElysiumAnimIntent::PriorityName(EElysiumAnimPriority::Scripted)));
+		TestFalse(TEXT("...with the claim ended by its own clip rather than held"),
+			F.Services.bNpcSegmentHeld);
+	}
+
+	// --- The same weapon in a cast hand states the same band ------------------------------------
+	// `DefaultPriority(Npc)` answers `Ambient`, so a producer that read the band off its source
+	// would leave the identical defect on every travelling combatant. The band is the ATTACK's, not
+	// the owner's.
+	{
+		FBandFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		FElysiumWeapon* Fists = GiveWeapon(*F.Victim, GFists);
+		if (!TestNotNull(TEXT("the NPC is armed with the same record"), Fists))
+		{
+			return false;
+		}
+		F.Services.Calls.Reset();
+		TestEqual(TEXT("the NPC's swing is accepted"),
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary, F.Player->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(TEXT("a cast swing claims the base at the same band the player's does"),
+			BandOfPlay(F.Services,
+				FString::Printf(TEXT("PlayNpcClip gangbanger_a %s loop=0 "), GSwingClip)),
+			FString(ElysiumAnimIntent::PriorityName(EElysiumAnimPriority::Scripted)));
+	}
+
+	// --- The layer families keep yielding: a shot leaves the base to the gait ladder -------------
+	{
+		FBandFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		FElysiumWeapon* Pistol = GiveWeapon(*F.Player, GPistol);
+		if (!TestNotNull(TEXT("the player is armed with a firearm"), Pistol))
+		{
+			return false;
+		}
+		F.Services.Calls.Reset();
+		TestEqual(TEXT("the shot is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, F.Victim->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(TEXT("a ranged attack's base-channel stand-in still yields to a travelling body"),
+			BandOfPlay(F.Services, PlayerSwingPlay),
+			FString(ElysiumAnimIntent::PriorityName(EElysiumAnimPriority::Ambient)));
+	}
+
+	// --- The arbitration itself, over the band the swing just claimed ----------------------------
+	{
+		FElysiumAnimationDriver Driver = TravellingDriver();
+		const uint32 Handle =
+			Driver.SubmitRequest(BaseClaim(SwingBand, EElysiumAnimSource::Player, GSwingClip));
+		TestTrue(TEXT("the swing's claim is granted"), Handle != 0);
+
+		Driver.ArbitrateBase();
+		TestFalse(TEXT("a travelling body's locomotion publish does NOT take the swing's base pose"),
+			Driver.Selection.bBasePoseOwned);
+		TestTrue(TEXT("...and the verdict names the swing as the holder"),
+			Driver.Selection.BaseHold.Contains(GSwingClip));
+		TestNotNull(TEXT("...leaving the claim standing"),
+			Driver.ActiveRequest(EElysiumAnimChannel::Base));
+
+		// The control, and the defect this test exists for: the band-less door's own band IS consumed
+		// by that same publish, so a swing armed through it animates nothing while the body moves.
+		FElysiumAnimationDriver Ambient = TravellingDriver();
+		TestTrue(TEXT("an ambient claim is granted too"),
+			Ambient.SubmitRequest(BaseClaim(EElysiumAnimPriority::Ambient,
+				EElysiumAnimSource::Player, GSwingClip)) != 0);
+		Ambient.ArbitrateBase();
+		TestTrue(TEXT("...and the travelling publish takes the base pose from it"),
+			Ambient.Selection.bBasePoseOwned);
+		TestNull(TEXT("...consuming the claim outright"),
+			Ambient.ActiveRequest(EElysiumAnimChannel::Base));
+
+		// Being struck mid-swing still flinches the body out of the swing: `Reaction` outranks the
+		// band. The reverse does not hold — a swing cannot displace a standing reaction, which is
+		// what keeps a body attacking out of its own flinch.
+		TestTrue(TEXT("an incoming reaction takes the base channel from a standing swing"),
+			Driver.SubmitRequest(BaseClaim(EElysiumAnimPriority::Reaction,
+				EElysiumAnimSource::Damage, TEXT("knockback_small_high_back"))) != 0);
+		TestEqual(TEXT("a swing submitted under a standing reaction is refused"),
+			Driver.SubmitRequest(BaseClaim(SwingBand, EElysiumAnimSource::Player, GSwingClip)),
+			static_cast<uint32>(0));
+	}
+
+	// --- The combo hand-off is one more frame of the same attack, at the same band ---------------
+	{
+		FComboFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		F.Chains(GSwingClip, ComboBlock(GComboNext, 0.5f, 0.9f, 0.91f));
+		F.DeclareSuccessor(GComboNext);
+
+		F.Press(0.0);
+		F.StandOn(GSwingClip, 0.70f);
+		F.Services.Calls.Reset();
+		F.Press(0.10);
+		TestEqual(TEXT("the press committed the successor"), F.Fists->Swing.ClipLabel,
+			FString(GComboNext));
+		TestEqual(TEXT("...claiming the base channel at the band the swing it continues did"),
+			BandOfPlay(F.Services,
+				FString::Printf(TEXT("PlayNpcClip male_pc %s loop=0 "), GComboNext)),
+			FString(ElysiumAnimIntent::PriorityName(EElysiumAnimPriority::Scripted)));
+	}
+
+	return true;
+}
+
+// =====================================================================================
+// The airborne melee fork: the recovered switch on the player's IDEAL ACTIVITY, not on
+// ground contact — and who the fork belongs to.
+//
+// `CWeaponMelee::PrimaryAttack` asks one helper whether to request the air form, and that
+// helper switches on the player's ideal activity over six cases: five airborne phases and
+// the air attack itself. A ground-flag test is a different predicate and the difference is
+// observable, which is what the "off the ground but not airborne" case below pins.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponMeleeAirTest, "Elysium.Substrate.Weapons.MeleeAir",
+	GElysiumTestFlags)
+bool FElysiumWeaponMeleeAirTest::RunTest(const FString&)
+{
+	const FElysiumItemTable Table = MakeWeaponTable();
+	ElysiumItems::Install(Table);
+	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
+
+	const FString Ordinary = TEXT("ACT_MELEE_ATTACK");
+	const FString AirForm  = TEXT("ACT_MELEE_AIR_ATTACK");
+	const FString Combo    = TEXT("ACT_MELEE_ATTACK_2COMBO");
+	const FString Heavy    = TEXT("ACT_MELEE_ATTACK_HEAVY");
+
+	// The five airborne phases the recovered switch enters on, plus the air attack's own self-latch
+	// case. Spellings, never numbers: the registered IDs this runtime carries are the binary's
+	// registration numbers rather than the compiled enum slots the switch's cases are.
+	const TCHAR* const Entries[] =
+	{
+		TEXT("ACT_HOP"), TEXT("ACT_HOP_UP"), TEXT("ACT_HOP_DOWN"), TEXT("ACT_LEAP"),
+		TEXT("ACT_FALLING"),
+	};
+	// Off the ground and NOT in the switch. The three landings are the point of the whole case:
+	// a body mid-land has no ground contact and swings the grounded form anyway.
+	const TCHAR* const NotEntries[] =
+	{
+		TEXT("ACT_LAND"), TEXT("ACT_LAND_CROUCH"), TEXT("ACT_LAND_HARD"),
+		TEXT("ACT_LEAP_ASCEND"), TEXT("ACT_LEAP_DESCEND"),
+	};
+
+	// Rank 5 Brawl draws the combo at 100%, which is what makes the two substitutions separable: on
+	// the grounded arm every primary promotes, so a swing that did NOT promote can only be the fork.
+	auto ArmCombo = [](FElysiumCombatCharacter& Char)
+	{
+		Char.Sheet.SetBase(EC::Abilities, /*Brawl*/ 1, 5);
+	};
+
+	// --- The names are joined to the recovered tables, not assumed ---------------------------------
+	{
+		TArray<FString> Vocabulary;
+		ElysiumActionTables::CollectPlayerActivities(Vocabulary);
+		auto Registered = [&Vocabulary](const TCHAR* Name)
+		{
+			return Vocabulary.ContainsByPredicate([Name](const FString& Seen)
+				{ return Seen.Equals(Name, ESearchCase::IgnoreCase); });
+		};
+		for (const TCHAR* const Name : Entries)
+		{
+			TestTrue(FString::Printf(TEXT("%s is an activity the player selector names"), Name),
+				Registered(Name));
+		}
+		TestTrue(TEXT("ACT_MELEE_AIR_ATTACK is one too — the self-latch case"),
+			Registered(*AirForm));
+		// The exclusions have to be spellings the tables carry as well, or "not in the set" would be
+		// indistinguishable from a typo that can never match anything.
+		for (const TCHAR* const Name : NotEntries)
+		{
+			TestTrue(FString::Printf(TEXT("%s is a named activity too, so its exclusion is a rule"),
+				Name), Registered(Name));
+		}
+
+		// The five entries and the landings alike come off ONE arm — the jump classifier's — which is
+		// what makes the split inside it the recovered switch's own and not a distinction between
+		// two unrelated vocabularies.
+		const ElysiumActionTables::FPlayerAction* Jump =
+			ElysiumActionTables::FindPlayerAction(TEXT("PLAYER_JUMP"));
+		if (TestNotNull(TEXT("the player selector carries a jump arm"), Jump))
+		{
+			auto NamedByJumpArm = [Jump](const TCHAR* Name)
+			{
+				for (int32 Index = 0; Index < Jump->RuleCount; ++Index)
+				{
+					const TCHAR* const Activity = Jump->Rules[Index].Activity;
+					if (Activity != nullptr && FCString::Stricmp(Activity, Name) == 0)
+					{
+						return true;
+					}
+				}
+				return false;
+			};
+			for (const TCHAR* const Name : Entries)
+			{
+				TestTrue(FString::Printf(TEXT("the jump arm names %s"), Name),
+					NamedByJumpArm(Name));
+			}
+			for (const TCHAR* const Name : NotEntries)
+			{
+				TestTrue(FString::Printf(TEXT("...and names %s, which the fork excludes"), Name),
+					NamedByJumpArm(Name));
+			}
+		}
+	}
+
+	// --- The predicate itself, as pure rules --------------------------------------------------------
+	{
+		for (const TCHAR* const Name : Entries)
+		{
+			TestTrue(FString::Printf(TEXT("%s enters the air fork"), Name),
+				ElysiumWeapons::IsAirborneMeleeActivity(Name));
+		}
+		for (const TCHAR* const Name : NotEntries)
+		{
+			TestFalse(FString::Printf(TEXT("%s does not"), Name),
+				ElysiumWeapons::IsAirborneMeleeActivity(Name));
+		}
+		for (const TCHAR* const Name : { TEXT("ACT_IDLE"), TEXT("ACT_WALK"), TEXT("ACT_RUN"),
+			TEXT("ACT_CROUCH"), TEXT("ACT_MELEE_ATTACK") })
+		{
+			TestFalse(FString::Printf(TEXT("nor does the ordinary %s"), Name),
+				ElysiumWeapons::IsAirborneMeleeActivity(Name));
+		}
+		// The switch's own `case ACT_MELEE_AIR_ATTACK`: once the air attack is the ideal, a follow-up
+		// press stays on the air form until the activity moves off it.
+		//
+		// **Asserted at the predicate, and its publisher is asserted where the publisher lives.** A
+		// swing's forced ideal activity travels with the base-channel claim
+		// (`FElysiumClipSegment::Activity`) and the animation driver publishes it ahead of its own
+		// locomotion classification, which `Elysium.Substrate.MeleeMovementLock` asserts for the air
+		// form by name; `AElysiumMapActor::GetPlayerBaseActivity` is the seam that hands the same
+		// value back here. The window it is published in is the whole air clip, and whether a
+		// follow-up press can arrive inside that window is the weapon's busy predicate's answer, not
+		// this switch's.
+		TestTrue(TEXT("the air attack latches itself"),
+			ElysiumWeapons::IsAirborneMeleeActivity(*AirForm));
+		TestFalse(TEXT("an unpublished activity forks nowhere"),
+			ElysiumWeapons::IsAirborneMeleeActivity(FString()));
+	}
+
+	// --- Grounded: the ordinary activity, promoted by the combo draw --------------------------------
+	{
+		FBandFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		ArmCombo(*F.Player);
+		FElysiumWeapon* Fists = GiveWeapon(*F.Player, GFists);
+		if (!TestNotNull(TEXT("the fists are granted"), Fists))
+		{
+			return false;
+		}
+		F.Services.bPlayerOnGround = true;
+		F.Services.PlayerBaseActivity = TEXT("ACT_IDLE");
+		FRandomStream Expected = ElysiumRng::Stream(EElysiumRngStream::Dice);
+
+		TestEqual(TEXT("the grounded swing is accepted"),
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(TEXT("a grounded primary requests the ordinary activity, promoted by the draw"),
+			Fists->Swing.Activity, Combo);
+
+		// The grounded path's draw count is what the melee suite's determinism rests on, so it is
+		// pinned here rather than described.
+		Expected.RandRange(0, 99);
+		TestEqual(TEXT("...spending exactly the one combo draw"),
+			ElysiumRng::Stream(EElysiumRngStream::Dice).GetCurrentSeed(),
+			Expected.GetCurrentSeed());
+	}
+
+	// --- Each of the five recovered phases takes the air form ---------------------------------------
+	for (const TCHAR* const Phase : Entries)
+	{
+		FBandFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		ArmCombo(*F.Player);
+		FElysiumWeapon* Fists = GiveWeapon(*F.Player, GFists);
+		if (!TestNotNull(TEXT("the fists are granted"), Fists))
+		{
+			return false;
+		}
+		F.Services.bPlayerOnGround = false;
+		F.Services.PlayerBaseActivity = Phase;
+		F.Services.Calls.Reset();
+		const FRandomStream Expected = ElysiumRng::Stream(EElysiumRngStream::Dice);
+
+		TestEqual(FString::Printf(TEXT("the swing from %s is accepted"), Phase),
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(FString::Printf(TEXT("...and %s requests the air form"), Phase),
+			Fists->Swing.Activity, AirForm);
+		TestTrue(TEXT("...asking the driver's own published ideal activity for it"),
+			F.Services.Saw(TEXT("GetPlayerBaseActivity")));
+		TestFalse(TEXT("...and never consulting ground contact, which is a different predicate"),
+			F.Services.Saw(TEXT("IsPlayerOnGround")));
+		TestTrue(TEXT("...and the vocabulary is searched for that activity"),
+			F.Services.Saw(FString::Printf(TEXT("ResolveNpcActivityClip male_pc %s"), *AirForm)));
+		// The air form is not the ordinary activity, so `RequestActivity`'s equality test never
+		// reaches its draw — the combo cannot promote a swing that is already the air one.
+		TestEqual(TEXT("...spending no combo draw at all"),
+			ElysiumRng::Stream(EElysiumRngStream::Dice).GetCurrentSeed(),
+			Expected.GetCurrentSeed());
+	}
+
+	// --- THE CORRECTION: off the ground, but not in one of the five phases ---------------------------
+	//
+	// A body mid-landing, or riding a lift with an ordinary gait, has no ground contact and is not
+	// airborne by the recovered switch. It swings the GROUNDED form — which the combo promotion
+	// makes unmistakable, since only the grounded arm reaches the draw.
+	for (const TCHAR* const Phase : { TEXT("ACT_LAND"), TEXT("ACT_LAND_CROUCH"),
+		TEXT("ACT_LAND_HARD"), TEXT("ACT_RUN"), TEXT("ACT_IDLE") })
+	{
+		FBandFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		ArmCombo(*F.Player);
+		FElysiumWeapon* Fists = GiveWeapon(*F.Player, GFists);
+		if (!TestNotNull(TEXT("the fists are granted"), Fists))
+		{
+			return false;
+		}
+		// Off the ground by the mover's flag, and it must not matter.
+		F.Services.bPlayerOnGround = false;
+		F.Services.PlayerBaseActivity = Phase;
+		F.Services.Calls.Reset();
+
+		TestEqual(FString::Printf(TEXT("the swing from %s is accepted"), Phase),
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(FString::Printf(
+			TEXT("...and %s keeps the grounded form though the body is off the ground"), Phase),
+			Fists->Swing.Activity, Combo);
+		TestFalse(TEXT("...the air form's vocabulary is never searched"),
+			F.Services.Saw(FString::Printf(TEXT("ResolveNpcActivityClip male_pc %s"), *AirForm)));
+	}
+
+	// --- Airborne secondary: the heavy has no air form, so the grounded heavy is the answer ----------
+	{
+		FBandFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		FElysiumWeapon* Blade = GiveWeapon(*F.Player, GHeavyBlade);
+		if (!TestNotNull(TEXT("the two-mode blade is granted"), Blade))
+		{
+			return false;
+		}
+		F.Services.bPlayerOnGround = false;
+		F.Services.PlayerBaseActivity = TEXT("ACT_FALLING");
+		// No recovered weapon ladder declares an airborne heavy base and no authored clip answers
+		// one, so the fork is keyed on the ORDINARY activity alone: nothing airborne rewrites a
+		// secondary. An authored absence, not a gap, so nothing reports.
+		TestEqual(TEXT("the airborne secondary press is accepted"),
+			Blade->AttackIntent(FElysiumWeapon::EIntent::Secondary),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(TEXT("an airborne secondary keeps the heavy activity"),
+			Blade->Swing.Activity, Heavy);
+	}
+
+	// --- The fork is the player's: a cast body never swings the air form -----------------------------
+	{
+		FBandFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		FElysiumWeapon* Fists = GiveWeapon(*F.Victim, GFists);
+		if (!TestNotNull(TEXT("the NPC is armed with the same record"), Fists))
+		{
+			return false;
+		}
+		F.Services.bPlayerOnGround = false;
+		F.Services.PlayerBaseActivity = TEXT("ACT_FALLING");
+		F.Services.Calls.Reset();
+
+		TestEqual(TEXT("the NPC's swing is accepted"),
+			Fists->AttackIntent(FElysiumWeapon::EIntent::Primary, F.Player->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestEqual(TEXT("a cast swing keeps the ordinary activity however the player's body is"),
+			Fists->Swing.Activity, Ordinary);
+		TestFalse(TEXT("...and never asks the player's ideal activity at all"),
+			F.Services.Saw(TEXT("GetPlayerBaseActivity")));
 	}
 
 	return true;

@@ -406,12 +406,23 @@ swing**, and holding the attack key never produces a second one; the semi-automa
 not to melee.
 
 `ItemPostFrame` polls that edge and the weapon's next-attack time, then enters `PrimaryAttack`
-(`0x103EACA0`). That body rejects a live grapple,
+(`0x103EACA0`). That body rejects a live grapple — the **paired-action** triple at `owner+0x1538`
+(peer handle), `+0x153c` (role) and `+0x1540` (mode), which is the whole of its body-ownership test:
+it does not consult `m_hCine`, so a scripted beat does not refuse a press
+(`docs/vtmb/animation_and_movers.md` → "Protected activities and player paired-action modes"). It
 may start the paired sneak-attack route for a valid target, otherwise requests
-`ACT_MELEE_ATTACK`, substitutes `ACT_MELEE_AIR_ATTACK` while airborne, and may fall back to
-`ACT_KICK` when the weapon capability allows it. The melee `SecondaryAttack` body at
-`0x103EAE00` requests `ACT_MELEE_ATTACK_HEAVY`. The class capability result is `0x40018000`;
-its `0x18000` portion is also the capability gate used by the player block resolver.
+`ACT_MELEE_ATTACK`, substitutes `ACT_MELEE_AIR_ATTACK` when the player's *ideal activity* names one
+of five airborne states — the test is a switch on `+0xff0`, not the ground flag
+(`docs/vtmb/animation_and_movers.md` → "The melee swing bypasses the compact-code dispatch
+entirely") — and may fall back to `ACT_KICK` when the weapon capability allows it. The melee
+`SecondaryAttack` body at `0x103EAE00` requests `ACT_MELEE_ATTACK_HEAVY`. The class capability
+result is `0x40018000`; its `0x18000` portion is also the capability gate used by the player block
+resolver.
+
+**No air form of the heavy attack exists.** `SecondaryAttack` substitutes nothing, the compact
+code `5` arm names no heavy row, and no recovered weapon ladder declares an airborne heavy base
+[data-verified over the ladder corpus]. The grounded `ACT_MELEE_ATTACK_HEAVY` *is* the heavy answer
+in the air; the absence is measured, not unexamined.
 
 The command overlap is deliberate and must not be simplified to "attack2 means block":
 `+attack2` owns the ordinary weapon-secondary route, while `+wpn_secondaryatk` asserts a second,
@@ -439,6 +450,12 @@ Direction enters one step later, in sequence selection.
 **A `2COMBO` clip terminates a chain.** No `ACT_MELEE_ATTACK_2COMBO` sequence in the corpus names
 a chain successor, so an ability roll that promotes the swing to `2COMBO` also ends the player's
 ability to extend it.
+
+**An air attack spends no draw at all.** `PrimaryAttack` picks the air form *before* it calls
+`RequestActivity`, and the substitution tests the requested activity for equality with
+`ACT_MELEE_ATTACK` with the random draw inside that equality branch. `ACT_MELEE_AIR_ATTACK`
+therefore never promotes to `ACT_MELEE_ATTACK_2COMBO`, and the ability rank has no bearing on an
+airborne swing.
 
 The weapon table then translates the generic activity to a weapon activity such as
 `ACT_MELEE_ATTACK_FISTS`, `ACT_MELEE_ATTACK_2COMBO_KNIFE` or
@@ -478,7 +495,23 @@ neutral press selects, which any state falls back to. `-1` — the mask on 13,89
 14,012 descriptors — is not a rank at all: it makes a sequence **no candidate for direction-keyed
 selection**, reachable only through the ordinary `actweight` path. `0` is a stated mask rather than
 an absence, which is why `-1` is the only marker tested. The target argument is not read by this
-selector.
+selector. Per candidate `i`:
+
+```c
+mask = seqdesc->+0x2D4;  hit = buttons & mask;
+if (mask == 0xFFFFFFFF) continue;                                       // not a candidate
+if (mask == 0) { bestZero = i; if ((buttons & 0x79A) == 0) return i; }  // neutral, exact
+else if (hit) { if (hit == (buttons & 0x79A)) return i;                 // exact
+                if (hit & 0x18) best18 = i; else if (hit & 0x600) best600 = i; }
+return best18 >= 0 ? best18 : best600 >= 0 ? best600 : bestZero;
+```
+
+**The authored mask is the runtime's own button enum, and nothing remaps it.** The selector ANDs
+the player's live `m_nButtons` (`+0x2088`) straight against the file's `+0x2D4`, and the numbering
+is stock Source, confirmed three ways inside the same binary: `ItemPostFrame` tests
+`m_afButtonPressed & 1` for `IN_ATTACK`; `CHL2_Player::PreThink`'s ladder push tests `& 8` for up
+and `& 0x10` for down, i.e. `IN_FORWARD` and `IN_BACK`; and the same block gates the strafe pair on
+`& 0x600`. A consumer reads the authored value as a usercmd bit field directly.
 
 **So the attack a swing plays *is* directional**, but the direction is a sequence-selection key
 rather than a command: there is no three-direction input state machine, and labels such as `med`,
@@ -488,13 +521,32 @@ rather than a command: there is no three-direction input state machine, and labe
 
 `CBasePlayer::ItemPostFrame` (`0x10174CE0`) routes to the weapon's `ItemBusyFrame` instead of its
 ordinary frame whenever `curtime < m_flNextAttack` **or** the busy predicate at `0x10161200` holds.
-That predicate is per-activity:
+That predicate is `CBasePlayer` virtual `+0x670`, it is keyed on the **ideal** activity (`+0xff0`),
+and it is the single answer three systems ask: this routing test, the player's animation router
+(`docs/vtmb/animation_and_movers.md` → "Protected activities and player paired-action modes"), and
+the movement substitution that makes a swing lunge (`docs/vtmb/source_movement.md` → "The melee
+lock drives the move from the clip"). That third consumer reads it through virtual `+0x674`
+(`0x10161430`), which is this predicate OR `m_IdealActivity == ACT_LAND_HARD` and nothing else.
+`ACT_LAND_HARD` (`0x32`) matches none of the rows below, so the two virtuals part company only
+during a hard landing — where the movement is driven from the animation while a jump is still
+permitted.
 
-| Current activity | Busy while |
+| Ideal activity | Busy while |
 |---|---|
-| `ACT_MELEE_ATTACK` | `cycle < ` the sequence's own `+0x2F8` hold value |
-| the blocked and block activities | `curtime < ` next-attack |
-| `ACT_MELEE_AIR_ATTACK`, `ACT_MELEE_ATTACK_2COMBO`, `ACT_MELEE_ATTACK_HEAVY` | `cycle < 1` — i.e. for the whole clip |
+| `ACT_BLOCKED_REACTION_LEFT` `0x1152`, `ACT_BLOCKED_REACTION_RIGHT` `0x1153`, `ACT_BLOCK` `0x52`, `ACT_BLOCK_HEAVY` `0x1156` | `curtime < m_flNextAttack` (`+0x1564`) |
+| *every row below additionally requires `m_nSequence >= 0` and `m_flCycle < 1.0`* | |
+| `ACT_MELEE_ATTACK` `0x4b` | `cycle < ` the sequence's own `+0x2F8` hold value |
+| `ACT_MELEE_AIR_ATTACK` `0x4c`, `ACT_MELEE_ATTACK_2COMBO` `0x4d`, `ACT_MELEE_ATTACK_HEAVY` `0x4e`, `ACT_FEEDING_ENGAGE_FAILURE` `0xfa4` | unconditionally — i.e. for the whole clip |
+| flying knockback `0x8b`…`0x93` (`FUN_10344da0`) | unconditionally |
+| the knockback family `0x75`…`0x93` or `0x9d0` (`FUN_10161380`) | `cycle <= 0.8` (`_DAT_1047049c`) |
+| `ACT_VOMIT_INTO` / `ACT_VOMIT_IDLE` / `ACT_VOMIT_GETOUT` `0x1065`…`0x1067` | unconditionally |
+
+**Only `ACT_MELEE_ATTACK` reads `+0x2F8` at all.** `0x10161200` compares the live cycle against it
+with a plain `fld` / `fcomp` pair at `0x10161275` — busy while `cycle < w_hold`, **strictly** — and a
+null sequence descriptor is the routine's only guard. There is no substitution, no clamp and no
+default arm: the value the predicate tests is the value the file states. The other three player
+melee activities never reach that comparison, taking the unconditional arm at `0x1016129b`
+(`cmp edi,0x4e / jne / mov al,1 / ret`) instead.
 
 `CWeaponMelee::ItemBusyFrame` (`0x10254250`) is where a chain step is taken. It requires all three
 of:
@@ -515,11 +567,44 @@ deadline is **not** pushed forward again, and `ForceMeleeReset` clears the previ
 A chain step is therefore free of recovery cost: the whole chain is paid for by the first swing's
 deadline.
 
-**The windows are per-sequence, and one of them is not what it looks like.** The triple most
-shipped attacks carry is `0.5 / 0.9 / 0.91` (open, close, hold); a descriptor stating no window at
-all reads `0.0 / 1.0 / 1.0`, which gates nothing (`docs/vtmb/mdl_v2531.md`). Authored values
-differ — `katana_running_attack` states `0.25 / 1.0 / 0.9`, whose *hold* sits **below** its close,
-so the busy predicate releases the clip before its own combo window shuts.
+**The windows are per-sequence, and one of them is not what it looks like.** `0.5 / 0.9 / 0.91`
+(open, close, hold) is the triple the **directional** attacks carry, and the `0.91` hold is stated
+by 126 descriptors install-wide — those attacks plus the `-1`-mask successors that continue them,
+which open at `0.55` instead. A descriptor stating no window at all states `0.0 / 1.0 / 1.0`
+(`docs/vtmb/mdl_v2531.md`), which admits a chain press at any cycle. Authored values differ —
+`katana_running_attack` states `0.25 / 1.0 / 0.9`, whose *hold* sits
+**below** its close, so the busy predicate releases the clip before its own combo window shuts.
+
+**The hold does double duty.** `+0x2F8` is not only the combo hold: it is the cycle at which
+`ACT_MELEE_ATTACK` stops being busy, so it simultaneously releases the busy-frame routing, the
+animation reselection block and the movement substitution.
+
+**`1.0` is a value the file states, not a fallback the runtime supplies** [data-verified]. Across
+the install's **14,012** sequence descriptors — the loose `models/` tree and the Unofficial Patch
+shadowing the VPKs, which is what the game runs — `+0x2F8` reads `1.00` on **13,863** (98.94%),
+`0.91` on 126, `0.96` on 12, `0.00` on 7, `0.80` on 2 and `0.90` on 2, and `0.91` is what the
+directional attacks carry rather than any default. That `13,863` is not `docs/vtmb/mdl_v2531.md`'s
+`13,841`: the latter counts the whole unauthored triple `(0.00, 1.00, 1.00)`, while this counts
+`+0x2F8` alone, which is the only one of the three the busy predicate reads — the 22 extra
+descriptors state an open/close window and still hold to the end.
+
+**Seven descriptors state a hold of `0.00`, and a strict `cycle < w_hold` makes them never busy.**
+They are the single-`idle` scenery and prop models whose whole custom block is zeroed
+(`docs/vtmb/mdl_v2531.md`), so no melee activity reaches them and the reading costs nothing in
+play — but they are the one population a `1.0` fallback would answer wrongly, which is the sharpest
+evidence that the field is read rather than defaulted.
+
+On `baseball.mdl` the non-directional attacks — `attack_heavy_a`, `_heavy`, `_W3`, `_med`, `_low`,
+`_far`, all four `*combo`, `dodge_attack` and the eight `stealth_*` — state `0.00 / 1.00 / 1.00`
+outright; the directional ones state `0.50 / 0.90 / 0.91`, or `0.55 / 0.90 / 0.91` where the swing
+is a `-1`-mask successor continuing one of them, and `baseballbat_attack_jump` states
+`0.50 / 0.90 / 0.80`.
+
+A sequence stating the full-clip hold therefore locks all three consumers for its whole clip, where
+a directional swing gives control back before the clip ends. Because the predicate separately
+requires `cycle < 1.0`, a stated `1.0` makes `cycle < w_hold` and that outer guard the same test, so
+`ACT_MELEE_ATTACK` degrades cleanly to the behaviour of the unconditional arms. A heavy finisher is
+held twice over — its activity is unconditionally busy, and its descriptor states no window either.
 
 **Four authored chain links are broken, and are preserved as data.** Both sexes' `fists.mdl` chain
 `Fists_attack_W2` to a `Fists_attack_W3` the bank never defines, and both sexes' `katana.mdl` chain

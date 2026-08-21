@@ -431,10 +431,17 @@ def write_procedural(stem, model, rules, prefix=""):
 
 
 def write_blends(stem, model, table, prefix=""):
-    """Write one model's blend grids, autolayer binding and event timelines to
-    `<prefix>blends/<stem>.json` -> the manifest fields naming it. All three are read from the
-    same 764-byte sequence descriptor, so they ship in one file; a model authoring none of them
-    writes none.
+    """Write one model's blend grids, autolayer binding, event timelines and authored movement
+    paths to `<prefix>blends/<stem>.json` -> the manifest fields naming it. The first three are
+    read from the same 764-byte sequence descriptor and the fourth off the animation descriptor
+    each sequence selects, so they ship in one file; a model authoring none of them writes none.
+
+    Movement rides here rather than on the clip slice for the reason the timelines do: the slice
+    is per resolving character and this is per owning model. Inlined into the rows it would
+    repeat every bank sequence's path across all 157 characters that resolve it -- 942,739
+    records and ~83 MB against the 13,505 records and 0.9 MB the owning models declare between
+    them -- and the melee consumer already holds the `owner` column the slice row states, which
+    is the key this table is reached by.
 
     Kept out of `npc_manifest.json` for the reason the flex rigs and procedural tables are:
     `move_and_ranged` alone authors 253 grids, and a map places 17-22 models. `{}` for a model
@@ -463,7 +470,8 @@ def write_blends(stem, model, table, prefix=""):
                            "`cells[].clip` names an animation of this stem's glb, or is null "
                            "where the cell's animation did not bake. A cell whose animation "
                            "carries authored movement also has a `motion` summary in seconds, "
-                           "centimetres and centimetres/second for an in-place host motor. "
+                           "centimetres and centimetres/second for an in-place host motor; the "
+                           "whole authored path is in `movement` below, per sequence. "
                            "Evaluate each cell and "
                            "blend the results — never blend the clips. "
                            "autolayers[label] names the clips composed WITH that host, in "
@@ -481,10 +489,25 @@ def write_blends(stem, model, table, prefix=""):
                            "payload. Rows stay in the descriptor's own order, which is the "
                            "order the dispatcher fires records sharing a cycle in. See "
                            "docs/vtmb/animation_and_movers.md A.3 and its sequence-event "
-                           "section.",
+                           "section. movement[label] is that sequence's authored displacement "
+                           "path, one row per record in the columns `movement_fields` names. "
+                           "EVERY VALUE IS ALREADY UNREAL-NATIVE: `pos_*_cm` is the cumulative "
+                           "displacement at `end_frame` in centimetres on Unreal axes (X "
+                           "forward, Y right, Z up) in the clip's own local frame, `dir_*` the "
+                           "unit direction on the same axes, `v0_cm`/`v1_cm` the ease "
+                           "coefficients of v0*f + 0.5*(v1-v0)*f*f over the block fraction (a "
+                           "length, not a rate; the block travels 0.5*(v0+v1)) and `yaw_deg` "
+                           "the turn about Z in Unreal's sense. Convert nothing and negate "
+                           "nothing -- the Y reflection retail spends at the point of use is "
+                           "already spent here. Sample the path piecewise: walk the records in "
+                           "order, take the last one whose `end_frame` is below the frame you "
+                           "want as the base, and ease into the next. A label absent from "
+                           "`movement` while `movement_fields` is present authors no record at "
+                           "all and displaces nothing.",
                    **table}, f, separators=(",", ":"))
     return {"blends": rel, "blend_grids": len(table.get("grids", {})),
-            "event_sequences": len(table.get("events", {}))}
+            "event_sequences": len(table.get("events", {})),
+            "movement_sequences": len(table.get("movement", {}))}
 
 
 def animated_prop_index_row(rec):
@@ -514,7 +537,8 @@ def animated_prop_index_row(rec):
         **({"procedural": rec["procedural"],
             "procedural_bones": rec["procedural_bones"]} if rec.get("procedural") else {}),
         **({"blends": rec["blends"], "blend_grids": rec["blend_grids"],
-            "event_sequences": rec["event_sequences"]}
+            "event_sequences": rec["event_sequences"],
+            "movement_sequences": rec.get("movement_sequences", 0)}
            if rec.get("blends") else {}),
         "clips": [{"name": label, "index": i, **meta}
                   for i, (label, meta) in enumerate(rec.get("clips", {}).items())],
@@ -584,7 +608,8 @@ def write_sidecars(manifest):
                          "procedural_bones": r["procedural_bones"]} if r.get("procedural")
                         else {}),
                      **({"blends": r["blends"], "blend_grids": r["blend_grids"],
-                         "event_sequences": r["event_sequences"]}
+                         "event_sequences": r["event_sequences"],
+                         "movement_sequences": r.get("movement_sequences", 0)}
                         if r.get("blends") else {}),
                      **({"garment": r["garment"],
                          "garment_particles": r["garment_particles"]}
@@ -592,7 +617,8 @@ def write_sidecars(manifest):
                  for s, r in manifest["npcs"].items()},
         "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"]),
                       **({"blends": r["blends"], "blend_grids": r["blend_grids"],
-                          "event_sequences": r["event_sequences"]}
+                          "event_sequences": r["event_sequences"],
+                          "movement_sequences": r.get("movement_sequences", 0)}
                          if r.get("blends") else {})}
                   for s, r in manifest["banks"].items()},
         # 12.1 — a choreo scene's anim-set model key -> the per-bone-root banks it was split
@@ -1118,13 +1144,19 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
           f"{sum(r['eyeballs'] for r in eyed)} records -> {NPC_DIR}/eyes/")
     for stem, fault in eye_faults:
         print(f"  ! {stem}: eyeball - {fault}")
-    gridded = [r for r in (*npc_index.values(), *bank_index.values(),
-                           *animated_prop_index.values()) if r.get("blends")]
+    # A sidecar is written for any of the four blocks it can carry, so the grid count is taken
+    # over the models that actually author a grid rather than over every model with a file.
+    sidecars = [r for r in (*npc_index.values(), *bank_index.values(),
+                            *animated_prop_index.values()) if r.get("blends")]
+    gridded = [r for r in sidecars if r["blend_grids"]]
     print(f"[npc] blend grids: {len(gridded)} model(s) author one, "
           f"{sum(r['blend_grids'] for r in gridded)} grids -> {BLENDS_DIR}/")
-    evented = [r for r in gridded if r["event_sequences"]]
+    evented = [r for r in sidecars if r["event_sequences"]]
     print(f"[npc] sequence events: {len(evented)} model(s) author a timeline, "
           f"{sum(r['event_sequences'] for r in evented)} sequences -> {BLENDS_DIR}/")
+    moved = [r for r in sidecars if r.get("movement_sequences")]
+    print(f"[npc] authored movement: {len(moved)} model(s) author a path, "
+          f"{sum(r['movement_sequences'] for r in moved)} sequences -> {BLENDS_DIR}/")
     print(f"[npc] size: banks {bank_bytes/1e6:.0f} MB (shared) + meshes {npc_bytes/1e6:.0f} MB, "
           f"manifest {os.path.getsize(MANIFEST)/1e6:.1f} MB")
     if warnings:

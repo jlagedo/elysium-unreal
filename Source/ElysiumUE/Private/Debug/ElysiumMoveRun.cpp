@@ -168,14 +168,14 @@ bool FElysiumMoveRun::BuildGym()
 		return false;
 	}
 
-	// **The body the gym stands** (CCC7). Without one the speed authority has no tables and the whole
-	// run measures the constants fallback — which would make the promoted baselines a recording of
-	// the thing the rung replaced. It is the shipping `BuildPlayerVisual`, so the attachment, the
-	// hull offset, the mover tick prerequisite and the cached stem are the game's own.
+	// **The body the gym stands** (CCC7). Without one the speed authority has no tables and every
+	// grounded command resolves to zero, so the whole run records a body that never moves. It is the
+	// shipping `BuildPlayerVisual`, so the attachment, the hull offset, the mover tick prerequisite
+	// and the cached stem are the game's own.
 	//
-	// A body that will not build is not fatal: the run continues on the fallback, which is what a
-	// checkout with no character export gets, and the manifest records the empty stem so a recording
-	// made without a body cannot be mistaken for one made with it.
+	// A body that will not build is not fatal here — it is what a checkout with no character export
+	// gets — but the recording it produces is motionless rather than merely approximate, and the
+	// manifest's empty stem plus the zeroed gait constants below are what say so.
 	if (Body.Map)
 	{
 		FString Stem = TEXT("tremere_Male_Armor_0");
@@ -183,7 +183,8 @@ bool FElysiumMoveRun::BuildGym()
 		if (Body.Map->BuildPlayerVisual(Stem, TEXT("Neutral"), 0) == nullptr)
 		{
 			UE_LOG(LogElysiumMove, Warning,
-				TEXT("no player body for '%s' — recording the constants fallback instead"), *Stem);
+				TEXT("no player body for '%s' — the mover has no gait tables, so this run records a ")
+				TEXT("body that cannot move"), *Stem);
 		}
 	}
 
@@ -514,8 +515,8 @@ void FElysiumMoveRun::FinishCourse()
 		Recorder.SetConstant(TEXT("WalkSpeed"), ElysiumMove::WalkSpeed * Inv);
 		Recorder.SetConstant(TEXT("RunSpeed"), ElysiumMove::RunSpeed * Inv);
 		// What the body's own fans answered (CCC7). The constants block is metadata and is never
-		// compared, so this is free — and it is what stops a recording made on the no-fan fallback
-		// being mistaken for one made on the animation.
+		// compared, so this is free — and three zeroes here are what identify a recording made with
+		// no speed authority at all.
 		const FElysiumGaitSpeeds& Fans = Body.Move->GetGaitSpeeds();
 		Recorder.SetConstant(TEXT("GaitWalkForward"), Fans.Walk.Forward() * Inv);
 		Recorder.SetConstant(TEXT("GaitRunForward"), Fans.Run.Forward() * Inv);

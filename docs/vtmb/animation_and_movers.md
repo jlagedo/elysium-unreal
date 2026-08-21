@@ -137,7 +137,7 @@ streaming fields — older HL2-Beta layout.)
 |---|---|---|---|
 | 0 | int | `endframe` | Last frame of this piecewise block |
 | 4 | int | `motionflags` | Motion component mask |
-| 8/12 | float | `v0` / `v1` | Block-start/end movement values |
+| 8/12 | float | `v0` / `v1` | The block's start and end **lengths**, not rates — its whole travel is `0.5 * (v0 + v1)` |
 | 16 | float | `angle` | Cumulative yaw at the block end |
 | 20 | Vector | `vector` | Direction relative to the block's initial angle |
 | 32 | Vector | `position` | Cumulative Source-space displacement at the block end |
@@ -149,6 +149,54 @@ distance is converted from Source inches to centimetres offline. The skeletal gl
 place, because also translating its root would double-move a body whose route motor consumes the
 same metadata. Missing or malformed movement metadata is optional and leaves the runtime's prior
 gait fallback intact.
+
+**Retail samples the array piecewise, and quadratically inside a block** [VtMB decompiled].
+`Studio_AnimPosition` (`0x100c57e0`) walks the records at stride `0x2C`, carrying the previous
+block's `endframe` as the window start:
+
+```c
+if (endframe /*+0x00*/ < flFrame) { vecPos = position /*+0x20*/; vecAng.y = angle /*+0x10*/;
+                                    prevframe = endframe; continue; }
+f = (flFrame - prevframe) / (endframe - prevframe);
+d = v0 /*+0x08*/ * f + 0.5f * (v1 /*+0x0C*/ - v0) * f * f;    // 0.5 = _DAT_10449270
+vecPos += d * vector /*+0x14*/;
+```
+
+`Studio_AnimMovement` (`0x100c5b00`) samples that at both ends of the frame's cycle window and
+yaw-rotates the difference back into the window-start frame —
+`VectorYawRotate(endPos - startPos, -startA.y, &deltaPos)` — and returns false outright when
+`nummovements == 0`. A consumer that reads only the last record's cumulative `position` is
+therefore answering a different question from the one the runtime asks.
+
+**The shipped census** [data-verified] — **13,505 records over the install's 52 movement-carrying
+owner models**:
+
+- `v0` and `v1` are lengths: `0.5 * (v0 + v1)` reproduces the block's own travel exactly to float
+  on every shipped record, and neither value is ever negative.
+- `angle` is **exactly 0.0 on all 13,505 records**, so retail's own yaw branch is unexercised by
+  retail's own content.
+- `motionflags` takes five values: `0x10C0` ×7,343, `0x1040` ×5,087, `0xC0` ×201, `0x11C0` ×56,
+  `0x1080` ×47. The 56 records carrying a Z component are exactly the 56 flagged `0x11C0`.
+- 8,169 records state a non-zero Y — every strafing and diagonal locomotion clip.
+- **A clip can author displacement whose cumulative total is zero.** `baseballbat_attack_med`
+  carries 12 records and travels 46.7 cm forward mid-clip, then ends on a cumulative `position` of
+  exactly zero. Ground speed read off the final record calls that clip stationary; the swing it
+  drives is not (`docs/vtmb/source_movement.md` → "The melee lock drives the move from the clip").
+
+**Player and cast consume the records through two disjoint seams** [VtMB decompiled].
+`Studio_SeqMovement` has exactly six direct call sites. Two apply displacement to a body:
+`CPlayerMove::SetupMove` for the player, and `CAI_BaseNPC::AutoMovement` (`0x10280A50`) →
+`CBaseAnimating::GetIntervalMovement` (`0x10094B70`) for an NPC, which hands the result to a
+`CAI_Motor` (`npc+0x5D44`) move-execute returning a `MoveResult`, early-outs unless the body is
+`MOVETYPE_STEP`, and is reached only from individual `RunTask` arms — so an NPC travels on a clip's
+records only where its task asks. Three are queries: `HasMovement`, `GetSequenceLinearMotion`
+(which feeds `m_flGroundSpeed`) and `GetSequenceMoveYaw`. The sixth, `FUN_1032A490` — a
+`CBaseCombatCharacter`-shaped per-frame applier keyed on `+0xA9C` — is **unreferenced in the pinned
+build**.
+
+`AutoMovement` is never reached from the player and `SetupMove` never from an NPC, and **neither is
+reached from the weapon**: the shared weapon surface ends at committing activity, sequence,
+playback rate and deadlines, and who moves the body is the owner's own frame path.
 
 The character vocabulary and bank animation have deliberately different keys. `ACT_WALK` selects
 the sequence label `walk`; that label owns the include-tree mapping to the gendered
@@ -249,6 +297,38 @@ recovered load-time warning — "unregistered dodge activity" — for a name the
 not know. The two chain fields are the exception to the pattern: they name **sequence labels**, not
 activities, and are resolved case-insensitively through `LookupSequence` at runtime rather than at
 load.
+
+#### One weapon's authored set, read end to end [data-verified]
+
+`models/character/shared/male/baseball.mdl` is the worked example, and it shows that the label is
+not the authoring. **`baseballbat_attack_jump` is the back-key attack, not the air attack**: it
+declares the grounded activity `ACT_MELEE_ATTACK_BASEBALLBAT` with authored button mask `16`
+(`IN_BACK`). The genuine air clip is **`BaseballBat_air`** — `ACT_MELEE_AIR_ATTACK_BASEBALLBAT`,
+mask `0`, 8 movement records over 24.4 cm, a near-in-place swing.
+`baseballbat_attack_jumpcombo` carries **no combo block at all** and is reachable only by
+`actweight` among the `2COMBO` candidates.
+
+Two chains are authored, both terminating on the same heavy:
+
+| Chain | Masks | Windows (open/close/hold) | Movement, cumulative at the clip's final frame |
+|---|---|---|---|
+| `W1` → `W2` → `heavy_a` | `8` (`IN_FORWARD`) / `-1` / `-1` | `0.50/0.90/0.91` then `0.55/0.90/0.91` | `W1` 8 records / 418.7 cm; `W2` 12 / 136.4 cm; `heavy_a` **0 records** |
+| `Center1` → `Center2` → `heavy_a` | `0` / `-1` / `-1` | — | `Center1` 15 / 107.5 cm |
+
+`A1` states mask `512` (`IN_MOVELEFT`), 12 records over 139.6 cm. The bat authors **no
+`IN_MOVERIGHT` (1024) attack at all**, so strafing right matches nothing and falls through to the
+zero-mask `Center1`. The `-1` masks on `W2`, `A2` and `Center2` are never directly selectable —
+they exist only as chain successors — which is the same marker the whole install uses
+(`docs/vtmb/mdl_v2531.md`). The heavy that ends both chains authors no displacement whatever, while
+the forward chain's opening swing authors over four metres — more than the mover will let the
+player travel, since the substituted move is clamped to the live gait peak, and more than it is
+ever asked to travel, since the substitution stops at the sequence's own `w_hold`
+(`docs/vtmb/source_movement.md` → "The melee lock drives the move from the clip").
+
+**The mask is the runtime's own button enum, with no remap.** `PlayerSelectMeleeSequence`
+(`0x10160F90`) ANDs the player's live `m_nButtons` (`+0x2088`) straight against `+0x2D4`; the
+selector and the three independent confirmations of the numbering are in
+`docs/vtmb/combat-and-damage.md` → "The direction key selects which attack, at swing start".
 
 ### The blend grid is two axes, not a raw 16×16 [data-verified + VtMB decompiled]
 
@@ -590,7 +670,7 @@ the complete native caller surface give this map [VtMB decompiled]:
 | `2` | `PLAYER_JUMP` | positive jump/landing state out of water or the jump helper; phases 1…11 select `ACT_HOP*`, `ACT_LEAP*`, `ACT_FALLING` and the land family |
 | `3` | `PLAYER_SUPERJUMP` | no classifier edge, native caller, retained-latch writer or effective `Player_Anim` value; no distinct ordinary-selector branch |
 | `4` | `PLAYER_DIE` | the player death routine at `0x10163af0`; death/protected activity ownership precedes the ordinary selector, which has no distinct code-4 branch |
-| `5` | `PLAYER_ATTACK1` | ranged, base/thrown, frag-grenade and discipline-weapon attack paths; melee capability selects `ACT_MELEE_ATTACK` / `ACT_MELEE_AIR_ATTACK`, while ranged capability adds `ACT_RANGE_ATTACK1_LAYER` |
+| `5` | `PLAYER_ATTACK1` | ranged, base/thrown, frag-grenade and discipline-weapon attack paths, all four of them ranged; ranged capability adds `ACT_RANGE_ATTACK1_LAYER`. Its compiled melee arm is dormant — no shipped melee weapon reaches this code, and the live melee route is below |
 | `6` | `PLAYER_FEED` | no classifier edge, native caller, retained-latch writer or effective `Player_Anim` value; no distinct selector branch. Live feeding uses `PLAYER_GRAPPLE` plus the separate paired-action modes |
 | `7` | `PLAYER_PRAY` | `InPrayer` or both form/prayer gate bytes; `ACT_PRAYING_BEGIN` → `ACT_PRAYING_IDLE` → `ACT_PRAYING_END` → `ACT_IDLE` |
 | `8` | `PLAYER_GRAPPLE` | live feed/grapple target in release state zero; flags select `ACT_FEEDING_RELEASED_IDLE_ATTACKER` or `ACT_SEDUCTIVE_RELEASED_IDLE_ATTACKER` |
@@ -656,13 +736,24 @@ The land pair is computed rather than branched — `((m_fFlags & 2) | 0x60) >> 1
 running body running through its own landing. This is the same arm the controlled `sm_hub_1` corpus
 exercised at phases `1`, `7` and `8`; the other eight phases are static reachability, not observed.
 
-**Melee replaces the base; ranged and reload only add a layer.** Code `5` reads the active weapon's
-capability mask through virtual `+0x5a0`: with `0x18000` it takes `0x4c - (m_fFlags & 1)`, so
-`ACT_MELEE_ATTACK` (`0x4b`) grounded and `ACT_MELEE_AIR_ATTACK` (`0x4c`) airborne, and clears the
-layer. Otherwise `0x6000` — or the weapon's own `+0x464` predicate — sets the layer to
-`ACT_RANGE_ATTACK1_LAYER` (`0x1a`) and leaves the base alone; a weapon that is neither selects
-nothing at all. Code `14` is the same shape with `ACT_RELOAD_LAYER` (`0x56`) and no gate beyond an
-active weapon. So an armed player keeps walking while the upper body fires or reloads.
+**Ranged and reload only add a layer, and code `5`'s melee arm is dead in the shipped game.** Code
+`5` reads the active weapon's capability mask through virtual `+0x5a0`: with `0x18000` it takes
+`0x4c - (m_fFlags & 1)`, so `ACT_MELEE_ATTACK` (`0x4b`) grounded and `ACT_MELEE_AIR_ATTACK`
+(`0x4c`) airborne, and clears the layer. Otherwise `0x6000` — or the weapon's own `+0x464`
+predicate — sets the layer to `ACT_RANGE_ATTACK1_LAYER` (`0x1a`) and leaves the base alone; a
+weapon that is neither selects nothing at all. Code `14` is the same shape with `ACT_RELOAD_LAYER`
+(`0x56`) and no gate beyond an active weapon. So an armed player keeps walking while the upper body
+fires or reloads.
+
+**No shipped melee weapon reaches that arm.** Exactly four of the module's 29
+`call dword ptr [reg+0x704]` sites pass `5`, and all four are ranged:
+`CWeaponRanged::RequestActivity` (vtable `+0x5d0`, `0x10238661`),
+`CBaseCombatWeapon::PrimaryAttack` (`0x1025579a`), the frag grenade (`0x103ee556`) and the
+discipline weapon (`0x103f2245`). Every `CWeaponMelee*` subclass overrides `PrimaryAttack` (vtable
+`+0x518`) with `0x103eaca0`, which never writes `+0x704` at all, and `CWeaponUnarmed::PrimaryAttack`
+(`0x103f5460`) is a bare `ret` with capabilities `0`. The transcription above is accurate compiled
+code; it is simply unreachable through any shipped melee item, so a melee swing is never selected
+by the compact-code dispatch.
 
 **Codes `7` and `12` are one shape twice.** Both test `m_bSequenceFinished` (`+0x65c`) first, so an
 unfinished clip either enters the chain or holds the stored ideal (`+0xff0`) unchanged; every later
@@ -690,10 +781,36 @@ vertical velocity sits strictly between that threshold and a higher one. Code `1
 `ACT_PREBLOCK` (`0x1154`). Code `10` names no activity at all: the live interaction entity supplies
 one through its own `+0x84` virtual, and a `-1` leaves the ladder standing.
 
-**An unfinished swing refuses an idle.** The switch's default arm returns *without applying* when
-the base is `ACT_IDLE` or `ACT_AIM` while the stored ideal is `ACT_MELEE_ATTACK` and
-`m_bSequenceFinished` is clear. It is the only place the selector declines to write, and it is what
-keeps the ladder's own default answer from cutting a melee attack short.
+**An unfinished swing refuses an idle — and only an idle.** The switch's default arm returns
+*without applying* when the base is `ACT_IDLE` or `ACT_AIM` while the stored ideal is
+`ACT_MELEE_ATTACK` and `m_bSequenceFinished` is clear. It is the only place the selector declines
+to write. It is **not** what protects a swing: the whole selector is skipped for the swing's locked
+phase (below), and this refuse set only governs the tail after the lock releases. There, a body
+standing still plays the swing out while a body that is *moving* answers a gait — which **is**
+applied, cutting the clip's last stretch. The narrow refuse set is a deliberate recovery-cancel
+rule, not a safety net over the attack.
+
+#### The melee swing bypasses the compact-code dispatch entirely [VtMB decompiled]
+
+`CWeaponMelee::ItemPostFrame` (`0x103EAEC0`) → `PrimaryAttack` (`0x103EACA0`) →
+`CWeaponMelee::RequestActivity` (`0x103E9E00`) reaches the player through two virtuals of its own:
+`+0x52C` `PlayerSelectMeleeSequence` (`0x10160F90`) picks the sequence from the authored button
+masks, and `+0x4DC` `CBaseCombatCharacter::ForcePreTranslatedSequenceAndActivity` (`0x103250D0`)
+commits it. Neither `SetAnimation` nor the ordinary selector is involved, which is why code `5`'s
+melee arm can be dead compiled code while melee plainly works.
+
+**The airborne test melee uses is not the ground flag.** `0x101613B0` switches on the *ideal*
+activity at `+0xff0`:
+
+| Ideal activity | Requested |
+|---|---|
+| `ACT_HOP` `0x28`, `ACT_HOP_UP` `0x29`, `ACT_HOP_DOWN` `0x2a`, `ACT_LEAP` `0x2c`, `ACT_FALLING` `0x2f`, `ACT_MELEE_AIR_ATTACK` `0x4c` | `ACT_MELEE_AIR_ATTACK` |
+| everything else | `ACT_MELEE_ATTACK` |
+
+The three landing activities are deliberately absent, so a body that is airborne for a reason
+outside those five — riding a lift, or mid-`ACT_LAND` / `ACT_LAND_CROUCH` / `ACT_LAND_HARD` — swings
+the **grounded** attack. `case 0x4c` is a self-latch: once the air attack is the ideal activity, a
+follow-up press stays on the air form until the ideal moves off it.
 
 ### The gait ladder runs ahead of the compact-code dispatch [VtMB decompiled]
 
@@ -828,7 +945,9 @@ the translation an unarmed request for either activity would select nothing.
 order is:
 
 1. virtual `+0x670` (`0x10161200`) tests whether the current ideal activity owns animation. While
-   it does, `0x101641d0` receives the compact action and the ordinary and paired routes are skipped;
+   it does, `0x101641d0` receives the compact action and the ordinary and paired routes are skipped
+   — and `0x101641d0` does nothing at all unless that action is `12`, the vomit chain, so for every
+   other action the router is a **complete no-op for animation selection**;
 2. without a valid grapple peer, or with role `-1`, virtual `+0x684` runs the ordinary selector;
 3. a valid role `1` actor is the paired **victim** and does not independently advance the pair;
 4. a role `0` actor is the paired **attacker**. Its mode at `+0x1540` selects one of six stateful
@@ -838,13 +957,72 @@ order is:
    so the same compact action can resume through the ordinary path.
 
 The protected predicate covers the block and blocked-reaction activities, the early portion of
-the four player melee activities, `ACT_FEEDING_ENGAGE_FAILURE`, its registered helper set, the
-contiguous protected range `0x75`–`0x93` plus `0x9d0`, and the vomit activities. The contextual
+`ACT_MELEE_ATTACK` and the whole of the other three player melee activities,
+`ACT_FEEDING_ENGAGE_FAILURE`, its registered helper set, the contiguous protected range
+`0x75`–`0x93` plus `0x9d0`, and the vomit activities; the per-activity rows and their exact release
+conditions are in `docs/vtmb/combat-and-damage.md` → "The combo chain is a press-edge hand-off
+inside the busy frame". The contextual
 compact code `12` has one confirmed protected owner: while the `+0x1cb0` latch is active,
 `0x101641d0` advances `ACT_VOMIT_INTO` → `ACT_VOMIT_IDLE` while blood is consumed →
 `ACT_VOMIT_GETOUT` → `ACT_IDLE`, then clears the latch. This is distinct from code `12`'s
 ordinary route only in ownership: both call the same `0x10164040` state helper, but the protected
 route keeps first refusal while the latch is set.
+
+**Nothing reaches the ordinary selector around the router.** `0x10164870` occupies only `+0x684`,
+has zero direct callers, and the module's single `call dword ptr [reg+0x684]` is at `0x10164322`,
+on the router's not-busy branch. So while the predicate holds, the gait ladder's answer is not
+merely overridden — it is never computed. The `cmdMoveMag` field the ladder reads (`+0x19ec`) has
+exactly two sites in the image, the write in `CPlayerMove::SetupMove` at `0x10186446` and the
+ladder's own read at `0x10164b68`, so during a locked swing the ladder would answer `ACT_RUN` and
+is simply never asked.
+
+**The busy check gates the router, not the apply path.** `0x101644f0` has 14 further direct callers
+that bypass the predicate entirely — `PlayerKnockbackReaction` (`0x101606e0`),
+`PlayerDefenderBlockReaction` (`0x10160bc0`), `PlayerAttackerBlockedReaction` (`0x10160d00`),
+`0x1015fcd0`, five more player bodies, and two script paths (`0x101f8846`, `0x101f911c`). Reactions
+and scripts therefore interrupt a swing; only ordinary per-frame reselection cannot.
+
+**And the reverse holds: nothing on the attack path consults the cine handle, so a melee swing
+overwrites a scripted beat's pose.** `CAI_BaseNPC::m_hCine` is `+0x5d74` — from its datamap builder
+at `0x1027A973`, `fieldType` `0xC` (FIELD_EHANDLE), name string `0x105CD1E8`. Its 81 `.text` sites
+are all in the `scripted_sequence` entity, the AI task and schedule code, and the per-NPC classes:
+**zero** in player animation (`0x1016…`), base weapon (`0x1025…`), combat character (`0x1032…`) or
+melee weapon (`0x103e…`). And `CBaseCombatCharacter::ForcePreTranslatedSequenceAndActivity`
+(`0x103250D0`) carries exactly one guard, `if (sequence < 0) return`, before it writes the ideal
+activity, the sequence, a zeroed cycle, `ResetSequenceInfo()` and the playback rate — no ownership
+test, no refusal, no notification.
+
+Two facts narrow that rather than contradict it:
+
+- Retail **does** refuse a melee press, but on the **paired-action** triple — the peer handle at
+  `owner+0x1538`, the role at `+0x153c` and the mode at `+0x1540`, which is feeding, grapple and the
+  sneak-attack route. `CWeaponMelee::PrimaryAttack` tests it at the top (`docs/vtmb/combat-and-damage.md`
+  → "Weapon and input surface"), and the `scripted_sequence` entity never writes any of the three.
+- An **NPC** under a beat never reaches `ItemPostFrame` at all: that path reads the *player's*
+  `m_afButtonPressed`, while NPC melee enters at `RequestActivity` from a `CAI_BaseNPC::RunTask`
+  arm — so a beat suppresses an NPC's swing simply by owning the schedule, not by being consulted.
+  For the player there is no cine handle to consult in the first place, `m_hCine` being a
+  `CAI_BaseNPC` field.
+
+**A melee swing has three phases**, because one predicate gates reselection here and the
+movement substitution in `CPlayerMove::SetupMove` (`docs/vtmb/source_movement.md` → "The melee lock
+drives the move from the clip"), and both release on the same cycle. The substitution reads that
+predicate's `+0x674` form, which adds only `ACT_LAND_HARD` and so holds the same value throughout a
+swing:
+
+| Phase | Cycle | Body |
+|---:|---|---|
+| 1 | `cycle < w_hold` (`+0x2F8`) | movement is substituted from the clip and reselection is blocked — the swing is uninterruptible and it lunges |
+| 2 | `w_hold <= cycle < 1.0` | **both release together**: control returns and selection resumes, so a moving body answers a gait and cuts the clip's tail while a standing one plays it out |
+| 3 | `cycle >= 1.0` | the predicate's own cycle guard fails |
+
+**The three-phase shape belongs to `ACT_MELEE_ATTACK` and to the directional attacks.** `w_hold` is
+a value the sequence states on disk rather than a runtime default, and 98.9% of the install's
+descriptors state the full-clip `1.00`, which collapses phase 2: control returns only as the clip ends. The
+other three player melee activities never consult the field, and are busy for their whole clip by
+their activity alone. So a swing that hands control back early is the authored exception
+(`docs/vtmb/combat-and-damage.md` → "The combo chain is a press-edge hand-off inside the busy
+frame").
 
 The remaining protected-router side path is inventory policy rather than another animation
 selector. During a protected melee activity, the `+0x1df4` special-owner flag, elapsed cycle and

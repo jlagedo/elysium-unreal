@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "Templates/PimplPtr.h"
 #include "ElysiumAnimationIntent.h" // FElysiumAnimationSelection — returned by value reference
+#include "ElysiumClipMovement.h"   // FElysiumBaseClipCycle / FElysiumClipMovementPath — by value
 #include "ElysiumEnvironment.h"    // FElysiumSkyDef — a plain by-value member
 #include "ElysiumWorldServices.h"  // the four interfaces this actor implements
 #include "ElysiumMapActor.generated.h"
@@ -441,6 +442,7 @@ public:
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
 	virtual bool IsPlayerSneaking() const override;
 	virtual bool IsPlayerOnGround() const override;
+	virtual FString GetPlayerBaseActivity() const override;
 	virtual float ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 		float TraceDepthCm) const override;
 	virtual bool IsNpcMakerVisibleFromPlayer(const FVector& MakerOriginCm) const override;
@@ -619,6 +621,31 @@ private:
 	// the body — so this is the only thing that has to remember whether it happened.
 	uint32 PushedGaitGeneration = 0;
 	void TickPlayerAnimation(float DeltaSeconds);
+
+	// --- Animation-driven movement (LIFE5) ---------------------------------------------------------
+	// Where the base channel's own clip stands, read off the pose layer and pushed onto the driver
+	// before it ticks. The driver never reaches for an anim instance — it also serves bodies that
+	// have none — so this is the one place the two are joined.
+	//
+	// It answers only for the clip the base-channel CLAIM named: a body posing something else there
+	// is not standing on the forced sequence, and reading that clip's cycle would time the lock off
+	// a stranger.
+	FElysiumBaseClipCycle ReadPlayerBaseClipCycle(USkeletalMeshComponent* Visual) const;
+	// Hand the mover the swing that owns its command, after the driver has settled the predicate.
+	void PushPlayerAnimMovementLock(class APawn* Pawn);
+	// Take it back. The lock is an input the mover keeps until it is handed a new one, so every path
+	// that stops pushing — the predicate releasing, and this actor leaving its `Active` phase
+	// mid-swing — goes through here rather than letting a frozen window stand.
+	void ClearPlayerAnimMovementLock(class APawn* Pawn);
+	// The clip the pushed path belongs to (`owner|label`), so the shared path is rebuilt when the
+	// swing changes clips and shared by pointer on every other frame.
+	FString PushedLockClip;
+	TSharedPtr<const FElysiumClipMovementPath> PushedLockPath;
+	// Owning stems whose blend sidecar cannot answer the movement question — either it carries no
+	// `movement_fields` at all or it states a schema this build cannot address. Reported once each,
+	// with the cause named: both are real gaps and NEITHER is the same absence as a clip the file
+	// states no records for.
+	TSet<FString> ReportedMovementGaps;
 
 	void LoadMap();
 	// LoadMap's stage-world half: the substrate scaffolding a green room needs and nothing else —

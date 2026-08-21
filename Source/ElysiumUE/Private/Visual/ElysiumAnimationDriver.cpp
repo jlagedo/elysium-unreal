@@ -1,5 +1,6 @@
 #include "Visual/ElysiumAnimationDriver.h"
 
+#include "ElysiumClipMovement.h"            // the animation-driven predicate and its refuse set
 #include "ElysiumEntityWorld.h"             // the clock the combat-stance window is read against
 #include "ElysiumPlayer.h"
 #include "Visual/ElysiumActionTables.h"     // the committed player gait ladder (LIFE4, Option A)
@@ -11,6 +12,13 @@ void FElysiumAnimationDriver::Reset()
 	Latch = FElysiumJumpLatch();
 	Selection = FElysiumAnimationSelection();
 	Assets = FElysiumResolvedAnimation();
+	// The forced ideal and the cycle it was read against go with the record they describe: a teleport
+	// or a map epoch is not a swing continuing, and a lock carried across one would discard the
+	// player's command for a clip nothing is playing.
+	BaseClipCycle = FElysiumBaseClipCycle();
+	IdealActivity = FElysiumIdealActivityState();
+	bAnimationDriven = false;
+	bMovementLocked = false;
 	// The published pair goes together: a producer left holding last epoch's sample beside this
 	// epoch's empty record would trace a body that moved through a frame nothing classified.
 	Sample = FElysiumLocomotionSample();
@@ -126,6 +134,22 @@ const FElysiumAnimationRequest* FElysiumAnimationDriver::ActiveRequest(
 		return nullptr;
 	}
 	return &Requests[Index].Request;
+}
+
+FElysiumIdealActivityState FElysiumAnimationDriver::ForcedIdealActivity() const
+{
+	FElysiumIdealActivityState State;
+	if (const FElysiumAnimationRequest* Claim = ActiveRequest(EElysiumAnimChannel::Base))
+	{
+		State.Activity = Claim->Activity;
+	}
+	// The cycle half comes from the pose layer through the owner's push. A body with no pose layer
+	// reports no sequence, which fails every row's own guard — so a headless body is never
+	// animation-driven, however its claims are labelled.
+	State.bHasSequence = BaseClipCycle.bPlaying;
+	State.Cycle = BaseClipCycle.Cycle;
+	State.HoldCycle = BaseClipCycle.HoldCycle;
+	return State;
 }
 
 void FElysiumAnimationDriver::AdvanceRequests(float DeltaSeconds)
@@ -371,11 +395,47 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	// The claims age first: a one-shot whose length has run out must not hold this frame's verdict.
 	AdvanceRequests(DeltaSeconds);
 
+	// **The gait fan is refreshed before the lock predicate is built, and is not gated by it.**
+	// Retail fills its speed tables in `PreThink` ahead of the animation-driven flag it later
+	// rebuilds, so the ceiling the mover clamps a substituted command against keeps tracking the live
+	// run peak for the whole of a swing. Nothing here is a SELECTION — the fan is a property of the
+	// body, resolved from its stem, weapon and state — so it belongs above the guard while every
+	// classify/ladder/resolve step stays below it. It also seeds `Gait`, which both the jump latch
+	// and the grounded ladder read this frame.
+	RefreshGaitSpeeds(Anims);
+
+	// **Retail's `CBasePlayer::SetAnimation` router opens here.** It asks the animation-driven
+	// predicate and, when it holds, no-ops for animation SELECTION entirely: the ordinary player
+	// selector has zero direct callers, and its one call site is on this router's not-busy branch.
+	// So the gait ladder below is not overridden during a swing — it never runs, and the swing's
+	// forced ideal activity stands because nothing wrote over it.
+	//
+	// The predicate is rebuilt from the claim and the cycle every frame, never latched, which is what
+	// lets a reaction that overwrites the ideal activity mid-swing release the lock instantly.
+	//
+	// The router gates ORDINARY per-frame reselection and nothing else: retail's apply path has 14
+	// other callers that bypass it — knockback, the block reactions, two script paths — so a reaction
+	// or a scene still interrupts a swing. That asymmetry is already the priority table's
+	// (`Scripted` loses to `Reaction`), and this guard leaves it alone.
+	IdealActivity = ForcedIdealActivity();
+	// The two arms of the same rebuild. `bAnimationDriven` is `vt+0x670` — what gates reselection
+	// below and the mover's jump refusal; `bMovementLocked` is `vt+0x674`, the same predicate plus
+	// `ACT_LAND_HARD`, and it is what discards the movement command. Both are `CBasePlayer`
+	// capabilities, so both gate on the body.
+	const bool bPlayerBody = BodyKind == EElysiumAnimBodyKind::Player;
+	bAnimationDriven = bPlayerBody && ElysiumClipMovement::IsAnimationDriven(IdealActivity);
+	bMovementLocked = bPlayerBody && ElysiumClipMovement::IsMovementLocked(IdealActivity);
+
 	// The pose parameter is a rate, and this is the one place per body per frame — a producer's
 	// sample is a getter a readout may take twice, so it seeds the value and cannot advance it.
 	FElysiumLocomotionSample Body = InSample;
-	Body.MoveYawPose = ElysiumLocomotion::AdvanceMoveYaw(MoveYawFilter, InSample.MoveYawVelocity,
-		InSample.Speed2D(), DeltaSeconds);
+	// The three pose writes belong to the selector, so an animation-driven body does not perform
+	// them: `move_yaw` holds where the swing began rather than slewing toward a wish the substituted
+	// command no longer carries.
+	Body.MoveYawPose = bAnimationDriven
+		? MoveYawFilter.Value
+		: ElysiumLocomotion::AdvanceMoveYaw(MoveYawFilter, InSample.MoveYawVelocity,
+			InSample.Speed2D(), DeltaSeconds);
 	// Kept, so the record and the frame it describes are one published pair. Every reader — the
 	// graph, the trace, Cog — takes both from here rather than asking the body again.
 	Sample = Body;
@@ -387,8 +447,23 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	// scripted task. It is a `CBasePlayer` capability, so it reads the BODY: a scene beat driving the
 	// player pawn still commands jumps, and a player-sourced request on a cast body never does.
 	const bool bCommandsJumps = BodyKind == EElysiumAnimBodyKind::Player;
+	// The air phases are the movement state machine's rather than the selector's — retail keeps its
+	// jump phase in a player field the movement code writes — so the latch advances on both branches.
+	// A body that leaves the ground mid-swing has left the ground.
 	Latch = ElysiumAnimIntent::AdvanceJumpLatch(Latch, Body, DeltaSeconds, Gait, OneShot,
 		bCommandsJumps);
+
+	if (bAnimationDriven)
+	{
+		// Phase 1 of the swing: the selection pass does not run at all. The record keeps naming the
+		// clip and the assets it last resolved — the graph is posing the swing's own claim over them
+		// — and the ideal activity is the forced one, which is what every reader of "what is this
+		// body doing" takes while the claim stands.
+		Selection.RequestedActivity = IdealActivity.Activity;
+		Selection.AirPhase = Latch.Phase;
+		ArbitrateBase();
+		return;
+	}
 
 	FElysiumAnimationIntent Intent = ElysiumAnimIntent::BuildLocomotionIntent(Body, Latch, Gait,
 		Source, BodyKind, Stem, Character, Variant);
@@ -414,11 +489,52 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		{
 			Intent.Activity = GroundActivity;
 		}
-	}
 
-	// The body key, resolved ahead of the request so a body that changed model this frame steers by
-	// its new speeds rather than by one frame of its old ones.
-	RefreshGaitSpeeds(Anims);
+		// **Phase 2 of the swing, between `w_hold` and the end of the clip.** The lock has released
+		// and the selector runs again, so what the swing's tail survives on is the recovered refuse
+		// set: an unfinished `ACT_MELEE_ATTACK` refuses `ACT_IDLE` and `ACT_AIM` — the selector
+		// returns without applying — and applies anything else.
+		//
+		// So a body standing still plays its swing out, and a body that is MOVING answers a gait,
+		// which is applied and cuts the last ~9% of the clip. That is a deliberate recovery cancel.
+		if (ElysiumClipMovement::RefusesReselection(IdealActivity, Intent.Activity))
+		{
+			Selection.RequestedActivity = IdealActivity.Activity;
+			Selection.AirPhase = Latch.Phase;
+			ArbitrateBase();
+			return;
+		}
+		if (IdealActivity.bHasSequence
+			&& ElysiumClipMovement::AnimDrivenArmFor(IdealActivity.Activity)
+				!= EElysiumAnimDrivenArm::None)
+		{
+			// Applied. Retail's apply writes the new ideal activity over the swing's, which is what
+			// ends the attack sequence; here the equivalent is giving the base channel back, so this
+			// frame's locomotion publish takes the pose from the swing's claim. Without it the claim
+			// outranks the publish and the cancel would exist in the classification only.
+			//
+			// Scoped to the families this rung owns. Retail's apply overwrites ANY ideal activity a
+			// reselection is not refused for, but the claim table is not retail's single variable —
+			// releasing a scene's or a scripted beat's claim because the gait ladder answered would
+			// hand a body back to its locomotion mid-performance. Those producers state no forced
+			// activity at all today, so the two rules agree; the gate is what keeps them agreeing
+			// when the block, knockback and vomit rows land.
+			//
+			// Through the one release door, and reported at the same `Verbose` level `ArbitrateBase`
+			// reports the identical transition at: this is a claim ending because something outranked
+			// it in practice, and a consume that logs nothing is invisible beside one that does.
+			const FElysiumAnimRequestSlot& Base =
+				Requests[static_cast<int32>(EElysiumAnimChannel::Base)];
+			if (Base.bActive)
+			{
+				UE_LOG(LogElysiumAnimDriver, Verbose,
+					TEXT("'%s' reselection to '%s' takes the base pose from %s '%s' (%s)"),
+					*Stem, *Intent.Activity, ElysiumAnimIntent::SourceName(Base.Request.Source),
+					*Base.Request.Label, ElysiumAnimIntent::PriorityName(Base.Request.Priority));
+				ReleaseRequest(Base.Handle);
+			}
+		}
+	}
 
 	// The discrete key. Everything else about the intent is continuous and does not re-select
 	// anything: a body that turned, sped up or strafed is playing the same request.

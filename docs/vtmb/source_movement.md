@@ -200,7 +200,13 @@ rank 1. Verifying this needs the RPG-layer jump driver, not `CGameMovement`.
 getter) and its call site in `CheckJumpButton`; `sv_jump_boost`'s registered help string; the
 `0.99` and `0.5` scalars read from `.rdata` as doubles.*
 
-**`CheckJumpButton` (`0x101226b0`) is additive, and that is load-bearing.** The decompile reads
+**`FUN_101226b0` is `CGameMovement::CheckJumpButton`, `CGameMovement` vtable `+0x44`**
+[VtMB decompiled]. Its structure is stock — deadflag, then `m_flWaterJumpTime`, then water level,
+then the button — and it is the only reader and writer of the jump latch in the mover: it tests
+`mv->m_nOldButtons` (`CMoveData +0x28`) against `IN_JUMP` at `0x101227ed` and sets it at
+`0x10122817`.
+
+**`CheckJumpButton` is additive, and that is load-bearing.** The decompile reads
 `v.z = impulse * groundFactor + v.z` — it *adds* to the existing vertical velocity rather than
 overwriting it. `FullWalkMove` has already run `StartGravity` by the time the jump is checked, so
 the launch velocity carries the half-step offset the leapfrog integration wants; overwriting
@@ -418,7 +424,7 @@ the rest are identified by their bodies):
 | `PlayerMove` | `0x101274a0` | the dispatcher; profile string `CGameMovement::PlayerMove` |
 | `CategorizePosition` | `0x1011e560` | ground + `surfaceFriction` |
 | `Duck` | `0x10126fd0` | → `FinishDuck` `0x10126cb0` / `FinishUnDuck` `0x101269e0`, `CanUnduck` `0x101265d0` |
-| `CheckJumpButton` | `0x101226b0` | **additive**, and latches `m_nOldButtons` |
+| `CheckJumpButton` | `0x101226b0` | vtable `+0x44`; **additive**, and latches `m_nOldButtons` |
 | `FullWalkMove` | `0x10121ce0` | the gravity split lives here |
 | `FullNoClipMove` | `0x10122190` | reads `sv_noclipspeed` / `sv_noclipaccelerate` |
 | `StartGravity` / `FinishGravity` | `0x1011fa80` / `0x10120f30` | the half-step pair |
@@ -430,6 +436,30 @@ the rest are identified by their bodies):
 | `CheckFalling` | `0x10125db0` | |
 | `TracePlayerBBox` | — | profile string `CGameMovement::TracePlayerBBox` |
 | `UpdateStepSound` | `0x1011e940` | step intervals 60/80 walking, 120/220 running |
+
+**The vftable is read out, so a slot is a measured fact even where the name is not.** `CGameMovement`
+vftable `0x10462874` holds **26 slots** — 26 through 31 read zero, so slot 25 is the last. Of the
+rows below only `PlayerMove` carries its own VProf scope; on every other one the **slot is measured
+while the name stays body-identified**:
+
+| Slot | Offset | Function |
+|---:|---|---|
+| 5 | `+0x14` | `0x101274a0` `CGameMovement::PlayerMove` — named by its own VProf scope [VtMB decompiled] |
+| 11 | `+0x2c` | `0x101213b0` `WalkMove` [inferred] |
+| 12 | `+0x30` | `0x10121ce0` `FullWalkMove` [inferred] |
+| 17 | `+0x44` | `0x101226b0` `CheckJumpButton` [VtMB decompiled] |
+| 23 | `+0x5c` | `0x1011ef00` the `return 1.0f` speed-crop virtual [inferred] |
+| 25 | `+0x64` | `0x10126f60` `HandleDuckingSpeedCrop` [inferred] |
+
+**Three of the movement functions are not virtual at all**, which is why they hold no slot: their
+thunks carry zero data references and each has exactly one direct caller — `CheckParameters`
+(`0x1011f140`) from `PlayerMove` at `0x10127500`, `Duck` (`0x10126fd0`) from `PlayerMove` at
+`0x10127661`, and `ComputeConstraintSpeedFactor` (`0x1011ef20`) from `CheckParameters` at
+`0x1011f1dc`.
+
+**`0x10127b00` is the function that seeds `mv->m_flMaxSpeed` from `sv_maxspeed`**, and that is all
+that is verified about it: it holds no vtable slot, so Source's `ProcessMovement` is not a supported
+name for it — slot 0 is `0x1011e1d0`.
 
 ### The gravity half-step split
 
@@ -552,7 +582,9 @@ peak    = fmaxf(peak, |dPos * k|);                                    // 3D magn
 
 **`m_flMaxspeed` is the running peak over all 24 cells.** One local, initialized to 0.0 once,
 threaded through all three calls and never reset between them. It exists so the clamp below never
-cuts a cell — it is a ceiling, not a gait.
+cuts a cell — it is a ceiling, not a gait. **It can never sit below a commandable cell**: the peak
+is a running maximum over exactly the 24 selectable cells, taken in the same pass that fills them,
+so a cell is either at or below it or was never written at all.
 
 ### The scales, and the walk asymmetry
 
@@ -614,7 +646,7 @@ reads.
 `CGameMovement::CheckParameters` (`FUN_1011f140`) is Source 1:1:
 
 ```c
-mv->m_flMaxSpeed = sv_maxspeed;                                   // 2048, set in ProcessMovement
+mv->m_flMaxSpeed = sv_maxspeed;                                   // 2048, seeded by 0x10127b00
 if (mv->m_flClientMaxSpeed != 0)
     mv->m_flMaxSpeed = min(mv->m_flClientMaxSpeed, mv->m_flMaxSpeed);
 mv->m_flMaxSpeed *= min(m_pSurfaceData->game.maxSpeedFactor, ComputeConstraintSpeedFactor());
@@ -666,7 +698,44 @@ Whether `AirAccelerate` applies Source's separate 30 u/s air wish-speed cap is
 Three, all "hold", none "zero": a cell whose `Studio_AnimMovement` reports no movement keeps its
 previous value and does not contribute to the peak; a gait whose resolved sequence is not a 9-blend
 grid leaves all 16 of its slots untouched; and if all three gaits yield a zero peak, `m_flMaxspeed`
-holds. The tables and `m_flMaxspeed` are zeroed exactly once, in `Spawn` (`FUN_1016d260`).
+holds. The tables and `m_flMaxspeed` are zeroed exactly once, in `Spawn` (`FUN_1016d260`, at
+`0x1016D2CE`, `0x1016D301` and `0x1016D31B`).
+
+**The gate is one test on the sequence descriptor, and there is nothing behind it.** In the fan
+extractor, after the activity resolves:
+
+```asm
+10350668  call 0x10004d4a                 ; the seqdesc for the resolved activity
+10350670  test eax,eax / je 0x10350682    ; no descriptor -> skip
+1035067c  cmp dword ptr [eax+0x34], 9     ; seqdesc->numblends == 9
+10350680  je  0x103506c4                  ; only a 9-blend fan proceeds
+...
+103507b4  <epilogue>                      ; reached with the slot never written
+```
+
+So a gait with no 9-blend fan commands **whatever its slot already holds**. There is no constant, no
+per-gait substitute and no `speed_runbase` on this path — the ConVars under "The intended figures"
+below are registered and never read. `m_flMaxspeed` is conditional in the same way:
+`if (peak > 0.0f) m_flMaxspeed = peak;`, otherwise it holds.
+
+**Two states are reachable and they are not the same thing.** On a body that never had that fan the
+held value is **zero**, because `Spawn` is the only site that clears the six arrays. After a
+**mid-game model swap** it is **the previous body's values**: `PreThink` overwrites per gait and
+never clears, so a stale real fan outlives the body that authored it. *[inferred]* — whether the
+Protean path reaches the second state is not established. It does if the discipline swaps the
+player's own model, and does not if it spawns `npc_VWolfMorph` beside a hidden player; only the
+former reaches this code.
+
+**The state is reachable, the player included** *[data-verified, install-wide]*. 323 bodies declare
+at least one of `ACT_WALK` / `ACT_RUN` / `ACT_SNEAK`; **299** carry all three as 9-blend fans and
+**24** do not — 17 with `WALK=1`, `RUN=1` and no `SNEAK`; 3 with `WALK=1` and neither of the others;
+3 with `WALK=9`, `RUN=9` and no `SNEAK`; 1 with `WALK=1`, `RUN=9` and no `SNEAK`. Twenty of the 24
+are monster, animal or NPC-only bodies that cannot reach this code at all: the six tables are
+`CHL2_Player` fields filled only by `CHL2_Player::PreThink`, while an NPC locomotes on
+`m_flGroundSpeed` through `CAI_Motor`. The player-reachable ones are `gangrel_male_beastial.mdl`
+(under `character/pc/`, `WALK=1`, `RUN=1`, no `ACT_SNEAK` — **no 9-blend fan at all**, so on a fresh
+body every gait and `m_flMaxspeed` alike stay at the zero `Spawn` left) and `wolf_form.mdl` /
+`wolf_form_2.mdl` (`WALK=9`, `RUN=9`, no `ACT_SNEAK`, so only their crouch is silent).
 
 `m_flMaxspeed`'s complete writer set is six sites, closed by two independent scans:
 `ClientDisconnect` → 0, `Spawn` → 0, `FinishMove` ← `m_flClientMaxSpeed`, and the three in
@@ -683,8 +752,9 @@ the peak, so under it the tables say walk speeds while `m_flMaxspeed` still says
 
 ### Ordering
 
-`CPlayerMove::RunCommand` (`FUN_101874a0`) runs `PreThink` → `SetupMove` → `ProcessMovement` /
-`PlayerMove` → `CheckParameters` → `FinishMove` → `PostThink`, all inside one command.
+`CPlayerMove::RunCommand` (`FUN_101874a0`) runs `PreThink` → `SetupMove` → the max-speed seed
+(`0x10127b00`) → `PlayerMove` → `CheckParameters` → `FinishMove` → `PostThink`, all inside one
+command.
 
 **`PreThink` does not read the currently-playing sequence.** It re-resolves all three activities
 from scratch every frame and never consults `m_nSequence`, so there is no one-frame lag between the
@@ -717,3 +787,143 @@ The edge-friction *trace* still runs (its result feeds `surfaceFriction`), but t
 2× multiplier `sv_edgefriction` is gone. `speed_walk`/`speed_runbase` are still the
 best statement of Troika's intended tuning and are what a port with no player
 animation should use — they are simply wired to nothing in the retail build.
+
+## The melee lock drives the move from the clip
+
+The tables above are the ordinary path: the client writes an animation speed into the command and
+the mover accelerates toward it. There is a second path. **While a swing owns the player's
+animation — or while the player is playing a hard landing — the command's movement is discarded and
+refilled from the playing sequence's own movement records**, and the resulting velocity is assigned
+rather than accelerated [VtMB decompiled].
+
+**The switch is `player + 0x1ed8` bit `0x80`.** `CPlayerMove::SetupMove` forks on it at
+`0x10186297`, zeroes `forwardmove`, `sidemove` and `upmove` at `0x101862c1`, and refills all three
+from the clip:
+
+```c
+rate = GetSequenceCycleRate(seq) * m_flPlaybackRate(+0x6f4);
+c0 = m_flCycle(+0x6f8) + ((player[+0x2358] - cmd[+0x10]) - (player[+0x174] - 0.1f)) * rate;
+c1 = c0 + rate * frametime;   clamp c0 >= 0, c1 <= 1;
+if (c0 < c1 && Studio_SeqMovement(hdr, seq, c0, c1, &m_flPoseParameter[+0x690], &dPos, &dAng)) {
+    mv->m_flForwardMove =  dPos.x / frametime;
+    mv->m_flSideMove    = -dPos.y / frametime;
+    mv->m_flUpMove      =  dPos.z / frametime;
+    mv->[0xD0] = 1;                                  // 0x10186403
+}
+player[+0x19ec] = hypot(sidemove, forwardmove);      // cmdMoveMag, from the SUBSTITUTED values
+```
+
+`WalkMove` branches on that flag at `0x1012150b` and **assigns `m_vecVelocity = wishvel`**, so
+`sv_accelerate` never sees the move. The move is still swept by `TryPlayerMove`, so a locked swing
+collides, steps and slides like any other move — nothing teleports and nothing passes through
+geometry.
+
+`dAng` is computed and **discarded**: the clip's authored yaw delta never reaches the player.
+`CMoveData+0xD0` has exactly two writers, both in `SetupMove`, and one reader, in `WalkMove`.
+`player+0x2358` and `player+0x174` are [inferred] a player simulation-time field and
+`m_flAnimTime`; the `0.1` is `_DAT_104491b4`. `WalkMove` is slot 11 (`+0x2c`) of `CGameMovement`
+vftable `0x10462874` — a measured slot under a name [inferred] from its body, as with every mover
+function above except `PlayerMove`.
+
+**The realised speed is `(dPos / dcycle) * cycleRate * m_flPlaybackRate`**, so the swing's playback
+rate is the lunge's speed control. `CWeaponMelee::RequestActivity` writes that rate at `0x103ea297`
+as `max(m_flSpeedScale (+0x1488), the cvar floor) * (0.7 + 0.03 * rank)`, the same attack-rate
+scalar that sets the recovery deadline (`docs/vtmb/combat-and-damage.md` → "Target acquisition,
+sequence commit and recovery"). **The lunge's commanded speed therefore rises with attack speed and
+with `m_flSpeedScale`** — the one place `m_flSpeedScale` reaches the player's realised travel
+without passing through the six speed tables. Walk's exemption from `m_flSpeedScale` does not apply
+here. **The realised distance moves the other way.** A higher playback rate raises the commanded
+speed, but it also reaches the sequence's release cycle in fewer steps, and the clamps below take
+back the speed while nothing gives back the duration — so once the cap binds, **clamped lunge
+distance falls as attack speed rises**.
+
+**The substituted movement is clamped twice, and both clamps sit above the fork.** The first is
+`CheckParameters` (above, "The clamp"), which runs earlier in the same command — the third call in
+`PlayerMove`, at `0x10127500` — and scales `forwardmove`/`sidemove`/`upmove` down together when
+their **3-vector** magnitude exceeds `mv->m_flMaxSpeed`. The second is stock Source's
+normalize-and-clamp at the head of `WalkMove` (`0x101214cb`), immediately above the `+0xD0` fork:
+
+```c
+wishdir = wishvel;  wishvel.z = wishdir.z = 0;
+wishspeed = VectorNormalize(wishdir);
+if (wishspeed > mv->m_flMaxSpeed /*CMoveData +0x38*/) {
+    fRatio = mv->m_flMaxSpeed / wishspeed;
+    wishvel.x *= fRatio;  wishvel.y *= fRatio;  wishspeed = mv->m_flMaxSpeed;
+}
+mv->m_vecVelocity.z = 0;
+if (mv->[0xD0]) m_vecVelocity = wishvel;   // reads the CLAMPED stack slots
+else            Accelerate(...);
+```
+
+It rewrites the wishvel slots in place and the direct-assignment branch reads those exact slots, so
+one clamp governs both paths. The order inside one command is: `SetupMove` substitutes →
+`CheckParameters` clamp → `FullWalkMove` → `WalkMove` → wishvel clamp → the `+0xD0` fork →
+assignment. The second is a no-op given the first **except on the `up` component**, because
+`CheckParameters` counts `upmove` in its magnitude while `WalkMove` clamps in 2D with `z` forced to
+zero.
+
+**The cap is the live gait peak, not a melee constant.** `mv->m_flMaxSpeed` is
+`min(player->m_flMaxspeed, sv_maxspeed)` scaled by the surface factor, and `m_flMaxspeed` is
+exactly the `PreThink` gait-table peak — 208.0 u/s (528.3 cm/s) on `tremere_Male_Armor_0`. It does
+not freeze at swing start: `PreThink`'s table fill runs *before* the lock flag is built and is not
+gated by the busy predicate, so the cap keeps tracking the live run peak through a grounded swing.
+An air melee attack is capped differently — while the jump-phase field is in `1…7`, `PreThink` pins
+`m_flMaxspeed` to `sv_jump_maxspeed`, 350 u/s (889 cm/s).
+
+**So an authored displacement is a request, not a guarantee** [data-verified, simulated against the
+two stock studio helpers at 66 Hz]. On `baseball.mdl`, `baseballbat_attack_W1` peaks at 2,895 cm/s
+and would travel 406.5 cm unclamped over the stretch the lock substitutes, but lands at roughly
+218–240 cm depending on melee rank — the **shorter** figure at the higher rank, because the faster
+swing spends less time under the same cap.
+`baseballbat_attack_jump` loses about a fifth, 505 cm down to 366–414 cm. The neutral
+`Center1`/`Center2` chain and `_W2` are essentially unaffected, and `BaseballBat_air` never reaches
+its cap at all.
+
+**The clip's tail past `w_hold` is authored but never substituted** [data-verified]. `_W1` states
+418.7 cm cumulative at its final frame — frame 16 of a 17-frame clip — while the lock releases at
+its `w_hold` of `0.91`, frame `14.56`, where retail's own piecewise walk reads 406.5 cm: the last
+record ending below that frame stands at 398.8 cm and easing into the next block adds 7.7 cm
+(`docs/vtmb/animation_and_movers.md` → "Retail samples the array piecewise, and quadratically
+inside a block"). A `_W1` swing therefore offers the mover 97% of its authored displacement, and
+**every attack whose descriptor states a hold below `1.0` leaves part of its own displacement
+unspent** — before the cap takes back any of what it does offer.
+
+**The bit has no latch.** It has exactly one write site in the module — set at `0x10181a22`,
+unconditionally cleared at `0x10181a26` — inside `FUN_10181780`, whose single call site is
+`0x10169afd` in `CBasePlayer` vtable `+0x680`, called from `CHL2_Player::PreThink` (`0x10350830`)
+once per user command. It is a pure function of `(m_IdealActivity, m_nSequence, m_flCycle,
+seqdesc->w_hold, m_flNextAttack, curtime)`, re-derived from scratch before `SetupMove` reads it in
+the same command; nothing else in the image sets, clears, saves or restores it. It appears in **no
+SendTable and no datamap**, so the substitution is server-authoritative and client prediction does
+not reproduce it.
+
+**Bit `0x80` and the jump-check's bit `0x08` are one predicate, written back to back.**
+`FUN_10181780` fills bit `0x80` from virtual `+0x674` (`0x10161430`, called at `0x10181a12`) and,
+two lines later, bit `0x08` from virtual `+0x670` (`0x10161200`, called at `0x10181a32`, set at
+`0x10181a42` and cleared at `0x10181a46`); neither write carries a condition of its own. `+0x674`
+is `+0x670` plus one line —
+`if (m_IdealActivity == ACT_LAND_HARD /*0x32*/) return true; return vt[0x670]();` — so **bit `0x80`
+is bit `0x08` OR `ideal == ACT_LAND_HARD`**, and `0x32` matches none of `0x10161200`'s own activity
+rows. The entire divergence between the two bits is therefore one behaviour: **during
+`ACT_LAND_HARD` the movement is driven from the animation while a jump is still permitted.**
+Everywhere else the two bits hold identical values.
+
+**Which activities lock is one predicate with three consumers.** `CBasePlayer` vtable `+0x670`
+(`0x10161200`) decides the weapon's busy-frame routing, whether the player's animation selector
+runs at all, and — through the `+0x674` form above — this substitution; its per-activity rows and
+release conditions are in `docs/vtmb/combat-and-damage.md` → "The combo chain is a press-edge
+hand-off inside the busy frame", and what the animation side does while it holds is in
+`docs/vtmb/animation_and_movers.md` → "Protected activities and player paired-action modes".
+Melee's release cycle is the `w_hold` the sequence states, and it is read for `ACT_MELEE_ATTACK`
+alone; the other three melee activities are busy for their whole clip regardless. Nearly every descriptor in the install states the full-clip `1.0`, so a swing
+that hands movement back before its clip ends is the authored exception.
+
+**What the lock does not touch.** `m_flMaxspeed` (`+0x2310`) is untouched by every melee path — its
+six-writer set above is closed and contains none of them — so the cap a swing meets is the ordinary
+gait peak and nothing melee-specific. `m_flNextAttack` and `m_flNextPrimaryAttack` gate re-pressing and the block
+branch, not movement. **The lock refuses a jump, and the refusal does not consume the press.**
+`CheckJumpButton` reads bit `0x08` of the same `+0x1ed8` bitfield and jumps to the plain
+`pop esi / add esp / ret` at `0x10122b02`; that exit does **not** run the
+`mv->m_nOldButtons |= IN_JUMP` at `0x10122afa` which the water-jump bail at `0x10122af7` falls
+into. So a locked swing cannot be jump-cancelled, and a held jump key fires the instant the lock
+releases rather than needing a fresh press.

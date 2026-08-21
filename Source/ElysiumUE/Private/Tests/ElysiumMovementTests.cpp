@@ -1087,16 +1087,26 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	In.JumpMaxSpeed = ElysiumMove::JumpMaxSpeed;
 	In.NoclipSpeed = ElysiumMove::NoclipSpeed;
 
-	// A body with no fan at all falls back to the shipped constants.
+	// A body with no fan at all commands nothing, and no constant stands in for it. Retail's gait
+	// fill writes a slot only when the resolved sequence is a 9-blend grid and `Spawn` is the only
+	// site that ever clears one, so an unwritten cell on a fresh body reads zero
+	// (`docs/vtmb/source_movement.md` -> "Fallbacks"). `speed_walk`/`speed_runbase` are on no part of
+	// that path.
 	const FElysiumGaitSpeeds NoFan;
-	TestEqual(TEXT("a body with no fan runs at speed_runbase"),
-		ElysiumGait::WishSpeedFrom(In, NoFan), ElysiumMove::RunSpeed, 0.01f);
+	TestEqual(TEXT("a body with no fan commands zero"),
+		ElysiumGait::WishSpeedFrom(In, NoFan), 0.0f, 0.01f);
+	TestTrue(TEXT("...which is not speed_runbase"),
+		!FMath::IsNearlyEqual(ElysiumGait::WishSpeedFrom(In, NoFan), ElysiumMove::RunSpeed, 0.01f));
 	In.bWalkKey = true;
-	TestEqual(TEXT("...and +speed selects the slow gait"),
-		ElysiumGait::WishSpeedFrom(In, NoFan), ElysiumMove::WalkSpeed, 0.01f);
+	TestEqual(TEXT("...and +speed does not conjure a walk constant"),
+		ElysiumGait::WishSpeedFrom(In, NoFan), 0.0f, 0.01f);
 	In.bDucked = true;
-	TestEqual(TEXT("...and a ducked body takes Source's third"),
-		ElysiumGait::WishSpeedFrom(In, NoFan), ElysiumMove::WalkSpeed / 3.0f, 0.01f);
+	TestEqual(TEXT("...nor does a crouch"),
+		ElysiumGait::WishSpeedFrom(In, NoFan), 0.0f, 0.01f);
+	// The ceiling goes with it: `m_flMaxspeed` is written under the same `peak > 0` condition and
+	// zeroed by the same `Spawn`, so a body with no fan carries no ceiling either.
+	TestEqual(TEXT("...and the body has no ceiling to clamp against"),
+		ElysiumGait::MaxSpeedFrom(In, NoFan), 0.0f, 0.01f);
 	In.bDucked = false;
 	In.bWalkKey = false;
 
@@ -1128,16 +1138,45 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	In.Scale = 1.0f;
 	In.bWalkKey = false;
 
-	// A gait that resolved no fan falls back on its own, not wholesale: this body walks and runs at
-	// its authored speed and sneaks at the constant.
+	// A gait that resolved no fan answers on its own, not wholesale: this body walks and runs at its
+	// authored speed and its crouch commands zero, which is the slot retail never wrote. Three
+	// shipped player-reachable bodies are in exactly this shape — they author no `ACT_SNEAK` at all.
 	FElysiumGaitSpeeds Partial = Body;
 	Partial.Sneak = FElysiumGaitSpeedTable();
 	In.bDucked = true;
-	TestEqual(TEXT("a missing sneak fan falls back to the constant"),
-		ElysiumGait::WishSpeedFrom(In, Partial), ElysiumMove::RunSpeed / 3.0f, 0.01f);
+	TestEqual(TEXT("a missing sneak fan commands zero"),
+		ElysiumGait::WishSpeedFrom(In, Partial), 0.0f, 0.01f);
 	In.bDucked = false;
 	TestEqual(TEXT("...while the gaits that did resolve are unaffected"),
 		ElysiumGait::WishSpeedFrom(In, Partial), Body.Run.Forward(), 0.01f);
+	TestEqual(TEXT("...and the ceiling is the peak over the fans that did resolve"),
+		ElysiumGait::MaxSpeedFrom(In, Partial), Partial.Peak(), 0.01f);
+
+	// **The inversion, asserted away.** A per-gait constant substitute could outrun the body's own
+	// whole-body peak, and then a lunge clamped to `m_flMaxspeed` was slower than the ordinary walk
+	// it interrupted. Retail cannot produce that: the peak is a running maximum over the same 24
+	// cells the fill writes, so a commandable cell is either at or below it or was never written.
+	{
+		float WorstCell = 0.0f;
+		for (const bool bPartialDucked : { false, true })
+		{
+			for (const bool bPartialWalkKey : { false, true })
+			{
+				for (int32 Degrees = -180; Degrees <= 180; Degrees += 5)
+				{
+					FElysiumWishSpeedInput Cell = In;
+					Cell.bDucked = bPartialDucked;
+					Cell.bWalkKey = bPartialWalkKey;
+					Cell.WishYawDegrees = static_cast<float>(Degrees);
+					WorstCell = FMath::Max(WorstCell,
+						ElysiumGait::WishSpeedFrom(Cell, Partial));
+				}
+			}
+		}
+		TestTrue(TEXT("no gait on a partly-resolved body commands above its own ceiling"),
+			WorstCell <= ElysiumGait::MaxSpeedFrom(In, Partial));
+	}
+	In.WishYawDegrees = 0.0f;
 
 	// Airborne: the held grounded speed, because retail's tables stop refreshing for the jump.
 	// `sv_jump_maxspeed` is the ceiling and never fires — the run peak is below it.

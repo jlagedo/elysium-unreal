@@ -375,9 +375,17 @@ struct FElysiumRecordingServices final
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FElysiumClipSegment& Segment, float* OutSeconds) override
 	{
-		Record(FString::Printf(TEXT("PlayNpcClip %s %s loop=%d band=%s%s"), *Stem, *Segment.ClipName,
-			Segment.bLoop ? 1 : 0, ElysiumAnimIntent::PriorityName(Segment.Priority),
-			Segment.bHoldUntilReleased ? TEXT(" held=1") : TEXT("")));
+		// `rate=` and `act=` ride at the very tail, after the band and the hold, for the reason those
+		// two do: `Saw` is a prefix match, so a case that wants the forced ideal activity or the
+		// playback rate can ask for it without moving the ground under one that does not. `act=` is
+		// the FORCED IDEAL ACTIVITY the segment carries, and it is recorded because it is the value
+		// the movement lock, the reselection guard and the air self-latch all read — a producer that
+		// stopped stating it would otherwise still play its clip and look identical here.
+		Record(FString::Printf(TEXT("PlayNpcClip %s %s loop=%d band=%s%s rate=%.2f act=%s"),
+			*Stem, *Segment.ClipName, Segment.bLoop ? 1 : 0,
+			ElysiumAnimIntent::PriorityName(Segment.Priority),
+			Segment.bHoldUntilReleased ? TEXT(" held=1") : TEXT(""), Segment.PlaybackRate,
+			Segment.Activity.IsEmpty() ? TEXT("(none)") : *Segment.Activity));
 		if (OutSeconds)
 		{
 			*OutSeconds = ClipSeconds;   // a beat's OnEndSequence schedules off this
@@ -1234,6 +1242,16 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("IsPlayerOnGround -> %s"),
 			bPlayerOnGround ? TEXT("true") : TEXT("false")));
 		return bPlayerOnGround;
+	}
+	// The player's published ideal activity, which the melee primary's airborne fork switches on.
+	// Default EMPTY — a Substrate world runs no animation driver, so the honest answer is "nothing
+	// published", and an empty activity forks nowhere. A test that wants the fork names the phase.
+	FString PlayerBaseActivity;
+	virtual FString GetPlayerBaseActivity() const override
+	{
+		Record(FString::Printf(TEXT("GetPlayerBaseActivity -> %s"),
+			PlayerBaseActivity.IsEmpty() ? TEXT("(none)") : *PlayerBaseActivity));
+		return PlayerBaseActivity;
 	}
 	virtual float ResolveNpcMakerGroundZ(const FVector& Origin, float Depth) const override
 	{

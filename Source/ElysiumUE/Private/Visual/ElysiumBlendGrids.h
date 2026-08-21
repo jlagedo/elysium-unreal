@@ -4,6 +4,9 @@
 // The timeline record this file parses, which crosses the outbound service seam and therefore
 // lives in `Public/`.
 #include "ElysiumAnimEvent.h"
+// The authored displacement path this file parses, which crosses to the player's own mover and
+// therefore lives in `Public/` for the same reason.
+#include "ElysiumClipMovement.h"
 #include "ElysiumGaitSpeeds.h"   // FElysiumGaitSpeedTable — what a locomotion fan's motion becomes
 
 // What a model's own sequence descriptors declare beside their clips, off `npc/blends/<stem>.json`
@@ -141,10 +144,32 @@ struct FElysiumBlendTable
 	// Keyed the same way again, by the label of the sequence the timeline belongs to. **The array
 	// order is the file's**, which is the order the dispatcher fires records that share a cycle in.
 	TMap<FString, TArray<FElysiumAnimEvent>> Events;
+	// The authored displacement paths, keyed the same way again. A label that is absent authors no
+	// record at all — see `bMovementStated`, which is what tells that apart from a file nothing
+	// looked in.
+	TMap<FString, FElysiumClipMovementPath> Movement;
+	// Whether the sidecar carried `movement_fields`. **The two absences are different and a reader
+	// must not collapse them**: false means this file was written by an exporter that never read the
+	// `mstudiomovement_t` array, so it says nothing about any clip and a consumer reports the gap;
+	// true with a label missing from `Movement` is the file stating that the clip authors no
+	// movement, which is the value retail's own `Studio_AnimMovement` returns false for.
+	bool bMovementStated = false;
+	// **Why `bMovementStated` is false, when it is.** A file that carries no `movement_fields` at all
+	// predates the column and is fixed by re-exporting it; a file that carries one this reader cannot
+	// address names columns the reader does not, and re-exporting it changes nothing. Both leave every
+	// clip unanswerable, and they have opposite remedies, so the consumer is told which it has.
+	bool bMovementSchemaUnreadable = false;
+	// Movement rows dropped for being malformed while the rest of the table installed. Non-zero means
+	// a clip's authored path is short or missing on a table the runtime still uses, which no `IsValid`
+	// answer reports.
+	int32 MalformedMovementRows = 0;
 
-	// A table that parses but declares no grid, no binding and no timeline is not worth caching.
-	// The exporter writes no file at all in that case, so this only fires on a damaged one.
-	bool IsValid() const { return !Grids.IsEmpty() || !AutoLayers.IsEmpty() || !Events.IsEmpty(); }
+	// A table that parses but declares no grid, no binding, no timeline and no path is not worth
+	// caching. The exporter writes no file at all in that case, so this only fires on a damaged one.
+	bool IsValid() const
+	{
+		return !Grids.IsEmpty() || !AutoLayers.IsEmpty() || !Events.IsEmpty() || !Movement.IsEmpty();
+	}
 	const FElysiumBlendGrid* Find(const FString& Label) const { return Grids.Find(Label); }
 	// The layers `Label` declares, or null. Never reordered — see FElysiumAutoLayerBinding.
 	const FElysiumAutoLayerBinding* FindAutoLayers(const FString& Label) const
@@ -156,6 +181,12 @@ struct FElysiumBlendTable
 	const TArray<FElysiumAnimEvent>* FindEvents(const FString& Label) const
 	{
 		return Events.Find(Label);
+	}
+	// `Label`'s authored displacement path, or null when that sequence declares none — which is
+	// almost all of them, and an absence rather than a fault.
+	const FElysiumClipMovementPath* FindMovement(const FString& Label) const
+	{
+		return Movement.Find(Label);
 	}
 	const FElysiumPoseParamDesc* Param(int32 Index) const
 	{

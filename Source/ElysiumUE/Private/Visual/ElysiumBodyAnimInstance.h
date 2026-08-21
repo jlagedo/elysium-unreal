@@ -122,8 +122,14 @@ public:
 	// and a producer that cannot name its route must not assume a restart — the held-crouch trace in
 	// `docs/vtmb/animation_and_movers.md` is the proof of the complementary rule. A host whose only
 	// route already restarts (the dynamic slot montage) ignores it.
+	//
+	// `PlayRate` is `m_flPlaybackRate`, and it defaults to **1.0** for the same reason `bRestart`
+	// defaults to false: retail's `ResetSequenceInfo` resets the rate before anything writes it, so a
+	// producer that names no rate means the authored speed. It is one number for the whole play — the
+	// drawn speed, the cycle advance and anything derived from either.
 	virtual bool PlayOneShot(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence,
-		bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart = false)
+		bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart = false,
+		float PlayRate = 1.0f)
 	{
 		return false;
 	}

@@ -69,6 +69,10 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 	Grids.Reset();
 	AutoLayers.Reset();
 	Events.Reset();
+	Movement.Reset();
+	bMovementStated = false;
+	bMovementSchemaUnreadable = false;
+	MalformedMovementRows = 0;
 
 	TSharedPtr<FJsonObject> Document;
 	const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(JsonText);
@@ -206,17 +210,123 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 		}
 	}
 
+	// The authored displacement paths, read before the grids for the same reason the two blocks
+	// above are: an attack bank whose every sequence is a single cell carries these and no grid at
+	// all, so a table dropped for having no grid would drop the only statement of the lunge.
+	//
+	// **`movement_fields` is read rather than assumed.** The sidecar states its own column order
+	// precisely so a reader never positionally guesses, and the flag it sets is what separates "this
+	// clip authors no movement" from "nothing ever looked" — two absences a consumer must be able to
+	// tell apart (`FElysiumBlendTable::bMovementStated`).
+	int32 MalformedMovement = 0;
+	const TArray<TSharedPtr<FJsonValue>>* MovementFields = nullptr;
+	if (Document->TryGetArrayField(TEXT("movement_fields"), MovementFields)
+		&& MovementFields != nullptr)
+	{
+		bMovementStated = true;
+		TMap<FString, int32> Column;
+		for (int32 Index = 0; Index < MovementFields->Num(); ++Index)
+		{
+			FString Name;
+			if ((*MovementFields)[Index].IsValid() && (*MovementFields)[Index]->TryGetString(Name))
+			{
+				Column.Add(MoveTemp(Name), Index);
+			}
+		}
+		auto ColumnIndex = [&Column](const TCHAR* Name)
+		{
+			const int32* Found = Column.Find(Name);
+			return Found != nullptr ? *Found : INDEX_NONE;
+		};
+		const int32 IEndFrame = ColumnIndex(TEXT("end_frame"));
+		const int32 IFlags    = ColumnIndex(TEXT("flags"));
+		const int32 IV0       = ColumnIndex(TEXT("v0_cm"));
+		const int32 IV1       = ColumnIndex(TEXT("v1_cm"));
+		const int32 IYaw      = ColumnIndex(TEXT("yaw_deg"));
+		const int32 IDirX     = ColumnIndex(TEXT("dir_x"));
+		const int32 IDirY     = ColumnIndex(TEXT("dir_y"));
+		const int32 IDirZ     = ColumnIndex(TEXT("dir_z"));
+		const int32 IPosX     = ColumnIndex(TEXT("pos_x_cm"));
+		const int32 IPosY     = ColumnIndex(TEXT("pos_y_cm"));
+		const int32 IPosZ     = ColumnIndex(TEXT("pos_z_cm"));
+		const bool bSchemaKnown = IEndFrame != INDEX_NONE && IFlags != INDEX_NONE
+			&& IV0 != INDEX_NONE && IV1 != INDEX_NONE && IYaw != INDEX_NONE
+			&& IDirX != INDEX_NONE && IDirY != INDEX_NONE && IDirZ != INDEX_NONE
+			&& IPosX != INDEX_NONE && IPosY != INDEX_NONE && IPosZ != INDEX_NONE;
+
+		const TSharedPtr<FJsonObject>* MovementObject = nullptr;
+		if (!bSchemaKnown)
+		{
+			// The file names columns this reader cannot address. Not silently treated as "no
+			// movement": that answer belongs to a file that states the schema and omits the label.
+			//
+			// It is recorded as a FLAG rather than as `OutError`, because the table still loads: a
+			// sidecar with an unreadable movement schema and a perfectly good grid is `IsValid()` and
+			// installs, so an error string the caller only reads on failure is a diagnosis that never
+			// surfaces. The caller reports the flag on the success path.
+			bMovementSchemaUnreadable = true;
+			bMovementStated = false;
+		}
+		else if (Document->TryGetObjectField(TEXT("movement"), MovementObject)
+			&& MovementObject != nullptr)
+		{
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*MovementObject)->Values)
+			{
+				const TArray<TSharedPtr<FJsonValue>>* Rows = nullptr;
+				if (!Pair.Value.IsValid() || !Pair.Value->TryGetArray(Rows) || Rows == nullptr)
+				{
+					++MalformedMovement;
+					continue;
+				}
+				FElysiumClipMovementPath Path;
+				Path.Records.Reserve(Rows->Num());
+				for (const TSharedPtr<FJsonValue>& RowValue : *Rows)
+				{
+					const TArray<TSharedPtr<FJsonValue>>* Columns = nullptr;
+					if (!RowValue.IsValid() || !RowValue->TryGetArray(Columns) || Columns == nullptr
+						|| Columns->Num() < MovementFields->Num())
+					{
+						++MalformedMovement;
+						continue;
+					}
+					auto Number = [Columns](int32 Index)
+					{
+						return static_cast<float>((*Columns)[Index]->AsNumber());
+					};
+					FElysiumMovementRecord Record;
+					Record.EndFrame = static_cast<int32>(Number(IEndFrame));
+					Record.Flags = static_cast<int32>(Number(IFlags));
+					Record.V0Cm = Number(IV0);
+					Record.V1Cm = Number(IV1);
+					Record.YawDegrees = Number(IYaw);
+					// Verbatim. The Source->Unreal reflection is spent at export, so a second
+					// negation here would mirror every sideways attack.
+					Record.Direction = FVector(Number(IDirX), Number(IDirY), Number(IDirZ));
+					Record.PositionCm = FVector(Number(IPosX), Number(IPosY), Number(IPosZ));
+					Path.Records.Add(MoveTemp(Record));
+				}
+				if (!Path.Records.IsEmpty())
+				{
+					Movement.Add(Pair.Key, MoveTemp(Path));
+				}
+			}
+		}
+	}
+
 	const TSharedPtr<FJsonObject>* GridObject = nullptr;
 	if (!Document->TryGetObjectField(TEXT("grids"), GridObject) || GridObject == nullptr)
 	{
-		if (AutoLayers.IsEmpty() && Events.IsEmpty())
+		if (AutoLayers.IsEmpty() && Events.IsEmpty() && Movement.IsEmpty())
 		{
-			OutError = TEXT("blend sidecar carries no `grids`, `autolayers` or `events`");
+			OutError = TEXT("blend sidecar carries no `grids`, `autolayers`, `events` or `movement`");
 			return false;
 		}
-		if (MalformedEvents > 0)
+		MalformedMovementRows = MalformedMovement;
+		if (MalformedEvents > 0 || MalformedMovement > 0)
 		{
-			OutError = FString::Printf(TEXT("%d malformed event row(s) skipped"), MalformedEvents);
+			OutError = FString::Printf(
+				TEXT("%d malformed event row(s) and %d malformed movement row(s) skipped"),
+				MalformedEvents, MalformedMovement);
 		}
 		return true;
 	}
@@ -288,10 +398,13 @@ bool FElysiumBlendTable::LoadJsonText(const FString& JsonText, FString& OutError
 		Grids.Add(Pair.Key, MoveTemp(Grid));
 	}
 
-	if (Malformed > 0 || MalformedEvents > 0)
+	MalformedMovementRows = MalformedMovement;
+	if (Malformed > 0 || MalformedEvents > 0 || MalformedMovement > 0)
 	{
-		OutError = FString::Printf(TEXT("%d malformed grid(s) and %d malformed event row(s) skipped"),
-			Malformed, MalformedEvents);
+		OutError = FString::Printf(
+			TEXT("%d malformed grid(s), %d malformed event row(s) and %d malformed movement row(s) ")
+			TEXT("skipped"),
+			Malformed, MalformedEvents, MalformedMovement);
 	}
 	return IsValid();
 }

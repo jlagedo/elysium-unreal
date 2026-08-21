@@ -379,8 +379,19 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 			&& Report.Generation == PlayerAnimDriver->Selection.Generation,
 		Report.bInOneShotState, Report.bComplete);
 
+	// **Where the forced sequence stands, read before the driver ticks** (LIFE5). The driver's
+	// animation-driven predicate is rebuilt from this plus the base claim's own forced activity every
+	// frame, so it is pushed here rather than remembered anywhere — and a body with no pose layer
+	// pushes the default, which reports no sequence and is never animation-driven.
+	PlayerAnimDriver->BaseClipCycle = ReadPlayerBaseClipCycle(Visual);
+
 	PlayerAnimDriver->Tick(DeltaSeconds, Body->GetLocomotionSample(), Anims,
 		Visual ? Visual->GetSkeletalMeshAsset() : nullptr, OneShot);
+
+	// The movement half of the same mechanism, handed to the mover for the frame after this one —
+	// the same one-frame push the gait tables below take, and the same lag retail's own `SetupMove`
+	// reads the cycle with.
+	PushPlayerAnimMovementLock(Pawn);
 
 	// **The speed authority's push** (CCC7). The mover runs in the pre-physics pass and this driver
 	// in the post-move one, so the mover cannot ask for a table — it has to be handed one, and the
@@ -406,6 +417,170 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 	{
 		Graph->PublishSelection(PlayerAnimDriver->Selection, PlayerAnimDriver->Assets);
 	}
+}
+
+FElysiumBaseClipCycle AElysiumMapActor::ReadPlayerBaseClipCycle(
+	USkeletalMeshComponent* Visual) const
+{
+	FElysiumBaseClipCycle Cycle;
+	if (!PlayerAnimDriver.IsValid() || Visual == nullptr || Bodies == nullptr)
+	{
+		return Cycle;   // no body and no pose layer: nothing is standing on the base channel
+	}
+	const FElysiumAnimationRequest* Claim =
+		PlayerAnimDriver->ActiveRequest(EElysiumAnimChannel::Base);
+	if (Claim == nullptr || Claim->Activity.IsEmpty())
+	{
+		// No forced activity on the channel. There is a clip there on plenty of frames — an ambient
+		// stance, a scripted beat — but none of them is retail's forced sequence, and timing a lock
+		// off one would answer for a body that is not acting.
+		return Cycle;
+	}
+
+	FElysiumClipPhase Phase;
+	if (!Bodies->GetBodyClipPhase(Visual, EElysiumAnimChannel::Base, Phase) || !Phase.IsValid())
+	{
+		return Cycle;
+	}
+	if (!Phase.Label.Equals(Claim->Label, ESearchCase::IgnoreCase))
+	{
+		// The channel is standing on a different clip than the claim named — the play was refused,
+		// replaced, or the pose layer has not reached it yet. `m_nSequence` is not the forced one, so
+		// the predicate's own sequence guard fails and the lock is simply not on this frame.
+		return Cycle;
+	}
+
+	Cycle.bPlaying = true;
+	Cycle.Cycle = Phase.Cycle;
+	Cycle.LengthSeconds = Phase.Length;
+	// `m_flPlaybackRate`, as the pose layer is actually running it — the other half of retail's
+	// `GetSequenceCycleRate(seq) * m_flPlaybackRate`.
+	Cycle.PlayRate = Phase.PlayRate;
+
+	// **`w_hold` is the release cycle, and it is the playing sequence's own.** It is exported beside
+	// `w_open`/`w_close` on the clip manifest's `combo` column; a sequence that authors no combo
+	// block authors no `w_hold` either and takes 1.0, which is why a heavy finisher locks for its
+	// whole clip.
+	UElysiumAnimSubsystem* Anims = GetGameInstance()
+		? GetGameInstance()->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	const FElysiumNpcClipSet* Set = Anims != nullptr ? Anims->GetClipSet(PlayerVisualStem) : nullptr;
+	if (const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(Phase.Label) : nullptr)
+	{
+		Cycle.HoldCycle = Clip->HasCombo() ? Clip->Combo.HoldCycle : 1.0f;
+		// The frame count the cycle is mapped onto for the movement sample — the clip's own, because
+		// the authored `mstudiomovement_t` records index frames rather than seconds.
+		Cycle.FrameCount = Clip->Frames;
+	}
+	return Cycle;
+}
+
+void AElysiumMapActor::ClearPlayerAnimMovementLock(APawn* Pawn)
+{
+	if (PushedLockClip.IsEmpty())
+	{
+		// Nothing was ever handed over, so there is nothing to take back — and the component lookup
+		// below is skipped on every ordinary frame rather than run to clear a zero.
+		return;
+	}
+	PushedLockClip.Reset();
+	PushedLockPath.Reset();
+	if (UElysiumMovementComponent* Move = Pawn != nullptr
+		? Pawn->FindComponentByClass<UElysiumMovementComponent>() : nullptr)
+	{
+		Move->ClearAnimMovementLock();
+	}
+}
+
+void AElysiumMapActor::PushPlayerAnimMovementLock(APawn* Pawn)
+{
+	// `vt+0x674` is the arm that discards the movement command, so it is the one that decides whether
+	// a lock is handed over at all.
+	if (!PlayerAnimDriver.IsValid() || !PlayerAnimDriver->bMovementLocked)
+	{
+		ClearPlayerAnimMovementLock(Pawn);
+		return;
+	}
+
+	UElysiumMovementComponent* Move = Pawn != nullptr
+		? Pawn->FindComponentByClass<UElysiumMovementComponent>() : nullptr;
+	if (Move == nullptr)
+	{
+		return;   // the capsule A/B body and a backdrop map have no `CGameMovement` port to lock
+	}
+
+	const FElysiumBaseClipCycle& Cycle = PlayerAnimDriver->BaseClipCycle;
+	const FElysiumAnimationRequest* Claim =
+		PlayerAnimDriver->ActiveRequest(EElysiumAnimChannel::Base);
+	FElysiumAnimMovementLock Lock;
+	Lock.bActive = true;
+	// The narrower arm travels beside it: `vt+0x670` refuses the jump press, `vt+0x674` discards the
+	// movement command, and the difference is exactly `ACT_LAND_HARD`. Every row this rung implements
+	// is a melee one, so the two are equal on every frame today.
+	Lock.bRefusesJump = PlayerAnimDriver->bAnimationDriven;
+	Lock.Cycle = Cycle.Cycle;
+	// Retail's `GetSequenceCycleRate(seq) * m_flPlaybackRate`, in cycles per second, and BOTH factors
+	// are the clip the pose layer is actually running. The cycle rate is the reciprocal of the
+	// authored length — reading the played length rather than the model's own fps/frame count is what
+	// keeps the window the mover samples aligned with the cycle it was handed — and the playback rate
+	// is the one the swing wrote onto the play, so the drawn clip, the cycle and the lunge advance
+	// together instead of at three speeds.
+	Lock.CycleRate = Cycle.LengthSeconds > 0.0f ? Cycle.PlayRate / Cycle.LengthSeconds : 0.0f;
+	Lock.FrameCount = Cycle.FrameCount;
+
+	// The clip's authored displacement path, resolved once per clip and shared by pointer after.
+	const FString OwnerStem = Bodies != nullptr && Claim != nullptr
+		? Bodies->NpcClipOwner(PlayerVisualStem, Claim->Label) : FString();
+	const FString Key = FString::Printf(TEXT("%s|%s"), *OwnerStem,
+		Claim != nullptr ? *Claim->Label : TEXT(""));
+	if (Key != PushedLockClip)
+	{
+		PushedLockClip = Key;
+		PushedLockPath.Reset();
+		UElysiumAnimSubsystem* Anims = GetGameInstance()
+			? GetGameInstance()->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+		const TSharedPtr<const FElysiumBlendTable> Table = Anims != nullptr && !OwnerStem.IsEmpty()
+			? Anims->GetBlendTable(OwnerStem) : nullptr;
+		if (Table.IsValid() && !Table->bMovementStated)
+		{
+			// **The gap, and it is not the same thing as a clip authoring no movement.** Either way
+			// the sidecar says nothing about any of its clips, so reporting it as "no records" would
+			// turn a broken input into a silent behaviour change. The two causes have opposite
+			// remedies, so each is named with its own: a file that carries no `movement_fields`
+			// predates the column and a re-export fixes it, while a file whose schema this build
+			// cannot address is a READER that is behind, and re-exporting the same columns changes
+			// nothing.
+			if (!ReportedMovementGaps.Contains(OwnerStem))
+			{
+				ReportedMovementGaps.Add(OwnerStem);
+				if (Table->bMovementSchemaUnreadable)
+				{
+					UE_LOG(LogElysium, Warning,
+						TEXT("bank '%s' states a `movement_fields` schema this build cannot address, "
+							 "so no clip of it can say whether it authors a lunge — the reader is "
+							 "behind the file's column set and a re-export will not change it; the "
+							 "swing holds the body in place meanwhile"), *OwnerStem);
+				}
+				else
+				{
+					UE_LOG(LogElysium, Warning,
+						TEXT("bank '%s' carries no `movement_fields` at all, so no clip of it can say "
+							 "whether it authors a lunge — re-export this model's blend sidecar; the "
+							 "swing holds the body in place meanwhile"), *OwnerStem);
+				}
+			}
+		}
+		else if (Table.IsValid() && Claim != nullptr)
+		{
+			if (const FElysiumClipMovementPath* Path = Table->FindMovement(Claim->Label))
+			{
+				PushedLockPath = MakeShared<FElysiumClipMovementPath>(*Path);
+			}
+			// A stated file with no row for this label is the authored absence: the clip really does
+			// author no movement, and the null path is that value rather than a miss.
+		}
+	}
+	Lock.Path = PushedLockPath;
+	Move->SetAnimMovementLock(Lock);
 }
 
 const FElysiumAnimationSelection& AElysiumMapActor::GetPlayerAnimSelection() const
@@ -1423,6 +1598,21 @@ bool AElysiumMapActor::IsPlayerOnGround() const
 	return Body != nullptr && Body->GetLocomotionSample().bOnGround;
 }
 
+FString AElysiumMapActor::GetPlayerBaseActivity() const
+{
+	// The driver's own published record, read through the same accessor Cog, the trace and the MCP
+	// surface read — so "what the player is doing" is one answer with one producer.
+	//
+	// `RequestedActivity` and not `ResolvedActivity`: the fork is a question about the LOGICAL
+	// request, and translation only changes which sequence set realizes it. Not `GraphState`
+	// either — that projection collapses eight states over the whole vocabulary, so the landing
+	// activities this fork must exclude are indistinguishable from the jump phases it must include.
+	//
+	// A driver that has never ticked publishes an empty request, which is the stated
+	// no-body answer of the seam rather than a failure: there is no body to have left the floor.
+	return GetPlayerAnimSelection().RequestedActivity;
+}
+
 float AElysiumMapActor::ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 	float TraceDepthCm) const
 {
@@ -1735,6 +1925,12 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 {
 	if (RuntimePhase != EElysiumMapRuntimePhase::Active)
 	{
+		// The lock is an INPUT the mover keeps until it is handed a new one, and the mover's own tick
+		// is not gated by this phase. Bailing without taking it back leaves a swing's window frozen
+		// at the cycle it stopped at: `SetupMove` re-samples the same interval every step and assigns
+		// one constant velocity, which is a slide rather than a lunge. Nothing else in this pass runs
+		// outside `Active`.
+		ClearPlayerAnimMovementLock(ResolvePlayerPawn());
 		return;
 	}
 

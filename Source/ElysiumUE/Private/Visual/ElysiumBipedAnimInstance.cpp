@@ -107,7 +107,8 @@ void FElysiumBipedAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& 
 // The cinematic clip path
 // ================================================================================================
 
-bool FElysiumBipedAnimProxy::PlayDirect(UAnimSequence* Sequence, bool bLoop, bool bRestart)
+bool FElysiumBipedAnimProxy::PlayDirect(UAnimSequence* Sequence, bool bLoop, bool bRestart,
+	float PlayRate)
 {
 	if (Sequence == nullptr)
 	{
@@ -122,12 +123,13 @@ bool FElysiumBipedAnimProxy::PlayDirect(UAnimSequence* Sequence, bool bLoop, boo
 		// rate 0 must not stay frozen forever because of it, though: SetPlayRate writes the node's
 		// own member, read on every UpdateAssetPlayer, so this un-freezes without the restart the
 		// early-out exists to prevent — no reinit, and the play position is preserved.
-		ClipPlayer.SetPlayRate(1.f);
+		ClipPlayer.SetPlayRate(PlayRate);
 		return false;
 	}
 	ClipPlayer.SetSequence(Sequence);
 	ClipPlayer.SetLoopAnimation(bLoop);
-	ClipPlayer.SetPlayRate(1.f);
+	// `m_flPlaybackRate`. The producer's, or the authored 1.0 nobody wrote over.
+	ClipPlayer.SetPlayRate(PlayRate);
 	ClipPlayer.SetStartPosition(0.f);
 	bClipNeedsReinit = true;   // reset the play time on the worker
 	Playing = Sequence;
@@ -714,11 +716,22 @@ bool UElysiumBipedAnimInstance::HasCompiledGraph() const
 }
 
 bool UElysiumBipedAnimInstance::PlayOneShot(const FElysiumClipIdentity& Identity,
-	UAnimSequence* Sequence, bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart)
+	UAnimSequence* Sequence, bool bLoop, float BlendInSeconds, float BlendOutSeconds, bool bRestart,
+	float PlayRate)
 {
 	if (Sequence == nullptr)
 	{
 		return false;
+	}
+	// A non-positive rate is not a slow play, it is a stopped one, and nothing in the recovered
+	// producer set can ask for it: `m_flPlaybackRate` is a product of two positive scalars. Refusing
+	// it here would silence a caller bug, so it is named and the authored speed stands.
+	if (!(PlayRate > 0.0f) || !FMath::IsFinite(PlayRate))
+	{
+		UE_LOG(LogElysiumBipedGraph, Warning,
+			TEXT("[elysium] clip '%s' was handed playback rate %.3f, which is not a speed — playing "
+				"it at the authored 1.0 instead"), *Identity.Label, PlayRate);
+		PlayRate = 1.0f;
 	}
 	// No compiled graph means no slot node to play a montage into, so the clip player answers
 	// instead. That is the body whose generated graph package is not on the mount — a named failure
@@ -729,7 +742,7 @@ bool UElysiumBipedAnimInstance::PlayOneShot(const FElysiumClipIdentity& Identity
 	// its footsteps like any other.
 	if (!HasCompiledGraph())
 	{
-		PlayClip(Identity, Sequence, bLoop, bRestart);
+		PlayClip(Identity, Sequence, bLoop, bRestart, PlayRate);
 		return true;
 	}
 	// The montage route needs no restart branch: `PlaySlotAnimationAsDynamicMontage` builds a fresh
@@ -764,8 +777,11 @@ bool UElysiumBipedAnimInstance::PlayOneShot(const FElysiumClipIdentity& Identity
 	// logging. A looping clip therefore asks for a segment long enough to outlast any lab or
 	// gameplay hold; the montage is replaced, not resumed, on every new selection.
 	constexpr int32 LoopingHoldCount = 1000000;
+	// **The producer's rate reaches the montage.** Retail has one `m_flPlaybackRate` per play, so the
+	// drawn speed, the montage position and therefore the cycle every consumer reads all scale off
+	// this one number rather than the transaction keeping a private copy of it.
 	ActiveSlotMontage = PlaySlotAnimationAsDynamicMontage(Sequence, FAnimSlotGroup::DefaultSlotName,
-		BlendIn, BlendOut, /*InPlayRate=*/1.0f, /*LoopCount=*/ bLoop ? LoopingHoldCount : 1);
+		BlendIn, BlendOut, PlayRate, /*LoopCount=*/ bLoop ? LoopingHoldCount : 1);
 	if (ActiveSlotMontage == nullptr)
 	{
 		return false;
@@ -778,7 +794,8 @@ bool UElysiumBipedAnimInstance::PlayOneShot(const FElysiumClipIdentity& Identity
 	// **The SEQUENCE's length, never the montage's.** `PlaySlotAnimationAsDynamicMontage` builds a
 	// looping clip as `LoopingHoldCount` segments and reports that as its length; dividing a position
 	// by it pins the cycle at ~0 forever, which fires the timeline's first record and nothing else.
-	ArmBasePhase(EElysiumBasePhaseSource::Montage, Identity, Sequence->GetPlayLength(), bLoop);
+	ArmBasePhase(EElysiumBasePhaseSource::Montage, Identity, Sequence->GetPlayLength(), bLoop,
+		PlayRate);
 	return true;
 }
 
@@ -914,7 +931,7 @@ void UElysiumBipedAnimInstance::StopOneShot(float BlendSeconds)
 // ================================================================================================
 
 void UElysiumBipedAnimInstance::PlayClip(const FElysiumClipIdentity& Identity,
-	UAnimSequence* Sequence, bool bLoop, bool bRestart)
+	UAnimSequence* Sequence, bool bLoop, bool bRestart, float PlayRate)
 {
 	if (Sequence == nullptr)
 	{
@@ -924,8 +941,8 @@ void UElysiumBipedAnimInstance::PlayClip(const FElysiumClipIdentity& Identity,
 	// so a reaction left active behind it would be an invisible branch pinning its own assets and
 	// counting down a phase nothing is showing. The scene replaces the graph; it takes the branch too.
 	StopReaction();
-	const bool bStarted =
-		GetProxyOnGameThread<FElysiumBipedAnimProxy>().PlayDirect(Sequence, bLoop, bRestart);
+	const bool bStarted = GetProxyOnGameThread<FElysiumBipedAnimProxy>().PlayDirect(Sequence, bLoop,
+		bRestart, PlayRate);
 	// **The arm follows the pose.** `PlayDirect` holds a repeated identical looping clip rather than
 	// resetting it, and arming a new `PlayId` over a clip that did not restart would re-fire its whole
 	// timeline against a cycle nothing moved — a footstep per re-request on a body that never took a
@@ -937,7 +954,8 @@ void UElysiumBipedAnimInstance::PlayClip(const FElysiumClipIdentity& Identity,
 	// exactly what a seek should do (`Substrate/ElysiumAnimEvents.cpp`).
 	if (bStarted)
 	{
-		ArmBasePhase(EElysiumBasePhaseSource::Clip, Identity, Sequence->GetPlayLength(), bLoop);
+		ArmBasePhase(EElysiumBasePhaseSource::Clip, Identity, Sequence->GetPlayLength(), bLoop,
+			PlayRate);
 	}
 }
 
@@ -984,7 +1002,7 @@ void UElysiumBipedAnimInstance::ResyncClip(float PositionSeconds)
 // ================================================================================================
 
 void UElysiumBipedAnimInstance::ArmBasePhase(EElysiumBasePhaseSource Source,
-	const FElysiumClipIdentity& Identity, float LengthSeconds, bool bLoop)
+	const FElysiumClipIdentity& Identity, float LengthSeconds, bool bLoop, float PlayRate)
 {
 	if (!Identity.IsValid())
 	{
@@ -999,6 +1017,7 @@ void UElysiumBipedAnimInstance::ArmBasePhase(EElysiumBasePhaseSource Source,
 	Arm = FElysiumArmedClip();
 	Arm.Identity = Identity;
 	Arm.LengthSeconds = FMath::Max(0.0f, LengthSeconds);
+	Arm.PlayRate = PlayRate;
 	Arm.bLooping = bLoop;
 	// The restart discriminator, and the only thing that can say a repeated attack is a new play:
 	// the owner, the label and the phase are all identical between two plays of one clip
@@ -1154,6 +1173,7 @@ void UElysiumBipedAnimInstance::PublishBasePhase(FElysiumBipedAnimProxy& InProxy
 	BasePhase.OwnerStem = Arm.Identity.OwnerStem;
 	BasePhase.Label = Arm.Identity.Label;
 	BasePhase.Length = Arm.LengthSeconds;
+	BasePhase.PlayRate = Arm.PlayRate;
 	BasePhase.bLooping = Arm.bLooping;
 	BasePhase.PlayId = Arm.PlayId;
 	// Where the dispatcher last left THIS arm, carried as it stood before this frame's advance. A

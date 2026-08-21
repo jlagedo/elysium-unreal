@@ -35,6 +35,7 @@
 #include "Misc/EnumClassFlags.h"
 
 #include "ElysiumAnimEvent.h"
+#include "ElysiumAnimationIntent.h"   // EElysiumAnimPriority — the band a play claims its channel at
 #include "ElysiumEntity.h"
 #include "ElysiumSwingRecord.h"
 #include "Substrate/ElysiumDamage.h"
@@ -152,6 +153,22 @@ namespace ElysiumWeapons
 	// The recovered `ACT_MELEE_ATTACK_2COMBO` chance table, indexed by the controlling base Ability
 	// rank. A rank outside 0..5 clamps to the ends, which is what the table's own bounds mean.
 	int32 ComboChancePercent(int32 BaseRank);
+
+	// The melee primary's airborne fork, as a predicate over the player's ideal activity.
+	//
+	// `CWeaponMelee::PrimaryAttack` asks one helper whether to request `ACT_MELEE_AIR_ATTACK`
+	// instead of `ACT_MELEE_ATTACK`, and that helper is a switch on the player's ideal activity —
+	// five airborne entry activities plus the air attack itself. It is NOT a ground-flag test, and
+	// the difference is observable: a body off the ground for a reason outside this set — riding a
+	// lift, mid-landing, a frame mid-teleport — takes the grounded swing.
+	//
+	// Matched by NAME. The registered activity IDs this runtime carries are the binary's own
+	// registration numbers, not the compiled enum slots the recovered switch's cases are, so a
+	// numeric join would compare two different vocabularies.
+	//
+	// An empty activity is no match, which is the grounded answer a body with no published
+	// classification gets.
+	bool IsAirborneMeleeActivity(const FString& IdealActivity);
 
 	// The player attack sequence's playback rate: `0.70 + 0.03 * evaluated attack-feat rank`. The
 	// character's base attack-rate scalar multiplies this in retail; no shipped `stats.txt` trait or
@@ -698,8 +715,24 @@ private:
 	// include DAG named, which is the other half of the key a timeline is looked up by, and
 	// `OutMaxReachCm` the acquisition distance the TRANSLATED activity asks for — the maximum over
 	// every sequence answering it, which is the query distance and not the played clip's own.
-	float ResolveAndPlay(const FString& Activity, const FElysiumWeaponMode& Mode,
-		FString& OutClipLabel, FString* OutOwnerStem = nullptr, float* OutMaxReachCm = nullptr);
+	//
+	// **`Band` is stated by the caller and has no default, because the melee and layer families do
+	// not mean the same thing by a play.** A melee swing REPLACES the base pose, so it claims the
+	// base channel above a travelling body's own locomotion publish; a ranged, dry-fire or reload
+	// activity is a layer over an untouched gait ladder, so its stand-in claim has to yield to that
+	// publish exactly as retail's untouched ladder does. One default here would silently give one of
+	// the two families the other's behaviour (`docs/vtmb/animation_and_movers.md` § "Melee replaces
+	// the base; ranged and reload only add a layer").
+	//
+	// `PlaybackRate` is `m_flPlaybackRate`, written onto the play. It defaults to 1.0 — retail's
+	// `ResetSequenceInfo` resets it before `RequestActivity` writes anything, so a family that
+	// authors no rate really does play at the authored speed. Only the melee family recovers a rate
+	// today, and the returned length is the clip's AUTHORED one either way, so a caller timing its
+	// schedule divides by the rate exactly once.
+	float ResolveAndPlay(const FString& Activity, EElysiumAnimPriority Band,
+		const FElysiumWeaponMode& Mode, FString& OutClipLabel,
+		FString* OutOwnerStem = nullptr, float* OutMaxReachCm = nullptr,
+		float PlaybackRate = 1.0f);
 
 	// Which `Operator_HandleAnimEvent` body this weapon's authored record selects.
 	ElysiumWeapons::EOperatorBody OperatorBody() const;

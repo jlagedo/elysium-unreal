@@ -1,10 +1,12 @@
 #include "ElysiumGaitSpeeds.h"
 
-#include "ElysiumMoveSolve.h"   // the constants the authority falls back to
-
 bool FElysiumGaitSpeedTable::IsValid() const
 {
-	if (Count < 2 || Count > MaxCells || !(AxisMax > AxisMin) || !FMath::IsFinite(Scale))
+	// `Scale` must be POSITIVE, not merely finite: a zero or negative multiplier makes `Peak()` zero
+	// on cells that carry real speed, which is a fan reporting itself as absent. A fan that cannot
+	// answer a speed is not a fan, and it has to say so rather than answer a wrong number.
+	if (Count < 2 || Count > MaxCells || !(AxisMax > AxisMin) || !FMath::IsFinite(Scale)
+		|| !(Scale > 0.0f))
 	{
 		return false;
 	}
@@ -125,10 +127,43 @@ float ElysiumGait::WishSpeedFrom(const FElysiumWishSpeedInput& In, const FElysiu
 		return Table.SpeedAt(In.WishYawDegrees) * In.Scale;
 	}
 
-	// The fallback for a body with no fan. The ducked third is **Source's own default, not VtMB's**: retail
-	// applies no duck speed multiplier at all and gets its slower crouch from the sneak table, which
-	// this path by definition does not have (`docs/vtmb/source_movement.md` → "The ducking speed crop
-	// is dead code").
-	const float Base = In.bWalkKey ? ElysiumMove::WalkSpeed : ElysiumMove::RunSpeed;
-	return (In.bDucked ? Base / 3.0f : Base) * In.Scale;
+	// **A gait with no fan commands zero, because that is what retail's table holds.** `PreThink`'s
+	// fill is conditional on the resolved sequence being a 9-blend grid; when it is not, the slot is
+	// never written and the client keeps reading whatever was already in it. `Spawn` is the only site
+	// that clears the six tables, so on a body that never had that fan the held value IS zero — and
+	// there is no constant, no per-gait substitute and no `speed_runbase` anywhere on that path
+	// (`docs/vtmb/source_movement.md` → "Fallbacks").
+	//
+	// Retail's other reachable state is a mid-game model swap: the tables are never cleared between
+	// bodies, so a stale real fan outlives the body that authored it. This set is re-resolved whole
+	// per body, so it cannot carry that one — what it reproduces is the fresh-body state, which is
+	// the honest half of the pair.
+	return 0.0f;
+}
+
+float ElysiumGait::MaxSpeedFrom(const FElysiumWishSpeedInput& In, const FElysiumGaitSpeeds& Speeds)
+{
+	if (In.bNoclip)
+	{
+		return In.NoclipSpeed;
+	}
+	// The jump-phase ceiling. `PreThink` writes `sv_jump_maxspeed` into `m_flMaxspeed` for the whole
+	// of a jump instead of refilling it from the tables, so an air attack is bounded by 350 u/s
+	// rather than by the run peak.
+	if (!In.bOnGround)
+	{
+		return In.JumpMaxSpeed;
+	}
+	if (Speeds.IsValid())
+	{
+		return Speeds.Peak();
+	}
+	// A body with no fan at all has no ceiling either, and zero is the value rather than the absence
+	// of one. `m_flMaxspeed` is written the same conditional way the cells are — `if (peak > 0.0f)`,
+	// else it holds — and `Spawn` zeroes it alongside the six tables, so a body whose every gait
+	// resolved nothing carries the zero it spawned with. It is consistent with the cells rather than
+	// a separate rule: nothing can command a speed here, so nothing needs bounding, and the one
+	// caller that reads it (`SetupMove`'s `CheckParameters` clamp) erases a substituted lunge exactly
+	// as retail's zero-seeded `mv->m_flMaxSpeed` does.
+	return 0.0f;
 }

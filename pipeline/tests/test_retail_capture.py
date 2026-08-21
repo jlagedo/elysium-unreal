@@ -8711,6 +8711,68 @@ class BlendGridTests(unittest.TestCase):
         )
         self.assertNotIn("motion", blends["walk"]["cells"][0])
 
+    def test_a_single_cell_sequence_carries_its_movement_records(self) -> None:
+        """The melee case: every attack is one cell, and the lunge is only in this array."""
+        from elysium_pipeline.formats import mdl_skel
+
+        records = (
+            (2, 0x1040, 2.0, 4.0, 0.0, 1.0, 0.0, 0.0, 3.0, 0.0, 0.0),
+            (4, 0x1040, 6.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        )
+        # No grid at all, so all four sequences are the single cell a blend-cell walk never
+        # reaches; `aim` alone selects the animation carrying the records.
+        image = self._with_movements(
+            self._image({}, base_cells=(0, 4, 0, 0)), 4, records)
+        sequences = self._sequences(image)
+        self.assertEqual(len(sequences["aim"].grid.cells), 1)
+        self.assertEqual(len(sequences["aim"].movement), 2)
+        self.assertEqual(sequences["aim"].movement[0].endframe, 2)
+        # Asked and empty is the other answer, and it is not the same as never asked.
+        self.assertEqual(sequences["idle"].movement, ())
+
+        extra, blends = mdl_skel.blend_clip_plan(image, list(sequences.values()))
+        self.assertEqual((extra, blends), ([], {}))
+        sidecar = mdl_skel.blend_sidecar(image, blends, list(sequences.values()))
+        self.assertEqual(sidecar["movement_fields"],
+                         ["end_frame", "flags", "v0_cm", "v1_cm", "yaw_deg",
+                          "dir_x", "dir_y", "dir_z", "pos_x_cm", "pos_y_cm", "pos_z_cm"])
+        self.assertEqual(sorted(sidecar["movement"]), ["aim"])
+        # The path is piecewise and the cumulative position returns to zero: a scalar summary
+        # would call this "no movement" while the file states a real displacement out and back.
+        self.assertEqual(sidecar["movement"]["aim"],
+                         [[2, 0x1040, 5.08, 10.16, 0.0, 1.0, 0.0, 0.0, 7.62, 0.0, 0.0],
+                          [4, 0x1040, 15.24, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        self.assertIsNone(mdl_skel.movement_summary(
+            image, sequences["aim"].base, sequences["aim"].frames, sequences["aim"].fps))
+
+    def test_movement_rows_are_stated_unreal_native(self) -> None:
+        """The sidecar states the path in centimetres on Unreal axes, converted exactly once."""
+        from elysium_pipeline.formats import mdl_skel
+
+        # A record with a real Y and Z: 8,169 of the 13,505 shipped records state a non-zero Y,
+        # so the reflection is observable rather than a formality.
+        records = ((3, 0x11C0, 4.0, 6.0, 90.0, 0.0, -1.0, 0.0, 0.0, -10.0, 2.0),)
+        image = self._with_movements(
+            self._image({}, base_cells=(0, 4, 0, 0)), 4, records)
+        sequences = self._sequences(image)
+        row, = mdl_skel.blend_sidecar(image, {}, list(sequences.values()))["movement"]["aim"]
+        self.assertEqual(row, [3, 0x11C0, 10.16, 15.24, -90.0, 0.0, 1.0, 0.0, 0.0, 25.4, 5.08])
+        # The reflection turns a zero component into `-0.0`; an axis-aligned path reads as one.
+        self.assertFalse(any(math.copysign(1.0, value) < 0.0 for value in row if value == 0.0))
+
+    def test_a_model_whose_sequences_state_no_movement_says_so(self) -> None:
+        """Asked-and-empty ships the column list and no rows, which is not silence."""
+        from elysium_pipeline.formats import mdl_skel
+
+        image = self._image({})
+        sequences = list(self._sequences(image).values())
+        self.assertTrue(all(clip.movement == () for clip in sequences))
+        table = mdl_skel.movement_table(sequences)
+        self.assertIn("movement_fields", table)
+        self.assertNotIn("movement", table)
+        # Nothing else is authored either, so there is no sidecar to carry the column list.
+        self.assertEqual(mdl_skel.blend_sidecar(image, {}, sequences), {})
+
     def test_a_nine_by_one_grid_reads_its_extents_binding_and_every_cell(self) -> None:
         """The shape the theatre corpus fires throughout, read end to end."""
         sequences = self._sequences(self._image({0: NINE_BY_ONE}))
