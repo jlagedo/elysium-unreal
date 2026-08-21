@@ -365,7 +365,8 @@ def _apply_names(connection: sqlite3.Connection, write: bool = True,
     wrong and the overlay cannot tell which, so silently preferring either would launder a
     disagreement into a fact.
     """
-    tally = {"applied": 0, "agreed": 0, "conflict": 0, "absent": 0, "reverted": 0}
+    tally = {"applied": 0, "agreed": 0, "conflict": 0, "collision": 0, "absent": 0,
+             "reverted": 0}
     # A name deleted from the overlay has to come back off the function, or the file stops being
     # the record of what the corpus states. `name_dump` is what the dump called it.
     for module, addr, dumped in connection.execute(
@@ -405,6 +406,21 @@ def _apply_names(connection: sqlite3.Connection, write: bool = True,
                 print(f"names overlay: {module} {addr} is {current} in the dump and {name} in "
                       f"the overlay -- left as the dump has it ({evidence})")
             continue
+        # A name already carried by a DIFFERENT body in the same module is refused. Three
+        # functions answering `CVDmg_t::Apply` is a worse answer than one FUN_ -- and this is
+        # the shape the same-address conflict test cannot see, because the disagreement is
+        # between two addresses rather than about one. A thunk sharing its target's name is not
+        # a collision; it is what a thunk is.
+        taken = connection.execute(
+            "SELECT addr FROM functions WHERE module = ? AND ns = ? AND name = ? "
+            "AND lower(addr) != ? AND thunk = 0", (module, namespace, bare, addr)).fetchall()
+        if taken:
+            tally["collision"] += 1
+            if verbose:
+                print(f"names overlay: {module} {addr} would be a second {name}, which "
+                      f"{', '.join(one['addr'] for one in taken[:3])} already carries "
+                      f"-- not applied ({evidence})")
+            continue
         dumped = row["name_dump"] or (f"{row['ns']}::{row['name']}"
                                       if row["ns"] not in ("", "Global") else row["name"])
         if write:
@@ -415,6 +431,19 @@ def _apply_names(connection: sqlite3.Connection, write: bool = True,
         tally["applied"] += 1
     if write:
         connection.commit()
+
+    # The per-row guard only sees rows it is applying. A duplicate created before the guard
+    # existed, or by a dump that later recovered the same name elsewhere, would otherwise stay
+    # invisible -- so the whole overlay is checked against the corpus each time.
+    for row in connection.execute(
+            """SELECT f.module, f.ns, f.name, count(*) AS holders FROM functions f
+               WHERE f.thunk = 0 AND EXISTS (SELECT 1 FROM functions o WHERE o.module = f.module
+                     AND o.ns = f.ns AND o.name = f.name AND o.name_src != '')
+               GROUP BY f.module, f.ns, f.name HAVING holders > 1"""):
+        tally["collision"] += 1
+        if verbose:
+            owner = f"{row['ns']}::{row['name']}" if row["ns"] not in ("", "Global")                 else row["name"]
+            print(f"names overlay: {row['module']} has {row['holders']} bodies named {owner}")
     return tally
 
 
@@ -425,6 +454,7 @@ def _apply_overlay(connection: sqlite3.Connection) -> None:
     if loaded or tally["reverted"]:
         print(f"names overlay: {loaded} row(s), {tally['applied']} applied, "
               f"{tally['agreed']} already agree, {tally['conflict']} conflict with the dump, "
+              f"{tally['collision']} collide with a name already in use, "
               f"{tally['absent']} name no function entry point, {tally['reverted']} reverted")
 
 
@@ -1974,6 +2004,7 @@ def command_names(apply: bool) -> int:
     tally = _apply_names(connection, write=apply)
     print(f"{'applied' if apply else 'would apply'} {tally['applied']}, "
           f"{tally['agreed']} already agree, {tally['conflict']} conflict with the dump, "
+          f"{tally['collision']} collide with a name already in use, "
           f"{tally['absent']} name no function entry point, {tally['reverted']} reverted")
     if not apply:
         print("nothing was written; pass --apply")
