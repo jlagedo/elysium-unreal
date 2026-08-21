@@ -15,8 +15,9 @@ struct FElysiumCompositionRig;
 namespace ElysiumHairDynamics
 {
 	// AnimDynamics solves chain links iteratively, so a violent input can leave one frame with
-	// unconverged body positions. Keep its rotations, but rebuild the target transforms with the
-	// incoming pose's parent-relative translations and scales before the ordinary alpha blend.
+	// unconverged body positions, while its cone constrains the bone axis but leaves axial roll
+	// free. Keep the simulated swing, inherit roll from the incoming pose, and rebuild the target
+	// transforms with authored parent-relative translations and scales before the alpha blend.
 	void PreserveChainLocalTransforms(FComponentSpacePoseContext& Output,
 		TArray<FBoneTransform>& Transforms);
 }

@@ -38,6 +38,33 @@ research/tooling/ghidra/driver/run.ps1 -Program vampire.dll -Script DumpFuncs `
 uv run elysium research parse_datamap_builder …/bcc_builder.txt --recs 10616694 --count 305
 ```
 
+### The **Args** column is stated by the image, not inferred
+
+Every bound method begins by calling `PyArg_ParseTuple(args, "<format>", …)`, and that format
+string **is** the Python-level argument list. It was unreadable for a long time for a mechanical
+reason: Ghidra imports a DLL's functions with no signature, so the second parameter was untyped
+and the operand stayed `&DAT_10590cb8`; and every one of these formats is shorter than the string
+analyzer's five-character minimum, so nothing ever made them strings either.
+
+Applying CPython **2.1.2**'s own declared prototypes to the imports fixes both — `PyArg_ParseTuple`
+declares `(PyObject *, char *, ...)`, and with the parameter typed the operands resolve:
+
+```
+uv run elysium research pyapi                          # prototypes out of Include/*.h
+uv run elysium research corpus pyapi --apply           # apply them, and make the formats strings
+```
+
+Two consequences worth knowing when reading a body:
+
+- **A second `PyArg_ParseTuple` after a `PyErr_Clear()` is an optional-argument form**, not a
+  retry. `StartBarter` tries `"Oiii"` and falls back to `"Oii"`; `SetExpression` tries
+  `"Osfffff"` then `"Os"`. The longer format is the full arity and the shorter one is what a
+  script may omit.
+- **A format is not a doc string, and it wins.** Six `ml_doc` values in these tables are
+  copy-paste errors from a neighbouring method (listed below), and an argument list read from
+  the prose inherits the error. `SetExpression` carries `React`'s doc; its format says
+  `(char, str, …)` where `React`'s says `(char, obj, int, …)`.
+
 ### Reading a datamap takes both techniques
 
 `DumpDatamap` reads the image; `parse_datamap_builder.py` replays the builder. Neither alone is
@@ -126,19 +153,24 @@ only from `unhidePlus()` for clans 9–11; the reader of `vchar_skip_intro` rema
 
 Doc strings are verbatim from `ml_doc`; they are the contract the scripts rely on.
 
-| Name | Body | Calls | Contract |
-|---|---|---|---|
-| `FindEntityByName` | `10196970` | **1,911** | *"Find a single entity by its targetname field. Returns None if not found. It is an error if multiple entities have the same name."* |
-| `FindPlayer` | `10196940` | 531 | *"Find the first player entity, or NULL if there is not one spawned"* |
-| `OneOfSet` | `10196c50` | 589 | **no doc string** — the only global without one. Solved below. |
-| `ScheduleTask` | `10196ea0` | 245 | *"Sets up a task callback."* |
-| `FindEntitiesByName` | `10196d10` | 163 | *"Returns a list of entities matching the name."* |
-| `ChangeMap` | `10196a40` | 76 | *"Changes to the map and sets the player at the specified landmark"* |
-| `FindEntitiesByClass` | `10196de0` | 70 | *"Returns a list of entities matching the class."* |
-| `CreateEntityNoSpawn` | `10197050` | 64 | *"Creates an entity, but does not call it's spawn function"* |
-| `CallEntitySpawn` | `101970f0` | 64 | *"Dispatches the entitie's spawn function"* |
-| `IsPCMalk` | `10196bb0` | — | *"Returns 1 if the player is Malkavian, otherwise returns 0."* |
-| `SquadSeesPlayer` | `10196f30` | 0 | *"Returns 1 if NPCs in the squad can see the player."* |
+| Name | Body | Args | Calls | Contract |
+|---|---|---|---|---|
+| `FindEntityByName` | `10196970` | `"s"` | **1,911** | *"Find a single entity by its targetname field. Returns None if not found. It is an error if multiple entities have the same name."* |
+| `FindPlayer` | `10196940` | none | 531 | *"Find the first player entity, or NULL if there is not one spawned"* |
+| `OneOfSet` | `10196c50` | `"ii"` | 589 | **no doc string** — the only global without one. Solved below. |
+| `ScheduleTask` | `10196ea0` | `"fs"` | 245 | *"Sets up a task callback."* |
+| `FindEntitiesByName` | `10196d10` | `"s"` | 163 | *"Returns a list of entities matching the name."* |
+| `ChangeMap` | `10196a40` | `"fss"` | 76 | *"Changes to the map and sets the player at the specified landmark"* |
+| `FindEntitiesByClass` | `10196de0` | `"s"` | 70 | *"Returns a list of entities matching the class."* |
+| `CreateEntityNoSpawn` | `10197050` | `"sOO"` | 64 | *"Creates an entity, but does not call it's spawn function"* |
+| `CallEntitySpawn` | `101970f0` | `"O"` | 64 | *"Dispatches the entitie's spawn function"* |
+| `IsPCMalk` | `10196bb0` | none | — | *"Returns 1 if the player is Malkavian, otherwise returns 0."* |
+| `SquadSeesPlayer` | `10196f30` | `"s"` | 0 | *"Returns 1 if NPCs in the squad can see the player."* |
+
+`Args` is the `PyArg_ParseTuple` format each body states; **none** means the body never parses,
+which is how a no-argument global says so. Note `ChangeMap` takes a **float first**
+(`"fss"` — a delay, then map and landmark), and `ScheduleTask` likewise (`"fs"` — delay, then
+the callback name).
 
 All eleven are `METH_VARARGS`. `IsPCMalk` compares the player's clan against a lazily-initialized
 `"Player_Malkavian"` lookup and returns `None` — not `0` — when no player is spawned.
@@ -200,22 +232,22 @@ in CurrentMoney"`), rather than returning a falsy value.
 | `RemoveItem` | `10199240` | `(char, item:str)` | 182 | real (stack decrement / final-entity destroy / keyring) |
 | `GiveItem` | `10199100` | `(char, item:str)` | 126 | real (player-only grant; a failed grant logs) |
 | `SetCamera` | `10198070` | `(char, shotfile:str)` | 115 | real (the 11.7 shot channel) |
-| `StartBarter` | `101993c0` | `(char, arg0:int, arg1:int)` | 108 | stub |
-| `CurrentMoney` | `101998c0` | `(char)` | 86 | real (the `money` field) |
-| `SeductiveFeed` | `10198150` | `(char)` | 54 | stub |
+| `StartBarter` | `101993c0` | `(char, int, int[, int])` — `"Oiii"`, else `"Oii"` | 108 | stub |
+| `CurrentMoney` | `101998c0` | `(char)` — `"O"` | 86 | real (the `money` field) |
+| `SeductiveFeed` | `10198150` | `(char, obj)` — `"OO"` | 54 | stub |
 | `CalcFeat` | `10198cc0` | `(char, feat:str)` | 53 | real (the feat rating over the sheet) |
 | `HasWeaponEquipped` | `101984c0` | `(char, item:str)` | 27 | real (exact compare vs the active weapon) |
 | `AmmoCount` | `101989b0` | `(char, item:str)` | 19 | real (stack count / loaded magazine) |
 | `GiveAmmo` | `10198b30` | `(char, item:str, count:int)` | 19 | real (stack add / reserve pool) |
 | `BumpStat` | `10199a70` | `(char, stat:str, times:int)` | 19 | real (dots onto the base) |
-| `WorldMap` | `10199520` | `(char)` | 12 | stub |
-| `IsFollowerOf` | `101988c0` | `(char, …)` | 8 | stub |
-| `SewerMap` | `10199690` | `(char)` | 4 | stub |
+| `WorldMap` | `10199520` | `(char, int)` — `"Oi"` | 12 | stub |
+| `IsFollowerOf` | `101988c0` | `(char, obj)` — `"OO"` | 8 | stub |
+| `SewerMap` | `10199690` | `(char, int)` — `"Oi"` | 4 | stub |
 | `SetGesture` | `10197f60` | `(char, sequence:str)` | 2 | real exact-label lookup; a miss is a silent no-op |
 | `GetMasqueradeLevel` | `10199ce0` | `(char)` | 2 | real (the masquerade counter) |
-| `DialogDiscipline` | `10198310` | `(char, …)` | — | the rating, no blood spent (the power is P13) |
-| `SetExpression` | `10197ce0` | `(char, modifier:int, expr:str)` | — | stub |
-| `React` | `10197b00` | `(char, modifier:int, expr:str)` | 0 | stub |
+| `DialogDiscipline` | `10198310` | `(char, obj, str)` — `"OOs"` | — | the rating, no blood spent (the power is P13) |
+| `SetExpression` | `10197ce0` | `(char, expr:str[, f, f, f, f, f])` — `"Osfffff"`, else `"Os"` | — | stub |
+| `React` | `10197b00` | `(char, obj, int[, str])` — `"OOis"`, else `"OOi"` | 0 | stub |
 
 The retail item ownership, keyring, stack, active-weapon, ammo, container and barter behavior
 behind these signatures is recovered in `docs/vtmb/inventory.md`. The **Backing today** column

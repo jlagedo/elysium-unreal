@@ -37,6 +37,9 @@ section E), the script API surface, and the choreographed scenes.
 | `SplitFuncs.java` | ✅ | splits a function whose body swallowed its neighbours, on CALL-target and post-padding evidence only |
 | `RecoverJumpTables.java` | ✅ | reads a switch's jump table out of the image when the decompiler abandoned it |
 | `RecoverSignatures.java` | ✅ | recovers each function's parameter count from `RET <imm16>` or the caller's `ADD ESP,<n>` |
+| `RecoverThisCall.java` | ✅ | gives a C++ method `__thiscall`, so `this` stops decompiling as `in_ECX` and its virtual dispatches name a class |
+| `DumpExternals.java` | ✅ | every function a module imports from another DLL, by the `EXTERNAL:` address its call edges carry |
+| `ApplyPythonApi.java` | ✅ | applies CPython 2.1.2's own declared prototypes to the Python imports, and makes the format strings those calls pass into strings |
 | `BuildCrtFid.java` | ✅ | populates a FID database from imported library objects (headless "Populate FidDb") |
 | `AttachFid.java` | ✅ | registers a FID database so the Function ID analyzer queries it; used as a pre-script |
 | `ApplyFid.java`  | ✅ | names a program's CRT functions from the database, for programs analyzed before it existed |
@@ -44,8 +47,9 @@ section E), the script API surface, and the choreographed scenes.
 | `crt_fid.py`     | ✅ | builds the VC6 SP5 CRT database and applies it: `stage`, `build`, `apply` |
 | `symbol_sweep.py` | ✅ | drives `NameFromStrings`: `survey`, `apply`, `clear` |
 | `datamap_types.py` | ✅ | drives `ApplyDatamapTypes`: `report`, `apply` |
-| `corpus.py`      | ✅ | drives `DumpCorpus`, `DumpVtables` and `DumpListing`, loads SQLite, and answers every corpus query |
-| `repair.py`      | ✅ | drives the three repair passes: `boundaries`, `jumptables`, `signatures`, each `report` then `apply` |
+| `corpus.py`      | ✅ | drives `DumpCorpus`, `DumpVtables`, `DumpExternals`, `DumpListing` and `ApplyPythonApi`, loads SQLite, and answers every corpus query |
+| `repair.py`      | ✅ | drives the repair passes: `boundaries`, `jumptables`, `thiscall`, `signatures`, each `report` then `apply` |
+| `pyapi.py`       | ✅ | extracts the CPython 2.1.2 C API from `Include/*.h` into the prototype file `ApplyPythonApi` applies |
 | `corpus_mcp.py`  | ✅ | the same queries as MCP tools (`vtmb_*`), registered in `.mcp.json` as `vtmb-corpus` |
 | `run.ps1`        | ✅ | headless runner (import + post-script) |
 | `crt/`, `crtfid/`, `fid/` | ❌ gitignored | the staged Microsoft archives, their import projects, and the built `.fidb` |
@@ -317,8 +321,11 @@ uv run elysium research datamap_types apply vampire.dll client.dll engine.dll
 uv run elysium research corpus vtables --name --create            # cheap; names slots, and
                                                                   # makes functions MakeFuncs
                                                                   # structurally cannot seed
+uv run elysium research pyapi                                     # CPython 2.1.2 prototypes
+uv run elysium research corpus pyapi --apply                      # the modules that embed it
 
 # take the photograph
+uv run elysium research corpus externals                          # cheap; the imported names
 uv run elysium research corpus dump                               # the slow step
 uv run elysium research corpus listing                            # the slow step, again
 uv run elysium research corpus build
@@ -327,6 +334,10 @@ uv run elysium research corpus readers 0x1564 --class CBasePlayer
 uv run elysium research corpus callers 10161200
 uv run elysium research corpus closure CBasePlayer --out <path>
 ```
+
+`corpus reindex` rebuilds everything derived from rows already loaded — the search index and the
+virtual half of the call graph — without re-reading a dump, which is how a change to *those rules*
+costs seconds instead of an overnight run.
 
 `corpus` also answers `func`, `code`, `asm`, `callers`, `callees`, `vtable`, `slot`, `grep`,
 `str`, `globals`, `fields`, `twin`, `outliers`, `suggest` and `stat`; `corpus_mcp.py` exposes the
@@ -446,15 +457,81 @@ Measured on `vampire.dll`:
 | `signatures` | **2,201** functions corrected; `CBaseCombatCharacter::MeleeSwingStep` goes from **114 invented parameters to 4** | the large one. 7,024 functions state their argument bytes in their own `RET <imm16>`, which is exact, not inferred |
 | `boundaries` | **0 of 16** oversized functions split | the outliers are *real*: `datamap_*_builder` static-init, and `FUN_104126e0` — 68 KB that turns out to be VtMB's complete `ACT_*` activity registry, every activity name paired with its ID |
 | `jumptables` | **6** tables read from the image | small. 265 of the 605 computed jumps state no base at all — they are register-indirect tail calls, not switches, and are left alone |
+| `thiscall` | **699** methods in `vampire.dll`, **1,379** in `engine.dll` | `engine.dll` had **2** before, so nearly every method there was decompiling its receiver as `in_ECX` |
 
-The order matters: boundaries first because every later pass reads function bodies, signatures
-last because a split function needs one too. `repair all` runs them in that order.
+The order matters: boundaries first because every later pass reads function bodies; `thiscall`
+before `signatures`, because the convention decides whether the receiver is a stack parameter at
+all and the count is read against it; signatures last because a split function needs one too.
+`repair all` runs them in that order.
+
+**`thiscall` demands two independent facts and refuses on one.** A function gets `__thiscall`
+only when it is a method — in a class namespace, or held by some class vftable — *and* it reads
+ECX before writing it. The second is the same fact the decompiler reports when it invents
+`in_ECX`. Either alone is not evidence: a method that never touches ECX in the window may take
+no receiver on that path, and a non-method that reads ECX first is reading whatever its caller
+left there. A wrong convention shifts every parameter, which is worse than no convention.
 
 **A pass that finds no evidence changes nothing and says so.** `SplitFuncs` will not invent a
 boundary, `RecoverJumpTables` will not invent a table, and `RecoverSignatures` leaves a function
 alone when neither the `RET` nor the call sites state an argument count — 15,568 of them in
 `vampire.dll`. An unknown prototype is better than a fabricated one, which is the whole point of
 the signature pass.
+
+### `grep`'s index has to agree with `grep` about what a match is
+
+`grep` searches for **substrings**, so `/Melee/` must find `CBaseCombatCharacter::MeleeSwingUpdate`.
+An FTS5 index built with a word tokenizer does not: it holds that identifier as one token, and
+`MATCH "Melee"` returns nothing for it. The prefilter then narrows the scan to a set that does
+not contain the hits, and `grep` reports a number that is simply wrong — silently, and with the
+confident shape of an answer:
+
+| pattern | with a word tokenizer | truth |
+|---|---:|---:|
+| `/Melee/` | 152 | **1,258** |
+| `/Disciplin/` | 6 | **451** |
+| `/NextAttack/` | 0 | **52** |
+| `/haracter/` | 0 | **1,634** |
+
+`code_fts` is therefore built `tokenize='trigram'`, which indexes every 3-character window and
+*is* substring semantics, case-insensitively — the same as `grep`'s own `re.IGNORECASE`. It costs
+roughly 3.5× the code size on disk (the corpus goes 173 → 275 MiB) and that is the price of an
+answer that is not silently short.
+
+Two rules follow, and both are in `_prefilter`: the index is only consulted for a pattern with
+**no metacharacter at all** (a literal lifted out of an alternation is not required to appear in
+a match), and only for a literal of **three characters or more** (a trigram index cannot answer a
+query shorter than one trigram, and returns nothing rather than everything). `command_grep` also
+reads `code_fts`'s stored definition before trusting it, because a corpus built by the old
+tokenizer still answers `MATCH` — just wrongly.
+
+### A search term is not a LIKE pattern
+
+`corpus func %` used to answer with twenty arbitrary functions, because the reference was
+interpolated straight into `'%' || ? || '%'` and `%` is the wildcard. `_contains()` escapes `%`,
+`_` and `\`, and every caller pairs it with `ESCAPE '\'`. The same shape was in `str` and
+`globals`.
+
+### An imported function is a call edge that joins to nothing
+
+Ghidra files a call into another DLL under a synthetic `EXTERNAL:0000001f` address, and no other
+table in the corpus holds a row there — so `callees`' join dropped **7,131** edges across the
+eight modules, every call into the CRT, Win32, `TIER0`, or `VAMPIRE_PYTHON21`. `DumpExternals`
+reads the external function list alone (seconds, no decompilation) and `callees` names them in
+their own section. Before it, `PyServerSystem::vfunc0` read as "3 callees, one of them `_strstr`";
+after, it reads as `Py_InitModule4`, `PyCFunction_New`, `PyClass_New`, `PyModule_AddObject` — the
+Python bridge's module registration.
+
+### The embedded interpreter is CPython 2.1.2, and the source is an exact oracle
+
+`vampire_python21.dll` states `2.1.2` in its own data, so one released source tree accounts for
+it. `ApplyPythonApi` applies that tree's declared prototypes to the imports, which is what makes
+`PyArg_ParseTuple`'s format string readable — and the format string is the argument list of a
+script-API function. Facts belong in `docs/vtmb/python_bridge.md` and `docs/vtmb/script_api.md`;
+the mechanism is that a `char *` parameter plus a string shorter than the analyzer's five-character
+minimum is invisible until *both* are fixed, which is why `ApplyPythonApi` does the two together.
+
+Unpack the tree under `$ELYSIUM_WORK_ROOT/research/reference-source/Python-2.1.2/`. It is
+third-party reference source and is never committed.
 
 ### Names come from the strings the compiler left
 

@@ -1175,10 +1175,12 @@ tail after axis interpolation and before skinning, the same ordering Epic docume
    motion Epic warns about;
 4. constraints use the authored maximum as a cone limit, the reference segment to size each narrow
    body, locked linear motion, an X-axis angular target, 8 pre-update and 2 post-update iterations,
-   no wind, and LOD threshold 2. The 4:1 iteration ratio follows Epic's solver guidance. The native
-   tail accepts AnimDynamics' simulated rotations but rebuilds every chain target with the incoming
-   pose's parent-relative translation and scale before alpha blending, so an unconverged solver
-   frame cannot lengthen a hair segment;
+   no wind, and LOD threshold 2. The 4:1 iteration ratio follows Epic's solver guidance. A cone
+   limits swing but leaves roll around its own axis free, so the native tail keeps the simulated
+   bone direction while inheriting axial roll from the incoming pose. It also rebuilds every chain
+   target with the incoming pose's parent-relative translation and scale before alpha blending, so
+   neither free twist nor an unconverged solver frame can produce propeller motion or lengthen a
+   hair segment;
 5. a validated recipe runs unconditionally when either scoped body poses. There is no feature flag
    or A/B toggle. A stable proxy-owned custom node participates in Unreal's dynamics-reset registry
    and forwards component teleports and explicit `ResetDynamics` requests to the current manually
@@ -1186,13 +1188,14 @@ tail after axis interpolation and before skinning, the same ordering Epic docume
    constraints rather than actual collision geometry, so head/shoulder intersection remains a
    known proof limitation.
 
-The numeric mapping is deliberately provisional: native gravity scale starts at the authored
-magnitude, native damping at the authored value (clamped to AnimDynamics' effective 0.7–1 range),
-native spring at `4 × 10^(-exponent)`, and the cone at the authored maximum. Those are calibration
-hypotheses, not an equivalence statement. The parked calibration slice (LIFE9) decides with a
-controlled retail series whether the result is useful as remastered presentation and supplies
-fitted settings; it cannot promote AnimDynamics into a faithful solver without the
-game-independent retail replay.
+The baked recipe retains authored gravity, damping, spring exponent and maximum angle. The current
+hair-chain runtime deliberately replaces those values with a diagnostic lock: zero gravity, a
+zero-degree cone, full linear and angular damping, a `1000` angular spring, and no component-space
+linear or angular motion injection. Single-body dynamics keep their authored mapping. **This is an
+owner-directed diagnostic presentation divergence, not final tuning or an equivalence statement.**
+Its live acceptance has one purpose: prove whether this AnimDynamics stage owns the visible wild
+motion before calibration resumes. The parked calibration slice (LIFE9) supplies fitted settings;
+it cannot promote AnimDynamics into a faithful solver without the game-independent retail replay.
 
 **The persistent partial-update behaviour is a divergence.** Retail refreshes only the bones a mask
 selects, so bones legitimately carry matrices composed against older roots; those mask bits are

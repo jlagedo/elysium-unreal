@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 """The repair passes: fix what the analyzer got wrong before the corpus photographs it.
 
-Three defects that the corpus measured in itself, each with its own headless script:
+Four defects that the corpus measured in itself, each with its own headless script:
 
     boundaries   a function whose body swallowed its neighbours -- vampire.dll's worst runs
                  68,194 bytes against a p99.9 of 3,096, and nothing inside it has a name or a
                  caller of its own                             (``SplitFuncs``)
     jumptables   a switch the decompiler could not follow, so its C has the WRONG control flow:
                  the switch reads as a call and cases vanish   (``RecoverJumpTables``)
+    thiscall     a C++ method Ghidra never gave __thiscall, so `this` decompiles as `in_ECX`
+                 and a virtual dispatch through it names no class -- 2,491 unresolved call
+                 sites in vampire.dll                          (``RecoverThisCall``)
     signatures   a prototype the decompiler had to invent, which is where
                  ``CBaseCombatCharacter::MeleeSwingUpdate``'s 93 parameters come from
                                                                (``RecoverSignatures``)
@@ -17,7 +20,7 @@ Every phase reports before it writes:
     uv run elysium research repair boundaries report vampire.dll
     uv run elysium research repair boundaries apply vampire.dll
 
-``all`` runs the three in the order that matters -- boundaries first, because every later pass
+``all`` runs them in the order that matters -- boundaries first, because every later pass
 reads function bodies, and signatures last, because a split function needs one too.
 
 These passes MUTATE the shared Ghidra project, so they must land before ``corpus dump``: the
@@ -55,9 +58,12 @@ LOCK_DELAY_SECONDS = 9.0
 PASSES = {
     "boundaries": "SplitFuncs",
     "jumptables": "RecoverJumpTables",
+    "thiscall": "RecoverThisCall",
     "signatures": "RecoverSignatures",
 }
-ORDER = ("boundaries", "jumptables", "signatures")
+# `thiscall` precedes `signatures` because the convention decides whether the receiver is a
+# parameter at all, and the parameter count is read against it.
+ORDER = ("boundaries", "jumptables", "thiscall", "signatures")
 
 
 def _runner() -> Path:

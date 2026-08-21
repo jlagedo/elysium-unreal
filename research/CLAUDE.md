@@ -16,8 +16,12 @@ copied from the game or a decompiler.
   game logic through vtables, so for most class methods the direct section is empty and an
   unlabelled "none" would be a wrong answer rather than a missing one.
 - `tooling/ghidra/driver/repair.py` fixes what Ghidra's analyzer got wrong — function
-  boundaries, abandoned jump tables, invented parameter lists — and must run **before** a corpus
-  dump, which photographs the project as it stands.
+  boundaries, abandoned jump tables, missing `__thiscall`, invented parameter lists — and must
+  run **before** a corpus dump, which photographs the project as it stands.
+- `tooling/ghidra/driver/pyapi.py` extracts the CPython 2.1.2 C API from the released source
+  tree, and `corpus pyapi` applies it to the modules that embed the interpreter. The tree is
+  third-party reference source: it lives under `ELYSIUM_WORK_ROOT/research/reference-source/`
+  and is never committed.
 - `tooling/capture/` contains live hook/injector source and capture analysis.
 - `tooling/probes/` contains focused surveys and static probes.
 - `cases/` contains hash-pinned specifications grouped by topic.

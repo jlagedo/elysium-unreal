@@ -90,6 +90,7 @@ bool FElysiumHairDynamicsSegmentLengthTest::RunTest(const FString& Parameters)
 		Output.Pose.InitPose(LocalPose);
 
 		TArray<FBoneTransform> Simulated;
+		TArray<FQuat> ExpectedSwingOnlyRotations;
 		for (int32 Index = FirstBone; Index < SourceLocals.Num(); ++Index)
 		{
 			const FVector Axis = FVector(1.0f, static_cast<float>(Index), 0.5f).GetSafeNormal();
@@ -98,9 +99,20 @@ bool FElysiumHairDynamicsSegmentLengthTest::RunTest(const FString& Parameters)
 				FVector(1000.0f * Index, -750.0f * Index, 500.0f * Index),
 				FVector(4.0f, 3.0f, 2.0f));
 			Simulated.Add(FBoneTransform(FCompactPoseBoneIndex(Index), Unconverged));
+			const FTransform SourceComponent =
+				Output.Pose.GetComponentSpaceTransform(FCompactPoseBoneIndex(Index));
+			ExpectedSwingOnlyRotations.Add((FQuat::FindBetweenNormals(
+				SourceComponent.GetRotation().GetAxisX(), Unconverged.GetRotation().GetAxisX())
+				* SourceComponent.GetRotation()).GetNormalized());
 		}
 
 		ElysiumHairDynamics::PreserveChainLocalTransforms(Output, Simulated);
+		for (int32 ResultIndex = 0; ResultIndex < Simulated.Num(); ++ResultIndex)
+		{
+			TestTrue(*FString::Printf(TEXT("bone %d removes free axial roll"),
+				FirstBone + ResultIndex), Simulated[ResultIndex].Transform.GetRotation().Equals(
+					ExpectedSwingOnlyRotations[ResultIndex], 0.001));
+		}
 		Output.Pose.LocalBlendCSBoneTransforms(Simulated, Alpha);
 
 		bool bRotationChanged = false;
@@ -123,6 +135,48 @@ bool FElysiumHairDynamicsSegmentLengthTest::RunTest(const FString& Parameters)
 
 	RunCase(1.0f, 1);
 	RunCase(0.35f, 2);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHairDynamicsPresentationTuningTest,
+	"Elysium.Substrate.HairDynamics.PresentationTuning", GElysiumHairDynamicsTestFlags)
+
+bool FElysiumHairDynamicsPresentationTuningTest::RunTest(const FString& Parameters)
+{
+	const TArray<FTransform> Locals = HairTestLocals();
+	USkeleton* Skeleton = BuildHairTestSkeleton(Locals);
+	FElysiumHairDynamicsChainConfig Chain;
+	Chain.BoundBone = TEXT("anchor");
+	Chain.ChainEnd = TEXT("tip");
+	Chain.GravityScale = 1.0f;
+	Chain.Damping = 0.9f;
+	Chain.ConeAngleDegrees = 45.0f;
+
+	FAnimNode_ElysiumHairDynamics Node;
+	Node.Configure(Chain, Skeleton->GetReferenceSkeleton());
+	TestEqual(TEXT("diagnostic hair gravity is disabled"), Node.GravityScale, 0.0f);
+	TestEqual(TEXT("diagnostic hair linear damping is maximal"),
+		Node.LinearDampingOverride, 1.0f);
+	TestEqual(TEXT("diagnostic hair angular damping is maximal"),
+		Node.AngularDampingOverride, 1.0f);
+	TestTrue(TEXT("diagnostic hair angular spring is enabled"), Node.bAngularSpring);
+	TestEqual(TEXT("diagnostic hair angular spring is intentionally rigid"),
+		Node.AngularSpringConstant, 1000.0f);
+	TestTrue(TEXT("diagnostic hair ignores component linear acceleration"),
+		Node.ComponentLinearAccScale.IsZero());
+	TestTrue(TEXT("diagnostic hair has no component linear acceleration allowance"),
+		Node.ComponentAppliedLinearAccClamp.IsZero());
+	TestEqual(TEXT("diagnostic hair ignores simulation-space rotation"),
+		Node.SimSpaceSettings.SimSpaceAngularAlpha, 0.0f);
+	TestEqual(TEXT("diagnostic hair angular velocity is zero"),
+		Node.SimSpaceSettings.MaxAngularVelocity, 0.0f);
+	TestEqual(TEXT("diagnostic hair angular acceleration is zero"),
+		Node.SimSpaceSettings.MaxAngularAcceleration, 0.0f);
+	TestTrue(TEXT("diagnostic hair locks every chain cone"),
+		Algo::AllOf(Node.PhysicsBodyDefinitions, [](const FAnimPhysBodyDefinition& Body)
+		{
+			return Body.ConstraintSetup.ConeAngle == 0.0f;
+		}));
 	return true;
 }
 

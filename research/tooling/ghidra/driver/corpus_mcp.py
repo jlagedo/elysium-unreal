@@ -70,7 +70,9 @@ TOOLS = [
         "description": "The decompiled C of a VtMB function, as the corpus captured it "
                        "(names and struct field types already applied). Prints a DAMAGED banner "
                        "when the decompiler dropped blocks or failed a jump table -- when it "
-                       "does, the C is not the whole function and vtmb_asm is the fallback.",
+                       "does, the C is not the whole function and vtmb_asm is the fallback. "
+                       "Truncated at 60 KB, which only a body that swallowed its neighbours "
+                       "reaches; the cut says so and names the tool that lists them.",
         "inputSchema": {"type": "object", "required": ["reference"], "properties": {
             "reference": {"type": "string"}}},
     },
@@ -126,14 +128,21 @@ TOOLS = [
     },
     {
         "name": "vtmb_callees",
-        "description": "Every function the given one calls.",
+        "description": "Every function the given one calls: direct and virtual edges, then the "
+                       "calls into other DLLs whose bodies the corpus does not hold, then the "
+                       "virtual dispatches whose receiver class the code does not state.",
         "inputSchema": {"type": "object", "required": ["reference"], "properties": {
             "reference": {"type": "string"}}},
     },
     {
         "name": "vtmb_grep",
-        "description": "Regex search over every decompiled function in the corpus. Use this "
-                       "instead of running a Ghidra script.",
+        "description": "Regex search over every decompiled function in the corpus, "
+                       "case-insensitively. Use this instead of running a Ghidra script. A "
+                       "plain substring is answered from a trigram index in milliseconds; a "
+                       "pattern with metacharacters scans all 60 MB and says so. Reports one "
+                       "hit per function with up to six matching lines, and stops at `limit` "
+                       "functions -- the count on the last line is what was printed, so a "
+                       "pattern that hits the limit was not counted to the end.",
         "inputSchema": {"type": "object", "required": ["pattern"], "properties": {
             "pattern": {"type": "string"},
             "module": {"type": "string", "description": "e.g. vampire.dll"},
@@ -156,7 +165,9 @@ TOOLS = [
         "name": "vtmb_readers",
         "description": "THE FIELD LEDGER. Every function that touches a struct offset, both "
                        "the typed accesses (class known) and the untyped candidates. This is "
-                       "what makes 'nothing else reads this field' provable.",
+                       "what makes 'nothing else reads this field' provable. Both sections "
+                       "are counted in full and `limit` applies to each separately, so a small "
+                       "limit never hides one behind the other.",
         "inputSchema": {"type": "object", "required": ["offset"], "properties": {
             "offset": {"type": "string", "description": "e.g. 0x2f8"},
             "cls": {"type": "string"}, "limit": {"type": "integer"}}},
@@ -178,48 +189,86 @@ TOOLS = [
 ]
 
 
+class ToolInput(Exception):
+    """A caller's argument is unusable. Its message is the whole answer they get, so it says
+    what was wrong and what a working value looks like -- `int()`'s own ValueError does not."""
+
+
 def _offset(value: str) -> int:
-    return int(value, 16) if value.lower().startswith("0x") else int(value, 0)
+    try:
+        return int(value, 16) if value.lower().startswith("0x") else int(value, 0)
+    except (TypeError, ValueError):
+        raise ToolInput(f"{value!r} is not an offset; write it in hex as 0x2f8, or in decimal "
+                        f"as 760") from None
+
+
+def _slot(arguments: dict) -> int:
+    value = arguments.get("slot")
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ToolInput(f"'slot' must be a vtable slot number; got {value!r}") from None
+
+
+def _text(arguments: dict, key: str, tool: str) -> str:
+    value = arguments.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ToolInput(f"{tool} needs a non-empty {key!r}; got {value!r}")
+    return value
+
+
+def _count(arguments: dict, key: str, fallback: int) -> int:
+    value = arguments.get(key)
+    if value in (None, ""):
+        return fallback
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise ToolInput(f"{key!r} must be a whole number; got {value!r}") from None
+    if number < 1:
+        raise ToolInput(f"{key!r} must be at least 1; got {number}")
+    return number
 
 
 def _call(name: str, arguments: dict) -> str:
     buffer = io.StringIO()
     with redirect_stdout(buffer):
         if name == "vtmb_func":
-            corpus.command_func(arguments["reference"])
+            corpus.command_func(_text(arguments, "reference", name))
         elif name == "vtmb_code":
-            corpus.command_code(arguments["reference"])
+            corpus.command_code(_text(arguments, "reference", name))
         elif name == "vtmb_asm":
-            corpus.command_asm(arguments["reference"])
+            corpus.command_asm(_text(arguments, "reference", name))
         elif name == "vtmb_vtable":
-            corpus.command_vtable(arguments["cls"])
+            corpus.command_vtable(_text(arguments, "cls", name))
         elif name == "vtmb_slot":
-            corpus.command_slot(int(arguments["slot"]), arguments.get("module"))
+            corpus.command_slot(_slot(arguments), arguments.get("module"))
         elif name == "vtmb_globals":
-            corpus.command_globals(arguments["text"], int(arguments.get("limit") or 20))
+            corpus.command_globals(_text(arguments, "text", name), _count(arguments, "limit", 20))
         elif name == "vtmb_twin":
-            corpus.command_twin(arguments["reference"])
+            corpus.command_twin(_text(arguments, "reference", name))
         elif name == "vtmb_callers":
-            corpus.command_hop(arguments["reference"], "callers")
+            corpus.command_hop(_text(arguments, "reference", name), "callers")
         elif name == "vtmb_callees":
-            corpus.command_hop(arguments["reference"], "callees")
+            corpus.command_hop(_text(arguments, "reference", name), "callees")
         elif name == "vtmb_grep":
-            corpus.command_grep(arguments["pattern"], arguments.get("module"),
-                                int(arguments.get("limit") or 40))
+            corpus.command_grep(_text(arguments, "pattern", name), arguments.get("module"),
+                                _count(arguments, "limit", 40))
         elif name == "vtmb_string":
-            corpus.command_str(arguments["text"], int(arguments.get("limit") or 40))
+            corpus.command_str(_text(arguments, "text", name), _count(arguments, "limit", 40))
         elif name == "vtmb_fields":
-            corpus.command_fields(arguments["cls"],
+            corpus.command_fields(_text(arguments, "cls", name),
                                   _offset(arguments["offset"]) if arguments.get("offset") else None)
         elif name == "vtmb_readers":
-            corpus.command_readers(_offset(arguments["offset"]), arguments.get("cls"),
-                                   int(arguments.get("limit") or 60))
+            corpus.command_readers(_offset(_text(arguments, "offset", name)),
+                                   arguments.get("cls"), _count(arguments, "limit", 60))
         elif name == "vtmb_closure":
-            corpus.command_closure(arguments["cls"], None, with_code=False)
+            corpus.command_closure(_text(arguments, "cls", name), None, with_code=False)
         elif name == "vtmb_stat":
             corpus.command_stat()
         else:
-            raise ValueError(f"unknown tool {name!r}")
+            raise ToolInput(f"no tool named {name!r}; this server offers "
+                            + ", ".join(one["name"] for one in TOOLS))
     return buffer.getvalue() or "(no output)"
 
 
@@ -255,6 +304,9 @@ def main() -> int:
                 text = _call(parameters.get("name", ""), parameters.get("arguments") or {})
                 _send({"jsonrpc": "2.0", "id": identifier, "result": {
                     "content": [{"type": "text", "text": text}]}})
+            except ToolInput as error:                      # the caller's fault, and fixable
+                _send({"jsonrpc": "2.0", "id": identifier, "result": {
+                    "isError": True, "content": [{"type": "text", "text": str(error)}]}})
             except Exception as error:                      # surfaced, never swallowed
                 traceback.print_exc(file=sys.stderr)
                 _send({"jsonrpc": "2.0", "id": identifier, "result": {

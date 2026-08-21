@@ -17,19 +17,29 @@ live in `vampire.dll`.
 
 | Binary | Python symbols | Role |
 |---|---|---|
-| `Bin/vampire_python21.dll` | **exports 653** | The VM. Stock CPython 2.1. |
+| `Bin/vampire_python21.dll` | **exports 653** | The VM. CPython **2.1.2**, renamed, plus five symbols. |
 | `Bin/engine.dll` | imports 30, **5 unique** | Boots and owns the VM. Knows nothing about entities. |
 | `Vampire/dlls/vampire.dll` | imports 69, **44 unique** | **Owns the entire script API.** |
 
-`vampire_python21.dll` is unmodified CPython 2.1 — its 32 non-`Py*` exports are all
-stock built-in module inits (`initmath`, `initcPickle`, `initnt`, `initthread`, …).
-Troika added exactly **three** symbols:
+The DLL states its own version: the string `2.1.2` is in its data, and `Py_GetVersion`
+returns it. That pins it to a single released source tree, which is what makes the
+additions decidable — every export is looked for in the whole of `Python-2.1.2`
+(`Include/`, `Python/`, `Objects/`, `Modules/`, `Parser/`, `PC/`), and **exactly five appear
+nowhere in it**. A namespace test does not find them: four of the five begin with `Py`, and
+`Py_SetGameInterface` looks like stock API until the source says otherwise.
 
 | Export | RVA | Status |
 |---|---|---|
 | `Py_SetGameInterface` | `0x02bed0` | **Dead.** The body is one byte: `C3` (`RET`), then 15× `90` padding. `engine.dll` calls it; it discards its argument. |
 | `PyRun_ConsoleString` | `0x053160` | Real — the dev-console eval path. |
-| `Py_FlushConsoleOutput` | `0x02bee0` | Real. |
+| `Py_FlushConsoleOutput` | `0x02bee0` | Real. Called from five sites in `vampire.dll`, including `FUN_100ce990`, the `"__main__.%s"` field-6 dispatcher — so level-script output flushes through it. |
+| `PyParser_ParseConsoleString` | — | The parser half of the console path. |
+| `PyParser_SimpleParseConsoleString` | — | Likewise. Neither is called from `vampire.dll` or `engine.dll`; both exist for `PyRun_ConsoleString`. |
+
+Nothing else diverges. The remaining 648 exports are stock, the 32 non-`Py*` ones being
+built-in module inits (`initmath`, `initcPickle`, `initnt`, `initthread`, …). **The
+interpreter itself carries no VtMB semantics**: the divergence is a console I/O path and one
+dead stub, and everything a script can observe is bound in `vampire.dll`.
 
 `engine.dll`'s 5 unique symbols are `Py_Initialize`, `Py_Finalize`, `Py_SetProgramName`,
 `Py_SetGameInterface`, `PyType_Type`. It sets the interpreter search path to

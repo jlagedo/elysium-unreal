@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS fields (
     module TEXT, cls TEXT, off INTEGER, name TEXT, len INTEGER, type TEXT, note TEXT);
 CREATE TABLE IF NOT EXISTS accesses (
     module TEXT, func_addr TEXT, cls TEXT, off INTEGER, field TEXT, kind TEXT);
+CREATE TABLE IF NOT EXISTS externals (
+    module TEXT, addr TEXT, lib TEXT, name TEXT, imported TEXT, PRIMARY KEY (module, addr));
 CREATE TABLE IF NOT EXISTS meta (
     module TEXT PRIMARY KEY, binary TEXT, sha256 TEXT, dumped_at REAL, project_at REAL);"""
 
@@ -117,6 +119,7 @@ INDICES = {
     "string_refs_func": "string_refs (func_addr)",
     "string_refs_str": "string_refs (module, str_addr)",
     "globals_name": "globals (name)",
+    "externals_name": "externals (name)",
     "global_refs_addr": "global_refs (module, addr)",
     "global_refs_func": "global_refs (func_addr)",
     "fields_cls": "fields (cls, off)",
@@ -302,6 +305,63 @@ def vtables(programs: list[str], project_dir: Path | None, project_name: str,
     return 0
 
 
+def pyapi(programs: list[str], project_dir: Path | None, project_name: str,
+           apply: bool) -> int:
+    """Apply CPython 2.1.2's declared C API to the modules that embed its interpreter.
+
+    A write pass, so it runs BEFORE a dump: the corpus photographs the project, and a signature
+    applied after one is a signature the corpus does not have.
+    """
+    out = _corpus_dir()
+    api = out / "python21-api.txt"
+    if not api.is_file():
+        print(f"no prototype file at {api}; run `research pyapi` first")
+        return 1
+    log = out / "pyapi.log"
+    project = project_dir or (research_root() / "ghidra" / "project")
+    first = True
+    for program in programs:
+        if not first:
+            time.sleep(LOCK_DELAY_SECONDS)
+        first = False
+        args = [f"api={api.as_posix()}",
+                f"report={(out / f'pyapi-{program}.txt').as_posix()}"]
+        if apply:
+            args.append("apply=1")
+        print(f"[{program}] pyapi{' (applying)' if apply else ' (report only)'}")
+        _run(["-ProjDir", str(project), "-ProjName", project_name, "-NoFid",
+              "-Program", program, "-Script", "ApplyPythonApi",
+              "-ScriptArgs", " ".join(args)], log)
+    if apply:
+        _record_apply(programs)
+    return 0
+
+
+def externals(programs: list[str], project_dir: Path | None, project_name: str) -> int:
+    """The imported-function pass: seconds, and it is what makes `callees` complete.
+
+    A call into another DLL is recorded against a synthetic `EXTERNAL:` address that no other
+    table holds a row for, so the join dropped it. This reads the external function list only,
+    so recovering those names never costs a re-decompilation.
+    """
+    out = _corpus_dir()
+    out.mkdir(parents=True, exist_ok=True)
+    log = out / "externals.log"
+    project = project_dir or (research_root() / "ghidra" / "project")
+    first = True
+    for program in programs:
+        if not first:
+            time.sleep(LOCK_DELAY_SECONDS)
+        first = False
+        target = out / f"externals-{program}.jsonl"
+        print(f"[{program}] externals")
+        _run(["-ProjDir", str(project), "-ProjName", project_name, "-NoFid",
+              "-Program", program, "-Script", "DumpExternals",
+              "-ScriptArgs", f"out={target.as_posix()}"], log)
+        print(f"  {target.stat().st_size if target.is_file() else 0} bytes")
+    return 0
+
+
 def listing(programs: list[str], project_dir: Path | None, project_name: str,
             limit: int) -> int:
     """The disassembly pass. Slow like ``dump``, and the fallback for every damaged C."""
@@ -387,6 +447,8 @@ def _load_module(connection: sqlite3.Connection, module: str, corpus: Path) -> t
             accesses += _derive_accesses(connection, module, record, code)
             _derive_vcalls(connection, module, record, code, classes)
 
+    _load_externals(connection, module, corpus)
+
     globals_path = corpus / f"globals-{module}.jsonl"
     if globals_path.is_file():
         with globals_path.open(encoding="utf-8") as stream:
@@ -420,6 +482,27 @@ def _load_module(connection: sqlite3.Connection, module: str, corpus: Path) -> t
                                     record.get("len") or 0, record.get("type") or "",
                                     record.get("note") or ""))
     return rows, edges, accesses
+
+
+def _load_externals(connection: sqlite3.Connection, module: str, corpus: Path) -> int:
+    """The imported-function names, from their own cheap sidecar.
+
+    Separate from the function loader so `reindex` can pick up an externals pass without a
+    rebuild: the pass costs seconds, and re-reading 63,000 decompilations to absorb 153 names
+    would be the whole point of the split thrown away.
+    """
+    path = corpus / f"externals-{module}.jsonl"
+    if not path.is_file():
+        return 0
+    rows = 0
+    with path.open(encoding="utf-8") as stream:
+        for line in stream:
+            record = json.loads(line)
+            connection.execute("INSERT OR REPLACE INTO externals VALUES (?,?,?,?,?)",
+                               (module, record["a"], record.get("lib") or "",
+                                record.get("name") or "", record.get("import") or ""))
+            rows += 1
+    return rows
 
 
 def _derive_accesses(connection: sqlite3.Connection, module: str,
@@ -519,6 +602,10 @@ def _resolve_virtual_edges(connection: sqlite3.Connection) -> tuple[int, int]:
     possible rather than as fact.
     """
     written = ambiguous = 0
+    # One caller can reach one implementation through two different (class, slot) pairs -- a
+    # base and its subobject both name it -- and grouping by the pair alone wrote the edge
+    # twice, so `callers` listed the same caller twice and `func` counted it twice.
+    seen: set[tuple[str, str, str]] = set()
     rows = connection.execute(
         """SELECT v.module, v.caller, v.cls, v.slot, count(DISTINCT t.func) AS candidates,
                   min(t.func) AS target
@@ -529,8 +616,11 @@ def _resolve_virtual_edges(connection: sqlite3.Connection) -> tuple[int, int]:
         if row["candidates"] != 1:
             ambiguous += 1
             continue
-        connection.execute("INSERT INTO edges VALUES (?,?,?,'virtual')",
-                           (row["module"], row["caller"], row["target"]))
+        edge = (row["module"], row["caller"], row["target"])
+        if edge in seen:
+            continue
+        seen.add(edge)
+        connection.execute("INSERT INTO edges VALUES (?,?,?,'virtual')", edge)
         written += 1
     return written, ambiguous
 
@@ -592,6 +682,39 @@ def build(programs: list[str]) -> int:
     return 0
 
 
+def reindex() -> int:
+    """Everything `build` derives from rows already in the database, without re-reading a dump.
+
+    The two derived structures -- the search index and the virtual half of the call graph -- are
+    the ones whose *rules* change while the decompilation underneath does not. Re-running the
+    Ghidra pass to pick up a tokenizer change would cost an overnight run for nothing.
+    """
+    if not _database().is_file():
+        print(f"no corpus at {_database()}; run `corpus build` first")
+        return 1
+    connection = sqlite3.connect(_database())
+    connection.row_factory = sqlite3.Row
+    # The schema first: `_ensure_indices` indexes tables, and a table the running schema declares
+    # but this database predates does not exist yet.
+    connection.executescript(SCHEMA)
+    _migrate(connection)
+    _ensure_indices(connection)
+    loaded = sum(_load_externals(connection, one, _corpus_dir()) for one in PROGRAMS)
+    if loaded:
+        print(f"imported functions: {loaded} names loaded from the externals sidecars")
+    connection.execute("DELETE FROM edges WHERE kind = 'virtual'")
+    virtual, ambiguous = _resolve_virtual_edges(connection)
+    connection.commit()
+    print(f"virtual call graph: {virtual} edges, {ambiguous} sites left unresolved because the "
+          f"class holds more than one function at that slot")
+    _build_index(connection)
+    connection.execute("ANALYZE")
+    connection.commit()
+    connection.close()
+    print(f"database: {_database()}  {_database().stat().st_size // (1 << 20)} MiB")
+    return 0
+
+
 def _build_listing(programs: list[str]) -> None:
     """Load whatever disassembly dumps exist into their own database."""
     corpus = _corpus_dir()
@@ -619,19 +742,30 @@ def _build_listing(programs: list[str]) -> None:
 def _build_index(connection: sqlite3.Connection) -> None:
     """A full-text index over the decompiled C, used only to PREFILTER `grep`.
 
-    97 MiB of TEXT is a few seconds to scan per query, which is a few seconds paid on every
-    question. The index narrows the scan; the regex still decides, so a tokenizer disagreement
-    can never turn a match into a miss without `grep` saying it took the indexed path.
+    60 MB of TEXT is ~100 ms to scan per query, paid on every question. The index narrows the
+    scan and the regex still decides -- but only if the index and the regex agree on what a
+    match is, and a word tokenizer does NOT. `grep` searches for substrings: `/Melee/` must find
+    `CBaseCombatCharacter::MeleeSwingUpdate`. A word tokenizer indexes that identifier as one
+    token, so `MATCH "Melee"` returns nothing for it, and the prefilter turns 1,258 real hits
+    into 152. Measured, before this was a trigram index: /Disciplin/ 451 -> 6, /NextAttack/
+    52 -> 0, /haracter/ 1,634 -> 0. Every one of those answered "N function(s) match" with a
+    number that was simply wrong.
+
+    `tokenize='trigram'` indexes every 3-character window instead, which is exactly substring
+    semantics, and is case-insensitive by default -- the same as `grep`'s own `re.IGNORECASE`.
+    It costs roughly 3.5x the code size on disk. That is the price of an answer that is not
+    silently short.
     """
     try:
         connection.execute("DROP TABLE IF EXISTS code_fts")
         connection.execute("CREATE VIRTUAL TABLE code_fts USING fts5("
-                           "code, content='functions', content_rowid='rowid')")
+                           "code, content='functions', content_rowid='rowid', "
+                           "tokenize='trigram')")
         connection.execute("INSERT INTO code_fts(rowid, code) "
                            "SELECT rowid, code FROM functions WHERE code != ''")
         connection.commit()
         count = connection.execute("SELECT count(*) FROM code_fts").fetchone()[0]
-        print(f"search index: {count} functions indexed")
+        print(f"search index: {count} functions indexed (trigram)")
     except sqlite3.OperationalError as error:
         # FTS5 is compiled into every stock CPython, but a stripped SQLite would fail here and
         # `grep` has to know the index is absent rather than query a table that is not there.
@@ -763,9 +897,34 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _modules(connection: sqlite3.Connection) -> list[str]:
+    return [row[0] for row in connection.execute(
+        "SELECT DISTINCT module FROM functions ORDER BY module")]
+
+
+def _known_module(connection: sqlite3.Connection, module: str) -> bool:
+    return connection.execute("SELECT 1 FROM meta WHERE module = ? UNION "
+                              "SELECT 1 FROM functions WHERE module = ? LIMIT 1",
+                              (module, module)).fetchone() is not None
+
+
+def _contains(text: str) -> str:
+    """A LIKE pattern that matches `text` as a literal substring.
+
+    Interpolating a search term straight into `%…%` hands the caller the wildcards: `%` matches
+    everything and `_` matches anything at all, so `corpus func %` answered with twenty
+    arbitrary functions and looked exactly like twenty real hits. `\\` is the escape, declared
+    by the ESCAPE clause every caller of this pairs it with.
+    """
+    escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
 def _resolve(connection: sqlite3.Connection, reference: str) -> list[sqlite3.Row]:
     """A function by address, by bare name, or by `Class::method`."""
     reference = reference.strip()
+    if not reference:
+        return []
     if "::" in reference:
         cls, _, member = reference.partition("::")
         return connection.execute(
@@ -788,7 +947,24 @@ def _resolve(connection: sqlite3.Connection, reference: str) -> list[sqlite3.Row
     if rows:
         return rows
     return connection.execute(
-        "SELECT * FROM functions WHERE name LIKE ?", (f"%{reference}%",)).fetchall()[:20]
+        "SELECT * FROM functions WHERE name LIKE ? ESCAPE '\\' LIMIT 21",
+        (_contains(reference),)).fetchall()
+
+
+def _miss(reference: str) -> None:
+    """Why nothing matched, in the terms the caller used."""
+    if not reference.strip():
+        print("no reference given; pass an address (10161200), a name, or Class::method")
+    else:
+        print(f"no function matches {reference!r} — tried it as an address, as an exact name, "
+              f"and as a name substring")
+
+
+def _truncated(rows: list, shown: int, reference: str) -> None:
+    """`_resolve` fetches one row past what it shows, so a cut list can say it was cut."""
+    if len(rows) > shown:
+        print(f"… more than {shown} functions have {reference!r} in their name; narrow it or "
+              f"pass an address")
 
 
 def _label(row: sqlite3.Row) -> str:
@@ -801,9 +977,9 @@ def command_func(reference: str) -> int:
     connection = _connect()
     rows = _resolve(connection, reference)
     if not rows:
-        print(f"no function matches {reference!r}")
+        _miss(reference)
         return 1
-    for row in rows:
+    for row in rows[:20]:
         direct = connection.execute(
             "SELECT count(*) FROM edges WHERE module = ? AND callee = ? AND kind = 'direct'",
             (row["module"], row["addr"])).fetchone()[0]
@@ -827,6 +1003,7 @@ def command_func(reference: str) -> int:
             print(f"    vtable slot of {len(slots)} class(es): {where}"
                   + (" …" if len(slots) > 8 else ""))
         _damage(row)
+    _truncated(rows, 20, reference)
     return 0
 
 
@@ -836,6 +1013,13 @@ def command_func(reference: str) -> int:
 # symbols` is cosmetic and rides on 696 of stdshader_dx8's 1,294 functions; bannering those would
 # mark half the corpus as damaged and train a reader to skip the banner -- which is precisely the
 # failure the banner exists to prevent. Only a warning that changes what the C MEANS is severe.
+# How much of one answer a caller should have to read before deciding it is the wrong answer.
+# Every tool here feeds an agent's context, so an unbounded print is a cost the caller cannot
+# refuse; each cap says what it cut and how to get the rest.
+CODE_LIMIT = 60_000
+ROW_LIMIT = 400
+
+
 SEVERE_WARNINGS = (
     "Removing unreachable block",        # the C is not the whole function
     "Could not recover jumptable",       # control flow is wrong: a switch printed as a call
@@ -866,12 +1050,30 @@ def command_code(reference: str) -> int:
     connection = _connect()
     rows = _resolve(connection, reference)
     if not rows:
-        print(f"no function matches {reference!r}")
+        _miss(reference)
         return 1
     for row in rows[:3]:
         print(f"// {_label(row)}")
         _damage(row)
-        print(row["code"] or "// no decompilation in the corpus")
+        code = row["code"] or "// no decompilation in the corpus"
+        # A boundary defect makes one "function" out of dozens, and 104126e0 decompiles to
+        # 300 KB. Handing that back whole is not an answer -- it is the caller's whole reading
+        # budget spent on a function that `outliers` already says is not one function.
+        if len(code) > CODE_LIMIT:
+            lines = code.splitlines()
+            kept = 0
+            for index, line in enumerate(lines):
+                kept += len(line) + 1
+                if kept > CODE_LIMIT:
+                    break
+            print("\n".join(lines[:index]))
+            print(f"\n// … truncated at {CODE_LIMIT // 1000} KB of {len(code) // 1000} KB "
+                  f"({index} of {len(lines)} lines). This body is {row['size']} bytes, which "
+                  f"is a boundary defect more often than a real function — `corpus outliers` "
+                  f"lists them, and `corpus grep` searches inside it without printing it.")
+        else:
+            print(code)
+    _truncated(rows, 3, reference)
     return 0
 
 
@@ -880,7 +1082,7 @@ def command_asm(reference: str) -> int:
     connection = _connect()
     rows = _resolve(connection, reference)
     if not rows:
-        print(f"no function matches {reference!r}")
+        _miss(reference)
         return 1
     listings = _listing_connection()
     if listings is None:
@@ -899,7 +1101,7 @@ def command_hop(reference: str, direction: str) -> int:
     connection = _connect()
     rows = _resolve(connection, reference)
     if not rows:
-        print(f"no function matches {reference!r}")
+        _miss(reference)
         return 1
     row = rows[0]
     if direction == "callees":
@@ -911,6 +1113,28 @@ def command_hop(reference: str, direction: str) -> int:
         print(f"{len(found)} callees of {_label(row)}")
         for one in found:
             print(f"  {_label(one)}  [{one['kind']}]")
+        # Ghidra files a call into another DLL under an `EXTERNAL:` address, which is not in
+        # this module's function table -- so the JOIN above drops it and the count above is
+        # short by however many imports the function calls. Silently, until now.
+        imported = connection.execute(
+            """SELECT DISTINCT e.callee, x.lib, x.name, x.imported FROM edges e
+               LEFT JOIN externals x ON x.module = e.module AND x.addr = e.callee
+               WHERE e.module = ? AND e.caller = ? AND e.callee LIKE 'EXTERNAL:%'
+               ORDER BY x.lib, x.name, e.callee""",
+            (row["module"], row["addr"])).fetchall()
+        if imported:
+            print(f"\n{len(imported)} call(s) into another DLL — imported, so the corpus holds "
+                  f"no body:")
+            for one in imported:
+                if one["name"]:
+                    original = (f"  (imported as {one['imported']})"
+                                if one["imported"] and one["imported"] != one["name"] else "")
+                    print(f"    {(one['lib'] or '?'):22} {one['name']}{original}")
+                else:
+                    # No name means the externals pass has not run for this module. Say which
+                    # pass, rather than printing a synthetic address and no explanation.
+                    print(f"    {one['callee']}  <no name — run `corpus externals "
+                          f"{row['module']}`>")
         unresolved = connection.execute(
             "SELECT DISTINCT slot, recv FROM vcalls WHERE module = ? AND caller = ? AND cls = ''"
             " ORDER BY slot", (row["module"], row["addr"])).fetchall()
@@ -991,23 +1215,50 @@ METACHARACTERS = set(r".^$*+?{}[]\|()")
 def _prefilter(pattern: str) -> str | None:
     """The longest literal run a regex must contain, usable as a full-text prefilter.
 
-    Only taken from a pattern with no metacharacter at all. A literal lifted out of an
-    alternation or an optional group is not required to appear in a match, and prefiltering on
-    one would silently drop hits.
+    Two conditions, and both are load-bearing:
+
+    * no metacharacter anywhere -- a literal lifted out of an alternation or an optional group
+      is not required to appear in a match, and prefiltering on one silently drops hits;
+    * at least three characters -- a trigram index cannot answer a query shorter than one
+      trigram, and asking it anyway returns nothing rather than everything.
     """
     if any(character in METACHARACTERS for character in pattern):
         return None
-    words = LITERAL.findall(pattern)
+    words = [word for word in LITERAL.findall(pattern) if len(word) >= 3]
     return max(words, key=len) if words else None
+
+
+def _index_is_trigram(connection: sqlite3.Connection) -> bool:
+    """Whether `code_fts` can answer a substring query.
+
+    A corpus built before the tokenizer changed still has a `code_fts`, still answers MATCH, and
+    still returns a number -- just the wrong one. The prefilter is only safe over an index whose
+    idea of a match is `grep`'s, so the stored definition is read rather than assumed.
+    """
+    row = connection.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'code_fts'").fetchone()
+    return bool(row and "trigram" in (row[0] or ""))
 
 
 def command_grep(pattern: str, module: str | None, limit: int) -> int:
     connection = _connect()
-    expression = re.compile(pattern, re.IGNORECASE)
+    if not pattern.strip():
+        print("grep needs a pattern; an empty one matches every line of all 71,235 functions")
+        return 1
+    try:
+        expression = re.compile(pattern, re.IGNORECASE)
+    except re.error as error:
+        print(f"{pattern!r} is not a valid regular expression: {error}")
+        return 1
+    limit = max(1, limit)
+    if module and not _known_module(connection, module):
+        print(f"no module named {module!r} in the corpus; it holds "
+              f"{', '.join(_modules(connection))}")
+        return 1
     query = "SELECT * FROM functions WHERE code != ''"
     parameters: list[str] = []
 
-    literal = _prefilter(pattern)
+    literal = _prefilter(pattern) if _index_is_trigram(connection) else None
     if literal:
         try:
             # Through a temporary table rather than an IN list: a common literal matches tens of
@@ -1023,6 +1274,9 @@ def command_grep(pattern: str, module: str | None, limit: int) -> int:
             print(f"(indexed on {literal!r}: {found} candidate functions)")
         except sqlite3.OperationalError as error:
             print(f"(no search index — scanning the whole corpus: {error})")
+    else:
+        print("(scanning every decompiled function — the pattern carries no literal the "
+              "index can narrow on)")
     if module:
         query += " AND module = ?"
         parameters.append(module)
@@ -1045,9 +1299,12 @@ def command_grep(pattern: str, module: str | None, limit: int) -> int:
 
 def command_str(text: str, limit: int) -> int:
     connection = _connect()
+    if not text:
+        print("string needs some text to look for")
+        return 1
     rows = connection.execute(
-        "SELECT * FROM strings WHERE text LIKE ? ORDER BY module, addr LIMIT ?",
-        (f"%{text}%", limit)).fetchall()
+        "SELECT * FROM strings WHERE text LIKE ? ESCAPE '\\' ORDER BY module, addr LIMIT ?",
+        (_contains(text), max(1, limit))).fetchall()
     for row in rows:
         referencing = connection.execute(
             """SELECT f.* FROM string_refs r LEFT JOIN functions f
@@ -1098,21 +1355,38 @@ def command_slot(slot: int, module: str | None) -> int:
     land on any of these, and no static analysis narrows it further.
     """
     connection = _connect()
-    query = "SELECT * FROM vtables WHERE slot = ? AND sub = 0"
+    # The class name comes from the same join the listing needs, so the whole answer is one
+    # query rather than one per class.
+    query = ("SELECT v.*, f.ns, f.name FROM vtables v LEFT JOIN functions f"
+             " ON f.module = v.module AND f.addr = v.func"
+             " WHERE v.slot = ? AND v.sub = 0")
     parameters: list = [slot]
     if module:
-        query += " AND module = ?"
+        query += " AND v.module = ?"
         parameters.append(module)
-    rows = connection.execute(query + " ORDER BY module, cls", parameters).fetchall()
+    rows = connection.execute(query + " ORDER BY v.module, v.cls", parameters).fetchall()
     if not rows:
-        print(f"no vftable in the corpus has a slot {slot}")
+        # Which absence it is decides what the caller does next: a slot nothing fills anywhere
+        # is an answer, while a slot filled only in another module is a wrong question.
+        elsewhere = connection.execute(
+            "SELECT module, count(*) n FROM vtables WHERE slot = ? AND sub = 0 "
+            "GROUP BY module ORDER BY n DESC", (slot,)).fetchall()
+        if module and elsewhere:
+            where = ", ".join(f"{one['module']} ({one['n']})" for one in elsewhere)
+            print(f"no vftable in {module} has a slot {slot}; it is filled in {where}")
+        elif elsewhere:
+            print(f"no vftable in the corpus has a slot {slot}")
+        else:
+            widest = connection.execute("SELECT max(slot) FROM vtables").fetchone()[0]
+            print(f"no vftable in the corpus has a slot {slot}; the widest table has "
+                  f"{widest + 1} slots (0–{widest})")
         return 1
-    for row in rows:
-        found = connection.execute(
-            "SELECT * FROM functions WHERE module = ? AND addr = ?",
-            (row["module"], row["func"])).fetchone()
+    for row in rows[:ROW_LIMIT]:
         print(f"  {row['module']:18} {row['cls']:42} {row['func']}  "
-              + (f"{found['ns']}::{found['name']}" if found else "<not a function>"))
+              + (f"{row['ns']}::{row['name']}" if row["name"] else "<not a function>"))
+    if len(rows) > ROW_LIMIT:
+        print(f"  … {len(rows) - ROW_LIMIT} more class(es) not listed; pass a module to narrow "
+              f"it")
     sites = connection.execute(
         "SELECT count(*) FROM vcalls WHERE slot = ?" + (" AND module = ?" if module else ""),
         parameters).fetchone()[0]
@@ -1124,8 +1398,8 @@ def command_globals(text: str, limit: int) -> int:
     """A global datum and every function that reaches it."""
     connection = _connect()
     rows = connection.execute(
-        "SELECT * FROM globals WHERE name LIKE ? ORDER BY module, addr LIMIT ?",
-        (f"%{text}%", limit)).fetchall()
+        "SELECT * FROM globals WHERE name LIKE ? ESCAPE '\\' ORDER BY module, addr LIMIT ?",
+        (_contains(text), max(1, limit))).fetchall()
     if not rows:
         print(f"no global name matches {text!r}")
         return 1
@@ -1214,7 +1488,7 @@ def command_twin(reference: str) -> int:
     connection = _connect()
     rows = _resolve(connection, reference)
     if not rows:
-        print(f"no function matches {reference!r}")
+        _miss(reference)
         return 1
     row = rows[0]
     if row["name"].startswith("FUN_"):
@@ -1272,16 +1546,32 @@ def command_readers(offset: int, cls: str | None, limit: int) -> int:
     if cls:
         query += " AND a.cls = ?"
         parameters.append(cls)
-    rows = connection.execute(query + " ORDER BY a.kind, f.module, f.addr LIMIT ?",
-                              parameters + [limit]).fetchall()
-    typed = [row for row in rows if row["kind"] in ("named", "this")]
-    loose = [row for row in rows if row["kind"] == "expr"]
-    print(f"\n{len(typed)} typed access(es) — the class is known:")
-    for row in typed:
-        print(f"    {_label(row)}   {row['cls']}::{row['field'] or '?'} ({row['kind']})")
-    print(f"\n{len(loose)} untyped access(es) at the same offset — candidates, class unknown:")
-    for row in loose[:limit]:
-        print(f"    {_label(row)}")
+
+    # Each section is fetched and counted separately. One LIMIT over the union starved the half
+    # that matters: `ORDER BY a.kind` sorts 'expr' before 'named', so `readers 0x2f8 --limit 5`
+    # printed five untyped candidates and "0 typed access(es)" for an offset that has them.
+    limit = max(1, limit)
+    sections = []
+    for label, predicate in (
+            ("typed access(es) — the class is known", "a.kind IN ('named','this')"),
+            ("untyped access(es) at the same offset — candidates, class unknown",
+             "a.kind = 'expr'")):
+        total = connection.execute(
+            f"SELECT count(*) FROM accesses a WHERE a.off = ?"
+            + (" AND a.cls = ?" if cls else "") + f" AND {predicate}", parameters).fetchone()[0]
+        rows = connection.execute(
+            f"{query} AND {predicate} ORDER BY f.module, f.addr LIMIT ?",
+            parameters + [limit]).fetchall()
+        sections.append((label, total, rows))
+
+    for label, total, rows in sections:
+        print(f"\n{total} {label}:")
+        for row in rows:
+            detail = (f"   {row['cls']}::{row['field'] or '?'} ({row['kind']})"
+                      if row["kind"] != "expr" else "")
+            print(f"    {_label(row)}{detail}")
+        if total > len(rows):
+            print(f"    … {total - len(rows)} more; raise --limit")
     return 0
 
 
@@ -1364,7 +1654,7 @@ def command_stat() -> int:
         print(f"  {row['module']:20} {row['functions']:7} functions, "
               f"{row['decompiled']:7} decompiled, {row['warned']:5} warned")
     for table in ("edges", "vtables", "vcalls", "strings", "string_refs", "globals",
-                  "global_refs", "fields", "accesses"):
+                  "global_refs", "externals", "fields", "accesses"):
         count = connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
         print(f"  {table:20} {count}")
     for row in connection.execute(
@@ -1419,6 +1709,19 @@ def main() -> int:
                                      "reached only through a vtable is never a CALL target, so "
                                      "nothing else seeds it")
 
+    pyapi_parser = sub.add_parser("pyapi", help="apply CPython 2.1.2's declared C API (cheap, "
+                                               "a WRITE pass — run before a dump)")
+    pyapi_parser.add_argument("program", nargs="*", default=["vampire.dll", "engine.dll"])
+    pyapi_parser.add_argument("--project-dir", type=Path, default=None)
+    pyapi_parser.add_argument("--project-name", default="vtmb")
+    pyapi_parser.add_argument("--apply", action="store_true",
+                              help="write to the project (default: report what it would do)")
+
+    externals_parser = sub.add_parser("externals", help="run the imported-function pass (cheap)")
+    externals_parser.add_argument("program", nargs="*", default=[])
+    externals_parser.add_argument("--project-dir", type=Path, default=None)
+    externals_parser.add_argument("--project-name", default="vtmb")
+
     listing_parser = sub.add_parser("listing", help="run the disassembly pass (slow)")
     listing_parser.add_argument("program", nargs="*", default=[])
     listing_parser.add_argument("--project-dir", type=Path, default=None)
@@ -1427,6 +1730,9 @@ def main() -> int:
 
     build_parser = sub.add_parser("build", help="load the dumps into SQLite")
     build_parser.add_argument("program", nargs="*", default=[])
+
+    sub.add_parser("reindex", help="rebuild the search index and the virtual call graph from "
+                                   "rows already loaded — no dump is re-read")
 
     sub.add_parser("stat", help="what the database holds")
 
@@ -1485,11 +1791,18 @@ def main() -> int:
     if args.command == "vtables":
         return vtables(list(args.program) or list(PROGRAMS), args.project_dir,
                        args.project_name, args.name, args.create)
+    if args.command == "pyapi":
+        return pyapi(list(args.program), args.project_dir, args.project_name, args.apply)
+    if args.command == "externals":
+        return externals(list(args.program) or list(PROGRAMS), args.project_dir,
+                         args.project_name)
     if args.command == "listing":
         return listing(list(args.program) or list(PROGRAMS), args.project_dir,
                        args.project_name, args.limit)
     if args.command == "build":
         return build(list(args.program) or list(PROGRAMS))
+    if args.command == "reindex":
+        return reindex()
     if args.command == "stat":
         return command_stat()
     if args.command == "func":

@@ -6,6 +6,16 @@
 
 namespace
 {
+	// Owner-directed diagnostic lock: make the stock chain effectively rigid so the next live pass
+	// can prove whether this node owns the visible motion. These are intentionally not final tuning.
+	constexpr float HairDiagnosticGravityScale = 0.0f;
+	constexpr float HairDiagnosticDamping = 1.0f;
+	constexpr float HairDiagnosticAngularSpring = 1000.0f;
+	constexpr float HairDiagnosticConeAngleDegrees = 0.0f;
+	constexpr float HairDiagnosticSimSpaceAngularAlpha = 0.0f;
+	constexpr float HairDiagnosticMaxAngularVelocity = 0.0f;
+	constexpr float HairDiagnosticMaxAngularAcceleration = 0.0f;
+
 	// The component-space transform a bone has at this point in the pass, preferring a correction
 	// this pass has already produced over what the incoming pose holds. Retail composes bone by bone
 	// into one live array; this is that array, restricted to the handful of bones being rewritten.
@@ -37,12 +47,17 @@ void ElysiumHairDynamics::PreserveChainLocalTransforms(
 		const FCompactPoseBoneIndex ParentIndex =
 			Output.Pose.GetPose().GetParentBoneIndex(BoneIndex);
 		const FTransform SourceLocal = Output.Pose.GetLocalSpaceTransform(BoneIndex);
+		const FTransform SourceComponent = Output.Pose.GetComponentSpaceTransform(BoneIndex);
+		const FVector SourceAxis = SourceComponent.GetRotation().GetAxisX();
+		const FVector SimulatedAxis = Simulated.Transform.GetRotation().GetAxisX();
+		const FQuat Swing = FQuat::FindBetweenNormals(SourceAxis, SimulatedAxis);
 
 		FTransform CorrectedComponent = Simulated.Transform;
+		CorrectedComponent.SetRotation((Swing * SourceComponent.GetRotation()).GetNormalized());
 		if (ParentIndex.IsValid())
 		{
 			const FTransform CorrectedParent = CurrentComponentSpace(Output, Corrected, ParentIndex);
-			FTransform CorrectedLocal = Simulated.Transform.GetRelativeTransform(CorrectedParent);
+			FTransform CorrectedLocal = CorrectedComponent.GetRelativeTransform(CorrectedParent);
 			CorrectedLocal.SetTranslation(SourceLocal.GetTranslation());
 			CorrectedLocal.SetScale3D(SourceLocal.GetScale3D());
 			CorrectedComponent = CorrectedLocal * CorrectedParent;
@@ -93,21 +108,21 @@ void FAnimNode_ElysiumHairDynamics::Configure(
 	ChainEnd.BoneName = Config.ChainEnd;
 	bChain = true;
 	SimulationSpace = AnimPhysSimSpaceType::Component;
-	GravityScale = Config.GravityScale;
+	GravityScale = HairDiagnosticGravityScale;
 	bOverrideLinearDamping = true;
 	bOverrideAngularDamping = true;
-	LinearDampingOverride = Config.Damping;
-	AngularDampingOverride = Config.Damping;
-	bAngularSpring = Config.AngularSpring > 0.0f;
-	AngularSpringConstant = Config.AngularSpring;
+	LinearDampingOverride = HairDiagnosticDamping;
+	AngularDampingOverride = HairDiagnosticDamping;
+	bAngularSpring = true;
+	AngularSpringConstant = HairDiagnosticAngularSpring;
 	NumSolverIterationsPreUpdate = 8;
 	NumSolverIterationsPostUpdate = 2;
-	ComponentLinearAccScale = FVector::OneVector;
+	ComponentLinearAccScale = FVector::ZeroVector;
 	ComponentLinearVelScale = FVector::ZeroVector;
-	ComponentAppliedLinearAccClamp = FVector(2500.0);
-	SimSpaceSettings.SimSpaceAngularAlpha = 1.0f;
-	SimSpaceSettings.MaxAngularVelocity = 10.0f;
-	SimSpaceSettings.MaxAngularAcceleration = 100.0f;
+	ComponentAppliedLinearAccClamp = FVector::ZeroVector;
+	SimSpaceSettings.SimSpaceAngularAlpha = HairDiagnosticSimSpaceAngularAlpha;
+	SimSpaceSettings.MaxAngularVelocity = HairDiagnosticMaxAngularVelocity;
+	SimSpaceSettings.MaxAngularAcceleration = HairDiagnosticMaxAngularAcceleration;
 	bUsePlanarLimit = false;
 	bUseSphericalLimits = false;
 	bEnableWind = false;
@@ -146,7 +161,7 @@ void FAnimNode_ElysiumHairDynamics::Configure(
 		Body.ConstraintSetup.TwistAxis = AnimPhysTwistAxis::AxisX;
 		Body.ConstraintSetup.AngularTargetAxis = AnimPhysTwistAxis::AxisX;
 		Body.ConstraintSetup.AngularTarget = FVector::XAxisVector;
-		Body.ConstraintSetup.ConeAngle = Config.ConeAngleDegrees;
+		Body.ConstraintSetup.ConeAngle = HairDiagnosticConeAngleDegrees;
 	}
 	RequestInitialise(ETeleportType::ResetPhysics);
 }
