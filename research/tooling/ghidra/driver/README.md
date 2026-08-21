@@ -29,14 +29,28 @@ section E), the script API surface, and the choreographed scenes.
 | `DumpInitTable.java` | ✅ | every global constructor, ranked by data touched — the datamap and registration builders |
 | `DumpRtti.java`  | ✅ | the C++ class hierarchy with base displacements; labels each vftable with its owner |
 | `DumpDatamaps.java` | ✅ | every `datamap_t` in a module: class name, base chain, builder, record base and count |
+| `NameFromStrings.java` | ✅ | names functions from the VProf scopes and asserts compiled into the image; maps the source tree |
+| `ApplyDatamapTypes.java` | ✅ | every datamap as a Ghidra structure, hung on its class, so a member access reads as a name |
+| `DumpCorpus.java` | ✅ | the whole module as JSONL: every function decompiled with the decompiler's warnings about it, every string's referrers, every named global, every class structure |
+| `DumpVtables.java` | ✅ | every class vftable slot by slot — the ground truth virtual call edges are joined against; names unambiguous slots under `name=1` |
+| `DumpListing.java` | ✅ | every function's disassembly as JSONL, into its own database — the fallback for damaged C |
+| `SplitFuncs.java` | ✅ | splits a function whose body swallowed its neighbours, on CALL-target and post-padding evidence only |
+| `RecoverJumpTables.java` | ✅ | reads a switch's jump table out of the image when the decompiler abandoned it |
+| `RecoverSignatures.java` | ✅ | recovers each function's parameter count from `RET <imm16>` or the caller's `ADD ESP,<n>` |
 | `BuildCrtFid.java` | ✅ | populates a FID database from imported library objects (headless "Populate FidDb") |
 | `AttachFid.java` | ✅ | registers a FID database so the Function ID analyzer queries it; used as a pre-script |
 | `ApplyFid.java`  | ✅ | names a program's CRT functions from the database, for programs analyzed before it existed |
 | `parse_datamap_builder.py` | ✅ | reconstructs a `datamap_t` from its **decompiled builder** (the half an image read misses) |
 | `crt_fid.py`     | ✅ | builds the VC6 SP5 CRT database and applies it: `stage`, `build`, `apply` |
+| `symbol_sweep.py` | ✅ | drives `NameFromStrings`: `survey`, `apply`, `clear` |
+| `datamap_types.py` | ✅ | drives `ApplyDatamapTypes`: `report`, `apply` |
+| `corpus.py`      | ✅ | drives `DumpCorpus`, `DumpVtables` and `DumpListing`, loads SQLite, and answers every corpus query |
+| `repair.py`      | ✅ | drives the three repair passes: `boundaries`, `jumptables`, `signatures`, each `report` then `apply` |
+| `corpus_mcp.py`  | ✅ | the same queries as MCP tools (`vtmb_*`), registered in `.mcp.json` as `vtmb-corpus` |
 | `run.ps1`        | ✅ | headless runner (import + post-script) |
 | `crt/`, `crtfid/`, `fid/` | ❌ gitignored | the staged Microsoft archives, their import projects, and the built `.fidb` |
 | `project/`       | ❌ gitignored | the analyzed Ghidra project DB (derived from the user's own binary) |
+| `names/`, `types/`, `corpus/` | ❌ gitignored | the naming, typing and corpus reports, and `corpus.sqlite` |
 | `$ELYSIUM_EXPORT_ROOT/`           | ❌ gitignored | decompilation dumps (game-derived) |
 
 `project/` and `$ELYSIUM_EXPORT_ROOT/` are **derived from the user's own game binary** — bring-your-own,
@@ -278,6 +292,201 @@ function *and* a data slot points at it.
   container file nests under the container's own folders and is reported as not found.
 - **A `.lib` imports as a container**: `-Import <archive> -Recursive` descends it through
   Ghidra's COFF archive filesystem, one program per member, no custom script needed.
+
+## The whole-body corpus
+
+The passes above prepare a program one question at a time. These three take it whole, so a
+question stops costing a headless run and the project lock: the module is materialized once and
+every later query reads a local database. A cross-reference claim — *nothing else reads this
+field*, *nothing else overrides this slot* — becomes provable rather than a sweep repeated per
+question.
+
+The order is load-bearing. The corpus preserves whatever names and types the project holds at
+the moment it is taken, so a dump taken before the naming and typing passes bakes in `FUN_` and
+raw displacements and has to be thrown away.
+
+```powershell
+# repair what the analyzer got wrong, before anything photographs it
+uv run elysium research repair all report vampire.dll             # read the reports first
+uv run elysium research repair all apply                          # every module
+
+# recover identity
+uv run elysium research symbol_sweep survey                       # read-only, every module
+uv run elysium research symbol_sweep apply vampire.dll
+uv run elysium research datamap_types apply vampire.dll client.dll engine.dll
+uv run elysium research corpus vtables --name --create            # cheap; names slots, and
+                                                                  # makes functions MakeFuncs
+                                                                  # structurally cannot seed
+
+# take the photograph
+uv run elysium research corpus dump                               # the slow step
+uv run elysium research corpus listing                            # the slow step, again
+uv run elysium research corpus build
+
+uv run elysium research corpus readers 0x1564 --class CBasePlayer
+uv run elysium research corpus callers 10161200
+uv run elysium research corpus closure CBasePlayer --out <path>
+```
+
+`corpus` also answers `func`, `code`, `asm`, `callers`, `callees`, `vtable`, `slot`, `grep`,
+`str`, `globals`, `fields`, `twin`, `outliers`, `suggest` and `stat`; `corpus_mcp.py` exposes the
+same set as `vtmb_*` MCP tools. It is launched directly rather than through
+`uv run elysium research`, because the CLI writes a run report to stdout and stdout there carries
+only protocol messages — so it reads `.elysium.local.env` itself.
+
+### VtMB dispatches virtually, so a direct call graph is blind where the rules live
+
+`vampire.dll` records 43,004 direct call edges and contains 31,270 indirect dispatch sites, and
+**79.6 % of its class methods have no direct caller at all**. A `callers` query that answers
+"none" for `CBaseCombatCharacter` or `CAI_BaseNPC` is not reporting an unused method; it is
+reporting that the call is virtual.
+
+`DumpVtables` supplies (class, slot) → implementation; the decompiler's
+`(**(code **)(*(int *)this + 0xNN))()` supplies (caller, receiver, slot). **slot = offset / 4.**
+`corpus build` joins them.
+
+**A virtual edge is an inference and is labelled as one.** `callers` prints three sections and
+never merges them:
+
+- **direct** — a static call reference;
+- **virtual** — the site's receiver class holds this function at that slot;
+- **possible** — a dispatch at the same slot whose receiver class the code does not state.
+
+Only the receiver's *own* class is joined. A call through a base pointer can land on any derived
+override, and manufacturing those edges would replace one silent wrongness with another —
+`corpus slot <N>` reports the whole override set instead.
+
+**The vtable walk exists in two scripts.** `ApplyDatamapTypes` walks it to type `this`;
+`DumpVtables` walks it to dump the slots. A Ghidra script compiles alone, so a change to one
+belongs in the other — the two bounds especially (next `vftable_*` label, and following raw `E9`
+stubs as well as Ghidra thunks).
+
+**`MakeFuncs` cannot reach vtable-only code, and reports success while missing it.** Its two
+seeds are CALL targets and post-padding starts. Code that is *only* ever reached through a data
+pointer is never a CALL target, so it is only seeded when the linker happened to pad in front of
+it. Run on `client.dll` and `engine.dll` it found 16,137 and 6,958 seeds and created **zero**
+functions, while 2,663 and 1,038 vtable slots still pointed at code with no function at all.
+(It is not useless — the same run created 682 functions in `GameUI.dll` and 535 in
+`vguimatsurface.dll`, whose padding happens to line up. It is just not a bound on the problem.)
+
+The slot itself is the missing evidence: a vftable entry *is* the statement that its target is a
+function. `DumpVtables create=1` (`corpus vtables --create`) disassembles and creates at the slot
+target, which is the only seed that reaches this code. It recovers two different things, and
+which one depends on how the module was linked:
+
+| module | slots thunked | created | what was created |
+|---|---:|---:|---|
+| `vampire.dll` | 175,199 / 175,513 | 5,735 | `E9` stubs Ghidra had not modelled as thunks |
+| `client.dll` | 96 / 95,714 | 559 | bodies with no function at all |
+| `engine.dll` | — | 274 | mixed |
+| `GameUI.dll` | — | 154 | mixed |
+| `vguimatsurface.dll` | — | 51 | mixed |
+
+**Nearly every `vampire.dll` slot goes through an incremental-link stub**, so creating at the
+slot address makes a *thunk*, not a body — `100074d7` becomes `CAISound::thunk_FUN_10027450`,
+two bytes of `JMP`. That is the fix for the trap above rather than new code: once the stub is a
+modelled thunk, a call reaching it resolves to the body, and `getCallingFunctions` stops losing
+the edge. `client.dll` links its slots directly, so its 559 really are bodies nothing else found.
+
+Either way the result is marked `thunk` in the corpus and filters out of a function census.
+
+### A decompilation that is damaged says so
+
+`corpus code` prints a `DAMAGED DECOMPILATION` banner carrying the decompiler's own warnings.
+Two of them mean the C cannot be read as the function:
+
+- `Removing unreachable block` — the C **is not the whole function**;
+- `Could not recover jumptable` / `Treating indirect jump as call` — its **control flow is
+  wrong**, a switch printed as a call.
+
+`corpus asm <ref>` is the fallback, from `listing.sqlite` beside the corpus. The listing lives in
+its own database because it is comparable in size to every decompiled function put together, and
+every MCP query opens the corpus.
+
+### The repair passes, and what each is actually worth
+
+Measured on `vampire.dll`:
+
+| pass | yield | reading |
+|---|---|---|
+| `signatures` | **2,201** functions corrected; `CBaseCombatCharacter::MeleeSwingStep` goes from **114 invented parameters to 4** | the large one. 7,024 functions state their argument bytes in their own `RET <imm16>`, which is exact, not inferred |
+| `boundaries` | **0 of 16** oversized functions split | the outliers are *real*: `datamap_*_builder` static-init, and `FUN_104126e0` — 68 KB that turns out to be VtMB's complete `ACT_*` activity registry, every activity name paired with its ID |
+| `jumptables` | **6** tables read from the image | small. 265 of the 605 computed jumps state no base at all — they are register-indirect tail calls, not switches, and are left alone |
+
+The order matters: boundaries first because every later pass reads function bodies, signatures
+last because a split function needs one too. `repair all` runs them in that order.
+
+**A pass that finds no evidence changes nothing and says so.** `SplitFuncs` will not invent a
+boundary, `RecoverJumpTables` will not invent a table, and `RecoverSignatures` leaves a function
+alone when neither the `RET` nor the call sites state an argument count — 15,568 of them in
+`vampire.dll`. An unknown prototype is better than a fabricated one, which is the whole point of
+the signature pass.
+
+### Names come from the strings the compiler left
+
+A VProf scope pushed at a function's entry is that function's name, an input handler opens by
+pushing `C<Class>::Input<Name>`, and an assert carries the source file it was written in.
+`NameFromStrings` attributes each such string to the function that references it and renames on
+the strong tier only — a qualified name referenced within `entry=` bytes of the entry point.
+
+**The window has to clear the prologue.** A marker referenced at `+0x41` is ordinary: the frame
+is set up before the scope is pushed. The default is 128 bytes, and the deltas cluster there;
+past ~256 the references are overwhelmingly inlined callees naming themselves.
+
+**A name claimed by many functions is an inlined helper, not a collision.** `CBaseEntity::SetSolid`
+is claimed by 71 functions in `vampire.dll` because its scope marker rides into everything that
+inlined it. Those are reported with the claim count and never written.
+
+Ownership is the plate comment: a renamed function carries a `NameFromStrings:` line naming the
+string and its address, which is both the evidence and the marker `clear` uses to revert.
+Attribution is `getFunctionContaining`, so disassembled-but-unowned code contributes nothing —
+the survey reports that count per module, and `MakeFuncs` is the answer when it is non-zero.
+
+### A datamap is only half in the image
+
+**VtMB's `typedescription_t` states no byte width** — its `+0x24` is zero on every record — so
+`ApplyDatamapTypes` derives the width per `fieldType` from the corpus itself: sort a class's
+records by offset, and an adjacent pair gives `(next.offset - offset) / count`.
+
+**Take the smallest supported width, not the modal one.** Padding can only enlarge the gap to
+the next field, so a one-byte bool followed by three bytes of alignment votes "4" as loudly as a
+real int does, and a plurality types every bool in the module four bytes wide.
+
+**Records past the statically initialized prefix read back zero.** One index of every
+`mov [<abs>],<imm>` in the module's code resolves both a map's own `dataDesc`/`dataNumFields`
+and the individual records' names — `CBaseCombatCharacter` reads 46 records from the image and
+has 282. A record whose name is stored from a register cannot be recovered this way and is
+counted, not skipped silently.
+
+**A class structure must live in the ROOT category.** Making a namespace a `GhidraClass` mints
+an empty same-named structure there, and a structure filed in a category of its own loses to
+that placeholder: `this` then prints as a one-byte type (`this[0xaa1]`) while the real
+6,576-byte structure sits unused.
+
+**A vftable slot holds a 5-byte `E9` thunk that Ghidra often does not model as a thunk**, so the
+jump has to be followed from the bytes as well as through `getThunkedFunction`. Bound the walk
+at the next `vftable_*` label: stopping at the first slot that is not a `Function` truncates any
+table with a gap — the player's busy predicate is slot 412 — and not bounding it at all makes
+the walk run into the next class's table and claim its methods.
+
+### The ledger has two tiers, and the second one is candidates
+
+`corpus readers <offset>` answers "who touches this". A typed method states its members by name,
+so those rows carry a class and a field. An untyped one states an offset against a pointer the
+decompiler named itself, and that row carries the offset alone.
+
+Keeping both is what makes the question answerable across a whole module rather than across the
+typed part of it — but the untyped tier is candidates, not consumers, because unrelated
+structures collide numerically. A query for a sequence descriptor's `+0x2F8` returns the
+`rules.txt` parser too, which writes its own record at the same displacement.
+
+### Two headless traps in these passes
+
+- **`ParallelDecompiler` does not return results in the order the functions were handed to it.**
+  Pairing by index files every function's body under a neighbour's name, and nothing complains.
+  Return the result's own `getFunction()` alongside its C and pair on that.
+- **Headless splits a `key=value` script argument on the `=` before the script sees it**, so a
+  script that only parses the joined form reads `null` for every argument. Accept both.
 
 ## Disassembled ≠ owned (the plugin DLLs)
 

@@ -741,7 +741,12 @@ old `EndTouch`**; with the queue's equal-time FIFO tie-break (see "Output-list a
 edge is the last writer of any state the two handlers share.
 
 The partition enumerates pairs in **spatial BSP-leaf order** with a per-query dedup token — not
-entity-index, spawn, or name order. The exact intra-leaf list order is not recovered; verifying it
+entity-index, spawn, or name order. `CSpatialPartition::EnumerateElementsInBox` (`engine.dll
+0x20042550`) delegates the leaf walk itself (vtable slot `+0x20`) to a handle-indexed hash/free-list
+container built by `0x2000e690`, whose own slot `+0x20` in turn forwards to a caller-supplied
+comparator object cached at construction (`+0x70`) rather than walking a literal BSP/kd-tree
+in-place. The exact intra-leaf list order therefore depends on that comparator's own element
+storage, two decompile layers past what this pass reached, and is not recovered; verifying it
 needs three `trigger_multiple` volumes sharing one point, authored in different `.ents` orders across
 map builds and walked into while capturing the `OnStartTouch` firing order.
 
@@ -851,6 +856,102 @@ records game time. Use end (`FUN_10231690`) clears busy/session state and fires 
 it calls one player routine and sets a per-entity byte that neither begin nor end resets. That
 downstream action is once per entity lifetime and collision-touch-driven, not an entity think or
 queued timer.
+
+### `trigger_autosave` (`CTriggerSave`)
+
+`LINK_ENTITY_TO_CLASS(trigger_autosave, CTriggerSave)` factory `0x101c9740`, vtable `0x1047fb54`,
+base chain `CBaseToggle` → `CBaseTrigger` → `CTriggerSave`. The leaf overrides exactly `Spawn`
+(`0x101c97d0`) and `Touch` (`0x101c9810`); it declares no datamap of its own and shares
+`CBaseTrigger`'s `GetDataDescMap` byte-for-byte, so it is keyless and output-less — the 2013-SDK
+`NewLevelUnit`/`MinimumHitPoints`/`DangerousTimer` fields and the "dangerous autosave" branch do not
+exist in this build. `StartTouch`/`EndTouch` are inherited unchanged and unused; the autosave hangs
+off `Touch`, which runs once per frame per persisting touch pair, not once per begin.
+
+`Spawn` removes itself in deathmatch (`g_pGameRules->IsDeathmatch()`) and otherwise calls
+`CBaseTrigger::InitTrigger`, which is also where the occupancy gate lives: a `m_bDisabled` trigger
+never gets `FSOLID_TRIGGER`, so it never links and never touches. `Touch` is twelve instructions:
+if the toucher's `CBaseEntity+0xA8` self-pointer is null (VtMB's replacement for a virtual
+`IsPlayer()`, written only by `CBasePlayer::CBasePlayer`) it returns; otherwise it calls
+`UTIL_Remove(this)` — Source's deferred, end-of-frame delete, not a synchronous unlink — then
+`engine->ServerCommand("autosave\n")`. There is no `m_flWait`, rearm think, activator bookkeeping,
+master or filter call, and no chain to `BaseClass::Touch`; a non-player toucher does nothing and
+does not consume the trigger.
+
+`IVEngineServer::ServerCommand` (`engine.dll` `CVEngineServer`, vtable slot 59) is stock Source:
+it validates the trailing `\n`/`;` and calls `Cbuf_AddText`. **The save does not happen inline in
+the touch** — `autosave\n` executes at the next `Cbuf_Execute` in the host frame loop, so the
+trigger's observable effect is "a save happens later this frame or the next," not "during the
+touch callback." The `autosave` `ConCommand` (`engine.dll 0x20099010`, `Host_AutoSave_f`) then
+gates on, in order: `-buildpackfiles`/`-buildnodegraphs` on the command line; `autosave_on` (VtMB
+cvar, default `1`); a minimum interval against engine realtime, `autosave_time_delay` (VtMB cvar,
+default `300` seconds), skipped entirely for the session's first autosave; and
+`CSaveRestore::IsValidSave()` — the game DLL's save-block reason code (below) is zero — together
+with `gpGlobals`'s field at `+0x18`. **Neither original candidate for that field holds up under raw
+disassembly**: it is not a copy of `maxClients` (`+0x14`, single writer in `SV_SpawnServer`, a
+distinct field), and it is not a raw entity/edict-pool count either — `engine.dll`'s
+`SV_SpawnServer` (`0x200f55f0`) computes it as `1 - (int)(-1.0 / x)` from a separate global float at
+`0x20b42af4`, refreshed into `gpGlobals+0x18` every server frame (`0x200f7e40`) from a mirrored `sv`
+field it also initializes. That arithmetic evaluates to `2` when `x == 1` and to `1` for any larger
+integer `x`, so `gpGlobals+0x18 > 1` reduces to **"this session's underlying count is exactly one"**
+— a single-player-shaped gate, not a pool-size or client-count comparison. The source global at
+`0x20b42af4` sits immediately before the `mem_leakdelta` ConVar object in the engine's registration
+table (best positional match: the tail field of `mp_logecho`'s object, though no write/registration
+site was found to confirm that specific ConVar owns it) and carries no confirming symbol; naming it
+precisely needs a debugger read of `dword [0x20b42af4]` in-map, not further static tracing.
+
+On a D/E failure the request is **latched, not dropped**: `CSaveRestore::RequestAutosave()` sets
+`m_bAutosavePending`, and `CSaveRestore::SetSaveBlocked(int n)` — the same call the game DLL makes
+every player frame through `IVEngineServer` slot 5 — re-runs `Host_AutoSave_f` immediately the
+instant a pending request's block clears to `0`. So a `trigger_autosave` whose save is refused
+because the player is mid-something is not lost even though the trigger entity is already gone; the
+retry lives entirely in the save service, driven by the unblock write itself rather than polling or
+a timer.
+
+The reason code is `CBasePlayer::GetSaveBlockedReason` (`0x10174f80`, called from `CBasePlayer`
+vtable slot 444 / `+0x6F0`, a per-frame player update), returning `0` for savable and a nonzero code
+otherwise. Cross-referencing its tested byte offsets against the recovered `CBasePlayer` datamap
+(`0x10580edc`, 157 records) and decompiling its four predicate callees narrows most codes past the
+original shape-only guesses:
+
+- **Codes 6 and 7 are the same relationship, split by state.** `+0x1db0` is an `EHANDLE` the
+  `PostThink` common tail also touches (see "Recovered `PostThink` body" in `docs/vtmb/player-entity.md`);
+  code **7**'s predicate (`0x10175180`) resolves it and returns true only when the target's own
+  vtable slot `+0x228` getter equals exactly `3`, while code **6**'s `0x101618a0` resolves the same
+  handle and returns true whenever it is merely valid, regardless of state — so **7 fires for that
+  relationship in state 3 specifically, and 6 covers it in every other live state.** Code 6 also
+  covers an active camera relationship directly: `+0x19C0`/`+0x19CC` are the datamap-confirmed
+  `m_hCameraViewEntity`/`m_hCameraTargetEntity`, and its third predicate (`0x1017cf90`) requires a
+  positive int at the adjacent `+0x1ec4` together with a valid `EHANDLE` at `+0x19b4` — a related
+  camera-cluster field one datamap record short of a confirmed name.
+- **Code 1**'s second predicate (`0x1023bd00`) simply returns a global pointer (`0x107532e8`) whose
+  sole writer (`0x1023c020`) is a `worldspawn`-shaped initializer (creates the soundent, reads the
+  `message`/`chaptertitle`/`startdark` keyfields at `param_1+0x114/0x115/0x11e`) — so the global is
+  the world entity singleton, and code 1 also fires whenever that entity's `+0x4AC` field is
+  nonzero; the field itself is not further named.
+- **Codes 2, 3, 4, and code 1's `+0x1EB8` test have no datamap record anywhere in `CBasePlayer`'s
+  base chain.** `+0xFE8`, `+0x153C`/`+0x1538`, `+0x1040`, and `+0x1EB8` were checked against every
+  `typedescription_t` in the complete walked chain — `CBasePlayer` (157 records), `CBaseCombatCharacter`
+  (305), `CBaseFlex` (3), `CBaseAnimatingOverlay` (70), `CBaseAnimating` (43), `CBaseToggle` (38),
+  and the root `CBaseEntity` (110, `base=0`, chain terminates) — and none of the four offsets appear
+  in any of them. This is a terminal result, not an unchased lead: datamap coverage is not
+  universal, and these four are ordinary runtime `EHANDLE`/int fields `GetSaveBlockedReason` reads
+  directly without ever exposing them to Hammer or save/restore. Naming what they represent
+  semantically would need a logged walk of `0x10174f80`'s return across each candidate player state
+  (idle, dialogue, terminal, feeding, climbing, cutscene, dead), same as the final `vtbl[+0x278]()`
+  check (HYPOTHESIS `IsAlive()`, gating `0`/`5`), which this pass did not re-examine.
+
+On success, `CSaveRestore::SaveGameSlot("autosave", <GetSaveComment>, "Autosave")` writes
+`SAVE/autosave<NN>.sav` plus the map's `SAVE/*.HL1` state files; the comment is
+`"<map display name> <elapsed h:mm>"`. `GameHeader.userName` is a VtMB addition absent from stock
+Source's `GAME_HEADER` — the autosave writes the literal `"Autosave"`, which the load-game UI shows
+as the slot label. `g_ClientDLL->+0xAC` receives ids `0x4F` before the write and `0x36` after a
+successful one (hypothesised as the on-screen saving indicator's show/hide; `client.dll`'s
+`IBaseClientDLL` vtable slot 43 would confirm statically, and was not decompiled in this pass).
+
+Because `sp_tutorial_1`'s zero-offset landing spot puts the initial standing hull inside the map's
+one `trigger_autosave` (`docs/vtmb/game_runtime.md` → "The tutorial"), and the session's first
+autosave bypasses the minimum-interval guard, this trigger normally fires the very first autosave
+of the game the moment the player is not in a save-blocked state.
 
 ## `logic_relay` spawnflags and refire
 
@@ -2063,3 +2164,33 @@ disciplines and XP.
 
 Input names are case-sensitive in the data with rare exceptions (`trigger`,
 `teleport` appear once each lowercased), so lookup should fold case.
+
+### The declared surface, from the binary [decompile-verified]
+
+The table above is the surface the shipped maps actually *wire*. The surface each class
+**declares** is larger, and it is enumerable: every `DEFINE_INPUTFUNC` record binds a class,
+an input name and a handler address in one 44-byte structure. **`vampire.dll` declares 402
+input handlers across its datamaps**, `client.dll` and `engine.dll` none — inputs are a
+server-side concept.
+
+The recovered names follow `<Class>::Input<ExternalName>` and are what the handler bodies now
+carry, so an input is traceable from the map wire to its implementation without a fresh
+disassembly. Examples from `CAI_BaseNPCTroika`, the class the NPC wires address:
+
+| input | handler |
+| --- | --- |
+| `StartPlayerDialog` | `0x1029ef80` |
+| `StartPlayerDialogRemote` | `0x1029f060` |
+| `StartPlayerDialogUnforced` | `0x1029f120` |
+| `FollowPatrolPath` | `0x1029ed90` |
+| `SetupPatrolType` | `0x1029eb30` |
+| `ClearPatrolPath` | `0x1029ef60` |
+| `WalkToNode` | `0x1029e840` |
+| `TweakParam` | `0x1029ea40` |
+| `FleeAndDie` | `0x1029f210` |
+| `Faint` | `0x1029f250` |
+| `DisableThink` | `0x1029f2a0` |
+| `TeleportToEntity` | `0x102c24a0` |
+
+A declared input that no map wires is still real: `FadeToSkin` and `SetSkinFadeTime` are
+declared by the skin family above and wired zero times.

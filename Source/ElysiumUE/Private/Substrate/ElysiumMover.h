@@ -183,7 +183,25 @@ public:
 	// OnIn/OnOut (those are button-only outputs), so the cursor enter/leave stays a base no-op — only
 	// activation and the reticle-arming (world-side) matter.
 	virtual bool IsUsable() const override;
-	virtual bool IsUseLocked() const override { return bLocked; }   // locked_icon on the reticle (P4.4)
+	// locked_icon on the reticle (P4.4). The reticle is always the player's, so this asks the
+	// predicate with the player as the user — otherwise a knob-gated door would draw its unlocked
+	// icon and then refuse the +use behind it.
+	virtual bool IsUseLocked() const override;
+
+	// CBaseDoor::IsUseRefused (FUN_100eec70) — the real locked predicate, and the one the door's own
+	// `bLocked` byte only answers when no doorknob is attached. A knob owns its lock; the door reads
+	// it. NONPCS (0x200) refuses an NPC activator ahead of the knob lookup.
+	bool IsUseRefused(const FElysiumEntityHandle& Activator) const;
+
+	// The "user" retail's door predicates actually receive: the activator's character sub-object,
+	// null for any activator that is not a character (a relay, a button, a trigger).
+	const class FElysiumCombatCharacter* ResolveUser(const FElysiumEntityHandle& Activator) const;
+
+	// CBaseDoor::GetNearestDoorknob (FUN_100ee950): of the (at most two) registered knobs, the one
+	// nearest the user by MANHATTAN distance between world-space centres, ties going to the
+	// second-registered knob. Null when no knob is attached OR when there is no activator — retail
+	// returns null for a null user, which is what lets a script-fired Open/Toggle bypass the knob.
+	const FElysiumLockableEntity* FindNearestDoorknob(const FElysiumEntityHandle& Activator) const;
 	virtual void OnDormancyChanged() override;
 	virtual void Use(const FElysiumEntityHandle& Activator) override { DoorUse(Activator); }
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
@@ -237,7 +255,12 @@ protected:
 	// Resolve `LinkedDoorName` to the paired door leaf through the world name index (cached, no-RTTI
 	// downcast via AsDoorBase). Null when unset or the partner is missing/not a door.
 	FElysiumDoorBase* ResolveLinkedDoor();
-	void SyncDoorknobs();
+	// Drop handles whose knob no longer resolves, then re-arm the use anchor. This never writes a
+	// knob's lock state — the knob owns that.
+	void PruneDoorknobs();
+	// Retail vtable +0x444, pushed from the door at its use/activate sites (0x100eef88, 0x100f0485,
+	// 0x100f0524): re-pose each knob's handle from the knob's OWN lock state.
+	void RefreshDoorknobPoses();
 	void RefreshUseOwner();
 
 	// True when the door rests open with no autoclose: `wait -1` or the NO_AUTO_RETURN (0x20) flag.

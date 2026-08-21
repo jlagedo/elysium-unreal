@@ -12,6 +12,7 @@ boots, a game is played, and it saves". This doc owns that spine.
 | Owns | Doc |
 |---|---|
 | the entity object language (R1–R8), class registry, queue | `docs/architecture/engine-core.md` |
+| offline runtime-data compilation and load formats | `docs/architecture/runtime-data-compilation.md` |
 | map load/unload/travel | `docs/architecture/map-architecture.md` |
 | Enhanced Input planes, remapping, gamepad | `docs/architecture/input-architecture.md` |
 | the CommonUI/Slate stack, tokens, the virtual canvas | `docs/architecture/ui-architecture.md` |

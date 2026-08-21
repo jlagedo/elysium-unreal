@@ -25,6 +25,40 @@ namespace
 	}
 }
 
+void ElysiumHairDynamics::PreserveChainLocalTransforms(
+	FComponentSpacePoseContext& Output, TArray<FBoneTransform>& Transforms)
+{
+	TArray<FBoneTransform> Corrected;
+	Corrected.Reserve(Transforms.Num());
+
+	for (const FBoneTransform& Simulated : Transforms)
+	{
+		const FCompactPoseBoneIndex BoneIndex = Simulated.BoneIndex;
+		const FCompactPoseBoneIndex ParentIndex =
+			Output.Pose.GetPose().GetParentBoneIndex(BoneIndex);
+		const FTransform SourceLocal = Output.Pose.GetLocalSpaceTransform(BoneIndex);
+
+		FTransform CorrectedComponent = Simulated.Transform;
+		if (ParentIndex.IsValid())
+		{
+			const FTransform CorrectedParent = CurrentComponentSpace(Output, Corrected, ParentIndex);
+			FTransform CorrectedLocal = Simulated.Transform.GetRelativeTransform(CorrectedParent);
+			CorrectedLocal.SetTranslation(SourceLocal.GetTranslation());
+			CorrectedLocal.SetScale3D(SourceLocal.GetScale3D());
+			CorrectedComponent = CorrectedLocal * CorrectedParent;
+		}
+		else
+		{
+			CorrectedComponent.SetTranslation(SourceLocal.GetTranslation());
+			CorrectedComponent.SetScale3D(SourceLocal.GetScale3D());
+		}
+
+		Corrected.Add(FBoneTransform(BoneIndex, CorrectedComponent));
+	}
+
+	Transforms = MoveTemp(Corrected);
+}
+
 // --- stock AnimDynamics hair proof -------------------------------------------------------------
 
 namespace
@@ -163,6 +197,10 @@ void FAnimNode_ElysiumHairDynamics::Apply(FComponentSpacePoseContext& Output)
 	EvaluateSkeletalControl_AnyThread(Output, Transforms);
 	if (!Transforms.IsEmpty())
 	{
+		if (bChain)
+		{
+			ElysiumHairDynamics::PreserveChainLocalTransforms(Output, Transforms);
+		}
 		Output.Pose.LocalBlendCSBoneTransforms(Transforms, ActualAlpha);
 	}
 }

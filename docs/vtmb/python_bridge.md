@@ -276,6 +276,15 @@ trailing `override_count` / `fieldTolerance`. The offsets that matter are unchan
 `externalName` **+0x14**, `pSaveRestoreOps` +0x18, `inputFunc` **+0x1C**, `td` +0x20,
 `fieldSizeInBytes` +0x24.
 
+**An input-only record describes no member, so it is keyed by nothing.** A
+`DEFINE_INPUTFUNC` record carries `externalName` (+0x14) and `inputFunc` (+0x1C) but leaves
+`fieldName` (+4) **null** and `fieldOffset` (+8) **zero** — it names a handler, not a field.
+Any reader that keys a class's records by offset, or that skips a record with no field name,
+therefore discards the entity's entire input surface while still reporting a complete
+structure. The offsets are real: `InputScriptHide`'s record at `0x10553d24` reads back all
+zeroes from the image and its `inputFunc` is written by the builder as a single
+`mov [0x10553d40], 0x1001488f`.
+
 **`datamap_t`**: `dataDesc` +0, `dataNumFields` +4, `dataClassName` +8, `baseMap` **+0xC**.
 `GetDataDescMap()` is the virtual at **vtable +0x148**.
 

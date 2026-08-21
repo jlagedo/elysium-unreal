@@ -70,6 +70,8 @@ private:
 	// Split inheritance, then axis interpolation, in component space over whatever the body
 	// produced. Order is load-bearing — see the definition.
 	void EvaluateComposition(FPoseContext& Output);
+	void RegisterHairDynamicResetNodes();
+	void UnregisterHairDynamicResetNodes();
 
 	TArray<FName> FacialCurves;
 	TArray<float> FacialWeights;

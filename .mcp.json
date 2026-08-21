@@ -14,6 +14,19 @@
 			"env": {
 				"PYTHONUNBUFFERED": "1"
 			}
+		},
+		"vtmb-corpus": {
+			"type": "stdio",
+			"command": "uv",
+			"args": [
+				"run",
+				"--no-sync",
+				"python",
+				"research/tooling/ghidra/driver/corpus_mcp.py"
+			],
+			"env": {
+				"PYTHONUNBUFFERED": "1"
+			}
 		}
 	}
 }

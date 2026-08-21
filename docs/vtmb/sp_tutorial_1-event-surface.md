@@ -284,7 +284,7 @@ current step-3 Python handler; any output it fires rejoins the equal-time tail o
 | `trigger_look` | 4 | 8 | Teach looking/aiming by holding view on a target for `0.5` seconds. | Requires a player-view ray/angle test, uninterrupted dwell time, target identity, and enable/disable state. All four begin disabled. |
 | `trigger_hurt` | 3 | 0 | Environmental damage volumes. | Two author `damage=13`, one `damage=8`; two use damage type `8`, one `0`. Recovered cadence is an entry half-tick followed by `damage * 3` every three seconds, not arbitrary per-frame or half-second damage. |
 | `trigger_changelevel` | 14 | 0 | Script-only travel to `sm_pawnshop_1`, `sp_theatre`, and optional patch/hunter destinations. | All carry spawnflag `2` (`NOTOUCH` for this class) and are driven through `ChangeNow`; five begin hidden. The class-specific flag meaning must not be inherited from generic trigger flags. |
-| `trigger_autosave` | 1 | 0 | Establish a recovery point without player UI. | Must join the save architecture and avoid repeated saves while continuously occupied. |
+| `trigger_autosave` | 1 | 0 | Establish a recovery point without player UI. | Self-deletes on the first accepted player touch, so repeated saves while occupied are structurally impossible rather than guarded; full chain in `docs/vtmb/entity_io.md` → "`trigger_autosave` (`CTriggerSave`)". |
 | `trigger_inventory_check` | 1 | 3 | Emit `OnPlayerHasItem` for an inventory-gated beat. | Recovered `StartTouch` accepts only a base-filtered player entry, then searches ordinary slots and keyring case-insensitively. It does not poll, test quantity, or disable itself; this map authors the one-shot outputs. |
 | `trigger_environmental_audio` | 16 | 0 | Change acoustic room/reverb state while crossing tutorial spaces. | All begin disabled and author room types `123` (8), `12` (1), `5` (3), `104` (2), `108` (1), and `11` (1). Plans must preserve trigger, SoundScheme `RoomDSP`, interior/exterior, and scripted-override precedence until RE30/RE31 close it. |
 | `trigger_stealth_mod` | 3 | 0 | Add a balanced Sneaking modifier while a combat character overlaps the region. | All three author `stealth_modifier=2`; enter adds, leave removes, overlapping raw contributions stack, and only the effective read clamps to `[-10,+10]`. Full observer contract: `stealth.md`. |
@@ -1017,9 +1017,14 @@ an unmet prerequisite, or still unexplained. “No error in the log” is not cl
 
 ## 15. Open research questions
 
-1. In retail `engine.dll`, after `PhysicsTouchTriggers` enters the collision-property interface,
-   what exact order delivers old-contact ends and new-contact begins for a teleported player?
-2. What save service and repeat/occupancy guard does the no-output `trigger_autosave` leaf invoke?
+1. Closed: new `StartTouch` precedes old `EndTouch` within a frame (`docs/vtmb/entity_io.md` →
+   "New begins precede old ends within a frame"); only the partition's intra-leaf element order
+   among simultaneously-entered triggers remains open, needing a live capture.
+2. Closed: `trigger_autosave` is `CTriggerSave`, self-deleting on first player touch and requesting
+   an async `CSaveRestore` save through the engine's console-command deferral, with the save-blocked
+   retry latched rather than polled (`docs/vtmb/entity_io.md` → "`trigger_autosave` (`CTriggerSave`)").
+   The save-blocked reason-code meanings and the `gpGlobals+0x18` guard-field identity remain open,
+   needing a debugger read rather than a decompile.
 3. How do damage type, velocity mode, force, and victim classification affect the three tutorial
    `trigger_hurt` volumes beyond their recovered timing?
 4. What is the precedence between `trigger_environmental_audio`, SoundScheme `RoomDSP`,

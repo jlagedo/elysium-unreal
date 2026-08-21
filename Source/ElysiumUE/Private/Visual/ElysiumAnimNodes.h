@@ -12,6 +12,15 @@
 
 struct FElysiumCompositionRig;
 
+namespace ElysiumHairDynamics
+{
+	// AnimDynamics solves chain links iteratively, so a violent input can leave one frame with
+	// unconverged body positions. Keep its rotations, but rebuild the target transforms with the
+	// incoming pose's parent-relative translations and scales before the ordinary alpha blend.
+	void PreserveChainLocalTransforms(FComponentSpacePoseContext& Output,
+		TArray<FBoneTransform>& Transforms);
+}
+
 // Stock Unreal AnimDynamics, configured from the baked-native recipe carried by the mesh. This
 // wrapper only exposes the graph node's protected evaluate seam to the native body tail; it does
 // not implement or interpret VtMB's secondary-motion solve.

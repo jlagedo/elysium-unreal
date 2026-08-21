@@ -603,7 +603,10 @@ bool FElysiumTutorialLockpickDoorTest::RunTest(const FString&)
 	World.RouteEntityTouch(Loose->Handle, PlayerHandle, /*bBegin*/ true);
 	TestTrue(TEXT("world overlap makes HasItem see the lockpick"),
 		Player->Inventory.Has(*Player, TEXT("item_g_lockpick")));
-	TestTrue(TEXT("the doorknob starts locked from its attached door"), LiveKnob->IsUseLocked());
+	// The knob's lock is its own, seeded from `difficulty` in Spawn — attaching to a door does not
+	// write it. Here both authorities happen to agree (spawnflags 2304 carries LOCKED, difficulty is
+	// 1); Elysium.Substrate.DoorKnobLockAuthority covers the cases where they disagree.
+	TestTrue(TEXT("the doorknob starts locked from its own difficulty"), LiveKnob->IsUseLocked());
 	TestTrue(TEXT("a knobbed door keeps its slab as a look-ray target"),
 		Services.UseAnchorEnabled.FindRef(LiveDoor->Handle));
 
@@ -654,8 +657,12 @@ bool FElysiumTutorialLockpickDoorTest::RunTest(const FString&)
 	TestEqual(TEXT("success increments the resolved-attempt count"), LiveKnob->SkillAttempts, 1);
 	TestEqual(TEXT("success emits the unlock output"),
 		ReadCounter(World.FindByName(TEXT("unlocked"))), 1.0f);
-	TestFalse(TEXT("success synchronizes doorknob and door"),
-		LiveKnob->IsUseLocked() || LiveDoor->IsUseLocked());
+	// The knob is the authority a knobbed door reads, so picking it is enough to admit the player —
+	// the door's own LOCKED byte is untouched and stays set, exactly as retail leaves it.
+	TestFalse(TEXT("success unlocks the doorknob"), LiveKnob->IsUseLocked());
+	TestTrue(TEXT("success does not write the door's own lock byte"), LiveDoor->bLocked);
+	TestFalse(TEXT("the unlocked knob admits the player at the door"),
+		LiveDoor->IsUseRefused(PlayerHandle));
 	TestEqual(TEXT("unlocked knob drives the door's real OnOpen"),
 		ReadCounter(World.FindByName(TEXT("opened"))), 1.0f);
 	TestTrue(TEXT("opening never consumes the reusable lockpick"),

@@ -17,6 +17,7 @@ documents:
   - {path: operations/life-agent-playbook.md, kind: operations, owner: animation, subject: agent session shapes and kickoff prompts per LIFE task}
 
   - {path: architecture/runtime-architecture.md, kind: architecture, owner: runtime, subject: runtime spine}
+  - {path: architecture/runtime-data-compilation.md, kind: architecture, owner: runtime data, subject: offline compilation and runtime loading contracts}
   - {path: architecture/engine-core.md, kind: architecture, owner: entity substrate, subject: entity object model}
   - {path: architecture/gameplay-systems-architecture.md, kind: architecture, owner: gameplay systems, subject: legacy API layer and gameplay-domain decomposition}
   - {path: architecture/computer-terminal-architecture.md, kind: architecture, owner: computer terminals, subject: Unreal computer terminal interaction and presentation}

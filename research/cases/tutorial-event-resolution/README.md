@@ -53,10 +53,37 @@ use Source feet plus the recovered 32×32×72 standing player hull.
 - Map-specific join: `docs/vtmb/sp_tutorial_1-event-surface.md`
 - Status: `docs/project/roadmap.md` RE43
 
-Static `vampire.dll` inspection reaches `PhysicsTouchTriggers`, but the exact ordering of old-contact
-ends and new-contact begins is below the `engine.dll` collision-property interface. The
-`trigger_autosave` save transaction is also not closed by this server-DLL pass. Keep both explicit
-rather than inferring them from Source SDK or the Unreal implementation.
+The ordering of old-contact ends and new-contact begins is now closed across both `vampire.dll` and
+`engine.dll`: a new `StartTouch` fires synchronously inside the engine's relink (`engine.dll
+FUN_20111f30`), while a stale `EndTouch` is deferred to `GameFrame`'s post-entity-think step, so
+**new begins precede old ends within a frame** (`docs/vtmb/entity_io.md` → "New begins precede old
+ends within a frame"). What stays open is only the partition's *intra-leaf* element order — the
+enumeration delegates to a caller-supplied comparator two decompile layers past what this pass
+reached, not a literal BSP walk — and needs a live capture (three overlapping `trigger_multiple`
+volumes in different `.ents` orders) to settle. `trigger_autosave`'s full chain — `CTriggerSave`,
+the engine `ServerCommand`/`Host_AutoSave_f` deferral, the save-blocked latch and `SaveGameSlot` —
+is also closed (`docs/vtmb/entity_io.md` → "`trigger_autosave` (`CTriggerSave`)"). Both remaining
+items narrowed further under static analysis alone: `gpGlobals+0x18` is confirmed **not** a raw
+entity/client-count copy — it is `1 - (int)(-1.0 / x)` over a separate, still-unnamed global
+(`engine.dll 0x20b42af4`), reducing the guard to "this session's underlying count is exactly one";
+naming that global's ConVar/registration site needs a debugger read. The save-blocked reason codes
+are now datamap-cross-referenced and callee-decompiled rather than shape-guessed: codes 6/7 are
+confirmed to be the same `+0x1db0` relationship split by state (`==3` vs. any other live state) plus
+the datamap-named camera pair `m_hCameraViewEntity`/`m_hCameraTargetEntity`; code 1's global
+predicate resolves to the world-entity singleton. Codes 2/3/4 and code 1's `+0x1EB8` test are now a
+**terminal static result**: the full base chain from `CBasePlayer` to the root `CBaseEntity`
+(`CBasePlayer` → `CBaseCombatCharacter` → `CBaseFlex` → `CBaseAnimatingOverlay` → `CBaseAnimating` →
+`CBaseToggle` → `CBaseEntity`, every one of the seven datamaps walked) carries no `typedescription_t`
+at any of those four offsets — they are ordinary runtime `EHANDLE`/int fields the function reads
+directly, never exposed to Hammer or save/restore. Only a live logged walk of
+`GetSaveBlockedReason`'s return across player states (idle, dialogue, terminal, feeding, climbing,
+cutscene, dead) can name them further, same as the final `vtbl+0x278` check (`IsAlive()` HYPOTHESIS).
+
+The player's touch-relink cadence is closed: `CBasePlayer::PostThink` (`0x1016be10`, called from
+`CPlayerMove::RunCommand` → `RunPostThink` once per **processed usercmd**, not once per server
+frame) unconditionally reaches `CBasePlayer::SimulatePlayerSimulatedEntities` regardless of which
+branch its live-body update takes (`docs/vtmb/player-entity.md` → "Recovered `PostThink` body";
+`docs/vtmb/game_runtime.md` → "The server stage in order").
 
 The `CNPCMaker` boundary needed by the tutorial is closed. Public `Spawn` and timed spawning share
 the same admission path; start-disabled suppresses only the timer; infinite mode bypasses finite

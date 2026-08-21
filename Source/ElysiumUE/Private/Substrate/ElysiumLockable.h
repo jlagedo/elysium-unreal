@@ -38,7 +38,12 @@ public:
 
 	void InputLock();
 	void InputUnlock(const FElysiumEntityHandle& Activator);
-	void ApplyDoorLockState(bool bLocked);
+	// The lock this entity owns. A door never writes it: retail's CBaseDoor consults the knob
+	// (CBaseDoor::IsUseRefused FUN_100eec70) and pushes only the handle pose back down.
+	void SetLockState(bool bLocked);
+	// Retail vtable +0x444 — re-pose the handle from this entity's own lock state. This is the
+	// whole of what a door pushes to its knobs.
+	void RefreshHandlePose() { OnLockPresentationChanged(); }
 
 protected:
 	virtual void OnSkillSucceeded(FElysiumCombatCharacter& User) override;

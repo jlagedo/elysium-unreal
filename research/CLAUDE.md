@@ -6,6 +6,18 @@ copied from the game or a decompiler.
 - `tooling/ghidra/scripts/` contains tracked analysis scripts.
 - `tooling/ghidra/driver/` contains the headless runner, context builder, and parsers; its
   `README.md` is the workspace manual — read it before running a Ghidra pass.
+- `tooling/ghidra/driver/corpus.py` holds the whole-body corpus: every module's functions
+  decompiled, its strings, its named globals, its class vtables, its class structures and the
+  field ledger, in one SQLite database, with the disassembly beside it in a second.
+  **Query it before running a headless pass** — `uv run elysium research corpus`, or the
+  `vtmb_*` MCP tools. A pass is for changing the project, not for asking it a question. The
+  corpus reports itself stale when a naming or typing pass has run since it was dumped.
+  `callers` answers virtually as well as directly, in labelled sections — VtMB dispatches its
+  game logic through vtables, so for most class methods the direct section is empty and an
+  unlabelled "none" would be a wrong answer rather than a missing one.
+- `tooling/ghidra/driver/repair.py` fixes what Ghidra's analyzer got wrong — function
+  boundaries, abandoned jump tables, invented parameter lists — and must run **before** a corpus
+  dump, which photographs the project as it stands.
 - `tooling/capture/` contains live hook/injector source and capture analysis.
 - `tooling/probes/` contains focused surveys and static probes.
 - `cases/` contains hash-pinned specifications grouped by topic.

@@ -113,52 +113,37 @@ bool FElysiumLockableEntity::AttachToParent(FElysiumEntity& Parent)
 	return !IsDead();
 }
 
+// Lock and Unlock write this entity's own lock and nothing else's. A knob attached to a door does
+// not relay to the door: retail's CBaseLockableEnt owns m_LastRoll, and the door reads it back
+// through IsUseRefused. A container still needs the push, because the container — not the lock —
+// owns its own use anchor.
 void FElysiumLockableEntity::InputLock()
 {
+	SetLockState(true);
 	if (FElysiumEntity* Parent = World ? World->Resolve(AttachedOwner) : nullptr)
 	{
-		if (FElysiumDoorBase* Door = Parent->AsDoorBase())
-		{
-			Door->InputLock();
-			return;
-		}
 		if (FElysiumItemContainer* Container = Parent->AsItemContainer())
 		{
-			ApplyDoorLockState(true);
 			Container->NotifyLockState(Handle, true);
-			return;
 		}
 	}
-	ApplyDoorLockState(true);
 }
 
 void FElysiumLockableEntity::InputUnlock(const FElysiumEntityHandle& Activator)
 {
 	FireOutput(GOnUnlocked, Activator);
+	SetLockState(false);
 	if (FElysiumEntity* Parent = World ? World->Resolve(AttachedOwner) : nullptr)
 	{
-		if (FElysiumDoorBase* Door = Parent->AsDoorBase())
+		if (FElysiumItemContainer* Container = Parent->AsItemContainer())
 		{
-			Door->InputUnlock();
-		}
-		else if (FElysiumItemContainer* Container = Parent->AsItemContainer())
-		{
-			ApplyDoorLockState(false);
 			Container->NotifyLockState(Handle, false);
 		}
-		else
-		{
-			ApplyDoorLockState(false);
-		}
-	}
-	else
-	{
-		ApplyDoorLockState(false);
 	}
 	OnUnlocked(Activator);
 }
 
-void FElysiumLockableEntity::ApplyDoorLockState(bool bLocked)
+void FElysiumLockableEntity::SetLockState(bool bLocked)
 {
 	LastRoll = bLocked ? 1 : 3;
 	OnLockPresentationChanged();

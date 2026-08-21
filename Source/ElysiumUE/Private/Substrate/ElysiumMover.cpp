@@ -8,6 +8,7 @@
 
 #include "Substrate/ElysiumMover.h"
 
+#include "Substrate/ElysiumLockable.h"
 #include "Substrate/ElysiumSkillClasses.h"
 
 #include "ElysiumAudioSubsystem.h"
@@ -427,16 +428,19 @@ void FElysiumDoorBase::Serialize(FElysiumSaveArchive& Ar)
 	}
 }
 
+// Lock/Unlock write the door's own byte only. Retail's InputLock/InputUnlock (FUN_100f0120 /
+// FUN_100f02b0) do not reach the doorknobs, and a knobbed door's refusal is decided by the knob —
+// so a script that unlocks a door still leaves a locked knob gating the player's +use.
 void FElysiumDoorBase::InputLock()
 {
 	bLocked = true;
-	SyncDoorknobs();
+	PruneDoorknobs();
 }
 
 void FElysiumDoorBase::InputUnlock()
 {
 	bLocked = false;
-	SyncDoorknobs();
+	PruneDoorknobs();
 }
 
 void FElysiumDoorBase::RegisterDoorknob(FElysiumLockableEntity& Doorknob)
@@ -452,7 +456,10 @@ void FElysiumDoorBase::RegisterDoorknob(FElysiumLockableEntity& Doorknob)
 		return;
 	}
 	Doorknobs.Add(Doorknob.Handle);
-	Doorknob.ApplyDoorLockState(bLocked);
+	// The knob arrives with the lock it seeded from its own `difficulty`. Attaching to a door only
+	// re-poses its handle; writing the door's lock over it would open every keypad and padlock whose
+	// door carries no LOCKED spawnflag.
+	Doorknob.RefreshHandlePose();
 	RefreshUseOwner();
 }
 
@@ -462,20 +469,113 @@ void FElysiumDoorBase::UnregisterDoorknob(const FElysiumEntityHandle& Doorknob)
 	RefreshUseOwner();
 }
 
-void FElysiumDoorBase::SyncDoorknobs()
+void FElysiumDoorBase::PruneDoorknobs()
 {
 	for (int32 Index = Doorknobs.Num() - 1; Index >= 0; --Index)
 	{
 		FElysiumEntity* Entity = World ? World->Resolve(Doorknobs[Index]) : nullptr;
-		FElysiumLockableEntity* Doorknob = Entity ? Entity->AsLockableEntity() : nullptr;
+		const FElysiumLockableEntity* Doorknob = Entity ? Entity->AsLockableEntity() : nullptr;
 		if (!Doorknob || Doorknob->IsDead())
 		{
 			Doorknobs.RemoveAt(Index);
-			continue;
 		}
-		Doorknob->ApplyDoorLockState(bLocked);
 	}
 	RefreshUseOwner();
+}
+
+void FElysiumDoorBase::RefreshDoorknobPoses()
+{
+	PruneDoorknobs();
+	for (const FElysiumEntityHandle& Knob : Doorknobs)
+	{
+		FElysiumEntity* Entity = World ? World->Resolve(Knob) : nullptr;
+		if (FElysiumLockableEntity* Doorknob = Entity ? Entity->AsLockableEntity() : nullptr)
+		{
+			Doorknob->RefreshHandlePose();
+		}
+	}
+}
+
+// Retail's "user" is never the activator entity itself: FUN_100f0170/FUN_100f0210 pass the
+// activator's character sub-object (+0x9c) and FUN_100eef50 passes +0xa8, DevMsg'ing "Non player
+// entity %s trying to use" when it is absent. That pointer is null for anything that is not a
+// character, so a relay, button or trigger propagating a non-character activator resolves to NO
+// user — the same fall-through as a script-fired input with no activator at all.
+const FElysiumCombatCharacter* FElysiumDoorBase::ResolveUser(
+	const FElysiumEntityHandle& Activator) const
+{
+	if (!World || !Activator.IsSet())
+	{
+		return nullptr;
+	}
+	// A set handle that no longer resolves is the documented falsy-when-dead/stale contract
+	// (ElysiumEntityHandle.h), not a failure, so it takes the same no-user branch silently — and
+	// it must, because the reticle calls this every frame with the player's handle.
+	const FElysiumEntity* Entity = World->Resolve(Activator);
+	return Entity ? Entity->AsCombatCharacter() : nullptr;
+}
+
+const FElysiumLockableEntity* FElysiumDoorBase::FindNearestDoorknob(
+	const FElysiumEntityHandle& Activator) const
+{
+	// Retail returns null for a null user before it ever looks at the handles, so an I/O-driven
+	// Open/Toggle never consults a knob and falls through to the door's own byte.
+	const FElysiumCombatCharacter* User = ResolveUser(Activator);
+	if (!User)
+	{
+		return nullptr;
+	}
+	const FElysiumLockableEntity* Nearest = nullptr;
+	double NearestDist = 0.0;
+	for (const FElysiumEntityHandle& Knob : Doorknobs)
+	{
+		const FElysiumEntity* Entity = World->Resolve(Knob);
+		const FElysiumLockableEntity* Doorknob = Entity ? Entity->AsLockableEntity() : nullptr;
+		if (!Doorknob)
+		{
+			continue;
+		}
+		// Manhattan, not Euclidean — FUN_100ee950 sums the per-axis absolute differences. `<=` keeps
+		// the retail tie-break, where the second-registered knob wins an exact draw.
+		//
+		// Divergence, deliberate: retail measures between WorldSpaceCenter()s (vtable +0x304) while
+		// these are entity origins — the player's is its feet, a knob's is its def origin. The Z
+		// term is therefore offset, but by the SAME amount for both candidates: across the whole
+		// export corpus the two knobs of a door differ in height by at most 2.5 cm while sitting
+		// tens of cm apart horizontally, so the offset cancels in the comparison and cannot change
+		// which handle is picked. There is no world-space-centre accessor on the substrate to use.
+		const FVector ToKnob = Doorknob->Origin - User->Origin;
+		const double Dist = FMath::Abs(ToKnob.X) + FMath::Abs(ToKnob.Y) + FMath::Abs(ToKnob.Z);
+		if (!Nearest || Dist <= NearestDist)
+		{
+			Nearest = Doorknob;
+			NearestDist = Dist;
+		}
+	}
+	return Nearest;
+}
+
+bool FElysiumDoorBase::IsUseLocked() const
+{
+	return IsUseRefused(World ? World->PlayerHandle() : FElysiumEntityHandle::Invalid());
+}
+
+bool FElysiumDoorBase::IsUseRefused(const FElysiumEntityHandle& Activator) const
+{
+	// NONPCS (0x200) reports "locked" for an NPC activator, ahead of the knob lookup.
+	if ((SpawnFlags & SF_DOOR_NONPCS) != 0)
+	{
+		const FElysiumCombatCharacter* User = ResolveUser(Activator);
+		if (User && User->AsNpc())
+		{
+			return true;
+		}
+	}
+	if (const FElysiumLockableEntity* Knob = FindNearestDoorknob(Activator))
+	{
+		return Knob->IsUseLocked();
+	}
+	return bLocked;
 }
 
 void FElysiumDoorBase::OnDormancyChanged()
@@ -537,7 +637,9 @@ void FElysiumDoorBase::InputOpen(const FElysiumEntityHandle& Activator)
 	// (RE: CBaseDoor::InputOpen FUN_100f0170 opens iff `!IsDoorLocked` and fires nothing on the
 	// locked path). CBaseDoor carries no OnLockedUse output — that output belongs to prop_switch —
 	// and the `locked` sound is a +use affordance played only by CBaseDoor::Use (see DoorUse).
-	if (bLocked)
+	// The gate is IsUseRefused, not the raw byte: a knobbed door defers to its knob, and an
+	// activator-less input degrades to the byte so script-driven opens still work.
+	if (IsUseRefused(Activator))
 	{
 		return;
 	}
@@ -560,7 +662,7 @@ void FElysiumDoorBase::InputToggle(const FElysiumEntityHandle& Activator)
 	// Locked door: retail InputToggle (FUN_100f0210) gates on `IsDoorLocked` at the top and does
 	// nothing at all when locked — no output, no sound, no motion. The `locked` +use affordance
 	// belongs to CBaseDoor::Use, not to the Toggle input (see DoorUse).
-	if (bLocked)
+	if (IsUseRefused(Activator))
 	{
 		return;
 	}
@@ -801,7 +903,12 @@ void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
 	// CBaseDoor::Use @0x100efc90 locked branch: a locked door reached by +use plays ONLY the
 	// `locked` sound and returns — no output (CBaseDoor has no OnLockedUse) and no motion. This is
 	// the single path that voices the locked door; the direct Open/Toggle inputs stay silent.
-	if (bLocked)
+	//
+	// A knobbed door asks its nearest knob, not its own byte (CBaseDoor::IsUseRefused FUN_100eec70,
+	// reached from DoorknobUse FUN_100eef50). That is what keeps a keypad or padlock gating a door
+	// whose spawnflags carry no LOCKED bit.
+	RefreshDoorknobPoses();
+	if (IsUseRefused(Activator))
 	{
 		static const FName Locked(TEXT("locked"));
 		PlayMoverSound(Locked);
@@ -831,7 +938,14 @@ void FElysiumDoorBase::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("Toggle state"), StateNames[(uint8)ToggleState]);
 	Out.Emplace(TEXT("Moving"), IsMoving()
 		? (MoveKind() == EMoveKind::Angular ? TEXT("yes (angular)") : TEXT("yes (linear)")) : TEXT("no"));
-	Out.Emplace(TEXT("Locked"), bLocked ? TEXT("yes") : TEXT("no"));
+	// Two authorities, reported separately: the door's own byte, and whichever one actually decides
+	// a refusal. A knobbed door's answer comes from the knob.
+	Out.Emplace(TEXT("Locked (door byte)"), bLocked ? TEXT("yes") : TEXT("no"));
+	if (Doorknobs.Num() > 0)
+	{
+		Out.Emplace(TEXT("Lock authority"), FString::Printf(TEXT("%d doorknob(s) — the nearest one decides"),
+			Doorknobs.Num()));
+	}
 	Out.Emplace(TEXT("Stays open"), StaysOpen() ? TEXT("yes (wait -1 / NO_AUTO_RETURN)") : TEXT("no (autoclose)"));
 	Out.Emplace(TEXT("Closed pose"), FString::Printf(TEXT("%s / %s"), *ClosedLoc.ToString(), *ClosedRot.ToString()));
 	Out.Emplace(TEXT("Open pose"),   FString::Printf(TEXT("%s / %s"), *OpenLoc.ToString(), *OpenRot.ToString()));

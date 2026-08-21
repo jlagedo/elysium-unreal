@@ -172,6 +172,10 @@ void FElysiumBodyAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 
 void FElysiumBodyAnimProxy::PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds)
 {
+	// InitializeCachedClassData rebuilds the engine-owned list during an AnimInstance reinitialize.
+	// These nodes live on the native proxy rather than in the compiled graph, so restore their reset
+	// registrations before continuing with the manually hosted pre-update path.
+	RegisterHairDynamicResetNodes();
 	FAnimInstanceProxy::PreUpdate(InAnimInstance, DeltaSeconds);
 	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
 	{
@@ -297,6 +301,7 @@ void FElysiumBodyAnimProxy::SetHairDynamics(
 	const TArray<FElysiumHairDynamicsBodyConfig>& InBodies,
 	const FReferenceSkeleton& ReferenceSkeleton)
 {
+	UnregisterHairDynamicResetNodes();
 	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
 	{
 		Node.TermPhysics();
@@ -315,6 +320,23 @@ void FElysiumBodyAnimProxy::SetHairDynamics(
 	InstalledChainCount = InChains.Num();
 	InstalledBodyCount = InBodies.Num();
 	bHairNeedsInitialize = !HairDynamics.IsEmpty();
+	RegisterHairDynamicResetNodes();
+}
+
+void FElysiumBodyAnimProxy::RegisterHairDynamicResetNodes()
+{
+	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
+	{
+		DynamicResetNodes.AddUnique(&Node);
+	}
+}
+
+void FElysiumBodyAnimProxy::UnregisterHairDynamicResetNodes()
+{
+	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
+	{
+		DynamicResetNodes.Remove(&Node);
+	}
 }
 
 // ================================================================================================

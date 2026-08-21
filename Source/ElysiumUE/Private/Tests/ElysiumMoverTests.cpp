@@ -5,6 +5,8 @@
 #include "ElysiumBrushComponent.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
+#include "ElysiumPlayer.h"
+#include "Substrate/ElysiumLockable.h"
 #include "Substrate/ElysiumMover.h"
 #include "Tests/ElysiumTestServices.h"
 
@@ -958,6 +960,228 @@ bool FElysiumDoorStaleAtTopReopensTest::RunTest(const FString&)
 		Sink->CountOf(TEXT("fire"), TEXT("OnOpen")), 1);
 	TestEqual(TEXT("stale +use fires no OnClose"),
 		Sink->CountOf(TEXT("fire"), TEXT("OnClose")), 0);
+
+	return true;
+}
+
+namespace ElysiumDoorKnobTests
+{
+	// A knob whose `difficulty` is non-zero seeds itself locked in FElysiumLockableEntity::Spawn.
+	// Whether the DOOR is locked is a separate authority — the whole point of these cases.
+	static FElysiumEntityDef Knob(const TCHAR* Name, const TCHAR* Parent, const TCHAR* Difficulty,
+		const FVector& Origin = FVector::ZeroVector)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("prop_doorknob");
+		Def.TargetName = Name;
+		Def.Origin = Origin;
+		Def.ModelMesh = TEXT("test_knob");
+		Def.Keys.Add(TEXT("model"), TEXT("models/test/knob.mdl"));
+		Def.Keys.Add(TEXT("parentname"), Parent);
+		Def.Keys.Add(TEXT("difficulty"), Difficulty);
+		Def.Keys.Add(TEXT("skilltype"), TEXT("1"));
+		return Def;
+	}
+
+	static FElysiumEntityDef Door(const TCHAR* Name, const TCHAR* SpawnFlags)
+	{
+		FElysiumEntityDef Def;
+		Def.Classname = TEXT("func_door_rotating");
+		Def.TargetName = Name;
+		Def.Keys.Add(TEXT("spawnflags"), SpawnFlags);
+		Def.Keys.Add(TEXT("wait"), TEXT("-1"));
+		return Def;
+	}
+}
+
+// The regression for the tutorial keypad defect: `tutchopdoord` (spawnflags 256, no LOCKED bit)
+// carries a prop_doorknob_electronic with `difficulty 1`, and a bare +use opened it because the
+// door wrote its own unlocked state over the knob at attach time. Retail reads the other way —
+// CBaseDoor::IsUseRefused (FUN_100eec70) consults the nearest knob and only falls back to the
+// door's own byte when there is no knob, or no user.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorKnobLockAuthorityTest,
+	"Elysium.Substrate.DoorKnobLockAuthority", GElysiumMoverTestFlags)
+bool FElysiumDoorKnobLockAuthorityTest::RunTest(const FString&)
+{
+	using namespace ElysiumDoorKnobTests;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__door_knob_authority__");
+	// Unlocked door, locked knob — the tutchopdoord shape.
+	Defs.Defs.Add(Door(TEXT("keypad_door"), TEXT("256")));
+	Defs.Defs.Add(Knob(TEXT("keypad"), TEXT("keypad_door"), TEXT("1")));
+	// Locked door, unlocked knob — the mirror. Retail lets the knob win here too.
+	Defs.Defs.Add(Door(TEXT("open_knob_door"), TEXT("2304")));
+	Defs.Defs.Add(Knob(TEXT("free_knob"), TEXT("open_knob_door"), TEXT("0")));
+	// No knob at all: the door's own byte is still the authority.
+	Defs.Defs.Add(Door(TEXT("plain_locked_door"), TEXT("2304")));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	AddExpectedError(TEXT("its attachment body is unavailable"),
+		EAutomationExpectedErrorFlags::Contains, 2);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	World.Activate(0.0);
+
+	auto FindDoor = [&World](const TCHAR* Name)
+	{
+		FElysiumEntity* E = World.FindByName(Name);
+		return E ? E->AsDoorBase() : nullptr;
+	};
+	auto FindKnob = [&World](const TCHAR* Name)
+	{
+		FElysiumEntity* E = World.FindByName(Name);
+		return E ? E->AsLockableEntity() : nullptr;
+	};
+
+	FElysiumDoorBase* KeypadDoor = FindDoor(TEXT("keypad_door"));
+	FElysiumLockableEntity* Keypad = FindKnob(TEXT("keypad"));
+	FElysiumDoorBase* OpenKnobDoor = FindDoor(TEXT("open_knob_door"));
+	FElysiumLockableEntity* FreeKnob = FindKnob(TEXT("free_knob"));
+	FElysiumDoorBase* PlainDoor = FindDoor(TEXT("plain_locked_door"));
+	if (!TestNotNull(TEXT("keypad door resolves"), KeypadDoor)
+		|| !TestNotNull(TEXT("keypad knob resolves"), Keypad)
+		|| !TestNotNull(TEXT("open-knob door resolves"), OpenKnobDoor)
+		|| !TestNotNull(TEXT("free knob resolves"), FreeKnob)
+		|| !TestNotNull(TEXT("plain door resolves"), PlainDoor))
+	{
+		return false;
+	}
+
+	// The defect, stated directly: attaching to an unlocked door must not open the knob.
+	TestTrue(TEXT("a difficulty knob stays locked on an unlocked door"), Keypad->IsUseLocked());
+	TestFalse(TEXT("the unlocked door's own byte is untouched"), KeypadDoor->bLocked);
+	TestTrue(TEXT("+use on the slab is refused by the knob"),
+		KeypadDoor->IsUseRefused(PlayerHandle));
+	TestTrue(TEXT("the reticle reports the same refusal it will apply"), KeypadDoor->IsUseLocked());
+
+	// The mirror: a locked door does not lock an unlocked knob, and the knob still decides.
+	TestFalse(TEXT("a difficulty-0 knob stays unlocked on a locked door"), FreeKnob->IsUseLocked());
+	TestTrue(TEXT("the locked door's own byte is untouched"), OpenKnobDoor->bLocked);
+	TestFalse(TEXT("+use defers to the unlocked knob"),
+		OpenKnobDoor->IsUseRefused(PlayerHandle));
+
+	// No knob: the door's byte is the authority, exactly as before.
+	TestTrue(TEXT("a knobless locked door still refuses"), PlainDoor->IsUseRefused(PlayerHandle));
+
+	// The null-activator fallthrough — GetNearestDoorknob returns null for a null user, so an
+	// I/O-driven Open never consults the knob. This is what keeps every authored `Unlock -> door`
+	// wire and every script-fired open working after the authority flip.
+	const FElysiumEntityHandle NoActivator;
+	TestFalse(TEXT("a script-fired open bypasses the knob"), KeypadDoor->IsUseRefused(NoActivator));
+	KeypadDoor->InputOpen(NoActivator);
+	TestEqual(TEXT("script-fired Open still opens a knob-gated door"), KeypadDoor->State(),
+		FElysiumDoorBase::EToggleState::GoingUp);
+
+	// ...while a player-activated Open on the same door is refused.
+	OpenKnobDoor->InputOpen(PlayerHandle);   // knob unlocked -> admitted
+	TestEqual(TEXT("player Open admitted through an unlocked knob"), OpenKnobDoor->State(),
+		FElysiumDoorBase::EToggleState::GoingUp);
+	FElysiumDoorBase* SecondKeypad = KeypadDoor;
+	SecondKeypad->InputToggle(PlayerHandle);
+	TestEqual(TEXT("player Toggle refused by the locked knob leaves the state alone"),
+		SecondKeypad->State(), FElysiumDoorBase::EToggleState::GoingUp);
+
+	return true;
+}
+
+// Lock/Unlock are per-authority. A knob's Unlock writes the knob; a door's Unlock writes the door.
+// Eleven authored wires in the corpus aim `Unlock` straight at a knob, and they must land there.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorKnobUnlockInputsTest,
+	"Elysium.Substrate.DoorKnobUnlockInputs", GElysiumMoverTestFlags)
+bool FElysiumDoorKnobUnlockInputsTest::RunTest(const FString&)
+{
+	using namespace ElysiumDoorKnobTests;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__door_knob_unlock__");
+	Defs.Defs.Add(Door(TEXT("gate"), TEXT("2304")));         // LOCKED door
+	Defs.Defs.Add(Knob(TEXT("gate_knob"), TEXT("gate"), TEXT("5")));   // locked knob
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	AddExpectedError(TEXT("its attachment body is unavailable"),
+		EAutomationExpectedErrorFlags::Contains, 1);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	World.Activate(0.0);
+
+	FElysiumEntity* DoorEntity = World.FindByName(TEXT("gate"));
+	FElysiumEntity* KnobEntity = World.FindByName(TEXT("gate_knob"));
+	FElysiumDoorBase* LiveDoor = DoorEntity ? DoorEntity->AsDoorBase() : nullptr;
+	FElysiumLockableEntity* LiveKnob = KnobEntity ? KnobEntity->AsLockableEntity() : nullptr;
+	if (!TestNotNull(TEXT("door resolves"), LiveDoor) || !TestNotNull(TEXT("knob resolves"), LiveKnob))
+	{
+		return false;
+	}
+	TestTrue(TEXT("both authorities start locked"), LiveDoor->bLocked && LiveKnob->IsUseLocked());
+
+	// Unlock the DOOR: its byte clears, the knob does not, and a player +use is still refused.
+	LiveDoor->InputUnlock();
+	TestFalse(TEXT("door Unlock clears the door byte"), LiveDoor->bLocked);
+	TestTrue(TEXT("door Unlock does not reach the knob"), LiveKnob->IsUseLocked());
+	TestTrue(TEXT("a locked knob still gates the door after the door unlocks"),
+		LiveDoor->IsUseRefused(PlayerHandle));
+
+	// Unlock the KNOB: the authored `Unlock -> knob` wire is what actually opens the way.
+	LiveKnob->InputUnlock(PlayerHandle);
+	TestFalse(TEXT("knob Unlock clears the knob"), LiveKnob->IsUseLocked());
+	TestFalse(TEXT("with both clear the door admits a player +use"),
+		LiveDoor->IsUseRefused(PlayerHandle));
+
+	// Re-lock the knob alone and confirm the door byte was not dragged along.
+	LiveKnob->InputLock();
+	TestTrue(TEXT("knob Lock re-locks only the knob"), LiveKnob->IsUseLocked());
+	TestFalse(TEXT("knob Lock leaves the door byte clear"), LiveDoor->bLocked);
+	TestTrue(TEXT("the re-locked knob gates again"), LiveDoor->IsUseRefused(PlayerHandle));
+
+	return true;
+}
+
+// GetNearestDoorknob (FUN_100ee950): Manhattan distance between world-space centres, ties to the
+// second-registered knob. A double-knobbed door asks whichever handle the user is standing at.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorNearestKnobSelectionTest,
+	"Elysium.Substrate.DoorNearestKnobSelection", GElysiumMoverTestFlags)
+bool FElysiumDoorNearestKnobSelectionTest::RunTest(const FString&)
+{
+	using namespace ElysiumDoorKnobTests;
+
+	FElysiumEntityDefs Defs;
+	Defs.MapName = TEXT("__door_nearest_knob__");
+	Defs.Defs.Add(Door(TEXT("double_door"), TEXT("256")));
+	// Inside handle unlocked, outside handle locked — the classic "locked from the street" door.
+	Defs.Defs.Add(Knob(TEXT("inside"), TEXT("double_door"), TEXT("0"), FVector(0.0, 100.0, 0.0)));
+	Defs.Defs.Add(Knob(TEXT("outside"), TEXT("double_door"), TEXT("7"), FVector(0.0, -100.0, 0.0)));
+
+	FElysiumRecordingServices Services;
+	Services.bHasPlayer = true;
+	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+	AddExpectedError(TEXT("its attachment body is unavailable"),
+		EAutomationExpectedErrorFlags::Contains, 2);
+	World.Load(MoveTemp(Defs));
+	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
+	World.Activate(0.0);
+
+	FElysiumEntity* DoorEntity = World.FindByName(TEXT("double_door"));
+	FElysiumDoorBase* LiveDoor = DoorEntity ? DoorEntity->AsDoorBase() : nullptr;
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!TestNotNull(TEXT("door resolves"), LiveDoor) || !TestNotNull(TEXT("player resolves"), Player))
+	{
+		return false;
+	}
+
+	Player->Origin = FVector(0.0, 90.0, 0.0);   // standing at the inside handle
+	const FElysiumLockableEntity* Near = LiveDoor->FindNearestDoorknob(PlayerHandle);
+	TestNotNull(TEXT("a knob is selected from the inside"), Near);
+	TestFalse(TEXT("the inside handle is unlocked, so the door admits"),
+		LiveDoor->IsUseRefused(PlayerHandle));
+
+	Player->Origin = FVector(0.0, -90.0, 0.0);  // walked round to the outside handle
+	TestTrue(TEXT("the outside handle is locked, so the same door refuses"),
+		LiveDoor->IsUseRefused(PlayerHandle));
 
 	return true;
 }
