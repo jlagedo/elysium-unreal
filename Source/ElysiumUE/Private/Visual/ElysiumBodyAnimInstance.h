@@ -15,6 +15,20 @@
 
 class UAnimSequence;
 struct FElysiumCompositionRig;
+struct FElysiumBodyAnimProxy;
+
+// A stable node for the engine's native custom-node registry. The simulated nodes themselves live
+// in a replaceable array, so registering their addresses would make reconfiguration unsafe; this
+// bridge stays put and forwards each reset to whichever nodes the proxy currently owns.
+struct FElysiumHairDynamicsResetNode final : FAnimNode_Base
+{
+	void SetOwner(FElysiumBodyAnimProxy* InOwner) { Owner = InOwner; }
+	virtual bool NeedsDynamicReset() const override { return true; }
+	virtual void ResetDynamics(ETeleportType InTeleportType) override;
+
+private:
+	FElysiumBodyAnimProxy* Owner = nullptr;
+};
 
 // Everything a VtMB body wears over whatever produced its pose — and nothing about how the pose
 // was produced.
@@ -32,12 +46,16 @@ struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
 {
 	GENERATED_BODY()
 
-	FElysiumBodyAnimProxy() = default;
-	explicit FElysiumBodyAnimProxy(UAnimInstance* Instance) : FAnimInstanceProxy(Instance) {}
+	FElysiumBodyAnimProxy() { HairDynamicsResetNode.SetOwner(this); }
+	explicit FElysiumBodyAnimProxy(UAnimInstance* Instance) : FAnimInstanceProxy(Instance)
+	{
+		HairDynamicsResetNode.SetOwner(this);
+	}
 
 	virtual void Initialize(UAnimInstance* InAnimInstance) override;
 	virtual void PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds) override;
 	virtual void UpdateAnimationNode(const FAnimationUpdateContext& InContext) override;
+	virtual void GetCustomNodes(TArray<FAnimNode_Base*>& OutNodes) override;
 
 	// Walks a compiled graph's nodes if there is one, then resolves the tail's bone references —
 	// both stages resolve their indices here, once, and never by name per evaluation. The base call
@@ -53,6 +71,10 @@ struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
 		const FReferenceSkeleton& ReferenceSkeleton);
 	int32 NumHairDynamicsChains() const { return InstalledChainCount; }
 	int32 NumHairDynamicsBodies() const { return InstalledBodyCount; }
+#if WITH_DEV_AUTOMATION_TESTS
+	void ClearHairDynamicResetRequestsForTest();
+	bool HairDynamicsRequestedResetForTest(ETeleportType TeleportType) const;
+#endif
 
 	// The facial morph track (12.3): the rig's evaluated morph weights, published from the game
 	// thread and emitted as morph-target anim curves over whatever pose the body produced. Two
@@ -70,8 +92,8 @@ private:
 	// Split inheritance, then axis interpolation, in component space over whatever the body
 	// produced. Order is load-bearing — see the definition.
 	void EvaluateComposition(FPoseContext& Output);
-	void RegisterHairDynamicResetNodes();
-	void UnregisterHairDynamicResetNodes();
+	void ResetHairDynamics(ETeleportType TeleportType);
+	friend struct FElysiumHairDynamicsResetNode;
 
 	TArray<FName> FacialCurves;
 	TArray<float> FacialWeights;
@@ -80,6 +102,7 @@ private:
 	// are driven through `ResolveBones`/`CacheBones` + `Apply` rather than through pose links.
 	UPROPERTY(Transient) FAnimNode_ElysiumAxisInterp AxisInterp;
 	UPROPERTY(Transient) TArray<FAnimNode_ElysiumHairDynamics> HairDynamics;
+	FElysiumHairDynamicsResetNode HairDynamicsResetNode;
 	int32 InstalledChainCount = 0;
 	int32 InstalledBodyCount = 0;
 	bool bHairNeedsInitialize = false;

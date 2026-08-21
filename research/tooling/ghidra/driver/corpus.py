@@ -88,28 +88,62 @@ CREATE TABLE IF NOT EXISTS fields (
     module TEXT, cls TEXT, off INTEGER, name TEXT, len INTEGER, type TEXT, note TEXT);
 CREATE TABLE IF NOT EXISTS accesses (
     module TEXT, func_addr TEXT, cls TEXT, off INTEGER, field TEXT, kind TEXT);
-CREATE INDEX IF NOT EXISTS functions_name ON functions (name);
-CREATE INDEX IF NOT EXISTS functions_ns ON functions (ns);
-CREATE INDEX IF NOT EXISTS edges_caller ON edges (caller);
-CREATE INDEX IF NOT EXISTS edges_callee ON edges (callee);
-CREATE INDEX IF NOT EXISTS string_refs_func ON string_refs (func_addr);
-CREATE INDEX IF NOT EXISTS fields_cls ON fields (cls);
-CREATE INDEX IF NOT EXISTS fields_off ON fields (off);
-CREATE INDEX IF NOT EXISTS accesses_off ON accesses (off);
-CREATE INDEX IF NOT EXISTS accesses_field ON accesses (field);
-CREATE INDEX IF NOT EXISTS accesses_cls ON accesses (cls);
-CREATE INDEX IF NOT EXISTS vtables_cls ON vtables (cls);
-CREATE INDEX IF NOT EXISTS vtables_func ON vtables (func);
-CREATE INDEX IF NOT EXISTS vtables_slot ON vtables (slot);
-CREATE INDEX IF NOT EXISTS vcalls_caller ON vcalls (caller);
-CREATE INDEX IF NOT EXISTS vcalls_slot ON vcalls (slot);
-CREATE INDEX IF NOT EXISTS vcalls_cls ON vcalls (cls);
-CREATE INDEX IF NOT EXISTS globals_name ON globals (name);
-CREATE INDEX IF NOT EXISTS global_refs_addr ON global_refs (addr);
-CREATE INDEX IF NOT EXISTS global_refs_func ON global_refs (func_addr);
 CREATE TABLE IF NOT EXISTS meta (
-    module TEXT PRIMARY KEY, binary TEXT, sha256 TEXT, dumped_at REAL, project_at REAL);
-"""
+    module TEXT PRIMARY KEY, binary TEXT, sha256 TEXT, dumped_at REAL, project_at REAL);"""
+
+# The indices, declared apart from the schema because they have to be RECONCILED rather than
+# created. `CREATE INDEX IF NOT EXISTS` matches on the index's NAME, not its definition, so
+# widening one in place is a silent no-op: the old single-column index survives, every query
+# still plans against it, and nothing anywhere says so. `_ensure_indices` compares each stored
+# definition and rebuilds the ones that differ.
+#
+# `functions_addr` is the one that matters most. The table's PRIMARY KEY is (module, addr) and
+# cannot serve a lookup that knows only the address -- which is how every reference query starts
+# -- so without it SQLite scans all 71,235 rows, each carrying its own decompilation, and drags
+# 162 MiB of TEXT past the page cache to answer `corpus func <addr>`.
+INDICES = {
+    "functions_addr": "functions (addr)",
+    "functions_name": "functions (name)",
+    "functions_ns": "functions (ns)",
+    "edges_caller": "edges (module, caller, kind)",
+    "edges_callee": "edges (module, callee, kind)",
+    "vtables_cls": "vtables (cls, slot)",
+    "vtables_func": "vtables (module, func)",
+    "vtables_slot": "vtables (module, slot, sub)",
+    "vcalls_caller": "vcalls (module, caller)",
+    "vcalls_slot": "vcalls (module, slot, cls)",
+    "vcalls_cls": "vcalls (module, cls, slot)",
+    "strings_addr": "strings (module, addr)",
+    "string_refs_func": "string_refs (func_addr)",
+    "string_refs_str": "string_refs (module, str_addr)",
+    "globals_name": "globals (name)",
+    "global_refs_addr": "global_refs (module, addr)",
+    "global_refs_func": "global_refs (func_addr)",
+    "fields_cls": "fields (cls, off)",
+    "fields_off": "fields (off)",
+    "accesses_off": "accesses (off, cls)",
+    "accesses_field": "accesses (field)",
+    "accesses_cls": "accesses (cls)",
+}
+
+
+def _ensure_indices(connection: sqlite3.Connection) -> None:
+    """Create each index, and rebuild any whose stored definition no longer matches."""
+    existing = {name: sql for name, sql in connection.execute(
+        "SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL")}
+    rebuilt = 0
+    for name, definition in INDICES.items():
+        wanted = f"CREATE INDEX {name} ON {definition}"
+        if existing.get(name) == wanted:
+            continue
+        if name in existing:
+            connection.execute(f"DROP INDEX {name}")
+            rebuilt += 1
+        connection.execute(wanted)
+    if rebuilt:
+        print(f"rebuilt {rebuilt} index(es) whose definition had changed")
+    connection.commit()
+
 
 # Where each module's own binary lives, relative to the VtMB install. A corpus is only as
 # current as the project it was taken from, and neither fact is visible in the data itself.
@@ -507,6 +541,7 @@ def build(programs: list[str]) -> int:
     connection.row_factory = sqlite3.Row
     connection.executescript(SCHEMA)
     _migrate(connection)
+    _ensure_indices(connection)
     total = 0
     for program in programs:
         if not (corpus / f"functions-{program}.jsonl").is_file():
@@ -547,6 +582,10 @@ def build(programs: list[str]) -> int:
           f"slot with `corpus slot <N>`)")
 
     _build_index(connection)
+    # The planner picks between these indices by guesswork until it has seen their shape, and
+    # guesses badly on a table whose rows carry a decompilation each.
+    connection.execute("ANALYZE")
+    connection.commit()
     print(f"database: {_database()}  ({total} functions)")
     connection.close()
     _build_listing(programs)
@@ -613,15 +652,50 @@ def _stamp(connection: sqlite3.Connection, module: str, corpus: Path) -> None:
                        (module, path, digest, dumped, dumped))
 
 
+# The MCP server is long-lived and answers many queries against an unchanging database, so the
+# per-query setup is the cost that matters there, not the query. Both of these are held open:
+# the connection (whose page cache is the point) and the staleness verdict (which reads every
+# module's binary end to end).
+_CONNECTION: sqlite3.Connection | None = None
+_LISTING: sqlite3.Connection | None = None
+_STALENESS: tuple[tuple, list[str]] | None = None
+
+
+def _listing_connection() -> sqlite3.Connection | None:
+    """The disassembly database, opened once. None when it has not been built."""
+    global _LISTING
+    if _LISTING is not None:
+        return _LISTING
+    if not _listing_database().is_file():
+        return None
+    _LISTING = sqlite3.connect(_listing_database())
+    _LISTING.row_factory = sqlite3.Row
+    for pragma in ("mmap_size = 1073741824", "cache_size = -65536", "temp_store = MEMORY"):
+        _LISTING.execute(f"PRAGMA {pragma}")
+    return _LISTING
+
+
 def _connect() -> sqlite3.Connection:
+    global _CONNECTION
+    if _CONNECTION is not None:
+        for warning in _staleness(_CONNECTION):
+            print(warning)
+        return _CONNECTION
     if not _database().is_file():
         raise FileNotFoundError(f"no corpus at {_database()}; run `corpus build` first")
     connection = sqlite3.connect(_database())
     connection.row_factory = sqlite3.Row
+    # Read-only work over a 162 MiB database: map it rather than copying pages through the
+    # cache, and keep enough of it resident that a second query does not re-read the index.
+    for pragma in ("mmap_size = 1073741824", "cache_size = -262144",
+                   "temp_store = MEMORY", "synchronous = OFF"):
+        connection.execute(f"PRAGMA {pragma}")
     # Idempotent, and it means a corpus built by an earlier schema answers a query about a table
     # it has never held -- empty, rather than raising about a table that does not exist.
     connection.executescript(SCHEMA)
     _migrate(connection)
+    _ensure_indices(connection)
+    _CONNECTION = connection
     for warning in _staleness(connection):
         print(warning)
     return connection
@@ -635,6 +709,7 @@ def _staleness(connection: sqlite3.Connection) -> list[str]:
     because the project directory's own mtime moves on every read-only headless run and a
     warning that always fires is one nobody reads.
     """
+    global _STALENESS
     warnings: list[str] = []
     try:
         rows = connection.execute("SELECT * FROM meta").fetchall()
@@ -642,6 +717,24 @@ def _staleness(connection: sqlite3.Connection) -> list[str]:
         return ["corpus predates staleness stamping; re-run `corpus build` to record it"]
 
     marker = research_root() / "ghidra" / "last-apply.json"
+
+    # Hashing eight DLLs end to end costs ~80 ms, and the answer only changes when one of the
+    # inputs does. Key the verdict on their cheap stats -- size and mtime of every binary, plus
+    # the apply stamp -- so a repeat query pays nothing while any real change still re-hashes.
+    def _fingerprint() -> tuple:
+        parts: list = [marker.stat().st_mtime_ns if marker.is_file() else 0]
+        for one in rows:
+            path = Path(one["binary"]) if one["binary"] else None
+            if path is not None and path.is_file():
+                stat = path.stat()
+                parts.append((one["module"], stat.st_size, stat.st_mtime_ns))
+            else:
+                parts.append((one["module"], 0, 0))
+        return tuple(parts)
+
+    key = _fingerprint()
+    if _STALENESS is not None and _STALENESS[0] == key:
+        return _STALENESS[1]
     applied: dict[str, float] = {}
     if marker.is_file():
         try:
@@ -658,6 +751,7 @@ def _staleness(connection: sqlite3.Connection) -> list[str]:
         if when and when > (row["dumped_at"] or 0.0):
             warnings.append(f"STALE: {row['module']} was renamed or retyped after this corpus "
                             f"was dumped; re-run `corpus dump {row['module']}`")
+    _STALENESS = (key, warnings)
     return warnings
 
 
@@ -676,14 +770,25 @@ def _resolve(connection: sqlite3.Connection, reference: str) -> list[sqlite3.Row
         cls, _, member = reference.partition("::")
         return connection.execute(
             "SELECT * FROM functions WHERE ns = ? AND name = ?", (cls, member)).fetchall()
+    # Normalised in Python, not in SQL. `lower(addr) = lower(?)` applies a function to the
+    # COLUMN, which makes `functions_addr` unusable and sends every reference lookup -- the one
+    # each of func/code/callers/callees/asm/twin begins with -- back to a full scan of 71,235
+    # rows that each carry a decompilation.
+    candidate = reference.lower()
+    if candidate.startswith("0x"):
+        candidate = candidate[2:]
     rows = connection.execute(
-        "SELECT * FROM functions WHERE addr = ? OR lower(addr) = lower(?)",
-        (reference, reference.replace("0x", ""))).fetchall()
+        "SELECT * FROM functions WHERE addr = ?", (candidate,)).fetchall()
+    if rows:
+        return rows
+    # Exact name first for the same reason: a leading-wildcard LIKE cannot use an index, and
+    # OR-ing it beside the equality denies the index to both halves.
+    rows = connection.execute(
+        "SELECT * FROM functions WHERE name = ?", (reference,)).fetchall()
     if rows:
         return rows
     return connection.execute(
-        "SELECT * FROM functions WHERE name = ? OR name LIKE ?",
-        (reference, f"%{reference}%")).fetchall()[:20]
+        "SELECT * FROM functions WHERE name LIKE ?", (f"%{reference}%",)).fetchall()[:20]
 
 
 def _label(row: sqlite3.Row) -> str:
@@ -777,12 +882,11 @@ def command_asm(reference: str) -> int:
     if not rows:
         print(f"no function matches {reference!r}")
         return 1
-    if not _listing_database().is_file():
+    listings = _listing_connection()
+    if listings is None:
         print(f"no listing database at {_listing_database()}; run `corpus listing` then "
               f"`corpus build` to create it")
         return 1
-    listings = sqlite3.connect(_listing_database())
-    listings.row_factory = sqlite3.Row
     for row in rows[:2]:
         print(f"// {_label(row)}")
         found = listings.execute("SELECT asm FROM listing WHERE module = ? AND addr = ?",
@@ -960,8 +1064,14 @@ def command_str(text: str, limit: int) -> int:
 def command_vtable(cls: str) -> int:
     """A class's dispatch table, slot by slot — the shape of its virtual interface."""
     connection = _connect()
+    # The caller counts come back in ONE grouped query rather than one per slot: a wide class
+    # has hundreds of slots, and a per-slot count turns a single answer into hundreds of
+    # round trips.
     rows = connection.execute(
-        """SELECT v.*, f.name, f.ns, f.size, f.warn FROM vtables v
+        """SELECT v.*, f.name, f.ns, f.size, f.warn,
+                  (SELECT count(*) FROM edges e
+                   WHERE e.module = v.module AND e.callee = v.func) AS callers
+           FROM vtables v
            LEFT JOIN functions f ON f.module = v.module AND f.addr = v.func
            WHERE v.cls = ? ORDER BY v.module, v.sub, v.slot""", (cls,)).fetchall()
     if not rows:
@@ -975,10 +1085,7 @@ def command_vtable(cls: str) -> int:
                   + (f"  subobject at +{row['sub']}" if row["sub"] else ""))
         name = row["name"] or "<not a function in the corpus>"
         owner = f"{row['ns']}::" if row["ns"] and row["ns"] != "Global" else ""
-        callers = connection.execute(
-            "SELECT count(*) FROM edges WHERE module = ? AND callee = ?",
-            (row["module"], row["func"])).fetchone()[0]
-        print(f"  #{row['slot']:<4} {row['func']}  {owner}{name:44} callers={callers}"
+        print(f"  #{row['slot']:<4} {row['func']}  {owner}{name:44} callers={row['callers']}"
               f"{'  [thunked]' if row['thunk'] else ''}")
     print(f"\n{len(rows)} slot(s) in {cls}")
     return 0

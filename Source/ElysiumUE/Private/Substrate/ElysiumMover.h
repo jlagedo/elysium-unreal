@@ -202,6 +202,11 @@ public:
 	// second-registered knob. Null when no knob is attached OR when there is no activator — retail
 	// returns null for a null user, which is what lets a script-fired Open/Toggle bypass the knob.
 	const FElysiumLockableEntity* FindNearestDoorknob(const FElysiumEntityHandle& Activator) const;
+	FElysiumLockableEntity* FindNearestDoorknob(const FElysiumEntityHandle& Activator)
+	{
+		return const_cast<FElysiumLockableEntity*>(
+			const_cast<const FElysiumDoorBase*>(this)->FindNearestDoorknob(Activator));
+	}
 	virtual void OnDormancyChanged() override;
 	virtual void Use(const FElysiumEntityHandle& Activator) override { DoorUse(Activator); }
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
@@ -258,9 +263,6 @@ protected:
 	// Drop handles whose knob no longer resolves, then re-arm the use anchor. This never writes a
 	// knob's lock state — the knob owns that.
 	void PruneDoorknobs();
-	// Retail vtable +0x444, pushed from the door at its use/activate sites (0x100eef88, 0x100f0485,
-	// 0x100f0524): re-pose each knob's handle from the knob's OWN lock state.
-	void RefreshDoorknobPoses();
 	void RefreshUseOwner();
 
 	// True when the door rests open with no autoclose: `wait -1` or the NO_AUTO_RETURN (0x20) flag.

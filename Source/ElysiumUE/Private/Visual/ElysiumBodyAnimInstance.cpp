@@ -164,23 +164,34 @@ namespace
 // FElysiumBodyAnimProxy
 // ================================================================================================
 
+void FElysiumHairDynamicsResetNode::ResetDynamics(ETeleportType InTeleportType)
+{
+	if (Owner != nullptr)
+	{
+		Owner->ResetHairDynamics(InTeleportType);
+	}
+}
+
 void FElysiumBodyAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 {
+	HairDynamicsResetNode.SetOwner(this);
 	FAnimInstanceProxy::Initialize(InAnimInstance);
 	bHairNeedsInitialize = !HairDynamics.IsEmpty();
 }
 
 void FElysiumBodyAnimProxy::PreUpdate(UAnimInstance* InAnimInstance, float DeltaSeconds)
 {
-	// InitializeCachedClassData rebuilds the engine-owned list during an AnimInstance reinitialize.
-	// These nodes live on the native proxy rather than in the compiled graph, so restore their reset
-	// registrations before continuing with the manually hosted pre-update path.
-	RegisterHairDynamicResetNodes();
 	FAnimInstanceProxy::PreUpdate(InAnimInstance, DeltaSeconds);
 	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
 	{
 		Node.PreUpdate(InAnimInstance);
 	}
+}
+
+void FElysiumBodyAnimProxy::GetCustomNodes(TArray<FAnimNode_Base*>& OutNodes)
+{
+	FAnimInstanceProxy::GetCustomNodes(OutNodes);
+	OutNodes.Add(&HairDynamicsResetNode);
 }
 
 void FElysiumBodyAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& InContext)
@@ -301,7 +312,6 @@ void FElysiumBodyAnimProxy::SetHairDynamics(
 	const TArray<FElysiumHairDynamicsBodyConfig>& InBodies,
 	const FReferenceSkeleton& ReferenceSkeleton)
 {
-	UnregisterHairDynamicResetNodes();
 	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
 	{
 		Node.TermPhysics();
@@ -320,24 +330,37 @@ void FElysiumBodyAnimProxy::SetHairDynamics(
 	InstalledChainCount = InChains.Num();
 	InstalledBodyCount = InBodies.Num();
 	bHairNeedsInitialize = !HairDynamics.IsEmpty();
-	RegisterHairDynamicResetNodes();
 }
 
-void FElysiumBodyAnimProxy::RegisterHairDynamicResetNodes()
+void FElysiumBodyAnimProxy::ResetHairDynamics(ETeleportType TeleportType)
 {
 	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
 	{
-		DynamicResetNodes.AddUnique(&Node);
+		Node.ResetDynamics(TeleportType);
 	}
 }
 
-void FElysiumBodyAnimProxy::UnregisterHairDynamicResetNodes()
+#if WITH_DEV_AUTOMATION_TESTS
+void FElysiumBodyAnimProxy::ClearHairDynamicResetRequestsForTest()
 {
 	for (FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
 	{
-		DynamicResetNodes.Remove(&Node);
+		Node.InitTeleportType = ETeleportType::None;
 	}
 }
+
+bool FElysiumBodyAnimProxy::HairDynamicsRequestedResetForTest(ETeleportType TeleportType) const
+{
+	for (const FAnimNode_ElysiumHairDynamics& Node : HairDynamics)
+	{
+		if (Node.InitTeleportType != TeleportType)
+		{
+			return false;
+		}
+	}
+	return !HairDynamics.IsEmpty();
+}
+#endif
 
 // ================================================================================================
 // UElysiumBodyAnimInstance

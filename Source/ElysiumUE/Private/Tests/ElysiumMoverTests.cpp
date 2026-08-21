@@ -1015,6 +1015,15 @@ bool FElysiumDoorKnobLockAuthorityTest::RunTest(const FString&)
 	Defs.Defs.Add(Knob(TEXT("free_knob"), TEXT("open_knob_door"), TEXT("0")));
 	// No knob at all: the door's own byte is still the authority.
 	Defs.Defs.Add(Door(TEXT("plain_locked_door"), TEXT("2304")));
+	// A non-character activator, to stand in for the relay/button/trigger that propagates itself.
+	{
+		FElysiumEntityDef Relay;
+		Relay.Classname = TEXT("math_counter");
+		Relay.TargetName = TEXT("not_a_character");
+		Relay.Keys.Add(TEXT("min"), TEXT("0"));
+		Relay.Keys.Add(TEXT("max"), TEXT("100"));
+		Defs.Defs.Add(MoveTemp(Relay));
+	}
 
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
@@ -1050,17 +1059,20 @@ bool FElysiumDoorKnobLockAuthorityTest::RunTest(const FString&)
 		return false;
 	}
 
-	// The defect, stated directly: attaching to an unlocked door must not open the knob.
+	// The defect, stated directly: attaching to an unlocked door must not open the knob. Both of
+	// these fail before the fix — RegisterDoorknob wrote the door's state over the knob's.
 	TestTrue(TEXT("a difficulty knob stays locked on an unlocked door"), Keypad->IsUseLocked());
-	TestFalse(TEXT("the unlocked door's own byte is untouched"), KeypadDoor->bLocked);
 	TestTrue(TEXT("+use on the slab is refused by the knob"),
 		KeypadDoor->IsUseRefused(PlayerHandle));
+	// The reticle and the refusal are one predicate, so a knob-gated door cannot draw its unlocked
+	// icon over a +use that will be refused.
 	TestTrue(TEXT("the reticle reports the same refusal it will apply"), KeypadDoor->IsUseLocked());
 
-	// The mirror: a locked door does not lock an unlocked knob, and the knob still decides.
+	// The mirror: a locked door does not lock an unlocked knob, and the knob still decides. The
+	// first fails before the fix; the second is the invariant that makes it meaningful.
 	TestFalse(TEXT("a difficulty-0 knob stays unlocked on a locked door"), FreeKnob->IsUseLocked());
-	TestTrue(TEXT("the locked door's own byte is untouched"), OpenKnobDoor->bLocked);
-	TestFalse(TEXT("+use defers to the unlocked knob"),
+	TestTrue(TEXT("the door's own LOCKED byte survives, unread"), OpenKnobDoor->bLocked);
+	TestFalse(TEXT("+use defers to the unlocked knob over the door's own locked byte"),
 		OpenKnobDoor->IsUseRefused(PlayerHandle));
 
 	// No knob: the door's byte is the authority, exactly as before.
@@ -1069,8 +1081,21 @@ bool FElysiumDoorKnobLockAuthorityTest::RunTest(const FString&)
 	// The null-activator fallthrough — GetNearestDoorknob returns null for a null user, so an
 	// I/O-driven Open never consults the knob. This is what keeps every authored `Unlock -> door`
 	// wire and every script-fired open working after the authority flip.
-	const FElysiumEntityHandle NoActivator;
+	const FElysiumEntityHandle NoActivator = FElysiumEntityHandle::Invalid();
 	TestFalse(TEXT("a script-fired open bypasses the knob"), KeypadDoor->IsUseRefused(NoActivator));
+
+	// Retail's user is the activator's CHARACTER sub-object, null for anything that is not one — so
+	// a relay or trigger propagating itself as the activator is also "no user" and bypasses the
+	// knob, exactly like a null handle. Without that rule those wires would start being gated.
+	FElysiumEntity* Relay = World.FindByName(TEXT("not_a_character"));
+	if (!TestNotNull(TEXT("non-character activator resolves"), Relay))
+	{
+		return false;
+	}
+	TestNull(TEXT("a math_counter is not a character"),
+		reinterpret_cast<const void*>(Relay->AsCombatCharacter()));
+	TestFalse(TEXT("a non-character activator bypasses the knob"),
+		KeypadDoor->IsUseRefused(Relay->Handle));
 	KeypadDoor->InputOpen(NoActivator);
 	TestEqual(TEXT("script-fired Open still opens a knob-gated door"), KeypadDoor->State(),
 		FElysiumDoorBase::EToggleState::GoingUp);
@@ -1151,16 +1176,23 @@ bool FElysiumDoorNearestKnobSelectionTest::RunTest(const FString&)
 
 	FElysiumEntityDefs Defs;
 	Defs.MapName = TEXT("__door_nearest_knob__");
+	// Placed so Manhattan and Euclidean DISAGREE: from the origin the first knob is 100 away by
+	// both metrics, while the second is 120 by Manhattan but only ~84.9 by Euclidean. Manhattan
+	// must pick `inside`; a Euclidean implementation would pick `outside` and flip every assertion
+	// below. Inside handle unlocked, outside locked — the "locked from the street" door.
 	Defs.Defs.Add(Door(TEXT("double_door"), TEXT("256")));
-	// Inside handle unlocked, outside handle locked — the classic "locked from the street" door.
-	Defs.Defs.Add(Knob(TEXT("inside"), TEXT("double_door"), TEXT("0"), FVector(0.0, 100.0, 0.0)));
-	Defs.Defs.Add(Knob(TEXT("outside"), TEXT("double_door"), TEXT("7"), FVector(0.0, -100.0, 0.0)));
+	Defs.Defs.Add(Knob(TEXT("inside"), TEXT("double_door"), TEXT("0"), FVector(100.0, 0.0, 0.0)));
+	Defs.Defs.Add(Knob(TEXT("outside"), TEXT("double_door"), TEXT("7"), FVector(0.0, 60.0, 60.0)));
+	// A third door whose two knobs are exactly equidistant, to pin the tie-break direction.
+	Defs.Defs.Add(Door(TEXT("tie_door"), TEXT("256")));
+	Defs.Defs.Add(Knob(TEXT("tie_first"), TEXT("tie_door"), TEXT("0"), FVector(0.0, 50.0, 0.0)));
+	Defs.Defs.Add(Knob(TEXT("tie_second"), TEXT("tie_door"), TEXT("9"), FVector(0.0, -50.0, 0.0)));
 
 	FElysiumRecordingServices Services;
 	Services.bHasPlayer = true;
 	FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 	AddExpectedError(TEXT("its attachment body is unavailable"),
-		EAutomationExpectedErrorFlags::Contains, 2);
+		EAutomationExpectedErrorFlags::Contains, 4);
 	World.Load(MoveTemp(Defs));
 	const FElysiumEntityHandle PlayerHandle = World.SpawnPlayer();
 	World.Activate(0.0);
@@ -1173,15 +1205,45 @@ bool FElysiumDoorNearestKnobSelectionTest::RunTest(const FString&)
 		return false;
 	}
 
-	Player->Origin = FVector(0.0, 90.0, 0.0);   // standing at the inside handle
+	// Manhattan: inside = 100, outside = 0 + 60 + 60 = 120 -> inside wins.
+	// Euclidean:  inside = 100, outside = sqrt(60^2 + 60^2) ~= 84.9 -> outside would win.
+	Player->Origin = FVector::ZeroVector;
 	const FElysiumLockableEntity* Near = LiveDoor->FindNearestDoorknob(PlayerHandle);
-	TestNotNull(TEXT("a knob is selected from the inside"), Near);
-	TestFalse(TEXT("the inside handle is unlocked, so the door admits"),
-		LiveDoor->IsUseRefused(PlayerHandle));
+	if (!TestNotNull(TEXT("a knob is selected"), Near))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the Manhattan-nearest knob is chosen, not the Euclidean-nearest"),
+		Near->TargetName, FString(TEXT("inside")));
+	TestFalse(TEXT("that unlocked handle admits the +use"), LiveDoor->IsUseRefused(PlayerHandle));
 
-	Player->Origin = FVector(0.0, -90.0, 0.0);  // walked round to the outside handle
-	TestTrue(TEXT("the outside handle is locked, so the same door refuses"),
-		LiveDoor->IsUseRefused(PlayerHandle));
+	// Standing on the far side, the locked handle is now nearest and the same door refuses.
+	Player->Origin = FVector(0.0, 60.0, 60.0);
+	const FElysiumLockableEntity* FarSide = LiveDoor->FindNearestDoorknob(PlayerHandle);
+	if (!TestNotNull(TEXT("a knob is selected from the far side"), FarSide))
+	{
+		return false;
+	}
+	TestEqual(TEXT("the other handle is selected from the other side"), FarSide->TargetName,
+		FString(TEXT("outside")));
+	TestTrue(TEXT("the locked handle refuses the same door"), LiveDoor->IsUseRefused(PlayerHandle));
+
+	// An exact draw goes to the second-registered knob (retail returns the 0x62c handle when its
+	// distance is <= the 0x628 handle's). Here that knob is the locked one, so the tie is visible.
+	FElysiumEntity* TieEntity = World.FindByName(TEXT("tie_door"));
+	FElysiumDoorBase* TieDoor = TieEntity ? TieEntity->AsDoorBase() : nullptr;
+	if (!TestNotNull(TEXT("tie door resolves"), TieDoor))
+	{
+		return false;
+	}
+	Player->Origin = FVector::ZeroVector;   // exactly 50 from each handle
+	const FElysiumLockableEntity* Tie = TieDoor->FindNearestDoorknob(PlayerHandle);
+	if (!TestNotNull(TEXT("a knob is selected on an exact tie"), Tie))
+	{
+		return false;
+	}
+	TestEqual(TEXT("an exact tie goes to the second-registered knob"), Tie->TargetName,
+		FString(TEXT("tie_second")));
 
 	return true;
 }

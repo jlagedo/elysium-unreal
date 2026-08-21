@@ -434,13 +434,11 @@ void FElysiumDoorBase::Serialize(FElysiumSaveArchive& Ar)
 void FElysiumDoorBase::InputLock()
 {
 	bLocked = true;
-	PruneDoorknobs();
 }
 
 void FElysiumDoorBase::InputUnlock()
 {
 	bLocked = false;
-	PruneDoorknobs();
 }
 
 void FElysiumDoorBase::RegisterDoorknob(FElysiumLockableEntity& Doorknob)
@@ -449,6 +447,9 @@ void FElysiumDoorBase::RegisterDoorknob(FElysiumLockableEntity& Doorknob)
 	{
 		return;
 	}
+	// Drop any handle whose knob died without unregistering, so a stale entry cannot consume one of
+	// the two slots and turn a legitimate second knob away.
+	PruneDoorknobs();
 	if (Doorknobs.Num() >= 2)
 	{
 		UE_LOG(LogElysiumMover, Warning, TEXT("Door %s already has 2 doorknobs"), *DebugString());
@@ -471,29 +472,16 @@ void FElysiumDoorBase::UnregisterDoorknob(const FElysiumEntityHandle& Doorknob)
 
 void FElysiumDoorBase::PruneDoorknobs()
 {
+	// Resolve is already falsy for a dead or stale handle, so a null result is the whole test.
 	for (int32 Index = Doorknobs.Num() - 1; Index >= 0; --Index)
 	{
-		FElysiumEntity* Entity = World ? World->Resolve(Doorknobs[Index]) : nullptr;
-		const FElysiumLockableEntity* Doorknob = Entity ? Entity->AsLockableEntity() : nullptr;
-		if (!Doorknob || Doorknob->IsDead())
+		const FElysiumEntity* Entity = World ? World->Resolve(Doorknobs[Index]) : nullptr;
+		if (!Entity || !Entity->AsLockableEntity())
 		{
 			Doorknobs.RemoveAt(Index);
 		}
 	}
 	RefreshUseOwner();
-}
-
-void FElysiumDoorBase::RefreshDoorknobPoses()
-{
-	PruneDoorknobs();
-	for (const FElysiumEntityHandle& Knob : Doorknobs)
-	{
-		FElysiumEntity* Entity = World ? World->Resolve(Knob) : nullptr;
-		if (FElysiumLockableEntity* Doorknob = Entity ? Entity->AsLockableEntity() : nullptr)
-		{
-			Doorknob->RefreshHandlePose();
-		}
-	}
 }
 
 // Retail's "user" is never the activator entity itself: FUN_100f0170/FUN_100f0210 pass the
@@ -907,9 +895,15 @@ void FElysiumDoorBase::DoorUse(const FElysiumEntityHandle& Activator)
 	// A knobbed door asks its nearest knob, not its own byte (CBaseDoor::IsUseRefused FUN_100eec70,
 	// reached from DoorknobUse FUN_100eef50). That is what keeps a keypad or padlock gating a door
 	// whose spawnflags carry no LOCKED bit.
-	RefreshDoorknobPoses();
 	if (IsUseRefused(Activator))
 	{
+		// Retail re-poses the handle on exactly this branch, and only on the knob the user reached
+		// for (FUN_100eef50 @0x100eef88) — not on every knob and not on every use, or the clip
+		// restarts from frame 0 each press.
+		if (FElysiumLockableEntity* Knob = FindNearestDoorknob(Activator))
+		{
+			Knob->RefreshHandlePose();
+		}
 		static const FName Locked(TEXT("locked"));
 		PlayMoverSound(Locked);
 		return;

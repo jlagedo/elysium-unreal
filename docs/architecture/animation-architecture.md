@@ -1175,9 +1175,14 @@ tail after axis interpolation and before skinning, the same ordering Epic docume
    motion Epic warns about;
 4. constraints use the authored maximum as a cone limit, the reference segment to size each narrow
    body, locked linear motion, an X-axis angular target, 8 pre-update and 2 post-update iterations,
-   no wind, and LOD threshold 2. The 4:1 iteration ratio follows Epic's solver guidance;
+   no wind, and LOD threshold 2. The 4:1 iteration ratio follows Epic's solver guidance. The native
+   tail accepts AnimDynamics' simulated rotations but rebuilds every chain target with the incoming
+   pose's parent-relative translation and scale before alpha blending, so an unconverged solver
+   frame cannot lengthen a hair segment;
 5. a validated recipe runs unconditionally when either scoped body poses. There is no feature flag
-   or A/B toggle. The node has no planar ground or spherical collision: AnimDynamics supplies
+   or A/B toggle. A stable proxy-owned custom node participates in Unreal's dynamics-reset registry
+   and forwards component teleports and explicit `ResetDynamics` requests to the current manually
+   hosted nodes. The node has no planar ground or spherical collision: AnimDynamics supplies
    constraints rather than actual collision geometry, so head/shoulder intersection remains a
    known proof limitation.
 

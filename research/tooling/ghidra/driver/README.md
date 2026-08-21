@@ -390,6 +390,40 @@ the edge. `client.dll` links its slots directly, so its 559 really are bodies no
 
 Either way the result is marked `thunk` in the corpus and filters out of a function census.
 
+### Query cost is setup cost, not query cost
+
+A `vtmb_*` call averages **1.8 ms** over a warm server. It averaged 16 ms, and none of that was
+the query — the four hot tools sat at ~22 ms each while the SQL underneath ran in 0.02 ms. Three
+causes, all of them setup:
+
+**`CREATE INDEX IF NOT EXISTS` matches on the index's NAME, not its definition.** Widening one in
+place is a silent no-op: the old single-column index survives, every query still plans against
+it, and nothing says so. Eleven indices here were redefined and none of them changed until
+`_ensure_indices` compared the stored SQL and rebuilt the ones that differed. Same trap as
+`CREATE TABLE IF NOT EXISTS` refusing to add a column, which `_migrate` handles.
+
+**`functions`' PRIMARY KEY is `(module, addr)` and cannot serve a lookup that knows only the
+address** — which is how every reference query begins. Without `functions_addr` SQLite scans all
+71,235 rows, and each row carries its own decompilation, so the scan drags 162 MiB of TEXT past
+the page cache. 45 ms, on the first step of `func`, `code`, `callers`, `callees`, `asm` and
+`twin` alike.
+
+**Never apply a function to the column you are indexing.** `WHERE addr = ? OR lower(addr) =
+lower(?)` re-introduced the full scan even with the index present; normalise the argument in
+Python instead. The same applies to `name = ? OR name LIKE '%x%'` — OR-ing a leading-wildcard
+LIKE beside an equality denies the index to both halves, so try the exact match first and fall
+back only if it misses.
+
+Two more, cheaper: `_staleness` hashed all eight DLLs on **every** query (~80 ms), and is now
+keyed on their size and mtime so a repeat pays nothing while any real change still re-hashes;
+and both databases are opened once per process rather than per call, with `mmap_size` set so a
+173 MiB file is mapped rather than copied page by page.
+
+`grep`'s prefilter stays deliberately conservative: it only fires on a pattern with no
+metacharacter at all. A literal lifted out of an alternation or an optional group is not
+required to appear in a match, so prefiltering on one would silently drop hits — a regex scan
+costs 99 ms, and a silent miss costs a wrong conclusion.
+
 ### A decompilation that is damaged says so
 
 `corpus code` prints a `DAMAGED DECOMPILATION` banner carrying the decompiler's own warnings.
