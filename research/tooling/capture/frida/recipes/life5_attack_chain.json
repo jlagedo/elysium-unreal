@@ -1,0 +1,29 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "life5_attack_chain",
+  "description": "Order every call from a player attack press through melee activity resolution, combo substitution and the committed sequence.",
+  "mode": "trace",
+  "targets": [
+    "vampire.player_item_post_frame",
+    "vampire.weapon_melee_post_frame",
+    "vampire.weapon_melee_primary_attack",
+    "vampire.weapon_melee_heavy_attack",
+    "vampire.weapon_melee_request_activity",
+    "vampire.weapon_melee_event_dispatch",
+    "vampire.melee_roll",
+    "vampire.player_select_melee_sequence",
+    "vampire.player_set_animation_router",
+    "vampire.classify_player_animation_action",
+    "vampire.apply_player_activity_and_sequence",
+    "vampire.set_ideal_activity",
+    "vampire.weapon_translate_activity",
+    "vampire.select_weighted_sequence",
+    "vampire.select_heaviest_sequence"
+  ],
+  "expected_modules": [
+    "vampire.dll"
+  ],
+  "max_trace_events": 4096,
+  "capture_returns": true,
+  "stack_words": 12
+}

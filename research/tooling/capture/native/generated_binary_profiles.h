@@ -96,6 +96,54 @@ inline constexpr std::uint8_t Profile1Target17ExpectedBytes[] = {
     0x56, 0x8b, 0xf1, 0x8b, 0x8e, 0xbc, 0x04, 0x00, 0x00
 };
 
+inline constexpr std::uint8_t Profile1Target18ExpectedBytes[] = {
+    0x56, 0x8b, 0xf1, 0x8b, 0x86, 0x38, 0x15, 0x00, 0x00
+};
+
+inline constexpr std::uint8_t Profile1Target19ExpectedBytes[] = {
+    0x56, 0x8b, 0xf1, 0xe8, 0xe3, 0xa0, 0xc2, 0xff
+};
+
+inline constexpr std::uint8_t Profile1Target20ExpectedBytes[] = {
+    0x83, 0xec, 0x08, 0x53, 0x55
+};
+
+inline constexpr std::uint8_t Profile1Target21ExpectedBytes[] = {
+    0x53, 0x56, 0x57, 0x8b, 0xf1
+};
+
+inline constexpr std::uint8_t Profile1Target22ExpectedBytes[] = {
+    0xb8, 0x28, 0x40, 0x00, 0x00
+};
+
+inline constexpr std::uint8_t Profile1Target23ExpectedBytes[] = {
+    0x56, 0x8b, 0xf1, 0xe8, 0xdc, 0x6c, 0xc1, 0xff
+};
+
+inline constexpr std::uint8_t Profile1Target24ExpectedBytes[] = {
+    0xb8, 0x0c, 0x60, 0x00, 0x00
+};
+
+inline constexpr std::uint8_t Profile1Target25ExpectedBytes[] = {
+    0x51, 0x53, 0x8b, 0xd9, 0x56
+};
+
+inline constexpr std::uint8_t Profile1Target26ExpectedBytes[] = {
+    0x53, 0x56, 0x8b, 0xf1, 0x57
+};
+
+inline constexpr std::uint8_t Profile1Target27ExpectedBytes[] = {
+    0x51, 0x56, 0x57, 0x8b, 0x7c, 0x24, 0x10
+};
+
+inline constexpr std::uint8_t Profile1Target28ExpectedBytes[] = {
+    0x53, 0x56, 0x57, 0x8b, 0xd9
+};
+
+inline constexpr std::uint8_t Profile1Target29ExpectedBytes[] = {
+    0x56, 0x8b, 0xf1, 0x8b, 0x86, 0xf0, 0x06, 0x00, 0x00
+};
+
 inline constexpr BinaryTargetProfile Profile1Targets[] = {
     {
         "vampire.viewmodel_update",
@@ -349,6 +397,174 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x00000000u,
         0u,
     },
+    {
+        "vampire.player_item_post_frame",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x00174ce0u,
+        Profile1Target18ExpectedBytes,
+        9u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.weapon_melee_post_frame",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x003eaec0u,
+        Profile1Target19ExpectedBytes,
+        8u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.weapon_melee_primary_attack",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x003eaca0u,
+        Profile1Target20ExpectedBytes,
+        5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.weapon_melee_heavy_attack",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x003eae00u,
+        Profile1Target21ExpectedBytes,
+        5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.weapon_melee_request_activity",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x003e9e00u,
+        Profile1Target22ExpectedBytes,
+        5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.weapon_melee_event_dispatch",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x003ea510u,
+        Profile1Target23ExpectedBytes,
+        8u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.player_select_melee_sequence",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x00160f90u,
+        Profile1Target24ExpectedBytes,
+        5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.melee_roll",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x00346910u,
+        Profile1Target25ExpectedBytes,
+        5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.player_set_animation_router",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x00164240u,
+        Profile1Target26ExpectedBytes,
+        5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.apply_player_activity_and_sequence",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x001644f0u,
+        Profile1Target27ExpectedBytes,
+        7u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.weapon_item_busy_frame",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x00254250u,
+        Profile1Target28ExpectedBytes,
+        5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.is_in_combo_window",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x00160dc0u,
+        Profile1Target29ExpectedBytes,
+        9u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
 };
 
 inline constexpr BinaryProfile Profile1 = {
@@ -367,7 +583,7 @@ inline constexpr BinaryProfile Profile1 = {
         0x00000000u,
     },
     Profile1Targets,
-    18u,
+    30u,
 };
 
 inline constexpr std::uint8_t Profile2Target0ExpectedBytes[] = {

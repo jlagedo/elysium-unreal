@@ -1,0 +1,72 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "smoke_trace",
+  "description": "Prove ordered trace mode and declarative field reads over the controlled synthetic IA-32 exported hooks.",
+  "mode": "trace",
+  "targets": [],
+  "expected_modules": [
+    "client.dll",
+    "engine.dll",
+    "StudioRender.dll"
+  ],
+  "export_hooks": [
+    {
+      "module": "client.dll",
+      "export": "ElysiumSyntheticHookTarget",
+      "label": "synthetic.client_hook"
+    },
+    {
+      "module": "engine.dll",
+      "export": "ElysiumSyntheticHookTarget",
+      "label": "synthetic.engine_hook"
+    },
+    {
+      "module": "StudioRender.dll",
+      "export": "ElysiumSyntheticHookTarget",
+      "label": "synthetic.studiorender_hook"
+    }
+  ],
+  "expected_callers": [
+    "synthetic.client_hook",
+    "synthetic.engine_hook",
+    "synthetic.studiorender_hook"
+  ],
+  "max_trace_events": 64,
+  "capture_returns": true,
+  "stack_words": 8,
+  "field_reads": {
+    "synthetic.client_hook": [
+      {
+        "label": "image_dos_magic",
+        "base": "module",
+        "module": "client.dll",
+        "rva": "0x0",
+        "offset": "0x0",
+        "type": "u8"
+      },
+      {
+        "label": "image_dos_magic_second",
+        "base": "module",
+        "module": "client.dll",
+        "rva": "0x0",
+        "offset": "0x1",
+        "type": "u8"
+      },
+      {
+        "label": "return_address_word",
+        "base": "register",
+        "register": "esp",
+        "offset": "0x0",
+        "type": "ptr"
+      },
+      {
+        "label": "return_address_word_at_leave",
+        "base": "register",
+        "register": "esp",
+        "offset": "0x0",
+        "type": "ptr",
+        "when": "leave"
+      }
+    ]
+  }
+}

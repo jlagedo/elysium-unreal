@@ -4,9 +4,13 @@ const SCHEMA = 'elysium.research.frida.events.v1';
 const listeners = [];
 const callerCounts = new Map();
 const uniqueCallers = new Set();
+const traceCounts = new Map();
+const cappedTargets = new Set();
 let observer = null;
 let config = null;
 let stopped = false;
+let traceSequence = 0;
+let traceDropped = 0;
 
 function emit(kind, fields = {}) {
   send({
@@ -144,12 +148,178 @@ function installCallerTraceAt(module, label, address) {
     },
   });
   listeners.push(listener);
+  emitHookInstalled(module, label, address);
+}
+
+function emitHookInstalled(module, label, address) {
   emit('hook_installed', {
     target: label,
     module: module.name,
     base: module.base.toString(),
     rva: `0x${address.sub(module.base).toUInt32().toString(16)}`,
   });
+}
+
+// A named field turns an ordered trace into readable state: a recipe declares
+// where a value lives relative to the call and the agent decodes it in place.
+// A field the process cannot supply is reported as an error string on the
+// record rather than dropped, so a bad displacement is visible in the capture.
+function fieldBase(field, context, words) {
+  const base = field.base;
+  if (base === 'module') {
+    const module = Process.findModuleByName(field.module);
+    if (module === null) {
+      throw new Error(`module not loaded: ${field.module}`);
+    }
+    return module.base.add(field.rva);
+  }
+  if (base === 'register') {
+    const value = context[field.register];
+    if (value === undefined) {
+      throw new Error(`unknown register: ${field.register}`);
+    }
+    return value;
+  }
+  if (base === 'argument') {
+    const word = words[field.index];
+    if (word === null || word === undefined) {
+      throw new Error(`argument ${field.index} is unreadable`);
+    }
+    return ptr(word);
+  }
+  throw new Error(`unknown field base: ${base}`);
+}
+
+function readTyped(address, type) {
+  switch (type) {
+    case 'u8': return address.readU8();
+    case 'i32': return address.readS32();
+    case 'u32': return address.readU32();
+    case 'f32': return address.readFloat();
+    case 'ptr': return address.readPointer().toString();
+    case 'vec3': return [
+      address.readFloat(),
+      address.add(4).readFloat(),
+      address.add(8).readFloat(),
+    ];
+    default: throw new Error(`unknown field type: ${type}`);
+  }
+}
+
+function readFields(declarations, context, words) {
+  const result = {};
+  for (const field of declarations) {
+    try {
+      let address = fieldBase(field, context, words);
+      for (const step of field.deref || []) {
+        address = address.add(step).readPointer();
+      }
+      result[field.label] = readTyped(
+        address.add(field.offset || 0),
+        field.type
+      );
+    } catch (error) {
+      result[field.label] = { error: String(error) };
+    }
+  }
+  return result;
+}
+
+function fieldsFor(label, phase) {
+  const declared = (config.recipe.field_reads || {})[label] || [];
+  return declared.filter((field) => (field.when || 'enter') === phase);
+}
+
+// A trace keeps every call in order rather than the first hit per unique
+// caller, so a recipe can read a producer/consumer sequence instead of a
+// caller census. Backtraces are omitted because the ordering is the answer
+// and unwinding every call is what makes a hook expensive.
+function installTraceAt(module, label, address) {
+  const stackWordCount = config.recipe.stack_words || 8;
+  const maximumEvents = config.recipe.max_trace_events || 4096;
+  const wantsLeave = ((config.recipe.field_reads || {})[label] || [])
+    .some((field) => (field.when || 'enter') === 'leave');
+  const callbacks = {
+    onEnter() {
+      const observed = (traceCounts.get(label) || 0) + 1;
+      traceCounts.set(label, observed);
+      if (observed > maximumEvents) {
+        this.sequence = null;
+        traceDropped += 1;
+        if (!cappedTargets.has(label)) {
+          cappedTargets.add(label);
+          emit('warning', {
+            operation: 'trace_cap_reached',
+            target: label,
+            max_trace_events: maximumEvents,
+          });
+        }
+        return;
+      }
+      this.sequence = ++traceSequence;
+      const words = stackWords(this.context.esp, stackWordCount);
+      const record = {
+        sequence: this.sequence,
+        target: label,
+        thread_id: this.threadId,
+        depth: this.depth,
+        caller: normalizeAddress(this.returnAddress),
+        ecx: this.context.ecx.toString(),
+        esp: this.context.esp.toString(),
+        stack_words: words,
+      };
+      const declared = fieldsFor(label, 'enter');
+      if (declared.length !== 0) {
+        record.fields = readFields(declared, this.context, words);
+      }
+      this.words = words;
+      if (wantsLeave) {
+        // A leave-phase register base means the value the call was entered
+        // with: ECX is caller-saved, so reading it after the return would
+        // decode whatever the callee left behind.
+        this.entryRegisters = {
+          eax: this.context.eax, ebx: this.context.ebx,
+          ecx: this.context.ecx, edx: this.context.edx,
+          esi: this.context.esi, edi: this.context.edi,
+          ebp: this.context.ebp, esp: this.context.esp,
+        };
+      }
+      emit('call', record);
+    },
+  };
+  if (config.recipe.capture_returns === true || wantsLeave) {
+    callbacks.onLeave = function onLeave(returnValue) {
+      if (this.sequence === null || this.sequence === undefined) {
+        return;
+      }
+      const record = {
+        sequence: this.sequence,
+        target: label,
+        thread_id: this.threadId,
+        eax: this.context.eax.toString(),
+        return_value: returnValue.toString(),
+      };
+      const declared = fieldsFor(label, 'leave');
+      if (declared.length !== 0) {
+        record.fields = readFields(
+          declared,
+          this.entryRegisters || this.context,
+          this.words || []
+        );
+      }
+      emit('return', record);
+    };
+  }
+  listeners.push(Interceptor.attach(address, callbacks));
+  emitHookInstalled(module, label, address);
+}
+
+function installHookAt(module, label, address) {
+  if (config.recipe.mode === 'trace') {
+    installTraceAt(module, label, address);
+    return;
+  }
+  installCallerTraceAt(module, label, address);
 }
 
 function installCallerTrace(module, profile, target) {
@@ -165,7 +335,7 @@ function installCallerTrace(module, profile, target) {
     });
     return;
   }
-  installCallerTraceAt(module, target.semantic_label, address);
+  installHookAt(module, target.semantic_label, address);
 }
 
 function moduleMatches(profile, module) {
@@ -211,7 +381,7 @@ function onModuleAdded(module) {
       continue;
     }
     try {
-      installCallerTraceAt(
+      installHookAt(
         module,
         declaration.label,
         module.getExportByName(declaration.export)
@@ -248,6 +418,17 @@ function onModuleAdded(module) {
   }
 }
 
+function buildSummary() {
+  return {
+    mode: config === null ? null : config.recipe.mode || 'callers',
+    callers: Object.fromEntries(callerCounts),
+    unique_callers: uniqueCallers.size,
+    trace_calls: Object.fromEntries(traceCounts),
+    trace_events: traceSequence,
+    trace_dropped: traceDropped,
+  };
+}
+
 rpc.exports = {
   initialize(initialConfig) {
     if (config !== null) {
@@ -282,7 +463,7 @@ rpc.exports = {
 
   stop() {
     if (stopped) {
-      return { callers: Object.fromEntries(callerCounts), unique_callers: uniqueCallers.size };
+      return buildSummary();
     }
     stopped = true;
     for (const listener of listeners.splice(0)) {
@@ -296,10 +477,7 @@ rpc.exports = {
       observer.detach();
       observer = null;
     }
-    const summary = {
-      callers: Object.fromEntries(callerCounts),
-      unique_callers: uniqueCallers.size,
-    };
+    const summary = buildSummary();
     emit('summary', summary);
     return summary;
   },

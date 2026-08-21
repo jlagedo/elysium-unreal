@@ -993,6 +993,7 @@ bool FElysiumPlayerAttackReloadTest::RunTest(const FString&)
 	return true;
 }
 
+
 }   // namespace ElysiumPlayerAttackTests
 
 #endif   // WITH_DEV_AUTOMATION_TESTS

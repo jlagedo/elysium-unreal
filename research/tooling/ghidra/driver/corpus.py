@@ -69,6 +69,9 @@ PROGRAMS = (
     "StudioRender.dll",
     "stdshader_dx8.dll",
     "vphysics.dll",
+    "vampire_python21.dll",
+    "tier0.dll",
+    "vstdlib.dll",
 )
 
 LOCK_DELAY_SECONDS = 9.0

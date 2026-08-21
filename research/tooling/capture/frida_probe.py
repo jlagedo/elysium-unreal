@@ -118,7 +118,88 @@ def load_recipe(name: str) -> dict[str, Any]:
         raise ValueError(f"invalid max_unique_callers: {path}")
     if int(recipe.get("stack_words", 8)) not in range(0, 65):
         raise ValueError(f"invalid stack_words: {path}")
+    if recipe.get("mode", "callers") not in ("callers", "trace"):
+        raise ValueError(f"invalid Frida recipe mode: {path}")
+    if int(recipe.get("max_trace_events", 4096)) not in range(1, 1048577):
+        raise ValueError(f"invalid max_trace_events: {path}")
+    if not isinstance(recipe.get("capture_returns", False), bool):
+        raise ValueError(f"invalid capture_returns: {path}")
+    _validate_field_reads(recipe, path)
     return recipe
+
+
+FIELD_TYPES = ("u8", "i32", "u32", "f32", "ptr", "vec3")
+FIELD_BASES = ("module", "register", "argument")
+
+
+def _integer_field(value: object, label: str) -> int:
+    if isinstance(value, str):
+        return int(value, 0)
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    raise ValueError(f"{label} must be an integer")
+
+
+def _validate_field_reads(recipe: dict[str, Any], path: Path) -> None:
+    reads = recipe.get("field_reads", {})
+    if not isinstance(reads, dict):
+        raise ValueError(f"invalid Frida field reads: {path}")
+    known = set(recipe["targets"]) | {
+        declaration["label"] for declaration in recipe.get("export_hooks", [])
+    }
+    stack_words = int(recipe.get("stack_words", 8))
+    for target, declarations in reads.items():
+        if target not in known:
+            raise ValueError(
+                f"field reads name an undeclared target {target!r}: {path}"
+            )
+        if not isinstance(declarations, list) or not declarations:
+            raise ValueError(f"invalid field-read list for {target}: {path}")
+        labels: set[str] = set()
+        for field in declarations:
+            if not isinstance(field, dict):
+                raise ValueError(f"invalid field read for {target}: {path}")
+            label = field.get("label")
+            if not isinstance(label, str) or not label:
+                raise ValueError(f"invalid field-read label for {target}: {path}")
+            if label in labels:
+                raise ValueError(f"duplicate field-read label {label}: {path}")
+            labels.add(label)
+            if field.get("type") not in FIELD_TYPES:
+                raise ValueError(f"invalid field-read type for {label}: {path}")
+            if field.get("when", "enter") not in ("enter", "leave"):
+                raise ValueError(f"invalid field-read phase for {label}: {path}")
+            base = field.get("base")
+            if base not in FIELD_BASES:
+                raise ValueError(f"invalid field-read base for {label}: {path}")
+            if base == "module":
+                if not isinstance(field.get("module"), str) or not field["module"]:
+                    raise ValueError(f"field read {label} needs a module: {path}")
+                field["rva"] = _integer_field(
+                    field.get("rva"), f"field read {label} rva"
+                )
+            elif base == "register":
+                if field.get("register") not in (
+                    "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp"
+                ):
+                    raise ValueError(f"invalid field-read register for {label}: {path}")
+            else:
+                index = _integer_field(field.get("index"), f"field read {label} index")
+                if not 0 <= index < stack_words:
+                    raise ValueError(
+                        f"field read {label} names argument {index} outside the "
+                        f"{stack_words} captured stack words: {path}"
+                    )
+                field["index"] = index
+            # The agent adds these to a pointer, so they reach it as numbers
+            # rather than the hexadecimal strings a recipe is written in.
+            field["offset"] = _integer_field(
+                field.get("offset", 0), f"field read {label} offset"
+            )
+            field["deref"] = [
+                _integer_field(step, f"field read {label} deref step")
+                for step in field.get("deref", [])
+            ]
 
 
 def _target_profiles(
@@ -209,7 +290,7 @@ class Recorder:
                 name = value.get("name")
                 if isinstance(name, str):
                     self.observed_modules.add(name.casefold())
-            if value.get("kind") == "caller":
+            if value.get("kind") in ("caller", "call"):
                 target = value.get("target")
                 if isinstance(target, str):
                     self.observed_callers.add(target)
@@ -321,12 +402,17 @@ def _manifest_base(
 
 def smoke(args: argparse.Namespace) -> int:
     if args.supervised:
+        if args.recipe != "smoke":
+            raise ValueError(
+                "the supervised smoke launcher passes the fixture recipe to its "
+                f"collector and cannot run {args.recipe!r}"
+            )
         return supervised_smoke(args)
     frida = _load_frida()
-    recipe = load_recipe("smoke")
-    output = _session_root("smoke", "smoke")
+    recipe = load_recipe(args.recipe)
+    output = _session_root("smoke", args.recipe)
     recorder = Recorder(output)
-    manifest = _manifest_base("smoke", "smoke", recipe, frida)
+    manifest = _manifest_base("smoke", args.recipe, recipe, frida)
     device = frida.get_local_device()
     pid: int | None = None
     session = None
@@ -652,6 +738,7 @@ def parser() -> argparse.ArgumentParser:
 
     smoke_parser = subparsers.add_parser("smoke")
     smoke_parser.add_argument("--config", choices=("Debug", "Release"), default="Release")
+    smoke_parser.add_argument("--recipe", default="smoke")
     smoke_parser.add_argument(
         "--supervised",
         action="store_true",

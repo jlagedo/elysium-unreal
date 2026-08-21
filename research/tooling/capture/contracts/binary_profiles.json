@@ -207,6 +207,122 @@
           "rva": "0x000829e0",
           "calling_convention": "thiscall",
           "expected_bytes": "568bf18b8ebc040000"
+        },
+        {
+          "semantic_label": "vampire.player_item_post_frame",
+          "source_function_label": "PlayerItemPostFrame",
+          "source_spec": "research/cases/player-entity/specs/player_entity_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00174ce0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf18b8638150000"
+        },
+        {
+          "semantic_label": "vampire.weapon_melee_post_frame",
+          "source_function_label": "WeaponMeleePostFrame",
+          "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x003eaec0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf1e8e3a0c2ff"
+        },
+        {
+          "semantic_label": "vampire.weapon_melee_primary_attack",
+          "source_function_label": "WeaponMeleePrimaryAttack",
+          "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x003eaca0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec085355"
+        },
+        {
+          "semantic_label": "vampire.weapon_melee_heavy_attack",
+          "source_function_label": "WeaponMeleeHeavyAttack",
+          "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x003eae00",
+          "calling_convention": "thiscall",
+          "expected_bytes": "5356578bf1"
+        },
+        {
+          "semantic_label": "vampire.weapon_melee_request_activity",
+          "source_function_label": "WeaponMeleeRequestActivity",
+          "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x003e9e00",
+          "calling_convention": "thiscall",
+          "expected_bytes": "b828400000"
+        },
+        {
+          "semantic_label": "vampire.weapon_melee_event_dispatch",
+          "source_function_label": "WeaponMeleeEventDispatch",
+          "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x003ea510",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf1e8dc6cc1ff"
+        },
+        {
+          "semantic_label": "vampire.player_select_melee_sequence",
+          "source_function_label": "PlayerSelectMeleeSequence",
+          "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00160f90",
+          "calling_convention": "thiscall",
+          "expected_bytes": "b80c600000"
+        },
+        {
+          "semantic_label": "vampire.melee_roll",
+          "source_function_label": "MeleeRollA",
+          "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00346910",
+          "calling_convention": "thiscall",
+          "expected_bytes": "51538bd956"
+        },
+        {
+          "semantic_label": "vampire.player_set_animation_router",
+          "source_function_label": "cbaseplayer_set_animation_router",
+          "source_spec": "research/cases/animation-pose/specs/gameplay_actions.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00164240",
+          "calling_convention": "thiscall",
+          "expected_bytes": "53568bf157"
+        },
+        {
+          "semantic_label": "vampire.apply_player_activity_and_sequence",
+          "source_function_label": "apply_player_activity_and_sequence",
+          "source_spec": "research/cases/animation-pose/specs/gameplay_actions.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x001644f0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "5156578b7c2410"
+        },
+        {
+          "semantic_label": "vampire.weapon_item_busy_frame",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00254250",
+          "calling_convention": "thiscall",
+          "expected_bytes": "5356578bd9"
+        },
+        {
+          "semantic_label": "vampire.is_in_combo_window",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00160dc0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf18b86f0060000"
         }
       ]
     },
