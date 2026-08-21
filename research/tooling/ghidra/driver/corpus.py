@@ -2018,12 +2018,27 @@ def command_names(apply: bool) -> int:
 HARVEST_WINDOW = 120
 
 _ADDR = re.compile(r"0x([0-9A-Fa-f]{8})\b")
+# In prose a recovered name is backticked, and requiring the backticks is most of the precision.
+# In C++ and Python it is written bare as often as not -- "vampire.dll 0x10167470 -> FindEntityFOV
+# 0x10341c30" -- so those trees get the looser pattern and lean on `--max-distance` instead.
 _SYMBOL = re.compile(r"`([A-Za-z_][\w]*(?:::~?[\w]+)?)`")
+_SYMBOL_CODE = re.compile(r"`?\b([A-Za-z_][\w]*(?:::~?[\w]+)?)\b`?")
+
+# Where a VtMB address gets a name written beside it. `docs/` is the recovered record; the other
+# three cite the same addresses in comments beside the code that reproduces them.
+HARVEST_ROOTS = (("docs", ("*.md",), False),
+                 ("research", ("*.md", "*.py", "*.java"), True),
+                 ("Source", ("*.cpp", "*.h"), True),
+                 ("pipeline", ("*.py",), True))
 
 
 def _plausible(name: str) -> bool:
     """A symbol a function could be called, as against a field, a flag or an English word."""
     if re.match(r"(thunk_)?(FUN|SUB|DAT|LAB|UNK)_", name):
+        return False
+    # This repo's own types stand next to VtMB addresses constantly -- the comment above a
+    # reproduction cites the original it reproduces. They are never the original's name.
+    if "Elysium" in name:
         return False
     if "::" in name:
         return True
@@ -2043,9 +2058,16 @@ def command_harvest(out: Path | None, limit: int, max_distance: int) -> int:
     with its own -- so a row here is a question for a reader, not a name.
     """
     connection = _connect()
-    root = repo_root() / "docs"
-    if not root.is_dir():
-        print(f"no documentation set at {root}")
+    files: list[tuple[Path, bool]] = []
+    for name, patterns, is_code in HARVEST_ROOTS:
+        root = repo_root() / name
+        if not root.is_dir():
+            print(f"harvest: no {name}/ in this checkout - skipped")
+            continue
+        for pattern in patterns:
+            files.extend((path, is_code) for path in root.rglob(pattern))
+    if not files:
+        print("harvest: nothing to read")
         return 1
 
     # A pairing at distance 0-6 is a template the docs actually use -- ``Name`` (``0x…``) and
@@ -2059,15 +2081,19 @@ def command_harvest(out: Path | None, limit: int, max_distance: int) -> int:
     # is the template the documentation set actually uses.
     # addr -> name -> {source doc: nearest distance}
     seen: dict[str, dict[str, dict[str, int]]] = {}
-    for path in sorted(root.rglob("*.md")):
-        text = path.read_text(encoding="utf-8", errors="replace")
+    for path, is_code in sorted(files):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError as problem:
+            print(f"harvest: {path} unreadable: {problem}")
+            continue
         where = path.relative_to(repo_root()).as_posix()
         addresses = [(one.start(), one.end(), one.group(1).lower())
                      for one in _ADDR.finditer(text)]
         if not addresses:
             continue
         starts = [one[0] for one in addresses]
-        for found in _SYMBOL.finditer(text):
+        for found in (_SYMBOL_CODE if is_code else _SYMBOL).finditer(text):
             name = found.group(1)
             if not _plausible(name):
                 continue
@@ -2128,7 +2154,7 @@ def command_harvest(out: Path | None, limit: int, max_distance: int) -> int:
                 stream.write(f"# alt: {', '.join(alternates)}\n")
             stream.write("\t".join((module, addr, name, tier, evidence)) + "\n")
 
-    print(f"{len(seen)} address(es) in docs/ carry a plausible name nearby")
+    print(f"{len(seen)} address(es) across {len(files)} file(s) carry a plausible name nearby")
     print(f"{len(rows)} of them are an unnamed function in exactly one module -> {target}")
     if conflicts:
         print(f"{len(conflicts)} already carry a different name in the dump:")

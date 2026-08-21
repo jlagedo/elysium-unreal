@@ -26,8 +26,7 @@ client.dll	100c3cd0	RunFlexRules	doc	docs/vtmb/facial_animation.md
 client.dll	100c42f0	SetupWeights	doc	docs/vtmb/facial_animation.md
 client.dll	100c4880	AddGlobalFlexController	doc	docs/vtmb/facial_animation.md
 client.dll	10198ea0	ShouldDrawViewModel	doc	docs/vtmb/camera-view-modes.md
-client.dll	1019d0a0	DisableFog	doc	docs/vtmb/sky-ambience.md
-client.dll	1019d4c0	GetSkyboxFogColor	doc	docs/vtmb/sky-ambience.md
+client.dll	1019d0a0	GetSkyboxFogColor	doc	docs/vtmb/sky-ambience.md
 engine.dll	20069730	CEngineTrace::ClipRayToCollideable	doc	docs/vtmb/mdl_v2531.md
 engine.dll	200775a0	RecursiveLightPoint	doc	docs/vtmb/sky-ambience.md
 engine.dll	200a9ea0	FindAmbientLight	doc	docs/vtmb/sky-ambience.md
@@ -35,7 +34,6 @@ engine.dll	200b8960	CModelLoader::LoadModel	doc	docs/vtmb/animation_and_movers.m
 stdshader_dx8.dll	10001ca0	SetModulationDynamicState	doc	docs/vtmb/sky-ambience.md
 stdshader_dx8.dll	10016a70	ComputeModulationColor	doc	docs/vtmb/sky-ambience.md
 vampire.dll	100154a1	PlayerTryStealthKillThunk	doc	docs/vtmb/stealth.md
-vampire.dll	10072e40	CChoreoScene::Process	doc	docs/vtmb/choreographed_scenes.md
 vampire.dll	10081b60	OnSceneFinished	doc	docs/vtmb/choreographed_scenes.md
 vampire.dll	10082ee0	CSceneEntity::DispatchStartEvent	doc	docs/vtmb/choreographed_scenes.md
 vampire.dll	10083cd0	CSceneEntity::FindNamedEntity	doc	docs/vtmb/choreographed_scenes.md
@@ -51,7 +49,7 @@ vampire.dll	1011e350	GetPlayerMaxs	doc	docs/vtmb/source_movement.md
 vampire.dll	1011e560	CategorizePosition	doc	docs/vtmb/source_movement.md
 vampire.dll	1011e940	UpdateStepSound	doc	docs/vtmb/source_movement.md
 vampire.dll	1011ef20	ComputeConstraintSpeedFactor	doc	docs/vtmb/source_movement.md
-vampire.dll	1011fa80	FinishGravity	doc	docs/vtmb/source_movement.md
+vampire.dll	1011fa80	StartGravity	doc	docs/vtmb/source_movement.md
 vampire.dll	101200c0	WaterMove	doc	docs/vtmb/source_movement.md
 vampire.dll	10121000	AirAccelerate	doc	docs/vtmb/source_movement.md
 vampire.dll	10122190	FullNoClipMove	doc	docs/vtmb/source_movement.md
@@ -149,3 +147,21 @@ vampire.dll	1019e5d0	RecalculateLength	doc	docs/vtmb/entity_visuals.md
 vampire.dll	1020dd70	CPropSwitchSwitchThink	doc	docs/vtmb/entity_io.md
 vampire.dll	103ea510	CWeaponMelee::Deploy	doc	docs/vtmb/combat-and-damage.md
 vampire.dll	103eae00	CWeaponMelee::SecondaryAttack	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10120f30	FinishGravity	doc	docs/vtmb/source_movement.md; Source/ElysiumUE/Public/ElysiumMoveSolve.h
+vampire.dll	10289ee0	RestartIdealActivity	doc	Source/ElysiumUE/Private/Tests/ElysiumActionTableTests.cpp
+client.dll	1009c250	ApplyWeaponCameraPref	doc	Source/ElysiumUE/Public/ElysiumCameraSolve.h
+client.dll	1009c2e0	SaveWeaponCameraPref	doc	Source/ElysiumUE/Public/ElysiumCameraSolve.h
+client.dll	100fdb30	SimpleSpline	doc	Source/ElysiumUE/Public/ElysiumCameraSolve.h
+engine.dll	20087f10	MakeSkyVec	doc	research/tooling/probes/probe_sky_orientation.py
+vampire.dll	10271f50	PreTranslate_Base	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	10295590	PreTranslate_Troika	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	103854f0	PreTranslate_Human	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	103690a0	PreTranslate_Camera	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	10271f70	ClassTranslate_Base	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	10295710	ClassTranslate_Troika	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	103858b0	ClassTranslate_Human	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	103690c0	ClassTranslate_Camera	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	10274aa0	Cover_Base	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	10297560	Cover_Troika	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	10274820	Reload_Base	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
+vampire.dll	102954b0	Reload_Troika	doc	Source/ElysiumUE/Private/Visual/ElysiumNpcActivityTables.cpp
