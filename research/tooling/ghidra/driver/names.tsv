@@ -1,0 +1,136 @@
+# Names the corpus applies on top of the Ghidra dump.
+#
+# tier: binary = the image states it (a VProf scope, RTTI, an export)
+#       doc    = a docs/ topic file states it beside the address
+#       inferred = argued from call sites or slot position, and nothing else
+#
+# `corpus names --apply` writes these; `build` and `reindex` re-apply them. A row
+# removed from this file is reverted to whatever the dump called it. A row that
+# disagrees with a name the dump recovered is reported and NOT applied.
+module	addr	name	tier	evidence
+client.dll	100935a0	C_BaseAnimating::FireEvent	doc	docs/vtmb/effects.md; docs/vtmb/feeding.md
+vampire.dll	101874a0	CPlayerMove::RunCommand	doc	docs/vtmb/game_runtime.md; docs/vtmb/source_movement.md
+vampire.dll	10265ed0	CAI_BaseNPC::OnTakeDamageAlive	doc	docs/vtmb/combat-and-damage.md; docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	1028fb70	InitPerceptionDistances	doc	docs/vtmb/npc-ai-reverse-engineering.md; docs/vtmb/stealth.md
+vampire.dll	103851e0	CNPC_VHuman::SelectIdealState	doc	docs/vtmb/animation_and_movers.md; docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	103e9e00	CWeaponMelee::RequestActivity	doc	docs/vtmb/animation_and_movers.md; docs/vtmb/combat-and-damage.md
+vampire.dll	103eaca0	PrimaryAttack	doc	docs/vtmb/animation_and_movers.md; docs/vtmb/combat-and-damage.md
+vampire.dll	103eaec0	CWeaponMelee::ItemPostFrame	doc	docs/vtmb/animation_and_movers.md; docs/vtmb/combat-and-damage.md
+StudioRender.dll	2c00eba0	ConcatTransforms	doc	docs/vtmb/animation_and_movers.md
+client.dll	1008f5c0	C_BaseEntity::~C_BaseEntity	doc	docs/vtmb/animation_and_movers.md
+client.dll	10093e40	IsSkinCrossfading	doc	docs/vtmb/entity_io.md
+client.dll	1009f300	C_BaseAnimating::ShadowCastType	doc	docs/vtmb/entity_visuals.md
+client.dll	100a5910	ShouldDrawLocalPlayer	doc	docs/vtmb/camera-view-modes.md
+client.dll	100c04d0	C_RopeKeyframe::Init	doc	docs/vtmb/entity_visuals.md
+client.dll	100c3cd0	RunFlexRules	doc	docs/vtmb/facial_animation.md
+client.dll	100c42f0	SetupWeights	doc	docs/vtmb/facial_animation.md
+client.dll	100c4880	AddGlobalFlexController	doc	docs/vtmb/facial_animation.md
+client.dll	10198ea0	ShouldDrawViewModel	doc	docs/vtmb/camera-view-modes.md
+client.dll	1019d0a0	DisableFog	doc	docs/vtmb/sky-ambience.md
+client.dll	1019d4c0	GetSkyboxFogColor	doc	docs/vtmb/sky-ambience.md
+engine.dll	20069730	CEngineTrace::ClipRayToCollideable	doc	docs/vtmb/mdl_v2531.md
+engine.dll	200775a0	RecursiveLightPoint	doc	docs/vtmb/sky-ambience.md
+engine.dll	20088480	CVRenderView::DrawNamedSkyBox	doc	docs/vtmb/sky-ambience.md
+engine.dll	200a9ea0	FindAmbientLight	doc	docs/vtmb/sky-ambience.md
+engine.dll	200b8960	CModelLoader::LoadModel	doc	docs/vtmb/animation_and_movers.md
+stdshader_dx8.dll	10001ca0	SetModulationDynamicState	doc	docs/vtmb/sky-ambience.md
+stdshader_dx8.dll	10016a70	ComputeModulationColor	doc	docs/vtmb/sky-ambience.md
+vampire.dll	100154a1	PlayerTryStealthKillThunk	doc	docs/vtmb/stealth.md
+vampire.dll	1003bad0	CBaseEntity::PhysicsSimulate	doc	docs/vtmb/game_runtime.md
+vampire.dll	10072e40	CChoreoScene::Process	doc	docs/vtmb/choreographed_scenes.md
+vampire.dll	10081b60	OnSceneFinished	doc	docs/vtmb/choreographed_scenes.md
+vampire.dll	10082ee0	CSceneEntity::DispatchStartEvent	doc	docs/vtmb/choreographed_scenes.md
+vampire.dll	10083cd0	CSceneEntity::FindNamedEntity	doc	docs/vtmb/choreographed_scenes.md
+vampire.dll	1008f120	CBaseAnimating::StudioFrameAdvance	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10091880	CBaseAnimating::DispatchAnimEvents	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	100cb750	CCameraTrack::TrackThink	doc	docs/vtmb/camera-view-modes.md
+vampire.dll	100cfac0	CEventQueue::ServiceEvents	doc	docs/vtmb/game_runtime.md
+vampire.dll	100e05f0	CDialog::Acquire	doc	docs/vtmb/game_runtime.md
+vampire.dll	100ed150	CDispositionTable::GetTransitionAnim	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	100ef060	CBaseDoor::Spawn	doc	docs/vtmb/audio_pipeline.md
+vampire.dll	1011e310	GetPlayerMins	doc	docs/vtmb/source_movement.md
+vampire.dll	1011e350	GetPlayerMaxs	doc	docs/vtmb/source_movement.md
+vampire.dll	1011e560	CategorizePosition	doc	docs/vtmb/source_movement.md
+vampire.dll	1011e940	UpdateStepSound	doc	docs/vtmb/source_movement.md
+vampire.dll	1011ef20	ComputeConstraintSpeedFactor	doc	docs/vtmb/source_movement.md
+vampire.dll	1011fa80	FinishGravity	doc	docs/vtmb/source_movement.md
+vampire.dll	101200c0	WaterMove	doc	docs/vtmb/source_movement.md
+vampire.dll	10121000	AirAccelerate	doc	docs/vtmb/source_movement.md
+vampire.dll	10122190	FullNoClipMove	doc	docs/vtmb/source_movement.md
+vampire.dll	10125db0	CheckFalling	doc	docs/vtmb/source_movement.md
+vampire.dll	101265d0	CanUnduck	doc	docs/vtmb/source_movement.md
+vampire.dll	101269e0	FinishUnDuck	doc	docs/vtmb/source_movement.md
+vampire.dll	10126cb0	FinishDuck	doc	docs/vtmb/source_movement.md
+vampire.dll	10126fd0	CGameMovement::Duck	doc	docs/vtmb/controls.md
+vampire.dll	10127b00	PlayerMove	doc	docs/vtmb/source_movement.md
+vampire.dll	10147a60	DisciplineGlobalTeardown	doc	docs/vtmb/entity_io.md
+vampire.dll	101606e0	PlayerKnockbackReaction	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10160bc0	PlayerDefenderBlockReaction	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10160d00	PlayerAttackerBlockedReaction	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10160dc0	IsInComboWindow	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10162c30	CBasePlayer::TraceAttack	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10164240	CBasePlayer::SetAnimation	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10167320	PlayerStealthKillEligibility	doc	docs/vtmb/stealth.md
+vampire.dll	10167370	PlayerTryStealthKill	doc	docs/vtmb/stealth.md
+vampire.dll	10168320	CBasePlayer::Replenish	doc	docs/vtmb/feeding.md
+vampire.dll	10168700	CBasePlayer::BeFedOnByZombie	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	1016b090	UpdateButtonState	doc	docs/vtmb/game_runtime.md
+vampire.dll	1016be10	CBasePlayer::PostThink	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10174ce0	CBasePlayer::ItemPostFrame	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10174f80	CBasePlayer::GetSaveBlockedReason	doc	docs/vtmb/entity_io.md
+vampire.dll	101755d0	CBasePlayer::UpdateClientActionState	doc	docs/vtmb/stealth.md
+vampire.dll	1017f2a0	PlayerCriminalIncident	doc	docs/vtmb/player-entity.md
+vampire.dll	1017f4a0	PlayerSupernaturalIncident	doc	docs/vtmb/player-entity.md
+vampire.dll	10185f90	CheckMovingGround	doc	docs/vtmb/game_runtime.md
+vampire.dll	10197f60	SetGesture	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	1019b7b0	ClearAll	doc	docs/vtmb/python_bridge.md
+vampire.dll	1019e110	SetupHangDistance	doc	docs/vtmb/entity_visuals.md
+vampire.dll	101d1280	DispatchSpawn	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	10217b30	BeginInput	doc	docs/vtmb/computer-terminals.md
+vampire.dll	10218660	CBaseTerminal::ObjectCaps	doc	docs/vtmb/computer-terminals.md
+vampire.dll	1021da40	CPropKeypad::LoadTextStrings	doc	docs/vtmb/computer-terminals.md
+vampire.dll	10238160	CWeaponRanged::HandleAnimEvent	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10238230	CWeaponRanged::FireOnEmpty	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	102383b0	ModeDispatch	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10238580	CWeaponRanged::Attack	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	102387b0	CWeaponRanged::Shot	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	102397b0	CWeaponRanged::Kick	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	1024f210	CBaseCombatWeapon::ActivityOverride	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10254250	CWeaponMelee::ItemBusyFrame	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10259230	WeaponModeDataLoader	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10265ad0	CAI_BaseNPC::Event_Killed	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	10266780	CAI_BaseNPC::TraceAttack	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10268330	RangedDamagePerVictim	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	1026af70	SetHeadDirection	doc	docs/vtmb/facial_animation.md
+vampire.dll	1026f660	CAI_BaseNPC::SelectIdealState	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	10270b20	GatherEnemyConditions	doc	docs/vtmb/stealth.md
+vampire.dll	10271ff0	CAI_BaseNPC::TranslateActivity	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10272130	ResolveActivityToSequence	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10272490	CAI_BaseNPC::SetActivityAndSequence	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	102725d0	CAI_BaseNPC::SetActivity	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10272650	CAI_BaseNPC::SetIdealActivity	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	102726a0	AdvanceToIdealActivity	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10273790	InputSetRelationship	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	102743c0	BestEnemy	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	10279a50	SetEnemy	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	10279d00	ShouldChooseNewEnemy	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	102827f0	CAI_BaseNPC::StartTask	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10288780	CAI_BaseNPC::RunTask	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	10293a80	SetClosestPlayer	doc	docs/vtmb/stealth.md
+vampire.dll	102a1910	CAI_BaseNPCTroika::StartTask	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	102aacf0	CAI_BaseNPCTroika::RunTask	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	102ad660	CAI_BaseNPCTroika::SelectIdealState	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	102ae140	OnStateChange	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	102af660	CAI_BaseNPCTroika::SelectSchedule	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	102b7370	SelectDoorObstructionSchedule	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	102bed30	CNPC_VVampire::OnTakeDamage	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	102c0f70	SetDisposition	doc	docs/vtmb/animation_and_movers.md
+vampire.dll	102da0d0	PickSpotFor	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	102db470	BuildCandidates	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	102db590	PickRandomInterestingPlace	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	10326750	CBaseCombatCharacter::FInViewCone	doc	docs/vtmb/stealth.md
+vampire.dll	10346830	MeleeRollAndSendNotice	doc	docs/vtmb/combat-and-damage.md
+vampire.dll	10384ee0	CNPC_VHuman::SelectSchedule	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	10387380	CNPC_VHumanCombatPatrol::SelectIdealState	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	103c4ef0	CNPC_VVampire::Spawn	doc	docs/vtmb/npc-ai-reverse-engineering.md
+vampire.dll	103ea5b0	CWeaponMelee::Operator_HandleAnimEvent	doc	docs/vtmb/combat-and-damage.md

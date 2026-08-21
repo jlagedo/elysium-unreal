@@ -31,6 +31,9 @@ Phases and queries:
     outliers                 functions whose body swallowed its neighbours
     suggest                  unnamed functions only one class ever calls
 
+    names [--apply]          the tracked names overlay: what it states, what it changes
+    harvest                  propose overlay rows from the addresses `docs/` already names
+
 Usage:
     uv run elysium research corpus dump
     uv run elysium research corpus build
@@ -45,6 +48,7 @@ names and types the project holds at the moment it is taken.
 from __future__ import annotations
 
 import argparse
+import bisect
 import hashlib
 import json
 import re
@@ -99,7 +103,10 @@ CREATE TABLE IF NOT EXISTS data_refs (
 CREATE TABLE IF NOT EXISTS externals (
     module TEXT, addr TEXT, lib TEXT, name TEXT, imported TEXT, PRIMARY KEY (module, addr));
 CREATE TABLE IF NOT EXISTS meta (
-    module TEXT PRIMARY KEY, binary TEXT, sha256 TEXT, dumped_at REAL, project_at REAL);"""
+    module TEXT PRIMARY KEY, binary TEXT, sha256 TEXT, dumped_at REAL, project_at REAL);
+CREATE TABLE IF NOT EXISTS names (
+    module TEXT, addr TEXT, name TEXT, tier TEXT, evidence TEXT,
+    PRIMARY KEY (module, addr));"""
 
 # The indices, declared apart from the schema because they have to be RECONCILED rather than
 # created. `CREATE INDEX IF NOT EXISTS` matches on the index's NAME, not its definition, so
@@ -266,13 +273,159 @@ def _migrate(connection: sqlite3.Connection) -> None:
     Each addition is checked and reported rather than attempted and swallowed.
     """
     for table, column, definition in (("edges", "kind", "TEXT DEFAULT 'direct'"),
-                                      ("functions", "warn", "TEXT DEFAULT ''")):
+                                      ("functions", "warn", "TEXT DEFAULT ''"),
+                                      ("functions", "name_src", "TEXT DEFAULT ''"),
+                                      ("functions", "name_dump", "TEXT DEFAULT ''")):
         present = {row[1] for row in connection.execute(f"PRAGMA table_info({table})")}
         if not present or column in present:
             continue
         print(f"migrating: {table} gains {column}")
         connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     connection.commit()
+
+
+# ---------------------------------------------------------------------------
+# The names overlay.
+#
+# A name argued out rather than read out is knowledge the image does not carry, so it cannot
+# live in the Ghidra project: that project is derived from the user's own binary, is gitignored,
+# and `dump` rebuilds it from scratch. The overlay is the tracked half -- a text file applied on
+# top of whatever the dump carried, the same shape as a generator rebuilding an authored asset
+# from its captured text. It holds names and addresses, which is what `docs/vtmb/` already
+# tracks; it holds no bytes off the user's install.
+
+# The tier is never merged away, because a guess that prints like a recovered name is how a
+# wrong fact enters a document. `binary` is a name the image itself states -- a VProf scope, an
+# RTTI method, an export. `doc` is one a `docs/` topic file states beside the address, which is
+# this project's own recovered record. `inferred` is argued from call sites or slot position and
+# nothing else.
+NAME_TIERS = ("binary", "doc", "inferred")
+
+NAMES_HEADER = "\t".join(("module", "addr", "name", "tier", "evidence"))
+
+
+def _names_file() -> Path:
+    return repo_root() / "research" / "tooling" / "ghidra" / "driver" / "names.tsv"
+
+
+def _read_names(path: Path) -> tuple[list[tuple[str, str, str, str, str]], list[str]]:
+    """Parse the overlay. A malformed row is reported and dropped, never silently repaired."""
+    rows: list[tuple[str, str, str, str, str]] = []
+    complaints: list[str] = []
+    if not path.is_file():
+        return rows, complaints
+    seen: dict[tuple[str, str], int] = {}
+    for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip() or line.lstrip().startswith("#") or line == NAMES_HEADER:
+            continue
+        parts = line.split("\t")
+        if len(parts) != 5:
+            complaints.append(f"line {number}: {len(parts)} column(s), expected 5")
+            continue
+        module, addr, name, tier, evidence = (one.strip() for one in parts)
+        addr = addr.lower().removeprefix("0x")
+        if module not in PROGRAMS:
+            complaints.append(f"line {number}: {module!r} is not a corpus module")
+        elif not re.fullmatch(r"[0-9a-f]{6,8}", addr):
+            complaints.append(f"line {number}: {addr!r} is not an address")
+        elif not re.fullmatch(r"[A-Za-z_][\w]*(::~?[\w]+)?", name):
+            complaints.append(f"line {number}: {name!r} is not a symbol")
+        elif tier not in NAME_TIERS:
+            complaints.append(f"line {number}: tier {tier!r} is not one of {NAME_TIERS}")
+        elif not evidence:
+            complaints.append(f"line {number}: {module} {addr} states no evidence")
+        elif (module, addr) in seen:
+            complaints.append(f"line {number}: {module} {addr} restates line {seen[module, addr]}")
+        else:
+            seen[module, addr] = number
+            rows.append((module, addr, name, tier, evidence))
+            continue
+    return rows, complaints
+
+
+def _load_names(connection: sqlite3.Connection) -> int:
+    rows, complaints = _read_names(_names_file())
+    for one in complaints:
+        print(f"names overlay: {one}")
+    connection.execute("DELETE FROM names")
+    connection.executemany("INSERT INTO names VALUES (?, ?, ?, ?, ?)", rows)
+    connection.commit()
+    return len(rows)
+
+
+def _is_unnamed(name: str) -> bool:
+    return bool(re.match(r"(thunk_)?(FUN|SUB)_[0-9a-fA-F]+$", name or ""))
+
+
+def _apply_names(connection: sqlite3.Connection, write: bool = True,
+                 verbose: bool = True) -> dict[str, int]:
+    """Write the overlay onto `functions`, and refuse to overwrite a name the dump recovered.
+
+    A row that disagrees with a recovered name is reported and left alone. One of the two is
+    wrong and the overlay cannot tell which, so silently preferring either would launder a
+    disagreement into a fact.
+    """
+    tally = {"applied": 0, "agreed": 0, "conflict": 0, "absent": 0, "reverted": 0}
+    # A name deleted from the overlay has to come back off the function, or the file stops being
+    # the record of what the corpus states. `name_dump` is what the dump called it.
+    for module, addr, dumped in connection.execute(
+            "SELECT module, addr, name_dump FROM functions WHERE name_src != '' AND "
+            "NOT EXISTS (SELECT 1 FROM names n WHERE n.module = functions.module "
+            "AND n.addr = lower(functions.addr))").fetchall():
+        namespace, bare = dumped.rsplit("::", 1) if "::" in dumped else (None, dumped)
+        if write:
+            connection.execute(
+                "UPDATE functions SET name = ?, name_src = '', name_dump = ''"
+                + (", ns = ?" if namespace is not None else "")
+                + " WHERE module = ? AND addr = ?",
+                (bare, namespace, module, addr) if namespace is not None
+                else (bare, module, addr))
+        tally["reverted"] += 1
+
+    for module, addr, name, tier, evidence in connection.execute(
+            "SELECT module, addr, name, tier, evidence FROM names ORDER BY module, addr"):
+        row = connection.execute(
+            "SELECT name, ns, name_src, name_dump FROM functions "
+            "WHERE module = ? AND lower(addr) = ?", (module, addr)).fetchone()
+        if row is None:
+            tally["absent"] += 1
+            if verbose:
+                print(f"names overlay: {module} {addr} is not a function entry point "
+                      f"({evidence})")
+            continue
+        namespace, bare = name.rsplit("::", 1) if "::" in name else (row["ns"], name)
+        current = (f"{row['ns']}::{row['name']}" if row["ns"] not in ("", "Global")
+                   else row["name"])
+        if row["name"] == bare and row["ns"] == namespace:
+            tally["agreed"] += 1
+            continue
+        if not _is_unnamed(row["name"]) and not row["name_src"]:
+            tally["conflict"] += 1
+            if verbose:
+                print(f"names overlay: {module} {addr} is {current} in the dump and {name} in "
+                      f"the overlay -- left as the dump has it ({evidence})")
+            continue
+        dumped = row["name_dump"] or (f"{row['ns']}::{row['name']}"
+                                      if row["ns"] not in ("", "Global") else row["name"])
+        if write:
+            connection.execute(
+                "UPDATE functions SET name = ?, ns = ?, name_src = ?, name_dump = ? "
+                "WHERE module = ? AND lower(addr) = ?",
+                (bare, namespace, tier, dumped, module, addr))
+        tally["applied"] += 1
+    if write:
+        connection.commit()
+    return tally
+
+
+def _apply_overlay(connection: sqlite3.Connection) -> None:
+    """Re-apply the overlay after a load, so a dump never silently drops a recovered name."""
+    loaded = _load_names(connection)
+    tally = _apply_names(connection)
+    if loaded or tally["reverted"]:
+        print(f"names overlay: {loaded} row(s), {tally['applied']} applied, "
+              f"{tally['agreed']} already agree, {tally['conflict']} conflict with the dump, "
+              f"{tally['absent']} name no function entry point, {tally['reverted']} reverted")
 
 
 def _runner() -> Path:
@@ -863,6 +1016,7 @@ def build(programs: list[str]) -> int:
           f"slot with `corpus slot <N>`)")
 
     _report_interfaces(connection)
+    _apply_overlay(connection)
     _build_index(connection)
     # The planner picks between these indices by guesswork until it has seen their shape, and
     # guesses badly on a table whose rows carry a decompilation each.
@@ -900,6 +1054,7 @@ def reindex() -> int:
     print(f"virtual call graph: {virtual} edges, {ambiguous} sites left unresolved because the "
           f"class holds more than one function at that slot")
     _report_interfaces(connection)
+    _apply_overlay(connection)
     _build_index(connection)
     connection.execute("ANALYZE")
     connection.commit()
@@ -1191,6 +1346,13 @@ def command_func(reference: str) -> int:
         print(f"{_label(row)}  {row['cc']}  {row['size']} bytes"
               f"  callers={direct} direct/{virtual} virtual callees={callees} strings={strings}"
               f"{'  [thunk]' if row['thunk'] else ''}")
+        if row["name_src"]:
+            evidence = connection.execute(
+                "SELECT evidence FROM names WHERE module = ? AND addr = lower(?)",
+                (row["module"], row["addr"])).fetchone()
+            print(f"    name is [{row['name_src']}], not stated by the image"
+                  f"{': ' + evidence[0] if evidence else ''}"
+                  f"  (the dump calls it {row['name_dump']})")
         if slots:
             where = ", ".join(f"{one['cls']}#{one['slot']}" for one in slots[:8])
             print(f"    vtable slot of {len(slots)} class(es): {where}"
@@ -1796,6 +1958,154 @@ def command_suggest(limit: int) -> int:
     return 0
 
 
+def command_names(apply: bool) -> int:
+    """The overlay: what it states, and what applying it would change."""
+    connection = _connect()
+    path = _names_file()
+    if not path.is_file():
+        print(f"no overlay at {path}")
+        print("`corpus harvest` proposes rows from the addresses docs/ already names")
+        return 1
+    loaded = _load_names(connection)
+    tiers = connection.execute(
+        "SELECT tier, count(*) FROM names GROUP BY tier ORDER BY 2 DESC").fetchall()
+    print(f"{loaded} name(s) in {path.relative_to(repo_root()).as_posix()}: "
+          + ", ".join(f"{count} {tier}" for tier, count in tiers))
+    tally = _apply_names(connection, write=apply)
+    print(f"{'applied' if apply else 'would apply'} {tally['applied']}, "
+          f"{tally['agreed']} already agree, {tally['conflict']} conflict with the dump, "
+          f"{tally['absent']} name no function entry point, {tally['reverted']} reverted")
+    if not apply:
+        print("nothing was written; pass --apply")
+    return 0
+
+
+# A `docs/` topic file states a name beside an address in several shapes -- ``Name`` then
+# ``0x…``, the reverse, a table row carrying both -- and states plenty of addresses with no name
+# at all. Rather than trust one shape, take every backticked symbol within a window of the
+# address and let agreement across the documentation set do the ranking.
+HARVEST_WINDOW = 120
+
+_ADDR = re.compile(r"0x([0-9A-Fa-f]{8})\b")
+_SYMBOL = re.compile(r"`([A-Za-z_][\w]*(?:::~?[\w]+)?)`")
+
+
+def _plausible(name: str) -> bool:
+    """A symbol a function could be called, as against a field, a flag or an English word."""
+    if re.match(r"(thunk_)?(FUN|SUB|DAT|LAB|UNK)_", name):
+        return False
+    if "::" in name:
+        return True
+    # A bare Source class name is the commonest thing standing next to an address, and it is
+    # never the function's name: `CBasePlayer`, `CUserCmd`, `CAI_BaseNPC`.
+    if re.fullmatch(r"[CI][A-Z]\w*", name):
+        return False
+    # CamelCase with an internal capital: `ItemPostFrame`, not `cycle`, `reach` or `curtime`.
+    return bool(re.fullmatch(r"[A-Z][A-Za-z0-9]*", name)) and bool(re.search(r"[a-z][A-Z]", name))
+
+
+def command_harvest(out: Path | None, limit: int, max_distance: int) -> int:
+    """Propose overlay rows from the addresses `docs/` already names.
+
+    The output is a candidate file for review, never the overlay itself. Proximity is evidence
+    of nothing on its own -- the docs pair an address with the function above it as readily as
+    with its own -- so a row here is a question for a reader, not a name.
+    """
+    connection = _connect()
+    root = repo_root() / "docs"
+    if not root.is_dir():
+        print(f"no documentation set at {root}")
+        return 1
+
+    # A pairing at distance 0-6 is a template the docs actually use -- ``Name`` (``0x…``) and
+    # its reverse. Past that it is proximity, which is evidence of nothing on its own, so
+    # `--max-distance` is how a caller asks for the reviewable half.
+    #
+    # Each name is offered to its NEAREST address and to no other. A doc listing two pairs in a
+    # row -- "interpolation `0x100C4110`, `AddGlobalFlexController` `0x100C4880`" -- otherwise
+    # hands the second name to the first address as well, which reads like corroboration and is
+    # simply the sentence's punctuation. Ties go to the name written BEFORE its address, which
+    # is the template the documentation set actually uses.
+    # addr -> name -> {source doc: nearest distance}
+    seen: dict[str, dict[str, dict[str, int]]] = {}
+    for path in sorted(root.rglob("*.md")):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        where = path.relative_to(repo_root()).as_posix()
+        addresses = [(one.start(), one.end(), one.group(1).lower())
+                     for one in _ADDR.finditer(text)]
+        if not addresses:
+            continue
+        starts = [one[0] for one in addresses]
+        for found in _SYMBOL.finditer(text):
+            name = found.group(1)
+            if not _plausible(name):
+                continue
+            pivot = bisect.bisect_left(starts, found.start())
+            best: tuple[tuple[int, int], str] | None = None
+            for index in range(max(0, pivot - 1), min(len(addresses), pivot + 2)):
+                start, end, addr = addresses[index]
+                before = found.end() <= start
+                gap = (start - found.end()) if before else (found.start() - end)
+                if gap < 0 or gap > max_distance:
+                    continue
+                rank = (gap, 0 if before else 1)
+                if best is None or rank < best[0]:
+                    best = (rank, addr)
+            if best is None:
+                continue
+            (gap, _), addr = best
+            sources = seen.setdefault(addr, {}).setdefault(name, {})
+            sources[where] = min(gap, sources.get(where, gap))
+
+    rows: list[tuple[str, str, str, str, str, int, list[str]]] = []
+    conflicts: list[tuple[str, str, str, str]] = []
+    for addr, candidates in seen.items():
+        entry = connection.execute(
+            "SELECT module, addr, name, ns FROM functions WHERE lower(addr) = ?",
+            (addr,)).fetchall()
+        if len(entry) != 1:
+            # Ambiguous across modules (vampire.dll and client.dll share an imagebase) or not an
+            # entry point at all. Either way a reader has to say which, so it is not proposed.
+            continue
+        row = entry[0]
+        ranked = sorted(candidates.items(),
+                        key=lambda one: (-len(one[1]), min(one[1].values()), one[0]))
+        name, sources = ranked[0]
+        current = (f"{row['ns']}::{row['name']}" if row["ns"] not in ("", "Global")
+                   else row["name"])
+        if not _is_unnamed(row["name"]):
+            # The docs name a method bare as often as they qualify it, and a bare name matching
+            # the dump's method half is the same name, not a second opinion about it.
+            agrees = current == name or ("::" not in name and row["name"] == name)
+            if not agrees:
+                conflicts.append((row["module"], addr, current, name))
+            continue
+        rows.append((row["module"], addr, name, "doc",
+                     "; ".join(sorted(sources)), len(sources),
+                     [one for one, _ in ranked[1:4]]))
+
+    rows.sort(key=lambda one: (-one[5], one[0], one[1]))
+    target = out or (research_root() / "ghidra" / "names" / "harvest.tsv")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w", encoding="utf-8", newline="\n") as stream:
+        stream.write("# Candidates, not names. Review each row, then move it into\n"
+                     f"# {_names_file().relative_to(repo_root()).as_posix()}.\n"
+                     "# `alt:` lists the runners-up the same window offered.\n")
+        stream.write(NAMES_HEADER + "\n")
+        for module, addr, name, tier, evidence, agreeing, alternates in rows[:limit]:
+            if alternates:
+                stream.write(f"# alt: {', '.join(alternates)}\n")
+            stream.write("\t".join((module, addr, name, tier, evidence)) + "\n")
+
+    print(f"{len(seen)} address(es) in docs/ carry a plausible name nearby")
+    print(f"{len(rows)} of them are an unnamed function in exactly one module -> {target}")
+    if conflicts:
+        print(f"{len(conflicts)} already carry a different name in the dump:")
+        for module, addr, current, proposed in conflicts[:limit]:
+            print(f"  {module:18} {addr}  dump {current}  docs {proposed}")
+    return 0
+
+
 def command_twin(reference: str) -> int:
     """The same function in another module.
 
@@ -2081,6 +2391,18 @@ def main() -> int:
     suggest_parser = sub.add_parser("suggest", help="unnamed functions only one class calls")
     suggest_parser.add_argument("--limit", type=int, default=60)
 
+    names_parser = sub.add_parser("names", help="the tracked names overlay and what it changes")
+    names_parser.add_argument("--apply", action="store_true",
+                              help="write the overlay onto the corpus (default: report only)")
+
+    harvest_parser = sub.add_parser(
+        "harvest", help="propose overlay rows from the addresses docs/ already names")
+    harvest_parser.add_argument("--out", type=Path, default=None)
+    harvest_parser.add_argument("--limit", type=int, default=2000)
+    harvest_parser.add_argument("--max-distance", type=int, default=HARVEST_WINDOW,
+                                help="how far from the address a name may stand; 6 keeps only "
+                                     "the adjacent pairings the docs use as a template")
+
     grep_parser = sub.add_parser("grep", help="search the decompiled corpus")
     grep_parser.add_argument("pattern")
     grep_parser.add_argument("--module", default=None)
@@ -2146,6 +2468,10 @@ def main() -> int:
         return command_outliers(args.minimum)
     if args.command == "suggest":
         return command_suggest(args.limit)
+    if args.command == "names":
+        return command_names(args.apply)
+    if args.command == "harvest":
+        return command_harvest(args.out, args.limit, args.max_distance)
     if args.command in ("callers", "callees"):
         return command_hop(args.reference, args.command)
     if args.command == "grep":
