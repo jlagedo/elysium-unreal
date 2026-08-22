@@ -41,6 +41,28 @@ def baked_asset_name(text):
     return _UNSAFE.sub("_", text)
 
 
+_RIG_UNSAFE = re.compile(r"[^A-Za-z0-9_\-.| ]")
+
+
+def rig_bone_name(name):
+    """A VtMB bone name every Unreal animation surface can carry, folded character by character.
+
+    Unreal's sequencer-backed animation data model stores each bone track as an FK Control Rig
+    element, and `URigHierarchy::SanitizeName` folds any character outside letters, digits,
+    `_ - . |` and a non-leading space to `_` (`UAnimSequencerController::AddBoneControl`). A
+    `USkeleton` accepts the raw name, so a bone whose name folds never binds to its own track and
+    the track is silently dropped on save. Folding once here, at the exporter boundary, keeps
+    every product -- skeleton, mesh, clip track, dynamics chain, garment sidecar -- naming the
+    bone the one way Unreal can store it. Character per character rather than per run, matching
+    the engine's own fold, so two authored names that differ stay different wherever a legal
+    character separates them.
+    """
+    folded = _RIG_UNSAFE.sub("_", name)
+    if folded.startswith(" "):
+        folded = "_" + folded[1:]
+    return folded
+
+
 def texture_asset_name(uri):
     """The `T_*` package name a character albedo imports under, from its export-relative uri."""
     stem = uri.replace("\\", "/").rsplit("/", 1)[-1]

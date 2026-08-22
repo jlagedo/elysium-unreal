@@ -1153,10 +1153,53 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			// bank-skeleton evaluation, the body's own for the retargeted one -- and matched by
 			// bone NAME, because the fork this guards against is precisely a disagreement about
 			// which bone occupies which INDEX.
+			//
+			// `EvaluateOrdinaryFrame` hands back locals indexed by the TARGET asset's reference
+			// skeleton. For the body that order IS the container's, because a body's mesh is
+			// authored from its own container. The bank-family skeleton is a union over every
+			// member bank, ordered by whichever container declared a bone first -- so its indices
+			// agree with THIS container's only for the family's first-declared member, and
+			// composing skeleton-indexed locals with container indices reads one bone's animation
+			// as another's. Reindexed by name before composing, for both sides, because the name
+			// is the only join the orders share.
+			const FReferenceSkeleton& BankRef = BankSkeleton->GetReferenceSkeleton();
+			const FReferenceSkeleton& BodyRef = Baked->GetRefSkeleton();
+			TArray<FTransform> BankByContainer;
+			TArray<FTransform> BodyByContainer;
+			BankByContainer.SetNum(BankSource.Bones.Num());
+			BodyByContainer.SetNum(Source.Bones.Num());
+			bool bIndexed = true;
+			for (int32 Index = 0; Index < BankSource.Bones.Num() && bIndexed; ++Index)
+			{
+				const int32 At = BankRef.FindBoneIndex(BankSource.Bones[Index].Name);
+				bIndexed = At != INDEX_NONE && BankLocals.IsValidIndex(At);
+				if (bIndexed)
+				{
+					BankByContainer[Index] = BankLocals[At];
+				}
+			}
+			for (int32 Index = 0; Index < Source.Bones.Num() && bIndexed; ++Index)
+			{
+				const int32 At = BodyRef.FindBoneIndex(Source.Bones[Index].Name);
+				bIndexed = At != INDEX_NONE && BodyLocals.IsValidIndex(At);
+				if (bIndexed)
+				{
+					BodyByContainer[Index] = BodyLocals[At];
+				}
+			}
+			if (!bIndexed)
+			{
+				AddError(FString::Printf(
+					TEXT("%s: '%s' (bank '%s') has a container bone its baked skeleton does not ")
+					TEXT("carry, so the composed comparison cannot be indexed"),
+					*Stem, *Clip->Name, *Bank));
+				bSound = false;
+				break;
+			}
 			TArray<FTransform> BankComposed;
 			TArray<FTransform> BodyComposed;
-			ComposeComponentSpace(BankSource.Bones, BankLocals, BankComposed);
-			ComposeComponentSpace(Source.Bones, BodyLocals, BodyComposed);
+			ComposeComponentSpace(BankSource.Bones, BankByContainer, BankComposed);
+			ComposeComponentSpace(Source.Bones, BodyByContainer, BodyComposed);
 
 			for (int32 BankIndex = 0; BankIndex < BankSource.Bones.Num(); ++BankIndex)
 			{

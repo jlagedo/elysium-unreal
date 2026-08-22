@@ -1529,6 +1529,34 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		Controller.NotifyPopulated();
 		Controller.CloseBracket(false);
 
+		// Every track just written must be answerable by the NAME it was written under. The
+		// sequencer-backed data model stores a bone track as an FK Control Rig element, and
+		// `URigHierarchy::SanitizeName` folds characters Control Rig cannot carry -- so a bone
+		// name outside its legal set is silently stored under a different name, never binds to
+		// its bone, and evaluates as identity. The exporter's `rig_bone_name` keeps such a name
+		// out of the container; this is the refusal if one ever gets through.
+		{
+			TArray<FName> ModelTracks;
+			Sequence->GetDataModel()->GetBoneTrackNames(ModelTracks);
+			const TSet<FName> Stored(ModelTracks);
+			TArray<FString> Lost;
+			for (const int32 Bone : Tracked)
+			{
+				if (!Stored.Contains(Source.Bones[Bone].Name))
+				{
+					Lost.Add(Source.Bones[Bone].Name.ToString());
+				}
+			}
+			if (!Lost.IsEmpty())
+			{
+				return FString::Printf(
+					TEXT("%s '%s': %d written track(s) are not stored under their bone's name ")
+					TEXT("(%s) -- the animation data model renamed them, so they would never ")
+					TEXT("bind; the container's bone names need the exporter's rig-name fold"),
+					*PackagePath, *Clip.Name, Lost.Num(), *FString::Join(Lost, TEXT(", ")));
+			}
+		}
+
 		if (BoundTracks == 0)
 		{
 			// Nothing on this skeleton to drive: the package would be a sequence that poses

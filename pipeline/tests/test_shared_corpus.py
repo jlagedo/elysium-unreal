@@ -196,6 +196,25 @@ class PredicateTests(unittest.TestCase):
             "maps/sm_pier_1/water/invisible_water_depth_33", local=True))
 
 
+class RigBoneNameTests(unittest.TestCase):
+    """`rig_bone_name` must be a fixed point of Control Rig's own sanitizer: every character it
+    emits is one `URigHierarchy::SanitizeName` keeps, or the track and the bone diverge again."""
+
+    def test_control_rig_illegal_characters_fold_to_underscores(self):
+        from elysium_pipeline.asset_names import rig_bone_name
+        self.assertEqual(rig_bone_name("[2]upper_teeth"), "_2_upper_teeth")
+        self.assertEqual(rig_bone_name("[2]GeoSphere02"), "_2_GeoSphere02")
+
+    def test_legal_names_pass_verbatim(self):
+        from elysium_pipeline.asset_names import rig_bone_name
+        for name in ("Bip01 L Finger0", "lower_teeth", "bush hook", "a-b.c|d"):
+            self.assertEqual(rig_bone_name(name), name)
+
+    def test_a_leading_space_folds_and_a_later_space_does_not(self):
+        from elysium_pipeline.asset_names import rig_bone_name
+        self.assertEqual(rig_bone_name(" tail bone"), "_tail bone")
+
+
 class FileNameTests(unittest.TestCase):
     def test_every_product_of_one_key_is_a_distinct_file(self):
         key = "models/scenery/structural/doorknoba/doorknob1"

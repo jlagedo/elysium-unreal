@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 import os
 
+from elysium_pipeline.asset_names import rig_bone_name
 from elysium_pipeline.formats import install, mdl_cloth
 from elysium_pipeline.formats.bsp import source_to_unreal
 
@@ -49,6 +50,15 @@ def build_sidecar(data: bytes, vtx: bytes) -> list[dict]:
     """Every garment on this model, converted into Unreal-native space."""
     garments = mdl_cloth.build(data, vtx)
     for g in garments:
+        # Bone references bind by name against the baked mesh, whose skeleton names pass
+        # `rig_bone_name` -- the sidecar has to say the same name.
+        for cap in g["capsules"]:
+            for key in ("bone_a_name", "bone_b_name"):
+                if cap.get(key):
+                    cap[key] = rig_bone_name(cap[key])
+        for sph in g["spheres"]:
+            if sph.get("bone_name"):
+                sph["bone_name"] = rig_bone_name(sph["bone_name"])
         g["rest_positions"] = [_point(p) for p in g["rest_positions"]]
         # Winding reversed with the reflection, once and here. See the module docstring for
         # which normal decides the sign -- it is the left-hand one.
@@ -60,6 +70,8 @@ def build_sidecar(data: bytes, vtx: bytes) -> list[dict]:
         for entry in g["render_maps"]:
             entry["positions"] = [_point(p) for p in entry["positions"]]
             entry["triangles"] = [[t[0], t[2], t[1]] for t in entry["triangles"]]
+            entry["skin"] = [[[rig_bone_name(name), weight] for name, weight in influences]
+                             for influences in entry["skin"]]
 
         # Colliders are carried in BIND space, not in their bone's local frame.
         #

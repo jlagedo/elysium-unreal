@@ -64,6 +64,7 @@ which has no geometry, is the same file shape as a body rather than a special ca
 import os
 import struct
 
+from elysium_pipeline.asset_names import rig_bone_name
 from elysium_pipeline.formats import bsp, mdl, mdl_secondary_motion as SM, mdl_skel as S
 
 #: Bumped whenever a section's payload changes meaning. `FElysiumSkeletalSource` refuses a
@@ -469,8 +470,19 @@ def unreal_bones(bones):
     vertex's influences and a clip's tracks both address the emitted list. `reparented` is
     `_single_root`'s fork-resolution record, `{stray original index: chosen root's original
     index}`; `_ref_pose_rows` is the one caller that needs it, to redo the same composition over a
-    caller-supplied override instead of over this function's own bind."""
-    rows = [(b.name, b.parent, b.pos, b.quat) for b in bones]
+    caller-supplied override instead of over this function's own bind.
+
+    Names pass through `rig_bone_name`, and a pair the fold makes collide is fatal here rather
+    than two same-named bones deep in an Unreal authoring path."""
+    rows = [(rig_bone_name(b.name), b.parent, b.pos, b.quat) for b in bones]
+    seen = {}
+    for row, bone in zip(rows, bones):
+        key = row[0].lower()
+        if key in seen and seen[key] != bone.name:
+            raise SystemExit(
+                f"bone names {seen[key]!r} and {bone.name!r} fold onto the same rig name "
+                f"{row[0]!r}; the model cannot be exported without renaming one")
+        seen[key] = bone.name
     return _single_root(rows)
 
 
@@ -1245,8 +1257,9 @@ def _dynamics_section(model_path, blob, bones):
         return b"", 0
     out = bytearray(struct.pack("<I", len(chains)))
     for chain in chains:
-        out += _string(chain.first_bone)
-        out += _string(chain.chain_end)
+        # The chain binds by name against the SKEL section, whose names pass `rig_bone_name`.
+        out += _string(rig_bone_name(chain.first_bone))
+        out += _string(rig_bone_name(chain.chain_end))
         out += struct.pack(
             "<4f", chain.gravity_scale, chain.damping,
             chain.angular_spring, chain.cone_angle_degrees)
@@ -1412,7 +1425,8 @@ def _cinematic_rows(sub, root):
     """
     low = root.lower()
     order = {b.index: slot for slot, b in enumerate(sub)}
-    rows = [((("Bip01" + b.name[len(root):]) if b.name[:len(root)].lower() == low else b.name),
+    rows = [(rig_bone_name(("Bip01" + b.name[len(root):])
+                           if b.name[:len(root)].lower() == low else b.name),
              order.get(b.parent, -1), b.pos, b.quat)
             for b in sub]
     rows, position_of, _reparented = _single_root(rows)
