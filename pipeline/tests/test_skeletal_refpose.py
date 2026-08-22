@@ -278,10 +278,11 @@ class RealCorpusShapeTests(unittest.TestCase):
     `regular_cop`, `tremere_male_armor_3`) plus `w_f_severed_arm` in the wield corpus -- not just
     the two-stem sample (`regular_cop`, `prophet`) the two-stray tests above already cover."""
 
-    def test_four_strays_including_a_literal_and_a_bracket_prefixed_duplicate_name(self) -> None:
-        # `brian`: a biped root plus FOUR parent-less prop bones, one of whose names ("lower_teeth")
-        # recurs verbatim on a second, unrelated bone, and a pair ("upper_teeth"/"Sphere01") that
-        # differ from a sibling only by studiomdl's "[2]" duplicate-instance prefix.
+    def test_four_strays_including_a_bracket_prefixed_near_duplicate_name(self) -> None:
+        # `brian`: a biped root plus FOUR parent-less prop bones, one pair of which
+        # ("lower_teeth" / "[2]lower_teeth") differ only by studiomdl's "[2]" duplicate-instance
+        # prefix. The rig-name fold rewrites the bracket to an underscore, so the pair stays two
+        # distinct names on the Unreal side rather than collapsing into one.
         bones = [
             bone(0, "Bip01", -1, (0.0, 0.0, 0.0), QUAT_Z90),
             bone(1, "Bip01 Spine", 0, (0.0, 1.0, 0.0)),
@@ -289,7 +290,7 @@ class RealCorpusShapeTests(unittest.TestCase):
             bone(3, "lower_teeth", -1, (1.0, 70.0, 3.0)),
             bone(4, "[2]upper_teeth", -1, (1.2, 70.0, 3.5)),
             bone(5, "[2]Sphere01", -1, (0.5, 68.0, 2.0)),
-            bone(6, "lower_teeth", -1, (1.1, 70.1, 3.1)),  # shares bone 3's exact name string
+            bone(6, "[2]lower_teeth", -1, (1.1, 70.1, 3.1)),  # bone 3's name behind the prefix
         ]
         rows, bone_map, reparented = UEK.unreal_bones(bones)
 
@@ -297,15 +298,18 @@ class RealCorpusShapeTests(unittest.TestCase):
         self.assertEqual(bone_map[0], 0)
         self.assertEqual(reparented, {3: 0, 4: 0, 5: 0, 6: 0})
 
-        # Every bone survives as its own row, INDEX-addressed -- the duplicate name never
+        # Every bone survives as its own row, INDEX-addressed -- the near-duplicate never
         # collapses bone 3 and bone 6 into one, and `bone_map` is still a full permutation.
+        # Names come out FOLDED, because the fold is applied once at this boundary.
         self.assertEqual(len(rows), len(bones))
         self.assertEqual(sorted(bone_map), list(range(len(bones))))
         for original, b in enumerate(bones):
-            self.assertEqual(rows[bone_map[original]][0], b.name)
+            self.assertEqual(rows[bone_map[original]][0], UEK.rig_bone_name(b.name))
+        emitted_names = {name.lower() for name, _p, _pos, _q in rows}
+        self.assertEqual(len(emitted_names), len(bones))
 
-        # Every stray -- including both same-named "lower_teeth" bones -- reproduces its OWN
-        # original model-space transform under the chosen root, independently of the others.
+        # Every stray -- both "lower_teeth" bones included -- reproduces its OWN original
+        # model-space transform under the chosen root, independently of the others.
         root_slot = bone_map[0]
         root_pos, root_quat = rows[root_slot][2], rows[root_slot][3]
         for original in (3, 4, 5, 6):
@@ -318,6 +322,18 @@ class RealCorpusShapeTests(unittest.TestCase):
         for slot, (_name, parent, _pos, _quat) in enumerate(rows):
             if parent >= 0:
                 self.assertLess(parent, slot)
+
+    def test_a_verbatim_duplicate_bone_name_is_a_fatal_export_error(self) -> None:
+        # Two bones sharing one rig name cannot both bind: skeleton, data-model control and bank
+        # binding all address a bone by name, so the second would silently hold its bind. No
+        # installed model carries one (whole-corpus census: 0 of 1,130), so the export refuses.
+        bones = [
+            bone(0, "Bip01", -1, (0.0, 0.0, 0.0), QUAT_Z90),
+            bone(1, "lower_teeth", -1, (1.0, 70.0, 3.0)),
+            bone(2, "lower_teeth", -1, (1.1, 70.1, 3.1)),
+        ]
+        with self.assertRaises(SystemExit):
+            UEK.unreal_bones(bones)
 
     def test_low_z_stray_resolves_the_same_as_a_head_height_one(self) -> None:
         # `ash`: the fork is a single prop root at ankle height (z=14.5 in this corpus's units),
@@ -349,7 +365,9 @@ class CinematicMultiRootTests(unittest.TestCase):
             bone(12, "Bip02 Spine1", 11, (0.0, 1.0, 0.0)),
             bone(13, "Bip02 Prop", -1, (5.0, 5.0, 5.0)),  # a second, forked root
         ]
-        rows, order = UEK._cinematic_rows(sub, "Bip02")
+        rows, order, reparented = UEK._cinematic_rows(sub, "Bip02")
+        # The forked prop resolved onto the actor's own root, keyed by ORIGINAL bone index.
+        self.assertEqual(reparented, {13: 10})
 
         names = [name for name, _p, _pos, _q in rows]
         self.assertNotIn("__elysium_skeleton_root", names)

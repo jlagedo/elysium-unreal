@@ -478,7 +478,13 @@ def unreal_bones(bones):
     seen = {}
     for row, bone in zip(rows, bones):
         key = row[0].lower()
-        if key in seen and seen[key] != bone.name:
+        if key in seen:
+            # Two bones sharing one rig name — whether a fold collision or the same raw name on
+            # two bones — cannot both bind: the skeleton, the data model's control and the
+            # runtime's bank binding all address a bone by name, so the second bone's track lands
+            # on the first and the second silently holds its bind. No installed model carries a
+            # verbatim duplicate (whole-corpus census: 0 of 1,130), so a fatal export error costs
+            # nothing real and closes the silent-loss shape.
             raise SystemExit(
                 f"bone names {seen[key]!r} and {bone.name!r} fold onto the same rig name "
                 f"{row[0]!r}; the model cannot be exported without renaming one")
@@ -958,8 +964,18 @@ def _owned_channels(d, bones, clip):
 
 
 def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_label="",
-                  label=None, owned=None, base_channels=None, forced_channels=None):
+                  label=None, owned=None, base_channels=None, forced_channels=None,
+                  reparented=None):
     """One complete owned pose, or None if the clip's mask owns no emitted bone.
+
+    `reparented` (`_single_root`'s `{stray original index: chosen root's original index}`) names
+    the bones whose SKELETON row was restated under the chosen root. A parent-less StudioBone's
+    animation is model-space — retail has nothing to compose it against — so a reparented bone's
+    channels are restated the same way the bind was: each frame is divided by the chosen root's
+    own model-space transform for that frame, through `_reparent_local`, so ordinary FK
+    recomposes the authored model-space pose exactly. A reparented bone with no channel of its
+    own still gets a track while the clip animates its chosen root: retail holds it at its
+    model-space bind, and without a compensating track FK would drag it along with the root.
 
     The seven offsets at `+4` only say which components have samples. On an owned bone retail
     fills every absent component from the DONOR bind, while a zero-weight bone contributes no
@@ -990,6 +1006,17 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
     # like any other. `base_label` distinguishes that derived form from the raw record.
     split_rotations = ({} if (clip.flags & DELTA_SEQUENCE and not base_label)
                        else _split_rotation_tracks(bones, frames, clip.frames))
+
+    reparented = reparented or {}
+
+    def _model_space(index, frame):
+        # A bone the clip carries a record for was filled by `read_anim` (absent components from
+        # this container's bind); a bone with NO record reads back a zero quaternion, and the
+        # value retail evaluates there is the stored bind — model-space, since only parent-less
+        # bones are ever reparented.
+        if index in clip_owned or any(channels[index]):
+            return frames[frame][index]
+        return (bones[index].pos, bones[index].quat)
 
     tracks = bytearray()
     count = 0
@@ -1049,30 +1076,59 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
         carried_by_base = bool(base_label and owned is None and base_channels
                                and any(base_channels[bone.index]))
         carried_by_force = bool(forced_channels and any(forced_channels[bone.index]))
-        if bone.index not in clip_owned and not carried_by_base and not carried_by_force:
+        # A reparented stray whose CLIP touches either side of its fold — its own model-space
+        # channel, or the chosen root it now inherits from — needs a restated track. One with a
+        # record needs its frames divided by the root's; one without needs the compensating bind
+        # track, or FK drags retail's static model-space bind along with the animated root. An
+        # overlay is excluded like everywhere else: it ships only the bones its mask owns.
+        chosen = reparented.get(bone.index) if owned is None else None
+        stray_active = chosen is not None and (
+            bone.index in clip_owned or any(channels[bone.index])
+            or chosen in clip_owned or any(channels[chosen]))
+        if (bone.index not in clip_owned and not carried_by_base and not carried_by_force
+                and not stray_active):
             # In particular, a split bone outside a partial-body mask must not acquire the
             # normalized rotation `_split_rotation_tracks` can compute from its zero pose slot.
             continue
-        if bone.index in clip_owned:
+        if bone.index in clip_owned or stray_active:
             # Complete, self-describing donor local. `read_anim` has already filled each absent
             # component from this container's MDL bind and normalized the quaternion.
             has_translation = has_rotation = True
         if not (has_translation or has_rotation):
             continue
-        tracks += struct.pack("<I2B", bone_map[bone.index], int(has_translation),
-                              int(has_rotation))
         # A host may mask this bone out even though an additive declared against the host owns it.
         # Retail's host pose still has the donor bind there; read_anim correctly returns zeros for
         # the masked-out record, so a forced track must state that bind explicitly rather than
         # serialising those mask sentinels as a real zero transform.
         force_bind = carried_by_force and bone.index not in clip_owned
+        stray_locals = None
+        if stray_active:
+            # Both channels of the stray's donor-local, computed once: the division mixes the
+            # model-space translation and rotation, so a single-channel restatement would be a
+            # different pose from the one retail composes.
+            stray_locals = []
+            for frame in range(clip.frames):
+                root_pos, root_quat = _model_space(chosen, frame)
+                stray_pos, stray_quat = ((bone.pos, bone.quat) if force_bind
+                                         else _model_space(bone.index, frame))
+                try:
+                    stray_locals.append(
+                        _reparent_local(root_pos, root_quat, stray_pos, stray_quat))
+                except ValueError as exc:
+                    raise ValueError(
+                        f"{clip.label!r} frame {frame}: reparented bone {bone.name!r} "
+                        f"cannot be restated under {bones[chosen].name!r}: {exc}") from exc
+        tracks += struct.pack("<I2B", bone_map[bone.index], int(has_translation),
+                              int(has_rotation))
         if has_translation:
             for frame in range(clip.frames):
-                position = bone.pos if force_bind else frames[frame][bone.index][0]
+                position = (stray_locals[frame][0] if stray_locals is not None else
+                            bone.pos if force_bind else frames[frame][bone.index][0])
                 tracks += struct.pack("<3f", *_conv_pos(position))
         if has_rotation:
             for frame in range(clip.frames):
-                quat = (bone.quat if force_bind else
+                quat = (stray_locals[frame][1] if stray_locals is not None else
+                        bone.quat if force_bind else
                         rotations[frame] if rotations is not None else
                         frames[frame][bone.index][1])
                 tracks += struct.pack("<4f", *_conv_quat(quat))
@@ -1161,7 +1217,8 @@ def _grid_animations(d, seq, names):
     return out or [seq]
 
 
-def _anim_section(d, bones, clips, bone_map, emitted, masks, ensure_labels=()):
+def _anim_section(d, bones, clips, bone_map, emitted, masks, ensure_labels=(),
+                  reparented=None):
     """The clips that actually baked, in declaration order. A sequence whose tracks came out
     empty is absent rather than present-and-silent, which is the same rule the manifest's
     clip list already follows.
@@ -1211,7 +1268,8 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks, ensure_labels=()):
                                 d, bones, c, bone_map, emitted, masks,
                                 forced_channels=([(True, True)] * len(bones)
                                                  if c.label.lower() in ensured
-                                                 else forced.get(c.label.lower())))
+                                                 else forced.get(c.label.lower())),
+                                reparented=reparented)
                             for c in clips if c.label.lower() not in unresolvable)
                 if p is not None]
     for layer, host, owned in bindings:
@@ -1220,7 +1278,8 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks, ensure_labels=()):
             frames=_composed_frames(d, bones, layer, host, owned),
             base_label=host.label.lstrip("@"), owned=owned,
             base_channels=None if owned is not None else _owned_channels(d, bones, host),
-            label=f"{layer.label.lstrip('@')}{BASE_SEPARATOR}{host.label.lstrip('@')}")
+            label=f"{layer.label.lstrip('@')}{BASE_SEPARATOR}{host.label.lstrip('@')}",
+            reparented=reparented)
         if payload is not None:
             payloads.append(payload)
     return struct.pack("<I", len(payloads)) + b"".join(payloads), len(payloads)
@@ -1351,7 +1410,8 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
     extra, _blends = S.blend_clip_plan(d, own)
     masks = {}
     anim_payload, clip_count = _anim_section(
-        d, bones, own + extra, bone_map, len(rows), masks, ensure_labels or ())
+        d, bones, own + extra, bone_map, len(rows), masks, ensure_labels or (),
+        reparented=reparented)
 
     blob = _assemble([
         (b"SKEL", _skel_section(_ref_pose_rows(rows, bone_map, ref_pose, model_path, reparented))),
@@ -1393,9 +1453,10 @@ def write_bank(idx, model_path, out_dir, stem):
         return None
     bones = S.read_bones(d)
     extra, _blends = S.blend_clip_plan(d, clips)
-    rows, bone_map, _reparented = unreal_bones(bones)
+    rows, bone_map, reparented = unreal_bones(bones)
     masks = {}
-    anim_payload, count = _anim_section(d, bones, clips + extra, bone_map, len(rows), masks)
+    anim_payload, count = _anim_section(d, bones, clips + extra, bone_map, len(rows), masks,
+                                        reparented=reparented)
     if not count:
         return None
 
@@ -1412,7 +1473,9 @@ def write_bank(idx, model_path, out_dir, stem):
 
 
 def _cinematic_rows(sub, root):
-    """One actor's bones as (rows, {StudioBone index: emitted index}), prefix folded to `Bip01`.
+    """One actor's bones as (rows, {StudioBone index: emitted index}, reparented), prefix
+    folded to `Bip01`. `reparented` is `_single_root`'s fold record restated by ORIGINAL
+    StudioBone index, the shape the clip writer addresses bones by.
 
     Folded for the reason the glb half folds: a scene's `bonerename "BipNN" "Bip01"` is how an
     actor picks its own skeleton out of the shared performance, so writing the bank under the
@@ -1429,8 +1492,12 @@ def _cinematic_rows(sub, root):
                            if b.name[:len(root)].lower() == low else b.name),
              order.get(b.parent, -1), b.pos, b.quat)
             for b in sub]
-    rows, position_of, _reparented = _single_root(rows)
-    return rows, {index: position_of[slot] for index, slot in order.items()}
+    rows, position_of, reparented = _single_root(rows)
+    # `_single_root` keyed its fold record by subset slot; the clip writer addresses bones by
+    # original StudioBone index, so restate it the way `order` maps the other direction.
+    original_of = {slot: index for index, slot in order.items()}
+    return (rows, {index: position_of[slot] for index, slot in order.items()},
+            {original_of[stray]: original_of[chosen] for stray, chosen in reparented.items()})
 
 
 def write_cinematic(idx, model_path, out_dir, stem):
@@ -1477,12 +1544,13 @@ def write_cinematic(idx, model_path, out_dir, stem):
         sub = [b for b in bones if (S._bone_root(b.name) or "").lower() == low]
         if not sub:
             continue
-        rows, order = _cinematic_rows(sub, root)
+        rows, order, reparented = _cinematic_rows(sub, root)
         bone_map = [-1] * len(bones)
         for index, slot in order.items():
             bone_map[index] = slot
         masks = {}
-        anim_payload, count = _anim_section(d, bones, all_clips, bone_map, len(rows), masks)
+        anim_payload, count = _anim_section(d, bones, all_clips, bone_map, len(rows), masks,
+                                            reparented=reparented)
         if not count:
             continue
         name = f"{stem}__{low}"

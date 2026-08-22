@@ -249,7 +249,8 @@ class PlacedModelClipEmissionTests(unittest.TestCase):
         seen = []
         ensured = []
 
-        def anim(_data, _bones, emitted, _bone_map, _count, _masks, ensure_labels=()):
+        def anim(_data, _bones, emitted, _bone_map, _count, _masks, ensure_labels=(),
+                 reparented=None):
             seen.extend(clip.label for clip in emitted)
             ensured.extend(ensure_labels)
             return b"", len(emitted)
