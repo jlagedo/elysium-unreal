@@ -30,9 +30,11 @@ after every solid:  a plain-text keyvalues block
 ```
 
 `byte_size` re-encoding the solid size is the integrity check worth asserting: it holds on all
-2,854 files with zero exceptions. The `magic` is decorative: it
-reads `IVPS` on scenery and is **zeroed on the 42 ragdoll files**, which are otherwise the same
-layout (all 42 decode, 100 hulls, every one convex).
+2,854 files with zero exceptions. The `magic` is decorative: it reads `IVPS` on most files and is
+**zeroed on 42 of them**, which are otherwise the same layout (all 42 decode, 100 hulls, every one
+convex). Those 42 are not a meaningful class — 38 are ordinary scenery (`securitycam`, `plates`,
+`curtains`, `trailer_1pc`, …) and only 4 overlap the ragdoll set. The ragdoll marker is the
+keyvalue tail, not the magic.
 
 ## Ledge tree
 
@@ -118,6 +120,52 @@ stool 25, wine glass 1.46. Every `prop_physics` in the exported maps carries
 `override_mass = -1`, so this is the only mass the original game ever uses for them. The bake
 puts it on the mesh's `BodySetup.DefaultInstance` mass override; the entity's own `override_mass`
 still outranks it at spawn, which is Source's precedence.
+
+## The ragdoll rig
+
+A character's `.phy` carries a second payload in the same tail: its solids are **named after bones**
+and are followed by one `ragdollconstraint` block per joint. Nothing in the binary half changes —
+the solids, ledge trees and hulls decode identically — so a ragdoll file is a collision file whose
+keyvalues say how its hulls articulate.
+
+```
+solid {
+"index" "3"
+"name" "Bip01 R Thigh"
+"parent" "Bip01 Pelvis"
+"origin" "-3.444549 0.294401 38.981178"
+"angles" "87.016258 132.105820 -47.932941"
+"mass" "10.162495"
+"surfaceprop" "flesh"
+"damping" "0.010000"
+"rotdamping" "1.500000"
+"inertia" "5.000000"
+"volume" "843.899231"
+"massbias" "2.000000"
+}
+ragdollconstraint {
+"parent" "0"          // solid index, not a bone name
+"child"  "3"
+"xmin" "-25.000000"  "xmax" "20.000000"  "xfriction" "1.000000"
+"ymin" "-40.000000"  "ymax" "20.000000"  "yfriction" "1.000000"
+"zmin" "-37.000000"  "zmax" "63.000000"  "zfriction" "1.000000"
+}
+```
+
+- `name` / `parent` are **model bone names**, and the client resolves them by name at load —
+  `"CRagdollProp::CreateObjects: Couldn't Lookup Bone %s"` is the failure. A rig is therefore
+  addressed by name, never by bone index.
+- `parent` / `child` on a constraint are **solid indices** into the same file.
+- The per-axis `min`/`max` are degrees and `friction` is dimensionless. A joint with all six limits
+  at `0` and zero friction is a fixed weld — the two accessory solids parented to `Bip01 Pelvis` in
+  the example rig are authored that way.
+- `origin` / `angles` are **Source units and Euler degrees**, not the IVP metres the hulls use. One
+  file therefore carries two frames: `Coordinates` above governs the hull vertices only, and the
+  mapping for the solid transforms is not yet settled.
+- `massbias` is sparse; `surfaceprop` is `flesh` on the humanoid rigs.
+
+Which models carry a rig, the shape distribution, and every behaviour that consumes it are
+`docs/vtmb/physics-interaction.md`.
 
 ## Missing collision
 

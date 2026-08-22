@@ -287,13 +287,15 @@ to matter — not before.
 - **Dynamic props** (`prop_dynamic` ×78): spawned from `.ents` `model` keyvalues.
   *Pipeline addition required*: export models referenced by entities (only
   GAME_LUMP static props are exported today). Skeletal ones ride the `.glb` path.
-- **Physics props** (`prop_physics` ×54, `phys_hinge` ×12): **Chaos rigid bodies** with
-  convex hulls from the render mesh, constraints for hinges — this system is built from
-  scratch, with no prior implementation to de-risk it against.
+- **Physics props** (`prop_physics` ×54, `phys_hinge` ×12): **Chaos rigid bodies** with the
+  model's own authored `.phy` convex hulls and authored mass, constraints for hinges. The whole
+  rigid-body lane — props, brush physboxes, the `phys_*` constraint family, character ragdolls,
+  the player's object carry and every impulse producer — is one system:
+  `docs/architecture/physics-architecture.md`.
 - **NPCs**: spawn from `npc_*` / `npc_maker` entity data at their origins and stand baked
   native skeletal bodies off the `/ElysiumBaked` mount — the character bake is the only build
   of a character, and glTF stays an inspection product (`docs/architecture/animation-architecture.md`).
-  IK/ragdoll stay deferred.
+  IK stays deferred; the ragdoll is `docs/architecture/physics-architecture.md`'s.
 - **AI later**: runtime-generated NavMesh (dynamic navmesh generation over the loaded
   world collision) replaces the `info_node` graph (×154 + patrol points) rather than
   reimplementing Source AI navigation; decision-making stays the substrate schedule kernel

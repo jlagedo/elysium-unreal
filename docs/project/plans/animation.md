@@ -45,9 +45,9 @@ for the per-weapon translation half.
 ### LIFE5 Reactions and combat actions
 
 What is left of the rung: the flying knockback chain, the authored knockback table the grounded
-gate currently stands in for, the NPC melee sequence selector, the ragdoll physics-asset bake, and
-the owner-played acceptance sweep. **Owns the pose, not the number**: lethality, soak, the damage
-roll and the health commit are 13.3's; this rung consumes their outcome.
+gate currently stands in for, the NPC melee sequence selector, and the owner-played acceptance
+sweep. **Owns the pose, not the number**: lethality, soak, the damage roll and the health commit
+are 13.3's; this rung consumes their outcome. The ragdoll a killed body hands off to is PHYS1's.
 
 **The NPC melee sequence selector.** A melee attack's sequence is chosen through vtable slot 331
 (`+0x52c`) on the **owner**, and the two arms are different systems rather than two settings of
@@ -126,11 +126,11 @@ cells the vocabulary already carries. The two named omissions of the gate stay o
 reported: the hit-buildup counter, whose per-victim versus per-attacker/victim-pair accounting is
 still an open RE question, and the second, unidentified template predicate.
 
-**The ragdoll handoff is a bake-side follow-up.** The death transaction hands off by holding the
-final pose because no baked mesh carries a physics asset. A true ragdoll needs the character bake
-to generate one per body — bodies, constraints and a collision profile derived from the
-baked skeleton — with the runtime handoff switching to simulation at the same point it now freezes.
-Until then the held pose is the recorded stand-in, not the design.
+**The ragdoll handoff belongs to PHYS1, not here.** The death transaction hands off by holding the
+final pose because no baked mesh carries a physics asset; generating one per body from the model's
+own `.phy` rig, and seeding the simulation with the killing blow's force, is PHYS1's whole subject
+(`docs/architecture/physics-architecture.md`). This rung owns only the point of handoff, which
+already exists and needs no change. Until PHYS1 lands, the held pose is the recorded stand-in.
 
 **Named residuals**, each small, each real:
 
@@ -150,8 +150,8 @@ Until then the held pose is the recorded stand-in, not the design.
 melee blow committing inside its clip's **authored contact window** and the shot on its own
 authored sequence event; an NPC's ambient behaviour and a scripted beat both reach a pose through
 the intent seam, and `m_iszCustomMove` plays over a travelling body; a struck body is knocked back
-on the direction its blow states, a launched body flies and lands, and a killed body dies and hands
-off to the ragdoll.
+on the direction its blow states, a launched body flies and lands, and a killed body dies and
+reaches the handoff (what the handoff hands to is PHYS1's).
 *Deps:* LIFE2, LIFE3, LIFE4; `docs/vtmb/combat-and-damage.md` (its open joins are numeric and
 gate 13.3, not this rung).
 

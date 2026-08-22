@@ -29,7 +29,10 @@ stack.
 
 `.phy` collision stays what it is — Chaos hulls on the prop — and is not an FX
 problem (`docs/vtmb/phy_vphysics.md`). `env_physimpact` / `env_physexplosion` stay
-impulse sources. They are never "implemented as a particle."
+impulse sources. They are never "implemented as a particle." **The impulse itself is
+`docs/architecture/physics-architecture.md`'s**, delivered through that document's
+`AddBodyImpulse` / `AddRadialImpulse` seam; this document owns only what the explosion
+looks and sounds like.
 
 ---
 
@@ -154,7 +157,7 @@ grids for the ones the player is next to.
 | Runtime blood / rain stains | Niagara Decal renderer, or spawn a short-lived `UDecalComponent` | particle `collide.decal` |
 | Screen fade | `env_fade` (done) | |
 | Camera shake | `UCameraShakeBase` / `ULegacyCameraShake` | `env_shake` and `params_explosion.shk_*` |
-| Physics kick | `FBodyInstance::AddImpulse` / `AddRadialImpulse` | `env_physimpact` / `env_physexplosion` |
+| Physics kick | the impulse seam in `docs/architecture/physics-architecture.md` (`FBodyInstance::AddImpulse` / `AddRadialImpulse` underneath) | `env_physimpact` / `env_physexplosion` |
 | Gibs | `UNiagaraComponent` mesh renderer, **or** spawn the gib `SM_*` with a Chaos impulse | `env_shooter` already names `.mdl`s |
 | HUD / view-space FX | `NiagaraUIRenderer` plugin (in this engine) or a camera-attached Niagara | `env_particle_hud`, discipline HUD, muzzle first-person |
 | Auspex / heat vision | post-process material | not an emitter |

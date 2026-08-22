@@ -144,9 +144,9 @@ def decode(data):
         body = pos + 4
         if solid_size < 48 or body + solid_size > len(data):
             raise PhyError("solid %d size %d overruns the file" % (index, solid_size))
-        # The magic reads `IVPS` on scenery and is zeroed on the 42 ragdoll files, which are
-        # otherwise the same layout (all 42 decode, 100 hulls, every one convex). `byte_size`
-        # is the real integrity gate, so the magic only has to not be garbage.
+        # The magic reads `IVPS` on most files and is zeroed on 42 of them, which are otherwise
+        # the same layout (all 42 decode, 100 hulls, every one convex). `byte_size` is the real
+        # integrity gate, so the magic only has to not be garbage.
         magic = data[body + 44:body + 48]
         if magic not in (b"IVPS", b"\0\0\0\0"):
             raise PhyError("solid %d magic %r, expected IVPS" % (index, magic))

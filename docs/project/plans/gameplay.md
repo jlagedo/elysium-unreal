@@ -219,3 +219,127 @@ producer is recovered. Facts: `docs/vtmb/npc-ai-reverse-engineering.md`.
 *Acceptance:* the tutorial's hostile beats run from real producers — authored
 `OnFoundPlayer`/`OnDamaged` consequences fire as wired and the combat lessons' opponents fight
 and die as retail. *Deps:* 11.10.
+
+## The physics substrate (PHYS)
+
+One owner for everything that touches a simulated body — the prop, the corpse, the carried chair
+and the explosion kick. Design: `docs/architecture/physics-architecture.md`. Facts:
+`docs/vtmb/phy_vphysics.md` (the container and the ragdoll rig) and
+`docs/vtmb/physics-interaction.md` (what simulates, the physics hands, the placed surface). The
+governing rule is that design's owner call: **VtMB owns the rules, Chaos owns the solve.**
+
+### PHYS1 The ragdoll rig — export, bake, handoff
+
+**The export.** `phy.py` gains a second product from the same parse: a `RAGD` chunk in each
+character's `.eskm`, carrying bone-named solids (parent, transform, mass, damping, rotdamping,
+inertia, massbias, surfaceprop, hull range) and one constraint record per `ragdollconstraint`
+(parent/child solid index, three axes of min/max/friction). It is a chunk and not a loose sidecar
+because the payload is per-model skeletal data addressed by bone name, which is what `SKEL`,
+`DYNM`, `BDYN` and `MASK` already are. 324 models carry a rig; 289 of them are one 15-solid,
+14-constraint humanoid shape covering every ordinary NPC and all 58 PC bodies. Bone names fold
+through the same rule the bank baseline uses, and a name that does not resolve against the baked
+skeleton is a hard export error.
+
+**Two calibrations gate it, and both are settled the way `(x, -z, -y)` was** — by scoring candidate
+mappings against evidence the corpus already carries, over all 289 canonical rigs, and taking the
+winner by margin rather than by argument:
+
+- the **solid transform frame**. A ragdoll `.phy` carries two frames: hull vertices in IVP metres
+  (settled) and `origin`/`angles` in Source units and Euler degrees (not). Score against each
+  model's own bind-pose bone transforms.
+- the **constraint axis identity**. Which of VtMB's x/y/z is Unreal's twist, swing1 and swing2 is
+  not stated by the data. Score by settled pose under gravity; a wrong assignment reads as a knee
+  bending sideways.
+
+Until each is settled the export **fails rather than guesses**.
+
+**The bake.** `bake_characters.py` gains one stage between the mesh and the clips: a
+`UPhysicsAsset` assigned to the baked `USkeletalMesh`. One `USkeletalBodySetup` per solid, with the
+authored convex hulls as `AggGeom.ConvexElems` under the same exactness rule the prop bake proved,
+the authored mass as a body-instance override, `damping`/`rotdamping` as linear/angular damping,
+and `surfaceprop` through the existing surface-property table. One `UPhysicsConstraintTemplate` per
+constraint, linear locked, angular limited — **asymmetry resolved by half-range limit plus a
+midpoint-biased child frame**, never by taking the larger magnitude; an all-zero constraint is a
+weld, not a zero-width limit. `massbias` is carried and unconsumed until a body needs it. Keyed in
+the bake cache off the `RAGD` bytes.
+
+**The handoff.** `StartBodyRagdoll` needs no change and simply stops returning false; the
+`HoldBodyFinalPose` stand-in becomes what it was always described as, the fallback for a body with
+no rig. Two behaviours land with it:
+
+- **the death impulse**, retiring the recorded "no impulse" divergence. The force envelope is fully
+  recovered in `docs/vtmb/combat-and-damage.md` — the damage force or its synthesised replacement,
+  plus absolute velocity, plus the physics-object term, clamped to `50000.0` — and is applied at
+  the hit bone, or at `Bip01 Spine2` when the hit bone is unknown, converted through the Source
+  impulse unit.
+- **the interaction volume stays at the death origin.** Retail's corpse entity *is* the dying NPC,
+  frozen non-solid at the death spot while only the drawn body slides; the use/feed/loot anchor
+  therefore does not follow the pelvis. Making it follow is a Feel divergence and needs an explicit
+  owner call before it is written.
+
+*Acceptance:* a killed NPC falls under simulation from the pose its death program left, driven off
+the killing blow's own force, and comes to rest without a limb inverting; its corpse remains
+feedable and lootable where it died. *Deps:* LIFE5's death transaction.
+
+### PHYS2 The physics hands
+
+VtMB's object handling is HL2's gravity-gun code wired to the **use key**, granted to the player as
+a hidden inventory item named *Hands* (`weapon_physcannon`). The item record stays authored data —
+inventory and the criminal-law check read it by name — and the **grab state does not live on it**.
+
+**The service.** `FElysiumPhysicsHands`, one per player, owned by `FElysiumEntityWorld` and saved
+with the player. `TryAcquire` runs inside `UpdatePlayerInteraction` **before** the ordinary focus
+query, reproducing retail's order: an open interactive-use session, then the grab candidate, then
+`FindUseEntity`.
+
+**The search** is a new embodiment query, `QueryPhysicsGrab`, separate from `QueryPlayerUse` for
+the same reason the B6 feed search is separate — a different retail shape with a different mask. In
+order: a ray of `physcannon_tracelength` (80 units = **203.2 cm**); on a miss, a hull trace of
+±4 units (**±10.16 cm**) along the same segment; then a cone at `physcannon_cone` 0.97. Geometry
+only; eligibility stays on the leaf as `FElysiumPhysProp::CanPlayerCarry` — simulating body, not
+the player's ground entity, summed mass under the limit, every bounding-box axis under the size
+limit — plus the player-side water gate (`m_nWaterLevel < 2`).
+
+**Two constants are open and neither is guessed.** The mass and size limits are float arguments the
+decompiler dropped from the eligibility body; recovering them means reading the asm at
+`0x10411160`. Until then mass uses `physcannon_maxmass` (250 kg) and the **size test fails loudly**
+rather than admitting on an invented constant.
+
+**The carry** rides the existing `+use` session: `CanPlayerFocus` admits, `BeginPlayerUse` returns
+`Started(WhileHeld)`, `EndPlayerUse(Released)` releases. `BeginBodyCarry`/`UpdateBodyCarry`/
+`EndBodyCarry` on the embodiment are a `UPhysicsHandleComponent` on the pawn — Unreal's own PD
+constraint to a target transform, which is the level Source's shadow controller should be
+reproduced at. The mass and angular-damping overrides applied while held are restored on release,
+as retail's saved arrays do. Throw force is `player_throwforce` 1000, converted through the same
+Source impulse unit; that conversion is derived from the unit convention rather than measured, and
+a visibly wrong throw arc is the cheap test that it is right.
+
+**The cursor already exists.** `use_icons.json` slot 9 is `PhysicsHand` and slot 1 is `CarryBody`;
+the hands publish the icon into `FElysiumInteractionView`, which today only entities produce.
+
+*Acceptance:* in `sp_tutorial_1`, from real input, the office chair (`chairoffice`, 1.00 kg) can be
+picked up, carried and dropped, and a sardine can (0.30 kg) can be picked up and thrown; the stool
+(25 kg) and the crate (100 kg) behave as retail does; nothing is grabbable underwater.
+*Deps:* 4.4, PHYS1's impulse seam.
+
+### PHYS3 The rest of the physics world
+
+`func_physbox` (179 placements in 17 maps) as `FElysiumPhysProp`'s brush twin — the entity's own
+`.ents` convex `hulls` as the body, `func_breakable`'s damage surface. The `phys_*` constraint
+family (`phys_ballsocket` 84, `phys_constraint` 78, `phys_convert` 56, `phys_thruster` 3,
+`phys_constraintsystem` 1, `phys_animlink` 1; `phys_hinge` 43 is landed) over
+`UPhysicsConstraintComponent` between two entities' `GetAttachBody()`; `phys_convert` is a
+transaction on its target's leaf rather than a constraint. `env_physimpact` (130) and
+`env_physexplosion` (61) stop being stubs and become the first non-player consumers of
+`AddBodyImpulse` / `AddRadialImpulse`, with their presentation still owned by
+`docs/architecture/effects-architecture.md`.
+
+`prop_ragdoll` (52 placements in 14 maps — the Warrens corpses, the Malkavian mansion stalkers, the
+Ventrue Tower aftermath) is the one placed server ragdoll and lands here, seeded from its
+`demo_sequence` pose onto the PHYS1 physics asset. `physics_prop_ragdoll`, `prop_ragdoll_attached`
+and `prop_ragdoll_special` register in VtMB and are placed in no map; they are out of scope, and a
+map that places one is a new task rather than a gap here.
+
+*Acceptance:* `sp_tutorial_1` and one Warrens map load with every physics classname resolved and no
+unhandled-class warning; a wired `env_physexplosion` scatters the props in its radius.
+*Deps:* PHYS2's seam.

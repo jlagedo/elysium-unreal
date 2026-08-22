@@ -364,7 +364,7 @@ The ladder:
   hit-buildup gate reported as named stand-ins; the NPC death family lands the `OnKilled`
   transaction (claims released, Mind Dead, frozen-not-hidden, collision off), the
   `TASK_PLAY_DEATH_SEQUENCE` ladder (arg → `ACT_DIESIMPLE` → `ACT_IDLE`), a handoff that holds the
-  final pose because no baked mesh carries a physics asset, and corpse state restored synchronously
+  final pose until PHYS1 bakes a physics asset, and corpse state restored synchronously
   on load; the holdable reaction claim releases by condition
   (`ClipCompletion`/`Envelope`/`Predicate`), so the player's block pose loops for the whole held
   predicate and resumes after preemption with no re-draw and the flinch runs the recovered
@@ -375,7 +375,7 @@ The ladder:
   sidecars carry the `swings` and `combo` columns the families read. Open: the owner-played
   acceptance sweep (which also closes LIFE4's), the flying knockback chain (RE-unblocked — launch
   formula and land terminator recovered), consuming the authored per-attack knockback table now in
-  the sidecars, the ragdoll physics-asset bake, the **NPC melee sequence selector**
+  the sidecars, the **NPC melee sequence selector**
   (`ChooseMeleeAttackSequence`, the cast arm of the owner's slot-331 fork — geometric candidate
   scoring against the enemy, where the runtime draws by weight today), and the four named residuals
   the plan lists (the NPC-side reaction-claim release on a mid-hold body swap, the montage route's
@@ -485,6 +485,24 @@ subtitled lines, live faces — and hands the player to the tutorial, unassisted
 *Slice acceptance:* `sp_tutorial_1` completable as retail on keyboard/mouse and gamepad, proven
 by `uv run elysium test Play`.
 
+## The physics substrate (PHYS) — detail: [plans/gameplay.md](plans/gameplay.md)
+
+*Design: `docs/architecture/physics-architecture.md`; facts: `docs/vtmb/phy_vphysics.md`,
+`docs/vtmb/physics-interaction.md`.* One owner for every simulated body — the prop (8.4, landed),
+the corpse, the carried chair and the explosion kick.
+
+- [ ] **[PHYS1 The ragdoll rig](plans/gameplay.md)** — the `.eskm` `RAGD` chunk, the
+  `UPhysicsAsset` bake, the death impulse; two frame calibrations gate the export. Retires LIFE5's
+  held-pose stand-in.
+- [ ] **[PHYS2 The physics hands](plans/gameplay.md)** — `weapon_physcannon` is *Hands*: HL2's
+  grab wired to `+use`, over the existing `WhileHeld` session and the exported `PhysicsHand` cursor.
+- [ ] **[PHYS3 The rest of the physics world](plans/gameplay.md)** — `func_physbox`, the `phys_*`
+  constraint family, `prop_ragdoll`, and `env_physimpact` / `env_physexplosion` over the impulse
+  seam.
+
+*Slice acceptance:* a killed NPC ragdolls off its killing blow and stays lootable where it died; the
+tutorial's office chair carries and its sardine can throws, from real input.
+
 ## The first-beat path (B*) — all landed
 
 - [x] **B1 `env_fade`** · **B2 real entity objects in CPython** · **B3 minimal NPC presence** ·
@@ -542,6 +560,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE50 | stealth-kill victim selection and deaf-zone transaction | `docs/vtmb/stealth.md`; 13.1 | [x] |
 | RE51 | the player entity and world relationship; lifecycle, world-area/verb policy and law/Masquerade/police/pursuit transactions closed; open: 277-field ledger, camera/travel, area save retention and live world teardown | `docs/vtmb/player-entity.md`; 9.8, LIFE6, 13.1–13.4 | [~] |
 | RE53 | the discipline-magnitude retail/patch delta — Blood Buff's `Min 5` floor, Potence's flat Strength `+1` and Fortitude's single re-applied group are retail's authoring where the patch-first corpus scales all three; which one a remake reproduces is an open owner call, default retail | `docs/vtmb/disciplines.md`; 13.2 | [ ] |
+| RE54 | the rigid-body world: the `.phy` ragdoll rig (bone-named solids + `ragdollconstraint` limits, 324 models, 289 on one 15/14 humanoid shape), the client-ragdoll death result (the corpse entity *is* the frozen NPC at the death origin; the flopping body is client-only) and its suppressors, the placed physics surface, and the player's object handling recovered whole — `weapon_physcannon` is the hidden *Hands* item every retail `StartingEquip` grants (the patch moves the grant into `vamputil.py`, it disables nothing), reached from `CBasePlayer::PlayerUse` via `Inventory_Find`, ahead of `FindUseEntity`, with the ray→hull→cone search, the eligibility predicate and the full ConVar table; `player_pickup`/`CPlayerPickupController` proven dead (zero callers). Open: the two eligibility limit constants (float args the decompiler dropped at `0x10411160`), the release/throw path and `player_throwforce`'s consumer, whether the light-object lob is real, whether a thrown object raises a sound NPCs hear, the solid-transform frame and the constraint axis identity | `docs/vtmb/physics-interaction.md`, `phy_vphysics.md`; PHYS1–PHYS3 | [~] |
 | RE-K1–RE-K9 | knockback: the normal-hit/knockback callback pair and its place in the contact order, the authored per-attack candidate table's location and bucket rotation, the SMALL/NORMAL + HIGH/LOW selector, the confirmed body-goes token convention with its asymmetric bands and NPC-only yaw snap, the launch — a two-stage velocity assignment with recovered magnitude interpolation, direction and one-think delay — the `KnockbackPreventTime` consumer and the flying chain's land/wall terminator all recovered; the discipline path recovered — `HitInfo`'s `Knockback` key enters the shared chain as a boolean with its authored percent discarded, while `AI_Schedule` resolves a schedule by name and bypasses the chain, and the only two `TASK_SET_KNOCKBACK_ACTIVITY` schedules are its Blood Strike and Burrowing Beetle reactions, animation-only with no launch; `knockback_chance` recovered as a **dead field**, parsed by retail and read by nothing, and `COND_KNOCKBACK` as a **dead condition**, registered and read but produced nowhere, leaving its two selector branches and three schedule interrupts unreachable. Open: the `Major`/`MinorKnockbackDist` consumer; whether hit-buildup counting is per victim or per attacker/victim pair. Victim `+0xA8` is behaviourally closed — the `CBasePlayer` self-pointer, verified | `docs/vtmb/combat-and-damage.md`, `animation_and_movers.md`; LIFE5 | [~] |
 | RE-D1–RE-D5 | death: envelope/sequence, schedule, solid-body policy, script deferral, the two npctemplate keys | `docs/vtmb/combat-and-damage.md`, `npc-ai-reverse-engineering.md` | [x] |
 | RE-R1–RE-R4 | the reaction channel: `DamageFlinch`'s fade envelope at `0x103229d0` recovered as 0.1 s in / 0.3 s out with no hold, retiring the hold-floor interim; `0x103302e0`'s reach to `DamageFlinch` on the damaging blocked path settled; `0x10345AB0`'s facing constant read as `0.0f`, so the frontal test is the open forward hemisphere with a `1e-4` coincident-origin bypass that allows the block; and the resume phase recovered as **no stored phase at all** — the apply path zeroes `m_flCycle` on a sequence change unless the incoming activity is a gait (the NPC path requires both sides to be one), `ResetSequenceInfo` never touches the cycle, so a base-channel reaction hands the resumed gait its own ending cycle | `docs/vtmb/combat-and-damage.md`, `animation_and_movers.md`; LIFE5 | [x] |

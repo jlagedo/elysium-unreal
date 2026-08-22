@@ -35,6 +35,7 @@ documents:
   - {path: architecture/uasset-bake-spike.md, kind: architecture, owner: content bake, subject: Unreal package bake}
   - {path: architecture/wielded-weapon-integration.md, kind: architecture, owner: wielded weapons, subject: third-person weapon binding modes assets and the wield bake contract}
   - {path: architecture/effects-architecture.md, kind: architecture, owner: effects, subject: Unreal reproduction of VtMB visual and impulse effects}
+  - {path: architecture/physics-architecture.md, kind: architecture, owner: physics, subject: Unreal reproduction of VtMB rigid bodies ragdolls carry and impulse}
   - {path: architecture/water-architecture.md, kind: architecture, owner: water, subject: Unreal reproduction of VtMB water surfaces volumes and underwater}
   - {path: architecture/bouncy-boobs-dynamics.md, kind: research-brief, owner: animation, subject: Bouncy Boobs Dynamics}
 
@@ -42,7 +43,8 @@ documents:
   - {path: vtmb/vpk_format.md, kind: vtmb-fact, owner: VPK, subject: archive format and resolution}
   - {path: vtmb/texture_format.md, kind: vtmb-fact, owner: textures, subject: TTH TTZ and VMT formats}
   - {path: vtmb/mdl_v2531.md, kind: vtmb-fact, owner: models, subject: MDL v2531 static geometry}
-  - {path: vtmb/phy_vphysics.md, kind: vtmb-fact, owner: physics, subject: PHY collision models}
+  - {path: vtmb/phy_vphysics.md, kind: vtmb-fact, owner: physics, subject: PHY collision models and the ragdoll rig payload}
+  - {path: vtmb/physics-interaction.md, kind: vtmb-fact, owner: physics, subject: ragdoll application the physics hands grab and the placed physics entity surface}
   - {path: vtmb/surface_properties.md, kind: vtmb-fact, owner: surface properties, subject: physical material table for physics footsteps and impacts}
   - {path: vtmb/animation_and_movers.md, kind: vtmb-fact, owner: animation, subject: skeletal animation and brush movers}
   - {path: vtmb/wielded_weapons.md, kind: vtmb-fact, owner: wielded weapons, subject: item model roles equip binding follow-attach composition and the wield-model corpus}
