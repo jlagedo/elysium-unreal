@@ -1488,8 +1488,16 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 				Rotations.Add(Track.Rotations.IsValidIndex(Frame)
 					? Track.Rotations[Frame] : FQuat4f(Bind.GetRotation()));
 			}
-			Controller.AddBoneCurve(BoneName, false);
-			Controller.SetBoneTrackKeys(BoneName, Positions, Rotations, Scales, false);
+			// Checked, not assumed: a refused add leaves the bone with no track and a refused key
+			// write leaves a named track that evaluates to the reference pose -- both read back as
+			// a successful bake with a wrongly-posed bone.
+			if (!Controller.AddBoneCurve(BoneName, false)
+				|| !Controller.SetBoneTrackKeys(BoneName, Positions, Rotations, Scales, false))
+			{
+				return FString::Printf(
+					TEXT("%s '%s': the animation data controller refused the track for bone '%s'"),
+					*PackagePath, *Clip.Name, *BoneName.ToString());
+			}
 			Tracked.Add(Track.Bone);
 			++BoundTracks;
 		}
@@ -1520,8 +1528,14 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 				Positions.Init(FVector3f(Bind.GetTranslation()), KeyCount);
 				Rotations.Init(FQuat4f(Bind.GetRotation()), KeyCount);
 				Scales.Init(FVector3f::OneVector, KeyCount);
-				Controller.AddBoneCurve(BoneName, false);
-				Controller.SetBoneTrackKeys(BoneName, Positions, Rotations, Scales, false);
+				if (!Controller.AddBoneCurve(BoneName, false)
+					|| !Controller.SetBoneTrackKeys(BoneName, Positions, Rotations, Scales, false))
+				{
+					return FString::Printf(
+						TEXT("%s '%s': the animation data controller refused the mask-owned bind ")
+						TEXT("track for bone '%s'"),
+						*PackagePath, *Clip.Name, *BoneName.ToString());
+				}
 				++BoundTracks;
 			}
 		}
