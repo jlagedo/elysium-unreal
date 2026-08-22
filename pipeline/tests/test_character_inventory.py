@@ -216,16 +216,16 @@ class InvariantTests(InventoryFixture):
         self.assertEqual(summary["blend_spaces"], 2)
         self.assertEqual(summary["packages"], 9)
 
-    def test_adding_a_body_family_moves_no_bank_package(self):
+    def test_adding_a_body_moves_no_bank_package(self):
         # The invariant itself: a bank is addressed by owner alone, so the projection cannot take
         # the model partition as an input and the count cannot follow it.
         before = self.prove()
         widened = copy.deepcopy(self.partition)
-        widened["models"]["synthetic"] = {
-            "members": ["synthetic_body"], "skeleton": "SKEL_Elysium_synthetic",
+        widened["models"]["synthetic_body"] = {
+            "members": ["synthetic_body"], "skeleton": "SKEL_Elysium_synthetic_body",
             "tree_fingerprint": "0" * 64, "bones": len(TREE),
         }
-        widened["model_family_of"]["synthetic_body"] = "synthetic"
+        widened["model_family_of"]["synthetic_body"] = "synthetic_body"
         self.partition = widened
         self.assertEqual(self.prove(), before)
 

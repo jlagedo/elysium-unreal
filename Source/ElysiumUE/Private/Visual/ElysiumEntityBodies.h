@@ -449,8 +449,8 @@ private:
 	// AddInstanceComponent), freed with it.
 	//
 	// The animation cache is keyed `<stem>|<clip>` and lives HERE rather than on the GI-scoped
-	// UElysiumAnimSubsystem, because a baked UAnimSequence is bound to one rig family's USkeleton
-	// and the meshes that carry it are per-map-epoch. The subsystem caches what is
+	// UElysiumAnimSubsystem, because a baked UAnimSequence is bound to one USkeleton and the meshes
+	// that carry it are per-map-epoch. The subsystem caches what is
 	// skeleton-independent: the clip vocabularies. An entry may be null (nothing resolved →
 	// reference pose); it is still cached, so a miss is not retried per NPC.
 	UPROPERTY() TMap<FString, TObjectPtr<USkeletalMesh>> NpcMeshCache;

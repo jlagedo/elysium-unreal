@@ -456,9 +456,11 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		return FString::Printf(TEXT("%s carries no geometry"), *SourcePath);
 	}
 
-	// --- the skeleton, shared across a rig family -------------------------------------------
-	// It is created on first use and merged into afterwards, so the bone tree ends up the union
-	// of every body in the family. That union is what lets one baked clip play on all of them.
+	// --- the skeleton this mesh binds to ------------------------------------------------------
+	// Named rather than private, because the clip stage authors sequences against the same asset
+	// and a sequence is bound to exactly one `USkeleton`. It is built ahead of this call from this
+	// same container, so the merge below finds every bone already present and the mesh keeps its
+	// own authored bind.
 	const bool bSharedSkeleton = !SkeletonPackageName.IsEmpty();
 	const FString SkeletonAsset = bSharedSkeleton
 		? FPackageName::GetShortName(SkeletonPackageName)
@@ -488,7 +490,7 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	USkeletalMesh* Mesh = NewObject<USkeletalMesh>(Package, *AssetName, RF_Public | RF_Standalone);
 
 	// --- the reference skeleton -------------------------------------------------------------
-	// Authored on the MESH. It keeps the exact MDL bind; the separate family `USkeleton` carries the
+	// Authored on the MESH. It keeps the exact MDL bind; the separate `USkeleton` carries the
 	// rotation-neutral compatibility frame used to share bank assets.
 	FReferenceSkeleton RefSkeleton;
 	{
@@ -737,8 +739,12 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 
 	if (!Skeleton->MergeAllBonesToBoneTree(Mesh))
 	{
+		// The skeleton is built from this same container, so a refusal means the asset on disk is
+		// stale relative to it -- an earlier bake's tree that a re-export has since changed, and
+		// which the skeleton stage did not rebuild.
 		return FString::Printf(
-			TEXT("%s: bone tree is incompatible with skeleton %s -- it belongs to another rig family"),
+			TEXT("%s: bone tree is incompatible with skeleton %s -- the skeleton on disk is stale ")
+			TEXT("for this container"),
 			*SourcePath, *SkeletonAsset);
 	}
 	Mesh->SetSkeleton(Skeleton);
@@ -835,7 +841,7 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 #if WITH_EDITOR
 	if (SourcePaths.IsEmpty())
 	{
-		return FString::Printf(TEXT("%s: a rig family names no member"), *SkeletonPackageName);
+		return FString::Printf(TEXT("%s: no source container was named"), *SkeletonPackageName);
 	}
 
 	UPackage* Package = ElysiumSkeletalBuildImpl::OpenPackage(SkeletonPackageName);
@@ -847,18 +853,19 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	USkeleton* Skeleton = FindObject<USkeleton>(Package, *AssetName);
 	// `bRebuild` is not an optimisation switch. USkeleton::MergeBonesToBoneTree only rebuilds an
 	// EMPTY tree and otherwise unions, and OpenPackage loads whatever is already on disk -- so
-	// without this a family skeleton can only ever grow, and keeps the bones of members that left
-	// the family in an earlier partition. Their bind poses then answer for bones no current member
-	// declares, which is exactly the reference pose an untracked bone falls back to.
+	// without this the skeleton can only ever grow, and keeps bones a container that has since lost
+	// them no longer declares. Their bind poses then answer for bones nothing declares, which is
+	// exactly the reference pose an untracked bone falls back to.
 	const bool bNewSkeleton = Skeleton == nullptr || bRebuild;
 
 	// What a rebuild must NOT take with it. This function owns the BONE TREE and nothing else; the
-	// morph-curve metadata and the layer blend masks are registered per member, by the mesh and
-	// clip stages, and a slice runs those only for the members it named. So replacing the asset
-	// wholesale silently unbinds every facial curve on every member the slice left alone -- the
-	// mesh keeps its morph targets, the animation keeps its curves, and nothing connects the two.
-	// Carried by NAME rather than by index, because the tree about to be rebuilt is what indices
-	// mean; a bone no current member declares simply fails to re-register, which is correct.
+	// morph-curve metadata and the layer blend masks are registered by the mesh and clip stages,
+	// and those stages gate on their own cache entries independently of this one. So a slice that
+	// rebuilds the skeleton while the mesh and clip stages stay cached would otherwise silently
+	// unbind every facial curve -- the mesh keeps its morph targets, the animation keeps its
+	// curves, and nothing connects the two. Carried by NAME rather than by index, because the tree
+	// about to be rebuilt is what indices mean; a bone no named container declares simply fails to
+	// re-register, which is correct.
 	TArray<TPair<FName, FCurveMetaData>> CarriedCurves;
 	struct FCarriedProfile
 	{
@@ -907,10 +914,11 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	}
 
 	// Authored straight onto the USkeleton, because a bank has no mesh to take a tree from -- and
-	// because a body family's tree must not depend on which of its members a slice named. The
-	// modifier's USkeleton* constructor is the same door an importer uses; its destructor is what
-	// rebuilds the remapping tables, so the scope has to close before anything reads the tree.
-	// One scope over every member, so the whole family costs one save rather than one per member.
+	// because a skeleton's tree must be a function of the containers named here rather than of
+	// whichever meshes a slice happened to build. The modifier's USkeleton* constructor is the same
+	// door an importer uses; its destructor is what rebuilds the remapping tables, so the scope has
+	// to close before anything reads the tree. One scope over every container, so a bank skeleton
+	// costs one save rather than one per contributing container.
 	{
 		FReferenceSkeletonModifier Modifier(Skeleton);
 		const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
@@ -928,9 +936,11 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 			}
 
 			// Source bone index -> index in the skeleton being built. A bone the tree already
-			// carries keeps the index it has, so a later member merges in rather than duplicating
-			// the core. The FIRST member to declare a bone owns its reference transform, which is
-			// why the caller passes the family's members in a declared, stable order.
+			// carries keeps the index it has, so a later container merges in rather than
+			// duplicating the core. The FIRST container to declare a bone owns its reference
+			// transform, which is why a bank skeleton's contributing containers arrive in the
+			// declared, stable order the bank states -- a model names one container, so the
+			// question does not arise there.
 			TArray<int32> Mapped;
 			Mapped.Init(INDEX_NONE, Source.Bones.Num());
 			int32 Next = Ref.GetRawBoneNum();
@@ -1034,7 +1044,7 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 		Profile->Mode = Carried.Mode;
 		for (const TPair<FName, float>& Bone : Carried.Bones)
 		{
-			// A changed partition may rebuild a family with a smaller tree. Drop stale entries by
+			// A changed container may rebuild a skeleton with a smaller tree. Drop stale entries by
 			// name before SetBoneBlendScale can index an unresolved bone.
 			if (Skeleton->GetReferenceSkeleton().FindBoneIndex(Bone.Key) == INDEX_NONE)
 			{
@@ -1155,10 +1165,11 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	// difference that decides whether an unresolved bone is a defect or a fact of sharing, and it is
 	// checked here rather than per track so the bake stops before writing a single short clip.
 	//
-	// The whole bone list, not just the ones some clip animates: the skeleton was merged from this
-	// body's mesh, so every one of its bones must be on it whether or not anything drives it yet,
-	// and asserting the wider set catches a lost bone where it happens instead of wherever a clip
-	// first misses it.
+	// The whole bone list, not just the ones some clip animates: a body's skeleton is built from
+	// this very container, so every one of its bones must be on it whether or not anything drives
+	// it yet, and asserting the wider set catches a lost bone where it happens instead of wherever
+	// a clip first misses it. What that makes this check detect in practice is a STALE skeleton --
+	// one whose tree predates a re-export of the container being read here.
 	if (!Source.Vertices.IsEmpty())
 	{
 		TArray<FString> Missing;
@@ -1171,22 +1182,22 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		}
 		if (!Missing.IsEmpty())
 		{
-			// Deliberately does not name a cause. The mesh build for this stem may have failed
+			// Deliberately does not name a cause. The skeleton build for this stem may have failed
 			// earlier in the same run -- `bake_characters.py` records that and carries on -- in
-			// which case the skeleton never saw these bones rather than losing them, and the real
-			// error is already in the log above this one. Naming the merge would send the operator
-			// past it.
+			// which case the asset on disk is a previous run's and never saw these bones, and the
+			// real error is already in the log above this one. Naming a cause would send the
+			// operator past it.
 			return FString::Printf(
 				TEXT("%s: %d of %d bones are not on skeleton %s (%s) -- every clip here would bake ")
 				TEXT("that many tracks short, so nothing is written; check whether this model's ")
-				TEXT("mesh built at all earlier in this run"),
+				TEXT("skeleton built at all earlier in this run"),
 				*SourcePath, Missing.Num(), Source.Bones.Num(),
 				*FPackageName::GetShortName(SkeletonPackageName), *FString::Join(Missing, TEXT(", ")));
 		}
 	}
 
-	// Bank bones this family has never had. Named rather than only counted: which ones they are is
-	// what says "another clan's hair chain" rather than "the merge dropped something".
+	// Bank bones the playing skeleton has never had. Named rather than only counted: which ones
+	// they are is what says "another clan's hair chain" rather than "the merge dropped something".
 	TSet<FName> Unresolved;
 
 	// The pose every sequence below is a difference from, and the appendix bones none of them
@@ -1205,13 +1216,14 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	// --- blend masks ---------------------------------------------------------------------------
 	// A layer sequence owns some of the rig and leaves the rest to the pose it is composed over,
 	// stated per bone as the animation record's `weight`@0 (`docs/vtmb/animation_and_movers.md`
-	// A.4). That gate becomes one `UBlendProfile` in BlendMask mode on the SHARED skeleton, which
-	// is the asset a layered blend already consumes, and the sequence carries its name.
+	// A.4). That gate becomes one `UBlendProfile` in BlendMask mode on the skeleton the sequence is
+	// baked against, which is the asset a layered blend already consumes, and the sequence carries
+	// its name.
 	//
 	// The profile is content-addressed by the bones it owns, so the same gate reached from two
 	// banks resolves to one asset and a re-bake of a different slice cannot rename it out from
 	// under a sequence already pointing at it. The whole install states four distinct layer masks,
-	// so this is a handful of assets per family rather than a table per clip.
+	// so this is a handful of assets per skeleton rather than a table per clip.
 	struct FMaskProfile
 	{
 		FName Profile = NAME_None;
@@ -1235,7 +1247,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		const FElysiumSourceMask& Mask = Source.Masks[MaskIndex];
 		for (int32 Bone = 0; Bone < Source.Bones.Num(); ++Bone)
 		{
-			// A bank names bones this family has never had, and they leave the mask for the same
+			// A bank names bones this skeleton has never had, and they leave the mask for the same
 			// reason their tracks are dropped: there is nothing here for them to own.
 			if (Mask.Bones[Bone] != 0 && RefSkeleton.FindBoneIndex(Source.Bones[Bone].Name) != INDEX_NONE)
 			{
@@ -1448,18 +1460,19 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			}
 
 			// A channel the clip leaves alone holds the bind value from the file that AUTHORED the
-			// clip, not from the consuming family skeleton. The two differ on exactly the bones a family
-			// disagrees about -- the `[2]` fork and the appendix chains, whose generic names denote
-			// different chains on different bodies -- and taking the skeleton's would hand every
-			// member of a family whichever member happened to seed it.
+			// clip, not from the skeleton it is baked against. A `USkeleton` here is compatibility
+			// metadata whose reference rotations are identity by construction, so a bone that fell
+			// back to it would come back rotation-neutral rather than at its own authored bind --
+			// and for a bank, whose skeleton is a union over many containers, it would additionally
+			// come back at whichever container seeded that bone.
 			//
 			// An ADDITIVE needs no special case here, and that is the point of the container naming
 			// its base. `FCompressibleAnimData::BakeOutAdditiveIntoRawData` composes an additive
 			// down by `Target * Base^-1` before compressing, so the raw keys have to be the delta
 			// composed ONTO the base it is declared against -- and that composed pose is exactly
 			// what the exporter wrote. A derived clip carries every bone for the same subtraction:
-			// a bone with no track evaluates to the family skeleton's reference pose rather than to
-			// the base, which would subtract into a spurious delta rather than an identity one.
+			// a bone with no track evaluates to the skeleton's reference pose rather than to the
+			// base, which would subtract into a spurious delta rather than an identity one.
 			const FTransform& Bind = Source.Bones[Track.Bone].Local;
 			TArray<FVector3f> Positions;
 			TArray<FQuat4f> Rotations;
@@ -1484,8 +1497,9 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		// A bone the overlay OWNS and does not animate holds its BIND pose, and that is a real
 		// authored pose rather than an absence -- 1,346 records across the shipped `*_layer` clips.
 		// The exporter drops a channel-less track, so without this the sequence evaluates to the
-		// SHARED SKELETON's reference pose there, which is whichever body of the family seeded it,
-		// and the overlay would quietly pull those bones onto another model's bind.
+		// SKELETON's reference pose there. Those reference rotations are identity by construction,
+		// so the overlay would quietly pull those bones to rotation-neutral instead of to the bind
+		// the mask says they hold.
 		if (MaskProfile != nullptr)
 		{
 			const FElysiumSourceMask& Mask = Source.Masks[Clip.Mask];

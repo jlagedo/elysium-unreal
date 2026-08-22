@@ -306,8 +306,8 @@ namespace
 namespace
 {
 	// Both entry points below. `bBonesOnly` skips every section but SKEL, which is what makes
-	// seeding a rig family's skeleton from all of its members affordable: a bank container is up
-	// to 30 MB and almost all of it is clip payload the bone tree does not need. The trailing
+	// seeding a bank family's skeleton from all of its members affordable: a bank container is
+	// up to 30 MB and almost all of it is clip payload the bone tree does not need. The trailing
 	// validation still runs -- its mask and clip loops are simply empty on this path.
 	bool LoadContainer(const FString& Path, FElysiumSkeletalSource& Out, FString& OutError,
 		bool bBonesOnly)

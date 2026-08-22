@@ -1388,8 +1388,9 @@ def character_source_plan(
                 banks[root["bank"]] = bank["model"]
 
     # A placed model is a skeletal model like any other, so it takes the same container. It is
-    # NOT a cast member: it carries its own skeleton rather than joining a rig family, because a
-    # crane and a wolf share no tree with each other or with a biped.
+    # NOT a cast member: it is absent from the declared partition and nothing declares
+    # compatibility with its skeleton, because a crane and a wolf share no tree with each other or
+    # with a biped.
     props = {stem: record["model"]
              for stem, record in manifest.get("placed_models", {}).items()
              if record.get("model")}
@@ -1412,7 +1413,7 @@ def _placed_model_source_tasks(npc_dir: Path, source_manifest: dict,
                                code_fingerprint: str) -> list[Task]:
     """Build the independently cacheable `.eskm` tasks for exactly ``props``.
 
-    Placed models own no shared rig family or animation bank, so there is no correctness reason
+    Placed models own no shared skeleton or animation bank, so there is no correctness reason
     for a one-prop edit to enumerate the cast.  The whole-corpus character path calls this with
     every declared prop; the focused map path calls it with only the selected stems.
     """
@@ -1613,11 +1614,12 @@ def write_character_sources(
 def write_character_partition(npc_dir: Path, *, validate_props: bool = True) -> dict:
     """Write `npc/families.json` and `npc/textures.json` over the whole corpus.
 
-    The rig partition is greedy and order-dependent, so it is a property of the set it is given
-    (`formats/eskm.rig_families`). Recomputing it per slice therefore renames families -- and can
-    merge two the whole cast keeps apart -- while the family name IS the path contract for every
-    baked clip and skeleton. Computing it once here and writing it down is what lets the bake
-    slice at all.
+    Whole-corpus for two reasons. The BANK partition is greedy and order-dependent, so it is a
+    property of the set it is given (`formats/eskm.rig_families`): recomputing it per slice renames
+    bank families -- and can merge two the whole cast keeps apart -- while that name IS the path
+    contract for the skeleton their sequences bind to. The MODEL half is one entry per stem, and
+    the file is the one statement of which bodies are declared at all, which is what lets the bake,
+    the sweep and the verifier judge a slice against the whole cast.
 
     `textures.json` rides along because the same pass already has every container's material
     table open. Without it the editor reopens 400 MB of containers just to recover which albedo
@@ -1626,10 +1628,11 @@ def write_character_partition(npc_dir: Path, *, validate_props: bool = True) -> 
     from elysium_pipeline import asset_names, character_partition
     from elysium_pipeline.formats import eskm
 
-    # Props are deliberately absent from the partition: each carries its own skeleton, so it is
-    # not a member of any rig family and has no family folder to be addressed through. They are
-    # present in the texture table all the same -- one texture package serves the whole mount, and
-    # a prop albedo missing from it is swept as an orphan the moment anything sweeps.
+    # Props are deliberately absent from the partition: a prop is baked out of its own container
+    # into its own mount folder, and nothing declares compatibility with its skeleton, so no
+    # reader joins it here. They are present in the texture table all the same -- one texture
+    # package serves the whole mount, and a prop albedo missing from it is swept as an orphan the
+    # moment anything sweeps.
     models, banks, _cinematics, props = character_source_plan(npc_dir)
     model_paths = {stem: npc_dir / f"{stem}.eskm" for stem in models}
     bank_paths = {stem: npc_dir / "banks" / f"{stem}.eskm" for stem in banks}
@@ -1711,10 +1714,10 @@ def resolve_character_slice(partition: dict, selectors: Sequence[str] | None,
                             npc_dir: Path | None = None) -> list[str]:
     """Selectors -> the model stems to bake, resolved against the declared partition.
 
-    A bare stem is that model. `family:<name>` is every member of a model rig family.
-    `bank:<name>` is every model that plays a bank in that bank family, which is the slice to take
-    when a bank container changed -- the partition names bank membership and the manifest names
-    who plays them, so it is the one selector that reads both.
+    A bare stem is that model. `family:<name>` is an alias for the bare stem, because a model's
+    declared entry names only itself. `bank:<name>` is every model that plays a bank in that bank
+    family, which is the slice to take when a bank container changed -- the partition names bank
+    membership and the manifest names who plays them, so it is the one selector that reads both.
 
     No selectors is the whole cast, which is what the game needs and what a release must have.
     """
@@ -1779,7 +1782,7 @@ def sweep_characters(config, partition: dict, *, apply: bool = True,
     Safe on a slice, because the partition it checks against always covers the whole cast: a run
     that baked two models still knows what the other 164 own. That is the property that makes a
     global sweep possible at all -- the flat `Meshes/`, `Materials/` and `Skeletons/` folders give
-    no per-family answer.
+    no per-body answer.
     """
     from elysium_pipeline import character_sweep
 
@@ -1823,11 +1826,11 @@ def export_characters(
     """Bake characters onto /ElysiumBaked/Characters (ANM1) -- the whole cast unless told otherwise.
 
     Three stages. The `.eskm` containers are written from the user's own install, the rig
-    partition is derived from them and written down, then a headless editor turns the pair into an
-    shared skeleton per rig family, a mesh per model and a compressed sequence per clip. The
-    manifest and the eye sidecars have to be on disk already, which `export bundle npc` or a
-    complete profile writes. The policy content is a prerequisite too, because a body is built
-    against the same master materials the runtime names.
+    partition is derived from them and written down, then a headless editor turns the pair into a
+    skeleton and a mesh per model, a shared skeleton per bank rig family, and a compressed
+    sequence per clip. The manifest and the eye sidecars have to be on disk already, which
+    `export bundle npc` or a complete profile writes. The policy content is a prerequisite too,
+    because a body is built against the same master materials the runtime names.
 
     **The partition always covers the whole cast; a named slice writes only its source closure and
     bakes only those bodies.** The existing containers for every other body and bank remain inputs
@@ -1864,8 +1867,8 @@ def export_characters(
         if exact_only:
             source_stems = sorted(dict.fromkeys(exact))
         else:
-            # Family and bank selectors are resolved through the last complete partition. The
-            # selected sources are then written before that partition is recomputed.
+            # A selector that is not a bare stem resolves through the last complete partition.
+            # The selected sources are then written before that partition is recomputed.
             source_stems = resolve_character_slice(
                 read_character_partition(npc_dir), models, npc_dir)
 
@@ -1883,11 +1886,11 @@ def export_characters(
 
     with (npc_dir / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
         npc_manifest = json.load(handle)
-    # Fail before Unreal starts if orchestration reintroduces bank clips below body families. The
-    # previous cross-product generated 95 GB before it was diagnosed. Two halves: the layout
-    # assertion refuses the SHAPE of that cross-product, and the inventory proves its COUNT --
-    # every source bank clip packaged once, addressed by owner alone and by nothing about the
-    # bodies that play it.
+    # Fail before Unreal starts if orchestration reintroduces bank clips below a body's own
+    # folder. That cross-product costs tens of gigabytes before output size exposes it. Two
+    # halves: the layout assertion refuses its SHAPE, and the inventory proves its COUNT -- every
+    # source bank clip packaged once, addressed by owner alone and by nothing about the bodies
+    # that play it.
     #
     # The census is the third: the count proves every bank clip reaches a package, and the census
     # proves a body reaches the package -- measured over the whole catalogue's include DAGs, so

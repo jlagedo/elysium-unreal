@@ -1,13 +1,13 @@
 """Remove baked character assets the declared partition no longer produces.
 
 The character mount is addressed by name, so an asset nobody writes any more is still loadable --
-and a rig family that was renamed leaves a complete second answer for every clip label it owned.
-That is worse than a missing asset: nothing fails, and which copy wins depends on which skeleton
-the mesh happens to point at.
+and a folder the declared layout no longer names leaves a complete second answer for every clip
+label it held. That is worse than a missing asset: nothing fails, and which copy wins depends on
+which skeleton the mesh happens to point at.
 
 **A sweep is only authorised against a complete inventory.** `Meshes/`, `Materials/`, `Textures/`
-and `Skeletons/` are flat folders shared by every family, so a per-family sweep cannot tell "this
-family does not own it" from "another family does". The declared partition plus the manifest is
+and `Skeletons/` are flat folders shared by the whole cast, so a sweep over a slice cannot tell
+"this body does not own it" from "another body does". The declared partition plus the manifest is
 that inventory: between them they name every asset the bake would produce for the whole cast,
 whatever subset a given run baked. Anything else under `Characters/` is residue.
 
@@ -35,8 +35,8 @@ def _expected(npc_dir: Path, partition: dict) -> set[str]:
         manifest = json.load(handle)
 
     expected: set[str] = set()
-    for family, entry in partition["models"].items():
-        expected.add(f"Skeletons/{character_partition.MODEL_SKELETON_PREFIX}{family}")
+    for stem in partition["models"]:
+        expected.add(f"Skeletons/{character_partition.MODEL_SKELETON_PREFIX}{stem}")
     for family in partition["banks"]:
         expected.add(f"Skeletons/{character_partition.BANK_SKELETON_PREFIX}{family}")
     for stem in partition["model_family_of"]:
@@ -51,22 +51,16 @@ def _expected(npc_dir: Path, partition: dict) -> set[str]:
 
 
 def _expected_dirs(partition: dict, manifest: dict) -> set[str]:
-    """Every `Anims/<family>/<owner>` folder the partition would write."""
+    """Every anim folder the partition would write: `Anims/<stem>` and `Anims/_banks/<bank>`.
+
+    A body owns its own non-bank clips and no other body's (`assert_owner_integrity`), so one
+    folder per declared stem states the whole body half.
+    """
     out = {"Anims/_banks"}
-    for stem, family in partition["model_family_of"].items():
-        out.add(f"Anims/{family}")
-        out.add(f"Anims/{family}/{stem}")
+    for stem in partition["model_family_of"]:
+        out.add(f"Anims/{stem}")
     for bank in partition["bank_family_of"]:
         out.add(f"Anims/_banks/{bank}")
-    # A body's own clips can be owned by another body -- the manifest resolves ownership -- so an
-    # owner folder is legitimate under any family that reaches it.
-    for stem, record in manifest.get("npcs", {}).items():
-        family = partition["model_family_of"].get(stem)
-        if not family:
-            continue
-        for owner in record.get("clips", {}).values():
-            if owner in partition["model_family_of"]:
-                out.add(f"Anims/{family}/{owner}")
     return out
 
 
@@ -144,9 +138,9 @@ def plan(mount_root: Path, npc_dir: Path, partition: dict) -> dict:
         stem = rel[: -len(".uasset")]
         leaf = rel.rpartition("/")[2]
         if folder == "Anims" or folder.startswith("Anims/"):
-            # A sequence or blend space is claimed by its FOLDER: the partition names the family
-            # and owner pair, and the container names which clips live there. A folder no declared
-            # pair produces is residue whole, which is exactly the renamed-family case.
+            # A sequence or blend space is claimed by its FOLDER: the partition names the body
+            # or the bank that owns it, and the container names which clips live there. A folder
+            # the declared layout does not name is residue whole.
             if folder not in expected_dirs:
                 orphan_assets.append(path)
                 orphan_dirs.add(folder)

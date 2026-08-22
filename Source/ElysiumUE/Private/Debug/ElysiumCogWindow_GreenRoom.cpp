@@ -71,8 +71,8 @@ void FElysiumCogWindow_GreenRoom::RenderHelp()
 		"map, and `elysium.map <name>` goes back.\n\n"
 		"Source: the body comes off the /ElysiumBaked mount, which is the only build of a character "
 		"-- a stem the character bake has not covered cannot stand at all. The line under Restand "
-		"names the asset that is standing and the rig family whose skeleton it was built against, "
-		"and Restand is what picks up a re-export.\n\n"
+		"names the asset that is standing and the skeleton it was built against, and Restand is "
+		"what picks up a re-export.\n\n"
 		"Garments: a body wearing one carries it as a generated Chaos cloth asset, built by "
 		"`make_cloth_assets.py` from the exported payload and the authored tuning asset. The View "
 		"tab draws its bounds and its colliders; `elysium.garment` reports what every built garment "
@@ -264,11 +264,10 @@ void FElysiumCogWindow_GreenRoom::RenderSource(FElysiumGreenRoomRun& Lab)
 
 	const FString Path = Mesh->GetPathName();
 	const USkeleton* Skeleton = Mesh->GetSkeleton();
-	const FString Family = Skeleton != nullptr
-		? FElysiumContentPaths::BakedCharacterFamily(Skeleton->GetName()) : FString();
+	const FString SkeletonName = Skeleton != nullptr ? Skeleton->GetName() : FString();
 	ImGui::TextColored(ImVec4(0.4f, 0.85f, 0.4f, 1.0f),
-		"baked: %s (rig family '%s')", COG_TCHAR_TO_CHAR(*FPackageName::GetShortName(Path)),
-		COG_TCHAR_TO_CHAR(*Family));
+		"baked: %s (skeleton '%s')", COG_TCHAR_TO_CHAR(*FPackageName::GetShortName(Path)),
+		COG_TCHAR_TO_CHAR(*SkeletonName));
 }
 
 void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
@@ -294,8 +293,8 @@ void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
 	for (FClipRow& Row : ClipRows)
 	{
 		FString Error;
-		// A baked sequence is addressed by owner and animation name off the standing mesh's own rig
-		// family.
+		// A baked sequence is addressed by its owner and animation name; the standing mesh is what
+		// it has to be able to play on.
 		const UAnimSequence* Sequence = Anims->ResolveClip(PendingStem, Row.Label, Mesh, Error);
 		FTransform Start;
 		FTransform End;

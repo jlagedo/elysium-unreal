@@ -16,8 +16,9 @@
 // space standing on the mount does not excuse its cells: `ResolveClip` and `ResolveClipFromBank`
 // never consult the space, they resolve a cell and ask for that clip by name.
 //
-// NOTHING IS LOADED. A bank owner resolves to `_banks`; a body's own owner resolves to its one
-// family folder. The fresh-process character verifier owns deeper load and compatibility checks.
+// NOTHING IS LOADED. A bank owner resolves under `_banks`; a body's own owner resolves to the one
+// folder named for its own stem. The fresh-process character verifier owns deeper load and
+// compatibility checks.
 //
 // TWO REACHES, BECAUSE THERE ARE TWO RESOLVERS. `ResolveClip`/`ResolveAssets` are driven by a
 // body's own resolved vocabulary, which is enumerable per stem. `ResolveClipFromBank` is handed a
@@ -66,38 +67,51 @@ namespace
 		return FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(ObjectPath));
 	}
 
-	// The rig-family folders the character bake wrote. A family is
-	// named for its lowest-sorted member and is recomputed per bake run, so the set is discovered
-	// rather than declared.
-	TArray<FString> AnimFamilyFolders()
+	// Which of the two clip namespaces an owner's packages live in. There is no lookup table for
+	// this on the mount and none is wanted: the runtime itself decides by probing, so the test
+	// decides the same way and in the same order (`ElysiumNpcVisual::LoadBakedClip`).
+	enum class EOwnerKind : uint8
 	{
-		TArray<FString> Families;
-		FString Dir;
-		if (!FPackageName::TryConvertLongPackageNameToFilename(
-			FElysiumContentPaths::BakedCharacterDir() / TEXT("Anims"), Dir))
-		{
-			return Families;
-		}
-		// Names only, directories only -- the family folder name IS the family.
-		IFileManager::Get().FindFiles(Families, *(Dir / TEXT("*")), /*Files=*/false,
-			/*Directories=*/true);
-		Families.Sort();
-		return Families;
+		None,
+		Bank,
+		Body,
+	};
+
+	FString AnimsDir()
+	{
+		return FElysiumContentPaths::BakedCharacterDir() / TEXT("Anims");
 	}
 
-	FString FamilyFolderForOwner(const TArray<FString>& Families, const FString& Owner)
+	bool FolderExists(const FString& PackagePath)
 	{
-		for (const FString& Family : Families)
+		FString Dir;
+		return FPackageName::TryConvertLongPackageNameToFilename(PackagePath, Dir)
+			&& IFileManager::Get().DirectoryExists(*Dir);
+	}
+
+	// Bank first, exactly as the runtime probes. The two namespaces cannot collide -- `_banks` is
+	// not a legal model stem -- so the order settles the answer rather than merely preferring one.
+	EOwnerKind OwnerKindOf(const FString& Owner)
+	{
+		if (FolderExists(AnimsDir() / FElysiumContentPaths::BakedBankFolder() / Owner))
 		{
-			FString Dir;
-			if (FPackageName::TryConvertLongPackageNameToFilename(
-				FElysiumContentPaths::BakedCharacterDir() / TEXT("Anims") / Family / Owner, Dir)
-				&& IFileManager::Get().DirectoryExists(*Dir))
-			{
-				return Family;
-			}
+			return EOwnerKind::Bank;
 		}
-		return FString();
+		return FolderExists(AnimsDir() / Owner) ? EOwnerKind::Body : EOwnerKind::None;
+	}
+
+	FString AnimPathFor(const EOwnerKind Kind, const FString& Owner, const FString& Clip)
+	{
+		return Kind == EOwnerKind::Bank
+			? FElysiumContentPaths::BakedBankAnim(Owner, Clip)
+			: FElysiumContentPaths::BakedCharacterAnim(Owner, Clip);
+	}
+
+	FString BlendSpacePathFor(const EOwnerKind Kind, const FString& Owner, const FString& Label)
+	{
+		return Kind == EOwnerKind::Bank
+			? FElysiumContentPaths::BakedBankBlendSpace(Owner, Label)
+			: FElysiumContentPaths::BakedCharacterBlendSpace(Owner, Label);
 	}
 
 	// `-ElysiumCoverageStems=a,b,c` narrows the run while iterating. The default is the whole
@@ -146,15 +160,16 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 	}
 
 	const TArray<FString> Stems = CoverageStems(Index);
-	const TArray<FString> Families = AnimFamilyFolders();
-	TMap<FString, FString> OwnerFolders;
-	auto FolderFor = [&Families, &OwnerFolders](const FString& Owner) -> FString
+	// One directory probe per distinct owner rather than one per label: a body's whole vocabulary
+	// resolves through a handful of owners, and the answer is a property of the mount.
+	TMap<FString, EOwnerKind> OwnerKinds;
+	auto KindFor = [&OwnerKinds](const FString& Owner) -> EOwnerKind
 	{
-		if (const FString* Cached = OwnerFolders.Find(Owner))
+		if (const EOwnerKind* Cached = OwnerKinds.Find(Owner))
 		{
 			return *Cached;
 		}
-		return OwnerFolders.Add(Owner, FamilyFolderForOwner(Families, Owner));
+		return OwnerKinds.Add(Owner, OwnerKindOf(Owner));
 	};
 
 	// An owner's grid sidecar plus the labels that sidecar binds as autolayer TARGETS. A target is
@@ -257,11 +272,12 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 			}
 			++LabelsChecked;
 
-			const FString Folder = FolderFor(Owner);
-			if (Folder.IsEmpty())
+			const EOwnerKind Kind = KindFor(Owner);
+			if (Kind == EOwnerKind::None)
 			{
 				Report(FString::Printf(
-					TEXT("%s: '%s' is owned by '%s', which has no folder on the mount"),
+					TEXT("%s: '%s' is owned by '%s', which is neither a bank nor a body folder on "
+					     "the mount"),
 					*Stem, *Label, *Owner));
 				continue;
 			}
@@ -270,7 +286,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 			const FElysiumBlendGrid* Grid = Table != nullptr ? Table->Find(Label) : nullptr;
 			if (Grid == nullptr)
 			{
-				if (!PackageExists(FElysiumContentPaths::BakedCharacterAnim(Folder, Owner, Label)))
+				if (!PackageExists(AnimPathFor(Kind, Owner, Label)))
 				{
 					Report(FString::Printf(
 						TEXT("%s: '%s' is owned by '%s' and is not on the mount"),
@@ -280,8 +296,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 			}
 
 			++GridsChecked;
-			if (!PackageExists(
-				FElysiumContentPaths::BakedCharacterBlendSpace(Folder, Owner, Label)))
+			if (!PackageExists(BlendSpacePathFor(Kind, Owner, Label)))
 			{
 				// Not a failure on its own: the resolver downgrades to the selected cell, which the
 				// loop below is what holds to. Counted so the summary can say it happened.
@@ -298,8 +313,7 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 					continue;
 				}
 				++CellsChecked;
-				if (!PackageExists(
-					FElysiumContentPaths::BakedCharacterAnim(Folder, Owner, Cell.Clip)))
+				if (!PackageExists(AnimPathFor(Kind, Owner, Cell.Clip)))
 				{
 					Report(FString::Printf(
 						TEXT("%s: grid '%s' on '%s' has cell [%d][%d] = '%s', which is not on the mount"),
@@ -335,7 +349,10 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 	int32 CinematicUnbaked = 0;
 	for (const FString& BankStem : CinematicStems)
 	{
-		if (!FamilyFolderForOwner(Families, BankStem).IsEmpty())
+		// The bank folder ONLY. A cinematic root is a bank by construction, so a body folder of the
+		// same name would not answer for it -- accepting one would certify a scene against clips no
+		// `ResolveClipFromBank` call can reach.
+		if (FolderExists(AnimsDir() / FElysiumContentPaths::BakedBankFolder() / BankStem))
 		{
 			continue;
 		}
@@ -356,10 +373,21 @@ bool FElysiumBakedClipCoverageTest::RunTest(const FString&)
 	AddInfo(FString::Printf(TEXT("%d of %d scene-named cinematic banks are on the mount"),
 		CinematicStems.Num() - CinematicUnbaked, CinematicStems.Num()));
 
+	// How many distinct clip owners the run actually resolved, bank and body together. That is the
+	// breadth the certification covers -- a run whose bodies all name the same two owners has
+	// proven much less than the body count suggests.
+	int32 OwnersCertified = 0;
+	for (const TPair<FString, EOwnerKind>& Owner : OwnerKinds)
+	{
+		if (Owner.Value != EOwnerKind::None)
+		{
+			++OwnersCertified;
+		}
+	}
 	AddInfo(FString::Printf(
-		TEXT("certified %d of %d indexed bodies over %d family folders: %d labels, %d grids, "
+		TEXT("certified %d of %d indexed bodies over %d clip owners: %d labels, %d grids, "
 		     "%d grid cells; %d clips missing"),
-		BodiesOnMount, BodiesIndexed, Families.Num(), LabelsChecked, GridsChecked, CellsChecked,
+		BodiesOnMount, BodiesIndexed, OwnersCertified, LabelsChecked, GridsChecked, CellsChecked,
 		MissingAssets));
 	if (LayersSkipped > 0)
 	{

@@ -38,9 +38,11 @@ public:
 	 * Build and save a skeletal mesh from an `.eskm` container -- skeleton, LOD0 geometry, skin
 	 * weights and facial morph targets.
 	 *
-	 * `SkeletonPackageName` names the shared rig-family skeleton to bind to; it is created on
-	 * first use and merged into on every later model, so the bone tree becomes the union across
-	 * the family. Left empty, the mesh gets a private skeleton beside it.
+	 * `SkeletonPackageName` names the `USkeleton` to bind to; it is created on first use and the
+	 * mesh's bone tree is merged into it. A model's skeleton is built ahead of this call from the
+	 * same container, so that merge is a cross-check rather than a growth step -- a refusal means
+	 * the skeleton on disk no longer matches the container. Left empty, the mesh gets a private
+	 * skeleton beside it.
 	 *
 	 * Each material section gets a `UMaterialInstanceConstant` under `MaterialPackagePath`,
 	 * parented to `MaterialParentPath` and carrying the albedo named for its slot in
@@ -61,9 +63,9 @@ public:
 	 *
 	 * An animation bank carries no geometry, so it has no mesh to take a tree from -- and a bank
 	 * needs a skeleton of its own precisely so its clips can be baked ONCE and shared, rather than
-	 * rebuilt against every rig family that plays them. Called again with another bank's container
-	 * it merges: a bone the tree already carries keeps its index, so the banks that agree on a rig
-	 * land on one skeleton.
+	 * rebuilt against every body skeleton that plays them. Called again with another bank's
+	 * container it merges: a bone the tree already carries keeps its index, so the banks that agree
+	 * on a rig land on one skeleton.
 	 *
 	 * Refuses a container that would give the skeleton a second root, which is what
 	 * `USkeleton::MergeBonesToBoneTree` rejects far downstream.
@@ -75,17 +77,19 @@ public:
 		const FString& SkeletonPackageName);
 
 	/**
-	 * Build and save one rig family's `USkeleton` from EVERY declared member's bone tree.
+	 * Build and save one `USkeleton` from the union of EVERY named container's bone tree.
 	 *
-	 * The union of a family's trees, in the order the partition declares, is what makes the
-	 * skeleton a function of the declared partition rather than of whichever members a bake
-	 * happened to name. Two things downstream depend on that: an untracked bone falls back to this
-	 * skeleton's reference pose, and a blend mask is content-addressed by the bones it owns
-	 * INTERSECTED with this bone set -- so a skeleton that varies by slice silently varies both.
+	 * A model names its own container alone, so its skeleton is exactly its own tree. A shared
+	 * animation bank names every container the bank is declared over, in that declared order, which
+	 * is what makes a bank skeleton a function of the declared membership rather than of whichever
+	 * containers a bake happened to slice. Two things downstream depend on that: an untracked bone
+	 * falls back to this skeleton's reference pose, and a blend mask is content-addressed by the
+	 * bones it owns INTERSECTED with this bone set -- so a skeleton that varies by slice silently
+	 * varies both.
 	 *
 	 * `bRebuild` discards whatever is on disk first. `MergeBonesToBoneTree` only rebuilds an empty
-	 * tree and otherwise unions, so without it a family skeleton can only grow and keeps the bones
-	 * of members that a later partition moved elsewhere.
+	 * tree and otherwise unions, so without it the skeleton can only ever grow and keeps bones no
+	 * named container declares any more.
 	 *
 	 * Refuses a container that would give the skeleton a second root, which is what
 	 * `USkeleton::MergeBonesToBoneTree` rejects far downstream. `OutBones` is the resulting raw
@@ -123,12 +127,13 @@ public:
 	 * carries none.
 	 *
 	 * - A **body's own** container is checked up front and the whole call fails if any of its bones
-	 *   is missing from the skeleton. That skeleton was merged from this very body's mesh, so a
-	 *   missing bone means the merge lost one, and the clip would bake a track short and play part
-	 *   of the rig at bind pose with nothing reported.
-	 * - A **bank** is recorded against another body's rig and legitimately names bones this family
-	 *   has never had -- the Gangrel hair chain, the Ventrue ponytail. Those tracks are dropped, and
-	 *   `OutDroppedTracks` counts them so a bake that quietly loses more than it should is visible.
+	 *   is missing from the skeleton. That skeleton is built from this very container, so a missing
+	 *   bone means the asset on disk is stale for it, and the clip would bake a track short and play
+	 *   part of the rig at bind pose with nothing reported.
+	 * - A **bank** is recorded against another body's rig and legitimately names bones this
+	 *   skeleton has never had -- the Gangrel hair chain, the Ventrue ponytail. Those tracks are
+	 *   dropped, and `OutDroppedTracks` counts them so a bake that quietly loses more than it
+	 *   should is visible.
 	 *
 	 * A clip that owns only part of the rig -- VtMB's partial-body `*_layer` overlays -- also gets a
 	 * `UBlendProfile` blend mask on the sequence skeleton and a `UElysiumAnimLayerMask` naming it, and

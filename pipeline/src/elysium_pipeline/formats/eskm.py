@@ -142,8 +142,9 @@ def bone_translations(blob):
 
 
 def bone_parents(blob):
-    """{bone name: parent bone name}, with "" for a root -- the shape rig-family comparison
-    wants, because a family is defined by names agreeing on their parent, not by indices."""
+    """{bone name: parent bone name}, with "" for a root -- the shape the declared partition
+    compares and fingerprints, because a rig is a set of names agreeing on their parent rather
+    than a set of indices."""
     rows = bones(blob)
     return {name: (rows[parent][0] if 0 <= parent < len(rows) else "")
             for name, parent in rows}
@@ -276,13 +277,13 @@ def rig_trees_compatible(base, tree):
 
     Strict about the parent, including the root. A bone that is parentless in one tree and parented
     in the other is a conflict, because `USkeleton::MergeBonesToBoneTree` rejects exactly that -- a
-    model whose VtMB skeleton forks carries a synthetic root above Bip01, and no amount of
+    container whose VtMB skeleton forks carries a synthetic root above Bip01, and no amount of
     interpretation makes that the same shape as a Bip01-rooted one.
 
     **Agreeing on every shared bone is not sufficient, because two trees can share nothing.** A
-    prop rooted at `Phone_bone_01` conflicts with no bone of a biped family and would merge in,
-    giving the skeleton a second parentless bone -- which Unreal's single-rooted reference skeleton
-    refuses at mesh-build time, long after the partition was decided."""
+    tree rooted at `Phone_bone_01` conflicts with no bone of a biped and would merge in, giving the
+    skeleton a second parentless bone -- which Unreal's single-rooted reference skeleton refuses at
+    mesh-build time, long after the partition was decided."""
     low_base = _casefold_tree(base)
     low_tree = _casefold_tree(tree)
     if not all(bone not in low_base or low_base[bone] == par
@@ -294,21 +295,21 @@ def rig_trees_compatible(base, tree):
 
 
 def rig_families(trees, stems):
-    """Partition the models into sets that one USkeleton can carry -> [{name, tree, stems}].
+    """Partition animation banks into sets one USkeleton can carry -> [{name, tree, stems}].
 
-    The cast is not one rig. VtMB's Bip01 biped is consistent across every model and every bank --
-    which is what makes a bank clip shareable at all -- but the appendix chains are not: the generic
-    `BoneNN` hair names denote a different chain on different bodies, and Unreal's reference
-    skeleton is single-rooted so the models whose VtMB skeleton forks carry a synthetic root above
-    Bip01. A family is a maximal set that agrees on every bone it shares.
+    The bank corpus is not one rig. VtMB's Bip01 biped is consistent across every model and every
+    bank -- which is what makes a bank clip shareable at all -- but the appendix chains are not: the
+    generic `BoneNN` hair names denote a different chain in different containers, and Unreal's
+    reference skeleton is single-rooted so a container whose VtMB skeleton forks carries a synthetic
+    root above Bip01. A family is a maximal set that agrees on every bone it shares.
 
     Greedy and order-dependent by construction, so the stems are sorted: the partition has to be
-    the same on every run or a re-bake renames the families out from under the meshes that point at
+    the same on every run or a re-bake renames the families out from under the sequences bound to
     them. **It is also a property of the whole set it is given**, which is why the caller partitions
-    the entire cast even when it intends to bake the result a few families at a time.
+    the whole bank corpus even when it intends to bake the result a few families at a time.
 
     A PREDICTION of what Unreal will accept, not a guarantee -- `MergeAllBonesToBoneTree` is the
-    authority, and the bake re-homes a model it refuses."""
+    authority, and the bake fails a family whose skeleton it refuses to build."""
     families = []
     for stem in sorted(stems):
         tree = trees[stem]

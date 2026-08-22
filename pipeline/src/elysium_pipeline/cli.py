@@ -674,7 +674,8 @@ def export_characters(
     ctx: typer.Context,
     models: list[str] = typer.Argument(
         None,
-        help="Models to bake: a stem, family:<name>, or bank:<name>. "
+        help="Models to bake: a stem, family:<name> (an alias for that stem), or "
+             "bank:<name> (every model that plays the bank). "
              "Omit for the whole cast, which is what the game needs.",
     ),
     force: bool = typer.Option(False, "--force", help="Rewrite every .eskm container."),
@@ -741,7 +742,8 @@ def verify_characters(
     ctx: typer.Context,
     models: list[str] = typer.Argument(
         None,
-        help="Models to check: a stem, family:<name>, or bank:<name>. Omit for the whole cast.",
+        help="Models to check: a stem, family:<name> (an alias for that stem), or "
+             "bank:<name> (every model that plays the bank). Omit for the whole cast.",
     ),
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:

@@ -17,14 +17,17 @@ struct FElysiumWieldModelRef;
 namespace ElysiumNpcVisual
 {
 	// The mount's body for this stem, or null with OutError set when the export has not covered it.
-	// `bPlayerMaterial` selects the player permutation, which is a distinct mesh and skeleton.
+	// `bPlayerMaterial` does NOT select a second asset — a stem has exactly one body package and one
+	// skeleton, and the player permutation is the same sections driven through different material
+	// parameters (`FElysiumContentPaths::BakedCharacterMesh`). The flag survives here only as a
+	// discriminator in the runtime's own visual cache key.
 	USkeletalMesh* LoadMesh(const FString& Stem, FString& OutError, bool bPlayerMaterial = false);
 
 	// Declare every morph target a mesh carries as a morph-target *curve* on its skeleton. An anim
 	// curve only reaches USkeletalMeshComponent::ActiveMorphTargets when the bone container flags
 	// it, and the bone container takes those flags from this metadata — so without this the facial
 	// track evaluates correctly and moves nothing. The mesh loader calls it; the bake calls it again
-	// on the family skeleton so the metadata is serialised rather than rebuilt per load.
+	// on the body's own skeleton so the metadata is serialised rather than rebuilt per load.
 	void RegisterMorphTargetCurves(USkeletalMesh* Mesh);
 
 	// Show or hide the generated garments led by this body, and suspend or resume their simulation.
@@ -48,8 +51,11 @@ namespace ElysiumNpcVisual
 	// One baked body / one baked clip off the /ElysiumBaked mount, or null when the bake has not
 	// covered it. `Owner` is the stem that owns the clip — the body for its own dialogue clips, the
 	// bank stem otherwise — and `ClipName` is the resolved animation name, after any blend-grid
-	// cell selection, never the label. A clip is addressed through the MESH because a sequence is
-	// bound to one rig family's skeleton and the mesh is what knows which family it belongs to.
+	// cell selection, never the label. `Owner` alone is the whole address: a bank's clips sit under
+	// the bank folder, a body's own clips under the body's stem, and a body never owns another
+	// body's clip. `Mesh` is not part of that address — it is the on-mount body the sequence is
+	// about to play on, so a null one resolves nothing rather than handing back a clip with no
+	// rig behind it.
 	USkeletalMesh* LoadBakedMesh(const FString& Stem, bool bPlayerMaterial = false);
 	UAnimSequence* LoadBakedClip(const USkeletalMesh* Mesh, const FString& Owner,
 		const FString& ClipName);

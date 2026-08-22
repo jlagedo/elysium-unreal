@@ -163,7 +163,7 @@ public:
 	 *
 	 * `SkeletalMeshPath` names the character mesh whose reference skeleton the cloth binds to;
 	 * the sidecar's bone indices are model bone indices, so they are resolved by NAME against
-	 * that skeleton rather than used directly — a baked family skeleton renumbers, and an index
+	 * that skeleton rather than used directly — a baked skeleton may renumber, and an index
 	 * carried across that boundary silently attaches a hem to the wrong limb.
 	 *
 	 * Every material and solver value the build applies comes from the authored

@@ -58,12 +58,13 @@ static constexpr EAutomationTestFlags GElysiumBakedCharacterFlags =
 
 namespace
 {
-	// The parity slice. `smiling_jack` SEEDS its rig family, so its own bone tree becomes the union
-	// every other male body merges into; `tremere_male_armor_0` merges INTO that union, which is
-	// the case where a bone can be lost. The other seven are every stem, across all 166 exported
-	// `.eskm` containers, whose VtMB skeleton carries MORE THAN ONE parentless bone -- every one of
-	// them is affected, not a sample of them. `brian` is the most stressing case: four strays,
-	// two of whose names differ only by a `[2]` prefix.
+	// The parity slice, chosen by CONTAINER property rather than by which bodies happen to be
+	// interesting. Seven of the nine are every stem, across all 166 exported `.eskm` containers,
+	// whose VtMB skeleton carries MORE THAN ONE parentless bone -- every one of them is here, not a
+	// sample of them. `brian` is the most stressing case: four strays, two of whose names differ
+	// only by a `[2]` prefix. `smiling_jack` and `tremere_male_armor_0` are the single-rooted
+	// control the other seven read against, one plain body and one armour variant, so a defect a
+	// fork produces stays separable from one every container would show.
 	const TCHAR* const GDefaultSliceStems[] = {
 		TEXT("smiling_jack"),
 		TEXT("tremere_male_armor_0"),
@@ -168,8 +169,9 @@ namespace
 	// `OrientAndScale` retarget sources, so a clean corpus still accumulates more slack here than
 	// the sub-degree/sub-millimetre agreement a body's own clips owe their own container -- but
 	// both numbers stay two orders of magnitude below the ~90 degree yaw and ~99 cm lift a clip
-	// landing on the wrong bone (a fork-carrying body's synthetic root stealing bone 0 from
-	// `Bip01`) actually produces, which is the failure this check exists to catch.
+	// landing on the wrong bone produces -- bone 0 carrying anything other than `Bip01`, which is
+	// the failure this check exists to catch. The exporter's `_single_root` puts `Bip01` at slot 0
+	// in every container, so that magnitude is what the tolerances are calibrated against.
 	constexpr double GBankLocomotionRotationToleranceDeg = 2.0;
 	constexpr double GBankLocomotionTranslationTolerance = 5.0;   // centimetres
 
@@ -516,7 +518,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					const int32 SkeletonBone = BakedRefSkeleton.FindBoneIndex(BoneName);
 					if (!Deltas.IsValidIndex(SkeletonBone))
 					{
-						// A bank drives bones this rig family has never had; that is sharing, not a
+						// A bank drives bones this body has never had; that is sharing, not a
 						// defect, and the composed pass below is what asserts an own body's rig.
 						continue;
 					}
@@ -578,8 +580,9 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	//
 	// Both halves fail silently and neither is visible in the sequence's own tracks. A lost mask
 	// composes the overlay over the whole rig at full weight, which erases the body's stance from
-	// the waist down; a lost bind track leaves an owned bone on the family skeleton's reference
-	// pose, which is another body of the family's bind rather than this clip's own.
+	// the waist down; a lost bind track leaves an owned bone on the skeleton's reference pose,
+	// whose rotations are identity by construction, so the bone comes back rotation-neutral rather
+	// than at the bind this clip states for it.
 	auto CheckLayerMasks = [&](const USkeletalMesh* Baked, const FString& Owner,
 		const FElysiumSkeletalSource& Container)
 	{
@@ -665,7 +668,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				const FName BoneName = Container.Bones[Bone].Name;
 				if (Ref.FindBoneIndex(BoneName) == INDEX_NONE)
 				{
-					// A bank names bones this family has never had; they leave the mask for the
+					// A bank names bones this body has never had; they leave the mask for the
 					// same reason their tracks are dropped.
 					continue;
 				}
@@ -683,7 +686,7 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				}
 				// An owned bone the clip animates nothing on holds its BIND pose, which is a pose
 				// the overlay states rather than an absence. The bake writes it out; without that
-				// the sequence would evaluate to the family skeleton's reference pose here.
+				// the sequence would evaluate to the skeleton's reference pose here.
 				//
 				// **Except in the appendix of a shared bank**, where the bake deliberately writes
 				// nothing. That bind belongs to the bank's own rig, and binding it by name hands it
@@ -1078,6 +1081,10 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 	// through each side's own hierarchy so a mis-landed root shows up amplified at every bone below
 	// it, the same way every other composed check here does. Returns whether a qualifying clip was
 	// found and checked at all, so the caller can try another bank rather than reporting a miss.
+	//
+	// Every body carries its own skeleton, so this runs one bank->body `FSkeletonRemapping` pair
+	// per body it is handed: over the whole cast it is the proof that the remap holds for each of
+	// them individually, rather than for one representative the rest are assumed to match.
 	auto CheckBankLocomotionAgreement = [&](const USkeletalMesh* Baked, const FString& Stem,
 		const FElysiumSkeletalSource& Source, const FString& Bank,
 		const FElysiumSkeletalSource& BankSource)
@@ -1156,8 +1163,8 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				const int32* BodyIndex = BodyIndexOf.Find(BankSource.Bones[BankIndex].Name);
 				if (BodyIndex == nullptr)
 				{
-					// A bank drives bones this rig family has never had; there is nothing on the
-					// body's own hierarchy to compare that bone against.
+					// A bank drives bones this body has never had; there is nothing on the body's
+					// own hierarchy to compare that bone against.
 					continue;
 				}
 				++Samples;
@@ -1211,9 +1218,10 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 		KeepAlive.Add(Baked);
 		++Compared;
 
-		// The body's own bone set, in its own order. The baked mesh keeps its own reference
-		// skeleton -- only the SKELETON asset is shared -- so it must carry exactly what the
-		// container declared.
+		// The body's own bone set, in its own order. The mesh's reference skeleton and the
+		// `USkeleton`'s are two different poses -- the mesh keeps the exact authored bind, the
+		// `USkeleton` carries the rotation-neutral compatibility frame -- so this asserts the mesh
+		// against the container rather than against the skeleton it binds to.
 		const FReferenceSkeleton& BakedRef = Baked->GetRefSkeleton();
 		if (!TestEqual(FString::Printf(TEXT("%s bone count"), *Stem),
 			BakedRef.GetNum(), Source.Bones.Num()))
@@ -1797,16 +1805,18 @@ bool FElysiumBakedSkeletonRetargetingTest::RunTest(const FString&)
 		}
 	}
 
-	// Capped: a whole family reading the wrong mode is one defect, and 111 lines of it buries every
-	// other failure in the run.
-	for (int32 Index2 = 0; Index2 < FMath::Min(Wrong.Num(), 12); ++Index2)
+	// Capped so one systemic defect cannot bury the rest of the run's failures. The cap sits well
+	// above what a single body can produce and well below the 166 skeletons swept, so a corpus-wide
+	// fault still reads as corpus-wide instead of being truncated into something a single body
+	// could have caused.
+	for (int32 Index2 = 0; Index2 < FMath::Min(Wrong.Num(), 64); ++Index2)
 	{
 		AddError(Wrong[Index2]);
 	}
 	AddInfo(FString::Printf(
 		TEXT("%d baked skeleton(s) checked, %d loaded sequence(s), %d without a resolvable ")
 		TEXT("retarget source"), Checked, Sequences, Unsourced));
-	TestEqual(TEXT("shared skeletons are rotation-neutral and every sequence declares its donor"),
+	TestEqual(TEXT("baked skeletons are rotation-neutral and every sequence declares its donor"),
 		Wrong.Num(), 0);
 	return true;
 }
@@ -1927,10 +1937,10 @@ bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
 			// sequence, decided the same way the arm decides it: does the label name a grid.
 			FName MaskName;
 			const TCHAR* Kind = nullptr;
-			// The skeleton the OVERLAY ASSET is bound to, which on a shared rig family need not be
-			// the body's. Carried so a missing mask can name which of the two carries it — "the
-			// profile is on the wrong skeleton" and "the bake never wrote it" are the same silence
-			// otherwise, and they are different repairs.
+			// The skeleton the OVERLAY ASSET is bound to, which for a bank-owned layer is the
+			// bank's rather than the body's. Carried so a missing mask can name which of the two
+			// carries it — "the profile is on the wrong skeleton" and "the bake never wrote it"
+			// are the same silence otherwise, and they are different repairs.
 			const USkeleton* AssetSkeleton = nullptr;
 			if (UBlendSpace* Space =
 				ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, LayerOwner, Label, Host))
@@ -2003,9 +2013,9 @@ bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
 			}
 
 			// Step 4 — the mask, resolved against the PLAYING body's skeleton rather than the one
-			// the layer's own bank was baked against. Those are different assets on a shared rig
-			// family, and a profile taken from the wrong one gates a shifted set of bones and logs
-			// nothing, so the name is what travels and this is where it has to land.
+			// the layer's own bank was baked against. Those are different assets whenever the layer
+			// comes off a bank, and a profile taken from the wrong one gates a shifted set of bones
+			// and logs nothing, so the name is what travels and this is where it has to land.
 			const UBlendProfile* Profile = BodySkeleton->GetBlendProfile(MaskName);
 			if (Profile == nullptr)
 			{
@@ -2105,7 +2115,7 @@ bool FElysiumBakedAttachmentSocketTest::RunTest(const FString&)
 		}
 
 		// `NumSockets` counts the skeleton's sockets too, so this also states that the bake put
-		// every one of them on the mesh and none on the shared family `USkeleton`.
+		// every one of them on the mesh and none on the `USkeleton`.
 		TestEqual(*FString::Printf(TEXT("%s bakes one socket per distinct attachment name"), Stem),
 			Mesh->NumSockets(), Expected.Num());
 		for (const TPair<FName, const FElysiumSourceAttachment*>& Entry : Expected)

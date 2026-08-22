@@ -15,6 +15,7 @@ import os
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import character_partition  # noqa: E402
 from elysium_pipeline import wield_corpus as wc  # noqa: E402
 from elysium_pipeline.formats import eskm  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
@@ -26,7 +27,8 @@ BANK_SKELETON_PREFIX = "SKEL_ElysiumBank_"
 MESHES = CHARACTERS + "/Meshes"
 ANIMS = CHARACTERS + "/Anims"
 PROPS = MOUNT + "/Props"
-#: Stands where a rig family goes in an anim path, for the banks every family shares.
+#: The one anim folder addressed by a bank rather than by a body, for the banks the whole cast
+#: reaches through its skeletons' compatibility declarations.
 BANKS_FOLDER = "_banks"
 
 NPC_DIR = os.path.join(os.fspath(export_root()), "npc")
@@ -50,8 +52,13 @@ def assets_under(package):
 
 
 def read_partition():
+    """The declared partition, refused unless this build can read it.
+
+    Checked here as well as on the bake side: a stale `families.json` names a layout the verifier
+    would then measure the mount against, and every miss would be reported as a missing asset.
+    """
     with open(os.path.join(NPC_DIR, "families.json"), "r", encoding="utf-8") as handle:
-        return json.load(handle)
+        return character_partition.check(json.load(handle))
 
 
 #: {container path: (the wield mounts it declares, {clip label: the mounts that clip channels})}.
@@ -82,8 +89,8 @@ def declared_mounts(path, container=None):
     return _MOUNTS[path]
 
 
-def verify_declared_compat(partition, family, skeleton, errors):
-    """Every declared bank skeleton must be on this family skeleton's compatible list.
+def verify_declared_compat(partition, stem, skeleton, errors):
+    """Every declared bank skeleton must be on this body skeleton's compatible list.
 
     A bank is baked once against a skeleton of its own, and the declaration is what builds the
     name-keyed bone map the evaluator remaps a bank clip through. Missing, the clips still load,
@@ -102,27 +109,27 @@ def verify_declared_compat(partition, family, skeleton, errors):
                if entry is not None}
     missing = sorted(declared - carried)
     if missing:
-        errors.append("family '%s': skeleton declares %d of %d bank skeleton(s) compatible, "
-                      "missing %s" % (family, len(declared) - len(missing), len(declared),
-                                      ", ".join(missing[:4])))
+        errors.append("%s: skeleton declares %d of %d bank skeleton(s) compatible, missing %s"
+                      % (stem, len(declared) - len(missing), len(declared),
+                         ", ".join(missing[:4])))
 
 
 def verify_mount_inventory(partition, errors):
     """Nothing on the mount outside the declared partition.
 
     Only sound against a COMPLETE run: the folders are flat and shared, so a slice cannot tell an
-    asset another family owns from an orphan. The caller decides; this assumes it already did.
+    asset another body owns from an orphan. The caller decides; this assumes it already did.
     """
-    families = set(partition.get("models", {}))
+    stems = set(partition.get("models", {}))
     banks = set(partition.get("banks", {}))
-    declared_skeletons = {"%s%s" % (SKELETON_PREFIX, name) for name in families}
+    declared_skeletons = {"%s%s" % (SKELETON_PREFIX, name) for name in stems}
     declared_skeletons |= {"%s%s" % (BANK_SKELETON_PREFIX, name) for name in banks}
     for data in assets_under(CHARACTERS + "/Skeletons"):
         name = str(data.asset_name)
         if name not in declared_skeletons:
             errors.append("Skeletons/%s: on the mount and not in the declared partition" % name)
 
-    declared_dirs = families | {BANKS_FOLDER}
+    declared_dirs = stems | {BANKS_FOLDER}
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
     seen = set()
     for data in registry.get_assets_by_path(ANIMS, recursive=True):
@@ -131,11 +138,16 @@ def verify_mount_inventory(partition, errors):
             continue
         seen.add(rel.split("/")[0])
     for directory in sorted(seen - declared_dirs):
-        errors.append("Anims/%s: a rig family the declared partition does not name" % directory)
+        errors.append("Anims/%s: neither a bank folder nor a body the declared partition names"
+                      % directory)
 
 
 def verify_mesh(stem, manifest, container_path, errors):
-    """Returns the rig family the baked body belongs to, or "" when it is not baked."""
+    """Returns the stem read off the skeleton the baked body points at, or "" when it is not baked.
+
+    A body owns its skeleton, so that stem is the body's own -- which makes a mesh bound to another
+    body's skeleton directly readable off what landed rather than inferred from a missing asset.
+    """
     asset = "SK_%s" % stem
     path = "%s/%s.%s" % (MESHES, asset, asset)
     mesh = unreal.EditorAssetLibrary.load_asset(path)
@@ -156,17 +168,18 @@ def verify_mesh(stem, manifest, container_path, errors):
             errors.append("%s: %d of %d wield-mount bone(s) are not on the built mesh (%s)"
                           % (asset, len(missing), len(mounts), ", ".join(missing)))
 
-    # The family is read off what landed rather than recomputed, so the check cannot agree with the
+    # The stem is read off what landed rather than recomputed, so the check cannot agree with the
     # bake by sharing its arithmetic: whatever skeleton the mesh actually points at is the one whose
     # clips have to exist.
     skeleton = mesh.get_editor_property("skeleton")
-    family = ""
+    baked_stem = ""
     if skeleton is None:
         errors.append("%s: has no skeleton" % asset)
     elif not skeleton.get_name().startswith(SKELETON_PREFIX):
-        errors.append("%s: skeleton '%s' is not a baked rig family" % (asset, skeleton.get_name()))
+        errors.append("%s: skeleton '%s' is not a baked body skeleton"
+                      % (asset, skeleton.get_name()))
     else:
-        family = skeleton.get_name()[len(SKELETON_PREFIX):]
+        baked_stem = skeleton.get_name()[len(SKELETON_PREFIX):]
 
     # A slot left holding a dynamic instance serialises as null and the section draws with the
     # engine's default material -- grey, and nothing logged.
@@ -200,7 +213,7 @@ def verify_mesh(stem, manifest, container_path, errors):
         if missing:
             errors.append("%s: %d morph target(s) carry no curve metadata (%s)"
                           % (asset, len(missing), ", ".join(sorted(missing)[:4])))
-    return family
+    return baked_stem
 
 
 def verify_prop(stem, manifest, errors):
@@ -294,13 +307,13 @@ def verify_prop_bone_tracks(owner, package, clips, baked, container_path, errors
                       % (owner, label, len(missing), len(expected), ", ".join(missing)))
 
 
-def verify_clips(family, owner, clips, container_path, errors):
-    package = "%s/%s/%s" % (ANIMS, family, owner)
+def verify_clips(package, owner, clips, container_path, errors):
+    """Every clip `owner` declares, against what landed under `package`."""
     baked = {}
     for data in assets_under(package):
         baked[str(data.asset_name)] = data
     if not baked:
-        errors.append("%s/%s: no sequences baked" % (family, owner))
+        errors.append("%s: no sequences baked under %s" % (owner, package))
         return 0
 
     # A clip the container binds to a host ships as `<clip>@<host>`, one per declaring host,
@@ -352,8 +365,7 @@ def verify_clips(family, owner, clips, container_path, errors):
         else:
             additive_found += 1
     if additive_expected:
-        log("%s/%s: %d/%d delta sequences additive"
-            % (family, owner, additive_found, additive_expected))
+        log("%s: %d/%d delta sequences additive" % (owner, additive_found, additive_expected))
     verify_prop_bone_tracks(owner, package, clips, baked, container_path, errors)
     return len(baked)
 
@@ -373,13 +385,12 @@ def cell_is_baked(package, grid):
     return False
 
 
-def verify_blend_spaces(family, owner, blends, errors):
-    """Every grid the sidecar declares has a BS_ asset, and it carries its samples.
+def verify_blend_spaces(package, owner, blends, errors):
+    """Every grid the sidecar declares has a BS_ asset under `package`, and it carries its samples.
 
     A blend space that lost its samples is the failure worth catching here: it loads, it lists, and
     it poses nothing -- the same shape as a sequence that lost its compressed data. The bake refuses
     to write one, so reaching this is a sign the asset did not survive the save."""
-    package = "%s/%s/%s" % (ANIMS, family, owner)
     with open(os.path.join(NPC_DIR, *blends.split("/")), "r", encoding="utf-8") as handle:
         sidecar = json.load(handle)
     grids = sidecar.get("grids", {})
@@ -428,7 +439,7 @@ def verify_blend_spaces(family, owner, blends, errors):
             continue
         found += len(loaded)
     if found:
-        log("%s/%s: %d blend space(s)" % (family, owner, found))
+        log("%s: %d blend space(s)" % (owner, found))
     return found
 
 
@@ -442,23 +453,23 @@ def main():
     with open(os.path.join(NPC_DIR, "npc_manifest.json"), "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
     partition = read_partition()
-    declared_family_of = partition.get("model_family_of", {})
+    declared_stems = set(partition.get("model_family_of", {}))
 
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT],
                                                                            force_rescan=True)
     errors = []
     for stem in prop_stems:
         verify_prop(stem, manifest, errors)
-    # {family: {owner: {clip label: flags}}}. Built off the family each baked BODY reports, so a
-    # model whose mesh landed on one skeleton while its clips were written under another name shows
-    # up as missing sequences rather than passing quietly.
+    # {stem: {clip label: flags}}. Keyed by the stem each baked BODY's own skeleton reports, so a
+    # model whose mesh landed on another body's skeleton shows up as missing sequences rather than
+    # passing quietly.
     wanted = {}
-    # {owner: blends sidecar path relative to npc/}. Keyed by owner alone rather than by family: a
-    # grid is declared by the model that owns the clips.
+    # {owner: blends sidecar path relative to npc/}. A grid is declared by the model that owns the
+    # clips.
     gridded = {}
     # {bank owner: {clip label: flags}}. Banks are baked ONCE, under `_banks`, and reached by every
     # body through its skeleton's compatibility declaration -- so they are checked once here rather
-    # than once per family that includes them.
+    # than once per body that includes them.
     bank_wanted = {}
 
     for stem in stems:
@@ -466,24 +477,23 @@ def main():
         if record is None:
             errors.append("%s: not in the manifest" % stem)
             continue
-        family = verify_mesh(stem, manifest, os.path.join(NPC_DIR, stem + ".eskm"), errors)
-        if not family:
+        baked_stem = verify_mesh(stem, manifest, os.path.join(NPC_DIR, stem + ".eskm"), errors)
+        if not baked_stem:
             continue
 
-        # The family read off the baked body against the family the partition declares. These
-        # disagree exactly when a run partitioned the corpus its own way -- which renames the
-        # family, and with it the path contract for every clip and skeleton the body points at.
-        # It is the check that catches a whole second copy of a cast member under a second name.
-        declared = declared_family_of.get(stem, "")
-        if declared and declared != family:
-            errors.append("%s: baked onto rig family '%s' and the partition declares '%s'"
-                          % (stem, family, declared))
+        # The stem read off the baked body's own skeleton against the body being verified. A body
+        # owns its skeleton, so these disagree exactly when a mesh landed on ANOTHER body's rig --
+        # which addresses every clip and every mask through a name nothing else points at, and is
+        # how a whole second copy of a cast member appears under a second name.
+        if baked_stem != stem:
+            errors.append("%s: mesh is bound to '%s%s', not to its own skeleton"
+                          % (stem, SKELETON_PREFIX, baked_stem))
 
-        owners = wanted.setdefault(family, {})
+        clips = wanted.setdefault(stem, {})
         own = {label: int(meta.get("flags", 0))
                for label, meta in record.get("own_clips", {}).items()}
         if own:
-            owners.setdefault(stem, {}).update(own)
+            clips.update(own)
             if record.get("blends"):
                 gridded[stem] = record["blends"]
         for _label, bank in record.get("clips", {}).items():
@@ -497,35 +507,39 @@ def main():
 
     total = 0
     spaces = 0
-    for family, owners in sorted(wanted.items()):
+    for stem, clips in sorted(wanted.items()):
         skeleton = unreal.EditorAssetLibrary.load_asset(
-            "%s/Skeletons/%s%s.%s%s" % (CHARACTERS, SKELETON_PREFIX, family,
-                                        SKELETON_PREFIX, family))
+            "%s/Skeletons/%s%s.%s%s" % (CHARACTERS, SKELETON_PREFIX, stem,
+                                        SKELETON_PREFIX, stem))
         bones = unreal.ElysiumCharacterBakeLibrary.skeleton_bone_count(skeleton)
-        log("family '%s': %d bones, %d owners" % (family, bones, len(owners)))
-        verify_declared_compat(partition, family, skeleton, errors)
-        for owner, clips in sorted(owners.items()):
-            total += verify_clips(family, owner, clips,
-                                  os.path.join(NPC_DIR, owner + ".eskm"), errors)
-            if owner in gridded:
-                spaces += verify_blend_spaces(family, owner, gridded[owner], errors)
+        log("body '%s': %d bones, %d own clip(s)" % (stem, bones, len(clips)))
+        verify_declared_compat(partition, stem, skeleton, errors)
+        # A body that owns no clip has no folder of its own; the banks it plays carry the lot.
+        if not clips:
+            continue
+        package = "%s/%s" % (ANIMS, stem)
+        total += verify_clips(package, stem, clips,
+                              os.path.join(NPC_DIR, stem + ".eskm"), errors)
+        if stem in gridded:
+            spaces += verify_blend_spaces(package, stem, gridded[stem], errors)
 
     log("%d bank(s) shared across the cast" % len(bank_wanted))
     for owner, clips in sorted(bank_wanted.items()):
-        total += verify_clips(BANKS_FOLDER, owner, clips,
+        package = "%s/%s/%s" % (ANIMS, BANKS_FOLDER, owner)
+        total += verify_clips(package, owner, clips,
                               os.path.join(NPC_DIR, "banks", owner + ".eskm"), errors)
         if owner in gridded:
-            spaces += verify_blend_spaces(BANKS_FOLDER, owner, gridded[owner], errors)
-    log("%d sequences, %d blend spaces over %d famil%s"
+            spaces += verify_blend_spaces(package, owner, gridded[owner], errors)
+    log("%d sequences, %d blend spaces over %d bod%s"
         % (total, spaces, len(wanted), "y" if len(wanted) == 1 else "ies"))
 
     # Same rule as the sweep: an inventory check is only sound against a complete run, because
-    # Skeletons/ and Anims/ are flat folders every family shares.
-    if set(stems) >= set(declared_family_of):
+    # Skeletons/ and Anims/ are flat folders the whole cast shares.
+    if set(stems) >= declared_stems:
         verify_mount_inventory(partition, errors)
     else:
         log("skipping the mount inventory: %d of %d declared model(s) in this slice"
-            % (len(stems), len(declared_family_of)))
+            % (len(stems), len(declared_stems)))
 
     for error in errors:
         unreal.log_error("[chars-verify] %s" % error)

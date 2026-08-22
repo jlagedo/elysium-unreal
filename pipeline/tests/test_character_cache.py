@@ -354,32 +354,30 @@ class CharacterCacheTests(CharacterFixture):
         self.write_body("amy", b"amy-mesh-changed")
         self.assertEqual(self.stale(), {
             "meshes": [cc.mesh_object_path("amy")],
-            "clips": [cc.clips_object_path(cp.model_family(self.partition, "amy"), "amy")],
+            "clips": [cc.clips_object_path("amy")],
         })
 
-    def test_a_moved_bone_tree_takes_its_whole_family(self):
+    def test_a_moved_bone_tree_takes_only_its_own_body(self):
         self.promote()
         (self.npc / "amy.eskm").write_bytes(
             container([(b"SKEL", skel_section(BODY_BONES + [("hair", 1)])),
                        (b"MESH", b"amy-mesh"), (b"ANIM", b"amy")]))
-        family = cp.model_family(self.partition, "amy")
         stale = self.stale()
         self.assertEqual(stale["family_skeletons"],
-                         [self.partition["models"][family]["skeleton"]])
-        self.assertEqual(stale["meshes"],
-                         sorted(cc.mesh_object_path(s) for s in ("amy", "bob")))
-        self.assertEqual(stale["clips"],
-                         sorted(cc.clips_object_path(family, s) for s in ("amy", "bob")))
+                         [self.partition["models"]["amy"]["skeleton"]])
+        self.assertEqual(stale["meshes"], [cc.mesh_object_path("amy")])
+        self.assertEqual(stale["clips"], [cc.clips_object_path("amy")])
 
-    def test_a_moved_bank_restates_the_model_skeleton_and_nothing_else(self):
+    def test_a_moved_bank_restates_every_body_skeleton_and_nothing_else(self):
         self.promote()
         self.write_bank("bank_a", BANK_A_BONES + [("wing", 2)], b"bank-a")
-        family = cp.model_family(self.partition, "amy")
         bank_family = cp.bank_family(self.partition, "bank_a")
         stale = self.stale()
-        # The model family restates its compatibility declaration; no mesh and no body clip moves.
+        # Every body's skeleton restates its compatibility declaration; no mesh and no body clip
+        # moves.
         self.assertEqual(stale["family_skeletons"],
-                         [self.partition["models"][family]["skeleton"]])
+                         sorted(self.partition["models"][stem]["skeleton"]
+                                for stem in ("amy", "bob")))
         self.assertNotIn("meshes", stale)
         self.assertNotIn("clips", stale)
         self.assertEqual(stale["bank_skeletons"],
@@ -411,8 +409,7 @@ class CharacterCacheTests(CharacterFixture):
         manifest = json.loads(json.dumps(MANIFEST))
         manifest["npcs"]["bob"]["own_clips"] = {}
         planned = cc.plan(self.config, self.npc, manifest, self.partition, self.stems)
-        family = cp.model_family(self.partition, "bob")
-        self.assertNotIn(cc.clips_object_path(family, "bob"), planned.units["clips"])
+        self.assertNotIn(cc.clips_object_path("bob"), planned.units["clips"])
 
     def test_a_missing_package_reopens_a_receipted_unit(self):
         self.promote()
@@ -557,17 +554,16 @@ class CharacterCacheTests(CharacterFixture):
         self.write_body("amy", b"amy-mesh-changed")
         planned = self.plan()
         _path, document = cc.write_run_plan(self.npc, planned, force=False)
-        family = cp.model_family(self.partition, "amy")
         self._write_report(document, {
             "meshes": [cc.mesh_object_path("amy")],
-            "clips": [cc.clips_object_path(family, "amy")],
+            "clips": [cc.clips_object_path("amy")],
         })
         cc.promote_run(self.config, cc.load_run_report(self.config, document))
         self.assertEqual(self.stale(), {})
         self.assertEqual(cc.revoke(self.config, document), 2)
         self.assertEqual(self.stale(), {
             "meshes": [cc.mesh_object_path("amy")],
-            "clips": [cc.clips_object_path(family, "amy")],
+            "clips": [cc.clips_object_path("amy")],
         })
 
 
@@ -853,9 +849,6 @@ class CharacterBakeWorkerTests(CharacterFixture):
         _path, document = cc.write_run_plan(self.npc, self.plan(force=True), force=True)
         return document
 
-    def _families(self, stems):
-        return sorted({cp.model_family(self.partition, stem) for stem in stems})
-
     # ------------------------------------------------------ the texture unit's coverage
 
     def test_a_sliced_run_imports_every_texture_the_table_names(self):
@@ -913,7 +906,7 @@ class CharacterBakeWorkerTests(CharacterFixture):
         library = _FakeLibrary(bones=2)
         failed = []
         self.worker.bake_bodies(MANIFEST, self.partition, ["amy"], library, failed, document,
-                                tracker, {}, [], self._families(["amy"]))
+                                tracker, {}, [], ["amy"])
         self.assertIn("amy", failed)
         self.assertEqual(library.meshes, [])
         self.assertEqual(tracker.stages["meshes"]["assets"], {})
@@ -932,7 +925,7 @@ class CharacterBakeWorkerTests(CharacterFixture):
         self.assertEqual(tracker.stages["bank_skeletons"]["assets"], {})
         self.assertEqual(tracker.stages["banks"]["assets"], {})
 
-    def test_a_family_skeleton_the_partition_disagrees_with_bakes_no_body(self):
+    def test_a_body_skeleton_the_partition_disagrees_with_bakes_no_body(self):
         document = self._document()
         tracker = self.worker.CharacterTracker(document)
         library = _FakeLibrary(bones=99)
@@ -940,7 +933,7 @@ class CharacterBakeWorkerTests(CharacterFixture):
         textures = {"T_amy": _FakeAsset("T_amy", self.worker.TEXTURES + "/T_amy"),
                     "T_bob": _FakeAsset("T_bob", self.worker.TEXTURES + "/T_bob")}
         self.worker.bake_bodies(MANIFEST, self.partition, self.stems, library, failed, document,
-                                tracker, textures, [], self._families(self.stems))
+                                tracker, textures, [], self.stems)
         self.assertTrue(failed)
         self.assertEqual(library.meshes, [])
         self.assertEqual(library.sequences, [])
@@ -948,7 +941,7 @@ class CharacterBakeWorkerTests(CharacterFixture):
         self.assertEqual(tracker.stages["meshes"]["assets"], {})
         self.assertEqual(tracker.stages["clips"]["assets"], {})
 
-    def test_a_sound_family_still_bakes_and_receipts_its_bodies(self):
+    def test_sound_bodies_still_bake_and_receipt_themselves(self):
         document = self._document()
         tracker = self.worker.CharacterTracker(document)
         library = _FakeLibrary(bones=2)
@@ -956,7 +949,7 @@ class CharacterBakeWorkerTests(CharacterFixture):
         textures = {"T_amy": _FakeAsset("T_amy", self.worker.TEXTURES + "/T_amy"),
                     "T_bob": _FakeAsset("T_bob", self.worker.TEXTURES + "/T_bob")}
         self.worker.bake_bodies(MANIFEST, self.partition, self.stems, library, failed, document,
-                                tracker, textures, [], self._families(self.stems))
+                                tracker, textures, [], self.stems)
         self.assertEqual(failed, [])
         self.assertEqual(sorted(tracker.stages["meshes"]["assets"]),
                          sorted(cc.mesh_object_path(stem) for stem in self.stems))

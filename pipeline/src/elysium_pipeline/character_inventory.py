@@ -2,13 +2,13 @@
 
 A bank is recorded on one rig and played by every compatible body, so its packages are addressed
 by owner alone -- `Anims/_banks/<bank>` -- and their count is a function of the bank containers
-and of nothing else. The moment a body family enters that arithmetic the mount multiplies: two
-banks carry 4,551 of the cast's distinct clips, and rebuilding them per rig family once produced
-95 GB before the output size exposed it.
+and of nothing else. The moment a body enters that arithmetic the mount multiplies: two banks
+carry 4,551 of the cast's distinct clips, so authoring them once per body that plays them costs
+tens of gigabytes for no additional animation.
 
 `character_sweep.assert_shared_bank_layout` refuses the *shape* of that cross-product -- a bank
-folder addressed below a body family. This module answers the harder half, the *count*: it
-projects the exact package set each bank produces and proves every source clip is packaged once.
+folder addressed below a body. This module answers the harder half, the *count*: it projects the
+exact package set each bank produces and proves every source clip is packaged once.
 The projection is the bake's own arithmetic stated offline, so it can be checked before an editor
 process starts rather than after twenty minutes of authoring.
 

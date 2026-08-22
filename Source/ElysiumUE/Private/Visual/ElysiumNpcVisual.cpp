@@ -442,50 +442,45 @@ namespace ElysiumNpcVisual
 		return FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(ObjectPath));
 	}
 
-	// The rig family a body's own clips were baked under, off the body's own skeleton rather than a
-	// second lookup table: the mesh was built against exactly one family's USkeleton, so asking the
-	// mesh is the only answer that cannot disagree with what will actually play.
-	FString MeshFamily(const USkeletalMesh* Mesh)
-	{
-		const USkeleton* Skeleton = Mesh != nullptr ? Mesh->GetSkeleton() : nullptr;
-		return Skeleton != nullptr
-			? FElysiumContentPaths::BakedCharacterFamily(Skeleton->GetName()) : FString();
-	}
-
+	// The bank folder is probed before the owner's own folder because a bank owns clips no body
+	// declares, and the two namespaces are disjoint on the mount: `_banks` is not a legal model
+	// stem, so an owner that answers as a bank can never also be a body. A body's non-bank clips
+	// are always its own, so `Owner` is the whole address on the fallback.
+	//
+	// `Mesh` is the liveness guard rather than part of the address: a caller with no body has
+	// nothing to play the sequence on, so it resolves nothing. This is an ordinary negative query
+	// and not a failure — the callers that need to distinguish "no body" from "no clip" already
+	// hold the mesh they passed.
 	UAnimSequence* LoadBakedClip(const USkeletalMesh* Mesh, const FString& Owner,
 		const FString& ClipName)
 	{
-		const FString BankPath = FElysiumContentPaths::BakedCharacterAnim(
-			FElysiumContentPaths::BakedBankFolder(), Owner, ClipName);
+		if (Mesh == nullptr)
+		{
+			return nullptr;
+		}
+		const FString BankPath = FElysiumContentPaths::BakedBankAnim(Owner, ClipName);
 		if (IsOnMount(BankPath))
 		{
 			return LoadObject<UAnimSequence>(nullptr, *BankPath);
 		}
-		const FString Family = MeshFamily(Mesh);
-		if (Family.IsEmpty())
-		{
-			return nullptr;
-		}
 		return LoadObject<UAnimSequence>(nullptr,
-			*FElysiumContentPaths::BakedCharacterAnim(Family, Owner, ClipName));
+			*FElysiumContentPaths::BakedCharacterAnim(Owner, ClipName));
 	}
 
 	UBlendSpace* LoadBakedBlendSpace(const USkeletalMesh* Mesh, const FString& Owner,
 		const FString& Label, const FString& Host)
 	{
-		const FString BankPath = FElysiumContentPaths::BakedCharacterBlendSpace(
-			FElysiumContentPaths::BakedBankFolder(), Owner, Label, Host);
+		if (Mesh == nullptr)
+		{
+			return nullptr;
+		}
+		const FString BankPath = FElysiumContentPaths::BakedBankBlendSpace(Owner, Label, Host);
 		if (IsOnMount(BankPath))
 		{
 			return LoadObject<UBlendSpace>(nullptr, *BankPath);
 		}
-		const FString Family = MeshFamily(Mesh);
-		if (Family.IsEmpty())
-		{
-			return nullptr;
-		}
 		return LoadObject<UBlendSpace>(nullptr,
-			*FElysiumContentPaths::BakedCharacterBlendSpace(Family, Owner, Label, Host));
+			*FElysiumContentPaths::BakedCharacterBlendSpace(Owner, Label, Host));
 	}
 
 	USkeletalMesh* LoadMesh(const FString& Stem, FString& OutError, bool bPlayerMaterial)

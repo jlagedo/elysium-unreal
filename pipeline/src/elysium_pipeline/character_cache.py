@@ -1,7 +1,7 @@
 """Which character packages this run still has to author.
 
-The unit is one **generated package family** -- a body's mesh, a body's own clips, one bank's
-clips, one rig family's skeleton, one placed model -- and each carries its own recipe receipt in
+The unit is one **generated package set** -- a body's mesh, a body's own clips, one bank's
+clips, one body's skeleton, one placed model -- and each carries its own recipe receipt in
 the same per-asset store the map and shared-corpus bakes use
 (`elysium_pipeline.bake_cache.AssetReceiptStore`), under the `characters` scope. A unit is stale
 when its own recipe changed; nothing else in the cast is touched.
@@ -9,14 +9,13 @@ when its own recipe changed; nothing else in the cast is touched.
 Every dependency between units is stated **inside a recipe** rather than as a cascade over
 stages:
 
-- a rig family's skeleton names its declared members' bone trees, so a body whose geometry or
-  clips changed does not move it;
-- a mesh and a body's own clips name the tree digest of the skeleton they bind to, so a family
-  whose tree did move takes them with it;
-- a model family's skeleton also names the bank skeletons it declares compatibility with, so a
-  moved bank restates that declaration without disturbing one mesh or one sequence.
+- a body's skeleton names its own container's bone tree, so nothing another body does moves it;
+- a mesh and a body's own clips name the tree digest of the skeleton they bind to, so a tree
+  that did move takes them with it and nothing else;
+- a body's skeleton also names the bank skeletons it declares compatibility with, so a moved
+  bank restates that declaration on every body without disturbing one mesh or one sequence.
 
-A scope (`_global`, `bank.<family>`, `model.<family>`, `prop.<stem>`) remains the editor's
+A scope (`_global`, `bank.<family>`, `model.<stem>`, `prop.<stem>`) remains the editor's
 selector for which stages run at all; the plan names the exact units inside them.
 """
 from __future__ import annotations
@@ -32,7 +31,7 @@ from elysium_pipeline.formats import eskm
 from elysium_pipeline.tasking import ContentDigestCache, fingerprint_content
 
 #: Bump to invalidate every character receipt -- a change in what a unit MEANS, not in its inputs.
-CACHE_REVISION = "elysium-character-unit-v1"
+CACHE_REVISION = "elysium-character-unit-v2"
 
 STAGES = ("textures", "bank_skeletons", "banks", "family_skeletons", "meshes", "clips", "props")
 
@@ -90,8 +89,8 @@ def mesh_object_path(stem: str) -> str:
     return f"{MESHES}/SK_{stem}"
 
 
-def clips_object_path(family: str, owner: str) -> str:
-    return f"{ANIMS}/{family}/{owner}"
+def clips_object_path(stem: str) -> str:
+    return f"{ANIMS}/{stem}"
 
 
 def bank_clips_object_path(bank: str) -> str:
@@ -209,8 +208,8 @@ def reached_banks(manifest: dict, stems) -> list[str]:
 def scopes_for(partition: dict, stems, props=(), *, manifest: dict | None = None) -> list[str]:
     """Every scope a bake of `stems` touches, banks first -- they gate the compatibility call.
 
-    A prop is its own scope. It joins no rig family, so there is nothing to slice it by: one stage
-    builds its skeleton, its mesh and its clips together.
+    A body and a prop are each their own scope: one stage set builds a skeleton, a mesh and
+    clips for exactly one container.
 
     A complete-cast bake covers every declared bank family, including cinematic-only banks. A
     focused bake covers only bank families its named bodies reach; existing skeleton packages for
@@ -234,20 +233,20 @@ def scopes_for(partition: dict, stems, props=(), *, manifest: dict | None = None
             for owner in owners if owner in partition["bank_family_of"]
         }
     banks = [f"bank.{family}" for family in sorted(bank_families)]
-    families = sorted({partition["model_family_of"][stem] for stem in stems
-                       if stem in partition["model_family_of"]})
+    bodies = sorted(stem for stem in set(stems) if stem in partition["model_family_of"])
     global_scopes = [GLOBAL_SCOPE] if stems else []
-    return [*global_scopes, *banks, *[f"model.{family}" for family in families],
+    return [*global_scopes, *banks, *[f"model.{stem}" for stem in bodies],
             *[f"prop.{stem}" for stem in sorted(props)]]
 
 
 def _family_tree_digest(npc_dir: Path, family: dict, *, bank: bool) -> str:
-    """One rig family's skeleton identity: its declared members' bone trees and nothing else.
+    """One skeleton's identity: its declared members' bone trees and nothing else.
 
-    `build_family_skeleton` reads only the `SKEL` section of each declared member, so this is what
-    the skeleton package is a function of. Geometry, morph targets and clips live in the same
-    containers and must not move it -- that is the difference between re-skinning one body and
-    re-authoring every mesh and every sequence in its family.
+    A body's entry declares one member -- itself -- and a bank family declares several.
+    `build_family_skeleton` reads only the `SKEL` section of each declared member, so this is
+    what the skeleton package is a function of. Geometry, morph targets and clips live in the
+    same containers and must not move it -- that is the difference between re-skinning one body
+    and re-authoring its mesh and every sequence bound to its skeleton.
     """
     digest = hashlib.sha256()
     digest.update(str(family.get("bones", 0)).encode("ascii"))
@@ -397,7 +396,7 @@ def plan(config, npc_dir: Path, manifest: dict, partition: dict, stems, *,
             )
             declared["family_skeletons"][unit.object_path] = unit
 
-            members = [stem for stem in family["members"] if stem in stems]
+            members = [name] if name in stems else []
             for stem in members:
                 unit = _unit(
                     repo_root, policies, "meshes", scope, stem, mesh_object_path(stem),
@@ -412,7 +411,7 @@ def plan(config, npc_dir: Path, manifest: dict, partition: dict, stems, *,
             for owner in own_clip_owners(manifest, members):
                 unit = _unit(
                     repo_root, policies, "clips", scope, owner,
-                    clips_object_path(name, owner),
+                    clips_object_path(name),
                     {
                         "container": _file_digest(_container(npc_dir, owner), cache),
                         "blends": _file_digest(

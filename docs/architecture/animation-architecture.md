@@ -54,7 +54,7 @@ Every rotation that reaches a baked asset or an actor has one named source:
    Unreal's pre-multiplied form.
 
 There is no fourth category. In particular, the pipeline and runtime carry no fixed quarter-turn,
-model-family facing correction, reference-pose flattening, asset-name exception, or corrective
+per-model facing correction, reference-pose flattening, asset-name exception, or corrective
 rest-pose transform. The mesh reference skeleton and the `USkeleton` both preserve the converted
 MDL bind transforms, and entity placement is the converted entity placement alone.
 
@@ -130,13 +130,14 @@ path A.4b names.
 Characters are baked into native assets on the `/ElysiumBaked` mount by an editor commandlet beside
 the map bake, under the same gitignored, regenerable posture. What the bake produces:
 
-- **Shared banks are assets, not copies per body.** Models with the same named bone tree share one
-  body-family `USkeleton`; animals, skeletal props and `wolf_form` naturally form separate
-  families. Each shared bank is built once on the smallest compatible bank-family skeleton, and
-  body-family skeletons declare that bank skeleton compatible. A body's own clips remain on its
-  body-family skeleton. Bank storage therefore scales with the number of source clips, never with
-  `bank clips × consuming body families`. Cinematic actor banks are likewise emitted once in the
-  shared namespace; no body family, biped or otherwise, receives an empty scene-package copy.
+- **Shared banks are assets, not copies per body.** Every model carries its own `USkeleton`,
+  seeded from its own container alone; nothing about one model's skeleton depends on any other
+  model's. Each shared bank is built once on the smallest compatible bank-family skeleton, and
+  every body's skeleton declares that bank skeleton compatible. A body's own clips live on its
+  own skeleton, at `Anims/<stem>/`; a bank's clips live once, at `Anims/_banks/<bank>/`. Bank
+  storage therefore scales with the number of source clips, never with the number of bodies.
+  Cinematic actor banks are likewise emitted once in the shared namespace; no body, biped or
+  otherwise, receives an empty scene-package copy.
 - **A `USkeletalMesh` per model**, morph targets preserved. A face spans several material primitives
   and glTF morph weights are mesh-level, so a target that spans two materials arrives as one
   same-named piece per primitive; those pieces are **merged**, never first-wins, or a jaw moves and
@@ -180,7 +181,7 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   clip owns, each absent position or rotation channel holds the **donor MDL bind value**. The
   exporter therefore materializes that value as a constant track. A bone the mask does not own
   remains absent and leaves the base pose untouched. This preserves VtMB's distinction without
-  making Unreal consult either a donor file or an arbitrary family reference pose at evaluation.
+  making Unreal consult either a donor file or an arbitrary shared reference pose at evaluation.
 - **The one overlay mask that owns the split bone derives once per declaring host.** Of the distinct
   per-bone masks a bank ships, exactly one contains `Bip01 Spine1` — the 49-bone upper-body gate the
   `*_aim_layer` and `*_bobble_layer` families carry. Those clips are the one place the split bone
@@ -311,8 +312,8 @@ share banks have a separate job: name and index the compatible tree. Their commo
 rotations are identity, so Unreal's automatic compatible-skeleton remap has an identity rotation
 delta. This metadata frame never changes a mesh bind, an animation rotation, or an actor transform.
 Rotation keys pass verbatim. A visible quarter-turn is therefore still evidence of a missing
-authored animation or a decode defect; it is not repaired by a family, model-name, or asset-type
-rotation exception.
+authored animation or a decode defect; it is not repaired by a per-model, model-name, or
+asset-type rotation exception.
 
 VtMB's include-model position rule is represented by Unreal's stock translation retargeting. Each
 bank sequence names a `RetargetSource` containing its donor bind pose, and common bones use
@@ -325,8 +326,8 @@ VtMB retarget node, source-file lookup, or hard-wired runtime rotation.
 Owned missing channels have already become donor-bind constants (§2.3), while unowned bones remain
 on the playing mesh's reference pose. The former pass through the same declared translation rule;
 the latter acquire no synthesized track. The bake has a cardinality invariant: a source bank clip
-may produce its declared base/overlay derivatives, but changing the number of compatible body
-families must not multiply the bank's base sequences or packages.
+may produce its declared base/overlay derivatives, but changing the number of compatible bodies
+must not multiply the bank's base sequences or packages.
 
 A preflight proves that before an editor commandlet starts, and proves it over the packages
 themselves rather than over the folders holding them. It projects the exact set each bank
@@ -334,7 +335,7 @@ produces — one sequence per clip payload the container carries, less the paylo
 declines to build, plus one blend space per grid or per declaring host — from the containers'
 payload headers and the blend sidecars alone. The projection is therefore the bake's own
 arithmetic rather than an estimate of it, and it takes no model partition as an input, so a new
-body family cannot move a bank's package count. It refuses a package addressed outside
+body cannot move a bank's package count. It refuses a package addressed outside
 `Anims/_banks/<bank>`, two payload labels folding onto one package name, a packaged clip the
 manifest does not account for on either half of a `<layer>@<host>` name, a payload carrying no
 frame or no track, and a source bank clip that reaches no package at all — excusing only the raw

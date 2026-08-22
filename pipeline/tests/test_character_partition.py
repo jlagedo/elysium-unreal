@@ -9,10 +9,12 @@ from elysium_pipeline.formats import eskm
 # Synthetic bone trees. Game-independent by construction, per pipeline/CLAUDE.md: these are the
 # SHAPES the partition reasons about, not any model's actual rig.
 #
-# The three model trees are chosen to reproduce the failure the declared partition exists to
-# prevent. `A_SEED` binds Bone01 under spine, `Z_FORK` binds it under head, so they conflict.
-# `M_PLAIN` carries no Bone01 at all, so it is compatible with BOTH -- and which family it lands
-# in depends entirely on who else is in the input set.
+# The three trees reproduce the failure the declared BANK partition exists to prevent -- the
+# model half no longer groups bodies at all, so instability is bank-only. `A_SEED` binds Bone01
+# under spine, `Z_FORK` binds it under head, so they conflict. `M_PLAIN` carries no Bone01 at
+# all, so it is compatible with BOTH -- and, when these shapes name banks, which family it lands
+# in depends entirely on who else is in the input set. The same three trees double as MODEL
+# fixtures, where no such instability exists: each stem's entry is a singleton of its own.
 A_SEED = {"root": "", "spine": "root", "Bone01": "spine"}
 M_PLAIN = {"root": "", "spine": "root"}
 Z_FORK = {"root": "", "spine": "root", "head": "spine", "Bone01": "head"}
@@ -68,25 +70,27 @@ class RigFamilySemanticsTests(unittest.TestCase):
 
 
 class SubsetInstabilityTests(unittest.TestCase):
-    """Why the partition is declared rather than recomputed.
+    """Why the BANK partition is declared rather than recomputed.
 
     These assert the behaviour of the RAW partition function, which is subset-sensitive by
     construction. They are the reason `build_partition` is fed the whole corpus and the answer is
-    written down -- not a defect in `rig_families`, which documents this contract itself.
+    written down -- not a defect in `rig_families`, which documents this contract itself. The
+    model half of the declared partition has no such hazard: every stem is a singleton regardless
+    of who else is in the input set.
     """
 
     def test_a_slice_renames_a_family(self):
-        whole = cp.build_partition(MODELS, {})
-        self.assertEqual(cp.model_family(whole, "m_plain"), "a_seed")
+        whole = cp.build_partition({}, MODELS)
+        self.assertEqual(cp.bank_family(whole, "m_plain"), "a_seed")
 
         sliced = eskm.rig_families({"m_plain": M_PLAIN, "z_fork": Z_FORK},
                                    ["m_plain", "z_fork"])
         self.assertEqual(sliced[0]["name"], "m_plain")
 
     def test_a_slice_merges_two_families_the_corpus_splits(self):
-        whole = cp.build_partition(MODELS, {})
-        self.assertNotEqual(cp.model_family(whole, "m_plain"),
-                            cp.model_family(whole, "z_fork"))
+        whole = cp.build_partition({}, MODELS)
+        self.assertNotEqual(cp.bank_family(whole, "m_plain"),
+                            cp.bank_family(whole, "z_fork"))
 
         sliced = eskm.rig_families({"m_plain": M_PLAIN, "z_fork": Z_FORK},
                                    ["m_plain", "z_fork"])
@@ -117,16 +121,36 @@ class BuildPartitionTests(unittest.TestCase):
         partition = cp.build_partition(MODELS, BANKS)
         self.assertEqual(partition["models"]["a_seed"]["skeleton"],
                          f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}a_seed")
+        self.assertEqual(partition["models"]["m_plain"]["skeleton"],
+                         f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain")
         bank_family = cp.bank_family(partition, "bank_one")
         self.assertEqual(partition["banks"][bank_family]["skeleton"],
                          f"{cp.SKELETON_DIR}/{cp.BANK_SKELETON_PREFIX}{bank_family}")
 
-    def test_tree_fingerprint_covers_the_merged_union(self):
-        # a_seed absorbs m_plain, which adds no bone, so the family's tree is a_seed's own.
+    def test_every_model_gets_its_own_skeleton(self):
+        # m_plain's tree is compatible with a_seed's -- the old family partition would have
+        # merged them onto one skeleton -- but every model now names its own regardless.
         partition = cp.build_partition(MODELS, {})
-        self.assertEqual(partition["models"]["a_seed"]["tree_fingerprint"],
+        self.assertEqual(partition["models"]["m_plain"]["skeleton"],
+                         f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain")
+        self.assertNotEqual(partition["models"]["m_plain"]["skeleton"],
+                            partition["models"]["a_seed"]["skeleton"])
+
+    def test_every_models_tree_fingerprint_is_its_own(self):
+        # m_plain's tree is compatible with a_seed's, but each model's entry states only its own
+        # container's tree -- no union, no absorption.
+        partition = cp.build_partition(MODELS, {})
+        self.assertEqual(partition["models"]["m_plain"]["tree_fingerprint"],
+                         cp.tree_fingerprint(M_PLAIN))
+        self.assertEqual(partition["models"]["m_plain"]["bones"], len(M_PLAIN))
+
+    def test_bank_tree_fingerprint_covers_the_merged_union(self):
+        # a_seed-shaped bank absorbs m_plain-shaped bank, which adds no bone, so the family's
+        # tree is a_seed's own.
+        partition = cp.build_partition({}, MODELS)
+        self.assertEqual(partition["banks"]["a_seed"]["tree_fingerprint"],
                          cp.tree_fingerprint(A_SEED))
-        self.assertEqual(partition["models"]["a_seed"]["bones"], len(A_SEED))
+        self.assertEqual(partition["banks"]["a_seed"]["bones"], len(A_SEED))
 
     def test_models_and_banks_partition_independently(self):
         partition = cp.build_partition(MODELS, BANKS)
@@ -135,8 +159,12 @@ class BuildPartitionTests(unittest.TestCase):
 
     def test_members_for_reads_back(self):
         partition = cp.build_partition(MODELS, {})
-        self.assertEqual(cp.members_for(partition, "models", "a_seed"), ["a_seed", "m_plain"])
+        self.assertEqual(cp.members_for(partition, "models", "a_seed"), ["a_seed"])
         self.assertEqual(cp.members_for(partition, "models", "nobody"), [])
+
+        bank_partition = cp.build_partition({}, MODELS)
+        self.assertEqual(cp.members_for(bank_partition, "banks", "a_seed"),
+                         ["a_seed", "m_plain"])
 
 
 class CheckTests(unittest.TestCase):

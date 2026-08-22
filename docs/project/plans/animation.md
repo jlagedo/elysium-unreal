@@ -128,7 +128,7 @@ still an open RE question, and the second, unidentified template predicate.
 
 **The ragdoll handoff is a bake-side follow-up.** The death transaction hands off by holding the
 final pose because no baked mesh carries a physics asset. A true ragdoll needs the character bake
-to generate one per body family — bodies, constraints and a collision profile derived from the
+to generate one per body — bodies, constraints and a collision profile derived from the
 baked skeleton — with the runtime handoff switching to simulation at the same point it now freezes.
 Until then the held pose is the recorded stand-in, not the design.
 

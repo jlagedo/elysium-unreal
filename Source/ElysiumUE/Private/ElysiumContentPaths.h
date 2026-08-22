@@ -152,18 +152,15 @@ struct FElysiumContentPaths
 	}
 
 	// --- Baked characters (pipeline/unreal/bake_characters.py) -----------------------------------
-	// The cast bakes to the same mount as the maps but is not per-map: one shared biped USkeleton
-	// carries the whole cast, so a bank clip is one UAnimSequence rather than one per body, and a
-	// character outlives any map epoch. `Stem` is the model name the export uses ("smiling_jack");
-	// `Owner` is the stem that OWNS a clip — the body itself for its own dialogue clips, the bank
-	// stem for everything resolved through the include DAG, which is npc_manifest.json's own
-	// ownership resolution. `Clip` is the sequence label with no leading '@'.
-	// A **rig family** is a maximal set of models whose bone trees agree on every bone they share,
-	// so one USkeleton can carry all of them. The cast is not one family: VtMB's `Bip01` biped is
-	// consistent everywhere, but the appendix chains above it are not a shared convention — the
-	// generic `BoneNN` hair names mean a different chain on different bodies, and a handful of
-	// models fork into a second skinned root that Unreal's single-rooted reference skeleton has to
-	// unify. A family is named for its lowest-sorted member and is recomputed per bake run.
+	// The cast bakes to the same mount as the maps but is not per-map: a character outlives any
+	// map epoch. `Stem` is the model name the export uses ("smiling_jack"); `Owner` is the stem
+	// that OWNS a clip — the body itself for its own dialogue clips, the bank stem for everything
+	// resolved through the include DAG, which is npc_manifest.json's own ownership resolution.
+	// `Clip` is the sequence label with no leading '@'.
+	// Every body carries its OWN USkeleton, seeded from its own container alone — the same shape
+	// an animated prop or a wielded weapon has. A shared bank is still one UAnimSequence rather
+	// than one per body: banks bake once onto bank skeletons of their own, and each body skeleton
+	// declares those compatible, so the engine remaps a bank clip by bone name at evaluation.
 	// The player animation graph's generated class (CCC5). A local, regenerable package like every
 	// other under `/Game/Elysium`, rebuilt from the tracked graph text by
 	// `pipeline/unreal/make_player_anim_bp.py`.
@@ -173,9 +170,9 @@ struct FElysiumContentPaths
 	}
 
 	// --- Baked animated props (pipeline/unreal/bake_characters.py) -------------------------------
-	// Apart from the cast, because a prop owns its own skeleton rather than joining a rig family:
-	// a crane, a wolf and a wineglass share no bone tree with each other or with a biped. So there
-	// is no family segment in any of these paths — a prop's stem is the whole address.
+	// Apart from the cast only in folder and lifetime: a prop owns its own skeleton the same way
+	// a body does, and its stem is the whole address. It plays no shared bank, so nothing is
+	// declared compatible with it.
 	static FString BakedPropDir() { return BakedMount() / TEXT("Props"); }
 	static FString BakedPropPackage(const FString& Stem) { return BakedPropDir() / Stem; }
 	static FString BakedPropSkeleton(const FString& Stem)
@@ -200,10 +197,9 @@ struct FElysiumContentPaths
 	}
 
 	// --- The baked wield corpus (pipeline/unreal/bake_wield.py) ----------------------------------
-	// The geometry a drawn weapon puts in a character's hand. Shaped like an animated prop and for
-	// the same reason — a weapon owns a private skeleton rather than joining a rig family, so its
-	// stem is the whole address — but kept apart because the corpus and its lifetime are the item
-	// definitions', not the cast's.
+	// The geometry a drawn weapon puts in a character's hand. Shaped like an animated prop — a
+	// weapon owns a private skeleton and its stem is the whole address — but kept apart because
+	// the corpus and its lifetime are the item definitions', not the cast's.
 	static FString BakedItemsDir() { return BakedMount() / TEXT("Items"); }
 	static FString BakedWieldDir() { return BakedItemsDir() / TEXT("Wield"); }
 	static FString BakedWieldPackage(const FString& Stem) { return BakedWieldDir() / Stem; }
@@ -223,19 +219,10 @@ struct FElysiumContentPaths
 
 	static FString BakedCharacterDir() { return BakedMount() / TEXT("Characters"); }
 	static FString BakedCharacterSkeletonPrefix() { return TEXT("SKEL_Elysium_"); }
-	static FString BakedCharacterSkeleton(const FString& Family)
+	static FString BakedCharacterSkeleton(const FString& Stem)
 	{
-		const FString Asset = BakedCharacterSkeletonPrefix() + Family;
+		const FString Asset = BakedCharacterSkeletonPrefix() + Stem;
 		return BakedCharacterDir() / TEXT("Skeletons") / Asset + TEXT(".") + Asset;
-	}
-	// The family a baked body belongs to, read back off the skeleton its mesh was built against.
-	// Empty for a mesh that is not on the baked mount, which is how a caller tells the two paths
-	// apart without consulting a second table.
-	static FString BakedCharacterFamily(const FString& SkeletonName)
-	{
-		return SkeletonName.StartsWith(BakedCharacterSkeletonPrefix())
-			? SkeletonName.RightChop(BakedCharacterSkeletonPrefix().Len())
-			: FString();
 	}
 	// One body, whoever is wearing it. The player-material variant is not a separate asset: every
 	// section is instanced from the one body master whose parameters the player path drives, so the
@@ -246,17 +233,25 @@ struct FElysiumContentPaths
 		const FString Asset = TEXT("SK_") + Stem;
 		return BakedCharacterDir() / TEXT("Meshes") / Asset + TEXT(".") + Asset;
 	}
-	// Where a bank's clips live, in place of a rig family. Banks are packaged once and reused by
+	// Where a bank's clips live, apart from the bodies'. Banks are packaged once and reused by
 	// compatible body skeletons.
 	static FString BakedBankFolder()
 	{
 		return TEXT("_banks");
 	}
-	// One clip. `Family` is a body's rig family or `BakedBankFolder()` for a shared bank.
-	static FString BakedCharacterAnim(const FString& Family, const FString& Owner, const FString& Clip)
+	// One of a body's own clips. `Owner` is the body's stem — a body's non-bank clips are always
+	// its own (the export asserts it), so the stem is the whole address.
+	static FString BakedCharacterAnim(const FString& Owner, const FString& Clip)
 	{
 		const FString Asset = TEXT("A_") + BakedAssetName(Clip);
-		return BakedCharacterDir() / TEXT("Anims") / Family / Owner / Asset + TEXT(".") + Asset;
+		return BakedCharacterDir() / TEXT("Anims") / Owner / Asset + TEXT(".") + Asset;
+	}
+	// One of a shared bank's clips, under `BakedBankFolder()`.
+	static FString BakedBankAnim(const FString& Bank, const FString& Clip)
+	{
+		const FString Asset = TEXT("A_") + BakedAssetName(Clip);
+		return BakedCharacterDir() / TEXT("Anims") / BakedBankFolder() / Bank / Asset
+			+ TEXT(".") + Asset;
 	}
 	// One blend grid, as a UBlendSpace. It sits with the sequences it samples rather than in a
 	// directory of its own — the `BS_` prefix disambiguates it from their `A_` the way `MI_`, `T_`
@@ -267,12 +262,20 @@ struct FElysiumContentPaths
 	// its own. A layer's cells are masked overlays whose pose only means anything accumulated onto
 	// a particular host, so the bake writes one asset per declaring host and the label alone does
 	// not identify one — asking for the bare label found nothing for 299 of the mount's 527 spaces.
-	static FString BakedCharacterBlendSpace(const FString& Family, const FString& Owner,
+	static FString BakedCharacterBlendSpace(const FString& Owner,
 		const FString& Label, const FString& Host = FString())
 	{
 		const FString Asset = TEXT("BS_")
 			+ BakedAssetName(Host.IsEmpty() ? Label : Label + TEXT("@") + Host);
-		return BakedCharacterDir() / TEXT("Anims") / Family / Owner / Asset + TEXT(".") + Asset;
+		return BakedCharacterDir() / TEXT("Anims") / Owner / Asset + TEXT(".") + Asset;
+	}
+	static FString BakedBankBlendSpace(const FString& Bank,
+		const FString& Label, const FString& Host = FString())
+	{
+		const FString Asset = TEXT("BS_")
+			+ BakedAssetName(Host.IsEmpty() ? Label : Label + TEXT("@") + Host);
+		return BakedCharacterDir() / TEXT("Anims") / BakedBankFolder() / Bank / Asset
+			+ TEXT(".") + Asset;
 	}
 	// Every run of characters illegal in an Unreal object name folds to a single underscore. Model
 	// stems are already safe, but 14 of the 2,494 shipped clip labels are not —

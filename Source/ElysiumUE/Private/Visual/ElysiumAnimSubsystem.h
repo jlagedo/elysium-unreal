@@ -91,8 +91,8 @@ enum class EElysiumIdleTier : uint8
 // Two things are cached here rather than on the map actor, because both are skeleton-independent
 // and expensive: the parsed **bank assets** (a shared animation library is 2-35 MB of glb, and the
 // same two stances banks serve essentially every map), and the **clip vocabularies** read off
-// out/npc/clips/<stem>.json. What is NOT cached here is the resolved UAnimSequence: glTFRuntime
-// binds each one to a specific USkeletalMesh's USkeleton, and meshes are per-map-epoch, so those
+// out/npc/clips/<stem>.json. What is NOT cached here is the resolved UAnimSequence: each one is
+// baked against exactly one USkeleton, and the meshes that carry it are per-map-epoch, so those
 // belong to AElysiumMapActor and die with it.
 //
 // The clip -> owning-stem resolution is entirely offline (pipeline/src/elysium_pipeline/exporters/npc_export.py walks the studiohdr

@@ -10,9 +10,9 @@ distinction is load-bearing rather than tidy: a map's sky faces are written unde
 alias ``sky_<face>``, so keyed by filename two maps sharing a sky present one name carrying two
 sets of bytes. Keyed by the sky's own name they are one asset, which is what they are.
 
-`character_partition` states the same discipline for rigs -- compute once over the whole corpus,
-write it down, and let readers join rather than recompute. This module owns the static half's
-keys, its shared/per-map predicate, and the two documents the corpus writes:
+`character_partition` states the same discipline for bank rigs -- compute once over the whole
+corpus, write it down, and let readers join rather than recompute. This module owns the static
+half's keys, its shared/per-map predicate, and the two documents the corpus writes:
 
 - ``shared/manifest.json`` is the census: which units landed, from which install key, and what the
   decode could not resolve.

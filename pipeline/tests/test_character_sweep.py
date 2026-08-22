@@ -34,14 +34,14 @@ def _mount(root: Path, partition: dict, *, extra=()):
     """A mount carrying exactly what `partition` declares, plus `extra` relative asset paths."""
     characters = root / "Characters"
     wanted = []
-    for family in partition["models"]:
-        wanted.append(f"Skeletons/{cp.MODEL_SKELETON_PREFIX}{family}")
+    for stem in partition["models"]:
+        wanted.append(f"Skeletons/{cp.MODEL_SKELETON_PREFIX}{stem}")
     for family in partition["banks"]:
         wanted.append(f"Skeletons/{cp.BANK_SKELETON_PREFIX}{family}")
     for stem in partition["model_family_of"]:
         wanted.append(f"Meshes/SK_{stem}")
         wanted.append(f"Materials/MI_SK_{stem}_Body")
-        wanted.append(f"Anims/{partition['model_family_of'][stem]}/{stem}/A_idle")
+        wanted.append(f"Anims/{stem}/A_idle")
     for bank in partition["bank_family_of"]:
         wanted.append(f"Anims/_banks/{bank}/A_walk")
     wanted.append("Textures/T_skin")
@@ -117,13 +117,14 @@ class SweepTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "multiplies shared banks"):
                 character_sweep.assert_shared_bank_layout(self.partition, MANIFEST)
 
-    def test_finds_a_renamed_family_folder(self):
-        # The real failure: a slice partitioned itself, wrote clips under an invented family name,
-        # and left the declared family's copy in place. Two answers for one label.
-        _mount(self.root, self.partition, extra=("Anims/bob/amy/A_idle",))
+    def test_finds_a_stale_two_level_anim_folder(self):
+        # Residue from the retired rig-family layout: a two-level `Anims/<family>/<owner>` path is
+        # never expected under the flat `Anims/<stem>` layout, whatever name the first segment
+        # carries.
+        _mount(self.root, self.partition, extra=("Anims/gone/amy/A_idle",))
         result = character_sweep.plan(self.root, self.npc, self.partition)
         self.assertEqual([p.name for p in result["orphan_assets"]], ["A_idle.uasset"])
-        self.assertEqual(result["orphan_dirs"], ["Anims/bob/amy"])
+        self.assertEqual(result["orphan_dirs"], ["Anims/gone/amy"])
 
     def test_finds_an_orphan_skeleton(self):
         _mount(self.root, self.partition,
@@ -152,10 +153,13 @@ class SweepTests(unittest.TestCase):
                          ["orphan_assets"], [])
 
     def test_apply_removes_and_is_idempotent(self):
-        _mount(self.root, self.partition, extra=("Anims/bob/amy/A_idle",))
+        # Under flat `Anims/<stem>`, `Anims/bob` is a legitimate body folder -- the orphan has to
+        # sit under a parent no declared stem owns, or the prune assertion below would fail on a
+        # folder the partition still wants.
+        _mount(self.root, self.partition, extra=("Anims/gone/amy/A_idle",))
         first = character_sweep.sweep(self.root, self.npc, self.partition, apply=True)
         self.assertEqual(first["removed"], 1)
-        self.assertFalse((self.root / "Characters" / "Anims" / "bob").exists())
+        self.assertFalse((self.root / "Characters" / "Anims" / "gone").exists())
         second = character_sweep.sweep(self.root, self.npc, self.partition, apply=True)
         self.assertEqual(second["removed"], 0)
 
@@ -197,10 +201,12 @@ class SliceSelectorTests(unittest.TestCase):
     def test_a_bare_stem(self):
         self.assertEqual(resolve_character_slice(self.partition, ["amy"], self.npc), ["amy"])
 
-    def test_a_family_selector_takes_every_member(self):
+    def test_a_family_selector_is_a_stem_alias(self):
+        # `family:<name>` survives as a one-member alias -- a model is its own family now, so it
+        # resolves to exactly the named stem, never a wider group.
         family = cp.model_family(self.partition, "amy")
         self.assertEqual(resolve_character_slice(self.partition, [f"family:{family}"], self.npc),
-                         ["amy", "bob"])
+                         ["amy"])
 
     def test_a_bank_selector_takes_every_model_that_plays_it(self):
         family = cp.bank_family(self.partition, "bank_b")

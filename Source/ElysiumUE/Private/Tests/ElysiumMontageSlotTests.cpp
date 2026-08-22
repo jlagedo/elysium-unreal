@@ -53,9 +53,9 @@ static constexpr EAutomationTestFlags GElysiumMontageSlotFlags =
 namespace
 {
 	// Any biped body whose vocabulary carries a looping clip answers this question, so the slice is
-	// two rather than the cast: one seeds its rig family and one merges into it, which is the same
-	// pair `Elysium.Content.BakedCharacterParity` uses and the reason a second is listed at all --
-	// a partial export that covers only one of them still runs the test.
+	// two rather than the cast: the same pair `Elysium.Content.BakedCharacterParity` carries as its
+	// single-rooted control. A second is listed at all so that a partial export covering only one
+	// of them still runs the test.
 	const TCHAR* const GBodyStems[] = {
 		TEXT("smiling_jack"),
 		TEXT("tremere_male_armor_0"),
@@ -993,8 +993,8 @@ namespace
 	}
 
 	// A looping base clip on the FAN's own body — never whichever body `FindLoopingClip` reached
-	// first, because a sequence is bound to one rig family's skeleton and the two picks are
-	// independent searches over the same stem list.
+	// first, because a sequence is bound to one skeleton, every body carries its own, and the two
+	// picks are independent searches over the same stem list.
 	UAnimSequence* FindBaseClipFor(const FReactionFanPick& Fan)
 	{
 		FElysiumNpcClipSet Vocabulary;

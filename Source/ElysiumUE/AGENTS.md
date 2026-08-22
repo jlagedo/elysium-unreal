@@ -484,8 +484,8 @@ Hard-won, non-obvious, and easy to undo:
   its exact authored bind, rotation keys pass verbatim, and `OrientAndScale` reads the sequence's
   named donor pose only to map translations onto the playing mesh. A bone no ordinary sequence
   tracks resolves to that playing **mesh's** reference pose, not the `USkeleton`'s. Never restore a
-  per-body bank copy to avoid this engine path; bank package count is independent of body-family
-  count. See `docs/architecture/animation-architecture.md` § 2.4.
+  per-body bank copy to avoid this engine path; bank package count is independent of body count.
+  See `docs/architecture/animation-architecture.md` § 2.4.
 - **The Content Browser preview runs no anim graph, so it applies no axis interpolation.** A rig
   whose bones are procedurally driven previews with untwisted forearms: the stage evaluates over the
   blended pose rather than being baked into the clip, so the preview is showing what the asset says
@@ -537,7 +537,7 @@ Hard-won, non-obvious, and easy to undo:
 - **Save omission diffs against a post-Load baseline, not zero** — a fresh-constructed reference
   omits the wrong things and a restored map re-runs every `logic_auto` ignition.
 - **Resolved `UAnimSequence`s cache on the map actor, not the subsystem** — a sequence is bound to
-  one rig family's `USkeleton`, and meshes are per-map-epoch.
+  one body's own `USkeleton`, and meshes are per-map-epoch.
 - **A character has exactly one build: the `/ElysiumBaked` mount.** `ElysiumNpcVisual::LoadMesh`
   fails by name for a stem the character export has not covered rather than substituting anything,
   so a partial export is a missing body rather than a differently-posed one. `uv run elysium export

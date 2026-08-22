@@ -55,8 +55,10 @@ bool FElysiumCourtroomSeatedPoseTest::RunTest(const FString&)
 		return true;
 	}
 
-	// Both sides off the baked mount. The cinematic bank is the copy authored on this mesh's exact
-	// family skeleton; there is no inspection-format or cross-skeleton runtime path.
+	// Both sides off the baked mount. The cinematic bank is baked once under the bank folder, on a
+	// bank skeleton of its own, and reaches this mesh through the compatible-skeleton declaration
+	// the body's skeleton carries -- the same engine remap a live playthrough takes. There is no
+	// inspection-format path and no second build of either asset.
 	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(TEXT("ventrue_female_armor_1"));
 	UAnimSequence* Anim = Mesh != nullptr
 		? ElysiumNpcVisual::LoadBakedClip(Mesh,
