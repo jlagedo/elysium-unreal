@@ -68,6 +68,10 @@ void FElysiumLockableEntity::Spawn()
 	if (WorldBody)
 	{
 		World->RegisterPropBody(WorldBody, Handle);
+		if (!DrawsWorldBody())
+		{
+			WorldBody->SetVisibility(false, true);
+		}
 	}
 	OnLockPresentationChanged();
 }
@@ -267,7 +271,7 @@ void FElysiumLockableEntity::OnDormancyChanged()
 	FElysiumEntity::OnDormancyChanged();
 	if (WorldBody)
 	{
-		WorldBody->SetVisibility(!IsInert());
+		WorldBody->SetVisibility(!IsInert() && DrawsWorldBody());
 	}
 	if (World)
 	{

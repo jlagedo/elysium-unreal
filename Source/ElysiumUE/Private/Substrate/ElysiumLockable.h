@@ -52,6 +52,10 @@ protected:
 	virtual bool AttachToParent(FElysiumEntity& Parent);
 	virtual void OnLockPresentationChanged();
 	virtual void OnUnlocked(const FElysiumEntityHandle& Activator) {}
+	// Whether the built body is ever rendered. A leaf whose retail Spawn stamps EF_NODRAW keeps
+	// the body — its registration is the use anchor, the same bounds an undrawn retail entity
+	// keeps — but never shows it, and no later un-hide may either.
+	virtual bool DrawsWorldBody() const { return true; }
 	void FinishUseOutputs(const FElysiumEntityHandle& Activator);
 
 	FElysiumEntityHandle AttachedOwner;
@@ -89,6 +93,11 @@ public:
 protected:
 	virtual bool AttachToParent(FElysiumEntity& Parent) override;
 	virtual void ForwardUse(const FElysiumEntityHandle& Activator) override;
+	// CItemContainerLock::Spawn (vampire.dll 102264f0) sets EF_NODRAW (`m_fEffects |= 0x40`,
+	// docs/vtmb/entity_visuals.md) unconditionally: retail spawns the lock with its authored
+	// model — lock state, sounds and use bounds — but never renders it. The tutorial safe's
+	// `tutsafelock` carries `padlock1.mdl` and shows nothing.
+	virtual bool DrawsWorldBody() const override { return false; }
 };
 
 class FElysiumPadlock final : public FElysiumLockableEntity
