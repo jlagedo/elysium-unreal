@@ -111,8 +111,14 @@ namespace
 					continue;
 				}
 				const FReferenceSkeleton& Ref = Comp->GetSkinnedAsset()->GetRefSkeleton();
-				const int32 Pelvis = Ref.FindBoneIndex(TEXT("Bip01 Pelvis"));
+				// A biped reads relative to its pelvis; a pelvis-less rig — a skeletal prop — reads
+				// relative to its own root bone, so the same report serves both.
+				int32 Pelvis = Ref.FindBoneIndex(TEXT("Bip01 Pelvis"));
 				if (Pelvis == INDEX_NONE)
+				{
+					Pelvis = 0;
+				}
+				if (Ref.GetNum() == 0)
 				{
 					continue;
 				}
