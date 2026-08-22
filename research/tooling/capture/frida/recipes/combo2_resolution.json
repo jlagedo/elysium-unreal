@@ -1,0 +1,23 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "combo2_resolution",
+  "description": "Settle whether the automatic ACT_MELEE_ATTACK_2COMBO substitution ever reaches a played sequence. CWeaponMelee::RequestActivity re-enters itself with 0x4d on a winning ability draw, so every press should show TWO calls when the draw wins: the outer 0x4b and the inner 0x4d. The inner call's return value is the whole question - 1 committed the combo, 0 refused it and the outer call fell through to the ordinary attack. Deliberately excludes the per-frame targets in life5_attack_chain: they burn the trace budget before a swing arrives.",
+  "mode": "trace",
+  "targets": [
+    "vampire.weapon_melee_primary_attack",
+    "vampire.weapon_melee_heavy_attack",
+    "vampire.weapon_melee_request_activity",
+    "vampire.weapon_translate_activity",
+    "vampire.select_heaviest_sequence",
+    "vampire.select_weighted_sequence",
+    "vampire.player_select_melee_sequence",
+    "vampire.melee_roll",
+    "vampire.apply_player_activity_and_sequence"
+  ],
+  "expected_modules": [
+    "vampire.dll"
+  ],
+  "max_trace_events": 400000,
+  "capture_returns": true,
+  "stack_words": 8
+}

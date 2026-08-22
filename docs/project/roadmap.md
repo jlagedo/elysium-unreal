@@ -351,7 +351,9 @@ The ladder:
   embodiment seam, per-record hit-once groups and one opposed roll staged at swing start off
   retail's 60-unit/0.7 query, serial-scoped — while ranged commit stays on its authored 3030–3044
   events and 3047 is claimed and inert as retail's NPC swing trigger; the combo family selects its
-  entry on the authored direction-keyed button masks (exact-first, no draw) and walks the
+  entry on the authored direction-keyed button masks (exact-first, no draw) on the player arm,
+  which refuses rather than drawing when no candidate masks — so the `2COMBO` substitution is
+  offered and then refused on the player exactly as retail's is — and walks the
   busy/chain path on the authored `w_open`/`w_close`/`w_hold` windows, successor at the same rate,
   deadline never re-pushed, `2COMBO` terminating, dangling targets authored and reported, NPCs
   never chaining; NPC retaliation feeds damage into a 5-second derived enemy memory that stated
@@ -373,10 +375,12 @@ The ladder:
   sidecars carry the `swings` and `combo` columns the families read. Open: the owner-played
   acceptance sweep (which also closes LIFE4's), the flying knockback chain (RE-unblocked — launch
   formula and land terminator recovered), consuming the authored per-attack knockback table now in
-  the sidecars, the ragdoll physics-asset bake, and the four named residuals the plan lists (the
-  NPC-side reaction-claim release on a mid-hold body swap, the montage route's inert restart rule,
-  a restored scripted beat's un-retaken segment claim, and `QuerySwingContacts`' live-only
-  coverage). Paired actions moved to LIFE7 — owner call, made.
+  the sidecars, the ragdoll physics-asset bake, the **NPC melee sequence selector**
+  (`ChooseMeleeAttackSequence`, the cast arm of the owner's slot-331 fork — geometric candidate
+  scoring against the enemy, where the runtime draws by weight today), and the four named residuals
+  the plan lists (the NPC-side reaction-claim release on a mid-hold body swap, the montage route's
+  inert restart rule, a restored scripted beat's un-retaken segment claim, and
+  `QuerySwingContacts`' live-only coverage). Paired actions moved to LIFE7 — owner call, made.
 - [ ] **[LIFE6 The first-person viewmodel](plans/animation.md)** — the 21+17 corpus export and
   the two-component body; ranged only.
 - [ ] **[LIFE7 The cinematic path and gestures](plans/animation.md)** — the choreo-scene rewire

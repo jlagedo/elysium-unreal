@@ -259,6 +259,26 @@
           "expected_bytes": "b828400000"
         },
         {
+          "semantic_label": "vampire.weapon_activity_override",
+          "source_function_label": "WeaponActivityOverride",
+          "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0024f210",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec0c5355"
+        },
+        {
+          "semantic_label": "vampire.combat_character_find_entity_fov",
+          "source_function_label": "CombatCharacterFindEntityFOV",
+          "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00341c30",
+          "calling_convention": "thiscall",
+          "expected_bytes": "81ec3c0500"
+        },
+        {
           "semantic_label": "vampire.weapon_melee_event_dispatch",
           "source_function_label": "WeaponMeleeEventDispatch",
           "source_spec": "research/cases/core-mechanics/specs/core_mechanics_server.json",

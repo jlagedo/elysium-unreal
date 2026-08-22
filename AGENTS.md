@@ -171,16 +171,21 @@ contain bytes, transforms, timing, or other content derived from the user's game
   *own* level scripts; it is game logic, not pipeline.) The architecture and what it costs:
   `docs/architecture/uasset-bake-spike.md`.
 
-### Authored live, captured as text, rebuilt by a generator
+### Authored live: tracked in the authored namespace, or captured as text
 
 The editor is the authoring tool for anything Unreal authors better than code — an animation
-graph, a material, a widget, a Niagara system. What it produces is **never** the tracked
-artifact. Every such asset is captured into a **reviewable text source** under `pipeline/unreal/`,
-and a generator rebuilds the package from that text.
+graph, a material, a widget, a Niagara system. What it produces lands one of two ways:
 
-Live editing is the loop; the text is the record. A hand-edited binary package committed as-is
-breaks `reconstruct`, is unreviewable in a diff, and puts a generated package inside the tracked
-set — which is the boundary "Bring-your-own-game" exists to hold.
+- **An original, game-independent asset is tracked directly** under
+  `Content/ElysiumAuthored/**` (Git LFS): edited live, saved in place, no generator. This is the
+  home for original VFX, materials and tuning data assets (`Content/CLAUDE.md`). The one hard
+  test is bring-your-own-game: no game-derived bytes, transforms, timings, or references into a
+  generated mount.
+- **An asset that must live on a generated mount** (because it binds generated content — the
+  player animation graph compiled against baked banks) is **never** the tracked artifact.
+  It is captured into a **reviewable text source** under `pipeline/unreal/`, and a generator
+  rebuilds the package from that text. A hand-edited binary package on a generated mount breaks
+  `reconstruct` and puts a generated package inside the tracked set.
 
 The worked example is the player animation graph: `elysium.animbp.build` constructs it through
 the engine's own node-placement path, `UElysiumAnimGraphLibrary::ExportGraphToText` captures it as

@@ -45,9 +45,41 @@ for the per-weapon translation half.
 ### LIFE5 Reactions and combat actions
 
 What is left of the rung: the flying knockback chain, the authored knockback table the grounded
-gate currently stands in for, the ragdoll physics-asset bake, and the owner-played acceptance
-sweep. **Owns the pose, not the number**: lethality, soak, the damage roll and the health commit
-are 13.3's; this rung consumes their outcome.
+gate currently stands in for, the NPC melee sequence selector, the ragdoll physics-asset bake, and
+the owner-played acceptance sweep. **Owns the pose, not the number**: lethality, soak, the damage
+roll and the health commit are 13.3's; this rung consumes their outcome.
+
+**The NPC melee sequence selector.** A melee attack's sequence is chosen through vtable slot 331
+(`+0x52c`) on the **owner**, and the two arms are different systems rather than two settings of
+one. `CBasePlayer` (`0x10160F90`) is the direction-keyed arm: it requires a melee-capable weapon
+(`+0x5a0 & 0x18000`), matches each candidate's authored button mask at `+0x2D4` against
+`m_nButtons & 0x79A`, prefers exact → directional → strafe → neutral, seeds its answer with `-1`
+and returns `answer >= 0` — so an activity whose candidates author no mask is **not answered**, and
+the caller performs its own fallback. That arm is reproduced: `FElysiumActivityClipRequest::
+bRequireStateMask` refuses the weighted draw, and the melee swing sets it for a player-side owner.
+
+`CBaseCombatCharacter::ChooseMeleeAttackSequence` (`0x10347180`) is the cast arm and is **not**
+reproduced — the runtime draws by weight in its place. It scores every candidate geometrically
+against the enemy and picks by preference over the resulting flag word: the authored reach band at
+`+0x2CC`/`+0x2D0` against the measured enemy distance (the band is also accumulated onto the
+weapon's own min/max fields), a movement/hull trace for obstruction, and whether the enemy falls
+inside the clip's authored swing volumes at `+0x2C0`. `FUN_10348100` then walks eight ranked flag
+combinations twice — once with an "enemy in range" bit forced, once without — and the first
+candidate matching a combination wins; a body with no enemy takes a two-try `0x10`-then-`0` walk
+instead. It reads `+0x2D4` exactly once, to **zero a candidate's score when a mask is authored**,
+which is the mirror of the player arm: masked clips are the player's, unmasked clips are the cast's.
+
+The slice needs the per-clip reach band and swing volumes out of the sidecar (`swings` already
+carries the volumes), an obstruction query on the service seam, and the flag-preference walk as a
+pure rule beside `ElysiumSwingContact.h`. Until it lands, an NPC melee swing selects by weight,
+which is a stated stand-in and not the recovered rule.
+
+The behavioural consequence of the split: because no `ACT_MELEE_ATTACK_2COMBO_<FAMILY>` clip
+authors a mask, the player arm can never answer one, so the automatic `2COMBO` substitution is
+offered on the player and refused every time — while every NPC reaches it through the cast arm
+normally. Live capture on the pinned retail binary, 43 of 43 player presses at Melee 5.
+`docs/vtmb/combat-and-damage.md` § "`2COMBO` is an activity substitution" does not yet carry this
+and states the substitution without the refusal.
 
 **A reaction is not an idle.** `StateForActivity` maps the locomotion slice plus `Unknown`,
 `Swim` and `Treadwater` onto eight states, so a knockback or a death projects to `Idle` and a

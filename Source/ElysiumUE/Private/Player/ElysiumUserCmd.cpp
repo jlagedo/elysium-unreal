@@ -181,6 +181,15 @@ FElysiumUserCmd FElysiumUserCmdBuilder::Build(float DeltaSeconds)
 	Cmd.Move.Y = FMath::Clamp(Cmd.Move.Y, -1.0f, 1.0f);
 	Cmd.Up     = FMath::Clamp(Cmd.Up, -1.0f, 1.0f);
 
+	// The direction bits restated from the finished vector, so an analog source states them too. A
+	// key already set its own bit and re-deriving it is idempotent; a stick set none, and the
+	// consumers that read the button field — direction-keyed melee selection above all — would
+	// otherwise see a pad as permanently neutral no matter how far it is pushed.
+	//
+	// It runs on the CLAMPED sum rather than on the stick alone: a frame holding `+forward` and
+	// pushing back states one intent, and the vector is where the two were already reconciled.
+	Cmd.Buttons |= ElysiumInput::DirectionButtonsFromMove(Cmd.Move);
+
 	// The stick, on the same clamped delta the turn keys just used. Mouse counts are already
 	// finished degrees for this frame and are added raw; a stick is a held rate and is not.
 	//

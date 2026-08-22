@@ -89,6 +89,31 @@ namespace ElysiumInput
 	{
 		return FVector2D(Stick.Y, Stick.X);
 	}
+
+	// How far a stick has to be pushed along one axis before that axis counts as a held direction
+	// key. It matches the shoulder triggers' `actuation_threshold` in `make_input_assets.py`, so one
+	// number answers "the pad is asking for this" everywhere; a 45-degree push clears it on both
+	// components at 0.707, which is what makes a diagonal read as the two keys a keyboard would hold.
+	inline constexpr float StickDirectionThreshold = 0.5f;
+
+	// The four direction bits a move vector states, for the consumers that read a BUTTON FIELD rather
+	// than the vector — chiefly direction-keyed melee selection, which compares each candidate
+	// sequence's authored mask against the held bits (`ElysiumCombo::SelectionMask`).
+	//
+	// A keyboard sets those bits itself and a stick never does, so without this the pad publishes a
+	// permanently neutral selection state and no directional attack is reachable on it at any
+	// deflection. The vector is the device-neutral statement of the same intent, so it is derived
+	// from rather than duplicated: one owner, and a `+forward` and a pushed stick are indistinguishable
+	// by the time either reaches the substrate.
+	inline uint64 DirectionButtonsFromMove(const FVector2D& Move)
+	{
+		uint64 Bits = 0;
+		if (Move.X >= StickDirectionThreshold)  { Bits |= static_cast<uint64>(EElysiumButton::Forward); }
+		if (Move.X <= -StickDirectionThreshold) { Bits |= static_cast<uint64>(EElysiumButton::Back); }
+		if (Move.Y >= StickDirectionThreshold)  { Bits |= static_cast<uint64>(EElysiumButton::MoveRight); }
+		if (Move.Y <= -StickDirectionThreshold) { Bits |= static_cast<uint64>(EElysiumButton::MoveLeft); }
+		return Bits;
+	}
 }
 
 // One frame of intent.

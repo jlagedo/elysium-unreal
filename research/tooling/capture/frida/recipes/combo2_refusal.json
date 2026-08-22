@@ -1,0 +1,25 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "combo2_refusal",
+  "description": "Name the reason CWeaponMelee::RequestActivity refuses an ACT_MELEE_ATTACK_2COMBO recursion. combo2_resolution measured the refusal (23 of 26 inner 0x4d calls returned AL=0 at Melee 5) but could not see WHY: neither CBaseCombatWeapon::ActivityOverride nor FindEntityFOV was hooked, so the inner call appeared to return without doing anything. Both are hooked here. The abort at 0x103EA1DD fires only when nothing was acquired AND the TRANSLATED activity is still the generic 0x4d, so ActivityOverride's return value and FindEntityFOV's return value are the two facts that settle it: if the override answers a ..._2COMBO_KATANA id then that abort cannot be the refusal and something else is refusing.",
+  "mode": "trace",
+  "targets": [
+    "vampire.weapon_melee_primary_attack",
+    "vampire.weapon_melee_heavy_attack",
+    "vampire.weapon_melee_request_activity",
+    "vampire.weapon_activity_override",
+    "vampire.combat_character_find_entity_fov",
+    "vampire.weapon_translate_activity",
+    "vampire.select_heaviest_sequence",
+    "vampire.select_weighted_sequence",
+    "vampire.player_select_melee_sequence",
+    "vampire.melee_roll",
+    "vampire.apply_player_activity_and_sequence"
+  ],
+  "expected_modules": [
+    "vampire.dll"
+  ],
+  "max_trace_events": 600000,
+  "capture_returns": true,
+  "stack_words": 8
+}

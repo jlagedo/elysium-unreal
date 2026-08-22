@@ -472,6 +472,51 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 	Cmd = Builder.Build(1.0f / 60.0f);
 	TestEqual(TEXT("analog movement is consumed each frame"), (float)Cmd.Move.X, 0.0f, 0.001f);
 
+	// --- An analog source states the DIRECTION BITS too --------------------------------------
+	// Direction-keyed melee selection reads a button field, not the move vector: it compares each
+	// candidate sequence's authored mask against the held bits (`ElysiumCombo::SelectionMask`). A
+	// stick that sets no bit publishes a permanently neutral selection state, so a pad could reach
+	// only the mask-0 attack at any deflection. The vector is where both devices already agree.
+	const auto BuildFromStick = [&Builder](const FVector2D& Move) -> uint64
+	{
+		Builder.SetAnalogMove(Move);
+		return Builder.Build(1.0f / 60.0f).Buttons;
+	};
+	constexpr uint64 Fwd  = static_cast<uint64>(EElysiumButton::Forward);
+	constexpr uint64 Bck  = static_cast<uint64>(EElysiumButton::Back);
+	constexpr uint64 MvL  = static_cast<uint64>(EElysiumButton::MoveLeft);
+	constexpr uint64 MvR  = static_cast<uint64>(EElysiumButton::MoveRight);
+
+	TestEqual(TEXT("a fully pushed stick states forward"), BuildFromStick(FVector2D(1.0f, 0.0f)) & (Fwd | Bck | MvL | MvR), Fwd);
+	TestEqual(TEXT("and back"), BuildFromStick(FVector2D(-1.0f, 0.0f)) & (Fwd | Bck | MvL | MvR), Bck);
+	TestEqual(TEXT("and strafe left"), BuildFromStick(FVector2D(0.0f, -1.0f)) & (Fwd | Bck | MvL | MvR), MvL);
+	TestEqual(TEXT("and strafe right"), BuildFromStick(FVector2D(0.0f, 1.0f)) & (Fwd | Bck | MvL | MvR), MvR);
+
+	// A 45-degree push is 0.707 on both components, which is the whole reason the threshold sits
+	// where it does: a diagonal must read as the two keys a keyboard would hold, not as one.
+	const float Diagonal = FMath::Sqrt(0.5f);
+	TestEqual(TEXT("a diagonal push states both of its keys"),
+		BuildFromStick(FVector2D(Diagonal, -Diagonal)) & (Fwd | Bck | MvL | MvR), Fwd | MvL);
+
+	// Below the threshold the pad is not asking for a direction, and a drifting stick must not
+	// select a directional attack the player never aimed for.
+	TestEqual(TEXT("a barely-deflected stick states nothing"),
+		BuildFromStick(FVector2D(ElysiumInput::StickDirectionThreshold - 0.01f, 0.0f)) & (Fwd | Bck | MvL | MvR), uint64(0));
+	TestEqual(TEXT("the threshold itself counts"),
+		BuildFromStick(FVector2D(ElysiumInput::StickDirectionThreshold, 0.0f)) & (Fwd | Bck | MvL | MvR), Fwd);
+
+	// The derivation only ever ADDS. A keyboard holding two opposed keys cancels to a zero vector,
+	// and both of its own bits still stand — clearing them here would make the button field disagree
+	// with what the player is physically holding.
+	Builder.SetAnalogMove(FVector2D::ZeroVector);
+	Builder.SetButton(EElysiumButton::Forward, true);
+	Builder.SetButton(EElysiumButton::Back, true);
+	Cmd = Builder.Build(1.0f / 60.0f);
+	TestEqual(TEXT("opposed keys still cancel the vector"), (float)Cmd.Move.X, 0.0f, 0.001f);
+	TestEqual(TEXT("and the derivation clears neither bit"), Cmd.Buttons & (Fwd | Bck), Fwd | Bck);
+	Builder.SetButton(EElysiumButton::Forward, false);
+	Builder.SetButton(EElysiumButton::Back, false);
+
 	// Mouse counts accumulate within a frame and are consumed by the build, never carried over.
 	Builder.AddLook(1.5f, -0.5f);
 	Builder.AddLook(0.5f, 0.25f);

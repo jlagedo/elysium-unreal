@@ -398,6 +398,10 @@ struct FElysiumAnimationIntent
 	// for exactly that reason — a body that did not state one is a body with no buttons, not a body
 	// holding nothing.
 	int32 StateMask = INDEX_NONE;
+	// Whether the direction-keyed selection is the ONLY admissible answer — the player arm of the
+	// melee sequence selector, which fails rather than falling through to the weighted draw. The
+	// producer states it; see `FElysiumActivityClipRequest::bRequireStateMask` for the recovered rule.
+	bool bRequireStateMask = false;
 
 	// --- Translation context ---------------------------------------------------------------------
 	// The active weapon's ENTITY CLASSNAME (`item_w_glock_17c`), which is the key authored content
@@ -780,6 +784,19 @@ struct FElysiumActivityClipRequest
 	// sequence's authored mask against. `INDEX_NONE` is a body with no button field, which is every
 	// cast body and the default here for that reason.
 	int32 StateMask = INDEX_NONE;
+	// **Whether the direction-keyed selection is the ONLY way this request may be answered.**
+	//
+	// Retail selects a melee attack sequence through vtable slot 331 on the OWNER, and the two arms
+	// are different systems: `CBasePlayer` (`0x10160F90`) matches each candidate's authored button
+	// mask, while `CBaseCombatCharacter::ChooseMeleeAttackSequence` (`0x10347180`) scores candidates
+	// geometrically against the enemy and never reads a mask. The player arm seeds its answer with
+	// `-1` and returns `answer >= 0`, so an activity NONE of whose candidates authors a mask is not
+	// answered at all — it fails, and the caller performs its own fallback.
+	//
+	// That is what this states. It is the melee attack path's alone, and it is the player's alone:
+	// applied to a gait it would refuse every walk, because a walk's clips author no masks either.
+	// Set it only where retail runs the player arm (`docs/vtmb/combat-and-damage.md`).
+	bool bRequireStateMask = false;
 	// Whether a miss may walk `CAI_BaseNPC`'s recovered fallback ladder. The availability probe and
 	// the run-to-walk, disposition and sequence-zero rungs are the cast activity chain's own
 	// unconditional steps, so the default is true and matches the per-frame publish — but retail's

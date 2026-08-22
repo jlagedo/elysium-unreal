@@ -135,11 +135,12 @@ namespace
 	// **The direction-keyed selection stands AHEAD of the weighted draw**, which is where retail's
 	// player selector puts it: it reads the candidates' authored state masks and, when one of them
 	// answers the buttons being held, that sequence IS the answer and no draw happens
-	// (`docs/vtmb/combat-and-damage.md` § "The combo is automatic, not directional"). Every request
+	// (`docs/vtmb/combat-and-damage.md` § "The melee sequence selector is two systems, forked on the
+	// owner's class"). Every request
 	// from a body with no button field, and every activity none of whose candidates authors a mask,
 	// falls straight through to the draw unchanged.
 	FString TryActivity(const FElysiumAnimationCatalog& Catalog, const FString& Activity,
-		int32 Variant, int32 StateMask, int32& OutCandidates)
+		int32 Variant, int32 StateMask, bool bRequireStateMask, int32& OutCandidates)
 	{
 		OutCandidates = 0;
 		if (Activity.IsEmpty())
@@ -152,7 +153,21 @@ namespace
 			return FString();
 		}
 		const FString Keyed = PickByStateMask(*Catalog.Clips, Activity, StateMask);
-		return Keyed.IsEmpty() ? PickWeighted(*Catalog.Clips, Activity, Variant) : Keyed;
+		if (!Keyed.IsEmpty())
+		{
+			return Keyed;
+		}
+		// **The player arm does not fall through.** `CBasePlayer`'s melee selector seeds its answer
+		// with -1 and returns `answer >= 0`, so an activity whose candidates author no mask is simply
+		// not answered — and the whole `ACT_MELEE_ATTACK_2COMBO_<FAMILY>` family authors none, which
+		// is measured: 43 of 43 player presses at Melee 5 requested the combo and were refused here
+		// (`docs/vtmb/combat-and-damage.md`). The weighted draw below is the CAST's arm reached
+		// through the wrong door; taking it for the player is what plays a combo retail cannot.
+		if (bRequireStateMask)
+		{
+			return FString();
+		}
+		return PickWeighted(*Catalog.Clips, Activity, Variant);
 	}
 
 	void ResolveActivityRoute(const FElysiumAnimationIntent& Intent,
@@ -177,7 +192,7 @@ namespace
 
 		int32 Candidates = 0;
 		FString Label = TryActivity(Catalog, Out.ResolvedActivity, Intent.Variant, Intent.StateMask,
-			Candidates);
+			Intent.bRequireStateMask, Candidates);
 
 		if (!Label.IsEmpty())
 		{
@@ -238,7 +253,7 @@ namespace
 			// The disposition rung takes the same door, which costs nothing: no stance sequence in the
 			// corpus authors a state mask, so the ladder's own retry is the weighted draw it always was.
 			Label = TryActivity(Catalog, GDispositionActivity, Intent.Variant, Intent.StateMask,
-				Candidates);
+				Intent.bRequireStateMask, Candidates);
 			if (!Label.IsEmpty())
 			{
 				Out.ResolvedActivity = GDispositionActivity;
@@ -702,6 +717,9 @@ FElysiumAnimationIntent ActivityIntentFor(const FElysiumActivityClipRequest& Req
 	// the same reason the body kind is: the player and a combatant reach this seam through the same
 	// weapon entity, and only the caller knows which one is holding it.
 	Intent.StateMask = Request.StateMask;
+	// The player arm of the melee sequence selector, stated by the producer: only the weapon knows it
+	// is running a player-owned melee swing, which is the one place retail runs that arm.
+	Intent.bRequireStateMask = Request.bRequireStateMask;
 	// The availability probe and the run-to-walk, disposition and sequence-zero rungs are parts of
 	// `CAI_BaseNPC`'s own translation, unconditional on the cast chain — the human pre-translation
 	// rewrites an unarmed ACT_WALK to ACT_WALK_RELAXED whatever the body can play, and rung 4 of the

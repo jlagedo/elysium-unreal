@@ -2072,6 +2072,46 @@ bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
 			ElysiumAnimResolve::PickByStateMask(Pc, Attack, INDEX_NONE).IsEmpty());
 	}
 
+	// --- The PLAYER arm of the melee selector: no mask, no answer ---------------------------------
+	//
+	// Retail selects a melee attack sequence through vtable slot 331 on the OWNER, and the arms are
+	// different systems: `CBasePlayer` (`0x10160F90`) matches authored button masks and seeds its
+	// answer with -1, returning `answer >= 0`; `CBaseCombatCharacter::ChooseMeleeAttackSequence`
+	// (`0x10347180`) scores candidates geometrically and never reads a mask. So an activity whose
+	// candidates author NO mask is unanswerable on the player arm and ordinary on the cast arm.
+	//
+	// This is the measured shape of the shipped `ACT_MELEE_ATTACK_2COMBO_<FAMILY>` family: none of its
+	// clips carries a mask, and 43 of 43 player presses at Melee 5 lost the combo to exactly this.
+	{
+		// `ACT_IDLE` stands in for the shape — its candidates author no masks, same as the 2COMBO set.
+		FElysiumAnimationIntent Player = ActivityIntent(TEXT("male_pc"), TEXT("ACT_IDLE"));
+		Player.StateMask = InForward;
+		Player.bRequireStateMask = true;
+		FElysiumAnimationSelection Out;
+		ElysiumAnimResolve::Resolve(Player, Catalog, Out);
+		TestTrue(TEXT("the player arm refuses an activity no candidate masks"),
+			Out.SequenceLabel.IsEmpty());
+		TestTrue(TEXT("...and says so as a named miss rather than a silent substitution"),
+			Out.Outcome == EElysiumAnimOutcome::MissingSequence);
+
+		// The same request WITHOUT the flag is the cast arm, and it draws as it always did. One field
+		// is the whole difference, which is what makes the two arms one seam rather than two paths.
+		FElysiumAnimationIntent Cast = ActivityIntent(TEXT("male_pc"), TEXT("ACT_IDLE"));
+		Cast.StateMask = InForward;
+		ElysiumAnimResolve::Resolve(Cast, Catalog, Out);
+		TestEqual(TEXT("the cast arm still draws the same activity"),
+			Out.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0));
+
+		// A masked activity is answered on the player arm exactly as before: the flag refuses a
+		// FALLBACK, never a selection.
+		FElysiumAnimationIntent Masked = ActivityIntent(TEXT("male_pc"), *Attack);
+		Masked.StateMask = InForward;
+		Masked.bRequireStateMask = true;
+		ElysiumAnimResolve::Resolve(Masked, Catalog, Out);
+		TestEqual(TEXT("a direction-keyed attack is unaffected by the flag"),
+			Out.SequenceLabel, FString(TEXT("Fists_attack_W1")));
+	}
+
 	// --- The busy predicate's three arms -----------------------------------------------------------
 	{
 		TestTrue(TEXT("the ordinary attack takes the authored-hold arm"),

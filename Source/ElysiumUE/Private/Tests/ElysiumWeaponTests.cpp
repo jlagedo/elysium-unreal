@@ -1190,9 +1190,15 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 	}
 
 	// --- The automatic `2COMBO` substitution, at both ends of the table ----------------------
+	// The stub resolves a clip for every activity, which is the case where a won draw SURVIVES: the
+	// promotion is an offer, and an offer that resolves nothing falls back (the next case).
 	{
 		ElysiumRng::SeedAll(99);
 		FElysiumRecordingServices Services;
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityLabel = TEXT("swing");
+		Services.ResolvedNpcActivityClip = TEXT("swing");
+		Services.ResolvedNpcActivityOwner = TEXT("cast_bank");
 		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
 		World.Load(MakeWeaponTestDefs());
 		World.SpawnPlayer();
@@ -1244,6 +1250,45 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		Katana->AttackIntent(FElysiumWeapon::EIntent::Primary);
 		TestEqual(TEXT("...and substitutes once Melee reaches rank 5"), Katana->Swing.Activity,
 			FString(TEXT("ACT_MELEE_ATTACK_2COMBO")));
+		// Every swing above stands the player 100 cm from `victim`, inside the stand-in reach — which
+		// is the half the rank table alone never shows. The next case removes it.
+		TestTrue(TEXT("...having acquired the body that let it"), Katana->Swing.Opponent.IsSet());
+	}
+
+	// --- The offered combo, refused, falls back to the ORDINARY attack ------------------------
+	// Retail's promotion is a TRY: `RequestActivity` re-enters itself with the combo and takes the
+	// answer only if that call succeeds (`0x103E9F03`). On the player it almost never does — the
+	// selector answers only masked candidates and no `..._2COMBO_<FAMILY>` clip carries a mask — and
+	// the outer call then performs `ACT_MELEE_ATTACK`. Here the refusal is stood up as the case that
+	// reaches this code: an activity that resolves NO clip at all.
+	//
+	// Rank 5 is 100%, so every press below wins its draw and only the resolution decides the outcome.
+	{
+		ElysiumRng::SeedAll(0x32434D42);
+		FElysiumRecordingServices Services;   // resolves nothing, by default
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		World.Load(MakeWeaponTestDefs());
+		World.SpawnPlayer();
+		World.Activate(0.0);
+		World.Tick(0.0);
+
+		FElysiumPlayer* Player = World.FindPlayer();
+		if (!TestNotNull(TEXT("the player exists"), Player))
+		{
+			return false;
+		}
+		PlaceFacing(*Player, FVector::ZeroVector);
+		Player->Sheet.SetBase(EC::Abilities, /*Brawl*/ 1, 5);
+		FElysiumWeapon* Fists = GiveWeapon(*Player, GFists);
+		if (!TestNotNull(TEXT("the fists are granted"), Fists))
+		{
+			return false;
+		}
+
+		Fists->AttackIntent(FElysiumWeapon::EIntent::Primary);
+		TestEqual(TEXT("a won draw whose combo resolves nothing performs the ordinary attack"),
+			Fists->Swing.Activity, FString(TEXT("ACT_MELEE_ATTACK")));
+		TestTrue(TEXT("...and it is a real swing, not a dropped press"), Fists->Swing.bActive);
 	}
 
 	// --- The resolved clip's OWNER is staged with its label ----------------------------------

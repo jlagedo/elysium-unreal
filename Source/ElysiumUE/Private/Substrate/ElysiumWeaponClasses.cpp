@@ -41,6 +41,21 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeapon, Log, All);
 
+// The melee attack TIMELINE, and nothing else: one line per press, whatever the press did. It is a
+// separate category from `LogElysiumWeapon` on purpose — that one carries the whole weapon's
+// diagnostics, and raising it to Verbose to watch a combo buries the combo in per-swing and
+// per-batch chatter. This one is readable at its DEFAULT level, so nothing has to be turned on and
+// a log tail filtered to this category reads the attack sequence back as a sequence:
+//
+//   atk #12 swing  ACT_MELEE_ATTACK 'katana_combo_D1' 0.87s x0.76 roll 47/10 ordinary target (none)
+//   atk #12 link 2 ACT_MELEE_ATTACK 'katana_combo_D2' press @0.63 window [0.50,0.90]
+//   atk #12 link 3 ACT_MELEE_ATTACK 'katana_combo_D3' press @0.71 window [0.50,0.90]
+//   atk #12 ignored 'katana_combo_D3' names no successor — the chain ends
+//
+// Every line names the clip, because "which animation is it playing" is the question this exists to
+// answer. Nothing here decides anything; a line removed changes no behaviour.
+DEFINE_LOG_CATEGORY_STATIC(LogElysiumMelee, Log, All);
+
 // ================================================================================================
 // The logical activities the controller requests
 // ================================================================================================
@@ -48,8 +63,9 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeapon, Log, All);
 // `CWeaponMelee::PrimaryAttack` requests `ACT_MELEE_ATTACK` and substitutes
 // `ACT_MELEE_AIR_ATTACK` for a player whose ideal activity is one of the recovered airborne
 // phases, its secondary requests `ACT_MELEE_ATTACK_HEAVY`,
-// and `RequestActivity`'s one live substitution promotes an exactly-ordinary `ACT_MELEE_ATTACK` to
-// `ACT_MELEE_ATTACK_2COMBO`. The two substitutions are ordered, and that order is what keeps them
+// and `RequestActivity`'s one live substitution OFFERS an exactly-ordinary `ACT_MELEE_ATTACK` the
+// promotion to `ACT_MELEE_ATTACK_2COMBO` — an offer the re-entered request can refuse, in which
+// case the ordinary attack is performed. The two substitutions are ordered, and that order is what keeps them
 // exclusive: the air form is chosen first and is not the ordinary activity, so it never reaches the
 // combo test. The ordinary ranged selector realizes `ACT_RANGE_ATTACK1_LAYER`, which
 // the weapon activity table then translates per family. The translation is the embodiment's — the
@@ -267,8 +283,10 @@ namespace ElysiumWeapons
 {
 	int32 ComboChancePercent(int32 BaseRank)
 	{
-		// Recovered from `vampire.dll` (`combat-and-damage.md` § "The combo is automatic, not
-		// directional"). Ranks outside the table clamp to its ends.
+		// Recovered from `vampire.dll` (`combat-and-damage.md` § "`2COMBO` is an activity
+		// substitution, not the combo chain"), and read out of the shipped `.rdata` as literal
+		// PERCENTAGES. Ranks outside the table clamp to its ends; rank 0 is a hard zero, so the
+		// substitution is never offered at all to a character who never raised the Ability.
 		static constexpr int32 Chances[] = { 0, 10, 25, 45, 70, 100 };
 		const int32 Clamped = FMath::Clamp(BaseRank, 0, (int32)UE_ARRAY_COUNT(Chances) - 1);
 		return Chances[Clamped];
@@ -815,9 +833,30 @@ void FElysiumWeapon::ClearSwing()
 // Clip resolution — the one door to the animation half
 // ================================================================================================
 
+bool FElysiumWeapon::BuildActivityClipRequest(FElysiumCombatCharacter& Char,
+	const FString& Activity, FElysiumActivityClipRequest& Out) const
+{
+	// The chain is the OWNER's, and this one entity has both owners: a player weapon and an NPC's are
+	// the same `FElysiumWeapon`, so the attack activity walks `CBasePlayer`'s one pass on the player
+	// and the cast's alternation and probe on everyone else. The rest of the context — the owner's
+	// classname, its equipped weapon and its state — is the owner's own, which is why it is filled
+	// from the character rather than from this weapon.
+	Char.FillActivityClipRequest(Out);
+	Out.Activity = Activity;
+	Out.Variant = FMath::Max(Handle.Index, 0);
+	// The producer and the chain are one answer, taken from the same owner: a player-owned weapon's
+	// attack is the player's own request walking `CBasePlayer`'s one pass, and everyone else's is the
+	// cast's. Stating one without the other would record a producer whose translation belongs to a
+	// different body.
+	const bool bPlayerOwned = IsPlayerSide(Char);
+	Out.Source = bPlayerOwned ? EElysiumAnimSource::Player : EElysiumAnimSource::Npc;
+	Out.BodyKind = bPlayerOwned ? EElysiumAnimBodyKind::Player : EElysiumAnimBodyKind::Cast;
+	return Out.IsValid();
+}
+
 float FElysiumWeapon::ResolveAndPlay(const FString& Activity, EElysiumAnimPriority Band,
 	const FElysiumWeaponMode& Mode, FString& OutClipLabel, FString* OutOwnerStem,
-	float* OutMaxReachCm, float PlaybackRate)
+	float* OutMaxReachCm, float PlaybackRate, bool bRequirePlayerStateMask)
 {
 	OutClipLabel.Reset();
 	if (OutOwnerStem)
@@ -845,17 +884,9 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, EElysiumAnimPriori
 		// context — the owner's classname, its equipped weapon and its state — is the owner's own,
 		// which is why it is filled from the character rather than from this weapon.
 		FElysiumActivityClipRequest Request;
-		Char->FillActivityClipRequest(Request);
-		Request.Activity = Activity;
-		Request.Variant = FMath::Max(Handle.Index, 0);
-		// The producer and the chain are one answer, taken from the same owner: a player-owned
-		// weapon's attack is the player's own request walking `CBasePlayer`'s one pass, and everyone
-		// else's is the cast's. Stating one without the other would record a producer whose translation
-		// belongs to a different body.
-		const bool bPlayerOwned = IsPlayerSide(*Char);
-		Request.Source = bPlayerOwned ? EElysiumAnimSource::Player : EElysiumAnimSource::Npc;
-		Request.BodyKind = bPlayerOwned
-			? EElysiumAnimBodyKind::Player : EElysiumAnimBodyKind::Cast;
+		BuildActivityClipRequest(*Char, Activity, Request);
+		// The player arm of the melee sequence selector, and only where the caller says so.
+		Request.bRequireStateMask = bRequirePlayerStateMask;
 
 		FElysiumActivityClip Clip;
 		if (Embodiment->ResolveNpcActivityClip(Request, Clip) && !Clip.Label.IsEmpty())
@@ -930,7 +961,15 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, EElysiumAnimPriori
 	// The stated fallback. A headless run, a bodiless character and a bank with no sequence for the
 	// activity all land here, and the transaction still has to have a duration or the commit could
 	// never be scheduled — which is what keeps the two halves running with no renderer at all.
-	if (!bReportedClipFallback)
+	//
+	// **A refused player-arm selection is not one of them, and is not reported here.** Under
+	// `bRequirePlayerStateMask` the selector answering nothing is the recovered rule doing its job —
+	// retail's `0x10160F90` seeds `-1` and returns `answer >= 0`, so an activity none of whose
+	// candidates authors a button mask is refused by design and the caller falls through to the
+	// ordinary attack. Every `ACT_MELEE_ATTACK_2COMBO` clip is exactly that, so warning here would
+	// report the single most common outcome the player arm has as a bank miss, and it names the wrong
+	// cause: the bank holds those clips. The melee line reports the refusal where it means something.
+	if (!bReportedClipFallback && !bRequirePlayerStateMask)
 	{
 		bReportedClipFallback = true;
 		UE_LOG(LogElysiumWeapon, Warning,
@@ -1459,6 +1498,11 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 		}
 	}
 
+	// What the combo draw did, for the timeline line at the end. Diagnostics only.
+	int32 ComboDraw = INDEX_NONE;
+	int32 ComboChance = 0;
+	const TCHAR* ComboOutcome = TEXT("not rolled");
+
 	// The one live combo substitution: only for an exactly-ordinary `ACT_MELEE_ATTACK` — so the air
 	// form above, which is a different activity, never reaches it and spends no draw. That is the
 	// recovered order rather than a convenience: `PrimaryAttack` chooses the air form and only then
@@ -1472,8 +1516,25 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 		const int32 BaseRank = Char.Sheet.GetBase(EElysiumTraitContainer::Abilities, Slot);
 		const int32 Chance = ElysiumWeapons::ComboChancePercent(BaseRank);
 		const int32 Draw = ElysiumRng::Stream(EElysiumRngStream::Dice).RandRange(0, 99);
+		ComboDraw = Draw;
+		ComboChance = Chance;
+		ComboOutcome = TEXT("ordinary");
 		if (Draw < Chance)
 		{
+			// **The promotion is a TRY, not a switch** (`0x103E9EEB`-`0x103E9F03`). On a winning draw
+			// retail re-enters `RequestActivity` with `ACT_MELEE_ATTACK_2COMBO`, and takes the answer
+			// only if that inner call returns true; a false answer falls through and performs the
+			// ORDINARY attack. So the roll decides whether the combo is OFFERED, not whether it
+			// happens — and on the PLAYER it is refused almost every time, by the selector below
+			// rather than by anything here.
+			//
+			// **What refuses it is the owner's own sequence selector**, and that is a live capture
+			// rather than a reading: 43 of 43 player presses at Melee 5 requested the combo and lost
+			// it, because `CBasePlayer`'s selector answers only sequences carrying an authored button
+			// mask and no `..._2COMBO_<FAMILY>` clip carries one. The request is made here and denied
+			// there, exactly as retail does it; nothing at this site tests a target, an ability or a
+			// translated name. `ElysiumWeapons::RequiresPlayerStateMask` is where the denial lives.
+			ComboOutcome = TEXT("2COMBO offered");
 			Activity = GActMeleeAttack2Combo;
 		}
 	}
@@ -1483,15 +1544,16 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	// activity returns and only then runs `FindEntityFOV`
 	// (`docs/vtmb/combat-and-damage.md` § "Target acquisition, sequence commit and recovery").
 	//
-	// **A stated order divergence.** Retail computes that maximum from the whole answering set
-	// WITHOUT picking one, acquires, and only then sets the concrete sequence; this seam answers
-	// the reach and the pick together, so the clip is already playing by the time acquisition runs.
-	// It is unobservable in this runtime rather than merely tolerated: nothing acquisition reads is
-	// written by the play — `PlayAnimSegment` reaches the embodiment's visual channel and never the
-	// substrate `Origin`/`Angles` the cone is measured from, or any candidate's life state — and
-	// neither half draws from an RNG stream, so the Dice draw above stays the only one this swing
-	// spends. Acquisition also cannot refuse the swing, in either order: an ordinary swing animates
-	// with no candidate found.
+	// **A stated order divergence, and it survives only where acquisition cannot refuse.** Retail
+	// computes that maximum from the whole answering set WITHOUT picking one, acquires, and only then
+	// sets the concrete sequence; this seam answers the reach and the pick together, so on the path
+	// below the clip is already playing by the time acquisition runs. That is unobservable rather
+	// than merely tolerated: nothing acquisition reads is written by the play — `PlayAnimSegment`
+	// reaches the embodiment's visual channel and never the substrate `Origin`/`Angles` the cone is
+	// measured from, or any candidate's life state — and neither half draws from an RNG stream, so
+	// the Dice draw above stays the only one this swing spends. An ordinary swing animates with no
+	// candidate found, so the reservation is the only thing the order could change.
+	//
 	//
 	// **`Scripted` is the swing's band**, and it is the whole difference between a swing that plays
 	// and one that is swallowed. It is the first row above the `LocomotionTravel` publish a moving
@@ -1516,13 +1578,32 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	FString ClipLabel;
 	FString ClipOwnerStem;
 	float MaxReachCm = 0.0f;
-	const float Seconds = ResolveAndPlay(Activity, EElysiumAnimPriority::Scripted, Mode, ClipLabel,
-		&ClipOwnerStem, &MaxReachCm, Rate);
+	const bool bPlayerArm = IsPlayerSide(Char);
+	float Seconds = ResolveAndPlay(Activity, EElysiumAnimPriority::Scripted, Mode, ClipLabel,
+		&ClipOwnerStem, &MaxReachCm, Rate, bPlayerArm);
+
+	// **The offered combo, refused: fall through to the ordinary attack.** This is the outer half of
+	// retail's `TEST AL,AL / JNZ` at `0x103E9F03` — the recursion answered false, so the call it
+	// returned to performs `ACT_MELEE_ATTACK` instead. The refusal is the player selector's
+	// (`ElysiumWeapons::RequiresPlayerStateMask`), and it resolves NO clip at all, which is what this
+	// reads. Without the retry a promoted press would swing nothing, which is neither retail's
+	// behaviour nor a swing.
+	if (ClipLabel.IsEmpty() && Activity == GActMeleeAttack2Combo)
+	{
+		ComboOutcome = TEXT("2COMBO offered, refused by the selector");
+		Activity = GActMeleeAttack;
+		Seconds = ResolveAndPlay(Activity, EElysiumAnimPriority::Scripted, Mode, ClipLabel,
+			&ClipOwnerStem, &MaxReachCm, Rate, bPlayerArm);
+	}
 
 	// Target acquisition happens before the sequence is committed. It is aim assistance and
 	// opponent reservation, not a damage verdict: an ordinary swing still animates with no
 	// candidate found. It is NOT the opposed roll's own query — that one runs on the swing's first
 	// live frame at its own 60-unit reach and 0.7 cone (`StageSwingOpposedRoll`).
+	//
+	// It runs once, against whatever activity finally answered — the promotion above resolves before
+	// this line, so a refused combo has already fallen back and acquires at the ORDINARY attack's
+	// reach rather than the combo's.
 	const FElysiumEntityHandle Opponent = AcquireMeleeOpponent(Char, MaxReachCm,
 		FMath::Cos(FMath::DegreesToRadians(ElysiumWeapons::MeleeConeHalfAngleDegrees)));
 
@@ -1535,6 +1616,10 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	ClearSwing();
 	Swing.bActive = true;
 	Swing.Serial = ++SwingSerialCounter;
+	// A press opens a new attack, so it is its own chain root and its first link. A hand-off keeps
+	// the root and counts on from here.
+	Swing.ChainRoot = Swing.Serial;
+	Swing.ChainLink = 1;
 	Swing.ModeIndex = ModeIndex;
 	Swing.bMelee = true;
 	Swing.Activity = Activity;
@@ -1552,11 +1637,15 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 
 	HoldAttacksUntil(Recovery);
 
-	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s swing #%d %s rate %.2f clip %.3fs -> contact walks '%s' recover %.3f opponent %s"),
-		*DebugString(), Swing.Serial, *Activity, Rate, Seconds,
-		ClipLabel.IsEmpty() ? TEXT("(no clip)") : *ClipLabel,
-		Recovery, Opponent.IsSet() ? *World->DescribeHandle(Opponent) : TEXT("(none)"));
+	// The timeline line: one per press that opened a swing, naming the clip it is playing.
+	const FString RollNote = ComboDraw == INDEX_NONE
+		? FString(ComboOutcome)
+		: FString::Printf(TEXT("%d/%d %s"), ComboDraw, ComboChance, ComboOutcome);
+	UE_LOG(LogElysiumMelee, Log,
+		TEXT("atk #%d swing  %s '%s' %.2fs x%.2f  roll %s  target %s"),
+		Swing.ChainRoot, *Activity,
+		ClipLabel.IsEmpty() ? TEXT("(no clip)") : *ClipLabel, Seconds, Rate, *RollNote,
+		Opponent.IsSet() ? *World->DescribeHandle(Opponent) : TEXT("(none)"));
 	return EVerdict::Accepted;
 }
 
@@ -1636,6 +1725,9 @@ FElysiumWeapon::EVerdict FElysiumWeapon::MeleeBusyPress()
 	{
 		// Nothing to ask the hand-off of. The press is spent either way — retail's busy frame consumes
 		// it — and a headless swing with no pose layer is the ordinary shape of this, not a failure.
+		UE_LOG(LogElysiumMelee, Log,
+			TEXT("atk #%d ignored no live cycle for '%s' — the hand-off cannot be asked"),
+			Swing.ChainRoot, Swing.ClipLabel.IsEmpty() ? TEXT("(no clip)") : *Swing.ClipLabel);
 		return EVerdict::Busy;
 	}
 
@@ -1645,11 +1737,21 @@ FElysiumWeapon::EVerdict FElysiumWeapon::MeleeBusyPress()
 		// A terminal attack, and every `2COMBO` clip: the press is IGNORED. Not queued for the moment
 		// the attack ends, and not a restart — the combo is a chain of authored links and an attack
 		// that names no successor simply ends.
+		UE_LOG(LogElysiumMelee, Log,
+			TEXT("atk #%d ignored '%s' names no successor — the chain ends"),
+			Swing.ChainRoot, *Swing.ClipLabel);
 		return EVerdict::Busy;
 	}
 	if (!Combo->IsWindowOpen(Phase.Cycle))
 	{
-		return EVerdict::Busy;   // too early or too late, on a window closed at both ends
+		// Too early or too late, on a window closed at both ends. This is the line that explains a
+		// press the player felt they made and the body ignored, so it names which side it missed.
+		UE_LOG(LogElysiumMelee, Log,
+			TEXT("atk #%d ignored press @%.2f is %s '%s' window [%.2f,%.2f]"),
+			Swing.ChainRoot, Phase.Cycle,
+			Phase.Cycle < Combo->WindowOpen ? TEXT("before") : TEXT("past"),
+			*Swing.ClipLabel, Combo->WindowOpen, Combo->WindowClose);
+		return EVerdict::Busy;
 	}
 
 	// The successor is a SEQUENCE LABEL resolved against the body's own vocabulary, case-insensitively
@@ -1659,20 +1761,27 @@ FElysiumWeapon::EVerdict FElysiumWeapon::MeleeBusyPress()
 	{
 		// **The dangling link.** `LookupSequence` answers -1 and the chain is silently dead. The four
 		// shipped ones — both sexes' `fists` and `katana` banks — are authoring bugs in retail's own
-		// content, not decode failures, so the press is ignored and the fact is named ONCE per
-		// (clip, body) rather than repaired.
-		if (ShouldReportOnce(FString::Printf(TEXT("chainmiss:%s@%s"), *Swing.ClipLabel,
-			*Char->ModelStem())))
-		{
-			UE_LOG(LogElysiumWeapon, Verbose,
-				TEXT("%s: attack clip '%s' chains to '%s', which body '%s' does not name — the chain is "
-					"dead and the press is ignored"),
-				*DebugString(), *Swing.ClipLabel, *Combo->Chain, *Char->ModelStem());
-		}
+		// content, not decode failures, so the press is ignored rather than repaired. It is named on
+		// the timeline like every other refused press: the fact a player needs is which press did
+		// nothing, and once-per-(clip, body) would hide every repeat of it.
+		UE_LOG(LogElysiumMelee, Log,
+			TEXT("atk #%d ignored '%s' chains to '%s', which body '%s' does not name (dead link)"),
+			Swing.ChainRoot, *Swing.ClipLabel, *Combo->Chain, *Char->ModelStem());
 		return EVerdict::Busy;
 	}
 
+	// Read off the transaction BEFORE the hand-off tears it down: the line below reports the press
+	// that was accepted, and the window it was accepted in belongs to the clip being left.
+	const float PressCycle = Phase.Cycle;
+	const float WindowOpen = Combo->WindowOpen;
+	const float WindowClose = Combo->WindowClose;
+
 	CommitMeleeChain(*Char, Combo->Chain, ChainOwnerStem);
+
+	UE_LOG(LogElysiumMelee, Log,
+		TEXT("atk #%d link %d %s '%s' %.2fs  press @%.2f window [%.2f,%.2f]"),
+		Swing.ChainRoot, Swing.ChainLink, *Swing.Activity, *Swing.ClipLabel, Swing.ClipSeconds,
+		PressCycle, WindowOpen, WindowClose);
 	return EVerdict::Chained;
 }
 
@@ -1681,6 +1790,10 @@ void FElysiumWeapon::CommitMeleeChain(FElysiumCombatCharacter& Char, const FStri
 {
 	// Everything the hand-off carries forward, read off the transaction before it is torn down.
 	const int32 ModeIndex = Swing.ModeIndex;
+	// The attack's identity survives the hand-off; only the link count moves. `ClearSwing` below
+	// resets both, so they are read here like every other carried value.
+	const int32 ChainRoot = Swing.ChainRoot;
+	const int32 NextLink = Swing.ChainLink + 1;
 	// **The same playback rate.** The chain does not re-derive it from the attack feat: it continues
 	// one attack, and re-deriving would be a second `RequestActivity` this path never performs.
 	const float Rate = Swing.PlaybackRate;
@@ -1735,6 +1848,8 @@ void FElysiumWeapon::CommitMeleeChain(FElysiumCombatCharacter& Char, const FStri
 	ClearSwing();
 	Swing.bActive = true;
 	Swing.Serial = ++SwingSerialCounter;
+	Swing.ChainRoot = ChainRoot;
+	Swing.ChainLink = NextLink;
 	Swing.ModeIndex = ModeIndex;
 	Swing.bMelee = true;
 	// The LOGICAL activity stays the ordinary attack across the whole chain, whatever link it is on.
@@ -1748,10 +1863,6 @@ void FElysiumWeapon::CommitMeleeChain(FElysiumCombatCharacter& Char, const FStri
 	Swing.RecoveryDeadline = Recovery;
 	Swing.bAwaitingAnimEvent = false;
 
-	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s swing #%d chains to '%s' (%s) rate %.2f clip %.3fs, deadline unchanged at %.3f"),
-		*DebugString(), Swing.Serial, *ChainLabel, *ChainOwnerStem, Swing.PlaybackRate,
-		Swing.ClipSeconds, Swing.RecoveryDeadline);
 }
 
 FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 ModeIndex,
@@ -1981,7 +2092,10 @@ void FElysiumWeapon::StageSwingOpposedRoll(FElysiumCombatCharacter& Attacker,
 		// A swing opened on empty air. Ordinary, and deliberately not retried on a later frame:
 		// retail rolls once per swing and a body that walks into the arc afterwards is opposed by
 		// nothing. It is the reason a sweep can reach a victim with no record to consume.
-		UE_LOG(LogElysiumWeapon, Verbose,
+		// VeryVerbose: this fires on EVERY swing that opened on empty air, which is most of them
+		// outside a fight, and at Verbose it buries the attack timeline it sits next to. The swing
+		// line already reports the acquired target, so the absence is readable without this.
+		UE_LOG(LogElysiumWeapon, VeryVerbose,
 			TEXT("%s swing #%d opened with no opponent inside the %.0f-unit roll cone — no opposed "
 				"record staged"),
 			*DebugString(), Contact.Serial, ElysiumWeapons::SwingRollReachSourceUnits);

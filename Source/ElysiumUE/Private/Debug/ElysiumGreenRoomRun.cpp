@@ -20,7 +20,7 @@
 #include "ElysiumPlayerUISubsystem.h"
 #include "ElysiumMapActor.h"
 #include "ElysiumMapSubsystem.h"
-#include "ElysiumPlayer.h"   // FElysiumSheet — the arena checks the record's clan before seeding one
+#include "ElysiumPlayer.h"   // FElysiumPlayer — the driven modes take their body stem off the entity
 #include "ElysiumPlayerBody.h"
 #include "ElysiumSkeletalBasis.h"
 #include "Debug/ElysiumScreenshot.h"
@@ -1673,40 +1673,32 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 			Camera->SetThirdPerson(true);
 			Camera->RequestReseed();
 		}
-#if !UE_BUILD_SHIPPING
-		UGameInstance* GI = Subsystem.IsValid() ? Subsystem->GetGameInstance() : nullptr;
-		UElysiumGameStateSubsystem* GameState =
-			GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr;
-
-		// **The arena needs a player character; drive mode does not.** A stemless drive is a complete
-		// request — the mover, the floor and the camera are worth watching on their own, and
-		// inventing a PC body there would be inventing content. A fight is the opposite: a stage
-		// world's player record is whatever the game instance was carrying, which for a cold launch
-		// is a zeroed sheet with no clan, no soak and no derived health, and the damage path is
-		// fail-closed against it. There is nothing to test.
+		// **The body a driven mode stands is the player's own.** Entering the stage world seeds the
+		// session's character (`UElysiumGameFlowSubsystem::EnterStage`), and the player entity built
+		// over it resolved its `model` from that record through the clan table — the same call a
+		// map-loaded player goes through. Taking the stem off the entity rather than re-deriving it
+		// keeps the sheet and the body one identity: a Malkavian record cannot end up wearing a
+		// Brujah body because two callers each picked a model.
 		//
-		// Brujah is not a choice made here: it is the default `UElysiumGameFlowSubsystem::BeginNewGame`
-		// already applies to a request that names no clan. The window's preset picker re-seeds any of
-		// the seven.
-		if (NewMode == ELabMode::Arena && GameState != nullptr
-			&& !FElysiumSheet::IsValidClan(GameState->PlayerRecord().Sheet.Clan()))
+		// An explicit `-GreenRoomStem` still wins, and a model auditioned in review mode carries into
+		// drive: putting a named model on the mover is what those doors are for.
+		if (ReviewStem.IsEmpty())
 		{
-			FString Stem;
-			FString SeedError;
-			if (ElysiumArenaCast::SeedPlayerCharacter(GameState,
-				FElysiumSheet::ClanFromName(TEXT("Brujah")), /*bMale=*/true, Stem, SeedError))
+			if (FElysiumEntityWorld* EntityWorld = Map->GetEntityWorld())
 			{
-				if (ReviewStem.IsEmpty())
+				if (const FElysiumPlayer* Player = EntityWorld->FindPlayer())
 				{
-					ReviewStem = Stem;
+					ReviewStem = Player->ModelStem();
 				}
 			}
-			else
+			if (ReviewStem.IsEmpty())
 			{
-				UE_LOG(LogElysiumGreenRoom, Warning, TEXT("arena: %s"), *SeedError);
+				UE_LOG(LogElysiumGreenRoom, Warning,
+					TEXT("%s: the player entity names no body model — the mode stands on an "
+						"invisible pawn until `gr_body` names one"),
+					NewMode == ELabMode::Arena ? TEXT("arena") : TEXT("drive"));
 			}
 		}
-#endif
 
 		if (!ReviewStem.IsEmpty())
 		{
@@ -1728,10 +1720,11 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 			// inventory, so an arena that made you go and fetch a gun first would be an arena
 			// nobody uses for what it is for. It is the ordinary `GiveNamedItem` route over the
 			// whole parsed catalog; nothing is invented.
+			UGameInstance* GI = Subsystem.IsValid() ? Subsystem->GetGameInstance() : nullptr;
 			if (FElysiumEntityWorld* EntityWorld = Map->GetEntityWorld())
 			{
-				const ElysiumArenaCast::FArmResult Armed =
-					ElysiumArenaCast::ArmPlayerWithArsenal(*EntityWorld, GameState);
+				const ElysiumArenaCast::FArmResult Armed = ElysiumArenaCast::ArmPlayerWithArsenal(
+					*EntityWorld, GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr);
 				UE_LOG(LogElysiumGreenRoom, Log,
 					TEXT("arena: armed the player — %d melee, %d firearm(s), %d thrown, %d ammo type(s)"),
 					Armed.Melee, Armed.Firearms, Armed.Thrown, Armed.AmmoTypes);

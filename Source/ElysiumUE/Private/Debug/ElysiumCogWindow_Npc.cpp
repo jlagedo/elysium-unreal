@@ -519,10 +519,10 @@ void FElysiumCogWindow_Npc::RenderPlayerLoadout(FElysiumEntityWorld& World)
 	}
 
 	// --- the character preset ---------------------------------------------------------------------
-	// A stage world's player record is whatever the game instance happened to be carrying, which for
-	// a cold `gr --arena` is a zeroed sheet: no clan, no soak, no derived health block, and a damage
-	// path that is fail-closed against it. Seeding one is therefore not a convenience — without it
-	// the player is not a combatant and nothing in a fight resolves.
+	// Entering a stage world seeds the session's character, so this is the re-seeder rather than the
+	// seeder: it swaps the standing player for a baseline of any of the seven clans, which is how a
+	// clan's own gifts, banes and disciplines get exercised without relaunching. In a map it is a
+	// cheat like any other console cheat.
 	if (Clans.IsEmpty())
 	{
 		Clans = ElysiumArenaCast::PlayableClans(GetGameState());

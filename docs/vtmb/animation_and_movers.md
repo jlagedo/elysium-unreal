@@ -328,7 +328,8 @@ ever asked to travel, since the substitution stops at the sequence's own `w_hold
 **The mask is the runtime's own button enum, with no remap.** `PlayerSelectMeleeSequence`
 (`0x10160F90`) ANDs the player's live `m_nButtons` (`+0x2088`) straight against `+0x2D4`; the
 selector and the three independent confirmations of the numbering are in
-`docs/vtmb/combat-and-damage.md` → "The direction key selects which attack, at swing start".
+`docs/vtmb/combat-and-damage.md` → "The player arm: the direction key selects which attack, at
+swing start".
 
 ### The blend grid is two axes, not a raw 16×16 [data-verified + VtMB decompiled]
 
@@ -834,10 +835,18 @@ rule, not a safety net over the attack.
 
 `CWeaponMelee::ItemPostFrame` (`0x103EAEC0`) → `PrimaryAttack` (`0x103EACA0`) →
 `CWeaponMelee::RequestActivity` (`0x103E9E00`) reaches the player through two virtuals of its own:
-`+0x52C` `PlayerSelectMeleeSequence` (`0x10160F90`) picks the sequence from the authored button
-masks, and `+0x4DC` `CBaseCombatCharacter::ForcePreTranslatedSequenceAndActivity` (`0x103250D0`)
-commits it. Neither `SetAnimation` nor the ordinary selector is involved, which is why code `5`'s
-melee arm can be dead compiled code while melee plainly works.
+`+0x52C` (slot 331) picks the sequence and `+0x4DC`
+`CBaseCombatCharacter::ForcePreTranslatedSequenceAndActivity` (`0x103250D0`) commits it. Neither
+`SetAnimation` nor the ordinary selector is involved, which is why code `5`'s melee arm can be dead
+compiled code while melee plainly works.
+
+**`+0x52C` is forked on the OWNER's class, and the two arms are different systems**: the player's
+`PlayerSelectMeleeSequence` (`0x10160F90`) picks from the authored button masks and *fails* when no
+candidate carries one, while every NPC gets `CBaseCombatCharacter::ChooseMeleeAttackSequence`
+(`0x10347180`), which scores candidates geometrically against the enemy and de-scores any candidate
+that *does* carry a mask. The full rule, the vocabulary split it creates and the measured
+consequence for the `2COMBO` family are in `docs/vtmb/combat-and-damage.md` → "The melee sequence
+selector is two systems, forked on the owner's class".
 
 **The airborne test melee uses is not the ground flag.** `0x101613B0` switches on the *ideal*
 activity at `+0xff0`:

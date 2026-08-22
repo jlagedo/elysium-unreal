@@ -416,6 +416,14 @@ public:
 		int32 Serial = 0;
 		int32 ModeIndex = INDEX_NONE;
 		bool bMelee = false;
+		// --- The attack's own identity across a combo chain -------------------------------------
+		// `Serial` is bumped by every LINK, because the queued commit has to be able to tell one
+		// link from the next. These two name the ATTACK instead: `ChainRoot` is the serial of the
+		// press that opened it and holds still for the whole chain, and `ChainLink` counts 1, 2, 3
+		// down the authored successors. Diagnostics only — the transaction reads neither, and neither
+		// is saved: a load does not restore a body mid-clip, so a restored swing has no chain to name.
+		int32 ChainRoot = 0;
+		int32 ChainLink = 0;
 		FString Activity;                  // the LOGICAL activity (`ACT_MELEE_ATTACK_2COMBO`, ...)
 		FString ClipLabel;                 // the concrete clip the embodiment resolved, or empty
 		// The stem that OWNS that clip — the body's own or the bank the include DAG named. It is the
@@ -729,10 +737,31 @@ private:
 	// authors no rate really does play at the authored speed. Only the melee family recovers a rate
 	// today, and the returned length is the clip's AUTHORED one either way, so a caller timing its
 	// schedule divides by the rate exactly once.
+	// `bRequirePlayerStateMask` selects the PLAYER arm of retail's melee sequence selector (vtable
+	// slot 331 on the owner): direction-keyed selection only, no weighted fallback, and a miss is a
+	// miss. It is the melee attack path's and the player's — see
+	// `FElysiumActivityClipRequest::bRequireStateMask` — so every other caller leaves it false and
+	// gets the cast arm, which is what an NPC swing takes.
 	float ResolveAndPlay(const FString& Activity, EElysiumAnimPriority Band,
 		const FElysiumWeaponMode& Mode, FString& OutClipLabel,
 		FString* OutOwnerStem = nullptr, float* OutMaxReachCm = nullptr,
-		float PlaybackRate = 1.0f);
+		float PlaybackRate = 1.0f, bool bRequirePlayerStateMask = false);
+
+	// The owner's half of an activity request, filled from the CHARACTER rather than from this
+	// weapon: one `FElysiumWeapon` is held by a player and by a combatant, and the classname, the
+	// equipped weapon and the state that select a translation are all the holder's. One owner for the
+	// shape, because the probe below and `ResolveAndPlay` must ask the same question.
+	bool BuildActivityClipRequest(FElysiumCombatCharacter& Char, const FString& Activity,
+		FElysiumActivityClipRequest& Out) const;
+
+	// What one activity WOULD swing at, committing nothing: the acquisition reach and the name the
+	// vocabulary was finally searched for.
+	//
+	// It exists because `CWeaponMelee::RequestActivity` acquires BEFORE it commits a sequence, and
+	// the automatic `2COMBO` promotion can be refused by that acquisition — so the reach has to be
+	// answerable without a clip already playing. Resolution is pure and spends no RNG, so probing an
+	// activity and then playing it selects the same clip twice rather than two different ones.
+	//
 
 	// Which `Operator_HandleAnimEvent` body this weapon's authored record selects.
 	ElysiumWeapons::EOperatorBody OperatorBody() const;

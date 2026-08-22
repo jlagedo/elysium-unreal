@@ -462,8 +462,20 @@ void FElysiumEntityWorld::UpdatePlayerWeaponFrame()
 	}
 	const FElysiumWeapon::EVerdict Verdict =
 		Weapon->ItemPostFrame(HeldMask, PressedMask, AimTarget);
-	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) player weapon frame %s -> %s"),
-		NowSeconds(), *Weapon->DebugString(), FElysiumWeapon::VerdictName(Verdict));
+
+	// **Logged on the EDGE, and never for `Idle`.** This frame runs on any held weapon button, not
+	// only on a press, so a trigger held through an attack's recovery answers `Idle` — "no button
+	// asked for anything" — on every frame of it. At frame rate that is hundreds of identical lines
+	// a second, and it buries the melee timeline and everything else in the log. An unchanged verdict
+	// says nothing the previous line did not, so only a change is reported; `Idle` is the resting
+	// answer and is never worth a line of its own.
+	const int32 VerdictKey = static_cast<int32>(Verdict);
+	if (Verdict != FElysiumWeapon::EVerdict::Idle && VerdictKey != LastLoggedWeaponVerdict)
+	{
+		UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) player weapon frame %s -> %s"),
+			NowSeconds(), *Weapon->DebugString(), FElysiumWeapon::VerdictName(Verdict));
+	}
+	LastLoggedWeaponVerdict = VerdictKey;
 }
 
 void FElysiumEntityWorld::UpdatePlayerMeleeMovementStop(const FElysiumIdealActivityState& State)

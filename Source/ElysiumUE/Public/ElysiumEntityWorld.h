@@ -719,6 +719,13 @@ private:
 	// like.
 	uint64 PlayerButtons = 0;
 	uint64 ConsumedPlayerButtons = 0;
+	// The last verdict the player weapon frame logged, as its raw enumerator. Diagnostics only, and
+	// not saved: that frame runs while ANY weapon button is held, so a held trigger reports the same
+	// resting verdict every frame — hundreds of lines a second that say nothing changed. The line is
+	// worth having on an EDGE and worthless repeated, so this is what makes it one. `INDEX_NONE` is
+	// "nothing logged yet". Typed as an int rather than `FElysiumWeapon::EVerdict` because the weapon
+	// class is a `Substrate/` private header and this one is the module's public API surface.
+	int32 LastLoggedWeaponVerdict = INDEX_NONE;
 	struct FActiveUse
 	{
 		FElysiumUseContext Context;

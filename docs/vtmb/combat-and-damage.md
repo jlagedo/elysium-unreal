@@ -496,10 +496,39 @@ rank table recovered from `vampire.dll`:
 |---:|---:|---:|---:|---:|---:|---:|
 | `ACT_MELEE_ATTACK_2COMBO` chance | 0% | 10% | 25% | 45% | 70% | 100% |
 
-On success the function recursively requests `ACT_MELEE_ATTACK_2COMBO`; otherwise it continues
-with the ordinary activity. **This substitution is not the combo chain** — that is a separate,
-press-driven hand-off documented below — and no movement direction is read in *this* branch.
-Direction enters one step later, in sequence selection.
+Rank 0 is a hard zero rather than a small chance: the comparison is `draw < 0.0`, which no draw in
+`[0, 99]` satisfies, so a character who never raises the controlling Ability can never be offered
+the substitution at all. The two dwords preceding the table are also zero, so the degenerate path
+— no Abilities stat list found, and the static `CVStatList_t(-1)` fallback used instead — reads 0
+as well.
+
+**The substitution is a TRY, not a switch.** On a winning draw the function re-enters itself with
+`ACT_MELEE_ATTACK_2COMBO` (`0x103E9EF5` pushes the activity, a cleared force flag and the caller's
+third argument) and takes that answer **only if the inner call returns true** (`0x103E9F03`). A
+false answer falls through to `0x103E9F09` and the outer call performs the **ordinary** activity.
+So the ability roll decides whether the combo is *offered*, not whether it happens.
+
+**On the player it is offered and then refused, essentially always** [live-capture verified]. The
+inner call fails in the owner's melee sequence selector (next section): `CBasePlayer`'s arm answers
+only candidates carrying an authored button mask, and **no `ACT_MELEE_ATTACK_2COMBO_<FAMILY>`
+sequence in the shipped corpus carries one**. A Frida capture against the pinned binary, katana,
+Melee base 5 (a 100% draw), recorded 26 recursions in 29 presses and **23 refusals**; a second
+capture recorded **43 of 43** player presses requesting the combo and losing it, with the selector
+returning failure on every one. NPC-owned weapons in the same captures committed their `2COMBO`
+normally, because the cast arm of the selector reads no mask. The player-facing consequence is that
+the automatic combo is **unreachable for the player at every rank, with or without a target**,
+while every NPC can play it.
+
+Two readings this evidence rules out. The abort at `0x103EA1DD` — return false when nothing was
+acquired *and* the translated activity is still the generic `0x4D` and the force flag is clear — is
+**not** what refuses these: `CBaseCombatWeapon::ActivityOverride` translated `0x4D` on 48 of 48
+observed calls and never once returned it unchanged, so that branch is unreached for any weapon
+whose ladder answers a playable `..._2COMBO_<FAMILY>`. Nor is acquisition involved: refusals and
+acceptances did not separate on whether a target was found.
+
+**This substitution is not the combo chain** — that is a separate, press-driven hand-off documented
+below — and no movement direction is read in *this* branch. Direction enters one step later, in
+sequence selection.
 
 **A `2COMBO` clip terminates a chain.** No `ACT_MELEE_ATTACK_2COMBO` sequence in the corpus names
 a chain successor, so an ability roll that promotes the swing to `2COMBO` also ends the player's
@@ -520,7 +549,7 @@ logical activity
   -> weapon ActivityOverride
   -> player NPC_TranslateActivity
   -> enumerate matching model sequences
-  -> select by sequence state mask and activity weighting
+  -> select through slot 331 on the OWNER (player: button masks; NPC: geometric fit)
   -> commit activity, sequence, cycle and playback rate
 ```
 
@@ -529,9 +558,36 @@ preblock, block, heavy-block and left/right blocked-reaction sequences for fists
 melee weapons. Multiple sequences can answer one activity and their `actweight` controls the
 candidate order.
 
-### The direction key selects which attack, at swing start
+### The melee sequence selector is two systems, forked on the owner's class
 
-The player selector at `0x10160F90` reads each candidate sequence's authored button mask at
+A melee attack's sequence is chosen through **vtable slot 331 (`+0x52C`) on the OWNER**, which
+`CWeaponMelee::RequestActivity` calls at `0x103EA1A3`. The slot holds two unrelated
+implementations, and which one runs is decided by the owner's class and nothing else:
+
+| Owner | Slot 331 | Selects by |
+|---|---|---|
+| `CBasePlayer`, `CHL2_Player` | `0x10160F90` | the authored button mask at `+0x2D4` |
+| `CBaseCombatCharacter` and all 77 NPC classes | `CBaseCombatCharacter::ChooseMeleeAttackSequence` (`0x10347180`) | geometric fit against the enemy |
+
+The two arms partition the authored melee vocabulary. The player arm answers **only** masked
+candidates; the cast arm reads `+0x2D4` exactly once, to **zero a candidate's score when a mask is
+authored**. So masked clips are the player's and unmasked clips are the cast's, and a family
+authored without masks — the whole `2COMBO` set — is reachable by NPCs and by nothing the player
+does.
+
+**The cast arm.** `ChooseMeleeAttackSequence` scores every candidate and picks by preference over
+the resulting flag word: the authored reach band at `+0x2CC`/`+0x2D0` against the measured enemy
+distance (the band is also accumulated onto the weapon's own min/max fields at `+0x22E`/`+0x230`), a
+movement/hull trace for obstruction, and whether the enemy falls inside the clip's authored swing
+volumes at `+0x2C0`. `FUN_10348100` then walks eight ranked flag combinations twice — once with an
+enemy-in-range bit forced, once without — and the first candidate matching a combination wins. A
+body with no enemy takes a two-try `0x10`-then-`0` walk instead. No random draw enters the choice.
+
+#### The player arm: the direction key selects which attack, at swing start
+
+The player selector at `0x10160F90` first requires a **melee-capable weapon** — the active weapon's
+capability mask (virtual `+0x5A0`) must intersect `0x18000`, or it returns false before looking at
+any sequence. It then reads each candidate sequence's authored button mask at
 `+0x2D4` and matches it against `m_nButtons & 0x79A` — the movement half of the current button
 field, sampled once when the swing starts. The five authored mask values and their meanings:
 
@@ -552,13 +608,25 @@ an absence, which is why `-1` is the only marker tested. The target argument is 
 selector. Per candidate `i`:
 
 ```c
+*out = -1;                                                              // the seed, and the verdict
+if (!weapon || (weapon->CapabilityMask() & 0x18000) == 0) return false; // melee-capable only
 mask = seqdesc->+0x2D4;  hit = buttons & mask;
 if (mask == 0xFFFFFFFF) continue;                                       // not a candidate
 if (mask == 0) { bestZero = i; if ((buttons & 0x79A) == 0) return i; }  // neutral, exact
 else if (hit) { if (hit == (buttons & 0x79A)) return i;                 // exact
                 if (hit & 0x18) best18 = i; else if (hit & 0x600) best600 = i; }
-return best18 >= 0 ? best18 : best600 >= 0 ? best600 : bestZero;
+*out = best18 >= 0 ? list[best18] : best600 >= 0 ? list[best600]
+     : bestZero >= 0 ? list[bestZero] : *out;                           // untouched when none matched
+return *out >= 0;                                                       // -1 survives -> FAILURE
 ```
+
+**An activity none of whose candidates authors a mask is not answered at all.** `*out` is seeded
+with `-1` and the function returns `*out >= 0`, so when every candidate carries the `-1` marker no
+arm of the ranking writes anything and the selector reports failure. This is not the "no direction
+held" case — that is the zero-mask fallback, which requires a candidate that *states* mask `0`. It
+is the case where the activity is simply outside the player's half of the vocabulary, and it is what
+refuses the `2COMBO` substitution on every player press (previous section). The caller's own
+fallback then decides what happens; `RequestActivity` performs the ordinary attack.
 
 **The authored mask is the runtime's own button enum, and nothing remaps it.** The selector ANDs
 the player's live `m_nButtons` (`+0x2088`) straight against the file's `+0x2D4`, and the numbering

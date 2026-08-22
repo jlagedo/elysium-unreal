@@ -898,6 +898,39 @@ bool UElysiumGameFlowSubsystem::EnterStage(FString& OutError, bool bWithGreenRoo
 		OutError = TEXT("no map subsystem");
 		return false;
 	}
+	// The stage world's player is the game's player. It seats the same pawn, builds the same player
+	// entity and runs the same player think a map does, so the one thing that would make it a
+	// mannequin is the character record behind it: a cold stage launch never went through New Game,
+	// and a zeroed record means no clan, no clan effects, no soak and no derived health block — a
+	// sheet every rule that reads one (combat, disciplines, feats, skill gates) is fail-closed
+	// against. Seed the developer character `elysium.newgame` seeds, through the same
+	// SeedNewGameState funnel and with no entry point, because nothing here travels.
+	//
+	// Only when the session is carrying no character: `elysium.gr` opened mid-run must keep the run's
+	// own player, and seeding is destructive (BeginNewGame clears `G`, the quests, the snapshots, the
+	// sheet and the clock). The clan slot is the test because it is what a valid character always
+	// has and a zeroed record never does.
+	if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
+	{
+		if (!FElysiumSheet::IsValidClan(GameState->PlayerRecord().Sheet.Clan()))
+		{
+			if (SeedNewGameState(ElysiumStory::MakeMockCharacterRequest(FString())))
+			{
+				UE_LOG(LogElysiumFlow, Log,
+					TEXT("stage: seeded the developer character — '%s', %s %s"),
+					*GameState->PlayerRecord().Name,
+					FElysiumSheet::ClanName(GameState->PlayerRecord().Sheet.Clan()),
+					GameState->PlayerRecord().Sheet.IsMale() ? TEXT("male") : TEXT("female"));
+			}
+			else
+			{
+				UE_LOG(LogElysiumFlow, Warning,
+					TEXT("stage: the developer character could not be seeded — the stage world's "
+						"player will carry a zeroed sheet"));
+			}
+		}
+	}
+
 	// Asked from inside a stage world, this only re-arms whatever was armed over it: nothing loads,
 	// so nothing will publish ready, and moving to Loading would strand the app behind the overlay
 	// forever.
