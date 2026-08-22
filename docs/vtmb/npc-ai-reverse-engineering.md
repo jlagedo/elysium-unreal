@@ -920,6 +920,11 @@ The combat-facing condition identities needed by those bodies are fixed by the r
 | `0x5f` | `TOO_CLOSE_TO_ATTACK` | `0x60` | `TOO_FAR_TO_ATTACK` |
 | `0x63` | `WEAPON_BLOCKED_BY_FRIEND` | `0x66` | `WEAPON_SIGHT_OCCLUDED` |
 
+`KNOCKBACK` is registered and read but never produced, so the two `SelectSchedule` branches that
+test it and the three melee-idle schedules that list it as an interrupt are unreachable; the
+knockback reaction forces its schedule directly instead (`docs/vtmb/combat-and-damage.md` →
+"`COND_KNOCKBACK` is a dead condition").
+
 The melee selector is ordered policy, not a random attack picker. Scripted combat-mode and weapon
 switch gates run first, followed by door/class helpers. `SHOULD_DODGE` returns
 `SCHED_TROIKA_MELEE_DODGE` (`0xd5`); `SHOULD_BLOCK` returns
@@ -1329,12 +1334,13 @@ pool it calls `Event_Killed`. The shared death body (`0x1032b9b0`) enters life s
 cleans weapon/effect/ownership state, constructs the ragdoll-force envelope, and notifies killer
 and game rules. `CAI_BaseNPC::Event_Killed` (`0x10265ad0`) then:
 
-1. ignores a repeated call already in the death schedule;
-2. defers death when a non-interruptible scripted sequence owns the NPC, otherwise cancels script
-   ownership;
+1. refuses the kill outright while the current schedule (`+0x5c38`) is `GetScheduleOfType(0x3a)`
+   — schedule type **`NPC_FREEZE`**, not a death schedule. A frozen NPC does not die;
+2. defers death while a **started** scripted sequence owns it, otherwise cancels script ownership;
 3. cleans navigation, marks current/ideal NPC state 7 (dead), vacates strategy and squad state;
 4. fires `OnDeath` once through its `+0x5bd4` guard and notifies the AI death path; and
-5. emits death sound/solid-body policy and selects the death schedule.
+5. emits the carcass sound or starts the corpse fade, then leaves the death schedule to the
+   dead-state selector.
 
 The Troika override (`0x102bf340`) composes game-specific cleanup around that base transaction:
 release the hint/claims and feed-related ownership, notify owning/maker systems, run Python
@@ -1343,6 +1349,71 @@ outer path (`0x10163af0`): it ends conversations/controllers/grapples and active
 notifies game rules, enters the player death action/screen (`vdata/Signs/death.txt`), and then uses
 the same combat-character death cleanup. NPC and player can therefore kill each other through one
 health threshold while retaining different AI, I/O and presentation consequences.
+
+#### The dead-state schedule
+
+`CAI_BaseNPC::SelectSchedule` (`0x1028a380`) is the only producer of either death schedule, and it
+decides on the **ragdoll's availability**, not on the damage:
+
+```
+case NPC_STATE_DEAD (7):
+    BecomeClientRagdoll(vec3_origin, forceBone = -1, 0)
+        ? SCHED_DIE_RAGDOLL (0x2c)
+        : SCHED_DIE         (0x2b)
+```
+
+`BecomeClientRagdoll` returns false when the model carries no ragdoll collide, so a model without
+one animates its death instead.
+
+| Schedule | Type id | Tasks | Interrupts |
+|---|---|---|---|
+| `DIE` | `0x2b` | `TASK_STOP_MOVING 0`, `TASK_SOUND_DIE 0`, `TASK_DIE 0` | none |
+| `SCHED_DIE_RAGDOLL` | `0x2c` | `TASK_STOP_MOVING 0`, `TASK_SOUND_DIE 0` | none |
+
+Every argument is zero; neither schedule carries a non-zero task argument, and neither declares an
+interrupt condition. Task ids are `TASK_STOP_MOVING` `0x69`, `TASK_SOUND_DIE` `0x49`, `TASK_DIE`
+`0x5f`; the death family also registers `TASK_DIE_IF_PLAYER_CANT_SEE` `0xdc`, `TASK_DIE_IMMEDIATE`
+`0xdf`, `TASK_DIE_GIB` `0xe9`, `TASK_DIE_EXPLODE_GIB` `0xea` and `TASK_DIE_DUE_TO_PLAYER` `0xeb`.
+Named Troika and per-NPC death schedules — `SCHED_TROIKA_D_VISION_OF_DEATH`,
+`SCHED_TROIKA_D_SUICIDE`, `SCHED_TROIKA_DO_BLOODBOIL_DEATH_ACTIVITY`,
+`SCHED_TROIKA_DO_INTERESTING_PLACE_DEATH`, `SCHED_TROIKA_FLEE_AND_DIE`, `SCHED_VGARGOYLE_DEATH`,
+`SCHED_VANDREIBLOOD_DEATH`, the five `SCHED_VMING_XIAO_*_DIE` and `SCHED_VZOMBIE_ANIMATED_DEATH` —
+are reached by their own selectors, not by the dead-state branch.
+
+#### Death deferred under a scripted sequence
+
+The deferral test in `CAI_BaseNPC::Event_Killed` reads the owning sequence, not an interruptibility
+verb:
+
+```
+if (m_NPCState == NPC_STATE_SCRIPT && m_hCine != NULL) {
+    if (m_hCine->m_sequenceStarted            // CCineNPC +0x5f91
+        && (m_hCine->m_spawnflags & 0x2080) != 0x80)
+    {
+        copy the 0x4c-byte damage packet to CAI_BaseNPC +0x1a48; return;
+    }
+    CancelScript(m_hCine);                    // 0x101a8c30
+    ...re-enable physics motion...
+}
+```
+
+**Deferral is the default.** Once a sequence has started, the only combination that lets the kill
+proceed immediately is spawnflag bit `0x80` set with bit `0x2000` clear. Bit `0x80` is Source's
+`SF_SCRIPT_DONT_TELEPORT_AT_END`; bit `0x2000` is Troika-added, and its only two consumers are this
+test and `CineCleanup`'s branch that snaps the entity onto its `Bip01` bone origin and angles. The
+authored name of `0x2000` is not present in the image.
+
+**The stashed packet is a dead store.** `CAI_BaseNPC +0x1a48 … +0x1a92` is written only by this
+branch, appears in no datamap, and is read nowhere in `vampire.dll` or `client.dll`. The deferred
+death resumes instead through `CineCleanup` (`0x1027d170`), whose tail reads
+`if (m_iHealth < 1) { SetIdealState(NPC_STATE_DEAD); SetCondition(LIGHT_DAMAGE 0x4c); }`. A kill
+that lands mid-sequence is therefore re-derived from the health counter when the script releases
+the actor, and every field of the original damage packet — attacker, force, damage type — is lost.
+
+`CineCleanup`'s other branch handles an NPC that did reach life state 1 (dying) inside the script:
+health is forced to 0, `FSOLID_NOT_SOLID` is added, state becomes 7 with life state 2 (dead), the
+hull collapses to `mins.z + 2.0`, and the corpse fades unless the sequence sets
+`SF_SCRIPT_LEAVECORPSE` (`0x8`), in which case use/think/touch are merely cleared.
 
 ## What a complete game-side NPC AI requires
 

@@ -650,7 +650,7 @@ base activity is translated and selected against the model:
 | `0x10164870` | ordinary player selector | writes `move_yaw`, `aim_yaw` and `aim_pitch`, chooses a base activity, then calls the apply path |
 | `0x101644f0` | activity/sequence apply | stores ideal activity, translates/sets the activity, chooses weighted or heaviest sequence, stores `m_nSequence`, calls `ResetSequenceInfo`, and derives playback rate |
 | `0x1008dc40` / `0x1008dd30` | `SelectWeightedSequence` / `SelectHeaviestSequence` | resolve one activity against the current studio header |
-| `0x10090950` | `ResetSequenceInfo` | resets cycle/sequence state after a changed selection or a finished one-shot is reselected |
+| `0x10090950` | `ResetSequenceInfo` | re-derives the per-sequence state after a changed selection — yaw speed, ground speed, the loop flag, playback rate `1.0`, `m_bSequenceFinished` cleared. It does **not** touch `m_flCycle` |
 
 The classifier is driven by state after movement rather than by raw input. Its decompile tests the
 current velocity components, ground flags, water level, jump/landing state, a live interaction
@@ -708,6 +708,46 @@ numeric identities independently fixed by the global registration table:
 Presence in this selector does not prove a branch is reachable in shipped gameplay. In particular,
 the activity inventory is broader than the reconstructed movement system, so a controlled trace is
 what separates a live action from inherited/dead engine code.
+
+#### The cycle is never stored, and only a gait inherits one [VtMB decompiled]
+
+`m_flCycle` (`+0x6F8`) has no saved-and-restored form anywhere in the image. Every writer is a
+zero, `StudioFrameAdvance`'s own advance, or a copy of *another entity's* live cycle —
+`CopyAnimationDataFrom`, the viewmodel follow at `0x101618E0`, `CPayphone::vfunc431`, and the
+`m_hControllerNPC` possession mirror in `CBasePlayer::PostThink`, which copies sequence, anim time,
+cycle, playback rate, the four `0x30`-byte `m_AnimOverlay` slots and the three `0x1C`-byte flinch
+slots in one pass. So "resuming" a deselected sequence is never a remembered phase; it is only ever
+whatever cycle the channel was left holding.
+
+The **player** apply path `0x101644F0` takes `(baseActivity, layerActivity, flag)` — `ret 0xC` — and
+decides in three steps:
+
+1. **Reselecting the same activity is a complete no-op** while the translated activity equals
+   `m_Activity` and `m_bSequenceFinished` is clear: no `SetActivity`, no sequence choice, no
+   `ResetSequenceInfo`, no playback-rate rewrite, cycle untouched. For the airborne set —
+   `ACT_HOP`, `ACT_HOP_UP`, `ACT_HOP_DOWN` (`0x28`–`0x2a`), `ACT_LEAP`, `ACT_LEAP_ASCEND`,
+   `ACT_LEAP_DESCEND`, `ACT_FALLING` (`0x2c`–`0x2f`) — the `m_bSequenceFinished` term is dropped
+   from that test, so a finished airborne one-shot does not re-drive selection.
+2. When a different sequence index is chosen, or the current one has finished, `m_nSequence` is
+   stored and **`m_flCycle` is zeroed unless the *incoming* activity is one of the five gaits** —
+   `ACT_WALK` (`9`), `ACT_SNEAK` (`0x12`), `ACT_RUN` (`0x13`), `ACT_WALK_RELAXED` (`0x16`),
+   `ACT_RUN_RELAXED` (`0x17`). The outgoing activity is not consulted.
+3. `ResetSequenceInfo` then re-derives the per-sequence state, leaving the cycle exactly as step 2
+   left it.
+
+The **NPC** path `CAI_BaseNPC::SetActivityAndSequence` (`0x10272490`) states the same idea as a
+*paired* rule, and a narrower one: the cycle survives only when the same sequence is reselected and
+it loops, or when the outgoing **and** incoming activity are both in `{ACT_WALK, ACT_RUN}`.
+
+Two observable consequences follow. Gait changes keep their foot phase — walk↔run on either body,
+and on the player any gait entered from anything at all. And a **reaction hands the resumed gait its
+own ending cycle**: `PlayerDefenderBlockReaction` applies `ACT_BLOCK`/`ACT_BLOCK_HEAVY` as a base
+activity, which zeroes the cycle on entry, and when the ordinary selector next answers a gait the
+gait starts at whatever the reaction clip reached. `StudioFrameAdvance` clamps a finished
+non-looping sequence to cycle `1.0` (and to `0.0` if it ran backwards past zero), so a reaction that
+plays out hands the gait its final frame and the gait wraps on the next advance, while a reaction
+cut short hands it an arbitrary mid-cycle. Returning to `ACT_IDLE` restarts at zero, and the same
+reaction-to-gait transition on an NPC restarts at zero.
 
 #### Each arm, as ordered rows [VtMB decompiled]
 

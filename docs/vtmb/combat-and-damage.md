@@ -67,10 +67,11 @@ automatic-success metadata.
 
 ### The authored knockback inputs [data-verified]
 
-Knockback is authored in four separate places, and they do not all have consumers. **The one that
-actually selects a knockback is the sequence descriptor's own swing records** — see "Knockback"
-below; the three item/rules keys catalogued here are a dead field, a ranged distance pair and a
-player-only view-kick refractory.
+Knockback is authored in five separate places, and they do not all have consumers. **The one that
+actually selects a melee knockback is the sequence descriptor's own swing records** — see
+"Knockback" below; the three item/rules keys catalogued here are a dead field, a ranged distance
+pair and a player-only view-kick refractory. The fifth is the discipline `HitInfo` block, which
+owns two mutually exclusive keys of its own — see "The discipline knockback path" below.
 
 **`knockback_chance` is a melee key, on sixteen weapon definitions**, a probability in `0..1`:
 
@@ -111,8 +112,10 @@ landing more than `KnockbackPreventTime` after the last one takes the large kick
 window takes the small one, and either re-arms the timer. It never prevents a knockback, and it
 never applies to an NPC. The name describes an intent the shipped code does not implement.
 
-The fourth authoring — the one the runtime actually selects from — is the **per-swing knockback
-table inside each sequence descriptor's swing records**, covered under "Knockback" below.
+The fourth authoring — the one the melee runtime actually selects from — is the **per-swing
+knockback table inside each sequence descriptor's swing records**, covered under "Knockback"
+below. The fifth is the **discipline `HitInfo` block**, whose `AI_Schedule` and `Knockback` keys
+reach two different mechanisms; both have consumers, and no authored hit table sets both.
 
 ## `CVDmg_t`: the 17-word damage descriptor
 
@@ -805,6 +808,23 @@ requires a block-capable defender, a held melee weapon and a frontal/facing test
 as actively blocking while its ideal activity is `ACT_PREBLOCK` or `ACT_BLOCK`; non-player
 defenders use the stored roll classifier.
 
+**The frontal test is the open forward hemisphere** [VtMB decompiled]. The defender is
+`WasMeleeBlocked`'s *argument*, not its `this` — the argument is what takes the block-capable
+virtual `+0x510` and `IsHoldingMeleeWeapon`. The test dots the defender's forward vector,
+`AngleVectors(defender->GetAbsAngles())` from virtual `+0x36c`, against the **normalized**
+attacker-minus-defender delta built from virtual `+0x364`, and admits the block on
+**`dot > 0` strictly**. The comparand at `0x104454C4` is **`0.0f`**, byte-identical in the patched
+`vampire.dll` and in `vampire.dll.12`, so there is no cone angle: the half-angle is exactly 90° and
+an attacker standing exactly abeam is **refused**. Two details complete it:
+
+- the dot is **3D**, including the vertical term, but `GetAbsAngles` carries no pitch on a combat
+  character, so `forward.z` is zero and the sign of the 3D dot equals the sign of the planar
+  bearing;
+- the delta is normalized in place by a `Vector` method that returns its length, and that length is
+  compared against `0x1049E024` = **`1e-4f`** first. At or below that separation the facing test is
+  **skipped entirely and the block is allowed** — coincident origins name no direction, and retail
+  resolves that in the defender's favour.
+
 On a blocked contact, the defender callback at `0x10160BC0` rolls bonus soak dice from attribute
 slot 2 (`Dexterity`) through `AddBonusSoakRolls` (`0x10349710`), which adds them into the opposed
 record's **word 3**, then classifies the updated record. **In the shipped call ordering those dice
@@ -839,11 +859,11 @@ never stores a weapon-suffixed reaction.
 **Where the reproduction departs from that record.** Each is an explicit owner call, taken with
 the blocked/stagger family and recorded here beside the behaviour it departs from:
 
-- **The frontal test is reproduced as the full forward hemisphere, ±90° — chosen, not
-  recovered.** `0x10345AB0`'s facing constant is undecoded, so no cone angle is known. The
-  hemisphere is the deliberately permissive reading: a tighter cone would refuse blocks retail
-  allows, and refusing a legal block is the worse failure. Decoding the constant closes it
-  (`RE-R3`).
+- **The frontal test's two boundaries.** `ElysiumReactions::IsFrontalContact` reproduces the
+  recovered hemisphere as a planar `|bearing| <= 90°`, which agrees with retail everywhere except
+  at the boundary itself: it **admits** an attacker standing exactly abeam where retail refuses it,
+  and it **refuses** a horizontally coincident attacker where retail allows the block. The planar
+  reading is exact for the rest of the fan because the defender's absolute angles carry no pitch.
 - **The `Dexterity` bonus-soak re-roll at `0x10160BC0` is left to the damage/soak system.** This
   rung owns the pose, not the number — which costs nothing against retail, where those dice do not
   change the triggering hit either.
@@ -856,6 +876,10 @@ the blocked/stagger family and recorded here beside the behaviour it departs fro
   flinch at all is not affected by the substitution: the flinch is requested from `TraceAttack`, not
   from `OnTakeDamage_Alive`, so a blocked **non-damaging** melee contact never reaches
   `DispatchTraceAttack` and therefore never flinches, while a fully-soaked damaging one does.
+  What the substitution costs on the way out is named: retail's overlay never touches the base
+  cycle, while a base-channel reaction hands the resumed gait the cycle it was left at
+  ([animation_and_movers.md](animation_and_movers.md) → "The cycle is never stored, and only a gait
+  inherits one").
 - **A player blocking into the hit/knockback margin plays no defender pose**, while the attacker
   still plays its blocked reaction — the chosen reading of `WasMeleeBlocked` gating both callbacks
   off one predicate.
@@ -952,6 +976,92 @@ The `_INTO` / `_LAND` / `_WALL_LAND` clips end on sequence completion. The fligh
 **land detection** — the body is grounded, or it is falling and a ground probe succeeds. Wall
 contact diverts instead: the rebound velocity is the wall vector times `100.0`, a timer is armed at
 `curtime + 0.01`, and the chain enters `..._WALL_FALL`.
+
+#### The discipline knockback path
+
+A discipline reaches knockback through its `HitInfo` block, and the two keys it may author are
+different mechanisms, not two settings of one.
+
+**`Knockback` enters the shared chain.** The key is parsed as an integer percent into `HitInfo`
+`+0x4C` (`0x101DDFB0`); the apply body (`0x101DE660`) tests it for non-zero only and calls the
+shared knockback entry `0x10344F80` with an away-vector it builds from the source and target
+origins. **The authored percentage is not forwarded** — `0x10344F80` takes no magnitude argument,
+so `"50%"` and `"100%"` are the same instruction. From there the hit runs the ordinary chain:
+direction classification, `LookupActivity`, `TranslateFlyingKnockbackActivity` when victim `+0xA8
+!= 0`, the yaw snap when `+0xA8 == 0`, then the reaction virtual `+0x500`.
+
+**`AI_Schedule` bypasses the chain entirely.** The key is stored as a **string** at `HitInfo`
+`+0x34`, and the apply body resolves it by name at hit time — no schedule id appears in the image
+for these — then forces it with `SetSchedule(id, false)`. Two of the schedules it can name carry
+`TASK_SET_KNOCKBACK_ACTIVITY`:
+
+| Schedule | id | Named by |
+|---|---:|---|
+| `SCHED_TROIKA_D_BLOODSHOT_KNOCKBACK` | `0x144` | Thaumaturgy **Blood Strike**, `Hit_Human` and `Hit_Strata_2` |
+| `SCHED_TROIKA_D_BURROWING_BEETLE` | `0x134` | Animalism **Burrowing Beetle**, `Hit_Human` (inherited by `Hit_Supernatural`, `Hit_Strata_1`, `Hit_Strata_2`) |
+
+Both are the same program, and both pass the same activity:
+
+```text
+TASK_MAKE_OBLIVIOUS           TRUE
+TASK_SET_NPC_FLAG             NPCFlag:D_IS_BUSY     (beetle: TASK_SET_FAIL_SCHEDULE SCHEDULE:Idle_Stand)
+TASK_SET_PRESERVE_PATH        0
+TASK_STOP_MOVING              0
+TASK_SET_KNOCKBACK_ACTIVITY   ACTIVITY:ACT_KNOCKBACK_SMALLLOW
+TASK_ADD_EVENT_EXPRESSION     EXPRESSION:KNOCKBACK
+TASK_MELEE_KNOCKBACK          0
+Interrupts                                          (empty — uninterruptible)
+```
+
+- **`TASK_SET_KNOCKBACK_ACTIVITY` is task `0xF1`**, and its whole body is `m_knockbackType =
+  activity; TaskComplete()`. It exists because the discipline path never enters the melee reaction
+  body `0x102A01B0`, which is what normally fills `m_knockbackType` from the swing-record candidate
+  table; without it the task below would replay whatever the last melee knockback left behind.
+- **`TASK_MELEE_KNOCKBACK` is task `0x92`**. Its start clears all three flinch/gesture layer slots
+  (`m_Flinch_0..2` sequence `-1`, via the NPC virtual `+0x428`) and then *restarts* the ideal
+  activity — so a knockback cancels an in-flight `DamageFlinch` gesture rather than layering over
+  it. Its run phase is `AutoMovement()` each think, completing when the sequence finishes.
+- **Nothing here launches a body.** `m_KnockbackVelocity` is computed only in `0x102A01B0`, there is
+  no direction classification and no yaw snap, and `ACT_KNOCKBACK_SMALLLOW` (`0x75`) fails
+  `IsFlyingKnockbackActivity` (`0x8A < act < 0x94`) in any case. `0x75`–`0x80` are the legacy
+  `SMALLLOW` / `SMALLHIGH` / `BIG*` band that precedes the directional `SMALL_` / `NORMAL_` /
+  `FLYING_` sets at `0x81`–`0x93`.
+
+The authored data keeps the two mechanisms disjoint: every strata that names `AI_Schedule` leaves
+`Knockback` unset, and every strata that sets `Knockback "50%"` has its `AI_Schedule` line
+commented out (Blood Strike `Hit_Strata_3/4/5` and `Hit_Boss`, Burrowing Beetle `Hit_Strata_3/5`).
+Retail (`pack101.vpk`, `vdata/system/disciplinetgt_000.txt` and `_004.txt`) and the patch author
+these lines identically.
+
+**Both knockback entries force the frame.** `0x102A01B0` and `0x101DE660` each call the NPC virtual
+`+0x998` immediately before setting the schedule; it stamps `curtime` into `m_flNextThink`,
+`m_flNextUpdateThink`, `m_flNextNormalThink`, `m_flNextMoveThink` and `m_flNextAIThink`, so the new
+schedule starts on the current frame instead of the next AI tick.
+
+#### `COND_KNOCKBACK` is a dead condition
+
+`COND_KNOCKBACK` is condition `0x28` in the retail registry (`0x102C8CE0`), and **nothing sets it**.
+`CAI_BaseNPC::SetCondition` (`0x10269A20`) is the only writer that introduces a condition id; across
+every call site in `vampire.dll` its argument is a literal in `0x01`–`0x7E` or one of four computed
+values, and `0x28` is not among them. The four computed sites are `GatherAttackConditions`
+(`0x1026DD10`, feeding `0x2F` / `0x4F` / `0x51` / `0x63` from weapon results), the delayed-condition
+queue drain (`0x102CC760`, whose two queues only ever receive `0x0B` and the `COND_HEAR_*` family)
+and `CNPC_VMingXiao::GatherConditions` (`0x77`–`0x7E`). No task sets conditions either — the
+330-entry task registry has no `TASK_SET_CONDITION`.
+
+Its consumers are therefore unreachable: `CAI_BaseNPCTroika::SelectSchedule` (`0x102AE920`) tests it
+in both `NPC_STATE_ALERT` and `NPC_STATE_COMBAT`, returning `SCHED_TROIKA_KNOCKBACK` (`0x14C`)
+either way, and three schedules list it as an interrupt (`SCHED_TROIKA_MELEE_IDLE`,
+`..._IDLE_STAND_STILL`, `..._IDLE_FRENZY`).
+
+The reason is structural rather than an oversight: `0x102A01B0` delivers the knockback by forcing
+the schedule directly, so the condition-to-selector round trip the registry entry was written for is
+bypassed. This is the same shape as `knockback_chance` above — a retail authoring that the shipped
+code never wired. A remake gains nothing by producing the condition, and reproducing the selector
+branches that read it reproduces dead code.
+
+`EXPRESSION:KNOCKBACK` in the schedule text is unrelated: it is a facial-expression token consumed
+by `TASK_ADD_EVENT_EXPRESSION`.
 
 #### The reproduction's grounded stand-ins
 
@@ -1134,22 +1244,46 @@ The shared `CBaseCombatCharacter::Event_Killed` body (`0x1032b9b0`) sets life st
 cleans weapon, effect and ownership state, constructs the ragdoll-force envelope, and notifies the
 killer and game rules. The NPC override at `0x10265ad0` is schedule-aware:
 
-- an NPC already in the death schedule ignores a duplicate kill;
-- a non-interruptible scripted sequence defers the kill packet, while an interruptible owner is
-  cancelled;
+- an NPC whose current schedule is `GetScheduleOfType(0x3a)` — schedule type **`NPC_FREEZE`** —
+  refuses the kill and returns. This guard is about being frozen, not about already dying;
+- a **started** scripted sequence defers the kill packet, otherwise the owning sequence is
+  cancelled; the deferral test and its resume are owned by
+  [npc-ai-reverse-engineering.md](npc-ai-reverse-engineering.md);
 - `OnDeath` fires once through the native guard at `+0x5bd4`;
-- current and ideal NPC state become 7 (dead), strategy and squad claims are vacated, and death
-  sound/solid-body policy leads to the death schedule.
+- current and ideal NPC state become 7 (dead), strategy and squad claims are vacated, and the
+  carcass-sound / corpse-fade fork runs; the death schedule itself is chosen later, by the
+  dead-state selector.
 
 The Troika NPC override (`0x102bf340`) additionally releases hints and feed/claim ownership,
 notifies owner/maker systems, invokes Python `MarkAsDead('<targetname>')`, and updates its special
 partner/owner memory. These are consequences of the one death commit; a maker child count must not
 be decremented from a hit or flinch path.
 
-**Two authored death-policy keys have no recovered consumer** [data-verified]. `npctemplate*.txt`
-states `Disallow_Kindred_Death` on **9** templates and `Has_Burning_Death` on **32** (out of 41 and
-34 authorings respectively; the rest are explicit zeros). Both are real authored content and
-neither is parsed anywhere in the reproduction; what reads them in retail is `RE-D5`.
+### The two authored death-policy keys
+
+`npctemplate*.txt` states `Disallow_Kindred_Death` on **9** templates and `Has_Burning_Death` on
+**32** (out of 41 and 34 authorings respectively; the rest are explicit zeros). Both are parsed
+into the character-template record by the same loader on server and client (`0x101d4520` /
+client `0x1013ec60`), inherited by the template copy (`0x101d3c10`), and reached through
+`GetCharTemplate()` into the template array:
+
+| Key | Template offset |
+|---|---|
+| `Has_Burning_Death` | `+0x98` |
+| `Disallow_Kindred_Death` | `+0x9d` |
+
+Their **single consumer** is the predicate at `0x10207df0`, which is exactly
+
+```
+ShouldBurnOnDeath(ent) = template[0x98] || (IsKindred(ent) && !template[0x9d])
+```
+
+and its only caller is `CBaseCombatCharacter::CreateCorpse`. `Has_Burning_Death` short-circuits
+true for anyone; `Disallow_Kindred_Death` only ever suppresses the Kindred half. A true result
+gives the corpse a material override (vtable `+0x3d0` producing the value passed to `+0x3cc`),
+puts it on the burn think at `curtime + 10.0`, and plays
+`character/vampire burning death.wav` through a `CPASAttenuationFilter` at 0.8 attenuation. A
+false result puts the corpse on the ordinary corpse think at the same `curtime + 10.0`.
 
 The player damage wrapper (`0x10163020`) adds player-specific refusal/protection gates and tears
 down conversation, use, grapple and special-control state before/around the shared commit. The
@@ -1157,6 +1291,76 @@ player death override (`0x10163af0`) stops active weapon/controllers, notifies g
 the death action/screen from `vdata/Signs/death.txt`, and composes the shared combat-character
 cleanup. NPCs and the player share the authoritative damage counter and lethal comparison; their
 outer AI, I/O and presentation lifecycles are deliberately different.
+
+### The ragdoll-force envelope
+
+`CBaseCombatCharacter::Event_Killed` builds one force vector and hands it to the corpse
+constructor. In order:
+
+1. Take `info`'s damage force. **If its length is `<= 0.0`, replace it** with
+   `CalcDamageForceVector` (`0x1032b290`) — a zero force is synthesised, not carried.
+2. Add the character's absolute velocity.
+3. When the physics ConVar is on and `m_pPhysicsObject` exists, add the physics object's velocity
+   and write the sum back with `SetLocalVelocity`.
+4. **Clamp the magnitude to `50000.0`**, announced by
+   `DevMsg(1, "Clamping ragdoll force from %.2f to %.2f.\n")`.
+5. Call `CreateCorpse(force, info)` through vtable `+0x4b4`.
+
+`CalcDamageForceVector` picks a magnitude and a direction independently.
+
+- **Magnitude** is the attacker's active weapon's own force when it has one; otherwise
+  `damage * 150.0`, where `damage` is `CVDmg_t::GetDmg` when the descriptor is present and the
+  scalar damage field otherwise. A weapon whose capability bits intersect `0x18000` adds a
+  stat-scaled random term drawn from two `CVStatList_t` entries.
+- **Direction** is one of four cases: `DMG_BLAST` (`0x40`) takes inflictor→victim scaled by
+  `1.5`; a self-inflicted kill takes the victim's own forward vector scaled by `-1.0`; an
+  inflictor in `MOVETYPE_VPHYSICS` (7) takes that object's velocity, and its **mass replaces the
+  magnitude**; everything else takes inflictor→victim through a ConVar-scaled height offset.
+- With neither inflictor nor attacker the whole result is `vec3_origin`.
+
+The result is then **multiplied component-wise by a per-axis scale vector carried in the damage
+record at `+0x04 … +0x0c`**. This is why the scalar `TakeDamage` I/O input produces no impulse: it
+zeroes those three floats immediately after construction, so the synthesised replacement force
+collapses to zero as well.
+
+### Corpse construction and the solid-body policy
+
+A corpse is not made non-solid by one rule. Four stages apply in sequence.
+
+**`BecomeDead` (`0x10265a40`)**, reached from the NPC `Event_Killed` when `GetFlags() & FL_NPC`
+(`0x2000`) after `SetTouch(NULL)`: `m_iHealth = m_iMaxHealth / 2`, `m_iMaxHealth = 5`,
+`m_takedamage = DAMAGE_YES` (2), `SetMoveType(MOVETYPE_TOSS, 0)`. **Solidity is untouched** — a
+fresh corpse is still solid and still takes damage.
+
+**The fade fork.** `ShouldFadeOnDeath()` (vtable `+0x8a0`) decides the next line:
+
+- false → `CSoundEnt::InsertSound(SOUND_CARCASS 0x20, GetAbsOrigin(), volume 384, duration 30.0)`;
+- true → `SUB_StartFadeOut` (`0x102695d0`): set render mode 2 with alpha 255 **only when the render
+  mode was 0**, `AddSolidFlags(FSOLID_NOT_SOLID 0x4)`, zero local angular velocity, relink, and
+  arm the fade think at `curtime + 0.0`.
+
+**`CreateCorpse` (`0x1032c0e0`)** then builds the body:
+
+- the **player** never ragdolls — the player branch spawns a static corpse and stops all 18 body
+  fire particle emitters;
+- an NPC carrying MiscFlag **`No_Ragdoll_Death` (bit 19, `0x80000`)** spawns a static corpse and
+  takes a `curtime + 0.5` think. `TASK_SET_MISC_FLAG MiscFlag:No_Ragdoll_Death` in
+  `SCHED_TROIKA_D_VISION_OF_DEATH` is the authored producer;
+- otherwise `BecomeClientRagdoll(force, bone, 0)`, where `bone` is the hitbox index carried by
+  `info`, or the bone looked up as `Bip01 Spine2` when that index is negative.
+
+**`CBaseAnimating::BecomeClientRagdoll` (`0x10090180`)** returns **false** when the model carries no
+ragdoll collide, and in that case only zeroes velocity — that false is what drives the death
+schedule choice recorded in
+[npc-ai-reverse-engineering.md](npc-ai-reverse-engineering.md). On success:
+
+- **when the force bone is `-1` it first sets a weighted-random sequence of activity `0x21`
+  (`ACT_DIERAGDOLL`) at cycle 0**, so the ragdoll starts from the first frame of a death animation;
+  with a real hit bone the current pose is kept;
+- `TriggerClientRagdoll` fires with the force and bone, `m_nRenderFX` becomes `0x17`
+  (`kRenderFxRagdoll`), and — because both call sites pass `0` for the third argument —
+  `FSOLID_NOT_SOLID` is added, move type becomes `MOVETYPE_NONE`, velocity is zeroed and the think
+  is cleared.
 
 ## Faithful implementation seams
 
@@ -1184,13 +1388,16 @@ fact document.
 synthesizes **zero** damage. From the integer it builds a descriptor whose damage-type bits are
 explicitly zeroed (`DMG_GENERIC`, no slashing/bashing/aggravated/fire), whose attacker and inflictor
 are the I/O `pActivator`/`pCaller` rather than a weapon, and whose **force and damage position are
-both the same zero vector**. It then enters the ordinary pipeline unmodified — base
+both the same zero vector**. It additionally zeroes the per-axis force scale at `+0x04 … +0x0c`
+straight after construction. It then enters the ordinary pipeline unmodified — base
 `CBaseEntity::TakeDamage`, the `OnTakeDamage` virtual, the life-state dispatch, and the same health
 commit and `Event_Killed` a weapon kill reaches.
 
-The zero force is carried all the way to ragdoll creation, so a corpse killed by this input
-**collapses in place with no impulse** instead of being knocked back. That is the authored result,
-not a defect: a map that wants a body thrown has to move it itself.
+That zeroed scale is what makes the input harmless to the body. `Event_Killed` would otherwise
+**replace** the zero force with a synthesised one, but the synthesis is multiplied by the same
+per-axis scale, so the corpse killed by this input **collapses in place with no impulse** instead
+of being knocked back. That is the authored result, not a defect: a map that wants a body thrown
+has to move it itself.
 
 ### `invincible` is a total refusal, tested first
 
