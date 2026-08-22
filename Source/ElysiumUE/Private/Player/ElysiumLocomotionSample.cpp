@@ -11,6 +11,13 @@ float RelativeYaw(float WorldYaw, float FacingYaw)
 	return FRotator::NormalizeAxis(WorldYaw - FacingYaw);
 }
 
+void ClearMotion(FElysiumLocomotionSample& Sample)
+{
+	Sample.LocalVelocity = FVector::ZeroVector;
+	Sample.MoveYawVelocity = 0.0f;
+	Sample.MoveYawPose = 0.0f;
+}
+
 float AdvanceMoveYaw(FElysiumMoveYawFilter& Filter, float TargetYawDegrees, float Speed2D,
 	float DeltaSeconds)
 {

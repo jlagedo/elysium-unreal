@@ -373,8 +373,8 @@ def _policy_fingerprint(config, *, exclude_generators: Sequence[str] = ()) -> st
         # class's reflected properties by name. A `-game` run loads the serialized class rather than
         # recompiling it, so a property the graph binds to that the class no longer declares
         # resolves to nothing: transitions read false, the machine never leaves its entry state, and
-        # the body poses one frame forever with no error anywhere. The class surface is a generator
-        # input exactly as `ElysiumRainAssetBuilder` below is.
+        # the body poses one frame forever with no error anywhere. The class surface is a
+        # generator input.
         config.repo_root / "Source" / "ElysiumUE" / "Private" / "Visual"
         / "ElysiumBipedAnimInstance.h",
         config.repo_root / "Source" / "ElysiumUE" / "Private" / "Visual"
@@ -391,13 +391,6 @@ def _policy_fingerprint(config, *, exclude_generators: Sequence[str] = ()) -> st
         config.export_root / "particles" / "fortituderings.png",
         config.export_root / "particles" / "d_targetblob.png",
         config.export_root / "particles" / "furball.png",
-        config.repo_root / "Source" / "ElysiumUE" / "Public" / "ElysiumRainAssetBuilder.h",
-        config.repo_root
-        / "Source"
-        / "ElysiumUE"
-        / "Private"
-        / "Editor"
-        / "ElysiumRainAssetBuilder.cpp",
     ]
     return fingerprint_content(scripts, extra=("policy-v2",))
 
@@ -1799,16 +1792,18 @@ def sweep_characters(config, partition: dict, *, apply: bool = True,
 def _stale_garments(config, stems: Sequence[str]) -> list[str]:
     """Named stems whose cloth asset is older than an input it was generated from.
 
-    Two inputs, not one. The garment sidecar is the authored payload, and `cloth_tuning.json` is
-    every material and solver value applied on top of it -- so a tuning edit has to invalidate the
-    whole corpus the same way re-exporting one model invalidates that one. Without it the fast
-    path reports the assets current and the edit silently does nothing.
+    Two inputs, not one. The garment sidecar is the decoded payload, and the tracked authored
+    tuning asset (`Content/ElysiumAuthored/Cloth/DA_ClothTuning.uasset`) is every material and
+    solver value applied on top of it -- so a tuning edit has to invalidate the whole corpus the
+    same way re-exporting one model invalidates that one. Without it the fast path reports the
+    assets current and the edit silently does nothing.
 
     Most stems author no garment and are absent from both sides, which is not staleness.
     """
     garment_dir = config.export_root / "npc" / "garment"
     cloth_dir = config.repo_root / "Content" / "VtMB" / "Cloth"
-    tuning = config.repo_root / "pipeline" / "unreal" / "cloth_tuning.json"
+    tuning = (config.repo_root / "Content" / "ElysiumAuthored" / "Cloth"
+              / "DA_ClothTuning.uasset")
     tuned_at = tuning.stat().st_mtime if tuning.is_file() else 0.0
     stale = []
     for stem in stems:

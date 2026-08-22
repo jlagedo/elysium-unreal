@@ -7,6 +7,9 @@
 // record, and both are this header's types.
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumAudioSubsystem.h"   // FElysiumAudioVoiceHandle + FElysiumPlayParams (passed by value)
+// By value: the ideal-activity record the melee seam below reports, and the substrate's own
+// predicates over it.
+#include "ElysiumClipMovement.h"
 // The authored combo-chain block the clip seam below hands down, by pointer.
 #include "ElysiumComboChain.h"
 #include "ElysiumEntity.h"           // FElysiumFlexWrite (passed by view)
@@ -850,6 +853,18 @@ public:
 	// a headless run. An empty activity matches no fork, so a caller reads the grounded form — which
 	// is what a player who is not airborne anywhere gets.
 	virtual FString GetPlayerBaseActivity() const { return FString(); }
+
+	// LIFE5 — discard the player body's carried motion, `CBasePlayer::PostThink`'s melee stop.
+	//
+	// Retail's pair is `SetAbsVelocity(vec3_origin)` then `SetLocalVelocity(vec3_origin)`, and this
+	// runtime's body carries the same two: the mover's world velocity, and the locomotion sample
+	// published off it that every animation reader takes the body's motion from. Both go, or the
+	// selector still reads the lunge out of a record the component no longer agrees with.
+	//
+	// It is a command rather than a query because stopping a body is the engine's to perform — the
+	// substrate decides WHEN, on the rule in `ElysiumClipMovement::StopsMeleeTailMotion`, and never
+	// touches a component.
+	virtual void StopPlayerBody() {}
 
 	// CNPCMaker's host geometry. The substrate owns admission order and all policy; these four calls
 	// only answer the engine-shaped questions at the point each guard is reached. Defaults are the

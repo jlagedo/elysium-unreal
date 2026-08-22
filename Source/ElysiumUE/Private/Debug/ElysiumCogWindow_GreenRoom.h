@@ -9,27 +9,19 @@
 #include "imgui.h"
 
 class FElysiumGreenRoomRun;
-class UChaosClothComponent;
 class UElysiumBodyAnimInstance;
 class UElysiumEntityBodies;
 class UElysiumBipedAnimInstance;
 class USkinnedAsset;
 
-// The green room's control surface: pick a body, pick a clip, watch it move, and tune the garment
-// simulation while it does.
+// The green room's control surface: pick a body, pick a clip, and watch it move.
 //
 // The green room has always been a one-shot — it resolved a fixed case, seeked fixed times, wrote
-// PNGs and exited — and everything it answered was answered by a still. A garment is not a still.
-// Whether a skirt settles or keeps ringing, whether a hem clears the knee at walking pace, whether
-// a coat flares like a coat or like a crinoline: all of that is timing, and none of it survives
-// being sampled at five fractions. This window drives the same stage in the live lab mode
+// PNGs and exited — and everything it answered was answered by a still. Most of what a body does is
+// not a still. Whether a gait reads at walking pace, whether a held weapon tracks the hand through
+// one, whether two irises converge on the same point: all of that is timing, and none of it
+// survives being sampled at five fractions. This window drives the same stage in the live lab mode
 // (`Debug/ElysiumGreenRoomRun.h`), where nothing is captured and nothing exits.
-//
-// The cloth sliders write to the running simulation, not to a file. `npc/cloth/<stem>.json` is what
-// the offline spike derived from the model's own measurements — the shape of the cone ramp down a
-// panel, the radius of the thigh a hem must clear — and it stays the record until Save bakes a
-// tuning into it. Revert goes back to it. So an afternoon of dragging sliders costs nothing that
-// closing the window does not undo.
 class FElysiumCogWindow_GreenRoom : public FElysiumCogWindow
 {
 	typedef FElysiumCogWindow Super;
@@ -55,12 +47,8 @@ private:
 	// The lab this window drives, or null when nothing is armed (which is every ordinary session).
 	FElysiumGreenRoomRun* GetLab() const;
 	// The anim instance of the body currently standing on the stage, or null.
-	// The body's shared portrait/rig surface — the rows that read a cloth rig or a composition rig.
+	// The body's shared portrait/rig surface — the rows that read a composition rig.
 	UElysiumBodyAnimInstance* GetBodyInstance() const;
-	// The generated garment worn by whatever is standing, or null. Found by walking the body's
-	// attachments rather than cached: a Restand replaces the body, and a stale pointer here would
-	// draw an overlay for a component that no longer exists.
-	UChaosClothComponent* FindGarment() const;
 	// The pose machinery itself — the clip and layer rows, which read the proxy rather than a rig.
 	UElysiumBipedAnimInstance* GetBipedInstance() const;
 
@@ -79,8 +67,6 @@ private:
 	// The orbit, the stage, and the drawn overlays — everything about how the body is being looked
 	// at, as opposed to which body it is or what its garment is doing.
 	void RenderView(FElysiumGreenRoomRun& Lab);
-	void RenderCloth(FElysiumGreenRoomRun& Lab);
-	void RenderClothDebugDraw();
 	// The evaluated local pose of the standing body's torso-to-head chain against its mesh bind —
 	// the Cog equivalent of `elysium.gr_bones`. Written by the "Dump bones" button in RenderView; a
 	// hand-triggered snapshot rather than a per-frame readout, matching that verb's log-on-request

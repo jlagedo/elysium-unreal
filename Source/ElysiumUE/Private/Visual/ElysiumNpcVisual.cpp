@@ -3,6 +3,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumWieldTable.h"
 #include "Visual/ElysiumBodyAnimInstance.h"
+#include "Visual/ElysiumHairDynamicsConfig.h"
 #include "Visual/ElysiumHairDynamicsData.h"
 
 #include "Animation/AnimSequence.h"
@@ -37,86 +38,65 @@ namespace ElysiumNpcVisual
 {
 	bool InstallHairDynamics(USkeletalMeshComponent* Body, const FString& Stem)
 	{
-		static const TSet<FString> ProofStems = {
-			TEXT("malkavian_female_armor_0"), TEXT("jeanette")
-		};
 		USkeletalMesh* const Mesh = Body != nullptr ? Body->GetSkeletalMeshAsset() : nullptr;
 		if (Mesh == nullptr)
 		{
 			return false;
 		}
-		const UElysiumHairDynamicsAssetUserData* Hair = Cast<UElysiumHairDynamicsAssetUserData>(
-			Mesh->GetAssetUserDataOfClass(UElysiumHairDynamicsAssetUserData::StaticClass()));
-		if (Hair == nullptr)
+		// The authored table's key set IS the scope gate: hair dynamics are owner-tuned
+		// presentation, so a body simulates hair exactly when the owner gave it an entry. No entry
+		// is the ordinary answer for almost the whole cast and is not a failure -- the one thing
+		// worth reporting, a table that is missing entirely, `Load` already reports once.
+		const FElysiumHairDynamicsStem* const Authored = UElysiumHairDynamicsConfig::FindStem(Stem);
+		if (Authored == nullptr)
 		{
 			return false;
 		}
 
 		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
 		TArray<FElysiumHairDynamicsChainConfig> Chains;
-		if (!Hair->Chains.IsEmpty())
+		Chains.Reserve(Authored->Chains.Num());
+		for (const FElysiumHairDynamicsChain& Chain : Authored->Chains)
 		{
-			const bool bProofStem = ProofStems.Contains(Stem.ToLower());
-			const bool bExactSelection = Stem.Equals(TEXT("malkavian_female_armor_0"),
-				ESearchCase::IgnoreCase)
-				? Hair->Chains.Num() == 1
-					&& Hair->Chains[0].BoundBone == FName(TEXT("Bone05"))
-					&& Hair->Chains[0].ChainEnd == FName(TEXT("Bone09"))
-				: Hair->Chains.Num() == 2
-					&& Hair->Chains[0].BoundBone == FName(TEXT("Bone01"))
-					&& Hair->Chains[0].ChainEnd == FName(TEXT("Bone07"))
-					&& Hair->Chains[1].BoundBone == FName(TEXT("Bone09"))
-					&& Hair->Chains[1].ChainEnd == FName(TEXT("Bone13"));
-			if (!bProofStem)
+			// The asset is hand-authored against one body, so a chain can name bones this mesh does
+			// not have or a value the solver cannot use. Each bad chain is reported and skipped on
+			// its own; the rest of the body's hair still swings.
+			const int32 Bound = Ref.FindBoneIndex(Chain.BoundBone);
+			const int32 End = Ref.FindBoneIndex(Chain.ChainEnd);
+			bool bDescends = Bound != INDEX_NONE && End != INDEX_NONE && Bound != End;
+			for (int32 Bone = End; bDescends && Bone != Bound;)
 			{
-				UE_LOG(LogElysiumNpcVisual, Warning,
-					TEXT("Hair AnimDynamics chains on out-of-scope body '%s' (%s); dropping them"),
-					*Stem, *Mesh->GetPathName());
+				Bone = Ref.GetParentIndex(Bone);
+				bDescends = Bone != INDEX_NONE;
 			}
-			else if (!bExactSelection)
+			const bool bFinite = FMath::IsFinite(Chain.GravityScale)
+				&& FMath::IsFinite(Chain.Damping)
+				&& FMath::IsFinite(Chain.AngularSpring)
+				&& FMath::IsFinite(Chain.ConeAngleDegrees);
+			if (!bDescends || !bFinite || Chain.GravityScale < 0.0f
+				|| Chain.Damping < 0.7f || Chain.Damping > 1.0f
+				|| Chain.AngularSpring < 0.0f
+				|| Chain.ConeAngleDegrees < 0.0f || Chain.ConeAngleDegrees > 90.0f)
 			{
 				UE_LOG(LogElysiumNpcVisual, Warning,
-					TEXT("Hair AnimDynamics chains on '%s' are outside the exact proof selection"),
+					TEXT("hair dynamics: authored chain %s -> %s on stem '%s' is invalid against "
+					     "'%s' and is skipped"),
+					*Chain.BoundBone.ToString(), *Chain.ChainEnd.ToString(), *Stem,
 					*Mesh->GetPathName());
+				continue;
 			}
-			else
-			{
-				bool bValid = true;
-				for (const FElysiumHairDynamicsChainConfig& Chain : Hair->Chains)
-				{
-					const int32 Bound = Ref.FindBoneIndex(Chain.BoundBone);
-					const int32 End = Ref.FindBoneIndex(Chain.ChainEnd);
-					bool bDescends = Bound != INDEX_NONE && End != INDEX_NONE && Bound != End;
-					for (int32 Bone = End; bDescends && Bone != Bound;)
-					{
-						Bone = Ref.GetParentIndex(Bone);
-						bDescends = Bone != INDEX_NONE;
-					}
-					const bool bFinite = FMath::IsFinite(Chain.GravityScale)
-						&& FMath::IsFinite(Chain.Damping)
-						&& FMath::IsFinite(Chain.AngularSpring)
-						&& FMath::IsFinite(Chain.ConeAngleDegrees);
-					if (!bDescends || !bFinite || Chain.GravityScale < 0.0f
-						|| Chain.Damping < 0.7f || Chain.Damping > 1.0f
-						|| Chain.AngularSpring < 0.0f
-						|| Chain.ConeAngleDegrees < 0.0f || Chain.ConeAngleDegrees > 90.0f)
-					{
-						UE_LOG(LogElysiumNpcVisual, Warning,
-							TEXT("Hair AnimDynamics chain %s -> %s is invalid on '%s'"),
-							*Chain.BoundBone.ToString(), *Chain.ChainEnd.ToString(),
-							*Mesh->GetPathName());
-						bValid = false;
-						break;
-					}
-				}
-				if (bValid)
-				{
-					Chains = Hair->Chains;
-				}
-			}
+
+			FElysiumHairDynamicsChainConfig& Config = Chains.AddDefaulted_GetRef();
+			Config.BoundBone = Chain.BoundBone;
+			Config.ChainEnd = Chain.ChainEnd;
+			Config.GravityScale = Chain.GravityScale;
+			Config.Damping = Chain.Damping;
+			Config.AngularSpring = Chain.AngularSpring;
+			Config.ConeAngleDegrees = Chain.ConeAngleDegrees;
 		}
 
-		// Single-body breast recipes stay on the mesh if a bake wrote them; they are not installed.
+		// Single-body breast recipes are not authored and not installed; the proxy's vocabulary
+		// still takes the list.
 		const TArray<FElysiumHairDynamicsBodyConfig> Bodies;
 
 		if (Chains.IsEmpty() && Bodies.IsEmpty())

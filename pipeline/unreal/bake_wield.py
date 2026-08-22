@@ -664,7 +664,8 @@ def verify(manifest, baked_stems, errors):
 
         registry_bones = unreal.ElysiumCharacterBakeLibrary.skeleton_bone_count(skeleton)
         source_path = os.path.join(OUT_ROOT, model["eskm"].replace("/", os.sep))
-        rows = eskm.bone_locals(eskm.read(source_path))
+        blob = eskm.read(source_path)
+        rows = eskm.bone_locals(blob)
         declared_bones = int(model.get("bone_count", -1))
         # A multi-rooted rig resolves its fork onto one of its own bones rather than gaining an
         # extra synthetic one (`UE_mdl_skeletal.unreal_bones`), so the .eskm's row count is always
@@ -700,6 +701,34 @@ def verify(manifest, baked_stems, errors):
             drot = wc.quat_angle((rot.x, rot.y, rot.z, rot.w), rotation)
             if drot > BONE_ROT_EPS_DEG:
                 errors.append("%s: bone '%s' rotation off by %.4f deg" % (stem, name, drot))
+
+        # The melee-trail VFX's TrailTip socket: a manifest that names one must have baked a real
+        # socket at the mount bone, at the .eskm's own converted attachment transform -- the same
+        # "the .eskm and the built asset must agree" check the bone loop above runs, just for the
+        # one attachment record `wield_corpus.trail_tip` synthesised rather than `.mdl` authored.
+        trail_tip = model.get("trail_tip")
+        if trail_tip:
+            attachment = next(
+                (row for row in eskm.attachments(blob) if row[0] == "TrailTip"), None)
+            if attachment is None:
+                errors.append("%s: manifest names a trail_tip but the .eskm carries no "
+                              "'TrailTip' attachment" % stem)
+            else:
+                socket = mesh.find_socket(unreal.Name("TrailTip"))
+                if socket is None:
+                    errors.append("%s: baked mesh carries no 'TrailTip' socket" % stem)
+                else:
+                    _name, _bone, translation, _rotation = attachment
+                    bone_name = str(socket.get_editor_property("bone_name"))
+                    if bone_name != trail_tip.get("bone"):
+                        errors.append("%s: TrailTip socket bone is '%s', manifest names '%s'"
+                                      % (stem, bone_name, trail_tip.get("bone")))
+                    loc = socket.get_editor_property("relative_location")
+                    dpos = max(abs(loc.x - translation[0]), abs(loc.y - translation[1]),
+                              abs(loc.z - translation[2]))
+                    if dpos > BONE_POS_EPS_CM:
+                        errors.append("%s: TrailTip socket translation off by %.5f cm"
+                                      % (stem, dpos))
 
     da = unreal.EditorAssetLibrary.load_asset("%s/%s" % (DA_PACKAGE, DA_NAME))
     if da is None:

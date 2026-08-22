@@ -55,6 +55,13 @@ behavioral change.
   header first. Prefer forward declarations and fine-grained includes, never `Engine.h` or
   `UnrealEd.h`, and do not put `using` declarations in global scope. Dependencies belong in the
   narrowest correct `Build.cs` list.
+- **File granularity:** one primary class — or one small, tightly coupled cluster (a class plus
+  its private helpers) — per `.h`/`.cpp`, under the owning layer folder. A new class never lands
+  inside an existing multi-class file. When a change substantially touches a class that lives in
+  an oversized multi-class file, first move that class verbatim into its own file (includes by
+  layer path, a thin registration site may remain behind), then make the behavioral edit — and
+  keep the verbatim move and the behavioral change reviewable as separate diffs (separate
+  commits when both land together). Pure moves change no behavior and no names.
 - **APIs and diagnostics:** avoid boolean flag lists and long parameter lists; use an enum or a
   parameter struct. Use `TEXT()` for Unreal string literals, sized integers for serialized or
   replicated formats, named log categories, and the appropriate `check`/`verify`/`ensure` family.
@@ -173,7 +180,10 @@ as `GetVisuals()`/`GetCollision()`/`GetBodies()`, no forwarders. Its runtime pha
 current actor's one-shot ready/failed delegates. Visual readers:
 `FElysiumObjModel`, `FElysiumTextureCache`, `FElysiumMaterialFactory`, `ElysiumReflections.h`,
 `FElysiumDecals`, `FElysiumRopes`, `UElysiumLightRig`, `FElysiumSkyDef`,
-`ElysiumEnvironment.{h,cpp}`, `ElysiumFog.h`.
+`ElysiumEnvironment.{h,cpp}`, `ElysiumFog.h`. `UElysiumWieldTable`
+(`Public/ElysiumWieldTable.h`) is the `/ElysiumBaked/Items/DA_WieldModels` row table the wield bake
+writes and `(classname, sex)` resolves through; design:
+`docs/architecture/wielded-weapon-integration.md`.
 
 **Entity substrate / Track B** (`docs/architecture/engine-core.md`), plain C++, no UObject reflection:
 `FElysiumVariant`, `FElysiumEntityHandle`, `FElysiumEntityDef`/`FElysiumEntityDefs`,
@@ -213,24 +223,66 @@ sheet slot taking the bare name would silently repoint `trigger_hurt`. `Elysium.
 guards it.
 
 Entity class implementations: `ElysiumStarterClasses.cpp` (logic_auto/relay, triggers,
-`logic_pythoncheck`), `ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case, env_fade,
-func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElysiumDoorBase`,
-`FElysiumFuncDoor`, `FElysiumButton`), `ElysiumSignClasses.cpp`, `ElysiumAmbientGeneric.cpp`,
-`ElysiumEventClasses.cpp`, `ElysiumNpcClasses.cpp`, `ElysiumPlayerClasses.cpp`,
-`ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp`, `ElysiumItemClasses.{h,cpp}`
+`logic_pythoncheck`) over the shared `ElysiumTriggerBase.h` (`FElysiumTriggerBase`, the base every
+trigger leaf derives from) and the shared keyfield-adder template `Substrate/ElysiumClassFields.h`,
+`ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case, env_fade,
+func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElysiumDoorBase` and the
+two `func_door` leaves) with `ElysiumButton.cpp`, `ElysiumElevator.cpp`, `ElysiumFuncRotating.cpp`
+and the manifest loader `ElysiumMoverSounds.cpp` beside it, `ElysiumSignClasses.cpp`, `ElysiumAmbientGeneric.cpp`,
+`ElysiumEventClasses.cpp`, `ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp` (the prop
+registration site over `ElysiumProp.{h,cpp}`, `ElysiumPropLeaves.{h,cpp}` and
+`ElysiumPhysProp.{h,cpp}`), `ElysiumItemClasses.{h,cpp}`
 (`FElysiumItem`/`FElysiumKeyring` — one registered class per `vdata/items` definition, installed at
-the rulebook's first `Items()` load; `FElysiumInventory` lives on the combat character),
+the rulebook's first `Items()` load; the loot container is `ElysiumItemContainer.{h,cpp}`, and
+`FElysiumInventory` lives on the combat character, implemented in `ElysiumInventory.cpp`),
 `ElysiumFeed.{h,cpp}` (the feed transaction and paired state machine on the combat character),
 `ElysiumChoreoScene.cpp`
 (`logic_choreographed_scene`, over the `.vcd` reader `ElysiumSceneData.{h,cpp}` and the event
-timeline `ElysiumScenePlayer.{h,cpp}` — both free of the world so 12.2's per-line dialogue path can
-reuse them). `Substrate/ElysiumPendingInput.h` is the registration form for a recovered datamap
+timeline `ElysiumScenePlayer.{h,cpp}` — both world-free and shared by map-authored scenes and
+per-line dialogue playback). `Substrate/ElysiumPendingInput.h` is the registration form for a recovered datamap
 input with no system behind it yet; `elysium.stubs` reads the fired set back, and
 `Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
 
+The character chain's leaves are one class per file, with a registration site beside them.
+`ElysiumNpcClasses.cpp` registers the `npc_*` family, `intersting_place` and the two `npc_maker`
+classnames; the classes are `ElysiumInterestingPlace.{h,cpp}`, `ElysiumScriptedCharacter.{h,cpp}`,
+`ElysiumNpc.{h,cpp}` (`FElysiumNpc` plus the scene-owned `FElysiumPlayerControllerNpc` duplicate)
+and `ElysiumNpcMaker.{h,cpp}`, logging through `ElysiumNpcLog.h`. `ElysiumPlayerClasses.cpp`
+declares the player chain's fields, inputs and outputs; the three implementations are
+`ElysiumAnimatingImpl.cpp`, `ElysiumCombatCharacter.cpp` and `ElysiumPlayerEntity.cpp`, logging
+through `ElysiumPlayerLog.h`.
+
+**Gameplay domain services**, plain C++ under `Substrate/` — the design is
+`docs/architecture/gameplay-systems-architecture.md` §5 and the behaviour is the `docs/vtmb/` doc
+each file names in its header:
+`ElysiumDamage.{h,cpp}` (`FElysiumDmg` + `ElysiumDamage::Apply`; the one typed health commit is
+`FElysiumCombatCharacter::CommitDamage` in `ElysiumCombatCharacter.cpp`),
+`ElysiumWeaponClasses.{h,cpp}` (`FElysiumWeapon` on the `CWeapon` chain node — mode dispatch, the
+two-half attack transaction, reload),
+`ElysiumGameSound.{h,cpp}` (`FElysiumGameSoundBus` behind `FElysiumEntityWorld::EmitGameSound`),
+`ElysiumNpcSenses.{h,cpp}` (`FElysiumNpcPerception`, `FElysiumNpcMemory`),
+`ElysiumNpcConditions.{h,cpp}` (`EElysiumNpcCond`, `FElysiumNpcConditions`, the ideal-state pass),
+`ElysiumNpcEnemy.{h,cpp}` (the enemy-selection transaction),
+`ElysiumSchedule.{h,cpp}` (`FElysiumSchedule`, the task vocabulary and its executor),
+`ElysiumNpcCombatSchedules.{h,cpp}` (the recovered combat families and their selector),
+`ElysiumNpcLoadout.{h,cpp}` (the weapon-capability join),
+`ElysiumNpcWitness.{h,cpp}` (the two per-NPC player-law observation lanes),
+`ElysiumAiScriptedSchedule.{h,cpp}` (`aiscripted_schedule`'s mode table and `forcestate` mapping),
+`ElysiumDisciplines.{h,cpp}` (active states and the targeted cast transaction),
+`ElysiumStealth.{h,cpp}` + `ElysiumStealthTrigger.{h,cpp}` (the player target surface and
+`trigger_stealth_mod`),
+`ElysiumLaw.{h,cpp}` + `ElysiumActivityTrigger.{h,cpp}` (the player's activity/Masquerade/pursuit
+channels and `trigger_player_activity_level`),
+`ElysiumReaction.{h,cpp}` (the RPG reaction score),
+`ElysiumRelationships.{h,cpp}` and `ElysiumDisposition.{h,cpp}` (two of K4's three separate
+social stores). The `FElysiumNpcMind` state machine and body-owner arbiter stay in
+`ElysiumNpcMind.{h,cpp}`.
+
 **The outbound seam** (`docs/architecture/runtime-architecture.md`): everything the substrate needs from the
 engine arrives as `FElysiumWorldServices`. `IElysiumEmbodiment` (bodies + the player's own view/
-teleport/damage/`+use`/camera, implemented by `AElysiumMapActor`), `IElysiumAudio` (voice,
+teleport/damage/`+use`/camera, plus the geometry queries `QueryLineOfSight`/`QueryLightAtPoint`,
+implemented by `AElysiumMapActor`; the per-body `IElysiumNpcMotor` beside it carries
+`ProjectToNavigable`), `IElysiumAudio` (voice,
 `AElysiumMapActor`), `IElysiumTravel` (`AElysiumMapActor`), `IElysiumPresenter` (fades/signs/
 dialog moments, `UElysiumPresentationSubsystem`), `IElysiumWeather` (wetness and particle state,
 `AElysiumMapActor`). Any member may be null; every call site handles it.
@@ -265,7 +317,12 @@ pure-rules/engine-half split as `ElysiumCameraSolve.h`), `FElysiumViewState`. Ac
 fallbacks), `ElysiumPythonEntity.{h,cpp}`, `ElysiumScriptNatives.{h,cpp}`, `FElysiumScriptFS`,
 `ElysiumDlg.{h,cpp}`. Audio: `UElysiumAudioSubsystem` + `FElysiumSoundCache` +
 `FElysiumSoundSchemeManager` (every voice passes `elysium.Mute`, default 1, a gain multiplier).
-Shared readers: `ElysiumKeyValues.h`, `ElysiumRulebook.{h,cpp}`, `FElysiumSignData`.
+Shared readers: `ElysiumKeyValues.h`, `ElysiumRulebook.{h,cpp}` (the shared value types and the
+stats/feats/rules/trait-effects/clans/histories/experience/leveling/strings sections) with the
+per-section table libraries beside it — `ElysiumItemTable`, `ElysiumDiceTables`,
+`ElysiumQuestTables`, `ElysiumChargenWizard`, `ElysiumReactionTables`, `ElysiumStealthTables`,
+`ElysiumSoundVolumeTable`, `ElysiumDisciplineTargetTables`, all `{h,cpp}` under `Substrate/` over
+the shared loaders `ElysiumVdataLoad.{h,cpp}` — and `FElysiumSignData`.
 
 ## Debug layer (non-Shipping)
 
@@ -284,10 +341,15 @@ command-line flag and all exiting when done: `FElysiumProfileRun` (`-ElysiumProf
 (`-ElysiumMove`, courses in `ElysiumMoveCourses.h` over the generated gym `ElysiumGymSpec.h` /
 `ElysiumGymBuilder.h`, recorded through `FElysiumChannelRecorder` over the `ElysiumChannels.h`
 registry, driven by `uv run elysium debug move`, compared by
-`pipeline/src/elysium_pipeline/validation/channel_diff.py`).
+`pipeline/src/elysium_pipeline/validation/channel_diff.py`), `FElysiumCastRun` (`-ElysiumCast`,
+courses in `ElysiumCastCourses.h` over the arena `Debug/ElysiumArenaSpec.h` / `ElysiumArenaBuilder.h`,
+driven by `uv run elysium debug cast`, same recorder and comparator). The two recording runs share
+one schema and one writer, `Debug/ElysiumLocomotionTrace.h`.
 
-Automation tests live in `Private/Tests/`: `ElysiumSubstrateTests.cpp` (content-free, `-nullrhi`)
-and `ElysiumContentTests.cpp` (parses real exports, self-skips when `$ELYSIUM_EXPORT_ROOT` is empty).
+Automation tests live in `Private/Tests/`: content-free `Elysium.Substrate.*` suites are split by
+domain across the focused `Elysium*Tests.cpp` files and run under `-nullrhi`; `ElysiumContentTests.cpp`
+parses real exports and self-skips when `$ELYSIUM_EXPORT_ROOT` is empty. Shared substrate recordings
+and engine-service doubles live in `ElysiumTestServices.h`.
 
 ## Engine gotchas
 
@@ -305,6 +367,11 @@ Hard-won, non-obvious, and easy to undo:
   keeps navigation click-to-open instead of rendering whole live windows on hover. Reapply both when
   updating Cog. `SetEnableInput` dereferences the lazily created ImGui context, so every boot-time call
   guards on `GetEnableInput()` first.
+- **An `APawn`'s owner is not permanent.** `AController::Possess` overwrites the pawn's owner with
+  the controller, and `AElysiumNpcBody` possesses lazily on its first accepted travel order — so
+  anything read back off `GetOwner()` answers only for a body that has never moved. The body holds
+  its `AElysiumMapActor` directly (`SetOwningEntity`), and a body that cannot reach its character
+  warns once naming the broken link.
 - **The loading screen hooks `IGameMoviePlayer::OnPrepareLoadingScreen`, not `PreLoadMap`** — the
   movie player binds `PreLoadMap` itself at engine init, ahead of any GI subsystem. Its blocking
   screen auto-completes; `PostLoadMapWithWorld` installs the same visual in the player UI root's
@@ -329,6 +396,16 @@ Hard-won, non-obvious, and easy to undo:
   priority.
 - **The player hull is a box, not a capsule** — `StepMove` depends on a flat bottom, and `ACharacter`
   will not take a box root.
+- **A `UCharacterMovementComponent` starts in `MOVE_None` and only a controller ever changes that.**
+  `MovementMode` has no constructor initializer, so it is zero-initialised, and the walking mode is
+  set by `ACharacter::Restart()` on possession. `AElysiumNpcBody` disables auto-possession and spawns
+  its controller lazily on the first accepted `MoveTo`, so a body that only ever stands never gets
+  one. `IsMovingOnGround()` reads the mode alone — not `IsActive()` — so such a body reports itself
+  airborne for its whole life while standing on the floor, and anything reading the locomotion
+  sample's grounded flag believes it. `ApplyEnabledState` sets the mode itself once its floor query
+  succeeds. Note the asymmetry that makes this easy to misdiagnose: `Deactivate()` never touches
+  `MovementMode`, so a body that has moved even once stays correctly grounded forever after, and only
+  the never-moved background cast is affected.
 - **An NPC movement tick already depends on the map actor while its character stands on map-owned
   collision.** CharacterMovement wires the primary tick of the movement base's owner. GameFrame
   therefore runs from `GameplayTickFunction`, which depends on the motor ticks; adding those
@@ -412,7 +489,34 @@ Hard-won, non-obvious, and easy to undo:
 - **The Content Browser preview runs no anim graph, so it applies no axis interpolation.** A rig
   whose bones are procedurally driven previews with untwisted forearms: the stage evaluates over the
   blended pose rather than being baked into the clip, so the preview is showing what the asset says
-  and not a bake defect.
+  and not a bake defect. The same blind spot belongs to **any** graph-less evaluation, including a
+  test that poses a `UPoseableMeshComponent` and skins it: every driven helper holds its bind while
+  its control swings, so deformation measured that way tears at the deltoid and elbow and blames
+  bones nothing drove. `Instrument.Elysium.DancerDecodeProbe3` measures both variants — the pose as
+  skinned, and the same pose with `FElysiumCompositionRig` applied — because the difference between
+  the two is the whole distance between a bake question and a measurement one.
+- **`FAnimNode_BlendStack`'s defaults are a minefield, and four of them fail silently.**
+  `BlendspaceUpdateMode` defaults to `InitialOnly`, which samples a hosted blend space's xy once at
+  `BlendTo` and never again — a gait fan freezes at the steering value it was entered with.
+  `BlendParametersDeltaThreshold` defaults to `0`, and a plain *sequence* player answers
+  `GetBlendParameters()` with the zero vector, so any non-zero requested parameter pushes a new
+  player every frame; a threshold no steering value can reach is what turns the comparison off.
+  `bResetOnBecomingRelevant` defaults to `true`, and it pairs with `FAnimNode_BlendListBase`'s
+  `ZERO_ANIMWEIGHT_THRESH` child skip: a full-weight blend-list sibling makes the stack
+  non-relevant, so the default `Reset()`s it and restarts the clip at frame 0 the moment the
+  sibling releases. And `bLoop` is read only inside `BlendTo` — `ConditionalBlendTo` returns early
+  when the requested asset matches the playing one, so a loop flip on the *same* asset holds the
+  pin and changes nothing; `ForceBlendNextUpdate()` is the door, and it must not be called on an
+  empty stack, where the flag survives the blend and forces a second one.
+- **`EAlphaBlendOption::HermiteCubic` is the engine's own default, so it never appears in exported
+  T3D.** A graph text round-trip cannot prove the curve, and `UAnimGraphNode_BlendStack::Serialize`
+  carries a downgrade-to-`Linear` path on an old custom version — only an assertion against the
+  compiled node proves what is actually running.
+- **`GetSlotMontageGlobalWeight` is filled during graph *evaluation*, not `TickAnimation`.** Read
+  in a tick-time path it answers the previous frame's weight or zero.
+- **`GetRelevantAnimTimeFraction` returns `0.0` both at the start of a clip and when there is no
+  relevant player at all.** The two are indistinguishable from that call alone;
+  `GetRelevantAnimLength` is what disambiguates them.
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /
   `ELYSIUM_PICK_CHANNEL`), because the walkable surface is a material-less `.hulls` collider that
   would otherwise be reported instead of the wall.
@@ -420,6 +524,13 @@ Hard-won, non-obvious, and easy to undo:
   compiles (the effect argument defaults to null) and silently drops every clan bane and gift. On a
   character, go through `FElysiumCombatCharacter::RecomputeSheet()`, which passes both and re-derives
   the `health` keyfields after.
+- **A restored NPC's sheet is not its health.** An NPC sheet is re-seeded from the stat template at
+  spawn and is not save state, so after a load its damage slot reads zero while the field walk has
+  already restored the real `health` keyfield — and `RecomputeSheet()` (which `RebuildEffects()`
+  ends in) re-derives the pair off that sheet, handing a wounded NPC its whole track back with
+  nothing logged. `FElysiumNpc::Serialize` (`Substrate/ElysiumNpc.cpp`) holds the restored
+  `Health`/`MaxHealth` across its own `RebuildEffects()` and puts them back; any new restore path
+  that recomputes a sheet needs the same guard.
 - **`SetQuestState` pays out; a save load must not go through it** — it resolves the completion
   state and fires `AwardMoney`/`AwardXP`/`Event`, so restoring a payload key-by-key through it would
   replay the whole run's awards. `RestoreQuests` is the silent bulk door, and it is the only one.
@@ -442,6 +553,15 @@ Hard-won, non-obvious, and easy to undo:
   character-vs-character switch a `scripted_sequence` beat borrows. Collapsing any of the three into
   the others makes a scene's cast vanish. They are resolved together in `ApplyCollisionState`, so a
   new caller must go through it rather than touching the capsule directly.
+- **No game-thread bone query tells you where a leader-pose follower is drawn.**
+  `GetSocketTransform` on a follower answers through the leader bone map, and
+  `GetCurrentRefToLocalMatrices` rebuilds fresh matrices from current game-thread state — both can
+  report a followed weapon riding the hand while the mesh draws frozen at its reference pose off a
+  proxy nothing has updated. The drawn frame is the skinning matrices in
+  `GetMeshObject()->GetReferenceToLocalMatrices()` (the last dynamic-data packet the render thread
+  received), guarded by `HaveValidDynamicData()` — on the install frame the packet does not exist
+  yet and the accessor dereferences it unchecked. The worked example is the green room's wield
+  tracking check (`ElysiumRenderedWield` in `Debug/ElysiumGreenRoomWield.cpp`).
 
 ## Build and test loop
 

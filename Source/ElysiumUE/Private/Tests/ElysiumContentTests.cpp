@@ -2935,14 +2935,14 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 	}
 
 	UNiagaraSystem* RainSystem = LoadObject<UNiagaraSystem>(nullptr,
-		TEXT("/Game/VtMB/Particles/NS_ElysiumRain.NS_ElysiumRain"));
+		TEXT("/Game/ElysiumAuthored/VFX/NS_ElysiumRain.NS_ElysiumRain"));
 	UMaterialInterface* RainMaterial = LoadObject<UMaterialInterface>(nullptr,
-		TEXT("/Game/VtMB/Particles/M_ElysiumRain.M_ElysiumRain"));
-	TestNotNull(TEXT("the single generated Niagara rain system loads"), RainSystem);
-	TestNotNull(TEXT("the single generated rain material loads"), RainMaterial);
+		TEXT("/Game/ElysiumAuthored/VFX/M_ElysiumRain.M_ElysiumRain"));
+	TestNotNull(TEXT("the tracked authored Niagara rain system loads"), RainSystem);
+	TestNotNull(TEXT("the tracked authored rain material loads"), RainMaterial);
 	for (const TCHAR* Path : {
-		TEXT("/Game/VtMB/Particles/T_RainDroplet.T_RainDroplet"),
-		TEXT("/Game/VtMB/Particles/T_RainMist.T_RainMist")})
+		TEXT("/Game/ElysiumAuthored/VFX/T_RainDroplet.T_RainDroplet"),
+		TEXT("/Game/ElysiumAuthored/VFX/T_RainMist.T_RainMist")})
 	{
 		TestNotNull(FString::Printf(TEXT("rain dependency sprite loads: %s"), Path),
 			LoadObject<UTexture2D>(nullptr, Path));

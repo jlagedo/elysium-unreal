@@ -3,6 +3,8 @@
 #if WITH_EDITOR
 
 #include "AssetRegistry/AssetRegistryModule.h"
+#include "ElysiumClothTuningConfig.h"
+#include "ElysiumContentPaths.h"
 #include "ChaosCloth/ChaosClothConfig.h"
 #include "ChaosCloth/ChaosClothingSimulationConfig.h"
 #include "ChaosClothAsset/ClothAsset.h"
@@ -40,7 +42,7 @@ namespace
 	 *
 	 * This is a conversion between two engines' constants, not a tuning value, which is why it is
 	 * the only number in this file. Everything a garment's solve needs beyond what VtMB itself
-	 * authored lives in `pipeline/unreal/cloth_tuning.json`.
+	 * authored lives in the authored `UElysiumClothTuningConfig`.
 	 */
 	constexpr float RetailGravityRatio = 975.36f / 980.665f;
 
@@ -70,117 +72,6 @@ namespace
 				  static_cast<float>(Values[1]->AsNumber()),
 				  static_cast<float>(Values[2]->AsNumber()))
 			: FVector3f::ZeroVector;
-	}
-
-	/** Write every key of `Source` over `Target`, so a later layer wins key by key. */
-	void OverlayTuning(const TSharedPtr<FJsonObject>& Source, const TSharedRef<FJsonObject>& Target)
-	{
-		if (Source.IsValid())
-		{
-			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Source->Values)
-			{
-				Target->SetField(Pair.Key, Pair.Value);
-			}
-		}
-	}
-
-	/**
-	 * One garment's material parameters, resolved out of `pipeline/unreal/cloth_tuning.json`.
-	 *
-	 * VtMB's payload states a garment's shape and its constraint graph and says nothing about what
-	 * it is made of — the retail solver had no density, no friction and no thickness to state. So
-	 * the material is a reading of the garment rather than a decode of it, and no rule recovers
-	 * "heavy leather" from a vertex count. It is authored per garment as data, and this function
-	 * is the only thing here that knows about it: `defaults` <- `materials[<name>]` <- the
-	 * garment's own entry, each layer overriding the last key by key.
-	 *
-	 * A model that authors more than one garment gives its entry as an array, selected by
-	 * `Definition` — tremere_female_armor_3 tunes its hanging sleeves apart from its robe skirt.
-	 *
-	 * A stem the table does not name is an error rather than a default. The table is meant to
-	 * cover the cast, so a miss means a garment reached the build untuned, and quietly giving it
-	 * the average of everything else is how that stays unnoticed.
-	 */
-	TSharedRef<FJsonObject> ResolveTuning(const TSharedPtr<FJsonObject>& Table, const FString& Stem,
-		int32 Definition, FString& OutMaterial, TArray<FString>& Errors)
-	{
-		const TSharedRef<FJsonObject> Resolved = MakeShared<FJsonObject>();
-		const TSharedPtr<FJsonObject>* Section = nullptr;
-		if (Table->TryGetObjectField(TEXT("defaults"), Section))
-		{
-			OverlayTuning(*Section, Resolved);
-		}
-
-		TSharedPtr<FJsonObject> Entry;
-		if (Table->TryGetObjectField(TEXT("garments"), Section))
-		{
-			if (const TSharedPtr<FJsonValue> Value = (*Section)->TryGetField(Stem))
-			{
-				const TArray<TSharedPtr<FJsonValue>>* Definitions = nullptr;
-				Entry = Value->TryGetArray(Definitions)
-					? (Definitions->IsValidIndex(Definition) ? (*Definitions)[Definition]->AsObject()
-															: nullptr)
-					: Value->AsObject();
-			}
-		}
-
-		FString Material;
-		if (Entry.IsValid())
-		{
-			Entry->TryGetStringField(TEXT("material"), Material);
-		}
-		if (Material.IsEmpty())
-		{
-			Table->TryGetStringField(TEXT("fallback_material"), Material);
-			Errors.Add(FString::Printf(
-				TEXT("cloth_tuning.json names no garment '%s' definition %d; fell back to '%s'"),
-				*Stem, Definition, *Material));
-		}
-		if (Table->TryGetObjectField(TEXT("materials"), Section))
-		{
-			const TSharedPtr<FJsonObject>* Declared = nullptr;
-			if ((*Section)->TryGetObjectField(Material, Declared))
-			{
-				OverlayTuning(*Declared, Resolved);
-			}
-			else
-			{
-				Errors.Add(FString::Printf(
-					TEXT("cloth_tuning.json declares no material '%s'"), *Material));
-			}
-		}
-		OverlayTuning(Entry, Resolved);
-
-		OutMaterial = Material;
-		return Resolved;
-	}
-
-	/**
-	 * A tuned value, or zero and an error when the table does not declare it.
-	 *
-	 * `defaults` declares every key the build reads, so an absence is an incomplete table rather
-	 * than an invitation to substitute something — which is the whole point of keeping the numbers
-	 * out of here.
-	 */
-	double TunedNumber(const TSharedRef<FJsonObject>& Tuning, const TCHAR* Key,
-		TArray<FString>& Errors)
-	{
-		double Value = 0.0;
-		if (!Tuning->TryGetNumberField(Key, Value))
-		{
-			Errors.Add(FString::Printf(TEXT("cloth_tuning.json declares no '%s'"), Key));
-		}
-		return Value;
-	}
-
-	bool TunedBool(const TSharedRef<FJsonObject>& Tuning, const TCHAR* Key, TArray<FString>& Errors)
-	{
-		bool bValue = false;
-		if (!Tuning->TryGetBoolField(Key, bValue))
-		{
-			Errors.Add(FString::Printf(TEXT("cloth_tuning.json declares no '%s'"), Key));
-		}
-		return bValue;
 	}
 
 	/**
@@ -491,8 +382,7 @@ namespace
 TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFromSidecar(
 	const FString& SidecarPath,
 	const FString& PackageDirectory,
-	const FString& SkeletalMeshPath,
-	const FString& TuningPath)
+	const FString& SkeletalMeshPath)
 {
 	TArray<FElysiumClothBuildResult> Results;
 
@@ -506,10 +396,14 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		return Results;
 	}
 
-	const TSharedPtr<FJsonObject> TuningTable = ReadJsonObject(TuningPath, Error);
-	if (!TuningTable.IsValid())
+	// The authored half of the build. `Load` has already logged the miss by name; the failure is
+	// repeated into the result so the generator's own log carries it beside the garment it stopped.
+	const UElysiumClothTuningConfig* const TuningTable = UElysiumClothTuningConfig::Load();
+	if (TuningTable == nullptr)
 	{
-		Fatal.Errors.Add(Error);
+		Fatal.Errors.Add(FString::Printf(
+			TEXT("cannot load the authored cloth tuning asset %s"),
+			*FElysiumContentPaths::AuthoredClothTuning()));
 		Results.Add(Fatal);
 		return Results;
 	}
@@ -546,8 +440,10 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 
 		// The material call for this garment, resolved before anything is built with it. Every
 		// number below that is not a decode of the authored payload comes from here.
-		const TSharedRef<FJsonObject> Tuning =
-			ResolveTuning(TuningTable, Stem, GarmentIndex, Result.Material, Result.Errors);
+		FName TuningMaterial;
+		const FElysiumClothTuningLayer Tuning =
+			TuningTable->ResolveGarment(Stem, GarmentIndex, TuningMaterial, Result.Errors);
+		Result.Material = TuningMaterial.ToString();
 
 		// --- the authored simulation mesh -------------------------------------------------
 		TArray<FVector3f> Rest;
@@ -732,12 +628,9 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		// tight leash and a hem particle a loose one, and one tuned fraction means the same thing
 		// on a 35 cm necktie and a 228 cm cloak.
 		const TArray<float> Reach = ReachToPinned(Rest, Faces, Anchored);
-		const float LeashFraction =
-			static_cast<float>(TunedNumber(Tuning, TEXT("leash_reach_fraction"), Result.Errors));
-		const float LeashMin =
-			static_cast<float>(TunedNumber(Tuning, TEXT("leash_min_cm"), Result.Errors));
-		const float LeashMax =
-			static_cast<float>(TunedNumber(Tuning, TEXT("leash_max_cm"), Result.Errors));
+		const float LeashFraction = Tuning.LeashReachFraction;
+		const float LeashMin = Tuning.LeashMinCm;
+		const float LeashMax = Tuning.LeashMaxCm;
 
 		Cloth.AddWeightMap(MaxDistanceMap);
 		TArrayView<float> MaxDistance = Cloth.GetWeightMap(MaxDistanceMap);
@@ -766,13 +659,10 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		UChaosClothConfig* const ClothConfig = NewObject<UChaosClothConfig>();
 		UChaosClothSharedSimConfig* const SharedConfig = NewObject<UChaosClothSharedSimConfig>();
 
-		auto Tuned = [&Tuning, &Result](const TCHAR* Key)
+		// A weighted value with no weight map behind it: both ends are the same number, so the
+		// property is constant over the garment.
+		auto Weighted = [](const float Value)
 		{
-			return static_cast<float>(TunedNumber(Tuning, Key, Result.Errors));
-		};
-		auto Weighted = [&Tuned](const TCHAR* Key)
-		{
-			const float Value = Tuned(Key);
 			return FChaosClothWeightedValue{ Value, Value };
 		};
 
@@ -783,61 +673,54 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		// mismatch to be corrected away. The tuned multiplier rides on top of it, so a material
 		// can be adjusted without discarding what the artist asked for.
 		ClothConfig->GravityScale =
-			static_cast<float>(GravityScale) * RetailGravityRatio * Tuned(TEXT("gravity_multiplier"));
+			static_cast<float>(GravityScale) * RetailGravityRatio * Tuning.GravityMultiplier;
 
 		// What the garment is made of. VtMB states none of this — its solver had no material at
 		// all — so every value here is the tuning table's, keyed by the material this garment was
 		// read as. Density is Chaos's own kg scale, where the engine's reference points run from
 		// melton wool at 0.7 down to silk at 0.1.
 		ClothConfig->MassMode = EClothMassMode::Density;
-		ClothConfig->Density = Tuned(TEXT("density"));
-		ClothConfig->EdgeStiffnessWeighted = Weighted(TEXT("edge_stiffness"));
-		ClothConfig->BendingStiffnessWeighted = Weighted(TEXT("bend_stiffness"));
+		ClothConfig->Density = Tuning.Density;
+		ClothConfig->EdgeStiffnessWeighted = Weighted(Tuning.EdgeStiffness);
+		ClothConfig->BendingStiffnessWeighted = Weighted(Tuning.BendStiffness);
 		// Zero by default in the table, and deliberately: VtMB authors exactly two constraint
 		// sets, the mesh's edges and its bend diagonals, and no area-preservation set at all. The
 		// engine's default of 1 buys a constraint the garment was never designed around and
 		// charges for it every substep.
-		ClothConfig->AreaStiffnessWeighted = Weighted(TEXT("area_stiffness"));
+		ClothConfig->AreaStiffnessWeighted = Weighted(Tuning.AreaStiffness);
 
 		// Retail retains 0.97 of the previous displacement per substep at a 300 Hz target, and
 		// Chaos states damping as the fraction removed per 60 Hz frame: 1 - 0.97^5. That is where
 		// the table's default came from; a material may still move it.
-		ClothConfig->DampingCoefficient = Tuned(TEXT("damping"));
-		ClothConfig->LocalDampingCoefficient = Tuned(TEXT("local_damping"));
+		ClothConfig->DampingCoefficient = Tuning.Damping;
+		ClothConfig->LocalDampingCoefficient = Tuning.LocalDamping;
 
-		ClothConfig->CollisionThickness = Tuned(TEXT("collision_thickness"));
-		ClothConfig->FrictionCoefficient = Tuned(TEXT("friction"));
-		ClothConfig->TetherStiffness = Weighted(TEXT("tether_stiffness"));
-		ClothConfig->TetherScale = Weighted(TEXT("tether_scale"));
+		ClothConfig->CollisionThickness = Tuning.CollisionThickness;
+		ClothConfig->FrictionCoefficient = Tuning.Friction;
+		ClothConfig->TetherStiffness = Weighted(Tuning.TetherStiffness);
+		ClothConfig->TetherScale = Weighted(Tuning.TetherScale);
 
-		const float LinearVelocityScale = Tuned(TEXT("linear_velocity_scale"));
-		ClothConfig->LinearVelocityScale =
-			FVector(LinearVelocityScale, LinearVelocityScale, LinearVelocityScale);
-		ClothConfig->AngularVelocityScale = Tuned(TEXT("angular_velocity_scale"));
-		ClothConfig->FictitiousAngularScale = Tuned(TEXT("fictitious_angular_scale"));
+		ClothConfig->LinearVelocityScale = FVector(
+			Tuning.LinearVelocityScale, Tuning.LinearVelocityScale, Tuning.LinearVelocityScale);
+		ClothConfig->AngularVelocityScale = Tuning.AngularVelocityScale;
+		ClothConfig->FictitiousAngularScale = Tuning.FictitiousAngularScale;
 
 		// Continuous collision detection. A garment on a character who turns, sits or takes a hit
 		// moves far enough in one substep to pass straight through a hip capsule, and a discrete
 		// test only ever asks where the particle ENDED — so the miss is silent and the hem comes
 		// out the far side. It is per material because it is a real cost and most of what it buys
 		// is on the long coats: a necktie on a sternum never meets a fast collider.
-		ClothConfig->bUseCCD = TunedBool(Tuning, TEXT("use_ccd"), Result.Errors);
+		ClothConfig->bUseCCD = Tuning.bUseCCD;
 
 		// The solver block, shared by every garment. The substep clock is VtMB's own --
 		// `N = min(30, round(elapsed * 300))` -- and Chaos computes
 		// `Clamp(Round(DeltaTime * 1000 / DynamicSubstepDeltaTime), 1, NumSubsteps)`, so the
 		// table's 3.3333 ms target and cap of 30 reproduce it rather than approximate it.
-		const TSharedPtr<FJsonObject>* Solver = nullptr;
-		const TSharedRef<FJsonObject> SolverConfig = TuningTable->TryGetObjectField(
-			TEXT("solver"), Solver) ? Solver->ToSharedRef() : MakeShared<FJsonObject>();
-		SharedConfig->IterationCount =
-			static_cast<int32>(TunedNumber(SolverConfig, TEXT("iteration_count"), Result.Errors));
-		SharedConfig->MaxIterationCount = static_cast<int32>(
-			TunedNumber(SolverConfig, TEXT("max_iteration_count"), Result.Errors));
-		SharedConfig->SubdivisionCount =
-			static_cast<int32>(TunedNumber(SolverConfig, TEXT("max_substeps"), Result.Errors));
-		ClothConfig->bUseSelfCollisions =
-			TunedBool(SolverConfig, TEXT("use_self_collisions"), Result.Errors);
+		const FElysiumClothSolverTuning& SolverConfig = TuningTable->Solver;
+		SharedConfig->IterationCount = SolverConfig.IterationCount;
+		SharedConfig->MaxIterationCount = SolverConfig.MaxIterationCount;
+		SharedConfig->SubdivisionCount = SolverConfig.MaxSubsteps;
+		ClothConfig->bUseSelfCollisions = SolverConfig.bUseSelfCollisions;
 
 		::Chaos::FClothingSimulationConfig SimulationConfig;
 		SimulationConfig.Initialize(ClothConfig, SharedConfig);
@@ -849,8 +732,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		{
 			::Chaos::Softs::FCollectionPropertyMutableFacade Properties(Collection);
 			Properties.AddValue(FName(TEXT("DynamicSubstepDeltaTime")),
-				static_cast<float>(
-					TunedNumber(SolverConfig, TEXT("substep_target_ms"), Result.Errors)));
+				SolverConfig.SubstepTargetMs);
 		}
 		Result.ConfigProperties =
 			::Chaos::Softs::FCollectionPropertyConstFacade(Collection).Num();

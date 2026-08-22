@@ -1253,6 +1253,15 @@ struct FElysiumRecordingServices final
 			PlayerBaseActivity.IsEmpty() ? TEXT("(none)") : *PlayerBaseActivity));
 		return PlayerBaseActivity;
 	}
+	// LIFE5 — the melee stop. Counted as well as recorded, because the assertion that matters most
+	// is that it fires on EVERY frame of the swing's tail: the recovered block carries no latch, so
+	// the count is what tells a window apart from a one-shot.
+	int32 StopPlayerBodyCount = 0;
+	virtual void StopPlayerBody() override
+	{
+		++StopPlayerBodyCount;
+		Record(TEXT("StopPlayerBody"));
+	}
 	virtual float ResolveNpcMakerGroundZ(const FVector& Origin, float Depth) const override
 	{
 		const float Result = bUseNpcMakerGroundZ ? NpcMakerGroundZ : Origin.Z;

@@ -818,10 +818,7 @@ def _stage_code_paths(config, stage: str) -> tuple[Path, ...]:
             (
                 unreal_root / "make_world_materials.py",
                 unreal_root / "make_decal_material.py",
-                unreal_root / "make_rain_system.py",
                 unreal_root / "mat_fog.py",
-                source_root / "Public" / "ElysiumRainAssetBuilder.h",
-                source_root / "Private" / "Editor" / "ElysiumRainAssetBuilder.cpp",
             )
         )
     elif stage == "level":

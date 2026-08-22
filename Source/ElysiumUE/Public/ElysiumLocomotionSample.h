@@ -143,6 +143,16 @@ namespace ElysiumLocomotion
 	// yaw direction, so a body strafing right reads positive.
 	float RelativeYaw(float WorldYaw, float FacingYaw);
 
+	// LIFE5 — `SetLocalVelocity(vec3_origin)`: clear what the sample says the body is DOING, and
+	// nothing it says about the command or the posture.
+	//
+	// The three fields are exactly the ones `PublishLocomotionSample` derives from the velocity, so
+	// a cleared sample says what it would have said had the frame been integrated from a standing
+	// start. `MoveYawPose` goes with them because the producer seeds it with the unfiltered velocity
+	// yaw rather than the filtered pose. The wish, the commanded speed, ground contact, the stance
+	// and the jump window are the COMMAND and the body's posture, and a stop is not a reset.
+	void ClearMotion(FElysiumLocomotionSample& Sample);
+
 	// Advance the pose parameter one frame toward the realized direction, and answer it.
 	//
 	// Three recovered behaviours, none of them smoothing for its own sake:

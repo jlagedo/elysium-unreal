@@ -25,6 +25,8 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Visual/ElysiumLightRig.h"        // the authored light set the light query estimates from
 #include "Visual/ElysiumMapVisuals.h"
+#include "Visual/ElysiumMeleeTrail.h"
+#include "Visual/ElysiumNpcVisual.h"
 
 #include "Components/BoxComponent.h"
 #include "Components/LightComponent.h"
@@ -385,6 +387,22 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 	// pushes the default, which reports no sequence and is never animation-driven.
 	PlayerAnimDriver->BaseClipCycle = ReadPlayerBaseClipCycle(Visual);
 
+	// **The melee stop, between the pose read and the selector** (LIFE5). Retail zeroes the body's
+	// velocity in `PostThink` and then, in the very next instruction block, asks the classifier and
+	// calls `SetAnimation` — so the frame the swing's lock releases is a frame the selector sees a
+	// STANDING body on. Here that is the same seam: the freshly-read cycle above is what the rule's
+	// predicate is rebuilt over, and the sample handed to `Tick` below is read after the stop has
+	// had its chance at it.
+	//
+	// The rule itself is the substrate's (`FElysiumEntityWorld::UpdatePlayerMeleeMovementStop`); all
+	// this order decides is when it is asked.
+	// The driver's own rebuild, not its published copy: the published pair still describes the frame
+	// before, and this rule needs where the forced sequence stands RIGHT NOW.
+	if (EntityWorld)
+	{
+		EntityWorld->UpdatePlayerMeleeMovementStop(PlayerAnimDriver->ForcedIdealActivity());
+	}
+
 	PlayerAnimDriver->Tick(DeltaSeconds, Body->GetLocomotionSample(), Anims,
 		Visual ? Visual->GetSkeletalMeshAsset() : nullptr, OneShot);
 
@@ -652,6 +670,11 @@ void AElysiumMapActor::ClearPlayerVisual()
 	}
 	if (USkeletalMeshComponent* Visual = Body->GetPlayerVisual())
 	{
+		// The wield mesh and its trail are owned by the PAWN and merely attached to this visual
+		// (`ElysiumNpcVisual::SweepWieldModels`' ownership trap), so destroying the visual alone
+		// detaches them into floating orphans nothing would ever sweep on this path.
+		ElysiumNpcVisual::ClearWieldModel(Visual);
+		ElysiumMeleeTrail::ClearTrail(Visual);
 		Body->SetPlayerVisual(nullptr);
 		Visual->DestroyComponent();
 	}
@@ -1613,6 +1636,39 @@ FString AElysiumMapActor::GetPlayerBaseActivity() const
 	return GetPlayerAnimSelection().RequestedActivity;
 }
 
+void AElysiumMapActor::StopPlayerBody()
+{
+	APawn* Pawn = ResolvePlayerPawn();
+	// Cached per pawn, the same reason the gait push gates on its generation counter: this runs
+	// every frame of a melee tail window, and the component set on a pawn cannot change under it —
+	// only the pawn itself can be replaced.
+	if (Pawn != StopBodyPawn.Get() || !StopBodyMove.IsValid())
+	{
+		StopBodyPawn = Pawn;
+		StopBodyMove = Pawn != nullptr
+			? Pawn->FindComponentByClass<UElysiumMovementComponent>() : nullptr;
+	}
+	UElysiumMovementComponent* Move = StopBodyMove.Get();
+	if (Move == nullptr)
+	{
+		// The substrate only asks after its own predicate held, which needs a pose layer standing on
+		// the player's forced swing — so a body with no `CGameMovement` port at that point is a
+		// mismatched pawn rather than the ordinary backdrop absence, and the swing's lunge is about
+		// to survive into the gait ladder with nothing else to catch it.
+		if (!bReportedNoStoppableBody)
+		{
+			bReportedNoStoppableBody = true;
+			UE_LOG(LogElysium, Warning,
+				TEXT("the melee movement lock stands released on '%s', but the player pawn carries no ")
+				TEXT("UElysiumMovementComponent to stop — the swing's authored lunge stays on the ")
+				TEXT("body and the gait ladder will read it as movement"),
+				Pawn != nullptr ? *Pawn->GetName() : TEXT("(no pawn)"));
+		}
+		return;
+	}
+	Move->StopBody();
+}
+
 float AElysiumMapActor::ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 	float TraceDepthCm) const
 {
@@ -1963,6 +2019,11 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		// It is the only substrate call in this pass that takes the frame's delta, because the
 		// sub-step count is `floor(dt * 100)` and nothing else in the layer measures a frame.
 		EntityWorld->AdvanceMeleeSwings(DeltaSeconds);
+		// The melee weapon-trail VFX rides the same frame's Swing state the contact walk just
+		// advanced, and the same fresh render data the contact walk's own bone queries just read.
+		// Presentation only -- no substrate mutation, so it runs beside the walk rather than inside
+		// FElysiumEntityWorld.
+		ElysiumMeleeTrail::Advance(DeltaSeconds, *EntityWorld);
 	}
 
 	// 11.7 — re-resolve every `Follow` camera shot against this frame's final entity positions. Same

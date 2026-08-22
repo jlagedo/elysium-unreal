@@ -217,6 +217,76 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(W.classify_bones(bones, {10}).anomalies, ())
 
 
+class TrailTipTests(unittest.TestCase):
+    """`trail_tip_from_geometry`: the melee weapon-trail VFX's synthetic `TrailTip` attachment,
+    the model's own geometry's farthest point from the mount along its own long axis."""
+
+    def _rig(self):
+        # Every arm bone is at the origin with an identity bind (the `bone()` default), so the
+        # mount's bind-space WORLD transform equals its own local: a pure translation to (4,0,0).
+        bones = with_subrig(("handle", None))
+        bones[10] = bone(10, "handle", 9, pos=(4.0, 0.0, 0.0))
+        return bones, W.classify_bones(bones, {10})
+
+    def test_tip_sits_on_the_long_axis_at_the_far_extreme(self) -> None:
+        bones, cls = self._rig()
+        # In the mount's local frame (subtract the mount's world translation, (4,0,0)): the grip
+        # end at the origin, the blade's far corners 6 units out on X, 2 wide on Y and Z.
+        positions = [(4.0, 0.0, 0.0), (10.0, 2.0, -1.0), (10.0, 0.0, 1.0)]
+
+        pos, quat = W.trail_tip_from_geometry(bones, cls, positions)
+
+        # X is the long axis (extent 6 against 2 on Y/Z) and the far end is the +X extreme.
+        self.assertAlmostEqual(pos[0], 6.0)
+        # The other two axes sit at the geometry's own midpoint, not the origin -- Y's bbox is
+        # [0,2], not [-1,1], so a wrong "midpoint is always zero" implementation would fail this.
+        self.assertAlmostEqual(pos[1], 1.0)
+        self.assertAlmostEqual(pos[2], 0.0)
+        self.assertEqual(quat, (0.0, 0.0, 0.0, 1.0))
+
+    def test_long_axis_is_read_per_model_not_assumed(self) -> None:
+        bones, cls = self._rig()
+        # The same rig, but this time the geometry's long axis is Z, not X -- the function must
+        # not hardcode which axis is "the blade direction" (the corpus itself disagrees by sex on
+        # `bushhook`: local-Y in the male file, local-Z in the female).
+        positions = [(4.0, 0.0, 0.0), (4.0, 1.0, 8.0), (4.0, -1.0, 8.0)]
+
+        pos, _ = W.trail_tip_from_geometry(bones, cls, positions)
+
+        self.assertAlmostEqual(pos[2], 8.0)
+        self.assertAlmostEqual(pos[0], 4.0 - 4.0)  # X sits at its own (degenerate) midpoint, 0
+        self.assertAlmostEqual(pos[1], 0.0)
+
+    def test_degenerate_mount_bind_still_produces_a_sane_offset(self) -> None:
+        # Mirrors `test_degenerate_identity_bind_is_recorded_not_corrected`: a literal identity
+        # local bind on the mount is a retail authoring defect (`w_f_bushhook.mdl`), reproduced
+        # rather than corrected. The geometry bbox math must not raise or blow up over it -- only
+        # the vertex positions matter, not whether the bind itself is well-formed.
+        bones = with_subrig(("bush hook", None))
+        bones[10] = bone(10, "bush hook", 9, pos=(0.0, 0.0, 1e-7), quat=IDENTITY_Q)
+        cls = W.classify_bones(bones, {10})
+        positions = [(0.0, 0.0, 0.0), (0.0, 0.0, 5.0)]
+
+        pos, _ = W.trail_tip_from_geometry(bones, cls, positions)
+
+        self.assertAlmostEqual(pos[2], 5.0, places=3)
+
+    def test_no_positions_returns_the_origin(self) -> None:
+        bones, cls = self._rig()
+
+        pos, quat = W.trail_tip_from_geometry(bones, cls, [])
+
+        self.assertEqual(pos, (0.0, 0.0, 0.0))
+        self.assertEqual(quat, (0.0, 0.0, 0.0, 1.0))
+
+    def test_wrapper_is_none_off_socket_prop(self) -> None:
+        bones = with_subrig(("body", None), ("slide", 0))
+        cls = W.classify_bones(bones, {10, 11})
+        self.assertEqual(cls.binding, "socket_hand")
+
+        self.assertIsNone(W.trail_tip(b"", b"", bones, cls))
+
+
 class NonSocketBindingTests(unittest.TestCase):
     """The three non-socket modes need the character corpus: whether a rig is worn at all is a
     fact about the cast, not about the file."""

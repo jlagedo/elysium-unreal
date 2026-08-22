@@ -73,9 +73,12 @@ namespace ElysiumNpcVisual
 	// one was attached, null otherwise.
 	UChaosClothComponent* InstallGarment(USkeletalMeshComponent* Body, const FString& Stem);
 
-	// Install generated stock-AnimDynamics hair recipes from the mesh. Hair chains still admit
-	// only the two proof bodies. Breast body recipes are not installed. False is the ordinary
-	// answer on a body with no recipe. A carried-but-invalid chain warns and is dropped.
+	// Install this stem's authored stock-AnimDynamics hair chains.
+	//
+	// The recipes are owner-authored presentation, tuned in the editor and tracked in
+	// `/Game/ElysiumAuthored/Hair/DA_HairDynamics`; having an entry there is the whole scope gate,
+	// so most of the cast simulates nothing and false is the ordinary answer. An authored chain the
+	// body cannot run warns naming the stem and the chain, and only that chain is dropped.
 	bool InstallHairDynamics(USkeletalMeshComponent* Body, const FString& Stem);
 
 	// The component tag every installed wield model carries. A body's owner holds other skeletal

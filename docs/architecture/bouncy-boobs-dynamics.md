@@ -95,16 +95,19 @@ Therese, Damsel and Heather have both.
 
 ## What the current host does
 
-The hair proof writes a baked-native AnimDynamics **chain** recipe
-(`DYNM` on the `.eskm`, `UElysiumHairDynamicsAssetUserData` on the mesh) and
-installs it from `ElysiumNpcVisual::InstallHairDynamics`. Three locks keep
+Hair AnimDynamics **chain** entries are owner-authored in the tracked
+`/Game/ElysiumAuthored/Hair/DA_HairDynamics` (`UElysiumHairDynamicsConfig`)
+and installed from `ElysiumNpcVisual::InstallHairDynamics`. Two locks keep
 breasts out:
 
-1. `ANIM_DYNAMICS_POC_CHAINS` in `mdl_secondary_motion.py` names only the two
-   hair routes.
-2. The installer admits only stems `jeanette` and `malkavian_female_armor_0`
-   and those exact bone names.
-3. Bake and install reject a cone above 90° and reject `BoundBone == ChainEnd`.
+1. The authored table carries only chain entries, and only for the two hair
+   bodies; a stem with no entry simulates nothing. (`mdl_secondary_motion.py`'s
+   decode of retail's chain table remains as reference data nothing installs.)
+2. The installer rejects a cone above 90° and rejects
+   `BoundBone == ChainEnd`.
+
+A landed breast recipe would be a second authored entry kind on the same
+asset — single-body (`bChain = false`) rows beside the chain rows.
 
 The same `FAnimNode_ElysiumHairDynamics` wrapper is a stock
 `FAnimNode_AnimDynamics` with `bChain = true`. That is the right Unreal mode

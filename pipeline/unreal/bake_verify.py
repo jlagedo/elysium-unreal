@@ -179,21 +179,22 @@ def verify_sm_hub_1_weather(package, world_dir):
                 != unreal.TextureCompressionSettings.TC_DISPLACEMENTMAP):
             fail("height texture is not linear displacement-map R16")
 
-    expected_policy_assets = [
+    # The rain master, system and textures are tracked authored assets
+    # (Content/ElysiumAuthored/VFX); their presence is a checkout sanity check, not a bake
+    # product check. Only the per-map material instances are bake products here.
+    expected_assets = [
         "/Game/VtMB/Materials/MPC_ElysiumEnvironment",
-        "/Game/VtMB/Particles/M_ElysiumRain",
-        "/Game/VtMB/Particles/NS_ElysiumRain",
-        "/Game/VtMB/Particles/T_RainDroplet",
-        "/Game/VtMB/Particles/T_RainMist",
+        "/Game/ElysiumAuthored/VFX/M_ElysiumRain",
+        "/Game/ElysiumAuthored/VFX/NS_ElysiumRain",
+        "/Game/ElysiumAuthored/VFX/T_RainDroplet",
+        "/Game/ElysiumAuthored/VFX/T_RainMist",
     ]
-    for asset in expected_policy_assets:
+    for asset in expected_assets:
         if not unreal.EditorAssetLibrary.does_asset_exist(asset):
-            fail("generated policy asset is missing: " + asset)
+            fail("required weather asset is missing: " + asset)
 
     rain_material = unreal.EditorAssetLibrary.load_asset(
-        "/Game/VtMB/Particles/M_ElysiumRain")
-    system = unreal.EditorAssetLibrary.load_asset(
-        "/Game/VtMB/Particles/NS_ElysiumRain")
+        "/Game/ElysiumAuthored/VFX/M_ElysiumRain")
     mic_path = package + "/Weather/MI_ElysiumRain"
     rain_mic = unreal.EditorAssetLibrary.load_asset(mic_path)
     if rain_mic is None:
@@ -206,9 +207,6 @@ def verify_sm_hub_1_weather(package, world_dir):
             rain_mic, "RainHeightTexture")
         if height is None or bound_height != height:
             fail("per-map rain material has no matching height texture")
-        validation = unreal.ElysiumRainAssetBuilder.validate_rain_system(system, rain_mic)
-        if validation:
-            fail(str(validation))
 
     wetness_values = []
     corpus = _corpus_materials()

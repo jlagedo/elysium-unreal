@@ -326,13 +326,29 @@ def main(index=None, force=False):
     for model_key in real_keys:
         d, v = loaded[model_key]
         bones = mdl_skel.read_bones(d)
-        skinned = W.skinned_bones(d, v)
-        cls = W.classify(d, v, bodies=bodies)
+        # One geometry decode per model, shared by every consumer below -- skinned_bones, classify
+        # and trail_tip each decode themselves when standing alone.
+        surfaces = mdl_skel.decode_skinned(d, v)
+        skinned = W.skinned_bones(d, v, surfaces=surfaces)
+        cls = W.classify(d, v, bodies=bodies, surfaces=surfaces)
         subtree_check = W.check_subtree(bones, skinned, cls)
         collapse_check = W.check_collapse(bones, skinned, cls)
         motion_check = W.check_motion(d, bones, cls)
         binding = _binding_for(cls, motion_check)
         binding_counts[binding] = binding_counts.get(binding, 0) + 1
+
+        # A TrailTip attachment is a fixed bone-local offset, which is only meaningful under the
+        # rigid-collapse assumption `binding == "socket_prop"` licenses -- a model `_binding_for`
+        # demoted to `copy_pose` (its own clip moves below the mount) gets none, the same
+        # motion-check gate that demotion itself is keyed on.
+        trail_tip = (W.trail_tip(d, v, bones, cls, surfaces=surfaces)
+                     if binding == "socket_prop" else None)
+        extra_attachments = None
+        if trail_tip is not None:
+            mount_index = next(i for i, bone in enumerate(bones) if bone.name == cls.mount_bone)
+            extra_attachments = [mdl_skel.Attachment(
+                name="TrailTip", flags=0, bone=mount_index,
+                pos=trail_tip[0], quat=trail_tip[1])]
 
         pose = W.bake_pose(d, bones)
         stem = W.stem(model_key)
@@ -341,7 +357,8 @@ def main(index=None, force=False):
                 f"[wield] {model_key}: stem {stem!r} collides with an earlier model's -- "
                 "the manifest is keyed on it and would lose one")
 
-        write_model(idx, model_key, os.fspath(out_dir), stem=stem, ref_pose=list(pose.locals))
+        write_model(idx, model_key, os.fspath(out_dir), stem=stem, ref_pose=list(pose.locals),
+                    extra_attachments=extra_attachments)
         eskm_path = os.path.join(os.fspath(out_dir), stem + ".eskm")
         _assert_ref_pose(model_key, eskm_path, bones, pose)
 
@@ -362,6 +379,8 @@ def main(index=None, force=False):
                  for seq in mdl_skel.local_sequences(d)]
         mount_bind = ({"pos": list(cls.mount_bind[0]), "quat": list(cls.mount_bind[1])}
                       if cls.mount_bind else None)
+        trail_tip_out = ({"bone": cls.mount_bone, "pos": list(trail_tip[0]), "quat": list(trail_tip[1])}
+                         if trail_tip is not None else None)
 
         model_out[stem] = {
             "source": model_key,
@@ -372,6 +391,7 @@ def main(index=None, force=False):
             "collapse_bone": cls.collapse_bone,
             "grip": cls.grip,
             "mount_bind": mount_bind,
+            "trail_tip": trail_tip_out,
             "bone_count": cls.bone_count,
             "skinned_bone_count": cls.skinned_bone_count,
             "on_body": on_body,

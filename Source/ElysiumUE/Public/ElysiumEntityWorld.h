@@ -264,6 +264,28 @@ public:
 	// stays its schedule tasks' direct `AttackIntent` calls.
 	void UpdatePlayerWeaponFrame();
 
+	// LIFE5 — `CBasePlayer::PostThink`'s melee stop, run once per post-move tick immediately before
+	// the frame's animation selection. No `docs/vtmb/` section owns this block yet: it sits between
+	// the grounded fall-sound reset and the realized-action classifier, which is a gap in
+	// `player-entity.md`'s recovered `PostThink` listing.
+	//
+	// Every frame from the swing's `w_hold` to the end of its clip, with no direction key held, the
+	// swing's own authored lunge is discarded so the selector that runs next reads a standing body. The rule is
+	// `ElysiumClipMovement::StopsMeleeTailMotion`; the two facts it needs come from the embodiment —
+	// where the forced sequence stands, and the held direction bits this world already keeps — and
+	// the stop itself goes back out through `IElysiumEmbodiment::StopPlayerBody`.
+	//
+	// The ORDER is the whole of it: retail zeroes the velocity and then, in the next instruction
+	// block, asks the classifier and calls `SetAnimation`. Run after the selection instead and the
+	// gait has already been applied over the swing.
+	//
+	// `State` is PUSHED rather than pulled: the caller reads the driver's own rebuild between the
+	// pose read and the selector, which is the only point in the frame where the record means what
+	// this rule needs. Asking for it back through the seam would be the same object answering its
+	// own question a call later, and the bool that came with it carried nothing a cleared record
+	// did not already say.
+	void UpdatePlayerMeleeMovementStop(const FElysiumIdealActivityState& State);
+
 	// LIFE5 — one frame of the melee contact walk, for EVERY character holding a live melee swing.
 	//
 	// Retail runs the swept contact on the CHARACTER's own update rather than on the player's input

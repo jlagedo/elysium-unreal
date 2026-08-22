@@ -35,6 +35,7 @@
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
+#include "Visual/ElysiumMeleeTrail.h"
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Components/PointLightComponent.h"
@@ -419,8 +420,10 @@ void FElysiumGreenRoomRun::DestroyBodies()
 		if (USkeletalMeshComponent* Body = Entry.Body.Get())
 		{
 			// Before the body goes: a wield model outlives the component it follows, and an orphan
-			// keeps drawing at the identity transform rather than erroring.
+			// keeps drawing at the identity transform rather than erroring. Its trail shares the
+			// same ownership and goes with it.
 			ElysiumNpcVisual::ClearWieldModel(Body);
+			ElysiumMeleeTrail::ClearTrail(Body);
 			Body->DestroyComponent();
 		}
 	}

@@ -537,9 +537,15 @@ def _ref_pose_rows(rows, bone_map, ref_pose, context, reparented=None):
     return out
 
 
-def _attachment_section(d, bone_map):
-    """Model-authored bone-local attachments, resolved into the emitted skeleton indices."""
-    records = S.attachments(d)
+def _attachment_section(d, bone_map, extra_attachments=None):
+    """Model-authored bone-local attachments, resolved into the emitted skeleton indices.
+
+    `extra_attachments`, when given, is a list of `mdl_skel.Attachment` records synthesised by
+    the caller (not read from `d`) -- e.g. the wield bake's `TrailTip` socket -- appended after
+    the model's own authored attachments. `record.bone` is a raw StudioBone index into the same
+    `bones` array `bone_map` was built from, exactly like an authored record's.
+    """
+    records = list(S.attachments(d)) + list(extra_attachments or ())
     if not records:
         return b""
     out = bytearray(struct.pack("<I", len(records)))
@@ -1270,7 +1276,7 @@ def _write_container(path, blob):
 
 
 def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=None,
-                ensure_labels=None, ref_pose=None):
+                ensure_labels=None, ref_pose=None, extra_attachments=None):
     """Write `<out_dir>/<stem>.eskm` and return a summary dict.
 
     `anorms` is the unit-vector table read out of the user's own `StudioRender.dll`; without
@@ -1285,7 +1291,11 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
     (`_reskin_surfaces`) -- vertices are meaningful only against the reference pose they are
     stored with, so an override that left them in bind space would bake a container that
     disagrees with itself. Left `None`, the container's own bind pose is written exactly as
-    before -- byte-identical output for every caller that does not pass it."""
+    before -- byte-identical output for every caller that does not pass it.
+
+    `extra_attachments`, when given, is a list of `mdl_skel.Attachment` records appended to the
+    model's own authored attachments in the "ATCH" section -- see `_attachment_section`. Left
+    `None`, byte-identical output for every caller that does not pass it."""
     loaded = mdl.load(idx, model_path)
     if not loaded:
         raise SystemExit(f"model not found: {model_path}")
@@ -1332,7 +1342,7 @@ def write_model(idx, model_path, out_dir, stem=None, anorms=None, clip_labels=No
 
     blob = _assemble([
         (b"SKEL", _skel_section(_ref_pose_rows(rows, bone_map, ref_pose, model_path, reparented))),
-        (b"ATCH", _attachment_section(d, bone_map)),
+        (b"ATCH", _attachment_section(d, bone_map, extra_attachments)),
         (b"DYNM", dynamics_payload),
         (b"BDYN", breast_payload),
         (b"MATL", _matl_section(matnames, matinfo)),

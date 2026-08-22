@@ -92,6 +92,21 @@ public:
 	// accumulator. What a teleport wants — a body arriving somewhere new must not still be running.
 	void ResetState();
 
+	// LIFE5 — discard the body's carried motion, and nothing else: `CBasePlayer::PostThink`'s melee
+	// stop, driven from the substrate on every frame of a swing's tail — from the playing sequence's
+	// own `w_hold` to the end of its clip — with no direction key held
+	// (`ElysiumClipMovement::StopsMeleeTailMotion`).
+	//
+	// It is not `ResetState` and not `SetFrozen`. Retail zeroes two velocities and leaves every
+	// latch, the duck, the jump window and the pushed lock exactly where they were — the body is
+	// stopped, not reset and not immobilised, and the very next command moves it again.
+	//
+	// The published sample goes with the component's velocity because it is retail's second call:
+	// `SetLocalVelocity(vec3_origin)`. Every animation reader takes the body's motion from that
+	// record, and the reader that matters runs later in the SAME frame, before the mover ticks
+	// again — so a record left carrying the lunge is the whole defect this exists to fix.
+	void StopBody();
+
 	// Freeze the body where it stands (the spawn hold, while collision cooks).
 	void SetFrozen(bool bFrozen);
 	bool IsFrozen() const { return bFrozen; }

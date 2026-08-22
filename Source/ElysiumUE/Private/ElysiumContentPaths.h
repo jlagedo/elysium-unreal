@@ -59,6 +59,21 @@ struct FElysiumContentPaths
 		return !Value.IsEmpty() && IFileManager::Get().FileExists(*IncompleteMarker(Domain));
 	}
 
+	// --- Original authored content (/Game/ElysiumAuthored) ---------------------------------------
+	// The one tracked package namespace. Nothing here is generated and nothing here is derived from
+	// the user's install, so a clean or a regeneration must never write to or remove it
+	// (`Content/CLAUDE.md`).
+	static FString AuthoredMount() { return TEXT("/Game/ElysiumAuthored"); }
+	// What every VtMB garment is made of, in Chaos's own terms, typed by
+	// Public/ElysiumClothTuningConfig.h. The authored payload states a garment's shape and its
+	// constraint graph and nothing about its material -- VtMB's solver had no density, friction or
+	// thickness to state -- so that call is authored here rather than decoded or compiled in.
+	static FString AuthoredClothTuning()
+	{
+		const FString Asset = TEXT("DA_ClothTuning");
+		return AuthoredMount() / TEXT("Cloth") / Asset + TEXT(".") + Asset;
+	}
+
 	// --- Baked content (pipeline/unreal/bake_map.py) ---------------------------------------------
 	// The look of a map — world + sky geometry, materials, textures, props, lights, fog — is
 	// offline-baked into real .uasset content under the /ElysiumBaked plugin mount, and the map
@@ -325,6 +340,12 @@ struct FElysiumContentPaths
 	// are the corpus's, addressed by `BakedItemMesh`.
 	static FString ItemsDir() { return Root() / TEXT("items"); }
 	static FString ItemGroundModels() { return ItemsDir() / TEXT("ground_models.json"); }
+	// `items/wield_models.json`'s `models` table, and the Unreal-native `.eskm` beside it each row
+	// names -- the wield-model analogue of `NpcSource`, checked against the baked `SK_<stem>` the
+	// same way (`wield_corpus.wield_dir`/`manifest_path`).
+	static FString WieldDir() { return ItemsDir() / TEXT("wield"); }
+	static FString WieldManifest() { return ItemsDir() / TEXT("wield_models.json"); }
+	static FString WieldSource(const FString& Stem) { return WieldDir() / (Stem + TEXT(".eskm")); }
 
 	static FString MapDir(const FString& Map) { return Root() / Map; }
 	// A map's own texture directory. It holds only `tex/cube/` now -- the env cubemaps VBSP baked

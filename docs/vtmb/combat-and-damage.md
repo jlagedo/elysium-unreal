@@ -318,15 +318,66 @@ The shot body keeps two authored counts distinct:
   M37's patch-first record therefore spends one shell while emitting eight buckshot rays.
 
 The same packet carries a copy of the active `CVDmg_t`, the ammo type, muzzle/aim vectors, mode
-range data and its spread cone. The body queries the attacker's Presence bonus and Shaky Hands
-penalty and joins the authored `WeaponRanges`/`GrossPointBlank` tables. `SpreadAngle`, `Accuracy`,
-crosshair fields and those modifiers are all live data surfaces, but the final cone/crosshair
-formula is not yet closed tightly enough to reproduce from this static pass alone.
+range data and its spread cone. `SpreadAngle` is the **only** authored spread keyfield —
+`SpreadAngleMax` does not exist anywhere in the corpus. The loader instead computes
+`SpreadAngle * two engine constants` once and stores that same value into all three axes of the
+per-mode spread vector (`+0x3ac/+0x3b0/+0x3b4`); the z component is never read downstream. The
+body queries the attacker's Presence bonus and Shaky Hands penalty and joins the authored
+`WeaponRanges`/`GrossPointBlank` tables, but Presence/Shaky Hands are **confirmed cosmetic**: both
+are logged via `DevMsg` behind a developer cvar in `CWeaponRanged::Shot` and never read again
+after that call.
+
+`m_fCurrentRangedAccuracy` (`+0x1ddc`) is maintained only by the player's `PostThink`
+(`thunk_FUN_101600a0`, the sole caller) — NPCs never run this path. It converges a target
+crosshair size toward the authored `CrosshairMinSize`/`CrosshairWalkSize*`/`CrosshairRunSize*`
+fields at a rate scaled **cubically** by `GetRawAttackValue` (the Firearms feat rank), plus a
+widening term from mouse-look angular delta, clamped to authored bounds. The fired cone
+(`FUN_10268170`) disc-rejection-samples a random point: the X axis always scales by the static
+`SpreadAngle`; the Y axis substitutes `const * m_fCurrentRangedAccuracy` **only when the shooter
+is `CBasePlayer`**. An NPC therefore always fires on the static authored `SpreadAngle` alone, on
+both axes — only the player's cone is skill-warped, and only on one axis of it.
 
 After a valid shot, `CWeaponRanged::Kick` (`0x102397B0`) reads the attacker's raw attack feat,
 clamps it to compiled bounds, quadratically interpolates between the active mode's kick bounds,
 draws two random signed offsets and applies them through the player view-angle callback. The
 Steyr's separate post-frame scope sway is additive state, not the shot kick itself.
+
+*Elysium divergence, owner-called.* Elysium drops the Firearms-feat-driven accuracy curve and the
+randomized kick draw entirely, for both the player and NPCs. Firearms skill's only remaining
+effect on ranged combat is lethality, via `attack_feat_adjustment` (see "Damage and reaction
+boundary" below) — the same shape as Melee/Brawl, which already drives damage rather than to-hit.
+In their place:
+
+- **Spread** is a fixed cone per weapon mode: a `Base` half-angle that grows by a fixed `Growth`
+  per consecutive shot while the trigger is held, capped at `Max`, and recovers to `Base` over
+  `Recovery` seconds after the trigger releases. The bullet still lands at a random point inside
+  that cone each shot — only the cone's size is deterministic, not the impact point.
+- **Kick** follows a fixed, deterministic per-weapon pattern instead of the random draw: shot 1
+  lands near the authored `KickPitchMin`/`KickYawMin`, and sustained automatic fire climbs to
+  `KickPitchMax`/`KickYawMax` over a fixed shot count, the same every time a given weapon fires.
+
+Authored `SpreadAngle`/`KickPitch*`/`KickYaw*`/`KickTime` remain the anchors; the values below
+replace them for the fixed-cone system. The Mac-10's retail `SpreadAngle 15.0` is reduced — a
+fixed cone with no bloom to mask it made the raw authored figure send fire wildly off target,
+nearly 4x an Uzi's in the same weapon class:
+
+| Weapon | Spread Base → Growth → Max (°) | Recovery | Kick ramps to Max over |
+|---|---|---:|---:|
+| Glock 17c | 1.0 → +0.6 → 4.0 | 0.35 s | 3 shots |
+| .38 revolver | 1.2 → +0.8 → 3.5 | 0.3 s | 2 shots |
+| Desert Eagle | 1.5 → +1.0 → 4.5 | 0.4 s | 2 shots |
+| Colt Anaconda (aimed mode) | 1.0 → +0.7 → 3.0 | 0.3 s | 2 shots |
+| Colt Anaconda (fan mode) | 2.5 → +1.5 → 6.0 | 0.5 s | 3 shots |
+| Uzi | 2.0 → +0.9 → 7.0 | 0.5 s | 5 shots |
+| Mac-10 | 2.5 → +1.1 → 8.5 | 0.6 s | 5 shots |
+| Steyr AUG (mode 1) | 0.8 → +0.5 → 3.0 | 0.4 s | 5 shots |
+| Ithaca M37 | 6.0 fixed, no growth | n/a — dominated by 1.5 s `KickTime` | 1 shot |
+| Super shotgun | 5.0 / 7.0 (single/both barrels), no growth | n/a | 1 shot |
+| Remington M700 | 0.2 fixed, no growth | instant | 1 shot |
+| Crossbow | 0.3 fixed, no growth | instant | 1 shot |
+
+Faithful behaviour — the stat-driven bloom curve and the randomized kick draw — stays recoverable
+through git history and the RE record above; no A/B mechanism or cvar toggles between the two.
 
 Crossbow modes use this same controller and event-driven shot entry. Their item records set
 `fires_projectile`, projectile velocity/model and stake-damage policy, so the downstream fire
@@ -1413,11 +1464,11 @@ who author `invincible 0`.
 
 ## Reverse-engineered mechanics (RE40)
 
-- **Ranged Spread, Cone and Crosshair**:
-  - `m_fCurrentRangedAccuracy` (`+0x1ddc`) dynamically interpolates between min/max accuracy bounds in `thunk_FUN_101600a0`.
-  - Authored weapon mode `SpreadAngle` / `SpreadAngleMax` define the cone of dispersion.
-  - HUD crosshair expansion directly mirrors `CrosshairMinSize` and `CrosshairWalkSizeMax`.
-  - `Presence` modifier and `Shaky Hands` penalty log diagnostic messages via `DevMsg` in `WeaponRangedShot` (`0x102387b0`) but do not alter the physical spread cone.
+- **Ranged Spread, Cone and Crosshair** [closed]:
+  - `m_fCurrentRangedAccuracy` (`+0x1ddc`) is maintained only by the player's `PostThink` (`thunk_FUN_101600a0`, sole caller), converging toward `CrosshairMinSize`/`CrosshairWalkSize*`/`CrosshairRunSize*` at a rate scaled cubically by the Firearms feat rank (`GetRawAttackValue`). NPCs never run this path.
+  - `SpreadAngle` is the **only** authored spread keyfield — `SpreadAngleMax` does not exist; the loader stores `SpreadAngle * two engine constants` into all three axes of the per-mode spread vector, and only x/y are ever read.
+  - The fired cone (`FUN_10268170`) samples a random point in a unit disc: the X axis always scales by the static `SpreadAngle`; the Y axis substitutes `const * m_fCurrentRangedAccuracy` only when the shooter is `CBasePlayer`. NPCs fire on the static `SpreadAngle` alone, on both axes.
+  - `Presence` modifier and `Shaky Hands` penalty log diagnostic messages via `DevMsg` in `WeaponRangedShot` (`0x102387b0`) but are never read again after that call — confirmed cosmetic, not a live input to the cone.
 - **Burst Fields and DamageFlinch Pipeline**:
   - `BurstMin` (`+0x3a4`) and `BurstMax` (`+0x3a8`) are parsed by `WeaponModeDataLoader` (`0x10259230`) from weapon script files but are unreferenced by runtime combat logic (dead fields).
   - Firearm damage enters `DamageFlinch` (`0x103229d0`) via `RangedDamagePerVictim` (`0x10268330`) -> `CBaseEntity::DispatchTraceAttack` (`0x100a7d00`, identified by its scope string) -> the victim's `TraceAttack` virtual, which requests the flinch **at the top of `CBasePlayer::TraceAttack` (`0x10162c30`) or the bottom of `CAI_BaseNPC::TraceAttack` (`0x10266780`)**, before soak and before the health commit. `OnTakeDamage_Alive` (`0x103302e0`) does **not** call `DamageFlinch`, and `0x101cfef0` is the impact-effect/decal body — it reads the trace fields, maps surface characters and calls `+0x268`/`+0x26C` — not a trace-attack dispatcher. See "Damage flinch" above.

@@ -169,24 +169,42 @@ class WieldExportTests(unittest.TestCase):
         inst.add_bytes("materials/ghost_mask.ttz", zlib.compress(bytes((1, 2, 3))))
         return inst
 
-    def _run(self, root: Path, out: Path, *, bone_locals=None, census=None, bindings=None):
+    def _run(self, root: Path, out: Path, *, bone_locals=None, census=None, bindings=None,
+             classification=None, trail_tip=None, capture_attachments=None):
         """One `main()` call with the decision layer and the geometry writer replaced, against a
-        fresh install rooted at `root` and an export root at `out`."""
+        fresh install rooted at `root` and an export root at `out`.
+
+        `capture_attachments`, when given a list, receives `write_model`'s `extra_attachments`
+        kwarg from every call -- how the socket_prop trail-tip tests observe what would have
+        been baked into the `.eskm` without a real geometry writer.
+        """
         inst = self._install(root)
+
+        def _write_model(idx, model_path, out_dir_, stem=None, ref_pose=None,
+                         extra_attachments=None, **kw):
+            if capture_attachments is not None:
+                capture_attachments.append(extra_attachments)
+            return _fake_write_model(idx, model_path, out_dir_, stem=stem, ref_pose=ref_pose, **kw)
+
         patches = [
             mock.patch.object(export, "export_root", return_value=out),
-            mock.patch.object(export, "write_model", side_effect=_fake_write_model),
+            mock.patch.object(export, "write_model", side_effect=_write_model),
             mock.patch.object(export, "EXPECTED_CENSUS", census or _CENSUS),
             mock.patch.object(export, "EXPECTED_BINDINGS", bindings or _BINDINGS),
             mock.patch.object(mdl_skel, "read_bones", return_value=_bones()),
+            # main() decodes each model's geometry once and hands it to the decision layer; the
+            # decision layer is mocked here, so the shared decode is stubbed the same way
+            # read_bones is.
+            mock.patch.object(mdl_skel, "decode_skinned", return_value={}),
             mock.patch.object(W, "skinned_bones", return_value={1}),
-            mock.patch.object(W, "classify", return_value=_classification()),
+            mock.patch.object(W, "classify", return_value=classification or _classification()),
             mock.patch.object(W, "check_subtree",
                               return_value=W.Check("subtree", True, ())),
             mock.patch.object(W, "check_collapse",
                               return_value=W.Check("collapse", True, ())),
             mock.patch.object(W, "check_motion",
                               return_value=W.Check("motion", True, ())),
+            mock.patch.object(W, "trail_tip", return_value=trail_tip),
             mock.patch.object(W, "bake_pose", return_value=_pose()),
             mock.patch.object(W, "model_materials", return_value=_materials()),
             mock.patch.object(W, "skin_families", return_value=_skins()),
@@ -296,6 +314,42 @@ class WieldExportTests(unittest.TestCase):
         message = str(ctx.exception)
         self.assertIn(REAL_MODEL, message)
         self.assertIn("handle", message)
+
+    # --- trail tip ------------------------------------------------------------------------------
+
+    def test_socket_hand_model_carries_no_trail_tip(self) -> None:
+        # The fixture's REAL_MODEL classifies socket_hand (a firearm shape); a melee-only
+        # attachment must not appear on it.
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
+            manifest = self._run(Path(root), Path(out))
+
+            self.assertIsNone(manifest["models"]["w_real"]["trail_tip"])
+
+    def test_socket_prop_model_carries_a_trail_tip_attachment(self) -> None:
+        prop_cls = W.Classification(binding="socket_prop", mount_bone="handle", hand_bone="Bip01",
+                                    collapse_bone="handle", grip="right",
+                                    mount_bind=((4.0, 1.0, 0.0), IDENTITY_Q),
+                                    bone_count=2, skinned_bone_count=1, anomalies=())
+        tip = ((6.0, 1.0, 0.0), IDENTITY_Q)
+        captured: list = []
+        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
+            manifest = self._run(Path(root), Path(out), bindings={"socket_prop": 1},
+                                 classification=prop_cls, trail_tip=tip,
+                                 capture_attachments=captured)
+
+        trail_tip_out = manifest["models"]["w_real"]["trail_tip"]
+        self.assertEqual(trail_tip_out["bone"], "handle")
+        self.assertEqual(trail_tip_out["pos"], [6.0, 1.0, 0.0])
+        self.assertEqual(trail_tip_out["quat"], list(IDENTITY_Q))
+
+        # write_model must have received the synthetic attachment record too -- the manifest field
+        # and the baked socket are the same fact stated twice, and both have to agree.
+        [attachments] = captured
+        self.assertEqual(len(attachments), 1)
+        self.assertEqual(attachments[0].name, "TrailTip")
+        self.assertEqual(attachments[0].bone, 1)   # "handle" is StudioBone index 1 in `_bones()`
+        self.assertEqual(attachments[0].pos, (6.0, 1.0, 0.0))
+        self.assertEqual(attachments[0].quat, IDENTITY_Q)
 
     # --- determinism --------------------------------------------------------------------------
 

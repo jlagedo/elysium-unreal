@@ -4,7 +4,9 @@
 
 #include "RenderingThread.h"   // the wield window flushes so its two render packets are one frame
 #include "SkeletalRenderPublic.h"   // the wield check reads the drawn mesh's own skinning matrices
+#include "Visual/ElysiumMeleeTrail.h"
 #include "Visual/ElysiumNpcVisual.h"
+#include "Visual/ElysiumRenderedBone.h"
 
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
@@ -85,6 +87,7 @@ void FElysiumGreenRoomRun::LabClearWield()
 	if (USkeletalMeshComponent* Body = LabBody())
 	{
 		ElysiumNpcVisual::ClearWieldModel(Body);
+		ElysiumMeleeTrail::ClearTrail(Body);
 	}
 	ReviewWield.Reset();
 }
@@ -107,28 +110,16 @@ void FElysiumGreenRoomRun::LabClearWield()
 static bool ElysiumRenderedWield(const USkeletalMeshComponent& Wield, FName Mount,
 	FTransform& OutMount, FTransform& OutBindToWorld, FVector& OutCentre)
 {
+	FMatrix RefToLocal, DrawnCS;
+	if (!ElysiumRenderedBone::RenderedSkinningMatrices(Wield, Mount, RefToLocal, DrawnCS))
+	{
+		return false;
+	}
 	const USkeletalMesh* const Mesh = Wield.GetSkeletalMeshAsset();
-	const FSkeletalMeshObject* const MeshObject = Wield.GetMeshObject();
-	const int32 Index = Mesh != nullptr && MeshObject != nullptr
-			&& MeshObject->HaveValidDynamicData()
-		? Mesh->GetRefSkeleton().FindBoneIndex(Mount) : INDEX_NONE;
-	if (Index == INDEX_NONE)
-	{
-		return false;
-	}
-	const TConstArrayView<FMatrix44f> RefToLocals = MeshObject->GetReferenceToLocalMatrices();
-	const TArray<FMatrix44f>& InvBind = Mesh->GetRefBasesInvMatrix();
-	if (!RefToLocals.IsValidIndex(Index) || !InvBind.IsValidIndex(Index))
-	{
-		return false;
-	}
-	const FMatrix RefToLocal(RefToLocals[Index]);
 	const FTransform ComponentToWorld = Wield.GetComponentTransform();
-	// RefToLocal = InvBind * ComponentSpace, so the bind matrix on the left recovers the rendered
-	// component-space bone; the component transform then lifts it to the world. The bounds centre
-	// is already bind-space, so it goes through RefToLocal as-is.
-	const FMatrix RenderedCS = FMatrix(InvBind[Index].Inverse()) * RefToLocal;
-	OutMount = FTransform(RenderedCS * ComponentToWorld.ToMatrixWithScale());
+	// The component transform lifts both matrices to the world. The bounds centre is already
+	// bind-space, so it goes through RefToLocal (the bind-to-drawn-pose map) as-is.
+	OutMount = FTransform(DrawnCS * ComponentToWorld.ToMatrixWithScale());
 	OutBindToWorld = FTransform(RefToLocal * ComponentToWorld.ToMatrixWithScale());
 	OutCentre = OutBindToWorld.TransformPosition(FVector(Mesh->GetImportedBounds().Origin));
 	return true;
@@ -139,8 +130,9 @@ static bool ElysiumRenderedWield(const USkeletalMeshComponent& Wield, FName Moun
 // on screen, and comparing across that seam reads pipeline latency as an attachment defect:
 // mid-swing the skew scales with hand speed, and across the review loop's wrap it is the full
 // end-pose→start-pose snap at ANY playback speed — 16–31 cm on `baseballbat_attack_heavy`
-// while the paused pose agrees to 0.00 cm. Same recovery as `ElysiumRenderedWield`, same
-// guards; false means the packet cannot answer this frame.
+// while the paused pose agrees to 0.00 cm. Same recovery as `ElysiumRenderedWield`
+// (`ElysiumRenderedBone::RenderedWorldTransform`), same guards; false means the packet cannot
+// answer this frame.
 //
 // Only a SKINNED bone may be read this way. The render matrices exist for skinning, so a
 // zero-weight bone — every prop mount — is left at identity in the packet and reads as the
@@ -150,24 +142,7 @@ static bool ElysiumRenderedWield(const USkeletalMeshComponent& Wield, FName Moun
 static bool ElysiumRenderedBodyBone(const USkeletalMeshComponent& Body, FName Bone,
 	FTransform& OutWorld)
 {
-	const USkeletalMesh* const Mesh = Body.GetSkeletalMeshAsset();
-	const FSkeletalMeshObject* const MeshObject = Body.GetMeshObject();
-	const int32 Index = Mesh != nullptr && MeshObject != nullptr
-			&& MeshObject->HaveValidDynamicData()
-		? Mesh->GetRefSkeleton().FindBoneIndex(Bone) : INDEX_NONE;
-	if (Index == INDEX_NONE)
-	{
-		return false;
-	}
-	const TConstArrayView<FMatrix44f> RefToLocals = MeshObject->GetReferenceToLocalMatrices();
-	const TArray<FMatrix44f>& InvBind = Mesh->GetRefBasesInvMatrix();
-	if (!RefToLocals.IsValidIndex(Index) || !InvBind.IsValidIndex(Index))
-	{
-		return false;
-	}
-	const FMatrix RenderedCS = FMatrix(InvBind[Index].Inverse()) * FMatrix(RefToLocals[Index]);
-	OutWorld = FTransform(RenderedCS * Body.GetComponentTransform().ToMatrixWithScale());
-	return true;
+	return ElysiumRenderedBone::RenderedWorldTransform(Body, Bone, OutWorld);
 }
 
 // The placement gate's "touch" floor: how far a hand bone may sit from the drawn geometry's box

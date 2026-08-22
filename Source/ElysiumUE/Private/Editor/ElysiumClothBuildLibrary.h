@@ -16,7 +16,7 @@ struct FElysiumClothBuildResult
 	FString AssetPath;
 
 	/**
-	 * The material this garment was tuned as, out of `pipeline/unreal/cloth_tuning.json`.
+	 * The material this garment was tuned as, out of `/Game/ElysiumAuthored/Cloth/DA_ClothTuning`.
 	 *
 	 * Reported because it is the one input to the build that is a judgement rather than a decode —
 	 * a reading of what the garment is — so it belongs in the build log beside the counts that
@@ -149,8 +149,8 @@ struct FElysiumClothBuildResult
  *    from the cloth collection.
  *  - **Material is not decoded at all.** VtMB's solver had no density, friction or thickness to
  *    state, so what a garment is MADE of is a reading of it rather than a fact in the file. It
- *    lives in `pipeline/unreal/cloth_tuning.json` beside every other tuned value, and no number
- *    in the implementation is a tuning value.
+ *    lives in the authored `UElysiumClothTuningConfig` beside every other tuned value, and no
+ *    number in the implementation is a tuning value.
  */
 UCLASS()
 class ELYSIUMUE_API UElysiumClothBuildLibrary final : public UBlueprintFunctionLibrary
@@ -166,15 +166,14 @@ public:
 	 * that skeleton rather than used directly — a baked family skeleton renumbers, and an index
 	 * carried across that boundary silently attaches a hem to the wrong limb.
 	 *
-	 * `TuningPath` is `pipeline/unreal/cloth_tuning.json`, which owns every material and solver
-	 * value the build applies. It is a required input rather than an optional override: the
-	 * implementation carries no fallback to substitute, which is what keeps the whole corpus
-	 * tunable from one reviewable file.
+	 * Every material and solver value the build applies comes from the authored
+	 * `UElysiumClothTuningConfig`, which this resolves itself rather than taking as an argument:
+	 * there is one table, the implementation carries no fallback to substitute, and an asset that
+	 * is not on the mount fails the whole call by name.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Cloth")
 	static TArray<FElysiumClothBuildResult> BuildClothAssetsFromSidecar(
 		const FString& SidecarPath,
 		const FString& PackageDirectory,
-		const FString& SkeletalMeshPath,
-		const FString& TuningPath);
+		const FString& SkeletalMeshPath);
 };

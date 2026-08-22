@@ -177,6 +177,20 @@ bool UElysiumMovementComponent::SetJumpRuleOverride(const TCHAR* Key, float Valu
 	return true;
 }
 
+void UElysiumMovementComponent::StopBody()
+{
+	// `SetAbsVelocity(vec3_origin)` — all three components, including the vertical one. The tail of
+	// a grounded swing carries no Z worth speaking of, but the recovered call takes the whole vector
+	// and a horizontal-only stop would be a rule of our own.
+	Velocity = FVector::ZeroVector;
+
+	// `SetLocalVelocity(vec3_origin)` — the published record, brought into agreement with the
+	// component. The rule is a free function so a test can assert it against a lunging sample with
+	// no pawn, no world and no mover; what it clears and what it deliberately leaves standing is
+	// stated where it is declared.
+	ElysiumLocomotion::ClearMotion(LastSample);
+}
+
 void UElysiumMovementComponent::SetFrozen(bool bInFrozen)
 {
 	bFrozen = bInFrozen;

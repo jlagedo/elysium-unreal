@@ -1,5 +1,6 @@
 #include "ElysiumEntityWorld.h"
 
+#include "ElysiumClipMovement.h"   // the melee stop's own recovered rule
 #include "ElysiumComboChain.h"   // ElysiumCombo::In* — the FILE's own button bits the masks are in
 #include "ElysiumPlayer.h"
 #include "ElysiumUserCmd.h"   // EElysiumButton — the combat button field this file drains
@@ -463,6 +464,38 @@ void FElysiumEntityWorld::UpdatePlayerWeaponFrame()
 		Weapon->ItemPostFrame(HeldMask, PressedMask, AimTarget);
 	UE_LOG(LogElysiumWorld, Verbose, TEXT("(%8.3f) player weapon frame %s -> %s"),
 		NowSeconds(), *Weapon->DebugString(), FElysiumWeapon::VerdictName(Verdict));
+}
+
+void FElysiumEntityWorld::UpdatePlayerMeleeMovementStop(const FElysiumIdealActivityState& State)
+{
+	if (!bActive)
+	{
+		return;
+	}
+	FElysiumPlayer* PlayerEnt = FindPlayer();
+	if (!PlayerEnt || PlayerEnt->IsInert())
+	{
+		return;
+	}
+	// The same two guards the weapon frame takes, and they are the same retail ones: the whole live
+	// `PostThink` body is skipped while `m_iPlayerLocked` is set or the player is not alive, and
+	// this block sits inside it.
+	if (!PlayerEnt->IsMobile() || PlayerEnt->HasReportedDeath())
+	{
+		return;
+	}
+	// Asked fresh every frame, against this frame's own cycle. The recovered block keeps no state
+	// between frames and neither does this.
+	if (!ElysiumClipMovement::StopsMeleeTailMotion(State, PlayerSelectionStateMask()))
+	{
+		return;
+	}
+	if (IElysiumEmbodiment* Bodily = Embodiment())
+	{
+		Bodily->StopPlayerBody();
+	}
+	// A headless world has no body to stop. An ordinary absence, and the same one every other
+	// embodiment reader treats as one.
 }
 
 float FElysiumEntityWorld::InteractionPromptAlpha(double Now) const

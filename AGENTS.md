@@ -192,6 +192,18 @@ An editor MCP toolset drives all of it in-process (`docs/architecture/debug-tool
 was proven live is proven again through `uv run elysium build` and `uv run elysium test`, which
 remain the only gate.
 
+Epic's `unreal-engine-skills-for-claude-code` plugin ships an `unreal-mcp` skill whose operating
+procedure describes that server exactly — tool search on, so `list_toolsets`, `describe_toolset`
+and `call_tool` are the only advertised tools and everything else dispatches server-side through a
+`ToolsetRegistry`; calls run on the game thread and must be serialized. **Our server is that
+server, named `elysium`.** `.mcp.json` registers it as a *stdio* server running
+`pipeline/src/elysium_pipeline/devtools/mcp_proxy.py`, which bridges to the in-process HTTP
+endpoint (`http://127.0.0.1:8000/mcp`, `$ELYSIUM_MCP_URL`) and reconnects on its own across a
+rebuild-and-relaunch. So no server literally named `unreal-mcp` ever appears, its absence is not
+evidence the editor is down, and the skill's `references/setup.md` wiring does not apply. When the
+game is down the proxy still answers: `tools/list` from its on-disk cache, `tools/call` with a
+"game not running" result.
+
 ### The `UE_` exporter convention
 
 An exporter prefixed **`UE_`** (e.g. `UE_bsp_to_scene.py`) is verified to emit

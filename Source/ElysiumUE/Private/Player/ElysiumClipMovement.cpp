@@ -1,5 +1,6 @@
 #include "ElysiumClipMovement.h"
 
+#include "ElysiumComboChain.h"   // `SelectionMask` — the seven direction bits, in the file's numbering
 #include "Visual/ElysiumActionTables.h"
 
 namespace
@@ -102,6 +103,41 @@ bool ElysiumClipMovement::RefusesReselection(const FElysiumIdealActivityState& S
 		}
 	}
 	return false;
+}
+
+bool ElysiumClipMovement::StopsMeleeTailMotion(const FElysiumIdealActivityState& State,
+	int32 HeldSelectionMask)
+{
+	const ElysiumActionTables::FPlayerActionTuning& Tuning = ElysiumActionTables::PlayerTuning();
+	if (Tuning.MeleeHoldIdeal == nullptr)
+	{
+		return false;
+	}
+	// The recovered check names ONE ideal activity — the same `ACT_MELEE_ATTACK` the reselection
+	// guard is keyed on, and the only melee row that HAS a release before its clip ends. The three
+	// whole-clip rows are outside it by construction, not by omission.
+	if (!State.Activity.Equals(Tuning.MeleeHoldIdeal, ESearchCase::IgnoreCase))
+	{
+		return false;
+	}
+	// No forced sequence standing on the channel: the claim is up but the pose layer is not on its
+	// clip — the arming frame of every swing and of every chain link, a body whose baked clip is
+	// missing, and a headless body that has no pose layer at all. There is no cycle to be past, so
+	// there is no tail. Retail cannot reach this state (it stores `m_IdealActivity` and
+	// `m_nSequence` in one apply); this runtime composes the two from different producers, so the
+	// guard is implementation-necessary — the same one `RefusesReselection` carries.
+	if (!State.bHasSequence)
+	{
+		return false;
+	}
+	if (IsAnimationDriven(State))
+	{
+		return false;   // still busy: the cycle has not reached the sequence's `w_hold` yet
+	}
+	// The seven direction bits and nothing else. The attack bits, `+use`, duck and the camera verbs
+	// are invisible here exactly as they are to attack selection, so a player holding only attack
+	// still stops.
+	return (HeldSelectionMask & ElysiumCombo::SelectionMask) == 0;
 }
 
 void ElysiumClipMovement::PositionAtFrame(const FElysiumClipMovementPath& Path, float Frame,

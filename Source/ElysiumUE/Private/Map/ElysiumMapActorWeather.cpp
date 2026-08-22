@@ -384,7 +384,7 @@ void AElysiumMapActor::RefreshFollowRain()
 		if (!RainSystem)
 		{
 			RainSystem = LoadObject<UNiagaraSystem>(nullptr,
-				TEXT("/Game/VtMB/Particles/NS_ElysiumRain.NS_ElysiumRain"));
+				TEXT("/Game/ElysiumAuthored/VFX/NS_ElysiumRain.NS_ElysiumRain"));
 		}
 		if (!RainSystem)
 		{
@@ -392,7 +392,7 @@ void AElysiumMapActor::RefreshFollowRain()
 				[&]
 				{
 					return FString::Printf(
-						TEXT("rain_follow_emitter on map '%s' cannot load /Game/VtMB/Particles/NS_ElysiumRain"),
+						TEXT("rain_follow_emitter on map '%s' cannot load /Game/ElysiumAuthored/VFX/NS_ElysiumRain"),
 						*MapName);
 				});
 			return;
@@ -414,6 +414,39 @@ void AElysiumMapActor::RefreshFollowRain()
 		RainFollowComponent->SetupAttachment(GetRootComponent());
 		RainFollowComponent->RegisterComponent();
 		AddInstanceComponent(RainFollowComponent);
+		// The shared system is a tracked authored asset and is never rewritten per map; this
+		// map's height-masked material instances come off its own baked Weather package and bind
+		// through the system's material user parameters. A missing instance (a bake from before
+		// the weather package carried them) falls back to the authored default material on the
+		// renderer -- rain still draws, without the map's height mask.
+		const FString WeatherPkg = FElysiumContentPaths::BakedMapDir(MapName) / TEXT("Weather");
+		const auto LoadRainInstance = [&](const TCHAR* Name) -> UMaterialInterface*
+		{
+			const FString Path = WeatherPkg / Name + TEXT(".") + Name;
+			UMaterialInterface* Instance = LoadObject<UMaterialInterface>(nullptr, *Path);
+			if (Instance == nullptr)
+			{
+				WarnEmitterOnce(FString::Printf(TEXT("follow|material|%s"), Name),
+					[&]
+					{
+						return FString::Printf(
+							TEXT("follow rain on map '%s': %s is missing -- re-bake the map's "
+							     "weather package; using the authored default material"),
+							*MapName, *Path);
+					});
+			}
+			return Instance;
+		};
+		if (UMaterialInterface* Streaks = LoadRainInstance(TEXT("MI_ElysiumRain")))
+		{
+			RainFollowComponent->SetVariableMaterial(
+				FName(TEXT("User.RainStreakMaterial")), Streaks);
+		}
+		if (UMaterialInterface* Mist = LoadRainInstance(TEXT("MI_ElysiumRainMist")))
+		{
+			RainFollowComponent->SetVariableMaterial(
+				FName(TEXT("User.RainMistMaterial")), Mist);
+		}
 		UE_LOG(LogElysium, Log,
 			TEXT("follow rain created on '%s' system=%s"),
 			*MapName, *RainSystem->GetPathName());

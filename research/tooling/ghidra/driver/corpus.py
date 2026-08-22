@@ -377,20 +377,23 @@ def _apply_names(connection: sqlite3.Connection, write: bool = True,
             "SELECT module, addr, name_dump FROM functions WHERE name_src != '' AND "
             "NOT EXISTS (SELECT 1 FROM names n WHERE n.module = functions.module "
             "AND n.addr = lower(functions.addr))").fetchall():
-        namespace, bare = dumped.rsplit("::", 1) if "::" in dumped else (None, dumped)
+        # `name_dump` always carries its namespace, so an empty or `Global` one round-trips as
+        # well as a named one. A row written before that shape reverts to the neutral namespace,
+        # which is what a bare dumped name meant.
+        namespace, bare = dumped.rsplit("::", 1) if "::" in dumped else ("", dumped)
         if write:
             connection.execute(
-                "UPDATE functions SET name = ?, name_src = '', name_dump = ''"
-                + (", ns = ?" if namespace is not None else "")
-                + " WHERE module = ? AND addr = ?",
-                (bare, namespace, module, addr) if namespace is not None
-                else (bare, module, addr))
+                "UPDATE functions SET name = ?, ns = ?, name_src = '', name_dump = '' "
+                "WHERE module = ? AND addr = ?", (bare, namespace, module, addr))
         tally["reverted"] += 1
 
+    # A dry run writes nothing, so the corpus cannot answer for a name two overlay rows both
+    # claim. `claimed` is what this pass has handed out, and it is read beside the corpus.
+    claimed: dict[tuple[str, str, str], str] = {}
     for module, addr, name, tier, evidence in connection.execute(
             "SELECT module, addr, name, tier, evidence FROM names ORDER BY module, addr"):
         row = connection.execute(
-            "SELECT name, ns, name_src, name_dump FROM functions "
+            "SELECT name, ns, name_src, name_dump, thunk FROM functions "
             "WHERE module = ? AND lower(addr) = ?", (module, addr)).fetchone()
         if row is None:
             tally["absent"] += 1
@@ -415,23 +418,27 @@ def _apply_names(connection: sqlite3.Connection, write: bool = True,
         # the shape the same-address conflict test cannot see, because the disagreement is
         # between two addresses rather than about one. A thunk sharing its target's name is not
         # a collision; it is what a thunk is.
-        taken = connection.execute(
+        taken = [one["addr"] for one in connection.execute(
             "SELECT addr FROM functions WHERE module = ? AND ns = ? AND name = ? "
-            "AND lower(addr) != ? AND thunk = 0", (module, namespace, bare, addr)).fetchall()
+            "AND lower(addr) != ? AND thunk = 0", (module, namespace, bare, addr)).fetchall()]
+        holder = claimed.get((module, namespace, bare))
+        if holder is not None and holder != addr and holder not in taken:
+            taken.append(holder)
         if taken:
             tally["collision"] += 1
             if verbose:
                 print(f"names overlay: {module} {addr} would be a second {name}, which "
-                      f"{', '.join(one['addr'] for one in taken[:3])} already carries "
+                      f"{', '.join(taken[:3])} already carries "
                       f"-- not applied ({evidence})")
             continue
-        dumped = row["name_dump"] or (f"{row['ns']}::{row['name']}"
-                                      if row["ns"] not in ("", "Global") else row["name"])
+        dumped = row["name_dump"] or f"{row['ns']}::{row['name']}"
         if write:
             connection.execute(
                 "UPDATE functions SET name = ?, ns = ?, name_src = ?, name_dump = ? "
                 "WHERE module = ? AND lower(addr) = ?",
                 (bare, namespace, tier, dumped, module, addr))
+        if not row["thunk"]:
+            claimed[module, namespace, bare] = addr
         tally["applied"] += 1
     if write:
         connection.commit()

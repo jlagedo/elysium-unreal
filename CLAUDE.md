@@ -171,16 +171,21 @@ contain bytes, transforms, timing, or other content derived from the user's game
   *own* level scripts; it is game logic, not pipeline.) The architecture and what it costs:
   `docs/architecture/uasset-bake-spike.md`.
 
-### Authored live, captured as text, rebuilt by a generator
+### Authored live: tracked in the authored namespace, or captured as text
 
 The editor is the authoring tool for anything Unreal authors better than code — an animation
-graph, a material, a widget, a Niagara system. What it produces is **never** the tracked
-artifact. Every such asset is captured into a **reviewable text source** under `pipeline/unreal/`,
-and a generator rebuilds the package from that text.
+graph, a material, a widget, a Niagara system. What it produces lands one of two ways:
 
-Live editing is the loop; the text is the record. A hand-edited binary package committed as-is
-breaks `reconstruct`, is unreviewable in a diff, and puts a generated package inside the tracked
-set — which is the boundary "Bring-your-own-game" exists to hold.
+- **An original, game-independent asset is tracked directly** under
+  `Content/ElysiumAuthored/**` (Git LFS): edited live, saved in place, no generator. This is the
+  home for original VFX, materials and tuning data assets (`Content/CLAUDE.md`). The one hard
+  test is bring-your-own-game: no game-derived bytes, transforms, timings, or references into a
+  generated mount.
+- **An asset that must live on a generated mount** (because it binds generated content — the
+  player animation graph compiled against baked banks) is **never** the tracked artifact.
+  It is captured into a **reviewable text source** under `pipeline/unreal/`, and a generator
+  rebuilds the package from that text. A hand-edited binary package on a generated mount breaks
+  `reconstruct` and puts a generated package inside the tracked set.
 
 The worked example is the player animation graph: `elysium.animbp.build` constructs it through
 the engine's own node-placement path, `UElysiumAnimGraphLibrary::ExportGraphToText` captures it as
@@ -191,6 +196,18 @@ the editor, copy the graph, paste it back over the text.
 An editor MCP toolset drives all of it in-process (`docs/architecture/debug-tooling.md`). Whatever
 was proven live is proven again through `uv run elysium build` and `uv run elysium test`, which
 remain the only gate.
+
+Epic's `unreal-engine-skills-for-claude-code` plugin ships an `unreal-mcp` skill whose operating
+procedure describes that server exactly — tool search on, so `list_toolsets`, `describe_toolset`
+and `call_tool` are the only advertised tools and everything else dispatches server-side through a
+`ToolsetRegistry`; calls run on the game thread and must be serialized. **Our server is that
+server, named `elysium`.** `.mcp.json` registers it as a *stdio* server running
+`pipeline/src/elysium_pipeline/devtools/mcp_proxy.py`, which bridges to the in-process HTTP
+endpoint (`http://127.0.0.1:8000/mcp`, `$ELYSIUM_MCP_URL`) and reconnects on its own across a
+rebuild-and-relaunch. So no server literally named `unreal-mcp` ever appears, its absence is not
+evidence the editor is down, and the skill's `references/setup.md` wiring does not apply. When the
+game is down the proxy still answers: `tools/list` from its on-disk cache, `tools/call` with a
+"game not running" result.
 
 ### The `UE_` exporter convention
 

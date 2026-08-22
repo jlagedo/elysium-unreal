@@ -108,36 +108,14 @@ def _png_chunk(kind, data):
 
 
 def make_height_placeholder():
-    """A real G16 default keeps the height sampler valid before any map instance overrides it."""
-    asset = "/Game/VtMB/Particles/T_RainHeightPlaceholder"
+    """The tracked authored G16 default (Content/ElysiumAuthored/VFX) keeps the height sampler
+    valid before any map instance overrides it -- loaded, never generated."""
+    asset = "/Game/ElysiumAuthored/VFX/T_RainHeightPlaceholder"
     existing = unreal.load_asset(asset)
-    if existing:
-        return existing
-    source = Path(export_root()) / ".policy" / "rain_height_placeholder.png"
-    source.parent.mkdir(parents=True, exist_ok=True)
-    source.write_bytes(
-        b"\x89PNG\r\n\x1a\n"
-        + _png_chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 16, 0, 0, 0, 0))
-        + _png_chunk(b"IDAT", zlib.compress(b"\x00\x00\x00"))
-        + _png_chunk(b"IEND", b"")
-    )
-    task = unreal.AssetImportTask()
-    task.set_editor_property("filename", str(source))
-    task.set_editor_property("destination_path", "/Game/VtMB/Particles")
-    task.set_editor_property("destination_name", "T_RainHeightPlaceholder")
-    task.set_editor_property("automated", True)
-    task.set_editor_property("replace_existing", True)
-    task.set_editor_property("save", False)
-    tools.import_asset_tasks([task])
-    texture = unreal.load_asset(asset)
-    if not texture:
-        raise SystemExit("[make_world_materials] could not import G16 height placeholder")
-    texture.set_editor_property("srgb", False)
-    texture.set_editor_property(
-        "compression_settings", unreal.TextureCompressionSettings.TC_DISPLACEMENTMAP)
-    texture.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
-    unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False)
-    return texture
+    if not existing:
+        raise SystemExit(
+            "[make_world_materials] tracked height placeholder is missing: %s" % asset)
+    return existing
 
 
 def make_linear_white_mask():

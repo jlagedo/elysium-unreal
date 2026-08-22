@@ -122,6 +122,14 @@ writes an engine-neutral JSON manifest; the editor bake consumes it and builds t
 missing or renamed package therefore fails at bake with a resolvable name rather than at load with
 an empty attachment.
 
+Every `socket_prop` wield model also carries a **`TrailTip` socket** on its mount bone: the export
+derives it from the geometry's bind-space bounding box along the model's own long axis
+(`wield_corpus.py::trail_tip`), writes it as a synthetic `ATCH` record, and the bake verifies the
+baked socket against the manifest. The socket is the melee weapon trail's entire scope gate — the
+runtime (`Visual/ElysiumMeleeTrail.cpp`) activates the authored ribbon
+(`/Game/ElysiumAuthored/VFX/NS_ElysiumMeleeTrail`) only on a wield mesh that carries it, with no
+classname check anywhere.
+
 ## Materials and textures
 
 The wield corpus has its own texture and material wiring; neither pre-existing lane covers it. The

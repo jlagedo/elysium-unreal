@@ -43,7 +43,8 @@ Do not rebuild these to explore the look.
 | Particle mirror | `$ELYSIUM_EXPORT_ROOT/particles/` | 1,698 `.txt` + 318 TGA/PNG |
 | Per-map sidecar | `<map>.particles.json` | placed `env_particle` + closure + `unresolved` |
 | Niagara flatten | `pipeline/unreal/make_particle_systems.py` | one Fountain-based emitter per drawing leaf, `NS_<root>` |
-| Rain presentation | `/Game/VtMB/Particles/NS_ElysiumRain` | live follow-rain; other emitters load their baked `NS_*` |
+| Rain presentation | `/Game/ElysiumAuthored/VFX/NS_ElysiumRain` | tracked authored system; live follow-rain binds each map's baked height-masked material instances through `User.RainStreakMaterial`/`User.RainMistMaterial` (`ElysiumMapActorWeather.cpp`); other emitters load their baked `NS_*` |
+| Melee weapon trail | `/Game/ElysiumAuthored/VFX/NS_ElysiumMeleeTrail` | tracked authored ribbon; `ElysiumMeleeTrail.cpp` drives `User.TrailPointA/B` off the wield mesh's baked `TrailTip` socket during a live melee swing |
 | Sprites sidecar | `<map>.sprites` | `env_sprite` coronas |
 | Decals | `<map>.decals` → `UDecalComponent` | authored `infodecal` |
 | `env_fade` | real entity class | screen fade |
@@ -258,8 +259,10 @@ Suggested order, each one is a single proven example:
    (rate 30, size 5–15, colour 203 202 217, alpha 90).
 6. **Billboard corona** — one `glowa` at a lamp, additive, Lumen on. Decide how
    much of the 969 coronas Lumen + bloom already replace.
-7. **Ribbon** — one tracer or one Celerity trail. Enough to know whether ribbons
-   are the motion-trail answer.
+7. **Ribbon** — answered: `NS_ElysiumMeleeTrail` is a shipping
+   `LocationBasedRibbon`-derived system (blade-spanning strip via
+   `CustomSideVector` facing over two user positions), so ribbons are the
+   motion-trail answer; a tracer or Celerity trail starts from the same shape.
 
 After those seven, every family in §4 has a chosen stand-in. The remaining work
 is parameterization and I/O, not research.

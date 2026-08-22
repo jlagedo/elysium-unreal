@@ -14,6 +14,7 @@ class FElysiumSoundSchemeManager;
 class UElysiumEntityBodies;
 class UElysiumMapCollision;
 class UElysiumMapVisuals;
+class UElysiumMovementComponent;
 class USceneComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
@@ -25,6 +26,7 @@ class UNiagaraComponent;
 class UNiagaraSystem;
 class UTexture2D;
 class ANavMeshBoundsVolume;
+class APawn;
 class AElysiumNpcBody;
 class AElysiumMapActor;
 
@@ -443,6 +445,9 @@ public:
 	virtual bool IsPlayerSneaking() const override;
 	virtual bool IsPlayerOnGround() const override;
 	virtual FString GetPlayerBaseActivity() const override;
+	// LIFE5 — the forced-sequence record the melee stop's rule is evaluated over, and the stop
+	// itself. Both are the player body's, so both live on this actor beside the driver that owns it.
+	virtual void StopPlayerBody() override;
 	virtual float ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
 		float TraceDepthCm) const override;
 	virtual bool IsNpcMakerVisibleFromPlayer(const FVector& MakerOriginCm) const override;
@@ -646,6 +651,13 @@ private:
 	// with the cause named: both are real gaps and NEITHER is the same absence as a clip the file
 	// states no records for.
 	TSet<FString> ReportedMovementGaps;
+	// Latched so a body that cannot be stopped reports once rather than on every frame of a swing.
+	bool bReportedNoStoppableBody = false;
+	// StopPlayerBody's cached mover: the stop is asked fresh every frame of a melee tail window,
+	// and the component set on a pawn cannot change under it — only the pawn itself can be
+	// replaced, which is what invalidates the pair.
+	TWeakObjectPtr<APawn> StopBodyPawn;
+	TWeakObjectPtr<UElysiumMovementComponent> StopBodyMove;
 
 	void LoadMap();
 	// LoadMap's stage-world half: the substrate scaffolding a green room needs and nothing else —

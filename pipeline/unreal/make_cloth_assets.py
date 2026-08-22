@@ -37,11 +37,11 @@ from elysium_pipeline.paths import export_root  # noqa: E402
 MESH_PACKAGE = "/ElysiumBaked/Characters/Meshes"
 CLOTH_PACKAGE = "/Game/VtMB/Cloth"
 
-# What each garment is MADE of, and every solver value the build applies. The authored payload
-# states a garment's shape and its constraint graph and nothing about its material -- VtMB's
-# solver had no density, friction or thickness to state -- so that call is authored here as
-# reviewable data rather than compiled into the build library.
-TUNING_PATH = os.path.join(_REPO, "pipeline", "unreal", "cloth_tuning.json")
+# What each garment is MADE of, and every solver value the build applies, is the authored
+# `/Game/ElysiumAuthored/Cloth/DA_ClothTuning` data asset -- the authored payload states a garment's
+# shape and its constraint graph and nothing about its material, since VtMB's solver had no density,
+# friction or thickness to state. `UElysiumClothBuildLibrary` resolves that asset itself and fails
+# the whole call by name when it is not on the mount, so nothing is passed through from here.
 
 
 def requested_stems():
@@ -111,7 +111,7 @@ def main():
             continue
 
         results = unreal.ElysiumClothBuildLibrary.build_cloth_assets_from_sidecar(
-            path, CLOTH_PACKAGE, mesh, TUNING_PATH)
+            path, CLOTH_PACKAGE, mesh)
         for result in results:
             for error in result.errors:
                 unreal.log_error("[make_cloth_assets] %s: %s" % (stem, error))

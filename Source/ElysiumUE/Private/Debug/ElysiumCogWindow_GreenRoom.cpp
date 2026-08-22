@@ -14,9 +14,6 @@
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumEntityBodies.h"
 #include "Visual/ElysiumAnimSubsystem.h"
-#include "ChaosClothAsset/ClothAsset.h"
-#include "ChaosClothAsset/ClothAssetInteractor.h"
-#include "ChaosClothAsset/ClothComponent.h"
 #include "Visual/ElysiumNpcVisual.h"
 #include "Visual/ElysiumPoseDeviation.h"
 
@@ -30,9 +27,7 @@
 #include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 #include "HAL/FileManager.h"
-#include "HAL/IConsoleManager.h"
 
-#include "Debug/ElysiumClothDebug.h"
 #include "Engine/SkeletalMesh.h"
 
 #include "CogLocalizationConfig.h"   // COG_TCHAR_TO_CHAR
@@ -69,7 +64,7 @@ void FElysiumCogWindow_GreenRoom::RenderHelp()
 {
 	ImGui::Text(
 		"The green room, driven by hand. Stand any exported character on the neutral stage, play "
-		"any clip it owns, orbit it, and tune the garment simulation while it moves.\n\n"
+		"any clip it owns, and orbit it.\n\n"
 		"Launch it with `uv run elysium gr [model] [clip]`, or type `elysium.gr` in a running "
 		"session. Either way the stage stands in an empty world of its own with no VtMB map loaded, "
 		"so the room looks the same however it was entered -- entering from a session leaves that "
@@ -78,19 +73,10 @@ void FElysiumCogWindow_GreenRoom::RenderHelp()
 		"-- a stem the character bake has not covered cannot stand at all. The line under Restand "
 		"names the asset that is standing and the rig family whose skeleton it was built against, "
 		"and Restand is what picks up a re-export.\n\n"
-		"Cloth: retail carries renderer-side particle cloth after skeletal skinning, independently "
-		"from its hair/body bone-chain solver. The current offline spike does not decode that cloth "
-		"payload: it appends a substitute bone lattice to a copy of the "
-		"mesh and hangs an AnimDynamics chain down each panel; `npc/cloth/<stem>.json` is the "
-		"solver setup it derived from the model's own measurements. These sliders edit the live "
-		"simulation, never the file, until Save bakes them into it. Revert goes back to the "
-		"sidecar. The baked-character path currently does not select the approximation mesh, so "
-		"these controls remain a research surface until that route is reconnected.\n\n"
-		"Gravity, the two component scales, the iteration counts, the cone ramp and the collider "
-		"radii are re-read every frame, so those answer while you drag. Damping and the body "
-		"extents are baked into the rigid bodies when a chain initialises, so moving either "
-		"re-seats the chain and the garment drops from the pose again -- that is the settle, not a "
-		"glitch.");
+		"Garments: a body wearing one carries it as a generated Chaos cloth asset, built by "
+		"`make_cloth_assets.py` from the exported payload and the authored tuning asset. The View "
+		"tab draws its bounds and its colliders; `elysium.garment` reports what every built garment "
+		"in the world actually carries and drives Chaos's own overlays.");
 }
 
 FElysiumGreenRoomRun* FElysiumCogWindow_GreenRoom::GetLab() const
@@ -104,24 +90,6 @@ UElysiumBodyAnimInstance* FElysiumCogWindow_GreenRoom::GetBodyInstance() const
 	FElysiumGreenRoomRun* Lab = GetLab();
 	USkeletalMeshComponent* Body = Lab ? Lab->LabBody() : nullptr;
 	return Body ? Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance()) : nullptr;
-}
-
-UChaosClothComponent* FElysiumCogWindow_GreenRoom::FindGarment() const
-{
-	FElysiumGreenRoomRun* Lab = GetLab();
-	USkeletalMeshComponent* Body = Lab ? Lab->LabBody() : nullptr;
-	if (Body == nullptr)
-	{
-		return nullptr;
-	}
-	for (USceneComponent* Child : Body->GetAttachChildren())
-	{
-		if (UChaosClothComponent* Cloth = Cast<UChaosClothComponent>(Child))
-		{
-			return Cloth;
-		}
-	}
-	return nullptr;
 }
 
 UElysiumBipedAnimInstance* FElysiumCogWindow_GreenRoom::GetBipedInstance() const
@@ -426,8 +394,8 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 				continue;
 			}
 			ImGui::PushID(Index);
-			// A model the spike built a garment for is the reason this window exists; the rest are
-			// here because a stage that only accepts two models is not a green room.
+			// 60 of the 4,445 installed models author a garment at all, so marking the few is what
+			// makes them findable in a list of the whole cast.
 			const bool bCloth = StemHasCloth.IsValidIndex(Index) && StemHasCloth[Index];
 			if (bCloth)
 			{
@@ -451,7 +419,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 			ImGui::PopID();
 		}
 		ImGui::EndChild();
-		ImGui::TextDisabled("~ = the cloth spike built a simulated garment.  Double-click to stand.");
+		ImGui::TextDisabled("~ = this model exported an authored garment.  Double-click to stand.");
 	}
 
 }
@@ -1044,7 +1012,7 @@ void FElysiumCogWindow_GreenRoom::RenderView(FElysiumGreenRoomRun& Lab)
 
 	// The overlays belong to what is being LOOKED at, not to the garment. The skeleton in
 	// particular is the model's own rig and reads on any body, including every model that authors
-	// no cloth at all — behind the Cloth tab it would be unreachable on exactly those.
+	// no cloth at all.
 	ImGui::SeparatorText("Overlays");
 
 	ImGui::Checkbox("Skeleton", &View.bDrawSkeleton);
@@ -1061,20 +1029,11 @@ void FElysiumCogWindow_GreenRoom::RenderView(FElysiumGreenRoomRun& Lab)
 		ImGui::TextWrapped("%s", COG_TCHAR_TO_CHAR(*BoneDumpText));
 	}
 
-	const bool bHasGarment = FindGarment() != nullptr;
-	ImGui::BeginDisabled(!bHasGarment);
 	ImGui::Checkbox("Bounds", &View.bDrawLattice);
 	ImGui::SameLine();
 	ImGui::Checkbox("Colliders", &View.bDrawColliders);
-	ImGui::EndDisabled();
-	if (bHasGarment)
-	{
-		ImGui::TextDisabled("Garment bounds in amber, its capsules and spheres in red.");
-	}
-	else
-	{
-		ImGui::TextDisabled("Both need a generated garment on the standing body - see the Cloth tab.");
-	}
+	ImGui::TextDisabled("Garment bounds in amber, its capsules and spheres in red. Both draw only");
+	ImGui::TextDisabled("on a body wearing a generated garment; most of the cast wears none.");
 }
 
 void FElysiumCogWindow_GreenRoom::RenderAutoLayers(FElysiumGreenRoomRun& Lab)
@@ -1316,152 +1275,6 @@ void FElysiumCogWindow_GreenRoom::RenderWield(FElysiumGreenRoomRun& Lab)
 	}
 	ImGui::EndChild();
 	ImGui::TextDisabled("%d rows carry geometry for this sex.", WieldRows.Num());
-}
-
-void FElysiumCogWindow_GreenRoom::RenderCloth(FElysiumGreenRoomRun& Lab)
-{
-	// A garment is attached when the body is BUILT, so a regenerated asset reaches the stage only
-	// on the next build -- attaching a simulating component to a body already posed this frame
-	// would drop the garment out of the bind pose in view. Restand is that rebuild, without going
-	// back to the model list.
-	ImGui::BeginDisabled(Lab.LabStem().IsEmpty());
-	if (ImGui::Button("Restand"))
-	{
-		Stand(Lab, Lab.LabStem(), Lab.LabClip());
-	}
-	ImGui::EndDisabled();
-
-	UChaosClothComponent* Cloth = FindGarment();
-	if (Cloth == nullptr)
-	{
-		ImGui::TextDisabled("No garment component on the stage.");
-		// Three different causes read identically in the viewport, so they are separated here:
-		// the model authored no cloth at all, the export never ran, or the asset was never
-		// generated from an export that did.
-		const FString Stem = Lab.LabStem();
-		if (!Stem.IsEmpty())
-		{
-			const bool bSidecar = IFileManager::Get().FileExists(
-				*FElysiumContentPaths::NpcGarment(Stem));
-			if (!bSidecar)
-			{
-				ImGui::TextDisabled("%s exported no garment payload - either its model authors "
-					"none, or the character export has not run.", COG_TCHAR_TO_CHAR(*Stem));
-			}
-			else
-			{
-				ImGui::TextDisabled("%s exported a payload but no asset exists.",
-					COG_TCHAR_TO_CHAR(*Stem));
-				ImGui::TextDisabled("  uv run elysium build content   (make_cloth_assets.py)");
-			}
-		}
-		return;
-	}
-
-	const UChaosClothAsset* Asset = Cast<UChaosClothAsset>(Cloth->GetAsset());
-	ImGui::Text("%s", COG_TCHAR_TO_CHAR(*GetNameSafe(Asset)));
-	ImGui::Text("leader pose: %s",
-		Cloth->LeaderPoseComponent.IsValid() ? "bound" : "NONE - the garment will not follow");
-
-	ImGui::SeparatorText("Simulation");
-	bool bSuspended = Cloth->IsSimulationSuspended();
-	if (ImGui::Checkbox("Suspended", &bSuspended))
-	{
-		if (bSuspended)
-		{
-			Cloth->SuspendSimulation();
-		}
-		else
-		{
-			Cloth->ResumeSimulation();
-		}
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("Teleport"))
-	{
-		// What a body moved by anything other than its own motion needs: without it the garment
-		// solves the jump as one enormous frame of velocity and flails.
-		Cloth->ForceNextUpdateTeleportAndReset();
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("Reset config"))
-	{
-		Cloth->ResetConfigProperties();
-	}
-
-	// Live tuning is the asset's OWN property set rather than a fixed list of sliders: a Chaos
-	// cloth config is data, and enumerating it means this panel does not go stale when the
-	// generator starts authoring a property it did not before.
-	if (UChaosClothAssetInteractor* Interactor =
-			Cast<UChaosClothAssetInteractor>(Cloth->GetClothOutfitInteractor()))
-	{
-		ImGui::SeparatorText("Properties");
-		const TArray<FName> Names = Interactor->GetAllPropertyNames();
-		for (const FName& Property : Names)
-		{
-			float Value = Interactor->GetFloatPropertyValue(Property, 0);
-			ImGui::SetNextItemWidth(-GetDpiScale() * 130.f);
-			if (ImGui::DragFloat(COG_TCHAR_TO_CHAR(*Property.ToString()), &Value, 0.01f))
-			{
-				// LOD -1 writes every LOD, which is what a live edit means here: the garment has
-				// one authored config and tuning it per LOD would diverge as the body walks away.
-				Interactor->SetFloatPropertyValue(Property, -1, Value);
-			}
-		}
-		if (Names.IsEmpty())
-		{
-			ImGui::TextDisabled("The asset exposes no float properties.");
-		}
-	}
-
-	RenderClothDebugDraw();
-}
-
-// Chaos's own cloth overlays, as toggles over the shared table in `Debug/ElysiumClothDebug.h`.
-// They are the instrument this vertical is debugged with, and a console command nobody can recall
-// is not an instrument.
-void FElysiumCogWindow_GreenRoom::RenderClothDebugDraw()
-{
-	ImGui::SeparatorText("Debug draw");
-
-	const int32 Active = ElysiumClothDebug::NumActiveDraws();
-	ImGui::BeginDisabled(Active == 0);
-	if (ImGui::Button("All off"))
-	{
-		ElysiumClothDebug::ClearDraws();
-	}
-	ImGui::EndDisabled();
-	ImGui::SameLine();
-	ImGui::TextDisabled("%d on  -  also elysium.garment", Active);
-
-	// Two columns: the list is long enough that one column pushes the properties above it off the
-	// top of the window at any sane panel height.
-	if (ImGui::BeginTable("##ClothDebugDraw", 2, ImGuiTableFlags_SizingStretchSame))
-	{
-		for (const ElysiumClothDebug::FDrawToggle& Toggle : ElysiumClothDebug::DrawToggles())
-		{
-			ImGui::TableNextColumn();
-			IConsoleVariable* const CVar = ElysiumClothDebug::DrawCVar(Toggle.Suffix);
-			if (CVar == nullptr)
-			{
-				// Unavailable rather than off: these are registered by the ChaosCloth module and
-				// compiled out with CHAOS_DEBUG_DRAW, so a missing one is worth seeing as missing.
-				ImGui::TextDisabled("%s", Toggle.Label);
-				continue;
-			}
-			bool bOn = CVar->GetBool();
-			if (ImGui::Checkbox(Toggle.Label, &bOn))
-			{
-				CVar->Set(bOn, ECVF_SetByConsole);
-			}
-			if (ImGui::IsItemHovered())
-			{
-				ImGui::SetTooltip("%s\n\np.ChaosCloth.DebugDraw%s", Toggle.Help,
-					COG_TCHAR_TO_CHAR(Toggle.Suffix));
-			}
-		}
-		ImGui::EndTable();
-	}
 }
 
 // Drive mode's readout. Everything here is READ: the sample the mover published, the record the
@@ -2059,11 +1872,6 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 	if (ImGui::BeginTabItem("Eyes"))
 	{
 		RenderEyes(*Lab);
-		ImGui::EndTabItem();
-	}
-	if (ImGui::BeginTabItem("Cloth"))
-	{
-		RenderCloth(*Lab);
 		ImGui::EndTabItem();
 	}
 	ImGui::EndTabBar();

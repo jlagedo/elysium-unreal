@@ -1,0 +1,19 @@
+{
+  "enabledPlugins": {
+    "unreal-engine-skills-for-claude-code@claude-plugins-official": true
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/elysium-mcp-context.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

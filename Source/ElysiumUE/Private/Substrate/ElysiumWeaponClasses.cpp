@@ -36,6 +36,7 @@
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealth.h"
 #include "Substrate/ElysiumSwingContact.h"    // the contact walk's pure window/sub-step rules
+#include "Visual/ElysiumMeleeTrail.h"
 #include "Visual/ElysiumNpcVisual.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeapon, Log, All);
@@ -534,12 +535,14 @@ namespace
 			// The corpus's ordinary answer (`w_null.mdl` / no wield model) or the `shows_view_model`
 			// gate: either way the hand draws nothing, which is an authored answer, not a missing asset.
 			ElysiumNpcVisual::ClearWieldModel(Body);
+			ElysiumMeleeTrail::ClearTrail(Body);
 			break;
 		case EElysiumWieldResult::UnknownItem:
 			UE_LOG(LogElysiumWeapon, Warning,
 				TEXT("%s equipped by %s names no row in the wield table for '%s'"),
 				*Weapon.DebugString(), *Wearer.DebugString(), *Weapon.ClassName());
 			ElysiumNpcVisual::ClearWieldModel(Body);
+			ElysiumMeleeTrail::ClearTrail(Body);
 			break;
 		case EElysiumWieldResult::NoTable:
 			// UElysiumWieldTable::Load already warned once that the wield bake has not run.
@@ -691,6 +694,7 @@ void FElysiumWeapon::OnHolstered(FElysiumCombatCharacter& Wearer)
 	if (USkeletalMeshComponent* const WearerBody = Wearer.GetSkeletalBody())
 	{
 		ElysiumNpcVisual::ClearWieldModel(WearerBody);
+		ElysiumMeleeTrail::ClearTrail(WearerBody);
 	}
 	UE_LOG(LogElysiumWeapon, Verbose, TEXT("%s holstered by %s"), *DebugString(),
 		*Wearer.DebugString());

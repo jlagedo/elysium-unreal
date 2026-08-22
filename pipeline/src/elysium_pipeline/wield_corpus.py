@@ -253,12 +253,19 @@ def quat_angle(a, b):
     return math.degrees(2.0 * math.acos(max(-1.0, min(1.0, dot))))
 
 
-def skinned_bones(d, v):
-    """Every bone index any vertex carries weight on."""
+def skinned_bones(d, v, surfaces=None):
+    """Every bone index any vertex carries weight on.
+
+    `surfaces`, when given, is a pre-decoded `mdl_skel.decode_skinned(d, v)` result, so one decode
+    can serve every geometry consumer of a model -- the exporter decodes each model once and
+    passes it here, to `classify` and to `trail_tip` alike.
+    """
     from elysium_pipeline.formats import mdl_skel
 
+    if surfaces is None:
+        surfaces = mdl_skel.decode_skinned(d, v)
     out = set()
-    for surface in mdl_skel.decode_skinned(d, v).values():
+    for surface in surfaces.values():
         for joints, weights in zip(surface["joints"], surface["weights"]):
             out.update(bone for bone, weight in zip(joints, weights) if weight > 0.0)
     return frozenset(out)
@@ -344,12 +351,12 @@ def _skinned_roots(bones, skinned):
     return sorted(set(roots)), hands
 
 
-def classify(d, v, bodies=None):
+def classify(d, v, bodies=None, surfaces=None):
     """One decoded model to its binding decision.
 
     `bodies` is a `body_index` mapping; supply it to resolve the non-socket modes, which cannot be
     told apart from the model alone -- whether a rig is worn at all is a fact about the character
-    corpus, not about the file.
+    corpus, not about the file. `surfaces` is `skinned_bones`' optional pre-decoded geometry.
     """
     from elysium_pipeline.formats import mdl_skel
 
@@ -366,7 +373,8 @@ def classify(d, v, bodies=None):
         if frame_variance(bones, pose, range(len(bones))):
             animated = True
             break
-    return classify_bones(bones, skinned_bones(d, v), bodies=bodies, animated=animated)
+    return classify_bones(bones, skinned_bones(d, v, surfaces=surfaces),
+                          bodies=bodies, animated=animated)
 
 
 def classify_bones(bones, skinned, *, bodies=None, animated=False):
@@ -425,6 +433,51 @@ def classify_bones(bones, skinned, *, bodies=None, animated=False):
     )
 
 
+# ------------------------------------------------------------------------ the trail tip
+
+def trail_tip_from_geometry(bones, cls, positions):
+    """A synthetic `TrailTip` attachment for a `socket_prop` model: `(pos, quat)` bone-local to
+    `cls.mount_bone`, Source inches, identity quat -- the model's own geometry's farthest point
+    from the mount along its own long axis, the other two axes at the geometry's midpoint.
+
+    Meaningful only when `cls.binding == "socket_prop"`. `positions` is the model's decoded
+    vertex list in the same bind-space object frame `bind_world_transforms` composes (Source
+    inches, e.g. every `pos` from `mdl_skel.decode_skinned`'s surfaces). The long axis is picked
+    per model from its own geometry -- never assumed -- because it is not a fixed convention
+    across the corpus: `w_m_bushhook`'s is local-Y, `w_f_bushhook`'s is local-Z. The mount's own
+    bind need not be well-formed for this to work (`w_f_bushhook`'s is a degenerate identity) --
+    only the geometry's bbox is read, not the bind rotation/translation magnitude.
+    """
+    import numpy as np
+
+    mount = next(b.index for b in bones if b.name == cls.mount_bone)
+    inv_mount = np.linalg.inv(bind_world_transforms(bones)[mount])
+    if not positions:
+        return (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)
+    local = np.array([(inv_mount @ np.array([p[0], p[1], p[2], 1.0]))[:3] for p in positions])
+    mins, maxs = local.min(axis=0), local.max(axis=0)
+    axis = int(np.argmax(maxs - mins))
+    point = [(mins[i] + maxs[i]) / 2.0 for i in range(3)]
+    point[axis] = maxs[axis] if abs(maxs[axis]) >= abs(mins[axis]) else mins[axis]
+    return tuple(float(c) for c in point), (0.0, 0.0, 0.0, 1.0)
+
+
+def trail_tip(d, v, bones, cls, surfaces=None):
+    """Decode-and-call wrapper over `trail_tip_from_geometry`, mirroring the `classify`/
+    `classify_bones` split: the byte reading belongs to `mdl_skel`, this is the part that composes
+    the decision. Returns `None` for any binding other than `socket_prop`. `surfaces` is
+    `skinned_bones`' optional pre-decoded geometry, so the exporter's one decode serves this too.
+    """
+    from elysium_pipeline.formats import mdl_skel
+
+    if cls.binding != "socket_prop":
+        return None
+    if surfaces is None:
+        surfaces = mdl_skel.decode_skinned(d, v)
+    positions = [p for surface in surfaces.values() for p in surface["pos"]]
+    return trail_tip_from_geometry(bones, cls, positions)
+
+
 # ----------------------------------------------------------------------- the checks
 
 class Check(NamedTuple):
@@ -448,16 +501,16 @@ def check_subtree(bones, skinned, cls):
     return Check("subtree", not outside, outside)
 
 
-def check_collapse(bones, skinned, cls):
-    """The stored inverse bind agrees with the one composed from the bind locals.
+def bind_world_transforms(bones):
+    """[4x4 bind-space world matrix per bone index], composed from parent-relative locals.
 
-    This is what licenses treating a whole sub-rig as one rigid transform: the cancellation is
-    algebraic *given* a self-consistent file, so the thing worth asserting is the consistency.
+    Shared by `check_collapse` (which asserts the stored inverse bind agrees with this
+    composition) and `trail_tip_from_geometry` (which uses it to bring mesh geometry into a
+    mount bone's local frame).
     """
     import numpy as np
     from elysium_pipeline.formats import mdl_skel
 
-    worst, name = 0.0, ""
     world = [None] * len(bones)
     for bone in bones:
         local = np.eye(4)
@@ -467,6 +520,19 @@ def check_collapse(bones, skinned, cls):
         world[bone.index] = (world[parent] @ local
                              if 0 <= parent < bone.index and world[parent] is not None
                              else local)
+    return world
+
+
+def check_collapse(bones, skinned, cls):
+    """The stored inverse bind agrees with the one composed from the bind locals.
+
+    This is what licenses treating a whole sub-rig as one rigid transform: the cancellation is
+    algebraic *given* a self-consistent file, so the thing worth asserting is the consistency.
+    """
+    import numpy as np
+
+    worst, name = 0.0, ""
+    world = bind_world_transforms(bones)
     for index in sorted(skinned):
         stored = np.array(bones[index].pose_to_bone, dtype=np.float64).reshape(3, 4)
         composed = np.linalg.inv(world[index])[:3, :4]

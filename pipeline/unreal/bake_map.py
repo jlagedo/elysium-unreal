@@ -925,12 +925,14 @@ class Bake(object):
                 made, mat_pkg, ", %d stale pruned" % pruned if pruned else "",
                 time.time() - start))
         if self.weather:
+            # The rain master and system are tracked authored assets
+            # (Content/ElysiumAuthored/VFX); the bake instances the master per map and never
+            # writes either asset -- the runtime binds this map's instances through the system's
+            # material user parameters (ElysiumMapActorWeather.cpp).
             master = unreal.load_asset(
-                "/Game/VtMB/Particles/M_ElysiumRain.M_ElysiumRain")
-            system = unreal.load_asset(
-                "/Game/VtMB/Particles/NS_ElysiumRain.NS_ElysiumRain")
-            if not master or not system or not self.rain_height:
-                fail("rain policy assets or height texture are missing")
+                "/Game/ElysiumAuthored/VFX/M_ElysiumRain.M_ElysiumRain")
+            if not master or not self.rain_height:
+                fail("the authored rain master or the map height texture is missing")
                 return
             bounds = self.weather["world_bounds_cm"]
             minimum, maximum = bounds["min"], bounds["max"]
@@ -967,19 +969,8 @@ class Bake(object):
                     raise SystemExit("[bake] cached rain material could not be loaded: %s" % path)
                 return mic
 
-            streak_mic = _make_rain_mic("MI_ElysiumRain", rain_path, 0.0)
-            mist_mic = _make_rain_mic("MI_ElysiumRainMist", mist_path, 1.0)
-
-            system_path = "/Game/VtMB/Particles/NS_ElysiumRain"
-            if self.tracker.register(
-                    "materials", system_path,
-                    {"streaks": rain_path, "mist": mist_path, "binding": "rain-material-v2"},
-                    expected_class="NiagaraSystem"):
-                if not unreal.ElysiumRainAssetBuilder.bind_rain_materials(
-                        system, streak_mic, mist_mic):
-                    raise SystemExit("[bake] could not bind the map rain materials")
-                self.saved.append(system_path)
-                self.tracker.built("materials")
+            _make_rain_mic("MI_ElysiumRain", rain_path, 0.0)
+            _make_rain_mic("MI_ElysiumRainMist", mist_path, 1.0)
         else:
             rain_path = "%s/MI_ElysiumRain" % self.weather_pkg
             mist_path = "%s/MI_ElysiumRainMist" % self.weather_pkg

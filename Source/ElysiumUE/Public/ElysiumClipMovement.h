@@ -188,6 +188,36 @@ namespace ElysiumClipMovement
 	// rows are driven for their whole clip and never reach it.
 	bool RefusesReselection(const FElysiumIdealActivityState& State, const FString& Candidate);
 
+	// **The melee stop** — `CBasePlayer::PostThink`'s third half of the same mechanism.
+	//
+	// On the frame the movement lock RELEASES — the ideal activity is still `ACT_MELEE_ATTACK` and
+	// the predicate above has just gone false — retail discards the body's carried motion outright
+	// unless a direction key is held: `SetAbsVelocity(vec3_origin)` followed by
+	// `SetLocalVelocity(vec3_origin)`, immediately before the classifier and `SetAnimation` run.
+	//
+	// It is what makes the reselection guard above WORK. Without it the swing's own authored lunge
+	// is still on the body when the selector runs, the gait ladder reads a moving body, and
+	// `RefusesReselection` lets that gait through — which cuts the swing's tail off. With the body
+	// stopped the ladder answers an idle instead, the guard refuses it, and the clip plays out. The
+	// two are one rule read from opposite ends: the guard says what a MOVING body loses, the stop
+	// says which bodies count as moving.
+	//
+	// `HeldSelectionMask` is the button field in the FILE's own `IN_*` numbering
+	// (`ElysiumCombo::SelectionMask`, retail's `+0x2088 & 0x79a`) — what
+	// `FElysiumEntityWorld::PlayerSelectionStateMask` answers. It is the HELD KEYS and never the
+	// realized velocity or the movement wish: the defect this exists to fix is precisely that
+	// clip-driven motion must not be read back as input.
+	//
+	// **It is a per-frame WINDOW, not an edge.** The recovered block carries no latch: its three
+	// tests all jump to the same convergence point, nothing reads or writes an "already stopped"
+	// byte, and the busy predicate behind it is a pure function of the ideal activity, sequence and
+	// cycle. So it re-runs on every frame from the sequence's `w_hold` to the end of the clip, and
+	// the window sustains itself — a stopped body classifies as idle, the reselection guard refuses
+	// that idle, the ideal activity therefore stays put, and the next frame stops the body again.
+	// Anything that imparts motion during the tail without changing the ideal activity is killed
+	// again on the frame after it lands, which is the behaviour a one-shot edge would lose.
+	bool StopsMeleeTailMotion(const FElysiumIdealActivityState& State, int32 HeldSelectionMask);
+
 	// `Studio_AnimPosition` — the cumulative position and yaw at a fractional frame.
 	//
 	// **Piecewise, and it must be.** Walk the records in order; the last one ending before the wanted

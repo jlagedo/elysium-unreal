@@ -5,8 +5,12 @@ deliberately separate package classes:
 
 - **Original project-authored packages** live only below `Content/ElysiumAuthored/`, mounted as
   `/Game/ElysiumAuthored/**`. They are committed through Git LFS and may contain original camera
-  profiles, curves, shakes, Blueprint helpers, and Level Sequences. They must not copy or encode
-  game-derived art, transforms, timings, scripts, map data, or converted assets.
+  profiles, curves, shakes, Blueprint helpers, Level Sequences, VFX and tuning data assets. They
+  must not copy or encode game-derived art, transforms, timings, scripts, map data, or converted
+  assets. Current residents: `VFX/` (the melee-trail and rain Niagara systems, materials and
+  textures), `Hair/DA_HairDynamics` (owner-authored AnimDynamics chains), and
+  `Cloth/DA_ClothTuning` (Chaos cloth material/solver tuning). These are edited live in the
+  editor and saved in place — they have no generator.
 - **Generated local packages** are products of the pipeline and remain ignored/regenerable.
 
 The tracked files under `Content/Fonts/` and `Content/InputPrompts/` are licensed, loose source

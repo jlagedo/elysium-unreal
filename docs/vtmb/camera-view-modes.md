@@ -676,6 +676,47 @@ architecture is `docs/architecture/camera-architecture.md`.
 - Original map-track timing is already authoritative. Its evaluator publishes sampled values into
   the shared request surface without a second spring, turn tracker, or blend.
 
+### Divergence, owner-called — no first-person weapon camera
+
+Elysium is a pure third-person game for ranged and thrown weapons as well as melee: the
+`camera_class` arbitration in §2 (`ranged`/`thrown` defaulting to first person under
+`camera_prefs`, the player-settable toggle, `togglecamera`/`thirdperson`/`firstperson`, and the
+first↔third weight blend of §3) is retired. Every weapon behaves like retail's `melee` class —
+always third person, camera never approaches the eye. `viewmodel_fov`, the dedicated viewmodel
+projection (§"The viewmodel has its own projection and draw lifetime") and the first-person
+hands/weapon draw path have no consumer.
+
+In its place, ranged combat gets a hip-fire/aim-mode pair retail never authored — VtMB's only
+aiming mechanic *was* the first-person switch. Both states run the same third-person boom; only
+its target transform changes, blended with the same weight-ramp/ease shape as the retired
+first↔third toggle (§3) rather than a hard cut:
+
+- **Hip-fire** (default): the ordinary third-person boom, at the player's chosen FOV.
+- **Aim mode** (held/toggled): boom pulls in, offsets toward one shoulder, and FOV narrows per
+  weapon; the ranged spread cone (`docs/vtmb/combat-and-damage.md` → "Shot count, accuracy and
+  kick") is multiplied down while held.
+
+| Weapon | Aim FOV (% of hip) | Shoulder offset (right/up, cm) | Aim spread multiplier |
+|---|---:|---|---:|
+| Glock 17c, .38 revolver, Desert Eagle | 88% | 35 / 15 | ×0.5 |
+| Colt Anaconda (aimed mode) | 85% | 35 / 15 | ×0.45 |
+| Colt Anaconda (fan mode) | no aim state — spray by design | — | ×1.0 |
+| Uzi, Mac-10 | 92% | 30 / 10 | ×0.7 |
+| Steyr AUG | 80% | 35 / 15 | ×0.4 |
+| Ithaca M37, super shotgun | 95% | 30 / 10 | ×0.9 |
+| Remington M700 | 65% | 40 / 20 | ×0.1 |
+| Crossbow | 70% | 35 / 15 | ×0.15 |
+
+Default hip-fire FOV is **90° horizontal** (~62° vertical at 16:9). Retail's own `default_fov 75`
+is Hor+ and already renders ~91° horizontal at a 16:9 window (`docs/vtmb/source_movement.md` →
+"View / camera"), so 90° keeps that widescreen baseline rather than retail's narrower 4:3
+reference. Elysium ships a user-facing FOV slider; each weapon's aim percentage above is relative
+to whatever hip FOV the player has chosen, not an absolute value.
+
+Faithful first/third behaviour — the toggle, the weight ramp, `camera_class` arbitration, and the
+dedicated viewmodel projection — stays recoverable through git history and the RE record above;
+no A/B mechanism or cvar toggles between the two.
+
 ### Faithful evaluator shape
 
 The faithful path preserves VtMB's one weight and one solve order: advance the third-person weight

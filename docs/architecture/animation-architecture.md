@@ -1141,17 +1141,18 @@ merged, and the curve metadata authored. `docs/vtmb/facial_animation.md` owns ev
 
 ## 8. Adjacent stages
 
-**The garment simulation** (`pipeline/src/elysium_pipeline/enhancement/cloth.py` writes its rig) runs
-after the composition stage, so the simulation sees the finished skeleton. It is an enhancement
-rather than a reproduction because it synthesizes a bone lattice instead of consuming VtMB's
-authored renderer-cloth payload. Retail selects that second payload with `MDLHeader.Flags & 0x400`,
-skins its pinned attachment particles, then simulates and substitutes selected render vertices
-after ordinary skinning. Jeanette's skirt and Sheriff's coat both use it. The exact carrier and
-solve are `docs/vtmb/secondary_motion.md`.
-
-It is **off** (`elysium.Cloth 0`) and it no longer selects a mesh. A garment rig names lattice
-bones the shared baked skeleton does not carry, so with the cvar on the chains resolve nothing;
-every body comes off the mount either way.
+**The garment simulation** consumes VtMB's authored renderer-cloth payload as generated Chaos
+cloth assets. Retail selects the payload with `MDLHeader.Flags & 0x400`, skins its pinned
+attachment particles, then simulates and substitutes selected render vertices after ordinary
+skinning; Jeanette's skirt and Sheriff's coat both use it, and the exact carrier and solve are
+`docs/vtmb/secondary_motion.md`. Offline, `UE_mdl_cloth.py` writes an Unreal-native
+`npc/garment/<stem>.json` sidecar and `UElysiumClothBuildLibrary::BuildClothAssetsFromSidecar`
+(driven by `pipeline/unreal/make_cloth_assets.py`, after the character bake) builds
+`/Game/VtMB/Cloth/CLOTH_<stem>` — generated and gitignored, because its payload is game-derived
+geometry bound to a baked mesh. The material and solver judgment values are the one authored
+layer: the tracked `/Game/ElysiumAuthored/Cloth/DA_ClothTuning` (`UElysiumClothTuningConfig`),
+edited in the editor. At runtime `ElysiumNpcVisual::InstallGarment` attaches the garment as a
+leader-pose `UChaosClothComponent` follower of the body and hides the duplicated body sections.
 
 **Bone-chain secondary motion is another independent stage.** VtMB simulates hair, ponytail, mane
 and breast chains from an authored table in the model header, with gravity, damping, a spring
@@ -1166,10 +1167,17 @@ control, not a port of retail's point/segment solver. It runs in the body proxy'
 tail after axis interpolation and before skinning, the same ordering Epic documents for a
 [`PostProcessAnimBlueprint`](https://dev.epicgames.com/documentation/unreal-engine/API/Runtime/Engine/Engine/USkeletalMesh/PostProcessAnimBlueprint):
 
-1. the offline exporter admits only `malkavian_female_armor_0`'s `Bone05` → `Bone09` hair route and
-   Jeanette's `Bone01` → `Bone07` and `Bone09` → `Bone13` hair routes;
-2. it writes a complete native recipe into the generated skeletal mesh. Breast records, the other
-   Malkavian armours, and Jeanette's renderer-cloth skirt produce no recipe;
+1. the chain set and every parameter are owner-authored presentation in the tracked
+   `/Game/ElysiumAuthored/Hair/DA_HairDynamics` (`UElysiumHairDynamicsConfig`), edited in the
+   editor. A stem's entry is the whole opt-in — no allow-list exists in code, and a stem with no
+   entry simulates nothing, silently. The current table carries
+   `malkavian_female_armor_0`'s `Bone05` → `Bone09` route and Jeanette's `Bone01` → `Bone07` and
+   `Bone09` → `Bone13` routes, seeded from the retail decode and owned by hand from here on;
+2. `ElysiumNpcVisual::InstallHairDynamics` reads that asset per stood body, re-validates each
+   chain against the mesh's own reference skeleton (bone existence, descent, numeric ranges), and
+   skips only the failing chain, with one warning naming stem and chain. The offline decode of
+   retail's chain table (`mdl_secondary_motion.py`, the `.eskm` `DYNM` chunk) remains as
+   reference data the runtime and bake no longer consume;
 3. one chain node takes the first and last bone, allowing AnimDynamics to generate the intermediate
    bodies. It simulates relative to the first moving bone's animated parent (`Bip01 Head` on the
    admitted chains), so a blended head pose moves the simulation frame instead of sweeping the
@@ -1182,14 +1190,14 @@ tail after axis interpolation and before skinning, the same ordering Epic docume
    target with the incoming pose's parent-relative translation and scale before alpha blending, so
    neither free twist nor an unconverged solver frame can produce propeller motion or lengthen a
    hair segment;
-5. a validated recipe runs unconditionally when either scoped body poses. There is no feature flag
+5. a validated authored entry runs unconditionally when its body poses. There is no feature flag
    or A/B toggle. A stable proxy-owned custom node participates in Unreal's dynamics-reset registry
    and forwards component teleports and explicit `ResetDynamics` requests to the current manually
    hosted nodes. The node has no planar ground or spherical collision: AnimDynamics supplies
    constraints rather than actual collision geometry, so head/shoulder intersection remains a
    known proof limitation.
 
-The hair-chain node applies the baked recipe's authored gravity, damping, spring coefficient and
+The hair-chain node applies the authored table's gravity, damping, spring coefficient and
 maximum angle. It admits `0.15` of component linear acceleration, clamped to `200 cm/s²` per axis,
 and `0.25` of bone-relative angular motion, with the source frame clamped to `3 rad/s` and
 `25 rad/s²`. Component velocity drag remains zero. The animated parent therefore carries most of
