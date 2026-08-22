@@ -1893,6 +1893,7 @@ def export_characters(
     # proves a body reaches the package -- measured over the whole catalogue's include DAGs, so
     # it holds for a slice too.
     from elysium_pipeline import character_census, character_inventory, character_sweep
+    character_sweep.assert_owner_integrity(npc_manifest)
     character_sweep.assert_shared_bank_layout(partition, npc_manifest)
     reached = character_cache.reached_banks(npc_manifest, stems)
     projected = character_inventory.project(npc_dir, npc_manifest, reached)

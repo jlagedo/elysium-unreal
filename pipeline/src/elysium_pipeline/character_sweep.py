@@ -70,6 +70,33 @@ def _expected_dirs(partition: dict, manifest: dict) -> set[str]:
     return out
 
 
+def assert_owner_integrity(manifest: dict) -> None:
+    """Refuse a manifest in which a clip's owner is neither the playing body nor a bank.
+
+    A body's non-bank clips are owned by the body itself -- `bake_characters.owner_clips` fails
+    a run on any other shape -- and every anim path on the mount is addressed on that invariant.
+    This assertion states it offline over the WHOLE manifest before an editor starts, so a
+    resolver change that routes a clip to another body's container fails here by name rather
+    than surfacing as a per-run bake error on whichever slice happens to reach it.
+    """
+    banks = set(manifest.get("banks", {}))
+    broken = []
+    for stem, record in manifest.get("npcs", {}).items():
+        for label, owner in record.get("clips", {}).items():
+            if owner != stem and owner not in banks:
+                broken.append(f"{stem}:{label} -> {owner}")
+    for scene, record in manifest.get("cinematics", {}).items():
+        for root in record.get("roots", []):
+            bank = root.get("bank")
+            if bank and bank not in banks:
+                broken.append(f"cinematic {scene} -> {bank}")
+    if broken:
+        raise ValueError(
+            "manifest routes a clip to an owner that is neither the body nor a bank: "
+            + ", ".join(sorted(broken)[:4])
+        )
+
+
 def assert_shared_bank_layout(partition: dict, manifest: dict) -> None:
     """Refuse any plan whose bank folders scale with body-family count.
 

@@ -80,6 +80,21 @@ class SweepTests(unittest.TestCase):
         self.assertEqual(result["orphan_assets"], [])
         self.assertGreater(result["total"], 0)
 
+    def test_owner_integrity_accepts_self_and_bank_owners(self):
+        character_sweep.assert_owner_integrity(MANIFEST)
+
+    def test_a_clip_owned_by_another_body_is_refused(self):
+        broken = json.loads(json.dumps(MANIFEST))
+        broken["npcs"]["amy"]["clips"]["walk"] = "bob"
+        with self.assertRaisesRegex(ValueError, r"amy:walk -> bob"):
+            character_sweep.assert_owner_integrity(broken)
+
+    def test_a_cinematic_root_outside_the_banks_is_refused(self):
+        broken = json.loads(json.dumps(MANIFEST))
+        broken["cinematics"] = {"scene_1": {"roots": [{"bank": "not_a_bank"}]}}
+        with self.assertRaisesRegex(ValueError, r"cinematic scene_1 -> not_a_bank"):
+            character_sweep.assert_owner_integrity(broken)
+
     def test_shared_bank_layout_is_independent_of_body_family_count(self):
         character_sweep.assert_shared_bank_layout(self.partition, MANIFEST)
         dirs = character_sweep._expected_dirs(self.partition, MANIFEST)
