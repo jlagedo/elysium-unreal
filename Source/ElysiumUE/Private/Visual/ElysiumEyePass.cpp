@@ -158,7 +158,7 @@ void FElysiumEyePass::InstallEyes(USkeletalMeshComponent* Comp,
 		// beside the mesh's own textures and names it here.
 		if (!Eye->IrisTexture.IsEmpty())
 		{
-			const FString Dir = FPaths::GetPath(FElysiumContentPaths::NpcGlb(Set->Stem));
+			const FString Dir = FElysiumContentPaths::NpcDir();
 			if (UTexture2D* Iris = EyeTextures.LoadTex(Dir, Eye->IrisTexture, /*bSRGB=*/true))
 			{
 				Mid->SetTextureParameterValue(TEXT("IrisTexture"), Iris);

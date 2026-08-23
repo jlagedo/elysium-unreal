@@ -468,34 +468,30 @@ struct FElysiumContentPaths
 	static FString FontsDir() { return FPaths::ProjectContentDir() / TEXT("Fonts"); }
 	static FString FontFile(const FString& File) { return FontsDir() / File; }
 
-	// NPCs (P8 8.2). Skeletal characters export as one standard glTF 2.0 file per model (mesh +
-	// StudioBone skeleton + one animation) under the export root's npc/ directory, written by
-	// pipeline/src/elysium_pipeline/formats/mdl_gltf.py. The runtime
-	// loads them through glTFRuntime (glTF is self-describing, so no UE_-style pre-conversion — the
-	// plugin does the glTF->UE basis/scale change). Stem is the model name, e.g. "gangmember_male_2".
+	// NPCs. Skeletal characters export under the export root's npc/ directory; the game plays
+	// only baked assets off the mount, and the .eskm container is what the character bake reads.
+	// Stem is the model name, e.g. "gangmember_male_2".
 	static FString NpcDir() { return Root() / TEXT("npc"); }
-	static FString NpcGlb(const FString& Stem) { return NpcDir() / (Stem + TEXT(".glb")); }
-	// The Unreal-native skeletal container the character bake reads (`UE_mdl_skeletal.py`). Unlike
-	// the .glb it needs no import transform, so it is also the reference a baked asset is checked
-	// against: whatever it says a bone's bind pose is, is what the bake had to write.
+	// The Unreal-native skeletal container the character bake reads (`UE_mdl_skeletal.py`). It
+	// needs no import transform, so it is also the reference a baked asset is checked against:
+	// whatever it says a bone's bind pose is, is what the bake had to write.
 	static FString NpcSource(const FString& Stem) { return NpcDir() / (Stem + TEXT(".eskm")); }
 	static FString NpcBankSource(const FString& Stem)
 	{
 		return NpcDir() / TEXT("banks") / (Stem + TEXT(".eskm"));
 	}
 
-	// The shared animation banks and their resolution sidecars (8.5). A VtMB NPC's own .mdl
+	// The shared animation banks and their resolution sidecars. A VtMB NPC's own .mdl
 	// carries only its own clips — mostly dialogue — and pulls idle/locomotion/combat from banks
-	// through the studiohdr include DAG, so a bank glb is a skeleton + clips with no mesh, applied
-	// to any NPC by bone name. `npc_index.json` names every character and bank with its glb and
-	// counts (~47 KB, read once); `clips/<stem>.json` is one character's whole resolved vocabulary
-	// (~95 KB), read only for the stems a map actually places — the full npc_manifest.json is
-	// 15.8 MB and exists for the offline probes. The index also carries the 56 player bodies
-	// (PL13), which no map references and 8.11a resolves by clan through `clandoc000.txt`.
-	// NpcBankGlb takes the index's own relative path ("banks/x.glb").
+	// through the studiohdr include DAG, so a bank is a skeleton + clips with no mesh, applied
+	// to any NPC through skeleton compatibility. `npc_index.json` names every character and bank
+	// with counts (~47 KB, read once); `clips/<stem>.json` is one character's whole resolved
+	// vocabulary (~95 KB), read only for the stems a map actually places — the full
+	// npc_manifest.json is 15.8 MB and exists for the offline probes. The index also carries the
+	// 56 player bodies (PL13), which no map references and are resolved by clan through
+	// `clandoc000.txt`.
 	static FString NpcIndex() { return NpcDir() / TEXT("npc_index.json"); }
 	static FString NpcClips(const FString& Stem) { return NpcDir() / TEXT("clips") / (Stem + TEXT(".json")); }
-	static FString NpcBankGlb(const FString& RelGlb) { return NpcDir() / RelGlb; }
 
 	// The facial flex rig beside a rigged NPC's glb (12.3, PL10): the FACS flexdesc names, the 44
 	// flex controllers, the 60 RPN flex rules, the amplitude jaw and the per-morph target ramps,

@@ -39,7 +39,7 @@ namespace
 
 TArray<FString> BodyStems()
 {
-	TArray<FString> Exported = UElysiumNpcSubsystem::AvailableGlbStems();
+	TArray<FString> Exported = UElysiumNpcSubsystem::AvailableBodyStems();
 	TArray<FString> Baked;
 	Baked.Reserve(Exported.Num());
 	for (const FString& Stem : Exported)

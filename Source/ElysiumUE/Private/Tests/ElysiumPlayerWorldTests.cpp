@@ -566,7 +566,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropManifestTest,
 	"Elysium.Substrate.AnimatedPropManifest", GElysiumTestFlags)
 bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 {
-	const FString MinimalNpc = TEXT("\"npcs\":{\"dummy\":{\"glb\":\"dummy.glb\","
+	const FString MinimalNpc = TEXT("\"npcs\":{\"dummy\":{"
 		"\"model\":\"models/dummy.mdl\",\"clips\":1,\"split_bones\":[\"Bip01 Spine1\"]}}");
 	FString Error;
 	FElysiumNpcIndex V3;
@@ -583,7 +583,7 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 
 	FElysiumNpcIndex V4;
 	const FString Json4 = FString::Printf(TEXT("{\"manifest_version\":4,%s,\"banks\":{},\"cinematics\":{},"
-		"\"animated_props\":{\"cin_wineglass\":{\"glb\":\"animated_props/cin_wineglass.glb\","
+		"\"animated_props\":{\"cin_wineglass\":{"
 		"\"model\":\"models/cinematic/cin_wineglass.mdl\",\"bones\":4,"
 		"\"split_bones\":[\"glass hinge\"],\"clips\":[\"Idle\",\"Pour\"]}}}"),
 		*MinimalNpc);
@@ -594,8 +594,6 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 		V4.FindAnimatedProp(TEXT("cinematic\\cin_wineglass.mdl"));
 	if (TestNotNull(TEXT("v4 normalizes and resolves animated prop model"), Glass))
 	{
-		TestEqual(TEXT("v4 retains generated glb"), Glass->Glb,
-			FString(TEXT("animated_props/cin_wineglass.glb")));
 		TestTrue(TEXT("clip lookup folds case"), Glass->HasClip(TEXT("POUR")));
 		TestEqual(TEXT("clip inventory retained"), Glass->Clips.Num(), 2);
 		TestEqual(TEXT("animated-prop split-bone metadata is retained"),
@@ -608,7 +606,7 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	FElysiumNpcIndex V5;
 	Error.Reset();
 	const FString Json5 = FString::Printf(
-		TEXT("{\"manifest_version\":5,\"npcs\":{\"dummy\":{\"glb\":\"dummy.glb\","
+		TEXT("{\"manifest_version\":5,\"npcs\":{\"dummy\":{"
 			 "\"model\":\"models/dummy.mdl\",\"clips\":1,"
 			 "\"eyes\":\"eyes/dummy.json\",\"eyeballs\":2}},\"banks\":{},\"cinematics\":{}}"));
 	TestTrue(FString::Printf(TEXT("v5 manifest parses: %s"), *Error), V5.LoadJsonText(Json5, Error));
@@ -629,7 +627,7 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	FElysiumNpcIndex V6;
 	Error.Reset();
 	const FString Json6 = FString::Printf(TEXT("{\"manifest_version\":6,%s,\"banks\":{},\"cinematics\":{},"
-		"\"animated_props\":{\"drknobantique\":{\"glb\":\"animated_props/drknobantique.glb\","
+		"\"animated_props\":{\"drknobantique\":{"
 		"\"model\":\"models/scenery/doorknoba/drknobantique.mdl\",\"bones\":2,\"clips\":["
 		"{\"name\":\"idle\",\"index\":0,\"activity\":\"\",\"weight\":0,\"flags\":1,\"frames\":16,\"fps\":15.0},"
 		"{\"name\":\"handle_locked\",\"index\":1,\"activity\":\"\",\"weight\":0,\"flags\":0,\"frames\":16,\"fps\":15.0},"
@@ -658,13 +656,13 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	}
 
 	// `bounds_radius_m` is additive and optional. Its presence states the reach the clip needs
-	// about the model origin, in the metres the glb is written in; its absence is "no claim", not
+	// about the model origin, in the decode's own metres; its absence is "no claim", not
 	// "zero reach". These are `cin_sheriff_sword`'s real numbers — a 2 m mesh whose scene clip
 	// draws it up to 22 m from the anchor it is culled on.
 	FElysiumNpcIndex Reach;
 	Error.Reset();
 	const FString JsonReach = FString::Printf(TEXT("{\"manifest_version\":6,%s,\"banks\":{},\"cinematics\":{},"
-		"\"animated_props\":{\"cin_sheriff_sword\":{\"glb\":\"animated_props/cin_sheriff_sword.glb\","
+		"\"animated_props\":{\"cin_sheriff_sword\":{"
 		"\"model\":\"models/cinematic/santa_monica/courtroom/cin_sheriff_sword.mdl\",\"bones\":15,\"clips\":["
 		"{\"name\":\"idle01\",\"index\":0,\"frames\":4701,\"fps\":10.0,\"bounds_radius_m\":22.388},"
 		"{\"name\":\"scene\",\"index\":1,\"frames\":4701,\"fps\":30.0}"
@@ -675,7 +673,7 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 		Reach.FindAnimatedProp(TEXT("models/cinematic/santa_monica/courtroom/cin_sheriff_sword.mdl"));
 	if (TestNotNull(TEXT("the sword resolves"), Sword))
 	{
-		TestEqual(TEXT("a declared clip reach is read in the glb's own metres"),
+		TestEqual(TEXT("a declared clip reach is read in the decode's own metres"),
 			Sword->Clips[0].BoundsRadiusMeters, 22.388f);
 		TestEqual(TEXT("a clip that declares no reach makes no claim"),
 			Sword->Clips[1].BoundsRadiusMeters, 0.f);
@@ -722,9 +720,9 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	FElysiumNpcIndex V8;
 	Error.Reset();
 	const FString Json8 = TEXT("{\"manifest_version\":8,"
-		"\"npcs\":{\"dummy\":{\"glb\":\"dummy.glb\",\"model\":\"models/dummy.mdl\",\"clips\":1,"
+		"\"npcs\":{\"dummy\":{\"model\":\"models/dummy.mdl\",\"clips\":1,"
 		"\"blends\":\"blends/dummy.json\",\"blend_grids\":0,\"event_sequences\":11}},"
-		"\"banks\":{\"bank\":{\"glb\":\"banks/bank.glb\",\"model\":\"models/bank.mdl\","
+		"\"banks\":{\"bank\":{\"model\":\"models/bank.mdl\","
 		"\"clips\":3,\"blends\":\"blends/bank.json\",\"blend_grids\":2,"
 		"\"event_sequences\":7}},\"cinematics\":{}}");
 	TestTrue(FString::Printf(TEXT("v8 manifest parses: %s"), *Error), V8.LoadJsonText(Json8, Error));

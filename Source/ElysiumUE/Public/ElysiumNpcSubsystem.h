@@ -62,7 +62,7 @@ public:
 	const TArray<FElysiumLoadedNpc>& GetLoaded() const { return Loaded; }
 
 	// glb stems available under out/npc (scanned from disk; for the window's picker + npc.list).
-	static TArray<FString> AvailableGlbStems();
+	static TArray<FString> AvailableBodyStems();
 
 	// Every live NPC animation host in this world carrying a facial flex rig (12.3) — the map's own
 	// characters as readily as this harness's preview bodies, since both stand on the same anim

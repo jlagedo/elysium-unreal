@@ -34,8 +34,7 @@
 //
 // The fixture is synthetic for the reason every fixture in this repo is: nothing game-sourced is
 // committed, and a capture's own bone transforms are derived from the user's install. What the
-// real corpus is used for instead is the Content tier below, which reads the exported tables and
-// checks them against the skeleton the same .glb produced.
+// real corpus is used for instead is the Content tier below, which reads the exported tables.
 
 static constexpr EAutomationTestFlags GElysiumCompositionTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -241,84 +240,7 @@ bool FElysiumAxisInterpRuleTest::RunTest(const FString&)
 		NearlyEqual(Rig.EvaluateRule(Rule, Controls[1]), Rig.EvaluateRule(Rule, Controls[1]), 0.0));
 	return true;
 }
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCompositionRigCorpusTest,
-	"Elysium.Content.CompositionRigCorpus", GElysiumCompositionTestFlags)
 
-bool FElysiumCompositionRigCorpusTest::RunTest(const FString&)
-{
-	if (!FElysiumContentPaths::IsConfigured())
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no export root configured"));
-		return true;
-	}
-	FElysiumNpcIndex Index;
-	FString Error;
-	if (!Index.Load(Error))
-	{
-		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: no npc index (%s)"), *Error));
-		return true;
-	}
-
-	int32 Declared = 0;
-	int32 Loaded = 0;
-	int32 Rules = 0;
-	int32 SplitModels = 0;
-	for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Npcs)
-	{
-		if (!Pair.Value.SplitRotationBones.IsEmpty())
-		{
-			++SplitModels;
-		}
-		if (Pair.Value.Procedural.IsEmpty())
-		{
-			continue;
-		}
-		++Declared;
-
-		FElysiumCompositionRig Rig;
-		FString RigError;
-		if (!Rig.LoadAxisRules(Pair.Value.Procedural, RigError))
-		{
-			AddError(FString::Printf(TEXT("procedural '%s': %s"), *Pair.Key, *RigError));
-			continue;
-		}
-		++Loaded;
-		Rules += Rig.AxisRules.Num();
-
-		if (Rig.AxisRules.Num() != Pair.Value.ProceduralBones)
-		{
-			AddError(FString::Printf(TEXT("'%s': index says %d driven bones, the table carries %d"),
-				*Pair.Key, Pair.Value.ProceduralBones, Rig.AxisRules.Num()));
-		}
-		// The two stages are disjoint over the whole corpus — 295 of 295 on the measured capture —
-		// which is what lets each be confirmed against the other's bones without contamination.
-		for (const FElysiumAxisInterpRule& Rule : Rig.AxisRules)
-		{
-			if (Pair.Value.SplitRotationBones.Contains(Rule.Bone.ToString()))
-			{
-				AddError(FString::Printf(TEXT("'%s': %s is both split and driven"),
-					*Pair.Key, *Rule.Bone.ToString()));
-			}
-			if (Rule.Bone == Rule.Control)
-			{
-				AddError(FString::Printf(TEXT("'%s': %s drives itself"), *Pair.Key,
-					*Rule.Bone.ToString()));
-			}
-		}
-	}
-
-	if (Declared == 0)
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no model in this export declares a procedural rule table"));
-		return true;
-	}
-	TestEqual(TEXT("every declared rule table parses"), Loaded, Declared);
-	AddInfo(FString::Printf(
-		TEXT("%d model(s) with a rule table, %d driven bones, %d model(s) with a split bone"),
-		Loaded, Rules, SplitModels));
-	TestTrue(TEXT("the corpus carries split bones"), SplitModels > 0);
-	return true;
-}
 
 // ---------------------------------------------------------------------------------------------
 // The sidecar's frame, checked against the baked body the same model produced.

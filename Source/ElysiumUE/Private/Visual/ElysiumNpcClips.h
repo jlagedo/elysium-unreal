@@ -153,7 +153,6 @@ struct FElysiumNpcClipSet
 // out/npc/npc_index.json — every NPC and bank with its glb and counts, no clip maps (~34 KB).
 struct FElysiumNpcIndexEntry
 {
-	FString Glb;        // relative to out/npc ("gangmember_male_2.glb", "banks/x.glb")
 	FString Model;      // the source .mdl, for diagnostics
 	int32   Bones = 0;  // NPCs only
 	int32   ClipCount = 0;
@@ -233,7 +232,6 @@ struct FElysiumPropClip
 struct FElysiumAnimatedPropEntry
 {
 	FString Stem;
-	FString Glb;       // relative to out/npc — an inspection product; nothing the game loads
 	FString Eskm;      // relative to out/npc, normally animated_props/<stem>.eskm
 	FString Model;     // normalized source .mdl path
 	FString StaticStem; // the map-baked SM_ stem whose materials/collision this body reuses
@@ -282,7 +280,6 @@ struct FElysiumNpcIndex
 	bool LoadJsonText(const FString& JsonText, FString& OutError);
 
 	// Absolute path to a bank's glb, or empty when the stem is not a known bank.
-	FString BankGlbPath(const FString& BankStem) const;
 
 	// The normalized cinematic-set record for a scene model path, or null.
 	const FElysiumCinematicSet* FindCinematic(const FString& ModelPath) const;

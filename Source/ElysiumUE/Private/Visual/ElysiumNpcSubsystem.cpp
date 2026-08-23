@@ -136,11 +136,11 @@ TArray<UElysiumBipedAnimInstance*> UElysiumNpcSubsystem::FacialBodies(const FStr
 	return Bodies;
 }
 
-TArray<FString> UElysiumNpcSubsystem::AvailableGlbStems()
+TArray<FString> UElysiumNpcSubsystem::AvailableBodyStems()
 {
 	TArray<FString> Stems;
 	TArray<FString> Files;
-	IFileManager::Get().FindFiles(Files, *(FElysiumContentPaths::NpcDir() / TEXT("*.glb")), true, false);
+	IFileManager::Get().FindFiles(Files, *(FElysiumContentPaths::NpcDir() / TEXT("*.eskm")), true, false);
 	for (const FString& File : Files)
 	{
 		Stems.Add(FPaths::GetBaseFilename(File));
@@ -398,7 +398,7 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		TEXT("elysium.npc.list -- list the .glb NPC assets under out/npc"),
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]()
 		{
-			const TArray<FString> Stems = AvailableGlbStems();
+			const TArray<FString> Stems = AvailableBodyStems();
 			UE_LOG(LogElysiumNpc, Display, TEXT("%d NPC glb(s) under out/npc:"), Stems.Num());
 			for (const FString& Stem : Stems)
 			{

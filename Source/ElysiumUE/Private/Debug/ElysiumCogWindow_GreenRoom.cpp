@@ -327,7 +327,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 
 	if (bStemsDirty)
 	{
-		Stems = UElysiumNpcSubsystem::AvailableGlbStems();
+		Stems = UElysiumNpcSubsystem::AvailableBodyStems();
 		StemHasCloth.Reset();
 		StemHasCloth.Reserve(Stems.Num());
 		for (const FString& Stem : Stems)
@@ -388,7 +388,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 	FCogWidgets::InputTextWithHint("##StemFilter", "(filter)", StemFilter);
 	if (Stems.IsEmpty())
 	{
-		ImGui::TextDisabled("No .glb under npc/. Export one: uv run elysium export bundle npc");
+		ImGui::TextDisabled("No .eskm under npc/. Export: uv run elysium export characters");
 	}
 	else
 	{

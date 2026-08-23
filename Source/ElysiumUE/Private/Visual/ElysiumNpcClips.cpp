@@ -218,7 +218,6 @@ namespace
 				continue;
 			}
 			FElysiumNpcIndexEntry E;
-			(*Obj)->TryGetStringField(TEXT("glb"), E.Glb);
 			(*Obj)->TryGetStringField(TEXT("model"), E.Model);
 			(*Obj)->TryGetNumberField(TEXT("bones"), E.Bones);
 			(*Obj)->TryGetNumberField(TEXT("clips"), E.ClipCount);
@@ -579,7 +578,6 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 				}
 				FElysiumAnimatedPropEntry Entry;
 				Entry.Stem = Pair.Key;
-				(*Obj)->TryGetStringField(TEXT("glb"), Entry.Glb);
 				(*Obj)->TryGetStringField(TEXT("eskm"), Entry.Eskm);
 				(*Obj)->TryGetStringField(TEXT("model"), Entry.Model);
 				(*Obj)->TryGetStringField(TEXT("static_stem"), Entry.StaticStem);
@@ -632,7 +630,7 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 						}
 					}
 				}
-				if (!Entry.Model.IsEmpty() && (!Entry.Eskm.IsEmpty() || !Entry.Glb.IsEmpty()))
+				if (!Entry.Model.IsEmpty() && !Entry.Eskm.IsEmpty())
 				{
 					Out.Add(Entry.Stem, MoveTemp(Entry));
 				}
@@ -651,12 +649,6 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 		return false;
 	}
 	return true;
-}
-
-FString FElysiumNpcIndex::BankGlbPath(const FString& BankStem) const
-{
-	const FElysiumNpcIndexEntry* E = Banks.Find(BankStem);
-	return E ? FElysiumContentPaths::NpcBankGlb(E->Glb) : FString();
 }
 
 FString FElysiumCinematicSet::BankForRoot(const FString& Root) const

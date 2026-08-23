@@ -1369,8 +1369,8 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 		BodyRotation(/*bAnimatedProp=*/false), 1.0f, TEXT("Neutral"), 0);
 	if (!Body)
 	{
-		OutError = FString::Printf(TEXT("could not build %s — is npc/%s.glb exported?"),
-			*Stem, *Stem);
+		OutError = FString::Printf(TEXT("could not build %s — is its baked body on the mount?"),
+			*Stem);
 		return false;
 	}
 	Body->SetWorldLocationAndRotation(BodyOrigin(), BodyRotation(/*bAnimatedProp=*/false));
@@ -1525,7 +1525,7 @@ bool FElysiumGreenRoomRun::LabSetDriveBody(const FString& Stem, FString& OutErro
 	USkeletalMeshComponent* Visual = Map->BuildPlayerVisual(Stem, TEXT("Neutral"), 0);
 	if (!Visual)
 	{
-		OutError = FString::Printf(TEXT("could not build %s — is npc/%s.glb exported?"), *Stem, *Stem);
+		OutError = FString::Printf(TEXT("could not build %s — is its baked body on the mount?"), *Stem);
 		return false;
 	}
 	// The same flag the capture path sets: it means "this run owns the map's player visual", and it
