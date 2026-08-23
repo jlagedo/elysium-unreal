@@ -498,6 +498,15 @@
           "rva": "0x00091110",
           "calling_convention": "thiscall",
           "expected_bytes": "b8f4260000"
+        },
+        {
+          "semantic_label": "client.resolve_follow_parent",
+          "source_function_label": "c_baseanimating_resolve_follow_parent",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000921d0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "538bd95657"
         }
       ]
     },

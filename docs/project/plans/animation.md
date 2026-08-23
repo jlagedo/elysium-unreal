@@ -59,27 +59,36 @@ the caller performs its own fallback. That arm is reproduced: `FElysiumActivityC
 bRequireStateMask` refuses the weighted draw, and the melee swing sets it for a player-side owner.
 
 `CBaseCombatCharacter::ChooseMeleeAttackSequence` (`0x10347180`) is the cast arm and is **not**
-reproduced — the runtime draws by weight in its place. It scores every candidate geometrically
-against the enemy and picks by preference over the resulting flag word: the authored reach band at
-`+0x2CC`/`+0x2D0` against the measured enemy distance (the band is also accumulated onto the
-weapon's own min/max fields), a movement/hull trace for obstruction, and whether the enemy falls
-inside the clip's authored swing volumes at `+0x2C0`. `FUN_10348100` then walks eight ranked flag
-combinations twice — once with an "enemy in range" bit forced, once without — and the first
-candidate matching a combination wins; a body with no enemy takes a two-try `0x10`-then-`0` walk
-instead. It reads `+0x2D4` exactly once, to **zero a candidate's score when a mask is authored**,
-which is the mirror of the player arm: masked clips are the player's, unmasked clips are the cast's.
+reproduced — the runtime draws by weight in its place. Its rule is recovered whole and is owned by
+`docs/vtmb/combat-and-damage.md` → "The cast arm": four scored bits, a subset match, a sixteen-step
+ranked search, and — where more than one candidate matches — an `actweight`-weighted draw, so the
+arm is not deterministic. It reads `+0x2D4` exactly once, to **zero a candidate's score when a mask
+is authored**, which is the mirror of the player arm: masked clips are the player's, unmasked clips
+are the cast's.
 
-The slice needs the per-clip reach band and swing volumes out of the sidecar (`swings` already
-carries the volumes), an obstruction query on the service seam, and the flag-preference walk as a
-pure rule beside `ElysiumSwingContact.h`. Until it lands, an NPC melee swing selects by weight,
-which is a stated stand-in and not the recovered rule.
+What the slice owes, now that nothing about the rule is open:
+
+- **Two pipeline fields that do not exist yet.** The low reach edge at `+0x2CC` (its own statedness,
+  `FLT_MIN`-marked, 516 descriptors — not the same population as `reach`) and the 24-byte envelope
+  records at `+0x2BC`/`+0x2C0`. `swings` does **not** carry the envelopes: those are the 188-byte
+  contact records, a different array with a different job. An envelope's two corners are not a
+  position, so a converter must not run them through the positional path — the axes are reach
+  distance, lateral tolerance and vertical offset.
+- **The scored query, which is three scalars rather than a box:** the XY-only distance from the
+  attacker to the enemy's AABB centre, the signed height difference, and the enemy's half-extents.
+- **The flag walk and the weighted draw as a pure rule** beside `ElysiumSwingContact.h`, including
+  the bool's narrow meaning — it reports a premium match, not "a sequence was chosen", and the
+  caller keys off the out-index.
+- **No obstruction query.** Both arms trace and neither reads the result; the answer feeds only a
+  debug overlay. A service-seam query here would be invented behaviour.
+
+Until it lands, an NPC melee swing selects by weight, which is a stated stand-in and not the
+recovered rule.
 
 The behavioural consequence of the split: because no `ACT_MELEE_ATTACK_2COMBO_<FAMILY>` clip
 authors a mask, the player arm can never answer one, so the automatic `2COMBO` substitution is
 offered on the player and refused every time — while every NPC reaches it through the cast arm
 normally. Live capture on the pinned retail binary, 43 of 43 player presses at Melee 5.
-`docs/vtmb/combat-and-damage.md` § "`2COMBO` is an activity substitution" does not yet carry this
-and states the substitution without the refusal.
 
 **A reaction is not an idle.** `StateForActivity` maps the locomotion slice plus `Unknown`,
 `Swim` and `Treadwater` onto eight states, so a knockback or a death projects to `Idle` and a
@@ -109,6 +118,13 @@ of it:
   successful ground probe. Wall contact is a sub-chain rather than an ending — rebound velocity is
   the wall vector times `100.0`, a timer arms at `curtime + 0.01`, and the chain enters
   `..._WALL_FALL`. Movement goes through the motor seam; nothing here solves physics.
+- **A gunshot enters the same chain**, and this band owns that entry too. A ranged hit dispatches on
+  the victim, measures shooter-to-victim distance against the fire mode's authored
+  `Major`/`MinorKnockbackDist`, and resolves a cell from a static direction/height/family table —
+  inside the major band a `FLYING_INTO_{dir}` cell, so **a close shotgun hit launches an NPC**;
+  inside the minor band alone a grounded `SMALL_{dir}`. It carries no swing record, so the authored
+  candidate table above does not apply to it. Retail authors the pair on four weapons plus four
+  patch additions, and the player's own slot is a no-op.
 
 The cells this band plays are the flying half of the shipped corpus recorded in
 `docs/vtmb/animation_and_movers.md`, and the get-up the corpus does not ship stays a named absence.
@@ -122,9 +138,17 @@ slice consumes them: the direction comes off the byte and bucket `k` answers dir
 with more than one candidate draws with `RandomInt` on an owned stream. That retires
 `StandInKnockbackSize`/`StandInKnockbackHeight` — the deterministic single `NORMAL_HIGH_{dir}`
 candidate and its "no draw at all" note — and reaches the `SMALL` family and the two `LOW_BACK`
-cells the vocabulary already carries. The two named omissions of the gate stay open and stay
-reported: the hit-buildup counter, whose per-victim versus per-attacker/victim-pair accounting is
-still an open RE question, and the second, unidentified template predicate.
+cells the vocabulary already carries.
+
+The gate's two omissions are no longer RE questions, so the slice implements them rather than
+reporting them (`docs/vtmb/combat-and-damage.md` → "Who may be knocked back"). The hit-buildup
+counter is one scalar **on the victim**, admitted at `<= npc_hit_buildup_amount` (default `2`) or on
+the record's `+0xBA == 2`, and cleared by the body's **own** swing passing `0.8` of its cycle — so
+it needs a per-body counter and no relationship bookkeeping at all. What was recorded as a second,
+unidentified template predicate is the dead-victim refusal the reproduction's alive filter already
+carries; the one term still absent is the `CNPC_VTzimisceRunner` class bypass. The slice also owes
+the ordering: retail commits health before the knockback entry, so a **killing blow is not
+knocked back** — the body dies where it stands and hands off.
 
 **The ragdoll handoff belongs to PHYS1, not here.** The death transaction hands off by holding the
 final pose because no baked mesh carries a physics asset; generating one per body from the model's
@@ -206,8 +230,9 @@ Choreographed playback migrates from the sequence player's absolute-time seek to
 position. **Deliberately last among the mechanisms**: the theatre is the proven ground and
 stays on its verified seek path until the stack under it is established. Owns the
 gesture/sequence un-collapse — a gesture is an overlay in the same four-slot
-`CBaseAnimatingOverlay` array as an `ACT_*_LAYER_*` selection, rate-scaled at start then
-free-running (`docs/vtmb/animation_and_movers.md` A.4c), so a second scene-time-pinned player
+`CBaseAnimatingOverlay` array as an `ACT_*_LAYER_*` selection, composed at a flat `0.1` weight,
+rate-scaled at start then free-running and auto-killed at its end
+(`docs/vtmb/animation_and_movers.md` A.4c), so a second scene-time-pinned player
 would reproduce timing retail does not have; whether the composite wants a montage slot or the
 weapon layers' overlay treatment is this rung's design call, as is whether a scene's clip
 changes regain a crossfade (the divergence CCC9 recorded).
@@ -231,21 +256,30 @@ transaction. The feed transaction is the shipped consumer.
   when `elysium.SceneActors` is 0, so toggling that cvar mid-scene leaks the scene's claim and
   parks the body's base channel; and a body destroyed without a stop leaves its inert
   `CinematicClaims` entry unswept.
-- **The composition weight, measured.** The four-byte autolayer record carries no weight, ramp
-  or flags; the scalar lives in the game DLL and only retail answers it. The move is an
-  analysis pass over the **banked** captures, not a new hook: the combine is closed arithmetic,
-  so a host's decoded local, its layer's decoded local and the composed local determine the
-  scalar per bone, and a value consistent across the mask's bones measures it while confirming
-  the combine. Acceptance is a coverage argument — the recipe exercises weapon draw, an aim
-  transition and a sequence crossfade, and constancy counts only when witnessed over conditions
-  that would have varied it. Until it lands, the runtime's `1.0` remains a named stand-in and
-  the green room labels it as such; the measured value gates how a gesture reads against its
-  base.
-- **The `Prince_Escort_Male` cluster.** 1,061 banked records the include transform does not
-  explain, 65% on one two-actor cinematic bank (351 `brujah_Male_Armor_0`, 342 `Lacroix`); the
-  discriminating shape is the **actor**, not the bank or cell — same grid, same cell pair,
-  different residual rates per actor — which is where diagnosis starts. A cinematic-bank
-  defect, diagnosed here where the cinematic path lands.
+- **The composition weights are recovered; what is left is the confirmation pass.** Both scalars
+  are constants in the DLL: an autolayer composes at a literal `1.0` against a binary per-bone
+  mask, and a choreographed `gesture` composes at `SetLayer`'s literal `0.1`
+  (`docs/vtmb/animation_and_movers.md` §A.3, §A.4c). The runtime already matches the autolayer
+  value, so no stand-in remains there. The optional confirmation is an analysis pass over the
+  **banked** captures rather than a new hook — the combine is closed arithmetic, so a host's
+  decoded local, its layer's decoded local and the composed local determine the scalar per bone,
+  and `sm_hub_1` carries all three for the `move_and_ranged` banks. The gesture value has no banked
+  witness at all (all five databases are `sp_theatre`), and the one shipped scene that composes a
+  gesture over a running sequence is `prince_beckett_dialog` on `la_ventruetower_1`. The `0.1`
+  is what the un-collapse is designed against: a gesture leans the base pose 10%, it does not
+  replace it.
+- **The `Prince_Escort_Male` cluster**, now mostly attributed. The characterization report
+  (`golden/golden_theater/cap5.9-characterization-*.json`) puts the bank at 693 over-band records
+  on the current evaluator, 351 `brujah_Male_Armor_0` and 342 `Lacroix`. Applying the retail
+  hemisphere-corrected quaternion decode collapses that to **18**, and the same correction zeroes
+  `move_and_ranged`'s separate 1,318-record residual — so the dominant cause is a corpus-wide
+  decode defect, not a cinematic-bank one. The include route, the remap table and the static bind
+  are all ruled out directly (zero route disagreements; bind error ~2.4e-5 with no bone over band),
+  and `bonerename` selects the bank rather than binding bones inside it. What is left is the one
+  actor-discriminating signal: the `bone_name` join fails 3,599/3,599 on Lacroix against 4/3,599 on
+  brujah, alongside a 72-vs-78 bone-count asymmetry. The cheapest next measurement is an offline
+  bone-name diff from the existing capture database — no new capture, no bake. The doc's earlier
+  1,061/65% figures do not reproduce from the banked snapshot and are withdrawn.
 
 *Deps:* LIFE5's montage mechanism; the theatre plan's 12.x rows consume the result.
 

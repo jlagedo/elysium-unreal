@@ -242,11 +242,152 @@ That is most of the 646 `d_*` files.
 
 ### 3.4 Weapon items
 
-Ranged `vdata/items/item_w_*.txt` name `muzzleflash_particle` / `viewmuzzleflash_particle`
-and a per-gun emitter (`w_thirtyeight_emitter`, `w_ithaca_m_37_emitter`, …). The flaming
-crossbow and flamethrower name fire emitters; Ming Xiao spit and the Tzimisce head name
-vomit / launch emitters. These fire from the animation-event path above, not from a map
-entity.
+Ranged `vdata/items/item_w_*.txt` name a per-gun emitter (`w_thirtyeight_emitter`,
+`w_ithaca_m_37_emitter`, …) in four muzzle keys, plus `projectile_particles` for the tracer
+(default `BulletTrail_Emitter`). The flaming crossbow and flamethrower name fire emitters;
+Ming Xiao spit and the Tzimisce head name vomit / launch emitters. These fire from the
+animation-event path above, not from a map entity.
+
+#### A muzzle flash is two named emitters plus a one-frame dynamic light [static-verified]
+
+There is no muzzle sprite and no temp entity. A muzzle flash is **two mechanisms with
+separate triggers**, and reproducing only one of them loses half the effect:
+
+1. a *flash* emitter and a *smoke* emitter, started by name on a numbered attachment from a
+   client-only animation event (below);
+2. a **dynamic light**, set as an entity effect bit by the server and consumed once by the
+   client's per-frame animating body (§ *The light*).
+
+The particle half is the one the item record names. The light half carries no authored
+parameters at all — its colour, radius and lifetime are constants in `client.dll`.
+
+The event ID encodes the attachment slot and the shooter:
+
+| Event | `GetAttachment` index | Shooter |
+|---|---:|---|
+| 5001 / 5011 / 5021 / 5031 | 1 / 2 / 3 / 4 | player |
+| 5003 / 5013 / 5023 / 5033 | 1 / 2 / 3 / 4 | NPC |
+
+The handler derives 0–3 from the ID and asks for index + 1; attachments are 1-based, and the
+request is skipped when the model declares fewer. Resolved origin and angles go to
+`CTempEnts` slot 6 (`client.dll 0x1003cc90`), which forks on a first-person flag into
+`0x1003d950` or `0x1003d9c0`. Both then do the same thing twice — flash, then smoke —
+through the named-emitter spawn `0x100b47b0(name, origin, angles, entity, mode 6,
+attachmentIndex, 1,1,1,1)`, and force one immediate simulate tick so the burst lands on the
+frame that fired it. A name the particle registry cannot resolve produces
+`could not create particle of type %s` and no effect.
+
+The two names come from the parsed item record. All four keys are 128-byte strings and each
+carries a default, so a gun that names none still flashes:
+
+| Key | Record offset | Default |
+|---|---|---|
+| `muzzleflash_particle` | `+0x50170` | `MuzzleFlash_Emitter` |
+| `muzzlesmoke_particle` | `+0x501f0` | `MuzzleSmoke_Emitter` |
+| `viewmuzzleflash_particle` | `+0x50270` | `MuzzleFlash_Emitter` |
+| `viewmuzzlesmoke_particle` | `+0x502f0` | `MuzzleSmoke_Emitter` |
+
+**Almost no gun sets them.** Of the 16 `camera_class ranged` records, four name an emitter, two
+blank the keys, and the other ten omit them and take the parser default. The whole of Troika's
+per-weapon muzzle art is three statements:
+
+| Profile | Weapons | `muzzleflash_particle` | `muzzlesmoke_particle` | first-person variant |
+|---|---|---|---|---|
+| revolver — flash **and** smoke | `thirtyeight`, `colt_anaconda` | `W_ThirtyEight_Emitter` | `W_ThirtyEight_Emitter-Smoke` | same as world |
+| shotgun — own flash, **no** smoke | `ithaca_m_37` | `W_ithaca_m_37_Emitter` | `Blank_emitter` | `W_ithaca_m_37_View_Emitter` |
+| | `supershotgun` | `W_SuperShotgun_Emitter` | `Blank_emitter` | `W_SuperShotgun_View_Emitter` |
+| none at all | `crossbow`, `crossbow_flaming` | `""` | `""` | `""` |
+| generic default | `deserteagle`, `glock_17c`, `mac_10`, `uzi`, `steyr_aug`, `remington_m_700`, `rem_m_700_bach`, `flamethrower`, `mingxiao_spit`, `tzimisce2_head` | *(absent)* → `MuzzleFlash_Emitter` | *(absent)* → `MuzzleSmoke_Emitter` | *(absent)* → `MuzzleFlash_Emitter` |
+
+The shotguns are the only records whose first-person emitter differs from their world one, so the
+`view*` keys buy VtMB exactly two distinct assets across the whole arsenal. The crossbows' blank
+is load-bearing in both halves: an empty `muzzleflash_particle` also fails the server gate in
+*The light* below, so a crossbow throws neither particles nor a dynamic light.
+
+Which pair is read, and when the emitters start, depends on who is shooting:
+
+| Case | Body | Timing | Pair |
+|---|---|---|---|
+| local player, first person | `C_BaseViewModel::DrawModel` `0x100aba00` | latched at `+0x78c`, emitted on the next draw | `view*` |
+| local player third person, and the world weapon model | `C_BaseCombatWeapon::DrawModel` `0x1009c070` | latched at `+0x8cf`, emitted on the next draw | non-`view` |
+| NPC | `C_BaseCombatCharacter::FireEvent` `0x10099c00` | immediate | `view*` |
+
+The latch is `{bool pending, Vector origin, QAngle angles, float time, byte type, int
+attachment}`, written by the event and consumed by the next `DrawModel`. The weapon's event
+hook (`0x1009c970`) declines — returning false so the viewmodel handles it — when the owner
+is the local player and the camera is not third-person; that is what routes first person to
+the viewmodel and everything else to the world model. The NPC body prefers an attachment on
+the *held weapon* and falls back to one on the character.
+
+Two Troika behaviours to reproduce rather than tidy:
+
+- The NPC path reads the **`view*` pair** (`0x10099cbe` / `0x10099ccf`), not the world pair.
+  It is only observable on a gun whose `view*` keys differ from its world keys.
+- The flash is one frame late in first and third person, because it is latched at event time
+  and started from `DrawModel`. Only the NPC path starts on the event itself.
+
+#### The light [static-verified]
+
+The light does not ride the animation event, the item record, or the particle system. It is
+Source's entity-effect-bit path, and it is the only part of a muzzle flash the *server*
+triggers.
+
+`CWeaponRanged::Shot` (`vampire.dll 0x102387b0`), in the same body that spends ammunition
+and builds the fire packet, reads the weapon's item record and sets bit `0x2` on the
+**shooter's** `m_fEffects` (server `+0x19c`) — `GetOwner()`, not the weapon:
+
+```
+10238881  CALL 0x10010ea6                   ; weapon->GetItemRecord()
+10238886  MOV  CL, byte ptr [EAX + 0x50170] ; muzzleflash_particle[0]
+1023888c  TEST CL, CL
+1023888e  JZ   0x1023889e                   ; empty -> no bit, no light
+10238890  MOV  EAX, dword ptr [ESI + 0x19c] ; ESI = the shooter
+10238896  OR   AL, 0x2
+10238898  MOV  dword ptr [ESI + 0x19c], EAX
+```
+
+That is the **only** site in either DLL that sets bit `0x2`, and it is gated on the weapon
+naming a non-empty `muzzleflash_particle` — a gun with no muzzle particle also gets no
+light.
+
+The bit networks to the client, where `C_BaseAnimating`'s per-frame body (slot 17,
+`client.dll 0x10093370`) consumes it:
+
+| Property | Value |
+|---|---|
+| position | the entity's **attachment 1**, always — not the 1..4 the event selected |
+| colour | 255 / 192 / 64, exponent 10 |
+| radius | 100 Source units (254 cm) |
+| decay | 2000 |
+| life | `curtime` + a shared `.rdata` constant; Valve's published `MuzzleFlashCallback` uses the same constant at 0.05 s, and the byte value is not read out of the corpus |
+| repeat | none — the body clears bit `0x2` after allocating, so one bit set is one light |
+
+`decay` is Source's radius shrink rate in units per second, so the radius ramps linearly to
+zero and 2000 × 0.05 s = 100 — exactly the initial radius. The light dies at the same
+instant it reaches zero size, which is independent evidence that the unread life constant is
+0.05 s.
+
+It is additionally gated on the model declaring at least one attachment and on the global
+no-dynamic-lights ConVar at `0x105fb298`, which gates every `CL_AllocDlight` site in the
+client (explosions, gunshot decals, temp entities) rather than muzzle flashes specifically.
+
+Both halves are therefore faithful behaviour to reproduce, but they are *not* one effect:
+the particles follow the event's attachment 1..4 and the item record's per-gun emitter, and
+the light is a fixed-colour constant at attachment 1 on the shooter.
+
+Source's own muzzle *sprite* presentation ships in `client.dll` and is unreachable. The
+sprite temp entity (`C_TEMuzzleFlash`, `effects/muzzleflash1`…`4`,
+`MuzzleFlash_Pistol_Player` at `0x1003d770`) and the `MuzzleFlash` client effect at
+`0x10044870` — a smoke puff plus a dlight with the same colour and radius constants, gated
+on the registered `muzzleflash_light` ConVar (`0x100446f0`) — are reached only from
+`CTempEnts` slots 22 and 24 and `CEffectsClient` slot 5, which VtMB's weapon code never
+calls. The `muzzleflash_light` ConVar therefore does **not** gate the light VtMB actually
+shows; the effect-bit path at `0x10093370` never reads it.
+
+Separately, the flamethrower resolves an attachment named literally `muzzle` and drives
+`Flamethrower_Muzzle_Active_emitter` / `Flamethrower_Muzzle_Inactive_emitter`
+(`0x100280a0`). `ent_muzzle` is a server console command that draws the muzzleflash
+attachment point.
 
 ### 3.5 Impact table
 
@@ -351,10 +492,12 @@ authored set (blood strike / shot / boil / shield). Impact on flesh is
 
 ### 4.7 Muzzle flash, tracers, shells
 
-Per-gun first- and third-person bursts from animation events + item records. A
-muzzle is a 3-burst flash card with a smoke child, not a continuous emitter. Tracers
-are `bullettrail_emitter` (distort + ring). Shell ejection, when present, is a mesh
-or sprite burst from the same event bus.
+Per-gun first- and third-person bursts from animation events + item records; the chain,
+the four record keys and the absent dynamic light are §3.4. A muzzle is a 3-burst flash
+card with a smoke child, not a continuous emitter, and the smoke is a second named
+emitter rather than a child of the flash. Tracers are `bullettrail_emitter` (distort +
+ring) from `projectile_particles`. Shell ejection, when present, is a mesh or sprite
+burst from the same event bus.
 
 ### 4.8 Impact hits
 
@@ -449,7 +592,12 @@ Decoded and in the export:
 
 Open, and they matter for a remaster even if the *look* is modernized:
 
-- `attach_type` values above 3 (5, 9, 10, 11) — 11 is the rain-follow hypothesis;
+- `attach_type` values above 3 (5, 9, 10, 11) — 11 is the rain-follow hypothesis. The
+  runtime enum is wider than the four values maps use: the emitter's mode field drives a
+  19-branch switch in `0x100af150`, and the muzzle-flash spawn passes **6**, whose branch
+  reads a matrix off the attachment. Whether the `env_particle` keyfield and that spawn
+  argument are the same enum is inferred from both landing in the same emitter field, not
+  captured;
 - `func_particle` volume sampling;
 - `frames` / `fps` / `v(n)` keyframe units (data-supported, not retail-captured);
 - sprite blend vs `mask` (additive vs translucent);

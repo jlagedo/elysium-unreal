@@ -89,7 +89,8 @@ CREATE TABLE IF NOT EXISTS vcalls (
     module TEXT, caller TEXT, recv TEXT, off INTEGER, slot INTEGER, cls TEXT);
 CREATE TABLE IF NOT EXISTS globals (
     module TEXT, addr TEXT, name TEXT, type TEXT, size INTEGER);
-CREATE TABLE IF NOT EXISTS global_refs (module TEXT, addr TEXT, func_addr TEXT);
+CREATE TABLE IF NOT EXISTS global_refs (
+    module TEXT, addr TEXT, func_addr TEXT, kind TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS strings (module TEXT, addr TEXT, text TEXT);
 CREATE TABLE IF NOT EXISTS string_refs (module TEXT, str_addr TEXT, func_addr TEXT);
 CREATE TABLE IF NOT EXISTS fields (
@@ -138,12 +139,13 @@ INDICES = {
     "string_refs_func": "string_refs (func_addr)",
     "string_refs_str": "string_refs (module, str_addr)",
     "globals_name": "globals (name)",
+    "globals_addr": "globals (addr)",
     "externals_name": "externals (name)",
     "data_refs_addr": "data_refs (module, addr, writes)",
     "xedges_caller": "xedges (module, caller)",
     "xedges_to": "xedges (to_module, to_addr)",
     "data_refs_func": "data_refs (module, func_addr)",
-    "global_refs_addr": "global_refs (module, addr)",
+    "global_refs_addr": "global_refs (module, addr, kind)",
     "global_refs_func": "global_refs (func_addr)",
     "fields_cls": "fields (cls, off)",
     "fields_off": "fields (off)",
@@ -277,6 +279,7 @@ def _migrate(connection: sqlite3.Connection) -> None:
     Each addition is checked and reported rather than attempted and swallowed.
     """
     for table, column, definition in (("edges", "kind", "TEXT DEFAULT 'direct'"),
+                                      ("global_refs", "kind", "TEXT DEFAULT ''"),
                                       ("functions", "warn", "TEXT DEFAULT ''"),
                                       ("functions", "name_src", "TEXT DEFAULT ''"),
                                       ("functions", "name_dump", "TEXT DEFAULT ''")):
@@ -495,7 +498,15 @@ def _run(arguments: list[str], log: Path) -> None:
                 raise RuntimeError(f"headless run failed: {line.strip()}; see {log}")
 
 
-def dump(programs: list[str], project_dir: Path | None, project_name: str, limit: int) -> int:
+def dump(programs: list[str], project_dir: Path | None, project_name: str, limit: int,
+         globals_only: bool = False) -> int:
+    """The Ghidra pass, into the sidecars `build` loads.
+
+    `globals_only` refreshes the named-datum sidecar alone and leaves the others untouched. The
+    decompilation is what makes a dump an overnight run, and the globals pass does not need it:
+    when the rule for what counts as a named datum changes, this is the whole cost of picking the
+    change up, and the following `build` reads the other sidecars off disk exactly as they stand.
+    """
     out = _corpus_dir()
     out.mkdir(parents=True, exist_ok=True)
     log = out / "dump.log"
@@ -506,12 +517,15 @@ def dump(programs: list[str], project_dir: Path | None, project_name: str, limit
             time.sleep(LOCK_DELAY_SECONDS)
         first = False
         args = [f"out={out.as_posix()}"]
+        if globals_only:
+            args.append("only=globals")
         if limit:
             args.append(f"limit={limit}")
-        print(f"[{program}] dump")
+        print(f"[{program}] dump" + (" (globals only)" if globals_only else ""))
         _run(["-ProjDir", str(project), "-ProjName", project_name, "-NoFid",
               "-Program", program, "-Script", "DumpCorpus", "-ScriptArgs", " ".join(args)], log)
-        for kind in ("functions", "strings", "globals", "fields"):
+        for kind in (("globals",) if globals_only
+                     else ("functions", "strings", "globals", "fields")):
             path = out / f"{kind}-{program}.jsonl"
             print(f"  {kind}: {path.stat().st_size if path.is_file() else 0} bytes")
     return 0
@@ -710,8 +724,10 @@ def _load_module(connection: sqlite3.Connection, module: str, corpus: Path) -> t
                                    (module, record["a"], record["n"], record.get("t") or "",
                                     record.get("sz") or 0))
                 for reference in record.get("refs") or []:
-                    connection.execute("INSERT INTO global_refs VALUES (?,?,?)",
-                                       (module, record["a"], reference))
+                    # `<func addr>:<kind>`; a dump from before the kinds existed has no colon.
+                    func_addr, _, kind = reference.partition(":")
+                    connection.execute("INSERT INTO global_refs VALUES (?,?,?,?)",
+                                       (module, record["a"], func_addr, kind))
 
     strings_path = corpus / f"strings-{module}.jsonl"
     if strings_path.is_file():
@@ -1827,6 +1843,21 @@ def command_slot(slot: int, module: str | None) -> int:
     return 0
 
 
+def _datum_address(text: str) -> str | None:
+    """A datum's address as the corpus stores it, or None when the text is not one.
+
+    A question about a global arrives as whatever the listing showed -- `DAT_1070b22c`,
+    `0x1070b22c`, a bare `1070b22c` -- and all three name the same row.
+    """
+    candidate = text.lower().removeprefix("0x")
+    for prefix in ("dat_", "_dat_", "ptr_", "unk_"):
+        if candidate.startswith(prefix):
+            candidate = candidate[len(prefix):]
+    if not re.fullmatch(r"[0-9a-f]{6,8}", candidate):
+        return None
+    return candidate.rjust(8, "0")
+
+
 def _unnamed_datum(connection: sqlite3.Connection, text: str) -> int:
     """A datum by bare address, from the references derived out of the decompiled C.
 
@@ -1835,13 +1866,9 @@ def _unnamed_datum(connection: sqlite3.Connection, text: str) -> int:
     matches" would be reporting the index's blind spot as a fact about the game. Writers are
     listed first and separately: what a singleton IS is stated by whatever assigns it.
     """
-    candidate = text.lower().removeprefix("0x")
-    for prefix in ("dat_", "_dat_", "ptr_", "unk_"):
-        if candidate.startswith(prefix):
-            candidate = candidate[len(prefix):]
-    if not re.fullmatch(r"[0-9a-f]{6,8}", candidate):
+    candidate = _datum_address(text)
+    if candidate is None:
         return 1
-    candidate = candidate.rjust(8, "0")
     rows = connection.execute(
         "SELECT module, writes, func_addr FROM data_refs WHERE addr = ? ORDER BY module, writes "
         "DESC, func_addr", (candidate,)).fetchall()
@@ -1884,9 +1911,13 @@ def _unnamed_datum(connection: sqlite3.Connection, text: str) -> int:
 def command_globals(text: str, limit: int) -> int:
     """A global datum and every function that reaches it."""
     connection = _connect()
+    # By name OR by bare address. A question about a global starts from a decompiled listing,
+    # which states the address and only sometimes a name, so an address that IS in `globals`
+    # answering "no global matches" reports the query's blind spot as a fact about the module.
     rows = connection.execute(
-        "SELECT * FROM globals WHERE name LIKE ? ESCAPE '\\' ORDER BY module, addr LIMIT ?",
-        (_contains(text), max(1, limit))).fetchall()
+        "SELECT * FROM globals WHERE name LIKE ? ESCAPE '\\' OR addr = ? "
+        "ORDER BY module, addr LIMIT ?",
+        (_contains(text), _datum_address(text) or "", max(1, limit))).fetchall()
     if not rows:
         if _unnamed_datum(connection, text) == 0:
             return 0
@@ -1894,16 +1925,36 @@ def command_globals(text: str, limit: int) -> int:
         return 1
     for row in rows:
         referencing = connection.execute(
-            """SELECT f.* FROM global_refs r JOIN functions f
+            """SELECT f.*, r.kind FROM global_refs r JOIN functions f
                ON f.module = r.module AND f.addr = r.func_addr
                WHERE r.module = ? AND r.addr = ? ORDER BY f.addr""",
             (row["module"], row["addr"])).fetchall()
+        # A label and a data item are independent: a datum can be named and carry no type, which
+        # is the ordinary state of a global C++ object sitting in the BSS tail.
+        described = (f"{row['type']} [{row['size']} bytes]" if row["type"] else "untyped")
         print(f"{row['module']:18} {row['addr']:10} {row['name']}"
-              f"  {row['type']} [{row['size']} bytes]  {len(referencing)} referrer(s)")
-        for one in referencing[:40]:
+              f"  {described}  {len(referencing)} referrer(s)")
+        # A __thiscall constructor writes the object through ECX inside the callee, so the
+        # registration site holds the only statement of what the datum IS and would otherwise
+        # be filed with the readers.
+        for label, wanted in (("construct it, passing it as `this`", ("t",)),
+                              ("write it", ("w",)),
+                              ("read it", ("r",)),
+                              ("take its address", ("a",))):
+            group = [one for one in referencing if one["kind"] in wanted]
+            if not group:
+                continue
+            print(f"    {len(group)} {label}:")
+            for one in group[:40]:
+                print("      " + _label(one))
+            if len(group) > 40:
+                print(f"      … {len(group) - 40} more")
+        # A dump from before the kinds existed carries none, and every row lands here.
+        unclassified = [one for one in referencing if not one["kind"]]
+        for one in unclassified[:40]:
             print("    " + _label(one))
-        if len(referencing) > 40:
-            print(f"    … {len(referencing) - 40} more")
+        if len(unclassified) > 40:
+            print(f"    … {len(unclassified) - 40} more")
     return 0
 
 
@@ -2399,6 +2450,10 @@ def main() -> int:
     dump_parser.add_argument("--project-dir", type=Path, default=None)
     dump_parser.add_argument("--project-name", default="vtmb")
     dump_parser.add_argument("--limit", type=int, default=0)
+    dump_parser.add_argument("--globals-only", action="store_true",
+                             help="refresh only the named-datum sidecar, skipping the "
+                                  "decompilation; the other sidecars stay as they are and the "
+                                  "following `build` reads them off disk")
 
     vtables_parser = sub.add_parser("vtables", help="run the vtable pass (cheap)")
     vtables_parser.add_argument("program", nargs="*", default=[])
@@ -2504,7 +2559,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.command == "dump":
         return dump(list(args.program) or list(PROGRAMS), args.project_dir,
-                    args.project_name, args.limit)
+                    args.project_name, args.limit, args.globals_only)
     if args.command == "vtables":
         return vtables(list(args.program) or list(PROGRAMS), args.project_dir,
                        args.project_name, args.name, args.create)

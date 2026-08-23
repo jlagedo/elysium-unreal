@@ -260,8 +260,11 @@ The descriptor's last fields are not animation data at all: they are how VtMB au
 
 | Off | Field | Role |
 |---:|---|---|
+| 700 (`0x2BC`) | envelope-record count | how many reach envelopes this attack declares |
+| 704 (`0x2C0`) | envelope index | descriptor-relative base of the 24-byte envelope array |
 | 708 (`0x2C4`) | `numswingcentres` | how many contact records this attack declares |
 | 712 (`0x2C8`) | `swingcentreindex` | descriptor-relative base of the 188-byte record array |
+| 716 (`0x2CC`) | low reach | the near edge of the band whose far edge is 720 |
 | 720 (`0x2D0`) | `reach` | target-acquisition distance, Source units |
 | 724 (`0x2D4`) | attack button mask | which direction key selects this attack |
 | 728 (`0x2D8`) | dodge activity enum | load-resolved from 732 |
@@ -290,6 +293,25 @@ array is simultaneously the attack's contact geometry and its window. One 188-by
 banks, the player fists and claws, and the monster bodies. The bone index is the declaring model's,
 so the **bone name** is the durable key across an include chain, exactly as it is for every other
 bone-addressed record.
+
+Both bytes are authored data the runtime only ever reads; nothing writes either at runtime.
+Their censuses over all 1,587 records: `0xBA` reads `0xFF` on 639, `1` on 500, `0` on 344 and
+**`2` on 104**; `0xB8` reads `0xFF` on 639, `3` on 378, `0` on 374, `1` on 196 and **`2` on none**,
+so no shipped record rotates the buckets by two. The 104 unconditional records are a legible set —
+every shared weapon's dedicated heavy and every combo finisher (`katana` and `sheriffsword`
+`_A3`/`_B3`/`_C3`/`_D3`, `sledgehammer` `_A3`/`_B3`/`_C3` and `_SwingRight_3rd`, the `_heavy` and
+`_heavy_a` swings, `bushhook`'s `_far`/`_far2`/`_SwingRight_3rd`), plus `Fists_attack_W2`,
+`fists_attack_Roundhouse` and `Knife_attack_Kick_Spin`, on both sexes' banks — plus `manbat`'s
+four (`Fly_Flap`, `Fly_Glide`, and two on `Melee_Attack`). No other model states one, and no
+monster, creature or NPC-only bank does. What the marker admits past is
+`docs/vtmb/combat-and-damage.md` → "The NPC gate is a counter, not a chance".
+
+**The envelope array at 700/704 is a different structure with a different job.** Each record is six
+floats — a min corner and a max corner — and the cast-arm selector tests the enemy against them.
+`andrei`'s `JumpFromBlood_Attack` declares 459 of them against 17 contact records for the same
+clip, and they sweep forward across the swing rather than describing one static box. They are not
+positional geometry: the axes are reach distance, lateral tolerance and vertical offset
+(`docs/vtmb/combat-and-damage.md` → "The cast arm").
 
 **The three name-index fields are resolved by the DLL at model load**, into the enum slots beside
 them, the same pattern as `activity`@12 from `szactivitynameindex`@4. The dodge pair carries a
@@ -1869,6 +1891,10 @@ one body:
 | `0x100ab530` | 1 viewmodel | after the weapon hook declines, 6001..6004 parse two integers and emit repeated effects on attachments 1..4; 6011..6014 parse one integer and emit one effect |
 | `0x1009c970` | 214 weapon hook | intercept eligible viewmodel/owner muzzle flashes and the same 600x effect families; return false to delegate everything else |
 
+The four muzzle IDs in each family select attachment 1..4 in order, and what they then start —
+a flash emitter and a smoke emitter named by the weapon's item record, latched for the next
+`DrawModel` in first and third person and immediate on an NPC — is `docs/vtmb/effects.md` §3.4.
+
 The corpus actually uses these client IDs: 5001×48, 5003×101, 5005×1, 5101×2, 5102×2,
 5105×45, 5112×1, 5115×4, 5116×30, 5117×5, 5118×59, 5120×12, 6001×26,
 6002×24 and 6013×10. This both identifies the dormant cases and preserves the exact live demand.
@@ -2161,21 +2187,26 @@ for free.
 `numautolayers == 764` at sequence 0 — the descriptor tail runs past the end of the file and lands
 in the string table. A reader must bound both the count and the array against the image.
 
-**The composition weight of an autolayer is not stated by the file** [open]. The 4-byte entry
+**The composition weight of an autolayer is a DLL constant, not a file field.** The 4-byte entry
 carries a sequence index and nothing else — no weight, and unlike later Source's
-`mstudioautolayer_t` no `start`/`peak`/`tail`/`end` to ramp one over the host's cycle (§ above).
-The recovered `0.1f` belongs to the *other* layer mechanism: `SetLayer` on
-`CBaseAnimatingOverlay` (§A.4c), which the DLL drives for gestures and `ACT_*_LAYER_*` selections,
-not for the model-declared autolayer table. The two must not be conflated.
+`mstudioautolayer_t` no `start`/`peak`/`tail`/`end` to ramp one over the host's cycle (§ above) —
+but the dispatcher supplies the scalar itself, the literal `1.0f` pushed at `0x1008a0ce` (§ "The
+combine and caller weight are both resolved"). Since the accumulator multiplies that by the target's
+per-bone `weight`@0 mask, and that mask is binary `{0.0, 1.0}` (§ above), the effective scalar on
+every bone an autolayer touches is `1.0 × 1.0 = 1.0` exactly: a full replace for an ordinary
+overlay, an un-attenuated accumulate for a `0x4` delta. The runtime's bake-time-bound autolayer
+composes at that same `1.0`, so it reproduces the recovered value rather than standing in for it.
 
-*Elysium divergence, owner-called.* The runtime composes a bake-time-bound autolayer at weight
-**1.0** — a named stand-in, not a recovered value. At 1.0 the masked overlay fully replaces the
-bones it owns rather than leaning the base pose toward them, which is the upper bound of the
-plausible range and the reading most likely to look mechanical. Recovering the real scalar is
-tracked in `docs/project/roadmap.md` LIFE7, whose oracle is an arithmetic recovery from the
-finalized captures — the combine is closed, so a host's decoded local, its layer's decoded local and
-the composed local determine the scalar per bone. The capture hook's per-contribution `blendWeight`
-is the blend-space *cell* weight and does not answer this.
+The `0.1f` recovered elsewhere belongs to the *other* layer mechanism: `SetLayer` on
+`CBaseAnimatingOverlay` (§A.4c), which the DLL drives for gestures and `ACT_*_LAYER_*` selections,
+not for the model-declared autolayer table. The two are separate call paths that never meet, and
+must not be conflated.
+
+Capture confirmation of the scalar is available and not yet run. The combine is closed arithmetic,
+so a host's decoded local, its layer's decoded local and the composed local determine it per bone,
+and the banked `sm_hub_1` corpus carries all three for the `move_and_ranged` banks that declare
+autolayers. The capture hook's per-contribution `blendWeight` is the blend-space *cell* weight and
+does not answer this.
 
 **The first-person body is a different skeleton with its own bank** [data-verified]. 21 viewmodels
 under `models/hands/**` as `v_<clan>_<gender>_hands.mdl` — seven clans plus `hunter` and a `shared`
@@ -3335,18 +3366,29 @@ The class name comes from the `DevMsg` string at `0x10552678`. `CBaseCombatChara
 derives from it; plain `CBaseAnimating` does not, so an ordinary animated prop carries no
 layers at all.
 
-Server-side the array base is `this + 0x73c`, stride `0x30`, **exactly four entries**:
+Server-side the record base is `this + 0x734`, stride `0x30`, **exactly four entries**. Twelve
+fields fill the stride with nothing left over:
 
-| Off | Field | Note |
-|---|---|---|
-| `+0x00` | sequence | |
-| `+0x04` | cycle | |
-| `+0x08` | playbackrate | |
-| `+0x0c` | weight | `0` means the slot is free |
-| `+0x14` | blend-in | initialised `0.2` |
-| `+0x18` | blend-out | initialised `0.2` |
-| `+0x1c` | owner / activity id | initialised `-1` |
-| `+0x20` | byte | flags |
+| Off | Abs (slot 0) | Field | Note |
+|---|---|---|---|
+| `+0x00` | `0x734` | `m_fFlags` | |
+| `+0x04` | `0x738` | `m_fSequenceFinished` | |
+| `+0x08` | `0x73c` | `m_nSequence` | |
+| `+0x0c` | `0x740` | `m_flCycle` | |
+| `+0x10` | `0x744` | `m_flPlaybackRate` | |
+| `+0x14` | `0x748` | `m_flWeight` | `0` means the slot is free |
+| `+0x18` | `0x74c` | `m_flWeightMax` | initialised `1.0` |
+| `+0x1c` | `0x750` | `m_flBlendIn` | initialised `0.2` |
+| `+0x20` | `0x754` | `m_flBlendOut` | initialised `0.2` |
+| `+0x24` | `0x758` | `m_nActivity` | owner / activity id, initialised `-1` |
+| `+0x28` | `0x75c` | `m_bAutoKillWhenFinished` | byte |
+| `+0x2c` | `0x760` | `m_flLastEventCheck` | |
+
+The order comes from the entity Dump function `FUN_10098a90`, which walks one record from
+`m_fFlags` and advances `0xc` ints per entry, and from the SendTable `FUN_10098120`, whose literal
+offsets run `sequence0@0x73c` … `sequence3@0x7cc` on a clean `0x30` stride. A field offset stated
+relative to `0x73c` — the sequence field rather than the record head — is eight bytes short of the
+record base.
 
 The API around it: `AllocateLayer` `FUN_10099470`, `SetLayer` `FUN_10099020`,
 `FindLayerByOwner` `FUN_100994c0`, `HasLayer` `FUN_10099540`, `RemoveLayer` `FUN_10099660`,
@@ -3357,7 +3399,7 @@ Composition (`FUN_10098eb0`) is the base sequence, then the layers in **ascendin
 array-index order**, each accumulated by `SlerpBones` (`FUN_1008eb70`) with a single scalar
 weight — a weighted slerp toward the layer pose, neither an additive add nor a per-bone
 replace. **There is no priority field**: order is the array index and nothing sorts it. The
-`+0x1c` owner id serves lookup and removal only.
+`m_nActivity` owner id serves lookup and removal only.
 
 **Layers do not ramp.** `blend-in` and `blend-out` are written by `SetLayer` and read
 nowhere in `vampire.dll`, and they are absent from the SendTable —
@@ -3374,9 +3416,25 @@ which **suppresses** smoothing across exactly the change a crossfade would want 
 
 **`SetLayer` initialises weight to `0.1f`**, and the client never substitutes a default, so a layer
 composes at 10% weight. This is confirmed pinned-binary behavior: `0x10099075` writes literal
-`0x3dcccccd` to slot `+0x0c`, while the same initializer writes cycle 0, playback rate 1.0 and the
-two 0.2 blend fields. The blend fields are inert as described above; the networked weight is not.
-`animation_layer_survey.py` validates all five immediates independently of the decompiler's types.
+`0x3dcccccd` to `m_flWeight`, at absolute `idx*0x30 + 0x748`, while the same initializer writes
+cycle 0, playback rate 1.0, `m_flWeightMax` 1.0 and the two 0.2 blend fields. It then reads the
+target sequence's descriptor and zeroes the two blend fields for a clip carrying `0x2`, which
+changes nothing because nothing reads them. The blend fields are inert as described above; the
+networked weight is not. `animation_layer_survey.py` validates all five immediates independently of
+the decompiler's types.
+
+**A choreographed `gesture` event is that initializer's caller**, which fixes a gesture's
+composition weight statically. `AddGestureSequence` (`FUN_100990f0`) takes the lowest free slot from
+`AllocateLayer` through vtable `+0x440`, then reaches `SetLayer` directly through vtable `+0x430` —
+that slot holds `FUN_10099020` itself on all 272 classes that fill it, so there is no intermediate
+wrapper — passing activity id `-1` and `m_bAutoKillWhenFinished` set, so the slot frees itself when
+its sequence ends. The wrapper `FUN_10099140` then overwrites `m_flPlaybackRate` alone, with the
+`SequenceDuration / eventDuration` ratio the event asks for. Nothing revisits the weight:
+`FUN_10098eb0` reads it straight into `SlerpBones` as the blend scalar, and no other site writes
+`m_flWeight` — a strong negative rather than an exhaustive one, since the check covered
+fixed-displacement accesses and not every possible indexed form. So a gesture composes at a flat
+10% from its first frame, with no ramp. The event side is
+`docs/vtmb/choreographed_scenes.md`.
 
 The client advances a layer's cycle with the same routine it uses for the base sequence,
 `FUN_1008fa70`:
@@ -3398,14 +3456,21 @@ unless the incoming clip requests the documented hard cut; replacing or removing
 kills that slot immediately. Player protected/paired/ordinary arbitration happens earlier in the
 selection router and is documented in A.3, not in the pose accumulator.
 
-**One layout inconsistency is open.** Four `0x30` entries from `0x73c` run to `0x7fc`, yet
-the server's flinch array is declared at `0x7f4`; on the client, four `0xE4` entries run
-past the flinch block declared at `0xb20` whichever of the two bases the evidence names for
-that array (`0x7dc` from the composition loop, `0xad4` from the flinch accounting, which do
-not themselves reconcile). Both strides are corroborated by the iteration code on their own
-side, so the declared flinch offsets are the anomaly rather than the strides. The
-discrepancy is **unexplained**; recovering the class declaration, or watching which bytes a
-flinch write actually touches, would resolve it.
+**The layer and flinch arrays abut exactly.** Four `0x30` records from `0x734` end at `0x7f4`,
+which is the flinch array's own base: `FUN_100997f0` initialises **three** entries there at stride
+`0x1c` (`nSequence`, `nLatch`, `flFadeIn`, `flFadeOut`, `nPoseParamIndex`, `flPoseParamValue`,
+`flExpireTime`), and the flinch trigger `FUN_10099690` walks the same three slots at the same
+stride. No gap, no overlap.
+
+The client has one base too. The RecvTable `FUN_10097480` declares layer `sequence0..3` at `0x828`,
+`0x90c`, `0x9f0` and `0xad4` — `this + 0x7dc` plus a constant `+0x4c` into each `0xE4` block, which
+is what the composition loop `FUN_100979b0` walks (`+0x39` ints). `0xad4` is layer 3's own sequence
+field, not a rival base. Extrapolating the `0xE4` stride across all four elements reaches `0xb6c`,
+past the flinch record's true first byte at `0xb1c` (from the flinch-shift virtual `FUN_100978e0`,
+three entries at stride `0x20`), but the composition loop never reads beyond relative `+0x58` in a
+slot, so the two live ranges do not intersect. What the span between `0xae4` and `0xb1c` holds is
+**not established** — no `C_AnimationLayer` constructor states the element's real size — and no
+observed behavior depends on it.
 
 ## A.5 Skinning [data-verified + VtMB decompiled]
 

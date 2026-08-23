@@ -187,6 +187,16 @@ graph, a material, a widget, a Niagara system. What it produces lands one of two
   rebuilds the package from that text. A hand-edited binary package on a generated mount breaks
   `reconstruct` and puts a generated package inside the tracked set.
 
+The live-authored residents today are **rain** (`VFX/NS_ElysiumRain` with its materials and
+textures), the **melee weapon trail** (`VFX/NS_ElysiumMeleeTrail`), **hair dynamics**
+(`Hair/DA_HairDynamics`) and **cloth tuning** (`Cloth/DA_ClothTuning`). Each is edited in the
+editor through the `elysium` MCP server and saved in place: no generator, no text source, and no
+export or bake stage produces them, so hunting for one is the wrong path and adding one is a
+defect. Three are split, and only the authored half leaves the generated path — the game-derived
+payload each consumes stays generated and is never hand-edited: a map's height-masked rain
+instances, the wield mesh's `TrailTip` socket, the `SK_*` bodies a hair chain names, and
+`CLOTH_<stem>`. The procedure is the `authored-assets` skill.
+
 The worked example is the player animation graph: `elysium.animbp.build` constructs it through
 the engine's own node-placement path, `UElysiumAnimGraphLibrary::ExportGraphToText` captures it as
 `pipeline/unreal/graphs/ABP_ElysiumBiped.t3d`, and `pipeline/unreal/make_player_anim_bp.py` rebuilds

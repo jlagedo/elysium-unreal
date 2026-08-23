@@ -65,6 +65,53 @@ The optional leading trait is stored as a `CVStatRef` and applied by `SetSrc`. T
 feat/reference identifies the attack feat used to adjust lethality and supply associated
 automatic-success metadata.
 
+### The ranged activation census [data-verified]
+
+A firearm authors one `Activation` block per firing mode, not one per weapon, and the mode is
+where cadence, pellet count, spread, kick and full-auto live. Reading a weapon's "fire rate" off
+its first block is wrong for five of them: the Super Shotgun's single-barrel `Primary` is
+semi-automatic at 1.0 s while its `PrimaryMode2` double-barrel is auto at 0.2 s, and the Uzi's
+`Primary` is auto at 0.10 s while its `PrimaryMode2` is semi at 0.30 s.
+
+Patch-first values. `rate` is `Attack_Rate`, the minimum seconds between trigger pulls; `shot` is
+`Ammo_Fired`, the ray/pellet count; `auto` is `allow_autofire`; `kick` is
+`KickPitchMin`..`KickPitchMax`.
+
+| Weapon | mode | rate | shot | spread° | auto | kick pitch | `KickTime` | mag | reload | `sound_group` |
+|---|---|---:|---:|---:|:--:|---|---:|---:|---:|---|
+| `glock_17c` | Primary | 0.4 | 1 | 4.0 | – | −1.75..−7.50 | 0.03 | 15 | 3.5 | Glock |
+| `thirtyeight` | Primary | 0.8 | 1 | 7.0 | – | −1.0..−5.0 | 0.02 | 6 | 3.5 | Thirty_Eight |
+| `deserteagle` | Primary | 0.3 | 1 | 4.0 | – | −1.00..−14.00 | 0.03 | 7 | 3.5 | DesertEagle |
+| `colt_anaconda` | Primary | 0.7 | 1 | 6.0 | – | −1.75..−15.00 | 0.04 | 6 | 3.5 | Anaconda |
+| `colt_anaconda` | PrimaryMode2 | 0.35 | 1 | 7 | ✔ | −1.75..−15.00 | 0.04 | 6 | 3.5 | Anaconda |
+| `mac_10` | Primary | 0.10 | 1 | 15.0 | ✔ | −3.0..−15.0 | 0.04 | 32 | 2.5 | Mac_10 |
+| `uzi` | Primary | 0.10 | 1 | 5.0 | ✔ | −0.5..−8.00 | 0.04 | 32 | 2.5 | Uzi |
+| `uzi` | PrimaryMode2 | 0.30 | 1 | 5.0 | – | −1.0..−10.00 | 0.04 | 32 | 2.5 | Uzi |
+| `steyr_aug` | Primary | 0.10 | 1 | 9.0 | ✔ | −0.5..−6.00 | 0.02 | 30 | 3.0 | Assault_Rifle |
+| `steyr_aug` | Secondary | 0.10 | 1 | 3.0 | ✔ | −0.2..−3.5 | 0.02 | 30 | 3.0 | Assault_Rifle |
+| `remington_m_700` | Primary | 1 | 1 | 3.0 | – | −0.75..−10.00 | 0.02 | 1 | 3.5 | Rifle |
+| `rem_m_700_bach` | Primary | 1 | 1 | 3.0 | – | −0.75..−10.00 | 0.02 | 1 | 3.5 | Rifle |
+| `ithaca_m_37` | Primary | 1.0 | **8** | 10.0 | – | −2.5..−27.00 | 1.5 | 5 | 4.0 | Shotgun |
+| `supershotgun` | Primary | 1.0 | **8** | 7.0 | – | −1.0..−18.00 | 0.04 | 6 | 4.0 | Super_Shotgun |
+| `supershotgun` | PrimaryMode2 | 0.2 | **8** | 7.0 | ✔ | −3.0..−14.00 | 0.04 | 6 | 4.0 | Super_Shotgun |
+| `crossbow` | Primary | 0.25 | 1 | 3.0 | – | −2.00..−10.00 | 0.05 | 1 | 2.5 | Crossbow |
+| `crossbow_flaming` | Primary | 0.5 | **18** | 5.0 | – | −2.5..−27.00 | 1.5 | 2 | 1.0 | Shotgun |
+| `flamethrower` | Primary | 0.2 | 1 | 3.0 | ✔ | −10.00..−10.00 | 0.02 | 250 | 3.5 | Flamethrower |
+
+`Secondary` blocks carrying no `SpreadAngle` and no kick bounds are omitted; they are the
+alt-fire/scope entries on the Anaconda, Super Shotgun and Uzi. `mingxiao_spit` and
+`tzimisce2_head` are omitted too — they take `camera_class ranged` but are creature attacks, not
+firearms. `ithaca_m_37` additionally sets `reload_single 1`, shell at a time.
+
+**Retail differs from patch-first on more than the Mac-10.** Reading `pack101.vpk` instead of the
+loose `Unofficial_Patch/vdata/items` changes: `mac_10` spread 15.0 → **5.0** and kick
+−3.0..−15.0 → −6.0..−7.00; `steyr_aug` Primary spread 9.0 → 3.0; `thirtyeight` kick −1.0..−5.0 →
+**0.0..0.0** with `KickTime` 0; `crossbow_flaming` is an ordinary 1-bolt crossbow (rate 1.0, 1
+shot, spread 3.0, `Crossbow` sound group) rather than the patch's 18-pellet shotgun-like weapon;
+`remington_m_700` / `rem_m_700_bach` rates 0.8 / 0.5 rather than 1; and every magazine size
+differs (`crossbow` 4, `deserteagle` 12, `glock_17c` 18, `ithaca_m_37` 6, `uzi`/`mac_10` 33/30,
+`flamethrower` 150). The muzzle keys in *Effects* are identical between the two.
+
 ### The authored knockback inputs [data-verified]
 
 Knockback is authored in five separate places, and they do not all have consumers. **The one that
@@ -96,14 +143,58 @@ gate is the victim's hit-buildup counter and the swing record's own unconditiona
 activity is chosen from the swing record's candidate list. A remake that rolls `knockback_chance`
 invents a mechanic retail authored and then never wired.
 
+**A second push vector is computed on every melee hit and thrown away.** `FUN_103455A0`, called
+unconditionally from the traced-impact body, builds a full launch-shaped vector: a bearing from
+attacker to victim, quadrant-offset by the swing record's `+0xB8`, elevated 45°, scaled by
+`(GetRawAttackValue · 0.1 · 0.4 + 1.0)` times one of three force scalars the record's `+0xBA`
+selects — `3750.0` by default, `4250.0` on marker `1`, `5550.0` on marker `2` (the latter two are
+built at DLL load as `3750 + 500` and `3750 + 1800`). It writes the result to `DAT_1072CB20`, which
+has three writers and **no readers**; the only other writer is a function with no callers and no
+vtable slot. So the marker byte's second reading is authored, computed every swing, and consumed by
+nothing. This is a distinct mechanism from the real launch below, which never touches the swing
+record — a remake that wires it up invents a force retail computes and discards, the same shape as
+`knockback_chance` and `COND_KNOCKBACK`.
+
 **Ranged modes author a distance pair instead**, `MajorKnockbackDist` / `MinorKnockbackDist` —
 retail's own major/minor two-tier vocabulary, not a probability. Retail (`pack101.vpk`) authors it
 on four weapons: Ithaca M37 and the super shotgun `105 / 250`; the Colt Anaconda two minor
 distances (`400`, `350`) across its two modes and no major; the Remington M700 a lone minor
 `1500`. The flaming crossbow (`105 / 250`), frag grenade (`100 / 1000`), Desert Eagle (minor
 `400`) and the M700 Bach variant (minor `1500`) are patch additions — their retail files carry no
-`KnockbackDist` line. **What reads the pair is open** — no consumer of either distance is
-recovered (`RE-K9`).
+`KnockbackDist` line.
+
+**The pair is live, and it is how a gunshot knocks a body back.** Both values are parsed by the
+weapon-mode loader (`0x10259230`) into the active fire mode's own record at `+0x404`/`+0x408`,
+defaulting to `0.0` when the item file authors neither. The reader is
+`CAI_BaseNPCTroika::FUN_1029FBE0` (`0x1029FBE0`), the class's override of **vtable slot 330**:
+
+```text
+dist = |victimOrigin − hitInfo.vecSrc|        // vecSrc is the bullet's firing origin
+mode = activeFireModeRecord(weapon)           // 0x102517E0, per fire mode, not per weapon
+if (dist < mode->MajorKnockbackDist)  knockback(victim, dir, family = 2); return
+if (dist < mode->MinorKnockbackDist)  knockback(victim, dir, family = 0)
+```
+
+It is reached from every ranged hit — `CVampireProjectile`'s impact handler and `CAISound`'s
+per-pellet volley registration both run `RangedDamagePerVictim` (`0x10268330`), which dispatches
+slot 330 on the victim gated only on the victim being non-null, not on damage. **`CBasePlayer`
+leaves that slot at the base no-op** (`0x1014F870`), which is a second, structural proof that the
+player is never launched.
+
+Both branches enter the shared knockback entry `0x10344F80`, the same one the discipline
+`Knockback` key uses. The family index selects a column of a static `[4 direction][2 height][3
+family]` pointer table at `0x10579690`, read through `FUN_1013D900` as
+`direction*0x18 + height*0xC + family*4`. Its contents, dumped from the shipped image: family `0`
+is `ACT_KNOCKBACK_SMALL_*`, family `1` `NORMAL`, family `2` `ACT_KNOCKBACK_FLYING_INTO_*`, with the
+same pointer duplicated into both height slots wherever a direction authors no height variant.
+**So a shot landing inside `MajorKnockbackDist` resolves a `FLYING` cell and launches its victim**,
+while one inside `MinorKnockbackDist` alone resolves the grounded `SMALL` family and does not.
+**Family `1` is dead**: the table has one entry point with one caller, and its six call sites pass
+only `0` or `2`.
+
+This is the one path by which a ranged hit selects a knockback cell without a swing record. Its
+practical scope is the authored population above — with both fields defaulting to `0.0` and no
+distance below zero, every weapon that authors neither takes the branch and does nothing.
 
 **`rules.txt` owns a refractory window that is not a knockback window**:
 `Knockbacks { KnockbackPreventTime 5.0 }`, parsed to rules `+0x3DC`. Its only consumer is the
@@ -357,9 +448,11 @@ In their place:
   `KickPitchMax`/`KickYawMax` over a fixed shot count, the same every time a given weapon fires.
 
 Authored `SpreadAngle`/`KickPitch*`/`KickYaw*`/`KickTime` remain the anchors; the values below
-replace them for the fixed-cone system. The Mac-10's retail `SpreadAngle 15.0` is reduced — a
+replace them for the fixed-cone system. The Mac-10's `SpreadAngle 15.0` is reduced — a
 fixed cone with no bloom to mask it made the raw authored figure send fire wildly off target,
-nearly 4x an Uzi's in the same weapon class:
+nearly 4x an Uzi's in the same weapon class. That 15.0 is the **patch-first** figure, marked
+`// changed by wesp` in the loose record; retail authors 5.0 (see "The ranged activation
+census"):
 
 | Weapon | Spread Base → Growth → Max (°) | Recovery | Kick ramps to Max over |
 |---|---|---:|---:|
@@ -575,13 +668,87 @@ authored**. So masked clips are the player's and unmasked clips are the cast's, 
 authored without masks — the whole `2COMBO` set — is reachable by NPCs and by nothing the player
 does.
 
-**The cast arm.** `ChooseMeleeAttackSequence` scores every candidate and picks by preference over
-the resulting flag word: the authored reach band at `+0x2CC`/`+0x2D0` against the measured enemy
-distance (the band is also accumulated onto the weapon's own min/max fields at `+0x22E`/`+0x230`), a
-movement/hull trace for obstruction, and whether the enemy falls inside the clip's authored swing
-volumes at `+0x2C0`. `FUN_10348100` then walks eight ranked flag combinations twice — once with an
-enemy-in-range bit forced, once without — and the first candidate matching a combination wins. A
-body with no enemy takes a two-try `0x10`-then-`0` walk instead. No random draw enters the choice.
+#### The cast arm: a scored flag word, then a ranked search with a weighted draw
+
+`ChooseMeleeAttackSequence` scores every candidate into a four-bit flag word, then searches for a
+candidate carrying a wanted combination of those bits. Both halves are recovered exactly.
+
+**The query the candidates are scored against is not a position.** Before the loop, the body takes
+the enemy's world-space AABB (`CCollisionProperty` slot `0x3C` on `enemy+0x270`), forms its centre,
+and derives three scalars against the attacker's own origin: `mag`, the **XY-only** distance to that
+centre — the vertical component is deliberately excluded from the square root — and `diff.z`, the
+signed height difference, and the enemy's own half-extents. The comparison box is then
+
+```text
+min = ( mag − half.x ,  −half.y , diff.z − half.z )
+max = ( mag + half.x ,  +half.y , diff.z + half.z )
+```
+
+so the three axes mean **reach distance, lateral tolerance and vertical offset**, and the lateral
+axis carries no positional term at all — it is symmetric about zero. No rotation or basis transform
+is applied anywhere. The authored 24-byte envelope records at `+0x2BC`/`+0x2C0` are therefore an
+attack envelope in that derived space rather than geometry in any Cartesian frame, which is what
+makes a 459-record `andrei` lunge and a hand-length fist swing comparable to the same test.
+
+**The four bits**, in scoring order:
+
+| Bit | Set when |
+|---:|---|
+| `8` | `+0x2CC <= mag <= +0x2D0` — the authored reach band, **inclusive at both ends** |
+| `4` | seeded on every scored candidate, and cleared again when the reciprocity test below fails |
+| `0x10` | the pose/attachment evaluation (`FUN_100C6020`) resolved no sample; added alongside `4`, never replacing it, so a bare `0x10` has no producer |
+| `2` | the enemy's box overlaps one of the descriptor's authored envelope records |
+| `1` | the resolved target is the enemy **and** the attacker's `m_bAllowsInterpenetratingAttacks` (`+0xFE0`) is set |
+
+**Both arms trace, and neither reads the answer.** The NPC branch runs `CAI_MoveProbe::TraceHull`
+(`0x102E3450`, mask `0x202400B`) and the player branch `UTIL_TraceHull` (mask `0x201400B`, hull
+type 6), and in both cases the only consumer of the result is the `r_visualizetraces` debug overlay
+— the NPC branch's next instruction reads the static `+0x2D4` field, and the player branch's is the
+cvar gate. **Obstruction never enters the flag word.** A reproduction that gates selection on a
+line-of-sight query is inventing a rule; the traces are vestigial.
+
+The two reach edges are separately accumulated onto the weapon's own `m_fMinRange1` (`+0x8B8`,
+running min of `+0x2CC`) and `m_fMaxRange1` (`+0x8C0`, running max of `+0x2D0`). That is not
+bookkeeping: `CBaseCombatWeapon` (`0x1024F670`, vtable slot 365) turns the pair into
+`COND_TOO_CLOSE_TO_ATTACK` (`0x5F`) and `COND_TOO_FAR_TO_ATTACK` (`0x60`) for
+`GatherAttackConditions`, and `GatherEnemyConditions` (`0x10270B20`) maxes `m_flDistTooFar` against
+`m_fMaxRange1` for `COND_ENEMY_TOO_FAR`. **`m_fMinRange1` has no other writer in the image**, so the
+band only ever widens across every activity the weapon scores and never narrows; `m_fMaxRange1` is
+reset only in `Weapon_Equip` (`0x1032D380`) and only under spawnflag `0x100`, to `1.0e9` — which
+pins the far gate open rather than restoring a bound.
+
+**The search.** `FUN_10348100` takes the candidate list, the parallel `actweight` array, the scored
+flags and a requested mask, and matches on `(flags & mask) == mask` — **subset, not equality**, so a
+candidate may carry bits the mask did not ask for. Among the matches it **draws**: sum their
+`actweight`, and on a sum below 1 pick uniformly with `RandomInt(0, n−1)`, otherwise roulette with
+`RandomInt(0, sum−1)` walked down the weights. A single match returns directly and no match returns
+`-1`. The RNG is the engine's global stream, unseeded per call.
+
+The caller walks the ranked combinations `{7,5,6,3,1,2,4,0}` twice, **the first pass forcing `|8`**,
+and stops at the first mask that matches anything — sixteen steps, `F,D,E,B,9,A,C,8` then
+`7,5,6,3,1,2,4,0`. A body with no enemy takes a two-try `0x10`-then-`0` walk instead, where `0x10`
+selects candidates whose pose evaluation failed and `0` matches unconditionally.
+
+**The boolean return is not "did we choose".** It is `true` only when the *winning mask* satisfies
+`(mask & 3) && (mask & 4) && (mask & 8)`, which only steps 1–3 can, and every later step writes a
+valid sequence index and still returns `false`. `CWeaponMelee::RequestActivity` reads it correctly:
+it aborts only when the bool is false **and** the out-index is negative **and** its own force
+parameter is unset. A consumer that treats the bool as the success flag drops thirteen of the
+sixteen outcomes.
+
+**The early abort.** With an enemy present and a cooldown gate open, a resolved-target mismatch
+makes the body set **`COND_ENEMY_BLOCKED`** (condition `0x3A`, from the registry at `0x102C8CE0`) on
+itself and return without choosing anything. It is the condition's only producer in the image; its
+only consumer, `FUN_102B6FE0`, tests it immediately after `COND_ENEMY_OCCLUDED`, and no schedule
+lists it as an interrupt.
+
+Two further inputs the loop reads: candidate filtering happens upstream in
+`GetSequencesForActivity`, which excludes studio flag `0x100` for a player-owned body and `0x200`
+for the other kind, so the two arms do not even score the same list; and a per-species float from
+virtual `+0x828` on the body's own NPC self-pointer (defaulting to `4.0` when there is none, which
+is the player's case) is added to the Z of both trace endpoints. Only four classes override that
+virtual — `CNPC_VTzimisce`, `CNPC_VMingXiao`, `CNPC_VMingXiaoTentacle` and `CAI_TestHull` — and
+since the trace it shapes is discarded, it changes nothing a player can observe.
 
 #### The player arm: the direction key selects which attack, at swing start
 
@@ -1005,7 +1172,9 @@ the blocked/stagger family and recorded here beside the behaviour it departs fro
 
 ### Knockback
 
-The hit/knockback band above is the only reaction that moves a body. Its whole chain is recovered.
+The hit/knockback band above is the melee reaction that moves a body, and its whole chain is
+recovered. It is not the only route in: a ranged hit reaches the same shared entry through the
+weapon mode's authored `Major`/`MinorKnockbackDist` pair, above.
 
 #### The authored table lives in the swing record, not in an item file
 
@@ -1080,14 +1249,52 @@ switch to `item_w_unarmed` on capability `0x6000`, and a `ViewPunch` scaled by
 refuses a player whose weapon capability intersects `0x6000` unless the attacker's own NPC template
 authors `KnockbackRangedPlayer` (`+0xA0`).
 
-`Disallow_Knockbacks` (template `+0x9E`) is authored `"1"` on **8** `npctemplate*.txt` files.
+`Disallow_Knockbacks` (template `+0x9E`) is authored `"1"` on **8** `npctemplate*.txt` files and
+**17** templates: `Bach`, `SheriffMan`, `VampireSabbatLeader`, `AndreiBlood`, `BrotherKanker`,
+`VampireLasombraBoss`, `SabbatFortitudeShottie`, `SabbatWithProtean`, `BloodHuntFortitude` and
+`BloodHuntProtean` in `npctemplate001.txt`, then `Zombie`, `BloodGuardian`, `SuperSWAT`,
+`Chastity`, `Bomberman`, `BishopVick` and `Tutorial_Jack` one apiece.
+
+**The eligibility gate is three terms, and only one of them is a template key.** In the shared
+entry `0x10344F80`, in order:
+
+1. a class-level **bypass** on vtable slot 400 — a stub returning `0` for every class in the game
+   except `CNPC_VTzimisceRunner` (`0x103C3060`), which returns `1` and skips both terms below;
+2. the template's `Disallow_Knockbacks` above;
+3. **a dead-victim refusal**: `CVStatList_t::IsEqual(victimStats, 0xF, 0x11)` (`0x102017B0`), i.e.
+   `Health == Max_Health`. Since `Health` is damage taken rather than health remaining (see "Health
+   commit"), that equality is death, not full health. `GetValue` (`0x102012D0`) clamps on read
+   against the `Max` reference `stats.txt` authors on the `Health` stat while `AddBase`/`SetBase`
+   write raw, so an overkill blow reads back as exactly equal and the `==` here cannot diverge from
+   `Event_Killed`'s `>=`.
+
+The same two-step recurs verbatim in `CAI_BaseNPC::FUN_103482E0` and `CNPC_VGargoyle::vfunc438`
+(`0x103788D0`), neither of which carries the slot-400 bypass.
+
+**A killing blow's own knockback is refused.** The health commit runs first on the same blow —
+`FUN_102579F0` reaches `TakeDamage` → `OnTakeDamage` → `OnTakeDamage_Alive`, which commits the
+damage and may call `Event_Killed`, and only then returns to the knockback block — and there is no
+deferred damage queue anywhere in the image. So a body killed by a swing dies where it stands and
+hands off to the corpse path; it is not thrown first.
 
 **The NPC gate is a counter, not a chance.** A knockback is admitted when
 `m_iHitBuildupCount` (`+0x6064`) `<= npc_hit_buildup_amount` — a ConVar, default `"2"` — **or** the
-swing record's `0xBA == 2` marker is set. The counter is incremented per qualifying hit
-(`0x1029F800`) and reset at `melee_swing_completion_percent`. **Whether the count is per victim or
-per attacker/victim pair is OPEN**; that is the observable behind the widely reported "about two
-hits and then the NPC parries" feel.
+swing record's `0xBA == 2` marker is set (the 104 records that state it are named in
+`docs/vtmb/animation_and_movers.md` A.3). This is the observable behind the widely reported "about
+two hits and then the NPC stops flying" feel, and the counter's shape is what produces it:
+
+- **It is one scalar on the victim, per victim.** The field lives on `CAI_BaseNPCTroika`, and its
+  whole ledger is four sites: zeroed at construction (`0x1029A0B0`), incremented (`0x1029F800`),
+  tested (`0x1029FEC0`), zeroed again (below). Both the increment and the test are called **on the
+  victim**, with the attacker passed as an argument neither body ever reads. There is no per-attacker
+  keying of any kind, so two attackers working the same target share that target's counter.
+- **A body clears its own counter by swinging.** `MeleeSwingUpdate` (`0x10346CD0`) zeroes the
+  counter on the **swinging body's own** NPC self-pointer once its clip passes
+  `melee_swing_completion_percent` — a ConVar whose default reads `"0.8"` in the shipped image. The
+  loop that produces is "you are knocked around until you fight back", and it needs no relationship
+  bookkeeping at all.
+- The counter is not saved, and nothing else in the image reads it. In particular no parry or block
+  behaviour consults it: `WasMeleeBlocked` is a separate test that skips the gate entirely.
 
 #### How a flying chain ends
 
@@ -1191,11 +1398,14 @@ Each is recorded beside the retail fact it stands in for
   select the `NORMAL`/`HIGH` cell of the classified direction, with no draw at all, pending the
   authored swing-record table above being consumed. The `SMALL` family and the two `LOW_BACK` cells
   stay in the vocabulary; nothing reaches them yet.
-- **The hit-buildup gate is omitted, not guessed.** `IsKnockbackAllowed` takes the alive filter and
+- **The hit-buildup gate is omitted.** `IsKnockbackAllowed` takes the alive filter and
   `Disallow_Knockbacks` only, and the producer reports the omission once. A victim retail would have
-  spared until its counter drained is knocked back here.
-- **The second template predicate is omitted** for the same reason — it is unidentified, and a
-  guessed predicate would refuse knockbacks the content asks for.
+  spared until its counter drained is knocked back here. The retail rule it stands in for is fully
+  recovered above — a per-victim scalar, `<= npc_hit_buildup_amount`, cleared when the body's own
+  swing passes `0.8` of its cycle — so what remains is implementation, not RE.
+- **The alive filter is the retail term, not a stand-in for one.** What was recorded here as an
+  unidentified second template predicate is the dead-victim refusal above; it reads no template key
+  at all. The one term genuinely absent is the `CNPC_VTzimisceRunner` class bypass.
 - **Only the grounded cells are produced.** The flying chain and the launch assignment are not
   reproduced, so nothing here moves a body.
 

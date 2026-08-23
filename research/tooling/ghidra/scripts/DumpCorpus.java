@@ -13,8 +13,13 @@ import ghidra.program.model.listing.Data;
 import ghidra.program.model.listing.DataIterator;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.FunctionIterator;
+import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.mem.MemoryBlock;
+import ghidra.program.model.symbol.RefType;
 import ghidra.program.model.symbol.Reference;
+import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SymbolIterator;
+import ghidra.program.model.symbol.SymbolType;
 import ghidra.util.task.TaskMonitor;
 
 import java.io.BufferedWriter;
@@ -49,6 +54,11 @@ import java.util.Set;
 //   chunk=<int>    functions decompiled per batch (default 2000)
 //   limit=<int>    stop after this many functions (0 = all; for a smoke run)
 //   nodecomp=1     skip decompilation, emit structure and reference data only
+//   only=globals   emit ONLY the globals sidecar and stop. The named-datum index is
+//                  the one part of this dump that changes without the decompilation
+//                  underneath changing, and `build` reads each sidecar off disk, so
+//                  refreshing that one file costs seconds instead of an overnight run.
+//                  Nothing else is rewritten -- the other sidecars stay as they were.
 public class DumpCorpus extends GhidraScript {
 
     private int written;
@@ -57,7 +67,7 @@ public class DumpCorpus extends GhidraScript {
     public void run() throws Exception {
         String outDir = null;
         int chunk = 2000, limit = 0;
-        boolean decompile = true;
+        boolean decompile = true, globalsOnly = false;
         // Headless splits a `key=value` argument on the '=' before the script sees it, so both
         // forms have to be accepted or every argument reads null.
         String[] raw = getScriptArgs();
@@ -78,6 +88,7 @@ public class DumpCorpus extends GhidraScript {
             else if (key.equals("chunk")) chunk = Integer.parseInt(value);
             else if (key.equals("limit")) limit = Integer.parseInt(value);
             else if (key.equals("nodecomp")) decompile = !value.equals("1");
+            else if (key.equals("only")) globalsOnly = value.equals("globals");
         }
         if (outDir == null) {
             printerr("DumpCorpus: out=<dir> is required");
@@ -85,6 +96,62 @@ public class DumpCorpus extends GhidraScript {
         }
         String module = currentProgram.getName();
         new File(outDir).mkdirs();
+
+        // Every named datum outside the code, with the functions that reach it. A cvar object, a
+        // vftable, a datamap, a global counter -- "who touches this" is the same question the
+        // call graph and the field ledger answer for functions and members, and it was the one
+        // part of the module with no index at all.
+        //
+        // Driven by the SYMBOL table, not by the defined data. A label is a name and a data item
+        // is a type, and the two are independent: `DumpConVars` labels a ConVar object sitting in
+        // the BSS tail and applies no type there, so a defined-data sweep never reaches it. That
+        // datum is then invisible twice over, because being NAMED is also what keeps it out of
+        // the unnamed-datum index the driver derives from the decompiled C -- the decompiler
+        // prints `cvar_x`, and that index only matches a `DAT_`-shaped token. A named, untyped
+        // global fell between both tables and answered "no such address".
+        PrintWriter globals = new PrintWriter(new BufferedWriter(
+                new FileWriter(new File(outDir, "globals-" + module + ".jsonl")), 1 << 20));
+        int globalCount = 0;
+        // Dynamic symbols excluded at the source: Ghidra mints a `DAT_<addr>` for anything
+        // referenced at all, and those carry no information the address does not already carry --
+        // they would bury the labels that mean something (`cvar_<name>`, `vftable_<Class>`,
+        // `datamap_<Class>`) under tens of thousands of rows.
+        SymbolIterator labels = currentProgram.getSymbolTable().getAllSymbols(false);
+        while (labels.hasNext() && !monitor.isCancelled()) {
+            Symbol label = labels.next();
+            if (label.getSymbolType() != SymbolType.LABEL || label.isExternal()) continue;
+            // One row per address: a secondary label is an alias for a datum already emitted.
+            if (!label.isPrimary()) continue;
+            Address at = label.getAddress();
+            if (at == null || !at.isMemoryAddress()) continue;
+            MemoryBlock block = getMemoryBlock(at);
+            if (block == null || block.isExecute()) continue;
+            Data item = getDataAt(at);
+            // Strings already have their own table, with the same reference index.
+            if (item != null) {
+                StringDataInstance text = StringDataInstance.getStringDataInstance(item);
+                if (text != null && text.getStringLength() > 0) continue;
+            }
+            Set<String> referencing = new LinkedHashSet<>();
+            for (Reference reference : getReferencesTo(at)) {
+                MemoryBlock from = getMemoryBlock(reference.getFromAddress());
+                if (from == null || !from.isExecute()) continue;
+                Function owner = getFunctionContaining(reference.getFromAddress());
+                if (owner != null) referencing.add(owner.getEntryPoint() + ":" + kind(reference));
+            }
+            DataType type = item == null ? null : item.getDataType();
+            globals.println("{\"a\":\"" + at + "\",\"n\":" + json(label.getName())
+                    + ",\"t\":" + json(type == null ? "" : type.getName())
+                    + ",\"sz\":" + (item == null ? 0 : item.getLength())
+                    + ",\"refs\":" + jsonList(referencing) + "}");
+            globalCount++;
+        }
+        globals.close();
+
+        if (globalsOnly) {
+            println("DumpCorpus: " + module + " -> " + globalCount + " globals (globals only)");
+            return;
+        }
 
         List<Function> functions = new ArrayList<>();
         FunctionIterator all = currentProgram.getFunctionManager().getFunctions(true);
@@ -163,44 +230,6 @@ public class DumpCorpus extends GhidraScript {
         }
         strings.close();
 
-        // Every named datum outside the code, with the functions that reach it. A cvar object, a
-        // vftable, a datamap, a global counter -- "who touches this" is the same question the
-        // call graph and the field ledger answer for functions and members, and it was the one
-        // part of the module with no index at all.
-        PrintWriter globals = new PrintWriter(new BufferedWriter(
-                new FileWriter(new File(outDir, "globals-" + module + ".jsonl")), 1 << 20));
-        int globalCount = 0;
-        DataIterator data2 = currentProgram.getListing().getDefinedData(true);
-        while (data2.hasNext() && !monitor.isCancelled()) {
-            Data item = data2.next();
-            MemoryBlock block = getMemoryBlock(item.getAddress());
-            if (block == null || block.isExecute()) continue;
-            // Strings already have their own table, with the same reference index.
-            if (StringDataInstance.getStringDataInstance(item) != null
-                    && StringDataInstance.getStringDataInstance(item).getStringLength() > 0) {
-                continue;
-            }
-            ghidra.program.model.symbol.Symbol label = getSymbolAt(item.getAddress());
-            // A real label only. Ghidra mints a dynamic `DAT_<addr>` for anything referenced, and
-            // those carry no information the address does not already carry -- they would bury
-            // the labels that mean something (`cvar_<name>`, `vftable_<Class>`,
-            // `datamap_<Class>`) under tens of thousands of rows.
-            if (label == null || label.isDynamic()) continue;
-            Set<String> referencing = new LinkedHashSet<>();
-            for (Reference reference : getReferencesTo(item.getAddress())) {
-                MemoryBlock from = getMemoryBlock(reference.getFromAddress());
-                if (from == null || !from.isExecute()) continue;
-                Function owner = getFunctionContaining(reference.getFromAddress());
-                if (owner != null) referencing.add(owner.getEntryPoint().toString());
-            }
-            DataType type = item.getDataType();
-            globals.println("{\"a\":\"" + item.getAddress() + "\",\"n\":" + json(label.getName())
-                    + ",\"t\":" + json(type == null ? "" : type.getName())
-                    + ",\"sz\":" + item.getLength()
-                    + ",\"refs\":" + jsonList(referencing) + "}");
-            globalCount++;
-        }
-        globals.close();
 
         // Every class structure the datamap pass wrote, component by component: the field
         // ledger's own vocabulary.
@@ -234,6 +263,27 @@ public class DumpCorpus extends GhidraScript {
         println("DumpCorpus: " + module + " -> " + written + " functions, " + stringCount
                 + " strings, " + globalCount + " globals, " + fieldCount + " fields in "
                 + structureCount + " structures, " + damaged + " damaged decompilations");
+    }
+
+    /** How a site touches a datum: `w` writes it, `r` reads it, `t` hands it to a call as
+        `this`, `a` merely takes its address.
+
+        `t` exists because of the __thiscall constructor. A global C++ object is initialized by
+        `MOV ECX,<object>` followed by a CALL, and every field it sets is written inside the
+        callee through ECX -- so no site in the module writes the object's address, and a plain
+        read/write split reports "0 writers" for a datum the image demonstrably initializes. */
+    private String kind(Reference reference) {
+        RefType type = reference.getReferenceType();
+        if (type.isWrite()) return "w";
+        if (type.isRead()) return "r";
+        Instruction instruction = getInstructionAt(reference.getFromAddress());
+        if (instruction != null && instruction.getMnemonicString().equalsIgnoreCase("MOV")
+                && "ECX".equals(instruction.getDefaultOperandRepresentation(0))) {
+            Instruction next = instruction.getNext();
+            String mnemonic = next == null ? "" : next.getMnemonicString();
+            if (mnemonic.startsWith("CALL") || mnemonic.startsWith("JMP")) return "t";
+        }
+        return "a";
     }
 
     /** The decompiler's own warnings about the C it just produced.

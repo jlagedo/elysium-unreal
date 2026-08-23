@@ -839,6 +839,104 @@ abstract activity, which then passes through class/weapon translation and weight
 selection; the full activity-to-sequence chain is documented in
 [animation_and_movers.md](animation_and_movers.md).
 
+Schedule identifiers are **per-class, not global**. Every class registers its own name table, and
+the same number names a different schedule in each one. `0x156` is `SCHED_VTZIMISCE_TEST` in
+`CNPC_VTzimisce`'s table, `SCHED_TZIMISCEHEADCLAW_WAIT_FOR_MELEE_ADVANCE` in
+`CNPC_VTzimisceHeadClaw`'s, `SCHED_VTZIMISCERUNNER_WAIT_FOR_MELEE_ADVANCE` in
+`CNPC_VTzimisceRunner`'s, `SCHED_VMING_XIAO_TRANSFORM` in `CNPC_VMingXiao`'s,
+`SCHED_VANIMAL_WALK_TO_INTERESTING_PLACE_SETUP` in `CNPC_VAnimal`'s, and
+`SCHED_VWEREWOLF_CONSIDER_SITUATION` in `CNPC_VWerewolf`'s. A bare `return 0x156` from a
+`TranslateSchedule` body therefore states nothing until the receiving class's own table is read,
+and asking who reaches a schedule by scanning the module for its numeric identifier yields a false
+hit for every other class that happens to register at that number.
+
+### The `TASK_TEST*` scaffolding is inert
+
+`CAI_BaseNPC` registers five test tasks in `FUN_10316ff0` — `TASK_TEST1` (`0xa7`) through
+`TASK_TEST5` (`0xab`), immediately after `TASK_PAUSE_MOVING` (`0xa6`). Two carry working handlers
+in `CAI_BaseNPCTroika::StartTask` (`0x102a1910`), each gated by its own console variable. The
+other three reach the default arm, which tail-calls `CAI_BaseNPC::StartTask` (`0x102827f0`).
+**No shipped code path runs any of the five.**
+
+`StartTask` dispatches on `pTask->iTask` over the range `5`–`0x149` through a byte index table at
+`0x102a7ab8` and a jump table at `0x102a77f8`; `TASK_TEST1` lands at `0x102a1943` and `TASK_TEST2`
+at `0x102a1a60`. The Ghidra case labels for this switch are compressed jump-table indices, not
+task identifiers, so the two must be resolved through the byte table before a case is named.
+
+The two console variables are ordinary `ConVar`s in `vampire.dll`, both defaulting to `"0"` with
+flags `0` — no `FCVAR_CHEAT`, `FCVAR_ARCHIVE` or `FCVAR_REPLICATED` — and both sharing the help
+string "Toggles stuff for the test task." There is no `client.dll` counterpart.
+
+| | `debug_test_switch1` | `debug_test_switch2` |
+|---|---|---|
+| object | `0x10924678` | `0x10924630` |
+| initializer | `FUN_1028b5f0` | `FUN_1028b680` |
+| gates | `TASK_TEST1` | `TASK_TEST2` |
+| read at | `0x102a1950`, `0x102a195f` | `0x102a1a62`, `0x102a1a75` |
+
+Each read is an inlined `ConVar::GetInt()`: `m_pParent` at `+4`, `IsCommand()` through vtable slot
+1, and the value from `m_nValue` at `+0x2c`, taken as zero when `IsCommand()` is true. No
+absolute-addressed write to either object exists anywhere, because the constructor assigns
+`m_pParent = this` through `ECX`; the objects are reachable only as the `this` operand of their
+own constructor and destructor.
+
+`TASK_TEST1` hides or unhides the NPC's active weapon. With the variable at its default `0` it
+calls `CBaseEntity::Hide` (weapon vtable `+0x108`); nonzero calls `CBaseEntity::Unhide`
+(`+0x10c`). Those set and clear `EF_NODRAW` (`0x40`) in `m_fEffects`, or in
+`m_fScriptSavedEffects` when `m_bScriptHidden` is set, so a script-hidden weapon stays hidden.
+The task then unconditionally jitters two axes of the NPC's origin by `RandomFloat(-200, 200)` and
+draws `NDebugOverlay::Box(pos, (-2,-2,-2), (2,2,2), 192, 255, 192, 0, 2.0)`. It does not complete
+itself.
+
+`TASK_TEST2` forces an activity through `RestartIdealActivity` and then completes the task. The
+arm is selected by a four-entry jump table over the values `1`–`4`:
+
+| value | activity | id |
+|---|---|---|
+| 1 | `ACT_AIM` | `5` |
+| 2 | `ACT_CORNER_COVER_IDLE` | `0x1118` |
+| 3 | `ACT_RANGE_ATTACK1` | `0x19` |
+| 4 | `ACT_DRYFIRE` | `0x58` |
+| 0 or any other | `ACT_IDLE` | `1` |
+
+`RestartIdealActivity` (`0x10289ee0`) zeroes `m_IdealActivity` (`this+0xfec`) when it already
+holds the requested activity before setting it, so the clip restarts even when the activity does
+not change. The completion helper (`0x10273e80`) writes `TASKSTATUS_COMPLETE` (`4`) to
+`this+0x5c44`.
+
+Three schedules contain these tasks, and nothing selects any of them:
+
+| schedule | id | task program |
+|---|---|---|
+| `SCHED_TASK_TEST1` | `0x152` | `TASK_TEST1 0`, `TASK_TEST2 0`, `TASK_WAIT 3` |
+| `SCHED_TASK_TEST2` | `0x153` | `TASK_TEST2 0`, `TASK_WAIT 3` |
+| `SCHED_VTZIMISCE_TEST` | `0x156` | `TASK_SET_INTERRUPT_TIME 4`, `TASK_TEST1 0`, interrupts on `COND_INTERRUPT_TIME` |
+
+`SCHED_TASK_TEST3` (`0x154`) and `SCHED_TASK_TEST4` (`0x155`) hold the two handlerless tasks. The
+first three identifiers belong to the Troika table, the last to `CNPC_VTzimisce`'s own — see the
+per-class identifier note above, which is what makes `0x156` look reachable from several
+`TranslateSchedule` bodies that in fact name their own schedules.
+
+Unreachability is established by exhaustion rather than by absence of an obvious caller. Scanning
+the whole of `.text` for `0x152`–`0x156` in every immediate form — `PUSH imm32`, `MOV <reg>,imm32`
+across seven registers, `CMP EAX,imm32`, `MOV [ESP+d],imm32`, `MOV [EBP-d],imm32` — and resolving
+each hit to its containing function returns only other classes' schedule-table builders, the
+activity registry (a separate identifier space), and one unrelated comparison in
+`CNPC_VWerewolf::StartTask`. A by-name path is ruled out separately: every reference to a schedule
+name string in the module is its own registration, and the module holds no name-to-identifier
+lookup for schedules.
+
+The trigger this scaffolding was built around is present and dead. `debug_test_schedule` (object
+`0x10924db0`, initializer `FUN_1028b550`) is a `ConVar` built through the min/max overload —
+default `"0"`, flags `0`, clamped to `[0, 4]`, help "Forces the AI into test schedules." — which
+matches `SCHED_TASK_TEST1`–`4` exactly. It has **no readers**: a scan of `.text` for the object and
+for its `m_pParent`, `m_flValue` and `m_nValue` fields finds only the constructor and destructor.
+
+Nothing here is a game rule and none of it reaches a frame a player sees, so the rebuild
+reproduces none of it. Its remaining value is as an oracle: the `TASK_TEST2` arms state five
+activity identifiers unambiguously, and the handler pair states `RestartIdealActivity` and
+`CBaseEntity::Hide`/`Unhide` semantics without any surrounding gameplay to disentangle.
+
 ### Schedule families
 
 Name-family counts are a useful index, not an exclusive taxonomy: a schedule can participate in

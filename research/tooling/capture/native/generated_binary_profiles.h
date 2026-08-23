@@ -678,6 +678,10 @@ inline constexpr std::uint8_t Profile2Target13ExpectedBytes[] = {
     0xb8, 0xf4, 0x26, 0x00, 0x00
 };
 
+inline constexpr std::uint8_t Profile2Target14ExpectedBytes[] = {
+    0x53, 0x8b, 0xd9, 0x56, 0x57
+};
+
 inline constexpr BinaryTargetProfile Profile2Targets[] = {
     {
         "client.viewmodel_draw_pass",
@@ -875,6 +879,20 @@ inline constexpr BinaryTargetProfile Profile2Targets[] = {
         0x00000000u,
         0u,
     },
+    {
+        "client.resolve_follow_parent",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x000921d0u,
+        Profile2Target14ExpectedBytes,
+        5u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
 };
 
 inline constexpr BinaryProfile Profile2 = {
@@ -893,7 +911,7 @@ inline constexpr BinaryProfile Profile2 = {
         0x00000000u,
     },
     Profile2Targets,
-    14u,
+    15u,
 };
 
 inline constexpr std::uint8_t Profile3Target0ExpectedBytes[] = {

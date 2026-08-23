@@ -124,11 +124,12 @@ TOOLS = [
     },
     {
         "name": "vtmb_globals",
-        "description": "A named global in .data/.rdata -- a cvar object, a vftable, a datamap, a "
-                       "counter -- and every function that reaches it. Also answers for an "
-                       "UNNAMED datum by bare address (20b42980), listing which functions write "
-                       "it apart from those that read it: what a singleton is, is stated by "
-                       "whatever assigns it.",
+        "description": "A global in .data/.rdata -- a cvar object, a vftable, a datamap, a "
+                       "counter -- and every function that reaches it, by NAME or by bare "
+                       "ADDRESS (20b42980), named or not. The referrers are split by how they "
+                       "touch it: what a singleton is, is stated by whatever assigns it, and a "
+                       "global C++ object is assigned by the constructor it is passed to as "
+                       "`this` rather than by any write to its address.",
         "inputSchema": {"type": "object", "required": ["text"], "properties": {
             "text": {"type": "string"}, "limit": {"type": "integer"}}},
     },

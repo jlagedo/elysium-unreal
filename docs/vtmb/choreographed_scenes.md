@@ -159,8 +159,8 @@ for anything else:
 | 19 | `BODYSOUND` | `bodysound` | **1** | emit `param` at the actor on sound channel 4; `param2` = dB, default 80, floored at 75 |
 
 Types 13–15 (`SILENCE`, `LOUD`, `PYTHON`) share one dispatch arm at `0x1008320e`: gated on a
-flag bit (`0x40` at actor `+0x4C`), the event is handed to the actor's own AI object
-(`actor+0x98`, virtual `+0x478`) together with the scene. The scene entity itself does
+flag bit (`0x40` at actor `+0x4C`), the event is handed to the actor as a
+`CBaseCombatCharacter` (`actor+0x98`, virtual `+0x478`) together with the scene. The scene entity itself does
 nothing with them — the `python` event's call string and the mouth-driving envelope are
 both the actor's business.
 
@@ -189,11 +189,26 @@ lines plus all 35 of the courtroom cast's:
 A `loud` span's peaks are the line's own maxima, so pinning `loud` to a fully open jaw puts
 `silence` at 0.06 and the unmarked majority at **0.49**. Nothing in the `.vcd` says a marker
 ramps — all 1,401 authored `event_ramp`s sit on `expression` and `gesture`, none on
-`silence`/`loud` — so stepping is the literal reading, and what the actor's AI object does with
-the event is undecoded. For reference, the wavs' own envelopes rise 10→90% into a `loud` in a
-median 100 ms and fall 90→10% into a `silence` in 150 ms.
+`silence`/`loud` — so stepping is the literal reading. For reference, the wavs' own envelopes rise
+10→90% into a `loud` in a median 100 ms and fall 90→10% into a `silence` in 150 ms.
 
-`CAMERASHOT` is registered, named, parsed — and unhandled. `SECTION`, `LOOKAT`, `MOVETO`,
+**Neither marker drives a jaw.** `CAI_BaseNPCTroika::FUN_102c1680`, the `+0x478` override on
+essentially every named creature and NPC class, re-switches on the event type. A `silence` acts only
+when the NPC has no live dialogue partner: it parses the event's own duration string, compares it
+against a threshold/percentage pair keyed by `m_nCurrDisposition`, and on a `RandomInt(1,100)` roll
+switches the body to a disposition idle/fidget activity (`0xf1`). A `loud`, past the per-NPC
+cooldown `m_flLoudExpressionTime`, clamps the parsed duration between per-disposition min/max floats
+and calls `CBaseCombatCharacter::AddScriptedExpression`, queuing into the same ten-slot scripted
+expression array the `EXPRESSION` events fill (`docs/vtmb/facial_animation.md`), then re-arms the
+cooldown. Both fire **once, at dispatch**, from the event's own scalar; neither is sampled across
+the event's span, which is what "stepping is the literal reading" amounts to in code. Actors whose
+class does not override `+0x478` reach `CBaseFlex::AddSceneEvent` instead, which queues the record
+at actor `+0xa58`; `ProcessSceneEvents` has cases for types 2, 6, 7 and 10 only, so for those actors
+the marker is marked processed and discarded.
+
+`CAMERASHOT` is registered, named, parsed — and unhandled. `DispatchStartEvent`'s switch
+carries case labels `1`–`0x10`, `0x12` and `0x13`; **`0x11` is absent**, so the event falls to
+the default arm that re-reads the type and prints `Unhandled event type: %d`. `SECTION`, `LOOKAT`, `MOVETO`,
 `FACE`, `FLEXANIMATION`, `SUBSCENE`, `LOOP`, `CAMERAMOVE` and `CAMERARESTORE` all have
 handlers but zero authored uses; VtMB's cinematics move the camera with
 `camera_keyframe` + `PlayAsCameraPosition`/`PlayAsCameraTarget` entities instead
@@ -240,19 +255,53 @@ instead is off by 4.5%.
 `+0x400` (`FUN_10081510`) looks up the label on the actor and calls `FUN_10099140`, which takes the
 lowest free overlay layer and sets **`playbackrate = SequenceDuration(sequence) / eventDuration`**,
 stretching or compressing the clip to fill the authored `time <start> <end>`. A label that does not
-resolve logs `Could not find gesture sequence %s`. The layer is pushed onto the object at actor
-`+0x94`, whose identity is **not established**; naming it needs that object's vftable located and
-walked, the same shape of open question as the `hide_ents` predicate's `+0x98` object. The
+resolve logs `Could not find gesture sequence %s`. The
 `sequenceduration` key on 56 `gesture` events is the authored companion to that division.
 
-**No capture in the corpus shows a gesture composing.** `gesture` is dispatched **zero** times
-across all five retail capture databases, and the per-line dialogue `.vcd`s dispatch type 7, not
-type 6 — `jack_tutorial/line881_col_E.vcd` fires `Smiling_Jack_line881_col_E` over `time 0 → 12` as
-a `SEQUENCE`. The only other dispatched types observed are 13 (`Silence`), 14 (`Loud`) and 19
-(`Horn`, an environmental wav). How a gesture composes against a running base clip is therefore
-**open**: settling it needs a capture of a path that actually dispatches type 6 — a scene authoring
-`event gesture` on an actor already playing a `sequence` — with that actor's layer array sampled per
-frame.
+**The layer is the four-slot `CBaseAnimatingOverlay` array**, and `actor+0x94` is the actor itself.
+`FUN_10099140` writes its playback rate at `this + idx*0x30 + 0x744`, which is
+`CBaseAnimatingOverlay`'s own declared `m_flPlaybackRate` for slot `idx`; only a self-pointer can
+satisfy that offset, so `+0x94` is a cached upcast of the actor to `CBaseAnimatingOverlay*`,
+non-null exactly when its dynamic type carries layers. `actor+0x98` is the same object upcast to
+`CBaseCombatCharacter*` — named by its `+0x650` slot holding `CBaseCombatCharacter::IRelationType`
+(`0x10333340`) — which is the pointer the `SILENCE`/`LOUD`/`PYTHON` arm and the `hide_ents`
+predicate use. Neither is a separate allocation, so neither has a vftable of its own to walk.
+`+0x9c`, used directly as a `CBaseCombatCharacter*` by the `CAMERAMOVE` arm, is very likely a third
+cache of the same kind; that it holds the identical value is **not established**. Which ancestor
+declares the three slots is not recoverable from the datamap, which carries no entry for private
+non-networked members.
+
+The label resolves through `LookupSequence` **on the actor's own model**, not on the cinematic
+`BaseAnim` model a `sequence` reaches through `AddExtraAnimation` — the two event types resolve
+their clip against different vocabularies. Three further gates sit on the path: `+0x94` must be
+non-null, the allocator must return a free slot (a full array is a silent no-op, no warning), and
+the event duration must exceed zero.
+
+**A gesture's composition weight is fixed at `0.1`.** `AddGestureSequence` reaches `SetLayer`
+through vtable `+0x430`, which initialises the slot's weight to the literal `0x3dcccccd`, and only
+the playback rate is overwritten afterwards; the blend-in/blend-out fields are written and read
+nowhere, so no ramp exists. A gesture therefore leans the base pose 10% toward itself from its first
+frame, holds that weight for the event, and frees its slot when the sequence ends
+(`m_bAutoKillWhenFinished`, set from the literal `1` the dispatch arm passes). The mechanism and its
+addresses are `docs/vtmb/animation_and_movers.md` §A.4c.
+
+**No capture in the corpus shows a gesture composing**, so the `0.1` weight above is derived from
+the binary and unwitnessed in a running scene. `gesture` is dispatched **zero** times across all
+five retail capture databases, and the per-line dialogue `.vcd`s dispatch type 7, not type 6 —
+`jack_tutorial/line881_col_E.vcd` fires `Smiling_Jack_line881_col_E` over `time 0 → 12` as a
+`SEQUENCE`. The only other dispatched types observed are 13 (`Silence`), 14 (`Loud`) and 19
+(`Horn`, an environmental wav). This is coverage rather than evidence of a dead path: all five
+databases are `sp_theatre` sessions.
+
+**One shipped scene composes a gesture over a running sequence, and only one.** Across all 5,444
+`.vcd`s, `cinematic/la/chambers/talk_with_beckett.vcd` — the `logic_choreographed_scene`
+`prince_beckett_dialog` on `la_ventruetower_1`, reached through `move_to_sarcophagus` →
+`prince_to_coffin`'s `OnEndSequence` — is the only file where a `gesture` overlaps a `sequence` on
+the same actor. Both actors run `entire_scene` as a `sequence` for the full 57.25 s with two
+per-line gestures nested inside it: `prince2` at `17.493332→30.826664` and `37.213337→47.406670`,
+`beckett` at `2.513334→17.513334` and `30.993336→38.660004`. LaCroix's two labels resolve against
+his own exported clip vocabulary, so the model-side gate passes. That scene, with the actor's layer
+array sampled per frame, is what would confirm the derivation.
 
 ### An `event sequence`'s end time is derived from the model, and can be stale
 
@@ -319,6 +368,31 @@ automation block (`m_bAutomated` `0x4ac`, `m_nAutomatedAction` `0x4b0`,
 `vampire.dll` — only `force_lod_2`, which 8 entities set. The keyvalue lookup drops the
 wire, exactly like `OnEnterMapHere` on a `point_teleport` (`docs/vtmb/game_runtime.md`). `StartHidden`
 (12 uses) is real but comes from `CBaseEntity`, not this class.
+
+**`force_lod_2` parses and is then read by nothing.** `m_bForceLOD` is zeroed by the constructor
+and never loaded again: `CSceneEntity`'s 74-method closure contains no access to `0x57d`, and a
+module-wide sweep of `vampire.dll` and `client.dll` returns only that zero-init plus hits on an
+unrelated class whose own field happens to share the offset. The object is `0x580` bytes
+(`FUN_100802e0` allocates exactly that), which is what disqualifies the one candidate reader —
+it also reads `+0x584` and beyond, so it belongs to a larger class and has no callers. The key is
+authored on 8 entities and consumed nowhere.
+
+**`full_sound` selects the spoken line's `soundlevel_t`.** `FUN_10081700` passes `m_bFullSound`
+into the `CPASAttenuationFilter` construction and the `IEngineSoundServer003` emit call, where a
+`NEG`/`SBB`/`AND`/`ADD` idiom maps it to **0 when set and 80 when clear** — `SNDLVL_NONE`, audible
+everywhere with no distance attenuation, against the ordinary `SNDLVL_80dB` falloff the 82 entities
+that never set the key inherit from the constructor's zero. The `BODYSOUND` arm confirms the slot:
+it parses its own dB string, clamps it to 75–80 and passes it in the identical argument position.
+
+**The automation block is reached by a hand-written `KeyValue` override**, not by the datamap, which
+is why the table above does not carry it. `FUN_10081210` (vtable slot 266) matches the key
+`automate` case-insensitively, reads `Cancel` or `Resume` as the first token into
+`m_nAutomatedAction` (1 or 2), `atof`s the remainder into `m_flAutomationDelay`, and sets
+`m_bAutomated` when that delay clears a small epsilon — so the authored form is
+`automate "Cancel 1.5"`. The paused think `FUN_10081020` counts elapsed pause time against the delay
+and then dispatches `Cancel` (`+0x3d4`) or `Resume` (`+0x3d0`). **No entity in the exported corpus
+authors it**: 31 `logic_choreographed_scene` entities across the five maps that place them, zero
+`automate` keys.
 
 ### Inputs
 
@@ -508,19 +582,31 @@ accepts; `FUN_100828d0` reverses it. The predicate, in order:
 1. the candidate must exist and not be dead or dying (`FUN_100a52a0`);
 2. its flags (`FUN_100b39c0`) must not carry bit **`0x20`**;
 3. it must not be one of **this scene's own actors** — the scene walks its actor array and compares;
-4. its character object (entity `+0x98`) must exist, and that object's EHANDLE at **`+0xfe8` must
-   not resolve**. That field is the **current dialogue partner**: `FindNamedEntity`'s
+4. its `CBaseCombatCharacter` upcast (entity `+0x98`) must exist, and that object's EHANDLE at
+   **`+0xfe8` must not resolve**. That field is the **current dialogue partner**: `FindNamedEntity`'s
    `!dialogpartner` branch reads exactly `UTIL_PlayerByIndex(1) + 0xfe8`. So an NPC already in a
    conversation is never hidden;
-5. finally a class/relationship gate — **not decoded**: a virtual at `+0x740` on that character
-   object returning a small enum (value `4` is rejected outright; `2`, `3`, `0x0b` and `0x0e` pass
-   when `+0x29c` — which returns an entity — equals the player), plus `+0x650(player)` returning 1
-   as an alternative accept.
+5. finally a state/relationship gate on that same character object:
 
-Steps 1–4 are settled. Step 5's two virtuals are unidentified: they live on the object at entity
-`+0x98`, whose vftable is large enough to be entity-sized, and naming them needs that vftable
-located and walked. Until then the *set* of NPCs a shipped scene hides is not reproducible, only
-the mechanism.
+   ```
+   state = actor->m_NPCState;                            // +0x740, CAI_BaseNPC::GetNPCState
+   if (state != 4) {                                     // 4 = the scripted state — never hidden
+       if (actor->GetEnemy() == player &&                // +0x29c, resolves m_hEnemy
+           (state == 2 || state == 3 || state == 0xb || state == 0xe))
+           hide;
+       else if (actor->IRelationType(player) == 1)       // +0x650
+           hide;
+   }
+   ```
+
+The three virtuals are named by the functions that fill their slots: `+0x740` is
+`CAI_BaseNPC::FUN_101a6720`, a one-line `return m_NPCState` (`CBasePlayer` and `CNPC_VManBat`
+override it with their own); `+0x29c` is `CAI_BaseNPC::FUN_101a67e0`, which resolves `m_hEnemy` to a
+live pointer or null and is stubbed to `return 0` on non-AI classes; and `+0x650`'s base
+implementation is `CBaseCombatCharacter::IRelationType` (`0x10333340`), which reads the frenzy
+count and the relationship array. Predicate-true means hidden: the caller `FUN_100826b0` queues the
+accepted handle and calls `Hide()` (vtable `+0x134`) in its finalize loop. The whole predicate is
+settled, so the *set* of NPCs a shipped scene hides is reproducible, not only the mechanism.
 
 ## The timing model
 
@@ -836,8 +922,10 @@ diverges as follows, each an explicit call:
   there. The divergence is `gesture`: retail gives it an overlay layer at
   `SequenceDuration / eventDuration`, so it composes over the base clip *and* is stretched to the
   authored range, while here it replaces the base clip and plays at rate 1. `sequenceduration` is
-  parsed and surfaced, not acted on. Nothing in the corpus is observed dispatching a gesture, so the
-  cost of this one is unmeasured as well as unimplemented.
+  parsed and surfaced, not acted on. The cost is now bounded rather than unknown: retail composes a
+  gesture at a flat `0.1` weight (above), so it reads as a 10% lean on the base pose, where the
+  collapse substitutes the gesture outright. The 609 authored gestures are all dialogue-reaction
+  clips, and only one shipped scene overlaps one with a running `sequence`.
 - **`position_start` immobilises the body rather than restoring four separate fields.** The engine
   saves and restores move type, move collide, solid type and solid flags individually; this runtime
   has one reversible freeze (`FElysiumEntity::SetBodyFrozen`) that stops the movement motor and
@@ -855,14 +943,16 @@ diverges as follows, each an explicit call:
 - **`python` events go through the field-6 event queue** (`EnqueuePython`) rather than the actor's
   own AI object. Both corpus uses are module-level calls, so the receiver is observably the same,
   and this way the call single-steps in the queue window and serializes into a save.
-- **`hide_ents` is off by default** (`elysium.SceneHideEnts`), because step 5 of its predicate is
-  undecoded (above). The mechanism is implemented; the selection is not trusted.
-- **Not reproduced at all:** `force_lod_2` (LOD is not reproduced), the `m_bAutomated` pause
-  automation block, and the intro-skip global at `0x106e7e91` — nothing in any map or script
-  reaches any of them.
+- **`hide_ents` is off by default** (`elysium.SceneHideEnts`). The predicate is fully decoded
+  (above), so what remains is verifying the selection against a shipped scene rather than an
+  unknown in the rule.
+- **Not reproduced at all:** `force_lod_2` (retail reads it nowhere either), the `m_bAutomated`
+  pause automation block (no exported map authors `automate`), and the intro-skip global at
+  `0x106e7e91`, which retail sets only from the `vskip_intro` console command — `FUN_100db3f0` is
+  its single writer, a one-instruction function beside the static init that registers that
+  `ConCommand`. Nothing in any map or script reaches any of them.
 
-Open, and owned elsewhere: what `full_sound` and `force_lod_2` change (both read once each,
-in the speak path and the actor pass), and what sets the intro-skip flag. The facial layer
+The facial layer
 `expression` and the `.lip` files feed is settled in **`docs/vtmb/facial_animation.md`** — flex
 controllers, the flex-rule RPN, both vertex-animation encodings and the phoneme tables. It
 also settles what is *not* there: **no shipped model carries eyeball data**, so a scene's

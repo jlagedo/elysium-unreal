@@ -680,6 +680,15 @@
       "depth": 2,
       "cap": 160,
       "asm_count": 2400
+    },
+    {
+      "address": "100921d0",
+      "label": "c_baseanimating_resolve_follow_parent",
+      "confidence": "confirmed",
+      "role": "Resolves the follow-attach parent for a mod_studio entity. Reads the follow handle at this+0x188, requires the resolved parent's model type to equal 3 (mod_studio), and returns the parent's model context at +0x404; returns 0 when the handle is stale, the parent carries no model, or the parent is not mod_studio. Its two diagnostics are \"mod_studio: MOVETYPE_FOLLOW with no model.\" and \"Attached %s (mod_studio) to %s (%d)\". Called by C_BaseAnimating::BuildTransformations, C_BaseAnimating::DrawModel and C_ServerRagdollAttached::SetupBones.",
+      "depth": 1,
+      "cap": 120,
+      "asm_count": 231
     }
   ],
   "relationships": [

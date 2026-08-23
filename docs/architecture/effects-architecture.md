@@ -26,6 +26,15 @@ stack.
 - **One presentation, not two.** There is no faithful-sprite mode and an enhanced
   mode. Tuning lives on the one system. This matches the weather rule in
   `docs/vtmb/weather.md`.
+- **A light an emitter never had is not "the look."** Modernizing the flame material
+  is presentation; adding an emissive source that changes what the room reads as lit
+  is a divergence and needs an explicit owner call. The reverse also holds, and it is
+  the easier mistake: a light VtMB *does* throw is reproduced work, and dropping it is
+  a divergence too. VtMB lights a muzzle flash and an explosion, from different
+  places — `params_explosion` authors `dl_color` / `dl_radius` / `dl_time` /
+  `dl_decay`, while a muzzle flash carries no authored light parameters and takes
+  fixed constants off an entity effect bit (`docs/vtmb/effects.md` §3.4). Check the
+  owning topic for a light before deciding an effect has none.
 
 `.phy` collision stays what it is — Chaos hulls on the prop — and is not an FX
 problem (`docs/vtmb/phy_vphysics.md`). `env_physimpact` / `env_physexplosion` stay
@@ -198,7 +207,7 @@ Each row is "open this, retune to the compiled rates, ship that family."
 | Moths / flies | `HangingParticulates` + `CurlNoiseForce` | simple sprite with a wandering velocity | `moth_emitter` (compiler currently rejects `timescale`) |
 | Blood hit / spray | `DirectionalBurst` | `SimpleSpriteBurst` | impact table + compiled blood FX |
 | Blood trail / return | `LocationBasedRibbon` | sprite streak with `movealign` | Thaumaturgy return emitters |
-| Muzzle flash | `SimpleSpriteBurst` + a 1-frame point light | SubUV flash sheet | item `muzzleflash_particle` + events 5001/5003 |
+| Muzzle flash | two `SimpleSpriteBurst` systems (flash + smoke) on the weapon's muzzle socket, **plus** a one-frame point light on the shooter's attachment 1 | SubUV flash sheet | item `muzzleflash_particle` / `muzzlesmoke_particle` (`view*` in first person) + events 5001/5003; the light is 255/192/64 at 254 cm off the `m_fEffects` bit, not an item key |
 | Tracers | ribbon | `movealign` sprite | `bullettrail_emitter` |
 | Surface impact | `SimpleSpriteBurst` per surface group (concrete/metal/wood/dirt/glass/flesh) | one generic burst tinted by surface | `particleimpacttable.txt` |
 | Explosion look | `SimpleExplosion` or `Grid2D_Gas_Explosion` | OmnidirectionalBurst | `params_explosion.particle` |

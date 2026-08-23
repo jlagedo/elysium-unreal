@@ -26,7 +26,7 @@ the runtime: per-vertex normals, IK chains, pose parameters, and the surface pro
 are cheap to consume, and the first is a live shading regression rather than a new feature.
 
 Genuinely undecoded territory is now small: two header slots nothing in the shipped binaries
-reads, two `StudioModel` slots that are zero everywhere, and the interiors of `StudioSeqDesc` and
+reads, and the interiors of `StudioSeqDesc` and
 `StudioAnimDesc` that no observed consumer touches. The one real hole in *method* is that the
 survey has covered header and struct declarations but never a payload byte-coverage map.
 
@@ -79,7 +79,6 @@ diverge by a mean of 11–15° elsewhere because they encode hard edges no avera
 | Slot | State | What would settle it |
 |---|---|---|
 | `MDLHeader`@412, @416 | `0` on all 4,445; **no shipped binary reads either through a studiohdr pointer** | A Troika-side artifact (studiomdl, a QC-era tool), or a model carrying a non-zero value. The install offers neither. |
-| `StudioModel`+80, +84 | `0` on all 4,567 model records | Same class of problem; no consumer identified |
 | `StudioSeqDesc` interior (764B) | Much of it read by no observed consumer | Broader runtime capture, or targeted decompilation |
 | `StudioAnimDesc` remainder (64 of 72B) | Same | Same |
 | `.phy` vphysics | Deferred by choice, not blocked — ~2/3 of models carry one | Owned by `docs/vtmb/phy_vphysics.md` |
