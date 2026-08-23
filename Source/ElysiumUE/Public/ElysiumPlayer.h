@@ -1155,19 +1155,24 @@ public:
 	}
 
 	// --- The combat-stance clock (`docs/vtmb/animation_and_movers.md` — `IsInCombatStance`) --
-	// `m_flLastCombatAnimTime` (+0x19b0): the world time of the last melee-opponent contact,
-	// stamped on both sides of the exchange by the melee transaction. Negative means never.
-	double LastMeleeContactSeconds = -1.0;
+	// `m_flLastCombatAnimTime` (+0x19b0): the world time of the attacker's last attack ANIMATION
+	// request, not of a contact. Retail stamps it in `CBasePlayer::SetAnimation` (`0x10164870`)
+	// on the `PLAYER_ATTACK1` arm, gated only on there being an active weapon, through the sole
+	// writer of the field (`0x1015fdf0`, vtable slot 410). So a whiffed swing holds the stance
+	// exactly as a landed one does, a shot and a dry fire both start it, and the struck body is
+	// never stamped — the field ledger records one writer and one reader, both on the attacking
+	// `CBasePlayer`. Negative means never.
+	double LastCombatAnimSeconds = -1.0;
 	static constexpr double CombatStanceHoldSeconds = 5.0;
-	void StampMeleeContact(double NowSeconds) { LastMeleeContactSeconds = NowSeconds; }
+	void StampCombatAnim(double NowSeconds) { LastCombatAnimSeconds = NowSeconds; }
 	// `IsInCombatStance` (virtual +0x66c): true while morphed, or for five seconds after the
-	// last melee-opponent contact. The morph half is Protean's (`m_bIsMorphed`, +0x1edc) and no
-	// system here can set it, so the contact window is the whole answer until that discipline
+	// last attack animation. The morph half is Protean's (`m_bIsMorphed`, +0x1edc) and no
+	// system here can set it, so the attack window is the whole answer until that discipline
 	// exists. Read by the player gait ladder's `CombatReady`/`Relaxed` predicates.
 	bool IsInCombatStance(double NowSeconds) const
 	{
-		return LastMeleeContactSeconds >= 0.0
-			&& NowSeconds - LastMeleeContactSeconds < CombatStanceHoldSeconds;
+		return LastCombatAnimSeconds >= 0.0
+			&& NowSeconds - LastCombatAnimSeconds < CombatStanceHoldSeconds;
 	}
 
 	// --- The melee reaction's hold on the base channel ---------------------------------------

@@ -471,8 +471,6 @@ def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
     outputs = (
         config.repo_root / "Content" / "Elysium.umap",
         *(font_root / name for name in unreal.FONT_ASSETS),
-        config.repo_root / "Content" / "VtMB" / "Particles" / "M_ElysiumRain.uasset",
-        config.repo_root / "Content" / "VtMB" / "Particles" / "NS_ElysiumRain.uasset",
     )
     task = Task(
         "unreal:policy",

@@ -51,6 +51,17 @@ namespace
 			const FString Host = ElysiumAnimResolve::ResolveLayerHost(Selection.SequenceLabel,
 				LayerTable, LayerLabel);
 
+			// Which of the two shapes below a layer took, and the three lookups that decide it. A
+			// grid that resolves as a plain sequence still POSES — it stands the one cell it loaded
+			// — so the failure is invisible in the frame and only a steerable parameter that never
+			// moves reveals it. Verbose because it is per layer per publish.
+			UE_LOG(LogElysiumAnim, Verbose,
+				TEXT("[elysium] layer '%s' owner='%s' host='%s': table=%s grid=%s multicell=%s"),
+				*LayerLabel, *LayerOwner, *Host,
+				LayerTable != nullptr ? TEXT("yes") : TEXT("NO"),
+				LayerGrid != nullptr ? TEXT("yes") : TEXT("NO"),
+				LayerGrid != nullptr && LayerGrid->IsMultiCell() ? TEXT("yes") : TEXT("NO"));
+
 			if (LayerGrid != nullptr && LayerGrid->IsMultiCell())
 			{
 				// An aim grid, baked once per declaring host (`_derived_bindings` in
@@ -68,18 +79,52 @@ namespace
 				}
 				if (Assets.OverlaySpace != nullptr)
 				{
+					UE_LOG(LogElysiumAnim, Verbose,
+						TEXT("[elysium] layer '%s' stands the GRID asset %s"), *LayerLabel,
+						*GetNameSafe(Assets.OverlaySpace));
 					// Every cell of a grid shares one bone mask (A.4), so reading it off the base
 					// cell [0][0] is reading it off the whole grid.
+					//
+					// **The cell is asked for by its DERIVED name first, exactly as the grid's own
+					// samples were baked.** A cell of an autolayer grid ships only as
+					// `<cell>@<host>`: the raw form of a clip some host declares is suppressed, so
+					// the bare label the blend table names has no asset behind it. Asking for the
+					// bare name alone therefore finds nothing, and the mask stays unset — which is
+					// not a neutral outcome. An unset mask writes a NULL blend profile, and a null
+					// profile gives every bone a per-bone weight of zero, so the layer resolves,
+					// binds, takes its aim parameters and then contributes nothing to the pose. The
+					// body stands its base pose alone and the grid looks frozen rather than absent.
 					if (const FElysiumBlendCell* BaseCell = LayerGrid->CellAt(0, 0))
 					{
-						if (UAnimSequence* BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh,
-							LayerOwner, BaseCell->Clip))
+						UAnimSequence* BaseCellSequence = nullptr;
+						if (!Host.IsEmpty())
 						{
-							if (const UElysiumAnimLayerMask* Mask =
-								BaseCellSequence->FindMetaDataByClass<UElysiumAnimLayerMask>())
-							{
-								Assets.OverlayMaskName = Mask->Profile;
-							}
+							BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
+								FString::Printf(TEXT("%s@%s"), *BaseCell->Clip, *Host));
+						}
+						if (BaseCellSequence == nullptr)
+						{
+							BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, LayerOwner,
+								BaseCell->Clip);
+						}
+						const UElysiumAnimLayerMask* Mask = BaseCellSequence != nullptr
+							? BaseCellSequence->FindMetaDataByClass<UElysiumAnimLayerMask>()
+							: nullptr;
+						if (Mask != nullptr)
+						{
+							Assets.OverlayMaskName = Mask->Profile;
+						}
+						else
+						{
+							// Said out loud rather than composed at zero weight. The layer is
+							// standing and steerable and still cannot reach the pose, which is the
+							// one failure on this path that looks exactly like working content.
+							UE_LOG(LogElysiumAnim, Warning,
+								TEXT("[elysium] layer '%s' stands the grid %s but its base cell '%s' "
+									 "(host '%s') carries no bone mask, so the layer would compose at "
+									 "zero weight on every bone and the body poses its base alone"),
+								*LayerLabel, *GetNameSafe(Assets.OverlaySpace), *BaseCell->Clip,
+								*Host);
 						}
 					}
 				}
@@ -121,12 +166,48 @@ namespace
 			}
 
 			Assets.OverlaySequence = LayerSequence;
+			UE_LOG(LogElysiumAnim, Verbose,
+				TEXT("[elysium] layer '%s' stands the SEQUENCE asset %s — a single pose, so nothing "
+					 "the aim parameters say can move it"),
+				*LayerLabel, *GetNameSafe(LayerSequence));
 			if (const UElysiumAnimLayerMask* Mask =
 				LayerSequence->FindMetaDataByClass<UElysiumAnimLayerMask>())
 			{
 				Assets.OverlayMaskName = Mask->Profile;
 			}
 		}
+	}
+
+	// The bone mask a RESOLVED BASE asset carries, or none.
+	//
+	// **A grid is asked through its base cell**, exactly as the layer path above asks a layer grid:
+	// every cell of a grid shares one mask, so cell [0][0] answers for the whole fan — while the
+	// `UBlendSpace` itself carries no metadata at all and would report every masked fan as unmasked.
+	const UElysiumAnimLayerMask* BaseLayerMask(const FElysiumAnimationCatalog& Catalog,
+		const FElysiumAnimationSelection& Selection, USkeletalMesh* Mesh,
+		const FElysiumResolvedAnimation& Assets)
+	{
+		if (Assets.Sequence != nullptr)
+		{
+			return Assets.Sequence->FindMetaDataByClass<UElysiumAnimLayerMask>();
+		}
+		if (Assets.Space == nullptr || Mesh == nullptr || !Catalog.BlendTableFor)
+		{
+			return nullptr;
+		}
+		const FElysiumBlendTable* Table = Catalog.BlendTableFor(Selection.OwnerStem);
+		const FElysiumBlendGrid* Grid = Table != nullptr
+			? Table->Find(Selection.SequenceLabel) : nullptr;
+		const FElysiumBlendCell* BaseCell = Grid != nullptr ? Grid->CellAt(0, 0) : nullptr;
+		if (BaseCell == nullptr)
+		{
+			return nullptr;
+		}
+		UAnimSequence* BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, Selection.OwnerStem,
+			BaseCell->Clip);
+		return BaseCellSequence != nullptr
+			? BaseCellSequence->FindMetaDataByClass<UElysiumAnimLayerMask>()
+			: nullptr;
 	}
 }
 
@@ -138,6 +219,7 @@ void UElysiumAnimSubsystem::Deinitialize()
 	EyeSets.Reset();
 	BlendTables.Reset();
 	ReportedMisses.Reset();
+	ReportedSlotMisses.Reset();
 	Super::Deinitialize();
 }
 
@@ -536,7 +618,7 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetAnimatedPropC
 }
 
 UAnimSequence* UElysiumAnimSubsystem::ResolveClip(const FString& Stem, const FString& ClipName,
-	USkeletalMesh* Mesh, FString& OutError)
+	USkeletalMesh* Mesh, FString& OutError, EElysiumAnimChannel Channel)
 {
 	OutError.Reset();
 	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
@@ -560,6 +642,47 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClip(const FString& Stem, const FSt
 	const FString AnimName = ResolveClipAnimName(Stem, ClipName);
 	if (UAnimSequence* Baked = ElysiumNpcVisual::LoadBakedClip(Mesh, Owner, AnimName))
 	{
+		// **A masked partial-body layer is refused for a Base-channel caller, at the door that
+		// actually poses one.** `ResolveAnimation` guards the locomotion resolve; every clip a
+		// producer names by hand arrives HERE instead — the melee/ranged claim path, a scripted
+		// beat's `m_iszPlay`, `SetAnimation`, an NPC idle, the green room — and a masked clip posed
+		// as a base pose decodes its unowned bones to a zero quaternion and a zero position, which
+		// collapses the character.
+		//
+		// It goes through `RefuseMaskedBase` rather than testing the metadata here, so the guard, the
+		// detail line and the once-per-case report are ONE implementation. That funnel reads a
+		// record, so the request is stated as one: the label the caller asked for, the bank the
+		// include DAG named, the animation the grid collapsed to, and the channel the caller intends
+		// to pose it on. `ReportMiss` keys on (stem, request, outcome), so a body that keeps asking
+		// warns once.
+		FElysiumAnimationIntent Intent;
+		Intent.Stem = Stem;
+		Intent.SequenceLabel = ClipName;
+		Intent.Route = EElysiumAnimRoute::ExactLabel;
+		Intent.Channel = Channel;
+
+		FElysiumAnimationSelection Selection;
+		Selection.Stem = Stem;
+		Selection.Channel = Channel;
+		Selection.Route = EElysiumAnimRoute::ExactLabel;
+		Selection.SequenceLabel = ClipName;
+		Selection.AnimationName = AnimName;
+		Selection.OwnerStem = Owner;
+		Selection.AssetKind = EElysiumAnimAssetKind::Sequence;
+		Selection.Outcome = EElysiumAnimOutcome::Resolved;
+
+		FElysiumResolvedAnimation Assets;
+		Assets.Sequence = Baked;
+		// **The catalog is built only where the refusal can fire.** `RefuseMaskedBase` returns on the
+		// channel rule before it reads a thing, and the catalog it would have been handed allocates a
+		// `TFunction` for the blend-table lookup — on every successful clip resolve in the game,
+		// including every layer-channel call, which is the one this door exists to let through.
+		if (!ElysiumAnimIntent::MaskedClipPlayableOn(Channel)
+			&& RefuseMaskedBase(Intent, BuildCatalog(Stem), Mesh, Selection, Assets))
+		{
+			OutError = Selection.Detail;
+			return nullptr;
+		}
 		return Baked;
 	}
 
@@ -687,9 +810,268 @@ FElysiumAnimationCatalog UElysiumAnimSubsystem::BuildCatalog(const FString& Stem
 	return Catalog;
 }
 
+void UElysiumAnimSubsystem::ResolveSlotDeclaredAssets(const FString& OwnerStem,
+	const FString& Label, USkeletalMesh* Mesh, UBlendSpace*& OutAimSpace, FName& OutAimMaskName,
+	UAnimSequence*& OutAdditive)
+{
+	OutAimSpace = nullptr;
+	OutAimMaskName = NAME_None;
+	OutAdditive = nullptr;
+	if (Mesh == nullptr)
+	{
+		return;
+	}
+
+	// One warning per (host, layer, reason), through the same latch the slot resolution uses: this
+	// seam is re-entered every publish and per trigger pull, and each fault it can name is a bake
+	// property that does not change between frames.
+	auto ReportOnce = [this, &OwnerStem, &Label](const TCHAR* Reason, const FString& Line)
+	{
+		const uint32 Key = HashCombine(HashCombine(GetTypeHash(OwnerStem), GetTypeHash(Label)),
+			GetTypeHash(FString(Reason)));
+		if (ReportedSlotMisses.Contains(Key))
+		{
+			return;
+		}
+		ReportedSlotMisses.Add(Key);
+		UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] slot layer %s"), *Line);
+	};
+
+	const TSharedPtr<const FElysiumBlendTable> Table = GetBlendTable(OwnerStem);
+	const FElysiumAutoLayerBinding* Declared = Table.IsValid()
+		? Table->FindAutoLayers(Label) : nullptr;
+	if (Declared == nullptr)
+	{
+		// An ordinary absence: a clip that declares no layers — every reload layer — composes bare.
+		return;
+	}
+
+	for (const FString& DeclaredLayer : Declared->Clips)
+	{
+		const FElysiumBlendGrid* Grid = Table->Find(DeclaredLayer);
+		if (Grid == nullptr || !Grid->IsMultiCell())
+		{
+			// Not a grid, so a sequence — and whether it is the `_delta` additive is asked of the
+			// ASSET rather than a clip catalog: clip sets are per-NPC while this owner is a bank, so
+			// a catalog lookup here answers nothing for every shared layer. The derived
+			// `<layer>@<host>` form is composed against this host's own pose; the raw form is the
+			// fallback for the containers that still carry one.
+			//
+			// **A resolved grid stands the additive DOWN.** The bake folds a masked host's motion
+			// additives into the grid's own cells — a delta's meaning depends on the pose it rides,
+			// so per-cell composition is the only place it can be right for every aim direction —
+			// and composing the delta again here would apply the action twice.
+			if (OutAdditive != nullptr || OutAimSpace != nullptr)
+			{
+				continue;
+			}
+			UAnimSequence* Loaded = ElysiumNpcVisual::LoadBakedClip(Mesh, OwnerStem,
+				FString::Printf(TEXT("%s@%s"), *DeclaredLayer, *Label));
+			if (Loaded == nullptr)
+			{
+				Loaded = ElysiumNpcVisual::LoadBakedClip(Mesh, OwnerStem, DeclaredLayer);
+			}
+			if (Loaded == nullptr)
+			{
+				ReportOnce(TEXT("nolayerasset"), FString::Printf(
+					TEXT("'%s' declares the layer '%s' but no baked asset answers for it on this "
+						 "body, so the shot composes without it"),
+					*Label, *DeclaredLayer));
+			}
+			else if (Loaded->IsValidAdditive())
+			{
+				OutAdditive = Loaded;
+			}
+			else
+			{
+				// A declared non-grid, non-additive overlay — nothing a slot clip ships today. Said
+				// out loud rather than composed wrong or dropped silently.
+				ReportOnce(TEXT("layerkind"), FString::Printf(
+					TEXT("'%s' declares '%s', which is neither a grid nor an additive; the slot "
+						 "composes without it"),
+					*Label, *DeclaredLayer));
+			}
+			continue;
+		}
+		if (OutAimSpace != nullptr)
+		{
+			continue;
+		}
+		OutAimSpace = ElysiumNpcVisual::LoadBakedBlendSpace(Mesh, OwnerStem, DeclaredLayer, Label);
+		if (OutAimSpace == nullptr)
+		{
+			ReportOnce(TEXT("nogrid"), FString::Printf(
+				TEXT("'%s' declares the aim grid '%s' but no composed asset for it exists on this "
+					 "body, so the shot poses aim-neutral"),
+				*Label, *DeclaredLayer));
+			continue;
+		}
+		// The grid's own mask, read off its base cell exactly as the base channel's aim grid reads
+		// it — derived name first, because a cell of an autolayer grid ships only as `<cell>@<host>`.
+		if (const FElysiumBlendCell* BaseCell = Grid->CellAt(0, 0))
+		{
+			UAnimSequence* BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, OwnerStem,
+				FString::Printf(TEXT("%s@%s"), *BaseCell->Clip, *Label));
+			if (BaseCellSequence == nullptr)
+			{
+				BaseCellSequence = ElysiumNpcVisual::LoadBakedClip(Mesh, OwnerStem, BaseCell->Clip);
+			}
+			const UElysiumAnimLayerMask* Mask = BaseCellSequence != nullptr
+				? BaseCellSequence->FindMetaDataByClass<UElysiumAnimLayerMask>() : nullptr;
+			if (Mask != nullptr)
+			{
+				OutAimMaskName = Mask->Profile;
+			}
+			else
+			{
+				// An unmasked grid composes at zero weight on every bone — standing, steerable, and
+				// invisible — so it is refused with its grid rather than composed silently.
+				OutAimSpace = nullptr;
+				ReportOnce(TEXT("nogridmask"), FString::Printf(
+					TEXT("'%s' grid '%s': its base cell '%s' carries no bone mask, so the aim layer "
+						 "would compose at zero weight and is refused"),
+					*Label, *DeclaredLayer, *BaseCell->Clip));
+			}
+		}
+	}
+}
+
+void UElysiumAnimSubsystem::ResolveSlotLayer(const FElysiumAnimationRequest& Claim,
+	const FString& Stem, USkeletalMesh* Mesh, FElysiumAnimationSelection& OutSelection,
+	FElysiumResolvedAnimation& OutAssets)
+{
+	if (Claim.Label.IsEmpty())
+	{
+		// A claim that names no clip is a claim on the channel and nothing else — a producer holding
+		// the slot open. There is no layer to load and no miss to report.
+		return;
+	}
+	// The label is published whether or not it binds, for the same reason the base record's is: a
+	// layer that resolved nothing has to read as a named miss rather than as a body that is not
+	// layering at all.
+	OutSelection.SlotLabel = Claim.Label;
+
+	// The owner column is the include DAG's own answer and is never re-derived — the same rule the
+	// base resolution and every clip seam take. It is read even when the load below fails, so the
+	// record names the bank that was asked.
+	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
+	if (const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(Claim.Label) : nullptr)
+	{
+		OutSelection.SlotOwnerStem = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
+	}
+
+	if (Mesh == nullptr)
+	{
+		// The ordinary answer before a body has a skeleton to bind against. Not reported, exactly as
+		// the base path's own mesh-less rung is not.
+		return;
+	}
+
+	auto ReportOnce = [this, &Stem, &Claim](const TCHAR* Reason, const FString& Line)
+	{
+		const uint32 Key = HashCombine(HashCombine(GetTypeHash(Stem), GetTypeHash(Claim.Label)),
+			GetTypeHash(FString(Reason)));
+		if (ReportedSlotMisses.Contains(Key))
+		{
+			return;
+		}
+		ReportedSlotMisses.Add(Key);
+		UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] overlay layer %s"), *Line);
+	};
+
+	FString Error;
+	// The CLAIM's own channel, which is the slot's: a masked clip on a layer channel is exactly what
+	// the mask exists for, and asking through the base-channel default would refuse every layer this
+	// function exists to load.
+	UAnimSequence* Layer = ResolveClip(Stem, Claim.Label, Mesh, Error, Claim.Channel);
+	if (Layer == nullptr)
+	{
+		// A layer the body cannot bind composes nothing, so the base pose stands alone while the
+		// producer believes it armed one — the failure this report exists to make observable.
+		ReportOnce(TEXT("noasset"), FString::Printf(TEXT("'%s' on '%s' binds no asset: %s"),
+			*Claim.Label, *Stem, *Error));
+		return;
+	}
+	OutAssets.SlotSequence = Layer;
+
+	// **The layers this clip itself declares, resolved the way every host's are.** Retail's autolayer
+	// rule is recursive: the sequence in the overlay slot composes with its OWN declared layers,
+	// exactly as the base does — the shot motion, then its aim grid over it, then its `_delta`
+	// additive. The slot therefore carries the same trio the base channel does, resolved by the same
+	// rule from the same table, rather than a special case per symptom.
+	{
+		const FString SlotOwner = OutSelection.SlotOwnerStem.IsEmpty()
+			? Stem : OutSelection.SlotOwnerStem;
+		ResolveSlotDeclaredAssets(SlotOwner, Claim.Label, Mesh, OutAssets.SlotSpace,
+			OutAssets.SlotAimMaskName, OutAssets.SlotAdditive);
+	}
+
+	// The mask is the whole difference between a partial-body layer and a full-body replacement, and
+	// it lives on the asset because only the bake can answer it (`UElysiumAnimLayerMask`). A layer
+	// that carries none would compose over every bone, which is the opposite of what an overlay is.
+	if (const UElysiumAnimLayerMask* Mask = Layer->FindMetaDataByClass<UElysiumAnimLayerMask>())
+	{
+		OutAssets.SlotMaskName = Mask->Profile;
+	}
+	else
+	{
+		// The body's own stem where the clip-set lookup above named no bank: a label the vocabulary
+		// does not carry leaves `SlotOwnerStem` empty, and a report reading `'label'@''` names nothing
+		// a reader could go and look at.
+		const FString& Owner = OutSelection.SlotOwnerStem.IsEmpty()
+			? Stem : OutSelection.SlotOwnerStem;
+		ReportOnce(TEXT("nomask"), FString::Printf(
+			TEXT("'%s'@'%s' carries no baked bone mask, so it would own the whole rig rather than "
+				 "composing over the base pose"),
+			*Claim.Label, *Owner));
+	}
+
+	// **Neither the envelope nor the rate is copied out beside the asset.** Both are already the
+	// claim's: `ElysiumAnimIntent::SlotWeightAt` rides the envelope over the claim's own phase into
+	// the record's `SlotWeight`, and the rate is exactly what `ClaimForSegment` divided the clip's
+	// authored length by to get the duration that phase is read against. A copy here would be a
+	// second place the layer's timing could be stated from, and nothing keeps two of them in step.
+}
+
+bool UElysiumAnimSubsystem::RefuseMaskedBase(const FElysiumAnimationIntent& Intent,
+	const FElysiumAnimationCatalog& Catalog, USkeletalMesh* Mesh,
+	FElysiumAnimationSelection& OutSelection, FElysiumResolvedAnimation& OutAssets)
+{
+	if (ElysiumAnimIntent::MaskedClipPlayableOn(OutSelection.Channel))
+	{
+		// A masked clip asked for on a LAYER channel is the whole point of the mask. Only the base
+		// pose is the illegal home for one, so every other channel passes through untouched.
+		return false;
+	}
+	const UElysiumAnimLayerMask* Mask = BaseLayerMask(Catalog, OutSelection, Mesh, OutAssets);
+	if (Mask == nullptr)
+	{
+		return false;
+	}
+
+	// Refused, not posed. The masked bones decode to a zero quaternion and a zero position, so a body
+	// handed this as its base pose collapses — and the record has to say which of the two illegal
+	// base clips this was, because "additive" and "partial-body layer" reach the base channel through
+	// different producers and are fixed in different places.
+	OutSelection.bMasked = true;
+	OutSelection.AssetKind = EElysiumAnimAssetKind::None;
+	OutSelection.Outcome = EElysiumAnimOutcome::LayerMaskRejected;
+	OutSelection.Detail = FString::Printf(
+		TEXT("'%s'@'%s' is a partial-body layer (bone mask '%s', %d bones) asked for on the %s channel "
+			 "of '%s', and a masked clip can never own the base pose"),
+		*OutSelection.SequenceLabel, *OutSelection.OwnerStem, *Mask->Profile.ToString(),
+		Mask->OwnedBones, ElysiumAnimIntent::ChannelName(OutSelection.Channel), *Intent.Stem);
+	OutAssets.Sequence = nullptr;
+	OutAssets.Space = nullptr;
+	// Through the ordinary miss funnel, which is already keyed on (stem, request, outcome) — so this
+	// warns once per distinct case rather than once per frame for a body that keeps asking.
+	ReportMiss(Intent, OutSelection);
+	return true;
+}
+
 void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Intent,
 	USkeletalMesh* Mesh, FElysiumAnimationSelection& OutSelection,
-	FElysiumResolvedAnimation& OutAssets)
+	FElysiumResolvedAnimation& OutAssets, const FElysiumAnimationRequest* SlotClaim)
 {
 	OutAssets = FElysiumResolvedAnimation();
 
@@ -698,6 +1080,17 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 	// layer resolution reads the same catalog the primary asset resolved against.
 	const FElysiumAnimationCatalog Catalog = BuildCatalog(Intent.Stem);
 	ElysiumAnimResolve::Resolve(Intent, Catalog, OutSelection);
+
+	// **The overlay slot is resolved ahead of every base rung, because it does not depend on one.**
+	// A layer composes over whatever the base turned out to be — including a base that resolved
+	// nothing at all — so a slot resolved after the base's own early returns would silently stop
+	// layering on exactly the bodies whose base pose already missed. `Resolve` above rebuilt the
+	// record from scratch, which is why the slot's fields are written after it rather than before.
+	if (SlotClaim != nullptr)
+	{
+		ResolveSlotLayer(*SlotClaim, Intent.Stem, Mesh, OutSelection, OutAssets);
+	}
+
 	if (OutSelection.Outcome == EElysiumAnimOutcome::GridStateRefused)
 	{
 		ReportMiss(Intent, OutSelection);
@@ -733,6 +1126,12 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 			OutSelection.SequenceLabel);
 		if (OutAssets.Space != nullptr)
 		{
+			if (RefuseMaskedBase(Intent, Catalog, Mesh, OutSelection, OutAssets))
+			{
+				// Nothing to compose onto: the base was refused rather than resolved, so the host's
+				// own autolayers have no pose to overwrite bones on.
+				return;
+			}
 			ResolveLayerAssets(Catalog, OutSelection, Mesh, OutAssets);
 			return;
 		}
@@ -754,6 +1153,11 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 		// A named clip the mount does not carry, on a body that has its mesh: a bake gap rather than
 		// a timing one, and the only warning that separates the two.
 		ReportMiss(Intent, OutSelection);
+	}
+	else if (RefuseMaskedBase(Intent, Catalog, Mesh, OutSelection, OutAssets))
+	{
+		// Nothing to compose onto: the base was refused rather than resolved.
+		return;
 	}
 
 	// A layer rides a DIFFERENT pose than the one it composes onto, so it resolves whether or not

@@ -492,18 +492,51 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 	TestEqual(TEXT("and strafe left"), BuildFromStick(FVector2D(0.0f, -1.0f)) & (Fwd | Bck | MvL | MvR), MvL);
 	TestEqual(TEXT("and strafe right"), BuildFromStick(FVector2D(0.0f, 1.0f)) & (Fwd | Bck | MvL | MvR), MvR);
 
-	// A 45-degree push is 0.707 on both components, which is the whole reason the threshold sits
-	// where it does: a diagonal must read as the two keys a keyboard would hold, not as one.
+	// A true 45-degree push is the diagonal a keyboard states by holding two keys, and only a true
+	// one: the sector is centred on its direction, so both bits appear at 45° and nowhere else.
 	const float Diagonal = FMath::Sqrt(0.5f);
 	TestEqual(TEXT("a diagonal push states both of its keys"),
 		BuildFromStick(FVector2D(Diagonal, -Diagonal)) & (Fwd | Bck | MvL | MvR), Fwd | MvL);
 
-	// Below the threshold the pad is not asking for a direction, and a drifting stick must not
-	// select a directional attack the player never aimed for.
-	TestEqual(TEXT("a barely-deflected stick states nothing"),
-		BuildFromStick(FVector2D(ElysiumInput::StickDirectionThreshold - 0.01f, 0.0f)) & (Fwd | Bck | MvL | MvR), uint64(0));
-	TestEqual(TEXT("the threshold itself counts"),
-		BuildFromStick(FVector2D(ElysiumInput::StickDirectionThreshold, 0.0f)) & (Fwd | Bck | MvL | MvR), Fwd);
+	// --- The direction is the ANGLE, not a test per component ------------------------------------
+	// The failure this replaces: a thumb pushing left rests 20-40 degrees off the axis, both
+	// components cleared a 0.5 per-axis threshold, and the state came out `Forward|MoveLeft` — which
+	// `RankStateMask` ranks as the FORWARD attack, because the forward/back pair outranks the strafe
+	// pair. A keyboard player holding only `+moveleft` states one bit, so a pad pushed left must too.
+	TestEqual(TEXT("a push 20 degrees off left is still left alone"),
+		BuildFromStick(FVector2D(0.342f, -0.940f)) & (Fwd | Bck | MvL | MvR), MvL);
+	TestEqual(TEXT("and 20 degrees off forward is forward alone"),
+		BuildFromStick(FVector2D(0.940f, 0.342f)) & (Fwd | Bck | MvL | MvR), Fwd);
+	TestEqual(TEXT("past the 22.5-degree sector edge the second bit appears"),
+		BuildFromStick(FVector2D(0.866f, -0.500f)) & (Fwd | Bck | MvL | MvR), Fwd | MvL);
+
+	// **Deflection decides how fast, never whether.** The move dead zone upstream already answered
+	// "is the player asking"; a second threshold here would leave a band in which the character
+	// visibly strafes while the selector calls the state neutral, which is a pad that moves and
+	// cannot reach a directional attack at all.
+	TestEqual(TEXT("a shallow push states its direction like a tapped key"),
+		BuildFromStick(FVector2D(0.0f, -0.2f)) & (Fwd | Bck | MvL | MvR), MvL);
+	TestEqual(TEXT("a centred stick states nothing"),
+		BuildFromStick(FVector2D::ZeroVector) & (Fwd | Bck | MvL | MvR), uint64(0));
+
+	// Every cardinal and diagonal key state round-trips unchanged, which is the whole parity claim:
+	// the derivation cannot invent a direction a keyboard would not have stated for the same vector.
+	const TPair<FVector2D, uint64> KeyStates[] = {
+		{ FVector2D( 1.0f,  0.0f), Fwd },
+		{ FVector2D(-1.0f,  0.0f), Bck },
+		{ FVector2D( 0.0f, -1.0f), MvL },
+		{ FVector2D( 0.0f,  1.0f), MvR },
+		{ FVector2D( 1.0f,  1.0f), Fwd | MvR },
+		{ FVector2D( 1.0f, -1.0f), Fwd | MvL },
+		{ FVector2D(-1.0f,  1.0f), Bck | MvR },
+		{ FVector2D(-1.0f, -1.0f), Bck | MvL },
+	};
+	for (const TPair<FVector2D, uint64>& State : KeyStates)
+	{
+		TestEqual(*FString::Printf(TEXT("(%.0f,%.0f) states what the keys that make it state"),
+			State.Key.X, State.Key.Y),
+			ElysiumInput::DirectionButtonsFromMove(State.Key), State.Value);
+	}
 
 	// The derivation only ever ADDS. A keyboard holding two opposed keys cancels to a zero vector,
 	// and both of its own bits still stand — clearing them here would make the button field disagree

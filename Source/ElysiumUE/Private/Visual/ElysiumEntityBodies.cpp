@@ -1,6 +1,8 @@
 #include "Visual/ElysiumEntityBodies.h"
 
+#include "ElysiumAnimationIntent.h" // ElysiumAnimIntent::NumChannels/ChannelName
 #include "ElysiumContentPaths.h"
+#include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 #include "Visual/ElysiumEntityBodiesLog.h"
@@ -60,6 +62,84 @@ namespace
 		}
 		return Cached;
 	}
+
+	// True the first time a key is offered. The overlay-arm refusals ride this rather than logging
+	// unguarded, because their path is one trigger pull: a fire layer refused on a body that cannot
+	// compose it is refused again on every shot, and a warning per shot buries every other line in
+	// the log at autofire rates. The set is the component's, so a re-export or a rebuilt body reports
+	// the next fault instead of staying silent about it.
+	bool ShouldReportRefusalOnce(TSet<FString>& Reported, const FString& Key)
+	{
+		bool bAlready = false;
+		Reported.Add(Key, &bAlready);
+		return !bAlready;
+	}
+
+	// Arm one claimed `UpperBody` segment on the graph's overlay slot — retail's
+	// `CBaseAnimatingOverlay` slot 0.
+	//
+	// It is a separate path from the montage slot rather than a parameter on it, because the two are
+	// different mechanisms with different results: `DefaultSlot` sits on top of the whole blend stack
+	// and REPLACES the pose, while this composes over whatever owns the base through the layer clip's
+	// own per-bone mask. A masked clip put through the montage slot poses its unowned bones from a
+	// zero quaternion and a zero position, which collapses the body.
+	//
+	// The mask is read off the loaded asset because that is the only thing that can answer it — the
+	// bake writes `UElysiumAnimLayerMask` onto the sequence when any bone on the emitted skeleton has
+	// `weight`@0 == 0 — and never from the label, which says nothing about which bones a clip owns.
+	//
+	// **The claim, not the segment, is what carries the phase and the envelope.** `ClaimForSegment`
+	// already divided the clip's authored length by its playback rate into one hold, and both the
+	// weight ramp and the cycle are read off that one number, so the layer cannot be weighed against
+	// a length other than the one it ends on.
+	bool ArmSegmentOnSlot(UElysiumBodyAnimInstance* Host, const FString& Stem,
+		const FElysiumClipSegment& Segment, const FElysiumClipIdentity& Identity, UAnimSequence* Anim,
+		const FElysiumAnimationRequest& Claim, TSet<FString>& ReportedRefusals,
+		UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh)
+	{
+		// The host the caller already resolved off the body, narrowed rather than fetched again: the
+		// slot blend belongs to the biped graph, and every body reaching here has had its animation
+		// host looked up one line earlier.
+		UElysiumBipedAnimInstance* Graph = Cast<UElysiumBipedAnimInstance>(Host);
+		if (Graph == nullptr)
+		{
+			// A body with no compiled graph has no slot blend at all. There is no montage fallback
+			// here on purpose: playing the layer through one is the collapse this path exists to
+			// avoid, so the layer is refused and said out loud.
+			//
+			// Latched on (stem|label), because this arm is reached once per trigger pull: an autofire
+			// weapon on a graph-less body would otherwise restate one missing-graph fault at its own
+			// fire rate. The fault belongs to the body rather than to the shot, so the first line
+			// carries the whole of it.
+			if (ShouldReportRefusalOnce(ReportedRefusals,
+				FString::Printf(TEXT("nograph:%s|%s"), *Stem, *Segment.ClipName)))
+			{
+				UE_LOG(LogElysiumBodies, Warning,
+					TEXT("npc '%s' layer '%s': this body carries no Elysium animation graph, so it has "
+					     "no overlay slot to compose on and the layer is refused"),
+					*Stem, *Segment.ClipName);
+			}
+			return false;
+		}
+		const UElysiumAnimLayerMask* Mask = Anim != nullptr
+			? Anim->FindMetaDataByClass<UElysiumAnimLayerMask>() : nullptr;
+		// The identity travels with the layer for the same reason it travels with a one-shot: the
+		// ranged families compose HERE, their clips carry the 3030-3044 commit ids, and
+		// `FElysiumAnimating::AdvanceAnimEvents` addresses a timeline by (bank, label). A layer armed
+		// without one plays and dispatches nothing.
+		// The clip's own declared layers, resolved HERE through the same helper the driver's publish
+		// uses — one frame of bare shot before the first publish is exactly the flash this closes.
+		UBlendSpace* AimSpace = nullptr;
+		FName AimMaskName;
+		UAnimSequence* Additive = nullptr;
+		if (Anims != nullptr)
+		{
+			Anims->ResolveSlotDeclaredAssets(Identity.OwnerStem, Identity.Label, Mesh, AimSpace,
+				AimMaskName, Additive);
+		}
+		return Graph->PlaySlotLayer(Identity, Anim, Mask != nullptr ? Mask->Profile : NAME_None,
+			Claim, AimSpace, AimMaskName, Additive);
+	}
 }
 
 UElysiumEntityBodies::UElysiumEntityBodies()
@@ -79,9 +159,10 @@ FString ElysiumEntityAnimation::NpcVisualCacheKey(const FString& Stem, bool bPla
 	return Stem.ToLower() + (bPlayerMaterial ? TEXT("|player") : TEXT("|npc"));
 }
 
-FString ElysiumEntityAnimation::NpcClipCacheKey(const FString& Stem, const FString& ClipName)
+FString ElysiumEntityAnimation::NpcClipCacheKey(const FString& Stem, const FString& ClipName,
+	EElysiumAnimChannel Channel)
 {
-	return Stem + TEXT("|") + ClipName;
+	return Stem + TEXT("|") + ClipName + TEXT("|") + ElysiumAnimIntent::ChannelName(Channel);
 }
 
 FString ElysiumEntityAnimation::CinematicClipCacheKey(
@@ -150,7 +231,7 @@ USkeletalMesh* UElysiumEntityBodies::ResolveNpcMesh(const FString& Stem, bool bP
 }
 
 UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const FString& ClipName,
-	USkeletalMesh* TargetMesh)
+	USkeletalMesh* TargetMesh, EElysiumAnimChannel Channel)
 {
 	if (Stem.IsEmpty() || ClipName.IsEmpty())
 	{
@@ -165,8 +246,13 @@ UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const F
 	// CAP7.3 — key on the animation the label will actually load, not the label. A blend-grid label
 	// selects a cell from the pose parameters, so a cache keyed on `walk` would pin whichever cell was
 	// resolved first and no parameter could ever move it again.
+	//
+	// The CHANNEL rides in the key beside it: a baked partial-body layer resolves for a layer channel
+	// and is refused for the base one, so the same animation has two answers and a shared entry would
+	// let the first caller decide for the second — either a refused layer that never composes or a
+	// collapsed body posing a masked clip as its base.
 	const FString Key = ElysiumEntityAnimation::NpcClipCacheKey(VisualKey,
-		Anims != nullptr ? Anims->ResolveClipAnimName(Stem, ClipName) : ClipName);
+		Anims != nullptr ? Anims->ResolveClipAnimName(Stem, ClipName) : ClipName, Channel);
 	if (const TObjectPtr<UAnimSequence>* Cached = NpcAnimCache.Find(Key))
 	{
 		return Cached->Get();
@@ -177,10 +263,11 @@ UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const F
 	if (Anims != nullptr && Mesh != nullptr && *Mesh != nullptr)
 	{
 		FString Error;
-		Anim = Anims->ResolveClip(Stem, ClipName, Mesh->Get(), Error);
+		Anim = Anims->ResolveClip(Stem, ClipName, Mesh->Get(), Error, Channel);
 		if (Anim == nullptr)
 		{
-			UE_LOG(LogElysiumBodies, Warning, TEXT("npc '%s' clip '%s': %s"), *Stem, *ClipName, *Error);
+			UE_LOG(LogElysiumBodies, Warning, TEXT("npc '%s' clip '%s' (%s): %s"), *Stem, *ClipName,
+				ElysiumAnimIntent::ChannelName(Channel), *Error);
 		}
 	}
 	NpcAnimCache.Add(Key, Anim);
@@ -240,6 +327,11 @@ void UElysiumEntityBodies::NoteHeldReactionPreempted(USkeletalMeshComponent* Bod
 	// **The pose goes down with the claim.** A held reaction that no longer owns the channel must not
 	// keep posing over the producer that took it — the block pose outliving its claim is the same
 	// defect as the claim outliving its pose, read the other way round.
+	//
+	// **Base-only, deliberately.** A held reaction is a statement about the BASE pose — the whole body
+	// is standing in a flinch or a block — so only a claim that took the base channel can have
+	// preempted it. A claim on another channel (a partial-body overlay layer) leaves the base pose,
+	// and the reaction standing on it, exactly where it was.
 	if (GrantedHandle == 0 || Request.Channel != EElysiumAnimChannel::Base)
 	{
 		return;
@@ -354,8 +446,11 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 {
 	const FString& ClipName = Segment.ClipName;
 	const bool bLoop = Segment.bLoop;
+	// The segment's own channel decides which answer the resolver may give: a baked partial-body
+	// layer is refused for the base pose and handed over for a layer channel, and a caller that let
+	// the base default stand for a layer would be told its layer does not exist.
 	UAnimSequence* Anim = Body
-		? ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset())
+		? ResolveNpcClip(Stem, ClipName, Body->GetSkeletalMeshAsset(), Segment.Channel)
 		: nullptr;
 	if (Anim == nullptr)
 	{
@@ -428,27 +523,83 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	const FElysiumAnimationRequest Claim =
 		ElysiumAnimIntent::ClaimForSegment(Segment, Anim->GetPlayLength());
 	uint32 ClaimHandle = 0;
-	if (SubmitBodyAnimRequest(Body, Claim, ClaimHandle) == EElysiumAnimClaim::Refused)
+	const EElysiumAnimClaim Verdict = SubmitBodyAnimRequest(Body, Claim, ClaimHandle);
+	// **A layer channel needs an arbiter; the base pose does not.** `NoArbiter` is an ordinary answer
+	// for a green-room stand, a preview body or an unattached visual — nothing publishes locomotion
+	// against them, so a base clip simply plays with no claim to hold. The overlay slot is the
+	// opposite: its weight and its phase are republished by the driver's own record every frame, and
+	// with no driver behind the body nothing ever advances or ends the layer. It would stand at the
+	// frame it was armed on, at the weight it was armed at, for the life of the body — so it is
+	// refused here instead, and said out loud because a producer that believes it armed a layer is
+	// otherwise looking at a body that merely poses wrong.
+	//
+	// Said once per BODY rather than once per shot: whether a driver stands behind a body is a
+	// property of the body, not of the clip, so every layer this body is ever handed is refused for
+	// the same reason — and an armed cast body firing on autofire would restate it at its own fire
+	// rate. The first line names the body, which is the whole of the fault.
+	if (Verdict == EElysiumAnimClaim::NoArbiter
+		&& Segment.Channel != EElysiumAnimChannel::Base)
+	{
+		if (ShouldReportRefusalOnce(ReportedSlotRefusals,
+			FString::Printf(TEXT("noarbiter:%s"), *GetNameSafe(Body))))
+		{
+			UE_LOG(LogElysiumBodies, Warning,
+				TEXT("npc '%s' layer '%s' on %s: this body has no animation driver arbitrating it, so "
+				     "nothing would ever advance or end an overlay layer on the %s channel; refused"),
+				*Stem, *ClipName, *GetNameSafe(Body),
+				ElysiumAnimIntent::ChannelName(Segment.Channel));
+		}
+		return false;
+	}
+	if (Verdict == EElysiumAnimClaim::Refused)
 	{
 		// An ordinary negative outcome, not a failure: the priority table answered and a higher band
-		// owns the pose. Verbose for the same reason the one-shot seam's refusal is — a body a scene
-		// or a reaction owns refuses ambient clips for as long as it holds them.
+		// owns the channel. Verbose for the same reason the one-shot seam's refusal is — a body a
+		// scene or a reaction owns refuses ambient clips for as long as it holds them.
+		//
+		// The channel is NAMED rather than spelled: a segment states its own, so a refused overlay
+		// layer and a refused base pose are two different objects and a fixed literal would
+		// misidentify one of them.
 		UE_LOG(LogElysiumBodies, Verbose,
-			TEXT("clip '%s' on %s was refused the base channel at the %s band"), *ClipName, *Stem,
+			TEXT("clip '%s' on %s was refused the %s channel at the %s band"), *ClipName, *Stem,
+			ElysiumAnimIntent::ChannelName(Segment.Channel),
 			ElysiumAnimIntent::PriorityName(Segment.Priority));
 		return false;
 	}
 
-	// The producer's `m_flPlaybackRate` goes to the host with the clip. Every caller that names none
-	// hands over 1.0, which is the value `ResetSequenceInfo` leaves behind, so nothing that never set
-	// a rate is changed by one that does.
-	if (!Inst->PlayOneShot(Identity, Anim, bLoop, Fade, Fade, /*bRestart=*/false,
-		Segment.PlaybackRate))
+	// **A layer segment does not go on `DefaultSlot`, and the fork is the whole point of the
+	// channel.** That slot sits ON TOP of the entire blend stack and replaces the pose outright, so a
+	// masked partial-body layer played through it would own the whole body — which is the opposite of
+	// composing over it. An `UpperBody` segment is retail's `CBaseAnimatingOverlay` slot 0 and belongs
+	// on the graph's own slot blend, gated by the clip's baked bone mask and weighed by the envelope
+	// its claim states; the base pose it rides over is left to whoever owns it.
+	//
+	// The mask comes off the ASSET, which is the only thing that can answer it (`UElysiumAnimLayerMask`
+	// is metadata the bake writes onto the sequence), and is never guessed from the label.
+	const bool bPlayed = Segment.Channel == EElysiumAnimChannel::UpperBody
+		? ArmSegmentOnSlot(Inst, Stem, Segment, Identity, Anim, Claim, ReportedSlotRefusals,
+			Anims, Body->GetSkeletalMeshAsset())
+		// The producer's `m_flPlaybackRate` goes to the host with the clip. Every caller that names
+		// none hands over 1.0, which is the value `ResetSequenceInfo` leaves behind, so nothing that
+		// never set a rate is changed by one that does.
+		: Inst->PlayOneShot(Identity, Anim, bLoop, Fade, Fade, /*bRestart=*/false,
+			Segment.PlaybackRate);
+	if (!bPlayed)
 	{
-		UE_LOG(LogElysiumBodies, Warning,
-			TEXT("npc '%s' clip '%s' (loop=%d, %.3fs): the animation host refused to play it, so the "
-			     "body keeps posing whatever it already held"),
-			*Stem, *ClipName, bLoop ? 1 : 0, Anim->GetPlayLength());
+		// **The overlay arm names its own refusal, and this one does not restate it.** Every gate on
+		// that path — a body with no biped graph, a maskless clip, a claim carrying no length —
+		// reports where it is owned, naming WHICH gate answered, and each is latched there. A second
+		// line here would double every one of them on a path a trigger pull reaches, and it says
+		// less than the first. The base arm's `PlayOneShot` refuses without a line of its own, so it
+		// is reported here.
+		if (Segment.Channel != EElysiumAnimChannel::UpperBody)
+		{
+			UE_LOG(LogElysiumBodies, Warning,
+				TEXT("npc '%s' clip '%s' on the %s channel (loop=%d, %.3fs): the animation host refused "
+				     "to play it, so the body keeps posing whatever it already held"),
+				*Stem, *ClipName, ElysiumAnimIntent::ChannelName(Segment.Channel), bLoop ? 1 : 0,
+				Anim->GetPlayLength());
+		}
 		// The claim it was granted goes straight back: a channel held for a clip that never started
 		// is exactly the leaked claim the hold report exists to make visible.
 		if (ClaimHandle != 0)
@@ -465,13 +616,24 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	//
 	// A segment that does NOT hold still drops the record: the run it belonged to has been replaced by
 	// an ordinary clip, so there is no longer a run claim to release.
+	//
+	// **Both writes are scoped to the segment's OWN channel** (`FElysiumSegmentClaims::Set`). The
+	// driver replaced only that channel's slot, so a body's other channels are still standing exactly
+	// what they were standing — and an ordinary ambient clip that cleared the whole record would
+	// strand a held layer's claim on a channel whose producer has no handle left to give back.
 	if (Segment.bHoldUntilReleased && ClaimHandle != 0)
 	{
-		SegmentClaims.Add(FObjectKey(Body), ClaimHandle);
+		SegmentClaims.FindOrAdd(FObjectKey(Body)).Set(Segment.Channel, ClaimHandle);
 	}
-	else
+	else if (FElysiumSegmentClaims* Claims = SegmentClaims.Find(FObjectKey(Body)))
 	{
-		SegmentClaims.Remove(FObjectKey(Body));
+		Claims->Set(Segment.Channel, 0);
+		if (Claims->IsEmpty())
+		{
+			// Nothing left to remember, so the body leaves the map rather than sitting in it as an
+			// all-zero row a sweep would have to walk.
+			SegmentClaims.Remove(FObjectKey(Body));
+		}
 	}
 	UE_LOG(LogElysiumBodies, Verbose, TEXT("clip '%s' on %s (loop=%d, %.3fs, rate %.2f, %s%s%s)"),
 		*ClipName, *Stem, bLoop ? 1 : 0, Anim->GetPlayLength(), Segment.PlaybackRate,
@@ -491,12 +653,36 @@ void UElysiumEntityBodies::ReleaseNpcSegment(USkeletalMeshComponent* Body)
 	// A claim that already lapsed — outranked by a reaction, replaced by another run, or dropped with
 	// the driver across a map epoch — releases nothing, which is the ordinary end of a run rather
 	// than a failure. The same shape as `ReleaseCinematicClaim`, and for the same reason.
-	uint32 Handle = 0;
-	if (Body != nullptr && SegmentClaims.RemoveAndCopyValue(FObjectKey(Body), Handle))
+	FElysiumSegmentClaims* Row = Body != nullptr ? SegmentClaims.Find(FObjectKey(Body)) : nullptr;
+	if (Row == nullptr)
 	{
-		ReleaseBodyAnimRequest(Body, Handle);
-		UE_LOG(LogElysiumBodies, Verbose,
-			TEXT("segment claim on %s released by its run"), *GetNameSafe(Body));
+		return;
+	}
+	// Read destructively, and the row leaves the map with it: this call ends the RUN rather than one
+	// layer of it, so a handle read out a second time would release a claim the driver has since
+	// granted to whoever holds that channel now.
+	const FElysiumSegmentClaims Claims = Row->TakeAll();
+	SegmentClaims.Remove(FObjectKey(Body));
+	// Every channel the run took: the producer that took these has one stop path and no handle of its
+	// own to come back with.
+	for (int32 Channel = 0; Channel < ElysiumAnimIntent::NumChannels; ++Channel)
+	{
+		if (Claims.Handles[Channel] == 0)
+		{
+			continue;
+		}
+		ReleaseBodyAnimRequest(Body, Claims.Handles[Channel]);
+		// **The pose goes down with the claim**, the same rule the held reaction's release states: a
+		// layer that no longer owns the overlay slot must not keep composing over the base pose. The
+		// driver's own next publish would clear it a frame later, and that frame is a shot still
+		// visibly on the body after the producer ended it.
+		if (static_cast<EElysiumAnimChannel>(Channel) == EElysiumAnimChannel::UpperBody)
+		{
+			UElysiumBipedAnimInstance::StopSlotLayerOn(Body);
+		}
+		UE_LOG(LogElysiumBodies, Verbose, TEXT("segment claim on %s (%s) released by its run"),
+			*GetNameSafe(Body),
+			ElysiumAnimIntent::ChannelName(static_cast<EElysiumAnimChannel>(Channel)));
 	}
 }
 
@@ -843,9 +1029,11 @@ void UElysiumEntityBodies::ForgetNpcVisuals()
 	const int32 Meshes = NpcMeshCache.Num();
 	NpcMeshCache.Empty();
 	NpcAnimCache.Empty();
-	// The warn-once set goes with them: a re-export that fixes a missing one-shot must be able to
-	// report the next miss rather than staying silent about it.
+	// The warn-once sets go with them: a re-export that fixes a missing one-shot must be able to
+	// report the next miss rather than staying silent about it, and the overlay-arm refusals are
+	// keyed on bodies that are exactly what is being forgotten.
 	ReportedMissingOneShots.Empty();
+	ReportedSlotRefusals.Empty();
 	// And the held-reaction records, whose bodies are exactly what is being forgotten: a record naming
 	// a component nothing holds any more can never be released by its producer, which is the inert
 	// entry a claim map has to be swept of rather than left to a map epoch.
@@ -1122,6 +1310,12 @@ void UElysiumEntityBodies::ReleaseBodyAnimClaims(USkeletalMeshComponent* Body)
 	// And the run's own claim, tracked here for the third time for the third identical reason: a
 	// scripted beat or an ambient spot that dies mid-run holds a claim its stop path will never reach.
 	ReleaseNpcSegment(Body);
+	// **The overlay slot's POSE travels with the wholesale release below, not with this call.** Both
+	// routes report whether a layer claim was among the ones they dropped and take its pose down on
+	// this same body (`UElysiumBipedAnimInstance::StopSlotLayerOn`) — the claim going back is not
+	// what stops a layer composing, and a body released wholesale may never publish again. A body
+	// that reaches neither route has no driver and therefore never held a layer at all, because
+	// `PlayNpcClip` refuses a layer segment on an unarbitrated body outright.
 	if (AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
 	{
 		Motor->ReleaseAllAnimRequests();

@@ -70,6 +70,25 @@ namespace ElysiumAnimIntent
 {
 	// How many channels the slot array carries — one slot per `EElysiumAnimChannel` value.
 	inline constexpr int32 NumChannels = 5;
+
+	// Whether a clip that is a PARTIAL pose — a baked per-bone mask, or an additive delta — may be
+	// posed on this channel at all.
+	//
+	// **Base is the one illegal home for either, and the rule belongs to the CHANNEL rather than to
+	// any producer.** VtMB composes fire, reload and dry-fire as `CBaseAnimatingOverlay` slot 0 — a
+	// masked partial-body layer over the base pose — and the bones the mask leaves out decode to a
+	// zero quaternion and a zero position. Posed as the base that collapses the character (pelvis and
+	// legs gone, arms vertical), verified live and in the retail binaries; composed on a layer channel
+	// the same bytes are exactly what the mask is for. An additive stores the difference from a base
+	// pose rather than a pose, so standing one as the base folds the skeleton the same way.
+	//
+	// One predicate because three doors ask it — the pure resolver's additive refusal, the locomotion
+	// resolve and the montage/claim resolve — and a second spelling of "which channel may pose a
+	// partial clip" is a second answer waiting to let one of them through.
+	inline bool MaskedClipPlayableOn(EElysiumAnimChannel Channel)
+	{
+		return Channel != EElysiumAnimChannel::Base;
+	}
 }
 
 // Step 1's priority table, whole and in one place: the ORDER of these values IS the table, and a
@@ -130,6 +149,17 @@ struct FElysiumAnimationRequest
 	// looping clip and a scene-pinned one have no natural end; a one-shot passes its clip length so
 	// an armer that never comes back cannot park the channel.
 	float HoldSeconds = 0.0f;
+	// The claim's clip as a WALL-CLOCK length: its authored seconds over the playback rate the
+	// producer stated. For a one-shot it is the same number `HoldSeconds` carries; for a claim with
+	// no expiry it is the only length there is, and it is what the overlay slot's phase is read
+	// against. A held layer answering no phase at all pins its evaluator on frame 0 for as long as
+	// the claim stands, which is one still frame composed at whatever weight the envelope gives
+	// cycle 0.
+	float ClipLengthSeconds = 0.0f;
+	// Whether the clip repeats, carried from the segment that armed it. Read only where the claim has
+	// no expiry to read a phase against: the phase then WRAPS instead of clamping, so a looping layer
+	// rides its motion again from the head rather than running once and standing at its own end.
+	bool bLoop = false;
 };
 
 // One segment of a montage-slot run: what a producer hands the clip funnel, band and all (LIFE5).
@@ -180,6 +210,11 @@ struct FElysiumClipSegment
 	// default is false, which is what every caller that is not a run means: one clip, one claim, and
 	// the claim goes when the clip does.
 	bool bHoldUntilReleased = false;
+	// Which channel this segment plays on. Base is the default because a producer that states none
+	// means the base pose; a partial-body layer clip — retail's `CBaseAnimatingOverlay` slot 0, the
+	// ranged fire/reload/dry-fire families — names `UpperBody`, which composes OVER the base rather
+	// than replacing it.
+	EElysiumAnimChannel Channel = EElysiumAnimChannel::Base;
 
 	FElysiumClipSegment() = default;
 	// The band-less clip, which is what every caller outside a run means: the ambient band, one clip,
@@ -195,11 +230,13 @@ struct FElysiumClipSegment
 
 namespace ElysiumAnimIntent
 {
-	// The segment -> base-channel claim conversion, in one place because it is a HINGE rather than a
-	// copy: `Activity` is what carries retail's `ForcePreTranslatedSequenceAndActivity` from the
-	// producer that armed the clip to every reader of "what is this body doing" — the melee movement
-	// lock, its reselection guard and the airborne-attack self-latch. Dropping that one field leaves
-	// a clip that plays, a claim that holds the channel, and three mechanisms silently dead.
+	// The segment -> claim conversion, in one place because it is a HINGE rather than a copy: the
+	// claim inherits the segment's own channel — Base for a producer that states none, UpperBody for
+	// a partial-body layer that composes over the base — and `Activity` is what carries retail's
+	// `ForcePreTranslatedSequenceAndActivity` from the producer that armed the clip to every reader of
+	// "what is this body doing" — the melee movement lock, its reselection guard and the
+	// airborne-attack self-latch. Dropping that one field leaves a clip that plays, a claim that holds
+	// the channel, and three mechanisms silently dead.
 	//
 	// `PlayLengthSeconds` is the resolved clip's own AUTHORED length. A looping or held segment claims
 	// with no duration — a run spans several clips and only its stop path ends the claim — while a
@@ -214,16 +251,236 @@ namespace ElysiumAnimIntent
 	{
 		FElysiumAnimationRequest Claim;
 		Claim.Source = Segment.Source;
-		Claim.Channel = EElysiumAnimChannel::Base;
+		Claim.Channel = Segment.Channel;
 		Claim.Priority = Segment.Priority;
 		Claim.Label = Segment.ClipName;
 		Claim.Activity = Segment.Activity;
+		// **One division, read twice.** The clip's wall-clock length is what a one-shot's expiry IS,
+		// and it is what a duration-less claim's phase rides; deriving them separately is how the
+		// layer comes to be weighed against a length other than the one it plays at.
+		Claim.ClipLengthSeconds =
+			PlayLengthSeconds / FMath::Max(Segment.PlaybackRate, UE_KINDA_SMALL_NUMBER);
+		Claim.bLoop = Segment.bLoop;
 		Claim.HoldSeconds = (Segment.bLoop || Segment.bHoldUntilReleased)
 			? 0.0f
-			: PlayLengthSeconds / FMath::Max(Segment.PlaybackRate, UE_KINDA_SMALL_NUMBER);
+			: Claim.ClipLengthSeconds;
 		return Claim;
 	}
+
+	// The overlay slot's weight ceiling — retail's `m_flWeightMax`, which is **1.0 on every layer the
+	// game arms**. Named once because the envelope below is capped at it and a second spelling of the
+	// ceiling is a second ceiling.
+	inline constexpr float SlotWeightMax = 1.0f;
+
+	// An overlay layer's blend envelope, in the units retail states it in: fractions of the layer
+	// clip's OWN CYCLE, never seconds. A fraction rides the clip, so a rate-scaled layer ramps over
+	// the same part of its motion however fast it is played.
+	struct FSlotBlend
+	{
+		float InFraction = 0.0f;
+		float OutFraction = 0.0f;
+	};
+
+	// Which envelope a layer clip's activity family asks for. Both answers are retail's own measured
+	// values, and there are only two:
+	//
+	//  * the ATTACK families — `ACT_RANGE_ATTACK1_LAYER` and its per-weapon renames,
+	//    `ACT_DRYFIRE_LAYER`, the thrown pullback/hold/throw/roll layers — blend in and out over
+	//    **zero**: the layer is at full weight on the frame it is armed and gone on the frame its
+	//    cycle reaches 1. A snap, not a fast ramp.
+	//  * `ACT_RELOAD_LAYER` blends over **0.2 of its cycle** at each end, shaped by the smoothstep
+	//    `w = 3w^2 - 2w^3` and capped at `SlotWeightMax`.
+	//
+	// One helper, because the pair is read by both the thing that arms a layer and the thing that
+	// weighs it: two tables of the same two constants are two answers waiting to disagree. The key is
+	// the LOGICAL layer activity the producer forced, which is the only thing that names the family —
+	// a clip name cannot, because a weapon's reload layer and its fire layer are both `<weapon>_*`.
+	//
+	// **Matched as a PREFIX, defensively.** The only rename table (`GRenames`,
+	// `ElysiumWeaponActivityTables.cpp`) never touches `ACT_RELOAD_LAYER` — `GActReloadLayer`
+	// (`ElysiumWeaponClasses.cpp`) carries the LOGICAL activity constant verbatim for every weapon, so
+	// the exact generic spelling is what arrives here. The prefix is tolerance rather than a
+	// requirement: it means a producer that ever did hand over a per-weapon spelling still takes the
+	// reload envelope instead of silently falling to the snap branch below. The renamed attack family
+	// (`ACT_RANGE_ATTACK_LAYER_<FAMILY>`) does not begin with this token and still misses, which is the
+	// right answer: that family is the one that snaps.
+	inline FSlotBlend SlotBlendFor(const FString& LayerActivity)
+	{
+		if (LayerActivity.StartsWith(TEXT("ACT_RELOAD_LAYER"), ESearchCase::IgnoreCase))
+		{
+			return FSlotBlend{ 0.2f, 0.2f };
+		}
+		// **The snap envelope is the deliberate fallback, not a gap.** Every layer family retail
+		// measures except the reload blends over zero at both ends, so a layer whose activity names no
+		// family at all is armed at weight and gone with its clip — the same behaviour, stated once.
+		return FSlotBlend{ 0.0f, 0.0f };
+	}
+
+	// The one length a slot claim's phase is read against, seconds.
+	//
+	// **For a one-shot the expiry and the clip are the same number.** `ClaimForSegment` set
+	// `HoldSeconds` to the clip's wall-clock length and `FElysiumAnimationDriver::AdvanceRequests`
+	// drops the claim at exactly it, so the phase and the expiry are one clock read twice — a phase
+	// taken off any other length would reach 1 before or after the slot stops holding, and the layer
+	// would pop off mid-clip or linger past its end with nothing saying which.
+	//
+	// A claim with no expiry — a looping layer, or one its producer holds — still has a clip, and
+	// that clip's own length is what its motion rides.
+	inline float SlotPhaseLength(const FElysiumAnimationRequest& Claim)
+	{
+		return Claim.HoldSeconds > 0.0f ? Claim.HoldSeconds : Claim.ClipLengthSeconds;
+	}
+
+	// Where an overlay slot's claim stands on its clip, 0..1.
+	//
+	// **A duration-less claim reports the phase of its own clip, never zero.** A layer pinned at
+	// phase zero is not a layer that is waiting — it is one still frame of the clip, held on the
+	// evaluator for as long as the producer holds the channel, at whatever weight the envelope gives
+	// cycle 0. The claim carries the clip's length precisely so the answer here is the motion the
+	// layer is actually performing.
+	//
+	// A LOOPING claim wraps rather than clamping, which is what honours the segment's own `bLoop` on
+	// this path: the layer rides its motion again from the head, and the envelope rides with it. A
+	// held claim that does NOT loop clamps at 1 instead — its clip has ended, and retail's overlay
+	// weight dies at cycle 1 whether or not the producer has come back for the channel yet.
+	//
+	// A claim carrying no length at all names no clip to stand on, so there is no phase: zero, and
+	// `SlotWeightAt` composes nothing over it.
+	inline float SlotCycle(const FElysiumAnimationRequest& Claim, float AgeSeconds)
+	{
+		const float Length = SlotPhaseLength(Claim);
+		if (!(Length > 0.0f))
+		{
+			return 0.0f;
+		}
+		const float Phase = AgeSeconds / Length;
+		if (Claim.bLoop && Claim.HoldSeconds <= 0.0f)
+		{
+			// The expiry stays authoritative where one exists: a claim that both loops and states a
+			// hold is ended by the hold, and wrapping past it would report a layer the driver has
+			// already dropped. `Max` guards the floor against an age no producer can currently
+			// produce rather than against one that happens today.
+			return FMath::Max(Phase - FMath::FloorToFloat(Phase), 0.0f);
+		}
+		return FMath::Clamp(Phase, 0.0f, 1.0f);
+	}
+
+	// The overlay slot's weight this frame: the envelope above, ridden over the phase beside it.
+	//
+	// **Computed rather than reported as the ceiling.** `SlotWeightMax` is where a layer tops out, and
+	// a record publishing only that answers the same 1.0 for a layer at full strength and for one a
+	// fifth of the way up a reload's ramp — precisely the pair a reader opens the readout to tell
+	// apart. Both inputs already ride the claim and the arithmetic is pure, so the enveloped number is
+	// the one the record can honestly carry.
+	//
+	// The shape is retail's: a linear ramp over the in/out fractions of the clip's OWN cycle, shaped by
+	// the smoothstep `w = 3w^2 - 2w^3`, capped at the ceiling, and gone the moment the cycle reaches 1
+	// — the same instant `FElysiumAnimationDriver::AdvanceRequests` drops the claim.
+	//
+	// **One envelope over one phase, whatever kind of claim states it.** A looping layer rides the
+	// ramp again on every wrap, a held one rides it once and dies at its clip's end, and a one-shot
+	// rides it exactly between its arm and its expiry — the difference is entirely in `SlotCycle`, so
+	// there is one place the shape can be wrong.
+	//
+	// A claim carrying no length names no clip: there is no phase to ride and no motion to compose, so
+	// the layer weighs nothing. Answering the ceiling instead would stand one frozen frame of whatever
+	// the evaluator happened to be pinned to at full strength.
+	inline float SlotWeightAt(const FElysiumAnimationRequest& Claim, float AgeSeconds)
+	{
+		if (!(SlotPhaseLength(Claim) > 0.0f))
+		{
+			return 0.0f;
+		}
+		const float Cycle = SlotCycle(Claim, AgeSeconds);
+		if (Cycle >= 1.0f)
+		{
+			return 0.0f;
+		}
+		const FSlotBlend Blend = SlotBlendFor(Claim.Activity);
+		// Between the two ramps the layer is simply at weight, which is what a zero-fraction envelope
+		// answers for the whole of its cycle — the snap.
+		float Weight = 1.0f;
+		if (Blend.InFraction > 0.0f && Cycle < Blend.InFraction)
+		{
+			Weight = Cycle / Blend.InFraction;
+		}
+		else if (Blend.OutFraction > 0.0f && Cycle > 1.0f - Blend.OutFraction)
+		{
+			Weight = (1.0f - Cycle) / Blend.OutFraction;
+		}
+		Weight = FMath::Clamp(Weight, 0.0f, 1.0f);
+		Weight = Weight * Weight * (3.0f - 2.0f * Weight);
+		return FMath::Min(Weight, SlotWeightMax);
+	}
 }
+
+// The standing HELD claims one body's segment runs took, one handle per channel.
+//
+// A montage-slot RUN — a `scripted_sequence`'s idle/travel/play/post-idle, an interesting place's
+// enter/hold/leave — holds one claim across every segment of the run, so the claim carries no
+// duration and this row is what remembers the handle to give back.
+//
+// **One handle PER CHANNEL, because a body runs on more than one at once.** A segment states the
+// channel it plays on, and a body posing a held upper-body layer over an ordinary base clip has two
+// independent runs on it. A single handle per body confuses them in both directions: an ordinary
+// base segment starting would erase the handle of a held layer, and a held base segment would
+// overwrite it — and a held claim carries no duration, so the driver never expires the orphan and
+// that channel stays locked for the life of the body.
+//
+// It lives here, beside `ClaimForSegment`, because it is a dependency-free row over the claims that
+// call produces: no world, no mesh and no UObject, so its update rule is asserted directly rather
+// than through a body factory that needs all three.
+struct FElysiumSegmentClaims
+{
+	// Indexed by `EElysiumAnimChannel`; zero is "this channel holds no run claim".
+	uint32 Handles[ElysiumAnimIntent::NumChannels] = {};
+
+	uint32 Get(EElysiumAnimChannel Channel) const
+	{
+		const int32 Index = static_cast<int32>(Channel);
+		return (Index >= 0 && Index < ElysiumAnimIntent::NumChannels) ? Handles[Index] : 0;
+	}
+
+	// Record — or clear — one channel's handle, which is the whole update rule a played segment
+	// applies: a held segment writes the claim its run will come back for, and any other segment
+	// writes zero, because the run that channel belonged to has been replaced by an ordinary clip.
+	//
+	// **Scoped to the ONE channel the segment played on.** The driver replaced only that channel's
+	// slot, so every other channel is still standing exactly what it was standing, and a write that
+	// cleared the row would strand a held layer's claim on a channel whose producer has no handle left
+	// to give back.
+	void Set(EElysiumAnimChannel Channel, uint32 Handle)
+	{
+		const int32 Index = static_cast<int32>(Channel);
+		if (Index >= 0 && Index < ElysiumAnimIntent::NumChannels)
+		{
+			Handles[Index] = Handle;
+		}
+	}
+
+	// Every handle at once, cleared as it is read. A run's stop path ends the RUN rather than one
+	// layer of it — the producer has one stop path and no handle of its own to come back with — and
+	// reading destructively is what stops a second pass releasing a claim the driver has since granted
+	// to whoever holds that channel now.
+	FElysiumSegmentClaims TakeAll()
+	{
+		const FElysiumSegmentClaims Taken = *this;
+		*this = FElysiumSegmentClaims();
+		return Taken;
+	}
+
+	bool IsEmpty() const
+	{
+		for (const uint32 Handle : Handles)
+		{
+			if (Handle != 0)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+};
 
 // How the request reached the layer. **These are the producer routes the 22-map corpus actually
 // contains** (`docs/vtmb/animation_and_movers.md`), and collapsing any of them into "activity" would
@@ -270,7 +527,8 @@ enum class EElysiumAnimOutcome : uint8
 	// A named miss with no fallback at all — ACT_LAND_CROUCH on a validated player body. Reported so
 	// the graph can name a fallback rather than being handed an invented clip.
 	MissingSequence,
-	// A masked or additive sequence was asked for on the base channel, which is never legal.
+	// An ADDITIVE sequence was asked for on the base channel, which is never legal: it stores the
+	// difference from a base pose, so standing one as the base folds the skeleton up.
 	MaskedRejected,
 	// The stem resolves no clip vocabulary at all — the gym, a menu backdrop, an unexported model.
 	NoVocabulary,
@@ -281,6 +539,17 @@ enum class EElysiumAnimOutcome : uint8
 	// projected: a sequence-only state with a null sequence pin evaluates to the reference pose, and
 	// the blend-space pointer would defeat the hold-pose guard.
 	GridStateRefused,
+	// A bone-MASKED partial-body layer was asked for on the base channel, which is never legal either
+	// and is a different cause from the additive above. A masked clip's unowned bones decode to a zero
+	// quaternion and a zero position — degenerate in retail too — so posing one as the base collapses
+	// the character. Named apart from the additive because only the ASSET can answer it: the mask is
+	// `UElysiumAnimLayerMask` metadata the bake writes, and the pure resolver never sees one.
+	//
+	// Declared last, and every future addition belongs after it. `act_outcome`
+	// (`Debug/ElysiumLocomotionTrace.cpp`) writes this enum's raw ordinal into a diffed frame channel,
+	// so a value inserted mid-enum renumbers everything after it and turns a recorded baseline into a
+	// false regression on every frame, not just the ones that hit the new rung.
+	LayerMaskRejected,
 };
 
 // The locomotion slice's activities as a small ordered code, so a per-frame channel can carry the
@@ -466,6 +735,31 @@ struct FElysiumAnimationSelection
 	// one on the readouts: a scene mid-performance reads its own running time, a stuck claim only
 	// grows. Zero while owned.
 	float BaseHoldSeconds = 0.0f;
+
+	// --- Step 1's other half: the overlay slot, which composes rather than competes ----------------
+	// Retail's `CBaseAnimatingOverlay` slot 0 — the masked partial-body layer every ranged fire,
+	// reload and dry-fire plays through. It never touches `bBasePoseOwned` above, because it does not
+	// take the base pose: it is accumulated ON TOP of whatever does, gated by the layer clip's own
+	// per-bone mask, and a bone the mask leaves out keeps the base pose exactly as it was.
+	//
+	// The four fields are the record's whole answer about it, and they are here for the same reason
+	// the base verdict is: a layer that is composing invisibly — wrong clip, wrong bank, stuck at
+	// weight 0 — is otherwise a body that simply looks wrong.
+	//
+	// The vocabulary label the layer claim named, and the bank the include DAG resolved it out of.
+	// Empty while no layer stands, which is the ordinary state of every body that is not shooting.
+	FString SlotLabel;
+	FString SlotOwnerStem;
+	// The slot's own weight, before the layer clip's per-bone mask gates it — the ENVELOPED number
+	// (`ElysiumAnimIntent::SlotWeightAt`), not the `m_flWeightMax` ceiling it is capped at. The
+	// distinction is the whole value of the line: a layer stuck at zero weight and one at full
+	// strength are the two states a reader opens the readout to tell apart, and publishing the ceiling
+	// answers 1.0 for both. Zero while no claim stands. The per-bone product is the composition's, not
+	// the record's: a mask is 49 or 24 numbers and this line is one.
+	float SlotWeight = 0.0f;
+	// Where the layer stands on its own clip, 0..1 — `ElysiumAnimIntent::SlotCycle` over the claim's
+	// duration, which is the same number that expires the claim.
+	float SlotCycle = 0.0f;
 
 	// --- Steps 2 and 3: the activity chain, one line per witnessed hop ---------------------------
 	// The LOGICAL request, un-translated. Retail's `m_Activity` stays this: translation changes the

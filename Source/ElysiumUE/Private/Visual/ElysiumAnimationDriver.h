@@ -150,11 +150,18 @@ struct FElysiumAnimationDriver
 	// Give a claim back by the handle `SubmitRequest` returned. False when the claim is already
 	// gone — expired, outranked or replaced — which is an ordinary answer, not an error.
 	bool ReleaseRequest(uint32 Handle);
-	// Give back every standing claim at once, whoever took it (LIFE5). The one caller is the death
+	// Give back every standing claim at once, whoever took it. The one caller is the death
 	// transaction: a character that stops having behaviour stops owning every channel in the same
 	// instant, and there is no producer left to come back with its handle. Returns how many claims
 	// were standing, so the caller can report an unexpectedly held body.
-	int32 ReleaseAllRequests();
+	//
+	// `OutDroppedSlotLayer` reports whether the overlay slot's own channel was among them, and it is
+	// not a convenience: this struct never reaches for an anim instance — it also serves bodies that
+	// have none — so it cannot take a layer's POSE down, and the caller that can has no other way to
+	// learn one was standing. A layer dropped here with nothing taking its pose down keeps composing
+	// at its last weight and phase, and the driver's own next publish is what would clear it — which
+	// a frozen corpse never runs.
+	int32 ReleaseAllRequests(bool* OutDroppedSlotLayer = nullptr);
 	// The channel's standing claim, or null. The layer families read their channels through this.
 	const FElysiumAnimationRequest* ActiveRequest(EElysiumAnimChannel Channel) const;
 
@@ -176,10 +183,39 @@ struct FElysiumAnimationDriver
 
 	// Age the slots by one frame and drop expired claims. Split from the verdict because expiry is
 	// time and the verdict is state — `Tick` runs both, in that order.
+	//
+	// **This is the overlay slot's whole lifetime too, and it needs no mechanism of its own.**
+	// `ElysiumAnimIntent::ClaimForSegment` set a layer's `HoldSeconds` to its clip's authored length
+	// over its playback rate, so the claim ends exactly when the clip's cycle reaches 1 — which is
+	// retail's own rule for a layer slot's weight dropping to 0. A re-fire submits a new claim on the
+	// same channel, which replaces the standing one and restarts the layer from zero.
 	void AdvanceRequests(float DeltaSeconds);
 	// Write the base-channel verdict onto `Selection`. Runs on every `Tick` exit path, because a
 	// claim can expire or be outranked on a frame whose discrete request never moved.
 	void ArbitrateBase();
+	// Publish the overlay slot's identity and phase onto `Selection`. Runs beside `ArbitrateBase` on
+	// every `Tick` exit path, for the same reason: a layer claim expires on its own clock.
+	//
+	// **It arbitrates nothing, despite the name it shares with the base pass, and that asymmetry is
+	// the mechanism.** The slot never competes with the locomotion publish — it is accumulated ON TOP
+	// of whatever owns the base pose, gated per bone by the layer clip's mask — so there is no rank
+	// to compare and no claim to consume. All it does is state who is layering, at what weight and
+	// where on its clip.
+	void ArbitrateSlot();
+	// Answer for the standing slot claim on an exit that does NOT re-enter the base resolve.
+	//
+	// **`Tick` has two player-only exits that skip the selection pass entirely** — an
+	// animation-driven frame, and a frame whose reselection an unfinished swing refuses — and the
+	// slot does not belong to either: it composes over whatever owns the base pose rather than
+	// participating in the choice of one, which is the premise `UElysiumAnimSubsystem::ResolveAnimation`
+	// states when it resolves the slot ahead of every base rung. A claim armed on one of those frames
+	// is a shot fired mid-swing; leaving it unanswered would let `ArbitrateSlot` publish it as a named
+	// label with no bank and no asset for the whole swing, which is a body that stops shooting with
+	// nothing saying so.
+	//
+	// Keyed on `LastSlotHandle` exactly as the ordinary path is, so a claim already answered for is
+	// not re-loaded per frame.
+	void ResolveSlotClaim(UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh);
 
 	// --- The discrete key: what a change of request actually means ---------------------------------
 	FString LastActivity;
@@ -194,6 +230,15 @@ struct FElysiumAnimationDriver
 	EElysiumNpcState LastActorState = EElysiumNpcState::Idle;
 	EElysiumAnimRoute LastRoute = EElysiumAnimRoute::Activity;
 	bool bResolvedOnce = false;
+	// The overlay slot's own discrete key, kept apart from the base's above because the two move for
+	// unrelated reasons: a body fires without changing what it is doing, and it changes what it is
+	// doing without firing. The HANDLE and not the label, because a re-fire of the same layer is a new
+	// play that has to resolve again — the handle is the only thing that tells one from the other.
+	//
+	// It does NOT advance `Generation`. That number means "the base request moved" and every reader
+	// downstream treats it as a transition to blend, so folding a shot into it would restate the
+	// body's gait as a new selection once per trigger pull.
+	uint32 LastSlotHandle = 0;
 
 	// --- The published answers, always valid --------------------------------------------------------
 	// A default-constructed record reads `NoVocabulary`, so every consumer — the channel recorder, Cog,

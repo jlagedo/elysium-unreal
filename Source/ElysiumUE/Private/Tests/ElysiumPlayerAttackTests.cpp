@@ -96,6 +96,47 @@ namespace
 	// `MeleePlaybackRate(0)`, which is what every rating in a rulebook-free world evaluates to.
 	constexpr double GMeleeRate = 0.70;
 
+	// The bodies and the bank the clip seam answers with, so a recorded `PlayNpcClip` line names who
+	// asked. The player and the cast carry DIFFERENT stems on purpose: the reload fork is the one
+	// place in the runtime where the two arms ask for different things, and one shared stem would let
+	// either line satisfy an assertion meant for the other.
+	const TCHAR* const GPlayerModel = TEXT("models/character/pc/male/male_pc.mdl");
+	const TCHAR* const GPlayerStem  = TEXT("male_pc");
+	const TCHAR* const GCastModel   = TEXT("models/character/npc/gangbanger/gangbanger_a.mdl");
+	const TCHAR* const GCastStem    = TEXT("gangbanger_a");
+	const TCHAR* const GLayerClip   = TEXT("glock_fire_layer");
+	const TCHAR* const GLayerOwner  = TEXT("move_and_ranged");
+	// What the recorded line ends with, which is the whole question these cases ask: retail composes
+	// ranged fire and the player's reload as `CBaseAnimatingOverlay` slot 0 — a masked partial-body
+	// layer — and posing one of those clips as the base pose collapses the character.
+	const TCHAR* const GOnBase      = TEXT("ch=base");
+	const TCHAR* const GOnSlot      = TEXT("ch=upper body");
+
+	// How many recorded clip plays went onto one channel. Matched at the TAIL rather than by prefix
+	// because every other token on the line is the same between the two mechanisms — the channel is
+	// the only thing that says which of them the producer asked for.
+	int32 ClipPlaysOn(const FElysiumRecordingServices& Services, const TCHAR* ChannelToken)
+	{
+		int32 Count = 0;
+		for (const FString& Call : Services.Calls)
+		{
+			Count += (Call.StartsWith(TEXT("PlayNpcClip")) && Call.EndsWith(ChannelToken)) ? 1 : 0;
+		}
+		return Count;
+	}
+
+	// Make the clip seam answer, so a segment actually reaches the body instead of falling through to
+	// the headless timing fallback. `ClipSeconds` is the length `PlayNpcClip` hands back, which is
+	// what the reload deadline is derived from.
+	void ArmClipSeam(FElysiumRecordingServices& Services, float ClipSeconds)
+	{
+		Services.bNpcActivitiesResolve = true;
+		Services.ResolvedNpcActivityLabel = GLayerClip;
+		Services.ResolvedNpcActivityClip = GLayerClip;
+		Services.ResolvedNpcActivityOwner = GLayerOwner;
+		Services.ClipSeconds = ClipSeconds;
+	}
+
 	FElysiumWeaponMode MakeMode(const TCHAR* Tag, EElysiumWeaponModeType Type, const TCHAR* TypeName,
 		const TCHAR* Dmg, float AttackRate, int32 AmmoCost = 0)
 	{
@@ -188,6 +229,21 @@ namespace
 		return Defs;
 	}
 
+	// The same world plus one armed cast body, so the reload fork can be driven through the SAME
+	// weapon controller for both arms in one case. It is a separate world rather than an addition to
+	// the one above because every other case in this suite measures a map with no cast in it, and an
+	// NPC thinking beside the player would move the ground under them.
+	FElysiumEntityDefs MakeAttackCastDefs()
+	{
+		FElysiumEntityDefs Defs = MakeAttackTestDefs();
+		FElysiumEntityDef Gunman;
+		Gunman.Classname = TEXT("npc_VPedestrian");
+		Gunman.TargetName = TEXT("gunman");
+		Gunman.Origin = FVector(600.0f, 0.0f, 0.0f);
+		Defs.Defs.Add(MoveTemp(Gunman));
+		return Defs;
+	}
+
 	void SeedHealth(FElysiumCombatCharacter& Char, int32 MaxHealth)
 	{
 		Char.Sheet.SetBase(EC::Attributes, ElysiumSlot::MaxHealth, MaxHealth);
@@ -203,7 +259,10 @@ namespace
 		FElysiumPlayer* Player = nullptr;
 		double Now = 0.0;
 
-		bool Stand(FAutomationTestBase& Test, const TCHAR* WeaponClass = nullptr)
+		// `WorldDefs` stands a different map for the cases that need one — the reload fork's, which is
+		// the only one in this suite with a cast body in it.
+		bool Stand(FAutomationTestBase& Test, const TCHAR* WeaponClass = nullptr,
+			const FElysiumEntityDefs* WorldDefs = nullptr)
 		{
 			// The block classification's pose request draws its weighted variant off the Reaction
 			// stream, so the suite seeds it — the idiom every stream-reading suite uses.
@@ -211,7 +270,8 @@ namespace
 			Services.bPlayerOnGround = true;
 
 			World = MakeUnique<FElysiumEntityWorld>(nullptr, nullptr, Services.Bundle());
-			World->Load(MakeAttackTestDefs());
+			FElysiumEntityDefs Defs = WorldDefs != nullptr ? *WorldDefs : MakeAttackTestDefs();
+			World->Load(MoveTemp(Defs));
 			World->SpawnPlayer();
 			World->Activate(0.0);
 			World->Tick(0.0);
@@ -238,10 +298,24 @@ namespace
 		// The grant goes through `Weapon_Equip`, so what comes back is the active weapon.
 		FElysiumWeapon* Give(const TCHAR* Classname)
 		{
-			const FElysiumEntityHandle Handle = Player->Inventory.GiveNamedItem(*Player, Classname);
+			return GiveTo(*Player, Classname);
+		}
+
+		// The same grant, addressed at ANY combat character: the reload fork's whole point is that one
+		// `FElysiumWeapon` is held by a player and by a cast body, so both arms have to be reachable
+		// through one door.
+		FElysiumWeapon* GiveTo(FElysiumCombatCharacter& Char, const TCHAR* Classname)
+		{
+			const FElysiumEntityHandle Handle = Char.Inventory.GiveNamedItem(Char, Classname);
 			FElysiumEntity* Ent = World->Resolve(Handle);
 			FElysiumItem* Item = Ent ? Ent->AsItem() : nullptr;
 			return Item ? Item->AsWeapon() : nullptr;
+		}
+
+		FElysiumCombatCharacter* FindCast(const TCHAR* Name)
+		{
+			FElysiumEntity* Ent = World ? World->FindByName(Name) : nullptr;
+			return Ent ? Ent->AsCombatCharacter() : nullptr;
 		}
 
 		FElysiumWeapon* Active() const
@@ -952,43 +1026,200 @@ bool FElysiumPlayerAttackReloadTest::RunTest(const FString&)
 	ElysiumItems::Install(Table);
 	ON_SCOPE_EXIT { ElysiumItems::Uninstall(Table); };
 
-	FAttackFixture F;
-	if (!F.Stand(*this, GPistol))
+	// --- the transaction itself ------------------------------------------------------------------
 	{
-		return false;
+		FAttackFixture F;
+		if (!F.Stand(*this, GPistol))
+		{
+			return false;
+		}
+		FElysiumWeapon* Pistol = F.Active();
+		if (!TestNotNull(TEXT("the pistol is the active weapon"), Pistol))
+		{
+			return false;
+		}
+		Pistol->MagazineCount = 0;
+		F.Player->Inventory.AddReserve(GRound, 12);
+
+		// The `+reload` press edge starts the transaction.
+		F.Frame(0.0, GReload);
+		TestTrue(TEXT("the reload press starts the transaction"), Pistol->bReloading);
+		TestFalse(TEXT("nothing has interrupted it yet"), Pistol->bFireIntentDuringReload);
+
+		// A primary press arriving during the reload sets the interruption latch and reports
+		// `Reloading` — the reload frame finishes the transaction before normal firing resumes.
+		TestEqual(TEXT("a fire intent during a reload reports `reloading`"),
+			Verdict(Pistol->ItemPostFrame(EB::Primary, EB::Primary)), FString(TEXT("reloading")));
+		TestTrue(TEXT("...and sets the interruption latch"), Pistol->bFireIntentDuringReload);
+		TestEqual(TEXT("...and stages no shot"), Pistol->AcceptedSwingCount(), 0);
+
+		// A repeated `+reload` while one is live is refused and leaves the running transaction alone.
+		const int32 LiveSerial = Pistol->ReloadSerial;
+		F.Frame(0.05, 0);
+		F.Frame(0.06, GReload);
+		TestEqual(TEXT("a second reload press does not restart the live transaction"),
+			Pistol->ReloadSerial, LiveSerial);
+
+		// The queued commit lands on the substrate clock and refills from the reserve.
+		F.Frame(5.0, 0);
+		TestFalse(TEXT("the reload completed"), Pistol->bReloading);
+		TestEqual(TEXT("the magazine is full"), Pistol->MagazineCount, 6);
+		TestEqual(TEXT("...out of the reserve"), F.Player->Inventory.Reserve(GRound), 6);
 	}
-	FElysiumWeapon* Pistol = F.Active();
-	if (!TestNotNull(TEXT("the pistol is the active weapon"), Pistol))
+
+	// --- which POSE each ranged transaction asks the body for --------------------------------------
+	//
+	// The three ranged families reach one clip seam and mean three different things by it, and the
+	// difference is invisible in the clip's own name:
+	//
+	//  * FIRE is retail's `CBaseAnimatingOverlay` slot 0 for BOTH bodies. The player reaches it as
+	//    `CWeaponRanged::Attack` -> `SetAnimation(PLAYER_ATTACK1)` -> a layer with the base activity
+	//    left at -1; the cast reaches it as `CAI_BaseNPC::RunAI` ->
+	//    `AddGesture(ACT_RANGE_ATTACK1_LAYER)` into `m_AnimOverlay`. Two producers, one mechanism, so
+	//    there is nothing to fork.
+	//  * RELOAD is the one real fork. The player layers `ACT_RELOAD_LAYER` over whatever owns the base;
+	//    the cast has no such path at all and takes `CAI_BaseNPC::StartTask`'s `TASK_RELOAD`, which is
+	//    `RestartIdealActivity(ACT_RELOAD)` — a full-body BASE pose.
+	//  * DRY FIRE asks for no third-person body clip from anybody. The player's is viewmodel-only
+	//    (`SendWeaponAnim(ACT_VM_DRYFIRE)`, and `CBasePlayer::SetAnimation` carries no dry-fire case),
+	//    and an empty NPC ends its burst rather than dry-firing.
+	//
+	// A layer posed as the base pose is not a cosmetic difference: the bones its mask leaves out decode
+	// to a zero quaternion and a zero position, so the character collapses. That is why the channel is
+	// asserted on every one of them rather than only where it moved.
 	{
-		return false;
+		FAttackFixture F;
+		const FElysiumEntityDefs CastDefs = MakeAttackCastDefs();
+		ArmClipSeam(F.Services, /*ClipSeconds=*/2.0f);
+		if (!F.Stand(*this, GPistol, &CastDefs))
+		{
+			return false;
+		}
+		FElysiumWeapon* Pistol = F.Active();
+		if (!TestNotNull(TEXT("the pistol is the active weapon"), Pistol))
+		{
+			return false;
+		}
+		// A body, because the clip seam is only reached through one: without it every request falls
+		// through to the headless timing fallback and nothing records which pose was asked for.
+		F.Player->SetRuntimeModel(GPlayerModel);
+
+		// --- the shot ------------------------------------------------------------------------------
+		F.Services.Calls.Reset();
+		F.Frame(0.0, GAtk);
+		if (!TestEqual(TEXT("the press fires"), Pistol->AcceptedSwingCount(), 1))
+		{
+			return false;
+		}
+		TestTrue(TEXT("a player shot composes the attack layer on the overlay slot"),
+			F.Services.Saw(FString::Printf(
+				TEXT("PlayNpcClip %s %s loop=0 band=ambient rate=1.00 act=ACT_RANGE_ATTACK1_LAYER %s"),
+				GPlayerStem, GLayerClip, GOnSlot)));
+		TestEqual(TEXT("...and asks for no base pose at all, which is what would collapse the body"),
+			ClipPlaysOn(F.Services, GOnBase), 0);
+
+		// --- the player's reload -------------------------------------------------------------------
+		Pistol->MagazineCount = 0;
+		F.Player->Inventory.AddReserve(GRound, 12);
+		F.Services.Calls.Reset();
+		F.Frame(1.0, 0);
+		F.Frame(1.0, GReload);
+		if (!TestTrue(TEXT("the reload press starts the transaction"), Pistol->bReloading))
+		{
+			return false;
+		}
+		TestTrue(TEXT("a player reload composes ACT_RELOAD_LAYER on the overlay slot"),
+			F.Services.Saw(FString::Printf(
+				TEXT("PlayNpcClip %s %s loop=0 band=ambient rate=1.00 act=ACT_RELOAD_LAYER %s"),
+				GPlayerStem, GLayerClip, GOnSlot)));
+		TestEqual(TEXT("...and leaves the base pose to whatever the gait ladder is doing"),
+			ClipPlaysOn(F.Services, GOnBase), 0);
+		// The deadline is still the SELECTED SEQUENCE's own length over the playback rate — the
+		// authored `ReloadTime` is 99 and is deliberately not this clock — so moving the clip onto the
+		// slot must not have moved where the transaction ends.
+		TestTrue(TEXT("...and the deadline is still the returned clip length over the rate"),
+			NearlyEqual(Pistol->ReloadEndTime, 1.0 + 2.0));
+
+		// --- the cast's reload, which is the one real fork ------------------------------------------
+		FElysiumCombatCharacter* Gunman = F.FindCast(TEXT("gunman"));
+		if (!TestNotNull(TEXT("the cast body exists"), Gunman))
+		{
+			return false;
+		}
+		Gunman->SetRuntimeModel(GCastModel);
+		FElysiumWeapon* CastGun = F.GiveTo(*Gunman, GPistol);
+		if (!TestNotNull(TEXT("the cast body is armed"), CastGun))
+		{
+			return false;
+		}
+		CastGun->MagazineCount = 0;
+		Gunman->Inventory.AddReserve(GRound, 12);
+		F.Services.Calls.Reset();
+		TestTrue(TEXT("the cast reload starts"), CastGun->BeginReload());
+		// `band=scripted`, and it is load-bearing rather than cosmetic. This claim is the only thing
+		// carrying `Activity="ACT_RELOAD"` into the body's forced ideal activity, and `ArbitrateBase`
+		// CONSUMES a claim the locomotion publish outranks rather than merely yielding to it — so at
+		// the `Ambient` row a gunman who steps sideways mid-magazine loses the pose AND the forced
+		// activity to the gait ladder, while retail's `RestartIdealActivity(ACT_RELOAD)` writes
+		// `m_IdealActivity` outright. `Scripted` is the first row above `LocomotionTravel`, the same
+		// one a melee swing claims, and it stops below `Reaction` so a reload cannot displace a
+		// standing flinch.
+		TestTrue(TEXT("an NPC reload restarts its IDEAL ACTIVITY at the full-body ACT_RELOAD"),
+			F.Services.Saw(FString::Printf(
+				TEXT("PlayNpcClip %s %s loop=0 band=scripted rate=1.00 act=ACT_RELOAD %s"),
+				GCastStem, GLayerClip, GOnBase)));
+		TestEqual(TEXT("...and never reaches the overlay slot, which has no NPC producer at all"),
+			ClipPlaysOn(F.Services, GOnSlot), 0);
+		// The band the claim was submitted at, asserted as itself rather than only through the
+		// recorded line: it is the whole difference between a reload a walking body keeps and one its
+		// own gait publish takes away.
+		TestTrue(TEXT("...at a band the travelling body's own publish cannot consume"),
+			EElysiumAnimPriority::Scripted > ElysiumAnimIntent::LocomotionPriority(
+				EElysiumGraphState::Walk));
+		TestTrue(TEXT("...and below the reaction band, so a reload never cuts a standing flinch off"),
+			EElysiumAnimPriority::Scripted < EElysiumAnimPriority::Reaction);
+
+		// --- the cast's SHOT, which is NOT a fork ---------------------------------------------------
+		//
+		// The cast reaches fire through `AddGesture(ACT_RANGE_ATTACK1_LAYER)` into `m_AnimOverlay`,
+		// which is slot 0 — the same mechanism the player's `SetAnimation(PLAYER_ATTACK1)` reaches
+		// three assertions above. Driving the cast only through `BeginReload` would leave the "no
+		// fork for fire" claim unproven on the commoner of the two paths, and a cast fire routed to
+		// the base channel poses a masked layer as the whole body.
+		//
+		// The magazine is refilled by hand rather than by finishing the reload above, so this states
+		// its own preconditions and does not inherit that transaction's clock.
+		CastGun->bReloading = false;
+		CastGun->MagazineCount = 6;
+		CastGun->NextPrimaryAttackTime = 0.0;
+		CastGun->NextSecondaryAttackTime = 0.0;
+		F.Services.Calls.Reset();
+		TestEqual(TEXT("the cast's shot is accepted"),
+			CastGun->AttackIntent(FElysiumWeapon::EIntent::Primary),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestTrue(TEXT("an NPC shot composes the attack layer on the overlay slot, as the player's does"),
+			F.Services.Saw(FString::Printf(
+				TEXT("PlayNpcClip %s %s loop=0 band=ambient rate=1.00 act=ACT_RANGE_ATTACK1_LAYER %s"),
+				GCastStem, GLayerClip, GOnSlot)));
+		TestEqual(TEXT("...and asks the cast body for no base pose at all"),
+			ClipPlaysOn(F.Services, GOnBase), 0);
+
+		// --- dry fire, which asks the body for nothing ---------------------------------------------
+		Pistol->bReloading = false;
+		Pistol->MagazineCount = 0;
+		F.Player->Inventory.AddReserve(GRound, -F.Player->Inventory.Reserve(GRound));
+		const double DryAt = 20.0;
+		F.Services.Calls.Reset();
+		F.Frame(DryAt, 0);
+		F.Frame(DryAt, GAtk);
+		TestEqual(TEXT("an empty magazine dry-fires rather than shooting"),
+			Pistol->AcceptedSwingCount(), 1);
+		TestEqual(TEXT("a dry fire asks the body for no clip on any channel"),
+			F.Services.Count(TEXT("PlayNpcClip")), 0);
+		TestTrue(TEXT("...while still holding both presses for the mode's own Attack_Rate"),
+			NearlyEqual(Pistol->NextPrimaryAttackTime, DryAt + 0.4)
+			&& NearlyEqual(Pistol->NextSecondaryAttackTime, DryAt + 0.4));
 	}
-	Pistol->MagazineCount = 0;
-	F.Player->Inventory.AddReserve(GRound, 12);
-
-	// The `+reload` press edge starts the transaction.
-	F.Frame(0.0, GReload);
-	TestTrue(TEXT("the reload press starts the transaction"), Pistol->bReloading);
-	TestFalse(TEXT("nothing has interrupted it yet"), Pistol->bFireIntentDuringReload);
-
-	// A primary press arriving during the reload sets the interruption latch and reports
-	// `Reloading` — the reload frame finishes the transaction before normal firing resumes.
-	TestEqual(TEXT("a fire intent during a reload reports `reloading`"),
-		Verdict(Pistol->ItemPostFrame(EB::Primary, EB::Primary)), FString(TEXT("reloading")));
-	TestTrue(TEXT("...and sets the interruption latch"), Pistol->bFireIntentDuringReload);
-	TestEqual(TEXT("...and stages no shot"), Pistol->AcceptedSwingCount(), 0);
-
-	// A repeated `+reload` while one is live is refused and leaves the running transaction alone.
-	const int32 LiveSerial = Pistol->ReloadSerial;
-	F.Frame(0.05, 0);
-	F.Frame(0.06, GReload);
-	TestEqual(TEXT("a second reload press does not restart the live transaction"),
-		Pistol->ReloadSerial, LiveSerial);
-
-	// The queued commit lands on the substrate clock and refills from the reserve.
-	F.Frame(5.0, 0);
-	TestFalse(TEXT("the reload completed"), Pistol->bReloading);
-	TestEqual(TEXT("the magazine is full"), Pistol->MagazineCount, 6);
-	TestEqual(TEXT("...out of the reserve"), F.Player->Inventory.Reserve(GRound), 6);
 
 	return true;
 }

@@ -83,8 +83,14 @@ namespace
 	const TCHAR* const GActMeleeAttack2Combo = TEXT("ACT_MELEE_ATTACK_2COMBO");
 	const TCHAR* const GActMeleeAttackHeavy  = TEXT("ACT_MELEE_ATTACK_HEAVY");
 	const TCHAR* const GActRangeAttackLayer  = TEXT("ACT_RANGE_ATTACK1_LAYER");
-	const TCHAR* const GActRangeDryFire      = TEXT("ACT_RANGE_DRYFIRE_LAYER");
 	const TCHAR* const GActReloadLayer       = TEXT("ACT_RELOAD_LAYER");
+	// The cast's reload, and it is a different activity from the player's rather than the same one on
+	// another channel. `CAI_BaseNPC::StartTask`'s `TASK_RELOAD` restarts the body's IDEAL ACTIVITY at
+	// `ACT_RELOAD` — a full-body base pose — and no NPC path anywhere requests `ACT_RELOAD_LAYER`.
+	// The generic spelling is what travels: `ACT_RELOAD` carries no rename rule
+	// (`ElysiumWeaponActivityTables.cpp` -> `GRenames`), so the ladder appends the weapon's own family
+	// to it and every armed cast body reaches its own `ACT_RELOAD_<FAMILY>`.
+	const TCHAR* const GActReload            = TEXT("ACT_RELOAD");
 
 	// The two `rules.txt` blocks the weapon transactions read.
 	const TCHAR* const GDamageInfoBlock    = TEXT("Damage_Info");
@@ -855,8 +861,8 @@ bool FElysiumWeapon::BuildActivityClipRequest(FElysiumCombatCharacter& Char,
 }
 
 float FElysiumWeapon::ResolveAndPlay(const FString& Activity, EElysiumAnimPriority Band,
-	const FElysiumWeaponMode& Mode, FString& OutClipLabel, FString* OutOwnerStem,
-	float* OutMaxReachCm, float PlaybackRate, bool bRequirePlayerStateMask)
+	EElysiumAnimChannel Channel, const FElysiumWeaponMode& Mode, FString& OutClipLabel,
+	FString* OutOwnerStem, float* OutMaxReachCm, float PlaybackRate, bool bRequirePlayerStateMask)
 {
 	OutClipLabel.Reset();
 	if (OutOwnerStem)
@@ -942,6 +948,14 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, EElysiumAnimPriori
 			// number. A caller that names no rate (every ranged and reload layer, whose schedules are
 			// authored rather than clip-timed) leaves the authored 1.0 in place.
 			Segment.PlaybackRate = PlaybackRate;
+			// **Which pose this clip IS, and it is the caller's answer because the two attack
+			// families disagree.** A melee swing REPLACES the base pose; a ranged fire and the
+			// player's reload are retail's `CBaseAnimatingOverlay` slot 0 — a masked partial-body
+			// layer accumulated over whatever owns the base, whose unowned bones decode to a zero
+			// quaternion and a zero position. Posed as the base those bytes collapse the character,
+			// so the channel travels with the clip rather than being inferred from the activity name
+			// downstream: only the producer knows which of retail's two mechanisms it just asked for.
+			Segment.Channel = Channel;
 
 			float Played = 0.0f;
 			if (Char->PlayAnimSegment(Segment, &Played) && Played > 0.0f)
@@ -1417,9 +1431,12 @@ FElysiumWeapon::EVerdict FElysiumWeapon::AttackIntent(EIntent Intent,
 		const int32 Current = PrimaryModeSlots.IndexOfByKey(PrimaryModeIndex);
 		const int32 Next = (Current == INDEX_NONE) ? 0 : (Current + 1) % PrimaryModeSlots.Num();
 		PrimaryModeIndex = PrimaryModeSlots[Next];
-		// The mode-change activity plays and the weapon timers refresh.
+		// The mode-change activity plays and the weapon timers refresh. It is the attack LAYER, so it
+		// composes on the overlay slot exactly as a shot does — the same activity through the same
+		// mechanism, on the player and on the cast alike.
 		FString Label;
-		ResolveAndPlay(GActRangeAttackLayer, EElysiumAnimPriority::Ambient, *Mode, Label);
+		ResolveAndPlay(GActRangeAttackLayer, EElysiumAnimPriority::Ambient,
+			EElysiumAnimChannel::UpperBody, *Mode, Label);
 		HoldAttacksUntil(Now + Mode->AttackRate / FMath::Max(ElysiumWeapons::AttackSpeedScale(*Char), KINDA_SMALL_NUMBER));
 		return EVerdict::ModeToggled;
 	}
@@ -1579,8 +1596,16 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	FString ClipOwnerStem;
 	float MaxReachCm = 0.0f;
 	const bool bPlayerArm = IsPlayerSide(Char);
-	float Seconds = ResolveAndPlay(Activity, EElysiumAnimPriority::Scripted, Mode, ClipLabel,
-		&ClipOwnerStem, &MaxReachCm, Rate, bPlayerArm);
+	// The base channel, because a melee swing REPLACES the pose: retail's own attack is the body's
+	// selected base sequence and nothing composes over it (no `ACT_MELEE_ATTACK_<FAMILY>` clip is a
+	// masked layer, and none declares an autolayer either).
+	float Seconds = ResolveAndPlay(Activity, EElysiumAnimPriority::Scripted,
+		EElysiumAnimChannel::Base, Mode, ClipLabel, &ClipOwnerStem, &MaxReachCm, Rate, bPlayerArm);
+
+	// The combat-stance clock, stamped where retail stamps it: `CWeaponMelee::RequestActivity`
+	// dispatches the field's writer as it commits the sequence, so the swing holds the stance
+	// whether or not it goes on to touch anything.
+	Char.StampCombatAnim(Now);
 
 	// **The offered combo, refused: fall through to the ordinary attack.** This is the outer half of
 	// retail's `TEST AL,AL / JNZ` at `0x103E9F03` — the recursion answered false, so the call it
@@ -1592,8 +1617,9 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	{
 		ComboOutcome = TEXT("2COMBO offered, refused by the selector");
 		Activity = GActMeleeAttack;
-		Seconds = ResolveAndPlay(Activity, EElysiumAnimPriority::Scripted, Mode, ClipLabel,
-			&ClipOwnerStem, &MaxReachCm, Rate, bPlayerArm);
+		Seconds = ResolveAndPlay(Activity, EElysiumAnimPriority::Scripted,
+			EElysiumAnimChannel::Base, Mode, ClipLabel, &ClipOwnerStem, &MaxReachCm, Rate,
+			bPlayerArm);
 	}
 
 	// Target acquisition happens before the sequence is committed. It is aim assistance and
@@ -1641,10 +1667,16 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	const FString RollNote = ComboDraw == INDEX_NONE
 		? FString(ComboOutcome)
 		: FString::Printf(TEXT("%d/%d %s"), ComboDraw, ComboChance, ComboOutcome);
+	// The held direction rides on the same line, because it is the input half of the selection this
+	// line already reports the output of. Only the player arm reads a button field at all; a cast
+	// body selects geometrically and has none to name.
+	const FString StateNote = bPlayerArm
+		? ElysiumCombo::DescribeStateMask(World->PlayerSelectionStateMask())
+		: FString(TEXT("(npc)"));
 	UE_LOG(LogElysiumMelee, Log,
-		TEXT("atk #%d swing  %s '%s' %.2fs x%.2f  roll %s  target %s"),
+		TEXT("atk #%d swing  %s '%s' %.2fs x%.2f  held %s  roll %s  target %s"),
 		Swing.ChainRoot, *Activity,
-		ClipLabel.IsEmpty() ? TEXT("(no clip)") : *ClipLabel, Seconds, Rate, *RollNote,
+		ClipLabel.IsEmpty() ? TEXT("(no clip)") : *ClipLabel, Seconds, Rate, *StateNote, *RollNote,
 		Opponent.IsSet() ? *World->DescribeHandle(Opponent) : TEXT("(none)"));
 	return EVerdict::Accepted;
 }
@@ -1873,8 +1905,20 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 
 	FString ClipLabel;
 	FString ClipOwnerStem;
-	const float Seconds = ResolveAndPlay(GActRangeAttackLayer, EElysiumAnimPriority::Ambient, Mode,
-		ClipLabel, &ClipOwnerStem);
+	// **Fire is an overlay for BOTH bodies, so there is no fork here.** The player reaches it as
+	// `CWeaponRanged::Attack` -> `SetAnimation(PLAYER_ATTACK1)` -> an overlay-slot-0 layer with the
+	// base activity left at -1, and the cast reaches it as `CAI_BaseNPC::RunAI` ->
+	// `AddGesture(ACT_RANGE_ATTACK1_LAYER)` into `m_AnimOverlay` — two producers, one mechanism.
+	// Retail's own "the attack layer for the weapon '%s' lasts longer than the fire rate" warning is
+	// about that NPC layer, so the cast arm is a layer in retail's own words.
+	const float Seconds = ResolveAndPlay(GActRangeAttackLayer, EElysiumAnimPriority::Ambient,
+		EElysiumAnimChannel::UpperBody, Mode, ClipLabel, &ClipOwnerStem);
+
+	// The combat-stance clock. A shot reaches it through `CBasePlayer::SetAnimation`'s
+	// `PLAYER_ATTACK1` arm, which stamps before it selects anything — so the five-second ready hold
+	// starts on the trigger pull rather than on a hit.
+	Char.StampCombatAnim(Now);
+
 	const bool bEventCommit =
 		CommitArrivesFromAnimEvent(Char, ClipOwnerStem, ClipLabel);
 	const float Scale = FMath::Max(ElysiumWeapons::AttackSpeedScale(Char), KINDA_SMALL_NUMBER);
@@ -1942,14 +1986,30 @@ void FElysiumWeapon::FireOnEmpty(int32 ModeIndex, const FElysiumWeaponMode& Mode
 	FElysiumCombatCharacter* Char = OwnerCharacter();
 	const double Now = World ? World->NowSeconds() : 0.0;
 
-	// `CWeaponRanged::FireOnEmpty` plays the mode-specific dry-fire activity through the same
-	// resolution seam an attack uses and advances BOTH attack timers.
-	FString Label;
-	ResolveAndPlay(GActRangeDryFire, EElysiumAnimPriority::Ambient, Mode, Label);
-
+	// **No third-person body clip is requested here, by anybody, and the absence is the recovered
+	// behaviour rather than a gap.** The player's dry fire is VIEWMODEL-ONLY:
+	// `CWeaponRanged::FireOnEmpty` reaches `SendWeaponAnim(ACT_VM_DRYFIRE)`, and
+	// `CBasePlayer::SetAnimation` carries no dry-fire case at all, so nothing ever reaches the body's
+	// own animation seam. NPCs never dry-fire — an empty magazine ends the burst and the AI picks a
+	// reload schedule instead. The `ACT_DRYFIRE_LAYER` body clips do exist in the banks, but the only
+	// thing that reaches them is the `debug_test_switch2 4` ConVar, which is not a game path.
+	//
+	// Retail's own arm also plays a click; that sound is not reproduced here, and no path in this
+	// runtime emits one for an empty magazine.
+	//
+	// The hold below is the mode's authored `Attack_Rate` over the owner's attack-speed scale, which
+	// is what both attack timers advance on. No clip length enters it: this arm resolves none.
 	const float Scale = Char
 		? FMath::Max(ElysiumWeapons::AttackSpeedScale(*Char), KINDA_SMALL_NUMBER) : 1.0f;
 	HoldAttacksUntil(Now + static_cast<double>(Mode.AttackRate) / Scale);
+
+	// The combat-stance clock, and this arm reaches it WITHOUT `SetAnimation`: retail's own
+	// `CWeaponRanged::FireOnEmpty` ends by dispatching the field's writer on its owner directly. So
+	// an empty trigger pull holds the ready stance even though it poses no body clip.
+	if (Char != nullptr)
+	{
+		Char->StampCombatAnim(Now);
+	}
 
 	UE_LOG(LogElysiumWeapon, Verbose, TEXT("%s dry fire (mode %d, magazine %d/%d)"),
 		*DebugString(), ModeIndex, MagazineCount, Mode.AmmoCost);
@@ -2477,17 +2537,6 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	const FElysiumWeaponContext Context = FElysiumWeaponContext::FromCharacter(Victim);
 	const FElysiumDmg& ModeDmg = DamageForMode(ModeIndex);
 
-	// --- The combat-stance clock (`m_flLastCombatAnimTime`) ----------------------------------
-	// A melee-opponent contact holds BOTH bodies in stance for the next five seconds
-	// (`FElysiumCombatCharacter::IsInCombatStance`, the gait ladder's `CombatReady` gate).
-	// Stamped ahead of the margin classifier below, because a blocked or fully soaked contact
-	// is still contact. `World` is non-null here — the caller resolved the victim through it.
-	{
-		const double Now = World->NowSeconds();
-		Attacker.StampMeleeContact(Now);
-		Victim.StampMeleeContact(Now);
-	}
-
 	// --- The opposed record, CONSUMED from the defender ---------------------------------------
 	// It was staged on this victim on the swing's first batched frame, before any contact test, by
 	// `StageSwingOpposedRoll` — which is where retail rolls it. Nothing is rolled here.
@@ -2682,20 +2731,24 @@ void FElysiumWeapon::KnockbackContact(FElysiumCombatCharacter& Attacker,
 		return;
 	}
 
-	// **OPEN RE GATE — the hit-buildup counter.** Retail admits the knockback on
-	// `counter <= threshold` OR a per-attack unconditional marker. The counter's semantics are not
-	// recovered, so the term is OMITTED rather than stood in for and every classified contact is
-	// admitted. Reported once so the divergence is observable rather than inferred from behaviour.
+	// **OMITTED — the hit-buildup counter.** Retail admits the knockback on
+	// `counter <= npc_hit_buildup_amount` (default 2) OR the swing record's `+0xBA == 2` marker. The
+	// rule is recovered (`docs/vtmb/combat-and-damage.md` → "Who may be knocked back"): one scalar
+	// on the victim, raised by any attacker's landed hit, cleared when the victim's own swing passes
+	// 0.8 of its cycle. It is not built yet, so the term is OMITTED rather than stood in for and
+	// every classified contact is admitted. Reported once so the divergence is observable rather
+	// than inferred from behaviour.
 	if (ShouldReportOnce(TEXT("knockback_hit_buildup_counter")))
 	{
 		UE_LOG(LogElysiumWeapon, Verbose,
-			TEXT("the knockback hit-buildup gate is omitted (counter semantics unrecovered) — every "
+			TEXT("the knockback hit-buildup gate is omitted (recovered, not built) — every "
 				"hit/knockback margin admits a knockback"));
 	}
 
-	// Eligibility. `IsAliveForCombat` is the alive half; the template half is the authored
-	// `General/Disallow_Knockbacks` that zombies, cabbies and the tutorial cast wear. A second,
-	// unidentified template predicate sits beside it in retail and is omitted — named on
+	// Eligibility. `IsAliveForCombat` is retail's own dead-victim refusal, which it spells as
+	// `Health == Max_Health` over damage-taken; the template half is the authored
+	// `General/Disallow_Knockbacks` that zombies, cabbies and the tutorial cast wear. Retail's one
+	// remaining term, the `CNPC_VTzimisceRunner` class bypass, is omitted — named on
 	// `ElysiumReactions::IsKnockbackAllowed`.
 	if (!ElysiumReactions::IsKnockbackAllowed(IsAliveForCombat(Victim),
 		Victim.DisallowsKnockbacks()))
@@ -2871,8 +2924,36 @@ bool FElysiumWeapon::BeginReload()
 	FString Label;
 	const FElysiumWeaponMode* Mode = ModeAt(PrimaryModeIndex);
 	static const FElysiumWeaponMode EmptyMode;
-	const float Seconds = ResolveAndPlay(GActReloadLayer, EElysiumAnimPriority::Ambient,
-		Mode ? *Mode : EmptyMode, Label);
+	// **The one place the player and the cast genuinely diverge, and they diverge in the ACTIVITY as
+	// well as the channel.** The player's reload is `CWeaponRanged`'s overlay: `SetAnimation` hands
+	// `apply_player_activity_and_sequence` a base of -1 and `ACT_RELOAD_LAYER` as the layer, so slot 0
+	// composes the reload over whatever gait owns the base and the legs keep walking. The cast has no
+	// such path — `ACT_RELOAD_LAYER` is requested nowhere in NPC code — and reloads through
+	// `CAI_BaseNPC::StartTask`'s `TASK_RELOAD`, which calls `RestartIdealActivity(ACT_RELOAD)`: a
+	// full-body base pose that the body's own locomotion classifier stops answering under.
+	//
+	// Asking one activity on two channels would be wrong in both directions: `ACT_RELOAD_LAYER` on the
+	// cast's base channel collapses the body on the layer clip's masked bones, and `ACT_RELOAD` on the
+	// player's slot composes a full-body pose through a partial-body mechanism.
+	//
+	// **The two arms take different BANDS, because only one of them is arbitrated.** The cast's claim
+	// is `Scripted` — the same band `BeginMeleeSwing` states, for the identical reason: it is the
+	// first row above the `LocomotionTravel` publish a moving body makes every anim tick, and the
+	// smallest band that is. `ArbitrateBase` does not merely yield a lower claim to that publish, it
+	// CONSUMES it, and the claim is what carries `Activity="ACT_RELOAD"` into `ForcedIdealActivity` —
+	// so an `Ambient` reload would hand a gunman who steps sideways mid-magazine both his pose and his
+	// forced ideal activity back to the gait ladder, while retail's `RestartIdealActivity(ACT_RELOAD)`
+	// writes `m_IdealActivity` outright and a walking NPC keeps reloading. It stops BELOW `Reaction`
+	// on purpose: a reload must not displace a standing flinch.
+	//
+	// The player's stays `Ambient` because nothing arbitrates it. `ArbitrateSlot` ranks nothing — the
+	// overlay channel has exactly one producer family — so the band on that claim decides no contest.
+	const bool bPlayerReload = IsPlayerSide(*Char);
+	const float Seconds = bPlayerReload
+		? ResolveAndPlay(GActReloadLayer, EElysiumAnimPriority::Ambient,
+			EElysiumAnimChannel::UpperBody, Mode ? *Mode : EmptyMode, Label)
+		: ResolveAndPlay(GActReload, EElysiumAnimPriority::Scripted,
+			EElysiumAnimChannel::Base, Mode ? *Mode : EmptyMode, Label);
 	const float Rate = FMath::Max(ElysiumWeapons::AttackSpeedScale(*Char), KINDA_SMALL_NUMBER);
 
 	bReloading = true;

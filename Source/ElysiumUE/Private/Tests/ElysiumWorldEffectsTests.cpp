@@ -154,6 +154,27 @@ bool FElysiumAnimationBindingIdentityTest::RunTest(const FString&)
 		ElysiumEntityAnimation::NpcClipCacheKey(NormalVisual, Clip)
 			== ElysiumEntityAnimation::NpcClipCacheKey(PlayerVisual, Clip));
 
+	// **The CHANNEL is part of the identity, because the same animation has two answers.**
+	// `UElysiumAnimSubsystem::ResolveClip` refuses a clip carrying a baked bone mask for a Base-channel
+	// caller — posed as the base pose its unowned bones decode to a zero quaternion and a zero
+	// position, which collapses the body — and hands the same bytes straight over for a layer channel,
+	// which is what the mask exists for. A key that dropped the channel would let whichever caller
+	// asked first decide for the second: either a layer refused for the life of the map because an
+	// idle asked for it as a base pose, or a collapsed body because the layer asked first.
+	const FString AsBase = ElysiumEntityAnimation::NpcClipCacheKey(NormalVisual, Clip,
+		EElysiumAnimChannel::Base);
+	const FString AsLayer = ElysiumEntityAnimation::NpcClipCacheKey(NormalVisual, Clip,
+		EElysiumAnimChannel::UpperBody);
+	TestFalse(TEXT("one animation asked for as a base pose and as a layer has two cache identities"),
+		AsBase == AsLayer);
+	TestEqual(TEXT("...and Base is what a caller naming no channel is keyed under, so the funnel's "
+		"own default cannot drift from the resolver's"),
+		ElysiumEntityAnimation::NpcClipCacheKey(NormalVisual, Clip), AsBase);
+	TestFalse(TEXT("...while the refused channel is the only refused one"),
+		ElysiumAnimIntent::MaskedClipPlayableOn(EElysiumAnimChannel::Base));
+	TestTrue(TEXT("...and the layer channel the key keeps apart is one that resolves"),
+		ElysiumAnimIntent::MaskedClipPlayableOn(EElysiumAnimChannel::UpperBody));
+
 	FElysiumBipedAnimProxy Proxy;
 	UAnimSequence* Sequence = NewObject<UAnimSequence>();
 	TestTrue(TEXT("the first stand starts the clip"),

@@ -25,7 +25,7 @@ directory convention spells the roles apart: `view/v_`, `world/g_`, `wield/w_`, 
 | `wieldmodel_f` | held geometry, female wielder | `+0x2288` | `char[0x80]` |
 | `wieldmodel_m` | held geometry, male wielder | `+0x2308` | `char[0x80]` |
 | `infomodel` | inventory/UI geometry | `+0x2388` | `char[0x80]` |
-| `anim_prefix` | weapon-family key (§5) | `+0x2408` | `char[0x10]` |
+| `anim_prefix` | animation extension, unread at run time (§5) | `+0x2408` | `char[0x10]` |
 
 `playermodel` is the loose ground model and is **not** what a character holds. For `item_w_katana`
 the four are `weapons/w_null.mdl`, `weapons/katana/world/g_katana.mdl`,
@@ -49,9 +49,10 @@ Because equip applies the named string unconditionally (§2), the null model is 
 system branchless: every key, every armour piece and every discipline runs the same code path as a
 katana and receives geometry that draws nothing.
 
-An **empty** string is a different value from `w_null.mdl`. `EventDispatch` (§5) guards its own
-model apply with `if (*string != '\0')`, so an empty value there means "leave the current model
-alone". Equip carries no such guard.
+An **empty** string is a different value from `w_null.mdl`. `CWeaponMelee::Deploy` (`0x103ea510`,
+§2) re-applies the gendered wield model on every deploy but guards that apply with
+`if (*string != '\0')`, so an empty value there means "leave the current model alone". Equip
+carries no such guard.
 
 ### Two models the install lacks
 
@@ -239,13 +240,18 @@ An active-weapon switch does not detach the outgoing weapon. `CBaseCombatCharact
 ### Deploy and holster are weapon-side, and the busy timer is the character's
 
 `Deploy` is vtable slot 315 (`+0x4ec`) and `Holster` slot 316 (`+0x4f0`) [static-verified].
-`CBaseCombatWeapon::Deploy` (`0x10253c50`) and `CWeaponMelee::Deploy` (`0x103ea510`) are the same
-body up to a male/female wield-sound lookup; `CWeaponRanged::Deploy` (`0x102395c0`) adds that lookup
-and picks its activity by attack mode — `ACT_VM_DRAW2` (`0xe1`) when `m_iAtkMode` is non-zero,
-`ACT_VM_DRAW` (`0xb4`) otherwise. All three commit through `0x10253b70`, which refuses only on an
-ammunition/readiness test — there is no "already busy" gate — then dispatches the activity onto the
-viewmodel and stores it in `m_iTakeOutActivity` (`+0x854`), where the weapon's idle think consumes
-it on the next tick (`docs/vtmb/animation_and_movers.md`).
+`CBaseCombatWeapon::Deploy` (`0x10253c50`) commits directly. `CWeaponMelee::Deploy` (`0x103ea510`)
+first **re-applies the gendered wield model** — the same `IsMale` → `+0x440`/`+0x444` →
+`SetModel` sequence equip runs, guarded here by `if (*string != '\0')` (§1);
+`CWeaponRanged::Deploy` (`0x102395c0`) runs that re-apply unguarded and picks its activity by
+attack mode — `ACT_VM_DRAW2` (`0xe1`) when `m_iAtkMode` is non-zero, `ACT_VM_DRAW` (`0xb4`)
+otherwise. All three commit through `0x10253b70`, which refuses only on an
+ammunition/readiness test — there is no "already busy" gate — then stores the activity in
+`m_iTakeOutActivity` (`+0x854`), where the weapon's idle think consumes it on the next tick
+(`docs/vtmb/animation_and_movers.md`), and writes the item's `anim_prefix` into
+`CBasePlayer::m_szAnimExtension` through a pointer at owner `+0xa8` (§5). That pointer's absence
+is what selects the constant-timer fallback below; `m_iTakeOutActivity` is then `-1` and no
+activity is committed at all.
 
 `Holster` (`0x10253ca0`, shared unmodified by melee; `CWeaponRanged`'s `0x10239d10` cancels zoom
 first) clears `m_bInReload`, cancels the weapon's pending `Think`, unwields and hides the world
@@ -254,7 +260,7 @@ model. **It plays `ACT_VM_LOWER` (`0xde`) only when its caller passes a non-null
 incoming weapon, so the lower animation is specifically the player-driven weapon-to-weapon switch.
 
 Both ends write the character-level `m_flNextAttack` from `SequenceDuration` of the clip actually
-selected, falling back to a constant only when no viewmodel record exists — the timing is the
+selected, falling back to a constant only on the absence branch above — the timing is the
 sequence's, not an authored item field. `CBasePlayer::ItemPostFrame` (`0x10174ce0`) routes to the
 weapon's `ItemBusyFrame` (slot 320) while that timer is live, and `ItemBusyFrame` reads no fire or
 reload input at all, so attack and reload are unreachable for the duration of a draw or holster.
@@ -341,44 +347,43 @@ follow binding are untouched by view mode. And an NPC-owned weapon is never came
 visibility mirrors the owner's own flag byte, so a cast member's drawn weapon is unaffected by where
 the player's camera is.
 
-## 5. `anim_prefix` is a lookup key
+## 5. `anim_prefix` is the animation extension, and it is dead
 
 `GetAnimPrefix()` (`FUN_10251e20`) returns item-definition `+0x2408` and occupies weapon vtable
-slot `+0x560`, unoverridden across all 169 subclasses. Its one caller is `EventDispatch`
-(`FUN_103ea510`), the melee animation-event route into `Smack()` (`FUN_10253b70`), which caches
-the resolved value at `this+0x854`.
-
-**The prefix is consumed as an opaque key.** `EventDispatch` contains no `Q_snprintf`, `Q_strcat`
-or format literal: the string is fetched and pushed unmodified. It selects a per-weapon-family
-impact profile; it is not assembled into a sequence or activity name. No guard precedes the call,
-so the empty and single-space values flow through identically — whatever tolerates them lives in
-the resolver.
-
-Across 244 definitions there are 35 distinct values. 157 author a single space `" "` and 12 the
-empty string. The remainder name a weapon family, and several do not match the item:
-`item_w_fireaxe`→`sledgehammer`, `item_w_torch`→`tireiron`, `item_w_severed_arm`→`baseballbat`,
-`item_w_flamethrower`→`anaconda`, `item_w_crossbow_flaming`→`m37`, `item_g_wallet` and
-`item_m_wallet`→`none`, the three disciplines `item_d_animalism`/`_dementation`/`_dominate`→`uzi`,
-and `item_i_written` — a readable note — →`pistol`.
-
-`EventDispatch` is shared by every `CWeaponMelee` subclass — the same vtable slot carries it on the
-fists, sledgehammer and base melee tables — and its call shape is:
+slot `+0x560`, unoverridden across all 169 subclasses. Its only caller is `FUN_10253b70`, the
+shared deploy commit (§2), which every `Deploy` funnels into. That function's shape is Source's
+`DefaultDeploy(char *szViewModel, char *szWeaponModel, int iActivity, char *szAnimExt)` and the
+prefix is `szAnimExt`:
 
 ```c
-prefix  = vtable[0x560]();          // GetAnimPrefix()
-variant = vtable[0x55c](0xb4, prefix);   // activity 0xb4 + prefix -> variant id
-arg     = vtable[0x558]();
-        = FUN_10253b70(this, arg, 0, variant, 0xb4);   // cached at this+0x854
+prefix = vtable[0x560]();      // GetAnimPrefix()          — no arguments
+world  = vtable[0x55c]();      // GetWorldModel()          — no arguments
+view   = vtable[0x558](0);     // GetViewModel(index)      — one argument
+         FUN_10253b70(this, view, world, iActivity, prefix);   // RET 0x10 — four arguments
 ```
 
-So the prefix is resolved **together with an activity constant** into a variant id, which is what
-makes it a lookup key rather than a name fragment, and the resolution happens on the weapon rather
-than on its wearer.
+`FUN_10253b70` stores `iActivity` at `this+0x854` (`m_iTakeOutActivity`) and hands `szAnimExt` to
+`FUN_10170e80`, which is `Q_strncpy(owner + 0x20a9, szAnimExt, 32)` — `CBasePlayer::m_szAnimExtension`.
 
-*Uncertain:* `+0x55c` is recorded in §1 and §2 as `GetWorldModel()`, a no-argument accessor, which
-cannot also be a two-argument activity resolver. One of the two identifications is wrong.
-**What would close it:** the `CBaseCombatWeapon` vtable layout read directly, rather than inferred
-from either call site.
+**Nothing reads it.** A full field-reference sweep of `+0x20a9` finds exactly two touches beyond
+that write, both `CBasePlayer::vfunc31` — the datamap debug dump. The field is an HL2 vestige: in
+that lineage the extension is pasted into a sequence name, and VtMB replaced the mechanism with the
+compiled per-weapon activity tables (`docs/vtmb/animation_and_movers.md` → "Activity translation is
+a second compiled-data layer") while leaving the string plumbing in place. `anim_prefix` selects
+nothing at run time.
+
+That is why the shipped values tolerate being wrong. Across 244 definitions there are 35 distinct
+values; 157 author a single space `" "` and 12 the empty string, and several of the rest name a
+family that is not the item: `item_w_fireaxe`→`sledgehammer`, `item_w_torch`→`tireiron`,
+`item_w_severed_arm`→`baseballbat`, `item_w_flamethrower`→`anaconda`,
+`item_w_crossbow_flaming`→`m37`, `item_g_wallet` and `item_m_wallet`→`none`, the three disciplines
+`item_d_animalism`/`_dementation`/`_dominate`→`uzi`, and `item_i_written` — a readable note —
+→`pistol`. No guard precedes the call, so empty and single-space flow through identically.
+
+The weapon-family key that *does* drive third-person animation is the per-class activity table at
+weapon virtuals `+0x5a8`/`+0x5ac`, consumed by `CBaseCombatWeapon::ActivityOverride` (`+0x5a4`) and
+reached from `CBaseCombatCharacter::Weapon_TranslateActivity` — owned by
+`docs/vtmb/animation_and_movers.md`. It is compiled data keyed by C++ class, not by this string.
 
 ## 6. The shipped corpus
 
@@ -397,6 +402,35 @@ firearms carry 2–13 sub-rig bones (`body`/`slide`/`mag`, `stock`/`bolt`,
 than assumed: `w_m_m37` and `w_m_submachine_mac10` park unskinned authoring leftovers beside the
 real mount, and `w_f_m37` and `w_f_dragonbreath` hang the same leftovers from a second root outside
 the Biped chain entirely.
+
+### A weapon's moving part exists on both models and animates on only one
+
+The wield model keeps the viewmodel's articulation and cannot use it. `w_m_m37.mdl` is the clearest
+case, and the shotgun's two-piece split is visible in the skin weights on both sides:
+
+| | `v_m37.mdl` (first person) | `w_m_m37.mdl` (held) |
+|---|---|---|
+| bones | 13 | 14 |
+| sequences | **13** — `idle01`, `fire01`, `dryfire01`, `reload_begin`/`reload`/`reload_complete`, `draw01`, `lower01`, `fidget01`, … | **1** — `idle01`, `ACT_VM_IDLE`, 10 fps, 60 frames |
+| receiver | `Dummy01`, 762 influences | `Box02`, 832 influences |
+| **pump** | `Stock01`, **117** | `Box01`, **117**, child of `Box02` |
+| shells | `Dummy11` 66, `Cylinder01` 66, `Box01` 70 | absent |
+
+The 117-influence piece is the same authored mesh on both files. In first person its bone is driven
+by the ten firing/reloading clips; in the wield model the only clip that exists is `idle01`, and
+nothing ever sends the wield entity a different sequence — `ACT_VM_*` goes to the viewmodel, and the
+weapon-suffixed body clips the wearer resolves (`m37_attack`, `m37_reload` and the rest, owned by
+`docs/vtmb/animation_and_movers.md`) move only the wearer's arms.
+**The held M37 is two rigid segments riding `Bip01 R Hand`; its pump never cycles in third person.**
+The unskinned `stock` → `pump handle` leftovers are the viewmodel rig's names surviving in the wield
+file, carrying no geometry.
+
+The mount bones are `Box02` (whole gun) and its child `Box01`, and **no character model declares
+either under a hand**: across all 485 character models `Box01` occurs only on `swat.mdl`/`swat2`/
+`swat3` — parented to `Bip01 Pelvis` — and `Box02` only on `bomb_guy.mdl`, under `Bip01 R Finger1`
+(§"`Box01` and `Box02` are vestigial"). So on every real wearer both fail the name match and FK off
+the hand, which is what makes the gun rigid; on a `swat` body the pump would instead be yanked to
+the pelvis, and no placement pairs those bodies with this weapon.
 
 Six models have no single skinned root under one hand: `w_{m,f}_claws.mdl` (44 bones, skinned to ten
 fingertips across both hands), `w_{m,f}_handleclaws.mdl` (40 bones, 30 skinned),

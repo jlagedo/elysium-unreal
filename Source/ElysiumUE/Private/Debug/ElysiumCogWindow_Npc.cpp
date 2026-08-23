@@ -589,6 +589,18 @@ void FElysiumCogWindow_Npc::RenderPlayerLoadout(FElysiumEntityWorld& World)
 		ElysiumArenaCast::ArmPlayerWithArsenal(World, GetGameState(), ReservePerAmmoType);
 	}
 	ImGui::SameLine();
+	if (ImGui::SmallButton("Seed ammo"))
+	{
+		const int32 Stocked = ElysiumArenaCast::StockPlayerAmmo(World, ReservePerAmmoType, LastError);
+		if (LastError.IsEmpty())
+		{
+			LastNotice = Stocked > 0
+				? FString::Printf(TEXT("stocked %d round(s) into %d ammo type(s)"),
+					ReservePerAmmoType, Stocked)
+				: TEXT("no carried weapon names an ammo type — nothing to stock");
+		}
+	}
+	ImGui::SameLine();
 	ImGui::TextDisabled("slot1..slot8 select · +attack · +reload · discipline");
 
 	// --- what is actually in the player's hands ---------------------------------------------------

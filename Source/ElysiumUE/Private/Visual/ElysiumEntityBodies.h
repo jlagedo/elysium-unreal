@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "ElysiumAnimationIntent.h" // FElysiumSegmentClaims (SegmentClaims stores it by value)
 #include "ElysiumEntity.h"   // FElysiumFlexWrite (passed by view)
 #include "ElysiumWorldServices.h" // placed-model request/body value types
 // By value: the grid a review body is standing on is a member, so the resolver's own header.
@@ -144,8 +145,16 @@ public:
 	// `ReleaseNpcSegment`.
 	bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FElysiumClipSegment& Segment, float* OutSeconds);
-	// LIFE5 — give back the HELD segment claim standing on this body. A body holding none releases
-	// nothing, which is the ordinary end of a run rather than a failure.
+	// Give back EVERY held segment claim standing on this body, on every channel, and take down any
+	// pose still standing for one. A body holding none releases nothing, which is the ordinary end of
+	// a run rather than a failure.
+	//
+	// **The whole run, not one channel of it, and that is what its callers mean.** Every caller is a
+	// producer's single stop path — a scripted beat abandoning its move, an interesting place
+	// leaving, a `scripted_sequence` cancelling, the death transaction — and each of them is ending
+	// the run outright rather than one layer of it. None names a channel, and none has a second call
+	// to give the rest back with, so a release that took one channel would leave a held claim on the
+	// others that nothing can ever return.
 	void ReleaseNpcSegment(USkeletalMeshComponent* Body);
 	// LIFE5 — play one already-resolved cell over whatever owns the base pose. The (owner, animation
 	// name) pair goes straight at the baked clip, never through the vocabulary. The channel claim is
@@ -272,12 +281,18 @@ public:
 	FString AnimatedPropRestClip(const FString& Stem, int32 PlacementToken = 0) const;
 	bool FindAnimatedPropClip(const FString& Stem, const FString& ClipName, bool& bOutLoops) const;
 
-	// Retarget one named clip onto an already-built NPC model's skeleton, cached per (stem, clip).
-	// The clip may live in the NPC's own glb or in any shared bank — the manifest says which, and
-	// the bank is loaded once per session. Null when the stem has no body yet or the name resolves
-	// nothing.
+	// Retarget one named clip onto an already-built NPC model's skeleton, cached per (stem, clip,
+	// channel). The clip may live in the NPC's own glb or in any shared bank — the manifest says
+	// which, and the bank is loaded once per session. Null when the stem has no body yet or the name
+	// resolves nothing.
+	//
+	// **The channel is part of the cache identity, not just a pass-through.** `ResolveClip` refuses a
+	// baked partial-body layer for a Base-channel caller and answers it for a layer channel, so one
+	// label has two legitimate answers on one body — and a cache keyed on the label alone would let
+	// whichever channel asked first decide for the other.
 	UAnimSequence* ResolveNpcClip(const FString& Stem, const FString& ClipName,
-		USkeletalMesh* TargetMesh = nullptr);
+		USkeletalMesh* TargetMesh = nullptr,
+		EElysiumAnimChannel Channel = EElysiumAnimChannel::Base);
 
 	// The baked SM_<Stem> asset for a prop model, cached per stem (one load per model however many
 	// entities place it). Null + a warning naming the bake command when the map has no such asset.
@@ -363,6 +378,12 @@ private:
 	// One-shot requests already reported — a missing bank or asset, and a request a producer built
 	// unplayable — so a reaction re-armed every time a body is hit warns once rather than per hit.
 	TSet<FString> ReportedMissingOneShots;
+	// The overlay-slot arm's own refusals, for the same reason at a much higher rate: that path is
+	// reached once per TRIGGER PULL, so a body that cannot compose a layer refuses one on every shot
+	// an autofire weapon takes. Keyed by reason — `nograph:<stem>|<label>` for a body with no biped
+	// graph, `noarbiter:<body>` for a body nothing arbitrates — because the second is a property of
+	// the body rather than of the clip and belongs to the body for its whole life.
+	TSet<FString> ReportedSlotRefusals;
 	bool ReleaseBodyAnimRequest(USkeletalMeshComponent* Body, uint32 Handle);
 	// LIFE5 — the standing claim on one of a body's channels, or null. Read-only mirror of the two
 	// submit/release routes above, and it never BUILDS a driver: a body that has never been claimed
@@ -375,11 +396,11 @@ private:
 	// until this map gives it back.
 	TMap<FObjectKey, uint32> CinematicClaims;
 
-	// LIFE5 — one standing HELD segment claim per body, the same shape and for the same reason as the
-	// cinematic claims above. A montage-slot RUN — a `scripted_sequence`'s idle/travel/play/post-idle,
-	// an interesting place's enter/hold/leave — holds one claim across every segment of the run, so
-	// the claim has no duration and this map is what remembers the handle to give back.
-	TMap<FObjectKey, uint32> SegmentClaims;
+	// The standing HELD segment claims on one body, the same shape and for the same reason as
+	// the cinematic claims above. The row itself is `FElysiumSegmentClaims`
+	// (`ElysiumAnimationIntent.h`), beside the `ClaimForSegment` call that produces the handles it
+	// remembers; this map is the per-body index over it.
+	TMap<FObjectKey, FElysiumSegmentClaims> SegmentClaims;
 
 	// LIFE5 — one standing HELD reaction claim per body, the same shape and for the same reason as
 	// the cinematic claims above: a `Predicate` play has no duration, so its claim holds until the
@@ -483,7 +504,8 @@ private:
 namespace ElysiumEntityAnimation
 {
 	FString NpcVisualCacheKey(const FString& Stem, bool bPlayerMaterial);
-	FString NpcClipCacheKey(const FString& Stem, const FString& ClipName);
+	FString NpcClipCacheKey(const FString& Stem, const FString& ClipName,
+		EElysiumAnimChannel Channel = EElysiumAnimChannel::Base);
 	FString CinematicClipCacheKey(const FString& Stem, const FString& BankStem, const FString& ClipName);
 
 	// How long the pose a fan strikes at `AxisValue` actually lasts (LIFE5) — **the engine's own

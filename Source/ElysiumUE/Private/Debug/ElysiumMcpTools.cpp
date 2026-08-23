@@ -217,6 +217,9 @@ namespace ElysiumMcpImpl
 		Loco->SetNumberField(TEXT("speed2d"), S.Speed2D());
 		Loco->SetObjectField(TEXT("local_velocity"), Vec(S.LocalVelocity));
 		Loco->SetNumberField(TEXT("facing_yaw"), S.FacingYaw);
+		// The other half of the view frame, and the producer side of `aim_pitch`: read together they
+		// say whether a still aim grid is being handed nothing or is ignoring what it was handed.
+		Loco->SetNumberField(TEXT("view_pitch"), S.ViewPitch);
 		Loco->SetNumberField(TEXT("move_yaw_wish"), S.MoveYawWish);
 		Loco->SetNumberField(TEXT("move_yaw_vel"), S.MoveYawVelocity);
 		if (bFull)
@@ -618,6 +621,13 @@ namespace ElysiumMcpImpl
 				Anim->SetBoolField(TEXT("base_pose_owned"), Sel.bBasePoseOwned);
 				Anim->SetStringField(TEXT("base_hold"), Sel.BaseHold);
 				Anim->SetNumberField(TEXT("base_hold_seconds"), Sel.BaseHoldSeconds);
+				// The overlay slot, which composes over the base rather than taking it — so it is
+				// invisible in every field above and a layer stuck on the wrong clip, the wrong bank
+				// or at zero weight reads as a body that simply looks wrong.
+				Anim->SetStringField(TEXT("slot_label"), Sel.SlotLabel);
+				Anim->SetStringField(TEXT("slot_owner"), Sel.SlotOwnerStem);
+				Anim->SetNumberField(TEXT("slot_weight"), Sel.SlotWeight);
+				Anim->SetNumberField(TEXT("slot_cycle"), Sel.SlotCycle);
 				Out->SetObjectField(TEXT("animation"), Anim);
 			}
 		}
@@ -1051,6 +1061,10 @@ namespace ElysiumMcpImpl
 						Anim->SetNumberField(TEXT("fade"), Sel.FadeSeconds);
 						Anim->SetNumberField(TEXT("ground_speed"), Sel.GroundSpeedCmPerSecond);
 						Anim->SetNumberField(TEXT("move_yaw"), Sel.MoveYaw);
+						// The two the LAYER's grid is steered by, which the axis list below cannot
+						// report: `axes` describes the base asset, and an aim grid rides the layer.
+						Anim->SetNumberField(TEXT("aim_yaw"), Sel.AimYaw);
+						Anim->SetNumberField(TEXT("aim_pitch"), Sel.AimPitch);
 						TArray<TSharedPtr<FJsonValue>> Axes;
 						for (int32 Axis = 0; Axis < Sel.Axes; ++Axis)
 						{
@@ -1075,6 +1089,13 @@ namespace ElysiumMcpImpl
 						Anim->SetBoolField(TEXT("base_pose_owned"), Sel.bBasePoseOwned);
 						Anim->SetStringField(TEXT("base_hold"), Sel.BaseHold);
 						Anim->SetNumberField(TEXT("base_hold_seconds"), Sel.BaseHoldSeconds);
+						// The overlay slot the player's ranged families layer through. It takes no
+						// part in the verdict above — it composes over whatever owns the base — so
+						// these four lines are the only place a live layer is visible at all.
+						Anim->SetStringField(TEXT("slot_label"), Sel.SlotLabel);
+						Anim->SetStringField(TEXT("slot_owner"), Sel.SlotOwnerStem);
+						Anim->SetNumberField(TEXT("slot_weight"), Sel.SlotWeight);
+						Anim->SetNumberField(TEXT("slot_cycle"), Sel.SlotCycle);
 						Body->SetObjectField(TEXT("animation"), Anim);
 					}
 

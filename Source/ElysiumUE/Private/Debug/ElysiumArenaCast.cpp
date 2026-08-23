@@ -9,6 +9,7 @@
 #include "ElysiumNpcSubsystem.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumChargen.h"
+#include "Substrate/ElysiumItemClasses.h"
 #include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumRulebook.h"
@@ -351,6 +352,40 @@ bool GivePlayerItem(FElysiumEntityWorld& World, const FString& Classname, FStrin
 	return true;
 }
 
+int32 StockPlayerAmmo(FElysiumEntityWorld& World, int32 Amount, FString& OutError)
+{
+	OutError.Reset();
+	FElysiumPlayer* Player = World.FindPlayer();
+	if (!Player)
+	{
+		OutError = TEXT("no player entity");
+		return 0;
+	}
+
+	// The types come off what is CARRIED, not off the catalog: seeding reserve for a caliber no
+	// carried weapon chambers would stock rounds nothing can fire.
+	TSet<FString> AmmoTypes;
+	for (int32 i = 0; i < Player->Inventory.Num(); ++i)
+	{
+		const FElysiumItem* Item = Player->Inventory.At(*Player, i);
+		const FElysiumItemDef* Def = Item ? Item->Data() : nullptr;
+		if (Def && !Def->AmmoType.IsEmpty())
+		{
+			AmmoTypes.Add(Def->AmmoType);
+		}
+	}
+	for (const FString& AmmoType : AmmoTypes)
+	{
+		// Same posture as the arsenal grant: `GiveAmmo`'s wrapper applies no clamp, and neither
+		// does this.
+		Player->Inventory.AddReserve(AmmoType, Amount);
+	}
+	UE_LOG(LogElysiumArenaCast, Log,
+		TEXT("arena cast: stocked %d round(s) into %d carried ammo type(s)"),
+		Amount, AmmoTypes.Num());
+	return AmmoTypes.Num();
+}
+
 FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
 	UElysiumGameStateSubsystem* GameState, int32 ReservePerType)
 {
@@ -396,13 +431,29 @@ FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
 		}
 	}
 
-	// The full arsenal: all six wield melee weapons plus 3 common firearms. The melee set is every
-	// `CWeaponMelee_*` classname (`ElysiumWeaponActivityTables.cpp`), which is what the LIFE4
-	// acceptance sweep needs standing in the pawn's inventory: nothing wielded is left untested.
+	// Every ordinarily-reachable player weapon — every ranged and melee item a run gets by playing
+	// the game rather than by a drop-only enemy kill or a plus-patch addition/restoration
+	// (`docs/vtmb/wielded_weapons.md` § "Who carries what"). `item_w_occultblade` is the
+	// Tal'Mahe'Ra Blade.
 	const FString Arsenal[] = {
-		TEXT("item_w_tire_iron"), TEXT("item_w_knife"), TEXT("item_w_katana"),
-		TEXT("item_w_baseball_bat"), TEXT("item_w_bush_hook"), TEXT("item_w_sledgehammer"),
-		TEXT("item_w_thirtyeight"), TEXT("item_w_glock_17c"), TEXT("item_w_ithaca_m_37")
+		// Melee — blunt
+		TEXT("item_w_fists"), TEXT("item_w_baton"), TEXT("item_w_baseball_bat"),
+		TEXT("item_w_tire_iron"), TEXT("item_w_severed_arm"), TEXT("item_w_sledgehammer"),
+		// Melee — bladed
+		TEXT("item_w_knife"), TEXT("item_w_fireaxe"), TEXT("item_w_katana"), TEXT("item_w_bush_hook"),
+		// Melee — special
+		TEXT("item_w_torch"), TEXT("item_w_occultblade"),
+		// Ranged — handguns
+		TEXT("item_w_thirtyeight"), TEXT("item_w_glock_17c"), TEXT("item_w_colt_anaconda"),
+		TEXT("item_w_deserteagle"),
+		// Ranged — shotguns
+		TEXT("item_w_ithaca_m_37"), TEXT("item_w_supershotgun"),
+		// Ranged — machine guns
+		TEXT("item_w_mac_10"), TEXT("item_w_uzi"), TEXT("item_w_steyr_aug"),
+		// Ranged — rifles
+		TEXT("item_w_remington_m_700"),
+		// Ranged — special
+		TEXT("item_w_crossbow"), TEXT("item_w_flamethrower"),
 	};
 
 	TSet<FString> AmmoTypes;
@@ -427,7 +478,17 @@ FArmResult ArmPlayerWithArsenal(FElysiumEntityWorld& World,
 		switch (Def->Type)
 		{
 		case EElysiumItemType::WeaponMelee:   ++Result.Melee; break;
-		case EElysiumItemType::WeaponFirearm: ++Result.Firearms; AmmoTypes.Add(Def->AmmoType); break;
+		case EElysiumItemType::WeaponFirearm:
+			++Result.Firearms;
+			AmmoTypes.Add(Def->AmmoType);
+			// A fresh firearm spawns loaded with `Default_Size`, which a record may author BELOW the
+			// magazine's capacity. An arena player starts at max: top the loaded magazine to `Size`,
+			// the same ceiling a completed reload reaches.
+			if (FElysiumItem* Granted = Player->Inventory.FindOrdinary(*Player, Classname))
+			{
+				Granted->MagazineCount = FMath::Max(Granted->MagazineCount, Def->MagazineSize);
+			}
+			break;
 		case EElysiumItemType::WeaponThrown:  ++Result.Thrown; break;
 		default: break;
 		}

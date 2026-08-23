@@ -35,7 +35,7 @@
 #include "Misc/EnumClassFlags.h"
 
 #include "ElysiumAnimEvent.h"
-#include "ElysiumAnimationIntent.h"   // EElysiumAnimPriority — the band a play claims its channel at
+#include "ElysiumAnimationIntent.h"   // EElysiumAnimPriority/EElysiumAnimChannel — the band and the channel
 #include "ElysiumEntity.h"
 #include "ElysiumSwingRecord.h"
 #include "Substrate/ElysiumDamage.h"
@@ -742,8 +742,14 @@ private:
 	// miss. It is the melee attack path's and the player's — see
 	// `FElysiumActivityClipRequest::bRequireStateMask` — so every other caller leaves it false and
 	// gets the cast arm, which is what an NPC swing takes.
+	//
+	// `Channel` is stated by every caller and has no default, because the two attack families
+	// disagree about what a clip IS: a melee swing is the base pose and a ranged fire or a player
+	// reload is retail's `CBaseAnimatingOverlay` slot 0, a masked partial-body layer whose unowned
+	// bones decode to a zero quaternion and a zero position. A layer defaulted onto the base channel
+	// collapses the body, so the answer is required rather than inherited.
 	float ResolveAndPlay(const FString& Activity, EElysiumAnimPriority Band,
-		const FElysiumWeaponMode& Mode, FString& OutClipLabel,
+		EElysiumAnimChannel Channel, const FElysiumWeaponMode& Mode, FString& OutClipLabel,
 		FString* OutOwnerStem = nullptr, float* OutMaxReachCm = nullptr,
 		float PlaybackRate = 1.0f, bool bRequirePlayerStateMask = false);
 

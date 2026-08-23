@@ -34,7 +34,7 @@ namespace
 	}
 
 	// An outcome is a verdict, so it is coloured like one: a clean resolve reads plain, a fallback
-	// reads as a warning, and the two that mean the catalog is wrong read as errors.
+	// reads as a warning, and the four that mean the catalog is wrong read as errors.
 	ImVec4 OutcomeColor(EElysiumAnimOutcome Outcome)
 	{
 		switch (Outcome)
@@ -43,6 +43,7 @@ namespace
 			return ElysiumCogStyle::ColOk;
 		case EElysiumAnimOutcome::MissingSequence:
 		case EElysiumAnimOutcome::MaskedRejected:
+		case EElysiumAnimOutcome::LayerMaskRejected:
 		case EElysiumAnimOutcome::GridStateRefused:
 			return ElysiumCogStyle::ColError;
 		default:

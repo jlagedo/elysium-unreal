@@ -25,10 +25,21 @@
 
 namespace
 {
-	// Which channels the event pass polls. The base channel alone: it is the only one any producer
-	// publishes a phase for, and a channel nothing answers for costs one seam call per body per
-	// frame to learn nothing.
-	constexpr EElysiumAnimChannel GPolledEventChannels[] = { EElysiumAnimChannel::Base };
+	// Which channels the event pass polls, and `EventCursors` is sized off this array so a channel
+	// added here gets its own cursor with nothing else to change.
+	//
+	// **The overlay slot is polled beside the base pose, because the ranged families live there.**
+	// Every ranged fire and the player's reload compose as retail's `CBaseAnimatingOverlay` slot 0 —
+	// a masked partial-body layer over the base — and the shot clips are the ones that carry the
+	// 3030-3044 commit ids. A pass that polled the base alone would walk the gait's timeline while
+	// the shot's went unread, and `FElysiumWeapon::CommitArrivesFromAnimEvent` would answer false for
+	// every player shot: the commit would silently fall back to the `ContactEventCycle` estimate with
+	// nothing but a Verbose line to say so.
+	//
+	// The three remaining channels stay out: nothing publishes a phase for them, and a channel
+	// nothing answers for costs one seam call per body per frame to learn nothing.
+	constexpr EElysiumAnimChannel GPolledEventChannels[] = {
+		EElysiumAnimChannel::Base, EElysiumAnimChannel::UpperBody };
 
 	// A phase the seam answered TRUE for but that names no clip, or sits outside `[0,1)`, is a
 	// producer defect: the dispatcher's whole rule is an interval over that number, so a bad one

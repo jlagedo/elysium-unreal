@@ -90,29 +90,58 @@ namespace ElysiumInput
 		return FVector2D(Stick.Y, Stick.X);
 	}
 
-	// How far a stick has to be pushed along one axis before that axis counts as a held direction
-	// key. It matches the shoulder triggers' `actuation_threshold` in `make_input_assets.py`, so one
-	// number answers "the pad is asking for this" everywhere; a 45-degree push clears it on both
-	// components at 0.707, which is what makes a diagonal read as the two keys a keyboard would hold.
-	inline constexpr float StickDirectionThreshold = 0.5f;
+	// The magnitude at which the finished move vector counts as asking for a direction at all. It is
+	// a floor against float dust and nothing more: the **dead zone owns the "is the player asking"
+	// decision** and owns it once, upstream in `ShapeStickMove`, so anything that survives it is a
+	// deliberate push and states its direction. Raising this would put a second, disagreeing dead
+	// zone here — a band where the character visibly strafes while the selector calls the state
+	// neutral, which is a pad that moves and cannot reach a directional attack.
+	inline constexpr float DirectionActuation = UE_KINDA_SMALL_NUMBER;
 
-	// The four direction bits a move vector states, for the consumers that read a BUTTON FIELD rather
-	// than the vector — chiefly direction-keyed melee selection, which compares each candidate
-	// sequence's authored mask against the held bits (`ElysiumCombo::SelectionMask`).
+	// The eight directions a move vector can state, indexed by 45-degree sector: 0 is forward and the
+	// count runs toward +Y, which is `+moveright`. Each sector is CENTRED on its own direction, so a
+	// push within ±22.5° of an axis states that axis alone and only a genuine diagonal states two.
+	inline constexpr uint64 DirectionSectors[8] = {
+		static_cast<uint64>(EElysiumButton::Forward),
+		static_cast<uint64>(EElysiumButton::Forward)   | static_cast<uint64>(EElysiumButton::MoveRight),
+		static_cast<uint64>(EElysiumButton::MoveRight),
+		static_cast<uint64>(EElysiumButton::Back)      | static_cast<uint64>(EElysiumButton::MoveRight),
+		static_cast<uint64>(EElysiumButton::Back),
+		static_cast<uint64>(EElysiumButton::Back)      | static_cast<uint64>(EElysiumButton::MoveLeft),
+		static_cast<uint64>(EElysiumButton::MoveLeft),
+		static_cast<uint64>(EElysiumButton::Forward)   | static_cast<uint64>(EElysiumButton::MoveLeft),
+	};
+
+	// The direction bits a move vector states, for the consumers that read a BUTTON FIELD rather than
+	// the vector — chiefly direction-keyed melee selection, which compares each candidate sequence's
+	// authored mask against the held bits (`ElysiumCombo::SelectionMask`).
 	//
 	// A keyboard sets those bits itself and a stick never does, so without this the pad publishes a
 	// permanently neutral selection state and no directional attack is reachable on it at any
 	// deflection. The vector is the device-neutral statement of the same intent, so it is derived
-	// from rather than duplicated: one owner, and a `+forward` and a pushed stick are indistinguishable
-	// by the time either reaches the substrate.
+	// from rather than duplicated: one owner, and a `+forward` and a pushed stick are
+	// indistinguishable by the time either reaches the substrate.
+	//
+	// **The direction is the vector's ANGLE, not a test on each component**, and that is what makes
+	// the two surfaces state the same thing. A key is binary and a thumb is not: a stick almost never
+	// rests on an axis, so per-component thresholds turn an ordinary push toward left into
+	// `MoveLeft|Forward` — two bits a keyboard player would only ever hold on purpose — and
+	// `ElysiumCombo::RankStateMask` ranks the forward/back pair above the strafe pair, so the forward
+	// attack wins a press the player read as left. Quantizing to the sector reproduces the keyboard
+	// exactly: `+forward` alone is sector 0, `+forward` with `+moveleft` is sector 7, and every
+	// cardinal key state round-trips through this function unchanged.
 	inline uint64 DirectionButtonsFromMove(const FVector2D& Move)
 	{
-		uint64 Bits = 0;
-		if (Move.X >= StickDirectionThreshold)  { Bits |= static_cast<uint64>(EElysiumButton::Forward); }
-		if (Move.X <= -StickDirectionThreshold) { Bits |= static_cast<uint64>(EElysiumButton::Back); }
-		if (Move.Y >= StickDirectionThreshold)  { Bits |= static_cast<uint64>(EElysiumButton::MoveRight); }
-		if (Move.Y <= -StickDirectionThreshold) { Bits |= static_cast<uint64>(EElysiumButton::MoveLeft); }
-		return Bits;
+		if (Move.SizeSquared() <= static_cast<double>(DirectionActuation) * DirectionActuation)
+		{
+			return 0;
+		}
+		// Sector width is 45°, and rounding rather than flooring is what centres each sector on its
+		// own direction. The double modulo is for the negative half-turn: `Atan2` answers (−π, π].
+		constexpr double SectorRadians = UE_DOUBLE_PI / 4.0;
+		const double Angle = FMath::Atan2(Move.Y, Move.X);
+		const int32 Sector = ((FMath::RoundToInt32(Angle / SectorRadians) % 8) + 8) % 8;
+		return DirectionSectors[Sector];
 	}
 }
 

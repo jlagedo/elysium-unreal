@@ -313,6 +313,9 @@ void UElysiumMovementComponent::PublishLocomotionSample(bool bSolved)
 	// The same expression the wish was framed in, or the sample's facing and its `move_yaw` would be
 	// two different frames wearing one name.
 	LastSample.FacingYaw = static_cast<float>(ViewFrame().Yaw);
+	// The other half of the same frame, and the only consumer of the view's vertical: the movement
+	// solve is planar, so this is carried for the pose parameter rather than used here.
+	LastSample.ViewPitch = static_cast<float>(ViewFrame().Pitch);
 
 	// Into the facing frame. A yaw-only rotation, so the vertical component passes through unchanged.
 	const FVector Planar = FRotator(0.0f, -LastSample.FacingYaw, 0.0f).RotateVector(Velocity);

@@ -55,6 +55,11 @@ struct FElysiumLocomotionSample
 	// actor yaw.
 	float FacingYaw = 0.0f;
 
+	// Where the body LOOKS, world degrees, positive up. Taken from the same view frame `FacingYaw`
+	// is, so the two describe one look direction rather than two. It steers the `aim_pitch` pose
+	// parameter; an NPC leaves it at zero, which is the value its own grids are authored around.
+	float ViewPitch = 0.0f;
+
 	// The two candidate movement yaws, both facing-relative and both in (-180, 180]. **Both are
 	// recorded from the first day on purpose**: `CCC7` recovers the sign of `move_yaw` by comparing
 	// the retail selector's own input against these, and that comparison should run against

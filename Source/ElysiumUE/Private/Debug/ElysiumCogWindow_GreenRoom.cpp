@@ -295,7 +295,14 @@ void FElysiumCogWindow_GreenRoom::ScanRootMotion(FElysiumGreenRoomRun& Lab)
 		FString Error;
 		// A baked sequence is addressed by its owner and animation name; the standing mesh is what
 		// it has to be able to play on.
-		const UAnimSequence* Sequence = Anims->ResolveClip(PendingStem, Row.Label, Mesh, Error);
+		//
+		// **Asked on a LAYER channel, because this sweep poses nothing.** It samples `Bip01` at the
+		// clip's two ends to answer whether the root travels; no pose is ever struck, so the base
+		// channel's refusal of a bone-masked partial-body clip would answer "no such clip" for
+		// exactly the fire, reload and dry-fire layers a reader opens this report to inspect, and
+		// leave their rows reading "unknown".
+		const UAnimSequence* Sequence = Anims->ResolveClip(PendingStem, Row.Label, Mesh, Error,
+			EElysiumAnimChannel::UpperBody);
 		FTransform Start;
 		FTransform End;
 		const float Length = Sequence != nullptr ? Sequence->GetPlayLength() : 0.0f;

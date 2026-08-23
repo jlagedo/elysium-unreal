@@ -375,17 +375,21 @@ struct FElysiumRecordingServices final
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FElysiumClipSegment& Segment, float* OutSeconds) override
 	{
-		// `rate=` and `act=` ride at the very tail, after the band and the hold, for the reason those
-		// two do: `Saw` is a prefix match, so a case that wants the forced ideal activity or the
-		// playback rate can ask for it without moving the ground under one that does not. `act=` is
-		// the FORCED IDEAL ACTIVITY the segment carries, and it is recorded because it is the value
-		// the movement lock, the reselection guard and the air self-latch all read — a producer that
-		// stopped stating it would otherwise still play its clip and look identical here.
-		Record(FString::Printf(TEXT("PlayNpcClip %s %s loop=%d band=%s%s rate=%.2f act=%s"),
+		// `rate=`, `act=` and `ch=` ride at the very tail, after the band and the hold, for the reason
+		// those two do: `Saw` is a prefix match, so a case that wants the forced ideal activity, the
+		// playback rate or the channel can ask for it without moving the ground under one that does
+		// not. `act=` is the FORCED IDEAL ACTIVITY the segment carries, and it is recorded because it
+		// is the value the movement lock, the reselection guard and the air self-latch all read — a
+		// producer that stopped stating it would otherwise still play its clip and look identical
+		// here. `ch=` is which of retail's two mechanisms the producer asked for: a base pose that
+		// REPLACES, or a `CBaseAnimatingOverlay` slot 0 layer that composes over it. A ranged fire on
+		// the base channel collapses the body, and nothing else in this line would say so.
+		Record(FString::Printf(TEXT("PlayNpcClip %s %s loop=%d band=%s%s rate=%.2f act=%s ch=%s"),
 			*Stem, *Segment.ClipName, Segment.bLoop ? 1 : 0,
 			ElysiumAnimIntent::PriorityName(Segment.Priority),
 			Segment.bHoldUntilReleased ? TEXT(" held=1") : TEXT(""), Segment.PlaybackRate,
-			Segment.Activity.IsEmpty() ? TEXT("(none)") : *Segment.Activity));
+			Segment.Activity.IsEmpty() ? TEXT("(none)") : *Segment.Activity,
+			ElysiumAnimIntent::ChannelName(Segment.Channel)));
 		if (OutSeconds)
 		{
 			*OutSeconds = ClipSeconds;   // a beat's OnEndSequence schedules off this
@@ -609,12 +613,18 @@ struct FElysiumRecordingServices final
 				Cast<UElysiumBodyAnimInstance>(Body->GetAnimInstance());
 			return Inst != nullptr && Inst->GetClipPhase(Channel, Out);
 		}
-		if (!bBodyClipPhaseSet)
+		if (!bBodyClipPhaseSet || BodyClipPhase.Channel != Channel)
 		{
+			// **The scripted record stands on ONE channel, and every other channel is empty.** A body
+			// really does stand on its base pose and on the overlay slot at the same time — the two are
+			// different clips composed together — so a double that answered the same record for every
+			// channel would describe a body that cannot exist, and the event pass would walk one
+			// timeline twice and fire every record on it once per polled channel. The record's own
+			// `Channel` is the one it stands on, and it defaults to the base pose, which is what every
+			// case that never states one means.
 			return false;
 		}
 		Out = BodyClipPhase;
-		Out.Channel = Channel;
 		return true;
 	}
 	// The timelines a fixture declares, keyed `<owner>|<label>` and matched case-insensitively the

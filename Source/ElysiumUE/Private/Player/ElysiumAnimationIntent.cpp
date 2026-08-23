@@ -195,7 +195,8 @@ const TCHAR* OutcomeName(EElysiumAnimOutcome Outcome)
 	case EElysiumAnimOutcome::ScriptedSequenceZero:    return TEXT("scripted sequence 0");
 	case EElysiumAnimOutcome::GestureNoOp:             return TEXT("gesture no-op");
 	case EElysiumAnimOutcome::MissingSequence:         return TEXT("missing sequence");
-	case EElysiumAnimOutcome::MaskedRejected:          return TEXT("masked, refused");
+	case EElysiumAnimOutcome::MaskedRejected:          return TEXT("additive, refused");
+	case EElysiumAnimOutcome::LayerMaskRejected:       return TEXT("masked layer, refused");
 	case EElysiumAnimOutcome::GridStateRefused:        return TEXT("grid, sequence-only state");
 	case EElysiumAnimOutcome::NoAsset:                 return TEXT("no asset");
 	default:                                           return TEXT("no vocabulary");
@@ -505,6 +506,25 @@ FElysiumAnimationIntent BuildLocomotionIntent(const FElysiumLocomotionSample& Sa
 	Out.Body = Sample;
 	Out.AirPhase = Latch.Phase;
 	Out.CompletionOwner = Source;
+
+	// **`aim_pitch`, the player's half of an aim grid.** Retail's player selector takes the pitch
+	// from a field and writes `aim_yaw` as a literal 0, because the body's yaw already follows the
+	// view — so looking up and down is the only axis a player steers by looking, and `AimYaw` stays
+	// where the cast's own producer puts it.
+	//
+	// **Negated, because the grid's pitch axis is positive-DOWN and Unreal's is positive-UP.** The
+	// grid states it itself: the cells at the low end of its -45..45 axis are `<weapon>_aim_UC`, up
+	// at the low end. That is the convention the pose parameter was authored in, and it survives
+	// into the baked blend space because the sample positions are the authored parameter values.
+	// Converted HERE rather than at the asset, on the same reasoning as axis interpolation: this
+	// binds a LIVE view orientation to a parameter rather than reinterpreting a stored coordinate.
+	//
+	// **The clamp is the animation's, not the shot's.** Every shipped aim grid spans -45..45, so a
+	// steeper look would saturate at a cell the grid does not have. The bullet leaves along the
+	// unclamped view (`AElysiumMapActor::QueryAimTarget`), so clamping here bounds how far the body
+	// leans and nothing else. A body whose producer states no view pitch — every cast body — leaves
+	// this at zero, the centre column its grids are authored around.
+	Out.AimPitch = FMath::Clamp(-FRotator::NormalizeAxis(Sample.ViewPitch), -45.0f, 45.0f);
 
 	// The request's own loop intent, which is not the clip's looping flag: the leap and the two lands
 	// are one-shots the body plays through, everything else is a state it holds. A held crouch holds

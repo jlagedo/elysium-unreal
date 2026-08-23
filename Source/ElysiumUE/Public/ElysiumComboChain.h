@@ -83,6 +83,35 @@ namespace ElysiumCombo
 		return EStateMatch::None;
 	}
 
+	// The held selection bits by name — `FORWARD|MOVELEFT`, or `-` when the player is holding no
+	// direction. Diagnostics only, and the reason it exists is that the state a swing selected on is
+	// otherwise invisible: a directional attack that silently resolves at the neutral entry looks
+	// exactly like an authored absence in the log, and telling those two apart is what the melee
+	// timeline line needs in order to be evidence.
+	inline FString DescribeStateMask(int32 State)
+	{
+		struct FNamedBit { int32 Bit; const TCHAR* Name; };
+		static constexpr FNamedBit Named[] = {
+			{ InForward,   TEXT("FORWARD")   },
+			{ InBack,      TEXT("BACK")      },
+			{ InMoveLeft,  TEXT("MOVELEFT")  },
+			{ InMoveRight, TEXT("MOVERIGHT") },
+			{ InLeft,      TEXT("LEFT")      },
+			{ InRight,     TEXT("RIGHT")     },
+			{ InJump,      TEXT("JUMP")      },
+		};
+		const int32 Held = State & SelectionMask;
+		FString Out;
+		for (const FNamedBit& Entry : Named)
+		{
+			if ((Held & Entry.Bit) != 0)
+			{
+				Out += Out.IsEmpty() ? Entry.Name : FString(TEXT("|")) + Entry.Name;
+			}
+		}
+		return Out.IsEmpty() ? FString(TEXT("-")) : Out;
+	}
+
 	// Whether A is a better match than B, over the order the enum declares. `None` never wins.
 	inline bool IsBetterStateMatch(EStateMatch A, EStateMatch B)
 	{

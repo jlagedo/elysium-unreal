@@ -170,8 +170,12 @@ namespace ElysiumArenaCast
 		FString FirstError;
 	};
 
-	// Give the player every controllable weapon in the catalog plus a full reserve of every
-	// ammunition type any of them names.
+	// Give the player every ordinarily-reachable weapon — every ranged and melee item obtainable by
+	// playing the game, excluding drop-only enemy weapons and plus-patch additions/restorations —
+	// plus a full reserve of every ammunition type any of them names. Each granted firearm's loaded
+	// magazine is topped to its
+	// record's capacity — `Default_Size` can author a fresh spawn below `Size`, and an armoury
+	// handed over for a fight arrives loaded.
 	//
 	// The reserve is stocked by AMMO TYPE rather than by handing over ammunition item entities: a
 	// magazine's reserve and its loaded rounds are two different homes (`FElysiumInventory` —
@@ -183,6 +187,13 @@ namespace ElysiumArenaCast
 	// One named item onto the player, through the same route. Returns false with `OutError` for a
 	// classname the item catalog does not carry.
 	bool GivePlayerItem(FElysiumEntityWorld& World, const FString& Classname, FString& OutError);
+
+	// Add `Amount` reserve rounds of every ammunition type the player's CARRIED firearms name,
+	// granting nothing — the re-stock half of `ArmPlayerWithArsenal`, for a run that has spent its
+	// reserve mid-test. Returns the number of ammo types stocked; 0 with `OutError` set when there
+	// is no player, and 0 with `OutError` empty when nothing carried names a magazine (an ordinary
+	// empty-handed answer, not a failure).
+	int32 StockPlayerAmmo(FElysiumEntityWorld& World, int32 Amount, FString& OutError);
 }
 
 #endif // !UE_BUILD_SHIPPING

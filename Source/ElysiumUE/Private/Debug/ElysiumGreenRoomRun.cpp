@@ -1723,8 +1723,12 @@ bool FElysiumGreenRoomRun::LabSetMode(ELabMode NewMode, FString& OutError)
 			UGameInstance* GI = Subsystem.IsValid() ? Subsystem->GetGameInstance() : nullptr;
 			if (FElysiumEntityWorld* EntityWorld = Map->GetEntityWorld())
 			{
+				// Every firearm arrives with a full magazine, and the reserve is stocked to the same
+				// 999 ceiling the AI window's reserve slider tops out at: an arena run is about the
+				// fight, not about running dry mid-test.
 				const ElysiumArenaCast::FArmResult Armed = ElysiumArenaCast::ArmPlayerWithArsenal(
-					*EntityWorld, GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr);
+					*EntityWorld, GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr,
+					/*ReservePerType=*/999);
 				UE_LOG(LogElysiumGreenRoom, Log,
 					TEXT("arena: armed the player — %d melee, %d firearm(s), %d thrown, %d ammo type(s)"),
 					Armed.Melee, Armed.Firearms, Armed.Thrown, Armed.AmmoTypes);

@@ -12,6 +12,7 @@ class UAnimMontage;
 class UAnimSequence;
 class UBlendSpace;
 class UElysiumAnimLayerMask;
+class USkeletalMeshComponent;
 struct FAnimNode_BlendStack;
 struct FElysiumResolvedAnimation;
 
@@ -409,6 +410,56 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	float AdditiveLayerWeight = 0.0f;
 
+	// --- the overlay SLOT, which is a different mechanism from the three layers above --------------
+	//
+	// Retail's `CBaseAnimatingOverlay` slot 0: the masked partial-body layer every ranged fire,
+	// reload and dry-fire composes through. Those three are the bake-time autolayers the base
+	// channel's own resolved HOST declares and travel with the base clip; this one is a layer a
+	// PRODUCER armed on the UpperBody channel, and it outlives any number of base selections
+	// underneath it. It therefore rides its own layered blend, placed after theirs — the order
+	// retail accumulates in.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> RequestedSlotSequence = nullptr;
+	// **The layers the slot clip itself declares — retail's autolayer rule applied recursively to
+	// the sequence in the overlay slot.** The shot motion stays on `RequestedSlotSequence`; the aim
+	// grid it declares composes OVER it through its own masked blend (steered by the same
+	// `AimYaw`/`AimPitch` the base channel's grid reads), and the `_delta` it declares composes
+	// additively after that. Each weight is 1 when its asset stands and 0 when it does not, because
+	// within the slot retail's autolayers ride at the hardcoded 1.0 — the slot's own envelope is
+	// applied once, by the outer blend's `SlotLayerWeight`. All null on a slot clip that declares
+	// nothing, which is every reload layer.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UBlendSpace> RequestedSlotBlendSpace = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float SlotAimLayerWeight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> RequestedSlotAdditive = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float SlotAdditiveWeight = 0.0f;
+	// The layer's own baked bone mask, by name. **Read by no pin**, for exactly the reason
+	// `RequestedUpperBodyMaskName` is: `FAnimNode_LayeredBoneBlend::BlendMasks` is edit-time state,
+	// so this reaches the graph through `ApplySlotMask` instead of a property copy.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	FName RequestedSlotMaskName;
+	// The ENVELOPED weight the record carries (`ElysiumAnimIntent::SlotWeightAt`), never retail's
+	// `m_flWeightMax` ceiling: an attack layer snaps to full on the frame it is armed while a reload
+	// ramps over a fifth of its cycle at each end, and writing the ceiling here would compose both
+	// the same way.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float SlotLayerWeight = 0.0f;
+	// Where the slot's `FAnimNode_SequenceEvaluator` is pinned, in the layer clip's own seconds. It
+	// is the CLAIM's phase projected onto the clip, never a clock the graph advances: the claim's
+	// hold is what expires the layer, so a second clock would let the pose and the claim end at
+	// different instants.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float SlotExplicitTime = 0.0f;
+	// The same playhead the grid's evaluator wants, which states its time as a FRACTION of a clip
+	// rather than in seconds — a blend space rescales one normalized phase onto each sample's own
+	// length. Derived from the seconds above rather than tracked beside them, so the sequence branch
+	// and the grid branch cannot come to disagree about where in the shot the body is.
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float SlotNormalizedTime = 0.0f;
+
 	// Where the upper-body layer aims, in the pose parameters' own degrees — the aim grid's own axes.
 	// The player's own producer pins this at the literal 0.0f/pitch-only
 	// (`docs/vtmb/animation_and_movers.md`); an NPC's own aim producer arrives with `CCC11`.
@@ -514,11 +565,61 @@ public:
 		float PlayRate = 1.0f) override;
 	virtual void StopOneShot(float BlendSeconds) override;
 
+	// --- the overlay slot seam --------------------------------------------------------------------
+	//
+	// Arm retail's `CBaseAnimatingOverlay` slot 0 on this body. **This is not a second one-shot
+	// slot**: the layer COMPOSES over whatever owns the base pose through its own bone mask, so
+	// nothing the blend stack, the montage slot or the reaction branch is doing is stopped, and a
+	// bone the mask leaves out keeps the base pose exactly as it was.
+	//
+	// `Claim` is the channel claim the producer just took, and it carries the only duration the
+	// mechanism has: `ElysiumAnimIntent::SlotWeightAt` and `SlotCycle` are both read off it here, so
+	// the frame this arms on is already enveloped rather than snapped to the ceiling. The claim's
+	// own driver republishes both numbers every frame afterwards through `PublishSelection`, which is
+	// what walks the layer to its end and drops it — this states the frame it starts on.
+	//
+	// False when there is no sequence to compose, when it carries no baked bone mask (a maskless
+	// layer would own the whole rig, which is never what a partial-body overlay means), or when the
+	// claim states no clip length — a layer with no phase to ride is one still frame held at a fixed
+	// weight for as long as the producer holds the channel.
+	//
+	// `Identity` is the (bank, label) pair the layer's event timeline is addressed by, taken first
+	// exactly as `PlayOneShot` takes it and for the same reason: the ranged families ride this slot,
+	// their clips carry the 3030-3044 commit ids, and a layer armed without a name has a timeline
+	// nothing can look up. The claim's `Label` cannot stand in for it — a claim names no bank, and
+	// the owner is the include DAG's answer rather than the body's own stem.
+	// The full trio the clip composes as — its motion, its declared aim grid (with that grid's own
+	// mask), and its declared additive — because an arm that staged only the sequence would pose one
+	// frame of bare shot before the driver's first publish filled the rest in.
+	bool PlaySlotLayer(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence, FName MaskName,
+		const FElysiumAnimationRequest& Claim, UBlendSpace* AimSpace = nullptr,
+		FName AimMaskName = NAME_None, UAnimSequence* Additive = nullptr);
+	// Take the layer down now, rather than waiting for the next publish to stop naming it — the
+	// staged record AND the pins the graph evaluates, because the bodies this is called on are the
+	// ones that may never publish again. The release half of a producer that armed a layer and is
+	// ending early.
+	void StopSlotLayer();
+	// The same call, addressed at a BODY rather than at a host.
+	//
+	// Static because every producer that has to end a layer holds a mesh and not a graph: a segment
+	// run's stop path, an NPC motor giving back every claim at once, and the map actor doing the same
+	// for the player. One door, because "the claim went back but the pose did not" is the defect, and
+	// three spellings of the take-down are three places it can be forgotten. A body with no compiled
+	// biped graph carries no slot at all, which is an ordinary absence rather than a failure.
+	static void StopSlotLayerOn(USkeletalMeshComponent* Body);
+
 	// --- the phase seam (LIFE5) ---------------------------------------------------------------
 	//
-	// Where the base channel stands on its clip. A pure member read: the snapshot is armed at play
-	// time and its cycle refreshed once per update, so every reader in a frame — the event pass, the
-	// weapon's `HasLiveAnimEventDispatch`, a debug surface — is handed the same record.
+	// Where a channel stands on its clip. A pure member read: the snapshot is armed at play time and
+	// its cycle refreshed once per update, so every reader in a frame — the event pass, the weapon's
+	// `HasLiveAnimEventDispatch`, a debug surface — is handed the same record.
+	//
+	// Two channels answer. `Base` is the body's server timeline, published off whichever of its four
+	// concurrent producers is posing it. `UpperBody` is the overlay slot, published off the claim
+	// that armed the layer — it is a SECOND record rather than a second producer of the first,
+	// because the slot composes over the base instead of competing for it, and both are standing on
+	// their own clips at once. Every other channel is an ordinary negative: nothing publishes a phase
+	// for it.
 	virtual bool GetClipPhase(EElysiumAnimChannel Channel, FElysiumClipPhase& Out) const override;
 
 	// --- the reaction seam (LIFE5) ----------------------------------------------------------------
@@ -657,6 +758,36 @@ private:
 	// weights, so writing it every frame would rebuild them every frame.
 	void ApplyUpperBodyMask();
 
+	// Project the overlay slot — the layer, its mask, its enveloped weight and the explicit time its
+	// evaluator is pinned to. Beside `ProjectUpperBodyLayer` and ahead of the hold branch for the
+	// same reason: a base pose that is being HELD is a locomotion answer, and a producer's layer is a
+	// separate request that must not freeze with it.
+	//
+	// **It is NOT gated on `Selection.bBasePoseOwned`, and that asymmetry is deliberate.** The
+	// autolayer overlay above IS gated, because an autolayer belongs to the host sequence that owns
+	// the base pose and installing one from a publish that yielded would drive bones off a clip
+	// nothing is playing. A slot layer belongs to nothing of the kind: retail accumulates it over
+	// whatever owns the base at the time, it survives the base changing hands underneath it, and it
+	// dies with its own clip. Gating it would silence every shot fired while a scene, a reaction or
+	// an ambient stance held the base.
+	void ProjectSlotLayer();
+
+	// Hand the SLOT's layered blend its bone mask, through `ElysiumAnimGraph::SlotLayerTag`. The same
+	// door, the same assertions and the same refusal as `ApplyUpperBodyMask`, on the second blend
+	// node — and separate rather than parameterized because the two nodes carry two independent
+	// masks and a shared applier would have to be told which, which is the tag it already is.
+	void ApplySlotMask();
+	// The third masked blend's applier — the aim grid the slot clip declares rides its own node with
+	// the GRID's mask, not the slot clip's, because the two gate different bone sets by design.
+	void ApplySlotAimMask();
+
+	// True the first time this instance refuses one arm for one reason. `PlaySlotLayer` is reached
+	// once per trigger pull, so an unguarded refusal there restates a bake fault at the weapon's own
+	// fire rate; the key carries the reason so three different gates answering for one clip are three
+	// lines rather than one.
+	bool ShouldReportSlotArmRefusalOnce(const TCHAR* Reason, const FElysiumClipIdentity& Identity,
+		const FElysiumAnimationRequest& Claim, const UAnimSequence* Sequence);
+
 	// --- the base channel's phase clock (LIFE5) ---------------------------------------------------
 
 	// Stand a new play on one producer's arm: identity, length and loop bit in, a fresh `PlayId`,
@@ -697,6 +828,27 @@ private:
 	// The locomotion arm alone: it is a per-frame projection rather than a discrete play, so nothing
 	// calls a seam for it and it maintains its own record here — live or not.
 	void RefreshLocomotionArm(const FAnimNode_BlendStack* Stack);
+
+	// --- the overlay slot's own phase clock -------------------------------------------------------
+	//
+	// **A second published record, not a fifth arm on the first.** The base arms are four producers
+	// competing for ONE timeline, so precedence picks the one that publishes; the slot is not
+	// competing at all — it composes over whichever of them won and is standing on its own clip at
+	// the same time. Folding it into `PublishBasePhase` would make one of the two invisible on every
+	// frame a shot is fired over a gait, which is every frame a shot is fired.
+	//
+	// Armed by `PlaySlotLayer` at the instant the producer's claim is granted, because the ranged
+	// transactions call `ResolveAndPlay` and `CommitArrivesFromAnimEvent` in the same statement pair
+	// (`Substrate/ElysiumWeaponClasses.cpp`) — a phase that only appeared on the next update would
+	// answer for the play before this one and the shot's commit would silently take the estimate.
+	void ArmSlotPhase(const FElysiumClipIdentity& Identity, float LengthSeconds, bool bLoop,
+		float PlayRate, float Cycle);
+	// Move the armed layer to the cycle the driver's record just published, and drop it when the
+	// record has stopped naming a layer at all. Once per publish.
+	void RefreshSlotPhase(const FElysiumAnimationSelection& Selection, float Cycle);
+	// Copy the arm into `SlotPhase` at the given cycle, or empty the record when nothing is armed —
+	// the same contract `PublishBasePhase` honours for a channel standing on nothing.
+	void PublishSlotPhase(float Cycle);
 	FElysiumArmedClip& Armed(EElysiumBasePhaseSource Source)
 	{
 		return ArmedClips[static_cast<uint8>(Source)];
@@ -723,9 +875,49 @@ private:
 	// `NAME_None` before the first write, which is also the name a body with no layer resolves to —
 	// the two agree by construction, so a body that never had a layer never touches the node.
 	FName AppliedUpperBodyMaskName;
+	// And the mask name a REFUSAL was last reported for, which is a different question from what the
+	// node holds. A named mask the playing skeleton does not carry never reaches `SetBlendMask`, so
+	// `AppliedUpperBodyMaskName` cannot latch it — and the requested name does not change frame to
+	// frame, so the warning would repeat for as long as the layer stood. Kept apart rather than
+	// latched onto the applied name so the resolve is still RETRIED: a proxy whose skeleton is not
+	// bound yet on an early frame refuses once and applies the moment it is.
+	FName ReportedUpperBodyMaskName;
 	float PendingUpperBodyLayerWeight = 0.0f;
 	float PendingAdditiveLayerWeight = 0.0f;
 	bool bHasApplied = false;
+
+	// The overlay slot, staged the same way — written by `PublishSelection` off the driver's record
+	// and by `PlaySlotLayer` off a producer's claim, which are the same two numbers taken from the
+	// same two pure helpers rather than two envelopes.
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingSlotSequence = nullptr;
+	UPROPERTY(Transient) TObjectPtr<UBlendSpace> PendingSlotSpace = nullptr;
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingSlotAdditive = nullptr;
+	FName PendingSlotAimMaskName;
+	FName PendingSlotMaskName;
+	float PendingSlotWeight = 0.0f;
+	float PendingSlotCycle = 0.0f;
+	// What the slot's blend node was last actually given, so the mask is written on change rather
+	// than per frame — the setter invalidates the node's cached per-bone weights.
+	FName AppliedSlotMaskName;
+	// And the name a refusal was last reported for, for exactly the reason its autolayer twin above
+	// carries one: a refused mask never reaches the node, so the applied name cannot latch it and the
+	// warning would repeat every frame the layer stands.
+	FName ReportedSlotMaskName;
+	// The aim blend's own applied/reported pair, mirroring the two above for the third masked node.
+	FName AppliedSlotAimMaskName;
+	FName ReportedSlotAimMaskName;
+	// The layer the evaluator is currently standing on. A publish that swaps the ASSET while still
+	// carrying the previous claim's cycle would otherwise seat a fresh clip mid-motion, so the
+	// playhead is re-seated at the head whenever this moves.
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PosedSlotSequence = nullptr;
+	// A maskless slot layer is refused rather than composed, and said once per instance: it is a bake
+	// or vocabulary fault that does not change frame to frame, and a per-frame line would bury it.
+	bool bReportedMasklessSlot = false;
+	// The arm seam's own refusals, keyed by reason and clip. Separate from the projection latch above
+	// because they answer a different question — that one is about the record the driver published,
+	// these are about a claim a producer just took — and because the arm reaches one key per weapon
+	// clip while the projection reaches one per instance.
+	TSet<FString> ReportedSlotArmRefusals;
 
 	// The layer lab's override, applied over the published record every frame while it is armed.
 	bool bDebugUpperBody = false;
@@ -805,6 +997,12 @@ private:
 	// Which producer `BasePhase` was last read off. A readout, not a gate — precedence decides who
 	// publishes, and this records who did.
 	EElysiumBasePhaseSource PhaseSource = EElysiumBasePhaseSource::None;
+	// The overlay slot's own published record and the single arm behind it. **One arm, because the
+	// slot has one producer**: a claim on the UpperBody channel is arbitrated before it ever reaches
+	// `PlaySlotLayer`, so the layer standing here is the only one there is — unlike the base, where
+	// four clocks run concurrently and only one of them is the timeline.
+	FElysiumClipPhase SlotPhase;
+	FElysiumArmedClip SlotArm;
 	// Whether the APPLIED record actually put an asset on the pin. `bHasApplied` cannot answer it: a
 	// record that resolved nothing is still a record applied, so the generation after a resolved-
 	// nothing first publish would present a non-null outgoing descriptor while the stack beneath is

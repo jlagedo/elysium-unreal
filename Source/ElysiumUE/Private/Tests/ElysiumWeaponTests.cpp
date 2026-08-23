@@ -919,15 +919,16 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		TestEqual(TEXT("GetNumAttackSuccesses reads word 1 back"),
 			Victim->GetNumAttackSuccesses(Player->Handle), 8);
 
-		// --- The combat-stance clock: contact holds BOTH bodies for five seconds -------------
-		// `m_flLastCombatAnimTime`, stamped by the melee transaction and read by the player gait
-		// ladder's `CombatReady`/`Relaxed` predicates through `IsInCombatStance`.
-		TestTrue(TEXT("the contact puts the attacker in combat stance"),
+		// --- The combat-stance clock: the ATTACKER alone, for five seconds -------------------
+		// `m_flLastCombatAnimTime`, stamped where retail stamps it — as the attack activity is
+		// requested, not on contact — and read by the player gait ladder's `CombatReady`/`Relaxed`
+		// predicates through `IsInCombatStance`.
+		TestTrue(TEXT("the swing puts the attacker in combat stance"),
 			Player->IsInCombatStance(World.NowSeconds()));
-		TestTrue(TEXT("...and the victim"),
+		TestFalse(TEXT("...and never the struck body, which does not own the field"),
 			Victim->IsInCombatStance(World.NowSeconds()));
-		TestFalse(TEXT("...and the window closes five seconds after the contact"),
-			Player->IsInCombatStance(Player->LastMeleeContactSeconds
+		TestFalse(TEXT("...and the window closes five seconds after the attack"),
+			Player->IsInCombatStance(Player->LastCombatAnimSeconds
 				+ FElysiumCombatCharacter::CombatStanceHoldSeconds));
 
 		World.Tick(0.5);
@@ -985,9 +986,10 @@ bool FElysiumWeaponMeleeTest::RunTest(const FString&)
 		TestEqual(TEXT("a sweep onto a dead victim misses"), DamageTaken(*Victim), 0);
 		TestTrue(TEXT("...and stages no opposed record"),
 			Victim->FindMeleeRoll(Player->Handle) == nullptr);
-		TestFalse(TEXT("...and stamps no combat stance on either body — a whiff is not contact"),
-			Player->IsInCombatStance(World.NowSeconds())
-				|| Victim->IsInCombatStance(World.NowSeconds()));
+		TestTrue(TEXT("...and still holds the attacker in stance — the stamp is the swing, not the hit"),
+			Player->IsInCombatStance(World.NowSeconds()));
+		TestFalse(TEXT("...while the body it swung at is never stamped"),
+			Victim->IsInCombatStance(World.NowSeconds()));
 	}
 
 	// --- A melee clip that declares NO records opens no contact window at all ----------------
@@ -1510,9 +1512,10 @@ bool FElysiumWeaponMeleeRollTest::RunTest(const FString&)
 		TestTrue(TEXT("...leaving the record it consumed untouched"),
 			Victim->FindMeleeRoll(Player->Handle) != nullptr
 				&& Victim->FindMeleeRoll(Player->Handle)->Margin() == StagedMargin);
-		TestTrue(TEXT("...and the contact was real: both bodies are in combat stance"),
-			Player->IsInCombatStance(World.NowSeconds())
-				&& Victim->IsInCombatStance(World.NowSeconds()));
+		TestTrue(TEXT("...and the attacker is in combat stance from its own swing"),
+			Player->IsInCombatStance(World.NowSeconds()));
+		TestFalse(TEXT("...which the struck body never enters"),
+			Victim->IsInCombatStance(World.NowSeconds()));
 		TestEqual(TEXT("...with a non-positive margin committing no damage"),
 			DamageTaken(*Victim), 0);
 	}
@@ -3391,6 +3394,165 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 			Pistol->MagazineCount, MagazineBefore - 1);
 		TestFalse(TEXT("...and consuming it"), Pistol->Swing.bActive);
 		TestEqual(TEXT("a claimed id is not census work"), ElysiumAnimEventCensus::Num(), 0);
+	}
+
+	// --- the same commit, on the channel a shot ACTUALLY composes on ------------------------------
+	{
+		// **The polled-channel list is what this case is about.** A ranged fire is retail's
+		// `CBaseAnimatingOverlay` slot 0, so the clip carrying the 3030..3044 ids stands on
+		// `UpperBody` and the base pose is left to whatever gait owns it. The fixture reproduces that
+		// exactly: its record answers for the ONE channel it names, and every other channel gives the
+		// empty answer a body really gives for a channel it is not standing on.
+		//
+		// The case above cannot see any of it. `GetLiveClipPhase` matches on (owner, label) and walks
+		// whichever channels the pass polls, so a record left on the base satisfies it however the
+		// list is written. Here the base answers nothing at all: a pass that polled it alone would
+		// find no phase for the shot's clip, `bAwaitingAnimEvent` would be false, the
+		// `ContactEventCycle` estimate would take the commit back, and the only report would be a
+		// Verbose line.
+		//
+		// The second half is that the second channel gets its OWN cursor. The base's poll answers
+		// nothing every frame and resets cursor 0; two slots sharing one cursor would re-anchor the
+		// layer's walk on every one of those frames and fire each record behind the playhead again,
+		// and a list naming one channel twice would fire every record once per cursor within a single
+		// frame. The census counts an unclaimed id, so "exactly once" is a number rather than an
+		// impression.
+		ElysiumRng::SeedAll(4242);
+		ElysiumAnimEventCensus::Clear();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Victim = nullptr;
+		if (!Stand(Services, World, Player, Victim))
+		{
+			return false;
+		}
+		ArmClipSeam(Services, 0.0f);
+		Services.BodyClipPhase.Channel = EElysiumAnimChannel::UpperBody;
+		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
+			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
+		// Two unclaimed footsteps around the commit, one on each side of it. They are what makes the
+		// once-only assertion measurable: a claimed id never reaches the census, so the commit itself
+		// cannot report how many times it fired — and a cursor re-walking a stale interval counts the
+		// record behind the playhead again on every frame that follows.
+		Timeline.Add(WeaponEv(0.05f, 2050));
+		Timeline.Add(WeaponEv(0.30f, 3038, TEXT("0")));
+		Timeline.Add(WeaponEv(0.60f, 2051));
+
+		// The base really is empty, asked of the seam itself rather than assumed off the fixture's
+		// field. Everything below rests on it: an assertion about the second cursor means nothing if
+		// the first one is quietly answering for the same record.
+		FElysiumClipPhase BaseAsked;
+		TestFalse(TEXT("the base channel stands on nothing while the layer stands on the shot"),
+			Services.GetBodyClipPhase(Player->Visual, EElysiumAnimChannel::Base, BaseAsked));
+		FElysiumClipPhase LayerAsked;
+		TestTrue(TEXT("...and the overlay slot is what answers for it"),
+			Services.GetBodyClipPhase(Player->Visual, EElysiumAnimChannel::UpperBody, LayerAsked));
+
+		FElysiumWeapon* Pistol = GiveWeapon(*Player, GPistol);
+		if (!TestNotNull(TEXT("the pistol is granted"), Pistol))
+		{
+			return false;
+		}
+		const int32 MagazineBefore = Pistol->MagazineCount;
+
+		TestEqual(TEXT("the shot is accepted"),
+			Pistol->AttackIntent(FElysiumWeapon::EIntent::Primary, Victim->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		TestTrue(TEXT("the overlay slot's own phase is what stands the estimate down"),
+			Pistol->Swing.bAwaitingAnimEvent);
+
+		// Past the instant the estimate would have used (0.5 of a 1.0s clip), short of the commit.
+		Services.BodyClipPhase.Cycle = 0.20f;
+		World.Tick(0.6);
+		TestEqual(TEXT("the suppressed estimate commits nothing at its own instant"),
+			DamageTaken(*Victim), 0);
+		TestEqual(TEXT("...and spends no ammunition"), Pistol->MagazineCount, MagazineBefore);
+		TestTrue(TEXT("...leaving the transaction staged"), Pistol->Swing.bActive);
+
+		// The frame whose interval contains 0.30, walked by the layer's own cursor.
+		Services.BodyClipPhase.Cycle = 0.40f;
+		World.Tick(0.7);
+		TestTrue(TEXT("the layer's own shot event commits the transaction"),
+			DamageTaken(*Victim) > 0);
+		TestEqual(TEXT("...spending Ammo_Cost exactly once"), Pistol->MagazineCount,
+			MagazineBefore - 1);
+		TestFalse(TEXT("...and consuming it"), Pistol->Swing.bActive);
+
+		// Two more frames with the base still answering nothing, past the trailing record.
+		Services.BodyClipPhase.Cycle = 0.70f;
+		World.Tick(0.8);
+		Services.BodyClipPhase.Cycle = 0.90f;
+		World.Tick(0.9);
+
+		TArray<ElysiumAnimEventCensus::FRow> Rows;
+		ElysiumAnimEventCensus::Collect(Rows);
+		TestEqual(TEXT("the layer's two unclaimed ids are two rows, not two rows per cursor"),
+			Rows.Num(), 2);
+		for (const ElysiumAnimEventCensus::FRow& Row : Rows)
+		{
+			TestEqual(FString::Printf(
+				TEXT("...id %d fired exactly once across both cursors"), Row.Event), Row.Count, 1);
+			TestEqual(TEXT("...off the layer's own clip"), Row.Label, FString(GAttackLabel));
+		}
+	}
+
+	// --- an NPC's fire composes on the same channel the player's does -----------------------------
+	{
+		// The commoner path, and the one every cast combat schedule reaches. Retail's cast fires
+		// through `CAI_BaseNPC::RunAI` -> `AddGesture(ACT_RANGE_ATTACK1_LAYER)` into `m_AnimOverlay`,
+		// which IS slot 0 — the same mechanism the player's `SetAnimation(PLAYER_ATTACK1)` reaches —
+		// so there is no fork on this transaction the way there is on reload. Driving the cast only
+		// through `BeginReload` would leave that unproven on the commoner of the two paths, and a
+		// cast fire routed to the base channel poses a masked layer as the whole body: the bones the
+		// mask leaves out decode to a zero quaternion and a zero position, and the character
+		// collapses.
+		ElysiumRng::SeedAll(4242);
+		ElysiumAnimEventCensus::Clear();
+		FElysiumRecordingServices Services;
+		FElysiumEntityWorld World(nullptr, nullptr, Services.Bundle());
+		FElysiumPlayer* Player = nullptr;
+		FElysiumCombatCharacter* Gunman = nullptr;
+		if (!Stand(Services, World, Player, Gunman))
+		{
+			return false;
+		}
+		ArmClipSeam(Services, 0.0f);
+		Services.BodyClipPhase.Channel = EElysiumAnimChannel::UpperBody;
+		TArray<FElysiumAnimEvent>& Timeline = Services.NpcEventTimelines.Add(
+			FElysiumRecordingServices::EventTimelineKey(GAttackOwner, GAttackLabel));
+		Timeline.Add(WeaponEv(0.30f, 3038, TEXT("0")));
+
+		// The shooter is the CAST body this time, and it needs a body of its own: the clip seam is
+		// only reached through one, and without it the transaction falls through to the headless
+		// timing fallback and records which pose was asked for nowhere.
+		Gunman->SetRuntimeModel(TEXT("models/character/npc/gangbanger/gangbanger_a.mdl"));
+		if (!TestNotNull(TEXT("the cast body the seam can reach exists"), Gunman->Visual))
+		{
+			return false;
+		}
+		FElysiumWeapon* CastGun = GiveWeapon(*Gunman, GPistol);
+		if (!TestNotNull(TEXT("the cast body is armed"), CastGun))
+		{
+			return false;
+		}
+		Services.Calls.Reset();
+		TestEqual(TEXT("the cast's shot is accepted"),
+			CastGun->AttackIntent(FElysiumWeapon::EIntent::Primary, Player->Handle),
+			FElysiumWeapon::EVerdict::Accepted);
+		// The channel is read off the recorded call rather than inferred: every other token on that
+		// line is identical between retail's two mechanisms, so the tail is the only thing that says
+		// which of them the producer asked for.
+		TestTrue(TEXT("an NPC fire asks for the overlay slot, exactly as the player's does"),
+			Services.Saw(FString::Printf(
+				TEXT("PlayNpcClip gangbanger_a %s loop=0 band=ambient rate=1.00 "
+					"act=ACT_RANGE_ATTACK1_LAYER ch=upper body"), GAttackLabel)));
+		TestEqual(TEXT("...and asks the cast body for exactly that one clip, on no other channel"),
+			Services.Count(TEXT("PlayNpcClip")), 1);
+		// And the layer's phase is what the cast's commit waits on, for the same reason the player's
+		// is: the shot clip composes there, so that is the channel whose timeline gets walked.
+		TestTrue(TEXT("...so the cast waits on the clip's own commit id rather than the estimate"),
+			CastGun->Swing.bAwaitingAnimEvent);
 	}
 
 	// --- 3047 is CLAIMED and commits nothing; the swallow set is claimed and does nothing ---------

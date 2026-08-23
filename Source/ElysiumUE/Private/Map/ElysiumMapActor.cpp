@@ -638,7 +638,24 @@ bool AElysiumMapActor::ReleasePlayerAnimRequest(uint32 Handle)
 int32 AElysiumMapActor::ReleaseAllPlayerAnimRequests()
 {
 	// Deliberately NOT built on demand, unlike the submit above: releasing nothing needs no driver.
-	return PlayerAnimDriver.IsValid() ? PlayerAnimDriver->ReleaseAllRequests() : 0;
+	if (!PlayerAnimDriver.IsValid())
+	{
+		return 0;
+	}
+	bool bDroppedSlotLayer = false;
+	const int32 Released = PlayerAnimDriver->ReleaseAllRequests(&bDroppedSlotLayer);
+	// **The claim going back is not what ends a layer's pose; the next publish is.** A body released
+	// wholesale is a body whose producers have stopped, so that publish may never come — and the
+	// overlay slot would keep composing at whatever weight and phase it was dropped on. The driver
+	// cannot reach an anim instance by design, so this is where the pose is taken down.
+	if (bDroppedSlotLayer)
+	{
+		APawn* Pawn = ResolvePlayerPawn();
+		IElysiumPlayerBody* PlayerBody = Pawn ? Cast<IElysiumPlayerBody>(Pawn) : nullptr;
+		UElysiumBipedAnimInstance::StopSlotLayerOn(
+			PlayerBody != nullptr ? PlayerBody->GetPlayerVisual() : nullptr);
+	}
+	return Released;
 }
 
 const FElysiumAnimationRequest* AElysiumMapActor::ActivePlayerAnimRequest(

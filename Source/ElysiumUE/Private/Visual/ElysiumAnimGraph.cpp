@@ -228,6 +228,23 @@ namespace ElysiumAnimGraph
 		return bHasAppliedOnce && !bHasSequence && !bHasBlendSpace;
 	}
 
+	float SlotEvaluatorTime(float Cycle, float ClipLengthSeconds, bool bSequenceChanged)
+	{
+		if (!(ClipLengthSeconds > 0.0f))
+		{
+			// No clip, or a clip with no length: there is no playhead to pin, and dividing a cycle
+			// into it would put a NaN on the evaluator's time pin.
+			return 0.0f;
+		}
+		if (bSequenceChanged)
+		{
+			// A fresh asset always seats at its head. The cycle riding this frame belongs to whatever
+			// was playing before it and says nothing about where this clip starts.
+			return 0.0f;
+		}
+		return FMath::Clamp(Cycle, 0.0f, 1.0f) * ClipLengthSeconds;
+	}
+
 	EElysiumOneShotState OneShotStateFor(bool bHasAsset, bool bGenerationMatches,
 		bool bInOneShotState, bool bComplete)
 	{

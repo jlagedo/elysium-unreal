@@ -238,23 +238,27 @@ namespace ElysiumReactions
 	const TCHAR* KnockbackActivity(EKnockbackSize Size, EKnockbackHeight Height,
 		EKnockbackDirection Direction);
 
-	// Whether this victim may be knocked back at all — retail's eligibility, minus two omissions
-	// that are named rather than guessed.
+	// Whether this victim may be knocked back at all — retail's eligibility, minus two terms that
+	// are named rather than guessed. The recovered rule is `docs/vtmb/combat-and-damage.md` →
+	// "Who may be knocked back".
 	//
-	// `bVictimAlive` is the ordinary alive-path filter and `bTemplateDisallowsKnockbacks` is the NPC
-	// template's authored `General/Disallow_Knockbacks`, which eight `npctemplate*.txt` files set on
+	// `bVictimAlive` is retail's own third term, not an approximation of it: retail refuses on
+	// `Health == Max_Health`, and because `Health` is damage taken rather than health remaining,
+	// that equality is death. Reads are clamped to the max, so it cannot diverge from the death
+	// test on an overkill. `bTemplateDisallowsKnockbacks` is the NPC template's authored
+	// `General/Disallow_Knockbacks`, set on 17 templates across eight `npctemplate*.txt` files —
 	// zombies, cabbies, the tutorial cast and the other bodies that must not be thrown.
 	//
-	// **OPEN RE GATE 1 — a further template predicate.** Retail tests one more value off the same
-	// template beside `Disallow_Knockbacks`. It is not identified, so it is omitted rather than
-	// stood in for: a guessed predicate would refuse knockbacks the content asks for.
+	// **OMITTED — the `CNPC_VTzimisceRunner` bypass.** Retail gives that one class a virtual that
+	// skips both terms below it. Nothing here has that body yet.
 	//
-	// **OPEN RE GATE 2 — the hit-buildup counter.** Retail also admits the knockback on
-	// `counter <= threshold` OR a per-attack unconditional marker. The counter's semantics are open —
-	// what increments it, what resets it and what the threshold is — so the whole term is omitted and
-	// every classified contact is admitted. The consequence is the stated divergence: a victim retail
-	// would have spared until its counter drained is knocked back here. The producer reports the
-	// omission once.
+	// **OMITTED — the hit-buildup counter.** Retail also admits the knockback on
+	// `counter <= npc_hit_buildup_amount` (default 2) OR the swing record's `+0xBA == 2` marker.
+	// The counter is one scalar on the victim, incremented by any attacker's landed hit and cleared
+	// when the victim's own swing passes `melee_swing_completion_percent` (0.8) of its cycle — so
+	// reproducing it needs a per-body counter and no attacker bookkeeping. Until it lands the whole
+	// term is omitted and every classified contact is admitted: a victim retail would have spared
+	// until its counter drained is knocked back here. The producer reports the omission once.
 	bool IsKnockbackAllowed(bool bVictimAlive, bool bTemplateDisallowsKnockbacks);
 
 	// The direction the victim is thrown, unnormalized and with its z zeroed: victim minus attacker.

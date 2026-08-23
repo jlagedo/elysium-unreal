@@ -161,7 +161,9 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	}
 	if (Anim == nullptr)
 	{
-		Anim = ResolveNpcClip(Stem, ClipName, Mesh);
+		// The layer channel, because that is what the lab is arming: this ladder exists to load a
+		// masked overlay, and the base-channel default refuses exactly those.
+		Anim = ResolveNpcClip(Stem, ClipName, Mesh, EElysiumAnimChannel::UpperBody);
 		if (Anim != nullptr)
 		{
 			SeqForm = ElysiumAnimResolve::ELayerAssetForm::PlainSequence;

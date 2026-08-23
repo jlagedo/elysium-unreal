@@ -45,7 +45,12 @@ namespace
 
 		// An additive stores the difference from a base pose, so standing one as a base folds the
 		// skeleton up instead of animating it. The engine composes these and never selects one.
-		if (Out.bAdditive && Intent.Channel == EElysiumAnimChannel::Base)
+		//
+		// Through `MaskedClipPlayableOn`, which is the one place "which channel may pose a partial
+		// clip" is answered: this refusal and the two bone-mask refusals in `UElysiumAnimSubsystem`
+		// are the same channel rule over two kinds of partial pose, and a second spelling here is a
+		// second answer waiting to let one of them through.
+		if (Out.bAdditive && !ElysiumAnimIntent::MaskedClipPlayableOn(Intent.Channel))
 		{
 			Out.bMasked = true;
 			Out.AssetKind = EElysiumAnimAssetKind::None;

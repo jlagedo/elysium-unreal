@@ -145,7 +145,22 @@ int32 AElysiumNpcBody::ReleaseAllAnimRequests()
 {
 	// Deliberately NOT `EnsureAnimDriver`: a body whose driver was never built has never granted a
 	// claim, and building one here would hand a corpse a locomotion publisher it never had.
-	return AnimDriver.IsValid() ? AnimDriver->ReleaseAllRequests() : 0;
+	if (!AnimDriver.IsValid())
+	{
+		return 0;
+	}
+	bool bDroppedSlotLayer = false;
+	const int32 Released = AnimDriver->ReleaseAllRequests(&bDroppedSlotLayer);
+	// **A released claim does not take a pose down; the driver's next publish would, and this body
+	// may never publish again.** The one caller is the death transaction, which freezes the corpse
+	// straight after — so an overlay layer dropped here without this keeps composing the last frame
+	// and weight of a shot the character died mid-way through. The driver serves bodies with no anim
+	// instance at all and cannot reach one, so the take-down belongs here.
+	if (bDroppedSlotLayer)
+	{
+		UElysiumBipedAnimInstance::StopSlotLayerOn(Visual.Get());
+	}
+	return Released;
 }
 
 const FElysiumAnimationRequest* AElysiumNpcBody::ActiveAnimRequest(

@@ -327,7 +327,7 @@ def _split_rotation_tracks(bones, frames, frame_count):
              if all(_qnorm(frames[frame][index][1]) is not None
                     for frame in range(frame_count))]
     if not split:
-        return {}
+        return {}, set()
     needed = set()
     for index in split:
         needed.update(_split_ancestors(bones, index))
@@ -336,6 +336,7 @@ def _split_rotation_tracks(bones, frames, frame_count):
     # eighty for the whole rig, over every frame of every clip in the cast.
     order = sorted(needed)
     out = {index: [] for index in split}
+    anchored = set()
     for frame in range(frame_count):
         world = {}
         for index in order:
@@ -350,9 +351,41 @@ def _split_rotation_tracks(bones, frames, frame_count):
         for index in split:
             local = frames[frame][index][1]
             parent_world = world[bones[index].parent]
-            out[index].append(local if parent_world is None
-                              else _qmul(_qconj(parent_world), local))
-    return out
+            if parent_world is None:
+                # **The masked overlay's own answer: normalise against the BIND chain and say so.**
+                # The chain this frame needs is not in the file — the clip's weight mask zeroes
+                # `Bip01`, `Bip01 Pelvis` and `Bip01 Spine`, which is the whole of the split bone's
+                # ancestry — and no host is named to borrow one from, because nothing declares this
+                # clip as its autolayer. Retail does not need a chain: the stored rotation IS the
+                # bone's model-space orientation, absolute and independent of whatever the lower
+                # body is doing, which is what lets one attack layer stand over any gait.
+                #
+                # Dividing by the bind chain does NOT make the value a conventional local, and it is
+                # not meant to. It makes the clip's OWN forward kinematics reproduce the stored
+                # model-space rotation exactly, so a layered blend running in mesh-space rotation
+                # mode writes that absolute orientation onto the composed pose whatever the host's
+                # spine is doing. `anchored` names the chain the caller must then ship as bind
+                # tracks, so the divisor is stated by the clip rather than borrowed from whichever
+                # body's reference pose happens to be playing it.
+                out[index].append(_qmul(_qconj(_bind_world_rotation(bones,
+                                                                   bones[index].parent)), local))
+                anchored.update(_split_ancestors(bones, index))
+            else:
+                out[index].append(_qmul(_qconj(parent_world), local))
+    return out, anchored
+
+
+def _bind_world_rotation(bones, index):
+    """`index`'s model-space rotation in the container's BIND pose, by ordinary FK.
+
+    The split rule is not applied here, and that is deliberate: this composes the chain a clip
+    would have to divide by, and a chain member carrying the flag itself would break the identity
+    the caller relies on. On every biped in the corpus the flagged bone is `Bip01 Spine1`, whose
+    ancestors carry no flag at all."""
+    world = (0.0, 0.0, 0.0, 1.0)
+    for ancestor in _split_ancestors(bones, index) + [index]:
+        world = _qmul(world, bones[ancestor].quat)
+    return _qnorm(world) or (0.0, 0.0, 0.0, 1.0)
 
 
 def _bone_subtree_sizes(parents):
@@ -880,7 +913,7 @@ def _owns_split_bone(d, bones, clip):
     return bool(split) and bool(split & _owned_bones(d, bones, clip))
 
 
-def _composed_frames(d, bones, delta, host, owned=None):
+def _composed_frames(d, bones, delta, host, owned=None, fold_deltas=None):
     """`host`'s frame 0 with `delta` accumulated onto it, per frame of the delta.
 
     Retail's additive combine is `out.quat = out.quat * scale(delta, s)` and
@@ -905,24 +938,50 @@ def _composed_frames(d, bones, delta, host, owned=None):
     pose is no substitute for it (`_split_rotation_tracks`), and the host is the pose the
     autolayer table names. The caller drops the bones the clip does not own.
     """
-    # Frame 0 only: an additive's base is one pose, so decoding the host's whole cycle to read
-    # its first frame is work per binding rather than per host.
-    host_frames = S.read_anim(d, bones, host.base, 1)
+    # Frame 0 only for the ordinary binding: an additive's base is one pose. With `fold_deltas`
+    # the HOST'S whole cycle is decoded instead, because the composition runs the host's length:
+    # a masked host's declared motion additives carry the visible action (the pump, the recoil),
+    # and a delta's meaning depends on the pose it rides — state outside the clip — so it is
+    # resolved HERE, per cell, with retail's own post-multiplied combine, rather than converted
+    # against one pose and applied at runtime over eight others.
+    fold_deltas = fold_deltas or []
+    length = host.frames if fold_deltas else 1
+    host_frames = S.read_anim(d, bones, host.base, length)
     delta_frames = S.read_anim(d, bones, delta.base, delta.frames)
+    folded = [(f, S.read_anim(d, bones, f.base, f.frames)) for f in fold_deltas]
     # A bone the host carries no record for reads back as zeros rather than as its bind, and
     # retail accumulates onto a pose where such a bone holds its bind. Resolve that once.
-    base = []
-    for bone in bones:
-        pos, quat = host_frames[0][bone.index]
-        rot = _qnorm(quat)
-        base.append((pos if rot is not None else bone.pos, rot or bone.quat))
+    # **A derived OVERLAY's split-bone ancestors are forced to BIND, whatever the host does.** The
+    # runtime composes every masked overlay through a mesh-space rotation blend, which writes the
+    # split bone's model-space orientation onto the pose absolutely — retail's own rule for the
+    # flag. That only holds if the emitted clip states the bone against a chain the runtime can
+    # reproduce, and the BIND chain is the one chain every body shares. A host-frame-0 chain is
+    # only true at host frame 0: corrected against it, a layer over a moving gait sways with every
+    # stride the correction never saw, and the weapon at the end of the arm amplifies it.
+    split_ancestors = set()
+    if owned is not None:
+        for b in bones:
+            if (b.flags & SPLIT_ROTATION) and b.parent >= 0:
+                split_ancestors.update(_split_ancestors(bones, b.index))
+    bases = []
+    for hframe in range(length):
+        base = []
+        for bone in bones:
+            if bone.index in split_ancestors:
+                base.append((bone.pos, bone.quat))
+                continue
+            pos, quat = host_frames[hframe][bone.index]
+            rot = _qnorm(quat)
+            base.append((pos if rot is not None else bone.pos, rot or bone.quat))
+        bases.append(base)
 
     out = []
-    for frame in range(delta.frames):
+    for frame in range(host.frames if fold_deltas else delta.frames):
+        base = bases[min(frame, length - 1)]
         row = []
         for bone in bones:
             base_pos, base_rot = base[bone.index]
-            own_pos, own_rot = delta_frames[frame][bone.index]
+            own_pos, own_rot = delta_frames[min(frame, delta.frames - 1)][bone.index]
             rot = _qnorm(own_rot)
             if owned is not None:
                 # Overlay: replace where the mask owns the bone, keep the host everywhere else.
@@ -939,6 +998,19 @@ def _composed_frames(d, bones, delta, host, owned=None):
                 continue
             row.append((tuple(b + v for b, v in zip(base_pos, own_pos)),
                         _qmul(base_rot, rot)))
+        # The host's own motion additives, accumulated per frame in retail's order and frame —
+        # `out.quat = out.quat * delta.quat`, `out.pos += delta.pos` — AFTER the overlay above,
+        # which is the declaration order the autolayer table states.
+        for fold_clip, fold_frames in folded:
+            fold_row = fold_frames[min(frame, fold_clip.frames - 1)]
+            for index in range(len(row)):
+                add_pos, add_rot = fold_row[index]
+                rot = _qnorm(add_rot)
+                if rot is None:
+                    continue
+                cur_pos, cur_rot = row[index]
+                row[index] = (tuple(c + v for c, v in zip(cur_pos, add_pos)),
+                              _qnorm(_qmul(cur_rot, rot)) or cur_rot)
         out.append(row)
     return out
 
@@ -989,6 +1061,9 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
     original record, so a derived clip carries exactly the bones its own delta owned."""
     if frames is None:
         frames = S.read_anim(d, bones, clip.base, clip.frames)
+    # The frame count is the POSE LIST's, not the record's: a derived cell that folds a host's
+    # motion additives runs the host's full length while its own record states one static frame.
+    frame_count = len(frames)
 
     # Channel presence is still needed by the derived additive bookkeeping below, but it does not
     # decide whether the clip exists. Ownership does: a one-frame clip with no RLE offsets is a real
@@ -1004,8 +1079,18 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
     # A raw delta is not a pose, so there is no parent chain to divide out of it; the derived
     # clip that ships in its place IS a pose (its host's, with the delta on it) and normalizes
     # like any other. `base_label` distinguishes that derived form from the raw record.
-    split_rotations = ({} if (clip.flags & DELTA_SEQUENCE and not base_label)
-                       else _split_rotation_tracks(bones, frames, clip.frames))
+    split_rotations, split_anchors = (
+        ({}, set()) if (clip.flags & DELTA_SEQUENCE and not base_label)
+        else _split_rotation_tracks(bones, frames, frame_count))
+    # A derived overlay's chain was forced to BIND by `_composed_frames`, so the normalization above
+    # divided by a chain that is present rather than absent — which means the anchor set stays empty
+    # on the very clips that need it most. The divisor still has to travel with the clip: an
+    # untracked bone resolves to whichever mesh happens to play a shared bank clip, and only a
+    # shipped bind track states the value the division actually used.
+    if owned is not None:
+        for bone in bones:
+            if (bone.flags & SPLIT_ROTATION) and bone.parent >= 0 and bone.index in owned:
+                split_anchors = set(split_anchors) | set(_split_ancestors(bones, bone.index))
 
     reparented = reparented or {}
 
@@ -1029,6 +1114,17 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
         has_translation, has_rotation = channels[bone.index]
         rotations = split_rotations.get(bone.index)
         has_rotation = has_rotation or rotations is not None
+        # **The split bone's divisor, shipped with the clip that divided by it.** Where the chain
+        # was missing, `_split_rotation_tracks` normalised against the BIND chain; these are that
+        # chain's bones. They ship as complete bind tracks so the clip's own forward kinematics
+        # reproduce the divisor exactly instead of resolving to whichever body's reference pose
+        # happens to be playing a shared bank clip — an untracked bone takes the mesh's reference
+        # pose and is not retargeted, so borrowing one would reintroduce the error on any body
+        # whose bind differs. The clip's own mask gives every one of them weight zero, so they
+        # change no composed pose; they exist to make the pose self-describing.
+        anchors_chain = bone.index in split_anchors and bone.index not in clip_owned
+        if anchors_chain:
+            has_translation = has_rotation = True
         if base_label and owned is None:
             # A derived ADDITIVE ships the bones ITS OWN delta authored, plus the bones its HOST
             # tracks -- and nothing else.
@@ -1054,7 +1150,7 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
             # A derived OVERLAY ships only the bones its mask owns; the rest come from whatever
             # the layered blend is composed over at runtime, which is what the mask is for. An
             # owned bone always ships, including one the clip leaves at its bind pose.
-            if bone.index not in owned:
+            if bone.index not in owned and not anchors_chain:
                 continue
             has_translation = has_rotation = True
         elif forced_channels is not None:
@@ -1086,7 +1182,7 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
             bone.index in clip_owned or any(channels[bone.index])
             or chosen in clip_owned or any(channels[chosen]))
         if (bone.index not in clip_owned and not carried_by_base and not carried_by_force
-                and not stray_active):
+                and not stray_active and not anchors_chain):
             # In particular, a split bone outside a partial-body mask must not acquire the
             # normalized rotation `_split_rotation_tracks` can compute from its zero pose slot.
             continue
@@ -1100,14 +1196,14 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
         # Retail's host pose still has the donor bind there; read_anim correctly returns zeros for
         # the masked-out record, so a forced track must state that bind explicitly rather than
         # serialising those mask sentinels as a real zero transform.
-        force_bind = carried_by_force and bone.index not in clip_owned
+        force_bind = (carried_by_force or anchors_chain) and bone.index not in clip_owned
         stray_locals = None
         if stray_active:
             # Both channels of the stray's donor-local, computed once: the division mixes the
             # model-space translation and rotation, so a single-channel restatement would be a
             # different pose from the one retail composes.
             stray_locals = []
-            for frame in range(clip.frames):
+            for frame in range(frame_count):
                 root_pos, root_quat = _model_space(chosen, frame)
                 stray_pos, stray_quat = ((bone.pos, bone.quat) if force_bind
                                          else _model_space(bone.index, frame))
@@ -1121,12 +1217,12 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
         tracks += struct.pack("<I2B", bone_map[bone.index], int(has_translation),
                               int(has_rotation))
         if has_translation:
-            for frame in range(clip.frames):
+            for frame in range(frame_count):
                 position = (stray_locals[frame][0] if stray_locals is not None else
                             bone.pos if force_bind else frames[frame][bone.index][0])
                 tracks += struct.pack("<3f", *_conv_pos(position))
         if has_rotation:
-            for frame in range(clip.frames):
+            for frame in range(frame_count):
                 quat = (stray_locals[frame][1] if stray_locals is not None else
                         bone.quat if force_bind else
                         rotations[frame] if rotations is not None else
@@ -1142,7 +1238,7 @@ def _clip_payload(d, bones, clip, bone_map, emitted, masks, frames=None, base_la
     index = -1 if mask is None else masks.setdefault(mask, len(masks))
     header = _string((label or clip.label).lstrip("@"))
     header += _string(base_label)
-    header += struct.pack("<IfIiI", clip.frames, clip.fps or 30.0, clip.flags, index, count)
+    header += struct.pack("<IfIiI", frame_count, clip.fps or 30.0, clip.flags, index, count)
     return header + bytes(tracks)
 
 
@@ -1227,10 +1323,17 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks, ensure_labels=(),
     `<clip>@<host>` and carrying that host's label as its base (`_derived_bindings`).
 
     A raw ADDITIVE still ships beside its derived forms: it is the label the model references,
-    and it is the clip retail would have accumulated. A raw OVERLAY that owns the split bone
-    does not, and must not -- its rotation for that bone is model-space and there is no chain in
-    the file to resolve it against, so ordinary FK reads it as the upper body folded about the
-    waist. The derived forms are the only correct way to stand one.
+    and it is the clip retail would have accumulated. A raw OVERLAY that a host declares does
+    not, because the derived form is the better pose for that host -- it resolves the split bone
+    against the host's own animated chain rather than against the bind.
+
+    An overlay NO host declares ships raw, and stands on its own: `_split_rotation_tracks`
+    normalises its split bone against the bind chain and `anchored` ships that chain with it, so
+    the clip's own FK restates the bone's model-space orientation. That pose is only correct
+    under a mesh-space rotation blend, which is what states the orientation as absolute -- the
+    same thing retail's flag says. Every clip reached by ACTIVITY rather than by an autolayer
+    declaration is one of these: the `*_attack_layer`, `*_reload_layer` and `*_dryfire_layer`
+    families, and the discipline cast layers.
 
     `masks` accumulates the file's distinct bone masks in index order; it is written out as the
     "MASK" section once every clip has been read."""
@@ -1272,10 +1375,23 @@ def _anim_section(d, bones, clips, bone_map, emitted, masks, ensure_labels=(),
                                 reparented=reparented)
                             for c in clips if c.label.lower() not in unresolvable)
                 if p is not None]
+    by_label = {c.label.lower(): c for c in clips}
     for layer, host, owned in bindings:
+        # **A masked host's motion additives fold into its overlay cells.** A slot-family host
+        # (`*_attack_layer`, `*_dryfire_layer`) is itself masked, and the visible action — the
+        # recoil, the pump — is its declared `_delta`. A delta's meaning depends on the pose it
+        # rides, so a cell it is not folded into poses it wrong for every aim direction but the
+        # one the runtime conversion happened to match. A FULL-BODY host keeps the fold empty:
+        # its additives (the bobble) compose at runtime against the very host they were
+        # converted for, which is the one case the conversion is exact in.
+        fold = None
+        if owned is not None and _bone_mask(d, bones, host, bone_map, emitted) is not None:
+            fold = [by_label[t.lower()] for t in host.autolayers
+                    if t.lower() in by_label
+                    and (by_label[t.lower()].flags & DELTA_SEQUENCE)]
         payload = _clip_payload(
             d, bones, layer, bone_map, emitted, masks,
-            frames=_composed_frames(d, bones, layer, host, owned),
+            frames=_composed_frames(d, bones, layer, host, owned, fold_deltas=fold),
             base_label=host.label.lstrip("@"), owned=owned,
             base_channels=None if owned is not None else _owned_channels(d, bones, host),
             label=f"{layer.label.lstrip('@')}{BASE_SEPARATOR}{host.label.lstrip('@')}",

@@ -44,6 +44,33 @@ namespace ElysiumAnimGraph
 	// text free of any reference to a generated, game-derived profile asset.
 	inline constexpr const TCHAR* UpperBodyLayerTag = TEXT("ElysiumUpperBodyLayer");
 
+	// The graph tag on the overlay SLOT's own `FAnimNode_LayeredBoneBlend` — retail's
+	// `CBaseAnimatingOverlay` slot 0, the masked partial-body layer every ranged fire, reload and
+	// dry-fire composes through.
+	//
+	// **A SECOND layered blend, not the one above.** Retail accumulates its slots AFTER the host
+	// sequence's own model-declared autolayers, so the two are ordered rather than alternatives: the
+	// autolayer blend composes what the base clip DECLARES, and this one composes what a PRODUCER
+	// armed over whatever came out of that. Reusing one node would make a body's carry-pose layer and
+	// its fire layer fight for one weight and one mask, and only one of them could ever be on screen.
+	//
+	// Its mask reaches the node the same way the autolayer blend's does — `SetBlendMask` by name
+	// against the playing skeleton, through `UElysiumBipedAnimInstance::ApplySlotMask` — and for the
+	// same reason: `BlendMasks` is edit-time state with no pin, and a `UBlendProfile` belongs to one
+	// skeleton while a bank owns the layer.
+	//
+	// Retail carries four such slots. No weapon path ever addresses one but slot 0, so one is what
+	// exists here; the ceiling is recorded rather than built.
+	// The layer it composes is posed by an `FAnimNode_SequenceEvaluator` pinned to an EXPLICIT time,
+	// not a sequence player. A player keeps its own clock, so it would drift from the claim that
+	// expires the layer, it could not be restarted on a re-fire of the same clip, and it publishes no
+	// phase. Retail's slot cycle is explicit, so the evaluator is the faithful shape as well as the
+	// controllable one — and it needs no tag of its own, because both of its inputs arrive on pins.
+	inline constexpr const TCHAR* SlotLayerTag = TEXT("ElysiumSlotLayer");
+	// The third masked blend: the aim grid the SLOT's own clip declares, composed over the shot
+	// motion inside the slot branch — retail's recursive autolayer rule for the overlay sequence.
+	inline constexpr const TCHAR* SlotAimLayerTag = TEXT("ElysiumSlotAimLayer");
+
 	// The graph tag on the reaction branch's own `FAnimNode_BlendListByBool` (LIFE5), read by the
 	// generator that stamps it and by anything that has to find the node on a compiled class, so the
 	// two cannot drift into two spellings of one node.
@@ -174,6 +201,24 @@ namespace ElysiumAnimGraph
 	// pose — a visible T-pose. A body that has published nothing yet has no pose to hold, so it
 	// cannot take this path.
 	bool ShouldHoldPose(bool bHasAppliedOnce, bool bHasSequence, bool bHasBlendSpace);
+
+	// Where the overlay slot's `FAnimNode_SequenceEvaluator` stands this frame, in the layer clip's
+	// own seconds.
+	//
+	// **The phase is the CLAIM's, projected, never an accumulator the graph advances.** The record's
+	// cycle comes off the same `HoldSeconds` that expires the claim
+	// (`ElysiumAnimIntent::SlotCycle`), so pinning the evaluator to it is what keeps the layer from
+	// finishing early or lingering past the claim it belongs to — the two cannot be read off
+	// different clocks because there is only one.
+	//
+	// `bSequenceChanged` re-seats the playhead at the head, and it is not redundant with a cycle that
+	// happens to be zero: a publish can hand over a NEW layer asset while still carrying the previous
+	// claim's cycle, and seating a fresh clip mid-motion is a visible jump into the middle of a
+	// reload. A re-fire of the SAME clip restarts through the cycle instead, because a new claim
+	// starts at age zero — which is retail's own restart.
+	//
+	// A clip with no length has no playhead, so it answers zero rather than a NaN.
+	float SlotEvaluatorTime(float Cycle, float ClipLengthSeconds, bool bSequenceChanged);
 
 	// The one-shot answer a caller should feed the jump latch, from what it can see.
 	//
