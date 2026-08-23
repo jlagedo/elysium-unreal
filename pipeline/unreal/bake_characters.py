@@ -125,7 +125,9 @@ def bake_props(manifest, library, failed, tracker, selected=()):
         package = prop_package(stem)
         bl.ensure_dir(package)
         skeleton_package = "%s/SKEL_%s" % (package, stem)
-        error, bones = library.build_family_skeleton([path], skeleton_package, True)
+        error, bones = library.build_family_skeleton(
+            [path], skeleton_package, True,
+            recipe_fingerprint=tracker.fingerprint("props", unit))
         if error:
             fail("prop skeleton %s: %s" % (stem, error))
             failed.append(stem)
@@ -137,14 +139,16 @@ def bake_props(manifest, library, failed, tracker, selected=()):
         bindings = {}
         error = library.build_skeletal_mesh_from_source(
             path, "%s/SK_%s" % (package, stem), skeleton_package,
-            BODY_MASTER, "", bindings, {})
+            BODY_MASTER, "", bindings, {},
+            recipe_fingerprint=tracker.fingerprint("props", unit))
         if error:
             fail("prop SK_%s: %s" % (stem, error))
             failed.append(stem)
             continue
 
         error, count, dropped = library.build_anim_sequences_from_source(
-            path, package, skeleton_package)
+            path, package, skeleton_package,
+            recipe_fingerprint=tracker.fingerprint("props", unit))
         if error:
             fail("prop %s clips: %s" % (stem, error))
             failed.append(stem)
@@ -155,7 +159,8 @@ def bake_props(manifest, library, failed, tracker, selected=()):
         blends = props[stem].get("blends", "")
         if blends:
             error, spaces, skipped_grids, skipped_cells = library.build_blend_spaces_from_grids(
-                blends, package, skeleton_package)
+                blends, package, skeleton_package,
+                recipe_fingerprint=tracker.fingerprint("props", unit))
             if error:
                 fail("prop %s blends: %s" % (stem, error))
                 failed.append(stem)
@@ -244,30 +249,38 @@ class CharacterTracker(object):
         self.decisions[key] = stale
         return stale
 
-    def record(self, stage, object_path):
-        """Stamp every asset the unit now holds. Recorded only after the builders succeeded.
+    def fingerprint(self, stage, object_path):
+        """The fingerprint `wants_unit` computed for this unit, for the builders to stamp
+        onto each asset as it saves."""
+        return self.fingerprints.get((stage, object_path), "")
 
-        The C++ builders save each package as they finish it, so the stamp is a re-save of
-        finished packages -- and a unit whose stamp never lands reads as stale next run, which
-        is the correct failure mode.
-        """
+    def record(self, stage, object_path, stamp=False):
+        """Count one authored unit. Recorded only after the builders succeeded.
+
+        The builders stamp each asset as they save it (`RecipeFingerprint` rides the build),
+        so recording verifies the unit produced assets instead of re-saving them. A unit that
+        never lands its stamps reads as stale next run, which is the correct failure mode.
+
+        `stamp=True` is the textures unit's path: its import skips assets already on the
+        mount, so a moved unit fingerprint must be re-stamped across the whole set here --
+        the one remaining load-and-resave, paid only when that unit is stale."""
         fingerprint = self.fingerprints.get((stage, object_path))
         if not fingerprint:
             raise SystemExit("[chars] a unit that was never decided was authored: %s %s"
                              % (stage, object_path))
-        stamped = 0
-        for path in self._unit_assets(stage, object_path):
-            asset = unreal.EditorAssetLibrary.load_asset(path)
-            if not asset:
-                raise SystemExit(
-                    "[chars] authored asset could not be loaded to stamp: %s" % path)
-            bl.stamp_recipe(asset, fingerprint)
-            if not bl.save(path):
-                raise SystemExit("[chars] stamped asset could not be saved: %s" % path)
-            stamped += 1
-        if not stamped:
+        assets = self._unit_assets(stage, object_path)
+        if not assets:
             raise SystemExit("[chars] unit authored nothing to stamp: %s %s"
                              % (stage, object_path))
+        if stamp:
+            for path in assets:
+                asset = unreal.EditorAssetLibrary.load_asset(path)
+                if not asset:
+                    raise SystemExit(
+                        "[chars] authored asset could not be loaded to stamp: %s" % path)
+                bl.stamp_recipe(asset, fingerprint)
+                if not bl.save(path):
+                    raise SystemExit("[chars] stamped asset could not be saved: %s" % path)
         self._counters(stage)["built"] += 1
         self.pending += 1
 
@@ -551,7 +564,8 @@ def bake_banks(manifest, partition, stems, library, failed, tracker):
             # banks a later partition moved elsewhere, and an untracked bone falls back to exactly
             # that tree.
             error, bones = library.build_family_skeleton(
-                [source_path(b, bank=True) for b in members], skeleton_package, True)
+                [source_path(b, bank=True) for b in members], skeleton_package, True,
+                recipe_fingerprint=tracker.fingerprint("bank_skeletons", skeleton_package))
             if error:
                 fail("bank skeleton %s: %s" % (name, error))
                 failed.append(name)
@@ -580,7 +594,8 @@ def bake_banks(manifest, partition, stems, library, failed, tracker):
             broken = False
             package = "%s/%s" % (BANKS, bank)
             error, count, dropped = library.build_anim_sequences_from_source(
-                source_path(bank, bank=True), package, skeleton_package)
+                source_path(bank, bank=True), package, skeleton_package,
+                recipe_fingerprint=tracker.fingerprint("banks", unit))
             if error:
                 fail("%s: %s" % (bank, error))
                 failed.append(bank)
@@ -591,7 +606,9 @@ def bake_banks(manifest, partition, stems, library, failed, tracker):
             blends = blend_source(manifest, bank, True)
             if blends:
                 error, spaces, skipped_grids, skipped_cells = (
-                    library.build_blend_spaces_from_grids(blends, package, skeleton_package))
+                    library.build_blend_spaces_from_grids(
+                        blends, package, skeleton_package,
+                        recipe_fingerprint=tracker.fingerprint("banks", unit)))
                 if error:
                     fail("%s blends: %s" % (bank, error))
                     failed.append(bank)
@@ -629,7 +646,8 @@ def bake_bodies(manifest, partition, stems, library, failed, tracker,
         authoring_skeleton = tracker.wants_unit("family_skeletons", skeleton_package)
         if authoring_skeleton:
             error, bones = library.build_family_skeleton(
-                [source_path(name)], skeleton_package, True)
+                [source_path(name)], skeleton_package, True,
+                recipe_fingerprint=tracker.fingerprint("family_skeletons", skeleton_package))
             if error:
                 fail("body skeleton %s: %s" % (name, error))
                 failed.append(name)
@@ -668,7 +686,8 @@ def bake_bodies(manifest, partition, stems, library, failed, tracker,
             error = library.build_skeletal_mesh_from_source(
                 source_path(stem), "%s/SK_%s" % (MESHES, stem), skeleton_package,
                 BODY_MASTER, MATERIALS, bindings,
-                eye_slot_masters(manifest, stem, blob))
+                eye_slot_masters(manifest, stem, blob),
+                recipe_fingerprint=tracker.fingerprint("meshes", cr.mesh_object_path(stem)))
             if error:
                 fail("SK_%s: %s" % (stem, error))
                 failed.append(stem)
@@ -689,7 +708,9 @@ def bake_bodies(manifest, partition, stems, library, failed, tracker,
         # declaration -- `DecompressPose` builds the name-keyed remapping for any skeleton pair --
         # but every editor-side validator consults it.
         if authoring_skeleton:
-            error = library.declare_compatible_skeletons(skeleton_package, bank_skeletons)
+            error = library.declare_compatible_skeletons(
+                skeleton_package, bank_skeletons,
+                recipe_fingerprint=tracker.fingerprint("family_skeletons", skeleton_package))
             if error:
                 fail("body '%s': %s" % (name, error))
                 failed.append(name)
@@ -724,7 +745,8 @@ def bake_bodies(manifest, partition, stems, library, failed, tracker,
                 failed.append(owner)
                 continue
             error, count, dropped = library.build_anim_sequences_from_source(
-                path, "%s/%s" % (ANIMS, name), skeleton_package)
+                path, "%s/%s" % (ANIMS, name), skeleton_package,
+                recipe_fingerprint=tracker.fingerprint("clips", unit))
             if error:
                 fail("%s: %s" % (owner, error))
                 failed.append(owner)
@@ -739,7 +761,8 @@ def bake_bodies(manifest, partition, stems, library, failed, tracker,
             if blends:
                 error, spaces, skipped_grids, skipped_cells = (
                     library.build_blend_spaces_from_grids(
-                        blends, "%s/%s" % (ANIMS, name), skeleton_package))
+                        blends, "%s/%s" % (ANIMS, name), skeleton_package,
+                        recipe_fingerprint=tracker.fingerprint("clips", unit)))
                 if error:
                     fail("%s blends: %s" % (owner, error))
                     failed.append(owner)
@@ -816,7 +839,7 @@ def main():
         # A texture that did not import or did not save leaves a body drawing untextured, so the
         # unit is not stamped and the next run imports it again.
         if len(failed) == before:
-            tracker.record("textures", cr.TEXTURES)
+            tracker.record("textures", cr.TEXTURES, stamp=True)
     else:
         textures = existing_textures()
 

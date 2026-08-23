@@ -695,15 +695,14 @@ def prune_package(package, keep, scope=""):
     _assert_prunable(package, scope)
     if not unreal.EditorAssetLibrary.does_directory_exist(package):
         return 0
-    gone = 0
+    stale = []
     for path in unreal.EditorAssetLibrary.list_assets(package, recursive=False,
                                                       include_folder=False):
         name = path.rsplit("/", 1)[-1].split(".")[0]
-        if name in keep:
-            continue
-        delete_owned_asset(path)
-        gone += 1
-    return gone
+        if name not in keep:
+            stale.append(path)
+    delete_owned_assets(stale)
+    return len(stale)
 
 
 def prune_package_prefix(package, prefix, keep, scope=""):
@@ -712,21 +711,37 @@ def prune_package_prefix(package, prefix, keep, scope=""):
     _assert_prunable(package, scope)
     if not unreal.EditorAssetLibrary.does_directory_exist(package):
         return 0
-    gone = 0
+    stale = []
     for path in unreal.EditorAssetLibrary.list_assets(package, recursive=False,
                                                       include_folder=False):
         name = path.rsplit("/", 1)[-1].split(".")[0]
-        if not name.startswith(prefix) or name in keep:
-            continue
-        delete_owned_asset(path)
-        gone += 1
-    return gone
+        if name.startswith(prefix) and name not in keep:
+            stale.append(path)
+    delete_owned_assets(stale)
+    return len(stale)
 
 
 def delete_owned_asset(asset_path):
     """Delete a generated asset or fail the commandlet; failed pruning is not cacheable."""
     if not unreal.EditorAssetLibrary.delete_asset(asset_path):
         raise RuntimeError("could not delete generated asset: %s" % asset_path)
+
+
+def delete_owned_assets(asset_paths):
+    """Delete generated assets in ONE ForceDeleteObjects pass.
+
+    Per-asset `delete_asset` runs a whole-heap reference sweep and a garbage
+    collection each; `delete_loaded_assets` pays that once for the batch."""
+    if not asset_paths:
+        return
+    loaded = [unreal.EditorAssetLibrary.load_asset(path) for path in asset_paths]
+    missing = [path for path, asset in zip(asset_paths, loaded) if asset is None]
+    if missing:
+        raise RuntimeError("could not load for deletion: %s" % ", ".join(missing))
+    if not unreal.EditorAssetLibrary.delete_loaded_assets(loaded):
+        raise RuntimeError(
+            "could not delete %d generated asset(s): %s ..."
+            % (len(asset_paths), asset_paths[0]))
 
 
 def set_tex_param(mic, param, texture):
@@ -851,11 +866,44 @@ def set_phy_collision(static_mesh, phys):
 
 def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collision=True):
     """Write a UDynamicMesh out as a real StaticMesh asset and bind its material slots.
-    Returns the asset, or None when the build failed."""
-    if unreal.EditorAssetLibrary.does_asset_exist(asset_path):
-        delete_owned_asset(asset_path)
+    Returns the asset, or None when the build failed.
+
+    An existing StaticMesh is rewritten IN PLACE through `CopyMeshToStaticMesh`.
+    Deleting it first routes through `ForceDeleteObjects`, whose whole-heap reference
+    sweep plus garbage collection costs seconds per asset with the corpus resident and
+    dominated every re-baked prop stage. The copy also carries the materials, slot
+    names and Nanite settings in the same build and emits no transaction, so a rewrite
+    is one mesh build instead of three plus an undo record."""
     nanite_settings = unreal.MeshNaniteSettings()
     nanite_settings.set_editor_property("enabled", nanite)
+    existing = None
+    if unreal.EditorAssetLibrary.does_asset_exist(asset_path):
+        loaded = unreal.EditorAssetLibrary.load_asset(asset_path)
+        if isinstance(loaded, unreal.StaticMesh):
+            existing = loaded
+        else:
+            # A different class squats on the generated path; the slow force-delete is
+            # the correct tool for that rare, wrong state.
+            delete_owned_asset(asset_path)
+    if existing is not None:
+        options = unreal.GeometryScriptCopyMeshToAssetOptions()
+        options.enable_recompute_normals = False
+        options.enable_recompute_tangents = True
+        # BSP soup is non-manifold; keeping the source vertex order stops the build from
+        # welding face-boundary corners back together and smoothing the flat shading away.
+        options.use_original_vertex_order = True
+        options.replace_materials = True
+        options.new_materials = materials
+        options.new_material_slot_names = list(slot_names)
+        options.apply_nanite_settings = True
+        options.new_nanite_settings = nanite_settings
+        options.emit_transaction = False
+        result = unreal.GeometryScript_AssetUtils.copy_mesh_to_static_mesh(
+            mesh, existing, options, unreal.GeometryScriptMeshWriteLOD())
+        outcome = result[1] if isinstance(result, tuple) and len(result) > 1 else None
+        if outcome is not None and outcome != unreal.GeometryScriptOutcomePins.SUCCESS:
+            return None
+        return existing
     options = unreal.GeometryScriptCreateNewStaticMeshAssetOptions()
     options.enable_recompute_normals = False
     options.enable_recompute_tangents = True
@@ -872,9 +920,8 @@ def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collisio
     static_mesh = result[0] if isinstance(result, tuple) else result
     if not static_mesh:
         return None
-    # The creation option alone does not land on the asset, so set the settings struct on the
-    # mesh as well; assigning it runs PostEditChange, which rebuilds with Nanite.
-    static_mesh.set_editor_property("nanite_settings", nanite_settings)
+    # Nanite lands at create time (CreateStaticMeshUtil applies Options.NaniteSettings
+    # before the first build); only the material bind remains a post-create write.
     static_mesh.set_editor_property("static_materials", [
         unreal.StaticMaterial(material_interface=mat, material_slot_name=name)
         for mat, name in zip(materials, slot_names)])

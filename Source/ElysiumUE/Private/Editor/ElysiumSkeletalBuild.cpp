@@ -130,6 +130,25 @@ namespace ElysiumSkeletalBuildImpl
 		}
 	}
 
+	/**
+	 * Write the recipe fingerprint into the asset's package metadata, pre-save -- the same
+	 * channel `EditorAssetLibrary.set_metadata_tag` writes, which `MetaDataTagsForAssetRegistry`
+	 * surfaces as an asset-registry tag at save. Riding the builder's own save is what keeps
+	 * every baked asset stamped without a second save per package.
+	 *
+	 * The stamp belongs to the assets a unit CREATES. A shared skeleton re-saved on another
+	 * unit's behalf keeps its own stamp untouched: metadata is per object, and an unrelated
+	 * resave carries it forward.
+	 */
+	void StampRecipe(UObject* Asset, const FString& RecipeFingerprint)
+	{
+		if (!RecipeFingerprint.IsEmpty() && Asset != nullptr)
+		{
+			Asset->GetPackage()->GetMetaData().SetValue(
+				Asset, TEXT("ElysiumRecipe"), *RecipeFingerprint);
+		}
+	}
+
 	bool SavePackageTo(UPackage* Package, const FString& PackageName)
 	{
 		Package->MarkPackageDirty();
@@ -442,7 +461,8 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	const FString& PackageName, const FString& SkeletonPackageName,
 	const FString& MaterialParentPath, const FString& MaterialPackagePath,
 	const TMap<FString, FString>& MaterialTextures,
-	const TMap<FString, FString>& MaterialParents)
+	const TMap<FString, FString>& MaterialParents,
+	const FString& RecipeFingerprint)
 {
 #if WITH_EDITOR
 	FElysiumSkeletalSource Source;
@@ -776,6 +796,8 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		FAssetRegistryModule::AssetCreated(Skeleton);
 	}
 	FAssetRegistryModule::AssetCreated(Mesh);
+	// The mesh alone: the shared skeleton saved below belongs to its own unit.
+	ElysiumSkeletalBuildImpl::StampRecipe(Mesh, RecipeFingerprint);
 
 	if (!ElysiumSkeletalBuildImpl::SavePackageTo(SkeletonPackage,
 			bSharedSkeleton ? SkeletonPackageName : PackageName))
@@ -835,7 +857,8 @@ int32 UElysiumSkeletalBuildLibrary::ReleaseBakedPackages(const FString& PackageP
 }
 
 FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>& SourcePaths,
-	const FString& SkeletonPackageName, bool bRebuild, int32& OutBones)
+	const FString& SkeletonPackageName, bool bRebuild, int32& OutBones,
+	const FString& RecipeFingerprint)
 {
 	OutBones = 0;
 #if WITH_EDITOR
@@ -1058,6 +1081,7 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	{
 		FAssetRegistryModule::AssetCreated(Skeleton);
 	}
+	ElysiumSkeletalBuildImpl::StampRecipe(Skeleton, RecipeFingerprint);
 	if (!ElysiumSkeletalBuildImpl::SavePackageTo(Package, SkeletonPackageName))
 	{
 		return FString::Printf(TEXT("could not save %s"), *SkeletonPackageName);
@@ -1076,7 +1100,8 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletonFromSource(const FString& Sou
 }
 
 FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& SkeletonPackageName,
-	const TArray<FString>& SourceSkeletonPackageNames)
+	const TArray<FString>& SourceSkeletonPackageNames,
+	const FString& RecipeFingerprint)
 {
 #if WITH_EDITOR
 	USkeleton* Target = ElysiumSkeletalBuildImpl::LoadSkeleton(SkeletonPackageName);
@@ -1130,6 +1155,7 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 		}
 	}
 
+	ElysiumSkeletalBuildImpl::StampRecipe(Target, RecipeFingerprint);
 	if (!ElysiumSkeletalBuildImpl::SavePackageTo(Target->GetPackage(), SkeletonPackageName))
 	{
 		return FString::Printf(TEXT("could not save %s"), *SkeletonPackageName);
@@ -1142,7 +1168,7 @@ FString UElysiumSkeletalBuildLibrary::DeclareCompatibleSkeletons(const FString& 
 
 FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString& SourcePath,
 	const FString& PackagePath, const FString& SkeletonPackageName, int32& OutClipCount,
-	int32& OutDroppedTracks)
+	int32& OutDroppedTracks, const FString& RecipeFingerprint)
 {
 	OutClipCount = 0;
 	OutDroppedTracks = 0;
@@ -1594,6 +1620,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 
 		Sequence->PostEditChange();
 		FAssetRegistryModule::AssetCreated(Sequence);
+		ElysiumSkeletalBuildImpl::StampRecipe(Sequence, RecipeFingerprint);
 		// Only a clip that actually built is a base anything may name, which is why this is
 		// recorded here rather than when the package was opened.
 		BuiltByName.Add(Clip.Name, Sequence);
@@ -1640,7 +1667,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 
 FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& BlendsRelPath,
 	const FString& PackagePath, const FString& SkeletonPackageName, int32& OutSpaceCount,
-	int32& OutSkippedGrids, int32& OutSkippedCells)
+	int32& OutSkippedGrids, int32& OutSkippedCells, const FString& RecipeFingerprint)
 {
 	OutSpaceCount = 0;
 	OutSkippedGrids = 0;
@@ -1894,6 +1921,7 @@ FString UElysiumSkeletalBuildLibrary::BuildBlendSpacesFromGrids(const FString& B
 
 		Space->PostEditChange();
 		FAssetRegistryModule::AssetCreated(Space);
+		ElysiumSkeletalBuildImpl::StampRecipe(Space, RecipeFingerprint);
 		if (!ElysiumSkeletalBuildImpl::SavePackageTo(Package, PackageName))
 		{
 			return FString::Printf(TEXT("could not save %s"), *PackageName);

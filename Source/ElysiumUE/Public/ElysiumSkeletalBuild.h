@@ -56,7 +56,8 @@ public:
 	static FString BuildSkeletalMeshFromSource(const FString& SourcePath, const FString& PackageName,
 		const FString& SkeletonPackageName, const FString& MaterialParentPath,
 		const FString& MaterialPackagePath, const TMap<FString, FString>& MaterialTextures,
-		const TMap<FString, FString>& MaterialParents);
+		const TMap<FString, FString>& MaterialParents,
+		const FString& RecipeFingerprint = TEXT(""));
 
 	/**
 	 * Build and save a `USkeleton` from an `.eskm`'s bone tree alone, with no mesh.
@@ -97,7 +98,8 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString BuildFamilySkeleton(const TArray<FString>& SourcePaths,
-		const FString& SkeletonPackageName, bool bRebuild, int32& OutBones);
+		const FString& SkeletonPackageName, bool bRebuild, int32& OutBones,
+		const FString& RecipeFingerprint = TEXT(""));
 
 	/**
 	 * Drop every saved package under `PackagePath` from memory, and return how many were released.
@@ -113,7 +115,8 @@ public:
 	/** Declare that this skeleton may play animations authored on the named bank skeletons. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString DeclareCompatibleSkeletons(const FString& SkeletonPackageName,
-		const TArray<FString>& SourceSkeletonPackageNames);
+		const TArray<FString>& SourceSkeletonPackageNames,
+		const FString& RecipeFingerprint = TEXT(""));
 
 	/**
 	 * Build and save one `UAnimSequence` per clip in an `.eskm`, as `<PackagePath>/A_<clip>`.
@@ -144,7 +147,8 @@ public:
 	 */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString BuildAnimSequencesFromSource(const FString& SourcePath, const FString& PackagePath,
-		const FString& SkeletonPackageName, int32& OutClipCount, int32& OutDroppedTracks);
+		const FString& SkeletonPackageName, int32& OutClipCount, int32& OutDroppedTracks,
+		const FString& RecipeFingerprint = TEXT(""));
 
 	/**
 	 * Build and save one `UBlendSpace` per blend grid in `npc/blends/<owner>.json`, as
@@ -172,7 +176,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
 	static FString BuildBlendSpacesFromGrids(const FString& BlendsRelPath, const FString& PackagePath,
 		const FString& SkeletonPackageName, int32& OutSpaceCount, int32& OutSkippedGrids,
-		int32& OutSkippedCells);
+		int32& OutSkippedCells, const FString& RecipeFingerprint = TEXT(""));
 
 	/** Report what a saved sequence contains, for a fresh process to check against. */
 	UFUNCTION(BlueprintCallable, Category="Elysium|Characters")
