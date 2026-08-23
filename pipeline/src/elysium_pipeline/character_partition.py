@@ -59,7 +59,10 @@ def _entries(trees, stems, prefix):
             "members": sorted(family["stems"]),
             "skeleton": f"{SKELETON_DIR}/{prefix}{name}",
             "tree_fingerprint": tree_fingerprint(family["tree"]),
-            "bones": len(family["tree"]),
+            # Counted case-folded: Unreal bone names are case-insensitive, so the engine's
+            # skeleton merge folds `Bip01 L Forearm` and `Bip01 L ForeArm` (both shipped)
+            # into one bone, and the declared count must match what that merge builds.
+            "bones": len({bone.lower() for bone in family["tree"]}),
         }
         for stem in family["stems"]:
             owner[stem] = name
@@ -72,7 +75,7 @@ def _singletons(trees, prefix):
         "members": [stem],
         "skeleton": f"{SKELETON_DIR}/{prefix}{stem}",
         "tree_fingerprint": tree_fingerprint(tree),
-        "bones": len(tree),
+        "bones": len({bone.lower() for bone in tree}),
     } for stem, tree in trees.items()}
     return out, {stem: stem for stem in trees}
 

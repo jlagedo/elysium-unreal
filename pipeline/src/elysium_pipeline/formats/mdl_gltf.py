@@ -193,6 +193,19 @@ def _inverse_bind_accessor(g, bones):
     return g.accessor(ibm, FLOAT, "MAT4")
 
 
+def _clip_animates(d, bones, animdesc_base):
+    """Whether this clip authors any channel on any of `bones` -- read off the
+    animation records alone, which is the exact test `_bake_animation` derives its
+    channels from. The no-write export paths use it to decide "baked non-empty"
+    without decoding a single frame."""
+    recs = animdesc_base + struct.unpack_from("<i", d, animdesc_base + 48)[0]
+    for b in bones:
+        offs = struct.unpack_from("<7i", d, recs + b.index * 32 + 4)
+        if any(offs[:3]) or any(offs[3:]):
+            return True
+    return False
+
+
 def _bake_animation(g, d, bones, label, animdesc_base, nframes, fps):
     """One glTF animation from a decoded clip: a rotation and/or translation sampler per
     animated bone, targeting the bone's node by index (identity -- the clip bakes against its
@@ -578,20 +591,25 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None,
     extra, blends = S.blend_clip_plan(d, own)
     animations, labels, extents = [], [], {}
     for c in own + extra:
-        anim = _bake_animation(g, d, built["bones"], c.label, c.base, c.frames, c.fps)
-        if anim:
-            animations.append(anim)
+        if write:
+            anim = _bake_animation(g, d, built["bones"], c.label, c.base, c.frames, c.fps)
+            baked = anim is not None
+            if anim:
+                animations.append(anim)
+        else:
+            baked = _clip_animates(d, built["bones"], c.base)
+        if baked:
             labels.append(c)
             if measure_extents:
                 extents[c.label] = S.clip_extent(d, built["bones"], c.base, c.frames)
     blends = _reconcile_blends(blends, {c.label for c in labels})
-    gltf, _root = _assemble_skinned(built, animations)
-    gltf["accessors"] = g.accessors
-    gltf["bufferViews"] = g.bufferViews
-    gltf["buffers"] = [{"byteLength": len(g.bin)}]
 
     glb = os.path.join(out_dir, stem + ".glb")
     if write:
+        gltf, _root = _assemble_skinned(built, animations)
+        gltf["accessors"] = g.accessors
+        gltf["bufferViews"] = g.bufferViews
+        gltf["buffers"] = [{"byteLength": len(g.bin)}]
         _write_glb(gltf, g.bin, glb)
     tris = sum(len(s["tris"]) for s in built["surfaces"].values())
     face = built["facial"]
@@ -642,11 +660,16 @@ def export_bank(idx, model_path, out_dir, stem, write=False):
     nodes = _skeleton_nodes(bones)
     animations, labels = [], []
     for c in clips + extra:
-        anim = _bake_animation(g, d, bones, c.label, c.base, c.frames, c.fps)
-        if anim:
-            animations.append(anim)
+        if write:
+            anim = _bake_animation(g, d, bones, c.label, c.base, c.frames, c.fps)
+            baked = anim is not None
+            if anim:
+                animations.append(anim)
+        else:
+            baked = _clip_animates(d, bones, c.base)
+        if baked:
             labels.append(c)
-    if not animations:
+    if not labels:
         return None
     blends = _reconcile_blends(blends, {c.label for c in labels})
     root = next(b.index for b in bones if b.parent == -1)
@@ -717,8 +740,9 @@ def export_cinematic(idx, model_path, out_dir, stem, write=False):
     # Decode each clip once against the FULL skeleton: the animation records are indexed by the
     # model's own bone order, so a per-root subset has to read through the original indices.
     decoded = {}
-    for c in clips:
-        decoded[c.label] = S.read_anim(d, bones, c.base, c.frames)
+    if write:
+        for c in clips:
+            decoded[c.label] = S.read_anim(d, bones, c.base, c.frames)
 
     banks_dir = os.path.join(out_dir, "banks")
     os.makedirs(banks_dir, exist_ok=True)
@@ -751,6 +775,10 @@ def export_cinematic(idx, model_path, out_dir, stem, write=False):
 
         animations, labels = [], []
         for c in clips:
+            if not write:
+                if _clip_animates(d, sub, c.base):
+                    labels.append(c)
+                continue
             frames = decoded[c.label]
             recs = c.base + struct.unpack_from("<i", d, c.base + 48)[0]
             times = np.arange(c.frames, dtype=np.float32) / (c.fps or 30.0)
@@ -777,7 +805,7 @@ def export_cinematic(idx, model_path, out_dir, stem, write=False):
                 animations.append({"name": c.label.lstrip("@"), "channels": channels,
                                    "samplers": samplers})
                 labels.append(c)
-        if not animations:
+        if not labels:
             continue
 
         # The subtree's own root: the one bone whose parent is outside the subtree.

@@ -11,6 +11,9 @@ from __future__ import annotations
 KNOWN_MISSING_NPC_MODELS = frozenset(
     {
         "models/character/npc/doppleganger/doppleganger.mdl",
+        # la_library_1's npc_VVampire "Stuntman" ships the literal placeholder name;
+        # no file of this name exists anywhere in the install.
+        "models/missing.mdl",
     }
 )
 
@@ -22,14 +25,6 @@ KNOWN_STATIC_ANIMATED_PROP_FALLBACKS = frozenset(
     }
 )
 
-# Two hidden Warrens interaction records use prop_switch for its use/lock/output surface while the
-# model itself is a one-frame hatch carrying only `only_sequence`. Retail's named sequence lookups
-# therefore resolve no transition clips; the static rest pose remains the honest presentation.
-KNOWN_SWITCHES_WITHOUT_SWITCH_CLIPS = frozenset(
-    {
-        "models/scenery/structural/warrens/warr_02_container_door.mdl",
-    }
-)
 
 
 def missing_npc_warning(model: str) -> dict[str, str] | None:
@@ -64,13 +59,21 @@ def animated_prop_warning(
     }
 
 
-def missing_intrinsic_prop_clips_warning(model: str, clips: list[str]) -> dict[str, str] | None:
+def missing_intrinsic_prop_clips_warning(
+    model: str, clips: list[str], *, declared: int = 0
+) -> dict[str, str]:
+    """A switch-class entity placed on a model without its full switch vocabulary.
+
+    Map data, not an export defect: 18 shipped models are used this way, from partial
+    sets (`curcuitbreaker` lacks only `deactivate`) down to one-frame `only_sequence`
+    props (the temple pedestals, the Warrens hatches). Retail's named sequence lookup
+    resolves -1 for an absent clip and the transition simply does not animate, and the
+    runtime's `InputSetAnimation` no-ops the same way, so the export ships the clips
+    the model declares and reports the gap."""
     normalized = model.lower().replace("\\", "/")
-    if normalized not in KNOWN_SWITCHES_WITHOUT_SWITCH_CLIPS:
-        return None
     return {
         "code": "missing-intrinsic-prop-clips",
         "model": normalized,
-        "fallback": "authored static rest pose",
+        "fallback": "the declared clip subset" if declared else "authored static rest pose",
         "detail": "model does not declare runtime switch clip(s): " + ", ".join(clips),
     }

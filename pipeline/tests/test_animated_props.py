@@ -195,13 +195,16 @@ class PlacedModelPolicyTests(unittest.TestCase):
         self.assertEqual([use.model for use in uses], ["models/a.mdl"])
         self.assertEqual(uses[0].static_stem, "models_a")
 
-    def test_only_the_authored_warrens_hatch_may_lack_switch_clips(self) -> None:
+    def test_missing_switch_clips_warn_for_any_model(self) -> None:
         missing = ["activate", "deactivate", "idle_off", "idle_on"]
         warning = source_warnings.missing_intrinsic_prop_clips_warning(
             "models/scenery/structural/warrens/warr_02_container_door.mdl", missing)
         self.assertEqual(warning["fallback"], "authored static rest pose")
-        self.assertIsNone(source_warnings.missing_intrinsic_prop_clips_warning(
-            "models/scenery/structural/switches/switch.mdl", missing))
+        partial = source_warnings.missing_intrinsic_prop_clips_warning(
+            "models/scenery/misc/curcuitbreaker/curcuitbreaker.mdl",
+            ["deactivate"], declared=3)
+        self.assertEqual(partial["fallback"], "the declared clip subset")
+        self.assertIn("deactivate", partial["detail"])
 
     def test_legacy_game_lump_stem_joins_with_its_models_prefix(self) -> None:
         model = "models/scenery/street/payphone/payphone_pair.mdl"

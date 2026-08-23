@@ -1518,6 +1518,12 @@ def blend_clip_plan(d, clips):
         grid = c.grid
         if len(grid.cells) <= 1:
             continue
+        # A grid bound to no pose parameter on either axis cannot be driven: the engine
+        # evaluates it at the parameter default, which normalizes to cell 0 on a zero-width
+        # axis, so no other cell is ever reachable (crooked_cop's Walkie_Talkie trio ships
+        # this way). That is a plain clip -- the base cell -- not a blend space.
+        if all(index < 0 for index in grid.paramindex):
+            continue
         cells = []
         for cell in grid.cells:
             found = local_animation(d, cell.anim)

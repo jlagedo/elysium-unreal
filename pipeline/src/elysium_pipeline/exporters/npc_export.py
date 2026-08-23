@@ -939,11 +939,9 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
             available_labels = {sequence.label.lower() for sequence in sequences}
             missing_required = sorted(required_labels - available_labels)
             if missing_required:
-                warning = missing_intrinsic_prop_clips_warning(model, missing_required)
-                if warning is None:
-                    raise ValueError(
-                        "runtime-required clip(s) absent: " + ", ".join(missing_required)
-                    )
+                warning = missing_intrinsic_prop_clips_warning(
+                    model, missing_required,
+                    declared=len(required_labels & available_labels))
                 warnings.append(warning)
                 print(f"  ! warning {warning['code']}: {stem} uses "
                       f"{warning['fallback']} ({warning['detail']})")
