@@ -121,10 +121,14 @@ Chain resolution: each node's `NextKey` → the `targetname` of the next node. `
 factories `0x1019d680` / `0x1019d6f0`, both `operator new(0x49c)` + the one ctor `0x1019dc80`) —
 so the two classnames carry no behavioural difference and chain roles are topological, not
 classname-derived. `NextKey` resolves the engine way, `FindEntityByName(NULL, name)` = the
-**first** entity of that name in spawn/entity order (= entity-lump order), which matters because
-a map can reuse rope names across installations (`sp_tutorial_1` reuses `tele4..tele9` twice,
-~200 m apart). A `NextKey` naming no rope node is a mapper typo the engine warns about and draws
-nothing for — there are **122** of them across the 108 maps.
+**first** entity of that name in spawn/entity order (= entity-lump order), matched
+**case-insensitively over the whole entity list, not just rope nodes** — 16 NextKeys across
+the maps name a non-rope entity and the rope hangs from its origin
+(`la_plaguebearer_sewer_1` strings each ceiling chain to a `prop_physics` meat hook,
+`hook1`..`hook9`). First-wins matters because a map can reuse rope names across
+installations (`sp_tutorial_1` reuses `tele4..tele9` twice, ~200 m apart). A `NextKey`
+naming no entity at all is a mapper typo the engine warns about and draws nothing for —
+there are **105** of them across 26 maps.
 
 **The rope's shape comes from three fields, and only one of them is the one the FGD name
 suggests:**

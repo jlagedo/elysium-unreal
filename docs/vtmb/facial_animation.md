@@ -944,8 +944,10 @@ position.
 
 ## The offline export (PL10)
 
-`pipeline/src/elysium_pipeline/exporters/npc_export.py` bakes each rigged NPC's flexes into its own `.glb` as glTF **morph
-targets** and writes everything above them to `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`. The split follows
+`pipeline/src/elysium_pipeline/exporters/npc_export.py` decodes each rigged NPC's flexes as **morph
+targets** — carried by the `.eskm` container and baked into the character's `USkeletalMesh` —
+and writes everything above them to `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`. The `.glb`
+descriptions below apply to the on-demand inspection product (`uv run elysium export model`). The split follows
 what a morph target is: a vertex displacement. Everything between a controller value and that
 displacement — the rules, the ramps — is arithmetic, so it ships as data and 12.3 replays it.
 The decoders are `mdl_skel.py`'s (`flex_descs`, `flex_controllers`, `flex_rules`, `mouths`,
@@ -960,8 +962,8 @@ which half a given weight drives, so they are two morphs. The shipped 65-flexdes
 of them: 45 flexdescs that a mesh actually deforms, plus eight second ramps.
 
 Names are the flexdesc's FACS name, with a `#k` suffix on the second and later ramp of the
-same flexdesc (`AU12R`, `AU12R#1`). Uniqueness is load-bearing — glTFRuntime keys a
-`UMorphTarget` by name.
+same flexdesc (`AU12R`, `AU12R#1`). Uniqueness is load-bearing — a `UMorphTarget` is keyed
+by name.
 
 ### A morph spans materials
 
@@ -972,8 +974,7 @@ model's eight material primitives.
 glTF weights are mesh-level, so the target list is **unified across every primitive** and
 written in the same order on each; that is what lets `mesh.extras.targetNames` name them
 positionally. A primitive a target does not touch still carries it, as a one-entry zero
-sparse accessor (glTFRuntime applies the names first and drops the empty ones after, under
-`bIgnoreEmptyMorphTargets`). A target that spans two materials therefore arrives as one
+sparse accessor. A target that spans two materials therefore arrives as one
 same-named piece per primitive, so the consumer **must** load with
 `MorphTargetsDuplicateStrategy::Merge` — the default, `Ignore`, keeps the first piece and
 silently drops the rest, which would move a jaw and leave its teeth behind.
@@ -984,8 +985,8 @@ Each target attribute is a **sparse accessor with no `bufferView`** — base imp
 only the moved vertices stored — carrying `POSITION` and `NORMAL` deltas in glTF space
 (`(x,y,z)→(x,z,−y)`, ×0.0254 for the position, unscaled for the normal). The `POSITION` and
 `NORMAL` accessors of one target share their sparse *indices* view, since a flex moves the
-same vertex set in both; the *values* views are never shared, because glTFRuntime reads
-`sparse.values.byteOffset` and then never applies it.
+same vertex set in both; the *values* views are never shared, because common glTF readers
+read `sparse.values.byteOffset` and then never apply it.
 
 The mesh's base normals are regenerated from face normals at export (the `.mdl`'s own vertex
 normals are not carried), so a normal delta lands on a recomputed base rather than the

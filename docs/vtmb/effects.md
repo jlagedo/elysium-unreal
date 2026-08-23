@@ -72,6 +72,10 @@ is no `info_particle_system` and no `.pcf` in the install.
 (each also as a normalized PNG). Parser: `pipeline/src/elysium_pipeline/formats/particles.py`.
 Mirror: `pipeline/src/elysium_pipeline/exporters/UE_extract_particles.py`.
 
+A definition file name can carry a space — the install ships
+`particles/tz_ bloodtrickle_emitter.txt`, and the engine resolves it like any other file — so
+the parser accepts spaces in source names; the Unreal-side asset name folds them.
+
 Roles, distinguished by content rather than by a declared type:
 
 | Role | Count | Shape |

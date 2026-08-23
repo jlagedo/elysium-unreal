@@ -73,7 +73,8 @@ An exporter with a `UE_` filename emits centimetres, Z-up, left-handed Unreal da
 the required winding. Every tracked coordinate-bearing OBJ/sidecar exporter follows this
 rule; parsers and orchestration modules do not emit coordinate products. `mdl_gltf.py` is
 the standing exemption: standard glTF 2.0 is self-describing and its `.glb` output is an
-inspection product that nothing the game loads reads. Every sidecar is Unreal-native,
+on-demand inspection product (`uv run elysium export model <mdl>`) that nothing the game loads
+reads and no profile export writes. Every sidecar is Unreal-native,
 including the `eyes/` and `procedural/` tables, which `UE_mdl_skeletal.py` states in the
 body's own frame from the Source-space records `mdl_skel.py` parses.
 
@@ -86,7 +87,9 @@ difference from, leaving the runtime no VtMB rule to apply. The root `CLAUDE.md`
 
 `UE_bsp_to_scene.py` writes per-map geometry and sidecars. The CLI task graph coordinates
 the `grid` and `all` profiles, focused map or model exports, and the global mirrors.
-Integrated NPC export adds skeletal meshes, animation banks, indexes, and facial sidecars.
+Integrated NPC export writes the cast's resolution manifest and indexes, the per-character
+sidecars, and the decoded character texture corpus; `export characters` writes the `.eskm`
+containers the bake consumes.
 `UE_extract_items.py` decodes every `vdata/items` ground model into the shared `items/props/`
 corpus with a `ground_models.json` manifest; `UE_extract_wield.py` writes the wield-model corpus —
 `items/wield_models.json`, one `.eskm` per real wield model with its reference pose at the model's

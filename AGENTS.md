@@ -155,7 +155,7 @@ contain bytes, transforms, timing, or other content derived from the user's game
 
 - **Offline — `pipeline/`** (Python): decodes VtMB's proprietary formats (BSP v17, MDL v2531,
   TTH/TTZ, VPK, VMT, `.fnt`, `.res`) into intermediates under `$ELYSIUM_EXPORT_ROOT/<map>/`
-  (OBJ+MTL+PNG/DDS, glTF `.glb`, plain-text/JSON sidecars). `UE_bsp_to_scene.py` is the map
+  (OBJ+MTL+PNG/DDS, `.eskm` containers, plain-text/JSON sidecars). `UE_bsp_to_scene.py` is the map
   exporter; `uv run elysium export` coordinates map and whole-game profiles. Its Python package,
   dependencies, and command entrypoint are declared in `pyproject.toml` and locked by `uv.lock`.
   The same export command invokes `pipeline/unreal/bake_map.py` to turn each exported map's

@@ -106,7 +106,7 @@ JSON families use their own version fields and failure shapes. A valid but stale
 be structurally accepted without proving that it belongs to the export inputs expected by the
 running build.
 
-The existing bake receipts solve this for baked packages, but `.ents`, `.hulls`, `.dispcol` and
+The bake's per-asset recipe stamps solve this for baked packages, but `.ents`, `.hulls`, `.dispcol` and
 `.ropes` deliberately remain outside the Unreal bake fingerprints. A separate runtime-data receipt
 and source digest are needed; adding these inputs to the visual bake would conflate two independent
 invalidation domains.

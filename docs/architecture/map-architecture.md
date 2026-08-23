@@ -138,7 +138,7 @@ finish cooking, the map actor refreshes both completed BodySetups into the navig
 creates one transient `ANavMeshBoundsVolume` covering their combined bounds, and requests a dynamic
 Recast build. Convex-only brush collision derives those bounds from its sidecar vertices because a
 collision-only `UProceduralMeshComponent` has no render bounds. Each mobile entity's visible runtime
-glTF component is attached to an `AElysiumNpcBody`: an Unreal `ACharacter` with `CharacterMovement`, a character
+skeletal component is attached to an `AElysiumNpcBody`: an Unreal `ACharacter` with `CharacterMovement`, a character
 capsule and `ADetourCrowdAIController`. Agents exist while the entity world is constructed but stay
 movement-disabled until the activation barrier, so they cannot fall through uncooked collision or
 request paths from a partial graph. Crossing the barrier enables the body's collision and visibility,

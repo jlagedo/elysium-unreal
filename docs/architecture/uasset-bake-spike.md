@@ -39,7 +39,7 @@ uv run elysium export map <map> [--force]
   -> UnrealEditor-Cmd -run=pythonscript -script=pipeline/unreal/bake_map.py -BakeMap=
        pipeline/unreal/bake_lib.py    sidecar readers + editor asset factories
        pipeline/unreal/bake_map.py    the seven stages
-  -> bake_verify.py                   reads the result back off the assets, not off the bake's own log
+  -> bake_verify.py                   opt-in (--verify, or `elysium verify maps`): reads the result back off the assets
 ```
 
 | Stage | Reads | Writes |
@@ -54,39 +54,31 @@ uv run elysium export map <map> [--force]
 
 ### Incremental invalidation
 
-A normal export first fingerprints the bytes consumed by each stage and records coarse
-`bake:<map>:<stage>` receipts in the generated export manifest. Rewriting an intermediate with
-identical bytes does not invalidate its stage; adding, removing, or renaming an input does. The
-receipt also carries the stage's generated package inventory, so a missing or unexpected owned
-asset invalidates the stage even when its source files are unchanged.
+The mount is the record. Every baked asset carries the SHA-256 of its authoring recipe as
+package metadata (`bake_lib.RECIPE_TAG`, surfaced as an asset registry tag through
+`MetaDataTagsForAssetRegistry` in `Config/DefaultEngine.ini`), so a fresh commandlet reads what
+is current off the registry scan without loading a package, and no plan, receipt, or run state
+exists outside the assets themselves. A crash loses only the packages that were not saved.
 
-Before Unreal launches, the driver freezes those stage fingerprints and their authoring-policy
-fingerprints in a unique `.elysium-bake-runs/<run-id>/plan.json`. Inside the commandlet, every
-desired object path gets a canonical semantic recipe and SHA-256 fingerprint. Verified per-map
-recipes live in `.elysium-bake-assets/<map>.json`; a matching recipe resolves the existing asset
-without configuring, dirtying, or saving it. A stale recipe authors only that asset. Textures hash
-their source bytes and import role; materials hash parameters and referenced object paths; meshes
-hash their section buffers, slots, materials, Nanite and collision policy; particles hash each
-root's flattened definition closure; and the level hashes parsed placement/environment values plus
-referenced asset-path inventories. Pixel changes therefore do not dirty materials, and in-place
-mesh or material changes do not dirty the level.
+Inside the commandlet, every desired object path gets a canonical semantic recipe and SHA-256
+fingerprint; a matching stamp resolves the existing asset without configuring, dirtying, or
+saving it, and a stale one authors only that asset. Textures hash their source bytes and import
+role; materials hash parameters and referenced object paths; meshes hash their section buffers,
+slots, materials, Nanite and collision policy; particles hash each root's flattened definition
+closure; and the level hashes parsed placement/environment values plus referenced asset-path
+inventories. Pixel changes therefore do not dirty materials, and in-place mesh or material
+changes do not dirty the level.
 
 Runtime-only sidecars such as `.ents`, `.hulls`, `.dispcol`, and `.ropes` are outside every bake
-fingerprint. A particle-only change runs `-BakeStages=particles`; changed world, sky, or prop mesh
-families also rebuild `level`, because that stage discovers their package membership when it places
-actors. Maps with the same stale-stage set retain commandlet batching. The commandlet writes a
-pending desired inventory with `built/reused/pruned` counts. Independent verification runs only for
-a mutated map or a changed verifier contract. Input drift, import/save/prune failure, commandlet
-failure, and verification failure promote neither asset nor stage receipts. The first schema-v1 run
-is deliberately a full rebuild; `--force` always bypasses both receipt layers and runs all seven
-stages.
+fingerprint. No cross-asset dependency is tracked, because Unreal does not need one: a level
+references its meshes and materials by package path and picks up new content at load, and
+derived data re-keys off content in the DDC. A bake-code change that alters output without
+changing inputs is expressed by bumping a version literal inside the affected recipes;
+`-BakeForce=1` (`--force`) re-authors everything regardless of stamps.
 
-The `sp_tutorial_1` acceptance inventory is 2,100 assets. A one-pixel change to
-`tex/asphalt_asphalta.png` reports `1 built / 879 reused / 0 pruned`, changes only
-`T_tex_asphalt_asphalta.uasset`, and completes in 47.932 s end to end (3.767 s commandlet script,
-12.220 s verifier script). A combined material/world-chunk/prop/particle/placement edit changes
-exactly those five packages; its byte-for-byte restore changes the same five back. The final no-op
-export completes in 10.246 s and launches no Unreal process.
+Every export launches the bake: a fully current scope launches, reports every asset reused, and
+exits. Deep verification (`bake_verify.py`) runs only on request — `--verify` on an export, or
+`uv run elysium verify maps` on its own.
 
 Material selection and parameter names are lifted from `FElysiumMaterialFactory`. Light *values* are
 not: the bake writes a reasonable starting point, and `UElysiumLightRig::Adopt` re-derives every
@@ -106,15 +98,16 @@ tangent normal from the retained uneven-glass image inside the reflective/alpha 
 a linear normal map, the authored amount offsets PNO from neutral 1.0, and the vector texture never
 becomes pane colour.
 
-Model textures are decoded once and retained as RGBA in the model-export basetexture cache. Opaque
-materials write RGB, while `$translucent`, `$alphatest`, or `$additive` write RGBA. If an opaque
-material encounters a shared basetexture first and a later material needs alpha, the exporter
-promotes the cached PNG from that retained RGBA image; emissive and reflection-mask products use
-the same original pixels. The Unreal import task always submits an existing `Texture2D` for
+Model textures are decoded once and retained as RGBA in the model-export basetexture cache. The
+written PNG keeps whatever alpha its source stores; a uniformly opaque plane folds to RGB, which
+is lossless, and no material's flags decide bytes — whether a material renders with alpha is a
+semantic in `materials.json`, so no resolution order can change any file. Emissive and
+reflection-mask products use the same original pixels. The Unreal import task always submits an existing `Texture2D` for
 replacement rather than returning it untouched, so a focused re-export updates the package in
 place without breaking material or mesh references.
 
-Verification reads the saved assets rather than trusting exporter intent. Flagged prop albedos with
+Verification is an explicit acceptance step (`--verify`, or `uv run elysium verify maps`); it
+reads the saved assets rather than trusting exporter intent. Flagged prop albedos with
 non-opaque source alpha require the `HasAlphaChannel` asset tag. Semantic glass additionally
 requires `M_World_Glass`, an alpha-capable albedo, and a bound linear normal-compressed `BumpMap`;
 Source Refract requires `M_Refract`, a bound linear normal-compressed `RefractMap`, and the exact
@@ -214,10 +207,9 @@ loaded sp_tutorial_1 in 2.50s
 - **`unreal.EditorAssetLibrary.load_asset` logs a hard `Error` when the registry has no such asset**,
   which on a first bake is the normal path and makes a clean run report `Failure - 1 error(s)`. Use
   `unreal.load_asset` (LoadObject) for a load that is allowed to miss.
-- **A bake that dies mid-run can still leave partial assets on disk.** Pending reports are not
-  receipts: the outer driver promotes nothing unless every selected map passes commandlet, frozen-
-  input, output-inventory, and independent-verifier checks. The previous verified recipes remain
-  authoritative for the repair run.
+- **A bake that dies mid-run keeps exactly what it saved.** Each saved asset already carries its
+  recipe stamp, so the next run reuses it and re-authors only what never landed; nothing else
+  records progress.
 - **An existing Niagara system can begin async compilation when loaded for replacement.** Force-
   deleting its package before that work drains can crash in `CoreUObject`. A standalone particle
   stage preloads its complete replacement set and calls `FAssetCompilingManager::FinishAllCompilation`

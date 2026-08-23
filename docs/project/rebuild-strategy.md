@@ -32,7 +32,7 @@ Two tracks run in parallel:
    - **Offline**: the Python decoders in this repo's `pipeline/` decode VtMB's proprietary
      formats (BSP v17, MDL v2531, TTH/TTZ, VPK, VMT, .fnt, .res) into portable intermediates
      under `$ELYSIUM_EXPORT_ROOT/<map>/` (gitignored — regenerable from the user's install) — OBJ+MTL+
-     PNG/DDS, glTF `.glb`, and plain-text sidecars.
+     PNG/DDS, `.eskm` containers, and plain-text sidecars.
      `pipeline/src/elysium_pipeline/exporters/UE_bsp_to_scene.py` is the map exporter;
      the `uv run elysium export` task graph batches maps and global resources.
    - **Offline, second stage**: `uv run elysium export map <map>` coordinates
@@ -127,7 +127,7 @@ All under `$ELYSIUM_EXPORT_ROOT/<map>/`. Formats are fixed by the pipeline:
 | `.cube` | color-grade LUT | Adobe .cube |
 | `.decals` | infodecal projectors: `material centre normal s_dir t_dir hw hh` (one deferred UDecalComponent per line) | text, Unreal cm (dirs unit; extents cm) |
 | `.ropes` | move_rope/keyframe_rope cables, chain-resolved to segments: `tex ax ay az bx by bz width_cm rest_cm nodes texscale flags` (one UCableComponent per line) | text, Unreal cm (width/rest cm; `rest_cm` is the RE'd simulated rest length and may be shorter than the span — a taut cable; `-` tex = decode miss) |
-| `npc/*.glb` | skeletal characters (mdl_skel → mdl_gltf) | glTF binary |
+| `npc/*.eskm` | skeletal characters (mdl_skel → UE_mdl_skeletal) | ESKM container |
 
 ---
 
@@ -286,7 +286,7 @@ to matter — not before.
 - **Static props** (Track A): one baked `SM_*` per unique model, placed from `.props`.
 - **Dynamic props** (`prop_dynamic` ×78): spawned from `.ents` `model` keyvalues.
   *Pipeline addition required*: export models referenced by entities (only
-  GAME_LUMP static props are exported today). Skeletal ones ride the `.glb` path.
+  GAME_LUMP static props are exported today). Skeletal ones ride the character-bake path.
 - **Physics props** (`prop_physics` ×54, `phys_hinge` ×12): **Chaos rigid bodies** with the
   model's own authored `.phy` convex hulls and authored mass, constraints for hinges. The whole
   rigid-body lane — props, brush physboxes, the `phys_*` constraint family, character ragdolls,
@@ -493,7 +493,7 @@ Vertical slice: **play `sp_tutorial_1` start to finish, then walk into
 - **M5 — UI + characters**: the modern UI foundation (design system, vector type,
   resolution-independent Slate/UMG stack) carrying the main/pause menus and New Game flow, the
   HUD and sign panels re-skinned onto it, accessibility/options backing, NPCs spawned from
-  entity data via glTFRuntime, `scripted_sequence` minimal handler, dynamic props.
+  entity data off the baked mount, `scripted_sequence` minimal handler, dynamic props.
 - **M6 — dialogue + game state**: `.dlg` parser + UI + dlgexpr, level-script execution,
   quest/XP basics, save/load. *Success: the tutorial is completable as in retail.*
 

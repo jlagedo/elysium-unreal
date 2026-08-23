@@ -145,8 +145,8 @@ streaming fields — older HL2-Beta layout.)
 The array starts at `animdesc + movementindex`. Source's sequence ground speed is the final
 record's displacement length divided by `(numframes - 1) / fps`. The exporter writes that scalar
 beside a resolved blend cell as `motion.{cycle_seconds,ground_distance_cm,ground_speed_cm_s}`;
-distance is converted from Source inches to centimetres offline. The skeletal glTF remains in
-place, because also translating its root would double-move a body whose route motor consumes the
+distance is converted from Source inches to centimetres offline. The clip's root track stays in
+place, because also translating it would double-move a body whose route motor consumes the
 same metadata. Missing or malformed movement metadata is optional and leaves the runtime's prior
 gait fallback intact.
 

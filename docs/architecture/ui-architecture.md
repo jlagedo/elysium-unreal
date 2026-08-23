@@ -424,7 +424,7 @@ the original's even where the backing system is missing.
 
   It **remembers the previous view target and restores it on teardown**, before the input scope pops:
   the in-game screen has a camera to give back and chargen does not, and a null is what says so.
-  Every piece degrades independently — no `.glb`, no body; no backdrop texture, no quad; no world, no
+  Every piece degrades independently — no baked body, no body; no backdrop texture, no quad; no world, no
   stage — and the panels stand alone in each case.
 
 - **The chargen popup** — `UElysiumChargenPopup`, one `charcreatewizard.txt` popup full-screen: the

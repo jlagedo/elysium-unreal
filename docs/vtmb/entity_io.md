@@ -386,6 +386,11 @@ table already converted to Unreal centimetres. `start_hidden` gates collision, v
 monitoring, while `keys` retains every raw keyvalue needed by a class handler. This doc owns
 the behavior of those fields, not a second copy of their wire schema.
 
+Keyvalue numbers read with C `atof` semantics — the longest numeric prefix, stopping at the
+first character that cannot continue the number — and authored data relies on it:
+`hw_jewelry_1` ships origins with comma decimals (`"-3496,92"`), which the engine, and
+therefore the export (`UE_bsp_to_scene._atof`), reads as `-3496`.
+
 ## The usable set
 
 Only these classnames carry `use_icon`/`locked_icon` — i.e. only these are things

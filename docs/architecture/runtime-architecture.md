@@ -321,7 +321,7 @@ interface is the body's own geometry, the eye, and the camera — 11.7 added the
 here rather than to `IElysiumPresenter`, because the camera is part of the body.
 
 An NPC's visible skeleton and native motor use that same outbound boundary. The substrate asks
-`IElysiumEmbodiment` to build/play the glTF body, select a manifest clip by ACT activity, and create
+`IElysiumEmbodiment` to build/play the baked body, select a manifest clip by ACT activity, and create
 an engine-neutral `IElysiumNpcMotor`. The implementation is an `ACharacter` with Detour crowd path
 following; the interface exposes only move/stop/teleport/enable/freeze/ignore-collision/sample.
 Recast, controllers and movement components therefore never enter the plain-C++ entity layer, while

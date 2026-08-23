@@ -377,6 +377,12 @@ case-insensitive and slash-normalized; dialogue uses the MP3-first/WAV-fallback 
 but the verb itself is general direct playback and cannot be hard-wired to a dialogue
 directory.
 
+Entity keyvalue sound references get the same tolerance: 41 authored refs across the
+maps carry a **leading slash** (`/Area/Santa_Monica/Warehouse/train_bell.wav`) and
+resolve to shipped files once it is stripped. Eight refs name files that exist nowhere
+in the install (`Music/temp_song.mp3`, six `Music/Stems/Mid_Short cutscene*` stems,
+`environmental/electronic/button_beep.wav`) and are silent in retail.
+
 ## 10. Dead stock leftovers (ignore)
 
 The `game_sounds` manifest precaches **only** `game_sounds_surfaceproperties.txt`;

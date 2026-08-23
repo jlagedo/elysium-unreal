@@ -1069,7 +1069,7 @@ that boundary: the exporter spends the record selection and provisional paramete
 runtime receives only bone names plus native node settings.
 
 **There is one build of a character, and it is the baked one.** No runtime path constructs a
-character from `.glb` or `.eskm`, so no unresolved VtMB storage rule reaches the graph and there is
+character from a source container, so no unresolved VtMB storage rule reaches the graph and there is
 no split-inheritance node to gate. A stem the character export has not covered cannot stand at all
 and fails by name — a missing export rather than a silent substitution.
 
