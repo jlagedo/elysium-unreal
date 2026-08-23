@@ -92,21 +92,29 @@ class BakeOrchestrationTests(unittest.TestCase):
             self.assertEqual(
                 [call.kwargs["force"] for call in bake.call_args_list], [True, False])
 
-    def test_a_package_root_module_change_moves_the_decoder_fingerprint(self) -> None:
+    def test_scoped_fingerprint_moves_with_reached_modules_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)
             package = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
-            (package / "formats").mkdir(parents=True)
-            (package / "exporters").mkdir()
-            (package / "formats" / "bsp.py").write_text("VALUE = 1\n", encoding="utf-8")
-            (package / "exporters" / "UE_bsp_to_scene.py").write_text(
-                "VALUE = 1\n", encoding="utf-8")
-            for name in ("shared_corpus.py", "placed_models.py", "asset_names.py"):
-                (package / name).write_text("VALUE = 1\n", encoding="utf-8")
+            (package / "exporters").mkdir(parents=True)
+            (package / "exporters" / "reader.py").write_text(
+                "from elysium_pipeline import shared_corpus\nVALUE = 1\n",
+                encoding="utf-8")
+            (package / "exporters" / "other.py").write_text("VALUE = 1\n", encoding="utf-8")
+            (package / "shared_corpus.py").write_text("VALUE = 1\n", encoding="utf-8")
+            entries = {"elysium_pipeline.exporters.reader"}
 
-            initial = export_manager._decoder_source_fingerprint(config)
-            (package / "shared_corpus.py").write_text("VALUE = 222\n", encoding="utf-8")
-            self.assertNotEqual(export_manager._decoder_source_fingerprint(config), initial)
+            initial = export_manager._scoped_source_fingerprint(config, entries)
+            # A module the closure reaches moves the fingerprint...
+            (package / "shared_corpus.py").write_text("VALUE = 2\n", encoding="utf-8")
+            export_manager._DECODER_CLOSURES.clear()
+            moved = export_manager._scoped_source_fingerprint(config, entries)
+            self.assertNotEqual(moved, initial)
+            # ...and a module outside it does not.
+            (package / "exporters" / "other.py").write_text("VALUE = 2\n", encoding="utf-8")
+            export_manager._DECODER_CLOSURES.clear()
+            self.assertEqual(
+                export_manager._scoped_source_fingerprint(config, entries), moved)
 
     def test_policy_fingerprint_ignores_unrelated_bake_scripts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

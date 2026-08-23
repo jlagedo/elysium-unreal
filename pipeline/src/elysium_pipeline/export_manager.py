@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 import hashlib
 import json
 import os
@@ -72,35 +72,130 @@ def _source_index_fingerprint(index: dict) -> str:
     return digest.hexdigest()
 
 
-def _decoder_code_paths(config) -> list[Path]:
-    """Every offline module whose bytes decide what an export writes."""
+class _DecoderClosures:
+    """Static import closures over `elysium_pipeline`, for scoped task fingerprints.
 
-    root = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
-    return [
-        root / "formats",
-        root / "exporters",
-        # The package-root modules the exporters import: the corpus keys and record shape, the
-        # placed-model catalogue's stems and rest policy, and the baked asset-name fold.
-        root / "shared_corpus.py",
-        root / "placed_models.py",
-        root / "asset_names.py",
-    ]
-
-
-def _decoder_source_fingerprint(config, index: dict | None = None) -> str:
-    """The decoders' identity: every format parser, exporter and package-root module they import,
-    hashed by content, plus the install inventory when one is given.
-
-    Every map and bundle task carries this, so it is hashed by bytes through the persistent digest
-    cache rather than by mtime: a checkout, a touch, or a byte-identical rewrite leaves it
-    unchanged and re-decodes nothing.
+    One coarse fingerprint over every decoder module re-exports the whole profile for
+    any one-line change, so each task instead hashes exactly the modules its entry
+    function can reach. The entry set is the function's own `elysium_pipeline` imports
+    -- the lazy-import convention the pipeline already follows makes those the honest
+    dependency declaration -- expanded transitively through each module's parsed
+    imports. Nothing is hand-listed, so a module cannot be left out by omission.
     """
 
+    def __init__(self, package_root: Path):
+        self.package_root = package_root
+        self.modules: dict[str, Path] = {}
+        for path in sorted(package_root.rglob("*.py")):
+            parts = path.relative_to(package_root.parent).with_suffix("").parts
+            name = ".".join(parts)
+            if name.endswith(".__init__"):
+                name = name[: -len(".__init__")]
+            self.modules[name] = path
+        self._imports: dict[str, frozenset[str]] = {}
+
+    def _normalize(self, dotted: str, attribute: str | None = None) -> str | None:
+        if attribute is not None:
+            candidate = f"{dotted}.{attribute}"
+            if candidate in self.modules:
+                return candidate
+        while dotted and dotted not in self.modules:
+            dotted = dotted.rpartition(".")[0]
+        return dotted or None
+
+    def _collect(self, nodes) -> set[str]:
+        found: set[str] = set()
+        for node in nodes:
+            for child in ast.walk(node):
+                if isinstance(child, ast.Import):
+                    for alias in child.names:
+                        if alias.name.partition(".")[0] == "elysium_pipeline":
+                            name = self._normalize(alias.name)
+                            if name:
+                                found.add(name)
+                elif (isinstance(child, ast.ImportFrom) and child.level == 0
+                      and child.module
+                      and child.module.partition(".")[0] == "elysium_pipeline"):
+                    for alias in child.names:
+                        name = self._normalize(child.module, alias.name)
+                        if name:
+                            found.add(name)
+        return found
+
+    def imports_of(self, module: str) -> frozenset[str]:
+        cached = self._imports.get(module)
+        if cached is None:
+            tree = ast.parse(self.modules[module].read_text(encoding="utf-8"))
+            cached = frozenset(self._collect([tree]))
+            self._imports[module] = cached
+        return cached
+
+    def function_entries(self, module: str, function: str) -> set[str]:
+        """The `elysium_pipeline` modules one function imports (its whole body)."""
+        tree = ast.parse(self.modules[module].read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))                     and node.name == function:
+                entries = self._collect(node.body)
+                if not entries:
+                    raise ValueError(f"{module}.{function} imports no pipeline module")
+                return entries
+        raise ValueError(f"{module} has no function {function}")
+
+    def bundle_entries(self, bundle: str) -> set[str]:
+        """The modules `_run_bundle`'s branch for one bundle imports, read off its AST
+        so the dispatch and the fingerprint cannot drift apart."""
+        module = "elysium_pipeline.exporters.export_all"
+        tree = ast.parse(self.modules[module].read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.FunctionDef) and node.name == "_run_bundle":
+                branch = node.body
+                while branch:
+                    test = branch[0]
+                    if not isinstance(test, ast.If):
+                        branch = branch[1:]
+                        continue
+                    literals = {c.value for c in ast.walk(test.test)
+                                if isinstance(c, ast.Constant)}
+                    if bundle in literals:
+                        entries = self._collect(test.body)
+                        if entries:
+                            return entries
+                    branch = test.orelse
+                raise ValueError(f"_run_bundle has no branch for bundle {bundle!r}")
+        raise ValueError("export_all has no _run_bundle")
+
+    def closure_files(self, entries: set[str]) -> list[Path]:
+        seen: set[str] = set()
+        frontier = sorted(entries)
+        while frontier:
+            name = frontier.pop()
+            if name in seen or name not in self.modules:
+                continue
+            seen.add(name)
+            frontier.extend(self.imports_of(name) - seen)
+        return [self.modules[name] for name in sorted(seen)]
+
+
+_DECODER_CLOSURES: dict[str, _DecoderClosures] = {}
+
+
+def _decoder_closures(config) -> _DecoderClosures:
+    root = config.repo_root / "pipeline" / "src" / "elysium_pipeline"
+    key = str(root)
+    if key not in _DECODER_CLOSURES:
+        _DECODER_CLOSURES[key] = _DecoderClosures(root)
+    return _DECODER_CLOSURES[key]
+
+
+def _scoped_source_fingerprint(config, entries: set[str], *,
+                               index_fingerprint: str = "") -> str:
+    """Content hash of one entry set's import closure, plus the install identity."""
+    closures = _decoder_closures(config)
     cache = ContentDigestCache(config.export_root / DIGEST_CACHE_FILE)
     try:
         return fingerprint_content(
-            _decoder_code_paths(config),
-            extra=("decoder-v1",) if index is None else (_source_index_fingerprint(index),),
+            closures.closure_files(entries),
+            extra=("decoder-v2", index_fingerprint, *sorted(entries)),
             cache=cache,
         )
     finally:
@@ -183,7 +278,7 @@ def _bundle_tasks(
     bundles: Sequence[str],
     maps: Sequence[str],
     index: dict,
-    source_fingerprint: str,
+    fingerprints: Mapping[str, str],
 ) -> list[Task]:
     from elysium_pipeline.exporters import export_all
 
@@ -221,7 +316,7 @@ def _bundle_tasks(
                 # bundle reads -- `shared_corpus`, `placed_models`, `asset_names` included -- is
                 # already hashed by content into `source_fingerprint`.
                 fingerprint=lambda b=bundle: fingerprint_paths(
-                    [], extra=("bundle", b, source_fingerprint, *maps)
+                    [], extra=("bundle", b, fingerprints[b], *maps)
                 ),
                 outputs=_bundle_outputs(config.export_root, bundle),
             )
@@ -273,14 +368,25 @@ def run_offline_profile(
         # after the maps. It is decoded once, here, before anything reads it.
         with progress.stage("corpus"):
             ensure_corpus_export(config, force=force or clean, index=index, jobs=jobs)
-        source_fingerprint = _decoder_source_fingerprint(config, index)
+        closures = _decoder_closures(config)
+        index_fingerprint = _source_index_fingerprint(index)
+        map_fingerprint = _scoped_source_fingerprint(
+            config,
+            closures.function_entries("elysium_pipeline.exporters.export_all", "export_maps"),
+            index_fingerprint=index_fingerprint)
+        bundle_fingerprints = {
+            bundle: _scoped_source_fingerprint(
+                config, closures.bundle_entries(bundle),
+                index_fingerprint=index_fingerprint)
+            for bundle in bundles
+        }
         manifest = Manifest(config.export_root / MANIFEST_FILE)
         dependency_fingerprint = fingerprint_paths(
             [config.repo_root / "dev" / "dependencies.lock.json"]
         )
         manifest.set_context(
             profile=profile,
-            source_fingerprint=source_fingerprint,
+            source_fingerprint=map_fingerprint,
             dependency_fingerprint=dependency_fingerprint,
             configuration={
                 "game_root": str(config.game_root),
@@ -292,8 +398,8 @@ def run_offline_profile(
         )
         graph = TaskGraph(
             [
-                *_map_tasks(config, maps, index, source_fingerprint),
-                *_bundle_tasks(config, bundles, maps, index, source_fingerprint),
+                *_map_tasks(config, maps, index, map_fingerprint),
+                *_bundle_tasks(config, bundles, maps, index, bundle_fingerprints),
             ]
         )
         results = graph.run(
@@ -514,7 +620,7 @@ def ensure_corpus_export(config, *, force: bool = False, index: dict | None = No
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     maps = [Path(install.map_path(name)) for name in install.all_map_names()]
     # The corpus decode also writes the offline enhancement track's reference set, which is the
-    # one input outside `_decoder_code_paths` that no other export product reads.
+    # one input outside the decoder closure that no other export product reads.
     enhancement = config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "enhancement"
     task = Task(
         "export:corpus",
@@ -524,7 +630,10 @@ def ensure_corpus_export(config, *, force: bool = False, index: dict | None = No
             maps,
             extra=(
                 "corpus-v1",
-                _decoder_source_fingerprint(config),
+                _scoped_source_fingerprint(
+                    config,
+                    _decoder_closures(config).function_entries(
+                        "elysium_pipeline.export_manager", "ensure_corpus_export")),
                 fingerprint_paths([enhancement]),
             ),
         ),
@@ -701,6 +810,13 @@ def export_profile(
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
     ensure_corpus_bake(config, runner, force=force or clean)
+    # The cast and its placed-prop scope BEFORE the map bakes: a map's level stage loads
+    # `/ElysiumBaked/Props/<stem>/SK_*` and its rest clip for every animated GAME_LUMP
+    # placement, so those assets must be on the mount first -- the same ordering the focused
+    # map path already enforces through `export_placed_models`. Recipe stamps make the
+    # repeat cost of a current cast one editor boot of "reused" decisions.
+    export_characters(config, runner, None, force=force or clean, verify=verify)
+    unreal.bake_wield(config, runner, ())
     bake_and_verify(config, runner, maps, force=force or clean, verify=verify)
     # Only the domains this profile actually covers.  `grid` and `all` both run every bundle, so
     # this clears the corpus either way; a profile that dropped one would leave that one gated.
@@ -728,7 +844,11 @@ def export_targeted_maps(
     jobs = min(len(names), default_jobs())
     index = install.build_index()
     config.export_root.mkdir(parents=True, exist_ok=True)
-    source_fingerprint = _decoder_source_fingerprint(config, index)
+    source_fingerprint = _scoped_source_fingerprint(
+        config,
+        _decoder_closures(config).function_entries(
+            "elysium_pipeline.exporters.export_all", "export_maps"),
+        index_fingerprint=_source_index_fingerprint(index))
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     manifest.set_context(
         profile="targeted-map",
@@ -1340,9 +1460,10 @@ def write_character_sources(
             npc_dir, source_manifest, props, index, code_fingerprint))
 
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    log_root = getattr(config, "log_root", None) or npc_dir
     progress = TaskProgress(
         total=len(tasks),
-        log_path=config.log_root / f"{stamp}-character-sources.log",
+        log_path=log_root / f"{stamp}-character-sources.log",
         per_task=False,
     )
     with progress:
