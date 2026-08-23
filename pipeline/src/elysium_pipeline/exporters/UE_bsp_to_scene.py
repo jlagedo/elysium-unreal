@@ -251,7 +251,7 @@ def _report_missing_models(out_dir, stems, what):
     corpus = _corpus(out_dir)
     missing = shared_corpus.missing_models(corpus.models, stems)
     if missing:
-        print(f"WARNING: {len(missing)} {what} model(s) are not in the shared corpus "
+        print(f"  ! {len(missing)} {what} model(s) are not in the shared corpus "
               f"(they will place no mesh): {', '.join(missing[:8])}"
               + (" ..." if len(missing) > 8 else ""))
     return missing
@@ -524,9 +524,14 @@ def write_ropes(data, out_dir, base, idx):
             rope_cache[mat] = (albedo, bump, flags)
         return rope_cache[mat]
 
-    # Collect every rope node, and index by targetname for NextKey lookup. A node may itself lack a
-    # targetname (it can only be a chain *start* then, never a NextKey target) — so iterate all nodes
-    # as potential segment starts, but resolve B through the name index.
+    # Collect every rope node, and index EVERY named entity for NextKey lookup. A node may itself
+    # lack a targetname (it can only be a chain *start* then, never a NextKey target) — so iterate
+    # all nodes as potential segment starts, but resolve B through the name index.
+    #
+    # The index spans all classes because a rope's far end may be any named entity, not another
+    # rope node: la_plaguebearer_sewer_1 hangs each ceiling chain (`move_rope`) on a swinging
+    # `prop_physics` meat hook (`hook1`..). Only the endpoint's origin is read, so any entity
+    # serves. Matching is case-insensitive, like the engine's.
     #
     # A targetname can **repeat across separate wire installations** (sp_tutorial_1 reuses tele4..tele9
     # in two areas ~200 m apart). The engine (CRopeKeyframe::Activate in vampire.dll — a stock Source
@@ -536,14 +541,14 @@ def write_ropes(data, out_dir, base, idx):
     # cables, and not a nearest-position heuristic — though on the tutorial first-wins and nearest give
     # the identical result, because the lump orders each installation's nodes contiguously).
     rope_nodes = []
-    by_name = {}   # targetname -> FIRST node with that name (entity-lump order = engine spawn order)
+    by_name = {}   # targetname -> FIRST entity with that name (entity-lump order = engine spawn order)
     for b in blocks:
         d = {k.lower(): v for k, v in b}
         if d.get("classname") in ("keyframe_rope", "move_rope"):
             rope_nodes.append(d)
-            tn = d.get("targetname", "")
-            if tn and tn not in by_name:
-                by_name[tn] = d
+        tn = d.get("targetname", "").lower()
+        if tn and tn not in by_name:
+            by_name[tn] = d
 
     def atof(s, default=0.0):
         """C `atof` semantics: parse the leading numeric prefix, ignore the rest.
@@ -569,11 +574,11 @@ def write_ropes(data, out_dir, base, idx):
         nk = a.get("nextkey", "")
         if not nk:
             continue                          # chain end -> no outgoing segment
-        b = by_name.get(nk)                    # engine's FindEntityByName(NULL,...): first of that name
+        b = by_name.get(nk.lower())            # engine's FindEntityByName(NULL,...): first of that name
         if b is None:
-            # The map itself names a node that does not exist (a mapper typo — 122 of these
-            # across the 108 maps). The engine warns and draws nothing; so do we, but say so
-            # rather than dropping it silently, because it looks identical to a linking bug.
+            # The map names an entity that does not exist in the lump at all (a mapper typo,
+            # e.g. `cablea -> cablea0`). The engine warns and draws nothing; so do we, but say
+            # so rather than dropping it silently, because it looks identical to a linking bug.
             dangling.append(f"{a.get('targetname', '?')}->{nk}")
             continue
         pa, pb = origin_of(a), origin_of(b)
@@ -697,8 +702,7 @@ def _split_output(value):
             "python": f[5].strip() if len(f) > 5 else ""}
 
 
-def decode_prop_models(idx, model_paths, propdir, tex_cache, valid, *,
-                       keep_alpha=None, tex_out=None):
+def decode_prop_models(idx, model_paths, propdir, tex_cache, valid, *, tex_out=None):
     """Decode each unique `.mdl` in `model_paths` into `propdir/<safe>.obj` (Unreal
     space, winding reversed) sharing `tex_cache`, and return `{model_path: safe}` for
     the models that decoded. A model whose stem is already in `valid` (decoded earlier
@@ -707,9 +711,8 @@ def decode_prop_models(idx, model_paths, propdir, tex_cache, valid, *,
     static-prop path (`write_props`) and the `.ents`-referenced prop path
     (`write_entities`) so a model referenced by both decodes once into one `props/` dir.
 
-    `keep_alpha` and `tex_out` pass through to `mdl.write_obj_scene`, so a caller holding the
-    whole corpus can state the alpha decision and land every model's textures in one shared
-    directory instead of one per prop tree."""
+    `tex_out` passes through to `mdl.write_obj_scene`, so a caller holding the whole corpus
+    can land every model's textures in one shared directory instead of one per prop tree."""
     os.makedirs(propdir, exist_ok=True)
     read_bytes = lambda key: install.read(idx, key)
     resolved, ok, missing = {}, 0, 0
@@ -724,12 +727,26 @@ def decode_prop_models(idx, model_paths, propdir, tex_cache, valid, *,
         try:
             meshes = MDL.decode(*dv)
             MDL.write_obj_scene(meshes, safe, propdir, MDL.search_paths(dv[0]), read_bytes,
-                                tex_cache, skins=MDL.skin_families(dv[0]),
-                                keep_alpha=keep_alpha, tex_out=tex_out)
+                                tex_cache, skins=MDL.skin_families(dv[0]), tex_out=tex_out)
             valid.add(safe); resolved[model_path] = safe; ok += 1
         except Exception as e:
-            print(f"  prop decode failed {model_path}: {e}"); missing += 1
+            print(f"  ! prop decode failed {model_path}: {e}"); missing += 1
     return resolved, ok, missing
+
+
+_ATOF = re.compile(r"^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
+
+
+def _atof(token):
+    """C ``atof`` of one keyvalue token: the longest numeric prefix, 0.0 when there is none.
+
+    The engine reads every keyvalue number this way -- ``V_atof`` stops at the first character
+    that cannot continue the number -- and authored data relies on it: ``hw_jewelry_1`` ships
+    origins with comma decimals (``"-3496,92"``), which the engine, and therefore this export,
+    reads as ``-3496``.
+    """
+    match = _ATOF.match(token.strip())
+    return float(match.group(0)) if match else 0.0
 
 
 def write_entities(data, out_dir, base, idx, sky=None, brush_meshes=None):
@@ -782,7 +799,7 @@ def write_entities(data, out_dir, base, idx, sky=None, brush_meshes=None):
              "targetname": keys.pop("targetname", "")}
 
         og = keys.get("origin", "").split()
-        so = [float(x) for x in og] if len(og) == 3 else [0.0, 0.0, 0.0]
+        so = [_atof(x) for x in og] if len(og) == 3 else [0.0, 0.0, 0.0]
         e["origin"] = [round(float(c), 5) for c in source_to_unreal(*so)]
 
         # 3D-skybox membership, by the same BSP-area test every other content class uses.
@@ -798,7 +815,7 @@ def write_entities(data, out_dir, base, idx, sky=None, brush_meshes=None):
         # normalized. Coincident points -> world Z. (roadmap 8.4; keys are raw Source.)
         ha = keys.get("hingeaxis", "").split()
         if len(ha) == 3 and len(og) == 3:
-            d = np.array(source_dir_to_unreal(float(ha[0]) - so[0], float(ha[1]) - so[1], float(ha[2]) - so[2]))
+            d = np.array(source_dir_to_unreal(_atof(ha[0]) - so[0], _atof(ha[1]) - so[1], _atof(ha[2]) - so[2]))
             nrm = float(np.linalg.norm(d))
             e["hinge_axis"] = [round(float(c), 6) for c in (d / nrm)] if nrm > 1e-6 else [0.0, 0.0, 1.0]
 
@@ -831,7 +848,7 @@ def write_entities(data, out_dir, base, idx, sky=None, brush_meshes=None):
             floors = []
             for floor in range(1, 9):
                 try:
-                    src_z = float(keys.get("floor%d" % floor, "0"))
+                    src_z = _atof(keys.get("floor%d" % floor, "0"))
                 except ValueError:
                     src_z = 0.0
                 floors.append(round(float(source_to_unreal(0.0, 0.0, src_z)[2]), 5))
@@ -867,7 +884,7 @@ def write_entities(data, out_dir, base, idx, sky=None, brush_meshes=None):
             # with no coordinate math — origin is already Unreal-space, this makes orientation so
             # too. Absent/short `angles` -> identity. (roadmap 8.3; keys.angles is raw Source.)
             ang = out[i]["keys"].get("angles", "").split()
-            pyr = [float(x) for x in ang] if len(ang) == 3 else [0.0, 0.0, 0.0]
+            pyr = [_atof(x) for x in ang] if len(ang) == 3 else [0.0, 0.0, 0.0]
             out[i]["model_quat"] = [round(float(c), 6) for c in source_angles_to_unreal_quat(*pyr)]
 
     path = os.path.join(out_dir, base + ".ents")
@@ -1088,7 +1105,7 @@ def main(bsp_path, out_dir, *, index=None):
     # The decal projector pass below still needs each face's authored world offset.
     visibility_backing_models, visibility_warnings = source_visibility_backing_models(ents)
     for warning in visibility_warnings:
-        print("  warning: %s" % warning)
+        print("  ! %s" % warning)
     if visibility_backing_models:
         print("Source visibility: %d backing brush model(s) left to Unreal" %
               len(visibility_backing_models))
@@ -1336,7 +1353,7 @@ def main(bsp_path, out_dir, *, index=None):
     print(f"envmap: {len(env_cube)} reflective surfaces ({_tinted} chromatic tint); "
           f"glass: {len(glass_info)}; refract: {len(refract_info)}; water: {len(water_info)}")
     for w in warnings:
-        print(f"  warning: {w}")
+        print(f"  ! {w}")
     if problems:
         raise SystemExit(
             f"export aborted: {len(problems)} material(s) resolved to no texture "
@@ -1546,7 +1563,7 @@ def main(bsp_path, out_dir, *, index=None):
                   if shared_corpus.sky_texture_key(skyname, face) in corpus_textures)
         sky_ok = got == 6
         if not sky_ok:
-            print(f"  warning: sky '{skyname}': {got}/6 faces in the shared corpus")
+            print(f"  ! sky '{skyname}': {got}/6 faces in the shared corpus")
 
     # Fog is TWO different things, and they belong to two different renders (RE-A8/RE-A9):
     #

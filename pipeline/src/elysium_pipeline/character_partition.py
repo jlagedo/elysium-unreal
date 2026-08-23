@@ -24,8 +24,7 @@ from elysium_pipeline.formats import eskm
 
 SCHEMA = "elysium.character-families"
 VERSION = 2
-#: Names the shape of an entry, for a reader of the file; nothing hashes it. Receipts move when
-#: this module's own bytes change (`character_cache._code_paths`), not when this string does.
+#: Names the shape of an entry, for a reader of the file; nothing hashes it.
 REVISION = "elysium-character-families-v2"
 
 SKELETON_DIR = "/ElysiumBaked/Characters/Skeletons"

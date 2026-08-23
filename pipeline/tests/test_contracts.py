@@ -313,10 +313,34 @@ class PropMaterialContractTests(unittest.TestCase):
         self.assertEqual(image.mode, "RGBA")
         self.assertEqual([image.getpixel((x, 0))[3] for x in range(2)], [0, 191])
 
-    def test_opaque_prop_stays_rgb(self) -> None:
-        self.assertEqual(self._export_texture("").mode, "RGB")
+    def test_opaque_prop_keeps_stored_alpha(self) -> None:
+        # Alpha is a fact of the source file, not of the material drawing it: an opaque VMT does
+        # not flatten a texture whose source stores a real alpha plane.
+        image = self._export_texture("")
+        self.assertEqual(image.mode, "RGBA")
+        self.assertEqual([image.getpixel((x, 0))[3] for x in range(2)], [0, 191])
 
-    def test_shared_basetexture_promotes_cached_rgb_to_rgba(self) -> None:
+    def test_blank_alpha_folds_to_rgb(self) -> None:
+        # A uniformly opaque plane encodes nothing, so the write folds it away -- losslessly.
+        vmt_body = '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n'
+
+        def read_bytes(path):
+            if path == "materials/models/props/glasswin.vmt":
+                return vmt_body.encode("ascii")
+            if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
+                return b"synthetic"
+            return None
+
+        source = Image.new("RGBA", (2, 1), (10, 20, 30, 255))
+        with tempfile.TemporaryDirectory() as out, mock.patch(
+            "elysium_pipeline.formats.tex_to_png.decode", return_value=source
+        ):
+            mdl.write_obj_scene(
+                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
+            with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
+                self.assertEqual(exported.mode, "RGB")
+
+    def test_shared_basetexture_writes_one_file_whatever_the_order(self) -> None:
         vmts = {
             "materials/models/props/opaque.vmt": (
                 '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n'
@@ -335,15 +359,16 @@ class PropMaterialContractTests(unittest.TestCase):
             return None
 
         source = Image.new("RGBA", (1, 1), (10, 20, 30, 73))
-        with tempfile.TemporaryDirectory() as out, mock.patch(
-            "elysium_pipeline.formats.tex_to_png.decode", return_value=source
-        ):
-            mdl.write_obj_scene(
-                [self._triangle("opaque"), self._triangle("glass")],
-                "test", out, self.SEARCH, read_bytes, {})
-            with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
-                self.assertEqual(exported.mode, "RGBA")
-                self.assertEqual(exported.getchannel("A").getpixel((0, 0)), 73)
+        for order in (("opaque", "glass"), ("glass", "opaque")):
+            with tempfile.TemporaryDirectory() as out, mock.patch(
+                "elysium_pipeline.formats.tex_to_png.decode", return_value=source
+            ):
+                mdl.write_obj_scene(
+                    [self._triangle(name) for name in order],
+                    "test", out, self.SEARCH, read_bytes, {})
+                with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
+                    self.assertEqual(exported.mode, "RGBA")
+                    self.assertEqual(exported.getchannel("A").getpixel((0, 0)), 73)
 
 
 class PngAlphaContractTests(unittest.TestCase):
@@ -696,6 +721,9 @@ class BakeErrorMaterialContractTests(unittest.TestCase):
         def pruned(self, stage, count):
             pass
 
+        def stamp(self, asset, object_path):
+            pass
+
         def summary(self, stage):
             return ""
 
@@ -714,7 +742,9 @@ class BakeErrorMaterialContractTests(unittest.TestCase):
             GeometryScript_Collision=object(),
             EditorAssetLibrary=editor,
             Paths=SimpleNamespace(project_dir=lambda: str(REPO)),
-            SystemLibrary=SimpleNamespace(get_command_line=lambda: "-BakeStages=none"),
+            SystemLibrary=SimpleNamespace(get_command_line=lambda: ""),
+            AssetRegistryHelpers=SimpleNamespace(
+                get_asset_registry=mock.Mock(side_effect=SystemExit(0))),
             LinearColor=lambda *values: values,
             log=logs.append,
             log_warning=warnings.append,
@@ -733,8 +763,8 @@ class BakeErrorMaterialContractTests(unittest.TestCase):
             # earlier import; patch.dict restores whatever was there.
             sys.modules.pop("pipeline.unreal.bake_lib", None)
             try:
-                # bake_map is an editor entry point, so importing it runs main(). The unknown
-                # stage on the faked command line exits it at once, with every definition made.
+                # bake_map is an editor entry point, so importing it runs main(). The faked
+                # registry scan exits it at once, with every definition made.
                 spec.loader.exec_module(module)
             except SystemExit:
                 pass

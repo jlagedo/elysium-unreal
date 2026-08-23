@@ -359,10 +359,9 @@ def corpus_fingerprint(texture_keys, material_keys, model_paths):
 def build_manifest(*, textures, materials, models, missing=None, fingerprint=""):
     """The body of ``shared/manifest.json``.
 
-    ``textures`` is ``{key: {"files": {name: role}, "alpha": bool}}``. ``alpha`` is the corpus-wide
-    union over every material that references the key, so whether a base texture keeps its alpha
-    channel is a property of the install rather than of whichever material happened to resolve it
-    first -- which is what made it a per-map, decode-order answer before. ``materials`` is
+    ``textures`` is ``{key: {"files": {name: role}, "alpha": bool}}``. ``alpha`` states whether
+    the decoded albedo PNG carries an alpha channel -- a fact of the file itself, since the decode
+    writes alpha exactly as the source stores it. ``materials`` is
     ``{key: {"map_scoped": bool}}``, and ``models`` is
     ``{stem: {"model": install path, "materials": [key, ...]}}``.
 

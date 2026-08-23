@@ -883,3 +883,36 @@ def create_static_mesh(mesh, asset_path, materials, slot_names, nanite, collisio
 
 def save(asset_path):
     return unreal.EditorAssetLibrary.save_asset(asset_path, only_if_is_dirty=True)
+
+
+#: The package-metadata tag every baked asset carries: the sha256 of its authoring recipe.
+#: `Config/DefaultEngine.ini` lists it in `MetaDataTagsForAssetRegistry`, so a saved asset
+#: surfaces it as an asset registry tag and a fresh process reads it without loading anything.
+RECIPE_TAG = "ElysiumRecipe"
+
+
+def recipe_fingerprint(stage, object_path, recipe):
+    """The sha256 a recipe stamps: canonical JSON over the stage label, path and inputs."""
+    payload = json.dumps([stage, object_path, recipe], sort_keys=True, default=str,
+                         separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def stored_recipe(object_path):
+    """The recipe stamped on an asset, read off the registry without loading it; "" if absent.
+
+    An absent tag -- a pre-tag asset, or a registry that was not configured to surface it --
+    reads as "", which never matches a fingerprint, so the failure mode is a rebuild, not a
+    stale asset.
+    """
+    registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    data = registry.get_asset_by_object_path(object_path)
+    if not data or not data.is_valid():
+        return ""
+    value = data.get_tag_value(RECIPE_TAG)
+    return str(value) if value else ""
+
+
+def stamp_recipe(asset, fingerprint):
+    """Write the recipe fingerprint into the asset's package metadata, pre-save."""
+    unreal.EditorAssetLibrary.set_metadata_tag(asset, RECIPE_TAG, fingerprint)

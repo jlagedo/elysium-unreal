@@ -450,8 +450,10 @@ class BakeScopeContractTests(unittest.TestCase):
 
     def test_a_map_bakes_no_prop_stage(self):
         source = self._bake_map()
-        self.assertIn('ALL_STAGES = ("textures", "materials", "world", "sky", "particles", "level")',
-                      source)
+        # Props belong to the shared corpus scope; a map resolves them and authors none.
+        map_bake = source[source.index("def bake_one("):source.index("def _collect_garbage(")]
+        self.assertNotIn("stage_props", map_bake)
+        self.assertIn("stage_props", source[source.index("def bake_corpus("):])
         self.assertNotIn("ITEMS_SCOPE", source)
 
 
@@ -459,7 +461,7 @@ class MaterialRecordTests(unittest.TestCase):
     def _channels(self, **overrides):
         base = {
             "material": "spike", "vmt": "models/scenery/spike", "albedo": "models/scenery/spike",
-            "needs_alpha": False, "selfillum": False, "additive": False, "translucent": False,
+            "selfillum": False, "additive": False, "translucent": False,
             "alphatest": False, "glass": False, "envmap": "", "envmap_path": "", "envmask": "",
             "envmask_from_alpha": False, "envtint": None, "globalwetness": None, "bump": "",
             "base_tex2": "", "refract": False, "refract_amount": 0.0, "refract_map": "",

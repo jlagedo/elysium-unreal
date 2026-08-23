@@ -1,4 +1,4 @@
-"""Batch character export: mesh glbs + shared animation-bank glbs + a resolution manifest.
+"""Batch character export: the cast's resolution manifest, sidecars, and texture decode.
 
 Two seeds, one product. The maps' own `npc_*` model references cover every NPC; the **player
 bodies** are named by no entity at all, so they come from `vdata/system/clandoc000.txt`
@@ -7,16 +7,17 @@ are the same v2531 skeletal format, so both go through the same decode: each mod
 include-model tree (`docs/vtmb/animation_and_movers.md` A.7) resolves into shared banks, and the
 run writes under `$ELYSIUM_EXPORT_ROOT/npc/`:
 
-  <npc>.glb          skinned mesh + skeleton + own clips (dialogue anims) + morph targets
-  banks/<bank>.glb   a shared bank's skeleton + all its clips, no mesh
   npc_manifest.json  per-NPC {clip -> owning-stem} resolution + a bank/mesh index
+  tex/               every character texture, decoded once for the texture corpus
   facial/<npc>.json  the flex rig above the morphs: controllers, rules, ramps (PL10)
 
-The runtime (roadmap 8.5) reads the manifest, loads a clip's owning glb once -- shared across
-every NPC that uses it -- and applies it to the NPC skeletal mesh by bone name via glTFRuntime
-(`LoadSkeletalAnimation(mesh, ...)` matches tracks to the ref skeleton by bone name). This is
-VtMB's own virtualmodel bank-sharing in the modern-engine shape: one skeleton, many meshes, a
-shared animation library keyed by bone name -- not a per-NPC monolith.
+The shipped container is the `.eskm` the character bake consumes; the game plays only baked
+assets off the mount. This export decodes each model once to state the manifest facts -- which
+clips actually bake, their activity keys, bounds, morphs, procedural rules -- and writes no
+model container of its own. A `.glb` inspection twin exists only on demand
+(`uv run elysium export model <mdl>`). Bank sharing is VtMB's own virtualmodel shape: one
+skeleton, many meshes, a shared animation library keyed by bone name -- not a per-NPC
+monolith.
 
 The manifest carries each clip's engine-facing selection keys -- the `ACT_*` activity
 literal, its weighted-random `weight`, `flags`, `frames` and `fps` -- stored once on the stem
@@ -25,8 +26,8 @@ ask for an `ACT_IDLE` (or the `ACT_DISPOSITION` stance a `default_disposition` n
 of pattern-matching a label: `regular_cop` resolves 229 clips with "idle" in the name, and
 `Stance_Dead_Idle_1` is not one of the useful ones.
 
-Manifest v3 adds the **face** (roadmap PL10). Each rigged NPC's `.mdl` flexes bake into glTF
-morph targets in its own glb, and the three layers that drive them -- 44 flex controllers,
+Manifest v3 adds the **face** (roadmap PL10). Each rigged NPC's `.mdl` flexes bake into
+morph targets of its skeletal mesh, and the three layers that drive them -- 44 flex controllers,
 60 RPN flex rules, and each flex's four-value target ramp -- ride beside it in
 `facial/<stem>.json`, because none of the three is a vertex displacement a morph can hold.
 Baking needs the unit-vector table out of the user's own `Bin/StudioRender.dll`
@@ -212,7 +213,7 @@ def pc_models_from_clandoc(out_root=OUT):
     note) when it is absent."""
     path = os.path.join(out_root, CLANDOC)
     if not os.path.exists(path):
-        print(f"[npc] {path} not found - PC bodies skipped (run the vdata export first)")
+        print(f"  ! [npc] {path} not found - PC bodies skipped (run the vdata export first)")
         return []
     with open(path, encoding="utf-8", errors="replace") as f:
         doc = kv.parse(f.read())
@@ -273,7 +274,7 @@ def _clip_meta(c, bounds_radius_m=None):
     so unlike `reach_cm` and `swings` it crosses the seam unconverted -- a button mask is a mask,
     an activity and a sequence label are names, and a fraction of a clip cycle has no units.
 
-    `bounds_radius_m` appears only where it has been reconciled against the baked glb
+    `bounds_radius_m` appears only where it has been reconciled against the baked clip set
     (`clip_bounds_radius_m`). Its presence is therefore a promise that the number covers the
     geometry, which is the whole reason a consumer would trust it over the mesh's own bounds."""
     meta = {"activity": c.activity, "weight": c.actweight, "flags": c.flags,
@@ -314,7 +315,7 @@ def warn_combo_chain_orphans(model, clips):
 
 def authored_radius_m(c):
     """A sequence's own model-space bound as a radius about the model origin, in the metres
-    the glb is written in -- `mdl_skel.Seq.bbmin`/`bbmax` reduced to its largest coordinate.
+    the decode is stated in -- `mdl_skel.Seq.bbmin`/`bbmax` reduced to its largest coordinate.
 
     A radius rather than the box: the box is in Source axes and the runtime holds the model in
     the repo's canonical Unreal frame, so a box would have to carry its basis across the seam
@@ -344,7 +345,8 @@ def write_facial(stem, model, rig):
     path = os.path.join(FACIAL_DIR, stem + ".json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"stem": stem, "model": model,
-                   "note": "morphs[i] describes glTF morph target i of <stem>.glb, in order. "
+                   "note": "morphs[i] describes morph target i of the stem's decoded mesh, in "
+                           "order; the baked skeletal mesh preserves that order. "
                            "`targets` is the four-value ramp the flexdesc's weight is remapped "
                            "through before it becomes that morph's weight; the weight itself "
                            "comes from `rules` (RPN over `controllers`). See "
@@ -448,7 +450,7 @@ def write_blends(stem, model, table, prefix=""):
     that authors none — 913 of the 1,166 sequences on either `move_and_ranged` are a single
     cell, which is a clip and needs no table.
 
-    A grid names the clip in *this* stem's glb for each cell; the mix is the host's, driven by
+    A grid names one of *this* stem's baked clips for each cell; the mix is the host's, driven by
     the pose parameter each axis binds to. The cells are not pre-blended and must not be: the
     engine evaluates every cell and mixes the resulting transforms, which is a different pose
     from mixing the clips first."""
@@ -467,7 +469,7 @@ def write_blends(stem, model, table, prefix=""):
                            "parameter's start..end, remapping through this grid's "
                            "paramstart[a]..paramend[a], clamping to 0..1 and scaling by the "
                            "extent; that yields a cell index and a fraction to the next. "
-                           "`cells[].clip` names an animation of this stem's glb, or is null "
+                           "`cells[].clip` names an animation this stem bakes, or is null "
                            "where the cell's animation did not bake. A cell whose animation "
                            "carries authored movement also has a `motion` summary in seconds, "
                            "centimetres and centimetres/second for an in-place host motor; the "
@@ -521,15 +523,12 @@ def animated_prop_index_row(rec):
     `clamp`, `wolf_form`).
 
     Each row also carries `bounds_radius_m`, the reach the clip needs about the model origin in
-    the glb's own metres (`clip_bounds_radius_m`). The runtime widens the mesh's bind-pose
+    the decode's own metres (`clip_bounds_radius_m`). The runtime widens the mesh's bind-pose
     bounds by it, because a prop animated in place draws where its bones go and is culled on
     where its component sits.
     """
     return {
-        "glb": rec["glb"],
-        # The container the character bake actually reads. The `.glb` beside it is an inspection
-        # product; nothing the game loads comes off it, so a row that carried only the glb told the
-        # runtime where to find a file it never opens.
+        # The container the character bake actually reads.
         "eskm": rec["eskm"],
         "model": rec["model"],
         "bones": rec.get("bones", 0),
@@ -564,7 +563,7 @@ def write_sidecars(manifest):
     clips out of the same shared banks. A map places 17-22 distinct models (and one player
     body), so the runtime is made to parse only those:
 
-      npc_index.json      every character + bank, glb path and counts, no clip maps (~47 KB)
+      npc_index.json      every character + bank, container path and counts, no clip maps (~47 KB)
       clips/<stem>.json   one character's whole resolved vocabulary
 
     A slice interns its owner stems and activity literals into two small arrays and stores
@@ -594,10 +593,10 @@ def write_sidecars(manifest):
                 "clips/<stem>.json, a flex rig in facial/<stem>.json, an eyeball pair in "
                 "eyes/<stem>.json, a procedural bone rule table in procedural/<stem>.json and "
                 "a blend-grid table, autolayer binding and sequence event timelines in "
-                "blends/<stem>.json. Those paths, like the bank glb "
-                "paths, are relative to this file's directory. placed_models carry their "
+                "blends/<stem>.json. Those paths are relative to this file's "
+                "directory. placed_models carry their "
                 "baked clip vocabulary inline, in the model's own sequence-declaration order.",
-        "npcs": {s: {"glb": r["glb"], "model": r["model"], "bones": r["bones"],
+        "npcs": {s: {"model": r["model"], "bones": r["bones"],
                      "split_bones": r.get("split_bones", []),
                      "clips": len(r["clips"]), "own_clips": len(r["own_clips"]),
                      **({"facial": r["facial"], "morphs": r["morphs"]} if r.get("facial")
@@ -615,7 +614,7 @@ def write_sidecars(manifest):
                          "garment_particles": r["garment_particles"]}
                         if r.get("garment") else {})}
                  for s, r in manifest["npcs"].items()},
-        "banks": {s: {"glb": r["glb"], "model": r["model"], "clips": len(r["clips"]),
+        "banks": {s: {"model": r["model"], "clips": len(r["clips"]),
                       **({"blends": r["blends"], "blend_grids": r["blend_grids"],
                           "event_sequences": r["event_sequences"],
                           "movement_sequences": r.get("movement_sequences", 0)}
@@ -740,7 +739,7 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
                  if (r := load_mdl(m)) is not None and not has_animation(r)]
         if still:
             animated_props = [m for m in animated_props if m not in set(still)]
-            print(f"[npc] {len(still)} animated-prop candidate(s) declare no sequence pose and "
+            print(f"  ! [npc] {len(still)} animated-prop candidate(s) declare no sequence pose and "
                   f"stay static: {', '.join(_basename_stem(m) for m in still)}")
         print(f"[npc] seed: {len(from_ents)} npc model(s) from the exported .ents + "
               f"{len(pc_models)} player body model(s) from {CLANDOC} + "
@@ -844,7 +843,7 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
             continue
         if info:
             bank_index[info["stem"]] = {
-                "glb": info["glb"], "model": info["model"],
+                "model": info["model"],
                 "clips": {c.label: _clip_meta(c) for c in info["clips"]},
                 **write_blends(info["stem"], info["model"], info["blends"]),
             }
@@ -875,7 +874,7 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
         roots = []
         for info in banks:
             bank_index[info["stem"]] = {
-                "glb": info["glb"], "model": info["model"],
+                "model": info["model"],
                 "clips": {c.label: _clip_meta(c) for c in info["clips"]},
                 **write_blends(info["stem"], info["model"], info["blends"]),
             }
@@ -888,7 +887,7 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
     # user's own StudioRender.dll -- without it the morph magnitudes are unknowable, so the
     # export ships the meshes and skips the faces rather than baking wrong deltas.
     anorms = S.load_anorms() if npcs else None
-    print(f"[npc] exporting {len(npcs)} NPC mesh glb(s) -> {NPC_DIR}/ ...", flush=True)
+    print(f"[npc] decoding {len(npcs)} NPC mesh(es) -> {NPC_DIR}/ ...", flush=True)
     npc_index = {}
     procedural_faults = []
     eye_faults = []
@@ -900,7 +899,7 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
             failures.append(f"npc {npc_stem[m]}: {e}")
             continue
         npc_index[info["stem"]] = {
-            "glb": info["glb"], "model": info["model"], "bones": info["bones"],
+            "model": info["model"], "bones": info["bones"],
             "split_bones": info["split_bones"],
             "clips": npc_records.get(m, {}),
             "own_clips": {c.label: _clip_meta(c) for c in info["clips"]},
@@ -952,8 +951,9 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
                         [sequence for sequence in sequences
                          if sequence in candidates or sequence.label.lower() in required_labels])
 
-            # Keep the legacy inspection GLB only for the compact set gameplay can animate. The
-            # runtime never reads it; rest-only models go straight from MDL to ESKM.
+            # A full-clip model is decoded whole so its manifest facts -- which clips bake,
+            # measured extents, procedural rules -- come off the same decode the bake performs.
+            # Rest-only models go straight from MDL facts.
             if use.full_clips:
                 info = mdl_gltf.export_npc(idx, model, PLACED_MODEL_DIR, stem, anorms=None,
                                            measure_extents=True)
@@ -964,12 +964,10 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
                 rules = info["procedural"]
                 rule_faults = info["procedural_faults"]
                 blends = info["blends"]
-                glb = "placed_models/" + info["glb"]
                 extents = info["clip_extents"]
             else:
                 rules, rule_faults = S.axis_interp_records(d, bones)
                 blends = {}
-                glb = ""
                 extents = {clip.label: S.clip_extent(d, bones, clip.base, clip.frames)
                            for clip in selected}
         except (Exception, SystemExit) as e:
@@ -998,7 +996,6 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
             prop_clips[c.label] = _clip_meta(c, clip_bounds_radius_m(c, measured))
         placed_model_index[stem] = {
             "stem": stem,
-            "glb": glb,
             "eskm": "placed_models/%s.eskm" % stem,
             "model": model,
             "static_stem": use.static_stem,
@@ -1030,7 +1027,7 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
 
     # Reconcile: a sequence the include tree advertises but whose owner failed to bake (empty
     # tracks, or a bank export that raised) must not appear as resolvable. Filtering here is
-    # what lets the runtime treat a hit in `clips` as a promise the glb can answer.
+    # what lets the runtime treat a hit in `clips` as a promise the owner's bake can answer.
     bank_baked = {stem: set(rec["clips"]) for stem, rec in bank_index.items()}
 
     def _activity(stem, rec, label, owner):
@@ -1068,12 +1065,12 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
     manifest = {
         "manifest_version": MANIFEST_VERSION,
         "note": "npcs[stem].clips maps a clip label -> the stem that OWNS it. If that stem is a "
-                "key in `banks`, load banks/<stem>.glb and retarget onto the NPC skeletal mesh "
-                "by bone name; otherwise it is the NPC's own glb. Per-clip metadata "
+                "key in `banks`, the clip is a baked bank sequence played through skeleton "
+                "compatibility; otherwise it is the NPC's own. Per-clip metadata "
                 "(activity/weight/flags/frames/fps) lives once on the owner: banks[owner].clips "
                 "for a bank, npcs[stem].own_clips for the NPC's own. Every label in `clips` is "
-                "backed by a baked animation in the owner's glb. npcs[stem].facial, when "
-                "present, names the flex rig driving that glb's morph targets.",
+                "backed by an animation the owner's decode bakes. npcs[stem].facial, when "
+                "present, names the flex rig driving that body's morph targets.",
         "npcs": npc_index,
         "banks": bank_index,
         "cinematics": cinematic_index,
@@ -1116,10 +1113,6 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
     write_sidecars(manifest)
 
     n_clips = sum(len(r["clips"]) for r in npc_index.values())
-    bank_bytes = sum(os.path.getsize(os.path.join(NPC_DIR, b["glb"]))
-                     for b in bank_index.values() if os.path.exists(os.path.join(NPC_DIR, b["glb"])))
-    npc_bytes = sum(os.path.getsize(os.path.join(NPC_DIR, n["glb"]))
-                    for n in npc_index.values() if os.path.exists(os.path.join(NPC_DIR, n["glb"])))
     metas = [m for r in bank_index.values() for m in r["clips"].values()]
     metas += [m for r in npc_index.values() for m in r["own_clips"].values()]
     acts = {m["activity"] for m in metas if m["activity"]}
@@ -1157,8 +1150,7 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
     moved = [r for r in sidecars if r.get("movement_sequences")]
     print(f"[npc] authored movement: {len(moved)} model(s) author a path, "
           f"{sum(r['movement_sequences'] for r in moved)} sequences -> {BLENDS_DIR}/")
-    print(f"[npc] size: banks {bank_bytes/1e6:.0f} MB (shared) + meshes {npc_bytes/1e6:.0f} MB, "
-          f"manifest {os.path.getsize(MANIFEST)/1e6:.1f} MB")
+    print(f"[npc] size: manifest {os.path.getsize(MANIFEST)/1e6:.1f} MB")
     if warnings:
         print(
             f"[npc] warnings: {len(warnings)} known source issue(s) recorded in "

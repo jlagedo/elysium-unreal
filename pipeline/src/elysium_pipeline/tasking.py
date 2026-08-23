@@ -4,13 +4,20 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import hashlib
 from importlib.metadata import PackageNotFoundError, version
+import io
 import json
+import os
 from pathlib import Path
+import re
+import shutil
+import sys
 import tempfile
+import threading
 import time
 from typing import Any
 
@@ -48,6 +55,222 @@ class TaskFailure(RuntimeError):
         self.results = dict(results)
         failed = [name for name, result in results.items() if not result.succeeded]
         super().__init__("task failure: " + ", ".join(failed))
+
+
+class _StreamRouter:
+    """`sys.stdout`/`sys.stderr` replacement for a progress-reported run.
+
+    A thread that registered a buffer has every write land there; every other
+    thread passes through to the real stream. This is what lets concurrent graph
+    tasks print freely without interleaving on the console."""
+
+    def __init__(self, base):
+        self.base = base
+        self._routes: dict[int, io.StringIO] = {}
+
+    def register(self, buffer: io.StringIO) -> None:
+        self._routes[threading.get_ident()] = buffer
+
+    def release(self) -> None:
+        self._routes.pop(threading.get_ident(), None)
+
+    def write(self, text: str) -> int:
+        return self._routes.get(threading.get_ident(), self.base).write(text)
+
+    def flush(self) -> None:
+        self._routes.get(threading.get_ident(), self.base).flush()
+
+    def isatty(self) -> bool:
+        return bool(getattr(self.base, "isatty", lambda: False)())
+
+
+#: A captured line whose first non-space characters are ``!`` (the exporters'
+#: warning marker) is surfaced on the console; everything else stays in the log.
+_WARNING_LINE = re.compile(r"^\s*!+\s")
+
+#: How many of one task's warning lines reach the console before eliding.
+_WARNING_LIMIT = 8
+
+
+class TaskProgress:
+    """One console line per task; the complete captured output in a log file.
+
+    Installed as a context manager around a graph run: it replaces the process
+    streams with routers, gives every task its own capture buffer, prints
+    ``[done/total] name status`` as tasks finish, surfaces ``!``-marked warning
+    lines beneath the task that produced them, and dumps a failed task's output
+    tail so the error context never has to be dug out of the log."""
+
+    def __init__(self, total: int, log_path: Path, *, per_task: bool = True):
+        self.total = total
+        self.log_path = log_path
+        #: When False, a clean task prints nothing: only tasks with warnings or a
+        #: failure reach the console, plus the closing tally. The fit for large
+        #: homogeneous graphs (one task per container) where per-task lines are noise.
+        self.per_task = per_task
+        self._lock = threading.Lock()
+        self.done = 0
+        self.warnings = 0
+        self.counts: dict[str, int] = {}
+        self._log = None
+        self._stdout = None
+        self._stderr = None
+        #: Live status line (tty only): what is running right now and for how
+        #: long, rewritten in place so a long task never looks stalled.
+        self._active: dict[str, float] = {}
+        self._status_len = 0
+        self._tty = False
+        self._ticker: threading.Thread | None = None
+        self._stop = threading.Event()
+
+    def __enter__(self) -> "TaskProgress":
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._log = self.log_path.open("w", encoding="utf-8")
+        self._stdout, self._stderr = sys.stdout, sys.stderr
+        self._router_out = _StreamRouter(self._stdout)
+        self._router_err = _StreamRouter(self._stderr)
+        sys.stdout, sys.stderr = self._router_out, self._router_err
+        self._tty = bool(getattr(self._stdout, "isatty", lambda: False)())
+        if self._tty:
+            self._ticker = threading.Thread(target=self._tick, daemon=True)
+            self._ticker.start()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._stop.set()
+        if self._ticker is not None:
+            self._ticker.join(timeout=2.0)
+        self._tty = False
+        sys.stdout, sys.stderr = self._stdout, self._stderr
+        with self._lock:
+            self._clear_status()
+        self._console(self.summary())
+        self._log.close()
+
+    @contextmanager
+    def capture(self):
+        buffer = io.StringIO()
+        self._router_out.register(buffer)
+        self._router_err.register(buffer)
+        try:
+            yield buffer
+        finally:
+            self._router_out.release()
+            self._router_err.release()
+
+    @contextmanager
+    def stage(self, name: str):
+        """Capture one uncounted phase that runs outside the graph (e.g. the
+        shared-corpus decode), reported on the same console/log seam."""
+        started = time.monotonic()
+        self.start(name)
+        with self.capture() as buffer:
+            try:
+                yield
+            except BaseException as exc:
+                self.emit(name, "failed", time.monotonic() - started,
+                          buffer.getvalue(), counted=False,
+                          error=f"{type(exc).__name__}: {exc}")
+                raise
+        self.emit(name, "ok", time.monotonic() - started, buffer.getvalue(),
+                  counted=False)
+
+    def start(self, name: str) -> None:
+        """Mark a task as running so the live status line can show it."""
+        with self._lock:
+            self._active[name] = time.monotonic()
+            self._draw_status()
+
+    def _tick(self) -> None:
+        while not self._stop.wait(1.0):
+            with self._lock:
+                self._draw_status()
+
+    def _clear_status(self) -> None:
+        if self._status_len:
+            self._stdout.write("\r" + " " * self._status_len + "\r")
+            self._stdout.flush()
+            self._status_len = 0
+
+    def _draw_status(self) -> None:
+        if not self._tty:
+            return
+        now = time.monotonic()
+        running = sorted(self._active.items(), key=lambda kv: kv[1])
+        parts = [f"{name} {now - t:.0f}s" for name, t in running[:4]]
+        if len(running) > 4:
+            parts.append(f"+{len(running) - 4} more")
+        text = f"\u00bb {self.done}/{self.total}"
+        if parts:
+            text += " \u00b7 running: " + ", ".join(parts)
+        width = shutil.get_terminal_size(fallback=(120, 25)).columns - 1
+        text = text[:width]
+        pad = max(0, self._status_len - len(text))
+        self._stdout.write("\r" + text + " " * pad + "\r" + text)
+        self._stdout.flush()
+        self._status_len = len(text)
+
+    def note(self, line: str) -> None:
+        with self._lock:
+            self._console(line)
+            self._log.write(line + "\n")
+
+    def emit(self, name: str, status: str, seconds: float, text: str,
+             *, counted: bool = True, error: str | None = None) -> None:
+        with self._lock:
+            self._active.pop(name, None)
+            self._log.write(f"==== {name} [{status}] {seconds:.1f}s ====\n")
+            if text:
+                self._log.write(text if text.endswith("\n") else text + "\n")
+            if error:
+                self._log.write(error + "\n")
+            self._log.flush()
+
+            warnings = [line for line in text.splitlines() if _WARNING_LINE.match(line)]
+            self.warnings += len(warnings)
+            self.counts[status] = self.counts.get(status, 0) + 1
+            head = ""
+            if counted:
+                self.done += 1
+                width = len(str(self.total))
+                head = f"[{self.done:>{width}}/{self.total}] "
+            shown = "reused" if status == "skipped" else status.upper() if status in {
+                "failed", "blocked"} else status
+            timing = f"  {seconds:.1f}s" if status == "ok" and seconds >= 0.05 else ""
+            note = f"  ({len(warnings)} warning{'s' if len(warnings) != 1 else ''})" \
+                if warnings else ""
+            if not self.per_task and status in {"ok", "skipped"} and not warnings:
+                return
+            self._console(f"{head}{name:<28} {shown}{timing}{note}")
+            if status == "failed":
+                # The output tail carries the warnings too; one copy is enough.
+                for line in text.splitlines()[-30:]:
+                    self._console("      " + line)
+                if error:
+                    self._console("      " + error)
+                return
+            for line in warnings[:_WARNING_LIMIT]:
+                self._console("      " + line.strip())
+            if len(warnings) > _WARNING_LIMIT:
+                self._console(f"      … {len(warnings) - _WARNING_LIMIT} more: {self.log_path}")
+
+    def summary(self) -> str:
+        parts = []
+        for status, label in (("ok", "ok"), ("skipped", "reused"),
+                              ("failed", "failed"), ("blocked", "blocked")):
+            if self.counts.get(status):
+                parts.append(f"{self.counts[status]} {label}")
+        left = self.total - self.done
+        if left > 0:
+            parts.append(f"{left} not run")
+        parts.append(f"{self.warnings} warning{'s' if self.warnings != 1 else ''}")
+        return " · ".join(parts) + f" — task log: {self.log_path}"
+
+    def _console(self, line: str) -> None:
+        self._clear_status()
+        self._stdout.write(line + "\n")
+        self._stdout.flush()
+        self._draw_status()
 
 
 class Manifest:
@@ -131,6 +354,11 @@ class Manifest:
                     temporary.unlink(missing_ok=True)
                     raise
                 time.sleep(self.WRITE_BACKOFF_SECONDS * (attempt + 1))
+
+
+#: The persistent digest cache the export root carries, shared by every consumer that hashes
+#: generated intermediates -- the offline fingerprints and the editor bakes alike.
+DIGEST_CACHE_FILE = ".elysium-content-digests.json"
 
 
 class ContentDigestCache:
@@ -225,11 +453,19 @@ class TaskGraph:
         force: bool = False,
         manifest: Manifest | None = None,
         fail_fast: bool = True,
+        progress: TaskProgress | None = None,
     ) -> dict[str, TaskResult]:
         jobs = max(1, jobs)
         pending = set(self.tasks)
-        running: dict[Future[TaskResult], str] = {}
+        running: dict[Future[tuple[TaskResult, str]], str] = {}
         results: dict[str, TaskResult] = {}
+
+        def execute_captured(task: Task) -> tuple[TaskResult, str]:
+            if progress is None:
+                return execute(task), ""
+            with progress.capture() as buffer:
+                result = execute(task)
+            return result, buffer.getvalue()
 
         def execute(task: Task) -> TaskResult:
             started = time.monotonic()
@@ -267,7 +503,28 @@ class TaskGraph:
                     dependencies=list(task.dependencies),
                 )
 
-        with ThreadPoolExecutor(max_workers=jobs) as executor:
+        def drain_after_interrupt() -> None:
+            # First Ctrl+C: nothing new is scheduled and queued work is
+            # cancelled, but a running thread cannot be killed -- wait for it
+            # in short, interruptible slices. Second Ctrl+C: abort the
+            # process without joining (os._exit), because every graceful exit
+            # path joins those threads and blocks exactly the same way.
+            for queued in running:
+                queued.cancel()
+            message = (f"interrupted -- waiting for {len(running)} running "
+                       f"task(s); Ctrl+C again to abort immediately")
+            if progress:
+                progress.note(message)
+            else:
+                print(message, flush=True)
+            try:
+                while any(not f.done() for f in running):
+                    time.sleep(0.2)
+            except KeyboardInterrupt:
+                os._exit(130)
+
+        executor = ThreadPoolExecutor(max_workers=jobs)
+        try:
             while pending or running:
                 made_progress = False
                 for name in sorted(tuple(pending)):
@@ -284,28 +541,42 @@ class TaskGraph:
                         results[name] = result
                         if manifest:
                             manifest.record(result)
+                        if progress:
+                            progress.emit(name, "blocked", 0.0, "")
                         pending.remove(name)
                         made_progress = True
                         continue
                     if all(dep in results for dep in task.dependencies) and len(running) < jobs:
-                        running[executor.submit(execute, task)] = name
+                        if progress:
+                            progress.start(name)
+                        running[executor.submit(execute_captured, task)] = name
                         pending.remove(name)
                         made_progress = True
                 if not running:
                     if pending and not made_progress:
                         raise RuntimeError("task graph stalled")
                     continue
-                done, _ = wait(tuple(running), return_when=FIRST_COMPLETED)
+                done, _ = wait(tuple(running), timeout=0.5,
+                               return_when=FIRST_COMPLETED)
                 for future in done:
                     name = running.pop(future)
-                    result = future.result()
+                    result, captured = future.result()
                     results[name] = result
                     if manifest:
                         manifest.record(result)
+                    if progress:
+                        progress.emit(result.name, result.status,
+                                      result.duration_seconds, captured,
+                                      error=result.error)
                     if fail_fast and not result.succeeded:
                         for queued in running:
                             queued.cancel()
                         raise TaskFailure(results)
+        except KeyboardInterrupt:
+            drain_after_interrupt()
+            raise
+        finally:
+            executor.shutdown(wait=True, cancel_futures=True)
 
         if any(not result.succeeded for result in results.values()):
             raise TaskFailure(results)

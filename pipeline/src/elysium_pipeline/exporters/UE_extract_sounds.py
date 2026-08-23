@@ -87,7 +87,9 @@ def collect_audio_refs(ents_paths):
     for ent in _iter_ents(ents_paths):
         for v in ent.get("keys", {}).values():
             if isinstance(v, str) and v.lower().endswith(AUDIO_EXTS):
-                refs.add(v.replace("\\", "/"))
+                # A leading slash is authored ("/Area/.../train_bell.wav") and the engine's
+                # path layer swallows it; joined raw it turns 49 shipped WAVs into misses.
+                refs.add(v.replace("\\", "/").lstrip("/"))
     return refs
 
 
@@ -98,13 +100,27 @@ def collect_audio_refs(ents_paths):
 # records every category a referenced group appears in.
 SOUNDGROUP_CATEGORIES = ("openable", "switches", "computers")
 
+#: The classes that resolve their `soundgroup` token through `usable/` (doors and
+#: containers -> openable, buttons/switches -> switches, hacking/keypads -> computers).
+#: NPC classes carry the same key naming their VOICE set under `sound/character/`,
+#: which is the dialogue system's to resolve, not this manifest's.
+SOUNDGROUP_CLASSES = frozenset((
+    "func_button", "func_door", "func_door_rotating",
+    "item_container", "item_container_animated", "item_container_one_item_filtered",
+    "prop_button", "prop_hacking", "prop_keypad", "prop_switch",
+))
+
 
 def collect_soundgroups(ents_paths):
-    """Every distinct non-empty `soundgroup` token any entity carries (case preserved)."""
+    """Every distinct `soundgroup` token a usable-class entity carries (case preserved).
+
+    An authored token of `None` is deliberate silence, not a reference."""
     groups = set()
     for ent in _iter_ents(ents_paths):
+        if ent.get("classname") not in SOUNDGROUP_CLASSES:
+            continue
         sg = ent.get("keys", {}).get("soundgroup")
-        if isinstance(sg, str) and sg.strip():
+        if isinstance(sg, str) and sg.strip() and sg.strip().lower() != "none":
             groups.add(sg.strip())
     return groups
 
@@ -210,9 +226,8 @@ def extract_schemes(scheme_rels, idx):
             print(f"  ! scheme parse failed {rel}: {e}", flush=True)
 
     if misses:
-        print(f"  ! {len(misses)} scheme file(s) not in the install, e.g.:", flush=True)
-        for rel in misses[:8]:
-            print(f"      {rel}", flush=True)
+        print(f"  ! {len(misses)} scheme file(s) not in the install: "
+              f"{', '.join(sorted(misses)[:6])}{' ...' if len(misses) > 6 else ''}", flush=True)
     return written, cached, missing, asset_refs
 
 
@@ -224,7 +239,7 @@ def extract(refs, idx=None):
 
     written = cached = missing = 0
     misses = []
-    for rel in sorted(refs):
+    for rel in sorted(ref.lstrip("/") for ref in refs):
         dest = os.path.join(SOUND_OUT, rel)
         if os.path.exists(dest):
             cached += 1
@@ -240,9 +255,8 @@ def extract(refs, idx=None):
         written += 1
 
     if misses:
-        print(f"  ! {len(misses)} referenced sounds not in the install, e.g.:", flush=True)
-        for rel in misses[:8]:
-            print(f"      {rel}", flush=True)
+        print(f"  ! {len(misses)} referenced sound(s) not in the install: "
+              f"{', '.join(misses[:6])}{' ...' if len(misses) > 6 else ''}", flush=True)
     return written, cached, missing
 
 

@@ -34,341 +34,63 @@ class BakeOrchestrationTests(unittest.TestCase):
             )
         )
 
-    def test_noop_plan_launches_no_unreal_process(self) -> None:
+    def test_bake_launches_once_per_batch_and_trusts_the_exit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)
-            self._record_verification(config)
             with (
-                mock.patch.object(export_manager.bake_cache, "plan_stages", return_value={}),
                 mock.patch.object(export_manager.unreal, "bake_maps") as bake,
                 mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
             ):
-                export_manager.bake_and_verify(config, object(), ["test_map"])
-            bake.assert_not_called()
+                export_manager.bake_and_verify(config, object(), ["test_map", "test_map"])
+            bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=False)
             verify.assert_not_called()
 
-    def test_particle_plan_requests_only_particle_stage(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            plan_path = Path(temporary) / "plan.json"
-            plan_document = {
-                "run_id": "test-run",
-                "maps": {"test_map": {
-                    "stages": ["particles"],
-                    "fingerprints": {"particles": "frozen"},
-                    "policies": {"particles": "policy"},
-                }},
-            }
-            reports = {"test_map": {"stages": {
-                "particles": {"built": 1, "pruned": 0},
-            }}}
-            order: list[str] = []
-            with (
-                mock.patch.object(
-                    export_manager.bake_cache,
-                    "plan_stages",
-                    return_value={"test_map": ("particles",)},
-                ),
-                mock.patch.object(
-                    export_manager.bake_cache,
-                    "create_asset_run_plan",
-                    return_value=(plan_path, plan_document),
-                ),
-                mock.patch.object(
-                    export_manager.bake_cache,
-                    "load_asset_run_reports",
-                    return_value=reports,
-                ),
-                mock.patch.object(
-                    export_manager.bake_cache,
-                    "mutated_maps",
-                    return_value={"test_map"},
-                ),
-                mock.patch.object(
-                    export_manager.bake_cache, "assert_asset_run_inputs_current"
-                ) as assert_current,
-                mock.patch.object(
-                    export_manager.bake_cache, "promote_asset_run",
-                    side_effect=lambda *_a, **_k: order.append("promote")) as promote,
-                mock.patch.object(
-                    export_manager.bake_cache, "record_stages",
-                    side_effect=lambda *_a, **_k: order.append("record")) as record,
-                mock.patch.object(export_manager.unreal, "bake_maps") as bake,
-                mock.patch.object(
-                    export_manager.unreal, "verify_bakes",
-                    side_effect=lambda *_a, **_k: order.append("verify")) as verify,
-            ):
-                export_manager.bake_and_verify(config, object(), ["test_map"])
-            bake.assert_called_once_with(
-                config,
-                mock.ANY,
-                ["test_map"],
-                stages="particles",
-                asset_plan=plan_path,
-            )
-            verify.assert_called_once_with(config, mock.ANY, ["test_map"])
-            promote.assert_called_once_with(config, plan_document, reports)
-            record.assert_called_once()
-            self.assertEqual(assert_current.call_count, 2)
-            # A validated report is bake truth, so the receipts advance before verification runs.
-            self.assertEqual(order, ["promote", "record", "verify"])
-
-    def test_unverified_run_bakes_and_promotes_without_verify_bakes(self) -> None:
-        # A focused map iteration trusts a clean bake commandlet exit; the deep verification
-        # commandlet stays a separate, explicitly-requested acceptance check.
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            plan_path = Path(temporary) / "plan.json"
-            plan_document = {
-                "run_id": "test-run",
-                "maps": {"test_map": {
-                    "stages": ["particles"],
-                    "fingerprints": {"particles": "frozen"},
-                    "policies": {"particles": "policy"},
-                }},
-            }
-            reports = {"test_map": {"stages": {
-                "particles": {"built": 1, "pruned": 0},
-            }}}
-            with (
-                mock.patch.object(
-                    export_manager.bake_cache,
-                    "plan_stages",
-                    return_value={"test_map": ("particles",)},
-                ),
-                mock.patch.object(
-                    export_manager.bake_cache,
-                    "create_asset_run_plan",
-                    return_value=(plan_path, plan_document),
-                ),
-                mock.patch.object(
-                    export_manager.bake_cache,
-                    "load_asset_run_reports",
-                    return_value=reports,
-                ),
-                mock.patch.object(
-                    export_manager.bake_cache, "assert_asset_run_inputs_current"
-                ) as assert_current,
-                mock.patch.object(
-                    export_manager.bake_cache, "promote_asset_run"
-                ) as promote,
-                mock.patch.object(
-                    export_manager.bake_cache, "record_stages"
-                ) as record,
-                mock.patch.object(export_manager.unreal, "bake_maps") as bake,
-                mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
-            ):
-                export_manager.bake_and_verify(
-                    config, object(), ["test_map"], verify=False
-                )
-            bake.assert_called_once()
-            promote.assert_called_once_with(config, plan_document, reports)
-            record.assert_called_once()
-            verify.assert_not_called()
-            self.assertEqual(assert_current.call_count, 1)
-
-            task = export_manager._verification_task(config, "test_map")
-            reloaded = Manifest(config.export_root / ".elysium-manifest.json")
-            self.assertFalse(reloaded.can_skip(task, task.fingerprint()))
-
-    def test_failed_bake_does_not_record_stage_receipts(self) -> None:
+    def test_missing_baked_package_is_a_loud_failure(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)
             with (
-                mock.patch.object(
-                    export_manager.bake_cache,
-                    "plan_stages",
-                    return_value={"test_map": ("particles",)},
-                ),
-                mock.patch.object(export_manager.bake_cache, "record_stages") as record,
-                mock.patch.object(
-                    export_manager.unreal,
-                    "bake_maps",
-                    side_effect=RuntimeError("synthetic failure"),
-                ),
-                mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
-            ):
-                with self.assertRaises(export_manager.ExportBakeFailure):
-                    export_manager.bake_and_verify(config, object(), ["test_map"])
-            record.assert_not_called()
-            verify.assert_not_called()
-
-    def test_a_failed_batch_salvages_the_maps_whose_reports_validate(self) -> None:
-        # A per-map report is written once that map's stages completed and its packages were
-        # saved, so a later map's failure does not throw away the work that already landed.
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            plan_path = Path(temporary) / "plan.json"
-            plan_document = {
-                "run_id": "test-run",
-                "maps": {
-                    "map_a": {
-                        "stages": ["particles"],
-                        "fingerprints": {"particles": "frozen-a"},
-                        "policies": {"particles": "policy"},
-                    },
-                    "map_b": {
-                        "stages": ["particles"],
-                        "fingerprints": {"particles": "frozen-b"},
-                        "policies": {"particles": "policy"},
-                    },
-                },
-            }
-            reports = {"map_a": {"stages": {"particles": {"built": 1, "pruned": 0}}}}
-
-            def load(_config, document):
-                if set(document["maps"]) != {"map_a"}:
-                    raise RuntimeError("asset bake report missing or invalid")
-                return reports
-
-            with (
-                mock.patch.object(
-                    export_manager.bake_cache, "plan_stages",
-                    return_value={"map_a": ("particles",), "map_b": ("particles",)}),
-                mock.patch.object(
-                    export_manager.bake_cache, "create_asset_run_plan",
-                    return_value=(plan_path, plan_document)),
-                mock.patch.object(
-                    export_manager.bake_cache, "load_asset_run_reports", side_effect=load),
-                mock.patch.object(export_manager.bake_cache, "promote_asset_run") as promote,
-                mock.patch.object(export_manager.bake_cache, "record_stages") as record,
-                mock.patch.object(
-                    export_manager.unreal, "bake_maps",
-                    side_effect=RuntimeError("synthetic batch failure")),
-                mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
-            ):
-                with self.assertRaises(export_manager.ExportBakeFailure):
-                    export_manager.bake_and_verify(config, object(), ["map_a", "map_b"])
-            verify.assert_not_called()
-            promote.assert_called_once()
-            self.assertEqual(set(promote.call_args.args[1]["maps"]), {"map_a"})
-            self.assertEqual(promote.call_args.args[2], reports)
-            record.assert_called_once()
-            self.assertEqual(record.call_args.args[2], {"map_a": ("particles",)})
-
-    def test_a_failed_corpus_bake_salvages_its_checkpointed_receipts(self) -> None:
-        # The corpus commandlet checkpoints: it saves its packages, then publishes an interim run
-        # report. Every asset such a report names is already on disk, so a run that dies later
-        # still hands the next one its work -- which then reports `reused` and builds the rest.
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            scope = shared_corpus.SCOPE
-            object_path = f"/ElysiumBaked/{scope}/Textures/T_wall"
-            output = export_manager.bake_cache.unreal_output_path(
-                config.repo_root, object_path, "textures")
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_bytes(b"texture")
-            plan_document = {
-                "schema": export_manager.bake_cache.ASSET_RUN_SCHEMA,
-                "version": export_manager.bake_cache.ASSET_SCHEMA_VERSION,
-                "run_id": "test-run",
-                "force": False,
-                "maps": {scope: {
-                    "stages": ["textures"],
-                    "fingerprints": {"textures": "frozen"},
-                    "policies": {"textures": "policy"},
-                }},
-            }
-            export_manager.bake_cache.write_asset_run_report(config.export_root, {
-                "schema": export_manager.bake_cache.ASSET_RUN_SCHEMA,
-                "version": export_manager.bake_cache.ASSET_SCHEMA_VERSION,
-                "run_id": "test-run",
-                "map": scope,
-                "stages": {"textures": {
-                    "policy": "policy",
-                    "assets": {object_path: {
-                        "object_path": object_path,
-                        "fingerprint": "a" * 64,
-                        "output": str(output),
-                    }},
-                    "built": 1,
-                    "reused": 0,
-                    "pruned": 0,
-                }},
-            })
-
-            with (
-                mock.patch.object(
-                    export_manager.bake_cache, "create_corpus_run_plan",
-                    return_value=(Path(temporary) / "plan.json", plan_document)),
-                mock.patch.object(
-                    export_manager.unreal, "bake_corpus",
-                    side_effect=export_manager.unreal.UnrealFailure("editor died")),
-            ):
-                with self.assertRaises(TaskFailure):
-                    export_manager.ensure_corpus_bake(config, object())
-
-            store = export_manager.bake_cache.AssetReceiptStore(config.export_root, scope)
-            self.assertEqual(set(store.stage_assets("textures")), {object_path})
-            # The coarse task stays failed, so the next run launches the commandlet again.
-            manifest = Manifest(config.export_root / ".elysium-manifest.json")
-            self.assertEqual(
-                manifest.data["tasks"]["unreal:corpus"]["status"], "failed")
-
-    def test_frozen_input_drift_rejects_before_verification_or_promotion(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            plan_path = Path(temporary) / "plan.json"
-            plan_document = {
-                "run_id": "test-run",
-                "maps": {"test_map": {
-                    "stages": ["textures"],
-                    "fingerprints": {"textures": "frozen"},
-                    "policies": {"textures": "policy"},
-                }},
-            }
-            reports = {"test_map": {"stages": {
-                "textures": {"built": 1, "reused": 0, "pruned": 0},
-            }}}
-            with (
-                mock.patch.object(
-                    export_manager.bake_cache, "plan_stages",
-                    return_value={"test_map": ("textures",)}),
-                mock.patch.object(
-                    export_manager.bake_cache, "create_asset_run_plan",
-                    return_value=(plan_path, plan_document)),
-                mock.patch.object(
-                    export_manager.bake_cache, "load_asset_run_reports",
-                    return_value=reports),
-                mock.patch.object(
-                    export_manager.bake_cache, "assert_asset_run_inputs_current",
-                    side_effect=RuntimeError("synthetic drift")),
-                mock.patch.object(export_manager.bake_cache, "promote_asset_run") as promote,
-                mock.patch.object(export_manager.bake_cache, "record_stages") as record,
                 mock.patch.object(export_manager.unreal, "bake_maps"),
                 mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
             ):
-                with self.assertRaises(export_manager.ExportBakeFailure):
-                    export_manager.bake_and_verify(config, object(), ["test_map"])
+                with self.assertRaises(export_manager.ExportBakeFailure) as caught:
+                    export_manager.bake_and_verify(config, object(), ["absent_map"])
+            self.assertIn("absent_map", str(caught.exception))
             verify.assert_not_called()
-            promote.assert_not_called()
-            record.assert_not_called()
 
-    def test_failed_verification_discards_only_the_verified_maps_receipts(self) -> None:
-        # A receipt records what the bake authored, not whether it is right, so a map the
-        # verification commandlet rejected has to bake again rather than answer from its receipt.
+    def test_verify_is_an_explicit_opt_in(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)
-            verified = export_manager.bake_cache.AssetReceiptStore(
-                config.export_root, "test_map")
-            verified.replace_stages({"level": {"policy": "policy", "assets": {}}})
-            untouched = export_manager.bake_cache.AssetReceiptStore(
-                config.export_root, "other_map")
-            untouched.replace_stages({"level": {"policy": "policy", "assets": {}}})
-
             with (
-                mock.patch.object(
-                    export_manager.bake_cache, "plan_stages", return_value={}),
-                mock.patch.object(
-                    export_manager.unreal, "verify_bakes",
-                    side_effect=RuntimeError("synthetic verification failure")) as verify,
+                mock.patch.object(export_manager.unreal, "bake_maps"),
+                mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
             ):
-                with self.assertRaises(export_manager.ExportBakeFailure):
-                    export_manager.bake_and_verify(config, object(), ["test_map"])
-
+                export_manager.bake_and_verify(
+                    config, object(), ["test_map"], verify=True
+                )
             verify.assert_called_once_with(config, mock.ANY, ["test_map"])
-            self.assertFalse(verified.path.exists())
-            self.assertTrue(untouched.path.exists())
+
+    def test_force_reaches_the_commandlet(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self._config(temporary)
+            with (
+                mock.patch.object(export_manager.unreal, "bake_maps") as bake,
+                mock.patch.object(export_manager.unreal, "verify_bakes"),
+            ):
+                export_manager.bake_and_verify(
+                    config, object(), ["test_map"], force=True
+                )
+            bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=True)
+
+    def test_corpus_bake_always_launches_and_forwards_force(self) -> None:
+        # No fingerprint gates the launch: per-asset reuse is the commandlet's own decision,
+        # read off each asset's recipe stamp.
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self._config(temporary)
+            with mock.patch.object(export_manager.unreal, "bake_corpus") as bake:
+                export_manager.ensure_corpus_bake(config, object(), force=True)
+                export_manager.ensure_corpus_bake(config, object())
+            self.assertEqual(
+                [call.kwargs["force"] for call in bake.call_args_list], [True, False])
 
     def test_a_package_root_module_change_moves_the_decoder_fingerprint(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

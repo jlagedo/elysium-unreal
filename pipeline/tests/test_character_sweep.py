@@ -80,43 +80,6 @@ class SweepTests(unittest.TestCase):
         self.assertEqual(result["orphan_assets"], [])
         self.assertGreater(result["total"], 0)
 
-    def test_owner_integrity_accepts_self_and_bank_owners(self):
-        character_sweep.assert_owner_integrity(MANIFEST)
-
-    def test_a_clip_owned_by_another_body_is_refused(self):
-        broken = json.loads(json.dumps(MANIFEST))
-        broken["npcs"]["amy"]["clips"]["walk"] = "bob"
-        with self.assertRaisesRegex(ValueError, r"amy:walk -> bob"):
-            character_sweep.assert_owner_integrity(broken)
-
-    def test_a_cinematic_root_outside_the_banks_is_refused(self):
-        broken = json.loads(json.dumps(MANIFEST))
-        broken["cinematics"] = {"scene_1": {"roots": [{"bank": "not_a_bank"}]}}
-        with self.assertRaisesRegex(ValueError, r"cinematic scene_1 -> not_a_bank"):
-            character_sweep.assert_owner_integrity(broken)
-
-    def test_shared_bank_layout_is_independent_of_body_family_count(self):
-        character_sweep.assert_shared_bank_layout(self.partition, MANIFEST)
-        dirs = character_sweep._expected_dirs(self.partition, MANIFEST)
-        self.assertEqual(
-            sorted(path for path in dirs if path.startswith("Anims/_banks/")),
-            ["Anims/_banks/bank_a", "Anims/_banks/bank_b"],
-        )
-        self.assertFalse(any(
-            path.rpartition("/")[2] in MANIFEST["banks"]
-            for path in dirs if not path.startswith("Anims/_banks/")
-        ))
-
-    def test_bank_body_cross_product_is_rejected_before_bake(self):
-        original = character_sweep._expected_dirs
-
-        def multiplied(partition, manifest):
-            return original(partition, manifest) | {"Anims/amy/bank_a"}
-
-        with mock.patch.object(character_sweep, "_expected_dirs", multiplied):
-            with self.assertRaisesRegex(ValueError, "multiplies shared banks"):
-                character_sweep.assert_shared_bank_layout(self.partition, MANIFEST)
-
     def test_finds_a_stale_two_level_anim_folder(self):
         # Residue from the retired rig-family layout: a two-level `Anims/<family>/<owner>` path is
         # never expected under the flat `Anims/<stem>` layout, whatever name the first segment

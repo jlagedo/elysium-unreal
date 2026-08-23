@@ -396,7 +396,6 @@ class AnimatedPropIndexRowTests(unittest.TestCase):
     # `drknobantique`'s real shape: declaration order puts `idle` first, alphabetical order would
     # put `handle_locked` first, and retail's rest pose is sequence index 0.
     RECORD = {
-        "glb": "animated_props/drknobantique.glb",
         "eskm": "animated_props/drknobantique.eskm",
         "model": "models/scenery/doorknoba/drknobantique.mdl",
         "bones": 2,
@@ -428,7 +427,7 @@ class AnimatedPropIndexRowTests(unittest.TestCase):
         self.assertEqual(row["split_bones"], [])
 
     def test_a_clipless_record_projects_an_empty_list(self) -> None:
-        row = npc_export.animated_prop_index_row({"glb": "g", "eskm": "e", "model": "m"})
+        row = npc_export.animated_prop_index_row({"eskm": "e", "model": "m"})
         self.assertEqual(row["clips"], [])
 
     def test_a_bounds_radius_reaches_the_runtime_row(self) -> None:

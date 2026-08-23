@@ -26,8 +26,9 @@ import unreal
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 from elysium_pipeline import (  # noqa: E402
-    asset_names, bake_cache, character_cache, character_partition)
+    asset_names, character_partition, character_recipes as cr)
 from elysium_pipeline.formats import eskm  # noqa: E402
+from elysium_pipeline.tasking import ContentDigestCache, DIGEST_CACHE_FILE  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 
 MOUNT = "/ElysiumBaked"
@@ -95,7 +96,7 @@ def prop_package(stem):
     return "%s/%s" % (PROPS, stem)
 
 
-def bake_props(manifest, library, failed, plan, tracker, selected=()):
+def bake_props(manifest, library, failed, tracker, selected=()):
     """One skeleton, one mesh and one selected clip set per placed model.
 
     A prop takes the same container and the same builders a body does -- it IS a skeletal model,
@@ -113,8 +114,8 @@ def bake_props(manifest, library, failed, plan, tracker, selected=()):
     for stem in sorted(props):
         if stem not in selected:
             continue
-        unit = character_cache.prop_object_path(stem)
-        if not (wants(plan, "prop.%s" % stem, "props") and tracker.wants_unit("props", unit)):
+        unit = cr.prop_object_path(stem)
+        if not tracker.wants_unit("props", unit):
             continue
         path = prop_source_path(stem)
         if not os.path.isfile(path):
@@ -189,121 +190,103 @@ def read_partition():
         return character_partition.check(json.load(handle))
 
 
-def read_plan():
-    """The frozen run plan, or None for "author everything".
-
-    The plan names the scopes and stages this run still has to author AND, inside them, the exact
-    units -- one body's mesh, one clip owner's sequences, one body's or one bank family's skeleton
-    -- whose recipe changed. A scope or a unit absent from it is current on the mount and must be
-    left untouched: rebuilding a skeleton renames its blend-mask profiles out from under sequences
-    that are not being rebuilt with it.
-
-    No plan means a hand-run bake, which does the lot; that is the recovery surface and it is
-    deliberately not receipted.
-    """
-    path = cmdline_arg("BakeCharacterPlan")
-    if not path:
-        return None
-    with open(path, "r", encoding="utf-8-sig") as handle:
-        document = json.load(handle)
-    if document.get("schema") != character_cache.PLAN_SCHEMA:
-        raise SystemExit("[chars] %s is not a character bake plan" % path)
-    if document.get("version") != character_cache.PLAN_VERSION:
-        raise SystemExit(
-            "[chars] %s is plan version %s, this build reads %d"
-            % (path, document.get("version"), character_cache.PLAN_VERSION))
-    return document
-
-
 class CharacterTracker(object):
-    """Decide and report per-unit work for one character bake.
+    """Decide per-unit work off each asset's recipe stamp, and stamp what this run authors.
 
-    Every unit's recipe was decided offline, so this side records rather than re-derives: a unit
-    the plan does not name is not authored, and a unit that built is written into the receipt store
-    at the next checkpoint. The store's other units are seeded in unchanged, because a stage's
-    receipts are replaced wholesale and a slice must not erase the cast it did not touch.
+    A unit is one package set. A single-asset stage's unit is one object path; every other
+    stage's unit is the package family below its root, and the unit is current only when every
+    asset under that root carries the unit's fingerprint -- a crash that saved half a family
+    reads as stale and the family is authored again whole. No state exists outside the assets:
+    the mount is the record, exactly as it is for the map and corpus bakes.
     """
 
-    def __init__(self, plan):
-        self.plan = plan
-        self.run_id = str((plan or {}).get("run_id", ""))
-        self.policies = (plan or {}).get("policies", {})
-        self.units = (plan or {}).get("units", {})
-        self.batch = int((plan or {}).get("batch", character_cache.BODY_BATCH))
-        self.pending = 0
+    def __init__(self, units, force=False):
+        self.units = units
+        self.force = bool(force)
+        self.decisions = {}
+        self.fingerprints = {}
         self.stages = {}
-        if plan is None:
-            return
-        receipts = bake_cache.AssetReceiptStore(Path(OUT_ROOT), character_cache.SCOPE)
-        for stage in sorted(self.units):
-            policy = self.policies.get(stage, "")
-            carried = (dict(receipts.stage_assets(stage))
-                       if receipts.has_stage(stage, policy) else {})
-            self.stages[stage] = {"policy": policy, "assets": carried,
-                                  "built": 0, "reused": len(carried), "pruned": 0}
+        self.pending = 0
+
+    def _counters(self, stage):
+        return self.stages.setdefault(stage, {"built": 0, "reused": 0})
+
+    def _unit_assets(self, stage, object_path):
+        if stage in cr.SINGLE_ASSET_STAGES:
+            if unreal.EditorAssetLibrary.does_asset_exist(object_path):
+                return [object_path]
+            return []
+        listed = unreal.EditorAssetLibrary.list_assets(
+            object_path, recursive=True, include_folder=False)
+        return [value.split(".", 1)[0] for value in listed]
 
     def wants_unit(self, stage, object_path):
-        """Whether this run authors one named unit."""
-        if self.plan is None:
-            return True
-        return object_path in self.units.get(stage, {})
+        """Whether this run authors one named unit.
+
+        Memoized: a body's several clip owners land in one unit, and every one of them must see
+        the same answer within a run -- the first one authors, the rest add to the same package
+        family.
+        """
+        key = (stage, object_path)
+        if key in self.decisions:
+            return self.decisions[key]
+        unit = self.units.get(stage, {}).get(object_path)
+        if unit is None:
+            self.decisions[key] = False
+            return False
+        fingerprint = bl.recipe_fingerprint(stage, object_path, unit.recipe)
+        self.fingerprints[key] = fingerprint
+        assets = self._unit_assets(stage, object_path)
+        stale = (self.force or not assets
+                 or any(bl.stored_recipe(path) != fingerprint for path in assets))
+        if not stale:
+            self._counters(stage)["reused"] += 1
+        self.decisions[key] = stale
+        return stale
 
     def record(self, stage, object_path):
-        """Note that one unit's packages are on disk. Recorded only after the builders succeeded."""
-        if self.plan is None:
-            return
-        planned = self.units.get(stage, {}).get(object_path)
-        if planned is None:
-            raise SystemExit(
-                "[chars] a unit the plan does not name was authored: %s %s"
-                % (stage, object_path))
-        self.stages[stage]["assets"][object_path] = {
-            "object_path": object_path,
-            "fingerprint": planned["fingerprint"],
-            "output": planned.get("output", ""),
-        }
-        self.stages[stage]["built"] += 1
+        """Stamp every asset the unit now holds. Recorded only after the builders succeeded.
+
+        The C++ builders save each package as they finish it, so the stamp is a re-save of
+        finished packages -- and a unit whose stamp never lands reads as stale next run, which
+        is the correct failure mode.
+        """
+        fingerprint = self.fingerprints.get((stage, object_path))
+        if not fingerprint:
+            raise SystemExit("[chars] a unit that was never decided was authored: %s %s"
+                             % (stage, object_path))
+        stamped = 0
+        for path in self._unit_assets(stage, object_path):
+            asset = unreal.EditorAssetLibrary.load_asset(path)
+            if not asset:
+                raise SystemExit(
+                    "[chars] authored asset could not be loaded to stamp: %s" % path)
+            bl.stamp_recipe(asset, fingerprint)
+            if not bl.save(path):
+                raise SystemExit("[chars] stamped asset could not be saved: %s" % path)
+            stamped += 1
+        if not stamped:
+            raise SystemExit("[chars] unit authored nothing to stamp: %s %s"
+                             % (stage, object_path))
+        self._counters(stage)["built"] += 1
         self.pending += 1
 
     def summary(self):
-        return "; ".join("%s %d built / %d carried" % (stage, data["built"], data["reused"])
+        return "; ".join("%s %d built / %d reused" % (stage, data["built"], data["reused"])
                          for stage, data in sorted(self.stages.items()))
 
-    def write_report(self):
-        bake_cache.write_asset_run_report(Path(OUT_ROOT), {
-            "schema": bake_cache.ASSET_RUN_SCHEMA,
-            "version": bake_cache.ASSET_SCHEMA_VERSION,
-            "run_id": self.run_id,
-            "map": character_cache.SCOPE,
-            "stages": self.stages,
-        })
-
     def checkpoint(self, label):
-        """Publish the run report and the receipts of everything already on disk, then release.
-
-        The C++ builders save each package as they finish it, so a unit this has recorded is
-        written -- which is what makes both documents safe to publish here. A run killed with its
-        whole process tree still leaves the next one everything that landed.
-        """
+        """Release this pass's packages. Every recorded unit is already saved and stamped, so
+        there is nothing to publish; the release bounds memory."""
         self.pending = 0
-        if self.plan is None:
-            release_packages()
-            return
-        self.write_report()
-        bake_cache.checkpoint_receipts(Path(OUT_ROOT), character_cache.SCOPE, self.stages)
         release_packages()
-        log("checkpoint: %s -- report and receipts written, %s" % (label, self.summary()))
+        log("checkpoint: %s -- %s" % (label, self.summary()))
 
     def maybe_checkpoint(self, label):
         """Checkpoint once a batch of units has landed. Bodies are heavy -- a skeletal mesh plus
         every sequence it owns -- so the batch is small and the editor releases them often."""
-        if self.pending >= self.batch:
+        if self.pending >= cr.BODY_BATCH:
             self.checkpoint(label)
-
-
-def wants(plan, scope, stage):
-    """Whether this run authors `stage` for `scope`."""
-    return plan is None or stage in plan.get("scopes", {}).get(scope, ())
 
 
 def release_packages():
@@ -515,7 +498,7 @@ def blend_source(manifest, owner, is_bank):
     return section.get(owner, {}).get("blends", "")
 
 
-def bake_banks(manifest, partition, stems, library, failed, plan, tracker):
+def bake_banks(manifest, partition, stems, library, failed, tracker):
     """Bake every bank the named bodies reach ONCE, and return the skeletons they play them from.
 
     A `UAnimSequence` is bound to exactly one `USkeleton`, so a bank authored against the rig of
@@ -553,20 +536,16 @@ def bake_banks(manifest, partition, stems, library, failed, plan, tracker):
     for name in sorted(families):
         family = families[name]
         skeleton_package = family["skeleton"]
-        scope = "bank.%s" % name
         # The package path is returned whether or not this run authors it: a body still declares
         # compatibility with every bank family, and a skeleton left alone is still on the mount.
         skeletons.append(skeleton_package)
-        if not (wants(plan, scope, "bank_skeletons") or wants(plan, scope, "banks")):
-            continue
         members = [b for b in family["members"] if os.path.isfile(source_path(b, bank=True))]
         if len(members) != len(family["members"]):
             fail("bank family %s: %d of %d member containers are missing"
                  % (name, len(family["members"]) - len(members), len(family["members"])))
             failed.append(name)
             continue
-        if (wants(plan, scope, "bank_skeletons")
-                and tracker.wants_unit("bank_skeletons", skeleton_package)):
+        if tracker.wants_unit("bank_skeletons", skeleton_package):
             # Rebuilt from every declared member, in declared order, rather than merged into
             # whatever a previous run left behind: a skeleton that only grows keeps the bones of
             # banks a later partition moved elsewhere, and an untracked bone falls back to exactly
@@ -588,16 +567,13 @@ def bake_banks(manifest, partition, stems, library, failed, plan, tracker):
         else:
             bones = family["bones"]
 
-        if not wants(plan, scope, "banks"):
-            continue
-
         total = 0
         spaces_total = 0
         dropped_total = 0
         grids_skipped = 0
         baked_banks = 0
         for bank in [b for b in family["members"] if b in needed]:
-            unit = character_cache.bank_clips_object_path(bank)
+            unit = cr.bank_clips_object_path(bank)
             if not tracker.wants_unit("banks", unit):
                 continue
             baked_banks += 1
@@ -635,7 +611,7 @@ def bake_banks(manifest, partition, stems, library, failed, plan, tracker):
     return skeletons
 
 
-def bake_bodies(manifest, partition, stems, library, failed, plan, tracker,
+def bake_bodies(manifest, partition, stems, library, failed, tracker,
                 textures, bank_skeletons, baking):
     """One skeleton, one mesh and its own clips, per model.
 
@@ -646,16 +622,11 @@ def bake_bodies(manifest, partition, stems, library, failed, plan, tracker,
     for name in baking:
         entry = partition["models"][name]
         skeleton_package = entry["skeleton"]
-        scope = "model.%s" % name
-        if not any(wants(plan, scope, stage)
-                   for stage in ("family_skeletons", "meshes", "clips")):
-            continue
         if not os.path.isfile(source_path(name)):
             fail("body %s: the declared container is missing" % name)
             failed.append(name)
             continue
-        authoring_skeleton = (wants(plan, scope, "family_skeletons")
-                              and tracker.wants_unit("family_skeletons", skeleton_package))
+        authoring_skeleton = tracker.wants_unit("family_skeletons", skeleton_package)
         if authoring_skeleton:
             error, bones = library.build_family_skeleton(
                 [source_path(name)], skeleton_package, True)
@@ -682,8 +653,8 @@ def bake_bodies(manifest, partition, stems, library, failed, plan, tracker,
         # than something to route around.
         mesh_failed = False
         built = []
-        if (wants(plan, scope, "meshes") and name in stems
-                and tracker.wants_unit("meshes", character_cache.mesh_object_path(name))):
+        if (name in stems
+                and tracker.wants_unit("meshes", cr.mesh_object_path(name))):
             built = [name]
         for stem in built:
             blob = eskm.read(source_path(stem))
@@ -703,7 +674,7 @@ def bake_bodies(manifest, partition, stems, library, failed, plan, tracker,
                 failed.append(stem)
                 mesh_failed = True
             else:
-                tracker.record("meshes", character_cache.mesh_object_path(stem))
+                tracker.record("meshes", cr.mesh_object_path(stem))
                 tracker.maybe_checkpoint("meshes through %s" % stem)
         log("body '%s': %d mesh(es) authored, %d bones" % (name, len(built), bones))
 
@@ -727,10 +698,6 @@ def bake_bodies(manifest, partition, stems, library, failed, plan, tracker,
                 continue
             tracker.record("family_skeletons", skeleton_package)
 
-        if not wants(plan, scope, "clips"):
-            release_packages()
-            continue
-
         owners = owner_clips(manifest, [name])
         total = 0
         spaces_total = 0
@@ -746,7 +713,7 @@ def bake_bodies(manifest, partition, stems, library, failed, plan, tracker,
             if is_bank:
                 # Already baked, once, onto a bank skeleton this body is compatible with.
                 continue
-            unit = character_cache.clips_object_path(name)
+            unit = cr.clips_object_path(name)
             if not tracker.wants_unit("clips", unit):
                 continue
             authored_owners += 1
@@ -822,15 +789,16 @@ def main():
 
     library = unreal.ElysiumSkeletalBuildLibrary
     partition = read_partition()
-    plan = read_plan()
-    tracker = CharacterTracker(plan)
-    if plan is not None:
-        scopes = plan.get("scopes", {})
-        log("plan: %d scope(s), %d unit(s) -- %s" % (
-            len(scopes),
-            sum(len(units) for units in plan.get("units", {}).values()),
-            ", ".join("%s[%s]" % (s, "+".join(sorted(v)))
-                      for s, v in sorted(scopes.items()) if v)))
+    force = bool(cmdline_arg("BakeForce", ""))
+    digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)
+    units = cr.declared_units(Path(NPC_DIR), manifest, partition, stems,
+                              prop_stems or None, cache=digest_cache)
+    digest_cache.write()
+    tracker = CharacterTracker(units, force=force)
+    log("declared: %d unit(s) across %d stage(s)%s" % (
+        sum(len(stage_units) for stage_units in units.values()),
+        sum(1 for stage_units in units.values() if stage_units),
+        " (forced)" if force else ""))
     baking = sorted(set(stems))
     undeclared = [stem for stem in baking if stem not in partition["models"]]
     if undeclared:
@@ -841,31 +809,25 @@ def main():
     failed = []
     # A prop-only run authors no body, so it reaches no binding and imports nothing: the placed
     # models take the neutral body master and their owning map's already-baked materials.
-    authoring_textures = (bool(stems)
-                          and wants(plan, "_global", "textures")
-                          and tracker.wants_unit("textures", character_cache.TEXTURES))
+    authoring_textures = bool(stems) and tracker.wants_unit("textures", cr.TEXTURES)
     if authoring_textures:
         before = len(failed)
-        # A hand-run bake carries no plan and is the recovery surface, so it re-imports like a
-        # forced one.
-        textures = import_texture_corpus(
-            failed, force=bool((plan or {}).get("force", plan is None)))
+        textures = import_texture_corpus(failed, force=force)
         # A texture that did not import or did not save leaves a body drawing untextured, so the
-        # stage is not receipted and the next run imports it again.
+        # unit is not stamped and the next run imports it again.
         if len(failed) == before:
-            tracker.record("textures", character_cache.TEXTURES)
+            tracker.record("textures", cr.TEXTURES)
     else:
         textures = existing_textures()
 
-    bank_skeletons = bake_banks(manifest, partition, stems, library, failed, plan, tracker)
-    props_baked = bake_props(manifest, library, failed, plan, tracker, prop_stems)
+    bank_skeletons = bake_banks(manifest, partition, stems, library, failed, tracker)
+    props_baked = bake_props(manifest, library, failed, tracker, prop_stems)
     if props_baked:
         log("%d animated prop(s) baked to %s" % (props_baked, PROPS))
 
-    bake_bodies(manifest, partition, stems, library, failed, plan, tracker,
+    bake_bodies(manifest, partition, stems, library, failed, tracker,
                 textures, bank_skeletons, baking)
 
-    # The last batch, and the report the orchestrator promotes once the verifier agrees.
     tracker.checkpoint("final")
 
     if failed:

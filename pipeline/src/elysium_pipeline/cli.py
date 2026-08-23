@@ -9,8 +9,11 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
+import shutil
 import subprocess
 import sys
+import threading
 import time
 from typing import Any, Callable
 
@@ -106,6 +109,77 @@ def _state(ctx: typer.Context) -> CliState:
     return ctx.obj
 
 
+#: What an export/verify command's child processes may say on the console. Editor
+#: commandlets stream thousands of engine lines; the run log keeps every one, the
+#: console keeps the signal -- our own script output (LogPython) and any engine
+#: warning or error.
+_CHILD_SIGNAL = re.compile(
+    r"LogPython|Fatal error|Assertion failed|: Error:|: Warning:|^Error:")
+
+
+class _ChildEcho:
+    """The filtered console echo for export/verify children, with a live status.
+
+    Signal lines (our scripts' LogPython output, engine warnings/errors) print
+    normally. Everything else feeds a single rewritten status line -- elapsed
+    time, how many log lines have streamed, and the most recent one -- redrawn
+    by a ticker so a quiet editor phase never looks stalled. Terminal only;
+    redirected output gets the signal lines and nothing else."""
+
+    def __init__(self):
+        self._tty = bool(getattr(sys.stdout, "isatty", lambda: False)())
+        self._lock = threading.Lock()
+        self._started = time.monotonic()
+        self._count = 0
+        self._last = ""
+        self._status_len = 0
+        self._stop = threading.Event()
+        if self._tty:
+            threading.Thread(target=self._tick, daemon=True).start()
+
+    def __call__(self, line: str) -> None:
+        if _CHILD_SIGNAL.search(line):
+            with self._lock:
+                self._clear()
+                console.print(line, markup=False)
+                self._draw()
+            return
+        with self._lock:
+            self._count += 1
+            self._last = line.strip()
+
+    def _tick(self) -> None:
+        while not self._stop.wait(1.0):
+            with self._lock:
+                self._draw()
+
+    def _draw(self) -> None:
+        if not self._tty:
+            return
+        minutes, seconds = divmod(int(time.monotonic() - self._started), 60)
+        text = f"\u00bb editor {minutes:02d}:{seconds:02d} \u00b7 {self._count} log lines"
+        if self._last:
+            text += " \u00b7 " + self._last
+        width = shutil.get_terminal_size(fallback=(120, 25)).columns - 1
+        text = text[:width]
+        pad = max(0, self._status_len - len(text))
+        sys.stdout.write("\r" + text + " " * pad + "\r" + text)
+        sys.stdout.flush()
+        self._status_len = len(text)
+
+    def _clear(self) -> None:
+        if self._status_len:
+            sys.stdout.write("\r" + " " * self._status_len + "\r")
+            sys.stdout.flush()
+            self._status_len = 0
+
+    def close(self) -> None:
+        self._stop.set()
+        with self._lock:
+            self._clear()
+            self._tty = False
+
+
 def _execute(
     state: CliState,
     name: str,
@@ -122,6 +196,7 @@ def _execute(
     report = RunReport(command=name, arguments=sys.argv[1:])
     config: ProjectConfig | None = None
     log_handle = None
+    child_echo: _ChildEcho | None = None
     report_path: Path | None = None
     task: task_worktrees.TaskWorktreeRecord | None = None
     started = datetime.now(timezone.utc).isoformat()
@@ -148,6 +223,8 @@ def _execute(
             output_sink=(
                 None
                 if log_handle is None
+                else (child_echo := _ChildEcho())
+                if name.split(" ", 1)[0] in {"export", "verify"}
                 else lambda line: console.print(line, markup=False)
             ),
         )
@@ -208,6 +285,8 @@ def _execute(
         code = int(getattr(exc, "exit_code", category))
         detail = str(exc) or type(exc).__name__
     finally:
+        if child_echo is not None:
+            child_echo.close()
         if log_handle is not None:
             log_handle.close()
 
@@ -583,6 +662,7 @@ def _export_profile_command(
     clean: bool,
     force: bool,
     jobs: int | None,
+    verify: bool,
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
@@ -594,6 +674,7 @@ def _export_profile_command(
             clean=clean,
             force=force,
             jobs=jobs,
+            verify=verify,
         )
         console.print(f"{profile} export complete: {len(maps)} map(s)")
 
@@ -615,8 +696,18 @@ def export_grid(
     clean: bool = typer.Option(False, "--clean"),
     force: bool = typer.Option(False, "--force"),
     jobs: int | None = typer.Option(None, "--jobs", min=1),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help=(
+            "Read the baked mount back after the bake (acceptance check). Off by "
+            "default: a bake that exits clean and writes its run report is trusted."
+        ),
+    ),
 ) -> None:
-    _export_profile_command(ctx, "grid", clean=clean, force=force, jobs=jobs)
+    _export_profile_command(
+        ctx, "grid", clean=clean, force=force, jobs=jobs, verify=verify
+    )
 
 
 @export_app.command("all")
@@ -625,8 +716,18 @@ def export_all_command(
     clean: bool = typer.Option(False, "--clean"),
     force: bool = typer.Option(False, "--force"),
     jobs: int | None = typer.Option(None, "--jobs", min=1),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help=(
+            "Read the baked mount back after the bake (acceptance check). Off by "
+            "default: a bake that exits clean and writes its run report is trusted."
+        ),
+    ),
 ) -> None:
-    _export_profile_command(ctx, "all", clean=clean, force=force, jobs=jobs)
+    _export_profile_command(
+        ctx, "all", clean=clean, force=force, jobs=jobs, verify=verify
+    )
 
 
 @export_app.command("map")
@@ -685,13 +786,21 @@ def export_characters(
     force_sweep: bool = typer.Option(
         False, "--force-sweep", help="Sweep past the safety guard on how much may be removed."
     ),
+    verify: bool = typer.Option(
+        False,
+        "--verify",
+        help=(
+            "Read the baked mount back after the bake (acceptance check). Off by "
+            "default: a bake that exits clean and writes its run report is trusted."
+        ),
+    ),
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager
 
         stems = export_manager.export_characters(
             config, runner, models, force=force,
-            sweep=not no_sweep, force_sweep=force_sweep,
+            sweep=not no_sweep, force_sweep=force_sweep, verify=verify,
         )
         console.print(f"character bake complete: {len(stems)} model(s)")
 

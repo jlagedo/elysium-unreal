@@ -22,7 +22,6 @@ FONT_ASSETS = (
     "FF_Inter_SemiBold.uasset",
 )
 #: A map's stages. Prop meshes belong to the shared corpus scope, whose stages are its own.
-DEFAULT_BAKE_STAGES = "textures,materials,world,sky,particles,level"
 TEST_ABSTENTION_TOKEN = "ELYSIUM_TEST_ABSTAIN"
 
 
@@ -159,16 +158,13 @@ def generate_policy_content(config, runner, generators: Sequence[str] | None = N
         raise UnrealFailure("font generation did not produce: " + ", ".join(missing))
 
 
-def bake_corpus(config, runner, *, asset_plan: Path | None = None) -> None:
+def bake_corpus(config, runner, *, force: bool = False) -> None:
     """Bake the shared asset corpus onto /ElysiumBaked/Shared.
 
     One scope, no map: a texture, a material and a static model belong to the install, so each is
-    baked once rather than once per map that draws it. Only textures, materials and props apply --
-    the corpus has no world, sky, particle or level input.
-
-    `asset_plan` names the frozen per-asset inputs and policies, so the run rebuilds only the
-    assets whose recipe changed. Without one the commandlet rebuilds the whole scope, which is the
-    recovery surface for a hand-run bake.
+    baked once rather than once per map that draws it. The commandlet decides per asset whether
+    anything is authored, by comparing each recipe against the hash stamped on the asset, so a
+    fully current corpus launches, reports every asset reused, and exits.
     """
     _run(
         config,
@@ -179,7 +175,7 @@ def bake_corpus(config, runner, *, asset_plan: Path | None = None) -> None:
             "-run=pythonscript",
             f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
             "-BakeCorpus=1",
-            *([f"-BakeAssetPlan={asset_plan}"] if asset_plan is not None else []),
+            *(["-BakeForce=1"] if force else []),
             "-AllowCommandletRendering",
             "-unattended",
             "-nosplash",
@@ -195,57 +191,50 @@ def bake_maps(
     runner,
     maps: Sequence[str],
     *,
-    stages: str = DEFAULT_BAKE_STAGES,
-    asset_plan: Path | None = None,
-    batch_size: int = 4,
+    force: bool = False,
+    batch_size: int | None = None,
 ) -> None:
+    """Bake the named maps -- the whole list through ONE editor process by default.
+
+    Editor start-up (module load, plugin init, registry scan) is the dominant fixed cost, and
+    the commandlet already garbage-collects between maps and isolates per-map failures, so more
+    processes buy nothing. A crash mid-run costs only a relaunch: every saved asset carries its
+    recipe stamp and is reused. `batch_size` remains for callers that want smaller processes.
+
+    Per-asset reuse is the commandlet's own decision, read off each asset's recipe stamp; a
+    failed batch is reported by the editor log naming the failing map.
+    """
     maps = list(dict.fromkeys(maps))
-    for offset in range(0, len(maps), max(1, batch_size)):
-        batch = maps[offset : offset + max(1, batch_size)]
-        args = [
-            str(config.project),
-            "-run=pythonscript",
-            f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
-            f"-BakeMaps={','.join(batch)}",
-            f"-BakeStages={stages}",
-            *([f"-BakeAssetPlan={asset_plan}"] if asset_plan is not None else []),
-            "-AllowCommandletRendering",
-            "-unattended",
-            "-nosplash",
-            "-nopause",
-            "-stdout",
-            "-FullStdOutLogOutput",
-        ]
-        try:
-            _run(config, runner, editor_executable(config, commandlet=True), args)
-        except UnrealFailure:
-            if len(batch) == 1:
-                raise
-            failures: list[str] = []
-            for name in batch:
-                try:
-                    bake_maps(
-                        config,
-                        runner,
-                        [name],
-                        stages=stages,
-                        asset_plan=asset_plan,
-                        batch_size=1,
-                    )
-                except UnrealFailure:
-                    failures.append(name)
-            raise UnrealFailure(
-                "bake batch failed; isolated failing map(s): " + ", ".join(failures or batch)
-            )
+    step = max(1, batch_size) if batch_size else max(1, len(maps))
+    for offset in range(0, len(maps), step):
+        batch = maps[offset : offset + step]
+        _run(
+            config,
+            runner,
+            editor_executable(config, commandlet=True),
+            [
+                str(config.project),
+                "-run=pythonscript",
+                f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
+                f"-BakeMaps={','.join(batch)}",
+                *(["-BakeForce=1"] if force else []),
+                "-AllowCommandletRendering",
+                "-unattended",
+                "-nosplash",
+                "-nopause",
+                "-stdout",
+                "-FullStdOutLogOutput",
+            ],
+        )
 
 
 def bake_characters(config, runner, stems: Sequence[str], *, props: Sequence[str] = (),
-                    plan: Path | None = None) -> None:
+                    force: bool = False) -> None:
     """Bake the named models onto /ElysiumBaked/Characters.
 
-    The whole cast goes through one editor process, and `plan` names which scopes and stages of it
-    still have to be authored -- everything else on the mount is already current and is left alone.
-    Without a plan every scope is rebuilt, which is the recovery surface for a hand-run bake.
+    The whole cast goes through one editor process, and the commandlet decides per unit whether
+    anything is authored, by comparing each recipe against the hash stamped on the assets -- a
+    current cast launches, reports every unit reused, and exits.
 
     Memory is bounded by releasing each scope's packages as it completes rather than by the async
     compilation throttler, which cannot see this work: only a task reporting -1 draws against that
@@ -268,8 +257,8 @@ def bake_characters(config, runner, stems: Sequence[str], *, props: Sequence[str
     ]
     if props:
         arguments.insert(4, f"-BakeProps={','.join(props)}")
-    if plan is not None:
-        arguments.insert(4, f"-BakeCharacterPlan={plan}")
+    if force:
+        arguments.insert(4, "-BakeForce=1")
     _run(config, runner, editor_executable(config, commandlet=True), arguments)
 
 

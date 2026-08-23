@@ -7,7 +7,9 @@ from collections import defaultdict
 from collections.abc import Sequence
 import hashlib
 import json
+import os
 from pathlib import Path
+import time
 
 from elysium_pipeline.clean import (
     INCOMPLETE_FILE,
@@ -18,15 +20,17 @@ from elysium_pipeline.clean import (
     validate_clean_targets,
 )
 from elysium_pipeline.tasking import (
+    DIGEST_CACHE_FILE,
     ContentDigestCache,
     Manifest,
     Task,
     TaskGraph,
+    TaskProgress,
     TaskResult,
     fingerprint_content,
     fingerprint_paths,
 )
-from elysium_pipeline import bake_cache, shared_corpus, unreal, wield_corpus
+from elysium_pipeline import shared_corpus, unreal, wield_corpus, workers
 
 
 class OfflineExportFailure(RuntimeError):
@@ -38,13 +42,8 @@ class ExportBakeFailure(RuntimeError):
 
 
 def default_jobs() -> int:
-    try:
-        import psutil
-
-        physical = psutil.cpu_count(logical=False) or 1
-    except Exception:
-        physical = 1
-    return min(4, max(1, physical // 2))
+    """One worker per physical core; the policy lives with the pool that applies it."""
+    return workers.default_jobs()
 
 
 def _require_export_config(config) -> None:
@@ -97,7 +96,7 @@ def _decoder_source_fingerprint(config, index: dict | None = None) -> str:
     unchanged and re-decodes nothing.
     """
 
-    cache = ContentDigestCache(config.export_root / bake_cache.DIGEST_CACHE_FILE)
+    cache = ContentDigestCache(config.export_root / DIGEST_CACHE_FILE)
     try:
         return fingerprint_content(
             _decoder_code_paths(config),
@@ -189,13 +188,17 @@ def _bundle_tasks(
     from elysium_pipeline.exporters import export_all
 
     tasks: list[Task] = []
-    prior: tuple[str, ...] = ()
     all_map_dependencies = tuple(f"map:{name}" for name in maps)
+    requested = set(bundles)
     for bundle in bundles:
         name = f"bundle:{bundle}"
+        # Every bundle mirrors something global, so each waits on every map. Between bundles
+        # there is exactly one edge: `npc` resolves the player bodies through the exported
+        # `vdata/system/clandoc000.txt` mirror and skips them when it is absent. The rest write
+        # disjoint directories from the install and run concurrently.
         dependencies = all_map_dependencies
-        if prior:
-            dependencies += prior
+        if bundle == "npc" and "vdata" in requested:
+            dependencies += ("bundle:vdata",)
 
         def action(bundle_name=bundle) -> None:
             _raise_results(
@@ -223,9 +226,6 @@ def _bundle_tasks(
                 outputs=_bundle_outputs(config.export_root, bundle),
             )
         )
-        # Global mirrors intentionally run once and serially. This also keeps vdata
-        # before NPC and ensures scenes sees every completed map.
-        prior = (name,)
     return tasks
 
 
@@ -258,39 +258,51 @@ def run_offline_profile(
     maps = export_all.maps_for_profile(profile)
     bundles = export_all.bundles_for_profile(profile)
     index = install.build_index()
-    # The shared corpus is a prerequisite of the graph rather than a node in it: every map export
-    # resolves its materials and textures against it, while every ordinary bundle runs after the
-    # maps. It is decoded once, here, before anything reads it.
-    ensure_corpus_export(config, force=force or clean, index=index)
-    source_fingerprint = _decoder_source_fingerprint(config, index)
-    manifest = Manifest(config.export_root / MANIFEST_FILE)
-    dependency_fingerprint = fingerprint_paths(
-        [config.repo_root / "dev" / "dependencies.lock.json"]
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    progress = TaskProgress(
+        total=len(maps) + len(bundles),
+        log_path=config.log_root / f"{stamp}-export-tasks.log",
     )
-    manifest.set_context(
-        profile=profile,
-        source_fingerprint=source_fingerprint,
-        dependency_fingerprint=dependency_fingerprint,
-        configuration={
-            "game_root": str(config.game_root),
-            "export_root": str(config.export_root),
-            "jobs": max(1, jobs),
-        },
-        maps=list(maps),
-        bundles=list(bundles),
-    )
-    graph = TaskGraph(
-        [
-            *_map_tasks(config, maps, index, source_fingerprint),
-            *_bundle_tasks(config, bundles, maps, index, source_fingerprint),
-        ]
-    )
-    results = graph.run(
-        jobs=max(1, jobs),
-        force=force,
-        manifest=manifest,
-        fail_fast=True,
-    )
+    with progress:
+        progress.note(
+            f"export {profile}: {len(maps)} map(s) + {len(bundles)} bundle(s), "
+            f"{max(1, jobs)} job(s)"
+        )
+        # The shared corpus is a prerequisite of the graph rather than a node in it: every map
+        # export resolves its materials and textures against it, while every ordinary bundle runs
+        # after the maps. It is decoded once, here, before anything reads it.
+        with progress.stage("corpus"):
+            ensure_corpus_export(config, force=force or clean, index=index, jobs=jobs)
+        source_fingerprint = _decoder_source_fingerprint(config, index)
+        manifest = Manifest(config.export_root / MANIFEST_FILE)
+        dependency_fingerprint = fingerprint_paths(
+            [config.repo_root / "dev" / "dependencies.lock.json"]
+        )
+        manifest.set_context(
+            profile=profile,
+            source_fingerprint=source_fingerprint,
+            dependency_fingerprint=dependency_fingerprint,
+            configuration={
+                "game_root": str(config.game_root),
+                "export_root": str(config.export_root),
+                "jobs": max(1, jobs),
+            },
+            maps=list(maps),
+            bundles=list(bundles),
+        )
+        graph = TaskGraph(
+            [
+                *_map_tasks(config, maps, index, source_fingerprint),
+                *_bundle_tasks(config, bundles, maps, index, source_fingerprint),
+            ]
+        )
+        results = graph.run(
+            jobs=max(1, jobs),
+            force=force,
+            manifest=manifest,
+            fail_fast=True,
+            progress=progress,
+        )
     return maps, results
 
 
@@ -484,7 +496,8 @@ def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
         force=force, manifest=manifest)["unreal:policy"]
 
 
-def ensure_corpus_export(config, *, force: bool = False, index: dict | None = None) -> TaskResult:
+def ensure_corpus_export(config, *, force: bool = False, index: dict | None = None,
+                         jobs: int | None = None) -> TaskResult:
     """Decode the shared static corpus, once, before anything that reads it.
 
     Every map export and every bake resolves its textures, materials and static models through
@@ -505,7 +518,8 @@ def ensure_corpus_export(config, *, force: bool = False, index: dict | None = No
     enhancement = config.repo_root / "pipeline" / "src" / "elysium_pipeline" / "enhancement"
     task = Task(
         "export:corpus",
-        lambda: UE_extract_corpus.main(index=index, force=force),
+        lambda: UE_extract_corpus.main(
+            index=index, force=force, jobs=jobs or default_jobs()),
         fingerprint=lambda: fingerprint_paths(
             maps,
             extra=(
@@ -606,92 +620,14 @@ def _corpus_materials(config) -> dict:
         return shared_corpus.check_materials(json.load(handle))["materials"]
 
 
-def _salvage_corpus_receipts(config, plan_document: dict) -> None:
-    """Promote the per-asset receipts of a corpus bake that died mid-run.
+def ensure_corpus_bake(config, runner, *, force: bool = False) -> None:
+    """Launch the corpus bake; the editor reuses every asset whose stamped recipe matches.
 
-    The commandlet checkpoints every stage and every batch of prop meshes: it saves the queued
-    packages, then publishes an interim run report. Every asset such a report names is therefore
-    already on disk, which is exactly what `load_asset_run_reports` verifies, so a report left by a
-    run that died later is promotable as it stands.
-
-    The coarse `unreal:corpus` task stays failed, so the next run launches the commandlet again --
-    but the promoted receipts make that run a resume: everything salvaged reports `reused` and only
-    the remainder is built.
+    No fingerprint gates the launch and no receipt lives outside the mount: each baked asset
+    carries the hash of its own inputs, the commandlet authors exactly the mismatches, and a
+    current corpus costs one launch that reports everything reused.
     """
-
-    try:
-        reports = bake_cache.load_asset_run_reports(config, plan_document)
-        bake_cache.promote_asset_run(config, plan_document, reports)
-    except Exception as error:
-        print(f"[bake] corpus bake failed with no promotable interim report: {error}")
-        return
-    salvaged = sum(
-        int(stage.get("built", 0)) + int(stage.get("reused", 0))
-        for report in reports.values()
-        for stage in report.get("stages", {}).values()
-    )
-    print(f"[bake] corpus bake failed; salvaged the receipts of {salvaged} asset(s)")
-
-
-def ensure_corpus_bake(config, runner, *, force: bool = False) -> TaskResult:
-    """Bake the shared corpus onto /ElysiumBaked/Shared.
-
-    A separate scope from the per-map bake because its product is: a texture, a material and a
-    static model belong to the install, not to a map, so each is baked once and every map that
-    draws it references the one asset. Everything the scope consumes is under
-    `$ELYSIUM_EXPORT_ROOT/shared`, so that directory plus the bake code is the whole fingerprint.
-
-    That fingerprint decides only whether the commandlet launches. What the run then authors is
-    decided per asset against the frozen run plan, so a corpus one texture wide re-imports one
-    texture and every other receipt is reused.
-    """
-    manifest = Manifest(config.export_root / MANIFEST_FILE)
-    unreal_root = config.repo_root / "pipeline" / "unreal"
-    # The corpus is the whole install's textures and models -- gigabytes of intermediates. Hashing
-    # them through the persistent digest cache is what keeps a single-unit re-bake a short path:
-    # only the files the unit rewrote are read again, the rest answer from their stored identity.
-    digests = ContentDigestCache(config.export_root / bake_cache.DIGEST_CACHE_FILE)
-    # Each stage's authoring policy joins the gate, so an edit to a material library dirties the
-    # per-asset receipts AND launches the commandlet that would otherwise never be asked to
-    # rebuild them.
-    policies = tuple(
-        bake_cache.corpus_stage_policy(config, stage, cache=digests)
-        for stage in shared_corpus.STAGES
-    )
-    # `bake_map.py` is not a file input here: each stage policy already states the closure of it
-    # that stage runs, so an edit to a method the corpus never calls launches nothing.
-    fingerprint = fingerprint_content(
-        [
-            shared_corpus.manifest_path(config.export_root),
-            shared_corpus.materials_path(config.export_root),
-            shared_corpus.props_dir(config.export_root),
-            shared_corpus.tex_dir(config.export_root),
-            unreal_root / "bake_lib.py",
-        ],
-        extra=("bake-corpus-v1", *policies),
-        cache=digests,
-    )
-    digests.write()
-
-    def bake() -> None:
-        # Planned inside the action: a skipped task launches nothing and so writes no plan.
-        plan_path, plan_document = bake_cache.create_corpus_run_plan(config, force=force)
-        try:
-            unreal.bake_corpus(config, runner, asset_plan=plan_path)
-        except unreal.UnrealFailure:
-            _salvage_corpus_receipts(config, plan_document)
-            raise
-        reports = bake_cache.load_asset_run_reports(config, plan_document)
-        bake_cache.promote_asset_run(config, plan_document, reports)
-
-    baked = _baked_corpus_dir(config)
-    task = Task(
-        "unreal:corpus",
-        bake,
-        fingerprint=lambda value=fingerprint: value,
-        outputs=tuple(sorted(baked.glob("SM_*.uasset"))) if baked.is_dir() else (),
-    )
-    return TaskGraph([task]).run(force=force, manifest=manifest)["unreal:corpus"]
+    unreal.bake_corpus(config, runner, force=force)
 
 
 def _baked_package(config, map_name: str) -> Path:
@@ -705,204 +641,37 @@ def _baked_package(config, map_name: str) -> Path:
     )
 
 
-def _verification_task(config, map_name: str) -> Task:
-    baked_root = _baked_package(config, map_name).parent
-    fingerprint = fingerprint_paths(
-        [
-            baked_root,
-            config.repo_root / "pipeline" / "unreal" / "bake_verify.py",
-            config.repo_root / "pipeline" / "unreal" / "bake_lib.py",
-            config.repo_root
-            / "pipeline"
-            / "src"
-            / "elysium_pipeline"
-            / "validation"
-            / "png_alpha.py",
-        ],
-        extra=("verify-bake-v2", map_name),
-    )
-    output = _baked_package(config, map_name)
-    return Task(
-        name=f"verify:{map_name}",
-        action=lambda: None,
-        fingerprint=lambda value=fingerprint: value,
-        outputs=(output,) if output.is_file() else (),
-    )
-
-
-def _salvage_asset_receipts(
-    manifest: Manifest, config, plan: dict, asset_plan: dict | None
-) -> None:
-    """Advance the receipts of every planned map whose own bake report still validates.
-
-    A per-map report is written only once that map's stages completed and its packages were saved,
-    so one map's failure says nothing about the maps that finished before it.  Each map is
-    promoted against a single-map slice of the run plan; a map without a valid report keeps the
-    receipts it already had.
-    """
-
-    if asset_plan is None or not plan:
-        return
-    planned = asset_plan.get("maps", {})
-    salvaged: list[str] = []
-    for name in plan:
-        map_plan = planned.get(name)
-        if map_plan is None:
-            continue
-        single = {**asset_plan, "maps": {name: map_plan}}
-        try:
-            reports = bake_cache.load_asset_run_reports(config, single)
-            bake_cache.promote_asset_run(config, single, reports)
-            bake_cache.record_stages(
-                manifest,
-                config,
-                {name: plan[name]},
-                frozen_fingerprints={name: map_plan.get("fingerprints", {})},
-            )
-        except Exception:
-            continue
-        salvaged.append(name)
-    print(
-        f"[bake] bake failed; salvaged receipts for {len(salvaged)} of {len(plan)} planned map(s)"
-    )
-
-
-def _discard_verified_receipts(config, names: Sequence[str]) -> None:
-    """Drop the per-asset receipts of the maps verification rejected.
-
-    A receipt records what the bake authored, not whether it is right. Verification failing says
-    one of those packages is wrong, so leaving its receipt in place would let every later run
-    reuse the wrong asset. Only the maps that were actually verified are discarded.
-    """
-
-    discarded = 0
-    for name in dict.fromkeys(names):
-        path = bake_cache.AssetReceiptStore(config.export_root, name).path
-        try:
-            path.unlink()
-        except FileNotFoundError:
-            continue
-        except OSError as error:
-            print(f"[bake] could not discard {name} asset receipts at {path}: {error}")
-            continue
-        discarded += 1
-    print(
-        f"[bake] verification failed; discarded the asset receipts of {discarded} "
-        f"of {len(names)} verified map(s) so the next run re-bakes them"
-    )
-
-
 def bake_and_verify(
     config,
     runner,
     maps: Sequence[str],
     *,
     force: bool = False,
-    verify: bool = True,
+    verify: bool = False,
 ) -> None:
-    manifest = Manifest(config.export_root / MANIFEST_FILE)
+    """Bake the named maps, and read the mount back only when explicitly asked to.
+
+    The bake's exit code is the acceptance signal, and each asset's recipe stamp is the record
+    of what was authored -- a crash loses only unsaved packages, and the next run resumes off
+    the stamps alone. `verify` opts into the deep read-back, which `uv run elysium verify maps`
+    also runs on its own whenever a mount has to be re-checked without authoring it again.
+    """
     names = list(dict.fromkeys(maps))
-    plan = bake_cache.plan_stages(manifest, config, names, force=force)
-    asset_plan_path = None
-    asset_plan = None
-    if plan:
-        asset_plan_path, asset_plan = bake_cache.create_asset_run_plan(
-            config, plan, force=force
-        )
-
-    try:
-        if plan:
-            grouped: dict[tuple[str, ...], list[str]] = defaultdict(list)
-            for name, stages in plan.items():
-                grouped[stages].append(name)
-            for stages, stage_maps in grouped.items():
-                unreal.bake_maps(
-                    config,
-                    runner,
-                    stage_maps,
-                    stages=",".join(stages),
-                    asset_plan=asset_plan_path,
-                )
-
-        missing = [
-            str(_baked_package(config, name))
-            for name in plan
-            if not _baked_package(config, name).is_file()
-        ]
-        if missing:
-            raise ExportBakeFailure("bake did not produce: " + ", ".join(missing))
-
-        reports = (
-            bake_cache.load_asset_run_reports(config, asset_plan)
-            if asset_plan is not None
-            else {}
-        )
-    except ExportBakeFailure:
-        _salvage_asset_receipts(manifest, config, plan, asset_plan)
-        raise
-    except Exception as exc:
-        _salvage_asset_receipts(manifest, config, plan, asset_plan)
-        raise ExportBakeFailure(str(exc)) from exc
-
-    try:
-        if asset_plan is not None:
-            bake_cache.assert_asset_run_inputs_current(config, asset_plan)
-
-        # A validated per-map report proves that map's bake completed and its outputs exist, so
-        # its receipts advance whatever later maps or verification go on to do.  The verification
-        # receipt below is the one that stays gated on `verify_bakes` passing.
-        if asset_plan is not None:
-            bake_cache.promote_asset_run(config, asset_plan, reports)
-        bake_cache.record_stages(
-            manifest,
-            config,
-            plan,
-            frozen_fingerprints={
-                name: value["fingerprints"]
-                for name, value in (asset_plan or {}).get("maps", {}).items()
-            },
-        )
-
-        verification: list[str] = []
-        if verify:
-            changed = bake_cache.mutated_maps(reports)
-            for name in names:
-                task = _verification_task(config, name)
-                fingerprint = task.fingerprint() if task.fingerprint else None
-                if name in changed or force or not manifest.can_skip(task, fingerprint):
-                    verification.append(name)
-            if not plan and not verification:
-                return
-            if verification:
-                try:
-                    unreal.verify_bakes(config, runner, verification)
-                except Exception:
-                    _discard_verified_receipts(config, verification)
-                    raise
-            if asset_plan is not None:
-                bake_cache.assert_asset_run_inputs_current(config, asset_plan)
-        else:
-            print("[bake] deep verification skipped by flag; iteration trusts the bake exit")
-            if not plan:
-                return
-    except ExportBakeFailure:
-        raise
-    except Exception as exc:
-        raise ExportBakeFailure(str(exc)) from exc
-
-    # Verification receipts advance only when `unreal.verify_bakes` actually ran, so a later
-    # profile run still verifies maps that an unverified targeted run baked and promoted.
-    for name in verification:
-        task = _verification_task(config, name)
-        manifest.record(
-            TaskResult(
-                name=task.name,
-                status="ok",
-                duration_seconds=0.0,
-                fingerprint=task.fingerprint() if task.fingerprint else None,
-                outputs=[str(path) for path in task.outputs],
-            )
-        )
+    if not names:
+        return
+    unreal.bake_maps(config, runner, names, force=force)
+    missing = [
+        str(_baked_package(config, name))
+        for name in names
+        if not _baked_package(config, name).is_file()
+    ]
+    if missing:
+        raise ExportBakeFailure("bake did not produce: " + ", ".join(missing))
+    if verify:
+        unreal.verify_bakes(config, runner, names)
+    else:
+        print("[bake] trusting the bake exit; pass --verify or run `elysium verify maps` "
+              "to read the mount back")
 
 
 def export_profile(
@@ -913,6 +682,7 @@ def export_profile(
     clean: bool = False,
     force: bool = False,
     jobs: int | None = None,
+    verify: bool = False,
 ) -> list[str]:
     from elysium_pipeline.exporters.export_all import bundles_for_profile
 
@@ -931,7 +701,7 @@ def export_profile(
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
     ensure_corpus_bake(config, runner, force=force or clean)
-    bake_and_verify(config, runner, maps, force=force or clean)
+    bake_and_verify(config, runner, maps, force=force or clean, verify=verify)
     # Only the domains this profile actually covers.  `grid` and `all` both run every bundle, so
     # this clears the corpus either way; a profile that dropped one would leave that one gated.
     mark_complete(config.export_root, ("maps", "policy", *bundles_for_profile(profile)))
@@ -953,6 +723,9 @@ def export_targeted_maps(
     from elysium_pipeline.formats import install
 
     names = list(dict.fromkeys(maps))
+    # One named map is one worker; naming several is a batch, and each map export is an
+    # independent decode into its own directory.
+    jobs = min(len(names), default_jobs())
     index = install.build_index()
     config.export_root.mkdir(parents=True, exist_ok=True)
     source_fingerprint = _decoder_source_fingerprint(config, index)
@@ -966,13 +739,13 @@ def export_targeted_maps(
         configuration={
             "game_root": str(config.game_root),
             "export_root": str(config.export_root),
-            "jobs": 1,
+            "jobs": jobs,
         },
         maps=list(names),
         bundles=["audio"],
     )
     TaskGraph(_map_tasks(config, names, index, source_fingerprint)).run(
-        jobs=1,
+        jobs=jobs,
         force=force,
         manifest=manifest,
     )
@@ -1162,7 +935,8 @@ def _preserve_placed_row_policy(use, row: dict):
 
 
 def export_placed_models(config, runner, maps: Sequence[str], models: Sequence[str] | None = None,
-                         *, force: bool = False, index: dict | None = None) -> list[str]:
+                         *, force: bool = False, index: dict | None = None,
+                         verify: bool = False) -> list[str]:
     """Integrate and bake only placed models used by ``maps``.
 
     The global NPC manifest remains the release/reconstruct inventory. This workflow projects the
@@ -1171,7 +945,7 @@ def export_placed_models(config, runner, maps: Sequence[str], models: Sequence[s
     """
     _require_export_config(config)
     adopt_export_root(config.export_root, config.work_root)
-    from elysium_pipeline import character_cache, placed_models
+    from elysium_pipeline import placed_models
     from elysium_pipeline.exporters import npc_export
     from elysium_pipeline.formats import install
 
@@ -1223,19 +997,7 @@ def export_placed_models(config, runner, maps: Sequence[str], models: Sequence[s
     receipt_store = Manifest(config.export_root / MANIFEST_FILE)
     write_placed_model_sources(
         config, npc_dir, stems, manifest=receipt_store, force=force)
-    partition = read_character_partition(npc_dir)
-    with manifest_path.open(encoding="utf-8") as handle:
-        source_manifest = json.load(handle)
-    planned = character_cache.plan(
-        config, npc_dir, source_manifest, partition, (), props=stems, force=force)
-    if not planned.stale:
-        print(f"placed models: {len(stems)} model(s) already current")
-        return stems
-
-    plan_path, plan_document = character_cache.write_run_plan(npc_dir, planned, force=force)
-    print("placed models: " + ", ".join(
-        f"{scope}[{'+'.join(stages)}]"
-        for scope, stages in sorted(planned.scopes.items()) if stages))
+    read_character_partition(npc_dir)
 
     # The prop mesh stores only a neutral material reference. The owning map supplies its exact
     # material instances at runtime, so policy changes do not invalidate this scope; only absence
@@ -1243,7 +1005,7 @@ def export_placed_models(config, runner, maps: Sequence[str], models: Sequence[s
     body_master = config.repo_root / "Content" / "VtMB" / "Materials" / "M_PlayerBody.uasset"
     if not body_master.is_file():
         ensure_character_material_content(config, runner)
-    _run_character_bake(config, runner, plan_document, plan_path, (), props=stems)
+    _run_character_bake(config, runner, (), props=stems, verify=verify, force=force)
     return stems
 
 
@@ -1251,44 +1013,21 @@ FAMILIES_FILE = "families.json"
 CHARACTER_TEXTURES_FILE = "textures.json"
 
 
-def _run_character_bake(config, runner, plan_document: dict, plan_path: Path,
-                        stems: Sequence[str], *, props: Sequence[str] = (),
-                        after_bake=None) -> None:
-    """Author the planned character units, then promote their receipts once the verifier agrees.
+def _run_character_bake(config, runner, stems: Sequence[str], *, props: Sequence[str] = (),
+                        after_bake=None, verify: bool = False,
+                        force: bool = False) -> None:
+    """Author the stale character units and leave each one stamped with its recipe.
 
-    Exactly two outcomes leave a receipt standing, and the editor's own batch checkpoints are why
-    the distinction matters: they write into the live store while the bake runs, so a run that ends
-    any other way would leave its planned units looking current and never verify them again.
-
-    An editor that DIES mid-run keeps what it checkpointed. Those are packages the C++ builders
-    already saved, so the interim report is salvaged and the next run resumes instead of rebuilding
-    them. A run that PROMOTES has been read back off the mount by the verifier.
-
-    Everything else revokes. Once the editor has returned, any failure in the report validation, the
-    orphan sweep or the verify -- whatever its type -- means the units this run planned are not
-    known good, whatever the checkpoints recorded. Revoking drops exactly those units so they are
-    re-authored and re-verified next run; every unit the run did not plan keeps its receipt.
+    Acceptance is the editor's own exit: the commandlet stamps every unit it authored as it
+    lands, so a run that dies keeps exactly what it saved and the next run resumes off the
+    stamps alone. `verify` adds the deep read-back on top, which
+    `uv run elysium verify characters` also runs on its own.
     """
-    from elysium_pipeline import character_cache
-
-    try:
-        unreal.bake_characters(config, runner, stems, props=props, plan=plan_path)
-    except unreal.UnrealFailure:
-        character_cache.salvage(config, plan_document)
-        raise
-
-    promoted = False
-    try:
-        report = character_cache.load_run_report(config, plan_document)
-        if after_bake is not None:
-            after_bake()
+    unreal.bake_characters(config, runner, stems, props=props, force=force)
+    if after_bake is not None:
+        after_bake()
+    if verify:
         unreal.verify_characters(config, runner, stems, props=props)
-        character_cache.promote_run(config, report)
-        promoted = True
-    finally:
-        if not promoted:
-            revoked = character_cache.revoke(config, plan_document)
-            print(f"[bake] character bake did not verify; revoked {revoked} receipt(s)")
 
 
 def _character_code_inputs(config) -> tuple[Path, ...]:
@@ -1600,7 +1339,15 @@ def write_character_sources(
         tasks.extend(_placed_model_source_tasks(
             npc_dir, source_manifest, props, index, code_fingerprint))
 
-    results = TaskGraph(tasks).run(force=force, manifest=manifest)
+    stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    progress = TaskProgress(
+        total=len(tasks),
+        log_path=config.log_root / f"{stamp}-character-sources.log",
+        per_task=False,
+    )
+    with progress:
+        progress.note(f"character sources: {len(tasks)} container task(s)")
+        results = TaskGraph(tasks).run(force=force, manifest=manifest, progress=progress)
     failures = [name for name, result in results.items() if result.status not in ("ok", "skipped")]
     if failures:
         raise OfflineExportFailure(
@@ -1819,7 +1566,8 @@ def _stale_garments(config, stems: Sequence[str]) -> list[str]:
 
 def export_characters(
     config, runner, models: Sequence[str] | None = None, *, force: bool = False,
-    sweep: bool = True, force_sweep: bool = False, include_props: bool = True
+    sweep: bool = True, force_sweep: bool = False, include_props: bool = True,
+    verify: bool = False
 ) -> list[str]:
     """Bake characters onto /ElysiumBaked/Characters (ANM1) -- the whole cast unless told otherwise.
 
@@ -1880,54 +1628,12 @@ def export_characters(
     if not stems:
         raise ValueError("no models named and the manifest lists no character")
 
-    from elysium_pipeline import character_cache
-
-    with (npc_dir / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
-        npc_manifest = json.load(handle)
-    # Fail before Unreal starts if orchestration reintroduces bank clips below a body's own
-    # folder. That cross-product costs tens of gigabytes before output size exposes it. Two
-    # halves: the layout assertion refuses its SHAPE, and the inventory proves its COUNT -- every
-    # source bank clip packaged once, addressed by owner alone and by nothing about the bodies
-    # that play it.
-    #
-    # The census is the third: the count proves every bank clip reaches a package, and the census
-    # proves a body reaches the package -- measured over the whole catalogue's include DAGs, so
-    # it holds for a slice too.
-    from elysium_pipeline import character_census, character_inventory, character_sweep
-    character_sweep.assert_owner_integrity(npc_manifest)
-    character_sweep.assert_shared_bank_layout(partition, npc_manifest)
-    reached = character_cache.reached_banks(npc_manifest, stems)
-    projected = character_inventory.project(npc_dir, npc_manifest, reached)
-    print(character_inventory.summary_line(character_inventory.assert_cardinality(
-        npc_dir, partition, npc_manifest, reached, projected)))
-    print(character_census.summary_line(character_census.assert_reachable(
-        npc_dir, partition, npc_manifest, reached, projected[0])))
-    planned = character_cache.plan(
-        config, npc_dir, npc_manifest, partition, stems,
-        props=None if include_props else (), force=force
-    )
-    if not planned.stale:
-        # Nothing to author, so nothing to launch. This is the case the receipts exist for: the
-        # editor costs 20-40s of process lifetime before it does any work at all.
-        print(f"characters: {len(stems)} model(s) already current")
-        # Garments are not covered by those receipts -- they are generated from the sidecar, not
-        # from the bake's own inputs -- so a cast that is current can still be undressed. Compared
-        # by file rather than by receipt so the fast path stays free when it is not.
-        stale_garments = _stale_garments(config, stems)
-        if stale_garments:
-            unreal.make_cloth_assets(config, runner, stale_garments)
-        return stems
-
-    plan_path, plan_document = character_cache.write_run_plan(npc_dir, planned, force=force)
-    print("characters: " + ", ".join(
-        f"{scope}[{'+'.join(stages)}]"
-        for scope, stages in sorted(planned.scopes.items()) if stages))
-
     ensure_character_material_content(config, runner)
 
-    def sweep_before_verify() -> None:
-        # After the bake, before the verify: the verifier walks the mount, and an orphan from a
-        # partition that has since moved is exactly the thing it should not find.
+    def sweep_after_bake() -> None:
+        # Once the editor has returned and before any receipt is promoted: an orphan from a
+        # partition that has since moved must not survive on the mount, and a verify that is
+        # opted into runs after this for the same reason.
         if not sweep:
             return
         result = sweep_characters(config, partition, force=force_sweep)
@@ -1938,11 +1644,13 @@ def export_characters(
 
     # One process for the whole cast. Banks are built once on their declared skeleton families and
     # reused by compatible body skeletons; package count must not scale with the number of bodies.
-    _run_character_bake(config, runner, plan_document, plan_path, stems,
-                        after_bake=sweep_before_verify)
-    # The garments those bodies wear. After the verify, because a cloth asset resolves its bone
-    # names against the mesh's reference skeleton -- the mesh has to be on the mount and sound
-    # before a garment can bind to it. Most models author none and cost nothing here.
+    # Whether the run authors anything at all is the commandlet's per-unit decision, read off
+    # each asset's recipe stamp.
+    _run_character_bake(config, runner, stems, after_bake=sweep_after_bake, verify=verify,
+                        force=force)
+    # The garments those bodies wear. After the bake has been accepted, because a cloth asset
+    # resolves its bone names against the mesh's reference skeleton -- the mesh has to be on the
+    # mount before a garment can bind to it. Most models author none and cost nothing here.
     unreal.make_cloth_assets(config, runner, stems)
     return stems
 

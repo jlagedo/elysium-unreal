@@ -14,9 +14,9 @@ Two things follow that a per-map decode could not give:
 - **A single-unit rebake.** With one asset per source, changing a prop is one decode and one
   baked mesh, and every map that places it is already pointing at the result.
 
-Whether a base texture keeps its alpha channel is decided here, over the whole material set at
-once (`keep_alpha`), because it is a property of every material that draws the texture rather than
-of whichever one resolved first.
+A texture keeps whatever alpha its source stores (`tex_to_png.save_png` folds a uniformly
+opaque plane to RGB, which is lossless). Whether a material *renders* with alpha is a semantic in
+`materials.json`; no material's flags change any texture's bytes, so no decode order can either.
 
 Unreal-native by construction: meshes go through `UE_bsp_to_scene.decode_prop_models`, the same
 MDL -> OBJ writer both map prop paths share (cm, Z-up, left-handed, winding reversed). This module
@@ -27,12 +27,13 @@ Usage:
   uv run elysium export prop <models/....mdl>            # one model and what it draws
   uv run elysium export texture <materials/path>         # one texture
 """
+import functools
 import json
 import os
 import re
 import struct
 
-from elysium_pipeline import shared_corpus as SC
+from elysium_pipeline import shared_corpus as SC, workers
 from elysium_pipeline.formats import install, mdl as MDL
 from elysium_pipeline.formats.bsp import read_lump, read_game_lump
 from elysium_pipeline.paths import export_root
@@ -176,21 +177,9 @@ class Corpus(object):
         self.unreadable = []
 
 
-def discover(idx, map_names=None):
-    """Every source identity the install's maps reference.
-
-    Returns a ``Corpus``. `map_names` restricts the walk; omitted, it is every map the engine
-    could load.
-    """
-    names = list(map_names) if map_names else install.all_map_names()
+def _census_shard(names):
+    """The identities one shard of the map list references. Reads only; writes nothing."""
     found = Corpus()
-    # An item's world model is named by `vdata/items`, not by any map: a placed `item_*` states no
-    # `model` key, and a scripted grant or a drop can put any definition in any map. They are the
-    # same kind of thing as a prop -- one model, one mesh -- so they join the same corpus.
-    if map_names is None:
-        from elysium_pipeline.exporters import UE_extract_items
-
-        found.models |= set(UE_extract_items.ground_models(idx))
     for name in names:
         try:
             with open(install.map_path(name), "rb") as handle:
@@ -213,6 +202,35 @@ def discover(idx, map_names=None):
                 found.skies.add(sky)
         except (IndexError, KeyError, ValueError, struct.error) as error:
             found.unreadable.append((name, f"lump decode: {error}"))
+    return found
+
+
+def discover(idx, map_names=None, *, jobs=1):
+    """Every source identity the install's maps reference.
+
+    Returns a ``Corpus``. `map_names` restricts the walk; omitted, it is every map the engine
+    could load. The walk shards across `jobs` processes: a map contributes only set membership,
+    so the shards union and the result does not depend on the worker count. `unreadable` stays in
+    map order because the shards are contiguous and come back in shard order.
+    """
+    names = list(map_names) if map_names else install.all_map_names()
+    found = Corpus()
+    # An item's world model is named by `vdata/items`, not by any map: a placed `item_*` states no
+    # `model` key, and a scripted grant or a drop can put any definition in any map. They are the
+    # same kind of thing as a prop -- one model, one mesh -- so they join the same corpus.
+    if map_names is None:
+        from elysium_pipeline.exporters import UE_extract_items
+
+        found.models |= set(UE_extract_items.ground_models(idx))
+    for shard in workers.map_chunks(_census_shard, names, jobs=jobs, label="map census"):
+        found.world |= shard.world
+        found.decals |= shard.decals
+        found.models |= shard.models
+        found.physics |= shard.physics
+        found.sprites |= shard.sprites
+        found.ropes |= shard.ropes
+        found.skies |= shard.skies
+        found.unreadable.extend(shard.unreadable)
     return found
 
 
@@ -278,19 +296,6 @@ def resolve_models(idx, model_paths):
     return rows, materials, missing
 
 
-def alpha_keys(channel_sets):
-    """The base textures that must keep their alpha, unioned over every material that draws them.
-
-    One material asking is enough. Computed over the whole corpus so the answer is a property of
-    the install rather than of decode order -- the thing a per-map cache could not give.
-    """
-    out = set()
-    for channels in channel_sets:
-        if channels.get("needs_alpha") and channels.get("albedo"):
-            out.add(channels["albedo"])
-    return out
-
-
 def texture_demand(channels):
     """`{texture key: {suffix}}` -- every decoded product one material asks for."""
     out = {}
@@ -323,19 +328,128 @@ def texture_demand(channels):
 
 # ----------------------------------------------------------------------------- decode
 
-def _decode_plain(idx, jobs, tex_out, *, label):
+#: Each worker process builds nothing: the parent hands it the install index once, at pool
+#: start-up, rather than re-walking the install or re-pickling the table per shard.
+_WORKER_INDEX = None
+
+
+def _adopt_worker_index(index):
+    global _WORKER_INDEX
+    _WORKER_INDEX = index
+
+
+def _model_shard_plan(model_paths):
+    """``(paths to decode, {duplicate path: decoded stem})`` for a shardable model list.
+
+    `MDL.sanitize` can map two install paths onto one decoded stem. The serial decode settles
+    that by letting the first path in sorted order write the file and pointing the rest at it, so
+    the parent settles it the same way before sharding. A shard then owns whole stems and never
+    races another for one `.obj`, and the corpus is identical whatever the worker count.
+    """
+    decode, duplicates, seen = [], {}, set()
+    for model_path in sorted(set(model_paths)):
+        stem = model_path[:-4] if model_path.endswith(".mdl") else model_path
+        safe = MDL.sanitize(stem)
+        if safe in seen:
+            duplicates[model_path] = safe
+            continue
+        seen.add(safe)
+        decode.append(model_path)
+    return decode, duplicates
+
+
+def _decode_models_shard(model_paths, *, prop_out, tex_out):
+    """One shard of the model corpus, with a decode cache of its own."""
+    from elysium_pipeline.exporters.UE_bsp_to_scene import decode_prop_models
+
+    return decode_prop_models(_WORKER_INDEX, model_paths, prop_out, {}, set(), tex_out=tex_out)
+
+
+def decode_corpus_models(idx, model_paths, prop_out, tex_out, *, jobs=1):
+    """Decode every corpus model across `jobs` processes. ``(resolved, ok, missing)``.
+
+    Models are the GIL-bound half of the corpus -- `mdl.decode` reads its vertices field by field
+    in Python -- so this is where separate interpreters buy the most. Textures a model draws still
+    land in the one shared directory; two shards can reach the same one and write it twice, with
+    identical bytes, published atomically by `tex_to_png.save_png`.
+    """
+    decode, duplicates = _model_shard_plan(model_paths)
+    shards = workers.map_chunks(
+        functools.partial(_decode_models_shard, prop_out=prop_out, tex_out=tex_out),
+        decode,
+        jobs=jobs,
+        label="corpus models",
+        initializer=_adopt_worker_index,
+        initargs=(idx,),
+    )
+    resolved, ok, missing = {}, 0, 0
+    for shard_resolved, shard_ok, shard_missing in shards:
+        resolved.update(shard_resolved)
+        ok += shard_ok
+        missing += shard_missing
+
+    # A duplicate rides on the stem the primary wrote. Where the primary FAILED, nothing wrote
+    # that stem, so the duplicate is decoded on its own rather than dropped -- the same second
+    # chance the serial `valid` set gives it.
+    landed = set(resolved.values())
+    retry = []
+    for model_path, safe in duplicates.items():
+        if safe in landed:
+            resolved[model_path] = safe
+            ok += 1
+        else:
+            retry.append(model_path)
+    if retry:
+        from elysium_pipeline.exporters.UE_bsp_to_scene import decode_prop_models
+
+        print(f"  ! {len(retry)} model(s) share a decoded stem with a failed decode; "
+              "retrying them on their own")
+        retry_resolved, retry_ok, retry_missing = decode_prop_models(
+            idx, retry, prop_out, {}, set(), tex_out=tex_out)
+        resolved.update(retry_resolved)
+        ok += retry_ok
+        missing += retry_missing
+    return resolved, ok, missing
+
+
+def _decode_plain_shard(pairs, *, tex_out, label):
+    return _decode_plain(_WORKER_INDEX, pairs, tex_out, label=label)
+
+
+def decode_plain_textures(idx, pairs, tex_out, *, label, jobs=1):
+    """`_decode_plain` across `jobs` processes. One ``(key, suffix)`` names one file, so the
+    shards write disjoint outputs and merge without contending."""
+    shards = workers.map_chunks(
+        functools.partial(_decode_plain_shard, tex_out=tex_out, label=label),
+        sorted(set(pairs)),
+        jobs=jobs,
+        label=f"{label} textures",
+        initializer=_adopt_worker_index,
+        initargs=(idx,),
+    )
+    written, missing = {}, []
+    for shard_written, shard_missing in shards:
+        for key, files in shard_written.items():
+            # Two suffixes of one key can land in different shards, so the roles merge rather
+            # than the later shard replacing the earlier one's record.
+            written.setdefault(key, {}).update(files)
+        missing.extend(shard_missing)
+    return written, missing
+
+
+def _decode_plain(idx, pairs, tex_out, *, label):
     """Decode textures that belong to no material's channel set.
 
     Two kinds need this: a sky face, which is an ordinary texture under `materials/skybox/` with
     no VMT at all, and the ``Water`` shader's normal map, which is the only thing a water material
     draws. Everything else arrives through `_resolve_material`.
 
-    `jobs` is ``[(texture key, suffix)]``. Returns ``({key: {file: role}}, missing)``.
+    `pairs` is ``[(texture key, suffix)]``. Returns ``({key: {file: role}}, missing)``.
     """
-    from elysium_pipeline.formats.tex_to_png import decode as decode_texture
+    from elysium_pipeline.formats.tex_to_png import decode as decode_texture, save_png
 
     written, missing = {}, []
-    for key, suffix in sorted(set(jobs)):
+    for key, suffix in sorted(set(pairs)):
         name = SC.texture_file(key, suffix)
         target = os.path.join(tex_out, name)
         tth = install.read(idx, f"materials/{key}.tth")
@@ -344,7 +458,7 @@ def _decode_plain(idx, jobs, tex_out, *, label):
             missing.append(key)
             continue
         try:
-            decode_texture(tth, ttz).convert("RGB").save(target)
+            save_png(decode_texture(tth, ttz).convert("RGB"), target)
         except Exception as error:                           # noqa: BLE001 - decoder is broad
             print(f"  ! {label} decode failed {key}: {error}")
             missing.append(key)
@@ -355,6 +469,15 @@ def _decode_plain(idx, jobs, tex_out, *, label):
 
 def _decoded_files(tex_out):
     return {name for name in os.listdir(tex_out)} if os.path.isdir(tex_out) else set()
+
+
+def _png_has_alpha(path):
+    """Whether the written PNG carries an alpha channel -- a fact read off the file, since the
+    file is the decision (`tex_to_png.save_png` folds a uniformly opaque plane to RGB)."""
+    from PIL import Image
+
+    with Image.open(path) as image:
+        return image.mode in ("RGBA", "LA", "PA")
 
 
 def _png_size(path):
@@ -408,9 +531,8 @@ def build_units(idx, *, models=(), materials=(), verbose=True):
     and leaves every other row exactly as the last whole-corpus run wrote it -- so changing one
     prop costs one model's decode instead of the install's.
 
-    The alpha decision stays corpus-wide: the manifest records, per texture, whether the whole
-    material set needed its alpha, and a unit run unions its own demand onto that rather than
-    deciding afresh from one material's point of view.
+    A texture's alpha is a fact of its own file (`tex_to_png.save_png`), so a unit run cannot
+    disagree with the whole-corpus run about any texture it re-decodes.
     """
     from elysium_pipeline.exporters.UE_bsp_to_scene import decode_prop_models
 
@@ -434,17 +556,14 @@ def build_units(idx, *, models=(), materials=(), verbose=True):
     channels = dict(world)
     channels.update(prop_materials)
 
-    keep = {key for key, record in manifest["textures"].items() if record.get("alpha")}
-    keep |= alpha_keys(channels.values())
-
     tex_cache = {}
     read_bytes = _read(idx)
     for key in sorted(world):
-        MDL._resolve_material(key, [], read_bytes, OUT, tex_cache,
-                              keep_alpha=keep, tex_out=tex_out)
+        MDL._resolve_material(key, MDL.WORLD_SEARCH, read_bytes, OUT, tex_cache,
+                              tex_out=tex_out)
     resolved, ok, gone = decode_prop_models(
         idx, [row["model"] for row in rows.values()], prop_out, tex_cache, set(),
-        keep_alpha=keep, tex_out=tex_out)
+        tex_out=tex_out)
     if rows:
         from elysium_pipeline.formats import phy
 
@@ -456,13 +575,13 @@ def build_units(idx, *, models=(), materials=(), verbose=True):
     for key, unit in channels.items():
         for texture_key, suffixes in texture_demand(unit).items():
             record = manifest["textures"].setdefault(
-                texture_key, {"files": {}, "alpha": texture_key in keep})
-            record["alpha"] = texture_key in keep
+                texture_key, {"files": {}, "alpha": False})
             for suffix in suffixes:
                 name = SC.texture_file(texture_key, suffix)
                 if name in present:
                     record["files"][name] = SC.ROLES[suffix]
                     if suffix == SC.ALBEDO:
+                        record["alpha"] = _png_has_alpha(os.path.join(tex_out, name))
                         record["size"] = _png_size(os.path.join(tex_out, name))
                         record["reflectivity"] = _reflectivity(idx, texture_key)
         material_doc["materials"][key] = SC.material_record(
@@ -478,11 +597,16 @@ def build_units(idx, *, models=(), materials=(), verbose=True):
     return manifest, material_doc
 
 
-def build(idx, *, map_names=None, verbose=True):
+def build(idx, *, map_names=None, verbose=True, jobs=1):
     """Decode the whole corpus and return `(manifest, materials document)`.
 
     `map_names` restricts the census, which only a focused diagnostic wants; a unit rebake goes
     through `build_units` so it costs one decode instead of the install's.
+
+    `jobs` is the worker count for the three stages whose outputs shard cleanly -- the map
+    census, the model decode, and the plain sky/water textures. World material resolution stays
+    on one process: its `tex_cache` carries an emission mask and a decoded image from one
+    material to the next, so a shard would either re-derive them or read one half-filled.
     """
     from elysium_pipeline.exporters.UE_bsp_to_scene import decode_prop_models
 
@@ -491,7 +615,7 @@ def build(idx, *, map_names=None, verbose=True):
     os.makedirs(tex_out, exist_ok=True)
     os.makedirs(prop_out, exist_ok=True)
 
-    found = discover(idx, map_names)
+    found = discover(idx, map_names, jobs=jobs)
     for name, error in found.unreadable:
         print(f"  ! map unreadable, its content is absent from the corpus: {name}: {error}")
 
@@ -501,31 +625,29 @@ def build(idx, *, map_names=None, verbose=True):
         print(f"  ! model not in the install: {path}")
     all_channels = dict(world)
     all_channels.update(prop_materials)
-    keep = alpha_keys(all_channels.values())
-    # A corona and a cable draw their own cut-out, so their base textures keep alpha whatever the
-    # VMT declares -- a chain flattened to RGB renders as a solid tube with a chain painted on it.
-    for key in found.sprites | found.ropes:
-        channels = world.get(key)
-        if channels and channels.get("albedo"):
-            keep.add(channels["albedo"])
     if verbose:
         print(f"corpus: {len(all_channels)} materials, {len(rows)} models, "
-              f"{len(found.skies)} skies, {len(keep)} textures keeping alpha")
+              f"{len(found.skies)} skies")
 
     # World and decal materials: decode their textures into the one corpus directory. The `.mtl`
     # these would have written is `materials.json` instead, so no per-material file is produced.
+    # A world material's one candidate is the materials root (`MDL.WORLD_SEARCH`) -- the same
+    # resolution `resolve_world` used; an empty search list resolves nothing and would leave
+    # every world-only texture out of the corpus.
     tex_cache = {}
     read_bytes = _read(idx)
     for key, channels in sorted(world.items()):
-        MDL._resolve_material(key, [], read_bytes, OUT, tex_cache,
-                              keep_alpha=keep, tex_out=tex_out)
+        MDL._resolve_material(key, MDL.WORLD_SEARCH, read_bytes, OUT, tex_cache,
+                              tex_out=tex_out)
 
     # Models: one OBJ + MTL + skins + phys each, with every texture landing in the same corpus
-    # directory the world materials used.
+    # directory the world materials used. Each shard opens its own decode cache, so a texture the
+    # world loop already wrote is decoded again rather than carried across the process boundary --
+    # the alternative is pickling every decoded image to every worker, which costs more than the
+    # re-decode it saves.
     wanted = [row["model"] for _stem, row in sorted(rows.items())]
-    resolved, ok, missing = decode_prop_models(
-        idx, wanted, prop_out, tex_cache, set(),
-        keep_alpha=keep, tex_out=tex_out)
+    resolved, ok, missing = decode_corpus_models(
+        idx, wanted, prop_out, tex_out, jobs=jobs)
     if verbose:
         print(f"corpus models: {ok} decoded, {missing} missing -> {prop_out}")
 
@@ -537,16 +659,16 @@ def build(idx, *, map_names=None, verbose=True):
     phy.write_physics_phys(idx, prop_out, {
         SC.static_stem(path): path for path in sorted(found.physics)})
 
-    sky_files, missing_sky = _decode_plain(
+    sky_files, missing_sky = decode_plain_textures(
         idx, [(SC.sky_texture_key(sky, face), SC.ALBEDO)
               for sky in found.skies for face in SC.SKY_FACES],
-        tex_out, label="sky face")
+        tex_out, label="sky face", jobs=jobs)
     for key in missing_sky:
         print(f"  ! sky face not in the install: {key}")
-    water_files, missing_water = _decode_plain(
+    water_files, missing_water = decode_plain_textures(
         idx, [(channels["water_normal"], SC.NORMAL) for channels in all_channels.values()
               if channels.get("water_normal")],
-        tex_out, label="water normal")
+        tex_out, label="water normal", jobs=jobs)
     for key in missing_water:
         print(f"  ! water normal not in the install: {key}")
 
@@ -556,12 +678,13 @@ def build(idx, *, map_names=None, verbose=True):
     textures = {}
     for channels in all_channels.values():
         for key, suffixes in texture_demand(channels).items():
-            record = textures.setdefault(key, {"files": {}, "alpha": key in keep})
+            record = textures.setdefault(key, {"files": {}, "alpha": False})
             for suffix in suffixes:
                 name = SC.texture_file(key, suffix)
                 if name in present:
                     record["files"][name] = SC.ROLES[suffix]
                     if suffix == SC.ALBEDO:
+                        record["alpha"] = _png_has_alpha(os.path.join(tex_out, name))
                         record["size"] = _png_size(os.path.join(tex_out, name))
                         record["reflectivity"] = _reflectivity(idx, key)
     for extra in (sky_files, water_files):
@@ -616,8 +739,13 @@ def _write(path, document):
         handle.write(text)
 
 
-def main(index=None, *, map_names=None, models=None, materials=None, force=False):
-    """Decode the corpus and write its two documents. Returns the manifest."""
+def main(index=None, *, map_names=None, models=None, materials=None, force=False, jobs=None):
+    """Decode the corpus and write its two documents. Returns the manifest.
+
+    `jobs` defaults to the machine's decode width, so `export bundle corpus` is as wide as a
+    profile run; a caller that must stay on one process states ``jobs=1``.
+    """
+    jobs = workers.default_jobs() if jobs is None else jobs
     idx = index if index is not None else install.build_index()
     if force:
         for directory in (SC.tex_dir(OUT), SC.props_dir(OUT)):
@@ -629,7 +757,7 @@ def main(index=None, *, map_names=None, models=None, materials=None, force=False
         manifest, material_doc = build_units(
             idx, models=models or (), materials=materials or ())
     else:
-        manifest, material_doc = build(idx, map_names=map_names)
+        manifest, material_doc = build(idx, map_names=map_names, jobs=jobs)
     _write(str(SC.manifest_path(OUT)), manifest)
     _write(str(SC.materials_path(OUT)), material_doc)
 

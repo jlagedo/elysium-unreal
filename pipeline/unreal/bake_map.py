@@ -14,8 +14,7 @@
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/bake_map.py"
 #       -BakeMap=sp_tutorial_1 -unattended -nosplash -nopause
 #
-# Optional -BakeStages=<csv> restricts the run to a subset of:
-#   textures, materials, world, sky, particles, level
+# Optional -BakeForce=1 re-authors every asset whether or not its stamped recipe matches.
 import math
 import json
 import os
@@ -27,9 +26,9 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
-from elysium_pipeline import bake_cache, placed_models as PM, shared_corpus as SC  # noqa: E402
+from elysium_pipeline import placed_models as PM, shared_corpus as SC  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
-from elysium_pipeline.tasking import ContentDigestCache  # noqa: E402
+from elysium_pipeline.tasking import ContentDigestCache, DIGEST_CACHE_FILE  # noqa: E402
 
 MOUNT = "/ElysiumBaked"
 OUT_ROOT = os.fspath(export_root())
@@ -107,7 +106,6 @@ FOG_CPD_FLOATS = 6
 
 # A map bakes only what carries its own inputs. Prop meshes and every surface texture and
 # material belong to the corpus scope, which runs `shared_corpus.STAGES` instead.
-ALL_STAGES = ("textures", "materials", "world", "sky", "particles", "level")
 
 # Static models per prop-stage checkpoint. The corpus builds thousands of meshes in one editor
 # process, so the stage saves, reports and releases each batch instead of holding the whole set
@@ -216,90 +214,165 @@ def _asset_path(asset):
     return path.split(".", 1)[0]
 
 
+def level_sidecar_recipe(map_root: Path, map_name: str) -> dict:
+    """Parse only the values that affect authored level actors.
+
+    Formatting, comments, and ignored Source fields do not dirty the level package.  Ordered
+    rows stay ordered because decal sort order and light source indices are authored output.
+    """
+
+    def lines(suffix: str):
+        path = map_root / f"{map_name}.{suffix}"
+        if not path.is_file():
+            return []
+        return [line.split() for line in path.read_text(
+            encoding="utf-8", errors="replace"
+        ).splitlines()]
+
+    def number(value: str):
+        try:
+            return float(value)
+        except ValueError:
+            return value
+
+    props = []
+    for tokens in lines("props"):
+        if len(tokens) < 9:
+            continue
+        props.append({
+            "stem": tokens[0],
+            "position": [float(value) for value in tokens[1:4]],
+            "rotation": [float(value) for value in tokens[4:8]],
+            "solid": int(tokens[8]),
+            "skin": int(tokens[9]) if len(tokens) >= 10 else 0,
+            "sky": int(tokens[10]) if len(tokens) >= 11 else 0,
+        })
+
+    decals = []
+    for tokens in lines("decals"):
+        if len(tokens) == 15:
+            decals.append({
+                "material": tokens[0],
+                "values": [float(value) for value in tokens[1:]],
+            })
+
+    lights = []
+    for index, tokens in enumerate(lines("lights")):
+        if len(tokens) < 15:
+            continue
+        kind = int(tokens[0])
+        rgb = [float(value) for value in tokens[7:10]]
+        if max(rgb) <= 0.0 or kind not in (0, 1, 2, 3, 5):
+            continue
+        row = {"index": index, "kind": kind, "rgb": rgb}
+        if kind != 5:
+            row.update({
+                "position": [float(value) for value in tokens[1:4]],
+                "direction": [float(value) for value in tokens[4:7]],
+                "radius": float(tokens[10]),
+                "stopdot": float(tokens[11]),
+                "stopdot2": float(tokens[12]),
+                "sky": int(tokens[15]) if len(tokens) >= 16 else 0,
+            })
+        lights.append(row)
+
+    env = {}
+    relevant_env = {
+        "fog", "fogcolor", "fogstart", "fogend",
+        "skyfog", "skyfogcolor", "skyfogstart", "skyfogend",
+    }
+    for tokens in lines("env"):
+        if len(tokens) >= 2 and tokens[0] in relevant_env:
+            if tokens[0] in {"fog", "skyfog"}:
+                env[tokens[0]] = tokens[1] == "1"
+            else:
+                env[tokens[0]] = [number(value) for value in tokens[1:]]
+
+    sky = {"origin": [0.0, 0.0, 0.0], "scale": 16.0}
+    for tokens in lines("sky"):
+        if len(tokens) == 4 and tokens[0] == "origin":
+            sky["origin"] = [float(value) for value in tokens[1:4]]
+        elif len(tokens) == 2 and tokens[0] == "scale":
+            sky["scale"] = float(tokens[1])
+
+    spawn = {"origin": None, "yaw": 0.0}
+    for tokens in lines("spawn"):
+        if len(tokens) >= 4 and tokens[0] == "origin":
+            spawn["origin"] = [float(value) for value in tokens[1:4]]
+        elif len(tokens) >= 2 and tokens[0] == "yaw":
+            spawn["yaw"] = float(tokens[1])
+
+    return {
+        "props": props,
+        "decals": decals,
+        "lights": lights,
+        "environment": env,
+        "sky": sky,
+        "spawn": spawn,
+    }
+
+
 class AssetTracker(object):
-    """Decide and report per-package work for one map bake."""
+    """Decide per-asset work by comparing each recipe against the hash stamped on the asset.
 
-    def __init__(self, map_name, plan, digest_cache):
-        self.map = map_name
-        self.plan = plan
-        self.run_id = str(plan["run_id"])
-        self.force = bool(plan.get("force"))
-        self.map_plan = plan["maps"][map_name]
+    The mount is the record: every baked asset carries its recipe fingerprint as package
+    metadata (`bake_lib.RECIPE_TAG`), surfaced as an asset registry tag, so a fresh process
+    reads what is current without loading a package, a crash loses only the packages that were
+    not saved, and no state exists outside the assets themselves. Unreal owns everything
+    downstream -- references resolve by path and derived data re-keys off content -- so the one
+    question decided here is the one the engine cannot answer: does this asset still match the
+    intermediate it was authored from?
+
+    `stage` names group the run's counters for reporting; they select nothing.
+    """
+
+    def __init__(self, scope, digest_cache, force=False):
+        self.scope = scope
+        self.force = bool(force)
         self.digest_cache = digest_cache
-        self.selected = tuple(self.map_plan["stages"])
-        self.receipts = bake_cache.AssetReceiptStore(Path(OUT_ROOT), map_name)
-        self.repo_root = Path(unreal.Paths.project_dir()).resolve()
         self.stages = {}
-        for stage in self.selected:
-            self.stages[stage] = {
-                "policy": self.map_plan["policies"][stage],
-                "assets": {},
-                "built": 0,
-                "reused": 0,
-                "pruned": 0,
-            }
+        self.recipes = {}
 
-    def selected_stage(self, stage):
-        return stage in self.stages
+    def _counters(self, stage):
+        return self.stages.setdefault(stage, {"built": 0, "reused": 0, "pruned": 0})
 
     def file_sha256(self, path):
         return self.digest_cache.digest(Path(path))
 
     def register(self, stage, object_path, recipe, expected_class="", fresh=True):
-        if stage not in self.stages:
-            raise RuntimeError("asset registered for an unselected stage: %s" % stage)
-        policy = self.stages[stage]["policy"]
-        fingerprint = bake_cache.asset_recipe_fingerprint(
-            stage, object_path, policy, recipe)
-        output = bake_cache.unreal_output_path(self.repo_root, object_path, stage)
+        counters = self._counters(stage)
+        fingerprint = bl.recipe_fingerprint(stage, object_path, recipe)
+        self.recipes[object_path] = fingerprint
         exists = unreal.EditorAssetLibrary.does_asset_exist(object_path)
-        class_ok = True
         if exists and expected_class:
-            class_ok = bl.asset_class_name(object_path) == expected_class
-            if not class_ok:
+            if bl.asset_class_name(object_path) != expected_class:
                 bl.delete_owned_asset(object_path)
                 exists = False
-        dirty = (self.force or not fresh or not exists or not class_ok
-                 or not self.receipts.matches(stage, object_path, fingerprint))
-        self.stages[stage]["assets"][object_path] = {
-            "object_path": object_path,
-            "fingerprint": fingerprint,
-            "output": str(output),
-        }
-        if dirty:
+        if (self.force or not fresh or not exists
+                or bl.stored_recipe(object_path) != fingerprint):
             return True
-        self.stages[stage]["reused"] += 1
+        counters["reused"] += 1
         return False
 
+    def stamp(self, asset, object_path):
+        """Stamp the recipe this run computed for the asset; called before its save."""
+        fingerprint = self.recipes.get(object_path)
+        if not fingerprint:
+            fail("no recipe was registered for %s; left unstamped, it re-authors next run"
+                 % object_path)
+            return
+        bl.stamp_recipe(asset, fingerprint)
+
     def built(self, stage, count=1):
-        self.stages[stage]["built"] += count
+        self._counters(stage)["built"] += count
 
     def pruned(self, stage, count):
-        self.stages[stage]["pruned"] += int(count)
+        self._counters(stage)["pruned"] += int(count)
 
     def summary(self, stage):
-        data = self.stages[stage]
+        data = self._counters(stage)
         return "%d built / %d reused / %d pruned" % (
             data["built"], data["reused"], data["pruned"])
-
-    def write_report(self):
-        report = {
-            "schema": bake_cache.ASSET_RUN_SCHEMA,
-            "version": bake_cache.ASSET_SCHEMA_VERSION,
-            "run_id": self.run_id,
-            "map": self.map,
-            "stages": self.stages,
-        }
-        bake_cache.write_asset_run_report(Path(OUT_ROOT), report)
-
-    def write_receipts(self):
-        """Persist the per-asset receipts of every stage that has flushed work.
-
-        `write_report` publishes what the orchestrator validates and promotes once the commandlet
-        exits. This writes that promoted document directly, so the work survives a kill of the
-        whole process tree -- the orchestrator no longer has to be alive for it to be kept.
-        """
-        return bake_cache.checkpoint_receipts(Path(OUT_ROOT), self.map, self.stages)
 
 
 class Bake(object):
@@ -1597,7 +1670,7 @@ class Bake(object):
             return sorted(paths)
 
         return {
-            "placement": bake_cache.level_sidecar_recipe(Path(self.dir), self.map),
+            "placement": level_sidecar_recipe(Path(self.dir), self.map),
             "world_sky_meshes": assets(self.mesh_pkg, ("SM_World_", "SM_Sky_")),
             # Only the models this map places. Enumerating the whole shared package would make
             # every level stale whenever any of the corpus's 3,000 meshes changed, which is the
@@ -1687,6 +1760,7 @@ class Bake(object):
         self._place_sky(actors, sky_ambient)
         self._place_player_start(actors)
 
+        self.tracker.stamp(world, map_path)
         if unreal.EditorLoadingAndSavingUtils.save_map(world, map_path):
             self.tracker.built("level")
             log("level: saved %s (%.1fs)" % (map_path, time.time() - start))
@@ -1926,6 +2000,9 @@ class Bake(object):
         start = time.time()
         failed = 0
         for asset_path in self.saved:
+            asset = unreal.EditorAssetLibrary.load_asset(asset_path)
+            if asset:
+                self.tracker.stamp(asset, asset_path)
             if not bl.save(asset_path):
                 failed += 1
         log("saved %d assets, %d failed (%.1fs)" % (
@@ -1936,22 +2013,18 @@ class Bake(object):
         return failed
 
     def checkpoint(self, label):
-        """Save the queued packages, publish the run report and the receipts, reclaim memory.
+        """Save the queued packages and reclaim memory.
 
-        Both documents are written AFTER the save, so every asset either one lists exists on disk.
-        That is what makes the report promotable -- `load_asset_run_reports` validates each
-        receipt's output file -- and what makes the receipts themselves a safe crash floor.
-        Returns the number of packages that could not be saved.
+        A saved asset carries its recipe stamp, so whatever lands before a crash is already
+        current for the next run; there is nothing else to record. Returns the number of
+        packages that could not be saved.
         """
         failed = self.flush()
         if failed:
-            fail("checkpoint %s: %d asset(s) could not be saved, nothing recorded"
-                 % (label, failed))
+            fail("checkpoint %s: %d asset(s) could not be saved" % (label, failed))
             return failed
-        self.tracker.write_report()
-        self.tracker.write_receipts()
         _collect_garbage()
-        log("corpus checkpoint: %s -- report and receipts written, %s" % (label, "; ".join(
+        log("corpus checkpoint: %s -- %s" % (label, "; ".join(
             "%s %s" % (stage, self.tracker.summary(stage)) for stage in self.tracker.stages)))
         return 0
 
@@ -2049,68 +2122,54 @@ class CorpusBake(Bake):
                     self.materials[(mat_pkg, key)] = unreal.EditorAssetLibrary.load_asset(path)
 
 
-def bake_corpus(stages, asset_plan, digest_cache):
+def bake_corpus(digest_cache, force=False):
     """Bake the shared corpus in the current editor process.
 
     The corpus is thousands of packages in one process, so each stage -- and each batch of prop
-    meshes inside the props stage -- checkpoints when it completes: the queued packages are saved,
-    an interim run report is published, and the editor collects what the batch no longer holds. A
-    run that dies later still leaves a report the orchestrator can promote, so the next run reuses
-    the work that landed instead of building it a second time.
+    meshes inside the props stage -- checkpoints when it completes: the queued packages are
+    saved, each carrying its recipe stamp, and the editor collects what the batch no longer
+    holds. A run that dies later still leaves everything it saved current for the next run.
     """
-    tracker = AssetTracker(SC.SCOPE, asset_plan, digest_cache)
+    tracker = AssetTracker(SC.SCOPE, digest_cache, force=force)
     bake = CorpusBake(tracker, digest_cache)
     if not bake.load_masters() or not bake.load_sources():
         return False
-    if "textures" in stages:
-        bake.stage_textures()
-        if bake.checkpoint("textures"):
-            return False
+    bake.stage_textures()
+    if bake.checkpoint("textures"):
+        return False
     bake.resolve_textures()
-    if "materials" in stages:
-        bake.stage_materials()
-        if bake.checkpoint("materials"):
-            return False
+    bake.stage_materials()
+    if bake.checkpoint("materials"):
+        return False
     bake.resolve_materials()
-    if "props" in stages:
-        bake.stage_props()
+    bake.stage_props()
     if bake.flush():
         return False
-    tracker.write_report()
     log("%s done" % SC.SCOPE)
     return True
 
 
-def bake_one(map_name, stages, asset_plan, digest_cache):
+def bake_one(map_name, digest_cache, force=False):
     """Bake one map in the current editor process."""
-    tracker = AssetTracker(map_name, asset_plan, digest_cache)
+    tracker = AssetTracker(map_name, digest_cache, force=force)
     bake = Bake(map_name, tracker, digest_cache)
     if not bake.load_masters() or not bake.load_sources():
         return False
-
-    # Textures and materials are prerequisites for every mesh stage, so they always run --
-    # a restricted -BakeStages skips their asset *creation*, not the lookup.
-    if "textures" in stages:
-        bake.stage_textures()
+    bake.stage_textures()
     bake.resolve_textures()
-    if "materials" in stages:
-        bake.stage_materials()
+    bake.stage_materials()
     bake.resolve_materials()
-    if "world" in stages:
-        bake.stage_world()
-    if "sky" in stages:
-        bake.stage_sky()
-    if "particles" in stages:
-        # One Niagara system per env_particle definition the map places. Independent of the mesh
-        # stages -- it reads the offline particle sidecar, not the OBJ/material graph.
-        from pipeline.unreal import make_particle_systems
-        make_particle_systems.build(
-            map_name, Path(OUT_ROOT), bake.pkg, tracker=bake.tracker)
+    bake.stage_world()
+    bake.stage_sky()
+    # One Niagara system per env_particle definition the map places. Independent of the mesh
+    # stages -- it reads the offline particle sidecar, not the OBJ/material graph.
+    from pipeline.unreal import make_particle_systems
+    make_particle_systems.build(
+        map_name, Path(OUT_ROOT), bake.pkg, tracker=bake.tracker)
     if bake.flush():
         return False
-    if "level" in stages and not bake.stage_level():
+    if not bake.stage_level():
         return False
-    tracker.write_report()
     log("%s done" % map_name)
     return True
 
@@ -2121,53 +2180,14 @@ def _collect_garbage():
         collect()
 
 
-def _manual_plan(scopes, stages):
-    """The forced run plan a direct invocation uses. Never promoted by the outer orchestrator."""
-    return {
-        "schema": bake_cache.ASSET_RUN_SCHEMA,
-        "version": bake_cache.ASSET_SCHEMA_VERSION,
-        "run_id": "manual-%d" % int(time.time()),
-        "force": True,
-        "maps": {scope: {
-            "stages": list(stages),
-            "fingerprints": {stage: "manual" for stage in stages},
-            "policies": {stage: "manual" for stage in stages},
-        } for scope in scopes},
-    }
-
-
-def _load_asset_plan(path):
-    """Read one frozen asset run plan off disk, or exit when it is not one this bake can read."""
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            plan = json.load(handle)
-    except (OSError, ValueError) as exc:
-        fail("invalid asset run plan: %s" % exc)
-        raise SystemExit(1)
-    if (plan.get("schema") != bake_cache.ASSET_RUN_SCHEMA
-            or plan.get("version") != bake_cache.ASSET_SCHEMA_VERSION):
-        fail("unsupported asset run plan schema")
-        raise SystemExit(1)
-    return plan
-
-
 def _run_corpus():
-    """-BakeCorpus=1: the shared corpus, gated upstream by its own manifest task."""
-    asset_plan_path = cmdline_arg("BakeAssetPlan", "")
-    if asset_plan_path:
-        asset_plan = _load_asset_plan(asset_plan_path)
-        planned = asset_plan.get("maps", {}).get(SC.SCOPE)
-        if not planned or set(planned.get("stages", [])) != set(SC.STAGES):
-            fail("asset run plan does not match %s stages" % SC.SCOPE)
-            raise SystemExit(1)
-    else:
-        # Direct developer invocation remains a recovery surface.
-        asset_plan = _manual_plan([SC.SCOPE], SC.STAGES)
+    """-BakeCorpus=1: the shared corpus scope."""
+    force = bool(cmdline_arg("BakeForce", ""))
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
         [MOUNT], force_rescan=True)
-    digest_cache = ContentDigestCache(Path(OUT_ROOT) / bake_cache.DIGEST_CACHE_FILE)
+    digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)
     try:
-        ok = bake_corpus(SC.STAGES, asset_plan, digest_cache)
+        ok = bake_corpus(digest_cache, force=force)
     finally:
         digest_cache.write()
         _collect_garbage()
@@ -2184,37 +2204,21 @@ def main():
     map_names = [item.strip() for item in raw_maps.split(",") if item.strip()]
     if not map_names:
         map_names = [cmdline_arg("BakeMap", "sp_tutorial_1")]
-    stages = [s.strip() for s in cmdline_arg("BakeStages", ",".join(ALL_STAGES)).split(",")
-              if s.strip()]
-    unknown = sorted(set(stages) - set(ALL_STAGES))
-    if unknown:
-        fail("unknown stage(s): %s" % ", ".join(unknown))
-        raise SystemExit(1)
-    asset_plan_path = cmdline_arg("BakeAssetPlan", "")
-    if asset_plan_path:
-        asset_plan = _load_asset_plan(asset_plan_path)
-    else:
-        # Direct developer invocation remains a recovery surface.
-        asset_plan = _manual_plan(map_names, stages)
-    for map_name in map_names:
-        planned = asset_plan.get("maps", {}).get(map_name)
-        if not planned or set(planned.get("stages", [])) != set(stages):
-            fail("asset run plan does not match %s stages" % map_name)
-            raise SystemExit(1)
-    log("maps=%s stages=%s" % (",".join(map_names), ",".join(stages)))
+    force = bool(cmdline_arg("BakeForce", ""))
+    log("maps=%s%s" % (",".join(map_names), " (forced)" if force else ""))
 
     # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for
     # assets already on disk and every create_asset call then trips the unattended
-    # overwrite guard. Scan it up front so re-runs reuse what is there.
+    # overwrite guard. Scanning up front also loads the recipe tags reuse decisions read.
     unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
         [MOUNT], force_rescan=True)
 
     failed = []
-    digest_cache = ContentDigestCache(Path(OUT_ROOT) / bake_cache.DIGEST_CACHE_FILE)
+    digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)
     for position, map_name in enumerate(map_names, 1):
         log("--- [%d/%d] %s ---" % (position, len(map_names), map_name))
         try:
-            if not bake_one(map_name, stages, asset_plan, digest_cache):
+            if not bake_one(map_name, digest_cache, force=force):
                 failed.append(map_name)
         except (Exception, SystemExit) as exc:
             fail("%s raised: %s" % (map_name, exc))
