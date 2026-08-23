@@ -114,6 +114,12 @@ default.
 `FUN_10256220` reads the same field independently of equip — `return *(int *)(defn + 0x2448) != 0` —
 and is called throughout the ranged and melee reload state machine.
 
+A third consumer is the first-person hands. `FUN_10182e00`, which resolves the hands viewmodel from
+the wearer's clan and sex (`docs/vtmb/animation_and_movers.md`), tests `shows_view_model` and then
+`hides_hands_model` before anything else: either a cleared `+0x2448` or a non-zero `+0x244c` on the
+active weapon clears the hands entity's model outright and returns. `hides_hands_model` has no other
+reader.
+
 ### The keys either side of the model block
 
 `FUN_1025b930` walks the struct in declaration order and brackets the model keys:
@@ -226,8 +232,38 @@ handle resolver, a jump-table forwarder or a no-op stub; none touches `m_hOwner`
 `+0x328` or the wield-model accessors. No virtual implements "stay owned and parented, stop being
 visually active".
 
-*Uncertain:* whether an active-weapon switch calls detach on the outgoing weapon and equip on the
-incoming one. **What would close it:** the character-side weapon-switch caller.
+An active-weapon switch does not detach the outgoing weapon. `CBaseCombatCharacter::Weapon_Switch`
+(`0x1032dde0`) and `Weapon_Equip` (`0x1032d380`) both call the outgoing weapon's own `Holster`
+(below); detach stays the release path, holster is the state change.
+
+### Deploy and holster are weapon-side, and the busy timer is the character's
+
+`Deploy` is vtable slot 315 (`+0x4ec`) and `Holster` slot 316 (`+0x4f0`) [static-verified].
+`CBaseCombatWeapon::Deploy` (`0x10253c50`) and `CWeaponMelee::Deploy` (`0x103ea510`) are the same
+body up to a male/female wield-sound lookup; `CWeaponRanged::Deploy` (`0x102395c0`) adds that lookup
+and picks its activity by attack mode — `ACT_VM_DRAW2` (`0xe1`) when `m_iAtkMode` is non-zero,
+`ACT_VM_DRAW` (`0xb4`) otherwise. All three commit through `0x10253b70`, which refuses only on an
+ammunition/readiness test — there is no "already busy" gate — then dispatches the activity onto the
+viewmodel and stores it in `m_iTakeOutActivity` (`+0x854`), where the weapon's idle think consumes
+it on the next tick (`docs/vtmb/animation_and_movers.md`).
+
+`Holster` (`0x10253ca0`, shared unmodified by melee; `CWeaponRanged`'s `0x10239d10` cancels zoom
+first) clears `m_bInReload`, cancels the weapon's pending `Think`, unwields and hides the world
+model. **It plays `ACT_VM_LOWER` (`0xde`) only when its caller passes a non-null second argument**:
+`Weapon_Equip` passes `0`, so a forced replace holsters silently, while `Weapon_Switch` passes the
+incoming weapon, so the lower animation is specifically the player-driven weapon-to-weapon switch.
+
+Both ends write the character-level `m_flNextAttack` from `SequenceDuration` of the clip actually
+selected, falling back to a constant only when no viewmodel record exists — the timing is the
+sequence's, not an authored item field. `CBasePlayer::ItemPostFrame` (`0x10174ce0`) routes to the
+weapon's `ItemBusyFrame` (slot 320) while that timer is live, and `ItemBusyFrame` reads no fire or
+reload input at all, so attack and reload are unreachable for the duration of a draw or holster.
+
+A switch issued mid-draw or mid-reload aborts rather than queues: nothing in the select path
+(`0x101772b0`, gated on `m_bCanSwitchWeapons`) or in `Weapon_CanSwitchTo` (`0x1032db60`) consults
+`m_flNextAttack` or `m_iTakeOutActivity`, and `Holster` then zeroes `m_bInReload`, kills the pending
+reload-completion `Think` and overwrites the timer. [inferred] **What would close it:** the
+key-bound console-command layer feeding `0x101772b0`, checked for a further gate.
 
 ## 3. Composition — a per-bone name-matched copy
 

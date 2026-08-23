@@ -8,28 +8,18 @@ until the faces are alive, **eyes and lipsync included**. Facts:
 `docs/vtmb/animation_and_movers.md`. RE33 verifies 12.3–12.5 rather than gating them; RE34
 makes 12.4 a plain reproduction.
 
+Scene line audio, subtitles and the mixahead lead belong to the audio programme's AUD3
+(`plans/audio.md`); this file owns the faces the lines drive.
+
 ### 12.1 Choreographed scenes — remaining
 
 The reader/timeline/entity, cameras, PC body, controller transfer and the per-actor cinematic
 bank binding are implemented and verified. **Remaining:** the residual RE32 material/remap work
 and the final live acceptance pass — `newgame_ttd` with no unexpected actor, clip, camera, NPC
-or prop diagnostics (deferred scene audio/facial/lip work belongs to 12.2–12.5). `hide_ents`
+or prop diagnostics (deferred facial/lip work belongs to 12.3–12.5, scene audio to AUD3).
+`hide_ents`
 stays behind `elysium.SceneHideEnts` (default 0); the authored missing `controls` target stays
 a single non-fatal diagnostic.
-
-### 12.2 Scene audio + subtitles
-
-Per-line audio through 6.5/6.6's shared line service (the `PlayDialogFile` resolution rules)
-synced to scene time; a subtitle surface on the view state (11.8). *Acceptance:* the scene's
-lines are audible and subtitled in sync. *Deps:* 12.1, 6.5, 6.6, 11.8.
-
-### 12.2b Scene mixahead calibration *(blocks lipsync precision)*
-
-The runtime applies VtMB's `snd_mixahead` 0.100 s to every `speak` event; our own audible
-latency is ~21–61 ms, so dialogue is heard 40–80 ms early against every authored cue — lipsync,
-expressions, gestures and camera cuts alike. One term unmeasured: `ScheduledAudioClock` is
-stamped at submit, before the async mp3 decode. *Acceptance:* the lead matches the measured
-path, with the residual stated. *Deps:* none — a constant and a measurement.
 
 ### 12.3 Facial flex track — remaining
 
@@ -56,10 +46,10 @@ fallback. *Deps:* 12.3.
 
 ### 12.5 Lipsync
 
-`.lip` phoneme tracks driving mouth flexes against 12.2's line audio — a three-file join per
+`.lip` phoneme tracks driving mouth flexes against AUD3's line audio — a three-file join per
 line: the `.lip` for timing, `expressions/<model stem>_phonemes.txt` for phoneme→controller
 weights (249 tables, keyed by the actor's model basename), and `mstudiomouth_t` for the
 amplitude jaw alongside. Key on the phoneme *string* — the numeric code is not stable across
 the corpus. All inputs are on disk (`$ELYSIUM_EXPORT_ROOT/lip/`, `/expressions/`, `mouths` in
 the facial sidecar). *Acceptance:* mouths move with the words on every theatre line. *Deps:*
-12.2, 12.3.
+AUD3, 12.3.

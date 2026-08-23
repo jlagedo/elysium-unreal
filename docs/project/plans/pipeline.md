@@ -23,10 +23,5 @@ patch-first into `$ELYSIUM_EXPORT_ROOT/particles/`, wired into export orchestrat
 exported geometry bounds; `sm_hub_1` is accepted, but grid-wide height-map
 generation/acceptance has not run. Format: `docs/vtmb/weather.md`. Needed by 7.9.
 
-### PL17 Patch-first audio catalog + typed sidecars
-
-Codec/channel/rate/frame/duration metadata, complete static reference closure, parsed map +
-entity sound schemes, sentences/surfaces, item/discipline events, radio/news, case collisions
-and missing refs. Raw game audio remains gitignored under `$ELYSIUM_EXPORT_ROOT/sound/`.
-→ `docs/vtmb/audio_pipeline.md`, `docs/architecture/audio-architecture.md`. Needed by 6.5–6.8,
-9.2, 12.2.
+The audio catalog and its typed sidecars are the audio programme's AUD0 (`plans/audio.md`), even
+though the work is the exporter's.

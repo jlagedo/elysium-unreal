@@ -3,7 +3,7 @@ documents:
   - {path: project/roadmap.md, kind: tracker, owner: project, subject: project status}
   - {path: project/plans/world.md, kind: plan, owner: rendering, subject: open-task specs for the look and scale lane}
   - {path: project/plans/gameplay.md, kind: plan, owner: gameplay systems, subject: open-task specs for interaction dialogue and tutorial mechanics}
-  - {path: project/plans/audio.md, kind: plan, owner: audio, subject: open-task specs for the audio stack}
+  - {path: project/plans/audio.md, kind: plan, owner: audio, subject: open-task specs for the audio programme}
   - {path: project/plans/characters-ui.md, kind: plan, owner: user interface, subject: open-task specs for characters and UI}
   - {path: project/plans/input.md, kind: plan, owner: input, subject: open-task specs for the input path}
   - {path: project/plans/spine.md, kind: plan, owner: runtime, subject: open-task specs for the runtime spine and camera director}

@@ -186,10 +186,14 @@ A separate body, not a camera mode. Two halves, landing in order:
 **The corpus (pipeline).** Export and bake one deterministic, patch-first manifest for both
 first-person roles: exactly **21** models under `models/hands/**` (active and repeated
 `M_Hands`/`F_Hands` clandoc values plus the script-only male/female Tremere `_shield` swaps)
+(the clan-specific rows and the shield script are both patch-first restorations: retail wires
+only Nosferatu and the shared pair, `docs/vtmb/animation_and_movers.md`)
 and exactly **17** packed weapon viewmodels (the 12 accepted firearm geometries plus grenade,
 lockpick-reference and three Discipline models); each row's source key, normalized stem, role,
 skeleton signature, attachments, sequences and events, with item `viewmodel`, `anim_prefix`,
-`camera_class` and `reload_single` joins retained as provenance. Package layout is a contract:
+`camera_class`, `reload_single`, `shows_view_model` and `hides_hands_model` joins retained as
+provenance — the last two suppress the hands component outright and a row that omits them bakes a
+phantom. Package layout is a contract:
 `/ElysiumBaked/Characters/Viewmodels/Hands/<stem>/SK_<stem>` and
 `.../Viewmodels/Weapons/<stem>/SK_<stem>`, one compatible skeleton per identical hierarchy,
 case-folded sorted iteration so the same corpus produces the same packages on every run. The
@@ -197,7 +201,8 @@ exporter owns cache fingerprints; a changed or removed manifest row invalidates 
 products and a pre-save stale sweep below the two viewmodel roots removes renamed/deleted rows.
 Verification resolves every manifest package, checks mesh/skeleton/sequence counts and events
 against the container, rejects duplicate paths, asserts the 21/2/17/12 census. Missing authored
-references stay diagnostics (`v_gangrel_fem_hands.mdl` reported dangling, not repaired).
+references stay diagnostics (`v_gangrel_fem_hands.mdl` is a multiplayer row's dangling
+reference — reported, not repaired).
 Outputs remain game-derived and gitignored.
 
 **The body (runtime).** The hands and weapon render as **two skeletal components** — not
@@ -207,7 +212,16 @@ family sequence, evaluating independently in the same camera-root space with aut
 independent of player FOV: `t = tan(viewmodel_fov·π/360)`, scales `1/t` and `aspect/t`, clip
 range 1..28400 in the recovered space, 4:3 or 16:9 under the widescreen/anamorphic setting; the
 11.13d view projection owns the local-body/viewmodel visibility decision, and a hidden view
-suppresses both submissions without destroying components or resetting sequence state. Server
+suppresses both submissions without destroying components or resetting sequence state.
+The selection contract is recovered whole and is consumed rather than re-derived: one activity per
+request, translated per weapon through its own `{source, target}` table into the family the hands
+bank holds, applied to the hands on slot 1 with the packed weapon on its own slot and one shared
+playback rate; the idle think owns fidget and the `_EMPTY` form; `ACT_VM_LOWER` marks the transition
+across which the hand offset is held rather than resampled. Placement is a second transaction the
+presenter owes on top of projection — turn lag, the `-0.1` forward pull and the `0.25` blend, the
+stair-smoothing term the view and both components share, and the slot-1-only basis offset — with the
+idle drift and the `viewmodel_fov`/`scr_ofs*` terms reproduced as the no-ops they are at their
+defaults (`docs/vtmb/animation_and_movers.md`, `docs/vtmb/camera-view-modes.md`). Server
 sequence events are timing carriers into weapon mode dispatch — weapon logic commits the
 shot/reload transaction; client viewmodel events own muzzle flash and shell presentation only.
 Tremere shield scripts swap the hands-role model to the baked `_shield` variant. **Melee has no
@@ -216,10 +230,11 @@ first-person model, measured** — when retained first person suppresses retail'
 **Scope — owner call, made: ranged only**; lockpick and Discipline viewmodels ride the same
 machinery, deferred rather than designed out.
 
-*Acceptance is presentation-only:* test intents drive draw, idle, fire, dry-fire, ordinary
-reload and the M37 begin/per-shell/complete phases on both components for every accepted
-firearm family, proving clan/shield selection, matching sequence/cycle, `Camera01`/right-hand
-alignment, both FOV/aspect policies, visibility suppression/resume and the empty melee view —
+*Acceptance is presentation-only:* test intents drive draw, idle, fidget, fire, dry-fire, ordinary
+reload, the switch-driven `lower` and the M37 begin/per-shell/complete phases on both components for
+every accepted firearm family, proving clan/shield selection, matching sequence/cycle,
+`Camera01`/right-hand alignment, both FOV/aspect policies, the lag and stair-smoothing placement,
+visibility suppression/resume and the empty melee view —
 without spending ammunition, creating a projectile or originating a VtMB event. *Deps:* LIFE2
 (catalog), LIFE5 (event carrier for real fire timing), 11.13d. Recovered contracts: `docs/vtmb/animation_and_movers.md`,
 `docs/vtmb/camera-view-modes.md`.

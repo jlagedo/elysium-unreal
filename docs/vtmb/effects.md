@@ -215,11 +215,22 @@ anything attached to a playing sequence (`docs/vtmb/animation_and_movers.md`):
 | 5103 | effect teardown |
 | 5111–5119 | attachment / origin emitter variants |
 | 5120 | options effect from weapon attachment `slampoint` |
-| 6001–6004 / 6011–6014 | viewmodel attachment bursts |
+| 6001–6004 | shell ejection on attachment 1..4, repeated |
+| 6011–6014 | clip ejection on attachment 1..4, once |
 
 The corpus actually uses 5001, 5003, 5005, 5101–5102, 5105, 5112, 5115–5118, 5120,
 6001, 6002, 6013. Feeding starts `force_feeding_emitter` from event 5116
-(`docs/vtmb/feeding.md`). The Unreal bake emits **no** AnimNotify; reproducing these
+(`docs/vtmb/feeding.md`). The two 60xx families are named by their own diagnostics —
+`"weapon does not have attachment for shell ejection!"` and the clip-ejection twin — in both
+`C_BaseViewModel::FireEvent` (`0x100ab530`) and the weapon hook (`0x1009c970`). The attachment
+index is the event id less 6000 or 6010; 6001–6004 parse `"%d %d"` where the second integer is a
+repeat count defaulting to 1, 6011–6014 parse a single integer and fire once. Both spawn a client
+temp-entity at the attachment's origin and angles through the temp-entity manager, so a shell or
+magazine is a dropped prop, not a particle handle. The two handlers split on camera mode: the
+viewmodel's runs only when `ShouldDrawLocalPlayer` is false and the world weapon's only when it is
+true, so exactly one spawns the effect. What the parsed integers select is not recovered.
+**What would close it:** the manager's dispatch body, cross-referenced against the authored option
+strings on `v_m37`'s `fire01`/`fireempty01`. The Unreal bake emits **no** AnimNotify; reproducing these
 is runtime work over the decoded event list.
 
 ### 3.3 Discipline records

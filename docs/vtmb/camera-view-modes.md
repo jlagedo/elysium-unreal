@@ -454,6 +454,63 @@ state rather than recreating it.
 retained-first-person option prevents that camera move, melee renders **neither hands nor weapon**;
 the authored hands bank has no melee family and the project does not invent one.
 
+### The viewmodel is placed by its own per-frame transaction
+
+The projection above maps the pass to the viewport; where the two entities *sit* is decided
+separately, once per slot, by `CViewRender::CalcViewModelView` (`0x10190ba0`) [static-verified].
+`CalcView` (`0x10191200`) calls it in a two-iteration loop over slots 0 and 1, passing the slot
+index, the player origin, the frame's view angles, the player's `+0x148` offset vector and the
+water offset. Both helpers it calls take only the slot and refetch the same per-slot record.
+
+```text
+origin = playerOrigin + player(+0x148) ; origin.z += waterOffset ; angles = viewAngles
+CalcViewModelAngle(slot)                       // idle drift, below
+if (activeWeapon) {
+    CalcViewModelLag(slot)                     // turn lag, below
+    origin = VectorMA(origin, -0.1, forward)   // pull back along the view forward
+    blend(origin, angles, 0.25)
+}
+switch (viewmodel_fov) { 80: z += 0.5 ; 90, 110: z += 1.0 ; 100: z += 2.0 ; default: — }
+if (slot != 0) origin += CViewRender(+0x4) projected onto the view basis
+```
+
+**Two of these are inert in a stock configuration.** `viewmodel_fov` defaults to `54`, which takes
+the switch's `default:` arm, so the z nudge only appears when the player moves it to one of those
+four values; and the three view-origin weights `CalcView` blends onto the view basis are
+`scr_ofsx`, `scr_ofsy` and `scr_ofsz`, all defaulting to `0`.
+
+**The idle drift is off whenever a weapon is held.** `CalcViewModelAngle` (`0x1018fcb0`) subtracts
+`sin(cycle · time) · level · 4.0` from three angle components — pitch taking an extra `0.5` factor —
+from `v_ipitch_cycle` 1 / `v_ipitch_level` 0.3, `v_iyaw_cycle` 2 / `v_iyaw_level` 0.3,
+`v_iroll_cycle` 0.5 / `v_iroll_level` 0.1. The whole body is gated on there being **no** active
+weapon, so on the only frames a viewmodel is drawn it contributes nothing.
+
+**The lag has no discriminator.** `CalcViewModelLag` (`0x1018fb70`) keeps a smoothed facing vector on
+the view renderer at `+0x458`, approaches it toward the current forward at rate `5.0`, negates the
+residual and adds `5.0 ×` it to the origin — the classic swing-and-settle. Its gate is the weapon's
+vtable `+0x3dc` (slot 247), which is `return 1` in the one implementation all 214 classes that fill
+that slot share. Lag therefore runs whenever an active weapon exists; only an unarmed frame skips
+it.
+
+**The stair-step smoothing reaches the viewmodels.** `CalcView` keeps one persistent smoothed
+player-origin z, approaches it at `150` units/second, clamps it to an `18`-unit band below the
+player's own z, and adds the same `(smoothed − actual)` term to the view origin **and to both
+viewmodel slots**. The `+0x400` player-state branch that replaces the `+0x148` offset instead bumps
+view z by `64.0`.
+
+**One alternate source exists and is unidentified.** When the active weapon passes a three-part gate
+on `+0x45c`, `+0x465` and `+0x4a4`, both origin and angles are taken from a cached transform on the
+weapon at `+0x468`..`+0x47c` instead of from the view, and lag, the `-0.1` step and the `0.25` blend
+are all skipped. What populates those fields is not recovered. **What would close it:** the writers
+of `+0x468` and its gate fields.
+
+The blend calls route through the interface at `PTR_DAT_102d5238` (slots `+0x18`/`+0x1c`/`+0x20`,
+shaped as a weighted origin-and-angle commit); its concrete identity is not recovered, and one of the
+seven stack arguments `CalcViewModelView` receives is never read inside the body.
+
+*Provenance: `client.dll` static decompilation; ConVar names, defaults and the float constants read
+from the shipped PE, since the registration stubs' `mov ecx, imm32` does not survive decompilation.*
+
 ### The strafe bank is first-person only
 
 Strafing banks the camera around the view axis, and it is a **view** effect — no character

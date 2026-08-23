@@ -58,7 +58,7 @@ recovered-to-retail reproduce work under P4's RE-first rule:
 - **Mover sound emission points.** Retail emits `close` at **arrival** (`DoorHitBottom`), not at
   motion start, and starts no loop and stops none — `swing` is one event like the others, so any
   looping is the soundgroup's. Elysium plays `close` at motion start and owns the loop in code;
-  both differ — owner-adjudicated against P6. → `animation_and_movers.md` B.4.3.
+  both differ — owner-adjudicated against AUD2. → `animation_and_movers.md` B.4.3.
 - **The blocked family.** Retail's `Blocked` damages in **both** directions, self-reverses only
   behind `CRotDoor`'s re-entrancy byte (so a plain `func_door` never reverses), and **synchronises**
   its targetname group to its own direction rather than reversing it; `StartBlocked`/`EndBlocked`
@@ -90,13 +90,14 @@ valid link, then honor `usescript`/line-1/first-stored-line fallbacks. Acceptanc
 Jack's overlapping and shadowed conditions plus line-action → `OnDialogEnd` ordering.
 → `docs/vtmb/game_runtime.md`.
 
-### 9.2 Conversation UI + audio-by-path — remaining
+### 9.2 Conversation UI — remaining
 
 The UI slice landed. Remaining: presentation completion (speaker/emotion cues, the 8.10 subtitle
 path), and live physical-device acceptance. Acceptance includes `(Auto-Link)`/`(Auto-End)` as
-hidden control rows: retain the preceding NPC subtitle through its voice turn, run the automatic
-row action before following its link, and never publish the marker as a player response.
-Content is reproduced verbatim; presentation modernizes. *Deps:* 9.1, 6.5, 6.6, 8.6.
+hidden control rows: run the automatic row action before following its link and never publish the
+marker as a player response. Content is reproduced verbatim; presentation modernizes. The line
+audio, the subtitle publish and the retained-NPC-subtitle rule are AUD3's (`plans/audio.md`).
+*Deps:* 9.1, AUD3, 8.6.
 
 ### 9.3 Level-script execution — remaining
 
@@ -110,8 +111,8 @@ inventory follow-up.
 The ownership, loose-pickup, explicit loot-container session and CommonUI transfer panel form the
 loot core. **Remaining:** player drop, `StartBarter` plus the buy/sell barter UI (8.6),
 `trigger_inventory_check`, and the `TravelsWithPlayer()` absent-set half; buy/sell pricing is
-9.10's. The plain `item_container` lid mover and the animated-container `soundgroup` path remain;
-the tutorial lockpick's attempt HUD remains a logged stub.
+9.10's. The plain `item_container` lid mover remains, and the tutorial lockpick's attempt HUD
+remains a logged stub; the lid cue and the animated-container `soundgroup` path are AUD2's.
 → `docs/vtmb/inventory.md`, `docs/architecture/gameplay-systems-architecture.md`. *Deps:* 9.4.
 
 ### 9.9 NPC disposition & reactions — remaining
@@ -194,28 +195,28 @@ attachments and use it for both the recovered `0.7` facing gate and a fixed `Foc
 framed to keep the bezel and part of the prop in shot; no offline screen-metadata export is needed.
 Give the screensaver ownership of the projection surface so an idle terminal is live before its
 first session, reproducing the recovered random-cell placement on `ss_start`/`ss_delay`. Add the CRT
-screen material and the monospace type tokens, the four authority-side sound cues over the exported
-`old_computer` group plus the local keystroke click, and the email state machine including
-`global_email` reconciliation. `autodelete` is inert in retail and is not implemented. The
+screen material and the monospace type tokens, and the email state machine including
+`global_email` reconciliation. The four authority-side cues over the exported `old_computer` group
+and the local keystroke click are AUD2's; this task raises them. `autodelete` is inert in retail and is not implemented. The
 controller's semantic action palette and virtual text entry reach the same handler as keyboard line
 editing; VtMB's terminal font/VGUI/512×512 raster are not reused. *Design:*
 `docs/architecture/computer-terminal-architecture.md`; behavior: `docs/vtmb/computer-terminals.md`.
 *Acceptance:* from real input, keyboard and gamepad focus `tuthack`, enter `Safe` by password or
 Hacking bypass, execute Unlock, enqueue `OnTrigger0`, reveal/unlock the safe through the authored
 map wires, quit, restore the exact
-previous camera; the grid stays readable inside the bezel at 1080p/1440p/4K. *Deps:* 4.11, 6.8, 9.6,
+previous camera; the grid stays readable inside the bezel at 1080p/1440p/4K. *Deps:* 4.11, AUD2, 9.6,
 11.4–11.8.
 
 ### 13.5 Combat AI — remaining
 
 The sound-event bus, senses and stimulus memory, the conditions layer, the ideal-state pass, the
 enemy transaction, the alert/combat schedule families, the loadout and `aiscripted_schedule` are
-built over the schedule kernel and the body-owner arbiter. Open: the **footstep hearing
-producer** (the one bus category with nothing raising it — the seam is marked in
-`Substrate/ElysiumPlayerEntity.cpp`); the **flinch and reaction action families** on the
-animation side, which are LIFE5's; `COND_HIT_BY_DOOR`'s producer and the door-obstruction
-retreat's consumers, which stay in 10.7; and the `Prone` state, a named refusal until a
-producer is recovered. Facts: `docs/vtmb/npc-ai-reverse-engineering.md`.
+built over the schedule kernel and the body-owner arbiter. Open: the **flinch and reaction action
+families** on the animation side, which are LIFE5's; `COND_HIT_BY_DOOR`'s producer and the
+door-obstruction retreat's consumers, which stay in 10.7; and the `Prone` state, a named refusal
+until a producer is recovered. The **footstep hearing producer** — the one bus category with
+nothing raising it, the seam marked in `Substrate/ElysiumPlayerEntity.cpp` — is AUD2's; this task
+is its consumer. Facts: `docs/vtmb/npc-ai-reverse-engineering.md`.
 *Acceptance:* the tutorial's hostile beats run from real producers — authored
 `OnFoundPlayer`/`OnDamaged` consequences fire as wired and the combat lessons' opponents fight
 and die as retail. *Deps:* 11.10.

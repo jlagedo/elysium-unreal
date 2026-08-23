@@ -2260,6 +2260,115 @@ is a timing/routing trigger, not the transaction. Client `C_BaseViewModel::FireE
 effects before the generic fallback. It owns muzzle flash, magazine and related presentation only;
 it cannot commit ammunition, traces or damage.
 
+**The pair is created once, and slot 1 is always the hands** [static-verified]. `m_hViewModel` is a
+two-element array at `+0x2308`: the player's dump routine (`0x1015e140`) passes a literal count of
+`2`, the only creator (`0x1015d6d0`, storing at `+0x2308 + slot*4`) has one caller —
+`CBasePlayer::vfunc104` (`0x1016e820`) — which calls it exactly twice, with 0 and 1, then fetches
+slot 1 back and clears its model, and nothing occupies `+0x230C`. The applier passes the literal
+`1` for the hands whatever the weapon, while the packed weapon takes `m_nViewModelIndex` (`+0x890`,
+initialised to `0` in the weapon constructor `0x10250ce0`). A weapon swap never re-creates either
+entity; it pushes a new model and sequence into the existing pair. The accessor `0x1015d680` is
+itself unbounded — it indexes and then validates the resulting handle — so the creation side alone
+fixes the array's size.
+
+**A viewmodel sequence is selected by activity and translated per weapon family** [static-verified].
+`CBaseCombatWeapon::SendWeaponAnim` (`0x10253390`, vtable `+0x4cc`) takes one activity and drives
+both entities from it:
+
+```text
+seq   = SelectWeightedSequence(weapon, activity)          // the packed weapon's own sequence
+hands = SelectSameSequence(GetViewModel(owner, 1),
+                           ActivityOverride(weapon, activity))
+weapon->m_nSequence = FindTransitionSequence(weapon, m_nSequence, seq)
+applier(weapon, weapon->m_nSequence, hands)               // 0x102532a0, vtable +0x4d0
+m_flTimeWeaponIdle = curtime + SequenceDuration(seq)      // vtable +0x4d8
+```
+
+`FindTransitionSequence` is inert here for the reason it is inert everywhere: `NumTransitions` is 0
+on all 4,445 models (`docs/vtmb/mdl_v2531.md`). The applier sets each entity's model and sequence
+independently and copies one playback rate — the player's `+0x1488` — onto both. When
+`SelectWeightedSequence` fails, or the weapon is not the active one, the fallback is `ACT_VM_IDLE`
+(`0xb6`) and the idle time is set to `curtime` with no duration added.
+
+`ActivityOverride` is vtable slot 361 (`+0x5a4`, `0x1024f210`), one implementation shared by all 254
+weapon classes. It walks a per-class table — supplied by slots 362 and 363 as array and count — of
+`{source activity, target activity, flag}` triples and returns the first target the owner body or
+the hands actually holds a sequence for, falling back to the source activity unchanged.
+
+**The translation tables are static data** [data-verified]. They sit initialised in `vampire.dll`'s
+`.data`, 12 bytes per entry, the third field always `0` or `1`. The M37's (`0x105ba680`, 245
+entries) carries **two** complete 27-entry `ACT_VM_*` blocks over one source list: one targeting the
+`M37` family (1145–1171), one the `TWOHANDED` grip family (497–523). That is how a single request
+reaches three banks — the packed weapon model answers its own family, the hands bank answers the
+family whose sequences it holds, the third-person body answers the grip family — with the caller
+naming none of them.
+
+**The `ACT_VM_*` enum is registered, not authored** [static-verified].
+`RegisterSharedActivity(name, index)` (`0x104123a0`) is called once per activity from the 68 KB
+static initialiser `0x104126e0`, warning on either a name or an index collision. Each weapon family
+registers a 26-verb block in a fixed order whose indices descend by one per position from the
+family's `ROLL` entry, so a family is a contiguous run; families are not contiguous with each other.
+Named endpoints: `ACT_VM_DRAW` 180, `ACT_VM_DRAW2` 225, `ACT_VM_FIDGET` 183, `ACT_VM_LOWER` 222,
+`ACT_VM_LOWER2` 221, `ACT_VM_IDLE` 182, `ACT_VM_IDLE2` 223, `ACT_VM_IDLE_EMPTY` 216,
+`ACT_VM_IDLE2_EMPTY` 217. `THROWING_STAR` registers a full block that no weapon class fills,
+matching the cut record above.
+
+**A `2` suffix is the weapon's attack mode, not the hands' counterpart** [static-verified].
+`CWeaponRanged::WeaponIdle` (`0x10239350`) selects between the plain and `2` forms purely on
+`m_iAtkMode`, and both forms travel the same `SendWeaponAnim` path to both entities. No mechanism
+sends one activity to the weapon and its `2` variant to the hands.
+
+**Idle and fidget are one think** [static-verified]. On `curtime > m_flTimeWeaponIdle`: a pending
+`m_iTakeOutActivity` (`+0x854`) wins and is consumed; otherwise, if the active weapon's current
+sequence is not already `ACT_VM_FIDGET`, a `RandomInt(0, 100)` draw on the engine's shared stream
+under `6` plays the fidget; otherwise the idle plays, taking the `_EMPTY` form when the magazine
+holds under one round. `m_iAtkMode` picks the plain or `2` form throughout.
+
+**Lowering freezes the hand offset instead of resyncing it** [static-verified]. `ACT_VM_LOWER` and
+`ACT_VM_LOWER2` are the only two activities that *clear* `CBasePlayer::m_bAllowResyncHandsOffset`
+(`+0x1b6d`, client copy `+0x14d5`); every other activity sets it. `C_BaseViewModel`'s per-frame
+data-change handler (`client.dll 0x100abe80`) reads it when the viewmodel's sequence changes into a
+small activity set including `ACT_VM_IDLE`, and holds the captured hand offset rather than
+resampling it from the live attachment. It is an anti-pop rule across the lower/holster transition,
+not a selection rule.
+
+**The hands model is chosen per clan and sex, and two item keys suppress it** [static-verified].
+`FUN_10182e00` runs on spawn, save restore, weapon select and swap, and any armour or body refresh:
+
+```text
+hands = GetViewModel(player, 1);  if (!hands) return           // NPCs have no such slot
+if (active weapon &&
+    (!shows_view_model(+0x2448) || hides_hands_model(+0x244c))) { hands->SetModel(NULL); return }
+record = ClanData[character template]                          // the clandoc000.txt table
+path   = IsMale(character) ? record->M_Hands (+0x74) : record->F_Hands (+0x70)
+PrecacheModel(path); hands->SetModel(path)
+```
+
+`IsMale` reads live stat `0xb` — the same query that selects `M_Body`/`F_Body` at the moment each is
+applied — so one character's hands and body can never resolve to different sexes. The two item keys
+are `docs/vtmb/wielded_weapons.md`'s.
+
+**`v_shared_{male,female}_hands.mdl` is a code default, not a clandoc value** [static-verified]. The
+clan parser (`0x101d3f10`, client twin `0x1013e790`) substitutes those two literals whenever a
+record's `M_Hands`/`F_Hands` is absent or empty. In retail only Nosferatu authors clan-specific
+hands; every other clan row and every hunter row is commented out and resolves to the shared pair,
+and the patch-first corpus is what restores them and makes the 21-model census reachable. The hunter
+models are named by multiplayer rows (`mp-condotierre`, `mp-inquisitor`, `mp-mercenary`), and the
+one dangling reference — `v_gangrel_fem_hands.mdl` — is a multiplayer row's: the single-player
+Gangrel row names `v_gangrel_female_hands.mdl`, which ships. [data-verified] What retail does when a
+hands path names a file the install lacks is not recovered — the existence check lives below
+`PrecacheModel`, in the model loader's own interface. **What would close it:** the loader's `Load`
+implementation, or a runtime probe on a body forced to that template.
+
+**The Tremere shield swap is a patch script** [data-verified]. Retail's `vamputil.py` carries no
+hands swap at all. The patch adds one, driven by `base_health_buffer > 0`, applied in
+`bloodShield()` and reverted by `IsIdling()`'s per-tick poll rather than by an event, and it swaps
+the Thaumaturgy weapon viewmodel in parallel with the hands. Which discipline writes `HealthBuffer`
+is not recovered; **what would close it:** the stat's container index and the `SetBase` writers
+against it. Its target, `FindEntitiesByClass("viewmodel")[3]`, is not the `m_hViewModel` array — it
+walks the live entity list, and no third creation path is recovered. **What would close that:** an
+entity list filtered to classname `viewmodel` after map load.
+
 **Two cautions when judging a layer by eye.** A delta over a host that does *not* declare it is
 arithmetically exact and anatomically nonsense — `twohanded_crouch_attack_delta` over a standing idle
 swings an arm that never raised, because the crouch and the arm-raise live in the base and the delta

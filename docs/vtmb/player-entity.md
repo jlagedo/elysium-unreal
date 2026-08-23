@@ -116,7 +116,7 @@ derived, cached or presentation-only and name every writer and consumer.
 | Stealth target surface | feet/centre/head light samples, aggregate light, next sample/update, vision distance, cone and hearing values | `stealth.md` |
 | Movement | six per-direction gait tables plus inherited movement, ground, water and view state | `source_movement.md`, `game_runtime.md` |
 | Animation and camera | sequence, cycle, pose parameters, head/eye data, camera view/target handles and player action state | `animation_and_movers.md`, `camera-view-modes.md` |
-| Inventory relationships | 224 compact item handles, active/last/melee weapon, armour, view weapon and four viewmodel handles | `inventory.md`, `savegame_format.md` |
+| Inventory relationships | 224 compact item handles, active/last/melee weapon, armour, view weapon and two viewmodel handles | `inventory.md`, `savegame_format.md` |
 | Terminal state | per-terminal global email flag records | `computer-terminals.md` |
 
 Inventory is an object relationship, not a bag of item names. Each carried item remains a complete
@@ -496,7 +496,8 @@ The player-wide investigation keeps these questions open:
    condition/schedule admission, combat-zone guard, Masquerade, police-response, pursuit and alert
    transactions are statically closed.
 4. Classify origin, hull centre, eye/view offset, control angles, body facing, view entity, camera
-   target, local-body visibility and first-person viewmodel ownership.
+   target and local-body visibility; first-person viewmodel ownership is recovered
+   (`docs/vtmb/animation_and_movers.md`).
 5. Recover the map-transition transaction for the player and carried moveable entities, including
    active/last weapon, armour, reserve ammunition and stale-handle policy; separately live-test
    same-map save/load retention of world `m_nAreaType`, whose replication but not save record is

@@ -17,7 +17,7 @@ archive and no decision log.
 - **Landing a task is a deletion:** delete its entry from the plan file, write the durable
   facts into the owning design/`docs/vtmb/` doc, flip the row here and cut its gloss to the
   owning-doc pointer. A done task is one line in this file and nothing anywhere else.
-- Old plan IDs (M*, L*, X*, retired CAP numbering) are resolved by git history
+- Old plan IDs (M*, L*, X*, retired CAP and P6 numbering) are resolved by git history
   (`git log -S "<id>"`), not by a mapping table.
 
 ## North star
@@ -46,8 +46,8 @@ tutorial.** Everything on the path lands first. Three standing rules:
 |---|---|---|
 | **PP0 — the core refactor** | the runtime spine | 11.10 *(11.0–11.8 [x])* |
 | **PP1 — New Game & genesis [x]** | chargen for real, `sp_genesisdevice_1` played | 9.4 [x] |
-| **PP2 — the theatre cinematic** | the intro plays start to finish — eyes and lipsync block | 12.1–12.5, 8.11a [x] |
-| **PP3 — land the tutorial** | Jack's first conversation with sound and reactions | 9.2, 9.9 |
+| **PP2 — the theatre cinematic** | the intro plays start to finish — eyes and lipsync block | AUD0, AUD1, AUD3, 12.1–12.5, 8.11a [x] |
+| **PP3 — land the tutorial** | Jack's first conversation with sound and reactions | AUD2, 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement, modern camera, gait, feeding, items, dice, HUD foundation + observer presentation seam | CCC0–CCC9, LIFE0–LIFE3, B6 [x], 9.8, 9.6 [x], 8.9 |
 | **PP5 — persistence [x]** | save / quick / autosave + load mid-run | 11.9 [x] |
 | **PP6 — complete the tutorial** | stealth authority, disciplines, firearms, combat AI, hacking — every retail beat | 13.1–13.5 → `uv run elysium test Play` |
@@ -81,6 +81,11 @@ rule 3 governs what happens next:
    [plans/gameplay.md](plans/gameplay.md).
 5. **LIFE3 → LIFE4** — one resolver for the whole cast over the committed action tables, then a
    drawn weapon visible in the hand through a swing → [plans/animation.md](plans/animation.md).
+
+**The audio programme is unstarted and sits under two rungs**: PP2 cannot finish without AUD3's
+scene lines and PP3 cannot finish without AUD2's event surface, and both stand on AUD0's
+catalog. Its place in the five items above is an open owner call →
+[plans/audio.md](plans/audio.md).
 
 ## P0 — Ground truth & de-risk
 
@@ -170,14 +175,52 @@ it, so the readout claims a body the stage does not have.
   **5.3 Native bindings** — one `GNativeBindings` table · **5.4 Field-6 +
   `logic_pythoncheck` + `ScheduleTask` live** · **5.5 Embedded CPython 2.7**.
 
-## P6 — Audio foundation *(detail: [plans/audio.md](plans/audio.md))*
+## The audio programme (AUD) — detail: [plans/audio.md](plans/audio.md)
+
+Every authored sound heard — one catalog, one service, one request ledger, and VtMB's mix,
+ambience and rooms on the Unreal Audio Mixer. Governing design:
+`docs/architecture/audio-architecture.md`. One cumulative ladder in three tiers; absorbs the
+retired P6 rows, PL17, 12.2/12.2b and the audio halves of 9.2, 9.8, 13.4 and 13.5 (landed rows
+keep their historical IDs).
+
+Landed foundation:
 
 - [x] **6.1 MS-ADPCM decode** · **6.2 MP3 decode** · **6.3 `ambient_generic` + SoundSchemes** ·
-  **6.4 Mover sounds**.
-- [ ] **[6.5 Final loose-audio core + catalog](plans/audio.md)** ·
-  **[6.6 UE mixer graph + mix policy](plans/audio.md)** ·
-  **[6.7 Map ambience, music + DSP closure](plans/audio.md)** ·
-  **[6.8 Gameplay audio adapters](plans/audio.md)**
+  **6.4 Mover sounds** — the decoders, the scheme runtime and the mover `soundgroup` path.
+- [x] **The request ledger** — the request/owner/handle model, map-epoch retirement, the
+  gameplay-noise bus and the output-latency measurement →
+  `docs/architecture/audio-architecture.md`.
+
+**Tier 0 — it plays.** Every authored sound reaches the mixer through one path, and every I/O
+call, script verb and scheme event that names a sound is conformed to it.
+
+- [ ] **[AUD0 The catalog](plans/audio.md)** — the offline patch-first audio catalog and typed
+  sidecars.
+- [ ] **[AUD1 The service](plans/audio.md)** — one resolver, worker decode, streaming, handles,
+  owner/epoch cancellation.
+- [ ] **[AUD2 The event surface](plans/audio.md)** — typed domain events, NPC voices, footsteps,
+  weapons, containers, terminals, radio/news and the AI-hearing producer.
+- [ ] **[AUD3 The spoken line](plans/audio.md)** — one line service for dialogue and scenes,
+  subtitles, and the calibrated mixahead lead.
+- [ ] **[AUD4 Authored ambience plays](plans/audio.md)** — every `ambient_generic` flag, envelope
+  and lifetime path; the scheme bed and its emitters.
+
+**Tier 1 — it sounds like VtMB.** Levels, ambience behaviour, music state and room DSP.
+
+- [ ] **[AUD5 The mix](plans/audio.md)** — classes, submixes, buses, user sliders, ducking,
+  concurrency, occlusion.
+- [ ] **[AUD6 Ambience, schemes and music](plans/audio.md)** — deterministic transitions, the
+  random-emitter scheduler, the six `events_world` music states.
+- [ ] **[AUD7 The listener zone](plans/audio.md)** — one resolver over
+  `trigger_environmental_audio`, scheme `RoomDSP` and scripted overrides.
+- [ ] **[AUD8 Heard — played acceptance](plans/audio.md)** — the programme's owner-played finish
+  line.
+
+**Tier 2 — beyond VtMB.** Enhancements the original never had.
+
+- [P] **[AUD9 Enhancement](plans/audio.md)** — spatialization, zone reverb, loudness, detail
+  layers, adaptive music, accessibility; behind the presentation freeze, each its own owner call
+  at the thaw.
 
 ## P7 — Dressing & parity — **open tasks FROZEN** *(detail: [plans/world.md](plans/world.md))*
 
@@ -396,7 +439,8 @@ The ladder:
 ## P9 — Dialogue & persistence *(detail: [plans/gameplay.md](plans/gameplay.md))*
 
 - [~] **[9.1 `.dlg` parser + dlgexpr](plans/gameplay.md)** — `GetStartingLine` fidelity open.
-- [ ] **[9.2 Conversation UI + audio-by-path](plans/gameplay.md)** — UI slice landed; audio open.
+- [ ] **[9.2 Conversation UI](plans/gameplay.md)** — UI slice landed; presentation completion and
+  live acceptance open. Line audio and subtitles are AUD3's.
 - [x] **9.3a CPython default host + auto-load** · **9.3b `ccmd` + cfg aliases** ·
   **9.3c script filesystem**.
 - [~] **[9.3 Level-script execution](plans/gameplay.md)** — core landed; delegated fills open.
@@ -405,7 +449,8 @@ The ladder:
 - [x] **9.6 Dice resolver** → `docs/recovered/dice-system.md`.
 - [x] **9.7 The script→engine action surface** → `docs/vtmb/script_api.md`.
 - [~] **[9.8 Inventory & items](plans/gameplay.md)** — loose pickup and explicit CommonUI loot
-  sessions landed; plain-container lid/sound, drop, barter, inventory-check and travel policy open.
+  sessions landed; the plain-container lid mover, drop, barter, inventory-check and travel policy
+  open. Its cue and the animated-container `soundgroup` path are AUD2's.
 - [~] **[9.9 NPC disposition & reactions](plans/gameplay.md)** — talk/feed slice and the
   reaction-score calculator landed; `React`, expression policy and the dialogue consumer open.
 - [ ] **[9.10 Economy](plans/gameplay.md)**
@@ -455,12 +500,12 @@ Camera, controls and the played movement feel; the animation rungs are the LIFE 
 
 - [~] **[12.1 Choreographed scenes](plans/theatre.md)** — implemented and verified; residual
   RE32 material/remap work + final live acceptance.
-- [ ] **[12.2 Scene audio + subtitles](plans/theatre.md)** ·
-  **[12.2b Scene mixahead calibration](plans/theatre.md)**
 - [~] **[12.3 Facial flex track](plans/theatre.md)** — built; pending an unobstructed visual.
 - [~] **[12.4 Eyes and eyelids](plans/theatre.md)** — built through the gaze layer; debug
   surface + theatre acceptance open.
-- [ ] **[12.5 Lipsync](plans/theatre.md)**
+- [ ] **[12.5 Lipsync](plans/theatre.md)** — reads AUD3's scheduled line clock.
+
+Scene line audio, subtitles and the mixahead lead are AUD3 → [plans/audio.md](plans/audio.md).
 
 *Slice acceptance:* New Game → the full theatre act plays — choreography, camera, audible
 subtitled lines, live faces — and hands the player to the tutorial, unassisted.
@@ -477,10 +522,10 @@ subtitled lines, live faces — and hands the player to the tutorial, unassisted
 - [~] **[13.4 Computer terminals & tutorial hacking](plans/gameplay.md)** — the parser, state
   machine, `hackcmd` path and the `tuthack` output transaction landed headless, and the console
   projects through the model's `screen` slot; session escape, camera framing, the idle screensaver,
-  the CRT/type pass, sounds, email and the played acceptance open.
+  the CRT/type pass, email and the played acceptance open. Its cues are AUD2's.
 - [~] **[13.5 Combat AI](plans/gameplay.md)** — bus, senses, conditions, the enemy transaction,
-  the schedule families and `aiscripted_schedule` landed headless; the played beats, the footstep
-  producer and the flinch action family open.
+  the schedule families and `aiscripted_schedule` landed headless; the played beats and the flinch
+  action family open. The footstep hearing producer is AUD2's.
 
 *Slice acceptance:* `sp_tutorial_1` completable as retail on keyboard/mouse and gamepad, proven
 by `uv run elysium test Play`.
@@ -516,8 +561,9 @@ tutorial's office chair carries and its sardine can throws, from real input.
   schemes/vdata/cfg mirrors.
 - [ ] **[PL6 Texlight merge in exporter](plans/pipeline.md)** ·
   **[PL11 Remove the dead card path](plans/pipeline.md)** ·
-  **[PL12 Particle mirror + weather height maps](plans/pipeline.md)** ·
-  **[PL17 Patch-first audio catalog](plans/pipeline.md)**
+  **[PL12 Particle mirror + weather height maps](plans/pipeline.md)**
+
+The audio catalog and its typed sidecars are AUD0 → [plans/audio.md](plans/audio.md).
 
 The first-person model corpus (old PL14) is LIFE6's first half →
 [plans/animation.md](plans/animation.md).
@@ -538,7 +584,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE18–RE22 | script API; scenes; facial formats; frame order; hulls | owning docs | [x] |
 | RE23 | particle format — open: the `frames`/`fps` semantics and the `v(n)` keyframe position unit, each a reading the data supports and nothing confirms | `docs/vtmb/weather.md`; 7.9, PL12 | [ ] |
 | RE24–RE29 | sheet; chargen; traits; quests; genesis exit; name matching | `docs/vtmb/game_runtime.md`, `entity_io.md` | [x] |
-| RE30, RE31 | env-audio DSP precedence; RandomSound scheduler | `docs/vtmb/audio_pipeline.md`; 6.7 | [ ] |
+| RE30, RE31 | env-audio DSP precedence; RandomSound scheduler | `docs/vtmb/audio_pipeline.md`; AUD7, AUD6 | [ ] |
 | RE32 | source-attributed `sp_theatre` run joined to bytes/export | `docs/vtmb/vtmb-animation-reverse-engineering.md`; 12.1 | [~] |
 | RE33 | facial/lip runtime equivalence — verifies 12.3–12.5, never gates | `docs/vtmb/facial_animation.md`; 12.3–12.5 | [~] |
 | RE34 | the eye system end to end | `docs/vtmb/facial_animation.md` | [x] |
@@ -549,7 +595,7 @@ Findings live only in the owning doc each row names; a row here is question · s
 | RE39 | computer terminals; open: TERM1 skill-entity join, TERM2 generic use outputs + teardown exits, TERM9 player mode fields | `docs/vtmb/computer-terminals.md`; 13.4 | [~] |
 | RE40 | the core mechanics chain; open joins numeric | `docs/vtmb/combat-and-damage.md` + siblings; 13.3 | [~] |
 | RE41 | discipline authority/interpreter; activity/witness admission plus Elysium/HUD world-area authority and Bloodbuff/`LockPick` exception closed; open: native power consumers and client disable presentation | `docs/vtmb/disciplines.md`; 13.2 | [~] |
-| RE42 | first-person viewmodel; static composition/pose/projection/authority and the ELGVM1 harness closed | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`; LIFE6 | [x] |
+| RE42 | first-person viewmodel; static composition/pose/projection/authority closed, and with it the two-entity creation with `m_hViewModel[2]` sized, the activity-translation selection chain and the `ACT_VM_*` registry (a `2` suffix is attack mode, not a hands counterpart), the idle/fidget think, deploy/holster with the switch-only `lower`, the per-frame placement transaction and its named ConVars and constants, the clan/sex hands rule with its two item suppressors, and the shell/clip eject events. Open: the alternate weapon-attachment placement source, the blend interface identity, `THAUMATURGY`'s and `ENFIELD`'s owning class, what retail does with a missing hands model, and the fourth live `viewmodel` entity. The ELGVM1 harness is built but 12 of its 13 scenarios have never run and the one that did finished partial on a timeout, so no viewmodel claim is capture-verified | `docs/vtmb/animation_and_movers.md`, `camera-view-modes.md`, `wielded_weapons.md`; LIFE6 | [~] |
 | RE43 | the tutorial event-resolution transaction; engine contact order (new-begin before old-end, spatial enumeration, teleport defers) and the autosave txn recovered | `docs/vtmb/sp_tutorial_1-event-surface.md`, `entity_io.md` | [x] |
 | RE44 | the exported-map event surface beyond the tutorial | `docs/vtmb/exported-map-event-surface.md` | [~] |
 | RE45 | trigger touch dispatch recovered (synchronous new StartTouch, deferred old EndTouch at the post-think pass) | `docs/vtmb/entity_io.md`, `python_bridge.md` | [x] |
