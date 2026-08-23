@@ -546,10 +546,11 @@ def _reconcile_blends(blends, baked):
 
 
 def export_npc(idx, model_path, out_dir, stem=None, anorms=None,
-               measure_extents=False):
-    """Write `<out_dir>/<stem>.glb`: skinned mesh + skeleton + the NPC's OWN clips (the
-    dialogue anims that live only in this .mdl) + its facial morph targets. Shared clips come
-    from bank glbs applied by bone name at runtime. Returns
+               measure_extents=False, write=False):
+    """Decode one NPC -- skinned mesh + skeleton + OWN clips + facial morph targets -- and
+    decode its textures into `<out_dir>/tex/`. With `write`, also emit the assembly as
+    `<out_dir>/<stem>.glb`, the on-demand inspection product; the cast export passes nothing
+    and produces no file, because the `.eskm` container is the shipped product. Returns
     {stem, glb, model, bones, split_bones, clips:[mdl_skel.Seq,...], clip_extents, facial,
     procedural, procedural_faults} — the clip list is what actually baked, so a sequence whose
     tracks came out empty is absent, and `facial` is None for a model with no flex rig (or when
@@ -590,7 +591,8 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None,
     gltf["buffers"] = [{"byteLength": len(g.bin)}]
 
     glb = os.path.join(out_dir, stem + ".glb")
-    _write_glb(gltf, g.bin, glb)
+    if write:
+        _write_glb(gltf, g.bin, glb)
     tris = sum(len(s["tris"]) for s in built["surfaces"].values())
     face = built["facial"]
     morphs = f", {len(face['morphs'])} morphs" if face and face["morphs"] else ""
@@ -599,16 +601,16 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None,
     grids = f", {len(blends)} blend grids" if blends else ""
     eyes = built["eyes"]
     eyeballs = f", {len(eyes['eyeballs'])} eyeballs" if eyes else ""
+    landed = f" -> {glb} ({os.path.getsize(glb) // 1024} KB)" if write else ""
     print(f"  npc {stem}: {len(built['bones'])} bones, {tris} tris, {len(labels)} own clips"
-          f"{morphs}{driven}{grids}{eyeballs}"
-          f" -> {glb} ({os.path.getsize(glb) // 1024} KB)")
+          f"{morphs}{driven}{grids}{eyeballs}{landed}")
     for fault in rule_faults:
         print(f"  ! {stem}: procedural rule - {fault}")
     for fault in built["eye_faults"]:
         print(f"  ! {stem}: eyeball - {fault}")
     for orphan in S.autolayer_orphans(labels):
         print(f"  ! {stem}: autolayer target '{orphan}' baked no clip")
-    return dict(stem=stem, glb=os.path.basename(glb), model=model_path,
+    return dict(stem=stem, glb=os.path.basename(glb) if write else "", model=model_path,
                 bones=len(built["bones"]),
                 split_bones=[b.name for b in built["bones"] if b.flags & 0x2],
                 clips=labels, clip_extents=extents,
@@ -617,10 +619,10 @@ def export_npc(idx, model_path, out_dir, stem=None, anorms=None,
                 eyes=eyes, eye_faults=built["eye_faults"])
 
 
-def export_bank(idx, model_path, out_dir, stem):
-    """Write `<out_dir>/banks/<stem>.glb`: the bank skeleton (named bone nodes) + all its
-    clips, no mesh/materials -- an animation library retargeted onto NPC skeletons by bone
-    name at load (A.7). Returns {stem, glb, model, clips:[mdl_skel.Seq,...], blends} or None
+def export_bank(idx, model_path, out_dir, stem, write=False):
+    """Decode one shared bank -- skeleton + all its clips, no mesh. With `write`, also emit
+    `<out_dir>/banks/<stem>.glb` as the on-demand inspection product.
+    Returns {stem, glb, model, clips:[mdl_skel.Seq,...], blends} or None
     if the bank defines no animated clip (aggregator/plumbing models). `clips` carries one
     entry per baked animation, which for a multi-cell sequence is every cell rather than the
     base alone; `blends` is the grid table naming which clip each cell is."""
@@ -662,20 +664,22 @@ def export_bank(idx, model_path, out_dir, stem):
         "buffers": [{"byteLength": len(g.bin)}],
     }
     glb = os.path.join(banks_dir, stem + ".glb")
-    _write_glb(gltf, g.bin, glb)
+    if write:
+        _write_glb(gltf, g.bin, glb)
     grids = f", {len(blends)} blend grids" if blends else ""
     hosts = sum(1 for c in labels if c.autolayers)
     layered = f", {hosts} autolayer hosts" if hosts else ""
-    print(f"  bank {stem}: {len(bones)} bones, {len(labels)} clips{grids}{layered} "
-          f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
+    landed = f" -> {glb} ({os.path.getsize(glb) // 1024} KB)" if write else ""
+    print(f"  bank {stem}: {len(bones)} bones, {len(labels)} clips{grids}{layered}{landed}")
     for orphan in S.autolayer_orphans(labels):
         print(f"  ! {stem}: autolayer target '{orphan}' baked no clip")
     return dict(stem=stem, glb="banks/" + os.path.basename(glb), model=model_path,
                 clips=labels, blends=S.blend_sidecar(d, blends, labels))
 
 
-def export_cinematic(idx, model_path, out_dir, stem):
-    """Write one bank per bone root of a cinematic `.mdl` -> `<out_dir>/banks/<stem>__<root>.glb`.
+def export_cinematic(idx, model_path, out_dir, stem, write=False):
+    """Decode one bank per bone root of a cinematic `.mdl`; with `write`, each also lands as
+    `<out_dir>/banks/<stem>__<root>.glb` for inspection.
 
     A cinematic model is a whole multi-actor performance packed into one file: N co-located
     skeletons (`Bip01`..`BipNN`, ~67 bones each) carrying a single clip, usually `entire_scene`.
@@ -790,12 +794,15 @@ def export_cinematic(idx, model_path, out_dir, stem):
             "buffers": [{"byteLength": len(g.bin)}],
         }
         glb = os.path.join(banks_dir, name + ".glb")
-        _write_glb(gltf, g.bin, glb)
+        if write:
+            _write_glb(gltf, g.bin, glb)
         rooted = _reconcile_blends(blends, {c.label for c in labels})
         grids = f", {len(rooted)} blend grids" if rooted else ""
-        print(f"  cinematic {name}: {len(sub)} bones, {len(labels)} clips{grids} "
-              f"-> {glb} ({os.path.getsize(glb) // 1024} KB)")
-        out.append(dict(stem=name, glb="banks/" + os.path.basename(glb), model=model_path,
+        landed = f" -> {glb} ({os.path.getsize(glb) // 1024} KB)" if write else ""
+        print(f"  cinematic {name}: {len(sub)} bones, {len(labels)} clips{grids}{landed}")
+        out.append(dict(stem=name,
+                        glb="banks/" + os.path.basename(glb) if write else "",
+                        model=model_path,
                         clips=labels, blends=S.blend_sidecar(d, rooted, labels), root=root))
 
     return out or None

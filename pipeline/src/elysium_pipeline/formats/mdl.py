@@ -170,7 +170,7 @@ def decode(d, v):
         vbp = vtx_bp_off + bp * 8
         vtx_model_off = _i32(v, vbp + 4)            # rel to vtx bodypart
         for m in range(num_models):
-            model_base = mbp + model_index + m * 160
+            model_base = mbp + model_index + m * 224   # StudioModel stride (mdl_skel.MODEL_STRIDE)
             num_meshes = _i32(d, model_base + 136)
             mesh_index = _i32(d, model_base + 140)  # rel to model
             vertex_index = _i32(d, model_base + 148)  # rel to model
@@ -247,7 +247,7 @@ def _envmask_png(info, bt, img, read_bytes, tex_out, tex_cache):
     The inversion is the shipped shader's, not a guess: lightmappedgeneric_basealphamaskedenvmap
     computes `mul r1, t2, 1-t3.a` (docs/vtmb/reflections.md). Cached under a prefixed key so a mask
     shared by several models decodes once, in the same dict the albedos use."""
-    from elysium_pipeline.formats.tex_to_png import decode as decode_texture
+    from elysium_pipeline.formats.tex_to_png import decode as decode_texture, save_png
     from PIL import Image, ImageChops
 
     em = info.get("envmapmask")
@@ -261,7 +261,7 @@ def _envmask_png(info, bt, img, read_bytes, tex_out, tex_cache):
                 try:
                     fn = sanitize(src) + "_envmask.png"
                     mask = decode_texture(tth, ttz).convert("L")
-                    mask.save(os.path.join(tex_out, fn))
+                    save_png(mask, os.path.join(tex_out, fn))
                     tex_cache[key] = (fn, mask)
                 except Exception:
                     pass
@@ -275,7 +275,7 @@ def _envmask_png(info, bt, img, read_bytes, tex_out, tex_cache):
                 fn = sanitize(bt) + "_envmask.png"
                 alpha = img.convert("RGBA").getchannel("A")
                 mask = ImageChops.invert(alpha)
-                mask.save(os.path.join(tex_out, fn))
+                save_png(mask, os.path.join(tex_out, fn))
                 tex_cache[key] = (fn, mask)
             except Exception:
                 pass
@@ -343,7 +343,6 @@ def material_channels(mat, search, read_bytes):
 
     Returns ``None`` when no VMT resolves, or when the VMT names neither a base texture nor a
     refraction layer. Keys are install-relative and normalized (`shared_corpus.texture_key`'s
-    form); ``needs_alpha`` is this material's own demand, to be unioned by the caller.
 
     ``vmt`` is the resolved material's **corpus key**, folded by `shared_corpus.material_key` --
     the one form ``shared/materials.json`` is keyed by and the one form a `.mtl`'s ``mat`` line
@@ -379,7 +378,6 @@ def material_channels(mat, search, read_bytes):
         "albedo": key(bt),
         # An additive, blended or masked surface reads its own alpha, so the base texture cannot
         # be flattened to RGB. One material asking is enough for the whole corpus.
-        "needs_alpha": additive or translucent or alphatest,
         "selfillum": bool(info.get("selfillum")),
         "additive": additive,
         "translucent": translucent,
@@ -423,8 +421,7 @@ def material_channels(mat, search, read_bytes):
     }
 
 
-def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
-                      keep_alpha=None, tex_out=None):
+def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *, tex_out=None):
     """material name -> decoded channels plus the VMT's render semantics.
 
     The albedo PNG (and the self-illum emission mask derived from its alpha) is
@@ -434,16 +431,14 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
     albedo: its authored DUDV/normal map distorts the framebuffer and many such VMTs declare no
     ``$basetexture`` at all.
 
-    ``keep_alpha`` is the set of base-texture keys that must keep their alpha channel. Whether a
-    texture keeps alpha is a property of the whole set of materials drawing it, not of this one,
-    so a caller that knows the whole set states it here and the answer stops depending on which
-    material happened to resolve first. Left ``None``, the cache promotes RGB to RGBA on demand,
-    which is correct only within a single run that resolves every sharer.
+    The written albedo keeps whatever alpha its source stores (`tex_to_png.save_png`); no
+    material's flags decide bytes here, so resolution order cannot change any file.
 
     ``tex_out`` is where decoded textures land, defaulting to ``<out_dir>/tex``.
     """
     from elysium_pipeline.formats.glass import derive_normal
-    from elysium_pipeline.formats.tex_to_png import decode as decode_texture, dudv_to_normal
+    from elysium_pipeline.formats.tex_to_png import (
+        decode as decode_texture, dudv_to_normal, save_png)
     tex_out = tex_out or os.path.join(out_dir, "tex")
     channels = material_channels(mat, search, read_bytes)
     if channels is None:
@@ -455,14 +450,10 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
     translucent = channels["translucent"]
     alphatest = channels["alphatest"]
     glass = channels["glass"]
-    needs_alpha = (bt in keep_alpha) if keep_alpha is not None else channels["needs_alpha"]
 
-    # Cache per basetexture:
-    # [albedo_png, emis_png_or_None, decoded_rgba_or_None, alpha_preserved].
+    # Cache per basetexture: [albedo_png, emis_png_or_None, decoded_rgba_or_None].
     # emis is generated lazily the first time a selfillum material references this
-    # texture; the decoded image is held so that generation needs no re-decode. Alpha
-    # preservation is promoted: if an opaque material resolves a shared basetexture first,
-    # a later translucent/masked/additive material rewrites that same PNG as RGBA.
+    # texture; the decoded image is held so that generation needs no re-decode.
     albedo = emis = img = None
     if bt:
         ent = tex_cache.get(bt)
@@ -472,18 +463,14 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
                 try:
                     img = decode_texture(tth, ttz).convert("RGBA")
                     fn = sanitize(bt) + ".png"
-                    (img if needs_alpha else img.convert("RGB")).save(
-                        os.path.join(tex_out, fn))
+                    save_png(img, os.path.join(tex_out, fn))
                     albedo = fn
                 except Exception as e:
                     print(f"    texture decode failed for {mat} ({bt}): {e}")
                     img = None
-            ent = tex_cache[bt] = [albedo, None, img, bool(albedo and needs_alpha)]
+            ent = tex_cache[bt] = [albedo, None, img]
 
-        albedo, emis, img, alpha_preserved = ent
-        if needs_alpha and albedo and img is not None and not alpha_preserved:
-            img.save(os.path.join(tex_out, albedo))
-            ent[3] = True
+        albedo, emis, img = ent
     if info.get("selfillum") and albedo and emis is None and img is not None:
         import numpy as np
         from PIL import Image
@@ -491,7 +478,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
         a = arr[:, :, 3:4] / 255.0
         masked = (arr[:, :, :3] * a).clip(0, 255).astype("uint8")
         efn = sanitize(bt) + "_ke.png"
-        Image.fromarray(masked, "RGB").save(os.path.join(tex_out, efn))
+        save_png(Image.fromarray(masked, "RGB"), os.path.join(tex_out, efn))
         ent[1] = emis = efn
 
     # $envmap. VtMB's models are the LARGER half of the reflective set (1,419 of 2,610
@@ -528,7 +515,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
                         decoded = decode_texture(tth, ttz)
                         normal = dudv_to_normal(decoded) if is_dudv else decoded.convert("RGB")
                         refract_png = sanitize(refract_src) + "_refract_n.png"
-                        normal.save(os.path.join(tex_out, refract_png))
+                        save_png(normal, os.path.join(tex_out, refract_png))
                         tex_cache[key] = refract_png
                     except Exception as e:
                         print(f"    refract decode failed for {mat} ({refract_src}): {e}")
@@ -548,8 +535,8 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
             if tth and ttz:
                 try:
                     bump_png = sanitize(bump) + "_n.png"
-                    decode_texture(tth, ttz).convert("RGB").save(
-                        os.path.join(tex_out, bump_png))
+                    save_png(decode_texture(tth, ttz).convert("RGB"),
+                             os.path.join(tex_out, bump_png))
                     tex_cache[key] = bump_png
                 except Exception:
                     pass
@@ -559,7 +546,7 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
         key = "#glassnormal:%s|%s" % (bt, mask_id)
         if key not in tex_cache:
             bump_png = sanitize(bt) + "_glass_n.png"
-            derive_normal(img, envmask_img).save(os.path.join(tex_out, bump_png))
+            save_png(derive_normal(img, envmask_img), os.path.join(tex_out, bump_png))
             tex_cache[key] = bump_png
         bump_png = tex_cache[key]
 
@@ -576,8 +563,8 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *,
             if tth and ttz:
                 try:
                     fn = sanitize(iris) + "_iris.png"
-                    decode_texture(tth, ttz).convert("RGBA").save(
-                        os.path.join(tex_out, fn))
+                    save_png(decode_texture(tth, ttz).convert("RGBA"),
+                             os.path.join(tex_out, fn))
                     tex_cache[key] = fn
                 except Exception as e:
                     print(f"    iris decode failed for {mat} ({iris}): {e}")
@@ -656,7 +643,7 @@ def _write_skins(meshes, skins, name, out_dir):
 
 
 def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, skins=None,
-                    keep_alpha=None, tex_out=None):
+                    tex_out=None):
     """Write out_dir/<name>.obj + .mtl, decoding textures into out_dir/tex/
     (shared across models via tex_cache). Vertices are Unreal cm/Z-up/left-handed via
     bsp.source_to_unreal and triangle winding is reversed because the Y negation is a
@@ -667,9 +654,8 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ski
     and out_dir/<name>.skins records the remap. A single-family model writes exactly what it
     always did, byte for byte.
 
-    ``keep_alpha`` is passed through to `_resolve_material`, and ``tex_out`` is where textures
-    land -- separate from ``out_dir`` so a corpus can put one texture set beside many models'
-    OBJs instead of under each one."""
+    ``tex_out`` is where textures land -- separate from ``out_dir`` so a corpus can put one
+    texture set beside many models' OBJs instead of under each one."""
     tex_out = tex_out or os.path.join(out_dir, "tex")
     os.makedirs(tex_out, exist_ok=True)
 
@@ -680,7 +666,7 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ski
     names += sorted(extra)
 
     mat_png = {n: _resolve_material(n, search, read_bytes, out_dir, tex_cache,
-                                    keep_alpha=keep_alpha, tex_out=tex_out) for n in names}
+                                    tex_out=tex_out) for n in names}
     _write_skins(meshes, skins, name, out_dir)
     # The `.mtl` names each mesh slot and the corpus material it draws. Every channel and flag
     # lives once in `shared/materials.json`, so a model and a world surface that share a material
@@ -710,8 +696,13 @@ def write_obj_scene(meshes, name, out_dir, search, read_bytes, tex_cache, *, ski
 
 
 def load(idx, model_path):
-    """Read mdl+dx80.vtx bytes for an install model path. Returns (d, v) or None."""
+    """Read mdl+vtx bytes for an install model path. Returns (d, v) or None.
+
+    `.dx80.vtx` first; `.dx7_2bone.vtx` is the engine-matching fallback for the models
+    shipped without one (`fishtank/fish07_school` is the install's sole case), and the
+    same parser reads both variants."""
     from elysium_pipeline.formats import install
     stem = model_path[:-4] if model_path.lower().endswith(".mdl") else model_path
-    d, v = install.read(idx, stem + ".mdl"), install.read(idx, stem + ".dx80.vtx")
+    d = install.read(idx, stem + ".mdl")
+    v = install.read(idx, stem + ".dx80.vtx") or install.read(idx, stem + ".dx7_2bone.vtx")
     return (d, v) if d and v else None

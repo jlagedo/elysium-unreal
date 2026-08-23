@@ -10,7 +10,7 @@ Format (reverse-engineered):
 DXT blocks are decoded by wrapping the raw bytes in a minimal DDS container and
 letting PIL do the BC1/BC3 decode.
 """
-import os, struct, zlib, io, sys
+import os, struct, zlib, io, sys, tempfile
 from PIL import Image
 from elysium_pipeline.paths import export_root
 
@@ -177,6 +177,40 @@ def decode(tth: bytes, ttz: bytes) -> Image.Image:
     if fmt == FMT_UVWQ8888:
         return Image.frombytes("RGBA", (w, h), largest)
     raise ValueError(f"unsupported format {fmt}")
+
+
+def save_png(image: Image.Image, path) -> None:
+    """Write a decoded texture: alpha as the source stores it, published atomically.
+
+    Alpha is a per-file fact, never a decision. A texture keeps whatever alpha plane its source
+    format carries; the one normalization is lossless -- a plane that is uniformly opaque encodes
+    nothing, so it folds to RGB. No material's semantics reach this function: whether a material
+    *renders* with alpha lives in `materials.json`, and the bake keys compression and blend mode
+    off that document, not off the PNG's channel count.
+
+    Atomic because a sharded corpus decode reaches the same texture from more than one worker:
+    two materials that share a basetexture can land in different shards. What they write is
+    byte-identical -- name and pixels are both a function of the source texture and its role --
+    so the duplicate is wasted work rather than a conflict, and `os.replace` keeps a reader (or
+    the other writer) from ever observing a half-written PNG.
+    """
+    if image.mode == "RGBA" and image.getchannel("A").getextrema()[0] == 255:
+        image = image.convert("RGB")
+    path = os.fspath(path)
+    directory = os.path.dirname(path) or "."
+    handle, temporary = tempfile.mkstemp(
+        dir=directory, prefix=".tmp-", suffix=os.path.splitext(path)[1] or ".png")
+    os.close(handle)
+    try:
+        image.save(temporary)
+        os.replace(temporary, path)
+    except BaseException:
+        try:
+            os.unlink(temporary)
+        except OSError:
+            pass
+        raise
+
 
 if __name__ == "__main__":
     from elysium_pipeline.formats import install, vpk

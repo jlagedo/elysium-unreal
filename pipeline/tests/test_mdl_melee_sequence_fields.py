@@ -525,7 +525,7 @@ class ClipSidecarRowTests(unittest.TestCase):
     def _slice(self, own_clips):
         manifest = {
             "manifest_version": npc_export.MANIFEST_VERSION,
-            "npcs": {"fighter": {"glb": "fighter.glb", "model": "models/fighter.mdl",
+            "npcs": {"fighter": {"model": "models/fighter.mdl",
                                  "bones": 2,
                                  "clips": {label: "fighter" for label in own_clips},
                                  "own_clips": own_clips}},

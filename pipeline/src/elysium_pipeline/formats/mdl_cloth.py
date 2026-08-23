@@ -46,7 +46,7 @@ from __future__ import annotations
 import struct
 from collections import defaultdict
 
-from elysium_pipeline.formats import mdl_skel
+from elysium_pipeline.formats import mdl, mdl_skel
 
 MODEL_STRIDE = 224
 MESH_STRIDE = 60
@@ -285,6 +285,18 @@ def build(d, v):
             capsules, spheres = read_colliders(d, model_base, bones)
             model_name = _cstr(d, model_base)
 
+            # The model's own vertex pool, addressed by the same model-global id the
+            # anchored prefix uses. A render vertex no LOD0 strip references never
+            # enters `decode_skinned`'s remap yet still carries its authored position,
+            # uv and skin here — which is where the engine reads anchors from.
+            pool_verts = _i32(d, model_base + 144)
+            pool_index = _i32(d, model_base + 148)
+            pool_vlist = _i32(d, model_base + 156)
+            pool_stride = mdl.VSTRIDE.get(pool_vlist, 44)
+            pool_qoff = _f3(d, model_base + 160)
+            pool_qscale = _f3(d, model_base + 172)
+            pool_skin = None
+
             for di in range(ndefs):
                 defn = read_definition(d, model_base, di)
                 samples = defaultdict(list)
@@ -372,6 +384,20 @@ def build(d, v):
                         skin_first[k] = anchor_skin[k]
                         if gvid in global_uv:
                             uv_first[k] = global_uv[gvid]
+                    elif 0 <= gvid < pool_verts:
+                        sv = model_base + pool_index + gvid * pool_stride
+                        px, py, pz, u, vv = mdl._read_vertex(
+                            d, sv, pool_vlist, pool_qoff, pool_qscale)
+                        if pool_skin is None:
+                            pool_skin = mdl_skel.read_skin(
+                                d, model_base, pool_index, pool_verts, pool_vlist)
+                        anchor_skin[k] = [
+                            (names[j] if j < len(names) else str(j), float(w))
+                            for j, w in zip(*pool_skin[gvid]) if w > 0
+                        ]
+                        rest[k] = (px, py, pz)
+                        skin_first[k] = anchor_skin[k]
+                        uv_first[k] = (u, vv)
 
                 # Some of the anchored ring is not substituted. The vertices a pinned particle
                 # is SKINNED FROM keep an ordinary-skinning selector, so the loop above never

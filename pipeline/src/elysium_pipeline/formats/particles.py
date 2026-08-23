@@ -97,7 +97,11 @@ def _name(value: Any, where: str) -> str:
         name = name[len("particles/"):]
     if name.endswith(".txt"):
         name = name[: -len(".txt")]
-    if not name or not re.fullmatch(r"[a-z0-9_./-]+", name):
+    # A space is part of a real source identity: the install ships
+    # `particles/tz_ bloodtrickle_emitter.txt`, and the engine resolves it like any other file.
+    # The Unreal-side asset name folds it away (`asset_names`); the source name must keep it or
+    # the definition file stops resolving.
+    if not name or not re.fullmatch(r"[a-z0-9_./ -]+", name):
         raise ParticleContractError(f"{where}: invalid asset name {value!r}")
     return name
 
