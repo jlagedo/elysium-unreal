@@ -899,7 +899,10 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 
 				// The binding. A vertex with no row, or one the anchor pass claimed, is a vertex
 				// VtMB skins -- the belt -- so it takes a zero blend and never reads the solver.
-				const TSharedPtr<FJsonObject> Row = Vertices.IsValidIndex(Index)
+				// The sidecar states "no row" as a JSON null, checked by type first: `AsObject`
+				// on a null value logs a LogJson warning per call, and the belt is most of a cast.
+				const TSharedPtr<FJsonObject> Row =
+					Vertices.IsValidIndex(Index) && Vertices[Index]->Type == EJson::Object
 					? Vertices[Index]->AsObject() : nullptr;
 				int32 Particle = INDEX_NONE;
 				if (Row.IsValid() && !Row->HasField(TEXT("anchor")))
