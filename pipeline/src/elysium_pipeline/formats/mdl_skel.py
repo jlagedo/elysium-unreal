@@ -266,6 +266,37 @@ _SEQ_BLOCKED_REACTION_NAME = 740
 #: 14,012 shipped descriptors.
 _REACH_UNSET = struct.unpack("<f", struct.pack("<I", 0x7F7FFFFF))[0]
 
+#: The NEAR edge of the same reach band, `low_reach`@716 (`+0x2CC`). The cast-arm melee selector
+#: scores a candidate's reach bit on `low_reach <= mag <= reach`, inclusive at both ends
+#: (`docs/vtmb/combat-and-damage.md` -> "The cast arm"), so this is the band's other end rather
+#: than a second distance.
+_SEQ_LOW_REACH = 716
+
+#: **The unset marker here is `FLT_MIN`, not `reach`'s `FLT_MAX`**, and the two fields are
+#: adjacent. `0x00800000` covers 13,496 of the 14,012 shipped descriptors; 516 state a value,
+#: which is NOT the same population as `reach`'s 581. 502 state both, 72 state a `reach` with no
+#: low edge, and 14 state a low edge with `reach` unset. Reading this field against the wrong
+#: marker does not fail loudly -- `FLT_MIN` is a finite positive float, so 13,496 descriptors
+#: would quietly report a 1.18e-38 near edge that every distance clears.
+_LOW_REACH_UNSET = struct.unpack("<f", struct.pack("<I", 0x00800000))[0]
+
+#: The attack-envelope array, `numenvelopes`@700 (`+0x2BC`) and `envelopeindex`@704 (`+0x2C0`),
+#: descriptor-relative like the swing array below. Each record is six floats -- a min corner and a
+#: max corner -- and the cast arm tests the enemy's box against them.
+#:
+#: **They are not the swing records and not parallel to them.** `andrei`'s `JumpFromBlood_Attack`
+#: declares 459 envelopes against 17 contact records for the same clip: the envelopes sweep
+#: forward across the swing rather than describing one static box.
+_SEQ_ENVELOPE_COUNT = 700
+_SEQ_ENVELOPE_INDEX = 704
+_ENVELOPE_STRIDE = 24
+
+#: The gate on `numenvelopes`@700, the same shape `_MAX_SWING_RECORDS` is. The shipped maximum is
+#: 459; the clamp is set above it with room rather than at it, so a legitimate authoring is never
+#: refused while a descriptor-tail-into-the-string-table read still is. The seven single-`idle`
+#: scenery models that read count `768` at offset `768` are exactly what it catches.
+_MAX_ENVELOPE_RECORDS = 512
+
 #: The contact half of the same custom block. `numswingcentres`@708 (`+0x2C4`) and
 #: `swingcentreindex`@712 (`+0x2C8`) declare the descriptor-relative array of swing-contact
 #: records: where on the swinging limb the attack sweeps, over which slice of the clip cycle, and
@@ -420,12 +451,15 @@ _NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
 #: `fade` is the authored transition duration in seconds (see `local_sequences`);
 #: `autolayers` names the sequences this one is composed with (see `read_autolayers`);
 #: `events` carries the sequence timeline records (see `read_events`); `reach` is the melee
-#: swing's authored reach in Source units (see `read_reach`) and `blocked_reaction` the activity
+#: swing's authored reach in Source units (see `read_reach`), `low_reach` the near edge of that
+#: same band (see `read_low_reach`), and `blocked_reaction` the activity
 #: literal the attacker plays when that swing is blocked (see `read_blocked_reaction`). Those two
 #: are `None` on a sequence that states neither, which is most of the corpus; `swings` is the
 #: authored contact geometry and timing of the same swing (see `read_swing_records`), empty there.
 #: `combo` is the same block's chain half — which direction key selects this attack, which attack
 #: it hands off to, and over which slice of the cycle (see `read_combo_chain`) — `None` there too.
+#: `envelopes` is the cast-arm selector's authored attack envelopes (see `read_envelopes`), empty
+#: there too and NOT parallel to `swings`.
 #: `movement` is the base animation's authored `mstudiomovement_t` array (see `read_movements`),
 #: in the file's own Source units. Its default is `None` — **not asked**, which is what a `Seq`
 #: built outside `local_sequences` from a raw animation carries — and `()` is the distinct answer
@@ -433,9 +467,9 @@ _NO_GRID = Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
 #: `baseballbat_attack_heavy_a` states and what makes retail's `Studio_AnimMovement` refuse.
 Seq = namedtuple("Seq",
                  "label base frames fps activity actweight flags grid bbmin bbmax fade autolayers"
-                 " events reach blocked_reaction swings combo movement",
+                 " events reach low_reach blocked_reaction swings combo movement envelopes",
                  defaults=(_NO_GRID, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 0.2, (), (), None, None,
-                           (), None, None))
+                           None, (), None, None, ()))
 
 
 def pose_parameters(d):
@@ -575,6 +609,62 @@ def read_reach(d, sb):
     if not math.isfinite(value) or value <= 0.0 or value >= _REACH_UNSET:
         return None
     return value
+
+
+def read_low_reach(d, sb):
+    """The NEAR edge of the swing's reach band at descriptor base `sb`, in Source units, or
+    `None` when the sequence states none.
+
+    `low_reach`@716 is the other end of the band whose far end `read_reach` answers: the cast-arm
+    melee selector sets a candidate's reach bit on `low <= mag <= reach`, inclusive both ways
+    (`docs/vtmb/combat-and-damage.md` -> "The cast arm").
+
+    **Its unset marker is `FLT_MIN`, not `reach`'s `FLT_MAX`.** 516 descriptors state a value and
+    13,496 carry the marker. The two edges are authored independently, so this population is not
+    `reach`'s: 502 state both, 72 a reach with no low edge, 14 a low edge with reach unset.
+
+    A genuine authored `0.0` is kept, unlike `read_reach`'s. `werewolf`/`werewolf_damaged`
+    `claw_attack_close` state exactly that against a reach of 114.9, and a near edge of zero is a
+    band that starts at the body rather than a band that states nothing -- where a zero FAR edge
+    would be a swing that can never reach. Non-finite and negative are still unstated."""
+    value = _f32(d, sb + _SEQ_LOW_REACH)
+    if not math.isfinite(value) or value < 0.0 or value == _LOW_REACH_UNSET:
+        return None
+    return value
+
+
+def read_envelopes(d, sb):
+    """One StudioSeqDesc's authored attack envelopes at descriptor base `sb` -> tuple of
+    (min_corner, max_corner) pairs, each corner three floats in the file's own units.
+
+    The array at `numenvelopes`@700 / `envelopeindex`@704 is 24-byte records, six floats apiece.
+    574 descriptors declare them -- the same 574 that state the swing pair and `reach` -- with
+    counts from 2 to 459.
+
+    **These are not positions and the axes are not Cartesian.** The cast arm derives three scalars
+    against the enemy first -- the XY-only distance to its AABB centre, the signed height
+    difference, and its half-extents -- and tests the resulting box against these records, so the
+    axes are reach distance, lateral tolerance and vertical offset. No rotation or basis transform
+    is applied anywhere in retail, and a consumer that put a corner through a positional
+    projection would mirror the lateral axis, which is symmetric about zero and would therefore
+    disagree with nothing.
+
+    Three bounds, the same ones `read_swing_records` requires: the count is gated at the clamp,
+    the relative index must be positive, and the array must lie inside the image. A descriptor
+    failing any of them yields no envelopes rather than floats read out of adjacent bytes -- which
+    is what the seven single-`idle` scenery models with the zeroed custom block need."""
+    count = _i32(d, sb + _SEQ_ENVELOPE_COUNT)
+    relative = _i32(d, sb + _SEQ_ENVELOPE_INDEX)
+    if not (0 < count <= _MAX_ENVELOPE_RECORDS) or relative <= 0:
+        return ()
+    base = sb + relative
+    if base < 0 or base + count * _ENVELOPE_STRIDE > len(d):
+        return ()
+    out = []
+    for index in range(count):
+        record = base + index * _ENVELOPE_STRIDE
+        out.append((_vec3(d, record), _vec3(d, record + 12)))
+    return tuple(out)
 
 
 def _descriptor_name(d, sb, field_off):
@@ -957,6 +1047,8 @@ def local_sequences(d):
                        autolayers=tuple(labels[t] for t in read_autolayers(d, sb, ns)),
                        events=read_events(d, sb),
                        reach=read_reach(d, sb),
+                       low_reach=read_low_reach(d, sb),
+                       envelopes=read_envelopes(d, sb),
                        blocked_reaction=read_blocked_reaction(d, sb),
                        swings=read_swing_records(d, sb, bones),
                        combo=read_combo_chain(d, sb),

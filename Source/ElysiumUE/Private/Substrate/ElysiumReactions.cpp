@@ -93,12 +93,6 @@ bool IsFrontalContact(const FVector& AttackerOriginCm, const FVector& VictimOrig
 
 // --- The grounded knockback family --------------------------------------------------------------
 
-const TCHAR* FElysiumKnockback::Activity() const
-{
-	return bFallbackCell ? FallbackGroundedKnockbackActivity
-		: KnockbackActivity(Size, Height, Direction);
-}
-
 const TCHAR* KnockbackActivity(EKnockbackSize Size, EKnockbackHeight Height,
 	EKnockbackDirection Direction)
 {
@@ -130,10 +124,21 @@ const TCHAR* KnockbackActivity(EKnockbackSize Size, EKnockbackHeight Height,
 	}
 }
 
-bool IsKnockbackAllowed(bool bVictimAlive, bool bTemplateDisallowsKnockbacks)
+bool IsKnockbackAllowed(bool bVictimAlive, bool bTemplateDisallowsKnockbacks,
+	bool bBuildupAdmits, bool bClassBypass)
 {
-	// The two recovered terms only. The two omitted ones are named on the declaration.
-	return bVictimAlive && !bTemplateDisallowsKnockbacks;
+	// Retail's own order, and the bypass really is FIRST: the class virtual skips both terms below
+	// it, so a `CNPC_VTzimisceRunner` is knocked back even wearing `Disallow_Knockbacks` and even
+	// when its buildup counter has drained.
+	if (bClassBypass)
+	{
+		return true;
+	}
+	// The dead-victim refusal, which retail spells `Health == Max_Health` over damage-taken. The
+	// health commit runs BEFORE the knockback entry on the same blow, so a killing blow arrives here
+	// already dead and is refused: the body dies where it stands rather than being thrown first.
+	// Ordering that is the producer's job; answering it is this one's.
+	return bVictimAlive && !bTemplateDisallowsKnockbacks && bBuildupAdmits;
 }
 
 FVector KnockbackAwayFrom(const FVector& AttackerOriginCm, const FVector& VictimOriginCm)
@@ -223,8 +228,58 @@ void BuildKnockback(const FVector& AwayCm, float VictimUnrealYawDegrees, FElysiu
 	Out.Direction = Out.bFallbackCell ? EKnockbackDirection::Back
 		: KnockbackDirectionForRelativeYaw(RelativeYaw);
 	Out.SnapYawDegrees = KnockbackSnapYaw(AwayWorldYaw, Out.Direction);
-	Out.Size = StandInKnockbackSize;
-	Out.Height = StandInKnockbackHeight;
 }
 
+int32 KnockbackBucketFor(int32 RotationByte, EKnockbackDirection Direction)
+{
+	if (RotationByte < 0 || RotationByte >= KnockbackDirectionCount)
+	{
+		// `0xFF` on the 639 records filling fewer than four buckets, and the byte is decoded
+		// unsigned, so this catches both that and anything else outside the cycle.
+		return INDEX_NONE;
+	}
+	// Bucket `k` answers `(RotationByte + k) mod 4`, so the bucket answering a given direction is
+	// that relation inverted. The `+ Count` keeps the modulus non-negative on a C++ `%`.
+	return (static_cast<int32>(Direction) - RotationByte + KnockbackDirectionCount)
+		% KnockbackDirectionCount;
+}
+
+bool SelectKnockbackActivity(const FElysiumSwingRecord& Record, EKnockbackDirection Direction,
+	FRandomStream& Rng, FString& OutActivity)
+{
+	OutActivity.Reset();
+
+	int32 Bucket = KnockbackBucketFor(Record.B8, Direction);
+	if (Bucket == INDEX_NONE)
+	{
+		return false;
+	}
+	// **An empty bucket re-reads bucket 0**, which is retail's own first fallback rather than a
+	// refusal: `if (counts[bucket] < 1) bucket = 0`. A direction the attack authors no candidate for
+	// therefore answers whatever bucket 0 holds, and only a record whose bucket 0 is ALSO empty
+	// reaches the caller's fallback. Refusing here instead would skip the shipped answer entirely.
+	if (!Record.KnockbackNames.IsValidIndex(Bucket) || Record.KnockbackNames[Bucket].IsEmpty())
+	{
+		Bucket = 0;
+	}
+	if (!Record.KnockbackNames.IsValidIndex(Bucket))
+	{
+		return false;
+	}
+	const TArray<FString>& Candidates = Record.KnockbackNames[Bucket];
+	if (Candidates.IsEmpty())
+	{
+		// Retail reaches a per-class default activity by direction here (a virtual on the victim).
+		// Nothing in this runtime carries one, so the caller's own fallback cell stands in — named
+		// at `FallbackGroundedKnockbackActivity`, which is a DIFFERENT fallback from this one.
+		return false;
+	}
+	// **The draw is unconditional, including over a single candidate.** Retail calls
+	// `RandomInt(0, count - 1)` whenever the bucket holds anything, so a one-candidate bucket still
+	// spends a draw. Skipping it would answer the same activity and leave the stream one position
+	// behind, which every later reaction in the run would then read differently.
+	const int32 Pick = Rng.RandRange(0, Candidates.Num() - 1);
+	OutActivity = Candidates[Pick];
+	return !OutActivity.IsEmpty();
+}
 }

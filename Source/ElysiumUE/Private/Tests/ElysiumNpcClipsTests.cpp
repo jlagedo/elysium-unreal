@@ -104,6 +104,118 @@ namespace
 				 "w_open":0.25,"w_close":1.0,"w_hold":0.9}]
 		}
 	})");
+
+	// Columns 12 and 13 — the cast-arm selector's two inputs, and the four shapes each takes.
+	//
+	// `low_only` is the shipped case that makes the placeholders matter: 14 descriptors state a low
+	// edge with `reach` UNSET, so every column ahead of 12 is held open and each with its own kind.
+	// `zero_low` is the other trap: a stated `0.0` is a band that starts at the body, and a reader
+	// testing the number instead of the null would discard it.
+	const TCHAR* const GEnvelopeSlice = TEXT(R"({
+		"stem":"cast_body",
+		"owners":["melee_bank"],
+		"activities":["ACT_MELEE_ATTACK"],
+		"fields":["owner","activity","weight","flags","frames","fps","fade","reach_cm",
+		          "blocked_reaction","swings","combo","low_reach_cm","envelopes"],
+		"clips":{
+			"nocolumn":[0,0,1,0,31,30.0,0.2,282.9939],
+			"nullcolumn":[0,0,1,0,31,30.0,0.2,282.9939,"",[],null,null,null],
+			"emptycolumn":[0,0,1,0,31,30.0,0.2,282.9939,"",[],null,60.0,[]],
+			"low_only":[0,0,1,0,31,30.0,0.2,null,"",[],null,30.48],
+			"zero_low":[0,0,1,0,31,30.0,0.2,282.9939,"",[],null,0.0],
+			"banded":[0,0,1,0,31,30.0,0.2,282.9939,"",[],null,60.0,
+				[{"min":[25.4,-7.62,-20.32],"max":[101.6,7.62,20.32]},
+				 {"min":[30.48,-12.7,-22.86],"max":[111.76,12.7,22.86]}]],
+			"halfcolumn":[0,0,1,0,31,30.0,0.2,282.9939,"",[],null,60.0,
+				[{"min":[25.4,-7.62,-20.32]}]]
+		}
+	})");
+}
+
+// Columns 12 and 13: the reach band's near edge and the cast arm's attack envelopes.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumClipsEnvelopeColumnTest,
+	"Elysium.Substrate.Clips.EnvelopeColumn", GElysiumTestFlags)
+bool FElysiumClipsEnvelopeColumnTest::RunTest(const FString&)
+{
+	FElysiumNpcClipSet Set;
+	FString Error;
+	if (!TestTrue(TEXT("the synthetic slice parses"),
+		Set.LoadJsonText(TEXT("cast_body"), GEnvelopeSlice, Error)))
+	{
+		AddError(FString::Printf(TEXT("slice refused: %s"), *Error));
+		return false;
+	}
+	auto Clip = [&Set, this](const TCHAR* Label) -> const FElysiumNpcClip*
+	{
+		const FElysiumNpcClip* Found = Set.Find(Label);
+		TestNotNull(*FString::Printf(TEXT("'%s' is in the slice"), Label), Found);
+		return Found;
+	};
+
+	// --- Absent, null and empty are one answer, exactly as they are for swings and combos --------
+	for (const TCHAR* Label : { TEXT("nocolumn"), TEXT("nullcolumn") })
+	{
+		if (const FElysiumNpcClip* Row = Clip(Label))
+		{
+			TestFalse(*FString::Printf(TEXT("'%s' states no near edge"), Label), Row->HasLowReach());
+			TestFalse(*FString::Printf(TEXT("'%s' states no envelope"), Label), Row->HasEnvelopes());
+		}
+	}
+	if (const FElysiumNpcClip* Row = Clip(TEXT("emptycolumn")))
+	{
+		TestTrue(TEXT("an empty envelope array still carries its near edge"), Row->HasLowReach());
+		TestFalse(TEXT("...and reads as no envelopes"), Row->HasEnvelopes());
+	}
+
+	// --- The two shipped traps -------------------------------------------------------------------
+	if (const FElysiumNpcClip* Row = Clip(TEXT("low_only")))
+	{
+		// 14 descriptors state a low edge with `reach` unset. The far edge's own column is held
+		// open with a null, so the near edge lands in ITS column rather than sliding forward.
+		TestFalse(TEXT("a low edge without a reach carries no reach"), Row->HasReach());
+		TestTrue(TEXT("...and still carries the near edge"), Row->HasLowReach());
+		TestEqual(TEXT("...at the value the column states"), Row->LowReachCm, 30.48f, 1e-3f);
+	}
+	if (const FElysiumNpcClip* Row = Clip(TEXT("zero_low")))
+	{
+		// `werewolf`'s `claw_attack_close` states exactly this. Zero is a band that starts at the
+		// body — a real claim — so the guard is the null and never the number.
+		TestTrue(TEXT("a stated zero near edge is stated"), Row->HasLowReach());
+		TestEqual(TEXT("...and is zero"), Row->LowReachCm, 0.0f, 1e-6f);
+	}
+
+	// --- The records themselves, read verbatim ---------------------------------------------------
+	if (const FElysiumNpcClip* Row = Clip(TEXT("banded")))
+	{
+		if (TestEqual(TEXT("both envelopes decode"), Row->Envelopes.Num(), 2))
+		{
+			// Verbatim: the exporter already stated these in the frame the cast arm's own derived
+			// query is built in, and their axes are not a position.
+			TestEqual(TEXT("the first envelope's near edge"),
+				static_cast<float>(Row->Envelopes[0].Min.X), 25.4f, 1e-3f);
+			TestEqual(TEXT("...its lateral tolerance"),
+				static_cast<float>(Row->Envelopes[0].Max.Y), 7.62f, 1e-3f);
+			TestEqual(TEXT("...its vertical offset"),
+				static_cast<float>(Row->Envelopes[0].Min.Z), -20.32f, 1e-3f);
+			// The overlap test is per-axis and inclusive, which is how the reach bit is scored.
+			TestTrue(TEXT("a box inside the envelope overlaps it"),
+				Row->Envelopes[0].Overlaps(FVector(50.0f, -1.0f, 0.0f),
+					FVector(60.0f, 1.0f, 5.0f)));
+			TestFalse(TEXT("...and one beyond its far edge does not"),
+				Row->Envelopes[0].Overlaps(FVector(200.0f, -1.0f, 0.0f),
+					FVector(210.0f, 1.0f, 5.0f)));
+		}
+	}
+
+	// --- A malformed row is a pipeline defect, not an authored absence ---------------------------
+	if (const FElysiumNpcClip* Row = Clip(TEXT("halfcolumn")))
+	{
+		// The column is this repository's own product, so a record missing a corner is dropped and
+		// reported — the absence has its own shape, which is no column at all.
+		TestEqual(TEXT("an envelope missing a corner is dropped"), Row->Envelopes.Num(), 0);
+		TestTrue(TEXT("...while the row's own near edge survives"), Row->HasLowReach());
+	}
+	return true;
 }
 
 // The tenth column, and the compatibility rule behind it: absent, null and empty are one answer.

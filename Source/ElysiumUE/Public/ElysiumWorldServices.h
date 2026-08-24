@@ -115,10 +115,62 @@ enum class EElysiumNpcGaitKind : uint8
 	Sneak,
 };
 
+// What a launched body is doing right now, as the motor can observe it (LIFE5).
+//
+// **Geometry and engine state only — no verdict.** Whether a flight has ENDED, and whether a
+// contact counts as the wall that diverts a chain into its `..._WALL_FALL` sub-chain, are the
+// substrate's rules and are decided from these facts rather than reported by them (S11).
+struct FElysiumBallisticSample
+{
+	// The two the terminator reads. Retail ends a flight when the body is grounded, OR is falling
+	// and a ground probe succeeds.
+	bool bGrounded = false;
+	bool bFalling = false;
+	// The body's current velocity, world centimetres/second. The chain reads it to build the wall
+	// rebound, which is the wall vector times a recovered scalar.
+	FVector VelocityCmPerSecond = FVector::ZeroVector;
+	// The most recent blocking contact since the last sample, and its surface normal. The NORMAL,
+	// not a verdict about walls: a floor is a blocking contact too, and which of them is a wall is
+	// the substrate's call.
+	bool bContacted = false;
+	FVector ContactNormal = FVector::ZeroVector;
+};
+
 class IElysiumNpcMotor
 {
 public:
 	virtual ~IElysiumNpcMotor() = default;
+
+	// --- The ballistic pair (LIFE5) ------------------------------------------------------------
+	//
+	// EXECUTION. Retail's `SetAbsVelocity(m_KnockbackVelocity)` — a straight ASSIGNMENT, not an
+	// impulse and not a physics solve (`docs/vtmb/combat-and-damage.md` -> "Launch is a velocity
+	// assignment, in two stages"). Chaos never sees it: the body stays an animated character
+	// playing an authored cell, which is why this is not the physics architecture's own
+	// `AddBodyImpulse` — that one is for ragdolls and props, and a live launched body is neither.
+	//
+	// The magnitude, the direction and the think it happens on are all decided before this call.
+	//
+	// **False is the default and it is part of the contract**: this motor cannot carry a ballistic
+	// body at all — a headless world, or a recording double that models no flight. A caller that
+	// gets false must END its chain rather than wait for a landing that will never be reported,
+	// because the sample below will answer "neither grounded nor falling" forever.
+	virtual bool Launch(const FVector& VelocityCmPerSecond) { return false; }
+
+	// QUERY, and **polled rather than pushed** — the same direction `IElysiumEmbodiment::
+	// QueryNpcReactionHold` runs in, and for the same reason: a callback from the body into the
+	// substrate is a presentation backchannel, which the gameplay contract forbids outright. A
+	// producer already has a think, and asks on that.
+	//
+	// False means this motor has nothing to report, which is also the default. `Out` is untouched.
+	//
+	// **The divergence, named here.** Retail's flight is integrated by its own `CGameMovement` over
+	// its own traces; ours is integrated by `UCharacterMovementComponent` over Unreal's. The rules
+	// that shape the arc — the launch magnitude, the direction, the one-think delay, the rebound
+	// scalar — stay in the substrate and are reproduced exactly; the solve between two samples is
+	// the engine's and will not agree frame-for-frame with retail's. What the player observes is
+	// the cell that plays and where the body ends up, and both are decided by the substrate.
+	virtual bool SampleBallistic(FElysiumBallisticSample& Out) const { return false; }
 	// `bAllowPartialPath` takes the best path the graph can offer instead of refusing the request.
 	// A route point wants the refusal — it must never silently skip authored route data. A
 	// scripted_sequence mark wants the partial walk: the transit is the point of the beat, and its

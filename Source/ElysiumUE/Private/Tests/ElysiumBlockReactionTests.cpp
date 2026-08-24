@@ -7,19 +7,17 @@
 // `ACT_BLOCKED_REACTION_RIGHT` fallback, `WasMeleeBlocked`'s three terms, and "blocked does not mean
 // zero damage". Nothing loads a rulebook, a mesh or an export.
 //
-// **What is NOT reachable here, and why.** The margin classifier needs `rules.txt`'s
-// `Melee_Reactions` block, and a content-free world has no rulebook to supply it: the tables load
-// from disk behind private lazy slots on a GameInstance subsystem, so there is no seam that injects
-// a synthetic margin table into a live contact the way `MakeMarginRules` injects one into the pure
-// classifier. Two consequences, both of them limits on the cases below rather than on the code:
+// **The margin table a live contact classifies against is bindable**, and cases that need one take
+// `ElysiumMeleeTest::FRulesFixture` — a fabricated `Melee_Reactions` block installed as the
+// process-wide fallback every combat leaf already reads when no rulebook subsystem is in reach. A
+// case WITHOUT it classifies `Unclassified`, which names no block activity, and that is the
+// fail-safe rather than a limit.
 //
-//  1. `WasMeleeBlocked`'s NON-player fork reads the stored classification, so it is never true here.
-//     The producer cases drive the PLAYER fork, which retail answers from the live block intent
-//     rather than from a roll.
-//  2. Every contact therefore classifies as `Unclassified`, which names no block activity — so the
-//     DEFENDER half of the contact (`PlayReactionActivity` plus the base-channel hold) never fires
-//     through `MeleeContact` either. `.Rule` asserts its selection as a rule and `.Ownership`
-//     asserts the composition it performs, by making the same two calls the contact makes.
+// One genuine limit remains, and it is about the rule rather than the scaffolding:
+// `WasMeleeBlocked`'s NON-player fork reads the stored classification, so the producer cases drive
+// the PLAYER fork — which is the one retail answers from the live block intent rather than from a
+// roll. `.Rule` asserts the selection as a rule and `.Ownership` asserts the composition, because
+// what each is about is one rule's arithmetic rather than the transaction around it.
 //
 // The ATTACKER half — the authored column, its key, the `ACT_BLOCKED_REACTION_RIGHT` fallback, the
 // three terms of `WasMeleeBlocked` and the ordering against the damage exit — is driven end to end.

@@ -47,7 +47,12 @@ namespace ElysiumLocomotionTrace
 		int32 ResolvedFrames = 0;
 		int32 FallbackFrames = 0;
 		// Which activity codes the course reached, as a bitmask over `EElysiumAnimActivityCode`.
-		uint32 CodesSeen = 0;
+		//
+		// **64 bits because the enum is wider than 32.** The vocabulary carries the locomotion slice,
+		// the death pair, the ten grounded knockback cells and the nine flying ones, which is past
+		// ordinal 31 — and `1u << 32` is undefined behaviour, not a wrapped zero. A code added to the
+		// enum has to fit here, so the two are checked against each other at compile time below.
+		uint64 CodesSeen = 0;
 		// Fastest horizontal speed the course reached, Source units/s.
 		double PeakSpeed2D = 0.0;
 		// The body the selections were resolved for, and the banks they came out of.

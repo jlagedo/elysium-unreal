@@ -294,6 +294,13 @@ def _clip_meta(c, bounds_radius_m=None):
                          "w_open": round(c.combo.w_open, 6),
                          "w_close": round(c.combo.w_close, 6),
                          "w_hold": round(c.combo.w_hold, 6)}
+    if c.low_reach is not None:
+        # The near edge of the same band `reach_cm` closes, and it converts the same way: both are
+        # distances in the file's inches. A genuine authored 0.0 survives -- two shipped sequences
+        # state one -- because a band starting at the body is not a band stating nothing.
+        meta["low_reach_cm"] = round(c.low_reach * INCH_TO_CM, 4)
+    if c.envelopes:
+        meta["envelopes"] = UEK.unreal_envelopes(c.envelopes)
     if bounds_radius_m is not None:
         meta["bounds_radius_m"] = round(bounds_radius_m, 4)
     return meta
@@ -664,41 +671,44 @@ def write_sidecars(manifest):
                 act_i[act] = len(acts); acts.append(act)
             row = [owner_i[owner], act_i[act], meta["weight"], meta["flags"],
                    meta["frames"], meta["fps"], meta.get("fade", 0.2)]
+            # --- The optional trailing columns -----------------------------------------------
+            #
+            # Each is (value, placeholder, stated). A row is truncated at its LAST stated column,
+            # and every column before that one is held open with its own placeholder -- which has
+            # to match its reader's guard, because the reader indexes by position and cannot ask
+            # what a column meant. `reach_cm` and `low_reach_cm` are read guarded against a null,
+            # `blocked_reaction` is taken as a string unconditionally, and the two arrays are read
+            # as arrays. A single shared placeholder would put a literal where a list belongs on
+            # whichever column happened to be held open.
+            #
+            # The populations genuinely cross: all 574 swing carriers state a reach but 427 name
+            # no blocked reaction; 28 combo carriers state none of the three before them (the
+            # `meleeshared_onehand` flying-knockback reaction chain, which is what the victim
+            # plays rather than an attack); and 14 descriptors state a LOW edge with `reach`
+            # unset. So every placeholder below is reached by real shipped data.
+            #
+            # New columns append. The index of an existing one is a contract with every slice
+            # already on disk.
             reach = meta.get("reach_cm")
-            blocked = meta.get("blocked_reaction")
-            swings = meta.get("swings")
-            combo = meta.get("combo")
-            if combo:
-                # The combo column reaches past all three, and 28 of the 208 carriers -- the
-                # `meleeshared_onehand` flying-knockback reaction chain, which is what the victim
-                # plays rather than an attack -- state none of them. So all three placeholders
-                # are needed, and the third is the empty list for the same reason the second is
-                # the empty literal: that is what "no swing" already means to a reader taking
-                # column 9 as an array.
-                row += [reach, blocked or "", swings or [], combo]
-            elif swings:
-                # Every column a stated one sits behind is held open, whatever it holds: all 574
-                # swing carriers state a reach but 427 of them name no blocked reaction, and a
-                # row that closed that column up would put a list where a literal belongs. The
-                # two placeholders differ because their readers do: `reach_cm` is read guarded
-                # against a null, `blocked_reaction` is taken as a string unconditionally, and
-                # the empty literal is what "no reaction" already means to it.
-                row += [reach, blocked or "", swings]
-            elif blocked:
-                # `reach_cm` holds the column blocked_reaction sits behind, so a sequence that
-                # named a reaction without a reach still lands its reaction in the right column.
-                # The literal is inlined rather than interned: only 147 rows carry it, and the
-                # `activities` array is the stem's playable vocabulary the runtime unions for
-                # conformance, so a referenced-but-unselectable reaction would pollute it.
-                row += [reach, blocked]
-            elif reach is not None:
-                row.append(reach)
+            envelopes = meta.get("envelopes")
+            optional = [
+                (reach, None, reach is not None),                  # 7  reach_cm
+                (meta.get("blocked_reaction"), "", bool(meta.get("blocked_reaction"))),  # 8
+                (meta.get("swings"), [], bool(meta.get("swings"))),                      # 9
+                (meta.get("combo"), None, bool(meta.get("combo"))),                      # 10
+                (meta.get("low_reach_cm"), None, meta.get("low_reach_cm") is not None),  # 11
+                (envelopes, [], bool(envelopes)),                                        # 12
+            ]
+            last = max((i for i, (_, _, stated) in enumerate(optional) if stated), default=-1)
+            row += [value if stated else placeholder
+                    for value, placeholder, stated in optional[:last + 1]]
             clips[label] = row
         path = os.path.join(CLIPS_DIR, stem + ".json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"stem": stem, "owners": owners, "activities": acts,
                        "fields": ["owner", "activity", "weight", "flags", "frames", "fps",
-                                  "fade", "reach_cm", "blocked_reaction", "swings", "combo"],
+                                  "fade", "reach_cm", "blocked_reaction", "swings", "combo",
+                                  "low_reach_cm", "envelopes"],
                        "clips": clips}, f, separators=(",", ":"))
         total += os.path.getsize(path)
     print(f"[npc] sidecars: {INDEX} ({os.path.getsize(INDEX)/1024:.0f} KB) + "

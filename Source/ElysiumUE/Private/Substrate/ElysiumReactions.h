@@ -3,6 +3,8 @@
 #include "CoreMinimal.h"
 #include "Math/RandomStream.h"
 
+#include "ElysiumSwingRecord.h"   // the authored per-attack candidate table the cell is drawn from
+
 // The defender half of the `rules.txt` margin classifier, declared in
 // `Substrate/ElysiumWeaponClasses.h`. Forward-declared rather than included: that header pulls in
 // the entity chain and the item catalogue, and this one is world-free by design (see below). A
@@ -138,17 +140,18 @@ namespace ElysiumReactions
 	// --- The grounded knockback family (`docs/vtmb/combat-and-damage.md` § "The authored knockback
 	// inputs", `docs/vtmb/animation_and_movers.md` § "The knockback and death corpus") ------------
 	//
-	// The GROUNDED cells only, and an NPC victim only. The nine-activity flying chain and the launch
-	// impulse are a separate outcome whose magnitude, direction and mechanism are not recovered
-	// (the master roadmap's `RE-K5`), and nothing here moves a body — this namespace answers which
-	// cell plays and which yaw the body is turned to, exactly as the flinch half above answers which
-	// activity at what angle.
+	// The GROUNDED cells only, and an NPC victim only. The nine-activity flying chain is a separate
+	// outcome: its contract is recovered whole — a two-stage velocity assignment with a one-think
+	// delay, and a land/wall terminator — but reproducing it needs a motor verb that carries a
+	// ballistic body, which the service seam does not have yet. Nothing here moves a body; this
+	// namespace answers which cell plays and which yaw the body is turned to, exactly as the flinch
+	// half above answers which activity at what angle.
 	//
-	// **There is no randomness in this family at all.** Retail draws once, to pick among the
-	// candidates an authored per-attack activity table lists for the selected direction bucket; that
-	// table's on-disk location is unrecovered, so the stand-in below offers exactly one candidate per
-	// bucket and there is nothing to draw for. Every function here is a pure function of two origins
-	// and a facing, and the Reaction stream is untouched whether a knockback happens or not.
+	// **The classification is deterministic; the CELL may draw.** Every geometric function here is a
+	// pure function of two origins and a facing and spends nothing. Retail then picks among the
+	// candidates the attack's own swing record lists for the selected direction bucket, with
+	// `RandomInt` — so a bucket naming one candidate spends nothing and a bucket naming several
+	// spends exactly one draw off the caller's stream (`SelectKnockbackActivity`).
 
 	// The two authored sizes. Ten cells exist as `ACT_KNOCKBACK_{SMALL,NORMAL}_HIGH_{FORWARD,BACK,
 	// LEFT,RIGHT}` plus `ACT_KNOCKBACK_{SMALL,NORMAL}_LOW_BACK`, each on 155 bodies.
@@ -182,21 +185,29 @@ namespace ElysiumReactions
 		Right = 3,     // bucket 3 — `away` points to its right
 	};
 
-	// **STAND-IN, AND NAMED AS ONE.** Retail selects the cell out of an AUTHORED PER-ATTACK ACTIVITY
-	// TABLE — four direction buckets, up to four candidates each, one picked with `RandomInt` — which
-	// lives on the attack clip's swing records (`docs/vtmb/combat-and-damage.md` → Knockback) and rides
-	// the clip sidecar's `swings` column. Until the runtime consumes that table, one deterministic
-	// candidate stands in per bucket: the `NORMAL`/`HIGH` cell of the classified direction.
-	//
-	// The `SMALL` family and the two `LOW_BACK` cells stay in the vocabulary, in `KnockbackActivity`
-	// and in the tests — they are authored on 155 bodies and the recovered table is what will select
-	// them. Nothing here reaches them, and that is the stand-in's whole extent.
-	inline constexpr EKnockbackSize StandInKnockbackSize = EKnockbackSize::Normal;
-	inline constexpr EKnockbackHeight StandInKnockbackHeight = EKnockbackHeight::High;
+	// The four directions in the order the record's buckets rotate through them, which is retail's
+	// own cycle: bucket `k` answers direction `(B8 + k) mod 4` over BACK, LEFT, FORWARD, RIGHT. The
+	// enum's values ARE those indices, so the cycle is the enum's own order and this constant only
+	// names how long it is.
+	inline constexpr int32 KnockbackDirectionCount = 4;
+
+	// The record's rotation byte is unstated. `+0xB8` reads `0xFF` on the 639 shipped records that
+	// fill fewer than four buckets, and the byte is decoded unsigned, so 255 rather than -1 is what
+	// reaches here. A record stating no rotation names no bucket for any direction — there is
+	// nothing to rotate — and its cell comes from the fallback instead.
+	inline constexpr int32 KnockbackRotationUnset = 0xFF;
+
+	// The record's `+0xBA == 2` unconditional marker, which admits the knockback past the victim's
+	// hit-buildup counter however drained it is. 104 shipped records state it, and they are a legible
+	// set: every shared weapon's dedicated heavy and every combo finisher, plus `Fists_attack_W2`,
+	// `fists_attack_Roundhouse`, `Knife_attack_Kick_Spin` and `manbat`'s four
+	// (`docs/vtmb/animation_and_movers.md` § "The knockback and death corpus").
+	inline constexpr int32 KnockbackUnconditionalMarker = 2;
 
 	// Retail's recovered fallback when no candidate list is consulted: activity `0x8b`, the
-	// flying-into-forward cell, which on a GROUNDED body downgrades to this one. It is reached here
-	// only by a degenerate classification (see `KnockbackRelativeYaw`).
+	// flying-into-forward cell, which on a GROUNDED body downgrades to this one. Three routes reach
+	// it — a degenerate classification (see `KnockbackRelativeYaw`), an entry carrying no swing
+	// record at all, and a record whose rotation byte or selected bucket states nothing.
 	inline constexpr const TCHAR* FallbackGroundedKnockbackActivity =
 		TEXT("ACT_KNOCKBACK_NORMAL_HIGH_FORWARD");
 
@@ -208,11 +219,6 @@ namespace ElysiumReactions
 	// model-space direction reads true.
 	struct FElysiumKnockback
 	{
-		// The stand-in's answer on every knockback. Not constants folded into two globals: the
-		// recovered activity table selects per candidate, so these are per-knockback fields that
-		// happen to be filled from one place today.
-		EKnockbackSize Size = StandInKnockbackSize;
-		EKnockbackHeight Height = StandInKnockbackHeight;
 		EKnockbackDirection Direction = EKnockbackDirection::Back;
 
 		// The Unreal world yaw of `away`, degrees in [0, 360) — the classifier's own input, carried
@@ -224,23 +230,56 @@ namespace ElysiumReactions
 		// not a facing-frame angle: retail snaps the absolute yaw (see `KnockbackSnapYaw`).
 		float SnapYawDegrees = 0.0f;
 
-		// Whether the classification degenerated, which is the one route to
-		// `FallbackGroundedKnockbackActivity`.
+		// Whether the classification degenerated. It is one of the routes to
+		// `FallbackGroundedKnockbackActivity`, and the only one this struct can report: the other
+		// two are properties of the record, which the classifier never sees.
 		bool bFallbackCell = false;
-
-		// The ACT_* literal, spelled once for the whole slice so the producer, the record and the
-		// test cannot drift into three spellings of one activity.
-		const TCHAR* Activity() const;
 	};
 
 	// The ten cells' literals, one function. Null for a `Low` height on any direction but `Back`:
 	// the corpus authors no such cell, so there is nothing to name rather than a spelling to invent.
+	//
+	// **This is the vocabulary, not the selector.** A melee knockback's cell comes off the attack's
+	// own swing record (`SelectKnockbackActivity`); this names what the corpus authors, which is
+	// what the record's candidates are drawn from and what the no-record entries resolve against.
 	const TCHAR* KnockbackActivity(EKnockbackSize Size, EKnockbackHeight Height,
 		EKnockbackDirection Direction);
 
-	// Whether this victim may be knocked back at all — retail's eligibility, minus two terms that
-	// are named rather than guessed. The recovered rule is `docs/vtmb/combat-and-damage.md` →
-	// "Who may be knocked back".
+	// Which of the record's four buckets answers `Direction`, or `INDEX_NONE`.
+	//
+	// **The buckets are a ROTATION, not a fixed direction order.** Bucket `k` answers direction
+	// `(RotationByte + k) mod 4` over the cycle BACK, LEFT, FORWARD, RIGHT — which holds on 948 of
+	// 948 records that fill every bucket — so this inverts that: `k = (Direction - RotationByte) mod
+	// 4`. A consumer that assumed bucket 0 was one particular way round would be right on a quarter
+	// of the corpus and silently wrong on the rest.
+	//
+	// `INDEX_NONE` when the byte states no rotation (`KnockbackRotationUnset`, or any value outside
+	// the cycle). That is an authored absence on 639 records, not a defect.
+	int32 KnockbackBucketFor(int32 RotationByte, EKnockbackDirection Direction);
+
+	// The authored cell this record answers `Direction` with, drawn from its own candidate list.
+	//
+	// Retail's own selection (`CBaseCombatCharacter::GetKnockbackActivity`, `0x103449B0`), in its
+	// own order: classify the direction into a bucket, fall back to bucket 0 if that one is empty,
+	// then draw. **The candidate NAME is the answer** — it already states its own size, height and
+	// direction, so nothing here re-derives them, and this is the path by which the `SMALL` family
+	// and the two `LOW_BACK` cells are reached at all.
+	//
+	// **One draw off `Rng` whenever a bucket holds anything, including a single candidate.** Retail
+	// spends `RandomInt(0, count - 1)` unconditionally, so a one-candidate bucket still advances the
+	// stream; skipping it would answer the same activity and leave every later reaction in the run
+	// reading a different position. A refusal advances the stream by nothing, because the draw
+	// happens only once a candidate list is in hand.
+	//
+	// False when the record states no rotation, or when the selected bucket AND bucket 0 both list
+	// nothing. Retail answers that last case with a per-class default activity by direction; nothing
+	// here carries one, so the caller's `FallbackGroundedKnockbackActivity` stands in for it — a
+	// DIFFERENT fallback from the no-record one, which is the `0x8B` cell.
+	bool SelectKnockbackActivity(const FElysiumSwingRecord& Record, EKnockbackDirection Direction,
+		FRandomStream& Rng, FString& OutActivity);
+
+	// Whether this victim may be knocked back at all — retail's eligibility, whole. The recovered
+	// rule is `docs/vtmb/combat-and-damage.md` → "Who may be knocked back".
 	//
 	// `bVictimAlive` is retail's own third term, not an approximation of it: retail refuses on
 	// `Health == Max_Health`, and because `Health` is damage taken rather than health remaining,
@@ -249,17 +288,19 @@ namespace ElysiumReactions
 	// `General/Disallow_Knockbacks`, set on 17 templates across eight `npctemplate*.txt` files —
 	// zombies, cabbies, the tutorial cast and the other bodies that must not be thrown.
 	//
-	// **OMITTED — the `CNPC_VTzimisceRunner` bypass.** Retail gives that one class a virtual that
-	// skips both terms below it. Nothing here has that body yet.
+	// `bClassBypass` is retail's class-level term, and it comes FIRST because it skips both of the
+	// others: a stub returning 0 for every class in the game except `CNPC_VTzimisceRunner`.
 	//
-	// **OMITTED — the hit-buildup counter.** Retail also admits the knockback on
-	// `counter <= npc_hit_buildup_amount` (default 2) OR the swing record's `+0xBA == 2` marker.
-	// The counter is one scalar on the victim, incremented by any attacker's landed hit and cleared
-	// when the victim's own swing passes `melee_swing_completion_percent` (0.8) of its cycle — so
-	// reproducing it needs a per-body counter and no attacker bookkeeping. Until it lands the whole
-	// term is omitted and every classified contact is admitted: a victim retail would have spared
-	// until its counter drained is knocked back here. The producer reports the omission once.
-	bool IsKnockbackAllowed(bool bVictimAlive, bool bTemplateDisallowsKnockbacks);
+	// `bBuildupAdmits` is the victim's hit-buildup gate, already reduced to its answer by the caller
+	// — `counter <= npc_hit_buildup_amount` OR the landing swing record's `+0xBA == 2`
+	// unconditional marker. It is passed as the answer rather than as the counter because the
+	// marker half is a property of the ATTACK and the counter half a property of the VICTIM, and a
+	// world-free rule cannot reach either.
+	//
+	// The order below is retail's own, and it is the whole of the recovered gate: no term is
+	// omitted any more.
+	bool IsKnockbackAllowed(bool bVictimAlive, bool bTemplateDisallowsKnockbacks,
+		bool bBuildupAdmits, bool bClassBypass);
 
 	// The direction the victim is thrown, unnormalized and with its z zeroed: victim minus attacker.
 	// **CONFIRMED**, and the sign is the whole of it — the body travels AWAY from the blow.

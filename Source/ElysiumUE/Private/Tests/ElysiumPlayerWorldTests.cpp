@@ -584,6 +584,7 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	FElysiumNpcIndex V4;
 	const FString Json4 = FString::Printf(TEXT("{\"manifest_version\":4,%s,\"banks\":{},\"cinematics\":{},"
 		"\"animated_props\":{\"cin_wineglass\":{"
+		"\"eskm\":\"props/cin_wineglass.eskm\","
 		"\"model\":\"models/cinematic/cin_wineglass.mdl\",\"bones\":4,"
 		"\"split_bones\":[\"glass hinge\"],\"clips\":[\"Idle\",\"Pour\"]}}}"),
 		*MinimalNpc);
@@ -628,6 +629,7 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	Error.Reset();
 	const FString Json6 = FString::Printf(TEXT("{\"manifest_version\":6,%s,\"banks\":{},\"cinematics\":{},"
 		"\"animated_props\":{\"drknobantique\":{"
+		"\"eskm\":\"props/drknobantique.eskm\","
 		"\"model\":\"models/scenery/doorknoba/drknobantique.mdl\",\"bones\":2,\"clips\":["
 		"{\"name\":\"idle\",\"index\":0,\"activity\":\"\",\"weight\":0,\"flags\":1,\"frames\":16,\"fps\":15.0},"
 		"{\"name\":\"handle_locked\",\"index\":1,\"activity\":\"\",\"weight\":0,\"flags\":0,\"frames\":16,\"fps\":15.0},"
@@ -663,6 +665,7 @@ bool FElysiumAnimatedPropManifestTest::RunTest(const FString&)
 	Error.Reset();
 	const FString JsonReach = FString::Printf(TEXT("{\"manifest_version\":6,%s,\"banks\":{},\"cinematics\":{},"
 		"\"animated_props\":{\"cin_sheriff_sword\":{"
+		"\"eskm\":\"props/cin_sheriff_sword.eskm\","
 		"\"model\":\"models/cinematic/santa_monica/courtroom/cin_sheriff_sword.mdl\",\"bones\":15,\"clips\":["
 		"{\"name\":\"idle01\",\"index\":0,\"frames\":4701,\"fps\":10.0,\"bounds_radius_m\":22.388},"
 		"{\"name\":\"scene\",\"index\":1,\"frames\":4701,\"fps\":30.0}"

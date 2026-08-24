@@ -465,6 +465,9 @@ void AElysiumNpcBody::Face(float YawDegrees)
 
 void AElysiumNpcBody::Stop()
 {
+	// A launch ends here too. Freeze, teleport and the disable path all funnel through
+	// `Stop()`, so clearing the recording flag once here covers every one of them.
+	EndLaunchRecording();
 	if (AAIController* AI = Cast<AAIController>(GetController()))
 	{
 		AI->StopMovement();
@@ -657,6 +660,95 @@ EElysiumNpcMoveStatus AElysiumNpcBody::Sample(FVector& OutFeetOrigin, float& Out
 	}
 	Stop();
 	return EElysiumNpcMoveStatus::Failed;
+}
+
+bool AElysiumNpcBody::Launch(const FVector& VelocityCmPerSecond)
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (!bRuntimeReady || !bRequestedEnabled || bFrozen || Movement == nullptr)
+	{
+		// A body that is not standing in the world cannot be thrown across it. The caller ends its
+		// chain on false rather than waiting for a landing.
+		return false;
+	}
+
+	// Whatever this body was doing, it is not doing it any more: a launched body follows no path.
+	// `Stop()` also deactivates the component and ends any recording launch, so the order matters —
+	// reactivate and re-arm after it.
+	Stop();
+
+	// **The component is `SetAutoActivate(false)` and `Stop()` deactivates it**, so a launch has to
+	// wake it explicitly. Without this the velocity below is assigned to a component that never
+	// integrates it and the body stands still while its cell plays.
+	Movement->Activate();
+	// And the mode has to be set outright. `MovementMode` only ever becomes `MOVE_Walking` through
+	// `ApplyEnabledState`'s floor settle, and `IsMovingOnGround()` reads the mode alone — so a body
+	// left in `MOVE_Walking` would be integrated as a walker and report itself grounded for the
+	// whole flight, which is exactly the terminator's own condition.
+	Movement->SetMovementMode(MOVE_Falling);
+	// The assignment itself. Not `AddImpulse`, not `LaunchCharacter`'s additive form: retail assigns
+	// the velocity outright and whatever the body carried is discarded.
+	Movement->Velocity = VelocityCmPerSecond;
+
+	bLaunched = true;
+	bBallisticContacted = false;
+	BallisticContactNormal = FVector::ZeroVector;
+	return true;
+}
+
+bool AElysiumNpcBody::SampleBallistic(FElysiumBallisticSample& Out) const
+{
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (Movement == nullptr)
+	{
+		return false;
+	}
+	Out = FElysiumBallisticSample();
+	Out.bGrounded = Movement->IsMovingOnGround();
+	Out.bFalling = Movement->MovementMode == MOVE_Falling;
+	Out.VelocityCmPerSecond = Movement->Velocity;
+	// Consumed on read: the chain asks once per think, and a normal left standing would divert it
+	// again on a wall it has already rebounded from.
+	Out.bContacted = bBallisticContacted;
+	Out.ContactNormal = BallisticContactNormal;
+	bBallisticContacted = false;
+	BallisticContactNormal = FVector::ZeroVector;
+	return true;
+}
+
+void AElysiumNpcBody::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+	// The flight is over as far as the ENGINE is concerned. Whether the CHAIN is over is the
+	// substrate's rule, read off the next `SampleBallistic`; all this does is stop recording
+	// contacts for a launch that is no longer in the air.
+	EndLaunchRecording();
+}
+
+void AElysiumNpcBody::EndLaunchRecording()
+{
+	// **Every path that ends a flight clears this, not just a landing.** A chain can end without a
+	// `Landed` — the body is stopped, teleported, frozen or disabled — and a `bLaunched` left set
+	// would have `NotifyHit` recording wall normals off ordinary walking contacts, which is exactly
+	// the backchannel the flag exists to prevent.
+	bLaunched = false;
+	bBallisticContacted = false;
+	BallisticContactNormal = FVector::ZeroVector;
+}
+
+void AElysiumNpcBody::NotifyHit(UPrimitiveComponent* MyComp, AActor* Other,
+	UPrimitiveComponent* OtherComp, bool bSelfMoved, FVector HitLocation, FVector HitNormal,
+	FVector NormalImpulse, const FHitResult& Hit)
+{
+	Super::NotifyHit(MyComp, Other, OtherComp, bSelfMoved, HitLocation, HitNormal, NormalImpulse,
+		Hit);
+	// Only while carrying a launch. An ordinary walking body brushes geometry constantly, and a
+	// normal recorded from one of those would divert the next chain that ran on this body.
+	if (bLaunched)
+	{
+		bBallisticContacted = true;
+		BallisticContactNormal = HitNormal;
+	}
 }
 
 bool AElysiumNpcBody::ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const

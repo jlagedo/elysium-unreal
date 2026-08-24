@@ -114,8 +114,32 @@ public:
 	virtual FElysiumLocomotionSample SampleLocomotion() const override;
 	virtual bool ProjectToNavigable(const FVector& PointCm, FVector& OutProjectedCm) const override;
 	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees) const override;
+	virtual bool Launch(const FVector& VelocityCmPerSecond) override;
+	virtual bool SampleBallistic(FElysiumBallisticSample& Out) const override;
+
+	// Unreal's own landing and blocking-hit notifications. They exist ONLY to record what
+	// `SampleBallistic` reports: nothing is decided here, and neither one calls into the substrate.
+	// That direction is the whole point — a body that pushed a landing into the entity layer would
+	// be a presentation backchannel, so the chain polls on the think it already has.
+	virtual void Landed(const FHitResult& Hit) override;
+	virtual void NotifyHit(UPrimitiveComponent* MyComp, AActor* Other, UPrimitiveComponent* OtherComp,
+		bool bSelfMoved, FVector HitLocation, FVector HitNormal, FVector NormalImpulse,
+		const FHitResult& Hit) override;
 
 private:
+	// Clear every trace of a recording launch. Called from `Landed` and from `Stop()`, which is the
+	// funnel freeze, teleport and disable all reach.
+	void EndLaunchRecording();
+
+	// The most recent blocking contact since the last `SampleBallistic`, recorded by the two
+	// notifications above and consumed by it. A contact is reported ONCE: the chain asks per think,
+	// and a normal left standing would divert it again on a wall it already rebounded from.
+	mutable bool bBallisticContacted = false;
+	mutable FVector BallisticContactNormal = FVector::ZeroVector;
+	// Whether this body is carrying a launch. It gates the contact recording, so an ordinary walking
+	// body brushing a doorframe never leaves a normal for a chain that is not running.
+	bool bLaunched = false;
+
 	// CCC7 — build the driver if it does not exist yet and re-point it at the model this body wears.
 	// The driver holds the body's gait tables, and a travel request wants them before the first
 	// animation pass has run.

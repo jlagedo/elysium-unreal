@@ -43,6 +43,28 @@
 
 DEFINE_LOG_CATEGORY(LogElysium);
 
+namespace
+{
+	// The standing hull a BODILESS candidate is measured by: VtMB's own 32x32x72-unit character box,
+	// built off the entity's feet. Only reachable with `elysium.NpcBodies 0` or a failed model,
+	// where a rendered bound does not exist; a standing body is measured by its own rendered bounds
+	// like every `+use` candidate is.
+	//
+	// **Feet-anchored, not centred.** An entity's origin is its feet in this runtime, so the box
+	// runs origin-half to origin+half+height. Centring it would sink the hull half a body into the
+	// floor and put its top at chest height.
+	//
+	// The three character queries below — feed, aim and swing contact — each build this, and
+	// `IsNpcMakerSpawnAreaOccupied` builds the same box from the same constants. One function so a
+	// change to VtMB's hull cannot land in three of the four.
+	FBox ElysiumStandHullAt(const FVector& FeetOriginCm)
+	{
+		const FVector Half(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, 0.0f);
+		return FBox(FeetOriginCm - Half,
+			FeetOriginCm + Half + FVector(0.0f, 0.0f, ElysiumMove::StandHeight));
+	}
+}
+
 // ------------------------------------------------------------------------------------------
 // S2 — the pre-move tick function (runtime-architecture.md §3, steps 2-3).
 // ------------------------------------------------------------------------------------------
@@ -1236,11 +1258,6 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 	// characters (the mask's player/NPC bits), and occlusion is tested on `ELYSIUM_USE_CHANNEL`
 	// (its solid-world bits) — the same channel `+use` reaches the world through, and the one the
 	// map's brush bodies and the walkable surface already answer on.
-	// The standing hull a bodiless candidate is measured by: VtMB's own 32x32x72-unit character box.
-	// Only reachable with `elysium.NpcBodies 0` or a failed model, where a rendered bound does not
-	// exist; a standing body is measured by its own rendered bounds like every `+use` candidate is.
-	constexpr float StandHalfWidthUnits = 16.0f;
-	constexpr float StandHeightUnits = 72.0f;
 
 	FVector UseOrigin;
 	FVector IgnoredCapsuleCenter;
@@ -1276,10 +1293,7 @@ FElysiumEntityHandle AElysiumMapActor::QueryFeedTarget() const
 		}
 		else
 		{
-			const FVector Half(StandHalfWidthUnits * ElysiumMove::U,
-				StandHalfWidthUnits * ElysiumMove::U, 0.0f);
-			Candidate = FBox(Ent->Origin - Half,
-				Ent->Origin + Half + FVector(0.0f, 0.0f, StandHeightUnits * ElysiumMove::U));
+			Candidate = ElysiumStandHullAt(Ent->Origin);
 		}
 		// Sweeping a box along a segment against an AABB is exactly a segment test against the AABB
 		// grown by the hull's extents, so the recovered 16-cube is applied without a physics query.
@@ -1326,8 +1340,6 @@ FElysiumEntityHandle AElysiumMapActor::QueryAimTarget(float MaxRangeCm) const
 	// The standing hull a bodiless candidate is measured by is `QueryFeedTarget`'s own: VtMB's
 	// 32x32x72-unit character box, reachable with `elysium.NpcBodies 0` or a failed model, where a
 	// rendered bound does not exist.
-	constexpr float StandHalfWidthUnits = 16.0f;
-	constexpr float StandHeightUnits = 72.0f;
 
 	FVector Eye;
 	const APawn* Pawn = ResolvePlayerPawn();
@@ -1378,10 +1390,7 @@ FElysiumEntityHandle AElysiumMapActor::QueryAimTarget(float MaxRangeCm) const
 		}
 		else
 		{
-			const FVector Half(StandHalfWidthUnits * ElysiumMove::U,
-				StandHalfWidthUnits * ElysiumMove::U, 0.0f);
-			Candidate = FBox(Ent->Origin - Half,
-				Ent->Origin + Half + FVector(0.0f, 0.0f, StandHeightUnits * ElysiumMove::U));
+			Candidate = ElysiumStandHullAt(Ent->Origin);
 		}
 		if (!FMath::LineBoxIntersection(Candidate, Eye, End, End - Eye))
 		{
@@ -1414,8 +1423,6 @@ void AElysiumMapActor::QuerySwingContacts(const FElysiumSwingSweep& Sweep,
 	// The standing hull a bodiless candidate is measured by is `QueryFeedTarget`/`QueryAimTarget`'s
 	// own: VtMB's 32x32x72-unit character box, reachable with `elysium.NpcBodies 0` or a failed
 	// model, where a rendered bound does not exist.
-	constexpr float StandHalfWidthUnits = 16.0f;
-	constexpr float StandHeightUnits = 72.0f;
 
 	OutHits.Reset();
 	if (!EntityWorld.IsValid())
@@ -1489,10 +1496,7 @@ void AElysiumMapActor::QuerySwingContacts(const FElysiumSwingSweep& Sweep,
 		}
 		else
 		{
-			const FVector Half(StandHalfWidthUnits * ElysiumMove::U,
-				StandHalfWidthUnits * ElysiumMove::U, 0.0f);
-			Candidate = FBox(Ent->Origin - Half,
-				Ent->Origin + Half + FVector(0.0f, 0.0f, StandHeightUnits * ElysiumMove::U));
+			Candidate = ElysiumStandHullAt(Ent->Origin);
 		}
 
 		bool bTouched = false;
@@ -1797,10 +1801,7 @@ bool AElysiumMapActor::IsNpcMakerSpawnAreaOccupied(const FVector& GroundOriginCm
 		}
 		else if (Ent->AsCombatCharacter())
 		{
-			Bounds = FBox(
-				Ent->Origin - FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, 0.0f),
-				Ent->Origin + FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth,
-					ElysiumMove::StandHeight));
+			Bounds = ElysiumStandHullAt(Ent->Origin);
 		}
 		if (Bounds.IsValid && SpawnArea.Intersect(Bounds))
 		{

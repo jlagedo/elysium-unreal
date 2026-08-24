@@ -1193,6 +1193,50 @@ Two single bytes complete it:
 - **`0xBA == 2` is the unconditional marker**, which admits the knockback past the victim's
   hit-buildup gate below.
 
+**The selector is `CBaseCombatCharacter::GetKnockbackActivity` (`0x103449B0`), and it has four
+arms rather than one.** It derives `away` itself as `victim.origin - attacker.origin`, classifies
+it through the victim's own slot-323 (`+0x50C`) direction virtual, and then:
+
+```text
+if (record == null)                 activity = 0x8B          // flying-into-forward
+else {
+  if (counts[bucket] < 1) bucket = 0                         // an empty bucket re-reads bucket 0
+  count = counts[bucket]
+  if (count < 1)  activity = victim->vfunc(0x644)(bucket)    // a per-class default, by direction
+  else            activity = names[bucket][RandomInt(0, count - 1)]
+}
+if (victim+0xA8 != 0) activity = TranslateFlyingKnockbackActivity(activity)   // a PLAYER victim
+if (victim+0xA8 == 0) { yaw snap }                                           // an NPC victim
+```
+
+Four things fall out of that shape and none of them is optional:
+
+- **The draw is unconditional.** `RandomInt(0, count - 1)` runs whenever the bucket holds anything,
+  including a bucket with exactly one candidate. A consumer that short-circuits the single-candidate
+  case answers the same activity and leaves the stream one position behind.
+- **An empty bucket is not a refusal** — it re-reads bucket 0, which is a shipped answer. Only a
+  record whose bucket 0 is *also* empty reaches the per-class default.
+- **`0x8B` is the NO-RECORD fallback specifically**, not a general one. The two fallbacks are
+  different: no record at all takes `0x8B`, and an all-empty record takes the class virtual.
+- A resolved activity of `-1` with a drawn candidate emits the load-time warning
+  *"melee attack sequence has knockb…"*, so an unregistered candidate name is retail-reported.
+
+**The melee call site's own gate is a different expression from the entry's**
+(`CBaseCombatWeapon::FUN_102579F0`, the tail):
+
+```c
+if (!blocked && victimNpc) {
+  if (((record == 0) || (record == -0x28) || (victim->vfunc(0x518)(record) == 0))
+      && (victim->vfunc(0x640)() == 0))   normalHitCallback();      // slot 0x504
+  else { GetKnockbackActivity(...); knockbackCallback(attacker); }  // slot 0x500
+}
+```
+
+So a contact carrying no swing record takes the **normal-hit callback**, not a knockback — and the
+class bypass at `+0x640` forces the knockback branch even when the buildup test refused. The shared
+entry `0x10344F80` then re-checks the bypass, the template key and the dead-victim refusal; it does
+**not** re-check the counter.
+
 #### Launch is a velocity assignment, in two stages
 
 There is no impulse and no physics solve. The NPC reaction body (`0x102a01b0`) computes
@@ -1283,14 +1327,22 @@ swing record's `0xBA == 2` marker is set (the 104 records that state it are name
 `docs/vtmb/animation_and_movers.md` A.3). This is the observable behind the widely reported "about
 two hits and then the NPC stops flying" feel, and the counter's shape is what produces it:
 
+- **The increment runs BEFORE the test, on the same blow.** `FUN_102579F0` is the one body that
+  both commits a melee hit and tests this counter, and its order settles it: `DispatchTraceAttack`
+  — the damage dispatch the only increment site hangs off — runs well before the slot-326 test at
+  its tail, and no increment appears anywhere in that function. So the counter a blow tests already
+  carries that blow, and the default of `2` admits **two** knockbacks before refusing the third.
+  That is the arithmetic behind the reported "about two hits and then it stops flying".
 - **It is one scalar on the victim, per victim.** The field lives on `CAI_BaseNPCTroika`, and its
   whole ledger is four sites: zeroed at construction (`0x1029A0B0`), incremented (`0x1029F800`),
   tested (`0x1029FEC0`), zeroed again (below). Both the increment and the test are called **on the
   victim**, with the attacker passed as an argument neither body ever reads. There is no per-attacker
   keying of any kind, so two attackers working the same target share that target's counter.
 - **A body clears its own counter by swinging.** `MeleeSwingUpdate` (`0x10346CD0`) zeroes the
-  counter on the **swinging body's own** NPC self-pointer once its clip passes
+  counter on the **swinging body's own** NPC self-pointer (`+0x98`) once its clip reaches
   `melee_swing_completion_percent` — a ConVar whose default reads `"0.8"` in the shipped image. The
+  comparison is **inclusive** (`cycle >= percent`), it sits inside the live-swing branch, and it is
+  unguarded: every update past the cycle re-zeroes an already-zero counter. The
   loop that produces is "you are knocked around until you fight back", and it needs no relationship
   bookkeeping at all.
 - The counter is not saved, and nothing else in the image reads it. In particular no parry or block
@@ -1394,20 +1446,19 @@ by `TASK_ADD_EVENT_EXPRESSION`.
 Each is recorded beside the retail fact it stands in for
 (`Source/ElysiumUE/Private/Substrate/ElysiumReactions.h`):
 
-- **One deterministic candidate per bucket.** `StandInKnockbackSize` / `StandInKnockbackHeight`
-  select the `NORMAL`/`HIGH` cell of the classified direction, with no draw at all, pending the
-  authored swing-record table above being consumed. The `SMALL` family and the two `LOW_BACK` cells
-  stay in the vocabulary; nothing reaches them yet.
-- **The hit-buildup gate is omitted.** `IsKnockbackAllowed` takes the alive filter and
-  `Disallow_Knockbacks` only, and the producer reports the omission once. A victim retail would have
-  spared until its counter drained is knocked back here. The retail rule it stands in for is fully
-  recovered above — a per-victim scalar, `<= npc_hit_buildup_amount`, cleared when the body's own
-  swing passes `0.8` of its cycle — so what remains is implementation, not RE.
-- **The alive filter is the retail term, not a stand-in for one.** What was recorded here as an
-  unidentified second template predicate is the dead-victim refusal above; it reads no template key
-  at all. The one term genuinely absent is the `CNPC_VTzimisceRunner` class bypass.
+- **The authored table is consumed.** The cell comes off the landing swing record's own four
+  direction buckets, rotated by `+0xB8`, with the unconditional `RandomInt` over the selected
+  bucket and the empty-bucket-re-reads-bucket-0 fallback. The `SMALL` family and the two `LOW_BACK`
+  cells are reachable, and which one a direction answers is a property of the attack that was swung.
+- **The eligibility gate is whole**: the alive filter, `Disallow_Knockbacks`, the hit-buildup
+  counter with its `+0xBA == 2` override, and the `CNPC_VTzimisceRunner` class bypass that skips
+  the two terms below it.
+- **The per-class default activity is the one selector arm not reproduced.** Retail reaches a
+  direction-keyed class virtual (`+0x644`) when a record's bucket 0 is also empty; nothing in this
+  runtime carries one, so the no-record `0x8B` cell stands in for it and is named where it is taken.
 - **Only the grounded cells are produced.** The flying chain and the launch assignment are not
-  reproduced, so nothing here moves a body.
+  reproduced, so nothing moves a body yet — the seam that would carry one is
+  `IElysiumNpcMotor::Launch`/`SampleBallistic`.
 
 ### Melee damage commit
 

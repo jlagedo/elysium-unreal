@@ -1526,8 +1526,8 @@ bool FElysiumLocomotionTraceTest::RunTest(const FString&)
 	TestEqual(TEXT("a clean resolve counts as resolved"), Totals.ResolvedFrames, 1);
 	TestEqual(TEXT("and a miss counts as a fallback"), Totals.FallbackFrames, 1);
 	TestTrue(TEXT("both activities are in the reached mask"),
-		(Totals.CodesSeen & (1u << static_cast<uint32>(EElysiumAnimActivityCode::Walk))) != 0
-		&& (Totals.CodesSeen & (1u << static_cast<uint32>(EElysiumAnimActivityCode::Sneak))) != 0);
+		(Totals.CodesSeen & (1ull << static_cast<uint32>(EElysiumAnimActivityCode::Walk))) != 0
+		&& (Totals.CodesSeen & (1ull << static_cast<uint32>(EElysiumAnimActivityCode::Sneak))) != 0);
 	TestEqual(TEXT("the peak speed is in Source units"), Totals.PeakSpeed2D, 100.0, 0.001);
 	TestTrue(TEXT("the run channels reach the manifest"),
 		Manifest.Contains(TEXT("\"name\": \"act_resolved\"")));

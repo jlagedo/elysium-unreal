@@ -13,26 +13,31 @@
 //    omitted terms named on `ElysiumReactions::IsKnockbackAllowed`.
 //  - **Direction** is the four asymmetric bands over `AngleMod(awayYaw - victimYaw)`, and
 //    **the yaw snap** turns the victim so the authored cell's model-space direction reads true.
-//  - **No randomness at all.** With one candidate per bucket there is nothing to draw for. The
-//    rules stand the Reaction stream completely still on refusal AND on success; the producer
-//    spends exactly one draw and it is the SHARED reaction path's weighted-variant pick, which the
-//    flinch and the block family take on the same terms. Both counts are asserted.
+//  - **The classification spends nothing; the CELL may draw.** Every geometric rule stands the
+//    Reaction stream completely still on refusal AND on success. The cell then comes off the
+//    attack's own swing record — four direction buckets rotated by the record's `+0xB8` byte — and
+//    a bucket naming several candidates spends one draw while a bucket naming one spends none.
+//    Beside that the producer spends the SHARED reaction path's weighted-variant pick, which the
+//    flinch and the block family take on the same terms. Every count is asserted.
 //
-// The one STAND-IN is the cell: retail picks it out of an authored per-attack activity table whose
-// on-disk location is unrecovered, and until that is found the `NORMAL`/`HIGH` cell of the
-// classified direction stands in. The `SMALL` family and the two `LOW_BACK` cells are asserted as
-// vocabulary and asserted NOT to be selected, which is what makes finding the table a visible change.
+// **The buckets are a rotation and the fixtures say so.** `GNormalHighRecord`/`GSmallLowRecord`
+// state `B8 = 1`, so bucket 0 answers LEFT — a consumer that assumed bucket 0 was BACK passes on
+// the identity rotation and fails here, which is the whole point of not using it.
 //
-// **What is NOT reachable here, and why.** The knockback branch is taken on the hit/knockback
-// classification, and the classifier needs `rules.txt`'s `Melee_Reactions` block: a content-free
-// world has no rulebook to supply it, and the tables load behind private lazy slots on a
-// GameInstance subsystem, so no seam injects a margin table into a live contact. This is the same
-// limit `ElysiumBlockReactionTests.cpp` records, and it has the same two consequences —
+// The `SMALL` family and the two `LOW_BACK` cells are **reachable**, and asserted so: which cell a
+// direction answers is a property of the record that was swung, not of the classifier.
 //
-//  1. `.Producer` drives the composition the contact performs by making the same calls the contact
-//     makes, rather than through `MeleeContact`.
-//  2. `.Producer` DOES drive a real melee contact end to end, to assert the fail-safe: an
-//     unclassified record names no band, so it knocks nobody back.
+// **How a content-free world reaches the knockback branch at all.** It is taken on the hit/knockback
+// classification, which needs `rules.txt`'s `Melee_Reactions` block — and `ElysiumMeleeTest::
+// FRulesFixture` binds a fabricated one as the process-wide fallback every combat leaf already reads
+// when no rulebook subsystem is in reach. So `.Producer` drives real contacts through
+// `MeleeContact`, and the cases split three ways:
+//
+//  1. WITHOUT the fixture, the fail-safe: an unclassified record names no band, so it knocks nobody
+//     back and the shared health commit's ordinary flinch is the only reaction produced.
+//  2. WITH it, the whole path: press, sweep, classify, select off the record's table, snap, play.
+//  3. A handful of composition cases still make the producer's calls directly, where what is being
+//     asserted is one rule's arithmetic rather than the transaction around it.
 #include "Misc/AutomationTest.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -52,6 +57,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumReactions.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Tests/ElysiumMeleeTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
 #include "Visual/ElysiumAnimGraph.h"
 
@@ -90,6 +96,47 @@ namespace
 	// Off a bucket centre, so the yaw snap has an actual turn to make: the away direction is the
 	// third quadrant's diagonal and the victim has to end up with its BACK along it.
 	const FVector GAheadRight = FVector(100.0f, 100.0f, 0.0f);
+
+	// --- The authored candidate table, as two records ---------------------------------------------
+	//
+	// A record's four buckets are a ROTATION: bucket `k` answers direction `(B8 + k) mod 4` over the
+	// cycle BACK(0), LEFT(1), FORWARD(2), RIGHT(3). Both fixtures below state `B8 = 1`, so bucket 0
+	// answers LEFT rather than BACK — deliberately NOT the identity rotation, because a consumer that
+	// assumed bucket 0 was BACK would pass every case on `B8 = 0` and fail all of them here.
+	//
+	// The buckets are therefore written in the order LEFT, FORWARD, RIGHT, BACK.
+	FElysiumSwingRecord MakeKnockbackRecord(const TCHAR* Left, const TCHAR* Forward,
+		const TCHAR* Right, const TCHAR* Back, int32 Rotation = 1)
+	{
+		FElysiumSwingRecord Record;
+		Record.Start = 0.1f;
+		Record.End = 0.5f;
+		Record.Bone = GSwingBone;
+		Record.ACm = FVector(0.0f, 0.0f, 0.0f);
+		Record.BCm = FVector(30.0f, 0.0f, 0.0f);
+		Record.B8 = Rotation;
+		Record.Ba = 0;
+		for (const TCHAR* Name : { Left, Forward, Right, Back })
+		{
+			TArray<FString>& Bucket = Record.KnockbackNames.AddDefaulted_GetRef();
+			if (Name != nullptr)
+			{
+				Bucket.Add(Name);
+			}
+		}
+		return Record;
+	}
+
+	// The `NORMAL`/`HIGH` set, which is what the retired stand-in used to answer for every direction.
+	const FElysiumSwingRecord GNormalHighRecord = MakeKnockbackRecord(
+		TEXT("ACT_KNOCKBACK_NORMAL_HIGH_LEFT"), TEXT("ACT_KNOCKBACK_NORMAL_HIGH_FORWARD"),
+		TEXT("ACT_KNOCKBACK_NORMAL_HIGH_RIGHT"), TEXT("ACT_KNOCKBACK_NORMAL_HIGH_BACK"));
+
+	// A record whose BACK bucket names the `SMALL`/`LOW` cell — one of the two the stand-in could
+	// never reach, and which 155 bodies author.
+	const FElysiumSwingRecord GSmallLowRecord = MakeKnockbackRecord(
+		TEXT("ACT_KNOCKBACK_SMALL_HIGH_LEFT"), TEXT("ACT_KNOCKBACK_SMALL_HIGH_FORWARD"),
+		TEXT("ACT_KNOCKBACK_SMALL_HIGH_RIGHT"), TEXT("ACT_KNOCKBACK_SMALL_LOW_BACK"));
 
 	FElysiumWeaponMode MakeMode(const TCHAR* Dmg, int32 BaseLethality)
 	{
@@ -305,7 +352,9 @@ namespace
 		bool Knockback(double NowSeconds)
 		{
 			if (!ElysiumReactions::IsKnockbackAllowed(!Victim->IsInert() && !Victim->HasReportedDeath(),
-				Victim->DisallowsKnockbacks()))
+				Victim->DisallowsKnockbacks(),
+				Victim->HitBuildupCount <= FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow,
+				Victim->BypassesKnockbackEligibility()))
 			{
 				return false;
 			}
@@ -313,9 +362,13 @@ namespace
 			ElysiumReactions::BuildKnockback(
 				ElysiumReactions::KnockbackAwayFrom(Attacker->Origin, Victim->Origin),
 				VictimUnrealYaw(), Selected);
-			if (Selected.Activity() == nullptr)
+			// The cell comes off the record the swing declared, exactly as the producer takes it.
+			FString Cell;
+			if (Selected.bFallbackCell
+				|| !ElysiumReactions::SelectKnockbackActivity(GNormalHighRecord, Selected.Direction,
+					ElysiumRng::Stream(EElysiumRngStream::Reaction), Cell))
 			{
-				return false;
+				Cell = ElysiumReactions::FallbackGroundedKnockbackActivity;
 			}
 
 			FVector Facing = Victim->Angles;
@@ -323,7 +376,7 @@ namespace
 			Victim->SetRuntimeAngles(Facing);
 
 			FElysiumReactionPlayRequest Request;
-			Request.Activity = Selected.Activity();
+			Request.Activity = Cell;
 			Request.bAllowFallbackLadder = true;
 			float Held = 0.0f;
 			if (!Victim->PlayReactionActivity(Request, &Held))
@@ -408,6 +461,56 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 			KnockbackActivity(ESize::Small, EHeight::Low, EDir::Right));
 	}
 
+	// --- An empty bucket re-reads bucket 0, and only then falls back ------------------------------
+	//
+	// Retail's own first fallback: `if (counts[bucket] < 1) bucket = 0`. A direction the attack
+	// authors no candidate for answers whatever bucket 0 holds, which is a shipped answer rather
+	// than the no-list cell — refusing here would skip it entirely.
+	{
+		// Bucket 0 answers LEFT on this rotation and is the only one filled.
+		FElysiumSwingRecord LeftOnly = MakeKnockbackRecord(
+			TEXT("ACT_KNOCKBACK_NORMAL_HIGH_LEFT"), nullptr, nullptr, nullptr);
+		FString Cell;
+		FRandomStream Rng(7);
+		TestTrue(TEXT("a direction with an empty bucket re-reads bucket 0"),
+			SelectKnockbackActivity(LeftOnly, EDir::Back, Rng, Cell));
+		TestEqual(TEXT("...and answers what bucket 0 holds"), Cell,
+			FString(TEXT("ACT_KNOCKBACK_NORMAL_HIGH_LEFT")));
+
+		// Only a record whose bucket 0 is ALSO empty refuses, which is where retail reaches a
+		// per-class default this runtime does not carry.
+		FElysiumSwingRecord Empty = MakeKnockbackRecord(nullptr, nullptr, nullptr, nullptr);
+		TestFalse(TEXT("a record with nothing in any bucket refuses"),
+			SelectKnockbackActivity(Empty, EDir::Back, Rng, Cell));
+	}
+
+	// --- The draw is unconditional, including over one candidate ----------------------------------
+	//
+	// Retail spends `RandomInt(0, count - 1)` whenever the bucket holds anything. Skipping it for a
+	// single candidate would answer the same cell and leave the stream a position behind, which
+	// every later reaction in the run would then read differently.
+	{
+		FElysiumSwingRecord OneEach = MakeKnockbackRecord(
+			TEXT("ACT_KNOCKBACK_NORMAL_HIGH_LEFT"), TEXT("ACT_KNOCKBACK_NORMAL_HIGH_FORWARD"),
+			TEXT("ACT_KNOCKBACK_NORMAL_HIGH_RIGHT"), TEXT("ACT_KNOCKBACK_NORMAL_HIGH_BACK"));
+		FRandomStream Rng(11);
+		const int32 Before = Rng.GetCurrentSeed();
+		FString Cell;
+		TestTrue(TEXT("a single-candidate bucket answers"),
+			SelectKnockbackActivity(OneEach, EDir::Back, Rng, Cell));
+		TestNotEqual(TEXT("...and still spends its draw"), Rng.GetCurrentSeed(), Before);
+
+		// A refusal spends nothing: the draw happens only once a candidate list is in hand.
+		FElysiumSwingRecord NoRotation = MakeKnockbackRecord(
+			TEXT("A"), TEXT("B"), TEXT("C"), TEXT("D"),
+			/*Rotation*/ ElysiumReactions::KnockbackRotationUnset);
+		const int32 BeforeRefusal = Rng.GetCurrentSeed();
+		TestFalse(TEXT("a record stating no rotation refuses"),
+			SelectKnockbackActivity(NoRotation, EDir::Back, Rng, Cell));
+		TestEqual(TEXT("...and advances the stream by nothing"),
+			Rng.GetCurrentSeed(), BeforeRefusal);
+	}
+
 	// --- The buckets carry retail's own numbers ---------------------------------------------------
 	//
 	// The activity table and the yaw-offset table are both indexed by them, so a renumbering that
@@ -421,7 +524,11 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 		TestEqual(TEXT("bucket 3 is RIGHT"), static_cast<int32>(EDir::Right), 3);
 	}
 
-	// --- The state projection: every one of the ten is named and lands somewhere ------------------
+	// --- The state projection: every one of the nineteen is named and lands somewhere -------------
+	//
+	// The ten grounded cells and the nine flying ones. They take the same answer for the same
+	// reason — both families play on the reaction branch above the locomotion pose, so the state
+	// underneath is what the projection describes.
 	{
 		static const EElysiumAnimActivityCode Codes[] =
 		{
@@ -435,6 +542,15 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 			EElysiumAnimActivityCode::KnockbackNormalHighRight,
 			EElysiumAnimActivityCode::KnockbackSmallLowBack,
 			EElysiumAnimActivityCode::KnockbackNormalLowBack,
+			EElysiumAnimActivityCode::KnockbackFlyingIntoForward,
+			EElysiumAnimActivityCode::KnockbackFlyingIntoRight,
+			EElysiumAnimActivityCode::KnockbackFlyingIntoLeft,
+			EElysiumAnimActivityCode::KnockbackFlyingIntoBack,
+			EElysiumAnimActivityCode::KnockbackFlyingIdle,
+			EElysiumAnimActivityCode::KnockbackFlyingLand,
+			EElysiumAnimActivityCode::KnockbackFlyingWallHit,
+			EElysiumAnimActivityCode::KnockbackFlyingWallFall,
+			EElysiumAnimActivityCode::KnockbackFlyingWallLand,
 		};
 		for (const EElysiumAnimActivityCode Code : Codes)
 		{
@@ -460,18 +576,34 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 			static_cast<int32>(EElysiumAnimActivityCode::KnockbackNormalHighForward));
 	}
 
-	// --- Eligibility ------------------------------------------------------------------------------
+	// --- Eligibility, all four terms --------------------------------------------------------------
 	{
+		auto Allowed = [](bool bAlive, bool bDisallow, bool bAdmits = true, bool bBypass = false)
+		{
+			return IsKnockbackAllowed(bAlive, bDisallow, bAdmits, bBypass);
+		};
 		TestTrue(TEXT("a live victim whose template allows it is knocked back"),
-			IsKnockbackAllowed(/*Alive*/ true, /*Disallow*/ false));
-		TestFalse(TEXT("a dead victim is not"),
-			IsKnockbackAllowed(/*Alive*/ false, /*Disallow*/ false));
+			Allowed(/*Alive*/ true, /*Disallow*/ false));
+		TestFalse(TEXT("a dead victim is not"), Allowed(/*Alive*/ false, /*Disallow*/ false));
 		// The authored refusal eight `npctemplate*.txt` files carry — zombies, the cabbie, the
 		// tutorial and crackhouse casts, the bomberman.
 		TestFalse(TEXT("a template that disallows knockbacks refuses one"),
-			IsKnockbackAllowed(/*Alive*/ true, /*Disallow*/ true));
+			Allowed(/*Alive*/ true, /*Disallow*/ true));
 		TestFalse(TEXT("and both together still refuse"),
-			IsKnockbackAllowed(/*Alive*/ false, /*Disallow*/ true));
+			Allowed(/*Alive*/ false, /*Disallow*/ true));
+
+		// The hit-buildup gate: a drained counter refuses a victim every other term would admit.
+		TestFalse(TEXT("a drained hit-buildup counter refuses"),
+			Allowed(/*Alive*/ true, /*Disallow*/ false, /*Admits*/ false));
+
+		// **The class bypass skips BOTH terms below it**, which is the whole reason it is first.
+		// A `CNPC_VTzimisceRunner` is thrown wearing `Disallow_Knockbacks` and with its counter
+		// drained — and the one thing it does NOT bypass is being dead, because retail's stub
+		// returns before the two template/health tests rather than before the entry.
+		TestTrue(TEXT("the class bypass ignores the template refusal"),
+			Allowed(/*Alive*/ true, /*Disallow*/ true, /*Admits*/ true, /*Bypass*/ true));
+		TestTrue(TEXT("...and a drained counter"),
+			Allowed(/*Alive*/ true, /*Disallow*/ true, /*Admits*/ false, /*Bypass*/ true));
 	}
 
 	// --- The away direction, and the sign that is the whole of it ---------------------------------
@@ -497,8 +629,14 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 		BuildKnockback(KnockbackAwayWithoutAttacker(30.0f), 30.0f, NoAttacker);
 		TestEqual(TEXT("...which classifies as the BACK bucket whatever the facing"),
 			static_cast<int32>(NoAttacker.Direction), static_cast<int32>(EDir::Back));
-		TestEqual(TEXT("...naming the back cell"), FString(NoAttacker.Activity()),
-			FString(TEXT("ACT_KNOCKBACK_NORMAL_HIGH_BACK")));
+		{
+			FString Cell;
+			FRandomStream Unused(1);
+			TestTrue(TEXT("...and the record answers that bucket"),
+				SelectKnockbackActivity(GNormalHighRecord, NoAttacker.Direction, Unused, Cell));
+			TestEqual(TEXT("...naming the back cell"), Cell,
+				FString(TEXT("ACT_KNOCKBACK_NORMAL_HIGH_BACK")));
+		}
 		// And the snap is a no-op: a body already facing the right way is not turned.
 		TestEqual(TEXT("...and the victim keeps the facing it had"), NoAttacker.SnapYawDegrees,
 			30.0f, 1e-3f);
@@ -672,25 +810,32 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 			TestEqual(*FString::Printf(TEXT("%s selects bucket %d"), Case.What,
 				static_cast<int32>(Case.Direction)),
 				static_cast<int32>(Out.Direction), static_cast<int32>(Case.Direction));
+			// The cell is the record's, not the classifier's: the bucket answering this direction is
+			// found by inverting the rotation byte, and its candidate is the answer verbatim.
+			FString Cell;
+			FRandomStream Unused(1);
+			TestTrue(*FString::Printf(TEXT("%s resolves an authored candidate"), Case.What),
+				SelectKnockbackActivity(GNormalHighRecord, Out.Direction, Unused, Cell));
 			TestEqual(*FString::Printf(TEXT("%s plays %s"), Case.What, Case.Cell),
-				FString(Out.Activity()), FString(Case.Cell));
+				Cell, FString(Case.Cell));
 			TestEqual(*FString::Printf(TEXT("%s snaps the victim to %.1f"), Case.What, Case.SnapYaw),
 				Out.SnapYawDegrees, Case.SnapYaw, 1e-3f);
-			TestEqual(TEXT("...off the stand-in's NORMAL size"),
-				static_cast<int32>(Out.Size), static_cast<int32>(StandInKnockbackSize));
-			TestEqual(TEXT("...and its HIGH cell"),
-				static_cast<int32>(Out.Height), static_cast<int32>(StandInKnockbackHeight));
 			TestFalse(TEXT("...without reaching the no-list fallback"), Out.bFallbackCell);
 			TestEqual(TEXT("...and the away yaw is carried for the record"), Out.AwayWorldYawDegrees,
 				AwayYawOf(Case.AttackerOrigin, GVictim), 1e-3f);
 		}
 
-		// The stand-in never reaches the SMALL family or either LOW cell. Recovering the authored
-		// activity table is what changes this, and this case is what says so.
-		TestEqual(TEXT("the stand-in size is NORMAL"),
-			static_cast<int32>(StandInKnockbackSize), static_cast<int32>(ESize::Normal));
-		TestEqual(TEXT("the stand-in height is HIGH"),
-			static_cast<int32>(StandInKnockbackHeight), static_cast<int32>(EHeight::High));
+		// **The SMALL family and both LOW cells are now REACHABLE**, and that is the whole change the
+		// authored table made: the same classified direction answers a different cell because a
+		// different record was swung. What used to be asserted here is that nothing could reach them.
+		{
+			FString Cell;
+			FRandomStream Unused(1);
+			TestTrue(TEXT("a SMALL record answers the same direction"),
+				SelectKnockbackActivity(GSmallLowRecord, EDir::Back, Unused, Cell));
+			TestEqual(TEXT("...with its own authored LOW_BACK cell"), Cell,
+				FString(TEXT("ACT_KNOCKBACK_SMALL_LOW_BACK")));
+		}
 	}
 
 	// --- The degenerate contact, and the no-list fallback it takes ---------------------------------
@@ -698,10 +843,10 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 		FElysiumKnockback Out;
 		BuildKnockback(KnockbackAwayFrom(GVictim, GVictim), /*VictimYaw*/ 0.0f, Out);
 		TestTrue(TEXT("coincident origins take the no-list fallback"), Out.bFallbackCell);
-		// Retail's fallback is the flying activity 0x8b, downgraded on a grounded body.
+		// Retail's fallback is the flying activity 0x8b, downgraded on a grounded body. The producer
+		// takes it WITHOUT consulting the record, which is what `bFallbackCell` means.
 		TestEqual(TEXT("...which is the flying-forward cell downgraded to the grounded one"),
-			FString(Out.Activity()), FString(FallbackGroundedKnockbackActivity));
-		TestEqual(TEXT("...and it is the NORMAL/HIGH forward cell"), FString(Out.Activity()),
+			FString(FallbackGroundedKnockbackActivity),
 			FString(TEXT("ACT_KNOCKBACK_NORMAL_HIGH_FORWARD")));
 		// The classifier's own answer on that path is bucket 0, stated rather than reached through
 		// the bands — a zeroed relative yaw would otherwise fall in the FRONT band. The bucket and the
@@ -740,7 +885,7 @@ bool FElysiumKnockbackRngTest::RunTest(const FString&)
 
 	// A refusal — the eligibility gate, which is where every "no knockback" answer now lives.
 	TestFalse(TEXT("a disallowed victim is refused"),
-		IsKnockbackAllowed(/*Alive*/ true, /*Disallow*/ true));
+		IsKnockbackAllowed(/*Alive*/ true, /*Disallow*/ true, /*Admits*/ true, /*Bypass*/ false));
 	TestEqual(TEXT("...and the refusal advances the Reaction stream by nothing"),
 		Rng.GetCurrentSeed(), SeedBefore);
 
@@ -807,13 +952,16 @@ bool FElysiumKnockbackProducerTest::RunTest(const FString&)
 		// The claim a played knockback takes.
 		TestTrue(TEXT("the base channel is held for as long as it runs"),
 			F.Victim->MeleeReactionHoldsBaseUntil > 10.0);
-		// **The knockback itself adds NO draw.** The one the producer spends is the shared reaction
-		// path's weighted-variant pick — retail's `SelectWeightedSequence`, which the flinch and the
-		// block family take on exactly the same terms — and not a knockback term. If the authored
-		// activity table is ever recovered, its `RandomInt` over the bucket's candidates is a SECOND
-		// draw and this count is what says so.
-		TestTrue(TEXT("the producer spends exactly one draw, and it is the shared variant pick"),
-			SpentDraws(SeedBefore, Rng, 1));
+		// **TWO draws, and they are different systems.** One is the shared reaction path's
+		// weighted-variant pick — retail's `SelectWeightedSequence`, which the flinch and the block
+		// family take on exactly the same terms. The other is the authored table's own
+		// `RandomInt(0, count - 1)` over the selected bucket's candidates, which retail spends
+		// unconditionally including over a single candidate.
+		//
+		// This count was 1 while the cell was a stand-in with nothing to draw for. Consuming the
+		// authored table is what made it 2, and that is the whole visible difference.
+		TestTrue(TEXT("the producer spends two draws: the variant pick and the candidate draw"),
+			SpentDraws(SeedBefore, Rng, 2));
 	}
 
 	// --- The four buckets, each through the real producer ------------------------------------------
@@ -960,6 +1108,204 @@ bool FElysiumKnockbackProducerTest::RunTest(const FString&)
 		// The generic flinch is the reaction it DOES produce, from the shared health commit.
 		TestTrue(TEXT("...while the ordinary damage flinch still plays"),
 			Saw(F.Services, TEXT("ResolveNpcActivityClip"), TEXT("ACT_HIT_")));
+	}
+
+	// --- A REAL contact, classified, knocking back off the record's own table ------------------------
+	//
+	// The case above is the fail-safe with no margin table. This is the same swing WITH one, and it is
+	// what makes every assertion in this suite a statement about the producer rather than about a
+	// re-composition of it: `ElysiumMeleeTest::FRulesFixture` binds a fabricated `Melee_Reactions`
+	// block as the process-wide fallback, so `FElysiumWeaponContext::FromCharacter` builds real
+	// margins and `ClassifyDefender` reaches `HitKnockback` inside `MeleeContact` itself.
+	//
+	// Nothing here calls a reaction rule directly. The swing is pressed, the walk sweeps, and the
+	// knockback is whatever the contact produced.
+	{
+		ElysiumMeleeTest::FRulesFixture Rules;
+		FKnockbackFixture F;
+		// The victim starts turned 45 degrees off, so the yaw snap has an actual turn to make. Dead
+		// ahead it would be a no-op by construction — a body struck in the face is already facing the
+		// way a `..._BACK` cell needs it to.
+		if (!F.Stand(*this, /*VictimUnrealYawDegrees*/ 45.0f))
+		{
+			return false;
+		}
+		// The attack's own authored candidate table, which is what the cell is drawn from. Bucket 0
+		// answers LEFT on this rotation, so a table read with the identity rotation would play the
+		// wrong cell rather than none — which is the failure this case exists to catch.
+		{
+			FElysiumSwingRecord Record = GNormalHighRecord;
+			Record.Start = 0.30f;
+			Record.End = 0.70f;
+			F.Services.SwingsByClip.Add(FString(GSwingLabel).ToLower(), { Record });
+		}
+		// What the rule answers for this geometry, computed the way the producer computes it. The
+		// case asserts the CONTACT reached the same answer, rather than restating a constant that
+		// would have to be re-derived by hand every time the fixture's geometry moved.
+		ElysiumReactions::FElysiumKnockback Expected;
+		ElysiumReactions::BuildKnockback(
+			ElysiumReactions::KnockbackAwayFrom(F.Attacker->Origin, F.Victim->Origin),
+			F.VictimUnrealYaw(), Expected);
+		const float FacingBefore = F.VictimUnrealYaw();
+		F.Swing(GHammer);
+
+		FString ExpectedCell;
+		FRandomStream Unused(1);
+		TestTrue(TEXT("the record answers this direction"),
+			ElysiumReactions::SelectKnockbackActivity(GNormalHighRecord, Expected.Direction,
+				Unused, ExpectedCell));
+		TestTrue(TEXT("a classified contact produces the record's own cell"),
+			Saw(F.Services, TEXT("ResolveNpcActivityClip"), *ExpectedCell));
+		// The yaw snap is the producer's, and it runs BEFORE the clip is asked for: a directional
+		// cell only reads true if the body's named side IS the way it is going.
+		TestEqual(TEXT("...after snapping the victim to the yaw the rule states"),
+			F.VictimUnrealYaw(), Expected.SnapYawDegrees, 1e-3f);
+		TestNotEqual(TEXT("...which on this geometry is a real turn"),
+			Expected.SnapYawDegrees, FacingBefore);
+		TestTrue(TEXT("...on a body that also took the damage"), DamageTaken(*F.Victim) > 0);
+	}
+
+	// --- The hit-buildup counter, driven through real contacts ---------------------------------------
+	//
+	// One scalar on the VICTIM, admitted at or below `npc_hit_buildup_amount` and cleared by the
+	// victim's OWN swing. The loop it produces is "you are knocked around until you fight back", and
+	// this case walks it: swing until the counter drains, see the knockbacks stop, then let the
+	// victim swing and see them resume.
+	{
+		ElysiumMeleeTest::FRulesFixture Rules;
+		FKnockbackFixture F;
+		if (!F.Stand(*this, /*VictimUnrealYawDegrees*/ 45.0f))
+		{
+			return false;
+		}
+		{
+			FElysiumSwingRecord Record = GNormalHighRecord;
+			Record.Start = 0.30f;
+			Record.End = 0.70f;
+			F.Services.SwingsByClip.Add(FString(GSwingLabel).ToLower(), { Record });
+		}
+		// The victim has to survive the whole run, so its health is well past what the swings spend.
+		SeedHealth(*F.Victim, 100000);
+
+		auto KnockbacksSoFar = [&F]()
+		{
+			return CountCalls(F.Services, TEXT("ResolveNpcActivityClip"), TEXT("ACT_KNOCKBACK"));
+		};
+		TestEqual(TEXT("the counter starts at zero"), F.Victim->HitBuildupCount, 0);
+
+		// Two admitted hits. The raise runs before the read — recovered from the melee impact body's
+		// own order, named at the producer — so a default of `2` admits at counts 1 and 2 and
+		// refuses at 3. Thrown twice, then it stands its ground.
+		int32 Admitted = 0;
+		for (int32 Hit = 0; Hit < 5; ++Hit)
+		{
+			const int32 Before = KnockbacksSoFar();
+			F.Swing(GHammer);
+			if (KnockbacksSoFar() > Before)
+			{
+				++Admitted;
+			}
+		}
+		TestEqual(TEXT("the counter admits exactly two hits"), Admitted, 2);
+		TestTrue(TEXT("...and has risen past the admission bound"),
+			F.Victim->HitBuildupCount > FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow);
+
+	}
+
+	// --- A body clears its OWN counter by swinging ----------------------------------------------------
+	//
+	// The other half of the loop, isolated: nothing is hitting this body while it swings. That
+	// isolation is the point — the clear is called on the SWINGING body's own self-pointer and has
+	// no reference to whoever drained it, so a case where an attacker is still landing hits would
+	// prove nothing about which body the clear addresses.
+	{
+		ElysiumMeleeTest::FRulesFixture Rules;
+		FKnockbackFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		// Drained by earlier blows this case does not need to replay.
+		F.Victim->HitBuildupCount = FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow + 5;
+		// This swing must touch NOBODY. The fixture's standing contact answer is the victim itself,
+		// which the victim's own sweep would then land on — a self-hit that raises the very counter
+		// this case is watching drain, one loop iteration after the clear ran.
+		F.Services.SwingContacts.Reset();
+
+		if (FElysiumWeapon* Held = GiveWeapon(*F.Victim, GHammer))
+		{
+			const FElysiumWeapon::EVerdict Verdict =
+				Held->AttackIntent(FElysiumWeapon::EIntent::Primary);
+			TestEqual(TEXT("the victim's own swing is accepted"), static_cast<int32>(Verdict),
+				static_cast<int32>(FElysiumWeapon::EVerdict::Accepted));
+		}
+		else
+		{
+			AddError(TEXT("the victim could not be given a weapon to fight back with"));
+		}
+		F.World->Tick(GContactTick);
+		F.Services.BodyClipPhase.Cycle = 0.0f;
+		F.World->AdvanceMeleeSwings(0.02f);
+		TestNotEqual(TEXT("a swing short of the completion cycle clears nothing"),
+			F.Victim->HitBuildupCount, 0);
+
+		F.Services.BodyClipPhase.Cycle = FElysiumCombatCharacter::MeleeSwingCompletionPercent;
+		F.World->AdvanceMeleeSwings(0.02f);
+		TestEqual(TEXT("a body that swings past the completion cycle clears its own counter"),
+			F.Victim->HitBuildupCount, 0);
+	}
+
+	// --- The unconditional marker, which ignores a drained counter ------------------------------------
+	//
+	// `+0xBA == 2` on the landing record admits the knockback however drained the victim is. 104
+	// shipped records state it — every shared weapon's dedicated heavy and every combo finisher.
+	{
+		ElysiumMeleeTest::FRulesFixture Rules;
+		FKnockbackFixture F;
+		if (!F.Stand(*this, /*VictimUnrealYawDegrees*/ 45.0f))
+		{
+			return false;
+		}
+		{
+			FElysiumSwingRecord Record = GNormalHighRecord;
+			Record.Start = 0.30f;
+			Record.End = 0.70f;
+			Record.Ba = ElysiumReactions::KnockbackUnconditionalMarker;
+			F.Services.SwingsByClip.Add(FString(GSwingLabel).ToLower(), { Record });
+		}
+		SeedHealth(*F.Victim, 100000);
+		// Drain the counter well past the bound before the swing lands.
+		F.Victim->HitBuildupCount = FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow + 10;
+
+		F.Swing(GHammer);
+		TestTrue(TEXT("an unconditional record knocks back a drained victim"),
+			Saw(F.Services, TEXT("ResolveNpcActivityClip"), TEXT("ACT_KNOCKBACK")));
+	}
+
+	// --- The same contact, with a record that names the SMALL/LOW cell -------------------------------
+	//
+	// The direction is identical; only the record changed. That is the whole of what retiring the
+	// stand-in bought: which cell a direction answers is a property of the attack that was swung.
+	{
+		ElysiumMeleeTest::FRulesFixture Rules;
+		FKnockbackFixture F;
+		if (!F.Stand(*this))
+		{
+			return false;
+		}
+		{
+			FElysiumSwingRecord Record = GSmallLowRecord;
+			Record.Start = 0.30f;
+			Record.End = 0.70f;
+			F.Services.SwingsByClip.Add(FString(GSwingLabel).ToLower(), { Record });
+		}
+		F.Swing(GHammer);
+
+		TestTrue(TEXT("the same direction reaches the record's own LOW_BACK cell"),
+			Saw(F.Services, TEXT("ResolveNpcActivityClip"), TEXT("ACT_KNOCKBACK_SMALL_LOW_BACK")));
+		TestFalse(TEXT("...and never the cell the retired stand-in would have answered"),
+			Saw(F.Services, TEXT("ResolveNpcActivityClip"),
+				TEXT("ACT_KNOCKBACK_NORMAL_HIGH_BACK")));
 	}
 
 	return true;

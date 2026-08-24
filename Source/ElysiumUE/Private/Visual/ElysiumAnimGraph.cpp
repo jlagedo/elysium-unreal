@@ -64,6 +64,20 @@ namespace ElysiumAnimGraph
 		case EElysiumAnimActivityCode::KnockbackNormalHighRight:
 		case EElysiumAnimActivityCode::KnockbackSmallLowBack:
 		case EElysiumAnimActivityCode::KnockbackNormalLowBack:
+		// The nine FLYING cells take the same answer for the same reason, and one more besides: the
+		// chain that plays them holds the base channel through a single `Predicate` reaction claim
+		// across several clips, so the locomotion state underneath is not what is on screen for any
+		// of them. A launched body is not walking, running or idling — but `Idle` is what a body
+		// whose locomotion is not driving it is doing, and the record still names the cell asked for.
+		case EElysiumAnimActivityCode::KnockbackFlyingIntoForward:
+		case EElysiumAnimActivityCode::KnockbackFlyingIntoRight:
+		case EElysiumAnimActivityCode::KnockbackFlyingIntoLeft:
+		case EElysiumAnimActivityCode::KnockbackFlyingIntoBack:
+		case EElysiumAnimActivityCode::KnockbackFlyingIdle:
+		case EElysiumAnimActivityCode::KnockbackFlyingLand:
+		case EElysiumAnimActivityCode::KnockbackFlyingWallHit:
+		case EElysiumAnimActivityCode::KnockbackFlyingWallFall:
+		case EElysiumAnimActivityCode::KnockbackFlyingWallLand:
 		// The death family shares the answer for the same structural reason — never a base-channel
 		// locomotion answer. A death pose is played on the REACTION branch, over whatever the graph
 		// is posing, so its own request never enters the state machine and this projection describes

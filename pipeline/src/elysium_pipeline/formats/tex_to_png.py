@@ -214,6 +214,15 @@ def save_png(image: Image.Image, path) -> None:
     so the duplicate is wasted work rather than a conflict, and `os.replace` keeps a reader (or
     the other writer) from ever observing a half-written PNG.
 
+    **That last sentence is a POSIX guarantee, and this pipeline runs on Windows.** There
+    `os.replace` is `MoveFileEx(MOVEFILE_REPLACE_EXISTING)`, which refuses with
+    `ERROR_ACCESS_DENIED` while another process holds the destination open -- and the corpus
+    decode is a `ProcessPoolExecutor`, so two workers writing one shared basetexture really do
+    collide. Ten stage-prop models share `scenery/misc/stagelights/stagelight`, which is how the
+    collision was first observed. The loser therefore accepts the winner's file: what both wrote
+    is byte-identical by construction, so the destination existing IS this call's answer. Only a
+    replace that failed with no file at the destination is a real error.
+
     The opaqueness question is answered from the source format when `decode` proved it
     (``image.info["opaque_alpha"]``); otherwise the alpha plane is scanned. Encoded at zlib
     level 1: the PNGs are gitignored intermediates whose read-back cost is identical, so encode
@@ -230,7 +239,14 @@ def save_png(image: Image.Image, path) -> None:
     os.close(handle)
     try:
         image.save(temporary, compress_level=1)
-        os.replace(temporary, path)
+        try:
+            os.replace(temporary, path)
+        except PermissionError:
+            # Windows, another worker holding the destination. Byte-identical by construction, so
+            # its copy is this call's answer -- but only if a copy is actually there.
+            if not os.path.exists(path):
+                raise
+            os.unlink(temporary)
     except BaseException:
         try:
             os.unlink(temporary)

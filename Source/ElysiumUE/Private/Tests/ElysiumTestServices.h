@@ -20,6 +20,7 @@
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEventQueue.h"
 #include "ElysiumIOSink.h"
+#include "ElysiumMoveSolve.h"     // HullHalfWidth/StandHeight — the character box the sweep reaches
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumSignData.h"
 #include "ElysiumWorldServices.h"
@@ -150,6 +151,49 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	}
 	// The stub has no movement component to derive one from, so it reports a body standing still at
 	// the yaw it was placed at. What a substrate test asserts is the request contract, not motion.
+	// --- The ballistic pair, MODELLED rather than recorded --------------------------------------
+	//
+	// A recorded-only stub cannot serve a chain: the terminator reads whether the body is grounded,
+	// so a stub answering the same thing every think either ends the chain on its first look or
+	// never ends it at all. The double therefore holds the two flags a case drives.
+	//
+	// `bCarriesBallistic` is the seam's own "this motor cannot carry a launched body" answer, which
+	// a case sets false to prove the caller ends its chain instead of waiting forever.
+	bool bCarriesBallistic = true;
+	bool bLaunched = false;
+	FVector LaunchedVelocityCmPerSecond = FVector::ZeroVector;
+	// What the next `SampleBallistic` reports. A case moves these to walk a body through its flight:
+	// airborne, then contacted with a normal, then grounded.
+	FElysiumBallisticSample Ballistic;
+
+	virtual bool Launch(const FVector& VelocityCmPerSecond) override
+	{
+		Record(FString::Printf(TEXT("NpcMotor Launch %s carries=%d"),
+			*VelocityCmPerSecond.ToString(), bCarriesBallistic ? 1 : 0));
+		if (!bCarriesBallistic)
+		{
+			return false;
+		}
+		bLaunched = true;
+		LaunchedVelocityCmPerSecond = VelocityCmPerSecond;
+		// The default flight a case starts in, so a launch that is not driven further still reads as
+		// airborne rather than as a body that landed on the frame it left the ground.
+		Ballistic.bGrounded = false;
+		Ballistic.bFalling = true;
+		Ballistic.VelocityCmPerSecond = VelocityCmPerSecond;
+		return true;
+	}
+
+	virtual bool SampleBallistic(FElysiumBallisticSample& Out) const override
+	{
+		if (!bCarriesBallistic)
+		{
+			return false;   // the headless answer, and the one a chain has to end on
+		}
+		Out = Ballistic;
+		return true;
+	}
+
 	virtual FElysiumLocomotionSample SampleLocomotion() const override
 	{
 		FElysiumLocomotionSample Out;
@@ -734,17 +778,81 @@ struct FElysiumRecordingServices final
 		OutWorld = *Found;
 		return true;
 	}
-	// What the swing sweep answers. `SwingContacts` is the standing answer for every sub-step;
-	// `SwingContactSweeps` accumulates the segments it was asked about, so a case can assert WHERE
-	// the walk swept as well as that it swept at all. Deliberately not `Record`ed: the walk asks once
-	// per live record per sub-step, and a hundred lines a frame would bury everything a suite reads.
-	TArray<FElysiumEntityHandle> SwingContacts;
+	// What the swing sweep answers. `SwingContactSweeps` accumulates the segments it was asked
+	// about, so a case can assert WHERE the walk swept as well as that it swept at all. Deliberately
+	// not `Record`ed: the walk asks once per live record per sub-step, and a hundred lines a frame
+	// would bury everything a suite reads.
 	mutable TArray<FElysiumSwingSweep> SwingContactSweeps;
+
+	// The standing answer, returned verbatim for every sub-step. It is what a case uses when the
+	// question is the WALK — which records opened, how the hit-once spread behaved, whether a batch
+	// ran at all — and geometry would only be scaffolding in the way.
+	TArray<FElysiumEntityHandle> SwingContacts;
+
+	// A body the sweep can actually reach, keyed by handle: the feet-anchored box a case places so
+	// the swept segment has something to intersect. Non-empty switches this query from the standing
+	// answer to a real geometric one.
+	//
+	// **Why the double sweeps rather than only recording.** The walk's sub-step batching decides
+	// WHERE a limb is at each of `floor(span * 100)` instants, and a stub that answers the same list
+	// however the segment moved cannot tell a correct interpolation from a stationary one — the
+	// batching was provable in the arena and nowhere else. With a box in the way the substrate tier
+	// asks the same question the map actor does.
+	TMap<FElysiumEntityHandle, FBox> SwingBodies;
+
+	// The 32x32x72-unit character box, in the same feet-anchored form the map actor builds for a
+	// bodiless candidate: origin-half to origin+half+height, NOT centred on the origin.
+	static FBox StandHullAt(const FVector& FeetOriginCm)
+	{
+		const FVector Half(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, 0.0f);
+		return FBox(FeetOriginCm - Half,
+			FeetOriginCm + Half + FVector(0.0f, 0.0f, ElysiumMove::StandHeight));
+	}
+	void PlaceSwingBody(const FElysiumEntityHandle& Body, const FVector& FeetOriginCm)
+	{
+		SwingBodies.Add(Body, StandHullAt(FeetOriginCm));
+	}
+
 	virtual void QuerySwingContacts(const FElysiumSwingSweep& Sweep,
 		TArray<FElysiumEntityHandle>& OutHits) const override
 	{
 		SwingContactSweeps.Add(Sweep);
-		OutHits = SwingContacts;
+		if (SwingBodies.IsEmpty())
+		{
+			OutHits = SwingContacts;
+			return;
+		}
+		// The same four edges `AElysiumMapActor::QuerySwingContacts` bounds the swept patch with:
+		// the segment where the sub-step started, where it ended, and the path each endpoint took
+		// between. Testing the edges rather than solving the bilinear patch is the production
+		// query's own choice, and the double has to make the same one or it would answer a question
+		// the real seam does not.
+		const FVector Edges[4][2] = {
+			{ Sweep.PrevA, Sweep.PrevB },
+			{ Sweep.CurA,  Sweep.CurB  },
+			{ Sweep.PrevA, Sweep.CurA  },
+			{ Sweep.PrevB, Sweep.CurB  },
+		};
+		OutHits.Reset();
+		for (const TPair<FElysiumEntityHandle, FBox>& Body : SwingBodies)
+		{
+			if (Body.Key == Sweep.Attacker)
+			{
+				continue;   // a swing never reaches its own swinger, same as the real query
+			}
+			for (const FVector (&Edge)[2] : Edges)
+			{
+				if (FMath::LineBoxIntersection(Body.Value, Edge[0], Edge[1], Edge[1] - Edge[0]))
+				{
+					OutHits.Add(Body.Key);
+					break;
+				}
+			}
+		}
+		// **No occlusion trace, and that is the stated divergence.** The real query then asks the
+		// engine whether solid world stands between the limb and the body. A headless world has no
+		// geometry to answer with, so this reports every geometric reach — which is the permissive
+		// direction: a case can prove a contact landed, never that a wall stopped one.
 	}
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,

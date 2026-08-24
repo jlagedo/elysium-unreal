@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 #include "ElysiumComboChain.h"
+#include "ElysiumMeleeEnvelope.h"
 #include "ElysiumSwingRecord.h"
 
 // The NPC animation vocabulary, read off the offline sidecars (roadmap 8.5, pipeline PL4).
@@ -60,6 +61,21 @@ struct FElysiumNpcClip
 	// `ACT_BLOCKED_REACTION_RIGHT` (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
 	// Empty means the sequence names none.
 	FString BlockedReaction;
+	// The NEAR edge of the same band `ReachCm` closes (`mstudioseqdesc_t`+0x2CC). The cast-arm melee
+	// selector scores a candidate's reach bit on `LowReachCm <= mag <= ReachCm`, inclusive at both
+	// ends (`docs/vtmb/combat-and-damage.md` -> "The cast arm").
+	//
+	// **Its own statedness, and not the same population as `ReachCm`.** 516 descriptors state a low
+	// edge against 581 stating a reach: 502 state both, 72 a reach with no low edge, and 14 a low
+	// edge with the reach unset. Negative is the unstated answer here rather than zero, because two
+	// shipped sequences author a genuine `0.0` — a band that starts at the body, which is a real
+	// claim where a zero FAR edge would be a swing that can never reach.
+	float LowReachCm = -1.0f;
+	// The authored attack envelopes the cast arm tests the enemy against
+	// (`mstudioseqdesc_t`+0x2BC/+0x2C0). A DIFFERENT array from `Swings` below, with a different job
+	// and no parallelism — see `Public/ElysiumMeleeEnvelope.h` for what its axes mean, which is the
+	// one thing a consumer has to know before touching the numbers.
+	TArray<FElysiumMeleeEnvelope> Envelopes;
 	// The authored swing-contact records of this sequence's swing (`mstudioseqdesc_t`+0x2C4/+0x2C8).
 	// This is where a melee attack stops being an animation and becomes one: `ReachCm` is the
 	// distance the swing ACQUIRES at, and these are where and when it TOUCHES. Empty on every
@@ -75,6 +91,11 @@ struct FElysiumNpcClip
 	// Whether this sequence states a reach at all. Zero is "no claim", not a zero-length swing, so a
 	// caller maximising over an activity's sequences skips it rather than clamping to it.
 	bool HasReach() const { return ReachCm > 0.0f; }
+	// Whether this sequence states the band's near edge. Zero is a STATED value here, so the test is
+	// against the negative sentinel rather than against zero the way `HasReach` is.
+	bool HasLowReach() const { return LowReachCm >= 0.0f; }
+	// Whether the cast arm has any envelope to score this sequence against.
+	bool HasEnvelopes() const { return !Envelopes.IsEmpty(); }
 	// Whether this sequence's swing can contact anything. Retail's walk is driven by the records
 	// themselves, so a melee clip declaring none simply never opens a contact window.
 	bool HasSwings() const { return !Swings.IsEmpty(); }

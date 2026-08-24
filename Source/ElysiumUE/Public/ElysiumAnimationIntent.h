@@ -600,6 +600,27 @@ enum class EElysiumAnimActivityCode : uint8
 	KnockbackNormalHighRight,
 	KnockbackSmallLowBack,
 	KnockbackNormalLowBack,
+	// The nine flying knockback cells — the chain a launched body plays, `_INTO` through its landing
+	// and the wall sub-chain that diverts it (`docs/vtmb/animation_and_movers.md` § "The knockback
+	// and death corpus"). Unlike the ten grounded cells above, these DO carry authored
+	// `..._MELEESHARED_ONEHAND` spellings on the thirteen ranged weapon ladders, so whether an armed
+	// body's translated request resolves is a per-body corpus question rather than a settled no.
+	KnockbackFlyingIntoForward,
+	KnockbackFlyingIntoRight,
+	KnockbackFlyingIntoLeft,
+	KnockbackFlyingIntoBack,
+	KnockbackFlyingIdle,
+	KnockbackFlyingLand,
+	KnockbackFlyingWallHit,
+	KnockbackFlyingWallFall,
+	KnockbackFlyingWallLand,
+
+	// **The bound, and it is load-bearing twice.** `act_code` is a diffed frame channel, so a value
+	// inserted mid-enum renumbers everything after it and turns a recorded baseline into a false
+	// regression — every addition goes at the END, immediately above this. And
+	// `FElysiumLocomotionTrace` keeps a bitmask over these ordinals, which static-asserts against
+	// this bound rather than guessing whether the set still fits.
+	Count,
 };
 
 // The latched air state. Distinct from `EElysiumJumpPhase`, which the sample derives from velocity

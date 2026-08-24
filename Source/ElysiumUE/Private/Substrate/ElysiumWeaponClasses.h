@@ -668,7 +668,7 @@ private:
 		const FElysiumEntityHandle& Victim);
 	// The accepted swing's own identity, copied out of the transaction before the first contact
 	// commits. A contact can retire the transaction, so the walk must not read the live one back
-	// through a reference into it — and the four values are one thing, not a parameter list.
+	// through a reference into it — and the values are one thing, not a parameter list.
 	struct FSwingContact
 	{
 		int32 ModeIndex = INDEX_NONE;
@@ -680,6 +680,24 @@ private:
 		// the weapon what it happens to be playing by then.
 		FString ClipLabel;
 		FString ClipOwnerStem;
+		// WHICH authored swing record landed this contact, indexing the array `NpcClipSwings`
+		// answered for `(ClipOwnerStem, ClipLabel)`. Unlike the four values above it is per CONTACT
+		// rather than per swing: one swing's records are walked independently and any of them may be
+		// the one that reached a body.
+		//
+		// It is the record's identity and not a copy of it, because the array is owned by the clip
+		// vocabulary and outlives the walk; a contact re-reads it rather than carrying the row.
+		//
+		// The knockback the victim answers with is stated ON that record — four direction buckets of
+		// candidate activities, the `+0xB8` rotation byte and the `+0xBA == 2` unconditional marker
+		// (`docs/vtmb/combat-and-damage.md` → "The authored table lives in the swing record"). Without
+		// this index the contact knows a record landed but not which, so the authored table cannot be
+		// read at all.
+		//
+		// `INDEX_NONE` is a real answer, not an error: a contact that reached a body through no
+		// authored record has no candidate table and resolves its cell the way a ranged or discipline
+		// entry does.
+		int32 RecordIndex = INDEX_NONE;
 	};
 
 	// **The opposed record is CONSUMED here, never rolled here.** It was staged on the victim on the
@@ -688,6 +706,18 @@ private:
 	// roll's own 60-unit query did not select them — and commits nothing.
 	void MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
 		const FSwingContact& Contact);
+
+	// The authored swing record `Contact.RecordIndex` names, or null.
+	//
+	// Re-read through the embodiment rather than carried on the contact: the record array belongs to
+	// the clip vocabulary, which is cached whole and immutable for the run, so the index is the
+	// durable handle and a copied row would only be a second truth about the same bytes.
+	//
+	// Null on every ordinary absence — no index stamped, no embodiment, a clip that declares no
+	// records, an index the array does not hold. A caller that gets null has a contact with no
+	// authored candidate table, which is the same position a ranged or discipline entry is in.
+	const FElysiumSwingRecord* ResolveSwingRecord(const FElysiumCombatCharacter& Attacker,
+		const FSwingContact& Contact) const;
 
 	// The swing's first batched frame, BEFORE any contact test: select the opponent with the roll's
 	// own `FindEntityFOV` (60 Source units, half-cone dot 0.7), stage the opposed record on them
@@ -712,7 +742,12 @@ private:
 	// Nothing here is a failure: a dead victim, a template that disallows knockbacks, a player victim
 	// (whose reaction is the unbuilt view kick) and a body whose vocabulary carries no such cell are
 	// all ordinary answers, and the last of them is named on the resolver's own selection record.
-	void KnockbackContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim);
+	// `Record` is the authored swing record that landed the contact, or null when the entry carries
+	// none. It is what the cell is selected out of: four direction buckets of up to four candidate
+	// activities, rotated by the record's own `+0xB8` byte
+	// (`docs/vtmb/combat-and-damage.md` → "The authored table lives in the swing record").
+	void KnockbackContact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,
+		const FElysiumSwingRecord* Record);
 
 	// `CWeaponRanged::FireOnEmpty` — the mode's dry-fire action, which advances BOTH attack timers.
 	void FireOnEmpty(int32 ModeIndex, const FElysiumWeaponMode& Mode);

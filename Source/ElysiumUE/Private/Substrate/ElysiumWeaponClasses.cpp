@@ -2265,6 +2265,26 @@ void FElysiumWeapon::AdvanceSwingContact(float DeltaSeconds)
 		return;
 	}
 
+	// **The swinging body clears its OWN hit-buildup counter** once its clip reaches
+	// `melee_swing_completion_percent`. Retail's site is on the swinging body's own NPC self-pointer
+	// rather than on anything it hit, and that asymmetry is the whole mechanism: a body is knocked
+	// around until it fights back, and no relationship bookkeeping is involved.
+	//
+	// **It sits here — above the record lookup and above the batch decision — deliberately.** Retail
+	// zeroes inside the live-swing branch of `MeleeSwingUpdate`, which knows nothing about swing
+	// records, and a melee clip declaring none is an ordinary shipped shape rather than a defect.
+	// Placed below the record bail-out, a body whose attack clip authors no contact record could
+	// raise its counter by being hit and never clear it by swinging — permanently knockback-immune,
+	// which inverts the very loop this reproduces. The batch decision is the same trap: a frame too
+	// short to walk still advanced the clip.
+	//
+	// Unguarded, like retail's: it asks on every frame past the cycle, and zeroing an already-zero
+	// counter is not an event.
+	if (Phase.Cycle >= FElysiumCombatCharacter::MeleeSwingCompletionPercent)
+	{
+		Attacker->ClearHitBuildup();
+	}
+
 	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
 	if (Embodiment == nullptr)
 	{
@@ -2519,6 +2539,17 @@ void FElysiumWeapon::AdvanceSwingContact(float DeltaSeconds)
 				// The mark goes down BEFORE the commit, and across every record sharing this one's
 				// window: a contact that kills its victim must still count as this swing's one hit.
 				ElysiumSwing::MarkHit(*Records, Index, Hit, Swing.RecordHits);
+				// The victim's hit-buildup counter, raised by ANY attacker's landed hit — this is the
+				// site retail calls on the victim with the attacker passed and never read. It sits
+				// here rather than inside the contact because retail raises it on the hit landing,
+				// not on the reaction it selects: a hit that is blocked still counts.
+				Victim->RaiseHitBuildup();
+				// WHICH record reached this body, stamped per contact rather than per swing: the
+				// knockback the victim answers with is authored on the record, so a contact that
+				// could not name its own would have no candidate table to read. The mark above is
+				// spread across every record sharing the window, but the one that LANDED is this
+				// one, and it is the one whose table applies.
+				Contact.RecordIndex = Index;
 				MeleeContact(*Attacker, *Victim, Contact);
 			}
 		}
@@ -2589,6 +2620,10 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	// Both callbacks fire on a blocked contact, and both run BEFORE the damage test below: retail's
 	// blocked path plays its reactions and only then asks whether positive damage remains
 	// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
+	// Armed by the knockback branch below and spent past the health commit — see there for why
+	// the two halves of this contact sit on opposite sides of it.
+	bool bKnockbackPending = false;
+
 	if (WasMeleeBlocked(Attacker, Victim, DefenderReaction))
 	{
 		const double Now = World->NowSeconds();
@@ -2661,28 +2696,36 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 		// --- The grounded knockback ---------------------------------------------------------------
 		// "A stronger unblocked result takes the separate normal-hit or knockback callbacks"
 		// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions"), so this is the sibling
-		// branch of the blocked callbacks above and sits at the same point in the contact order. It
-		// therefore runs BEFORE the damage below for the same reason they do — and it has to, because
-		// the base-channel hold it takes is what makes the flinch the damage commits yield to it
-		// rather than replace a knockback already on screen.
+		// branch of the blocked callbacks above — but it does NOT sit at the same point in the
+		// contact order, and the difference is recovered rather than chosen.
 		//
-		// **SEAM — grounded cells only.** The nine-activity flying chain and the launch impulse are
-		// the other half of this outcome, and the impulse's magnitude, direction and mechanism are
-		// the master roadmap's `RE-K5`. Nothing here moves the victim; the pose and the facing snap
-		// it needs are what is reproduced.
+		// **The blocked callbacks run before the health commit; the knockback runs after it.**
+		// `CBaseCombatWeapon::FUN_102579F0` puts its two blocked slots ahead of
+		// `DispatchTraceAttack` and its knockback slots behind it. That ordering is load-bearing:
+		// it is the whole of why a killing blow is never knocked back — the health commit has
+		// already run and the victim reads dead by the time eligibility is asked. So the branch is
+		// only ARMED here, and the call is made past the commit below.
+		//
+		// **SEAM — grounded cells only.** The nine-activity flying chain is the other half of this
+		// outcome. Its contract is recovered whole — a two-stage velocity assignment with a
+		// one-think delay, and a land/wall terminator — and reproducing it needs a motor verb that
+		// carries a ballistic body, which this seam does not have yet. Nothing here moves the
+		// victim; the pose and the facing snap it needs are what is reproduced.
 		//
 		// `Unclassified` is deliberately NOT a knockback: a margin table that never loaded names no
 		// band, and the classifier's own warning above already reported it.
-		KnockbackContact(Attacker, Victim);
+		//
+		bKnockbackPending = true;
 	}
 
-	// A record that is not damaging exits without damage. Blocked does NOT mean zero damage: what
+	// A record that is not damaging commits no damage. Blocked does NOT mean zero damage: what
 	// decides is the margin, and a positive one carries on even when a block reaction played.
-	if (Margin <= 0)
+	//
+	// It is a BRANCH rather than an early return, because the knockback below is not gated on the
+	// damage: retail's knockback block runs on any unblocked contact, and only the health commit
+	// stands between them.
+	if (Margin > 0)
 	{
-		return;
-	}
-
 	// --- The damage commit --------------------------------------------------------------------
 	int32 DamageInflicted = Margin;
 	// Potence guarantees a minimum on what the formula multiplies: the remaining lethality is floored
@@ -2712,10 +2755,48 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 
 	const FElysiumItemDef* Record = Data();
 	Victim.TakeDamage(Dmg, &Attacker, Record && Record->bDisallowFirearmsToBashing);
+	}
+
+	// --- The knockback, AFTER the health commit -------------------------------------------------
+	// Retail's own order, and the reason a killing blow is not thrown: the commit above may have
+	// killed this victim, and `IsKnockbackAllowed`'s alive term then refuses. A body killed by a
+	// swing dies where it stands and hands off to the corpse path.
+	//
+	// The consequence for the reaction channel is retail's too. The commit's own `DamageFlinch` has
+	// already played by now, so the knockback TAKES the base channel from it rather than the flinch
+	// yielding to a knockback already on screen — which is what `TASK_MELEE_KNOCKBACK` does when it
+	// clears the three flinch slots before restarting the ideal activity.
+	//
+	// The authored record that landed this contact rides in, because the cell the victim answers
+	// with is stated ON it rather than derived from the direction alone.
+	if (bKnockbackPending)
+	{
+		KnockbackContact(Attacker, Victim, ResolveSwingRecord(Attacker, Contact));
+	}
+}
+
+const FElysiumSwingRecord* FElysiumWeapon::ResolveSwingRecord(
+	const FElysiumCombatCharacter& Attacker, const FSwingContact& Contact) const
+{
+	if (Contact.RecordIndex == INDEX_NONE)
+	{
+		return nullptr;
+	}
+	IElysiumEmbodiment* Embodiment = World ? World->Embodiment() : nullptr;
+	if (Embodiment == nullptr)
+	{
+		return nullptr;
+	}
+	// The same key the walk read the array under: the records are filed against the ATTACKING
+	// body's own stem, carrying whatever the owning bank's sequence declared.
+	const TArray<FElysiumSwingRecord>* Records =
+		Embodiment->NpcClipSwings(Attacker.ModelStem(), Contact.ClipLabel);
+	return Records && Records->IsValidIndex(Contact.RecordIndex)
+		? &(*Records)[Contact.RecordIndex] : nullptr;
 }
 
 void FElysiumWeapon::KnockbackContact(FElysiumCombatCharacter& Attacker,
-	FElysiumCombatCharacter& Victim)
+	FElysiumCombatCharacter& Victim, const FElysiumSwingRecord* Record)
 {
 	// The player's knockback is a VIEW KICK — a separate reaction reading `KnockbackPreventTime` as
 	// its refractory — and that system is not built. Refusing it here rather than playing an NPC
@@ -2731,27 +2812,30 @@ void FElysiumWeapon::KnockbackContact(FElysiumCombatCharacter& Attacker,
 		return;
 	}
 
-	// **OMITTED — the hit-buildup counter.** Retail admits the knockback on
-	// `counter <= npc_hit_buildup_amount` (default 2) OR the swing record's `+0xBA == 2` marker. The
-	// rule is recovered (`docs/vtmb/combat-and-damage.md` → "Who may be knocked back"): one scalar
-	// on the victim, raised by any attacker's landed hit, cleared when the victim's own swing passes
-	// 0.8 of its cycle. It is not built yet, so the term is OMITTED rather than stood in for and
-	// every classified contact is admitted. Reported once so the divergence is observable rather
-	// than inferred from behaviour.
-	if (ShouldReportOnce(TEXT("knockback_hit_buildup_counter")))
-	{
-		UE_LOG(LogElysiumWeapon, Verbose,
-			TEXT("the knockback hit-buildup gate is omitted (recovered, not built) — every "
-				"hit/knockback margin admits a knockback"));
-	}
+	// **The hit-buildup gate.** Retail admits the knockback on `counter <= npc_hit_buildup_amount`
+	// OR the landing swing record's `+0xBA == 2` unconditional marker
+	// (`docs/vtmb/combat-and-damage.md` → "Who may be knocked back"). The two halves live in
+	// different places on purpose: the counter is a property of the VICTIM and the marker one of the
+	// ATTACK, so they are resolved here and handed to the rule as one answer.
+	//
+	// **RECOVERED — the raise happens before this read.** `CBaseCombatWeapon::FUN_102579F0` is the
+	// one body that both commits a melee blow and tests this counter, and its order is settled:
+	// `DispatchTraceAttack` — the damage commit, and the chain the only increment site
+	// (`0x1029F800`) hangs off — runs well before the slot-326 buildup test near its tail, and no
+	// increment appears anywhere in that function. So the counter a blow tests already carries that
+	// blow. With the default of `2` a victim is thrown on two hits and stands its ground on the
+	// third, which is the widely reported "about two hits and then the NPC stops flying".
+	const bool bUnconditional = Record != nullptr
+		&& Record->Ba == ElysiumReactions::KnockbackUnconditionalMarker;
+	const bool bBuildupAdmits = bUnconditional
+		|| Victim.HitBuildupCount <= FElysiumCombatCharacter::HitBuildupAdmitAtOrBelow;
 
-	// Eligibility. `IsAliveForCombat` is retail's own dead-victim refusal, which it spells as
+	// Eligibility, whole. `IsAliveForCombat` is retail's own dead-victim refusal, which it spells as
 	// `Health == Max_Health` over damage-taken; the template half is the authored
-	// `General/Disallow_Knockbacks` that zombies, cabbies and the tutorial cast wear. Retail's one
-	// remaining term, the `CNPC_VTzimisceRunner` class bypass, is omitted — named on
-	// `ElysiumReactions::IsKnockbackAllowed`.
+	// `General/Disallow_Knockbacks` that zombies, cabbies and the tutorial cast wear; and the class
+	// bypass is the `CNPC_VTzimisceRunner` virtual, which skips both of the others.
 	if (!ElysiumReactions::IsKnockbackAllowed(IsAliveForCombat(Victim),
-		Victim.DisallowsKnockbacks()))
+		Victim.DisallowsKnockbacks(), bBuildupAdmits, Victim.BypassesKnockbackEligibility()))
 	{
 		UE_LOG(LogElysiumWeapon, Verbose,
 			TEXT("%s -> %s hit/knockback: %s is not eligible to be knocked back"),
@@ -2764,16 +2848,43 @@ void FElysiumWeapon::KnockbackContact(FElysiumCombatCharacter& Attacker,
 	ElysiumReactions::BuildKnockback(
 		ElysiumReactions::KnockbackAwayFrom(Attacker.Origin, Victim.Origin), VictimYaw, Knockback);
 
-	const TCHAR* const Activity = Knockback.Activity();
-	if (Activity == nullptr)
+	// --- The cell, off the attack's own authored candidate table ------------------------------
+	// Retail selects out of the swing record's four direction buckets — up to four candidates each,
+	// rotated by the record's `+0xB8` byte, one drawn with `RandomInt`
+	// (`docs/vtmb/combat-and-damage.md` → "The authored table lives in the swing record"). The
+	// candidate NAME is the answer: it already states its own size, height and direction, which is
+	// how the `SMALL` family and the two `LOW_BACK` cells are reached at all.
+	//
+	// The draw is the session's own `Reaction` stream — the same one the flinch's coin and jitter
+	// and the shared reaction path's weighted-variant pick take, because they are one family.
+	FString Activity;
+	const bool bAuthored = !Knockback.bFallbackCell && Record != nullptr
+		&& ElysiumReactions::SelectKnockbackActivity(*Record, Knockback.Direction,
+			ElysiumRng::Stream(EElysiumRngStream::Reaction), Activity);
+	if (!bAuthored)
 	{
-		// Unreachable while the stand-in answers NORMAL/HIGH, and it must stay unreachable: `LOW` is
-		// authored on the `BACK` direction alone, so a selector that produced any other combination
-		// would be asking 155 bodies for a clip none of them carries.
-		UE_LOG(LogElysiumWeapon, Warning,
-			TEXT("%s -> %s selected a knockback cell the corpus does not author (relative yaw %.1f)"),
-			*Attacker.DebugString(), *Victim.DebugString(), Knockback.RelativeYawDegrees);
-		return;
+		// Retail's own no-list fallback, and three things reach it: a degenerate classification, a
+		// contact carrying no record, and a record whose rotation byte or selected bucket states
+		// nothing (639 records fill fewer than four buckets). None is a defect — each is a shape the
+		// shipped data has — so this is Verbose and keyed by the attacking clip rather than warned.
+		Activity = ElysiumReactions::FallbackGroundedKnockbackActivity;
+		// The key names all THREE routes, because the message does. Keying only on
+		// record-versus-no-record folded the degenerate-classification case in with the
+		// no-rotation one, so the first coincident-origin contact on a body silenced every later
+		// contact whose record genuinely states no rotation — 639 shipped records.
+		const TCHAR* const Route = Knockback.bFallbackCell ? TEXT("degenerate")
+			: Record != nullptr ? TEXT("norotation") : TEXT("norecord");
+		if (ShouldReportOnce(FString::Printf(TEXT("kbtable:%s@%s"), *Attacker.ModelStem(), Route)))
+		{
+			UE_LOG(LogElysiumWeapon, Verbose,
+				TEXT("%s: a hit/knockback resolved no authored candidate (%s) and took the no-list "
+					"fallback cell '%s'"),
+				*DebugString(),
+				Knockback.bFallbackCell ? TEXT("degenerate classification")
+					: Record != nullptr ? TEXT("the record states no rotation or an empty bucket")
+					: TEXT("the contact carries no swing record"),
+				ElysiumReactions::FallbackGroundedKnockbackActivity);
+		}
 	}
 
 	// The yaw snap, BEFORE the clip is asked for, which is retail's own order: the authored cell is a
@@ -2794,8 +2905,14 @@ void FElysiumWeapon::KnockbackContact(FElysiumCombatCharacter& Attacker,
 	// `..._MELEESHARED_ONEHAND` spelling — a stated literal, not an inferred append. The corpus
 	// authors that spelling for the OLDER twelve knockback labels only; the ten bare cells exist bare
 	// on 155 bodies and suffixed on none (`docs/vtmb/animation_and_movers.md` § "The knockback and
-	// death corpus"). So an armed body's translated answer resolves nothing, and the probe's fourth
-	// rung — the original request — is the only thing that reaches the clip.
+	// death corpus"). So for a bare cell an armed body's translated answer resolves nothing, and the
+	// probe's fourth rung — the original request — is the only thing that reaches the clip.
+	//
+	// **Both halves of that now matter, because the authored table reaches both vocabularies.** A
+	// candidate naming one of the older twelve labels DOES have a suffixed spelling to translate
+	// into, so the probe's earlier rungs answer it; one naming a bare cell falls to the fourth rung
+	// as before. The flag serves both, which is why it is unconditional rather than keyed on which
+	// vocabulary the candidate came from.
 	Reaction.bAllowFallbackLadder = true;
 	// No steering angle. A knockback is four authored cells, not a fan: the direction is IN the cell
 	// name and the yaw snap above is what aims it, so `hit_yaw` stays at its resting value the way
@@ -2816,10 +2933,12 @@ void FElysiumWeapon::KnockbackContact(FElysiumCombatCharacter& Attacker,
 	Victim.HoldBaseForMeleeReaction(World->NowSeconds() + static_cast<double>(Held));
 
 	UE_LOG(LogElysiumWeapon, Verbose,
-		TEXT("%s -> %s knocked back: %s (away yaw %.1f, relative %.1f, snapped to %.1f%s, holds %.3f s)"),
-		*Attacker.DebugString(), *Victim.DebugString(), Activity, Knockback.AwayWorldYawDegrees,
-		Knockback.RelativeYawDegrees, Knockback.SnapYawDegrees,
-		Knockback.bFallbackCell ? TEXT(", degenerate -> fallback cell") : TEXT(""), Held);
+		TEXT("%s -> %s knocked back: %s (%s, away yaw %.1f, relative %.1f, snapped to %.1f%s, "
+			"holds %.3f s)"),
+		*Attacker.DebugString(), *Victim.DebugString(), *Activity,
+		bAuthored ? TEXT("authored candidate") : TEXT("no-list fallback"),
+		Knockback.AwayWorldYawDegrees, Knockback.RelativeYawDegrees, Knockback.SnapYawDegrees,
+		Knockback.bFallbackCell ? TEXT(", degenerate classification") : TEXT(""), Held);
 }
 
 void FElysiumWeapon::RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCombatCharacter& Victim,

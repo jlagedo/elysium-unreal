@@ -992,10 +992,10 @@ bool FElysiumCastRun::FinishCourse()
 				TEXT("frame of this course is an idle rather than the gait it is a course of"),
 				StillCut, Totals.PeakSpeed2D));
 		}
-		const uint32 Wanted = 1u << static_cast<uint32>(Course.ExpectGait);
+		const uint64 Wanted = 1ull << static_cast<uint32>(Course.ExpectGait);
 		if ((Totals.CodesSeen & Wanted) == 0)
 		{
-			Refuse(FString::Printf(TEXT("no frame reached %s; the codes seen were 0x%x"),
+			Refuse(FString::Printf(TEXT("no frame reached %s; the codes seen were 0x%llx"),
 				ElysiumAnimIntent::ActivityName(Course.ExpectGait), Totals.CodesSeen));
 		}
 		if (NoSlide.AtSpeedFrames < MinAtSpeedFrames)

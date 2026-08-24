@@ -196,6 +196,12 @@ public:
 
 	virtual bool DisallowsKnockbacks() const override { return bDisallowKnockbacks; }
 
+	// Retail's slot-400 class bypass. Exactly one class in the game overrides the stub, and this is
+	// the leaf that knows its own registered classname, so the test is the classname and nothing
+	// else — no template key, no authored flag, no per-body state
+	// (`docs/vtmb/combat-and-damage.md` -> "Who may be knocked back").
+	virtual bool BypassesKnockbackEligibility() const override;
+
 	// Retail's NPC override saves the complete incoming damage packet before composing the base
 	// transaction, and a surviving positive hit remembers its attacker. This is that record; the
 	// schedule/senses consumers that read it arrive with the combat AI.

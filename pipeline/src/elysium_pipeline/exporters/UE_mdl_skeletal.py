@@ -226,6 +226,28 @@ def unreal_swings(records):
     } for r in records]
 
 
+def unreal_envelopes(records):
+    """`mdl_skel.read_envelopes` stated in centimetres -> the clip sidecar's `envelopes` rows.
+
+    **The corners do NOT take `_conv_pos`, and that is the whole of this function.** An envelope's
+    two corners are not a point in the model's frame: the cast-arm selector derives three scalars
+    against the enemy first -- the XY-only distance to its AABB centre, the signed height
+    difference, and its half-extents -- and tests the resulting box against these records, so the
+    axes are REACH DISTANCE, LATERAL TOLERANCE and VERTICAL OFFSET
+    (`docs/vtmb/combat-and-damage.md` -> "The cast arm").
+
+    All three are distances, so all three take the inch-to-centimetre scale and nothing else. The
+    Y reflection `_conv_pos` also applies would mirror the lateral axis -- which is symmetric about
+    zero, so the mirrored record would compare equal against every symmetric enemy box and
+    disagree with nothing that could report it. That is why this is a separate converter rather
+    than a second caller of the positional one.
+    """
+    return [{
+        "min": [round(float(c) * S.INCH_TO_CM, 4) for c in lo],
+        "max": [round(float(c) * S.INCH_TO_CM, 4) for c in hi],
+    } for lo, hi in records]
+
+
 def _qmul(a, b):
     """Hamilton product, matching `FUN_1010a450` and Unreal's `FQuat::operator*` convention."""
     ax, ay, az, aw = a

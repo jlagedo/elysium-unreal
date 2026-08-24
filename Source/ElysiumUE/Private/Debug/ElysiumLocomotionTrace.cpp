@@ -96,8 +96,12 @@ void FTotals::Observe(const FElysiumLocomotionSample& Sample,
 {
 	const EElysiumAnimActivityCode Code =
 		ElysiumAnimIntent::ActivityCode(Selection.RequestedActivity);
+	// `1ull`, not `1u`: the enum reaches past ordinal 31 and a 32-bit shift there is undefined
+	// behaviour rather than a value that merely wraps.
+	static_assert(static_cast<uint32>(EElysiumAnimActivityCode::Count) <= 64,
+		"EElysiumAnimActivityCode has outgrown the CodesSeen bitmask; widen it or stop using one");
 	CodesSeen |= (Code != EElysiumAnimActivityCode::Unknown)
-		? (1u << static_cast<uint32>(Code)) : 0u;
+		? (1ull << static_cast<uint32>(Code)) : 0ull;
 
 	if (Selection.Outcome == EElysiumAnimOutcome::Resolved)
 	{
@@ -139,7 +143,16 @@ void FTotals::Write(FElysiumChannelRecorder& Recorder) const
 	Recorder.SetRun(TEXT("peak_speed2d"), PeakSpeed2D);
 	Recorder.SetRun(TEXT("act_resolved"), ResolvedFrames);
 	Recorder.SetRun(TEXT("act_fallbacks"), FallbackFrames);
-	Recorder.SetRun(TEXT("act_codes"), static_cast<int32>(CodesSeen));
+	// **One channel, as a double, and it is exact.** The channel's own storage is a double, which
+	// represents every integer below 2^53 without loss — and the mask needs one bit per activity
+	// code, which `Count` bounds well under that. So the whole set crosses as a single number the
+	// comparator can diff.
+	//
+	// The `int32` this used to be is what would NOT work: bit 31 is a real code now, so the masked
+	// value exceeds `INT32_MAX` and would land in the manifest negative.
+	static_assert(static_cast<uint32>(EElysiumAnimActivityCode::Count) <= 53,
+		"the activity-code mask no longer fits a double exactly; it can no longer ride one channel");
+	Recorder.SetRun(TEXT("act_codes"), static_cast<double>(CodesSeen));
 
 	Recorder.SetMeta(TEXT("anim_stem"), Stem);
 	Recorder.SetMeta(TEXT("anim_banks"), JoinedTraceIdentities(Banks));

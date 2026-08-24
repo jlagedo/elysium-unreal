@@ -1211,6 +1211,49 @@ public:
 	// is the PLAYER view kick's refractory and is read by nothing on this path.
 	virtual bool DisallowsKnockbacks() const { return false; }
 
+	// Retail's class-level bypass on vtable slot 400: a stub returning 0 for every class in the game
+	// except `CNPC_VTzimisceRunner`, which returns 1 and skips BOTH the template key and the
+	// dead-victim refusal below it (`docs/vtmb/combat-and-damage.md` -> "Who may be knocked back").
+	//
+	// A class answer, not a per-body one, so the leaf that knows its own classname answers it.
+	virtual bool BypassesKnockbackEligibility() const { return false; }
+
+	// **The hit-buildup counter — one scalar, on the VICTIM, per victim** (retail
+	// `m_iHitBuildupCount`, `+0x6064`). A knockback is admitted while it is at or below
+	// `npc_hit_buildup_amount`, and this is the observable behind the widely reported "about two
+	// hits and then the NPC stops flying" feel.
+	//
+	// Its whole ledger is four sites, and the shape of them is the recovered rule rather than a
+	// convenience: zeroed at construction, raised by ANY attacker's landed hit, tested by
+	// `ElysiumReactions::IsKnockbackAllowed`, and zeroed again when this body's OWN swing passes
+	// `melee_swing_completion_percent` of its cycle. Both the raise and the test are called on the
+	// victim with the attacker passed as an argument neither body ever reads, so **two attackers
+	// working one target share that target's counter** and there is no per-attacker keying anywhere.
+	// The loop it produces is "you are knocked around until you fight back".
+	//
+	// Live combat state like `MeleeRolls` and `MeleeReactionHoldsBaseUntil` beside it: it rides no
+	// save block, and neither does retail's — nothing else in the image reads it and it is not
+	// persisted.
+	int32 HitBuildupCount = 0;
+
+	// Retail's `npc_hit_buildup_amount`, whose default reads `"2"` in the shipped image. Not a cvar
+	// here: this runtime's debug surface is Cog rather than a console variable per recovered
+	// constant, and nothing authored ever moves it.
+	static constexpr int32 HitBuildupAdmitAtOrBelow = 2;
+
+	// Retail's `melee_swing_completion_percent`, default `"0.8"`. The cycle a body's own swing has
+	// to pass for the counter above to clear.
+	static constexpr float MeleeSwingCompletionPercent = 0.8f;
+
+	// A landed hit on this body. Called on the VICTIM; the attacker is not recorded, because retail
+	// does not record it either.
+	void RaiseHitBuildup() { ++HitBuildupCount; }
+
+	// This body's own swing passed the completion cycle, so it has fought back. Idempotent — the
+	// walk asks every batched frame once the cycle is past, and retail's own site is equally
+	// unguarded because zeroing an already-zero counter is not an event.
+	void ClearHitBuildup() { HitBuildupCount = 0; }
+
 	// `WasMeleeBlocked`'s player branch (`docs/vtmb/combat-and-damage.md` § "Block and stagger
 	// reactions"): "a player counts as actively blocking while its ideal activity is `ACT_PREBLOCK`
 	// or `ACT_BLOCK`". Only the player leaf can answer — a non-player defender is classified by its

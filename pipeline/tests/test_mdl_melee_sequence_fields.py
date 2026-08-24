@@ -26,7 +26,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from elysium_pipeline.exporters import npc_export
+from elysium_pipeline.exporters import UE_mdl_skeletal as UEK, npc_export
 from elysium_pipeline.formats import mdl_skel
 
 SEQ_STRIDE = 764
@@ -34,6 +34,10 @@ ANIM_STRIDE = 72
 BONE_STRIDE = 160
 SWING_STRIDE = 188
 FLT_MAX = struct.unpack("<f", struct.pack("<I", 0x7F7FFFFF))[0]
+#: `low_reach`@716's own unset marker, and NOT `reach`@720's. The two fields are adjacent and the
+#: markers are opposite ends of the float range, which is the trap this constant exists to pin.
+FLT_MIN = struct.unpack("<f", struct.pack("<I", 0x00800000))[0]
+ENVELOPE_STRIDE = 24
 
 _ANIM_BASE = 512
 _BONE_BASE = 1300
@@ -42,7 +46,12 @@ _SEQ_BASE = 2048
 _SEQ_CAPACITY = 4
 _SWING_BASE = 8192
 _SWING_CAPACITY = 4
-_STRINGS = _SWING_BASE + _SWING_CAPACITY * SWING_STRIDE
+#: The envelope array sits after the swing array and before the strings. It is a SEPARATE arena
+#: because the two arrays are not parallel: `andrei`'s `JumpFromBlood_Attack` declares 459
+#: envelopes against 17 contact records for the same clip.
+_ENVELOPE_BASE = _SWING_BASE + _SWING_CAPACITY * SWING_STRIDE
+_ENVELOPE_CAPACITY = 4
+_STRINGS = _ENVELOPE_BASE + _ENVELOPE_CAPACITY * ENVELOPE_STRIDE
 
 #: Where a `swingcentreindex` read as a file offset instead of a descriptor-relative one would
 #: land. The gap between the descriptor array and the swing array is kept clear of every other
@@ -74,13 +83,16 @@ def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
            reach=FLT_MAX, blocked="ACT_BLOCKED_REACTION_LEFT", blocked_index=None,
            swings=(), swing_count=None, swing_index=None, decoy_swing=False,
            mask=-1, dodge=None, dodge_index=None, chain=None, chain_index=None,
-           chain_alt=None, window=None, siblings=()):
+           chain_alt=None, window=None, siblings=(),
+           low_reach=FLT_MIN, envelopes=(), envelope_count=None, envelope_index=None):
     """A one-animation v2531 image `local_sequences` can walk, carrying one authored sequence
     plus any `siblings` a chain link resolves against.
 
     `blocked_index` overrides the stored `szblockedreactionindex` outright, which is how the
     unset marker and an index off the end of the image are exercised; `dodge_index` and
-    `chain_index` do the same for the chain half's own name indices. `swing_count` and
+    `chain_index` do the same for the chain half's own name indices. `low_reach` writes `+0x2CC`
+    directly, so a case states the `FLT_MIN` marker or a value; `envelope_count`/`envelope_index`
+    override the envelope array's declaration the way the swing pair's overrides do. `swing_count` and
     `swing_index` override the swing array's declaration the same way. `decoy_swing` plants a
     second, differently-windowed record at the offset an absolute reading of `swingcentreindex`
     would resolve to. A `siblings` entry is a bare label with the whole custom block unset, which
@@ -110,7 +122,8 @@ def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
 
     def write_seq(index, seq_label, *, seq_activity="", seq_reach=FLT_MAX, blocked_at=-1,
                   buttons=-1, dodge_at=-1, chain_at=-1, chain_alt_at=-1,
-                  seq_window=WINDOW_DEFAULT, swings_declared=(0, 0)):
+                  seq_window=WINDOW_DEFAULT, swings_declared=(0, 0),
+                  seq_low_reach=FLT_MIN, envelopes_declared=(0, 0)):
         sb = _SEQ_BASE + index * SEQ_STRIDE
         struct.pack_into("<i", image, sb, intern(seq_label) - sb)
         if seq_activity:
@@ -124,6 +137,8 @@ def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
         struct.pack_into("<f", image, sb + 720, seq_reach)
         struct.pack_into("<i", image, sb + 740, blocked_at)
         struct.pack_into("<ii", image, sb + 708, *swings_declared)
+        struct.pack_into("<f", image, sb + 716, seq_low_reach)      # +0x2CC
+        struct.pack_into("<ii", image, sb + 700, *envelopes_declared)  # +0x2BC / +0x2C0
         struct.pack_into("<i", image, sb + 724, buttons)   # +0x2D4
         # +0x2D8, the resolved DODGE enum: -1 on all 14,012 shipped descriptors, filled by the
         # DLL from the name beside it, exactly as +0x2E0 is filled from +0x2E4.
@@ -132,6 +147,9 @@ def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
         struct.pack_into("<i", image, sb + 744, chain_at)      # +0x2E8
         struct.pack_into("<i", image, sb + 748, chain_alt_at)  # +0x2EC
         struct.pack_into("<3f", image, sb + 752, *seq_window)  # +0x2F0 / +0x2F4 / +0x2F8
+
+    def write_envelope(record, corners):
+        struct.pack_into("<6f", image, record, *corners[0], *corners[1])
 
     def write_swing(record, spec):
         struct.pack_into("<2f", image, record, *spec["window"])
@@ -150,6 +168,7 @@ def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
         image[record + 0xBA] = spec["ba"]
 
     assert len(swings) <= _SWING_CAPACITY, swings
+    assert len(envelopes) <= _ENVELOPE_CAPACITY, envelopes
     if blocked_index is None:
         blocked_index = intern(blocked) - _SEQ_BASE if blocked else -1
     if dodge_index is None:
@@ -162,11 +181,17 @@ def _image(*, label="fists_attack_JabLeft", activity="ACT_MELEE_ATTACK",
               seq_window=WINDOW_DEFAULT if window is None else window,
               swings_declared=(len(swings) if swing_count is None else swing_count,
                                (_SWING_BASE - _SEQ_BASE) if swing_index is None
-                               else swing_index))
+                               else swing_index),
+              seq_low_reach=low_reach,
+              envelopes_declared=(len(envelopes) if envelope_count is None else envelope_count,
+                                  (_ENVELOPE_BASE - _SEQ_BASE) if envelope_index is None
+                                  else envelope_index))
     for position, sibling in enumerate(siblings, start=1):
         write_seq(position, sibling)
     for index, spec in enumerate(swings):
         write_swing(_SWING_BASE + index * SWING_STRIDE, spec)
+    for index, corners in enumerate(envelopes):
+        write_envelope(_ENVELOPE_BASE + index * ENVELOPE_STRIDE, corners)
     if decoy_swing:
         write_swing(_DECOY_BASE, _swing(window=(0.9, 0.95), bone=2, a=(-1.0, -1.0, -1.0),
                                         knockback=("ACT_DECOY", None, None, None)))
@@ -215,6 +240,75 @@ class MeleeSequenceDescriptorTests(unittest.TestCase):
         self.assertEqual((seq.reach, seq.blocked_reaction), (None, None))
         self.assertEqual(seq.swings, ())
         self.assertIsNone(seq.combo)
+
+
+class LowReachTests(unittest.TestCase):
+    """`low_reach`@716 — the near edge of the band whose far edge is `reach`@720."""
+
+    def test_the_unset_marker_is_flt_min_and_not_flt_max(self):
+        # The whole reason this field needs its own reader. `FLT_MIN` is a finite POSITIVE float, so
+        # a reader that copied `read_reach`'s `>= FLT_MAX` test would report 13,496 descriptors as
+        # stating a near edge of 1.18e-38 — a band every distance clears, silently.
+        self.assertIsNone(_sequence(low_reach=FLT_MIN).low_reach)
+        self.assertIsNotNone(_sequence(low_reach=FLT_MAX).low_reach)
+
+    def test_a_stated_edge_is_carried_in_source_units(self):
+        self.assertAlmostEqual(_sequence(low_reach=48.5).low_reach, 48.5, places=4)
+
+    def test_a_genuine_authored_zero_is_kept(self):
+        # `werewolf`/`werewolf_damaged` `claw_attack_close` state exactly this against a reach of
+        # 114.9. A near edge of zero is a band that starts at the body, which is a real claim —
+        # unlike a zero FAR edge, which `read_reach` reads as unstated because it would be a swing
+        # that can never reach.
+        self.assertEqual(_sequence(low_reach=0.0).low_reach, 0.0)
+
+    def test_the_two_edges_are_independent(self):
+        # 72 descriptors state a reach with no low edge and 14 state a low edge with reach unset, so
+        # neither field may be read as gating the other.
+        reach_only = _sequence(reach=120.0, low_reach=FLT_MIN)
+        self.assertAlmostEqual(reach_only.reach, 120.0, places=4)
+        self.assertIsNone(reach_only.low_reach)
+        low_only = _sequence(reach=FLT_MAX, low_reach=30.0)
+        self.assertIsNone(low_only.reach)
+        self.assertAlmostEqual(low_only.low_reach, 30.0, places=4)
+
+
+class EnvelopeTests(unittest.TestCase):
+    """The attack-envelope array at `numenvelopes`@700 / `envelopeindex`@704."""
+
+    CORNERS = (((10.0, -4.0, -8.0), (40.0, 4.0, 8.0)),
+               ((12.0, -5.0, -9.0), (44.0, 5.0, 9.0)))
+
+    def test_records_decode_as_corner_pairs(self):
+        self.assertEqual(_sequence(envelopes=self.CORNERS).envelopes, self.CORNERS)
+
+    def test_a_sequence_declaring_none_carries_none(self):
+        self.assertEqual(_sequence().envelopes, ())
+
+    def test_the_index_is_descriptor_relative(self):
+        # Same bound `read_swing_records` requires. An absolute reading would resolve somewhere
+        # inside the descriptor array and decode neighbouring fields as floats.
+        absolute = _sequence(envelopes=self.CORNERS, envelope_index=_ENVELOPE_BASE)
+        self.assertNotEqual(absolute.envelopes, self.CORNERS)
+
+    def test_an_implausible_count_yields_nothing(self):
+        # The seven single-`idle` scenery models read count 768 at offset 768 — the descriptor tail
+        # running into the string table. Refused rather than partly believed.
+        self.assertEqual(_sequence(envelopes=self.CORNERS, envelope_count=768).envelopes, ())
+
+    def test_an_array_off_the_end_of_the_image_yields_nothing(self):
+        self.assertEqual(
+            _sequence(envelopes=self.CORNERS, envelope_index=1 << 24).envelopes, ())
+
+    def test_a_non_positive_index_yields_nothing(self):
+        self.assertEqual(_sequence(envelopes=self.CORNERS, envelope_index=0).envelopes, ())
+
+    def test_the_arrays_are_not_parallel(self):
+        # The load-bearing fact about this array: it is a different structure with a different job,
+        # and a consumer that walked them together would index one off the other's count.
+        seq = _sequence(swings=(_swing(),), envelopes=self.CORNERS)
+        self.assertEqual(len(seq.swings), 1)
+        self.assertEqual(len(seq.envelopes), 2)
 
 
 class ComboChainTests(unittest.TestCase):
@@ -541,12 +635,77 @@ class ClipSidecarRowTests(unittest.TestCase):
                           encoding="utf-8") as f:
                     return json.load(f)
 
+    def test_the_envelope_corners_are_not_positionally_converted(self) -> None:
+        # **The negative that matters.** An envelope's corners are not a point in the model's frame:
+        # the axes are reach distance, lateral tolerance and vertical offset. Putting them through
+        # the positional projection would apply the Y reflection as well as the scale, mirroring an
+        # axis that is symmetric about zero — so the mirrored record would compare equal against
+        # every symmetric enemy box and disagree with nothing that could report it.
+        #
+        # The check is a scale and ONLY a scale, asserted on a corner whose Y is non-zero and
+        # asymmetric so a sign flip cannot hide.
+        corners = (((10.0, -3.0, -8.0), (40.0, 7.0, 8.0)),)
+        meta = npc_export._clip_meta(_sequence(envelopes=corners))
+        cm = npc_export.INCH_TO_CM
+        self.assertEqual(meta["envelopes"], [{
+            "min": [round(10.0 * cm, 4), round(-3.0 * cm, 4), round(-8.0 * cm, 4)],
+            "max": [round(40.0 * cm, 4), round(7.0 * cm, 4), round(8.0 * cm, 4)],
+        }])
+        # And the same corner through the positional path, to name what was avoided.
+        self.assertNotEqual(
+            meta["envelopes"][0]["min"][1],
+            round(UEK._conv_pos((10.0, -3.0, -8.0))[1], 4))
+
+    def test_a_low_reach_converts_to_centimetres_and_keeps_a_zero(self) -> None:
+        self.assertAlmostEqual(
+            npc_export._clip_meta(_sequence(low_reach=30.0))["low_reach_cm"],
+            round(30.0 * npc_export.INCH_TO_CM, 4), places=4)
+        # A stated zero is a band that starts at the body, and it has to survive the seam.
+        self.assertEqual(npc_export._clip_meta(_sequence(low_reach=0.0))["low_reach_cm"], 0.0)
+        self.assertNotIn("low_reach_cm", npc_export._clip_meta(_sequence(low_reach=FLT_MIN)))
+
+    def test_a_low_reach_lands_behind_the_four_melee_columns(self) -> None:
+        # 14 shipped descriptors state a low edge with `reach` unset, so every column before this
+        # one has to be held open — and each with its own placeholder, because the readers differ.
+        written = self._slice({"swing": npc_export._clip_meta(
+            _sequence(label="swing", reach=FLT_MAX, blocked=None, low_reach=12.0))})
+        row = written["clips"]["swing"]
+        self.assertEqual(len(row), 12)
+        self.assertIsNone(row[7])            # reach_cm — read guarded against a null
+        self.assertEqual(row[8], "")         # blocked_reaction — read as a string
+        self.assertEqual(row[9], [])         # swings — read as an array
+        self.assertIsNone(row[10])           # combo — read guarded against a null
+        self.assertAlmostEqual(row[11], round(12.0 * npc_export.INCH_TO_CM, 4), places=4)
+
+    def test_envelopes_land_last_and_hold_every_column_open(self) -> None:
+        written = self._slice({"swing": npc_export._clip_meta(
+            _sequence(label="swing", reach=FLT_MAX, blocked=None,
+                      envelopes=(((1.0, -2.0, -3.0), (4.0, 2.0, 3.0)),)))})
+        row = written["clips"]["swing"]
+        self.assertEqual(len(row), 13)
+        self.assertIsNone(row[7])
+        self.assertEqual(row[8], "")
+        self.assertEqual(row[9], [])
+        self.assertIsNone(row[10])
+        self.assertIsNone(row[11])           # low_reach_cm — the same null guard as reach_cm
+        self.assertEqual(len(row[12]), 1)
+
+    def test_a_clip_stating_neither_new_field_is_unchanged(self) -> None:
+        # The compatibility direction: adding two columns must not lengthen a row that states
+        # nothing in them, or every existing slice would re-write for no reason.
+        written = self._slice({"swing": npc_export._clip_meta(
+            _sequence(label="swing", reach=64.0, blocked=None))})
+        self.assertEqual(len(written["clips"]["swing"]), 8)
+
     def test_a_plain_clip_stops_at_fade(self) -> None:
         written = self._slice({"idle": npc_export._clip_meta(
             _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None))})
+        # The column names, in the order a reader indexes them by. New columns APPEND: the index of
+        # an existing one is a contract with every slice already on disk.
         self.assertEqual(written["fields"],
                          ["owner", "activity", "weight", "flags", "frames", "fps", "fade",
-                          "reach_cm", "blocked_reaction", "swings", "combo"])
+                          "reach_cm", "blocked_reaction", "swings", "combo",
+                          "low_reach_cm", "envelopes"])
         self.assertEqual(written["clips"]["idle"], [0, 1, 3, 0, 21, 30.0, 0.2])
 
     def test_a_reach_without_a_reaction_adds_one_column(self) -> None:

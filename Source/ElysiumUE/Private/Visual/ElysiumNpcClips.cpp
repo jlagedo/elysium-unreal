@@ -135,6 +135,48 @@ namespace
 		return Dropped;
 	}
 
+	// The `envelopes` column: an array of `{min,max}` objects, each two three-float corners.
+	//
+	// Returns the number of rows it could not read, exactly as `ReadSwingRecords` does, and for the
+	// same reason: the column is this repository's own exporter product, so a row it cannot read is
+	// a pipeline defect and never an authored absence — the absence has its own (silent) shape,
+	// which is no column at all.
+	//
+	// **The corners are read verbatim.** They are already stated in the frame the cast arm's own
+	// derived query is built in, and their axes are reach distance / lateral tolerance / vertical
+	// offset rather than a position (`Public/ElysiumMeleeEnvelope.h`), so there is nothing here to
+	// convert and putting them through `ReadPointCm`'s sibling would be the defect that header
+	// exists to warn about.
+	int32 ReadEnvelopes(const TSharedPtr<FJsonValue>& Column, TArray<FElysiumMeleeEnvelope>& Out)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Rows = nullptr;
+		if (!Column.IsValid() || !Column->TryGetArray(Rows) || Rows == nullptr)
+		{
+			return 1;   // a stated column that is not an array
+		}
+		int32 Dropped = 0;
+		Out.Reserve(Rows->Num());
+		for (const TSharedPtr<FJsonValue>& RowValue : *Rows)
+		{
+			const TSharedPtr<FJsonObject>* Row = nullptr;
+			if (!RowValue.IsValid() || !RowValue->TryGetObject(Row) || Row == nullptr
+				|| !Row->IsValid())
+			{
+				++Dropped;
+				continue;
+			}
+			FElysiumMeleeEnvelope Envelope;
+			if (!ReadPointCm(*Row, TEXT("min"), Envelope.Min)
+				|| !ReadPointCm(*Row, TEXT("max"), Envelope.Max))
+			{
+				++Dropped;
+				continue;
+			}
+			Out.Add(Envelope);
+		}
+		return Dropped;
+	}
+
 	// The `combo` column: one object carrying the whole authored chain block. The exporter writes it
 	// WHOLE or not at all — `read_combo_chain` already answered "is any of this authored" — so a
 	// column that is stated and cannot be read is a pipeline defect and never an authored absence,
@@ -298,6 +340,7 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 	int32 Malformed = 0;
 	int32 DroppedSwings = 0;
 	int32 DroppedCombos = 0;
+	int32 DroppedEnvelopes = 0;
 	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*ClipObj)->Values)
 	{
 		const TArray<TSharedPtr<FJsonValue>>* Row = nullptr;
@@ -357,6 +400,24 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 		{
 			DroppedCombos += ReadComboChain((*Row)[10], Clip.Combo);
 		}
+		// Columns 11 and 12, the cast-arm selector's two inputs. Same trailing-and-optional contract
+		// again: a slice written before they existed ends at 10, and every such row reads as a
+		// sequence stating no near edge and no envelope — which all but 516 and all but 574 shipped
+		// descriptors respectively are anyway. What such a corpus loses is the cast arm's scoring,
+		// not a mis-read column.
+		//
+		// **The near edge is read against a NULL guard, never against zero.** Zero is a STATED value
+		// on this field — two shipped sequences author a band that starts at the body — so a numeric
+		// test would silently discard them, which is the trap `reach_cm`'s own zero-is-unstated rule
+		// sets for anyone assuming the two edges read alike.
+		if (Row->Num() > 11 && !(*Row)[11]->IsNull())
+		{
+			Clip.LowReachCm = static_cast<float>((*Row)[11]->AsNumber());
+		}
+		if (Row->Num() > 12 && !(*Row)[12]->IsNull())
+		{
+			DroppedEnvelopes += ReadEnvelopes((*Row)[12], Clip.Envelopes);
+		}
 		Clips.Add(Pair.Key, MoveTemp(Clip));
 	}
 	if (Malformed > 0)
@@ -382,6 +443,16 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 			TEXT("npc clips '%s': %d combo-chain block(s) dropped — those attacks chain nothing and "
 				"are not direction-selectable"),
 			*InStem, DroppedCombos);
+	}
+	if (DroppedEnvelopes > 0)
+	{
+		// And again, with its own consequence: the clip is usable and its swing still contacts, but
+		// the cast arm scores this candidate against fewer envelopes than the descriptor authored, so
+		// an NPC may rank an attack below one it should have preferred.
+		UE_LOG(LogElysiumClips, Warning,
+			TEXT("npc clips '%s': %d attack envelope(s) dropped — the cast arm scores those "
+				"candidates against an incomplete set"),
+			*InStem, DroppedEnvelopes);
 	}
 	return !Clips.IsEmpty();
 }
@@ -630,9 +701,24 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 						}
 					}
 				}
+				// **Both keys or the row is not a prop.** `Model` is what every lookup resolves by
+				// and `Eskm` is the animation container the body is built from — a row missing
+				// either names something that cannot be stood, so it is not indexed.
+				//
+				// It is REPORTED rather than dropped quietly. The exporter writes both on every row
+				// it emits, so a row missing one is a pipeline defect, and swallowing it turns a
+				// broken manifest into a prop that silently never appears.
 				if (!Entry.Model.IsEmpty() && !Entry.Eskm.IsEmpty())
 				{
 					Out.Add(Entry.Stem, MoveTemp(Entry));
+				}
+				else
+				{
+					UE_LOG(LogElysiumClips, Warning,
+						TEXT("npc index: %s row '%s' states %s — it names no body that can be "
+							"stood, so nothing will resolve it"),
+						Field, *Entry.Stem,
+						Entry.Model.IsEmpty() ? TEXT("no model") : TEXT("no eskm container"));
 				}
 			}
 		};

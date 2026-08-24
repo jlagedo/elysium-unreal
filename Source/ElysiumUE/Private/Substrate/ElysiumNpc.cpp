@@ -2633,6 +2633,16 @@ void FElysiumNpc::Activate()
 	NextThink = static_cast<float>(World ? World->NowSeconds() : 0.0);
 }
 
+bool FElysiumNpc::BypassesKnockbackEligibility() const
+{
+	// `CNPC_VTzimisceRunner` is the one class whose slot-400 virtual returns 1; every other class in
+	// the image keeps the stub. The classname is the whole test.
+	// Case-folded, like every other classname test in this runtime: `.ents` content spells a
+	// classname however it likes and the registry folds on the way in.
+	return Def != nullptr
+		&& Def->Classname.Equals(TEXT("npc_VTzimisceRunner"), ESearchCase::IgnoreCase);
+}
+
 void FElysiumNpc::OnRuntimeModelChanged()
 {
 	// The rebuild is FElysiumScriptedCharacter's; the A/B gate is this leaf's.

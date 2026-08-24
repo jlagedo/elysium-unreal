@@ -2488,10 +2488,15 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 		//
 		// Spot checks prove the rows that were argued over; this proves there is no row missing. A
 		// classifier answer with no state is what would leave a body in the reference pose with
-		// nothing in the log, so the enum is walked whole rather than sampled — the bound is the
-		// LAST enumerator, so a family added to the vocabulary joins this walk with it.
+		// nothing in the log, so the enum is walked whole rather than sampled.
+		//
+		// **The bound is the enum's own `Count`, and it has to be.** It was previously the literal
+		// `DieRagdoll`, which the comment described as "the last enumerator" — but the ten grounded
+		// knockback cells already sat past it, so the walk had silently stopped covering them. A
+		// sentinel cannot go stale that way, and every family added to the vocabulary now joins this
+		// walk with it.
 		using ElysiumAnimGraph::StateCanPlay;
-		for (uint8 Code = 0; Code <= static_cast<uint8>(EElysiumAnimActivityCode::DieRagdoll); ++Code)
+		for (uint8 Code = 0; Code < static_cast<uint8>(EElysiumAnimActivityCode::Count); ++Code)
 		{
 			const EElysiumAnimActivityCode Activity = static_cast<EElysiumAnimActivityCode>(Code);
 			const EElysiumGraphState State = StateForActivity(Activity);
