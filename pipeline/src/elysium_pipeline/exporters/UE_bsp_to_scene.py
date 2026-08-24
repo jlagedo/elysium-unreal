@@ -337,15 +337,20 @@ def write_lights(data, out_dir, base, sky=None):
 
 # --- env_sprite coronas: glow billboards at light sources -------------------
 
-def write_sprites(data, out_dir, base, idx, sky=None):
+def write_sprites(data, out_dir, base, idx, sky=None, ents=None):
     """Emit `<base>.sprites`: env_sprite glow billboards (the soft coronas VtMB places at
     lamps/bulbs). Each sprite's Sprite VMT `$basetexture` is decoded to `tex/spr_*.png`;
     one line per sprite: `png ox oy oz w_cm h_cm r g b amt orient sky`, where the world size is
     Source's `scale × textureSize` (inches → cm), `r g b`/`amt` are the entity's
     `rendercolor`/`renderamt` (additive tint), and orient is 0 (`vp_parallel`, full
     billboard) or 1 (`parallel_upright`, Y-axis only). `start_hidden` sprites are skipped
-    (entity I/O that would switch them on is not ported)."""
-    blocks = _parse_ent_blocks(read_lump(data, 0).decode("ascii", "replace"))
+    (entity I/O that would switch them on is not ported).
+
+    ``ents`` is the already-decoded entity lump text; ``main`` passes its one copy, and a
+    direct caller may omit it."""
+    if ents is None:
+        ents = read_lump(data, 0).decode("ascii", "replace")
+    blocks = _parse_ent_blocks(ents)
     pak = read_pakfile(data)
 
     def read_bytes(key):
@@ -413,7 +418,7 @@ def write_sprites(data, out_dir, base, idx, sky=None):
     print(f"sprites: {len(lines)} env_sprite coronas ({n_sky} sky, {len(_sprite_seen)} textures) "
           f"-> {base}.sprites")
 
-def write_ropes(data, out_dir, base, idx):
+def write_ropes(data, out_dir, base, idx, ents=None):
     """Emit `<base>.ropes`: the overhead cables VtMB strings between poles/buildings.
 
     A rope is a chain of `move_rope`/`keyframe_rope` nodes linked by `NextKey` (a node's
@@ -471,8 +476,13 @@ def write_ropes(data, out_dir, base, idx):
     `RopeShader` (0/1/2 -> `cable/cable`, `cable/rope`, `cable/chain`) overrides `RopeMaterial`
     when present, matching `KeyValue`. `MoveSpeed`/`MoveTime`/`Tension`/`PositionInterpolator`
     are keyframe-path behaviour the rope renderer ignores -> rendered at rest.
+
+    ``ents`` is the already-decoded entity lump text; ``main`` passes its one copy, and a
+    direct caller may omit it.
     """
-    blocks = _parse_ent_blocks(read_lump(data, 0).decode("ascii", "replace"))
+    if ents is None:
+        ents = read_lump(data, 0).decode("ascii", "replace")
+    blocks = _parse_ent_blocks(ents)
     pak = read_pakfile(data)
 
     def read_bytes(key):
@@ -749,7 +759,7 @@ def _atof(token):
     return float(match.group(0)) if match else 0.0
 
 
-def write_entities(data, out_dir, base, idx, sky=None, brush_meshes=None):
+def write_entities(data, out_dir, base, idx, sky=None, brush_meshes=None, ents=None):
     """Emit `<base>.ents` (JSON): every entity's keyvalues + outputs, and for brush
     entities ("model" "*N") their brush volumes as convex hulls.
 
@@ -781,7 +791,8 @@ def write_entities(data, out_dir, base, idx, sky=None, brush_meshes=None):
     leafbrushes, brushes, sides = read_lump(data, 17), read_lump(data, 18), read_lump(data, 19)
     planes = np.frombuffer(read_lump(data, 1), dtype=np.float32).reshape(-1, 5)[:, :4].copy()
     models_l = read_lump(data, 14)
-    ents = read_lump(data, 0).decode("ascii", "replace")
+    if ents is None:      # main passes its one decoded copy; a direct caller may omit it
+        ents = read_lump(data, 0).decode("ascii", "replace")
 
     brush_meshes = brush_meshes or {}
     out, n_brush, n_hull, n_out, n_sky = [], 0, 0, 0, 0
@@ -1035,7 +1046,8 @@ def write_props(data, out_dir, base, idx, sky=None):
 
 
 def main(bsp_path, out_dir, *, index=None):
-    data = open(bsp_path, "rb").read()
+    with open(bsp_path, "rb") as bsp_file:
+        data = bsp_file.read()
     verts_l = read_lump(data, 3)
     edges_l = read_lump(data, 12)
     surf_l = read_lump(data, 13)
@@ -1304,7 +1316,9 @@ def main(bsp_path, out_dir, *, index=None):
                             os.makedirs(cdir, exist_ok=True)
                             faces = decode_cubemap(ctth, cttz)
                             for i, face in enumerate(faces):
-                                face.convert("RGB").save(os.path.join(cdir, f"{cube_id}_{i}.png"))
+                                # zlib level 1: gitignored intermediates, encode speed wins.
+                                face.convert("RGB").save(
+                                    os.path.join(cdir, f"{cube_id}_{i}.png"), compress_level=1)
                             with open(os.path.join(cdir, f"{cube_id}.dds"), "wb") as cube_file:
                                 cube_file.write(cubemap_dds(faces))
                             ok = True
@@ -1699,10 +1713,10 @@ def main(bsp_path, out_dir, *, index=None):
     # a map still owns is where each one stands, so both prop paths write placement rows plus the
     # stem that addresses the shared mesh, and neither decodes anything.
     write_collision(data, out_dir, base, sky)
-    write_entities(data, out_dir, base, idx, sky, brush_meshes)
+    write_entities(data, out_dir, base, idx, sky, brush_meshes, ents=ents)
     write_lights(data, out_dir, base, sky)
-    write_sprites(data, out_dir, base, idx, sky)
-    write_ropes(data, out_dir, base, idx)
+    write_sprites(data, out_dir, base, idx, sky, ents=ents)
+    write_ropes(data, out_dir, base, idx, ents=ents)
     # Concave displacement collision: one triangle per line (9 Unreal-space floats).
     # Convex brushes cannot represent sculpted terrain, so the runtime loads these
     # as triangle meshes alongside the .hulls convex bodies.
@@ -1803,9 +1817,8 @@ def main(bsp_path, out_dir, *, index=None):
         xyz = np.asarray(wpositions, dtype=np.float64)
         bounds_min = tuple(float(value) for value in xyz.min(axis=0))
         bounds_max = tuple(float(value) for value in xyz.max(axis=0))
-        entity_document = json.loads(
-            open(os.path.join(out_dir, base + ".ents"), encoding="utf-8").read()
-        )
+        with open(os.path.join(out_dir, base + ".ents"), encoding="utf-8") as ents_file:
+            entity_document = json.load(ents_file)
         weather_path = weather.write_weather(
             base, Path(out_dir), entity_document, idx, cover_triangles, bounds_min, bounds_max
         )
@@ -1814,12 +1827,9 @@ def main(bsp_path, out_dir, *, index=None):
 
     # Every map's env_particle set plus the definition closure it resolves to. Sibling of the
     # rain-only weather sidecar above, which stays sm_hub_1's.
-    particles_path = particles.write_particles(
-        base,
-        Path(out_dir),
-        json.loads(open(os.path.join(out_dir, base + ".ents"), encoding="utf-8").read()),
-        idx,
-    )
+    with open(os.path.join(out_dir, base + ".ents"), encoding="utf-8") as ents_file:
+        entity_document = json.load(ents_file)
+    particles_path = particles.write_particles(base, Path(out_dir), entity_document, idx)
     if particles_path:
         print(f"wrote {particles_path}")
 

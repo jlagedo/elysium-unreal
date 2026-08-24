@@ -4,7 +4,7 @@ import unittest
 
 from typer.testing import CliRunner
 
-from elysium_pipeline.cli import app
+from elysium_pipeline.cli import _CHILD_SIGNAL, _child_signal, app
 
 
 class CliContractTests(unittest.TestCase):
@@ -86,6 +86,28 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("stems", result.output)
         self.assertIn("whole corpus", result.output)
+
+
+class ChildSignalTests(unittest.TestCase):
+    def test_prefilter_agrees_with_the_regex_on_every_vocabulary_shape(self) -> None:
+        samples = (
+            "LogPython: baked hollywood in 12.3s",
+            "Fatal error: rendering thread exception",
+            "Assertion failed: Index < Num",
+            "LogShaderCompiler: Warning: retrying job",
+            "LogInit: Error: missing module",
+            "Error: cook failed",
+            "  Error: indented, so not anchored",
+            "SomeError: not the anchored form",
+            "Warning: at line start without the colon prefix",
+            "LogStreaming: Display: loaded package",
+            "plain engine chatter line",
+            "",
+        )
+        for line in samples:
+            self.assertEqual(
+                _child_signal(line), _CHILD_SIGNAL.search(line) is not None, line
+            )
 
 
 if __name__ == "__main__":

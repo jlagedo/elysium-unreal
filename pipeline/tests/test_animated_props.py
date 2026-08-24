@@ -507,5 +507,16 @@ class ClipExtentTests(unittest.TestCase):
             np.testing.assert_allclose(stacked[i], mdl_skel.rot_matrix(q), atol=1e-12)
 
 
+class LoadMdlMemoTests(unittest.TestCase):
+    """`main`'s model reads are memoized: one install extraction per distinct model."""
+
+    def test_a_seed_model_is_read_once_across_both_presence_probes(self) -> None:
+        # The seed is split into present/missing by two comprehensions over the same list;
+        # without the memo each probe is a full VPK extraction.
+        with mock.patch.object(npc_export.install, "read", return_value=None) as read:
+            npc_export.main(only=["models/ghost.mdl"], index={})
+        self.assertEqual(read.call_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

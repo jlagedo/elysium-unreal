@@ -234,6 +234,59 @@ def sanitize(name):
 # --- reusable Unreal OBJ-scene writer (shared texture pipeline, world-compatible) ---
 
 
+#: Process-level memo of texture PNGs already decoded and written, keyed by the absolute output
+#: path (so two output roots never collide). A corpus pass resolves the same shared texture from
+#: many models, each carrying its own per-model ``tex_cache``; a PNG's name and pixels are a pure
+#: function of the source texture and its role, so after the first successful write the decode is
+#: pure repetition. The memo holds filenames only, never decoded images -- a derived product
+#: first requested by a later model re-decodes its base once -- and it never outlives the
+#: process, so a changed install is always re-read on the next run. Task threads may race a key:
+#: single-key dict operations are atomic, the loser only repeats one decode, and
+#: `tex_to_png.save_png` publishes identical bytes atomically, so no lock is needed.
+_png_memo = {}
+
+
+def _memo_key(tex_out, fn):
+    return os.path.normcase(os.path.abspath(os.path.join(tex_out, fn)))
+
+
+def _redecode(bt, read_bytes):
+    """Pixels for a texture whose PNG this process already wrote (`_png_memo` holds filenames,
+    not images). The pair decoded once before, so a miss here is a real fault and warns."""
+    from elysium_pipeline.formats.tex_to_png import decode as decode_texture
+    tth, ttz = read_bytes(f"materials/{bt}.tth"), read_bytes(f"materials/{bt}.ttz")
+    if tth and ttz:
+        try:
+            return decode_texture(tth, ttz).convert("RGBA")
+        except Exception as e:
+            print(f"    texture re-decode failed ({bt}): {e}")
+            return None
+    print(f"    texture re-decode failed ({bt}): missing .tth/.ttz pair")
+    return None
+
+
+def _envmask_image(info, bt, img, read_bytes):
+    """The L mask for an `_envmask_png` entry that hit `_png_memo` (filename without pixels),
+    re-derived without re-writing -- same two sources, same semantics."""
+    from elysium_pipeline.formats.tex_to_png import decode as decode_texture
+    from PIL import ImageChops
+    em = info.get("envmapmask")
+    if em:
+        src = _norm(em.replace("\\", "/").lstrip("/"))
+        tth, ttz = read_bytes(f"materials/{src}.tth"), read_bytes(f"materials/{src}.ttz")
+        if tth and ttz:
+            try:
+                return decode_texture(tth, ttz).convert("L")
+            except Exception as e:
+                print(f"    envmask re-decode failed ({src}): {e}")
+                return None
+        print(f"    envmask re-decode failed ({src}): missing .tth/.ttz pair")
+        return None
+    if info.get("basealphaenvmapmask") and img is not None:
+        return ImageChops.invert(img.convert("RGBA").getchannel("A"))
+    return None
+
+
 def _envmask_png(info, bt, img, read_bytes, tex_out, tex_cache):
     """The $envmap reflectivity mask under tex/ as ``(filename, L image)``.
 
@@ -256,29 +309,46 @@ def _envmask_png(info, bt, img, read_bytes, tex_out, tex_cache):
         if key not in tex_cache:
             tex_cache[key] = (None, None)
             src = key[len("#envmask:"):]
-            tth, ttz = read_bytes(f"materials/{src}.tth"), read_bytes(f"materials/{src}.ttz")
-            if tth and ttz:
+            fn = sanitize(src) + "_envmask.png"
+            if _memo_key(tex_out, fn) in _png_memo:
+                # Written earlier this process; the mask image is re-derived on demand.
+                tex_cache[key] = (fn, None)
+            else:
+                tth, ttz = read_bytes(f"materials/{src}.tth"), read_bytes(f"materials/{src}.ttz")
+                if tth and ttz:
+                    try:
+                        mask = decode_texture(tth, ttz).convert("L")
+                        save_png(mask, os.path.join(tex_out, fn))
+                        _png_memo[_memo_key(tex_out, fn)] = fn
+                        tex_cache[key] = (fn, mask)
+                    except Exception:
+                        pass
+        return tex_cache[key]
+
+    if info.get("basealphaenvmapmask") and bt:
+        key = "#envmask:" + bt + "#a"
+        if key not in tex_cache:
+            fn = sanitize(bt) + "_envmask.png"
+            if _memo_key(tex_out, fn) in _png_memo:
+                # Written earlier this process; the mask image is re-derived on demand.
+                tex_cache[key] = (fn, None)
+            else:
+                if img is None:
+                    # The albedo's PNG was memoised earlier this process; the mask needs
+                    # its alpha, so the pixels come back through the same re-decode the
+                    # selfillum and glass branches use.
+                    img = _redecode(bt, read_bytes)
+                if img is None:
+                    return (None, None)      # base decode failed; there is no alpha to invert
+                tex_cache[key] = (None, None)
                 try:
-                    fn = sanitize(src) + "_envmask.png"
-                    mask = decode_texture(tth, ttz).convert("L")
+                    alpha = img.convert("RGBA").getchannel("A")
+                    mask = ImageChops.invert(alpha)
                     save_png(mask, os.path.join(tex_out, fn))
+                    _png_memo[_memo_key(tex_out, fn)] = fn
                     tex_cache[key] = (fn, mask)
                 except Exception:
                     pass
-        return tex_cache[key]
-
-    if info.get("basealphaenvmapmask") and img is not None:
-        key = "#envmask:" + bt + "#a"
-        if key not in tex_cache:
-            tex_cache[key] = (None, None)
-            try:
-                fn = sanitize(bt) + "_envmask.png"
-                alpha = img.convert("RGBA").getchannel("A")
-                mask = ImageChops.invert(alpha)
-                save_png(mask, os.path.join(tex_out, fn))
-                tex_cache[key] = (fn, mask)
-            except Exception:
-                pass
         return tex_cache[key]
     return (None, None)
 
@@ -425,7 +495,9 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *, tex_out=No
     """material name -> decoded channels plus the VMT's render semantics.
 
     The albedo PNG (and the self-illum emission mask derived from its alpha) is
-    decoded once per basetexture and cached; selfillum/additive/translucent/alphatest/envmap
+    decoded once per basetexture and cached -- per model through ``tex_cache``, and across
+    models through the process-level `_png_memo`, which skips the decode entirely once the
+    target PNG was written this process. selfillum/additive/translucent/alphatest/envmap
     are per-material (per-VMT), so two materials that share a basetexture but differ in those
     flags do not inherit each other's. Source ``Refract`` is deliberately independent of
     albedo: its authored DUDV/normal map distorts the framebuffer and many such VMTs declare no
@@ -454,32 +526,45 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *, tex_out=No
     # Cache per basetexture: [albedo_png, emis_png_or_None, decoded_rgba_or_None].
     # emis is generated lazily the first time a selfillum material references this
     # texture; the decoded image is held so that generation needs no re-decode.
+    # A miss consults `_png_memo` first: a PNG another model's resolve already wrote this
+    # process is reused by name, and its image is re-decoded only if a derived product asks.
     albedo = emis = img = None
     if bt:
         ent = tex_cache.get(bt)
         if ent is None:
-            tth, ttz = read_bytes(f"materials/{bt}.tth"), read_bytes(f"materials/{bt}.ttz")
-            if tth and ttz:
-                try:
-                    img = decode_texture(tth, ttz).convert("RGBA")
-                    fn = sanitize(bt) + ".png"
-                    save_png(img, os.path.join(tex_out, fn))
-                    albedo = fn
-                except Exception as e:
-                    print(f"    texture decode failed for {mat} ({bt}): {e}")
-                    img = None
-            ent = tex_cache[bt] = [albedo, None, img]
+            fn = sanitize(bt) + ".png"
+            if _memo_key(tex_out, fn) in _png_memo:
+                ent = tex_cache[bt] = [fn, None, None]
+            else:
+                tth, ttz = read_bytes(f"materials/{bt}.tth"), read_bytes(f"materials/{bt}.ttz")
+                if tth and ttz:
+                    try:
+                        img = decode_texture(tth, ttz).convert("RGBA")
+                        save_png(img, os.path.join(tex_out, fn))
+                        _png_memo[_memo_key(tex_out, fn)] = fn
+                        albedo = fn
+                    except Exception as e:
+                        print(f"    texture decode failed for {mat} ({bt}): {e}")
+                        img = None
+                ent = tex_cache[bt] = [albedo, None, img]
 
         albedo, emis, img = ent
-    if info.get("selfillum") and albedo and emis is None and img is not None:
-        import numpy as np
-        from PIL import Image
-        arr = np.asarray(img.convert("RGBA"), dtype=np.float32)
-        a = arr[:, :, 3:4] / 255.0
-        masked = (arr[:, :, :3] * a).clip(0, 255).astype("uint8")
+    if info.get("selfillum") and albedo and emis is None:
         efn = sanitize(bt) + "_ke.png"
-        save_png(Image.fromarray(masked, "RGB"), os.path.join(tex_out, efn))
-        ent[1] = emis = efn
+        if _memo_key(tex_out, efn) in _png_memo:
+            ent[1] = emis = efn
+        else:
+            if img is None:                  # albedo hit the memo without pixels
+                img = ent[2] = _redecode(bt, read_bytes)
+            if img is not None:
+                import numpy as np
+                from PIL import Image
+                arr = np.asarray(img.convert("RGBA"), dtype=np.float32)
+                a = arr[:, :, 3:4] / 255.0
+                masked = (arr[:, :, :3] * a).clip(0, 255).astype("uint8")
+                save_png(Image.fromarray(masked, "RGB"), os.path.join(tex_out, efn))
+                _png_memo[_memo_key(tex_out, efn)] = efn
+                ent[1] = emis = efn
 
     # $envmap. VtMB's models are the LARGER half of the reflective set (1,419 of 2,610
     # $envmap VMTs are vertexlitgeneric), and vertexlitgeneric_maskedenvmap composites it
@@ -508,17 +593,21 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *, tex_out=No
             key = "#refract:%s:%s" % ("dudv" if is_dudv else "normal", refract_src)
             if key not in tex_cache:
                 tex_cache[key] = None
-                tth = read_bytes(f"materials/{refract_src}.tth")
-                ttz = read_bytes(f"materials/{refract_src}.ttz")
-                if tth and ttz:
-                    try:
-                        decoded = decode_texture(tth, ttz)
-                        normal = dudv_to_normal(decoded) if is_dudv else decoded.convert("RGB")
-                        refract_png = sanitize(refract_src) + "_refract_n.png"
-                        save_png(normal, os.path.join(tex_out, refract_png))
-                        tex_cache[key] = refract_png
-                    except Exception as e:
-                        print(f"    refract decode failed for {mat} ({refract_src}): {e}")
+                fn = sanitize(refract_src) + "_refract_n.png"
+                if _memo_key(tex_out, fn) in _png_memo:
+                    tex_cache[key] = fn
+                else:
+                    tth = read_bytes(f"materials/{refract_src}.tth")
+                    ttz = read_bytes(f"materials/{refract_src}.ttz")
+                    if tth and ttz:
+                        try:
+                            decoded = decode_texture(tth, ttz)
+                            normal = dudv_to_normal(decoded) if is_dudv else decoded.convert("RGB")
+                            save_png(normal, os.path.join(tex_out, fn))
+                            _png_memo[_memo_key(tex_out, fn)] = fn
+                            tex_cache[key] = fn
+                        except Exception as e:
+                            print(f"    refract decode failed for {mat} ({refract_src}): {e}")
             refract_png = tex_cache[key]
 
     # Props use the same bumpmap channel as world surfaces. Real authored normals win;
@@ -531,24 +620,37 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *, tex_out=No
         key = "#normal:" + bump
         if key not in tex_cache:
             tex_cache[key] = None
-            tth, ttz = read_bytes(f"materials/{bump}.tth"), read_bytes(f"materials/{bump}.ttz")
-            if tth and ttz:
-                try:
-                    bump_png = sanitize(bump) + "_n.png"
-                    save_png(decode_texture(tth, ttz).convert("RGB"),
-                             os.path.join(tex_out, bump_png))
-                    tex_cache[key] = bump_png
-                except Exception:
-                    pass
+            fn = sanitize(bump) + "_n.png"
+            if _memo_key(tex_out, fn) in _png_memo:
+                tex_cache[key] = fn
+            else:
+                tth, ttz = read_bytes(f"materials/{bump}.tth"), read_bytes(f"materials/{bump}.ttz")
+                if tth and ttz:
+                    try:
+                        save_png(decode_texture(tth, ttz).convert("RGB"),
+                                 os.path.join(tex_out, fn))
+                        _png_memo[_memo_key(tex_out, fn)] = fn
+                        tex_cache[key] = fn
+                    except Exception:
+                        pass
         bump_png = tex_cache[key]
-    elif glass and img is not None and bt:
+    elif glass and bt and (img is not None or albedo):
         mask_id = info.get("envmapmask") or ("#basealpha" if info.get("basealphaenvmapmask") else "#alpha")
         key = "#glassnormal:%s|%s" % (bt, mask_id)
         if key not in tex_cache:
-            bump_png = sanitize(bt) + "_glass_n.png"
-            save_png(derive_normal(img, envmask_img), os.path.join(tex_out, bump_png))
-            tex_cache[key] = bump_png
-        bump_png = tex_cache[key]
+            fn = sanitize(bt) + "_glass_n.png"
+            if _memo_key(tex_out, fn) in _png_memo:
+                tex_cache[key] = fn
+            else:
+                if img is None:              # albedo hit the memo without pixels
+                    img = ent[2] = _redecode(bt, read_bytes)
+                if envmask and envmask_img is None and img is not None:
+                    envmask_img = _envmask_image(info, bt, img, read_bytes)
+                if img is not None:
+                    save_png(derive_normal(img, envmask_img), os.path.join(tex_out, fn))
+                    _png_memo[_memo_key(tex_out, fn)] = fn
+                    tex_cache[key] = fn
+        bump_png = tex_cache.get(key)
 
     # The "Eyes" shader's second layer. Kept RGBA: the iris is composited over the eyeball
     # by its own alpha, so dropping alpha would paint the whole sclera.
@@ -559,15 +661,19 @@ def _resolve_material(mat, search, read_bytes, out_dir, tex_cache, *, tex_out=No
         key = "#iris:" + iris
         if key not in tex_cache:
             tex_cache[key] = None
-            tth, ttz = read_bytes(f"materials/{iris}.tth"), read_bytes(f"materials/{iris}.ttz")
-            if tth and ttz:
-                try:
-                    fn = sanitize(iris) + "_iris.png"
-                    save_png(decode_texture(tth, ttz).convert("RGBA"),
-                             os.path.join(tex_out, fn))
-                    tex_cache[key] = fn
-                except Exception as e:
-                    print(f"    iris decode failed for {mat} ({iris}): {e}")
+            fn = sanitize(iris) + "_iris.png"
+            if _memo_key(tex_out, fn) in _png_memo:
+                tex_cache[key] = fn
+            else:
+                tth, ttz = read_bytes(f"materials/{iris}.tth"), read_bytes(f"materials/{iris}.ttz")
+                if tth and ttz:
+                    try:
+                        save_png(decode_texture(tth, ttz).convert("RGBA"),
+                                 os.path.join(tex_out, fn))
+                        _png_memo[_memo_key(tex_out, fn)] = fn
+                        tex_cache[key] = fn
+                    except Exception as e:
+                        print(f"    iris decode failed for {mat} ({iris}): {e}")
         iris_png = tex_cache[key]
 
     return {

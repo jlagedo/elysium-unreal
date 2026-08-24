@@ -29,20 +29,38 @@ class UnrealFailure(RuntimeError):
     pass
 
 
+_EDITOR_EXECUTABLES = frozenset({"unrealeditor.exe", "unrealeditor-cmd.exe"})
+
+#: How many streamed editor-output lines stay in memory for reports. The runner's mirror log
+#: keeps every line, so the bound loses nothing the log does not already hold.
+EDITOR_TAIL_LINES = 2000
+
+#: Idle services a batch editor launch pays boot cost for and never uses: Live Coding's
+#: console thread, the audio device, and the Perforce source-control probe. Applied only to
+#: `-unattended` launches -- an interactive editor keeps Live Coding for C++ hot reload and an
+#: attended game keeps its sound.
+_HEADLESS_EDITOR_ARGS = ("-NoLiveCoding", "-noP4", "-nosound")
+
+
 def _run(config, runner, executable: Path | str, args: Sequence[str]) -> None:
     arguments = list(map(str, args))
     executable_name = Path(executable).name.casefold()
-    shader_work_root = getattr(config, "unreal_shader_work_root", None)
-    if (
-        executable_name in {"unrealeditor.exe", "unrealeditor-cmd.exe"}
-        and shader_work_root is not None
-        and not any(
+    tail_lines = None
+    if executable_name in _EDITOR_EXECUTABLES:
+        tail_lines = EDITOR_TAIL_LINES
+        shader_work_root = getattr(config, "unreal_shader_work_root", None)
+        if shader_work_root is not None and not any(
             argument.casefold().startswith("-shaderworkingdir=")
             for argument in arguments
-        )
-    ):
-        arguments.append(f"-shaderworkingdir={shader_work_root}")
-    result = runner.run([str(executable), *arguments], cwd=config.repo_root)
+        ):
+            arguments.append(f"-shaderworkingdir={shader_work_root}")
+        lowered = {argument.casefold() for argument in arguments}
+        if "-unattended" in lowered:
+            arguments.extend(flag for flag in _HEADLESS_EDITOR_ARGS
+                             if flag.casefold() not in lowered)
+    result = runner.run(
+        [str(executable), *arguments], cwd=config.repo_root, tail_lines=tail_lines
+    )
     if result.returncode:
         raise UnrealFailure(f"{executable} exited with {result.returncode}")
 
@@ -123,8 +141,19 @@ def generate_policy_content(config, runner, generators: Sequence[str] | None = N
         editor_executable(config, commandlet=True),
         content_arguments,
     )
-    if not include_auxiliary:
-        return
+    if include_auxiliary:
+        generate_auxiliary_policy_content(config, runner)
+
+
+def generate_auxiliary_policy_content(config, runner) -> None:
+    """The two policy launches `build_content.py` cannot host, plus their existence checks.
+
+    The font import needs a Slate application, which `-run=pythonscript` never creates, so it
+    boots the full editor; `make_player_anim_bp.py` runs `main()` at module scope and is not a
+    registered generator, so `build_content.py` refuses its name and it keeps its own
+    commandlet.
+    """
+    common = ["-unattended", "-nosplash", "-nopause", "-stdout"]
     _run(
         config,
         runner,

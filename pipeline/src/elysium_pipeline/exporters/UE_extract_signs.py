@@ -92,10 +92,14 @@ def decode_background(idx, material, resolve_inc):
     return tex_to_png.decode(tth, ttz)
 
 
-def main(force=False):
+def main(force=False, index=None):
     os.makedirs(os.path.join(OUT, "tex"), exist_ok=True)
-    print("indexing install...")
-    idx = install.build_index(dirs=("materials", "vdata"))
+    # A shared full install index is a superset whose extra loose dirs fall outside every
+    # prefix this exporter filters on, so it resolves identically to the scoped build.
+    if index is None:
+        print("indexing install...")
+        index = install.build_index(dirs=("materials", "vdata"))
+    idx = index
     resolve_inc = resolve_include(idx)
 
     # --- definitions, verbatim -------------------------------------------------------

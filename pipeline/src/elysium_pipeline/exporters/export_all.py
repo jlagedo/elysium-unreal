@@ -112,14 +112,18 @@ def export_maps(
     index: dict[str, Any] | None = None,
     skip_existing: bool = False,
     continue_on_error: bool = True,
+    available: Sequence[str] | None = None,
 ) -> list[ExportTaskResult]:
-    """Export named maps with one shared patch-first install index."""
+    """Export named maps with one shared patch-first install index.
+
+    ``available`` is the discovered map inventory; a profile run passes its one
+    `install.all_map_names()` result rather than re-walking the install."""
 
     from elysium_pipeline.exporters import UE_bsp_to_scene
     from elysium_pipeline.formats import install
 
     requested = list(dict.fromkeys(names))
-    available = set(install.all_map_names())
+    available = set(available if available is not None else install.all_map_names())
     shared_index = index if index is not None else install.build_index()
     results: list[ExportTaskResult] = []
 
@@ -182,6 +186,8 @@ def _run_bundle(
     if name == "audio":
         from elysium_pipeline.exporters import UE_extract_sounds
 
+        # The shared index cannot serve audio: its loose walk omits `sound/`, so the sound
+        # exporter builds its own SOUND_DIRS index or a patch's loose sound overrides vanish.
         UE_extract_sounds.main(list(maps))
     elif name == "particles":
         from elysium_pipeline.exporters import UE_extract_particles
@@ -190,15 +196,15 @@ def _run_bundle(
     elif name == "scripts":
         from elysium_pipeline.exporters import UE_extract_scripts
 
-        UE_extract_scripts.main(force=force)
+        UE_extract_scripts.main(force=force, index=index)
     elif name == "signs":
         from elysium_pipeline.exporters import UE_extract_signs
 
-        UE_extract_signs.main(force=force)
+        UE_extract_signs.main(force=force, index=index)
     elif name == "vdata":
         from elysium_pipeline.exporters import UE_extract_vdata
 
-        UE_extract_vdata.main(force=force)
+        UE_extract_vdata.main(force=force, index=index)
     elif name == "corpus":
         from elysium_pipeline.exporters import UE_extract_corpus
 
@@ -211,15 +217,15 @@ def _run_bundle(
     elif name == "cfg":
         from elysium_pipeline.exporters import UE_extract_cfg
 
-        UE_extract_cfg.main(force=force)
+        UE_extract_cfg.main(force=force, index=index)
     elif name == "scenes":
         from elysium_pipeline.exporters import UE_extract_scenes
 
-        UE_extract_scenes.main(force=force)
+        UE_extract_scenes.main(force=force, index=index)
     elif name == "ui":
         from elysium_pipeline.exporters import UE_extract_ui
 
-        UE_extract_ui.main(inventory=inventory, force=force)
+        UE_extract_ui.main(inventory=inventory, force=force, index=index)
     elif name == "use-icons":
         from elysium_pipeline.exporters import UE_use_icons
 
@@ -292,7 +298,8 @@ def export_profile(
 
     from elysium_pipeline.formats import install
 
-    map_names = maps_for_profile(name)
+    available = install.all_map_names()
+    map_names = maps_for_profile(name, available=available)
     shared_index = install.build_index()
     result = ExportBatchResult()
     result.maps = export_maps(
@@ -301,6 +308,7 @@ def export_profile(
         index=shared_index,
         skip_existing=False,
         continue_on_error=continue_on_error,
+        available=available,
     )
     completed = [item.name for item in result.maps if item.ok]
     if continue_on_error or not result.failures:

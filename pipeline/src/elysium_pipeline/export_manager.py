@@ -5,10 +5,12 @@ from __future__ import annotations
 import ast
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
 import hashlib
 import json
 import os
 from pathlib import Path
+import threading
 import time
 
 from elysium_pipeline.clean import (
@@ -24,6 +26,7 @@ from elysium_pipeline.tasking import (
     ContentDigestCache,
     Manifest,
     Task,
+    TaskFailure,
     TaskGraph,
     TaskProgress,
     TaskResult,
@@ -93,6 +96,8 @@ class _DecoderClosures:
                 name = name[: -len(".__init__")]
             self.modules[name] = path
         self._imports: dict[str, frozenset[str]] = {}
+        self._function_entries: dict[tuple[str, str], set[str]] = {}
+        self._bundle_entries: dict[str, set[str]] = {}
 
     def _normalize(self, dotted: str, attribute: str | None = None) -> str | None:
         if attribute is not None:
@@ -131,19 +136,27 @@ class _DecoderClosures:
         return cached
 
     def function_entries(self, module: str, function: str) -> set[str]:
-        """The `elysium_pipeline` modules one function imports (its whole body)."""
+        """The `elysium_pipeline` modules one function imports (its whole body).
+        Memoized like `imports_of`: the sources are fixed for the process lifetime."""
+        cached = self._function_entries.get((module, function))
+        if cached is not None:
+            return cached
         tree = ast.parse(self.modules[module].read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))                     and node.name == function:
                 entries = self._collect(node.body)
                 if not entries:
                     raise ValueError(f"{module}.{function} imports no pipeline module")
+                self._function_entries[(module, function)] = entries
                 return entries
         raise ValueError(f"{module} has no function {function}")
 
     def bundle_entries(self, bundle: str) -> set[str]:
         """The modules `_run_bundle`'s branch for one bundle imports, read off its AST
-        so the dispatch and the fingerprint cannot drift apart."""
+        so the dispatch and the fingerprint cannot drift apart. Memoized per bundle."""
+        cached = self._bundle_entries.get(bundle)
+        if cached is not None:
+            return cached
         module = "elysium_pipeline.exporters.export_all"
         tree = ast.parse(self.modules[module].read_text(encoding="utf-8"))
         for node in ast.walk(tree):
@@ -159,6 +172,7 @@ class _DecoderClosures:
                     if bundle in literals:
                         entries = self._collect(test.body)
                         if entries:
+                            self._bundle_entries[bundle] = entries
                             return entries
                     branch = test.orelse
                 raise ValueError(f"_run_bundle has no branch for bundle {bundle!r}")
@@ -188,10 +202,18 @@ def _decoder_closures(config) -> _DecoderClosures:
 
 
 def _scoped_source_fingerprint(config, entries: set[str], *,
-                               index_fingerprint: str = "") -> str:
-    """Content hash of one entry set's import closure, plus the install identity."""
+                               index_fingerprint: str = "",
+                               cache: ContentDigestCache | None = None) -> str:
+    """Content hash of one entry set's import closure, plus the install identity.
+
+    A caller-supplied ``cache`` is shared and left for its owner to write; a run computing a
+    dozen scoped fingerprints then parses and rewrites the digest store once rather than per
+    call. Without one the call owns a private cache and writes it itself.
+    """
     closures = _decoder_closures(config)
-    cache = ContentDigestCache(config.export_root / DIGEST_CACHE_FILE)
+    owned = cache is None
+    if owned:
+        cache = ContentDigestCache(config.export_root / DIGEST_CACHE_FILE)
     try:
         return fingerprint_content(
             closures.closure_files(entries),
@@ -199,7 +221,8 @@ def _scoped_source_fingerprint(config, entries: set[str], *,
             cache=cache,
         )
     finally:
-        cache.write()
+        if owned:
+            cache.write()
 
 
 def _raise_results(results) -> None:
@@ -273,6 +296,15 @@ def _bundle_outputs(export_root: Path, bundle: str) -> tuple[Path, ...]:
     return mapping.get(bundle, ())
 
 
+#: Bundles that read per-map export products under `$ELYSIUM_EXPORT_ROOT/<map>/` and therefore
+#: wait on every map task: `audio` reads each map's `.ents` for its WAV and soundscheme
+#: references, and `npc` seeds the cast from every exported map's `.ents`. Every other bundle
+#: reads the install (or the pre-graph shared corpus) directly and starts immediately;
+#: `scenes` only globs whatever `.ents` already exist for a report-only cross-check that its
+#: own exporter declares independent of the map export.
+MAP_DEPENDENT_BUNDLES = frozenset({"audio", "npc"})
+
+
 def _bundle_tasks(
     config,
     bundles: Sequence[str],
@@ -287,11 +319,13 @@ def _bundle_tasks(
     requested = set(bundles)
     for bundle in bundles:
         name = f"bundle:{bundle}"
-        # Every bundle mirrors something global, so each waits on every map. Between bundles
-        # there is exactly one edge: `npc` resolves the player bodies through the exported
-        # `vdata/system/clandoc000.txt` mirror and skips them when it is absent. The rest write
-        # disjoint directories from the install and run concurrently.
-        dependencies = all_map_dependencies
+        # Only the bundles that consume exported per-map products wait on the maps. Between
+        # bundles there is exactly one edge: `npc` resolves the player bodies through the
+        # exported `vdata/system/clandoc000.txt` mirror and skips them when it is absent. The
+        # rest write disjoint directories from the install and run concurrently.
+        dependencies = (
+            all_map_dependencies if bundle in MAP_DEPENDENT_BUNDLES else ()
+        )
         if bundle == "npc" and "vdata" in requested:
             dependencies += ("bundle:vdata",)
 
@@ -358,28 +392,34 @@ def run_offline_profile(
         total=len(maps) + len(bundles),
         log_path=config.log_root / f"{stamp}-export-tasks.log",
     )
+    # One digest cache for every scoped fingerprint this run computes -- constructed after the
+    # clean, parsed once, written once at the end, instead of a parse-and-rewrite per call.
+    cache = ContentDigestCache(config.export_root / DIGEST_CACHE_FILE)
     with progress:
         progress.note(
             f"export {profile}: {len(maps)} map(s) + {len(bundles)} bundle(s), "
             f"{max(1, jobs)} job(s)"
         )
         # The shared corpus is a prerequisite of the graph rather than a node in it: every map
-        # export resolves its materials and textures against it, while every ordinary bundle runs
-        # after the maps. It is decoded once, here, before anything reads it.
+        # export resolves its materials and textures against it, and the `items` bundle joins
+        # its manifests over the decoded props. It is decoded once, here, before anything
+        # reads it.
         with progress.stage("corpus"):
-            ensure_corpus_export(config, force=force or clean, index=index, jobs=jobs)
+            ensure_corpus_export(config, force=force or clean, index=index, jobs=jobs,
+                                 cache=cache)
         closures = _decoder_closures(config)
         index_fingerprint = _source_index_fingerprint(index)
         map_fingerprint = _scoped_source_fingerprint(
             config,
             closures.function_entries("elysium_pipeline.exporters.export_all", "export_maps"),
-            index_fingerprint=index_fingerprint)
+            index_fingerprint=index_fingerprint, cache=cache)
         bundle_fingerprints = {
             bundle: _scoped_source_fingerprint(
                 config, closures.bundle_entries(bundle),
-                index_fingerprint=index_fingerprint)
+                index_fingerprint=index_fingerprint, cache=cache)
             for bundle in bundles
         }
+        cache.write()
         manifest = Manifest(config.export_root / MANIFEST_FILE)
         dependency_fingerprint = fingerprint_paths(
             [config.repo_root / "dev" / "dependencies.lock.json"]
@@ -433,23 +473,12 @@ def _policy_generator_names(config) -> list[str]:
     return []
 
 
-def _policy_script_paths(config, *, only_generators: Sequence[str] | None = None,
-                         exclude_generators: Sequence[str] = (),
-                         include_fonts: bool = True) -> list[Path]:
-    unreal_root = config.repo_root / "pipeline" / "unreal"
-    build_content = unreal_root / "build_content.py"
-    generator_names = _policy_generator_names(config)
-    if only_generators is not None:
-        selected = set(only_generators)
-        generator_names = [name for name in generator_names if name in selected]
-    excluded = set(exclude_generators)
-    generator_names = [name for name in generator_names if name not in excluded]
-    scripts = [build_content, *(unreal_root / name for name in generator_names)]
-    if include_fonts:
-        scripts.append(unreal_root / "make_ui_fonts.py")
+def _with_local_script_imports(unreal_root: Path, scripts: Sequence[Path]) -> list[Path]:
+    """The given editor scripts plus their `from pipeline.unreal import ...` closure.
 
-    # Follow local helper imports without importing the modules (they import ``unreal`` and are
-    # only executable inside an editor process).
+    Followed without importing the modules (they import ``unreal`` and are only executable
+    inside an editor process).
+    """
     pending = list(scripts)
     seen = set(scripts)
     while pending:
@@ -469,7 +498,52 @@ def _policy_script_paths(config, *, only_generators: Sequence[str] | None = None
     return sorted(seen, key=lambda path: str(path).lower())
 
 
-def _policy_fingerprint(config, *, exclude_generators: Sequence[str] = ()) -> str:
+def _policy_script_paths(config, *, only_generators: Sequence[str] | None = None,
+                         exclude_generators: Sequence[str] = (),
+                         include_fonts: bool = True) -> list[Path]:
+    unreal_root = config.repo_root / "pipeline" / "unreal"
+    build_content = unreal_root / "build_content.py"
+    generator_names = _policy_generator_names(config)
+    if only_generators is not None:
+        selected = set(only_generators)
+        generator_names = [name for name in generator_names if name in selected]
+    excluded = set(exclude_generators)
+    generator_names = [name for name in generator_names if name not in excluded]
+    scripts = [build_content, *(unreal_root / name for name in generator_names)]
+    if include_fonts:
+        scripts.append(unreal_root / "make_ui_fonts.py")
+    return _with_local_script_imports(unreal_root, scripts)
+
+
+def _bake_script_fingerprint(config, names: Sequence[str], *,
+                             cache: ContentDigestCache | None = None) -> str:
+    """Content identity of the editor scripts driving one bake launch.
+
+    Covers the named `pipeline/unreal` scripts, their local-import closure, and the
+    `elysium_pipeline` modules those scripts import, expanded through the same parsed-import
+    closure the decoder fingerprints use -- so a helper the bake reaches cannot be left out
+    by omission from a hand-kept list.
+    """
+    unreal_root = config.repo_root / "pipeline" / "unreal"
+    scripts = _with_local_script_imports(
+        unreal_root, [unreal_root / name for name in names])
+    closures = _decoder_closures(config)
+    entries: set[str] = set()
+    for script in scripts:
+        try:
+            tree = ast.parse(script.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, UnicodeError):
+            continue
+        entries |= closures._collect([tree])
+    return fingerprint_content(
+        [*scripts, *closures.closure_files(entries)],
+        extra=("bake-scripts-v1", *names),
+        cache=cache,
+    )
+
+
+def _policy_fingerprint(config, *, exclude_generators: Sequence[str] = (),
+                        cache: ContentDigestCache | None = None) -> str:
     scripts = [
         *_policy_script_paths(config, exclude_generators=exclude_generators),
         config.repo_root / "Content" / "Fonts",
@@ -510,7 +584,7 @@ def _policy_fingerprint(config, *, exclude_generators: Sequence[str] = ()) -> st
         config.export_root / "particles" / "d_targetblob.png",
         config.export_root / "particles" / "furball.png",
     ]
-    return fingerprint_content(scripts, extra=("policy-v2",))
+    return fingerprint_content(scripts, extra=("policy-v2",), cache=cache)
 
 
 WORLD_MATERIAL_GENERATOR = "make_world_materials.py"
@@ -518,6 +592,13 @@ CHARACTER_MATERIAL_GENERATORS = (
     "make_player_body_material.py",
     "make_eye_material.py",
 )
+WIELD_MATERIAL_GENERATOR = "make_wield_materials.py"
+
+
+def _wield_material_fingerprint(config) -> str:
+    scripts = _policy_script_paths(
+        config, only_generators=(WIELD_MATERIAL_GENERATOR,), include_fonts=False)
+    return fingerprint_content(scripts, extra=("policy-wield-materials-v1",))
 
 
 def _world_material_fingerprint(config) -> str:
@@ -564,22 +645,90 @@ def ensure_world_material_content(config, runner, *, force: bool = False) -> Tas
     return TaskGraph([task]).run(force=force, manifest=manifest)[task.name]
 
 
-def ensure_character_material_content(config, runner, *, force: bool = False) -> TaskResult:
-    """Keep the two material masters consumed by character/prop bakes current in isolation."""
-    manifest = Manifest(config.export_root / MANIFEST_FILE)
+def ensure_character_material_content(config, runner, *, force: bool = False,
+                                      manifest: Manifest | None = None) -> TaskResult:
+    """Keep the two material masters consumed by character/prop bakes current in isolation.
+
+    A caller holding a live ``manifest`` passes it in: two instances over the same file each
+    write the whole document, so a receipt this task records through a private instance is
+    reverted by the caller's next write."""
+    store = manifest if manifest is not None else Manifest(config.export_root / MANIFEST_FILE)
     task = _character_material_task(config, runner)
-    return TaskGraph([task]).run(force=force, manifest=manifest)[task.name]
+    return TaskGraph([task]).run(force=force, manifest=store)[task.name]
 
 
-def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
-    # The generated rain material imports normalized derivatives of the exact patch-first source
-    # sprites. Keep the raw full mirror and its four-item closure current even for a focused
-    # map/policy command, not only complete profiles.
+def _run_launch_task(config, task: Task, *, manifest: Manifest | None = None,
+                     force: bool = False) -> TaskResult:
+    """Run one fingerprint-gated editor-launch task and report the skip.
+
+    A launch that runs and fails is recorded failed by the graph, so a later run cannot read
+    a half-authored mount as done; a skip is printed because an editor boot that never
+    happens must be tellable from one that hung.
+    """
+    store = manifest if manifest is not None else Manifest(config.export_root / MANIFEST_FILE)
+    try:
+        result = TaskGraph([task]).run(force=force, manifest=store)[task.name]
+    except TaskFailure as exc:
+        raise ExportBakeFailure(str(exc)) from exc
+    if result.status == "skipped":
+        print(f"[bake] {task.name}: inputs unchanged; editor launch skipped")
+    return result
+
+
+def _ensure_particle_mirror(config, *, manifest: Manifest, force: bool = False,
+                            cache: ContentDigestCache | None = None,
+                            covered: bool = False) -> None:
+    """Keep the raw particle-sprite mirror the generated rain material imports current.
+
+    A complete profile runs the fingerprint-gated `bundle:particles` task before any policy
+    work, so ``covered`` skips the duplicate; a focused policy run carries the same work as
+    its own receipt-gated task rather than an unconditional call.
+    """
+    if covered:
+        return
     from elysium_pipeline.exporters import UE_extract_particles
     from elysium_pipeline.formats import install
 
-    UE_extract_particles.main(index=install.build_index(dirs=("particles",)))
+    def action() -> None:
+        UE_extract_particles.main(index=install.build_index(dirs=("particles",)))
+
+    def fingerprint() -> str:
+        index = install.build_index(dirs=("particles",), verbose=False)
+        return _scoped_source_fingerprint(
+            config, {"elysium_pipeline.exporters.UE_extract_particles"},
+            index_fingerprint=_source_index_fingerprint(index), cache=cache)
+
+    task = Task(
+        "export:particles-mirror",
+        action,
+        fingerprint=fingerprint,
+        outputs=(config.export_root / "particles" / "manifest.json",),
+    )
+    try:
+        TaskGraph([task]).run(force=force, manifest=manifest)
+    except TaskFailure as exc:
+        raise OfflineExportFailure("particle mirror failed: " + str(exc)) from exc
+
+
+def ensure_policy_content(config, runner, *, force: bool = False,
+                          cache: ContentDigestCache | None = None,
+                          particles_covered: bool = False) -> TaskResult:
+    """Keep every generated policy package current, in as few editor boots as possible.
+
+    Three receipts, one commandlet: the world-material, character-material and remaining
+    generator sets keep their separate fingerprints -- a narrow change must not invalidate
+    every MIC shader map -- but every set stale in the same run rides one `build_content.py`
+    launch carrying the union, in the generator list's own declared dependency order. The
+    Slate font import and the animation-graph rebuild cannot ride it (`build_content.py`
+    refuses names outside its registry, and the font import needs a Slate application), so
+    they launch separately whenever the umbrella receipt is stale. A launch that fails
+    records every stale receipt failed and satisfies none.
+    """
     manifest = Manifest(config.export_root / MANIFEST_FILE)
+    # The generated rain material imports normalized derivatives of the exact patch-first
+    # source sprites, and the policy fingerprint below reads the mirror's outputs.
+    _ensure_particle_mirror(config, manifest=manifest, force=force, cache=cache,
+                            covered=particles_covered)
     font_root = config.repo_root / "Content" / "VtMB" / "UI" / "Fonts"
     generator_names = _policy_generator_names(config)
     focused_generators = {WORLD_MATERIAL_GENERATOR, *CHARACTER_MATERIAL_GENERATORS}
@@ -590,20 +739,79 @@ def ensure_policy_content(config, runner, *, force: bool = False) -> TaskResult:
         config.repo_root / "Content" / "Elysium.umap",
         *(font_root / name for name in unreal.FONT_ASSETS),
     )
-    task = Task(
+    policy_task = Task(
         "unreal:policy",
         lambda: unreal.generate_policy_content(config, runner, other_generators),
         dependencies=(world_task.name, character_task.name),
         fingerprint=lambda: _policy_fingerprint(
-            config, exclude_generators=tuple(focused_generators)),
+            config, exclude_generators=tuple(focused_generators), cache=cache),
         outputs=outputs,
     )
-    return TaskGraph([world_task, character_task, task]).run(
-        force=force, manifest=manifest)["unreal:policy"]
+
+    batch = (
+        (world_task, (WORLD_MATERIAL_GENERATOR,)),
+        (character_task, tuple(CHARACTER_MATERIAL_GENERATORS)),
+        (policy_task, tuple(other_generators)),
+    )
+    results: dict[str, TaskResult] = {}
+    stale: list[tuple[Task, tuple[str, ...], str | None]] = []
+    for task, generators in batch:
+        started = time.monotonic()
+        fingerprint = task.fingerprint() if task.fingerprint else None
+        if not force and manifest.can_skip(task, fingerprint):
+            results[task.name] = TaskResult(
+                task.name, "skipped", time.monotonic() - started,
+                fingerprint=fingerprint,
+                outputs=[str(path) for path in task.outputs],
+                dependencies=list(task.dependencies))
+            manifest.record(results[task.name], flush=False)
+        else:
+            stale.append((task, generators, fingerprint))
+    if cache is not None:
+        cache.write()
+    if not stale:
+        manifest.write()
+        print("[policy] content current; editor launches skipped")
+        return results["unreal:policy"]
+
+    union = [name for name in generator_names
+             if any(name in generators for _, generators, _ in stale)]
+    for _, generators, _ in stale:
+        union.extend(name for name in generators if name not in union)
+    policy_stale = any(task.name == policy_task.name for task, _, _ in stale)
+    started = time.monotonic()
+    try:
+        unreal.generate_policy_content(config, runner, union, include_auxiliary=False)
+        if policy_stale:
+            unreal.generate_auxiliary_policy_content(config, runner)
+        missing = [str(path) for task, _, _ in stale for path in task.outputs
+                   if not path.exists()]
+        if missing:
+            raise ExportBakeFailure("policy content did not produce: " + ", ".join(missing))
+    except BaseException as exc:
+        elapsed = time.monotonic() - started
+        for task, _, fingerprint in stale:
+            manifest.record(TaskResult(
+                task.name, "failed", elapsed, error=f"{type(exc).__name__}: {exc}",
+                fingerprint=fingerprint,
+                outputs=[str(path) for path in task.outputs],
+                dependencies=list(task.dependencies)), flush=False)
+        manifest.write()
+        raise
+    elapsed = time.monotonic() - started
+    for task, _, fingerprint in stale:
+        results[task.name] = TaskResult(
+            task.name, "ok", elapsed, fingerprint=fingerprint,
+            outputs=[str(path) for path in task.outputs],
+            dependencies=list(task.dependencies))
+        manifest.record(results[task.name], flush=False)
+    manifest.write()
+    return results["unreal:policy"]
 
 
 def ensure_corpus_export(config, *, force: bool = False, index: dict | None = None,
-                         jobs: int | None = None) -> TaskResult:
+                         jobs: int | None = None,
+                         cache: ContentDigestCache | None = None) -> TaskResult:
     """Decode the shared static corpus, once, before anything that reads it.
 
     Every map export and every bake resolves its textures, materials and static models through
@@ -633,7 +841,8 @@ def ensure_corpus_export(config, *, force: bool = False, index: dict | None = No
                 _scoped_source_fingerprint(
                     config,
                     _decoder_closures(config).function_entries(
-                        "elysium_pipeline.export_manager", "ensure_corpus_export")),
+                        "elysium_pipeline.export_manager", "ensure_corpus_export"),
+                    cache=cache),
                 fingerprint_paths([enhancement]),
             ),
         ),
@@ -729,14 +938,48 @@ def _corpus_materials(config) -> dict:
         return shared_corpus.check_materials(json.load(handle))["materials"]
 
 
-def ensure_corpus_bake(config, runner, *, force: bool = False) -> None:
-    """Launch the corpus bake; the editor reuses every asset whose stamped recipe matches.
+def _corpus_bake_fingerprint(config, *, cache: ContentDigestCache | None = None) -> str:
+    """The corpus launch's whole recipe: the decoded `shared/` export products it imports
+    (manifest, materials, textures and prop meshes), the driving scripts, and the
+    world-material policy the instanced MICs compile against."""
+    return fingerprint_content(
+        [config.export_root / "shared"],
+        extra=(
+            "corpus-bake-v1",
+            _bake_script_fingerprint(config, ("bake_map.py",), cache=cache),
+            _world_material_fingerprint(config),
+        ),
+        cache=cache,
+    )
 
-    No fingerprint gates the launch and no receipt lives outside the mount: each baked asset
-    carries the hash of its own inputs, the commandlet authors exactly the mismatches, and a
-    current corpus costs one launch that reports everything reused.
+
+def ensure_corpus_bake(config, runner, *, force: bool = False,
+                       cache: ContentDigestCache | None = None,
+                       manifest: Manifest | None = None) -> None:
+    """Launch the corpus bake only when its recorded recipe receipt is stale.
+
+    The receipt's fingerprint covers the decoded `shared/` corpus, the bake scripts, and the
+    world-material policy; `--force` defeats it, and a launch that fails records no success.
+    Inside a launch the editor still decides per asset off each recipe stamp, so a stale
+    receipt costs one boot of mostly "reused" decisions, and the stamps remain the second
+    line of defense behind this gate.
     """
-    unreal.bake_corpus(config, runner, force=force)
+    if cache is None:
+        cache = ContentDigestCache(config.export_root / DIGEST_CACHE_FILE)
+
+    def fingerprint() -> str:
+        value = _corpus_bake_fingerprint(config, cache=cache)
+        # Persisted before the launch so the commandlet's own digest reads start warm.
+        cache.write()
+        return value
+
+    task = Task(
+        "unreal:bake:corpus",
+        lambda: unreal.bake_corpus(config, runner, force=force),
+        fingerprint=fingerprint,
+        outputs=(config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Shared",),
+    )
+    _run_launch_task(config, task, manifest=manifest, force=force)
 
 
 def _baked_package(config, map_name: str) -> Path:
@@ -783,6 +1026,95 @@ def bake_and_verify(
               "to read the mount back")
 
 
+def _ensure_wield_bake(config, runner, *, force: bool = False,
+                       cache: ContentDigestCache | None = None) -> None:
+    """Launch the wield-corpus bake only when its recorded recipe receipt is stale.
+
+    The fingerprint covers the wield manifest, the wield `.eskm` containers and their texture
+    closure, the driving scripts, and the wield-material policy the instances compile
+    against. The launch itself takes no per-stem force: `bake_wield.py` decides per asset off
+    its recipe stamps, so `--force` defeats only this gate.
+    """
+    def fingerprint() -> str:
+        value = fingerprint_content(
+            [
+                wield_corpus.manifest_path(config.export_root),
+                wield_corpus.wield_dir(config.export_root),
+            ],
+            extra=(
+                "wield-bake-v1",
+                _bake_script_fingerprint(config, ("bake_wield.py",), cache=cache),
+                _wield_material_fingerprint(config),
+            ),
+            cache=cache,
+        )
+        if cache is not None:
+            cache.write()
+        return value
+
+    task = Task(
+        "unreal:bake:wield",
+        lambda: unreal.bake_wield(config, runner, ()),
+        fingerprint=fingerprint,
+        outputs=(
+            config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Items"
+            / "DA_WieldModels.uasset",
+        ),
+    )
+    _run_launch_task(config, task, force=force)
+
+
+def _maps_bake_fingerprint(config, maps: Sequence[str], *,
+                           cache: ContentDigestCache | None = None) -> str:
+    """One recipe for the whole profile bake: every selected map's exported directory
+    (geometry, entities and sidecars), the whole shared corpus (its tables, and the texture
+    and mesh bytes the map-scoped material and level recipes hash), the particle sprites
+    each map imports, the driving scripts, and the world-material policy."""
+    inputs = [config.export_root / name for name in maps]
+    inputs.append(config.export_root / "shared")
+    inputs.append(config.export_root / "particles")
+    return fingerprint_content(
+        inputs,
+        extra=(
+            "maps-bake-v2",
+            _bake_script_fingerprint(config, ("bake_map.py",), cache=cache),
+            _world_material_fingerprint(config),
+            *maps,
+        ),
+        cache=cache,
+    )
+
+
+def _bake_profile_maps(config, runner, maps: Sequence[str], *, force: bool = False,
+                       verify: bool = False,
+                       cache: ContentDigestCache | None = None) -> None:
+    """Bake the profile's maps behind one receipt; a stale receipt costs one launch whose
+    per-map reuse is still the commandlet's own recipe-stamp decision. The declared outputs
+    are every baked `.umap`, so a nuked or partial mount defeats the skip."""
+    names = list(dict.fromkeys(maps))
+    if not names:
+        return
+
+    def fingerprint() -> str:
+        value = _maps_bake_fingerprint(config, names, cache=cache)
+        if cache is not None:
+            cache.write()
+        return value
+
+    task = Task(
+        "unreal:bake:maps",
+        lambda: unreal.bake_maps(config, runner, names, force=force),
+        fingerprint=fingerprint,
+        outputs=tuple(_baked_package(config, name) for name in names),
+    )
+    result = _run_launch_task(config, task, force=force)
+    if verify:
+        unreal.verify_bakes(config, runner, names)
+    elif result.status == "ok":
+        print("[bake] trusting the bake exit; pass --verify or run `elysium verify maps` "
+              "to read the mount back")
+
+
 def export_profile(
     config,
     runner,
@@ -795,32 +1127,42 @@ def export_profile(
 ) -> list[str]:
     from elysium_pipeline.exporters.export_all import bundles_for_profile
 
+    jobs = jobs or default_jobs()
+    bundles = bundles_for_profile(profile)
     maps, _results = run_offline_profile(
         config,
         profile,
         clean=clean,
         force=force,
-        jobs=jobs or default_jobs(),
+        jobs=jobs,
     )
+    # One digest cache for every launch-gate fingerprint below, constructed after the offline
+    # phase (a --clean run wipes the store with the rest of the export root). Each gate
+    # persists it before its editor boots, so the commandlet reads the same warm entries.
+    cache = ContentDigestCache(config.export_root / DIGEST_CACHE_FILE)
     try:
         # The masters the corpus and every map instance from, then the shared assets a map bake
         # resolves. A map baked before the corpus binds nothing for every texture, material and
         # prop mesh the corpus owns, and its receipts would freeze that.
-        ensure_policy_content(config, runner, force=force or clean)
+        ensure_policy_content(config, runner, force=force or clean, cache=cache,
+                              particles_covered="particles" in bundles)
     except Exception as exc:
         raise ExportBakeFailure(str(exc)) from exc
-    ensure_corpus_bake(config, runner, force=force or clean)
+    ensure_corpus_bake(config, runner, force=force or clean, cache=cache)
     # The cast and its placed-prop scope BEFORE the map bakes: a map's level stage loads
     # `/ElysiumBaked/Props/<stem>/SK_*` and its rest clip for every animated GAME_LUMP
     # placement, so those assets must be on the mount first -- the same ordering the focused
     # map path already enforces through `export_placed_models`. Recipe stamps make the
     # repeat cost of a current cast one editor boot of "reused" decisions.
-    export_characters(config, runner, None, force=force or clean, verify=verify)
-    unreal.bake_wield(config, runner, ())
-    bake_and_verify(config, runner, maps, force=force or clean, verify=verify)
+    export_characters(config, runner, None, force=force or clean, verify=verify,
+                      jobs=jobs, cache=cache)
+    _ensure_wield_bake(config, runner, force=force or clean, cache=cache)
+    _bake_profile_maps(config, runner, maps, force=force or clean, verify=verify,
+                       cache=cache)
     # Only the domains this profile actually covers.  `grid` and `all` both run every bundle, so
     # this clears the corpus either way; a profile that dropped one would leave that one gated.
-    mark_complete(config.export_root, ("maps", "policy", *bundles_for_profile(profile)))
+    mark_complete(config.export_root, ("maps", "policy", *bundles))
+    cache.write()
     return maps
 
 
@@ -1124,8 +1466,9 @@ def export_placed_models(config, runner, maps: Sequence[str], models: Sequence[s
     # of the neutral master is a prerequisite failure.
     body_master = config.repo_root / "Content" / "VtMB" / "Materials" / "M_PlayerBody.uasset"
     if not body_master.is_file():
-        ensure_character_material_content(config, runner)
-    _run_character_bake(config, runner, (), props=stems, verify=verify, force=force)
+        ensure_character_material_content(config, runner, manifest=receipt_store)
+    _run_character_bake(config, runner, (), props=stems, verify=verify, force=force,
+                        manifest=receipt_store)
     return stems
 
 
@@ -1133,17 +1476,76 @@ FAMILIES_FILE = "families.json"
 CHARACTER_TEXTURES_FILE = "textures.json"
 
 
+def _character_bake_fingerprint(config, stems: Sequence[str], props: Sequence[str], *,
+                                cache: ContentDigestCache | None = None) -> str:
+    """The character launch's whole recipe: the complete `npc/` export tree (containers,
+    partition, texture corpus and sidecars are all bake inputs), the driving scripts, the
+    character-material policy the bodies instance from, and the requested slice."""
+    return fingerprint_content(
+        [config.export_root / "npc"],
+        extra=(
+            "character-bake-v1",
+            _bake_script_fingerprint(config, ("bake_characters.py",), cache=cache),
+            _character_material_fingerprint(config),
+            "stems:" + ",".join(stems),
+            "props:" + ",".join(props),
+        ),
+        cache=cache,
+    )
+
+
+def _character_bake_outputs(config, stems: Sequence[str],
+                            props: Sequence[str]) -> tuple[Path, ...]:
+    """The per-unit meshes the launch must leave on the mount, so a nuked or partially
+    removed mount defeats the fingerprint skip."""
+    mount = config.repo_root / "Plugins" / "ElysiumBaked" / "Content"
+    return (
+        *(mount / "Characters" / "Meshes" / f"SK_{stem}.uasset" for stem in stems),
+        *(mount / "Props" / stem / f"SK_{stem}.uasset" for stem in props),
+    )
+
+
 def _run_character_bake(config, runner, stems: Sequence[str], *, props: Sequence[str] = (),
-                        after_bake=None, verify: bool = False,
-                        force: bool = False) -> None:
+                        after_bake=None, verify: bool = False, force: bool = False,
+                        manifest: Manifest | None = None,
+                        cache: ContentDigestCache | None = None) -> None:
     """Author the stale character units and leave each one stamped with its recipe.
 
-    Acceptance is the editor's own exit: the commandlet stamps every unit it authored as it
-    lands, so a run that dies keeps exactly what it saved and the next run resumes off the
-    stamps alone. `verify` adds the deep read-back on top, which
+    The launch itself rides a manifest receipt over its complete input tree, so a current
+    cast costs no editor boot at all; a stale receipt costs one boot whose per-unit reuse is
+    still the commandlet's decision, read off each asset's recipe stamp. Acceptance is the
+    editor's own exit: the commandlet stamps every unit it authored as it lands, so a run
+    that dies keeps exactly what it saved, records no success, and the next run resumes off
+    the stamps alone. `verify` adds the deep read-back on top, which
     `uv run elysium verify characters` also runs on its own.
     """
-    unreal.bake_characters(config, runner, stems, props=props, force=force)
+    stems = list(dict.fromkeys(stems))
+    props = list(dict.fromkeys(props))
+    if not stems and not props:
+        raise ValueError("character bake needs at least one body or placed model")
+    if cache is None:
+        cache = ContentDigestCache(config.export_root / DIGEST_CACHE_FILE)
+
+    def fingerprint() -> str:
+        value = _character_bake_fingerprint(config, stems, props, cache=cache)
+        # Persisted before the launch so the commandlet's own digest reads start warm.
+        cache.write()
+        return value
+
+    def launch() -> None:
+        # A bake that runs invalidates the sweep receipt first: a crash between the editor's
+        # saves and the sweep must leave the next run scanning the mount, not trusting the
+        # receipt of the partition that was swept before this one authored.
+        (config.export_root / SWEEP_RECEIPT_FILE).unlink(missing_ok=True)
+        unreal.bake_characters(config, runner, stems, props=props, force=force)
+
+    task = Task(
+        "unreal:bake:characters",
+        launch,
+        fingerprint=fingerprint,
+        outputs=_character_bake_outputs(config, stems, props),
+    )
+    _run_launch_task(config, task, manifest=manifest, force=force)
     if after_bake is not None:
         after_bake()
     if verify:
@@ -1168,18 +1570,46 @@ def _character_code_fingerprint(config) -> str:
     return fingerprint_content(_character_code_inputs(config), extra=("eskm-exporter-v1",))
 
 
-def _character_source_detail(index: dict, model_rel: str) -> str:
+def _index_prefix_buckets(index: dict) -> dict[str, list[str]]:
+    """{dot-terminated prefix: sorted index keys that start with it}, one pass.
+
+    `_character_source_detail`'s needle is always a prefix ending at a ``.``, so bucketing
+    every key under each of its dot prefixes answers the same `startswith` question with one
+    lookup instead of a scan over the whole index per model. A key joins one bucket per dot
+    it contains, which keeps the lookup exactly equal to the scan whatever dots a directory
+    or stem carries.
+    """
+    buckets: dict[str, list[str]] = defaultdict(list)
+    for key in index:
+        at = key.find(".")
+        while at >= 0:
+            buckets[key[: at + 1]].append(key)
+            at = key.find(".", at + 1)
+    for entries in buckets.values():
+        entries.sort()
+    return dict(buckets)
+
+
+def _character_source_detail(index: dict, model_rel: str,
+                             buckets: Mapping[str, Sequence[str]] | None = None) -> str:
     """A stable identity for one model's own files inside the user's install.
 
     A model is more than its `.mdl` -- the exporter also reads the sibling `.vvd`, `.vtx` and
     `.ani` -- so every index entry sharing the model's directory and stem contributes. Its
     INCLUDED banks deliberately do not: a bank is written as its own container by its own task,
     and a body's container carries only the body's own clips.
+
+    ``buckets`` is `_index_prefix_buckets(index)`; with it the sibling set is one lookup, and
+    the answer is identical to the scan the bucketless call performs.
     """
     key = model_rel.replace("\\", "/").lower()
     prefix = key[: -len(".mdl")] + "." if key.endswith(".mdl") else key
+    if buckets is not None and prefix.endswith("."):
+        names = buckets.get(prefix, ())
+    else:
+        names = sorted(k for k in index if k.startswith(prefix))
     digest = hashlib.sha256()
-    for name in sorted(k for k in index if k.startswith(prefix)):
+    for name in names:
         kind, value = index[name]
         digest.update(name.encode("utf-8", errors="surrogateescape"))
         digest.update(b"\0")
@@ -1198,8 +1628,14 @@ def _character_source_detail(index: dict, model_rel: str) -> str:
     return digest.hexdigest()
 
 
+def _load_npc_manifest(npc_dir: Path) -> dict:
+    """One parse of the cast manifest, shared by every consumer a run passes it to."""
+    with (npc_dir / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
+        return json.load(handle)
+
+
 def character_source_plan(
-    npc_dir: Path,
+    npc_dir: Path, manifest: dict | None = None,
 ) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
     """({model stem}, {bank stem}, {cinematic stem}, {prop stem}) -> install path, whole cast.
 
@@ -1209,9 +1645,11 @@ def character_source_plan(
     models partitioned the banks differently from one that had baked all of them. Writing every
     container on every run removes that filesystem side effect; making each write individually
     skippable is what keeps it affordable.
+
+    ``manifest`` is the already-parsed `npc_manifest.json`; without it the file is read here.
     """
-    with (npc_dir / "npc_manifest.json").open(encoding="utf-8") as handle:
-        manifest = json.load(handle)
+    if manifest is None:
+        manifest = _load_npc_manifest(npc_dir)
 
     models = {stem: record["model"] for stem, record in manifest["npcs"].items()}
     banks: dict[str, str] = {}
@@ -1265,17 +1703,31 @@ def placed_model_source_fingerprint(stem: str, record: dict, code_fingerprint: s
     )
 
 
+def _inline_character_source(kind: str, stem: str, model_rel: str, out_dir: str,
+                             clip_labels: Sequence[str] = (),
+                             ensure_labels: Sequence[str] = ()) -> None:
+    """Run one container write on the calling thread, through the same worker function the
+    process pool uses, so both paths write identical containers."""
+    text = workers.character_source_worker(
+        kind, stem, model_rel, out_dir, clip_labels, ensure_labels)
+    if text:
+        print(text, end="")
+
+
 def _placed_model_source_tasks(npc_dir: Path, source_manifest: dict,
                                props: dict[str, str], index: dict,
-                               code_fingerprint: str) -> list[Task]:
+                               code_fingerprint: str, *,
+                               buckets: Mapping[str, Sequence[str]] | None = None,
+                               dispatch=None) -> list[Task]:
     """Build the independently cacheable `.eskm` tasks for exactly ``props``.
 
     Placed models own no shared skeleton or animation bank, so there is no correctness reason
     for a one-prop edit to enumerate the cast.  The whole-corpus character path calls this with
-    every declared prop; the focused map path calls it with only the selected stems.
+    every declared prop and its shared process-pool dispatch; the focused map path calls it
+    with only the selected stems, written inline.
     """
-    from elysium_pipeline.exporters import UE_mdl_skeletal
-
+    if dispatch is None:
+        dispatch = _inline_character_source
     prop_dir = npc_dir / "placed_models"
     tasks: list[Task] = []
     for stem, model_rel in sorted(props.items()):
@@ -1285,12 +1737,13 @@ def _placed_model_source_tasks(npc_dir: Path, source_manifest: dict,
 
         def prop_action(stem=stem, model_rel=model_rel, clip_labels=clip_labels,
                         ensure_labels=ensure_labels) -> None:
-            UE_mdl_skeletal.write_model(index, model_rel, str(prop_dir), stem=stem, anorms=None,
-                                        clip_labels=clip_labels, ensure_labels=ensure_labels)
+            dispatch("prop", stem, model_rel, str(prop_dir),
+                     clip_labels, ensure_labels)
 
         def prop_fingerprint(model_rel=model_rel, stem=stem, record=record) -> str:
             return placed_model_source_fingerprint(
-                stem, record, code_fingerprint, _character_source_detail(index, model_rel))
+                stem, record, code_fingerprint,
+                _character_source_detail(index, model_rel, buckets))
 
         tasks.append(Task(
             name=f"eskm:prop:{stem}",
@@ -1306,8 +1759,7 @@ def write_placed_model_sources(config, npc_dir: Path, stems: Sequence[str], *,
     """Write only the named placed-model containers, preserving the global cast untouched."""
     from elysium_pipeline.formats import install
 
-    with (npc_dir / "npc_manifest.json").open(encoding="utf-8") as handle:
-        source_manifest = json.load(handle)
+    source_manifest = _load_npc_manifest(npc_dir)
     declared = source_manifest.get("placed_models", {})
     requested = list(dict.fromkeys(str(stem).strip().lower() for stem in stems if str(stem).strip()))
     unknown = [stem for stem in requested if not declared.get(stem, {}).get("model")]
@@ -1330,7 +1782,8 @@ def write_placed_model_sources(config, npc_dir: Path, stems: Sequence[str], *,
 
 def write_character_sources(
     config, npc_dir: Path, *, manifest: Manifest, force: bool = False,
-    include_props: bool = True, body_stems: Sequence[str] | None = None
+    include_props: bool = True, body_stems: Sequence[str] | None = None,
+    jobs: int | None = None, npc_manifest: dict | None = None
 ) -> tuple[list[str], list[str]]:
     """Write the requested `.eskm` closure, or the whole cast when no slice is named.
 
@@ -1343,13 +1796,17 @@ def write_character_sources(
     a focused body slice writes only those bodies, body-owned clip donors they name, and the bank
     containers their clip maps reach. Existing containers for every other family remain the
     authoritative inputs when the global rig partition is recomputed.
-    """
-    from elysium_pipeline.exporters import UE_mdl_skeletal
-    from elysium_pipeline.formats import install, mdl_gltf, mdl_skel
 
-    models, banks, cinematics, props = character_source_plan(npc_dir)
-    with (npc_dir / "npc_manifest.json").open(encoding="utf-8") as handle:
-        source_manifest = json.load(handle)
+    Container writing is GIL-bound struct parsing, so ``jobs`` scheduler threads dispatch each
+    stale task's write to a shared process pool of the same width
+    (`workers.character_source_worker`); the fingerprint and skip decisions stay on the
+    scheduler threads, so a current container never pays a process round-trip, and a fully
+    current run spawns no pool at all.
+    """
+    from elysium_pipeline.formats import install
+
+    source_manifest = npc_manifest if npc_manifest is not None else _load_npc_manifest(npc_dir)
+    models, banks, cinematics, props = character_source_plan(npc_dir, source_manifest)
     # Every per-root container of a cinematic model is produced by one `write_cinematic` call, so
     # its stems are not their own tasks -- they would each rewrite the whole performance.
     cinematic_stems = {stem for stem in banks if any(
@@ -1380,28 +1837,40 @@ def write_character_sources(
         cinematics = {stem: cinematics[stem] for stem in sorted(selected_cinematics)}
         cinematic_stems &= bank_sources
     index = install.build_index(verbose=False)
+    buckets = _index_prefix_buckets(index)
     code_fingerprint = _character_code_fingerprint(config)
-    # Read once, lazily: without the unit-vector table a compressed vertex-animation record has
-    # directions but no magnitudes, so a body is written with no morph section rather than a
-    # wrong one. A fully-current run never needs it.
-    anorms: list = []
+    jobs = max(1, jobs if jobs is not None else default_jobs())
 
-    def load_anorms():
-        if not anorms:
-            anorms.append(mdl_skel.load_anorms())
-        return anorms[0]
+    # The pool exists only once a stale task actually dispatches, so a fully current run
+    # costs no process spawn; `min` keeps a small slice from spawning idle workers.
+    pool: list[ProcessPoolExecutor] = []
+    pool_lock = threading.Lock()
+
+    def dispatch(kind, stem, model_rel, out_dir, clip_labels=(), ensure_labels=()):
+        if jobs <= 1:
+            _inline_character_source(kind, stem, model_rel, out_dir,
+                                     clip_labels, ensure_labels)
+            return
+        with pool_lock:
+            if not pool:
+                pool.append(ProcessPoolExecutor(max_workers=min(jobs, len(tasks))))
+            executor = pool[0]
+        text = executor.submit(
+            workers.character_source_worker, kind, stem, model_rel, out_dir,
+            clip_labels, ensure_labels,
+        ).result()
+        if text:
+            print(text, end="")
 
     tasks: list[Task] = []
     for stem, model_rel in sorted(models.items()):
         def model_action(stem=stem, model_rel=model_rel) -> None:
-            UE_mdl_skeletal.write_model(
-                index, model_rel, str(npc_dir), stem=stem, anorms=load_anorms()
-            )
+            dispatch("model", stem, model_rel, str(npc_dir))
 
         def model_fingerprint(model_rel=model_rel, stem=stem) -> str:
             return fingerprint_content(
                 (), extra=("eskm-model-v1", stem, code_fingerprint,
-                           _character_source_detail(index, model_rel))
+                           _character_source_detail(index, model_rel, buckets))
             )
 
         tasks.append(Task(
@@ -1416,12 +1885,12 @@ def write_character_sources(
             continue
 
         def bank_action(stem=stem, model_rel=model_rel) -> None:
-            UE_mdl_skeletal.write_bank(index, model_rel, str(npc_dir), stem)
+            dispatch("bank", stem, model_rel, str(npc_dir))
 
         def bank_fingerprint(model_rel=model_rel, stem=stem) -> str:
             return fingerprint_content(
                 (), extra=("eskm-bank-v1", stem, code_fingerprint,
-                           _character_source_detail(index, model_rel))
+                           _character_source_detail(index, model_rel, buckets))
             )
 
         tasks.append(Task(
@@ -1438,12 +1907,12 @@ def write_character_sources(
                        if bank == stem or bank.startswith(stem + "__"))
 
         def cinematic_action(stem=stem, model_rel=model_rel) -> None:
-            UE_mdl_skeletal.write_cinematic(index, model_rel, str(npc_dir), stem)
+            dispatch("cinematic", stem, model_rel, str(npc_dir))
 
         def cinematic_fingerprint(model_rel=model_rel, stem=stem) -> str:
             return fingerprint_content(
                 (), extra=("eskm-cinematic-v1", stem, code_fingerprint,
-                           _character_source_detail(index, model_rel))
+                           _character_source_detail(index, model_rel, buckets))
             )
 
         tasks.append(Task(
@@ -1457,7 +1926,8 @@ def write_character_sources(
     # but owns no shared cast state. The focused path reuses this exact task factory for a slice.
     if include_props:
         tasks.extend(_placed_model_source_tasks(
-            npc_dir, source_manifest, props, index, code_fingerprint))
+            npc_dir, source_manifest, props, index, code_fingerprint,
+            buckets=buckets, dispatch=dispatch))
 
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     log_root = getattr(config, "log_root", None) or npc_dir
@@ -1466,9 +1936,15 @@ def write_character_sources(
         log_path=log_root / f"{stamp}-character-sources.log",
         per_task=False,
     )
-    with progress:
-        progress.note(f"character sources: {len(tasks)} container task(s)")
-        results = TaskGraph(tasks).run(force=force, manifest=manifest, progress=progress)
+    try:
+        with progress:
+            progress.note(
+                f"character sources: {len(tasks)} container task(s), {jobs} job(s)")
+            results = TaskGraph(tasks).run(
+                jobs=jobs, force=force, manifest=manifest, progress=progress)
+    finally:
+        if pool:
+            pool[0].shutdown(wait=True, cancel_futures=True)
     failures = [name for name, result in results.items() if result.status not in ("ok", "skipped")]
     if failures:
         raise OfflineExportFailure(
@@ -1477,7 +1953,8 @@ def write_character_sources(
     return sorted(models), sorted(banks)
 
 
-def write_character_partition(npc_dir: Path, *, validate_props: bool = True) -> dict:
+def write_character_partition(npc_dir: Path, *, validate_props: bool = True,
+                              npc_manifest: dict | None = None) -> dict:
     """Write `npc/families.json` and `npc/textures.json` over the whole corpus.
 
     Whole-corpus for two reasons. The BANK partition is greedy and order-dependent, so it is a
@@ -1490,6 +1967,10 @@ def write_character_partition(npc_dir: Path, *, validate_props: bool = True) -> 
     `textures.json` rides along because the same pass already has every container's material
     table open. Without it the editor reopens 400 MB of containers just to recover which albedo
     each material wants.
+
+    Only the SKEL and MATL sections are consumed, so each container is read through
+    `eskm.read_sections`' seek path -- a few kilobytes per file instead of the clip payload
+    that dominates the corpus.
     """
     from elysium_pipeline import asset_names, character_partition
     from elysium_pipeline.formats import eskm
@@ -1499,7 +1980,7 @@ def write_character_partition(npc_dir: Path, *, validate_props: bool = True) -> 
     # reader joins it here. They are present in the texture table all the same -- one texture
     # package serves the whole mount, and a prop albedo missing from it is swept as an orphan the
     # moment anything sweeps.
-    models, banks, _cinematics, props = character_source_plan(npc_dir)
+    models, banks, _cinematics, props = character_source_plan(npc_dir, npc_manifest)
     model_paths = {stem: npc_dir / f"{stem}.eskm" for stem in models}
     bank_paths = {stem: npc_dir / "banks" / f"{stem}.eskm" for stem in banks}
     prop_paths = {stem: npc_dir / "placed_models" / f"{stem}.eskm" for stem in props}
@@ -1519,11 +2000,17 @@ def write_character_partition(npc_dir: Path, *, validate_props: bool = True) -> 
                 raise OfflineExportFailure(
                     f"{path} is missing; the character sources did not complete"
                 )
-            blob = eskm.read(path)
-            trees[stem] = eskm.bone_parents(blob)
+            try:
+                sections = eskm.read_sections(path, (b"SKEL", b"MATL"))
+            except (OSError, ValueError) as exc:
+                raise OfflineExportFailure(
+                    f"{path} is not a readable .eskm container: {exc}"
+                ) from exc
+            trees[stem] = eskm.bone_parents_from_section(sections[b"SKEL"])
             corpus.update(f"{kind}:{stem}:".encode("utf-8"))
             corpus.update(character_partition.tree_fingerprint(trees[stem]).encode("ascii"))
-            for material, uri in sorted(eskm.materials(blob).items()):
+            for material, uri in sorted(
+                    eskm.materials_from_section(sections[b"MATL"]).items()):
                 if not uri:
                     continue
                 name = asset_names.texture_asset_name(uri)
@@ -1540,7 +2027,14 @@ def write_character_partition(npc_dir: Path, *, validate_props: bool = True) -> 
                 raise OfflineExportFailure(
                     f"{path} is missing; the character sources did not complete"
                 )
-            eskm.read(path)  # validate the container while walking the declared corpus
+            try:
+                # Header and section directory only: validates magic, version and table
+                # shape without loading the clip payload the partition never reads.
+                eskm.read_sections(path, ())
+            except (OSError, ValueError) as exc:
+                raise OfflineExportFailure(
+                    f"{path} is not a readable .eskm container: {exc}"
+                ) from exc
 
     partition = character_partition.build_partition(
         model_trees, bank_trees, corpus_fingerprint=corpus.hexdigest()
@@ -1641,21 +2135,60 @@ def resolve_character_slice(partition: dict, selectors: Sequence[str] | None,
     return sorted(dict.fromkeys(stem for stem in stems if stem))
 
 
+#: The receipt `sweep_characters` keeps beside the export manifest: the content identity of
+#: the two files the sweep's expected-asset set is a function of.
+SWEEP_RECEIPT_FILE = ".elysium-character-sweep.json"
+
+
+def _sweep_inputs_digest(npc_dir: Path) -> dict[str, str] | None:
+    """Content identity of the sweep's inputs, or None when either file is absent."""
+    out: dict[str, str] = {}
+    for name in (FAMILIES_FILE, CHARACTER_TEXTURES_FILE):
+        try:
+            out[name] = hashlib.sha256((npc_dir / name).read_bytes()).hexdigest()
+        except OSError:
+            return None
+    return out
+
+
 def sweep_characters(config, partition: dict, *, apply: bool = True,
-                     force: bool = False) -> dict:
+                     force: bool = False, skip_unchanged: bool = False,
+                     npc_manifest: dict | None = None) -> dict:
     """Remove baked character assets the declared partition no longer produces.
 
     Safe on a slice, because the partition it checks against always covers the whole cast: a run
     that baked two models still knows what the other 164 own. That is the property that makes a
     global sweep possible at all -- the flat `Meshes/`, `Materials/` and `Skeletons/` folders give
     no per-body answer.
+
+    ``skip_unchanged`` skips the whole mount scan when `families.json` and `textures.json` are
+    byte-identical to the last applied sweep's receipt: the expected-asset set is a function of
+    those two files, and a bake against an unchanged partition writes only expected assets, so
+    no new orphan can have appeared. ``force`` defeats the receipt as well as the removal guard.
     """
     from elysium_pipeline import character_sweep
 
     mount = config.repo_root / "Plugins" / "ElysiumBaked" / "Content"
-    return character_sweep.sweep(
-        mount, config.export_root / "npc", partition, apply=apply, force=force
+    npc_dir = config.export_root / "npc"
+    receipt_path = config.export_root / SWEEP_RECEIPT_FILE
+    digests = _sweep_inputs_digest(npc_dir)
+    if skip_unchanged and apply and not force and digests is not None:
+        try:
+            recorded = json.loads(receipt_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            recorded = None
+        if recorded and recorded.get("inputs") == digests:
+            print("character sweep: partition and texture table unchanged; "
+                  "mount scan skipped")
+            return {"orphan_assets": [], "orphan_dirs": [], "total": 0,
+                    "removed": 0, "refused": "", "skipped": True}
+    result = character_sweep.sweep(
+        mount, npc_dir, partition, apply=apply, force=force, manifest=npc_manifest
     )
+    if apply and not result["refused"] and digests is not None:
+        _write_json(receipt_path, {"schema": "elysium.character-sweep-receipt",
+                                   "version": 1, "inputs": digests})
+    return result
 
 
 def _stale_garments(config, stems: Sequence[str]) -> list[str]:
@@ -1685,10 +2218,21 @@ def _stale_garments(config, stems: Sequence[str]) -> list[str]:
     return stale
 
 
+def _cloth_bake_stems(config, stems: Sequence[str], *, force: bool = False) -> list[str]:
+    """The stems worth a cloth editor launch: the stale garments, or under ``force`` every
+    authored one. Empty when no named stem authors a garment at all, which skips the launch
+    -- there is no work an editor boot could do."""
+    if force:
+        garment_dir = config.export_root / "npc" / "garment"
+        return [stem for stem in stems if (garment_dir / f"{stem}.json").is_file()]
+    return _stale_garments(config, stems)
+
+
 def export_characters(
     config, runner, models: Sequence[str] | None = None, *, force: bool = False,
     sweep: bool = True, force_sweep: bool = False, include_props: bool = True,
-    verify: bool = False
+    verify: bool = False, jobs: int | None = None,
+    cache: ContentDigestCache | None = None
 ) -> list[str]:
     """Bake characters onto /ElysiumBaked/Characters (ANM1) -- the whole cast unless told otherwise.
 
@@ -1715,10 +2259,13 @@ def export_characters(
         raise ValueError(
             f"{index} is missing; run: uv run elysium export bundle npc"
         )
+    # The 30 MB cast manifest, parsed once and handed to every stage of this run.
+    npc_manifest = _load_npc_manifest(npc_dir)
 
     source_stems: list[str] | None = None
     if models:
-        declared_models, _banks, _cinematics, _props = character_source_plan(npc_dir)
+        declared_models, _banks, _cinematics, _props = character_source_plan(
+            npc_dir, npc_manifest)
         exact = []
         exact_only = True
         for selector in models:
@@ -1742,14 +2289,15 @@ def export_characters(
     manifest = Manifest(config.export_root / MANIFEST_FILE)
     write_character_sources(
         config, npc_dir, manifest=manifest, force=force, include_props=include_props,
-        body_stems=source_stems)
-    partition = write_character_partition(npc_dir, validate_props=include_props)
+        body_stems=source_stems, jobs=jobs, npc_manifest=npc_manifest)
+    partition = write_character_partition(npc_dir, validate_props=include_props,
+                                          npc_manifest=npc_manifest)
 
     stems = resolve_character_slice(partition, models, npc_dir)
     if not stems:
         raise ValueError("no models named and the manifest lists no character")
 
-    ensure_character_material_content(config, runner)
+    ensure_character_material_content(config, runner, manifest=manifest)
 
     def sweep_after_bake() -> None:
         # Once the editor has returned and before any receipt is promoted: an orphan from a
@@ -1757,7 +2305,9 @@ def export_characters(
         # opted into runs after this for the same reason.
         if not sweep:
             return
-        result = sweep_characters(config, partition, force=force_sweep)
+        result = sweep_characters(config, partition, force=force_sweep,
+                                  skip_unchanged=not (force or force_sweep),
+                                  npc_manifest=npc_manifest)
         if result["refused"]:
             raise ExportBakeFailure("character sweep refused: " + result["refused"])
         if result["removed"]:
@@ -1768,11 +2318,16 @@ def export_characters(
     # Whether the run authors anything at all is the commandlet's per-unit decision, read off
     # each asset's recipe stamp.
     _run_character_bake(config, runner, stems, after_bake=sweep_after_bake, verify=verify,
-                        force=force)
+                        force=force, manifest=manifest, cache=cache)
     # The garments those bodies wear. After the bake has been accepted, because a cloth asset
     # resolves its bone names against the mesh's reference skeleton -- the mesh has to be on the
-    # mount before a garment can bind to it. Most models author none and cost nothing here.
-    unreal.make_cloth_assets(config, runner, stems)
+    # mount before a garment can bind to it. Most models author none, and a launch happens only
+    # when a garment is stale (or, under --force, authored at all).
+    cloth_stems = _cloth_bake_stems(config, stems, force=force)
+    if cloth_stems:
+        unreal.make_cloth_assets(config, runner, cloth_stems)
+    else:
+        print("cloth: no authored garment is stale; editor launch skipped")
     return stems
 
 

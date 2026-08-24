@@ -160,16 +160,36 @@ def cubemap_dds(faces) -> bytes:
     )
     return bytes(header) + payload
 
+def _dxt1_blocks_opaque(raw: bytes) -> bool:
+    """Whether every BC1 block selects the four-colour mode (color0 > color1).
+
+    BC1's other mode (color0 <= color1) decodes index-3 texels transparent, so a plain DXT1
+    can still carry punch-through alpha. When no block uses that mode the decoded alpha plane
+    is provably all-255, which lets `save_png` skip its per-pixel scan."""
+    import numpy as np
+    colors = np.frombuffer(raw, dtype="<u2")
+    return bool((colors[0::4] > colors[1::4]).all())
+
+
 def decode(tth: bytes, ttz: bytes) -> Image.Image:
     w, h, fmt, mips = parse_tth(tth)
     data = zlib.decompress(ttz)
     base = mip_byte_size(w, h, fmt)          # size of the full-res mip
     largest = data[len(data) - base:]        # it's stored LAST
 
+    # Formats whose decoded alpha plane is provably all-255 are annotated so `save_png` can
+    # answer its fold-to-RGB question from the source format instead of scanning every pixel.
+    # `Image.info` survives `convert`, and PNG save writes no arbitrary info keys, so the
+    # annotation never reaches the file.
     if fmt in DXT_FOURCC:
-        return Image.open(io.BytesIO(make_dds(largest, w, h, DXT_FOURCC[fmt]))).convert("RGBA")
+        image = Image.open(io.BytesIO(make_dds(largest, w, h, DXT_FOURCC[fmt]))).convert("RGBA")
+        if fmt == FMT_DXT1 and _dxt1_blocks_opaque(largest):
+            image.info["opaque_alpha"] = True
+        return image
     if fmt == FMT_BGR888:
-        return Image.frombytes("RGB", (w, h), largest, "raw", "BGR").convert("RGBA")
+        image = Image.frombytes("RGB", (w, h), largest, "raw", "BGR").convert("RGBA")
+        image.info["opaque_alpha"] = True    # no alpha plane in the source at all
+        return image
     if fmt == FMT_BGRA8888:
         return Image.frombytes("RGBA", (w, h), largest, "raw", "BGRA")
     if fmt == FMT_RGBA8888:
@@ -193,8 +213,15 @@ def save_png(image: Image.Image, path) -> None:
     byte-identical -- name and pixels are both a function of the source texture and its role --
     so the duplicate is wasted work rather than a conflict, and `os.replace` keeps a reader (or
     the other writer) from ever observing a half-written PNG.
+
+    The opaqueness question is answered from the source format when `decode` proved it
+    (``image.info["opaque_alpha"]``); otherwise the alpha plane is scanned. Encoded at zlib
+    level 1: the PNGs are gitignored intermediates whose read-back cost is identical, so encode
+    speed outranks disk size.
     """
-    if image.mode == "RGBA" and image.getchannel("A").getextrema()[0] == 255:
+    if image.mode == "RGBA" and (
+            image.info.get("opaque_alpha")
+            or image.getchannel("A").getextrema()[0] == 255):
         image = image.convert("RGB")
     path = os.fspath(path)
     directory = os.path.dirname(path) or "."
@@ -202,7 +229,7 @@ def save_png(image: Image.Image, path) -> None:
         dir=directory, prefix=".tmp-", suffix=os.path.splitext(path)[1] or ".png")
     os.close(handle)
     try:
-        image.save(temporary)
+        image.save(temporary, compress_level=1)
         os.replace(temporary, path)
     except BaseException:
         try:

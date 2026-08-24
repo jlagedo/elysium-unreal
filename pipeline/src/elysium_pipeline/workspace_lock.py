@@ -39,12 +39,14 @@ def active_unreal_processes(project: Path) -> tuple[dict[str, Any], ...]:
 
     needle = os.path.normcase(str(project.resolve()))
     found: list[dict[str, Any]] = []
-    for process in psutil.process_iter(("pid", "name", "cmdline")):
+    for process in psutil.process_iter(("pid", "name")):
         try:
             name = str(process.info.get("name") or "").lower()
             if name not in _UNREAL_PROCESSES:
                 continue
-            command = " ".join(process.info.get("cmdline") or ())
+            # A command line is fetched per process (on Windows it opens the
+            # process), so only the name-matched few pay for it.
+            command = " ".join(process.cmdline() or ())
             if needle not in os.path.normcase(command):
                 continue
             found.append({"pid": process.pid, "name": process.info.get("name") or name})

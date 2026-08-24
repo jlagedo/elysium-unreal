@@ -29,10 +29,13 @@ from elysium_pipeline import asset_names, character_partition
 MAX_SHARE = 0.25
 
 
-def _expected(npc_dir: Path, partition: dict) -> set[str]:
-    """Every asset name the declared partition and the manifest would produce, by folder."""
-    with (npc_dir / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
-        manifest = json.load(handle)
+def _expected(npc_dir: Path, partition: dict, manifest: dict | None = None):
+    """Every asset name the declared partition and the manifest would produce, by folder.
+
+    ``manifest`` is the already-parsed `npc_manifest.json`; without it the file is read here."""
+    if manifest is None:
+        with (npc_dir / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
+            manifest = json.load(handle)
 
     expected: set[str] = set()
     for stem in partition["models"]:
@@ -64,10 +67,11 @@ def _expected_dirs(partition: dict, manifest: dict) -> set[str]:
     return out
 
 
-def plan(mount_root: Path, npc_dir: Path, partition: dict) -> dict:
+def plan(mount_root: Path, npc_dir: Path, partition: dict, *,
+         manifest: dict | None = None) -> dict:
     """{orphan_assets, orphan_dirs, total} -- what a sweep would remove, and out of how many."""
     character_partition.check(partition)
-    expected, manifest = _expected(npc_dir, partition)
+    expected, manifest = _expected(npc_dir, partition, manifest)
     expected_dirs = _expected_dirs(partition, manifest)
 
     characters = mount_root / "Characters"
@@ -105,14 +109,15 @@ def plan(mount_root: Path, npc_dir: Path, partition: dict) -> dict:
 
 
 def sweep(mount_root: Path, npc_dir: Path, partition: dict, *,
-          apply: bool = False, force: bool = False) -> dict:
+          apply: bool = False, force: bool = False,
+          manifest: dict | None = None) -> dict:
     """Report -- and with `apply`, remove -- everything the declared partition does not produce.
 
     Returns the plan, with `removed` counting what actually went. Refuses a sweep that would take
     more than `MAX_SHARE` of the mount unless `force`, because that shape is a bug in the inputs
     rather than a large legitimate cleanup.
     """
-    result = plan(mount_root, npc_dir, partition)
+    result = plan(mount_root, npc_dir, partition, manifest=manifest)
     result["removed"] = 0
     result["refused"] = ""
     orphans = result["orphan_assets"]

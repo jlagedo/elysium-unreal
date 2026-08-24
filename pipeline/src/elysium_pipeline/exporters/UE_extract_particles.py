@@ -40,7 +40,8 @@ def normalise_rain_sprite(data: bytes, destination: Path) -> None:
         alpha = rgba.getchannel("A")
         rgba = Image.merge("RGBA", (alpha, alpha, alpha, Image.new("L", rgba.size, 255)))
         destination.parent.mkdir(parents=True, exist_ok=True)
-        rgba.save(destination, format="PNG")
+        # zlib level 1: gitignored intermediates, so encode speed outranks disk size.
+        rgba.save(destination, format="PNG", compress_level=1)
 
 
 def normalise_sprite(data: bytes, destination: Path) -> None:
@@ -57,7 +58,8 @@ def normalise_sprite(data: bytes, destination: Path) -> None:
         if rgba.width <= 0 or rgba.height <= 0:
             raise ValueError(f"particle sprite has invalid dimensions: {destination}")
         destination.parent.mkdir(parents=True, exist_ok=True)
-        rgba.save(destination, format="PNG")
+        # zlib level 1: gitignored intermediates, so encode speed outranks disk size.
+        rgba.save(destination, format="PNG", compress_level=1)
 
 
 def main(*, force: bool = False, index=None) -> None:
@@ -81,33 +83,43 @@ def main(*, force: bool = False, index=None) -> None:
         if data is None:
             raise FileNotFoundError(key)
         destination.parent.mkdir(parents=True, exist_ok=True)
-        if not force and destination.is_file() and destination.read_bytes() == data:
-            cached += 1
-        else:
+        fresh = force or not (destination.is_file() and destination.read_bytes() == data)
+        if fresh:
             destination.write_bytes(data)
             copied += 1
+        else:
+            cached += 1
         manifest[relative.as_posix()] = {"bytes": len(data), "source": idx[key][0]}
         posix = relative.as_posix()
         if posix.lower().endswith(".tga"):
             png_relative = relative.with_suffix(".png")
             png_destination = out / png_relative
+            # The PNG is derived from the .tga, so a source that was (re)copied this run
+            # re-normalises; an unchanged source keeps the PNG it already has.
             if posix.lower() in RAIN_SLICE_SPRITES:
-                normalise_rain_sprite(data, png_destination)
+                if fresh or not png_destination.is_file():
+                    normalise_rain_sprite(data, png_destination)
                 normalized[posix] = png_relative.as_posix()
             else:
-                if force or not png_destination.is_file():
+                if fresh or not png_destination.is_file():
                     normalise_sprite(data, png_destination)
                 sprites[posix] = png_relative.as_posix()
-    (out / "manifest.json").write_text(
-        json.dumps({
-            "schema": "elysium.particle-mirror",
-            "version": 3,
-            "files": manifest,
-            "normalized_rain_closure": normalized,
-            "normalized_sprites": sprites,
-        }, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    manifest_text = json.dumps({
+        "schema": "elysium.particle-mirror",
+        "version": 3,
+        "files": manifest,
+        "normalized_rain_closure": normalized,
+        "normalized_sprites": sprites,
+    }, indent=2, sort_keys=True) + "\n"
+    manifest_path = out / "manifest.json"
+    # Skip a byte-identical rewrite: an unchanged manifest keeps its mtime, so downstream
+    # freshness checks stay warm (same pattern as `UE_extract_corpus._write`).
+    try:
+        unchanged = manifest_path.read_text(encoding="utf-8") == manifest_text
+    except OSError:
+        unchanged = False
+    if not unchanged:
+        manifest_path.write_text(manifest_text, encoding="utf-8")
     print(f"[particles] {len(selected)} files ({copied} copied, {cached} unchanged) -> {out}")
 
 

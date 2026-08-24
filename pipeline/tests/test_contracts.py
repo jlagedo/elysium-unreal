@@ -371,6 +371,111 @@ class PropMaterialContractTests(unittest.TestCase):
                     self.assertEqual(exported.getchannel("A").getpixel((0, 0)), 73)
 
 
+class TextureDecodeMemoTests(unittest.TestCase):
+    """`mdl._png_memo`: one decode+write per output path across per-model caches."""
+
+    SEARCH = ["models/props/"]
+
+    @staticmethod
+    def _read_bytes_for(vmts):
+        def read_bytes(path):
+            if path in vmts:
+                return vmts[path].encode("ascii")
+            if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
+                return b"synthetic"
+            return None
+        return read_bytes
+
+    def test_a_shared_texture_decodes_once_across_per_model_caches(self) -> None:
+        read_bytes = self._read_bytes_for({
+            "materials/models/props/glasswin.vmt":
+                '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n',
+        })
+        source = Image.new("RGBA", (2, 1))
+        source.putdata([(10, 20, 30, 0), (40, 50, 60, 191)])
+        with tempfile.TemporaryDirectory() as out, mock.patch(
+            "elysium_pipeline.formats.tex_to_png.decode", return_value=source
+        ) as decode:
+            (Path(out) / "tex").mkdir()          # write_obj_scene's own makedirs
+            first = mdl._resolve_material("glasswin", self.SEARCH, read_bytes, out, {})
+            second = mdl._resolve_material("glasswin", self.SEARCH, read_bytes, out, {})
+        self.assertEqual(first["albedo"], "props_shared.png")
+        self.assertEqual(second["albedo"], first["albedo"])
+        self.assertEqual(decode.call_count, 1)
+
+    def test_selfillum_arriving_on_a_later_model_still_writes_the_emission_mask(self) -> None:
+        # The memo keeps filenames, not images, so a derived product first requested by a
+        # later model re-decodes its base once rather than losing the mask.
+        read_bytes = self._read_bytes_for({
+            "materials/models/props/plain.vmt":
+                '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n',
+            "materials/models/props/glow.vmt":
+                '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n"$selfillum" "1"\n}\n',
+        })
+        source = Image.new("RGBA", (2, 1))
+        source.putdata([(10, 20, 30, 0), (40, 50, 60, 191)])
+        with tempfile.TemporaryDirectory() as out, mock.patch(
+            "elysium_pipeline.formats.tex_to_png.decode", return_value=source
+        ) as decode:
+            (Path(out) / "tex").mkdir()          # write_obj_scene's own makedirs
+            first = mdl._resolve_material("plain", self.SEARCH, read_bytes, out, {})
+            second = mdl._resolve_material("glow", self.SEARCH, read_bytes, out, {})
+            self.assertTrue((Path(out) / "tex" / "props_shared_ke.png").is_file())
+        self.assertIsNone(first["emis"])
+        self.assertEqual(second["emis"], "props_shared_ke.png")
+        self.assertEqual(decode.call_count, 2)   # the albedo, then the mask's re-decode
+
+
+class SourceFormatAlphaTests(unittest.TestCase):
+    """`decode` answers the fold-to-RGB question from the source format where provable."""
+
+    @staticmethod
+    def _tth(w, h, fmt):
+        import struct
+        vtf = bytearray(64)
+        vtf[0:4] = b"VTF\x00"
+        struct.pack_into("<HH", vtf, 16, w, h)
+        struct.pack_into("<I", vtf, 52, fmt)
+        vtf[56] = 1
+        return b"TTH\x00" + b"\x00" * 12 + bytes(vtf)
+
+    def _roundtrip(self, tth, ttz):
+        image = tex_to_png.decode(tth, ttz)
+        with tempfile.TemporaryDirectory() as out:
+            path = Path(out) / "t.png"
+            tex_to_png.save_png(image, path)
+            with Image.open(path) as saved:
+                return image, saved.mode
+
+    def test_bgr888_is_format_answered_opaque_and_folds(self) -> None:
+        import zlib
+        tth = self._tth(2, 1, tex_to_png.FMT_BGR888)
+        image, mode = self._roundtrip(tth, zlib.compress(bytes((30, 20, 10, 60, 50, 40))))
+        self.assertIs(image.info.get("opaque_alpha"), True)
+        self.assertEqual(mode, "RGB")
+
+    def test_dxt1_without_punch_through_blocks_is_format_answered_opaque(self) -> None:
+        import struct
+        import zlib
+        block = struct.pack("<HH4B", 0xF800, 0x001F, 0, 0, 0, 0)   # color0 > color1
+        tth = self._tth(4, 4, tex_to_png.FMT_DXT1)
+        image, mode = self._roundtrip(tth, zlib.compress(block))
+        self.assertIs(image.info.get("opaque_alpha"), True)
+        self.assertEqual(mode, "RGB")
+
+    def test_dxt1_punch_through_blocks_keep_their_alpha(self) -> None:
+        # color0 <= color1 selects BC1's three-colour mode; index 3 decodes transparent, so
+        # the format cannot claim opacity and the scan (and the alpha plane) must survive.
+        import struct
+        import zlib
+        block = struct.pack("<HH4B", 0x001F, 0xF800, 0xFF, 0xFF, 0xFF, 0xFF)
+        tth = self._tth(4, 4, tex_to_png.FMT_DXT1)
+        image, mode = self._roundtrip(tth, zlib.compress(block))
+        self.assertIsNone(image.info.get("opaque_alpha"))
+        self.assertEqual(image.getchannel("A").getextrema(), (0, 0))
+        self.assertEqual(mode, "RGBA")
+
+
 class PngAlphaContractTests(unittest.TestCase):
     def test_reads_rgba_alpha_range_and_rejects_rgb_as_alpha(self) -> None:
         with tempfile.TemporaryDirectory() as out:
@@ -920,7 +1025,7 @@ class UnrealPlayDriverContractTests(unittest.TestCase):
     def test_play_opens_unreals_live_log_console_without_stdout_redirection(self) -> None:
         submitted = []
         runner = SimpleNamespace(
-            run=lambda command, cwd: submitted.append((command, cwd))
+            run=lambda command, cwd, tail_lines=None: submitted.append((command, cwd))
             or SimpleNamespace(returncode=0)
         )
         config = SimpleNamespace(
@@ -948,7 +1053,7 @@ class UnrealBakeDriverContractTests(unittest.TestCase):
     def test_texture_bake_enables_commandlet_rendering(self) -> None:
         submitted = []
         runner = SimpleNamespace(
-            run=lambda command, cwd: submitted.append((command, cwd))
+            run=lambda command, cwd, tail_lines=None: submitted.append((command, cwd))
             or SimpleNamespace(returncode=0)
         )
         config = SimpleNamespace(

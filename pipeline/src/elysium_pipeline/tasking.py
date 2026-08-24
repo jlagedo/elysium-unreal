@@ -280,6 +280,7 @@ class Manifest:
 
     def __init__(self, path: Path):
         self.path = path
+        self.dirty = False
         self.data: dict[str, Any] = {
             "schema": self.SCHEMA,
             "tool_version": _tool_version(),
@@ -298,6 +299,7 @@ class Manifest:
         """Record the inputs that define this export run independently of tasks."""
 
         self.data.update(values)
+        self.dirty = True
         self.write()
 
     def can_skip(self, task: Task, fingerprint: str | None) -> bool:
@@ -315,7 +317,8 @@ class Manifest:
             return False
         return all(path.exists() for path in task.outputs)
 
-    def record(self, result: TaskResult) -> None:
+    def record(self, result: TaskResult, *, flush: bool = True) -> None:
+        """Store one task receipt; ``flush=False`` leaves it in memory for a later `write`."""
         tasks = self.data.setdefault("tasks", {})
         tasks[result.name] = {
             "status": "complete" if result.succeeded else "failed",
@@ -326,7 +329,9 @@ class Manifest:
             "error": result.error,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        self.write()
+        self.dirty = True
+        if flush:
+            self.write()
 
     #: Windows fails an atomic replace with a sharing violation whenever anything else holds the
     #: destination open for even a moment -- an indexer or a virus scanner reading the file this
@@ -337,6 +342,8 @@ class Manifest:
     WRITE_BACKOFF_SECONDS = 0.05
 
     def write(self) -> None:
+        if not self.dirty:
+            return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         payload = json.dumps(self.data, indent=2, sort_keys=True) + "\n"
         with tempfile.NamedTemporaryFile(
@@ -347,6 +354,7 @@ class Manifest:
         for attempt in range(self.WRITE_ATTEMPTS):
             try:
                 temporary.replace(self.path)
+                self.dirty = False
                 return
             except PermissionError:
                 if attempt == self.WRITE_ATTEMPTS - 1:
@@ -365,6 +373,7 @@ class ContentDigestCache:
     """Persistent SHA-256 cache keyed by stable file metadata."""
 
     SCHEMA = 1
+    RACY_WINDOW_NS = 2_000_000_000
 
     def __init__(self, path: Path):
         self.path = path
@@ -382,13 +391,22 @@ class ContentDigestCache:
         resolved = path.resolve()
         key = str(resolved)
         stat = resolved.stat()
+        # Size plus mtime_ns is the identity (creation time is not part of it: an atomic
+        # temp+replace publish gives even byte-identical output a fresh one). The match reads
+        # only the identity keys, so a saved entry carrying extra metadata keys still hits,
+        # and a malformed entry is a plain miss that re-hashes once.
         identity = {
             "size": stat.st_size,
             "mtime_ns": stat.st_mtime_ns,
-            "ctime_ns": stat.st_ctime_ns,
         }
+        # A file written inside the last RACY_WINDOW_NS is racy: a same-size rewrite landing
+        # within the filesystem's timestamp tick keeps the identity while changing the bytes,
+        # so such a file is always hashed and never recorded (the rule git's index applies).
+        # It settles into the store on the first check after the window.
+        racy = time.time_ns() - stat.st_mtime_ns < self.RACY_WINDOW_NS
         saved = self.entries.get(key)
-        if saved and all(saved.get(name) == value for name, value in identity.items()):
+        if not racy and isinstance(saved, dict) and all(
+                saved.get(name) == value for name, value in identity.items()):
             value = saved.get("sha256")
             if isinstance(value, str) and len(value) == 64:
                 return value
@@ -398,14 +416,30 @@ class ContentDigestCache:
             while chunk := handle.read(1024 * 1024):
                 digest.update(chunk)
         value = digest.hexdigest()
-        self.entries[key] = {**identity, "sha256": value}
-        self.dirty = True
+        if not racy:
+            self.entries[key] = {**identity, "sha256": value}
+            self.dirty = True
         return value
 
     def write(self) -> None:
+        """Persist the store, keeping entries another writer added since this one loaded.
+
+        An editor commandlet hashes into the same file while the parent process holds its
+        own instance; the parent's later write overlays its entries on the current on-disk
+        document instead of replacing it, so neither writer drops the other's digests."""
         if not self.dirty:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        merged: dict[str, dict[str, Any]] = {}
+        if self.path.is_file():
+            try:
+                current = json.loads(self.path.read_text(encoding="utf-8"))
+                if current.get("schema") == self.SCHEMA:
+                    merged = dict(current.get("entries", {}))
+            except (OSError, ValueError):
+                merged = {}
+        merged.update(self.entries)
+        self.entries = merged
         payload = json.dumps(
             {"schema": self.SCHEMA, "entries": self.entries},
             indent=2,
@@ -421,6 +455,12 @@ class ContentDigestCache:
 
 
 class TaskGraph:
+    #: How long deferred manifest receipts may sit in memory between interval flushes. The
+    #: scheduler records every result without flushing and writes on this cadence plus a final
+    #: flush in ``run``'s ``finally``, so a run pays a handful of full-document serializations
+    #: rather than one per task, and a hard crash loses at most this window of receipts.
+    MANIFEST_FLUSH_SECONDS = 5.0
+
     def __init__(self, tasks: Iterable[Task]):
         task_list = list(tasks)
         self.tasks = {task.name: task for task in task_list}
@@ -456,9 +496,20 @@ class TaskGraph:
         progress: TaskProgress | None = None,
     ) -> dict[str, TaskResult]:
         jobs = max(1, jobs)
-        pending = set(self.tasks)
+        # Sorted once: dispatch order is deterministic by name without a re-sort per pass.
+        pending = sorted(self.tasks)
         running: dict[Future[tuple[TaskResult, str]], str] = {}
         results: dict[str, TaskResult] = {}
+        manifest_flushed = time.monotonic()
+
+        def record_result(result: TaskResult) -> None:
+            # The manifest write serializes the whole document, so the scheduler defers each
+            # receipt and flushes on an interval; the run's finally writes whatever remains.
+            nonlocal manifest_flushed
+            manifest.record(result, flush=False)
+            if time.monotonic() - manifest_flushed >= self.MANIFEST_FLUSH_SECONDS:
+                manifest.write()
+                manifest_flushed = time.monotonic()
 
         def execute_captured(task: Task) -> tuple[TaskResult, str]:
             if progress is None:
@@ -525,49 +576,66 @@ class TaskGraph:
 
         executor = ThreadPoolExecutor(max_workers=jobs)
         try:
+            # A scheduling pass walks the still-sorted pending list once. It runs only when a
+            # completion or a fresh blocked result can change what is ready, never while every
+            # worker slot is occupied, and stops early once the slots fill with no failure to
+            # propagate -- past that point the rest of the list cannot change state.
+            scan_due = True
+            have_failures = False
             while pending or running:
-                made_progress = False
-                for name in sorted(tuple(pending)):
-                    task = self.tasks[name]
-                    dependency_results = [results.get(dep) for dep in task.dependencies]
-                    if any(result is not None and not result.succeeded for result in dependency_results):
-                        result = TaskResult(
-                            name,
-                            "blocked",
-                            0.0,
-                            error="dependency failed",
-                            dependencies=list(task.dependencies),
-                        )
-                        results[name] = result
-                        if manifest:
-                            manifest.record(result)
-                        if progress:
-                            progress.emit(name, "blocked", 0.0, "")
-                        pending.remove(name)
-                        made_progress = True
+                if scan_due and pending and len(running) < jobs:
+                    scan_due = False
+                    remaining: list[str] = []
+                    for index, name in enumerate(pending):
+                        if len(running) >= jobs and not have_failures:
+                            remaining.extend(pending[index:])
+                            break
+                        task = self.tasks[name]
+                        dependency_results = [results.get(dep) for dep in task.dependencies]
+                        if any(result is not None and not result.succeeded
+                               for result in dependency_results):
+                            result = TaskResult(
+                                name,
+                                "blocked",
+                                0.0,
+                                error="dependency failed",
+                                dependencies=list(task.dependencies),
+                            )
+                            results[name] = result
+                            if manifest:
+                                record_result(result)
+                            if progress:
+                                progress.emit(name, "blocked", 0.0, "")
+                            # A blocked result can block its own dependents on the next pass.
+                            scan_due = True
+                            continue
+                        if len(running) < jobs and all(
+                                result is not None for result in dependency_results):
+                            if progress:
+                                progress.start(name)
+                            running[executor.submit(execute_captured, task)] = name
+                            continue
+                        remaining.append(name)
+                    made_progress = len(remaining) != len(pending)
+                    pending = remaining
+                    if not running:
+                        if pending and not made_progress:
+                            raise RuntimeError("task graph stalled")
                         continue
-                    if all(dep in results for dep in task.dependencies) and len(running) < jobs:
-                        if progress:
-                            progress.start(name)
-                        running[executor.submit(execute_captured, task)] = name
-                        pending.remove(name)
-                        made_progress = True
-                if not running:
-                    if pending and not made_progress:
-                        raise RuntimeError("task graph stalled")
-                    continue
-                done, _ = wait(tuple(running), timeout=0.5,
-                               return_when=FIRST_COMPLETED)
+                done, _ = wait(running, timeout=0.5, return_when=FIRST_COMPLETED)
                 for future in done:
                     name = running.pop(future)
                     result, captured = future.result()
                     results[name] = result
                     if manifest:
-                        manifest.record(result)
+                        record_result(result)
                     if progress:
                         progress.emit(result.name, result.status,
                                       result.duration_seconds, captured,
                                       error=result.error)
+                    scan_due = True
+                    if not result.succeeded:
+                        have_failures = True
                     if fail_fast and not result.succeeded:
                         for queued in running:
                             queued.cancel()
@@ -576,6 +644,10 @@ class TaskGraph:
             drain_after_interrupt()
             raise
         finally:
+            # Deferred receipts must reach disk however the run ends -- normal return,
+            # TaskFailure, or interrupt -- so completed work never re-runs for lack of a record.
+            if manifest:
+                manifest.write()
             executor.shutdown(wait=True, cancel_futures=True)
 
         if any(not result.succeeded for result in results.values()):

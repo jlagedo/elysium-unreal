@@ -24,6 +24,8 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ProcessPoolExecutor
+import contextlib
+import io
 import os
 from typing import Any
 
@@ -98,3 +100,60 @@ def map_chunks(
         max_workers=len(chunks), initializer=initializer, initargs=initargs
     ) as pool:
         return list(pool.map(function, chunks))
+
+
+#: Loaded once per worker process. ``[None]`` is a real answer -- `load_anorms` warns and the
+#: export drops morph targets -- so presence in the list is the sentinel, not the value.
+_ANORMS: list = []
+
+
+def _anorms():
+    if not _ANORMS:
+        from elysium_pipeline.formats import mdl_skel
+
+        _ANORMS.append(mdl_skel.load_anorms())
+    return _ANORMS[0]
+
+
+def character_source_worker(kind: str, stem: str, model_rel: str, out_dir: str,
+                            clip_labels: Sequence[str] = (),
+                            ensure_labels: Sequence[str] = ()) -> str:
+    """Write one character `.eskm` container in this process; returns its console output.
+
+    Container writing is GIL-bound byte-struct parsing, so the character-source task graph
+    dispatches each stale task here rather than running it on a scheduler thread. The install
+    index is process-memoized (`install.build_index`), so every task after a worker's first
+    reuses it, and the unit-vector table loads once per process the same way. Output is
+    captured and returned so the caller's progress log carries it; on failure the captured
+    tail rides the raised error, because a pickled exception crosses the process boundary
+    without the worker's stdout.
+    """
+    if kind not in ("model", "bank", "cinematic", "prop"):
+        # Checked before any install read: a dispatch bug must not cost an index build.
+        raise RuntimeError(f"{kind} {stem}: unknown character source kind: {kind!r}")
+
+    from elysium_pipeline.exporters import UE_mdl_skeletal
+    from elysium_pipeline.formats import install
+
+    buffer = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+            index = install.build_index(verbose=False)
+            if kind == "model":
+                UE_mdl_skeletal.write_model(index, model_rel, out_dir, stem=stem,
+                                            anorms=_anorms())
+            elif kind == "bank":
+                UE_mdl_skeletal.write_bank(index, model_rel, out_dir, stem)
+            elif kind == "cinematic":
+                UE_mdl_skeletal.write_cinematic(index, model_rel, out_dir, stem)
+            else:
+                UE_mdl_skeletal.write_model(index, model_rel, out_dir, stem=stem,
+                                            anorms=None, clip_labels=tuple(clip_labels),
+                                            ensure_labels=tuple(ensure_labels))
+    except (Exception, SystemExit) as exc:
+        tail = "\n".join(buffer.getvalue().splitlines()[-20:])
+        raise RuntimeError(
+            f"{kind} {stem}: {type(exc).__name__}: {exc}"
+            + (f"\n--- worker output tail ---\n{tail}" if tail else "")
+        ) from exc
+    return buffer.getvalue()

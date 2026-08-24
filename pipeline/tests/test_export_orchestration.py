@@ -33,6 +33,40 @@ class ExportProfileTests(unittest.TestCase):
             with self.subTest(profile=profile):
                 self.assertEqual(set(export_all.bundles_for_profile(profile)), required)
 
+    def test_only_ents_consuming_bundles_wait_on_the_maps(self) -> None:
+        # `audio` and `npc` read the exported per-map `.ents`; every other bundle reads the
+        # install (or the pre-graph shared corpus) and starts immediately. `npc` keeps its one
+        # inter-bundle edge on the exported vdata mirror.
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        bundles = [
+            "audio", "particles", "scripts", "signs", "vdata", "items",
+            "cfg", "scenes", "ui", "use-icons", "npc",
+        ]
+        config = SimpleNamespace(export_root=Path("/fake/export/root"))
+        tasks = export_manager._bundle_tasks(
+            config, bundles, ["m1", "m2"], {}, {bundle: "fp" for bundle in bundles})
+        by_name = {task.name: task for task in tasks}
+        map_edges = ("map:m1", "map:m2")
+        self.assertEqual(by_name["bundle:audio"].dependencies, map_edges)
+        self.assertEqual(by_name["bundle:npc"].dependencies,
+                         (*map_edges, "bundle:vdata"))
+        for bundle in bundles:
+            if bundle in ("audio", "npc"):
+                continue
+            with self.subTest(bundle=bundle):
+                self.assertEqual(by_name[f"bundle:{bundle}"].dependencies, ())
+
+    def test_npc_bundle_drops_the_vdata_edge_when_vdata_is_not_requested(self) -> None:
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        config = SimpleNamespace(export_root=Path("/fake/export/root"))
+        tasks = export_manager._bundle_tasks(
+            config, ["npc"], ["m1"], {}, {"npc": "fp"})
+        self.assertEqual(tasks[0].dependencies, ("map:m1",))
+
     def test_items_bundle_outputs_include_both_manifests(self) -> None:
         from pathlib import Path
 

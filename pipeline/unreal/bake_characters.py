@@ -212,6 +212,7 @@ class CharacterTracker(object):
         self.fingerprints = {}
         self.stages = {}
         self.pending = 0
+        self.snapshot = None
 
     def _counters(self, stage):
         return self.stages.setdefault(stage, {"built": 0, "reused": 0})
@@ -224,6 +225,40 @@ class CharacterTracker(object):
         listed = unreal.EditorAssetLibrary.list_assets(
             object_path, recursive=True, include_folder=False)
         return [value.split(".", 1)[0] for value in listed]
+
+    def _mount_snapshot(self):
+        """Every asset below the character and prop roots, bucketed by package directory --
+        one registry pass at first use instead of one recursive listing per unit.
+
+        Sound for `wants_unit` because its decisions are memoized and taken before the unit
+        authors anything, and no unit writes below another unit's root. `record` runs after
+        the builders created assets this snapshot cannot carry, so it keeps its own live
+        listing."""
+        if self.snapshot is None:
+            by_dir = {}
+            count = 0
+            for root in (CHARACTERS, PROPS):
+                for value in unreal.EditorAssetLibrary.list_assets(
+                        root, recursive=True, include_folder=False):
+                    path = value.split(".", 1)[0]
+                    by_dir.setdefault(path.rsplit("/", 1)[0], []).append(path)
+                    count += 1
+            self.snapshot = by_dir
+            log("registry snapshot: %d asset(s) across %d package dir(s)" % (count, len(by_dir)))
+        return self.snapshot
+
+    def _snapshot_unit_assets(self, stage, object_path):
+        """`_unit_assets` answered from the process-start snapshot, for `wants_unit`."""
+        snapshot = self._mount_snapshot()
+        if stage in cr.SINGLE_ASSET_STAGES:
+            bucket = snapshot.get(object_path.rsplit("/", 1)[0], ())
+            return [object_path] if object_path in bucket else []
+        prefix = object_path + "/"
+        assets = []
+        for directory, paths in snapshot.items():
+            if directory == object_path or directory.startswith(prefix):
+                assets.extend(paths)
+        return assets
 
     def wants_unit(self, stage, object_path):
         """Whether this run authors one named unit.
@@ -241,7 +276,7 @@ class CharacterTracker(object):
             return False
         fingerprint = bl.recipe_fingerprint(stage, object_path, unit.recipe)
         self.fingerprints[key] = fingerprint
-        assets = self._unit_assets(stage, object_path)
+        assets = self._snapshot_unit_assets(stage, object_path)
         stale = (self.force or not assets
                  or any(bl.stored_recipe(path) != fingerprint for path in assets))
         if not stale:
@@ -438,6 +473,23 @@ def existing_textures():
             out[asset.get_name()] = asset
     log("textures: %d already on the mount" % len(out))
     return out
+
+
+class LazyTextureTable(object):
+    """The mount's texture table, read on first actual use.
+
+    The reuse path only consults textures when a stale mesh unit binds them
+    (`material_bindings`); a fully-current cast never asks, so its run loads no texture
+    package at all. First use loads the whole table through `existing_textures`, which
+    keeps the binding contract identical to the eager dict."""
+
+    def __init__(self):
+        self._table = None
+
+    def get(self, name, default=None):
+        if self._table is None:
+            self._table = existing_textures()
+        return self._table.get(name, default)
 
 
 def material_bindings(blob, textures):
@@ -804,9 +856,10 @@ def main():
                          % ", ".join(sorted(missing_props)))
 
     # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for assets
-    # that are already there and a re-bake would rewrite what it could have reused.
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT],
-                                                                           force_rescan=True)
+    # that are already there and a re-bake would rewrite what it could have reused. A plain
+    # scan is enough: the registry consults its mtime-keyed header cache either way, and
+    # forcing only re-walks the paths to drop entries for files no longer on disk.
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT])
     for package in (SKELETONS, MESHES, MATERIALS, TEXTURES, ANIMS, BANKS):
         bl.ensure_dir(package)
 
@@ -841,7 +894,10 @@ def main():
         if len(failed) == before:
             tracker.record("textures", cr.TEXTURES, stamp=True)
     else:
-        textures = existing_textures()
+        # Only a stale mesh unit consults the table, so the reuse path defers the load:
+        # a run that rebuilds no mesh opens no texture package.
+        textures = LazyTextureTable()
+        log("textures: not authoring, table loads on first use")
 
     bank_skeletons = bake_banks(manifest, partition, stems, library, failed, tracker)
     props_baked = bake_props(manifest, library, failed, tracker, prop_stems)

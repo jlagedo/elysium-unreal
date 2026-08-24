@@ -31,18 +31,26 @@ from elysium_pipeline.paths import export_root
 OUT = os.fspath(export_root())
 
 
-def collect(subdir, exts):
+def collect(subdir, exts, index=None):
     """Merged {install-rel-key -> (dest_rel, kind, ref)} for `<subdir>/`, filtered to
     `exts`, resolved patch-first (patch loose > retail loose > VPK -- each shadows the
     prior). `dest_rel` is the path under the mirror root (the `<subdir>/` prefix stripped);
-    loose sources keep their authored case, VPK sources use the lowercased index key."""
+    loose sources keep their authored case, VPK sources use the lowercased index key.
+
+    ``index`` is a shared `install.build_index()` table used as the base layer instead of
+    re-indexing the VPKs. Its tagged loose entries are re-walked below at their correct
+    precedence, so seeding from it yields the identical merge."""
     exts = tuple(e.lower() for e in exts)
     prefix = subdir + "/"
     picked = {}
     # Lowest precedence: the VPKs (keys already lowercased by vpk.index_all).
-    for key, entry in vpk.index_all(install.GAME).items():
+    base = (index.items() if index is not None
+            else ((k, ("vpk", e)) for k, e in vpk.index_all(install.GAME).items()))
+    for key, (kind, ref) in base:
+        if kind != "vpk":
+            continue    # loose entries enter through the re-walk below
         if key.startswith(prefix) and key.endswith(exts):
-            picked[key] = (key[len(prefix):], "vpk", entry)
+            picked[key] = (key[len(prefix):], kind, ref)
     # Then retail loose, then patch loose -- each root shadows the one before it.
     for root in (install.GAME, install.PATCH):
         base = os.path.join(root, subdir)
@@ -75,10 +83,10 @@ def extract(picked, dest_root, force=False):
     return written, cached
 
 
-def main(force=False):
+def main(force=False, index=None):
     for subdir, exts, out_name in (("python", (".py",), "scripts"),
                                    ("dlg", (".dlg",), "dlg")):
-        picked = collect(subdir, exts)
+        picked = collect(subdir, exts, index=index)
         dest_root = os.path.join(OUT, out_name)
         written, cached = extract(picked, dest_root, force=force)
         print(f"[{out_name}] {len(picked)} files ({written} copied, {cached} already present) "

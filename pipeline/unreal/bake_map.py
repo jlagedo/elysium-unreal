@@ -130,6 +130,40 @@ def log(msg):
     unreal.log("[bake] %s" % msg)
 
 
+#: The shared corpus's two documents, parsed and validated once per process. Both are
+#: install-wide and identical for every map a batch bakes, so a multi-map run reads them
+#: once instead of per map. The cached dicts are read-only to every bake.
+_CORPUS_DOCUMENTS = None
+
+
+def _corpus_documents():
+    """(materials, manifest) for the shared corpus, validated, or None after a logged failure."""
+    global _CORPUS_DOCUMENTS
+    if _CORPUS_DOCUMENTS is not None:
+        return _CORPUS_DOCUMENTS
+    materials_file = os.fspath(SC.materials_path(OUT_ROOT))
+    manifest_file = os.fspath(SC.manifest_path(OUT_ROOT))
+    for path in (materials_file, manifest_file):
+        if not os.path.isfile(path):
+            fail("no shared corpus at %s (run: uv run elysium export bundle corpus)" % path)
+            return None
+    with open(materials_file, "r", encoding="utf-8") as handle:
+        materials = SC.check_materials(json.load(handle))["materials"]
+    with open(manifest_file, "r", encoding="utf-8") as handle:
+        manifest = SC.check_manifest(json.load(handle))
+    _CORPUS_DOCUMENTS = (materials, manifest)
+    return _CORPUS_DOCUMENTS
+
+
+#: Corpus material keys already arbitrated to an on-mount instance path this process.
+#: Paths only, never UObject references: a Python-held wrapper is a root for the editor's
+#: collector, and pinning every corpus instance (with its texture closure) across a
+#: multi-map batch would defeat the per-map garbage collection that bounds the bake's
+#: memory. A cache hit still loads the asset, but skips the per-key path derivation and
+#: `does_asset_exist` arbitration.
+_CORPUS_MIC_PATHS = {}
+
+
 def _make_movable(component):
     """Make a spawned light dynamic BEFORE anything sets a property that only a movable light takes.
 
@@ -151,7 +185,14 @@ def _dir_rotator(direction):
     return unreal.MathLibrary.conv_vector_to_rotator(direction)
 
 
+#: Every `fail` call counts here; the launch exits non-zero when any fired, so a map or
+#: corpus that finished with a dropped mesh, a missing decal instance or a pruned prop cannot
+#: exit 0 and be receipted as complete by the launch gate that decides whether to boot again.
+FAILURES = [0]
+
+
 def fail(msg):
+    FAILURES[0] += 1
     unreal.log_error("[bake] %s" % msg)
 
 
@@ -443,17 +484,14 @@ class Bake(object):
         return True
 
     def load_corpus(self):
-        """Load the shared corpus's two documents plus this map's own local material overrides."""
-        materials_file = os.fspath(SC.materials_path(OUT_ROOT))
-        manifest_file = os.fspath(SC.manifest_path(OUT_ROOT))
-        for path in (materials_file, manifest_file):
-            if not os.path.isfile(path):
-                fail("no shared corpus at %s (run: uv run elysium export bundle corpus)" % path)
-                return False
-        with open(materials_file, "r", encoding="utf-8") as handle:
-            self.corpus_materials = SC.check_materials(json.load(handle))["materials"]
-        with open(manifest_file, "r", encoding="utf-8") as handle:
-            self.corpus_manifest = SC.check_manifest(json.load(handle))
+        """Bind the shared corpus's two documents plus this map's own local material overrides.
+
+        The documents themselves are parsed and validated once per process
+        (`_corpus_documents`); only the map-local overrides are this bake's own read."""
+        documents = _corpus_documents()
+        if documents is None:
+            return False
+        self.corpus_materials, self.corpus_manifest = documents
         self.corpus_textures = self.corpus_manifest["textures"]
         local_file = os.path.join(self.dir, "%s.materials.json" % self.map)
         if os.path.isfile(local_file):
@@ -664,8 +702,17 @@ class Bake(object):
                 unreal.EditorAssetLibrary.delete_directory(package)
         # The map's own texture package keeps its `Cubes` subdirectory, so this one is pruned
         # rather than deleted -- the surface textures directly in it are the retired set.
-        if unreal.EditorAssetLibrary.does_directory_exist("%s/Textures" % self.pkg):
-            dropped += bl.prune_package("%s/Textures" % self.pkg, set(), self.prune_scope)
+        tex_pkg = "%s/Textures" % self.pkg
+        if unreal.EditorAssetLibrary.does_directory_exist(tex_pkg):
+            dropped += bl.prune_package(tex_pkg, set(), self.prune_scope)
+            # An emptied directory goes with its retired set: only `Cubes` can still hold
+            # assets, and a directory that no longer exists ends this sweep at the
+            # existence check on every later run.
+            if not unreal.EditorAssetLibrary.list_assets(
+                    tex_pkg, recursive=True, include_folder=False):
+                if not unreal.EditorAssetLibrary.delete_directory(tex_pkg):
+                    unreal.log_warning(
+                        "[bake] could not delete the emptied retired directory %s" % tex_pkg)
         if dropped:
             self.tracker.pruned("textures", dropped)
             log("superseded: %d asset(s) removed from this map's retired packages" % dropped)
@@ -1105,12 +1152,20 @@ class Bake(object):
         for key in sorted(shared):
             if (self.shared_mat_pkg, key) in self.materials:
                 continue
-            path = "%s/%s" % (self.shared_mat_pkg, SC.material_asset(key))
-            asset = (unreal.EditorAssetLibrary.load_asset(path)
-                     if unreal.EditorAssetLibrary.does_asset_exist(path) else None)
+            # `_CORPUS_MIC_PATHS` remembers keys already arbitrated onto the mount this
+            # process; the load stays per map, because the loaded objects are what the
+            # per-map garbage collection reclaims.
+            path = _CORPUS_MIC_PATHS.get(key)
+            if path is None:
+                candidate = "%s/%s" % (self.shared_mat_pkg, SC.material_asset(key))
+                if unreal.EditorAssetLibrary.does_asset_exist(candidate):
+                    path = candidate
+            asset = unreal.EditorAssetLibrary.load_asset(path) if path else None
             if asset is None:
+                _CORPUS_MIC_PATHS.pop(key, None)
                 missing.append(key)
             else:
+                _CORPUS_MIC_PATHS[key] = path
                 self.materials[(self.shared_mat_pkg, key)] = asset
         if missing:
             # Continuing would author meshes and a level whose slots bind nothing, and the
@@ -1660,25 +1715,29 @@ class Bake(object):
     # ------------------------------------------------------------------- level
 
     def _level_recipe(self):
-        def assets(package, prefixes=()):
-            values = unreal.EditorAssetLibrary.list_assets(
-                package, recursive=False, include_folder=False)
-            paths = [value.split(".", 1)[0] for value in values]
-            if prefixes:
-                paths = [path for path in paths
-                         if path.rsplit("/", 1)[-1].startswith(prefixes)]
-            return sorted(paths)
+        # One recursive listing over the map's own package, bucketed into the two
+        # directly-owned mesh sets the recipe names.
+        world_sky = []
+        brushes = []
+        for value in unreal.EditorAssetLibrary.list_assets(
+                self.pkg, recursive=True, include_folder=False):
+            path = value.split(".", 1)[0]
+            directory, _, name = path.rpartition("/")
+            if directory == self.mesh_pkg and name.startswith(("SM_World_", "SM_Sky_")):
+                world_sky.append(path)
+            elif directory == self.brush_pkg and name.startswith("SM_"):
+                brushes.append(path)
 
         return {
             "placement": level_sidecar_recipe(Path(self.dir), self.map),
-            "world_sky_meshes": assets(self.mesh_pkg, ("SM_World_", "SM_Sky_")),
+            "world_sky_meshes": sorted(world_sky),
             # Only the models this map places. Enumerating the whole shared package would make
             # every level stale whenever any of the corpus's 3,000 meshes changed, which is the
             # opposite of what one asset per source is for.
             "props": sorted(
                 "%s/%s" % (self.shared_mesh_pkg, SC.mesh_asset(stem))
                 for stem in self.prop_mats),
-            "brushes": assets(self.brush_pkg, ("SM_",)),
+            "brushes": sorted(brushes),
             "materials": sorted(
                 _asset_path(material) for material in self.materials.values() if material),
             "prop_skins": self.prop_skins,
@@ -2183,8 +2242,7 @@ def _collect_garbage():
 def _run_corpus():
     """-BakeCorpus=1: the shared corpus scope."""
     force = bool(cmdline_arg("BakeForce", ""))
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
-        [MOUNT], force_rescan=True)
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT])
     digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)
     try:
         ok = bake_corpus(digest_cache, force=force)
@@ -2193,6 +2251,9 @@ def _run_corpus():
         _collect_garbage()
     if not ok:
         fail("shared corpus bake failed")
+        raise SystemExit(1)
+    if FAILURES[0]:
+        fail("shared corpus bake finished with %d failure(s) above" % FAILURES[0])
         raise SystemExit(1)
 
 
@@ -2210,8 +2271,9 @@ def main():
     # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for
     # assets already on disk and every create_asset call then trips the unattended
     # overwrite guard. Scanning up front also loads the recipe tags reuse decisions read.
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous(
-        [MOUNT], force_rescan=True)
+    # A plain scan serves both: the registry consults its mtime-keyed header cache either
+    # way, and forcing only re-walks the paths to drop entries for files no longer on disk.
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT])
 
     failed = []
     digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)
@@ -2230,6 +2292,9 @@ def main():
     if failed:
         fail("%d of %d map bake(s) failed: %s" % (
             len(failed), len(map_names), ", ".join(failed)))
+        raise SystemExit(1)
+    if FAILURES[0]:
+        fail("%d map bake(s) finished with %d failure(s) above" % (len(map_names), FAILURES[0]))
         raise SystemExit(1)
     log("all %d map bake(s) completed" % len(map_names))
 

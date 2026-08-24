@@ -35,16 +35,24 @@ ROOT = "cfg"
 EXTS = (".cfg",)
 
 
-def collect():
+def collect(index=None):
     """Merged {install-rel-key -> (dest_rel, kind, ref)} for every `cfg/*.cfg`, resolved
     patch-first (patch loose > retail loose > VPK). `dest_rel` keeps the subtree under
-    `cfg/` (flat in practice), so the mirror preserves the layout."""
+    `cfg/` (flat in practice), so the mirror preserves the layout.
+
+    ``index`` is a shared `install.build_index()` table used as the base layer instead of
+    re-indexing the VPKs. Its tagged loose entries are re-walked below at their correct
+    precedence, so seeding from it yields the identical merge."""
     prefix = ROOT + "/"
     picked = {}
     # Lowest precedence: the VPKs (keys already lowercased by vpk.index_all).
-    for key, entry in vpk.index_all(install.GAME).items():
+    base = (index.items() if index is not None
+            else ((k, ("vpk", e)) for k, e in vpk.index_all(install.GAME).items()))
+    for key, (kind, ref) in base:
+        if kind != "vpk":
+            continue    # loose entries enter through the re-walk below
         if key.startswith(prefix) and key.endswith(EXTS):
-            picked[key] = (key[len(prefix):], "vpk", entry)
+            picked[key] = (key[len(prefix):], kind, ref)
     # Then retail loose, then patch loose -- each root shadows the one before it.
     for base_root in (install.GAME, install.PATCH):
         base = os.path.join(base_root, ROOT)
@@ -76,8 +84,8 @@ def extract(picked, dest_root, force=False):
     return written, cached
 
 
-def main(force=False):
-    picked = collect()
+def main(force=False, index=None):
+    picked = collect(index=index)
     dest_root = os.path.join(OUT, "cfg")
     written, cached = extract(picked, dest_root, force=force)
     print(f"[cfg] {len(picked)} files ({written} copied, {cached} already present) "

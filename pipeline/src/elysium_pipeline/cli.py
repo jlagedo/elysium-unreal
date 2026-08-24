@@ -116,6 +116,20 @@ def _state(ctx: typer.Context) -> CliState:
 _CHILD_SIGNAL = re.compile(
     r"LogPython|Fatal error|Assertion failed|: Error:|: Warning:|^Error:")
 
+#: ``_CHILD_SIGNAL``'s literal alternatives as plain substrings; ``^Error:``
+#: anchors to the line start, so ``startswith`` carries it below. Ordinary
+#: engine lines fail every substring test and never reach the regex.
+_CHILD_SIGNAL_LITERALS = (
+    "LogPython", "Fatal error", "Assertion failed", ": Error:", ": Warning:")
+
+
+def _child_signal(line: str) -> bool:
+    """Whether a child line is console signal; substring checks gate the regex."""
+    if not line.startswith("Error:") and not any(
+            literal in line for literal in _CHILD_SIGNAL_LITERALS):
+        return False
+    return _CHILD_SIGNAL.search(line) is not None
+
 
 class _ChildEcho:
     """The filtered console echo for export/verify children, with a live status.
@@ -138,7 +152,7 @@ class _ChildEcho:
             threading.Thread(target=self._tick, daemon=True).start()
 
     def __call__(self, line: str) -> None:
-        if _CHILD_SIGNAL.search(line):
+        if _child_signal(line):
             with self._lock:
                 self._clear()
                 console.print(line, markup=False)

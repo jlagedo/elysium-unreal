@@ -93,12 +93,48 @@ def section_digest(path, tags):
     return digest.hexdigest()
 
 
-def bones(blob):
-    """[(name, parent index)] in file order. The parent of a root is -1."""
-    where = directory(blob).get(b"SKEL")
-    if where is None:
-        return []
-    offset = where[0]
+def read_sections(path, tags):
+    """{tag: payload bytes} for the named sections, read with the same seek pattern as
+    `section_digest` rather than loading the whole container.
+
+    An absent requested section maps to None -- the same explicitly optional absence the
+    digest marks as `absent`, so asking for `b"SKEL"` on a container without a skeleton is
+    a stable answer. A foreign, stale, or truncated container raises ValueError naming the
+    path, and an unopenable one raises OSError: a caller asking for bytes cannot use a
+    sentinel, so the failure is thrown rather than encoded.
+    """
+    with open(path, "rb") as handle:
+        header = handle.read(16)
+        if len(header) < 16:
+            raise ValueError(f"{path}: truncated .eskm header")
+        magic, version, count, _reserved = struct.unpack_from("<4sIII", header, 0)
+        if magic != MAGIC:
+            raise ValueError(f"{path}: not an .eskm container")
+        if version != VERSION:
+            raise ValueError(f"{path}: container is version {version}, "
+                             f"expected {VERSION} - re-export")
+        table = handle.read(count * 20)
+        if len(table) < count * 20:
+            raise ValueError(f"{path}: truncated .eskm section directory")
+        entries = {}
+        for index in range(count):
+            entry_tag, at, size = struct.unpack_from("<4sQQ", table, index * 20)
+            entries[entry_tag] = (at, size)
+        out = {}
+        for tag in tags:
+            where = entries.get(tag)
+            if where is None:
+                out[tag] = None
+                continue
+            handle.seek(where[0])
+            payload = handle.read(where[1])
+            if len(payload) != where[1]:
+                raise ValueError(f"{path}: truncated {tag!r} section")
+            out[tag] = payload
+    return out
+
+
+def _parse_bones(blob, offset):
     count = struct.unpack_from("<I", blob, offset)[0]
     offset += 4
     out = []
@@ -108,6 +144,23 @@ def bones(blob):
         offset += 4 + 12 + 16                       # parent, then the transform this skips
         out.append((name, parent))
     return out
+
+
+def bones(blob):
+    """[(name, parent index)] in file order. The parent of a root is -1."""
+    where = directory(blob).get(b"SKEL")
+    if where is None:
+        return []
+    return _parse_bones(blob, where[0])
+
+
+def bones_from_section(payload):
+    """[(name, parent index)] off one SKEL payload as `read_sections` returns it. ``None``
+    -- an absent section -- is an empty skeleton, the same answer `bones` gives a container
+    without one."""
+    if payload is None:
+        return []
+    return _parse_bones(payload, 0)
 
 
 def bone_locals(blob):
@@ -141,13 +194,21 @@ def bone_translations(blob):
     return {name: translation for name, _parent, translation, _rotation in bone_locals(blob)}
 
 
+def _parents(rows):
+    return {name: (rows[parent][0] if 0 <= parent < len(rows) else "")
+            for name, parent in rows}
+
+
 def bone_parents(blob):
     """{bone name: parent bone name}, with "" for a root -- the shape the declared partition
     compares and fingerprints, because a rig is a set of names agreeing on their parent rather
     than a set of indices."""
-    rows = bones(blob)
-    return {name: (rows[parent][0] if 0 <= parent < len(rows) else "")
-            for name, parent in rows}
+    return _parents(bones(blob))
+
+
+def bone_parents_from_section(payload):
+    """`bone_parents` off one SKEL payload as `read_sections` returns it."""
+    return _parents(bones_from_section(payload))
 
 
 def attachments(blob):
@@ -171,13 +232,7 @@ def attachments(blob):
     return out
 
 
-def materials(blob):
-    """{material name: albedo path relative to the export root}. The albedo is "" when the
-    material resolved no `$basetexture`."""
-    where = directory(blob).get(b"MATL")
-    if where is None:
-        return {}
-    offset = where[0]
+def _parse_materials(blob, offset):
     count = struct.unpack_from("<I", blob, offset)[0]
     offset += 4
     out = {}
@@ -186,6 +241,23 @@ def materials(blob):
         albedo, offset = _string(blob, offset)
         out[name] = albedo
     return out
+
+
+def materials(blob):
+    """{material name: albedo path relative to the export root}. The albedo is "" when the
+    material resolved no `$basetexture`."""
+    where = directory(blob).get(b"MATL")
+    if where is None:
+        return {}
+    return _parse_materials(blob, where[0])
+
+
+def materials_from_section(payload):
+    """`materials` off one MATL payload as `read_sections` returns it; ``None`` is an
+    empty table, the same answer `materials` gives a container without one."""
+    if payload is None:
+        return {}
+    return _parse_materials(payload, 0)
 
 
 #: One clip's payload header. `base` is the label this clip is a difference FROM, empty for a pose

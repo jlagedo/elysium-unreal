@@ -5,7 +5,11 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
+import psutil
+
+from elysium_pipeline import workspace_lock
 from elysium_pipeline.workspace_lock import (
     WorkspaceBusy,
     WorkspaceLease,
@@ -67,6 +71,30 @@ class WorkspaceLeaseTests(unittest.TestCase):
                     process.stderr.close()
             self.assertIsNone(active_lease(root))
 
+
+class _FakeProcess:
+    """A ``psutil.process_iter`` row whose command-line fetch is observable."""
+
+    def __init__(
+        self,
+        pid: int,
+        name: str,
+        cmdline: tuple[str, ...] = (),
+        error: Exception | None = None,
+    ) -> None:
+        self.pid = pid
+        self.info = {"pid": pid, "name": name}
+        self._cmdline = cmdline
+        self._error = error
+        self.cmdline_calls = 0
+
+    def cmdline(self) -> tuple[str, ...]:
+        self.cmdline_calls += 1
+        if self._error is not None:
+            raise self._error
+        return self._cmdline
+
+
 class ProjectIdleTests(unittest.TestCase):
     def test_a_project_no_editor_holds_is_idle(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -75,6 +103,39 @@ class ProjectIdleTests(unittest.TestCase):
             # Matching is per project path, so one checkout never sees another's editors.
             self.assertEqual(active_unreal_processes(project), ())
             assert_project_idle(project)
+
+    def test_cmdline_is_fetched_only_for_unreal_process_names(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary) / "ElysiumUE.uproject"
+            project.write_text("{}\n", encoding="utf-8")
+            bystander = _FakeProcess(101, "chrome.exe", cmdline=("chrome.exe",))
+            editor = _FakeProcess(
+                202,
+                "UnrealEditor.exe",
+                cmdline=("UnrealEditor.exe", str(project.resolve())),
+            )
+            other_project = _FakeProcess(
+                303,
+                "UnrealEditor-Cmd.exe",
+                cmdline=("UnrealEditor-Cmd.exe", "C:/elsewhere/Other.uproject"),
+            )
+            vanished = _FakeProcess(
+                404, "LiveCodingConsole.exe", error=psutil.NoSuchProcess(404)
+            )
+            with mock.patch.object(
+                workspace_lock.psutil,
+                "process_iter",
+                return_value=iter((bystander, editor, other_project, vanished)),
+            ):
+                found = active_unreal_processes(project)
+
+        self.assertEqual(found, ({"pid": 202, "name": "UnrealEditor.exe"},))
+        # A name outside the Unreal set never pays for a command-line fetch.
+        self.assertEqual(bystander.cmdline_calls, 0)
+        self.assertEqual(editor.cmdline_calls, 1)
+        self.assertEqual(other_project.cmdline_calls, 1)
+        # A process that vanishes mid-iteration is tolerated, not raised.
+        self.assertEqual(vanished.cmdline_calls, 1)
 
 
 if __name__ == "__main__":

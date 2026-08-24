@@ -25,6 +25,32 @@ from pipeline.unreal import bake_lib as bl
 
 ADDITIVE_MASTER = "/Game/VtMB/Materials/M_Additive"
 
+FOUNTAIN_TEMPLATE = "/Niagara/DefaultAssets/Templates/Emitters/Fountain.Fountain"
+
+#: The stock Fountain emitter template, loaded once per process. A module-held wrapper is a
+#: root for the editor's collector, so one small engine asset survives the per-map garbage
+#: collection instead of being reloaded per map; validity is still checked on use because a
+#: held wrapper can go stale if something unloads the package underneath it.
+_TEMPLATE = None
+
+
+def _fountain_template():
+    global _TEMPLATE
+    template = _TEMPLATE
+    if template is not None:
+        try:
+            valid = unreal.SystemLibrary.is_valid(template)
+        except Exception:
+            valid = False
+        if valid:
+            return template
+        unreal.log_warning("[particles] the cached Fountain template went stale; reloading")
+    template = unreal.load_asset(FOUNTAIN_TEMPLATE)
+    if not template:
+        raise SystemExit("[particles] missing the stock Fountain emitter template")
+    _TEMPLATE = template
+    return template
+
 # VtMB paces `frames` at its own tick when a definition gives no explicit `fps`. The exported
 # animation banks resolve at 30, so the same rate is assumed here; a definition carrying `fps`
 # overrides it.
@@ -244,10 +270,6 @@ def build(map_name: str, export_root: Path, package_root: str, tracker=None) -> 
                     "particles", bl.prune_package_prefix(package, prefix, set()))
         return 0
 
-    template = unreal.load_asset("/Niagara/DefaultAssets/Templates/Emitters/Fountain.Fountain")
-    if not template:
-        raise SystemExit("[particles] missing the stock Fountain emitter template")
-
     materials = _import_sprites(
         closure.get("sprites", []), package, Path(export_root), tracker)
 
@@ -286,6 +308,10 @@ def build(map_name: str, export_root: Path, package_root: str, tracker=None) -> 
     for root, layers, sprites, asset_name, asset, dirty in work:
         if not dirty:
             continue
+        # The template resolves at first use, so a run whose every system is current loads it
+        # never, and a batch loads it once; it resolves before the delete so a missing
+        # template fails with the existing asset intact.
+        template = _fountain_template()
         if unreal.EditorAssetLibrary.does_asset_exist(asset):
             bl.delete_owned_asset(asset)
         system = unreal.ElysiumParticleAssetBuilder.build_particle_system(

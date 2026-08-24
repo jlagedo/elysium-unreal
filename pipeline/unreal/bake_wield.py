@@ -23,6 +23,7 @@
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript
 #       -script="pipeline/unreal/bake_wield.py"
 #       -BakeWield=w_m_katana,sheriff_sword -unattended -nosplash -nopause
+import hashlib
 import json
 import os
 
@@ -498,14 +499,130 @@ def build_skin_family_instances(stem, model, mesh_asset_name, package, texture_t
     return built
 
 
+# ---------------------------------------------------------------------------- recipe reuse
+
+
+#: The wield stage's recipe version literal, following the character bake's
+#: `character_recipes.STAGE_VERSIONS` convention: bumping it re-authors every stem, which is
+#: how an editor-side builder change that alters output without changing inputs is expressed.
+WIELD_RECIPE_VERSION = "wield-models-v1"
+
+
+def _file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _stem_texture_uris(model, texture_table):
+    """{raw texture key: manifest uri} over one stem's material and skin-family rows.
+
+    The uris are the identity a bind resolves through (`texture_asset_name`), so a re-pointed
+    key moves the stem's fingerprint while an untouched one does not."""
+    uris = {}
+    rows = list(model.get("materials", ())) + list(model.get("skin_families", ()))
+    for row in rows:
+        for field, _param in TEXTURE_FIELDS:
+            key = row.get(field, "")
+            if key:
+                uris[key] = texture_table.get(key, "")
+    return uris
+
+
+def stem_fingerprint(stem, model, texture_table):
+    """The recipe hash one stem's whole package family is a function of.
+
+    The container is digested whole rather than per section: the mesh build consumes most of
+    it (SKEL, MESH, MATL, ATCH), and a re-export rewrites the file wholesale, so a section
+    list would add a maintenance surface without saving an invalidation. An unreadable
+    container digests as a changed input; the build itself reports the missing file."""
+    source = os.path.join(OUT_ROOT, model.get("eskm", "").replace("/", os.sep))
+    try:
+        container = _file_sha256(source)
+    except OSError as error:
+        container = "missing:%s" % error.__class__.__name__
+    recipe = {
+        "eskm": container,
+        "model": model,
+        "textures": _stem_texture_uris(model, texture_table),
+        "masters": {name: master_path(name)
+                    for name in (DEFAULT_WIELD_MASTER,)
+                    + tuple(name for _flag, name in MASTER_BY_FLAG)},
+        "version": WIELD_RECIPE_VERSION,
+    }
+    return bl.recipe_fingerprint("wield", "%s/%s" % (WIELD, stem), recipe)
+
+
+def stem_is_current(stem, model, texture_table, fingerprint, force):
+    """Whether the stem's whole package family is on the mount at the current recipe.
+
+    Three conditions, all required: the builder pair (`SKEL_` and `SK_`) is present -- the
+    builders stamp each as it saves, so a build that failed between the two leaves a stamped
+    skeleton beside no mesh; every asset under the folder carries the stamp -- the material
+    instances only gain theirs from `stamp_stem_assets` after a clean build; and every texture
+    the stem's rows name is still on the shared texture mount -- reuse imports nothing, so a
+    texture removed since the stamp would leave the instances dangling. Force defeats the
+    reuse whole, exactly as it does the sibling bakes' trackers."""
+    if force:
+        return False
+    package = "%s/%s" % (WIELD, stem)
+    assets = [value.split(".", 1)[0] for value in unreal.EditorAssetLibrary.list_assets(
+        package, recursive=True, include_folder=False)]
+    if not assets:
+        return False
+    pair = ("%s/SKEL_%s" % (package, stem), "%s/%s" % (package, wc.skeletal_asset(stem)))
+    if any(path not in assets for path in pair):
+        return False
+    if not all(bl.stored_recipe(path) == fingerprint for path in assets):
+        return False
+    for uri in _stem_texture_uris(model, texture_table).values():
+        if not uri or not unreal.EditorAssetLibrary.does_asset_exist(
+                "%s/%s" % (TEXTURES, texture_asset_name(uri))):
+            return False
+    return True
+
+
+def stamp_stem_assets(stem, fingerprint, failed):
+    """Stamp the stem's recipe onto every asset under its folder the builders did not stamp.
+
+    `build_family_skeleton` and `build_skeletal_mesh_from_source` stamp the skeleton and the
+    mesh as they save (`RecipeFingerprint` rides the build); the per-slot and skin-family
+    material instances save without one, so they take the same load-stamp-save path the
+    character texture unit uses (`bake_characters.CharacterTracker.record`). A stem that
+    fails here stays partially stamped, reads stale, and re-authors next run."""
+    package = "%s/%s" % (WIELD, stem)
+    stamped = 0
+    for value in unreal.EditorAssetLibrary.list_assets(package, recursive=True,
+                                                       include_folder=False):
+        object_path = value.split(".", 1)[0]
+        asset = unreal.EditorAssetLibrary.load_asset(object_path)
+        if asset is None:
+            fail("%s: could not load %s to stamp its recipe" % (stem, object_path))
+            failed.append(stem)
+            return
+        if str(unreal.EditorAssetLibrary.get_metadata_tag(asset, bl.RECIPE_TAG)) == fingerprint:
+            continue
+        bl.stamp_recipe(asset, fingerprint)
+        if not bl.save(object_path):
+            fail("%s: stamped asset could not be saved: %s" % (stem, object_path))
+            failed.append(stem)
+            return
+        stamped += 1
+    if stamped:
+        log("wield '%s': stamped %d asset(s) beside the builder-stamped pair" % (stem, stamped))
+
+
 # ---------------------------------------------------------------------------- mesh + skeleton
 
 
-def build_wield_model(stem, model, library, texture_table, textures, failed):
+def build_wield_model(stem, model, library, texture_table, textures, failed, fingerprint=""):
     """Build one model's private skeleton, skeletal mesh and material instances.
 
-    Returns the mesh's object path on success, or None -- the caller appends `stem` to `failed`
-    and moves on, per the sibling bakes' log-and-continue-per-model policy."""
+    `fingerprint` is the stem's recipe hash; the two builders stamp it onto the skeleton and
+    mesh as they save. Returns the mesh's object path on success, or None -- the caller appends
+    `stem` to `failed` and moves on, per the sibling bakes' log-and-continue-per-model policy."""
     source_path = os.path.join(OUT_ROOT, model["eskm"].replace("/", os.sep))
     if not os.path.isfile(source_path):
         fail("no .eskm for wield model %s (%s)" % (stem, wc.REGENERATE))
@@ -515,7 +632,8 @@ def build_wield_model(stem, model, library, texture_table, textures, failed):
     package = "%s/%s" % (WIELD, stem)
     bl.ensure_dir(package)
     skeleton_package = "%s/SKEL_%s" % (package, stem)
-    error, bones = library.build_family_skeleton([source_path], skeleton_package, True)
+    error, bones = library.build_family_skeleton(
+        [source_path], skeleton_package, True, recipe_fingerprint=fingerprint)
     if error:
         fail("wield skeleton %s: %s" % (stem, error))
         failed.append(stem)
@@ -548,7 +666,8 @@ def build_wield_model(stem, model, library, texture_table, textures, failed):
     # `master_path(DEFAULT_WIELD_MASTER)` only ever covers a section the manifest did not name.
     error = library.build_skeletal_mesh_from_source(
         source_path, mesh_package, skeleton_package,
-        master_path(DEFAULT_WIELD_MASTER), package, {}, parents)
+        master_path(DEFAULT_WIELD_MASTER), package, {}, parents,
+        recipe_fingerprint=fingerprint)
     if error:
         fail("%s: %s" % (mesh_asset_name, error))
         failed.append(stem)
@@ -648,7 +767,7 @@ def verify(manifest, baked_stems, errors):
     and re-checking a stem an earlier run already verified duplicates that run's own report."""
     if not baked_stems:
         return
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([WIELD], force_rescan=True)
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([WIELD])
     for stem in sorted(baked_stems):
         model = manifest["models"][stem]
         asset_name = wc.skeletal_asset(stem)
@@ -769,9 +888,14 @@ def main():
     models = manifest.get("models", {})
     check_no_stem_collisions(models)
     stems = selected_stems(models, cmdline_arg("BakeWield"))
-    force = cmdline_arg("BakeWieldForce", "0") == "1"
+    # Both spellings defeat every reuse path: the bake family's `-BakeForce=1` and this
+    # worker's own `-BakeWieldForce=1`.
+    force = (cmdline_arg("BakeWieldForce", "0") == "1"
+             or bool(cmdline_arg("BakeForce", "")))
 
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT], force_rescan=True)
+    # A fresh commandlet has not indexed the mount; a plain scan indexes off the on-disk
+    # registry cache and loads the recipe tags the reuse decisions read.
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT])
     for package in (WIELD, TEXTURES, DA_PACKAGE):
         bl.ensure_dir(package)
 
@@ -788,23 +912,45 @@ def main():
     errors = []
 
     texture_table = manifest.get("textures", {})
-    roles = texture_closure(manifest, stems)
-    textures = import_wield_textures(manifest, roles, failed, force=force)
+
+    # Per-stem reuse off the recipe stamps, before any texture import: a stem whose whole
+    # package family carries the current fingerprint is skipped -- build and in-run verify
+    # both -- and the texture closure covers only the stems this run actually builds.
+    fingerprints = {stem: stem_fingerprint(stem, models[stem], texture_table)
+                    for stem in stems}
+    reused = {stem for stem in stems
+              if stem_is_current(stem, models[stem], texture_table, fingerprints[stem], force)}
+    for stem in sorted(reused):
+        log("wield '%s': reused (every asset carries the current recipe)" % stem)
+    building = [stem for stem in stems if stem not in reused]
+
+    if building:
+        roles = texture_closure(manifest, building)
+        textures = import_wield_textures(manifest, roles, failed, force=force)
+    else:
+        textures = {}
+        log("textures: none to import, every selected stem is current")
 
     baked = []
-    for stem in stems:
+    for stem in building:
         model = models[stem]
         # One model's failure -- including an unexpected exception -- must not abort the rest of
         # the run; it is logged with its stem and folded into the final summary, per the sibling
         # bakes' policy.
+        before = len(failed)
         try:
-            mesh_path = build_wield_model(stem, model, library, texture_table, textures, failed)
+            mesh_path = build_wield_model(stem, model, library, texture_table, textures,
+                                          failed, fingerprint=fingerprints[stem])
         except Exception as exc:  # noqa: BLE001 - reported per stem, never swallowed
             fail("%s: build raised %s: %s" % (stem, type(exc).__name__, exc))
             failed.append(stem)
             mesh_path = None
         if mesh_path is not None:
             baked.append(stem)
+            # Stamped only when the whole stem landed clean; a stem with any failure stays
+            # (partially) unstamped, reads stale, and re-authors next run.
+            if len(failed) == before:
+                stamp_stem_assets(stem, fingerprints[stem], failed)
 
     build_data_asset(manifest, failed)
 
@@ -821,7 +967,7 @@ def main():
     if failed or errors:
         raise SystemExit("[wield] failed: %d model failure(s), %d verify error(s) -- %s"
                          % (len(set(failed)), len(errors), ", ".join(sorted(set(failed)))))
-    log("done: %d/%d model(s) baked" % (len(baked), len(stems)))
+    log("done: %d/%d model(s) baked, %d reused" % (len(baked), len(stems), len(reused)))
 
 
 main()

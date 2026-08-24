@@ -51,20 +51,28 @@ TREES = ((SCENE_ROOT, ".vcd", "scenes"), (SCENE_ROOT, ".lip", "lip"),
          ("expressions", ".txt", "expressions"))
 
 
-def collect():
+def collect(index=None):
     """Merged {(root, ext): {install-rel-key -> (dest_rel, kind, ref)}} for every tree,
     resolved patch-first (patch loose > retail loose > VPK). `dest_rel` is the path under the
     mirror root (the install root prefix stripped), so each mirror preserves the engine's own
     subtree; loose sources keep their authored case, VPK sources use the lowercased index
-    key."""
+    key.
+
+    ``index`` is a shared `install.build_index()` table used as the base layer instead of
+    re-indexing the VPKs. Its tagged loose entries are re-walked below at their correct
+    precedence, so seeding from it yields the identical merge."""
     picked = {(r, e): {} for r, e, _ in TREES}
     roots = {r for r, _, _ in TREES}
     # Lowest precedence: the VPKs (keys already lowercased by vpk.index_all).
-    for key, entry in vpk.index_all(install.GAME).items():
+    base = (index.items() if index is not None
+            else ((k, ("vpk", e)) for k, e in vpk.index_all(install.GAME).items()))
+    for key, (kind, ref) in base:
+        if kind != "vpk":
+            continue    # loose entries enter through the re-walk below
         root = key.split("/", 1)[0]
         ext = os.path.splitext(key)[1]
         if (root, ext) in picked and key.startswith(root + "/"):
-            picked[(root, ext)][key] = (key[len(root) + 1:], "vpk", entry)
+            picked[(root, ext)][key] = (key[len(root) + 1:], kind, ref)
     # Then retail loose, then patch loose -- each root shadows the one before it.
     for base_root in (install.GAME, install.PATCH):
         for root in sorted(roots):
@@ -130,8 +138,8 @@ def check_referenced(scenes):
         print(f"  ! not in the install: {key}  <- {', '.join(sorted(missing[key]))}", flush=True)
 
 
-def main(force=False):
-    picked = collect()
+def main(force=False, index=None):
+    picked = collect(index=index)
     scenes = set()
     for root, ext, out_name in TREES:
         files = picked[(root, ext)]

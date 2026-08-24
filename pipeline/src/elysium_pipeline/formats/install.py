@@ -17,6 +17,8 @@ Values are tagged `("loose", path)` or `("vpk", entry)` so `read` knows where th
 bytes live.
 """
 import os
+import threading
+
 from elysium_pipeline.formats import vpk
 from elysium_pipeline.paths import vtmb_root
 
@@ -34,8 +36,34 @@ LOOSE_ROOTS = [PATCH]
 ASSET_DIRS = ("materials", "models", "maps", "resource", "particles", "scripts", "vdata")
 
 
+# One process-lifetime index per (roots, dirs) key. The install is read-only while the
+# pipeline runs, so a rebuild of the same key walks the same trees and pack directories
+# for the same answer; callers share one index object instead.
+_INDEX_LOCK = threading.Lock()
+_INDEX_CACHE = {}
+
+
 def build_index(dirs=ASSET_DIRS, verbose=True):
-    """Index the install the way the engine searches it: loose files shadow VPKs."""
+    """Index the install the way the engine searches it: loose files shadow VPKs.
+
+    Memoized for the process, keyed on the search roots and `dirs`: a repeat call with
+    the same key returns the same index object. `verbose` only controls whether the
+    summary line prints -- it never forks or defeats the cache. `invalidate_index_cache`
+    drops the memo for a caller that knows the install changed.
+    """
+    key = (GAME, tuple(LOOSE_ROOTS), tuple(dirs))
+    with _INDEX_LOCK:
+        built = _INDEX_CACHE.get(key)
+        if built is None:
+            built = _INDEX_CACHE[key] = _build_index(dirs)
+        idx, summary = built
+    if verbose:
+        print(summary)
+    return idx
+
+
+def _build_index(dirs):
+    """One full walk over the VPKs and loose trees -> (index, summary line)."""
     idx = {k: ("vpk", v) for k, v in vpk.index_all(GAME).items()}
     shadowed = added = 0
     # Assignment into idx is last-writer-wins, so walk the engine's loose search path from lowest
@@ -51,10 +79,15 @@ def build_index(dirs=ASSET_DIRS, verbose=True):
                     else:
                         added += 1
                     idx[rel] = ("loose", p)
-    if verbose:
-        print(f"  install: {len(idx)} files "
-              f"({shadowed} loose overrides shadow the VPKs, {added} loose-only)")
-    return idx
+    summary = (f"  install: {len(idx)} files "
+               f"({shadowed} loose overrides shadow the VPKs, {added} loose-only)")
+    return idx, summary
+
+
+def invalidate_index_cache():
+    """Forget every memoized index; the next `build_index` call rebuilds."""
+    with _INDEX_LOCK:
+        _INDEX_CACHE.clear()
 
 
 def read(idx, key):

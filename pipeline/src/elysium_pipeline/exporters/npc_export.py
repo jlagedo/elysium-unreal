@@ -722,8 +722,18 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
     idx = index if index is not None else install.build_index()
     failures = []
     warnings = []
-    load_mdl = lambda k: (r if (r := install.read(idx, (k[:-4] if k.lower().endswith(".mdl")
-                                                         else k) + ".mdl")) else None)
+
+    # One VPK extraction per distinct model for the whole run: the seed is probed twice (presence
+    # split), every include-tree walk re-reads its shared banks, and a bank sits in ~every NPC's
+    # tree, so an unmemoized read decompresses the same bytes hundreds of times. The cache is
+    # scoped to this call and freed with it.
+    mdl_bytes = {}
+
+    def load_mdl(k):
+        key = (k[:-4] if k.lower().endswith(".mdl") else k) + ".mdl"
+        if key not in mdl_bytes:
+            mdl_bytes[key] = install.read(idx, key) or None
+        return mdl_bytes[key]
 
     # The default seed is two lists, because the two halves are referenced differently: NPCs by
     # the maps' own entities, the player bodies only by the rulebook (PL13).

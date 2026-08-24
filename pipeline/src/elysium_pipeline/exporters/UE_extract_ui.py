@@ -187,12 +187,16 @@ def parse_strings(raw):
     return out
 
 
-def main(inventory=False, force=False):
+def main(inventory=False, force=False, index=None):
     args = argparse.Namespace(inventory=inventory, force=force)
 
     os.makedirs(OUT, exist_ok=True)
-    print("indexing install...")
-    idx = install.build_index(dirs=("materials", "resource", "particles"))
+    # A shared full install index is a superset whose extra loose dirs fall outside every
+    # prefix this exporter filters on, so it resolves identically to the scoped build.
+    if index is None:
+        print("indexing install...")
+        index = install.build_index(dirs=("materials", "resource", "particles"))
+    idx = index
     resolve_inc = resolve_include(idx)
     manifest = {"resource": [], "strings": 0, "menu": {}, "art": {}, "missing": []}
 

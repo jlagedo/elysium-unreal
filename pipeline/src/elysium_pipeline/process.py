@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import os
@@ -13,6 +14,12 @@ from typing import Callable, Mapping, Sequence, TextIO
 
 
 OutputSink = Callable[[str], None]
+
+#: Seconds between mirror-log flushes while a child streams. Nothing in the
+#: pipeline reads the run log mid-run -- the console status feeds off the
+#: output sink -- so the interval only bounds how stale an externally tailed
+#: log can be; the flush after the child exits guarantees completeness.
+LOG_FLUSH_INTERVAL_SECONDS = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +71,7 @@ class ProcessRunner:
         cwd: Path | None = None,
         category: int = 3,
         check: bool = False,
+        tail_lines: int | None = None,
     ) -> ProcessResult:
         return run_process(
             argv,
@@ -73,6 +81,7 @@ class ProcessRunner:
             output_sink=self.output_sink,
             check=check,
             category=category,
+            tail_lines=tail_lines,
         )
 
 
@@ -85,16 +94,27 @@ def run_process(
     output_sink: OutputSink | None = None,
     check: bool = True,
     category: int = 3,
+    tail_lines: int | None = None,
 ) -> ProcessResult:
-    """Run an argv safely, stream combined output, and retain it for reports."""
+    """Run an argv safely, stream combined output, and retain it for reports.
+
+    ``tail_lines`` bounds retention: when set, ``ProcessResult.output`` carries
+    only the newest ``tail_lines`` lines. An editor commandlet under
+    ``-FullStdOutLogOutput`` streams hundreds of thousands of lines; the mirror
+    log keeps every line in either mode, so a bounded tail loses nothing the
+    log does not already hold.
+    """
 
     command = tuple(os.fspath(value) for value in argv)
     if not command:
         raise ValueError("process argv must not be empty")
+    if tail_lines is not None and tail_lines <= 0:
+        raise ValueError(f"tail_lines must be positive, got {tail_lines}")
     resolved_cwd = cwd.resolve()
     started = datetime.now(timezone.utc).isoformat()
     before = time.monotonic()
-    lines: list[str] = []
+    # maxlen=None keeps everything; a positive maxlen keeps the newest tail.
+    lines: deque[str] = deque(maxlen=tail_lines)
     process = subprocess.Popen(
         command,
         cwd=resolved_cwd,
@@ -124,13 +144,17 @@ def run_process(
             except OSError:
                 pass
 
+    last_flush = time.monotonic()
     try:
         for line in process.stdout:
             lines.append(line)
             if active_log is not None:
                 try:
                     active_log.write(line)
-                    active_log.flush()
+                    now = time.monotonic()
+                    if now - last_flush >= LOG_FLUSH_INTERVAL_SECONDS:
+                        active_log.flush()
+                        last_flush = now
                 except OSError as exc:
                     active_log = None
                     record_mirror_failure("log", exc)
@@ -152,6 +176,14 @@ def run_process(
             process.stdout.close()
         finally:
             returncode = process.wait()
+        if active_log is not None:
+            # The interval flush leaves a buffered tail; the log is complete
+            # once the child has exited.
+            try:
+                active_log.flush()
+            except OSError as exc:
+                active_log = None
+                record_mirror_failure("log", exc)
     result = ProcessResult(
         argv=command,
         cwd=resolved_cwd,
