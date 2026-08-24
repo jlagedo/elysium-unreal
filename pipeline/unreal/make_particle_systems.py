@@ -27,28 +27,24 @@ ADDITIVE_MASTER = "/Game/VtMB/Materials/M_Additive"
 
 FOUNTAIN_TEMPLATE = "/Niagara/DefaultAssets/Templates/Emitters/Fountain.Fountain"
 
-#: The stock Fountain emitter template, loaded once per process. A module-held wrapper is a
-#: root for the editor's collector, so one small engine asset survives the per-map garbage
-#: collection instead of being reloaded per map; validity is still checked on use because a
-#: held wrapper can go stale if something unloads the package underneath it.
-_TEMPLATE = None
+def _drain_compilation():
+    """Finish every queued asset compilation before a package is force-deleted.
+
+    Authoring or loading a Niagara system enqueues its scripts with the compiler, and
+    force-deleting a package the compiler still owns crashes in CoreUObject. Every delete
+    below is preceded by this drain, including the prunes, because the system built by the
+    previous iteration -- or by the previous map in the same process -- is still in flight.
+    """
+    unreal.ElysiumParticleAssetBuilder.finish_asset_compilation()
 
 
 def _fountain_template():
-    global _TEMPLATE
-    template = _TEMPLATE
-    if template is not None:
-        try:
-            valid = unreal.SystemLibrary.is_valid(template)
-        except Exception:
-            valid = False
-        if valid:
-            return template
-        unreal.log_warning("[particles] the cached Fountain template went stale; reloading")
+    """The stock Fountain emitter template, loaded fresh for each system authored: a wrapper
+    held across the per-map garbage collection and the force-delete of a system being
+    rebuilt is not a reference the engine honours."""
     template = unreal.load_asset(FOUNTAIN_TEMPLATE)
     if not template:
         raise SystemExit("[particles] missing the stock Fountain emitter template")
-    _TEMPLATE = template
     return template
 
 # VtMB paces `frames` at its own tick when a definition gives no explicit `fps`. The exported
@@ -217,6 +213,7 @@ def _import_sprites(sprites, package, source_root, tracker):
     if md5_missing or md5_mismatch:
         print("[particles] Unreal SourceFile MD5 diagnostic: %d missing / %d mismatch" % (
             md5_missing, md5_mismatch))
+    _drain_compilation()
     tracker.pruned("particles", bl.prune_package_prefix(package, "T_", wanted_textures))
     tracker.pruned("particles", bl.prune_package_prefix(package, "MI_P_", wanted_materials))
     return materials
@@ -255,6 +252,7 @@ def build(map_name: str, export_root: Path, package_root: str, tracker=None) -> 
     package = "%s/Particles" % package_root
     if not document_path.is_file():
         if tracker:
+            _drain_compilation()
             for prefix in ("T_", "MI_P_", "NS_"):
                 tracker.pruned(
                     "particles", bl.prune_package_prefix(package, prefix, set()))
@@ -265,6 +263,7 @@ def build(map_name: str, export_root: Path, package_root: str, tracker=None) -> 
     roots = closure.get("roots", [])
     if not roots:
         if tracker:
+            _drain_compilation()
             for prefix in ("T_", "MI_P_", "NS_"):
                 tracker.pruned(
                     "particles", bl.prune_package_prefix(package, prefix, set()))
@@ -276,7 +275,8 @@ def build(map_name: str, export_root: Path, package_root: str, tracker=None) -> 
     # Loading an existing Niagara system can enqueue compilation. Force-deleting that package
     # while the compiler still owns its scripts crashes in CoreUObject; a full bake used to hide
     # the race behind minutes of mesh work, while an isolated particle stage reached it instantly.
-    # Preload the complete replacement set and drain compilation before the first delete.
+    # Preload the complete replacement set here, so the deletes below run against objects that
+    # are already resident rather than loading each one an instant before destroying it.
     existing = []
     work = []
     wanted_systems = set()
@@ -301,21 +301,18 @@ def build(map_name: str, export_root: Path, package_root: str, tracker=None) -> 
             loaded = unreal.load_asset(asset)
             if loaded:
                 existing.append(loaded)
-    if existing:
-        unreal.ElysiumParticleAssetBuilder.finish_asset_compilation()
 
     written = 0
     for root, layers, sprites, asset_name, asset, dirty in work:
         if not dirty:
             continue
-        # The template resolves at first use, so a run whose every system is current loads it
-        # never, and a batch loads it once; it resolves before the delete so a missing
-        # template fails with the existing asset intact.
-        template = _fountain_template()
         if unreal.EditorAssetLibrary.does_asset_exist(asset):
+            _drain_compilation()
             bl.delete_owned_asset(asset)
+        # Loaded after the delete: that delete collects garbage, and the template must be a
+        # live object when the builder reads it.
         system = unreal.ElysiumParticleAssetBuilder.build_particle_system(
-            asset_name, package, template, layers)
+            asset_name, package, _fountain_template(), layers)
         if not system:
             raise SystemExit("[particles] could not author %s" % asset_name)
         # By index: a definition a spawn graph reaches twice yields two layers with one name, and
@@ -335,6 +332,7 @@ def build(map_name: str, export_root: Path, package_root: str, tracker=None) -> 
         tracker.built("particles")
         written += 1
 
+    _drain_compilation()
     tracker.pruned(
         "particles", bl.prune_package_prefix(package, "NS_", wanted_systems))
 

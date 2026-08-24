@@ -59,6 +59,20 @@ class BuildIndexMemo(unittest.TestCase):
         install.invalidate_index_cache()
         self._tmp.cleanup()
 
+    def test_retail_runtime_caches_below_maps_are_not_indexed(self):
+        # The engine writes AI node graphs and sound caches under maps/ while it runs; a play
+        # session must not re-stamp the index, and nothing reads those files.
+        os.makedirs(os.path.join(self.patch, "maps", "graphs"))
+        os.makedirs(os.path.join(self.patch, "maps", "soundcache"))
+        for rel in (("maps", "sm_hub_1.bsp"), ("maps", "graphs", "sm_hub_1.ain"),
+                    ("maps", "graphs", ".loc"), ("maps", "soundcache", "sm_hub_1.cache")):
+            with open(os.path.join(self.patch, *rel), "wb") as f:
+                f.write(b"x")
+        index = install.build_index(verbose=False)
+        self.assertIn("maps/sm_hub_1.bsp", index)
+        self.assertFalse([k for k in index if k.startswith("maps/graphs/")
+                          or k.startswith("maps/soundcache/")])
+
     def test_a_repeat_call_returns_the_same_index_object(self):
         with mock.patch.object(vpk, "index_all", wraps=vpk.index_all) as spy:
             first = install.build_index(verbose=False)

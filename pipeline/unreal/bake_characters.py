@@ -856,10 +856,10 @@ def main():
                          % ", ".join(sorted(missing_props)))
 
     # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for assets
-    # that are already there and a re-bake would rewrite what it could have reused. A plain
-    # scan is enough: the registry consults its mtime-keyed header cache either way, and
-    # forcing only re-walks the paths to drop entries for files no longer on disk.
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT])
+    # that are already there and a re-bake would rewrite what it could have reused. Forced,
+    # because the registry's own start-up scan runs in the background and a plain scan of a
+    # path that gatherer already owns returns at once, leaving the recipe tags unread.
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT], force_rescan=True)
     for package in (SKELETONS, MESHES, MATERIALS, TEXTURES, ANIMS, BANKS):
         bl.ensure_dir(package)
 

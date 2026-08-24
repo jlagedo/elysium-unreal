@@ -999,6 +999,7 @@ def bake_and_verify(
     maps: Sequence[str],
     *,
     force: bool = False,
+    particles: bool = False,
     verify: bool = False,
 ) -> None:
     """Bake the named maps, and read the mount back only when explicitly asked to.
@@ -1011,7 +1012,8 @@ def bake_and_verify(
     names = list(dict.fromkeys(maps))
     if not names:
         return
-    unreal.bake_maps(config, runner, names, force=force)
+    unreal.bake_maps(config, runner, names, force=force, particles=particles,
+                     batch_size=unreal.MAP_BAKE_BATCH)
     missing = [
         str(_baked_package(config, name))
         for name in names
@@ -1065,6 +1067,7 @@ def _ensure_wield_bake(config, runner, *, force: bool = False,
 
 
 def _maps_bake_fingerprint(config, maps: Sequence[str], *,
+                           particles: bool = False,
                            cache: ContentDigestCache | None = None) -> str:
     """One recipe for the whole profile bake: every selected map's exported directory
     (geometry, entities and sidecars), the whole shared corpus (its tables, and the texture
@@ -1072,11 +1075,16 @@ def _maps_bake_fingerprint(config, maps: Sequence[str], *,
     each map imports, the driving scripts, and the world-material policy."""
     inputs = [config.export_root / name for name in maps]
     inputs.append(config.export_root / "shared")
-    inputs.append(config.export_root / "particles")
+    if particles:
+        # The sprites only reach a package when the Niagara pass runs, so they are an input
+        # to the recipe only then; otherwise a re-decoded sprite would relaunch a bake that
+        # cannot consume it.
+        inputs.append(config.export_root / "particles")
     return fingerprint_content(
         inputs,
         extra=(
             "maps-bake-v2",
+            "particles-on" if particles else "particles-off",
             _bake_script_fingerprint(config, ("bake_map.py",), cache=cache),
             _world_material_fingerprint(config),
             *maps,
@@ -1086,7 +1094,7 @@ def _maps_bake_fingerprint(config, maps: Sequence[str], *,
 
 
 def _bake_profile_maps(config, runner, maps: Sequence[str], *, force: bool = False,
-                       verify: bool = False,
+                       particles: bool = False, verify: bool = False,
                        cache: ContentDigestCache | None = None) -> None:
     """Bake the profile's maps behind one receipt; a stale receipt costs one launch whose
     per-map reuse is still the commandlet's own recipe-stamp decision. The declared outputs
@@ -1096,14 +1104,15 @@ def _bake_profile_maps(config, runner, maps: Sequence[str], *, force: bool = Fal
         return
 
     def fingerprint() -> str:
-        value = _maps_bake_fingerprint(config, names, cache=cache)
+        value = _maps_bake_fingerprint(config, names, particles=particles, cache=cache)
         if cache is not None:
             cache.write()
         return value
 
     task = Task(
         "unreal:bake:maps",
-        lambda: unreal.bake_maps(config, runner, names, force=force),
+        lambda: unreal.bake_maps(config, runner, names, force=force, particles=particles,
+                                 batch_size=unreal.MAP_BAKE_BATCH),
         fingerprint=fingerprint,
         outputs=tuple(_baked_package(config, name) for name in names),
     )
@@ -1123,6 +1132,7 @@ def export_profile(
     clean: bool = False,
     force: bool = False,
     jobs: int | None = None,
+    particles: bool = False,
     verify: bool = False,
 ) -> list[str]:
     from elysium_pipeline.exporters.export_all import bundles_for_profile
@@ -1157,8 +1167,8 @@ def export_profile(
     export_characters(config, runner, None, force=force or clean, verify=verify,
                       jobs=jobs, cache=cache)
     _ensure_wield_bake(config, runner, force=force or clean, cache=cache)
-    _bake_profile_maps(config, runner, maps, force=force or clean, verify=verify,
-                       cache=cache)
+    _bake_profile_maps(config, runner, maps, force=force or clean, particles=particles,
+                       verify=verify, cache=cache)
     # Only the domains this profile actually covers.  `grid` and `all` both run every bundle, so
     # this clears the corpus either way; a profile that dropped one would leave that one gated.
     mark_complete(config.export_root, ("maps", "policy", *bundles))
@@ -1173,6 +1183,7 @@ def export_targeted_maps(
     *,
     force: bool = False,
     intermediate_only: bool = False,
+    particles: bool = False,
     verify: bool = False,
 ) -> list[str]:
     _require_export_config(config)
@@ -1233,7 +1244,8 @@ def export_targeted_maps(
         # catalogue rows, native containers and independently baked prop scopes current before the
         # level is accepted. This path never invokes the global NPC exporter.
         export_placed_models(config, runner, names, force=force, index=index)
-        bake_and_verify(config, runner, names, force=force, verify=verify)
+        bake_and_verify(config, runner, names, force=force, particles=particles,
+                        verify=verify)
     return names
 
 

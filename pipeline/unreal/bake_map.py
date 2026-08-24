@@ -2220,17 +2220,26 @@ def bake_one(map_name, digest_cache, force=False):
     bake.resolve_materials()
     bake.stage_world()
     bake.stage_sky()
-    # One Niagara system per env_particle definition the map places. Independent of the mesh
-    # stages -- it reads the offline particle sidecar, not the OBJ/material graph.
-    from pipeline.unreal import make_particle_systems
-    make_particle_systems.build(
-        map_name, Path(OUT_ROOT), bake.pkg, tracker=bake.tracker)
+    if BAKE_PARTICLES[0]:
+        # One Niagara system per env_particle definition the map places. Independent of the mesh
+        # stages -- it reads the offline particle sidecar, not the OBJ/material graph.
+        from pipeline.unreal import make_particle_systems
+        make_particle_systems.build(
+            map_name, Path(OUT_ROOT), bake.pkg, tracker=bake.tracker)
     if bake.flush():
         return False
     if not bake.stage_level():
         return False
     log("%s done" % map_name)
     return True
+
+
+#: Whether this launch authors the map's Niagara systems, set from `-BakeParticles=1`.
+#: The pass is off by default: force-deleting a Niagara package the asset compiler still owns
+#: crashes the editor in CoreUObject, so the stage opts in rather than riding every bake. With
+#: the pass off a map's existing `NS_`, `T_` and `MI_P_` particle packages are left exactly as
+#: they are -- skipping the stage never prunes what it did not author.
+BAKE_PARTICLES = [False]
 
 
 def _collect_garbage():
@@ -2242,7 +2251,8 @@ def _collect_garbage():
 def _run_corpus():
     """-BakeCorpus=1: the shared corpus scope."""
     force = bool(cmdline_arg("BakeForce", ""))
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT])
+    # Forced for the reason `main` states: the background start-up scan owns the mount.
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT], force_rescan=True)
     digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)
     try:
         ok = bake_corpus(digest_cache, force=force)
@@ -2266,14 +2276,19 @@ def main():
     if not map_names:
         map_names = [cmdline_arg("BakeMap", "sp_tutorial_1")]
     force = bool(cmdline_arg("BakeForce", ""))
-    log("maps=%s%s" % (",".join(map_names), " (forced)" if force else ""))
+    BAKE_PARTICLES[0] = bool(cmdline_arg("BakeParticles", ""))
+    log("maps=%s%s%s" % (
+        ",".join(map_names),
+        " (forced)" if force else "",
+        " (+particles)" if BAKE_PARTICLES[0] else " (particle systems off)"))
 
     # A fresh commandlet has not indexed the mount, so does_asset_exist reports False for
     # assets already on disk and every create_asset call then trips the unattended
     # overwrite guard. Scanning up front also loads the recipe tags reuse decisions read.
-    # A plain scan serves both: the registry consults its mtime-keyed header cache either
-    # way, and forcing only re-walks the paths to drop entries for files no longer on disk.
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT])
+    # Forced, because the registry's own start-up scan runs in the background and a plain
+    # scan of a path that gatherer already owns returns at once -- the tags then read as
+    # absent until it finishes, and every asset on the mount rebuilds.
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT], force_rescan=True)
 
     failed = []
     digest_cache = ContentDigestCache(Path(OUT_ROOT) / DIGEST_CACHE_FILE)

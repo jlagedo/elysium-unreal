@@ -34,6 +34,8 @@ LOOSE_ROOTS = [PATCH]
 # The trees the converters read from, so the walk stays cheap. The patch also
 # ships cfg/save/sound/python/dlg; nothing indexes those through here yet.
 ASSET_DIRS = ("materials", "models", "maps", "resource", "particles", "scripts", "vdata")
+#: Directories below `maps/` the retail engine writes at run time; never pipeline inputs.
+RUNTIME_CACHE_DIRS = frozenset({"graphs", "soundcache"})
 
 
 # One process-lifetime index per (roots, dirs) key. The install is read-only while the
@@ -70,7 +72,12 @@ def _build_index(dirs):
     # to highest precedence: retail loose first, then patch/add-on roots in reverse search order.
     for root in reversed(LOOSE_ROOTS + [GAME]):
         for sub in dirs:
-            for dirpath, _, files in os.walk(os.path.join(root, sub)):
+            for dirpath, subdirs, files in os.walk(os.path.join(root, sub)):
+                # The retail engine writes its own caches below `maps/` while it runs -- AI node
+                # graphs and sound caches -- so a play session would otherwise re-stamp the
+                # index and invalidate every export receipt. Nothing here reads them.
+                if os.path.relpath(dirpath, root).replace("\\", "/").lower() == "maps":
+                    subdirs[:] = [d for d in subdirs if d.lower() not in RUNTIME_CACHE_DIRS]
                 for fn in files:
                     p = os.path.join(dirpath, fn)
                     rel = os.path.relpath(p, root).replace("\\", "/").lower()

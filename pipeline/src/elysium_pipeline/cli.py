@@ -669,6 +669,12 @@ def build_command(
     )
 
 
+#: `--particles` on every command that bakes a map.
+PARTICLE_PASS_HELP = (
+    "Author each map's Niagara systems during the bake. Off by default: the pass force-deletes Niagara packages the asset compiler may still own, which crashes the editor. A bake without it leaves the mount's existing particle packages alone."
+)
+
+
 def _export_profile_command(
     ctx: typer.Context,
     profile: str,
@@ -676,6 +682,7 @@ def _export_profile_command(
     clean: bool,
     force: bool,
     jobs: int | None,
+    particles: bool,
     verify: bool,
 ) -> None:
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
@@ -688,6 +695,7 @@ def _export_profile_command(
             clean=clean,
             force=force,
             jobs=jobs,
+            particles=particles,
             verify=verify,
         )
         console.print(f"{profile} export complete: {len(maps)} map(s)")
@@ -710,6 +718,7 @@ def export_grid(
     clean: bool = typer.Option(False, "--clean"),
     force: bool = typer.Option(False, "--force"),
     jobs: int | None = typer.Option(None, "--jobs", min=1),
+    particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
     verify: bool = typer.Option(
         False,
         "--verify",
@@ -720,7 +729,7 @@ def export_grid(
     ),
 ) -> None:
     _export_profile_command(
-        ctx, "grid", clean=clean, force=force, jobs=jobs, verify=verify
+        ctx, "grid", clean=clean, force=force, jobs=jobs, particles=particles, verify=verify
     )
 
 
@@ -730,6 +739,7 @@ def export_all_command(
     clean: bool = typer.Option(False, "--clean"),
     force: bool = typer.Option(False, "--force"),
     jobs: int | None = typer.Option(None, "--jobs", min=1),
+    particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
     verify: bool = typer.Option(
         False,
         "--verify",
@@ -740,7 +750,7 @@ def export_all_command(
     ),
 ) -> None:
     _export_profile_command(
-        ctx, "all", clean=clean, force=force, jobs=jobs, verify=verify
+        ctx, "all", clean=clean, force=force, jobs=jobs, particles=particles, verify=verify
     )
 
 
@@ -750,6 +760,7 @@ def export_map(
     maps: list[str] = typer.Argument(...),
     force: bool = typer.Option(False, "--force"),
     intermediate_only: bool = typer.Option(False, "--intermediate-only"),
+    particles: bool = typer.Option(False, "--particles", help=PARTICLE_PASS_HELP),
     verify: bool = typer.Option(
         False,
         "--verify",
@@ -768,6 +779,7 @@ def export_map(
             maps,
             force=force,
             intermediate_only=intermediate_only,
+            particles=particles,
             verify=verify,
         )
         console.print("map export complete: " + ", ".join(names))

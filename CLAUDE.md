@@ -84,31 +84,12 @@ structured failure when callers need it, rather than producing duplicate warning
 negative query result or an explicitly optional absence is not a failure and does not require a
 warning.
 
-### Fast QA is a scope contract
-
-Iteration uses the **smallest independently testable unit** that can prove the requested change.
-A fix and its first validation stay in the same narrow unit: one parser fixture, test method,
-runtime test filter, model, NPC, placed model, map stage, or package generator. Widen only when
-focused evidence demonstrates a dependency outside that unit.
-
-**Agents never start a complete build, rebuild, reconstruction, export corpus, bake corpus, or
-full test sweep on their own.** Project-wide work is planned work: state the exact command, scope,
-reason, and expected cost, then wait for the owner's explicit acceptance. This applies to
-`reconstruct`, `export grid|all`, an unscoped `export characters`, full-map or full-policy forced
-bakes, `build --clean|--rebuild`, unfiltered automation tiers, and any equivalent command. A broad
-request such as "fix", "verify", or "go" does not authorize a complete operation.
-
-When a request would change an export or bake input and the owning unit is not explicit, stop
-before exporting and ask the owner to name the scope: map, model, placed model, NPC/body stem,
-bundle, generator, or another concrete unit. Prefer exact selectors and focused test filters;
-never add `--force`, `--clean`, or a wider profile merely to obtain confidence. Report the
-remaining broader acceptance separately instead of silently running it.
-
 ### Build slots: one engine install per concurrent checkout
 
 UnrealBuildTool takes a global single-instance mutex named from **its own assembly path**, so an
 engine installation builds one thing at a time and two checkouts sharing one installation wait for
-each other. Concurrency therefore comes from **build slots**: one complete engine installation per
+each other. When the mutex is held, wait for it to release and retry; never kill the process
+holding it. Concurrency therefore comes from **build slots**: one complete engine installation per
 checkout that may build at the same time. The machine carries the primary installation plus
 sibling copies named with an `_agent<N>` suffix; each checkout names its own in
 `.elysium.local.env`, and `uv run elysium worktree status` reports which slot a task holds.

@@ -933,7 +933,8 @@ def save(asset_path):
 
 
 #: The package-metadata tag every baked asset carries: the sha256 of its authoring recipe.
-#: `Config/DefaultEngine.ini` lists it in `MetaDataTagsForAssetRegistry`, so a saved asset
+#: `Config/DefaultGame.ini` lists it in `MetaDataTagsForAssetRegistry` (the asset manager
+#: settings class is `config=Game`), so a saved asset
 #: surfaces it as an asset registry tag and a fresh process reads it without loading anything.
 RECIPE_TAG = "ElysiumRecipe"
 
@@ -953,11 +954,23 @@ def stored_recipe(object_path):
     stale asset.
     """
     registry = unreal.AssetRegistryHelpers.get_asset_registry()
-    data = registry.get_asset_by_object_path(object_path)
+    data = registry.get_asset_by_object_path(object_path_of(object_path))
     if not data or not data.is_valid():
         return ""
     value = data.get_tag_value(RECIPE_TAG)
     return str(value) if value else ""
+
+
+def object_path_of(path):
+    """The registry's own key for a top-level asset: ``/Pkg/Name.Name``.
+
+    Callers name assets by package path (``/Pkg/Name``), which `EditorAssetLibrary` accepts
+    but the registry does not -- its lookup is by object path, and a package path finds no
+    asset, so every recipe reads as absent and every asset rebuilds."""
+    package, _, name = path.rpartition("/")
+    if "." in name:
+        return path
+    return "%s.%s" % (path, name)
 
 
 def stamp_recipe(asset, fingerprint):

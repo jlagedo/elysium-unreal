@@ -13,11 +13,15 @@ Scene line audio, subtitles and the mixahead lead belong to the audio programme'
 
 ### 12.1 Choreographed scenes — remaining
 
-The reader/timeline/entity, cameras, PC body, controller transfer and the per-actor cinematic
-bank binding are implemented and verified. **Remaining:** the residual RE32 material/remap work
-and the final live acceptance pass — `newgame_ttd` with no unexpected actor, clip, camera, NPC
-or prop diagnostics (deferred facial/lip work belongs to 12.3–12.5, scene audio to AUD3).
-`hide_ents`
+The `.vcd` reader, the event timeline, the entity's nine live event handlers, the camera-track
+path, the PC body stand-in and the per-actor cinematic bank binding are all built. What stands
+between them and acceptance is **staging**: actor placement, the camera coupling and the triggers
+regressed under CCC2 and LIFE0–4, and **LIFE7's choreo-scene rewire owns restoring them**
+(`plans/animation.md`). This row does not re-specify that work and does not duplicate its gap map.
+
+**Remaining here, once a scene stages its cast again:** the residual RE32 material/remap work and
+the final live acceptance pass — `newgame_ttd` with no unexpected actor, clip, camera, NPC or prop
+diagnostics (deferred facial/lip work belongs to 12.3–12.5, scene audio to AUD3). `hide_ents`
 stays behind `elysium.SceneHideEnts` (default 0); the authored missing `controls` target stays
 a single non-fatal diagnostic.
 

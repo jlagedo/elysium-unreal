@@ -46,7 +46,7 @@ tutorial.** Everything on the path lands first. Three standing rules:
 |---|---|---|
 | **PP0 — the core refactor** | the runtime spine | 11.10 *(11.0–11.8 [x])* |
 | **PP1 — New Game & genesis [x]** | chargen for real, `sp_genesisdevice_1` played | 9.4 [x] |
-| **PP2 — the theatre cinematic** | the intro plays start to finish — eyes and lipsync block | AUD0, AUD1, AUD3, 12.1–12.5, 8.11a [x] |
+| **PP2 — the theatre cinematic** | the intro plays start to finish — eyes and lipsync block | AUD0, AUD1, AUD3, LIFE7 *(the choreo-scene rewire 12.1–12.5 all stage on)*, 12.1–12.5, 8.11a [x] |
 | **PP3 — land the tutorial** | Jack's first conversation with sound and reactions | AUD2, 9.2, 9.9 |
 | **PP4 — core mechanics** | faithful movement, modern camera, gait, feeding, items, dice, HUD foundation + observer presentation seam | CCC0–CCC9, LIFE0–LIFE3, B6 [x], 9.8, 9.6 [x], 8.9 |
 | **PP5 — persistence [x]** | save / quick / autosave + load mid-run | 11.9 [x] |
@@ -74,8 +74,10 @@ rule 3 governs what happens next:
    through; PP0's finish → [plans/spine.md](plans/spine.md).
 2. **The 3 C's slice** — the controls/camera co-tune, then CCC8's owner-played acceptance →
    [plans/three-cs.md](plans/three-cs.md).
-3. **12.1 remainder** — the theatre's residual RE32 material/remap work and final live
-   acceptance → [plans/theatre.md](plans/theatre.md).
+3. **LIFE7's choreo-scene rewire, then the 12.1 remainder** — the staging, camera coupling and
+   triggers come back first ([plans/animation.md](plans/animation.md)), because the theatre's
+   residual RE32 material/remap work and its final live acceptance cannot be run until a scene
+   stages its cast again → [plans/theatre.md](plans/theatre.md).
 4. **13.1–13.5 and 9.8 / 9.9 remainders** — the played tutorial lessons plus stealth-kill, the
    per-rank discipline consumers, frenzy, terminals, barter and the dialogue reaction consumer →
    [plans/gameplay.md](plans/gameplay.md).
@@ -428,9 +430,12 @@ The ladder:
   the two-component body; ranged only.
 - [ ] **[LIFE7 The cinematic path and gestures](plans/animation.md)** — the choreo-scene rewire
   hard slice (marks, camera, triggers — the pipeline is broken end-to-end and untested since the
-  LIFE programme started), then the montage migration, the gesture un-collapse against the
-  recovered `0.1` layer weight, paired actions (role/size/side variant arithmetic and the two-body
-  claim — owner call, made), the `Prince_Escort_Male` cluster.
+  LIFE programme started; **12.1's staging and, through it, 12.3–12.5's acceptance runs all wait on
+  this**, and the plan carries the ranked gap map), then the montage migration, the gesture
+  un-collapse against the recovered `0.1` layer weight, paired actions (role/size/side variant
+  arithmetic and the two-body claim — owner call, made), the `Prince_Escort_Male` cluster (its
+  over-band residue attributed to the characterization evaluator, not to the decode or the bake, so
+  no pipeline row falls out of it).
 - [ ] **[LIFE8 Alive — played acceptance](plans/animation.md)** — the programme's owner-played
   finish line; owns the capture-tooling trim.
 - [P] **[LIFE9 Secondary-motion calibration](plans/animation.md)** — hair/cloth fitting and
@@ -498,12 +503,19 @@ Camera, controls and the played movement feel; the animation rungs are the LIFE 
 
 ## P12 — The theatre *(the PP2 rung; detail: [plans/theatre.md](plans/theatre.md))*
 
-- [~] **[12.1 Choreographed scenes](plans/theatre.md)** — implemented and verified; residual
-  RE32 material/remap work + final live acceptance.
+- [~] **[12.1 Choreographed scenes](plans/theatre.md)** — the reader, the timeline and the event
+  handlers stand; the staging around them does not. Actor placement, the camera coupling and the
+  triggers regressed under CCC2 and LIFE0–4 and have not been exercised since, so **LIFE7's
+  choreo-scene rewire owns them** and this row waits on it. Residual RE32 material/remap work
+  and the final live acceptance stay here.
 - [~] **[12.3 Facial flex track](plans/theatre.md)** — built; pending an unobstructed visual.
 - [~] **[12.4 Eyes and eyelids](plans/theatre.md)** — built through the gaze layer; debug
   surface + theatre acceptance open.
 - [ ] **[12.5 Lipsync](plans/theatre.md)** — reads AUD3's scheduled line clock.
+
+Each of 12.3, 12.4 and 12.5 states its acceptance on a played theatre scene, so all three are
+gated on the same staging LIFE7 restores. Their implementations are unaffected; only the run that
+proves them is unreachable until the rewire lands.
 
 Scene line audio, subtitles and the mixahead lead are AUD3 → [plans/audio.md](plans/audio.md).
 

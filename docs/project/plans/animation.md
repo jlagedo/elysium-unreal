@@ -44,9 +44,8 @@ for the per-weapon translation half.
 
 ### LIFE5 Reactions and combat actions
 
-What is left of the rung: the flying knockback chain, the authored knockback table the grounded
-gate currently stands in for, the NPC melee sequence selector, and the owner-played acceptance
-sweep. **Owns the pose, not the number**: lethality, soak, the damage roll and the health commit
+What is left of the rung: the flying knockback chain, the NPC melee sequence selector, the
+player's own knockback reaction (the view kick), and the owner-played acceptance sweep. **Owns the pose, not the number**: lethality, soak, the damage roll and the health commit
 are 13.3's; this rung consumes their outcome. The ragdoll a killed body hands off to is PHYS1's.
 
 **The NPC melee sequence selector.** A melee attack's sequence is chosen through vtable slot 331
@@ -129,19 +128,19 @@ of it:
 The cells this band plays are the flying half of the shipped corpus recorded in
 `docs/vtmb/animation_and_movers.md`, and the get-up the corpus does not ship stays a named absence.
 
-**The authored knockback table replaces the stand-in.** The swing sidecar already carries each
-record's four direction buckets of up to four candidate activity names, plus the `+0xB8` rotation
-byte and the `+0xBA == 2` unconditional marker (the `swings` column, written by
-`pipeline/src/elysium_pipeline/formats/mdl_skel.py`). The
-slice consumes them: the direction comes off the byte and bucket `k` answers direction
-`(byte_b8 + k) mod 4`, so a consumer never assumes bucket 0 is one particular way round; a bucket
-with more than one candidate draws with `RandomInt` on an owned stream. That retires
-`StandInKnockbackSize`/`StandInKnockbackHeight` — the deterministic single `NORMAL_HIGH_{dir}`
-candidate and its "no draw at all" note — and reaches the `SMALL` family and the two `LOW_BACK`
-cells the vocabulary already carries.
+**The authored knockback table and the eligibility gate have landed.** The cell comes off the
+landing swing record's four direction buckets, rotated by `+0xB8`; the gate carries all four
+recovered terms including the hit-buildup counter and the `CNPC_VTzimisceRunner` class bypass.
+`StandInKnockbackSize`/`StandInKnockbackHeight` are gone, and the `SMALL` family and both
+`LOW_BACK` cells are reachable. The selector's full recovered shape — the unconditional
+`RandomInt`, the empty-bucket-re-reads-bucket-0 fallback, and the two distinct no-candidate
+fallbacks — is `docs/vtmb/combat-and-damage.md` → "The authored table lives in the swing record".
 
-The gate's two omissions are no longer RE questions, so the slice implements them rather than
-reporting them (`docs/vtmb/combat-and-damage.md` → "Who may be knocked back"). The hit-buildup
+One selector arm is **not** reproduced and is named where it is taken: retail reaches a
+direction-keyed per-class default activity (virtual `+0x644`) when a record's bucket 0 is also
+empty, and nothing in this runtime carries one, so the no-record `0x8B` cell stands in for it.
+
+The hit-buildup
 counter is one scalar **on the victim**, admitted at `<= npc_hit_buildup_amount` (default `2`) or on
 the record's `+0xBA == 2`, and cleared by the body's **own** swing passing `0.8` of its cycle — so
 it needs a per-body counter and no relationship bookkeeping at all. What was recorded as a second,
@@ -263,14 +262,82 @@ transaction. The feed transaction is the shipped consumer.
   playing scene reproduces with its cast outside the camera, and the camera and trigger systems
   have both changed underneath the wiring. The slice re-wires the whole path — actor placement
   at marks, the scene camera, the triggers that start scenes — before any montage-migration work
-  builds on it. A static gap analysis of the whole path — the seam inventory, the divergence
-  timeline, and the ranked gap map — is at
-  <https://claude.ai/code/artifact/c4cd94a9-eb8c-4ce8-bd56-fea738b43ca6>. (The arbitration slot's claim lifecycle is proven independently of this; a
-  scene's Scene-band claims submit and release correctly even while the staging is broken.)
-  Two known claim-lifecycle edges ride along for this slice: `ReleaseActorClips` early-returns
-  when `elysium.SceneActors` is 0, so toggling that cvar mid-scene leaks the scene's claim and
-  parks the body's base channel; and a body destroyed without a stop leaves its inert
-  `CinematicClaims` entry unswept.
+  builds on it.
+
+  **Nothing was deleted out from under the scene player.** `ElysiumSceneData` (the `.vcd` reader)
+  and `ElysiumScenePlayer` (the clock) are world-free and unchanged since creation; every symbol
+  `ElysiumChoreoScene` calls still resolves to a live implementation. What broke is the contract
+  around it. Three things changed while the scene code stood still:
+
+  - **Every body now publishes a selection every tick**, and a locomotion publish that takes the
+    base channel calls `StopClip()` on the pinned cinematic player. The Scene-band claim inside
+    `PlayCinematicClip` is the only thing holding the pose — and a body that routes to no driver
+    (`SubmitBodyAnimRequest` answers 0 for anything not on an `AElysiumNpcBody` motor or the
+    player visual) holds no claim at all. The green-room theatre case that stands as the "proven
+    ground" uses exactly such bare components, so **the proven path is not the real path**.
+  - **The player-body visibility rules were rewritten**: a legacy shot no longer stands the real
+    body up, and a cutscene must go through the `npc_VPlayerController` stand-in. Compatible on
+    paper, never run. `PlayCinematicClip` still calls `SetVisibility(true, true)` unconditionally.
+  - **Cast-creation timing moved** — the NPC-maker interlock, the controller stand-in flow and the
+    map-epoch handle semantics were all reworked after the scene's last edit, and
+    `RebaseSavedHandle` was never revisited against the new epoch boundary.
+
+  **The ranked gap map.** Five kinds, and the first kind is what to rule out before any live
+  diagnosis, because each item independently produces the reported symptoms with nothing logged:
+
+  *Silent funnels.* `BindActors` resolves by exact name once per `Start` and logs a miss once at
+  `Log`, while `sp_theatre`'s cast is created and renamed by `theatre.py` after that bind — the
+  single most direct match for "NPCs not at their marks", and retail re-resolves every frame.
+  A bank miss returns false with no log, the scene falls back to `PlayAnimClip`, and
+  `SeekCinematicClip` then reports success while seeking nothing — so the clip free-runs at rate 1
+  under a weaker Ambient claim any travel publish outranks. A partial `export characters` corpus
+  leaves named cast members bodiless by design. And two cvars reproduce the whole symptom on
+  their own: `elysium.SceneActors 0` and `elysium.NpcBodies 0`.
+
+  *Confirmed defects.* `PlayCinematicClip`'s fallback calls `USkeletalMeshComponent::PlayAnimation`
+  for a body with no `UElysiumBipedAnimInstance`, which switches the component to single-node mode
+  and destroys its anim graph for the rest of the map — `PlayNpcClip` guards this hazard on its own
+  path and the cinematic path does not. Three claim-lifecycle leaks: `ReleaseActorClips`
+  early-returns when `elysium.SceneActors` is 0, so toggling that cvar mid-scene leaks the claim and
+  permanently parks the base channel; `ApplyPositionEnd` carries the identical guard, so the same
+  toggle also skips `position_end` and strands a restore-scene's cast at the mark; a body destroyed
+  without a stop leaves its inert `CinematicClaims` entry unswept; and `ReleaseActorClips` stops a
+  clip only while `DrivesActor` holds, so a `scripted_sequence` stealing an actor mid-scene leaves
+  the Scene claim standing. Placement writes origin and angles separately, firing two motor
+  teleports with the first carrying stale angles, where `SetRuntimeTransform` exists to avoid it.
+
+  *Semantic drift.* Two ownership registers were never reconciled: the scene stamps entity-level
+  `ScriptOwner` but never calls `ClaimScriptBody`, so the mind's body-owner token never reads
+  `Sequence` for a scene's cast. `SetBodyFrozen` is a no-op on the player chain, so a scene binding
+  `!player` with `position_start 1` teleports the pawn and then does not hold it.
+
+  *Missing wiring.* The camera has two composition systems on one component — the legacy shot stack
+  that cutscenes use and win the frame with, and `UElysiumCameraService`, whose `Sequence` request
+  kind is reserved for cutscenes and has no producer; the two arbitrate only by layering accident.
+  Nothing pushes `ElysiumInput::Priority::Cinematic`, so live look input integrates through a shot
+  and the base rig snaps to it when the shot's weight ramps out.
+
+  *Test blindness.* The scene suite's actor is a `logic_relay` — no body, no motor, no positive
+  assertion on play, seek, freeze, angles, camera or arbitration, and the theatre camera test counts
+  stub pushes rather than a live manager frame. The sibling `ScriptedSequenceBodyClaim` test is the
+  shape the scene path needs and does not have.
+
+  **What the slice does, in order.** Make the funnels loud first — log the bank miss, make
+  `SeekCinematicClip` report the no-seek case, raise the unresolved-actor diagnostic, guard the
+  `PlayAnimation` fallback — because until they are loud, live diagnosis is guesswork. Then the
+  claim-lifecycle leaks and a `CinematicClaims` sweep on body destruction. Then staging: settle
+  name-binding against recast timing (either restore retail's per-frame re-resolution or add a
+  re-bind hook), and collapse the double transform write. Then the camera, which is an owner call —
+  keep cutscenes on the legacy shot stack or move them onto the reserved `Sequence` kind — and push
+  the `Cinematic` input scope for a track's duration either way. Finally the body-backed scene test
+  in the `ScriptedSequenceBodyClaim` mould, so the path cannot rot silently again.
+
+  **What static cannot settle**, and what the first live run answers: which funnel is actually
+  firing. Make them loud, run `newgame_ttd`, read the log — the failure names itself. Also live-only:
+  whether the shot stack renders correctly through the live camera manager, whether the recast
+  scripts' create/rename timing matches the bind, and whether the stand-in flow survives the new
+  visibility rules. (The arbitration slot's claim lifecycle is proven independently of all of this;
+  a scene's Scene-band claims submit and release correctly even while the staging is broken.)
 - **The composition weights are recovered; what is left is the confirmation pass.** Both scalars
   are constants in the DLL: an autolayer composes at a literal `1.0` against a binary per-bone
   mask, and a choreographed `gesture` composes at `SetLayer`'s literal `0.1`
@@ -283,18 +350,56 @@ transaction. The feed transaction is the shipped consumer.
   gesture over a running sequence is `prince_beckett_dialog` on `la_ventruetower_1`. The `0.1`
   is what the un-collapse is designed against: a gesture leans the base pose 10%, it does not
   replace it.
-- **The `Prince_Escort_Male` cluster**, now mostly attributed. The characterization report
-  (`golden/golden_theater/cap5.9-characterization-*.json`) puts the bank at 693 over-band records
-  on the current evaluator, 351 `brujah_Male_Armor_0` and 342 `Lacroix`. Applying the retail
-  hemisphere-corrected quaternion decode collapses that to **18**, and the same correction zeroes
-  `move_and_ranged`'s separate 1,318-record residual — so the dominant cause is a corpus-wide
-  decode defect, not a cinematic-bank one. The include route, the remap table and the static bind
-  are all ruled out directly (zero route disagreements; bind error ~2.4e-5 with no bone over band),
-  and `bonerename` selects the bank rather than binding bones inside it. What is left is the one
-  actor-discriminating signal: the `bone_name` join fails 3,599/3,599 on Lacroix against 4/3,599 on
-  brujah, alongside a 72-vs-78 bone-count asymmetry. The cheapest next measurement is an offline
-  bone-name diff from the existing capture database — no new capture, no bake. The doc's earlier
-  1,061/65% figures do not reproduce from the banked snapshot and are withdrawn.
+- **The `Prince_Escort_Male` cluster**, now mostly attributed — and **the residue is a measuring
+  artefact, not a bake one**. The characterization report
+  (`golden/golden_theater/cap5.9-characterization-*.json`) is itself a four-way A/B over *evaluator*
+  variants: its `identity` carries an `evaluator_sha256` distinct from the decoder's and the
+  exporter's, and its `method` names the baseline as *"raw normalized frame lerp, shortest-arc cell
+  slerp"* against a candidate reading retail's own `FUN_100889f0`/`FUN_100892c0` → `FUN_1010a0b0`
+  hemisphere-corrected normalized component lerp. On the baseline the bank shows 693 over-band
+  records of 7,198 (351 `brujah_Male_Armor_0`, 342 `Lacroix`); on the retail rule it shows **18, and
+  its rotation column is exactly zero** — so the 18 that remain are *translation* records, and
+  orientation is fully explained. The same correction takes `move_and_ranged`'s separate 1,318 to
+  **0**, though only with both halves applied: the frame rule alone leaves 81 there, while for this
+  bank the cell rule contributes nothing at all, its `cell_frame_agreement` reporting no two-cell
+  records to correct.
+
+  **Nothing here implicates our decode or our bake.** `mdl_skel.read_anim` materialises every frame
+  of every bone and `_rle_channel` expands each run to explicit keys then clamps to the last, so the
+  export writes one key per authored frame and performs no between-key quaternion mix anywhere — the
+  hemisphere rule governs sampling at a fractional cycle, which the bake never does. The runtime half
+  was closed separately: Unreal's `FQuat::FastLerp` + `Normalize` is measured to be retail's own
+  mixer, key pair for key pair (`docs/architecture/animation-architecture.md` § 1). So no pipeline
+  row falls out of this and this rung is not gated on one.
+
+  The include route, the remap table and the static bind are all ruled out directly (zero route
+  disagreements; bind error ~2.4e-5 with no bone over band), and `bonerename` selects the bank rather
+  than binding bones inside it. What is left is the one actor-discriminating signal: the `bone_name`
+  join fails 3,599/3,599 on Lacroix against 4/3,599 on brujah, alongside a 72-vs-78 bone-count
+  asymmetry. The cheapest next measurement is an offline bone-name diff from the existing capture
+  database — no new capture, no bake — and it should be read as a *translation* question, since the
+  rotation column is already zero. The doc's earlier 1,061/65% figures do not reproduce from the
+  banked snapshot and are withdrawn.
+
+*Acceptance:* **two played runs, each driving every scene its map ships.** `sp_theatre` — all
+**twelve**, every one of them `position_start 1`, including the seven concurrent courtroom scenes
+and 15 of the corpus's 20 distinct cinematic bank models: the cast stages at its marks, stays inside
+the keyframe-conducted shot, the `npc_VPlayerController` stand-in carries the player, and every
+actor, clip and bank resolves with no diagnostic. No scene on that map wires an output, so it proves
+staging, cast breadth and camera and nothing else. `sp_tutorial_1` — all **three**, the alley fight
+included: `firetrigger` 1–2 reach their wired targets and `OnCompletion` fires and drives
+`logic_alley_cleanup`, because a scene that never reports finished is a soft-lock rather than a
+missing animation. Across both, no silent funnel fires — which is checkable only because the slice's
+first step made them loud — and no scene is carried by `elysium.SceneActors 0` or a bank-miss
+free-run.
+
+**What the two runs cannot reach**, stated rather than assumed: neither map composes a `gesture`
+over a running `sequence`, and `gesture` is dispatched **zero** times across the whole banked
+capture corpus, so the un-collapse has no witness in either. The only shipped file where a gesture
+overlaps a sequence is `prince_beckett_dialog` on `la_ventruetower_1` (`prince2` at
+`17.493→30.827` and `37.213→47.407`, entered from `prince_to_coffin`'s `OnEndSequence`) — the
+un-collapse is proven there or it is not proven. Paired actions are outside both runs for the same
+reason: their shipped consumer is the feed transaction, which no scene on either map reaches.
 
 *Deps:* LIFE5's montage mechanism; the theatre plan's 12.x rows consume the result.
 

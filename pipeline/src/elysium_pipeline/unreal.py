@@ -215,20 +215,32 @@ def bake_corpus(config, runner, *, force: bool = False) -> None:
     )
 
 
+#: Maps per editor process. The commandlet garbage-collects between maps, but loaded texture
+#: platform data and its RHI resources still accumulate across the loop -- one process reached
+#: 23 GB and the machine's commit limit at the fiftieth map -- so a profile bake runs in
+#: processes of this many maps, each starting from a fresh heap for about ten seconds of boot.
+MAP_BAKE_BATCH = 12
+
+
 def bake_maps(
     config,
     runner,
     maps: Sequence[str],
     *,
     force: bool = False,
+    particles: bool = False,
     batch_size: int | None = None,
 ) -> None:
-    """Bake the named maps -- the whole list through ONE editor process by default.
+    """Bake the named maps, `batch_size` maps per editor process (the whole list when None).
 
-    Editor start-up (module load, plugin init, registry scan) is the dominant fixed cost, and
-    the commandlet already garbage-collects between maps and isolates per-map failures, so more
-    processes buy nothing. A crash mid-run costs only a relaunch: every saved asset carries its
-    recipe stamp and is reused. `batch_size` remains for callers that want smaller processes.
+    `particles` opts the map's Niagara authoring pass in; it is off by default because
+    force-deleting a Niagara package the asset compiler still owns crashes the editor, and a
+    launch without it leaves whatever particle packages the mount already carries untouched.
+
+    Editor start-up (module load, plugin init, registry scan) is the fixed cost per process;
+    the commandlet garbage-collects between maps and isolates per-map failures, and a crash
+    mid-run costs only a relaunch: every saved asset carries its recipe stamp and is reused.
+    Profile bakes pass `MAP_BAKE_BATCH` so one process's growth stays bounded.
 
     Per-asset reuse is the commandlet's own decision, read off each asset's recipe stamp; a
     failed batch is reported by the editor log naming the failing map.
@@ -247,6 +259,7 @@ def bake_maps(
                 f"-script={config.repo_root / 'pipeline/unreal/bake_map.py'}",
                 f"-BakeMaps={','.join(batch)}",
                 *(["-BakeForce=1"] if force else []),
+                *(["-BakeParticles=1"] if particles else []),
                 "-AllowCommandletRendering",
                 "-unattended",
                 "-nosplash",

@@ -767,7 +767,7 @@ def verify(manifest, baked_stems, errors):
     and re-checking a stem an earlier run already verified duplicates that run's own report."""
     if not baked_stems:
         return
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([WIELD])
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([WIELD], force_rescan=True)
     for stem in sorted(baked_stems):
         model = manifest["models"][stem]
         asset_name = wc.skeletal_asset(stem)
@@ -893,9 +893,10 @@ def main():
     force = (cmdline_arg("BakeWieldForce", "0") == "1"
              or bool(cmdline_arg("BakeForce", "")))
 
-    # A fresh commandlet has not indexed the mount; a plain scan indexes off the on-disk
-    # registry cache and loads the recipe tags the reuse decisions read.
-    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT])
+    # A fresh commandlet has not indexed the mount. Forced, because the registry's own
+    # start-up scan runs in the background and a plain scan of a path that gatherer already
+    # owns returns at once, leaving the recipe tags the reuse decisions read unread.
+    unreal.AssetRegistryHelpers.get_asset_registry().scan_paths_synchronous([MOUNT], force_rescan=True)
     for package in (WIELD, TEXTURES, DA_PACKAGE):
         bl.ensure_dir(package)
 

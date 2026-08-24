@@ -42,7 +42,9 @@ class BakeOrchestrationTests(unittest.TestCase):
                 mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
             ):
                 export_manager.bake_and_verify(config, object(), ["test_map", "test_map"])
-            bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=False)
+            bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=False,
+                                         particles=False,
+                                         batch_size=export_manager.unreal.MAP_BAKE_BATCH)
             verify.assert_not_called()
 
     def test_missing_baked_package_is_a_loud_failure(self) -> None:
@@ -79,7 +81,45 @@ class BakeOrchestrationTests(unittest.TestCase):
                 export_manager.bake_and_verify(
                     config, object(), ["test_map"], force=True
                 )
-            bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=True)
+            bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=True,
+                                         particles=False,
+                                         batch_size=export_manager.unreal.MAP_BAKE_BATCH)
+
+    def test_particle_pass_is_an_explicit_opt_in(self) -> None:
+        """The map bake authors no Niagara system unless the caller asks for one.
+
+        The pass force-deletes packages the asset compiler may still own, which crashes the
+        editor, so it stays off the default path and rides `--particles` when wanted.
+        """
+        recorded: list[list[str]] = []
+
+        class _Runner:
+            def run(self, argv, **_kwargs):
+                recorded.append([str(item) for item in argv])
+                return SimpleNamespace(returncode=0)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self._config(temporary)
+            config.ue_root = Path(temporary) / "ue"
+            config.project = config.repo_root / "ElysiumUE.uproject"
+            editor = config.ue_root / "Engine" / "Binaries" / "Win64"
+            editor.mkdir(parents=True)
+            (editor / "UnrealEditor-Cmd.exe").write_bytes(b"")
+
+            export_manager.unreal.bake_maps(config, _Runner(), ["test_map"])
+            self.assertNotIn("-BakeParticles=1", recorded[-1])
+
+            export_manager.unreal.bake_maps(config, _Runner(), ["test_map"], particles=True)
+            self.assertIn("-BakeParticles=1", recorded[-1])
+
+    def test_particle_pass_is_part_of_the_profile_recipe(self) -> None:
+        """Turning the pass on or off changes the maps-bake receipt, so a toggled run relaunches."""
+        with tempfile.TemporaryDirectory() as temporary:
+            config = self._config(temporary)
+            (config.export_root / "test_map").mkdir(parents=True, exist_ok=True)
+            off = export_manager._maps_bake_fingerprint(config, ["test_map"], particles=False)
+            on = export_manager._maps_bake_fingerprint(config, ["test_map"], particles=True)
+            self.assertNotEqual(off, on)
 
     def test_corpus_bake_gate_skips_a_warm_second_run_and_force_defeats_it(self) -> None:
         # The launch rides a manifest receipt over the decoded shared corpus; per-asset reuse

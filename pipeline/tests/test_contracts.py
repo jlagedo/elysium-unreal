@@ -621,6 +621,31 @@ class BakeTextureImportContractTests(unittest.TestCase):
         self.assertTrue(tasks[0].replace_existing)
         self.assertTrue(tasks[0].replace_existing_settings)
 
+    def test_stored_recipe_reads_the_registry_by_object_path(self) -> None:
+        # Callers name assets by package path; the registry answers only the object path.
+        class FakeData:
+            def __init__(self, tag):
+                self.tag = tag
+
+            def is_valid(self):
+                return True
+
+            def get_tag_value(self, name):
+                return self.tag if name == "ElysiumRecipe" else ""
+
+        registry = SimpleNamespace(get_asset_by_object_path=lambda path: (
+            FakeData("abc123") if path == "/ElysiumBaked/Shared/Textures/T_x.T_x" else None))
+        fake_unreal = SimpleNamespace(
+            AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
+            MaterialEditingLibrary=object(),
+            GeometryScript_Collision=object(),
+            AssetRegistryHelpers=SimpleNamespace(get_asset_registry=lambda: registry),
+        )
+        module = self._load_bake_lib(fake_unreal)
+        self.assertEqual(module.stored_recipe("/ElysiumBaked/Shared/Textures/T_x"), "abc123")
+        self.assertEqual(module.stored_recipe("/ElysiumBaked/Shared/Textures/T_x.T_x"), "abc123")
+        self.assertEqual(module.stored_recipe("/ElysiumBaked/Shared/Textures/T_other"), "")
+
     def test_bake_mtl_parser_keeps_semantic_glass_flag(self) -> None:
         fake_unreal = SimpleNamespace(
             AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: object()),
