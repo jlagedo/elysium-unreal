@@ -574,6 +574,11 @@ def _policy_fingerprint(config, *, exclude_generators: Sequence[str] = (),
         config.repo_root / "Source" / "ElysiumUE" / "Public" / "ElysiumAnimGraphLibrary.h",
         config.repo_root / "Source" / "ElysiumUE" / "Private" / "Editor"
         / "ElysiumAnimGraphLibrary.cpp",
+        # The graph places this project's own animation node, whose pin names ARE the wiring the
+        # generator addresses by string. Rename a pin and every wire to it goes dead in a graph
+        # that still compiles, so the node's declaration is a generator input like the two anim
+        # instance headers above.
+        config.repo_root / "Source" / "ElysiumUE" / "Public" / "ElysiumPostAdditiveNode.h",
         config.export_root / "particles" / "manifest.json",
         config.export_root / "particles" / "dropletfast.tga",
         config.export_root / "particles" / "fortituderings.tga",

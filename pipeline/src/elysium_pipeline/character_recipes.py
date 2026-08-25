@@ -41,10 +41,10 @@ SINGLE_ASSET_STAGES = ("bank_skeletons", "family_skeletons", "meshes")
 STAGE_VERSIONS = {
     "textures": "chars-textures-v1",
     "bank_skeletons": "chars-bank-skeletons-v1",
-    "banks": "chars-banks-v1",
+    "banks": "chars-banks-v2",
     "family_skeletons": "chars-family-skeletons-v1",
     "meshes": "chars-meshes-v1",
-    "clips": "chars-clips-v1",
+    "clips": "chars-clips-v2",
     "props": "chars-props-v1",
 }
 
@@ -159,6 +159,20 @@ def own_clip_owners(manifest: dict, members) -> list[str]:
     return sorted(stem for stem in members if npcs.get(stem, {}).get("own_clips"))
 
 
+def clip_owners(manifest: dict, stem: str):
+    """Every bank that declares a clip the named body plays.
+
+    **A clip label maps to a LIST of owners, not to one.** A label names every bank that declares
+    it, in include-tree order, so the owner set is the flattened values rather than the values
+    themselves -- the same shape `export_manager.character_source_plan` reads. Consuming a value
+    as a scalar puts a list into a set, which raised `TypeError: unhashable type: 'list'` and took
+    down every bake scoped to named bodies before it had written anything. A lone string is still
+    accepted, because a single-owner label is written either way.
+    """
+    for declared in manifest.get("npcs", {}).get(stem, {}).get("clips", {}).values():
+        yield from (declared if isinstance(declared, list) else [declared])
+
+
 def reached_banks(manifest: dict, stems) -> list[str]:
     """Every bank the named bodies can play, plus every bank a cinematic scene names.
 
@@ -168,7 +182,7 @@ def reached_banks(manifest: dict, stems) -> list[str]:
     """
     banks = set()
     for stem in stems:
-        for owner in manifest.get("npcs", {}).get(stem, {}).get("clips", {}).values():
+        for owner in clip_owners(manifest, stem):
             if owner != stem and owner in manifest.get("banks", {}):
                 banks.add(owner)
     for record in manifest.get("cinematics", {}).values():
@@ -197,11 +211,7 @@ def scopes_for(partition: dict, stems, props=(), *, manifest: dict | None = None
     elif manifest is None or selected == all_models:
         bank_families = set(partition["banks"])
     else:
-        owners = {
-            owner
-            for stem in stems
-            for owner in manifest.get("npcs", {}).get(stem, {}).get("clips", {}).values()
-        }
+        owners = {owner for stem in stems for owner in clip_owners(manifest, stem)}
         bank_families = {
             partition["bank_family_of"][owner]
             for owner in owners if owner in partition["bank_family_of"]

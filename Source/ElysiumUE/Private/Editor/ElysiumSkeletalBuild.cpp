@@ -27,6 +27,7 @@
 #include "StaticMeshAttributes.h"
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumAnimPostAdditive.h"
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumSkeletalSource.h"
 #include "UObject/Package.h"
@@ -1373,12 +1374,22 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		}
 	}
 
-	// Poses first, then the additives that are differences from them. An additive names its base
-	// as an asset, so the base has to exist and be resolvable by the time it is set; ordering the
-	// two passes here is what guarantees that without a second lookup pass or a fixup.
+	// Poses first, then the clips written against one of them. A derived overlay names its host as
+	// the pose its split bone was resolved against; ordering the two passes here is what
+	// guarantees the host exists by then without a second lookup pass or a fixup.
+	//
+	// **A `_delta` is built from its RAW payload and its derived form is not built at all.** The
+	// container ships both -- the raw record, and that record composed onto each declaring host's
+	// frame 0 -- and which one becomes an asset is the whole of retail's combine order. Composed,
+	// the clip is a pose that only means anything over the one host it was folded onto, and
+	// Unreal's own additive types would then re-derive a delta in the wrong order (`D ⊗ q`
+	// against retail's `q ⊗ D`). Raw, it is the difference retail actually decodes, and
+	// `FAnimNode_ElysiumPostAdditive` states what composing it means. Both cannot ship: four
+	// resolvers ask for `<label>@<host>` before the plain label, so a surviving derived asset
+	// would quietly win.
 	TArray<const FElysiumSourceClip*> Ordered;
 	Ordered.Reserve(Source.Clips.Num());
-	int32 UnboundAdditives = 0;
+	int32 DerivedAdditives = 0;
 	// Every asset name this run wrote into the owner's folder, which is what the sweep below
 	// measures the folder's contents against.
 	TSet<FString> WrittenAssets;
@@ -1386,15 +1397,6 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	{
 		if (Clip.BaseName.IsEmpty())
 		{
-			// A `_delta` no host declares has nothing to be a difference FROM. Retail only ever
-			// reaches one through the autolayer binding that names its base, so an asset here would
-			// be a clip that is arithmetically a delta and semantically nothing -- exactly the trap
-			// of composing a delta over a base that did not declare it. It is not built.
-			if ((Clip.Flags & 0x4) != 0)
-			{
-				++UnboundAdditives;
-				continue;
-			}
 			Ordered.Add(&Clip);
 		}
 	}
@@ -1402,14 +1404,19 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	{
 		if (!Clip.BaseName.IsEmpty())
 		{
+			if ((Clip.Flags & 0x4) != 0)
+			{
+				++DerivedAdditives;
+				continue;
+			}
 			Ordered.Add(&Clip);
 		}
 	}
-	if (UnboundAdditives > 0)
+	if (DerivedAdditives > 0)
 	{
 		UE_LOG(LogElysiumSkeletalBuild, Verbose,
-			TEXT("%s: %d additive(s) no host declares, not built"),
-			*FPaths::GetBaseFilename(SourcePath), UnboundAdditives);
+			TEXT("%s: %d host-composed additive(s) skipped; the raw delta is what ships"),
+			*FPaths::GetBaseFilename(SourcePath), DerivedAdditives);
 	}
 
 	TMap<FString, UAnimSequence*> BuiltByName;
@@ -1453,39 +1460,29 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		Controller.SetNumberOfFrames(FFrameNumber(KeyCount - 1), false);
 
 		// The `_delta` family. `STUDIO_DELTA` (0x4) marks a clip whose tracks state a DIFFERENCE
-		// from a base pose rather than a pose of its own, which is what Unreal calls a local-space
-		// additive. The container names that base, because VtMB post-multiplies its delta and every
-		// `EAdditiveAnimationType` pre-multiplies: the conversion is a conjugation by the base's
-		// rotation, so which base is not a detail. The clip's tracks hold the base with the delta
-		// already composed onto it, and the compressor's subtraction is what performs that
-		// conjugation -- `(Base * Delta) * Base^-1` is the delta in Unreal's own order.
-		// Keyed on the studio flag, NOT on carrying a base. A derived OVERLAY carries one too --
-		// it is a masked layer written against the host whose chain resolves its split bone -- but
-		// it states a pose and composes through a layered blend, so it is an ordinary clip with a
-		// blend profile and no additive stamp.
-		const bool bAdditive = (Clip.Flags & 0x4) != 0 && !Clip.BaseName.IsEmpty();
-		UAnimSequence* const* BaseSequence = BuiltByName.Find(Clip.BaseName);
-		if (bAdditive)
-		{
-			if (BaseSequence == nullptr)
-			{
-				return FString::Printf(TEXT("%s is a difference from %s, which did not build"),
-					*Clip.Name, *Clip.BaseName);
-			}
-			Sequence->AdditiveAnimType = AAT_LocalSpaceBase;
-			Sequence->RefPoseType = ABPT_AnimFrame;
-			Sequence->RefPoseSeq = *BaseSequence;
-			Sequence->RefFrameIndex = 0;
-		}
+		// from whatever pose it is accumulated onto, and retail accumulates it on the RIGHT --
+		// `q = normalize(q ⊗ scale(D, s))`, `pos += D.pos · s` (`vampire.dll 0x100c12b0`, chosen
+		// by the descriptor's `0x10`, which all 118 shipped `_delta` sequences carry). Every
+		// `EAdditiveAnimationType` Unreal ships composes `D ⊗ q` instead, and the difference
+		// between the two is a conjugation by the base's rotation -- a property of the pose the
+		// delta lands on, not of the clip. No base and no `RefPoseType` reaches the right answer,
+		// so **the family carries no additive stamp at all**: it ships as an ordinary sequence
+		// holding the raw decoded delta, tagged for the runtime node that states the combine.
+		// Keyed on the studio flag alone. A derived OVERLAY is a different thing that also names
+		// a base -- a masked layer written against the host whose chain resolves its split bone --
+		// and it states a pose, composed through a layered blend.
+		const bool bPostAdditive = (Clip.Flags & 0x4) != 0;
 
 		// Resolved in the pre-pass above. An ADDITIVE's mask needs no asset, and giving it one would
-		// be an asset nothing reads: a bone outside the mask animates nothing, the exporter drops
-		// its channel-less track, and a missing track on an additive evaluates to the additive
-		// identity -- so the bone already contributes no change and gating it would be the same
-		// no-op. That equivalence belongs to the additive identity, not to the mask, so it does not
-		// carry over to an ordinary layer, where a masked bone must keep the BASE pose and an owned
-		// one with no track holds its BIND.
-		const FMaskProfile* MaskProfile = !bAdditive && MaskProfiles.IsValidIndex(Clip.Mask)
+		// be an asset nothing reads: a bone outside the mask is written at the additive identity
+		// below, where `q ⊗ I = q` and `pos += 0` -- so the bone already contributes no change and
+		// gating it would be the same no-op. Retail reaches the same place from the other side,
+		// skipping a bone whose per-bone weight zeroes the scale (`0x100c150e`). That equivalence
+		// belongs to the additive identity, not to the mask, so it does not carry over to an
+		// ordinary layer, where a masked bone must keep the BASE pose and an owned one with no
+		// track holds its BIND -- and it is why a delta and an overlay must never be told apart by
+		// the same tag: they compose by opposite rules.
+		const FMaskProfile* MaskProfile = !bPostAdditive && MaskProfiles.IsValidIndex(Clip.Mask)
 			&& MaskProfiles[Clip.Mask].Profile != NAME_None ? &MaskProfiles[Clip.Mask] : nullptr;
 
 		int32 BoundTracks = 0;
@@ -1536,13 +1533,13 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			// and for a bank, whose skeleton is a union over many containers, it would additionally
 			// come back at whichever container seeded that bone.
 			//
-			// An ADDITIVE needs no special case here, and that is the point of the container naming
-			// its base. `FCompressibleAnimData::BakeOutAdditiveIntoRawData` composes an additive
-			// down by `Target * Base^-1` before compressing, so the raw keys have to be the delta
-			// composed ONTO the base it is declared against -- and that composed pose is exactly
-			// what the exporter wrote. A derived clip carries every bone for the same subtraction:
-			// a bone with no track evaluates to the skeleton's reference pose rather than to the
-			// base, which would subtract into a spurious delta rather than an identity one.
+			// On a `_delta` the same statement reads differently and is still true: the value the
+			// exporter wrote for an absent component IS the decoded delta's own -- retail's
+			// decoder fills an unanimated quaternion component from the donor bind and adds the
+			// bind to every position (`mdl_skel.read_anim`) -- so a track written here is the
+			// difference retail evaluates, verbatim. What a delta needs beyond this is the bones
+			// it has NO track for, at the additive identity rather than at any bind; that pass is
+			// below.
 			const FTransform& Bind = Source.Bones[Track.Bone].Local;
 			TArray<FVector3f> Positions;
 			TArray<FQuat4f> Rotations;
@@ -1610,6 +1607,52 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			}
 		}
 
+		// **A `_delta`'s untracked bones are the additive identity, and they have to be written.**
+		// A bone with no track evaluates to the REFERENCE POSE, not to nothing
+		// (`FAnimationRuntime`'s pose init, and `ElysiumPoseOracle` reads it the same way), and
+		// this clip is composed by post-multiplying whatever it evaluates to. A reference rotation
+		// arriving there is not a small error: it turns every bone the delta does not animate,
+		// every frame, on top of a pose that was already correct. A bank delta declares its
+		// donor's 60 bones against an 88-bone body, so the untracked set is not a corner case.
+		//
+		// The sweep is over the REFERENCE SKELETON rather than `Source.Bones`, because the bones
+		// that need this most are exactly the ones the donor container never mentions -- the face
+		// and hair chains a shared bank does not carry. `Silent` is not honoured here: dropping a
+		// track to let a bone resolve to the playing mesh's bind is right for a pose and wrong for
+		// a difference, where the bind is the thing that must not arrive.
+		if (bPostAdditive)
+		{
+			TSet<FName> Written;
+			Written.Reserve(Tracked.Num());
+			for (const int32 Bone : Tracked)
+			{
+				Written.Add(Source.Bones[Bone].Name);
+			}
+			TArray<FVector3f> Positions;
+			TArray<FQuat4f> Rotations;
+			TArray<FVector3f> Scales;
+			Positions.Init(FVector3f::ZeroVector, KeyCount);
+			Rotations.Init(FQuat4f::Identity, KeyCount);
+			Scales.Init(FVector3f::OneVector, KeyCount);
+			for (int32 Bone = 0; Bone < RefSkeleton.GetNum(); ++Bone)
+			{
+				const FName BoneName = RefSkeleton.GetBoneName(Bone);
+				if (Written.Contains(BoneName))
+				{
+					continue;
+				}
+				if (!Controller.AddBoneCurve(BoneName, false)
+					|| !Controller.SetBoneTrackKeys(BoneName, Positions, Rotations, Scales, false))
+				{
+					return FString::Printf(
+						TEXT("%s '%s': the animation data controller refused the additive-identity ")
+						TEXT("track for bone '%s'"),
+						*PackagePath, *Clip.Name, *BoneName.ToString());
+				}
+				++BoundTracks;
+			}
+		}
+
 		Controller.NotifyPopulated();
 		Controller.CloseBracket(false);
 
@@ -1660,6 +1703,19 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			LayerMask->Profile = MaskProfile->Profile;
 			LayerMask->OwnedBones = MaskProfile->OwnedBones;
 			Sequence->AddMetaData(LayerMask);
+		}
+		// And how a `_delta` composes, for the same reason and through the same channel.
+		// `IsValidAdditive()` answers false on every one of them now, so this is the only thing
+		// that distinguishes a difference from a pose -- the slot resolver, the lab and the
+		// composition test all read exactly this, because a consumer keyed on anything else would
+		// drop the delta while the rest of the frame still looked right.
+		if (bPostAdditive)
+		{
+			UElysiumAnimPostAdditive* PostAdditive = NewObject<UElysiumAnimPostAdditive>(Sequence);
+			// The bones the delta actually animates, counted from what was written rather than
+			// from a mask profile -- an additive is never given one.
+			PostAdditive->OwnedBones = Tracked.Num();
+			Sequence->AddMetaData(PostAdditive);
 		}
 
 		Sequence->PostEditChange();
@@ -1996,12 +2052,16 @@ FString UElysiumSkeletalBuildLibrary::DescribeAnimSequence(const FString& AssetP
 		return FString::Printf(TEXT("%s did not load"), *AssetPath);
 	}
 	const IAnimationDataModel* Model = Sequence->GetDataModel();
-	return FString::Printf(TEXT("frames=%d rate=%s duration=%.4f tracks=%d additive=%d skeleton=%s"),
+	// `postadditive` rather than `AdditiveAnimType`: the `_delta` family carries no additive stamp
+	// and composes through `FAnimNode_ElysiumPostAdditive`, so the engine field now reads 0 for
+	// every one of them and a readout printing it would report "not additive" for the whole family.
+	return FString::Printf(
+		TEXT("frames=%d rate=%s duration=%.4f tracks=%d postadditive=%d skeleton=%s"),
 		Sequence->GetNumberOfSampledKeys(),
 		*Sequence->GetSamplingFrameRate().ToPrettyText().ToString(),
 		Sequence->GetPlayLength(),
 		Model != nullptr ? Model->GetNumBoneTracks() : -1,
-		static_cast<int32>(Sequence->AdditiveAnimType),
+		Sequence->FindMetaDataByClass<UElysiumAnimPostAdditive>() != nullptr ? 1 : 0,
 		Sequence->GetSkeleton() != nullptr ? *Sequence->GetSkeleton()->GetName() : TEXT("none"));
 #else
 	return TEXT("editor only");

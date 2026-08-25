@@ -2347,6 +2347,16 @@ the identity; `FUN_1010a320` scales a rotation by a scalar.
 **Every shipped additive post-multiplies.** All 118 `_delta` sequences carry `0x14`, so the
 `FUN_10088d00` pre-multiply side is unreachable on shipped content.
 
+**A `_delta`'s channels decode to a pure difference, with no bind in them** [data-verified]. On
+`shared/{male,female}/move_and_ranged` the frame-0 translation of every arm bone of
+`m37_attack_delta` is 0.002–0.007 units against binds of 13–26 (`Bip01 Spine1` 0.0023 / 13.13,
+`Bip01 L Forearm` 0.0018 / 26.15, `Bip01 L Hand` 0.0072 / 23.36), the root's is 4.2 against 99,
+and frame-0 `qw` reads 1.0000 on all 60 tracks against binds of 0.24–0.99. Read from the other
+side: a host's frame 0 with the delta accumulated differs from the host by the delta's own value to
+seven digits. So the decoder's general rule — position `bind + sample × posscale`, an unanimated
+rotation component from the bind — does not describe what a delta record carries; whatever is
+stored there is already the difference the accumulator adds.
+
 Valve's `source-sdk-2013` carries the same control flow in `SlerpBones()`, under the names
 `STUDIO_DELTA` (`0x0004`) and `STUDIO_POST` (`0x0010`), dispatching to `QuaternionSM`
 (`qt = (s*p) * q`) and `QuaternionMA` (`qt = p * (s*q)`). VtMB forked Source before that

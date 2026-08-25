@@ -6,6 +6,7 @@
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Visual/ElysiumActionTables.h"   // the recovered task routes the restart rule reads
 #include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumAnimPostAdditive.h"
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimSequence.h"
@@ -953,8 +954,12 @@ void UElysiumAnimSubsystem::ResolveSlotDeclaredAssets(const FString& OwnerStem,
 						 "body, so the shot composes without it"),
 					*Label, *DeclaredLayer));
 			}
-			else if (Loaded->IsValidAdditive())
+			else if (Loaded->FindMetaDataByClass<UElysiumAnimPostAdditive>() != nullptr)
 			{
+				// The tag, never `IsValidAdditive()`. A `_delta` ships as an ordinary sequence
+				// holding the raw difference, because retail's combine order is not one Unreal's
+				// additive types can express -- so the engine's own predicate answers false for
+				// every one of them and a resolver keyed on it composes the slot without its delta.
 				OutAdditive = Loaded;
 			}
 			else

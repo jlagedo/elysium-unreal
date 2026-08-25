@@ -21,6 +21,7 @@
 #include "ElysiumContentPaths.h"
 #include "Visual/ElysiumAnimGraph.h"       // ElysiumAnimGraph::ReactionBranchTag
 #include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumAnimPostAdditive.h"
 #include "Visual/ElysiumAnimSubsystem.h"   // FElysiumResolvedAnimation
 #include "Visual/ElysiumBipedAnimInstance.h"
 #include "Visual/ElysiumBlendGrids.h"
@@ -1414,11 +1415,14 @@ bool FElysiumReactionCellMasksTest::RunTest(const FString&)
 				     "poses the whole body and would hold every bone outside it at bind"),
 				*Sample.Animation->GetName(), *Mask->Profile.ToString(), Mask->OwnedBones));
 		}
-		if (Sample.Animation->IsValidAdditive())
+		// The bake's own tag, not `IsValidAdditive()`: a `_delta` ships unstamped because retail's
+		// post-multiply is not an `EAdditiveAnimationType`, so the engine predicate answers false
+		// for the whole family and this guard would go permanently blind keyed on it.
+		if (Sample.Animation->FindMetaDataByClass<UElysiumAnimPostAdditive>() != nullptr)
 		{
 			++Additive;
 			AddError(FString::Printf(
-				TEXT("reaction cell '%s' is an additive; the branch stands it as a base pose, which "
+				TEXT("reaction cell '%s' is a delta; the branch stands it as a base pose, which "
 				     "folds the skeleton rather than animating it"),
 				*Sample.Animation->GetName()));
 		}

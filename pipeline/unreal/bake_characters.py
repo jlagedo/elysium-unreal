@@ -527,13 +527,18 @@ def owner_clips(manifest, stems):
             continue
         if record.get("own_clips"):
             owners[stem] = False
-        for owner in record.get("clips", {}).values():
-            if owner == stem or owner in owners:
-                continue
-            if owner not in manifest["banks"]:
-                fail("%s names bank '%s', which the manifest does not carry" % (stem, owner))
-                continue
-            owners[owner] = True
+        # A label names every bank that DECLARES it, in include-tree order, so a clip entry is a
+        # list of owners rather than one -- flattened here for the same reason
+        # `character_source_plan` flattens it. Read as a scalar the list reaches a dict lookup and
+        # raises `TypeError: unhashable type: 'list'`. A lone string is still accepted.
+        for declared in record.get("clips", {}).values():
+            for owner in (declared if isinstance(declared, list) else [declared]):
+                if owner == stem or owner in owners:
+                    continue
+                if owner not in manifest["banks"]:
+                    fail("%s names bank '%s', which the manifest does not carry" % (stem, owner))
+                    continue
+                owners[owner] = True
 
     # A cinematic bank is named by a choreographed SCENE rather than by any body's clip map, so
     # the walk above never reaches one. Without it the performance is absent from the mount and

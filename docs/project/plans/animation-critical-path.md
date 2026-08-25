@@ -556,6 +556,90 @@ reaches the right answer (T22).
   list gains this entry beside axis interpolation. `docs/project/rebuild-strategy.md`'s register
   of deliberate reproductions gains the row.
 
+**Findings.** The rule is in and it is retail's; the gate as written is not reachable by it
+alone, and the instruments that were supposed to read it were the first thing it broke. The
+heading stays open.
+
+What landed: `FAnimNode_ElysiumPostAdditive` composing `q ⊗ scale(D, s)`, `pos += D.pos · s`,
+confirmed operand by operand from `vampire.dll 0x100c12b0` (`QuaternionScale` → `QuaternionMult`
+with the base pushed first → normalize); its editor face in a new **`UncookedOnly`** module
+`ElysiumUEAnimGraph`; the bake building the **raw** `_delta` and refusing the host-composed
+`<delta>@<host>` form, no additive stamp, tagged `UElysiumAnimPostAdditive`, every bone of the
+baked skeleton the clip does not animate written at the additive identity; every reader re-keyed
+onto the tag; the graph regenerated (5 nodes at the generator's own positions, 101 imported of
+101); the whole cast re-baked (banks 360 / clips 293 built, 0 reused).
+
+Where the three instruments stand, the same body, state and rule read three ways:
+
+| instrument | before T-B1 | now | reads |
+|---|---|---|---|
+| offline, bank clips, retail order (`armsway_post.py`) | 6.75 (`D ⊗ q`) | **0.93** female, 1.66 male | the rule alone |
+| `RigCompose`, aim cell pinned per state | — | **0.77** `seq 239`, **1.51** male `seq 211` | the rebuild |
+| compose harness (`debug compose`) | 6.757 female | **2.336** female (bound 2.5), **1.663** male (bound 4.19) | the running graph |
+
+R Hand ← `Spine1` peak-to-peak, cm; retail 1.89 female / 4.19 male. All three agree and all are
+inside the bound on both bodies. The harness mean lands at 33.11 against retail's 33.49, from
+29.48. The male's whole-body control median through the harness moved 1.887 → **1.755**, the
+female's 3.990 → **3.590**, and both rankings are feet-and-calves first — T-C7's residual, exactly
+where T-A1 and T-A2 said it would be. `m37_attack_layer` through the harness moved 3.995 → 3.704.
+
+Everything the task text got wrong, each carrying the measurement that decided it:
+
+- **The container already carried the raw delta and the bake refused it.** "Emit the raw delta as
+  decoded" was an inversion of `ElysiumSkeletalBuild.cpp`'s two-pass ordering — build the
+  `BaseName`-less delta, skip the derived one — not a decode. The "Pipeline ~1410" bullet was a
+  no-op: `fold_deltas` never touched the additive path.
+- **"Translation `bind + sample × posscale`" is false.** The payload is a pure difference: arm
+  bones 0.002–0.007 cm against binds of 13–26, root 4.2 against 99, frame-0 `qw` 1.0000 on all 60
+  tracks. Recorded in `animation_and_movers.md` A.4, where a format fact belongs.
+- **"`armsway.py` predicts 0.28 / 0.93" was true of a script that pre-multiplies the derived clip
+  with the bind subtracted.** The retail-order composition reproduces both numbers to the digit,
+  which is why they were right for the wrong reason.
+- **"~40 lines beside `AxisInterp`" needed a module.** `UAnimGraphNode_Base` lives in `AnimGraph`
+  (`SupportedTargetTypes` Editor/Program) and UHT does not honour `#if WITH_EDITOR` around a
+  `UCLASS`. Declared `Editor` the first time, it did not load under `-game`: the ABP regenerated
+  with 5 dead nodes and the harness recorded a body that travelled 1,782 cm at the **reference
+  pose**, which `compose_diff` scored as `arm p2p 0.000 OK`. `UncookedOnly` is what
+  `BlendStackEditor` is; `compose_diff` now refuses a run under one distinct pose per 20 frames
+  (exit 2, T1's other half).
+- **"Every untracked bone at identity" cannot be written by the bake for the bones that matter.**
+  A bank delta declares 60 bones; a body carries 79/88 and no bake against the bank can name the
+  rest. Read on the body mesh, `tongue`, `lower_teeth`, `_2_GeoSphere02`, `Tube02`, `Bone07`
+  evaluated to 90–180° / 9–84 cm and the node turned them. The node now skips a bone whose delta
+  equals the compact reference pose bit-for-bit — the engine's own "no track" signal, retail's own
+  skip-at-zero-weight from the other side — and `BakedCharacterParity` asserts the two-halves
+  contract on the body mesh. The Malkavians' body-only bones are all axis-interp (19/19 resolve on
+  the male) and are replaced at the proxy tail, so the arm was never touched by this.
+- **The T-A1 arm scalar was measuring its own aim-cell search.** Free per frame, it switched among
+  8 cells across the male's 53 frames and read 10.174 where the composition holds 1.513; female
+  `seq 97` read 6.576 against 0.122. The cell is now pinned per state to the modal choice, the
+  histogram is printed, and the free-search figure stays visible beside it. That is what the
+  "male regression" (8.31 → 10.17) was.
+- **`RigCompose` composed the slot delta twice.** The bake folds a masked host's delta into its
+  derived aim cells (`m37_aim_CC@m37_attack_layer` runs the host's 22 frames; the raw cell is 1),
+  and `ComposeClosure` composed the raw delta on top. The runtime already stood it down. Mirrored:
+  45,531 evaluations across the search now stand down. It is why `m37_attack_layer` read 5.195
+  before and 4.907 after, with legs carrying it either way.
+- **The gate numbers belong to T-C7 and to the layered cohort's legs, not here.** Control median
+  3.89 (`RigCompose`) / 3.59 (harness) against 1.0 is feet-and-calves first on every instrument;
+  `m37_attack_layer`'s assertion bound is 1.0, not 1.5, and its 4.9 is the same legs. No
+  instrument attributes any remaining error to the arm.
+- **A tag, not a name suffix or `UAssetUserData`.** `BakedAssetName` folds `@` and already
+  shadows 352 labels; `UAnimMetaData` is the door the mask already uses and the only one every
+  reader — slot resolver, lab, three tests, the Python verifier — reads the same way.
+
+One residual named rather than closed: with no stamp a delta's **translation** passes through
+`OrientAndScale` on a retargeted body and is re-oriented by the bank-to-body bind angle where
+retail adds it verbatim — bounded by the delta's own translation, 0.007 cm on any arm bone,
+**1.14 cm** on `Bip01 Pelvis` of `anaconda_attack_delta` on `SK_ash`; zero on a body whose binds
+match its bank. `BakedCharacterParity` reads it on the body mesh and names it apart from a bake
+defect. Two further things the sweep turned up outside this task: three copies of one
+list-as-scalar bug broke every bake scoped to named bodies (`character_recipes`,
+`bake_characters.py`, `bake_verify_characters.py` — fixed, `FocusedScopeTests` red first); and
+`BakedCharacterParity` reports `baseballbat_hunt_walk` 6 cm off on `Bip01` for seven bodies of the
+male baseball bank, an ordinary clip on a check that landed 2026-08-17 and that no run before this
+one exercised — provenance unverified.
+
 #### T-B2 Fan duration and ground speed
 
 Retail blends a fan's **durations** (`Studio_Duration`, `Σ wᵢ (nᵢ−1)/fpsᵢ`) and its **movement

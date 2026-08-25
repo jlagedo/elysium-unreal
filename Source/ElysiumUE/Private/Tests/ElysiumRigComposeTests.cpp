@@ -57,6 +57,7 @@
 #include "ElysiumContentPaths.h"
 #include "ElysiumPoseOracle.h"
 #include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumAnimPostAdditive.h"
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
@@ -488,6 +489,12 @@ namespace
 		// off the same `Order`, so each pair is a comparison rather than two unrelated numbers.
 		TMap<FString, ElysiumPoseOracle::FDistribution> ArmSpan;
 		TMap<FString, ElysiumPoseOracle::FDistribution> RetailArmSpan;
+		// Which aim cell the per-frame search settled on, and the arm distance the frame reads at
+		// EVERY cell -- so the scalar can be re-read with the cell pinned across the state. A
+		// search free to pick a different cell on each frame folds the jump between cells into a
+		// peak-to-peak that is supposed to measure the cycle, which is a T3 shape.
+		TMap<FString, TArray<int32>> ArmCell;
+		TMap<FString, TArray<TArray<double>>> ArmByCell;
 	};
 
 	// **A host's own declared closure, composed onto it — retail's autolayer walk, at the hardcoded
@@ -501,7 +508,8 @@ namespace
 	void ComposeClosure(const FElysiumBlendTable* Table, const FString& Owner,
 		const FString& HostLabel, const FElysiumPoseParams& Params, int32 AimCell, double Phase,
 		USkeletalMesh* Mesh, TMap<FString, UAnimSequence*>& Clips, const FString& CacheStem,
-		TArray<FTransform>& Locals, TSet<FString>& OutMissing, TSet<FString>& OutSubstituted)
+		bool bHostMasked, TArray<FTransform>& Locals, TSet<FString>& OutMissing,
+		TSet<FString>& OutSubstituted, int32& OutStoodDown)
 	{
 		const FElysiumAutoLayerBinding* Declared =
 			Table != nullptr ? Table->FindAutoLayers(HostLabel) : nullptr;
@@ -511,6 +519,10 @@ namespace
 		}
 		const FReferenceSkeleton& Ref = Mesh->GetRefSkeleton();
 		TArray<FTransform> Contribution;
+		// Whether a grid cell has been composed in its DERIVED form on this host. On a masked host
+		// the bake folds the host's motion additives into those cells, so the `_delta` declared
+		// after the grid is already inside the pose that just landed.
+		bool bDerivedGridComposed = false;
 
 		// **In declaration order.** An overlay blends toward its own pose and overwrites an additive
 		// already accumulated onto the bones it owns, so walking the array in the order the model
@@ -577,7 +589,9 @@ namespace
 					*Owner, *Label, *HostLabel));
 				continue;
 			}
-			if (!bDerived)
+			const bool bPostAdditive =
+				Asset->FindMetaDataByClass<UElysiumAnimPostAdditive>() != nullptr;
+			if (!bDerived && !bPostAdditive)
 			{
 				// The derived form is a different pose from the raw one -- the host's own motion
 				// with this layer composed onto it -- so standing the raw clip in its place is a
@@ -585,6 +599,10 @@ namespace
 				// retail did not draw. It is not an error only because the raw clip does load and
 				// the pose stays composable; it is never silent, because a substituted clip's
 				// divergence would read as composition error somewhere else entirely.
+				//
+				// **A `_delta` is exempt, because for that family the raw form IS what ships.** Its
+				// derived form is a pose rather than a difference and is deliberately not built;
+				// composing the raw record is the correction, not a fallback from one.
 				OutSubstituted.Add(FString::Printf(TEXT("%s/%s declared by %s"),
 					*Owner, *Label, *HostLabel));
 			}
@@ -594,17 +612,56 @@ namespace
 				continue;
 			}
 
-			if (Asset->IsValidAdditive())
+			const UElysiumAnimLayerMask* LayerMask =
+				Asset->FindMetaDataByClass<UElysiumAnimLayerMask>();
+			if (bPostAdditive && bHostMasked && bDerivedGridComposed)
 			{
-				// Unreal states an additive on the LEFT, which is the conversion the bake performed
-				// when it marked the sequence additive against its base.
+				// **A resolved grid stands the additive DOWN, exactly as the runtime slot
+				// resolver does.** The bake folds a masked host's motion additives into its
+				// derived grid cells -- a delta's meaning depends on the pose it rides, so per-cell
+				// composition is the only place it can be right for every aim direction -- and
+				// composing the raw delta again here applies the action twice. A full-body host
+				// keeps the fold empty and composes its delta here. Counted, never silent: a
+				// rebuild that quietly skipped a delta would read as composition error elsewhere.
+				++OutStoodDown;
+				continue;
+			}
+			if (bPostAdditive)
+			{
+				// **Retail states the delta on the RIGHT** -- `q = normalize(q * scale(D, s))`,
+				// `pos += D.pos * s` (`vampire.dll 0x100c12b0`). `s` is a literal `1.0` here
+				// because that is what the autolayer dispatcher pushes (`0x1008a0ce`), so the
+				// scale is the identity and the delta lands whole. This is the same arithmetic
+				// `FAnimNode_ElysiumPostAdditive` runs, and it must stay the same arithmetic: a
+				// rebuild that composed the other order would score a correct runtime as broken,
+				// and one keyed on a different predicate would score a broken one as correct.
+				const TArray<FTransform>& RefPose = Ref.GetRefBonePose();
 				for (int32 Bone = 0; Bone < Locals.Num() && Bone < Contribution.Num(); ++Bone)
 				{
+					// The node's own gate, mirrored: a bone the delta never addressed still holds
+					// the reference pose bit-for-bit and is not composed.
+					if (RefPose.IsValidIndex(Bone)
+						&& Contribution[Bone].Equals(RefPose[Bone], UE_SMALL_NUMBER))
+					{
+						continue;
+					}
 					Locals[Bone].SetRotation(
-						(Contribution[Bone].GetRotation() * Locals[Bone].GetRotation())
+						(Locals[Bone].GetRotation() * Contribution[Bone].GetRotation())
 							.GetNormalized());
 					Locals[Bone].AddToTranslation(Contribution[Bone].GetTranslation());
 				}
+				continue;
+			}
+			if (LayerMask == nullptr)
+			{
+				// Neither a difference nor a masked pose. Composed as an overlay it would own no
+				// bone and contribute nothing at all, which is a hole in the pose that would read
+				// as composition error somewhere else -- exactly the false green this test exists
+				// to refuse.
+				OutMissing.Add(FString::Printf(
+					TEXT("%s/%s declared by %s carries neither the post-additive tag nor a layer "
+						 "mask, so nothing says how it composes"),
+					*Owner, *Label, *HostLabel));
 				continue;
 			}
 			// An overlay replaces the bones its mask owns and leaves every other one to the host.
@@ -614,6 +671,10 @@ namespace
 				{
 					Locals[Bone] = Contribution[Bone];
 				}
+			}
+			if (Grid != nullptr && Grid->IsMultiCell() && bDerived)
+			{
+				bDerivedGridComposed = true;
 			}
 		}
 		(void)Ref;
@@ -704,6 +765,9 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 	// because the two say different things to whoever reads the failure: one is a clip retail
 	// committed as a base or pushed as a slot, the other is a layer some clip's own closure names.
 	TSet<FString> MissingClosure;
+	// Deltas a masked host declared after a grid whose derived cells already carry them (the
+	// bake's fold), and which this rebuild therefore did not compose a second time.
+	int32 DeltasStoodDown = 0;
 	// The declared layers whose `<label>@<host>` derived form the mount does not carry, composed
 	// from their raw form instead.
 	TSet<FString> SubstitutedClosure;
@@ -956,6 +1020,11 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 		// stated rather than hidden: this is the one axis of the rebuild the capture cannot bind.
 		constexpr int32 AimCells = 9;
 		double Best = TNumericLimits<double>::Max();
+		int32 BestCell = INDEX_NONE;
+		TArray<double> CellBest;
+		TArray<double> CellArm;
+		CellBest.Init(TNumericLimits<double>::Max(), AimCells);
+		CellArm.Init(0.0, AimCells);
 		TArray<FTransform> LayerLocals;
 		TArray<FTransform> Composed;
 		TArray<FTransform> Component;
@@ -984,15 +1053,19 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 				}
 				// The layer's OWN closure — its aim cell and its `_delta` — composed onto it by the
 				// same rule the base's is, because retail's autolayer walk is one rule.
+				// A slot host is masked by construction (`Assets->Owned` is non-empty here), so
+				// its declared delta was folded into its derived grid cells and stands down.
 				ComposeClosure(Table, Frame.LayerOwner, Frame.LayerLabel, Params, AimCell,
 					Keys > 1 ? static_cast<double>(Key) / (Keys - 1) : 0.0,
-					Mesh, Clips, Frame.Stem, Composed, MissingClosure, SubstitutedClosure);
+					Mesh, Clips, Frame.Stem, /*bHostMasked=*/true, Composed, MissingClosure,
+					SubstitutedClosure, DeltasStoodDown);
 			}
 			else
 			{
+				// A base host is full-body: its fold is empty and its delta composes here.
 				ComposeClosure(BlendTableFor(BaseClip->Owner), BaseClip->Owner, BaseLabel, Params,
-					AimCell, Frame.BaseCycle, Mesh, Clips, Frame.Stem, Composed, MissingClosure,
-					SubstitutedClosure);
+					AimCell, Frame.BaseCycle, Mesh, Clips, Frame.Stem, /*bHostMasked=*/false,
+					Composed, MissingClosure, SubstitutedClosure, DeltasStoodDown);
 			}
 			ElysiumPoseOracle::LocalToComponent(Ref, Composed, Component);
 
@@ -1004,9 +1077,16 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 			}
 			Signature(Ours, Mine);
 			const double Score = SignatureError(Mine, Target);
+			if (Score < CellBest[AimCell])
+			{
+				CellBest[AimCell] = Score;
+				CellArm[AimCell] = (ArmHand != INDEX_NONE && ArmSpine != INDEX_NONE)
+					? FVector::Dist(Ours[ArmHand], Ours[ArmSpine]) : 0.0;
+			}
 			if (Score < Best)
 			{
 				Best = Score;
+				BestCell = AimCell;
 				BestOurs = Ours;
 			}
 		}
@@ -1067,6 +1147,8 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 					.Add(FVector::Dist(BestOurs[ArmHand], BestOurs[ArmSpine]));
 				Cohort.RetailArmSpan.FindOrAdd(State)
 					.Add(FVector::Dist(Retail[ArmHand], Retail[ArmSpine]));
+				Cohort.ArmCell.FindOrAdd(State).Add(BestCell);
+				Cohort.ArmByCell.FindOrAdd(State).Add(CellArm);
 			}
 		}
 	}
@@ -1154,12 +1236,53 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 			++Asserted;
 			const double Bound =
 				FMath::Max(ArmPeakToPeakToleranceCm, Retail.PeakToPeak());
-			TestTrue(FString::Printf(
-				TEXT("control cohort, %s: the right hand holds its station against ")
-				TEXT("`Bip01 Spine1` through the cycle (peak-to-peak %.3f cm over %d moving ")
-				TEXT("frames, bound %.3f; this capture's own %.3f)"),
-				*State, Ours.PeakToPeak(), Ours.Count(), Bound, Retail.PeakToPeak()),
-				Ours.PeakToPeak() <= Bound);
+			// **Asserted with the aim cell PINNED across the state, never per frame.** The
+			// capture records no aim value (T18), so the cell is searched -- but a search free to
+			// pick a different cell on every frame folds the jump between cells into a scalar
+			// that is supposed to measure the hand through ONE cycle, and read that way the male
+			// M37 carry scored 10.17 cm across eight cells where the composition itself holds
+			// 1.51. The cell is pinned to the one the frame-wise search chose most often, the
+			// per-frame histogram is printed beside it, and the free-search figure stays visible
+			// so the difference between the two is always the search and never hidden.
+			const TArray<int32>* Cells = Control.ArmCell.Find(State);
+			const TArray<TArray<double>>* ByCell = Control.ArmByCell.Find(State);
+			if (Cells != nullptr && ByCell != nullptr && Cells->Num() == ByCell->Num()
+				&& !Cells->IsEmpty())
+			{
+				TMap<int32, int32> Histogram;
+				for (const int32 Cell : *Cells) { ++Histogram.FindOrAdd(Cell); }
+				int32 Modal = INDEX_NONE;
+				int32 ModalCount = 0;
+				FString HistogramText;
+				TArray<int32> CellKeys;
+				Histogram.GetKeys(CellKeys);
+				CellKeys.Sort();
+				for (const int32 Cell : CellKeys)
+				{
+					HistogramText += FString::Printf(TEXT("%s%d:%d"),
+						HistogramText.IsEmpty() ? TEXT("") : TEXT(" "), Cell, Histogram[Cell]);
+					if (Histogram[Cell] > ModalCount) { ModalCount = Histogram[Cell]; Modal = Cell; }
+				}
+				ElysiumPoseOracle::FDistribution Pinned;
+				for (const TArray<double>& Row : *ByCell)
+				{
+					if (Row.IsValidIndex(Modal)) { Pinned.Add(Row[Modal]); }
+				}
+				TestTrue(FString::Printf(
+					TEXT("control cohort, %s: the right hand holds its station against ")
+					TEXT("`Bip01 Spine1` through the cycle (aim cell pinned to %d: peak-to-peak ")
+					TEXT("%.3f cm, mean %.2f, over %d moving frames, bound %.3f; this capture's ")
+					TEXT("own %.3f; the free per-frame search {%s} reads %.3f)"),
+					*State, Modal, Pinned.PeakToPeak(), Pinned.Mean(), Pinned.Count(), Bound,
+					Retail.PeakToPeak(), *HistogramText, Ours.PeakToPeak()),
+					Pinned.PeakToPeak() <= Bound);
+			}
+			else
+			{
+				AddError(FString::Printf(
+					TEXT("control cohort, %s: no per-cell arm record, so the arm cannot be ")
+					TEXT("asserted for this state"), *State));
+			}
 		}
 		if (Asserted == 0)
 		{
@@ -1176,6 +1299,13 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 		AddError(FString::Printf(
 			TEXT("%d clips retail composed bind no baked asset on the mount: %s"),
 			Names.Num(), *FString::Join(Names, TEXT(", "))));
+	}
+	if (DeltasStoodDown > 0)
+	{
+		AddInfo(FString::Printf(
+			TEXT("%d delta evaluation(s) across the cell-and-phase search stood down behind a ")
+			TEXT("derived grid cell that already carries them (the bake's fold on a masked host)"),
+			DeltasStoodDown));
 	}
 	if (!MissingClosure.IsEmpty())
 	{

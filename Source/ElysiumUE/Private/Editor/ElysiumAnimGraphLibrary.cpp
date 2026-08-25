@@ -785,8 +785,13 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				TEXT("/Script/AnimGraph.AnimGraphNode_LayeredBoneBlend"), 280, 0);
 			UEdGraphNode* AdditiveSequence = Place(*Graph,
 				TEXT("/Script/AnimGraph.AnimGraphNode_SequencePlayer"), 280, 460);
+			// **This project's own node, not `ApplyAdditive`.** VtMB accumulates a `_delta` with the
+			// delta on the RIGHT and every `EAdditiveAnimationType` puts it on the left, so a stock
+			// additive node cannot reach the answer at any reference-pose setting. The clip ships
+			// raw and the node states the combine; the class lives in the editor-only
+			// `ElysiumUEAnimGraph` module and is resolved by path, so nothing links against it.
 			UEdGraphNode* Additive = Place(*Graph,
-				TEXT("/Script/AnimGraph.AnimGraphNode_ApplyAdditive"), 780, 0);
+				TEXT("/Script/ElysiumUEAnimGraph.AnimGraphNode_ElysiumPostAdditive"), 780, 0);
 			// The overlay SLOT: retail's `CBaseAnimatingOverlay` slot 0, composed AFTER the host's own
 			// model-declared autolayers and therefore over a second masked blend rather than through
 			// the first one. Its pose comes off an evaluator pinned to an explicit time.
@@ -898,7 +903,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				UEdGraphNode* SlotAdditiveEval = Place(*Graph,
 					TEXT("/Script/AnimGraph.AnimGraphNode_SequenceEvaluator"), X - 120, 620);
 				UEdGraphNode* SlotAdditive = Place(*Graph,
-					TEXT("/Script/AnimGraph.AnimGraphNode_ApplyAdditive"), X - 60, 220);
+					TEXT("/Script/ElysiumUEAnimGraph.AnimGraphNode_ElysiumPostAdditive"), X - 60, 220);
 				UEdGraphNode* SlotLayer = Place(*Graph,
 					TEXT("/Script/AnimGraph.AnimGraphNode_LayeredBoneBlend"), X, 0);
 				if (SlotEvaluator == nullptr || SlotGrid == nullptr || SlotAimBlend == nullptr
@@ -1000,9 +1005,10 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				Wire(DriveFromBool(*Graph, PinNamed(SlotAimBlend, TEXT("BlendWeights_0")),
 					*AimWeight, X - 340, 300), TEXT("slot aim weight pin"));
 
-				// And the `_delta` the layer clip declares, additively after the grid — retail's own
-				// order. The evaluator is pinned to the SAME explicit time as the motion, because the
-				// delta's phase is the motion's.
+				// And the `_delta` the layer clip declares, accumulated after the grid — retail's own
+				// order — through the post-multiply node, the same one the base channel uses. The
+				// evaluator is pinned to the SAME explicit time as the motion, because the delta's
+				// phase is the motion's.
 				ExposePin(SlotAdditiveEval, TEXT("Sequence"));
 				Wire(DriveFromBool(*Graph, PinNamed(SlotAdditiveEval, TEXT("Sequence")),
 					*AdditiveVar, X - 340, 620), TEXT("slot additive Sequence pin"));
@@ -1027,8 +1033,9 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				SlotChainTail = SlotLayer;
 			}
 
-			// The `_delta` additive composes independently, on top — retail's own order, overlay
-			// first (this node), additive second.
+			// The `_delta` composes independently, on top — retail's own order, overlay first
+			// (this node), delta second — and through the post-multiply node, so the pose it lands
+			// on is composed with `q ⊗ scale(D, s)` rather than Unreal's `D ⊗ q`.
 			ExposePin(AdditiveSequence, TEXT("Sequence"));
 			Wire(DriveFromBool(*Graph, PinNamed(AdditiveSequence, TEXT("Sequence")),
 				TEXT("RequestedAdditiveSequence"), 280, 520), TEXT("additive Sequence pin"));

@@ -46,10 +46,13 @@ struct FAnimNode_ElysiumHairDynamics : public FAnimNode_AnimDynamics
 // than through pose links. That is what makes it answer identically for a body posing from the
 // compiled locomotion graph and one posing from a clip.
 //
-// **It is the only VtMB rule left in the frame path**, and it earns that on one property: it reads
-// a LIVE control-bone orientation, so its input is the blended pose rather than anything a file
-// states. Every other rule names a value the file carries somewhere and is resolved at bake
-// instead (repo-root `CLAUDE.md`, "Poses are baked native").
+// **It is one of the two VtMB rules left in the frame path** -- the other is
+// `FAnimNode_ElysiumPostAdditive`, the additive combine order -- and it earns its place on one
+// property: it reads a LIVE control-bone orientation, so its input is the blended pose rather than
+// anything a file states. (The additive node earns its own on a different one: which side the delta
+// lands on depends on the pose it is accumulated onto.) Every other rule names a value the file
+// carries somewhere and is resolved at bake instead (repo-root `CLAUDE.md`, "Poses are baked
+// native").
 //
 // It is safe to evaluate on an animation worker thread: it reads a shared immutable rig held by
 // `TSharedPtr`, resolves every bone index once in `InitializeBoneReferences`, and touches no

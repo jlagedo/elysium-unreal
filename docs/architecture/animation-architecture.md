@@ -148,25 +148,33 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   ordinary FK reproduces the pose retail draws. The mesh needs nothing — VtMB's own `poseToBone`
   inverse binds are already conventional, so only the live pose ever disagreed.
 
-- **The `_delta` family is additive against the base the file names.** The composition order does
-  not carry over: every `EAdditiveAnimationType` pre-multiplies the delta (`Delta * Base`, in
+- **The `_delta` family ships raw, and composes at runtime.** The composition order does not carry
+  over: every `EAdditiveAnimationType` pre-multiplies the delta (`Delta * Base`, in
   `AccumulateLocalSpaceAdditivePoseInternal` and the mesh-space path alike), while VtMB
-  post-multiplies it (`Base * Delta`, `docs/vtmb/animation_and_movers.md`). The correction is a
-  conjugation by the base rotation, `Delta' = Base · Delta · Base⁻¹`, and **the base is a bake
-  input rather than a runtime one**: a delta is only meaningful over its own base, and the
-  autolayer table states which that is. **The pairing is the table's, not a naming convention** — a
-  host can declare a delta from another weapon's family entirely, which no name would predict, so a
-  bake that pairs by name silently conjugates against the wrong pose. Conjugation commutes with
-  Unreal's blend-from-identity, so a
-  conjugated delta is exact at any weight over the base it declares, and degrades away from it
-  exactly as any additive does.
+  post-multiplies it (`Base * Delta`, `docs/vtmb/animation_and_movers.md`). The difference is a
+  conjugation by the rotation of the pose the delta lands on — which is **not** something the clip
+  carries, because the same delta rides every cell of a fan and every gait a host stands. So this
+  one is a runtime rule, `FAnimNode_ElysiumPostAdditive`, and §5 states why no reference-pose
+  setting substitutes for it.
 
-  The asset therefore names its own base: `RefPoseType = ABPT_AnimFrame` pointing at that clip,
-  not `ABPT_RefPose`. **An additive sequence's raw keys are not what ships** — setting the additive
-  type makes the compressor bake the sequence down by subtracting its base before compressing, so
-  the delta has to be written *composed onto* the same pose the conjugation used. The two are one
-  decision: change what is subtracted without changing what is conjugated and every layered bone
-  ships rotated by its own inverse bind, from a run that logs nothing wrong.
+  What ships is the difference as the container states it — a pure delta, with no bind in either
+  channel (`docs/vtmb/animation_and_movers.md` A.4 carries the measurement). The clip carries
+  **no additive stamp** — an `AdditiveAnimType` would make the compressor subtract a base
+  out of keys that already are the difference — and no `RefPoseSeq`, so it names nothing. It
+  carries `UElysiumAnimPostAdditive` instead, which is what every reader keys on:
+  `IsValidAdditive()` answers false for the whole family, so a consumer keyed on the engine
+  predicate drops the delta while the rest of the frame still looks right.
+
+  **Every bone the delta does not animate is written at the additive identity** — zero translation,
+  identity rotation — over the whole reference skeleton rather than the donor's own bones. An
+  untracked bone evaluates to the reference pose, not to nothing, and the composition
+  post-multiplies whatever it evaluates to; a bank delta declares 60 bones against an 88-bone body,
+  so without those tracks the face and hair chains turn every frame on top of a pose that was
+  already correct.
+
+  The exporter still writes the host-composed `<delta>@<host>` form, and the bake deliberately does
+  **not** build it. It is a pose rather than a difference, and every resolver asks for
+  `<label>@<host>` before the plain label, so one surviving on the mount silently wins.
 - **Blend profiles** in blend-mask mode, one per distinct per-bone mask. The mask is binary in the
   source data and there are only a handful of distinct masks per bank, so this is a small table on
   the skeleton rather than per-clip data. A profile is named for the bones it owns rather than for
@@ -209,11 +217,13 @@ the map bake, under the same gitignored, regenerable posture. What the bake prod
   frame path, which is the rule rather than an optimization: a runtime that had to know the host's
   chain in order to evaluate a cell would be the failure "Poses are baked native" names.
 
-  Two things fall out. The family needs **no blend profile**: an additive's untouched bones
-  contribute the additive identity, so masked-out and bind-holding are both a zero delta and the
-  three-state distinction the mask table exists to preserve does not arise. And the remaining masks
-  need **no split correction at all**, because none of them owns the split bone — they are ordinary
-  parent-relative overlays composed by a stock layered blend.
+  Two things fall out. The family needs **no blend profile**: an additive's untouched bones are
+  written at the additive identity, where `q ⊗ I = q` and `pos += 0`, so masked-out and
+  bind-holding are both a zero delta and the three-state distinction the mask table exists to
+  preserve does not arise. Retail agrees from the other side, skipping a bone whose per-bone weight
+  zeroes the scale. And the remaining masks need **no split correction at all**, because none of
+  them owns the split bone — they are ordinary parent-relative overlays composed by a stock layered
+  blend.
 - **Blend spaces** from the exported grids: `UBlendSpace1D` for a `move_yaw` fan and a plain
   `UBlendSpace` for an aim grid. An aim grid is **not** a `UAimOffsetBlendSpace`: that asset wants
   mesh-space additive samples, and an aim layer's cells are ordinary masked local poses whose split
@@ -1054,7 +1064,8 @@ hand-written instance:
   `nlerp(base, layer, s)` on rotation and the matching lerp on translation, `s` the layer's weight
   times the bone's mask bit. An overlay therefore *replaces* the bones it owns rather than adding to
   them, which is what separates it from the additive below and why the two are never the same node.
-- **Additive nodes** for the `_delta` family, each over the base clip its asset names.
+- **`FAnimNode_ElysiumPostAdditive`** for the `_delta` family — VtMB's own combine order, over
+  whatever pose the branch has composed so far rather than over a base the asset names (§5).
 - **A second layered bone blend** for the upper-body overlay family, over a plain blend-space player
   standing the aim grid. Every cell of a grid carries the same mask, so one node holds the whole
   grid. It is deliberately not an aim-offset node: that node's samples are mesh-space additives,
@@ -1142,18 +1153,55 @@ a readout answers the previous frame — and a source read of the caller does no
   relevant player at all.** The two are indistinguishable from that call alone;
   `GetRelevantAnimLength` is what disambiguates them.
 
-## 5. One custom evaluator, and only one
+## 5. Two custom evaluators, and only two
 
 **Axis interpolation.** For each bone the model declares as procedurally driven, read the control
 bone's local rotation, evaluate the six-entry three-way blend, and replace the driven bone's local
 transform outright. The rule is `docs/vtmb/procedural_bones.md`. It derives
 `FAnimNode_SkeletalControlBase` and runs in the post-process graph.
 
-**It is the standing exemption to "poses are baked native", and it earns that on one property:** it
-reads a *live* control-bone orientation, so its input is the blended pose rather than anything a
+It reads a *live* control-bone orientation, so its input is the blended pose rather than anything a
 file states. That makes it a rig rule of the same kind as an IK or look-at node, not a frame
-conversion. Every other VtMB rule — split inheritance, the additive combine order, the per-bone mask
-— names a value the file carries somewhere, so each is a bake input and none reaches the graph.
+conversion.
+
+**The additive combine.** `FAnimNode_ElysiumPostAdditive`
+(`Source/ElysiumUE/Public/ElysiumPostAdditiveNode.h`) composes a `_delta` onto the pose beneath it
+as `q = normalize(q ⊗ scale(D, s))`, `pos += D.pos · s` — retail's `QuaternionMA` at
+`vampire.dll 0x100c12b0`, twin `client.dll 0x10088d60`, selected by the sequence descriptor's
+`0x10`, which all 118 shipped `_delta` sequences carry. `scale` is a shortest-arc slerp from
+identity (`0x1013add0`), so the node reads `FQuat::Slerp(FQuat::Identity, D, s)`; Unreal's `*` is
+the Hamilton product in retail's own order, so `Base * Scaled` **is** the post-multiply.
+
+It earns its place on a different property: the answer depends on **which pose the delta lands on**,
+and that pose is not a property of the clip. Every `EAdditiveAnimationType` composes `D ⊗ q`, and
+the difference between the two orders is a conjugation by the base rotation — so converting at bake
+would be exact over exactly one base and wrong over every other pose the same delta rides. Three
+conventions were measured against the capture before this node existed: `ABPT_AnimScaled` fixed the
+arm's mean and destroyed the grip (hand-to-hand peak-to-peak 17.12 cm against retail's 0.99), and
+`ABPT_AnimFrame 0` reproduced the defect to three digits. No reference-pose setting reaches the
+answer, which is what makes this a runtime rule rather than a bake input.
+
+The family therefore ships **raw**: a `_delta` is an ordinary sequence holding the difference VtMB
+decodes, tagged `UElysiumAnimPostAdditive`, with every bone of its skeleton it does not animate
+written at the additive identity — because an untracked bone evaluates to the reference pose, and
+the composition would turn it. A body plays a shared bank with bones the bank never declares (a
+face, a hair chain, a prop helper), which no bake against the bank can write; those evaluate to
+the body's compact reference pose bit-for-bit, and the node skips a bone that does — the engine's
+own "no track" signal, and retail's own skip-at-zero-weight from the other side. The clip carries
+no additive stamp, so `IsValidAdditive()` is false on every one of them and the tag is what every
+reader keys on.
+
+**One residual is named rather than closed.** With no additive stamp a delta's *translation* passes
+through the body's translation retargeting like a pose's, and `OrientAndScale` re-orients a
+difference by the angle between the bank's bind and the body's, where retail adds it verbatim. On a
+body whose binds match its bank the angle is zero; on a body they do not, the error is bounded by
+the delta's own translation, which is 0.002–0.007 cm on every arm bone and reaches 1.1 cm on
+`Bip01 Pelvis` of `anaconda_attack_delta`. `Elysium.Content.BakedCharacterParity` reads it on the
+body mesh and names it apart from a bake defect.
+
+Those two are the whole set. Every other VtMB rule — split inheritance, the per-bone mask, the
+blend-grid resolution — names a value the file carries somewhere, so each is a bake input and none
+reaches the graph.
 
 Split inheritance in particular is **not** a stage. `Flags & 0x2` is a 2004 toolchain defect the
 engine was taught to tolerate: the flagged bone's rotation is stored in model space while every
@@ -1196,9 +1244,10 @@ thread-safe so it evaluates on animation worker threads with the rest of the gra
 ## 6. What the export carries, and the basis boundary
 
 Exported clips store **resolved** locals, not raw decoded ones: the split bone's model-space
-rotation re-expressed against its parent, and a delta conjugated into Unreal's combine order. A
-channel retail decodes and then overrides is carried as what the override produces, because nothing
-downstream does the overriding any more. Beside the clips the export must carry the procedural rule
+rotation re-expressed against its parent. The one exception is the `_delta` family, which ships as
+decoded because its combine order is a runtime rule (§5) rather than a conversion the file could
+carry. A channel retail decodes and then overrides is carried as what the override produces,
+because nothing downstream does the overriding any more. Beside the clips the export must carry the procedural rule
 table, the per-bone mask inventory, the layer binding, and the blend grids.
 
 The boundary is basis. The rule's six entries and its **axis index** are expressed in VtMB's basis,

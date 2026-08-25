@@ -8,6 +8,11 @@
 			"Name": "ElysiumUE",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
+		},
+		{
+			"Name": "ElysiumUEAnimGraph",
+			"Type": "UncookedOnly",
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [

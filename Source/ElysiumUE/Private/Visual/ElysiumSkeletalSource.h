@@ -102,11 +102,14 @@ struct FElysiumSourceClip
 {
 	FString Name;
 	/**
-	 * The clip this one is a difference FROM, empty for a pose of its own. Set on the derived
-	 * `<additive>@<host>` clips the exporter writes once per declaring host: the tracks hold the
-	 * composed pose, and subtracting this base is what turns them back into the delta in Unreal's
-	 * own combine order. An additive whose base is empty was never bound to a host and is the raw
-	 * VtMB clip, which no additive asset is built from.
+	 * The host clip this one was written against, empty for a clip that stands on its own. Set on
+	 * the derived `<clip>@<host>` forms the exporter writes once per declaring host, whose tracks
+	 * hold the host's pose with this clip composed onto it.
+	 *
+	 * It is load-bearing for a masked OVERLAY, whose split bone can only be expressed against a
+	 * chain its own mask excludes. It is **not** used for a `_delta`: that family ships from its
+	 * raw record and composes at runtime with retail's post-multiply
+	 * (`FAnimNode_ElysiumPostAdditive`), so its derived form is decoded and then not built.
 	 */
 	FString BaseName;
 	int32 FrameCount = 0;

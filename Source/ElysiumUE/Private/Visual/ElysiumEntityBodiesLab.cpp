@@ -2,6 +2,7 @@
 
 #include "ElysiumAnimationIntent.h"
 #include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumAnimPostAdditive.h"
 #include "Visual/ElysiumAnimGraph.h"
 #include "Visual/ElysiumAnimationResolve.h"
 #include "Visual/ElysiumBipedAnimInstance.h"
@@ -178,7 +179,10 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	// honest: an additive is read as a delta and needs no mask, while an ordinary layer is read as a
 	// pose and is meaningless without one — composed unmasked it would pull every bone it does not
 	// own toward the reference pose and lose the body's stance from the waist down.
-	if (Anim->IsValidAdditive())
+	//
+	// The delta side is decided by the bake's own tag, not by `IsValidAdditive()`: the family
+	// carries no additive stamp, because retail's post-multiply is not an `EAdditiveAnimationType`.
+	if (Anim->FindMetaDataByClass<UElysiumAnimPostAdditive>() != nullptr)
 	{
 		Inst->ArmDebugUpperBodyAdditive(Anim, Weight);
 		Armed(SeqForm, ClipName, Host);

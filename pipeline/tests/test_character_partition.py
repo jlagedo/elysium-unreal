@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from elysium_pipeline import character_partition as cp
+from elysium_pipeline import character_recipes
 from elysium_pipeline.formats import eskm
 
 
@@ -186,6 +187,40 @@ class CheckTests(unittest.TestCase):
         del partition["bank_family_of"]
         with self.assertRaises(ValueError):
             cp.check(partition)
+
+
+class FocusedScopeTests(unittest.TestCase):
+    """`scopes_for` reading the cast manifest's clip table.
+
+    A clip label names every bank that DECLARES it, in include-tree order, so the manifest maps a
+    label to a LIST of owners. A focused bake resolves the bank families its named bodies reach by
+    reading that table, and read as if each value were one owner it puts a list into a set --
+    which raised before the run had written anything, so no bake could be scoped to a body at all.
+    """
+
+    MANIFEST = {
+        "npcs": {
+            # Both shapes, because both are written: a label declared by two banks and one
+            # declared by a single bank.
+            "a_seed": {"clips": {"walk": ["bank_one", "bank_two"], "idle": "bank_one"}},
+            "m_plain": {"clips": {"idle": ["bank_two"]}},
+        }
+    }
+
+    def test_a_multi_owner_clip_label_resolves_its_banks(self):
+        partition = cp.build_partition(MODELS, BANKS)
+        got = character_recipes.scopes_for(partition, ["a_seed"], manifest=self.MANIFEST)
+        families = {cp.bank_family(partition, owner) for owner in ("bank_one", "bank_two")}
+        self.assertEqual(
+            sorted(got),
+            sorted([character_recipes.GLOBAL_SCOPE, "model.a_seed",
+                    *(f"bank.{family}" for family in families)]))
+
+    def test_a_single_owner_string_still_resolves(self):
+        partition = cp.build_partition(MODELS, BANKS)
+        got = character_recipes.scopes_for(partition, ["m_plain"], manifest=self.MANIFEST)
+        self.assertIn(f"bank.{cp.bank_family(partition, 'bank_two')}", got)
+        self.assertIn("model.m_plain", got)
 
 
 if __name__ == "__main__":

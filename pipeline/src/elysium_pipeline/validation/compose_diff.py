@@ -127,6 +127,8 @@ MINIMUM_FRAMES_PER_LAYER = 5
 #: T1: a quarter of a metre over a whole stream is not a strafe, and every gait
 #: frame in such a report is a standing body under a gait selection.
 MINIMUM_TRAVEL_CM = 25.0
+#: Below this many frames a run is too short to say whether the pose ever changed.
+MINIMUM_POSED_FRAMES = 10
 
 
 def _sessions() -> list[Path]:
@@ -393,6 +395,25 @@ def compare(run_path: Path) -> _Verdict:
               f"{MINIMUM_TRAVEL_CM:.0f}; every gait frame in this report is a standing body, so "
               f"no verdict is taken from it")
         verdict.code, verdict.note = 2, f"travelled {travelled:.1f} cm"
+        return verdict
+    # **T1's other half: a body that travelled and never POSED.** A graph whose output is dead --
+    # a node the process could not resolve, an instance that failed to bind -- publishes the
+    # reference pose on every frame, and the motor still carries it 1,700 cm across the lane. Every
+    # cohort then scores one identical pose against a moving capture, and the arm scalar reads a
+    # perfect 0.000 peak-to-peak over hundreds of frames: a false green on the very number the
+    # programme gates on. Two distinct poses is the floor; a real gait cycle has dozens.
+    posed = {
+        tuple(sorted((name, tuple(round(float(v), 3) for v in pos))
+                     for name, pos in frame["bones"].items()))
+        for frame in frames if frame.get("bones")
+    }
+    # A gait at 60 Hz produces a new pose nearly every frame; a run whose distinct poses are under
+    # a twentieth of its frames is a body that posed once or twice on arming and then froze.
+    if len(frames) >= MINIMUM_POSED_FRAMES and len(posed) < max(2, len(frames) // 20):
+        print(f"[compose] REFUSED: {len(frames)} frames publish only {len(posed)} distinct pose(s); "
+              f"the body travelled but never posed, so the graph's output is dead and no "
+              f"verdict is taken from it")
+        verdict.code, verdict.note = 2, f"{len(posed)} distinct pose(s)"
         return verdict
     if not stem:
         print("[compose] REFUSED: the run names no body stem, so nothing selects the captured "

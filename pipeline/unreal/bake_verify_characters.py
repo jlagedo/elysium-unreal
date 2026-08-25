@@ -268,7 +268,9 @@ def verify_prop(stem, manifest, errors):
     for label, meta in record.get("clips", {}).items():
         name = "A_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(label)
         flags = int(meta.get("flags", 0))
-        if name not in baked and not has_derived(name) and not flags & 0x4:
+        # A `_delta` is NOT exempt: it ships from its raw record under its plain label, so a
+        # missing one is a hole rather than a form that lives elsewhere.
+        if name not in baked and not has_derived(name):
             missing.append(label)
     if missing:
         errors.append("prop %s: %d clip(s) missing (%s)"
@@ -362,11 +364,11 @@ def verify_clips(package, owner, clips, container_path, errors):
     for label, flags in sorted(clips.items()):
         name = "A_" + unreal.ElysiumCharacterBakeLibrary.baked_asset_name(label)
         if name not in baked:
-            # Deliberately absent when the clip is one no asset can be written for on its own:
-            # it either shipped in derived form, or it carries the delta flag and no host
-            # declares it, which leaves it with no base to be a difference from. The orphan
-            # layers the model ships and never references are that second case.
-            if has_derived(name) or flags & 0x4:
+            # Deliberately absent when the clip ships only in derived `<clip>@<host>` form, which
+            # is what an aim grid's cells do. A `_delta` is NOT one of those: it ships from its raw
+            # record under its plain label, because retail's post-multiply is not a conversion any
+            # base could carry, so a missing one is a hole rather than a form.
+            if has_derived(name):
                 continue
             errors.append("%s: clip '%s' is missing" % (owner, label))
             continue
@@ -377,12 +379,28 @@ def verify_clips(package, owner, clips, container_path, errors):
         if sequence is None:
             errors.append("%s: clip '%s' does not load" % (owner, label))
             continue
-        if sequence.get_editor_property("additive_anim_type") == unreal.AdditiveAnimationType.AAT_NONE:
-            errors.append("%s: '%s' carries the delta flag but baked non-additive" % (owner, label))
-        else:
+        # Two halves, and each is silent alone. The tag is the ONLY thing that tells a reader this
+        # clip is a difference rather than a pose -- every runtime resolver keys on it -- and the
+        # engine's own additive stamp must stay OFF, because it would make the compressor subtract
+        # a base out of keys that already are the difference.
+        tagged = any(meta is not None
+                     and meta.get_class().get_name() == "ElysiumAnimPostAdditive"
+                     for meta in (sequence.get_editor_property("meta_data") or []))
+        stamped = (sequence.get_editor_property("additive_anim_type")
+                   != unreal.AdditiveAnimationType.AAT_NONE)
+        if not tagged:
+            errors.append(
+                "%s: '%s' carries the delta flag and is untagged, so every reader composes it as "
+                "a pose" % (owner, label))
+        if stamped:
+            errors.append(
+                "%s: '%s' carries an additive stamp, which subtracts a base out of keys that are "
+                "already the difference" % (owner, label))
+        if tagged and not stamped:
             additive_found += 1
     if additive_expected:
-        log("%s: %d/%d delta sequences additive" % (owner, additive_found, additive_expected))
+        log("%s: %d/%d delta sequences tagged post-additive"
+            % (owner, additive_found, additive_expected))
     verify_prop_bone_tracks(owner, package, clips, baked, container_path, errors)
     return len(baked)
 
@@ -513,14 +531,19 @@ def main():
             clips.update(own)
             if record.get("blends"):
                 gridded[stem] = record["blends"]
-        for _label, bank in record.get("clips", {}).items():
-            if bank == stem or bank in bank_wanted:
-                continue
-            bank_record = manifest["banks"].get(bank, {})
-            bank_wanted[bank] = {label: int(meta.get("flags", 0))
-                                 for label, meta in bank_record.get("clips", {}).items()}
-            if bank_record.get("blends"):
-                gridded[bank] = bank_record["blends"]
+        # A label names every bank that DECLARES it, so a clip entry is a LIST of owners rather
+        # than one -- flattened here as `character_source_plan` flattens it. Read as a scalar the
+        # list reached `in bank_wanted` and raised `TypeError: unhashable type: 'list'` on the
+        # first body, before a single asset had been verified.
+        for _label, declared in record.get("clips", {}).items():
+            for bank in (declared if isinstance(declared, list) else [declared]):
+                if bank == stem or bank in bank_wanted:
+                    continue
+                bank_record = manifest["banks"].get(bank, {})
+                bank_wanted[bank] = {label: int(meta.get("flags", 0))
+                                     for label, meta in bank_record.get("clips", {}).items()}
+                if bank_record.get("blends"):
+                    gridded[bank] = bank_record["blends"]
 
     total = 0
     spaces = 0

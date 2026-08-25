@@ -32,7 +32,9 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumContentPaths.h"
+#include "ElysiumPoseOracle.h"
 #include "Visual/ElysiumAnimLayerMask.h"
+#include "Visual/ElysiumAnimPostAdditive.h"
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "Visual/ElysiumNpcVisual.h"
@@ -198,21 +200,16 @@ namespace
 	/**
 	 * One frame of an additive sequence as the DELTA it states, indexed by skeleton bone.
 	 *
-	 * `GetBoneTransform` is the wrong door for this and quietly answers the wrong question: it is
-	 * a plain track read, so on a raw evaluation it hands back the keys as written and never
-	 * performs the additive conversion at all. The keys of a baked `_delta` are the delta already
-	 * composed onto the reference pose -- Unreal's own transport, because its compressor subtracts
-	 * that pose back out -- so a track read reports the reference pose and calls a correct asset
-	 * broken.
+	 * `GetAnimationPose` is the door, because it is the door the runtime uses -- the same call
+	 * `FAnimNode_ElysiumPostAdditive` reaches through its pose link, over whichever representation
+	 * a cooked build would ship. A `_delta` carries no additive stamp, so this resolves to a plain
+	 * pose read and hands back the raw difference the bake wrote, bone for bone.
 	 *
-	 * `GetAnimationPose` is the door the runtime uses. It resolves the two evaluation paths
-	 * itself: raw data goes through `GetBonePose_Additive`, which subtracts the base pose, and
-	 * compressed data was subtracted already at bake time. Both answer the delta, which is what the
-	 * graph's own `FAnimNode_ApplyAdditive` composes.
-	 *
-	 * A bone the sequence carries no track for comes back as the ADDITIVE identity rather than as
-	 * the reference pose, which is the property that makes an unmasked layer safe to accumulate
-	 * over every bone.
+	 * A bone the sequence carries no track for comes back as the REFERENCE POSE, not as nothing --
+	 * which is precisely why the bake writes an explicit identity track for every ref-skeleton bone
+	 * a delta does not animate, and why this file asserts that it did. Without those tracks the
+	 * composition post-multiplies one bind rotation per untracked bone into an otherwise correct
+	 * pose, every frame.
 	 */
 	bool EvaluateAdditiveFrame(const UAnimSequence* Sequence, const double Time,
 		TArray<FTransform>& OutLocals)
@@ -427,12 +424,16 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 
 	// The `_delta` round-trip, for one container's worth of clips against one baked body.
 	//
-	// This is the ONE assertion here that reads the compressed data, and it has to. Unreal bakes an
-	// additive sequence down by subtracting its base pose before compressing, so the raw keys the
-	// bake writes are the delta composed onto the skeleton's reference pose and the compressed data
-	// is the delta itself. The graph's additive node (`FAnimNode_ApplyAdditive`) reads the second, so
-	// the second is what has to equal what VtMB authored -- and a raw comparison would pass without
-	// the subtraction ever having run.
+	// The `_delta` family's whole contract, and it is a different one from every other clip's.
+	//
+	// A delta ships RAW -- the difference VtMB decodes, with no base and no additive stamp -- and
+	// `FAnimNode_ElysiumPostAdditive` states how it composes (`q ⊗ scale(D, s)`, retail's own
+	// order at `vampire.dll 0x100c12b0`). So there are three things to prove and each fails
+	// silently on its own: the raw payload is what became the asset, the host-composed form did
+	// NOT (it resolves first wherever both exist, and it is a pose rather than a difference), and
+	// every ref-skeleton bone the delta does not animate reads the additive identity rather than a
+	// bind -- because an untracked bone evaluates to the reference pose, which the composition
+	// would then turn into the body one bone at a time.
 	//
 	// Un-composed, unlike everything else here: a delta has no hierarchy to inherit through. It is
 	// accumulated onto a bone's own local rotation, so a per-bone comparison IS the contract.
@@ -450,28 +451,20 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			{
 				continue;
 			}
-			if (Clip.BaseName.IsEmpty())
+			if (!Clip.BaseName.IsEmpty())
 			{
-				// A delta no host declares has no base to be a difference from, so no asset is
-				// built for it. Finding one means the mount is carrying a package from a previous
-				// export -- and one that is WRONG, because it was written against a different base
-				// and is still resolvable by the label the model references.
+				// The host-composed form. It is decoded and deliberately not built: it states the
+				// host's pose with the delta already on it, which is a pose rather than a
+				// difference, and every resolver asks for `<label>@<host>` BEFORE the plain label
+				// -- so one surviving here silently wins over the raw delta and the composition
+				// reverts to the defect this family exists to fix.
 				if (ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Clip.Name) != nullptr)
 				{
 					AddError(FString::Printf(
-						TEXT("%s '%s': an additive with no declared base is on the mount, so a ")
-						TEXT("stale package survived a re-export -- clean the mount"),
+						TEXT("%s '%s': the host-composed form of a delta is on the mount and would ")
+						TEXT("resolve ahead of the raw one -- a stale package survived a re-export"),
 						*Owner, *Clip.Name));
 				}
-				continue;
-			}
-			const FElysiumSourceClip* BaseClip = Container.Clips.FindByPredicate(
-				[&Clip](const FElysiumSourceClip& Candidate)
-				{ return Candidate.Name == Clip.BaseName; });
-			if (BaseClip == nullptr)
-			{
-				AddError(FString::Printf(TEXT("%s '%s': names base '%s', absent from the container"),
-					*Owner, *Clip.Name, *Clip.BaseName));
 				continue;
 			}
 			UAnimSequence* BakedDelta = ElysiumNpcVisual::LoadBakedClip(Baked, Owner, Clip.Name);
@@ -484,19 +477,30 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			++Taken;
 			++AdditiveClips;
 
-			// Without the stamp the sequence evaluates to a POSE, and every bone the layer does not
-			// touch comes back as the reference pose rather than as no change -- which the
-			// accumulator would then post-multiply into the body, one bind rotation per bone.
-			if (!BakedDelta->IsValidAdditive())
+			// The tag is the only thing that says this clip is a difference. `IsValidAdditive()` is
+			// false on every delta now and must stay false: an additive stamp would make the
+			// compressor subtract a base out of keys that are already the difference.
+			if (BakedDelta->FindMetaDataByClass<UElysiumAnimPostAdditive>() == nullptr)
 			{
 				AddError(FString::Printf(
-					TEXT("%s '%s': STUDIO_DELTA in the container and not additive on the mount, so ")
-					TEXT("no delta can be read out of it"), *Owner, *Clip.Name));
+					TEXT("%s '%s': STUDIO_DELTA in the container and untagged on the mount, so ")
+					TEXT("every reader composes it as a pose"), *Owner, *Clip.Name));
+				continue;
+			}
+			if (BakedDelta->IsValidAdditive())
+			{
+				AddError(FString::Printf(
+					TEXT("%s '%s': carries an additive stamp, which subtracts a base out of keys ")
+					TEXT("that are already the difference"), *Owner, *Clip.Name));
 				continue;
 			}
 
-			const FReferenceSkeleton& BakedRefSkeleton =
-				BakedDelta->GetSkeleton()->GetReferenceSkeleton();
+			// **Evaluated against the BODY that plays it, not the skeleton it was baked on.** A
+			// bank delta declares its donor's sixty bones; the body carries seventy-nine or
+			// eighty-eight, and the difference is exactly where an untracked bone reads back the
+			// body's own reference pose rather than the identity. Reading it off the sequence's
+			// skeleton would re-read the bones the bake enumerated and be blind to the rest.
+			const FReferenceSkeleton& BakedRefSkeleton = Baked->GetRefSkeleton();
 			bool bSound = true;
 			for (const double Fraction : GSampleFractions)
 			{
@@ -504,8 +508,10 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					FMath::RoundToInt32(Fraction * (Clip.FrameCount - 1)), 0, Clip.FrameCount - 1);
 				const double Time = Frame / FMath::Max(static_cast<double>(Clip.FrameRate), 1.0);
 				TArray<FTransform> Deltas;
-				if (!EvaluateAdditiveFrame(BakedDelta, Time, Deltas))
+				if (!ElysiumPoseOracle::EvaluateLocalSpace(BakedDelta, Baked, Time, Deltas))
 				{
+					AddError(FString::Printf(TEXT("%s '%s': does not evaluate on the body's mesh"),
+						*Owner, *Clip.Name));
 					break;
 				}
 				for (const FElysiumSourceTrack& Track : Clip.Tracks)
@@ -522,32 +528,19 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 						// defect, and the composed pass below is what asserts an own body's rig.
 						continue;
 					}
-					// The container states the COMPOSED pose -- the base with the delta already on
-					// it -- so what the asset must hand back is whatever pre-multiplies onto the
-					// base to reproduce that. Re-applying it here is what makes this assertion
-					// cover the whole chain at once: the exporter's composition, the bake naming
-					// `ABPT_AnimFrame`, and the compressor's subtraction. Comparing the read-back
-					// delta against the container's track directly would assert none of them, and
-					// would pass just as happily against a delta conjugated by the wrong base.
-					const FElysiumSourceTrack* BaseBone = BaseClip->Tracks.FindByPredicate(
-						[&Track](const FElysiumSourceTrack& Candidate)
-						{ return Candidate.Bone == Track.Bone; });
-					const FQuat BaseRotation = (BaseBone != nullptr
-						&& BaseBone->Rotations.IsValidIndex(0))
-						? FQuat(BaseBone->Rotations[0])
-						: Container.Bones[Track.Bone].Local.GetRotation();
-					const FVector BasePosition = (BaseBone != nullptr
-						&& BaseBone->Translations.IsValidIndex(0))
-						? FVector(BaseBone->Translations[0])
-						: Container.Bones[Track.Bone].Local.GetTranslation();
-
+					// Track for track against the container, with nothing re-applied. The
+					// payload IS the difference retail decodes, so any conversion performed here
+					// would be a second copy of a rule -- and a rule stated twice is a rule that
+					// can agree with itself while both copies are wrong. A channel the record
+					// leaves alone holds the donor bind value, which is what the decoder itself
+					// substitutes, so that is the expectation for an absent key too.
 					const FQuat Expected = Track.Rotations.IsValidIndex(Frame)
-						? FQuat(Track.Rotations[Frame]) : BaseRotation;
+						? FQuat(Track.Rotations[Frame])
+						: Container.Bones[Track.Bone].Local.GetRotation();
 					const FVector ExpectedPos = Track.Translations.IsValidIndex(Frame)
-						? FVector(Track.Translations[Frame]) : BasePosition;
-					FTransform Actual = Deltas[SkeletonBone];
-					Actual.SetRotation((Actual.GetRotation() * BaseRotation).GetNormalized());
-					Actual.SetTranslation(Actual.GetTranslation() + BasePosition);
+						? FVector(Track.Translations[Frame])
+						: Container.Bones[Track.Bone].Local.GetTranslation();
+					const FTransform Actual = Deltas[SkeletonBone];
 
 					++Samples;
 					const double Degrees = FMath::RadiansToDegrees(
@@ -557,12 +550,100 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 					if (Degrees > GAdditiveRotationToleranceDeg
 						|| Centimetres > GAdditiveTranslationTolerance)
 					{
+						// Two different defects read the same here, and the bank skeleton tells
+						// them apart. A delta that misses on its OWN skeleton was baked wrong. One
+						// that matches there and misses on the body was turned by the body's
+						// translation retargeting: with no additive stamp the delta's translation
+						// goes through `OrientAndScale` like a pose's, which re-orients a
+						// DIFFERENCE by the angle between the bank's bind and the body's, where
+						// retail adds it verbatim. Both are errors; only the second names the
+						// runtime rather than the bake.
+						TArray<FTransform> OnBank;
+						FString Where = TEXT("off VtMB's own");
+						if (EvaluateAdditiveFrame(BakedDelta, Time, OnBank))
+						{
+							const int32 BankBone = BakedDelta->GetSkeleton()->GetReferenceSkeleton()
+								.FindBoneIndex(BoneName);
+							if (OnBank.IsValidIndex(BankBone))
+							{
+								const double BankDeg = FMath::RadiansToDegrees(
+									OnBank[BankBone].GetRotation().AngularDistance(Expected));
+								const double BankCm =
+									FVector::Distance(OnBank[BankBone].GetTranslation(), ExpectedPos);
+								if (BankDeg <= GAdditiveRotationToleranceDeg
+									&& BankCm <= GAdditiveTranslationTolerance)
+								{
+									Where = FString::Printf(
+										TEXT("off VtMB's own on the body '%s', while it matches on the ")
+										TEXT("bank's own skeleton (%.4f deg / %.4f cm) -- the body's ")
+										TEXT("translation retargeting turned a difference as if it ")
+										TEXT("were a pose"),
+										*Baked->GetName(), BankDeg, BankCm);
+								}
+							}
+						}
 						AddError(FString::Printf(
-							TEXT("%s '%s' frame %d bone '%s': the baked delta is %.4f deg / %.4f cm ")
-							TEXT("off VtMB's own"),
-							*Owner, *Clip.Name, Frame, *BoneName.ToString(), Degrees, Centimetres));
+							TEXT("%s '%s' frame %d bone '%s': the baked delta is %.4f deg / %.4f cm %s"),
+							*Owner, *Clip.Name, Frame, *BoneName.ToString(), Degrees, Centimetres,
+							*Where));
 						bSound = false;
 						break;
+					}
+				}
+				if (!bSound)
+				{
+					break;
+				}
+
+				// **The bones the delta does NOT animate, which is the half no track can show.**
+				// An untracked bone evaluates to the reference pose, and the composition
+				// post-multiplies whatever it evaluates to -- so a delta that merely omits them
+				// turns the face, the hair and every bone a shared bank never mentions, on top of
+				// a pose that was already right. The contract has two halves and this checks
+				// both: a bone of the baked skeleton the clip does not animate holds the
+				// explicit IDENTITY the bake wrote, and a bone of the BODY the bank never declares
+				// holds the body's reference pose bit-for-bit -- the signal
+				// `FAnimNode_ElysiumPostAdditive` skips on. Anything else is a bone the node
+				// will turn. Read on the body's own mesh, because the second half only exists there.
+				const TArray<FTransform>& BodyRefPose = BakedRefSkeleton.GetRefBonePose();
+				TSet<int32> TrackedBones;
+				for (const FElysiumSourceTrack& Track : Clip.Tracks)
+				{
+					if (Container.Bones.IsValidIndex(Track.Bone))
+					{
+						const int32 SkeletonBone =
+							BakedRefSkeleton.FindBoneIndex(Container.Bones[Track.Bone].Name);
+						if (SkeletonBone != INDEX_NONE)
+						{
+							TrackedBones.Add(SkeletonBone);
+						}
+					}
+				}
+				for (int32 Bone = 0; bSound && Bone < Deltas.Num(); ++Bone)
+				{
+					if (TrackedBones.Contains(Bone))
+					{
+						continue;
+					}
+					if (BodyRefPose.IsValidIndex(Bone)
+						&& Deltas[Bone].Equals(BodyRefPose[Bone], UE_SMALL_NUMBER))
+					{
+						continue;   // the body's own bone, untouched by the bank: the node skips it
+					}
+					const double Degrees = FMath::RadiansToDegrees(
+						Deltas[Bone].GetRotation().AngularDistance(FQuat::Identity));
+					const double Centimetres = Deltas[Bone].GetTranslation().Size();
+					if (Degrees > GAdditiveRotationToleranceDeg
+						|| Centimetres > GAdditiveTranslationTolerance)
+					{
+						AddError(FString::Printf(
+							TEXT("%s '%s' frame %d bone '%s': untracked on a delta and reads ")
+							TEXT("%.4f deg / %.4f cm -- neither the additive identity the bake ")
+							TEXT("writes nor the body's reference pose the node skips, so composing ")
+							TEXT("it turns a bone the clip never animates"),
+							*Owner, *Clip.Name, Frame,
+							*BakedRefSkeleton.GetBoneName(Bone).ToString(), Degrees, Centimetres));
+						bSound = false;
 					}
 				}
 				if (!bSound)
@@ -1777,11 +1858,12 @@ bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
 				}
 				KeepAlive.Add(Anim);
 				AssetSkeleton = Anim->GetSkeleton();
-				if (Anim->IsValidAdditive())
+				if (Anim->FindMetaDataByClass<UElysiumAnimPostAdditive>() != nullptr)
 				{
 					++Additives;
-					// An additive states its own base through the additive identity and composes in
-					// the other slot, which takes no mask. Nothing further to resolve.
+					// A delta composes in the other slot, through the post-multiply node, and takes
+					// no mask -- every bone it does not animate is baked at the additive identity.
+					// Nothing further to resolve.
 					continue;
 				}
 				const UElysiumAnimLayerMask* Mask =
