@@ -22,13 +22,25 @@ is passed through untouched. The runner also fails a run whose report counts fai
 whose tests all abstained — a tier that proved nothing is not a pass.
 
 **Cost is dominated by editor-commandlet boot, not by the tests.** The whole `Substrate` tier
-executes in roughly three seconds inside a run of about twenty; a single narrow filter costs the
-same twenty. So a narrow filter buys focus and a readable failure, not time, and the choice
-between one filter and the whole tier is not a cost decision. `Content` is the tier that costs
-real time, and it is the one worth scoping.
+executes in about three and a half seconds of test time, and a single narrow filter pays the same
+boot. So a narrow filter buys focus and a readable failure, not time, and the choice between one
+filter and the whole tier is not a cost decision. `Content` is the tier that costs real time —
+37–42 seconds of test time for its 61 tests — and it is the one worth scoping.
 
 If the UnrealBuildTool mutex is held by another process, wait for it to release and retry rather
 than killing the holder (the `build-slots` skill).
+
+## Choosing a layer
+
+Pick the cheapest layer that can catch the class of bug in hand, not the layer nearest the change.
+
+- A rule, formula, threshold, state machine, call order or save field → `Substrate`, against the
+  recording doubles. Content-free, deterministic, and the whole tier answers in seconds.
+- A question only the real corpus or the bake can answer — a count, a parity, a resolved asset
+  → `Content`, with the narrowest selector that still asks the question.
+- Anything whose answer is a rendered frame is **not covered by any tier**: automation runs
+  `-nullrhi`. Say so rather than approximating it with a pose or a transform assertion, and reach
+  for `validation/shots_diff.py` if a pixel answer is actually needed.
 
 ## Writing a test
 
@@ -47,8 +59,13 @@ First add content-free `Substrate` coverage against `Private/Tests/ElysiumTestSe
 ## Python
 
 Python tests are `unittest`, and pytest is not installed. Run one module from the repo root as
-`uv run python -m unittest pipeline.tests.<module>`; `unittest discover -s pipeline/tests` fails
-because that directory is not an importable package.
+`uv run python -m unittest pipeline.tests.<module>`.
+
+`uv run python` does not load `.elysium.local.env` — only the `elysium` CLI does — and
+`elysium_pipeline.formats.install` resolves `ELYSIUM_VTMB_ROOT` at import time. So a module that
+imports a format or exporter (24 of the 56 do) fails at collection with `RuntimeError:
+ELYSIUM_VTMB_ROOT is not configured` on a shell that has no exported roots, whatever the test
+asserts. Export the roots into the shell, or invoke through a wrapper that reads the env file.
 
 ## Scope is gated
 

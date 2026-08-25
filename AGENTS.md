@@ -94,8 +94,9 @@ under `pipeline/unreal/` and a generator rebuilds the package from that text, be
 binary package on a generated mount breaks `reconstruct` and puts a generated package inside the
 tracked set. The worked example is `pipeline/unreal/graphs/ABP_ElysiumBiped.t3d`.
 
-Whatever was proven live is proven again through `uv run elysium build` and `uv run elysium test`,
-which remain the only gate.
+Whatever was proven live is proven again through `uv run elysium build` and `uv run elysium test`.
+That verb runs the C++ automation tiers; the Python suite is `unittest` with no `elysium` verb, and
+`.githooks/pre-commit` runs `uv run elysium doctor --repo-only` alone.
 
 ### Coordinates are read verbatim
 

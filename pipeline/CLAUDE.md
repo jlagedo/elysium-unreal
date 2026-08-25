@@ -25,6 +25,12 @@ mutates `sys.path`, or assumes a current directory.
 Python tests are `unittest`, and pytest is not installed. Running one module, choosing a scope,
 and the approvals a broad export/bake/reconstruct run needs are the **`elysium-testing`** skill.
 
+`elysium_pipeline.formats.install` resolves `ELYSIUM_VTMB_ROOT` at **import time**, so importing
+any format or exporter module needs a configured install — and `uv run python` does not load
+`.elysium.local.env`; only the `elysium` CLI does. A test module on that chain fails at collection
+with `RuntimeError: ELYSIUM_VTMB_ROOT is not configured`, which reads as a broken test rather than
+an unconfigured shell.
+
 `sqlite3.connect()` used as a context manager commits but does not close. On Windows the
 open handle blocks `TemporaryDirectory` cleanup, so a test that opens a session database
 closes it explicitly or fails in teardown with `PermissionError` rather than on the

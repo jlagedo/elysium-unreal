@@ -67,7 +67,10 @@ one schema and one writer, `Debug/ElysiumLocomotionTrace.h`, and are compared by
 Automation tests live in `Private/Tests/`. **`ElysiumScratchContentRoot.h` overrides the
 `-ElysiumContentRoot` command-line pin as well as the environment variable** — the pin wins and
 every automation launch passes one, so a test whose production reader resolves through
-`FElysiumContentPaths` would otherwise read the real corpus.
+`FElysiumContentPaths` would otherwise read the real corpus. Every tier runs `-nullrhi`, so **no
+test covers a rendered frame**; the pixel comparison is `validation/shots_diff.py` against a
+baseline under `$ELYSIUM_EXPORT_ROOT/_shots/_baseline/`, which is a local instrument outside the
+automation run.
 
 ## Engine gotchas
 
