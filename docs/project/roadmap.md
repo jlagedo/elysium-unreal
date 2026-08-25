@@ -437,9 +437,10 @@ The ladder:
 - [ ] **[LIFE6 The first-person viewmodel](plans/animation.md)** — the 21+17 corpus export and
   the two-component body; ranged only.
 - [ ] **[LIFE7 The cinematic path and gestures](plans/animation.md)** — the choreo-scene rewire
-  hard slice (marks, camera, triggers — the pipeline is broken end-to-end and untested since the
-  LIFE programme started; **12.1's staging and, through it, 12.3–12.5's acceptance runs all wait on
-  this**, and the plan carries the ranked gap map), then the montage migration, the gesture
+  hard slice (marks, camera, triggers — the retail execution oracle closes initial cast timing and
+  exposes the authored active-scene `Kill` cleanup the runtime lacks; Elysium's played path remains
+  untested, **12.1's staging and, through it, 12.3–12.5's acceptance runs all wait on this**, and the
+  plan carries the ranked gap map), then the montage migration, the gesture
   un-collapse against the recovered `0.1` layer weight, paired actions (role/size/side variant
   arithmetic and the two-body claim — owner call, made), the `Prince_Escort_Male` cluster (its
   over-band residue attributed to the characterization evaluator, not to the decode or the bake, so

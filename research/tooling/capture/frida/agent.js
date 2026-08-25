@@ -13,6 +13,7 @@ let traceSequence = 0;
 let traceDropped = 0;
 let dedupDropped = 0;
 let sampledOut = 0;
+let depthFiltered = 0;
 const lastChangeKeys = new Map();
 const hitCounts = new Map();
 
@@ -444,6 +445,7 @@ function keyPlan(spec, declared) {
 // Sampling is only ever correct for a census; an ordered target must never carry one.
 function installTraceAt(module, label, address) {
   const sample = Math.max(1, (config.recipe.sample || {})[label] || 1);
+  const maxDepth = (config.recipe.max_depth || {})[label];
   let sampleCounter = 0;
   const stackWordCount = config.recipe.stack_words || 8;
   const maximumEvents = config.recipe.max_trace_events || 4096;
@@ -501,19 +503,20 @@ function installTraceAt(module, label, address) {
 
   const callbacks = {
     onEnter() {
+      this.sequence = null;
+      this.pending = null;
+      hitCounts.set(label, (hitCounts.get(label) || 0) + 1);
+      if (maxDepth !== undefined && this.depth > maxDepth) {
+        depthFiltered += 1;
+        return;
+      }
       if (sample !== 1) {
         sampleCounter += 1;
         if (sampleCounter % sample !== 0) {
           sampledOut += 1;
-          hitCounts.set(label, (hitCounts.get(label) || 0) + 1);
-          this.pending = null;
-          this.sequence = null;
           return;
         }
       }
-      this.sequence = null;
-      this.pending = null;
-      hitCounts.set(label, (hitCounts.get(label) || 0) + 1);
       if (changeSpec !== null && !deferred) {
         const keyWords = plan.words === 0
           ? []
@@ -728,6 +731,7 @@ function buildSummary() {
     trace_dropped: traceDropped,
     dedup_dropped: dedupDropped,
     sampled_out: sampledOut,
+    depth_filtered: depthFiltered,
     // Every hook entry, emitted or not. A target whose hits dwarf its events is what a
     // session's frame rate is being spent on.
     hits: Object.fromEntries(hitCounts),

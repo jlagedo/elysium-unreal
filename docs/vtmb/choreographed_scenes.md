@@ -692,9 +692,9 @@ activator, and clears both flags — without touching `position_end`.
 
 ### A map sequences scenes with triggers and camera keyframes, not with scene outputs
 
-None of the shipped `logic_choreographed_scene` entities on `sp_theatre` wires an output — the
-only one in the map that does is `embrace_o_matic`, whose `OnTrigger1` opens a door. Scenes do
-not chain to each other. The clock that advances a cutscene is the **camera keyframe track**:
+All but one of the shipped `logic_choreographed_scene` entities on `sp_theatre` wire no output.
+The exception is `embrace_o_matic`, whose `OnTrigger1` opens `havenrm`. Scenes do not chain to each
+other. The clock that advances a cutscene is the **camera keyframe track**:
 each `camera_keyframe` carries `MoveTime` and `Pause`, and its `OnReachedKeyframe` at a chosen
 index fires the next stage.
 
@@ -704,17 +704,20 @@ finishes by loading the next map, with nothing to decide in between:
 1. An **unnamed** `trigger_once` at `(-4169.72, 1232, -309.85)` runs `chooseSire()`,
    `castUnderstudy()`, `controller CreateControllerNPC`, the `embrace_camera`/`embrace_target`
    tracks, `embrace_o_matic` + `_2 Start`, five prop `SetAnimation`s, and `G.Story_State = -4`.
+   The output list's reverse order is observable: at the queue boundary the story-state write runs
+   first, then controller creation and the fade, then `castUnderstudy()`, then `chooseSire()`.
    Arriving from `sp_genesisdevice_1` spawns the player at `info_landmark newgame`, which lies
    inside it, so the cutscene starts on arrival. `info_player_start` — where a console `map`
    load spawns — is 77 units short of it, and the player has to cross that gap.
 2. `embrace_camera_22 OnReachedKeyframe` → +4.0 → `move_embrace_actors Teleport` moves `!player`
    into the `start_courtroom` volume.
-3. `start_courtroom OnTrigger` → +1.0 → `courtroom_scene_relay`, which starts seven
-   `courtroom_scene_bip*` scenes at once, the courtroom camera pair, three prop animations, and
-   `fillSeats()`.
+3. `start_courtroom OnTrigger` → +1.0 → `courtroom_scene_relay`, which starts six directly named
+   `courtroom_scene_bip2..7` scenes and one of the normal/homo bip1 pair, the courtroom camera pair,
+   three prop animations, and `fillSeats()`.
 4. `courtroom_target_36 OnReachedKeyframe` → `scene_over_fade` +1.0 and `scene_over_relay` +4.0,
-   which kills the courtroom cast and triggers `walk_out_relay` — four `scripted_sequence`
-   `BeginSequence` walk-outs behind a second camera pair.
+   which kills the courtroom cast, kills the still-playing bip2 scene, and triggers
+   `walk_out_relay`. Its four named `BeginSequence` targets fan out across duplicate targetnames to
+   **seven** `scripted_sequence` receivers behind a second camera pair.
 5. `walk_out_cam_k OnReachedKeyframe` → +21.0 → `tutorial_change ScriptUnhide`, revealing the
    `trigger_changelevel` that ends the map.
 6. `walk_out_fade` → +2.0 → `walk_out_fade_relay` → +3.5 → `male_or_female Test` →
@@ -908,6 +911,44 @@ The client stores the same handle at `C_BaseEntity+0xe4`, and that encoding is s
 near-equal counts of the two halves. So one index space spans the two modules, bounded by
 the serial and by an address's lifetime.
 
+### The complete theatre execution at the event boundary
+
+The hash-gated `life7_theatre_oracle` Frida recipe observes the server's I/O queue, Python calls,
+map-scene lifecycle, VCD dispatch, camera-track scheduler and scripted-sequence entry/finish in one
+played `sp_theatre` execution. On the male, non-homosexual branch it records exactly **10** started
+map-scene entities and **113** VCD starts: 65 `expression`, 30 `sequence`, 17 `speak`, and one
+`firetrigger`; no `gesture` and no VCD `python`. The one firetrigger is
+`embrace_o_matic.OnTrigger1`, delivered as `havenrm.Open`.
+
+One execution cannot start all twelve scene entities. The normal/homo bip1 pair and the male/female
+Prince-escort pair are mutually exclusive, so a run selects one from each pair: two Embrace scenes,
+seven courtroom scenes and one escort. All twelve entities require complementary player-state
+runs. This is an execution constraint, not missing content.
+
+Every actor lookup at each accepted Start resolves. The timing fixes the cast boundary directly:
+`courtroomSire()` runs at game time 60.62, `fillSeats()` at 61.63, and all seven courtroom scenes
+start at 62.14. The map's Python recast therefore precedes binding; it is not an initial actor miss
+on this branch. Retail still re-resolves every frame, and later null results correspond to actors
+the map killed or removed.
+
+Lifecycle is **nine natural finishes plus one cancellation**, not ten completions. The two Embrace
+scenes finish at scene time 57.65. Six courtroom scenes finish at 150.00, but
+`Courtroom_bip2_scene.vcd` carries a final speak event through 155.814529 and is killed by
+`scene_over_relay` at 151.14; that `Kill` reaches `scene_cancel_playback`. The male escort then
+finishes at 60.00 and the changelevel resets the game clock. Thus an active scene receiving the
+generic `Kill` input owes cancellation cleanup; simply making the scene entity inert is not the
+retail result.
+
+The four named walk-out inputs reach seven receivers: Therese and Ash, Skelter and VV, Nines and
+Damsel, and Isaac. Only the Isaac and Nines beats finish naturally and fire the outputs the map
+uses; the authored cleanup removes the other five. Four camera position/target pairs start in the
+same execution: Embrace, courtroom, walk-out, and Prince escort.
+
+Except for the escort's start-clamped first line, `speak` starts are dispatched approximately
+0.15–0.18 seconds before their authored time in this run. That is the observed retail scheduling
+lead; a rebuild on another mixer is accepted on audible onset rather than on reproducing this
+internal submission interval.
+
 ## Where the rebuild diverges
 
 The runtime class is `FElysiumChoreoScene`
@@ -952,6 +993,16 @@ diverges as follows, each an explicit call:
   its single writer, a one-instruction function beside the static init that registers that
   `ConCommand`. Nothing in any map or script reaches any of them.
 
+### Implementation gap — `Kill` does not cancel a playing scene
+
+`sp_theatre` exercises the distinction: `scene_over_relay` kills `courtroom_scene_bip2` while it is
+still playing, retail enters `scene_cancel_playback`, and Prince1 must be free for the following
+walk-out and escort. `FElysiumChoreoScene::InputCancel` contains the corresponding stop, thaw,
+clip/claim release, face/jaw reset and unhide transaction, but the base `FElysiumEntity::Kill`
+marks the scene dead and suppresses its think without routing through it. The dead scene can
+therefore strand actor freeze and ownership state. A body-backed test must drive `Start → Kill →`
+immediate next beat and assert cancellation cleanup with no `OnCompletion`.
+
 The facial layer
 `expression` and the `.lip` files feed is settled in **`docs/vtmb/facial_animation.md`** — flex
 controllers, the flex-rule RPN, both vertex-animation encodings and the phoneme tables. It
@@ -993,3 +1044,6 @@ The live half is captured by `research/tooling/capture/`, whose scene stream hoo
 `0x100829e0`, `0x10081b60`, `0x10082b80`, `0x10082ee0`, `0x10083cd0` and `0x100843d0` as
 inline detours — never as vtable slots, because those hold thunks. Target addresses,
 prologues and confidence: `research/cases/animation-pose/specs/scene_requests.json`.
+The full execution-boundary target set is
+`research/cases/animation-pose/specs/theatre_execution_oracle.json`; its Frida recipe is
+`research/tooling/capture/frida/recipes/life7_theatre_oracle.json`.

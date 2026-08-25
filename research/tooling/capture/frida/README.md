@@ -35,6 +35,20 @@ uv run elysium research frida_probe attach `
   --pid 1234 --recipe smoke --duration-seconds 30
 ```
 
+An operator-driven scene can detach before that backstop through a fresh stop
+file. The controller refuses a pre-existing file so stale state cannot produce
+an empty successful capture:
+
+```powershell
+uv run elysium research frida_probe attach `
+  --pid 1234 --recipe life7_theatre_oracle --duration-seconds 600 `
+  --stop-file "$env:ELYSIUM_WORK_ROOT/research/frida/stop-life7"
+```
+
+Create the named file only after the authored terminal boundary. The agent
+flushes and detaches normally and records `stop_reason=stop-file` in the
+manifest.
+
 A profiled retail recipe runs through the existing supervised launcher:
 
 ```powershell

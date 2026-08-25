@@ -285,16 +285,22 @@ transaction. The feed transaction is the shipped consumer.
   **The ranked gap map.** Five kinds, and the first kind is what to rule out before any live
   diagnosis, because each item independently produces the reported symptoms with nothing logged:
 
-  *Silent funnels.* `BindActors` resolves by exact name once per `Start` and logs a miss once at
-  `Log`, while `sp_theatre`'s cast is created and renamed by `theatre.py` after that bind — the
-  single most direct match for "NPCs not at their marks", and retail re-resolves every frame.
-  A bank miss returns false with no log, the scene falls back to `PlayAnimClip`, and
-  `SeekCinematicClip` then reports success while seeking nothing — so the clip free-runs at rate 1
-  under a weaker Ambient claim any travel publish outranks. A partial `export characters` corpus
-  leaves named cast members bodiless by design. And two cvars reproduce the whole symptom on
-  their own: `elysium.SceneActors 0` and `elysium.NpcBodies 0`.
+  *Silent funnels.* `BindActors` resolves by exact name once per `Start`, while retail re-resolves
+  every frame. The retail execution oracle rules out an initial cast race on the normal/male path:
+  `courtroomSire()` and `fillSeats()` both precede Start and every actor resolves there. Cached
+  handles still diverge for a later rename/replacement and need the re-bind work below. A cinematic
+  bank miss is now warned by the lower resolver, but the fallback still loses provenance:
+  `PlayAnimClip` may answer true and `SeekCinematicClip` then reports success without proving it is
+  seeking that fallback, so it free-runs under a weaker Ambient claim. A partial
+  `export characters` corpus leaves named cast members bodiless by design; the current theatre
+  corpus is not partial (15 anim sets / 48 exact roots bind in the Content tier). And two cvars
+  reproduce the whole symptom on their own: `elysium.SceneActors 0` and `elysium.NpcBodies 0`.
 
-  *Confirmed defects.* `PlayCinematicClip`'s fallback calls `USkeletalMeshComponent::PlayAnimation`
+  *Confirmed defects.* The authored `scene_over_relay` kills `courtroom_scene_bip2` at scene time
+  151.14 while its final line runs to 155.814529; retail enters scene cancellation, but Elysium's
+  base `Kill()` only makes the scene inert. Because the cleanup lives only in `InputCancel`, that
+  path can strand Prince1 frozen or scene-owned immediately before the walk-out and escort.
+  `PlayCinematicClip`'s fallback calls `USkeletalMeshComponent::PlayAnimation`
   for a body with no `UElysiumBipedAnimInstance`, which switches the component to single-node mode
   and destroys its anim graph for the rest of the map — `PlayNpcClip` guards this hazard on its own
   path and the cinematic path does not. Three claim-lifecycle leaks: `ReleaseActorClips`
@@ -322,22 +328,27 @@ transaction. The feed transaction is the shipped consumer.
   stub pushes rather than a live manager frame. The sibling `ScriptedSequenceBodyClaim` test is the
   shape the scene path needs and does not have.
 
-  **What the slice does, in order.** Make the funnels loud first — log the bank miss, make
+  **What the slice does, in order.** Make the funnels loud first — retain the bank-miss warning, make
   `SeekCinematicClip` report the no-seek case, raise the unresolved-actor diagnostic, guard the
-  `PlayAnimation` fallback — because until they are loud, live diagnosis is guesswork. Then the
-  claim-lifecycle leaks and a `CinematicClaims` sweep on body destruction. Then staging: settle
-  name-binding against recast timing (either restore retail's per-frame re-resolution or add a
-  re-bind hook), and collapse the double transform write. Then the camera, which is an owner call —
+  `PlayAnimation` fallback — because until they are loud, live diagnosis is guesswork. Then route a
+  playing scene's `Kill` through cancellation cleanup and prove the immediate Prince1 hand-off in a
+  body-backed test. Then the claim-lifecycle leaks and a `CinematicClaims` sweep on body
+  destruction. Then staging: settle name-binding against recast timing (either restore retail's
+  per-frame re-resolution or add a re-bind hook), and collapse the double transform write. Then the
+  camera, which is an owner call —
   keep cutscenes on the legacy shot stack or move them onto the reserved `Sequence` kind — and push
   the `Cinematic` input scope for a track's duration either way. Finally the body-backed scene test
   in the `ScriptedSequenceBodyClaim` mould, so the path cannot rot silently again.
 
-  **What static cannot settle**, and what the first live run answers: which funnel is actually
-  firing. Make them loud, run `newgame_ttd`, read the log — the failure names itself. Also live-only:
-  whether the shot stack renders correctly through the live camera manager, whether the recast
-  scripts' create/rename timing matches the bind, and whether the stand-in flow survives the new
-  visibility rules. (The arbitration slot's claim lifecycle is proven independently of all of this;
-  a scene's Scene-band claims submit and release correctly even while the staging is broken.)
+  **What the retail execution oracle settles, and what remains Elysium-live.** Initial cast timing
+  is closed: all Start-time actor lookups resolve, and the Python recast precedes them. One normal
+  male run starts 10 scene entities, dispatches 113 VCD events, starts four camera pairs and reaches
+  seven scripted-sequence receivers; six courtroom scenes finish and bip2 is cancelled by `Kill`.
+  Still live-only in the rebuild: whether the shot stack renders correctly through the active camera
+  manager, whether every bank resolves on its embodied actor, and whether the stand-in survives the
+  current visibility rules. Make the funnels loud, run `newgame_ttd`, and read the log. (The
+  arbitration slot's claim lifecycle is proven independently of all of this; a scene's Scene-band
+  claims submit and release correctly while the staging remains open.)
 - **The composition weights are recovered; what is left is the confirmation pass.** Both scalars
   are constants in the DLL: an autolayer composes at a literal `1.0` against a binary per-bone
   mask, and a choreographed `gesture` composes at `SetLayer`'s literal `0.1`
@@ -381,13 +392,18 @@ transaction. The feed transaction is the shipped consumer.
   rotation column is already zero. The doc's earlier 1,061/65% figures do not reproduce from the
   banked snapshot and are withdrawn.
 
-*Acceptance:* **two played runs, each driving every scene its map ships.** `sp_theatre` — all
-**twelve**, every one of them `position_start 1`, including the seven concurrent courtroom scenes
-and 15 of the corpus's 20 distinct cinematic bank models: the cast stages at its marks, stays inside
-the keyframe-conducted shot, the `npc_VPlayerController` stand-in carries the player, and every
-actor, clip and bank resolves with no diagnostic. No scene on that map wires an output, so it proves
-staging, cast breadth and camera and nothing else. `sp_tutorial_1` — all **three**, the alley fight
-included: `firetrigger` 1–2 reach their wired targets and `OnCompletion` fires and drives
+*Acceptance:* **played scenario runs covering both maps and every reachable branch.** `sp_theatre`
+starts **10 of its 12** scene entities in one execution: both Embrace scenes, six directly named
+courtroom scenes plus the selected normal/homo bip1, and the selected male/female escort. Two
+complementary player-state runs cover all twelve; a single run claiming twelve is invalid. Every
+scene sets `position_start 1`; together they exercise 15 of the corpus's 20 distinct cinematic bank
+models. The cast stages at its marks, stays inside the keyframe-conducted shot, the
+`npc_VPlayerController` stand-in carries the player, and every actor, clip and bank resolves with no
+diagnostic. The Embrace `firetrigger` reaches `havenrm.Open`; six courtroom scenes finish and the
+still-playing bip2 scene's authored `Kill` performs cancellation cleanup before Prince1 enters the
+walk-out. The four named walk-out inputs reach all seven receiver entities. `sp_tutorial_1` — all
+**three**, the alley fight included: `firetrigger` 1–2 reach their wired targets and `OnCompletion`
+fires and drives
 `logic_alley_cleanup`, because a scene that never reports finished is a soft-lock rather than a
 missing animation. Across both, no silent funnel fires — which is checkable only because the slice's
 first step made them loud — and no scene is carried by `elysium.SceneActors 0` or a bank-miss

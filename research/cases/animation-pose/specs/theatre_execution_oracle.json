@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "topic": "theatre_execution_oracle",
+  "consuming_document": "docs/vtmb/choreographed_scenes.md",
+  "research_id": "RE32",
+  "program": "vampire.dll",
+  "binary": {
+    "size": 7860281,
+    "sha256": "c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f",
+    "md5": "1a10efcfe332036a9ee60bce223303db",
+    "image_base": "0x10000000"
+  },
+  "questions": [
+    "What exact ordered I/O, Python, scene, camera and scripted-sequence boundaries does one authored sp_theatre execution cross?",
+    "Which scene actors resolve at Start, and which later become absent through authored removal?",
+    "Which scene entities finish naturally and which are cancelled by external map wiring?",
+    "How many receiver entities do the four named courtroom walk-out inputs actually fan out to?"
+  ],
+  "functions": [
+    {
+      "address": "1019b570",
+      "label": "python_data_manager_setattr",
+      "confidence": "confirmed",
+      "role": "Record G-key assignment names plus the value object's type and payload word at the engine-owned data manager boundary."
+    },
+    {
+      "address": "100cc430",
+      "label": "camera_track_sample",
+      "confidence": "confirmed",
+      "role": "Record the depth-zero position and target scheduler outputs; recursive lookahead calls are excluded."
+    },
+    {
+      "address": "100cc0e0",
+      "label": "camera_play_position",
+      "confidence": "confirmed",
+      "role": "Record each authored camera position-stream start."
+    },
+    {
+      "address": "100cc090",
+      "label": "camera_play_target",
+      "confidence": "confirmed",
+      "role": "Record each authored camera target-stream start."
+    },
+    {
+      "address": "1017d280",
+      "label": "camera_player_adopt_position",
+      "confidence": "confirmed",
+      "role": "Record player adoption of the active scripted position stream."
+    },
+    {
+      "address": "1017d460",
+      "label": "camera_player_adopt_target",
+      "confidence": "confirmed",
+      "role": "Record player adoption of the active scripted target stream."
+    },
+    {
+      "address": "101a7390",
+      "label": "scripted_sequence_begin",
+      "confidence": "confirmed",
+      "role": "Record each receiver entering a scripted-sequence beat after targetname fan-out."
+    },
+    {
+      "address": "101a8640",
+      "label": "scripted_sequence_finish",
+      "confidence": "confirmed",
+      "role": "Record the natural scripted-sequence completion path that produces OnEndSequence."
+    }
+  ]
+}

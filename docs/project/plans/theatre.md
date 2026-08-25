@@ -19,6 +19,12 @@ between them and acceptance is **staging**: actor placement, the camera coupling
 regressed under CCC2 and LIFE0–4, and **LIFE7's choreo-scene rewire owns restoring them**
 (`plans/animation.md`). This row does not re-specify that work and does not duplicate its gap map.
 
+The retail execution oracle now fixes the acceptance shape: one run starts 10 mutually reachable
+scene entities and 113 VCD events; complementary normal/homo and male/female runs cover all twelve.
+The current Content tier resolves 15 theatre anim sets and 48 actor-root/skeleton bindings, so the
+remaining proof is the embodied played path rather than another static bank census. LIFE7 owns the
+active-scene `Kill` cleanup the oracle exposed before that run can be accepted.
+
 **Remaining here, once a scene stages its cast again:** the residual RE32 material/remap work and
 the final live acceptance pass — `newgame_ttd` with no unexpected actor, clip, camera, NPC or prop
 diagnostics (deferred facial/lip work belongs to 12.3–12.5, scene audio to AUD3). `hide_ents`

@@ -209,6 +209,174 @@
           "expected_bytes": "568bf18b8ebc040000"
         },
         {
+          "semantic_label": "vampire.base_entity_output_fire_output",
+          "source_function_label": "BaseEntityOutputFireOutput",
+          "source_spec": "research/cases/tutorial-event-resolution/specs/tutorial_event_resolution.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000cd300",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec1c535556"
+        },
+        {
+          "semantic_label": "vampire.event_queue_add",
+          "source_function_label": "EventQueueAdd",
+          "source_spec": "research/cases/tutorial-event-resolution/specs/tutorial_event_resolution.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000ce210",
+          "calling_convention": "thiscall",
+          "expected_bytes": "8b1528b27010",
+          "relocated_operand": {"offset": 2, "size": 4}
+        },
+        {
+          "semantic_label": "vampire.event_queue_service_events",
+          "source_function_label": "EventQueueServiceEvents",
+          "source_spec": "research/cases/tutorial-event-resolution/specs/tutorial_event_resolution.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000cebb0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec18a051ff6c10",
+          "relocated_operand": {"offset": 4, "size": 4}
+        },
+        {
+          "semantic_label": "vampire.base_entity_accept_input",
+          "source_function_label": "BaseEntityAcceptInput",
+          "source_spec": "research/cases/tutorial-event-resolution/specs/tutorial_event_resolution.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000abc90",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec24538b"
+        },
+        {
+          "semantic_label": "vampire.execute_output_python",
+          "source_function_label": "ExecuteOutputPython",
+          "source_spec": "research/cases/tutorial-event-resolution/specs/tutorial_event_resolution.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000ce990",
+          "calling_convention": "cdecl",
+          "expected_bytes": "81ec04040000"
+        },
+        {
+          "semantic_label": "vampire.execute_queued_python_source",
+          "source_function_label": "ExecuteQueuedPythonSource",
+          "source_spec": "research/cases/tutorial-event-resolution/specs/tutorial_event_resolution.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000ce8a0",
+          "calling_convention": "cdecl",
+          "expected_bytes": "578b7c2408"
+        },
+        {
+          "semantic_label": "vampire.logic_python_check_evaluate",
+          "source_function_label": "LogicPythonCheckEvaluate",
+          "source_spec": "research/cases/tutorial-event-resolution/specs/tutorial_event_resolution.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00135290",
+          "calling_convention": "thiscall",
+          "expected_bytes": "5156576860e35510",
+          "relocated_operand": {"offset": 4, "size": 4}
+        },
+        {
+          "semantic_label": "vampire.python_data_manager_setattr",
+          "source_function_label": "python_data_manager_setattr",
+          "source_spec": "research/cases/animation-pose/specs/theatre_execution_oracle.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0019b570",
+          "calling_convention": "cdecl",
+          "expected_bytes": "538b5c240c"
+        },
+        {
+          "semantic_label": "vampire.python_entity_input_function",
+          "source_function_label": "PythonEntityInputFunction",
+          "source_spec": "research/cases/tutorial-event-resolution/specs/tutorial_event_resolution.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x001962a0",
+          "calling_convention": "cdecl",
+          "expected_bytes": "83ec208b0da4379f10",
+          "relocated_operand": {"offset": 5, "size": 4}
+        },
+        {
+          "semantic_label": "vampire.camera_track_sample",
+          "source_function_label": "camera_track_sample",
+          "source_spec": "research/cases/animation-pose/specs/theatre_execution_oracle.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000cc430",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec4c53555657"
+        },
+        {
+          "semantic_label": "vampire.camera_play_position",
+          "source_function_label": "camera_play_position",
+          "source_spec": "research/cases/animation-pose/specs/theatre_execution_oracle.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000cc0e0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "a128b27010",
+          "relocated_operand": {"offset": 1, "size": 4}
+        },
+        {
+          "semantic_label": "vampire.camera_play_target",
+          "source_function_label": "camera_play_target",
+          "source_spec": "research/cases/animation-pose/specs/theatre_execution_oracle.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000cc090",
+          "calling_convention": "thiscall",
+          "expected_bytes": "a128b27010",
+          "relocated_operand": {"offset": 1, "size": 4}
+        },
+        {
+          "semantic_label": "vampire.camera_player_adopt_position",
+          "source_function_label": "camera_player_adopt_position",
+          "source_spec": "research/cases/animation-pose/specs/theatre_execution_oracle.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0017d280",
+          "calling_convention": "thiscall",
+          "expected_bytes": "83ec105557"
+        },
+        {
+          "semantic_label": "vampire.camera_player_adopt_target",
+          "source_function_label": "camera_player_adopt_target",
+          "source_spec": "research/cases/animation-pose/specs/theatre_execution_oracle.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0017d460",
+          "calling_convention": "thiscall",
+          "expected_bytes": "d905c4544410",
+          "relocated_operand": {"offset": 2, "size": 4}
+        },
+        {
+          "semantic_label": "vampire.scripted_sequence_begin",
+          "source_function_label": "scripted_sequence_begin",
+          "source_spec": "research/cases/animation-pose/specs/theatre_execution_oracle.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x001a7390",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf18b0d28b27010",
+          "relocated_operand": {"offset": 5, "size": 4}
+        },
+        {
+          "semantic_label": "vampire.scripted_sequence_finish",
+          "source_function_label": "scripted_sequence_finish",
+          "source_spec": "research/cases/animation-pose/specs/theatre_execution_oracle.json",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x001a8640",
+          "calling_convention": "thiscall",
+          "expected_bytes": "55568bf157"
+        },
+        {
           "semantic_label": "vampire.player_item_post_frame",
           "source_function_label": "PlayerItemPostFrame",
           "source_spec": "research/cases/player-entity/specs/player_entity_server.json",

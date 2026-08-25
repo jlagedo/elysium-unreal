@@ -32,6 +32,7 @@ The animation specifications divide the call chain at binary boundaries:
 | Specification | Program | Scope |
 |---|---|---|
 | `scene_requests.json` | `vampire.dll` | scene playback lifecycle, choreographed event dispatch, actor binding, animation-set application |
+| `theatre_execution_oracle.json` | `vampire.dll` | joined entity I/O, Python, camera tracks and scripted-sequence boundaries for the full `sp_theatre` path |
 | `gameplay_actions.json` | `vampire.dll` | player action classification/mode routing, common NPC task/activity resolution, class/weapon translation, direct-label routes and final sequence selection |
 | `animation_pose.json` | `client.dll` | local decode, blends, transitions, hierarchy, entity/root composition, render submission |
 | `animation_skinning.json` | `engine.dll` | `VEngineModel006`, `SetupBones` callback, `TStudioRender012` bridge |

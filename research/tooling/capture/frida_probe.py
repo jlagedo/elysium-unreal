@@ -127,6 +127,7 @@ def load_recipe(name: str) -> dict[str, Any]:
     _validate_field_reads(recipe, path)
     _validate_on_change(recipe, path)
     _validate_sample(recipe, path)
+    _validate_max_depth(recipe, path)
     return recipe
 
 
@@ -395,6 +396,27 @@ def _validate_sample(recipe: dict[str, Any], path: Path) -> None:
                 f"sampled target {target!r} carries no on_first key, so its order is its "
                 f"answer and sampling would punch holes in it: {path}"
             )
+
+
+def _validate_max_depth(recipe: dict[str, Any], path: Path) -> None:
+    """Keep recursive calls out without thinning the retained top-level order."""
+    declared = recipe.get("max_depth", {})
+    if not isinstance(declared, dict):
+        raise ValueError(f"invalid Frida max-depth declaration: {path}")
+    known = set(recipe["targets"]) | {
+        declaration["label"] for declaration in recipe.get("export_hooks", [])
+    }
+    if declared and recipe.get("mode") != "trace":
+        raise ValueError(f"max-depth filters require trace mode: {path}")
+    for target, depth in declared.items():
+        if target not in known:
+            raise ValueError(
+                f"max-depth filter names an undeclared target {target!r}: {path}"
+            )
+        value = _integer_field(depth, f"max depth for {target}")
+        if not 0 <= value <= 64:
+            raise ValueError(f"max depth for {target} lies outside 0..64: {path}")
+        declared[target] = value
 
 
 def _target_profiles(
@@ -847,13 +869,33 @@ def collect(args: argparse.Namespace) -> int:
         recorder.close()
 
 
+def _wait_for_attach_stop(
+    detached: threading.Event,
+    duration_seconds: float,
+    stop_file: Path | None,
+) -> str:
+    deadline = time.monotonic() + duration_seconds
+    while True:
+        if stop_file is not None and stop_file.is_file():
+            return "stop-file"
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return "duration"
+        if detached.wait(min(0.1, remaining)):
+            return "detached"
+
+
 def attach(args: argparse.Namespace) -> int:
     frida = _load_frida()
     recipe = load_recipe(args.recipe)
+    stop_file = args.stop_file.resolve() if args.stop_file is not None else None
+    if stop_file is not None and stop_file.exists():
+        raise FileExistsError(f"Frida attach stop file already exists: {stop_file}")
     output = _session_root("attach", args.recipe)
     recorder = Recorder(output)
     manifest = _manifest_base("attach", args.recipe, recipe, frida)
     manifest["pid"] = args.pid
+    manifest["stop_file"] = os.fspath(stop_file) if stop_file is not None else None
     session = None
     script = None
     try:
@@ -864,7 +906,11 @@ def attach(args: argparse.Namespace) -> int:
             recorder,
         )
         manifest["ready"] = ready
-        recorder.detached.wait(args.duration_seconds)
+        manifest["stop_reason"] = _wait_for_attach_stop(
+            recorder.detached,
+            args.duration_seconds,
+            stop_file,
+        )
         if not recorder.detached.is_set():
             manifest["summary"] = _stop_agent(session, script)
             session = None
@@ -945,6 +991,11 @@ def parser() -> argparse.ArgumentParser:
     attach_parser.add_argument("--pid", type=int, required=True)
     attach_parser.add_argument("--recipe", default="smoke")
     attach_parser.add_argument("--duration-seconds", type=float, default=30.0)
+    attach_parser.add_argument(
+        "--stop-file",
+        type=Path,
+        help="Detach cleanly when this externally-created file appears.",
+    )
     attach_parser.set_defaults(function=attach)
 
     collect_parser = subparsers.add_parser("collect")

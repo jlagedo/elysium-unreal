@@ -6196,9 +6196,20 @@ class RetailCaptureTests(unittest.TestCase):
         scene_targets = [
             target
             for target in vampire["targets"]
-            if target.get("source_spec", vampire["source_spec"]) == scene_spec
+            if target.get("source_function_label") is not None
+            and target.get("source_spec", vampire["source_spec"]) == scene_spec
         ]
-        self.assertEqual(len(scene_targets), 6)
+        self.assertEqual(
+            {target["semantic_label"] for target in scene_targets},
+            {
+                "vampire.scene_find_named_entity",
+                "vampire.scene_apply_anim_set",
+                "vampire.scene_on_finished",
+                "vampire.scene_cancel_playback",
+                "vampire.scene_dispatch_start_event",
+                "vampire.scene_start_playback",
+            },
+        )
         for target in scene_targets:
             # An incrementally linked module holds E9 thunks in its vtable
             # slots, so a vtable backend would validate a thunk.
@@ -6238,7 +6249,18 @@ class RetailCaptureTests(unittest.TestCase):
             if target.get("source_spec")
             == "research/cases/animation-pose/specs/gameplay_actions.json"
         ]
-        self.assertEqual(len(gameplay_targets), 5)
+        self.assertEqual(
+            {target["semantic_label"] for target in gameplay_targets},
+            {
+                "vampire.classify_player_animation_action",
+                "vampire.set_ideal_activity",
+                "vampire.weapon_translate_activity",
+                "vampire.select_weighted_sequence",
+                "vampire.select_heaviest_sequence",
+                "vampire.player_set_animation_router",
+                "vampire.apply_player_activity_and_sequence",
+            },
+        )
         for target in gameplay_targets:
             self.assertEqual(target["kind"], "inline")
             self.assertEqual(target["backend"], "inline_detour")
