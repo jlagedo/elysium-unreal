@@ -550,6 +550,12 @@ enum class EElysiumAnimOutcome : uint8
 	// so a value inserted mid-enum renumbers everything after it and turns a recorded baseline into a
 	// false regression on every frame, not just the ones that hit the new rung.
 	LayerMaskRejected,
+	// The label named a blend GRID the mount does not carry, so the record's own current cell stands
+	// alone. It poses — which is what makes it invisible in the frame — but the driver only
+	// re-resolves on a discrete key change, so the fan never advances and the body animates without
+	// listening to the parameter that is supposed to steer it. Distinct from `NoAsset` because an
+	// asset did bind, and from `Resolved` because the thing that was asked for did not.
+	GridFallback,
 };
 
 // The locomotion slice's activities as a small ordered code, so a per-frame channel can carry the

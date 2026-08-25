@@ -125,11 +125,13 @@ def load_recipe(name: str) -> dict[str, Any]:
     if not isinstance(recipe.get("capture_returns", False), bool):
         raise ValueError(f"invalid capture_returns: {path}")
     _validate_field_reads(recipe, path)
+    _validate_on_change(recipe, path)
+    _validate_sample(recipe, path)
     return recipe
 
 
-FIELD_TYPES = ("u8", "i32", "u32", "f32", "ptr", "vec3")
-FIELD_BASES = ("module", "register", "argument")
+FIELD_TYPES = ("u8", "i32", "u32", "f32", "ptr", "vec3", "cstr")
+FIELD_BASES = ("module", "register", "argument", "return")
 
 
 def _integer_field(value: object, label: str) -> int:
@@ -172,7 +174,28 @@ def _validate_field_reads(recipe: dict[str, Any], path: Path) -> None:
             base = field.get("base")
             if base not in FIELD_BASES:
                 raise ValueError(f"invalid field-read base for {label}: {path}")
-            if base == "module":
+            if field["type"] == "cstr":
+                field["max_length"] = _integer_field(
+                    field.get("max_length", 128), f"field read {label} max_length"
+                )
+                if not 1 <= field["max_length"] <= 1024:
+                    raise ValueError(
+                        f"field read {label} names a string bound outside "
+                        f"1..1024: {path}"
+                    )
+            elif "max_length" in field:
+                raise ValueError(
+                    f"field read {label} bounds a value that is not a string: {path}"
+                )
+            if base == "return":
+                # The return value only exists on the way out, so a declaration
+                # that reads it anywhere else would decode a stale register.
+                if field.get("when") != "leave":
+                    raise ValueError(
+                        f"field read {label} reads the return value outside "
+                        f"the leave phase: {path}"
+                    )
+            elif base == "module":
                 if not isinstance(field.get("module"), str) or not field["module"]:
                     raise ValueError(f"field read {label} needs a module: {path}")
                 field["rva"] = _integer_field(
@@ -200,6 +223,104 @@ def _validate_field_reads(recipe: dict[str, Any], path: Path) -> None:
                 _integer_field(step, f"field read {label} deref step")
                 for step in field.get("deref", [])
             ]
+
+
+_CHANGE_WORD = re.compile(r"^word(\d+)$")
+
+
+def _validate_on_change(recipe: dict[str, Any], path: Path) -> None:
+    """A change key names the values whose tuple is the target's answer.
+
+    Every name must resolve to something the record actually carries: a
+    declared field-read label, `ecx`, `return_value`, or `word<N>` inside the
+    captured stack window. A key that names nothing decodable would silently
+    dedupe on a constant and swallow the capture.
+    """
+    declared = dict(recipe.get("on_change", {}))
+    census = recipe.get("on_first", {})
+    if not isinstance(recipe.get("on_change", {}), dict) or not isinstance(census, dict):
+        raise ValueError(f"invalid Frida on-change declaration: {path}")
+    overlap = sorted(set(declared) & set(census))
+    if overlap:
+        raise ValueError(
+            f"a target declares both on_change and on_first "
+            f"({', '.join(overlap)}): {path}"
+        )
+    declared.update(census)
+    if declared and recipe.get("mode") != "trace":
+        raise ValueError(f"on-change keys require trace mode: {path}")
+    known = set(recipe["targets"]) | {
+        declaration["label"] for declaration in recipe.get("export_hooks", [])
+    }
+    stack_words = int(recipe.get("stack_words", 8))
+    reads = recipe.get("field_reads", {})
+    for target, names in declared.items():
+        if target not in known:
+            raise ValueError(
+                f"on-change names an undeclared target {target!r}: {path}"
+            )
+        if not isinstance(names, list) or not names:
+            raise ValueError(f"invalid on-change key for {target}: {path}")
+        if len(set(names)) != len(names):
+            raise ValueError(f"duplicate on-change key part for {target}: {path}")
+        labels = {field["label"] for field in reads.get(target, [])}
+        leave = {
+            field["label"]
+            for field in reads.get(target, [])
+            if field.get("when", "enter") == "leave"
+        }
+        # A key part read at leave is only decidable once the call returns, and the agent defers
+        # the whole record when it sees one. Both halves have to agree, so a target that reaches
+        # here with a leave-phase key part but no `capture_returns` would key on a value that is
+        # not there yet -- which reads as a constant and suppresses every distinct answer.
+        if leave & set(names) and not recipe.get("capture_returns"):
+            raise ValueError(
+                f"on-change key for {target} names the leave-phase field(s) "
+                f"{sorted(leave & set(names))!r}, which cannot be read without "
+                f"capture_returns: {path}"
+            )
+        for name in names:
+            if not isinstance(name, str) or not name:
+                raise ValueError(f"invalid on-change key part for {target}: {path}")
+            if name in ("ecx", "return_value") or name in labels:
+                continue
+            word = _CHANGE_WORD.fullmatch(name)
+            if word is None:
+                raise ValueError(
+                    f"on-change key {name!r} for {target} names neither a "
+                    f"declared field, ecx, return_value, nor a stack word: {path}"
+                )
+            if not 0 <= int(word.group(1)) < stack_words:
+                raise ValueError(
+                    f"on-change key {name!r} for {target} falls outside the "
+                    f"{stack_words} captured stack words: {path}"
+                )
+
+
+def _validate_sample(recipe: dict[str, Any], path: Path) -> None:
+    """A sampled target must be a census, never an ordered one.
+
+    Sampling drops calls outright, so a target whose ORDER is the answer would be recorded with
+    holes that read as absences. Requiring a census key is what makes that a refusal rather
+    than a silently thinned trace.
+    """
+    declared = recipe.get("sample", {})
+    if not isinstance(declared, dict):
+        raise ValueError(f"invalid Frida sample declaration: {path}")
+    known = set(recipe["targets"]) | {
+        declaration["label"] for declaration in recipe.get("export_hooks", [])
+    }
+    census = set(recipe.get("on_first", {}))
+    for target, rate in declared.items():
+        if target not in known:
+            raise ValueError(f"sample names an undeclared target {target!r}: {path}")
+        if not isinstance(rate, int) or isinstance(rate, bool) or not 1 <= rate <= 4096:
+            raise ValueError(f"invalid sample rate for {target}: {path}")
+        if rate != 1 and target not in census:
+            raise ValueError(
+                f"sampled target {target!r} carries no on_first key, so its order is its "
+                f"answer and sampling would punch holes in it: {path}"
+            )
 
 
 def _target_profiles(

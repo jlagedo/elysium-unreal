@@ -152,6 +152,18 @@ inline constexpr std::uint8_t Profile1Target31ExpectedBytes[] = {
     0x56, 0x8b, 0xf1, 0x8b, 0x86, 0xf0, 0x06, 0x00, 0x00
 };
 
+inline constexpr std::uint8_t Profile1Target32ExpectedBytes[] = {
+    0x53, 0x55, 0x8b, 0xe9, 0x56, 0x85, 0xed, 0x57
+};
+
+inline constexpr std::uint8_t Profile1Target33ExpectedBytes[] = {
+    0x56, 0x8b, 0xf1, 0x85, 0xf6, 0x57, 0x74
+};
+
+inline constexpr std::uint8_t Profile1Target34ExpectedBytes[] = {
+    0xb8, 0x7c, 0x61, 0x00, 0x00, 0xe8
+};
+
 inline constexpr BinaryTargetProfile Profile1Targets[] = {
     {
         "vampire.viewmodel_update",
@@ -601,6 +613,48 @@ inline constexpr BinaryTargetProfile Profile1Targets[] = {
         0x00000000u,
         0u,
     },
+    {
+        "vampire.lookup_sequence",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x0008f7b0u,
+        Profile1Target32ExpectedBytes,
+        8u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.get_model_ptr",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x000952d0u,
+        Profile1Target33ExpectedBytes,
+        7u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "vampire.npc_choose_melee_sequence",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Thiscall,
+        0x00347180u,
+        Profile1Target34ExpectedBytes,
+        6u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
 };
 
 inline constexpr BinaryProfile Profile1 = {
@@ -619,7 +673,7 @@ inline constexpr BinaryProfile Profile1 = {
         0x00000000u,
     },
     Profile1Targets,
-    32u,
+    35u,
 };
 
 inline constexpr std::uint8_t Profile2Target0ExpectedBytes[] = {
@@ -680,6 +734,14 @@ inline constexpr std::uint8_t Profile2Target13ExpectedBytes[] = {
 
 inline constexpr std::uint8_t Profile2Target14ExpectedBytes[] = {
     0x53, 0x8b, 0xd9, 0x56, 0x57
+};
+
+inline constexpr std::uint8_t Profile2Target15ExpectedBytes[] = {
+    0xb8, 0xc4, 0x27, 0x00, 0x00, 0xe8
+};
+
+inline constexpr std::uint8_t Profile2Target16ExpectedBytes[] = {
+    0xd9, 0x44, 0x24, 0x1c, 0xd8, 0x1d, 0xf0, 0x34, 0x1e, 0x10
 };
 
 inline constexpr BinaryTargetProfile Profile2Targets[] = {
@@ -893,6 +955,34 @@ inline constexpr BinaryTargetProfile Profile2Targets[] = {
         0x00000000u,
         0u,
     },
+    {
+        "client.resolve_sequence_owner",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Cdecl,
+        0x00089c40u,
+        Profile2Target15ExpectedBytes,
+        6u,
+        0u,
+        0u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
+    {
+        "client.accumulate_sequence_pose",
+        BinaryTargetKind::Inline,
+        HookBackendKind::InlineDetour,
+        CallingConvention::Cdecl,
+        0x00088e10u,
+        Profile2Target16ExpectedBytes,
+        10u,
+        6u,
+        4u,
+        0x00000000u,
+        0x00000000u,
+        0u,
+    },
 };
 
 inline constexpr BinaryProfile Profile2 = {
@@ -911,7 +1001,7 @@ inline constexpr BinaryProfile Profile2 = {
         0x00000000u,
     },
     Profile2Targets,
-    15u,
+    17u,
 };
 
 inline constexpr std::uint8_t Profile3Target0ExpectedBytes[] = {

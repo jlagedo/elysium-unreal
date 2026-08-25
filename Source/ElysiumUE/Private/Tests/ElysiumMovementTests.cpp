@@ -232,6 +232,52 @@ bool FElysiumMovementTest::RunTest(const FString&)
 		TestTrue(TEXT("and the into-wall component is removed"), FMath::IsNearlyEqual(F(Out.X), 0.0f, 0.01f));
 	}
 
+	// --- The two-plane crease a doorway's interior corner hits --------------------------------
+	//
+	// Clipping against each plane in turn is what makes a body stick on a jamb: the projection that
+	// clears wall A points back into wall B, so the bumps are spent and the move is abandoned.
+	{
+		// Walking diagonally into a 90-degree interior corner: +X and +Y both blocked.
+		const FVector WallX(-1.0f, 0.0f, 0.0f);
+		const FVector WallY(0.0f, -1.0f, 0.0f);
+		const FVector Into(100.0f, 100.0f, -50.0f);
+
+		FVector OneAtATime;
+		ClipVelocity(Into, WallX, OneAtATime);
+		TestTrue(TEXT("clipping against the first wall alone still drives into the second"),
+			(OneAtATime | WallY) < 0.0f);
+
+		const FVector Planes[] = { WallX, WallY };
+		FVector Resolved;
+		TestTrue(TEXT("the crease resolves rather than abandoning the move"),
+			ResolveClipPlanes(Planes, Into, Into, Resolved));
+		TestTrue(TEXT("...and the result drives into neither wall"),
+			(Resolved | WallX) >= -0.01f && (Resolved | WallY) >= -0.01f);
+		TestTrue(TEXT("...and it runs down the crease, keeping the descent"),
+			FMath::IsNearlyEqual(F(Resolved.X), 0.0f, 0.01f)
+			&& FMath::IsNearlyEqual(F(Resolved.Y), 0.0f, 0.01f)
+			&& FMath::IsNearlyEqual(F(Resolved.Z), -50.0f, 0.01f));
+
+		// One plane is the ordinary case and must still be a plain projection.
+		FVector Single;
+		const FVector OnePlane[] = { WallX };
+		TestTrue(TEXT("a single plane resolves"),
+			ResolveClipPlanes(OnePlane, Into, Into, Single));
+		ClipVelocity(Into, WallX, OneAtATime);
+		TestTrue(TEXT("...to exactly what ClipVelocity answers"), Single.Equals(OneAtATime, 0.01f));
+
+		// A wedge whose only crease points back the way the body came is stopped dead rather than
+		// walked backwards out of the corner.
+		const FVector Facing(-1.0f, 0.0f, 0.0f);
+		const FVector Behind(1.0f, 0.0f, 0.0f);
+		const FVector Wedge[] = { Facing, Behind };
+		FVector Stopped;
+		TestFalse(TEXT("a wedge with no forward answer stops the move"),
+			ResolveClipPlanes(Wedge, FVector(100.0f, 0.0f, 0.0f), FVector(100.0f, 0.0f, 0.0f),
+				Stopped));
+		TestTrue(TEXT("...with the velocity zeroed"), Stopped.IsNearlyZero());
+	}
+
 	// --- The jump: a held push under reduced gravity, not a single impulse --------------------
 	{
 		// The four numbers are `rules.txt`'s, not `CGameMovement` constants. sv_jump_boost is an
@@ -1179,14 +1225,21 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	In.WishYawDegrees = 0.0f;
 
 	// Airborne: the held grounded speed, because retail's tables stop refreshing for the jump.
-	// `sv_jump_maxspeed` is the ceiling and never fires — the run peak is below it.
+	// `sv_jump_maxspeed` is the ceiling over that held value and never fires at stock settings —
+	// the run peak is below it.
 	In.bOnGround = false;
 	In.LastGroundedWishSpeed = 400.0f;
 	TestEqual(TEXT("an airborne body keeps commanding what it left the ground with"),
 		ElysiumGait::WishSpeedFrom(In, Body), 400.0f, 0.01f);
-	In.LastGroundedWishSpeed = 0.0f;
-	TestEqual(TEXT("...and falls back to sv_jump_maxspeed with nothing held"),
+	In.LastGroundedWishSpeed = ElysiumMove::JumpMaxSpeed + 500.0f;
+	TestEqual(TEXT("...cut to sv_jump_maxspeed when the held value is above the pin"),
 		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::JumpMaxSpeed, 0.01f);
+	// A body that left the ground standing still held zero, and zero is a held value rather than a
+	// missing one — reading it as absent is what used to hand a standing jump the whole 350 u/s and
+	// latch the run gait for the arc.
+	In.LastGroundedWishSpeed = 0.0f;
+	TestEqual(TEXT("...and a jump from a standstill commands nothing, not the pin"),
+		ElysiumGait::WishSpeedFrom(In, Body), 0.0f, 0.01f);
 	In.bOnGround = true;
 
 	// Noclip short-circuits the ladder: a crouched fly is not a sneak.

@@ -14,6 +14,10 @@
 // `UElysiumMovementComponent` is the engine half: it owns the state, traces against real geometry,
 // and drives these functions in `CGameMovement::PlayerMove`'s own order.
 
+// The mover's log category, declared here rather than in the component because the pure half owns
+// the cvar surface and has to be able to refuse a value out loud.
+ELYSIUMUE_API DECLARE_LOG_CATEGORY_EXTERN(LogElysiumMovement, Log, All);
+
 namespace ElysiumMove
 {
 	// One Source unit in cm. The cvar surface stays in **Source units** so a user's `config.cfg`
@@ -123,6 +127,26 @@ namespace ElysiumMove
 	// two-plane crease case a doorway corner hits.
 	int32 ClipVelocity(const FVector& In, const FVector& Normal, FVector& Out,
 		float Overbounce = 1.0f);
+
+	// The most planes one bump sequence accumulates before the move is abandoned. Source's
+	// `MAX_CLIP_PLANES`.
+	inline constexpr int32 MaxClipPlanes = 5;
+
+	// `TryPlayerMove`'s plane resolution, which is the half of it that needs no world.
+	//
+	// Clipping against each plane in turn is not enough on its own: in a doorway's interior corner
+	// the projection that satisfies wall A drives back into wall B, so the loop below looks for a
+	// projection that satisfies EVERY plane at once and, failing that, sends the body along the
+	// **crease** the two planes share. Without it the four bumps are spent re-clipping between two
+	// walls and the move is abandoned, which is what makes a body stick on a jamb instead of sliding
+	// through it.
+	//
+	// `Original` is the velocity this bump sequence started with (re-baselined whenever the body
+	// actually moved) and `Primal` the velocity the whole move started with. Returns false when the
+	// move has to be abandoned — more than two planes with no common projection, or a resolution that
+	// reverses the original intent, both of which Source answers by zeroing the velocity.
+	bool ResolveClipPlanes(TArrayView<const FVector> Planes, const FVector& Original,
+		const FVector& Primal, FVector& OutVelocity);
 
 	// The half-step split. `FullWalkMove` applies half the interval's gravity before the move and
 	// half after (StartGravity 0x1011fa80 / FinishGravity 0x10120f30), which is what puts the jump
@@ -235,6 +259,12 @@ struct FElysiumMoveTuning
 	// run with no `out/cfg` on disk behaves exactly like a stock install. Taking the reader as a
 	// callback is what keeps this header free of the console (and testable with a hand-built store).
 	void LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup);
+
+private:
+	// Names whose value could not be parsed, so the refusal is stated once rather than on every
+	// frame `LoadFrom` re-reads the store. Cleared with the owning component, so a corrected value
+	// that later goes bad again is reported again in the next session rather than swallowed forever.
+	TSet<FName> ReportedMalformed;
 };
 
 namespace ElysiumMove

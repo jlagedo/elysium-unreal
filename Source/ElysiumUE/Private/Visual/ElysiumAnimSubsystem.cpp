@@ -21,9 +21,14 @@ namespace
 	// CLIP's own additive flag, never by declaration position: the order in `LayerLabels` is
 	// composition order, not a kind tag, and exactly one shipped host (`throwing_star_midcrouch_idle`)
 	// declares its additive first.
+	// `ReportOnce(Reason, Key, Line)` throttles a diagnostic to one line per (reason, key) for the
+	// session — the same shape `ResolveSlotLayer` uses, threaded in because this is a free function
+	// and the set that remembers belongs to the subsystem.
+	using FLayerReporter = TFunctionRef<void(const TCHAR*, const FString&, const FString&)>;
+
 	void ResolveLayerAssets(const FElysiumAnimationCatalog& Catalog,
 		const FElysiumAnimationSelection& Selection, USkeletalMesh* Mesh,
-		FElysiumResolvedAnimation& Assets)
+		FElysiumResolvedAnimation& Assets, FLayerReporter ReportOnce)
 	{
 		if (Mesh == nullptr || Catalog.Clips == nullptr)
 		{
@@ -119,12 +124,16 @@ namespace
 							// Said out loud rather than composed at zero weight. The layer is
 							// standing and steerable and still cannot reach the pose, which is the
 							// one failure on this path that looks exactly like working content.
-							UE_LOG(LogElysiumAnim, Warning,
-								TEXT("[elysium] layer '%s' stands the grid %s but its base cell '%s' "
-									 "(host '%s') carries no bone mask, so the layer would compose at "
-									 "zero weight on every bone and the body poses its base alone"),
-								*LayerLabel, *GetNameSafe(Assets.OverlaySpace), *BaseCell->Clip,
-								*Host);
+							// Throttled because this runs per layer per publish, which is per frame
+							// for the life of a standing layer.
+							ReportOnce(TEXT("nogridmask"),
+								FString::Printf(TEXT("%s|%s"), *LayerOwner, *LayerLabel),
+								FString::Printf(
+									TEXT("'%s' stands the grid %s but its base cell '%s' (host '%s') "
+										 "carries no bone mask, so it would compose at zero weight on "
+										 "every bone and pose nothing; the layer is refused"),
+									*LayerLabel, *GetNameSafe(Assets.OverlaySpace), *BaseCell->Clip,
+									*Host));
 						}
 					}
 				}
@@ -159,10 +168,42 @@ namespace
 				continue;
 			}
 
+			const FString LayerKey = FString::Printf(TEXT("%s|%s"), *LayerOwner, *LayerLabel);
+
 			if (LayerClip->IsAdditive())
 			{
+				// One additive per record — the graph carries one `_delta` node. A host declaring two
+				// would silently keep only the last, which reads as the first one never having been
+				// authored.
+				if (Assets.AdditiveSequence != nullptr)
+				{
+					ReportOnce(TEXT("twoadditive"), LayerKey, FString::Printf(
+						TEXT("'%s' is the second additive this record declares; the graph carries one "
+							 "`_delta` node, so %s is dropped in favour of it"),
+						*LayerLabel, *GetNameSafe(Assets.AdditiveSequence)));
+				}
 				Assets.AdditiveSequence = LayerSequence;
 				continue;
+			}
+
+			// The two overlay fields are "exactly one of these": a grid already standing means this
+			// record declares both shapes, and the grid would then compose through THIS clip's mask
+			// because the mask write below is the last one. Refused rather than mixed.
+			if (Assets.OverlaySpace != nullptr)
+			{
+				ReportOnce(TEXT("gridandsequence"), LayerKey, FString::Printf(
+					TEXT("'%s' is a plain overlay on a record that already stands the grid %s; the two "
+						 "share one node and one mask, so the sequence is refused rather than composing "
+						 "the grid through its own bone set"),
+					*LayerLabel, *GetNameSafe(Assets.OverlaySpace)));
+				continue;
+			}
+			if (Assets.OverlaySequence != nullptr)
+			{
+				ReportOnce(TEXT("twooverlay"), LayerKey, FString::Printf(
+					TEXT("'%s' is the second plain overlay this record declares; the graph carries one "
+						 "overlay node, so %s is dropped in favour of it"),
+					*LayerLabel, *GetNameSafe(Assets.OverlaySequence)));
 			}
 
 			Assets.OverlaySequence = LayerSequence;
@@ -174,6 +215,17 @@ namespace
 				LayerSequence->FindMetaDataByClass<UElysiumAnimLayerMask>())
 			{
 				Assets.OverlayMaskName = Mask->Profile;
+			}
+			else
+			{
+				// The same failure the grid branch reports, on the shape that had no `else` at all: a
+				// maskless overlay writes a null blend profile, which weights every bone at zero, so
+				// the layer binds, takes its aim parameters and reaches the pose on no bone. The
+				// projector refuses it; this is what says which clip.
+				ReportOnce(TEXT("nomask"), LayerKey, FString::Printf(
+					TEXT("'%s'@'%s' stands the sequence %s but it carries no bone mask, so it would "
+						 "compose at zero weight on every bone and pose nothing; the layer is refused"),
+					*LayerLabel, *LayerOwner, *GetNameSafe(LayerSequence)));
 			}
 		}
 	}
@@ -223,6 +275,21 @@ void UElysiumAnimSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
+void FElysiumResolvedAnimation::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	// `AddStableReference` rather than `AddReferencedObject`: this record lives for the whole life of
+	// the driver that owns it, so the batching form is the right one, and the raw-pointer overloads
+	// are deprecated because they race incremental GC.
+	Collector.AddStableReference(&Sequence);
+	Collector.AddStableReference(&Space);
+	Collector.AddStableReference(&OverlaySequence);
+	Collector.AddStableReference(&OverlaySpace);
+	Collector.AddStableReference(&AdditiveSequence);
+	Collector.AddStableReference(&SlotSequence);
+	Collector.AddStableReference(&SlotSpace);
+	Collector.AddStableReference(&SlotAdditive);
+}
+
 void UElysiumAnimSubsystem::ReportMiss(const FElysiumAnimationIntent& Intent,
 	const FElysiumAnimationSelection& Selection)
 {
@@ -239,8 +306,13 @@ void UElysiumAnimSubsystem::ReportMiss(const FElysiumAnimationIntent& Intent,
 	}
 	ReportedMisses.Add(Key);
 
-	const FString Line = FString::Printf(TEXT("[elysium] '%s' on '%s' binds no asset (%s): %s"),
-		*Request, *Intent.Stem, ElysiumAnimIntent::OutcomeName(Selection.Outcome),
+	// `GridFallback` is the one rung here that still binds something, so it does not get the "binds
+	// no asset" sentence — it would send a reader hunting a missing clip instead of a missing fan.
+	const FString Line = FString::Printf(TEXT("[elysium] '%s' on '%s' %s (%s): %s"),
+		*Request, *Intent.Stem,
+		Selection.Outcome == EElysiumAnimOutcome::GridFallback
+			? TEXT("binds a fallback asset") : TEXT("binds no asset"),
+		ElysiumAnimIntent::OutcomeName(Selection.Outcome),
 		Selection.Detail.IsEmpty() ? TEXT("no detail recorded") : *Selection.Detail);
 
 	// A stem with no clip vocabulary at all is the gym pawn, a menu backdrop or an unexported model
@@ -811,8 +883,8 @@ FElysiumAnimationCatalog UElysiumAnimSubsystem::BuildCatalog(const FString& Stem
 }
 
 void UElysiumAnimSubsystem::ResolveSlotDeclaredAssets(const FString& OwnerStem,
-	const FString& Label, USkeletalMesh* Mesh, UBlendSpace*& OutAimSpace, FName& OutAimMaskName,
-	UAnimSequence*& OutAdditive)
+	const FString& Label, USkeletalMesh* Mesh, TObjectPtr<UBlendSpace>& OutAimSpace, FName& OutAimMaskName,
+	TObjectPtr<UAnimSequence>& OutAdditive)
 {
 	OutAimSpace = nullptr;
 	OutAimMaskName = NAME_None;
@@ -1021,8 +1093,8 @@ void UElysiumAnimSubsystem::ResolveSlotLayer(const FElysiumAnimationRequest& Cla
 		const FString& Owner = OutSelection.SlotOwnerStem.IsEmpty()
 			? Stem : OutSelection.SlotOwnerStem;
 		ReportOnce(TEXT("nomask"), FString::Printf(
-			TEXT("'%s'@'%s' carries no baked bone mask, so it would own the whole rig rather than "
-				 "composing over the base pose"),
+			TEXT("'%s'@'%s' carries no baked bone mask, so it would compose at zero weight on every "
+				 "bone and pose nothing"),
 			*Claim.Label, *Owner));
 	}
 
@@ -1118,6 +1190,19 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 		return;
 	}
 
+	// One reporter for every layer diagnostic this resolve produces, throttled to a line per
+	// (reason, owner|label) for the session against the same set the slot's own misses use.
+	auto ReportLayerOnce = [this](const TCHAR* Reason, const FString& Key, const FString& Line)
+	{
+		const uint32 Hash = HashCombine(GetTypeHash(Key), GetTypeHash(FString(Reason)));
+		if (ReportedSlotMisses.Contains(Hash))
+		{
+			return;
+		}
+		ReportedSlotMisses.Add(Hash);
+		UE_LOG(LogElysiumAnim, Warning, TEXT("[elysium] layer %s"), *Line);
+	};
+
 	if (OutSelection.AssetKind == EElysiumAnimAssetKind::BlendSpace)
 	{
 		// A grid is addressed by the LABEL: it is the thing a label names when it does not name one
@@ -1132,12 +1217,23 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 				// own autolayers have no pose to overwrite bones on.
 				return;
 			}
-			ResolveLayerAssets(Catalog, OutSelection, Mesh, OutAssets);
+			ResolveLayerAssets(Catalog, OutSelection, Mesh, OutAssets, ReportLayerOnce);
 			return;
 		}
 		// A fan the bake has not covered still names its current cell, so the body can stand that one
 		// clip rather than nothing — and the record already says which cell it is.
+		//
+		// **It is a fallback rung, not a resolution.** The driver only re-resolves on a discrete key
+		// change, so a grid that degraded here plays ONE cell of the fan for the whole request and
+		// steers nothing — a body that looks like it is animating and is not listening. Recorded as
+		// its own outcome so `elysium.anim` and the trace can tell it from a fan that is steering.
 		OutSelection.AssetKind = EElysiumAnimAssetKind::Sequence;
+		OutSelection.Outcome = EElysiumAnimOutcome::GridFallback;
+		OutSelection.Detail = FString::Printf(
+			TEXT("'%s'@'%s' names a blend grid the mount does not carry; standing its cell '%s' alone, "
+				 "which poses but does not steer"),
+			*OutSelection.SequenceLabel, *OutSelection.OwnerStem, *OutSelection.AnimationName);
+		ReportMiss(Intent, OutSelection);
 	}
 
 	// Addressed by owner and resolved animation name, matching what the record says rather than
@@ -1162,7 +1258,7 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 
 	// A layer rides a DIFFERENT pose than the one it composes onto, so it resolves whether or not
 	// the primary asset above loaded.
-	ResolveLayerAssets(Catalog, OutSelection, Mesh, OutAssets);
+	ResolveLayerAssets(Catalog, OutSelection, Mesh, OutAssets, ReportLayerOnce);
 }
 
 bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Request,

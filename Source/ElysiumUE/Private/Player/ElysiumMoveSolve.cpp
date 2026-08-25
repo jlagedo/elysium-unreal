@@ -1,5 +1,7 @@
 #include "ElysiumMoveSolve.h"
 
+DEFINE_LOG_CATEGORY(LogElysiumMovement);
+
 namespace ElysiumMove
 {
 
@@ -179,19 +181,97 @@ TArrayView<const FCvarDef> CvarDefs()
 	return MakeArrayView(GMoveCvars);
 }
 
+bool ResolveClipPlanes(TArrayView<const FVector> Planes, const FVector& Original,
+	const FVector& Primal, FVector& OutVelocity)
+{
+	if (Planes.Num() == 0)
+	{
+		OutVelocity = Original;
+		return true;
+	}
+
+	// First: is there a single plane whose projection already satisfies all the others? That is the
+	// ordinary case, and with one plane it is the only case.
+	int32 Accepted = INDEX_NONE;
+	for (int32 I = 0; I < Planes.Num(); ++I)
+	{
+		FVector Candidate;
+		ClipVelocity(Original, Planes[I], Candidate);
+		bool bIntoAnother = false;
+		for (int32 J = 0; J < Planes.Num(); ++J)
+		{
+			if (J != I && (Candidate | Planes[J]) < 0.0f)
+			{
+				bIntoAnother = true;
+				break;
+			}
+		}
+		if (!bIntoAnother)
+		{
+			OutVelocity = Candidate;
+			Accepted = I;
+			break;
+		}
+	}
+
+	if (Accepted == INDEX_NONE)
+	{
+		// No projection clears every plane, so the only direction left is the crease the two share.
+		// Three planes with no common projection is a wedge, and Source stops dead in one rather than
+		// picking an edge that does not exist.
+		if (Planes.Num() != 2)
+		{
+			OutVelocity = FVector::ZeroVector;
+			return false;
+		}
+		const FVector Crease = (Planes[0] ^ Planes[1]).GetSafeNormal();
+		OutVelocity = Crease * (Crease | Original);
+	}
+
+	// A resolution that points back down the move the body asked for is a wedge answered the long
+	// way round: sliding it would walk the body backwards out of the corner it walked into.
+	if ((OutVelocity | Primal) <= 0.0f)
+	{
+		OutVelocity = FVector::ZeroVector;
+		return false;
+	}
+	return true;
+}
+
 } // namespace ElysiumMove
 
 void FElysiumMoveTuning::LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup)
 {
 	// An empty read keeps the default, so a run with no `out/cfg` on disk behaves like a stock
 	// install. Every distance converts from Source units to cm here, once.
-	auto Read = [&Lookup](const TCHAR* Name, float& Out, float Scale)
+	//
+	// **A value that is present and unparsable keeps the default too, and says so.** `Atof` answers
+	// 0 for anything it cannot read, and this surface is re-read every frame -- so `sv_maxvelocity
+	// nonsense` would otherwise clamp every velocity component to zero and freeze the body for the
+	// rest of the session with nothing logged. Said once per name because the store does not change
+	// between frames and a line here would repeat at the frame rate.
+	auto Read = [this, &Lookup](const TCHAR* Name, float& Out, float Scale)
 	{
 		const FString Value = Lookup(Name);
-		if (!Value.IsEmpty())
+		if (Value.IsEmpty())
 		{
-			Out = FCString::Atof(*Value) * Scale;
+			return;
 		}
+		float Parsed = 0.0f;
+		if (!LexTryParseString(Parsed, *Value) || !FMath::IsFinite(Parsed))
+		{
+			const FName Key(Name);
+			if (!ReportedMalformed.Contains(Key))
+			{
+				ReportedMalformed.Add(Key);
+				UE_LOG(LogElysiumMovement, Warning,
+					TEXT("[elysium] %s is set to '%s', which is not a finite number; keeping %g"),
+					Name, *Value, Out / Scale);
+			}
+			return;
+		}
+		ReportedMalformed.Remove(FName(Name));
+		Out = Parsed * Scale;
 	};
 
 	Read(TEXT("sv_gravity"),       Gravity,      ElysiumMove::U);

@@ -1,0 +1,428 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "life_rig_resolution",
+  "description": "Name the rig every player action resolves against, across weapons, models and sex, in one interactive session. Three answers ride together. The first is the rig set: CBaseAnimating::GetModelPtr resolves slot -1 (the body's own model) and slots 0 and 1 (the two extra animation-model slots VtMB adds), and each returned studiohdr names itself at Name@12, so a weapon swap or a sex swap shows up as the bank triple changing. The second is the selection: the activity ladder, the weapon's activity translation, the weighted and heaviest draws and the melee selector, each with the global sequence index it returned - an index into the concatenated space LookupSequence builds by walking the three slots and accumulating each one's sequence count. The third is ownership and blend: FUN_10089c40 recurses through the include-model groups until the index falls inside a bank's own NumLocalSeq@272, and it recurses again per autolayer, so every call names the bank that actually owns a contribution and the accumulate call beside it names the weight. Together they settle which copy of a repeated label retail answers with (docs/vtmb/animation_and_movers.md A.7), which the shipped corpus cannot decide on its own. The rig and ownership targets carry on-first keys, so each distinct tuple is recorded once for the whole session: they answer per entity per frame and interleave, so a key compared only against the previous call would suppress nothing. The player-state targets carry on-change keys, because there the timeline is the point. The discrete action and draw targets carry neither, because a weighted draw answering differently on an identical request is the finding.",
+  "mode": "trace",
+  "targets": [
+    "vampire.player_item_post_frame",
+    "vampire.classify_player_animation_action",
+    "vampire.player_set_animation_router",
+    "vampire.apply_player_activity_and_sequence",
+    "vampire.set_ideal_activity",
+    "vampire.weapon_translate_activity",
+    "vampire.weapon_activity_override",
+    "vampire.select_weighted_sequence",
+    "vampire.select_heaviest_sequence",
+    "vampire.player_select_melee_sequence",
+    "vampire.weapon_melee_primary_attack",
+    "vampire.weapon_melee_heavy_attack",
+    "vampire.weapon_melee_request_activity",
+    "vampire.viewmodel_ranged_shot",
+    "vampire.viewmodel_dry_fire",
+    "vampire.viewmodel_reload_request",
+    "vampire.viewmodel_ranged_anim_event",
+    "vampire.lookup_sequence",
+    "vampire.get_model_ptr",
+    "client.get_studio_hdr",
+    "client.resolve_sequence_owner",
+    "client.accumulate_sequence_pose"
+  ],
+  "expected_modules": [
+    "vampire.dll",
+    "client.dll"
+  ],
+  "max_trace_events": 300000,
+  "capture_returns": true,
+  "stack_words": 12,
+  "field_reads": {
+    "vampire.player_item_post_frame": [
+      {
+        "label": "curtime",
+        "base": "module",
+        "module": "vampire.dll",
+        "rva": "0x70b228",
+        "deref": [
+          "0x0"
+        ],
+        "offset": "0xc",
+        "type": "f32"
+      },
+      {
+        "label": "buttons",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x2088",
+        "type": "u32"
+      },
+      {
+        "label": "buttons_pressed",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x208c",
+        "type": "u32"
+      },
+      {
+        "label": "sequence",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f0",
+        "type": "i32"
+      },
+      {
+        "label": "cycle",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f8",
+        "type": "f32"
+      },
+      {
+        "label": "activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xfec",
+        "type": "i32"
+      },
+      {
+        "label": "ideal_activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xff0",
+        "type": "i32"
+      },
+      {
+        "label": "active_weapon",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x19a4",
+        "type": "u32"
+      },
+      {
+        "label": "velocity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x3d4",
+        "type": "vec3"
+      },
+      {
+        "label": "aim_yaw",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x2070",
+        "type": "f32"
+      }
+    ],
+    "vampire.classify_player_animation_action": [
+      {
+        "label": "curtime",
+        "base": "module",
+        "module": "vampire.dll",
+        "rva": "0x70b228",
+        "deref": [
+          "0x0"
+        ],
+        "offset": "0xc",
+        "type": "f32"
+      },
+      {
+        "label": "buttons",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x2088",
+        "type": "u32"
+      },
+      {
+        "label": "buttons_pressed",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x208c",
+        "type": "u32"
+      },
+      {
+        "label": "sequence",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f0",
+        "type": "i32"
+      },
+      {
+        "label": "cycle",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f8",
+        "type": "f32"
+      },
+      {
+        "label": "activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xfec",
+        "type": "i32"
+      },
+      {
+        "label": "ideal_activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xff0",
+        "type": "i32"
+      },
+      {
+        "label": "active_weapon",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x19a4",
+        "type": "u32"
+      },
+      {
+        "label": "velocity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x3d4",
+        "type": "vec3"
+      },
+      {
+        "label": "aim_yaw",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x2070",
+        "type": "f32"
+      }
+    ],
+    "vampire.player_set_animation_router": [
+      {
+        "label": "curtime",
+        "base": "module",
+        "module": "vampire.dll",
+        "rva": "0x70b228",
+        "deref": [
+          "0x0"
+        ],
+        "offset": "0xc",
+        "type": "f32"
+      },
+      {
+        "label": "sequence",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f0",
+        "type": "i32"
+      },
+      {
+        "label": "cycle",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f8",
+        "type": "f32"
+      },
+      {
+        "label": "activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xfec",
+        "type": "i32"
+      },
+      {
+        "label": "ideal_activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xff0",
+        "type": "i32"
+      },
+      {
+        "label": "active_weapon",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x19a4",
+        "type": "u32"
+      }
+    ],
+    "vampire.apply_player_activity_and_sequence": [
+      {
+        "label": "curtime",
+        "base": "module",
+        "module": "vampire.dll",
+        "rva": "0x70b228",
+        "deref": [
+          "0x0"
+        ],
+        "offset": "0xc",
+        "type": "f32"
+      },
+      {
+        "label": "sequence",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f0",
+        "type": "i32"
+      },
+      {
+        "label": "cycle",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f8",
+        "type": "f32"
+      },
+      {
+        "label": "activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xfec",
+        "type": "i32"
+      },
+      {
+        "label": "ideal_activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xff0",
+        "type": "i32"
+      },
+      {
+        "label": "active_weapon",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x19a4",
+        "type": "u32"
+      }
+    ],
+    "vampire.set_ideal_activity": [
+      {
+        "label": "curtime",
+        "base": "module",
+        "module": "vampire.dll",
+        "rva": "0x70b228",
+        "deref": [
+          "0x0"
+        ],
+        "offset": "0xc",
+        "type": "f32"
+      },
+      {
+        "label": "sequence",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f0",
+        "type": "i32"
+      },
+      {
+        "label": "cycle",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f8",
+        "type": "f32"
+      },
+      {
+        "label": "activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xfec",
+        "type": "i32"
+      },
+      {
+        "label": "ideal_activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xff0",
+        "type": "i32"
+      },
+      {
+        "label": "active_weapon",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x19a4",
+        "type": "u32"
+      }
+    ],
+    "vampire.lookup_sequence": [
+      {
+        "label": "label",
+        "base": "argument",
+        "index": 1,
+        "offset": 0,
+        "type": "cstr",
+        "max_length": 64
+      }
+    ],
+    "vampire.get_model_ptr": [
+      {
+        "label": "model",
+        "base": "return",
+        "when": "leave",
+        "offset": "0xc",
+        "type": "cstr",
+        "max_length": 128
+      }
+    ],
+    "client.get_studio_hdr": [
+      {
+        "label": "model",
+        "base": "return",
+        "when": "leave",
+        "offset": "0xc",
+        "type": "cstr",
+        "max_length": 128
+      }
+    ],
+    "client.resolve_sequence_owner": [
+      {
+        "label": "model",
+        "base": "argument",
+        "index": 1,
+        "offset": "0xc",
+        "type": "cstr",
+        "max_length": 128
+      }
+    ],
+    "client.accumulate_sequence_pose": [
+      {
+        "label": "model",
+        "base": "argument",
+        "index": 1,
+        "offset": "0xc",
+        "type": "cstr",
+        "max_length": 128
+      }
+    ]
+  },
+  "on_change": {
+    "vampire.player_item_post_frame": [
+      "buttons",
+      "sequence",
+      "activity",
+      "ideal_activity",
+      "active_weapon"
+    ],
+    "vampire.classify_player_animation_action": [
+      "buttons",
+      "buttons_pressed"
+    ],
+    "vampire.player_set_animation_router": [
+      "sequence",
+      "activity",
+      "ideal_activity"
+    ],
+    "vampire.lookup_sequence": [
+      "ecx",
+      "label",
+      "return_value"
+    ]
+  },
+  "on_first": {
+    "vampire.get_model_ptr": [
+      "ecx",
+      "word1",
+      "return_value"
+    ],
+    "client.get_studio_hdr": [
+      "ecx",
+      "word1",
+      "return_value"
+    ],
+    "client.resolve_sequence_owner": [
+      "word1",
+      "word4"
+    ],
+    "client.accumulate_sequence_pose": [
+      "word1",
+      "word4"
+    ]
+  }
+}

@@ -129,9 +129,9 @@ namespace
 		// without one plays and dispatches nothing.
 		// The clip's own declared layers, resolved HERE through the same helper the driver's publish
 		// uses — one frame of bare shot before the first publish is exactly the flash this closes.
-		UBlendSpace* AimSpace = nullptr;
+		TObjectPtr<UBlendSpace> AimSpace = nullptr;
 		FName AimMaskName;
-		UAnimSequence* Additive = nullptr;
+		TObjectPtr<UAnimSequence> Additive = nullptr;
 		if (Anims != nullptr)
 		{
 			Anims->ResolveSlotDeclaredAssets(Identity.OwnerStem, Identity.Label, Mesh, AimSpace,

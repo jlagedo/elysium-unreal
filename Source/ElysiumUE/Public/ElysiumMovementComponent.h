@@ -265,6 +265,10 @@ private:
 	// The one-shot latch for that report. `WishSpeed` is const because asking a table a question
 	// changes nothing; the latch is what keeps the answer from being a log line per frame.
 	mutable bool bReportedNoGaitAuthority = false;
+	// The substituted command's own two refusals, said once per body for the same reason: a swing
+	// reaches `SetupMove` on every step it owns, so an unguarded line runs at the frame rate.
+	bool bReportedNoClampCeiling = false;
+	bool bReportedClampedLunge = false;
 
 	// The pushed swing, and what `SetupMove` made of it this step. `SubstitutedWish` is a WORLD
 	// velocity in cm/s — the authored displacement over the step, divided by the step — so the
@@ -286,12 +290,17 @@ private:
 	bool bDucking = false;
 	bool bDucked = false;
 	// **The retained crouch request — the action, not the key and not the pose.** `IN_DUCK`'s press
-	// edge flips this and its release does nothing, so the crouch outlives the keypress the way an
+	// edge decides it and its release does nothing, so the crouch outlives the keypress the way an
 	// owner test against retail says it does: CTRL ducks, and a jump taken from a crouch lands still
-	// crouched. It is deliberately separate from `bDucked`, which is what the body actually *is*:
-	// `CanUnduck` can refuse a stand-up under a low ceiling, and when it does the request is already
-	// false while the hull is still small. Collapsing the two would either lose the refusal or make
-	// the ceiling re-duck the player.
+	// crouched.
+	//
+	// **Both edges are keyed on the hull rather than on this value**, which is what retail does with
+	// `FL_DUCKING` (`CGameMovement::Duck`, `vampire.dll 0x10126fd0`): a press raises it only when the
+	// hull is standing, and lowers it only when the hull is ducked *and* `CanUnduck` answers. So a
+	// press under a low ceiling is **swallowed, not queued** — the body leaves the vent still
+	// crouched and the player presses again. That also means this cannot fall while a lowering ramp
+	// is in flight, so a release mid-lower runs the ramp to completion instead of entering a
+	// stand-up with a standing hull.
 	bool bDuckRequested = false;
 	// Counts **down** in milliseconds from GameMovementDuckTime, exactly as `m_flDucktime` does.
 	float DuckTime = 0.0f;

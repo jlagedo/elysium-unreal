@@ -614,11 +614,43 @@ void AElysiumMapActor::PushPlayerAnimMovementLock(APawn* Pawn)
 			if (const FElysiumClipMovementPath* Path = Table->FindMovement(Claim->Label))
 			{
 				PushedLockPath = MakeShared<FElysiumClipMovementPath>(*Path);
+
+				// **The frame count and the records come from two different files** — the count off
+				// the clip's own play length, the records off the blend sidecar — so they can
+				// disagree, and the disagreement is invisible in the frame: the cycle maps onto the
+				// count, so a count short of the records simply never samples the tail of the lunge
+				// while the clip plays to its end. Once per clip, at the one place both are in scope.
+				const int32 Authored = Path->LastFrame();
+				if (Authored > 0 && Lock.FrameCount > 0 && Lock.FrameCount - 1 != Authored)
+				{
+					UE_LOG(LogElysium, Warning,
+						TEXT("clip '%s'@'%s' authors movement out to frame %d while the clip states %d "
+							 "frames; the cycle maps onto the clip, so %s"),
+						*Claim->Label, *OwnerStem, Authored, Lock.FrameCount,
+						Lock.FrameCount - 1 < Authored
+							? TEXT("the tail of the authored motion is never reached")
+							: TEXT("the last records are held past the end of the path"));
+				}
 			}
 			// A stated file with no row for this label is the authored absence: the clip really does
 			// author no movement, and the null path is that value rather than a miss.
 		}
 	}
+
+	// A clip whose length could not be read answers a zero rate, and a zero rate makes every substep
+	// a zero-width window: `SampleDelta` succeeds with no delta, `WalkMove` assigns zero and the body
+	// stops dead for the whole swing. That is indistinguishable in the frame from a clip that
+	// deliberately authors no motion, so it is named here where the cause is still known.
+	if (PushedLockPath.IsValid() && !(Lock.CycleRate > 0.0f)
+		&& !ReportedMovementGaps.Contains(PushedLockClip))
+	{
+		ReportedMovementGaps.Add(PushedLockClip);
+		UE_LOG(LogElysium, Warning,
+			TEXT("clip '%s'@'%s' authors a movement path but its played length reads %.3fs, so the "
+				 "cycle cannot advance and the swing holds the body in place"),
+			Claim != nullptr ? *Claim->Label : TEXT(""), *OwnerStem, Cycle.LengthSeconds);
+	}
+
 	Lock.Path = PushedLockPath;
 	Move->SetAnimMovementLock(Lock);
 }

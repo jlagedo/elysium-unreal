@@ -5,6 +5,11 @@
 #include "ElysiumPlayer.h"
 #include "Visual/ElysiumActionTables.h"     // the committed player gait ladder (LIFE4, Option A)
 
+void FElysiumAnimationDriver::AddReferencedObjects(FReferenceCollector& Collector)
+{
+	Assets.AddReferencedObjects(Collector);
+}
+
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnimDriver, Log, All);
 
 namespace
@@ -18,8 +23,16 @@ namespace
 	// graph would keep composing the previous shot over the base pose.
 	void ClearSlotAssets(FElysiumResolvedAnimation& Assets)
 	{
+		// **Every field the resolver writes, not just the pair the pointer test reads.** `SlotSpace`,
+		// `SlotAimMaskName` and `SlotAdditive` come out of `ResolveSlotDeclaredAssets` on the same
+		// pass and are stale by the same argument; leaving them makes `HasSlotLayer()` answer true off
+		// a grid under a record that names no layer, and the graph is saved from composing it only by
+		// `PublishSelection` gating all three on the sequence.
 		Assets.SlotSequence = nullptr;
+		Assets.SlotSpace = nullptr;
+		Assets.SlotAdditive = nullptr;
 		Assets.SlotMaskName = NAME_None;
+		Assets.SlotAimMaskName = NAME_None;
 	}
 }
 

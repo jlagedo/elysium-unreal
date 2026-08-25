@@ -2890,8 +2890,28 @@ owner bank and *copied* under another, with the same remap array in both.
 **One branch of the record would hang the engine.** The chain-rebase branch's second loop
 never advances its induction variable and terminates only when its two shorts are equal, so
 a record carrying unequal shorts loops forever. **0 of 3,095 records in the shipped corpus
-enter it**, so the branch is unreachable on shipped content — a latent hang, not a live one,
-and its semantics stay undecoded because nothing exercises them.
+enter it.** That count is of the authored records, which the builder has not yet completed:
+the selector at `+0x02` is one of the bytes it writes at model load, so a disk survey reads it
+before it has a value.
+
+**Read after the builder has run, the branch is reachable — four records, all terminating.**
+Re-deriving the builder's `+0x02`/`+0x04`/`+0x06` write path offline over every include pair in the
+install finds four: `sheriff_battle` ← `npc_allsequences` on `Cylinder01` (`-1`/`-1`), `mistidance`
+← `stripper3` on `Bone05` and `Bone03` (`9`/`9`), and `alsequences` ← `baseball` on `handle`
+(`29`/`29`), the one a live session also witnessed. Every one carries equal shorts, so every one
+terminates immediately.
+
+**The builder can emit unequal shorts, so the hang is latent rather than unreachable.** `+0x04` is
+the mapped parent `P`; `+0x06` is the first ancestor-or-self of the matched source bone `S` that is
+also an ancestor-or-self of `P`, found by an outer walk up `S`'s chain with the inner walk reset to
+`P` each iteration. The two are therefore equal **iff** `P` is an ancestor-or-self of `S`, and
+nothing constrains that — a cross-branch reparent emits unequal shorts, and a multi-root bank whose
+two chains never meet leaves `+0x06` at `-1` against a non-negative `+0x04`. The sharp form: the
+second loop exists to compose `P`'s chain up to the common ancestor, which is needed exactly when
+`P` is not an ancestor of `S` — the one input on which it never advances. The branch is correct only
+where its work is a no-op. No shipped pair reaches that input, so the hang cannot be provoked from
+this install; what stays undecoded is the branch's semantics, because one terminating record does
+not exercise them. Method and counts: `animation_rig_resolution.md`.
 
 `FUN_10089c40` is where an owner is resolved. A sequence index below `NumLocalSeq`@272
 takes the local path straight to `FUN_10089740`; otherwise it walks the include groups at
@@ -3695,13 +3715,15 @@ label another model in the tree also defines, and the repeats are families rathe
 | `ragdoll` | 4 banks, and every body's own model | 4 |
 | six gangrel `*_idle2`/`*_look2`/`*_sniff2`/`*_stretch2`/`*_nails1` fidgets | the gangrel PC banks, and the gangrel bodies' own models | 9 |
 
-**Which copy retail answers with is not recovered.** `LookupSequence` (`0x1008f7b0`) is the
-label→index call and is case-insensitive, but the order of the resolved sequence array a
-transitive include tree builds — and therefore which same-named sequence wins — has not been read
-out of the binary. Two things would settle it: the construction order of that array in Ghidra, or
-a capture of a katana stealth kill, which under an own-model-and-earlier-bank-first rule plays
-`baseball`'s clip. Elysium resolves first-in-tree-order and measures what that leaves unreachable
-(`docs/architecture/animation-architecture.md` § 2.4).
+**Which copy retail answers with is recovered, by reading the built ranges.** `LookupSequence`
+(`0x1008f7b0`) is the label→index call and is case-insensitive. The resolved array's order is
+not stored anywhere on disk, but the builder writes each group's own range into
+`StudioModelGroup`+0x08/+0x0c at load, so reading those from a live process resolves any global
+sequence number to its owning bank and owner-local index without inferring the order at all.
+One session's read maps 27,810 numbers this way across nine player bodies. Elysium resolves
+first-in-tree-order and measures what that leaves unreachable
+(`docs/architecture/animation-architecture.md` § 2.4); comparing that against the read ranges
+is what tests the rule. Method: `animation_rig_resolution.md`.
 
 The consuming representation must retain the include DAG's `clip → owning model` resolution and
 bind shared clips by bone name. It need not merge every included bank into every model, but an

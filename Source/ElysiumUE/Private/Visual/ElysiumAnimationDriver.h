@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/GCObject.h"
 
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumClipMovement.h"
@@ -23,8 +24,17 @@ class USkeletalMesh;
 // This rung resolves and records; it drives no pose. What consumes the published selection is the
 // player graph, and building a second driver into the native proxy would build scaffolding that
 // `CCC9` exists to delete.
-struct FElysiumAnimationDriver
+struct FElysiumAnimationDriver : public FGCObject
 {
+	// **The resolved assets are rooted here, because nothing else can root them.** This struct is
+	// plain C++ held through a `TPimplPtr` on an actor, so `Assets` is invisible to reflection: the
+	// base pair is re-published to the anim instance every frame and survives on that, but the
+	// overlay, the additive and the slot's trio are deliberately NOT re-copied on a frame the driver
+	// does not own the base pose — a scene, a reaction, an ambient hold — and would be collected out
+	// from under the next publish in a cooked build.
+	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
+	virtual FString GetReferencerName() const override { return TEXT("FElysiumAnimationDriver"); }
+
 	// --- Identity, set once when the body is built ------------------------------------------------
 	FString Stem;
 	EElysiumAnimSource Source = EElysiumAnimSource::Player;

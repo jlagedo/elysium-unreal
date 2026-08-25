@@ -111,14 +111,19 @@ float ElysiumGait::WishSpeedFrom(const FElysiumWishSpeedInput& In, const FElysiu
 		return In.NoclipSpeed * In.Scale;
 	}
 
-	// Airborne, the tables stop refreshing and the client keeps writing the last grounded cell. The
-	// held value IS the behaviour — `sv_jump_maxspeed` is a clamp that never fires, because the run
-	// peak (208 u/s) is below it.
+	// Airborne, the tables stop refreshing and the client keeps reading the last grounded cell, so
+	// the held value IS the behaviour. **`sv_jump_maxspeed` is a ceiling over it, never a stand-in
+	// for it** — retail pins `m_flMaxspeed` to it while the jump phase is live and clamps the wish
+	// velocity against the pin, which at stock settings never cuts because the run peak (208 u/s)
+	// is below it (`docs/vtmb/source_movement.md` → "Airborne").
+	//
+	// A held zero is a held value, not a missing one: it is what a body standing still leaves behind,
+	// and it is written on every grounded frame. Reading it as absent hands a standing jump the full
+	// 350 u/s, which the gait classifier then maxes against the body's real speed and lands in the
+	// run fan.
 	if (!In.bOnGround)
 	{
-		const float Held = In.LastGroundedWishSpeed > 0.0f
-			? In.LastGroundedWishSpeed : In.JumpMaxSpeed;
-		return Held * In.Scale;
+		return FMath::Min(In.LastGroundedWishSpeed, In.JumpMaxSpeed) * In.Scale;
 	}
 
 	const FElysiumGaitSpeedTable& Table = TableFor(Speeds, In.bDucked, In.bWalkKey);

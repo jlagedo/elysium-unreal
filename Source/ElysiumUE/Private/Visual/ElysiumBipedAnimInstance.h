@@ -579,7 +579,7 @@ public:
 	// what walks the layer to its end and drops it — this states the frame it starts on.
 	//
 	// False when there is no sequence to compose, when it carries no baked bone mask (a maskless
-	// layer would own the whole rig, which is never what a partial-body overlay means), or when the
+	// layer composes at zero weight on every bone and poses nothing), or when the
 	// claim states no clip length — a layer with no phase to ride is one still frame held at a fixed
 	// weight for as long as the producer holds the channel.
 	//
@@ -756,7 +756,12 @@ private:
 	// Called from `NativeUpdateAnimation`, on the game thread, before the worker is dispatched, and
 	// **only when the name actually changes**: the setter invalidates the node's cached per-bone
 	// weights, so writing it every frame would rebuild them every frame.
-	void ApplyUpperBodyMask();
+	//
+	// **Returns whether the layer may compose.** False means the node still holds some other mask —
+	// the previous clip's, or the graph's saved null — so the caller has to take the pose down; the
+	// verdict is never stored, so a skeleton that is only late binding refuses this frame and applies
+	// the next.
+	bool ApplyUpperBodyMask();
 
 	// Project the overlay slot — the layer, its mask, its enveloped weight and the explicit time its
 	// evaluator is pinned to. Beside `ProjectUpperBodyLayer` and ahead of the hold branch for the
@@ -776,10 +781,15 @@ private:
 	// door, the same assertions and the same refusal as `ApplyUpperBodyMask`, on the second blend
 	// node — and separate rather than parameterized because the two nodes carry two independent
 	// masks and a shared applier would have to be told which, which is the tag it already is.
-	void ApplySlotMask();
+	bool ApplySlotMask();
 	// The third masked blend's applier — the aim grid the slot clip declares rides its own node with
 	// the GRID's mask, not the slot clip's, because the two gate different bone sets by design.
-	void ApplySlotAimMask();
+	bool ApplySlotAimMask();
+
+	// Say once per instance that the compiled graph cannot carry a mask this record names, and answer
+	// true so the callers above can spell a refusal as one expression. A node fault is a property of
+	// the generated package rather than of the frame, so it never changes and never repeats.
+	bool ReportNodeFaultOnce(bool& Latch, const TCHAR* Layer, const TCHAR* Tag, const TCHAR* Fault);
 
 	// True the first time this instance refuses one arm for one reason. `PlaySlotLayer` is reached
 	// once per trigger pull, so an unguarded refusal there restates a bake fault at the weapon's own
@@ -913,6 +923,15 @@ private:
 	// A maskless slot layer is refused rather than composed, and said once per instance: it is a bake
 	// or vocabulary fault that does not change frame to frame, and a per-frame line would bury it.
 	bool bReportedMasklessSlot = false;
+	// The same fault on the upper-body layer, which the resolver can publish for a layer sequence
+	// whose clip carries no `UElysiumAnimLayerMask`.
+	bool bReportedMasklessUpperBody = false;
+	// One latch per masked node for a fault in the compiled graph itself — no node under the tag, or
+	// a node whose shape `SetBlendMask` cannot take. A property of the generated package, so it is
+	// stated once and never re-evaluated.
+	bool bReportedUpperBodyNodeFault = false;
+	bool bReportedSlotNodeFault = false;
+	bool bReportedSlotAimNodeFault = false;
 	// The arm seam's own refusals, keyed by reason and clip. Separate from the projection latch above
 	// because they answer a different question — that one is about the record the driver published,
 	// these are about a claim a producer just took — and because the arm reaches one key per weapon

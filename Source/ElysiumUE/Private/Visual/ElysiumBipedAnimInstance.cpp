@@ -375,17 +375,18 @@ bool UElysiumBipedAnimInstance::PlaySlotLayer(const FElysiumClipIdentity& Identi
 		}
 		return false;
 	}
-	// A layer with no baked bone mask owns the WHOLE rig, which is never what a partial-body overlay
-	// means: composed unmasked it would drag every bone the layer does not animate toward the layer's
-	// own pose and lose the body's stance from the waist down. Refused rather than composed, the same
-	// gate the layer lab and `ApplyUpperBodyMask` both apply.
+	// A layer with no baked bone mask reaches NO bone: the node blends in `BlendMask` mode, where a
+	// null profile is a per-bone weight of zero everywhere, so the layer resolves, binds, takes its
+	// aim parameters and then poses nothing. Refused rather than composed, the same gate the layer lab
+	// and `ApplyUpperBodyMask` both apply — an arm that silently does nothing reads as a missing
+	// animation and sends the next reader hunting the wrong thing.
 	if (MaskName.IsNone())
 	{
 		if (ShouldReportSlotArmRefusalOnce(TEXT("nomask"), Identity, Claim, Sequence))
 		{
 			UE_LOG(LogElysiumBipedGraph, Warning,
 				TEXT("[elysium] the overlay slot refuses '%s' ('%s'): it carries no baked bone mask, so "
-					 "it would own the whole rig rather than composing over the base pose"),
+					 "it would compose at zero weight on every bone and pose nothing"),
 				*Claim.Label, *GetNameSafe(Sequence));
 		}
 		return false;
@@ -441,6 +442,13 @@ bool UElysiumBipedAnimInstance::PlaySlotLayer(const FElysiumClipIdentity& Identi
 
 void UElysiumBipedAnimInstance::StopSlotLayer()
 {
+	// **Called from gameplay, and it writes pins the worker reads.** Every other gameplay-thread
+	// write in this class reaches them through `GetProxyOnGameThread`, whose block on an in-flight
+	// parallel evaluation is the whole reason those writes cannot race the worker; the projected
+	// pins below are exactly the generated property copies the worker pulls from
+	// `FExposedValueHandler`, so this needs the same barrier.
+	(void)GetProxyOnGameThread<FElysiumBipedAnimProxy>();
+
 	PendingSlotSequence = nullptr;
 	PendingSlotSpace = nullptr;
 	PendingSlotAdditive = nullptr;
@@ -509,9 +517,43 @@ void UElysiumBipedAnimInstance::ProjectUpperBodyLayer()
 		AdditiveLayerWeight = DebugAdditiveSequence != nullptr ? DebugLayerWeight : 0.0f;
 	}
 
+	// A live overlay that names no mask at all is refused, the same gate the slot's own projector
+	// applies: in `BlendMask` mode a null profile weights every bone at zero, so the layer binds,
+	// takes its aim parameters and reaches the pose on no bone. `UElysiumAnimSubsystem` publishes
+	// exactly that for a layer sequence whose clip carries no `UElysiumAnimLayerMask`.
+	if ((RequestedUpperBodySequence != nullptr || RequestedUpperBodyBlendSpace != nullptr)
+		&& RequestedUpperBodyMaskName.IsNone())
+	{
+		if (!bReportedMasklessUpperBody)
+		{
+			bReportedMasklessUpperBody = true;
+			UE_LOG(LogElysiumBipedGraph, Warning,
+				TEXT("[elysium] the upper-body layer refuses '%s' on %s: no baked bone mask, so it would "
+					 "compose at zero weight on every bone and pose nothing"),
+				*GetNameSafe(RequestedUpperBodyBlendSpace != nullptr
+					? static_cast<UObject*>(RequestedUpperBodyBlendSpace)
+					: static_cast<UObject*>(RequestedUpperBodySequence)),
+				*GetNameSafe(GetSkelMeshComponent()));
+		}
+		RequestedUpperBodySequence = nullptr;
+		RequestedUpperBodyBlendSpace = nullptr;
+	}
+
+	// The one pin-less write, and the only thing here that touches a node rather than a property. It
+	// runs before the weight is committed for the same reason the slot's does: a refused mask leaves
+	// the node holding the previous layer's bone set, and the weight is what stops that composing.
+	if (!ApplyUpperBodyMask())
+	{
+		RequestedUpperBodySequence = nullptr;
+		RequestedUpperBodyBlendSpace = nullptr;
+	}
+
+	// **The additive is deliberately not taken down with the overlay.** The `_delta` rides its own
+	// node, composes on top and carries no mask of its own, so it has nothing here that can fail —
+	// this is the one place the upper body is not symmetric with the slot's trio.
+	UpperBodyLayerWeight = (RequestedUpperBodySequence != nullptr
+		|| RequestedUpperBodyBlendSpace != nullptr) ? UpperBodyLayerWeight : 0.0f;
 	bUpperBodyHasBlendSpace = RequestedUpperBodyBlendSpace != nullptr;
-	// The one pin-less write, and the only thing here that touches a node rather than a property.
-	ApplyUpperBodyMask();
 }
 
 void UElysiumBipedAnimInstance::ProjectSlotLayer()
@@ -528,21 +570,42 @@ void UElysiumBipedAnimInstance::ProjectSlotLayer()
 	RequestedSlotBlendSpace = PendingSlotSpace;
 	RequestedSlotMaskName = PendingSlotMaskName;
 
-	// A layer the record named but that carries no baked bone mask is refused rather than composed:
-	// unmasked it would drag every bone it does not animate toward its own pose and lose the body's
-	// stance from the waist down. The resolver already warns when it loads one, so this says so once
-	// per instance rather than per frame — and takes the pose down, which the warning alone would not.
+	// A layer the record named but that carries no baked bone mask is refused rather than composed.
+	// In `BlendMask` mode a null profile gives every bone a per-bone weight of **zero**, so an
+	// unmasked layer resolves, binds, takes its aim parameters and then reaches the pose on no bone
+	// at all — the failure that looks exactly like a missing animation. The resolver already warns
+	// when it loads one, so this says so once per instance rather than per frame, and takes the pose
+	// down, which the warning alone would not.
 	if (RequestedSlotSequence != nullptr && RequestedSlotMaskName.IsNone())
 	{
 		if (!bReportedMasklessSlot)
 		{
 			bReportedMasklessSlot = true;
 			UE_LOG(LogElysiumBipedGraph, Warning,
-				TEXT("[elysium] the overlay slot refuses '%s' on %s: no baked bone mask, so composing it "
-					 "would own the whole rig rather than the bones the layer animates"),
+				TEXT("[elysium] the overlay slot refuses '%s' on %s: no baked bone mask, so it would "
+					 "compose at zero weight on every bone and pose nothing"),
 				*GetNameSafe(RequestedSlotSequence), *GetNameSafe(GetSkelMeshComponent()));
 		}
 		RequestedSlotSequence = nullptr;
+		RequestedSlotBlendSpace = nullptr;
+	}
+
+	// **The mask write is the layer's admission test, so it runs BEFORE the weight is committed.**
+	// Written after it, a mask the playing skeleton cannot answer for leaves the node holding the
+	// PREVIOUS clip's bone set while this frame's weight stands at full — one weapon's shot composing
+	// through another weapon's arm. Refusing here takes the pose down the same way a maskless layer's
+	// does, so there is one refusal idiom rather than two, and the verdict is recomputed every frame
+	// rather than stored: a skeleton that is merely not bound yet refuses this frame and applies the
+	// next.
+	if (!ApplySlotMask())
+	{
+		RequestedSlotSequence = nullptr;
+		RequestedSlotBlendSpace = nullptr;
+	}
+	// The aim grid carries its own mask on its own node, so it is refused INDEPENDENTLY: the motion
+	// survives a grid that cannot be masked; the grid does not.
+	if (!ApplySlotAimMask())
+	{
 		RequestedSlotBlendSpace = nullptr;
 	}
 
@@ -569,12 +632,11 @@ void UElysiumBipedAnimInstance::ProjectSlotLayer()
 		? FMath::Clamp(PendingSlotWeight, 0.0f, ElysiumAnimIntent::SlotWeightMax) : 0.0f;
 	PosedSlotSequence = RequestedSlotSequence;
 
-	// The slot's own pin-less writes, one per masked node.
-	ApplySlotMask();
-	ApplySlotAimMask();
+	// **The phase keeps walking through a refusal, deliberately.** The claim still stands and its
+	// commit ids still have to land on schedule; only the pose is refused.
 }
 
-void UElysiumBipedAnimInstance::ApplySlotAimMask()
+bool UElysiumBipedAnimInstance::ApplySlotAimMask()
 {
 	// The name to write: the grid's own mask while a grid stands, null to give the mask back when it
 	// goes. Same rules, latches and refusals as `ApplySlotMask` on the node behind it — a separate
@@ -582,7 +644,9 @@ void UElysiumBipedAnimInstance::ApplySlotAimMask()
 	const FName Wanted = RequestedSlotBlendSpace != nullptr ? PendingSlotAimMaskName : NAME_None;
 	if (Wanted == AppliedSlotAimMaskName)
 	{
-		return;
+		// The node already holds the mask this request names, which includes the null it holds while
+		// no grid stands.
+		return true;
 	}
 
 	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(GetClass());
@@ -594,13 +658,20 @@ void UElysiumBipedAnimInstance::ApplySlotAimMask()
 		: nullptr;
 	if (Layer == nullptr)
 	{
-		// No compiled graph, or one built before this node existed — a state, not an error.
-		return;
+		// No compiled graph at all is an absence, not a refusal: the plain native class has no node,
+		// nothing composes through it, and every green-room and preview stand is one. A compiled graph
+		// that carries no node under the tag while a mask is wanted IS a fault — the grid would
+		// otherwise stand at full weight through whatever the node was saved with.
+		return AnimClass == nullptr || Wanted.IsNone()
+			|| !ReportNodeFaultOnce(bReportedSlotAimNodeFault, TEXT("slot aim"),
+				ElysiumAnimGraph::SlotAimLayerTag, TEXT("carries no node under the tag"));
 	}
 	if (Layer->BlendMode != ELayeredBoneBlendMode::BlendMask || !Layer->BlendPoses.IsValidIndex(0)
 		|| !Layer->BlendMasks.IsValidIndex(0))
 	{
-		return;
+		return Wanted.IsNone()
+			|| !ReportNodeFaultOnce(bReportedSlotAimNodeFault, TEXT("slot aim"),
+				ElysiumAnimGraph::SlotAimLayerTag, TEXT("is not a single-pose blend-mask node"));
 	}
 
 	UBlendProfile* Profile = nullptr;
@@ -615,23 +686,24 @@ void UElysiumBipedAnimInstance::ApplySlotAimMask()
 				ReportedSlotAimMaskName = Wanted;
 				UE_LOG(LogElysiumBipedGraph, Warning,
 					TEXT("[elysium] slot aim mask '%s' is absent from this body's skeleton or is not "
-						 "a blend mask; the aim layer is left unmasked-refused"),
+						 "a blend mask; the aim grid is refused"),
 					*Wanted.ToString());
 			}
-			return;
+			return false;
 		}
 	}
 
 	Layer->SetBlendMask(0, Profile);
 	AppliedSlotAimMaskName = Wanted;
 	ReportedSlotAimMaskName = NAME_None;
+	return true;
 }
 
-void UElysiumBipedAnimInstance::ApplySlotMask()
+bool UElysiumBipedAnimInstance::ApplySlotMask()
 {
 	if (RequestedSlotMaskName == AppliedSlotMaskName)
 	{
-		return;
+		return true;
 	}
 
 	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(GetClass());
@@ -643,9 +715,12 @@ void UElysiumBipedAnimInstance::ApplySlotMask()
 		: nullptr;
 	if (Layer == nullptr)
 	{
-		// No compiled graph, or a graph built before the slot's own blend existed. A state rather
-		// than an error: the plain native class has no node to write to at all.
-		return;
+		// No compiled graph is an absence: the plain native class has no node to write to at all and
+		// nothing composes through one. A compiled graph missing the node while a mask is wanted is a
+		// generated-graph fault, and refusing is what stops the layer standing unmasked.
+		return AnimClass == nullptr || RequestedSlotMaskName.IsNone()
+			|| !ReportNodeFaultOnce(bReportedSlotNodeFault, TEXT("overlay slot"),
+				ElysiumAnimGraph::SlotLayerTag, TEXT("carries no node under the tag"));
 	}
 
 	// `SetBlendMask` asserts all three, so they are tested rather than assumed — same as the
@@ -654,7 +729,9 @@ void UElysiumBipedAnimInstance::ApplySlotMask()
 	if (Layer->BlendMode != ELayeredBoneBlendMode::BlendMask || !Layer->BlendPoses.IsValidIndex(0)
 		|| !Layer->BlendMasks.IsValidIndex(0))
 	{
-		return;
+		return RequestedSlotMaskName.IsNone()
+			|| !ReportNodeFaultOnce(bReportedSlotNodeFault, TEXT("overlay slot"),
+				ElysiumAnimGraph::SlotLayerTag, TEXT("is not a single-pose blend-mask node"));
 	}
 
 	UBlendProfile* Profile = nullptr;
@@ -678,10 +755,10 @@ void UElysiumBipedAnimInstance::ApplySlotMask()
 				ReportedSlotMaskName = RequestedSlotMaskName;
 				UE_LOG(LogElysiumBipedGraph, Warning,
 					TEXT("[elysium] overlay slot mask '%s' is absent from this body's skeleton or is not "
-						"a blend mask; the layer is left unmasked-refused"),
+						"a blend mask; the layer is refused"),
 					*RequestedSlotMaskName.ToString());
 			}
-			return;
+			return false;
 		}
 	}
 
@@ -691,6 +768,7 @@ void UElysiumBipedAnimInstance::ApplySlotMask()
 	// A name that resolved is no longer a name a refusal has been reported for, so the next one that
 	// does not resolve is said out loud rather than swallowed by a stale latch.
 	ReportedSlotMaskName = NAME_None;
+	return true;
 }
 
 void UElysiumBipedAnimInstance::ArmDebugUpperBodyOverlay(UAnimSequence* Sequence, UBlendSpace* Space,
@@ -725,11 +803,29 @@ void UElysiumBipedAnimInstance::ClearDebugUpperBodyLayer()
 	DebugOverlayMaskName = NAME_None;
 }
 
-void UElysiumBipedAnimInstance::ApplyUpperBodyMask()
+bool UElysiumBipedAnimInstance::ReportNodeFaultOnce(bool& Latch, const TCHAR* Layer, const TCHAR* Tag,
+	const TCHAR* Fault)
+{
+	// Once per instance: a generated graph's node shape does not change frame to frame, and a line
+	// per frame for the life of a body buries everything else in the log.
+	if (Latch)
+	{
+		return true;
+	}
+	Latch = true;
+	UE_LOG(LogElysiumBipedGraph, Warning,
+		TEXT("[elysium] the %s layer is refused on %s: the compiled graph %s ('%s'), so the mask this "
+			 "body's record names cannot be written and the layer would compose through whatever the "
+			 "node was saved with"),
+		Layer, *GetNameSafe(GetSkelMeshComponent()), Fault, Tag);
+	return true;
+}
+
+bool UElysiumBipedAnimInstance::ApplyUpperBodyMask()
 {
 	if (RequestedUpperBodyMaskName == AppliedUpperBodyMaskName)
 	{
-		return;
+		return true;
 	}
 
 	// The compiled graph's tag table. Absent on the plain native class — a body with no generated
@@ -743,7 +839,9 @@ void UElysiumBipedAnimInstance::ApplyUpperBodyMask()
 		: nullptr;
 	if (Layer == nullptr)
 	{
-		return;
+		return AnimClass == nullptr || RequestedUpperBodyMaskName.IsNone()
+			|| !ReportNodeFaultOnce(bReportedUpperBodyNodeFault, TEXT("upper-body"),
+				ElysiumAnimGraph::UpperBodyLayerTag, TEXT("carries no node under the tag"));
 	}
 
 	// `SetBlendMask` asserts all three of these, so they are tested rather than assumed: a graph
@@ -751,7 +849,9 @@ void UElysiumBipedAnimInstance::ApplyUpperBodyMask()
 	if (Layer->BlendMode != ELayeredBoneBlendMode::BlendMask || !Layer->BlendPoses.IsValidIndex(0)
 		|| !Layer->BlendMasks.IsValidIndex(0))
 	{
-		return;
+		return RequestedUpperBodyMaskName.IsNone()
+			|| !ReportNodeFaultOnce(bReportedUpperBodyNodeFault, TEXT("upper-body"),
+				ElysiumAnimGraph::UpperBodyLayerTag, TEXT("is not a single-pose blend-mask node"));
 	}
 
 	// Resolved against the PLAYING skeleton, which is the whole reason the mask travels as a name:
@@ -765,9 +865,10 @@ void UElysiumBipedAnimInstance::ApplyUpperBodyMask()
 			? Skeleton->GetBlendProfile(RequestedUpperBodyMaskName) : nullptr;
 		if (Profile == nullptr || Profile->Mode != EBlendProfileMode::BlendMask)
 		{
-			// A named mask the body's own skeleton does not carry. Refused rather than composed
-			// unmasked, which would pull the whole rig toward the layer instead of the bones it owns
-			// — the same failure the retired accumulator's gate existed to prevent.
+			// A named mask the body's own skeleton does not carry. **The node keeps the mask it was
+			// last given**, which for the second weapon in a row is the first weapon's bone set — so
+			// the pose has to come down here rather than being left to compose through it. The
+			// projector is what takes it down; this only produces the verdict.
 			//
 			// Once per requested name, and against its own latch rather than the applied one: nothing
 			// is written on this path, so the applied name never moves and an unguarded line repeats
@@ -778,10 +879,10 @@ void UElysiumBipedAnimInstance::ApplyUpperBodyMask()
 				ReportedUpperBodyMaskName = RequestedUpperBodyMaskName;
 				UE_LOG(LogElysiumBipedGraph, Warning,
 					TEXT("[elysium] upper-body mask '%s' is absent from this body's skeleton or is not a "
-						"blend mask; the layer is left unmasked-refused"),
+						"blend mask; the layer is refused"),
 					*RequestedUpperBodyMaskName.ToString());
 			}
-			return;
+			return false;
 		}
 	}
 
@@ -790,6 +891,7 @@ void UElysiumBipedAnimInstance::ApplyUpperBodyMask()
 	AppliedUpperBodyMaskName = RequestedUpperBodyMaskName;
 	// A name that resolved clears the refusal latch, so the next one that does not is reported.
 	ReportedUpperBodyMaskName = NAME_None;
+	return true;
 }
 
 void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -1229,6 +1331,11 @@ bool UElysiumBipedAnimInstance::PlayReaction(const FElysiumReactionPlay& Play)
 		return false;
 	}
 
+	// Same barrier as every other gameplay-thread write to a graph-read pin: the reaction's assets,
+	// axis and flags are property copies the worker pulls, and the refusals above are reached before
+	// anything is written so a refused play does not pay for the block.
+	(void)GetProxyOnGameThread<FElysiumBipedAnimProxy>();
+
 	// The blend IN takes the same predicate `PlayOneShot` does, and for the same reason: the branch's
 	// false pose is the locomotion pose, so a graph that has been handed no asset is blending up out
 	// of the reference pose. A body with nothing to blend FROM snaps in.
@@ -1277,7 +1384,10 @@ bool UElysiumBipedAnimInstance::PlayReaction(const FElysiumReactionPlay& Play)
 void UElysiumBipedAnimInstance::StopReaction()
 {
 	// The assets stay on their pins for the fade the engine is about to run — the same reason the
-	// phase clock's own expiry leaves them. They are replaced by the next `PlayReaction`.
+	// phase clock's own expiry leaves them. They are replaced by the next `PlayReaction`. The flags
+	// below are read by the worker, so this takes the same barrier its arming half does.
+	(void)GetProxyOnGameThread<FElysiumBipedAnimProxy>();
+
 	bReactionActive = false;
 	bReactionHeld = false;
 	bReactionLoops = false;

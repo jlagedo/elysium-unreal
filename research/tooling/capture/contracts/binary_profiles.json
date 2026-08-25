@@ -343,6 +343,30 @@
           "rva": "0x00160dc0",
           "calling_convention": "thiscall",
           "expected_bytes": "568bf18b86f0060000"
+        },
+        {
+          "semantic_label": "vampire.lookup_sequence",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x0008f7b0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "53558be95685ed57"
+        },
+        {
+          "semantic_label": "vampire.get_model_ptr",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x000952d0",
+          "calling_convention": "thiscall",
+          "expected_bytes": "568bf185f65774"
+        },
+        {
+          "semantic_label": "vampire.npc_choose_melee_sequence",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00347180",
+          "calling_convention": "thiscall",
+          "expected_bytes": "b87c610000e8"
         }
       ]
     },
@@ -507,6 +531,26 @@
           "rva": "0x000921d0",
           "calling_convention": "thiscall",
           "expected_bytes": "538bd95657"
+        },
+        {
+          "semantic_label": "client.resolve_sequence_owner",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00089c40",
+          "calling_convention": "cdecl",
+          "expected_bytes": "b8c4270000e8"
+        },
+        {
+          "semantic_label": "client.accumulate_sequence_pose",
+          "kind": "inline",
+          "backend": "inline_detour",
+          "rva": "0x00088e10",
+          "calling_convention": "cdecl",
+          "expected_bytes": "d944241cd81df0341e10",
+          "relocated_operand": {
+            "offset": 6,
+            "size": 4
+          }
         }
       ]
     },

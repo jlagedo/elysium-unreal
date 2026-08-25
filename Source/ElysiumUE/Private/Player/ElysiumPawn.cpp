@@ -94,40 +94,46 @@ void AElysiumPawn::SetHullHeight(float HeightCm, float EyeAboveFeetCm, bool bAnc
 
 	const float OldHalf = Hull->GetUnscaledBoxExtent().Z;
 	const float NewHalf = HeightCm * 0.5f;
-	if (FMath::IsNearlyEqual(OldHalf, NewHalf))
+
+	// **Only the geometry is conditional.** The eye is not a function of the hull alone — the mover
+	// drives it directly for the length of a transition — so a call that finds the hull already at
+	// this height still has a view offset to put back, and returning early strands the camera
+	// wherever the ramp last wrote it. Nothing below is lost on that path anyway: `Shift` would be
+	// zero and the surface re-base is idempotent at an unchanged half-height.
+	if (!FMath::IsNearlyEqual(OldHalf, NewHalf))
 	{
-		return;
+		// Source's player origin sits at the **feet** (its hull mins are 0); ours is the box centre,
+		// so resizing has to move the actor or the body would grow/shrink about its middle.
+		//
+		// On the ground the feet stay planted, so the centre travels the half-height change.
+		// Airborne, `FinishDuck` moves the origin by **half** the height difference (`+18u` ducking,
+		// `-18u` standing up) rather than the whole of it — the feet rise 18 and the head drops 18,
+		// which is exactly a **fixed centre**. So the airborne case is a pure resize with no shift,
+		// and that half — not the full 36 — is the crouch-jump's reach
+		// (`docs/vtmb/source_movement.md` → "Ducking").
+		const float Shift = bAnchorFeet ? (NewHalf - OldHalf) : 0.0f;
+
+		Hull->SetBoxExtent(FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, NewHalf),
+			/*bUpdateOverlaps*/ true);
+		AddActorWorldOffset(FVector(0.0f, 0.0f, Shift), /*bSweep*/ false, nullptr,
+			ETeleportType::TeleportPhysics);
+
+		// **The body surface re-bases with the hull, for exactly the reason the eye does.** It hangs
+		// off the box centre by one half-height so its authored feet sit on the hull's floor, and
+		// that offset is a function of the *current* height rather than a constant: shrinking to the
+		// ducked hull moves the centre down 18 while a surface still offset by the standing 36 keeps
+		// its feet 18 below the floor — the model wades into the ground for as long as the crouch
+		// lasts.
+		//
+		// It is re-based here rather than where it is attached because this is the one place the
+		// height changes.
+		if (USkeletalMeshComponent* Visual = GetPlayerVisual())
+		{
+			Visual->SetRelativeLocation(FVector(0.0f, 0.0f, -NewHalf));
+		}
 	}
 
-	// Source's player origin sits at the **feet** (its hull mins are 0); ours is the box centre, so
-	// resizing has to move the actor or the body would grow/shrink about its middle.
-	//
-	// On the ground the feet stay planted, so the centre travels the half-height change. Airborne,
-	// `FinishDuck` moves the origin by **half** the height difference (`+18u` ducking, `-18u`
-	// standing up) rather than the whole of it — the feet rise 18 and the head drops 18, which is
-	// exactly a **fixed centre**. So the airborne case is a pure resize with no shift, and that half
-	// — not the full 36 — is the crouch-jump's reach (`docs/vtmb/source_movement.md` → "Ducking").
-	const float Shift = bAnchorFeet ? (NewHalf - OldHalf) : 0.0f;
-
-	Hull->SetBoxExtent(FVector(ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, NewHalf),
-		/*bUpdateOverlaps*/ true);
-	AddActorWorldOffset(FVector(0.0f, 0.0f, Shift), /*bSweep*/ false, nullptr,
-		ETeleportType::TeleportPhysics);
-
-	// **The body surface re-bases with the hull, for exactly the reason the eye does.** It hangs off
-	// the box centre by one half-height so its authored feet sit on the hull's floor, and that
-	// offset is a function of the *current* height rather than a constant: shrinking to the ducked
-	// hull moves the centre down 18 while a surface still offset by the standing 36 keeps its feet
-	// 18 below the floor — the model wades into the ground for as long as the crouch lasts.
-	//
-	// It is re-based here rather than where it is attached because this is the one place the height
-	// changes. A crouch used to be a held key and the artefact flashed; it is a toggle now and it
-	// simply stands.
-	if (USkeletalMeshComponent* Visual = GetPlayerVisual())
-	{
-		Visual->SetRelativeLocation(FVector(0.0f, 0.0f, -NewHalf));
-	}
-
+	// After the resize, never before: the eye is stated above the feet and re-bases off the extent.
 	SetEyeHeight(EyeAboveFeetCm);
 }
 

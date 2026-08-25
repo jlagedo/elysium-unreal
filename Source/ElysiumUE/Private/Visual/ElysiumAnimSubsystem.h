@@ -45,17 +45,24 @@ struct FElysiumResolvedGrid
 // is a true statement rather than a hole.
 struct FElysiumResolvedAnimation
 {
-	UAnimSequence* Sequence = nullptr;
-	UBlendSpace* Space = nullptr;
+	// Hand every asset this record holds to a collector. **The record lives outside the object
+	// graph** — `FElysiumAnimationDriver` is plain C++ owned through a `TPimplPtr` — so nothing here
+	// is reachable by reflection and nothing keeps it alive. An uncooked run happens to survive on
+	// `RF_Standalone`; a cooked one collects, and the next publish assigns a dangling pointer into a
+	// `TObjectPtr` on the anim instance. The driver is the `FGCObject` that calls this.
+	void AddReferencedObjects(class FReferenceCollector& Collector);
+
+	TObjectPtr<UAnimSequence> Sequence = nullptr;
+	TObjectPtr<UBlendSpace> Space = nullptr;
 
 	// CCC10 — the upper-body layer(s) the selection named through `LayerLabels`: the bake-time
 	// autolayer binding the base channel's own resolved host declared, or an activity-keyed
 	// `UpperBody`/`Additive`-channel selection's own single asset (routed here by the caller
 	// rather than into `Sequence`/`Space`). `OverlaySequence` and `OverlaySpace` are never both
 	// set — a melee `_bobble_layer` is a plain sequence, an aim grid is a blend space.
-	UAnimSequence* OverlaySequence = nullptr;
-	UBlendSpace* OverlaySpace = nullptr;
-	UAnimSequence* AdditiveSequence = nullptr;
+	TObjectPtr<UAnimSequence> OverlaySequence = nullptr;
+	TObjectPtr<UBlendSpace> OverlaySpace = nullptr;
+	TObjectPtr<UAnimSequence> AdditiveSequence = nullptr;
 
 	// The overlay's baked bone mask, as the NAME the clip's own `UElysiumAnimLayerMask` metadata
 	// carries (the grid's base cell for `OverlaySpace` — every cell of a grid shares one mask), never
@@ -77,16 +84,16 @@ struct FElysiumResolvedAnimation
 	// any number of base selections underneath it. Ranged fire, reload and dry-fire are the shipped
 	// consumers. Retail has four such slots; no weapon path ever addresses one but slot 0, so one is
 	// what exists here.
-	UAnimSequence* SlotSequence = nullptr;
+	TObjectPtr<UAnimSequence> SlotSequence = nullptr;
 	// **The layers the slot's OWN clip declares — retail's autolayer rule applied recursively to the
 	// sequence in the overlay slot, the same rule the base channel's host gets.** The shot motion
 	// stays `SlotSequence`; its declared aim grid composes OVER it (`BS_<layer>_<slot clip>`,
 	// steered by the same two aim parameters, gated by the grid's own mask), and its declared
 	// `_delta` composes additively after that. A slot clip that declares nothing — every reload
 	// layer — leaves all three null and the sequence stands alone.
-	UBlendSpace* SlotSpace = nullptr;
+	TObjectPtr<UBlendSpace> SlotSpace = nullptr;
 	FName SlotAimMaskName;
-	UAnimSequence* SlotAdditive = nullptr;
+	TObjectPtr<UAnimSequence> SlotAdditive = nullptr;
 	// The layer's baked bone mask, by NAME, for the same reason `OverlayMaskName` above is a name: a
 	// `UBlendProfile` belongs to one skeleton and the mask has to be resolved against the skeleton
 	// being played. A layer with no mask owns the whole rig, which is never what a partial-body
@@ -260,8 +267,8 @@ public:
 	// arm seam resolves the same trio at trigger-pull time: an arm that staged only the sequence
 	// would pose one frame of bare shot before the driver's first publish filled the rest in.
 	void ResolveSlotDeclaredAssets(const FString& OwnerStem, const FString& Label,
-		USkeletalMesh* Mesh, UBlendSpace*& OutAimSpace, FName& OutAimMaskName,
-		UAnimSequence*& OutAdditive);
+		USkeletalMesh* Mesh, TObjectPtr<UBlendSpace>& OutAimSpace, FName& OutAimMaskName,
+		TObjectPtr<UAnimSequence>& OutAdditive);
 
 	// The catalog view the resolver reads, gathered from this subsystem's own caches. Exposed so a
 	// caller that resolves repeatedly does not re-enter the cache lookups, and so the Content tier can

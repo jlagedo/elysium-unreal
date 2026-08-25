@@ -226,6 +226,26 @@ namespace ElysiumSkeletalBuildImpl
 			{
 				Pose.ReferencePose[Index] = Bone.Local;
 			}
+
+			// **A bind at the origin is the one bone `OrientAndScale` declines to retarget at all.**
+			// `FBoneContainer` skips a bone whose source or target bind length is near zero
+			// (`IsNearlyZero(SourceLen * TargetLen)`), so the donor's animated translation reaches the
+			// playing mesh verbatim, where retail's own remap builder takes its origin branch and
+			// applies a pure `target - source` offset instead (`vampire.dll 0x100c67b0`;
+			// `docs/vtmb/animation_rig_resolution.md`). The gap is a constant offset of at most the
+			// other side's bind length -- 3 cm across the shipped corpus, on 16 containers and four
+			// bone names, all of them a pelvis or a prop helper. Named here so the residual is a
+			// measurement rather than a surprise; closing it needs a translation rule carrying
+			// retail's three branches, which is an owner call rather than a bake change.
+			if (Bone.Local.GetTranslation().IsNearlyZero(UE_KINDA_SMALL_NUMBER)
+				&& RefSkeleton.GetParentIndex(Index) != INDEX_NONE)
+			{
+				UE_LOG(LogElysiumSkeletalBuild, Warning,
+					TEXT("[elysium] retarget source '%s': bone '%s' binds at its parent's origin, so "
+						 "`OrientAndScale` will pass its translation through unretargeted where retail "
+						 "applies a pure offset"),
+					*Name.ToString(), *Bone.Name.ToString());
+			}
 		}
 		Skeleton->AnimRetargetSources.Add(Name, MoveTemp(Pose));
 		return Name;
@@ -899,9 +919,19 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	TArray<FCarriedProfile> CarriedProfiles;
 	TMap<FName, FReferencePose> CarriedRetargetSources;
 	TArray<FName> PreviousBoneNames;
-	if (Skeleton != nullptr && bNewSkeleton)
+	// **The retarget sources are carried whenever there is a skeleton to carry them from, not only on
+	// a rebuild.** They are assigned back unconditionally below, so seeding them under `bNewSkeleton`
+	// would hand an incremental call (`bRebuild == false` on an existing skeleton) an EMPTY map to
+	// write over a live one — dropping every donor bind pose already registered. Nothing would report
+	// it either: `USkeleton::GetRefLocalPoses` answers an unknown source name with the skeleton's own
+	// reference pose, so every bank sequence would silently retarget against the union seed instead
+	// of its donor. On the merge path the carry is simply the identity.
+	if (Skeleton != nullptr)
 	{
 		CarriedRetargetSources = Skeleton->AnimRetargetSources;
+	}
+	if (Skeleton != nullptr && bNewSkeleton)
+	{
 		const FReferenceSkeleton& Previous = Skeleton->GetReferenceSkeleton();
 		PreviousBoneNames.Reserve(Previous.GetRawBoneNum());
 		for (int32 Index = 0; Index < Previous.GetRawBoneNum(); ++Index)
@@ -1463,8 +1493,22 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		Tracked.Reserve(Clip.Tracks.Num());
 		for (const FElysiumSourceTrack& Track : Clip.Tracks)
 		{
+			// **The retarget-source invariant, stated where it is relied on.** The whole shared-bank
+			// scheme is sound only because a clip animates no bone outside its own donor container:
+			// `RegisterRetargetSource` overwrites exactly the donor's bones and leaves every other
+			// entry at the FAMILY skeleton's reference pose, which is some other member's bind. A
+			// track naming a bone this container does not declare would be retargeted against that
+			// foreign bind, silently. It holds by construction over the shipped corpus and cost
+			// nothing to assert, so it is asserted rather than assumed.
 			if (!Source.Bones.IsValidIndex(Track.Bone))
 			{
+				UE_LOG(LogElysiumSkeletalBuild, Error,
+					TEXT("[elysium] %s clip '%s': track %d names bone index %d, which the donor "
+						 "container does not declare (%d bones). A bank sequence may only animate its "
+						 "own donor's bones -- every other bone of the family skeleton holds another "
+						 "member's bind pose."),
+					*SourcePath, *Clip.Name, BoundTracks, Track.Bone, Source.Bones.Num());
+				++OutDroppedTracks;
 				continue;
 			}
 			const FName BoneName = Source.Bones[Track.Bone].Name;

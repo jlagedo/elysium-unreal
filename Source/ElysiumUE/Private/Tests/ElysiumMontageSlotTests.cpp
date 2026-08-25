@@ -1765,7 +1765,7 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 
 	Test.AddExpectedError(TEXT("it carries no baked bone mask"),
 		EAutomationExpectedErrorFlags::Contains, 1);
-	Test.TestFalse(TEXT("...and a layer that carries no baked bone mask, which would own the whole rig"),
+	Test.TestFalse(TEXT("...and a layer that carries no baked bone mask, which would pose nothing"),
 		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, NAME_None, Claim));
 
 	// The refusal that reads as working. A claim with no length has no phase, so the evaluator would
@@ -1929,12 +1929,51 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	// Three frames, one line. The refused name never reaches `SetBlendMask`, so the applied name
 	// cannot latch it — and the request does not change frame to frame, so an unguarded warning
 	// repeats for every frame the layer stands.
+	//
+	// **A warning alone is not a refusal**, which is the whole point of the assertions below. The
+	// blend node keeps whatever mask it was last given, so a second weapon whose mask this skeleton
+	// cannot answer for would compose through the FIRST weapon's bone set at full weight. Taking the
+	// pose down is what refuses it; the node is deliberately left holding the old profile, because at
+	// weight zero it is unread and clearing it would cost a per-bone-weight rebuild each way.
+	Inst->PublishSelection(Layered, Composed);
+	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
+	const UBlendProfile* GoodProfile = SlotBlend->BlendMasks.IsValidIndex(0)
+		? SlotBlend->BlendMasks[0] : nullptr;
+	Test.TestNotNull(TEXT("the good mask really reached the node"), GoodProfile);
+	Test.TestEqual(TEXT("...and the layer is standing at the record's weight"),
+		Inst->SlotLayerWeight, 0.5f);
+
 	Test.AddExpectedError(TEXT("is absent from this body's skeleton or is not a blend mask"),
 		EAutomationExpectedErrorFlags::Contains, 1);
 	FElysiumResolvedAnimation BadMask = Composed;
 	BadMask.SlotMaskName = FName(TEXT("elysium_no_such_blend_mask"));
 	Inst->PublishSelection(Layered, BadMask);
 	EvaluateFrames(Comp, /*Frames=*/3, FrameSeconds, Pose);
+
+	Test.TestEqual(TEXT("a refused mask takes the layer's weight to zero"),
+		Inst->SlotLayerWeight, 0.f);
+	Test.TestTrue(TEXT("...and the pin with it, so nothing composes"),
+		Inst->RequestedSlotSequence == nullptr);
+	Test.TestEqual(TEXT("...along with the aim and additive weights, one clip one fate"),
+		Inst->SlotAimLayerWeight + Inst->SlotAdditiveWeight, 0.f);
+	Test.TestEqual(TEXT("...and the playhead"), Inst->SlotExplicitTime, 0.f);
+	// The assertion that separates "refused" from "cleared": the node still holds the PREVIOUS
+	// weapon's bone set, and the weight is the only thing stopping it composing.
+	Test.TestTrue(TEXT("...while the blend node still holds the previous profile, unread at weight 0"),
+		SlotBlend->BlendMasks.IsValidIndex(0) && SlotBlend->BlendMasks[0] == GoodProfile);
+
+	// --- and the refusal is per-frame, never latched -----------------------------------------------
+	//
+	// The verdict is recomputed from the requested name every frame, so a skeleton that was merely
+	// late binding refuses this frame and applies the next. Latching it would strand every body whose
+	// proxy bound a frame after its first publish.
+	Inst->PublishSelection(Layered, Composed);
+	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
+	Test.TestTrue(TEXT("a good record after a refusal comes back"),
+		Inst->RequestedSlotSequence == Pick.Layer);
+	Test.TestEqual(TEXT("...at its own weight"), Inst->SlotLayerWeight, 0.5f);
+	Test.TestTrue(TEXT("...with a mask on the node"),
+		SlotBlend->BlendMasks.IsValidIndex(0) && SlotBlend->BlendMasks[0] != nullptr);
 
 	return true;
 }

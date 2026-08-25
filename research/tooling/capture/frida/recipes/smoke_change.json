@@ -1,0 +1,61 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "smoke_change",
+  "description": "Prove the three reads a rig-resolution capture depends on, over the controlled synthetic IA-32 exports and never the retail install: a string decoded in place, a value read off the return pointer at leave, and an on-change key that suppresses a repeated identical answer. The synthetic module names itself twice per load with the same pointer, so exactly one of the two calls may reach the capture.",
+  "mode": "trace",
+  "targets": [],
+  "expected_modules": [
+    "client.dll",
+    "engine.dll",
+    "StudioRender.dll"
+  ],
+  "export_hooks": [
+    {
+      "module": "client.dll",
+      "export": "ElysiumSyntheticModuleName",
+      "label": "synthetic.client_name"
+    },
+    {
+      "module": "engine.dll",
+      "export": "ElysiumSyntheticHookTarget",
+      "label": "synthetic.engine_hook"
+    }
+  ],
+  "expected_callers": [
+    "synthetic.client_name",
+    "synthetic.engine_hook"
+  ],
+  "max_trace_events": 64,
+  "capture_returns": true,
+  "stack_words": 8,
+  "field_reads": {
+    "synthetic.client_name": [
+      {
+        "label": "dos_magic",
+        "base": "module",
+        "module": "client.dll",
+        "rva": "0x0",
+        "offset": "0x0",
+        "type": "cstr",
+        "max_length": 8
+      },
+      {
+        "label": "name_head",
+        "base": "return",
+        "when": "leave",
+        "offset": "0x0",
+        "type": "u32"
+      }
+    ]
+  },
+  "on_change": {
+    "synthetic.client_name": [
+      "dos_magic",
+      "name_head",
+      "return_value"
+    ],
+    "synthetic.engine_hook": [
+      "word1"
+    ]
+  }
+}

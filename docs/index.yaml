@@ -49,6 +49,7 @@ documents:
   - {path: vtmb/animation_and_movers.md, kind: vtmb-fact, owner: animation, subject: skeletal animation and brush movers}
   - {path: vtmb/wielded_weapons.md, kind: vtmb-fact, owner: wielded weapons, subject: item model roles equip binding follow-attach composition and the wield-model corpus}
   - {path: vtmb/procedural_bones.md, kind: vtmb-fact, owner: animation, subject: procedural bones and the persistent pose array}
+  - {path: vtmb/animation_rig_resolution.md, kind: vtmb-fact, owner: animation, subject: global sequence numbering include-model resolution the load-time bone remap the NPC melee selector and the Elysium comparison with its capture procedure}
   - {path: vtmb/secondary_motion.md, kind: vtmb-fact, owner: animation, subject: bone-chain and renderer-cloth secondary motion}
   - {path: vtmb/mdl-coverage-and-gaps.md, kind: research-brief, owner: models, subject: MDL v2531 decode coverage gaps and Unreal opportunity}
   - {path: vtmb/vtmb-animation-reverse-engineering.md, kind: research-brief, owner: retail capture, subject: animation reverse-engineering survey}

@@ -14,7 +14,6 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/WorldSettings.h"
 
-DEFINE_LOG_CATEGORY_STATIC(LogElysiumMovement, Log, All);
 
 // How long the jump's push keeps being applied. 0 = use `rules.txt`'s `JumpHoldTime` (0.2). This
 // is **ours, not a VtMB cvar** — it exists because `rules.txt` carries two candidate windows
@@ -304,7 +303,41 @@ void UElysiumMovementComponent::SetupMove(float DeltaTime)
 	// Only the substituted wish is clamped, because only it is in cm/s. An ordinary command's axes
 	// are deflections and its speed enters later, off a gait cell the ceiling covers by
 	// construction.
-	ElysiumMove::ClampCommandSpeed(SubstitutedWish, GetMaxSpeed());
+	//
+	// **A ceiling of zero is not a ceiling.** `MaxSpeedFrom` answers zero for a grounded body whose
+	// gait tables never published, and clamping to it would multiply the authored displacement by
+	// nothing — deleting the whole lunge while `bSubstitutedMove` still claims the command. That is a
+	// body whose visual failed to build, not a game rule, so the authored wish stands and the failure
+	// is reported instead. `WishSpeed`'s own latch already names the body once; this names the swing
+	// that was nearly eaten by it.
+	const float Ceiling = GetMaxSpeed();
+	const double Authored = SubstitutedWish.Size();
+	if (!(Ceiling > 0.0f))
+	{
+		if (!bReportedNoClampCeiling)
+		{
+			bReportedNoClampCeiling = true;
+			UE_LOG(LogElysiumMovement, Warning,
+				TEXT("'%s' substitutes an authored move of %.1f cm/s against a speed ceiling of zero; ")
+				TEXT("the ceiling is refused rather than applied, which would delete the move."),
+				PawnOwner ? *PawnOwner->GetName() : TEXT("(no pawn)"), Authored);
+		}
+	}
+	else if (ElysiumMove::ClampCommandSpeed(SubstitutedWish, Ceiling))
+	{
+		// Faithful — `docs/vtmb/source_movement.md` measures an authored displacement as a request
+		// rather than a guarantee — but invisible, because the clip still plays at rate 1.0 while the
+		// body covers less ground than it animates. Said once per body so a foot slide has a cause in
+		// the log rather than only in the frame.
+		if (!bReportedClampedLunge)
+		{
+			bReportedClampedLunge = true;
+			UE_LOG(LogElysiumMovement, Log,
+				TEXT("'%s' authored %.1f cm/s over this step and the live speed ceiling is %.1f, so the ")
+				TEXT("move lands short of its authored distance while the clip plays at rate 1."),
+				PawnOwner ? *PawnOwner->GetName() : TEXT("(no pawn)"), Authored, Ceiling);
+		}
+	}
 	bSubstitutedMove = true;
 }
 
@@ -414,6 +447,18 @@ void UElysiumMovementComponent::CategorizePosition()
 void UElysiumMovementComponent::TryPlayerMove(const FVector& Delta)
 {
 	FVector Remaining = Delta;
+	// **The planes bumped into since the body last actually moved.** Clipping against each one as it
+	// arrives is not enough: in a doorway's interior corner the projection that clears wall A drives
+	// straight back into wall B, so bump three re-clips against A and the four bumps are spent
+	// without resolving anything. Source keeps the set and asks for a direction that clears all of
+	// them at once, falling back to the crease the two share — which is what turns sticking on a jamb
+	// into sliding through it.
+	TArray<FVector, TInlineAllocator<ElysiumMove::MaxClipPlanes>> Planes;
+	// The velocity this bump sequence started with. Re-baselined whenever the body covers ground,
+	// because a plane set only describes the corner the body is currently wedged in.
+	FVector Original = Velocity;
+	const FVector Primal = Velocity;
+
 	// Four bumps is Source's own iteration count; past that the move is abandoned rather than
 	// resolved, which is what stops a wedged player from tunnelling.
 	for (int32 Bump = 0; Bump < 4 && !Remaining.IsNearlyZero(); ++Bump)
@@ -424,14 +469,33 @@ void UElysiumMovementComponent::TryPlayerMove(const FVector& Delta)
 		{
 			return;
 		}
-		// Source's own ClipVelocity, overbounce 1.0, applied to both the velocity and what is left
-		// of the move. The returned blocked bits are what a two-plane crease case would need.
-		FVector Clipped;
-		ElysiumMove::ClipVelocity(Velocity, Hit.Normal, Clipped);
-		Velocity = Clipped;
+		if (Hit.Time > 0.0f)
+		{
+			// Ground was covered, so whatever corner the previous planes described is behind us.
+			Planes.Reset();
+			Original = Velocity;
+		}
 
-		ElysiumMove::ClipVelocity(Remaining * (1.0f - Hit.Time), Hit.Normal, Clipped);
-		Remaining = Clipped;
+		Remaining *= (1.0f - Hit.Time);
+
+		if (Planes.Num() >= ElysiumMove::MaxClipPlanes)
+		{
+			Velocity = FVector::ZeroVector;
+			return;
+		}
+		Planes.Add(Hit.Normal);
+
+		if (!ElysiumMove::ResolveClipPlanes(Planes, Original, Primal, Velocity))
+		{
+			// Wedged: the resolver already zeroed the velocity, and a remaining slide would only
+			// carry the body into the geometry that wedged it.
+			return;
+		}
+
+		// What is left of the MOVE takes the same direction the velocity just resolved to, so the
+		// next sweep travels along the crease rather than back into the plane that stopped it.
+		const float RemainingLength = static_cast<float>(Remaining.Size());
+		Remaining = Velocity.GetSafeNormal() * RemainingLength;
 	}
 }
 
@@ -550,13 +614,24 @@ bool UElysiumMovementComponent::CanUnduck() const
 	}
 
 	// VtMB tests the **standing** hull at the origin the stand-up would land on, and refuses if it
-	// hits anything. On the ground the feet stay planted, so the centre rises by the half-height
-	// gained; airborne the centre does not move at all (`SetHullHeight`). Testing at the
-	// destination rather than sweeping from here is what stops a stand-up pushing the body through
-	// a ceiling — and, in the air, through the floor.
+	// hits anything. Testing at the destination rather than sweeping from here is what stops a
+	// stand-up pushing the body through a ceiling — and, in the air, through the floor.
+	//
+	// **The offset is two terms, because retail's origin is the feet and ours is the box centre.**
+	// `CanUnduck` (`vampire.dll 0x101265d0`) moves the *feet* by ground state alone — nothing on the
+	// ground, `-Grow` airborne, where the airborne case is the fixed-centre resize `SetHullHeight`
+	// performs. Re-expressing that against a centre origin adds the half-height the hull would gain,
+	// which is a fact about the **hull**, not about the ground:
+	//
+	//     ducked + ground `+Grow` | ducked + air `0` | standing + ground `0` | standing + air `-Grow`
+	//
+	// Collapsing the two into `bOnGround ? Grow : 0` asks a *standing* body for 45.72 cm of headroom
+	// above its own head, which almost nothing has — and this function is a recorded channel
+	// (`Debug/ElysiumMoveRun.cpp`), so it answers on every frame rather than only when a stand-up is
+	// pending.
 	const float Grow = (ElysiumMove::StandHeight - ElysiumMove::DuckHeight) * 0.5f;
 	const FVector Centre = UpdatedComponent->GetComponentLocation()
-		+ FVector(0.0f, 0.0f, bOnGround ? Grow : 0.0f);
+		+ FVector(0.0f, 0.0f, (bDucked ? Grow : 0.0f) - (bOnGround ? 0.0f : Grow));
 
 	const FCollisionShape Standing = FCollisionShape::MakeBox(FVector(
 		ElysiumMove::HullHalfWidth, ElysiumMove::HullHalfWidth, ElysiumMove::StandHeight * 0.5f));
@@ -578,20 +653,36 @@ void UElysiumMovementComponent::Duck()
 	const uint64 DuckBit = static_cast<uint64>(EElysiumButton::Duck);
 	const bool bDuckDown = PendingCmd.IsDown(EElysiumButton::Duck);
 
-	// **The press edge toggles; the release does nothing.** This is the action layer, and it is the
+	// **The press edge decides; the release does nothing.** This is the action layer, and it is the
 	// only place the crouch is retained: the command says whether the key is down this frame
 	// (`docs/architecture/animation-architecture.md` § 3 — "a key press never selects an animation
 	// asset"), the classifier reads the realized stance off the body sample, and neither of them
 	// holds a crouch between frames. `m_nOldButtons` keeps tracking the button's true level, because
 	// that is what makes the edge detectable at all — the same latch `CheckJumpButton` uses.
+	//
+	// **Both edges are keyed on the HULL, not on the retained request** (`CGameMovement::Duck`,
+	// `vampire.dll 0x10126fd0`): `press && !FL_DUCKING` starts — or restarts — the lowering ramp, and
+	// `press && FL_DUCKING && CanUnduck()` starts the stand-up. A press with no headroom is neither,
+	// so it is swallowed rather than queued, and the body leaves the vent still crouched
+	// (`docs/vtmb/source_movement.md` → "Ducking"). Keying the unduck on the request going false
+	// instead lets a release mid-lowering enter the stand-up with a standing hull, which retail
+	// routes back into the duck ramp and cannot reach at all.
 	const bool bPressEdge = bDuckDown && !(OldButtons & DuckBit);
-	const bool bRequestRose = bPressEdge && !bDuckRequested;
-	if (bPressEdge)
+	const bool bDuckEdge = bPressEdge && !bDucked;
+	const bool bUnduckEdge = bPressEdge && bDucked && CanUnduck();
+	if (bDuckEdge)
 	{
-		bDuckRequested = !bDuckRequested;
+		bDuckRequested = true;
+	}
+	else if (bUnduckEdge)
+	{
+		bDuckRequested = false;
 	}
 	OldButtons = bDuckDown ? (OldButtons | DuckBit) : (OldButtons & ~DuckBit);
 
+	// The request can only fall on an unduck edge, which needs the hull to be ducked — so while a
+	// lowering ramp is in flight it stays true and the ramp runs to completion, which is exactly the
+	// routing retail performs on the flags.
 	const bool bWantsDuck = bDuckRequested;
 
 	// **Airborne, the transition does not ramp — it completes on the spot.** `Duck` only takes the
@@ -604,10 +695,10 @@ void UElysiumMovementComponent::Duck()
 
 	if (bWantsDuck)
 	{
-		// The ramp starts on the edge of the **request**, not of the button — under a toggle the key
-		// is up for almost the whole crouch, so keying this on the button would start the lowering
-		// ramp and then never advance it.
-		if (bRequestRose && !bDucked)
+		// Arming and advancing are separate: the edge arms, and every later frame advances whatever
+		// is in flight. A re-press mid-ramp therefore **restarts** the lowering rather than
+		// continuing it, which is what retail's unconditional `m_flDucktime = 1000` does.
+		if (bDuckEdge)
 		{
 			bDucking = true;
 			DuckTime = ElysiumMove::GameMovementDuckTime;
@@ -632,27 +723,35 @@ void UElysiumMovementComponent::Duck()
 	{
 		if (bDucked || bDucking)
 		{
-			if (!bDucking)
+			// Armed by the press edge alone, which is what makes a re-press during a rise restart it.
+			if (bUnduckEdge)
 			{
-				// The request went false: start the unduck ramp.
 				bDucking = true;
 				DuckTime = ElysiumMove::GameMovementDuckTime;
 			}
 
-			const float Elapsed = (ElysiumMove::GameMovementDuckTime - DuckTime) * 0.001f;
-			// The unduck is gated on headroom as well as on time — a stand-up under a low ceiling
-			// simply keeps waiting rather than pushing the body through it.
-			if (Elapsed >= ElysiumMove::TimeToUnduck || bInAir)
+			// **Headroom is tested before anything moves, including the eye.** Retail returns from
+			// the refusal without touching the view offset; ramping first walks the camera up through
+			// the very ceiling the stand-up is being refused for — 28 units above the head on a
+			// ducked hull — and leaves it there for as long as the body stays under it.
+			if (CanUnduck())
 			{
-				if (CanUnduck())
+				const float Elapsed = (ElysiumMove::GameMovementDuckTime - DuckTime) * 0.001f;
+				if (Elapsed >= ElysiumMove::TimeToUnduck || bInAir)
 				{
 					FinishUnDuck();
 				}
+				else if (AElysiumPawn* P = Cast<AElysiumPawn>(PawnOwner))
+				{
+					P->SetEyeHeight(FMath::Lerp(ElysiumMove::DuckViewZ, ElysiumMove::StandViewZ,
+						Elapsed / ElysiumMove::TimeToUnduck));
+				}
 			}
-			else if (AElysiumPawn* P = Cast<AElysiumPawn>(PawnOwner))
+			else
 			{
-				P->SetEyeHeight(FMath::Lerp(ElysiumMove::DuckViewZ, ElysiumMove::StandViewZ,
-					Elapsed / ElysiumMove::TimeToUnduck));
+				// Still under something. Retail re-arms the timer on every blocked frame, so the rise
+				// starts from the beginning once the ceiling clears rather than snapping to standing.
+				DuckTime = ElysiumMove::GameMovementDuckTime;
 			}
 		}
 	}

@@ -962,6 +962,32 @@ def movement_summary(d, animdesc_base, frames, fps):
     )
 
 
+def local_sequence_labels(d):
+    """Every declared `StudioSeqDesc[NumLocalSeq@272]` label, by on-disk index.
+
+    Positional, undeduped and unskipped, which is what the engine's own sequence
+    numbering is: a global sequence number resolves to a model and an index into
+    *this* array, so a list that dropped a duplicate label or an unplayable
+    descriptor would answer a captured index with the wrong name.
+    """
+    ns = _i32(d, 272)
+    sbase = _i32(d, 276)
+    return [_cstr_rel(d, sbase + i * _SEQDESC_STRIDE, 0) for i in range(ns)]
+
+
+def local_sequence_activities(d):
+    """Every declared descriptor's `szactivitynameindex`@4 literal, by on-disk index.
+
+    Positional for the same reason as `local_sequence_labels`, and empty on a
+    descriptor that names no activity. The sibling `activity`@12 int stays -1 on
+    disk because the game DLL resolves the name to an enum at model load, so a
+    capture that carries the resolved enum names it by joining against this list.
+    """
+    ns = _i32(d, 272)
+    sbase = _i32(d, 276)
+    return [_cstr_rel(d, sbase + i * _SEQDESC_STRIDE, 4) for i in range(ns)]
+
+
 def local_sequences(d):
     """This model's own game-facing sequences -> list[Seq].
 
@@ -1025,7 +1051,7 @@ def local_sequences(d):
     # Every descriptor's label by index, read before the walk because an autolayer entry
     # addresses this array directly and may name a descriptor the dedup below drops. A dropped
     # descriptor is a duplicate label, so the name it resolves to is the same either way.
-    labels = [_cstr_rel(d, sbase + i * _SEQDESC_STRIDE, 0) for i in range(ns)]
+    labels = local_sequence_labels(d)
     out, seen = [], set()
     for i in range(ns):
         sb = sbase + i * _SEQDESC_STRIDE

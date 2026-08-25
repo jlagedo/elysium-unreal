@@ -351,22 +351,46 @@ computes every frame anyway (above).
 
 ### Ducking
 
-**The crouch is a toggle, and the retention is state rather than the button** [observed in the
-shipped game]. `CTRL` ducks on the press edge and stays ducked when the key comes up; pressing again
-stands the player up, and a jump taken from a crouch lands still crouched. The decompiled surface
-below is entirely consistent with that and does not settle it either way: `Duck` reads a **held**
-bit off the server's button field, which a client-side latch keeps asserted exactly as a held key
-would. What decides when that bit is set is `client.dll`'s `CInput`, which is not decompiled.
-So the toggle lives at the client input layer, not in `CGameMovement`, and `m_bDucked` is the state
-it drives (`docs/vtmb/controls.md` → "What is bindable" carries the binding-layer half).
+**The crouch is a toggle, and `CGameMovement::Duck` is where the toggle lives.** `CTRL` ducks on the
+press edge and stays ducked when the key comes up; pressing again stands the player up, and a jump
+taken from a crouch lands still crouched. `Duck` (`0x10126fd0`) computes **two press edges**, and
+both are keyed on `FL_DUCKING` — the hull — rather than on any retained request:
 
-`Duck` (`0x10126fd0`) is called from `PlayerMove` between the step-sound update and
-`CategorizePosition`, so the ground trace runs against the hull the rest of the frame will use. It
-latches `IN_DUCK` (button bit `4`) into `m_nOldButtons` itself — the latch that makes a press edge
-detectable at all, which is what a toggle reads — and drives four pieces of player state: `m_bDucked` (`+0x1edd`), `m_bDucking` (`+0x1ede`), `m_flDucktime` (`+0x1ee0`) and
-`m_flDuckJumpTime` (`player[0x7b8]`). `m_bDucked` is the one the hull selector reads, which is why
-`CanUnduck` (`0x101265d0`) clears it around its own trace to make `TracePlayerBBox` pick the
-standing size.
+```
+duckEdge   = press && !(flags & FL_DUCKING)                   // start, or RESTART, the lowering ramp
+unduckEdge = press &&  (flags & FL_DUCKING) && CanUnduck()     // start the stand-up
+```
+
+where `press` is `(m_nButtons ^ m_nOldButtons) & m_nButtons & IN_DUCK`. Both arms then assign
+`m_flDucktime = 1000` and `m_bDucking = 1`.
+
+**A press with no headroom is neither edge, so it is swallowed rather than queued.** The stand-up is
+not remembered: the player walks out from under the vent still crouched and presses again.
+
+**With no press, the state `(!FL_DUCKING && m_bDucking)` is routed back into the duck branch** by an
+explicit test, so releasing the key mid-lowering runs the lowering ramp to completion. The unduck
+path is unreachable with a standing hull, which is what makes `CanUnduck` and `FinishUnDuck`
+functions of a ducked body only.
+
+**The unduck tests headroom before anything moves, including the eye.** `CanUnduck` is called ahead
+of the elapsed-time comparison, and on a refusal `Duck` re-arms `m_flDucktime = 1000` and returns
+without touching the view offset — so a blocked stand-up leaves the camera where the crouch put it
+and restarts its rise from the beginning once the ceiling clears.
+
+Two gates above all of this force an unduck outright and are unreachable from shipped content: a
+submerged player (`player+0x3E0` tested against `3` and `< 1`, reading as `m_nWaterLevel` at or above
+the waist) and a dead one.
+
+`Duck` is called from `PlayerMove` between the step-sound update and `CategorizePosition`, so the
+ground trace runs against the hull the rest of the frame will use — and `Duck`'s own `GetGroundEntity`
+reads are therefore one step stale, which costs the crouch-jump exactly one frame. It latches
+`IN_DUCK` (button bit `4`) into `m_nOldButtons` itself — the latch that makes a press edge detectable
+at all — and drives **three** pieces of player state: `m_bDucked` (`+0x1edd`), `m_bDucking`
+(`+0x1ede`) and `m_flDucktime` (`+0x1ee0`). There is one duck timer: the `m_flDuckJumpTime` this
+section previously listed as a fourth field is `player[0x7b8]`, and `0x7b8 × 4 = 0x1EE0` — the same
+dword, which the decompile assigns through both spellings. `m_bDucked` is the one the hull selector
+reads, which is why `CanUnduck` (`0x101265d0`) clears it around its own trace to make
+`TracePlayerBBox` pick the standing size.
 
 `GAMEMOVEMENT_DUCK_TIME` is **1000.0** (milliseconds — `0x447a0000`, assigned to `m_flDucktime`
 on both the duck and the unduck edge), and the elapsed fraction is formed as
@@ -409,6 +433,18 @@ the hard ceiling on what can be climbed in one jump.
 `FinishUnDuck` and `CanUnduck` (`0x101265d0`) both apply the airborne `−18` *before* running
 `TracePlayerBBox` at the standing size, and refuse the unduck if it would not fit — which is what
 stops a stand-up through a low ceiling on the ground, and through the floor in the air.
+
+**`CanUnduck`'s offset is a function of ground state alone, never of the hull**, because retail's
+origin is the feet: nothing on the ground, `−18` airborne, applied unconditionally to whichever hull
+is current. It then clears `m_bDucked` around a point trace and answers `startsolid == 0`, and
+`FinishUnDuck` point-traces the same destination and keeps the old origin when it starts solid. Both
+finishers end in `CategorizePosition`.
+
+> **Divergence, owner-approved.** Elysium's mover reproduces both edges including the `CanUnduck`
+> gate, so it drops the queued unduck it previously carried — a press under a low ceiling now does
+> nothing rather than arming a stand-up that fires when headroom clears. Its origin is the box centre
+> rather than the feet, so `CanUnduck`'s offset is re-expressed as two terms,
+> `(ducked ? Grow : 0) − (onGround ? 0 : Grow)`, which answers the same four states.
 
 *Provenance: `DumpFuncs range=1011e000-10128000` on `vampire.dll`; the hull literals decoded from
 the constructor's immediate dwords.*

@@ -216,6 +216,7 @@ const TCHAR* OutcomeName(EElysiumAnimOutcome Outcome)
 	case EElysiumAnimOutcome::MaskedRejected:          return TEXT("additive, refused");
 	case EElysiumAnimOutcome::LayerMaskRejected:       return TEXT("masked layer, refused");
 	case EElysiumAnimOutcome::GridStateRefused:        return TEXT("grid, sequence-only state");
+	case EElysiumAnimOutcome::GridFallback:            return TEXT("grid missing, cell stands");
 	case EElysiumAnimOutcome::NoAsset:                 return TEXT("no asset");
 	default:                                           return TEXT("no vocabulary");
 	}
