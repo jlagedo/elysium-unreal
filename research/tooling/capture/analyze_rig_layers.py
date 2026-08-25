@@ -163,6 +163,13 @@ def summarise(rows: list[dict[str, Any]]) -> dict[str, Any]:
     The runtime's graph carries one overlay node and one `_delta` node, and
     `ResolveLayerAssets` says so out loud when a record declares a second of
     either. This counts how often a captured frame asks for more than that.
+
+    **A census, not the measurement.** It assumes one plain channel is the base
+    the frame committed, which is true only when that base was among the
+    contributions the sampler kept — often it was not, and then a frame's
+    overlays are undercounted by one. `Elysium.Content.RigLayers` removes the
+    committed base by its own sequence number before counting, so where the two
+    disagree the test is the answer and this is the lower bound.
     """
     shape = Counter()
     over_overlay = 0
