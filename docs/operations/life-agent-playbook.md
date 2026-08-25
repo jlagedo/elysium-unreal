@@ -17,15 +17,19 @@ Task specs stay in `docs/project/plans/animation.md`; status stays in
    tightly-specified bullet, plan mode just paraphrases the spec.
 4. **Subagents search; the session implements.** Explore-type agents are for fan-out reads
    ("map every caller of X", "survey what the research tooling emits"); they never own a task.
-5. **Authorize the loop in the prompt.** Sessions may not start live runs, builds, exports or
-   test tiers on their own. Grant the standing loop explicitly:
+5. **Authorize the loop in the prompt, and say what it is for.** Sessions may not start live
+   runs, builds, exports or test tiers on their own. Grant the standing loop explicitly:
    *"You may build incrementally, run `uv run elysium run play`, and drive the green room via
-   the `elysium.gr_*` verbs over MCP to validate."* Anything wider — a re-export, a re-bake, a
-   test tier — the session must propose with exact scope and wait.
+   the `elysium.gr_*` verbs over MCP to locate a fault."* A live readout is the runtime's claim
+   about itself: it finds the link that broke and never accepts the result. Anything wider — a
+   re-export, a re-bake, a test tier — the session must propose with exact scope and wait.
 6. **Name the export scope when a bake input changes.** One stem, one bundle, one generator.
    A session that wants `export characters` unscoped is asking for a planned operation.
-7. **Acceptance is the plan's sentence, shown live.** For LIFE0–LIFE4 that means the green
-   room: pose on screen, misses named in the log. A quiet log is not acceptance.
+7. **Acceptance has two halves, and the session owns only one.** The session must *produce* a
+   measured artifact at the seam the plan's sentence names — a composed-pose run diffed against
+   its oracle, a `gr_wield_check` verdict, a test that failed before the change and passes after
+   — and report the number. Only you *accept*, by eye, on screen. A selection record, a slot
+   row, a screenshot the session cannot adjudicate, or a quiet log is neither half.
 8. **Landing is a doc operation.** When you accept the result, say "land it": the session
    deletes the plan entry, flips the roadmap row, writes durable facts to the owning doc, and
    commits code + docs together.

@@ -62,6 +62,17 @@ where the failure is owned or handled, then propagate a structured failure when 
 rather than producing duplicate warning spam. An ordinary negative query result or an explicitly
 optional absence is not a failure and does not require a warning.
 
+### Investigating a reported defect
+
+The owner's observation is the ground truth. A test, log, instrument or readout that reads green
+against it is the first suspect, not the report: a green instrument that disagrees with the screen
+is a false-green instrument, and finding the lie is the job. Reproduce at the seam the owner sees
+before reading anything upstream of it, then name the measurement that would falsify the code and
+run that — not a chain of readouts that agree with it. "Runtime failures are never silent" governs
+code being written; it is not a licence to infer correctness from a quiet log. Faithfulness (is
+this what retail does?) is adjudicated after the symptom is reproduced, never instead of
+reproducing it.
+
 ### Bring-your-own-game
 
 **Nothing game-sourced is committed.** The decoders read *the user's own VtMB install*; their

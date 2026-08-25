@@ -75,7 +75,9 @@ automation run.
 
 ## Engine gotchas
 
-Hard-won, non-obvious, and easy to undo:
+Hard-won, non-obvious, and easy to undo. The ones belonging to the animation bake, its readers
+and the graph live beside their design, in `docs/architecture/animation-architecture.md` §2.5
+and §4.1:
 
 - **A Live Coding patch exists only in the editor process that compiled it.** `CompileLiveCoding`
   links a `UnrealEditor-ElysiumUE.patch_N.dll` into the running editor, and the on-disk module is
@@ -134,11 +136,6 @@ Hard-won, non-obvious, and easy to undo:
   prerequisites to `AElysiumMapActor::PrimaryActorTick` closes a cycle and floods `LogTick`.
 - **`ApplyMaterialOverrides` is lazy** — a runtime `SetMaterial` drops the primitive's built
   texture-streaming data, so albedo and `EnvMask` fall back to a low mip.
-- **A morph target only drives when its curve is flagged on the skeleton.**
-  `USkeletalMeshComponent::ActiveMorphTargets` is populated from the bone container's flags, and
-  those come from `FCurveMetaData::Type.bMorphtarget` — so a curve registered without the flag
-  evaluates to the right weight on a face that cannot receive it. `RegisterMorphTargetCurves` sets
-  both halves; the character verifier guards the contract.
 - **`GetImportedModel()->LODModels` must grow in parallel with `AddLODInfo()`.** A skeletal mesh's
   LOD is two parallel arrays and both entries have to exist, but nothing reads the imported model
   while the mesh is being built — so a bake that adds only the LOD info runs clean and saves, and
@@ -149,96 +146,6 @@ Hard-won, non-obvious, and easy to undo:
   `GEditor->BeginTransaction`. `run play` is `UnrealEditor.exe -game`, where `GEditor` is null, so a
   runtime curve-metadata write crashes on a null dereference in `-game` while working fine in the
   editor. Pass `bTransact = false` from any runtime path.
-- **A proxy owning nodes outside the compiled graph must implement `UpdateAnimationNode`** —
-  `FElysiumBipedAnimProxy`'s cinematic clip player is not in the graph, so the base call cannot
-  reach it, and a sequence player never `Update_AnyThread`'d holds its start frame forever.
-- **A layered blend's bone mask is not a pin.** `FAnimNode_LayeredBoneBlend::BlendMasks` is
-  edit-time state, so a mask that changes per selection cannot be driven by a graph pin the way
-  every other asset on `ABP_ElysiumBiped` is. It is written at runtime instead — the node is found
-  by `FAnimSubsystem_Tag` under `ElysiumAnimGraph::UpperBodyLayerTag` and set through
-  `SetBlendMask`, which is what Epic's own `ULayeredBoneBlendLibrary` does. Two consequences:
-  a **null** mask is legal only because the graph is a *template* Animation Blueprint
-  (`ValidateAnimNodeDuringCompilation` exempts one), which is what keeps a generated profile asset
-  out of the tracked graph text; and the mask must be resolved by NAME against the **playing**
-  skeleton, because the profile a bank's own skeleton hands back gates a shifted set of bones and
-  logs nothing.
-- **A `UBlendProfile`'s mode has to be set before its bone scales.** An entry equal to the mode's own
-  default is not stored, and that default is 0 for `EBlendProfileMode::BlendMask` against 1 for every
-  other mode. A profile still in its constructed `WeightFactor` mode therefore discards every 1.0
-  written into it and saves empty — which reads at evaluation as owning the whole rig, the exact
-  opposite of the mask that was asked for, with nothing logged.
-- **`UBlendSpace::AddSample` reports failure only through its return value.** It validates the
-  sample against the blend space's own skeleton and axis bounds and returns `INDEX_NONE` without
-  logging, so a skeleton set *after* the first sample — or a value placed outside the axis range —
-  yields an asset that saves clean and carries fewer samples than it was given. Set the skeleton
-  before the first add and check every return. The related trap is `ExpandRangeForSample`, which
-  runs inside `AddSample` and quietly widens the axis to fit whatever it is handed: an axis range
-  that no longer matches what was written is the symptom of a misplaced sample, not a cosmetic
-  difference.
-- **A blend space with samples and no `ResampleData()` poses nothing.** That call builds the
-  segments or triangulation the evaluator reads and is not implied by adding samples or by
-  `PostEditChange`. Without it the asset lists its samples correctly everywhere that counts them and
-  evaluates to an empty blend; `GetBlendSpaceData().IsEmpty()` is how a caller tells. Dimensionality
-  is inferred there too, from the samples' bounding box rather than from the class, so a
-  `UBlendSpace` whose samples all share one axis value takes the 1D path regardless.
-- **`UAnimSequence::GetAnimationPose` silently falls back to the raw data model** whenever the
-  compressed data for the current platform is not resident yet, and compression runs asynchronously
-  after a bake. So the same call answers out of two different representations depending on how much
-  work happened earlier in the same process, and a test that reads an additive can pass and fail on
-  the same assets across runs. Call `WaitOnExistingCompression()` first when the assertion is about
-  what a cooked build ships; `IsCompressedDataValid()` is how a caller tells which one it got.
-- **`UAnimSequence::GetBoneTransform` never performs the additive conversion.** It is a plain track
-  read, so a raw evaluation hands back the keys as written — and a baked `_delta`'s keys are the
-  delta already composed onto its base, because the compressor subtracts that base back out. A test
-  built on it reports a correct additive as broken by exactly one base pose, and would pass just as
-  happily if the subtraction had never run. `GetAnimationPose` is the door the runtime uses;
-  `EvaluateAdditiveFrame` in `ElysiumBakedCharacterTests.cpp` is the worked example.
-- **A bone a sequence carries no track for evaluates to identity rather than to the reference pose —
-  on an additive.** The reset differs by kind: `ResetToAdditiveIdentity` for an additive against
-  `ResetToRefPose` for an ordinary sequence, so the single signature "the error equals that bone's
-  full bind transform" means a dropped track on one and the exact opposite on the other. Read the
-  additive stamp before hunting a rotation bug. On an additive that magnitude is ambiguous between
-  three causes — a dropped track, the additive round-trip above, and compressed data that is not
-  resident — so check `IsCompressedDataValid()` before reading anything into it.
-- **Compatible-skeleton remapping always reads both skeleton reference rotations.** Any valid pair
-  can make `DecompressPose` apply that rotation delta even without an explicit retarget node, so
-  every skeleton that shares a bank uses identity common-bone reference rotations. The mesh keeps
-  its exact authored bind, rotation keys pass verbatim, and `OrientAndScale` reads the sequence's
-  named donor pose only to map translations onto the playing mesh. A bone no ordinary sequence
-  tracks resolves to that playing **mesh's** reference pose, not the `USkeleton`'s. Never restore a
-  per-body bank copy to avoid this engine path; bank package count is independent of body count.
-  See `docs/architecture/animation-architecture.md` § 2.4.
-- **The Content Browser preview runs no anim graph, so it applies no axis interpolation.** A rig
-  whose bones are procedurally driven previews with untwisted forearms: the stage evaluates over the
-  blended pose rather than being baked into the clip, so the preview is showing what the asset says
-  and not a bake defect. The same blind spot belongs to **any** graph-less evaluation, including a
-  test that poses a `UPoseableMeshComponent` and skins it: every driven helper holds its bind while
-  its control swings, so deformation measured that way tears at the deltoid and elbow and blames
-  bones nothing drove. The seam was closed as a measurement rather than a bake defect (`e347ebb`),
-  which measured both variants — the pose as skinned, and the same pose with
-  `FElysiumCompositionRig` applied.
-- **`FAnimNode_BlendStack`'s defaults are a minefield, and four of them fail silently.**
-  `BlendspaceUpdateMode` defaults to `InitialOnly`, which samples a hosted blend space's xy once at
-  `BlendTo` and never again — a gait fan freezes at the steering value it was entered with.
-  `BlendParametersDeltaThreshold` defaults to `0`, and a plain *sequence* player answers
-  `GetBlendParameters()` with the zero vector, so any non-zero requested parameter pushes a new
-  player every frame; a threshold no steering value can reach is what turns the comparison off.
-  `bResetOnBecomingRelevant` defaults to `true`, and it pairs with `FAnimNode_BlendListBase`'s
-  `ZERO_ANIMWEIGHT_THRESH` child skip: a full-weight blend-list sibling makes the stack
-  non-relevant, so the default `Reset()`s it and restarts the clip at frame 0 the moment the
-  sibling releases. And `bLoop` is read only inside `BlendTo` — `ConditionalBlendTo` returns early
-  when the requested asset matches the playing one, so a loop flip on the *same* asset holds the
-  pin and changes nothing; `ForceBlendNextUpdate()` is the door, and it must not be called on an
-  empty stack, where the flag survives the blend and forces a second one.
-- **`EAlphaBlendOption::HermiteCubic` is the engine's own default, so it never appears in exported
-  T3D.** A graph text round-trip cannot prove the curve, and `UAnimGraphNode_BlendStack::Serialize`
-  carries a downgrade-to-`Linear` path on an old custom version — only an assertion against the
-  compiled node proves what is actually running.
-- **`GetSlotMontageGlobalWeight` is filled during graph *evaluation*, not `TickAnimation`.** Read
-  in a tick-time path it answers the previous frame's weight or zero.
-- **`GetRelevantAnimTimeFraction` returns `0.0` both at the start of a clip and when there is no
-  relevant player at all.** The two are indistinguishable from that call alone;
-  `GetRelevantAnimLength` is what disambiguates them.
 - **`+use` and the debug pick use dedicated channels** (`ELYSIUM_USE_CHANNEL` /
   `ELYSIUM_PICK_CHANNEL`), because the walkable surface is a material-less `.hulls` collider that
   would otherwise be reported instead of the wall.

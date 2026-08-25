@@ -32,15 +32,32 @@ than killing the holder (the `build-slots` skill).
 
 ## Choosing a layer
 
-Pick the cheapest layer that can catch the class of bug in hand, not the layer nearest the change.
+Pick the cheapest layer that **observes the seam the defect is reported at**, not the layer nearest
+the change.
 
 - A rule, formula, threshold, state machine, call order or save field → `Substrate`, against the
   recording doubles. Content-free, deterministic, and the whole tier answers in seconds.
 - A question only the real corpus or the bake can answer — a count, a parity, a resolved asset
   → `Content`, with the narrowest selector that still asks the question.
-- Anything whose answer is a rendered frame is **not covered by any tier**: automation runs
-  `-nullrhi`. Say so rather than approximating it with a pose or a transform assertion, and reach
+- **What the animation graph produced** — the component-space bone transforms after every layer
+  has composed, on a body a real map stood up from real input — is neither of those, and it is not
+  a rendered frame either: the graph evaluates under `-nullrhi`, so a headless harness can write it
+  down. The instruments that read it are the `-Elysium*` runs under `Private/Debug/`
+  (`ElysiumComposeRun.h` samples the graph's output per frame beside the overlay slots and the
+  selection record that produced it) and their differs under
+  `pipeline/src/elysium_pipeline/validation/`. The `Elysium.Content.Rig*` tests score assets and
+  selections, not composition; `docs/vtmb/animation_rig_resolution.md` → "The instruments, and
+  what each proves" says which seam each one cannot see.
+- Anything whose answer is a rendered frame — pixels, materials, lighting — is **not covered by
+  any tier**. Say so rather than approximating it with a pose or a transform assertion, and reach
   for `validation/shots_diff.py` if a pixel answer is actually needed.
+
+**A readout upstream of the seam under test is not evidence for that seam.** The selection record
+proves selection; a slot row proves arming; a quiet log proves that nothing logged. Only composed
+bone transforms prove composition, and only a frame proves the frame. A live MCP or Cog readout is
+the runtime's claim about itself — evidence of the claim, never of the pose — so a change is
+verified by a measurement at the seam the owner sees, and a live probe is for locating the link
+that broke.
 
 ## Writing a test
 
