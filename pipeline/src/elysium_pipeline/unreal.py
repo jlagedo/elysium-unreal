@@ -604,6 +604,12 @@ def run_play(config, runner, map_name: str | None = None, extra: Sequence[str] =
     _run(config, runner, editor_executable(config), args)
 
 
+#: The bodies `debug compose` stands when none is named. Both of them, because these are the two
+#: the retail capture recorded (`malkavian_male_armor_0`, 1,468 frames; `malkavian_female_armor_0`,
+#: 1,254) and so the two whose composed pose there is a retail pose to score against at all.
+COMPOSE_BODIES = ("malkavian_female_armor_0", "malkavian_male_armor_0")
+
+
 @dataclass(frozen=True)
 class HarnessOptions:
     """Harness-wide switches, split out of the positional arguments.
@@ -621,6 +627,14 @@ class HarnessOptions:
     promote: bool = False
     drive: bool = False
     arena: bool = False
+    #: The bodies a harness stands, in the order given. Empty means the harness's own default set,
+    #: which for the composed-pose run is both of the bodies the retail capture recorded.
+    bodies: tuple[str, ...] = ()
+
+
+def _split_bodies(value: str) -> list[str]:
+    """`--body a,b` and `--body a --body b` mean the same thing."""
+    return [stem.strip() for stem in value.split(",") if stem.strip()]
 
 
 def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
@@ -631,6 +645,7 @@ def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
     """
     positional: list[str] = []
     exec_cmds: list[str] = []
+    bodies: list[str] = []
     flags = {
         "--live": False,
         "--gym": False,
@@ -652,6 +667,19 @@ def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
             exec_cmds.append(value.split("=", 1)[1])
             index += 1
             continue
+        # `--body` is repeatable and comma-splittable, because a harness that stands one body per
+        # launch needs the SET stated in one command line -- naming them one launch at a time is how
+        # a second body ends up never run.
+        if value == "--body":
+            if index + 1 >= len(values):
+                raise ValueError("--body needs a model stem, e.g. --body malkavian_male_armor_0")
+            bodies.extend(_split_bodies(values[index + 1]))
+            index += 2
+            continue
+        if value.startswith("--body="):
+            bodies.extend(_split_bodies(value.split("=", 1)[1]))
+            index += 1
+            continue
         if value in flags:
             flags[value] = True
             index += 1
@@ -666,6 +694,7 @@ def _take_options(values: list[str]) -> tuple[list[str], HarnessOptions]:
         promote=flags["--promote"],
         drive=flags["--drive"],
         arena=flags["--arena"],
+        bodies=tuple(bodies),
     )
 
 
@@ -772,8 +801,11 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         _run(config, runner, os.fspath(Path(os.sys.executable)), diff)
         return None
     if kind == "compose":
-        # One map, one weapon, one launch -- the harness seats a body and drives it, so a second
-        # scenario in the same process would inherit the first one's motion.
+        # One map, one weapon, one BODY, one launch -- the harness seats a body and drives it, so a
+        # second scenario in the same process would inherit the first one's motion. Two bodies is
+        # therefore two launches, run here rather than left to the caller: the capture stands both
+        # the male and the female Malkavian, and a defect the female's proportions happen to hide is
+        # a defect nobody sees until the male is stood too.
         weapon = values[0] if values else "item_w_ithaca_m_37"
         hz = values[1] if len(values) > 1 else "60"
         if weapon.isdigit():
@@ -785,22 +817,30 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
         if not (config.export_root / map_name).is_dir():
             raise UnrealFailure(
                 f"{map_name} is not exported; the composed-pose run drives a body on a real map")
-        launch = [
-            *common, "-ElysiumCompose", f"-ComposeHz={hz}", f"-ComposeWeapon={weapon}",
-            f"-ElysiumMap={map_name}",
-            "-UseFixedTimeStep", f"-FPS={hz}", "-nullrhi", "-unattended",
-            "-nosplash", "-nosound", "-stdout", "-FullStdOutLogOutput",
-        ]
-        launch.extend(v for v in values[2:] if not v.startswith("-ElysiumMap="))
-        if exec_cmds:
-            launch.append("-ExecCmds=" + ";".join(exec_cmds))
-        _run(config, runner, editor, launch)
+        bodies = list(options.bodies) or list(COMPOSE_BODIES)
+
+        reports: list[Path] = []
+        for body in bodies:
+            launch = [
+                *common, "-ElysiumCompose", f"-ComposeHz={hz}", f"-ComposeWeapon={weapon}",
+                f"-ComposeBody={body}", f"-ElysiumMap={map_name}",
+                "-UseFixedTimeStep", f"-FPS={hz}", "-nullrhi", "-unattended",
+                "-nosplash", "-nosound", "-stdout", "-FullStdOutLogOutput",
+            ]
+            launch.extend(v for v in values[2:] if not v.startswith("-ElysiumMap="))
+            if exec_cmds:
+                launch.append("-ExecCmds=" + ";".join(exec_cmds))
+            _run(config, runner, editor, launch)
+            reports.append(config.export_root / "_compose"
+                           / f"{map_name}-{weapon}-{body}.json")
 
         # Recording without judging is the failure mode every other harness here already fixed:
-        # the comparator runs chained, and its verdict is this command's exit code.
-        diff = ["-m", "elysium_pipeline.validation.compose_diff",
-                "--run", os.fspath(config.export_root / "_compose"
-                                   / f"{map_name}-{weapon}.json")]
+        # the comparator runs chained, and its verdict is this command's exit code. Both runs go to
+        # ONE comparator call so the closing summary can put the two bodies' arm scalars beside each
+        # other -- two calls would print two verdicts and no comparison.
+        diff = ["-m", "elysium_pipeline.validation.compose_diff"]
+        for report in reports:
+            diff.extend(["--run", os.fspath(report)])
         _run(config, runner, os.fspath(Path(os.sys.executable)), diff)
         return None
     if kind == "cast":

@@ -1246,6 +1246,12 @@ def debug_compose(ctx: typer.Context, args: list[str] = typer.Argument(None)) ->
     directly and never stands a graph up, so a slot published at the wrong weight, a bone mask
     resolved against the wrong skeleton or a chain composed in the wrong order is invisible to it.
     `-ElysiumMap=<name>` picks the host map.
+
+    **Both bodies by default**, one launch each: the harness seats a body and drives it, so a second
+    body in the same process would inherit the first one's motion. They are the two the retail
+    capture recorded -- `malkavian_female_armor_0` and `malkavian_male_armor_0` -- and both reports
+    go to one scoring call, whose closing summary puts their arm scalars beside each other.
+    `--body <stem>` runs one; it is repeatable and takes a comma list.
     """
     _debug(ctx, "compose", [*(args or ()), *ctx.args])
 

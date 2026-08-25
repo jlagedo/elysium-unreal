@@ -32,9 +32,12 @@ class UElysiumMapSubsystem;
 // Distances are in centimetres and Unreal-native; the comparison is isometry-invariant, which is
 // what lets the two sit in one schema without either being converted.
 //
-// One map, one weapon, one launch — the same shape `-ElysiumProbe` takes, for the same reason: the
-// run seats a body and drives it, and a second scenario in the same process would inherit the
-// first one's motion.
+// One map, one weapon, one body, one launch — the same shape `-ElysiumProbe` takes, for the same
+// reason: the run seats a body and drives it, and a second scenario in the same process would
+// inherit the first one's motion. `-ComposeBody=<stem>` is what makes the body a statement of the
+// harness rather than an inheritance from whatever record the map loaded, and it is why the report
+// is named per body as well as per weapon: two bodies through one map and one weapon are two runs,
+// and a shared filename would leave the second silently standing for both.
 class FElysiumComposeRun
 {
 public:
@@ -67,6 +70,10 @@ private:
 	TArray<TSharedPtr<class FJsonValue>> Frames;
 
 	FString WeaponClass;
+	// The body the run stands, before it is stood. `Stem` below is what the driver PUBLISHED once it
+	// was standing, and the two are compared: an override that did not take records the wrong body
+	// under the right name, which is the one failure a pose report cannot show on its own.
+	FString BodyStem;
 	// The item the run granted. Held because `Begin` is retried while the world settles, and a grant
 	// per attempt would stack weapons in the inventory.
 	FElysiumEntityHandle GrantedWeapon;
@@ -91,6 +98,12 @@ private:
 	// under a screen that holds input is a replay every frame of which is gated to nothing.
 	int32 UngatedFrames = 0;
 	bool bGymBuilt = false;
+	// The body is built once, before the weapon is granted, so the wield lands on the body under
+	// test rather than on one a later rebuild throws away.
+	bool bBodyBuilt = false;
+	// A body that would not build is terminal rather than retried: every remaining attempt would
+	// stand the map's own body and record it under the requested name.
+	bool bBodyFailed = false;
 };
 
 #endif // !UE_BUILD_SHIPPING

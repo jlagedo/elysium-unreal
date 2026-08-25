@@ -42,6 +42,12 @@ namespace
 	// against each other — the shape a composition defect is visible in at all.
 	const TCHAR* const GDefaultWeapon = TEXT("item_w_ithaca_m_37");
 
+	// The default body is the female Malkavian because that is the body §3.1's retail row was read
+	// off — `malkavian_female_armor_0`, the M37 aggressive carry, moving — so the default run is the
+	// one whose numbers there is already a retail figure to place beside. The male is the other body
+	// the capture stands, and it is a second launch rather than a second scenario in this one.
+	const TCHAR* const GDefaultBody = TEXT("malkavian_female_armor_0");
+
 	// Frames of input-free settling before the stream is armed, for the reason the movement harness
 	// settles: a body that has just been placed is not grounded yet, and a gait resolved off an
 	// airborne frame is not the gait under test.
@@ -152,11 +158,15 @@ FElysiumComposeRun::FElysiumComposeRun(UElysiumMapSubsystem* InSubsystem)
 	{
 		WeaponClass = GDefaultWeapon;
 	}
+	if (!FParse::Value(FCommandLine::Get(), TEXT("ComposeBody="), BodyStem) || BodyStem.IsEmpty())
+	{
+		BodyStem = GDefaultBody;
+	}
 
 	BuildStream();
 	UE_LOG(LogElysiumCompose, Log,
-		TEXT("headless composed-pose run armed: weapon '%s', %d Hz, %d scripted frames."),
-		*WeaponClass, Hz, Stream.Num());
+		TEXT("headless composed-pose run armed: body '%s', weapon '%s', %d Hz, %d scripted frames."),
+		*BodyStem, *WeaponClass, Hz, Stream.Num());
 
 	TickHandle = FTSTicker::GetCoreTicker().AddTicker(
 		FTickerDelegate::CreateRaw(this, &FElysiumComposeRun::Tick));
@@ -215,7 +225,7 @@ void FElysiumComposeRun::BuildStream()
 bool FElysiumComposeRun::Begin()
 {
 	UElysiumMapSubsystem* Sub = Subsystem.Get();
-	const FComposeRefs Refs = Resolve(Sub);
+	FComposeRefs Refs = Resolve(Sub);
 	if (!Refs)
 	{
 		return false;
@@ -225,6 +235,49 @@ bool FElysiumComposeRun::Begin()
 	if (Player == nullptr)
 	{
 		return false;
+	}
+
+	// **The body the run stands, stated rather than inherited.** Whatever record the map loaded
+	// picks a model, and a harness that takes it records whichever body that record happened to
+	// name — which is fine while there is one body and wrong the moment there are two, because the
+	// report would carry the same numbers under either name. `BuildPlayerVisual` is the shipping
+	// call, so the attachment, the hull offset, the mover tick prerequisite and the cached stem are
+	// the game's own.
+	//
+	// **Before the grant, and once.** A rebuild tears the visual down, so a body built after the
+	// weapon was wielded would throw the wield attachment away; and `Begin` is retried while the
+	// world settles, so an unguarded build would rebuild the body on every attempt and reset the
+	// animation driver under it each time.
+	if (!bBodyBuilt)
+	{
+		bBodyBuilt = true;
+		USkeletalMeshComponent* Built = Refs.Map->BuildPlayerVisual(BodyStem, TEXT("Neutral"), 0);
+		if (Built == nullptr)
+		{
+			// Terminal rather than retried: every further attempt would stand the map's own body and
+			// this run would record it under the requested name.
+			bBodyFailed = true;
+			UE_LOG(LogElysiumCompose, Error,
+				TEXT("compose run could not build body '%s' — is its baked body on the mount? "
+					 "nothing is recorded"), *BodyStem);
+			return false;
+		}
+		// The same sync the green room's drive body makes, for the same two reasons: this builds the
+		// player's visual outside the entity's own embodiment call, so without it `GetSkeletalBody()`
+		// stays null and a real equip's wield visual silently never attaches; and `ModelStem()` reads
+		// the `model` field rather than the pawn, so every producer that resolves through the ENTITY —
+		// the weapon's attack activity above all, which is what this run exists to compose — would
+		// search the previous body's vocabulary. Written directly rather than through
+		// `SetRuntimeModel`, whose model-changed hook would tear down the visual just attached.
+		Player->Visual = Built;
+		Player->Model = BodyStem;
+		World->RegisterNpcBody(Built);
+		// `Refs` was resolved against the component this call has just replaced.
+		Refs = Resolve(Sub);
+		if (!Refs)
+		{
+			return false;
+		}
 	}
 
 	// The weapon, through the player's own grant service rather than by constructing an item: the
@@ -480,6 +533,10 @@ void FElysiumComposeRun::Finish()
 	Root->SetStringField(TEXT("schema"), TEXT("elysium.compose.pose.v1"));
 	Root->SetStringField(TEXT("harness"), TEXT("compose"));
 	Root->SetStringField(TEXT("weapon"), WeaponClass);
+	// The body ASKED FOR beside the body the driver PUBLISHED. They are two different claims — one
+	// is the harness's, one is the running graph's — and writing only the second would let an
+	// override that never took read as a run of the body it names.
+	Root->SetStringField(TEXT("body"), BodyStem);
 	Root->SetStringField(TEXT("stem"), Stem);
 	// Stated rather than converted: the comparison against a retail capture is isometry-invariant,
 	// so the two schemas differ only in the unit their numbers are already in.
@@ -494,8 +551,10 @@ void FElysiumComposeRun::Finish()
 
 	UElysiumMapSubsystem* Sub = Subsystem.Get();
 	const FString MapName = Sub != nullptr ? Sub->GetCurrentMapName() : FString(TEXT("nomap"));
+	// Named per body as well as per weapon: two bodies through one map and one weapon are two runs,
+	// and a shared filename would leave the second silently standing for both.
 	const FString Path = FPaths::Combine(OutputDir(),
-		FString::Printf(TEXT("%s-%s.json"), *MapName, *WeaponClass));
+		FString::Printf(TEXT("%s-%s-%s.json"), *MapName, *WeaponClass, *BodyStem));
 
 	FString Text;
 	const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&Text);
@@ -523,6 +582,15 @@ void FElysiumComposeRun::Finish()
 		// it was rather than leaving a reader to guess from a zero.
 		UE_LOG(LogElysiumCompose, Error,
 			TEXT("compose run recorded no frame at all — the body never posed"));
+	}
+	else if (!Stem.Equals(BodyStem, ESearchCase::IgnoreCase))
+	{
+		// The override did not take. Every frame of this report is a full skeleton under a gait
+		// selection and none of it is the body the run was asked for — the same shape as T1's
+		// standing body, one field further out, and equally invisible in the pose data.
+		UE_LOG(LogElysiumCompose, Error,
+			TEXT("compose run was asked for body '%s' but the driver published '%s'; every frame in ")
+			TEXT("this report is the wrong body"), *BodyStem, *Stem);
 	}
 	FPlatformMisc::RequestExit(false);
 }
@@ -554,6 +622,11 @@ bool FElysiumComposeRun::Tick(float /*DeltaSeconds*/)
 		}
 		if (!Begin())
 		{
+			if (bBodyFailed)
+			{
+				Finish();
+				return false;
+			}
 			// One retry window rather than an indefinite wait: a world that is ready and still
 			// cannot be driven is a fault, and a harness that spins forever on it reports nothing.
 			// Long enough to outlast a pickup notification's hold, which is the ordinary reason the

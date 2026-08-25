@@ -5,8 +5,20 @@ has measured against retail is here, as a task an agent can execute without redi
 traps that cost the session that found them. The acceptance is the same everywhere: an instrument
 that is **red today** goes green **on numbers**, never on a screenshot or a live session.
 
-This document carries no status marks. Progress is the roadmap's (`docs/project/roadmap.md`), and
-the owner adds the row.
+**This document carries its own status and its own findings**, against the general rule for a plan
+file, because the programme is ordered and a later task reads the earlier one's measurements to
+know what it is standing on. A landed task keeps its entry; nothing here is deleted on landing.
+
+- A task heading carries **DONE** once it has landed and its gate has been read. **An unmarked
+  heading is open** — absence of a mark is the status, so no task needs an edit to stay true.
+- A landed task gains an **As landed** block: the shape that shipped, the numbers its gate now
+  reads, and every place the task text turned out to be wrong, each correction carrying the
+  measurement that decided it. A task text is never rewritten to match what landed — the original
+  stands and the block says how it differed, because the next task's author needs to know which
+  assumptions did not survive contact.
+- An open task may carry a **Findings** block for a measurement taken before it lands.
+- The roadmap (`docs/project/roadmap.md`) still owns master sequencing and project priority, and
+  the owner adds the row there.
 
 ---
 
@@ -32,7 +44,8 @@ produced this plan, and they are not re-litigated per task.
 5. **No cvar, feature flag, A/B toggle or state-enabling switch.** A task lands as a complete
    change; the previous behaviour stays recoverable through git.
 6. **Docs follow the task that changes the fact.** Each task names the owning document it updates.
-   Nothing else touches docs. The roadmap is the owner's.
+   Nothing else touches docs, except this file: a landing task marks its own heading **DONE** and
+   writes its own **As landed** block here. The roadmap is the owner's.
 7. **Verification is scoped to what changed**: source → `uv run elysium build` then the named tier;
    pipeline → the Python suite and a re-bake only where the task says so; prose → nothing.
 
@@ -253,7 +266,7 @@ after. **Docs** names the owning document updated when it lands.
 
 ### Phase A — instruments
 
-#### T-A1 `RigCompose` attributes every cohort and fails on a missing asset
+#### T-A1 `RigCompose` attributes every cohort and fails on a missing asset — **DONE**
 
 - **Where:** `Source/ElysiumUE/Private/Tests/ElysiumRigComposeTests.cpp` (`ComposeClosure` at
   ~458, the asset load at ~505–522, the cohort report at ~1003–1090).
@@ -267,7 +280,43 @@ after. **Docs** names the owning document updated when it lands.
 - **Traps:** T2, T3, T4.
 - **Docs:** none — the test is the record.
 
-#### T-A2 `compose_diff.py` scores the whole body in local space
+**As landed.** The three cohorts are an `FCohort` each, carrying their own error distribution,
+per-bone ranking and arm scalar; every printed block and every assertion names its cohort.
+`FDistribution` gained `Mean`, `StdDev` and `PeakToPeak`. `Elysium.Content.RigCompose` is red on
+the gate: control cohort median **4.449 cm**, arm scalar **3.46 cm** on the female `seq 239` state
+and **6.98 cm** on `seq 412`. The control ranking, which did not exist before, is legs-first —
+`Bip01 R Calf 6.77`, `R Toe0 5.72`, `L Calf 5.46` — which is T-C7's residual showing up where T2
+said it would.
+
+Three things the task text got wrong, each corrected in the code and each carrying a number:
+
+- **The scalar is grouped per `(body, base sequence)`, never pooled over a cohort.** Pooled, the
+  peak-to-peak measures the difference *between* states — aiming, walking, reloading each hold the
+  hand at a different distance — and the cycle disappears into it: on **the capture itself** the
+  control cohort pools to **21.33 cm**, and the capture is retail. Grouped, the capture side
+  reproduces §3.1 to the digit (female `seq 239`, n=27: mean **33.49**, sd **0.49**, p2p **1.89**).
+  That is `sway2.py`'s grouping, which is where §3.1's row actually came from; `sway.py`, which
+  buckets by `(stem, moving)` and pools every M37 frame, gives 30.60 / 4.38 / 16.09 and is not the
+  source. A pooled assertion is a T3-class metric — a number that cannot move with the defect.
+- **The bound is `max(2.5 cm, the capture's own p2p for that same state)`.** Retail's *male* M37
+  carry swings **4.19 cm** (`seq 211`) and **4.48 cm** (`seq 383`), so a flat 2.5 cm reads red
+  where retail reads red, which is a threshold measuring itself rather than the code. The floor
+  masks nothing: both male states still fail, at 8.31 and 9.89. On every state where retail holds
+  inside 2.5 cm this is exactly the task's assertion.
+- **`A_katana_bobble_layer@katana_aggressive_run` is not skipped silently — it is *substituted*.**
+  The loader falls back to the raw `A_katana_bobble_layer`, which does exist on the mount, so the
+  frames it scores are scored against a clip retail did not draw. A genuinely absent layer is now
+  an `AddError`; this case is a separate named warning. **It is the only substitution in the whole
+  corpus** — every other declared autolayer has its `@host` derived form baked, including the
+  sibling `A_bushhook_bobble_layer_bushhook_aggressive_{run,walk}`. That asymmetry is a bake gap,
+  and the lead belongs to T-B1's re-bake.
+
+Our arm p2p reads **lower** than the ~6.8 cm the Gate line predicts because the two numbers come
+from different instruments: §3.1's "ours" is `sway_ours.py` over a compose-harness run, while this
+test searches the layer phase and the aim cell for the best fit and so reports a **lower bound** on
+the error. Both are red; T-A2 is the one that scores the harness run directly.
+
+#### T-A2 `compose_diff.py` scores the whole body in local space — **DONE**
 
 - **Where:** `pipeline/src/elysium_pipeline/validation/compose_diff.py`.
 - **Change:** replace the rigid-subtree all-pairs metric with the whole-body, local-space
@@ -277,7 +326,61 @@ after. **Docs** names the owning document updated when it lands.
 - **Traps:** T1, T3.
 - **Docs:** none.
 
-#### T-A3 A fan-duration assertion
+**As landed.** The comparator scores two cohorts — `control` (no slot standing) and `layered`
+(exactly one at full weight) — each carrying its own error distribution, per-bone ranking and arm
+scalar, and each asserted. On `sp_tutorial_1-item_w_ithaca_m_37.json` it is **red on every one of
+them**: control **n=338, median 3.990 cm** (p90 4.676, max 5.451), layered **n=81, median 3.995**
+(p90 5.482, max 7.481), `m37_attack_layer` 3.995, and the arm scalar **6.757 cm peak-to-peak
+against a bound of 2.500** — the Gate line's 6.76 to the digit. Both cohorts' per-bone rankings are
+feet-and-calves first (`L Toe0` 5.42, `R Toe0` 5.20, `L Foot` 4.95, `L Calf` 4.91 on the control),
+which is the same shape T-A1's ranking has and the same residual T-C7 owns.
+
+**It reproduces §3.1's table on both sides.** The control state (female `m37_aggressive_run`,
+moving) reads ours **29.48 / 2.14 / 6.76** and the capture **33.49 / 0.49 / 1.89 over n=27** —
+which is the §3.1 row exactly, from a completely different instrument than the `sway_ours.py` /
+`sway2.py` pair that produced it. Two independent readings of both halves now agree.
+
+Five things the task text got wrong or left unsaid, each carrying the measurement that decided it:
+
+- **There is no composition to do, so "in local space" does not name a step here.** The harness's
+  frame is the pose the running graph already composed, published in Unreal-native component
+  space; `RigCompose` composes in local space because it *rebuilds* the frame from clips, and this
+  scorer rebuilds nothing. What was actually ported is the part that mattered — the **whole-body
+  extent** of the pairwise set (T3), the per-cohort attribution (T2) and the per-state arm scalar.
+  Naming a space here would have been a claim about a stage the file does not have.
+- **"The whole body" is 59 bones of 88, and the other 29 must go.** The set is the bones the
+  committed clip states a track for, read from the playing bank's own `ANIM` track headers
+  (`eskm.clip_track_bones`) rather than from a name list. What that excludes on the female
+  Malkavian is the axis-interpolated twist chain (`Bicep`, `Ulna`, `Elbow`, `Knee`, `Hip`,
+  `Quadricep`, `Femoris`, `Shin`, `Ankle`, `Wrist`, `Shoulder`, both sides) and the `Bone01..09`
+  hair chain — things retail drives by a rig rule or secondary motion that this run does not
+  perform, so leaving them in scores a simulation instead of a composition.
+- **A captured frame taken mid cross-fade is not a candidate, and excluding it is what makes the
+  bound honest.** 377 of the 866 joined female frames carry a plain channel below full weight,
+  which is a previous base still ramping out (A.4c). Left in the candidate pool the min-search
+  preferred them, which *lowered* our reported error (control median 3.432 rather than 3.990) and
+  *raised* the capture's own arm excursion to 2.32 cm over n=44. Removed, the capture returns
+  1.89 over n=27 — §3.1's number — and our own figures do not move at all, because the defect is
+  ours and not the corpus's. Detected the way `RigCompose` detects it: non-additive, weight < 0.999.
+- **The bound is `max(2.5 cm, the capture's own p2p for that same state)`**, the same correction
+  T-A1 landed and for the same reason. On this state retail holds inside 2.5, so the floor is what
+  fires and this is exactly the task's assertion.
+- **The retail frame is matched on `(stem, base clip, overlay set, moving)`, and matching on the
+  full channel set is impossible today.** On all 81 layered frames the capture also accumulates
+  **`m37_attack_delta`**, which our published record does not name — an exact channel-set match
+  would drop the entire layered cohort. It is reported as a named channel gap per state and never
+  gated on, because our record enumerates what the driver published rather than everything the
+  graph composed; whether the delta reaches the frame is T-B1's to settle.
+
+Two smaller shapes worth knowing before the next task reads this: the moving gate is
+`motion.speed > 20` and it is part of the **state key** rather than a cohort filter, so a
+standing frame is still scored but never carries the arm scalar; and the exit code now separates
+**2 — the run cannot support a verdict** (travelled < 25 cm, per T1, or no stem) from **1 — the
+composed pose is wrong**, so a chained `debug compose` cannot report a harness fault as a
+composition defect. 60 relaxed-gait frames and 1 `m37_ready` frame are unscored and named: the
+capture never stood those states.
+
+#### T-A3 A fan-duration assertion — **DONE**
 
 - **Where:** new `Elysium.Content.FanDuration` beside `ElysiumRigComposeTests.cpp`.
 - **Change:** for every baked `UBlendSpace` with cells that disagree on length (99 of 126 gait
@@ -289,13 +392,125 @@ after. **Docs** names the owning document updated when it lands.
   retail 1.111 s.
 - **Docs:** none.
 
-#### T-A4 The compose harness runs both bodies
+**As landed.** `Elysium.Content.FanDuration`
+(`Source/ElysiumUE/Private/Tests/ElysiumFanDurationTests.cpp`) sweeps every owner in
+`npc_index.json` that declares a blends sidecar and scores every gait fan the bake wrote. **It is
+red on the Gate to the digit**: on the female `walk` fan and its whole carry family the asset
+answers **1.0000 s at `move_yaw = −120°` against retail's weighted mean of 1.1111 s**, and the
+printed row carries the harmonic mean beside it at 1.0000 — so the divergence is not merely
+present, it is identified as *exactly* the harmonic branch. Corpus-wide: **176 of 207 scored fans
+diverge, over 395 of 1,863 sampled headings**, worst 0.111 s.
+
+The measurement is taken through `UBlendSpace::UpdateBlendSamples` for the weights and
+`GetAnimationLengthFromSampleData` for the answer — the pair `FAnimNode_BlendSpacePlayer` reaches
+through `TickAssetPlayer`, so the number asserted is the one the graph reads. It confirms the
+plan's reading of `BlendSpace.cpp:2037` from the other side: the legacy branch is `Σ wᵢ · lenᵢ` and
+the default is `1 / Σ (wᵢ / lenᵢ)`, and every shipped asset is on the second.
+
+Four things the task text got wrong or left unsaid, each carrying the number that decided it:
+
+- **The census is 207 of 225, not 99 of 126, and every one of them is on the mount.** A gait fan is
+  a grid whose axis-0 pose parameter is `move_yaw` and whose every cell carries
+  `motion.cycle_seconds` — 225 of them across **84 owners**, all 9×1 over −180..180 without
+  exception, **207 with cells of differing length and 18 without**, and **0 not on the mount**. The
+  `@host` derived form does not arise here: no gait fan is declared as an autolayer *target*, so
+  every one has exactly one asset, unlike the layer grids T-A1 found. The 18 uniform fans are
+  counted and skipped rather than asserted — both means return the shared length there, so an
+  assertion on one would read as coverage it is not.
+- **`Σ wᵢ (numframesᵢ − 1)/fpsᵢ` is not recomputed from frame counts; it is the sidecar's own
+  column, and the frame count is a separate assertion.** `blends/*.json` states
+  `motion.cycle_seconds` per cell already reduced, and the expectation is built from that and the
+  engine's own blend weights — never from the baked sequences, which would let a bake that wrote
+  every clip at the wrong length agree with itself. The two are cross-checked per sample as a
+  **separately named failure**: `(frames − 1)/fps` in the `.eskm` matches `cycle_seconds` on all
+  918 cells of the female `move_and_ranged` bank offline, and the test reports **0 baked cells
+  disagreeing** across the sweep. So a length defect cannot be misread as a blend defect, in either
+  direction.
+- **Nine fixed positions cannot discriminate on every fan, so the third interior one is placed on
+  the fan's own widest span.** Six spokes and three between them, in cell coordinates rather than
+  literal degrees; the first interior sample lands at exactly −120° on a 9×1 −180..180 fan, which
+  is the Gate. The third is aimed at the adjacent pair whose lengths differ most, because the two
+  means agree *exactly* between two cells of equal length and a sample landing there passes for
+  either rule.
+- **31 of the 207 still cannot be discriminated on, and that is the tolerance rather than the
+  sampling.** They are the `*_run` weapon carries on both shared banks plus the three
+  `pcidles_allsequences` `run` fans, whose cells are `[0.6, 0.6, 0.567, 0.6, 0.6, 0.567, 0.567,
+  0.6, 0.6]`: the largest possible `|weighted − harmonic|` **anywhere** on such a fan is
+  **4.8e-4 s**, below the 1e-3 s bound, so no position could fail whatever the asset declares. The
+  test names all 31 in its report rather than folding them into the pass, because the count alone
+  would read as coverage. **176 discriminating fans, and all 176 diverge** — the instrument fails
+  on every fan it can see.
+
+One trap for T-B2's author. `GetAnimationLengthFromSampleData` reads `SamplePlayRate` off the
+sample-data list, not `RateScale` off the asset, and `FBlendSampleData`'s default for it is
+**`0.0f`** — on the harmonic branch that makes `SampleNormalizedSpeed` zero and the whole function
+return **0 s**. It is seeded from `FBlendSample::RateScale` inside `GetSamplesFromBlendInput`, so
+the length is only meaningful when read off a list that call produced. A hand-built list scores
+every fan at zero and reads as a catastrophic failure rather than a wiring one.
+
+#### T-A4 The compose harness runs both bodies — **DONE**
 
 - **Where:** `ElysiumComposeRun.cpp` (`BuildGym` path, `-ComposeBody=`), `cli.py` `debug compose`.
 - **Change:** a `-ComposeBody=<stem>` override defaulting to the female Malkavian, and `debug
   compose --body` in the verb; the summary prints the arm scalar per cohort.
 - **Gate:** both runs red on T-A2's scorer.
 - **Docs:** none.
+
+**As landed.** `-ComposeBody=<stem>` stands the body through the shipping `BuildPlayerVisual`,
+defaulting to `malkavian_female_armor_0`; `debug compose` runs **both** bodies by default, one
+launch each, and `--body <stem>` (repeatable, comma-splittable) runs a subset. Both reports go to
+one `compose_diff` call — `--run` is now repeatable — whose closing summary prints each run's
+per-cohort median and arm scalar beside the other's. **Both runs are red on the Gate:**
+
+| | control median | control arm p2p | bound | layered median | layered arm p2p |
+|---|---|---|---|---|---|
+| `malkavian_female_armor_0` | **3.990** cm (n=338) | **6.757** cm | 2.500 | **3.995** (n=81) | 13.086 |
+| `malkavian_male_armor_0` | **1.887** cm (n=370) | 1.404 cm | 4.191 | **3.660** (n=49) | 4.720 |
+
+The female run reproduces T-A2's landed figures **to the digit** — 480 frames, 1782.03 cm
+travelled, control 3.990 / p90 4.676 / max 5.451, layered 3.995, arm 6.757 — which is the check
+that the explicit body build changed nothing on the path that was already standing that body.
+
+Four things the task text got wrong or left unsaid, each carrying the measurement that decided it:
+
+- **The male's control-cohort arm scalar does not fail, and that is the finding, not a pass.** It
+  reads **1.404 cm against a bound of 4.191** (the capture's own male excursion for the same state,
+  `m37_aggressive_run` — which is T-A1's `seq 211` to the digit), while the female reads 6.757
+  against 2.500 on the same weapon, the same map and the same stream. So the arm defect T-B1 owns
+  is **not visible on the male body through this instrument at all**, and a programme that had run
+  only the male would have read the whole arm scalar green. The whole-body medians invert the
+  ranking — male 1.887, female 3.990 — so neither body is the strictly worse one and neither can
+  stand for the other.
+- **The two instruments disagree about the male arm by 6×, and the disagreement is a lead for
+  T-B1.** `RigCompose` reads the male's `seq 211` carry at **8.31 cm** (T-A1's As landed); this
+  harness reads the same body, the same state and the same retail bound at **1.404**. They measure
+  different objects — `RigCompose` rebuilds the frame from baked clips and searches the layer phase
+  and aim cell for the best fit, while this records what the running graph published — so the gap
+  says the male's error lives in something the graph does that the rebuild does not, or the reverse.
+  It is named here and settled by neither.
+- **The report is named per body, and a run's `body` is written beside its `stem`.** Two bodies
+  through one map and one weapon are two runs, so `<map>-<weapon>.json` became
+  `<map>-<weapon>-<body>.json`; T-A2's landed record cites the old name, and
+  `sp_tutorial_1-item_w_ithaca_m_37.json` is now an orphan no command writes. The report carries
+  both the body **asked for** and the stem the driver **published**, and the comparator refuses
+  (exit 2) when they disagree — an override that silently did not take records a full skeleton
+  under a gait selection belonging to the wrong body, which is T1's failure one field further out
+  and equally invisible in the pose data. Both runs came back with the two fields equal.
+- **The body is built before the weapon is granted, not in the gym block.** `BuildPlayerVisual`
+  tears the visual down and rebuilds it, so a body stood after the wield throws the wield
+  attachment away; and `Begin` is retried while the world settles, so the build is guarded and a
+  failure to build is **terminal** rather than retried — every further attempt would stand the map's
+  own body and record it under the requested name. The entity's `Visual` and `Model` are synced the
+  way the green room's drive body syncs them, because `ModelStem()` reads the `model` field and the
+  weapon's attack activity — the thing this run exists to compose — resolves through it.
+
+Two smaller shapes for the next reader. The male half of the capture is the more fragmented one:
+852 frames of `malkavian_male_armor_0` join across both oracles and **616 do not**, against the
+female's 866 joined and 388 unjoined, and **433 of the male's join only to be set aside as mid
+cross-fade** where 377 of the female's are — leaving 419 male candidates against 489 female. That is
+why the male's layered cohort is n=49 where the female's is n=81, and a per-layer bound reads on
+fewer frames there. And the exit code over several runs is the worst of them with **1 outranking
+2**, so a body whose capture cannot support a verdict never masks a body that failed.
 
 ### Phase B — the bake
 

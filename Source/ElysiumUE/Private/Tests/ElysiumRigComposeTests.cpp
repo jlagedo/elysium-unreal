@@ -447,6 +447,49 @@ namespace
 		TArray<int32> Owned;
 	};
 
+	// The two ends of the arm scalar. The right hand's distance to `Bip01 Spine1` is one number
+	// that a boundary-orientation defect in the upper body MOVES, where a whole-body distance
+	// median dilutes it across however many bones a body carries: retail holds it to 1.89 cm
+	// peak-to-peak through a moving cycle on the female M37 aggressive carry, and the pose this
+	// repo composes swings it 6.76.
+	const FName GArmHandBone(TEXT("Bip01 R Hand"));
+	const FName GArmSpineBone(TEXT("Bip01 Spine1"));
+
+	// **The excursion is read inside ONE state and never over a pooled cohort.** Aiming up, walking
+	// and reloading each hold the hand at a different distance, so the spread of every moving frame
+	// together measures the difference BETWEEN states and swamps the cycle: on this capture it
+	// reads 21.33 cm peak-to-peak -- and that is the capture, which is retail. Grouped by the body
+	// and the base sequence it committed, the same frames give retail's own 1.89. The group is
+	// `(stem, base sequence)`; the cohort split already separates the channel sets.
+	//
+	// A group too small to contain a cycle would let two adjacent frames stand for the excursion.
+	constexpr int32 MinimumStateFrames = 15;
+
+	FString ArmStateKey(const FString& Stem, int32 BaseSequence)
+	{
+		return FString::Printf(TEXT("%s seq %d"), *Stem, BaseSequence);
+	}
+
+	// One cohort's verdict material, and **every cohort carries all of it**.
+	//
+	// An earlier form of this test attributed per-bone error for the layered cohort alone, which is
+	// the one place the arm cannot show it: a pushed slot's 49-bone mask replaces the whole upper
+	// body outright, so the arm is the LAYER's pose there whatever the base did, and the legs
+	// dominate the ranking by construction. The defect the composed pose actually carries lives in
+	// the CONTROL cohort, which had no attribution at all. So the accumulation is per cohort and
+	// every printed block says which cohort it is.
+	struct FCohort
+	{
+		const TCHAR* Name = nullptr;
+		const TCHAR* Note = nullptr;
+		ElysiumPoseOracle::FDistribution Error;
+		TMap<FString, ElysiumPoseOracle::FDistribution> ByBone;
+		// The arm scalar per state, ours and the capture's own over the same frames. Both are read
+		// off the same `Order`, so each pair is a comparison rather than two unrelated numbers.
+		TMap<FString, ElysiumPoseOracle::FDistribution> ArmSpan;
+		TMap<FString, ElysiumPoseOracle::FDistribution> RetailArmSpan;
+	};
+
 	// **A host's own declared closure, composed onto it — retail's autolayer walk, at the hardcoded
 	// weight of 1.0 the dispatcher supplies.** Every base a captured frame commits declares one: an
 	// aim grid and, on a moving gait, a `_bobble_delta`. Leaving it out is not a small omission — on
@@ -458,7 +501,7 @@ namespace
 	void ComposeClosure(const FElysiumBlendTable* Table, const FString& Owner,
 		const FString& HostLabel, const FElysiumPoseParams& Params, int32 AimCell, double Phase,
 		USkeletalMesh* Mesh, TMap<FString, UAnimSequence*>& Clips, const FString& CacheStem,
-		TArray<FTransform>& Locals)
+		TArray<FTransform>& Locals, TSet<FString>& OutMissing, TSet<FString>& OutSubstituted)
 	{
 		const FElysiumAutoLayerBinding* Declared =
 			Table != nullptr ? Table->FindAutoLayers(HostLabel) : nullptr;
@@ -507,6 +550,7 @@ namespace
 			// because its meaning is completed by the host it was composed onto.
 			const FString Derived = FString::Printf(TEXT("%s@%s"), *Label, *HostLabel);
 			UAnimSequence* Asset = nullptr;
+			bool bDerived = false;
 			for (const FString& Name : { Derived, Label })
 			{
 				const FString Key = CacheStem / Owner / Name;
@@ -518,12 +562,31 @@ namespace
 				if (Cached != nullptr)
 				{
 					Asset = Cached;
+					bDerived = Name == Derived;
 					break;
 				}
 			}
 			if (Asset == nullptr)
 			{
+				// **A layer a host DECLARES and the mount does not carry is a hole in the composed
+				// pose, not an absence.** Retail composed it; every number scored below is missing
+				// whatever it contributed, and skipping it quietly makes that loss read as
+				// composition error somewhere else. Named by owner, label and host so the bake can
+				// be pointed at it, and carried out to an `AddError` by the caller.
+				OutMissing.Add(FString::Printf(TEXT("%s/%s declared by %s"),
+					*Owner, *Label, *HostLabel));
 				continue;
+			}
+			if (!bDerived)
+			{
+				// The derived form is a different pose from the raw one -- the host's own motion
+				// with this layer composed onto it -- so standing the raw clip in its place is a
+				// substitution, not a fallback, and the frames it scores are scored against a clip
+				// retail did not draw. It is not an error only because the raw clip does load and
+				// the pose stays composable; it is never silent, because a substituted clip's
+				// divergence would read as composition error somewhere else entirely.
+				OutSubstituted.Add(FString::Printf(TEXT("%s/%s declared by %s"),
+					*Owner, *Label, *HostLabel));
 			}
 			const double Time = FMath::Clamp(Phase, 0.0, 1.0) * Asset->GetPlayLength();
 			if (!ElysiumPoseOracle::EvaluateLocalSpace(Asset, Mesh, Time, Contribution))
@@ -613,15 +676,13 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 	TMap<FString, UAnimSequence*> Clips;
 	TMap<FString, TSharedPtr<FLayerAssets>> LayerCache;
 
-	// The layered cohort, its control, and the cross-fading frames both cohorts set aside.
-	ElysiumPoseOracle::FDistribution AllError;
-	ElysiumPoseOracle::FDistribution BaseOnly;
-	ElysiumPoseOracle::FDistribution CrossFaded;
+	// The layered cohort, its control, and the cross-fading frames both cohorts set aside. Each
+	// carries its own error distribution, its own per-bone attribution and its own arm scalar.
+	FCohort Layered{ TEXT("layered"), TEXT("base + masked overlay") };
+	FCohort Control{ TEXT("control"), TEXT("the same base, nothing layered") };
+	FCohort SetAside{ TEXT("set aside"), TEXT("a previous base still fading") };
+	FCohort* const Cohorts[] = { &Layered, &Control, &SetAside };
 	TMap<FString, ElysiumPoseOracle::FDistribution> ByLayer;
-	// **Which bones carry the error.** A single number says a composition is wrong; this says
-	// where, which is the difference between a red test and a diagnosis. Accumulated as the mean
-	// absolute distance error over every pair a bone takes part in, on the layered cohort only.
-	TMap<FString, ElysiumPoseOracle::FDistribution> ByBone;
 	// How many frames committed a base that is a multi-cell grid. Such a base is steered by a
 	// parameter -- `move_yaw` on a gait fan -- that this capture does not record, so the cell this
 	// rebuild picks is the neutral one and need not be the cell retail played. Counted and
@@ -639,6 +700,13 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 	int32 NoMask = 0;
 	int32 NoCommonBones = 0;
 	TSet<FString> MissingAssets;
+	// The autolayers a host declares and the mount does not carry. Kept apart from `MissingAssets`
+	// because the two say different things to whoever reads the failure: one is a clip retail
+	// committed as a base or pushed as a slot, the other is a layer some clip's own closure names.
+	TSet<FString> MissingClosure;
+	// The declared layers whose `<label>@<host>` derived form the mount does not carry, composed
+	// from their raw form instead.
+	TSet<FString> SubstitutedClosure;
 	TSet<FString> MasklessLayers;
 
 	for (const FComposeFrame& Frame : Frames)
@@ -810,11 +878,15 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 		const TArray<FTransform>& RefPose = Ref.GetRefBonePose();
 		TArray<int32> Order;
 		TArray<FVector> Retail;
+		// Where the arm scalar's two ends landed in the shared order, so both sides of it are read
+		// off the same rows and neither can quietly measure a bone the other excluded.
+		int32 ArmHand = INDEX_NONE;
+		int32 ArmSpine = INDEX_NONE;
 		int32 Untracked = 0;
 		for (int32 Index = 0; Index < Ref.GetNum(); ++Index)
 		{
-			const FVector* Position =
-				Frame.BonePositions.Find(Ref.GetBoneName(Index).ToString());
+			const FName BoneName = Ref.GetBoneName(Index);
+			const FVector* Position = Frame.BonePositions.Find(BoneName.ToString());
 			if (Position == nullptr)
 			{
 				continue;
@@ -823,9 +895,11 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 				&& BaseLocals[Index].Equals(RefPose[Index], 0.0f))
 			{
 				++Untracked;
-				ExcludedBones.Add(Ref.GetBoneName(Index).ToString());
+				ExcludedBones.Add(BoneName.ToString());
 				continue;
 			}
+			if (BoneName == GArmHandBone) { ArmHand = Order.Num(); }
+			else if (BoneName == GArmSpineBone) { ArmSpine = Order.Num(); }
 			Order.Add(Index);
 			Retail.Add(*Position);
 		}
@@ -912,12 +986,13 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 				// same rule the base's is, because retail's autolayer walk is one rule.
 				ComposeClosure(Table, Frame.LayerOwner, Frame.LayerLabel, Params, AimCell,
 					Keys > 1 ? static_cast<double>(Key) / (Keys - 1) : 0.0,
-					Mesh, Clips, Frame.Stem, Composed);
+					Mesh, Clips, Frame.Stem, Composed, MissingClosure, SubstitutedClosure);
 			}
 			else
 			{
 				ComposeClosure(BlendTableFor(BaseClip->Owner), BaseClip->Owner, BaseLabel, Params,
-					AimCell, Frame.BaseCycle, Mesh, Clips, Frame.Stem, Composed);
+					AimCell, Frame.BaseCycle, Mesh, Clips, Frame.Stem, Composed, MissingClosure,
+					SubstitutedClosure);
 			}
 			ElysiumPoseOracle::LocalToComponent(Ref, Composed, Component);
 
@@ -948,7 +1023,18 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 				++SteeredBase;
 			}
 		}
-		if (Frame.bLayered && !Frame.bCrossFading && !BestOurs.IsEmpty())
+		// **The cohort is chosen once and everything the frame produces goes into it.** A frame in
+		// a cross-fade is drawn from a base this rebuild does not carry, so it is held apart from
+		// both verdicts rather than counted against the composition -- but it is still attributed
+		// and still scored on the arm, because a set-aside cohort with no diagnosis is a number
+		// nobody can act on.
+		FCohort& Cohort = Frame.bCrossFading ? SetAside : (Frame.bLayered ? Layered : Control);
+		Cohort.Error.Add(Best);
+		if (Frame.bLayered && !Frame.bCrossFading)
+		{
+			ByLayer.FindOrAdd(Frame.LayerLabel).Add(Best);
+		}
+		if (!BestOurs.IsEmpty())
 		{
 			// The pair set is symmetric, so a bone's share is the mean over the pairs it is in.
 			for (int32 A = 0; A < Order.Num(); ++A)
@@ -967,25 +1053,21 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 				}
 				if (Count > 0)
 				{
-					ByBone.FindOrAdd(Ref.GetBoneName(Order[A]).ToString()).Add(Sum / Count);
+					Cohort.ByBone.FindOrAdd(Ref.GetBoneName(Order[A]).ToString()).Add(Sum / Count);
 				}
 			}
-		}
-		if (Frame.bCrossFading)
-		{
-			// Another base was still fading under the committed one, so the drawn pose is a blend
-			// this rebuild does not carry. Held apart from both verdicts rather than counted
-			// against the composition.
-			CrossFaded.Add(Best);
-		}
-		else if (Frame.bLayered)
-		{
-			AllError.Add(Best);
-			ByLayer.FindOrAdd(Frame.LayerLabel).Add(Best);
-		}
-		else
-		{
-			BaseOnly.Add(Best);
+			// **The arm scalar, on the moving frames only.** A body at rest has no cycle for the
+			// hand to swing over, so its excursion there says nothing; the number retail states is
+			// taken through a moving carry. Both ends come off `Order`, so ours and the capture's
+			// are the same two bones.
+			if (Frame.bMoving && ArmHand != INDEX_NONE && ArmSpine != INDEX_NONE)
+			{
+				const FString State = ArmStateKey(Frame.Stem, Frame.BaseSequence);
+				Cohort.ArmSpan.FindOrAdd(State)
+					.Add(FVector::Dist(BestOurs[ArmHand], BestOurs[ArmSpine]));
+				Cohort.RetailArmSpan.FindOrAdd(State)
+					.Add(FVector::Dist(Retail[ArmHand], Retail[ArmSpine]));
+			}
 		}
 	}
 
@@ -1000,17 +1082,16 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 		TEXT("layer asset %d, no mask %d, too few shared bones %d"),
 		NoMesh, NoClipSet, NoBaseSequence, NoBaseAsset, NoLayerAsset, NoMask, NoCommonBones));
 
-	if (AllError.Count() == 0 && BaseOnly.Count() == 0)
+	if (Layered.Error.Count() == 0 && Control.Error.Count() == 0)
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no captured frame could be composed and scored"));
 		return true;
 	}
-	AddInfo(FString::Printf(TEXT("layered   (base + masked overlay): %s"),
-		*AllError.Describe(TEXT(" cm"))));
-	AddInfo(FString::Printf(TEXT("control   (the same base, nothing layered): %s"),
-		*BaseOnly.Describe(TEXT(" cm"))));
-	AddInfo(FString::Printf(TEXT("set aside (a previous base still fading): %s"),
-		*CrossFaded.Describe(TEXT(" cm"))));
+	for (FCohort* Cohort : Cohorts)
+	{
+		AddInfo(FString::Printf(TEXT("%-9s (%s): %s"),
+			Cohort->Name, Cohort->Note, *Cohort->Error.Describe(TEXT(" cm"))));
+	}
 	AddInfo(FString::Printf(
 		TEXT("%d scored frames committed a multi-cell base; its `move_yaw` is derived from the ")
 		TEXT("capture's own velocity and facing"), SteeredBase));
@@ -1029,18 +1110,63 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 	// rebuild is what is wrong and the layered number means nothing. Asserted rather than printed,
 	// because a test whose own premise has quietly stopped holding is worse than one that fails.
 	constexpr double MedianToleranceCm = 1.0;
-	if (BaseOnly.Count() >= 5)
+	constexpr int32 MinimumCohortFrames = 5;
+	if (Control.Error.Count() >= MinimumCohortFrames)
 	{
 		TestTrue(FString::Printf(
-			TEXT("the control composes to the pose retail drew, so the base rebuild is sound ")
-			TEXT("(median %.4f cm over %d frames)"),
-			BaseOnly.Median(), BaseOnly.Count()), BaseOnly.Median() <= MedianToleranceCm);
+			TEXT("the CONTROL cohort composes to the pose retail drew, so the base rebuild is ")
+			TEXT("sound (median %.4f cm over %d frames)"),
+			Control.Error.Median(), Control.Error.Count()),
+			Control.Error.Median() <= MedianToleranceCm);
 	}
 	else
 	{
 		AddWarning(FString::Printf(
 			TEXT("only %d unlayered frames control this run; the layered figures below are ")
-			TEXT("uncontrolled"), BaseOnly.Count()));
+			TEXT("uncontrolled"), Control.Error.Count()));
+	}
+
+	// **The arm scalar, asserted on the CONTROL cohort, one state at a time.** It is asserted there
+	// and not on the layered one because that is the only cohort it can fail in: a pushed slot's
+	// 49-bone mask replaces the whole upper body, so in the layered cohort the hand is the LAYER's
+	// pose whatever the composition did to the arm underneath it (T2).
+	//
+	// The bound is the plan's 2.5 cm -- retail's 1.89 with room for the 9-bit pose-parameter
+	// quantisation between the cell the capture held and the cell this rebuild resolves -- **or the
+	// capture's own excursion for that same state, whichever is larger.** A state retail itself
+	// swings harder than 2.5 cm through (the male M37 carry is 4.19) is a state where 2.5 measures
+	// the threshold rather than the code, and an instrument that can read red where retail reads
+	// red is not an instrument. Where retail holds inside 2.5, this IS the plan's assertion.
+	constexpr double ArmPeakToPeakToleranceCm = 2.5;
+	{
+		TArray<FString> States;
+		Control.ArmSpan.GetKeys(States);
+		States.Sort();
+		int32 Asserted = 0;
+		for (const FString& State : States)
+		{
+			ElysiumPoseOracle::FDistribution& Ours = Control.ArmSpan[State];
+			ElysiumPoseOracle::FDistribution& Retail = Control.RetailArmSpan[State];
+			if (Ours.Count() < MinimumStateFrames)
+			{
+				continue;
+			}
+			++Asserted;
+			const double Bound =
+				FMath::Max(ArmPeakToPeakToleranceCm, Retail.PeakToPeak());
+			TestTrue(FString::Printf(
+				TEXT("control cohort, %s: the right hand holds its station against ")
+				TEXT("`Bip01 Spine1` through the cycle (peak-to-peak %.3f cm over %d moving ")
+				TEXT("frames, bound %.3f; this capture's own %.3f)"),
+				*State, Ours.PeakToPeak(), Ours.Count(), Bound, Retail.PeakToPeak()),
+				Ours.PeakToPeak() <= Bound);
+		}
+		if (Asserted == 0)
+		{
+			AddWarning(FString::Printf(
+				TEXT("no unlayered state carries %d moving frames; the control cohort's arm is ")
+				TEXT("unasserted on this run"), MinimumStateFrames));
+		}
 	}
 
 	if (!MissingAssets.IsEmpty())
@@ -1049,6 +1175,25 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 		Names.Sort();
 		AddError(FString::Printf(
 			TEXT("%d clips retail composed bind no baked asset on the mount: %s"),
+			Names.Num(), *FString::Join(Names, TEXT(", "))));
+	}
+	if (!MissingClosure.IsEmpty())
+	{
+		TArray<FString> Names = MissingClosure.Array();
+		Names.Sort();
+		AddError(FString::Printf(
+			TEXT("%d autolayers a host declares bind no baked asset on the mount, so every pose ")
+			TEXT("scored above is missing what retail composed from them: %s"),
+			Names.Num(), *FString::Join(Names, TEXT(", "))));
+	}
+	if (!SubstitutedClosure.IsEmpty())
+	{
+		TArray<FString> Names = SubstitutedClosure.Array();
+		Names.Sort();
+		AddWarning(FString::Printf(
+			TEXT("%d declared autolayers have no `<label>@<host>` derived asset on the mount and ")
+			TEXT("were composed from their raw form instead, which is not the pose retail drew: ")
+			TEXT("%s"),
 			Names.Num(), *FString::Join(Names, TEXT(", "))));
 	}
 	if (!MasklessLayers.IsEmpty())
@@ -1080,17 +1225,52 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 			continue;
 		}
 		TestTrue(FString::Printf(
-			TEXT("'%s' composes to the pose retail drew (median %.4f cm over %d frames)"),
+			TEXT("'%s' (layered cohort) composes to the pose retail drew (median %.4f cm over ")
+			TEXT("%d frames)"),
 			*Layer, Distribution.Median(), Distribution.Count()),
 			Distribution.Median() <= MedianToleranceCm);
 	}
 
-	// Where the error sits, worst first. Reported rather than asserted: the per-layer verdicts above
-	// are what fails, and this is what a reader opens the report to find out next.
-	if (!ByBone.IsEmpty())
+	// Where the error sits, worst first, **for every cohort and labelled with which one**. Reported
+	// rather than asserted: the verdicts above are what fails, and this is what a reader opens the
+	// report to find out next.
+	for (FCohort* Cohort : Cohorts)
 	{
+		if (Cohort->Error.Count() == 0)
+		{
+			continue;
+		}
+		if (Cohort->ArmSpan.IsEmpty())
+		{
+			AddInfo(FString::Printf(
+				TEXT("%s: no moving frame carries both ends of the arm scalar"), Cohort->Name));
+		}
+		else
+		{
+			AddInfo(FString::Printf(
+				TEXT("%s: right hand <- `Bip01 Spine1`, per state, ours beside the capture's own:"),
+				Cohort->Name));
+			TArray<FString> States;
+			Cohort->ArmSpan.GetKeys(States);
+			States.Sort();
+			for (const FString& State : States)
+			{
+				ElysiumPoseOracle::FDistribution& Ours = Cohort->ArmSpan[State];
+				ElysiumPoseOracle::FDistribution& Retail = Cohort->RetailArmSpan[State];
+				AddInfo(FString::Printf(
+					TEXT("  %-34s n=%-4d ours mean %6.2f sd %5.2f p2p %6.2f cm | capture ")
+					TEXT("mean %6.2f sd %5.2f p2p %6.2f cm%s"),
+					*State, Ours.Count(), Ours.Mean(), Ours.StdDev(), Ours.PeakToPeak(),
+					Retail.Mean(), Retail.StdDev(), Retail.PeakToPeak(),
+					Ours.Count() < MinimumStateFrames ? TEXT("  (too few to assert)") : TEXT("")));
+			}
+		}
+		if (Cohort->ByBone.IsEmpty())
+		{
+			continue;
+		}
 		TArray<TPair<FString, double>> Ranked;
-		for (TPair<FString, ElysiumPoseOracle::FDistribution>& Bone : ByBone)
+		for (TPair<FString, ElysiumPoseOracle::FDistribution>& Bone : Cohort->ByBone)
 		{
 			Ranked.Emplace(Bone.Key, Bone.Value.Median());
 		}
@@ -1098,7 +1278,8 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 		{
 			return A.Value > B.Value;
 		});
-		AddInfo(TEXT("the bones carrying the layered error, worst first:"));
+		AddInfo(FString::Printf(TEXT("%s: the bones carrying its error, worst first:"),
+			Cohort->Name));
 		for (int32 Index = 0; Index < Ranked.Num() && Index < 12; ++Index)
 		{
 			AddInfo(FString::Printf(TEXT("  %-28s %.3f cm"),

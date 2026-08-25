@@ -219,6 +219,41 @@ namespace ElysiumPoseOracle
 			return Samples[Samples.Num() / 2];
 		}
 
+		double Mean() const
+		{
+			if (Samples.IsEmpty()) { return 0.0; }
+			double Sum = 0.0;
+			for (const double Sample : Samples) { Sum += Sample; }
+			return Sum / Samples.Num();
+		}
+
+		// The population deviation of the recorded set, not an estimate of a wider one it was drawn
+		// from: the samples ARE the frames, so there is no population beyond them to correct for.
+		double StdDev() const
+		{
+			if (Samples.Num() < 2) { return 0.0; }
+			const double Average = Mean();
+			double Sum = 0.0;
+			for (const double Sample : Samples) { Sum += FMath::Square(Sample - Average); }
+			return FMath::Sqrt(Sum / Samples.Num());
+		}
+
+		// The full excursion of the set. A scalar whose defect is that it SWINGS -- a limb that
+		// should hold its station through a cycle and does not -- is read here and never off a
+		// median, which an error constant across the cycle leaves untouched.
+		double PeakToPeak() const
+		{
+			if (Samples.IsEmpty()) { return 0.0; }
+			double Low = Samples[0];
+			double High = Samples[0];
+			for (const double Sample : Samples)
+			{
+				Low = FMath::Min(Low, Sample);
+				High = FMath::Max(High, Sample);
+			}
+			return High - Low;
+		}
+
 		int32 Count() const { return Samples.Num(); }
 	};
 }
