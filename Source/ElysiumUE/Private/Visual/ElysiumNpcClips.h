@@ -45,6 +45,16 @@ struct FElysiumNpcClip
 	int32 Flags = 0;
 	int32 Frames = 0;
 	float Fps = 30.f;
+	// This clip's GLOBAL sequence number in the body's own flat space — the index retail's
+	// `LookupSequence` answers with, and the identity a label alone is not: a body's include tree
+	// numbers every descriptor it reaches, and ten weapon banks declare
+	// `stealth_success_attacker_shortvictim` between them.
+	//
+	// It is what orders an activity's candidates, because retail's collector emits them in
+	// ascending order of it and both pickers resolve a tie by keeping the first candidate. A slice
+	// written before the export stated it reads `INDEX_NONE`, and those rows keep their
+	// (label, owner) order behind every row that carries one.
+	int32 RawIndex = INDEX_NONE;
 	// The authored transition duration in seconds (`mstudioseqdesc_t`+0x264). 0.2 on almost every
 	// shipped sequence; 0.3 on a handful of dialogue clips and 0.45/0.5 on the lying-down and
 	// damaged stance idles. A pair of clips transitions over the LARGER of the two, which is why
@@ -102,6 +112,8 @@ struct FElysiumNpcClip
 	// Whether the sidecar stated this sequence's combo block. Same shape as `HasSwings()`: an
 	// unstated block is the ordinary case and also what an export predating the column gives.
 	bool HasCombo() const { return Combo.bStated; }
+	// Whether this clip knows its own place in the flat sequence space.
+	bool HasRawIndex() const { return RawIndex != INDEX_NONE; }
 
 	// Authored duration. The rate is per clip and is not always 30 (54 of 1,502 surveyed
 	// sequences are 18 fps, including `run`), so this is read rather than assumed.
@@ -125,19 +137,139 @@ struct FElysiumNpcClip
 	float FadeSeconds() const { return IsSnap() ? 0.f : FMath::Max(0.f, Fade); }
 };
 
+// One clip's address inside a body's vocabulary.
+//
+// The label alone is not one. A body's include tree numbers every descriptor it reaches, and the
+// shipped corpus repeats a label across banks freely: `stealth_success_attacker_shortvictim` is
+// declared by all ten weapon banks with a different `ACT_SNEAKATTACK_..._<WEAPON>` on each, and
+// `idle01` by both `misc` and `pc_idles` under one `ACT_IDLE`. Retail addresses a clip by the
+// global sequence number its own tree built, whose stable offline equivalent is (owner, label) —
+// which is exactly what `FElysiumAnimationSelection` already carries and what the bake already
+// writes (`_banks/<owner>/A_<label>`).
+//
+// An empty `Owner` means "whichever the include tree reaches first", which is the answer every
+// caller that names only a label is asking for.
+struct FElysiumClipRef
+{
+	FString Label;
+	FString Owner;
+
+	bool IsEmpty() const { return Label.IsEmpty(); }
+	// Stable across two runs of the same map: label first, then owner, so a tie-break never rides
+	// on TMap iteration order.
+	bool operator<(const FElysiumClipRef& Other) const
+	{
+		return Label == Other.Label ? Owner < Other.Owner : Label < Other.Label;
+	}
+	bool operator==(const FElysiumClipRef& Other) const
+	{
+		return Label.Equals(Other.Label, ESearchCase::IgnoreCase)
+			&& Owner.Equals(Other.Owner, ESearchCase::IgnoreCase);
+	}
+};
+
+// Label -> every clip that label names, in include-tree order.
+//
+// The first row is the tree's own first definition, so `Find(Label)` answers exactly what a
+// single-owner map answered before; the rest are the copies an owner-blind map dropped. A slice
+// written before the schema carried them parses as one row per label and behaves identically.
+struct FElysiumClipTable
+{
+	TMap<FString, TArray<FElysiumNpcClip>> Rows;
+
+	void Add(const FString& Label, FElysiumNpcClip Clip)
+	{
+		Rows.FindOrAdd(Label).Add(MoveTemp(Clip));
+	}
+	// The include tree's first answer for this label.
+	const FElysiumNpcClip* Find(const FString& Label) const
+	{
+		const TArray<FElysiumNpcClip>* Found = Rows.Find(Label);
+		return (Found != nullptr && !Found->IsEmpty()) ? &(*Found)[0] : nullptr;
+	}
+	// One named owner's copy, or null when that owner does not declare this label. An empty owner
+	// asks for the first, which is what a label-only caller means.
+	const FElysiumNpcClip* Find(const FString& Label, const FString& Owner) const
+	{
+		const TArray<FElysiumNpcClip>* Found = Rows.Find(Label);
+		if (Found == nullptr)
+		{
+			return nullptr;
+		}
+		if (Owner.IsEmpty())
+		{
+			return Found->IsEmpty() ? nullptr : &(*Found)[0];
+		}
+		for (const FElysiumNpcClip& Clip : *Found)
+		{
+			if (Clip.Owner.Equals(Owner, ESearchCase::IgnoreCase))
+			{
+				return &Clip;
+			}
+		}
+		return nullptr;
+	}
+	const FElysiumNpcClip* Find(const FElysiumClipRef& Ref) const
+	{
+		return Find(Ref.Label, Ref.Owner);
+	}
+	const TArray<FElysiumNpcClip>* FindAll(const FString& Label) const { return Rows.Find(Label); }
+	// The first row, for a caller that has already established the label exists.
+	const FElysiumNpcClip& operator[](const FString& Label) const { return Rows[Label][0]; }
+
+	// Distinct labels. `RowCount` is the clips behind them, which is the larger number wherever a
+	// bank repeats another bank's label.
+	int32 Num() const { return Rows.Num(); }
+	int32 RowCount() const
+	{
+		int32 Total = 0;
+		for (const TPair<FString, TArray<FElysiumNpcClip>>& Pair : Rows) { Total += Pair.Value.Num(); }
+		return Total;
+	}
+	bool IsEmpty() const { return Rows.IsEmpty(); }
+	bool Contains(const FString& Label) const { return Rows.Contains(Label); }
+	void Reset() { Rows.Reset(); }
+	void Reserve(int32 Count) { Rows.Reserve(Count); }
+	// Every declaring owner drops with the label: a caller removing a label is saying the body
+	// cannot play it at all, not that one bank's copy went away.
+	int32 Remove(const FString& Label) { return Rows.Remove(Label); }
+	void GetKeys(TArray<FString>& OutLabels) const { Rows.GetKeys(OutLabels); }
+
+	// Every (label, clip) pair, including the copies a label-keyed walk cannot reach.
+	void ForEachClip(TFunctionRef<void(const FString&, const FElysiumNpcClip&)> Visit) const
+	{
+		for (const TPair<FString, TArray<FElysiumNpcClip>>& Pair : Rows)
+		{
+			for (const FElysiumNpcClip& Clip : Pair.Value) { Visit(Pair.Key, Clip); }
+		}
+	}
+
+	auto begin() const { return Rows.begin(); }
+	auto end() const { return Rows.end(); }
+};
+
 // One NPC's whole resolved vocabulary, off `out/npc/clips/<stem>.json` (~92 KB / ~1,360 clips).
 struct FElysiumNpcClipSet
 {
 	FString Stem;
-	// Label -> clip. Keyed case-insensitively: content spells a clip name however it likes
-	// (`m_iszPlay "Jump2"`, `SetAnimation("showguns")`), and the label is the same name.
-	TMap<FString, FElysiumNpcClip> Clips;
+	// Label -> the clips that label names, in include-tree order. Keyed case-insensitively:
+	// content spells a clip name however it likes (`m_iszPlay "Jump2"`,
+	// `SetAnimation("showguns")`), and the label is the same name.
+	FElysiumClipTable Clips;
 
 	bool IsValid() const { return !Clips.IsEmpty(); }
 	const FElysiumNpcClip* Find(const FString& Label) const { return Clips.Find(Label); }
+	const FElysiumNpcClip* Find(const FString& Label, const FString& Owner) const
+	{
+		return Clips.Find(Label, Owner);
+	}
+	const FElysiumNpcClip* Find(const FElysiumClipRef& Ref) const { return Clips.Find(Ref); }
 
-	// Every clip carrying Activity, unordered.
-	TArray<FString> ByActivity(const FString& Activity) const;
+	// Every clip carrying Activity, unordered, addressed by (label, owner) — so two banks that
+	// declare one label under different activities are two separate candidates, and two that
+	// declare it under the same activity are both in the draw, which is what retail's number
+	// space gives its own selector.
+	TArray<FElysiumClipRef> ByActivity(const FString& Activity) const;
 	// Whether any clip carries it. The weapon ladder's availability probe asks this once per rung
 	// and never wants the labels, and `ByActivity` would allocate a list per rung to answer it.
 	bool HasActivity(const FString& Activity) const;
@@ -150,11 +282,11 @@ struct FElysiumNpcClipSet
 	float MaxReachCmForActivity(const FString& Activity) const;
 	// Every ACT_DISPOSITION clip named `Stance_<AnimName>_Idle*` (the standing idles) or, with
 	// bWantTransitions, `Stance_<AnimName>_Trans*` (the authored blends between two of them).
-	TArray<FString> StanceClips(const FString& AnimName, bool bWantTransitions = false) const;
+	TArray<FElysiumClipRef> StanceClips(const FString& AnimName, bool bWantTransitions = false) const;
 
-	// Highest Weight first, then label — the engine's resting pick among equals. Stable, so the
-	// same NPC resolves the same clip every load.
-	void SortByWeight(TArray<FString>& Labels) const;
+	// Highest Weight first, then label and owner — the engine's resting pick among equals. Stable,
+	// so the same NPC resolves the same clip every load.
+	void SortByWeight(TArray<FElysiumClipRef>& Refs) const;
 
 	// Parse out/npc/clips/<Stem>.json. Returns false and fills OutError on any failure.
 	bool Load(const FString& InStem, FString& OutError);

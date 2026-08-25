@@ -1386,18 +1386,19 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			TSet<FString> GridOwners;
 			if (Vocabulary.Load(Stem, VocabularyError))
 			{
-				for (const TPair<FString, FElysiumNpcClip>& Entry : Vocabulary.Clips)
+				Vocabulary.Clips.ForEachClip(
+					[&GridOwners, &AdditiveOwners, &Stem](const FString&, const FElysiumNpcClip& Clip)
 				{
-					if (Entry.Value.IsOwnedBy(Stem))
+					if (Clip.IsOwnedBy(Stem))
 					{
-						continue;
+						return;
 					}
-					GridOwners.Add(Entry.Value.Owner);
-					if (Entry.Value.IsAdditive())
+					GridOwners.Add(Clip.Owner);
+					if (Clip.IsAdditive())
 					{
-						AdditiveOwners.Add(Entry.Value.Owner);
+						AdditiveOwners.Add(Clip.Owner);
 					}
-				}
+				});
 			}
 			for (const FString& Bank : GridOwners)
 			{
@@ -1659,10 +1660,10 @@ bool FElysiumUpperBodyLayerArmingTest::RunTest(const FString&)
 		// today — so the set has to be gathered from the vocabulary rather than assumed.
 		TSet<FString> Owners;
 		Owners.Add(Stem);
-		for (const TPair<FString, FElysiumNpcClip>& Entry : Clips.Clips)
+		Clips.Clips.ForEachClip([&Owners](const FString&, const FElysiumNpcClip& Clip)
 		{
-			Owners.Add(Entry.Value.Owner);
-		}
+			Owners.Add(Clip.Owner);
+		});
 
 		// Label -> the hosts declaring it, sorted. The lab's runtime host is the standing
 		// sequence (table fallback only when nothing is standing); this census still walks

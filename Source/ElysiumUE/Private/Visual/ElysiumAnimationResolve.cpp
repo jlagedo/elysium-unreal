@@ -28,11 +28,15 @@ namespace
 	// Fill the asset half of the record from a resolved label. The owner is the include DAG's answer
 	// and is never re-derived: `Clip->Owner` names the bank offline, and a resolver keyed on the label
 	// alone hands the player the cast's gait.
-	void ApplyLabel(const FString& Label, const FElysiumAnimationIntent& Intent,
+	void ApplyLabel(const FElysiumClipRef& Ref, const FElysiumAnimationIntent& Intent,
 		const FElysiumAnimationCatalog& Catalog, FElysiumAnimationSelection& Out)
 	{
-		const FElysiumNpcClip* Clip = Catalog.Clips->Find(Label);
+		// The ref carries the owner because a label does not identify a clip: ten weapon banks
+		// declare `stealth_success_attacker_shortvictim`, each under its own weapon's activity.
+		// An empty owner asks for the include tree's first, which is what a label-only caller means.
+		const FElysiumNpcClip* Clip = Catalog.Clips->Find(Ref);
 		check(Clip != nullptr);
+		const FString& Label = Ref.Label;
 
 		Out.SequenceLabel = Label;
 		Out.TargetSequence = Label;
@@ -144,20 +148,24 @@ namespace
 	// owner's class"). Every request
 	// from a body with no button field, and every activity none of whose candidates authors a mask,
 	// falls straight through to the draw unchanged.
-	FString TryActivity(const FElysiumAnimationCatalog& Catalog, const FString& Activity,
-		int32 Variant, int32 StateMask, bool bRequireStateMask, int32& OutCandidates)
+	FElysiumClipRef TryActivity(const FElysiumAnimationCatalog& Catalog, const FString& Activity,
+		int32 Variant, int32 StateMask, bool bRequireStateMask, EElysiumAnimSelect Select,
+		int32& OutCandidates)
 	{
 		OutCandidates = 0;
 		if (Activity.IsEmpty())
 		{
-			return FString();
+			return FElysiumClipRef();
 		}
+		// The candidate count is over (label, owner) pairs rather than labels: two banks declaring
+		// one label under this activity are two candidates in the draw, which is what retail's flat
+		// number space hands its own selector.
 		OutCandidates = Catalog.Clips->ByActivity(Activity).Num();
 		if (OutCandidates <= 0)
 		{
-			return FString();
+			return FElysiumClipRef();
 		}
-		const FString Keyed = PickByStateMask(*Catalog.Clips, Activity, StateMask);
+		const FElysiumClipRef Keyed = PickByStateMask(*Catalog.Clips, Activity, StateMask);
 		if (!Keyed.IsEmpty())
 		{
 			return Keyed;
@@ -170,9 +178,13 @@ namespace
 		// through the wrong door; taking it for the player is what plays a combo retail cannot.
 		if (bRequireStateMask)
 		{
-			return FString();
+			return FElysiumClipRef();
 		}
-		return PickWeighted(*Catalog.Clips, Activity, Variant);
+		// The fork retail latches per commit: a commanded state change takes the canonical clip,
+		// everything else draws. Both arms see the same candidate array; only the pick differs.
+		return Select == EElysiumAnimSelect::Heaviest
+			? PickHeaviest(*Catalog.Clips, Activity)
+			: PickWeighted(*Catalog.Clips, Activity, Variant);
 	}
 
 	void ResolveActivityRoute(const FElysiumAnimationIntent& Intent,
@@ -196,8 +208,8 @@ namespace
 		Out.AvailabilityRung = Translation.AvailabilityRung;
 
 		int32 Candidates = 0;
-		FString Label = TryActivity(Catalog, Out.ResolvedActivity, Intent.Variant, Intent.StateMask,
-			Intent.bRequireStateMask, Candidates);
+		FElysiumClipRef Label = TryActivity(Catalog, Out.ResolvedActivity, Intent.Variant,
+			Intent.StateMask, Intent.bRequireStateMask, Intent.Select, Candidates);
 
 		if (!Label.IsEmpty())
 		{
@@ -258,7 +270,7 @@ namespace
 			// The disposition rung takes the same door, which costs nothing: no stance sequence in the
 			// corpus authors a state mask, so the ladder's own retry is the weighted draw it always was.
 			Label = TryActivity(Catalog, GDispositionActivity, Intent.Variant, Intent.StateMask,
-				Intent.bRequireStateMask, Candidates);
+				Intent.bRequireStateMask, Intent.Select, Candidates);
 			if (!Label.IsEmpty())
 			{
 				Out.ResolvedActivity = GDispositionActivity;
@@ -302,7 +314,7 @@ namespace
 		if (Catalog.Clips->Find(Intent.SequenceLabel) != nullptr)
 		{
 			Out.Candidates = 1;
-			ApplyLabel(Intent.SequenceLabel, Intent, Catalog, Out);
+			ApplyLabel(FElysiumClipRef{ Intent.SequenceLabel, FString() }, Intent, Catalog, Out);
 			return;
 		}
 
@@ -372,7 +384,7 @@ namespace
 		if (Catalog.Clips->Find(Intent.SequenceLabel) != nullptr)
 		{
 			Out.Candidates = 1;
-			ApplyLabel(Intent.SequenceLabel, Intent, Catalog, Out);
+			ApplyLabel(FElysiumClipRef{ Intent.SequenceLabel, FString() }, Intent, Catalog, Out);
 			return;
 		}
 		// `SetGesture` simply returns when its lookup is negative. Both gesture calls the shipped
@@ -611,28 +623,27 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	return Out;
 }
 
-FString PickByStateMask(const FElysiumNpcClipSet& Set, const FString& Activity, int32 StateMask)
+FElysiumClipRef PickByStateMask(const FElysiumNpcClipSet& Set, const FString& Activity,
+	int32 StateMask)
 {
 	if (Activity.IsEmpty() || StateMask == INDEX_NONE)
 	{
-		return FString();   // a body with no button field selects by weight alone
+		return FElysiumClipRef();   // a body with no button field selects by weight alone
 	}
-	TArray<FString> Candidates = Set.ByActivity(Activity);
+	TArray<FElysiumClipRef> Candidates = Set.ByActivity(Activity);
 	if (Candidates.IsEmpty())
 	{
-		return FString();
+		return FElysiumClipRef();
 	}
-	// Sorted for the same reason the weighted draw is: exact identity is (owner, raw sequence index)
-	// and the character export writes no raw index, so label order is the only stable tie-break this
-	// runtime can state. It decides nothing in the shipped corpus, where an activity's candidates
-	// state at most one mask each.
-	Candidates.Sort();
-
-	FString Best;
+	// Left in `ByActivity`'s order, which is ascending global sequence number — retail's own
+	// candidate order. It decides nothing in the shipped corpus, where an activity's candidates
+	// state at most one mask each, but re-sorting here would put this walk and the two pickers
+	// on different orders for no reason.
+	FElysiumClipRef Best;
 	ElysiumCombo::EStateMatch BestMatch = ElysiumCombo::EStateMatch::None;
-	for (const FString& Label : Candidates)
+	for (const FElysiumClipRef& Ref : Candidates)
 	{
-		const FElysiumNpcClip* Clip = Set.Find(Label);
+		const FElysiumNpcClip* Clip = Set.Find(Ref);
 		if (Clip == nullptr || !Clip->Combo.HasStateMask())
 		{
 			// A sequence authoring `-1`, or none at all, is not a candidate for state selection. It
@@ -644,45 +655,91 @@ FString PickByStateMask(const FElysiumNpcClipSet& Set, const FString& Activity, 
 		if (ElysiumCombo::IsBetterStateMatch(Match, BestMatch))
 		{
 			BestMatch = Match;
-			Best = Label;
+			Best = Ref;
 		}
 	}
 	return Best;
 }
 
-FString PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activity, int32 Variant)
+FElysiumClipRef PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activity, int32 Variant)
 {
 	if (Activity.IsEmpty())
 	{
-		return FString();
+		return FElysiumClipRef();
 	}
-	TArray<FString> Candidates = Set.ByActivity(Activity);
+	TArray<FElysiumClipRef> Candidates = Set.ByActivity(Activity);
 	if (Candidates.IsEmpty())
 	{
-		return FString();
+		return FElysiumClipRef();
 	}
-	// Sorted so the walk is stable across two runs of the same map; the weights are what the pick
-	// actually rides on.
-	Candidates.Sort();
+	// **Raw weights, not floored.** Retail sums `actweight` as authored, so a candidate the
+	// author gave no share gets none; flooring each at 1 hands every zero-weight clip a slice of
+	// a draw it was written out of.
 	int32 TotalWeight = 0;
-	for (const FString& Label : Candidates)
+	for (const FElysiumClipRef& Ref : Candidates)
 	{
-		const FElysiumNpcClip* Clip = Set.Find(Label);
-		TotalWeight += FMath::Max(1, Clip ? Clip->Weight : 1);
+		const FElysiumNpcClip* Clip = Set.Find(Ref);
+		TotalWeight += Clip != nullptr ? Clip->Weight : 0;
 	}
+	// **The seed stands in for retail's `RandomInt`, and that is a stated divergence.** The draw
+	// is `hash(stem lowered) ^ variant` rather than a live random stream, so one body resolves
+	// the same clip every load and a headless run can assert it. The cost is that this arm's
+	// answer cannot be compared against a capture the way the heaviest arm's can: retail rolled,
+	// and what it rolled is not a property of the corpus.
 	const uint32 Seed = HashCombineFast(GetTypeHash(Set.Stem.ToLower()),
 		static_cast<uint32>(FMath::Max(0, Variant)));
-	int32 Pick = static_cast<int32>(Seed % static_cast<uint32>(TotalWeight));
-	for (const FString& Label : Candidates)
+	// A candidate set whose authored shares sum to nothing is drawn UNIFORMLY, which is retail's
+	// own second branch rather than a guard: with no share to divide, every candidate is equally
+	// likely instead of the first one being certain.
+	if (TotalWeight <= 0)
 	{
-		const FElysiumNpcClip* Clip = Set.Find(Label);
-		Pick -= FMath::Max(1, Clip ? Clip->Weight : 1);
+		return Candidates[Seed % static_cast<uint32>(Candidates.Num())];
+	}
+	int32 Pick = static_cast<int32>(Seed % static_cast<uint32>(TotalWeight));
+	for (const FElysiumClipRef& Ref : Candidates)
+	{
+		const FElysiumNpcClip* Clip = Set.Find(Ref);
+		Pick -= Clip != nullptr ? Clip->Weight : 0;
 		if (Pick < 0)
 		{
-			return Label;
+			return Ref;
 		}
 	}
 	return Candidates[0];
+}
+
+FElysiumClipRef PickHeaviest(const FElysiumNpcClipSet& Set, const FString& Activity)
+{
+	if (Activity.IsEmpty())
+	{
+		return FElysiumClipRef();
+	}
+	const TArray<FElysiumClipRef> Candidates = Set.ByActivity(Activity);
+	if (Candidates.IsEmpty())
+	{
+		return FElysiumClipRef();
+	}
+	// **Strictly greater, which is the whole tie rule.** Retail compares `best < candidate`, so
+	// an equal weight never displaces the entry already held and the answer is the FIRST
+	// candidate carrying the maximum — the lowest global sequence number, because that is the
+	// order `ByActivity` hands them over in. Two `run` clips at weight 1 are decided here and
+	// nowhere else.
+	//
+	// **It spends no randomness**, so a body that commits a canonical clip and one that draws
+	// consume the same amount of every stream.
+	FElysiumClipRef Best = Candidates[0];
+	int32 BestWeight = MIN_int32;
+	for (const FElysiumClipRef& Ref : Candidates)
+	{
+		const FElysiumNpcClip* Clip = Set.Find(Ref);
+		const int32 Weight = Clip != nullptr ? Clip->Weight : 0;
+		if (BestWeight < Weight)
+		{
+			BestWeight = Weight;
+			Best = Ref;
+		}
+	}
+	return Best;
 }
 
 FElysiumPoseParams PoseFrom(const FElysiumAnimationIntent& Intent)

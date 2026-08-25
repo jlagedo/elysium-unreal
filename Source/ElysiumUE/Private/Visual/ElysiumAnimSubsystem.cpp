@@ -1517,7 +1517,7 @@ TArray<FString> UElysiumAnimSubsystem::IdleCandidates(const FString& Stem,
 	//    resolved against `ResolveStanceClips` instead, which fills the holes the way precache does.
 	//    Here it only has to answer whether this body has a stance set at all.
 	const FString AnimName = Dispositions().AnimNameFor(Disposition, DispositionLevel);
-	TArray<FString> Candidates = Set->StanceClips(AnimName);
+	TArray<FElysiumClipRef> Candidates = Set->StanceClips(AnimName);
 	if (!Candidates.IsEmpty())
 	{
 		OutTier = EElysiumIdleTier::Stance;
@@ -1534,13 +1534,13 @@ TArray<FString> UElysiumAnimSubsystem::IdleCandidates(const FString& Stem,
 		{
 			// 3. The monsters and one-offs (`rat`, `tzim3`, `newscaster_male`) whose clips carry no
 			//    activity at all. Only here does a label read decide anything.
-			for (const TPair<FString, FElysiumNpcClip>& Pair : Set->Clips)
+			Set->Clips.ForEachClip([&Candidates](const FString& Label, const FElysiumNpcClip& Clip)
 			{
-				if (Pair.Value.Activity.IsEmpty() && Pair.Key.Contains(TEXT("idle"), ESearchCase::IgnoreCase))
+				if (Clip.Activity.IsEmpty() && Label.Contains(TEXT("idle"), ESearchCase::IgnoreCase))
 				{
-					Candidates.Add(Pair.Key);
+					Candidates.Add(FElysiumClipRef{ Label, Clip.Owner });
 				}
-			}
+			});
 			if (!Candidates.IsEmpty())
 			{
 				OutTier = EElysiumIdleTier::Loose;
@@ -1548,7 +1548,17 @@ TArray<FString> UElysiumAnimSubsystem::IdleCandidates(const FString& Stem,
 		}
 	}
 	Set->SortByWeight(Candidates);
-	return Candidates;
+	// Labels out: an idle is addressed by name from here on, and the resolver re-reads the
+	// owner off the label's first row the same way every label-only caller does. A label two
+	// banks both declare is one candidate here rather than two, which is the resting pick this
+	// tier has always made.
+	TArray<FString> Labels;
+	Labels.Reserve(Candidates.Num());
+	for (const FElysiumClipRef& Ref : Candidates)
+	{
+		Labels.AddUnique(Ref.Label);
+	}
+	return Labels;
 }
 
 FString UElysiumAnimSubsystem::PickIdleClip(const FString& Stem, const FString& Disposition,

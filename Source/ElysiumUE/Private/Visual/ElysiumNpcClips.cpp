@@ -336,15 +336,76 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 		return false;
 	}
 
+	// The flat sequence numbers, one array per label in the same row order as `clips`. Absent
+	// on a slice written before the export stated them, which reads as `INDEX_NONE` on every
+	// row and leaves the (label, owner) ordering those slices already had.
+	const TSharedPtr<FJsonObject>* SeqObj = nullptr;
+	if (!Root->TryGetObjectField(TEXT("seq"), SeqObj))
+	{
+		SeqObj = nullptr;
+	}
+
 	Clips.Reserve((*ClipObj)->Values.Num());
 	int32 Malformed = 0;
 	int32 DroppedSwings = 0;
 	int32 DroppedCombos = 0;
 	int32 DroppedEnvelopes = 0;
+	// A label's value is a LIST of rows, one per owner that declares it, in include-tree order.
+	// A slice written before the schema carried the copies stores the single row bare, and is told
+	// apart by its first element being a number rather than an array — the row's own column 0 is
+	// the interned owner index, so the two shapes can never be confused.
+	// Each entry carries the row's own position under its label, so a malformed sibling cannot
+	// slide the `seq` array out of step with the rows it numbers.
+	TArray<TPair<int32, const TArray<TSharedPtr<FJsonValue>>*>> LabelRows;
+	TArray<int32> LabelSeq;
 	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*ClipObj)->Values)
 	{
-		const TArray<TSharedPtr<FJsonValue>>* Row = nullptr;
-		if (!Pair.Value.IsValid() || !Pair.Value->TryGetArray(Row) || Row->Num() < 6)
+		LabelRows.Reset();
+		LabelSeq.Reset();
+		if (SeqObj != nullptr)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Numbers = nullptr;
+			if ((*SeqObj)->TryGetArrayField(Pair.Key, Numbers) && Numbers != nullptr)
+			{
+				for (const TSharedPtr<FJsonValue>& Number : *Numbers)
+				{
+					LabelSeq.Add(Number.IsValid()
+						? static_cast<int32>(Number->AsNumber()) : INDEX_NONE);
+				}
+			}
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Value = nullptr;
+		if (!Pair.Value.IsValid() || !Pair.Value->TryGetArray(Value) || Value->IsEmpty())
+		{
+			++Malformed;
+			continue;
+		}
+		const TArray<TSharedPtr<FJsonValue>>* Nested = nullptr;
+		if ((*Value)[0].IsValid() && (*Value)[0]->TryGetArray(Nested))
+		{
+			int32 Position = 0;
+			for (const TSharedPtr<FJsonValue>& Entry : *Value)
+			{
+				const TArray<TSharedPtr<FJsonValue>>* EntryRow = nullptr;
+				if (Entry.IsValid() && Entry->TryGetArray(EntryRow))
+				{
+					LabelRows.Emplace(Position, EntryRow);
+				}
+				else
+				{
+					++Malformed;
+				}
+				++Position;
+			}
+		}
+		else
+		{
+			LabelRows.Emplace(0, Value);
+		}
+		for (const TPair<int32, const TArray<TSharedPtr<FJsonValue>>*>& Entry : LabelRows)
+		{
+		const TArray<TSharedPtr<FJsonValue>>* const Row = Entry.Value;
+		if (Row->Num() < 6)
 		{
 			++Malformed;
 			continue;
@@ -357,6 +418,7 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 			continue;
 		}
 		FElysiumNpcClip Clip;
+		Clip.RawIndex = LabelSeq.IsValidIndex(Entry.Key) ? LabelSeq[Entry.Key] : INDEX_NONE;
 		Clip.Owner = Owners[OwnerIdx];
 		Clip.Activity = Activities.IsValidIndex(ActIdx) ? Activities[ActIdx] : FString();
 		Clip.Weight = static_cast<int32>((*Row)[2]->AsNumber());
@@ -419,6 +481,7 @@ bool FElysiumNpcClipSet::LoadJsonText(const FString& InStem, const FString& Json
 			DroppedEnvelopes += ReadEnvelopes((*Row)[12], Clip.Envelopes);
 		}
 		Clips.Add(Pair.Key, MoveTemp(Clip));
+		}
 	}
 	if (Malformed > 0)
 	{
@@ -475,15 +538,40 @@ bool FElysiumNpcClipSet::LoadActivities(const FString& InStem, TSet<FString>& Ou
 	return true;
 }
 
-TArray<FString> FElysiumNpcClipSet::ByActivity(const FString& Activity) const
+TArray<FElysiumClipRef> FElysiumNpcClipSet::ByActivity(const FString& Activity) const
 {
-	TArray<FString> Out;
-	for (const TPair<FString, FElysiumNpcClip>& Pair : Clips)
+	// **In flat sequence order, because that order is load-bearing.** Retail's collector walks
+	// the body's own descriptors in on-disk order and then recurses into its include groups,
+	// writing `base + local index` per candidate -- so the array both pickers see is ascending
+	// global sequence number, and both of them resolve a tie by keeping the first entry. A
+	// candidate list in any other order answers a tie with a different clip.
+	//
+	// A row whose slice states no number sorts after every row that does, by (label, owner):
+	// that is the order those slices already resolved in, so an un-re-exported corpus keeps
+	// its previous answer rather than taking an arbitrary new one.
+	TArray<TPair<int32, FElysiumClipRef>> Ordered;
+	Clips.ForEachClip([&Ordered, &Activity](const FString& Label, const FElysiumNpcClip& Clip)
 	{
-		if (Pair.Value.Activity.Equals(Activity, ESearchCase::IgnoreCase))
+		if (Clip.Activity.Equals(Activity, ESearchCase::IgnoreCase))
 		{
-			Out.Add(Pair.Key);
+			Ordered.Emplace(Clip.RawIndex, FElysiumClipRef{ Label, Clip.Owner });
 		}
+	});
+	Ordered.Sort([](const TPair<int32, FElysiumClipRef>& A,
+		const TPair<int32, FElysiumClipRef>& B)
+	{
+		const bool bAStated = A.Key != INDEX_NONE;
+		const bool bBStated = B.Key != INDEX_NONE;
+		if (bAStated != bBStated) { return bAStated; }
+		if (bAStated && A.Key != B.Key) { return A.Key < B.Key; }
+		return A.Value < B.Value;
+	});
+
+	TArray<FElysiumClipRef> Out;
+	Out.Reserve(Ordered.Num());
+	for (TPair<int32, FElysiumClipRef>& Entry : Ordered)
+	{
+		Out.Add(MoveTemp(Entry.Value));
 	}
 	return Out;
 }
@@ -494,11 +582,14 @@ bool FElysiumNpcClipSet::HasActivity(const FString& Activity) const
 	{
 		return false;
 	}
-	for (const TPair<FString, FElysiumNpcClip>& Pair : Clips)
+	for (const TPair<FString, TArray<FElysiumNpcClip>>& Pair : Clips)
 	{
-		if (Pair.Value.Activity.Equals(Activity, ESearchCase::IgnoreCase))
+		for (const FElysiumNpcClip& Clip : Pair.Value)
 		{
-			return true;
+			if (Clip.Activity.Equals(Activity, ESearchCase::IgnoreCase))
+			{
+				return true;
+			}
 		}
 	}
 	return false;
@@ -515,17 +606,17 @@ float FElysiumNpcClipSet::MaxReachCmForActivity(const FString& Activity) const
 	// whose long variant was not selected still acquires at the long distance. A clip stating no
 	// reach contributes nothing rather than pinning the answer to zero.
 	float Max = 0.0f;
-	for (const TPair<FString, FElysiumNpcClip>& Pair : Clips)
+	Clips.ForEachClip([&Max, &Activity](const FString&, const FElysiumNpcClip& Clip)
 	{
-		if (Pair.Value.HasReach() && Pair.Value.Activity.Equals(Activity, ESearchCase::IgnoreCase))
+		if (Clip.HasReach() && Clip.Activity.Equals(Activity, ESearchCase::IgnoreCase))
 		{
-			Max = FMath::Max(Max, Pair.Value.ReachCm);
+			Max = FMath::Max(Max, Clip.ReachCm);
 		}
-	}
+	});
 	return Max;
 }
 
-TArray<FString> FElysiumNpcClipSet::StanceClips(const FString& AnimName, bool bWantTransitions) const
+TArray<FElysiumClipRef> FElysiumNpcClipSet::StanceClips(const FString& AnimName, bool bWantTransitions) const
 {
 	// `stances.mdl` names an idle `Stance_<Name>_Idle_<N>` and the authored blend between two of
 	// them `Stance_<Name>_Trans_<A>_<B>`; both carry ACT_DISPOSITION, so the discriminator is the
@@ -533,21 +624,21 @@ TArray<FString> FElysiumNpcClipSet::StanceClips(const FString& AnimName, bool bW
 	// idle set — and what makes a stance change able to play a real transition instead of snapping.
 	const FString Prefix = FString::Printf(TEXT("Stance_%s_%s"), *AnimName,
 		bWantTransitions ? TEXT("Trans") : TEXT("Idle"));
-	TArray<FString> Out;
-	for (const TPair<FString, FElysiumNpcClip>& Pair : Clips)
+	TArray<FElysiumClipRef> Out;
+	Clips.ForEachClip([&Out, &Prefix](const FString& Label, const FElysiumNpcClip& Clip)
 	{
-		if (Pair.Value.Activity.Equals(ElysiumActivity::Disposition, ESearchCase::IgnoreCase)
-			&& Pair.Key.StartsWith(Prefix, ESearchCase::IgnoreCase))
+		if (Clip.Activity.Equals(ElysiumActivity::Disposition, ESearchCase::IgnoreCase)
+			&& Label.StartsWith(Prefix, ESearchCase::IgnoreCase))
 		{
-			Out.Add(Pair.Key);
+			Out.Add(FElysiumClipRef{ Label, Clip.Owner });
 		}
-	}
+	});
 	return Out;
 }
 
-void FElysiumNpcClipSet::SortByWeight(TArray<FString>& Labels) const
+void FElysiumNpcClipSet::SortByWeight(TArray<FElysiumClipRef>& Refs) const
 {
-	Labels.Sort([this](const FString& A, const FString& B)
+	Refs.Sort([this](const FElysiumClipRef& A, const FElysiumClipRef& B)
 	{
 		const FElysiumNpcClip* CA = Clips.Find(A);
 		const FElysiumNpcClip* CB = Clips.Find(B);

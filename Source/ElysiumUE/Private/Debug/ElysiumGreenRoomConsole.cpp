@@ -109,14 +109,15 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			}
 			const FString Filter = Args.Num() > 0 ? Args[0] : FString();
 			TArray<FString> Hits;
-			for (const TPair<FString, FElysiumNpcClip>& Pair : Set->Clips)
+			Set->Clips.ForEachClip([&Hits, &Filter](const FString& Label, const FElysiumNpcClip& Clip)
 			{
-				// The label is the KEY — a clip carries its owner and activity, not its own name.
-				if (Filter.IsEmpty() || Pair.Key.Contains(Filter))
+				// The label is the KEY — a clip carries its owner and activity, not its own name —
+				// and several banks may declare one label, so the owner is printed beside it.
+				if (Filter.IsEmpty() || Label.Contains(Filter))
 				{
-					Hits.Add(Pair.Key);
+					Hits.Add(FString::Printf(TEXT("%s  [%s]"), *Label, *Clip.Owner));
 				}
-			}
+			});
 			Hits.Sort();
 			// Capped rather than truncated silently: the count says what was withheld, so a filter
 			// that matched more than it showed reads as a filter to tighten, not as the whole answer.

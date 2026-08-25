@@ -106,12 +106,27 @@ namespace ElysiumAnimResolve
 	FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Intent,
 		const FElysiumAnimationCatalog& Catalog);
 
-	// VtMB's own deterministic weighted choice, reproduced exactly: candidates sorted by label, each
-	// weight floored at 1, and the seed `hash(stem lowered) ^ variant`. The activity route's own pick,
-	// exposed so the rule can be asserted directly — every producer reaches it through `Resolve`,
-	// because two entries into one pick are how the player path and the cast path come to disagree
-	// about a bank silently.
-	FString PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activity, int32 Variant);
+	// VtMB's weighted draw (`FUN_10427fc0`): candidates in global sequence order, summed by their
+	// authored `actweight`, and the walk that subtracts until the roll runs out. A candidate set
+	// whose shares sum to nothing is drawn uniformly instead, which is retail's own second branch.
+	// The roll is `hash(stem lowered) ^ variant` where retail calls `RandomInt` — a stated
+	// divergence for determinism, and the reason this arm cannot be asserted against a capture.
+	//
+	// The activity route's own pick, exposed so the rule can be asserted directly — every producer
+	// reaches it through `Resolve`, because two entries into one pick are how the player path and
+	// the cast path come to disagree about a bank silently.
+	FElysiumClipRef PickWeighted(const FElysiumNpcClipSet& Set, const FString& Activity,
+		int32 Variant);
+
+	// VtMB's other picker (`FUN_104280f0`), which the same collector feeds: the largest authored
+	// `actweight`, kept with a STRICT comparison so an equal weight never displaces the entry
+	// already held. The answer is therefore the first candidate carrying the maximum — the lowest
+	// global sequence number — and it spends no randomness.
+	//
+	// This is the canonical clip for an activity, and retail commits it on a commanded state
+	// change (`EElysiumAnimSelect`). Two `run` clips at weight 1 differ by 30 fps against 18, so
+	// which of them a gait commits is a leg cycle at the right rate or one at 57% of it.
+	FElysiumClipRef PickHeaviest(const FElysiumNpcClipSet& Set, const FString& Activity);
 
 	// The player selector's direction-keyed entry choice (`0x10160F90`), which runs BEFORE the draw
 	// above and replaces it when it answers: each candidate's authored state mask
@@ -125,7 +140,8 @@ namespace ElysiumAnimResolve
 	//
 	// **It spends no randomness.** A mask-selected entry never reaches `PickWeighted`, so a player
 	// holding a direction and one holding none consume the same amount of every stream.
-	FString PickByStateMask(const FElysiumNpcClipSet& Set, const FString& Activity, int32 StateMask);
+	FElysiumClipRef PickByStateMask(const FElysiumNpcClipSet& Set, const FString& Activity,
+		int32 StateMask);
 
 	// The activity seam's request, as the resolver's own intent (LIFE5).
 	//

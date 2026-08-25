@@ -1126,7 +1126,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		// And the pick matches the seed the subsystem's own weighted chooser uses, which is what makes
 		// one implementation rather than two.
 		TestEqual(TEXT("and it is the seed the catalog's chooser uses"), First.SequenceLabel,
-			ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0));
+			ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0).Label);
 	}
 
 	// --- The route census: one schema, four routes -------------------------------------------------------
@@ -2112,7 +2112,8 @@ bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
 	// invariant in the selection token: a draw moves with the variant, and this does not.
 	{
 		TestEqual(TEXT("the draw, left to itself, answers the heavy candidate"),
-			ElysiumAnimResolve::PickWeighted(Pc, Attack, 0), FString(TEXT("fists_attack_plain")));
+			ElysiumAnimResolve::PickWeighted(Pc, Attack, 0).Label,
+			FString(TEXT("fists_attack_plain")));
 		for (int32 Variant = 0; Variant < 8; ++Variant)
 		{
 			FElysiumAnimationIntent Intent = ActivityIntent(TEXT("male_pc"), *Attack);
@@ -2134,7 +2135,7 @@ bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
 		FElysiumAnimationSelection Out;
 		ElysiumAnimResolve::Resolve(Cast, Catalog, Out);
 		TestEqual(TEXT("a body with no button field draws, and the mask column changes nothing"),
-			Out.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, Attack, 0));
+			Out.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, Attack, 0).Label);
 
 		// An activity none of whose candidates authors a mask falls straight through to the draw, even
 		// with a direction held.
@@ -2142,7 +2143,7 @@ bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
 		Held.StateMask = InForward;
 		ElysiumAnimResolve::Resolve(Held, Catalog, Out);
 		TestEqual(TEXT("an activity with no authored masks is decided by the draw as it always was"),
-			Out.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0));
+			Out.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0).Label);
 
 		// And the selection function says so directly: empty is "nothing here is direction-keyed".
 		TestTrue(TEXT("the mask pick answers nothing for an unmasked activity"),
@@ -2179,7 +2180,7 @@ bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
 		Cast.StateMask = InForward;
 		ElysiumAnimResolve::Resolve(Cast, Catalog, Out);
 		TestEqual(TEXT("the cast arm still draws the same activity"),
-			Out.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0));
+			Out.SequenceLabel, ElysiumAnimResolve::PickWeighted(Pc, TEXT("ACT_IDLE"), 0).Label);
 
 		// A masked activity is answered on the player arm exactly as before: the flag refuses a
 		// FALLBACK, never a selection.
@@ -4143,6 +4144,204 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 	}
 	TestTrue(TEXT("at least one slice transition was measured"), Checked > 0);
 	AddInfo(FString::Printf(TEXT("%d of 6 slice transitions measured on '%s'"), Checked, *Chosen));
+	return true;
+}
+
+
+// =====================================================================================
+// The two pickers (LIFE5). Retail collects an activity's candidates once and hands the array to
+// one of two functions: `SelectWeightedSequence` (`vampire.dll 0x1008dc40` -> `FUN_10427fc0`) draws
+// by authored `actweight`, and `SelectHeaviestSequence` (`0x1008dd30` -> `FUN_104280f0`) keeps the
+// largest. Which one answers is latched per commit by entity flag `0x40000000`
+// (`apply_player_activity_and_sequence`, `0x101644f0`), set on a commanded state change.
+//
+// The arithmetic is what this asserts, because the corpus cannot: `run` carries two candidates at
+// weight 1 whose only difference is 30 fps against 18, so the tie rule alone decides whether a gait
+// cycles at the rate its ground speed asks for.
+// =====================================================================================
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationSelectorsTest,
+	"Elysium.Substrate.AnimationSelectors", GElysiumAnimationTestFlags)
+bool FElysiumAnimationSelectorsTest::RunTest(const FString&)
+{
+	using namespace ElysiumAnimResolve;
+
+	// A clip that knows its place in the flat sequence space, which is what orders the candidates.
+	auto Numbered = [](const TCHAR* Owner, const TCHAR* Activity, int32 Weight, int32 RawIndex)
+	{
+		FElysiumNpcClip Clip = MakeClip(Owner, Activity, Weight, 0x1);
+		Clip.RawIndex = RawIndex;
+		return Clip;
+	};
+
+	// --- the candidate order --------------------------------------------------------------------
+	{
+		FElysiumNpcClipSet Set;
+		Set.Stem = TEXT("ordering_body");
+		// Added out of order on purpose: the array retail builds is ascending global sequence
+		// number, and nothing about a TMap's iteration order may reach the pickers.
+		Set.Clips.Add(TEXT("late"), Numbered(CastBank, TEXT("ACT_RUN"), 1, 40));
+		Set.Clips.Add(TEXT("early"), Numbered(PcBank, TEXT("ACT_RUN"), 1, 4));
+		Set.Clips.Add(TEXT("middle"), Numbered(MiscBank, TEXT("ACT_RUN"), 1, 12));
+		// No slice stated this one's number, which is every row of a corpus exported before the
+		// column existed.
+		Set.Clips.Add(TEXT("unnumbered"), MakeClip(MiscBank, TEXT("ACT_RUN"), 1, 0x1));
+
+		const TArray<FElysiumClipRef> Candidates = Set.ByActivity(TEXT("ACT_RUN"));
+		TestEqual(TEXT("every candidate carrying the activity is collected"), Candidates.Num(), 4);
+		TestEqual(TEXT("the lowest sequence number leads"), Candidates[0].Label, FString(TEXT("early")));
+		TestEqual(TEXT("then the next"), Candidates[1].Label, FString(TEXT("middle")));
+		TestEqual(TEXT("then the last numbered one"), Candidates[2].Label, FString(TEXT("late")));
+		TestEqual(TEXT("and a row stating no number sorts behind every row that does"),
+			Candidates[3].Label, FString(TEXT("unnumbered")));
+	}
+
+	// --- heaviest -------------------------------------------------------------------------------
+	{
+		FElysiumNpcClipSet Set;
+		Set.Stem = TEXT("heaviest_body");
+		Set.Clips.Add(TEXT("light_first"), Numbered(PcBank, TEXT("ACT_IDLE"), 1, 4));
+		Set.Clips.Add(TEXT("heavy"), Numbered(MiscBank, TEXT("ACT_IDLE"), 30, 9));
+		Set.Clips.Add(TEXT("light_last"), Numbered(CastBank, TEXT("ACT_IDLE"), 1, 20));
+
+		TestEqual(TEXT("the largest authored share is the answer"),
+			PickHeaviest(Set, TEXT("ACT_IDLE")).Label, FString(TEXT("heavy")));
+		TestTrue(TEXT("and it names the bank that declared it"),
+			PickHeaviest(Set, TEXT("ACT_IDLE")).Owner.Equals(MiscBank));
+		TestTrue(TEXT("an activity no clip carries answers nothing"),
+			PickHeaviest(Set, TEXT("ACT_SWIM")).IsEmpty());
+		TestTrue(TEXT("and so does an empty activity"),
+			PickHeaviest(Set, FString()).IsEmpty());
+	}
+
+	// **The tie rule, which is the whole reason this picker is not the draw.** Retail compares
+	// `best < candidate`, so an equal weight never displaces the entry already held and the answer
+	// is the FIRST candidate at the maximum — the lowest global sequence number. This is the shape
+	// of the shipped `run` pair exactly.
+	{
+		FElysiumNpcClipSet Set;
+		Set.Stem = TEXT("tie_body");
+		// The higher-numbered copy is added first, so insertion order and sequence order disagree
+		// and only one of them can be producing the answer.
+		Set.Clips.Add(TEXT("run"), Numbered(CastBank, TEXT("ACT_RUN"), 1, 7));
+		Set.Clips.Add(TEXT("run"), Numbered(PcBank, TEXT("ACT_RUN"), 1, 4));
+
+		const FElysiumClipRef Tied = PickHeaviest(Set, TEXT("ACT_RUN"));
+		TestEqual(TEXT("a tie keeps the lowest sequence number"), Tied.Owner, FString(PcBank));
+		TestEqual(TEXT("...which is one label under two banks"), Tied.Label, FString(TEXT("run")));
+
+		// **It spends no randomness**, which its signature states: there is no selection token to
+		// hand it. Asserted anyway against repeated calls, because a picker that reached for a
+		// stream would answer differently the second time and nothing else here would notice.
+		for (int32 Call = 0; Call < 8; ++Call)
+		{
+			TestEqual(TEXT("and every call answers the same"),
+				PickHeaviest(Set, TEXT("ACT_RUN")).Owner, FString(PcBank));
+		}
+	}
+
+	// --- the draw's own arithmetic ---------------------------------------------------------------
+	//
+	// **A zero share is a zero chance.** Flooring every weight at 1 hands a clip the author wrote
+	// out of the draw a slice of it, which is a candidate appearing where retail has none.
+	{
+		FElysiumNpcClipSet Set;
+		Set.Stem = TEXT("zero_share_body");
+		Set.Clips.Add(TEXT("never"), Numbered(PcBank, TEXT("ACT_IDLE"), 0, 4));
+		Set.Clips.Add(TEXT("always"), Numbered(MiscBank, TEXT("ACT_IDLE"), 5, 9));
+
+		for (int32 Variant = 0; Variant < 16; ++Variant)
+		{
+			TestEqual(*FString::Printf(TEXT("variant %d never draws the zero-weight clip"), Variant),
+				PickWeighted(Set, TEXT("ACT_IDLE"), Variant).Label, FString(TEXT("always")));
+		}
+	}
+
+	// **A candidate set whose shares sum to nothing is drawn uniformly**, which is retail's own
+	// second branch: with no share to divide there is nothing to walk, so the roll addresses the
+	// candidates directly instead of the first one being certain.
+	{
+		FElysiumNpcClipSet Set;
+		Set.Stem = TEXT("zero_sum_body");
+		Set.Clips.Add(TEXT("a"), Numbered(PcBank, TEXT("ACT_IDLE"), 0, 4));
+		Set.Clips.Add(TEXT("b"), Numbered(MiscBank, TEXT("ACT_IDLE"), 0, 9));
+		Set.Clips.Add(TEXT("c"), Numbered(CastBank, TEXT("ACT_IDLE"), 0, 20));
+
+		TSet<FString> Seen;
+		for (int32 Variant = 0; Variant < 24; ++Variant)
+		{
+			const FElysiumClipRef Drawn = PickWeighted(Set, TEXT("ACT_IDLE"), Variant);
+			TestFalse(TEXT("a zero-sum draw still answers"), Drawn.IsEmpty());
+			Seen.Add(Drawn.Label);
+		}
+		TestTrue(TEXT("and it addresses more than the first candidate"), Seen.Num() > 1);
+
+		// The heaviest arm over the same set is still deterministic: every weight ties at zero, so
+		// the lowest sequence number wins outright.
+		TestEqual(TEXT("heaviest over an all-zero set takes the lowest sequence number"),
+			PickHeaviest(Set, TEXT("ACT_IDLE")).Label, FString(TEXT("a")));
+	}
+
+	// --- the fork reaches the resolver -----------------------------------------------------------
+	//
+	// The two arms are one call apart in `TryActivity`, so the intent's own mode is what a producer
+	// changes. `run` is the fixture again: same label, two banks, equal weight.
+	{
+		FElysiumNpcClipSet Set;
+		Set.Stem = TEXT("fork_body");
+		Set.Clips.Add(TEXT("run"), Numbered(PcBank, TEXT("ACT_RUN"), 1, 4));
+		Set.Clips.Add(TEXT("run"), Numbered(CastBank, TEXT("ACT_RUN"), 1, 7));
+
+		FElysiumAnimationCatalog Catalog;
+		Catalog.Clips = &Set;
+		Catalog.BlendTableFor = [](const FString&) -> const FElysiumBlendTable* { return nullptr; };
+
+		FElysiumAnimationIntent Intent;
+		Intent.Stem = Set.Stem;
+		Intent.Route = EElysiumAnimRoute::Activity;
+		Intent.Activity = TEXT("ACT_RUN");
+		Intent.Source = EElysiumAnimSource::Player;
+		Intent.BodyKind = EElysiumAnimBodyKind::Player;
+		Intent.bAllowFallbackLadder = false;
+
+		TestEqual(TEXT("the default mode is the draw, which is what every producer had"),
+			static_cast<int32>(Intent.Select), static_cast<int32>(EElysiumAnimSelect::Weighted));
+
+		Intent.Select = EElysiumAnimSelect::Heaviest;
+		FElysiumAnimationSelection Canonical;
+		Resolve(Intent, Catalog, Canonical);
+		TestEqual(TEXT("a commanded state change commits the canonical clip"),
+			Canonical.OwnerStem, FString(PcBank));
+		TestEqual(TEXT("...and both candidates were on the table"), Canonical.Candidates, 2);
+
+		// Both arms see the same candidate array; only the pick differs.
+		Intent.Select = EElysiumAnimSelect::Weighted;
+		FElysiumAnimationSelection Drawn;
+		Resolve(Intent, Catalog, Drawn);
+		TestEqual(TEXT("the draw sees the same candidates"), Drawn.Candidates, 2);
+		TestFalse(TEXT("and still answers one of them"), Drawn.OwnerStem.IsEmpty());
+	}
+
+	// **The player's own locomotion request states the canonical arm**, because that is the request
+	// retail's `apply_player_activity_and_sequence` serves and the commit its state-change flag is
+	// latched for. A cast gait keeps the draw: retail's setter is a `CBasePlayer` virtual.
+	{
+		const FElysiumGaitReference Gait;
+		const FElysiumJumpLatch Latch;
+		const FElysiumEntityHandle NoCharacter;
+		const FElysiumAnimationIntent Player = ElysiumAnimIntent::BuildLocomotionIntent(
+			Moving(0.0f), Latch, Gait, EElysiumAnimSource::Player,
+			EElysiumAnimBodyKind::Player, TEXT("male_pc"), NoCharacter, 0);
+		TestEqual(TEXT("the player's locomotion commit takes the canonical clip"),
+			static_cast<int32>(Player.Select), static_cast<int32>(EElysiumAnimSelect::Heaviest));
+
+		const FElysiumAnimationIntent Cast = ElysiumAnimIntent::BuildLocomotionIntent(
+			Moving(0.0f), Latch, Gait, EElysiumAnimSource::Npc,
+			EElysiumAnimBodyKind::Cast, TEXT("cast_body"), NoCharacter, 0);
+		TestEqual(TEXT("a cast gait keeps the draw, whose retail rule this rung has not recovered"),
+			static_cast<int32>(Cast.Select), static_cast<int32>(EElysiumAnimSelect::Weighted));
+	}
+
 	return true;
 }
 

@@ -1107,6 +1107,61 @@ def resolve_tree(load, model_key):
     return order
 
 
+def first_reference_bases(load, model_key):
+    """The include tree with each model's own global sequence number -> [(key, d, base), ...].
+
+    The engine numbers a body's whole tree into one flat space: it walks depth-first and
+    concatenates each model's `NumLocalSeq`@272 descriptors, and a model reachable by several
+    include paths contributes its block at EVERY reference. `resolve_tree` cannot answer this —
+    it refuses a model it has already visited, which also refuses that model's subtree, so
+    re-walking an already-numbered subtree can reach a *new* bank at a lower global number than
+    the deduped walk arrives at it. `move_and_ranged` is reached that way on every PC body.
+
+    `base` is the number the model's first block starts at, because a first-match lookup answers
+    the first block: `LookupSequence` scans the flat space in order. A model's later blocks are
+    numbered too but are never the first answer, so only the first appearance is recorded, and
+    the returned order is that of first appearance.
+
+    The counter advances on every visit, including the repeats no entry is emitted for; a model
+    the loader cannot read contributes neither an entry nor a count, which is what leaves the
+    numbering of everything after it unchanged.
+    """
+    order, seen, data = [], set(), {}
+    base = 0
+
+    def visit(key, stack):
+        nonlocal base
+        lowered = key.lower()
+        if lowered in stack:
+            return                      # a true cycle, which the undeduped walk still refuses
+        d = data.get(lowered)
+        if d is None:
+            d = load(key)
+            if d is None:
+                return
+            data[lowered] = d
+        if lowered not in seen:
+            seen.add(lowered)
+            order.append((key, d, base))
+        base += _i32(d, 272)
+        for inc in read_includes(d):
+            visit(inc, stack | {lowered})
+
+    visit(model_key, frozenset())
+    return order
+
+
+def first_reference_order(load, model_key):
+    """The include tree ordered the way the engine's own sequence numbering reaches it.
+
+    The same `[(key, d), ...]` set `resolve_tree` answers with, ordered by each model's FIRST
+    appearance in the undeduped walk — which is the order that decides which bank owns a label
+    several banks declare. `first_reference_bases` owns the walk and carries the number each
+    model's block starts at; this is the projection for a caller that needs only the order.
+    """
+    return [(key, d) for key, d, _ in first_reference_bases(load, model_key)]
+
+
 def bone_names(d):
     """Bone names in header order (for name-keyed retarget diagnostics)."""
     n = _i32(d, 240); base = _i32(d, 244)

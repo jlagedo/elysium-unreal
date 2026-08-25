@@ -226,24 +226,32 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				Set->Clips.Num(), UElysiumAnimSubsystem::TierName(Tier),
 				Idles.Num() > 0 ? *Idles[0] : TEXT("<none>"));
 			int32 Shown = 0;
-			for (const TPair<FString, FElysiumNpcClip>& Pair : Set->Clips)
+			bool bCapped = false;
+			// One row per (label, owner): several banks may declare one label, each under its own
+			// activity, and a listing that showed the first alone would hide the others.
+			Set->Clips.ForEachClip([&](const FString& Label, const FElysiumNpcClip& Clip)
 			{
-				if (!Filter.IsEmpty()
-					&& !Pair.Key.Contains(Filter, ESearchCase::IgnoreCase)
-					&& !Pair.Value.Activity.Contains(Filter, ESearchCase::IgnoreCase))
+				if (bCapped)
 				{
-					continue;
+					return;
+				}
+				if (!Filter.IsEmpty()
+					&& !Label.Contains(Filter, ESearchCase::IgnoreCase)
+					&& !Clip.Activity.Contains(Filter, ESearchCase::IgnoreCase))
+				{
+					return;
 				}
 				if (++Shown > 60)
 				{
 					UE_LOG(LogElysiumNpc, Display, TEXT("  ... (narrow the filter)"));
-					break;
+					bCapped = true;
+					return;
 				}
 				UE_LOG(LogElysiumNpc, Display, TEXT("  %-34s %-42s %-24s w=%-3d %.2fs"),
-					*Pair.Key, *Pair.Value.Owner,
-					Pair.Value.Activity.IsEmpty() ? TEXT("-") : *Pair.Value.Activity,
-					Pair.Value.Weight, Pair.Value.Seconds());
-			}
+					*Label, *Clip.Owner,
+					Clip.Activity.IsEmpty() ? TEXT("-") : *Clip.Activity,
+					Clip.Weight, Clip.Seconds());
+			});
 		}),
 		ECVF_Cheat));
 
@@ -556,13 +564,13 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 	TArray<FString> OwnClips;
 	if (const FElysiumNpcClipSet* Set = Anims != nullptr ? Anims->GetClipSet(Stem) : nullptr)
 	{
-		for (const TPair<FString, FElysiumNpcClip>& Entry : Set->Clips)
+		Set->Clips.ForEachClip([&OwnClips, &Stem](const FString& Label, const FElysiumNpcClip& Clip)
 		{
-			if (Entry.Value.IsOwnedBy(Stem))
+			if (Clip.IsOwnedBy(Stem))
 			{
-				OwnClips.Add(Entry.Key);
+				OwnClips.AddUnique(Label);
 			}
-		}
+		});
 		OwnClips.Sort([](const FString& A, const FString& B) { return A < B; });
 	}
 

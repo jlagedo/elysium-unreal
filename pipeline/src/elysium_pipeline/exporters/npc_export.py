@@ -563,6 +563,75 @@ def placed_model_index_row(rec):
     return row
 
 
+def _owner_meta(rec, banks, stem, owner, label):
+    """One owner's clip record for a label, matched the way retail matches a label.
+
+    The clip map keys a label by the first spelling the include walk met, and a later owner may
+    spell the same label differently -- `TwoHanded_alert_180_into` against
+    `twohanded_alert_180_into`. Retail compares with `stricmp`, so the exact key misses and the
+    case-folded one is the answer.
+    """
+    owned = rec["own_clips"] if owner == stem else banks.get(owner, {}).get("clips", {})
+    meta = owned.get(label)
+    if meta is not None:
+        return meta
+    lowered = label.lower()
+    for spelled, record in owned.items():
+        if spelled.lower() == lowered:
+            return record
+    return None
+
+
+def bank_containers_present(npc_dir):
+    """The bank stems `npc/banks/` carries a container for.
+
+    A bank answers a label at runtime only if a container carries it: the bake reads
+    `npc/banks/<stem>.eskm` and writes `_banks/<stem>/A_<label>` from it, so a bank the
+    container plan never wrote has no asset however completely its decode succeeded.
+
+    An empty answer means the container stage has not run in this workspace, which is an
+    ordering fact rather than a coverage failure -- `answerable_owner` treats it as "cannot
+    tell" rather than as "nothing answers".
+    """
+    banks_dir = os.path.join(npc_dir, "banks")
+    if not os.path.isdir(banks_dir):
+        return set()
+    return {name[:-5] for name in os.listdir(banks_dir) if name.endswith(".eskm")}
+
+
+def answerable_owner(stem, owner, containers, containers_known):
+    """Whether `owner` can answer a label for the body `stem` on the baked mount.
+
+    A body answers its own clips out of its own container. A bank answers only if its
+    container exists, because that file is the bake's whole input. With no census available
+    every owner is admitted, because filtering against an empty set would drop every shared
+    clip in the cast.
+    """
+    return owner == stem or not containers_known or owner in containers
+
+
+def unreferenced_banks(bank_index, npc_index, cinematic_index, containers, containers_known):
+    """Declared banks no clip map reaches -> (orphaned, containerless).
+
+    A declared bank that reaches no clip map answers nothing, and until this census existed it
+    could disappear without a line of output. The two ways that happens are told apart because
+    only one is a defect: a bank WITH a container that nothing references is work the bake did
+    for no reader, and is how a clip that mattered would vanish; a bank with NO container is
+    the reconcile filter doing its job.
+    """
+    referenced = set()
+    for record in npc_index.values():
+        for owners in record["clips"].values():
+            referenced.update(owners if isinstance(owners, list) else [owners])
+    for record in cinematic_index.values():
+        referenced.update(root["bank"] for root in record.get("roots", ()))
+    unreferenced = sorted(set(bank_index) - referenced)
+    orphaned = [stem for stem in unreferenced
+                if not containers_known or stem in containers]
+    containerless = [stem for stem in unreferenced if stem not in orphaned]
+    return orphaned, containerless
+
+
 def write_sidecars(manifest):
     """The runtime-facing split of `npc_manifest.json` (roadmap 8.5).
 
@@ -605,7 +674,9 @@ def write_sidecars(manifest):
                 "baked clip vocabulary inline, in the model's own sequence-declaration order.",
         "npcs": {s: {"model": r["model"], "bones": r["bones"],
                      "split_bones": r.get("split_bones", []),
-                     "clips": len(r["clips"]), "own_clips": len(r["own_clips"]),
+                     "clips": sum(len(o) for o in r["clips"].values()),
+                     "clip_labels": len(r["clips"]),
+                     "own_clips": len(r["own_clips"]),
                      **({"facial": r["facial"], "morphs": r["morphs"]} if r.get("facial")
                         else {}),
                      **({"eyes": r["eyes"], "eyeballs": r["eyeballs"]} if r.get("eyes")
@@ -658,10 +729,17 @@ def write_sidecars(manifest):
     for stem, rec in manifest["npcs"].items():
         owners, acts = [stem], [""]
         owner_i, act_i = {stem: 0}, {"": 0}
-        clips = {}
-        for label, owner in rec["clips"].items():
-            meta = (rec["own_clips"] if owner == stem
-                    else banks.get(owner, {}).get("clips", {})).get(label)
+        clips, seq = {}, {}
+        # {label: [global sequence number, ...]}, parallel to the record's own owner list.
+        sequence_numbers = rec.get("clip_seq", {})
+        # A label carries a LIST of rows, one per owner that declares it, in include-tree order.
+        # The first is the tree's own first answer, which is what a label-only lookup resolves to
+        # and what this file carried alone before the copies were kept.
+        for label, declaring in rec["clips"].items():
+          numbers = sequence_numbers.get(label, [])
+          for position, owner in enumerate(declaring if isinstance(declaring, list)
+                                           else [declaring]):
+            meta = _owner_meta(rec, banks, stem, owner, label)
             if meta is None:
                 continue                      # reconcile already dropped these; belt and braces
             if owner not in owner_i:
@@ -702,14 +780,20 @@ def write_sidecars(manifest):
             last = max((i for i, (_, _, stated) in enumerate(optional) if stated), default=-1)
             row += [value if stated else placeholder
                     for value, placeholder, stated in optional[:last + 1]]
-            clips[label] = row
+            clips.setdefault(label, []).append(row)
+            # Written in the same pass as the row it belongs to, so `seq[label][i]` is the global
+            # sequence number of `clips[label][i]` by construction rather than by two filters
+            # agreeing. A row the tree walk could not number is held open with a null, because
+            # the two lists are read positionally.
+            seq.setdefault(label, []).append(
+                numbers[position] if position < len(numbers) else None)
         path = os.path.join(CLIPS_DIR, stem + ".json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"stem": stem, "owners": owners, "activities": acts,
                        "fields": ["owner", "activity", "weight", "flags", "frames", "fps",
                                   "fade", "reach_cm", "blocked_reaction", "swings", "combo",
                                   "low_reach_cm", "envelopes"],
-                       "clips": clips}, f, separators=(",", ":"))
+                       "clips": clips, "seq": seq}, f, separators=(",", ":"))
         total += os.path.getsize(path)
     print(f"[npc] sidecars: {INDEX} ({os.path.getsize(INDEX)/1024:.0f} KB) + "
           f"{len(manifest['npcs'])} clip slices in {CLIPS_DIR} "
@@ -817,21 +901,53 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
         npc_stem[model] = (basename if counts[basename] == 1 and owner in (None, key)
                            else bank_stem(model))
 
-    # Resolve every NPC's include tree once: its own clips, plus which bank owns each shared
-    # clip (first model in tree order to define a label owns it).
+    # Resolve every NPC's include tree once: its own clips, plus every bank that declares each
+    # shared clip, in include-tree order.
+    #
+    # A label does not identify a clip. The engine numbers every descriptor its include tree
+    # reaches and selects on the descriptor's own activity, and the shipped corpus repeats a
+    # label across banks freely: all ten weapon banks declare
+    # `stealth_success_attacker_shortvictim`, each under its own
+    # `ACT_SNEAKATTACK_..._<WEAPON>`, and `misc` and `pc_idles` both declare `idle01` under one
+    # `ACT_IDLE`. Keeping only the first would make nine of those ten activities unanswerable
+    # and hide a candidate from the weighted draw, so every owner is kept and the FIRST stays
+    # first -- that ordering is what a label-only lookup still resolves to.
     os.makedirs(NPC_DIR, exist_ok=True)
     print(f"[npc] resolving include trees for {len(npcs)} NPC model(s) ...", flush=True)
     npc_records = {}
+    npc_sequence_numbers = {}   # npc model_key -> {label: {owner stem: global sequence number}}
     banks_needed = {}  # bank model_key -> bank_stem
     # A shared bank is reached from every NPC that fights out of it, so its chain census is
     # reported against the model that declares the link and only the first time the walk
     # arrives -- one line per authoring bug, not one per character.
     chain_censused = set()
     dangling_chains = 0
+    # model key -> {lowercased label: first on-disk descriptor index}. `local_sequence_labels` is
+    # positional and unskipped, which is what a global sequence number indexes; a bank is reached
+    # by most of the cast, so its positions are read once for the whole run.
+    label_positions = {}
+
+    def _positions(key, d):
+        lowered = key.lower()
+        found = label_positions.get(lowered)
+        if found is None:
+            found = {}
+            for index, label in enumerate(S.local_sequence_labels(d)):
+                # First position wins: a label a model declares twice answers its first
+                # descriptor, which is the one a first-match lookup reaches.
+                found.setdefault(label.lower(), index)
+            label_positions[lowered] = found
+        return found
+
     for m in npcs:
-        tree = S.resolve_tree(load_mdl, m)
-        assigned, clips = {}, {}
-        for key, d in tree:
+        # Ordered by first appearance in the ENGINE's own walk, not by the deduped one: the two
+        # disagree wherever re-walking a shared subtree reaches a bank earlier, and that order is
+        # what decides which bank owns a label several banks declare. Each entry carries the
+        # global sequence number its own block starts at, so a clip's number is that base plus
+        # the descriptor's own position.
+        tree = S.first_reference_bases(load_mdl, m)
+        assigned, clips, spelling, clip_seq = {}, {}, {}, {}
+        for key, d, seq_base in tree:
             is_npc = (key == m)
             stem = npc_stem[m] if is_npc else bank_stem(key)
             seqs = S.local_sequences(d)
@@ -842,11 +958,27 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
                 banks_needed.setdefault(key, stem)
             for c in seqs:
                 ll = c.label.lower()
-                if ll in assigned:
+                owners = assigned.setdefault(ll, [])
+                if stem in owners:
+                    # One model declaring a label twice contributes one row: the clip map is
+                    # keyed by (label, owner) and a second row from the same owner would be
+                    # indistinguishable from the first. `local_sequences` already deduped the
+                    # within-model case; this catches a bank reached by two include paths.
                     continue
-                assigned[ll] = stem
-                clips[c.label] = stem
+                owners.append(stem)
+                # Keyed case-insensitively, on the FIRST spelling the walk met. Retail matches a
+                # label with `stricmp`, so `move_and_ranged`'s `twohanded_alert_180_into` and
+                # `meleeshared_twohand`'s `TwoHanded_alert_180_into` are one label with two
+                # owners; two keys would make the second unreachable by the name content spells.
+                label = spelling.setdefault(ll, c.label)
+                clips.setdefault(label, []).append(stem)
+                # The global sequence number this owner answers the label at, appended in the
+                # same breath as the owner so the two lists are parallel by construction.
+                position = _positions(key, d).get(ll)
+                clip_seq.setdefault(label, []).append(
+                    None if position is None else seq_base + position)
         npc_records[m] = clips
+        npc_sequence_numbers[m] = clip_seq
     if dangling_chains:
         print(f"[npc] {dangling_chains} combo chain link(s) name a sequence their own model does "
               "not define; the sidecars carry the authored string")
@@ -922,6 +1054,7 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
             "model": info["model"], "bones": info["bones"],
             "split_bones": info["split_bones"],
             "clips": npc_records.get(m, {}),
+            "clip_seq": npc_sequence_numbers.get(m, {}),
             "own_clips": {c.label: _clip_meta(c) for c in info["clips"]},
             **write_facial(info["stem"], info["model"], info["facial"]),
             **write_eyes(info["stem"], info["model"], info["eyes"]),
@@ -1047,21 +1180,76 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
     # tracks, or a bank export that raised) must not appear as resolvable. Filtering here is
     # what lets the runtime treat a hit in `clips` as a promise the owner's bake can answer.
     bank_baked = {stem: set(rec["clips"]) for stem, rec in bank_index.items()}
+    # The case-folded mirror: the clip map keys a label by the first spelling the walk met, so a
+    # later owner's own record may be spelled differently and the exact-set test would read as a
+    # failed bake.
+    bank_baked_folded = {stem: {label.lower() for label in labels}
+                         for stem, labels in bank_baked.items()}
+
+    # A bank answers a label at runtime only if a CONTAINER carries it: the bake reads
+    # `npc/banks/<stem>.eskm` and writes `_banks/<stem>/A_<label>` from it, and a bank the
+    # container plan never wrote has no asset however completely its decode succeeded. The two
+    # sets genuinely differ -- the twelve per-clan PC banks decode `ragdoll` and every clan
+    # charsheet fidget, uniquely own none of them, and so are planned by nothing.
+    #
+    # Absent directory means the container stage has not run in this workspace, which is an
+    # ordering fact rather than a coverage failure: the census is skipped and said to be
+    # skipped, because filtering against an empty set would drop every shared clip in the cast.
+    bank_containers = bank_containers_present(NPC_DIR)
+    containers_known = bool(bank_containers)
+
+    def _answerable(stem, owner):
+        return answerable_owner(stem, owner, bank_containers, containers_known)
 
     def _activity(stem, rec, label, owner):
-        meta = (rec["own_clips"] if owner == stem
-                else bank_index.get(owner, {}).get("clips", {})).get(label)
-        return (meta or {}).get("activity", "")
+        return (_owner_meta(rec, bank_index, stem, owner, label) or {}).get("activity", "")
+
+    def _rows(record):
+        """label -> [(owner, global sequence number), ...].
+
+        Owners and their numbers are filtered as pairs, so the two lists the record carries
+        cannot fall out of step with each other however many rows a filter drops. A
+        pre-multi-owner record reads as a single row, and one written before the numbering
+        existed reads with a null number per row.
+        """
+        numbers = record.get("clip_seq", {})
+        rows = {}
+        for label, owners in record["clips"].items():
+            listed = owners if isinstance(owners, list) else [owners]
+            seq = numbers.get(label, [])
+            rows[label] = [(owner, seq[index] if index < len(seq) else None)
+                           for index, owner in enumerate(listed)]
+        return rows
 
     dropped = 0
+    containerless = 0
+    containerless_banks = set()
     foreign_clan = 0
     for stem, rec in npc_index.items():
         own = set(rec["own_clips"])
+        own_folded = {label.lower() for label in own}
         # Resolve exactly the way the runtime does -- own stem first, then the bank index --
         # so the two can never disagree even if a bank and an NPC ever share a stem.
-        keep = {lbl: owner for lbl, owner in rec["clips"].items()
-                if lbl in (own if owner == stem else bank_baked.get(owner, ()))}
-        dropped += len(rec["clips"]) - len(keep)
+        rows = _rows(rec)
+        keep = {}
+        decoded_total = 0
+        for lbl, pairs in rows.items():
+            # Two filters, counted apart because they are different failures: a decode that
+            # produced no such clip, and a decode that produced one no container carries.
+            decoded = [(owner, number) for owner, number in pairs
+                       if _owner_meta(rec, bank_index, stem, owner, lbl) is not None
+                       and (lbl in (own if owner == stem else bank_baked.get(owner, ()))
+                            or lbl.lower() in (own_folded if owner == stem
+                                               else bank_baked_folded.get(owner, ())))]
+            decoded_total += len(decoded)
+            kept = [(owner, number) for owner, number in decoded
+                    if _answerable(stem, owner)]
+            containerless += len(decoded) - len(kept)
+            containerless_banks.update(owner for owner, _ in decoded
+                                       if not _answerable(stem, owner))
+            if kept:
+                keep[lbl] = kept
+        dropped += sum(len(pairs) for pairs in rows.values()) - decoded_total
         # A player body's include tree reaches `pcidles_allsequences`, which chains ALL SEVEN clan
         # banks, so every PC body resolves every clan's character-sheet fidget:
         # `tremere_female_armor_0` sees 24 of them and weighted order puts `Malk_Female_Idle2` (10)
@@ -1071,18 +1259,53 @@ def main(only=None, *, placed_uses=None, index=None, integrate=False, strict=Fal
         #
         # Scoped to this one activity deliberately. Every other shared label is shared on purpose:
         # a walk from `character_shared_female_move_and_ranged` is the same walk for all of them.
-        clan = {lbl for lbl, owner in keep.items()
-                if owner != stem and _activity(stem, rec, lbl, owner) == "ACT_CHARSHEET_FIDGET"}
-        foreign_clan += len(clan)
-        rec["clips"] = {lbl: owner for lbl, owner in keep.items() if lbl not in clan}
+        # Per (label, owner), not per label: a body that owns its own clan fidget keeps its own
+        # row and sheds only the other clans' copies of the same label.
+        resolved = {}
+        for lbl, pairs in keep.items():
+            kept = [(owner, number) for owner, number in pairs
+                    if owner == stem
+                    or _activity(stem, rec, lbl, owner) != "ACT_CHARSHEET_FIDGET"]
+            foreign_clan += len(pairs) - len(kept)
+            if kept:
+                resolved[lbl] = kept
+        rec["clips"] = {lbl: [owner for owner, _ in pairs] for lbl, pairs in resolved.items()}
+        rec["clip_seq"] = {lbl: [number for _, number in pairs]
+                           for lbl, pairs in resolved.items()}
     if dropped:
         print(f"[npc] dropped {dropped} unresolvable clip refs (owner did not bake them)")
+    if containerless:
+        print(f"[npc] dropped {containerless} clip ref(s) naming a bank with no container: "
+              + ", ".join(sorted(containerless_banks)))
     if foreign_clan:
         print(f"[npc] dropped {foreign_clan} charsheet fidget(s) belonging to another clan")
 
+    # The coverage guard the resolution work asked for: a declared bank that reaches no clip
+    # map answers nothing, and until now it could disappear without a single line of output.
+    # The two ways that happens are told apart, because only one of them is a defect:
+    #
+    #   * a bank WITH a container that nothing references is work the bake did for no reader,
+    #     and it is how a clip that mattered would vanish -- that fails the run;
+    #   * a bank with NO container is the filter above doing its job, counted and named.
+    orphaned, filtered = unreferenced_banks(
+        bank_index, npc_index, cinematic_index, bank_containers, containers_known)
+    if filtered:
+        print(f"[npc] {len(filtered)} declared bank(s) carry no container and reach no clip "
+              f"map: {', '.join(filtered)}")
+    if orphaned:
+        raise RuntimeError(
+            "%d declared bank(s) reach no clip map, so nothing can ever resolve them: %s"
+            % (len(orphaned), ", ".join(orphaned))
+        )
+
     manifest = {
         "manifest_version": MANIFEST_VERSION,
-        "note": "npcs[stem].clips maps a clip label -> the stem that OWNS it. If that stem is a "
+        "note": "npcs[stem].clips maps a clip label -> the stems that OWN it, in include-tree "
+                "order; several banks may declare one label, each under its own activity, and "
+                "the first is what a label-only lookup resolves to. npcs[stem].clip_seq is "
+                "parallel to it and carries each row's global sequence number -- the index the "
+                "engine's own flat space gives that descriptor, which is what orders candidates "
+                "and breaks a weight tie. If a stem is a "
                 "key in `banks`, the clip is a baked bank sequence played through skeleton "
                 "compatibility; otherwise it is the NPC's own. Per-clip metadata "
                 "(activity/weight/flags/frames/fps) lives once on the owner: banks[owner].clips "

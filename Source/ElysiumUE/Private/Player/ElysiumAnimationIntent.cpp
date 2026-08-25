@@ -521,6 +521,20 @@ FElysiumAnimationIntent BuildLocomotionIntent(const FElysiumLocomotionSample& Sa
 	Out.Channel = EElysiumAnimChannel::Base;
 	Out.Activity = ActivityName(Code);
 	Out.Route = EElysiumAnimRoute::Activity;
+	// **The player's locomotion commit takes the canonical clip, not a draw.** This is the request
+	// `apply_player_activity_and_sequence` (`vampire.dll 0x101644f0`) serves, and the flag that
+	// picks its selector is set by `CBasePlayer::SetAnimation` on a state change — which for a gait
+	// is the frame the classifier's answer changes, and the only frame this request's answer moves.
+	// `run` is the clip that proves it: two candidates at weight 1, 30 fps against 18, so the draw
+	// can hand the body a leg cycle at 57% of the rate its ground speed is asking for.
+	//
+	// Player-kind only. Retail's setter is a `CBasePlayer` virtual, and a cast body's locomotion is
+	// requested by AI schedules whose own call sites choose a picker per task — a rule this rung has
+	// not recovered, so a cast gait keeps the draw it already had.
+	if (BodyKind == EElysiumAnimBodyKind::Player)
+	{
+		Out.Select = EElysiumAnimSelect::Heaviest;
+	}
 	Out.Variant = Variant;
 	Out.Body = Sample;
 	Out.AirPhase = Latch.Phase;

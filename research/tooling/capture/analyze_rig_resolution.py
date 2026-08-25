@@ -332,13 +332,22 @@ def ownership_chains(
     return rows
 
 
-def sequence_map(session: Path) -> dict[tuple[str, int], dict[str, Any]]:
+def sequence_map(
+    session: Path, library: BankLibrary | None = None
+) -> dict[tuple[str, int], dict[str, Any]]:
     """The live global-index table `capture_rig_remap` read, if it ran.
 
     An ownership chain is only as complete as the calls that survived the
     capture's change keys, so a repeated inner link can be suppressed and leave
     its parent looking unowned. This table has no such gap: it resolves every
     number a body answers, from the group ranges the engine filled at load.
+
+    A row the reader could not label -- the owning bank's live image was never
+    named by the session -- still carries the owner and the rebased index the
+    engine's own ranges answered, so its label is completed off the owner's
+    installed file. Dropping such a row would send the selection that names the
+    number to the chain fallback, which is keyed on the number alone and can
+    answer with another body's bank.
     """
     path = session / "sequence_map.csv"
     if not path.is_file():
@@ -347,7 +356,19 @@ def sequence_map(session: Path) -> dict[tuple[str, int], dict[str, Any]]:
     with path.open(encoding="utf-8", newline="") as stream:
         for row in csv.DictReader(stream):
             if row.get("resolved") != "True":
-                continue
+                bank = library.bank(row.get("owner_model")) if library else None
+                if bank is None or not bank.present or row.get("owner_index") in (None, ""):
+                    continue
+                local = int(row["owner_index"])
+                label = bank.label(local)
+                if label is None:
+                    continue
+                row = {
+                    **row,
+                    "label": label,
+                    "activity_name": bank.activity(local) or "",
+                    "resolved": "install",
+                }
             key = (BankLibrary.key_for(row["body_model"]), int(row["global_index"]))
             table[key] = row
     return table
@@ -442,7 +463,10 @@ def selections(
                 row["resolved_activity_name"] = live["activity_name"] or None
                 row["resolved_from"] = "live_map"
             else:
-                owner = owners.get((body or "", result)) or owners.get(("", result))
+                # The head-only key answers with whichever body's chain carried the
+                # number; it is a fallback for a selection whose body the session
+                # never named, never for one whose body it did.
+                owner = owners.get((body, result)) if body else owners.get(("", result))
                 if owner is not None:
                     row["resolved_label"] = owner["label"]
                     row["resolved_owner"] = owner["owner_model"]
@@ -519,7 +543,7 @@ def analyze(session: Path) -> int:
         return 2
 
     library = BankLibrary()
-    live_map = sequence_map(session)
+    live_map = sequence_map(session, library)
     rigs = rig_sets(calls, returns)
     ownership = ownership_chains(calls, library, live_map)
     selection_rows = selections(calls, returns, ownership, live_map)

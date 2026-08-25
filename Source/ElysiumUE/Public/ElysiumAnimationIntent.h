@@ -53,6 +53,27 @@ enum class EElysiumAnimBodyKind : uint8
 	Cast,
 };
 
+// Which of retail's two sequence pickers answers this request.
+//
+// `SelectWeightedSequence` (`vampire.dll 0x1008dc40`) and `SelectHeaviestSequence` (`0x1008dd30`)
+// are the same function twice: both collect the activity's candidates through
+// `GetSequencesForActivity` and differ only in the picker they hand the array to. `Weighted` draws
+// by authored `actweight` — variety, which is why a katana attack carries 23 candidates.
+// `Heaviest` keeps the largest weight with a strict comparison, so it spends no randomness and
+// resolves a tie on the FIRST candidate, i.e. the lowest global sequence number. It is the
+// canonical clip for the activity.
+//
+// **The fork is a latch, not a per-request-kind rule.** `apply_player_activity_and_sequence`
+// (`0x101644f0`) reads entity flag `0x40000000`: set, it takes `Heaviest` and consumes the flag;
+// clear, it draws. The flag has exactly two setters — `CBasePlayer::SetAnimation` (`0x10164240`)
+// when the animation state machine reports a state CHANGE, and `FUN_10181680`, its forced-recommit
+// sibling. So a commanded change commits the canonical clip and everything else draws for variety.
+enum class EElysiumAnimSelect : uint8
+{
+	Weighted,
+	Heaviest,
+};
+
 // Which slot the request owns. The driver holds one request slot per channel
 // (`FElysiumAnimationRequest`); the base channel's slot is arbitrated against the locomotion
 // publish by the priority table below, and the other channels' slots stand ready for the layer
@@ -698,6 +719,13 @@ struct FElysiumAnimationIntent
 	// melee sequence selector, which fails rather than falling through to the weighted draw. The
 	// producer states it; see `FElysiumActivityClipRequest::bRequireStateMask` for the recovered rule.
 	bool bRequireStateMask = false;
+	// Which picker answers an activity whose candidates none of the direction-keyed rules claimed.
+	//
+	// `Weighted` is the default because it is what every producer asked for before the fork was
+	// recovered, and because it is the arm retail reaches whenever the heaviest latch is clear. A
+	// producer whose retail analogue commands a state change states `Heaviest` instead — see
+	// `EElysiumAnimSelect`.
+	EElysiumAnimSelect Select = EElysiumAnimSelect::Weighted;
 
 	// --- Translation context ---------------------------------------------------------------------
 	// The active weapon's ENTITY CLASSNAME (`item_w_glock_17c`), which is the key authored content

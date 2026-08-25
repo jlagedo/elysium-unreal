@@ -1663,10 +1663,16 @@ def character_source_plan(
     if manifest is None:
         manifest = _load_npc_manifest(npc_dir)
 
+    # A label names every bank that declares it, in include-tree order, so the owner set is the
+    # flattened values rather than the values themselves.
+    def _owners(record):
+        for owners in record.get("clips", {}).values():
+            yield from (owners if isinstance(owners, list) else [owners])
+
     models = {stem: record["model"] for stem, record in manifest["npcs"].items()}
     banks: dict[str, str] = {}
     for stem, record in manifest["npcs"].items():
-        for owner in record.get("clips", {}).values():
+        for owner in _owners(record):
             if owner == stem or owner in banks:
                 continue
             bank = manifest["banks"].get(owner)
@@ -1833,7 +1839,8 @@ def write_character_sources(
         model_sources = set(requested)
         bank_sources = set()
         for stem in requested:
-            for owner in source_manifest["npcs"][stem].get("clips", {}).values():
+            for owners in source_manifest["npcs"][stem].get("clips", {}).values():
+              for owner in (owners if isinstance(owners, list) else [owners]):
                 if owner in models:
                     # Some dialogue/performance clips live in another body's own container.
                     model_sources.add(owner)
@@ -2109,7 +2116,8 @@ def resolve_character_slice(partition: dict, selectors: Sequence[str] | None,
                 with (npc_dir / "npc_manifest.json").open(encoding="utf-8-sig") as handle:
                     manifest = json.load(handle)
                 for stem, record in manifest.get("npcs", {}).items():
-                    for owner in record.get("clips", {}).values():
+                    for owners in record.get("clips", {}).values():
+                      for owner in (owners if isinstance(owners, list) else [owners]):
                         if owner != stem:
                             players.setdefault(owner, set()).add(stem)
         return players
