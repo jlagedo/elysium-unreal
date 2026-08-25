@@ -287,6 +287,15 @@ disagreeing camera clocks, or any cast member never entering frame outside an op
 false and exits the batch with status 1. This separates model/clip/material faults from placement,
 framing, cuts, and fades before `newgame_ttd` is allowed to be the aggregate integration test.
 
+### The retail parity oracles
+
+A body that looks wrong on the stage is diagnosed against a captured retail session rather than by
+eye. Four automation tests read fixtures written from a Frida capture — selection, retarget, drawn
+pose and layer composition — each scoped to one link so a failure names the link rather than the
+symptom, and none of them needs the game running. What each proves and what each cannot, the
+capture recipes, and the offline `rig_parity` differ:
+`docs/vtmb/animation_rig_resolution.md` → "The instruments, and what each proves".
+
 ### The interactive green room
 
 `uv run elysium gr <stem>` is the same stage driven by hand rather than by a case list: one body on

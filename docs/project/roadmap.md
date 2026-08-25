@@ -70,23 +70,30 @@ schedules, `aiscripted_schedule`, disciplines, stealth, the player law channels 
 witnessing — carries headless Substrate/Content coverage and no played evidence. Playable-path
 rule 3 governs what happens next:
 
-1. **11.10** — the Play test tier, the beat-script harness the whole landed stack is accepted
+1. **LIFE10 — the animation overlay subsystem is missing** — an armed body composes fewer
+   channels than retail does, measured against a live retail session: 1,113 of 1,718 captured
+   frames are short at least one channel and none arms a channel retail did not. The autolayer
+   closure from a gait reaches aim and bobble only, so every `_attack_layer`, `_attack_delta` and
+   `_reload_layer` is armed by `CBaseAnimatingOverlay` — Source's game-pushed layer stack, which
+   this runtime has no counterpart for. A drawn gun never plays its attack or reload pose over
+   the gait → [plans/animation.md](plans/animation.md).
+2. **11.10** — the Play test tier, the beat-script harness the whole landed stack is accepted
    through; PP0's finish → [plans/spine.md](plans/spine.md).
-2. **The 3 C's slice** — the controls/camera co-tune, then CCC8's owner-played acceptance →
+3. **The 3 C's slice** — the controls/camera co-tune, then CCC8's owner-played acceptance →
    [plans/three-cs.md](plans/three-cs.md).
-3. **LIFE7's choreo-scene rewire, then the 12.1 remainder** — the staging, camera coupling and
+4. **LIFE7's choreo-scene rewire, then the 12.1 remainder** — the staging, camera coupling and
    triggers come back first ([plans/animation.md](plans/animation.md)), because the theatre's
    residual RE32 material/remap work and its final live acceptance cannot be run until a scene
    stages its cast again → [plans/theatre.md](plans/theatre.md).
-4. **13.1–13.5 and 9.8 / 9.9 remainders** — the played tutorial lessons plus stealth-kill, the
+5. **13.1–13.5 and 9.8 / 9.9 remainders** — the played tutorial lessons plus stealth-kill, the
    per-rank discipline consumers, frenzy, terminals, barter and the dialogue reaction consumer →
    [plans/gameplay.md](plans/gameplay.md).
-5. **LIFE3 → LIFE4** — one resolver for the whole cast over the committed action tables, then a
+6. **LIFE3 → LIFE4** — one resolver for the whole cast over the committed action tables, then a
    drawn weapon visible in the hand through a swing → [plans/animation.md](plans/animation.md).
 
 **The audio programme is unstarted and sits under two rungs**: PP2 cannot finish without AUD3's
 scene lines and PP3 cannot finish without AUD2's event surface, and both stand on AUD0's
-catalog. Its place in the five items above is an open owner call →
+catalog. Its place in the six items above is an open owner call →
 [plans/audio.md](plans/audio.md).
 
 ## P0 — Ground truth & de-risk
@@ -440,6 +447,15 @@ The ladder:
   finish line; owns the capture-tooling trim.
 - [P] **[LIFE9 Secondary-motion calibration](plans/animation.md)** — hair/cloth fitting and
   numeric replays; presentation polish behind the graphics freeze, revisit at the thaw.
+- [ ] **[LIFE10 The animation overlay subsystem](plans/animation.md)** — **the front's first
+  item.** An armed body composes a strict subset of retail's channels: 1,113 of 1,718 captured
+  frames are short at least one and none arms a channel retail did not, with every
+  `_attack_layer`, `_attack_delta` and `_reload_layer` across the five weapon families
+  unreachable. The autolayer closure from a gait reaches aim and bobble only, so the family is
+  armed by `CBaseAnimatingOverlay`, a game-pushed layer stack with no counterpart here; the
+  record's one-overlay/one-additive limit is a consequence of that, not a second cause. The
+  subsystem's data model, lifecycle and weight rule are located and under RE recovery.
+  `Elysium.Content.RigLayers` and `RigPose` are the acceptance.
 
 ## P9 — Dialogue & persistence *(detail: [plans/gameplay.md](plans/gameplay.md))*
 

@@ -432,6 +432,67 @@ controlled series, labelled an Unreal presentation approximation unless the nume
 itself matches. This is the one parked item that would need **new** live capture; that renewed
 scope is its own owner call at the thaw.
 
+### LIFE10 The weapon layer composition gap
+
+An armed body composes fewer animation channels than retail does, so a drawn gun never plays its
+attack or reload pose over the gait. The cause is an animation subsystem this runtime does not
+implement — Source's `CBaseAnimatingOverlay` layer stack — rather than a clip, a bake or a
+resolver defect. This is the first item on the unblocked front. The captured evidence and the
+autolayer closure that rules out the studio data are `docs/vtmb/animation_rig_resolution.md`; the
+runtime's layer plumbing is `docs/architecture/animation-architecture.md`.
+
+**Measured** against a live retail session by `Elysium.Content.RigLayers`, over 1,718 captured
+frames:
+
+- **1,113 frames (65%) are short at least one channel retail played; none arms a channel retail
+  did not.** The runtime composes a strict subset, never a different set.
+- The unreachable set is **every `_attack_layer`, `_attack_delta` and `_reload_layer` across all
+  five weapon families** — 1,154 of 1,230 missing instances. `_aim_layer` and `_bobble_delta` are
+  armed correctly and never appear in it.
+- After removing the committed base by its own sequence number, **955 frames need a second
+  overlay and 239 a second additive**.
+- Worked example, `malkavian_female_armor_0` with a supershotgun, 49 frames in this exact shape:
+  retail composes `supershotgun_aim_layer` + `supershotgun_attack_layer` +
+  `supershotgun_bobble_delta` + `supershotgun_attack_delta`; the runtime arms the first and the
+  third. The legs match retail to a hundredth of a millimetre and the torso is half-composed.
+- `idle01` and `walk` in the shortfall (76 instances) are gait cross-fades the blend stack
+  handles as a transition rather than a channel; they are excluded from the conclusion.
+
+**This is a missing subsystem, not a shortfall of armed channels.** The autolayer closure from a
+gait reaches aim and bobble and nothing else — read from `move_and_ranged.mdl`'s own records, and
+`supershotgun_attack_layer`'s own closure points back at the aim layer rather than outward, so no
+walk of the studio data reaches the attack or reload family from a gait at any depth. The two
+channels this runtime arms are exactly the two the studio data offers. The rest are armed by
+**`CBaseAnimatingOverlay`**: Source's animation overlay stack, present in `vampire.dll` with
+`m_AnimOverlay[]` in its datamap, per-layer `m_nSequence`/`m_fSequenceFinished`, its own vtable
+and datamap builder, and a `CBaseAnimatingOverlay::AddGesture…` `DevMsg`. Game code pushes a
+layer carrying its own sequence, weight, playback rate and lifetime, faded independently of the
+pose graph — which is also the only thing that accounts for a channel's weight falling
+`0.923 → 0.02` across consecutive frames, where an autolayer's weight moves with the cycle. The
+evidence is `docs/vtmb/animation_rig_resolution.md`.
+
+The one-overlay/one-additive limit on `FElysiumResolvedAnimation` — which `ResolveLayerAssets`
+already reports as `twooverlay`/`twoadditive` — is a **consequence** of never having modelled a
+layer stack, not a second independent cause. Raising it in isolation would not put an attack pose
+on the body.
+
+**What this rung needs before it can be designed.** `CBaseAnimatingOverlay`'s data model, its
+push/expire lifecycle and its weight-driving rule are located but **not recovered**; RE work is
+running on them. The runtime design follows that recovered contract rather than a slot count
+chosen in advance, and no reproduction is specified here until it exists.
+
+**Open:** whether a montage slot is the right home for a game-pushed overlay at all.
+`ElysiumSlotLayer` and `ElysiumSlotAimLayer` are reserved for montages today, and
+`ABP_ElysiumBiped` carries three `LayeredBoneBlend` nodes and two `ApplyAdditive` — but an overlay
+stack has its own lifetime and fade, which a montage slot does not model. Answer it against the
+recovered contract, not against the node count.
+
+*Acceptance:* `Elysium.Content.RigLayers` reports every captured frame's channel set covered,
+with the shortfall asserted rather than only reported; from real input, a drawn firearm plays its
+attack and reload poses over an unchanged gait on a male and a female body. *Deps:* the
+`CBaseAnimatingOverlay` recovery; LIFE3's resolver and LIFE4's wielded body. The capture oracles
+are already on disk.
+
 ### Open owner calls
 
 Movement-orientation/strafing settings so `move_yaw` resolves off the neutral cell in ordinary

@@ -444,6 +444,103 @@ another stem as another clan's. The banks are duplicates of what the bodies alre
 defect is the **detection gap**, not the lost data: a bank that mattered would disappear the
 same way, and nothing in the chain would fail.
 
+### What the reproduction does not carry
+
+Each of these is a named absence rather than an unknown: the retail behaviour is recorded, and
+this runtime does something else.
+
+**The cast still draws its gait by weight.** Both of retail's pickers exist here —
+`ElysiumAnimResolve::PickHeaviest` reproduces `FUN_104280f0` (maximum `actweight`, a strict `<` so
+ties keep the lowest global sequence number, no randomness) and `PickWeighted` reproduces
+`FUN_10427fc0` (raw weights, and a uniform draw when they sum to zero). The **fork** between them
+is reproduced only on the player: retail latches the heaviest picker on a commanded state change
+through entity flag `0x40000000` (`animation_and_movers.md`), and this runtime commits the
+canonical clip on the player's locomotion request in its place. NPC gaits are requested by AI
+schedules whose call sites choose a picker per task — the corpus shows `CAI_BaseNPC` thunks
+calling both — so no mapping is grounded and none is invented; the cast draws. A capture keyed to
+the requesting schedule would settle which arm each task takes.
+
+**The weighted draw is seeded, not random.** Retail calls `RandomInt(0, sum-1)`; this runtime
+draws from `HashCombineFast(stem, variant)` so a body resolves the same clip every load. That is a
+deliberate divergence for testability, and it is the reason the weighted arm cannot be asserted
+against a capture the way the heaviest arm can — only its candidate set and its weights are
+comparable, never its answer.
+
+**The `0x80` include-shadowing rule is not modelled.** Retail's candidate collector stores the
+flags of the last locally matched descriptor and searches the include tree only if that word's low
+byte carries `0x80` (`FUN_10427df0`, confirmed at instruction level: `MOV [ESP+0x18],flags` …
+`MOV AL,[ESP+0x18]; TEST AL,AL; JNS`). A local match without the bit therefore **shadows every
+bank's candidates for that activity**. Nothing in this repository's export or resolver carries it,
+and no witnessed selection distinguishes the two behaviours, so it is unreproduced rather than
+contradicted. A body whose own container declares an activity a bank also declares would
+distinguish them.
+
+**The two engines disagree about bind equality, and the disagreement is live.** Retail's copy
+threshold sits near `0.1 in`; `BoneContainer.cpp` refuses a retarget cache entry only when the
+binds agree within `0.001 cm`. Six bones on `nosferatu_female_armor_0 ← frenzy` fall in the gap —
+`Bip01 L/R Finger2` (`0.2109 cm`), `L/R Clavicle` (`0.1794`), `L/R Finger31` (`0.0800`) — and are
+copied by retail while this runtime retargets them. This is the same threshold the pelvis section
+brackets, seen on bones small enough that the consequence is a fraction of a millimetre.
+
+**The overlay subsystem does not exist here.** `CBaseAnimatingOverlay`'s stack of game-pushed
+layers has no counterpart in this runtime, which is why an armed body composes a strict subset of
+retail's channels — see "A composed pose is a subset" below. This is the largest missing
+mechanism in the reproduction, and it is a subsystem rather than a rule.
+
+**The composed pose is unmeasured.** `Elysium.Content.RigPose` evaluates one clip per captured
+frame, so a frame retail built from several contributions is compared against a single clip by
+construction — which is why its layered-frame figures describe the layers rather than a defect.
+Closing it means driving `ABP_ElysiumBiped` on a real component in a ticking world and feeding it
+retail's own captured channel set, which separates two questions the current instruments cannot:
+whether the graph composes correctly given the right inputs, and whether the runtime can produce
+those inputs at all.
+
+### A composed pose is a subset, and the missing half comes from outside the studio data
+
+`Elysium.Content.RigLayers` compares, per captured frame, the channels retail accumulated against
+the channels this runtime arms for the same request. Over 1,718 frames: **1,113 are short at least
+one channel retail played, and none arms a channel retail did not.** The unreachable set is every
+`_attack_layer`, `_attack_delta` and `_reload_layer` across all five weapon families — 1,154 of
+1,230 missing instances; `_aim_layer` and `_bobble_delta` are armed correctly. Removing the
+committed base by its own sequence number, 955 frames need a second overlay and 239 a second
+additive.
+
+**The autolayer closure does not reach the missing family, at any depth.** Read from
+`move_and_ranged.mdl`'s own records (`numautolayers`@660, `autolayerindex`@664,
+`mstudioautolayer_t` stride 20):
+
+| sequence | `numautolayers` | reaches |
+|---|---|---|
+| `supershotgun_aggressive_walk` | 2 | `supershotgun_aim_layer` (flags `0x192`), `walk` (flags `0x0`) |
+| `supershotgun_aim_layer` | 0 | — |
+| `supershotgun_bobble_delta` | 0 | — |
+| `supershotgun_attack_layer` | 2 | `supershotgun_aim_layer`, `supershotgun_relaxed_move_layer` |
+
+The gait's transitive closure is aim and bobble and nothing else. `_attack_layer`,
+`_attack_delta` and `_reload_layer` appear nowhere in it — and the attack layer's *own* closure
+points back at the aim layer rather than outward, so no walk of the studio data reaches the family
+from a gait. **Nothing in the shipped model connects them**, so this is neither a decode gap nor a
+question of which clip a resolver arms: the two channels we arm are exactly the two the studio data
+offers, and the rest are armed from somewhere else.
+
+**That somewhere else is `CBaseAnimatingOverlay`, and it is a subsystem rather than a rule.**
+`vampire.dll` carries the class with `m_AnimOverlay[]` in its datamap, per-layer `m_nSequence` and
+`m_fSequenceFinished` fields, its own vtable and datamap builder, and a `DevMsg` reading
+`CBaseAnimatingOverlay::AddGesture…`. That is Source's animation **overlay** system: a stateful
+stack of layers game code pushes, each carrying its own sequence, weight, playback rate and
+lifetime, and faded independently of the pose graph. It is a **peer** of the studio autolayer
+mechanism, not part of it — which is why an autolayer walk cannot find its members however deep it
+goes.
+
+It also accounts for the one observation an autolayer cannot: a channel's weight falling
+`0.923 → 0.02` across consecutive frames. An autolayer derives its weight from the cycle or a pose
+parameter, so it moves with the animation; an overlay fades because game code ticks it down.
+
+**Recovered in progress.** The class, its datamap and its entry point are located; the data model,
+the push/expire lifecycle and the weight-driving rule are not yet recovered, so no contract is
+stated here. The RE work naming them is what closes this section, and the reproduction's design
+follows that contract rather than any slot count chosen in advance.
+
 ## What a reproduction has to carry
 
 - The sequence numbering and the bone correspondence cannot be baked from the install alone.
@@ -697,11 +794,29 @@ frame-rate measurement.
 | `research/tooling/capture/capture_rig_remap.py` | the out-of-process runtime-table reader |
 | `research/tooling/capture/analyze_rig_resolution.py` | the offline resolver and guide writer |
 | `research/tooling/capture/analyze_rig_pose.py` | the pose fixture writer: frames, contributions, bones by name |
+| `research/tooling/capture/analyze_rig_layers.py` | the layer fixture writer: a frame's channels, deduplicated, additive-marked |
+| `research/tooling/capture/rig_parity.py` | the diff: numbering, ownership, retarget and sequence numbers against the session |
 
 The recipes hook 22 and 23 targets across `vampire.dll` and `client.dll`. Five were added for
 this work — `vampire.lookup_sequence`, `vampire.get_model_ptr`,
 `client.resolve_sequence_owner`, `client.accumulate_sequence_pose` and, for the fighting cast,
 `vampire.npc_choose_melee_sequence`.
+
+### The instruments, and what each proves
+
+Four automation tests read these fixtures. Each is scoped to one link in the chain, so a failure
+names the link rather than the symptom; none of them needs the game running.
+
+| test | proves | cannot prove |
+|---|---|---|
+| `Elysium.Content.RigOracle` | for every selection the session committed, the export names the same owning bank, activity and clip, and the resolver reaches it under the picker retail used | anything about a clip the session never committed; the weighted arm's *answer*, only its candidates |
+| `Elysium.Content.RigRetarget` | our bone correspondence, our identity cases and our similarity transforms agree with the captured remap tables | anything about an evaluated pose — it compares bind-time correspondence only |
+| `Elysium.Content.RigPose` | the drawn pose, bone for bone against a live retail frame, wherever a base clip is the whole pose | a composed frame: it evaluates one clip, so a layered frame is compared against a composition by construction |
+| `Elysium.Content.RigLayers` | which channels retail accumulated against which this runtime arms for the same request | whether the graph *composes* those channels correctly once armed |
+
+`rig_parity` is the offline sibling: it compares the export's include-DAG numbering, per-label
+ownership and sequence numbers against the same sessions without an editor, and it is the cheapest
+thing to run when a numbering or ownership question comes up.
 
 ### Volume, and why the keys matter
 
