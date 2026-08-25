@@ -21,7 +21,9 @@ ownership), `Content/CLAUDE.md` (tracked and generated packages).
 Procedures live in skills, not here: `build-slots` (one engine install per concurrent checkout),
 `elysium-testing` (the tiers, and how much export/bake a change authorizes), `gameplay-change`
 (the entity/API/event/save contract), `authored-assets`, `vscode-intellisense`.
-`.claude/rules/cpp.md` carries the C++ coding policy and loads with `Source/**`.
+`.claude/rules/cpp.md` carries the C++ coding policy and loads with `Source/**`;
+`.claude/rules/tests.md` carries test authoring and loads with `Private/Tests/**` and
+`pipeline/tests/**`.
 
 ## Load-bearing rules
 

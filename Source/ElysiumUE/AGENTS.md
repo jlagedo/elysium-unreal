@@ -13,7 +13,8 @@ ownership rationale — belongs to `docs/architecture/runtime-architecture.md` (
 `camera-view-modes.md` and `python_bridge.md`. Per-task status: `docs/project/roadmap.md`.
 
 Loaded alongside this file: `.claude/rules/cpp.md` (the C++ coding policy, path-scoped to
-`Source/**`), the `gameplay-change` skill (the entity/API/event/save contract every gameplay change
+`Source/**`), `.claude/rules/tests.md` (test authoring, path-scoped to `Private/Tests/**`), the
+`gameplay-change` skill (the entity/API/event/save contract every gameplay change
 lands behind), and the `elysium-testing` skill (tiers, filters, and how much a change authorizes).
 
 ## Module
