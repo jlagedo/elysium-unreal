@@ -98,7 +98,7 @@ namespace
 		return FString::Printf(TEXT("%s|%s|%s"), *Row.Body, *Row.Bank, *Row.BodyBone);
 	}
 
-	FString FindOracle()
+	FString FindRetargetOracle()
 	{
 		const FString Named = FPlatformMisc::GetEnvironmentVariable(TEXT("ELYSIUM_RIG_ORACLE"));
 		if (!Named.IsEmpty())
@@ -238,7 +238,7 @@ bool FElysiumRigRetargetTest::RunTest(const FString&)
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
 		return true;
 	}
-	const FString OraclePath = FindOracle();
+	const FString OraclePath = FindRetargetOracle();
 	if (OraclePath.IsEmpty())
 	{
 		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no rig_oracle.json under $ELYSIUM_WORK_ROOT/research/frida "

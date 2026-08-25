@@ -130,7 +130,10 @@ def load_recipe(name: str) -> dict[str, Any]:
     return recipe
 
 
-FIELD_TYPES = ("u8", "i32", "u32", "f32", "ptr", "vec3", "cstr")
+FIELD_TYPES = (
+    "u8", "i32", "u32", "f32", "ptr", "vec3", "cstr", "f32array", "u32array",
+)
+ARRAY_TYPES = ("f32array", "u32array")
 FIELD_BASES = ("module", "register", "argument", "return")
 
 
@@ -186,6 +189,77 @@ def _validate_field_reads(recipe: dict[str, Any], path: Path) -> None:
             elif "max_length" in field:
                 raise ValueError(
                     f"field read {label} bounds a value that is not a string: {path}"
+                )
+            if field["type"] in ARRAY_TYPES:
+                # An array read walks memory, so its ceiling is mandatory and its
+                # length must be stated exactly once -- a constant, or the label of
+                # a field decoded earlier in the same phase. A declaration carrying
+                # both would leave the reader to choose, and one carrying neither
+                # would read whatever the ceiling allows on every call.
+                field["max_count"] = _integer_field(
+                    field.get("max_count"), f"field read {label} max_count"
+                )
+                if not 1 <= field["max_count"] <= 8192:
+                    raise ValueError(
+                        f"field read {label} names an array ceiling outside "
+                        f"1..8192: {path}"
+                    )
+                has_count = "count" in field
+                has_source = "count_from" in field
+                if has_count == has_source:
+                    raise ValueError(
+                        f"field read {label} needs exactly one of `count` and "
+                        f"`count_from`: {path}"
+                    )
+                if has_count:
+                    field["count"] = _integer_field(
+                        field["count"], f"field read {label} count"
+                    )
+                    if not 0 <= field["count"] <= field["max_count"]:
+                        raise ValueError(
+                            f"field read {label} names a count outside its own "
+                            f"ceiling: {path}"
+                        )
+                else:
+                    source = field["count_from"]
+                    if not isinstance(source, str):
+                        raise ValueError(
+                            f"field read {label} names an invalid count source: {path}"
+                        )
+                    # The reader decodes a phase in declaration order and resolves the
+                    # count out of what it has already decoded, so a source declared
+                    # after this field -- or in the other phase -- reads as absent and
+                    # loses the whole array to an error value rather than to a refusal.
+                    phase = field.get("when", "enter")
+                    earlier = {
+                        other["label"]
+                        for other in declarations[:declarations.index(field)]
+                        if other.get("when", "enter") == phase
+                    }
+                    if source not in earlier:
+                        raise ValueError(
+                            f"field read {label} counts from {source!r}, which is not "
+                            f"declared before it in the {phase} phase: {path}"
+                        )
+                if "count_scale" in field:
+                    field["count_scale"] = _integer_field(
+                        field["count_scale"], f"field read {label} count_scale"
+                    )
+                    if not 1 <= field["count_scale"] <= 64:
+                        raise ValueError(
+                            f"field read {label} scales its count outside 1..64: {path}"
+                        )
+                if "decimals" in field:
+                    field["decimals"] = _integer_field(
+                        field["decimals"], f"field read {label} decimals"
+                    )
+                    if not 0 <= field["decimals"] <= 9:
+                        raise ValueError(
+                            f"field read {label} rounds outside 0..9 decimals: {path}"
+                        )
+            elif any(key in field for key in ("count", "count_from", "max_count")):
+                raise ValueError(
+                    f"field read {label} counts a value that is not an array: {path}"
                 )
             if base == "return":
                 # The return value only exists on the way out, so a declaration

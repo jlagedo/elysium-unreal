@@ -1,0 +1,169 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "life_rig_pose",
+  "description": "Record the pose retail actually drew, beside enough state to rebuild it offline. C_BaseAnimating::SetupBones runs the whole blending chain and leaves the result in the entity's own matrix3x4_t array at +0x724, whose length is the bone count at +0x730 -- both measured live by the life_pose_probe recipe, because the corpus decompilation of that function runs an __alloca_probe and loses its own thiscall, so neither member can be turned into an offset on paper. The array is read at LEAVE, when the chain has filled it; at enter it still holds the previous frame. Reading the entity's own array rather than the caller's output buffer matters because that buffer is one shared scratch allocation every entity in the frame writes through, so it identifies nothing on its own. This target's `this` is the entity plus four -- the renderable subobject -- so an entity pointer here is four below the one client.get_studio_hdr reports for the same body, which is the join between a pose and the model it belongs to. A pose names its own model rather than being joined to one: the entity's cached studio header sits at +0x6A8 from this target's `this`, and its name field at +0xC, so the record states the body it posed. That read is affordable HERE and nowhere else -- this target is sampled, so it pays a twentieth of what the census would. The census key stays the entity ALONE for the same reason: get_studio_hdr is called eight hundred times a frame, and naming any field or stack word in its key makes every suppressed call pay a memory read, measured at 32-46 fps against 60 for the entity alone; naming the return value defers each call into a full record and costs two thirds of the frame rate. So the census answers which model an entity FIRST drew, and the pose answers which model it is drawing now -- an entity outlives the model it draws, because the player keeps one pointer across a body swap. Contributions come from client.accumulate_sequence_pose, which runs nested inside the SetupBones call that consumes it -- depth one against depth zero on the same thread -- so a frame's contributions are the calls between that frame's enter and leave rather than anything a frame counter has to be trusted for. The player's own sequence, cycle and pose parameters ride on vampire.player_item_post_frame, whose curtime is the same clock SetupBones is passed as its fourth argument, matching to under a millisecond. The pose target is sampled rather than keyed down: a bone array cannot be compared for equality cheaply, and every frame of a held pose is a legitimately different sample, so what bounds the cost is how many frames are taken rather than which. Its census key is the entity and that frame time, which no two calls share, so sampling alone sets the rate and no answer is suppressed for resembling one already seen. Cost is naturally proportional: a prop carries one or two bones and a body carries seventy-seven, so the expensive records are the few worth having.",
+  "mode": "trace",
+  "targets": [
+    "client.setup_bones",
+    "client.accumulate_sequence_pose",
+    "client.get_studio_hdr",
+    "vampire.player_item_post_frame"
+  ],
+  "expected_modules": [
+    "vampire.dll",
+    "client.dll"
+  ],
+  "max_trace_events": 200000,
+  "capture_returns": false,
+  "stack_words": 8,
+  "sample": {
+    "client.setup_bones": 20
+  },
+  "field_reads": {
+    "client.setup_bones": [
+      {
+        "label": "model",
+        "base": "register",
+        "register": "ecx",
+        "deref": [
+          "0x6a8"
+        ],
+        "offset": "0xc",
+        "when": "leave",
+        "type": "cstr",
+        "max_length": 128
+      },
+      {
+        "label": "bone_count",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x730",
+        "when": "leave",
+        "type": "i32"
+      },
+      {
+        "label": "bone_matrices",
+        "base": "register",
+        "register": "ecx",
+        "deref": [
+          "0x724"
+        ],
+        "when": "leave",
+        "type": "f32array",
+        "count_from": "bone_count",
+        "count_scale": 12,
+        "max_count": 2400,
+        "decimals": 5
+      }
+    ],
+    "client.accumulate_sequence_pose": [
+      {
+        "label": "model",
+        "base": "argument",
+        "index": 1,
+        "offset": "0xc",
+        "type": "cstr",
+        "max_length": 128
+      },
+      {
+        "label": "curtime",
+        "base": "module",
+        "module": "vampire.dll",
+        "rva": "0x70b228",
+        "deref": [
+          "0x0"
+        ],
+        "offset": "0xc",
+        "type": "f32"
+      }
+    ],
+    "client.get_studio_hdr": [
+      {
+        "label": "model",
+        "base": "return",
+        "when": "leave",
+        "offset": "0xc",
+        "type": "cstr",
+        "max_length": 128
+      },
+      {
+        "label": "numbones",
+        "base": "return",
+        "when": "leave",
+        "offset": "0xf0",
+        "type": "i32"
+      }
+    ],
+    "vampire.player_item_post_frame": [
+      {
+        "label": "curtime",
+        "base": "module",
+        "module": "vampire.dll",
+        "rva": "0x70b228",
+        "deref": [
+          "0x0"
+        ],
+        "offset": "0xc",
+        "type": "f32"
+      },
+      {
+        "label": "sequence",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f0",
+        "type": "i32"
+      },
+      {
+        "label": "cycle",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x6f8",
+        "type": "f32"
+      },
+      {
+        "label": "activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xfec",
+        "type": "i32"
+      },
+      {
+        "label": "ideal_activity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0xff0",
+        "type": "i32"
+      },
+      {
+        "label": "active_weapon",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x19a4",
+        "type": "u32"
+      },
+      {
+        "label": "aim_yaw",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x2070",
+        "type": "f32"
+      },
+      {
+        "label": "velocity",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x3d4",
+        "type": "vec3"
+      }
+    ]
+  },
+  "on_first": {
+    "client.setup_bones": [
+      "ecx",
+      "word4"
+    ],
+    "client.get_studio_hdr": [
+      "ecx"
+    ]
+  }
+}

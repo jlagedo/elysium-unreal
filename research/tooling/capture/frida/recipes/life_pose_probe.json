@@ -1,0 +1,34 @@
+{
+  "schema": "elysium.research.frida.recipe.v1",
+  "name": "life_pose_probe",
+  "description": "Read the argument layout of C_BaseAnimating::SetupBones from a live process, and the entity field window beside it, so the pose recipe can declare its reads against measured offsets instead of guessed ones. The corpus decompilation of this function runs an __alloca_probe, so every stack offset the decompiler prints is shifted by a frame size it never states, and it loses the thiscall as well -- it reads the same register as both `this` and `this + 4` in one body, so the bone-count and matrix-pointer members it names cannot be turned into offsets on paper. Their values can: a bone count is a small positive integer, a matrix pointer is an address, a cycle is a float in [0,1) and a sequence is a small index. This reads a raw dword window off the entity at leave, when the pose has been built, and decides the layout offline. One record per distinct entity is enough.",
+  "mode": "trace",
+  "targets": [
+    "client.setup_bones"
+  ],
+  "expected_modules": [
+    "client.dll"
+  ],
+  "max_trace_events": 64,
+  "capture_returns": true,
+  "stack_words": 10,
+  "on_first": {
+    "client.setup_bones": [
+      "ecx"
+    ]
+  },
+  "field_reads": {
+    "client.setup_bones": [
+      {
+        "label": "entity_window",
+        "base": "register",
+        "register": "ecx",
+        "offset": "0x0",
+        "when": "leave",
+        "type": "u32array",
+        "count": 512,
+        "max_count": 512
+      }
+    ]
+  }
+}

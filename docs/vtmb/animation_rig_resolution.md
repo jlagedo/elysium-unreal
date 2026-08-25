@@ -296,11 +296,12 @@ poses, bone for bone, on `nosferatu_female_armor_0` ← `frenzy` and `tremere_ma
   direct one exactly. The rotation is a separate question and is not settled by the same argument —
   see "What one hop proves, and what it does not" below.
 
-### The one residual: a bone whose bind sits at the origin
+### The residual: a bone whose bind sits near the origin
 
-**There is no pelvis divergence.** An earlier reading of this section compared a scale measured on
-one (body, bank) pair against a retail matrix captured on another, and read the difference as a
-defect. Both halves reproduce; they simply do not describe the same pair:
+**The pelvis diverges, and it is the largest measured divergence in the reproduction.** Two
+separate pairs are involved and they must not be read as one: the finger scales below reproduce
+exactly, and the pelvis does not. A scale measured on one (body, bank) pair carries nothing about
+another, and joining the two reads as agreement where there is none.
 
 | bone | pair | bank bind | body bind | ratio |
 |---|---|---|---|---|
@@ -311,20 +312,33 @@ defect. Both halves reproduce; they simply do not describe the same pair:
 | `Bip01 Pelvis` | male | `2.96802` | `0.14496` | `0.04884` |
 | `Bip01 Pelvis` | **female** | `1.22112` | `1.22112` | **`1.00000`** |
 
-Retail's builder decides its branch on **the origin**, not on proximity between the two binds: the
-guard is `|a|² <= EPS` against zero (`vampire.dll 0x100c67b0`). A pelvis 0.145 cm from its parent is
-not at the origin, so that pair takes the axis-angle branch — axis `a × b`, angle
-`atan2(|a×b|, a·b)`, scale `|b|/|a|` — which is `FindBetweenNormals(SourceDir, TargetDir)` and
-`TargetLen / SourceLen` exactly. On the female pair the two binds are identical, so retail copies
+Retail's builder decides its branch on **the origin** rather than on proximity between the two
+binds (`vampire.dll 0x100c67b0`). On the female pair the two binds are identical, so retail copies
 (`+0x03` clear) and Unreal skips the bone entirely (`BoneContainer.cpp` refuses a cache entry when
-the binds agree within `0.001`). Both sides answer `1.00000`. Retail's captured `±1.21591` pure-X
-translation is a third pair: the sign follows which side is at the origin, which is what the branch
-writes as `b − a`.
+the binds agree within `0.001`). Both sides answer `1.00000`.
 
-**The real residual is the origin case itself, and it is small and bounded.** Unreal declines to
-retarget when either bind is at the origin — `BoneContainer.cpp`'s
-`IsNearlyZero(SourceLen * TargetLen)` — and passes the bank's translation through verbatim, where
-retail applies a pure `b − a` offset. Swept over all 653 exported containers:
+**On the male pair retail takes the pure-translation branch, and the captured matrix says so
+without ambiguity.** Every `Bip01 Pelvis` record on `tremere_Male_Armor_2/3 ← frenzy` and
+`← runotherspc_pcidles_allsequences` reads three row norms of exactly `1.00000` — identity rotation,
+unit scale — beside a translation of `1.225514 in` = `3.11281 cm`, which is our own `|b − a|` for
+that pair to five decimal places. `toreador_Male_Armor_3`, `goth_male` and `Bertram` carry the same
+record; `security_guard ← fat_male` carries its own value, `1.167083 in` = `2.96439 cm`, and that
+too equals our `|b − a|`. So the branch is not in question, and neither is our bind data — only
+which rule is applied to it.
+
+**The guard is therefore not a test against zero.** A pelvis binding `0.14496 cm` (`0.05707 in`)
+from its parent satisfies it, so `EPS ≥ 0.00326 in²`. The copy/transform bracket narrows it from the
+other side: the largest bind separation retail **copied** is `0.210946 cm` (`0.08305 in`) and the
+smallest it **transformed** is `0.321769 cm` (`0.126681 in`). A single **0.1 inch** constant sits in
+that gap and would explain both tests at once — a hypothesis the corpus is consistent with rather
+than a recovered value, since one constant explaining two thresholds is suggestive and not proof.
+
+**Two populations sit behind this, and only one of them is small.**
+
+The first is the case where the bind is *at* the origin. Unreal declines to retarget there —
+`BoneContainer.cpp`'s `IsNearlyZero(SourceLen * TargetLen)` — and passes the bank's translation
+through verbatim, where retail applies a pure `b − a` offset. Swept over all 653 exported
+containers:
 
 | | |
 |---|---|
@@ -335,10 +349,34 @@ retail applies a pure `b − a` offset. Swept over all 653 exported containers:
 | bodies affected | `swat`, `swat2`, `swat3`, `werewolf`, `wolf_form_2`, `cat`, `dog_guard`, `creation1_full`, `creation1_scripted_both`, `creation1_unused` |
 | worst-case error | a constant offset of at most the other side's bind length, ≤ 3 cm |
 
-`ElysiumSkeletalBuild.cpp::RegisterRetargetSource` names each one at bake time, so the residual is a
-measurement rather than a surprise. Closing it needs a translation rule carrying retail's three
-branches, which is an owner call rather than a bake change; at ≤ 3 cm on ten non-humanoid bodies it
-has not been made.
+`ElysiumSkeletalBuild.cpp::RegisterRetargetSource` names each one at bake time.
+
+**The second population is the band between the two engines' thresholds, and it is neither small
+nor confined to non-humanoids.** A bone binding further from its parent than Unreal's `0.001`
+but nearer than retail's epsilon is **translated by retail and retargeted by us** — the two guards
+simply disagree about what counts as the origin. Swept over the 293 exported character bodies,
+**71 carry such a bone**: 70 of them `Bip01 Pelvis`, the rest a `Bip01 Spine1` or a prop bone. The
+cluster sits at `0.14411`–`0.14496 cm` against the male banks' `2.96802`, so `OrientAndScale`
+scales the bank's pelvis translation by `0.04884` where retail adds a constant offset.
+
+**The figures above are bind-space bounds; they are not what the player sees.** The pelvis is a
+translation bone, so the error is not confined to it — every bone below and above inherits the
+displacement. Measured against a live retail session by `Elysium.Content.RigPose`, on
+`tremere_male_armor_3` and comparing only frames where a base clip is the whole drawn pose:
+
+| median, base clip alone | bodies outside the band | `tremere_male_armor_3` |
+|---|---|---|
+| radius from the root | `0.003 cm` | **`6.090 cm`** |
+| joint angle | `0.005°` | measured with the radius |
+| `Bip01 Pelvis` radius | `0.000 cm` | **`4.652 cm`** (p90 `36.815`, max `53.433`) |
+| lower body radius | `0.007 cm` | **`3.734 cm`** |
+| bone segment length | `0.000 cm` | `0.000 cm` (p99 `0.103`) |
+
+`malkavian_male_armor_0` (pelvis bind `2.96811`) and `tremere_male_armor_0` (`2.96804`) read the
+left-hand column through the same test and the same code path, which is what attributes the
+right-hand column to the bind rather than to the body. Bone lengths hold either way, so the
+skeleton is **displaced, not stretched** — hip sway and vertical bob are scaled to a twentieth
+while every limb keeps its proportions.
 
 ### What one hop proves, and what it does not
 
@@ -419,9 +457,10 @@ same way, and nothing in the chain would fail.
   applies to most of the skeleton. Rotation is never transformed, only copied.
 - A label alone does not name a clip; the tree it resolved through does
   (`animation_and_movers.md` A.7).
-- A bone whose bind sits **at the origin** needs retail's origin branch, which writes a pure
-  `b − a` offset. The length-ratio rule is correct everywhere else, including on a pelvis merely
-  close to its parent — retail's own test is against zero, not against proximity.
+- A bone whose bind sits **within retail's epsilon of the origin** needs retail's origin branch,
+  which writes a pure `b − a` offset. That epsilon is far wider than Unreal's own: a pelvis merely
+  close to its parent — `0.145 cm` — is inside it, so the length-ratio rule is correct only outside
+  the band, and 71 of 293 character bodies sit in it.
 - An NPC picks a melee attack geometrically against its enemy and may refuse outright; the
   player draws by weight. Both arms of the fork have to exist, and a refusal is an answer.
 
@@ -447,8 +486,9 @@ is below the caller's stack pointer, and the interceptor's own return path write
 window has to be read on the way in.
 
 **Assuming a bone's transform is a pure length retarget.** It is a similarity, and on a bone whose
-bind sits at the origin retail switches to a pure translation instead. Reading only the first row of
-the matrix shows a plausible scale and hides the branch.
+bind sits within retail's epsilon of the origin retail switches to a pure translation instead.
+Reading only the first row of the matrix shows a plausible scale and hides the branch; the three row
+norms together name it, because the translation branch writes all three as exactly `1.00000`.
 
 **Reading one bone's numbers off two different pairs.** A scale is a property of a (body, bank)
 pair, not of a bone name, and the corpus offers the same bone at wildly different ratios: `Bip01
@@ -460,13 +500,21 @@ measurements — which is how the section above came to claim one.
 
 Everything this document leaves unresolved, and what would resolve each.
 
-**The origin branch has no implementation, and the residual is ≤ 3 cm on 16 containers.** No stock
-translation-retargeting mode carries it, so a fix means a translation rule with retail's three
-branches — copy when the binds agree, a pure `b − a` offset when either is at the origin, otherwise
-axis-angle scaled by the length ratio — applied where `OrientAndScale` is applied today. The bake
-now names every affected container and bone, so the decision is available rather than latent. It is
-an owner call: the bodies are `swat`, `werewolf`, `cat`, `dog_guard` and the `creation1_*` set, and
-the error is a constant offset rather than a distortion.
+**The origin branch has no implementation, and the divergence is measured rather than bounded.**
+No stock translation-retargeting mode carries it, so a fix means a translation rule with retail's
+three branches — copy when the binds agree, a pure `b − a` offset when either bind sits inside
+retail's epsilon of the origin, otherwise axis-angle scaled by the length ratio — applied where
+`OrientAndScale` is applied today. It reaches **71 of 293 character bodies**, and on an affected
+body it displaces the whole pose by a median of `6.090 cm` rather than offsetting one bone; the
+at-origin sub-case on ten non-humanoid bodies is the smaller half of it. `Elysium.Content.RigPose`
+holds the defect to a recorded envelope and would accept a fix without being edited, so the
+instrument exists and the decision is an owner call.
+
+**Retail's epsilon is bracketed, not read.** The corpus places it between `0.08305 in` and
+`0.126681 in` and a single `0.1 inch` constant would satisfy both bounds, but the constant itself is
+inferred from where retail copied and transformed rather than recovered from the builder. Reading
+`vampire.dll 0x100c67b0`'s comparand would settle it, and a translation rule wants the real value
+rather than a plausible one.
 
 **A declared bank can leave no trace.** `npc_index.json` declares 372 banks and 360 containers
 exist. The plan↔disk edge *is* guarded — `character_source_plan` hard-fails for a planned container
@@ -564,6 +612,29 @@ uv run elysium research analyze_rig_resolution
 Resolves every committed sequence number to its owning bank and clip label, using stage 2's
 range table where an ownership chain was suppressed by a change key.
 
+### 4. The drawn pose
+
+A separate session and a separate recipe, because it answers a different question: what the bones
+actually held, rather than which clip was chosen or how it was remapped.
+
+```powershell
+uv run elysium research frida_probe attach --pid <PID> --recipe life_rig_pose --duration-seconds 200
+uv run elysium research analyze_rig_pose
+```
+
+`client.setup_bones` runs per entity per frame, so it is sampled and its records are read from the
+entity's own bone array rather than from the caller's output buffer — that buffer is one shared
+scratch allocation every entity writes through, and identifies nothing. A pose record names its own
+model from the entity's cached studio header, so it needs no join against the entity census.
+Measured at 60 fps with the session's own frame counter.
+
+**What the session must contain is variety of pose, not variety of weapon.** One clean sample of
+each composition shape — a base clip standing, a gait, a crouch, an aim layer, a one-shot, a
+reaction — held still for a few seconds so several cycle values land. A body swap costs nothing and
+covers a second rig; a body whose pelvis binds inside retail's epsilon is what exercises the
+divergence above, and `tremere_male_armor_2`, `tremere_male_armor_3` and `security_guard` are among
+them.
+
 ### What lands, and where
 
 Under `$ELYSIUM_WORK_ROOT/research/frida/<timestamp>-attach-life_rig_resolution/`:
@@ -622,8 +693,10 @@ frame-rate measurement.
 | `research/tooling/capture/frida/agent.js` | the Frida agent — `cstr` reads, `return` field base, `on_change` / `on_first` keys |
 | `research/tooling/capture/frida_probe.py` | recipe validation, attach/launch/collect |
 | `research/tooling/capture/contracts/binary_profiles.json` | hash-pinned hook targets and prologues |
+| `research/tooling/capture/frida/recipes/life_rig_pose.json` | the pose recipe: sampled `setup_bones`, its own model name, the contribution clock |
 | `research/tooling/capture/capture_rig_remap.py` | the out-of-process runtime-table reader |
 | `research/tooling/capture/analyze_rig_resolution.py` | the offline resolver and guide writer |
+| `research/tooling/capture/analyze_rig_pose.py` | the pose fixture writer: frames, contributions, bones by name |
 
 The recipes hook 22 and 23 targets across `vampire.dll` and `client.dll`. Five were added for
 this work — `vampire.lookup_sequence`, `vampire.get_model_ptr`,

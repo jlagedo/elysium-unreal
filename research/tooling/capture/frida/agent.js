@@ -215,7 +215,26 @@ function fieldBase(field, context, words, returnValue) {
   throw new Error(`unknown field base: ${base}`);
 }
 
-function readTyped(address, field) {
+// An array read resolves its length from a value already decoded in the same
+// phase, because the count that matters is the model's own bone count and it
+// arrives as a separate field rather than as a constant. `max_count` is the
+// ceiling that keeps a wrong or hostile count from walking the address space;
+// it is required, so a recipe cannot declare an unbounded read by omission.
+function arrayLength(field, sofar) {
+  const declared = field.count_from === undefined
+    ? field.count
+    : (sofar || {})[field.count_from];
+  const count = typeof declared === 'number' ? declared : Number.NaN;
+  if (!Number.isFinite(count) || count < 0) {
+    throw new Error(`array length is not a number: ${field.count_from || field.count}`);
+  }
+  // The counted thing and the read thing are rarely the same unit: a pose is
+  // counted in bones and read in floats, twelve to a matrix3x4_t.
+  const scale = field.count_scale === undefined ? 1 : field.count_scale;
+  return Math.min(Math.floor(count) * scale, field.max_count);
+}
+
+function readTyped(address, field, sofar) {
   switch (field.type) {
     case 'u8': return address.readU8();
     case 'i32': return address.readS32();
@@ -242,6 +261,34 @@ function readTyped(address, field) {
       }
       return text;
     }
+    // A pose is an array of matrix3x4_t, which is 12 floats a bone, and the
+    // whole point of capturing one is to compare it against an evaluated pose
+    // offline -- so it is read as a flat float run and shaped by the reader.
+    // Rounded on the way out: the record is JSON, a full double costs about
+    // seventeen characters against nine, and the fifth decimal of an inch is
+    // already two orders below anything a bone comparison can resolve.
+    case 'f32array': {
+      const count = arrayLength(field, sofar);
+      const scale = Math.pow(10, field.decimals === undefined ? 5 : field.decimals);
+      const bytes = address.readByteArray(count * 4);
+      const view = new Float32Array(bytes);
+      const out = new Array(count);
+      for (let index = 0; index < count; ++index) {
+        out[index] = Math.round(view[index] * scale) / scale;
+      }
+      return out;
+    }
+    // The same run left raw, for a window whose type is what is being decided.
+    case 'u32array': {
+      const count = arrayLength(field, sofar);
+      const bytes = address.readByteArray(count * 4);
+      const view = new Uint32Array(bytes);
+      const out = new Array(count);
+      for (let index = 0; index < count; ++index) {
+        out[index] = view[index];
+      }
+      return out;
+    }
     default: throw new Error(`unknown field type: ${field.type}`);
   }
 }
@@ -254,7 +301,7 @@ function readFields(declarations, context, words, returnValue) {
       for (const step of field.deref || []) {
         address = address.add(step).readPointer();
       }
-      result[field.label] = readTyped(address.add(field.offset || 0), field);
+      result[field.label] = readTyped(address.add(field.offset || 0), field, result);
     } catch (error) {
       result[field.label] = { error: String(error) };
     }
