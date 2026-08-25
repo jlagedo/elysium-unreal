@@ -790,28 +790,8 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// The overlay SLOT: retail's `CBaseAnimatingOverlay` slot 0, composed AFTER the host's own
 			// model-declared autolayers and therefore over a second masked blend rather than through
 			// the first one. Its pose comes off an evaluator pinned to an explicit time.
-			UEdGraphNode* SlotEvaluator = Place(*Graph,
-				TEXT("/Script/AnimGraph.AnimGraphNode_SequenceEvaluator"), 280, 260);
-			// **The slot clip's own declared layers — retail's autolayer rule, applied recursively to
-			// the sequence in the overlay slot.** The slot branch is the same trio the base already
-			// has: the shot motion (the evaluator above), its declared aim grid composed OVER it
-			// through a masked blend of its own, and its declared `_delta` composed additively after.
-			// A grid states its time as a FRACTION rather than in seconds, which is why the grid gets
-			// an evaluator of its own rather than the sequence evaluator with an asset swapped in.
-			UEdGraphNode* SlotGrid = Place(*Graph,
-				TEXT("/Script/AnimGraph.AnimGraphNode_BlendSpaceEvaluator"), 280, 560);
-			UEdGraphNode* SlotAimBlend = Place(*Graph,
-				TEXT("/Script/AnimGraph.AnimGraphNode_LayeredBoneBlend"), 400, 300);
-			UEdGraphNode* SlotAdditiveEval = Place(*Graph,
-				TEXT("/Script/AnimGraph.AnimGraphNode_SequenceEvaluator"), 400, 620);
-			UEdGraphNode* SlotAdditive = Place(*Graph,
-				TEXT("/Script/AnimGraph.AnimGraphNode_ApplyAdditive"), 460, 220);
-			UEdGraphNode* SlotLayer = Place(*Graph,
-				TEXT("/Script/AnimGraph.AnimGraphNode_LayeredBoneBlend"), 520, 0);
 			if (UpperBodySpace == nullptr || UpperBodySequence == nullptr || UpperBodyPick == nullptr
-				|| Layer == nullptr || AdditiveSequence == nullptr || Additive == nullptr
-				|| SlotEvaluator == nullptr || SlotGrid == nullptr || SlotAimBlend == nullptr
-				|| SlotAdditiveEval == nullptr || SlotAdditive == nullptr || SlotLayer == nullptr)
+				|| Layer == nullptr || AdditiveSequence == nullptr || Additive == nullptr)
 			{
 				UE_LOG(LogTemp, Error, TEXT("[animbp] a CCC10 layer node class was not found"));
 				return;
@@ -871,123 +851,181 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			Wire(DriveFromBool(*Graph, PinNamed(Layer, TEXT("BlendWeights_0")),
 				TEXT("UpperBodyLayerWeight"), 40, -100), TEXT("layer weight pin"));
 
-			// --- the overlay slot, composed over everything above it ---------------------------------
+			// --- the overlay stack: four slots, chained, composed in index order ---------------------
 			//
-			// **A SECOND masked blend, and the order is retail's.** `CBaseAnimatingOverlay` accumulates
-			// its slots after the host sequence's own autolayer bindings, so what the slot composes over
-			// is the pose the node above already produced. Folding both into one blend would give a
-			// body's carry-pose layer and its fire layer one weight and one mask between them, and only
-			// one of the two could ever be on screen.
+			// **Masked blends AFTER the autolayer blend, and the order is retail's.**
+			// `CBaseAnimatingOverlay` accumulates its slots after the host sequence's own autolayer
+			// bindings, so what slot 0 composes over is the pose the node above already produced, and
+			// each later slot composes over the one before it. Folding them into one blend's four
+			// poses would make the composition SIMULTANEOUS where retail's is sequential — two layers
+			// whose masks overlap (an aim layer and an attack layer both reach the upper body) do not
+			// give the same pose either way — and would give a body's carry-pose layer and its fire
+			// layer one weight and one mask between them.
 			//
-			// The layer is posed by an EVALUATOR rather than a player. Retail's slot cycle is explicit
-			// — the layer's phase is written each frame from its own age — and the same explicitness is
-			// what this needs mechanically: a player keeps its own clock and would drift from the claim
-			// that expires the layer, a re-fire of the same clip could not restart it, and it publishes
-			// no phase to read back. `bTeleportToExplicitTime` stays at the node's own `true`, which is
-			// what makes the time pin a pose lookup rather than an advance: no notifies fire off the
-			// layer and no root motion is extracted from it, both correct for a partial-body overlay.
-			// `ReinitializationBehavior` stays at `ExplicitTime` for the same reason — a slot that
-			// became relevant again must resume at the phase its claim states, not at zero.
+			// Each slot's branch is the same trio the base channel has, which is retail's autolayer
+			// rule applied recursively to the sequence in the slot: the layer's motion, its declared
+			// aim grid composed OVER it through a masked blend of its own, and its declared `_delta`
+			// composed additively after. A grid states its time as a FRACTION rather than in seconds,
+			// which is why the grid gets an evaluator of its own rather than the sequence evaluator
+			// with an asset swapped in.
 			//
-			// Every setting on this node is a `WITH_EDITORONLY_DATA` `FoldProperty`, so a reflection
-			// write lands somewhere the runtime cannot see; the pin is the only honest door, which is
-			// why both inputs are exposed and driven rather than set.
-			ExposePin(SlotEvaluator, TEXT("Sequence"));
-			Wire(DriveFromBool(*Graph, PinNamed(SlotEvaluator, TEXT("Sequence")),
-				TEXT("RequestedSlotSequence"), 40, 200), TEXT("slot Sequence pin"));
-			// `ExplicitTime` is shown by default, so it needs no `ExposePin` — only a driver.
-			Wire(DriveFromBool(*Graph, PinNamed(SlotEvaluator, TEXT("ExplicitTime")),
-				TEXT("SlotExplicitTime"), 40, 260), TEXT("slot ExplicitTime pin"));
-
-			// Same node shape and the same null mask as the autolayer blend above, for the same two
-			// reasons: `BlendMasks` is edit-time state with no pin, so the mask is written at runtime
-			// through the tag by `UElysiumBipedAnimInstance::ApplySlotMask`; and a null mask is legal
-			// only because this is a TEMPLATE Animation Blueprint, which is what keeps a generated,
-			// game-derived profile asset out of the tracked graph text.
-			SetNodeValue<uint8>(SlotLayer, TEXT("BlendMode"), 1);   // ELayeredBoneBlendMode::BlendMask
-			ResizeNodeArray(SlotLayer, TEXT("BlendMasks"), 1);
-			ResizeNodeArray(SlotLayer, TEXT("LayerSetup"), 0);
-			// **Mesh space, and it is what makes a slot layer standable at all.** VtMB flags
-			// `Bip01 Spine1` with `SPLIT_ROTATION`: its animated rotation is the bone's MODEL-SPACE
-			// orientation, absolute and independent of the chain below it, which is what lets one
-			// attack layer compose over any gait. A slot clip is masked, so the chain it would be
-			// normalised against is not in it and no host is named to borrow one from; the bake
-			// therefore states the bone against the bind chain and ships that chain with the clip,
-			// leaving the clip's own forward kinematics to restate the absolute orientation. Blending
-			// that in mesh space is what writes it onto the composed pose unchanged. Blended locally
-			// it would take the host's spine rotation on top and fold the upper body about the waist.
+			// The motion is posed by an EVALUATOR rather than a player. Retail's slot cycle is
+			// explicit — the layer's phase is written each frame from its own cycle — and the same
+			// explicitness is what this needs mechanically: a player keeps its own clock and would
+			// drift from the layer that ends it, a re-fire of the same clip could not restart it, and
+			// it publishes no phase to read back. `bTeleportToExplicitTime` stays at the node's own
+			// `true`, which is what makes the time pin a pose lookup rather than an advance: no
+			// notifies fire off the layer and no root motion is extracted from it, both correct for a
+			// partial-body overlay. `ReinitializationBehavior` stays at `ExplicitTime` for the same
+			// reason — a slot that became relevant again must resume at the phase its layer states,
+			// not at zero.
 			//
-			// It is set on THIS node alone. The autolayer blend below the slot stays local, because
-			// its layers are emitted per declaring host and carry an ordinary local pose resolved
-			// against that host's own animated chain.
-			//
-			// The mask decides how far this reaches, and it reaches exactly one bone: `Bip01 Spine1`
-			// is the only bone the layer masks own whose PARENT they do not, so it is the only bone
-			// whose local transform the mesh-space round trip can change. Every other owned bone sits
-			// under a parent that is owned too and rebuilds identically.
-			Wire(SetNodeBool(SlotLayer, TEXT("bMeshSpaceRotationBlend"), true),
-				TEXT("slot bMeshSpaceRotationBlend"));
-			SetOwnValue<FName>(SlotLayer, TEXT("Tag"), FName(ElysiumAnimGraph::SlotLayerTag));
+			// Every setting on the evaluator is a `WITH_EDITORONLY_DATA` `FoldProperty`, so a
+			// reflection write lands somewhere the runtime cannot see; the pin is the only honest
+			// door, which is why both inputs are exposed and driven rather than set.
+			UEdGraphNode* SlotChainTail = Layer;
+			for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
+			{
+				// Laid out left to right so the exported text reads in composition order; nothing
+				// depends on the coordinates.
+				const int32 X = 520 + SlotIndex * 340;
+				UEdGraphNode* SlotEvaluator = Place(*Graph,
+					TEXT("/Script/AnimGraph.AnimGraphNode_SequenceEvaluator"), X - 240, 260);
+				UEdGraphNode* SlotGrid = Place(*Graph,
+					TEXT("/Script/AnimGraph.AnimGraphNode_BlendSpaceEvaluator"), X - 240, 560);
+				UEdGraphNode* SlotAimBlend = Place(*Graph,
+					TEXT("/Script/AnimGraph.AnimGraphNode_LayeredBoneBlend"), X - 120, 300);
+				UEdGraphNode* SlotAdditiveEval = Place(*Graph,
+					TEXT("/Script/AnimGraph.AnimGraphNode_SequenceEvaluator"), X - 120, 620);
+				UEdGraphNode* SlotAdditive = Place(*Graph,
+					TEXT("/Script/AnimGraph.AnimGraphNode_ApplyAdditive"), X - 60, 220);
+				UEdGraphNode* SlotLayer = Place(*Graph,
+					TEXT("/Script/AnimGraph.AnimGraphNode_LayeredBoneBlend"), X, 0);
+				if (SlotEvaluator == nullptr || SlotGrid == nullptr || SlotAimBlend == nullptr
+					|| SlotAdditiveEval == nullptr || SlotAdditive == nullptr || SlotLayer == nullptr)
+				{
+					UE_LOG(LogTemp, Error, TEXT("[animbp] an overlay slot node class was not found"));
+					return;
+				}
 
-			Wire(Link(FirstPin(Layer, EGPD_Output), PinNamed(SlotLayer, TEXT("BasePose"))),
-				TEXT("layer -> slot base pose"));
-			// --- the slot's two shapes, picked by what the resolver answered with --------------------
-			// A grid where the slot clip declares one and the bake composed it (every fire and
-			// dry-fire layer), the plain sequence where it does not (every reload layer). Both are the
-			// SAME layer, so the pick is a hard switch and not a fade — a blend between them would be
-			// a blend between two answers to one question.
-			ExposePin(SlotGrid, TEXT("BlendSpace"));
-			Wire(DriveFromBool(*Graph, PinNamed(SlotGrid, TEXT("BlendSpace")),
-				TEXT("RequestedSlotBlendSpace"), 40, 560), TEXT("slot grid BlendSpace pin"));
-			Wire(DriveFromBool(*Graph, PinNamed(SlotGrid, TEXT("X")), TEXT("AimYaw"), 40, 620),
-				TEXT("slot grid X (AimYaw) pin"));
-			Wire(DriveFromBool(*Graph, PinNamed(SlotGrid, TEXT("Y")), TEXT("AimPitch"), 40, 680),
-				TEXT("slot grid Y (AimPitch) pin"));
-			// The playhead, as the fraction a blend space states time in. It is the same instant the
-			// sequence branch is pinned to, derived from it rather than tracked beside it.
-			Wire(DriveFromBool(*Graph, PinNamed(SlotGrid, TEXT("NormalizedTime")),
-				TEXT("SlotNormalizedTime"), 40, 740), TEXT("slot grid NormalizedTime pin"));
+				// The variable names the pins are driven from. Flat per slot because a pin is driven
+				// by a `Get <variable>` node, and an array element would need a second node kind in
+				// the generated text — `UElysiumBipedAnimInstance` declares the same nine names.
+				const FString Sequence = FString::Printf(TEXT("Slot%dSequence"), SlotIndex);
+				const FString BlendSpace = FString::Printf(TEXT("Slot%dBlendSpace"), SlotIndex);
+				const FString AimWeight = FString::Printf(TEXT("Slot%dAimWeight"), SlotIndex);
+				const FString AdditiveVar = FString::Printf(TEXT("Slot%dAdditive"), SlotIndex);
+				const FString AdditiveWeight = FString::Printf(TEXT("Slot%dAdditiveWeight"), SlotIndex);
+				const FString Weight = FString::Printf(TEXT("Slot%dWeight"), SlotIndex);
+				const FString Time = FString::Printf(TEXT("Slot%dTime"), SlotIndex);
+				const FString NormalizedTime = FString::Printf(TEXT("Slot%dNormalizedTime"), SlotIndex);
 
-			// The aim grid rides OVER the shot through its own masked blend, at weight 1 while a grid
-			// stands and 0 otherwise — retail's autolayers within a sequence are hardcoded 1.0, and
-			// the slot's envelope is applied once, by the outer blend. Mesh-space for the same split
-			// bone the outer blend is mesh-space for; the mask is the GRID's own, written by
-			// `ApplySlotAimMask` through the tag.
-			SetNodeValue<uint8>(SlotAimBlend, TEXT("BlendMode"), 1);
-			ResizeNodeArray(SlotAimBlend, TEXT("BlendMasks"), 1);
-			ResizeNodeArray(SlotAimBlend, TEXT("LayerSetup"), 0);
-			Wire(SetNodeBool(SlotAimBlend, TEXT("bMeshSpaceRotationBlend"), true),
-				TEXT("slot aim bMeshSpaceRotationBlend"));
-			SetOwnValue<FName>(SlotAimBlend, TEXT("Tag"), FName(ElysiumAnimGraph::SlotAimLayerTag));
-			Wire(Link(FirstPin(SlotEvaluator, EGPD_Output), PinNamed(SlotAimBlend, TEXT("BasePose"))),
-				TEXT("slot evaluator -> slot aim base"));
-			Wire(Link(FirstPin(SlotGrid, EGPD_Output), PinNamed(SlotAimBlend, TEXT("BlendPoses_0"))),
-				TEXT("slot grid -> slot aim blend pose 0"));
-			Wire(DriveFromBool(*Graph, PinNamed(SlotAimBlend, TEXT("BlendWeights_0")),
-				TEXT("SlotAimLayerWeight"), 200, 300), TEXT("slot aim weight pin"));
+				ExposePin(SlotEvaluator, TEXT("Sequence"));
+				Wire(DriveFromBool(*Graph, PinNamed(SlotEvaluator, TEXT("Sequence")),
+					*Sequence, X - 460, 200), TEXT("slot Sequence pin"));
+				// `ExplicitTime` is shown by default, so it needs no `ExposePin` — only a driver.
+				Wire(DriveFromBool(*Graph, PinNamed(SlotEvaluator, TEXT("ExplicitTime")),
+					*Time, X - 460, 260), TEXT("slot ExplicitTime pin"));
 
-			// And the `_delta` the slot clip declares, additively after the grid — retail's own
-			// order. The evaluator is pinned to the SAME explicit time as the shot, because the
-			// delta's phase is the shot's.
-			ExposePin(SlotAdditiveEval, TEXT("Sequence"));
-			Wire(DriveFromBool(*Graph, PinNamed(SlotAdditiveEval, TEXT("Sequence")),
-				TEXT("RequestedSlotAdditive"), 200, 620), TEXT("slot additive Sequence pin"));
-			Wire(DriveFromBool(*Graph, PinNamed(SlotAdditiveEval, TEXT("ExplicitTime")),
-				TEXT("SlotExplicitTime"), 200, 680), TEXT("slot additive ExplicitTime pin"));
-			Wire(Link(FirstPin(SlotAimBlend, EGPD_Output), PinNamed(SlotAdditive, TEXT("Base"))),
-				TEXT("slot aim -> slot additive base"));
-			Wire(Link(FirstPin(SlotAdditiveEval, EGPD_Output),
-				PinNamed(SlotAdditive, TEXT("Additive"))), TEXT("slot additive eval -> additive"));
-			Wire(DriveFromBool(*Graph, PinNamed(SlotAdditive, TEXT("Alpha")),
-				TEXT("SlotAdditiveWeight"), 260, 220), TEXT("slot additive Alpha pin"));
+				// Same node shape and the same null mask as the autolayer blend above, for the same
+				// two reasons: `BlendMasks` is edit-time state with no pin, so the mask is written at
+				// runtime through the tag by `UElysiumBipedAnimInstance::ApplySlotMask`; and a null
+				// mask is legal only because this is a TEMPLATE Animation Blueprint, which is what
+				// keeps a generated, game-derived profile asset out of the tracked graph text.
+				SetNodeValue<uint8>(SlotLayer, TEXT("BlendMode"), 1);  // BlendMask
+				ResizeNodeArray(SlotLayer, TEXT("BlendMasks"), 1);
+				ResizeNodeArray(SlotLayer, TEXT("LayerSetup"), 0);
+				// **Mesh space, and it is what makes a slot layer standable at all.** VtMB flags
+				// `Bip01 Spine1` with `SPLIT_ROTATION`: its animated rotation is the bone's
+				// MODEL-SPACE orientation, absolute and independent of the chain below it, which is
+				// what lets one attack layer compose over any gait. A slot clip is masked, so the
+				// chain it would be normalised against is not in it and no host is named to borrow
+				// one from; the bake therefore states the bone against the bind chain and ships that
+				// chain with the clip, leaving the clip's own forward kinematics to restate the
+				// absolute orientation. Blending that in mesh space is what writes it onto the
+				// composed pose unchanged. Blended locally it would take the host's spine rotation on
+				// top and fold the upper body about the waist.
+				//
+				// It is set on the SLOT blends alone. The autolayer blend below them stays local,
+				// because its layers are emitted per declaring host and carry an ordinary local pose
+				// resolved against that host's own animated chain.
+				//
+				// The mask decides how far this reaches, and it reaches exactly one bone:
+				// `Bip01 Spine1` is the only bone the layer masks own whose PARENT they do not, so it
+				// is the only bone whose local transform the mesh-space round trip can change. Every
+				// other owned bone sits under a parent that is owned too and rebuilds identically.
+				Wire(SetNodeBool(SlotLayer, TEXT("bMeshSpaceRotationBlend"), true),
+					TEXT("slot bMeshSpaceRotationBlend"));
+				SetOwnValue<FName>(SlotLayer, TEXT("Tag"), ElysiumAnimGraph::SlotLayerTag(SlotIndex));
 
-			Wire(Link(FirstPin(SlotAdditive, EGPD_Output), PinNamed(SlotLayer, TEXT("BlendPoses_0"))),
-				TEXT("slot additive -> slot blend pose 0"));
-			// The enveloped weight the record carries, never the `m_flWeightMax` ceiling: a reload
-			// layer ramps over a fifth of its cycle at each end and an attack layer snaps, and both
-			// answers arrive here as this one number.
-			Wire(DriveFromBool(*Graph, PinNamed(SlotLayer, TEXT("BlendWeights_0")),
-				TEXT("SlotLayerWeight"), 280, -100), TEXT("slot weight pin"));
+				// The chain: slot 0 composes over the autolayer blend, and each later slot over the
+				// one before it. This is retail's accumulate order made structural.
+				Wire(Link(FirstPin(SlotChainTail, EGPD_Output), PinNamed(SlotLayer, TEXT("BasePose"))),
+					TEXT("previous pose -> slot base pose"));
+
+				// --- the slot's two shapes, picked by what the resolver answered with ----------------
+				// A grid where the layer clip declares one and the bake composed it (every fire and
+				// dry-fire layer), the plain sequence where it does not (every reload layer). Both are
+				// the SAME layer, so the pick is a hard switch and not a fade — a blend between them
+				// would be a blend between two answers to one question.
+				ExposePin(SlotGrid, TEXT("BlendSpace"));
+				Wire(DriveFromBool(*Graph, PinNamed(SlotGrid, TEXT("BlendSpace")),
+					*BlendSpace, X - 460, 560), TEXT("slot grid BlendSpace pin"));
+				Wire(DriveFromBool(*Graph, PinNamed(SlotGrid, TEXT("X")), TEXT("AimYaw"),
+					X - 460, 620), TEXT("slot grid X (AimYaw) pin"));
+				Wire(DriveFromBool(*Graph, PinNamed(SlotGrid, TEXT("Y")), TEXT("AimPitch"),
+					X - 460, 680), TEXT("slot grid Y (AimPitch) pin"));
+				// The playhead, as the fraction a blend space states time in. It is the same instant
+				// the sequence branch is pinned to, derived from it rather than tracked beside it.
+				Wire(DriveFromBool(*Graph, PinNamed(SlotGrid, TEXT("NormalizedTime")),
+					*NormalizedTime, X - 460, 740), TEXT("slot grid NormalizedTime pin"));
+
+				// The aim grid rides OVER the motion through its own masked blend, at weight 1 while a
+				// grid stands and 0 otherwise — retail's autolayers within a sequence are hardcoded
+				// 1.0, and the slot's envelope is applied once, by the outer blend. Mesh-space for the
+				// same split bone the outer blend is mesh-space for; the mask is the GRID's own,
+				// written by `ApplySlotAimMask` through the tag.
+				SetNodeValue<uint8>(SlotAimBlend, TEXT("BlendMode"), 1);
+				ResizeNodeArray(SlotAimBlend, TEXT("BlendMasks"), 1);
+				ResizeNodeArray(SlotAimBlend, TEXT("LayerSetup"), 0);
+				Wire(SetNodeBool(SlotAimBlend, TEXT("bMeshSpaceRotationBlend"), true),
+					TEXT("slot aim bMeshSpaceRotationBlend"));
+				SetOwnValue<FName>(SlotAimBlend, TEXT("Tag"),
+					ElysiumAnimGraph::SlotAimLayerTag(SlotIndex));
+				Wire(Link(FirstPin(SlotEvaluator, EGPD_Output),
+					PinNamed(SlotAimBlend, TEXT("BasePose"))), TEXT("slot evaluator -> slot aim base"));
+				Wire(Link(FirstPin(SlotGrid, EGPD_Output),
+					PinNamed(SlotAimBlend, TEXT("BlendPoses_0"))),
+					TEXT("slot grid -> slot aim blend pose 0"));
+				Wire(DriveFromBool(*Graph, PinNamed(SlotAimBlend, TEXT("BlendWeights_0")),
+					*AimWeight, X - 340, 300), TEXT("slot aim weight pin"));
+
+				// And the `_delta` the layer clip declares, additively after the grid — retail's own
+				// order. The evaluator is pinned to the SAME explicit time as the motion, because the
+				// delta's phase is the motion's.
+				ExposePin(SlotAdditiveEval, TEXT("Sequence"));
+				Wire(DriveFromBool(*Graph, PinNamed(SlotAdditiveEval, TEXT("Sequence")),
+					*AdditiveVar, X - 340, 620), TEXT("slot additive Sequence pin"));
+				Wire(DriveFromBool(*Graph, PinNamed(SlotAdditiveEval, TEXT("ExplicitTime")),
+					*Time, X - 340, 680), TEXT("slot additive ExplicitTime pin"));
+				Wire(Link(FirstPin(SlotAimBlend, EGPD_Output), PinNamed(SlotAdditive, TEXT("Base"))),
+					TEXT("slot aim -> slot additive base"));
+				Wire(Link(FirstPin(SlotAdditiveEval, EGPD_Output),
+					PinNamed(SlotAdditive, TEXT("Additive"))), TEXT("slot additive eval -> additive"));
+				Wire(DriveFromBool(*Graph, PinNamed(SlotAdditive, TEXT("Alpha")),
+					*AdditiveWeight, X - 280, 220), TEXT("slot additive Alpha pin"));
+
+				Wire(Link(FirstPin(SlotAdditive, EGPD_Output),
+					PinNamed(SlotLayer, TEXT("BlendPoses_0"))),
+					TEXT("slot additive -> slot blend pose 0"));
+				// The enveloped weight the record carries, never the `m_flWeightMax` ceiling: a reload
+				// layer ramps over a fifth of its cycle at each end and an attack layer snaps, and
+				// both answers arrive here as this one number.
+				Wire(DriveFromBool(*Graph, PinNamed(SlotLayer, TEXT("BlendWeights_0")),
+					*Weight, X, -100), TEXT("slot weight pin"));
+
+				SlotChainTail = SlotLayer;
+			}
 
 			// The `_delta` additive composes independently, on top — retail's own order, overlay
 			// first (this node), additive second.
@@ -995,8 +1033,8 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			Wire(DriveFromBool(*Graph, PinNamed(AdditiveSequence, TEXT("Sequence")),
 				TEXT("RequestedAdditiveSequence"), 280, 520), TEXT("additive Sequence pin"));
 
-			Wire(Link(FirstPin(SlotLayer, EGPD_Output), PinNamed(Additive, TEXT("Base"))),
-				TEXT("slot layer -> additive base"));
+			Wire(Link(FirstPin(SlotChainTail, EGPD_Output), PinNamed(Additive, TEXT("Base"))),
+				TEXT("slot chain -> additive base"));
 			Wire(Link(FirstPin(AdditiveSequence, EGPD_Output), PinNamed(Additive, TEXT("Additive"))),
 				TEXT("additive sequence -> additive"));
 			Wire(DriveFromBool(*Graph, PinNamed(Additive, TEXT("Alpha")),

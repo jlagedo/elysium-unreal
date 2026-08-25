@@ -353,6 +353,27 @@ selector and the three independent confirmations of the numbering are in
 `docs/vtmb/combat-and-damage.md` → "The player arm: the direction key selects which attack, at
 swing start".
 
+### A retail defect in the 1xN blend branch, unreachable on shipped content
+
+`CalcPoseSingle` (`client.dll 0x10089740` / `vampire.dll 0x100c1f40`) has four arms. For
+`groupsize[0] == 1 && groupsize[1] > 1` -- a one-dimensional grid authored on pose-parameter axis 1
+-- the code at `0x100899d5` picks the correct neighbour cell (`anim[i0][i1+1]`, the axis-1
+direction) and then **jumps into the axis-0 tail**, whose `BlendBones` call loads its weight from
+the **`s0`** slot at `0x100899ad`. The axis-1 fraction `s1` is loaded only by the four-cell branch.
+Canonical Source blends this case with `s1`.
+
+Consequence, were it reachable: with `paramindex[0] == -1`, `s0` is 0 and the pose snaps to the
+lower cell forever, never interpolating.
+
+**It is unreachable.** No 1xN grid exists anywhere. Over every exported bank the multi-blend census
+is `(9,1)` x229, `(3,3)` x49, `(5,1)` x3; over the 339 loose models it is `(9,1)` x204, `(3,3)` x49,
+`(2,1)` x6; and the full-corpus figure is 9x1 (235), 3x3 (49), 2x1 (9), 5x1 (4) -- **all Nx1 or
+3x3**. A reproduction should implement the correct `s1` and record the divergence, because the
+faithful path cannot be exercised.
+
+Related, and also dead: all six `(2,1)` grids in the loose tree bind `paramindex = (-1, -1)`, so
+`s0 = 0` and `i0 = 0` and their second cell is **unreachable**. They are authored dead.
+
 ### The blend grid is two axes, not a raw 16×16 [data-verified + VtMB decompiled]
 
 The trailing region carries the blend space. Read from the runtime evaluator
@@ -459,6 +480,61 @@ every `move_yaw` fan shares its 180° cell. `hit_head` is the same grid at five 
 (`_back_right` at `−135`, `_right` at `−90`), the one body in the corpus that does; it is a
 monster bank with its own vocabulary, and a consumer resolving by cell index rather than by
 direction word gets a left-hit reaction for a right-side blow on it.
+
+### A fan's cycle is the weighted mean of its cells' DURATIONS, not of their rates
+
+The single largest reproduction fact in the timing territory, and the one a modern-Source
+implementation gets wrong.
+
+`GetSequenceCycleRate` (`0x10091230`) is `1.0 / SequenceDuration(seq)`, with a constant fallback
+when the duration is not positive. `SequenceDuration` resolves through the include DAG to
+`Studio_Duration` (`0x100c5720`), which is:
+
+```text
+duration = SUM over the (up to 4) contributing cells of   weight_i * (numframes_i - 1) / fps_i
+```
+
+`Studio_SeqAnims` (`0x100c5400`) supplies the same bilinear weights the pose blend uses. So retail
+computes **one** duration, inverts it into **one** cycle rate, advances **one** `m_flCycle`, and then
+samples every contributing cell at that same normalized cycle — each cell converting it into its own
+frame index with its own `numframes`. **Cells are time-warped onto the blended duration.**
+
+VtMB has **no `Studio_CPS`**. Later Source blends the *rates* and inverts:
+
+```text
+VtMB    :  duration = SUM w_i * d_i          ; rate = 1/duration     // arithmetic mean of durations
+Source07:  rate     = SUM w_i * (1/d_i)      ; duration = 1/rate     // harmonic mean
+```
+
+Those are the arithmetic and harmonic means and they disagree wherever the cells' durations do.
+**99 of 126 gait grids in the shipped banks have cells that disagree**, so this is live everywhere:
+on the female `walk` fan at `move_yaw = -120 deg`, VtMB gives 1.1111 s / 108.68 cm/s and the modern
+formula gives 1.0000 s / 120.76 cm/s — an **11% ground-speed error**. On the `run` fan the gap is
+1-4%.
+
+Three consequences that are directly observable:
+
+- **On a spoke**, one weight is 1 and the clip plays at its authored length.
+- **Between spokes**, both neighbours are stretched or squashed. On the female `run` fan at
+  `move_yaw = -120 deg` the 1.0 s cell and the 0.7727 s cell both play over 0.9242 s — the first
+  compressed 8%, the second stretched 20%.
+- **Phase alignment is by normalized cycle only.** Cycle 0 aligns and cycle 1 aligns; whatever sits
+  at cycle 0.5 of an 18-frame clip blends against cycle 0.5 of a 46-frame one. **Foot sliding between
+  spokes is retail behaviour**, not a defect to correct.
+
+Ground speed follows from the same two terms and blends **vectors**, not speeds:
+
+```text
+m_flGroundSpeed = | SUM w_i * movement_i(cycle 0->1) | * m_flGroundSpeedScalar / duration
+```
+
+so it dips between spokes as adjacent spokes' direction vectors partially cancel — 5-8% below a
+naive per-cell speed lerp on the shipped `run` fan.
+
+**`GetSequenceCycleRate`'s fallback is `10.0`, not later Source's `100.0`** — reachable only on a
+one-frame sequence or an all-zero weight set. And `Studio_SeqVelocity` (`0x100c5ee0`) is the one
+place in the engine that divides by `numframes` rather than `numframes - 1`, so
+`GetInstantaneousVelocity` over-reports by `n/(n-1)`: 5.9% on an 18-frame clip.
 
 ### `move_yaw` is right-positive and zero is forward [VtMB decompiled]
 
@@ -568,6 +644,125 @@ Separately, "the weapon stays raised for some seconds after firing, then drops t
 aiming mechanism — `ACT_AIM` is gated on `IsInCombatStance()`, a timer, and the selector falls to
 `ACT_IDLE_<weapon>` when it lapses.
 
+### The one live playback-rate multiplier is Celerity
+
+`m_flSpeedScale` (`CBaseCombatCharacter + 0x1488`, networked at client `+0x1078`) reaches
+`m_flPlaybackRate` on every activity commit and the overlay rate at `+0x744`, and it has exactly two
+writers. `CNPC_VFrenzyShadow::vfunc420` (`0x10375d1d`) hard-sets `8.0f`. Everything else is
+`CBaseCombatCharacter::UpdateDisciplineVisuals` (`0x100521e0`):
+
+```
+10052e63  PUSH 0x3                              ; discipline index 3 = Celerity
+10052e86  FLD  dword ptr [0x104454c0]           ; 1.0f
+10052e8c  FDIV dword ptr [EDI*4 + 0x1053e3a0]   ; / table[clamp(level, 0, 5)]
+10052ea3  FSTP dword ptr [ESI + 0x1488]
+```
+
+The six floats, read byte-exact from `vampire.dll` `.data` at `0x1053e3a0` (file offset
+`0x53e3a0`):
+
+| level | bytes | table | `m_flSpeedScale` |
+|---|---|---|---|
+| 0 | `00 00 80 3f` | 1.00 | **1.000** |
+| 1 | `3d 0a 57 3f` | 0.84 | 1.190 |
+| 2 | `48 e1 3a 3f` | 0.73 | 1.370 |
+| 3 | `52 b8 1e 3f` | 0.62 | 1.613 |
+| 4 | `5c 8f 02 3f` | 0.51 | 1.961 |
+| 5 | `cd cc cc 3e` | 0.40 | **2.500** |
+
+The table is the *duration* multiplier; the field is its reciprocal, the *rate*. Index 3 is Celerity
+by `CAI_BaseNPCTroika::InputSetScriptedDiscipline`'s literal name-to-index mapper (`"celerity"` ->
+3) and by the `base_celerity` datamap row. **It is not purely an animation scalar**: `CGameMovement`
+(`0x1011f720`) multiplies it into `frametime` for locomotion, and three frenzy paths invert it to
+rescale timers. A decompiler reading the inverse-lookup tolerance as `2.0` is wrong -- the
+`FCOMP` at `0x10052ec4` reads an eight-byte double, `(double)0.01f`.
+
+### The drawn player `aim_pitch` is the server's slewed value
+
+`client.dll C_BaseCombatCharacter::FUN_1009a010` is the `StandardBlendingRules` override (slot 130)
+that recomputes `aim_yaw`/`aim_pitch` locally from an aim target before the pose build. **It never
+runs on a player.** Its first three instructions test `[this + 0x3f8]`, a `C_BasePlayer*`
+self-downcast the player constructor stores at `0x100a53cf` (`MOV [ESI+0x3f8], ESI`), and jump
+straight to the tail call when it is non-null; an exhaustive scan of `.text` finds no other writer
+of that field. `"aim_pitch"` has exactly one referrer in `client.dll`, and it is this function.
+
+So for the player's own third-person body the drawn `aim_pitch` is `pl.v_angle.x` unwrapped to
+`(-180, 180]`, latched and slewed at 180 deg/s on the server, quantised to 9 bits over `[0,1]`, and
+lerped between the previous and current received snapshot on the client. **That is the path a
+reproduction implements.** The NPC recompute -- `VectorAngles(target - origin)` with the origin 75%
+up the collision box, `aim_yaw` relative to body yaw and scaled by 0.75, `aim_pitch` absolute and
+unscaled, no smoothing beyond a 16-bit angle round-trip -- applies to NPCs only.
+
+### The aim pair is latched and slewed; only `move_yaw` is written directly
+
+The selector writes `aim_yaw` and `aim_pitch` by name through vtable slot 345
+(`CBaseCombatCharacter::SetPoseParameter(const char*, float, bool)`, `0x1032fb80`), which resolves
+the name and dispatches slot 346 (`0x1032fc50`). **Slot 346 does not write the model.** It compares
+the index against a two-entry table and, on a hit, latches the value instead:
+
+```c
+for (i = 0; i < 2; i++)
+    if (index == m_idxPoseParameter[i]) {          // +0x106c, +0x1070
+        m_flSet_PoseParameters[i] = value;         // +0x1064, +0x1068   <-- latched only
+        return;
+    }
+SetPoseParameter02(index, value);                  // 0x10091fe0 -> m_flPoseParameter[index] @+0x690
+```
+
+`CBaseCombatCharacter::SetModel` (`0x103409a0`) fills that table by name at model load —
+`m_idxPoseParameter[0] = LookupPoseParameter("aim_pitch")`, `[1] = ("aim_yaw")` — beside
+`m_idxHeadBone = LookupBone("Bip01 Head")`. So **exactly two indices are diverted on every
+character, and `move_yaw` is not one of them**: index 0 falls through and is the only pose parameter
+the player writes straight to the model.
+
+The latch is drained by `CBaseCombatCharacter::UpdatePoseParameters` (`0x10054060`, vtable slot 314),
+dispatched from `UpdateCharacter` (slot 312) later in the **same** `PostThink`:
+
+```c
+speed = frametime * 180.0f;                        // _DAT_1044c3a8
+for (i = 0; i < 2; i++)
+    if (m_flSet_PoseParameters[i] != m_flIdeal_PoseParameters[i])
+        m_flIdeal_PoseParameters[i] =
+            AngleNormalize(ApproachAngle(m_flSet_PoseParameters[i],
+                                         m_flIdeal_PoseParameters[i], speed));
+for (i = 0; i < 2; i++)
+    SetPoseParameter02(m_idxPoseParameter[i], m_flIdeal_PoseParameters[i]);
+```
+
+Note the datamap names read backwards from their behaviour: **`m_flSet_PoseParameters` (`+0x1064`)
+is the COMMANDED value and `m_flIdeal_PoseParameters` (`+0x105c`) is the SMOOTHED value that reaches
+the skeleton.**
+
+**This is a second, entirely different smoothing law from `move_yaw`'s** — 180 deg/s against 720,
+unconditional against gated on a 0.3 s recency window, once per `UpdateCharacter` against once per
+selector call. It is also why `aim_yaw`, commanded at a literal `0.0f`, decays to and holds exactly
+0.000 deg — which is the `256/511 = 0.5009784698` the capture records over 7,299 evaluations — while
+`aim_pitch` tracks the view and varies.
+
+`CBasePlayer` **does** run this path: `PostThink` dispatches slot 312 at `0x1016c316`
+(`MOV EAX,[EBP]; PUSH ESI; MOV ECX,EBP; CALL dword ptr [EAX + 0x4e0]`), and `vtmb_func 0x103246d0`
+lists `CBasePlayer#312`. A caller census that resolves only the thunk reads as NPC-only and is
+misleading.
+
+**The shaky-hands weapon sway is compiled and never armed.** The other branch of
+`UpdatePoseParameters` perturbs the same two parameters from a 16-byte table at `0x1053e3b8` —
+`{±10°, ±10°, 0.05 s, 90 °/s}`, `{±15°, ±15°, 0.10 s, 85 °/s}`, `{±20°, ±30°, 0.50 s, 60 °/s}` —
+driven by `m_ShakyType` (`+0x1044`) and `m_flShakyHandsTimer` (`+0x1048`). `SetShakyHands`
+(`0x10053e20`) is escalate-only and has **zero callers**.
+
+### `pl.v_angle` is the aim source, and `+0x2070` is its yaw
+
+`+0x206c` is a **QAngle** copied verbatim out of the `CUserCmd`: `CBasePlayer::ProcessUsercmds`
+does `this->field_0x206c = param_1[5]` (cmd + 0x14), and `CPlayerMove::RunCommand` does the same on
+the non-frozen path; `CBasePlayer::vfunc451` calls `AngleVectors(&field_0x206c, ...)` on it and the
+`FL_FROZEN` arm writes all three components back into the usercmd. This upgrades the earlier
+`[LIKELY]` note about a yaw twin at `+0x2070` to **confirmed**, and names the source.
+`+0x1efc` is `m_Local.m_vecPunchAngle`; `+0x1efc + +0x206c` is the composite the weapon turn-rate
+spread accumulator differences.
+
+The pitch fold applied before the latch is **one-sided** — `v >= 180 ? v - 360 : v` — not a general
+wrap. A negative or >= 540 value passes through unchanged.
+
 ### The aim axes are left-positive and down-positive [data-verified]
 
 Measured rather than read off the cell names: each single-frame masked cell was composed through
@@ -651,12 +846,14 @@ not**; the 228 differences are the alert-transition, hunt, dodge and blocked set
 `Claws`, `Knife`, `TireIron` and `baseballbat`. Read case-sensitively, five weapons lose their
 whole alert-transition vocabulary while the `.mdl` files plainly carry it.
 
-**Unverified:** whether the pinned DLL's own name → enum resolution folds case has not been read
-out of the binary. The content is the argument that it must — the alternative is that Troika
-shipped five weapons' alert sets as dead data — but the decompile of the model-load resolution
-path beside `szactivitynameindex` is what would settle it. `Elysium.Content.ActionTableConformance`
-matches case-insensitively on that reading, which is also what the runtime's own
-`FElysiumNpcClipSet::ByActivity` has always done.
+**Settled: it folds case.** The activity symbol table (`vampire.dll 0x1094afe0`) is constructed by
+`FUN_10411ca0` → `FUN_1024a230` → `FUN_1024b2d0(tbl, 0, 0, caseInsensitive = 1)`, and that last
+argument selects comparator `0x10011383`, an ILT jump to `0x1024b230` whose body is
+`__strcmpi(a, b) < 0`; the case-sensitive alternative `0x1000c496` → `0x1024b150` is a byte-wise
+`strcmp` and is not the one installed. So `ACT_MELEE_ATTACK_sledgehammer` and
+`ACT_MELEE_ATTACK_SLEDGEHAMMER` resolve to one enum value, the 91 mixed-case literals in the corpus
+are live data rather than dead, and the count above resolves to the folded figure.
+`Elysium.Content.ActionTableConformance` and `FElysiumNpcClipSet::ByActivity` are faithful.
 
 ### Player action selection is code around the model table [VtMB decompiled]
 
@@ -902,7 +1099,11 @@ if (speed2D <= 5.0f)                                      // _DAT_10454110
 else if (GetFlags() & FL_DUCKING)                         act = ACT_SNEAK;
 else if (speed2D > T || cmdMoveMag > T)                   act = ACT_RUN;
 else                                                      act = ACT_WALK;
-// unarmed-or-out-of-combat maps RUN → ACT_RUN_RELAXED, WALK → ACT_WALK_RELAXED
+// the relaxed demotion is a THREE-way, not a two-way:
+//   no active weapon            -> keep ACT_RUN / ACT_WALK      (NOT relaxed)
+//   weapon AND IsInCombatStance -> keep ACT_RUN / ACT_WALK
+//   weapon AND !IsInCombatStance-> ACT_RUN_RELAXED / ACT_WALK_RELAXED
+// The `item_w_unarmed` classname test appears ONLY in the ACT_AIM branch above, never here.
 ```
 
 Five facts in that ladder are load-bearing:
@@ -925,6 +1126,13 @@ Five facts in that ladder are load-bearing:
   `m_bPlayerAnimCyclePlaying` (`+0x1cb0`) is set, which is a scripted-cycle hold rather than a gait.
 - **The ducked branch is a flat two-state ladder** — `ACT_SNEAK` above 5.0 u/s and `ACT_CROUCH`
   below, at any speed, with no walk/run split and no relaxed variant.
+- **The relaxed demotion is gated on a weapon existing, and the gate is not the unarmed classname.**
+  Read at `0x10164b7e`: `GetActiveWeapon()` null jumps straight past the demotion and keeps the plain
+  gait; only a non-null weapon reaches the `IsInCombatStance` call at `0x10164b91`. The
+  `item_w_unarmed` compare lives only in the `ACT_AIM` rung. Since the player always carries an
+  unarmed entry the gate is satisfied in practice, so an unarmed player out of stance does request
+  `ACT_WALK_RELAXED` — and `CBasePlayer::NPC_TranslateActivity` (`0x101647a0`) maps it straight back
+  to `ACT_WALK`.
 
 Two consequences follow from the ladder's placement. An **airborne** body (code `-1`) with
 horizontal velocity is run through it too, so `ACT_RUN`/`ACT_SNEAK` is requested mid-air unless a
@@ -932,10 +1140,30 @@ jump-phase arm overrides; and the `ACT_LEAP` arms test for the gait explicitly a
 (comparing against `ACT_WALK`/`ACT_RUN` and their relaxed forms) to preserve it, otherwise deriving
 `ACT_LAND` or `ACT_LAND_CROUCH` from `FL_DUCKING`.
 
-`IsInCombatStance` is virtual slot `+0x66c` (`0x1015ff40`): true while morphed, true for five
-seconds after the last melee-opponent contact (`m_flLastCombatAnimTime`, `+0x19b0`). The weapon
-test is `GetActiveWeapon() != NULL` plus a classname compare against `item_w_unarmed`; since the
-player always carries an unarmed entry, `IsInCombatStance` is the real discriminator.
+`IsInCombatStance` is virtual slot **411** = `+0x66c` (`0x1015ff40`); slot **410** = `+0x668`
+(`0x1015fdf0`) is the setter, whose whole body is `m_flLastCombatAnimTime = curtime`. The predicate
+is true while `m_bIsMorphed` (`+0x1edc`) is set, or while `m_flLastCombatAnimTime` (`+0x19b0`) is
+`> 0.0` and within **5.0 s** of now — the constant read byte-exact at `0x10454110`, which is the same
+`5.0f` object the speed floor above uses.
+
+**Four things stamp that clock, not one**, and one of them is the predicate itself:
+
+| stamping path | condition |
+|---|---|
+| `CBasePlayer::SetAnimation` `0x10164870` | compact code `5` (`PLAYER_ATTACK1`) **and** `GetActiveWeapon() != NULL` — nothing else; a whiffed swing counts exactly as a landed one |
+| `CBasePlayer::OnTakeDamage` `0x10163020` | the attacker or inflictor has `+0x9c != 0` |
+| `CWeaponMelee::RequestActivity` `0x103e9e00` | every accepted swing request, on the weapon's player owner |
+| **`IsInCombatStance` itself** `0x1015ff40` | a live `m_hMeleeOpponent` (`+0x1c58`) answering its virtual `+0x278` — **the reader refreshes the timestamp** |
+
+So the query is **not pure**: reading it can extend its own window, and the selector calls it up to
+three times per frame (the `ACT_AIM` rung and the two relaxed rungs). `vtmb_readers` on `+0x19b0`
+returns exactly two accessors in the module — the setter and the predicate — so that table is the
+complete ledger.
+
+**The concept is player-only.** On `CBasePlayer`/`CHL2_Player` slot 410 is the stamp and slot 411 is
+the predicate; on `CAI_BaseNPC` and its 77 subclasses slot 410 is an identity stub (`0x101a6420`)
+and slot 411 is **a bare `ret`**. A reimplementation must not model this as a shared
+`CBaseCombatCharacter` predicate.
 
 `m_fFlags` is `+0x434` (`CBaseEntity::GetFlags`, `0x100b3700`), bit 0 ground and bit 1 ducking
 — the bit *meanings* are recovered from behaviour, the `FL_*` spellings are conventional
@@ -1450,8 +1678,12 @@ which passes the entity's own live `m_flPoseParameter` array (`+0x690`) into the
 (`0x100c5d10`). That resolves up to four corner animations and bilinear weights
 (`0x100c5400` over `0x100c1c60`), extracts each corner's own motion across cycle `0.0 → 1.0`, and
 accumulates `weight * motion`. **A blend-grid travel cycle therefore yields a genuine pose-weighted
-ground speed — sampled once**, at the instant `ResetSequenceInfo` runs, and never re-evaluated as
-the pose parameter is subsequently driven for the visual blend.
+ground speed, and it is recomputed on EVERY `StudioFrameAdvance`** — `0x1008f2fa` calls it and
+`0x1008f306` stores the result into `m_flGroundSpeed` (`+0x654`), on every tick, beside the same
+treatment of `m_flYawSpeed` (`+0x560`) at `0x1008f2e5`. `CAI_Motor::MoveGroundExecute` writes it a
+second time (`0x10264841` / `0x10264846`). `ResetSequenceInfo` is one of three writers, not the only
+one. The pose-weighted speed therefore **tracks `move_yaw` live**, so a fan's speed dip between
+spokes is a continuously varying motor input rather than a value latched at activity change.
 
 `m_flGroundSpeedScalar` (`+0x564`) is `1.0` from the `CBaseAnimating` constructor (`0x1008b230`).
 Its only writer is `SetPlaybackAndSpeedScalar` (`0x1008d230`), which always sets the scalar and
@@ -1816,6 +2048,12 @@ guessed against unrelated target names.
 
 ### Sequence events and native dispatch [data-verified, VtMB decompiled]
 
+> **The record, the two dispatchers and the complete 58-code vocabulary now live in
+> `docs/vtmb/animation_events.md`.** What stays here is the sequence clock the dispatcher reads.
+> Two facts from that document change what is written below: the server window's **upper bound is a
+> 0.1 s look-ahead**, not the current cycle, and **overlay layers dispatch their own timelines while
+> autolayers never do**.
+
 `numevents`@20 and descriptor-relative `eventindex`@24 address an old **76-byte** event record:
 
 | Offset | Field | Encoding |
@@ -1834,7 +2072,15 @@ invalid. The character partition is **485 models / 1,044 sequences / 1,714 event
 
 Server `CBaseAnimating::DispatchAnimEvents` `0x10091880` stores the last checked cycle at
 animating-object `+0x658`, scans 76-byte records, and dispatches only IDs **below 5000**. In the
-ordinary interval it fires `last_cycle <= event.cycle < current_cycle`; when a looping sequence
+ordinary interval it fires `last_cycle <= event.cycle < look_ahead_cycle`, where
+**`look_ahead_cycle = m_flCycle + 0.1 * cycleRate * playbackRate`** (`0.1f` at `0x104491b4`) — the
+upper bound is AHEAD of the pose, not at it, and `m_flLastEventCheck` stores that look-ahead value
+rather than the current cycle. Retail therefore fires every server-band event up to **0.1 s before
+the pose reaches it**; `animevent_t.eventtime` carries the true absolute time
+(`m_flAnimTime + (eventCycle - m_flCycle) / rate`) but no shipped handler reads it. The look-ahead
+is also what makes the loop wrap seamless: the frame before the visual wrap already has
+`look_ahead >= 1.0`, so the tail and the head of the next lap are swept in one window. When a
+looping sequence
 wraps after passing cycle 1.0 it also visits the wrapped interval exactly once. The runtime event
 copy preserves cycle, ID, the full 64-byte options field and the source pointer, calls virtual
 `HandleAnimEvent` `+0x40c`, and calls `OnSequenceFinish` when the sequence newly completes.
@@ -2040,7 +2286,14 @@ body does carry is **8 `ACT_DISPOSITION_*` activities** — `AFRAID`, `ANGRY`, `
 ### `flags`@8 is a small, nearly-closed bit set [data + VtMB decompiled]
 
 Only five values occur across **331 loose models / 5,836 sequences**: `0x0002` ×2,642,
-`0x0000` ×2,217, `0x0001` ×815, `0x0014` ×118, `0x0003` ×44. Nothing else appears.
+`0x0000` ×2,217, `0x0001` ×815, `0x0014` ×118, `0x0003` ×44. Nothing else appears **in the loose
+tree**. Install-wide the census is wider: over all 4,445 v2531 models / 14,012 sequence descriptors
+it is `0x0000` ×7,646, `0x0002` ×3,138, `0x0001` ×3,042, `0x0014` ×118, `0x0003` ×60, **`0x0202` ×4**
+and **`0x0200` ×4** — the last eight all on `shared/{male,female}/knife.mdl`
+(`Knife_attack_Kick_Spin`, `knife_attack_jump`, `knife_attack_jumpcombo`, `knife_attack_heavy`).
+`0x100` and `0x200` are **runtime selection filters**, tested in the activity-candidate collector
+`FUN_100797e0` against two boolean caller parameters: a descriptor carrying the bit is rejected
+unless the caller passes the matching flag. `0x100` is authored by nothing.
 
 | bit | meaning | evidence |
 |---|---|---|
@@ -3530,12 +3783,36 @@ weight — a weighted slerp toward the layer pose, neither an additive add nor a
 replace. **There is no priority field**: order is the array index and nothing sorts it. The
 `m_nActivity` owner id serves lookup and removal only.
 
-**Layers do not ramp.** `blend-in` and `blend-out` are written by `SetLayer` and read
-nowhere in `vampire.dll`, and they are absent from the SendTable —
-`DT_BaseAnimatingOverlay` transmits only `sequenceN`/`cycleN`/`playbackrateN`/`weightN` for
-N = 0..3 plus a flinch block — so no client-side ramp can be built on them either. Nothing
-advances `layer.cycle` or ramps `layer.weight` per frame on the server, and a superseded
-layer is killed outright (`weight = 0, sequence = 0`) with no dying state.
+**Layers DO ramp, on the server, every tick.** This paragraph previously said the opposite; it was
+wrong, and `docs/vtmb/animation_rig_resolution.md` -> "The overlay contract" has the correct
+account. `CBaseAnimatingOverlay::StudioFrameAdvance` (`0x10098bb0`, vtable slot 250 — filled by
+`CBaseAnimatingOverlay`, `CBaseCombatCharacter`, `CBaseFlex`, `CBasePlayer`, `CHL2_Player` and every
+`CNPC_*`) walks the four slots each tick and calls `CAnimationLayer::StudioFrameAdvance`
+(`0x10098830`) on every one whose weight is non-zero. That function advances `m_flCycle@+0x0C` by
+`GetSequenceCycleRate * m_flPlaybackRate * dt`, wraps or clamps on the layer's **own** sequence's
+`STUDIO_LOOPING`, and then **unconditionally writes `m_flWeight@+0x14`** (`MOV dword [ESI+0x14],
+0x3f800000` at `0x100988dc`) before recomputing it from the envelope:
+
+```text
+m_flWeight = 1.0
+if (m_flBlendIn < 0.95 || m_flBlendOut < 0.95) {          // 0.95f at 0x1045001c
+    if (m_flBlendIn  != 0 && m_flCycle < m_flBlendIn)          m_flWeight = m_flCycle / m_flBlendIn
+    if (m_flBlendOut != 0 && m_flCycle > 1 - m_flBlendOut)     m_flWeight = (1 - m_flCycle) / m_flBlendOut
+    w = m_flWeight;  m_flWeight = 3*w*w - 2*w*w*w             // 3.0 as a double at 0x10450010
+}
+if (m_flWeightMax < m_flWeight) m_flWeight = m_flWeightMax
+```
+
+Three details a reproduction needs. The two blend branches are **independent `if`s**, not
+`if`/`else`, so where `blendIn + blendOut > 1` the out-ramp wins in the overlap. The `0.95` guard is
+a short circuit, observable only when **both** blend times are >= 0.95, where the spline is skipped
+and the weight is a flat 1.0. And because the envelope at a near-zero cycle is near zero, the `0.1f`
+seed `SetLayer` writes **never survives a tick with `dt > 0`** — it exists solely to make the slot
+read occupied against `AllocateLayer`'s zero-weight test.
+
+`m_flWeight` is the networked field, so the ramped value is what the client composes; `blend-in` and
+`blend-out` are correctly absent from the SendTable because the client never needs them. A
+superseded layer is still killed outright (`weight = 0, sequence = 0`) with no dying state.
 
 The client mirrors the same four entries at base `this + 0x7DC`, stride `0xE4` — larger
 because each networked float carries a `CInterpolatedVar` history — and composes them

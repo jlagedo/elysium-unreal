@@ -55,6 +55,30 @@ namespace ElysiumMcpImpl
 {
 	using namespace UE::ModelContextProtocol;
 
+	// The overlay stack as four rows, in composition order — every slot, including the free ones,
+	// so a reader can tell "slot 2 is empty" from "the stack was never published". Composing over
+	// the base rather than taking it, a layer is invisible in every other selection field, and one
+	// stuck on the wrong clip, the wrong bank or at zero weight reads as a body that looks wrong.
+	TArray<TSharedPtr<FJsonValue>> OverlayRows(const FElysiumAnimationSelection& Selection)
+	{
+		TArray<TSharedPtr<FJsonValue>> Rows;
+		for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
+		{
+			const FElysiumOverlaySlotRecord& Row = Selection.Slots[SlotIndex];
+			TSharedPtr<FJsonObject> Object = MakeShared<FJsonObject>();
+			Object->SetNumberField(TEXT("slot"), SlotIndex);
+			Object->SetStringField(TEXT("label"), Row.Label);
+			Object->SetStringField(TEXT("owner"), Row.OwnerStem);
+			Object->SetStringField(TEXT("activity"), Row.Activity);
+			Object->SetNumberField(TEXT("weight"), Row.Weight);
+			Object->SetNumberField(TEXT("cycle"), Row.Cycle);
+			Object->SetNumberField(TEXT("age_seconds"), Row.AgeSeconds);
+			Object->SetBoolField(TEXT("finished"), Row.bFinished);
+			Rows.Add(MakeShared<FJsonValueObject>(Object));
+		}
+		return Rows;
+	}
+
 	// ---------------------------------------------------------------------------------------
 	// Live-state resolution. Tools resolve the world at CALL time (never at registration), so one
 	// registered tool list survives map travel, PIE start/stop, and an idle editor.
@@ -621,13 +645,8 @@ namespace ElysiumMcpImpl
 				Anim->SetBoolField(TEXT("base_pose_owned"), Sel.bBasePoseOwned);
 				Anim->SetStringField(TEXT("base_hold"), Sel.BaseHold);
 				Anim->SetNumberField(TEXT("base_hold_seconds"), Sel.BaseHoldSeconds);
-				// The overlay slot, which composes over the base rather than taking it — so it is
-				// invisible in every field above and a layer stuck on the wrong clip, the wrong bank
-				// or at zero weight reads as a body that simply looks wrong.
-				Anim->SetStringField(TEXT("slot_label"), Sel.SlotLabel);
-				Anim->SetStringField(TEXT("slot_owner"), Sel.SlotOwnerStem);
-				Anim->SetNumberField(TEXT("slot_weight"), Sel.SlotWeight);
-				Anim->SetNumberField(TEXT("slot_cycle"), Sel.SlotCycle);
+				// The overlay stack (LIFE10).
+				Anim->SetArrayField(TEXT("overlay_slots"), OverlayRows(Sel));
 				Out->SetObjectField(TEXT("animation"), Anim);
 			}
 		}
@@ -1089,13 +1108,10 @@ namespace ElysiumMcpImpl
 						Anim->SetBoolField(TEXT("base_pose_owned"), Sel.bBasePoseOwned);
 						Anim->SetStringField(TEXT("base_hold"), Sel.BaseHold);
 						Anim->SetNumberField(TEXT("base_hold_seconds"), Sel.BaseHoldSeconds);
-						// The overlay slot the player's ranged families layer through. It takes no
-						// part in the verdict above — it composes over whatever owns the base — so
-						// these four lines are the only place a live layer is visible at all.
-						Anim->SetStringField(TEXT("slot_label"), Sel.SlotLabel);
-						Anim->SetStringField(TEXT("slot_owner"), Sel.SlotOwnerStem);
-						Anim->SetNumberField(TEXT("slot_weight"), Sel.SlotWeight);
-						Anim->SetNumberField(TEXT("slot_cycle"), Sel.SlotCycle);
+						// The overlay stack the player's ranged families layer through. It takes
+						// no part in the verdict above — a layer composes over whatever owns the
+						// base — so this is the only place a live layer is visible at all.
+						Anim->SetArrayField(TEXT("overlay_slots"), OverlayRows(Sel));
 						Body->SetObjectField(TEXT("animation"), Anim);
 					}
 

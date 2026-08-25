@@ -508,12 +508,15 @@ requirements rather than as an Unreal design:
   observed `0.923 → 0.02` fade.
 - **A lifecycle ending in weight-zeroing.** A layer finishing its cycle raises a finished flag;
   an auto-kill layer then frees its slot and fires a completion notification carrying its
-  activity. **A finished layer without auto-kill holds its slot indefinitely.**
+  activity. A finished layer without auto-kill holds its slot **only when it is a SNAP layer**:
+  an enveloped layer's own out-ramp reaches exactly zero at cycle 1.0 and frees the slot itself.
 - **Two producers, asymmetric.** The cast pushes a dynamically allocated layer selected by weighted
-  draw. The player writes **slot 0 directly**, driven by a two-entry current/next activity queue,
-  as the second argument to its activity commit — where a zero clears the channel. The player arm
-  is therefore materially smaller than the cast arm: one slot, one queue, and an envelope the
-  runtime computes rather than receives.
+  draw, and `AddGesture` **returns the existing layer unchanged** when the activity is already
+  playing rather than taking a second slot. The player writes **slot 0 directly**, as the second
+  argument to its activity commit, where a zero clears the channel. The current/next activity
+  lookahead beside that commit is **dead for every weapon but the frag grenade** (the weapon
+  virtuals it reads are constants), so the player arm is one slot and an envelope the runtime
+  computes rather than receives.
 - **No new activity translation.** Both arms resolve the layer activity through the same ladder
   this runtime already implements.
 - **Composition order**: the base pose, then the overlay slots in index order, then a global
@@ -524,10 +527,35 @@ requirements rather than as an Unreal design:
   A reproduction must confirm whether the existing blend-profile bake already carries that list
   before inventing a second mask source.
 
-Two facts about the shipped data bear on the design: retail's second additive variant (selected by
-a studio flag bit) is not modelled in this repository, and `m_Flinch` is a **separate** three-slot
-stack with a per-layer pose-parameter override that very likely corresponds to the reaction stream
-already implemented here — worth checking against, and not to be folded into the overlay work.
+Two facts about the shipped data bear on the design. **Every shipped additive post-multiplies**
+(`flags@8 & 0x10`, all 118 `_delta` sequences) while Unreal's `AAT_LocalSpaceBase` pre-multiplies;
+that is the live M37 defect and is on the critical path below, not a footnote. And `m_Flinch` is a
+**separate** three-slot stack with a per-layer pose-parameter override that very likely corresponds
+to the reaction stream already implemented here, worth checking against and not to be folded into
+the overlay work.
+
+#### Gaps on the critical path
+
+The critical path is the rung's acceptance sentence: *from real input, a drawn firearm plays its
+attack and reload poses over an unchanged gait on a male and a female body*, and looks like retail
+doing it. Every item below is measured, and each names the instrument that goes red on it.
+
+| # | gap | where | measured | instrument |
+|---|---|---|---|---|
+| G1 | **Additive multiply order.** Retail post-multiplies (`out = out * scale(D, s)`); the bake stamps `AAT_LocalSpaceBase` (pre-multiply) against `RefFrameIndex = 0` of the fan label, which the runtime never plays. | `ElysiumSkeletalBuild.cpp:1475`; `UE_mdl_skeletal.py:1410` skips the fold for fanned hosts | right hand vs `Spine1` peak-to-peak **6.76 cm** against retail's **1.89**; whole-skeleton attack error **6.04 cm median** | `Elysium.Content.RigCompose` control cohort, red at 4.45 cm; `-ElysiumCompose` |
+| G2 | **Fan cycle duration.** Retail's blended cycle is the weighted **mean of durations** (`Studio_Duration`), not of rates; 99 of 126 gait grids have cells that disagree. | `UBlendSpace` sample timing; see the verification note below | walk fan at `move_yaw = -120`: 1.111 s retail vs 1.000 s harmonic, 11% ground speed | none yet; needs a cycle-length assertion per fan position |
+| G3 | **Event look-ahead.** Retail fires server-band events up to **0.1 s early** (`flEnd = cycle + 0.1 * rate`); ours fires at the pose's own cycle. | `ElysiumAnimEvents.cpp:88` | 6 frames at 60 Hz on every muzzle flash, footstep, melee contact and grapple | none; `Elysium.Substrate.AnimEvents` asserts the catch-up shape |
+| G4 | **Combat-stance stamps.** Retail stamps the 5 s clock on four paths (attack, taking damage, `RequestActivity`, and the predicate refreshing itself off a melee opponent); ours models one. | `ElysiumPlayer.h:1157`; `ElysiumAnimationDriver.cpp:438` | a body being hit drops to the relaxed gait where retail holds aggressive | none |
+| G5 | **`AddGesture` re-use.** A repeated identical push takes a second slot; retail returns the existing layer. | the cast arm in `ElysiumAnimationDriver.cpp` | a sustained-fire NPC exhausts four slots | `Elysium.Substrate.OverlayStack` |
+| G6 | **Envelope arithmetic.** Retail's blend-in and blend-out are two independent `if`s under a `< 0.95` guard; ours is `else if` with no guard. Unreachable on the shipped 0.2/0.2 and 0/0 pairs. | `ElysiumAnimationIntent.h:369` | none today | `Elysium.Substrate.OverlayStack` |
+| G7 | **Overlay events.** Retail dispatches each of the four layers' own timelines with a per-layer `m_flLastEventCheck`; autolayers never dispatch. A pushed `_attack_layer`'s `3031` fires from the slot. | `ElysiumAnimatingImpl.cpp:315` walks one published timeline per body | unmeasured | none |
+| G8 | **Player `aim_pitch`.** Retail latches the view pitch and slews it at 180 deg/s in `UpdatePoseParameters`; the drawn value is that. Ours publishes `Intent.AimPitch` directly. | `ElysiumAnimationDriver.cpp:827` | unmeasured; `aim_yaw` is a literal zero either way | `Elysium.Content.RigPose` cannot see it (aim frames excluded) |
+| G9 | **Previous-sequence cross-fade.** Retail chains surviving old bases newest-first, each a `SlerpBones` toward the old pose at `SimpleSpline(1 - t/dur)`, `dur = max(fadeIn, fadeOut)`. The RigCompose control residual is this. | the blend stack | control cohort 4.45 cm median, legs-dominant | `Elysium.Content.RigCompose` set-aside cohort, 3.97 cm |
+| G10 | **Between-key interpolation.** Retail nlerps between authored frames; Unreal samples our baked keys at 60 Hz through its own curve, which on an 18 fps clip is every drawn frame. | bake / `UAnimSequence` | unmeasured | none; needs a sub-frame sample comparison |
+| G11 | **Instrument defects.** `RigCompose` prints per-bone attribution for the layered cohort only and `continue`s on a missing layer asset; `compose_diff.py` is blind to rigid-subtree isometries. | `ElysiumRigComposeTests.cpp:522`; `compose_diff.py` | a missing bobble scored as a slightly worse median | the instruments themselves |
+
+Retired by evidence, no work owed: bone controllers, IK, `STUDIO_AUTOPLAY`, `QUATINTERP`, the
+1xN blend-grid path, shaky-hands, and the weapon activity lookahead.
 
 **Open:** whether a montage slot is the right home for a game-pushed overlay at all.
 `ElysiumSlotLayer` and `ElysiumSlotAimLayer` are reserved for montages today, and

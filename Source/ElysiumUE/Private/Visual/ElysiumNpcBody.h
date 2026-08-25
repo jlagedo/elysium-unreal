@@ -89,6 +89,10 @@ public:
 	// pass, so a same-frame scripted beat is not dropped. Handle contract as on the driver: 0 is a
 	// refused claim, and releasing a handle that already lapsed answers false rather than failing.
 	uint32 SubmitAnimRequest(const FElysiumAnimationRequest& Request);
+	// Which overlay slot a granted `UpperBody` handle landed in, or `INDEX_NONE`. The driver's stack
+	// allocates the slot, and the arm seam has to write the pins of THAT slot rather than a fixed one
+	// — a shot fired during a reload composes on the higher index.
+	int32 OverlaySlotForHandle(uint32 Handle) const;
 	bool ReleaseAnimRequest(uint32 Handle);
 	// LIFE5 — every standing claim at once, for the death transaction. A driver that was never built
 	// holds nothing, so this does not build one.

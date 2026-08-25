@@ -426,6 +426,150 @@ These roles share identity but not mechanism. A trace result, light sample or co
 an engine answer about the body; the resulting game decision and persistent state belong to the
 entity transaction.
 
+## The animation update, and where it sits in the frame
+
+The player's whole animation decision lives inside **`CBasePlayer::PostThink`**
+(`vampire.dll 0x1016be10`, vtable slot 437), which runs once per user command, strictly **after**
+movement. The chain into it is
+`CServerGameClients::vfunc8` -> `ProcessUsercmds` (slot 461) -> `PlayerRunCommand` (slot 462) ->
+`CPlayerMove::RunCommand` (`0x101874a0`), which sets `gpGlobals->frametime` and `curtime` from the
+command, copies `ucmd->viewangles` into `pl.v_angle`, runs pre-think, `SetupMove`,
+`ProcessMovement`, `FinishMove`, `ProcessImpacts`, and then post-think.
+
+The animation-relevant steps of `PostThink`, in order:
+
+| step | what |
+|---|---|
+| 7 | `ItemPostFrame()` (slot 458) -- **before** the animation decision |
+| 9a | melee freeze: with `m_IdealActivity == ACT_MELEE_ATTACK` and no movement buttons, velocity is zeroed |
+| 9b | `FUN_1016bb50` -- the compact `PLAYER_*` code classifier |
+| 9c | `SetAnimation(code)` (slot 449) -> the gait ladder, the `move_yaw` write and the aim latch |
+| 11 | `StudioFrameAdvance()` (slot 250) -- returns the interval, and advances all four overlay slots |
+| 12 | `FUN_101600a0(interval * m_flSpeedScale)` -- the weapon turn-rate spread accumulator |
+| 13 | `DispatchAnimEvents(interval, this)` (slot 258) |
+| 15 | `UpdateCharacter(interval)` (slot 312) -> expressions, the eye maintainer, **`UpdatePoseParameters`**, melee swing |
+| 24 | the `m_hControllerNPC` (`+0x1db0`) possession mirror |
+
+**The player does run `UpdateCharacter`.** A caller census that resolves only the thunk
+(`0x1000669f`) reports a single `CAI_BaseNPCTroika` caller and reads as NPC-only; the disassembly
+settles it -- `0x1016c316` is `MOV EAX,[EBP]; PUSH ESI; MOV ECX,EBP; CALL dword ptr [EAX + 0x4e0]`,
+slot 312, and `vtmb_func 0x103246d0` lists `CBasePlayer#312`. There is a second dispatch at
+`0x1016c0e5` on the beast-form early-return path. This matters because slot 312 is the only route by
+which `aim_pitch` and `aim_yaw` ever reach the model
+(`docs/vtmb/animation_and_movers.md` -> "The aim pair is latched and slewed").
+
+## The weapon activity queue is a one-deep lookahead
+
+`m_aCurWpnActivity` = **`CBaseCombatCharacter + 0x14b0`** and `m_aNextWpnActivity` = **`+0x14b4`**,
+both ints, both saved, sentinel **`-1`** (named in the `CBaseCombatCharacter` datamap builder;
+`_DAT_10619218 = 0x14b0`, `_DAT_10619244 = 0x14b4`).
+
+**Both fields are declared on `CBaseCombatCharacter`, so an NPC's save file carries them, and every
+accessor is on the `CBasePlayer` path.** No NPC reads or writes either. The complete ledger is four
+functions and nothing else in 38,562 decompiled functions touches either offset:
+
+| function | address | role |
+|---|---|---|
+| `CBasePlayer::Spawn` (slot 103) | `0x1016d260` | both to `-1`; the only reset |
+| the commit | `0x1015fbb0` | push |
+| the drain | `0x1015fcd0` | pop on completion |
+| `CBasePlayer::DrawDebugTextOverlays` | `0x10161460` | read-only, prints `"WpnActv: %s"` |
+
+The commit:
+
+```c
+m_aNextWpnActivity = -1;                                  // cleared FIRST, unconditionally
+if (!bForce && GetLayerActivity(0) == activity)   return;
+seq = SelectWeightedSequence(activity, -1);
+if (seq < 0)                                      return;
+if (!bForce && GetLayerSequence(0) == seq)        return;
+SetLayer(/*layer*/ 0, activity, seq, /*autokill*/ true);  // vfunc +0x430, SLOT 0 literal
+m_aCurWpnActivity = activity;
+m_AnimOverlay[0].m_flPlaybackRate = m_flSpeedScale;       // +0x744 <- +0x1488
+if (GetActiveWeapon()) {
+    m_aNextWpnActivity = weapon->vfunc(+0x484)();         // the weapon names its follow-up
+    if (weapon->vfunc(+0x488)() > 1) {                    // a stage count
+        if (m_aNextWpnActivity == -1 && m_aCurWpnActivity != -1) SetLayerBlendIn (0, 0.0f);
+        else if (m_aNextWpnActivity != 0)                        SetLayerBlendOut(0, 0.0f);
+    }
+}
+```
+
+The drain is `CBasePlayer::OnLayerFinished` (`0x1015fcd0`), the **only** override of vtable slot
+`+0x1c0` anywhere in the hierarchy, called by the overlay stack when an auto-kill layer finishes:
+
+```c
+if (m_aCurWpnActivity == completedActivity && m_aNextWpnActivity != -1)
+    if (IsGestureFinished(m_aCurWpnActivity)) {
+        if (!IsLayerLooping(0)) CommitActivity(-1, m_aNextWpnActivity, /*bForce*/ true);
+        else                    CommitActivity(-1, m_aCurWpnActivity,  /*bForce*/ true);
+    }
+```
+
+**It is not a FIFO.** `Cur` is what is mounted on overlay slot 0; `Next` is the weapon's *declared*
+follow-up, re-asked on every commit and cleared to `-1` at the top of every commit, so a commit that
+early-outs leaves the queue empty.
+
+**And it is dead for every weapon in the game except the frag grenade.** The two virtuals the
+commit consults have exactly two bodies each across the ~250 weapon and item classes:
+
+| slot | base body | returns | the one override |
+|---|---|---|---|
+| 289 (`+0x484`) | `0x10149d00`, `OR EAX,0xffffffff; RET` | **-1** | `CWeaponThrown_Grenade_Frag` `0x103ee480`, a jump table on the grenade's throw state at `+0x920` |
+| 290 (`+0x488`) | `0x10149d20`, `MOV EAX,1; RET` | **1** | `CWeaponThrown_Grenade_Frag` `0x103ef5c0`, returns **2** |
+
+The `> 1` gate is a hard compare against `1`, so the blend-time branch is unreachable for every
+other weapon; and because slot 289 returns `-1`, `m_aNextWpnActivity` is `-1` after every commit and
+the drain's guard is permanently false. `CWeaponRanged_Rifle_M37` overrides five virtuals in total
+and none of them is near 289 or 290. **The M37's multi-part reload lives in the view-model activity
+set (`ACT_VM_RELOAD_BEGIN_M37` / `_M37` / `_COMPLETE_M37`), not in the body overlay**, whose
+third-person reload is the single `ACT_RELOAD_LAYER_M37`. The queue's one live user walks the frag
+grenade through `ACT_HOLD_LAYER_GRENADE` (3831) to `ACT_THROW_LAYER_GRENADE` (3833) or
+`ACT_ROLL_LAYER_GRENADE` (3835). The drain re-enters the ordinary apply path with `base = -1`
+(leave the gait alone), so the follow-up goes through the identical translate-and-commit path and
+immediately establishes its own `Next`. A looping layer re-commits the same activity instead.
+
+**The player is pinned to overlay slot 0**, confirmed in five places: `SetLayer(0, ...)` twice,
+`RemoveLayer(0)`, `IsLayerLooping(0)`, and both layer-0 getters. The player never calls
+`AddGesture` and therefore never allocates a slot.
+
+## Combat stance is a player-only concept, and reading it extends it
+
+`CBasePlayer::IsInCombatStance` is vtable slot **411** (`+0x66c`, `0x1015ff40`); slot **410**
+(`+0x668`, `0x1015fdf0`) is the setter, whose whole body is `m_flLastCombatAnimTime = curtime`.
+
+```c
+if (m_bIsMorphed /*+0x1edc, byte*/) return true;
+if (m_hMeleeOpponent /*+0x1c58*/ is live && opponent->vfunc(+0x278)())
+    m_flLastCombatAnimTime = curtime;                     // a WRITE, inside the reader
+return (m_flLastCombatAnimTime /*+0x19b0*/ > 0.0f)
+    && (m_flLastCombatAnimTime + 5.0f > curtime);         // 5.0f read byte-exact at 0x10454110
+```
+
+Four paths stamp the clock, and the fourth is the predicate itself: the `PLAYER_ATTACK1` arm of the
+selector (gated only on an active weapon existing, so a whiffed swing counts as a landed one),
+`CBasePlayer::OnTakeDamage` when the attacker or inflictor has `+0x9c != 0`,
+`CWeaponMelee::RequestActivity` on every accepted swing, and the melee-opponent refresh above. So
+the query is **not pure**, and the selector calls it up to three times per frame.
+
+**NPCs have no such concept.** On `CAI_BaseNPC` and its 77 subclasses slot 410 is an identity stub
+(`0x101a6420`) and slot 411 is **a bare `ret`**. A reimplementation must not model this as a shared
+`CBaseCombatCharacter` predicate.
+
+## Idle variation, and two dead fields
+
+The player **never selects `ACT_FIDGET`** -- the literal is referenced only by the activity
+registration table and by two `CAI_BaseNPC` animal schedules. `ACT_CHARSHEET_FIDGET` is client-side
+and event-driven, issued by the character-sheet 3-D preview panel when the previewed model changes,
+not by the world player. The whole `vdata/System/DispositionTable.txt` stance and fidget cadence is
+dispatched at slot 611, and `CBasePlayer`'s vtable has 469 slots.
+
+**The player's only idle variation is the ordinary weighted-random `SelectWeightedSequence(ACT_IDLE)`
+made on entry to `ACT_IDLE`.** There is no re-roll while idle and no timer decays it. Two dead
+fields make the intent visible: `m_bPlayerAnimIdleFinished` is written once (zero, in `Spawn`) and
+read nowhere, and `+0x1c68`, a last-non-idle-activity timestamp written in three places, is read
+nowhere in `vampire.dll`.
+
 ## Script and entity-input surface
 
 The player datamap at `0x10580edc`, built by `FUN_1015af10`, contains 157 records beginning at

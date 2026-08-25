@@ -290,6 +290,12 @@ public:
 	// `LabWieldCheck` above answers for the geometry. Names why it cannot answer rather than
 	// returning an empty line.
 	FString LabWeaponStatus() const;
+	// The driven character's overlay stack, one line per slot in composition order — **including the
+	// free ones**, because "slot 2 is empty" and "the stack was never published" are different
+	// faults and a compacted list cannot tell them apart. A layer composes OVER the base rather than
+	// taking it, so it is invisible in every other line of the readout: one stuck at zero weight, on
+	// the wrong clip or on the wrong bank looks exactly like a body that is merely posed wrong.
+	TArray<FString> LabOverlayStatus() const;
 	// Every item classname whose row carries geometry for this sex, sorted. Empty when the wield bake
 	// has not run — a caller reports that rather than drawing an empty picker.
 	static TArray<FString> LabWieldClassnames(bool bFemale);

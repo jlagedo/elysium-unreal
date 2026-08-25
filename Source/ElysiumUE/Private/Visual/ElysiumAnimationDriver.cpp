@@ -14,25 +14,18 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnimDriver, Log, All);
 
 namespace
 {
-	// Drop everything the RESOLVER owns about the overlay slot.
+	// Drop everything the RESOLVER owns about one overlay slot.
 	//
-	// Every field here is written by `UElysiumAnimSubsystem::ResolveSlotLayer` and by nothing else, so
-	// a frame that did not re-enter it must not leave them describing a layer other than the one the
-	// record names. `FElysiumResolvedAnimation::HasSlotLayer` is a POINTER test: a sequence left behind
-	// by a claim that has gone answers it true under a record that says nothing is layering, and the
-	// graph would keep composing the previous shot over the base pose.
-	void ClearSlotAssets(FElysiumResolvedAnimation& Assets)
+	// Every field is written by `UElysiumAnimSubsystem::ResolveSlotLayer` and by nothing else, so a
+	// frame that did not re-enter it must not leave them describing a layer other than the one the
+	// record names. `FElysiumResolvedOverlaySlot::IsValid` is a POINTER test: a sequence left behind
+	// by a layer that has gone answers it true under a record that says nothing is layering in that
+	// slot, and the graph would keep composing the previous shot over the base pose.
+	void ClearSlot(FElysiumAnimationSelection& Selection, FElysiumResolvedAnimation& Assets,
+		int32 SlotIndex)
 	{
-		// **Every field the resolver writes, not just the pair the pointer test reads.** `SlotSpace`,
-		// `SlotAimMaskName` and `SlotAdditive` come out of `ResolveSlotDeclaredAssets` on the same
-		// pass and are stale by the same argument; leaving them makes `HasSlotLayer()` answer true off
-		// a grid under a record that names no layer, and the graph is saved from composing it only by
-		// `PublishSelection` gating all three on the sequence.
-		Assets.SlotSequence = nullptr;
-		Assets.SlotSpace = nullptr;
-		Assets.SlotAdditive = nullptr;
-		Assets.SlotMaskName = NAME_None;
-		Assets.SlotAimMaskName = NAME_None;
+		Selection.Slots[SlotIndex] = FElysiumOverlaySlotRecord();
+		Assets.Slots[SlotIndex].Reset();
 	}
 }
 
@@ -57,9 +50,13 @@ void FElysiumAnimationDriver::Reset()
 	LastWeaponClassname.Reset();
 	LastRoute = EElysiumAnimRoute::Activity;
 	bResolvedOnce = false;
-	// The slot key goes with the rest of the discrete state: the claims below are dropped by this same
+	// The slot keys go with the rest of the discrete state: the stack below is dropped by this same
 	// reset, so a remembered handle would report the layer as unchanged and never resolve the next one.
-	LastSlotHandle = 0;
+	for (uint32& Handle : LastSlotHandles)
+	{
+		Handle = 0;
+	}
+	OverlayCompletions.Reset();
 	// A teleport is not a turn: slewing the stride across one would rotate the body's gait over a
 	// quarter second of standing somewhere else entirely.
 	MoveYawFilter = FElysiumMoveYawFilter();
@@ -81,6 +78,10 @@ void FElysiumAnimationDriver::Reset()
 	{
 		Slot = FElysiumAnimRequestSlot();
 	}
+	// The overlay layers go the same way and for the same reason. They are not claims and expire on
+	// their own cycles rather than on a band, but a body that has been teleported or re-modelled is
+	// not the body that was shooting.
+	Overlay.ClearAll();
 }
 
 uint32 FElysiumAnimationDriver::SubmitRequest(const FElysiumAnimationRequest& Request)
@@ -93,6 +94,56 @@ uint32 FElysiumAnimationDriver::SubmitRequest(const FElysiumAnimationRequest& Re
 			*Stem, Channel, *Request.Label, ElysiumAnimIntent::SourceName(Request.Source));
 		return 0;
 	}
+	// **The overlay channel is not a claim slot, and its rule is not the priority table.** Retail's
+	// `AllocateLayer` takes the lowest slot whose weight is zero and returns `-1` when all four are
+	// held: no eviction, no priority displacement, no reserved slot. A layer composes over whatever
+	// owns the base pose rather than competing for it, so there is nothing to rank — and ranking it
+	// would let one weapon transaction consume another's layer instead of standing beside it.
+	if (Request.Channel == EElysiumAnimChannel::UpperBody)
+	{
+		if (++RequestSerial == 0)
+		{
+			++RequestSerial;
+		}
+		// **The two producers are asymmetric, and the fork is the BODY's — the third player/cast fork
+		// in this system.** The cast pushes through retail's `AddGesture`, which allocates a slot and
+		// refuses when all four are held. The player does not use `AddGesture` at all: its layer
+		// arrives as the second argument to the activity commit and is written to **slot 0**
+		// directly, so a second player layer replaces the first rather than standing beside it.
+		//
+		// The `m_aCurWpnActivity`/`m_aNextWpnActivity` lookahead that retail's commit consults is
+		// **dead for every weapon but the frag grenade**: the weapon virtuals it reads return a
+		// constant `-1` and `1` on all ~250 other classes, so the drain's guard never passes
+		// (`docs/vtmb/player-entity.md` -> "The weapon activity queue"). Nothing to port. What the
+		// commit does carry — slot 0 is the player's, and a zero clears the channel — is reproduced
+		// here and in the producers.
+		const int32 SlotIndex =
+			BodyKind == EElysiumAnimBodyKind::Player ? 0 : Overlay.AllocateLayer();
+		if (SlotIndex == INDEX_NONE)
+		{
+			// Exhaustion is refusal, and it is retail's answer rather than a failure — but it is also
+			// the one way a body silently stops layering, so it is named. Verbose, because a body under
+			// sustained fire can legitimately reach it and a warning per push would bury the first.
+			UE_LOG(LogElysiumAnimDriver, Verbose,
+				TEXT("'%s' refuses %s overlay layer '%s': all %d slots are held"),
+				*Stem, ElysiumAnimIntent::SourceName(Request.Source), *Request.Label,
+				ElysiumOverlay::NumSlots);
+			return 0;
+		}
+		if (Overlay.SetLayer(SlotIndex, Request, Request.bSnap, RequestSerial) == INDEX_NONE)
+		{
+			// The one thing `SetLayer` refuses: a claim stating no clip length. The cycle is what
+			// carries a layer's weight, its end and its phase, so a layer without one would stand a
+			// single frame at a fixed weight for as long as its producer held the slot.
+			UE_LOG(LogElysiumAnimDriver, Warning,
+				TEXT("'%s' refuses %s overlay layer '%s': its claim carries no clip length, so the "
+					 "layer has no cycle to ride"),
+				*Stem, ElysiumAnimIntent::SourceName(Request.Source), *Request.Label);
+			return 0;
+		}
+		return RequestSerial;
+	}
+
 	FElysiumAnimRequestSlot& Slot = Requests[Channel];
 	if (Slot.bActive && Request.Priority < Slot.Request.Priority)
 	{
@@ -124,6 +175,12 @@ bool FElysiumAnimationDriver::ReleaseRequest(uint32 Handle)
 	{
 		return false;
 	}
+	// The stack shares the driver's serial, so one handle names one thing whichever mechanism holds
+	// it — and a producer releasing a layer states the same handle a base-channel producer would.
+	if (const int32 SlotIndex = Overlay.FindByHandle(Handle); SlotIndex != INDEX_NONE)
+	{
+		return Overlay.ClearSlot(SlotIndex);
+	}
 	for (FElysiumAnimRequestSlot& Slot : Requests)
 	{
 		if (Slot.bActive && Slot.Handle == Handle)
@@ -144,20 +201,26 @@ int32 FElysiumAnimationDriver::ReleaseAllRequests(bool* OutDroppedSlotLayer)
 		*OutDroppedSlotLayer = false;
 	}
 	int32 Released = 0;
+	// **The overlay layers are reported, not just counted.** Their POSE lives on an anim instance this
+	// struct deliberately cannot see, and a layer going back is not what takes it off the body — the
+	// next publish is, and a body being released wholesale is a body that may never publish again. The
+	// caller holding the mesh is the one that can end it, and this is the only thing that tells it
+	// there is something to end.
+	if (const int32 Layers = Overlay.ClearAll(); Layers > 0)
+	{
+		Released += Layers;
+		if (OutDroppedSlotLayer != nullptr)
+		{
+			*OutDroppedSlotLayer = true;
+		}
+		UE_LOG(LogElysiumAnimDriver, Verbose,
+			TEXT("'%s' drops %d overlay layer(s): the character's claims are being released wholesale"),
+			*Stem, Layers);
+	}
 	for (FElysiumAnimRequestSlot& Slot : Requests)
 	{
 		if (Slot.bActive)
 		{
-			// **The overlay slot's channel is reported, not just counted.** Its POSE lives on an anim
-			// instance this struct deliberately cannot see, and the claim going back is not what takes
-			// a layer off the body — the next publish is, and a body being released wholesale is a
-			// body that may never publish again. The caller holding the mesh is the one that can end
-			// it, and this is the only thing that tells it there is something to end.
-			if (Slot.Request.Channel == EElysiumAnimChannel::UpperBody
-				&& OutDroppedSlotLayer != nullptr)
-			{
-				*OutDroppedSlotLayer = true;
-			}
 			UE_LOG(LogElysiumAnimDriver, Verbose,
 				TEXT("'%s' drops %s claim '%s' (%s) on %s: the character's claims are being released "
 					 "wholesale"),
@@ -174,6 +237,19 @@ int32 FElysiumAnimationDriver::ReleaseAllRequests(bool* OutDroppedSlotLayer)
 const FElysiumAnimationRequest* FElysiumAnimationDriver::ActiveRequest(
 	EElysiumAnimChannel Channel) const
 {
+	if (Channel == EElysiumAnimChannel::UpperBody)
+	{
+		// The lowest live layer, which is the only single answer a four-slot stack has — and the one
+		// composed nearest the base. A caller that means a particular layer reads `Overlay` directly.
+		for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
+		{
+			if (const FElysiumOverlayLayer* Layer = Overlay.LiveLayer(SlotIndex))
+			{
+				return &Layer->Request;
+			}
+		}
+		return nullptr;
+	}
 	const int32 Index = static_cast<int32>(Channel);
 	if (Index < 0 || Index >= ElysiumAnimIntent::NumChannels || !Requests[Index].bActive)
 	{
@@ -221,6 +297,14 @@ void FElysiumAnimationDriver::AdvanceRequests(float DeltaSeconds)
 			Slot = FElysiumAnimRequestSlot();
 		}
 	}
+
+	// **The overlay stack ages on its own clock, and the order is retail's owner loop.** Advance
+	// every live layer's cycle and recompute its weight from the layer's own envelope, then reap the
+	// finished auto-kill layers in the same pass — so a layer never composes a frame past its end,
+	// and the slot it frees is available to the very next push.
+	Overlay.Advance(DeltaSeconds);
+	OverlayCompletions.Reset();
+	Overlay.Reap(&OverlayCompletions);
 }
 
 void FElysiumAnimationDriver::ArbitrateBase()
@@ -258,75 +342,76 @@ void FElysiumAnimationDriver::ArbitrateBase()
 	Selection.BaseHoldSeconds = 0.0f;
 }
 
-void FElysiumAnimationDriver::ArbitrateSlot()
+void FElysiumAnimationDriver::PublishOverlay()
 {
-	const FElysiumAnimRequestSlot& Slot =
-		Requests[static_cast<int32>(EElysiumAnimChannel::UpperBody)];
-	if (!Slot.bActive)
+	for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
 	{
-		// No layer, so the record says so outright rather than leaving the last shot's line standing
-		// under a body that has stopped firing. `SlotOwnerStem` goes with the rest: it names the bank
-		// a layer came out of, and a bank with no layer in it identifies nothing. The assets go too,
-		// because the record and the graph have to be unable to disagree: a sequence left standing
-		// answers `HasSlotLayer()` true beside a record that has already stopped naming a layer.
-		Selection.SlotLabel.Reset();
-		Selection.SlotOwnerStem.Reset();
-		Selection.SlotWeight = 0.0f;
-		Selection.SlotCycle = 0.0f;
-		ClearSlotAssets(Assets);
-		return;
+		const FElysiumOverlayLayer* Layer = Overlay.LiveLayer(SlotIndex);
+		if (Layer == nullptr)
+		{
+			// No layer here, so the record says so outright rather than leaving the last shot's line
+			// standing under a body that has stopped firing. The owner stem goes with the rest: it
+			// names the bank a layer came out of, and a bank with no layer in it identifies nothing.
+			// The assets go too, because the record and the graph have to be unable to disagree: a
+			// sequence left standing answers `IsValid()` beside a row that has stopped naming a layer.
+			ClearSlot(Selection, Assets, SlotIndex);
+			continue;
+		}
+		FElysiumOverlaySlotRecord& Row = Selection.Slots[SlotIndex];
+		// The layer's own identity, published rather than compared: nothing is arbitrated here.
+		Row.Label = Layer->Request.Label;
+		Row.Activity = Layer->Request.Activity;
+		// **The bank and the assets are republished only where they still describe THIS layer.** The
+		// resolver is the only thing that can name either, and `Tick` has exit paths that publish the
+		// record without re-entering it — an animation-driven frame, a refused reselection.
+		// `LastSlotHandles` is that resolver's own key, so a layer it has not answered for yet is
+		// stated as a named row with no bank and no asset behind it, rather than as this layer
+		// wearing the previous one's: a row naming clip B over bank A while the graph holds clip A is
+		// a layer that reads correct and composes the wrong motion.
+		if (Layer->Handle != LastSlotHandles[SlotIndex])
+		{
+			Row.OwnerStem.Reset();
+			Assets.Slots[SlotIndex].Reset();
+		}
+		// The layer's own advancing state, read rather than derived: `FElysiumOverlayStack::Advance`
+		// computed the weight from this cycle, so publishing anything else here would be a second
+		// answer to a question the stack already settled.
+		Row.Cycle = Layer->Cycle;
+		Row.Weight = Layer->Weight;
+		Row.AgeSeconds = Layer->AgeSeconds;
+		Row.bFinished = Layer->bFinished;
 	}
-	// The claim's own identity, published rather than compared: nothing was arbitrated here.
-	Selection.SlotLabel = Slot.Request.Label;
-	// **The bank and the assets are republished only where they still describe THIS claim.** The
-	// resolver is the only thing that can name either, and `Tick` has exit paths that publish the
-	// record without re-entering it — an animation-driven frame, a refused reselection. `LastSlotHandle`
-	// is that resolver's own key, so a claim it has not answered for yet is stated as a named layer
-	// with no bank and no asset behind it, rather than as this claim wearing the previous one's: a
-	// record naming clip B over bank A while the graph holds clip A is a layer that reads correct and
-	// composes the wrong motion.
-	if (Slot.Handle != LastSlotHandle)
-	{
-		Selection.SlotOwnerStem.Reset();
-		ClearSlotAssets(Assets);
-	}
-	// The same duration `AdvanceRequests` expires the claim on, read as a phase. One clock: the
-	// layer cannot be weighed against a length that is not the one it ends on.
-	Selection.SlotCycle = ElysiumAnimIntent::SlotCycle(Slot.Request, Slot.AgeSeconds);
-	// The ENVELOPED weight over that phase, capped at retail's `m_flWeightMax`, rather than the
-	// ceiling itself: the readout's job is to separate a layer composing at full strength from one
-	// stuck at zero, and the ceiling answers the same number for both. The per-bone mask that gates it
-	// belongs to the composition, not to this line.
-	Selection.SlotWeight = ElysiumAnimIntent::SlotWeightAt(Slot.Request, Slot.AgeSeconds);
 }
 
-void FElysiumAnimationDriver::ResolveSlotClaim(UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh)
+void FElysiumAnimationDriver::ResolveSlotClaims(UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh)
 {
-	const FElysiumAnimRequestSlot& Slot =
-		Requests[static_cast<int32>(EElysiumAnimChannel::UpperBody)];
-	const uint32 Handle = Slot.bActive ? Slot.Handle : 0;
-	if (Handle == LastSlotHandle)
+	for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
 	{
-		// Already answered for. The bank and the asset standing are this claim's own, so re-loading
-		// them per frame would repeat the vocabulary walk and the mount read for every frame of a
-		// swing — and `ArbitrateSlot` below leaves them alone precisely because this key matches.
-		return;
+		const FElysiumOverlayLayer* Layer = Overlay.LiveLayer(SlotIndex);
+		const uint32 Handle = Layer != nullptr ? Layer->Handle : 0;
+		if (Handle == LastSlotHandles[SlotIndex])
+		{
+			// Already answered for. The bank and the asset standing are this layer's own, so
+			// re-loading them per frame would repeat the vocabulary walk and the mount read for every
+			// frame of a shot — and `PublishOverlay` leaves them alone precisely because this matches.
+			continue;
+		}
+		// The resolver's own key moves here, which is what stops `PublishOverlay` clearing the answer
+		// this call is about to write.
+		LastSlotHandles[SlotIndex] = Handle;
+		// Whatever the previous layer left behind goes first: the fields below are the resolver's, and
+		// a layer it has not answered for must never be described by another layer's bank or asset.
+		Selection.Slots[SlotIndex].OwnerStem.Reset();
+		Assets.Slots[SlotIndex].Reset();
+		if (Handle == 0 || Anims == nullptr)
+		{
+			// No layer, or no game instance to read a catalog from — the same rung the base resolve's
+			// own catalog-less exit takes, and for the same reason. `PublishOverlay` still publishes
+			// the layer's label, so a layer that could not be looked up reads as a named miss.
+			continue;
+		}
+		Anims->ResolveSlotLayer(SlotIndex, Layer->Request, Stem, Mesh, Selection, Assets);
 	}
-	// The resolver's own key moves here, which is what stops `ArbitrateSlot` clearing the answer this
-	// call is about to write.
-	LastSlotHandle = Handle;
-	// Whatever the previous claim left behind goes first: the fields below are the resolver's, and a
-	// claim it has not answered for must never be described by another claim's bank or asset.
-	Selection.SlotOwnerStem.Reset();
-	ClearSlotAssets(Assets);
-	if (Handle == 0 || Anims == nullptr)
-	{
-		// No claim, or no game instance to read a catalog from — the same rung the base resolve's own
-		// catalog-less exit takes, and for the same reason. `ArbitrateSlot` still publishes the
-		// claim's label, so a layer that could not be looked up reads as a named miss.
-		return;
-	}
-	Anims->ResolveSlotLayer(Slot.Request, Stem, Mesh, Selection, Assets);
 }
 
 void FElysiumAnimationDriver::SetTranslationContext(const FElysiumCombatCharacter* Char)
@@ -591,9 +676,9 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		// **The slot is answered even though the selection pass is not.** It composes over whatever
 		// owns the base pose rather than choosing one, so it depends on no rung of the pass being
 		// skipped here — and a shot fired mid-swing is exactly the case this exit is taken on.
-		ResolveSlotClaim(Anims, Mesh);
+		ResolveSlotClaims(Anims, Mesh);
 		ArbitrateBase();
-		ArbitrateSlot();
+		PublishOverlay();
 		return;
 	}
 
@@ -635,9 +720,9 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 			Selection.AirPhase = Latch.Phase;
 			// The same reason as the animation-driven exit above: the refusal is the BASE channel's,
 			// and the layer standing over it was never part of what was refused.
-			ResolveSlotClaim(Anims, Mesh);
+			ResolveSlotClaims(Anims, Mesh);
 			ArbitrateBase();
-			ArbitrateSlot();
+			PublishOverlay();
 			return;
 		}
 		if (IdealActivity.bHasSequence
@@ -688,16 +773,25 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		|| Intent.ActorState != LastActorState
 		|| Intent.Route != LastRoute;
 
-	// The overlay slot's own key, ranked beside the base's rather than folded into it. A layer is
+	// The overlay stack's own key, ranked beside the base's rather than folded into it. A layer is
 	// armed and re-armed without the body's request moving at all — a player standing still empties a
-	// magazine into a wall — so the slot has to be able to force a resolve by itself. The HANDLE and
-	// not the label: a second shot of the same layer is a new play whose asset has to be re-read and
-	// whose rate comes off a new claim, and the label alone cannot tell it from the first.
-	const FElysiumAnimRequestSlot& SlotRequest =
-		Requests[static_cast<int32>(EElysiumAnimChannel::UpperBody)];
-	const uint32 SlotHandle = SlotRequest.bActive ? SlotRequest.Handle : 0;
-	const bool bSlotChanged = SlotHandle != LastSlotHandle;
-	LastSlotHandle = SlotHandle;
+	// magazine into a wall — so the stack has to be able to force a resolve by itself. The HANDLE and
+	// not the label: a second shot of the same layer is a new play whose asset has to be re-read, and
+	// the label alone cannot tell it from the first.
+	//
+	// **Only tested here; the keys are advanced by `ResolveSlotClaims`.** Writing them here as well
+	// would mark every slot answered before the resolve that answers them ran, and every layer would
+	// publish as a named row with no bank.
+	bool bSlotChanged = false;
+	for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
+	{
+		const FElysiumOverlayLayer* Layer = Overlay.LiveLayer(SlotIndex);
+		if ((Layer != nullptr ? Layer->Handle : 0u) != LastSlotHandles[SlotIndex])
+		{
+			bSlotChanged = true;
+			break;
+		}
+	}
 
 	if (bChanged)
 	{
@@ -744,7 +838,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		// frame whose discrete request never moved — a body that starts walking under an ambient
 		// stance changes the answer without changing what it asked for.
 		ArbitrateBase();
-		ArbitrateSlot();
+		PublishOverlay();
 		return;
 	}
 
@@ -758,18 +852,31 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 		ElysiumAnimResolve::Resolve(Intent, FElysiumAnimationCatalog(), Selection);
 		Selection.GroundSpeedCmPerSecond = GaitSpeedForSelection(Intent.Body.MoveYaw());
 		Assets = FElysiumResolvedAnimation();
+		// The stack's own keys go with the assets: `ResolveAnimation` is what advances them, and a key
+		// left standing over a cleared asset would report every layer as already answered for.
+		for (uint32& Handle : LastSlotHandles)
+		{
+			Handle = 0;
+		}
 		ArbitrateBase();
-		ArbitrateSlot();
+		PublishOverlay();
 		return;
 	}
 
-	Anims->ResolveAnimation(Intent, Mesh, Selection, Assets,
-		SlotRequest.bActive ? &SlotRequest.Request : nullptr);
+	// The whole stack, in slot order. `ResolveAnimation` rebuilt the record from scratch, so every
+	// live layer's row is written here rather than surviving from the previous frame — which is why
+	// the keys below are stamped after it rather than tested against it.
+	Anims->ResolveAnimation(Intent, Mesh, Selection, Assets, &Overlay);
+	for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
+	{
+		const FElysiumOverlayLayer* Layer = Overlay.LiveLayer(SlotIndex);
+		LastSlotHandles[SlotIndex] = Layer != nullptr ? Layer->Handle : 0;
+	}
 	// The resolver answers with the one cell it selected; the stride the body will actually travel
 	// at is the table's reading at this direction, which is the same number the mover commands.
 	Selection.GroundSpeedCmPerSecond = GaitSpeedForSelection(Intent.Body.MoveYaw());
 	// After the resolve, which rewrote the whole record: the verdict is step 1's and rides every
 	// publish, so it is restated onto whatever the resolver wrote.
 	ArbitrateBase();
-	ArbitrateSlot();
+	PublishOverlay();
 }

@@ -394,7 +394,7 @@ consumer: the eye pass indexes `model_base + *(int*)(model_base + 0xC4) + materi
 | 4 | int | `bone` | the head bone |
 | 8 | Vector | `org` | eye centre, bone-local inches; the pair mirrors in Z |
 | 20 | float | `zoffset` | sideways shift, applied as `forward += right × 2·zoffset` |
-| 24 | float | `radius` | `0.5` on every shipped record |
+| 24 | float | `radius` | **four values across the 512 exported records**, not a constant: `0.5` x484, `0.577` x18, `0.6` x4, `0.57` x6 |
 | 28 | Vector | `up` | bone-local, orthonormal with `forward` |
 | 40 | Vector | `forward` | the authored resting aim |
 | 52 | int | `texture` | **never read by the renderer** (Source's `texture`) |
@@ -415,6 +415,15 @@ The three material-index fields hold real texture-table indices — `jeanette`'s
 skinref material, and the iris and glint textures come from the `.vmt`'s `$iris` and `$glint`.
 The 16 bytes at +124 are read by nothing either, so **there is no data-driven gaze limit**: the
 only shaping in the data is `zoffset`, and the only switch is the renderer config's `bEyeMove`.
+
+Two measurements sharpen that. **`zoffset` is `0.0` on all 512 exported eyeballs**, so
+`forward += right * 2*zoffset` is a no-op on every shipped character and the "only shaping" is
+vacuous. **`radius` is not the constant this table once claimed**: the non-`0.5` models are
+`cabbie`, `caine`, `cal`, `cul`, `kilpatrick`, `larry`, `shu`, `shopkeeper_santa_monica_b` and
+`taine` at `0.577`; `chunk_3` and `security_guard` at `0.6`; `misti`, `strippdk` and `strippdr` at
+`0.57`. That matters twice over, because the lid angle is `asin(target/radius)` and the glint plane
+is `2*radius`. `iris_scale` likewise takes 13 distinct values, modal `1.818` (x252) then `2.0`
+(x148) and `2.222` (x56), tailing to `0.4`.
 
 **Census: 301 models carry records, two each.** 298 sit under `models/character/` (221 `npc`,
 57 `pc`, 15 `shared`, 5 `monster`); the other three are a cinematic `sewer_guard` and the two
@@ -927,7 +936,7 @@ Those numbers are the two floats at **studiohdr +232/+236** (`mdl_v2531.md` reco
 |---|---|---|
 | **0.065, 0.100** | yes | **57** — including `lacroix`, `nines` and `skelter` |
 | 0.080, 0.100 | yes | 32 |
-| 0.080, 0.105 | yes | `Jeanette` alone |
+| 0.080, 0.105 | yes | `Jeanette` and `larry` |
 | 0.065, 0.100 | no | 112 |
 | 0.080, 0.100 | no | 24 |
 | 0.0, 0.0 | no | 113, all `NumFlexDescs 0` |
@@ -941,6 +950,181 @@ reach the viseme path carry it.
 `phoneme_delay` contributes **0 at its default** — the call site takes a literal `0.0` when the
 ConVar answers `IsDefault()`. The clock is therefore the authored event's, not the mixer's
 position.
+
+## The server side: `m_flexWeight` is normalised, and expressions are a whole subsystem
+
+The chain above is the **client** half. It shows `m_flexWeight` entering as "networked" and stops
+there. This is where those weights come from.
+
+### `SetFlexWeight` normalises; `GetFlexWeight` de-normalises
+
+`m_flexWeight` is `float[128]` at **`CBaseCombatCharacter + 0x858`**, and it holds values
+**normalised to [0,1]**, not controller units:
+
+```c
+// SetFlexWeight, vampire.dll 0x100b5ba0, vtable slot 279
+if (i < 0 || i >= GetNumFlexControllers() || !GetModelPtr()) return;
+pfc = hdr + hdr->flexcontrollerindex + i*20;
+if (pfc->max != pfc->min) v = (v - pfc->min) / (pfc->max - pfc->min);
+m_flexWeight[i] = v;
+// GetFlexWeight, 0x100b5c50
+if (pfc->max != pfc->min) return (pfc->max - pfc->min) * m_flexWeight[i] + pfc->min;
+return m_flexWeight[i];                                  // 0.0f when out of range or no model
+```
+
+The client's `SetupWeights` min/max remap is the **inverse** of this. With every shipped controller
+at min 0 / max 1 both are the identity, which is why nothing shows, and why a rig authored with a
+non-unit range would break a port that implements only one half. **The pipeline models neither**;
+the sidecar carries `min`/`max` per controller, and a consumer that applies them once rather than
+zero or two times diverges.
+
+The index space is the model's **local** flex-controller space server-side, bounded by
+`GetNumFlexControllers`. `LookupFlexController` (`0x100b5d10`) **returns 0 on failure, not -1**, so a
+`.vfe` key naming a controller the model lacks silently maps to controller 0.
+
+### Networking: 6 bits, where Valve uses 12
+
+`DT_BaseFlex` is registered at `0x100b5620`:
+
+```
+SendPropFloat ("m_flexWeight[0]", 0x858, 4, nBits = 6, SPROP_ROUNDDOWN, 0.0f, 1.0f)
+SendPropArray (..., 128, 4, "m_flexWeight")
+SendPropInt   ("m_blinktoggle", 0x854, 4, 1 bit, SPROP_UNSIGNED)
+SendPropVector("m_viewtarget",  0x848, 12, -1 bits, SPROP_COORD, 0.0, HIGH_DEFAULT)
+```
+
+**Every networked flex weight is quantised to 1/64.** Valve's `baseflex.cpp` uses 12 bits.
+
+### `CExpressionTable` and the per-character expression record
+
+Global at `vampire.dll 0x10709200`; ConVar `disable_expressions` (`0x107091bc`); ConCommand
+`dump_expression_table_names` (`0x101059f0`). `PrecacheCharacter` (`0x101053a0`) walks the `.vfe`
+`flexsettinghdr_t` at `+0x8c`/`+0x90` with **stride 0x18**, and `+0xa0`/`+0xa4`/`+0xa8` for the key
+tables. That is Source's layout **shifted +64**, which independently confirms the `char name[128]`
+this document already records.
+
+It compiles each setting into a **400-byte** record: `char name[64]` (trimmed and lowercased),
+`int modelIndex` at 64, `struct { float weight; int key; } pairs[40]` at 68 (**only weights above
+zero are kept**), `int numPairs` at 388, `int id = (nameSymbol << 16) | modelIndex` at 392, and
+`int flags` at 396 with bit 0 set for the model-specific override. Overflow warns
+*"Too many flexes in %s"* past 39 pairs.
+
+`ReloadExpressionsForMyModel` (`0x10106c40`), called from `SetModel`, precaches
+`expressions/<modelstem>_expressions.vfe` with the override bit and then the literal
+`expressions/expressions.vfe` without it. **The client owns phonemes and the server owns
+expressions**; they meet at the controller array.
+
+### The expression stack, and its blend
+
+A `CUtlVector` at `CBaseCombatCharacter + 0x10bc`, count at `+0x10c8`, **stride 0x20**, **max 10**,
+and **absent from the datamap**, so a scripted expression does not survive a save. Entries carry
+`{int index; float startTime; float endTime; float fadeIn; float fadeOut; float intensity;}` plus an
+optional curve pair.
+
+`UpdateExpressions` (`0x10106050`) runs from `UpdateCharacter`:
+
+```c
+if (m_idxDefExpression == -1 || hdr->numflexcontrollers <= 0) return;   // the player exits here
+total = 0;
+for each live entry:
+    if (curtime >= endTime) { remove; continue; }
+    if (startTime >= curtime) continue;
+    w = CalcExpressionIntensity(curtime, e);  total += w;
+    BlendTowards(m_flexWeight, m_flexWeight, MakeFlexweights(e), w, 128);
+if (total < 1.0)
+    BlendTowards(..., default expression, (1.0 - total) * m_flDefExpressionIntensity, 128);
+```
+
+`CalcExpressionIntensity` (`0x10106e20`) is a **smoothstep**, not a linear ramp: a plateau at
+`intensity` between the fades and `(3x^2 - 2x^3) * intensity` inside them. `BlendTowards`
+(`0x10105a60`) is a plain lerp with **no frametime term**, so the expression blend is frame-rate
+dependent.
+
+`SetExpression` (`0x10106580`), the dialogue verb, treats a **negative intensity as a sentinel**
+meaning "derive it from my disposition toward my dialogue partner", scaling the 0-100 relationship
+score by 0.01; otherwise anything outside `[0.1, 1.0]` becomes `0.5`. `FadeoutExpressions`
+(`0x101063a0`) is a misnomer: it sets `endTime = curtime`, so the next tick removes the entry with
+no fade at all.
+
+### The trigger is an animation event, but the pose data never rides a clip
+
+Two studio events reach this system, both handled only in `CAI_BaseNPCTroika::HandleAnimEvent`:
+**`EVENT_EXPRESSION` = 2060**, whose options parse `"%s %f %f %f"` into name, total, fadeIn and
+fadeOut (defaults 0.2 / 0.2, both fades scaled down if they exceed the total, `hold` the remainder),
+and the **unnamed event 2061**, which holds for the sequence's remaining duration with no fades.
+No MDL animation channel carries flex; the clip carries only the trigger.
+
+### Why the player's face is inert, mechanically
+
+`UpdateExpressions` early-outs on `hdr->numflexcontrollers <= 0`, and **0 of the 57 exported PC
+bodies carry a facial sidecar** (56 of 57 carry an eyes sidecar; the exception is
+`gangrel_male_beastial`). So the player's face is inert for a **data** reason, not a code-path one.
+Give a PC body a flex rig and the whole server expression stack lights up unchanged.
+
+Separately, **the player never blinks.** `Blink()` (`0x100b5ce0`, slot 276) has exactly one caller:
+the `CAI_BaseNPCTroika` eye maintainer at slot 333 (`0x102bff20`). `CBasePlayer` takes
+`CBaseCombatCharacter::MaintainEyeDirection` (`0x10325580`) at that slot and `CHL2_Player` its own
+override, neither of which blinks. That is a second, independent reason for the still-face
+observation. Caution when re-deriving it: slot 333 is occupied by two unrelated virtuals, and on the
+~170 `CBaseCombatWeapon` subclasses it is `0x10254450`, a weapon activity request, so a slot census
+merges both hierarchies and reports 254 classes.
+
+### The flex rule evaluator implements opcodes 1-7 and silently ignores the rest
+
+`RunFlexRules` (`client.dll 0x100c3cd0`) dispatches through a seven-entry jump table:
+
+```
+100c3dd3  MOV EAX,[EDI]      ; op->op
+100c3dd5  DEC EAX
+100c3dd6  CMP EAX,0x6
+100c3dd9  JA  0x100c3e8e     ; default: push nothing, pop nothing, advance
+100c3ddf  JMP [EAX*4 + 0x100c3ee8]
+```
+
+**`CONST`, `FETCH1`, `FETCH2`, `ADD`, `SUB`, `MUL` and `DIV` are implemented; opcode 0 and
+everything from 8 up (Source's `NEG`, `EXP`, `OPEN`, `CLOSE`, `COMMA`, `MAX`, `MIN`) fall into a
+silent no-op arm.** VtMB's evaluator is the pre-`MAX`/`MIN` Source vintage. `mdl_skel.py`'s
+`FLEX_OPS` declares 8 through 14 with a comment that only 1 through 7 appear in shipped data; that
+is now stronger than a data observation, because the retail evaluator **cannot execute them at
+all**, so a rule carrying one would be a silent partial evaluation. It deserves an assertion rather
+than a name table.
+
+Three further facts from the same body. The result taken is **`stack[0]`, the bottom**, not the top,
+so a port returning top-of-stack is right only because shipped rules leave one value. The stack is
+**32 slots with no bounds check**, and the second-from-top pointer is initialised two slots below
+the array, so a malformed leading binary op reads out of bounds. And the `DIV` guard compares
+against an 8-byte double `1.0e-4` at `0x10232818`, yielding **0.0** rather than the numerator when
+the divisor is smaller.
+
+### What the exports actually contain
+
+`MORF` is **body-only**. Over the 293 body and 360 bank containers, bodies carry `SKEL`, `MATL`,
+`MESH` and `ANIM` 293 each, `ATCH` 273, **`MORF` 172**, `MASK` 2 and `DYNM` 2; banks carry `SKEL`
+and `ANIM` 360, `MASK` 4 and **`MORF` 0**. `MASK` is not facial: it is the de-duplicated per-clip
+bone-weight mask table. Morph counts over the 172 are 53 on 153 models, 52 on 4, 51 on 13, 3 on 1
+and 1 on 1.
+
+`facial/` holds **177** sidecars and `eyes/` **256**. Rig census over the 177: `(65 flexdescs, 44
+controllers, 60 rules)` on **170**; `mercuriodamaged` and `mercuriodamagedstreet` at 66/45/61, the
+only carriers of the `wholeface` controller type; `creation1_full` at 4/3/3, all `mouth`; and
+`female_raver_1`, `female_raver_2`, `ghost` and `male_raver_3` with one flexdesc and no controllers
+or rules. **Five sidecars carry zero morph targets** -- those four plus **`shovelhead`**, which
+carries the full 65/44/60 rig and deforms nothing.
+
+Opcode totals across the 177: `FETCH1` 24,260, `MUL` 19,095, `CONST` 15,483, `SUB` 8,775, `ADD`
+6,880, `FETCH2` 6,880, `DIV` 1,548. `ADD` and `FETCH2` are exactly equal, and `DIV` is exactly nine
+per rigged model.
+
+**Correction to `mdl_skel.py`'s `phoneme_filter` docstring**, which says rigged models carry
+`(0.080, 0.100)` and unrigged `(0.065, 0.100)`. Over the 177 **rigged** sidecars it is
+`(0.065, 0.100)` on 119, `(0.080, 0.100)` on 56 and `(0.080, 0.105)` on 2.
+
+### One MDL header semantic this settles
+
+`CBaseCombatCharacter::SetModel` (`0x103409a0`) reads
+`m_iGender = (~studiohdr->flags@0xE4 >> 8) & 1` -- **bit 8 of the studiohdr flags clear means gender
+1** -- and feeds it to the stat list. That is a live v2531 header semantic and belongs to
+`docs/vtmb/mdl_v2531.md`, recorded here because this is where it was found.
 
 ## The offline export (PL10)
 
@@ -1005,10 +1189,12 @@ authored one.
 | `mouths` | `{bone, forward, flexdesc}` — the amplitude jaw, for 12.5 |
 | `morphs` | `{name, flexdesc, targets}` per glTF morph target, in order; `targets` is the four-value ramp |
 
-Not exported: the **`StudioEyeball` records** — which the eyes section above shows every
-character carries, and which a face needs for its lids as well as its irises — and the `.vfe`
-expression tables, where `UE_extract_scenes.py` mirrors the readable `.txt` twins to
-`$ELYSIUM_EXPORT_ROOT/expressions/` instead.
+Also exported, contrary to what this section once said: the **`StudioEyeball` records** ship as
+**256 `eyes/*.json` sidecars** carrying the full record plus a `meshes` material join, an `iris`
+texture path and a `vampire` flag; and the sidecar now carries the **phoneme blend width**
+(`phoneme_filter`, the studiohdr +232/+236 pair). Not exported: the `.vfe` expression tables, where
+`UE_extract_scenes.py` mirrors the readable `.txt` twins to `$ELYSIUM_EXPORT_ROOT/expressions/`
+instead.
 
 **A sidecar can be complete and still drive nothing**, so a consumer decides on morph targets
 rather than on the manifest parsing. `shovelhead` carries the full 65/44/60 rig with **zero**
@@ -1070,8 +1256,10 @@ owner call (`docs/vtmb/vtmb-animation-reverse-engineering.md` → "Programme met
   at `0x2C0509A8`, the 8-byte loop at `0x2C050AF0`; the vertex accessor at `0x2C0181B0`; the
   tables at `0x2C06E008` (unit vectors), `0x2C06D358` (byte-indexed normals), `0x2C06C530`
   (`n/255`), and the scale constant `8.0` at `0x2C06C4FC`.
-- `client.dll` (imagebase `0x10000000`): the expression-file name at `0x100C4210` /
-  `0x100C4270` / `0x100C42F0`; the flex convars `flex_rules`, `print_flex_weights`,
+- `client.dll` (imagebase `0x10000000`): the expression-file name at `0x100C4200` /
+  `0x100C4210` / `0x100C4270` (**not** `0x100C42F0`, which is `SetupWeights` itself — vtable slot 16
+  of `C_BaseFlex`, `C_BasePlayer`, `C_AI_BaseNPC` and five more); the flex convars `flex_rules`,
+  `print_flex_weights`,
   `print_flex_rules`, `phoneme_delay`, `phonemefilter_min`, `phonemefilter_max`.
 - The eye system, by half. Model: `StudioModel+192/+196` and `StudioMesh+24/+28`, censused over
   the merged install. Renderer (`StudioRender.dll`): the eye pass `0x2C0502C0`, the per-mesh

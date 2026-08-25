@@ -14,6 +14,7 @@ class FElysiumProbeRun;
 class FElysiumShotRun;
 class FElysiumMoveRun;
 class FElysiumCastRun;
+class FElysiumComposeRun;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumCurrentMapReady, AElysiumMapActor*);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumCurrentMapFailed, AElysiumMapActor*, const FString&);
@@ -234,4 +235,9 @@ private:
 	// Headless cast-locomotion harness, created only under -ElysiumCast: the body trace's second
 	// producer, recording the cast's selection where the movement run records the player's.
 	TPimplPtr<FElysiumCastRun> CastRun;
+
+	// Headless composed-pose harness, created only under -ElysiumCompose: the pose the animation
+	// graph produced, recorded off a driven body so a composition defect is a number rather than a
+	// screenshot.
+	TPimplPtr<FElysiumComposeRun> ComposeRun;
 };

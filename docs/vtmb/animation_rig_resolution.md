@@ -507,23 +507,26 @@ one channel retail played, and none arms a channel retail did not.** The unreach
 committed base by its own sequence number, 955 frames need a second overlay and 239 a second
 additive.
 
-**The autolayer closure does not reach the missing family, at any depth.** Read from
+**The autolayer closure does not reach the missing family *from a gait*.** Read from
 `move_and_ranged.mdl`'s own records (`numautolayers`@660, `autolayerindex`@664,
-`mstudioautolayer_t` stride 20):
+**`mstudioautolayer_t` stride 4** — each entry is a bare `int` sequence index and nothing else; the
+runtime addresses them at `base + i*4` in `FUN_10089c40` / `FUN_100c25c0`, and the record has no
+room for a flags field):
 
 | sequence | `numautolayers` | reaches |
 |---|---|---|
-| `supershotgun_aggressive_walk` | 2 | `supershotgun_aim_layer` (flags `0x192`), `walk` (flags `0x0`) |
+| `supershotgun_aggressive_walk` | 2 | `supershotgun_aim_layer` (flags `0x0`), `supershotgun_bobble_delta` (flags `0x14`) |
 | `supershotgun_aim_layer` | 0 | — |
 | `supershotgun_bobble_delta` | 0 | — |
-| `supershotgun_attack_layer` | 2 | `supershotgun_aim_layer`, `supershotgun_relaxed_move_layer` |
+| `supershotgun_attack_layer` | 2 | `supershotgun_aim_layer`, `supershotgun_attack_delta` |
 
-The gait's transitive closure is aim and bobble and nothing else. `_attack_layer`,
-`_attack_delta` and `_reload_layer` appear nowhere in it — and the attack layer's *own* closure
-points back at the aim layer rather than outward, so no walk of the studio data reaches the family
-from a gait. **Nothing in the shipped model connects them**, so this is neither a decode gap nor a
-question of which clip a resolver arms: the two channels we arm are exactly the two the studio data
-offers, and the rest are armed from somewhere else.
+A gait's transitive closure is aim and bobble and nothing else, so no walk of the studio data
+reaches `_attack_layer` or `_reload_layer` **from a gait** — which is the finding that matters here,
+and it stands. But `_attack_delta` **is** an autolayer, of `_attack_layer`, on 13 hosts per bank:
+the attack layer brings its own aim pose and its own delta, which is why the two co-occur 1:1 in
+every captured frame. `_reload_layer` genuinely declares none. The channels this runtime arms from
+the base closure are exactly the two the gait offers; the attack family is armed from somewhere
+else, and arrives with its own closure attached.
 
 **That somewhere else is `CBaseAnimatingOverlay`, and it is a subsystem rather than a rule.**
 `vampire.dll` carries the class with `m_AnimOverlay[]` in its datamap, per-layer `m_nSequence` and
@@ -535,8 +538,13 @@ mechanism, not part of it — which is why an autolayer walk cannot find its mem
 goes.
 
 It also accounts for the one observation an autolayer cannot: a channel's weight falling
-`0.923 → 0.02` across consecutive frames. An autolayer derives its weight from the cycle or a pose
-parameter, so it moves with the animation; an overlay fades because game code ticks it down.
+`0.923 → 0.02` across consecutive frames. **An autolayer's composition weight is the DLL constant
+`1.0f`** — pushed literally at `client.dll 0x1008a0ce` = `vampire.dll 0x100c2a4e`, the same
+instruction at `+0x48E` of both copies of the walk — multiplied only by the target animation's
+per-bone `weight`@0 mask, which is binary `{0.0, 1.0}` over all 736,208 shipped records. So an
+autolayer contributes at exactly 1.0 or is skipped, and it can never ramp. An overlay fades because
+its own `StudioFrameAdvance` recomputes a smoothstep from its own cycle. The `0.923 → 0.02` fall is
+an overlay's; nothing in the studio data can produce it.
 
 ### The overlay contract
 
@@ -594,8 +602,14 @@ no-ops either way.
 looping one, and on reaching `1.0` sets `m_fSequenceFinished`. In the owner loop (`0x10098bb0`) a
 layer that is live, finished and auto-kill has `m_flWeight` set to zero — which returns the slot to
 the pool — and vfunc `+0x1c0` is called with `(layer index, m_nActivity)` as a completion
-notification. **A finished layer whose auto-kill flag is clear holds its slot at cycle 1.0
-indefinitely**, until something else clears it.
+notification. **A finished layer whose auto-kill flag is clear holds its slot at cycle 1.0 only
+when its envelope leaves it live** — which means only a SNAP clip. With the shipped `blendOut = 0.2`
+the envelope at cycle 1.0 evaluates to `(1.0 - 1.0) / 0.2 = 0`, then `3*0 - 2*0 = 0` exactly, so the
+layer's own out-ramp zeroes its weight on the tick it finishes and `AllocateLayer` sees the slot free
+from the next one. Auto-kill therefore decides two things and not a third: whether the slot is
+released one tick earlier, and whether `+0x1c0` fires. It does not decide whether the slot is
+recoverable. `SetLayer` zeroes both blend times for a clip carrying `flags@8 & 0x2`, and *that* is
+the case where a non-auto-kill layer pins its slot forever at weight `min(1.0, WeightMax)`.
 
 **There is no ordering.** No priority or order field exists in the record. Composition runs by slot
 index `0..3` and `AllocateLayer` answers the lowest free slot, so a freed slot is reused by the next
@@ -664,16 +678,41 @@ project already models is worth checking; it is not asserted here.
 
 ### What the overlay contract still leaves open
 
-- **Networking.** The datamap is save/restore only. The send/receive table for the class would
-  settle whether and how the array replicates.
-- **`m_fFlags` semantics.** `SetLayer` never writes it and only `Dump` reads it. Finding the writers
-  of the record's `+0x00` would settle it.
-- **The two additive variants.** Reading the two functions `flags@8 & 0x10` selects between would
-  settle which is which.
-- **The three unread virtuals** — `+0x438` and `+0x43c`, the "is this activity playing" and "find
-  its layer" pair `AddGesture` consults, and `+0x1c0`, the completion notification.
-- **Whether the server evaluates the stack**, for hitboxes or attachments, or whether it only holds
-  and saves the state. Finding the server-side counterpart of the client pose build would settle it.
+All five of the questions this section once listed are now answered; they are recorded here as
+resolved rather than deleted, because each one's answer is load-bearing.
+
+- **Networking — settled.** `DT_BaseAnimatingOverlay` exists (server builder `vampire.dll 0x10098120`,
+  client receive `client.dll 0x10097480`), 35 props. Per layer it sends **exactly four of the twelve
+  fields**: `sequence` (11 bits), `cycle` (10 bits, `[0,1]`, roundup), `playbackrate` (8 bits,
+  `[-4,12]`), `weight` (8 bits, `[0,1]`). The envelope, both blend times, `WeightMax`, the activity
+  identity, the auto-kill flag and `m_flLastEventCheck` are **server-only**. The client receives a
+  weight quantised to ~1/255 and knows nothing about how it was produced. **Nothing is predicted** —
+  the client class has no `StudioFrameAdvance` over the array, no cycle advance and no `AllocateLayer`.
+  The client record is a different object: `+0x790`, stride `0xE4 = 228`, three 76-byte interpolation
+  samples with the newest at `+0x98`, shifted by `C_BaseAnimatingOverlay` slot 70. Only the weight is
+  interpolated (`(1-t)*prev + t*cur`); on a sequence change the previous weight snaps to 0 or 1
+  against a 0.5 threshold.
+- **`m_fFlags` — settled: it has no semantics in 2531.** Zero writers anywhere in either module; the
+  only reader is `Dump`. `SetLayer` does not clear it, so a slot keeps its previous tenant's value.
+- **The two additive variants — settled.** `flags@8 & 0x10` clear selects `FUN_10088d00`
+  (`vampire.dll 0x100c1230`), which multiplies the scaled delta on the **left**; set selects
+  `FUN_10088d60` (`0x100c12b0`), which multiplies it on the **right**. The two bodies are
+  instruction-identical apart from the operand order at the `QuaternionMult` call. Every one of the
+  118 shipped `_delta` sequences carries `0x14`, so retail always post-multiplies. The pre-multiply
+  side is not dead code, though — `CalcBoneAdj` calls it at weight 1.0 for every rotational bone
+  controller, a path that is itself inert because no shipped model declares a controller.
+- **The three unread virtuals — settled.** `+0x438` is `IsPlayingGesture(Activity)`, `+0x43c` is
+  `FindGestureLayer(Activity)` (matching on `weight != 0 && activity != -1 && activity == wanted`),
+  and `+0x1c0` is `OnLayerFinished(int iLayer, int nActivity)`. The base is empty and there is
+  **exactly one override in the whole hierarchy**: `CBasePlayer` at `0x1015fcd0`, which is the weapon
+  activity queue's drain. `AddGesture` consults the first pair *before* allocating and **returns the
+  existing layer unchanged** when the activity is already playing — it does not restart it, and it
+  does not take a second slot.
+- **Whether the server evaluates the stack — settled: it does.** `CBaseAnimatingOverlay` slot 255
+  (`+0x3fc`, `vampire.dll 0x10098eb0`) runs `CalcPose` for the base and then, for each slot with
+  `weight > 0`, a `CalcPose` + `SlerpBones` at that weight, followed by autoplay and the bone
+  controllers. Server hitboxes, attachments and `GetBoneTransform` therefore all see the composed
+  overlay pose, not the base sequence alone.
 
 ## What a reproduction has to carry
 

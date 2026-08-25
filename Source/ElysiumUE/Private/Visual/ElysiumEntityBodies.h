@@ -371,6 +371,10 @@ private:
 	// `OutHandle` is non-zero only on `Granted`.
 	EElysiumAnimClaim SubmitBodyAnimRequest(USkeletalMeshComponent* Body,
 		const struct FElysiumAnimationRequest& Request, uint32& OutHandle);
+	// Which overlay slot a granted `UpperBody` handle landed in, or `INDEX_NONE` (LIFE10). The
+	// driver's stack allocates lowest-free, so the arm seam has to be told which slot's pins to write
+	// rather than assuming slot 0 — a shot fired during a reload is the higher index.
+	int32 BodyOverlaySlot(USkeletalMeshComponent* Body, uint32 Handle) const;
 	// LIFE5 — the baked clip one already-resolved (owner, animation name) pair names, cached per
 	// (mesh, owner, animation) exactly as the cinematic path is. Never consults the vocabulary.
 	UAnimSequence* ResolveOneShotClip(USkeletalMesh* Mesh, const FString& OwnerStem,

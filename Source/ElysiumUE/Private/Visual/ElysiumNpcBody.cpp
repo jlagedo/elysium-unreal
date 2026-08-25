@@ -141,6 +141,11 @@ bool AElysiumNpcBody::ReleaseAnimRequest(uint32 Handle)
 	return AnimDriver.IsValid() && AnimDriver->ReleaseRequest(Handle);
 }
 
+int32 AElysiumNpcBody::OverlaySlotForHandle(uint32 Handle) const
+{
+	return AnimDriver.IsValid() ? AnimDriver->Overlay.FindByHandle(Handle) : INDEX_NONE;
+}
+
 int32 AElysiumNpcBody::ReleaseAllAnimRequests()
 {
 	// Deliberately NOT `EnsureAnimDriver`: a body whose driver was never built has never granted a

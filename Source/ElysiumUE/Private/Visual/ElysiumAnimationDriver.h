@@ -5,6 +5,7 @@
 
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumClipMovement.h"
+#include "ElysiumOverlayStack.h"
 #include "Visual/ElysiumAnimSubsystem.h"
 
 class FElysiumCombatCharacter;
@@ -150,8 +151,21 @@ struct FElysiumAnimationDriver : public FGCObject
 	};
 	FElysiumAnimRequestSlot Requests[ElysiumAnimIntent::NumChannels];
 	// Handles stay unique for the driver's life so a stale release finds nothing rather than the
-	// claim that replaced its target. Never reset.
+	// claim that replaced its target. Never reset. Shared with the overlay stack below, so one handle
+	// names one thing whichever mechanism holds it.
 	uint32 RequestSerial = 0;
+
+	// --- The overlay stack (LIFE10) ----------------------------------------------------------------
+	//
+	// **The `UpperBody` channel is not a request slot, and that asymmetry is the mechanism.** Every
+	// other channel holds one claim arbitrated by band; this one holds retail's four
+	// `CBaseAnimatingOverlay` layers, allocated lowest-free and refused when full, with no priority
+	// and no eviction. A layer composes OVER whatever owns the base pose rather than competing for
+	// it, so there is nothing to rank — and its lifetime is its own cycle rather than a claim expiry,
+	// which is why it survives the base changing hands underneath it.
+	//
+	// `Requests[UpperBody]` is therefore never written: `SubmitRequest` routes that channel here.
+	FElysiumOverlayStack Overlay;
 
 	// Claim a channel. Replaces the channel's standing claim when the new one ranks at least as
 	// high; a lower-ranked claim is refused (returns 0) so a dialogue stance cannot displace the
@@ -173,6 +187,9 @@ struct FElysiumAnimationDriver : public FGCObject
 	// a frozen corpse never runs.
 	int32 ReleaseAllRequests(bool* OutDroppedSlotLayer = nullptr);
 	// The channel's standing claim, or null. The layer families read their channels through this.
+	//
+	// **The `UpperBody` channel answers the LOWEST live overlay layer**, which is the only single
+	// answer a four-slot stack has; a caller that means a particular layer reads `Overlay` directly.
 	const FElysiumAnimationRequest* ActiveRequest(EElysiumAnimChannel Channel) const;
 
 	// --- The forced ideal activity, and the movement lock over it (LIFE5) --------------------------
@@ -200,18 +217,22 @@ struct FElysiumAnimationDriver : public FGCObject
 	// retail's own rule for a layer slot's weight dropping to 0. A re-fire submits a new claim on the
 	// same channel, which replaces the standing one and restarts the layer from zero.
 	void AdvanceRequests(float DeltaSeconds);
+	// The completion notifications the last `AdvanceRequests` raised — retail's vfunc `+0x1c0`, one
+	// `(slot, activity)` per auto-killed layer. Cleared and refilled every advance, so a reader takes
+	// it in the same frame or not at all.
+	TArray<TPair<int32, FString>> OverlayCompletions;
 	// Write the base-channel verdict onto `Selection`. Runs on every `Tick` exit path, because a
 	// claim can expire or be outranked on a frame whose discrete request never moved.
 	void ArbitrateBase();
-	// Publish the overlay slot's identity and phase onto `Selection`. Runs beside `ArbitrateBase` on
-	// every `Tick` exit path, for the same reason: a layer claim expires on its own clock.
+	// Publish every overlay slot's identity, weight and phase onto `Selection`. Runs beside
+	// `ArbitrateBase` on every `Tick` exit path, for the same reason: a layer ends on its own clock.
 	//
-	// **It arbitrates nothing, despite the name it shares with the base pass, and that asymmetry is
-	// the mechanism.** The slot never competes with the locomotion publish — it is accumulated ON TOP
-	// of whatever owns the base pose, gated per bone by the layer clip's mask — so there is no rank
-	// to compare and no claim to consume. All it does is state who is layering, at what weight and
-	// where on its clip.
-	void ArbitrateSlot();
+	// **It arbitrates nothing, unlike the base pass, and that asymmetry is the mechanism.** A layer
+	// never competes with the locomotion publish — it is accumulated ON TOP of whatever owns the base
+	// pose, gated per bone by the layer clip's mask — so there is no rank to compare and no claim to
+	// consume. All it does is state who is layering, in which slot, at what weight and where on its
+	// clip.
+	void PublishOverlay();
 	// Answer for the standing slot claim on an exit that does NOT re-enter the base resolve.
 	//
 	// **`Tick` has two player-only exits that skip the selection pass entirely** — an
@@ -225,7 +246,7 @@ struct FElysiumAnimationDriver : public FGCObject
 	//
 	// Keyed on `LastSlotHandle` exactly as the ordinary path is, so a claim already answered for is
 	// not re-loaded per frame.
-	void ResolveSlotClaim(UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh);
+	void ResolveSlotClaims(UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh);
 
 	// --- The discrete key: what a change of request actually means ---------------------------------
 	FString LastActivity;
@@ -240,15 +261,18 @@ struct FElysiumAnimationDriver : public FGCObject
 	EElysiumNpcState LastActorState = EElysiumNpcState::Idle;
 	EElysiumAnimRoute LastRoute = EElysiumAnimRoute::Activity;
 	bool bResolvedOnce = false;
-	// The overlay slot's own discrete key, kept apart from the base's above because the two move for
+	// Each overlay slot's own discrete key, kept apart from the base's above because the two move for
 	// unrelated reasons: a body fires without changing what it is doing, and it changes what it is
 	// doing without firing. The HANDLE and not the label, because a re-fire of the same layer is a new
 	// play that has to resolve again — the handle is the only thing that tells one from the other.
 	//
+	// Per slot rather than one key for the stack: a body reloading while an attack layer runs moves
+	// one slot and leaves the other standing, and a shared key would re-resolve both on every push.
+	//
 	// It does NOT advance `Generation`. That number means "the base request moved" and every reader
 	// downstream treats it as a transition to blend, so folding a shot into it would restate the
 	// body's gait as a new selection once per trigger pull.
-	uint32 LastSlotHandle = 0;
+	uint32 LastSlotHandles[ElysiumOverlay::NumSlots] = {};
 
 	// --- The published answers, always valid --------------------------------------------------------
 	// A default-constructed record reads `NoVocabulary`, so every consumer — the channel recorder, Cog,

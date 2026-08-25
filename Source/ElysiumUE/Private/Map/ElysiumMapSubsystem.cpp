@@ -7,6 +7,7 @@
 #include "ElysiumPlayerBody.h"
 #include "Debug/ElysiumGreenRoomConsole.h"
 #include "Debug/ElysiumCastRun.h"
+#include "Debug/ElysiumComposeRun.h"
 #include "Debug/ElysiumGreenRoomRun.h"
 #include "Debug/ElysiumMoveRun.h"
 #include "Debug/ElysiumProbeRun.h"
@@ -171,6 +172,12 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	if (FElysiumCastRun::IsRequested())
 	{
 		CastRun = MakePimpl<FElysiumCastRun>(this);
+	}
+	// Under -ElysiumCompose, arm the headless composed-pose run: a driven body on a real map, and
+	// the pose its graph produced written down per frame.
+	if (FElysiumComposeRun::IsRequested())
+	{
+		ComposeRun = MakePimpl<FElysiumComposeRun>(this);
 	}
 #endif
 }

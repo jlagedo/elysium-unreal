@@ -7,6 +7,7 @@
 #include "ElysiumEntityDefs.h"               // what a map stands each cast body as
 #include "ElysiumGaitSpeeds.h"               // the per-direction speed table (CCC7)
 #include "ElysiumMoveSolve.h"                // the sv_*scale constants and the unit factor
+#include "ElysiumOverlayStack.h"            // retail's CBaseAnimatingOverlay, as this runtime holds it
 #include "ElysiumEntityWorld.h"              // the release-on-scene-stop fixture drives a real scene
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumSceneData.h"      // ElysiumScene::RegisterInline / ClearCache
@@ -2574,44 +2575,42 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 
 	// --- The overlay slot, as the graph is handed it ------------------------------------------------
 	//
-	// Two numbers reach the slot's blend and its evaluator, and neither is computed in the graph: the
-	// enveloped weight (`ElysiumAnimIntent::SlotWeightAt`) and the explicit time the evaluator is
-	// pinned to. The envelope's own table — both recovered families, the per-weapon renames, the held
-	// claim — is asserted whole in `Elysium.Substrate.AnimationArbitration`; what is asserted here is
-	// the pair as the PINS see it, because that is where a ceiling written instead of an envelope, or
-	// a playhead carried across a swapped asset, becomes a pose.
+	// Two numbers reach a slot's blend and its evaluator, and neither is computed in the graph: the
+	// enveloped weight (`ElysiumOverlay::WeightForCycle`) and the explicit time the evaluator is
+	// pinned to. The stack's own contract — allocation, the envelope's SNAP fork, the lifecycle — is
+	// asserted whole in `Elysium.Substrate.OverlayStack`; what is asserted here is the pair as the
+	// PINS see it, because that is where a ceiling written instead of an envelope, or a playhead
+	// carried across a swapped asset, becomes a pose.
 	{
-		using namespace ElysiumAnimIntent;
+		using namespace ElysiumAnimGraph;
 
-		FElysiumClipSegment Reload;
-		Reload.ClipName = TEXT("glock_reload_layer");
-		Reload.Channel = EElysiumAnimChannel::UpperBody;
-		Reload.Activity = TEXT("ACT_RELOAD_LAYER");
-		const FElysiumAnimationRequest ReloadClaim = ClaimForSegment(Reload, /*PlayLengthSeconds=*/2.0f);
+		// The two recovered families, keyed by the clip's own hard-cut bit and nothing else: every
+		// shipped `_attack_layer` and `_dryfire_layer` carries SNAP and every `_reload_layer` does not.
+		const ElysiumOverlay::FBlend ShotBlend = ElysiumOverlay::BlendFor(/*bSnap=*/true);
+		const ElysiumOverlay::FBlend ReloadBlend = ElysiumOverlay::BlendFor(/*bSnap=*/false);
 
-		FElysiumClipSegment Shot = Reload;
-		Shot.ClipName = TEXT("glock_fire_layer");
-		Shot.Activity = TEXT("ACT_RANGE_ATTACK1_LAYER");
-		const FElysiumAnimationRequest ShotClaim = ClaimForSegment(Shot, /*PlayLengthSeconds=*/0.5f);
-
-		// The weight pin, both recovered families: an attack layer is at the ceiling on the frame it
-		// is armed and a reload is at the foot of its ramp. Writing `SlotWeightMax` on the pin instead
-		// — which is what the autolayer blend's own weight legitimately does — would compose these two
-		// identically and lose the ramp outright.
+		// The weight pin: an attack layer is at the ceiling on the frame it is armed and a reload is
+		// at the foot of its ramp. Writing `WeightMax` on the pin instead — which is what the
+		// autolayer blend's own weight legitimately does — would compose these two identically and
+		// lose the ramp outright.
 		TestEqual(TEXT("the slot's weight pin snaps to the ceiling for an attack layer"),
-			SlotWeightAt(ShotClaim, 0.0f), SlotWeightMax);
+			ElysiumOverlay::WeightForCycle(0.0f, ShotBlend), ElysiumOverlay::WeightMax);
 		TestEqual(TEXT("...and starts a reload layer at zero, on the smoothstep's foot"),
-			SlotWeightAt(ReloadClaim, 0.0f), 0.0f);
+			ElysiumOverlay::WeightForCycle(0.0f, ReloadBlend), 0.0f);
+		// Cycle 0.1 is half of a 0.2 ramp, which is the smoothstep's own midpoint.
 		TestEqual(TEXT("...reaching the smoothstep's midpoint half way up the ramp"),
-			SlotWeightAt(ReloadClaim, 0.2f), 0.5f);
-		// PAST the end, not merely at it: `SlotCycle` clamps, so an age beyond the claim's own hold
-		// still reads cycle 1 and the layer is gone. A body whose producer stopped ticking must not
-		// leave a shot composing forever.
-		TestEqual(TEXT("...and weightless past the cycle its claim ends on"),
-			SlotWeightAt(ReloadClaim, 3.0f), 0.0f);
+			ElysiumOverlay::WeightForCycle(0.1f, ReloadBlend), 0.5f);
+		// At the end, where an enveloped layer's own out-ramp takes its weight — and therefore its
+		// slot — without the reap running at all.
+		TestEqual(TEXT("...and weightless at the cycle its own out-ramp ends on"),
+			ElysiumOverlay::WeightForCycle(1.0f, ReloadBlend), 0.0f);
+		// The asymmetry auto-kill exists for: a SNAP layer has no out-ramp, so it stands at full
+		// weight past its own end and only the reap frees it.
+		TestEqual(TEXT("...while a snap layer holds full weight past its own end"),
+			ElysiumOverlay::WeightForCycle(1.0f, ShotBlend), ElysiumOverlay::WeightMax);
 
-		// The evaluator's time pin: the claim's phase projected onto the clip's own seconds, so the
-		// layer cannot finish early or linger past the claim that expires it.
+		// The evaluator's time pin: the layer's cycle projected onto the clip's own seconds, so the
+		// layer cannot finish early or linger past the layer that carries it.
 		TestEqual(TEXT("the slot evaluator seats at the head on cycle zero"),
 			SlotEvaluatorTime(0.0f, 2.0f, /*bSequenceChanged=*/false), 0.0f);
 		TestEqual(TEXT("...half way through the clip at cycle 0.5"),
@@ -3411,6 +3410,9 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		Aim.Channel = EElysiumAnimChannel::UpperBody;
 		Aim.Priority = EElysiumAnimPriority::Scripted;
 		Aim.Label = TEXT("aim_layer");
+		// A layer states its clip's wall-clock length, because the cycle it rides is what carries its
+		// weight, its end and its phase — the stack refuses one that does not.
+		Aim.ClipLengthSeconds = 1.0f;
 		const uint32 Handle = Driver.SubmitRequest(Aim);
 		TestTrue(TEXT("an upper-body claim is accepted"), Handle != 0);
 
@@ -3559,6 +3561,9 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		Shot.Priority = EElysiumAnimPriority::Scripted;
 		Shot.Channel = EElysiumAnimChannel::UpperBody;
 		Shot.Activity = TEXT("ACT_RANGE_ATTACK1_LAYER");
+		// Every shipped `_attack_layer` carries the studio hard-cut bit, which is the ONE thing that
+		// decides the layer's envelope — so a shot is at full weight on the frame it is armed.
+		Shot.bSnap = true;
 		const FElysiumAnimationRequest ShotClaim =
 			ElysiumAnimIntent::ClaimForSegment(Shot, /*PlayLengthSeconds=*/0.5f);
 		const uint32 SlotHandle = Driver.SubmitRequest(ShotClaim);
@@ -3569,11 +3574,11 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 			Driver.Selection.bBasePoseOwned);
 		TestTrue(TEXT("...and names no base holder"), Driver.Selection.BaseHold.IsEmpty());
 		TestEqual(TEXT("...while the record names the layer that is composing"),
-			Driver.Selection.SlotLabel, FString(TEXT("glock_fire_layer")));
+			Driver.Selection.Slots[0].Label, FString(TEXT("glock_fire_layer")));
 		TestEqual(TEXT("...at full weight, because the attack family's envelope is a snap"),
-			Driver.Selection.SlotWeight, ElysiumAnimIntent::SlotWeightMax);
+			Driver.Selection.Slots[0].Weight, ElysiumOverlay::WeightMax);
 		TestTrue(TEXT("...and on a phase of its own clip rather than the base's"),
-			Driver.Selection.SlotCycle > 0.0f && Driver.Selection.SlotCycle < 1.0f);
+			Driver.Selection.Slots[0].Cycle > 0.0f && Driver.Selection.Slots[0].Cycle < 1.0f);
 
 		// The whole reason a layer claim must not reach the ideal activity: `ACT_RANGE_ATTACK1_LAYER`
 		// is a layer family, and taken as the body's ideal activity it would answer for what the body
@@ -3587,7 +3592,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		// untouched by either, because nothing about it was ever ranked.
 		Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
 		TestEqual(TEXT("a travelling publish does not consume the layer"),
-			Driver.Selection.SlotLabel, FString(TEXT("glock_fire_layer")));
+			Driver.Selection.Slots[0].Label, FString(TEXT("glock_fire_layer")));
 
 		FElysiumAnimationRequest Beat;
 		Beat.Source = EElysiumAnimSource::Scene;
@@ -3598,7 +3603,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
 		TestFalse(TEXT("the base is held by the scene"), Driver.Selection.bBasePoseOwned);
 		TestEqual(TEXT("...and the layer is still the same layer over it"),
-			Driver.Selection.SlotLabel, FString(TEXT("glock_fire_layer")));
+			Driver.Selection.Slots[0].Label, FString(TEXT("glock_fire_layer")));
 		TestNotNull(TEXT("...standing on its own channel"),
 			Driver.ActiveRequest(EElysiumAnimChannel::UpperBody));
 
@@ -3607,9 +3612,9 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		TestTrue(TEXT("the layer's handle gives it back"), Driver.ReleaseRequest(SlotHandle));
 		Driver.Tick(Dt, Travelling(ForwardWalk), nullptr, nullptr);
 		TestTrue(TEXT("a released layer leaves no label on the record"),
-			Driver.Selection.SlotLabel.IsEmpty());
-		TestEqual(TEXT("...no weight"), Driver.Selection.SlotWeight, 0.0f);
-		TestEqual(TEXT("...and no phase"), Driver.Selection.SlotCycle, 0.0f);
+			Driver.Selection.Slots[0].Label.IsEmpty());
+		TestEqual(TEXT("...no weight"), Driver.Selection.Slots[0].Weight, 0.0f);
+		TestEqual(TEXT("...and no phase"), Driver.Selection.Slots[0].Cycle, 0.0f);
 		TestNotNull(TEXT("...while the base claim it composed over is untouched"),
 			Driver.ActiveRequest(EElysiumAnimChannel::Base));
 	}
@@ -3659,149 +3664,202 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		TestNotNull(TEXT("...and the held layer is still standing on its channel"),
 			Driver.ActiveRequest(EElysiumAnimChannel::UpperBody));
 		TestEqual(TEXT("...with the record still naming it"),
-			Driver.Selection.SlotLabel, FString(TEXT("glock_reload_layer")));
+			Driver.Selection.Slots[0].Label, FString(TEXT("glock_reload_layer")));
 		// **And reporting the phase of its own clip, not zero.** A held claim has no expiry, so the
 		// duration the record reads its phase against is the clip's own length — twelve frames at
 		// 1/60 is 0.2s of a 2s layer. A held layer answering zero would be one still frame of the
 		// reload pinned on the evaluator for as long as the producer held the channel.
 		TestEqual(TEXT("...and reporting where it stands on its own clip, rather than freezing at 0"),
-			Driver.Selection.SlotCycle, 0.10f, UE_KINDA_SMALL_NUMBER);
+			Driver.Selection.Slots[0].Cycle, 0.10f, UE_KINDA_SMALL_NUMBER);
 		TestTrue(TEXT("...so its own stop path still finds it"), Driver.ReleaseRequest(HeldHandle));
 	}
 
-	// --- The layer blend envelope: one helper, two recovered answers ------------------------------
+	// --- The layer blend envelope: one helper, and the clip's own bit decides -----------------------
+	//
+	// Retail's `SetLayer` writes `0.2` at both ends and then zeroes both when the sequence's studio
+	// `flags@8` carries `0x2`. So the fork is the CLIP's, not the activity's — which is what keeps it
+	// answering for a family nobody has enumerated, and what makes it a property of what is playing
+	// rather than of what it was called.
 	{
-		const ElysiumAnimIntent::FSlotBlend ReloadBlend =
-			ElysiumAnimIntent::SlotBlendFor(TEXT("ACT_RELOAD_LAYER"));
-		TestEqual(TEXT("a reload layer blends in over a fifth of its cycle"),
-			ReloadBlend.InFraction, 0.2f);
-		TestEqual(TEXT("...and out over the same"), ReloadBlend.OutFraction, 0.2f);
+		const ElysiumOverlay::FBlend Enveloped = ElysiumOverlay::BlendFor(/*bSnap=*/false);
+		TestEqual(TEXT("a clip with no hard cut blends in over a fifth of its cycle"),
+			Enveloped.In, 0.2f);
+		TestEqual(TEXT("...and out over the same"), Enveloped.Out, 0.2f);
 
-		const ElysiumAnimIntent::FSlotBlend FireBlend =
-			ElysiumAnimIntent::SlotBlendFor(TEXT("ACT_RANGE_ATTACK1_LAYER"));
-		TestEqual(TEXT("an attack layer snaps in"), FireBlend.InFraction, 0.0f);
-		TestEqual(TEXT("...and snaps out"), FireBlend.OutFraction, 0.0f);
-		const ElysiumAnimIntent::FSlotBlend DryFireBlend =
-			ElysiumAnimIntent::SlotBlendFor(TEXT("ACT_DRYFIRE_LAYER"));
-		TestEqual(TEXT("...as does a dry-fire layer"), DryFireBlend.InFraction, 0.0f);
+		const ElysiumOverlay::FBlend Snapped = ElysiumOverlay::BlendFor(/*bSnap=*/true);
+		TestEqual(TEXT("a SNAP clip has no blend in"), Snapped.In, 0.0f);
+		TestEqual(TEXT("...and no blend out"), Snapped.Out, 0.0f);
 
 		TestEqual(TEXT("and the weight ceiling every layer is capped at is 1.0"),
-			ElysiumAnimIntent::SlotWeightMax, 1.0f);
-
-		// The translated spellings reach the same two answers. Retail renames a layer activity per
-		// weapon exactly as it renames every other one, so a producer handing the per-weapon name must
-		// not fall silently into the snap the attack families take.
-		const ElysiumAnimIntent::FSlotBlend RenamedReload =
-			ElysiumAnimIntent::SlotBlendFor(TEXT("ACT_RELOAD_LAYER_M37"));
-		TestEqual(TEXT("a per-weapon reload layer still takes the reload envelope"),
-			RenamedReload.InFraction, 0.2f);
-		TestEqual(TEXT("...at both ends"), RenamedReload.OutFraction, 0.2f);
-		const ElysiumAnimIntent::FSlotBlend RenamedAttack =
-			ElysiumAnimIntent::SlotBlendFor(TEXT("ACT_RANGE_ATTACK_LAYER_SHOTGUN"));
-		TestEqual(TEXT("...while a renamed attack layer is still the family that snaps"),
-			RenamedAttack.InFraction, 0.0f);
+			ElysiumOverlay::WeightMax, 1.0f);
+		TestEqual(TEXT("...while the seed a pushed layer reads as occupied by is retail's 0.1"),
+			ElysiumOverlay::SeedWeight, 0.1f);
 	}
 
-	// --- The slot's published weight is the ENVELOPE, never the ceiling ---------------------------
+	// --- The overlay stack: allocation, the envelope, and a lifetime that is the cycle -------------
 	//
-	// The whole value of the record's weight line is separating a layer composing at full strength
-	// from one stuck at zero, and a line that published `SlotWeightMax` answers 1.0 for both. So the
-	// number is computed: a smoothstep ramp over the blend-in and blend-out fractions of the claim's
-	// OWN cycle, capped at the ceiling, and gone the instant that cycle reaches 1 — which is the same
-	// instant `AdvanceRequests` drops the claim.
+	// Retail's `CBaseAnimatingOverlay`, whole: four slots taken lowest-free, refusal when full, a
+	// weight recomputed every tick from the layer's OWN cycle, and a death that is weight-zeroing.
+	// Nothing here is a claim expiry — a layer survives the base pose changing hands underneath it
+	// and ends because its own cycle ran.
 	{
-		using namespace ElysiumAnimIntent;
-
-		FElysiumClipSegment Reload;
-		Reload.ClipName = TEXT("glock_reload_layer");
+		FElysiumAnimationRequest Reload;
 		Reload.Channel = EElysiumAnimChannel::UpperBody;
+		Reload.Label = TEXT("glock_reload_layer");
 		Reload.Activity = TEXT("ACT_RELOAD_LAYER");
-		const FElysiumAnimationRequest Claim = ClaimForSegment(Reload, /*PlayLengthSeconds=*/2.0f);
-		TestEqual(TEXT("the claim holds for exactly the clip"), Claim.HoldSeconds, 2.0f);
+		Reload.ClipLengthSeconds = 2.0f;
 
-		TestEqual(TEXT("a reload layer is weightless on the frame it is armed"),
-			SlotWeightAt(Claim, 0.0f), 0.0f);
-		// Cycle 0.1 of a 0.2 ramp is the smoothstep's own midpoint, which is 0.5 exactly.
-		TestEqual(TEXT("...half way up its ramp it is at the smoothstep's midpoint"),
-			SlotWeightAt(Claim, 0.2f), 0.5f);
-		TestEqual(TEXT("...at the ceiling through the middle of the clip"),
-			SlotWeightAt(Claim, 1.0f), SlotWeightMax);
-		const float Fading = SlotWeightAt(Claim, 1.9f);
-		TestTrue(TEXT("...and back down the out ramp before it ends"),
-			Fading > 0.0f && Fading < SlotWeightMax);
-		TestEqual(TEXT("...gone when its cycle reaches 1"), SlotWeightAt(Claim, 2.0f), 0.0f);
-
-		// The attack family's envelope is a snap, so it is at the ceiling for the whole clip and gone
-		// on the frame after — no ramp at either end.
-		FElysiumClipSegment Shot = Reload;
-		Shot.ClipName = TEXT("glock_fire_layer");
+		FElysiumAnimationRequest Shot = Reload;
+		Shot.Label = TEXT("glock_fire_layer");
 		Shot.Activity = TEXT("ACT_RANGE_ATTACK1_LAYER");
-		const FElysiumAnimationRequest ShotClaim = ClaimForSegment(Shot, /*PlayLengthSeconds=*/0.5f);
-		TestEqual(TEXT("an attack layer is at weight on the frame it is armed"),
-			SlotWeightAt(ShotClaim, 0.0f), SlotWeightMax);
-		TestEqual(TEXT("...and gone on the frame its cycle reaches 1"),
-			SlotWeightAt(ShotClaim, 0.5f), 0.0f);
+		Shot.ClipLengthSeconds = 0.5f;
+		Shot.bSnap = true;
 
-		// --- A duration-less claim rides its own clip, and does not stand still ---------------------
-		//
-		// A held or looping claim has no expiry — its producer ends it — but it still has a clip, and
-		// the clip's length is what the layer's motion rides. A phase of zero is not "waiting": it is
-		// ONE FRAME of the clip, pinned on the evaluator at whatever weight cycle 0 gives, for as long
-		// as the producer holds the channel.
-		FElysiumClipSegment Held = Reload;
-		Held.bHoldUntilReleased = true;
-		const FElysiumAnimationRequest HeldClaim = ClaimForSegment(Held, /*PlayLengthSeconds=*/2.0f);
-		TestEqual(TEXT("a held claim carries no expiry"), HeldClaim.HoldSeconds, 0.0f);
-		TestEqual(TEXT("...but does carry its clip's own length"), HeldClaim.ClipLengthSeconds, 2.0f);
-		TestEqual(TEXT("...so a held reload is still weightless on the frame it is armed"),
-			SlotWeightAt(HeldClaim, 0.0f), 0.0f);
-		TestEqual(TEXT("...climbs its ramp on the clip's own clock"),
-			SlotWeightAt(HeldClaim, 0.2f), 0.5f);
-		TestEqual(TEXT("...stands at the ceiling through the middle of it"),
-			SlotWeightAt(HeldClaim, 1.0f), SlotWeightMax);
-		// Not looping, so the phase clamps and retail's overlay weight dies at cycle 1 whether or not
-		// the producer has come back for the channel yet.
-		TestEqual(TEXT("...and is gone at its clip's end, held claim or not"),
-			SlotWeightAt(HeldClaim, 5.0f), 0.0f);
+		// --- allocation: lowest free, no priority, refusal when full ------------------------------
+		{
+			FElysiumOverlayStack Stack;
+			TestEqual(TEXT("an empty stack allocates its lowest slot"), Stack.AllocateLayer(), 0);
+			for (int32 Index = 0; Index < ElysiumOverlay::NumSlots; ++Index)
+			{
+				TestEqual(TEXT("...and each push takes the next one up"), Stack.AllocateLayer(), Index);
+				TestEqual(TEXT("...where it is written"),
+					Stack.SetLayer(Index, Reload, /*bSnap=*/false, /*Handle=*/Index + 1u), Index);
+			}
+			// **The seed is what makes this work.** A layer pushed and not yet advanced has to read as
+			// occupied on its own, because occupancy IS the zero-weight test.
+			TestEqual(TEXT("a pushed layer reads as occupied before any advance"),
+				Stack.Layers[0].Weight, ElysiumOverlay::SeedWeight);
+			TestEqual(TEXT("a full stack refuses rather than evicting"),
+				Stack.AllocateLayer(), INDEX_NONE);
+			TestEqual(TEXT("...with every slot live"), Stack.LiveCount(), ElysiumOverlay::NumSlots);
 
-		// A LOOPING claim wraps instead, which is what honours the segment's own `bLoop` here: the
-		// layer rides its motion again from the head and the envelope rides with it, rather than
-		// running once and standing at zero weight forever.
-		FElysiumClipSegment Looping = Reload;
-		Looping.bLoop = true;
-		const FElysiumAnimationRequest LoopClaim = ClaimForSegment(Looping, /*PlayLengthSeconds=*/2.0f);
-		TestTrue(TEXT("a looping claim states that it loops"), LoopClaim.bLoop);
-		TestEqual(TEXT("...and carries no expiry either"), LoopClaim.HoldSeconds, 0.0f);
-		TestEqual(TEXT("a looping layer is back at the head one clip in"),
-			SlotCycle(LoopClaim, 2.0f), 0.0f);
-		TestEqual(TEXT("...and half way through its second pass at three clip-halves"),
-			SlotCycle(LoopClaim, 3.0f), 0.5f);
-		TestEqual(TEXT("...so its ramp is ridden again on the second pass"),
-			SlotWeightAt(LoopClaim, 2.2f), 0.5f);
-		// 101s is 50 whole passes and a half, so the layer is mid-clip on its fifty-first — at weight,
-		// where a claim that clamped instead would have been gone since its first pass ended.
-		TestEqual(TEXT("...and it is never gone, however long it stands"),
-			SlotWeightAt(LoopClaim, 101.0f), SlotWeightMax);
+			// A freed slot is reused by the next push, so layer order is NOT stable over time.
+			TestTrue(TEXT("a slot given back is free"), Stack.ClearSlot(1));
+			TestEqual(TEXT("...and is the next one allocated, not the top of the stack"),
+				Stack.AllocateLayer(), 1);
+		}
 
-		// The rate is folded into that one length, so a slowed layer rides a longer wall clock and its
-		// ramp stretches with it rather than being timed against the authored seconds.
-		FElysiumClipSegment Slowed = Reload;
-		Slowed.bHoldUntilReleased = true;
-		Slowed.PlaybackRate = 0.5f;
-		const FElysiumAnimationRequest SlowClaim = ClaimForSegment(Slowed, /*PlayLengthSeconds=*/2.0f);
-		TestEqual(TEXT("a half-rate layer occupies twice the wall clock"),
-			SlowClaim.ClipLengthSeconds, 4.0f);
-		TestEqual(TEXT("...and reaches its ramp's midpoint at twice the age"),
-			SlotWeightAt(SlowClaim, 0.4f), 0.5f);
+		// --- a layer with no length is refused, because the cycle is the whole mechanism ----------
+		{
+			FElysiumOverlayStack Stack;
+			FElysiumAnimationRequest Lengthless = Shot;
+			Lengthless.ClipLengthSeconds = 0.0f;
+			TestEqual(TEXT("a layer stating no clip length is refused"),
+				Stack.SetLayer(0, Lengthless, /*bSnap=*/true, /*Handle=*/1u), INDEX_NONE);
+			TestEqual(TEXT("...so nothing is standing"), Stack.LiveCount(), 0);
+		}
 
-		// A claim that states no length names no clip to stand on. Composing nothing is the honest
-		// answer; the ceiling would stand one frozen frame of the evaluator at full strength.
-		FElysiumAnimationRequest Lengthless;
-		Lengthless.Channel = EElysiumAnimChannel::UpperBody;
-		Lengthless.Label = TEXT("glock_fire_layer");
-		TestEqual(TEXT("a claim with no length has no phase"), SlotCycle(Lengthless, 1.0f), 0.0f);
-		TestEqual(TEXT("...and composes nothing rather than freezing at the ceiling"),
-			SlotWeightAt(Lengthless, 1.0f), 0.0f);
+		// --- the envelope, ridden over the layer's own cycle ---------------------------------------
+		{
+			FElysiumOverlayStack Stack;
+			Stack.SetLayer(0, Reload, /*bSnap=*/false, /*Handle=*/1u);
+			// Cycle 0.1 of a 0.2 ramp is the smoothstep's own midpoint, which is 0.5 exactly.
+			Stack.Advance(0.2f);
+			TestEqual(TEXT("a reload layer is half way up its ramp a tenth into its clip"),
+				Stack.Layers[0].Weight, 0.5f);
+			Stack.Advance(0.8f);
+			TestEqual(TEXT("...at the ceiling through the middle of the clip"),
+				Stack.Layers[0].Weight, ElysiumOverlay::WeightMax);
+			Stack.Advance(0.9f);
+			TestTrue(TEXT("...and back down the out ramp before it ends"),
+				Stack.Layers[0].Weight > 0.0f && Stack.Layers[0].Weight < ElysiumOverlay::WeightMax);
+			Stack.Advance(0.1f);
+			TestTrue(TEXT("...finished when its cycle reaches 1"), Stack.Layers[0].bFinished);
+			// **The out ramp frees the slot without the reap running at all**, which is why the reap's
+			// liveness term is not a guard: an enveloped layer is gone before it can be reaped.
+			TestEqual(TEXT("...and its own out ramp has already taken its slot"), Stack.LiveCount(), 0);
+			TestEqual(TEXT("...so the reap has nothing to do"), Stack.Reap(), 0);
+		}
+
+		// --- a SNAP layer holds full weight past its own end, and auto-kill is what ends it --------
+		{
+			FElysiumOverlayStack Stack;
+			Stack.SetLayer(0, Shot, /*bSnap=*/true, /*Handle=*/1u);
+			Stack.Advance(0.25f);
+			TestEqual(TEXT("an attack layer is at weight for the whole of its clip"),
+				Stack.Layers[0].Weight, ElysiumOverlay::WeightMax);
+			Stack.Advance(0.25f);
+			TestTrue(TEXT("...finished at its end"), Stack.Layers[0].bFinished);
+			TestEqual(TEXT("...and still standing at full weight, having no out ramp"),
+				Stack.Layers[0].Weight, ElysiumOverlay::WeightMax);
+
+			TArray<TPair<int32, FString>> Completed;
+			TestEqual(TEXT("the reap frees a finished auto-kill layer"), Stack.Reap(&Completed), 1);
+			TestEqual(TEXT("...raising one completion"), Completed.Num(), 1);
+			TestEqual(TEXT("...naming the slot it freed"), Completed[0].Key, 0);
+			TestEqual(TEXT("...and the layer's own activity, not its clip"), Completed[0].Value,
+				FString(TEXT("ACT_RANGE_ATTACK1_LAYER")));
+			TestEqual(TEXT("...leaving the stack empty"), Stack.LiveCount(), 0);
+		}
+
+		// --- a finished SNAP layer WITHOUT auto-kill holds its slot indefinitely -------------------
+		{
+			FElysiumOverlayStack Stack;
+			Stack.SetLayer(0, Shot, /*bSnap=*/true, /*Handle=*/1u, /*bAutoKill=*/false);
+			Stack.Advance(1.0f);
+			TestTrue(TEXT("it finishes"), Stack.Layers[0].bFinished);
+			TestEqual(TEXT("...and the reap leaves it alone"), Stack.Reap(), 0);
+			TestEqual(TEXT("...so its slot stays out of the pool"), Stack.AllocateLayer(), 1);
+			TestTrue(TEXT("...until something else clears it"), Stack.ClearSlot(0));
+			TestEqual(TEXT("...and then it is the lowest free slot again"), Stack.AllocateLayer(), 0);
+		}
+
+		// --- a LOOPING layer wraps, rides its ramp again, and never ends on its own ----------------
+		{
+			FElysiumOverlayStack Stack;
+			FElysiumAnimationRequest Looping = Reload;
+			Looping.bLoop = true;
+			Stack.SetLayer(0, Looping, /*bSnap=*/false, /*Handle=*/1u);
+			// **Advanced PAST the wrap rather than onto it.** An enveloped layer's weight is zero at
+			// cycle 0, and occupancy is the zero-weight test, so a layer whose cycle lands exactly on
+			// the wrap point reads as a free slot for that instant. Retail's arithmetic has the same
+			// knife edge and a real frame never lands on it; a test that did would be asserting the
+			// edge rather than the loop.
+			Stack.Advance(2.1f);
+			TestTrue(TEXT("a looping layer reports itself finished on its first pass"),
+				Stack.Layers[0].bFinished);
+			TestEqual(TEXT("...and is back near the head, wrapped rather than clamped"),
+				Stack.Layers[0].Cycle, 0.05f, UE_KINDA_SMALL_NUMBER);
+			Stack.Advance(0.1f);
+			TestEqual(TEXT("...so its ramp is ridden again on the second pass"),
+				Stack.Layers[0].Weight, 0.5f);
+			// Fifty more passes and two fifths: mid-clip on its fifty-first, where a clamping layer
+			// would have been gone since its first pass ended.
+			Stack.Advance(100.8f);
+			TestEqual(TEXT("...and it is never gone, however long it stands"),
+				Stack.Layers[0].Weight, ElysiumOverlay::WeightMax);
+		}
+
+		// --- the rate is folded into the one length, so a slowed layer stretches with it ------------
+		{
+			FElysiumClipSegment Slowed;
+			Slowed.ClipName = TEXT("glock_reload_layer");
+			Slowed.Channel = EElysiumAnimChannel::UpperBody;
+			Slowed.PlaybackRate = 0.5f;
+			const FElysiumAnimationRequest SlowClaim =
+				ElysiumAnimIntent::ClaimForSegment(Slowed, /*PlayLengthSeconds=*/2.0f);
+			TestEqual(TEXT("a half-rate layer occupies twice the wall clock"),
+				SlowClaim.ClipLengthSeconds, 4.0f);
+
+			FElysiumOverlayStack Stack;
+			Stack.SetLayer(0, SlowClaim, /*bSnap=*/false, /*Handle=*/1u);
+			Stack.Advance(0.4f);
+			TestEqual(TEXT("...and reaches its ramp's midpoint at twice the age"),
+				Stack.Layers[0].Weight, 0.5f);
+		}
+
+		// --- a handle finds its layer, whichever slot it landed in ---------------------------------
+		{
+			FElysiumOverlayStack Stack;
+			Stack.SetLayer(0, Reload, /*bSnap=*/false, /*Handle=*/11u);
+			Stack.SetLayer(2, Shot, /*bSnap=*/true, /*Handle=*/22u);
+			TestEqual(TEXT("a handle names its slot"), Stack.FindByHandle(22u), 2);
+			TestEqual(TEXT("...and a handle nothing holds names none"),
+				Stack.FindByHandle(33u), INDEX_NONE);
+			TestEqual(TEXT("...as does the null handle"), Stack.FindByHandle(0u), INDEX_NONE);
+			TestEqual(TEXT("a wholesale release gives every layer back"), Stack.ClearAll(), 2);
+			TestTrue(TEXT("...and the stack is empty"), Stack.IsEmpty());
+		}
 	}
 
 	// --- The record and the assets beside it can never disagree about which layer is composing -----
@@ -3823,6 +3881,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		FirstShot.Priority = EElysiumAnimPriority::Scripted;
 		FirstShot.Channel = EElysiumAnimChannel::UpperBody;
 		FirstShot.Activity = TEXT("ACT_RANGE_ATTACK1_LAYER");
+		FirstShot.bSnap = true;
 		const uint32 FirstHandle = Driver.SubmitRequest(
 			ElysiumAnimIntent::ClaimForSegment(FirstShot, /*PlayLengthSeconds=*/0.5f));
 		TestTrue(TEXT("the first layer claim is accepted"), FirstHandle != 0u);
@@ -3834,10 +3893,10 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		// the include DAG named, and the baked layer that came out of it. Nothing here needs a real
 		// mount — what is asserted is that a later frame cannot leave these describing another claim.
 		UAnimSequence* FirstLayer = NewObject<UAnimSequence>();
-		Driver.Selection.SlotOwnerStem = TEXT("shared_pc_bank");
-		Driver.Assets.SlotSequence = FirstLayer;
-		Driver.Assets.SlotMaskName = TEXT("upperbody_49");
-		TestTrue(TEXT("the body is layering before the claim moves"), Driver.Assets.HasSlotLayer());
+		Driver.Selection.Slots[0].OwnerStem = TEXT("shared_pc_bank");
+		Driver.Assets.Slots[0].Sequence = FirstLayer;
+		Driver.Assets.Slots[0].MaskName = TEXT("upperbody_49");
+		TestTrue(TEXT("the body is layering before the claim moves"), Driver.Assets.HasSlotLayer(0));
 
 		// The swing that closes the selector: a melee claim on the base channel with a live clip under
 		// it is retail's `vt+0x670`, and every frame of it takes the animation-driven exit.
@@ -3864,12 +3923,12 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		TestTrue(TEXT("the frame really did take the animation-driven exit"),
 			Driver.bAnimationDriven);
 		TestEqual(TEXT("the record names the layer that is actually claimed"),
-			Driver.Selection.SlotLabel, FString(TEXT("glock_fire_layer_2")));
+			Driver.Selection.Slots[0].Label, FString(TEXT("glock_fire_layer_2")));
 		TestTrue(TEXT("...and names no bank, because nothing has resolved this claim yet"),
-			Driver.Selection.SlotOwnerStem.IsEmpty());
+			Driver.Selection.Slots[0].OwnerStem.IsEmpty());
 		TestFalse(TEXT("...so the graph is handed no layer either, rather than the last shot's"),
-			Driver.Assets.HasSlotLayer());
-		TestTrue(TEXT("...mask included"), Driver.Assets.SlotMaskName.IsNone());
+			Driver.Assets.HasSlotLayer(0));
+		TestTrue(TEXT("...mask included"), Driver.Assets.Slots[0].MaskName.IsNone());
 
 		// --- ...and the claim is ANSWERED on that exit, rather than left unresolved forever ---------
 		//
@@ -3879,33 +3938,33 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		// frame of a swing and one that is republished as a named label with no asset for the swing's
 		// entire length, because the key never caught up with the claim.
 		TestEqual(TEXT("the animation-driven exit answers for the claim it published"),
-			static_cast<int32>(Driver.LastSlotHandle), static_cast<int32>(SecondHandle));
+			static_cast<int32>(Driver.LastSlotHandles[0]), static_cast<int32>(SecondHandle));
 		// Stand in for what a resolve on that frame binds on a body with a mount behind it. The next
 		// animation-driven frame must leave it alone: it belongs to the claim still standing.
 		UAnimSequence* SecondLayer = NewObject<UAnimSequence>();
-		Driver.Assets.SlotSequence = SecondLayer;
-		Driver.Assets.SlotMaskName = TEXT("upperbody_49");
-		Driver.Selection.SlotOwnerStem = TEXT("shared_pc_bank");
+		Driver.Assets.Slots[0].Sequence = SecondLayer;
+		Driver.Assets.Slots[0].MaskName = TEXT("upperbody_49");
+		Driver.Selection.Slots[0].OwnerStem = TEXT("shared_pc_bank");
 		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
 		TestTrue(TEXT("...on the same exit again"), Driver.bAnimationDriven);
 		TestTrue(TEXT("a layer resolved mid-swing survives the rest of the swing"),
-			Driver.Assets.SlotSequence == SecondLayer);
-		TestEqual(TEXT("...bank and all"), Driver.Selection.SlotOwnerStem,
+			Driver.Assets.Slots[0].Sequence == SecondLayer);
+		TestEqual(TEXT("...bank and all"), Driver.Selection.Slots[0].OwnerStem,
 			FString(TEXT("shared_pc_bank")));
-		TestEqual(TEXT("...and the record still names it"), Driver.Selection.SlotLabel,
+		TestEqual(TEXT("...and the record still names it"), Driver.Selection.Slots[0].Label,
 			FString(TEXT("glock_fire_layer_2")));
 
 		// The inactive branch takes the assets too, on the same exit. Without it `HasSlotLayer()` — a
 		// pointer test — stays true at weight 0 under a record that has stopped naming a layer at all.
-		Driver.Assets.SlotSequence = FirstLayer;
-		Driver.Assets.SlotMaskName = TEXT("upperbody_49");
+		Driver.Assets.Slots[0].Sequence = FirstLayer;
+		Driver.Assets.Slots[0].MaskName = TEXT("upperbody_49");
 		TestTrue(TEXT("the second layer's handle gives it back"), Driver.ReleaseRequest(SecondHandle));
 		Driver.Tick(Dt, Travelling(0.0f), nullptr, nullptr);
 		TestTrue(TEXT("...on the same animation-driven exit"), Driver.bAnimationDriven);
 		TestTrue(TEXT("a released layer leaves no label on the record"),
-			Driver.Selection.SlotLabel.IsEmpty());
-		TestFalse(TEXT("...and no asset behind it"), Driver.Assets.HasSlotLayer());
-		TestTrue(TEXT("...nor a mask"), Driver.Assets.SlotMaskName.IsNone());
+			Driver.Selection.Slots[0].Label.IsEmpty());
+		TestFalse(TEXT("...and no asset behind it"), Driver.Assets.HasSlotLayer(0));
+		TestTrue(TEXT("...nor a mask"), Driver.Assets.Slots[0].MaskName.IsNone());
 	}
 
 	// --- The per-channel run-claim row: a body runs on more than one channel at once ---------------

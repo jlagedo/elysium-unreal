@@ -285,9 +285,12 @@ void FElysiumResolvedAnimation::AddReferencedObjects(FReferenceCollector& Collec
 	Collector.AddStableReference(&OverlaySequence);
 	Collector.AddStableReference(&OverlaySpace);
 	Collector.AddStableReference(&AdditiveSequence);
-	Collector.AddStableReference(&SlotSequence);
-	Collector.AddStableReference(&SlotSpace);
-	Collector.AddStableReference(&SlotAdditive);
+	for (FElysiumResolvedOverlaySlot& Slot : Slots)
+	{
+		Collector.AddStableReference(&Slot.Sequence);
+		Collector.AddStableReference(&Slot.AimSpace);
+		Collector.AddStableReference(&Slot.Additive);
+	}
 }
 
 void UElysiumAnimSubsystem::ReportMiss(const FElysiumAnimationIntent& Intent,
@@ -1008,10 +1011,16 @@ void UElysiumAnimSubsystem::ResolveSlotDeclaredAssets(const FString& OwnerStem,
 	}
 }
 
-void UElysiumAnimSubsystem::ResolveSlotLayer(const FElysiumAnimationRequest& Claim,
+void UElysiumAnimSubsystem::ResolveSlotLayer(int32 SlotIndex, const FElysiumAnimationRequest& Claim,
 	const FString& Stem, USkeletalMesh* Mesh, FElysiumAnimationSelection& OutSelection,
 	FElysiumResolvedAnimation& OutAssets)
 {
+	if (SlotIndex < 0 || SlotIndex >= ElysiumOverlay::NumSlots)
+	{
+		return;
+	}
+	FElysiumOverlaySlotRecord& OutRecord = OutSelection.Slots[SlotIndex];
+	FElysiumResolvedOverlaySlot& OutSlot = OutAssets.Slots[SlotIndex];
 	if (Claim.Label.IsEmpty())
 	{
 		// A claim that names no clip is a claim on the channel and nothing else — a producer holding
@@ -1021,7 +1030,8 @@ void UElysiumAnimSubsystem::ResolveSlotLayer(const FElysiumAnimationRequest& Cla
 	// The label is published whether or not it binds, for the same reason the base record's is: a
 	// layer that resolved nothing has to read as a named miss rather than as a body that is not
 	// layering at all.
-	OutSelection.SlotLabel = Claim.Label;
+	OutRecord.Label = Claim.Label;
+	OutRecord.Activity = Claim.Activity;
 
 	// The owner column is the include DAG's own answer and is never re-derived — the same rule the
 	// base resolution and every clip seam take. It is read even when the load below fails, so the
@@ -1029,7 +1039,7 @@ void UElysiumAnimSubsystem::ResolveSlotLayer(const FElysiumAnimationRequest& Cla
 	const FElysiumNpcClipSet* Set = GetClipSet(Stem);
 	if (const FElysiumNpcClip* Clip = Set != nullptr ? Set->Find(Claim.Label) : nullptr)
 	{
-		OutSelection.SlotOwnerStem = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
+		OutRecord.OwnerStem = Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner;
 	}
 
 	if (Mesh == nullptr)
@@ -1064,7 +1074,7 @@ void UElysiumAnimSubsystem::ResolveSlotLayer(const FElysiumAnimationRequest& Cla
 			*Claim.Label, *Stem, *Error));
 		return;
 	}
-	OutAssets.SlotSequence = Layer;
+	OutSlot.Sequence = Layer;
 
 	// **The layers this clip itself declares, resolved the way every host's are.** Retail's autolayer
 	// rule is recursive: the sequence in the overlay slot composes with its OWN declared layers,
@@ -1072,10 +1082,9 @@ void UElysiumAnimSubsystem::ResolveSlotLayer(const FElysiumAnimationRequest& Cla
 	// additive. The slot therefore carries the same trio the base channel does, resolved by the same
 	// rule from the same table, rather than a special case per symptom.
 	{
-		const FString SlotOwner = OutSelection.SlotOwnerStem.IsEmpty()
-			? Stem : OutSelection.SlotOwnerStem;
-		ResolveSlotDeclaredAssets(SlotOwner, Claim.Label, Mesh, OutAssets.SlotSpace,
-			OutAssets.SlotAimMaskName, OutAssets.SlotAdditive);
+		const FString SlotOwner = OutRecord.OwnerStem.IsEmpty() ? Stem : OutRecord.OwnerStem;
+		ResolveSlotDeclaredAssets(SlotOwner, Claim.Label, Mesh, OutSlot.AimSpace,
+			OutSlot.AimMaskName, OutSlot.Additive);
 	}
 
 	// The mask is the whole difference between a partial-body layer and a full-body replacement, and
@@ -1083,26 +1092,28 @@ void UElysiumAnimSubsystem::ResolveSlotLayer(const FElysiumAnimationRequest& Cla
 	// that carries none would compose over every bone, which is the opposite of what an overlay is.
 	if (const UElysiumAnimLayerMask* Mask = Layer->FindMetaDataByClass<UElysiumAnimLayerMask>())
 	{
-		OutAssets.SlotMaskName = Mask->Profile;
+		OutSlot.MaskName = Mask->Profile;
+		// Onto the record as well as the assets: every readout that shows a slot's weight has to be
+		// able to say which bones that weight applies to, and the record is what those readouts see.
+		OutRecord.MaskName = Mask->Profile;
 	}
 	else
 	{
 		// The body's own stem where the clip-set lookup above named no bank: a label the vocabulary
-		// does not carry leaves `SlotOwnerStem` empty, and a report reading `'label'@''` names nothing
+		// does not carry leaves the row's owner empty, and a report reading `'label'@''` names nothing
 		// a reader could go and look at.
-		const FString& Owner = OutSelection.SlotOwnerStem.IsEmpty()
-			? Stem : OutSelection.SlotOwnerStem;
+		const FString& Owner = OutRecord.OwnerStem.IsEmpty() ? Stem : OutRecord.OwnerStem;
 		ReportOnce(TEXT("nomask"), FString::Printf(
 			TEXT("'%s'@'%s' carries no baked bone mask, so it would compose at zero weight on every "
 				 "bone and pose nothing"),
 			*Claim.Label, *Owner));
 	}
 
-	// **Neither the envelope nor the rate is copied out beside the asset.** Both are already the
-	// claim's: `ElysiumAnimIntent::SlotWeightAt` rides the envelope over the claim's own phase into
-	// the record's `SlotWeight`, and the rate is exactly what `ClaimForSegment` divided the clip's
-	// authored length by to get the duration that phase is read against. A copy here would be a
-	// second place the layer's timing could be stated from, and nothing keeps two of them in step.
+	// **Neither the envelope nor the rate is copied out beside the asset.** Both belong to the LAYER
+	// (`FElysiumOverlayLayer`), which advances the one cycle its weight, its end and its phase are all
+	// read against; the rate is exactly what `ClaimForSegment` divided the clip's authored length by
+	// to get that cycle's length. A copy here would be a second place the layer's timing could be
+	// stated from, and nothing keeps two of them in step.
 }
 
 bool UElysiumAnimSubsystem::RefuseMaskedBase(const FElysiumAnimationIntent& Intent,
@@ -1143,7 +1154,7 @@ bool UElysiumAnimSubsystem::RefuseMaskedBase(const FElysiumAnimationIntent& Inte
 
 void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Intent,
 	USkeletalMesh* Mesh, FElysiumAnimationSelection& OutSelection,
-	FElysiumResolvedAnimation& OutAssets, const FElysiumAnimationRequest* SlotClaim)
+	FElysiumResolvedAnimation& OutAssets, const FElysiumOverlayStack* Overlay)
 {
 	OutAssets = FElysiumResolvedAnimation();
 
@@ -1153,14 +1164,23 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 	const FElysiumAnimationCatalog Catalog = BuildCatalog(Intent.Stem);
 	ElysiumAnimResolve::Resolve(Intent, Catalog, OutSelection);
 
-	// **The overlay slot is resolved ahead of every base rung, because it does not depend on one.**
+	// **The overlay slots are resolved ahead of every base rung, because they do not depend on one.**
 	// A layer composes over whatever the base turned out to be — including a base that resolved
 	// nothing at all — so a slot resolved after the base's own early returns would silently stop
 	// layering on exactly the bodies whose base pose already missed. `Resolve` above rebuilt the
-	// record from scratch, which is why the slot's fields are written after it rather than before.
-	if (SlotClaim != nullptr)
+	// record from scratch, which is why the slot rows are written after it rather than before.
+	//
+	// Every slot, in index order, which is composition order. A free slot resolves nothing and leaves
+	// its row empty; there is no compaction, because a row's index is where the layer composes.
+	if (Overlay != nullptr)
 	{
-		ResolveSlotLayer(*SlotClaim, Intent.Stem, Mesh, OutSelection, OutAssets);
+		for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
+		{
+			if (const FElysiumOverlayLayer* Layer = Overlay->LiveLayer(SlotIndex))
+			{
+				ResolveSlotLayer(SlotIndex, Layer->Request, Intent.Stem, Mesh, OutSelection, OutAssets);
+			}
+		}
 	}
 
 	if (OutSelection.Outcome == EElysiumAnimOutcome::GridStateRefused)
@@ -1398,6 +1418,9 @@ bool UElysiumAnimSubsystem::ResolveActivityClip(const FElysiumActivityClipReques
 	// The selected row's own authored fade, already reduced to 0 by `FadeSeconds()` on a hard cut.
 	// A producer that blends the clip in reads it here rather than re-finding the clip.
 	Out.FadeSeconds = Selection.FadeSeconds;
+	// The hard-cut bit itself, which an overlay layer's blend envelope reads directly — a zero fade
+	// and a snap are not the same statement, so it is carried rather than inferred from the fade.
+	Out.bSnap = Selection.bSnap;
 	// The activity's reach, asked over the TRANSLATED activity rather than the request's: a melee
 	// swing acquires at the maximum over every sequence the activity the vocabulary was actually
 	// searched for returns, and asking under the pre-translation name would answer 0 for every

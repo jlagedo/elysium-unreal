@@ -50,13 +50,35 @@ Consecutive rules sit 176 bytes apart, and every `ProcIndex` resolves inside the
 record naming a control bone within the model's bone count and an axis in `0..2`.
 
 The rig shape mostly follows Valve's documented convention for helper bones, which requires
-the helper and its control to be immediate children of the same parent. Across 77 rules in
-five captured models the control is a **sibling** of the driven bone on 56, is the driven
-bone's own parent on 19, and neither on 2. That tally is a narrow sample of the 3,123 rules
-the install carries, and the corpus holds shapes it has no bucket for: on `Lacroix`,
-`Bip01 L Ulna` and `Bip01 L Wrist` are driven by `Bip01 L Hand`, which is their own *child*.
-The evaluation tolerates every arrangement, because it inverse-rotates by the control bone's
-own parent whatever that turns out to be.
+**Census over the whole install** - 4,446 v2531 models, 262 declaring rules, **3,126 rules** -
+gives exactly three shapes and no others:
+
+| the control's relation to the driven bone | rules |
+|---|---|
+| sibling (same parent) | 2,183 |
+| the driven bone's own parent | 845 |
+| cousin | 98 - only two pairs, `L/R Hip <- L/R Thigh` (80) and `L/R Pectoral <- L/R Clavicle` (18) |
+| **a direct child of the driven bone** | **0** |
+| itself procedural | 0 |
+| carrying `Flags & 0x2` | 0 |
+| driving a root bone (`parent == -1`) | 0 |
+
+**This corrects an earlier claim here.** It said that on `lacroix.mdl` `Bip01 L Ulna` and
+`Bip01 L Wrist` are driven by `Bip01 L Hand`, "their own *child*". They are not: on that model
+`Bip01 L Ulna` (26), `Bip01 L Wrist` (27) and `Bip01 L Hand` (10) all have parent
+`Bip01 L Forearm` (9) - **siblings**, the ordinary case. No rule anywhere is driven by a direct
+child.
+
+The evaluation tolerates every arrangement regardless, because it inverse-rotates by the control
+bone's own parent whatever that turns out to be. Two structural exceptions:
+
+- **12 rules read a one-build-stale control.** On `tommy.mdl` and `ventrue_male_armor_2.mdl` the
+  control's bone index is *higher* than the driven bone's (`L/R Shoulder <- L/R UpperArm`,
+  `L/R Ulna <- L/R Hand`, `L/R Wrist <- L/R Hand`). Composition is ascending and the bone-to-world
+  array is persistent, so retail evaluates these against the control's **previous** build.
+- **All 18 `Pectoral` rules are pure translation** - the only rules whose `pos[6]` is not six copies
+  of one vector, and the only ones whose `quat[6]` is six copies of one quaternion. Every other rule
+  is a pure rotation at a fixed offset.
 
 ## Corpus
 
@@ -116,9 +138,14 @@ genuinely distinct rotations on **99.7%** of rules.
 
 So a driven bone is pinned at its bind offset from its parent and reoriented, and a
 comparison that ignores the rule diverges in orientation while the position holds. The
-exceptions are real but rare — `pos[6]` spreads by up to **3.01** source units and departs
-from bind by up to **3.59** on a few rules — so a reproduction must evaluate the positional
-term rather than assume it inert.
+exceptions are real but rare - and the two figures were being conflated. Install-wide over all
+3,126 rules the maximum **pairwise spread** within a `pos[6]` is **6.0** source units (the 18
+`Pectoral` rules; 3.01 is the deviation from the mean, half of it), and the maximum departure from
+bind is **3.66**. The bind-equality figure is tolerance-dependent: **3,059 of 3,126 (97.9%) pin the
+bone within 1e-4 source units of its bind offset**, and the 79.3% above is the 1e-5 column. The
+reimplementable statement is that **49 rules (1.6%) pin the bone somewhere other than bind and 18
+actually interpolate the position** - so evaluate the positional term rather than assume it inert,
+but it is a constant for 98% of rules and can be hoisted out of the hot path.
 
 Valve's authoring format names the same split. A `.vrd` helper declares one `<basepos>` —
 the helper bone's rest translation in its parent's coordinate system — apart from the
@@ -156,6 +183,30 @@ procedural bone are decoded and carried through composition, then discarded. Ove
 paired decoded-local and composed-local records for one actor, **no bone changes between
 the two stages**, procedural bones included — the substitution happens while bone-to-world
 is built, not while locals are prepared.
+
+## The stage is client-only, and it has three call sites
+
+`CalcProceduralBone` (`client.dll 0x1008b180`) has exactly three callers, all in `client.dll`:
+`C_BaseAnimating::BuildTransformations` (`0x1008fd00`, the ordinary entity pose build),
+`C_ServerRagdoll::vfunc123` (`0x10125b40`), and **`CGUIClientRenderable::vfunc11` (`0x1018aa60`) -
+the VGUI 3-D model panel**, so retail's own character-creation and inventory previews do apply the
+rule.
+
+`vampire.dll` carries structurally identical copies at `0x100c40e0` / `0x100c39a0` / `0x100c3ce0`,
+and **`0x100c40e0` has no call site of any kind** - no direct, no virtual, in no vtable, no thunk.
+The server's own matrix builder `Studio_BuildMatrices` (`0x100c3600`) contains only the mask gate,
+`QuaternionMatrix`, the `Flags & 0x2` split-inheritance branch and `ConcatTransforms`. **Server
+hitboxes and attachments are therefore computed from an uncorrected pose** - the shared
+`bone_setup` translation unit is linked into both halves and only the client half calls it.
+
+Two things pre-empt the rule per bone, both inside `BuildTransformations` and both *before*
+`CalcProceduralBone` in the same iteration: a **ragdoll**-simulated bone (marked in
+`boneSimulated[350]` by `IRagdoll::RagdollBone`) skips it entirely, and a **bone-merge name hit**
+on a followed entity jumps past it. A helper bone is never itself simulated, so on a ragdolling body
+the wrist and bicep twists still fire and read the *physics-driven* control matrix.
+
+`MAXSTUDIOBONES` is **350** (`int chain[351]` in `Studio_BuildMatrices`, `bool boneSimulated[350]`
+in `BuildTransformations`), not Source's 128.
 
 ## The bone-to-world array is persistent and partially updated
 
@@ -338,10 +389,19 @@ off is the ordering above: decode, blend, compose, then apply this rule, then sk
 
 ## Open questions
 
-- **`ProcType == 2` is out of scope rather than unverified.** It postdates this format
-  revision and no shipped model declares it, so its layout and semantics stay undecoded and
-  nothing in VtMB exercises them. Evidence that would change that: a shipped model declaring
-  it, or a decompilation of a v2531 consumer that reads `mstudioquatinterpbone_t`.
+- **`ProcType == 2` is now decoded, and still unused.** `DoQuatInterpBone` is at
+  `client.dll 0x1008ae50`, reached from `CalcProceduralBone` (`0x1008b180`) whose dispatch is a
+  two-arm `if` over `proctype` 1 and 2 and nothing else - **v2531 has no `AIMATBONE`,
+  `AIMATATTACH` or `JIGGLE` in the dispatcher.** `mstudioquatinterpbone_t` is 12 bytes
+  (`int control; int numtriggers; int triggerindex`, record-relative) and
+  `mstudioquatinterpinfo_t` is 48 (`float inv_tolerance; Quaternion trigger; Vector pos;
+  Quaternion quat`). Per trigger the weight is `1 - 2*acos(|dot(trigger, src)|) * inv_tolerance`
+  clamped at zero; below a total of `0.001` the first trigger is taken outright, otherwise the
+  contributions are normalised, `QuaternionAlign`ed and accumulated **with no final normalise**.
+  The scratch is `float weight[32]`, so **32 triggers is the hard cap**. Two latent defects, both
+  faithful to the era's Source and both unreachable here: the two early-out guards fall through to
+  `ConcatTransforms` with an **uninitialised** matrix, and `acos` is fed an **unclamped** dot.
+  **0 of 3,126 shipped rules declare it**, so it stays dead data - but its layout is no longer a gap.
 - **The partial-update behaviour is faithful but not yet adjudicated for the rebuild.**
   Reproducing it means reproducing the mask, and the mask bits are loader-written, so the
   cost is recomputing the usage flags from hitboxes, attachments and vertex LODs rather than

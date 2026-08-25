@@ -594,6 +594,14 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			// The entity side of the same hand: what the driven character is actually holding and
 			// what its weapon controller is doing with the buttons the world is draining.
 			UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  combat %s"), *Run.LabWeaponStatus());
+			// The overlay stack, every slot, in composition order. `layers` above is the BASE clip's
+			// declared closure — a different mechanism — so neither line stands in for the other.
+			const TArray<FString> Overlay = Run.LabOverlayStatus();
+			for (int32 Index = 0; Index < Overlay.Num(); ++Index)
+			{
+				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  %s %s"),
+					Index == 0 ? TEXT("slots ") : TEXT("       "), *Overlay[Index]);
+			}
 			if (Run.IsArena())
 			{
 				UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("  pins   %d"), Run.ArenaPins().Num());

@@ -303,6 +303,37 @@ FString FElysiumGreenRoomRun::LabWeaponStatus() const
 		*SwingText, Weapon->AcceptedSwingCount(), *Buttons);
 }
 
+TArray<FString> FElysiumGreenRoomRun::LabOverlayStatus() const
+{
+	TArray<FString> Rows;
+	const AElysiumMapActor* Map = GetMap();
+	if (Map == nullptr)
+	{
+		Rows.Add(TEXT("(no map actor)"));
+		return Rows;
+	}
+	const FElysiumAnimationSelection& Selection = Map->GetPlayerAnimSelection();
+	for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
+	{
+		const FElysiumOverlaySlotRecord& Row = Selection.Slots[SlotIndex];
+		if (!Row.IsValid())
+		{
+			Rows.Add(FString::Printf(TEXT("%d  (free)"), SlotIndex));
+			continue;
+		}
+		// Weight and cycle together, because either alone misreads: a layer at cycle 0.98 SHOULD be
+		// near zero weight on its way out, and one at cycle 0.5 should not.
+		Rows.Add(FString::Printf(
+			TEXT("%d  %s@%s  %s  w %.3f  cycle %.3f  age %.2fs%s"),
+			SlotIndex, *Row.Label,
+			Row.OwnerStem.IsEmpty() ? TEXT("?") : *Row.OwnerStem,
+			Row.Activity.IsEmpty() ? TEXT("(no activity)") : *Row.Activity,
+			Row.Weight, Row.Cycle, Row.AgeSeconds,
+			Row.bFinished ? TEXT("  [finished]") : TEXT("")));
+	}
+	return Rows;
+}
+
 AElysiumNpcBody* FElysiumGreenRoomRun::FindArenaCastBody(FElysiumEntityWorld& World,
 	const FString& TargetName) const
 {

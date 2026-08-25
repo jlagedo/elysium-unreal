@@ -92,11 +92,17 @@ namespace
 	// already divided the clip's authored length by its playback rate into one hold, and both the
 	// weight ramp and the cycle are read off that one number, so the layer cannot be weighed against
 	// a length other than the one it ends on.
-	bool ArmSegmentOnSlot(UElysiumBodyAnimInstance* Host, const FString& Stem,
+	bool ArmSegmentOnSlot(UElysiumBodyAnimInstance* Host, const FString& Stem, int32 SlotIndex,
 		const FElysiumClipSegment& Segment, const FElysiumClipIdentity& Identity, UAnimSequence* Anim,
 		const FElysiumAnimationRequest& Claim, TSet<FString>& ReportedRefusals,
 		UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh)
 	{
+		if (SlotIndex == INDEX_NONE)
+		{
+			// The stack refused the push — every slot held, or a claim with no clip length — and said
+			// so where it was refused. There is no slot to arm, and no second line to add.
+			return false;
+		}
 		// The host the caller already resolved off the body, narrowed rather than fetched again: the
 		// slot blend belongs to the biped graph, and every body reaching here has had its animation
 		// host looked up one line earlier.
@@ -137,8 +143,9 @@ namespace
 			Anims->ResolveSlotDeclaredAssets(Identity.OwnerStem, Identity.Label, Mesh, AimSpace,
 				AimMaskName, Additive);
 		}
-		return Graph->PlaySlotLayer(Identity, Anim, Mask != nullptr ? Mask->Profile : NAME_None,
-			Claim, AimSpace, AimMaskName, Additive);
+		return Graph->PlaySlotLayer(SlotIndex, Identity, Anim,
+			Mask != nullptr ? Mask->Profile : NAME_None, Claim, Segment.bSnap, AimSpace, AimMaskName,
+			Additive);
 	}
 }
 
@@ -402,6 +409,25 @@ void UElysiumEntityBodies::StopHeldReactionPose(USkeletalMeshComponent* Body,
 	Inst->StopOneShot(Held.BlendOutSeconds);
 }
 
+int32 UElysiumEntityBodies::BodyOverlaySlot(USkeletalMeshComponent* Body, uint32 Handle) const
+{
+	if (Body == nullptr || Handle == 0)
+	{
+		return INDEX_NONE;
+	}
+	if (const AElysiumNpcBody* Motor = Cast<AElysiumNpcBody>(Body->GetAttachParentActor()))
+	{
+		return Motor->OverlaySlotForHandle(Handle);
+	}
+	if (const AElysiumMapActor* Map = Cast<AElysiumMapActor>(GetOwner()); Map != nullptr
+		&& Map->IsPlayerVisual(Body))
+	{
+		return Map->PlayerOverlaySlotForHandle(Handle);
+	}
+	// A body with no driver allocated no slot, exactly as it holds no claim.
+	return INDEX_NONE;
+}
+
 const FElysiumAnimationRequest* UElysiumEntityBodies::ActiveBodyAnimRequest(
 	USkeletalMeshComponent* Body, EElysiumAnimChannel Channel) const
 {
@@ -577,8 +603,12 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// The mask comes off the ASSET, which is the only thing that can answer it (`UElysiumAnimLayerMask`
 	// is metadata the bake writes onto the sequence), and is never guessed from the label.
 	const bool bPlayed = Segment.Channel == EElysiumAnimChannel::UpperBody
-		? ArmSegmentOnSlot(Inst, Stem, Segment, Identity, Anim, Claim, ReportedSlotRefusals,
-			Anims, Body->GetSkeletalMeshAsset())
+		// **The slot the stack allocated, not a fixed one.** A shot fired while a reload runs lands in
+		// the next free index and composes on that index's own node through that index's own mask;
+		// arming slot 0 regardless would overwrite the reload's pins with the shot's and lose one of
+		// the two layers retail composes.
+		? ArmSegmentOnSlot(Inst, Stem, BodyOverlaySlot(Body, ClaimHandle), Segment, Identity, Anim,
+			Claim, ReportedSlotRefusals, Anims, Body->GetSkeletalMeshAsset())
 		// The producer's `m_flPlaybackRate` goes to the host with the clip. Every caller that names
 		// none hands over 1.0, which is the value `ResetSequenceInfo` leaves behind, so nothing that
 		// never set a rate is changed by one that does.
@@ -627,7 +657,18 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	}
 	else if (FElysiumSegmentClaims* Claims = SegmentClaims.Find(FObjectKey(Body)))
 	{
-		Claims->Set(Segment.Channel, 0);
+		// **The overlay channel clears only a handle the stack has actually let go** (LIFE10). Every
+		// other channel holds ONE claim, so a new clip on it replaced whatever was there and the
+		// remembered handle is dead by construction. The overlay channel holds four layers allocated
+		// lowest-free, so an ordinary shot takes its own slot and displaces nothing — clearing the row
+		// there would strand a held layer standing in another slot on a producer with no handle left
+		// to give it back, and a held layer carries no expiry for anything else to end it with.
+		const bool bDisplaced = Segment.Channel != EElysiumAnimChannel::UpperBody
+			|| BodyOverlaySlot(Body, Claims->Get(Segment.Channel)) == INDEX_NONE;
+		if (bDisplaced)
+		{
+			Claims->Set(Segment.Channel, 0);
+		}
 		if (Claims->IsEmpty())
 		{
 			// Nothing left to remember, so the body leaves the map rather than sitting in it as an
@@ -671,14 +712,24 @@ void UElysiumEntityBodies::ReleaseNpcSegment(USkeletalMeshComponent* Body)
 		{
 			continue;
 		}
+		// **Which SLOT this run held, asked BEFORE the claim goes back** — after it, the handle names
+		// nothing and the pose below could not be addressed.
+		const int32 SlotIndex =
+			static_cast<EElysiumAnimChannel>(Channel) == EElysiumAnimChannel::UpperBody
+				? BodyOverlaySlot(Body, Claims.Handles[Channel])
+				: INDEX_NONE;
 		ReleaseBodyAnimRequest(Body, Claims.Handles[Channel]);
 		// **The pose goes down with the claim**, the same rule the held reaction's release states: a
-		// layer that no longer owns the overlay slot must not keep composing over the base pose. The
+		// layer that no longer owns its overlay slot must not keep composing over the base pose. The
 		// driver's own next publish would clear it a frame later, and that frame is a shot still
 		// visibly on the body after the producer ended it.
-		if (static_cast<EElysiumAnimChannel>(Channel) == EElysiumAnimChannel::UpperBody)
+		//
+		// **That one slot, and not the stack.** This call ends the RUN, and a run holds one slot; the
+		// wholesale take-down belongs to a body that is being released entirely, where there is no
+		// producer left to come back for any of them.
+		if (SlotIndex != INDEX_NONE)
 		{
-			UElysiumBipedAnimInstance::StopSlotLayerOn(Body);
+			UElysiumBipedAnimInstance::StopSlotLayerOn(Body, SlotIndex);
 		}
 		UE_LOG(LogElysiumBodies, Verbose, TEXT("segment claim on %s (%s) released by its run"),
 			*GetNameSafe(Body),

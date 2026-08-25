@@ -8,6 +8,7 @@ documents:
   - {path: project/plans/input.md, kind: plan, owner: input, subject: open-task specs for the input path}
   - {path: project/plans/spine.md, kind: plan, owner: runtime, subject: open-task specs for the runtime spine and camera director}
   - {path: project/plans/theatre.md, kind: plan, owner: choreographed scenes, subject: open-task specs for the theatre cinematic}
+  - {path: project/plans/animation-critical-path.md, kind: plan, owner: animation, subject: the ordered programme that closes every measured animation defect with its traps instruments and gates}
   - {path: project/plans/animation.md, kind: plan, owner: animation, subject: open-task specs for the character life programme}
   - {path: project/plans/three-cs.md, kind: plan, owner: movement, subject: open-task specs for the character camera controls slice}
   - {path: project/plans/pipeline.md, kind: plan, owner: pipeline, subject: open-task specs for the pipeline backlog}
@@ -49,6 +50,8 @@ documents:
   - {path: vtmb/animation_and_movers.md, kind: vtmb-fact, owner: animation, subject: skeletal animation and brush movers}
   - {path: vtmb/wielded_weapons.md, kind: vtmb-fact, owner: wielded weapons, subject: item model roles equip binding follow-attach composition and the wield-model corpus}
   - {path: vtmb/procedural_bones.md, kind: vtmb-fact, owner: animation, subject: procedural bones and the persistent pose array}
+  - {path: vtmb/activity_enum.md, kind: vtmb-fact, owner: animation, subject: the ACT_* numeric enum the activity registry and sequence selection with its translation chain}
+  - {path: vtmb/animation_events.md, kind: vtmb-fact, owner: animation, subject: studio animation events the two dispatchers and the complete event code vocabulary}
   - {path: vtmb/animation_rig_resolution.md, kind: vtmb-fact, owner: animation, subject: global sequence numbering include-model resolution the load-time bone remap the NPC melee selector and the Elysium comparison with its capture procedure}
   - {path: vtmb/secondary_motion.md, kind: vtmb-fact, owner: animation, subject: bone-chain and renderer-cloth secondary motion}
   - {path: vtmb/mdl-coverage-and-gaps.md, kind: research-brief, owner: models, subject: MDL v2531 decode coverage gaps and Unreal opportunity}

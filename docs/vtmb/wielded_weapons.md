@@ -213,21 +213,36 @@ Equip and detach (`FUN_10252a90`, slot `+0x4ac`) are a symmetric pair on the sam
 | `+0x328` — `(entity*)` setter, parent-shaped | `(owner)` | `(NULL)` |
 | `m_hOwner` | set from the owner handle | cleared to `0xffffffff` |
 
-*Uncertain:* the literal enumerators for `0xb` and `6`. No string in `vampire.dll` or `engine.dll`
-names them, and the reference SDK trees on hand postdate `MOVETYPE_FOLLOW`'s removal from
-`MoveType_t` — one carries the comment *"This is needed due to the removal of `MOVETYPE_FOLLOW`"*
-beside the `EF_BONEMERGE` replacement, confirming the enumerator existed without recording its
-value. By call-site role `0xb` is the movetype used while wielded and `6` the movetype used while
-detached. **What would close it:** a 2003–2004-era `movetype_t` header.
+**`0xb` is `MOVETYPE_FOLLOW` and `0xc` is `MOVETYPE_CARRIED`**, named by the engine's own strings.
+`CBaseEntity::PhysicsSimulate` (`0x10040390`) switches on the movetype and dispatches `0xb` to a
+handler whose `DevWarning` reads *"%s movetype FOLLOW with NULL aiment"* (`0x1053b2c8`) and `0xc` to
+one reading *"%s movetype CARRIED with NULL aiment"* (`0x1053a7f4`). The rest of the switch is
+`0`/`7` none, `1` parent, `4` step, `5`/`6` toss, `8` pusher, `9` noclip, `0xd` custom — so `6`, the
+detached value, is the toss movetype. `PhysicsFollow` copies the aim entity's absolute origin **and**
+angles every tick; `PhysicsCarried` copies origin only.
+
+**`+0x328` is `CBaseEntity::SetOwnerEntity` (vtable slot 202), not a parent setter.** The
+parent-shaped call in the same function is **`CBaseEntity::SetAimEnt` (`0x1009ee80`)**, writing the
+wearer's handle into **`m_hAimEnt` @ `+0x37c`** — that field, not a move parent, is what the bone
+merge and `GetAttachment` both resolve through. `CBaseCombatCharacter::ObjectHand_Attach`
+(`0x1032c6a0`), the physics-hands carry path, runs the identical `SetMoveType(0xb)` + `SetAimEnt` +
+`SetOwnerEntity` triple; those are the only two held-object callers of `SetAimEnt` in the module.
 
 `CBaseEntity::FollowEntity` and `InputFollowEntity` have zero cross-references in `vampire.dll`,
 and no receive table in `client.dll` carries a moveparent, aiment or follow property for a weapon
 class — the only `"moveparent"` property in the binary belongs to `DT_Beam`. The binding is the
-movetype and parent setters above, which is why those names are absent.
+movetype and aim-entity setters above, which is why those names are absent.
 
 ### There is no separate holster path
 
-Detach fully releases: `m_hOwner` cleared, movetype changed, parent nulled. Every non-trivial
+Holster (`0x10253ca0`, slot 316) **leaves the binding entirely intact** — it clears `m_bInReload`,
+cancels the pending think, sends `ACT_VM_LOWER` to the view model when switching to another weapon,
+sets the owner's next-attack time from that clip's duration, calls `Inventory_Unwield`, and then
+`Hide()` (slot 66). It never touches `m_hAimEnt` or the movetype, so a holstered weapon stays
+`MOVETYPE_FOLLOW`, stays aim-entity-bound and is still bone-merged every frame; it is simply not
+drawn. There is no scabbard, no belt bone and no stow attachment.
+
+Detach fully releases: `m_hOwner` cleared, movetype changed, aim entity nulled. Every non-trivial
 virtual in the seventeen slots between equip (`+0x468`) and detach (`+0x4ac`) is a trace helper, a
 handle resolver, a jump-table forwarder or a no-op stub; none touches `m_hOwner`, `+0x174`,
 `+0x328` or the wield-model accessors. No virtual implements "stay owned and parented, stop being
@@ -335,6 +350,89 @@ wearer most of its skeleton fails the match and runs on those clips. Its one shi
 `chang2.mdl`, declares all 30, so in the shipped game every skinned bone is overwritten by the
 wearer. It is nonetheless an ordinarily equipped weapon (§7), not a body.
 
+### There are two merges, and they disagree
+
+`C_BaseAnimating::BuildTransformations` above is the **client** merge — the one on screen. The
+**server** has a second, structurally different one, and every query that asks the server where a
+weapon is goes through it.
+
+`CBaseAnimating::GetBoneTransform` (`0x100927f0`) starts from the follower's own bone cache and,
+when the movetype is `0xb`/`0xc` and `m_hAimEnt` resolves, walks up the follower's parent chain
+looking for a name match on the leader — but it accepts a leader bone **only if
+`leaderBone.flags@0x88 & 0x0C`** (used-by-hitbox | used-by-attachment). On a match above the
+requested bone it re-roots rather than copying:
+
+```text
+out = leaderAncestorToWorld · ( ownAncestorToWorld⁻¹ · ownBoneToWorld )
+```
+
+The client applies no flag filter at all. Measured on both Malkavian player bodies, the seven prop
+bones (`Bat`, `bush hook`, `handle`, `gerber`, `Sledgehammer`, `Cylinder01`, `tire iron`) all read
+`0xfff0` — **rejected by the server filter, accepted by the client**. So for a `handle`-mounted
+katana the client copies the wearer's `handle` matrix wholesale while the server skips it and
+matches at `Bip01 R Hand`, composing the weapon's own hand→handle delta instead. The two answers
+differ by the per-sex bind calibration *plus* the prop bone's animated motion, which reaches 180°
+and 2.5 m in the attack and stealth-kill clips. **A server-side `GetAttachment` on a melee weapon
+mid-swing does not agree with the drawn frame.**
+
+`GetAttachment` (`0x10093000`, vtable `+0x418`) performs its own independent redirect of the same
+shape: it resolves the attachment's bone name against the leader and, on a hit, takes the leader's
+transform for it. Attachment indices are **1-based** — `LookupAttachment` returns `found + 1` and
+`0` means not found, and `GetAttachment(int)` rejects anything below 1.
+
+**Neither merge caches anything.** Both run an O(follower bones x leader bones) case-insensitive
+`_strcmpi` scan every frame (client) or every query (server). There is no name-to-index map to
+build or invalidate: v2531's `studiohdr` is exactly 424 bytes and has no `bonetablebynameindex`.
+
+### The bone flags at `+0x88`, decoded
+
+Measured across 25,408 bones of every `models/weapons/**` and `models/character/**` model, by
+correlating each bit against the self-or-descendant closure of skin / attachment / hitbox use:
+
+| bit | meaning | agreement |
+|---|---|---|
+| `0x01` | procedural bone (axis-interp helper) | exact — set on `Wrist`, `Bicep`, `Ankle`, `Shin`, `Quadricep`, `Ulna`, `Shoulder`, `Elbow`, `Knee`, `Femoris`, `Hip`, `Pectoral` and nothing else |
+| `0x02` | the `BuildTransformations` entity-rotation branch | set on `Bip0N Spine1` only, 588 bones corpus-wide |
+| `0x04` | used by hitbox, self or descendant | **25,408 / 25,408** |
+| `0x08` | used by attachment, self or descendant | 24,940 / 25,408 (residue is LOD and include-model related) |
+| `0x10` … `0x8000` | used by vertex, LOD0 … LODn | — |
+
+`BONE_USED_BY_ANYTHING` is **`0xfffc`**, pushed literally at `client.dll` `0x1008fdb3`, `0x1008fe1e`,
+`0x10090374` and `0x100905c9`. Worked example, `w_f_m37`: `Bip01` = `0x18` (ancestor of both a
+skinned bone and an attachment-bearing one), the Biped chain down to `Bip01 R Hand` = `0x10`,
+`Box02`/`Box01` = `0x10`, and `hands box`/`stock`/`pump handle` = `0x08` — attachment-bearing,
+skin-free, which is exactly what they are.
+
+### The attachment tables, and why they are dead
+
+33 of the 67 real wield models declare 59 attachment records between them; 34 declare none.
+
+| name | models |
+|---|---|
+| `muzzleflash` | 8 — `w_{f,m}_crossbow` (bone `muzzleflash`), `w_{f,m}_deserteagle` (`body`), `w_{f,m}_rifle_rem700` (`bolt`), `w_{f,m}_rifle_steyraug` (`Bip01 R Hand`) |
+| `muzzle` | 2 — `w_{f,m}_flamethrower`, bone `switch` |
+| `SlamPoint` | 2 — `w_{f,m}_sledgehammer`, bone `Sledgehammer` |
+| `slampoint` | 1 — `w_m_bushhook` only; `w_f_bushhook` declares none |
+| `particle` | 2 — `w_{f,m}_torch`, bone `Bat` |
+| `'0'` / `'1'` / `'2'` | the other 44 — glock, thirtyeight, anaconda, m37, dragonbreath, mac10, uzi, supershotgun, deserteagle slots 2-3, handleclaws |
+
+A wield model's numeric slots are addressed **positionally, by animation event**: muzzle-flash
+events `5001/5003/5011/5013/5021/5023/5031/5033` take `GetAttachment(slot + 1)`, brass ejection
+`6001`-`6004` takes `GetAttachment(ev - 6000)`, clip ejection `6011`-`6014` takes
+`GetAttachment(ev - 0x177A)`. **Every one of the 67 wield models carries zero animation events**, so
+nothing ever fires them. The only by-name lookups on a held weapon are
+`CBaseCombatCharacter::Weapon_ShootPosition` (`0x103338c0`) and `DrawMuzzleOverlay` (`0x1033e7e0`),
+both asking for `"muzzleflash"` — which is why only those 8 models get a geometric shot origin and
+the other 25 armed models fall back to `m_HackedGunPos` rotated by the character's eye angles.
+
+`w_f_m37` and both dragonbreaths name their slots `'0'` and `'1'`, on `pump handle` — so the
+`hands box` branch exists to position two attachment points that no shipped code path can reach.
+It is inert authoring residue: the viewmodel rigs (`v_m37`, `v_dragonbreath`) each declare one
+attachment `'0'` on `Bip01 R Forearm` and their sequences *do* fire event 5001, 48 times across the
+18 view models. The wield files are those rigs re-exported with the leftover carried over; on the
+male M37 the artist reparented it to the hand, on the female M37 and both dragonbreaths they did
+not. [inferred — the provenance, not the inertness]
+
 ## 4. First person suppresses submission only
 
 The camera gate on a held weapon's draw submission is owned by
@@ -400,8 +498,13 @@ firearms carry 2–13 sub-rig bones (`body`/`slide`/`mag`, `stock`/`bolt`,
 
 **The mount bone is the unique skinned root under a hand**, and it is read from the model rather
 than assumed: `w_m_m37` and `w_m_submachine_mac10` park unskinned authoring leftovers beside the
-real mount, and `w_f_m37` and `w_f_dragonbreath` hang the same leftovers from a second root outside
-the Biped chain entirely.
+real mount, and `w_f_m37`, `w_f_dragonbreath` and `w_m_dragonbreath` hang the same leftovers from a
+second **branch off `Bip01`** — through a bone named `hands box`, whose parent is bone index 0, the
+Biped root itself. It is a sibling of `Bip01 Pelvis`, not a second root, and it is the only place in
+the corpus where a wield model's sub-rig leaves the arm chain. Measured skin influence on all three:
+`Box02` 832/832/3075 and `Box01` 117/117/105, `hands box` → `stock` → `pump handle` **zero**. The
+mount is `Box02` under `Bip01 R Hand` on every one of them, exactly as on the male M37; the branch
+moves no pixel.
 
 ### A weapon's moving part exists on both models and animates on only one
 
@@ -487,6 +590,22 @@ relaxed-move layers never move a prop bone; **melee attack clips do** — `baseb
 `sledgehammer_attack_*` and `stake_attack_*`, reaching 179.99° on `gerber` and `Cylinder01` and
 21.4 in translation on `bush hook`. `stealth_success_victim_*` and `stealth_failure_victim_*` carry
 prop bones through whole-body reactions at up to 214 in.
+
+**The prop bones are inside the animation bone masks, and that is what swings a melee weapon.**
+Because the client merge copies the wearer's `handle` / `Bat` / `bush hook` world matrix wholesale
+onto the weapon's same-named mount, animating the wearer's prop bone *is* the mechanism. The shared
+`move_and_ranged` banks carry four masks; the 49-bone one (used by 1,691 male / 1,654 female clips
+— every `*_aim_layer` cell, every ranged bobble and relaxed-move layer, and two-handed melee) keeps
+**all seven** props, while the 24-bone right-arm mask (12 clips, one-handed melee) keeps exactly the
+five right-hand props and omits `bush hook` and `Sledgehammer`, the two left-hand ones. An upper-body
+overlay that owned the arms but not the prop bone would leave the weapon swinging off the walk cycle
+while the arms played the attack — so the mask claims them. The mask follows the weapon's **grip**,
+not ranged-versus-melee.
+
+**Per-body exception:** `bush hook` is not universal. All 28 male player bodies carry it; **26 of 28
+female bodies do not** — the two that do are `nosferatu_female_armor_2` and
+`toreador_female_armor_2`. A `bush hook` mount on any other female body finds no match and falls back
+to FK off `Bip01 L Hand`, which is the ordinary unmatched-bone rule and lands the weapon correctly.
 
 ### `Box01` and `Box02` are vestigial
 

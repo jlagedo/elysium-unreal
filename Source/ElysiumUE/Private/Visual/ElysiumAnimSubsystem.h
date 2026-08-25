@@ -11,6 +11,7 @@
 #include "Visual/ElysiumNpcClips.h"
 
 #include "ElysiumAnimationIntent.h"
+#include "ElysiumOverlayStack.h"
 #include "Visual/ElysiumAnimationResolve.h"
 
 #include "ElysiumAnimSubsystem.generated.h"
@@ -36,6 +37,44 @@ struct FElysiumResolvedGrid
 	float AxisMax[2] = { 0.f, 0.f };
 
 	bool IsValid() const { return Space != nullptr; }
+};
+
+// One overlay slot's resolved assets — the layer a producer armed, plus the trio the layer's OWN
+// clip declares (LIFE10).
+//
+// **The layer's autolayer closure is resolved by the same rule the base channel's host gets**, which
+// is retail's rule applied recursively: the motion stays `Sequence`, its declared aim grid composes
+// OVER it (`BS_<layer>_<slot clip>`, steered by the same two aim parameters, gated by the grid's own
+// mask), and its declared `_delta` composes additively after that. A layer that declares nothing —
+// every reload layer — leaves the trio null and the sequence stands alone.
+//
+// The masks are NAMES rather than resolved `UBlendProfile*`s, for the reason `OverlayMaskName` below
+// is: a profile belongs to one skeleton and the node rebuilds its per-bone weights against the
+// skeleton being played, while a bank owns every masked layer.
+//
+// **The envelope and the rate are deliberately not here.** Both belong to `FElysiumOverlayLayer`,
+// which advances the cycle they are read against; a second copy beside the asset is a number the
+// graph could be driven from that nothing keeps in step with the layer it belongs to.
+struct FElysiumResolvedOverlaySlot
+{
+	TObjectPtr<UAnimSequence> Sequence = nullptr;
+	TObjectPtr<UBlendSpace> AimSpace = nullptr;
+	TObjectPtr<UAnimSequence> Additive = nullptr;
+	// The layer's own baked bone mask. A layer with no mask owns the whole rig, which is never what a
+	// partial-body overlay means — the resolver warns rather than composing one silently.
+	FName MaskName;
+	FName AimMaskName;
+
+	bool IsValid() const { return Sequence != nullptr || AimSpace != nullptr; }
+
+	void Reset()
+	{
+		// **Every field the resolver writes, not just the pair the validity test reads.** `AimSpace`,
+		// `AimMaskName` and `Additive` come out of `ResolveSlotDeclaredAssets` on the same pass and go
+		// stale by the same argument; leaving them makes the slot answer valid off a grid under a
+		// record that names no layer.
+		*this = FElysiumResolvedOverlaySlot();
+	}
 };
 
 // What a selection resolved to on THIS body's skeleton (CCC4). Separate from the record on purpose:
@@ -76,42 +115,35 @@ struct FElysiumResolvedAnimation
 	// a profile taken off the layer's skeleton gates a shifted set of bones and logs nothing.
 	FName OverlayMaskName;
 
-	// --- The overlay SLOT, which is a different thing from the three layers above ------------------
+	// --- The overlay SLOTS, which are a different thing from the three layers above ----------------
 	//
 	// Those are the bake-time autolayers the base channel's own resolved host DECLARES — they belong
-	// to the base clip and travel with it. This is retail's `CBaseAnimatingOverlay` slot 0: a layer a
+	// to the base clip and travel with it. These are retail's `CBaseAnimatingOverlay` slots: layers a
 	// PRODUCER armed on the UpperBody channel, composed over whatever owns the base pose and outliving
-	// any number of base selections underneath it. Ranged fire, reload and dry-fire are the shipped
-	// consumers. Retail has four such slots; no weapon path ever addresses one but slot 0, so one is
-	// what exists here.
-	TObjectPtr<UAnimSequence> SlotSequence = nullptr;
-	// **The layers the slot's OWN clip declares — retail's autolayer rule applied recursively to the
-	// sequence in the overlay slot, the same rule the base channel's host gets.** The shot motion
-	// stays `SlotSequence`; its declared aim grid composes OVER it (`BS_<layer>_<slot clip>`,
-	// steered by the same two aim parameters, gated by the grid's own mask), and its declared
-	// `_delta` composes additively after that. A slot clip that declares nothing — every reload
-	// layer — leaves all three null and the sequence stands alone.
-	TObjectPtr<UBlendSpace> SlotSpace = nullptr;
-	FName SlotAimMaskName;
-	TObjectPtr<UAnimSequence> SlotAdditive = nullptr;
-	// The layer's baked bone mask, by NAME, for the same reason `OverlayMaskName` above is a name: a
-	// `UBlendProfile` belongs to one skeleton and the mask has to be resolved against the skeleton
-	// being played. A layer with no mask owns the whole rig, which is never what a partial-body
-	// overlay means — the resolver warns rather than composing one silently.
-	FName SlotMaskName;
-	// **The envelope and the rate are deliberately not here.** Both are already folded into the one
-	// duration the claim carries: `ElysiumAnimIntent::SlotWeightAt` rides the envelope over the
-	// claim's own phase into `FElysiumAnimationSelection::SlotWeight`, and the rate is what
-	// `ClaimForSegment` divided the clip's authored length by to get that duration. A second copy
-	// beside the asset is a number the graph could be driven from that nothing keeps in step with
-	// the claim it belongs to.
+	// any number of base selections underneath them. Ranged fire, reload and dry-fire are the shipped
+	// consumers. **Four of them, in slot index order, which is composition order.**
+	FElysiumResolvedOverlaySlot Slots[ElysiumOverlay::NumSlots];
 
 	bool IsValid() const { return Sequence != nullptr || Space != nullptr; }
 	bool HasUpperBodyLayer() const
 	{
 		return OverlaySequence != nullptr || OverlaySpace != nullptr || AdditiveSequence != nullptr;
 	}
-	bool HasSlotLayer() const { return SlotSequence != nullptr || SlotSpace != nullptr; }
+	bool HasSlotLayer(int32 SlotIndex) const
+	{
+		return SlotIndex >= 0 && SlotIndex < ElysiumOverlay::NumSlots && Slots[SlotIndex].IsValid();
+	}
+	bool AnySlotLayer() const
+	{
+		for (const FElysiumResolvedOverlaySlot& Slot : Slots)
+		{
+			if (Slot.IsValid())
+			{
+				return true;
+			}
+		}
+		return false;
+	}
 };
 
 // Which rule chose an NPC's standing idle. Reported by the console verbs and the Cog window so a
@@ -235,30 +267,33 @@ public:
 	// `Mesh` may be null — the record is still complete, and `OutAssets` simply comes back empty.
 	// `docs/architecture/animation-architecture.md` section 3.3.
 	//
-	// `SlotClaim` is the standing overlay-slot claim (retail's `CBaseAnimatingOverlay` slot 0), or
-	// null when nothing is layered on this body. It is a parameter rather than a field of the intent
-	// because it is a SECOND request on the same body: the intent describes what the base channel is
-	// asking for, and the slot composes over whatever answer that gets rather than participating in
-	// it. Its clip is resolved here, and not in the pure resolver, because the thing that decides a
+	// `Overlay` is the body's standing overlay stack (retail's `CBaseAnimatingOverlay`), or null when
+	// nothing is layered on this body. It is a parameter rather than a field of the intent because it
+	// is a SECOND set of requests on the same body: the intent describes what the base channel is
+	// asking for, and a layer composes over whatever answer that gets rather than participating in
+	// it. Its clips are resolved here, and not in the pure resolver, because the thing that decides a
 	// layer is playable is its baked bone mask — metadata that only exists once the asset is loaded.
 	//
-	// It has no default: a caller that does not state it is a caller whose layer nobody looked for,
+	// It has no default: a caller that does not state it is a caller whose layers nobody looked for,
 	// and a silently dropped layer is a body that stops shooting with nothing saying so.
 	void ResolveAnimation(const FElysiumAnimationIntent& Intent, USkeletalMesh* Mesh,
 		FElysiumAnimationSelection& OutSelection, FElysiumResolvedAnimation& OutAssets,
-		const FElysiumAnimationRequest* SlotClaim);
+		const FElysiumOverlayStack* Overlay);
 
 	// The overlay slot's own resolution: the layer clip the claim named and its baked mask, written
 	// onto the record and the assets beside whatever the base channel resolved to.
 	//
-	// **A separate door because the slot is a separate request, not a second base resolver.** It
+	// `SlotIndex` names which of the four rows the answer lands in — composition order, never a
+	// packing order, so a free slot between two live ones stays free.
+	//
+	// **A separate door because a slot is a separate request, not a second base resolver.** It
 	// reads and writes nothing the base selection owns — a miss here leaves the base pose exactly as
 	// it resolved — and it depends on no rung of the base ladder, which is why `ResolveAnimation`
 	// above runs it ahead of every one of them. `FElysiumAnimationDriver::ResolveSlotClaim` calls it
 	// directly on the two `Tick` exits that publish a record without re-entering the base pass at
 	// all; routing those through `ResolveAnimation` instead would re-run a selection those exits
 	// exist to skip.
-	void ResolveSlotLayer(const FElysiumAnimationRequest& Claim, const FString& Stem,
+	void ResolveSlotLayer(int32 SlotIndex, const FElysiumAnimationRequest& Claim, const FString& Stem,
 		USkeletalMesh* Mesh, FElysiumAnimationSelection& OutSelection,
 		FElysiumResolvedAnimation& OutAssets);
 

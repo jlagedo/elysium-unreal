@@ -956,6 +956,12 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, EElysiumAnimPriori
 			// so the channel travels with the clip rather than being inferred from the activity name
 			// downstream: only the producer knows which of retail's two mechanisms it just asked for.
 			Segment.Channel = Channel;
+			// **The clip's own hard-cut bit, and it is the only input to the layer's blend envelope.**
+			// Retail's `SetLayer` writes `0.2` at each end and zeroes both for a SNAP sequence, so an
+			// attack layer is at full weight on the frame it is armed while a reload ramps over a
+			// fifth of its cycle. It travels from the resolution that answered it because nothing
+			// downstream can ask the clip again for the sequence THIS pick chose.
+			Segment.bSnap = Clip.bSnap;
 
 			float Played = 0.0f;
 			if (Char->PlayAnimSegment(Segment, &Played) && Played > 0.0f)

@@ -689,6 +689,11 @@ bool AElysiumMapActor::ReleasePlayerAnimRequest(uint32 Handle)
 	return PlayerAnimDriver.IsValid() && PlayerAnimDriver->ReleaseRequest(Handle);
 }
 
+int32 AElysiumMapActor::PlayerOverlaySlotForHandle(uint32 Handle) const
+{
+	return PlayerAnimDriver.IsValid() ? PlayerAnimDriver->Overlay.FindByHandle(Handle) : INDEX_NONE;
+}
+
 int32 AElysiumMapActor::ReleaseAllPlayerAnimRequests()
 {
 	// Deliberately NOT built on demand, unlike the submit above: releasing nothing needs no driver.

@@ -1233,6 +1233,23 @@ def debug_cast(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> No
     _debug(ctx, "cast", [*(args or ()), *ctx.args])
 
 
+@debug_app.command("compose", context_settings=PASSTHROUGH)
+def debug_compose(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> None:
+    """Record the pose the animation graph composes, headless, and score it against the capture.
+
+    Usage: `debug compose <weapon> <hz>`, both optional (default `item_w_ithaca_m_37` at 60 Hz).
+    Drives a body on a real map through the real input router -- strafe, then strafe with the
+    trigger held, then a reload -- and writes the player body's own component-space bone transforms
+    per frame beside the four overlay slot rows that produced them.
+
+    This is the half `Elysium.Content.RigCompose` cannot reach: that test evaluates baked sequences
+    directly and never stands a graph up, so a slot published at the wrong weight, a bone mask
+    resolved against the wrong skeleton or a chain composed in the wrong order is invisible to it.
+    `-ElysiumMap=<name>` picks the host map.
+    """
+    _debug(ctx, "compose", [*(args or ()), *ctx.args])
+
+
 @debug_app.command("greenroom", context_settings=PASSTHROUGH)
 def debug_greenroom(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> None:
     _debug(ctx, "greenroom", [*(args or ()), *ctx.args])

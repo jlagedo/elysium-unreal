@@ -262,6 +262,9 @@ public:
 	// driver, or give a claim back. Same handle contract as `AElysiumNpcBody`'s pair; the driver is
 	// built on demand so a claim ahead of the first player anim pass is not dropped.
 	uint32 SubmitPlayerAnimRequest(const struct FElysiumAnimationRequest& Request);
+	// Which overlay slot a granted `UpperBody` handle landed in, or `INDEX_NONE`. The stack allocates
+	// the slot, so the arm seam writes the pins of THAT slot rather than a fixed one.
+	int32 PlayerOverlaySlotForHandle(uint32 Handle) const;
 	bool ReleasePlayerAnimRequest(uint32 Handle);
 	// LIFE5 — every standing claim on the player driver at once. A driver that was never built holds
 	// nothing, so this does not build one.

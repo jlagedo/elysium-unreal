@@ -771,6 +771,38 @@ def run_harness(config, runner, kind: str, args: Sequence[str]) -> Path | None:
             diff.append("--promote")
         _run(config, runner, os.fspath(Path(os.sys.executable)), diff)
         return None
+    if kind == "compose":
+        # One map, one weapon, one launch -- the harness seats a body and drives it, so a second
+        # scenario in the same process would inherit the first one's motion.
+        weapon = values[0] if values else "item_w_ithaca_m_37"
+        hz = values[1] if len(values) > 1 else "60"
+        if weapon.isdigit():
+            hz, weapon = weapon, "item_w_ithaca_m_37"
+        map_name = "sp_tutorial_1"
+        for value in values:
+            if value.startswith("-ElysiumMap="):
+                map_name = value.split("=", 1)[1]
+        if not (config.export_root / map_name).is_dir():
+            raise UnrealFailure(
+                f"{map_name} is not exported; the composed-pose run drives a body on a real map")
+        launch = [
+            *common, "-ElysiumCompose", f"-ComposeHz={hz}", f"-ComposeWeapon={weapon}",
+            f"-ElysiumMap={map_name}",
+            "-UseFixedTimeStep", f"-FPS={hz}", "-nullrhi", "-unattended",
+            "-nosplash", "-nosound", "-stdout", "-FullStdOutLogOutput",
+        ]
+        launch.extend(v for v in values[2:] if not v.startswith("-ElysiumMap="))
+        if exec_cmds:
+            launch.append("-ExecCmds=" + ";".join(exec_cmds))
+        _run(config, runner, editor, launch)
+
+        # Recording without judging is the failure mode every other harness here already fixed:
+        # the comparator runs chained, and its verdict is this command's exit code.
+        diff = ["-m", "elysium_pipeline.validation.compose_diff",
+                "--run", os.fspath(config.export_root / "_compose"
+                                   / f"{map_name}-{weapon}.json")]
+        _run(config, runner, os.fspath(Path(os.sys.executable)), diff)
+        return None
     if kind == "cast":
         course = values[0] if values else ""
         hz = values[1] if len(values) > 1 else "60"

@@ -59,17 +59,35 @@ namespace ElysiumAnimGraph
 	// same reason: `BlendMasks` is edit-time state with no pin, and a `UBlendProfile` belongs to one
 	// skeleton while a bank owns the layer.
 	//
-	// Retail carries four such slots. No weapon path ever addresses one but slot 0, so one is what
-	// exists here; the ceiling is recorded rather than built.
-	// The layer it composes is posed by an `FAnimNode_SequenceEvaluator` pinned to an EXPLICIT time,
-	// not a sequence player. A player keeps its own clock, so it would drift from the claim that
-	// expires the layer, it could not be restarted on a re-fire of the same clip, and it publishes no
-	// phase. Retail's slot cycle is explicit, so the evaluator is the faithful shape as well as the
+	// **Four of them, chained, composed in slot index order** — retail's own accumulate order, where
+	// each layer moves the running pose toward itself by its own weight. Chained rather than folded
+	// into one node's four blend poses because the composition is SEQUENTIAL: two layers whose masks
+	// overlap (an aim layer and an attack layer both reach the upper body) compose differently when
+	// accumulated one after another than when blended simultaneously against one base.
+	//
+	// The layer each one composes is posed by an `FAnimNode_SequenceEvaluator` pinned to an EXPLICIT
+	// time, not a sequence player. A player keeps its own clock, so it would drift from the layer that
+	// ends it, it could not be restarted on a re-fire of the same clip, and it publishes no phase.
+	// Retail's slot cycle is explicit, so the evaluator is the faithful shape as well as the
 	// controllable one — and it needs no tag of its own, because both of its inputs arrive on pins.
-	inline constexpr const TCHAR* SlotLayerTag = TEXT("ElysiumSlotLayer");
-	// The third masked blend: the aim grid the SLOT's own clip declares, composed over the shot
-	// motion inside the slot branch — retail's recursive autolayer rule for the overlay sequence.
-	inline constexpr const TCHAR* SlotAimLayerTag = TEXT("ElysiumSlotAimLayer");
+	inline FName SlotLayerTag(int32 SlotIndex)
+	{
+		static_assert(ElysiumOverlay::NumSlots == 4, "the tag table is sized by the slot count");
+		static const FName Tags[ElysiumOverlay::NumSlots] = {
+			FName(TEXT("ElysiumSlotLayer0")), FName(TEXT("ElysiumSlotLayer1")),
+			FName(TEXT("ElysiumSlotLayer2")), FName(TEXT("ElysiumSlotLayer3")) };
+		return Tags[FMath::Clamp(SlotIndex, 0, ElysiumOverlay::NumSlots - 1)];
+	}
+	// The aim grid the SLOT's own clip declares, composed over the shot motion inside that slot's own
+	// branch — retail's recursive autolayer rule for the overlay sequence, once per slot.
+	inline FName SlotAimLayerTag(int32 SlotIndex)
+	{
+		static_assert(ElysiumOverlay::NumSlots == 4, "the tag table is sized by the slot count");
+		static const FName Tags[ElysiumOverlay::NumSlots] = {
+			FName(TEXT("ElysiumSlotAimLayer0")), FName(TEXT("ElysiumSlotAimLayer1")),
+			FName(TEXT("ElysiumSlotAimLayer2")), FName(TEXT("ElysiumSlotAimLayer3")) };
+		return Tags[FMath::Clamp(SlotIndex, 0, ElysiumOverlay::NumSlots - 1)];
+	}
 
 	// The graph tag on the reaction branch's own `FAnimNode_BlendListByBool` (LIFE5), read by the
 	// generator that stamps it and by anything that has to find the node on a compiled class, so the
@@ -202,14 +220,14 @@ namespace ElysiumAnimGraph
 	// cannot take this path.
 	bool ShouldHoldPose(bool bHasAppliedOnce, bool bHasSequence, bool bHasBlendSpace);
 
-	// Where the overlay slot's `FAnimNode_SequenceEvaluator` stands this frame, in the layer clip's
+	// Where an overlay slot's `FAnimNode_SequenceEvaluator` stands this frame, in the layer clip's
 	// own seconds.
 	//
-	// **The phase is the CLAIM's, projected, never an accumulator the graph advances.** The record's
-	// cycle comes off the same `HoldSeconds` that expires the claim
-	// (`ElysiumAnimIntent::SlotCycle`), so pinning the evaluator to it is what keeps the layer from
-	// finishing early or lingering past the claim it belongs to — the two cannot be read off
-	// different clocks because there is only one.
+	// **The phase is the LAYER's, projected, never an accumulator the graph advances.** The record's
+	// cycle is `FElysiumOverlayLayer::Cycle`, the same number the layer's own weight and its end are
+	// read from, so pinning the evaluator to it is what keeps the layer from finishing early or
+	// lingering past the layer it belongs to — the two cannot be read off different clocks because
+	// there is only one.
 	//
 	// `bSequenceChanged` re-seats the playhead at the head, and it is not redundant with a cycle that
 	// happens to be zero: a publish can hand over a NEW layer asset while still carrying the previous

@@ -313,30 +313,41 @@ void UElysiumBipedAnimInstance::PublishSelection(const FElysiumAnimationSelectio
 	// base changing hands underneath it, and it dies with its own clip. Gating it would silence every
 	// shot fired while a scene, a reaction or an ambient stance held the base.
 	//
-	// The weight is the record's ENVELOPED number — `FElysiumAnimationDriver::ArbitrateSlot` computed
-	// it with `ElysiumAnimIntent::SlotWeightAt` over the claim's own age — never the `m_flWeightMax`
-	// ceiling `PendingUpperBodyLayerWeight` above stands in with. A ceiling written here would compose
-	// a reload's first frame at full strength and lose the ramp retail measures.
+	// The weight is the record's ENVELOPED number — `FElysiumOverlayStack::Advance` computed it from
+	// the layer's own cycle — never the `m_flWeightMax` ceiling `PendingUpperBodyLayerWeight` above
+	// stands in with. A ceiling written here would compose a reload's first frame at full strength and
+	// lose the ramp retail measures.
 	//
-	// Every field is cleared together when the record names no layer: `HasSlotLayer()` is a pointer
-	// test, and a weight or a cycle left behind by a claim that has gone would describe a layer the
-	// record has already stopped naming.
-	PendingSlotSequence = Assets.SlotSequence;
-	// The layers the slot clip itself declares, riding OVER the motion — its aim grid, that grid's
-	// own mask, and its `_delta`. All three travel with the sequence and go down with it.
-	PendingSlotSpace = Assets.SlotSequence != nullptr ? Assets.SlotSpace : nullptr;
-	PendingSlotAimMaskName = Assets.SlotSequence != nullptr ? Assets.SlotAimMaskName : NAME_None;
-	PendingSlotAdditive = Assets.SlotSequence != nullptr ? Assets.SlotAdditive : nullptr;
-	PendingSlotMaskName = Assets.SlotSequence != nullptr ? Assets.SlotMaskName : NAME_None;
-	PendingSlotWeight = Assets.SlotSequence != nullptr ? Selection.SlotWeight : 0.0f;
-	PendingSlotCycle = Assets.SlotSequence != nullptr ? Selection.SlotCycle : 0.0f;
+	// Every field of a row is cleared together when the record names no layer in that slot:
+	// `FElysiumResolvedOverlaySlot::IsValid` is a pointer test, and a weight or a cycle left behind by
+	// a layer that has gone would describe one the record has already stopped naming.
+	//
+	// **Every slot, in index order.** A free slot between two live ones stays free: the index is where
+	// the layer composes, not a packing order, so compacting the rows here would move a running shot
+	// onto a different node and through a different mask.
+	for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
+	{
+		const FElysiumResolvedOverlaySlot& Resolved = Assets.Slots[SlotIndex];
+		const FElysiumOverlaySlotRecord& Row = Selection.Slots[SlotIndex];
+		FElysiumOverlaySlotStaging& Staging = SlotStaging[SlotIndex];
+		const bool bStands = Resolved.Sequence != nullptr;
+		Staging.Sequence = Resolved.Sequence;
+		// The layers the slot clip itself declares, riding OVER the motion — its aim grid, that grid's
+		// own mask, and its `_delta`. All three travel with the sequence and go down with it.
+		Staging.Space = bStands ? Resolved.AimSpace : nullptr;
+		Staging.AimMaskName = bStands ? Resolved.AimMaskName : NAME_None;
+		Staging.Additive = bStands ? Resolved.Additive : nullptr;
+		Staging.MaskName = bStands ? Resolved.MaskName : NAME_None;
+		Staging.Weight = bStands ? Row.Weight : 0.0f;
+		Staging.Cycle = bStands ? Row.Cycle : 0.0f;
 
-	// The layer's PHASE moves with the same record, off the record's own cycle rather than a second
-	// clock: the claim's hold is what expires the layer, and a timeline walked against any other
-	// number would fire the shot's commit id at a different instant from the one the pose reaches it.
-	// It is read off `Selection` rather than `PendingSlotCycle` above so a frame whose asset has not
-	// been resolved yet still advances the timeline of the clip the claim named.
-	RefreshSlotPhase(Selection, Selection.SlotCycle);
+		// The layer's PHASE moves with the same record, off the layer's own cycle rather than a second
+		// clock: that cycle is what ends the layer, and a timeline walked against any other number
+		// would fire the shot's commit id at a different instant from the one the pose reaches it. It
+		// is read off the ROW rather than off `Staging.Cycle` above so a frame whose asset has not
+		// been resolved yet still advances the timeline of the clip the layer named.
+		RefreshSlotPhase(SlotIndex, Row);
+	}
 }
 
 // One line per (reason, bank|label, asset) for a refusal the arm seam can reach at autofire rates.
@@ -355,10 +366,21 @@ bool UElysiumBipedAnimInstance::ShouldReportSlotArmRefusalOnce(const TCHAR* Reas
 	return !bAlready;
 }
 
-bool UElysiumBipedAnimInstance::PlaySlotLayer(const FElysiumClipIdentity& Identity,
-	UAnimSequence* Sequence, FName MaskName, const FElysiumAnimationRequest& Claim,
-	UBlendSpace* AimSpace, FName AimMaskName, UAnimSequence* Additive)
+bool UElysiumBipedAnimInstance::PlaySlotLayer(int32 SlotIndex,
+	const FElysiumClipIdentity& Identity, UAnimSequence* Sequence, FName MaskName,
+	const FElysiumAnimationRequest& Claim, bool bSnap, UBlendSpace* AimSpace, FName AimMaskName,
+	UAnimSequence* Additive)
 {
+	if (SlotIndex < 0 || SlotIndex >= ElysiumOverlay::NumSlots)
+	{
+		// The driver allocates the slot and hands the index down, so this is unreachable — and a
+		// silent write past the array is what it would be if the allocation rule ever changed.
+		UE_LOG(LogElysiumBipedGraph, Warning,
+			TEXT("[elysium] the overlay stack was armed for '%s' at slot %d, which does not exist"),
+			*Claim.Label, SlotIndex);
+		return false;
+	}
+	FElysiumOverlaySlotStaging& Staging = SlotStaging[SlotIndex];
 	// **Every refusal below is latched on its own (reason, bank|label), because this seam is reached
 	// once per TRIGGER PULL.** A fire layer the bake left unmasked is refused on every shot, and an
 	// autofire weapon reaches that at its own rate — an unguarded line would restate one bake fault
@@ -392,11 +414,11 @@ bool UElysiumBipedAnimInstance::PlaySlotLayer(const FElysiumClipIdentity& Identi
 		return false;
 	}
 
-	// A claim that states no clip length states no phase either, and a layer with no phase is one
-	// still frame of its clip held for as long as the claim stands. Refused rather than composed: the
-	// length is the clip's own authored seconds over the producer's rate, so a claim without one names
-	// a zero-length asset or was built by hand without the conversion `ClaimForSegment` performs.
-	if (!(ElysiumAnimIntent::SlotPhaseLength(Claim) > 0.0f))
+	// A claim that states no clip length states no cycle either, and a layer with no cycle is one
+	// still frame of its clip held for as long as the producer holds the slot. Refused rather than
+	// composed: the length is the clip's own authored seconds over the producer's rate, so a claim
+	// without one names a zero-length asset or was built by hand without `ClaimForSegment`'s division.
+	if (!(Claim.ClipLengthSeconds > 0.0f))
 	{
 		if (ShouldReportSlotArmRefusalOnce(TEXT("nolength"), Identity, Claim, Sequence))
 		{
@@ -408,20 +430,21 @@ bool UElysiumBipedAnimInstance::PlaySlotLayer(const FElysiumClipIdentity& Identi
 		return false;
 	}
 
-	PendingSlotSequence = Sequence;
+	Staging.Sequence = Sequence;
 	// The clip's own declared layers, resolved by the CALLER through the same subsystem helper the
 	// driver's publish uses — so there is no frame where the motion stands without them, and no
 	// frame where a previous clip's grid outlives its own sequence.
-	PendingSlotSpace = AimSpace;
-	PendingSlotAimMaskName = AimSpace != nullptr ? AimMaskName : NAME_None;
-	PendingSlotAdditive = Additive;
-	PendingSlotMaskName = MaskName;
-	// **The envelope is `ElysiumAnimIntent`'s and is never re-derived here.** The arm frame is age
+	Staging.Space = AimSpace;
+	Staging.AimMaskName = AimSpace != nullptr ? AimMaskName : NAME_None;
+	Staging.Additive = Additive;
+	Staging.MaskName = MaskName;
+	// **The envelope is `ElysiumOverlay`'s and is never re-derived here.** The arm frame is cycle
 	// zero, which is full weight for an attack layer's snap and zero for the foot of a reload's ramp
-	// — two answers one shared helper already gives. A literal 1.0 here would be the ceiling wearing
-	// the envelope's name, and the driver's own publish next frame would disagree with it.
-	PendingSlotWeight = ElysiumAnimIntent::SlotWeightAt(Claim, 0.0f);
-	PendingSlotCycle = ElysiumAnimIntent::SlotCycle(Claim, 0.0f);
+	// — two answers one shared helper already gives from the clip's own SNAP bit. A literal 1.0 here
+	// would be the ceiling wearing the envelope's name, and the driver's own publish next frame would
+	// disagree with it.
+	Staging.Cycle = 0.0f;
+	Staging.Weight = ElysiumOverlay::WeightForCycle(0.0f, ElysiumOverlay::BlendFor(bSnap));
 
 	// **The phase is armed HERE, not on the next update**, for the reason `ArmBasePhase` is: the
 	// ranged transactions resolve a clip and immediately ask whether a polled channel is standing on
@@ -434,14 +457,18 @@ bool UElysiumBipedAnimInstance::PlaySlotLayer(const FElysiumClipIdentity& Identi
 	// duration the envelope, the expiry and this phase all share, so `PlayRate / Length` is the
 	// cycles-per-second a consumer sampling a window forward from the cycle needs.
 	const float AuthoredSeconds = Sequence->GetPlayLength();
-	const float PhaseSeconds = ElysiumAnimIntent::SlotPhaseLength(Claim);
-	ArmSlotPhase(Identity, AuthoredSeconds, Claim.bLoop,
-		PhaseSeconds > 0.0f ? AuthoredSeconds / PhaseSeconds : 1.0f, PendingSlotCycle);
+	const float PhaseSeconds = Claim.ClipLengthSeconds;
+	ArmSlotPhase(SlotIndex, Identity, AuthoredSeconds, Claim.bLoop,
+		PhaseSeconds > 0.0f ? AuthoredSeconds / PhaseSeconds : 1.0f, Staging.Cycle);
 	return true;
 }
 
-void UElysiumBipedAnimInstance::StopSlotLayer()
+void UElysiumBipedAnimInstance::StopSlotLayer(int32 SlotIndex)
 {
+	if (SlotIndex < 0 || SlotIndex >= ElysiumOverlay::NumSlots)
+	{
+		return;
+	}
 	// **Called from gameplay, and it writes pins the worker reads.** Every other gameplay-thread
 	// write in this class reaches them through `GetProxyOnGameThread`, whose block on an in-flight
 	// parallel evaluation is the whole reason those writes cannot race the worker; the projected
@@ -449,44 +476,63 @@ void UElysiumBipedAnimInstance::StopSlotLayer()
 	// `FExposedValueHandler`, so this needs the same barrier.
 	(void)GetProxyOnGameThread<FElysiumBipedAnimProxy>();
 
-	PendingSlotSequence = nullptr;
-	PendingSlotSpace = nullptr;
-	PendingSlotAdditive = nullptr;
-	PendingSlotAimMaskName = NAME_None;
-	PendingSlotMaskName = NAME_None;
-	PendingSlotWeight = 0.0f;
-	PendingSlotCycle = 0.0f;
+	FElysiumOverlaySlotStaging& Staging = SlotStaging[SlotIndex];
+	Staging.Sequence = nullptr;
+	Staging.Space = nullptr;
+	Staging.Additive = nullptr;
+	Staging.AimMaskName = NAME_None;
+	Staging.MaskName = NAME_None;
+	Staging.Weight = 0.0f;
+	Staging.Cycle = 0.0f;
 	// **The PROJECTED pins go down with the staging, or the call does not do what it says.** Staging
 	// alone is only read by the next `NativeUpdateAnimation`, and the bodies this is called on are
 	// exactly the ones that may not get another: a corpse frozen at its final pose, a body whose
 	// driver was released wholesale. The pins are what the graph evaluates, so a weight left standing
 	// is a shot still composing on a body whose producer ended it.
-	RequestedSlotSequence = nullptr;
-	RequestedSlotBlendSpace = nullptr;
-	RequestedSlotAdditive = nullptr;
-	SlotAimLayerWeight = 0.0f;
-	SlotAdditiveWeight = 0.0f;
-	RequestedSlotMaskName = NAME_None;
-	SlotLayerWeight = 0.0f;
-	SlotExplicitTime = 0.0f;
-	SlotNormalizedTime = 0.0f;
-	PosedSlotSequence = nullptr;
+	SlotSequenceAt(SlotIndex) = nullptr;
+	SlotBlendSpaceAt(SlotIndex) = nullptr;
+	SlotAdditiveAt(SlotIndex) = nullptr;
+	SlotAimWeightAt(SlotIndex) = 0.0f;
+	SlotAdditiveWeightAt(SlotIndex) = 0.0f;
+	SlotMaskNameAt(SlotIndex) = NAME_None;
+	SlotWeightAt(SlotIndex) = 0.0f;
+	SlotTimeAt(SlotIndex) = 0.0f;
+	SlotNormalizedTimeAt(SlotIndex) = 0.0f;
+	Staging.Posed = nullptr;
 	// The published timeline goes with the pose. A phase left standing names a clip nothing composes,
 	// and the event pass would keep walking its records against a frozen cycle.
-	SlotArm = FElysiumArmedClip();
-	PublishSlotPhase(0.0f);
+	Staging.Arm = FElysiumArmedClip();
+	PublishSlotPhase(SlotIndex, 0.0f);
 	// The blend node's own mask is deliberately NOT written here. At weight zero it gates nothing,
 	// and this runs from gameplay code rather than from the update pass, where a node write can race
 	// the worker the last dispatch handed the graph to. The next projection gives it back.
 }
 
-void UElysiumBipedAnimInstance::StopSlotLayerOn(USkeletalMeshComponent* Body)
+void UElysiumBipedAnimInstance::StopAllSlotLayers()
 {
-	if (UElysiumBipedAnimInstance* Graph = Body != nullptr
-		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr)
+	for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
 	{
-		Graph->StopSlotLayer();
+		StopSlotLayer(SlotIndex);
 	}
+}
+
+void UElysiumBipedAnimInstance::StopSlotLayerOn(USkeletalMeshComponent* Body, int32 SlotIndex)
+{
+	UElysiumBipedAnimInstance* Graph = Body != nullptr
+		? Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()) : nullptr;
+	if (Graph == nullptr)
+	{
+		return;
+	}
+	if (SlotIndex == INDEX_NONE)
+	{
+		// Every slot, because a caller that named none is ending everything this body is layering:
+		// the death transaction and a wholesale claim release have no per-slot handle to be selective
+		// with, and a layer left standing on a body nothing publishes for again never comes down.
+		Graph->StopAllSlotLayers();
+		return;
+	}
+	Graph->StopSlotLayer(SlotIndex);
 }
 
 void UElysiumBipedAnimInstance::ProjectUpperBodyLayer()
@@ -556,38 +602,80 @@ void UElysiumBipedAnimInstance::ProjectUpperBodyLayer()
 	bUpperBodyHasBlendSpace = RequestedUpperBodyBlendSpace != nullptr;
 }
 
+// The nine projected pins of one slot, addressed by index. **The one door**: the projection, the
+// take-down and the readouts all index through these, so a slot that is added or renamed is one edit
+// rather than a search for every spelling of `Slot2`. Out of range answers slot 0's pin rather than
+// dereferencing nothing — every caller loops over `ElysiumOverlay::NumSlots`, so it is unreachable,
+// and a reference cannot report an absence.
+#define ELYSIUM_SLOT_PIN(Type, Accessor, Member)                                                    \
+	Type& UElysiumBipedAnimInstance::Accessor(int32 SlotIndex)                                      \
+	{                                                                                               \
+		static_assert(ElysiumOverlay::NumSlots == 4, "the pin table is sized by the slot count");   \
+		switch (SlotIndex)                                                                          \
+		{                                                                                           \
+		case 1: return Slot1##Member;                                                               \
+		case 2: return Slot2##Member;                                                               \
+		case 3: return Slot3##Member;                                                               \
+		default: return Slot0##Member;                                                              \
+		}                                                                                           \
+	}
+
+ELYSIUM_SLOT_PIN(TObjectPtr<UAnimSequence>, SlotSequenceAt, Sequence)
+ELYSIUM_SLOT_PIN(TObjectPtr<UBlendSpace>, SlotBlendSpaceAt, BlendSpace)
+ELYSIUM_SLOT_PIN(TObjectPtr<UAnimSequence>, SlotAdditiveAt, Additive)
+ELYSIUM_SLOT_PIN(float, SlotAimWeightAt, AimWeight)
+ELYSIUM_SLOT_PIN(float, SlotAdditiveWeightAt, AdditiveWeight)
+ELYSIUM_SLOT_PIN(float, SlotWeightAt, Weight)
+ELYSIUM_SLOT_PIN(float, SlotTimeAt, Time)
+ELYSIUM_SLOT_PIN(float, SlotNormalizedTimeAt, NormalizedTime)
+ELYSIUM_SLOT_PIN(FName, SlotMaskNameAt, MaskName)
+
+#undef ELYSIUM_SLOT_PIN
+
 void UElysiumBipedAnimInstance::ProjectSlotLayer()
 {
-	// **The playhead is re-seated whenever the ASSET moves, and the cycle cannot answer that on its
-	// own.** A re-fire of the same clip restarts through the claim — a new claim starts at age zero,
-	// so its cycle is zero and the evaluator seats at the head, which is retail's own restart. What
-	// the cycle cannot state is a publish that swaps in a DIFFERENT layer while still carrying the
-	// previous claim's phase: seating a fresh clip a third of the way through its motion is a visible
-	// jump into the middle of a reload.
-	const bool bSequenceChanged = PendingSlotSequence != PosedSlotSequence;
+	for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
+	{
+		ProjectSlot(SlotIndex);
+	}
+}
 
-	RequestedSlotSequence = PendingSlotSequence;
-	RequestedSlotBlendSpace = PendingSlotSpace;
-	RequestedSlotMaskName = PendingSlotMaskName;
+void UElysiumBipedAnimInstance::ProjectSlot(int32 SlotIndex)
+{
+	FElysiumOverlaySlotStaging& Staging = SlotStaging[SlotIndex];
+
+	// **The playhead is re-seated whenever the ASSET moves, and the cycle cannot answer that on its
+	// own.** A re-fire of the same clip restarts through the layer — a new layer starts at cycle zero,
+	// so the evaluator seats at the head, which is retail's own restart. What the cycle cannot state
+	// is a publish that swaps in a DIFFERENT layer while still carrying the previous one's phase:
+	// seating a fresh clip a third of the way through its motion is a visible jump into the middle of
+	// a reload.
+	const bool bSequenceChanged = Staging.Sequence != Staging.Posed;
+
+	TObjectPtr<UAnimSequence>& Sequence = SlotSequenceAt(SlotIndex);
+	TObjectPtr<UBlendSpace>& BlendSpace = SlotBlendSpaceAt(SlotIndex);
+	Sequence = Staging.Sequence;
+	BlendSpace = Staging.Space;
+	SlotMaskNameAt(SlotIndex) = Staging.MaskName;
 
 	// A layer the record named but that carries no baked bone mask is refused rather than composed.
 	// In `BlendMask` mode a null profile gives every bone a per-bone weight of **zero**, so an
 	// unmasked layer resolves, binds, takes its aim parameters and then reaches the pose on no bone
 	// at all — the failure that looks exactly like a missing animation. The resolver already warns
-	// when it loads one, so this says so once per instance rather than per frame, and takes the pose
+	// when it loads one, so this says so once per slot rather than per frame, and takes the pose
 	// down, which the warning alone would not.
-	if (RequestedSlotSequence != nullptr && RequestedSlotMaskName.IsNone())
+	if (Sequence != nullptr && SlotMaskNameAt(SlotIndex).IsNone())
 	{
-		if (!bReportedMasklessSlot)
+		if (!Staging.bReportedMaskless)
 		{
-			bReportedMasklessSlot = true;
+			Staging.bReportedMaskless = true;
 			UE_LOG(LogElysiumBipedGraph, Warning,
-				TEXT("[elysium] the overlay slot refuses '%s' on %s: no baked bone mask, so it would "
+				TEXT("[elysium] overlay slot %d refuses '%s' on %s: no baked bone mask, so it would "
 					 "compose at zero weight on every bone and pose nothing"),
-				*GetNameSafe(RequestedSlotSequence), *GetNameSafe(GetSkelMeshComponent()));
+				SlotIndex, *GetNameSafe(Sequence), *GetNameSafe(GetSkelMeshComponent()));
 		}
-		RequestedSlotSequence = nullptr;
-		RequestedSlotBlendSpace = nullptr;
+		Sequence = nullptr;
+		BlendSpace = nullptr;
 	}
 
 	// **The mask write is the layer's admission test, so it runs BEFORE the weight is committed.**
@@ -597,52 +685,55 @@ void UElysiumBipedAnimInstance::ProjectSlotLayer()
 	// does, so there is one refusal idiom rather than two, and the verdict is recomputed every frame
 	// rather than stored: a skeleton that is merely not bound yet refuses this frame and applies the
 	// next.
-	if (!ApplySlotMask())
+	if (!ApplySlotMask(SlotIndex))
 	{
-		RequestedSlotSequence = nullptr;
-		RequestedSlotBlendSpace = nullptr;
+		Sequence = nullptr;
+		BlendSpace = nullptr;
 	}
 	// The aim grid carries its own mask on its own node, so it is refused INDEPENDENTLY: the motion
 	// survives a grid that cannot be masked; the grid does not.
-	if (!ApplySlotAimMask())
+	if (!ApplySlotAimMask(SlotIndex))
 	{
-		RequestedSlotBlendSpace = nullptr;
+		BlendSpace = nullptr;
 	}
 
 	// The clip's declared layers stand only where the motion does — one clip, one trio, one fate.
 	// Within the slot they ride at retail's hardcoded autolayer 1.0; the slot's own envelope is
 	// applied once by the OUTER blend's weight, so a weight here would double-apply it.
-	RequestedSlotAdditive = RequestedSlotSequence != nullptr ? PendingSlotAdditive.Get() : nullptr;
-	if (RequestedSlotSequence == nullptr)
+	TObjectPtr<UAnimSequence>& Additive = SlotAdditiveAt(SlotIndex);
+	Additive = Sequence != nullptr ? Staging.Additive.Get() : nullptr;
+	if (Sequence == nullptr)
 	{
-		RequestedSlotBlendSpace = nullptr;
+		BlendSpace = nullptr;
 	}
-	SlotAimLayerWeight = RequestedSlotBlendSpace != nullptr ? 1.0f : 0.0f;
-	SlotAdditiveWeight = RequestedSlotAdditive != nullptr ? 1.0f : 0.0f;
+	SlotAimWeightAt(SlotIndex) = BlendSpace != nullptr ? 1.0f : 0.0f;
+	SlotAdditiveWeightAt(SlotIndex) = Additive != nullptr ? 1.0f : 0.0f;
 
-	const float Length = RequestedSlotSequence != nullptr
-		? RequestedSlotSequence->GetPlayLength() : 0.0f;
-	SlotExplicitTime = ElysiumAnimGraph::SlotEvaluatorTime(PendingSlotCycle, Length,
-		bSequenceChanged);
+	const float Length = Sequence != nullptr ? Sequence->GetPlayLength() : 0.0f;
+	const float Time =
+		ElysiumAnimGraph::SlotEvaluatorTime(Staging.Cycle, Length, bSequenceChanged);
+	SlotTimeAt(SlotIndex) = Time;
 	// The same instant the seconds above name, as the fraction the grid's evaluator states time in.
-	SlotNormalizedTime = Length > 0.0f ? FMath::Clamp(SlotExplicitTime / Length, 0.0f, 1.0f) : 0.0f;
+	SlotNormalizedTimeAt(SlotIndex) = Length > 0.0f ? FMath::Clamp(Time / Length, 0.0f, 1.0f) : 0.0f;
 	// The record's own enveloped number, gated only by there being a layer to weigh. Retail's slot
 	// weight is `m_flWeight` after the blend envelope, and the record already carries exactly that.
-	SlotLayerWeight = RequestedSlotSequence != nullptr
-		? FMath::Clamp(PendingSlotWeight, 0.0f, ElysiumAnimIntent::SlotWeightMax) : 0.0f;
-	PosedSlotSequence = RequestedSlotSequence;
+	SlotWeightAt(SlotIndex) = Sequence != nullptr
+		? FMath::Clamp(Staging.Weight, 0.0f, ElysiumOverlay::WeightMax) : 0.0f;
+	Staging.Posed = Sequence;
 
-	// **The phase keeps walking through a refusal, deliberately.** The claim still stands and its
+	// **The phase keeps walking through a refusal, deliberately.** The layer still stands and its
 	// commit ids still have to land on schedule; only the pose is refused.
 }
 
-bool UElysiumBipedAnimInstance::ApplySlotAimMask()
+bool UElysiumBipedAnimInstance::ApplySlotAimMask(int32 SlotIndex)
 {
+	FElysiumOverlaySlotStaging& Staging = SlotStaging[SlotIndex];
 	// The name to write: the grid's own mask while a grid stands, null to give the mask back when it
 	// goes. Same rules, latches and refusals as `ApplySlotMask` on the node behind it — a separate
 	// applier because the two nodes carry two independent masks.
-	const FName Wanted = RequestedSlotBlendSpace != nullptr ? PendingSlotAimMaskName : NAME_None;
-	if (Wanted == AppliedSlotAimMaskName)
+	const FName Wanted =
+		SlotBlendSpaceAt(SlotIndex) != nullptr ? Staging.AimMaskName : NAME_None;
+	if (Wanted == Staging.AppliedAimMaskName)
 	{
 		// The node already holds the mask this request names, which includes the null it holds while
 		// no grid stands.
@@ -654,7 +745,7 @@ bool UElysiumBipedAnimInstance::ApplySlotAimMask()
 		? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
 	FAnimNode_LayeredBoneBlend* Layer = Tags != nullptr
 		? Tags->FindNodeByTag<FAnimNode_LayeredBoneBlend>(
-			FName(ElysiumAnimGraph::SlotAimLayerTag), this)
+			ElysiumAnimGraph::SlotAimLayerTag(SlotIndex), this)
 		: nullptr;
 	if (Layer == nullptr)
 	{
@@ -663,15 +754,17 @@ bool UElysiumBipedAnimInstance::ApplySlotAimMask()
 		// that carries no node under the tag while a mask is wanted IS a fault — the grid would
 		// otherwise stand at full weight through whatever the node was saved with.
 		return AnimClass == nullptr || Wanted.IsNone()
-			|| !ReportNodeFaultOnce(bReportedSlotAimNodeFault, TEXT("slot aim"),
-				ElysiumAnimGraph::SlotAimLayerTag, TEXT("carries no node under the tag"));
+			|| !ReportNodeFaultOnce(Staging.bReportedAimNodeFault, TEXT("slot aim"),
+				*ElysiumAnimGraph::SlotAimLayerTag(SlotIndex).ToString(),
+				TEXT("carries no node under the tag"));
 	}
 	if (Layer->BlendMode != ELayeredBoneBlendMode::BlendMask || !Layer->BlendPoses.IsValidIndex(0)
 		|| !Layer->BlendMasks.IsValidIndex(0))
 	{
 		return Wanted.IsNone()
-			|| !ReportNodeFaultOnce(bReportedSlotAimNodeFault, TEXT("slot aim"),
-				ElysiumAnimGraph::SlotAimLayerTag, TEXT("is not a single-pose blend-mask node"));
+			|| !ReportNodeFaultOnce(Staging.bReportedAimNodeFault, TEXT("slot aim"),
+				*ElysiumAnimGraph::SlotAimLayerTag(SlotIndex).ToString(),
+				TEXT("is not a single-pose blend-mask node"));
 	}
 
 	UBlendProfile* Profile = nullptr;
@@ -681,27 +774,29 @@ bool UElysiumBipedAnimInstance::ApplySlotAimMask()
 		Profile = Skeleton != nullptr ? Skeleton->GetBlendProfile(Wanted) : nullptr;
 		if (Profile == nullptr || Profile->Mode != EBlendProfileMode::BlendMask)
 		{
-			if (ReportedSlotAimMaskName != Wanted)
+			if (Staging.ReportedAimMaskName != Wanted)
 			{
-				ReportedSlotAimMaskName = Wanted;
+				Staging.ReportedAimMaskName = Wanted;
 				UE_LOG(LogElysiumBipedGraph, Warning,
-					TEXT("[elysium] slot aim mask '%s' is absent from this body's skeleton or is not "
-						 "a blend mask; the aim grid is refused"),
-					*Wanted.ToString());
+					TEXT("[elysium] slot %d's aim mask '%s' is absent from this body's skeleton or is "
+						 "not a blend mask; the aim grid is refused"),
+					SlotIndex, *Wanted.ToString());
 			}
 			return false;
 		}
 	}
 
 	Layer->SetBlendMask(0, Profile);
-	AppliedSlotAimMaskName = Wanted;
-	ReportedSlotAimMaskName = NAME_None;
+	Staging.AppliedAimMaskName = Wanted;
+	Staging.ReportedAimMaskName = NAME_None;
 	return true;
 }
 
-bool UElysiumBipedAnimInstance::ApplySlotMask()
+bool UElysiumBipedAnimInstance::ApplySlotMask(int32 SlotIndex)
 {
-	if (RequestedSlotMaskName == AppliedSlotMaskName)
+	FElysiumOverlaySlotStaging& Staging = SlotStaging[SlotIndex];
+	const FName Wanted = SlotMaskNameAt(SlotIndex);
+	if (Wanted == Staging.AppliedMaskName)
 	{
 		return true;
 	}
@@ -711,16 +806,17 @@ bool UElysiumBipedAnimInstance::ApplySlotMask()
 		? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
 	FAnimNode_LayeredBoneBlend* Layer = Tags != nullptr
 		? Tags->FindNodeByTag<FAnimNode_LayeredBoneBlend>(
-			FName(ElysiumAnimGraph::SlotLayerTag), this)
+			ElysiumAnimGraph::SlotLayerTag(SlotIndex), this)
 		: nullptr;
 	if (Layer == nullptr)
 	{
 		// No compiled graph is an absence: the plain native class has no node to write to at all and
 		// nothing composes through one. A compiled graph missing the node while a mask is wanted is a
 		// generated-graph fault, and refusing is what stops the layer standing unmasked.
-		return AnimClass == nullptr || RequestedSlotMaskName.IsNone()
-			|| !ReportNodeFaultOnce(bReportedSlotNodeFault, TEXT("overlay slot"),
-				ElysiumAnimGraph::SlotLayerTag, TEXT("carries no node under the tag"));
+		return AnimClass == nullptr || Wanted.IsNone()
+			|| !ReportNodeFaultOnce(Staging.bReportedNodeFault, TEXT("overlay slot"),
+				*ElysiumAnimGraph::SlotLayerTag(SlotIndex).ToString(),
+				TEXT("carries no node under the tag"));
 	}
 
 	// `SetBlendMask` asserts all three, so they are tested rather than assumed — same as the
@@ -729,34 +825,34 @@ bool UElysiumBipedAnimInstance::ApplySlotMask()
 	if (Layer->BlendMode != ELayeredBoneBlendMode::BlendMask || !Layer->BlendPoses.IsValidIndex(0)
 		|| !Layer->BlendMasks.IsValidIndex(0))
 	{
-		return RequestedSlotMaskName.IsNone()
-			|| !ReportNodeFaultOnce(bReportedSlotNodeFault, TEXT("overlay slot"),
-				ElysiumAnimGraph::SlotLayerTag, TEXT("is not a single-pose blend-mask node"));
+		return Wanted.IsNone()
+			|| !ReportNodeFaultOnce(Staging.bReportedNodeFault, TEXT("overlay slot"),
+				*ElysiumAnimGraph::SlotLayerTag(SlotIndex).ToString(),
+				TEXT("is not a single-pose blend-mask node"));
 	}
 
 	UBlendProfile* Profile = nullptr;
-	if (!RequestedSlotMaskName.IsNone())
+	if (!Wanted.IsNone())
 	{
 		// Against the PLAYING skeleton, which is why the mask travels as a name: a bank owns every
 		// shipped layer, so the profile the node rebuilds its per-bone weights from routinely belongs
 		// to a different asset than the clip does. Epic's own `ULayeredBoneBlendLibrary` resolves it
 		// the same way.
 		USkeleton* Skeleton = GetProxyOnGameThread<FElysiumBipedAnimProxy>().GetSkeleton();
-		Profile = Skeleton != nullptr
-			? Skeleton->GetBlendProfile(RequestedSlotMaskName) : nullptr;
+		Profile = Skeleton != nullptr ? Skeleton->GetBlendProfile(Wanted) : nullptr;
 		if (Profile == nullptr || Profile->Mode != EBlendProfileMode::BlendMask)
 		{
 			// Said ONCE per requested name. Nothing was written, so the applied name cannot latch this
 			// — and the request does not change frame to frame, so an unguarded line here repeats for
 			// every frame the layer stands. The applied name is deliberately left alone: this frame's
 			// skeleton may simply not be bound yet, and the resolve is retried until it answers.
-			if (ReportedSlotMaskName != RequestedSlotMaskName)
+			if (Staging.ReportedMaskName != Wanted)
 			{
-				ReportedSlotMaskName = RequestedSlotMaskName;
+				Staging.ReportedMaskName = Wanted;
 				UE_LOG(LogElysiumBipedGraph, Warning,
-					TEXT("[elysium] overlay slot mask '%s' is absent from this body's skeleton or is not "
-						"a blend mask; the layer is refused"),
-					*RequestedSlotMaskName.ToString());
+					TEXT("[elysium] overlay slot %d's mask '%s' is absent from this body's skeleton or "
+						"is not a blend mask; the layer is refused"),
+					SlotIndex, *Wanted.ToString());
 			}
 			return false;
 		}
@@ -764,10 +860,10 @@ bool UElysiumBipedAnimInstance::ApplySlotMask()
 
 	// Null is a legal write: it is how a body that stopped carrying a slot layer gives the mask back.
 	Layer->SetBlendMask(0, Profile);
-	AppliedSlotMaskName = RequestedSlotMaskName;
+	Staging.AppliedMaskName = Wanted;
 	// A name that resolved is no longer a name a refusal has been reported for, so the next one that
 	// does not resolve is said out loud rather than swallowed by a stale latch.
-	ReportedSlotMaskName = NAME_None;
+	Staging.ReportedMaskName = NAME_None;
 	return true;
 }
 
@@ -1757,16 +1853,18 @@ void UElysiumBipedAnimInstance::RefreshBasePhase(FElysiumBipedAnimProxy& InProxy
 // dispatch a shot's commit id at an instant the pose never reaches.
 // ================================================================================================
 
-void UElysiumBipedAnimInstance::ArmSlotPhase(const FElysiumClipIdentity& Identity,
-	float LengthSeconds, bool bLoop, float PlayRate, float Cycle)
+void UElysiumBipedAnimInstance::ArmSlotPhase(int32 SlotIndex,
+	const FElysiumClipIdentity& Identity, float LengthSeconds, bool bLoop, float PlayRate,
+	float Cycle)
 {
+	FElysiumArmedClip& SlotArm = SlotStaging[SlotIndex].Arm;
 	if (!Identity.IsValid())
 	{
 		// A layer nobody named. Ordinary rather than a failure — the layer lab and a hand-built stand
 		// both arm one — and it means this channel carries no timeline to walk, not that the pose is
 		// wrong.
 		SlotArm = FElysiumArmedClip();
-		PublishSlotPhase(0.0f);
+		PublishSlotPhase(SlotIndex, 0.0f);
 		return;
 	}
 
@@ -1781,31 +1879,35 @@ void UElysiumBipedAnimInstance::ArmSlotPhase(const FElysiumClipIdentity& Identit
 	// second is a new play rather than a lap.
 	SlotArm.PlayId = ++NextPlayId;
 	SlotArm.AnchorCycle = Cycle;
-	PublishSlotPhase(Cycle);
+	PublishSlotPhase(SlotIndex, Cycle);
 }
 
-void UElysiumBipedAnimInstance::RefreshSlotPhase(const FElysiumAnimationSelection& Selection,
-	float Cycle)
+void UElysiumBipedAnimInstance::RefreshSlotPhase(int32 SlotIndex,
+	const FElysiumOverlaySlotRecord& Row)
 {
-	// The record has stopped naming a layer, so the claim behind this arm has expired or been given
-	// back. The timeline goes with it rather than freezing at its last cycle.
+	FElysiumArmedClip& SlotArm = SlotStaging[SlotIndex].Arm;
+	// The row has stopped naming a layer, so the layer behind this arm has ended or been given back.
+	// The timeline goes with it rather than freezing at its last cycle.
 	//
-	// A record naming a DIFFERENT label than the arm is the same answer: this instance can only
-	// address the timeline of a layer it armed itself, and a claim that never reached `PlaySlotLayer`
-	// is one whose asset failed to load or carried no bone mask — both already reported by
+	// A row naming a DIFFERENT label than the arm is the same answer: this instance can only address
+	// the timeline of a layer it armed itself, and a layer that never reached `PlaySlotLayer` is one
+	// whose asset failed to load or carried no bone mask — both already reported by
 	// `UElysiumAnimSubsystem::ResolveSlotLayer` and by the arm seam, where the cause is known.
-	if (Selection.SlotLabel.IsEmpty() || !SlotArm.IsArmed()
-		|| !SlotArm.Identity.Label.Equals(Selection.SlotLabel, ESearchCase::IgnoreCase))
+	if (!Row.IsValid() || !SlotArm.IsArmed()
+		|| !SlotArm.Identity.Label.Equals(Row.Label, ESearchCase::IgnoreCase))
 	{
 		SlotArm = FElysiumArmedClip();
-		PublishSlotPhase(0.0f);
+		PublishSlotPhase(SlotIndex, 0.0f);
 		return;
 	}
-	PublishSlotPhase(Cycle);
+	PublishSlotPhase(SlotIndex, Row.Cycle);
 }
 
-void UElysiumBipedAnimInstance::PublishSlotPhase(float Cycle)
+void UElysiumBipedAnimInstance::PublishSlotPhase(int32 SlotIndex, float Cycle)
 {
+	FElysiumOverlaySlotStaging& Staging = SlotStaging[SlotIndex];
+	FElysiumArmedClip& SlotArm = Staging.Arm;
+	FElysiumClipPhase& SlotPhase = Staging.Phase;
 	if (!SlotArm.IsArmed())
 	{
 		SlotPhase = FElysiumClipPhase();
@@ -1845,14 +1947,33 @@ bool UElysiumBipedAnimInstance::GetClipPhase(EElysiumAnimChannel Channel,
 		Out = BasePhase;
 		return true;
 	case EElysiumAnimChannel::UpperBody:
-		if (!SlotPhase.IsValid())
+		// **The LOWEST live slot, which is the only single answer a four-slot stack has** — and the
+		// one composed nearest the base, so it is the layer a caller asking "what is this body
+		// layering" means. The ranged transactions each hold their own slot and read their own
+		// timeline through it: a shot fired while a reload runs is the higher index, and asking here
+		// would answer for the reload. That is why `GetSlotClipPhase` below exists beside this.
+		for (const FElysiumOverlaySlotStaging& Staging : SlotStaging)
 		{
-			return false;
+			if (Staging.Phase.IsValid())
+			{
+				Out = Staging.Phase;
+				return true;
+			}
 		}
-		Out = SlotPhase;
-		return true;
+		return false;
 	default:
 		return false;
 	}
+}
+
+bool UElysiumBipedAnimInstance::GetSlotClipPhase(int32 SlotIndex, FElysiumClipPhase& Out) const
+{
+	if (SlotIndex < 0 || SlotIndex >= ElysiumOverlay::NumSlots
+		|| !SlotStaging[SlotIndex].Phase.IsValid())
+	{
+		return false;
+	}
+	Out = SlotStaging[SlotIndex].Phase;
+	return true;
 }
 

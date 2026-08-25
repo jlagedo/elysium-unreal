@@ -1,5 +1,7 @@
 #include "Visual/ElysiumNpcVisual.h"
 
+#include "ElysiumWieldAttach.h"
+
 #include "ElysiumContentPaths.h"
 #include "ElysiumWieldTable.h"
 #include "Visual/ElysiumBodyAnimInstance.h"
@@ -402,22 +404,65 @@ namespace ElysiumNpcVisual
 			return nullptr;
 		}
 
+		// **The binding decides the mechanism, and it is data.** The bake writes one of five per
+		// model. A socket binding attaches the whole model rigidly at one wearer bone, which is what
+		// retail's per-frame name-matched copy amounts to for a sub-rig that holds still -- and on
+		// this corpus every single-mount model does hold still, carrying one near-constant `idle01`
+		// that nothing ever replaces. Leader-pose is kept for the models whose own bones really are
+		// driven by the wearer's. Contract and evidence: `ElysiumWieldAttach.h`.
+		USkeletalMesh* const BodyMesh = Body->GetSkeletalMeshAsset();
+		if (BodyMesh == nullptr)
+		{
+			UE_LOG(LogElysiumNpcVisual, Warning,
+				TEXT("wield model '%s' for '%s' has no wearer mesh to bind against -- nothing is "
+				     "drawn."), *Ref.Mesh.ToString(), *Context);
+			return nullptr;
+		}
+		const ElysiumWieldAttach::FPlan Plan = ElysiumWieldAttach::Resolve(Ref.Binding,
+			Mesh->GetRefSkeleton(), BodyMesh->GetRefSkeleton(), Ref.MountBone, Ref.HandBone);
+		if (!Plan.IsWorn())
+		{
+			UE_LOG(LogElysiumNpcVisual, Warning,
+				TEXT("wield model '%s' for '%s' is not worn: %s"),
+				*Ref.Mesh.ToString(), *Context, *Plan.Reason);
+			return nullptr;
+		}
+
 		USkeletalMeshComponent* const Wield = NewObject<USkeletalMeshComponent>(Owner);
 		Wield->ComponentTags.Add(WieldComponentTag());
 		Wield->SetSkeletalMeshAsset(Mesh);
-		// The weapon is posed by the body it hangs on, so it follows rather than animates: no graph,
-		// no clip player, nothing for its own skeleton to evaluate. Its clips are baked and a later
-		// rung may play one (`w_m_lockpick`'s pick wiggle is the corpus's only visible own-motion),
-		// which is a graph added here rather than a different attachment.
+		// The weapon evaluates no pose of its own under either placement: no graph, no clip player.
+		// Its clips are baked and a later rung may play one (`w_m_lockpick`'s pick wiggle is the
+		// corpus's only visible own-motion), which is a graph added here rather than a different
+		// attachment.
 		Wield->SetAnimationMode(EAnimationMode::AnimationCustomMode);
 		Wield->SetCanEverAffectNavigation(false);
 		// Attaching before registering keeps the component from ticking against an unset leader for a
 		// frame, the same ordering InstallGarment depends on.
 		Wield->SetupAttachment(Body);
 		Wield->RegisterComponent();
-		Wield->AttachToComponent(Body, FAttachmentTransformRules::SnapToTargetIncludingScale);
 		Wield->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Wield->SetLeaderPoseComponent(Body);
+
+		if (Plan.bAnchoredOnHandInstead)
+		{
+			// A worn answer, but not the one the manifest asked for. Said out loud so a carry that
+			// looks slightly off is traceable to the bone the wearer does not declare.
+			UE_LOG(LogElysiumNpcVisual, Log,
+				TEXT("wield model '%s' for '%s': %s"), *Ref.Mesh.ToString(), *Context, *Plan.Reason);
+		}
+		if (Plan.Placement == ElysiumWieldAttach::EPlacement::RigidToBone)
+		{
+			// Rigid, so the whole model rides one bone and no per-bone merge can leak the wearer's
+			// root into it. `KeepRelativeTransform` because the relative transform IS the placement.
+			Wield->AttachToComponent(Body,
+				FAttachmentTransformRules::KeepRelativeTransform, Plan.AnchorBone);
+			Wield->SetRelativeTransform(Plan.Relative);
+		}
+		else
+		{
+			Wield->AttachToComponent(Body, FAttachmentTransformRules::SnapToTargetIncludingScale);
+			Wield->SetLeaderPoseComponent(Body);
+		}
 		return Wield;
 	}
 

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimNode_SequencePlayer.h"
 #include "Visual/ElysiumAnimGraph.h"
+#include "ElysiumOverlayStack.h"
 #include "Visual/ElysiumBodyAnimInstance.h"
 
 #include "ElysiumBipedAnimInstance.generated.h"
@@ -224,6 +225,61 @@ struct FElysiumArmedClip
 	bool IsArmed() const { return Identity.IsValid(); }
 };
 
+// One overlay slot's staged state, between the driver's publish and the pins the graph evaluates
+// (LIFE10).
+//
+// A `USTRUCT` rather than nine parallel arrays because three of its members are object pointers the
+// graph holds across frames and have to be GC-rooted; a static array of a reflected struct is the one
+// shape that roots them without spelling `UPROPERTY` twelve times.
+//
+// It is staging, never the layer: the layer's own cycle, weight and lifetime belong to
+// `FElysiumOverlayLayer` on the driver. What is here is what this instance has been told and what it
+// has managed to hand the graph, which are different questions — a mask the playing skeleton cannot
+// answer for is refused here while the layer goes on standing.
+USTRUCT()
+struct FElysiumOverlaySlotStaging
+{
+	GENERATED_BODY()
+
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> Sequence = nullptr;
+	UPROPERTY(Transient) TObjectPtr<UBlendSpace> Space = nullptr;
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> Additive = nullptr;
+	// The layer the evaluator is currently standing on. A publish that swaps the ASSET while still
+	// carrying the previous layer's cycle would otherwise seat a fresh clip mid-motion, so the
+	// playhead is re-seated at the head whenever this moves.
+	UPROPERTY(Transient) TObjectPtr<UAnimSequence> Posed = nullptr;
+
+	FName MaskName;
+	FName AimMaskName;
+	float Weight = 0.0f;
+	float Cycle = 0.0f;
+
+	// What this slot's blend node was last actually given, so the mask is written on change rather
+	// than per frame — the setter invalidates the node's cached per-bone weights.
+	FName AppliedMaskName;
+	// And the name a refusal was last reported for: a refused mask never reaches the node, so the
+	// applied name cannot latch it and the warning would repeat every frame the layer stands.
+	FName ReportedMaskName;
+	// The aim blend's own pair, for the second masked node inside this slot's branch.
+	FName AppliedAimMaskName;
+	FName ReportedAimMaskName;
+
+	// A maskless layer is refused rather than composed, and said once: it is a bake or vocabulary
+	// fault that does not change frame to frame, and a per-frame line would bury it.
+	bool bReportedMaskless = false;
+	// A fault in the compiled graph itself — no node under this slot's tag, or a node whose shape
+	// `SetBlendMask` cannot take.
+	bool bReportedNodeFault = false;
+	bool bReportedAimNodeFault = false;
+
+	// This slot's published phase record and the arm behind it. **One arm per slot, because a slot
+	// has one producer at a time**: allocation gives a layer its own slot, so the layer standing here
+	// is the only one there is — unlike the base, where four clocks run concurrently and only one of
+	// them is the timeline.
+	FElysiumClipPhase Phase;
+	FElysiumArmedClip Arm;
+};
+
 USTRUCT()
 struct FElysiumBipedAnimProxy : public FElysiumBodyAnimProxy
 {
@@ -412,53 +468,128 @@ public:
 
 	// --- the overlay SLOT, which is a different mechanism from the three layers above --------------
 	//
-	// Retail's `CBaseAnimatingOverlay` slot 0: the masked partial-body layer every ranged fire,
-	// reload and dry-fire composes through. Those three are the bake-time autolayers the base
-	// channel's own resolved HOST declares and travel with the base clip; this one is a layer a
-	// PRODUCER armed on the UpperBody channel, and it outlives any number of base selections
-	// underneath it. It therefore rides its own layered blend, placed after theirs — the order
-	// retail accumulates in.
+	// --- retail's `CBaseAnimatingOverlay` layer stack: four slots, in composition order (LIFE10) ---
+	//
+	// The three properties above are the bake-time autolayers the base channel's own resolved HOST
+	// declares, and they travel with the base clip. These are layers a PRODUCER armed on the UpperBody
+	// channel, each outliving any number of base selections underneath it. They therefore ride their
+	// own chained layered blends, placed after the autolayer blend — the order retail accumulates in.
+	//
+	// **Flat names rather than an array, because the graph binds a pin to a VARIABLE.** Every asset
+	// this graph plays arrives on a pin driven by a `Get <variable>` node the generator places
+	// (`ElysiumAnimGraphLibrary`), and an array element would need a second node kind in generated
+	// text for no behavioural gain. The generator and `ProjectSlotLayer` both index them through the
+	// accessors below, so the flatness stops at the declaration.
+	//
+	// Per slot, in the order the branch composes them:
+	//
+	//  * `Slot<N>Sequence`      the layer's motion, posed by an evaluator pinned to `Slot<N>Time`
+	//  * `Slot<N>BlendSpace`    the aim grid the layer's own clip declares, over that motion
+	//  * `Slot<N>AimWeight`     1 while that grid stands, 0 otherwise — retail's autolayers within a
+	//                           sequence ride at a hardcoded 1.0, and the layer's own envelope is
+	//                           applied once by `Slot<N>Weight` below
+	//  * `Slot<N>Additive`      the `_delta` that clip declares, additively after the grid
+	//  * `Slot<N>AdditiveWeight`  the same 1-or-0
+	//  * `Slot<N>Weight`        the ENVELOPED weight the record carries
+	//                           (`ElysiumOverlay::WeightForCycle`), never the `m_flWeightMax` ceiling:
+	//                           an attack layer snaps to full on the frame it is armed while a reload
+	//                           ramps over a fifth of its cycle at each end, and writing the ceiling
+	//                           would compose both the same way
+	//  * `Slot<N>Time`          where the evaluators are pinned, in the layer clip's own seconds —
+	//                           the LAYER's cycle projected onto the clip, never a clock the graph
+	//                           advances
+	//  * `Slot<N>NormalizedTime`  the same instant as the fraction a blend space states time in,
+	//                           derived from the seconds rather than tracked beside them so the two
+	//                           branches cannot disagree about where in the shot the body is
+	//  * `Slot<N>MaskName`      the layer's own baked bone mask. **Read by no pin**, for exactly the
+	//                           reason `RequestedUpperBodyMaskName` is: `BlendMasks` is edit-time
+	//                           state, so it reaches the graph through `ApplySlotMask` instead
+
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	TObjectPtr<UAnimSequence> RequestedSlotSequence = nullptr;
-	// **The layers the slot clip itself declares — retail's autolayer rule applied recursively to
-	// the sequence in the overlay slot.** The shot motion stays on `RequestedSlotSequence`; the aim
-	// grid it declares composes OVER it through its own masked blend (steered by the same
-	// `AimYaw`/`AimPitch` the base channel's grid reads), and the `_delta` it declares composes
-	// additively after that. Each weight is 1 when its asset stands and 0 when it does not, because
-	// within the slot retail's autolayers ride at the hardcoded 1.0 — the slot's own envelope is
-	// applied once, by the outer blend's `SlotLayerWeight`. All null on a slot clip that declares
-	// nothing, which is every reload layer.
+	TObjectPtr<UAnimSequence> Slot0Sequence = nullptr;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	TObjectPtr<UBlendSpace> RequestedSlotBlendSpace = nullptr;
+	TObjectPtr<UBlendSpace> Slot0BlendSpace = nullptr;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	float SlotAimLayerWeight = 0.0f;
+	float Slot0AimWeight = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	TObjectPtr<UAnimSequence> RequestedSlotAdditive = nullptr;
+	TObjectPtr<UAnimSequence> Slot0Additive = nullptr;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	float SlotAdditiveWeight = 0.0f;
-	// The layer's own baked bone mask, by name. **Read by no pin**, for exactly the reason
-	// `RequestedUpperBodyMaskName` is: `FAnimNode_LayeredBoneBlend::BlendMasks` is edit-time state,
-	// so this reaches the graph through `ApplySlotMask` instead of a property copy.
+	float Slot0AdditiveWeight = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	FName RequestedSlotMaskName;
-	// The ENVELOPED weight the record carries (`ElysiumAnimIntent::SlotWeightAt`), never retail's
-	// `m_flWeightMax` ceiling: an attack layer snaps to full on the frame it is armed while a reload
-	// ramps over a fifth of its cycle at each end, and writing the ceiling here would compose both
-	// the same way.
+	float Slot0Weight = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	float SlotLayerWeight = 0.0f;
-	// Where the slot's `FAnimNode_SequenceEvaluator` is pinned, in the layer clip's own seconds. It
-	// is the CLAIM's phase projected onto the clip, never a clock the graph advances: the claim's
-	// hold is what expires the layer, so a second clock would let the pose and the claim end at
-	// different instants.
+	float Slot0Time = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	float SlotExplicitTime = 0.0f;
-	// The same playhead the grid's evaluator wants, which states its time as a FRACTION of a clip
-	// rather than in seconds — a blend space rescales one normalized phase onto each sample's own
-	// length. Derived from the seconds above rather than tracked beside them, so the sequence branch
-	// and the grid branch cannot come to disagree about where in the shot the body is.
+	float Slot0NormalizedTime = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
-	float SlotNormalizedTime = 0.0f;
+	FName Slot0MaskName;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> Slot1Sequence = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UBlendSpace> Slot1BlendSpace = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot1AimWeight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> Slot1Additive = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot1AdditiveWeight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot1Weight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot1Time = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot1NormalizedTime = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	FName Slot1MaskName;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> Slot2Sequence = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UBlendSpace> Slot2BlendSpace = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot2AimWeight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> Slot2Additive = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot2AdditiveWeight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot2Weight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot2Time = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot2NormalizedTime = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	FName Slot2MaskName;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> Slot3Sequence = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UBlendSpace> Slot3BlendSpace = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot3AimWeight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	TObjectPtr<UAnimSequence> Slot3Additive = nullptr;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot3AdditiveWeight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot3Weight = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot3Time = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	float Slot3NormalizedTime = 0.0f;
+	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
+	FName Slot3MaskName;
+
+	// One slot's projected pins, addressed by index. **The one door**: the projection, the take-down
+	// and the readouts all index through these, so a slot that is added or renamed is one edit rather
+	// than a search for every spelling of `Slot2`.
+	TObjectPtr<UAnimSequence>& SlotSequenceAt(int32 SlotIndex);
+	TObjectPtr<UBlendSpace>& SlotBlendSpaceAt(int32 SlotIndex);
+	TObjectPtr<UAnimSequence>& SlotAdditiveAt(int32 SlotIndex);
+	float& SlotAimWeightAt(int32 SlotIndex);
+	float& SlotAdditiveWeightAt(int32 SlotIndex);
+	float& SlotWeightAt(int32 SlotIndex);
+	float& SlotTimeAt(int32 SlotIndex);
+	float& SlotNormalizedTimeAt(int32 SlotIndex);
+	FName& SlotMaskNameAt(int32 SlotIndex);
 
 	// Where the upper-body layer aims, in the pose parameters' own degrees — the aim grid's own axes.
 	// The player's own producer pins this at the literal 0.0f/pitch-only
@@ -591,14 +722,17 @@ public:
 	// The full trio the clip composes as — its motion, its declared aim grid (with that grid's own
 	// mask), and its declared additive — because an arm that staged only the sequence would pose one
 	// frame of bare shot before the driver's first publish filled the rest in.
-	bool PlaySlotLayer(const FElysiumClipIdentity& Identity, UAnimSequence* Sequence, FName MaskName,
-		const FElysiumAnimationRequest& Claim, UBlendSpace* AimSpace = nullptr,
-		FName AimMaskName = NAME_None, UAnimSequence* Additive = nullptr);
+	bool PlaySlotLayer(int32 SlotIndex, const FElysiumClipIdentity& Identity, UAnimSequence* Sequence,
+		FName MaskName, const FElysiumAnimationRequest& Claim, bool bSnap,
+		UBlendSpace* AimSpace = nullptr, FName AimMaskName = NAME_None,
+		UAnimSequence* Additive = nullptr);
 	// Take the layer down now, rather than waiting for the next publish to stop naming it — the
 	// staged record AND the pins the graph evaluates, because the bodies this is called on are the
 	// ones that may never publish again. The release half of a producer that armed a layer and is
 	// ending early.
-	void StopSlotLayer();
+	void StopSlotLayer(int32 SlotIndex);
+	// Every slot at once.
+	void StopAllSlotLayers();
 	// The same call, addressed at a BODY rather than at a host.
 	//
 	// Static because every producer that has to end a layer holds a mesh and not a graph: a segment
@@ -606,7 +740,11 @@ public:
 	// for the player. One door, because "the claim went back but the pose did not" is the defect, and
 	// three spellings of the take-down are three places it can be forgotten. A body with no compiled
 	// biped graph carries no slot at all, which is an ordinary absence rather than a failure.
-	static void StopSlotLayerOn(USkeletalMeshComponent* Body);
+	// `INDEX_NONE` stops every slot, which is what a body being released ENTIRELY means: a corpse, a
+	// re-modelled body, a driver whose claims all went back at once, with no producer left to come
+	// back for any of them. A named slot stops that layer alone, which is what one run's stop path
+	// means — a shot standing in another slot is a different producer's and is not this one's to end.
+	static void StopSlotLayerOn(USkeletalMeshComponent* Body, int32 SlotIndex = INDEX_NONE);
 
 	// --- the phase seam (LIFE5) ---------------------------------------------------------------
 	//
@@ -621,6 +759,11 @@ public:
 	// their own clips at once. Every other channel is an ordinary negative: nothing publishes a phase
 	// for it.
 	virtual bool GetClipPhase(EElysiumAnimChannel Channel, FElysiumClipPhase& Out) const override;
+	// One overlay slot's phase, addressed by index. The channel accessor above answers the LOWEST live
+	// slot, which is the only single answer a four-slot stack has; a producer holding a particular
+	// layer's slot reads its own timeline through this so a shot fired during a reload does not walk
+	// the reload's records.
+	bool GetSlotClipPhase(int32 SlotIndex, FElysiumClipPhase& Out) const;
 
 	// --- the reaction seam (LIFE5) ----------------------------------------------------------------
 	//
@@ -776,15 +919,19 @@ private:
 	// dies with its own clip. Gating it would silence every shot fired while a scene, a reaction or
 	// an ambient stance held the base.
 	void ProjectSlotLayer();
+	// One slot's projection. Split out because every rule in it is per-layer — the mask admission
+	// test, the playhead re-seat, the trio's shared fate — and a loop body that long inside the caller
+	// hides that they are.
+	void ProjectSlot(int32 SlotIndex);
 
-	// Hand the SLOT's layered blend its bone mask, through `ElysiumAnimGraph::SlotLayerTag`. The same
+	// Hand one SLOT's layered blend its bone mask, through `ElysiumAnimGraph::SlotLayerTag(N)`. The same
 	// door, the same assertions and the same refusal as `ApplyUpperBodyMask`, on the second blend
 	// node — and separate rather than parameterized because the two nodes carry two independent
 	// masks and a shared applier would have to be told which, which is the tag it already is.
-	bool ApplySlotMask();
+	bool ApplySlotMask(int32 SlotIndex);
 	// The third masked blend's applier — the aim grid the slot clip declares rides its own node with
 	// the GRID's mask, not the slot clip's, because the two gate different bone sets by design.
-	bool ApplySlotAimMask();
+	bool ApplySlotAimMask(int32 SlotIndex);
 
 	// Say once per instance that the compiled graph cannot carry a mask this record names, and answer
 	// true so the callers above can spell a refusal as one expression. A node fault is a property of
@@ -851,14 +998,14 @@ private:
 	// transactions call `ResolveAndPlay` and `CommitArrivesFromAnimEvent` in the same statement pair
 	// (`Substrate/ElysiumWeaponClasses.cpp`) — a phase that only appeared on the next update would
 	// answer for the play before this one and the shot's commit would silently take the estimate.
-	void ArmSlotPhase(const FElysiumClipIdentity& Identity, float LengthSeconds, bool bLoop,
-		float PlayRate, float Cycle);
+	void ArmSlotPhase(int32 SlotIndex, const FElysiumClipIdentity& Identity, float LengthSeconds,
+		bool bLoop, float PlayRate, float Cycle);
 	// Move the armed layer to the cycle the driver's record just published, and drop it when the
 	// record has stopped naming a layer at all. Once per publish.
-	void RefreshSlotPhase(const FElysiumAnimationSelection& Selection, float Cycle);
+	void RefreshSlotPhase(int32 SlotIndex, const FElysiumOverlaySlotRecord& Row);
 	// Copy the arm into `SlotPhase` at the given cycle, or empty the record when nothing is armed —
 	// the same contract `PublishBasePhase` honours for a channel standing on nothing.
-	void PublishSlotPhase(float Cycle);
+	void PublishSlotPhase(int32 SlotIndex, float Cycle);
 	FElysiumArmedClip& Armed(EElysiumBasePhaseSource Source)
 	{
 		return ArmedClips[static_cast<uint8>(Source)];
@@ -896,42 +1043,17 @@ private:
 	float PendingAdditiveLayerWeight = 0.0f;
 	bool bHasApplied = false;
 
-	// The overlay slot, staged the same way — written by `PublishSelection` off the driver's record
-	// and by `PlaySlotLayer` off a producer's claim, which are the same two numbers taken from the
-	// same two pure helpers rather than two envelopes.
-	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingSlotSequence = nullptr;
-	UPROPERTY(Transient) TObjectPtr<UBlendSpace> PendingSlotSpace = nullptr;
-	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingSlotAdditive = nullptr;
-	FName PendingSlotAimMaskName;
-	FName PendingSlotMaskName;
-	float PendingSlotWeight = 0.0f;
-	float PendingSlotCycle = 0.0f;
-	// What the slot's blend node was last actually given, so the mask is written on change rather
-	// than per frame — the setter invalidates the node's cached per-bone weights.
-	FName AppliedSlotMaskName;
-	// And the name a refusal was last reported for, for exactly the reason its autolayer twin above
-	// carries one: a refused mask never reaches the node, so the applied name cannot latch it and the
-	// warning would repeat every frame the layer stands.
-	FName ReportedSlotMaskName;
-	// The aim blend's own applied/reported pair, mirroring the two above for the third masked node.
-	FName AppliedSlotAimMaskName;
-	FName ReportedSlotAimMaskName;
-	// The layer the evaluator is currently standing on. A publish that swaps the ASSET while still
-	// carrying the previous claim's cycle would otherwise seat a fresh clip mid-motion, so the
-	// playhead is re-seated at the head whenever this moves.
-	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PosedSlotSequence = nullptr;
-	// A maskless slot layer is refused rather than composed, and said once per instance: it is a bake
-	// or vocabulary fault that does not change frame to frame, and a per-frame line would bury it.
-	bool bReportedMasklessSlot = false;
-	// The same fault on the upper-body layer, which the resolver can publish for a layer sequence
-	// whose clip carries no `UElysiumAnimLayerMask`.
+	// The overlay stack's staging, one row per slot — written by `PublishSelection` off the driver's
+	// record and by `PlaySlotLayer` off a producer's own layer, which are the same numbers taken from
+	// the same pure helper rather than two envelopes.
+	FElysiumOverlaySlotStaging SlotStaging[ElysiumOverlay::NumSlots];
+	// The same maskless fault on the upper-body autolayer, which the resolver can publish for a layer
+	// sequence whose clip carries no `UElysiumAnimLayerMask`.
 	bool bReportedMasklessUpperBody = false;
 	// One latch per masked node for a fault in the compiled graph itself — no node under the tag, or
 	// a node whose shape `SetBlendMask` cannot take. A property of the generated package, so it is
-	// stated once and never re-evaluated.
+	// stated once and never re-evaluated. The slots carry their own, one pair per row.
 	bool bReportedUpperBodyNodeFault = false;
-	bool bReportedSlotNodeFault = false;
-	bool bReportedSlotAimNodeFault = false;
 	// The arm seam's own refusals, keyed by reason and clip. Separate from the projection latch above
 	// because they answer a different question — that one is about the record the driver published,
 	// these are about a claim a producer just took — and because the arm reaches one key per weapon
@@ -1016,12 +1138,8 @@ private:
 	// Which producer `BasePhase` was last read off. A readout, not a gate — precedence decides who
 	// publishes, and this records who did.
 	EElysiumBasePhaseSource PhaseSource = EElysiumBasePhaseSource::None;
-	// The overlay slot's own published record and the single arm behind it. **One arm, because the
-	// slot has one producer**: a claim on the UpperBody channel is arbitrated before it ever reaches
-	// `PlaySlotLayer`, so the layer standing here is the only one there is — unlike the base, where
-	// four clocks run concurrently and only one of them is the timeline.
-	FElysiumClipPhase SlotPhase;
-	FElysiumArmedClip SlotArm;
+	// Each overlay slot's published phase record and the arm behind it live on `SlotStaging` above —
+	// one per row, because four layers can stand at once and each rides its own clip.
 	// Whether the APPLIED record actually put an asset on the pin. `bHasApplied` cannot answer it: a
 	// record that resolved nothing is still a record applied, so the generation after a resolved-
 	// nothing first publish would present a non-null outgoing descriptor while the stack beneath is

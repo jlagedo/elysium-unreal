@@ -1626,7 +1626,7 @@ namespace
 			? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
 		return Tags != nullptr
 			? Tags->FindNodeByTag<FAnimNode_LayeredBoneBlend>(
-				FName(ElysiumAnimGraph::SlotLayerTag), Inst)
+				ElysiumAnimGraph::SlotLayerTag(0), Inst)
 			: nullptr;
 	}
 }
@@ -1647,7 +1647,7 @@ namespace
 //    its clip, pinned on the evaluator at a fixed weight for as long as the producer holds the
 //    channel, which on screen is an arm that stopped rather than an arm that never moved.
 //  * the projection, both ways — a published record drives the three pins, and a record that has
-//    stopped naming a layer takes them back down. `HasSlotLayer()` is a pointer test, so a weight or
+//    stopped naming a layer takes them back down. A resolved slot's validity is a pointer test, so a weight or
 //    a playhead left behind by a claim that has gone describes a layer the record no longer names.
 //  * `StopSlotLayer` taking the pose down WITHOUT another update, which is the whole point of it:
 //    its callers are a run's stop path and the death transaction, and a frozen corpse never runs
@@ -1741,7 +1741,7 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	Inst->PublishSelection(Standing, BaseOnly);
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
 	Test.TestTrue(TEXT("the body poses a base clip before anything is layered over it"),
-		Inst->RequestedSlotSequence == nullptr && Inst->SlotLayerWeight == 0.f);
+		Inst->Slot0Sequence == nullptr && Inst->Slot0Weight == 0.f);
 
 	// The claim a weapon will arm the layer with: one shot, on the UpperBody channel, carrying the
 	// forced layer activity that names its envelope family.
@@ -1761,12 +1761,12 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	Test.AddExpectedError(TEXT("the overlay slot was armed for"),
 		EAutomationExpectedErrorFlags::Contains, 1);
 	Test.TestFalse(TEXT("the slot refuses a claim with no sequence behind it"),
-		Inst->PlaySlotLayer(LayerIdentity, nullptr, Pick.MaskName, Claim));
+		Inst->PlaySlotLayer(0, LayerIdentity, nullptr, Pick.MaskName, Claim, /*bSnap=*/true));
 
 	Test.AddExpectedError(TEXT("it carries no baked bone mask"),
 		EAutomationExpectedErrorFlags::Contains, 1);
 	Test.TestFalse(TEXT("...and a layer that carries no baked bone mask, which would pose nothing"),
-		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, NAME_None, Claim));
+		Inst->PlaySlotLayer(0, LayerIdentity, Pick.Layer, NAME_None, Claim, /*bSnap=*/true));
 
 	// The refusal that reads as working. A claim with no length has no phase, so the evaluator would
 	// stand on one frame of the clip at a fixed weight for as long as the producer held the channel.
@@ -1776,23 +1776,23 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	Test.AddExpectedError(TEXT("its claim carries no clip length"),
 		EAutomationExpectedErrorFlags::Contains, 1);
 	Test.TestFalse(TEXT("...and a claim carrying no clip length, which would freeze on one frame"),
-		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, Pick.MaskName, Lengthless));
+		Inst->PlaySlotLayer(0, LayerIdentity, Pick.Layer, Pick.MaskName, Lengthless, /*bSnap=*/true));
 	Test.TestTrue(TEXT("none of the three left anything staged on the slot"),
-		Inst->RequestedSlotSequence == nullptr);
+		Inst->Slot0Sequence == nullptr);
 
 	// --- the arm frame reaches the pins -----------------------------------------------------------
 	Test.TestTrue(TEXT("a masked layer with a length behind it is taken"),
-		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, Pick.MaskName, Claim));
+		Inst->PlaySlotLayer(0, LayerIdentity, Pick.Layer, Pick.MaskName, Claim, /*bSnap=*/true));
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
 	Test.TestTrue(TEXT("the layer reaches the graph's own slot pin"),
-		Inst->RequestedSlotSequence == Pick.Layer);
-	Test.TestEqual(TEXT("...carrying the mask its own metadata names"), Inst->RequestedSlotMaskName,
+		Inst->Slot0Sequence == Pick.Layer);
+	Test.TestEqual(TEXT("...carrying the mask its own metadata names"), Inst->Slot0MaskName,
 		Pick.MaskName);
 	// Age zero on the attack family is the ceiling — the snap. A reload would be at the foot of its
 	// ramp, which is the whole reason the seam reads the envelope rather than writing 1.0.
 	Test.TestEqual(TEXT("...at the envelope's own answer for the frame it was armed on"),
-		Inst->SlotLayerWeight, ElysiumAnimIntent::SlotWeightMax);
-	Test.TestEqual(TEXT("...with the evaluator seated at the clip's head"), Inst->SlotExplicitTime, 0.f);
+		Inst->Slot0Weight, ElysiumOverlay::WeightMax);
+	Test.TestEqual(TEXT("...with the evaluator seated at the clip's head"), Inst->Slot0Time, 0.f);
 	// And the mask really was written on the node, which is the one thing no pin can show: the
 	// layered blend's mask is edit-time state, so it is set through `SetBlendMask` rather than copied.
 	Test.TestTrue(TEXT("...and the slot's blend node was given a profile, not left unmasked"),
@@ -1818,7 +1818,7 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	Test.TestEqual(TEXT("...carrying the sequence's own authored length"), LayerPhase.Length,
 		LayerSeconds, UE_KINDA_SMALL_NUMBER);
 	// The rate the claim is riding the clip at, read back out of the one duration the envelope, the
-	// expiry and this phase all share: `authored / SlotPhaseLength`. It is what a consumer sampling a
+	// expiry and this phase all share: `authored / ClipLengthSeconds`. It is what a consumer sampling a
 	// window forward from the cycle multiplies by, so a claim whose hold disagreed with its clip
 	// would hand every such reader a window measured in the wrong seconds. This claim states the
 	// authored 1.0, so the two lengths are the same number and the rate is exactly 1.
@@ -1855,20 +1855,20 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 
 	// --- the driver's republish walks it, and the record is what the pins follow -------------------
 	FElysiumAnimationSelection Layered = Standing;
-	Layered.SlotLabel = Pick.Label;
-	Layered.SlotOwnerStem = Pick.Owner;
-	Layered.SlotWeight = 0.5f;
-	Layered.SlotCycle = 0.5f;
+	Layered.Slots[0].Label = Pick.Label;
+	Layered.Slots[0].OwnerStem = Pick.Owner;
+	Layered.Slots[0].Weight = 0.5f;
+	Layered.Slots[0].Cycle = 0.5f;
 	FElysiumResolvedAnimation Composed = BaseOnly;
-	Composed.SlotSequence = Pick.Layer;
-	Composed.SlotMaskName = Pick.MaskName;
+	Composed.Slots[0].Sequence = Pick.Layer;
+	Composed.Slots[0].MaskName = Pick.MaskName;
 	Inst->PublishSelection(Layered, Composed);
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
-	Test.TestEqual(TEXT("a published record drives the slot's weight"), Inst->SlotLayerWeight, 0.5f);
+	Test.TestEqual(TEXT("a published record drives the slot's weight"), Inst->Slot0Weight, 0.5f);
 	Test.TestEqual(TEXT("...and pins the evaluator at that phase of the layer's own seconds"),
-		Inst->SlotExplicitTime, 0.5f * LayerSeconds, UE_KINDA_SMALL_NUMBER);
+		Inst->Slot0Time, 0.5f * LayerSeconds, UE_KINDA_SMALL_NUMBER);
 	Test.TestTrue(TEXT("...over the same layer, which is not re-seated at its head mid-motion"),
-		Inst->RequestedSlotSequence == Pick.Layer);
+		Inst->Slot0Sequence == Pick.Layer);
 	// The phase walks with the pose, off the same one number. A timeline advanced against any other
 	// clock would dispatch a shot's commit id at an instant the layer never reaches.
 	Test.TestTrue(TEXT("the published phase moves with the record"),
@@ -1881,10 +1881,10 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	Inst->PublishSelection(Standing, BaseOnly);
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
 	Test.TestTrue(TEXT("a cleared record takes the layer off the pin"),
-		Inst->RequestedSlotSequence == nullptr);
-	Test.TestEqual(TEXT("...its weight with it"), Inst->SlotLayerWeight, 0.f);
+		Inst->Slot0Sequence == nullptr);
+	Test.TestEqual(TEXT("...its weight with it"), Inst->Slot0Weight, 0.f);
 	Test.TestEqual(TEXT("...and its playhead, rather than leaving the last shot's phase standing"),
-		Inst->SlotExplicitTime, 0.f);
+		Inst->Slot0Time, 0.f);
 	// The timeline goes with it. A phase left standing names a clip nothing composes, and the event
 	// pass would keep walking its records against a frozen cycle for the life of the body.
 	Test.TestFalse(TEXT("...and the channel stops answering the phase seam"),
@@ -1896,13 +1896,13 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	// never runs another update, so a stop that only cleared the staging would leave the shot it died
 	// mid-way through composing at its last weight and phase for the life of the body.
 	Test.TestTrue(TEXT("the layer is armed again"),
-		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, Pick.MaskName, Claim));
+		Inst->PlaySlotLayer(0, LayerIdentity, Pick.Layer, Pick.MaskName, Claim, /*bSnap=*/true));
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
-	Test.TestTrue(TEXT("...and is standing on the pin"), Inst->RequestedSlotSequence == Pick.Layer);
-	Inst->StopSlotLayer();
+	Test.TestTrue(TEXT("...and is standing on the pin"), Inst->Slot0Sequence == Pick.Layer);
+	Inst->StopSlotLayer(0);
 	Test.TestTrue(TEXT("StopSlotLayer clears the pin without another update"),
-		Inst->RequestedSlotSequence == nullptr);
-	Test.TestEqual(TEXT("...and the weight the graph evaluates"), Inst->SlotLayerWeight, 0.f);
+		Inst->Slot0Sequence == nullptr);
+	Test.TestEqual(TEXT("...and the weight the graph evaluates"), Inst->Slot0Weight, 0.f);
 	Test.TestFalse(TEXT("...and the phase it published, which no later update would come back to clear"),
 		Inst->GetClipPhase(EElysiumAnimChannel::UpperBody, LayerPhase));
 
@@ -1912,14 +1912,14 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	// place it can be forgotten, and a body killed mid-fire then freezes holding the overlay's last
 	// weight.
 	Test.TestTrue(TEXT("the layer is armed a third time"),
-		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, Pick.MaskName, Claim));
+		Inst->PlaySlotLayer(0, LayerIdentity, Pick.Layer, Pick.MaskName, Claim, /*bSnap=*/true));
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
 	Test.TestTrue(TEXT("...and is standing on the pin again"),
-		Inst->RequestedSlotSequence == Pick.Layer);
+		Inst->Slot0Sequence == Pick.Layer);
 	UElysiumBipedAnimInstance::StopSlotLayerOn(Comp);
 	Test.TestTrue(TEXT("the body-addressed stop reaches the same pin"),
-		Inst->RequestedSlotSequence == nullptr);
-	Test.TestEqual(TEXT("...and the same weight"), Inst->SlotLayerWeight, 0.f);
+		Inst->Slot0Sequence == nullptr);
+	Test.TestEqual(TEXT("...and the same weight"), Inst->Slot0Weight, 0.f);
 	// A body with no biped graph at all carries no slot to stop, which is an ordinary absence rather
 	// than a failure — every green-room stand and preview body is one.
 	UElysiumBipedAnimInstance::StopSlotLayerOn(nullptr);
@@ -1941,22 +1941,22 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 		? SlotBlend->BlendMasks[0] : nullptr;
 	Test.TestNotNull(TEXT("the good mask really reached the node"), GoodProfile);
 	Test.TestEqual(TEXT("...and the layer is standing at the record's weight"),
-		Inst->SlotLayerWeight, 0.5f);
+		Inst->Slot0Weight, 0.5f);
 
 	Test.AddExpectedError(TEXT("is absent from this body's skeleton or is not a blend mask"),
 		EAutomationExpectedErrorFlags::Contains, 1);
 	FElysiumResolvedAnimation BadMask = Composed;
-	BadMask.SlotMaskName = FName(TEXT("elysium_no_such_blend_mask"));
+	BadMask.Slots[0].MaskName = FName(TEXT("elysium_no_such_blend_mask"));
 	Inst->PublishSelection(Layered, BadMask);
 	EvaluateFrames(Comp, /*Frames=*/3, FrameSeconds, Pose);
 
 	Test.TestEqual(TEXT("a refused mask takes the layer's weight to zero"),
-		Inst->SlotLayerWeight, 0.f);
+		Inst->Slot0Weight, 0.f);
 	Test.TestTrue(TEXT("...and the pin with it, so nothing composes"),
-		Inst->RequestedSlotSequence == nullptr);
+		Inst->Slot0Sequence == nullptr);
 	Test.TestEqual(TEXT("...along with the aim and additive weights, one clip one fate"),
-		Inst->SlotAimLayerWeight + Inst->SlotAdditiveWeight, 0.f);
-	Test.TestEqual(TEXT("...and the playhead"), Inst->SlotExplicitTime, 0.f);
+		Inst->Slot0AimWeight + Inst->Slot0AdditiveWeight, 0.f);
+	Test.TestEqual(TEXT("...and the playhead"), Inst->Slot0Time, 0.f);
 	// The assertion that separates "refused" from "cleared": the node still holds the PREVIOUS
 	// weapon's bone set, and the weight is the only thing stopping it composing.
 	Test.TestTrue(TEXT("...while the blend node still holds the previous profile, unread at weight 0"),
@@ -1970,8 +1970,8 @@ static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 	Inst->PublishSelection(Layered, Composed);
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
 	Test.TestTrue(TEXT("a good record after a refusal comes back"),
-		Inst->RequestedSlotSequence == Pick.Layer);
-	Test.TestEqual(TEXT("...at its own weight"), Inst->SlotLayerWeight, 0.5f);
+		Inst->Slot0Sequence == Pick.Layer);
+	Test.TestEqual(TEXT("...at its own weight"), Inst->Slot0Weight, 0.5f);
 	Test.TestTrue(TEXT("...with a mask on the node"),
 		SlotBlend->BlendMasks.IsValidIndex(0) && SlotBlend->BlendMasks[0] != nullptr);
 
