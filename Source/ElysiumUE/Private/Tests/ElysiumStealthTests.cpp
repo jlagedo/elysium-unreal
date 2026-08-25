@@ -33,8 +33,10 @@
 #include "Substrate/ElysiumStealth.h"
 #include "Substrate/ElysiumStealthTables.h"
 #include "Substrate/ElysiumStealthTrigger.h"
+#include "Tests/ElysiumRulebookTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
+#include "HAL/FileManager.h"
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 
@@ -198,6 +200,10 @@ namespace
 
 		FElysiumRecordingServices Services;
 		FElysiumEntityWorld World;
+		// Declared AFTER `World` on purpose: members destruct in reverse declaration order, so this
+		// unbinds the fallback tables before the world it configured tears down, exactly as this
+		// fixture's own explicit destructor used to by running before any member's.
+		ElysiumRulebookTest::FScopedRulebookBinding Binding;
 		FElysiumPlayer* Player = nullptr;
 		FElysiumNpc* Guard = nullptr;
 
@@ -257,18 +263,13 @@ namespace
 			}
 		}
 
-		~FStealthFixture()
-		{
-			ElysiumSheetRules::BindTables(ElysiumSheetRules::FBoundTables());
-		}
-
 		void Bind()
 		{
 			ElysiumSheetRules::FBoundTables Bound;
 			Bound.Stats = &Stats;
 			Bound.Feats = &Feats;
 			Bound.Stealth = &Tables;
-			ElysiumSheetRules::BindTables(Bound);
+			ElysiumRulebookTest::FScopedRulebookBinding::Bind(Bound);
 		}
 
 		// Null when the classname resolved to an inert record instead of the registered leaf — the
@@ -943,9 +944,19 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStealthContentTest,
 	"Elysium.Content.Stealth", GElysiumTestFlags)
 bool FElysiumStealthContentTest::RunTest(const FString&)
 {
-	if (FElysiumContentPaths::Root().IsEmpty())
+	// A missing prerequisite abstains; a prerequisite that is present and will not parse fails.
+	// Gating on the root alone conflated the two, so a maps-only export reported a red suite for
+	// the ordinary development state of not having exported vdata yet.
+	if (FElysiumContentPaths::Root().IsEmpty() || FElysiumContentPaths::IsIncomplete(TEXT("vdata")))
 	{
-		AddInfo(TEXT("no ELYSIUM_EXPORT_ROOT — skipping"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the vdata export domain is unavailable"));
+		return true;
+	}
+	const FString StealthPath = FElysiumContentPaths::VdataFile(TEXT("system/stealth.txt"));
+	if (!IFileManager::Get().FileExists(*StealthPath))
+	{
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: stealth.txt not exported: %s"),
+			*StealthPath));
 		return true;
 	}
 
@@ -1008,9 +1019,13 @@ bool FElysiumStealthContentTest::RunTest(const FString&)
 		TestEqual(TEXT("feat id 1 is Sneaking, which is what the code term keys on"),
 			Sneaking->InternalName, FString(TEXT("Sneaking")));
 	}
-	else
+	else if (IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/feats.txt"))))
 	{
 		AddError(FString::Printf(TEXT("feats.txt did not load: %s"), *FeatError));
+	}
+	else
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: feats.txt not exported"));
 	}
 	return true;
 }

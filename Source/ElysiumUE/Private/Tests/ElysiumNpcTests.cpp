@@ -689,7 +689,8 @@ bool FElysiumRelationshipsTest::RunTest(const FString&)
 	return true;
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcTest, "Elysium.Substrate.Npc", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcTest,
+	"Elysium.Substrate.Npc.Classes", GElysiumTestFlags)
 bool FElysiumNpcTest::RunTest(const FString&)
 {
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
@@ -936,15 +937,20 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	TestTrue(TEXT("named patrol resolves and arms both authored points"),
 		DebugRow(World.Resolve(JackHandle), TEXT("Patrol")).Contains(TEXT("point 1/2")));
 	World.Tick(0.05);
+	// Arming a patrol is not the same as walking one. Jack's body belongs to the schedule arbiter
+	// here, so the armed route is parked and NOTHING is commanded -- the arbiter, not the patrol,
+	// decides who drives. The moving half of the rule is `Elysium.Substrate.Npc.TravelSpeed`,
+	// whose walker has no schedule to park it.
+	TestTrue(TEXT("a scheduled body stays owned by its schedule while a patrol is armed"),
+		DebugRow(World.Resolve(JackHandle), TEXT("Body owner")).StartsWith(TEXT("Schedule")));
 	FElysiumRecordingNpcMotor* JackMotor = Services.NpcMotors.IsEmpty()
 		? nullptr : Services.NpcMotors[0].Get();
 	if (TestNotNull(TEXT("Jack owns the recording motor"), JackMotor))
 	{
 		TestTrue(TEXT("the NPC motor retains Jack rather than player identity"),
 			JackMotor->Owner == JackHandle);
-		TestTrue(TEXT("an active patrol issues a native movement request"), JackMotor->bMoving);
-		TestTrue(TEXT("the native request carries the first authored point"),
-			JackMotor->RequestedFeet.Equals(FVector(100.0f, 25.0f, 0.0f)));
+		TestFalse(TEXT("an armed patrol on a schedule-owned body commands no movement"),
+			JackMotor->bMoving);
 	}
 
 	FElysiumMapSnapshot PatrolSnapshot;
@@ -960,9 +966,7 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	World.Tick(0.05);
 	if (JackMotor)
 	{
-		TestFalse(TEXT("clearing a patrol stops its native request"), JackMotor->bMoving);
-		TestTrue(TEXT("clearing a patrol crosses the explicit motor Stop seam"),
-			Services.Saw(TEXT("NpcMotor Stop")));
+		TestFalse(TEXT("clearing a patrol leaves nothing commanded"), JackMotor->bMoving);
 	}
 
 	return true;

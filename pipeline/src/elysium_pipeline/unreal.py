@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 
 
 FONT_ASSETS = (
@@ -23,6 +24,29 @@ FONT_ASSETS = (
 )
 #: A map's stages. Prop meshes belong to the shared corpus scope, whose stages are its own.
 TEST_ABSTENTION_TOKEN = "ELYSIUM_TEST_ABSTAIN"
+
+#: The tier names `uv run elysium test` accepts, and the automation filter each selects. A bare
+#: word that is not one of these is a typo rather than a filter -- `Automation RunTest` matches by
+#: substring and reports success for a selection that matched nothing.
+TEST_TIERS = {
+    "substrate": "Elysium.Substrate.",
+    "content": "Elysium.Content.",
+    # Needs a generated `/Game` package but no export corpus -- a real material graph, a declared
+    # input asset. Separate from `content` so a corpus run is not slowed by generated-asset policy
+    # and a reader is not told the run needed the user's own game.
+    "policy": "Elysium.Policy.",
+}
+
+#: How long an automation launch may take before the watchdog kills it. Well above a cold boot
+#: that compiles shaders (the slowest observed tier run is under two minutes) and far below
+#: "forever", which is what a wedged commandlet costs without it.
+TEST_TIMEOUT_SECONDS = 900.0
+
+#: How many automation reports are retained under `$ELYSIUM_WORK_ROOT/reports/tests/`. Each run
+#: writes a stamped directory and nothing used to remove one, so the directory grew without bound.
+#: The reports are a debugging aid for the run you just made, not an archive -- git and the run
+#: journals in `$ELYSIUM_WORK_ROOT/logs/` are the durable record.
+TEST_REPORT_RETENTION = 50
 
 
 class UnrealFailure(RuntimeError):
@@ -42,7 +66,8 @@ EDITOR_TAIL_LINES = 2000
 _HEADLESS_EDITOR_ARGS = ("-NoLiveCoding", "-noP4", "-nosound")
 
 
-def _run(config, runner, executable: Path | str, args: Sequence[str]) -> None:
+def _run(config, runner, executable: Path | str, args: Sequence[str], *,
+         timeout: float | None = None) -> None:
     arguments = list(map(str, args))
     executable_name = Path(executable).name.casefold()
     tail_lines = None
@@ -59,7 +84,8 @@ def _run(config, runner, executable: Path | str, args: Sequence[str]) -> None:
             arguments.extend(flag for flag in _HEADLESS_EDITOR_ARGS
                              if flag.casefold() not in lowered)
     result = runner.run(
-        [str(executable), *arguments], cwd=config.repo_root, tail_lines=tail_lines
+        [str(executable), *arguments], cwd=config.repo_root, tail_lines=tail_lines,
+        timeout=timeout,
     )
     if result.returncode:
         raise UnrealFailure(f"{executable} exited with {result.returncode}")
@@ -406,14 +432,30 @@ def run_tests(config, runner, filter_name: str = "Elysium.", *,
     `parity_stems` widens the per-model parity slice, which is otherwise two hard-coded bodies.
     It is the only test in the suite built for slice iteration, and it was previously reachable
     only by invoking the commandlet by hand.
+
+    Raises rather than returning a green summary when the run proved nothing: an unknown tier
+    name, a selection that matched no test, a tier that abstained entirely, or a report that
+    counts failures. `Automation RunTest` matches by substring and reports success for a
+    selection that matched nothing, so a typo is otherwise indistinguishable from a clean run.
     """
-    aliases = {"substrate": "Elysium.Substrate.", "content": "Elysium.Content."}
-    selected = aliases.get(filter_name.lower(), filter_name)
+    selected = TEST_TIERS.get(filter_name.lower())
+    if selected is None:
+        # A bare word is a tier name and only these exist; anything carrying a dot is a caller
+        # spelling a fully qualified filter, which is passed through untouched.
+        if "." not in filter_name:
+            raise UnrealFailure(
+                f"unknown test tier '{filter_name}'; expected one of "
+                f"{', '.join(sorted(TEST_TIERS))}, or a fully qualified filter such as "
+                f"'Elysium.Substrate.Knockback.'"
+            )
+        selected = filter_name
     if config.work_root is None:
         raise UnrealFailure("automation needs ELYSIUM_WORK_ROOT for its retained report")
+    reports_dir = config.work_root / "reports" / "tests"
+    prune_test_reports(reports_dir, TEST_REPORT_RETENTION - 1)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
     slug = re.sub(r"[^a-z0-9]+", "-", selected.lower()).strip("-") or "all"
-    report = config.work_root / "reports" / "tests" / f"{stamp}-{slug}"
+    report = reports_dir / f"{stamp}-{slug}"
     suffix = 1
     while report.exists():
         report = report.with_name(f"{stamp}-{slug}-{suffix}")
@@ -432,10 +474,48 @@ def run_tests(config, runner, filter_name: str = "Elysium.", *,
     ]
     if parity_stems:
         arguments.insert(2, "-ElysiumParityStems=" + ",".join(parity_stems))
-    _run(config, runner, editor_executable(config, commandlet=True), arguments)
+    _run(config, runner, editor_executable(config, commandlet=True), arguments,
+         timeout=TEST_TIMEOUT_SECONDS)
     summary = summarize_test_report(report)
     summary["report_path"] = str(report.resolve())
+    if not summary["total"]:
+        raise UnrealFailure(
+            f"'{selected}' matched no test; the run proved nothing "
+            f"(report: {summary['report_path']})"
+        )
+    if summary["failed"]:
+        raise UnrealFailure(
+            f"{summary['failed']} of {summary['total']} test(s) failed "
+            f"(report: {summary['report_path']})"
+        )
+    if not summary["executed"]:
+        raise UnrealFailure(
+            f"all {summary['total']} test(s) under '{selected}' abstained; the prerequisite "
+            f"they need is unavailable, so the tier is vacuous "
+            f"(report: {summary['report_path']})"
+        )
     return summary
+
+
+def prune_test_reports(reports_dir: Path, keep: int = TEST_REPORT_RETENTION) -> int:
+    """Drop all but the newest `keep` automation reports. Returns how many were removed.
+
+    Names are UTC stamps, so lexical order is chronological. A report that cannot be removed --
+    a viewer holding its HTML open, most often -- is reported and skipped rather than failing the
+    run that just passed.
+    """
+    if not reports_dir.is_dir():
+        return 0
+    existing = sorted((child for child in reports_dir.iterdir() if child.is_dir()),
+                      key=lambda child: child.name)
+    removed = 0
+    for stale in existing[:max(0, len(existing) - keep)]:
+        try:
+            shutil.rmtree(stale)
+            removed += 1
+        except OSError as exc:
+            print(f"WARNING - could not prune automation report {stale}: {exc}")
+    return removed
 
 
 def summarize_test_report(report_dir: Path) -> dict:

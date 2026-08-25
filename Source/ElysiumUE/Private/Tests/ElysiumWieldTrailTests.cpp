@@ -1,6 +1,6 @@
 // The melee weapon-trail VFX's `TrailTip` socket is a synthetic bake-side attachment
 // (`wield_corpus.trail_tip_from_geometry`), not a `.mdl`-authored one, so it needs its own
-// coverage rather than riding `Elysium.Content.BakedAttachmentSockets`' repeat-name fixture.
+// coverage of its own rather than riding a shared repeat-name fixture.
 //
 // Self-skipping: both the wield manifest and the baked mount are gitignored and regenerable.
 // The manifest itself is the enumeration source of truth for which stems carry a socket, so this

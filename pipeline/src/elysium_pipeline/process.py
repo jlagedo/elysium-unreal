@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import threading
 import time
 from typing import Callable, Mapping, Sequence, TextIO
 
@@ -48,6 +49,20 @@ class ProcessFailure(RuntimeError):
         )
 
 
+class ProcessTimeout(ProcessFailure):
+    """A child process outlived its deadline and was killed."""
+
+    def __init__(self, result: ProcessResult, category: int, timeout: float):
+        self.timeout = timeout
+        RuntimeError.__init__(
+            self,
+            f"{result.argv[0]} exceeded its {timeout:.0f}s deadline and was killed "
+            f"after {result.duration_seconds:.1f}s"
+        )
+        self.result = result
+        self.category = category
+
+
 class ProcessRunner:
     """Command-scoped adapter used by build, Unreal, and debug drivers."""
 
@@ -72,6 +87,7 @@ class ProcessRunner:
         category: int = 3,
         check: bool = False,
         tail_lines: int | None = None,
+        timeout: float | None = None,
     ) -> ProcessResult:
         return run_process(
             argv,
@@ -82,6 +98,7 @@ class ProcessRunner:
             check=check,
             category=category,
             tail_lines=tail_lines,
+            timeout=timeout,
         )
 
 
@@ -95,6 +112,7 @@ def run_process(
     check: bool = True,
     category: int = 3,
     tail_lines: int | None = None,
+    timeout: float | None = None,
 ) -> ProcessResult:
     """Run an argv safely, stream combined output, and retain it for reports.
 
@@ -103,6 +121,12 @@ def run_process(
     ``-FullStdOutLogOutput`` streams hundreds of thousands of lines; the mirror
     log keeps every line in either mode, so a bounded tail loses nothing the
     log does not already hold.
+
+    ``timeout`` bounds the whole run. A commandlet that wedges before its
+    ``;Quit`` writes no more output and never exits, so the streaming read
+    blocks forever; a watchdog kills the child and the call raises
+    ``ProcessTimeout``. Left unset the call waits indefinitely, which is
+    correct for an attended launch the operator can see.
     """
 
     command = tuple(os.fspath(value) for value in argv)
@@ -130,6 +154,24 @@ def run_process(
     active_log = log
     active_sink = output_sink
     stdout_available = True
+
+    # The watchdog, not `Popen.communicate(timeout=...)`: this reads the child's output line by
+    # line so it can mirror it live, and that read is what blocks when a commandlet wedges.
+    # Killing the child closes the pipe, which is what releases the loop below.
+    timed_out = False
+
+    def on_deadline() -> None:
+        nonlocal timed_out
+        timed_out = True
+        try:
+            process.kill()
+        except OSError:
+            pass
+
+    watchdog = threading.Timer(timeout, on_deadline) if timeout is not None else None
+    if watchdog is not None:
+        watchdog.daemon = True
+        watchdog.start()
 
     def record_mirror_failure(destination: str, exc: OSError) -> None:
         warning = (
@@ -176,6 +218,8 @@ def run_process(
             process.stdout.close()
         finally:
             returncode = process.wait()
+            if watchdog is not None:
+                watchdog.cancel()
         if active_log is not None:
             # The interval flush leaves a buffered tail; the log is complete
             # once the child has exited.
@@ -192,6 +236,8 @@ def run_process(
         duration_seconds=time.monotonic() - before,
         output="".join(lines),
     )
+    if timed_out:
+        raise ProcessTimeout(result, category, timeout)
     if check and returncode:
         raise ProcessFailure(result, category)
     return result

@@ -85,6 +85,7 @@
 #include "Scripting/ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
 #include "Scripting/ElysiumScriptNatives.h"
+#include "Tests/ElysiumEntityDebugStateTestHelpers.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
@@ -197,20 +198,7 @@ namespace ElysiumEventOrderTests
 	// value no Add(1) chain here can produce.
 	float CounterValueOf(const FElysiumEntity* Entity)
 	{
-		if (Entity == nullptr)
-		{
-			return -1.f;
-		}
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value"))
-			{
-				return FCString::Atof(*Row.Value);
-			}
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	}
 
 	// The first live match's value — the ordinary case, where the name is unique.
@@ -321,12 +309,8 @@ bool FElysiumOutputRowOrderTest::RunTest(const FString&)
 		FElysiumEntity* GateEntity = World.FindByName(TEXT("gate"));
 		if (TestNotNull(TEXT("gate resolved"), GateEntity))
 		{
-			TArray<TPair<FString, FString>> State;
-			GateEntity->GetDebugState(State);
-			const TPair<FString, FString>* Disabled = State.FindByPredicate(
-				[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Disabled"); });
 			TestTrue(TEXT("Enable reached the receiver"),
-				Disabled != nullptr && Disabled->Value == TEXT("no"));
+				ElysiumEntityDebugTest::Row(GateEntity, TEXT("Disabled")) == TEXT("no"));
 		}
 
 		// Serviced PAST the deadline rather than exactly on it. `Delay` is a float (the `.ents`
@@ -1786,20 +1770,8 @@ bool FElysiumLogicStateSaveTest::RunTest(const FString&)
 	// what the restored entity does next.
 	auto DebugRow = [](const FElysiumEntity* Ent, const TCHAR* Key)
 	{
-		if (!Ent)
-		{
-			return FString(TEXT("<no entity>"));
-		}
-		TArray<TPair<FString, FString>> State;
-		Ent->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == Key)
-			{
-				return Row.Value;
-			}
-		}
-		return FString(TEXT("<no row>"));
+		return Ent ? ElysiumEntityDebugTest::Row(Ent, Key, TEXT("<no row>"))
+			: FString(TEXT("<no entity>"));
 	};
 
 	// --- (a) math_counter: the OnHitMax edge latch ------------------------------------------

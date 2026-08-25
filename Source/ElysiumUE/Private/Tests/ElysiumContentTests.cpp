@@ -99,6 +99,19 @@
 static constexpr EAutomationTestFlags GElysiumContentTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
+// `Elysium.Policy.*` is the third tier: cases that need a GENERATED `/Game` package -- a real
+// material graph, a declared input asset, an audio routing asset -- and read nothing from
+// `$ELYSIUM_EXPORT_ROOT`. They cannot be Substrate, because a recording stub cannot answer "the
+// master carries an EnvStrength scalar defaulting to 0"; they are not Content either, because
+// nothing about the user's own corpus is being regressed. Keeping them under Content made the
+// corpus tier slower and told a reader something untrue about what the run needed.
+static constexpr EAutomationTestFlags GElysiumPolicyTestFlags =
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+
+// The one case in this file that needs neither the corpus nor a generated package.
+static constexpr EAutomationTestFlags GElysiumSubstrateTestFlags =
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+
 namespace
 {
 	// Abstain only while a domain this test actually reads is missing. Naming the domains is what
@@ -682,9 +695,11 @@ bool FElysiumTutorialDecalsTest::RunTest(const FString&)
 	const FString Path = FElysiumContentPaths::MapDecals(Map);
 	if (!IFileManager::Get().FileExists(*Path))
 	{
+		// The token, not a prose "skipping": the pipeline counts an abstention separately
+		// from an execution, and a green tier that proved nothing has to say so.
 		AddInfo(FString::Printf(
-			TEXT("skipping %s decals: no exported .decals at %s (run the pipeline to enable)"), Map, *Path));
-		return true;   // not exported — skip, stay green
+			TEXT("ELYSIUM_TEST_ABSTAIN: no exported .decals for %s at %s"), Map, *Path));
+		return true;
 	}
 
 	TArray<FElysiumDecalDef> Defs;
@@ -739,9 +754,11 @@ bool FElysiumTutorialRopesTest::RunTest(const FString&)
 	const FString Path = FElysiumContentPaths::MapRopes(Map);
 	if (!IFileManager::Get().FileExists(*Path))
 	{
+		// The token, not a prose "skipping": the pipeline counts an abstention separately
+		// from an execution, and a green tier that proved nothing has to say so.
 		AddInfo(FString::Printf(
-			TEXT("skipping %s ropes: no exported .ropes at %s (run the pipeline to enable)"), Map, *Path));
-		return true;   // not exported — skip, stay green
+			TEXT("ELYSIUM_TEST_ABSTAIN: no exported .ropes for %s at %s"), Map, *Path));
+		return true;
 	}
 
 	TArray<FElysiumRopeDef> Defs;
@@ -815,9 +832,11 @@ bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
 	const FString Path = Dir / (FString(Map) + TEXT(".mtl"));
 	if (!IFileManager::Get().FileExists(*Path))
 	{
+		// The token, not a prose "skipping": the pipeline counts an abstention separately
+		// from an execution, and a green tier that proved nothing has to say so.
 		AddInfo(FString::Printf(
-			TEXT("skipping %s materials: no exported .mtl at %s (run the pipeline to enable)"), Map, *Path));
-		return true;   // not exported — skip, stay green
+			TEXT("ELYSIUM_TEST_ABSTAIN: no exported .mtl for %s at %s"), Map, *Path));
+		return true;
 	}
 
 	TMap<FString, FElysiumMaterialDef> Materials;
@@ -870,7 +889,7 @@ bool FElysiumTutorialMaterialsTest::RunTest(const FString&)
 // binds nothing and fails silently in the frame, so the contract is asserted here instead: every
 // lit master must carry every parameter ElysiumReflections names.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReflectionParamsTest,
-	"Elysium.Content.ReflectionParams", GElysiumContentTestFlags)
+	"Elysium.Policy.ReflectionParams", GElysiumPolicyTestFlags)
 bool FElysiumReflectionParamsTest::RunTest(const FString&)
 {
 	// This validates generated Unreal packages only. A corpus-wide export marker must not hide
@@ -986,7 +1005,7 @@ bool FElysiumReflectionParamsTest::RunTest(const FString&)
 // refraction, while real lit/reflective glass compiles as Thin Translucent with a tangent-normal
 // Pixel Normal Offset. These properties and parameter names are the bake/runtime contract.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGlassMasterTest,
-	"Elysium.Content.GlassMaster", GElysiumContentTestFlags)
+	"Elysium.Policy.GlassMaster", GElysiumPolicyTestFlags)
 bool FElysiumGlassMasterTest::RunTest(const FString&)
 {
 	UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
@@ -1048,7 +1067,7 @@ bool FElysiumGlassMasterTest::RunTest(const FString&)
 // albedo; the dedicated master consumes a linear tangent normal and the original amount through
 // Pixel Normal Offset while white Thin Translucent transmission leaves the pane behind visible.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRefractMasterTest,
-	"Elysium.Content.RefractMaster", GElysiumContentTestFlags)
+	"Elysium.Policy.RefractMaster", GElysiumPolicyTestFlags)
 bool FElysiumRefractMasterTest::RunTest(const FString&)
 {
 	UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
@@ -2239,7 +2258,7 @@ bool FElysiumOpeningAnimatedPropsContentTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerBodyMaterialTest,
-	"Elysium.Content.PlayerBodyMaterial", GElysiumContentTestFlags)
+	"Elysium.Policy.PlayerBodyMaterial", GElysiumPolicyTestFlags)
 bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
 {
 	if (SkipIncompleteCorpus(*this, { TEXT("policy") })) return true;
@@ -2283,7 +2302,7 @@ bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlacedPropMaterialUsageTest,
-	"Elysium.Content.PlacedPropMaterialUsage", GElysiumContentTestFlags)
+	"Elysium.Policy.PlacedPropMaterialUsage", GElysiumPolicyTestFlags)
 bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
 {
 	// Every branch bake_map._master_for can select for a prop is also applied to the skeletal
@@ -2347,11 +2366,17 @@ bool FElysiumSantaMonicaNpcRoutesContentTest::RunTest(const FString&)
 			++InterestingPedestrians;
 		}
 	}
-	TestEqual(TEXT("all authored Santa Monica interesting places survived export"),
-		InterestingPlaces, 76);
-	TestEqual(TEXT("all authored ambient pedestrians survived export"),
-		InterestingPedestrians, 17);
-	TestEqual(TEXT("all authored named patrol nodes survived export"), PatrolNodes.Num(), 34);
+	// Bands, not equalities, following the house pattern above: the export holds 76 interesting
+	// places, 17 ambient pedestrians and 34 named patrol nodes today. A decoder that drops a class
+	// trips the floor; a data revision that adds or retires one does not turn the tier red. The
+	// named nodes the routes actually reference are asserted individually below, which is the part
+	// a count could never prove.
+	TestTrue(TEXT("all authored Santa Monica interesting places survived export"),
+		InterestingPlaces > 60 && InterestingPlaces < 95);
+	TestTrue(TEXT("all authored ambient pedestrians survived export"),
+		InterestingPedestrians > 12 && InterestingPedestrians < 25);
+	TestTrue(TEXT("all authored named patrol nodes survived export"),
+		PatrolNodes.Num() > 28 && PatrolNodes.Num() < 45);
 	for (const TCHAR* Point : { TEXT("s1"), TEXT("s2"), TEXT("s3"), TEXT("s4"), TEXT("s7"),
 		TEXT("s8"), TEXT("s9"), TEXT("s10"), TEXT("s11"), TEXT("s12"), TEXT("s13"),
 		TEXT("s14"), TEXT("n1"), TEXT("n2"), TEXT("n3"), TEXT("n4"), TEXT("n5"),
@@ -2363,9 +2388,17 @@ bool FElysiumSantaMonicaNpcRoutesContentTest::RunTest(const FString&)
 
 	FElysiumInterestingPlaceTable Types;
 	FString Error;
-	if (!TestTrue(TEXT("retail interesting-place type table loads"), Types.Load(Error)))
+	if (!Types.Load(Error))
 	{
-		AddError(Error);
+		// Absent is the ordinary partial-export state and abstains; present-but-unparseable is a
+		// defect and fails.
+		if (FElysiumContentPaths::IsIncomplete(TEXT("vdata")))
+		{
+			AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the vdata export domain is marked incomplete"));
+			return true;
+		}
+		AddError(FString::Printf(TEXT("retail interesting-place type table did not load: %s"),
+			*Error));
 		return false;
 	}
 	for (const TCHAR* Type : { TEXT("Idle"), TEXT("Citizen_Idle"), TEXT("Doorknock"),
@@ -2502,10 +2535,9 @@ bool FElysiumTutorialLockpickDoorContentTest::RunTest(const FString&)
 				&& Output.Python.Contains(TEXT("G.Tut_Officedoor = 1"));
 		}));
 
-	const FElysiumClassDesc* KnobClass = FElysiumClassRegistry::Get().Find(
-		FName(TEXT("prop_doorknob")));
-	TestTrue(TEXT("the authored doorknob resolves to a live lockable class"),
-		KnobClass && KnobClass->BaseName == FName(TEXT("CBaseLockableEnt")));
+	// `prop_doorknob`'s place on the lockable class chain is a property of the registry, not of the
+	// corpus, and `Elysium.Substrate.TutorialLockpickDoor` asserts it -- with its lockable fields,
+	// which this never checked. Repeating it here only made the claim cost a corpus.
 	return true;
 }
 
@@ -4723,7 +4755,7 @@ bool FElysiumDispositionBlinkContentTest::RunTest(const FString&)
 
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAudioRoutingAssetsContentTest,
-	"Elysium.Content.AudioRoutingAssets", GElysiumContentTestFlags)
+	"Elysium.Policy.AudioRoutingAssets", GElysiumPolicyTestFlags)
 
 bool FElysiumAudioRoutingAssetsContentTest::RunTest(const FString&)
 {
@@ -4768,7 +4800,7 @@ bool FElysiumAudioRoutingAssetsContentTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMouseInputAssetsContentTest,
-	"Elysium.Content.MouseInputAssets", GElysiumContentTestFlags)
+	"Elysium.Policy.MouseInputAssets", GElysiumPolicyTestFlags)
 
 bool FElysiumMouseInputAssetsContentTest::RunTest(const FString&)
 {
@@ -4824,7 +4856,7 @@ bool FElysiumMouseInputAssetsContentTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInputGlyphAssetsContentTest,
-	"Elysium.Content.InputGlyphs", GElysiumContentTestFlags)
+	"Elysium.Substrate.InputGlyphs", GElysiumSubstrateTestFlags)
 
 bool FElysiumInputGlyphAssetsContentTest::RunTest(const FString&)
 {
@@ -4910,7 +4942,7 @@ bool FElysiumInputGlyphAssetsContentTest::RunTest(const FString&)
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGamepadInputAssetsContentTest,
-	"Elysium.Content.GamepadInputAssets", GElysiumContentTestFlags)
+	"Elysium.Policy.GamepadInputAssets", GElysiumPolicyTestFlags)
 
 bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 {

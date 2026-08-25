@@ -85,6 +85,7 @@
 #include "Scripting/ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
 #include "Scripting/ElysiumScriptNatives.h"
+#include "Tests/ElysiumEntityDebugStateTestHelpers.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
@@ -171,21 +172,7 @@ TArray<uint8> ElysiumSaveDigest(const FElysiumMapSnapshot& Snapshot)
 
 float SaveTestCounterValue(const FElysiumEntity* Entity)
 {
-	if (Entity == nullptr)
-	{
-		return -1.0f;
-	}
-
-	TArray<TPair<FString, FString>> State;
-	Entity->GetDebugState(State);
-	for (const TPair<FString, FString>& Row : State)
-	{
-		if (Row.Key == TEXT("Value"))
-		{
-			return FCString::Atof(*Row.Value);
-		}
-	}
-	return -1.0f;
+	return ElysiumEntityDebugTest::CounterValue(Entity);
 }
 }
 
@@ -241,15 +228,7 @@ bool FElysiumLogicRelayLifetimeTest::RunTest(const FString&)
 
 	auto CounterValue = [&World]() -> float
 	{
-		const FElysiumEntity* Counter = World.FindByName(TEXT("counter1"));
-		if (!Counter) { return -1.0f; }
-		TArray<TPair<FString, FString>> State;
-		Counter->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
-		}
-		return -1.0f;
+		return SaveTestCounterValue(World.FindByName(TEXT("counter1")));
 	};
 
 	FElysiumEntity* Plain = World.FindByName(TEXT("plain"));

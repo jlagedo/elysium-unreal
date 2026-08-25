@@ -86,6 +86,7 @@
 #include "Scripting/ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
 #include "Scripting/ElysiumScriptNatives.h"
+#include "Tests/ElysiumEntityDebugStateTestHelpers.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
@@ -413,16 +414,7 @@ bool FElysiumActivationLifecycleTest::RunTest(const FString&)
 
 	auto CounterValue = [](const FElysiumEntity* Entity)
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value"))
-			{
-				return FCString::Atof(*Row.Value);
-			}
-		}
-		return -1.0f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	// Construction may queue map-entry work, but every gameplay drive and physical ingress is
@@ -848,16 +840,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	}
 	auto CounterValue = [](const FElysiumEntity* Entity) -> float
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value"))
-			{
-				return FCString::Atof(*Row.Value);
-			}
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	// Before the timer is due nothing thinks and nothing is queued.
@@ -1045,16 +1028,7 @@ bool FElysiumIOChainTest::RunTest(const FString&)
 	// to the .cpp, so this base virtual is the seam).
 	auto CounterValue = [](const FElysiumEntity* Entity) -> FString
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value"))
-			{
-				return Row.Value;
-			}
-		}
-		return FString();
+		return ElysiumEntityDebugTest::Row(Entity, TEXT("Value"));
 	};
 
 	TestEqual(TEXT("counter starts at 0"), FCString::Atof(*CounterValue(CounterEntity)), 0.0f);

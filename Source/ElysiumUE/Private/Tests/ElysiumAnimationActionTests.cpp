@@ -4053,102 +4053,16 @@ namespace
 		return Out;
 	}
 
-	// What a map actually stands a body as. The cast half of the coverage sweep is keyed on the
-	// classname and the weapon, and the only place either is authored is a map's own entities — so
-	// they are read from there rather than invented, and a body no exported map stands is reported
-	// as one rather than driven under a plausible classname.
-	struct FAuthoredCast
-	{
-		FString Classname;
-		FString Weapon;
-	};
-
-	// Body stem -> what the exported maps author it as. First occurrence wins and the map order is
-	// the file system's, which is stable for a given export; a body stood under two classnames is a
-	// fact about the corpus rather than an ambiguity this has to resolve.
-	TMap<FString, FAuthoredCast> AuthoredCastByStem()
-	{
-		TMap<FString, FAuthoredCast> Out;
-		TArray<FString> Dirs;
-		IFileManager::Get().FindFiles(Dirs, *(FElysiumContentPaths::Root() / TEXT("*")),
-			/*Files*/ false, /*Directories*/ true);
-		Dirs.Sort();
-		for (const FString& Map : Dirs)
-		{
-			const FString EntsPath = FElysiumContentPaths::MapEnts(Map);
-			FElysiumEntityDefs Defs;
-			if (!IFileManager::Get().FileExists(*EntsPath)
-				|| !FElysiumEntityDefs::Parse(EntsPath, Defs))
-			{
-				continue;
-			}
-			for (const FElysiumEntityDef& Def : Defs.Defs)
-			{
-				if (!Def.Classname.StartsWith(TEXT("npc_"), ESearchCase::IgnoreCase))
-				{
-					continue;
-				}
-				const FString Model = Def.Keys.FindRef(TEXT("model"));
-				if (Model.IsEmpty())
-				{
-					continue;
-				}
-				// The stem the character export keys on is the model file's own base name, lowered.
-				const FString Stem = FPaths::GetBaseFilename(Model).ToLower();
-				FAuthoredCast& Entry = Out.FindOrAdd(Stem);
-				// The FIRST def that stands this body, both halves of it. Filling the classname from
-				// one map and the loadout from another would synthesise a pair no map authored, and
-				// the committed ladders are joined to the pair rather than to either field.
-				if (Entry.Classname.IsEmpty())
-				{
-					Entry.Classname = Def.Classname;
-					// `additionalequipment` is the loadout key; "0" is how a map spells "nothing",
-					// and an `npc_maker` template carries the same key as the body it makes.
-					const FString Equipment = Def.Keys.FindRef(TEXT("additionalequipment"));
-					if (!Equipment.IsEmpty() && Equipment != TEXT("0"))
-					{
-						Entry.Weapon = Equipment;
-					}
-				}
-			}
-		}
-		return Out;
-	}
-
-	// The activity-to-state rule, applied to one record: the state it names has to be able to play
-	// the asset shape it resolved, and a request that resolved nothing has to have said why.
-	//
-	// Returns an empty string when the record is sound, or the line to report when it is not.
-	FString DescribeCoverageFailure(const FElysiumAnimationSelection& Sel, const FString& Stem,
-		const TCHAR* Requested)
-	{
-		if (!ElysiumAnimGraph::StateCanPlay(Sel.GraphState, Sel.AssetKind))
-		{
-			return FString::Printf(TEXT("%s on %s resolved a %s into state %s, which cannot play one"),
-				Requested, *Stem, ElysiumAnimIntent::AssetKindName(Sel.AssetKind),
-				ElysiumAnimGraph::StateName(Sel.GraphState));
-		}
-		if (!Sel.IsResolved() && Sel.Detail.IsEmpty())
-		{
-			return FString::Printf(TEXT("%s on %s answered %s with no line naming the miss"),
-				Requested, *Stem, ElysiumAnimIntent::OutcomeName(Sel.Outcome));
-		}
-		if (Sel.IsResolved() && Sel.AssetKind == EElysiumAnimAssetKind::None)
-		{
-			return FString::Printf(TEXT("%s on %s reports a clean resolve with no asset"),
-				Requested, *Stem);
-		}
-		return FString();
-	}
 }
 
 
 
 // =====================================================================================
-// CCC5 — the graph against the real corpus.
+// The graph against the real corpus.
 //
 // The fixtures above prove the rule. This proves that the authored fades the transition arithmetic
-// reads are really what the export carries; AnimationSliceCoverage owns the graph asset-kind matrix.
+// reads are really what the export carries; the graph asset-kind matrix is a property of what the
+// bake wrote, and the character verifier owns it.
 // =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphTransitionParityTest,

@@ -182,7 +182,8 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInventoryTest, "Elysium.Substrate.Inventory", GElysiumTestFlags)
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInventoryTest,
+	"Elysium.Substrate.Inventory.Catalogue", GElysiumTestFlags)
 bool FElysiumInventoryTest::RunTest(const FString&)
 {
 	const FElysiumItemTable Table = MakeTestItemTable();

@@ -173,60 +173,141 @@ namespace
 	}
 }
 
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphMontageSlotTest,
-	"Elysium.Content.GraphMontageSlot", GElysiumMontageSlotFlags)
-bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
+namespace
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	// Every graph-backed row below repeats the same three setup steps (the npc-domain check plus the
+	// compiled player graph load, a `FindLoopingClip` pick, standing an actor/component/anim instance
+	// over a mesh) and the same "body owner spawned" check, so those are factored here once. Nothing
+	// is cached ACROSS rows: each is a plain function the caller re-runs every time, over the caller's
+	// OWN stack-local `FTestWorldWrapper`.
+	//
+	// This is deliberate, not a missed optimization. A cross-row cache was tried and reverted: static
+	// state keyed off "how many of the seven registered rows have reported in" is wrong the moment
+	// Unreal's automation filter selects fewer than seven -- `Elysium.Content.Graph.SlotLayer` alone,
+	// this project's own recommended narrow-filter workflow, would run one row, never reach the
+	// count, and leave the `UWorld` standing and the mesh/clip `AddToRoot`'d for the life of the
+	// process; worse, the cache held its `FTestWorldWrapper` in a function-local `static`, so on a
+	// process that never re-entered this file the wrapper's destructor fired at DLL unload, after the
+	// engine that owns GC and the world list has already shut down.
+	//
+	// It also is not the win it looks like: `LoadClass`/`LoadObject` resolve an already-resident
+	// package through `StaticFindObjectFast` before touching disk (`StaticLoadObjectInternal`,
+	// `UObjectGlobals.cpp`), and `LoadPackage` itself short-circuits once a package is loaded -- so a
+	// second `LoadClass<UAnimInstance>` for the same graph, or a second `FindLoopingClip` over an
+	// already-loaded mesh, answers from the in-memory object cache rather than re-parsing the asset.
+	// Cross-row rooting only ever guarded against a GC landing between two rows, and automation does
+	// not force one there. The `UWorld` is the one truly per-row cost, and it is inherently
+	// non-shareable across rows that must not inherit each other's pose anyway.
+	enum class ESharedSetupResult : uint8
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
-		return true;
-	}
-
-	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
-		*FElysiumContentPaths::PlayerAnimBlueprintClass());
-	if (Graph == nullptr)
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
-			"(run: uv run elysium export bundle policy)"));
-		return true;
-	}
-
-	FLoopingClipPick Pick;
-	if (!FindLoopingClip(Pick))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
-			"run: uv run elysium export characters"));
-		return true;
-	}
-	Pick.Mesh->AddToRoot();
-	Pick.Clip->AddToRoot();
-	ON_SCOPE_EXIT
-	{
-		Pick.Clip->RemoveFromRoot();
-		Pick.Mesh->RemoveFromRoot();
+		Ready,
+		Abstain,
+		Failed,
 	};
 
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+	// The npc-domain check plus the compiled player graph load, standing the caller's own world. The
+	// caller owns `OutWorld`'s lifetime (a stack local, torn down by its own destructor when the row
+	// returns) and `OutGraph` is a plain non-owning `UClass*` -- the class stays loaded by the engine's
+	// own package cache for as long as anything references it, same as every other asset load here.
+	ESharedSetupResult EnsureCoreSetup(FAutomationTestBase& Test, FTestWorldWrapper& OutWorld,
+		UClass*& OutGraph, FString& OutAbstainMessage)
 	{
-		TestWorld.ForwardErrorMessages(this);
-		return false;
-	}
-	UWorld* World = TestWorld.GetTestWorld();
-	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
-	if (!TestNotNull(TEXT("body owner spawned"), Owner))
-	{
-		return false;
+		if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+		{
+			OutAbstainMessage = TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete");
+			return ESharedSetupResult::Abstain;
+		}
+		OutGraph = LoadClass<UAnimInstance>(nullptr, *FElysiumContentPaths::PlayerAnimBlueprintClass());
+		if (OutGraph == nullptr)
+		{
+			OutAbstainMessage = TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
+				"(run: uv run elysium export bundle policy)");
+			return ESharedSetupResult::Abstain;
+		}
+		if (!OutWorld.CreateTestWorld(EWorldType::Game) || !OutWorld.BeginPlayInTestWorld())
+		{
+			OutWorld.ForwardErrorMessages(&Test);
+			return ESharedSetupResult::Failed;
+		}
+		return ESharedSetupResult::Ready;
 	}
 
-	USkeletalMeshComponent* Comp = nullptr;
-	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
-	if (Inst == nullptr)
+	// The looping-clip pick for the five cases that stand on an ordinary looping clip (MontageSlot,
+	// OneShotArbitration, ReactionBranch, BlendStack, FirstAssetBlend). ReactionDrive and SlotLayer
+	// pick their own content and never call this. On success the mesh and clip are rooted for exactly
+	// the caller's own scope; the caller un-roots them (`FGraphBodyCase`'s destructor does it below),
+	// the same discipline every one of these cases used before any of them shared a helper.
+	ESharedSetupResult EnsureLoopingPick(FString& OutAbstainMessage, FLoopingClipPick& OutPick)
 	{
-		return false;
+		if (!FindLoopingClip(OutPick))
+		{
+			OutAbstainMessage =
+				TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
+					"run: uv run elysium export characters");
+			return ESharedSetupResult::Abstain;
+		}
+		OutPick.Mesh->AddToRoot();
+		OutPick.Clip->AddToRoot();
+		return ESharedSetupResult::Ready;
 	}
 
+	// One actor, standing on the row's own world and mesh, with its own anim instance -- the per-row
+	// reinitialization that keeps a case from inheriting the blend state a previous case left on a
+	// shared skeleton. Both the rooted pick and the actor are released automatically when the case
+	// that asked for it returns, scoped to exactly the one row, never spanning two.
+	struct FGraphBodyCase
+	{
+		UWorld* World = nullptr;
+		AActor* Owner = nullptr;
+		USkeletalMeshComponent* Comp = nullptr;
+		UElysiumBipedAnimInstance* Inst = nullptr;
+		FLoopingClipPick Pick;
+		bool bPickRooted = false;
+
+		~FGraphBodyCase()
+		{
+			if (World != nullptr && Owner != nullptr)
+			{
+				World->DestroyActor(Owner);
+			}
+			if (bPickRooted)
+			{
+				Pick.Clip->RemoveFromRoot();
+				Pick.Mesh->RemoveFromRoot();
+			}
+		}
+	};
+
+	ESharedSetupResult BeginGraphBodyCase(FAutomationTestBase& Test, FTestWorldWrapper& World,
+		UClass* Graph, FGraphBodyCase& OutCase)
+	{
+		FString Message;
+		const ESharedSetupResult PickResult = EnsureLoopingPick(Message, OutCase.Pick);
+		if (PickResult == ESharedSetupResult::Abstain)
+		{
+			Test.AddInfo(Message);
+			return ESharedSetupResult::Abstain;
+		}
+		OutCase.bPickRooted = true;
+
+		OutCase.World = World.GetTestWorld();
+		OutCase.Owner = OutCase.World->SpawnActor<AActor>();
+		if (!Test.TestNotNull(TEXT("body owner spawned"), OutCase.Owner))
+		{
+			return ESharedSetupResult::Failed;
+		}
+		OutCase.Inst = StandGraphBody(OutCase.Owner, OutCase.Pick.Mesh, Graph, Test, OutCase.Comp);
+		if (OutCase.Inst == nullptr)
+		{
+			return ESharedSetupResult::Failed;
+		}
+		return ESharedSetupResult::Ready;
+	}
+}
+
+static bool RunGraphMontageSlotCase(FAutomationTestBase& Test, USkeletalMeshComponent* Comp,
+	UElysiumBipedAnimInstance* Inst, const FLoopingClipPick& Pick)
+{
 	const auto Evaluate = [Comp](int32 Frames, float DeltaSeconds, TArray<FTransform>& OutPose)
 	{
 		EvaluateFrames(Comp, Frames, DeltaSeconds, OutPose);
@@ -240,13 +321,13 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	TArray<FTransform> BindPose;
 	Evaluate(/*Frames=*/1, FrameSeconds, BindPose);
 	const int32 PosedBones = BindPose.Num() - 1;
-	if (!TestTrue(TEXT("the graph evaluates the whole skeleton"),
+	if (!Test.TestTrue(TEXT("the graph evaluates the whole skeleton"),
 		BindPose.Num() == Pick.Mesh->GetRefSkeleton().GetNum() && PosedBones > 0))
 	{
 		return false;
 	}
 
-	AddInfo(FString::Printf(TEXT("'%s' plays '%s'@'%s' (%.3fs, fade %.2fs) over %d bone(s)"),
+	Test.AddInfo(FString::Printf(TEXT("'%s' plays '%s'@'%s' (%.3fs, fade %.2fs) over %d bone(s)"),
 		*Pick.Stem, *Pick.Label, *Pick.Owner, Pick.Clip->GetPlayLength(), Pick.FadeSeconds,
 		PosedBones));
 
@@ -255,14 +336,14 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	// A non-looping clip asks for one segment and has always built a playable montage. Measuring it
 	// first separates "the slot poses nothing at all" from "the LOOPING length is wrong", which are
 	// different repairs behind one identical T-pose.
-	TestTrue(TEXT("a one-shot clip is accepted by the slot"),
+	Test.TestTrue(TEXT("a one-shot clip is accepted by the slot"),
 		Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds));
 	TArray<FTransform> OneShotPose;
 	Evaluate(/*Frames=*/6, FrameSeconds, OneShotPose);
 	const ElysiumPose::FDeviation OneShot = ElysiumPose::Measure(BindPose, OneShotPose);
-	AddInfo(FString::Printf(TEXT("one-shot: %d of %d non-root bones left the bind pose (max %.1f deg)"),
+	Test.AddInfo(FString::Printf(TEXT("one-shot: %d of %d non-root bones left the bind pose (max %.1f deg)"),
 		OneShot.MovedBones, PosedBones, OneShot.MaxDegrees));
-	TestTrue(TEXT("and it poses the body rather than leaving it in the bind pose"),
+	Test.TestTrue(TEXT("and it poses the body rather than leaving it in the bind pose"),
 		OneShot.MovedBones > PosedBones / 4 && OneShot.MaxDegrees > 5.f);
 
 	// --- the looping clip, which is the regression --------------------------------------------------
@@ -270,14 +351,14 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	// The refusal this guards is the whole failure: `Montage_Play` answers a zero-length montage with
 	// null and logs nothing, so the call below returning false IS the defect, with the reference pose
 	// two assertions down as its only other symptom.
-	TestTrue(TEXT("a looping clip is accepted by the slot"),
+	Test.TestTrue(TEXT("a looping clip is accepted by the slot"),
 		Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/true, Pick.FadeSeconds, Pick.FadeSeconds));
 	TArray<FTransform> LoopPose;
 	Evaluate(/*Frames=*/12, FrameSeconds, LoopPose);   // 0.4 s, past the authored fade
 	const ElysiumPose::FDeviation Looping = ElysiumPose::Measure(BindPose, LoopPose);
-	AddInfo(FString::Printf(TEXT("looping: %d of %d non-root bones left the bind pose (max %.1f deg)"),
+	Test.AddInfo(FString::Printf(TEXT("looping: %d of %d non-root bones left the bind pose (max %.1f deg)"),
 		Looping.MovedBones, PosedBones, Looping.MaxDegrees));
-	TestTrue(TEXT("and it poses the body rather than leaving it in the bind pose"),
+	Test.TestTrue(TEXT("and it poses the body rather than leaving it in the bind pose"),
 		Looping.MovedBones > PosedBones / 4 && Looping.MaxDegrees > 5.f);
 
 	// Past the clip's own length, which is the half a plain "does it pose" check cannot reach: a
@@ -296,12 +377,12 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	Evaluate(PastEndFrames, FrameSeconds, LoopedPose);
 	const ElysiumPose::FDeviation Looped = ElysiumPose::Measure(BindPose, LoopedPose);
 	const ElysiumPose::FDeviation Advanced = ElysiumPose::Measure(LoopPose, LoopedPose);
-	AddInfo(FString::Printf(
+	Test.AddInfo(FString::Printf(
 		TEXT("after %.2fs (%d frames, past the clip's %.3fs): %d of %d bones off the bind pose "
 		     "(max %.1f deg); %d moved since the first sample"),
 		PastEndFrames * FrameSeconds, PastEndFrames, Pick.Clip->GetPlayLength(),
 		Looped.MovedBones, PosedBones, Looped.MaxDegrees, Advanced.MovedBones));
-	TestTrue(TEXT("a looping montage is still posing the body after the clip's own length has passed"),
+	Test.TestTrue(TEXT("a looping montage is still posing the body after the clip's own length has passed"),
 		Looped.MovedBones > PosedBones / 4 && Looped.MaxDegrees > 5.f);
 
 	// The clip stops when it is asked to and not before, which is what makes the assertion above a
@@ -310,9 +391,9 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 	TArray<FTransform> StoppedPose;
 	Evaluate(/*Frames=*/2, FrameSeconds, StoppedPose);
 	const ElysiumPose::FDeviation Stopped = ElysiumPose::Measure(BindPose, StoppedPose);
-	AddInfo(FString::Printf(TEXT("stopped: %d of %d bones off the bind pose (max %.1f deg)"),
+	Test.AddInfo(FString::Printf(TEXT("stopped: %d of %d bones off the bind pose (max %.1f deg)"),
 		Stopped.MovedBones, PosedBones, Stopped.MaxDegrees));
-	TestTrue(TEXT("and stopping it hands the frame back to the blend stack underneath"),
+	Test.TestTrue(TEXT("and stopping it hands the frame back to the blend stack underneath"),
 		Stopped.MovedBones < Looped.MovedBones);
 
 	// --- LIFE5: two fades, stated apart, and the source pose that gates the blend IN ---------------
@@ -332,15 +413,15 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 
 		// Still nothing published in this test, and `StopOneShot` above left the slot empty: the
 		// snapping arm of the rule.
-		if (TestTrue(TEXT("a one-shot with distinct fades is accepted by the slot"),
+		if (Test.TestTrue(TEXT("a one-shot with distinct fades is accepted by the slot"),
 			Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, FadeIn, FadeOut)))
 		{
 			UAnimMontage* Snapped = Inst->GetCurrentActiveMontage();
-			if (TestNotNull(TEXT("and the dynamic montage exists"), Snapped))
+			if (Test.TestNotNull(TEXT("and the dynamic montage exists"), Snapped))
 			{
-				TestEqual(TEXT("a clip over a graph holding no asset snaps in"),
+				Test.TestEqual(TEXT("a clip over a graph holding no asset snaps in"),
 					Snapped->BlendIn.GetBlendTime(), 0.f);
-				TestEqual(TEXT("while its blend OUT is the fade it asked for"),
+				Test.TestEqual(TEXT("while its blend OUT is the fade it asked for"),
 					Snapped->BlendOut.GetBlendTime(), FadeOut);
 			}
 		}
@@ -361,15 +442,15 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 		Inst->PublishSelection(Standing, Assets);
 		Evaluate(/*Frames=*/2, FrameSeconds, StoppedPose);
 
-		if (TestTrue(TEXT("the same one-shot re-arms over the applied selection"),
+		if (Test.TestTrue(TEXT("the same one-shot re-arms over the applied selection"),
 			Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, FadeIn, FadeOut)))
 		{
 			UAnimMontage* Blended = Inst->GetCurrentActiveMontage();
-			if (TestNotNull(TEXT("and its dynamic montage exists"), Blended))
+			if (Test.TestNotNull(TEXT("and its dynamic montage exists"), Blended))
 			{
-				TestEqual(TEXT("a clip over a graph that HAS an asset blends in rather than snapping"),
+				Test.TestEqual(TEXT("a clip over a graph that HAS an asset blends in rather than snapping"),
 					Blended->BlendIn.GetBlendTime(), FadeIn);
-				TestEqual(TEXT("and the two fades reach the montage independently"),
+				Test.TestEqual(TEXT("and the two fades reach the montage independently"),
 					Blended->BlendOut.GetBlendTime(), FadeOut);
 			}
 		}
@@ -391,67 +472,20 @@ bool FElysiumGraphMontageSlotTest::RunTest(const FString&)
 // TRAVELLING one, which is the half the retired while-locomoting rule got wrong — and a publish
 // that owns the base takes it. The verdict's computation is
 // `Elysium.Substrate.AnimationArbitration`'s.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphIdlePublishTest,
-	"Elysium.Content.GraphOneShotArbitration", GElysiumMontageSlotFlags)
-bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
+static bool RunGraphOneShotArbitrationCase(FAutomationTestBase& Test, USkeletalMeshComponent* Comp,
+	UElysiumBipedAnimInstance* Inst, const FLoopingClipPick& Pick)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
-		return true;
-	}
-	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
-		*FElysiumContentPaths::PlayerAnimBlueprintClass());
-	if (Graph == nullptr)
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
-			"(run: uv run elysium export bundle policy)"));
-		return true;
-	}
-	FLoopingClipPick Pick;
-	if (!FindLoopingClip(Pick))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
-			"run: uv run elysium export characters"));
-		return true;
-	}
-	Pick.Mesh->AddToRoot();
-	Pick.Clip->AddToRoot();
-	ON_SCOPE_EXIT
-	{
-		Pick.Clip->RemoveFromRoot();
-		Pick.Mesh->RemoveFromRoot();
-	};
-
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
-	{
-		TestWorld.ForwardErrorMessages(this);
-		return false;
-	}
-	UWorld* World = TestWorld.GetTestWorld();
-	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
-	if (!TestNotNull(TEXT("body owner spawned"), Owner))
-	{
-		return false;
-	}
-	USkeletalMeshComponent* Comp = nullptr;
-	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
-	if (Inst == nullptr)
-	{
-		return false;
-	}
 	constexpr float FrameSeconds = 1.f / 30.f;
 	TArray<FTransform> Pose;
 
 	// The stance clip, armed the way the ambient schedule arms one.
-	if (!TestTrue(TEXT("the schedule's clip is accepted by the slot"),
+	if (!Test.TestTrue(TEXT("the schedule's clip is accepted by the slot"),
 		Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds)))
 	{
 		return false;
 	}
 	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
-	if (!TestNotNull(TEXT("and it is playing"), Inst->GetCurrentActiveMontage()))
+	if (!Test.TestNotNull(TEXT("and it is playing"), Inst->GetCurrentActiveMontage()))
 	{
 		return false;
 	}
@@ -473,7 +507,7 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 
 	Inst->PublishSelection(Standing, Assets);
 	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
-	TestNotNull(TEXT("a yielded standing publish leaves the schedule's clip playing"),
+	Test.TestNotNull(TEXT("a yielded standing publish leaves the schedule's clip playing"),
 		Inst->GetCurrentActiveMontage());
 
 	// The same body, now travelling — and still yielded, which is the verdict a scene's claim
@@ -483,7 +517,7 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 	Travelling.GraphState = EElysiumGraphState::Walk;
 	Inst->PublishSelection(Travelling, Assets);
 	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
-	TestNotNull(TEXT("a yielded travelling publish leaves the clip playing too"),
+	Test.TestNotNull(TEXT("a yielded travelling publish leaves the clip playing too"),
 		Inst->GetCurrentActiveMontage());
 
 	// The publish that won the arbitration — the claim expired, was released or was outranked —
@@ -493,7 +527,7 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 	Owned.BaseHold.Reset();
 	Inst->PublishSelection(Owned, Assets);
 	EvaluateFrames(Comp, /*Frames=*/4, FrameSeconds, Pose);
-	TestNull(TEXT("and a publish that owns the base takes the pose back"),
+	Test.TestNull(TEXT("and a publish that owns the base takes the pose back"),
 		Inst->GetCurrentActiveMontage());
 
 	// LIFE4, the expiry preempt pinned as deliberate: a one-shot's channel claim holds exactly its
@@ -501,7 +535,7 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 	// publish (`Elysium.Substrate.AnimationArbitration` pins that timing), the montage has already
 	// completed its own blend-out — there is nothing left for the takeover to cut, which is why the
 	// preempt is invisible on screen.
-	if (!TestTrue(TEXT("the one-shot re-arms for the expiry run"),
+	if (!Test.TestTrue(TEXT("the one-shot re-arms for the expiry run"),
 		Inst->PlayOneShot(FElysiumClipIdentity(Pick.Owner, Pick.Label), Pick.Clip, /*bLoop=*/false, Pick.FadeSeconds, Pick.FadeSeconds)))
 	{
 		return false;
@@ -509,13 +543,13 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 	const int32 LengthFrames =
 		FMath::CeilToInt32(Pick.Clip->GetPlayLength() / FrameSeconds) + 2;
 	EvaluateFrames(Comp, LengthFrames, FrameSeconds, Pose);
-	TestNull(TEXT("a non-looping one-shot has finished its own blend-out by its clip length"),
+	Test.TestNull(TEXT("a non-looping one-shot has finished its own blend-out by its clip length"),
 		Inst->GetCurrentActiveMontage());
 	// The publish that lands on the expiry frame therefore takes over a channel whose montage is
 	// already gone: a structural no-pop, not a tuned threshold.
 	Inst->PublishSelection(Owned, Assets);
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
-	TestNull(TEXT("and the expiry-frame publish has nothing to cut"),
+	Test.TestNull(TEXT("and the expiry-frame publish has nothing to cut"),
 		Inst->GetCurrentActiveMontage());
 
 	return true;
@@ -533,60 +567,13 @@ bool FElysiumGraphIdlePublishTest::RunTest(const FString&)
 // the two the instance publishes rather than the node's own 0.1 default, and with `bReactionActive`
 // false the base pose still reaches the output. The reaction pose itself has no producer yet; that
 // coverage belongs to the slice that gives it one.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphReactionBranchTest,
-	"Elysium.Content.GraphReactionBranch", GElysiumMontageSlotFlags)
-bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
+static bool RunGraphReactionBranchCase(FAutomationTestBase& Test, USkeletalMeshComponent* Comp,
+	UElysiumBipedAnimInstance* Inst, const FLoopingClipPick& Pick)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
-		return true;
-	}
-	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
-		*FElysiumContentPaths::PlayerAnimBlueprintClass());
-	if (Graph == nullptr)
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
-			"(run: uv run elysium export bundle policy)"));
-		return true;
-	}
-	FLoopingClipPick Pick;
-	if (!FindLoopingClip(Pick))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
-			"run: uv run elysium export characters"));
-		return true;
-	}
-	Pick.Mesh->AddToRoot();
-	Pick.Clip->AddToRoot();
-	ON_SCOPE_EXIT
-	{
-		Pick.Clip->RemoveFromRoot();
-		Pick.Mesh->RemoveFromRoot();
-	};
-
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
-	{
-		TestWorld.ForwardErrorMessages(this);
-		return false;
-	}
-	UWorld* World = TestWorld.GetTestWorld();
-	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
-	if (!TestNotNull(TEXT("body owner spawned"), Owner))
-	{
-		return false;
-	}
-	USkeletalMeshComponent* Comp = nullptr;
-	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
-	if (Inst == nullptr)
-	{
-		return false;
-	}
 	constexpr float FrameSeconds = 1.f / 30.f;
 
 	// Nothing publishes to the branch, so the off switch is a default rather than a written value.
-	TestFalse(TEXT("the reaction branch is inert -- nothing has activated it"),
+	Test.TestFalse(TEXT("the reaction branch is inert -- nothing has activated it"),
 		Inst->bReactionActive);
 
 	// **Moved off the property default before the first frame, deliberately.** The engine's own
@@ -600,7 +587,7 @@ bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
 	TArray<FTransform> BindPose;
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, BindPose);
 	const int32 PosedBones = BindPose.Num() - 1;
-	if (!TestTrue(TEXT("the graph evaluates the whole skeleton"),
+	if (!Test.TestTrue(TEXT("the graph evaluates the whole skeleton"),
 		BindPose.Num() == Pick.Mesh->GetRefSkeleton().GetNum() && PosedBones > 0))
 	{
 		return false;
@@ -610,13 +597,13 @@ bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
 	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(Inst->GetClass());
 	const FAnimSubsystem_Tag* Tags = AnimClass != nullptr
 		? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
-	if (!TestNotNull(TEXT("the compiled graph carries a tag table"), Tags))
+	if (!Test.TestNotNull(TEXT("the compiled graph carries a tag table"), Tags))
 	{
 		return false;
 	}
 	const FAnimNode_BlendListByBool* Branch = Tags->FindNodeByTag<FAnimNode_BlendListByBool>(
 		FName(ElysiumAnimGraph::ReactionBranchTag), Inst);
-	if (!TestNotNull(TEXT("and the reaction branch is on it under its own tag"), Branch))
+	if (!Test.TestNotNull(TEXT("and the reaction branch is on it under its own tag"), Branch))
 	{
 		return false;
 	}
@@ -625,19 +612,19 @@ bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
 	// on the node are the instance's own only once the graph has copied its exposed inputs. Reading
 	// them before the first update would assert against whatever the pin's literal happened to be.
 	const TArray<float>& BlendTimes = Branch->GetBlendTimes();
-	if (TestEqual(TEXT("the branch has exactly the two poses it was built with"),
+	if (Test.TestEqual(TEXT("the branch has exactly the two poses it was built with"),
 		BlendTimes.Num(), 2))
 	{
-		AddInfo(FString::Printf(TEXT("reaction blend times: in %.3fs, out %.3fs"),
+		Test.AddInfo(FString::Printf(TEXT("reaction blend times: in %.3fs, out %.3fs"),
 			BlendTimes[0], BlendTimes[1]));
 		// Index 0 is the TRUE pose, so its time is the fade INTO the reaction.
-		TestEqual(TEXT("the fade into a reaction is the published in-time"),
+		Test.TestEqual(TEXT("the fade into a reaction is the published in-time"),
 			BlendTimes[0], Inst->ReactionBlendInSeconds);
-		TestEqual(TEXT("and the fade back to the locomotion pose is the published out-time"),
+		Test.TestEqual(TEXT("and the fade back to the locomotion pose is the published out-time"),
 			BlendTimes[1], Inst->ReactionBlendOutSeconds);
-		TestTrue(TEXT("the two are stated apart rather than one value used twice"),
+		Test.TestTrue(TEXT("the two are stated apart rather than one value used twice"),
 			!FMath::IsNearlyEqual(BlendTimes[0], BlendTimes[1]));
-		TestTrue(TEXT("...and the in-time is the moved value, not the node's own 0.1 default"),
+		Test.TestTrue(TEXT("...and the in-time is the moved value, not the node's own 0.1 default"),
 			FMath::IsNearlyEqual(BlendTimes[0], 0.17f, 0.001f));
 	}
 
@@ -652,7 +639,7 @@ bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
 	// non-relevant while a full-weight flinch stands, so `bResetOnBecomingRelevant` on the stack has
 	// to be false as well or the reset arrives through that door instead.
 	// `Elysium.Content.GraphBlendStack` asserts the other half.
-	TestEqual(TEXT("the branch reinitializes no child on activation"),
+	Test.TestEqual(TEXT("the branch reinitializes no child on activation"),
 		static_cast<int32>(Branch->GetChildUpdateMode()),
 		static_cast<int32>(EBlendListChildUpdateMode::Default));
 
@@ -673,10 +660,10 @@ bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
 	TArray<FTransform> BasePose;
 	EvaluateFrames(Comp, /*Frames=*/8, FrameSeconds, BasePose);
 	const ElysiumPose::FDeviation Base = ElysiumPose::Measure(BindPose, BasePose);
-	AddInfo(FString::Printf(
+	Test.AddInfo(FString::Printf(
 		TEXT("with the branch inert: %d of %d non-root bones left the bind pose (max %.1f deg)"),
 		Base.MovedBones, PosedBones, Base.MaxDegrees));
-	TestTrue(TEXT("an inert reaction branch passes the locomotion pose straight through"),
+	Test.TestTrue(TEXT("an inert reaction branch passes the locomotion pose straight through"),
 		Base.MovedBones > PosedBones / 4 && Base.MaxDegrees > 5.f);
 
 	return true;
@@ -695,75 +682,28 @@ bool FElysiumGraphReactionBranchTest::RunTest(const FString&)
 //
 // The other half is the negative: the base channel is one node now, so a compiled class carrying a
 // state machine at all means an old package is on the mount.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphBlendStackTest,
-	"Elysium.Content.GraphBlendStack", GElysiumMontageSlotFlags)
-bool FElysiumGraphBlendStackTest::RunTest(const FString&)
+static bool RunGraphBlendStackCase(FAutomationTestBase& Test, USkeletalMeshComponent* Comp,
+	UElysiumBipedAnimInstance* Inst, const FLoopingClipPick& Pick)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
-		return true;
-	}
-	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
-		*FElysiumContentPaths::PlayerAnimBlueprintClass());
-	if (Graph == nullptr)
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
-			"(run: uv run elysium export bundle policy)"));
-		return true;
-	}
-	FLoopingClipPick Pick;
-	if (!FindLoopingClip(Pick))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
-			"run: uv run elysium export characters"));
-		return true;
-	}
-	Pick.Mesh->AddToRoot();
-	Pick.Clip->AddToRoot();
-	ON_SCOPE_EXIT
-	{
-		Pick.Clip->RemoveFromRoot();
-		Pick.Mesh->RemoveFromRoot();
-	};
-
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
-	{
-		TestWorld.ForwardErrorMessages(this);
-		return false;
-	}
-	UWorld* World = TestWorld.GetTestWorld();
-	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
-	if (!TestNotNull(TEXT("body owner spawned"), Owner))
-	{
-		return false;
-	}
-	USkeletalMeshComponent* Comp = nullptr;
-	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
-	if (Inst == nullptr)
-	{
-		return false;
-	}
 	constexpr float FrameSeconds = 1.f / 30.f;
 
 	// The compiled class's tag table, read the same way the runtime reads it.
 	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(Inst->GetClass());
 	const FAnimSubsystem_Tag* Tags = AnimClass != nullptr
 		? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
-	if (!TestNotNull(TEXT("the compiled graph carries a tag table"), Tags))
+	if (!Test.TestNotNull(TEXT("the compiled graph carries a tag table"), Tags))
 	{
 		return false;
 	}
 	const FAnimNode_BlendStack* Stack = Tags->FindNodeByTag<FAnimNode_BlendStack>(
 		FName(ElysiumAnimGraph::LocomotionStackTag), Inst);
-	if (!TestNotNull(TEXT("and the locomotion blend stack is on it under its own tag"), Stack))
+	if (!Test.TestNotNull(TEXT("and the locomotion blend stack is on it under its own tag"), Stack))
 	{
 		return false;
 	}
 	// The instance's own predicate answers the same question, and every caller that refuses a body
 	// with no base channel goes through it rather than through a tag lookup of its own.
-	TestTrue(TEXT("the instance reports the stack it just found"),
+	Test.TestTrue(TEXT("the instance reports the stack it just found"),
 		Inst->HasCompiledLocomotionStack());
 
 	// **The curve, and it is load-bearing twice over.** `EAlphaBlendOption::HermiteCubic` is
@@ -771,14 +711,14 @@ bool FElysiumGraphBlendStackTest::RunTest(const FString&)
 	// `0x10225158`) — and it is also the engine's default, so it is absent from the graph text and
 	// nothing else can see it. `UAnimGraphNode_BlendStack::Serialize` additionally downgrades this
 	// property to `Linear` on an old custom version, which is a live path rather than a hypothetical.
-	TestEqual(TEXT("the stack blends on retail's own Hermite-cubic curve"),
+	Test.TestEqual(TEXT("the stack blends on retail's own Hermite-cubic curve"),
 		static_cast<int32>(Stack->BlendOption),
 		static_cast<int32>(EAlphaBlendOption::HermiteCubic));
 
 	// The stack cross-fades its own players. True would make it RAISE an inertialization request
 	// instead of blending, and this graph carries no node that answers one — the request would be
 	// logged unserviced and the authored duration on the pin would decide nothing.
-	TestFalse(TEXT("the stack blends itself rather than raising an inertialization request"),
+	Test.TestFalse(TEXT("the stack blends itself rather than raising an inertialization request"),
 		Stack->bUseInertialBlend);
 
 	// **And there is no inertialization node to answer one** (LIFE5). Every crossfade this graph
@@ -797,23 +737,23 @@ bool FElysiumGraphBlendStackTest::RunTest(const FString&)
 				++Inertializers;
 			}
 		}
-		TestEqual(TEXT("the compiled graph carries no inertialization node at all"),
+		Test.TestEqual(TEXT("the compiled graph carries no inertialization node at all"),
 			Inertializers, 0);
 	}
 
-	TestEqual(TEXT("four concurrent players"), Stack->GetMaxActiveBlends(), 4);
+	Test.TestEqual(TEXT("four concurrent players"), Stack->GetMaxActiveBlends(), 4);
 
 	// **The default that would restart the gait on every flinch.** A full-weight reaction makes
 	// this node non-relevant — `FAnimNode_BlendListBase` skips a child under
 	// `ZERO_ANIMWEIGHT_THRESH` — and `FAnimNode_BlendStack::NeedsReset` would then `Reset()` it on
 	// the frame the flinch releases, dropping the walk back to frame 0.
-	TestFalse(TEXT("the stack is not reset when the reaction hands the base pose back"),
+	Test.TestFalse(TEXT("the stack is not reset when the reaction hands the base pose back"),
 		Stack->bResetOnBecomingRelevant);
 
 	// **The default that would freeze a gait fan's steering.** `InitialOnly` samples the blend
 	// space's xy once, at `BlendTo`, so `move_yaw` would stop turning the body after the transition
 	// that entered the fan.
-	TestEqual(TEXT("a fan's steering is re-sampled every frame"),
+	Test.TestEqual(TEXT("a fan's steering is re-sampled every frame"),
 		static_cast<int32>(Stack->BlendspaceUpdateMode),
 		static_cast<int32>(EBlendStack_BlendspaceUpdateMode::UpdateActiveOnly));
 
@@ -821,22 +761,22 @@ bool FElysiumGraphBlendStackTest::RunTest(const FString&)
 	// blend parameters against the playing player's, and a SEQUENCE player answers the zero vector
 	// — so at the engine's 0 threshold a body walking with a non-zero `move_yaw` on a plain clip
 	// pushes a new player on every single update.
-	TestTrue(TEXT("no steering value can reach the re-blend threshold"),
+	Test.TestTrue(TEXT("no steering value can reach the re-blend threshold"),
 		Stack->BlendParametersDeltaThreshold > 1000.f);
 
 	// `-1` is the constructed default and is not "wherever the clip is": it is the time a new
 	// player is seeded at. Every clip this graph plays starts at its head.
-	TestEqual(TEXT("a new player starts at the clip's head"), Stack->AnimationTime, 0.f);
+	Test.TestEqual(TEXT("a new player starts at the clip's head"), Stack->AnimationTime, 0.f);
 
 	// The negative, and the one thing only a compiled class can answer: no state machine survives
 	// the cutover, so nothing carries a baked `TLT_Inertialization` transition or an eight-state
 	// vocabulary any more. A non-empty list here is a stale generated package on the mount.
-	if (TestNotNull(TEXT("the compiled class answers the anim-class interface"), AnimClass))
+	if (Test.TestNotNull(TEXT("the compiled class answers the anim-class interface"), AnimClass))
 	{
 		const TArray<FBakedAnimationStateMachine>& Machines = AnimClass->GetBakedStateMachines();
-		AddInfo(FString::Printf(TEXT("baked state machines on the compiled class: %d"),
+		Test.AddInfo(FString::Printf(TEXT("baked state machines on the compiled class: %d"),
 			Machines.Num()));
-		TestEqual(TEXT("the base channel is one blend stack and no state machine at all"),
+		Test.TestEqual(TEXT("the base channel is one blend stack and no state machine at all"),
 			Machines.Num(), 0);
 	}
 
@@ -869,9 +809,9 @@ bool FElysiumGraphBlendStackTest::RunTest(const FString&)
 	Inst->PublishSelection(Second, Assets);
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
 
-	TestEqual(TEXT("the authored fade reaches the node's BlendTime pin whole"),
+	Test.TestEqual(TEXT("the authored fade reaches the node's BlendTime pin whole"),
 		Stack->BlendTime, Unique, 1e-4f);
-	TestEqual(TEXT("...and it is the value the instance reported asking for"),
+	Test.TestEqual(TEXT("...and it is the value the instance reported asking for"),
 		Inst->GetBlendReport().RequestedSeconds, Unique, 1e-4f);
 
 	return true;
@@ -1095,34 +1035,34 @@ namespace
 // Everything else here is the handover: the branch fades in rather than snapping, the phase clock
 // drops `bReactionActive` one out-fade before the branch's end so the fade completes ON that end,
 // and a Scene-band clip takes the branch back with nothing left holding it.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphReactionDriveTest,
-	"Elysium.Content.GraphReactionDrive", GElysiumMontageSlotFlags)
-bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
+static bool RunGraphReactionDriveCase(FAutomationTestBase& Test)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	FTestWorldWrapper TestWorld;
+	UClass* Graph = nullptr;
+	FString CoreMessage;
+	switch (EnsureCoreSetup(Test, TestWorld, Graph, CoreMessage))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+	case ESharedSetupResult::Abstain:
+		Test.AddInfo(CoreMessage);
 		return true;
+	case ESharedSetupResult::Failed:
+		return false;
+	default:
+		break;
 	}
-	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
-		*FElysiumContentPaths::PlayerAnimBlueprintClass());
-	if (Graph == nullptr)
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
-			"(run: uv run elysium export bundle policy)"));
-		return true;
-	}
+	UWorld* World = TestWorld.GetTestWorld();
+
 	FReactionFanPick Fan;
 	if (!FindReactionFan(Fan))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a directional hit fan; "
+		Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a directional hit fan; "
 			"run: uv run elysium export characters"));
 		return true;
 	}
 	UAnimSequence* BaseClip = FindBaseClipFor(Fan);
 	if (BaseClip == nullptr)
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the fan's body carries no looping base clip to stand on"));
+		Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the fan's body carries no looping base clip to stand on"));
 		return true;
 	}
 	Fan.Mesh->AddToRoot();
@@ -1150,18 +1090,18 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 	}
 	if (LowCell == INDEX_NONE)
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the fan carries no two adjacent distinct cells"));
+		Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the fan carries no two adjacent distinct cells"));
 		return true;
 	}
 	const float AxisLow = Fan.AxisAt(static_cast<float>(LowCell));
 	const float AxisMid = Fan.AxisAt(static_cast<float>(LowCell) + 0.5f);
 	const float AxisHigh = Fan.AxisAt(static_cast<float>(LowCell) + 1.0f);
 	const float ClipSeconds = ElysiumEntityAnimation::BlendedGridLengthSeconds(Fan.Space, AxisMid);
-	AddInfo(FString::Printf(
+	Test.AddInfo(FString::Printf(
 		TEXT("'%s' plays fan '%s'@'%s': cells %d/%d at %.1f / %.1f, midpoint %.1f, clip %.3fs"),
 		*Fan.Stem, *Fan.Label, *Fan.Owner, LowCell, LowCell + 1, AxisLow, AxisHigh, AxisMid,
 		ClipSeconds));
-	if (!TestTrue(TEXT("the fan reports a blended length"), ClipSeconds > 0.f))
+	if (!Test.TestTrue(TEXT("the fan reports a blended length"), ClipSeconds > 0.f))
 	{
 		return false;
 	}
@@ -1184,16 +1124,8 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 				*GetNameSafe(Sample.Animation),
 				Sample.Animation != nullptr ? Sample.Animation->GetPlayLength() : 0.f);
 		}
-		AddInfo(Line);
+		Test.AddInfo(Line);
 	}
-
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
-	{
-		TestWorld.ForwardErrorMessages(this);
-		return false;
-	}
-	UWorld* World = TestWorld.GetTestWorld();
 
 	// Four bodies, ticked in lockstep so their base clips share a phase: the two cells the midpoint
 	// sits between, the midpoint itself, and a CONTROL that is never hit. The control is what the
@@ -1210,21 +1142,31 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 	const float HoldSeconds = BlendIn;
 	// At least three, because the envelope's peak is the blend-in and the blend-in is three frames.
 	const int32 HoldFrames = FMath::CeilToInt32(HoldSeconds / FrameSeconds);
-	AddInfo(FString::Printf(TEXT("clip %.4fs, in %.2f, out %.2f -> hold %.4fs (%d frames)"),
+	Test.AddInfo(FString::Printf(TEXT("clip %.4fs, in %.2f, out %.2f -> hold %.4fs (%d frames)"),
 		LengthSeconds, BlendIn, BlendOut, HoldSeconds, HoldFrames));
-	if (!TestTrue(TEXT("the hold outlasts the two measurement frames"), HoldFrames >= 3))
+	if (!Test.TestTrue(TEXT("the hold outlasts the two measurement frames"), HoldFrames >= 3))
 	{
 		return false;
 	}
 	FReactionStand Low, Mid, High, Control;
-	if (!StandReactionBody(World, Graph, Fan, BaseClip, *this, Low)
-		|| !StandReactionBody(World, Graph, Fan, BaseClip, *this, Mid)
-		|| !StandReactionBody(World, Graph, Fan, BaseClip, *this, High)
-		|| !StandReactionBody(World, Graph, Fan, BaseClip, *this, Control))
+	if (!StandReactionBody(World, Graph, Fan, BaseClip, Test, Low)
+		|| !StandReactionBody(World, Graph, Fan, BaseClip, Test, Mid)
+		|| !StandReactionBody(World, Graph, Fan, BaseClip, Test, High)
+		|| !StandReactionBody(World, Graph, Fan, BaseClip, Test, Control))
 	{
 		return false;
 	}
 	FReactionStand* const Stands[] = { &Low, &Mid, &High, &Control };
+	ON_SCOPE_EXIT
+	{
+		for (FReactionStand* Stand : Stands)
+		{
+			if (Stand->Comp != nullptr && Stand->Comp->GetOwner() != nullptr)
+			{
+				World->DestroyActor(Stand->Comp->GetOwner());
+			}
+		}
+	};
 	auto TickAll = [&Stands](int32 Frames)
 	{
 		for (int32 Frame = 0; Frame < Frames; ++Frame)
@@ -1242,22 +1184,22 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 	TickAll(3);
 	const TArray<FTransform> BasePose = Mid.Comp->GetComponentSpaceTransforms();
 	const int32 PosedBones = BasePose.Num() - 1;
-	if (!TestTrue(TEXT("the graph evaluates the whole skeleton"), PosedBones > 0))
+	if (!Test.TestTrue(TEXT("the graph evaluates the whole skeleton"), PosedBones > 0))
 	{
 		return false;
 	}
 
-	TestTrue(TEXT("the compiled graph carries the reaction branch"),
+	Test.TestTrue(TEXT("the compiled graph carries the reaction branch"),
 		Mid.Inst->HasCompiledReactionBranch());
-	TestTrue(TEXT("the low cell's reaction is accepted"),
+	Test.TestTrue(TEXT("the low cell's reaction is accepted"),
 		Low.Inst->PlayReaction(FanPlay(Fan.Space, AxisLow, LengthSeconds, BlendIn, BlendOut)));
-	TestTrue(TEXT("the midpoint's reaction is accepted"),
+	Test.TestTrue(TEXT("the midpoint's reaction is accepted"),
 		Mid.Inst->PlayReaction(FanPlay(Fan.Space, AxisMid, LengthSeconds, BlendIn, BlendOut)));
-	TestTrue(TEXT("the high cell's reaction is accepted"),
+	Test.TestTrue(TEXT("the high cell's reaction is accepted"),
 		High.Inst->PlayReaction(FanPlay(Fan.Space, AxisHigh, LengthSeconds, BlendIn, BlendOut)));
-	TestTrue(TEXT("the branch reports itself active"), Mid.Inst->bReactionActive);
-	TestEqual(TEXT("...steered at the angle it was handed"), Mid.Inst->ReactionAxis0, AxisMid);
-	TestTrue(TEXT("...as a fan rather than a clip"), Mid.Inst->bReactionHasBlendSpace);
+	Test.TestTrue(TEXT("the branch reports itself active"), Mid.Inst->bReactionActive);
+	Test.TestEqual(TEXT("...steered at the angle it was handed"), Mid.Inst->ReactionAxis0, AxisMid);
+	Test.TestTrue(TEXT("...as a fan rather than a clip"), Mid.Inst->bReactionHasBlendSpace);
 
 	// **The blocker this seed exists for.** A two-frame cell less the out-fade is a negative number:
 	// a branch timed off the CELL seeds its clock at zero and the very first update drops it, so a
@@ -1265,27 +1207,27 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 	TickAll(1);
 	const ElysiumPose::FDeviation FirstFrame =
 		ElysiumPose::Measure(BasePose, Mid.Comp->GetComponentSpaceTransforms());
-	TestTrue(TEXT("the branch survives the update that armed it"), Mid.Inst->bReactionActive);
+	Test.TestTrue(TEXT("the branch survives the update that armed it"), Mid.Inst->bReactionActive);
 
 	TickAll(1);
 	const TArray<FTransform> LowPose = Low.Comp->GetComponentSpaceTransforms();
 	const TArray<FTransform> MidPose = Mid.Comp->GetComponentSpaceTransforms();
 	const TArray<FTransform> HighPose = High.Comp->GetComponentSpaceTransforms();
-	TestTrue(TEXT("...and is still holding two frames in"), Mid.Inst->bReactionActive);
+	Test.TestTrue(TEXT("...and is still holding two frames in"), Mid.Inst->bReactionActive);
 
 	const ElysiumPose::FDeviation TookTheFrame = ElysiumPose::Measure(BasePose, MidPose);
-	AddInfo(FString::Printf(TEXT("reaction vs locomotion: %d of %d bones moved (max %.1f deg)"),
+	Test.AddInfo(FString::Printf(TEXT("reaction vs locomotion: %d of %d bones moved (max %.1f deg)"),
 		TookTheFrame.MovedBones, PosedBones, TookTheFrame.MaxDegrees));
-	TestTrue(TEXT("the reaction replaces the locomotion pose"),
+	Test.TestTrue(TEXT("the reaction replaces the locomotion pose"),
 		TookTheFrame.MovedBones > PosedBones / 4 && TookTheFrame.MaxDegrees > 5.f);
 
 	// **It FADES in rather than snapping**, which is the whole of what `BlendTime_0` being driven off
 	// `ReactionBlendInSeconds` buys: a branch handed a zero in-time — an unwired pin, a pin folded to
 	// the node's own default — would be at full weight on the first frame and identical on the
 	// second. The out-fade's own shape is asserted by the return to base below.
-	AddInfo(FString::Printf(TEXT("in-fade: %.1f deg after one frame, %.1f deg after two"),
+	Test.AddInfo(FString::Printf(TEXT("in-fade: %.1f deg after one frame, %.1f deg after two"),
 		FirstFrame.MaxDegrees, TookTheFrame.MaxDegrees));
-	TestTrue(TEXT("the branch fades in over its own blend time rather than snapping"),
+	Test.TestTrue(TEXT("the branch fades in over its own blend time rather than snapping"),
 		TookTheFrame.MaxDegrees > FirstFrame.MaxDegrees);
 
 	// **The two-cell mix, which is the whole point.** The midpoint is an even blend of two authored
@@ -1294,12 +1236,12 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 	// these two deviations vanish.
 	const ElysiumPose::FDeviation FromLow = ElysiumPose::Measure(LowPose, MidPose);
 	const ElysiumPose::FDeviation FromHigh = ElysiumPose::Measure(HighPose, MidPose);
-	AddInfo(FString::Printf(
+	Test.AddInfo(FString::Printf(
 		TEXT("midpoint vs cell %d: max %.1f deg (%d bones); vs cell %d: max %.1f deg (%d bones)"),
 		LowCell, FromLow.MaxDegrees, FromLow.MovedBones,
 		LowCell + 1, FromHigh.MaxDegrees, FromHigh.MovedBones));
-	TestTrue(TEXT("the mid-cell pose differs from the cell below it"), FromLow.MaxDegrees > 1.f);
-	TestTrue(TEXT("...and from the cell above it"), FromHigh.MaxDegrees > 1.f);
+	Test.TestTrue(TEXT("the mid-cell pose differs from the cell below it"), FromLow.MaxDegrees > 1.f);
+	Test.TestTrue(TEXT("...and from the cell above it"), FromHigh.MaxDegrees > 1.f);
 
 	// **The de-snap.** The phase clock drops `bReactionActive` one out-fade before the branch's end,
 	// so the fade back completes ON that end — the same instant the Reaction claim's `TotalSeconds`
@@ -1309,10 +1251,10 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 	{
 		TickAll(HoldFrames - 1 - 2);
 	}
-	TestTrue(TEXT("the branch is still active a frame short of the hold"),
+	Test.TestTrue(TEXT("the branch is still active a frame short of the hold"),
 		Mid.Inst->bReactionActive);
 	TickAll(2);
-	TestFalse(TEXT("and drops at the hold"), Mid.Inst->bReactionActive);
+	Test.TestFalse(TEXT("and drops at the hold"), Mid.Inst->bReactionActive);
 
 	// Past the branch's whole life: the out-fade has run and the locomotion pose owns the frame
 	// again. Measured against the CONTROL rather than against the pre-hit pose, because the base
@@ -1323,23 +1265,23 @@ bool FElysiumGraphReactionDriveTest::RunTest(const FString&)
 	const TArray<FTransform> ControlPose = Control.Comp->GetComponentSpaceTransforms();
 	const ElysiumPose::FDeviation Returned = ElysiumPose::Measure(ControlPose, BackPose);
 	const ElysiumPose::FDeviation Drift = ElysiumPose::Measure(BasePose, ControlPose);
-	AddInfo(FString::Printf(
+	Test.AddInfo(FString::Printf(
 		TEXT("after %.3fs: %d bones off the un-hit control (max %.1f deg); the idle itself moved "
 		     "%.1f deg over the same span, against %.1f deg at the height of the reaction"),
 		HoldSeconds + BlendOut, Returned.MovedBones, Returned.MaxDegrees, Drift.MaxDegrees,
 		TookTheFrame.MaxDegrees));
-	TestTrue(TEXT("the reacting body is back on the locomotion pose the control holds"),
+	Test.TestTrue(TEXT("the reacting body is back on the locomotion pose the control holds"),
 		Returned.MaxDegrees < TookTheFrame.MaxDegrees * 0.25f);
 
 	// A Scene-band clip owns the body outright, and it takes the branch with it: a reaction left
 	// active behind a standing clip would pin its own assets and count down a phase nothing is
 	// showing.
-	TestTrue(TEXT("the low body's reaction is re-armed for the scene case"),
+	Test.TestTrue(TEXT("the low body's reaction is re-armed for the scene case"),
 		Low.Inst->PlayReaction(FanPlay(Fan.Space, AxisLow, LengthSeconds, BlendIn, BlendOut)));
 	TickAll(2);
-	TestTrue(TEXT("...and is running"), Low.Inst->bReactionActive);
+	Test.TestTrue(TEXT("...and is running"), Low.Inst->bReactionActive);
 	Low.Inst->PlayClip(FElysiumClipIdentity(), BaseClip, /*bLoop=*/true);
-	TestFalse(TEXT("a scene clip stops the reaction outright"), Low.Inst->bReactionActive);
+	Test.TestFalse(TEXT("a scene clip stops the reaction outright"), Low.Inst->bReactionActive);
 
 	return true;
 }
@@ -1501,56 +1443,9 @@ bool FElysiumReactionCellMasksTest::RunTest(const FString&)
 // EVALUATING, which the pure function cannot see. `GetBlendReport` is the observable: the decision is
 // recorded where it is made, because the fade it produces is indistinguishable after the fact from a
 // correct hard cut.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphFirstAssetBlendTest,
-	"Elysium.Content.GraphFirstAssetBlend", GElysiumMontageSlotFlags)
-bool FElysiumGraphFirstAssetBlendTest::RunTest(const FString&)
+static bool RunGraphFirstAssetBlendCase(FAutomationTestBase& Test, USkeletalMeshComponent* Comp,
+	UElysiumBipedAnimInstance* Inst, const FLoopingClipPick& Pick)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
-		return true;
-	}
-	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
-		*FElysiumContentPaths::PlayerAnimBlueprintClass());
-	if (Graph == nullptr)
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
-			"(run: uv run elysium export bundle policy)"));
-		return true;
-	}
-	FLoopingClipPick Pick;
-	if (!FindLoopingClip(Pick))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a looping clip; "
-			"run: uv run elysium export characters"));
-		return true;
-	}
-	Pick.Mesh->AddToRoot();
-	Pick.Clip->AddToRoot();
-	ON_SCOPE_EXIT
-	{
-		Pick.Clip->RemoveFromRoot();
-		Pick.Mesh->RemoveFromRoot();
-	};
-
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
-	{
-		TestWorld.ForwardErrorMessages(this);
-		return false;
-	}
-	UWorld* World = TestWorld.GetTestWorld();
-	AActor* Owner = World ? World->SpawnActor<AActor>() : nullptr;
-	if (!TestNotNull(TEXT("body owner spawned"), Owner))
-	{
-		return false;
-	}
-	USkeletalMeshComponent* Comp = nullptr;
-	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
-	if (Inst == nullptr)
-	{
-		return false;
-	}
 	constexpr float FrameSeconds = 1.f / 30.f;
 	TArray<FTransform> Pose;
 
@@ -1561,7 +1456,7 @@ bool FElysiumGraphFirstAssetBlendTest::RunTest(const FString&)
 	// behaviour and the reason the state persists: the applied record goes on naming no asset while
 	// the stack goes on posing the bind pose.
 	EvaluateFrames(Comp, /*Frames=*/2, FrameSeconds, Pose);
-	TestTrue(TEXT("a body that has published nothing is posing the bind pose"),
+	Test.TestTrue(TEXT("a body that has published nothing is posing the bind pose"),
 		Inst->GetAppliedSelection().AssetKind == EElysiumAnimAssetKind::None);
 
 	// A request that resolved nothing, which is not a contrived record: the controlled corpus records
@@ -1578,7 +1473,7 @@ bool FElysiumGraphFirstAssetBlendTest::RunTest(const FString&)
 	Missed.FadeSeconds = UElysiumBodyAnimInstance::DefaultBlendSeconds;
 	Inst->PublishSelection(Missed, FElysiumResolvedAnimation());
 	EvaluateFrames(Comp, /*Frames=*/2, FrameSeconds, Pose);
-	TestTrue(TEXT("a publish that resolved no asset holds the pose it had"), Inst->IsHoldingPose());
+	Test.TestTrue(TEXT("a publish that resolved no asset holds the pose it had"), Inst->IsHoldingPose());
 
 	// The first record that carries a real clip. Its outgoing operand exists and names a non-zero
 	// authored fade, so a gate asking only "has anything been published" hands the inertializer that
@@ -1598,14 +1493,14 @@ bool FElysiumGraphFirstAssetBlendTest::RunTest(const FString&)
 	EvaluateFrames(Comp, /*Frames=*/2, FrameSeconds, Pose);
 
 	const FElysiumBlendReport& Blend = Inst->GetBlendReport();
-	AddInfo(FString::Printf(
+	Test.AddInfo(FString::Printf(
 		TEXT("first real clip over a body that had posed nothing: %.3fs requested (snap=%d, "
 		     "nothing-to-fade-from=%d)"),
 		Blend.RequestedSeconds, Blend.bSnap ? 1 : 0, Blend.bFirstPublish ? 1 : 0));
-	TestEqual(TEXT("the real clip's own generation is the one reported"), Blend.Generation, 2u);
-	TestEqual(TEXT("and it snaps in rather than inertializing up out of the bind pose"),
+	Test.TestEqual(TEXT("the real clip's own generation is the one reported"), Blend.Generation, 2u);
+	Test.TestEqual(TEXT("and it snaps in rather than inertializing up out of the bind pose"),
 		Blend.RequestedSeconds, 0.f);
-	TestTrue(TEXT("...named as having no outgoing clip to fade from, not as an authored hard cut"),
+	Test.TestTrue(TEXT("...named as having no outgoing clip to fade from, not as an authored hard cut"),
 		Blend.bFirstPublish && !Blend.bSnap);
 
 	// The control, and it is what makes the assertion above about the POSED-AN-ASSET verdict rather
@@ -1619,9 +1514,9 @@ bool FElysiumGraphFirstAssetBlendTest::RunTest(const FString&)
 	Again.Generation = 3;
 	Inst->PublishSelection(Again, Assets);
 	EvaluateFrames(Comp, /*Frames=*/2, FrameSeconds, Pose);
-	TestEqual(TEXT("the generation after a posed record fades over the authored duration"),
+	Test.TestEqual(TEXT("the generation after a posed record fades over the authored duration"),
 		Inst->GetBlendReport().RequestedSeconds, UElysiumBodyAnimInstance::DefaultBlendSeconds);
-	TestFalse(TEXT("...and is not reported as having nothing to fade from"),
+	Test.TestFalse(TEXT("...and is not reported as having nothing to fade from"),
 		Inst->GetBlendReport().bFirstPublish);
 
 	return true;
@@ -1765,27 +1660,27 @@ namespace
 //    whether a polled channel is standing on it in the same statement pair, and the answer has to be
 //    a record separate from the base pose's — the layer and whatever owns the base are standing on
 //    their own clips at the same time.
-IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGraphSlotLayerTest,
-	"Elysium.Content.GraphSlotLayer", GElysiumMontageSlotFlags)
-bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
+static bool RunGraphSlotLayerCase(FAutomationTestBase& Test)
 {
-	if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
+	FTestWorldWrapper TestWorld;
+	UClass* Graph = nullptr;
+	FString CoreMessage;
+	switch (EnsureCoreSetup(Test, TestWorld, Graph, CoreMessage))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
+	case ESharedSetupResult::Abstain:
+		Test.AddInfo(CoreMessage);
 		return true;
+	case ESharedSetupResult::Failed:
+		return false;
+	default:
+		break;
 	}
-	UClass* Graph = LoadClass<UAnimInstance>(nullptr,
-		*FElysiumContentPaths::PlayerAnimBlueprintClass());
-	if (Graph == nullptr)
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the player animation graph is not generated "
-			"(run: uv run elysium export bundle policy)"));
-		return true;
-	}
+	UWorld* World = TestWorld.GetTestWorld();
+
 	FSlotLayerPick Pick;
 	if (!FindSlotLayer(Pick))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a masked layer clip "
+		Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no baked body in the slice carries a masked layer clip "
 			"whose blend profile is on its own skeleton; run: uv run elysium export characters"));
 		return true;
 	}
@@ -1799,24 +1694,24 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 		Pick.Mesh->RemoveFromRoot();
 	};
 	const float LayerSeconds = Pick.Layer->GetPlayLength();
-	AddInfo(FString::Printf(TEXT("'%s' layers '%s'@'%s' (%.3fs) through mask '%s', over base '%s'"),
+	Test.AddInfo(FString::Printf(TEXT("'%s' layers '%s'@'%s' (%.3fs) through mask '%s', over base '%s'"),
 		*Pick.Stem, *Pick.Label, *Pick.Owner, LayerSeconds, *Pick.MaskName.ToString(),
 		*GetNameSafe(Pick.BaseClip)));
 
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
-	{
-		TestWorld.ForwardErrorMessages(this);
-		return false;
-	}
-	UWorld* World = TestWorld.GetTestWorld();
 	AActor* Owner = World != nullptr ? World->SpawnActor<AActor>() : nullptr;
-	if (!TestNotNull(TEXT("slot body owner spawned"), Owner))
+	if (!Test.TestNotNull(TEXT("slot body owner spawned"), Owner))
 	{
 		return false;
 	}
+	ON_SCOPE_EXIT
+	{
+		if (World != nullptr && Owner != nullptr)
+		{
+			World->DestroyActor(Owner);
+		}
+	};
 	USkeletalMeshComponent* Comp = nullptr;
-	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, *this, Comp);
+	UElysiumBipedAnimInstance* Inst = StandGraphBody(Owner, Pick.Mesh, Graph, Test, Comp);
 	if (Inst == nullptr)
 	{
 		return false;
@@ -1824,7 +1719,7 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	FAnimNode_LayeredBoneBlend* SlotBlend = FindSlotBlend(Inst);
 	if (SlotBlend == nullptr)
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the generated graph carries no overlay-slot blend under "
+		Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the generated graph carries no overlay-slot blend under "
 			"the ElysiumSlotLayer tag (run: uv run elysium export bundle policy)"));
 		return true;
 	}
@@ -1845,7 +1740,7 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	BaseOnly.Sequence = Pick.BaseClip;
 	Inst->PublishSelection(Standing, BaseOnly);
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
-	TestTrue(TEXT("the body poses a base clip before anything is layered over it"),
+	Test.TestTrue(TEXT("the body poses a base clip before anything is layered over it"),
 		Inst->RequestedSlotSequence == nullptr && Inst->SlotLayerWeight == 0.f);
 
 	// The claim a weapon will arm the layer with: one shot, on the UpperBody channel, carrying the
@@ -1863,14 +1758,14 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	const FElysiumClipIdentity LayerIdentity(Pick.Owner, Pick.Label);
 
 	// --- the three refusals, each said out loud ---------------------------------------------------
-	AddExpectedError(TEXT("the overlay slot was armed for"),
+	Test.AddExpectedError(TEXT("the overlay slot was armed for"),
 		EAutomationExpectedErrorFlags::Contains, 1);
-	TestFalse(TEXT("the slot refuses a claim with no sequence behind it"),
+	Test.TestFalse(TEXT("the slot refuses a claim with no sequence behind it"),
 		Inst->PlaySlotLayer(LayerIdentity, nullptr, Pick.MaskName, Claim));
 
-	AddExpectedError(TEXT("it carries no baked bone mask"),
+	Test.AddExpectedError(TEXT("it carries no baked bone mask"),
 		EAutomationExpectedErrorFlags::Contains, 1);
-	TestFalse(TEXT("...and a layer that carries no baked bone mask, which would own the whole rig"),
+	Test.TestFalse(TEXT("...and a layer that carries no baked bone mask, which would own the whole rig"),
 		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, NAME_None, Claim));
 
 	// The refusal that reads as working. A claim with no length has no phase, so the evaluator would
@@ -1878,29 +1773,29 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	FElysiumAnimationRequest Lengthless = Claim;
 	Lengthless.HoldSeconds = 0.f;
 	Lengthless.ClipLengthSeconds = 0.f;
-	AddExpectedError(TEXT("its claim carries no clip length"),
+	Test.AddExpectedError(TEXT("its claim carries no clip length"),
 		EAutomationExpectedErrorFlags::Contains, 1);
-	TestFalse(TEXT("...and a claim carrying no clip length, which would freeze on one frame"),
+	Test.TestFalse(TEXT("...and a claim carrying no clip length, which would freeze on one frame"),
 		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, Pick.MaskName, Lengthless));
-	TestTrue(TEXT("none of the three left anything staged on the slot"),
+	Test.TestTrue(TEXT("none of the three left anything staged on the slot"),
 		Inst->RequestedSlotSequence == nullptr);
 
 	// --- the arm frame reaches the pins -----------------------------------------------------------
-	TestTrue(TEXT("a masked layer with a length behind it is taken"),
+	Test.TestTrue(TEXT("a masked layer with a length behind it is taken"),
 		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, Pick.MaskName, Claim));
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
-	TestTrue(TEXT("the layer reaches the graph's own slot pin"),
+	Test.TestTrue(TEXT("the layer reaches the graph's own slot pin"),
 		Inst->RequestedSlotSequence == Pick.Layer);
-	TestEqual(TEXT("...carrying the mask its own metadata names"), Inst->RequestedSlotMaskName,
+	Test.TestEqual(TEXT("...carrying the mask its own metadata names"), Inst->RequestedSlotMaskName,
 		Pick.MaskName);
 	// Age zero on the attack family is the ceiling — the snap. A reload would be at the foot of its
 	// ramp, which is the whole reason the seam reads the envelope rather than writing 1.0.
-	TestEqual(TEXT("...at the envelope's own answer for the frame it was armed on"),
+	Test.TestEqual(TEXT("...at the envelope's own answer for the frame it was armed on"),
 		Inst->SlotLayerWeight, ElysiumAnimIntent::SlotWeightMax);
-	TestEqual(TEXT("...with the evaluator seated at the clip's head"), Inst->SlotExplicitTime, 0.f);
+	Test.TestEqual(TEXT("...with the evaluator seated at the clip's head"), Inst->SlotExplicitTime, 0.f);
 	// And the mask really was written on the node, which is the one thing no pin can show: the
 	// layered blend's mask is edit-time state, so it is set through `SetBlendMask` rather than copied.
-	TestTrue(TEXT("...and the slot's blend node was given a profile, not left unmasked"),
+	Test.TestTrue(TEXT("...and the slot's blend node was given a profile, not left unmasked"),
 		SlotBlend->BlendMasks.IsValidIndex(0) && SlotBlend->BlendMasks[0] != nullptr);
 
 	// --- and the channel PUBLISHES A PHASE, at the instant the arm was accepted --------------------
@@ -1911,25 +1806,25 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	// on the next update would answer for the previous play — and every player shot would silently
 	// fall back to the `ContactEventCycle` estimate with nothing but a Verbose line to say so.
 	FElysiumClipPhase LayerPhase;
-	TestTrue(TEXT("the overlay slot answers the phase seam for its own channel"),
+	Test.TestTrue(TEXT("the overlay slot answers the phase seam for its own channel"),
 		Inst->GetClipPhase(EElysiumAnimChannel::UpperBody, LayerPhase));
-	TestEqual(TEXT("...naming the label the claim armed"), LayerPhase.Label, Pick.Label);
-	TestEqual(TEXT("...over the bank the include DAG resolved it out of"),
+	Test.TestEqual(TEXT("...naming the label the claim armed"), LayerPhase.Label, Pick.Label);
+	Test.TestEqual(TEXT("...over the bank the include DAG resolved it out of"),
 		LayerPhase.OwnerStem, Pick.Owner);
-	TestEqual(TEXT("...on the channel it composes on"), LayerPhase.Channel,
+	Test.TestEqual(TEXT("...on the channel it composes on"), LayerPhase.Channel,
 		EElysiumAnimChannel::UpperBody);
-	TestEqual(TEXT("...at the head of its clip, which is where a fresh claim starts"),
+	Test.TestEqual(TEXT("...at the head of its clip, which is where a fresh claim starts"),
 		LayerPhase.Cycle, 0.f);
-	TestEqual(TEXT("...carrying the sequence's own authored length"), LayerPhase.Length,
+	Test.TestEqual(TEXT("...carrying the sequence's own authored length"), LayerPhase.Length,
 		LayerSeconds, UE_KINDA_SMALL_NUMBER);
 	// The rate the claim is riding the clip at, read back out of the one duration the envelope, the
 	// expiry and this phase all share: `authored / SlotPhaseLength`. It is what a consumer sampling a
 	// window forward from the cycle multiplies by, so a claim whose hold disagreed with its clip
 	// would hand every such reader a window measured in the wrong seconds. This claim states the
 	// authored 1.0, so the two lengths are the same number and the rate is exactly 1.
-	TestEqual(TEXT("...at the rate the claim rides it, which one authored playback rate makes 1"),
+	Test.TestEqual(TEXT("...at the rate the claim rides it, which one authored playback rate makes 1"),
 		LayerPhase.PlayRate, 1.0f, UE_KINDA_SMALL_NUMBER);
-	TestTrue(TEXT("...and a play id, without which a repeated shot is a lap rather than a new play"),
+	Test.TestTrue(TEXT("...and a play id, without which a repeated shot is a lap rather than a new play"),
 		LayerPhase.PlayId != 0);
 	// The two records are separate, which is the whole reason the slot is a second published phase
 	// rather than a fifth base arm: the layer and whatever owns the base are standing on their own
@@ -1941,21 +1836,21 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	const FElysiumClipIdentity BaseIdentity(Pick.Owner, TEXT("elysium_base_under_the_layer"));
 	Inst->PlayClip(BaseIdentity, Pick.BaseClip, /*bLoop=*/true, /*bRestart=*/true, /*PlayRate=*/1.f);
 	FElysiumClipPhase BaseAsked;
-	TestTrue(TEXT("the base channel answers for the clip IT is standing on"),
+	Test.TestTrue(TEXT("the base channel answers for the clip IT is standing on"),
 		Inst->GetClipPhase(EElysiumAnimChannel::Base, BaseAsked));
-	TestEqual(TEXT("...naming that clip"), BaseAsked.Label, BaseIdentity.Label);
-	TestNotEqual(TEXT("...and never the layer's, which is a second record beside it"),
+	Test.TestEqual(TEXT("...naming that clip"), BaseAsked.Label, BaseIdentity.Label);
+	Test.TestNotEqual(TEXT("...and never the layer's, which is a second record beside it"),
 		BaseAsked.Label, Pick.Label);
-	TestTrue(TEXT("...while the overlay slot goes on answering for its own"),
+	Test.TestTrue(TEXT("...while the overlay slot goes on answering for its own"),
 		Inst->GetClipPhase(EElysiumAnimChannel::UpperBody, LayerPhase));
-	TestEqual(TEXT("...still the layer's label"), LayerPhase.Label, Pick.Label);
+	Test.TestEqual(TEXT("...still the layer's label"), LayerPhase.Label, Pick.Label);
 	// And the base's own play ends without touching the layer, which is the same independence read
 	// from the other side. The cinematic clip is taken back down before the next evaluation, because
 	// a standing one replaces the graph's output outright.
 	Inst->StopClip();
-	TestFalse(TEXT("a base play that ends stops answering for the base"),
+	Test.TestFalse(TEXT("a base play that ends stops answering for the base"),
 		Inst->GetClipPhase(EElysiumAnimChannel::Base, BaseAsked));
-	TestTrue(TEXT("...and takes nothing from the layer"),
+	Test.TestTrue(TEXT("...and takes nothing from the layer"),
 		Inst->GetClipPhase(EElysiumAnimChannel::UpperBody, LayerPhase));
 
 	// --- the driver's republish walks it, and the record is what the pins follow -------------------
@@ -1969,30 +1864,30 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	Composed.SlotMaskName = Pick.MaskName;
 	Inst->PublishSelection(Layered, Composed);
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
-	TestEqual(TEXT("a published record drives the slot's weight"), Inst->SlotLayerWeight, 0.5f);
-	TestEqual(TEXT("...and pins the evaluator at that phase of the layer's own seconds"),
+	Test.TestEqual(TEXT("a published record drives the slot's weight"), Inst->SlotLayerWeight, 0.5f);
+	Test.TestEqual(TEXT("...and pins the evaluator at that phase of the layer's own seconds"),
 		Inst->SlotExplicitTime, 0.5f * LayerSeconds, UE_KINDA_SMALL_NUMBER);
-	TestTrue(TEXT("...over the same layer, which is not re-seated at its head mid-motion"),
+	Test.TestTrue(TEXT("...over the same layer, which is not re-seated at its head mid-motion"),
 		Inst->RequestedSlotSequence == Pick.Layer);
 	// The phase walks with the pose, off the same one number. A timeline advanced against any other
 	// clock would dispatch a shot's commit id at an instant the layer never reaches.
-	TestTrue(TEXT("the published phase moves with the record"),
+	Test.TestTrue(TEXT("the published phase moves with the record"),
 		Inst->GetClipPhase(EElysiumAnimChannel::UpperBody, LayerPhase));
-	TestEqual(TEXT("...to the record's own cycle"), LayerPhase.Cycle, 0.5f);
-	TestEqual(TEXT("...anchored where the dispatcher was last left, so the interval between the two "
+	Test.TestEqual(TEXT("...to the record's own cycle"), LayerPhase.Cycle, 0.5f);
+	Test.TestEqual(TEXT("...anchored where the dispatcher was last left, so the interval between the two "
 		"fires each record exactly once"), LayerPhase.AnchorCycle, 0.f);
 
 	// --- and a record that stops naming a layer takes every one of them back down ------------------
 	Inst->PublishSelection(Standing, BaseOnly);
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
-	TestTrue(TEXT("a cleared record takes the layer off the pin"),
+	Test.TestTrue(TEXT("a cleared record takes the layer off the pin"),
 		Inst->RequestedSlotSequence == nullptr);
-	TestEqual(TEXT("...its weight with it"), Inst->SlotLayerWeight, 0.f);
-	TestEqual(TEXT("...and its playhead, rather than leaving the last shot's phase standing"),
+	Test.TestEqual(TEXT("...its weight with it"), Inst->SlotLayerWeight, 0.f);
+	Test.TestEqual(TEXT("...and its playhead, rather than leaving the last shot's phase standing"),
 		Inst->SlotExplicitTime, 0.f);
 	// The timeline goes with it. A phase left standing names a clip nothing composes, and the event
 	// pass would keep walking its records against a frozen cycle for the life of the body.
-	TestFalse(TEXT("...and the channel stops answering the phase seam"),
+	Test.TestFalse(TEXT("...and the channel stops answering the phase seam"),
 		Inst->GetClipPhase(EElysiumAnimChannel::UpperBody, LayerPhase));
 
 	// --- the stop seam takes the pose down NOW, without waiting for another update -----------------
@@ -2000,15 +1895,15 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	// Its callers are a run's stop path and the death transaction. A corpse frozen at its final pose
 	// never runs another update, so a stop that only cleared the staging would leave the shot it died
 	// mid-way through composing at its last weight and phase for the life of the body.
-	TestTrue(TEXT("the layer is armed again"),
+	Test.TestTrue(TEXT("the layer is armed again"),
 		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, Pick.MaskName, Claim));
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
-	TestTrue(TEXT("...and is standing on the pin"), Inst->RequestedSlotSequence == Pick.Layer);
+	Test.TestTrue(TEXT("...and is standing on the pin"), Inst->RequestedSlotSequence == Pick.Layer);
 	Inst->StopSlotLayer();
-	TestTrue(TEXT("StopSlotLayer clears the pin without another update"),
+	Test.TestTrue(TEXT("StopSlotLayer clears the pin without another update"),
 		Inst->RequestedSlotSequence == nullptr);
-	TestEqual(TEXT("...and the weight the graph evaluates"), Inst->SlotLayerWeight, 0.f);
-	TestFalse(TEXT("...and the phase it published, which no later update would come back to clear"),
+	Test.TestEqual(TEXT("...and the weight the graph evaluates"), Inst->SlotLayerWeight, 0.f);
+	Test.TestFalse(TEXT("...and the phase it published, which no later update would come back to clear"),
 		Inst->GetClipPhase(EElysiumAnimChannel::UpperBody, LayerPhase));
 
 	// The same call as every release path actually reaches it: a run's stop path, an NPC motor giving
@@ -2016,15 +1911,15 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	// than a host, and all three go through this one door. A second spelling of the take-down is a
 	// place it can be forgotten, and a body killed mid-fire then freezes holding the overlay's last
 	// weight.
-	TestTrue(TEXT("the layer is armed a third time"),
+	Test.TestTrue(TEXT("the layer is armed a third time"),
 		Inst->PlaySlotLayer(LayerIdentity, Pick.Layer, Pick.MaskName, Claim));
 	EvaluateFrames(Comp, /*Frames=*/1, FrameSeconds, Pose);
-	TestTrue(TEXT("...and is standing on the pin again"),
+	Test.TestTrue(TEXT("...and is standing on the pin again"),
 		Inst->RequestedSlotSequence == Pick.Layer);
 	UElysiumBipedAnimInstance::StopSlotLayerOn(Comp);
-	TestTrue(TEXT("the body-addressed stop reaches the same pin"),
+	Test.TestTrue(TEXT("the body-addressed stop reaches the same pin"),
 		Inst->RequestedSlotSequence == nullptr);
-	TestEqual(TEXT("...and the same weight"), Inst->SlotLayerWeight, 0.f);
+	Test.TestEqual(TEXT("...and the same weight"), Inst->SlotLayerWeight, 0.f);
 	// A body with no biped graph at all carries no slot to stop, which is an ordinary absence rather
 	// than a failure — every green-room stand and preview body is one.
 	UElysiumBipedAnimInstance::StopSlotLayerOn(nullptr);
@@ -2034,7 +1929,7 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	// Three frames, one line. The refused name never reaches `SetBlendMask`, so the applied name
 	// cannot latch it — and the request does not change frame to frame, so an unguarded warning
 	// repeats for every frame the layer stands.
-	AddExpectedError(TEXT("is absent from this body's skeleton or is not a blend mask"),
+	Test.AddExpectedError(TEXT("is absent from this body's skeleton or is not a blend mask"),
 		EAutomationExpectedErrorFlags::Contains, 1);
 	FElysiumResolvedAnimation BadMask = Composed;
 	BadMask.SlotMaskName = FName(TEXT("elysium_no_such_blend_mask"));
@@ -2042,6 +1937,99 @@ bool FElysiumGraphSlotLayerTest::RunTest(const FString&)
 	EvaluateFrames(Comp, /*Frames=*/3, FrameSeconds, Pose);
 
 	return true;
+}
+
+// One complex test replacing the seven near-identical `IMPLEMENT_SIMPLE_AUTOMATION_TEST` graph
+// cases above, each now a row here. The win is not a cross-row cache -- see the note above
+// `EnsureCoreSetup` for why that was tried and reverted -- it is that the seven rows' identical
+// setup boilerplate (the npc-domain check, the graph `LoadClass`, `FindLoopingClip`, standing an
+// actor/component/anim instance, "body owner spawned") is stated once, in `EnsureCoreSetup`/
+// `EnsureLoopingPick`/`BeginGraphBodyCase`, and every row -- run alone under a narrow filter or
+// as part of the whole tier -- still runs its own `FTestWorldWrapper` from first principles.
+// `ReactionGridLength` and `ReactionCellMasks` are untouched: neither builds a world or an anim
+// instance, so neither shares any of this.
+IMPLEMENT_COMPLEX_AUTOMATION_TEST(FElysiumGraphCasesTest,
+	"Elysium.Content.Graph", GElysiumMontageSlotFlags)
+
+void FElysiumGraphCasesTest::GetTests(TArray<FString>& OutBeautifiedNames,
+	TArray<FString>& OutTestCommands) const
+{
+	static const TCHAR* const Cases[] = {
+		TEXT("MontageSlot"),
+		TEXT("OneShotArbitration"),
+		TEXT("ReactionBranch"),
+		TEXT("BlendStack"),
+		TEXT("ReactionDrive"),
+		TEXT("FirstAssetBlend"),
+		TEXT("SlotLayer"),
+	};
+	for (const TCHAR* Case : Cases)
+	{
+		OutBeautifiedNames.Add(Case);
+		OutTestCommands.Add(Case);
+	}
+}
+
+bool FElysiumGraphCasesTest::RunTest(const FString& Parameters)
+{
+	// ReactionDrive and SlotLayer pick their own content and stand their own world entirely inside
+	// their own function, so they are dispatched directly.
+	if (Parameters == TEXT("ReactionDrive"))
+	{
+		return RunGraphReactionDriveCase(*this);
+	}
+	if (Parameters == TEXT("SlotLayer"))
+	{
+		return RunGraphSlotLayerCase(*this);
+	}
+
+	// The five ordinary-looping-clip cases share one shape: this row's own world, this row's own
+	// graph load, this row's own pick, this row's own body -- nothing here outlives this call.
+	FTestWorldWrapper TestWorld;
+	UClass* Graph = nullptr;
+	FString CoreMessage;
+	switch (EnsureCoreSetup(*this, TestWorld, Graph, CoreMessage))
+	{
+	case ESharedSetupResult::Abstain:
+		AddInfo(CoreMessage);
+		return true;
+	case ESharedSetupResult::Failed:
+		return false;
+	default:
+		break;
+	}
+
+	FGraphBodyCase Case;
+	switch (BeginGraphBodyCase(*this, TestWorld, Graph, Case))
+	{
+	case ESharedSetupResult::Abstain: return true;
+	case ESharedSetupResult::Failed: return false;
+	default: break;
+	}
+
+	if (Parameters == TEXT("MontageSlot"))
+	{
+		return RunGraphMontageSlotCase(*this, Case.Comp, Case.Inst, Case.Pick);
+	}
+	if (Parameters == TEXT("OneShotArbitration"))
+	{
+		return RunGraphOneShotArbitrationCase(*this, Case.Comp, Case.Inst, Case.Pick);
+	}
+	if (Parameters == TEXT("ReactionBranch"))
+	{
+		return RunGraphReactionBranchCase(*this, Case.Comp, Case.Inst, Case.Pick);
+	}
+	if (Parameters == TEXT("BlendStack"))
+	{
+		return RunGraphBlendStackCase(*this, Case.Comp, Case.Inst, Case.Pick);
+	}
+	if (Parameters == TEXT("FirstAssetBlend"))
+	{
+		return RunGraphFirstAssetBlendCase(*this, Case.Comp, Case.Inst, Case.Pick);
+	}
+
+	AddError(FString::Printf(TEXT("unknown Elysium.Content.Graph case '%s'"), *Parameters));
+	return false;
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS

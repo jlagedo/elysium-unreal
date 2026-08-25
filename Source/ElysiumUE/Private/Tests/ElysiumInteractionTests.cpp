@@ -87,7 +87,9 @@
 #include "ElysiumScriptHost.h"
 #include "Scripting/ElysiumScriptNatives.h"
 #include "Substrate/ElysiumSignData.h"
+#include "Tests/ElysiumEntityDebugStateTestHelpers.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
+#include "Tests/ElysiumScratchContentRoot.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumUseIcons.h"
@@ -276,16 +278,7 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 
 	auto CounterValue = [](const FElysiumEntity* Entity) -> float
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value"))
-			{
-				return FCString::Atof(*Row.Value);
-			}
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	// --- With services: the chain reaches all five seams ---------------------------------
@@ -744,11 +737,7 @@ bool FElysiumPropSwitchUseTest::RunTest(const FString&)
 	};
 	auto ReadCounter = [](const FElysiumEntity* Entity)
 	{
-		TArray<TPair<FString, FString>> State;
-		if (Entity) { Entity->GetDebugState(State); }
-		const TPair<FString, FString>* Value = State.FindByPredicate(
-			[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Value"); });
-		return Value ? FCString::Atof(*Value->Value) : -1.0f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	FElysiumEntityDefs Defs;
@@ -878,16 +867,7 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	};
 	auto CounterValue = [](const FElysiumEntity* Entity)
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value"))
-			{
-				return FCString::Atof(*Row.Value);
-			}
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	FElysiumEntityDefs Defs;
@@ -1121,15 +1101,9 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 		&& FMath::IsNearlyEqual(RestoredElevator->Body->GetRelativeLocation().Z, 254.f, 0.1f));
 	if (RestoredElevator)
 	{
-		TArray<TPair<FString, FString>> State;
-		RestoredElevator->GetDebugState(State);
-		const TPair<FString, FString>* Current = State.FindByPredicate(
-			[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Current floor"); });
-		const TPair<FString, FString>* Target = State.FindByPredicate(
-			[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Target floor"); });
 		TestTrue(TEXT("restored elevator is resting at floor two"),
-			Current && Current->Value == TEXT("2")
-			&& Target && Target->Value == TEXT("(none)"));
+			ElysiumEntityDebugTest::Row(RestoredElevator, TEXT("Current floor")) == TEXT("2")
+			&& ElysiumEntityDebugTest::Row(RestoredElevator, TEXT("Target floor")) == TEXT("(none)"));
 	}
 
 	World.AcceptInput(TEXT("lift_door"), FName(TEXT("ScriptHide")), FElysiumVariant::Void(),
@@ -1211,17 +1185,9 @@ bool FElysiumRotatingAttachTest::RunTest(const FString&)
 		}
 		return Hull;
 	};
-	auto DebugRow = [](const FElysiumEntity* Entity, const TCHAR* Key)
+	auto AngleOf = [](const FElysiumEntity* Entity)
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		const TPair<FString, FString>* Row = State.FindByPredicate(
-			[Key](const TPair<FString, FString>& R) { return R.Key == Key; });
-		return Row ? Row->Value : FString();
-	};
-	auto AngleOf = [&DebugRow](const FElysiumEntity* Entity)
-	{
-		return FCString::Atof(*DebugRow(Entity, TEXT("Angle")));
+		return ElysiumEntityDebugTest::RowAsFloat(Entity, TEXT("Angle"));
 	};
 
 	FElysiumEntityDefs Defs;
@@ -1619,12 +1585,9 @@ TerminalDefinition
 	TestTrue(TEXT("the authored Function executes"),
 		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("Open")));
 	World.Tick(0.0);
-	TArray<TPair<FString, FString>> CounterState;
-	World.FindByName(TEXT("triggered"))->GetDebugState(CounterState);
-	const TPair<FString, FString>* CounterValue = CounterState.FindByPredicate(
-		[](const TPair<FString, FString>& Row) { return Row.Key == TEXT("Value"); });
 	TestTrue(TEXT("OnTrigger0 delivers through the ordinary queue"),
-		CounterValue && FMath::IsNearlyEqual(FCString::Atof(*CounterValue->Value), 1.0f));
+		FMath::IsNearlyEqual(
+			ElysiumEntityDebugTest::CounterValue(World.FindByName(TEXT("triggered"))), 1.0f));
 
 	TestTrue(TEXT("quit closes through the captured session"),
 		World.SubmitTerminalCommand(Terminal->Handle, FirstSerial, TEXT("quit")));
@@ -1808,25 +1771,14 @@ bool FElysiumSignDependencyTruthinessTest::RunTest(const FString&)
 	// the integer-only rule must skip the string and select the integer, where the old ToBool()
 	// would have taken the string block first. FElysiumSignData::Load reads through
 	// FElysiumContentPaths::SignFile, so the fixture lives under a scratch content root installed
-	// for the test; a command-line -ElysiumContentRoot pin would defeat the override, so abstain.
-	const FString ScratchRoot = FPaths::ConvertRelativePathToFull(
-		FPaths::ProjectSavedDir() / TEXT("ElysiumTests") / TEXT("SignTruth"));
-	const FString ScratchSigns = ScratchRoot / TEXT("signs");
-	IFileManager::Get().MakeDirectory(*ScratchSigns, /*Tree*/ true);
+	// for the test.
+	const FElysiumScratchContentRoot Scratch(TEXT("SignTruth"));
+	const FString ScratchSigns = Scratch.Directory(TEXT("signs"));
 
-	const FString SavedEnv = FPlatformMisc::GetEnvironmentVariable(TEXT("ELYSIUM_EXPORT_ROOT"));
-	FPlatformMisc::SetEnvironmentVar(TEXT("ELYSIUM_EXPORT_ROOT"), *ScratchRoot);
-	ON_SCOPE_EXIT
+	if (!TestTrue(TEXT("the scratch content root is installed"),
+		FPaths::IsSamePath(FElysiumContentPaths::SignsDir(), ScratchSigns)))
 	{
-		FPlatformMisc::SetEnvironmentVar(TEXT("ELYSIUM_EXPORT_ROOT"),
-			SavedEnv.IsEmpty() ? TEXT("") : *SavedEnv);
-		IFileManager::Get().DeleteDirectory(*ScratchRoot, /*RequireExists*/ false, /*Tree*/ true);
-	};
-
-	if (!FPaths::IsSamePath(FElysiumContentPaths::SignsDir(), ScratchSigns))
-	{
-		AddInfo(TEXT("content root override defeated (a -ElysiumContentRoot pin is active) — skipping"));
-		return true;
+		return false;
 	}
 
 	const FString WrapperLeaf = TEXT("elysium_test_sign_wrapper.txt");
@@ -1882,26 +1834,16 @@ bool FElysiumDialogueConditionTruthinessTest::RunTest(const FString&)
 	// world's live conversation to observe which choices survive the gate.
 	//
 	// OpenConversation loads the `dialogname` `.dlg` off disk (FElysiumContentPaths::DlgFromDialogname),
-	// so the synthetic fixture lives under a scratch content root installed for the test; a command-line
-	// -ElysiumContentRoot pin would defeat the override, so abstain.
-	const FString ScratchRoot = FPaths::ConvertRelativePathToFull(
-		FPaths::ProjectSavedDir() / TEXT("ElysiumTests") / TEXT("DlgCondTruth"));
+	// so the synthetic fixture lives under a scratch content root installed for the test.
+	const FElysiumScratchContentRoot Scratch(TEXT("DlgCondTruth"));
+	const FString ScratchRoot = Scratch.Root;
 	const FString DialogName = TEXT("dlg/test/cond_truth.dlg");
 	const FString DlgPath = ScratchRoot / DialogName;
 
-	const FString SavedEnv = FPlatformMisc::GetEnvironmentVariable(TEXT("ELYSIUM_EXPORT_ROOT"));
-	FPlatformMisc::SetEnvironmentVar(TEXT("ELYSIUM_EXPORT_ROOT"), *ScratchRoot);
-	ON_SCOPE_EXIT
+	if (!TestTrue(TEXT("the scratch content root is installed"),
+		FPaths::IsSamePath(FElysiumContentPaths::DlgFromDialogname(DialogName), DlgPath)))
 	{
-		FPlatformMisc::SetEnvironmentVar(TEXT("ELYSIUM_EXPORT_ROOT"),
-			SavedEnv.IsEmpty() ? TEXT("") : *SavedEnv);
-		IFileManager::Get().DeleteDirectory(*ScratchRoot, /*RequireExists*/ false, /*Tree*/ true);
-	};
-
-	if (!FPaths::IsSamePath(FElysiumContentPaths::DlgFromDialogname(DialogName), DlgPath))
-	{
-		AddInfo(TEXT("content root override defeated (a -ElysiumContentRoot pin is active) — skipping"));
-		return true;
+		return false;
 	}
 
 	// One 13-field `.dlg` row in the on-disk `{ TAB content TAB }` shape (cols 6-11 empty, col-12

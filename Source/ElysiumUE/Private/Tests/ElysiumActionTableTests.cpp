@@ -2,19 +2,14 @@
 
 #if WITH_DEV_AUTOMATION_TESTS
 
-#include "ElysiumContentPaths.h"
 #include "Visual/ElysiumActionTables.h"
-#include "Visual/ElysiumNpcClips.h"
 
-// LIFE2 — the recovered activity-translation tables and player action rules as project source.
+// The recovered activity-translation tables and player action rules as project source.
 //
-// Two levels, and they prove different things. A Substrate suite is content-free: it walks the
-// committed model and requires the recovered shape back, which is what catches a bad regeneration or
-// a hand-edit. A Content suite walks the same model against the exported clip vocabulary and
-// requires the *behaviour* the decode was read for — the weapon fallback order carries real weight,
-// no rewrite kind is dead, every activity the player surface asks for is one a shipped model can
-// answer — which is what catches a table transcribed perfectly and interpreted wrongly. A byte diff
-// against the binary would pass that second case; these do not.
+// Content-free: the suite walks the committed model and requires the recovered shape back, which is
+// what catches a bad regeneration or a hand-edit. Whether a shipped model can actually answer what a
+// table names is a property of what the bake wrote, and the character verifier owns it — a byte diff
+// against the binary would pass this file's cases, and these do not.
 
 static constexpr EAutomationTestFlags GElysiumActionTableFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -66,80 +61,6 @@ namespace
 	auto Carrying(const TSet<FString>& Activities)
 	{
 		return [&Activities](const FString& Activity) { return Activities.Contains(Activity); };
-	}
-
-	enum class ECorpus : uint8
-	{
-		Loaded,
-		Incomplete,
-		NoIndex,
-		NoBodies,
-	};
-
-	// The union of every exported body's activity vocabulary. Both Content suites here ask the same
-	// question of it — whether *some* shipped model can play what a table names — so they load it the
-	// same way.
-	//
-	// **Matched case-insensitively, deliberately.** The tables carry the DLL's registered literals,
-	// which are upper case throughout, while the shipped models author 91 of their activities in
-	// mixed case (`ACT_ALERT_180_INTO_Katana`, `ACT_MELEE_ATTACK_sledgehammer`). A case-sensitive
-	// read leaves that content unreachable and costs the weapon walk 228 resolutions. This is the
-	// rule the resolver already uses — `FElysiumNpcClipSet::ByActivity` compares `IgnoreCase`, and so
-	// does `TSet<FString>` — so the walk has to use it too, or conformance would be measured against
-	// a resolver nobody runs.
-	ECorpus LoadCorpusVocabulary(FAutomationTestBase& Test, TSet<FString>& OutVocabulary,
-		int32& OutBodies)
-	{
-		OutVocabulary.Reset();
-		OutBodies = 0;
-
-		if (FElysiumContentPaths::IsIncomplete(TEXT("npc")))
-		{
-			return ECorpus::Incomplete;
-		}
-
-		FElysiumNpcIndex Index;
-		FString Error;
-		if (!Index.Load(Error) || !Index.IsValid())
-		{
-			return ECorpus::NoIndex;
-		}
-
-		for (const TPair<FString, FElysiumNpcIndexEntry>& Pair : Index.Npcs)
-		{
-			FString StemError;
-			if (FElysiumNpcClipSet::LoadActivities(Pair.Key, OutVocabulary, StemError))
-			{
-				++OutBodies;
-			}
-			else
-			{
-				Test.AddWarning(FString::Printf(TEXT("no clip vocabulary for '%s': %s"), *Pair.Key,
-					*StemError));
-			}
-		}
-		return OutBodies > 0 ? ECorpus::Loaded : ECorpus::NoBodies;
-	}
-
-	// Reports the abstention and answers whether the caller should stop.
-	bool AbstainedOnCorpus(FAutomationTestBase& Test, ECorpus Status)
-	{
-		switch (Status)
-		{
-		case ECorpus::Loaded:
-			return false;
-		case ECorpus::Incomplete:
-			Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the npc export domain is marked incomplete"));
-			return true;
-		case ECorpus::NoIndex:
-			Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported npc index "
-				"(run: uv run elysium export grid)"));
-			return true;
-		case ECorpus::NoBodies:
-			break;
-		}
-		Test.AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the export carries no clip vocabularies"));
-		return true;
 	}
 
 	// A predicate answer set, so a rule walk in a test reads as the player state it stands for.

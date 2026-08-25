@@ -6,6 +6,23 @@
 # renders untextured, a sequence that lost its compressed data plays as a rest pose, and a face with
 # no morph-target curve metadata evaluates its facial track correctly and moves nothing.
 #
+# Clip coverage is a contract, not a statistic. Runtime has no second character build and no
+# animation fallback, so a clip name the runtime can resolve and the mount cannot answer is a
+# missing bake stage rather than permission to correct anything at runtime. Two consequences shape
+# what is checked:
+#
+#   - EVERY CELL OF A GRID, not the neutral pick. A cell is chosen from pose parameters driven at
+#     runtime, and `ResolveGridClip` hands that cell straight to `LoadBakedClip`; checking only what
+#     `move_yaw = 0` selects would leave eight of a nine-cell fan unverified. A blend space standing
+#     on the mount does not excuse its cells -- `ResolveClip` and `ResolveClipFromBank` never consult
+#     the space.
+#   - BANKS SETTLE BY FOLDER, because there are two resolvers. `ResolveClip`/`ResolveAssets` are
+#     driven by a body's own vocabulary, which is enumerable per stem. `ResolveClipFromBank` is
+#     handed a bank stem and a clip name straight from a choreographed scene with no vocabulary in
+#     between, so its names are not enumerable -- but the banks it can be pointed at are, one per
+#     `bonerename` actor in the index's cinematic sets. A bank with no folder answers no name, so
+#     the folder settles every clip it owns at once.
+#
 # Internal editor worker coordinated by `uv run elysium export characters`:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript
 #       -script="pipeline/unreal/bake_verify_characters.py" -BakeCharacters=<csv>

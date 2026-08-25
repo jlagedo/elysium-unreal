@@ -241,7 +241,7 @@ the rulebook's first `Items()` load; the loot container is `ElysiumItemContainer
 timeline `ElysiumScenePlayer.{h,cpp}` — both world-free and shared by map-authored scenes and
 per-line dialogue playback). `Substrate/ElysiumPendingInput.h` is the registration form for a recovered datamap
 input with no system behind it yet; `elysium.stubs` reads the fired set back, and
-`Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
+`elysium.wires` reads the same set back against what a map actually fired.
 
 The character chain's leaves are one class per file, with a registration site beside them.
 `ElysiumNpcClasses.cpp` registers the `npc_*` family, `intersting_place` and the two `npc_maker`
@@ -347,9 +347,13 @@ driven by `uv run elysium debug cast`, same recorder and comparator). The two re
 one schema and one writer, `Debug/ElysiumLocomotionTrace.h`.
 
 Automation tests live in `Private/Tests/`: content-free `Elysium.Substrate.*` suites are split by
-domain across the focused `Elysium*Tests.cpp` files and run under `-nullrhi`; `ElysiumContentTests.cpp`
-parses real exports and self-skips when `$ELYSIUM_EXPORT_ROOT` is empty. Shared substrate recordings
-and engine-service doubles live in `ElysiumTestServices.h`.
+domain across the focused `Elysium*Tests.cpp` files and run under `-nullrhi`; `Elysium.Policy.*`
+covers generated `/Game` packages; `ElysiumContentTests.cpp` parses real exports and abstains when
+`$ELYSIUM_EXPORT_ROOT` is empty. Shared substrate recordings and engine-service doubles live in
+`ElysiumTestServices.h`. `ElysiumScratchContentRoot.h` installs a scratch export root for a test
+whose production reader resolves its input through `FElysiumContentPaths` — it overrides the
+`-ElysiumContentRoot` command-line pin as well as the environment variable, because the pin wins
+and every automation launch passes one.
 
 ## Engine gotchas
 
@@ -416,7 +420,7 @@ Hard-won, non-obvious, and easy to undo:
   `USkeletalMeshComponent::ActiveMorphTargets` is populated from the bone container's flags, and
   those come from `FCurveMetaData::Type.bMorphtarget` — so a curve registered without the flag
   evaluates to the right weight on a face that cannot receive it. `RegisterMorphTargetCurves` sets
-  both halves; `Elysium.Content.FacialMorphTargets` guards the contract.
+  both halves; the character verifier guards the contract.
 - **`GetImportedModel()->LODModels` must grow in parallel with `AddLODInfo()`.** A skeletal mesh's
   LOD is two parallel arrays and both entries have to exist, but nothing reads the imported model
   while the mesh is being built — so a bake that adds only the LOD info runs clean and saves, and
@@ -492,9 +496,9 @@ Hard-won, non-obvious, and easy to undo:
   and not a bake defect. The same blind spot belongs to **any** graph-less evaluation, including a
   test that poses a `UPoseableMeshComponent` and skins it: every driven helper holds its bind while
   its control swings, so deformation measured that way tears at the deltoid and elbow and blames
-  bones nothing drove. `Instrument.Elysium.DancerDecodeProbe3` measures both variants — the pose as
-  skinned, and the same pose with `FElysiumCompositionRig` applied — because the difference between
-  the two is the whole distance between a bake question and a measurement one.
+  bones nothing drove. The seam was closed as a measurement rather than a bake defect (`e347ebb`),
+  which measured both variants — the pose as skinned, and the same pose with
+  `FElysiumCompositionRig` applied.
 - **`FAnimNode_BlendStack`'s defaults are a minefield, and four of them fail silently.**
   `BlendspaceUpdateMode` defaults to `InitialOnly`, which samples a hosted blend space's xy once at
   `BlendTo` and never again — a gait fan freezes at the steering value it was entered with.
@@ -567,15 +571,40 @@ Hard-won, non-obvious, and easy to undo:
 
 The build command is `uv run elysium build`.
 
-The test command is `uv run elysium test <tier>` — `Substrate` for anything under the substrate,
-scripting, session, player or UI layers, `Content` when the change reads `$ELYSIUM_EXPORT_ROOT`.
+The test command is `uv run elysium test <tier>`, and there are three:
+
+| Tier | Needs | Covers |
+|---|---|---|
+| `Substrate` | nothing | the substrate, scripting, session, player and UI layers, against the recording doubles in `Private/Tests/ElysiumTestServices.h` |
+| `Policy` | a generated `/Game` package | material masters, declared input assets, audio routing — checks that need a real asset graph but not the user's game |
+| `Content` | `$ELYSIUM_EXPORT_ROOT` and the baked mount | the export corpus and what the bake wrote from it |
+
+A bare word that is not one of the three is refused rather than run: `Automation RunTest` matches
+by substring and reports success for a selection that matched nothing, so an unrecognized tier
+would otherwise be a green run of zero tests. A fully qualified filter (anything containing a dot)
+is passed through untouched. The runner also fails a run whose report counts failures, and one
+whose tests all abstained — a tier that proved nothing is not a pass.
+
+**Cost is dominated by editor-commandlet boot, not by the tests.** The whole `Substrate` tier
+executes in roughly three seconds inside a run of about twenty; a single narrow filter costs the
+same twenty. So a narrow filter buys focus and a readable failure, not time, and the choice
+between one filter and the whole tier is not a cost decision. `Content` is the tier that costs
+real time, and it is the one worth scoping.
 
 If the UnrealBuildTool mutex is held by another process, wait for it to release and retry rather
 than killing the holder.
 
-Testing is gated. Start with the narrowest owning automation filter or pure-rules test, and never
-run an entire `Substrate` or `Content` tier as routine validation; a complete tier is a separately
-planned and accepted operation.
+Testing is gated. Start with the narrowest owning automation filter or pure-rules test; a complete
+tier is a separately planned and accepted operation.
+
+**A test name must be a leaf.** Unreal's automation registry turns a name that is a strict prefix
+of another registered name into a branch of the test tree, and the test registered under it never
+runs and never reports. `uv run elysium doctor` refuses a prefix collision and a duplicated name.
+
+**A missing prerequisite abstains; a present but broken one fails.** An abstention is
+`AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: <reason>"))`, which the runner counts separately from an
+execution. Never gate on `TestNotNull`, which registers a failure and then returns, and never
+write a prose "skipping" — both produce a green run that proved nothing.
 
 **A live run is proposed, never assumed — ask the owner first, with a recommendation.**
 

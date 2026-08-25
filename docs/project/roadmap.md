@@ -297,7 +297,7 @@ The ladder:
   duplicates) and refusing a declaring host no body reaches or a reached grid that stands as no
   blend space; retail's between-key read adjudicated LINEAR against the banked corpus and closed
   as a fact, no divergence; the `A_dance01` seam adjudicated at
-  `Instrument.Elysium.DancerDecodeProbe3` as a graph-less measurement rather than a bake defect,
+  a graph-less measurement rather than a bake defect (`e347ebb`),
   the clip's blamed bones carrying Joy's own bind translations and skin weights.
 - [x] **LIFE2 The action catalog as project source** — the recovered weapon
   translation tables are committed source, generated from the pinned binary by owner-run

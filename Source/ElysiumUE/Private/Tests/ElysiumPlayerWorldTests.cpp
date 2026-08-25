@@ -1220,18 +1220,77 @@ bool FElysiumTouchReconcileOrderTest::RunTest(const FString&)
 // map wrapper deliberately suppresses only entity-bus ingress; raw UE delegates remain observable.
 // =====================================================================================
 
+// The transient-game-world preamble every native-actor case below rebuilt by hand: create the world,
+// start play, and (as each case needs it) spawn the faithful player pawn, its controller, and the
+// production map actor wrapper. RAII: destroying the fixture tears the transient world down through
+// its own wrapped FTestWorldWrapper, exactly as each hand-written local `TestWorld` did — one fixture
+// instance per RunTest, so each case still gets its own independent world with no cross-case sharing.
+// Every spawn helper is a thin mechanical wrapper that performs no assertions of its own, so each case
+// keeps its own TestNotNull/TestTrue wording exactly as authored.
+struct FPlayerWorldFixture
+{
+	FTestWorldWrapper TestWorld;
+	UWorld* World = nullptr;
+	APlayerController* PlayerController = nullptr;
+	AElysiumPawn* Pawn = nullptr;
+	AElysiumMapActor* MapActor = nullptr;
+
+	// Creates the transient game world and starts play. Forwards the wrapper's own error messages to
+	// Test and returns false on failure, exactly as every hand-written preamble did.
+	bool CreateWorld(FAutomationTestBase& Test)
+	{
+		if (!TestWorld.CreateTestWorld(EWorldType::Game) || !TestWorld.BeginPlayInTestWorld())
+		{
+			TestWorld.ForwardErrorMessages(&Test);
+			return false;
+		}
+		World = TestWorld.GetTestWorld();
+		return true;
+	}
+
+	// Spawns the faithful player pawn into Pawn, at the given feet-origin lifted by the hull's own
+	// half-height exactly as every hand-written call site lifted it. A null World (a prior CreateWorld
+	// failure) yields a null Pawn, matching the `World ? ... : nullptr` guard every call site used.
+	AElysiumPawn* SpawnPawn(const FVector& FeetOrigin = FVector::ZeroVector,
+		const FRotator& Facing = FRotator::ZeroRotator)
+	{
+		Pawn = World ? World->SpawnActor<AElysiumPawn>(
+			FeetOrigin + FVector(0.f, 0.f, ElysiumMove::StandHeight * 0.5f), Facing) : nullptr;
+		return Pawn;
+	}
+
+	// Spawns SpawnPawn's pawn plus its controller into PlayerController/Pawn, without possessing —
+	// several call sites assert on the unpossessed pair, or run their own assertions between spawn and
+	// Possess, before calling it themselves.
+	void SpawnPlayerControllerAndPawn(const FVector& FeetOrigin = FVector::ZeroVector,
+		const FRotator& Facing = FRotator::ZeroRotator)
+	{
+		PlayerController = World ? World->SpawnActor<APlayerController>() : nullptr;
+		SpawnPawn(FeetOrigin, Facing);
+	}
+
+	// Deferred-spawns the production map actor wrapper into MapActor. FinishSpawning is left to the
+	// caller: two of the three call sites this replaces never call it at all (TeleportPlayer and
+	// GetPlayerViewPoint need only the deferred actor), and the third (stage teardown) must set
+	// bStageOnly first.
+	AElysiumMapActor* SpawnMapActorDeferred()
+	{
+		MapActor = World->SpawnActorDeferred<AElysiumMapActor>(
+			AElysiumMapActor::StaticClass(), FTransform::Identity);
+		return MapActor;
+	}
+};
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcMotorSleepTest,
 	"Elysium.Substrate.NpcMotorSleep", GElysiumTestFlags)
 bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
 {
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game)
-		|| !TestWorld.BeginPlayInTestWorld())
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this))
 	{
-		TestWorld.ForwardErrorMessages(this);
 		return false;
 	}
-	UWorld* World = TestWorld.GetTestWorld();
+	UWorld* World = Fixture.World;
 	AElysiumNpcBody* Body = World ? World->SpawnActor<AElysiumNpcBody>() : nullptr;
 	if (!TestNotNull(TEXT("native NPC motor spawned"), Body))
 	{
@@ -1290,14 +1349,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcStandingGroundTest,
 	"Elysium.Substrate.NpcStandingGround", GElysiumTestFlags)
 bool FElysiumNpcStandingGroundTest::RunTest(const FString&)
 {
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game)
-		|| !TestWorld.BeginPlayInTestWorld())
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this))
 	{
-		TestWorld.ForwardErrorMessages(this);
 		return false;
 	}
-	UWorld* World = TestWorld.GetTestWorld();
+	UWorld* World = Fixture.World;
 	if (!TestNotNull(TEXT("transient game world exists"), World))
 	{
 		return false;
@@ -1380,22 +1437,20 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEngineTeleportOverlapTest,
 	"Elysium.Substrate.EngineTeleportOverlap", GElysiumTestFlags)
 bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 {
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game)
-		|| !TestWorld.BeginPlayInTestWorld())
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this))
 	{
-		TestWorld.ForwardErrorMessages(this);
 		return false;
 	}
-	UWorld* World = TestWorld.GetTestWorld();
+	UWorld* World = Fixture.World;
 	if (!TestNotNull(TEXT("transient game world exists"), World))
 	{
 		return false;
 	}
 
-	APlayerController* PC = World->SpawnActor<APlayerController>();
-	AElysiumPawn* Pawn = World->SpawnActor<AElysiumPawn>(
-		FVector(0.f, 0.f, ElysiumMove::StandHeight * 0.5f), FRotator::ZeroRotator);
+	Fixture.SpawnPlayerControllerAndPawn();
+	APlayerController* PC = Fixture.PlayerController;
+	AElysiumPawn* Pawn = Fixture.Pawn;
 	if (!TestNotNull(TEXT("player controller spawned"), PC)
 		|| !TestNotNull(TEXT("faithful player hull spawned"), Pawn))
 	{
@@ -1448,8 +1503,7 @@ bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 
 	// Deferred construction avoids loading a map; TeleportPlayer itself needs only this actor's
 	// world and its first player controller, so this calls the exact production wrapper.
-	AElysiumMapActor* MapActor = World->SpawnActorDeferred<AElysiumMapActor>(
-		AElysiumMapActor::StaticClass(), FTransform::Identity);
+	AElysiumMapActor* MapActor = Fixture.SpawnMapActorDeferred();
 	if (!TestNotNull(TEXT("production map actor wrapper spawned deferred"), MapActor))
 	{
 		return false;
@@ -1481,16 +1535,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPawnWieldVisibilityTest,
 	"Elysium.Substrate.PawnWieldVisibility", GElysiumTestFlags)
 bool FElysiumPawnWieldVisibilityTest::RunTest(const FString&)
 {
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game)
-		|| !TestWorld.BeginPlayInTestWorld())
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this))
 	{
-		TestWorld.ForwardErrorMessages(this);
 		return false;
 	}
-	UWorld* World = TestWorld.GetTestWorld();
-	AElysiumPawn* Pawn = World ? World->SpawnActor<AElysiumPawn>(
-		FVector(0.f, 0.f, ElysiumMove::StandHeight * 0.5f), FRotator::ZeroRotator) : nullptr;
+	UWorld* World = Fixture.World;
+	AElysiumPawn* Pawn = Fixture.SpawnPawn();
 	if (!TestNotNull(TEXT("wield-visibility fixture pawn spawned"), Pawn))
 	{
 		return false;
@@ -1578,17 +1629,15 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUseTargetingEmbodimentTest,
 	"Elysium.Substrate.UseTargetingEmbodiment", GElysiumTestFlags)
 bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 {
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game)
-		|| !TestWorld.BeginPlayInTestWorld())
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this))
 	{
-		TestWorld.ForwardErrorMessages(this);
 		return false;
 	}
-	UWorld* World = TestWorld.GetTestWorld();
-	APlayerController* PC = World ? World->SpawnActor<APlayerController>() : nullptr;
-	AElysiumPawn* Pawn = World ? World->SpawnActor<AElysiumPawn>(
-		FVector(0, 0, ElysiumMove::StandHeight * 0.5f), FRotator::ZeroRotator) : nullptr;
+	UWorld* World = Fixture.World;
+	Fixture.SpawnPlayerControllerAndPawn();
+	APlayerController* PC = Fixture.PlayerController;
+	AElysiumPawn* Pawn = Fixture.Pawn;
 	if (!TestNotNull(TEXT("targeting controller"), PC)
 		|| !TestNotNull(TEXT("targeting player body"), Pawn))
 	{
@@ -1601,8 +1650,7 @@ bool FElysiumUseTargetingEmbodimentTest::RunTest(const FString&)
 		PC->PlayerCameraManager->UpdateCamera(0.0f);
 	}
 
-	AElysiumMapActor* Map = World->SpawnActorDeferred<AElysiumMapActor>(
-		AElysiumMapActor::StaticClass(), FTransform::Identity);
+	AElysiumMapActor* Map = Fixture.SpawnMapActorDeferred();
 	if (!TestNotNull(TEXT("targeting map embodiment"), Map))
 	{
 		return false;
@@ -1812,14 +1860,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedTargetingOcclusionTest,
 	"Elysium.Substrate.FeedTargetingOcclusion", GElysiumTestFlags)
 bool FElysiumFeedTargetingOcclusionTest::RunTest(const FString&)
 {
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game)
-		|| !TestWorld.BeginPlayInTestWorld())
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this))
 	{
-		TestWorld.ForwardErrorMessages(this);
 		return false;
 	}
-	UWorld* World = TestWorld.GetTestWorld();
+	UWorld* World = Fixture.World;
 	if (!TestNotNull(TEXT("feed targeting world"), World))
 	{
 		return false;
@@ -1924,16 +1970,13 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapActorTeardownTest,
 	"Elysium.Substrate.MapActorTeardown", GElysiumTestFlags)
 bool FElysiumMapActorTeardownTest::RunTest(const FString&)
 {
-	FTestWorldWrapper TestWorld;
-	if (!TestWorld.CreateTestWorld(EWorldType::Game)
-		|| !TestWorld.BeginPlayInTestWorld())
+	FPlayerWorldFixture Fixture;
+	if (!Fixture.CreateWorld(*this))
 	{
-		TestWorld.ForwardErrorMessages(this);
 		return false;
 	}
-	UWorld* World = TestWorld.GetTestWorld();
-	AElysiumMapActor* Map = World ? World->SpawnActorDeferred<AElysiumMapActor>(
-		AElysiumMapActor::StaticClass(), FTransform::Identity) : nullptr;
+	UWorld* World = Fixture.World;
+	AElysiumMapActor* Map = World ? Fixture.SpawnMapActorDeferred() : nullptr;
 	if (!TestNotNull(TEXT("stage map actor"), Map))
 	{
 		return false;
@@ -1955,9 +1998,9 @@ bool FElysiumMapActorTeardownTest::RunTest(const FString&)
 	Map->AddInstanceComponent(Source);
 	Map->RegisterUseAnchor(Source, EntityWorld->PlayerHandle());
 
-	if (!TestWorld.EndPlayInTestWorld())
+	if (!Fixture.TestWorld.EndPlayInTestWorld())
 	{
-		TestWorld.ForwardErrorMessages(this);
+		Fixture.TestWorld.ForwardErrorMessages(this);
 		return false;
 	}
 	TestNull(TEXT("EndPlay destroys the substrate before UObject reclamation"), Map->GetEntityWorld());

@@ -1679,7 +1679,7 @@ def character_source_plan(
     # A cinematic bank is reached by a choreographed SCENE, not by any body's clip map, so the
     # loop above -- which walks vocabularies -- never names one. Left out, its clips are absent
     # from the mount and `ResolveClipFromBank` answers them out of the glb instead, in
-    # glTFRuntime's basis rather than this pipeline's (`Elysium.Content.BakedClipCoverage`).
+    # glTFRuntime's basis rather than this pipeline's (the character verifier).
     #
     # One model yields one bank PER ACTOR ROOT, so the writer is keyed by the model's own stem
     # and the per-root stems join `banks` for the partition and the paths that follow it.

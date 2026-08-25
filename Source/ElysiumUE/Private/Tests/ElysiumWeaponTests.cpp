@@ -41,6 +41,7 @@
 #include "Substrate/ElysiumWeaponClasses.h"
 #include "Visual/ElysiumActionTables.h"      // the recovered player selector, for the name join
 #include "Visual/ElysiumAnimationDriver.h"   // the real base-channel arbitration
+#include "Tests/ElysiumRulebookTestFixture.h"
 #include "Tests/ElysiumSaveTestHelpers.h"
 #include "Tests/ElysiumTestServices.h"
 
@@ -1379,11 +1380,13 @@ namespace
 	constexpr int32 GDefenceDifficulty = 1;   // every face succeeds, so the margin cannot drift
 	constexpr int32 GSoakDifficulty = 6;
 
-	// The rulebook halves a melee transaction reads, bound for the duration of one case.
+	// The rulebook halves a melee transaction reads, bound for the duration of one case through the
+	// shared `ElysiumRulebookTest::FScopedRulebookBinding` (`ElysiumRulebookTestFixture.h`).
 	struct FMeleeRollRules
 	{
 		FElysiumFeatTable Feats;
 		FElysiumRules Rules;
+		ElysiumRulebookTest::FScopedRulebookBinding Binding;
 
 		FMeleeRollRules()
 		{
@@ -1414,9 +1417,8 @@ namespace
 			ElysiumSheetRules::FBoundTables Bound;
 			Bound.Feats = &Feats;
 			Bound.Rules = &Rules;
-			ElysiumSheetRules::BindTables(Bound);
+			ElysiumRulebookTest::FScopedRulebookBinding::Bind(Bound);
 		}
-		~FMeleeRollRules() { ElysiumSheetRules::BindTables(ElysiumSheetRules::FBoundTables()); }
 	};
 
 	// The Dice stream's position, so a case can compare two of them rather than describe a delta.

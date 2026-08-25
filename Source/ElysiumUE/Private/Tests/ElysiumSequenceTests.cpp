@@ -85,6 +85,7 @@
 #include "Scripting/ElysiumScriptFS.h"
 #include "ElysiumScriptHost.h"
 #include "Scripting/ElysiumScriptNatives.h"
+#include "Tests/ElysiumEntityDebugStateTestHelpers.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
@@ -350,16 +351,7 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 
 	auto CounterValue = [](const FElysiumEntity* Entity) -> float
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value"))
-			{
-				return FCString::Atof(*Row.Value);
-			}
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	TestTrue(TEXT("the target starts at the origin"), Target->Origin.IsNearlyZero());
@@ -477,16 +469,7 @@ bool FElysiumScriptedSequenceLocomotionTest::RunTest(const FString&)
 
 	auto CounterValue = [](const FElysiumEntity* Entity) -> float
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value"))
-			{
-				return FCString::Atof(*Row.Value);
-			}
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	// --- The beat walks, and holds its output until the mark is reached ---------------------
@@ -749,16 +732,7 @@ bool FElysiumPlayerControllerSequenceLocomotionTest::RunTest(const FString&)
 
 	auto CounterValue = [](const FElysiumEntity* Entity) -> float
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value"))
-			{
-				return FCString::Atof(*Row.Value);
-			}
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	World.EnqueueInput(TEXT("!self"), FName(TEXT("BeginSequence")), FElysiumVariant::Void(), 0.0,
@@ -854,13 +828,7 @@ bool FElysiumScriptedSequenceFlagsTest::RunTest(const FString&)
 
 	auto CounterValue = [](const FElysiumEntity* Entity) -> float
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	auto Begin = [](FElysiumEntityWorld& World, FElysiumEntity* Seq)
@@ -1062,25 +1030,13 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 
 	auto CounterValue = [](const FElysiumEntity* Entity) -> float
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	// The arbiter, read off the NPC's own debug state ("Sequence gen=1 parked=None").
 	auto OwnsBody = [](const FElysiumEntity* Entity) -> bool
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Body owner")) { return Row.Value.StartsWith(TEXT("Sequence")); }
-		}
-		return false;
+		return ElysiumEntityDebugTest::Row(Entity, TEXT("Body owner")).StartsWith(TEXT("Sequence"));
 	};
 
 	const FString StancePrefix(TEXT("PlayNpcClip damsel Stance_"));
@@ -1317,13 +1273,7 @@ bool FElysiumScriptedSequenceSelfChainTest::RunTest(const FString&)
 
 	auto CounterValue = [](const FElysiumEntity* Entity) -> float
 	{
-		TArray<TPair<FString, FString>> State;
-		Entity->GetDebugState(State);
-		for (const TPair<FString, FString>& Row : State)
-		{
-			if (Row.Key == TEXT("Value")) { return FCString::Atof(*Row.Value); }
-		}
-		return -1.f;
+		return ElysiumEntityDebugTest::CounterValue(Entity);
 	};
 
 	// --- REPEATABLE: the beat re-enters itself, and its action holds its final frame ---------

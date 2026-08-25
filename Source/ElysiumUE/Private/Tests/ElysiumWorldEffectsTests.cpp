@@ -87,6 +87,7 @@
 #include "Scripting/ElysiumScriptNatives.h"
 #include "Tests/ElysiumDialogueTestHelpers.h"
 #include "Tests/ElysiumOverlapTestProbe.h"
+#include "Tests/ElysiumScratchContentRoot.h"
 #include "Tests/ElysiumTestServices.h"
 #include "ElysiumTimeControl.h"
 #include "ElysiumUseIcons.h"
@@ -351,8 +352,16 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 		Point->GetComponentLocation().Equals(FVector(100.f, 200.f, 300.f)));
 
 	// The map-load contract restores global calibration first, then the complete override by the
-	// stable sidecar index. Use the test's unique sidecar stem so no real survey can collide.
+	// stable sidecar index. `LightEdits` resolves under the export root, so the survey is written
+	// beneath a scratch one: a Substrate test must not create a directory inside the user's real
+	// corpus, and an aborted run used to leave one behind.
+	const FElysiumScratchContentRoot Scratch(TEXT("LightRig"));
 	const FString EditPath = FElysiumContentPaths::LightEdits(FPaths::GetBaseFilename(LightsPath));
+	if (!TestTrue(TEXT("the light survey resolves under the scratch content root"),
+		FPaths::IsUnderDirectory(EditPath, Scratch.Root)))
+	{
+		return false;
+	}
 	IFileManager::Get().MakeDirectory(*FElysiumContentPaths::LightEditsDir(), /*Tree*/ true);
 	const FString SavedEdit = TEXT(R"JSON({
 		"calibration": {
@@ -404,7 +413,6 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 	TestTrue(TEXT("saved shadow overrides restore"), Point->CastShadows != 0
 		&& Point->bCastVolumetricShadow == 0);
 
-	IFileManager::Get().Delete(*EditPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
 	IFileManager::Get().Delete(*LightsPath, /*RequireExists*/ false, /*EvenReadOnly*/ true);
 	return true;
 }
@@ -774,7 +782,7 @@ bool FElysiumEnvSpriteNoOpTest::RunTest(const FString&)
 // Every arm of this is a plain function of positions and time, which is the point: the half that
 // decides where a character looks holds no engine state, so the whole cascade is assertable here
 // rather than only in a running world. The one thing this cannot check is that the answer reaches
-// a material — that is the content tier's FacialMorphTargets and the live run's job.
+// a material — that is the character verifier's and the live run's job.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGazeTest, "Elysium.Substrate.Gaze", GElysiumTestFlags)
 bool FElysiumGazeTest::RunTest(const FString&)

@@ -688,7 +688,7 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClip(const FString& Stem, const FSt
 
 	// The mount is the only build of a clip, so this fails by name. There is no runtime format
 	// decoder and no alternate transform path.
-	// `Elysium.Content.BakedClipCoverage` holds the mount to every clip a vocabulary can name.
+	// `uv run elysium verify characters` holds the mount to every clip a vocabulary can name.
 	OutError = FString::Printf(
 		TEXT("'%s'@'%s' is not on the baked mount -- run: uv run elysium export characters"),
 		*AnimName, *Owner);
@@ -1397,7 +1397,7 @@ UAnimSequence* UElysiumAnimSubsystem::ResolveClipFromBank(const FString& BankSte
 	}
 	// A cinematic bank is named by a scene rather than by any vocabulary, so the bake enumerates it
 	// separately into the shared bank namespace.
-	// `Elysium.Content.BakedClipCoverage` holds the mount to every bank a scene can name.
+	// `uv run elysium verify characters` holds the mount to every bank a scene can name.
 	OutError = FString::Printf(
 		TEXT("'%s'@'%s' is not on the baked mount -- run: uv run elysium export characters"),
 		*AnimName, *BankStem);

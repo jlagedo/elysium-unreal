@@ -51,32 +51,47 @@ class UnrealTestReportTests(unittest.TestCase):
         self.assertEqual(summary["executed"], 1)
         self.assertEqual(summary["abstained"], 0)
 
+    @staticmethod
+    def stub_config(root: Path) -> SimpleNamespace:
+        return SimpleNamespace(
+            work_root=root / "work",
+            export_root=root / "exports",
+            project=root / "repo" / "ElysiumUE.uproject",
+        )
+
+    @staticmethod
+    def reporter(tests: list[dict], failed: int = 0):
+        """A `_run` stand-in that writes the report the real commandlet would have written."""
+
+        def write_report(_config, _runner, _executable, arguments, **_kwargs) -> None:
+            switch = next(
+                value for value in arguments if str(value).startswith("-ReportExportPath=")
+            )
+            report = Path(str(switch).split("=", 1)[1])
+            report.mkdir(parents=True)
+            (report / "index.json").write_text(
+                json.dumps({"tests": tests, "failed": failed, "totalDuration": 0}),
+                encoding="utf-8",
+            )
+
+        return write_report
+
+    def run_tests_against(self, config, tests: list[dict], failed: int = 0,
+                          filter_name: str = "Substrate") -> dict:
+        with (
+            mock.patch.object(unreal, "editor_executable", return_value=Path("editor")),
+            mock.patch.object(unreal, "_run", side_effect=self.reporter(tests, failed)),
+        ):
+            return unreal.run_tests(config, None, filter_name)
+
     def test_each_run_retains_its_report_below_the_work_root(self) -> None:
         with TemporaryDirectory() as temp:
             root = Path(temp)
-            config = SimpleNamespace(
-                work_root=root / "work",
-                export_root=root / "exports",
-                project=root / "repo" / "ElysiumUE.uproject",
-            )
+            config = self.stub_config(root)
+            executed = [self.make_entry("Elysium.Substrate.Case")]
 
-            def write_report(_config, _runner, _executable, arguments) -> None:
-                switch = next(
-                    value for value in arguments if str(value).startswith("-ReportExportPath=")
-                )
-                report = Path(str(switch).split("=", 1)[1])
-                report.mkdir(parents=True)
-                (report / "index.json").write_text(
-                    json.dumps({"tests": [], "failed": 0, "totalDuration": 0}),
-                    encoding="utf-8",
-                )
-
-            with (
-                mock.patch.object(unreal, "editor_executable", return_value=Path("editor")),
-                mock.patch.object(unreal, "_run", side_effect=write_report),
-            ):
-                first = unreal.run_tests(config, None, "Substrate")
-                second = unreal.run_tests(config, None, "Substrate")
+            first = self.run_tests_against(config, executed)
+            second = self.run_tests_against(config, executed)
 
             first_path = Path(first["report_path"])
             second_path = Path(second["report_path"])
@@ -85,6 +100,78 @@ class UnrealTestReportTests(unittest.TestCase):
             self.assertTrue(second_path.is_relative_to(report_root))
             self.assertNotEqual(first_path, second_path)
             self.assertFalse(first_path.is_relative_to(config.export_root.resolve()))
+
+    def test_a_selection_that_matched_nothing_is_a_failure(self) -> None:
+        # `Automation RunTest` reports success for a filter that matched no test, so a mistyped
+        # tier used to be indistinguishable from a clean run.
+        with TemporaryDirectory() as temp:
+            config = self.stub_config(Path(temp))
+            with self.assertRaisesRegex(unreal.UnrealFailure, "matched no test"):
+                self.run_tests_against(config, [])
+
+    def test_an_unknown_tier_name_is_refused_before_launching(self) -> None:
+        with TemporaryDirectory() as temp:
+            config = self.stub_config(Path(temp))
+            with self.assertRaisesRegex(unreal.UnrealFailure, "unknown test tier 'Substate'"):
+                self.run_tests_against(config, [], filter_name="Substate")
+
+    def test_a_fully_qualified_filter_is_passed_through(self) -> None:
+        with TemporaryDirectory() as temp:
+            config = self.stub_config(Path(temp))
+            summary = self.run_tests_against(
+                config,
+                [self.make_entry("Elysium.Substrate.Knockback.Rule")],
+                filter_name="Elysium.Substrate.Knockback.",
+            )
+            self.assertEqual(summary["executed"], 1)
+
+    def test_a_reported_failure_raises_even_when_the_commandlet_exits_clean(self) -> None:
+        with TemporaryDirectory() as temp:
+            config = self.stub_config(Path(temp))
+            with self.assertRaisesRegex(unreal.UnrealFailure, r"1 of 1 test\(s\) failed"):
+                self.run_tests_against(config, [self.make_entry("Elysium.Substrate.Case")],
+                                       failed=1)
+
+    def test_a_wholly_abstained_tier_is_vacuous_and_raises(self) -> None:
+        with TemporaryDirectory() as temp:
+            config = self.stub_config(Path(temp))
+            with self.assertRaisesRegex(unreal.UnrealFailure, "abstained"):
+                self.run_tests_against(config, [
+                    self.make_entry("Elysium.Content.A", f"{TEST_ABSTENTION_TOKEN}: no corpus"),
+                    self.make_entry("Elysium.Content.B", f"{TEST_ABSTENTION_TOKEN}: no corpus"),
+                ])
+
+    def test_partial_abstention_still_passes(self) -> None:
+        with TemporaryDirectory() as temp:
+            config = self.stub_config(Path(temp))
+            summary = self.run_tests_against(config, [
+                self.make_entry("Elysium.Content.A", f"{TEST_ABSTENTION_TOKEN}: no corpus"),
+                self.make_entry("Elysium.Content.B"),
+            ])
+            self.assertEqual(summary["executed"], 1)
+            self.assertEqual(summary["abstained"], 1)
+
+
+class PruneTestReportsTests(unittest.TestCase):
+    def test_only_the_newest_reports_survive(self) -> None:
+        with TemporaryDirectory() as temp:
+            reports = Path(temp) / "tests"
+            reports.mkdir()
+            for stamp in range(6):
+                (reports / f"2026082{stamp}T000000.0Z-elysium-substrate").mkdir()
+
+            removed = unreal.prune_test_reports(reports, keep=2)
+
+            self.assertEqual(removed, 4)
+            self.assertEqual(
+                sorted(child.name for child in reports.iterdir()),
+                ["20260824T000000.0Z-elysium-substrate",
+                 "20260825T000000.0Z-elysium-substrate"],
+            )
+
+    def test_a_missing_directory_is_not_an_error(self) -> None:
+        with TemporaryDirectory() as temp:
+            self.assertEqual(unreal.prune_test_reports(Path(temp) / "absent"), 0)
 
 
 if __name__ == "__main__":

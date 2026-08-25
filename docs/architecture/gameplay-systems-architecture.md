@@ -71,7 +71,7 @@ so a chain-level input reports one work-list row) — the frenzy family
 `PlayHUDParticle`/`StopHUDParticle`, the camera-target quartet, and the recovered NPC-chain
 `SetScriptedDiscipline` input. Each
 row is retired by the domain that owns it, never by a generic sweep, and
-`Elysium.Content.ScriptApiCoverage` asserts every corpus-called name resolves backed-or-pending.
+`elysium.wires` reads the same set back against what a map actually fired.
 
 ### 2.2 Tier 2 — the shared native table (globals + Character methods)
 

@@ -159,5 +159,6 @@ it loads the generated artifacts that are actually present and reports a missing
 the point of use.
 
 Automation JSON and HTML are retained per run below
-`$ELYSIUM_WORK_ROOT/reports/tests/`; the generated corpus is an input to a content test, not
-the home of its result.
+`$ELYSIUM_WORK_ROOT/reports/tests/`, capped at the newest fifty runs; the generated corpus is an
+input to a content test, not the home of its result. The durable record of a run is its journal
+under `$ELYSIUM_WORK_ROOT/logs/`, not the report directory.

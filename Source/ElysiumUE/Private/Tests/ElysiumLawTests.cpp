@@ -34,6 +34,7 @@
 #include "Substrate/ElysiumLaw.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Tests/ElysiumRulebookTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 #include "Serialization/MemoryReader.h"
@@ -180,9 +181,9 @@ namespace
 		FElysiumFeatTable Feats;
 		FElysiumClanTable Clans;
 		FElysiumDisciplineTargets Targets = MakeTargets();
+		ElysiumRulebookTest::FScopedRulebookBinding Binding;
 
 		FRulesFixture() { Rebind(); }
-		~FRulesFixture() { ElysiumSheetRules::BindTables(ElysiumSheetRules::FBoundTables()); }
 		void Rebind()
 		{
 			ElysiumSheetRules::FBoundTables Bound;
@@ -191,7 +192,7 @@ namespace
 			Bound.Feats = &Feats;
 			Bound.Clans = &Clans;
 			Bound.DisciplineTargets = &Targets;
-			ElysiumSheetRules::BindTables(Bound);
+			ElysiumRulebookTest::FScopedRulebookBinding::Bind(Bound);
 		}
 	};
 

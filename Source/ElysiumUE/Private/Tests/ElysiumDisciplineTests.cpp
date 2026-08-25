@@ -30,6 +30,7 @@
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumWeaponClasses.h"
+#include "Tests/ElysiumRulebookTestFixture.h"
 #include "Tests/ElysiumTestServices.h"
 
 #include "Misc/ScopeExit.h"
@@ -422,8 +423,9 @@ namespace
 		}
 	}
 
-	// The whole fabricated rulebook, bound for the lifetime of the fixture. The subsystem always
-	// wins over this, so binding it can never change what a real run reads.
+	// The whole fabricated rulebook, bound for the lifetime of the fixture through the shared
+	// `ElysiumRulebookTest::FScopedRulebookBinding` (`ElysiumRulebookTestFixture.h`). The
+	// subsystem always wins over this, so binding it can never change what a real run reads.
 	struct FRulesFixture
 	{
 		FElysiumStatTable Stats = MakeStats();
@@ -431,15 +433,12 @@ namespace
 		FElysiumFeatTable Feats;
 		FElysiumClanTable Clans;
 		FElysiumDisciplineTargets Targets = MakeTargets();
+		ElysiumRulebookTest::FScopedRulebookBinding Binding;
 
 		FRulesFixture()
 		{
 			AddInterruptRecords(Targets);
 			Rebind();
-		}
-		~FRulesFixture()
-		{
-			ElysiumSheetRules::BindTables(ElysiumSheetRules::FBoundTables());
 		}
 		void Rebind()
 		{
@@ -449,7 +448,7 @@ namespace
 			Bound.Feats = &Feats;
 			Bound.Clans = &Clans;
 			Bound.DisciplineTargets = &Targets;
-			ElysiumSheetRules::BindTables(Bound);
+			ElysiumRulebookTest::FScopedRulebookBinding::Bind(Bound);
 		}
 	};
 

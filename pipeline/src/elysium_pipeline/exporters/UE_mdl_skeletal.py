@@ -1644,7 +1644,7 @@ def write_cinematic(idx, model_path, out_dir, stem):
     The `.eskm` twin of `mdl_gltf.export_cinematic`, and it exists for the same reason the rest of
     this module does: the mount is the only build of a character, so every clip a scene can name
     must be present as a native container and then as one shared-bank asset
-    (`Elysium.Content.BakedClipCoverage`).
+    (the character verifier).
 
     A cinematic model is a whole multi-actor performance in one file: N co-located skeletons
     (`Bip01`..`BipNN`) sharing one clip, usually `entire_scene`. Every clip is decoded once

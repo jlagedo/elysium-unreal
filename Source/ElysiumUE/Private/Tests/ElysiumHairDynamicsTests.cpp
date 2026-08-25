@@ -236,7 +236,7 @@ bool FElysiumHairDynamicsResetRoutingTest::RunTest(const FString& Parameters)
 // names, which is the one fact only the baked skeleton can answer.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHairDynamicsAuthoredTest,
 	"Elysium.Content.Characters.HairDynamicsAuthored",
-	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+	GElysiumHairDynamicsTestFlags)
 
 bool FElysiumHairDynamicsAuthoredTest::RunTest(const FString& Parameters)
 {

@@ -6,7 +6,7 @@ import sys
 import tempfile
 import unittest
 
-from elysium_pipeline.process import run_process
+from elysium_pipeline.process import ProcessTimeout, run_process
 
 
 class _CountingLog(io.StringIO):
@@ -110,6 +110,27 @@ class ProcessRunnerTests(unittest.TestCase):
                 # The exit flush lands before the caller closes the handle, so a
                 # short final burst never sits in the file buffer.
                 self.assertIn("tail-marker", log_path.read_text(encoding="utf-8"))
+
+    def test_a_child_that_outlives_its_deadline_is_killed(self) -> None:
+        # The streaming read is what blocks when a child wedges, so the watchdog has to kill
+        # the process rather than wait on it.
+        with self.assertRaises(ProcessTimeout) as caught:
+            run_process(
+                [sys.executable, "-c", "import time; time.sleep(30)"],
+                cwd=Path.cwd(),
+                timeout=0.5,
+            )
+        self.assertIn("deadline", str(caught.exception))
+        self.assertLess(caught.exception.result.duration_seconds, 20)
+
+    def test_a_child_that_finishes_in_time_is_unaffected(self) -> None:
+        result = run_process(
+            [sys.executable, "-c", "print('done')"],
+            cwd=Path.cwd(),
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("done", result.output)
 
 
 if __name__ == "__main__":

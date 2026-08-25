@@ -540,7 +540,7 @@ def owner_clips(manifest, stems):
     # `ResolveClipFromBank` answers out of the glb instead -- in glTFRuntime's basis rather than
     # the container's, which stands every actor of every scene a quarter turn off, and the scene
     # writes that facing back into the entity's angles when it ends
-    # (`Elysium.Content.BakedClipCoverage`).
+    # (the character verifier).
     for record in manifest.get("cinematics", {}).values():
         for root in record.get("roots", []):
             bank = root.get("bank")

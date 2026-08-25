@@ -1088,8 +1088,8 @@ def reconstruct(
             clean=clean,
             force=clean,
         )
-        unreal.run_tests(config, runner, "Substrate")
-        unreal.run_tests(config, runner, "Content")
+        for tier in ("Substrate", "Policy", "Content"):
+            unreal.run_tests(config, runner, tier)
         console.print(f"reconstruction complete: {len(maps)} map(s)")
 
     _execute(
@@ -1117,8 +1117,6 @@ def test_command(
 
         summary = unreal.run_tests(config, runner, filter_name, parity_stems=stems or ())
         console.print(f"automation report: {summary['report_path']}")
-        if not summary["total"]:
-            return
         # A test that declines to run still reports Success, so the executed count is the only
         # honest measure of what a green tier covered.
         console.print(

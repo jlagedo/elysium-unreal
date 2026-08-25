@@ -16,9 +16,13 @@
 // can assert what the producer does instead of what a re-implementation of it does.
 //
 // The binding is process-wide (the readers are plain-C++ leaves holding no session pointer, the
-// same reason `ElysiumRng`'s streams are module-static), so it is RAII — `ElysiumLawTests.cpp` and
-// `ElysiumDisciplineTests.cpp` use the identical shape. A suite that forgot to unbind would leave
-// its own table answering for every case that ran after it.
+// same reason `ElysiumRng`'s streams are module-static), so it is RAII — every fixture here holds
+// an `ElysiumRulebookTest::FScopedRulebookBinding` (`ElysiumRulebookTestFixture.h`), the mechanism
+// `ElysiumLawTests.cpp`, `ElysiumDisciplineTests.cpp`, `ElysiumStealthTests.cpp` and
+// `ElysiumWeaponTests.cpp` all share. What each of those binds is its own fabricated table
+// content, not this one's `FMargins` — a suite that forgot to unbind would leave its own table
+// answering for every case that ran after it, which is the failure the shared type exists to rule
+// out everywhere at once.
 
 #include "CoreMinimal.h"
 
@@ -26,6 +30,7 @@
 
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
+#include "Tests/ElysiumRulebookTestFixture.h"
 
 namespace ElysiumMeleeTest
 {
@@ -63,6 +68,7 @@ namespace ElysiumMeleeTest
 	struct FRulesFixture
 	{
 		FElysiumRules Rules;
+		ElysiumRulebookTest::FScopedRulebookBinding Binding;
 
 		explicit FRulesFixture(const FMargins& Margins = FMargins())
 		{
@@ -89,9 +95,6 @@ namespace ElysiumMeleeTest
 			Rebind();
 		}
 
-		// Unbinding is the whole reason this is a type rather than a helper call.
-		~FRulesFixture() { ElysiumSheetRules::BindTables(ElysiumSheetRules::FBoundTables()); }
-
 		FRulesFixture(const FRulesFixture&) = delete;
 		FRulesFixture& operator=(const FRulesFixture&) = delete;
 
@@ -102,7 +105,7 @@ namespace ElysiumMeleeTest
 		{
 			ElysiumSheetRules::FBoundTables Bound;
 			Bound.Rules = &Rules;
-			ElysiumSheetRules::BindTables(Bound);
+			ElysiumRulebookTest::FScopedRulebookBinding::Bind(Bound);
 		}
 	};
 }
