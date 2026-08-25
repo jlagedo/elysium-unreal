@@ -22,25 +22,14 @@ mutates `sys.path`, or assumes a current directory.
 
 ## Tests
 
-Python tests are `unittest`, and pytest is not installed. Run one module from the repo
-root as `uv run python -m unittest pipeline.tests.<module>`; `unittest discover -s
-pipeline/tests` fails because that directory is not an importable package.
-
-QA starts with the smallest owning test method or module and the smallest export/bake selector.
-An exporter or Unreal-generator change does not authorize a complete profile as validation. If
-the requested change affects export or bake products and the owner has not named the scope, ask
-for the exact map, model, placed model, NPC/body stem, bundle, or generator before launching it.
-
-Never invoke `reconstruct`, `export grid|all`, unscoped `export characters`, a full policy/cast
-bake, broad `--force`/`--clean`, or the complete Python suite without first stating the command,
-scope, reason, and expected cost and receiving explicit owner acceptance. Use focused commands and
-receipt-backed no-op checks during iteration; broader release acceptance is a separately approved
-step.
+Python tests are `unittest`, and pytest is not installed. Running one module, choosing a scope,
+and the approvals a broad export/bake/reconstruct run needs are the **`elysium-testing`** skill.
 
 `sqlite3.connect()` used as a context manager commits but does not close. On Windows the
 open handle blocks `TemporaryDirectory` cleanup, so a test that opens a session database
 closes it explicitly or fails in teardown with `PermissionError` rather than on the
 assertion it was making.
+
 
 ## Path contract
 

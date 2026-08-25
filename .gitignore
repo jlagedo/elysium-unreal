@@ -117,3 +117,6 @@ Saved/Cooked/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Personal, untracked project memory
+CLAUDE.local.md

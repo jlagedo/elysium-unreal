@@ -6,160 +6,43 @@ level, adopts its actors, and builds everything the bake cannot hold — brush c
 entity substrate, entity-driven bodies, the sky cubemap — from the pipeline's on-disk intermediates,
 with no coordinate conversion.
 
-**This file maps what exists and where, not how it behaves.** Design — lifetimes, the frame, the
-object graph, ownership rationale — belongs to `docs/architecture/runtime-architecture.md` (the spine),
-`docs/architecture/engine-core.md` (entity object model), `docs/architecture/save-architecture.md` (persistence),
-`docs/vtmb/camera-view-modes.md`, `docs/architecture/ui-architecture.md`, `docs/architecture/input-architecture.md`,
-`docs/vtmb/python_bridge.md`, `docs/architecture/debug-tooling.md`, `docs/architecture/map-architecture.md`. Per-task status:
-`docs/project/roadmap.md`. Gotchas below are the one exception.
+**This file is orientation plus gotchas.** Design — lifetimes, the frame, the object graph,
+ownership rationale — belongs to `docs/architecture/runtime-architecture.md` (the spine),
+`engine-core.md` (entity object model), `save-architecture.md`, `ui-architecture.md`,
+`input-architecture.md`, `map-architecture.md`, `debug-tooling.md`, and `docs/vtmb/` for
+`camera-view-modes.md` and `python_bridge.md`. Per-task status: `docs/project/roadmap.md`.
+
+Loaded alongside this file: `.claude/rules/cpp.md` (the C++ coding policy, path-scoped to
+`Source/**`), the `gameplay-change` skill (the entity/API/event/save contract every gameplay change
+lands behind), and the `elysium-testing` skill (tiers, filters, and how much a change authorizes).
 
 ## Module
 
-UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase).
+UE 5.8. Module `ElysiumUE` (Runtime, Default loading phase). Plugins, third-party dependencies and
+their conditions are declared in `ElysiumUE.uproject` and `ElysiumUE.Build.cs`. Two facts those
+files do not state:
 
-- **Plugins:** `ProceduralMeshComponent`; `PythonScriptPlugin` (offline scaffolding only); `Cog`
-  (vendored MIT debug-UI shell, `Plugins/External/Cog/`, stripped from Shipping via `ENABLE_COG`).
-  Cog is the only vendored plugin; every skeletal asset is constructed from the `.eskm` container
-  by `UElysiumSkeletalBuildLibrary`, so nothing third-party reads a model.
-- **Third party:** vendored `dr_wav`/`dr_mp3`; CPython 2.7.18 SDK under `ThirdParty/CPython27/`
-  (**fetched, not committed** — `pipeline/src/elysium_pipeline/devtools/fetch_cpython27.py`, gitignored, `ELYSIUM_WITH_CPYTHON`,
-  Win64 only).
-
-## C++ coding policy
-
-The baseline for new and touched runtime code is Epic's
-[C++ Coding Standard for Unreal Engine](https://dev.epicgames.com/documentation/unreal-engine/epic-cplusplus-coding-standard-for-unreal-engine).
-Use Epic's [Object Pointers](https://dev.epicgames.com/documentation/unreal-engine/object-pointers-in-unreal-engine),
-[Reflection System](https://dev.epicgames.com/documentation/unreal-engine/reflection-system-in-unreal-engine)
-and [Include What You Use](https://dev.epicgames.com/documentation/unreal-engine/include-what-you-use-iwyu-for-unreal-engine-programming)
-guides for the corresponding engine semantics. This is a code and review contract, not a license
-header: never copy Epic's copyright notice into
-project-owned source. Repository `.clang-format` owns C++ layout and `.editorconfig` owns the
-remaining whitespace rules. Format touched code only; do not mix a formatting sweep with a
-behavioral change.
-
-- **Language and portability:** UE 5.8 code is C++20, constrained by Epic's cross-compiler rules.
-  Prefer `nullptr`, `override`/`final`, `static_assert`, range-based loops, strongly typed enums and
-  const-correct code. Keep types explicit; use `auto` only for lambdas, unwieldy iterators or
-  template cases where spelling the type harms clarity. Use explicit lambda captures, especially
-  for deferred work, and never capture a short-lived reference or an untracked `UObject` into it.
-- **Unreal names and reflection:** use the `U`/`A`/`F`/`T`/`I`/`S`/`E` prefixes and `b` for
-  booleans; boolean queries read as questions. Add `UCLASS`, `USTRUCT`, `UFUNCTION` and `UPROPERTY`
-  only where the engine must see the type or member. The plain-C++ substrate remains
-  reflection-free.
-- **Object references:** a persistent, engine-tracked `UObject` field uses `UPROPERTY()` with
-  `TObjectPtr<T>`. Short-lived locals and parameters normally use `T*`; expiring non-owning
-  references use `TWeakObjectPtr<T>`; load-on-demand asset references use `TSoftObjectPtr<T>`.
-  `TStrongObjectPtr<T>` is reserved for the uncommon strong reference owned outside a `UObject`.
-- **Headers and modules:** every header includes what it needs; every `.cpp` includes its matching
-  header first. Prefer forward declarations and fine-grained includes, never `Engine.h` or
-  `UnrealEd.h`, and do not put `using` declarations in global scope. Dependencies belong in the
-  narrowest correct `Build.cs` list.
-- **File granularity:** one primary class — or one small, tightly coupled cluster (a class plus
-  its private helpers) — per `.h`/`.cpp`, under the owning layer folder. A new class never lands
-  inside an existing multi-class file. When a change substantially touches a class that lives in
-  an oversized multi-class file, first move that class verbatim into its own file (includes by
-  layer path, a thin registration site may remain behind), then make the behavioral edit — and
-  keep the verbatim move and the behavioral change reviewable as separate diffs (separate
-  commits when both land together). Pure moves change no behavior and no names.
-- **APIs and diagnostics:** avoid boolean flag lists and long parameter lists; use an enum or a
-  parameter struct. Use `TEXT()` for Unreal string literals, sized integers for serialized or
-  replicated formats, named log categories, and the appropriate `check`/`verify`/`ensure` family.
-  Address compiler warnings. Comments explain intent, units, constraints and non-obvious safety,
-  not a paraphrase of the implementation.
+- **`Cog` is the only vendored plugin** (`Plugins/External/Cog/`, MIT debug-UI shell, stripped from
+  Shipping via `ENABLE_COG`). Every skeletal asset is constructed from the `.eskm` container by
+  `UElysiumSkeletalBuildLibrary`, so nothing third-party reads a model.
+- The **CPython 2.7.18 SDK is fetched, not committed** —
+  `pipeline/src/elysium_pipeline/devtools/fetch_cpython27.py` writes `ThirdParty/CPython27/`, which
+  is gitignored and gated by `ELYSIUM_WITH_CPYTHON`, Win64 only.
 
 ## Gameplay integration contract
 
-For every gameplay implementation or change in this runtime, first read and use
-`docs/architecture/gameplay-systems-architecture.md` as the governing design guidance. This
-includes map entities, entity I/O, the script bridge, interactive props, and every gameplay
-domain. When working in existing gameplay code, assess the touched code against that architecture
-and propose concrete changes for every divergence needed to bring it into conformance. Implement
-those corrections when they are within the requested scope; otherwise report them explicitly
-rather than expanding the task without authorization. The architecture composes the entity rules
-**R1–R8** in `docs/architecture/engine-core.md`, the runtime rules **S1–S12** in
-`docs/architecture/runtime-architecture.md`, and its own compatibility rules **K1–K13**. Exact
-VtMB behavior remains in the owning `docs/vtmb/` document; this file carries only the coding
-contract:
-
-- **Keep one object language.** Gameplay identity and mutable map state live on plain-C++
-  `FElysiumEntity` classes and the declared session/save structures. Unreal actors and components
-  are optional bodies for rendering, collision, movement and overlap; they do not become a second
-  gameplay model. The substrate reaches them only through nullable `FElysiumWorldServices`.
-- **Unreal owns the engine; the substrate owns the game.** A Source subsystem is reproduced only
-  when authored content or a game rule names its behavior — the Ownership test in
-  `docs/project/remaster-direction.md`, with the closed register of deliberate reproductions in
-  `docs/project/rebuild-strategy.md`. Geometry, visibility, reachability and physics are asked of
-  the engine through the service seam, never approximated with substrate arithmetic. Reproducing
-  Source's rules (formulas, call order, thresholds) is faithful; porting its mechanisms is a
-  defect, and a port outside the register is a bug.
-- **Preserve the addressability boundary.** Non-addressable GAME_LUMP dressing may be placed in the
-  baked level. Anything a map or script can name, mutate, hide, use, save, receive an input on, or
-  fire an output from remains a live `.ents` entity; baking its mesh must not bake away its entity
-  identity. Runtime readers consume exporter-produced Unreal-native coordinates verbatim.
-- **Add no fourth legacy API tier.** Tier 1 is the case-folded class-chain input/field surface;
-  Tier 2 is the single retail-evidenced `GNativeBindings` table; Tier 3 is the console bridge. Map
-  outputs, `logic_pythoncheck`, dialogue, `ScheduleTask` and level scripts converge on the installed
-  script host and the same domain implementations. Do not add a per-surface adapter, catch-all
-  dispatcher or duplicate native table.
-- **Bind a name at its retail kind.** A datamap input stays a registered class-chain input, a
-  Character method stays a Tier-2 row, and a script helper stays in `__main__`; the receiver may
-  distinguish identical spellings. An unimplemented recovered input uses
-  `ELYSIUM_PENDING_INPUT`; every other gap reports through the existing stub and wire-accounting
-  funnels and returns the retail-shaped failure/default. Never silently succeed, invent a receiver,
-  or repair authored defects without an explicit divergence in the owning VtMB document.
-- **Use one event transport and preserve its order.** Real producers call `FireOutput` or enqueue
-  owned work; only queue service delivers. Do not call a receiver synchronously from a producer,
-  prebind a target name, or add `FTimerManager`, a latent action, a private timer/event list, or a
-  second scheduler. The recovered synchronous Python reflected-input call still passes through
-  `AcceptInput`; any outputs it fires rejoin the ordinary queue. Follow the exact row, deadline,
-  equal-time, late-binding and service order in the gameplay architecture and `docs/vtmb/entity_io.md`.
-  The documented determinism divergences are a closed set; any other ordering difference is a bug.
-- **Keep the two Python systems separate.** `pipeline/` and Unreal editor Python are offline
-  export/generation tools and never run to produce game content at runtime. Embedded CPython is the
-  runtime host for the user's loose VtMB scripts. Level scripts load into the shared `__main__`
-  before the entity spawn pass; Python entity attributes resolve through the same class chain as
-  I/O. Scripts remain user-install data: do not commit a hand-fixed fork or grow a native binding
-  without retail evidence.
-- **Give every value and rule one owner.** Persistent state is a Save-flagged registered field, a
-  session-record member, or a declared save block. Recovered catalogs load patch-first through the
-  rulebook into typed tables; do not retype their constants into C++. Keep combat relationship,
-  emotional disposition and RPG reaction separate; keep ratings separate from rolls; route typed
-  damage through the shared descriptor/commit path; transfer NPC body control through its owner
-  arbiter.
-- **Land domains behind the existing seams.** A gameplay addition consists of class-chain
-  fields/inputs/outputs, one plain-C++ domain service, declared command verbs where player-facing,
-  and save state in an existing home. It does not add a dispatcher, clock, input owner, presentation
-  backchannel or save path. UI reads published view state and sends intent through the command bus.
-- **Prove the real producer path.** First add content-free Substrate coverage against
-  `Private/Tests/ElysiumTestServices.h`; add Content coverage only when the real export corpus is
-  required. Use `elysium.stubs`, `elysium.classes`, `elysium.wires` and the I/O history to distinguish
-  never produced, missing target, missing input, refused receiver and invisible side effect. A quiet
-  log is not acceptance, and debug injection does not prove an authored event producer.
-
-For a gameplay change, review the diff by asking two questions: does it put a real implementation
-behind these existing entity/API/event/save seams, or does it create another route around them —
-and does it use Unreal's mechanism for everything the ownership register does not reserve? Only a
-change that passes both belongs in the runtime.
+Every gameplay implementation or change in this runtime lands behind the entity/API/event/save
+seams described by the **`gameplay-change`** skill, over
+`docs/architecture/gameplay-systems-architecture.md` as the governing design guidance.
 
 ## Source layout
 
-`Private/` is subfoldered **by layer**. A private header is included by its layer path
-(`#include "Visual/ElysiumLightRig.h"`), so a cross-layer dependency is visible at the top of the
-file. `Public/` stays flat — the module's API surface, not a layering.
+`Private/` is subfoldered **by layer**; `Public/` stays flat, because it is the module's API
+surface rather than a layering. The include convention that makes a cross-layer dependency visible
+is in `.claude/rules/cpp.md`.
 
-| Folder | Layer |
-|---|---|
-| `Map/` | the map actor, the map subsystem, brush bodies, the walkable surface |
-| `Substrate/` | Track B — the plain-C++ entity object model, every entity class, I/O, movers, expressions, the rulebook |
-| `Scripting/` | the CPython VM, the script hosts and natives, the `.dlg` conversation machine |
-| `Visual/` | everything that produces or tunes what is **rendered** — materials, textures, the light rig, sky/fog, decals, prop skins, NPC meshes and animation, ropes, entity bodies |
-| `Audio/` | the decoders, the voice mixer, the SoundScheme system |
-| `Player/` | the pawn, movement, the camera, input, the command bus |
-| `UI/` | the HUD, the menu, the widgets, the presentation publisher |
-| `Debug/` | the Cog windows, the dev console, MCP, the probes and headless harnesses |
-| `Session/` | the game/flow state subsystems, the clock, persistence, the RNG streams |
-| (root) | `ElysiumUE.cpp` plus the two module-wide readers, `ElysiumContentPaths.h` and `ElysiumKeyValues.h`, which every layer includes bare |
+Types are named `FElysium*` (plain-C++ substrate and value types), `UElysium*`/`AElysium*` (the
+Unreal half) and `IElysium*` (the service seam) — grep is the index.
 
 ## Config
 
@@ -168,192 +51,23 @@ file. `Public/` stays flat — the module's API surface, not a layering.
 installed by `UElysiumInputRouter`). Boot decision + flow: `docs/architecture/runtime-architecture.md`.
 `FElysiumContentPaths::Root()` is the pipeline's `$ELYSIUM_EXPORT_ROOT` mount point.
 
-## Key type index
-
-Grep entry points, one line each — semantics live in the design doc named per group.
-
-**Map** (`docs/architecture/map-architecture.md`, `docs/architecture/engine-core.md`): `AElysiumMapActor` (owns one map's
-epoch) with three components — `UElysiumMapVisuals` (`Visual/`, the look), `UElysiumMapCollision`
-(`Map/`, the walkable surface), `UElysiumEntityBodies` (`Visual/`, NPC/prop body factory) — exposed
-as `GetVisuals()`/`GetCollision()`/`GetBodies()`, no forwarders. Its runtime phase is
-`Building → WaitingForPrerequisites → Activating → Active|Failed`; the map subsystem forwards the
-current actor's one-shot ready/failed delegates. Visual readers:
-`FElysiumObjModel`, `FElysiumTextureCache`, `FElysiumMaterialFactory`, `ElysiumReflections.h`,
-`FElysiumDecals`, `FElysiumRopes`, `UElysiumLightRig`, `FElysiumSkyDef`,
-`ElysiumEnvironment.{h,cpp}`, `ElysiumFog.h`. `UElysiumWieldTable`
-(`Public/ElysiumWieldTable.h`) is the `/ElysiumBaked/Items/DA_WieldModels` row table the wield bake
-writes and `(classname, sex)` resolves through; design:
-`docs/architecture/wielded-weapon-integration.md`.
-
-**Entity substrate / Track B** (`docs/architecture/engine-core.md`), plain C++, no UObject reflection:
-`FElysiumVariant`, `FElysiumEntityHandle`, `FElysiumEntityDef`/`FElysiumEntityDefs`,
-`FElysiumEntity`, `FElysiumClassDesc`/`FElysiumClassRegistry`, `FElysiumEntityWorld` (owned by
-`AElysiumMapActor`), `UElysiumBrushComponent`, `FElysiumEventQueue`/`FElysiumIOEvent`,
-`IElysiumIOSink`. Every input goes through `FElysiumEntityWorld::AcceptInput`/the event queue, and
-time comes from the substrate clock, never `FTimerManager` — this holds everywhere in the layer.
-`Load()` constructs a dormant world; a direct caller must `Activate(Now)` before driving gameplay.
-
-The character chain in `Public/ElysiumPlayer.h` is VtMB's own: `FElysiumEntity` (CBaseEntity) →
-`FElysiumAnimating` (CBaseAnimating) → `FElysiumCombatCharacter` (CBaseCombatCharacter) →
-`FElysiumNpc` (CAI_BaseNPC) / `FElysiumPlayer` (CBasePlayer). `SpawnPlayer()` creates the player
-entity, classname `player`, targetname `!player` (the name the maps themselves write).
-`FindPlayer()`/`PlayerHandle()` are the accessors; every reader handles null.
-
-The character sheet on that chain is `FElysiumSheet` (`Public/ElysiumPlayer.h`) over the compiled
-slot tables in `Public/ElysiumSheetSlots.h` + `Substrate/ElysiumSheet.cpp`; the values it seeds from
-are the rulebook's, reached as `World->GetGameState()->Stats()`. The arithmetic over those slots is
-`Substrate/ElysiumSheetMath.{h,cpp}` — `FElysiumSheetEffects` (a character's resolved
-`m_tEffectList`), `ElysiumFeats::FeatValue`/`Calc` (what `CalcFeat` answers), `ElysiumXp` (the award
-banking) and `ElysiumSheetRules::EvalPredependency`. `Substrate/ElysiumDice.{h,cpp}` is the d10
-resolver beside it (`ElysiumDice::Roll` over the rulebook's `FElysiumDiceTables` and the Dice RNG
-stream; `elysium.roll` drives it; `CalcFeat` stays a rating, never a roll). Quests sit beside it in the same shape:
-`Substrate/ElysiumQuestLog.{h,cpp}` is the pure decision (`ElysiumQuestLog::Apply` — resolve,
-gate, reconcile the `FElysiumAssignedQuest` rows on the player record), and
-`UElysiumGameStateSubsystem::SetQuestState` is the funnel that performs what it reports.
-`Substrate/ElysiumQuestView.{h,cpp}` is the read side of the same rows — `ResolveRow` joins one row
-to the catalogue, `Build` splits a hub's worth into the three columns the quest log draws — and both
-the screen and the `elysium.quest` verb go through it. `Substrate/ElysiumChargen.{h,cpp}` is the
-same shape again for character generation: `FElysiumChargenState` + `FElysiumChargenRules` (the
-rulebook tables gathered into one view), `BuildPools`/`ApplyBaseline`/`CanBuy`/`Buy`/`Sell`/
-`IsRowVisible`/`SuggestClan`.
-**Gotcha:** the sheet's own
-health slots register as `vhealth`/`vmax_health`, not `health`/`max_health` — those two are
-`CBaseEntity` keyfields on the same chain, and the registry resolves derived-shadows-base, so a
-sheet slot taking the bare name would silently repoint `trigger_hurt`. `Elysium.Substrate.Sheet`
-guards it.
-
-Entity class implementations: `ElysiumStarterClasses.cpp` (logic_auto/relay, triggers,
-`logic_pythoncheck`) over the shared `ElysiumTriggerBase.h` (`FElysiumTriggerBase`, the base every
-trigger leaf derives from) and the shared keyfield-adder template `Substrate/ElysiumClassFields.h`,
-`ElysiumLogicClasses.cpp` (math_counter, logic_timer, logic_case, env_fade,
-func_brush, point_teleport), `ElysiumMover.{h,cpp}` (`FElysiumMoverBase`, `FElysiumDoorBase` and the
-two `func_door` leaves) with `ElysiumButton.cpp`, `ElysiumElevator.cpp`, `ElysiumFuncRotating.cpp`
-and the manifest loader `ElysiumMoverSounds.cpp` beside it, `ElysiumSignClasses.cpp`, `ElysiumAmbientGeneric.cpp`,
-`ElysiumEventClasses.cpp`, `ElysiumScriptedSequence.cpp`, `ElysiumPropClasses.cpp` (the prop
-registration site over `ElysiumProp.{h,cpp}`, `ElysiumPropLeaves.{h,cpp}` and
-`ElysiumPhysProp.{h,cpp}`), `ElysiumItemClasses.{h,cpp}`
-(`FElysiumItem`/`FElysiumKeyring` — one registered class per `vdata/items` definition, installed at
-the rulebook's first `Items()` load; the loot container is `ElysiumItemContainer.{h,cpp}`, and
-`FElysiumInventory` lives on the combat character, implemented in `ElysiumInventory.cpp`),
-`ElysiumFeed.{h,cpp}` (the feed transaction and paired state machine on the combat character),
-`ElysiumChoreoScene.cpp`
-(`logic_choreographed_scene`, over the `.vcd` reader `ElysiumSceneData.{h,cpp}` and the event
-timeline `ElysiumScenePlayer.{h,cpp}` — both world-free and shared by map-authored scenes and
-per-line dialogue playback). `Substrate/ElysiumPendingInput.h` is the registration form for a recovered datamap
-input with no system behind it yet; `elysium.stubs` reads the fired set back, and
-`elysium.wires` reads the same set back against what a map actually fired.
-
-The character chain's leaves are one class per file, with a registration site beside them.
-`ElysiumNpcClasses.cpp` registers the `npc_*` family, `intersting_place` and the two `npc_maker`
-classnames; the classes are `ElysiumInterestingPlace.{h,cpp}`, `ElysiumScriptedCharacter.{h,cpp}`,
-`ElysiumNpc.{h,cpp}` (`FElysiumNpc` plus the scene-owned `FElysiumPlayerControllerNpc` duplicate)
-and `ElysiumNpcMaker.{h,cpp}`, logging through `ElysiumNpcLog.h`. `ElysiumPlayerClasses.cpp`
-declares the player chain's fields, inputs and outputs; the three implementations are
-`ElysiumAnimatingImpl.cpp`, `ElysiumCombatCharacter.cpp` and `ElysiumPlayerEntity.cpp`, logging
-through `ElysiumPlayerLog.h`.
-
-**Gameplay domain services**, plain C++ under `Substrate/` — the design is
-`docs/architecture/gameplay-systems-architecture.md` §5 and the behaviour is the `docs/vtmb/` doc
-each file names in its header:
-`ElysiumDamage.{h,cpp}` (`FElysiumDmg` + `ElysiumDamage::Apply`; the one typed health commit is
-`FElysiumCombatCharacter::CommitDamage` in `ElysiumCombatCharacter.cpp`),
-`ElysiumWeaponClasses.{h,cpp}` (`FElysiumWeapon` on the `CWeapon` chain node — mode dispatch, the
-two-half attack transaction, reload),
-`ElysiumGameSound.{h,cpp}` (`FElysiumGameSoundBus` behind `FElysiumEntityWorld::EmitGameSound`),
-`ElysiumNpcSenses.{h,cpp}` (`FElysiumNpcPerception`, `FElysiumNpcMemory`),
-`ElysiumNpcConditions.{h,cpp}` (`EElysiumNpcCond`, `FElysiumNpcConditions`, the ideal-state pass),
-`ElysiumNpcEnemy.{h,cpp}` (the enemy-selection transaction),
-`ElysiumSchedule.{h,cpp}` (`FElysiumSchedule`, the task vocabulary and its executor),
-`ElysiumNpcCombatSchedules.{h,cpp}` (the recovered combat families and their selector),
-`ElysiumNpcLoadout.{h,cpp}` (the weapon-capability join),
-`ElysiumNpcWitness.{h,cpp}` (the two per-NPC player-law observation lanes),
-`ElysiumAiScriptedSchedule.{h,cpp}` (`aiscripted_schedule`'s mode table and `forcestate` mapping),
-`ElysiumDisciplines.{h,cpp}` (active states and the targeted cast transaction),
-`ElysiumStealth.{h,cpp}` + `ElysiumStealthTrigger.{h,cpp}` (the player target surface and
-`trigger_stealth_mod`),
-`ElysiumLaw.{h,cpp}` + `ElysiumActivityTrigger.{h,cpp}` (the player's activity/Masquerade/pursuit
-channels and `trigger_player_activity_level`),
-`ElysiumReaction.{h,cpp}` (the RPG reaction score),
-`ElysiumRelationships.{h,cpp}` and `ElysiumDisposition.{h,cpp}` (two of K4's three separate
-social stores). The `FElysiumNpcMind` state machine and body-owner arbiter stay in
-`ElysiumNpcMind.{h,cpp}`.
-
-**The outbound seam** (`docs/architecture/runtime-architecture.md`): everything the substrate needs from the
-engine arrives as `FElysiumWorldServices`. `IElysiumEmbodiment` (bodies + the player's own view/
-teleport/damage/`+use`/camera, plus the geometry queries `QueryLineOfSight`/`QueryLightAtPoint`,
-implemented by `AElysiumMapActor`; the per-body `IElysiumNpcMotor` beside it carries
-`ProjectToNavigable`), `IElysiumAudio` (voice,
-`AElysiumMapActor`), `IElysiumTravel` (`AElysiumMapActor`), `IElysiumPresenter` (fades/signs/
-dialog moments, `UElysiumPresentationSubsystem`), `IElysiumWeather` (wetness and particle state,
-`AElysiumMapActor`). Any member may be null; every call site handles it.
-`Private/Tests/ElysiumTestServices.h` is the recording stub implementing all five.
-
-**Subsystems by scope** (`docs/architecture/runtime-architecture.md`): GameInstance —
-`UElysiumGameFlowSubsystem` (app state), `UElysiumGameStateSubsystem` (`G`, quest map, player
-record, clock, snapshots, script host), `UElysiumMapSubsystem` (travel), `UElysiumSaveSubsystem`,
-`UElysiumUISubsystem`, `UElysiumAudioSubsystem`, `UElysiumAnimSubsystem`,
-`UElysiumRulebookSubsystem`. World — `UElysiumPresentationSubsystem`. LocalPlayer —
-`UElysiumInputSubsystem` (the only `SetInputMode` caller). Engine — `UElysiumMcpSubsystem`.
-
-**Player, commands, camera** (`docs/vtmb/controls.md`, `docs/architecture/input-architecture.md`,
-`docs/vtmb/camera-view-modes.md`): `FElysiumCommands` (`Public/ElysiumCommands.h`, the verb registry),
-`ElysiumCommandBus`, `FElysiumConsole`, `FElysiumUserCmd`/`Builder`/`Stream`, `ElysiumBinds`,
-`UElysiumInputRouter`, `IElysiumPlayerBody`, `AElysiumPawn` + `UElysiumMovementComponent` (the
-faithful body) over `ElysiumMoveSolve.h` (`docs/vtmb/source_movement.md`: `namespace ElysiumMove`'s
-constants + the `CGameMovement` math as free functions, plus `FElysiumMoveTuning`'s `sv_*` cvar
-surface — the same pure-rules/engine-half split as `ElysiumCameraSolve.h`),
-`FElysiumCameraWeights`/`FElysiumCameraShotStack`/`UElysiumCameraComponent` (the mode weights, the
-scripted-shot stack, the fade band and the VtMB cvar surface), `AElysiumPlayerCameraManager` +
-`FElysiumCameraSample` (the one final view, the post-layer stack and the boom's state),
-`UElysiumCameraModifier` /
-`UElysiumCameraModifier_LegacyShot` (`ElysiumCameraModifiers.h`), `ElysiumCameraRig.h`
-(`namespace ElysiumRig` — the boom's pure rules and its tuning struct, the same
-pure-rules/engine-half split as `ElysiumCameraSolve.h`), `FElysiumViewState`. Actors:
-`AElysiumGameMode`, `AElysiumPlayerController` (hosts `UElysiumCheatManager`, the router and
-`PlayerCameraManagerClass`), `AElysiumPawn`, `AElysiumHUD` (Canvas, does not tick).
-
-**Scripting, audio, shared readers**: `IElysiumScriptHost` (`FElysiumCPythonScriptHost` over
-`FElysiumPythonVM` the map-load default; `FElysiumExprScriptHost`/`FElysiumNullScriptHost`
-fallbacks), `ElysiumPythonEntity.{h,cpp}`, `ElysiumScriptNatives.{h,cpp}`, `FElysiumScriptFS`,
-`ElysiumDlg.{h,cpp}`. Audio: `UElysiumAudioSubsystem` + `FElysiumSoundCache` +
-`FElysiumSoundSchemeManager` (every voice passes `elysium.Mute`, default 1, a gain multiplier).
-Shared readers: `ElysiumKeyValues.h`, `ElysiumRulebook.{h,cpp}` (the shared value types and the
-stats/feats/rules/trait-effects/clans/histories/experience/leveling/strings sections) with the
-per-section table libraries beside it — `ElysiumItemTable`, `ElysiumDiceTables`,
-`ElysiumQuestTables`, `ElysiumChargenWizard`, `ElysiumReactionTables`, `ElysiumStealthTables`,
-`ElysiumSoundVolumeTable`, `ElysiumDisciplineTargetTables`, all `{h,cpp}` under `Substrate/` over
-the shared loaders `ElysiumVdataLoad.{h,cpp}` — and `FElysiumSignData`.
-
 ## Debug layer (non-Shipping)
 
 `UElysiumCogSubsystem` (`#if ENABLE_COG`) registers the stock CogEngine windows plus the Elysium
-ones (`_Status`, `_Maps`, `_Lights`, `_Entities`, `_Inspector`, `_EventQueue`, `_WorldViz`,
-`_Audio`, `_SoundScheme`, `_Logic`, `_Scripting`, `_Npc`, `_Camera`, `_Environment`) over
-`FElysiumCogWindow`.
-`UElysiumEntityDebugSubsystem` hosts the `elysium.ent_*` verbs and world-viz layers.
-`ElysiumPick.{h,cpp}` is click-selection; `FElysiumGizmoLayer` the retained gizmo ISM.
-`UElysiumMcpSubsystem` is Layer 3, reached through `pipeline/src/elysium_pipeline/devtools/mcp_proxy.py`. Design:
-`docs/architecture/debug-tooling.md`.
+ones over `FElysiumCogWindow`; `UElysiumEntityDebugSubsystem` hosts the `elysium.ent_*` verbs and
+world-viz layers; `UElysiumMcpSubsystem` is Layer 3, reached through
+`pipeline/src/elysium_pipeline/devtools/mcp_proxy.py`. Design: `docs/architecture/debug-tooling.md`.
 
-Headless self-driving harnesses, all armed from `UElysiumMapSubsystem::Initialize` on a
-command-line flag and all exiting when done: `FElysiumProfileRun` (`-ElysiumProfile`),
-`FElysiumShotRun` (`-ElysiumShots`), `FElysiumProbeRun` (`-ElysiumProbe`), `FElysiumMoveRun`
-(`-ElysiumMove`, courses in `ElysiumMoveCourses.h` over the generated gym `ElysiumGymSpec.h` /
-`ElysiumGymBuilder.h`, recorded through `FElysiumChannelRecorder` over the `ElysiumChannels.h`
-registry, driven by `uv run elysium debug move`, compared by
-`pipeline/src/elysium_pipeline/validation/channel_diff.py`), `FElysiumCastRun` (`-ElysiumCast`,
-courses in `ElysiumCastCourses.h` over the arena `Debug/ElysiumArenaSpec.h` / `ElysiumArenaBuilder.h`,
-driven by `uv run elysium debug cast`, same recorder and comparator). The two recording runs share
-one schema and one writer, `Debug/ElysiumLocomotionTrace.h`.
+Headless self-driving harnesses are armed from `UElysiumMapSubsystem::Initialize` on a command-line
+flag and exit when done — `-ElysiumProfile`, `-ElysiumShots`, `-ElysiumProbe`, `-ElysiumMove` and
+`-ElysiumCast`, one per `uv run elysium debug <verb>`. The two recording runs (`move`, `cast`) share
+one schema and one writer, `Debug/ElysiumLocomotionTrace.h`, and are compared by
+`pipeline/src/elysium_pipeline/validation/channel_diff.py`.
 
-Automation tests live in `Private/Tests/`: content-free `Elysium.Substrate.*` suites are split by
-domain across the focused `Elysium*Tests.cpp` files and run under `-nullrhi`; `Elysium.Policy.*`
-covers generated `/Game` packages; `ElysiumContentTests.cpp` parses real exports and abstains when
-`$ELYSIUM_EXPORT_ROOT` is empty. Shared substrate recordings and engine-service doubles live in
-`ElysiumTestServices.h`. `ElysiumScratchContentRoot.h` installs a scratch export root for a test
-whose production reader resolves its input through `FElysiumContentPaths` — it overrides the
-`-ElysiumContentRoot` command-line pin as well as the environment variable, because the pin wins
-and every automation launch passes one.
+Automation tests live in `Private/Tests/`. **`ElysiumScratchContentRoot.h` overrides the
+`-ElysiumContentRoot` command-line pin as well as the environment variable** — the pin wins and
+every automation launch passes one, so a test whose production reader resolves through
+`FElysiumContentPaths` would otherwise read the real corpus.
 
 ## Engine gotchas
 
@@ -567,55 +281,15 @@ Hard-won, non-obvious, and easy to undo:
   yet and the accessor dereferences it unchecked. The worked example is the green room's wield
   tracking check (`ElysiumRenderedWield` in `Debug/ElysiumGreenRoomWield.cpp`).
 
-## Build and test loop
+## Build and test
 
-The build command is `uv run elysium build`.
+`uv run elysium build`, then `uv run elysium test <tier>`. The tiers, what each one needs, the
+filter rules, and how much export/bake a change authorizes are the **`elysium-testing`** skill.
 
-The test command is `uv run elysium test <tier>`, and there are three:
+Three standing approvals, because each is easy to add without noticing:
 
-| Tier | Needs | Covers |
-|---|---|---|
-| `Substrate` | nothing | the substrate, scripting, session, player and UI layers, against the recording doubles in `Private/Tests/ElysiumTestServices.h` |
-| `Policy` | a generated `/Game` package | material masters, declared input assets, audio routing — checks that need a real asset graph but not the user's game |
-| `Content` | `$ELYSIUM_EXPORT_ROOT` and the baked mount | the export corpus and what the bake wrote from it |
-
-A bare word that is not one of the three is refused rather than run: `Automation RunTest` matches
-by substring and reports success for a selection that matched nothing, so an unrecognized tier
-would otherwise be a green run of zero tests. A fully qualified filter (anything containing a dot)
-is passed through untouched. The runner also fails a run whose report counts failures, and one
-whose tests all abstained — a tier that proved nothing is not a pass.
-
-**Cost is dominated by editor-commandlet boot, not by the tests.** The whole `Substrate` tier
-executes in roughly three seconds inside a run of about twenty; a single narrow filter costs the
-same twenty. So a narrow filter buys focus and a readable failure, not time, and the choice
-between one filter and the whole tier is not a cost decision. `Content` is the tier that costs
-real time, and it is the one worth scoping.
-
-If the UnrealBuildTool mutex is held by another process, wait for it to release and retry rather
-than killing the holder.
-
-Testing is gated. Start with the narrowest owning automation filter or pure-rules test; a complete
-tier is a separately planned and accepted operation.
-
-**A test name must be a leaf.** Unreal's automation registry turns a name that is a strict prefix
-of another registered name into a branch of the test tree, and the test registered under it never
-runs and never reports. `uv run elysium doctor` refuses a prefix collision and a duplicated name.
-
-**A missing prerequisite abstains; a present but broken one fails.** An abstention is
-`AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: <reason>"))`, which the runner counts separately from an
-execution. Never gate on `TestNotNull`, which registers a failure and then returns, and never
-write a prose "skipping" — both produce a green run that proved nothing.
-
-**A live run is proposed, never assumed — ask the owner first, with a recommendation.**
-
-**No feature flag and no A/B toggle without approval — ask the owner first.** Work lands as a
-complete change, not behind a switch.
-
-**Do not create cvars without explicit request or approval.** Cog is the debug surface: a new
-control is a tab, not a console variable.
-
-## Console commands
-
-Every runtime verb is an `elysium.*` console command; the live set is whatever the module registers
-(`FAutoConsoleCommand`/`FAutoConsoleVariableRef`). `elysium.commands [filter]` reads the coverage
-back as a work list.
+- **A live run is proposed, never assumed** — ask the owner first, with a recommendation.
+- **No feature flag and no A/B toggle without approval.** Work lands as a complete change, not
+  behind a switch.
+- **Do not create cvars without explicit request or approval.** Cog is the debug surface: a new
+  control is a tab, not a console variable.
