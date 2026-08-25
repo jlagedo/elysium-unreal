@@ -76,7 +76,8 @@ rule 3 governs what happens next:
    closure from a gait reaches aim and bobble only, so every `_attack_layer`, `_attack_delta` and
    `_reload_layer` is armed by `CBaseAnimatingOverlay` — Source's game-pushed layer stack, which
    this runtime has no counterpart for. A drawn gun never plays its attack or reload pose over
-   the gait → [plans/animation.md](plans/animation.md).
+   the gait. The contract is recovered and the player arm is one slot fed by a current/next
+   activity queue → [plans/animation.md](plans/animation.md).
 2. **11.10** — the Play test tier, the beat-script harness the whole landed stack is accepted
    through; PP0's finish → [plans/spine.md](plans/spine.md).
 3. **The 3 C's slice** — the controls/camera co-tune, then CCC8's owner-played acceptance →
@@ -454,8 +455,9 @@ The ladder:
   unreachable. The autolayer closure from a gait reaches aim and bobble only, so the family is
   armed by `CBaseAnimatingOverlay`, a game-pushed layer stack with no counterpart here; the
   record's one-overlay/one-additive limit is a consequence of that, not a second cause. The
-  subsystem's data model, lifecycle and weight rule are located and under RE recovery.
-  `Elysium.Content.RigLayers` and `RigPose` are the acceptance.
+  contract is recovered — four slots, a per-layer envelope computed from the layer's own cycle,
+  weight-zeroing death, and two asymmetric producers of which the player's is one slot fed by a
+  current/next activity queue. `Elysium.Content.RigLayers` and `RigPose` are the acceptance.
 
 ## P9 — Dialogue & persistence *(detail: [plans/gameplay.md](plans/gameplay.md))*
 

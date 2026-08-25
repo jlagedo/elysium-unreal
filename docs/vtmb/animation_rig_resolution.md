@@ -482,10 +482,12 @@ binds agree within `0.001 cm`. Six bones on `nosferatu_female_armor_0 ← frenzy
 copied by retail while this runtime retargets them. This is the same threshold the pelvis section
 brackets, seen on bones small enough that the consequence is a fraction of a millimetre.
 
-**The overlay subsystem does not exist here.** `CBaseAnimatingOverlay`'s stack of game-pushed
-layers has no counterpart in this runtime, which is why an armed body composes a strict subset of
+**The overlay subsystem does not exist here.** `CBaseAnimatingOverlay`'s four game-pushed layers
+have no counterpart in this runtime, which is why an armed body composes a strict subset of
 retail's channels — see "A composed pose is a subset" below. This is the largest missing
-mechanism in the reproduction, and it is a subsystem rather than a rule.
+mechanism in the reproduction, and it is a subsystem rather than a rule. Its contract is recovered:
+the record, the slot count, the lifecycle, the weight envelope and the two producers are stated in
+"The overlay contract" below.
 
 **The composed pose is unmeasured.** `Elysium.Content.RigPose` evaluates one clip per captured
 frame, so a frame retail built from several contributions is compared against a single clip by
@@ -536,10 +538,142 @@ It also accounts for the one observation an autolayer cannot: a channel's weight
 `0.923 → 0.02` across consecutive frames. An autolayer derives its weight from the cycle or a pose
 parameter, so it moves with the animation; an overlay fades because game code ticks it down.
 
-**Recovered in progress.** The class, its datamap and its entry point are located; the data model,
-the push/expire lifecycle and the weight-driving rule are not yet recovered, so no contract is
-stated here. The RE work naming them is what closes this section, and the reproduction's design
-follows that contract rather than any slot count chosen in advance.
+### The overlay contract
+
+The layer array is **four records of 48 bytes** at `this+0x734`, named by the class's own datamap:
+
+| offset in record | field | offset in record | field |
+|---|---|---|---|
+| `+0x00` | `m_fFlags` | `+0x18` | `m_flWeightMax` |
+| `+0x04` | `m_fSequenceFinished` | `+0x1C` | `m_flBlendIn` |
+| `+0x08` | `m_nSequence` | `+0x20` | `m_flBlendOut` |
+| `+0x0C` | `m_flCycle` | `+0x24` | `m_nActivity` |
+| `+0x10` | `m_flPlaybackRate` | `+0x28` | `m_bAutoKillWhenFinished` |
+| `+0x14` | `m_flWeight` | `+0x2C` | `m_flLastEventCheck` |
+
+All twelve fields of all four slots are declared save/restore. Whether they are networked is a
+separate question the datamap cannot answer, and it is not answered here.
+
+**Four slots, and exhaustion is refusal.** The datamap declares `m_AnimOverlay_0..3`, and
+`m_Flinch_0` begins at `0x7F4` = `0x734 + 4 × 0x30` exactly, so nothing further fits.
+`AllocateLayer` (`0x10099470`) scans from `GetFirstGestureLayer` (vfunc `+0x42c`) — which answers
+`0` for every class in the hierarchy, so no slot is reserved — and takes the lowest slot whose
+`m_flWeight` is zero, returning `-1` when all four are held. `AddGesture` propagates that `-1`.
+There is no eviction and no priority displacement.
+
+**A layer's defaults are the contract a reproduction must match.** `SetLayer` (vfunc `+0x430`,
+`0x10099020`) writes `m_flWeight = 0.1`, `m_flWeightMax = 1.0`, `m_flBlendIn = m_flBlendOut = 0.2`,
+`m_flPlaybackRate = 1.0`, and zeroes the cycle, the finished flag and `m_flLastEventCheck`. The
+`0.1` is load-bearing: it is what makes the slot read as occupied against `AllocateLayer`'s
+zero-weight test. **`m_fFlags` is not written and keeps whatever the previous tenant left.** When
+the sequence's studio `flags@8` carries `0x2` (SNAP), both blend times are set to zero, so a snap
+sequence gets no envelope at all.
+
+**Weight rides the layer's own cycle, and this is what separates an overlay from an autolayer.**
+The per-layer advance (`0x10098830`) recomputes it every tick; no caller writes it:
+
+```
+cycle += SequenceCycleRate(m_nSequence) × m_flPlaybackRate × dt
+w = 1
+if (m_flBlendIn  && cycle < m_flBlendIn)        w = cycle / m_flBlendIn
+if (m_flBlendOut && cycle > 1 - m_flBlendOut)   w = (1 - cycle) / m_flBlendOut
+w = 3w² − 2w³
+m_flWeight = min(w, m_flWeightMax)
+```
+
+With the default `m_flBlendOut` of `0.2` the weight falls from one to zero over the last fifth of
+the cycle on a smoothstep, which is the `0.923 → 0.02` fade the capture records. An autolayer's
+weight is a function of the *owning* sequence's cycle or of a pose parameter; an overlay's is a
+function of its own independently advancing cycle, and that is the observable difference between
+them. The spline's leading coefficient reads as a folded constant (`_DAT_10450010`) and is
+**inferred** as `3.0` from the `3w² − 2w³` shape rather than read; the envelope-branch guard
+constant `_DAT_1045001c` is likewise unread, and with both blend times zero the inner tests are
+no-ops either way.
+
+**Death is weight-zeroing.** The cycle clamps to `1.0` on a non-looping sequence and wraps on a
+looping one, and on reaching `1.0` sets `m_fSequenceFinished`. In the owner loop (`0x10098bb0`) a
+layer that is live, finished and auto-kill has `m_flWeight` set to zero — which returns the slot to
+the pool — and vfunc `+0x1c0` is called with `(layer index, m_nActivity)` as a completion
+notification. **A finished layer whose auto-kill flag is clear holds its slot at cycle 1.0
+indefinitely**, until something else clears it.
+
+**There is no ordering.** No priority or order field exists in the record. Composition runs by slot
+index `0..3` and `AllocateLayer` answers the lowest free slot, so a freed slot is reused by the next
+push and **layer order is not stable over time** — it is neither authored nor durably
+insertion-ordered.
+
+**The producers are asymmetric, and this is the third player/cast fork in this system.** The cast
+pushes through `AddGesture` (`0x100991b0`) into a dynamically allocated slot with an auto-kill flag,
+and `AddGesture` selects its sequence with `SelectWeightedSequence` rather than
+`SelectHeaviestSequence`. The player does not use `AddGesture` at all: its layer arrives as the
+**second argument to the player activity commit** (`0x101644f0`), where `0` clears the channel, `-1`
+leaves it, and anything else is translated and handed to `FUN_1015fbb0`, which writes **slot 0**
+directly through vfunc `+0x430`. A current/next queue in the `CBaseCombatCharacter` datamap fields
+`m_aCurWpnActivity` and `m_aNextWpnActivity` drives it, and `CBasePlayer::vfunc103` resets both to
+`-1`.
+
+**No new family-resolution machinery is needed for either arm.** `CAI_BaseNPC::TranslateActivity`
+(`0x10271ff0`) is structurally the ladder `animation_and_movers.md` already records — pre-translation,
+weapon translation, an alternation loop capped at five, an availability probe, and the terminal
+`ACT_RUN → ACT_WALK`. The player path calls the same two virtuals inline before committing its
+layer.
+
+### Where overlays enter the pose, and how they blend
+
+The client pose build (`FUN_100979b0`) composes in this order, everything converging on the same
+accumulate:
+
+| # | stage | weight |
+|---|---|---|
+| 1 | the base sequence | `1.0` |
+| 2 | `m_AnimOverlay[0..3]`, in slot order | the layer's own |
+| 3 | a global autoplay pass over sequences carrying `flags@8 & 0x8` | `1.0`, hardcoded |
+| 4 | `m_Flinch[0..2]` | a linear ramp |
+| 5 | a virtual at `+0x1e0` | — |
+
+**Autolayers nest inside every accumulate rather than forming a stage.** The resolution walk
+evaluates a sequence and then recurses once per `numautolayers`@660 entry at a hardcoded weight of
+`1.0`, so the base *and each overlay* each bring their own closure. This is what produces the
+multiplicity of one to eight identical repeated contributions the capture records, and why
+`supershotgun_aim_layer` appears beside `supershotgun_attack_layer` — the attack layer's own closure
+names it.
+
+**The blend operation is the sequence's own `flags@8`, never the caller's choice.** With `0x4`
+clear a layer replaces — the running rotation slerps toward it by the weight and the position lerps;
+with `0x4` set it is additive, and **`0x10` selects between two additive variants**. That second
+variant is not modelled in this repository.
+
+**Masking is the sequence's own per-bone weight list**, not a bone root: `seqdesc+0x38` indexes
+`0x48`-byte records at `studiohdr+0x10c`, and the effective per-bone weight is the layer weight
+times the bone's weight, skipped below an epsilon. Being authored per clip, it corresponds to a
+clip-derived blend mask rather than to anything the caller supplies.
+
+**Weights are clamped to `[0,1]` and are never normalised across layers.** Each layer moves the
+running pose toward itself by its own weight or adds to it; weights summing past one simply let the
+later layers dominate.
+
+### `m_Flinch` is a second, separate stack
+
+Immediately after the overlay array, `m_Flinch[3]` at `+0x7F4` holds three 28-byte records —
+`nSequence`, `nLatch`, `flFadeIn`, `flFadeOut`, `nPoseParamIndex`, `flPoseParamValue`,
+`flExpireTime` — gated by `m_bNoFlinch` at `+0x730`. It is not part of `m_AnimOverlay`: it expires
+on a time rather than on an auto-kill flag, ramps linearly rather than on a spline, and carries a
+**per-layer pose-parameter override** the overlay records have no equivalent of. That override is
+the shape a directional reaction grid needs, so the correspondence with the reaction stream this
+project already models is worth checking; it is not asserted here.
+
+### What the overlay contract still leaves open
+
+- **Networking.** The datamap is save/restore only. The send/receive table for the class would
+  settle whether and how the array replicates.
+- **`m_fFlags` semantics.** `SetLayer` never writes it and only `Dump` reads it. Finding the writers
+  of the record's `+0x00` would settle it.
+- **The two additive variants.** Reading the two functions `flags@8 & 0x10` selects between would
+  settle which is which.
+- **The three unread virtuals** — `+0x438` and `+0x43c`, the "is this activity playing" and "find
+  its layer" pair `AddGesture` consults, and `+0x1c0`, the completion notification.
+- **Whether the server evaluates the stack**, for hitboxes or attachments, or whether it only holds
+  and saves the state. Finding the server-side counterpart of the client pose build would settle it.
 
 ## What a reproduction has to carry
 
@@ -592,6 +726,18 @@ pair, not of a bone name, and the corpus offers the same bone at wildly differen
 Pelvis` is `1.00000` on the female pair and `0.04884` on the male one. Joining a captured matrix to
 a computed ratio without carrying the pair through manufactures a divergence out of two correct
 measurements — which is how the section above came to claim one.
+
+**Counting overlay slots from `Dump`.** `CBaseAnimatingOverlay::Dump` (`0x10098a90`) iterates
+**24** records at stride `0x30` over an array that holds **four**, walking through `m_Flinch` and
+well past the end of it. The slot count is four, fixed three ways: the datamap declares
+`m_AnimOverlay_0..3`, `m_Flinch_0` begins exactly where a fifth record would, and both
+`AllocateLayer` and `RemoveAllGestures` bound at four.
+
+**Looking for a game-pushed layer in the studio data.** An overlay is a peer of the autolayer
+mechanism, not a member of it, so no walk of `numautolayers`@660 finds one however deep it goes —
+the gait's closure reaches `_aim_layer` and `_bobble_delta` and stops. The tell that separates the
+two at runtime is the weight: an autolayer's follows the owning sequence's cycle or a pose
+parameter, an overlay's follows its own independently advancing cycle.
 
 ## Open
 

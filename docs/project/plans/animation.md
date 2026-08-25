@@ -476,10 +476,42 @@ already reports as `twooverlay`/`twoadditive` — is a **consequence** of never 
 layer stack, not a second independent cause. Raising it in isolation would not put an attack pose
 on the body.
 
-**What this rung needs before it can be designed.** `CBaseAnimatingOverlay`'s data model, its
-push/expire lifecycle and its weight-driving rule are located but **not recovered**; RE work is
-running on them. The runtime design follows that recovered contract rather than a slot count
-chosen in advance, and no reproduction is specified here until it exists.
+**The contract this rung builds against is recovered**, and is stated in full in
+`docs/vtmb/animation_rig_resolution.md` → "The overlay contract". What it requires, as
+requirements rather than as an Unreal design:
+
+- **Four layer slots, and refusal when they are full.** No eviction, no priority, no reserved
+  slot. Composition runs by slot index, and because a freed slot is reused by the next push,
+  **layer order is not stable over time** — a reproduction must not depend on it being so.
+- **Per-layer state**: a sequence, a cycle advancing on its own playback rate, a weight, a weight
+  ceiling, a blend-in and blend-out pair, the originating activity, and an auto-kill flag.
+- **A weight envelope computed from the layer's own cycle**, not written by the pusher:
+  `blendIn`/`blendOut` default to `0.2`, ramp linearly and pass through `3w² − 2w³`, clamped to
+  the weight ceiling. A sequence carrying the studio SNAP bit gets no envelope at all. This is the
+  one rule that distinguishes an overlay from a studio autolayer, and it is what produces the
+  observed `0.923 → 0.02` fade.
+- **A lifecycle ending in weight-zeroing.** A layer finishing its cycle raises a finished flag;
+  an auto-kill layer then frees its slot and fires a completion notification carrying its
+  activity. **A finished layer without auto-kill holds its slot indefinitely.**
+- **Two producers, asymmetric.** The cast pushes a dynamically allocated layer selected by weighted
+  draw. The player writes **slot 0 directly**, driven by a two-entry current/next activity queue,
+  as the second argument to its activity commit — where a zero clears the channel. The player arm
+  is therefore materially smaller than the cast arm: one slot, one queue, and an envelope the
+  runtime computes rather than receives.
+- **No new activity translation.** Both arms resolve the layer activity through the same ladder
+  this runtime already implements.
+- **Composition order**: the base pose, then the overlay slots in index order, then a global
+  autoplay pass, then the flinch stack. Each contribution — base and overlay alike — carries its
+  own autolayer closure at full weight, so an overlay is not a leaf.
+- **Blend operation and mask come from the sequence, never the pusher**: the studio additive bit
+  decides replace against add, and the per-bone weight list decides which bones a layer reaches.
+  A reproduction must confirm whether the existing blend-profile bake already carries that list
+  before inventing a second mask source.
+
+Two facts about the shipped data bear on the design: retail's second additive variant (selected by
+a studio flag bit) is not modelled in this repository, and `m_Flinch` is a **separate** three-slot
+stack with a per-layer pose-parameter override that very likely corresponds to the reaction stream
+already implemented here — worth checking against, and not to be folded into the overlay work.
 
 **Open:** whether a montage slot is the right home for a game-pushed overlay at all.
 `ElysiumSlotLayer` and `ElysiumSlotAimLayer` are reserved for montages today, and
@@ -489,9 +521,10 @@ recovered contract, not against the node count.
 
 *Acceptance:* `Elysium.Content.RigLayers` reports every captured frame's channel set covered,
 with the shortfall asserted rather than only reported; from real input, a drawn firearm plays its
-attack and reload poses over an unchanged gait on a male and a female body. *Deps:* the
-`CBaseAnimatingOverlay` recovery; LIFE3's resolver and LIFE4's wielded body. The capture oracles
-are already on disk.
+attack and reload poses over an unchanged gait on a male and a female body. *Deps:* LIFE3's
+resolver and LIFE4's wielded body. The recovered contract and the capture oracles are both already
+on disk; the player arm is buildable without waiting on anything further, the cast arm needs the
+three virtuals named as open in the contract only if a reproduction chooses to mirror them.
 
 ### Open owner calls
 
