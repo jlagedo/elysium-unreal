@@ -663,7 +663,8 @@ bool FElysiumRigPoseTest::RunTest(const FString&)
 	// pelvis is a translation bone whose error every other bone inherits, so excluding the one
 	// bone would leave the body's whole pose displaced and the aggregate meaningless. It is
 	// held to the recorded envelope below instead, which is a ceiling rather than a target: a
-	// translation rule carrying retail's three branches would drive it to zero and still pass.
+	// graph-level translation rule carrying retail's four outcomes drives it to zero downstream and
+	// this direct-sequence exposure still passes.
 	constexpr double MedianToleranceCm = 0.5;
 	constexpr double MedianToleranceDegrees = 0.5;
 	if (BaseOnlyRadius.Count() == 0 && OriginBandRadius.Count() > 0)

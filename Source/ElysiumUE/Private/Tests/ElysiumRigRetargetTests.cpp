@@ -68,10 +68,10 @@ namespace
 	// hide. A row named here is reported and allowed; a row that diverges without being named
 	// fails, which is the whole reason the list is keyed rather than a tolerance.
 	//
-	// 1. Six bones where retail COPIES and Unreal retargets. Retail's own "these binds differ"
-	//    epsilon is bracketed by the corpus at 0.211-0.322 cm, and Unreal's is 0.001 cm, so a
-	//    pair inside that gap is copied by one engine and retargeted by the other. The two
-	//    engines disagree about equality; neither bind is wrong.
+	// 1. Six bones where retail COPIES and stock Unreal retargets. Retail compares squared Source
+	//    lengths against 0.01 (0.1 in / 0.254 cm), while Unreal's threshold is 0.001 cm, so a pair
+	//    inside that gap is copied by one engine and retargeted by the other. The two engines
+	//    disagree about equality; neither bind is wrong.
 	// 2. Five `Bip01 Pelvis` pairs where retail takes its ORIGIN branch -- identity rotation and
 	//    a pure `b - a` offset -- while `OrientAndScale` applies a 0.049 length ratio, because
 	//    Unreal's own zero test is against zero and retail's is not.

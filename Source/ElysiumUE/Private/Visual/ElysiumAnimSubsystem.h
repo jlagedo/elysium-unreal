@@ -4,6 +4,7 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 
 #include "Substrate/ElysiumDisposition.h"
+#include "Visual/ElysiumBankRemap.h"
 #include "Visual/ElysiumBlendGrids.h"
 #include "Visual/ElysiumCompositionRig.h"
 #include "Visual/ElysiumEyeRig.h"
@@ -14,10 +15,13 @@
 #include "ElysiumOverlayStack.h"
 #include "Visual/ElysiumAnimationResolve.h"
 
+#include "UObject/ObjectKey.h"
+
 #include "ElysiumAnimSubsystem.generated.h"
 
 class UAnimSequence;
 class UBlendSpace;
+class USkeleton;
 class USkeletalMesh;
 
 // One blend grid resolved to everything a caller needs to stand it and steer it (ANM3). `Axes` is 1
@@ -200,6 +204,17 @@ public:
 	// The same for a v4 animated prop, which indexes separately and whose sidecar sits under
 	// animated_props/.
 	TSharedPtr<const FElysiumCompositionRig> GetAnimatedPropCompositionRig(const FString& ModelPath);
+	// Retail's per-body bank bone-remap table (`vampire.dll FUN_100c67b0`) for one CLOSURE's own
+	// (mesh, source skeleton, retarget source) tuple — never for a body "stem": a cinematic body's
+	// per-actor bank is not in any manifest, so a stem-keyed cache would miss it by construction.
+	// There is no sidecar; this BUILDS the table from
+	// `SourceSkeleton->AnimRetargetSources[RetargetSource]` (the donor bind registered on the playing
+	// sequence's bank-family skeleton) against `Mesh->GetRefSkeleton()` (the playing body's own bind)
+	// the first time this tuple is asked for, and caches the result for the life of the game instance.
+	// Null is the ordinary "nothing to correct" case when every bone copies. A named source missing
+	// from its sequence skeleton is a broken baked prerequisite and warns.
+	TSharedPtr<const FElysiumBankRemap> GetBankRemap(USkeletalMesh* Mesh,
+		USkeleton* SourceSkeleton, FName RetargetSource);
 	// The blend spaces a stem declares (CAP7.3): `npc/blends/<stem>.json`. Null for every model whose
 	// sequences each name a single animation, which is most of them and a normal load. The stem may
 	// be a character, a bank or an animated prop — all three can declare grids.
@@ -393,6 +408,15 @@ private:
 	TMap<FString, TSharedPtr<const FElysiumEyeSet>> EyeSets;
 	// Character rigs are keyed by stem; animated-prop rigs use the normalized model's indexed stem.
 	TMap<FString, TSharedPtr<const FElysiumCompositionRig>> CompositionRigs;
+	// The bank bone-remap table, keyed by (playing mesh, source skeleton, retarget source) rather than
+	// by stem — a cinematic body's per-actor bank has no stem any manifest names, and the same source
+	// name on two bank-family skeletons does not identify the same donor pose. `TObjectKey` is a
+	// stable, non-owning identity: it never keeps either asset alive and never dangles, so a stale
+	// entry from a dead map epoch is a harmless dead key rather than a crash. A null entry is the
+	// common "every bone copies" case, not the exception.
+	using FBankRemapKey = TPair<TObjectKey<USkeletalMesh>,
+		TPair<TObjectKey<USkeleton>, FName>>;
+	TMap<FBankRemapKey, TSharedPtr<const FElysiumBankRemap>> BankRemaps;
 	// And again for the garment spike. A null entry here is the common case, not the exception.
 	// And again for the blend spaces. Keyed by the OWNING stem — a bank serves every character that
 	// resolves a clip out of it, so this is parsed once for the whole cast rather than per NPC.

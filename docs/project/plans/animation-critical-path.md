@@ -28,18 +28,13 @@ These override defaults for every task below. They are the owner's calls, made i
 produced this plan, and they are not re-litigated per task.
 
 1. **The bake-everything rule is demoted for this programme.** Root `CLAUDE.md` → "Poses are baked
-   native" stays the default for everything static. Four retail rules are **runtime rules by
-   construction** here — the post-multiply additive (T-B1), the overlay weight envelope (already
-   runtime), the previous-sequence cross-fade chain (T-C7) and the aim-pitch slew (T-C6). Each is
-   named where it lives, with the retail address beside it. No fifth is added without an owner
-   call.
-   **Revised by T-A5's evidence, on the owner's call:** the test for where a rule lands is its
-   *inputs* — a rule whose every input exists at bake time is a bake input; a rule with a live or
-   time-dependent input is a graph rule. The additive combine's inputs (host cell, host phase,
-   aim cell, mask, `s = 1.0` on every shipped delta) are all static, so T-B1 is to be **re-filed as
-   a bake fold** (`fold_deltas`, already proven on masked hosts) once T-A5's graph link closes;
-   T-C6 and T-C7 stay runtime rules by the same test. The runtime node stays in the tree until the
-   fold replaces it.
+   native" stays the default for everything static. Five retail rules are **runtime rules by
+   construction** here — the post-multiply additive (T-B1), the per-closure shared-bank remap, the
+   overlay weight envelope, the previous-sequence cross-fade chain (T-C7) and the aim-pitch slew
+   (T-C6). Each is named where it lives, with the retail address beside it. No sixth is added
+   without an owner call. T-A5 closes the post-additive node and bank-remap node against the running
+   graph: both depend on a live composed closure, and the affine bank origin branch must run once
+   after that closure rather than once per baked sequence.
 2. **The owner's observation is ground truth.** A test, log or harness that reads green against a
    reported defect is the first suspect. Reproduce at the seam the owner sees, then name the
    measurement that would falsify the code and run that. Do not hedge on whether the owner's build
@@ -254,8 +249,8 @@ index 2 the 49-bone upper body from `Bip01 Spine1`.
 | test | tier | today | what it proves |
 |---|---|---|---|
 | `Elysium.Content.RigCompose` | Content | **RED** — control 3.168 cm, layered **1.358**, arm scalar green on every state of both bodies, four layers green (`deserteagle_attack` 0.70, `deserteagle_reload` 0.40, `steyr_reload` 0.31, `supershotgun_reload` 0.24) | composed pose vs the capture, whole body, mesh-space on the split bone, aim cell pinned per state, three cohorts |
-| `Elysium.Content.OracleIdentity` (T-A5) | Content | **green** — median 0.001–0.003 cm, max 0.027, 880 states | the baked mount composed offline equals the reference compositor at every stated state; no capture, no search |
-| `Elysium.Content.BakedCharacterParity` | Content | red — the retargeted-delta residual (1.14 cm `Bip01 Pelvis`, `anaconda_attack_delta` on `SK_ash`) and seven `baseballbat_hunt_walk` `Bip01` rows of unverified provenance | the bake's own contract, read on the body mesh |
+| `Elysium.Content.OracleIdentity` (T-A5) | Content | **green** — median 0.001–0.003 cm, max 0.027, 928 states across both bodies | the baked mount composed offline equals the reference compositor at every stated state; no capture, no search |
+| `Elysium.Content.BakedCharacterParity` | Content | **green** — 9 models compared; the Ash delta and baseball-bat instrument rows are closed | the bake's own contract, read on the body mesh |
 | `Elysium.Content.FanDuration` (T-A3) | Content | red — 176 of 207 fans on the harmonic branch | T-B2's gate |
 | `Elysium.Content.PlayerGraphInstance` | Content | green — 17 of 17 axis-interp rules resolve | the generated graph stands a body in the editor commandlet |
 | `Elysium.Content.RigPose` | Content | green | one clip on an unlayered frame |
@@ -579,8 +574,9 @@ and every other comparison becomes an identity against that oracle at a fully st
 - **Gate:** the compositor reproduces the capture to sub-centimetre wherever the state is fully
   known; `OracleIdentity` ≤ 0.5 cm median; `debug oracle --run` ≤ 0.5 cm median on both bodies.
 
-**Findings.** Two of the three links are closed as identities; the third found a real runtime
-defect and is mid-fix.
+**Findings.** All three identity links are closed. Direct retail acceptance remains bounded by the
+capture corpus: the two bodies carrying both pose and layer oracles are all-copy Malkavians, so a
+differing-bind Ash or Tremere capture is still needed for that body class.
 
 *The compositor against the capture* (`debug oracle --validate <session> --search-aim`), 439
 unlayered full-weight frames composed: every state with **no aim layer** reads **0.005–0.26 cm**
@@ -601,50 +597,17 @@ was `RigCompose`'s standing defect: the derived overlay's `Spine1` must be compo
 (T23). Applied to `RigCompose`, its layered cohort moved **3.33 → 1.358 cm** and four layers went
 green; its control 3.89 → 3.168, still feet-and-calves first (T-C7).
 
-*The graph against the compositor* (`debug oracle --run`, male body): **the legs match at
-0.00–0.02 cm at the published phase on every steady frame**, so the fan, its clock and the whole
-lower body are right. The upper body drifts 0.1–2.7 cm frame to frame at a fixed state; with the
-`_delta` composed at a *searched* phase of its own the upper body drops to **0.01–0.07 cm**, and the
-searched phases advance at 0.032/frame against the fan's 0.022 — the base channel's delta is played
-by a free-running `SequencePlayer` at its clip's natural length (0.53 s lap) while the gait laps in
-0.77 s. Retail evaluates an autolayer at the host's cycle (T24). This is the arm bobbing out of
-step with the stride, in numbers. The slot branch never had it: its delta is an evaluator pinned
-to the slot time.
+*The graph against the compositor* (`debug oracle --run`): both the differing-bind
+`tremere_male_armor_3` and the all-copy `malkavian_male_armor_0` read **0.009 cm median over 480
+frames**, against the 0.5 cm bound. The slot cohort reads 0.030 cm. The host-clock sync therefore
+reaches the runtime graph; no fold replaces the post-additive node.
 
-*The fix in flight, uncommitted:* the generator puts the locomotion blend stack and the base
-`_delta` player in one sync group (`ElysiumAnimGraph::BaseSyncGroup`, stack `AlwaysLeader`, player
-`AlwaysFollower`, `Method = SyncGroup`) — the engine's own "follow the host's normalized time",
-stock nodes, no lag. **Unverified**: the generator's own comment says sync-group fields are
-`FoldProperty` members that a reflection write does not reach at runtime. The T3D regeneration to
-test it froze three times when launched beside a still-running editor; run alone it lands in ~60 s.
-If the fold properties do not take, the fallback is the T-B1 fold (the delta inside the aim cells
-at the host's phase, the base-channel aim grid becoming a phase-driven `BlendSpaceEvaluator`), which
-is also where §0.1 now points.
-
-**Resume here** (working tree after commit `1a7bfc8`, all built, editor tier green, Python suite
-green on the touched modules, doctor clean):
-
-1. Regenerate the T3D **with no other editor process alive**, from PowerShell:
-   `& "D:/Epic/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" E:/dev/elysium-unreal/ElysiumUE.uproject -ElysiumContentRoot=E:/elysium-work/exports "-ExecCmds=elysium.animbp.build /Game/Elysium/Animation/ABP_ElysiumBiped.ABP_ElysiumBiped E:/elysium-work/scratch/ABP_regen.t3d" -unattended -nopause -nosplash -nullrhi -NoLiveCoding -noP4 -nosound`
-   — it prints `[animbp] built 101 node(s)` and then idles; stop it, copy the file over
-   `pipeline/unreal/graphs/ABP_ElysiumBiped.t3d`, and check the text carries
-   `GroupName="ElysiumBase"`, `GroupRole=AlwaysLeader`/`AlwaysFollower`, `Method=SyncGroup` on the
-   stack and the additive player, and 5 `AnimGraphNode_ElysiumPostAdditive` nodes.
-2. `uv run elysium export bundle policy --force` — expect `imported 101 node(s)`.
-3. `uv run elysium debug compose --body malkavian_male_armor_0`, then
-   `uv run elysium debug oracle --run E:/elysium-work/exports/_compose/sp_tutorial_1-item_w_ithaca_m_37-malkavian_male_armor_0.json`
-   — the upper body on `m37_aggressive_run + no slot` should fall from ~1.0 cm to ≲ 0.1; the
-   `--best-cycle 12` diagnostic prints legs and upper body separately.
-4. If it does, run both bodies, commit, and re-file T-B1 as the fold. If it does not, the sync
-   group is confirmed unreachable by reflection; go to the fold directly.
-
-Uncommitted files and what each is: `ElysiumComposeRun.cpp` (publishes `cycle` and
-`cycle_norm`), `ElysiumBipedAnimInstance.{h,cpp}` (`GetLocomotionNormalizedTime`),
-`ElysiumAnimGraphLibrary.cpp` + `ElysiumAnimGraph.h` (the sync group), `ElysiumRigComposeTests.cpp`
-(mesh-space on the split bone, both the closure and the standing slot clip),
-`ElysiumRigLayerTests.cpp` (a helper renamed to dodge a unity-build collision),
-`ElysiumOracleIdentityTests.cpp` (new), `retail_compositor.py`, `graph_identity.py`,
-`test_retail_compositor.py` (new), `cli.py` (`debug oracle`).
+The same gate exposed and closed two bank-remap instrument/runtime defects. `graph_identity.py`
+now takes the harness-recorded root instead of the first parentless bone (`Tube02` precedes `Bip01`
+on Tremere), removing a false 83.97 cm / 177.2° result. The runtime builds its table from the
+playing sequence's bank-family skeleton, not the body skeleton, and resolves its named bones
+immediately when a table arrives after `CacheBones`. Tremere's real pre-fix `3.113 cm` rigid pelvis
+offset collapses to 0.009 cm; the Malkavian control remains unchanged.
 
 ### Phase B — the bake
 
@@ -690,9 +653,9 @@ reaches the right answer (T22).
   list gains this entry beside axis interpolation. `docs/project/rebuild-strategy.md`'s register
   of deliberate reproductions gains the row.
 
-**Findings.** The rule is in and it is retail's; the gate as written is not reachable by it
-alone, and the instruments that were supposed to read it were the first thing it broke. The
-heading stays open.
+**Findings.** The post-multiply rule is in and closed against the reference compositor. The
+programme heading remains open for the independent fan-duration and cross-fade work; no remaining
+instrument attributes the M37 arm defect to additive order.
 
 What landed: `FAnimNode_ElysiumPostAdditive` composing `q ⊗ scale(D, s)`, `pos += D.pos · s`,
 confirmed operand by operand from `vampire.dll 0x100c12b0` (`QuaternionScale` → `QuaternionMult`
@@ -762,24 +725,22 @@ Everything the task text got wrong, each carrying the measurement that decided i
   shadows 352 labels; `UAnimMetaData` is the door the mask already uses and the only one every
   reader — slot resolver, lab, three tests, the Python verifier — reads the same way.
 
-**Since the first landing (T-A5's evidence).** `RigCompose` composed every derived overlay's
-split bone locally (T23); corrected, its layered cohort reads **1.358 cm** and `m37_attack_layer`
-**4.417** with legs carrying it. The graph's base-channel delta runs on its own clock (T24) — the
-one remaining upper-body defect, ≲ 0.1 cm once the delta is at the host's phase — and the fix under
-test is a sync group, with the fold as the fallback and the direction §0.1 now records. The
-translation-retargeting residual below stands.
+**Since the first landing (T-A5's evidence).** `RigCompose` composes every derived overlay's split
+bone in mesh space; its control/layered medians remain **3.168 / 1.358 cm**, feet-and-calves first,
+and belong to T-C7. The host-clock sync closes the running graph at 0.009 cm against the compositor.
 
-One residual named rather than closed: with no stamp a delta's **translation** passes through
-`OrientAndScale` on a retargeted body and is re-oriented by the bank-to-body bind angle where
-retail adds it verbatim — bounded by the delta's own translation, 0.007 cm on any arm bone,
-**1.14 cm** on `Bip01 Pelvis` of `anaconda_attack_delta` on `SK_ash`; zero on a body whose binds
-match its bank. `BakedCharacterParity` reads it on the body mesh and names it apart from a bake
-defect. Two further things the sweep turned up outside this task: three copies of one
-list-as-scalar bug broke every bake scoped to named bodies (`character_recipes`,
-`bake_characters.py`, `bake_verify_characters.py` — fixed, `FocusedScopeTests` red first); and
-`BakedCharacterParity` reports `baseballbat_hunt_walk` 6 cm off on `Bip01` for seven bodies of the
-male baseball bank, an ordinary clip on a check that landed 2026-08-17 and that no run before this
-one exercised — provenance unverified.
+Shared-bank translation is no longer delegated to `OrientAndScale`. Retail composes a bank closure
+first and then applies one four-outcome translation map: copy, exactly-one-origin pure translation,
+both-origin copy, or shortest-arc/length-ratio similarity. The graph carries one
+`FAnimNode_ElysiumBankRemap` at the base tail and one at each of four slot tails. Tables are built
+at runtime from the sequence skeleton's registered donor pose and the playing mesh bind, so
+script-selected cinematic banks need no offline sidecar. `BakedCharacterParity` is green across
+9 models, including Ash and the repaired baseball-bat instrument.
+
+The retail evidence boundary remains: no differing-bind body has a capture containing both pose
+and layer oracles. Disassembly, 20 synthetic compositor tests, the C++ branch/routing test, the
+0.009 cm graph identity and the unchanged Malkavian control support the implementation; an Ash or
+Tremere retail capture is still required for direct live acceptance.
 
 #### T-B2 Fan duration and ground speed
 

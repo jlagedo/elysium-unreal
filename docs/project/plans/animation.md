@@ -450,15 +450,14 @@ scope is its own owner call at the thaw.
 
 ### LIFE10 The weapon layer composition gap
 
-An armed body composes fewer animation channels than retail does, so a drawn gun never plays its
-attack or reload pose over the gait. The cause is an animation subsystem this runtime does not
-implement — Source's `CBaseAnimatingOverlay` layer stack — rather than a clip, a bake or a
-resolver defect. This is the first item on the unblocked front. The captured evidence and the
-autolayer closure that rules out the studio data are `docs/vtmb/animation_rig_resolution.md`; the
-runtime's layer plumbing is `docs/architecture/animation-architecture.md`.
+An armed body carries a four-slot `FElysiumOverlayStack`; each slot owns its sequence, cycle,
+envelope and completion, and the graph composes each slot's base-plus-autolayer closure over the
+gait. Player and cast producers enter that stack through the shared activity-resolution ladder.
+The captured evidence and recovered contract are `docs/vtmb/animation_rig_resolution.md`; the
+runtime composition is `docs/architecture/animation-architecture.md`.
 
-**Measured** against a live retail session by `Elysium.Content.RigLayers`, over 1,718 captured
-frames:
+The subsystem's required channel set comes from a live retail session, measured by
+`Elysium.Content.RigLayers` over 1,718 captured frames:
 
 - **1,113 frames (65%) are short at least one channel retail played; none arms a channel retail
   did not.** The runtime composes a strict subset, never a different set.
@@ -474,12 +473,11 @@ frames:
 - `idle01` and `walk` in the shortfall (76 instances) are gait cross-fades the blend stack
   handles as a transition rather than a channel; they are excluded from the conclusion.
 
-**This is a missing subsystem, not a shortfall of armed channels.** The autolayer closure from a
-gait reaches aim and bobble and nothing else — read from `move_and_ranged.mdl`'s own records, and
-`supershotgun_attack_layer`'s own closure points back at the aim layer rather than outward, so no
-walk of the studio data reaches the attack or reload family from a gait at any depth. The two
-channels this runtime arms are exactly the two the studio data offers. The rest are armed by
-**`CBaseAnimatingOverlay`**: Source's animation overlay stack, present in `vampire.dll` with
+The autolayer closure from a gait reaches aim and bobble and nothing else — read from
+`move_and_ranged.mdl`'s own records, and `supershotgun_attack_layer`'s own closure points back at the
+aim layer rather than outward, so no walk of studio data reaches the attack or reload family from a
+gait at any depth. The rest are authored by **`CBaseAnimatingOverlay`**: Source's animation overlay
+stack, present in `vampire.dll` with
 `m_AnimOverlay[]` in its datamap, per-layer `m_nSequence`/`m_fSequenceFinished`, its own vtable
 and datamap builder, and a `CBaseAnimatingOverlay::AddGesture…` `DevMsg`. Game code pushes a
 layer carrying its own sequence, weight, playback rate and lifetime, faded independently of the
@@ -487,10 +485,9 @@ pose graph — which is also the only thing that accounts for a channel's weight
 `0.923 → 0.02` across consecutive frames, where an autolayer's weight moves with the cycle. The
 evidence is `docs/vtmb/animation_rig_resolution.md`.
 
-The one-overlay/one-additive limit on `FElysiumResolvedAnimation` — which `ResolveLayerAssets`
-already reports as `twooverlay`/`twoadditive` — is a **consequence** of never having modelled a
-layer stack, not a second independent cause. Raising it in isolation would not put an attack pose
-on the body.
+The graph therefore carries four explicit closure branches rather than raising the old
+one-overlay/one-additive fields on `FElysiumResolvedAnimation`. A slot's clip, mask, additive and
+aim grid have one lifetime and one envelope.
 
 **The contract this rung builds against is recovered**, and is stated in full in
 `docs/vtmb/animation_rig_resolution.md` → "The overlay contract". What it requires, as
@@ -528,8 +525,9 @@ requirements rather than as an Unreal design:
   before inventing a second mask source.
 
 Two facts about the shipped data bear on the design. **Every shipped additive post-multiplies**
-(`flags@8 & 0x10`, all 118 `_delta` sequences) while Unreal's `AAT_LocalSpaceBase` pre-multiplies;
-that is the live M37 defect and is on the critical path below, not a footnote. And `m_Flinch` is a
+(`flags@8 & 0x10`, all 118 `_delta` sequences), carried by
+`FAnimNode_ElysiumPostAdditive`; the completed closure then crosses
+`FAnimNode_ElysiumBankRemap` once. `m_Flinch` is a
 **separate** three-slot stack with a per-layer pose-parameter override that very likely corresponds
 to the reaction stream already implemented here, worth checking against and not to be folded into
 the overlay work.
@@ -540,9 +538,12 @@ The critical path is the rung's acceptance sentence: *from real input, a drawn f
 attack and reload poses over an unchanged gait on a male and a female body*, and looks like retail
 doing it. Every item below is measured, and each names the instrument that goes red on it.
 
+The additive multiply order and shared-bank closure remap are closed prerequisites: both Tremere
+and the all-copy Malkavian graph read `0.009 cm` median against the reference compositor over 480
+frames. The remaining gaps are:
+
 | # | gap | where | measured | instrument |
 |---|---|---|---|---|
-| G1 | **Additive multiply order.** Retail post-multiplies (`out = out * scale(D, s)`); the bake stamps `AAT_LocalSpaceBase` (pre-multiply) against `RefFrameIndex = 0` of the fan label, which the runtime never plays. | `ElysiumSkeletalBuild.cpp:1475`; `UE_mdl_skeletal.py:1410` skips the fold for fanned hosts | right hand vs `Spine1` peak-to-peak **6.76 cm** against retail's **1.89**; whole-skeleton attack error **6.04 cm median** | `Elysium.Content.RigCompose` control cohort, red at 4.45 cm; `-ElysiumCompose` |
 | G2 | **Fan cycle duration.** Retail's blended cycle is the weighted **mean of durations** (`Studio_Duration`), not of rates; 99 of 126 gait grids have cells that disagree. | `UBlendSpace` sample timing; see the verification note below | walk fan at `move_yaw = -120`: 1.111 s retail vs 1.000 s harmonic, 11% ground speed | none yet; needs a cycle-length assertion per fan position |
 | G3 | **Event look-ahead.** Retail fires server-band events up to **0.1 s early** (`flEnd = cycle + 0.1 * rate`); ours fires at the pose's own cycle. | `ElysiumAnimEvents.cpp:88` | 6 frames at 60 Hz on every muzzle flash, footstep, melee contact and grapple | none; `Elysium.Substrate.AnimEvents` asserts the catch-up shape |
 | G4 | **Combat-stance stamps.** Retail stamps the 5 s clock on four paths (attack, taking damage, `RequestActivity`, and the predicate refreshing itself off a melee opponent); ours models one. | `ElysiumPlayer.h:1157`; `ElysiumAnimationDriver.cpp:438` | a body being hit drops to the relaxed gait where retail holds aggressive | none |
@@ -557,11 +558,9 @@ doing it. Every item below is measured, and each names the instrument that goes 
 Retired by evidence, no work owed: bone controllers, IK, `STUDIO_AUTOPLAY`, `QUATINTERP`, the
 1xN blend-grid path, shaky-hands, and the weapon activity lookahead.
 
-**Open:** whether a montage slot is the right home for a game-pushed overlay at all.
-`ElysiumSlotLayer` and `ElysiumSlotAimLayer` are reserved for montages today, and
-`ABP_ElysiumBiped` carries three `LayeredBoneBlend` nodes and two `ApplyAdditive` — but an overlay
-stack has its own lifetime and fade, which a montage slot does not model. Answer it against the
-recovered contract, not against the node count.
+The overlay does not use montage lifetime. Four explicit graph branches consume the four substrate
+slots; each branch evaluates its closure at the slot's published phase and applies the slot's own
+mask and envelope.
 
 *Acceptance:* `Elysium.Content.RigLayers` reports every captured frame's channel set covered,
 with the shortfall asserted rather than only reported; from real input, a drawn firearm plays its

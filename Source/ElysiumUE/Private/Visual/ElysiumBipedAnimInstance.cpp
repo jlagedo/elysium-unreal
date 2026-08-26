@@ -1,7 +1,9 @@
 #include "Visual/ElysiumBipedAnimInstance.h"
 
+#include "ElysiumBankRemapNode.h"
 #include "Visual/ElysiumAnimLayerMask.h"
 #include "Visual/ElysiumAnimSubsystem.h"   // FElysiumResolvedAnimation
+#include "Visual/ElysiumBankRemap.h"
 
 #include "Animation/AnimBlueprintGeneratedClass.h"
 #include "Animation/AnimClassInterface.h"
@@ -17,10 +19,53 @@
 #include "AnimationRuntime.h"
 #include "BlendStack/AnimNode_BlendStack.h"
 #include "BonePose.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Engine/GameInstance.h"
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumBipedGraph, Log, All);
+
+namespace
+{
+	struct FElysiumClosureBankSource
+	{
+		USkeleton* Skeleton = nullptr;
+		FName Name;
+	};
+
+	// The retarget source a closure's own resolved asset was baked against — `Sequence->RetargetSource`
+	// for a plain clip, or the same field off any one cell's sample for a grid (every cell of one
+	// blend space is baked from the same owning bank, the same property `Content/CLAUDE.md`'s masks
+	// share). `NAME_None` is the ordinary case for an asset whose bake predates the registration, or
+	// for no asset at all — nothing to correct, not a fault.
+	FElysiumClosureBankSource BankSourceForClosure(UAnimSequence* Sequence, UBlendSpace* Space)
+	{
+		const UAnimSequence* Asset = Sequence;
+		if (Asset == nullptr && Space != nullptr && Space->GetNumberOfBlendSamples() > 0)
+		{
+			Asset = Space->GetBlendSample(0).Animation;
+		}
+		if (Asset == nullptr || Asset->RetargetSource.IsNone())
+		{
+			return FElysiumClosureBankSource();
+		}
+		return { Asset->GetSkeleton(), Asset->RetargetSource };
+	}
+
+	// The one reach into the subsystem this instance ever makes. Every other body-scoped asset
+	// (facial rig, composition rig, clip resolution) arrives already resolved through a setter or a
+	// driver publish; the bank-remap table cannot, because which (mesh, source skeleton, retarget
+	// source) tuple a
+	// closure needs changes with the asset currently posing it, per frame, and the subsystem is the
+	// GI-scoped cache that answers that pair cheaply.
+	UElysiumAnimSubsystem* AnimSubsystemFor(const UAnimInstance* Instance)
+	{
+		const UWorld* World = Instance != nullptr ? Instance->GetWorld() : nullptr;
+		UGameInstance* GameInstance = World != nullptr ? World->GetGameInstance() : nullptr;
+		return GameInstance != nullptr ? GameInstance->GetSubsystem<UElysiumAnimSubsystem>() : nullptr;
+	}
+}
 
 // ================================================================================================
 // FElysiumBipedAnimProxy
@@ -696,6 +741,10 @@ void UElysiumBipedAnimInstance::ProjectSlot(int32 SlotIndex)
 	{
 		BlendSpace = nullptr;
 	}
+	// This slot's own bank-remap closure. Never a reason to take the pose down: a node the compiled
+	// graph is missing leaves the slot's motion exactly as Unreal's own retargeting-off composition
+	// produced it, which is a generated-graph fault to report, not a masking failure to refuse.
+	ApplySlotBankRemap(SlotIndex);
 
 	// The clip's declared layers stand only where the motion does — one clip, one trio, one fate.
 	// Within the slot they ride at retail's hardcoded autolayer 1.0; the slot's own envelope is
@@ -867,6 +916,58 @@ bool UElysiumBipedAnimInstance::ApplySlotMask(int32 SlotIndex)
 	return true;
 }
 
+void UElysiumBipedAnimInstance::ApplySlotBankRemap(int32 SlotIndex)
+{
+	FElysiumOverlaySlotStaging& Staging = SlotStaging[SlotIndex];
+	// THIS SLOT's own asset, never the base channel's: a slot's clip routinely comes out of a
+	// different bank than whatever is posing the legs underneath it (a ranged weapon's fire layer
+	// against a bank-shared locomotion body, for one). A free slot resolves to `NAME_None`, the same
+	// "nothing to correct" answer a table-less `SetTable` gives.
+	const FElysiumClosureBankSource Source =
+		BankSourceForClosure(Staging.Sequence, Staging.Space);
+	if (Source.Name == Staging.AppliedBankRemapSource
+		&& Source.Skeleton == Staging.AppliedBankRemapSkeleton.Get())
+	{
+		return;
+	}
+
+	// The table and its resolved bone indices belong to the live graph node. Take the proxy barrier
+	// before touching either so an in-flight parallel evaluation cannot read them mid-swap.
+	FElysiumBipedAnimProxy& ProxyRef = GetProxyOnGameThread<FElysiumBipedAnimProxy>();
+	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(GetClass());
+	const FAnimSubsystem_Tag* Tags = AnimClass != nullptr
+		? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
+	FAnimNode_ElysiumBankRemap* Node = Tags != nullptr
+		? Tags->FindNodeByTag<FAnimNode_ElysiumBankRemap>(
+			ElysiumAnimGraph::BankRemapTag(SlotIndex), this)
+		: nullptr;
+	if (Node == nullptr)
+	{
+		if (AnimClass != nullptr && !Source.Name.IsNone())
+		{
+			ReportNodeFaultOnce(Staging.bReportedBankRemapNodeFault, TEXT("overlay slot bank remap"),
+				*ElysiumAnimGraph::BankRemapTag(SlotIndex).ToString(),
+				TEXT("carries no node under the tag"));
+		}
+		return;
+	}
+
+	TSharedPtr<const FElysiumBankRemap> Table;
+	if (!Source.Name.IsNone())
+	{
+		if (UElysiumAnimSubsystem* Anims = AnimSubsystemFor(this))
+		{
+			Table = Anims->GetBankRemap(GetSkelMeshComponent() != nullptr
+				? GetSkelMeshComponent()->GetSkeletalMeshAsset() : nullptr,
+				Source.Skeleton, Source.Name);
+		}
+	}
+	const FBoneContainer& RequiredBones = ProxyRef.GetRequiredBones();
+	Node->SetTable(Table, RequiredBones.IsValid() ? &RequiredBones : nullptr);
+	Staging.AppliedBankRemapSkeleton = Source.Skeleton;
+	Staging.AppliedBankRemapSource = Source.Name;
+}
+
 void UElysiumBipedAnimInstance::ArmDebugUpperBodyOverlay(UAnimSequence* Sequence, UBlendSpace* Space,
 	FName MaskName, float Weight)
 {
@@ -990,6 +1091,65 @@ bool UElysiumBipedAnimInstance::ApplyUpperBodyMask()
 	return true;
 }
 
+void UElysiumBipedAnimInstance::ApplyBaseBankRemap()
+{
+	// `PendingSequence`/`PendingBlendSpace`, never `Applied`'s: this runs every frame ahead of the
+	// hold branch, the same rung `ProjectUpperBodyLayer`/`ProjectSlotLayer` occupy and for the same
+	// reason -- the pending pins are what the stack actually plays this frame, while `Applied` only
+	// catches up inside the generation-gated transition further down this function.
+	const FElysiumClosureBankSource Source =
+		BankSourceForClosure(PendingSequence, PendingBlendSpace);
+	if (Source.Name == AppliedBaseBankRemapSource
+		&& Source.Skeleton == AppliedBaseBankRemapSkeleton.Get())
+	{
+		return;
+	}
+
+	// Same game-thread barrier as the slot path: this writes the live node's table and resolved
+	// arrays, which a parallel evaluation may otherwise be reading.
+	FElysiumBipedAnimProxy& ProxyRef = GetProxyOnGameThread<FElysiumBipedAnimProxy>();
+	IAnimClassInterface* AnimClass = IAnimClassInterface::GetFromClass(GetClass());
+	const FAnimSubsystem_Tag* Tags = AnimClass != nullptr
+		? AnimClass->FindSubsystem<FAnimSubsystem_Tag>() : nullptr;
+	FAnimNode_ElysiumBankRemap* Node = Tags != nullptr
+		? Tags->FindNodeByTag<FAnimNode_ElysiumBankRemap>(
+			ElysiumAnimGraph::BankRemapTag(INDEX_NONE), this)
+		: nullptr;
+	if (Node == nullptr)
+	{
+		// No compiled graph is an absence, same as every other tagged applier here. A compiled
+		// graph missing the node while a source is resolved IS a generated-graph fault -- reported
+		// once, never taking the base pose down, because a body that cannot be corrected still has
+		// to stand on the pose Unreal's own composition produced rather than nothing at all.
+		if (AnimClass != nullptr && !Source.Name.IsNone())
+		{
+			ReportNodeFaultOnce(bReportedBaseBankRemapNodeFault, TEXT("base bank remap"),
+				*ElysiumAnimGraph::BankRemapTag(INDEX_NONE).ToString(),
+				TEXT("carries no node under the tag"));
+		}
+		return;
+	}
+
+	// A null table -- no retarget source on the asset, or a body whose bind pose tracks that bank
+	// closely enough that every bone copies -- is a legal write: `FAnimNode_ElysiumBankRemap::SetTable`
+	// resolves it to "nothing to correct" and the base channel's pose stands exactly as Unreal's own
+	// retargeting-off composition produced it.
+	TSharedPtr<const FElysiumBankRemap> Table;
+	if (!Source.Name.IsNone())
+	{
+		if (UElysiumAnimSubsystem* Anims = AnimSubsystemFor(this))
+		{
+			Table = Anims->GetBankRemap(GetSkelMeshComponent() != nullptr
+				? GetSkelMeshComponent()->GetSkeletalMeshAsset() : nullptr,
+				Source.Skeleton, Source.Name);
+		}
+	}
+	const FBoneContainer& RequiredBones = ProxyRef.GetRequiredBones();
+	Node->SetTable(Table, RequiredBones.IsValid() ? &RequiredBones : nullptr);
+	AppliedBaseBankRemapSkeleton = Source.Skeleton;
+	AppliedBaseBankRemapSource = Source.Name;
+}
+
 void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	// The garment's game-thread pass.
@@ -1022,6 +1182,11 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// landing resolved nothing is still holding a trigger down. It is projected AFTER the autolayers
 	// because that is the order it composes in, and unlike them it is not gated on who owns the base.
 	ProjectSlotLayer();
+
+	// The base channel's own bank-remap closure, beside both of the above and for the same reason:
+	// a held pose is still standing on whatever bank it was posing, so the correction must not
+	// freeze either. `ApplySlotBankRemap` runs per slot inside `ProjectSlotLayer` above.
+	ApplyBaseBankRemap();
 
 	// --- the reaction's phase clock, advanced AHEAD of the hold branch too (LIFE5) -----------------
 	//
@@ -2013,4 +2178,3 @@ bool UElysiumBipedAnimInstance::GetSlotClipPhase(int32 SlotIndex, FElysiumClipPh
 	Out = SlotStaging[SlotIndex].Phase;
 	return true;
 }
-

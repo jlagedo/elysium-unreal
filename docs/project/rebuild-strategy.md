@@ -415,6 +415,7 @@ event layer's closed divergence set (`docs/architecture/gameplay-systems-archite
 | Format decode (BSP, MDL, TTH/TTZ, VPK, WAV/MP3, `.dlg`, `.vcd`, `.res`) | no engine reader exists for the bytes |
 | Mover state machines and timings | authored-visible timing, outputs and spawnflag semantics |
 | The additive combine order (`FAnimNode_ElysiumPostAdditive`, `vampire.dll 0x100c12b0`) | which side the `_delta` lands on decides the drawn pose, and the answer depends on the pose it is accumulated onto rather than on the clip — so no bake conversion is exact over the fan cells and gaits one delta rides |
+| The shared-bank closure remap (`FAnimNode_ElysiumBankRemap`, `vampire.dll 0x100c67b0`) | a bank's completed closure is translated onto the playing body's bind once; the origin branch is affine, so stock per-sequence retargeting double-counts it across base-plus-additive composition |
 
 Standing engine facts that shape the build: the offline bake exists to give every surface real
 DDC-fitted Lumen surface-cache cards and distance fields — the thing a runtime-built mesh can

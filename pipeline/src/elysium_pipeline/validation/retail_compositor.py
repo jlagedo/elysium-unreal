@@ -28,7 +28,14 @@ Rules carried, each with its owner:
 - a bone carrying `Flags & 0x2` takes its animated rotation as its MODEL-SPACE rotation, parent
   skipped, translation still composed through the parent (A.4a);
 - correspondence between a bank's bones and a body's is by identical bone name
-  (`animation_rig_resolution.md`).
+  (`animation_rig_resolution.md`), and a bone's TRANSLATION is then carried across by the
+  three-branch bind-pose remap `vampire.dll FUN_100c67b0` builds once per (owner, body) pair
+  (mirrored client.dll `0x1008cfa0`) -- copy, pure offset, or shortest-arc rotate-and-rescale,
+  chosen from the two models' bind translations against the engine constant at
+  `vampire.dll 0x10450aa4` (`remap`, `_bind_branch`). Rotation is never touched. Retail builds
+  this table once per model load and applies it ONCE per include closure -- the requested
+  sequence and its autolayers, decoded and accumulated entirely in the owner's own bind space
+  -- never per layer (`compose`).
 
 Every quantity is in Source units and Source coordinates; nothing here converts, because the
 capture is in the same space and the conversion is the exporter's, tested at its own seam.
@@ -337,15 +344,117 @@ def gate_to(layer: list, owned: set | None) -> list:
     return [c if i in owned else None for i, c in enumerate(layer)]
 
 
+#: The engine constant at vampire.dll `0x10450aa4`: retail's bind-pose remap branch threshold,
+#: compared against SQUARED bind lengths in Source units (0.1 Source units, squared).
+REMAP_EPS_SQ = 0.01
+
+
+def _sqlen(v):
+    return v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
+
+
+def _cross(u, v):
+    return (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0])
+
+
+def _dot(u, v):
+    return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]
+
+
+def _shortest_arc(u, v):
+    """The unit quaternion rotating unit vector `u` onto unit vector `v` by the shorter arc.
+
+    The antiparallel case is not a corner cut for tidiness -- `ash` against
+    `tremere_male_armor_3`'s `Bip01 Pelvis` sit 177.2 degrees apart, which is exactly the
+    defect's own reproduction case, so it is handled explicitly (an arbitrary axis orthogonal to
+    `u`, a half turn) rather than left to a cross product that has collapsed toward zero."""
+    d = _dot(u, v)
+    if d < -0.999999:
+        axis = _cross(u, (1.0, 0.0, 0.0))
+        if _sqlen(axis) < 1e-12:
+            axis = _cross(u, (0.0, 1.0, 0.0))
+        n = math.sqrt(_sqlen(axis))
+        axis = tuple(c / n for c in axis)
+        return (axis[0], axis[1], axis[2], 0.0)
+    s = math.sqrt((1.0 + d) * 2.0)
+    invs = 1.0 / s
+    c = _cross(u, v)
+    return (c[0] * invs, c[1] * invs, c[2] * invs, s * 0.5)
+
+
+def _bind_branch(a, b):
+    """One bone's remap branch from its two bind translations -- `a` the owner/bank's, `b` the
+    body's -- `vampire.dll FUN_100c67b0` (mirrored client.dll `0x1008cfa0`), gated on the engine
+    constant at `vampire.dll 0x10450aa4` against SQUARED lengths.
+
+    Retail tests `|a-b|^2` first: within the threshold, the bone is a plain copy. Otherwise it
+    tests each bind's own squared length. **When BOTH are within the threshold too, the
+    disassembly takes neither the translate nor the similarity path** -- the position falls
+    through unmodified, a copy in every observable way, not a translation by a near-zero delta.
+    Only when EXACTLY ONE bind is small does retail add the raw `b - a` offset; when NEITHER is
+    small it rotates by the shortest arc from `a`'s direction to `b`'s and rescales by `|b|/|a|`.
+
+    Returns `("copy", None)`, `("translate", b_minus_a)` or `("similarity", (quat, scale))` --
+    rotation and scale precomputed here since they depend only on the bind pair, never on a
+    frame."""
+    diff = tuple(x - y for x, y in zip(a, b))
+    if _sqlen(diff) <= REMAP_EPS_SQ:
+        return "copy", None
+    la_sq, lb_sq = _sqlen(a), _sqlen(b)
+    a_small, b_small = la_sq <= REMAP_EPS_SQ, lb_sq <= REMAP_EPS_SQ
+    if a_small and b_small:
+        return "copy", None
+    if a_small or b_small:
+        return "translate", tuple(y - x for x, y in zip(a, b))
+    la, lb = math.sqrt(la_sq), math.sqrt(lb_sq)
+    na = tuple(c / la for c in a)
+    nb = tuple(c / lb for c in b)
+    return "similarity", (_shortest_arc(na, nb), lb / la)
+
+
+#: {(owner.key, body.key): [(target_index, kind, payload) or None, ...] by owner bone index}.
+#: Retail builds this table once per model load; it depends only on the two models' bind poses,
+#: never on a frame, so it is built once here too rather than re-derived every `remap` call.
+_REMAP_TABLE_CACHE: dict[tuple[str, str], list] = {}
+
+
+def _remap_table(body: Model, owner: Model):
+    key = (owner.key, body.key)
+    table = _REMAP_TABLE_CACHE.get(key)
+    if table is not None:
+        return table
+    table = []
+    for bone in owner.bones:
+        target = body.by_name.get(bone.name.lower())
+        if target is None:
+            table.append(None)
+        else:
+            table.append((target.index, *_bind_branch(bone.pos, target.pos)))
+    _REMAP_TABLE_CACHE[key] = table
+    return table
+
+
 def remap(body: Model, owner: Model, pose: list) -> list:
-    """An owner-indexed pose carried onto the body's bones by identical name; None elsewhere."""
+    """An owner-indexed pose carried onto the body's bones by identical name, translation
+    remapped per retail's per-bone bind rule (`_bind_branch`); None where the owner names no
+    bone of the body's. Rotation is carried verbatim in every branch -- the remap never touches
+    it."""
+    table = _remap_table(body, owner)
     out = [None] * len(body.bones)
     for index, contribution in enumerate(pose):
         if contribution is None:
             continue
-        target = body.by_name.get(owner.bones[index].name.lower())
-        if target is not None:
-            out[target.index] = contribution
+        entry = table[index]
+        if entry is None:
+            continue
+        target_index, kind, payload = entry
+        pos, quat = contribution
+        if kind == "translate":
+            pos = tuple(p + d for p, d in zip(pos, payload))
+        elif kind == "similarity":
+            arc, scale = payload
+            pos = tuple(c * scale for c in qrotate(arc, pos))
+        out[target_index] = (pos, quat)
     return out
 
 
@@ -358,31 +467,48 @@ def compose(corpus: Corpus, stem: str, channels: Iterable[dict], params: dict[st
     autolayers are composed after it at its own cycle with weight 1.0, then every further channel
     in order with its own weight and, likewise, its autolayers. A body bone no channel reaches
     holds its bind.
+
+    Each channel's own sequence and its autolayers are decoded and accumulated entirely in the
+    OWNER's own bind space -- a fresh buffer seeded from the owner's bind pose, never `out` --
+    and the bind-pose remap runs ONCE on that whole closure before it ever reaches `out`
+    (`vampire.dll FUN_100c67b0` / `0x1008cfa0`). Composing per layer and remapping per layer would
+    read the same for a copy-only pair, which is exactly why the identity check on the two
+    Malkavian bodies alone could not have caught a no-op remap.
     """
     body = corpus.model(stem)
     out = [(tuple(b.pos), qnorm(b.quat)) for b in body.bones]
 
-    def apply(owner: str, label: str, cycle: float, weight: float, depth: int = 0,
-              gate: set | None = None):
+    def closure(owner: str, label: str, cycle: float):
         model = corpus.model(owner)
         seq = model.sequences.get(label.lower())
         if seq is None:
             raise KeyError(f"'{label}' is not a sequence of '{owner}'")
-        layer = remap(body, model, evaluate_sequence(model, seq, cycle, params, force))
-        if depth == 0 and gate is not None:
-            # A slot channel: its own bones gate everything the channel accumulates (`gate_to`).
-            gate = {i for i, c in enumerate(layer) if c is not None}
-        accumulate(out, gate_to(layer, gate), weight, seq.flags)
-        if depth == 0:
-            for target in seq.autolayers:
-                # Retail evaluates an autolayer at the HOST's cycle; `layer_cycles` is a
-                # diagnostic override for holding a graph that does otherwise to account.
-                apply(owner, target, (layer_cycles or {}).get(target.lower(), cycle), 1.0,
-                      depth + 1, gate)
+        base_eval = evaluate_sequence(model, seq, cycle, params, force)
+        local = [(tuple(b.pos), qnorm(b.quat)) for b in model.bones]
+        accumulate(local, base_eval, 1.0, seq.flags)
+        for target in seq.autolayers:
+            tseq = model.sequences.get(target.lower())
+            if tseq is None:
+                raise KeyError(f"'{target}' is not a sequence of '{owner}'")
+            # Retail evaluates an autolayer at the HOST's cycle; `layer_cycles` is a
+            # diagnostic override for holding a graph that does otherwise to account.
+            tcycle = (layer_cycles or {}).get(target.lower(), cycle)
+            accumulate(local, evaluate_sequence(model, tseq, tcycle, params, force), 1.0,
+                       tseq.flags)
+        return seq, model, base_eval, local
 
     for index, channel in enumerate(channels):
-        apply(channel["owner"], channel["label"], channel["cycle"], channel.get("weight", 1.0),
-              gate=set() if (index > 0 or channel.get("slot")) else None)
+        seq, model, base_eval, local = closure(
+            channel["owner"], channel["label"], channel["cycle"])
+        layer = remap(body, model, local)
+        gate = None
+        if index > 0 or channel.get("slot"):
+            # A slot channel: its OWN sequence's reached bones gate everything the channel's
+            # whole closure accumulates (`gate_to`) -- the autolayers' reach is not part of the
+            # gate, only of what passes through it.
+            base_layer = remap(body, model, base_eval)
+            gate = {i for i, c in enumerate(base_layer) if c is not None}
+        accumulate(out, gate_to(layer, gate), channel.get("weight", 1.0), seq.flags)
     return body, out
 
 

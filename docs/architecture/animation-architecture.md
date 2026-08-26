@@ -328,18 +328,30 @@ asset-type rotation exception.
 **Compatible-skeleton remapping always reads both skeleton reference rotations.** Any valid pair
 can make `DecompressPose` apply that rotation delta even without an explicit retarget node, so
 every skeleton that shares a bank uses identity common-bone reference rotations. The mesh keeps
-its exact authored bind, rotation keys pass verbatim, and `OrientAndScale` reads the sequence's
-named donor pose only to map translations onto the playing mesh. A bone no ordinary sequence
-tracks resolves to that playing **mesh's** reference pose, not the `USkeleton`'s. Never restore a
-per-body bank copy to avoid this engine path; bank package count is independent of body count.
+its exact authored bind and rotation keys pass verbatim. A bone no ordinary sequence tracks
+resolves to the playing **mesh's** reference pose, not the `USkeleton`'s. Never restore a per-body
+bank copy to avoid this engine path; bank package count is independent of body count.
 
-VtMB's include-model position rule is represented by Unreal's stock translation retargeting. Each
-bank sequence names a `RetargetSource` containing its donor bind pose, and common bones use
-`OrientAndScale`: Unreal maps the donor translation vector to the playing mesh's reference vector
-while leaving rotation untouched. Optional donor bones absent from the target are dropped by name,
-as VtMB's outer mapping skips absent targets. The sequence, donor pose, skeleton compatibility, and
-translation mode are saved together as a self-describing native Unreal asset; there is no custom
-VtMB retarget node, source-file lookup, or hard-wired runtime rotation.
+VtMB's include-model position rule is represented once per **composed bank closure**, after the
+base sequence and its autolayers or one overlay slot and its autolayers have combined. Each bank
+sequence names a `RetargetSource` containing its donor bind pose. The bake sets skeleton translation
+retargeting to `Animation`, so Unreal leaves those translations in bank space; the graph then runs
+`FAnimNode_ElysiumBankRemap` at each of the five closure tails. Rotation and scale are never changed.
+
+`UElysiumAnimSubsystem` builds the immutable table on demand from the playing sequence's
+bank-family `USkeleton` and the playing mesh's reference skeleton. The sequence skeleton is
+load-bearing: that is where `AnimRetargetSources[Sequence->RetargetSource]` is registered. The
+cache key is `(mesh, source skeleton, retarget-source name)`, because a source name is not a global
+skeleton identity. Optional donor bones absent from the target are dropped by name, as VtMB's outer
+mapping skips absent targets. There is no sidecar or per-body bank copy, so script-selected
+cinematic banks take the same path as ordinary bodies.
+
+The table carries retail's four observable outcomes, using the recovered `0.01` squared-Source-unit
+threshold (`0.1 in`, `0.254 cm`): binds within the copy threshold copy; exactly one bind within the
+origin threshold adds `targetBind - sourceBind`; both binds within the origin threshold copy; every
+other pair applies the shortest-arc source-to-target bind rotation and their length ratio to the
+translation. Applying the affine origin branch once after closure composition is load-bearing:
+applying it separately to a base and additive would add the constant offset twice.
 
 Owned missing channels have already become donor-bind constants (§2.3), while unowned bones remain
 on the playing mesh's reference pose. The former pass through the same declared translation rule;
@@ -1153,7 +1165,7 @@ a readout answers the previous frame — and a source read of the caller does no
   relevant player at all.** The two are indistinguishable from that call alone;
   `GetRelevantAnimLength` is what disambiguates them.
 
-## 5. Two custom evaluators, and only two
+## 5. Three custom evaluators, and only three
 
 **Axis interpolation.** For each bone the model declares as procedurally driven, read the control
 bone's local rotation, evaluate the six-entry three-way blend, and replace the driven bone's local
@@ -1191,15 +1203,21 @@ own "no track" signal, and retail's own skip-at-zero-weight from the other side.
 no additive stamp, so `IsValidAdditive()` is false on every one of them and the tag is what every
 reader keys on.
 
-**One residual is named rather than closed.** With no additive stamp a delta's *translation* passes
-through the body's translation retargeting like a pose's, and `OrientAndScale` re-orients a
-difference by the angle between the bank's bind and the body's, where retail adds it verbatim. On a
-body whose binds match its bank the angle is zero; on a body they do not, the error is bounded by
-the delta's own translation, which is 0.002–0.007 cm on every arm bone and reaches 1.1 cm on
-`Bip01 Pelvis` of `anaconda_attack_delta`. `Elysium.Content.BakedCharacterParity` reads it on the
-body mesh and names it apart from a bake defect.
+**The bank-closure remap.** `FAnimNode_ElysiumBankRemap`
+(`Source/ElysiumUE/Public/ElysiumBankRemapNode.h`) applies the translation rule in §2.4 after each
+closure has composed. This is a runtime rule because the closure is live graph state and the
+origin branch is affine: no per-sequence bake or stock translation-retargeting mode can apply its
+constant exactly once over a base-plus-additive result. The graph-identity gate on
+`tremere_male_armor_3` moved from a rigid `3.113 cm` pelvis offset to `0.009 cm` median over 480
+frames; the all-copy Malkavian control remains `0.009 cm`. `BakedCharacterParity` and
+`OracleIdentity` remain green.
 
-Those two are the whole set. Every other VtMB rule — split inheritance, the per-bone mask, the
+The remaining evidence boundary is explicit: no retail capture carries both pose and layer oracles
+for a differing-bind body. The rule is confirmed by disassembly, synthetic branch tests, the
+running-graph identity against the compositor and the unchanged all-copy control; a capture of Ash
+or a Tremere is still required for direct retail acceptance of that body class.
+
+Those three are the whole set. Every other VtMB rule — split inheritance, the per-bone mask, the
 blend-grid resolution — names a value the file carries somewhere, so each is a bake input and none
 reaches the graph.
 

@@ -120,3 +120,6 @@ Thumbs.db
 
 # Personal, untracked project memory
 CLAUDE.local.md
+
+# clangd background index
+.cache/

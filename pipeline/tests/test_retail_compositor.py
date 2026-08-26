@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 import unittest
 
+from elysium_pipeline.formats import mdl_skel
 from elysium_pipeline.formats.mdl_skel import Bone
 from elysium_pipeline.validation import retail_compositor as rc
 
@@ -28,9 +29,10 @@ def _bone(index, name, parent, pos=(0.0, 0.0, 0.0), quat=(0.0, 0.0, 0.0, 1.0), f
 
 
 class _FakeModel:
-    def __init__(self, bones):
+    def __init__(self, bones, key=None):
         self.bones = bones
         self.by_name = {b.name.lower(): b for b in bones}
+        self.key = key if key is not None else str(id(self))
 
 
 class QuaternionKitTests(unittest.TestCase):
@@ -123,6 +125,191 @@ class AxisTests(unittest.TestCase):
         self.assertEqual(i, 0)
         self.assertAlmostEqual(s, 10.0 / 45.0, places=6)
         self.assertEqual(rc._axis(model, grid, 1, {"move_yaw": 0.0}), (0, 0.0))
+
+
+class BindRemapBranchTests(unittest.TestCase):
+    """The three-branch bind-pose remap (`vampire.dll FUN_100c67b0` / `0x1008cfa0`), on
+    hand-built bind pairs -- never a model's data."""
+
+    def test_close_binds_copy_the_position_unchanged(self):
+        owner = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0))
+        body = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0 + 0.09))  # |a-b|^2 = 0.0081 < 0.01
+        kind, payload = rc._bind_branch(owner.pos, body.pos)
+        self.assertEqual(kind, "copy")
+        self.assertIsNone(payload)
+
+    def test_close_binds_boundary_just_outside_is_not_copy(self):
+        owner = _bone(0, "root", -1, pos=(0.0, 0.0, 0.0))
+        body = _bone(0, "root", -1, pos=(0.0, 0.0, 0.11))  # |a-b|^2 = 0.0121 > 0.01
+        kind, _payload = rc._bind_branch(owner.pos, body.pos)
+        self.assertNotEqual(kind, "copy")
+
+    def test_both_binds_near_origin_is_still_a_copy_not_a_translation(self):
+        # |a-b|^2 exceeds the threshold but BOTH |a|^2 and |b|^2 are within it: the disassembly
+        # takes neither the translate nor the similarity path.
+        a = (0.09, 0.0, 0.0)
+        b = (-0.09, 0.0, 0.0)
+        self.assertGreater(sum(c * c for c in (a[0] - b[0], a[1] - b[1], a[2] - b[2])), 0.01)
+        self.assertLessEqual(sum(c * c for c in a), 0.01)
+        self.assertLessEqual(sum(c * c for c in b), 0.01)
+        kind, payload = rc._bind_branch(a, b)
+        self.assertEqual(kind, "copy")
+        self.assertIsNone(payload)
+
+    def test_one_bind_near_origin_is_a_pure_translation(self):
+        a = (3.0, 0.0, 0.0)     # owner/bank bind, far from the origin
+        b = (0.02, 0.0, 0.0)    # body bind, within the threshold
+        kind, payload = rc._bind_branch(a, b)
+        self.assertEqual(kind, "translate")
+        for got, want in zip(payload, (b[0] - a[0], b[1] - a[1], b[2] - a[2])):
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_two_far_binds_are_a_similarity(self):
+        a = (2.0, 0.0, 0.0)
+        b = (0.0, 4.0, 0.0)
+        kind, payload = rc._bind_branch(a, b)
+        self.assertEqual(kind, "similarity")
+        arc, scale = payload
+        self.assertAlmostEqual(scale, 2.0, places=6)  # |b|/|a| = 4/2
+        rotated = rc.qrotate(arc, a)
+        for got, want in zip(rotated, (0.0, 2.0, 0.0)):  # a rotated onto b's direction, |a| kept
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_the_measured_ash_tremere_pelvis_case_is_the_origin_translate_branch(self):
+        # The measured defect case, converted from its own cm reading to the Source units this
+        # module works in: `Bip01 Pelvis` bank bind 2.968 cm / body bind 0.145 cm, 177.2 degrees
+        # apart. The body's own bind is within the threshold in Source units too (0.145 cm /
+        # 2.54 = 0.0571 in, under the 0.1 in threshold), so this is the "one bind near the
+        # origin" branch -- not a similarity -- which is exactly the defect: Unreal's
+        # `OrientAndScale` has no such branch at all, and rotate-and-scale on a bone whose body
+        # bind sits this close to the origin annihilates the animated deviation.
+        a = (2.968 / rc.SOURCE_UNIT_TO_CM, 0.0, 0.0)
+        b = (-0.145 / rc.SOURCE_UNIT_TO_CM, 0.0, 0.0)
+        kind, payload = rc._bind_branch(a, b)
+        self.assertEqual(kind, "translate")
+        for got, want in zip(payload, (b[0] - a[0], b[1] - a[1], b[2] - a[2])):
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_antiparallel_far_binds_resolve_a_half_turn(self):
+        # A synthetic (not model-measured) antiparallel pair where NEITHER bind is near the
+        # origin, to exercise `_shortest_arc`'s degenerate 180-degree branch under the
+        # similarity path specifically.
+        a = (2.0, 0.0, 0.0)
+        b = (-1.0, 0.0, 0.0)
+        kind, payload = rc._bind_branch(a, b)
+        self.assertEqual(kind, "similarity")
+        arc, scale = payload
+        self.assertAlmostEqual(scale, 0.5, places=6)
+        rotated = rc.qrotate(arc, a)
+        self.assertAlmostEqual(rotated[0], -a[0], places=4)
+        self.assertAlmostEqual(rotated[1], 0.0, places=4)
+        self.assertAlmostEqual(rotated[2], 0.0, places=4)
+
+
+class RemapTests(unittest.TestCase):
+    """`remap()` on a two-bone owner/body pair covering all three branches at once, plus the
+    rotation-untouched guarantee."""
+
+    def setUp(self):
+        self.rot = _axis_angle((0, 1, 0), 37.0)
+        # copy_bone: binds coincide.  translate_bone: owner far, body near the origin.
+        # similarity_bone: both far and not parallel.
+        self.owner = _FakeModel([
+            _bone(0, "copy_bone", -1, pos=(1.0, 1.0, 1.0)),
+            _bone(1, "translate_bone", -1, pos=(3.0, 0.0, 0.0)),
+            _bone(2, "similarity_bone", -1, pos=(2.0, 0.0, 0.0)),
+        ])
+        self.body = _FakeModel([
+            _bone(0, "copy_bone", -1, pos=(1.0, 1.0, 1.0)),
+            _bone(1, "translate_bone", -1, pos=(0.0, 0.0, 0.0)),
+            _bone(2, "similarity_bone", -1, pos=(0.0, 2.0, 0.0)),
+        ])
+
+    def test_copy_branch_passes_the_animated_position_through(self):
+        pose = [((5.0, 6.0, 7.0), self.rot), None, None]
+        out = rc.remap(self.body, self.owner, pose)
+        self.assertEqual(out[0][0], (5.0, 6.0, 7.0))
+
+    def test_translate_branch_adds_the_raw_bind_offset(self):
+        pose = [None, ((3.5, 0.0, 0.0), self.rot), None]
+        out = rc.remap(self.body, self.owner, pose)
+        # p + (b - a) = 3.5 + (0 - 3) = 0.5
+        for got, want in zip(out[1][0], (0.5, 0.0, 0.0)):
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_similarity_branch_rotates_and_rescales(self):
+        pose = [None, None, ((2.0, 0.0, 0.0), self.rot)]  # animated pos == owner bind exactly
+        out = rc.remap(self.body, self.owner, pose)
+        # Rotating the owner's own bind direction onto the body's and rescaling to |b| must
+        # reproduce the body's own bind exactly (both binds' lengths are 2.0 here).
+        for got, want in zip(out[2][0], (0.0, 2.0, 0.0)):
+            self.assertAlmostEqual(got, want, places=6)
+
+    def test_rotation_is_never_touched_in_any_branch(self):
+        pose = [((5.0, 6.0, 7.0), self.rot), ((3.5, 0.0, 0.0), self.rot),
+                ((2.0, 0.0, 0.0), self.rot)]
+        out = rc.remap(self.body, self.owner, pose)
+        for entry in out:
+            self.assertIsNotNone(entry)
+            self.assertEqual(entry[1], self.rot)
+
+
+class ClosureRemapTests(unittest.TestCase):
+    """`compose()` remaps a channel's WHOLE closure -- its sequence plus its autolayers,
+    composed in the owner's own bind space -- exactly ONCE, never per layer.
+
+    A translate-branch bone makes the distinction observable: remapping each layer on its own
+    would add the bind offset twice (once to the base, once to the raw additive delta), which is
+    exactly the wrong-shaped defect this module exists to catch.
+    """
+
+    def _corpus(self):
+        identity = (0.0, 0.0, 0.0, 1.0)
+        owner_bones = [_bone(0, "root", -1, pos=(0.0, 0.0, 0.0)),
+                       _bone(1, "target", 0, pos=(1.0, 0.0, 0.0))]
+        body_bones = [_bone(0, "root", -1, pos=(0.0, 0.0, 0.0)),
+                      _bone(1, "target", 0, pos=(0.0, 0.0, 0.0))]  # |b|^2 <= eps: translate branch
+
+        owner = _FakeModel(owner_bones)
+        owner.pose_params = {}
+        base_grid = mdl_skel.Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
+                                  paramstart=(0.0, 0.0), paramend=(0.0, 0.0),
+                                  cells=(mdl_skel.Cell(axis0=0, axis1=0, anim=0),))
+        delta_grid = mdl_skel.Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
+                                   paramstart=(0.0, 0.0), paramend=(0.0, 0.0),
+                                   cells=(mdl_skel.Cell(axis0=0, axis1=0, anim=1),))
+        base_seq = mdl_skel.Seq(label="base_seq", base=0, frames=1, fps=30.0, activity="",
+                                actweight=0.0, flags=0, grid=base_grid, autolayers=("delta_seq",))
+        delta_seq = mdl_skel.Seq(label="delta_seq", base=0, frames=1, fps=30.0, activity="",
+                                 actweight=0.0, flags=rc.FLAG_DELTA, grid=delta_grid,
+                                 autolayers=())
+        owner.sequences = {"base_seq": base_seq, "delta_seq": delta_seq}
+        # anim 0 (base): both bones exactly at the owner's own bind. anim 1 (delta): an additive
+        # +0.5 on X for the target bone only.
+        frame_table = {
+            0: [[((0.0, 0.0, 0.0), identity), ((1.0, 0.0, 0.0), identity)]],
+            1: [[((0.0, 0.0, 0.0), identity), ((0.5, 0.0, 0.0), identity)]],
+        }
+        owner.frames = lambda index: frame_table[index]
+
+        body = _FakeModel(body_bones)
+
+        class _StubCorpus:
+            def model(self, name):
+                return {"owner_stem": owner, "body_stem": body}[name]
+
+        return _StubCorpus()
+
+    def test_the_additive_delta_is_remapped_once_with_the_base_not_twice(self):
+        corpus = self._corpus()
+        channels = [{"owner": "owner_stem", "label": "base_seq", "cycle": 0.0, "weight": 1.0}]
+        _body, locals_ = rc.compose(corpus, "body_stem", channels, {})
+        # Owner-space closure: bind(1.0) -[base, replace]-> 1.0 -[delta, additive]-> 1.5.
+        # Remapped ONCE (translate: b - a = 0.0 - 1.0 = -1.0): 1.5 + (-1.0) = 0.5.
+        self.assertAlmostEqual(locals_[1][0][0], 0.5, places=6)
+        # The wrong, per-layer answer (offset applied to the base AND to the raw delta) would
+        # read -0.5 here; guard against silently regressing back to it.
+        self.assertNotAlmostEqual(locals_[1][0][0], -0.5, places=6)
 
 
 if __name__ == "__main__":

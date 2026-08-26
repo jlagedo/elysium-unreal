@@ -260,15 +260,16 @@ the point of the document; the architecture file owns the design itself.
 |---|---|
 | one flat sequence-number space per body, built at load | clips addressed by label per owner stem, resolved through the include DAG at export |
 | a bone remap table per (including model, bank) pair, built at load | bone correspondence by name, at bake and at play |
-| a per-bone `matrix3x4` applied to position, rotation copied | Unreal `OrientAndScale` translation retargeting, rotation never retargeted |
-| bank pose composed hop by hop up the include DAG | one hop: bank sequence retargeted straight onto the playing mesh |
+| a per-bone `matrix3x4` applied to position, rotation copied | one translation-only `FAnimNode_ElysiumBankRemap` after each composed bank closure |
+| bank pose composed hop by hop up the include DAG | one hop: the bank closure remapped straight onto the playing mesh |
 | every bank a distinct rig, remapped pairwise | banks partitioned into families, one `USkeleton` per family |
 
 Each body gets its own `USkeleton` seeded from its own container alone. Banks are grouped by
 `formats/eskm.rig_families`, greedily, into families whose tree is the growing union of their
 members; each bank sequence is built once on its family skeleton and names a `RetargetSource`
-holding its own donor bind pose. `ElysiumSkeletalBuild.cpp` sets
-`EBoneTranslationRetargetingMode::OrientAndScale` from the root with `bChildrenToo`.
+holding its own donor bind pose. `ElysiumSkeletalBuild.cpp` sets translation retargeting to
+`Animation`, and the graph remaps each completed base or overlay closure once from that named donor
+pose to the playing mesh.
 
 ### What the capture confirms
 
@@ -289,14 +290,14 @@ poses, bone for bone, on `nosferatu_female_armor_0` ← `frenzy` and `tremere_ma
   | `Bip01` | `0.99993` | `0.99993` |
 
 - **Rotation is untouched on both sides.** Retail copies the bank's quaternion verbatim;
-  `OrientAndScale` retargets translation only.
+  `FAnimNode_ElysiumBankRemap` changes translation only.
 - **Undriven bones agree.** Retail writes the including model's bind pose; an Unreal sequence
   with no track for a bone leaves it on the playing mesh's reference pose.
 - **One hop composes retail's five on the scale.** Each hop's length ratio multiplies out to the
   direct one exactly. The rotation is a separate question and is not settled by the same argument —
   see "What one hop proves, and what it does not" below.
 
-### The residual: a bone whose bind sits near the origin
+### The origin branch that stock retargeting missed
 
 **The pelvis diverges, and it is the largest measured divergence in the reproduction.** Two
 separate pairs are involved and they must not be read as one: the finger scales below reproduce
@@ -326,12 +327,12 @@ record; `security_guard ← fat_male` carries its own value, `1.167083 in` = `2.
 too equals our `|b − a|`. So the branch is not in question, and neither is our bind data — only
 which rule is applied to it.
 
-**The guard is therefore not a test against zero.** A pelvis binding `0.14496 cm` (`0.05707 in`)
-from its parent satisfies it, so `EPS ≥ 0.00326 in²`. The copy/transform bracket narrows it from the
-other side: the largest bind separation retail **copied** is `0.210946 cm` (`0.08305 in`) and the
-smallest it **transformed** is `0.321769 cm` (`0.126681 in`). A single **0.1 inch** constant sits in
-that gap and would explain both tests at once — a hypothesis the corpus is consistent with rather
-than a recovered value, since one constant explaining two thresholds is suggestive and not proof.
+**The guard is recovered, not inferred.** `vampire.dll 0x100c67b0` compares squared Source-space
+lengths against `0.01`, so the linear threshold is **0.1 inch** (`0.254 cm`). The observable branch
+structure is: binds within the copy threshold copy; exactly one bind within the origin threshold
+takes the pure `b - a` translation; both binds within the origin threshold copy; otherwise the
+shortest-arc orientation and length ratio map the position. The both-small copy path is distinct
+from the exactly-one-small translation path.
 
 **Two populations sit behind this, and only one of them is small.**
 
@@ -353,16 +354,17 @@ containers:
 
 **The second population is the band between the two engines' thresholds, and it is neither small
 nor confined to non-humanoids.** A bone binding further from its parent than Unreal's `0.001`
-but nearer than retail's epsilon is **translated by retail and retargeted by us** — the two guards
-simply disagree about what counts as the origin. Swept over the 293 exported character bodies,
+but nearer than retail's epsilon was **translated by retail and retargeted by the former stock
+path** — the two guards disagree about what counts as the origin. Swept over the 293 exported
+character bodies,
 **71 carry such a bone**: 70 of them `Bip01 Pelvis`, the rest a `Bip01 Spine1` or a prop bone. The
 cluster sits at `0.14411`–`0.14496 cm` against the male banks' `2.96802`, so `OrientAndScale`
 scales the bank's pelvis translation by `0.04884` where retail adds a constant offset.
 
-**The figures above are bind-space bounds; they are not what the player sees.** The pelvis is a
-translation bone, so the error is not confined to it — every bone below and above inherits the
-displacement. Measured against a live retail session by `Elysium.Content.RigPose`, on
-`tremere_male_armor_3` and comparing only frames where a base clip is the whole drawn pose:
+**The figures above are bind-space exposure, not the current running graph.** The pelvis is a
+translation bone, so an uncorrected error is not confined to it — every child inherits the
+displacement. `Elysium.Content.RigPose` evaluates sequences directly and therefore still measures
+that pre-graph exposure on `tremere_male_armor_3`; it is not an end-to-end bank-remap test:
 
 | median, base clip alone | bodies outside the band | `tremere_male_armor_3` |
 |---|---|---|
@@ -728,9 +730,10 @@ resolved rather than deleted, because each one's answer is load-bearing.
 - A label alone does not name a clip; the tree it resolved through does
   (`animation_and_movers.md` A.7).
 - A bone whose bind sits **within retail's epsilon of the origin** needs retail's origin branch,
-  which writes a pure `b − a` offset. That epsilon is far wider than Unreal's own: a pelvis merely
-  close to its parent — `0.145 cm` — is inside it, so the length-ratio rule is correct only outside
-  the band, and 71 of 293 character bodies sit in it.
+  which writes a pure `b − a` offset only when exactly one bind is small; two small binds copy.
+  That epsilon is `0.1 inch`, far wider than Unreal's own: a pelvis merely close to its parent —
+  `0.145 cm` — is inside it, so the length-ratio rule is correct only outside the band, and 71 of
+  293 character bodies sit in it.
 - An NPC picks a melee attack geometrically against its enemy and may refuse outright; the
   player draws by weight. Both arms of the fork have to exist, and a refusal is an answer.
 
@@ -782,21 +785,13 @@ parameter, an overlay's follows its own independently advancing cycle.
 
 Everything this document leaves unresolved, and what would resolve each.
 
-**The origin branch has no implementation, and the divergence is measured rather than bounded.**
-No stock translation-retargeting mode carries it, so a fix means a translation rule with retail's
-three branches — copy when the binds agree, a pure `b − a` offset when either bind sits inside
-retail's epsilon of the origin, otherwise axis-angle scaled by the length ratio — applied where
-`OrientAndScale` is applied today. It reaches **71 of 293 character bodies**, and on an affected
-body it displaces the whole pose by a median of `6.090 cm` rather than offsetting one bone; the
-at-origin sub-case on ten non-humanoid bodies is the smaller half of it. `Elysium.Content.RigPose`
-holds the defect to a recorded envelope and would accept a fix without being edited, so the
-instrument exists and the decision is an owner call.
-
-**Retail's epsilon is bracketed, not read.** The corpus places it between `0.08305 in` and
-`0.126681 in` and a single `0.1 inch` constant would satisfy both bounds, but the constant itself is
-inferred from where retail copied and transformed rather than recovered from the builder. Reading
-`vampire.dll 0x100c67b0`'s comparand would settle it, and a translation rule wants the real value
-rather than a plausible one.
+**Direct retail capture of a differing-bind body remains open.** The runtime implements the exact
+builder rule and the Tremere running-graph identity falls from `3.113 cm` to `0.009 cm` over 480
+frames while the all-copy Malkavian control remains `0.009 cm`. The complete retail capture corpus,
+however, contains pose and layer oracles together only for the two all-copy Malkavians. A capture
+of Ash or a Tremere carrying both oracles would close the live evidence boundary; until then the
+differing-bind result rests on disassembly, synthetic branch coverage, compositor identity and the
+unchanged control.
 
 **A declared bank can leave no trace.** `npc_index.json` declares 372 banks and 360 containers
 exist. The plan↔disk edge *is* guarded — `character_source_plan` hard-fails for a planned container

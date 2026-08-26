@@ -449,16 +449,13 @@ The ladder:
   finish line; owns the capture-tooling trim.
 - [P] **[LIFE9 Secondary-motion calibration](plans/animation.md)** — hair/cloth fitting and
   numeric replays; presentation polish behind the graphics freeze, revisit at the thaw.
-- [ ] **[LIFE10 The animation overlay subsystem](plans/animation.md)** — **the front's first
-  item.** An armed body composes a strict subset of retail's channels: 1,113 of 1,718 captured
-  frames are short at least one and none arms a channel retail did not, with every
-  `_attack_layer`, `_attack_delta` and `_reload_layer` across the five weapon families
-  unreachable. The autolayer closure from a gait reaches aim and bobble only, so the family is
-  armed by `CBaseAnimatingOverlay`, a game-pushed layer stack with no counterpart here; the
-  record's one-overlay/one-additive limit is a consequence of that, not a second cause. The
-  contract is recovered — four slots, a per-layer envelope computed from the layer's own cycle,
-  weight-zeroing death, and two asymmetric producers of which the player's is one slot fed by a
-  current/next activity queue. `Elysium.Content.RigLayers` and `RigPose` are the acceptance.
+- [~] **[LIFE10 The animation overlay subsystem](plans/animation.md)** — the four-slot substrate,
+  per-slot envelope and lifecycle, player/cast producers, five graph closures, post-multiply
+  additive and per-closure shared-bank remap stand. The running graph matches the reference
+  compositor at `0.009 cm` median on both a differing-bind Tremere and the all-copy Malkavian
+  control; `BakedCharacterParity`, `OracleIdentity`, `RigRetarget`, `RigPose` and `RigLayers` are
+  green. Fan duration, previous-sequence cross-fades, event look-ahead and played two-body
+  acceptance remain open; `RigCompose` is red at 3.168 cm control / 1.358 cm layered, legs first.
 
 ## P9 — Dialogue & persistence *(detail: [plans/gameplay.md](plans/gameplay.md))*
 

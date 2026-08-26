@@ -13,6 +13,7 @@ class UAnimMontage;
 class UAnimSequence;
 class UBlendSpace;
 class UElysiumAnimLayerMask;
+class USkeleton;
 class USkeletalMeshComponent;
 struct FAnimNode_BlendStack;
 struct FElysiumResolvedAnimation;
@@ -263,6 +264,14 @@ struct FElysiumOverlaySlotStaging
 	// The aim blend's own pair, for the second masked node inside this slot's branch.
 	FName AppliedAimMaskName;
 	FName ReportedAimMaskName;
+
+	// The source skeleton and retarget-source name this slot's own bank-remap node was last given a
+	// table for — read off the playing asset every frame so the node is re-resolved and re-written
+	// only on CHANGE, the same reason the mask above is. Both identify the donor pose: names are not
+	// globally unique across bank-family skeletons.
+	TWeakObjectPtr<USkeleton> AppliedBankRemapSkeleton;
+	FName AppliedBankRemapSource;
+	bool bReportedBankRemapNodeFault = false;
 
 	// A maskless layer is refused rather than composed, and said once: it is a bake or vocabulary
 	// fault that does not change frame to frame, and a per-frame line would bury it.
@@ -915,6 +924,15 @@ private:
 	// the next.
 	bool ApplyUpperBodyMask();
 
+	// Hand the BASE channel's own bank-remap node (`ElysiumAnimGraph::BankRemapTag(INDEX_NONE)`) the
+	// table for whatever retarget source `PendingSequence`/`PendingBlendSpace` currently plays —
+	// read off the asset itself, never off a stem, so this is exactly as good on a cinematic body as
+	// on an ordinary one. Correction-only: unlike the mask appliers above, a refusal here never has
+	// to take the pose down, because a node that cannot be reached simply leaves the incoming pose
+	// exactly as Unreal's own retargeting-off composition produced it — a defect in the compiled
+	// graph, never a reason to blank the body.
+	void ApplyBaseBankRemap();
+
 	// Project the overlay slot — the layer, its mask, its enveloped weight and the explicit time its
 	// evaluator is pinned to. Beside `ProjectUpperBodyLayer` and ahead of the hold branch for the
 	// same reason: a base pose that is being HELD is a locomotion answer, and a producer's layer is a
@@ -941,6 +959,11 @@ private:
 	// The third masked blend's applier — the aim grid the slot clip declares rides its own node with
 	// the GRID's mask, not the slot clip's, because the two gate different bone sets by design.
 	bool ApplySlotAimMask(int32 SlotIndex);
+	// The slot's own bank-remap node, through `ElysiumAnimGraph::BankRemapTag(SlotIndex)`. The
+	// retarget source is read off THIS SLOT's own `Staging.Sequence` — never the base channel's: a
+	// slot's clip routinely comes from a different bank than whatever is posing the legs underneath
+	// it, and each closure's correction is independent by construction.
+	void ApplySlotBankRemap(int32 SlotIndex);
 
 	// Say once per instance that the compiled graph cannot carry a mask this record names, and answer
 	// true so the callers above can spell a refusal as one expression. A node fault is a property of
@@ -1051,6 +1074,18 @@ private:
 	float PendingUpperBodyLayerWeight = 0.0f;
 	float PendingAdditiveLayerWeight = 0.0f;
 	bool bHasApplied = false;
+
+	// The source skeleton and retarget-source name the BASE channel's remap node was last given a
+	// table for — read off
+	// whatever `PendingSequence`/`PendingBlendSpace` names, never installed once: a different bank
+	// posing the base channel is a different (mesh, source skeleton, source name) tuple, resolved
+	// fresh through
+	// `UElysiumAnimSubsystem::GetBankRemap` each time it changes. `NAME_None` before the first write
+	// and on a body with no retarget source resolved yet, which agree by construction the same way
+	// the mask latch above does.
+	TWeakObjectPtr<USkeleton> AppliedBaseBankRemapSkeleton;
+	FName AppliedBaseBankRemapSource;
+	bool bReportedBaseBankRemapNodeFault = false;
 
 	// The overlay stack's staging, one row per slot — written by `PublishSelection` off the driver's
 	// record and by `PlaySlotLayer` off a producer's own layer, which are the same numbers taken from

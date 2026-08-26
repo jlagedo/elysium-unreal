@@ -84,7 +84,15 @@ def score(corpus: rc.Corpus, run_path: Path) -> int:
         print("[graph] REFUSED: the run cannot support a verdict (see compose_diff)")
         return 2
     body = corpus.model(stem)
-    root = next(b.name for b in body.bones if b.parent < 0)
+    # **The root is the one the HARNESS composed against, not the first parentless bone.** A body
+    # may carry more than one parentless bone -- `tremere_male_armor_3` roots both `Tube02` (a prop
+    # helper) and `Bip01` -- and `relative_to_root` divides out the named bone's ROTATION as well as
+    # its position, so picking the wrong one reads as a whole-body rotation. That scored the body at
+    # 84 cm with a 177 deg rigid fit where the real residual was 3.1.
+    frame_root = next((f.get("root_bone") for f in frames if f.get("root_bone")), None)
+    root = frame_root or next(b.name for b in body.bones if b.parent < 0)
+    if body.by_name.get(root.lower()) is None:
+        root = next(b.name for b in body.bones if b.parent < 0)
 
     per_state: dict[str, list[float]] = defaultdict(list)
     fit_angle: dict[str, list[float]] = defaultdict(list)

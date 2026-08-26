@@ -92,6 +92,35 @@ namespace ElysiumAnimGraph
 		return Tags[FMath::Clamp(SlotIndex, 0, ElysiumOverlay::NumSlots - 1)];
 	}
 
+	// The graph tag on retail's per-body bank bone-remap (`vampire.dll FUN_100c67b0`,
+	// `FAnimNode_ElysiumBankRemap`), read by both the generator that stamps it and the native
+	// instance that pushes the resolved table into it, so the two cannot drift into two spellings
+	// of one node.
+	//
+	// **One tag names the base channel's closure, four more name the overlay slots'** — the same
+	// split the mask tags above make, and for the same underlying reason: each closure can be
+	// decoded against a DIFFERENT owning bank, so each gets its own node fed its own resolved
+	// table rather than one node fighting over which owner it corrects for. `SlotIndex ==
+	// INDEX_NONE` asks for the base channel's tag; any other value clamps into the four slots.
+	//
+	// The node sits after its closure's own pose has composed — the base channel's trio (host,
+	// autolayer, `_delta`) or one slot's own — and before anything downstream reads bone
+	// translations, which is retail's own order: the closure decodes and composes in the owning
+	// bank's space, and the correction is the last thing that happens to it.
+	inline FName BankRemapTag(int32 SlotIndex)
+	{
+		if (SlotIndex == INDEX_NONE)
+		{
+			static const FName Base(TEXT("ElysiumBaseBankRemap"));
+			return Base;
+		}
+		static_assert(ElysiumOverlay::NumSlots == 4, "the tag table is sized by the slot count");
+		static const FName Tags[ElysiumOverlay::NumSlots] = {
+			FName(TEXT("ElysiumSlotBankRemap0")), FName(TEXT("ElysiumSlotBankRemap1")),
+			FName(TEXT("ElysiumSlotBankRemap2")), FName(TEXT("ElysiumSlotBankRemap3")) };
+		return Tags[FMath::Clamp(SlotIndex, 0, ElysiumOverlay::NumSlots - 1)];
+	}
+
 	// The graph tag on the reaction branch's own `FAnimNode_BlendListByBool` (LIFE5), read by the
 	// generator that stamps it and by anything that has to find the node on a compiled class, so the
 	// two cannot drift into two spellings of one node.

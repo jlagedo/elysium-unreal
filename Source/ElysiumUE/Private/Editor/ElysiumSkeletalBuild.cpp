@@ -227,26 +227,6 @@ namespace ElysiumSkeletalBuildImpl
 			{
 				Pose.ReferencePose[Index] = Bone.Local;
 			}
-
-			// **A bind at the origin is the one bone `OrientAndScale` declines to retarget at all.**
-			// `FBoneContainer` skips a bone whose source or target bind length is near zero
-			// (`IsNearlyZero(SourceLen * TargetLen)`), so the donor's animated translation reaches the
-			// playing mesh verbatim, where retail's own remap builder takes its origin branch and
-			// applies a pure `target - source` offset instead (`vampire.dll 0x100c67b0`;
-			// `docs/vtmb/animation_rig_resolution.md`). The gap is a constant offset of at most the
-			// other side's bind length -- 3 cm across the shipped corpus, on 16 containers and four
-			// bone names, all of them a pelvis or a prop helper. Named here so the residual is a
-			// measurement rather than a surprise; closing it needs a translation rule carrying
-			// retail's three branches, which is an owner call rather than a bake change.
-			if (Bone.Local.GetTranslation().IsNearlyZero(UE_KINDA_SMALL_NUMBER)
-				&& RefSkeleton.GetParentIndex(Index) != INDEX_NONE)
-			{
-				UE_LOG(LogElysiumSkeletalBuild, Warning,
-					TEXT("[elysium] retarget source '%s': bone '%s' binds at its parent's origin, so "
-						 "`OrientAndScale` will pass its translation through unretargeted where retail "
-						 "applies a pure offset"),
-					*Name.ToString(), *Bone.Name.ToString());
-			}
 		}
 		Skeleton->AnimRetargetSources.Add(Name, MoveTemp(Pose));
 		return Name;
@@ -1052,9 +1032,21 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 
 	OutBones = Skeleton->GetReferenceSkeleton().GetRawBoneNum();
 
-	// Stock Unreal translation retargeting reproduces the donor-bind direction and length mapping.
-	// Rotation is never retargeted by this mode.
-	Skeleton->SetBoneTranslationRetargetingMode(0, EBoneTranslationRetargetingMode::OrientAndScale,
+	// **Verbatim, because this repo applies retail's own remap instead.** VtMB carries a shared
+	// bank's clip onto a body through a per-bone table its loader builds from the two bind poses
+	// (`vampire.dll 0x100c67b0`), and that table has four observable outcomes: a copy where the binds
+	// agree, a pure `target - source` translation where exactly one bind sits at the origin, another
+	// copy where both binds sit there, and a shortest-arc rotation scaled by the bind lengths
+	// everywhere else. `OrientAndScale` is the similarity category exactly -- and only that category.
+	// It also runs PER SEQUENCE, where retail remaps ONCE over a
+	// composed include closure, which double-counts the affine second branch across a base and its
+	// `_delta` (`(p+t) + (d+t)` against retail's `p+d+t`).
+	//
+	// So the engine's mode is turned off rather than corrected: `FAnimNode_ElysiumBankRemap` states
+	// all four outcomes at the seam retail states them at, reading the same two bind poses off the
+	// sequence's own `RetargetSource` and the playing mesh. Leaving both running would apply the
+	// mapping twice. Design: `docs/architecture/animation-architecture.md`.
+	Skeleton->SetBoneTranslationRetargetingMode(0, EBoneTranslationRetargetingMode::Animation,
 		/*bChildrenToo=*/true);
 
 	for (TPair<FName, FReferencePose>& Carried : CarriedRetargetSources)

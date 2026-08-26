@@ -10,6 +10,7 @@
 #include "Visual/ElysiumNpcVisual.h"
 
 #include "Animation/AnimSequence.h"
+#include "Animation/Skeleton.h"
 #include "Engine/SkeletalMesh.h"
 #include "HAL/FileManager.h"
 
@@ -269,6 +270,7 @@ void UElysiumAnimSubsystem::Deinitialize()
 	ClipSets.Reset();
 	FacialRigs.Reset();
 	CompositionRigs.Reset();
+	BankRemaps.Reset();
 	EyeSets.Reset();
 	BlendTables.Reset();
 	ReportedMisses.Reset();
@@ -690,6 +692,58 @@ TSharedPtr<const FElysiumCompositionRig> UElysiumAnimSubsystem::GetAnimatedPropC
 		UE_LOG(LogElysiumAnim, Warning, TEXT("procedural prop '%s': %s"), *Entry->Stem, *Error);
 	}
 	CompositionRigs.Add(Entry->Stem, Result);
+	return Result;
+}
+
+TSharedPtr<const FElysiumBankRemap> UElysiumAnimSubsystem::GetBankRemap(USkeletalMesh* Mesh,
+	USkeleton* SourceSkeleton, FName RetargetSource)
+{
+	if (Mesh == nullptr || RetargetSource.IsNone())
+	{
+		// No retarget source is the ordinary case for a clip that never got one baked (predates the
+		// registration, or an asset this closure is not actually playing off a bank sequence for) —
+		// nothing to correct, not a fault.
+		return nullptr;
+	}
+	if (SourceSkeleton == nullptr)
+	{
+		UE_LOG(LogElysiumAnim, Warning,
+			TEXT("bank remap '%s' on mesh '%s': the playing animation carries no source skeleton"),
+			*RetargetSource.ToString(), *GetNameSafe(Mesh));
+		return nullptr;
+	}
+
+	const FBankRemapKey Key(Mesh,
+		TPair<TObjectKey<USkeleton>, FName>(SourceSkeleton, RetargetSource));
+	if (const TSharedPtr<const FElysiumBankRemap>* Cached = BankRemaps.Find(Key))
+	{
+		return *Cached;
+	}
+
+	TSharedPtr<const FElysiumBankRemap> Result;
+	const FReferencePose* Source = SourceSkeleton->AnimRetargetSources.Find(RetargetSource);
+	if (Source == nullptr)
+	{
+		UE_LOG(LogElysiumAnim, Warning,
+			TEXT("bank remap '%s' on mesh '%s': playing skeleton '%s' carries no such retarget source"),
+			*RetargetSource.ToString(), *GetNameSafe(Mesh), *GetNameSafe(SourceSkeleton));
+	}
+	else
+	{
+		FElysiumBankRemap Table = FElysiumBankRemap::Build(Source->ReferencePose,
+			SourceSkeleton->GetReferenceSkeleton(), Mesh->GetRefSkeleton());
+		if (Table.HasWork())
+		{
+			UE_LOG(LogElysiumAnim, Verbose,
+				TEXT("bank remap '%s' on '%s': %d translate, %d similarity"),
+				*RetargetSource.ToString(), *GetNameSafe(Mesh), Table.Translate.Num(),
+				Table.Similarity.Num());
+			Result = MakeShared<const FElysiumBankRemap>(MoveTemp(Table));
+		}
+		// A body whose bind pose tracks this bank closely enough that every bone copies is the
+		// ordinary case and is cached the same way a miss is — null, not an empty table nobody reads.
+	}
+	BankRemaps.Add(Key, Result);
 	return Result;
 }
 

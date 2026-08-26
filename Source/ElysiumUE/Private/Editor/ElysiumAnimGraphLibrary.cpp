@@ -930,7 +930,28 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			Wire(DriveFromBool(*Graph, PinNamed(Additive, TEXT("Alpha")),
 				TEXT("AdditiveLayerWeight"), 780, 160), TEXT("additive Alpha pin"));
 
-			UEdGraphNode* SlotChainTail = Additive;
+			// **Retail's bone remap, once, over the base channel's whole closure.** The host, its
+			// aim/overlay autolayer and its `_delta` have all composed by here, in the BANK's own
+			// space -- which is the exact point `client.dll FUN_10089c40` remaps on return from the
+			// include recursion (`vampire.dll 0x100c67b0` builds the table). Unreal's own
+			// `OrientAndScale` is off on every baked skeleton because it states only the similarity
+			// category and states it per SEQUENCE, which double-counts the affine exactly-one-origin
+			// outcome across a base and its delta. The table is pushed by
+			// `UElysiumBipedAnimInstance` for whatever (mesh, source skeleton, RetargetSource) tuple is
+			// posing this closure, through the tag below.
+			UEdGraphNode* BaseRemap = Place(*Graph,
+				TEXT("/Script/ElysiumUEAnimGraph.AnimGraphNode_ElysiumBankRemap"), 920, 0);
+			if (BaseRemap == nullptr)
+			{
+				UE_LOG(LogTemp, Error, TEXT("[animbp] the bank remap node class was not found"));
+				return;
+			}
+			SetOwnValue<FName>(BaseRemap, TEXT("Tag"),
+				ElysiumAnimGraph::BankRemapTag(INDEX_NONE));
+			Wire(Link(FirstPin(Additive, EGPD_Output), PinNamed(BaseRemap, TEXT("Source"))),
+				TEXT("additive -> base bank remap"));
+
+			UEdGraphNode* SlotChainTail = BaseRemap;
 			for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
 			{
 				// Laid out left to right so the exported text reads in composition order; nothing
@@ -1063,9 +1084,22 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				Wire(DriveFromBool(*Graph, PinNamed(SlotAdditive, TEXT("Alpha")),
 					*AdditiveWeight, X - 280, 220), TEXT("slot additive Alpha pin"));
 
-				Wire(Link(FirstPin(SlotAdditive, EGPD_Output),
+				// The same remap, over THIS slot's own closure. A slot resolves through its own
+				// include chain and may name a different owner than the base channel, so each one
+				// carries its own table and its own tag rather than sharing the base's.
+				UEdGraphNode* SlotRemap = Place(*Graph,
+					TEXT("/Script/ElysiumUEAnimGraph.AnimGraphNode_ElysiumBankRemap"), X - 30, 220);
+				if (SlotRemap == nullptr)
+				{
+					UE_LOG(LogTemp, Error, TEXT("[animbp] the bank remap node class was not found"));
+					return;
+				}
+				SetOwnValue<FName>(SlotRemap, TEXT("Tag"), ElysiumAnimGraph::BankRemapTag(SlotIndex));
+				Wire(Link(FirstPin(SlotAdditive, EGPD_Output), PinNamed(SlotRemap, TEXT("Source"))),
+					TEXT("slot additive -> slot bank remap"));
+				Wire(Link(FirstPin(SlotRemap, EGPD_Output),
 					PinNamed(SlotLayer, TEXT("BlendPoses_0"))),
-					TEXT("slot additive -> slot blend pose 0"));
+					TEXT("slot bank remap -> slot blend pose 0"));
 				// The enveloped weight the record carries, never the `m_flWeightMax` ceiling: a reload
 				// layer ramps over a fifth of its cycle at each end and an attack layer snaps, and
 				// both answers arrive here as this one number.
