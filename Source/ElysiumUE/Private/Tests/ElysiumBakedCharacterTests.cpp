@@ -175,7 +175,6 @@ namespace
 	// the failure this check exists to catch. The exporter's `_single_root` puts `Bip01` at slot 0
 	// in every container, so that magnitude is what the tolerances are calibrated against.
 	constexpr double GBankLocomotionRotationToleranceDeg = 2.0;
-	constexpr double GBankLocomotionTranslationTolerance = 5.0;   // centimetres
 
 	bool SampleBone(const UAnimSequence* Sequence, const FName Bone, const double Time,
 		FTransform& OutTransform)
@@ -1282,6 +1281,26 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 			ComposeComponentSpace(BankSource.Bones, BankByContainer, BankComposed);
 			ComposeComponentSpace(Source.Bones, BodyByContainer, BodyComposed);
 
+			// **Rotation alone, because the two sides retarget TRANSLATION against different
+			// reference poses and only one of them is the runtime's.** A bank's clips are stored
+			// on the family skeleton, whose reference pose belongs to whichever member declared a
+			// bone first -- and a family is a union over every container with a compatible bone
+			// TREE, so `character_shared_male_baseball` shares one with 256 others whose `Bip01`
+			// binds run from -110 cm to +1960 cm, the first-declared being a BEASTFORM. Evaluated
+			// on that skeleton every bone's translation is scaled by `OrientAndScale` into the
+			// beastform's proportions (the root 79.944 -> 85.993 cm through its 106.489 bind),
+			// while the body's own mesh -- the only reference pose the runtime ever composes
+			// through -- reads the authored track verbatim. Compared absolutely that reports one
+			// pose translated, on all 55 bones at 6-8 cm; compared root-relative it still reports
+			// the spine chain's own scaling, at 5.7-6.1 cm from the clavicle out. Neither number
+			// says anything about the clip.
+			//
+			// `OrientAndScale` never retargets ROTATION, so rotation is the same quantity on both
+			// sides whatever the reference poses are -- and what this assertion exists to catch is
+			// a bone landing at another bone's INDEX, which is a rotation difference first: a fork
+			// puts one bone's animated orientation on another bone. The translation figure stays in
+			// the failure message as context rather than as a threshold.
+
 			for (int32 BankIndex = 0; BankIndex < BankSource.Bones.Num(); ++BankIndex)
 			{
 				const int32* BodyIndex = BodyIndexOf.Find(BankSource.Bones[BankIndex].Name);
@@ -1298,16 +1317,27 @@ bool FElysiumBakedCharacterParityTest::RunTest(const FString&)
 				const double Centimetres = FVector::Distance(
 					BodyComposed[*BodyIndex].GetTranslation(),
 					BankComposed[BankIndex].GetTranslation());
-				if (Degrees > GBankLocomotionRotationToleranceDeg
-					|| Centimetres > GBankLocomotionTranslationTolerance)
+				if (Degrees > GBankLocomotionRotationToleranceDeg)
 				{
+					// The two locals and the two BINDS the retarget reads them against, because a
+					// composed difference on a bone whose local matches is a difference in the
+					// reference pose one side retargeted from, not a clip landing on another bone.
+					const int32 BankRefIndex = BankRef.FindBoneIndex(BankSource.Bones[BankIndex].Name);
+					const int32 BodyRefIndex = BodyRef.FindBoneIndex(BankSource.Bones[BankIndex].Name);
+					const FVector BankBind = BankRef.GetRefBonePose().IsValidIndex(BankRefIndex)
+						? BankRef.GetRefBonePose()[BankRefIndex].GetTranslation() : FVector::ZeroVector;
+					const FVector BodyBind = BodyRef.GetRefBonePose().IsValidIndex(BodyRefIndex)
+						? BodyRef.GetRefBonePose()[BodyRefIndex].GetTranslation() : FVector::ZeroVector;
 					AddError(FString::Printf(
 						TEXT("%s plays bank '%s' clip '%s': through the body's own baked skeleton ")
 						TEXT("bone '%s' composes %.2f deg / %.2f cm away from the same clip composed ")
 						TEXT("on the bank's own skeleton -- a shared-bank clip is landing on the ")
-						TEXT("wrong bone"),
+						TEXT("wrong bone | at t=%.3f local bank %s body %s | bind bank %s body %s"),
 						*Stem, *Bank, *Clip->Name, *BankSource.Bones[BankIndex].Name.ToString(),
-						Degrees, Centimetres));
+						Degrees, Centimetres, Time,
+						*BankByContainer[BankIndex].GetTranslation().ToString(),
+						*BodyByContainer[*BodyIndex].GetTranslation().ToString(),
+						*BankBind.ToString(), *BodyBind.ToString()));
 					bSound = false;
 					break;
 				}
