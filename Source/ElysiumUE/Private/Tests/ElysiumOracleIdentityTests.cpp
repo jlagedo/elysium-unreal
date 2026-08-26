@@ -351,6 +351,8 @@ namespace
 				// bone under an owned parent is the same either way and is replaced locally.
 				const TArray<int32> Owned = OwnedBones(MaskSource, Mesh);
 				const TSet<int32> OwnedSet(Owned);
+				LastOwned = Owned.Num();
+				bLastFinger0Owned = OwnedSet.Contains(Ref.FindBoneIndex(TEXT("Bip01 L Finger0")));
 				TArray<FTransform> HostComponent;
 				TArray<FTransform> LayerComponent;
 				ElysiumPoseOracle::LocalToComponent(Ref, Locals, HostComponent);
@@ -379,6 +381,10 @@ namespace
 
 		// One oracle state from the mount: the base (a fan blended at `move_yaw`, or a clip) and
 		// its closure, as root-relative component-space positions by bone name.
+		bool bLastHostMasked = false;
+		int32 LastOwned = 0;
+		bool bLastFinger0Owned = false;
+
 		bool Compose(const FOracleFrame& Frame, TMap<FString, FVector>& Out, int32& OutStoodDown)
 		{
 			TArray<FTransform> Locals;
@@ -409,6 +415,7 @@ namespace
 				}
 				bHostMasked = Asset->FindMetaDataByClass<UElysiumAnimLayerMask>() != nullptr;
 			}
+			bLastHostMasked = bHostMasked;
 			Closure(Frame.Owner, Frame.Label, Frame.Params, Frame.Cycle, bHostMasked, Locals,
 				OutStoodDown);
 
@@ -536,6 +543,35 @@ bool FElysiumOracleIdentityTest::RunTest(const FString&)
 			++Composed;
 			All.Add(FrameError.Median());
 			ByHost.FindOrAdd(Frame.Label).Add(FrameError.Median());
+			if (Composer.bLastHostMasked)
+			{
+				// Every state of a masked host on its own line, so a residual can be read against
+				// the phase and the pitch that produced it.
+				FString WorstBone;
+				double WorstError = 0.0;
+				for (const TPair<FString, FVector>& Bone : Frame.Bones)
+				{
+					const FVector* Mine = Ours.Find(Bone.Key);
+					const double Error = Mine != nullptr ? FVector::Dist(*Mine, Bone.Value) : 0.0;
+					if (Error > WorstError)
+					{
+						WorstError = Error;
+						WorstBone = Bone.Key;
+					}
+				}
+				auto Dist = [&](const TCHAR* Name) -> double
+				{
+					const FVector* Mine = Ours.Find(Name);
+					const FVector* Theirs = Frame.Bones.Find(Name);
+					return Mine != nullptr && Theirs != nullptr ? FVector::Dist(*Mine, *Theirs) : -1.0;
+				};
+				AddInfo(FString::Printf(TEXT("    %s cycle %.3f pitch %+.0f: median %.3f cm, worst %s %.2f")
+					TEXT(" | L Forearm %.2f L Hand %.2f L Finger0 %.2f L Finger01 %.2f | owned %d, finger0 %s"),
+					*Frame.Label, Frame.Cycle, Frame.Params.Get(TEXT("aim_pitch")), FrameError.Median(),
+					*WorstBone, WorstError, Dist(TEXT("Bip01 L Forearm")), Dist(TEXT("Bip01 L Hand")),
+					Dist(TEXT("Bip01 L Finger0")), Dist(TEXT("Bip01 L Finger01")), Composer.LastOwned,
+					Composer.bLastFinger0Owned ? TEXT("owned") : TEXT("NOT owned")));
+			}
 		}
 
 		AddInfo(FString::Printf(TEXT("%s: %d states, %d composed, %d not composable, %d delta ")
@@ -559,7 +595,7 @@ bool FElysiumOracleIdentityTest::RunTest(const FString&)
 			HostWorst.Sort([](const TPair<FString, double>& A, const TPair<FString, double>& B)
 				{ return A.Value > B.Value; });
 			FString HostRanking;
-			for (int32 I = 0; I < HostWorst.Num() && I < 10; ++I)
+			for (int32 I = 0; I < HostWorst.Num() && I < 24; ++I)
 			{
 				HostRanking += FString::Printf(TEXT("%s%s %.2f"), I ? TEXT(", ") : TEXT(""),
 					*HostWorst[I].Key.Replace(TEXT("Bip01 "), TEXT("")), HostWorst[I].Value);

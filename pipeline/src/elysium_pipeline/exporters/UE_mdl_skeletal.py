@@ -1022,10 +1022,18 @@ def _composed_frames(d, bones, delta, host, owned=None, fold_deltas=None):
                         _qmul(base_rot, rot)))
         # The host's own motion additives, accumulated per frame in retail's order and frame —
         # `out.quat = out.quat * delta.quat`, `out.pos += delta.pos` — AFTER the overlay above,
-        # which is the declaration order the autolayer table states.
+        # which is the declaration order the autolayer table states. Only onto the bones the
+        # overlay OWNS: a masked host stands in an overlay slot, and everything a slot accumulates
+        # — its autolayers included — reaches the slot's own bones alone (measured on the capture:
+        # the legs fit 2.14 cm with the attack delta kept off them, 4.48 with it on). The split
+        # bone's ancestors are among the unowned, and they have to stay the BIND chain here
+        # because that chain is both the divisor `_split_rotation_tracks` restates against and
+        # the chain the clip ships for the runtime to multiply back.
         for fold_clip, fold_frames in folded:
             fold_row = fold_frames[min(frame, fold_clip.frames - 1)]
             for index in range(len(row)):
+                if owned is not None and index not in owned:
+                    continue
                 add_pos, add_rot = fold_row[index]
                 rot = _qnorm(add_rot)
                 if rot is None:
