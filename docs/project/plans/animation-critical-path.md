@@ -33,6 +33,13 @@ produced this plan, and they are not re-litigated per task.
    runtime), the previous-sequence cross-fade chain (T-C7) and the aim-pitch slew (T-C6). Each is
    named where it lives, with the retail address beside it. No fifth is added without an owner
    call.
+   **Revised by T-A5's evidence, on the owner's call:** the test for where a rule lands is its
+   *inputs* — a rule whose every input exists at bake time is a bake input; a rule with a live or
+   time-dependent input is a graph rule. The additive combine's inputs (host cell, host phase,
+   aim cell, mask, `s = 1.0` on every shipped delta) are all static, so T-B1 is to be **re-filed as
+   a bake fold** (`fold_deltas`, already proven on masked hosts) once T-A5's graph link closes;
+   T-C6 and T-C7 stay runtime rules by the same test. The runtime node stays in the tree until the
+   fold replaces it.
 2. **The owner's observation is ground truth.** A test, log or harness that reads green against a
    reported defect is the first suspect. Reproduce at the seam the owner sees, then name the
    measurement that would falsify the code and run that. Do not hedge on whether the owner's build
@@ -174,6 +181,32 @@ guard with one referrer. *Rule:* a global with any referrer is read; list the re
 count and every array against the image; the decoder's `_MAX_AUTOLAYERS = 16` is a repo guard, not
 a retail rule.
 
+**T23 — A derived overlay's split bone is composed in MESH space, never as a local.** The bake
+states `Bip01 Spine1` of a derived overlay against the BIND chain it ships; replacing it as a local
+onto the host's animated chain lands the whole upper body 16–53 cm off (measured by
+`OracleIdentity`), which is what the graph's `bMeshSpaceRotationBlend` exists for. *Rule:* an owned
+bone whose parent the mask does not own takes `Parent⁻¹ · LayerComponent` (the quaternion order
+`FTransform::operator*` composes in); everything else is a local replace. `RigCompose` composed it
+locally for its whole life and read 3.9 cm for it.
+
+**T24 — A phase read off one clock, a pose evaluated on another.** The base channel's `_delta`
+player ran on its own clock while the fan ran on the stack's; the legs matched the compositor at
+0.00 cm at the published phase and the upper body drifted 0.1–2.7 cm in and out of step. *Rule:*
+every pose source in one composition evaluates at the host's cycle (retail's autolayer rule), and a
+harness records the clock each node evaluated at, never a derived one.
+
+**T25 — An `Editor` module does not load under `-game`.** The graph node's class was unresolvable
+in the harness, the uncooked ABP regenerated with five dead nodes and the body posed the reference
+pose for 1,782 cm of travel, which `compose_diff` scored as `arm p2p 0.000 OK`. *Rule:* a module the
+uncooked Blueprint references is `UncookedOnly` (as `BlendStackEditor` is), and every scorer refuses
+a run whose distinct poses are under one per twenty frames.
+
+**T26 — The doc outranked the trap.** T18/T19 read the player's `aim_yaw` literal `0.0f` as
+normalized 0 = the corner cell; the doc's own "aim pair is latched and slewed" section records it
+holding 0.000° = normalized 0.5009, the CENTRE column, and the compositor's cell search found the
+centre on every state. *Rule:* T19 is about unmapped include slots only; a trap is a lead, the
+owning document is the fact.
+
 **T22 — The three additive conventions are not interchangeable.** `ABPT_AnimScaled` (base at
 matching phase) fixed the arm's mean and destroyed the grip (hand-to-hand p2p 17.12 cm vs 0.99).
 `ABPT_AnimFrame 0` reproduces our defect to three digits. Only the pose the delta actually lands
@@ -220,7 +253,11 @@ index 2 the 49-bone upper body from `Bip01 Spine1`.
 
 | test | tier | today | what it proves |
 |---|---|---|---|
-| `Elysium.Content.RigCompose` | Content | **RED** — control 4.45 cm, layered 3.38 | composed pose vs the capture, whole body, local-space composition, three cohorts |
+| `Elysium.Content.RigCompose` | Content | **RED** — control 3.168 cm, layered **1.358**, arm scalar green on every state of both bodies, four layers green (`deserteagle_attack` 0.70, `deserteagle_reload` 0.40, `steyr_reload` 0.31, `supershotgun_reload` 0.24) | composed pose vs the capture, whole body, mesh-space on the split bone, aim cell pinned per state, three cohorts |
+| `Elysium.Content.OracleIdentity` (T-A5) | Content | **green** — median 0.001–0.003 cm, max 0.027, 880 states | the baked mount composed offline equals the reference compositor at every stated state; no capture, no search |
+| `Elysium.Content.BakedCharacterParity` | Content | red — the retargeted-delta residual (1.14 cm `Bip01 Pelvis`, `anaconda_attack_delta` on `SK_ash`) and seven `baseballbat_hunt_walk` `Bip01` rows of unverified provenance | the bake's own contract, read on the body mesh |
+| `Elysium.Content.FanDuration` (T-A3) | Content | red — 176 of 207 fans on the harmonic branch | T-B2's gate |
+| `Elysium.Content.PlayerGraphInstance` | Content | green — 17 of 17 axis-interp rules resolve | the generated graph stands a body in the editor commandlet |
 | `Elysium.Content.RigPose` | Content | green | one clip on an unlayered frame |
 | `Elysium.Content.RigLayers` | Content | green | channel reachability, four slots suffice |
 | `Elysium.Substrate.OverlayStack` | Substrate | green | the four stack rules |
@@ -239,14 +276,24 @@ aggressive carry, then the same to the left. Per frame: component-space bones, t
 (`label, layers, move_yaw, aim_yaw, aim_pitch`), the four slot rows with `mask` and
 `masked_bones`, and `motion{x, y, z, vx, vy, vz, speed, travelled, facing_yaw, gated}`. It errors
 on `farthest_travelled_cm < 25`. Default weapon `item_w_ithaca_m_37`; `-ComposeWeapon=` and
-`-ComposeHz=` override.
+`-ComposeHz=` override. The selection record also carries the base's phase two ways —
+`cycle` (the published `FElysiumClipPhase`) and `cycle_norm` (the locomotion stack's own normalized
+accumulator, `UElysiumBipedAnimInstance::GetLocomotionNormalizedTime`) — which is what lets
+`uv run elysium debug oracle --run <report>` hold every recorded frame to the reference compositor
+at exactly the state the graph stood (`validation/graph_identity.py`). `compose_diff` refuses a run
+whose distinct poses are under one per twenty frames (exit 2).
 
 ### 3.5 Offline tooling
 
 `E:\elysium-work\scratch\life10\` (gitignored, outside the checkout): `compose_probe.py` (the
 `.eskm` reader — `_rd`, `skel`, `masks`, `clips(want)`, `fk`, `qmul`, `qrot`), `sway.py` /
 `sway2.py` (retail scalars per state), `sway_ours.py` (the same off a compose run), `armsway.py`
-(compose a fan cell + layers offline). Every number in this plan is reproducible from them.
+(compose a fan cell + layers offline — it PRE-multiplies the derived clip; its "0.93" is right
+for the wrong reason), `armsway_post.py` (the retail order on the raw delta, 0.93 / 0.28 to the
+digit). Tracked and superseding all of them: `pipeline/src/elysium_pipeline/validation/
+retail_compositor.py` (the reference compositor, §T-A5), `graph_identity.py` (the graph held to
+it), and `$ELYSIUM_EXPORT_ROOT/_oracle/<stem>.json` (the dense oracle the C++ identity test reads).
+Every number in this plan is reproducible from them.
 
 ### 3.6 Reverse engineering
 
@@ -512,6 +559,93 @@ why the male's layered cohort is n=49 where the female's is n=81, and a per-laye
 fewer frames there. And the exit code over several runs is the worst of them with **1 outranking
 2**, so a body whose capture cannot support a verdict never masks a body that failed.
 
+#### T-A5 One oracle — the reference compositor and the identity chain
+
+Added on the owner's call after T-B1's first landing. Three instruments had disagreed about the
+same arm on the same body (`armsway.py` 0.93, `RigCompose` 2.67, the harness 2.34) and each had
+been searching a sparse capture for a value it does not record. The programme cannot read Phase B
+through instruments that disagree, so the capture is used **once** — to validate a dense oracle —
+and every other comparison becomes an identity against that oracle at a fully stated state.
+
+- **Where:** `pipeline/src/elysium_pipeline/validation/retail_compositor.py` (the compositor:
+  retail's arithmetic on the raw `.mdl`, Source space, capture-shaped output; `--validate
+  <session>`, `--emit`), `validation/graph_identity.py` (the running graph held to it),
+  `Source/ElysiumUE/Private/Tests/ElysiumOracleIdentityTests.cpp` (`Elysium.Content.OracleIdentity`,
+  the baked mount held to it), `pipeline/tests/test_retail_compositor.py` (7 synthetic tests of
+  the arithmetic), the `debug oracle` verb (`--validate`, `--emit`, `--run`).
+- **The chain:** `.mdl` → compositor (validated against the capture, once, per rule) → `.eskm`
+  (exporter contract) → `.uasset` (`BakedCharacterParity`, `OracleIdentity`) → the running graph
+  (`debug oracle --run`). Every link is an identity; only the first is a validation.
+- **Gate:** the compositor reproduces the capture to sub-centimetre wherever the state is fully
+  known; `OracleIdentity` ≤ 0.5 cm median; `debug oracle --run` ≤ 0.5 cm median on both bodies.
+
+**Findings.** Two of the three links are closed as identities; the third found a real runtime
+defect and is mid-fix.
+
+*The compositor against the capture* (`debug oracle --validate <session> --search-aim`), 439
+unlayered full-weight frames composed: every state with **no aim layer** reads **0.005–0.26 cm**
+median (`steyr_relaxed_run` 0.029, `katana_aggressive_run` 0.052, `sledgehammer_aggressive_run`
+0.26) — the fan blend, key interpolation, split rotation and FK are exact. With an aim layer, the
+capture's missing parameter is the *pitch* (T26: yaw is the centre column; pitch is the slewed view
+pitch sitting between cells): searched continuously, `_ready` states read **0.47–0.55 cm** and the
+residual on moving states (0.3–2.3) is the quarter-cell search step at a 60 cm lever. Removing the
+delta makes 6 of 7 delta states worse — the post-multiply is confirmed at the oracle level. Rules
+carried, each cited in the module: `floor((n−1)·cycle)` + normalized component lerp, the
+pose-parameter resolution, the four-arm cell weighting, weight-zero records, `nlerp`/post-multiply
+accumulate, `Flags & 0x2`, name correspondence.
+
+*The mount against the compositor* (`OracleIdentity`, 440 states per body: 13 yaws × 3 pitches ×
+8 phases on `m37_aggressive_run`, plus `m37_ready` and `m37_relaxed_run`): **median 0.001–0.003
+cm, max 0.027** on both bodies — compression noise. It took one rule to get there, and that rule
+was `RigCompose`'s standing defect: the derived overlay's `Spine1` must be composed in mesh space
+(T23). Applied to `RigCompose`, its layered cohort moved **3.33 → 1.358 cm** and four layers went
+green; its control 3.89 → 3.168, still feet-and-calves first (T-C7).
+
+*The graph against the compositor* (`debug oracle --run`, male body): **the legs match at
+0.00–0.02 cm at the published phase on every steady frame**, so the fan, its clock and the whole
+lower body are right. The upper body drifts 0.1–2.7 cm frame to frame at a fixed state; with the
+`_delta` composed at a *searched* phase of its own the upper body drops to **0.01–0.07 cm**, and the
+searched phases advance at 0.032/frame against the fan's 0.022 — the base channel's delta is played
+by a free-running `SequencePlayer` at its clip's natural length (0.53 s lap) while the gait laps in
+0.77 s. Retail evaluates an autolayer at the host's cycle (T24). This is the arm bobbing out of
+step with the stride, in numbers. The slot branch never had it: its delta is an evaluator pinned
+to the slot time.
+
+*The fix in flight, uncommitted:* the generator puts the locomotion blend stack and the base
+`_delta` player in one sync group (`ElysiumAnimGraph::BaseSyncGroup`, stack `AlwaysLeader`, player
+`AlwaysFollower`, `Method = SyncGroup`) — the engine's own "follow the host's normalized time",
+stock nodes, no lag. **Unverified**: the generator's own comment says sync-group fields are
+`FoldProperty` members that a reflection write does not reach at runtime. The T3D regeneration to
+test it froze three times when launched beside a still-running editor; run alone it lands in ~60 s.
+If the fold properties do not take, the fallback is the T-B1 fold (the delta inside the aim cells
+at the host's phase, the base-channel aim grid becoming a phase-driven `BlendSpaceEvaluator`), which
+is also where §0.1 now points.
+
+**Resume here** (working tree after commit `1a7bfc8`, all built, editor tier green, Python suite
+green on the touched modules, doctor clean):
+
+1. Regenerate the T3D **with no other editor process alive**, from PowerShell:
+   `& "D:/Epic/UE_5.8/Engine/Binaries/Win64/UnrealEditor-Cmd.exe" E:/dev/elysium-unreal/ElysiumUE.uproject -ElysiumContentRoot=E:/elysium-work/exports "-ExecCmds=elysium.animbp.build /Game/Elysium/Animation/ABP_ElysiumBiped.ABP_ElysiumBiped E:/elysium-work/scratch/ABP_regen.t3d" -unattended -nopause -nosplash -nullrhi -NoLiveCoding -noP4 -nosound`
+   — it prints `[animbp] built 101 node(s)` and then idles; stop it, copy the file over
+   `pipeline/unreal/graphs/ABP_ElysiumBiped.t3d`, and check the text carries
+   `GroupName="ElysiumBase"`, `GroupRole=AlwaysLeader`/`AlwaysFollower`, `Method=SyncGroup` on the
+   stack and the additive player, and 5 `AnimGraphNode_ElysiumPostAdditive` nodes.
+2. `uv run elysium export bundle policy --force` — expect `imported 101 node(s)`.
+3. `uv run elysium debug compose --body malkavian_male_armor_0`, then
+   `uv run elysium debug oracle --run E:/elysium-work/exports/_compose/sp_tutorial_1-item_w_ithaca_m_37-malkavian_male_armor_0.json`
+   — the upper body on `m37_aggressive_run + no slot` should fall from ~1.0 cm to ≲ 0.1; the
+   `--best-cycle 12` diagnostic prints legs and upper body separately.
+4. If it does, run both bodies, commit, and re-file T-B1 as the fold. If it does not, the sync
+   group is confirmed unreachable by reflection; go to the fold directly.
+
+Uncommitted files and what each is: `ElysiumComposeRun.cpp` (publishes `cycle` and
+`cycle_norm`), `ElysiumBipedAnimInstance.{h,cpp}` (`GetLocomotionNormalizedTime`),
+`ElysiumAnimGraphLibrary.cpp` + `ElysiumAnimGraph.h` (the sync group), `ElysiumRigComposeTests.cpp`
+(mesh-space on the split bone, both the closure and the standing slot clip),
+`ElysiumRigLayerTests.cpp` (a helper renamed to dodge a unity-build collision),
+`ElysiumOracleIdentityTests.cpp` (new), `retail_compositor.py`, `graph_identity.py`,
+`test_retail_compositor.py` (new), `cli.py` (`debug oracle`).
+
 ### Phase B — the bake
 
 #### T-B1 The post-multiply additive
@@ -627,6 +761,13 @@ Everything the task text got wrong, each carrying the measurement that decided i
 - **A tag, not a name suffix or `UAssetUserData`.** `BakedAssetName` folds `@` and already
   shadows 352 labels; `UAnimMetaData` is the door the mask already uses and the only one every
   reader — slot resolver, lab, three tests, the Python verifier — reads the same way.
+
+**Since the first landing (T-A5's evidence).** `RigCompose` composed every derived overlay's
+split bone locally (T23); corrected, its layered cohort reads **1.358 cm** and `m37_attack_layer`
+**4.417** with legs carrying it. The graph's base-channel delta runs on its own clock (T24) — the
+one remaining upper-body defect, ≲ 0.1 cm once the delta is at the host's phase — and the fix under
+test is a sync group, with the fold as the fallback and the direction §0.1 now records. The
+translation-retargeting residual below stands.
 
 One residual named rather than closed: with no stamp a delta's **translation** passes through
 `OrientAndScale` on a retargeted body and is re-oriented by the bank-to-body bind angle where

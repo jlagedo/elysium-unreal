@@ -606,13 +606,20 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				TEXT("stack bResetOnBecomingRelevant"));
 			// `MaxAnimationDeltaTime` stays at its `-1` (the desync re-blend is off, because nothing
 			// drives `AnimationTime`), and the notify filter, the mirror table, the blend profile and
-			// the experimental stitch fields stay at their own defaults. The sync-group fields are
-			// **not written**: they are `WITH_EDITORONLY_DATA` `FoldProperty` members, so a
-			// reflection write there is invisible to the runtime and breaks compile validation —
-			// and `DoNotSync` is already the answer, because two clips of different lengths must not
-			// be forced onto a shared normalized time.
+			// the experimental stitch fields stay at their own defaults.
 			Wire(SetOwnValue<FName>(Stack, TEXT("Tag"),
 				FName(ElysiumAnimGraph::LocomotionStackTag)), TEXT("stack tag"));
+			// **The base sync group, and the stack leads it.** Retail evaluates a host's autolayers
+			// at the HOST's cycle; a `_delta` player on its own clock laps at its clip's natural
+			// length while the gait laps at the fan's, and the reference compositor measured the
+			// upper body drifting 0.1-2.7 cm in and out of step with legs that matched to 0.01. A
+			// sync group is the engine's own statement of "follow the host's normalized time", so
+			// the delta player below joins it as a follower. `AlwaysLeader` (2) and `SyncGroup` (1)
+			// are the enum values the node's `TEnumAsByte`/`uint8` members carry.
+			Wire(SetNodeValue<FName>(Stack, TEXT("GroupName"), FName(ElysiumAnimGraph::BaseSyncGroup)),
+				TEXT("stack GroupName"));
+			Wire(SetNodeValue<uint8>(Stack, TEXT("GroupRole"), 2), TEXT("stack GroupRole"));
+			Wire(SetNodeValue<uint8>(Stack, TEXT("Method"), 1), TEXT("stack Method"));
 		}
 
 		// --- the four pins the whole base channel arrives on ----------------------------------------
@@ -813,6 +820,19 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			ExposePin(UpperBodySequence, TEXT("Sequence"));
 			Wire(DriveFromBool(*Graph, PinNamed(UpperBodySequence, TEXT("Sequence")),
 				TEXT("RequestedUpperBodySequence"), -560, 420), TEXT("layer melee Sequence pin"));
+			// **Both autolayer players follow the host's clock.** Retail evaluates every autolayer of
+			// a sequence -- the aim grid, a plain overlay such as `m37_relaxed_move_layer`, the delta
+			// -- at the HOST's cycle. A player left on its own clock laps at its clip's natural
+			// length while the gait laps at the fan's, and the reference compositor measured the
+			// upper body drifting away from legs that matched to 0.01 cm. Followers (1) of the group
+			// the locomotion stack leads; `SyncGroup` (1) is the method.
+			for (UEdGraphNode* Follower : {UpperBodySpace, UpperBodySequence})
+			{
+				Wire(SetNodeValue<FName>(Follower, TEXT("GroupName"),
+					FName(ElysiumAnimGraph::BaseSyncGroup)), TEXT("layer player GroupName"));
+				Wire(SetNodeValue<uint8>(Follower, TEXT("GroupRole"), 1), TEXT("layer player GroupRole"));
+				Wire(SetNodeValue<uint8>(Follower, TEXT("Method"), 1), TEXT("layer player Method"));
+			}
 
 			Wire(DriveFromBool(*Graph, PinNamed(UpperBodyPick, TEXT("bActiveValue")),
 				TEXT("bUpperBodyHasBlendSpace"), -160, 100), TEXT("layer bActiveValue"));
@@ -888,7 +908,29 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// Every setting on the evaluator is a `WITH_EDITORONLY_DATA` `FoldProperty`, so a
 			// reflection write lands somewhere the runtime cannot see; the pin is the only honest
 			// door, which is why both inputs are exposed and driven rather than set.
-			UEdGraphNode* SlotChainTail = Layer;
+			// **The host's own `_delta` composes here, BEFORE the slots.** Retail evaluates a
+			// sequence's autolayers -- overlay, then delta -- inside the host's own evaluation and
+			// accumulates the overlay slots after that, and a slot is a hard replace on its mask:
+			// under a standing attack layer the host's delta is overwritten on every masked bone.
+			// With the delta after the slots it landed on the slot's pose instead, and the
+			// reference compositor read the slot state 1.1-0.6 cm off on the upper body for it.
+			ExposePin(AdditiveSequence, TEXT("Sequence"));
+			Wire(DriveFromBool(*Graph, PinNamed(AdditiveSequence, TEXT("Sequence")),
+				TEXT("RequestedAdditiveSequence"), 280, 520), TEXT("additive Sequence pin"));
+			// The delta follows the base's clock -- retail's autolayer-at-host-cycle -- through the
+			// sync group the locomotion stack leads (`AlwaysFollower` is 1).
+			Wire(SetNodeValue<FName>(AdditiveSequence, TEXT("GroupName"),
+				FName(ElysiumAnimGraph::BaseSyncGroup)), TEXT("additive GroupName"));
+			Wire(SetNodeValue<uint8>(AdditiveSequence, TEXT("GroupRole"), 1), TEXT("additive GroupRole"));
+			Wire(SetNodeValue<uint8>(AdditiveSequence, TEXT("Method"), 1), TEXT("additive Method"));
+			Wire(Link(FirstPin(Layer, EGPD_Output), PinNamed(Additive, TEXT("Base"))),
+				TEXT("autolayer blend -> additive base"));
+			Wire(Link(FirstPin(AdditiveSequence, EGPD_Output), PinNamed(Additive, TEXT("Additive"))),
+				TEXT("additive sequence -> additive"));
+			Wire(DriveFromBool(*Graph, PinNamed(Additive, TEXT("Alpha")),
+				TEXT("AdditiveLayerWeight"), 780, 160), TEXT("additive Alpha pin"));
+
+			UEdGraphNode* SlotChainTail = Additive;
 			for (int32 SlotIndex = 0; SlotIndex < ElysiumOverlay::NumSlots; ++SlotIndex)
 			{
 				// Laid out left to right so the exported text reads in composition order; nothing
@@ -1033,22 +1075,9 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				SlotChainTail = SlotLayer;
 			}
 
-			// The `_delta` composes independently, on top — retail's own order, overlay first
-			// (this node), delta second — and through the post-multiply node, so the pose it lands
-			// on is composed with `q ⊗ scale(D, s)` rather than Unreal's `D ⊗ q`.
-			ExposePin(AdditiveSequence, TEXT("Sequence"));
-			Wire(DriveFromBool(*Graph, PinNamed(AdditiveSequence, TEXT("Sequence")),
-				TEXT("RequestedAdditiveSequence"), 280, 520), TEXT("additive Sequence pin"));
-
-			Wire(Link(FirstPin(SlotChainTail, EGPD_Output), PinNamed(Additive, TEXT("Base"))),
-				TEXT("slot chain -> additive base"));
-			Wire(Link(FirstPin(AdditiveSequence, EGPD_Output), PinNamed(Additive, TEXT("Additive"))),
-				TEXT("additive sequence -> additive"));
-			Wire(DriveFromBool(*Graph, PinNamed(Additive, TEXT("Alpha")),
-				TEXT("AdditiveLayerWeight"), 780, 160), TEXT("additive Alpha pin"));
-			// Additive's Pose output is left unconnected on purpose: it is the graph's sole terminal,
-			// and ImportGraphFromText wires whichever single output pose pin nothing else took to the
-			// schema's own output node.
+			// The last slot's Pose output is left unconnected on purpose: it is the graph's sole
+			// terminal, and ImportGraphFromText wires whichever single output pose pin nothing else
+			// took to the schema's own output node.
 		}
 
 		FBlueprintEditorUtils::MarkBlueprintAsStructurallyModified(Blueprint);

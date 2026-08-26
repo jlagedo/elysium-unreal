@@ -17,6 +17,7 @@
 #include "ElysiumPlayerController.h"
 #include "ElysiumMovementComponent.h"
 #include "Substrate/ElysiumItemClasses.h"
+#include "Visual/ElysiumBipedAnimInstance.h"
 
 #include "Animation/BlendProfile.h"
 #include "Animation/Skeleton.h"
@@ -454,6 +455,34 @@ void FElysiumComposeRun::Sample()
 	State->SetNumberField(TEXT("move_yaw"), Selection.MoveYaw);
 	State->SetNumberField(TEXT("aim_yaw"), Selection.AimYaw);
 	State->SetNumberField(TEXT("aim_pitch"), Selection.AimPitch);
+	// The base's own phase, read off the instance that composed it. With the parameters above and
+	// the slot rows below it is the whole state the graph stood this frame at, which is what lets
+	// the reference compositor answer the same state offline and hold this frame to it exactly --
+	// no search, no capture. Absent (a base standing on nothing) is written as such, not as zero.
+	UElysiumBipedAnimInstance* Instance =
+		Cast<UElysiumBipedAnimInstance>(Refs.Visual->GetAnimInstance());
+	{
+		FElysiumClipPhase Phase;
+		if (Instance != nullptr && Instance->GetClipPhase(EElysiumAnimChannel::Base, Phase))
+		{
+			State->SetNumberField(TEXT("cycle"), Phase.Cycle);
+		}
+		else
+		{
+			State->SetField(TEXT("cycle"), MakeShared<FJsonValueNull>());
+		}
+		// And the stack's own normalized accumulator beside it, so the two clocks can be told apart
+		// by the frame each one reproduces.
+		float Normalized = 0.0f;
+		if (Instance != nullptr && Instance->GetLocomotionNormalizedTime(Normalized))
+		{
+			State->SetNumberField(TEXT("cycle_norm"), Normalized);
+		}
+		else
+		{
+			State->SetField(TEXT("cycle_norm"), MakeShared<FJsonValueNull>());
+		}
+	}
 	Frame->SetObjectField(TEXT("selection"), State);
 
 	// **Where the body is and how fast it is going.** Without these a recording of a stationary body
@@ -493,6 +522,17 @@ void FElysiumComposeRun::Sample()
 		Object->SetStringField(TEXT("activity"), Row.Activity);
 		Object->SetNumberField(TEXT("weight"), Row.Weight);
 		Object->SetNumberField(TEXT("cycle"), Row.Cycle);
+		// The slot evaluator's own normalized time beside the record's cycle, for the same reason
+		// the base carries `cycle_norm`: the record is advanced after the graph has read it.
+		float SlotNormalized = 0.0f;
+		if (Instance != nullptr && Instance->GetSlotNormalizedTime(SlotIndex, SlotNormalized))
+		{
+			Object->SetNumberField(TEXT("cycle_norm"), SlotNormalized);
+		}
+		else
+		{
+			Object->SetField(TEXT("cycle_norm"), MakeShared<FJsonValueNull>());
+		}
 		Object->SetNumberField(TEXT("age_seconds"), Row.AgeSeconds);
 		Object->SetBoolField(TEXT("finished"), Row.bFinished);
 		Object->SetStringField(TEXT("mask"), Row.MaskName.ToString());

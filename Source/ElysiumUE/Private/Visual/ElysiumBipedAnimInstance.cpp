@@ -1735,6 +1735,43 @@ float UElysiumBipedAnimInstance::LiveBaseCycle(EElysiumBasePhaseSource Source,
 	}
 }
 
+bool UElysiumBipedAnimInstance::GetSlotNormalizedTime(int32 SlotIndex, float& OutNormalized)
+{
+	OutNormalized = 0.0f;
+	if (SlotIndex < 0 || SlotIndex >= ElysiumOverlay::NumSlots || SlotSequenceAt(SlotIndex) == nullptr)
+	{
+		return false;
+	}
+	OutNormalized = SlotNormalizedTimeAt(SlotIndex);
+	return true;
+}
+
+bool UElysiumBipedAnimInstance::GetLocomotionNormalizedTime(float& OutNormalized)
+{
+	OutNormalized = 0.0f;
+	const FAnimNode_BlendStack* Stack = FindLocomotionStack();
+	const UAnimationAsset* Asset = Stack != nullptr ? Stack->GetAnimAsset() : nullptr;
+	if (Asset == nullptr)
+	{
+		return false;
+	}
+	// `FBlendStackAnimPlayer::GetAccumulatedTime` is normalized for a blend space and seconds for
+	// a sequence -- the engine asserts the first; the second is divided here by the asset's length.
+	const float Accumulated = Stack->GetAccumulatedTime();
+	if (Asset->IsA<UBlendSpace>())
+	{
+		OutNormalized = FMath::Frac(FMath::Clamp(Accumulated, 0.0f, 1.0f));
+		return true;
+	}
+	const float Length = Stack->GetCurrentAssetLength();
+	if (Length <= 0.0f)
+	{
+		return false;
+	}
+	OutNormalized = FMath::Frac(Accumulated / Length);
+	return true;
+}
+
 void UElysiumBipedAnimInstance::PublishBasePhase(bool bReadClocks)
 {
 	// One proxy fetch for the whole publish, and the stack resolved inside the window it opens.

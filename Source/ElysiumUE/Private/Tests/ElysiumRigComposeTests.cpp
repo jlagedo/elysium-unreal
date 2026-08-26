@@ -664,13 +664,38 @@ namespace
 					*Owner, *Label, *HostLabel));
 				continue;
 			}
-			// An overlay replaces the bones its mask owns and leaves every other one to the host.
-			for (const int32 Bone : OwnedBoneIndices(Asset, Mesh))
+			// An overlay replaces the bones its mask owns and leaves every other one to the host --
+			// **in mesh space on the split bone, local everywhere else**, the graph's own rule. A
+			// derived overlay states `Bip01 Spine1` against the BIND chain it ships, and its meaning
+			// is that bone's component-space orientation; replaced as a local onto the host's
+			// animated chain it lands rotated by the host's own root turn, which
+			// `Elysium.Content.OracleIdentity` measured as the whole upper body 16-53 cm off. So an
+			// owned bone whose parent the mask does not own takes the rotation the overlay's own
+			// FK gives it, re-expressed against the host's parent (`Parent⁻¹ * Component`, the
+			// quaternion order `FTransform::operator*` composes in); an owned bone under an owned
+			// parent is the same either way and is replaced locally.
+			const TArray<int32> Owned = OwnedBoneIndices(Asset, Mesh);
+			const TSet<int32> OwnedSet(Owned);
+			TArray<FTransform> HostComponent;
+			TArray<FTransform> LayerComponent;
+			ElysiumPoseOracle::LocalToComponent(Ref, Locals, HostComponent);
+			ElysiumPoseOracle::LocalToComponent(Ref, Contribution, LayerComponent);
+			for (const int32 Bone : Owned)
 			{
-				if (Locals.IsValidIndex(Bone) && Contribution.IsValidIndex(Bone))
+				if (!Locals.IsValidIndex(Bone) || !Contribution.IsValidIndex(Bone))
 				{
-					Locals[Bone] = Contribution[Bone];
+					continue;
 				}
+				const int32 Parent = Ref.GetParentIndex(Bone);
+				if (Parent != INDEX_NONE && !OwnedSet.Contains(Parent))
+				{
+					FTransform Local = Contribution[Bone];
+					Local.SetRotation((HostComponent[Parent].GetRotation().Inverse()
+						* LayerComponent[Bone].GetRotation()).GetNormalized());
+					Locals[Bone] = Local;
+					continue;
+				}
+				Locals[Bone] = Contribution[Bone];
 			}
 			if (Grid != nullptr && Grid->IsMultiCell() && bDerived)
 			{
@@ -1044,10 +1069,29 @@ bool FElysiumRigComposeTest::RunTest(const FString&)
 				{
 					continue;
 				}
-				for (const int32 Bone : Assets->Owned)
+				// The standing slot clip is a masked overlay too, and takes the same mesh-space
+				// rule on its split bone as the closure's overlays do.
 				{
-					if (Composed.IsValidIndex(Bone) && LayerLocals.IsValidIndex(Bone))
+					const TSet<int32> OwnedSet(Assets->Owned);
+					TArray<FTransform> HostComponent;
+					TArray<FTransform> LayerComponent;
+					ElysiumPoseOracle::LocalToComponent(Ref, Composed, HostComponent);
+					ElysiumPoseOracle::LocalToComponent(Ref, LayerLocals, LayerComponent);
+					for (const int32 Bone : Assets->Owned)
 					{
+						if (!Composed.IsValidIndex(Bone) || !LayerLocals.IsValidIndex(Bone))
+						{
+							continue;
+						}
+						const int32 Parent = Ref.GetParentIndex(Bone);
+						if (Parent != INDEX_NONE && !OwnedSet.Contains(Parent))
+						{
+							FTransform Local = LayerLocals[Bone];
+							Local.SetRotation((HostComponent[Parent].GetRotation().Inverse()
+								* LayerComponent[Bone].GetRotation()).GetNormalized());
+							Composed[Bone] = Local;
+							continue;
+						}
 						Composed[Bone] = LayerLocals[Bone];
 					}
 				}

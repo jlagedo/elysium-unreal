@@ -198,7 +198,7 @@ namespace
 
 	// The clip retail committed on this frame, found by the global sequence number it recorded.
 	// `RawIndex` is that same number, written per row by the export.
-	const FElysiumNpcClip* FindByRawIndex(const FElysiumNpcClipSet& Set, int32 RawIndex,
+	const FElysiumNpcClip* FindLayerClipByRawIndex(const FElysiumNpcClipSet& Set, int32 RawIndex,
 		FString& OutLabel)
 	{
 		if (RawIndex == INDEX_NONE)
@@ -418,7 +418,7 @@ bool FElysiumRigLayerTest::RunTest(const FString&)
 			continue;
 		}
 		FString BaseLabel;
-		const FElysiumNpcClip* Base = FindByRawIndex(*Body, Frame.Sequence, BaseLabel);
+		const FElysiumNpcClip* Base = FindLayerClipByRawIndex(*Body, Frame.Sequence, BaseLabel);
 		if (Base == nullptr)
 		{
 			// Either the body's clip map carries no raw index yet, or the number the capture

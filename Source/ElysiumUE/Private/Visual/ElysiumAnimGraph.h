@@ -27,6 +27,9 @@ namespace ElysiumAnimGraph
 	// than a duration baked into a graph edge. The graph asset therefore encodes no game-derived
 	// timing at all, which `Content/ElysiumAuthored/README.md` forbids outright.
 	inline constexpr const TCHAR* LocomotionStackTag = TEXT("ElysiumLocomotionStack");
+	// The sync group the locomotion stack leads and the base channel's `_delta` player follows,
+	// which is how a host's autolayer is evaluated at the host's own cycle.
+	inline constexpr const TCHAR* BaseSyncGroup = TEXT("ElysiumBase");
 
 	// The graph tag on the upper-body `FAnimNode_LayeredBoneBlend` (CCC10), read by both the
 	// generator that stamps it and the native instance that looks the node up, so the two cannot

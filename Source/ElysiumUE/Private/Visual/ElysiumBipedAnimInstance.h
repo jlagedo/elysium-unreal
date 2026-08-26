@@ -759,6 +759,15 @@ public:
 	// their own clips at once. Every other channel is an ordinary negative: nothing publishes a phase
 	// for it.
 	virtual bool GetClipPhase(EElysiumAnimChannel Channel, FElysiumClipPhase& Out) const override;
+	// The locomotion stack's own normalized accumulator -- what its blend-space player evaluated
+	// the pose at, before any division of one clock by another. A harness records it beside the
+	// published phase so the two can be held to the reference compositor separately. False when
+	// no stack stands or it holds no asset.
+	bool GetLocomotionNormalizedTime(float& OutNormalized);
+	// One slot's evaluator time as the fraction its grid states time in -- the instant the slot's
+	// pose was evaluated at, which the record's published cycle runs one tick ahead of. False when
+	// the slot holds no sequence.
+	bool GetSlotNormalizedTime(int32 SlotIndex, float& OutNormalized);
 	// One overlay slot's phase, addressed by index. The channel accessor above answers the LOWEST live
 	// slot, which is the only single answer a four-slot stack has; a producer holding a particular
 	// layer's slot reads its own timeline through this so a shot fired during a reload does not walk

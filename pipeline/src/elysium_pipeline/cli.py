@@ -1256,6 +1256,69 @@ def debug_compose(ctx: typer.Context, args: list[str] = typer.Argument(None)) ->
     _debug(ctx, "compose", [*(args or ()), *ctx.args])
 
 
+@debug_app.command("oracle")
+def debug_oracle(
+    ctx: typer.Context,
+    validate: str | None = typer.Option(
+        None, "--validate", metavar="SESSION",
+        help="A life_rig_pose capture directory: hold the compositor to what retail drew."),
+    emit: bool = typer.Option(
+        False, "--emit", help="Write the dense oracle under $ELYSIUM_EXPORT_ROOT/_oracle."),
+    stems: list[str] = typer.Option(
+        None, "--stem", help="A body stem (repeatable); the two captured Malkavians by default."),
+    hosts: list[str] = typer.Option(
+        None, "--host", help="A base sequence label to answer states for (repeatable)."),
+    search_aim: bool = typer.Option(
+        False, "--search-aim", help="With --validate: search the aim pitch the capture omits."),
+    runs: list[str] = typer.Option(
+        None, "--run", help="A `debug compose` report: hold the running graph to the compositor "
+                            "frame by frame (repeatable)."),
+) -> None:
+    """The reference compositor: retail's pose arithmetic offline, from the user's own install.
+
+    `--validate <session>` holds it to the capture, once per rule -- the only place anything is
+    compared against the capture. `--emit` writes the dense oracle every downstream instrument is
+    held to instead: `Elysium.Content.OracleIdentity` composes the baked mount at the same states
+    and asserts identity, with no capture and no search in between.
+    """
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        import sys as _sys
+
+        if runs:
+            argv = [_sys.executable, "-m", "elysium_pipeline.validation.graph_identity",
+                    "--export-root", os.fspath(config.export_root)]
+            for run in runs:
+                argv.extend(["--run", run])
+            runner.run(argv, check=True)
+            return
+        argv = [_sys.executable, "-m", "elysium_pipeline.validation.retail_compositor",
+                "--export-root", os.fspath(config.export_root)]
+        chosen = stems or ["malkavian_female_armor_0", "malkavian_male_armor_0"]
+        for stem in chosen:
+            argv.extend(["--stem", stem])
+        if validate:
+            argv.extend(["--validate", validate])
+            if search_aim:
+                argv.append("--search-aim")
+        elif emit:
+            argv.extend(["--emit", os.fspath(config.export_root / "_oracle")])
+            for host in hosts or ["m37_aggressive_run", "m37_ready", "m37_relaxed_run",
+                                  "supershotgun_aggressive_run", "steyr_aggressive_run"]:
+                argv.extend(["--host", host])
+        else:
+            raise ValueError("debug oracle needs --validate <session>, --emit or --run <report>")
+        runner.run(argv, check=True)
+
+    _execute(
+        _state(ctx),
+        "debug oracle",
+        ExitCode.VALIDATION,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
 @debug_app.command("greenroom", context_settings=PASSTHROUGH)
 def debug_greenroom(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> None:
     _debug(ctx, "greenroom", [*(args or ()), *ctx.args])
