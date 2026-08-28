@@ -260,14 +260,14 @@ Each +204 table entry resolves from the `StudioModel` base to an authored defini
 | +0x18 | int | general distance-constraint count |
 | +0x1c | int | compression-only constraint count |
 | +0x20 | int | relative array of 16-byte constraint records |
-| +0x24/+0x28 | int/int | packed SIMD block counts for the two constraint sets |
-| +0x2c | int | relative packed SIMD constraint payload; stored byte count is the sum of the two block counts rounded up to four |
+| +0x24/+0x28 | int/int | SIMD block counts for the distance and compression constraint sets |
+| +0x2c | int | relative `uint8[+0x24 + +0x28]` block lane counts, stored rounded up to four bytes |
 | +0x30 | int | collision-triangle count |
 | +0x34 | int | relative `uint16[3]` collision-triangle array |
 | +0x38/+0x3c | int/int | tangent-edge and normal-edge counts |
 | +0x40 | int | relative edge-pair table |
-| +0x44/+0x48 | int/int | normal-contribution count / relative contribution table |
-| +0x4c/+0x50 | int/int | extra tangent-output count / relative interpolation table |
+| +0x44/+0x48 | int/int | normal-contribution count / relative `uint16[5]` contribution table |
+| +0x4c/+0x50 | int/int | extra tangent-output count / relative 12-byte interpolation table |
 | +0x54/+0x58 | int/int | optional relative `16 B × total particles` seed/seam tables; their exact authoring names remain unknown |
 
 A 16-byte constraint is `uint16 particleA`, `uint16 particleB`, two float movement weights,
@@ -280,6 +280,84 @@ record. `StudioRender.dll` `0x2c0031a0` increments its triangle cursor by six an
 three indices. Two definitions retain one non-zero u16 between the last triangle and the next
 edge-pair array (`creation1_full` and `bum_male`); that word is compiler alignment residue, not a
 fourth triangle field, and is runtime-unused.
+
+### Normal and tangent regeneration
+
+`0x2c002500` runs after the solve and before the vertex specialization substitutes its output. It
+takes one boolean: false regenerates normals, true regenerates tangents. Both passes share one
+scratch array of **edge vectors**, one 16-byte slot per edge pair.
+
+The edge-pair array at +0x40 is a single table of **+0x38 (tangent-edge count)** pairs whose first
+**+0x3c (normal-edge count)** entries are the normal set. The normal pass fills slots
+`[0, normalEdgeCount)`; the tangent pass skips that prefix and fills `[normalEdgeCount,
+tangentEdgeCount)`. There is no second edge table, and `normalEdgeCount <= tangentEdgeCount` holds
+over the whole install.
+
+Each edge vector is `particlePosition[b] - particlePosition[a]` for the pair's two `uint16`
+particle indices, taken from the current simulated buffer.
+
+#### Normal-contribution record (10 B)
+
+| Off | Type | Runtime meaning |
+|---|---|---|
+| +0x00 | uint16 | first edge index |
+| +0x02 | uint16 | second edge index |
+| +0x04 | uint16 | first accumulating particle |
+| +0x06 | uint16 | second accumulating particle |
+| +0x08 | uint16 | third accumulating particle |
+
+One record is one triangle stated as two of its edges. The routine forms
+`n = cross(edgeVector[second], edgeVector[first])` — unnormalized, so its length carries the
+triangle's area as the accumulation weight — and adds `n` to the normal accumulator of all three
+named particles. A single normalize pass over every particle closes the pass. The accumulator is
+`16 B × total particles`; the SSE path writes a fourth lane the scalar path leaves alone.
+
+#### Tangent-interpolation record (12 B)
+
+| Off | Type | Runtime meaning |
+|---|---|---|
+| +0x00 | uint16 | first edge index |
+| +0x02 | uint16 | second edge index |
+| +0x04 | float | first edge weight |
+| +0x08 | float | second edge weight |
+
+Output tangent `i` is `weightA * edgeVector[edgeA] + weightB * edgeVector[edgeB]`, with `weightA`
+copied into the fourth component. The weights are free coefficients, not barycentric: no definition
+in the install has a pair summing to one.
+
+These outputs do not overwrite particle slots. The pass writes them at output index
+`totalParticles + i`, and the tangent-mode allocation is
+`(+0x4c extra tangent outputs + +0x04 total particles) × 16 B`, which is what makes the output
+index space particles-then-tangents. Jeanette's 386 particles and 364 tangent outputs give the
+386..749 span the payload audit measures, and her first tangent record names edge 633 — exactly her
+normal-edge count, the first edge the normal pass does not own.
+
+#### Packed SIMD lane payload
+
++0x2c is not a second copy of the constraints. It is one `uint8` per SIMD block giving that block's
+**live lane count, 1 to 4**: `+0x24` bytes for the distance set followed by `+0x28` bytes for the
+compression set, and the stored run is rounded up to four bytes with uninitialised compiler bytes,
+not zeros, in the pad.
+
+Blocks are conflict-free batches rather than consecutive groups of four: two constraints sharing a
+particle cannot occupy one block, so the block count exceeds `ceil(count / 4)` — Sheriff's 821
+distance constraints occupy 304 blocks against a packed minimum of 206. The batching is therefore
+**not recoverable** from the constraint array; reproducing it means repeating the compiler's own
+graph colouring.
+
+`0x2c002d90` consumes it only on the SSE path, through a runtime structure-of-arrays buffer the
+loader builds; the scalar path walks the 16-byte constraint array at +0x20 directly and ignores the
+payload entirely.
+
+**Standing: Verified.** `0x2c002500` states both record strides and both index roles, and
+`0x2c002d90` states the two constraint paths. The install holds **144 cloth definitions across 54
+character MDLs**, of which **138 carry both the contribution and interpolation tables**. Over all
+of them every contribution edge index is below the tangent-edge count, every accumulating particle
+index is below the total particle count, and the lane bytes sum exactly to the distance and
+compression constraint counts — 144 of 144. The 10-byte stride is the only candidate that survives:
+stride 12 and 16 fail on all 138, stride 8 and a 2-byte shift on 100 of 138, and stride 6 on 71 of
+138. What remains open is the solver's open item, not the layout — a post-skin retail capture would
+test the regenerated values.
 
 ### Authored collision records and current-pose frame
 
@@ -329,7 +407,8 @@ On a cloth draw:
 3. Each substep integrates, solves the general distance set, solves the compression-only set,
    solves the general set again, then projects collision triangles against the model's authored
    capsules and spheres and any dynamic client collision records.
-4. StudioRender regenerates normals and tangents from the simulated surface.
+4. StudioRender regenerates normals and tangents from the simulated surface through
+   `0x2c002500`, using the edge-pair, normal-contribution and tangent-interpolation tables.
 5. One of 72 generated vertex specializations reads `StudioMesh` +48/+52/+56. `0xFF` vertices keep
    ordinary skeletal output; selected vertices take the simulated position/normal/tangent output.
 
@@ -446,6 +525,8 @@ VtMB's decoded procedural enum stops at AxisInterp rather than later Source's JI
 | Cloth targets 300 Hz with rounded subdivision, a 30-step cap, 0.97 no-wind retention and reset above 0.25 s | **Verified** | Host solvers still need an explicit parameter mapping and retail-series comparison. |
 | Dynamic cloth particles have no animated-position leash or long-range tether | **Verified** | None for retail mechanism; any host leash is a deliberate approximation. |
 | Capsule/sphere records are bind-space points transformed through the current skin palette per draw | **Verified** | None for layout or frame; capture remains useful for numerical output acceptance. |
+| Normal contributions are `uint16[5]` triangles and tangent interpolations are `{u16,u16,f32,f32}` edge blends | **Verified** | None for layout; a post-skin capture would test the regenerated values. |
+| +0x2c is one lane-count byte per conflict-free SIMD block, not a copy of the constraints | **Verified** | The batching is not recoverable from the constraint array; a host solver builds its own. |
 | `r_cloth` exact runtime gating semantics | **Unknown** | Establish with a controlled live toggle or locate its indirect consumer; the apparent callback is its static destructor. |
 | +4 is an explicit chain terminal when nonnegative | **Strong evidence** | No installed record exercises that branch. |
 | +8 preset | **Verified runtime-unused** | The corpus carries only `{9,30,60}`; both client constructors and all four engine/server record walks omit it. The physical authoring name is not recoverable and no behavior is assigned. |

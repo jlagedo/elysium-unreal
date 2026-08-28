@@ -50,6 +50,8 @@ class TextureModel:
     format: FormatInfo
     width: int
     height: int
+    declared_width: int
+    declared_height: int
     frames: int
     cubemap: bool
     mip_count: int

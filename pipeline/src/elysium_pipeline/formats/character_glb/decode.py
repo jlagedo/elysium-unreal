@@ -1027,11 +1027,46 @@ def _cloth_source_records(
                     tangent_edges = _i32(data, record + 56)
                     normal_edges = _i32(data, record + 60)
                     edge_base = record + _i32(data, record + 64)
+                    # One table of `tangent_edges` pairs whose first `normal_edges`
+                    # entries are the normal set; the tangent pass extends the same
+                    # table rather than owning a second one.
                     edge_pairs = [
                         list(struct.unpack_from("<2H", data, edge_base + edge * 4))
-                        for edge in range(tangent_edges + normal_edges)
-                    ] if tangent_edges + normal_edges else []
+                        for edge in range(tangent_edges)
+                    ]
                     particles = _i32(data, record + 4)
+
+                    def table(count_field: int, offset_field: int, layout: str,
+                              stride: int) -> list[tuple]:
+                        count = _i32(data, record + count_field)
+                        relative = _i32(data, record + offset_field)
+                        if not (count and relative):
+                            return []
+                        base = record + relative
+                        return [
+                            struct.unpack_from(layout, data, base + row * stride)
+                            for row in range(count)
+                        ]
+
+                    # StudioRender.dll FUN_2c002500 walks both tables at these strides.
+                    normal_contributions = [
+                        {"edgeA": row[0], "edgeB": row[1], "vertices": list(row[2:])}
+                        for row in table(68, 72, "<5H", 10)
+                    ]
+                    tangent_interpolation = [
+                        {"edgeA": row[0], "edgeB": row[1],
+                         "weightA": row[2], "weightB": row[3]}
+                        for row in table(76, 80, "<2H2f", 12)
+                    ]
+                    distance_blocks = _i32(data, record + 36)
+                    compression_blocks = _i32(data, record + 40)
+                    simd_relative = _i32(data, record + 44)
+                    lanes = (
+                        list(data[record + simd_relative:
+                                  record + simd_relative
+                                  + distance_blocks + compression_blocks])
+                        if simd_relative else []
+                    )
 
                     def seeds(field: int) -> list[list[int]]:
                         relative = _i32(data, record + field)
@@ -1060,6 +1095,12 @@ def _cloth_source_records(
                                 "optionalSeedBOffset": _i32(data, record + 88),
                             },
                             "edgePairs": edge_pairs,
+                            "normalContributions": normal_contributions,
+                            "tangentInterpolation": tangent_interpolation,
+                            "simdBlockLanes": {
+                                "distance": lanes[:distance_blocks],
+                                "compression": lanes[distance_blocks:],
+                            },
                             "optionalSeedA": seeds(84),
                             "optionalSeedB": seeds(88),
                         }
@@ -1341,14 +1382,6 @@ def decode_character(
                 "path": "vtx.alternateTopology[].overlap",
                 "reason": "semantic-equivalence-compared",
             }
-        )
-    if cloth_records:
-        omitted_proven.extend(
-            [
-                {"path": "mdl.cloth[].packedSimdPayload", "reason": "renderer-cache"},
-                {"path": "mdl.cloth[].normalTangentContributionPayloads",
-                 "reason": "renderer-cache"},
-            ]
         )
     for row in material_rows:
         if row.get("resolved", True):

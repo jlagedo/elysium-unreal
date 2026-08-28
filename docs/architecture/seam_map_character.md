@@ -164,24 +164,57 @@ Each mesh primitive carries the resolved material ID:
 Each material asset carries its own texture references, so the character dependency graph stops at
 the material asset ID.
 
+A studio texture name that resolves to no VMT through any of the model's search paths keeps a
+sentinel identity instead, and its slot records the candidate paths that were tried:
+
+```json
+{
+  "slot": 2,
+  "sourceName": "HEAD",
+  "sourcePath": null,
+  "material": "vtmb:missing-material:2:head",
+  "resolved": false,
+  "candidates": ["materials/models/character/gibs/HEAD.vmt"]
+}
+```
+
+A total miss is the engine's own routine outcome, not an export defect: VtMB composes exactly
+`materials/<search path><name>.vmt` over the model's header search paths in header order and
+carries no flat, `models/`-prefixed or otherwise global last resort, so a name whose VMT sits
+outside those paths is unreachable to retail too and the material system substitutes its `___error`
+checkerboard for the slot (research case `material-resolution`; the offline resolver states the
+same rule in `formats/mdl.py`, which answers `NO_MATERIAL`).
+
+A sentinel identity therefore names no material asset and produces no `dependencies` row. It enters
+coverage as `omitted-proven` with the reason `studio-texture-name-has-no-vmt`, because the miss is
+proven behaviour rather than unknown meaning. A primitive bound to a sentinel keeps it in
+`ELYSIUM_material_reference`, and a consumer binds the error material for that slot, which is what
+the character bake does for the same slots.
+
 ## Binary glTF layout
 
-The character unit is an ordinary GLB 2.0 container:
+The character unit is an ordinary GLB 2.0 container with exactly two chunks in the required order:
 
 ```text
 character.glb
-|- JSON chunk
+|- header      magic 'glTF', version 2, total length
+|- chunk 0     JSON  (0x4E4F534A), UTF-8, padded to 4 bytes with 0x20
 |  |- glTF core object graph
-|  `- ELYSIUM_vtmb_character
-`- BIN chunk
-   |- geometry/index accessors
-   |- skin and inverse-bind accessors
+|  `- extensions.ELYSIUM_vtmb_character
+`- chunk 1     BIN   (0x004E4942), padded to 4 bytes with 0x00
+   |- geometry, tangent and index accessors
+   |- inverse-bind matrices
    |- animation input/output accessors
-   |- morph-target accessors
-   `- physics numeric payloads
+   |- morph-target position/normal accessors
+   `- physics hull position/index accessors
 ```
 
-The JSON chunk declares one custom character namespace:
+There is one `buffers` entry whose `byteLength` is the BIN chunk payload, and every `bufferView`
+uses buffer 0. Each accessor owns one buffer view, and view offsets are 4-byte aligned. The JSON is
+serialized with compact separators and rejects `NaN` and infinity, so one source closure yields one
+byte-identical product.
+
+The JSON chunk declares two custom namespaces, both used and both required:
 
 ```json
 {
@@ -198,15 +231,16 @@ The JSON chunk declares one custom character namespace:
       "schemaVersion": "1.1.0",
       "identity": {},
       "sourceResolution": {},
+      "coordinateTransform": {},
       "mdl": {},
       "vtx": {},
       "physics": {},
       "materialBindings": {},
       "facial": {},
       "procedural": {},
-      "secondaryMotion": {},
+      "secondaryMotion": [],
       "cloth": {},
-      "dependencies": {},
+      "dependencies": [],
       "coverage": {}
     }
   }
@@ -215,29 +249,189 @@ The JSON chunk declares one custom character namespace:
 
 Object-local extension payloads carry stable indexes into the root extension.
 
-## Core glTF mapping
+## Core glTF content
 
-| Character datum | glTF core representation | VTMB-only information retained in the extension |
+Standard glTF carries everything a general consumer can draw or play; the extension carries the
+VTMB-only information beside it.
+
+| Character datum | glTF core representation | VTMB-only information in the extension |
 |---|---|---|
-| Bone hierarchy and bind locals | joint `nodes` | original MDL bone index, flags, controllers, procedural and physics fields |
-| Skin | `skins`, `inverseBindMatrices`, `JOINTS_0`, `WEIGHTS_0` | influence selector, decoded-weight rule, source record identity and validation |
-| Vertex geometry | `POSITION`, authored `NORMAL`, `TEXCOORD_0` | bodypart/model/mesh/vertex identity and source-to-core vertex map |
-| VTX topology | primitive `indices` and material sections | VTX variant, LOD, strip-group and original-vertex mapping |
-| Multiple skeleton roots | identity non-joint common root | original parentless-root set |
-| Material slots | `ELYSIUM_material_reference` on each primitive | source material name and stable material asset ID |
-| Skin families | `materialBindings.skinFamilies` | original family/skinref indexes and material asset IDs |
+| Bone hierarchy and bind locals | joint `nodes` | MDL bone index, flags, controllers, scales, pose-to-bone, procedural and physics fields |
+| Skin | `skins`, `inverseBindMatrices`, `JOINTS_0`, `WEIGHTS_0` | influence selector, decoded-weight rule, source record identity |
+| Vertex geometry | `POSITION`, `NORMAL`, `TANGENT`, `TEXCOORD_0` | bodypart/model/mesh/vertex identity and the source-to-core vertex map |
+| VTX topology | primitive `indices` and material sections | VTX variant, LOD, strip groups and original-vertex mapping |
+| Multiple skeleton roots | identity non-joint common root | the original parentless-root set |
+| Material slots | `ELYSIUM_material_reference` per primitive and per core material | source material name, search path and stable material asset ID |
+| Skin families | — | `materialBindings.skinFamilies`, family and skinref indexes |
 | Local animation tracks | `animations`, samplers and channels | sequence/animation identity, ownership mask, activity, flags, fades and additive base |
-| Blend grids and layers | referenced animation objects and numeric accessors | grid axes/cells, masks, autolayer order and composition semantics |
-| Timeline events and movement | extension references | event, root-motion, reach, swing, envelope and combo records |
-| Facial deformation | morph targets and animation weights | flex descriptors/controllers/rules, ramps, mouths and morph-piece mapping |
-| Eyes and eyelids | eye nodes and morph targets | eyeball bases, eyelid targets, iris rules, material asset IDs and eye-mesh association |
+| Blend grids and layers | the referenced animation objects | `sequences[].grid` axes and cells, autolayer order and composition semantics |
+| Timeline events and movement | — | `sequences[]` event, root-motion, reach, swing, envelope and combo records |
+| Facial deformation | morph targets and `extras.targetNames` | flex descriptors, controllers, rules, ramps, mouths and morph-piece mapping |
+| Eyes and eyelids | eye nodes and morph targets | eyeball bases, eyelid targets, iris rules and eye-mesh association |
 | Attachments | attachment nodes parented to bones | original attachment index, flags and bone binding |
-| Procedural bones | extension records | control bone, driven bone, axis and interpolation table |
-| Secondary motion and cloth | extension records and numeric accessors | recipes, particles, constraints, collisions and render maps |
-| PHY collision and ragdoll | extension records and numeric accessors | solids, hulls, mass, damping and constraints |
+| Procedural bones | — | `procedural.axisInterpolation[]` control bone, driven bone, axis and table |
+| Secondary motion and cloth | numeric accessors | recipes, particles, constraints, collisions and render maps |
+| PHY collision and ragdoll | hull position/index accessors | solids, ledges, mass, damping, constraints and key values |
 
-Core glTF uses its standard right-handed, Y-up, metre coordinate system. The extension records the
-Source-to-glTF transformation applied to each coordinate-bearing domain.
+### Coordinate transform
+
+Core glTF uses its standard right-handed, Y-up, metre coordinate system. The extension states the
+transformation applied to each coordinate-bearing domain in `coordinateTransform`:
+
+| Field | Value |
+|---|---|
+| `source` | `Source inches, Z-up, right-handed` |
+| `destination` | `glTF metres, Y-up, right-handed` |
+| `scale` | `0.0254` |
+| `position` | `(x, y, z)_gltf = (x, z, -y)_source * 0.0254` |
+| `direction` | `(x, y, z)_gltf = (x, z, -y)_source` |
+| `quaternion` | `(x, y, z, w)_gltf = (x, z, -y, w)_source` |
+| `domains` | the per-domain rule for mesh, skeleton, animation, morph, attachments, eyes, physics and cloth |
+
+The mapping is a rotation rather than a reflection, so triangle winding carries through unchanged.
+Quaternions are normalized on conversion, and a non-finite or degenerate quaternion fails the
+export. Physics is stated in `IVP metres, axis-only`, and cloth records keep source inches inside
+the extension.
+
+### Nodes and skin
+
+`nodes` is built in a fixed order, and that order is the contract every object-local index relies
+on:
+
+```text
+[0 .. boneCount-1]      one joint node per MDL bone, in MDL bone order
+[boneCount ..]          one node per attachment, then one node per eyeball
+[optional]              identity common root, only when the MDL has several parentless bones
+[last]                  the skinned mesh node
+```
+
+A joint node's index is its MDL bone index, so `skins[0].joints` is `[0 .. boneCount-1]` and
+`ELYSIUM_vtmb_character.mdl.bones[i]` describes node `i`. Each joint node carries `name`,
+`translation` and `rotation` from the MDL bind pose, and `children` from the bone parent table.
+`skins[0].inverseBindMatrices` is a `MAT4` float accessor holding the inverse of each bone's
+composed global bind matrix, column-major. `skins[0].skeleton` is present only when the model has
+exactly one parentless bone; a model with several keeps them all as scene roots below one identity
+node, so no bone transform is invented.
+
+An attachment node is parented to its bone and carries:
+
+```json
+{
+  "extensions": {
+    "ELYSIUM_vtmb_character": { "attachmentIndex": 0, "flags": 0, "bone": 12 }
+  }
+}
+```
+
+An eyeball node is parented to its bone and carries `eyeballIndex`, `bone`, `radius` and
+`irisScale`; its full record stays in `mdl.header.bodyParts[].models[].eyeballs[]`.
+
+### Meshes and primitives
+
+One `meshes` entry per VTX LOD, named `<asset>:lod<n>`, and one primitive per material section.
+The scene instances LOD 0 through the single skinned mesh node; higher LODs remain addressable
+`meshes` entries with no node of their own, and `vtx.lods[]` maps each LOD index to its mesh index,
+switch points and primitive count.
+
+Every primitive carries this attribute set:
+
+| Attribute | Type | Component |
+|---|---|---|
+| `POSITION` | `VEC3` | `FLOAT`, with `min`/`max` bounds |
+| `NORMAL` | `VEC3` | `FLOAT` |
+| `TEXCOORD_0` | `VEC2` | `FLOAT` |
+| `JOINTS_0` | `VEC4` | `UNSIGNED_SHORT` |
+| `WEIGHTS_0` | `VEC4` | `FLOAT` |
+| `TANGENT` | `VEC4` | `FLOAT`, only when the source model stores tangents |
+| `indices` | `SCALAR` | `UNSIGNED_INT`, triangles |
+
+`NORMAL` is the authored MDL normal wherever the source stores a usable one; a degenerate authored
+normal is replaced by the area-weighted geometric normal of the primitive's own triangles, so the
+attribute is always unit length.
+
+Each primitive names its source identity and its material:
+
+```json
+{
+  "material": 3,
+  "extensions": {
+    "ELYSIUM_material_reference": { "material": "vtmb:material:models/character/teeth/upperteeth" },
+    "ELYSIUM_vtmb_character": {
+      "bodyPart": 0,
+      "model": 0,
+      "mesh": 3,
+      "skinReference": 3,
+      "sourceVertices": [],
+      "stripGroups": []
+    }
+  }
+}
+```
+
+`sourceVertices` is the source-to-core vertex map, and `stripGroups` records the VTX strip-group
+decomposition the primitive was flattened from.
+
+`materials` holds one core material per distinct material asset ID, in first-use order. Its PBR
+values are a neutral placeholder: the surface itself belongs to the material GLB the ID names, and
+the binding rather than the appearance is what this product carries.
+
+### Morph targets
+
+Facial deformation is written as glTF morph targets on the LOD 0 primitives. Each target supplies
+`POSITION` and `NORMAL` deltas. `meshes[0].extras.targetNames` lists the target names in order and
+`meshes[0].weights` is the matching all-zero rest weight vector. `facial.morphTargets[]` maps each
+target back to its flex description and its source flex pieces.
+
+### Animations
+
+Each MDL-local animation becomes one `animations` entry named `<index>:<name>`. All samplers in an
+entry share one `SCALAR` input accessor holding `frame / fps` seconds. A bone whose per-animation
+weight is zero contributes no channel; every other bone contributes two `LINEAR` samplers and two
+channels, `translation` (`VEC3`) and `rotation` (`VEC4`), targeting that bone's joint node. The
+poses are decoded parent-relative locals, so an ordinary glTF consumer plays the clip with no VtMB
+rule applied. `mdl.localAnimations[]` carries the VtMB-side record for each clip and its
+`animation` index into the core array.
+
+### Physics
+
+`physics` mirrors the PHY records, with each convex hull's numeric payload moved into the BIN
+chunk: `hulls[].positions` is a `VEC3` float accessor and `hulls[].indices` a `SCALAR`
+`UNSIGNED_INT` accessor. Solid properties, ledge nodes, edit parameters, constraints, breaks and
+the trailing key-value text stay as extension records.
+
+## Extension reference
+
+| Root key | Kind | Contents |
+|---|---|---|
+| `schemaVersion` | string | `1.1.0` |
+| `identity` | object | `asset` (stable body ID), `modelPath`, `sourcePolicy` |
+| `sourceResolution` | object | `policy`, and `members[]` of `role`, `path`, `origin`, `byteLength`, `sha256` |
+| `coordinateTransform` | object | the source-to-glTF rule and its per-domain table |
+| `mdl` | object | `header`, `bones[]`, `localAnimations[]`, `sequences[]`, `poseParameters[]`, `attachments[]`, `hitboxSets[]`, `ikChains[]` |
+| `vtx` | object | `variants[]`, `comparison`, `lods[]` |
+| `physics` | object or null | `header`, `coordinateSystem`, `solids[]`, `editParams[]`, `constraints[]`, `breaks[]`, `keyValues[]` |
+| `materialBindings` | object | `slots[]` and `skinFamilies[]` |
+| `facial` | object | `flexDescriptions[]`, `controllers[]`, `rules[]`, `mouths[]`, `phonemeFilter`, `selectedTables`, `morphTargets[]` |
+| `procedural` | object | `axisInterpolation[]` |
+| `secondaryMotion` | array | one record per authored dynamics recipe |
+| `cloth` | object | `garments[]` and `sourceModels[]` |
+| `dependencies` | array | `role`, `asset`, `sourcePath`, `byteLength`, `sha256` |
+| `coverage` | object | `mapped[]`, `typedUnidentified[]`, `omittedProven[]`, `byteLedger[]`, `unresolved[]`, `unsupported[]` |
+
+`identity.asset` and each member's `origin` come from the same resolution the byte ledger is
+written against. A member `origin` is either `{"kind": "loose", "root": <install subdirectory>}` or
+`{"kind": "vpk", "container": <pack file>, "offset": …, "size": …}`.
+
+`mdl.header` restates every studio header field, including the table directory (`header.tables`,
+one `count`/`offset` row per indexed table) and the decoded `bodyParts`, `textures`,
+`sequenceGroups`, `boneControllers`, `transitionGraph` and `includeModels` payloads. Every record
+that came from a file offset keeps that offset, so a ledger range and the record it pays for name
+the same place. A sequence keeps both its raw fixed `animationTable` and the resolved `grid` its
+cells describe.
+
+`vtx.comparison` states which variant is primary, both decoded headers and material-replacement
+tables, whether the two variants are semantically `equivalent`, and which LOD indexes overlap or
+belong to only one variant.
 
 ## Source identity and dependencies
 
@@ -256,6 +450,10 @@ LaCroix carries `material` and `animation-bank` dependency rows.
 
 ## Semantic coverage
 
+Coverage is stated in two vocabularies. The semantic states below grade a source *field or record*;
+the byte-ledger states further down grade a *byte range*. A field graded `equivalent` and the bytes
+it was read from graded `mapped` describe the same decode from the two directions.
+
 Every source field or record receives one mapping state:
 
 | State | Meaning |
@@ -272,11 +470,44 @@ family, record identity, and reference edge is present in the ledger. Unknown ty
 their source-offset identity.
 
 Schema `1.1.0` additionally requires `coverage.byteLedger`, one row for every direct source member
-listed by `sourceResolution.members`. Each row carries the member's path, byte length, SHA-256,
-per-state byte totals, a digest of the range table, and a gapless ordered list of byte ranges.
-The allowed states are `mapped`, `mapped-string`, `mapped-text`, `derived`, `omitted-proven`,
-`reserved-zero`, and `padding-zero`. Publication fails when ranges overlap, leave even one byte
-unclaimed, disagree with the source hash/length, or label a non-zero source byte as zero storage.
+listed by `sourceResolution.members`:
+
+| Field | Meaning |
+|---|---|
+| `sourcePath` | the member's install-relative path, matching its `sourceResolution` row |
+| `sourceSha256` | SHA-256 of the member's bytes, matching its `sourceResolution` row |
+| `byteLength` | the member's byte length |
+| `accountedBytes` | bytes claimed by the range table; equal to `byteLength` |
+| `coveragePercent` | `100.0` |
+| `stateBytes` | claimed bytes per state, key-sorted |
+| `rangesSha256` | digest of the range table |
+| `ranges` | the gapless ordered range table |
+
+A range row is `{"offset", "length", "state", "owner"}`. Rows are ordered by `offset`, each row
+begins where the previous one ends, the first begins at 0, and the last ends at `byteLength`.
+`owner` is the walker's path to the record that paid for the range, so a range and the extension
+record it belongs to name the same place. `rangesSha256` is the SHA-256 of the UTF-8 encoding of
+
+```text
+json.dumps({"path": sourcePath, "byteLength": byteLength, "ranges": ranges},
+           sort_keys=True, separators=(",", ":"))
+```
+
+The allowed states are:
+
+| State | Meaning |
+|---|---|
+| `mapped` | binary record or payload decoded into the extension or a core accessor |
+| `mapped-string` | a null-terminated ASCII string decoded into a named field |
+| `mapped-text` | a text region decoded into a structured table |
+| `derived` | recoverable completely from other represented data |
+| `omitted-proven` | evidence-backed omission, carrying its reason in `coverage.omittedProven` |
+| `reserved-zero` | a declared field the source stores as zero |
+| `padding-zero` | alignment or unreferenced storage the source stores as zero |
+
+`reserved-zero` and `padding-zero` are verified: claiming either over a non-zero source byte aborts
+publication. Publication also fails when ranges overlap, leave even one byte unclaimed, disagree
+with the source hash or length, or when a member has no ledger row.
 
 This is **100% byte accountability without an opaque source mirror**. It covers the direct MDL,
 both admitted VTX variants, optional PHY, and selected TXT/VFE twins. Referenced VMTs and included

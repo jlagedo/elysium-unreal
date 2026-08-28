@@ -70,6 +70,26 @@ def _closure(fmt=13, **kwargs):
     )
 
 
+def _with_external(closure, raw_external):
+    """Replace a closure's external payload, keeping the TTH's declared TTZ length honest."""
+    ttz = zlib.compress(raw_external)
+    tth = bytearray(closure.tth.data)
+    struct.pack_into("<I", tth, 12 + tth[6] * 8 + 4, len(ttz))
+    return TextureSourceClosure(
+        closure.texture_path,
+        closure.asset_id,
+        _source("tth", closure.tth.path, bytes(tth)),
+        _source("ttz", closure.ttz.path, ttz),
+    )
+
+
+def _omission(model_or_extension, role):
+    rows = getattr(model_or_extension, "omissions", None)
+    if rows is None:
+        rows = model_or_extension["omissions"]
+    return next((row for row in rows if row["role"] == role), None)
+
+
 class TextureDecodeTests(unittest.TestCase):
     def test_every_admitted_format_builds_one_complete_model(self):
         for fmt in FORMATS:
@@ -122,6 +142,46 @@ class TextureDecodeTests(unittest.TestCase):
         self.assertEqual(model.byte_coverage[0]["stateBytes"]["omitted-proven"], 130)
         self.assertEqual(model.byte_coverage[1]["stateBytes"]["omitted-proven"], 2)
 
+    def test_a_repeated_full_resolution_stream_admits_one_level(self):
+        """A stream the declared chain cannot explain must not be sliced into levels.
+
+        Retail units of this shape store the full-resolution image twice and no pyramid. Sliding
+        the chain onto the tail would compose every level below the first from unrelated bytes.
+        """
+        closure = _closure(15, width=16, height=16, mips=3, inline=1)
+        full = bytes([0x7E]) * image_size(16, 16, FORMATS[15])
+        changed = _with_external(closure, bytes([0x11]) * len(full) + full)
+        model = decode_texture(changed)
+        self.assertEqual(model.mip_count, 1)
+        self.assertEqual((model.width, model.height), (16, 16))
+        self.assertEqual(model.levels[0].images[0], full)
+        row = _omission(model, "unexplained-leading-image-storage")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["byteLength"], len(full))
+        self.assertEqual(row["streamFullResolutionImages"], 2.0)
+        self.assertTrue(row["admittedFullResolutionImageOnly"])
+
+    def test_a_blob_larger_than_the_declared_colour_sample_is_not_the_colour_sample(self):
+        closure = _closure(15, width=16, height=16, mips=3, inline=1)
+        full = bytes([0x7E]) * image_size(16, 16, FORMATS[15])
+        model = decode_texture(_with_external(closure, bytes(len(full)) + full))
+        self.assertEqual(_omission(model, "low-res-cpu-sample")["externalByteLength"], 0)
+
+    def test_a_small_leading_blob_stays_the_colour_sample(self):
+        model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
+        self.assertEqual(model.mip_count, 3)
+        self.assertIsNone(_omission(model, "unexplained-leading-image-storage"))
+
+    def test_a_lost_primary_image_is_recorded_rather_than_published_quietly(self):
+        closure = _closure(15, width=8, height=8, mips=4, inline=3)
+        model = decode_texture(_with_external(closure, bytes(range(32))))
+        self.assertEqual((model.width, model.height), (4, 4))
+        self.assertEqual((model.declared_width, model.declared_height), (8, 8))
+        row = _omission(model, "primary-image-not-recoverable")
+        self.assertIsNotNone(row)
+        self.assertEqual((row["declaredWidth"], row["declaredHeight"]), (8, 8))
+        self.assertEqual((row["recoveredWidth"], row["recoveredHeight"]), (4, 4))
+
     def test_cubemap_rotation_preserves_uncompressed_texels(self):
         source = bytes((0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3))
         rotated = transform_cubemap_face(source, 2, 2, FORMATS[3], "rotate-cw")
@@ -158,6 +218,41 @@ class TextureGlbWriterTests(unittest.TestCase):
         changed[-1] ^= 1
         with self.assertRaisesRegex(validation.TextureGlbValidationError, "identity"):
             validation.validate_document(document, bytes(changed))
+
+    def test_validation_reports_a_degraded_unit_and_refuses_to_lose_the_record(self):
+        closure = _closure(15, width=8, height=8, mips=4, inline=3)
+        model = decode_texture(_with_external(closure, bytes(range(32))))
+        document, binary = texture_glb.build_document(model)
+        summary = validation.validate_document(document, binary)
+        self.assertTrue(summary["degraded"])
+        self.assertEqual((summary["declaredWidth"], summary["declaredHeight"]), (8, 8))
+        extension = document["extensions"][validation.TEXTURE_EXTENSION]
+        extension["omissions"] = [
+            row for row in extension["omissions"]
+            if row["role"] != "primary-image-not-recoverable"
+        ]
+        with self.assertRaisesRegex(validation.TextureGlbValidationError, "must be recorded"):
+            validation.validate_document(document, binary)
+
+    def test_validation_refuses_levels_sliced_from_an_unexplained_stream(self):
+        model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
+        document, binary = texture_glb.build_document(model)
+        extension = document["extensions"][validation.TEXTURE_EXTENSION]
+        extension["omissions"].append({
+            "role": "unexplained-leading-image-storage",
+            "byteLength": 64,
+            "admittedFullResolutionImageOnly": True,
+        })
+        with self.assertRaisesRegex(validation.TextureGlbValidationError, "one level only"):
+            validation.validate_document(document, binary)
+
+    def test_validation_refuses_an_oversized_colour_sample_claim(self):
+        model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
+        document, binary = texture_glb.build_document(model)
+        row = _omission(document["extensions"][validation.TEXTURE_EXTENSION], "low-res-cpu-sample")
+        row["externalByteLength"] = row["declaredByteLength"] + 4096
+        with self.assertRaisesRegex(validation.TextureGlbValidationError, "image storage"):
+            validation.validate_document(document, binary)
 
     def test_public_exporter_publishes_expected_relative_path(self):
         closure = _closure(13)

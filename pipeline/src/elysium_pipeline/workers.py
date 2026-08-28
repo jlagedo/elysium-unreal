@@ -204,6 +204,7 @@ def texture_glb_worker(texture: str, output_root: str) -> dict[str, Any]:
             "item": texture,
             "destination": str(destination),
             "summary": summary,
+            "warnings": validation.warnings_for(summary),
             "error": "",
         }
     except (Exception, SystemExit) as exc:
@@ -211,5 +212,6 @@ def texture_glb_worker(texture: str, output_root: str) -> dict[str, Any]:
             "item": texture,
             "destination": "",
             "summary": None,
+            "warnings": [],
             "error": f"{type(exc).__name__}: {exc}",
         }

@@ -1290,11 +1290,11 @@ def _cover_retained_mdl_payloads(
 _CLOTH_BLOCKS = (
     (0x10, (0x04,), 2, "particleVertices", "mapped"),
     (0x20, (0x18, 0x1C), 16, "constraints", "mapped"),
-    (0x2C, (0x24, 0x28), 1, "packedSimdPayload", "omitted-proven"),
+    (0x2C, (0x24, 0x28), 1, "packedSimdPayload", "mapped"),
     (0x34, (0x30,), 6, "collisionTriangles", "mapped"),
     (0x40, (0x38,), 4, "edgePairs", "mapped"),
-    (0x48, (0x44,), 10, "normalContributions", "omitted-proven"),
-    (0x50, (0x4C,), 12, "tangentInterpolation", "omitted-proven"),
+    (0x48, (0x44,), 10, "normalContributions", "mapped"),
+    (0x50, (0x4C,), 12, "tangentInterpolation", "mapped"),
     (0x54, (0x04,), 16, "optionalSeedA", "mapped"),
     (0x58, (0x04,), 16, "optionalSeedB", "mapped"),
 )
@@ -1358,10 +1358,21 @@ def _cover_mdl_cloth(
         for offset_field, count_fields, stride, name, state in _CLOTH_BLOCKS:
             relative = _i32(data, record + offset_field)
             count = sum(_i32(data, record + field) for field in count_fields)
+            if not (relative and count):
+                continue
+            ledger.array(record + relative, count, stride, f"{owner}.{name}", state=state)
             if name == "packedSimdPayload":
-                count = (count + 3) // 4 * 4
-            if relative and count:
-                ledger.array(record + relative, count, stride, f"{owner}.{name}", state=state)
+                # One lane-count byte per SIMD block. The stored run is rounded up to
+                # four bytes and the pad carries uninitialised compiler bytes rather
+                # than zeros, so it is residue rather than padding.
+                residue = -count % 4
+                if residue:
+                    ledger.claim(
+                        record + relative + count,
+                        residue,
+                        "omitted-proven",
+                        f"{owner}.{name}.alignmentResidue",
+                    )
         triangle_count = _i32(data, record + 0x30)
         triangle_relative = _i32(data, record + 0x34)
         edge_relative = _i32(data, record + 0x40)

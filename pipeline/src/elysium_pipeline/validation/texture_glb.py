@@ -234,6 +234,53 @@ def _check_decoded_pixels(extension: dict[str, Any], ktx: dict[str, Any], source
             )
 
 
+def _check_omissions(extension: dict[str, Any], dimensions: dict[str, Any], ktx) -> bool:
+    """Hold the omission rows to the payload they claim to explain; report degradation.
+
+    A unit whose largest emitted level is smaller than the resolution its own header declares has
+    lost the primary image, and a stream the declared chain cannot account for may not be sliced
+    into levels. Both facts are recoverable from the payload alone, so both are checked here
+    rather than trusted from the writer.
+    """
+
+    roles: dict[str, Any] = {}
+    for row in extension.get("omissions") or []:
+        if not isinstance(row, dict) or not row.get("role"):
+            raise TextureGlbValidationError("an omission row carries no role")
+        roles[str(row["role"])] = row
+    declared = (dimensions.get("declaredWidth"), dimensions.get("declaredHeight"))
+    if not all(isinstance(value, int) and value > 0 for value in declared):
+        raise TextureGlbValidationError("dimensions omit the declared source resolution")
+    if declared[0] < ktx["width"] or declared[1] < ktx["height"]:
+        raise TextureGlbValidationError("the emitted image exceeds the declared source resolution")
+    degraded = declared != (ktx["width"], ktx["height"])
+    if degraded != ("primary-image-not-recoverable" in roles):
+        detail = (
+            "an emitted image smaller than the declared source resolution must be recorded"
+            if degraded else "primary-image-not-recoverable contradicts the payload"
+        )
+        raise TextureGlbValidationError(detail)
+    low = roles.get("low-res-cpu-sample")
+    if low is not None:
+        external = int(low.get("externalByteLength", 0))
+        if external and external > int(low.get("declaredByteLength", 0)) and external >= min(
+            len(level) for level in ktx["levels"]
+        ):
+            raise TextureGlbValidationError(
+                "a leading blob larger than the declared colour sample is image storage, "
+                "not a CPU colour sample"
+            )
+    unexplained = roles.get("unexplained-leading-image-storage")
+    if unexplained is not None:
+        if int(unexplained.get("byteLength", 0)) <= 0:
+            raise TextureGlbValidationError("unexplained leading storage claims no bytes")
+        if unexplained.get("admittedFullResolutionImageOnly") and ktx["levelCount"] != 1:
+            raise TextureGlbValidationError(
+                "a stream the declared mip chain does not explain admits one level only"
+            )
+    return degraded
+
+
 def validate_document(document: dict, binary: bytes, *, source_members=None) -> dict[str, Any]:
     if document.get("asset", {}).get("version") != "2.0":
         raise TextureGlbValidationError("asset.version is not 2.0")
@@ -275,6 +322,7 @@ def validate_document(document: dict, binary: bytes, *, source_members=None) -> 
         dimensions.get("width"), dimensions.get("height"), dimensions.get("faces"), dimensions.get("mipCount")
     ):
         raise TextureGlbValidationError("KTX2 dimensions disagree with extension")
+    degraded = _check_omissions(extension, dimensions, ktx)
     source_format = (extension.get("sourceFormat") or {}).get("sourceFormatEnum")
     expected_vk = {
         0: 37,
@@ -300,6 +348,9 @@ def validate_document(document: dict, binary: bytes, *, source_members=None) -> 
         "asset": identity["asset"],
         "width": ktx["width"],
         "height": ktx["height"],
+        "declaredWidth": dimensions["declaredWidth"],
+        "declaredHeight": dimensions["declaredHeight"],
+        "degraded": degraded,
         "mips": ktx["levelCount"],
         "faces": ktx["faces"],
         "sourceBytes": source_total,
@@ -311,3 +362,19 @@ def validate_document(document: dict, binary: bytes, *, source_members=None) -> 
 def validate(path: Path) -> dict[str, Any]:
     document, binary = read_glb(path)
     return validate_document(document, binary)
+
+
+def warnings_for(summary: dict[str, Any]) -> list[str]:
+    """What a published unit lost, phrased for the operator.
+
+    Both the in-process and the pooled export path call this, because a warning derived in only
+    one of them is a warning the corpus run does not print.
+    """
+
+    if not summary.get("degraded"):
+        return []
+    return [
+        "the primary image is not recoverable from the selected source; the largest complete "
+        f"level is {summary['width']}x{summary['height']} against a declared "
+        f"{summary['declaredWidth']}x{summary['declaredHeight']}"
+    ]

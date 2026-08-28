@@ -250,9 +250,26 @@ def decode_texture(closure) -> TextureModel:
                 closure.ttz.data[:ttz_meaningful_length]
             )
     expected_external = sum(row[3] for row in source_level_sizes[actual_inline:])
+    smallest_external = (
+        source_level_sizes[actual_inline][3] if actual_inline < image_mip_count else 0
+    )
+
+    def _is_low_res_blob(size: int, floor: int) -> bool:
+        """Whether a blob ahead of the image stream is the header's CPU colour sample.
+
+        A leading blob is the low-resolution image, so it is either no larger than the size the
+        header declares for it or too small to be a level at all. Anything larger is image storage
+        the admitted chain does not explain. ``floor`` is the smallest level the test measures
+        against: the smallest external level while the chain is still being chosen, and the
+        smallest emitted level once it has been, which is the same quantity a published unit
+        states and therefore the one an independent reader can re-check.
+        """
+        return size <= declared_low_size or size < floor
+
     selected_start = 0
     selected_end = image_mip_count
     incomplete_mips = []
+    unexplained_stream = False
     if len(compressed) < expected_external:
         tail_size = 0
         tail_start = image_mip_count
@@ -275,6 +292,21 @@ def decode_texture(closure) -> TextureModel:
         else:
             source = closure.ttz.path if closure.ttz else f"materials/{closure.texture_path}.ttz"
             raise TextureDecodeError(f"{source}: no complete primary mip survives")
+    elif not _is_low_res_blob(len(compressed) - expected_external, smallest_external):
+        # The stream carries more than the declared chain plus a colour sample, so the chain does
+        # not describe it. Retail units of this shape store repeated full-resolution images and no
+        # pyramid, and sliding the chain onto the tail would compose every level below the first
+        # out of unrelated bytes. Admit the full-resolution image alone.
+        top = source_level_sizes[-1][3]
+        if actual_inline >= image_mip_count or len(compressed) < top:
+            raise TextureDecodeError(
+                f"{closure.texture_path}: a TTZ stream of {len(compressed)} bytes matches neither "
+                f"the declared mip chain nor one full-resolution image"
+            )
+        selected_start, selected_end = image_mip_count - 1, image_mip_count
+        external_auxiliary = len(compressed) - top
+        stream = compressed[external_auxiliary:]
+        unexplained_stream = True
     else:
         external_auxiliary = len(compressed) - expected_external
         primary_external = compressed[external_auxiliary:]
@@ -282,6 +314,12 @@ def decode_texture(closure) -> TextureModel:
     selected_sizes = source_level_sizes[selected_start:selected_end]
     if len(stream) != sum(row[3] for row in selected_sizes):
         raise TextureDecodeError(f"{closure.texture_path}: incomplete reconstructed image stream")
+    unexplained_external = 0
+    if external_auxiliary and (
+        unexplained_stream
+        or not _is_low_res_blob(external_auxiliary, min(row[3] for row in selected_sizes))
+    ):
+        unexplained_external, external_auxiliary = external_auxiliary, 0
 
     tth_ledger = ByteLedger(closure.tth.path, tth)
     tth_ledger.claim(0, 12, "mapped", "tth.header")
@@ -410,10 +448,30 @@ def decode_texture(closure) -> TextureModel:
             "reason": "compiler-generated Source CPU colour-sampling optimization",
             "byteLength": auxiliary_size,
             "declaredByteLength": declared_low_size,
-            "externalDecodedBytes": external_auxiliary,
+            "externalByteLength": external_auxiliary,
             "format": FORMATS[low_format].source_name if low_format in FORMATS else "none",
             "width": low_width,
             "height": low_height,
+        })
+    if unexplained_external:
+        top = source_level_sizes[-1][3]
+        omissions.append({
+            "role": "unexplained-leading-image-storage",
+            "reason": "source image storage the declared mip chain does not account for",
+            "byteLength": unexplained_external,
+            "sourceMips": list(range(selected_start)) if unexplained_stream else [],
+            "streamFullResolutionImages": round(len(compressed) / top, 4),
+            "admittedFullResolutionImageOnly": unexplained_stream,
+        })
+    if levels[0].width != width or levels[0].height != height:
+        omissions.append({
+            "role": "primary-image-not-recoverable",
+            "reason": "no complete image at the declared resolution survives in the selected source",
+            "declaredWidth": width,
+            "declaredHeight": height,
+            "recoveredWidth": levels[0].width,
+            "recoveredHeight": levels[0].height,
+            "zlibStreamComplete": compressed_complete,
         })
     if incomplete_mips:
         omissions.append({
@@ -448,6 +506,8 @@ def decode_texture(closure) -> TextureModel:
         format=info,
         width=levels[0].width,
         height=levels[0].height,
+        declared_width=width,
+        declared_height=height,
         frames=frames,
         cubemap=cubemap,
         mip_count=len(levels),

@@ -1403,6 +1403,8 @@ def _print_glb_row(label: str, ordinal: int, total: int, row: dict) -> None:
         f"{row['destination']} ({summary['accountedBytes']}/{summary['sourceBytes']} bytes)",
         flush=True,
     )
+    for warning in row.get("warnings", ()):
+        print(f"  warning: {item}: {warning}", flush=True)
 
 
 def _finalize_glb_corpus(
@@ -1419,7 +1421,16 @@ def _finalize_glb_corpus(
             f"{label} corpus exported {len(destinations)}/{total}; "
             f"{len(failures)} failed: {details}"
         )
+    # A unit that published with a warning is still a unit the corpus is weaker for; a run whose
+    # only report is its exit code would hide that.
+    warned = sorted(row["item"] for row in rows if row.get("warnings"))
     print(f"{label} corpus complete: {len(destinations)} {noun} -> {output_root}", flush=True)
+    if warned:
+        print(f"! {label} corpus: {len(warned)} {noun} published with warnings", flush=True)
+        for item in warned[:12]:
+            print(f"    {item}", flush=True)
+        if len(warned) > 12:
+            print(f"    ... {len(warned) - 12} more", flush=True)
     return destinations
 
 
@@ -1486,6 +1497,8 @@ def export_texture_glb(config, runner, texture: str) -> Path:
         f"({summary['width']}x{summary['height']}, {summary['mips']} mips, "
         f"{summary['accountedBytes']}/{summary['sourceBytes']} source bytes)"
     )
+    for warning in texture_glb_validation.warnings_for(summary):
+        print(f"  warning: {texture}: {warning}")
     return destination
 
 
@@ -1509,6 +1522,7 @@ def _texture_glb_one(index, texture: str, output_root: Path) -> dict:
             "item": texture,
             "destination": str(destination),
             "summary": summary,
+            "warnings": texture_glb_validation.warnings_for(summary),
             "error": "",
         }
     except Exception as exc:
@@ -1516,6 +1530,7 @@ def _texture_glb_one(index, texture: str, output_root: Path) -> dict:
             "item": texture,
             "destination": "",
             "summary": None,
+            "warnings": [],
             "error": f"{type(exc).__name__}: {exc}",
         }
 

@@ -56,6 +56,8 @@ def build_document(model) -> tuple[dict, bytes]:
         "dimensions": {
             "width": model.width,
             "height": model.height,
+            "declaredWidth": model.declared_width,
+            "declaredHeight": model.declared_height,
             "frames": model.frames,
             "faces": 6 if model.cubemap else 1,
             "mipCount": model.mip_count,
