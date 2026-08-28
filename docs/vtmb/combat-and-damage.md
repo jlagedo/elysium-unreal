@@ -1184,12 +1184,16 @@ activity names each** — name indices at `0x78`, `0x88`, `0x98` and `0xA8`, rec
 sixteen resolved enum slots at `0x38` and the four per-bucket candidate counts at `0x28`. Retail
 draws one candidate with `RandomInt`.
 
-Two single bytes complete it:
+Three single bytes complete it:
 
 - **`0xB8` is the direction bucket 0 answers.** The four directions cycle `BACK, LEFT, FORWARD,
   RIGHT`, and bucket `k` answers direction `(byte_b8 + k) mod 4`. This holds on **948 of 948**
   records that fill every bucket, so the buckets are a rotation rather than a fixed order and a
   consumer must read the byte.
+- **`0xB9` is the bucket-0 low-height marker.** It is `1` on exactly 166 full-table records, and
+  every one carries a LOW reaction in bucket 0 with HIGH reactions in buckets 1–3. `0` carries no
+  LOW bucket; `0xFF` is the partial-table unset form. No runtime read is identified, so this is an
+  authored table classification rather than a gameplay gate.
 - **`0xBA == 2` is the unconditional marker**, which admits the knockback past the victim's
   hit-buildup gate below.
 
@@ -1821,4 +1825,3 @@ who author `invincible 0`.
 - **Alive-Path Filtering and Rounding**:
   - `OnTakeDamage_Alive` (`0x103302e0`) guards against dead/invalid states (`0x168 != 0x1e/0x1f`) and non-positive incoming values (`damage <= 0.0`).
   - Final damage values truncate to integer via standard `__ftol()` (FISTP truncation toward zero) prior to deducting entity health.
-

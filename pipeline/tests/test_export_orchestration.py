@@ -8,6 +8,135 @@ from elysium_pipeline.exporters import export_all
 
 
 class ExportProfileTests(unittest.TestCase):
+    def test_texture_glb_corpus_admits_each_tth_identity_once(self) -> None:
+        index = {
+            "materials/a/brick.tth": object(),
+            "materials/a/brick.ttz": object(),
+            "materials/b/glass.tth": object(),
+            "materials/b/glass.vmt": object(),
+            "models/not-a-texture.tth": object(),
+        }
+        self.assertEqual(
+            export_manager._texture_glb_sources(index),
+            ["a/brick", "b/glass"],
+        )
+
+    def test_all_texture_glbs_reuses_one_patch_first_index(self) -> None:
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        from elysium_pipeline.exporters import texture_glb
+        from elysium_pipeline.formats import install
+        from elysium_pipeline.validation import texture_glb as validation
+
+        index = {
+            "materials/a/brick.tth": object(),
+            "materials/a/brick.ttz": object(),
+            "materials/b/glass.tth": object(),
+        }
+        config = SimpleNamespace(
+            game_root=Path("C:/game"),
+            work_root=Path("C:/work"),
+            export_root=Path("C:/export"),
+        )
+
+        def write(_index, texture, output_root):
+            self.assertIs(_index, index)
+            return output_root / (texture.replace("/", "_") + ".glb")
+
+        summary = {
+            "asset": "vtmb:texture:test",
+            "accountedBytes": 10,
+            "sourceBytes": 10,
+        }
+        with (
+            mock.patch.object(install, "build_index", return_value=index) as build_index,
+            mock.patch.object(texture_glb, "export", side_effect=write) as export,
+            mock.patch.object(validation, "validate", return_value=summary) as validate,
+        ):
+            destinations = export_manager.export_all_texture_glbs(
+                config, object(), jobs=1
+            )
+
+        self.assertEqual(len(destinations), 2)
+        build_index.assert_called_once_with()
+        self.assertEqual(export.call_count, 2)
+        self.assertEqual(validate.call_count, 2)
+
+    def test_character_glb_corpus_admits_only_models_with_topology(self) -> None:
+        index = {
+            "models/character/a/body.mdl": object(),
+            "models/character/a/body.dx80.vtx": object(),
+            "models/character/b/body.mdl": object(),
+            "models/character/b/body.dx7_2bone.vtx": object(),
+            "models/character/shared/bank.mdl": object(),
+            "models/scenery/prop.mdl": object(),
+            "models/scenery/prop.dx80.vtx": object(),
+        }
+        self.assertEqual(
+            export_manager._character_glb_models(index),
+            [
+                "models/character/a/body.mdl",
+                "models/character/b/body.mdl",
+            ],
+        )
+
+    def test_all_character_glbs_reuses_one_index_and_anorm_table(self) -> None:
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        from elysium_pipeline.exporters import character_glb
+        from elysium_pipeline.formats import install, mdl_skel
+        from elysium_pipeline.validation import character_glb as validation
+
+        index = {
+            "models/character/a/body.mdl": object(),
+            "models/character/a/body.dx80.vtx": object(),
+            "models/character/b/body.mdl": object(),
+            "models/character/b/body.dx7_2bone.vtx": object(),
+        }
+        config = SimpleNamespace(
+            game_root=Path("C:/game"),
+            work_root=Path("C:/work"),
+            export_root=Path("C:/export"),
+        )
+
+        def write(_index, model, output_root, *, anorms):
+            self.assertIs(_index, index)
+            self.assertIs(anorms, vectors)
+            return output_root / (model.rsplit("/", 1)[-1][:-4] + ".glb")
+
+        vectors = [(1.0, 0.0, 0.0)]
+        summary = {
+            "asset": "vtmb:character-body:test",
+            "accountedBytes": 10,
+            "sourceBytes": 10,
+        }
+        with (
+            mock.patch.object(install, "build_index", return_value=index) as build_index,
+            mock.patch.object(mdl_skel, "load_anorms", return_value=vectors) as load_anorms,
+            mock.patch.object(character_glb, "export", side_effect=write) as export,
+            mock.patch.object(validation, "validate", return_value=summary) as validate,
+        ):
+            destinations = export_manager.export_all_character_glbs(
+                config, object(), jobs=1
+            )
+
+        self.assertEqual(len(destinations), 2)
+        build_index.assert_called_once_with()
+        load_anorms.assert_called_once_with()
+        self.assertEqual(export.call_count, 2)
+        self.assertEqual(validate.call_count, 2)
+
+    def test_glb_corpus_workers_are_spawn_importable(self) -> None:
+        import pickle
+
+        from elysium_pipeline import workers
+
+        for worker in (workers.character_glb_worker, workers.texture_glb_worker):
+            restored = pickle.loads(pickle.dumps(worker))
+            self.assertEqual(restored.__name__, worker.__name__)
+
     def test_grid_is_the_canonical_test_set(self) -> None:
         maps = export_all.maps_for_profile("grid")
         self.assertEqual(maps[:2], ["sp_tutorial_1", "sp_theatre"])

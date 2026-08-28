@@ -104,11 +104,40 @@ def _relative(d, owner, rel, size, label):
     return absolute
 
 
-def read_definition(d, model_base, index):
+def definition_table(d, model_base):
+    """Return ``(table, rows, columns, records)`` for the LOD-major cloth matrix."""
+    columns = _i32(d, model_base + M_NUM_DEFS)
+    if columns <= 0:
+        return 0, 0, 0, []
+    table = _relative(
+        d, model_base, _i32(d, model_base + M_DEF_TABLE), columns * 4, "cloth table"
+    )
+    records = []
+    cursor = 0
+    first_record = len(d)
+    while cursor < 512 * columns and table + (cursor + 1) * 4 <= first_record:
+        relative = _i32(d, table + cursor * 4)
+        absolute = model_base + relative
+        if relative <= 0 or absolute + 92 > len(d):
+            break
+        records.append(absolute)
+        first_record = min(first_record, absolute)
+        cursor += 1
+    if not records or len(records) % columns:
+        raise ValueError(
+            f"cloth table at {table}: {len(records)} entries for {columns} columns"
+        )
+    return table, len(records) // columns, columns, records
+
+
+def read_definition(d, model_base, index, lod=0):
     """One cloth definition: particles, constraints and the authored collision proxy."""
-    count = _i32(d, model_base + M_NUM_DEFS)
-    table = _relative(d, model_base, _i32(d, model_base + M_DEF_TABLE), count * 4, "cloth table")
-    record = _relative(d, model_base, _i32(d, table + index * 4), 92, f"cloth definition {index}")
+    _table, rows, columns, records = definition_table(d, model_base)
+    if not 0 <= index < columns or not 0 <= lod < rows:
+        raise ValueError(
+            f"cloth definition column/LOD {index}/{lod} outside {columns}/{rows}"
+        )
+    record = records[lod * columns + index]
 
     particles = _i32(d, record + 4)
     anchored = _i32(d, record + 8)
@@ -119,10 +148,13 @@ def read_definition(d, model_base, index):
     if anchored + dynamic != particles or distance + compression != total:
         raise ValueError(f"cloth definition {index}: counts disagree")
 
-    anchors = []
-    if anchored:
-        base = _relative(d, record, _i32(d, record + 16), anchored * 2, "anchor indices")
-        anchors = [_u16(d, base + i * 2) for i in range(anchored)]
+    particle_vertices = []
+    if particles:
+        base = _relative(
+            d, record, _i32(d, record + 16), particles * 2, "particle vertex indices"
+        )
+        particle_vertices = [_u16(d, base + i * 2) for i in range(particles)]
+    anchors = particle_vertices[:anchored]
 
     constraints = []
     if total:
@@ -148,11 +180,15 @@ def read_definition(d, model_base, index):
                  for i in range(ntri)]
 
     return {
+        "source_offset": record,
+        "lod": lod,
+        "column": index,
         "gravity_scale": _f32(d, record),
         "particles": particles,
         "anchored": anchored,
         "dynamic": dynamic,
         "anchor_vertex_indices": anchors,
+        "particle_vertex_indices": particle_vertices,
         "constraints": constraints,
         "distance_constraints": distance,
         "compression_constraints": compression,
@@ -219,8 +255,17 @@ def read_colliders(d, model_base, bones):
     return capsules, spheres
 
 
-def _mesh_maps(d, mesh_base, numverts):
-    """The three per-render-vertex maps, or None where this mesh carries none."""
+def map_layout(d, mesh_base):
+    """Physical cloth-map extents from the three mesh-relative pointers.
+
+    Selectors occupy ``[selector, position)`` and positions occupy
+    ``[position, tangent)``. Each span is ``NumVertices`` rows (selectors) or
+    ``NumVertices * 2`` (positions), plus at most three alignment bytes. The
+    VTX ``numLODs`` count is what StudioRender indexes
+    (``selector + NumVertices * lod`` at ``0x2c03a2e0``); extra physical rows
+    stay in the file and are still decoded. Simulation reads LOD0 through
+    ``_mesh_maps``.
+    """
     sel = _i32(d, mesh_base + MESH_SELECTOR)
     pos = _i32(d, mesh_base + MESH_POSITION)
     tan = _i32(d, mesh_base + MESH_TANGENT)
@@ -228,9 +273,45 @@ def _mesh_maps(d, mesh_base, numverts):
         return None
     if not (sel and pos and tan):
         raise ValueError("partial cloth map triple")
-    sb = _relative(d, mesh_base, sel, numverts, "selector map")
-    pb = _relative(d, mesh_base, pos, numverts * 2, "position map")
-    tb = _relative(d, mesh_base, tan, numverts * 2, "tangent map")
+    verts = _i32(d, mesh_base + 8)
+    if verts <= 0:
+        raise ValueError("cloth map mesh has no vertices")
+    selector_base = _relative(d, mesh_base, sel, verts, "selector map")
+    position_base = _relative(d, mesh_base, pos, verts * 2, "position map")
+    tangent_base = _relative(d, mesh_base, tan, verts * 2, "tangent map")
+    if position_base < selector_base + verts or tangent_base < position_base + verts * 2:
+        raise ValueError("cloth map pointers are not in selector/position/tangent order")
+    selector_rows, selector_align = divmod(position_base - selector_base, verts)
+    position_rows, position_align = divmod(tangent_base - position_base, verts * 2)
+    if selector_rows <= 0 or position_rows <= 0:
+        raise ValueError("cloth map pointer span is smaller than one LOD row")
+    if selector_align > 3 or position_align > 3:
+        raise ValueError(
+            f"cloth map alignment is {selector_align}/{position_align} bytes; "
+            "expected at most 3"
+        )
+    return {
+        "vertex_count": verts,
+        "selector_base": selector_base,
+        "position_base": position_base,
+        "tangent_base": tangent_base,
+        "rows": selector_rows,
+        "selector_align": selector_align,
+        "position_rows": position_rows,
+        "position_align": position_align,
+    }
+
+
+def _mesh_maps(d, mesh_base, numverts):
+    """The three per-render-vertex maps, or None where this mesh carries none."""
+    layout = map_layout(d, mesh_base)
+    if layout is None:
+        return None
+    if layout["vertex_count"] != numverts:
+        raise ValueError("cloth map vertex count disagrees with the mesh record")
+    sb = layout["selector_base"]
+    pb = layout["position_base"]
+    tb = layout["tangent_base"]
     return (
         list(d[sb:sb + numverts]),
         [_u16(d, pb + i * 2) for i in range(numverts)],
@@ -279,7 +360,7 @@ def build(d, v):
         bpr = _i32(d, H_BODYPART_INDEX) + bp * 16
         for m in range(_i32(d, bpr + 4)):
             model_base = bpr + _i32(d, bpr + 12) + m * MODEL_STRIDE
-            ndefs = _i32(d, model_base + M_NUM_DEFS)
+            _table, lod_rows, ndefs, _records = definition_table(d, model_base)
             if ndefs <= 0:
                 continue
             capsules, spheres = read_colliders(d, model_base, bones)
@@ -497,11 +578,13 @@ def build(d, v):
                     {
                         "model_name": model_name,
                         "definition": di,
+                        "lod_rows": lod_rows,
                         "gravity_scale": defn["gravity_scale"],
                         "distance_rest_ratio": measured["distance"],
                         "compression_rest_ratio": measured["compression"],
                         "particle_count": defn["particles"],
                         "anchored_count": defn["anchored"],
+                        "particle_vertex_indices": defn["particle_vertex_indices"],
                         "rest_positions": [list(rest[i]) for i in range(defn["particles"])],
                         "rest_uvs": [
                             list(uv_first.get(i, (0.0, 0.0)))

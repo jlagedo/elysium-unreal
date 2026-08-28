@@ -157,3 +157,59 @@ def character_source_worker(kind: str, stem: str, model_rel: str, out_dir: str,
             + (f"\n--- worker output tail ---\n{tail}" if tail else "")
         ) from exc
     return buffer.getvalue()
+
+
+def character_glb_worker(model: str, output_root: str) -> dict[str, Any]:
+    """Export one Character GLB in this process. Never raises: the parent collects failures."""
+    from pathlib import Path
+
+    from elysium_pipeline.exporters import character_glb
+    from elysium_pipeline.formats import install
+    from elysium_pipeline.validation import character_glb as validation
+
+    try:
+        index = install.build_index(verbose=False)
+        destination = character_glb.export(
+            index, model, Path(output_root), anorms=_anorms()
+        )
+        summary = validation.validate(destination)
+        return {
+            "item": model,
+            "destination": str(destination),
+            "summary": summary,
+            "error": "",
+        }
+    except (Exception, SystemExit) as exc:
+        return {
+            "item": model,
+            "destination": "",
+            "summary": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def texture_glb_worker(texture: str, output_root: str) -> dict[str, Any]:
+    """Export one Texture GLB in this process. Never raises: the parent collects failures."""
+    from pathlib import Path
+
+    from elysium_pipeline.exporters import texture_glb
+    from elysium_pipeline.formats import install
+    from elysium_pipeline.validation import texture_glb as validation
+
+    try:
+        index = install.build_index(verbose=False)
+        destination = texture_glb.export(index, texture, Path(output_root))
+        summary = validation.validate(destination)
+        return {
+            "item": texture,
+            "destination": str(destination),
+            "summary": summary,
+            "error": "",
+        }
+    except (Exception, SystemExit) as exc:
+        return {
+            "item": texture,
+            "destination": "",
+            "summary": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }

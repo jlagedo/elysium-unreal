@@ -19,6 +19,12 @@ documents:
 
   - {path: architecture/runtime-architecture.md, kind: architecture, owner: runtime, subject: runtime spine}
   - {path: architecture/runtime-data-compilation.md, kind: architecture, owner: runtime data, subject: offline compilation and runtime loading contracts}
+  - {path: architecture/seam_map.md, kind: architecture, owner: runtime data, subject: VtMB export seam and Unreal type map}
+  - {path: architecture/seam_map_character.md, kind: architecture, owner: characters, subject: Character GLB Exporter source closure and mappings}
+  - {path: architecture/seam_map_animation_bank.md, kind: architecture, owner: animation, subject: canonical animation-bank GLB source closure and mappings}
+  - {path: architecture/seam_map_material.md, kind: architecture, owner: materials, subject: canonical material GLB source closure and mappings}
+  - {path: architecture/seam_map_texture.md, kind: architecture, owner: textures, subject: canonical texture GLB source closure and mappings}
+  - {path: architecture/seam_map_surface_property.md, kind: architecture, owner: surface properties, subject: canonical surface-property GLB source closure and mappings}
   - {path: architecture/engine-core.md, kind: architecture, owner: entity substrate, subject: entity object model}
   - {path: architecture/gameplay-systems-architecture.md, kind: architecture, owner: gameplay systems, subject: legacy API layer and gameplay-domain decomposition}
   - {path: architecture/computer-terminal-architecture.md, kind: architecture, owner: computer terminals, subject: Unreal computer terminal interaction and presentation}

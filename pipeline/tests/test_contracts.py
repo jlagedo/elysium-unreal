@@ -1157,10 +1157,13 @@ class NamingContractTests(unittest.TestCase):
         }
         self.assertTrue(expected.issubset({path.name for path in exporters.glob("UE_*.py")}))
 
-    def test_gltf_exemption_remains_present(self) -> None:
-        self.assertTrue(
-            (REPO / "pipeline/src/elysium_pipeline/formats/mdl_gltf.py").is_file()
+    def test_gltf_exemptions_remain_isolated(self) -> None:
+        expected = (
+            "pipeline/src/elysium_pipeline/formats/mdl_gltf.py",
+            "pipeline/src/elysium_pipeline/exporters/character_glb.py",
+            "pipeline/src/elysium_pipeline/exporters/texture_glb.py",
         )
+        self.assertFalse([path for path in expected if not (REPO / path).is_file()])
 
 
 class RepositoryPolicyTests(unittest.TestCase):

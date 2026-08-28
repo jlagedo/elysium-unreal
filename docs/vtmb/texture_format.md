@@ -30,9 +30,11 @@ minimal DDS header, let PIL decode → RGBA.
 ## Writing a `.tth` (RE probes only)
 
 Full layout, as needed to **write** one (`pipeline/src/elysium_pipeline/formats/tex_from_png.py`): `"TTH\0"`, `uint16 version`
-(1), `uint8 mip_count`, `uint8 inline_mips`, `uint32 vtf_blob_len` (bytes from the `"VTF\0"`
-marker to EOF), then `mip_count + 1` pairs of `uint32 raw_offset, uint32 ttz_prefix`, then the
-embedded VTF 7.1 header (64 B), a low-res DXT1 16×16 thumbnail (128 B), and the `inline_mips`
+(1), `uint8 mip_count`, `uint8 inline_mips`, `uint32 vtf_blob_len` (meaningful bytes from the
+`"VTF\0"` marker; some products retain arbitrary compiler allocation-fill beyond it, often
+`0xcd`), then
+`mip_count + 1` pairs of `uint32 raw_offset, uint32 ttz_prefix`, then the
+embedded VTF 7.0/7.1 header (64 B), a low-res DXT1 16×16 thumbnail (128 B), and the `inline_mips`
 **smallest** mips. A mip's `raw_offset` is its position in the reconstructed
 `[header][thumbnail][mips]` image counted from the `"VTF\0"` marker, so the first mip sits at
 192; `ttz_prefix` is how many compressed bytes precede it, which works because the `.ttz` is one
@@ -43,15 +45,29 @@ patch's uncompressed re-exports keep none and leave the per-mip columns unfilled
 totals row is load-bearing. `encode_like(template_tth, img)` clones a shipped texture's format,
 flags and mip policy — BGR888 round-trips bit-exact, DXT5 within a re-encode.
 
+Retail compiler bookkeeping is not uniformly canonical: the outer mip count may exceed the
+dimension-derived chain, individual inline counts and VTF mip counts may be stale, and declared
+meaningful TTH/TTZ lengths may be followed by arbitrary allocation-fill bytes. A small set of
+textures contains only a complete high-resolution prefix of the logical mip pyramid plus partial
+or disconnected lower-level storage. The outer table still provides the source ranges and totals;
+decoders validate available complete levels rather than inventing missing texels.
+
+The declared low-resolution image (normally DXT1 16×16) is separate from the rendered mip chain.
+Some retail declarations are non-canonical or internally inconsistent. Source exposes the image through
+`ITexture::GetLowResColorSample`/`IMaterial::GetLowResColorSample` so CPU code can make an
+approximate colour query without reading the primary image. It is a generated engine optimization,
+not independent authored artwork; the primary texture and the header's independently consumed
+`reflectivity` remain the authoritative image and average-albedo inputs.
+
 This writer exists only for RE probes that need the *original game* to draw an authored image
 (e.g. the sky-orientation probes in `docs/vtmb/sky-ambience.md`); it produces nothing the runtime consumes.
 
 ## Cubemaps
 
-VtMB cubemaps are **VTF 7.1 = 7 faces** (six axes + a legacy spheremap, dropped): DXT cubes ship
+VtMB cubemaps are **VTF 7.1 = 7 faces** (six axes + a legacy low-end spheremap fallback): DXT cubes ship
 the large mips zlib'd in `.ttz` (small mips in `.tth`); recompiled maps store uncompressed
 **BGR888 inline in the `.tth`, no `.ttz`**. `tex_to_png.decode_cubemap` handles both, slicing the
-full-res mip's first six faces. The naming convention that ties a cubemap to a BSP face is
+full-res mip's first six faces and deliberately drops the fallback face. The naming convention that ties a cubemap to a BSP face is
 `docs/vtmb/bsp_format.md` → "Cubemaps".
 
 ## VMT materials (`pipeline/src/elysium_pipeline/formats/vmt.py`)

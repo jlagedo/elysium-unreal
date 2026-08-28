@@ -69,17 +69,22 @@ records:
 |---|---|---|---|
 | +0 | int | first moving bone | **Verified** — passed to the chain constructor; its parent must exist |
 | +4 | int | explicit terminal bone, or `-1` to follow the child chain | **Strong evidence** — the two constructor branches are direct, but all 600 shipped records use `-1` |
-| +8 | float | unknown authoring field; shipped values are `{9, 30, 60}` | **Unknown** — `0x10096650` does not read or pass it to the located consumer |
+| +8 | float | unused authored preset; shipped values are `{9, 30, 60}` | **Verified runtime-unused** — every recovered client, engine and server walk omits it; the physical authoring name is not recoverable |
 | +12 | float | gravity | **Verified** — direct `bc_gravity` override mapping and integration use |
 | +16 | float | damping | **Verified** — direct `bc_damp` override mapping and velocity use |
 | +20 | float | spring exponent; runtime coefficient is `10^(-value)` | **Verified** — direct `bc_spring` override mapping and constructor conversion |
 | +24 | float | maximum angular deviation, degrees | **Verified** — radians conversion, `bc_maxangle` override, constraint clamp, and retail capture |
 
-The field mapping does not come from value-shape guesses. `0x10096650` reads the record and calls
-the constructor at `0x100ac0f0`. The call passes +24, +20, +16, +12, +4, and +0; it never reads
-+8. The constructor multiplies +24 by `π/180`, evaluates `pow(10, -value)` for +20, and stores
-+16 and +12 directly. Under `bc_override`, `0x100ac880` replaces those same four runtime members
-from `bc_maxangle`, `bc_spring`, `bc_damp`, and `bc_gravity` respectively.
+The field mapping does not come from value-shape guesses. Across all 600 records, +8 is `60.0` on
+539, `9.0` on 41 and `30.0` on 20; those presets cross chain lengths and every live solver
+parameter independently. Both client constructors (`client.dll` `0x10096650` and `0x1018adb0`)
+pass +24, +20, +16, +12, +4, and +0 to `0x100ac0f0`; neither reads +8. The other complete
+record walks read only +0: engine model load at `engine.dll` `0x2000ccf0`, server model admission
+at `vampire.dll` `0x10095030`, server bone-name lookup at `0x10097980`, and the server's
+bone-usage pass at `0x100c65f0`. Thus +8 is omitted across every recovered runtime path, not just
+one constructor call. The constructor multiplies +24 by `π/180`, evaluates `pow(10, -value)` for
++20, and stores +16 and +12 directly. Under `bc_override`, `0x100ac880` replaces those same four
+runtime members from `bc_maxangle`, `bc_spring`, `bc_damp`, and `bc_gravity` respectively.
 
 The slot is fixed by its neighbors. `+392` is `surfacepropindex`; `+404`/+408 are the independently
 verified `NumIncludeModels`/`IncludeModelIndex`. Modern Source assigns other meanings around this
@@ -199,19 +204,37 @@ The payload extends the 224-byte `StudioModel` and 60-byte `StudioMesh` records:
 
 | Owner / off | Type | Runtime meaning |
 |---|---|---|
-| `StudioModel` +200 | int | cloth-definition count |
-| `StudioModel` +204 | int | relative offset to a table of definition-record offsets |
+| `StudioModel` +200 | int | columns in the separate cloth-definition offset matrix |
+| `StudioModel` +204 | int | relative offset to a row-major rows × columns table of definition-record offsets |
 | `StudioModel` +208/+212 | int/int | authored capsule count / model-relative 36-byte record array |
 | `StudioModel` +216/+220 | int/int | authored sphere count / model-relative 20-byte record array |
-| `StudioMesh` +48 | int | mesh-relative `uint8[NumVertices]` cloth-definition selector; `0xFF` means ordinary skinning |
-| `StudioMesh` +52 | int | mesh-relative `uint16[NumVertices]` simulated position/normal index; high bit reverses the normal |
-| `StudioMesh` +56 | int | mesh-relative `uint16[NumVertices]` simulated tangent-output index |
+| `StudioMesh` +48 | int | mesh-relative, LOD-major `uint8` cloth-definition selector; `0xFF` means ordinary skinning |
+| `StudioMesh` +52 | int | mesh-relative, LOD-major `uint16` simulated position/normal index; high bit reverses the normal |
+| `StudioMesh` +56 | int | mesh-relative, LOD-major `uint16` simulated tangent-output index, read only on the selected branch |
 
 The counts govern all four model-level relative offsets. Empty capsule/sphere sets can retain a
 nonzero offset value, so a decoder must not dereference one when its count is zero. Across all
 4,567 `StudioModel` records, 60 carry definitions, 55 carry capsules, and 25 carry spheres. Across
 9,741 meshes, **84** carry all three per-vertex maps and none carries only part of the triple.
-Fifty-nine carrying model records have one definition and one has two.
+Fifty-nine carrying model records have one definition column and one has two. The definition table
+can carry multiple rows even when there is one column: Sheriff has seven 1-column rows, each
+pointing at a distinct 92-byte definition. It has no explicit row-count field; its first definition
+offset bounds that matrix.
+
+The definition-matrix row count does **not** size the three per-mesh maps. Their normal logical
+extent is `NumVertices × VTX ModelHeader.numLODs`: selectors use one byte per cell and
+positions/tangents use two, with up to three alignment bytes before the following array. The
+all-character byte ledger exposed nine models where using the definition row count stopped early
+at non-zero map data. Jeanette is 1 definition row / 1 VTX LOD and Sheriff is 7/7, which hid the
+distinction in the initial samples; Goth is 4 definition rows / 7 VTX LODs and its maps carry all
+seven rows. The StudioRender specialization at `0x2c03a2e0` reads the selector byte from the active
+render-LOD row, independently confirming the VTX-owned extent.
+
+Doppleganger is the bounded truncation case. Its selector and position maps cover all 2,743 LOD0
+vertices, but the tangent payload stops after 2,674 entries because the final 69 selectors are all
+`0xFF`; the last selected vertex is only 1,187. The generated renderer branch reads +56 only after
+the selector is non-`0xFF`, so no runtime read reaches the absent suffix. A byte walker must claim
+the physically present tangent prefix, not manufacture or overlap 69 unused entries.
 
 This is why the earlier bone/weight audit was insufficient. `jeanette_skirt` really does carry
 pelvis and thigh weights, but its selector map replaces the skinned result on 364 of 417 render
@@ -232,25 +255,31 @@ Each +204 table entry resolves from the `StudioModel` base to an authored defini
 | +0x04 | int | total particle count |
 | +0x08 | int | pinned/anchored particle count |
 | +0x0c | int | dynamic particle count; pinned + dynamic = total |
-| +0x10 | int | relative `uint16[]` source-vertex indices for the pinned particles |
+| +0x10 | int | relative `uint16[total particles]` source-vertex indices; the pinned particles are the leading prefix, not the whole table |
 | +0x14 | int | total constraint count |
 | +0x18 | int | general distance-constraint count |
 | +0x1c | int | compression-only constraint count |
 | +0x20 | int | relative array of 16-byte constraint records |
 | +0x24/+0x28 | int/int | packed SIMD block counts for the two constraint sets |
-| +0x2c | int | relative packed SIMD constraint payload |
+| +0x2c | int | relative packed SIMD constraint payload; stored byte count is the sum of the two block counts rounded up to four |
 | +0x30 | int | collision-triangle count |
 | +0x34 | int | relative `uint16[3]` collision-triangle array |
 | +0x38/+0x3c | int/int | tangent-edge and normal-edge counts |
 | +0x40 | int | relative edge-pair table |
 | +0x44/+0x48 | int/int | normal-contribution count / relative contribution table |
 | +0x4c/+0x50 | int/int | extra tangent-output count / relative interpolation table |
-| +0x54/+0x58 | int/int | optional relative seed tables; their exact authoring names remain unknown |
+| +0x54/+0x58 | int/int | optional relative `16 B × total particles` seed/seam tables; their exact authoring names remain unknown |
 
 A 16-byte constraint is `uint16 particleA`, `uint16 particleB`, two float movement weights,
 and float rest-length-squared. The first set is solved unconditionally. The second is solved only
 when current length squared is below rest length squared, so it resists compression rather than
 enforcing distance in both directions.
+
+Collision triangles are tightly packed `uint16[3]`, stride **6**, not an aligned eight-byte
+record. `StudioRender.dll` `0x2c0031a0` increments its triangle cursor by six and loads only the
+three indices. Two definitions retain one non-zero u16 between the last triangle and the next
+edge-pair array (`creation1_full` and `bum_male`); that word is compiler alignment residue, not a
+fourth triangle field, and is runtime-unused.
 
 ### Authored collision records and current-pose frame
 
@@ -419,7 +448,7 @@ VtMB's decoded procedural enum stops at AxisInterp rather than later Source's JI
 | Capsule/sphere records are bind-space points transformed through the current skin palette per draw | **Verified** | None for layout or frame; capture remains useful for numerical output acceptance. |
 | `r_cloth` exact runtime gating semantics | **Unknown** | Establish with a controlled live toggle or locate its indirect consumer; the apparent callback is its static destructor. |
 | +4 is an explicit chain terminal when nonnegative | **Strong evidence** | No installed record exercises that branch. |
-| +8's authoring meaning | **Unknown** | The located retail constructor does not consume it; values alone do not justify a name. |
+| +8 preset | **Verified runtime-unused** | The corpus carries only `{9,30,60}`; both client constructors and all four engine/server record walks omit it. The physical authoring name is not recoverable and no behavior is assigned. |
 | Exact `bc_ground` query semantics and the single-body `money` scale special case | **Unknown** | Trace the called interface and identify shipped chains that reach the special case. |
 | Bit-for-bit game-independent solver replays | **Partial** | Compare both the bone-chain and renderer-cloth paths with controlled retail series. |
 
@@ -434,9 +463,11 @@ VtMB's decoded procedural enum stops at AxisInterp rather than later Source's JI
   `9d00b2c1e5edbad052fb0b514634ba54574666e12d1b408c46ce141d51ed2313`.
 - Retail server `vampire.dll`: SHA-256
   `c546f4de2003624d72f54d03805e0dbe1d8157231adcc62368ff53fe6e48a76f`.
-- Static anchors: table owner `0x10096650`, cleanup `0x100966e0`, chain constructor
-  `0x100ac0f0`, chain update `0x100ac880`, integration `0x100ad1c0`, constraint/recomposition
-  `0x100ad2c0`, and `BuildTransformations` call site `0x1009022c`.
+- Static anchors: client table owners `0x10096650`/`0x1018adb0`, cleanup `0x100966e0`, chain
+  constructor `0x100ac0f0`, chain update `0x100ac880`, integration `0x100ad1c0`,
+  constraint/recomposition `0x100ad2c0`, and `BuildTransformations` call site `0x1009022c`.
+  The non-solving record walks are engine `0x2000ccf0` and server
+  `0x10095030`/`0x10097980`/`0x100c65f0`.
 - Cloth anchors: VEngineModel006 instance create/reset `0x200a7be0`/`0x200a8480`, client wind
   submitter `0x10092970`, TStudioRender012 vtable `0x2c06c150`, cloth get/create `0x2c001310`,
   simulation `0x2c001e50`, integration `0x2c002a30`, distance/compression solves

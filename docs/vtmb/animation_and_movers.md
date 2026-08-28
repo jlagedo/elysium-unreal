@@ -283,11 +283,14 @@ array is simultaneously the attack's contact geometry and its window. One 188-by
 | `0x00` / `0x04` | `start` / `end` — the contact window as a fraction of the clip cycle |
 | `0x08` | bone index, in the declaring model's own bone table |
 | `0x0C` / `0x18` | the contact segment's two endpoints, **bone-local**, Source units |
+| `0x24` | kick-only authored marker: `0` on the 18 `kick_short`/`kick_long` foot/calf records, `-1` elsewhere; no runtime behavior assigned |
 | `0x28`..`0x34` | four per-bucket knockback candidate counts |
 | `0x38`..`0x74` | sixteen load-resolved knockback activity enum slots |
 | `0x78` / `0x88` / `0x98` / `0xA8` | four direction buckets × four knockback activity **name** indices |
 | `0xB8` | the direction bucket 0 answers; the four cycle `BACK, LEFT, FORWARD, RIGHT` |
+| `0xB9` | bucket-0 low-height marker: `1` means bucket 0 is LOW and buckets 1–3 HIGH; `0xFF` is partial-table unset |
 | `0xBA` | `2` marks the knockback unconditional |
+| `0xBB` | reserved zero |
 
 **574 of the install's 14,012 descriptors carry 1,587 records across 53 models** — the shared weapon
 banks, the player fists and claws, and the monster bodies. The bone index is the declaring model's,

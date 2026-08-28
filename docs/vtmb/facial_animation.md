@@ -137,6 +137,13 @@ Only those seven appear across all 201 rigs (`FETCH1` 27,523 · `MUL` 21,648 · 
 · `SUB` 9,948 · `ADD` 7,800 · `FETCH2` 7,800 · `DIV` 1,755). The stack machine evaluates
 left to right and its final value is the weight of the rule's flexdesc.
 
+The union arm is part of the opcode contract, not two simultaneous semantic values.
+`C_BaseCombatCharacter::RunFlexRules` (`client.dll` `0x100c3cd0`) reads the second dword as float
+bits only for `CONST`, as an integer index only for `FETCH1`/`FETCH2`, and not at all for
+`ADD`/`SUB`/`MUL`/`DIV`. A decoder that emits both views manufactures non-finite floats from valid
+integer operands such as `0xffffffff`; that representation error caused 105 Character GLB corpus
+refusals. It is not non-finite authored facial data.
+
 **The two fetches read different arrays.** `FETCH1`'s operand is a **flex-controller
 index**. `FETCH2`'s is a **flexdesc index** — it reads `dest[index]`, the weight an *earlier
 rule* already wrote. On `nines`, 14 of the 22 distinct `FETCH2` operands are ≥ 44 and so out
@@ -407,7 +414,7 @@ consumer: the eye pass indexes `model_base + *(int*)(model_base + 0xC4) + materi
 | 104 | float[3] | `lowertarget` | |
 | 116 | int | `upperlidflexdesc` | the morph-carrying flexdesc the pass writes |
 | 120 | int | `lowerlidflexdesc` | |
-| 124 | — | 16 bytes | **never read** (Source's `unused[4]`) |
+| 124 | int[4] | reserved zero | `(0,0,0,0)` on all 602 installed eyeball records and never read |
 
 The three material-index fields hold real texture-table indices — `jeanette`'s resolve to
 `Eyeball_l` / `Eyeball_r` and `glint`, LaCroix's and Nines' to `Pupil_r` / `Pupil_l` — and
@@ -765,8 +772,9 @@ row's volume never reaches a weight.
 
 ## `expressions/` — phoneme → flex-controller weights
 
-`expressions/` holds **249 `.vfe`** (Faceposer's compiled form) and the identical 249
-`.txt` sources. The `.txt` is readable and is the useful one:
+`expressions/` holds **249 `.vfe`** compiled tables and **249 `.txt`** authoring tables, but they
+are not an identical twin set. `scrubs_female_phonemes` is TXT-only and `demal_expressions` is
+VFE-only in the merged install. The TXT is readable and useful evidence:
 
 ```
 $keys right_cheek_raiser left_cheek_raiser wrinkler right_upper_raiser … lower_lip
@@ -781,10 +789,11 @@ second is its **class**, and on a phoneme table that is the row's key: a single 
 reached by 107, `"nx" "0x014b"` by 331). On an expression table the class is `_` on every row
 and only the name is usable.
 
-`$keys` names the flex controllers the table writes; `$hasweighting` (set on all 249) means
+`$keys` names the flex controllers the table writes; `$hasweighting` means
 each row carries **two floats per key** — the value and its weight — so a row is
 `2 × len($keys)` numbers between the two quoted names and the trailing description. Key sets
-run 22–33 entries (the modal 30), rows 32 or 48 per table; 48 distinct key names appear
+on the ordinary character tables are usually 22–33 entries (the modal 30), rows 32 or 48 per
+table; 48 distinct key names appear
 across the set, all drawn from the `phoneme` and `mouth` controller families.
 
 **The file is chosen by the actor's model.** `client.dll` `FUN_100C4210` formats
@@ -796,11 +805,37 @@ same mechanism yields `<stem>_expressions.vfe`. Of the 249 files, 121 are `_phon
 stem**. `expressions/phonemes.vfe` and `expressions/phonemes_male.vfe` are the fallbacks
 `client.dll` names literally.
 
+**The compiled VFE is the runtime authority.** The client formats and loads
+`expressions/%s_%s.vfe` at `0x100c4210`, and `SetupWeights` (`0x100c42f0`) selects the model-stem
+phoneme VFE. The server's model reload at `0x10106c40` selects the model-specific expression VFE
+and then the generic fallback, while `CExpressionTable::PrecacheCharacter` (`0x101053a0`) walks
+compiled settings. No recovered runtime path loads the TXT.
+
+That distinction is observable in the installed corpus. A strict TXT/VFE equality gate refused
+27 character models:
+
+- 21 tables differ only by TXT's three-decimal rounding; the largest delta is
+  `0.000478259742259977`;
+- Pisha's expression VFE has five controller keys absent from its TXT (`dilator`, both puckerers,
+  `bite`, and `wide_open`);
+- Luca's and Sweeper's phoneme VFEs swap the `b` and `p` rows relative to TXT;
+- the two stripper expression users name row 9 `eyes closed` in TXT and `bliss` in VFE; and
+- `scrubs_female_phonemes.txt` has no same-stem compiled table.
+
+These are provenance differences, not corrupt binary data. Export the decoded VFE result when it
+exists and retain the TXT and its hash as authoring evidence; do not merge the two into a synthetic
+runtime table.
+
+`crooked_cop_expressions` is the valid zero-key edge case. Its TXT declares `$keys` with no names,
+then `$hasweighting`, then 32 labelled rows with no numeric values. The VFE independently carries
+32 settings whose value arrays are empty. An empty controller vector is therefore a decoded table,
+not a parser failure.
+
 ### The compiled `.vfe` header
 
-Every `.vfe` has a `.txt` twin, so the pipeline reads the text and nothing needs the binary
-form. The header is recorded because it dates the toolchain and because a reader ported from
-modern Source mis-walks it silently:
+The binary form is what retail consumes, so it is a required decode rather than a redundant
+mirror of TXT. The header also dates the toolchain, and a reader ported from modern Source
+mis-walks it silently:
 
 | Off | Type | Field | Value |
 |---|---|---|---|

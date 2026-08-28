@@ -16,7 +16,7 @@
     "What do the chain-rebase branch's shorts at remap record +0x04 and +0x06 select, and which corpus reaches that branch at all? The branch structure, the parent-chain walk against the included model's StudioBone.parent, and the position-transform byte are read; no shipped model in the captured corpus carries a record that enters it, and its second loop cannot terminate unless the two shorts are equal.",
     "Which model/material decode defect causes the observed rainbow cloth independently of skeletal pose?",
     "Which client receive/update path applies the server's networked activity and m_nSequence changes before SetupBones, and which sequence changes can originate only on the client? The server selector functions are located and tracked in gameplay_actions.json; this client-side specification now owns only the state handoff into pose evaluation.",
-    "How does the MDLHeader +396/+400 record table construct, update, constrain and render table-driven hair and body chains? The writer and four runtime parameters are located; record +8 remains unnamed because the located consumer does not read it."
+    "How does the MDLHeader +396/+400 record table construct, update, constrain and render table-driven hair and body chains? The writer and four runtime parameters are located; record +8 remains unnamed and both recovered client constructors omit it."
   ],
   "field_probes": [
     {
@@ -266,9 +266,9 @@
     },
     {
       "confidence": "confirmed",
-      "fact": "Record +12 is gravity, +16 damping, +20 a spring exponent converted to pow(10,-value), and +24 a maximum angle converted from degrees to radians; record +8 is not passed to the located constructor.",
-      "evidence": "0x10096695-0x100966b2 passes +24,+20,+16,+12,+4,+0 and never reads +8. 0x100ac171-0x100ac1c5 converts and stores the values. Under bc_override, 0x100acac4-0x100acc64 maps bc_maxangle, bc_spring, bc_damp and bc_gravity onto the same four members.",
-      "consequence": "The four runtime fields are named by retail data flow rather than value-shape inference; +8 remains unknown instead of receiving an invented label."
+      "fact": "Record +12 is gravity, +16 damping, +20 a spring exponent converted to pow(10,-value), and +24 a maximum angle converted from degrees to radians; record +8 is not passed by either recovered client constructor.",
+      "evidence": "0x10096695-0x100966b2 and 0x1018adfe-0x1018ae1b both pass +24,+20,+16,+12,+4,+0 and never read +8. 0x100ac171-0x100ac1c5 converts and stores the values. Under bc_override, 0x100acac4-0x100acc64 maps bc_maxangle, bc_spring, bc_damp and bc_gravity onto the same four members.",
+      "consequence": "The four runtime fields are named by retail data flow rather than value-shape inference; +8 is verified client-unused and retains an unnamed compiler-side authoring value."
     },
     {
       "confidence": "confirmed",
@@ -623,6 +623,15 @@
       "label": "secondary_chain_rebuild",
       "confidence": "confirmed",
       "role": "Replaces the entity+0x724 linked list with one chain owner per 28-byte MDLHeader +396/+400 record and passes the consumed record fields to 0x100ac0f0.",
+      "depth": 2,
+      "cap": 100,
+      "asm_count": 900
+    },
+    {
+      "address": "1018adb0",
+      "label": "secondary_chain_rebuild_by_model_handle",
+      "confidence": "confirmed",
+      "role": "Builds the alternate entity+0x40 secondary-chain list from the same 28-byte records and passes the same six fields as 0x10096650, omitting record +8.",
       "depth": 2,
       "cap": 100,
       "asm_count": 900

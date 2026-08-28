@@ -21,14 +21,20 @@ The impact ranking below is an assessment of what each finding would change, not
 The dominant gap in this format is **not undecoded bytes. It is decoded fields that nothing
 reads.**
 
-Four pieces of authored data are fully understood and sit unused by both the offline pipeline and
-the runtime: per-vertex normals, IK chains, pose parameters, and the surface property. All four
-are cheap to consume, and the first is a live shading regression rather than a new feature.
+Five pieces of authored data are understood but do not drive shipped runtime behavior here:
+per-vertex normals, IK chains, pose parameters, the surface property, and the per-material maximum
+world-units-per-texel metric. All five
+are retained by the Character GLB exporter. The first four can drive host features; the texel
+metric remains metadata because the shipped runtime does not read it.
 
-Genuinely undecoded territory is now small: two header slots nothing in the shipped binaries
-reads, and the interiors of `StudioSeqDesc` and
-`StudioAnimDesc` that no observed consumer touches. The one real hole in *method* is that the
-survey has covered header and struct declarations but never a payload byte-coverage map.
+Genuinely unidentified semantics are bounded but not closed. Secondary-motion record `+8` is an
+unused authored preset whose physical authoring name is unavailable, and the full character byte
+ledger has exposed compiler-retained donor/cache payloads whose runtime exclusion is settled but
+whose last internal byte boundaries are not all implemented in the ledger (§1.5).
+`StudioTexture+16` is the compiler's conservative
+maximum world-units-per-texel metric; only its exact compiler-side reducer remains unavailable.
+The two header slots are reserved zero storage, and every *indexed* `StudioSeqDesc` and
+`StudioAnimDesc` is carried as a complete typed record.
 
 ---
 
@@ -37,6 +43,7 @@ survey has covered header and struct declarations but never a payload byte-cover
 | Term | Means |
 |---|---|
 | **Confirmed** | Anchored by decoding what the field addresses, or by disassembly of a consuming instruction, with a stated check a wrong answer fails |
+| **Strong evidence** | Independent corpus tests select one semantic family, but the original compiler reducer or authoring name is unavailable |
 | **Probable** | Consistent across the whole corpus, but no consumer identified |
 | **Open** | Recorded as unknown; the evidence that would settle it is named |
 
@@ -68,6 +75,7 @@ nothing at runtime drives the parameter.
 | **IK chains** — `rhand`/`lhand`/`rfoot`/`lfoot`, 3 links each, 28B links | `MDLHeader`@368/372 | 239 models | **Confirmed** |
 | **Surface property** — physical material name | `MDLHeader`@392 | 1,923 named; 2,522 genuinely unset | **Confirmed** |
 | **Contents** — `CONTENTS_SOLID`, plus the per-bone field at `StudioBone`+156 | `MDLHeader`@420 | 7 models non-solid | **Confirmed** |
+| **Maximum world units per texel** — larger representative U/V material scale | `StudioTexture`+16 | 11,817 typed values; no runtime reader | **Strong corpus evidence** |
 
 Two supporting facts that make the first row actionable: the authored normals agree with a
 recomputation to 0.03–0.42° on clean spheres, which establishes shared frame and sign; and they
@@ -78,17 +86,65 @@ diverge by a mean of 11–15° elsewhere because they encode hard edges no avera
 
 | Slot | State | What would settle it |
 |---|---|---|
-| `MDLHeader`@412, @416 | `0` on all 4,445; **no shipped binary reads either through a studiohdr pointer** | A Troika-side artifact (studiomdl, a QC-era tool), or a model carrying a non-zero value. The install offers neither. |
-| `StudioSeqDesc` interior (764B) | Much of it read by no observed consumer | Broader runtime capture, or targeted decompilation |
-| `StudioAnimDesc` remainder (64 of 72B) | Same | Same |
-| `.phy` vphysics | Deferred by choice, not blocked — ~2/3 of models carry one | Owned by `docs/vtmb/phy_vphysics.md` |
+| `MDLHeader`@412, @416 | reserved zero storage: `0` on all 4,445 and no shipped reader | No authored value population remains; compiler-side names are unrecoverable |
+| secondary-motion record +8 | unused authored preset `{9,30,60}` over 600 records | A compiler-side name; every recovered runtime walk demonstrably omits it |
+| compiler-retained donor/cache blocks | Disabled include groups, animation payloads and mesh donors in §1.5; declared counts make them unreachable | Complete the typed subrange walk so the ledger can classify every retained byte without an opaque catch-all |
+| isolated compiler residue | Cloth alignment, string remnants and one orphan RLE sample in §1.5 | Preserve each bounded shape under its proven runtime-unused classification |
+| `.phy` solid-transform frame | Hulls and KeyValues are decoded; the ragdoll solid `origin`/`angles` mapping remains open | Owned by `docs/vtmb/phy_vphysics.md` |
 
-### 1.4 Never surveyed
+### 1.4 Payload byte coverage
 
-**No payload byte-coverage map has been run.** The survey work so far has profiled the header and
-walked declared structs. A coverage map — claim every byte range a known array owns, then inspect
-what is left — is the systematic way to find undecoded regions *inside* payloads, and it is the
-one method gap that could still surface something large.
+The Character GLB exporter now runs a strict per-file byte ledger over every direct source member.
+Independent MDL, VTX, PHY, VFE and TXT walkers claim decoded records, payloads and referenced
+strings; remaining zero runs are retained positionally as verified zero storage. Any unclaimed
+non-zero byte, overlap, out-of-range declaration, source hash mismatch, or non-zero byte inside a
+zero-classified range aborts publication. The ledger is emitted in the required
+`ELYSIUM_vtmb_character` extension and revalidated before the GLB is written.
+
+This closes the previous method gap for the Character GLB slice. It does not make dependency
+payloads part of the character: VMTs and included animation-bank MDLs are hashed references owned
+by their separate export products.
+
+### 1.5 Full character-export census
+
+The strict `export_v2 chacters-glb` pass admits **484** installed character models. The first
+corpus run published **280** and refused **204**. These are first-stop categories: correcting one
+gate can expose a later problem in the same model, so they describe why that run stopped rather
+than disjoint properties of the source files.
+
+| First refusal | Models | Finding |
+|---|---:|---|
+| non-finite semantic value | 105 | Exporter representation defect. A flex-op operand is a union; projecting every operand as both int and float turns integer bit patterns such as `0xffffffff` into NaN. Retail reads float only for `CONST`, int only for `FETCH1`/`FETCH2`, and ignores it for arithmetic ops. |
+| byte ledger | 53 | Real coverage refusal. The detailed families are below; some are decoder extent errors, while the rest are bounded dead duplicates or compiler-retained donor/cache data that still need explicit typed ledger ranges. |
+| TXT/VFE facial pair | 27 | Over-strict provenance gate. Twenty-one differ only because TXT rounds to three decimals; four have authored row-name differences, Pisha's compiled table has five additional controller keys, and `scrubs_female_phonemes.txt` has no same-stem VFE. Retail loads VFE, not TXT. |
+| PHY checksum mismatch | 14 | Over-strict source-closure gate. The PHY checksum is compiler provenance, not a retail admission test; `VCollideLoad` receives the solid count and bytes after the 16-byte header, not the MDL checksum. |
+| PHY KeyValues | 2 | Valid inline `break { ... }` blocks rejected by a parser that only accepts multiline blocks. |
+| zero-key facial table | 1 | Valid `crooked_cop_expressions` table: 32 labelled settings and an empty controller/value vector. |
+| MDL declared length | 1 | The patch's `taine.mdl` has one trailing `0x0a` after its declared MDL image. |
+| VTX variant disagreement | 1 | Barabus has LOD0 in DX80 and LOD0..6 in DX7; their shared LOD0 is identical. Whole-variant equality is the wrong check. |
+
+The 53 byte-ledger stops divide as follows:
+
+| Shape | Models | Current interpretation |
+|---|---:|---|
+| disabled PC include payload | 15 | Exactly two unindexed 116-byte `StudioModelGroup` records plus two `56 × NumBones` remap arrays per model. Their paths name PC-idle/frenzy banks, but `NumIncludeModels == 0`; all retail walkers gate on that count. |
+| donor animation payload | 7 | Six unindexed bone-record/RLE payloads plus Animalism's complete named `wolf_morph` descriptor and payload. The local animation/sequence counts and grids exclude them. |
+| cloth map extent/alignment | 10 | Nine use more VTX LOD rows than the definition matrix. Doppleganger stores a shortened tangent prefix whose omitted 69-vertex suffix is entirely selector `0xFF`; StudioRender reads the tangent map only on the selected branch. |
+| duplicate AxisInterp table before the referenced table | 5 | Exact byte-for-byte duplicate records; `ProcIndex` selects the second copy, making the first compiler residue. |
+| unreferenced string fragment | 5 | Recognisable material/include/animation string residue not reached by any declared string index. |
+| collision-triangle alignment residue | 2 | One non-zero u16 after a packed `u16[3]` triangle array. StudioRender advances exactly 6 bytes per triangle, proving the word is not a fourth index. |
+| full-body donor mesh | 2 | The same 596,392-byte retained body block in `walkie_talki1` and `sabbat_hand`: it begins with an unindexed 4,187-vertex/6-flex `StudioMesh` and matches the `sabbat_henchman` body layout at the same offsets, while each file's model header selects a later small active mesh. |
+| recursive include cache/donor records | 2 | Eight female and nine male `StudioModelGroup` records plus remap pointers retained after the declared `allsequences` group array. They name the tail of the recursively included `alsequences` DAG; the declared count excludes them and recursion loads the real child records. |
+| unindexed Taxida mesh payload | 1 | A 348-vertex mesh record followed by packed vertex and tangent-shaped arrays; the model header selects a later 568-vertex mesh. The patch-only compiler retained both. |
+| duplicate texture table | 1 | Twelve complete 20-byte `StudioTexture` records before the indexed 13-record table in `sabbat_henchman`; names and texel metrics match the indexed records (apart from one case-only spelling). |
+| extra secondary-motion records | 1 | Venus retains two additional valid 28-byte records after its declared five; the count excludes them. |
+| duplicate secondary-motion subset | 1 | Tremere female armor 1 retains five valid records, all byte/semantic duplicates of records in its indexed ten-record table. |
+| orphan animation sample | 1 | One complete four-byte, one-frame RLE sample immediately before the first referenced channel of `move_and_ranged` animation 100. No channel offset names it. |
+
+Therefore the present evidence boundary is exact: **280/484 products account for every direct
+source byte under the ledger; the other 204 are refused, never silently published.** Fixing the
+151 known false refusals does not by itself prove full-corpus byte closure; the 53 ledger cases
+remain the gate until each bounded donor/residue shape has explicit ranges and a regression.
 
 ---
 

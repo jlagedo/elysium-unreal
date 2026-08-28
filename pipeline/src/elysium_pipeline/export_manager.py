@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import hashlib
 import json
 import os
@@ -1322,6 +1322,232 @@ def export_model(
     # Keep placed props out of this slice as well -- they own independent containers and scopes.
     export_characters(config, runner, stems, sweep=False, include_props=False)
     return config.export_root / "npc"
+
+
+def export_character_glb(config, runner, model: str) -> Path:
+    """Write one isolated full-slice Character GLB and validate the published file."""
+    del runner  # This exporter is pure offline Python; kept for the public workflow signature.
+    _require_export_config(config)
+    from elysium_pipeline.exporters import character_glb
+    from elysium_pipeline.formats import install, mdl_skel
+    from elysium_pipeline.validation import character_glb as character_glb_validation
+
+    normalized = model.replace("\\", "/")
+    if not normalized.lower().endswith(".mdl"):
+        normalized += ".mdl"
+    index = install.build_index()
+    output_root = config.export_root / "glb" / "characters"
+    anorms = mdl_skel.load_anorms()
+    try:
+        destination = character_glb.export(
+            index, normalized, output_root, anorms=anorms
+        )
+        summary = character_glb_validation.validate(destination)
+    except Exception as exc:
+        raise OfflineExportFailure(
+            f"character GLB export failed for {normalized}: {exc}"
+        ) from exc
+    print(
+        "character GLB: "
+        f"{summary['asset']} -> {destination} "
+        f"({summary['bones']} bones, {summary['lods']} LODs, "
+        f"{summary['animations']} animations)"
+    )
+    return destination
+
+
+def _character_glb_models(index: dict) -> list[str]:
+    """Every character MDL with an admitted VTX topology companion."""
+    models = []
+    for path in index:
+        if not path.startswith("models/character/") or not path.endswith(".mdl"):
+            continue
+        stem = path[:-4]
+        if stem + ".dx80.vtx" in index or stem + ".dx7_2bone.vtx" in index:
+            models.append(path)
+    return sorted(models)
+
+
+def _character_glb_one(index, model: str, output_root: Path, anorms) -> dict:
+    from elysium_pipeline.exporters import character_glb
+    from elysium_pipeline.validation import character_glb as character_glb_validation
+
+    try:
+        destination = character_glb.export(
+            index, model, output_root, anorms=anorms
+        )
+        summary = character_glb_validation.validate(destination)
+        return {
+            "item": model,
+            "destination": str(destination),
+            "summary": summary,
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "item": model,
+            "destination": "",
+            "summary": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _print_glb_row(label: str, ordinal: int, total: int, row: dict) -> None:
+    item = row["item"]
+    if row["error"]:
+        print(f"! {label} [{ordinal}/{total}] failed for {item}: {row['error']}", flush=True)
+        return
+    summary = row["summary"]
+    print(
+        f"{label} [{ordinal}/{total}]: {summary['asset']} -> "
+        f"{row['destination']} ({summary['accountedBytes']}/{summary['sourceBytes']} bytes)",
+        flush=True,
+    )
+
+
+def _finalize_glb_corpus(
+    label: str, noun: str, rows: list[dict], output_root: Path
+) -> list[Path]:
+    destinations = [Path(row["destination"]) for row in rows if not row["error"]]
+    failures = [(row["item"], row["error"]) for row in rows if row["error"]]
+    total = len(rows)
+    if failures:
+        details = "; ".join(f"{item}: {error}" for item, error in failures[:12])
+        if len(failures) > 12:
+            details += f"; ... {len(failures) - 12} more"
+        raise OfflineExportFailure(
+            f"{label} corpus exported {len(destinations)}/{total}; "
+            f"{len(failures)} failed: {details}"
+        )
+    print(f"{label} corpus complete: {len(destinations)} {noun} -> {output_root}", flush=True)
+    return destinations
+
+
+def _run_glb_pool(label: str, worker, items: list[str], output_root: Path, jobs: int) -> list[dict]:
+    print(f"  {label}: {len(items)} unit(s) across {jobs} worker(s)", flush=True)
+    rows = []
+    with ProcessPoolExecutor(max_workers=jobs) as pool:
+        futures = [pool.submit(worker, item, str(output_root)) for item in items]
+        for ordinal, future in enumerate(as_completed(futures), 1):
+            row = future.result()
+            rows.append(row)
+            _print_glb_row(label, ordinal, len(items), row)
+    return rows
+
+
+def export_all_character_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every admitted character through the isolated schema-1.1 GLB pipeline."""
+    del runner
+    _require_export_config(config)
+    from elysium_pipeline.formats import install, mdl_skel
+
+    index = install.build_index()
+    models = _character_glb_models(index)
+    if not models:
+        raise OfflineExportFailure("character GLB corpus has no admitted models")
+    output_root = config.export_root / "glb" / "characters"
+    jobs = max(1, default_jobs() if jobs is None else int(jobs))
+    jobs = min(jobs, len(models))
+    if jobs <= 1:
+        anorms = mdl_skel.load_anorms()
+        rows = []
+        for ordinal, model in enumerate(models, 1):
+            row = _character_glb_one(index, model, output_root, anorms)
+            rows.append(row)
+            _print_glb_row("character GLB", ordinal, len(models), row)
+    else:
+        rows = _run_glb_pool(
+            "character GLB",
+            workers.character_glb_worker,
+            models,
+            output_root,
+            jobs,
+        )
+    return _finalize_glb_corpus("character GLB", "models", rows, output_root)
+
+
+def export_texture_glb(config, runner, texture: str) -> Path:
+    """Write and validate one isolated Texture GLB product."""
+    del runner
+    _require_export_config(config)
+    from elysium_pipeline.exporters import texture_glb
+    from elysium_pipeline.formats import install
+    from elysium_pipeline.validation import texture_glb as texture_glb_validation
+
+    index = install.build_index()
+    output_root = config.export_root / "glb" / "textures"
+    try:
+        destination = texture_glb.export(index, texture, output_root)
+        summary = texture_glb_validation.validate(destination)
+    except Exception as exc:
+        raise OfflineExportFailure(f"texture GLB export failed for {texture}: {exc}") from exc
+    print(
+        f"texture GLB: {summary['asset']} -> {destination} "
+        f"({summary['width']}x{summary['height']}, {summary['mips']} mips, "
+        f"{summary['accountedBytes']}/{summary['sourceBytes']} source bytes)"
+    )
+    return destination
+
+
+def _texture_glb_sources(index: dict) -> list[str]:
+    prefix, suffix = "materials/", ".tth"
+    return sorted(
+        path[len(prefix):-len(suffix)]
+        for path in index
+        if path.startswith(prefix) and path.endswith(suffix)
+    )
+
+
+def _texture_glb_one(index, texture: str, output_root: Path) -> dict:
+    from elysium_pipeline.exporters import texture_glb
+    from elysium_pipeline.validation import texture_glb as texture_glb_validation
+
+    try:
+        destination = texture_glb.export(index, texture, output_root)
+        summary = texture_glb_validation.validate(destination)
+        return {
+            "item": texture,
+            "destination": str(destination),
+            "summary": summary,
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "item": texture,
+            "destination": "",
+            "summary": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def export_all_texture_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every selected TTH identity; any incomplete unit fails the corpus."""
+    del runner
+    _require_export_config(config)
+    from elysium_pipeline.formats import install
+
+    index = install.build_index()
+    textures = _texture_glb_sources(index)
+    if not textures:
+        raise OfflineExportFailure("texture GLB corpus has no selected TTH members")
+    output_root = config.export_root / "glb" / "textures"
+    jobs = max(1, default_jobs() if jobs is None else int(jobs))
+    jobs = min(jobs, len(textures))
+    if jobs <= 1:
+        rows = []
+        for ordinal, texture in enumerate(textures, 1):
+            row = _texture_glb_one(index, texture, output_root)
+            rows.append(row)
+            _print_glb_row("texture GLB", ordinal, len(textures), row)
+    else:
+        rows = _run_glb_pool(
+            "texture GLB",
+            workers.texture_glb_worker,
+            textures,
+            output_root,
+            jobs,
+        )
+    return _finalize_glb_corpus("texture GLB", "textures", rows, output_root)
 
 
 def _placed_row_satisfies(row: dict, use) -> bool:

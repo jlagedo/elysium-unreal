@@ -36,6 +36,15 @@ convex). Those 42 are not a meaningful class — 38 are ordinary scenery (`secur
 `curtains`, `trailer_1pc`, …) and only 4 overlap the ragdoll set. The ragdoll marker is the
 keyvalue tail, not the magic.
 
+The header `checksum` is compiler provenance, not a runtime admission key. Fourteen character
+source closures in the merged install have a valid MDL and PHY whose stored checksums differ,
+including VPK/VPK and loose/loose pairs as well as patch/retail mixtures. The retail module corpus
+contains no checksum diagnostic or comparison in the collision-loading path. This agrees with the
+VtMB SDK's `VCollideLoad(output, solidCount, buffer, size)` seam: the caller passes `solidCount`
+and the bytes **after** this 16-byte header, so the collision loader never receives the MDL
+checksum. A converter may report the mismatch as provenance, but rejecting the PHY for it is
+stricter than retail.
+
 ## Ledge tree
 
 ```
@@ -97,7 +106,8 @@ exporter to reverse winding at OBJ-write time.
 
 ## Keyvalues tail
 
-After the solids comes plain text: one `solid { }` block per solid plus one `editparams { }`.
+After the solids comes plain-text KeyValues. Ordinary rigid bodies carry one `solid { }` block per
+solid plus one `editparams { }`:
 
 ```
 solid {
@@ -120,6 +130,18 @@ stool 25, wine glass 1.46. Every `prop_physics` in the exported maps carries
 `override_mass = -1`, so this is the only mass the original game ever uses for them. The bake
 puts it on the mesh's `BodySetup.DefaultInstance` mass override; the entity's own `override_mass`
 still outranks it at spawn, which is Source's precedence.
+
+Two composite character props use a different valid tail shape. `garg_gibbs.phy` and
+`throwtaxi.phy` contain compact inline blocks such as:
+
+```
+break { "model" "character\\...\\gib..." "health" "100" }
+```
+
+`break` names a child model and its authored health. Braces and fields may share one line, so a
+line-oriented parser that requires the opening and closing braces on separate lines falsely ends
+"inside a block". `PhysModelParseSolid` (`vampire.dll` `0x1002e210`) consumes only `solid` blocks;
+the exact breakable-composite consumer of `break` remains to be identified.
 
 ## The ragdoll rig
 

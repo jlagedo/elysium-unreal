@@ -48,6 +48,7 @@ app = typer.Typer(
 )
 deps_app = typer.Typer(help="Restore and verify locked project dependencies.")
 export_app = typer.Typer(help="Export VtMB sources and generate Unreal packages.")
+export_v2_app = typer.Typer(help="Run isolated lossless GLB export pipelines.")
 verify_app = typer.Typer(help="Check baked packages against what the export declares.")
 run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
@@ -55,6 +56,7 @@ ide_app = typer.Typer(help="Configure supported development environments.")
 worktree_app = typer.Typer(help="Manage mutable, isolated development-task worktrees.")
 app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
+app.add_typer(export_v2_app, name="export_v2")
 app.add_typer(verify_app, name="verify")
 app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
@@ -946,6 +948,102 @@ def export_model(
         action,
         require_game=True,
         require_ue=integrate,
+        activity=True,
+        primary_only=True,
+    )
+
+
+@export_v2_app.command("chacter-glb")
+def export_v2_chacter_glb(
+    ctx: typer.Context,
+    model: str = typer.Argument(
+        ...,
+        help="Install-relative models/character path, with or without .mdl.",
+    ),
+) -> None:
+    """Export one complete character body to the isolated GLB product tree."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_character_glb(config, runner, model)
+        console.print(f"character GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 chacter-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+        primary_only=True,
+    )
+
+
+@export_v2_app.command("chacters-glb")
+def export_v2_chacters_glb(ctx: typer.Context) -> None:
+    """Export every character body admitted by an MDL plus VTX companion."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_character_glbs(config, runner)
+        console.print(f"character GLB corpus export complete: {len(destinations)} models")
+
+    _execute(
+        _state(ctx),
+        "export_v2 chacters-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+        primary_only=True,
+    )
+
+
+@export_v2_app.command("texture-glb")
+def export_v2_texture_glb(
+    ctx: typer.Context,
+    texture: str = typer.Argument(
+        ...,
+        help="VtMB texture path, with optional materials/ prefix and TTH/TTZ suffix.",
+    ),
+) -> None:
+    """Export one complete texture identity to one GLB with one KTX2 payload."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_texture_glb(config, runner, texture)
+        console.print(f"texture GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 texture-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+        primary_only=True,
+    )
+
+
+@export_v2_app.command("textures-glb")
+def export_v2_textures_glb(ctx: typer.Context) -> None:
+    """Export every patch-first TTH identity through the lossless texture seam."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_texture_glbs(config, runner)
+        console.print(f"texture GLB corpus export complete: {len(destinations)} textures")
+
+    _execute(
+        _state(ctx),
+        "export_v2 textures-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
         activity=True,
         primary_only=True,
     )

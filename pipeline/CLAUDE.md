@@ -66,10 +66,16 @@ coordinate conversion.
 
 An exporter with a `UE_` filename emits centimetres, Z-up, left-handed Unreal data with
 the required winding. Every tracked coordinate-bearing OBJ/sidecar exporter follows this
-rule; parsers and orchestration modules do not emit coordinate products. `mdl_gltf.py` is
-the standing exemption: standard glTF 2.0 is self-describing and its `.glb` output is an
-on-demand inspection product (`uv run elysium export model <mdl>`) that nothing the game loads
-reads and no profile export writes. Every sidecar is Unreal-native,
+rule; parsers and orchestration modules do not emit coordinate products. Standard glTF 2.0 is
+self-describing and has isolated inspection/export exemptions: `mdl_gltf.py` writes the on-demand single-clip
+inspection product (`uv run elysium export model <mdl>`), and `exporters/character_glb.py` writes
+the complete character unit (`uv run elysium export_v2 chacter-glb <mdl>`, or
+`uv run elysium export_v2 chacters-glb` for every admitted character) below
+`$ELYSIUM_EXPORT_ROOT/glb/characters/`. Nothing the game loads reads either product and no profile
+export writes them. `exporters/texture_glb.py` likewise writes one required-extension GLB with one
+native KTX2 payload per patch-first texture below `$ELYSIUM_EXPORT_ROOT/glb/textures/`; the public
+commands are `export_v2 texture-glb` and `export_v2 textures-glb`. Nothing the game loads reads
+that product. Every sidecar is Unreal-native,
 including the `eyes/` and `procedural/` tables, which `UE_mdl_skeletal.py` states in the
 body's own frame from the Source-space records `mdl_skel.py` parses.
 

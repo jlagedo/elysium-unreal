@@ -20,6 +20,7 @@ class CliContractTests(unittest.TestCase):
             "doctor",
             "build",
             "export",
+            "export_v2",
             "test",
             "run",
             "debug",
@@ -80,6 +81,35 @@ class CliContractTests(unittest.TestCase):
         result = self.runner.invoke(app, ["export", "--help"])
         self.assertEqual(result.exit_code, 0, result.output)
         self.assertIn("wield", result.output)
+
+    def test_export_v2_exposes_the_isolated_glb_commands(self) -> None:
+        result = self.runner.invoke(app, ["export_v2", "--help"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("chacter-glb", result.output)
+        self.assertIn("chacters-glb", result.output)
+        self.assertIn("texture-glb", result.output)
+        self.assertIn("textures-glb", result.output)
+
+        old = self.runner.invoke(app, ["export", "--help"])
+        self.assertEqual(old.exit_code, 0, old.output)
+        self.assertNotIn("character-glb", old.output)
+
+    def test_export_v2_single_and_corpus_argument_contracts(self) -> None:
+        single = self.runner.invoke(app, ["export_v2", "chacter-glb", "--help"])
+        self.assertEqual(single.exit_code, 0, single.output)
+        self.assertIn("model", single.output)
+
+        corpus = self.runner.invoke(app, ["export_v2", "chacters-glb", "--help"])
+        self.assertEqual(corpus.exit_code, 0, corpus.output)
+        self.assertNotIn("model", corpus.output)
+
+        texture = self.runner.invoke(app, ["export_v2", "texture-glb", "--help"])
+        self.assertEqual(texture.exit_code, 0, texture.output)
+        self.assertIn("texture", texture.output)
+
+        textures = self.runner.invoke(app, ["export_v2", "textures-glb", "--help"])
+        self.assertEqual(textures.exit_code, 0, textures.output)
+        self.assertNotIn("texture path", textures.output.lower())
 
     def test_wield_export_stems_are_optional_positional_arguments(self) -> None:
         result = self.runner.invoke(app, ["export", "wield", "--help"])
