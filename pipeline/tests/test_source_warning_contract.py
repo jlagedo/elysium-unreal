@@ -26,12 +26,12 @@ def test_known_malformed_prop_requires_a_static_fallback() -> None:
     assert warning is not None
     assert warning["fallback"] == "per-map static model_mesh"
     assert animated_prop_warning(
-            model,
-            ValueError("truncated"),
-            has_static_fallback=False,
-        ) is None
+        model,
+        ValueError("truncated"),
+        has_static_fallback=False,
+    ) is None
     assert animated_prop_warning(
-            "models/scenery/misc/other.mdl",
-            ValueError("truncated"),
-            has_static_fallback=True,
-        ) is None
+        "models/scenery/misc/other.mdl",
+        ValueError("truncated"),
+        has_static_fallback=True,
+    ) is None

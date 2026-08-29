@@ -75,7 +75,7 @@ def test_retail_runtime_caches_below_maps_are_not_indexed(install_roots):
     index = install.build_index(verbose=False)
     assert "maps/sm_hub_1.bsp" in index
     assert not [k for k in index if k.startswith("maps/graphs/")
-                      or k.startswith("maps/soundcache/")]
+        or k.startswith("maps/soundcache/")]
 
 
 def test_a_repeat_call_returns_the_same_index_object(install_roots):

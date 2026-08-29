@@ -53,12 +53,12 @@ def test_distinct_models_dedupe_and_carry_every_classname() -> None:
         found = items.ground_models(install.index)
 
         assert found == {
-                "models/items/key/ground/key.mdl": [
-                    "item_k_gimble_key",
-                    "item_k_malcolm_office_key",
-                ],
-                "models/items/rings/ground/ring01.mdl": ["item_g_ring_gold"],
-            }
+            "models/items/key/ground/key.mdl": [
+                "item_k_gimble_key",
+                "item_k_malcolm_office_key",
+            ],
+            "models/items/rings/ground/ring01.mdl": ["item_g_ring_gold"],
+        }
 
 
 def test_an_extensionless_playermodel_resolves_as_a_model() -> None:
@@ -92,9 +92,9 @@ def test_weapondata_reads_whether_or_not_the_parser_unwrapped_it() -> None:
         install.item("item_g_watch", "models/items/watch/ground/watch.mdl", sole_root=False)
 
         assert sorted(items.ground_models(install.index)) == [
-                "models/items/stake/ground/stake.mdl",
-                "models/items/watch/ground/watch.mdl",
-            ]
+            "models/items/stake/ground/stake.mdl",
+            "models/items/watch/ground/watch.mdl",
+        ]
 
 
 def test_the_corpus_stem_is_the_whole_model_path_folded() -> None:
@@ -152,12 +152,12 @@ def test_a_model_the_install_lacks_is_recorded_rather_than_fatal() -> None:
 
         assert list(manifest["models"]) == ["models/items/stake/ground/stake.mdl"]
         assert manifest["skipped"] == [
-                {
-                    "model": "models/weapons/pistol/world/w_pistol.mdl",
-                    "reason": "not in the install",
-                    "classes": ["item_w_pistol", "item_w_pistol-null"],
-                }
-            ]
+            {
+                "model": "models/weapons/pistol/world/w_pistol.mdl",
+                "reason": "not in the install",
+                "classes": ["item_w_pistol", "item_w_pistol-null"],
+            }
+        ]
 
 
 def test_a_model_present_but_undecodable_is_named_as_such() -> None:

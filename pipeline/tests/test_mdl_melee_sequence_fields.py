@@ -595,8 +595,8 @@ def test_the_combo_block_crosses_the_seam_whole_and_unconverted() -> None:
         _sequence(label="Fists_attack_W1", mask=0x008, chain="Fists_attack_W2",
                   window=(0.5, 0.9, 0.91)))
     assert meta["combo"] == {"mask": 0x008, "dodge": "", "chain": "Fists_attack_W2",
-                                     "chain_alt": "", "w_open": 0.5, "w_close": 0.9,
-                                     "w_hold": 0.91}
+        "chain_alt": "", "w_open": 0.5, "w_close": 0.9,
+        "w_hold": 0.91}
 
 
 def test_a_dangling_chain_label_still_crosses_the_seam() -> None:
@@ -804,8 +804,8 @@ def test_a_plain_clip_stops_at_fade() -> None:
     # The column names, in the order a reader indexes them by. New columns APPEND: the index of
     # an existing one is a contract with every slice already on disk.
     assert written["fields"] == ["owner", "activity", "weight", "flags", "frames", "fps", "fade",
-                      "reach_cm", "blocked_reaction", "swings", "combo",
-                      "low_reach_cm", "envelopes"]
+        "reach_cm", "blocked_reaction", "swings", "combo",
+        "low_reach_cm", "envelopes"]
     assert _row(written, "idle") == [0, 1, 3, 0, 21, 30.0, 0.2]
 
 

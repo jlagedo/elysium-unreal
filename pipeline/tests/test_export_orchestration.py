@@ -131,9 +131,9 @@ def test_character_glb_corpus_admits_only_models_with_topology() -> None:
         "models/scenery/prop.dx80.vtx": object(),
     }
     assert export_manager._character_glb_models(index) == [
-            "models/character/a/body.mdl",
-            "models/character/b/body.mdl",
-        ]
+        "models/character/a/body.mdl",
+        "models/character/b/body.mdl",
+    ]
 
 
 def test_all_character_glbs_reuses_one_index_and_anorm_table() -> None:

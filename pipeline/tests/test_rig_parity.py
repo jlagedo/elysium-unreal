@@ -178,7 +178,7 @@ def test_a_number_naming_another_bank_is_an_owner_mismatch() -> None:
     report = compare_sequence_numbers(exported, SEQUENCE_NUMBER_LIVE, SEQUENCE_NUMBER_STEMS)
     assert report["owner_mismatches"] == 1
     assert report["examples"][0] == {"label": "kick", "seq": 2, "live": "shared_fists",
-                      "export": "shared_misc"}
+        "export": "shared_misc"}
 
 
 def test_a_number_naming_another_clip_is_a_label_mismatch() -> None:

@@ -785,10 +785,10 @@ def test_a_resolved_cell_exports_its_motion_summary() -> None:
     forward = next(cell for cell in blends["walk"]["cells"] if cell["axis"] == [4, 0])
     assert forward["clip"] == "aim#4"
     assert (forward["motion"] == {
-            "cycle_seconds": 0.1,
-            "ground_distance_cm": 30.48,
-            "ground_speed_cm_s": 304.8,
-        })
+        "cycle_seconds": 0.1,
+        "ground_distance_cm": 30.48,
+        "ground_speed_cm_s": 304.8,
+    })
     assert "motion" not in blends["walk"]["cells"][0]
 
 
@@ -815,12 +815,12 @@ def test_a_single_cell_sequence_carries_its_movement_records() -> None:
     assert (extra, blends) == ([], {})
     sidecar = mdl_skel.blend_sidecar(image, blends, list(sequences.values()))
     assert (sidecar["movement_fields"] == ["end_frame", "flags", "v0_cm", "v1_cm", "yaw_deg",
-                      "dir_x", "dir_y", "dir_z", "pos_x_cm", "pos_y_cm", "pos_z_cm"])
+        "dir_x", "dir_y", "dir_z", "pos_x_cm", "pos_y_cm", "pos_z_cm"])
     assert sorted(sidecar["movement"]) == ["aim"]
     # The path is piecewise and the cumulative position returns to zero: a scalar summary
     # would call this "no movement" while the file states a real displacement out and back.
     assert (sidecar["movement"]["aim"] == [[2, 0x1040, 5.08, 10.16, 0.0, 1.0, 0.0, 0.0, 7.62, 0.0, 0.0],
-                      [4, 0x1040, 15.24, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+        [4, 0x1040, 15.24, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
     assert (mdl_skel.movement_summary(
         image, sequences["aim"].base, sequences["aim"].frames, sequences["aim"].fps) is None)
 
@@ -865,10 +865,10 @@ def test_a_nine_by_one_grid_reads_its_extents_binding_and_every_cell() -> None:
     assert grid.paramstart == (-180.0, 0.0)
     assert grid.paramend == (180.0, 0.0)
     assert ([(cell.axis0, cell.axis1, cell.anim) for cell in grid.cells] == [(0, 0, 0), (1, 0, 1), (2, 0, 2), (3, 0, 3), (4, 0, 4),
-         (5, 0, 5), (6, 0, 6), (7, 0, 2), (8, 0, 0)])
+        (5, 0, 5), (6, 0, 6), (7, 0, 2), (8, 0, 0)])
     # The clip the sequence still bakes is the base cell's, unchanged.
-    assert (sequences["walk"].base == grid.cells[0].anim * ANIM_DESC_STRIDE
-                     + CONTRIBUTION_ANIM_INDEX_OFF)
+    expected = grid.cells[0].anim * ANIM_DESC_STRIDE + CONTRIBUTION_ANIM_INDEX_OFF
+    assert sequences["walk"].base == expected
 
 
 def test_a_three_by_three_grid_takes_axis_zero_down_the_row_stride() -> None:
@@ -914,7 +914,7 @@ def test_the_pose_parameters_a_grid_axis_binds_to_are_read() -> None:
 
     parameters = mdl_skel.pose_parameters(_image({0: NINE_BY_ONE}))
     assert ([(p.index, p.name, p.flags, p.start, p.end, p.loop) for p in parameters] == [(index, name, flags, start, end, loop)
-         for index, (name, flags, start, end, loop) in enumerate(POSE_PARAMETERS)])
+        for index, (name, flags, start, end, loop) in enumerate(POSE_PARAMETERS)])
     grid = _sequences(_image({0: NINE_BY_ONE}))["walk"].grid
     assert parameters[grid.paramindex[0]].name == "move_yaw"
     assert parameters[grid.paramindex[0]].loop == 360.0
@@ -946,7 +946,7 @@ def test_every_cell_becomes_its_own_clip_and_none_of_them_are_blended() -> None:
     assert walk["groupsize"] == [9, 1]
     assert walk["paramindex"] == [0, -1]
     assert ([cell["clip"] for cell in walk["cells"]] == ["walk", "run", "idle#2", "dead", "aim#4", "turn#5", "skip", "idle#2",
-         "walk"])
+        "walk"])
     assert [cell["axis"] for cell in blends["aim"]["cells"]] == [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]]
     # Nothing in the plan carries a blended clip: every cell names a clip
     # that decodes one animation of the model, and the weights that mix them

@@ -192,7 +192,7 @@ def test_a_multi_owner_clip_label_resolves_its_banks():
     got = character_recipes.scopes_for(partition, ["a_seed"], manifest=MANIFEST)
     families = {cp.bank_family(partition, owner) for owner in ("bank_one", "bank_two")}
     assert sorted(got) == sorted([character_recipes.GLOBAL_SCOPE, "model.a_seed",
-                *(f"bank.{family}" for family in families)])
+        *(f"bank.{family}" for family in families)])
 
 
 def test_a_single_owner_string_still_resolves():

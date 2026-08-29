@@ -51,7 +51,7 @@ def test_walks_through_a_stub_to_the_banks_that_hold_clips(tmp_path: Path) -> No
     assert len(closure.nodes) == 3
     assert closure.clip_count == 11
     assert {node.identity for node in closure.with_clips()} == {"vtmb:animation-bank:shared/idles",
-                      "vtmb:animation-bank:shared/combat"}
+        "vtmb:animation-bank:shared/combat"}
 
 
 def test_a_bank_with_no_clips_is_marked_a_stub(tmp_path: Path) -> None:

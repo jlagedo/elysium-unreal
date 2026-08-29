@@ -174,7 +174,7 @@ def test_only_the_newest_reports_survive() -> None:
 
         assert removed == 4
         assert sorted(child.name for child in reports.iterdir()) == ["20260824T000000.0Z-elysium-substrate",
-             "20260825T000000.0Z-elysium-substrate"]
+            "20260825T000000.0Z-elysium-substrate"]
 
 
 def test_a_missing_directory_is_not_an_error() -> None:

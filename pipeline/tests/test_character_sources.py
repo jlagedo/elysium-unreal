@@ -115,13 +115,13 @@ def test_sibling_files_move_the_detail_and_foreign_stems_do_not() -> None:
     grown = dict(INDEX)
     grown["models/character/x.ani"] = ("vpk", 10)
     assert base != export_manager._character_source_detail(
-            grown, "models/character/x.mdl",
-            export_manager._index_prefix_buckets(grown))
+        grown, "models/character/x.mdl",
+        export_manager._index_prefix_buckets(grown))
     foreign = dict(INDEX)
     foreign["models/character/xz.mdl"] = ("vpk", 11)
     assert base == export_manager._character_source_detail(
-            foreign, "models/character/x.mdl",
-            export_manager._index_prefix_buckets(foreign))
+        foreign, "models/character/x.mdl",
+        export_manager._index_prefix_buckets(foreign))
 
 
 MANIFEST = {

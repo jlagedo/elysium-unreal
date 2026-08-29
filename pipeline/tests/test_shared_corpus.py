@@ -91,7 +91,7 @@ def test_the_header_search_paths_are_tried_in_header_order():
     assert info is not None
     assert path == "models/props/second/spike"
     assert tried == ["materials/models/props/first/spike.vmt",
-                             "materials/models/props/second/spike.vmt"]
+        "materials/models/props/second/spike.vmt"]
 
 
 def test_a_flat_material_is_not_a_last_resort():

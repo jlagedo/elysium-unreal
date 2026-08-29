@@ -74,7 +74,7 @@ def test_parameters_keep_source_order_casing_and_offsets():
     assert [p.index for p in model.parameters] == [0, 1]
     assert model.surface_property == "flesh"
     assert {"role": "surface-property", "asset": "vtmb:surface-property:flesh",
-         "sourcePath": "scripts/surfaceproperties.txt#flesh"} in model.dependencies
+        "sourcePath": "scripts/surfaceproperties.txt#flesh"} in model.dependencies
 
 
 def test_a_repeated_proxy_stays_three_ordered_records():
@@ -295,7 +295,7 @@ def test_a_bumpmapped_material_draws_the_envmap_in_a_second_pass():
     second = [p for p in programs if p["drawPass"] == 1]
     assert base[0]["pixelShader"] == "VertexLitGeneric"
     assert {p["pixelShader"] for p in second} == {"VertexLitGeneric_EnvmappedBumpmapV2",
-         "VertexLitGeneric_EnvmappedBumpmapV2_ps14"}
+        "VertexLitGeneric_EnvmappedBumpmapV2_ps14"}
 
 
 def test_envmapoptional_deletes_the_envmap_outright():

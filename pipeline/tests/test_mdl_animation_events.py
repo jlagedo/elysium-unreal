@@ -17,9 +17,9 @@ def test_decodes_v2531_descriptor_relative_events():
     events = mdl_skel.read_events(image, descriptor)
 
     assert events == (
-            mdl_skel.Event(0.25, 1003, 0, "7"),
-            mdl_skel.Event(0.75, 2050, 0, "left foot"),
-        )
+        mdl_skel.Event(0.25, 1003, 0, "7"),
+        mdl_skel.Event(0.75, 2050, 0, "left foot"),
+    )
 
 
 def test_rejects_out_of_range_or_unterminated_event_arrays():

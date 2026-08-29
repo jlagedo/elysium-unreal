@@ -70,10 +70,10 @@ def test_the_chain_records_every_unit_it_walked_nearest_first(tmp_path: Path) ->
     )
     resolved = _resolve(tmp_path, "a")
     assert resolved.chain == (
-            "vtmb:surface-property:a",
-            "vtmb:surface-property:b",
-            "vtmb:surface-property:c",
-        )
+        "vtmb:surface-property:a",
+        "vtmb:surface-property:b",
+        "vtmb:surface-property:c",
+    )
 
 
 def test_origins_name_the_unit_each_value_came_from(tmp_path: Path) -> None:

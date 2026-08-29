@@ -83,7 +83,7 @@ def test_the_walk_is_depth_first_so_a_banks_own_banks_precede_its_sibling() -> N
         "models/b.mdl": _image(labels=("idle",)),
     })
     assert [(k, b) for k, _, b in S.first_reference_bases(load, "models/body.mdl")] == [("models/body.mdl", 0), ("models/a.mdl", 0), ("models/deep.mdl", 1),
-         ("models/b.mdl", 3)]
+        ("models/b.mdl", 3)]
 
 
 def test_a_model_reached_twice_records_its_first_appearance() -> None:

@@ -551,9 +551,9 @@ def test_every_declared_lod_is_decoded() -> None:
     assert lods[1]["primitives"][0]["triangles"] == [(0, 1, 2)]
     assert lods[0]["primitives"][0]["tangents"][0] == (1.0, 0.0, 0.0, 1.0)
     assert vtx.decode_material_replacements(topology) == [
-            {"lod": 0, "count": 0, "relativeOffset": 0, "replacements": []},
-            {"lod": 1, "count": 0, "relativeOffset": 0, "replacements": []},
-        ]
+        {"lod": 0, "count": 0, "relativeOffset": 0, "replacements": []},
+        {"lod": 1, "count": 0, "relativeOffset": 0, "replacements": []},
+    ]
 
 
 def test_vtmb_packed_material_replacement_is_typed() -> None:
@@ -564,11 +564,11 @@ def test_vtmb_packed_material_replacement_is_typed() -> None:
     struct.pack_into("<hi", data, 44, 2, 6)
     data[50:55] = b"skin\0"
     assert vtx.decode_material_replacements(bytes(data)) == [{
-            "lod": 0,
-            "count": 1,
-            "relativeOffset": 8,
-            "replacements": [{"index": 0, "material": 2, "name": "skin"}],
-        }]
+        "lod": 0,
+        "count": 1,
+        "relativeOffset": 8,
+        "replacements": [{"index": 0, "material": 2, "name": "skin"}],
+    }]
 
 
 def _closure_inputs():
@@ -602,8 +602,8 @@ def test_minimal_direct_closure_decodes_end_to_end() -> None:
     assert (model.header["reserved412"], model.header["reserved416"]) == (0, 0)
     assert model.header["bodyParts"][0]["models"][0]["reserved184"] == [0, 0]
     assert [row["path"] for row in model.typed_unidentified] == [
-            "mdl.secondaryMotion[].unusedAuthoredPreset",
-        ]
+        "mdl.secondaryMotion[].unusedAuthoredPreset",
+    ]
 
 
 def test_declared_image_allows_bounded_patch_newline() -> None:

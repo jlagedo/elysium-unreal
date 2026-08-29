@@ -150,10 +150,10 @@ def test_base_resolves_against_the_table_and_names_a_dependency():
     assert model.base["name"] == "default"
     assert model.base["resolved"]
     assert {
-            "role": "surface-property",
-            "asset": "vtmb:surface-property:default",
-            "sourcePath": "scripts/surfaceproperties.txt#default",
-        } in model.dependencies
+        "role": "surface-property",
+        "asset": "vtmb:surface-property:default",
+        "sourcePath": "scripts/surfaceproperties.txt#default",
+    } in model.dependencies
     assert model.unresolved == []
 
 
