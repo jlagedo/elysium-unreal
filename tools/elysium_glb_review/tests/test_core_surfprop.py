@@ -1,0 +1,155 @@
+"""Contract tests for surface-property inheritance.
+
+Eighteen of the sixty-three units declare no physics of their own. Reading one without
+walking its base chain reports nothing where the game reads a value, so the walk is not
+a convenience.
+"""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from core import glb, surfprop
+
+from . import support
+
+
+class InheritanceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._scratch = tempfile.TemporaryDirectory()
+        self.root = Path(self._scratch.name)
+        self.addCleanup(self._scratch.cleanup)
+
+    def _corpus(self, units: dict[str, bytes]) -> None:
+        support.write_corpus(self.root, units)
+
+    def _resolve(self, name: str) -> surfprop.Resolved:
+        document = glb.read_json(self.root / "surface-properties" / (name + ".glb"))
+        return surfprop.resolve(document, self.root)
+
+    def test_a_unit_that_declares_nothing_reads_its_base(self) -> None:
+        self._corpus(
+            {
+                "surface-properties/brick.glb": support.surface_property_unit(
+                    "brick", base="concrete"
+                ),
+                "surface-properties/concrete.glb": support.surface_property_unit(
+                    "concrete", physics={"density": 2400.0, "friction": 0.8}
+                ),
+            }
+        )
+        resolved = self._resolve("brick")
+        self.assertEqual(resolved.values["physics"], {"density": 2400.0, "friction": 0.8})
+        self.assertTrue(resolved.is_inherited("physics", "density"))
+
+    def test_a_nearer_declaration_wins_over_a_further_one(self) -> None:
+        self._corpus(
+            {
+                "surface-properties/a.glb": support.surface_property_unit(
+                    "a", base="b", physics={"friction": 0.1}
+                ),
+                "surface-properties/b.glb": support.surface_property_unit(
+                    "b", physics={"friction": 0.9, "density": 100.0}
+                ),
+            }
+        )
+        resolved = self._resolve("a")
+        self.assertEqual(resolved.values["physics"]["friction"], 0.1)
+        self.assertEqual(resolved.values["physics"]["density"], 100.0)
+        self.assertFalse(resolved.is_inherited("physics", "friction"))
+        self.assertTrue(resolved.is_inherited("physics", "density"))
+
+    def test_the_chain_records_every_unit_it_walked_nearest_first(self) -> None:
+        self._corpus(
+            {
+                "surface-properties/a.glb": support.surface_property_unit("a", base="b"),
+                "surface-properties/b.glb": support.surface_property_unit("b", base="c"),
+                "surface-properties/c.glb": support.surface_property_unit(
+                    "c", physics={"density": 1.0}
+                ),
+            }
+        )
+        resolved = self._resolve("a")
+        self.assertEqual(
+            resolved.chain,
+            (
+                "vtmb:surface-property:a",
+                "vtmb:surface-property:b",
+                "vtmb:surface-property:c",
+            ),
+        )
+
+    def test_origins_name_the_unit_each_value_came_from(self) -> None:
+        self._corpus(
+            {
+                "surface-properties/a.glb": support.surface_property_unit("a", base="b"),
+                "surface-properties/b.glb": support.surface_property_unit(
+                    "b", physics={"density": 7.0}
+                ),
+            }
+        )
+        resolved = self._resolve("a")
+        self.assertEqual(resolved.origins[("physics", "density")], "vtmb:surface-property:b")
+
+    def test_a_root_unit_walks_only_itself(self) -> None:
+        self._corpus(
+            {
+                "surface-properties/concrete.glb": support.surface_property_unit(
+                    "concrete", physics={"density": 2400.0}
+                )
+            }
+        )
+        resolved = self._resolve("concrete")
+        self.assertEqual(resolved.chain, ("vtmb:surface-property:concrete",))
+        self.assertFalse(resolved.is_inherited("physics", "density"))
+
+    def test_a_base_with_no_file_is_reported_rather_than_ignored(self) -> None:
+        # The seam treats an unresolvable base as a hard failure, so the tool must not
+        # quietly present a unit as complete when its inherited half is missing.
+        self._corpus(
+            {"surface-properties/a.glb": support.surface_property_unit("a", base="gone")}
+        )
+        resolved = self._resolve("a")
+        self.assertEqual(resolved.broken_base, "vtmb:surface-property:gone")
+        self.assertFalse(resolved.cyclic)
+
+    def test_a_cycle_terminates_and_is_flagged(self) -> None:
+        self._corpus(
+            {
+                "surface-properties/a.glb": support.surface_property_unit(
+                    "a", base="b", physics={"friction": 1.0}
+                ),
+                "surface-properties/b.glb": support.surface_property_unit("b", base="a"),
+            }
+        )
+        resolved = self._resolve("a")
+        self.assertTrue(resolved.cyclic)
+        self.assertEqual(resolved.values["physics"]["friction"], 1.0)
+
+    def test_scalars_inherit_from_the_nearest_unit_that_declares_them(self) -> None:
+        self._corpus(
+            {
+                "surface-properties/a.glb": support.surface_property_unit("a", base="b"),
+                "surface-properties/b.glb": support.surface_property_unit(
+                    "b", game_material="C"
+                ),
+            }
+        )
+        self.assertEqual(self._resolve("a").values["gameMaterial"], "C")
+
+    def test_the_walk_stops_at_the_depth_limit(self) -> None:
+        units = {}
+        for step in range(8):
+            units["surface-properties/s%d.glb" % step] = support.surface_property_unit(
+                "s%d" % step, base="s%d" % (step + 1)
+            )
+        self._corpus(units)
+        document = glb.read_json(self.root / "surface-properties/s0.glb")
+        resolved = surfprop.resolve(document, self.root, max_depth=3)
+        self.assertEqual(len(resolved.chain), 3)
+
+
+if __name__ == "__main__":
+    unittest.main()

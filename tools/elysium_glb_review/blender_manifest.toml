@@ -1,0 +1,26 @@
+schema_version = "1.0.0"
+
+id = "elysium_glb_review"
+version = "0.1.0"
+name = "Elysium GLB Review"
+tagline = "Reads ELYSIUM glTF extensions for asset review"
+maintainer = "Elysium Pipeline <jlagedo@icloud.com>"
+type = "add-on"
+
+blender_version_min = "5.2.0"
+
+license = ["SPDX:GPL-3.0-or-later"]
+
+tags = ["Import-Export", "Pipeline", "Development"]
+
+[permissions]
+files = "Read GLB and texture files from the export corpus"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  ".*",
+  "/*.zip",
+  "*.blend[1-9]",
+  "/tests/",
+]

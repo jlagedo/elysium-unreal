@@ -47,6 +47,7 @@ verify_app = typer.Typer(help="Check baked packages against what the export decl
 run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
 ide_app = typer.Typer(help="Configure supported development environments.")
+blender_app = typer.Typer(help="Package and drive the Blender GLB review add-on.")
 app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
 app.add_typer(export_v2_app, name="export_v2")
@@ -54,6 +55,7 @@ app.add_typer(verify_app, name="verify")
 app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
 app.add_typer(ide_app, name="ide")
+app.add_typer(blender_app, name="blender")
 
 
 @dataclass(slots=True)
@@ -1057,6 +1059,76 @@ def reconstruct(
         require_ue=True,
         activity=True,
     )
+
+
+@blender_app.command("build")
+def blender_build(ctx: typer.Context) -> None:
+    """Validate and package the review add-on into the work root."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import blender
+
+        archive = blender.build(config, runner)
+        console.print(f"built {archive}")
+
+    _execute(_state(ctx), "blender build", ExitCode.DEPENDENCY_OR_TOOLCHAIN, action)
+
+
+@blender_app.command("install")
+def blender_install(ctx: typer.Context) -> None:
+    """Package the add-on and install it into Blender, enabled."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import blender
+
+        module = blender.install(config, runner)
+        console.print(f"installed and enabled as {module}")
+
+    _execute(_state(ctx), "blender install", ExitCode.DEPENDENCY_OR_TOOLCHAIN, action)
+
+
+@blender_app.command("review")
+def blender_review(
+    ctx: typer.Context,
+    target: str | None = typer.Argument(None, help="A .glb to open on startup."),
+) -> None:
+    """Open Blender with the add-on enabled."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import blender
+
+        path = Path(target) if target else None
+        if path is not None and not path.is_absolute():
+            path = config.export_v2_root / path
+        blender.review(config, runner, path)
+
+    _execute(
+        _state(ctx), "blender review", ExitCode.DEPENDENCY_OR_TOOLCHAIN, action, activity=True
+    )
+
+
+@blender_app.command("report")
+def blender_report(
+    ctx: typer.Context,
+    json_output: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+) -> None:
+    """Sweep the export_v2 corpus for integrity problems.
+
+    Needs no Blender: the add-on's core is deliberately free of `bpy` so this runs here.
+    """
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline import blender
+
+        summary, data, destination = blender.corpus_report(config, write=not json_output)
+        if json_output:
+            typer.echo(json.dumps(data, indent=2, sort_keys=True))
+            return
+        console.print(summary)
+        if destination is not None:
+            console.print(f"report written to {destination}")
+
+    _execute(_state(ctx), "blender report", ExitCode.VALIDATION, action, activity=True)
 
 
 @app.command("test")
