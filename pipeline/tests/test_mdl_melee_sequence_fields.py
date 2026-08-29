@@ -276,41 +276,45 @@ def test_the_two_edges_are_independent():
     assert low_only.low_reach == pytest.approx(30.0, abs=1e-4)
 
 
-class EnvelopeTests(unittest.TestCase):
-    """The attack-envelope array at `numenvelopes`@700 / `envelopeindex`@704."""
+ENVELOPE_CORNERS = (((10.0, -4.0, -8.0), (40.0, 4.0, 8.0)),
+           ((12.0, -5.0, -9.0), (44.0, 5.0, 9.0)))
 
-    CORNERS = (((10.0, -4.0, -8.0), (40.0, 4.0, 8.0)),
-               ((12.0, -5.0, -9.0), (44.0, 5.0, 9.0)))
 
-    def test_records_decode_as_corner_pairs(self):
-        assert _sequence(envelopes=self.CORNERS).envelopes == self.CORNERS
+def test_records_decode_as_corner_pairs():
+    assert _sequence(envelopes=ENVELOPE_CORNERS).envelopes == ENVELOPE_CORNERS
 
-    def test_a_sequence_declaring_none_carries_none(self):
-        assert _sequence().envelopes == ()
 
-    def test_the_index_is_descriptor_relative(self):
-        # Same bound `read_swing_records` requires. An absolute reading would resolve somewhere
-        # inside the descriptor array and decode neighbouring fields as floats.
-        absolute = _sequence(envelopes=self.CORNERS, envelope_index=_ENVELOPE_BASE)
-        assert absolute.envelopes != self.CORNERS
+def test_a_sequence_declaring_no_envelope_carries_none():
+    assert _sequence().envelopes == ()
 
-    def test_an_implausible_count_yields_nothing(self):
-        # The seven single-`idle` scenery models read count 768 at offset 768 — the descriptor tail
-        # running into the string table. Refused rather than partly believed.
-        assert _sequence(envelopes=self.CORNERS, envelope_count=768).envelopes == ()
 
-    def test_an_array_off_the_end_of_the_image_yields_nothing(self):
-        assert _sequence(envelopes=self.CORNERS, envelope_index=1 << 24).envelopes == ()
+def test_the_index_is_descriptor_relative():
+    # Same bound `read_swing_records` requires. An absolute reading would resolve somewhere
+    # inside the descriptor array and decode neighbouring fields as floats.
+    absolute = _sequence(envelopes=ENVELOPE_CORNERS, envelope_index=_ENVELOPE_BASE)
+    assert absolute.envelopes != ENVELOPE_CORNERS
 
-    def test_a_non_positive_index_yields_nothing(self):
-        assert _sequence(envelopes=self.CORNERS, envelope_index=0).envelopes == ()
 
-    def test_the_arrays_are_not_parallel(self):
-        # The load-bearing fact about this array: it is a different structure with a different job,
-        # and a consumer that walked them together would index one off the other's count.
-        seq = _sequence(swings=(_swing(),), envelopes=self.CORNERS)
-        assert len(seq.swings) == 1
-        assert len(seq.envelopes) == 2
+def test_an_implausible_count_yields_nothing():
+    # The seven single-`idle` scenery models read count 768 at offset 768 — the descriptor tail
+    # running into the string table. Refused rather than partly believed.
+    assert _sequence(envelopes=ENVELOPE_CORNERS, envelope_count=768).envelopes == ()
+
+
+def test_an_array_off_the_end_of_the_image_yields_nothing():
+    assert _sequence(envelopes=ENVELOPE_CORNERS, envelope_index=1 << 24).envelopes == ()
+
+
+def test_a_non_positive_index_yields_nothing():
+    assert _sequence(envelopes=ENVELOPE_CORNERS, envelope_index=0).envelopes == ()
+
+
+def test_the_arrays_are_not_parallel():
+    # The load-bearing fact about this array: it is a different structure with a different job,
+    # and a consumer that walked them together would index one off the other's count.
+    seq = _sequence(swings=(_swing(),), envelopes=ENVELOPE_CORNERS)
+    assert len(seq.swings) == 1
+    assert len(seq.envelopes) == 2
 
 
 # ComboChainTests

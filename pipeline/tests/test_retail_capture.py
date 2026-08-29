@@ -1024,156 +1024,151 @@ def test_a_zero_weight_record_decodes_to_zero_rather_than_to_a_pose() -> None:
     assert mdl_skel.read_anim(image, bones, alive, 1)[0][1][0] == bones[1].pos
 
 
-class ProceduralRuleExportTests(unittest.TestCase):
-    """CAP7.1: the `ProcType == 1` rule table the model exporter carries out.
+def _procedural_rule_export_image(axis: int = 2, rule=None) -> bytes:
+    control, _, positions, quaternions = rule or AXIS_RULE
+    return model_image(
+        TRANSFORM_CHECKSUM,
+        TRANSFORM_MODEL,
+        bones=PROCEDURAL_BONES,
+        procedural={3: (control, axis, positions, quaternions)},
+    )
 
-    A rule's six entries and its axis index are Source quantities and the export's
-    change of basis conjugates a bone local, so the table is checked in both
-    directions: back into VtMB's basis against the bytes it was read from, and
-    forward against the transcription of the rule this module already holds. A
-    table that named the wrong axis after conversion passes neither.
+
+def _rules(image):
+    from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+    from elysium_pipeline.formats import mdl_skel
+
+    records, faults = mdl_skel.axis_interp_records(image, mdl_skel.read_bones(image))
+    return UEK.unreal_axis_rules(records), faults
+
+
+def test_the_exporter_carries_the_source_axes_into_the_unreal_basis() -> None:
+    """The three vectors every exported rule is read against.
+
+    Source Y becomes negative Unreal Y, so an export that carried the axis index
+    through unchanged would name a sign-flipped axis on one rule in three. This
+    is the assertion that says so out loud.
     """
+    from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 
-    def _image(self, axis: int = 2, rule=None) -> bytes:
-        control, _, positions, quaternions = rule or AXIS_RULE
-        return model_image(
-            TRANSFORM_CHECKSUM,
-            TRANSFORM_MODEL,
-            bones=PROCEDURAL_BONES,
-            procedural={3: (control, axis, positions, quaternions)},
-        )
+    assert UEK.DRIVER_AXES == [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]]
+    # `-0.0` is normalized away, so the table reads as the signed unit vectors it is.
+    for axis in UEK.DRIVER_AXES:
+        for component in axis:
+            assert not (math.copysign(1.0, component) < 0.0 and component == 0.0)
 
-    def _rules(self, image):
-        from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
-        from elysium_pipeline.formats import mdl_skel
 
-        records, faults = mdl_skel.axis_interp_records(image, mdl_skel.read_bones(image))
-        return UEK.unreal_axis_rules(records), faults
+def test_the_table_takes_the_same_basis_change_the_mesh_and_clips_take() -> None:
+    """The quaternion route the table uses names the rotation the matrix does.
 
-    def test_the_exporter_carries_the_source_axes_into_the_unreal_basis(self) -> None:
-        """The three vectors every exported rule is read against.
+    The table is read back and re-evaluated rather than only drawn, so it goes
+    through the quaternion rather than the rotation matrix -- which keeps the
+    representative the model authored and inverts to the float32 it was read
+    from. That is a different route to the same conjugation, and this is what
+    says so: the two agree as rotations to floating-point noise.
+    """
+    from elysium_pipeline.formats import bsp, mdl_skel
 
-        Source Y becomes negative Unreal Y, so an export that carried the axis index
-        through unchanged would name a sign-flipped axis on one rule in three. This
-        is the assertion that says so out loud.
-        """
-        from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+    basis = np.asarray(UNREAL_M)
+    for quaternion in (*AXIS_RULE[3], OBLIQUE, (0.0, HALF, 0.0, -HALF)):
+        exact = bsp.source_quat_to_unreal(*quaternion)
+        assert np.allclose(
+            mdl_skel.rot_matrix(exact),
+            basis @ mdl_skel.rot_matrix(quaternion) @ basis,
+            atol=1.0e-12,
+        ), f"quaternion={quaternion}"
+        # A component negation is its own inverse, so the exported table
+        # recovers the bytes it was read from exactly rather than nearly.
+        assert bsp.source_quat_to_unreal(*exact) == tuple(quaternion), (
+            f"quaternion={quaternion}")
 
-        assert UEK.DRIVER_AXES == [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]]
-        # `-0.0` is normalized away, so the table reads as the signed unit vectors it is.
-        for axis in UEK.DRIVER_AXES:
-            for component in axis:
-                assert not (math.copysign(1.0, component) < 0.0 and component == 0.0)
 
-    def test_the_table_takes_the_same_basis_change_the_mesh_and_clips_take(self) -> None:
-        """The quaternion route the table uses names the rotation the matrix does.
+@pytest.mark.parametrize("axis", range(3))
+def test_the_exported_table_inverts_to_the_bytes_it_was_read_from(axis: int) -> None:
+    from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 
-        The table is read back and re-evaluated rather than only drawn, so it goes
-        through the quaternion rather than the rotation matrix -- which keeps the
-        representative the model authored and inverts to the float32 it was read
-        from. That is a different route to the same conjugation, and this is what
-        says so: the two agree as rotations to floating-point noise.
-        """
-        from elysium_pipeline.formats import bsp, mdl_skel
+    # `source_to_unreal` and `source_quat_to_unreal` are their own inverses up to the
+    # inch-to-centimetre scale, so undoing them is a division and two sign flips.
+    def unconv_pos(p):
+        return (p[0] / UNREAL_SCALE, -p[1] / UNREAL_SCALE, p[2] / UNREAL_SCALE)
 
-        basis = np.asarray(UNREAL_M)
-        for quaternion in (*AXIS_RULE[3], OBLIQUE, (0.0, HALF, 0.0, -HALF)):
-            with self.subTest(quaternion=quaternion):
-                exact = bsp.source_quat_to_unreal(*quaternion)
-                assert (np.allclose(
-                        mdl_skel.rot_matrix(exact),
-                        basis @ mdl_skel.rot_matrix(quaternion) @ basis,
-                        atol=1.0e-12,
-                    ))
-                # A component negation is its own inverse, so the exported table
-                # recovers the bytes it was read from exactly rather than nearly.
-                assert bsp.source_quat_to_unreal(*exact) == tuple(quaternion)
+    def unconv_quat(q):
+        return (-q[0], q[1], -q[2], q[3])
 
-    def test_the_exported_table_inverts_to_the_bytes_it_was_read_from(self) -> None:
-        from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+    image = _procedural_rule_export_image(axis)
+    rules, faults = _rules(image)
+    assert faults == []
+    assert len(rules) == 1
+    rule = rules[0]
+    assert rule["bone"] == "Bip01 L Bicep"
+    assert rule["bone_index"] == 3
+    assert rule["control"] == "Bip01 Spine"
+    assert rule["control_index"] == 1
+    # The axis is carried as a direction, so recovering the index it
+    # was written from is a lookup rather than a conversion.
+    rebuilt = struct.pack(
+        "<ii", rule["control_index"], UEK.DRIVER_AXES.index(rule["axis"])
+    )
+    rebuilt += struct.pack(
+        "<18f",
+        *[c for entry in rule["pos"] for c in unconv_pos(entry)],
+    )
+    rebuilt += struct.pack(
+        "<24f",
+        *[c for entry in rule["quat"] for c in unconv_quat(entry)],
+    )
+    assert rebuilt == _raw_axis_interp(image, 3)
 
-        # `source_to_unreal` and `source_quat_to_unreal` are their own inverses up to the
-        # inch-to-centimetre scale, so undoing them is a division and two sign flips.
-        def unconv_pos(p):
-            return (p[0] / UNREAL_SCALE, -p[1] / UNREAL_SCALE, p[2] / UNREAL_SCALE)
 
-        def unconv_quat(q):
-            return (-q[0], q[1], -q[2], q[3])
+@pytest.mark.parametrize("axis", range(3))
+def test_the_exported_table_evaluates_to_the_converted_correction(axis: int) -> None:
+    from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 
-        for axis in range(3):
-            with self.subTest(axis=axis):
-                image = self._image(axis)
-                rules, faults = self._rules(image)
-                assert faults == []
-                assert len(rules) == 1
-                rule = rules[0]
-                assert rule["bone"] == "Bip01 L Bicep"
-                assert rule["bone_index"] == 3
-                assert rule["control"] == "Bip01 Spine"
-                assert rule["control_index"] == 1
-                # The axis is carried as a direction, so recovering the index it
-                # was written from is a lookup rather than a conversion.
-                rebuilt = struct.pack(
-                    "<ii", rule["control_index"], UEK.DRIVER_AXES.index(rule["axis"])
-                )
-                rebuilt += struct.pack(
-                    "<18f",
-                    *[c for entry in rule["pos"] for c in unconv_pos(entry)],
-                )
-                rebuilt += struct.pack(
-                    "<24f",
-                    *[c for entry in rule["quat"] for c in unconv_quat(entry)],
-                )
-                assert rebuilt == _raw_axis_interp(image, 3)
+    locals_ = _bind_locals(PROCEDURAL_BONES)
+    # The control bone's bind is oblique, so the driver has three non-zero
+    # components on every axis and the whole rule runs rather than landing on
+    # one table entry.
+    world = _expected_world(PROCEDURAL_BONES, locals_, TRANSFORM_ROOT, split=True)
+    to_unreal = lambda m: _to_basis_3x4(m, UNREAL_M, UNREAL_SCALE)
+    converted = [to_unreal(matrix) for matrix in world]
+    image = _procedural_rule_export_image(axis)
+    raw = _decoded_axis_interp(_raw_axis_interp(image, 3))
+    assert raw[1] == axis
+    expected = to_unreal(_axis_interp_local(raw, world, PROCEDURAL_BONES))
+    rules, _ = _rules(image)
+    produced = _exported_axis_interp_local(
+        rules[0], UEK.DRIVER_AXES, converted, PROCEDURAL_BONES
+    )
+    for index, (a, b) in enumerate(zip(produced, expected)):
+        assert a == pytest.approx(b, abs=1e-9)
+    # The rule has to be doing work, or agreeing about nothing would
+    # pass: the correction is not the bone's own animated local.
+    assert not np.allclose(produced, to_unreal(world[3]), atol=1.0e-3)
 
-    def test_the_exported_table_evaluates_to_the_converted_correction(self) -> None:
-        from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 
-        locals_ = _bind_locals(PROCEDURAL_BONES)
-        # The control bone's bind is oblique, so the driver has three non-zero
-        # components on every axis and the whole rule runs rather than landing on
-        # one table entry.
-        world = _expected_world(PROCEDURAL_BONES, locals_, TRANSFORM_ROOT, split=True)
-        to_unreal = lambda m: _to_basis_3x4(m, UNREAL_M, UNREAL_SCALE)
-        converted = [to_unreal(matrix) for matrix in world]
-        for axis in range(3):
-            with self.subTest(axis=axis):
-                image = self._image(axis)
-                raw = _decoded_axis_interp(_raw_axis_interp(image, 3))
-                assert raw[1] == axis
-                expected = to_unreal(_axis_interp_local(raw, world, PROCEDURAL_BONES))
-                rules, _ = self._rules(image)
-                produced = _exported_axis_interp_local(
-                    rules[0], UEK.DRIVER_AXES, converted, PROCEDURAL_BONES
-                )
-                for index, (a, b) in enumerate(zip(produced, expected)):
-                    assert a == pytest.approx(b, abs=1e-9)
-                # The rule has to be doing work, or agreeing about nothing would
-                # pass: the correction is not the bone's own animated local.
-                assert not np.allclose(produced, to_unreal(world[3]), atol=1.0e-3)
+def test_a_rule_that_does_not_resolve_is_a_named_fault() -> None:
+    rules, faults = _rules(_procedural_rule_export_image(rule=(1, 2, *AXIS_RULE[2:])))
+    assert len(rules) == 1
+    assert faults == []
 
-    def test_a_rule_that_does_not_resolve_is_a_named_fault(self) -> None:
-        rules, faults = self._rules(self._image(rule=(1, 2, *AXIS_RULE[2:])))
-        assert len(rules) == 1
-        assert faults == []
+    # `ProcIndex` left at zero resolves onto the bone record itself, whose
+    # first field is a string index rather than a bone.
+    image = model_image(
+        TRANSFORM_CHECKSUM, TRANSFORM_MODEL,
+        bones=PROCEDURAL_BONES, procedural={3: None},
+    )
+    rules, faults = _rules(image)
+    assert rules == []
+    assert len(faults) == 1
+    assert "control bone" in faults[0]
 
-        # `ProcIndex` left at zero resolves onto the bone record itself, whose
-        # first field is a string index rather than a bone.
-        image = model_image(
-            TRANSFORM_CHECKSUM, TRANSFORM_MODEL,
-            bones=PROCEDURAL_BONES, procedural={3: None},
-        )
-        rules, faults = self._rules(image)
-        assert rules == []
-        assert len(faults) == 1
-        assert "control bone" in faults[0]
 
-    def test_a_rule_naming_an_axis_outside_the_three_is_a_named_fault(self) -> None:
-        image = bytearray(self._image())
-        record = struct.unpack_from("<i", image, 244)[0] + BONE_STRIDE * 3
-        offset = record + struct.unpack_from("<i", image, record + 144)[0]
-        struct.pack_into("<i", image, offset + 4, 3)
-        rules, faults = self._rules(bytes(image))
-        assert rules == []
-        assert len(faults) == 1
-        assert "axis 3" in faults[0]
+def test_a_rule_naming_an_axis_outside_the_three_is_a_named_fault() -> None:
+    image = bytearray(_procedural_rule_export_image())
+    record = struct.unpack_from("<i", image, 244)[0] + BONE_STRIDE * 3
+    offset = record + struct.unpack_from("<i", image, record + 144)[0]
+    struct.pack_into("<i", image, offset + 4, 3)
+    rules, faults = _rules(bytes(image))
+    assert rules == []
+    assert len(faults) == 1
+    assert "axis 3" in faults[0]

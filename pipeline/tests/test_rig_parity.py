@@ -155,71 +155,75 @@ def test_a_witness_outside_the_tree_is_rejected_not_diffed() -> None:
     assert rejected["run"]["owners"] == Counter({"models/female/bank.mdl": 1})
 
 
-class SequenceNumberTests(unittest.TestCase):
-    """The export's offline numbering against the live flat space."""
+SEQUENCE_NUMBER_STEMS = {
+    "models/shared/misc.mdl": "shared_misc",
+    "models/shared/fists.mdl": "shared_fists",
+}
 
-    STEMS = {
-        "models/shared/misc.mdl": "shared_misc",
-        "models/shared/fists.mdl": "shared_fists",
-    }
+SEQUENCE_NUMBER_LIVE = _live(
+    ("body.mdl", 0, "ragdoll", True),
+    ("models/shared/misc.mdl", 0, "idle01", True),
+    ("models/shared/fists.mdl", 0, "kick", True),
+    ("models/shared/fists.mdl", 1, None, False),
+)
 
-    LIVE = _live(
-        ("body.mdl", 0, "ragdoll", True),
-        ("models/shared/misc.mdl", 0, "idle01", True),
-        ("models/shared/fists.mdl", 0, "kick", True),
-        ("models/shared/fists.mdl", 1, None, False),
-    )
 
-    @staticmethod
-    def _exported(**labels):
-        return {label.lower(): rows for label, rows in labels.items()}
+@staticmethod
+def _exported(**labels):
+    return {label.lower(): rows for label, rows in labels.items()}
 
-    def test_a_number_naming_another_bank_is_an_owner_mismatch(self) -> None:
-        exported = self._exported(
-            kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": 2}])
-        report = compare_sequence_numbers(exported, self.LIVE, self.STEMS)
-        assert report["owner_mismatches"] == 1
-        assert report["examples"][0] == {"label": "kick", "seq": 2, "live": "shared_fists",
-                          "export": "shared_misc"}
 
-    def test_a_number_naming_another_clip_is_a_label_mismatch(self) -> None:
-        exported = self._exported(
-            kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": 1}])
-        report = compare_sequence_numbers(exported, self.LIVE, self.STEMS)
-        assert report["label_mismatches"] == 1
-        assert report["owner_mismatches"] == 0
+def test_a_number_naming_another_bank_is_an_owner_mismatch() -> None:
+    exported = _exported(
+        kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": 2}])
+    report = compare_sequence_numbers(exported, SEQUENCE_NUMBER_LIVE, SEQUENCE_NUMBER_STEMS)
+    assert report["owner_mismatches"] == 1
+    assert report["examples"][0] == {"label": "kick", "seq": 2, "live": "shared_fists",
+                      "export": "shared_misc"}
 
-    def test_an_unlabelled_live_row_still_checks_its_owner(self) -> None:
-        agreeing = self._exported(
-            spare=[{"label": "spare", "owner_stem": "shared_fists", "seq": 3}])
-        assert compare_sequence_numbers(agreeing, self.LIVE, self.STEMS)["owner_mismatches"] == 0
-        disagreeing = self._exported(
-            spare=[{"label": "spare", "owner_stem": "shared_misc", "seq": 3}])
-        assert compare_sequence_numbers(disagreeing, self.LIVE, self.STEMS)["owner_mismatches"] == 1
 
-    def test_an_unnumbered_row_is_counted_rather_than_compared(self) -> None:
-        exported = self._exported(
-            kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": None}])
-        report = compare_sequence_numbers(exported, self.LIVE, self.STEMS)
-        assert report["rows_unnumbered"] == 1
-        assert report["rows_checked"] == 0
-        assert report["owner_mismatches"] == 0
+def test_a_number_naming_another_clip_is_a_label_mismatch() -> None:
+    exported = _exported(
+        kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": 1}])
+    report = compare_sequence_numbers(exported, SEQUENCE_NUMBER_LIVE, SEQUENCE_NUMBER_STEMS)
+    assert report["label_mismatches"] == 1
+    assert report["owner_mismatches"] == 0
 
-    def test_a_number_past_the_live_table_is_counted_rather_than_compared(self) -> None:
-        exported = self._exported(
-            kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": 900}])
-        report = compare_sequence_numbers(exported, self.LIVE, self.STEMS)
-        assert report["numbers_absent_from_live_table"] == 1
-        assert report["rows_checked"] == 0
 
-    def test_a_live_owner_with_no_export_stem_is_not_a_mismatch(self) -> None:
-        # A weapon or viewmodel the character export never names cannot be compared against.
-        live = _live(("models/weapons/w_null.mdl", 0, "idle", True))
-        exported = self._exported(
-            idle=[{"label": "idle", "owner_stem": "shared_misc", "seq": 0}])
-        report = compare_sequence_numbers(exported, live, self.STEMS)
-        assert report["owner_mismatches"] == 0
-        assert report["rows_checked"] == 1
+def test_an_unlabelled_exported_spare_row_still_checks_its_owner() -> None:
+    agreeing = _exported(
+        spare=[{"label": "spare", "owner_stem": "shared_fists", "seq": 3}])
+    assert compare_sequence_numbers(agreeing, SEQUENCE_NUMBER_LIVE, SEQUENCE_NUMBER_STEMS)["owner_mismatches"] == 0
+    disagreeing = _exported(
+        spare=[{"label": "spare", "owner_stem": "shared_misc", "seq": 3}])
+    assert compare_sequence_numbers(disagreeing, SEQUENCE_NUMBER_LIVE, SEQUENCE_NUMBER_STEMS)["owner_mismatches"] == 1
+
+
+def test_an_unnumbered_row_is_counted_rather_than_compared() -> None:
+    exported = _exported(
+        kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": None}])
+    report = compare_sequence_numbers(exported, SEQUENCE_NUMBER_LIVE, SEQUENCE_NUMBER_STEMS)
+    assert report["rows_unnumbered"] == 1
+    assert report["rows_checked"] == 0
+    assert report["owner_mismatches"] == 0
+
+
+def test_a_number_past_the_live_table_is_counted_rather_than_compared() -> None:
+    exported = _exported(
+        kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": 900}])
+    report = compare_sequence_numbers(exported, SEQUENCE_NUMBER_LIVE, SEQUENCE_NUMBER_STEMS)
+    assert report["numbers_absent_from_live_table"] == 1
+    assert report["rows_checked"] == 0
+
+
+def test_a_live_owner_with_no_export_stem_is_not_a_mismatch() -> None:
+    # A weapon or viewmodel the character export never names cannot be compared against.
+    live = _live(("models/weapons/w_null.mdl", 0, "idle", True))
+    exported = _exported(
+        idle=[{"label": "idle", "owner_stem": "shared_misc", "seq": 0}])
+    report = compare_sequence_numbers(exported, live, SEQUENCE_NUMBER_STEMS)
+    assert report["owner_mismatches"] == 0
+    assert report["rows_checked"] == 1
 
 
 STEMS = {
