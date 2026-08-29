@@ -265,6 +265,9 @@ class BakeOrchestrationTests(unittest.TestCase):
                 font_root.mkdir(parents=True, exist_ok=True)
                 for name in export_manager.unreal.FONT_ASSETS:
                     (font_root / name).write_bytes(b"font")
+                graph = config.repo_root / "Content" / "ElysiumGenerated" / "Animation"
+                graph.mkdir(parents=True, exist_ok=True)
+                (graph / "ABP_ElysiumBiped.uasset").write_bytes(b"graph")
                 (config.repo_root / "Content" / "ElysiumGenerated" / "Boot.umap").write_bytes(
                     b"map")
 
@@ -321,6 +324,9 @@ class BakeOrchestrationTests(unittest.TestCase):
                 font_root.mkdir(parents=True, exist_ok=True)
                 for name in export_manager.unreal.FONT_ASSETS:
                     (font_root / name).write_bytes(b"font")
+                graph = config.repo_root / "Content" / "ElysiumGenerated" / "Animation"
+                graph.mkdir(parents=True, exist_ok=True)
+                (graph / "ABP_ElysiumBiped.uasset").write_bytes(b"graph")
                 (config.repo_root / "Content" / "ElysiumGenerated" / "Boot.umap").write_bytes(
                     b"map")
 

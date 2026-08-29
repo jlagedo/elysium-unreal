@@ -42,6 +42,20 @@ TEST_TIERS = {
 #: "forever", which is what a wedged commandlet costs without it.
 TEST_TIMEOUT_SECONDS = 900.0
 
+#: Deadlines for the unattended launches a profile run drives. A commandlet that wedges before
+#: its own logging starts produces no diagnostic and no exit, so every launch carries a bound
+#: sized to the work it does. `process.run` kills the child on the deadline and raises
+#: `ProcessTimeout`, which names the command and its bound.
+BUILD_TIMEOUT_SECONDS = 3600.0
+POLICY_TIMEOUT_SECONDS = 1800.0
+CORPUS_TIMEOUT_SECONDS = 7200.0
+#: One batch is `MAP_BAKE_BATCH` maps of Nanite build, Lumen surface-cache fitting and texture
+#: compression, each a cold DDC miss on a first run.
+MAP_BAKE_TIMEOUT_SECONDS = 10800.0
+CHARACTER_BAKE_TIMEOUT_SECONDS = 7200.0
+WIELD_BAKE_TIMEOUT_SECONDS = 3600.0
+CLOTH_TIMEOUT_SECONDS = 1800.0
+
 #: How many automation reports are retained under `$ELYSIUM_WORK_ROOT/reports/tests/`. Each run
 #: writes a stamped directory and nothing used to remove one, so the directory grew without bound.
 #: The reports are a debugging aid for the run you just made, not an archive -- git and the run
@@ -147,7 +161,8 @@ def build(config, runner, mode: str = "", extra: Sequence[str] = ()) -> None:
     if mode == "analyze":
         arguments.append("-StaticAnalyzer=Default")
     arguments.extend(extra)
-    _run(config, runner, config.ue_root / "Engine" / "Build" / "BatchFiles" / script, arguments)
+    _run(config, runner, config.ue_root / "Engine" / "Build" / "BatchFiles" / script,
+         arguments, timeout=BUILD_TIMEOUT_SECONDS)
 
 
 def generate_policy_content(config, runner, generators: Sequence[str] | None = None, *,
@@ -166,6 +181,7 @@ def generate_policy_content(config, runner, generators: Sequence[str] | None = N
         runner,
         editor_executable(config, commandlet=True),
         content_arguments,
+        timeout=POLICY_TIMEOUT_SECONDS,
     )
     if include_auxiliary:
         generate_auxiliary_policy_content(config, runner)
@@ -189,6 +205,7 @@ def generate_auxiliary_policy_content(config, runner) -> None:
             f"-ExecutePythonScript={config.repo_root / 'pipeline/unreal/make_ui_fonts.py'}",
             *common,
         ],
+        timeout=POLICY_TIMEOUT_SECONDS,
     )
     # The player animation graph, rebuilt from its tracked text. A commandlet rather than the
     # Slate-enabled editor above: it authors no font and needs no RHI.
@@ -202,6 +219,7 @@ def generate_auxiliary_policy_content(config, runner) -> None:
             f"-script={config.repo_root / 'pipeline/unreal/make_player_anim_bp.py'}",
             *common,
         ],
+        timeout=POLICY_TIMEOUT_SECONDS,
     )
     graph_asset = (
         config.repo_root / "Content" / "ElysiumGenerated" / "Animation" / "ABP_ElysiumBiped.uasset"
@@ -240,6 +258,7 @@ def bake_corpus(config, runner, *, force: bool = False) -> None:
             "-stdout",
             "-FullStdOutLogOutput",
         ],
+        timeout=CORPUS_TIMEOUT_SECONDS,
     )
 
 
@@ -295,6 +314,7 @@ def bake_maps(
                 "-stdout",
                 "-FullStdOutLogOutput",
             ],
+            timeout=MAP_BAKE_TIMEOUT_SECONDS,
         )
 
 
@@ -329,7 +349,8 @@ def bake_characters(config, runner, stems: Sequence[str], *, props: Sequence[str
         arguments.insert(4, f"-BakeProps={','.join(props)}")
     if force:
         arguments.insert(4, "-BakeForce=1")
-    _run(config, runner, editor_executable(config, commandlet=True), arguments)
+    _run(config, runner, editor_executable(config, commandlet=True), arguments,
+         timeout=CHARACTER_BAKE_TIMEOUT_SECONDS)
 
 
 def bake_wield(config, runner, stems: Sequence[str] = ()) -> None:
@@ -351,7 +372,8 @@ def bake_wield(config, runner, stems: Sequence[str] = ()) -> None:
         "-stdout",
         "-FullStdOutLogOutput",
     ]
-    _run(config, runner, editor_executable(config, commandlet=True), arguments)
+    _run(config, runner, editor_executable(config, commandlet=True), arguments,
+         timeout=WIELD_BAKE_TIMEOUT_SECONDS)
 
 
 def make_cloth_assets(config, runner, stems: Sequence[str]) -> None:
@@ -376,6 +398,7 @@ def make_cloth_assets(config, runner, stems: Sequence[str]) -> None:
             "-stdout",
             "-FullStdOutLogOutput",
         ],
+        timeout=CLOTH_TIMEOUT_SECONDS,
     )
 
 
@@ -402,6 +425,7 @@ def verify_characters(config, runner, stems: Sequence[str], *, props: Sequence[s
         runner,
         editor_executable(config, commandlet=True),
         arguments,
+        timeout=CHARACTER_BAKE_TIMEOUT_SECONDS,
     )
 
 
@@ -424,6 +448,7 @@ def verify_bakes(config, runner, maps: Sequence[str], *, batch_size: int = 4) ->
                 "-stdout",
                 "-FullStdOutLogOutput",
             ],
+            timeout=MAP_BAKE_TIMEOUT_SECONDS,
         )
 
 

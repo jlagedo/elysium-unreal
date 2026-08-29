@@ -27,16 +27,19 @@ as a playable game — **remastered** — on **Unreal Engine 5.8 + C++**.
 ## Project layout
 
 - `Source/ElysiumUE/` — C++ runtime
+- `Source\ElysiumUEAnimGraph` - The editor-only module holding the graph-node faces (title, colour, tooltip) of the project's two custom animation nodes, split out because UAnimGraphNode_Base cannot link into a packaged game.
 - `pipeline/` — Python pipeline; owns build, asset management, VtMB asset decoders and `.uasset` bakes
-- `Content/` — tracked authored assets plus generated and baked package mounts.
-  `Content/ElysiumAuthored/**` (Git LFS) is edited live and saved in place, and has no generator;
-  the `authored-assets` skill owns its register and procedure.
-- `Plugins/` — includes ElysiumBaked, a generated `.uasset` mount where only the `.uplugin` is tracked
 - `research/` — research cases and tooling
 - `docs/` — documentation (project, architecture, vtmb, recovered, operations, openspec)
+
+### Content - Unreal
+
+- `Content/` — Main unreal folder
+  `Content/ElysiumAuthored/**` - Manual authored assets git tracked
+  `Content/ElysiumGenerated/**` - Generated content from pipeline (vtmb based or generated helpers)
+- `Plugins/` — assets directly generatedt from VTMB isntall and baked into Unreal Assets.
 - `Config/` — Unreal project config
 
 ## Rules
 
-- **Work lands as a complete change, not behind a switch or feature flags or cvars**
 - Log every unexpected failure once, where it is owned, at warning or worse, naming the operation and the object or input.

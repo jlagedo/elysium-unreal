@@ -592,6 +592,26 @@ def _policy_fingerprint(config, *, exclude_generators: Sequence[str] = (),
     return fingerprint_content(scripts, extra=("policy-v2",), cache=cache)
 
 
+#: One canonical package per umbrella generator. `build_content.py` authors its whole generator
+#: set in a single launch, so one missing product is enough to make the launch gate rerun the
+#: union; a sentinel each keeps every generator covered without restating the glyph and audio
+#: corpora, whose members the generators derive from their own sources.
+POLICY_GENERATOR_OUTPUTS = {
+    "make_wield_materials.py": (
+        "Materials/M_Wield.uasset", "Materials/M_Wield_Masked.uasset",
+        "Materials/M_Wield_Translucent.uasset", "Materials/M_Wield_Additive.uasset"),
+    "make_sky_material.py": ("Materials/M_Sky.uasset",),
+    "make_gizmo_material.py": ("Materials/M_Gizmo.uasset", "Materials/M_Gizmo_XRay.uasset"),
+    "make_decal_material.py": ("Materials/M_Decal.uasset",),
+    "make_audio_routing.py": ("Audio/SC_Master.uasset",),
+    "make_input_glyphs.py": ("Input/Glyphs/Kenney/Keyboard/T_Kenney_keyboard_e.uasset",),
+    "make_input_assets.py": (
+        "Input/DA_ElysiumInputActions.uasset", "Input/IMC_Player_KBM.uasset",
+        "Input/IMC_Player_Gamepad.uasset"),
+    "make_dialogue_camera_set.py": ("Camera/DA_ElysiumDialogueCameraSet.uasset",),
+    "make_boot_map.py": ("Boot.umap",),
+}
+
 WORLD_MATERIAL_GENERATOR = "make_world_materials.py"
 CHARACTER_MATERIAL_GENERATORS = (
     "make_player_body_material.py",
@@ -740,9 +760,17 @@ def ensure_policy_content(config, runner, *, force: bool = False,
     other_generators = [name for name in generator_names if name not in focused_generators]
     world_task = _world_material_task(config, runner)
     character_task = _character_material_task(config, runner)
+    generated_root = config.repo_root / "Content" / "ElysiumGenerated"
     outputs = (
-        config.repo_root / "Content" / "ElysiumGenerated" / "Boot.umap",
+        # Every umbrella generator this task carries, plus the two the umbrella refuses and
+        # `generate_auxiliary_policy_content` launches beside it: the Slate font import and the
+        # animation-graph rebuild. An undeclared product is a generator the gate cannot see
+        # missing, so a stale receipt would report complete having authored nothing.
+        *(generated_root / relative
+          for name in other_generators
+          for relative in POLICY_GENERATOR_OUTPUTS.get(name, ())),
         *(font_root / name for name in unreal.FONT_ASSETS),
+        generated_root / "Animation" / "ABP_ElysiumBiped.uasset",
     )
     policy_task = Task(
         "unreal:policy",

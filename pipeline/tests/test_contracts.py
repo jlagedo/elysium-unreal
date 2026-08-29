@@ -1038,7 +1038,7 @@ class UnrealPlayDriverContractTests(unittest.TestCase):
     def test_play_opens_unreals_live_log_console_without_stdout_redirection(self) -> None:
         submitted = []
         runner = SimpleNamespace(
-            run=lambda command, cwd, tail_lines=None: submitted.append((command, cwd))
+            run=lambda command, cwd, tail_lines=None, timeout=None: submitted.append((command, cwd))
             or SimpleNamespace(returncode=0)
         )
         config = SimpleNamespace(
@@ -1066,7 +1066,7 @@ class UnrealBakeDriverContractTests(unittest.TestCase):
     def test_texture_bake_enables_commandlet_rendering(self) -> None:
         submitted = []
         runner = SimpleNamespace(
-            run=lambda command, cwd, tail_lines=None: submitted.append((command, cwd))
+            run=lambda command, cwd, tail_lines=None, timeout=None: submitted.append((command, cwd))
             or SimpleNamespace(returncode=0)
         )
         config = SimpleNamespace(

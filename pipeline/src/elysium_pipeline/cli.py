@@ -909,9 +909,16 @@ def export_bundle(
 @app.command("reconstruct")
 def reconstruct(
     ctx: typer.Context,
-    clean: bool = typer.Option(False, "--clean"),
     rebuild: bool = typer.Option(False, "--rebuild"),
 ) -> None:
+    """Rebuild the whole generated tree from the VtMB install, from an empty mount.
+
+    Always cleans first and always forces: a reconstruction that reused a receipt would
+    reproduce whatever the last run left, which is the state it exists to discard. Every
+    generator and bake therefore runs, and the products are the run's own output rather than
+    a claim about them -- verifying them is `uv run elysium test`, a separate command.
+    """
+
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager, unreal
 
@@ -922,11 +929,9 @@ def reconstruct(
             config,
             runner,
             "all",
-            clean=clean,
-            force=clean,
+            clean=True,
+            force=True,
         )
-        for tier in ("Substrate", "Policy", "Content"):
-            unreal.run_tests(config, runner, tier)
         console.print(f"reconstruction complete: {len(maps)} map(s)")
 
     _execute(
