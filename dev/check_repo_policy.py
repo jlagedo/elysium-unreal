@@ -46,7 +46,7 @@ FORBIDDEN_PREFIXES = (
     "game/",
     "extracted/",
     "decompilation/",
-    "Content/VtMB/",
+    "Content/ElysiumGenerated/",
     "Plugins/ElysiumBaked/Content/",
     "research/evidence/",
     "research/generated/",
@@ -63,11 +63,8 @@ AUTHORED_EXTENSIONS = {
 # under pipeline/unreal/ (and, for a captured graph, its .t3d text). A package here is expected to
 # be absent until it is built and to be overwritten wholesale when it is.
 GENERATED_PACKAGE_ROOTS = (
-    "Content/VtMB/",
     "Plugins/ElysiumBaked/Content/",
-    "Content/Elysium.umap",
-    "Content/Elysium/",
-    "Content/Input/",
+    "Content/ElysiumGenerated/",
 )
 # Local tool state: caches, build products and fetched dependencies. Never authored, never tracked.
 LOCAL_TOOL_ROOTS = (
@@ -214,8 +211,8 @@ def workspace_warnings() -> list[str]:
                 "run `uv run elysium deps sync`"
             )
     generated = (
-        REPO / "Content" / "Elysium.umap",
-        REPO / "Content" / "VtMB" / "Materials" / "M_World_Opaque.uasset",
+        REPO / "Content" / "ElysiumGenerated" / "Boot.umap",
+        REPO / "Content" / "ElysiumGenerated" / "Materials" / "M_World_Opaque.uasset",
     )
     for path in generated:
         if not path.is_file():

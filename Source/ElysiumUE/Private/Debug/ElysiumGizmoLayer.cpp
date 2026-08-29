@@ -3,6 +3,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "ElysiumBrushComponent.h"
+#include "ElysiumContentPaths.h"
 #include "ElysiumEntity.h"
 #include "ElysiumEntityDefs.h"
 #include "ElysiumEntityWorld.h"
@@ -23,8 +24,8 @@ namespace
 	// The scale and the anchor live in ElysiumGizmoColor.h so the click-pick tests the same box
 	// this draws.
 	constexpr const TCHAR* CubePath  = TEXT("/Engine/BasicShapes/Cube.Cube");
-	constexpr const TCHAR* DepthPath = TEXT("/Game/VtMB/Materials/M_Gizmo.M_Gizmo");
-	constexpr const TCHAR* XRayPath  = TEXT("/Game/VtMB/Materials/M_Gizmo_XRay.M_Gizmo_XRay");
+	const FString DepthPath = FElysiumContentPaths::Material(TEXT("M_Gizmo"));
+	const FString XRayPath  = FElysiumContentPaths::Material(TEXT("M_Gizmo_XRay"));
 }
 
 FElysiumGizmoLayer::~FElysiumGizmoLayer()
@@ -65,8 +66,8 @@ void FElysiumGizmoLayer::Rebuild(FElysiumEntityWorld& World, AActor* Owner)
 	}
 
 	UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, CubePath);
-	UMaterialInterface* DepthMaster = LoadObject<UMaterialInterface>(nullptr, DepthPath);
-	UMaterialInterface* XRayMaster = LoadObject<UMaterialInterface>(nullptr, XRayPath);
+	UMaterialInterface* DepthMaster = LoadObject<UMaterialInterface>(nullptr, *DepthPath);
+	UMaterialInterface* XRayMaster = LoadObject<UMaterialInterface>(nullptr, *XRayPath);
 	if (!Cube || !DepthMaster)
 	{
 		UE_LOG(LogElysiumGizmo, Warning, TEXT("gizmo layer: missing cube mesh or M_Gizmo master — gizmos disabled"));

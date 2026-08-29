@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "asset": "/Game/Elysium/Camera/DA_ElysiumDialogueCameraSet",
+  "asset": "/Game/ElysiumGenerated/Camera/DA_ElysiumDialogueCameraSet",
   "profiles": [
     {"name": "EstablishingTwoShot", "kind": "TWO_SHOT", "distance_cm": 235.0, "lateral_cm": 90.0, "height_cm": 12.0, "field_of_view": 50.0, "minimum_hold_seconds": 2.5, "allow_close_up": false, "establishing": true},
     {"name": "SpeakerSingle", "kind": "SINGLE_SPEAKER", "distance_cm": 185.0, "lateral_cm": 52.0, "height_cm": 7.0, "field_of_view": 44.0, "minimum_hold_seconds": 2.0, "allow_close_up": false, "establishing": false},

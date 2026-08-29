@@ -242,7 +242,7 @@ The **Nocturne** system: **Spectral SC** for small-caps labels,
 signature is kept — it is an authored art decision, not a hardware constraint — while the 28 bitmap
 `.fnt` atlases are not.
 
-Faces reach the runtime as generated local **`UFontFace` assets** under `/Game/VtMB/UI/Fonts`, imported by
+Faces reach the runtime as generated local **`UFontFace` assets** under `/Game/ElysiumGenerated/UI/Fonts`, imported by
 `pipeline/unreal/make_ui_fonts.py` from `Content/Fonts` (placed by `pipeline/src/elysium_pipeline/devtools/fetch_ui_fonts.py`).
 `FElysiumUIFontLibrary` composes them into one runtime `UFont` per role with the weights as named
 typeface entries, because `FSlateFontInfo` resolves a composite font, not a bare face.
@@ -259,7 +259,7 @@ Two constraints:
 
 ## 6. The menu plate
 
-The front end stays in the genuinely empty `/Game/Elysium` boot world and draws the local
+The front end stays in the genuinely empty `/Game/ElysiumGenerated/Boot` boot world and draws the local
 `$ELYSIUM_EXPORT_ROOT/ui/menu/elysium_main_wallpaper_4k.png` plate beneath the CommonUI menu. Cold
 boot therefore loads no VtMB map, creates no map actor or entity substrate, and waits on no runtime
 activation barrier. New Game's story entry is the process's first VtMB map load.

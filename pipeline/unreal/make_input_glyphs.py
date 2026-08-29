@@ -1,7 +1,7 @@
 """Import the tracked Kenney input prompts as generated CommonInput textures.
 
 The CC0 PNG files are the reviewable source.  Unreal textures are local policy packages under
-``/Game/Input/Glyphs/Kenney`` and remain ignored like the generated Enhanced Input assets beside
+``/Game/ElysiumGenerated/Input/Glyphs/Kenney`` and remain ignored like the generated Enhanced Input assets beside
 them.
 """
 
@@ -10,9 +10,11 @@ import struct
 
 import unreal
 
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
 
 SOURCE_ROOT = Path(unreal.Paths.project_content_dir()) / "InputPrompts" / "Kenney"
-PACKAGE_ROOT = "/Game/Input/Glyphs/Kenney"
+PACKAGE_ROOT = mounts.INPUT + "/Glyphs/Kenney"
 GLYPHS = {
     "Keyboard": (
         "keyboard_e.png",

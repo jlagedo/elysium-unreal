@@ -33,11 +33,12 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from elysium_pipeline import character_partition  # noqa: E402
+from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import wield_corpus as wc  # noqa: E402
 from elysium_pipeline.formats import eskm  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 
-MOUNT = "/ElysiumBaked"
+MOUNT = mounts.BAKED
 CHARACTERS = MOUNT + "/Characters"
 SKELETON_PREFIX = "SKEL_Elysium_"
 BANK_SKELETON_PREFIX = "SKEL_ElysiumBank_"

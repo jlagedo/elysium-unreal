@@ -21,9 +21,10 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401
 from pipeline.unreal import bake_lib as bl
+from elysium_pipeline import mounts
 
 
-ADDITIVE_MASTER = "/Game/VtMB/Materials/M_Additive"
+ADDITIVE_MASTER = mounts.MATERIALS + "/M_Additive"
 
 FOUNTAIN_TEMPLATE = "/Niagara/DefaultAssets/Templates/Emitters/Fountain.Fountain"
 

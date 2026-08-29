@@ -9,8 +9,10 @@ from pathlib import Path
 
 import unreal
 
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
 
-ROOT = "/Game/Input"
+ROOT = mounts.INPUT
 ACTION_ROOT = ROOT + "/Actions"
 CSV_PATH = Path(unreal.Paths.project_dir()) / "Config" / "ElysiumInputActions.csv"
 EXPECTED_COLUMNS = (

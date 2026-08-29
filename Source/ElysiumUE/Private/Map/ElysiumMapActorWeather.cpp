@@ -482,7 +482,7 @@ void AElysiumMapActor::ApplyWeatherTuning()
 	if (!EnvironmentParameters)
 	{
 		EnvironmentParameters = LoadObject<UMaterialParameterCollection>(
-			nullptr, TEXT("/Game/VtMB/Materials/MPC_ElysiumEnvironment.MPC_ElysiumEnvironment"));
+			nullptr, *FElysiumContentPaths::Material(TEXT("MPC_ElysiumEnvironment")));
 	}
 	if (EnvironmentParameters && GetWorld())
 	{

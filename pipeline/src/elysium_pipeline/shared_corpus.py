@@ -26,6 +26,8 @@ from __future__ import annotations
 import hashlib
 import re
 
+from elysium_pipeline import mounts
+
 MANIFEST_SCHEMA = "elysium.shared-corpus"
 MATERIALS_SCHEMA = "elysium.shared-corpus-materials"
 VERSION = 1
@@ -46,7 +48,7 @@ MANIFEST = "manifest.json"
 MATERIALS = "materials.json"
 
 # --- the corpus on the /ElysiumBaked mount ------------------------------------------------------
-BAKED_ROOT = "/ElysiumBaked/Shared"
+BAKED_ROOT = mounts.BAKED + "/Shared"
 BAKED_TEXTURES = BAKED_ROOT + "/Textures"
 BAKED_MATERIALS = BAKED_ROOT + "/Materials"
 BAKED_MESHES = BAKED_ROOT + "/Meshes"

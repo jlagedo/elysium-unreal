@@ -73,6 +73,48 @@ struct FElysiumContentPaths
 		return AuthoredMount() / TEXT("Cloth") / Asset + TEXT(".") + Asset;
 	}
 
+	// The project's own top-level `/Game/ElysiumGenerated` namespace: every package this project
+	// itself generates rather than authors or decodes from the VtMB install. A text prefix of
+	// `/Game/ElysiumAuthored` (`AuthoredMount()`) -- the two are never interchangeable.
+	static FString GeneratedMount() { return TEXT("/Game/ElysiumGenerated"); }
+
+	// The empty boot map both the front end and the character stage stand in
+	// (`GameDefaultMap`/`EditorStartupMap` in Config/DefaultEngine.ini). Its own subfolder, so its
+	// package never collides with a sibling subfolder's.
+	static FString BootMount() { return GeneratedMount() / TEXT("Boot"); }
+	// The dialogue camera profile set, a sibling of the boot map rather than nested under it.
+	static FString CameraDir() { return GeneratedMount() / TEXT("Camera"); }
+	static FString DialogueCameraSet()
+	{
+		const FString Asset = TEXT("DA_ElysiumDialogueCameraSet");
+		return CameraDir() / Asset + TEXT(".") + Asset;
+	}
+
+	// The hand-authored world material masters (`make_world_materials.py`), under the project's own
+	// generated namespace rather than VtMB's -- like Audio and UI below, none of them carries a
+	// VtMB-authored identity worth keeping distinct.
+	static FString MaterialsDir() { return GeneratedMount() / TEXT("Materials"); }
+	static FString Material(const FString& Name) { return MaterialsDir() / Name + TEXT(".") + Name; }
+
+	// The sound concurrency/class tables addressed by category and the UI font faces
+	// (`make_ui_fonts.py`), under the project's own generated namespace rather than VtMB's --
+	// unlike the materials and cloth above, neither carries a VtMB-authored identity worth keeping
+	// distinct.
+	static FString AudioDir() { return GeneratedMount() / TEXT("Audio"); }
+	static FString AudioConcurrency(const FString& Category)
+	{
+		const FString Asset = TEXT("Concurrency_") + Category;
+		return AudioDir() / Asset + TEXT(".") + Asset;
+	}
+	static FString AudioSoundClass(const FString& Category)
+	{
+		const FString Asset = TEXT("SC_") + Category;
+		return AudioDir() / Asset + TEXT(".") + Asset;
+	}
+
+	static FString UiFontsDir() { return GeneratedMount() / TEXT("UI") / TEXT("Fonts"); }
+	static FString UiFontFace(const FString& Face) { return UiFontsDir() / Face + TEXT(".") + Face; }
+
 	// Baked map look (`pipeline/unreal/bake_map.py`).
 	// The look of a map — world + sky geometry, materials, textures, props, lights, fog — is
 	// offline-baked into real .uasset content under the /ElysiumBaked plugin mount, and the map
@@ -161,11 +203,11 @@ struct FElysiumContentPaths
 	// than one per body: banks bake once onto bank skeletons of their own, and each body skeleton
 	// declares those compatible, so the engine remaps a bank clip by bone name at evaluation.
 	// The player animation graph's generated class. A local, regenerable package like every other
-	// under `/Game/Elysium`, rebuilt from the tracked graph text by
+	// under `/Game/ElysiumGenerated`, rebuilt from the tracked graph text by
 	// `pipeline/unreal/make_player_anim_bp.py`.
 	static FString PlayerAnimBlueprintClass()
 	{
-		return TEXT("/Game/Elysium/Animation/ABP_ElysiumBiped.ABP_ElysiumBiped_C");
+		return GeneratedMount() / TEXT("Animation/ABP_ElysiumBiped.ABP_ElysiumBiped_C");
 	}
 
 	// Baked animated props (`pipeline/unreal/bake_characters.py`).
@@ -231,6 +273,14 @@ struct FElysiumContentPaths
 	{
 		const FString Asset = TEXT("SK_") + Stem;
 		return BakedCharacterDir() / TEXT("Meshes") / Asset + TEXT(".") + Asset;
+	}
+	// A body's Chaos cloth asset (`make_cloth_assets.py`), decoded from the user's VtMB install like
+	// the skeleton and mesh above rather than authored, so it bakes to the same per-character mount.
+	static FString BakedCharacterClothDir() { return BakedCharacterDir() / TEXT("Cloth"); }
+	static FString BakedCharacterCloth(const FString& Stem)
+	{
+		const FString Asset = TEXT("CLOTH_") + Stem;
+		return BakedCharacterClothDir() / Asset + TEXT(".") + Asset;
 	}
 	// Where a bank's clips live, apart from the bodies'. Banks are packaged once and reused by
 	// compatible body skeletons.
@@ -521,9 +571,9 @@ struct FElysiumContentPaths
 	// `MDLHeader.Flags` carries 0x400, so a miss is the ordinary case rather than a fault.
 	//
 	// The runtime does not read this. It is the generator's input — `make_cloth_assets.py` turns it
-	// into a `UChaosClothAsset` under /Game/VtMB/Cloth, and the game loads that. The path is here
-	// so a debug surface can report whether a body's garment was ever exported, which is what
-	// separates "this character has no cloth" from "the export did not run".
+	// into a `UChaosClothAsset` under /ElysiumBaked/Characters/Cloth, and the game loads that. The
+	// path is here so a debug surface can report whether a body's garment was ever exported, which
+	// is what separates "this character has no cloth" from "the export did not run".
 	static FString NpcGarmentDir() { return NpcDir() / TEXT("garment"); }
 	static FString NpcGarment(const FString& Stem) { return NpcGarmentDir() / (Stem + TEXT(".json")); }
 

@@ -1,4 +1,4 @@
-# Generates Content/VtMB/Materials/M_Sky.uasset: the six-face 2D skybox master material.
+# Generates Content/ElysiumGenerated/Materials/M_Sky.uasset: the six-face 2D skybox master material.
 # UMaterial (a shading graph) can only be compiled offline, so it is authored here once and
 # committed; the runtime only ever instances it (a UTextureCube bound per map to the SkyCube
 # parameter). It is unlit and two-sided, and samples the cube along the per-pixel view ray so
@@ -9,7 +9,10 @@
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_sky_material.py" -unattended -nosplash -nopause
 import unreal
 
-PKG = "/Game/VtMB/Materials"
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
+
+PKG = mounts.MATERIALS
 NAME = "M_Sky"
 ASSET = "%s/%s" % (PKG, NAME)
 DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"

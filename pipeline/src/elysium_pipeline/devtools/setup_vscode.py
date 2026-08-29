@@ -158,11 +158,11 @@ def main() -> None:
     }
     settings["search.exclude"] = {f"**/{d}": True for d in EXCLUDE_DIRS} | {
         "Plugins/External": True,
-        "Content/VtMB": True,
+        "Content/ElysiumGenerated": True,
     }
     settings["files.watcherExclude"] = {f"**/{d}/**": True for d in EXCLUDE_DIRS} | {
         "**/Plugins/External/**": True,
-        "**/Content/VtMB/**": True,
+        "**/Content/ElysiumGenerated/**": True,
     }
     # The .slnx files are UE-generated; stop the C# extension from trying to load one.
     settings["dotnet.defaultSolution"] = "disable"

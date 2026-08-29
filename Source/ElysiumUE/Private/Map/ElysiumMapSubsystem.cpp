@@ -26,9 +26,10 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMap, Log, All);
 
-// The game boots into /Game/Elysium (Config/DefaultEngine.ini GameDefaultMap), an empty UWorld it
-// sits in until the first Travel. Map travel does not come back through it — each VtMB map is its
-// own baked .umap under the /ElysiumBaked mount, and Travel opens that level directly.
+// The game boots into /Game/ElysiumGenerated/Boot (Config/DefaultEngine.ini GameDefaultMap), an
+// empty UWorld it sits in until the first Travel. Map travel does not come back through it — each
+// VtMB map is its own baked .umap under the /ElysiumBaked mount, and Travel opens that level
+// directly.
 
 void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -222,7 +223,7 @@ bool UElysiumMapSubsystem::EnterStageWorld(FString& OutError)
 	// returns no pawn class while IsMenuBackdrop), and nothing but a fresh world spawns one, so
 	// entering from the menu re-opens the shell rather than building into a world with no pawn for
 	// the activation barrier to wait on.
-	const FString ShellPackage = TEXT("/Game/Elysium");
+	const FString ShellPackage = FElysiumContentPaths::BootMount();
 	const bool bInShell =
 		World->GetOutermost()->GetName().Equals(ShellPackage, ESearchCase::IgnoreCase);
 	const bool bWorldHasPawn = !bCurrentIsMenuBackdrop;
@@ -496,7 +497,7 @@ bool UElysiumMapSubsystem::EnterFrontEnd(bool& bOutTravelStarted)
 	// character stage.
 	RetireGreenRoomLab(TEXT("returned to the front end"));
 
-	const FString ShellPackage = TEXT("/Game/Elysium");
+	const FString ShellPackage = FElysiumContentPaths::BootMount();
 	if (World->GetOutermost()->GetName().Equals(ShellPackage, ESearchCase::IgnoreCase))
 	{
 		UE_LOG(LogElysiumMap, Log, TEXT("front end: using the empty boot world in place"));

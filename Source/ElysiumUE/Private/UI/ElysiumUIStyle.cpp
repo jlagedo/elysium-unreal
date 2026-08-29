@@ -1,5 +1,6 @@
 #include "UI/ElysiumUIStyle.h"
 
+#include "ElysiumContentPaths.h"
 #include "Engine/Font.h"
 #include "Engine/FontFace.h"
 #include "Fonts/CompositeFont.h"
@@ -21,18 +22,20 @@ namespace
 
 	const FRoleFaces& FacesForRole(EElysiumFontRole Role)
 	{
-		static const FRoleFaces LabelFaces{
-			TEXT("/Game/VtMB/UI/Fonts/FF_SpectralSC_Regular.FF_SpectralSC_Regular"),
-			TEXT("/Game/VtMB/UI/Fonts/FF_SpectralSC_SemiBold.FF_SpectralSC_SemiBold"),
-			nullptr };
-		static const FRoleFaces BodyFaces{
-			TEXT("/Game/VtMB/UI/Fonts/FF_Spectral_Regular.FF_Spectral_Regular"),
-			TEXT("/Game/VtMB/UI/Fonts/FF_Spectral_SemiBold.FF_Spectral_SemiBold"),
-			TEXT("/Game/VtMB/UI/Fonts/FF_Spectral_Italic.FF_Spectral_Italic") };
-		static const FRoleFaces DataFaces{
-			TEXT("/Game/VtMB/UI/Fonts/FF_Inter_Regular.FF_Inter_Regular"),
-			TEXT("/Game/VtMB/UI/Fonts/FF_Inter_SemiBold.FF_Inter_SemiBold"),
-			nullptr };
+		// Backing storage for the TCHAR* faces below: FElysiumContentPaths::UiFontFace builds
+		// each path at runtime, so the pointers below must outlive this call rather than point into
+		// a temporary, hence the static FString locals rather than a direct FRoleFaces initializer.
+		static const FString LabelRegular = FElysiumContentPaths::UiFontFace(TEXT("FF_SpectralSC_Regular"));
+		static const FString LabelSemiBold = FElysiumContentPaths::UiFontFace(TEXT("FF_SpectralSC_SemiBold"));
+		static const FString BodyRegular = FElysiumContentPaths::UiFontFace(TEXT("FF_Spectral_Regular"));
+		static const FString BodySemiBold = FElysiumContentPaths::UiFontFace(TEXT("FF_Spectral_SemiBold"));
+		static const FString BodyItalic = FElysiumContentPaths::UiFontFace(TEXT("FF_Spectral_Italic"));
+		static const FString DataRegular = FElysiumContentPaths::UiFontFace(TEXT("FF_Inter_Regular"));
+		static const FString DataSemiBold = FElysiumContentPaths::UiFontFace(TEXT("FF_Inter_SemiBold"));
+
+		static const FRoleFaces LabelFaces{ *LabelRegular, *LabelSemiBold, nullptr };
+		static const FRoleFaces BodyFaces{ *BodyRegular, *BodySemiBold, *BodyItalic };
+		static const FRoleFaces DataFaces{ *DataRegular, *DataSemiBold, nullptr };
 
 		switch (Role)
 		{

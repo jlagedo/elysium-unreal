@@ -1,4 +1,4 @@
-# Generates the local world master-material set under Content/VtMB/Materials/ (roadmap 7.4):
+# Generates the local world master-material set under Content/ElysiumGenerated/Materials/ (roadmap 7.4):
 #
 #   M_World_Opaque       opaque world surfaces (the common case; grown from the old M_VtMB_World)
 #   M_World_Masked       $alphatest scissor surfaces (fences, grates, foliage) -- two-sided
@@ -49,6 +49,7 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import mat_fog
+from elysium_pipeline import mounts
 from elysium_pipeline.paths import export_root
 
 # A refused pin compiles anyway against the input's constant default, so a wrong output name
@@ -61,7 +62,7 @@ def connect_property(src, src_out, prop):
         raise SystemExit("[make_world_materials] no connection %s.%s -> %s" % (
             src.get_class().get_name(), src_out or "<out>", prop))
 
-PKG = "/Game/VtMB/Materials"
+PKG = mounts.MATERIALS
 DEFAULT_TEX = "/Engine/EngineResources/DefaultTexture.DefaultTexture"
 DEFAULT_NORMAL = "/Engine/EngineMaterials/DefaultNormal.DefaultNormal"
 DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"

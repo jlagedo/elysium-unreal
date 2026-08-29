@@ -18,11 +18,11 @@ assets and their licence texts.
 
 `uv run elysium export bundle policy` generates the local project packages:
 
-- `/Game/Elysium` from `Content/Elysium.umap`;
-- `/Game/VtMB/Materials/**`;
-- `/Game/VtMB/Audio/**`;
-- `/Game/VtMB/UI/Fonts/**`;
-- `/Game/Input/**`.
+- `/Game/ElysiumGenerated/Boot` from `Content/ElysiumGenerated/Boot.umap`;
+- `/Game/ElysiumGenerated/Materials/**`;
+- `/Game/ElysiumGenerated/Audio/**`;
+- `/Game/ElysiumGenerated/UI/Fonts/**`;
+- `/Game/ElysiumGenerated/Input/**`.
 
 Their physical `.uasset` and `.umap` files are ignored. Edit the corresponding generator under
 `pipeline/unreal/`, then regenerate; never hand-author or commit a replacement for a generated
@@ -32,8 +32,11 @@ package.
 `Plugins/ElysiumBaked/Content/`, mounted virtually as `/ElysiumBaked/<map>/**`.
 That directory is also ignored.
 
-The immutable generated virtual path contracts are `/Game/Elysium`, `/Game/VtMB/**`, and
-`/ElysiumBaked/**`. The original authored namespace is `/Game/ElysiumAuthored/**`; generated tools
+The generated virtual path roots are `/Game/ElysiumGenerated/**` and `/ElysiumBaked/**`, each
+defined once in `pipeline/src/elysium_pipeline/mounts.py`, the single source of truth every
+generator and bake resolves its packages against. Renaming a root is a deliberate change guarded by
+`pipeline/tests/test_profile_package_contract.py::test_virtual_package_roots_remain_immutable`, not
+a forbidden edit. The original authored namespace is `/Game/ElysiumAuthored/**`; generated tools
 and clean operations must never write to or remove it.
 
 ## Fonts

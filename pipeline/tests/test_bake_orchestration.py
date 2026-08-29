@@ -249,8 +249,8 @@ class BakeOrchestrationTests(unittest.TestCase):
                 "GENERATORS = " + repr(names) + "\n", encoding="utf-8")
             for name in names:
                 (unreal_root / name).write_text("VALUE = 1\n", encoding="utf-8")
-            material_root = config.repo_root / "Content" / "VtMB" / "Materials"
-            font_root = config.repo_root / "Content" / "VtMB" / "UI" / "Fonts"
+            material_root = config.repo_root / "Content" / "ElysiumGenerated" / "Materials"
+            font_root = config.repo_root / "Content" / "ElysiumGenerated" / "UI" / "Fonts"
 
             def generate(_config, _runner, generators, *, include_auxiliary):
                 self.assertFalse(include_auxiliary)
@@ -265,7 +265,8 @@ class BakeOrchestrationTests(unittest.TestCase):
                 font_root.mkdir(parents=True, exist_ok=True)
                 for name in export_manager.unreal.FONT_ASSETS:
                     (font_root / name).write_bytes(b"font")
-                (config.repo_root / "Content" / "Elysium.umap").write_bytes(b"map")
+                (config.repo_root / "Content" / "ElysiumGenerated" / "Boot.umap").write_bytes(
+                    b"map")
 
             with (
                 mock.patch.object(export_manager.unreal, "generate_policy_content",
@@ -305,8 +306,8 @@ class BakeOrchestrationTests(unittest.TestCase):
                 "GENERATORS = " + repr(names) + "\n", encoding="utf-8")
             for name in names:
                 (unreal_root / name).write_text("VALUE = 1\n", encoding="utf-8")
-            material_root = config.repo_root / "Content" / "VtMB" / "Materials"
-            font_root = config.repo_root / "Content" / "VtMB" / "UI" / "Fonts"
+            material_root = config.repo_root / "Content" / "ElysiumGenerated" / "Materials"
+            font_root = config.repo_root / "Content" / "ElysiumGenerated" / "UI" / "Fonts"
 
             def generate(_config, _runner, generators, *, include_auxiliary):
                 material_root.mkdir(parents=True, exist_ok=True)
@@ -320,7 +321,8 @@ class BakeOrchestrationTests(unittest.TestCase):
                 font_root.mkdir(parents=True, exist_ok=True)
                 for name in export_manager.unreal.FONT_ASSETS:
                     (font_root / name).write_bytes(b"font")
-                (config.repo_root / "Content" / "Elysium.umap").write_bytes(b"map")
+                (config.repo_root / "Content" / "ElysiumGenerated" / "Boot.umap").write_bytes(
+                    b"map")
 
             with (
                 mock.patch.object(export_manager.unreal, "generate_policy_content",
@@ -451,7 +453,7 @@ class BakeOrchestrationTests(unittest.TestCase):
     def test_focused_world_policy_runs_only_the_world_material_generator(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)
-            material_root = config.repo_root / "Content" / "VtMB" / "Materials"
+            material_root = config.repo_root / "Content" / "ElysiumGenerated" / "Materials"
 
             def generate(_config, _runner, generators, *, include_auxiliary):
                 self.assertEqual(generators, (export_manager.WORLD_MATERIAL_GENERATOR,))
@@ -474,7 +476,7 @@ class BakeOrchestrationTests(unittest.TestCase):
     def test_focused_character_policy_runs_only_character_material_generators(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)
-            material_root = config.repo_root / "Content" / "VtMB" / "Materials"
+            material_root = config.repo_root / "Content" / "ElysiumGenerated" / "Materials"
 
             def generate(_config, _runner, generators, *, include_auxiliary):
                 self.assertEqual(generators, export_manager.CHARACTER_MATERIAL_GENERATORS)

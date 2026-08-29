@@ -11,12 +11,14 @@ import os
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import shared_corpus as SC  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 from elysium_pipeline.validation.png_alpha import alpha_range  # noqa: E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 
-MOUNT = "/ElysiumBaked"
+MOUNT = mounts.BAKED
+MATERIALS = mounts.MATERIALS
 
 
 _CORPUS_MATERIALS = None
@@ -183,7 +185,7 @@ def verify_sm_hub_1_weather(package, world_dir):
     # (Content/ElysiumAuthored/VFX); their presence is a checkout sanity check, not a bake
     # product check. Only the per-map material instances are bake products here.
     expected_assets = [
-        "/Game/VtMB/Materials/MPC_ElysiumEnvironment",
+        MATERIALS + "/MPC_ElysiumEnvironment",
         "/Game/ElysiumAuthored/VFX/M_ElysiumRain",
         "/Game/ElysiumAuthored/VFX/NS_ElysiumRain",
         "/Game/ElysiumAuthored/VFX/T_RainDroplet",
@@ -477,7 +479,7 @@ def verify_map(map_name):
     glass_alpha = 0
     glass_normals = 0
     glass_parented = 0
-    expected_parent = "/Game/VtMB/Materials/M_World_Glass.M_World_Glass"
+    expected_parent = MATERIALS + "/M_World_Glass.M_World_Glass"
     for (mat_package, mic_name), (owner, mat, source_dir, tex_index) in sorted(
             glass_records.items()):
         if not mat.blend:
@@ -585,7 +587,7 @@ def verify_map(map_name):
 
     refract_normals = 0
     refract_parented = 0
-    expected_refract_parent = "/Game/VtMB/Materials/M_Refract.M_Refract"
+    expected_refract_parent = MATERIALS + "/M_Refract.M_Refract"
     for (mat_package, mic_name), (owner, mat, source_dir, tex_index) in sorted(
             refract_records.items()):
         normal_asset = None

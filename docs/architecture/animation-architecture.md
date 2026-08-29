@@ -1323,8 +1323,9 @@ skinning; Jeanette's skirt and Sheriff's coat both use it, and the exact carrier
 `docs/vtmb/secondary_motion.md`. Offline, `UE_mdl_cloth.py` writes an Unreal-native
 `npc/garment/<stem>.json` sidecar and `UElysiumClothBuildLibrary::BuildClothAssetsFromSidecar`
 (driven by `pipeline/unreal/make_cloth_assets.py`, after the character bake) builds
-`/Game/VtMB/Cloth/CLOTH_<stem>` — generated and gitignored, because its payload is game-derived
-geometry bound to a baked mesh. The material and solver judgment values are the one authored
+`/ElysiumBaked/Characters/Cloth/CLOTH_<stem>` — generated and gitignored, because its payload is
+decoded from the user's own VtMB install and is game-derived geometry bound to a baked mesh. The
+material and solver judgment values are the one authored
 layer: the tracked `/Game/ElysiumAuthored/Cloth/DA_ClothTuning` (`UElysiumClothTuningConfig`),
 edited in the editor. At runtime `ElysiumNpcVisual::InstallGarment` attaches the garment as a
 leader-pose `UChaosClothComponent` follower of the body and hides the duplicated body sections.

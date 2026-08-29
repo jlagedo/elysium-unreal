@@ -114,7 +114,7 @@ The repository rejects:
 Git LFS is required for `Content/ElysiumAuthored/**` and is not an exception anywhere else. The
 authored namespace may contain original project camera/cinematic assets and other independently
 owned work; copying game-derived exports, packages, transforms, timings, or scripts into it is a
-policy violation. Generated `/Game/Elysium`, `/Game/VtMB/**`, and `/ElysiumBaked/**` packages keep
+policy violation. Generated `/Game/ElysiumGenerated/**` and `/ElysiumBaked/**` packages keep
 their ignored/regenerable contracts.
 
 `uv run elysium doctor` enforces the path boundary and the tracked pre-commit hook runs the
@@ -150,8 +150,7 @@ dependencies, expected outputs, and completion state in
 complete tasks whose outputs still exist; `--force` bypasses that cache.
 
 `--clean` validates the work-root ownership marker before deleting only the configured
-export corpus, `Content/VtMB/`, `Content/Elysium.umap`, and
-`Plugins/ElysiumBaked/Content/`. It immediately writes
+export corpus, `Content/ElysiumGenerated/`, and `Plugins/ElysiumBaked/Content/`. It immediately writes
 `$ELYSIUM_EXPORT_ROOT/.elysium-incomplete`; successful export, package generation, bake,
 and verification remove the marker. Repository diagnostics and content tests refuse or skip an
 incomplete corpus rather than treating it as valid. Runtime gameplay does not consult the marker;

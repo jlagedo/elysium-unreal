@@ -457,7 +457,8 @@ void UElysiumGameFlowSubsystem::NotifyWorldReady(AGameModeBase* Mode)
 		return;
 	}
 
-	// No pending load: this is the boot world (/Game/Elysium). Run the plan decided at GI init.
+	// No pending load: this is the boot world (/Game/ElysiumGenerated/Boot). Run the plan decided
+	// at GI init.
 	if (bBootExecuted)
 	{
 		return;

@@ -25,6 +25,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from elysium_pipeline import mounts
 from elysium_pipeline.formats import eskm
 from elysium_pipeline.tasking import ContentDigestCache, fingerprint_content
 
@@ -54,7 +55,7 @@ GLOBAL_SCOPE = "_global"
 #: packages after this many authored units.
 BODY_BATCH = 16
 
-MOUNT = "/ElysiumBaked"
+MOUNT = mounts.BAKED
 CHARACTERS = MOUNT + "/Characters"
 MESHES = CHARACTERS + "/Meshes"
 TEXTURES = CHARACTERS + "/Textures"

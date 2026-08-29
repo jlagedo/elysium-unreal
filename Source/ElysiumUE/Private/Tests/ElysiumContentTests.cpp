@@ -895,9 +895,9 @@ bool FElysiumReflectionParamsTest::RunTest(const FString&)
 	// This validates generated Unreal packages only. A corpus-wide export marker must not hide
 	// missing parameters or a broken master graph after a focused map/policy bake.
 	static const TCHAR* LitMasters[] = {
-		TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque"),
-		TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked"),
-		TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Opaque.M_World_Opaque"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Masked.M_World_Masked"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Translucent.M_World_Translucent"),
 	};
 	static const FName ScalarParams[] = {
 		ElysiumReflections::Params::EnvStrength,
@@ -936,7 +936,7 @@ bool FElysiumReflectionParamsTest::RunTest(const FString&)
 		{
 			TestEqual(*FString::Printf(TEXT("%s EnvMask falls back to linear white"), Path),
 				Mask->GetPathName(),
-				FString(TEXT("/Game/VtMB/Materials/T_LinearWhiteMask.T_LinearWhiteMask")));
+				FString(TEXT("/Game/ElysiumGenerated/Materials/T_LinearWhiteMask.T_LinearWhiteMask")));
 			if (const UTexture2D* Mask2D = Cast<UTexture2D>(Mask))
 			{
 				TestFalse(TEXT("white mask is linear"), Mask2D->SRGB);
@@ -1009,7 +1009,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGlassMasterTest,
 bool FElysiumGlassMasterTest::RunTest(const FString&)
 {
 	UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
-		TEXT("/Game/VtMB/Materials/M_World_Glass.M_World_Glass"));
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Glass.M_World_Glass"));
 	if (!TestNotNull(TEXT("glass master loads"), Master))
 	{
 		return true;
@@ -1071,7 +1071,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRefractMasterTest,
 bool FElysiumRefractMasterTest::RunTest(const FString&)
 {
 	UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
-		TEXT("/Game/VtMB/Materials/M_Refract.M_Refract"));
+		TEXT("/Game/ElysiumGenerated/Materials/M_Refract.M_Refract"));
 	if (!TestNotNull(TEXT("refract master loads"), Master))
 	{
 		return true;
@@ -2263,7 +2263,7 @@ bool FElysiumPlayerBodyMaterialTest::RunTest(const FString&)
 {
 	if (SkipIncompleteCorpus(*this, { TEXT("policy") })) return true;
 	UMaterial* Material = LoadObject<UMaterial>(nullptr,
-		TEXT("/Game/VtMB/Materials/M_PlayerBody.M_PlayerBody"));
+		TEXT("/Game/ElysiumGenerated/Materials/M_PlayerBody.M_PlayerBody"));
 	if (!TestNotNull(TEXT("M_PlayerBody asset loads"), Material))
 	{
 		return true;
@@ -2309,12 +2309,12 @@ bool FElysiumPlacedPropMaterialUsageTest::RunTest(const FString&)
 	// representation of an authored non-static rest pose. A missing cooked permutation renders
 	// Default Material in a packaged build even though the editor compiles it on demand.
 	static const TCHAR* Masters[] = {
-		TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque"),
-		TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked"),
-		TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent"),
-		TEXT("/Game/VtMB/Materials/M_World_Glass.M_World_Glass"),
-		TEXT("/Game/VtMB/Materials/M_Refract.M_Refract"),
-		TEXT("/Game/VtMB/Materials/M_Additive.M_Additive"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Opaque.M_World_Opaque"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Masked.M_World_Masked"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Translucent.M_World_Translucent"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Glass.M_World_Glass"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_Refract.M_Refract"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_Additive.M_Additive"),
 	};
 	for (const TCHAR* Path : Masters)
 	{
@@ -2674,7 +2674,7 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 		FString(TEXT("R16_UNORM")));
 
 	UMaterialParameterCollection* Collection = LoadObject<UMaterialParameterCollection>(nullptr,
-		TEXT("/Game/VtMB/Materials/MPC_ElysiumEnvironment.MPC_ElysiumEnvironment"));
+		TEXT("/Game/ElysiumGenerated/Materials/MPC_ElysiumEnvironment.MPC_ElysiumEnvironment"));
 	if (TestNotNull(TEXT("one environment MPC loads"), Collection))
 	{
 		const TArray<FName> Names = Collection->GetScalarParameterNames();
@@ -2689,9 +2689,9 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 	}
 
 	for (const TCHAR* Path : {
-		TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque"),
-		TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked"),
-		TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent")})
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Opaque.M_World_Opaque"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Masked.M_World_Masked"),
+		TEXT("/Game/ElysiumGenerated/Materials/M_World_Translucent.M_World_Translucent")})
 	{
 		UMaterial* Master = LoadObject<UMaterial>(nullptr, Path);
 		if (!TestNotNull(FString::Printf(TEXT("wet world master loads: %s"), Path), Master))
@@ -4760,35 +4760,35 @@ bool FElysiumAudioRoutingAssetsContentTest::RunTest(const FString&)
 {
 	if (SkipIncompleteCorpus(*this, { TEXT("policy") })) return true;
 	static const TCHAR* Packages[] = {
-		TEXT("/Game/VtMB/Audio/SC_Master"),
-		TEXT("/Game/VtMB/Audio/SC_Music"),
-		TEXT("/Game/VtMB/Audio/SC_Dialogue"),
-		TEXT("/Game/VtMB/Audio/SC_Ambience"),
-		TEXT("/Game/VtMB/Audio/SC_SFX"),
-		TEXT("/Game/VtMB/Audio/SC_UI"),
-		TEXT("/Game/VtMB/Audio/SM_Master"),
-		TEXT("/Game/VtMB/Audio/SM_Music"),
-		TEXT("/Game/VtMB/Audio/SM_Dialogue"),
-		TEXT("/Game/VtMB/Audio/SM_Ambience"),
-		TEXT("/Game/VtMB/Audio/SM_SFX"),
-		TEXT("/Game/VtMB/Audio/SM_UI"),
-		TEXT("/Game/VtMB/Audio/SM_ReverbReturn"),
-		TEXT("/Game/VtMB/Audio/CB_Master"),
-		TEXT("/Game/VtMB/Audio/CB_Music"),
-		TEXT("/Game/VtMB/Audio/CB_Dialogue"),
-		TEXT("/Game/VtMB/Audio/CB_Ambience"),
-		TEXT("/Game/VtMB/Audio/CB_SFX"),
-		TEXT("/Game/VtMB/Audio/CB_UI"),
-		TEXT("/Game/VtMB/Audio/CBM_User"),
-		TEXT("/Game/VtMB/Audio/Concurrency_Music"),
-		TEXT("/Game/VtMB/Audio/Concurrency_Dialogue"),
-		TEXT("/Game/VtMB/Audio/Concurrency_Ambience"),
-		TEXT("/Game/VtMB/Audio/Concurrency_SFX"),
-		TEXT("/Game/VtMB/Audio/Concurrency_UI"),
-		TEXT("/Game/VtMB/Audio/Attenuation_Point"),
-		TEXT("/Game/VtMB/Audio/Attenuation_Dialogue"),
-		TEXT("/Game/VtMB/Audio/Attenuation_Mover"),
-		TEXT("/Game/VtMB/Audio/Attenuation_Ambient"),
+		TEXT("/Game/ElysiumGenerated/Audio/SC_Master"),
+		TEXT("/Game/ElysiumGenerated/Audio/SC_Music"),
+		TEXT("/Game/ElysiumGenerated/Audio/SC_Dialogue"),
+		TEXT("/Game/ElysiumGenerated/Audio/SC_Ambience"),
+		TEXT("/Game/ElysiumGenerated/Audio/SC_SFX"),
+		TEXT("/Game/ElysiumGenerated/Audio/SC_UI"),
+		TEXT("/Game/ElysiumGenerated/Audio/SM_Master"),
+		TEXT("/Game/ElysiumGenerated/Audio/SM_Music"),
+		TEXT("/Game/ElysiumGenerated/Audio/SM_Dialogue"),
+		TEXT("/Game/ElysiumGenerated/Audio/SM_Ambience"),
+		TEXT("/Game/ElysiumGenerated/Audio/SM_SFX"),
+		TEXT("/Game/ElysiumGenerated/Audio/SM_UI"),
+		TEXT("/Game/ElysiumGenerated/Audio/SM_ReverbReturn"),
+		TEXT("/Game/ElysiumGenerated/Audio/CB_Master"),
+		TEXT("/Game/ElysiumGenerated/Audio/CB_Music"),
+		TEXT("/Game/ElysiumGenerated/Audio/CB_Dialogue"),
+		TEXT("/Game/ElysiumGenerated/Audio/CB_Ambience"),
+		TEXT("/Game/ElysiumGenerated/Audio/CB_SFX"),
+		TEXT("/Game/ElysiumGenerated/Audio/CB_UI"),
+		TEXT("/Game/ElysiumGenerated/Audio/CBM_User"),
+		TEXT("/Game/ElysiumGenerated/Audio/Concurrency_Music"),
+		TEXT("/Game/ElysiumGenerated/Audio/Concurrency_Dialogue"),
+		TEXT("/Game/ElysiumGenerated/Audio/Concurrency_Ambience"),
+		TEXT("/Game/ElysiumGenerated/Audio/Concurrency_SFX"),
+		TEXT("/Game/ElysiumGenerated/Audio/Concurrency_UI"),
+		TEXT("/Game/ElysiumGenerated/Audio/Attenuation_Point"),
+		TEXT("/Game/ElysiumGenerated/Audio/Attenuation_Dialogue"),
+		TEXT("/Game/ElysiumGenerated/Audio/Attenuation_Mover"),
+		TEXT("/Game/ElysiumGenerated/Audio/Attenuation_Ambient"),
 	};
 	for (const TCHAR* Package : Packages)
 	{
@@ -4915,7 +4915,7 @@ bool FElysiumInputGlyphAssetsContentTest::RunTest(const FString&)
 					Texture->Source.GetSizeY(), int64(128));
 				TestTrue(*FString::Printf(TEXT("%s comes from Kenney policy content"), *Label),
 					Texture->GetPathName().Contains(
-						FString::Printf(TEXT("/Game/Input/Glyphs/Kenney/%s/"), Family)));
+						FString::Printf(TEXT("/Game/ElysiumGenerated/Input/Glyphs/Kenney/%s/"), Family)));
 			}
 		}
 	};

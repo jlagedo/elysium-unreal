@@ -1,4 +1,4 @@
-# Generates the wield master-material family under Content/VtMB/Materials/
+# Generates the wield master-material family under Content/ElysiumGenerated/Materials/
 # (docs/architecture/wielded-weapon-integration.md -> "Materials and textures"):
 #
 #   M_Wield              opaque weapons (the common case; most of the corpus carries $envmap)
@@ -26,7 +26,10 @@
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_wield_materials.py" -unattended -nosplash -nopause
 import unreal
 
-PKG = "/Game/VtMB/Materials"
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
+
+PKG = mounts.MATERIALS
 DEFAULT_TEX = "/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"
 DEFAULT_NORMAL = "/Engine/EngineMaterials/DefaultNormal.DefaultNormal"
 

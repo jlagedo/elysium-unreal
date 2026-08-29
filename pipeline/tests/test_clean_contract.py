@@ -26,15 +26,14 @@ class CleanContractTests(unittest.TestCase):
             (export / "sp_tutorial_1" / "map.obj").write_text("derived")
             (export / LOCK_FILE).write_bytes(b"\0")
             (export / OWNER_FILE).write_text("{}", encoding="utf-8")
-            (repo / "Content" / "VtMB").mkdir(parents=True)
-            (repo / "Content" / "VtMB" / "generated.uasset").write_text("derived")
             (repo / "Content" / "Fonts").mkdir(parents=True)
             (repo / "Content" / "Fonts" / "source.ttf").write_text("licensed")
             (repo / "Content" / "InputPrompts" / "Kenney").mkdir(parents=True)
             (repo / "Content" / "InputPrompts" / "Kenney" / "glyph.png").write_text("licensed")
-            (repo / "Content" / "Input").mkdir(parents=True)
-            (repo / "Content" / "Input" / "generated.uasset").write_text("derived")
-            (repo / "Content" / "Elysium.umap").write_text("derived")
+            (repo / "Content" / "ElysiumGenerated" / "Input").mkdir(parents=True)
+            (repo / "Content" / "ElysiumGenerated" / "Input" / "generated.uasset").write_text(
+                "derived")
+            (repo / "Content" / "ElysiumGenerated" / "Boot.umap").write_text("derived")
             baked = repo / "Plugins" / "ElysiumBaked" / "Content"
             baked.mkdir(parents=True)
             (baked / "generated.umap").write_text("derived")
@@ -50,9 +49,7 @@ class CleanContractTests(unittest.TestCase):
             )
             incomplete = clean.clean_generated(targets)
 
-            self.assertFalse((repo / "Content" / "VtMB").exists())
-            self.assertFalse((repo / "Content" / "Input").exists())
-            self.assertFalse((repo / "Content" / "Elysium.umap").exists())
+            self.assertFalse((repo / "Content" / "ElysiumGenerated").exists())
             self.assertFalse(baked.exists())
             self.assertTrue((repo / "Content" / "Fonts" / "source.ttf").is_file())
             self.assertTrue(

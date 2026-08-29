@@ -6,7 +6,10 @@ templates. Idempotent and run by build_content.py.
 """
 import unreal
 
-ROOT = "/Game/VtMB/Audio"
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
+
+ROOT = mounts.AUDIO
 CATEGORIES = ("Master", "Music", "Dialogue", "Ambience", "SFX", "UI")
 
 

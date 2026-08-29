@@ -1,5 +1,5 @@
 # Imports the UI typeface set (Content/Fonts/*.ttf) into generated local `UFontFace` assets under
-# /Game/VtMB/UI/Fonts. Roadmap 8.6; the type system is "Nocturne" (docs/architecture/ui-architecture.md):
+# /Game/ElysiumGenerated/UI/Fonts. Roadmap 8.6; the type system is "Nocturne" (docs/architecture/ui-architecture.md):
 # Spectral SC for small-caps labels, Spectral for body copy, Inter for data and numerals.
 #
 # Why font *faces* and not one composite UFont: UE 5.8's editor Python exposes `UFontFace`
@@ -22,8 +22,9 @@ import os
 
 import unreal
 from pipeline.unreal import _bootstrap  # noqa: E402
+from elysium_pipeline import mounts
 
-PKG = "/Game/VtMB/UI/Fonts"
+PKG = mounts.UI_FONTS
 SRC = os.path.join(_bootstrap.REPO, "Content", "Fonts")
 
 # (ttf filename, asset name). Asset names are FF_<Family>_<Weight> so the C++ side can build

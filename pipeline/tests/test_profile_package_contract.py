@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from types import SimpleNamespace
 
-from elysium_pipeline import export_manager
+from elysium_pipeline import export_manager, mounts
 from elysium_pipeline.exporters import export_all
 
 
@@ -57,18 +57,16 @@ class ProfileAndPackageContractTests(unittest.TestCase):
     def test_virtual_package_roots_remain_immutable(self) -> None:
         repo = Path(__file__).resolve().parents[2]
         engine = (repo / "Config" / "DefaultEngine.ini").read_text(encoding="utf-8")
-        bake = (repo / "pipeline" / "unreal" / "bake_map.py").read_text(
-            encoding="utf-8"
-        )
         descriptor = json.loads(
             (repo / "Plugins" / "ElysiumBaked" / "ElysiumBaked.uplugin").read_text(
                 encoding="utf-8"
             )
         )
 
-        self.assertIn("GameDefaultMap=/Game/Elysium.Elysium", engine)
-        self.assertIn('MOUNT = "/ElysiumBaked"', bake)
-        self.assertIn('"/Game/VtMB/Materials', bake)
+        self.assertIn("GameDefaultMap=/Game/ElysiumGenerated/Boot.Boot", engine)
+        self.assertEqual(mounts.BAKED, "/ElysiumBaked")
+        self.assertEqual(mounts.MATERIALS, "/Game/ElysiumGenerated/Materials")
+        self.assertEqual(mounts.CLOTH, "/ElysiumBaked/Characters/Cloth")
         self.assertTrue(descriptor["CanContainContent"])
 
 

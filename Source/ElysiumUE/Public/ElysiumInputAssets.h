@@ -44,13 +44,22 @@ public:
 namespace ElysiumInputAssets
 {
 	inline constexpr TCHAR ActionSetPath[] =
-		TEXT("/Game/Input/DA_ElysiumInputActions.DA_ElysiumInputActions");
+		TEXT("/Game/ElysiumGenerated/Input/DA_ElysiumInputActions.DA_ElysiumInputActions");
 	inline constexpr TCHAR KeyboardMouseContextPath[] =
-		TEXT("/Game/Input/IMC_Player_KBM.IMC_Player_KBM");
+		TEXT("/Game/ElysiumGenerated/Input/IMC_Player_KBM.IMC_Player_KBM");
 	inline constexpr TCHAR GamepadContextPath[] =
-		TEXT("/Game/Input/IMC_Player_Gamepad.IMC_Player_Gamepad");
+		TEXT("/Game/ElysiumGenerated/Input/IMC_Player_Gamepad.IMC_Player_Gamepad");
 
 	inline constexpr TCHAR DualSenseCreateKey[] = TEXT("Elysium_DualSense_Create");
 	inline constexpr TCHAR DualSensePSKey[] = TEXT("Elysium_DualSense_PS");
 	inline constexpr TCHAR DualSenseMuteKey[] = TEXT("Elysium_DualSense_Mute");
+
+	// One Kenney glyph texture, by input device family (e.g. "Xbox", "PlayStation", "Keyboard")
+	// and source stem. Package path is <Family>/T_Kenney_<Stem>.T_Kenney_<Stem> under Glyphs/Kenney.
+	inline FString GlyphTexturePath(const TCHAR* Family, const TCHAR* SourceStem)
+	{
+		return FString::Printf(
+			TEXT("/Game/ElysiumGenerated/Input/Glyphs/Kenney/%s/T_Kenney_%s.T_Kenney_%s"),
+			Family, SourceStem, SourceStem);
+	}
 }

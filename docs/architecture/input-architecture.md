@@ -518,7 +518,7 @@ removes the mapping.
 
 CommonUI and CommonInput own button prompts. `UElysiumCommonUIInputData` supplies native
 Accept/Back/Use actions, while three native `CommonInputBaseControllerData` policies map those
-keys to generated Kenney CC0 textures under `/Game/Input/Glyphs/Kenney/**`. The Windows platform
+keys to generated Kenney CC0 textures under `/Game/ElysiumGenerated/Input/Glyphs/Kenney/**`. The Windows platform
 policy defaults to Xbox art, maps `GameInput/XboxOne|Xbox360` to that set, and maps the overridden
 `GameInput/DualSense` hardware id to PlayStation art. Keyboard prompts use the same source pack.
 The world-interaction prompt asks CommonInput for its current brush and falls back to `E`/`RT`

@@ -22,7 +22,7 @@ rather than built at runtime; `docs/project/roadmap.md`'s LIFE programme owns th
 `docs/architecture/animation-architecture.md` its design.
 
 `UElysiumMapSubsystem::Travel` opens `/ElysiumBaked/<map>/<map>` directly — each map is its own
-level, and the `/Game/Elysium` shell is now only the boot world. The map actor is spawned into that
+level, and the `/Game/ElysiumGenerated/Boot` shell is only the boot world. The map actor is spawned into that
 level and **adopts** it: one pass over the actors, bucketed by the tag the bake stamped on them
 (`ElysiumBakedTags.h` ↔ `TAG_*` in `bake_map.py`). Tags rather than Outliner folders, because folder
 paths are editor-only metadata and vanish in a `-game` build.

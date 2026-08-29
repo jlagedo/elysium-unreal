@@ -26,21 +26,22 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
+from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline import placed_models as PM, shared_corpus as SC  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 from elysium_pipeline.tasking import ContentDigestCache, DIGEST_CACHE_FILE  # noqa: E402
 
-MOUNT = "/ElysiumBaked"
+MOUNT = mounts.BAKED
 OUT_ROOT = os.fspath(export_root())
 
 MASTERS = {
-    "opaque": "/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque",
-    "masked": "/Game/VtMB/Materials/M_World_Masked.M_World_Masked",
-    "translucent": "/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent",
-    "glass": "/Game/VtMB/Materials/M_World_Glass.M_World_Glass",
-    "refract": "/Game/VtMB/Materials/M_Refract.M_Refract",
-    "additive": "/Game/VtMB/Materials/M_Additive.M_Additive",
-    "decal": "/Game/VtMB/Materials/M_Decal.M_Decal",
+    "opaque": "%s/M_World_Opaque.M_World_Opaque" % mounts.MATERIALS,
+    "masked": "%s/M_World_Masked.M_World_Masked" % mounts.MATERIALS,
+    "translucent": "%s/M_World_Translucent.M_World_Translucent" % mounts.MATERIALS,
+    "glass": "%s/M_World_Glass.M_World_Glass" % mounts.MATERIALS,
+    "refract": "%s/M_Refract.M_Refract" % mounts.MATERIALS,
+    "additive": "%s/M_Additive.M_Additive" % mounts.MATERIALS,
+    "decal": "%s/M_Decal.M_Decal" % mounts.MATERIALS,
 }
 
 # World chunk edge, centimetres. Triangles are binned by centroid cell; each cell yields one
@@ -1916,10 +1917,10 @@ class Bake(object):
                     model_path = record.get("model", model_path)
                     rest = PM.select_rest_label(model_path, record, placement_token)
                     skel = unreal.EditorAssetLibrary.load_asset(
-                        "/ElysiumBaked/Props/%s/SK_%s" %
+                        (MOUNT + "/Props/%s/SK_%s") %
                         (catalogue_stem, catalogue_stem))
                     anim = unreal.EditorAssetLibrary.load_asset(
-                        "/ElysiumBaked/Props/%s/A_%s" %
+                        (MOUNT + "/Props/%s/A_%s") %
                         (catalogue_stem, bl.safe_name(rest)))
                     if not skel or not anim or not rest:
                         raise RuntimeError("GAME_LUMP model %s has no baked rest asset '%s'" %

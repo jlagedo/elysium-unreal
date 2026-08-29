@@ -619,7 +619,7 @@ def _character_material_fingerprint(config) -> str:
 
 
 def _world_material_task(config, runner) -> Task:
-    material_root = config.repo_root / "Content" / "VtMB" / "Materials"
+    material_root = config.repo_root / "Content" / "ElysiumGenerated" / "Materials"
     outputs = tuple(material_root / f"{name}.uasset" for name in (
         "M_World_Opaque", "M_World_Masked", "M_World_Translucent", "M_World_Glass",
         "M_Refract", "M_Additive"))
@@ -633,7 +633,7 @@ def _world_material_task(config, runner) -> Task:
 
 
 def _character_material_task(config, runner) -> Task:
-    material_root = config.repo_root / "Content" / "VtMB" / "Materials"
+    material_root = config.repo_root / "Content" / "ElysiumGenerated" / "Materials"
     return Task(
         "unreal:policy:character-materials",
         lambda: unreal.generate_policy_content(
@@ -734,14 +734,14 @@ def ensure_policy_content(config, runner, *, force: bool = False,
     # source sprites, and the policy fingerprint below reads the mirror's outputs.
     _ensure_particle_mirror(config, manifest=manifest, force=force, cache=cache,
                             covered=particles_covered)
-    font_root = config.repo_root / "Content" / "VtMB" / "UI" / "Fonts"
+    font_root = config.repo_root / "Content" / "ElysiumGenerated" / "UI" / "Fonts"
     generator_names = _policy_generator_names(config)
     focused_generators = {WORLD_MATERIAL_GENERATOR, *CHARACTER_MATERIAL_GENERATORS}
     other_generators = [name for name in generator_names if name not in focused_generators]
     world_task = _world_material_task(config, runner)
     character_task = _character_material_task(config, runner)
     outputs = (
-        config.repo_root / "Content" / "Elysium.umap",
+        config.repo_root / "Content" / "ElysiumGenerated" / "Boot.umap",
         *(font_root / name for name in unreal.FONT_ASSETS),
     )
     policy_task = Task(
@@ -1722,7 +1722,7 @@ def export_placed_models(config, runner, maps: Sequence[str], models: Sequence[s
     # The prop mesh stores only a neutral material reference. The owning map supplies its exact
     # material instances at runtime, so policy changes do not invalidate this scope; only absence
     # of the neutral master is a prerequisite failure.
-    body_master = config.repo_root / "Content" / "VtMB" / "Materials" / "M_PlayerBody.uasset"
+    body_master = config.repo_root / "Content" / "ElysiumGenerated" / "Materials" / "M_PlayerBody.uasset"
     if not body_master.is_file():
         ensure_character_material_content(config, runner, manifest=receipt_store)
     _run_character_bake(config, runner, (), props=stems, verify=verify, force=force,
@@ -2469,7 +2469,7 @@ def _stale_garments(config, stems: Sequence[str]) -> list[str]:
     Most stems author no garment and are absent from both sides, which is not staleness.
     """
     garment_dir = config.export_root / "npc" / "garment"
-    cloth_dir = config.repo_root / "Content" / "VtMB" / "Cloth"
+    cloth_dir = config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Characters" / "Cloth"
     tuning = (config.repo_root / "Content" / "ElysiumAuthored" / "Cloth"
               / "DA_ClothTuning.uasset")
     tuned_at = tuning.stat().st_mtime if tuning.is_file() else 0.0

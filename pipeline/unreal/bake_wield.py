@@ -31,11 +31,11 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
-from elysium_pipeline import asset_names, wield_corpus as wc  # noqa: E402
+from elysium_pipeline import asset_names, mounts, wield_corpus as wc  # noqa: E402
 from elysium_pipeline.formats import eskm  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 
-MOUNT = "/ElysiumBaked"
+MOUNT = mounts.BAKED
 ITEMS = MOUNT + "/Items"
 #: "/ElysiumBaked/Items/Wield" -- the immutable contract `wield_corpus.py` states for both halves.
 WIELD = wc.BAKED_ROOT
@@ -44,11 +44,11 @@ DA_PACKAGE = ITEMS
 DA_NAME = "DA_WieldModels"
 
 #: The wield master family -- FROZEN contract, `docs/architecture/wielded-weapon-integration.md`:
-#: package `/Game/VtMB/Materials`, one master per blend mode, texture parameters `Albedo`/`Normal`/
+#: package `/Game/ElysiumGenerated/Materials`, one master per blend mode, texture parameters `Albedo`/`Normal`/
 #: `EnvMask` on all four (a `EnvStrength` scalar may also exist -- this file only ever sets a
 #: parameter it has enumerated on the selected master, never assumes one). Every wield section and
 #: skin-family override is instanced from whichever of these its own manifest flags select.
-WIELD_MATERIALS = "/Game/VtMB/Materials"
+WIELD_MATERIALS = mounts.MATERIALS
 MAKE_WIELD_MASTERS = "pipeline/unreal/make_wield_materials.py"
 
 #: `flags` (from `wield_corpus.MATERIAL_FLAG_FIELDS`) that pick a variant master over the opaque

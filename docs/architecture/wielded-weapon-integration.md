@@ -149,7 +149,7 @@ translucent+additive on `gio_spirit` — plus any extra **skin family** as mater
 
 The character body master has no envmap, envmask, bump or translucency parameters, so weapons
 instance from their own master family — `M_Wield` (opaque), `M_Wield_Masked`, `M_Wield_Translucent`
-and `M_Wield_Additive` under `/Game/VtMB/Materials`, generator-built by
+and `M_Wield_Additive` under `/Game/ElysiumGenerated/Materials`, generator-built by
 `pipeline/unreal/make_wield_materials.py`. Each carries `Albedo`/`Normal`/`EnvMask` texture
 parameters and an `EnvStrength` scalar, flags `used_with_skeletal_mesh`, and the bake selects per
 material row by flag precedence additive → translucent → alphatest → opaque (additive blending

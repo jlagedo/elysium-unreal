@@ -1,4 +1,4 @@
-# Generates Content/VtMB/Materials/M_Decal.uasset: the master material for roadmap 7.2 decals.
+# Generates Content/ElysiumGenerated/Materials/M_Decal.uasset: the master material for roadmap 7.2 decals.
 # VtMB's `infodecal` layer (blood, bullet holes, graffiti, posters, stains) is exported as a
 # `<map>.decals` projector sidecar; the runtime builds one deferred UDecalComponent per line and
 # gives each a MID off this master. A DEFERRED-DECAL material writes into the GBuffer before the
@@ -22,8 +22,9 @@ import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import mat_fog
+from elysium_pipeline import mounts
 
-PKG = "/Game/VtMB/Materials"
+PKG = mounts.MATERIALS
 NAME = "M_Decal"
 ASSET = "%s/%s" % (PKG, NAME)
 DEFAULT_TEX = "/Engine/EngineResources/DefaultTexture.DefaultTexture"

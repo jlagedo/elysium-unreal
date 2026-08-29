@@ -3,6 +3,7 @@
 #if ENABLE_COG
 
 #include "Debug/ElysiumCogStyle.h"
+#include "ElysiumContentPaths.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameClock.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -97,8 +98,7 @@ namespace
 	FSourceBindingSummary InspectSourceBindings(const AElysiumMapActor& Map)
 	{
 		FSourceBindingSummary Summary;
-		const FString Prefix = FString::Printf(
-			TEXT("/ElysiumBaked/%s/Materials/"), *Map.MapName);
+		const FString Prefix = FElysiumContentPaths::BakedMapDir(Map.MapName) / TEXT("Materials/");
 		for (TObjectIterator<UMaterialInstance> It; It; ++It)
 		{
 			UMaterialInstance* Instance = *It;

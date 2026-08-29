@@ -31,7 +31,10 @@
 # Format and the system this material serves: `docs/vtmb/facial_animation.md` -> Eyes.
 import unreal
 
-PKG = "/Game/VtMB/Materials"
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
+
+PKG = mounts.MATERIALS
 ASSET = PKG + "/M_Eyes"
 DEFAULT_TEX = "/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"
 

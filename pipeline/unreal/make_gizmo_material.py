@@ -1,4 +1,4 @@
-# Generates Content/VtMB/Materials/M_Gizmo.uasset and M_Gizmo_XRay.uasset: the master materials
+# Generates Content/ElysiumGenerated/Materials/M_Gizmo.uasset and M_Gizmo_XRay.uasset: the master materials
 # for the P2.4 retained entity-gizmo layer (one UInstancedStaticMeshComponent of unit cubes, one
 # instance per entity). Both are unlit + two-sided + translucent and read their colour+opacity from
 # PER-INSTANCE CUSTOM DATA (floats 0..3 = R,G,B,A), so the runtime tints and dims each instance with
@@ -12,7 +12,10 @@
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_gizmo_material.py" -unattended -nosplash -nopause
 import unreal
 
-PKG = "/Game/VtMB/Materials"
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
+
+PKG = mounts.MATERIALS
 mel = unreal.MaterialEditingLibrary
 
 

@@ -203,11 +203,13 @@ def generate_auxiliary_policy_content(config, runner) -> None:
             *common,
         ],
     )
-    graph_asset = config.repo_root / "Content" / "Elysium" / "Animation" / "ABP_ElysiumBiped.uasset"
+    graph_asset = (
+        config.repo_root / "Content" / "ElysiumGenerated" / "Animation" / "ABP_ElysiumBiped.uasset"
+    )
     if not graph_asset.is_file():
         raise UnrealFailure("the player animation graph was not generated: " + str(graph_asset))
 
-    font_root = config.repo_root / "Content" / "VtMB" / "UI" / "Fonts"
+    font_root = config.repo_root / "Content" / "ElysiumGenerated" / "UI" / "Fonts"
     missing = [name for name in FONT_ASSETS if not (font_root / name).is_file()]
     if missing:
         raise UnrealFailure("font generation did not produce: " + ", ".join(missing))

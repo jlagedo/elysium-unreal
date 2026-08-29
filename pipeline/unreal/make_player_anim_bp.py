@@ -6,7 +6,7 @@ model the resolver picks assets for and the tracked source references nothing ge
 
 The graph itself is `graphs/ABP_ElysiumBiped.t3d` — the engine's own clipboard format, which is what
 lets a node graph be tracked as reviewable text instead of a binary package. The asset is a
-generated, ignored, regenerable package like every other under `/Game/Elysium`.
+generated, ignored, regenerable package like every other under `/Game/ElysiumGenerated`.
 
 Round trip: run this, open the asset, edit it in the animation editor, select the graph, Ctrl+C, and
 paste over the `.t3d`. The editor stays the authoring tool; the repository stores the text.
@@ -16,8 +16,10 @@ from pathlib import Path
 
 import unreal
 
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
 
-PACKAGE = "/Game/Elysium/Animation"
+PACKAGE = mounts.ANIMATION
 ASSET = "ABP_ElysiumBiped"
 GRAPH = "AnimGraph"
 PARENT = unreal.ElysiumBipedAnimInstance

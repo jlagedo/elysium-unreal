@@ -575,8 +575,7 @@ void UElysiumAudioSubsystem::RealizeVoice(
 	if (!Request.ConcurrencyKey.IsNone())
 	{
 		Concurrency = LoadObject<USoundConcurrency>(nullptr,
-			*FString::Printf(TEXT("/Game/VtMB/Audio/Concurrency_%s.Concurrency_%s"),
-				CategoryName, CategoryName));
+			*FElysiumContentPaths::AudioConcurrency(CategoryName));
 	}
 	if (!Request.Placement.bSpatialized)
 	{
@@ -628,7 +627,7 @@ void UElysiumAudioSubsystem::RealizeVoice(
 	}
 
 	Comp->SoundClassOverride = LoadObject<USoundClass>(nullptr,
-		*FString::Printf(TEXT("/Game/VtMB/Audio/SC_%s.SC_%s"), CategoryName, CategoryName));
+		*FElysiumContentPaths::AudioSoundClass(CategoryName));
 	if (Request.FadeInSeconds > 0.f)
 	{
 		const float TargetGain = OutputGain(Voice.Request);

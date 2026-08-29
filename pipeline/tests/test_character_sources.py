@@ -343,7 +343,7 @@ class ClothGateTests(unittest.TestCase):
             # amy authors a garment with no generated asset yet -> stale; bob authors none.
             self.assertEqual(
                 export_manager._cloth_bake_stems(config, ["amy", "bob"]), ["amy"])
-            cloth = config.repo_root / "Content" / "VtMB" / "Cloth"
+            cloth = config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Characters" / "Cloth"
             cloth.mkdir(parents=True)
             (cloth / "CLOTH_amy.uasset").write_bytes(b"cloth")
             future = (garment_dir / "amy.json").stat().st_mtime + 60

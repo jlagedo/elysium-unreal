@@ -182,7 +182,7 @@ namespace ElysiumNpcVisual
 
 	UMaterialInterface* EyeMaster()
 	{
-		return LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VtMB/Materials/M_Eyes.M_Eyes"));
+		return LoadObject<UMaterialInterface>(nullptr, *FElysiumContentPaths::Material(TEXT("M_Eyes")));
 	}
 
 	/**
@@ -291,8 +291,7 @@ namespace ElysiumNpcVisual
 		}
 		// Absence is the ordinary answer: 60 of 4,445 installed models author a garment at all, so
 		// this is a soft load rather than a resolve-or-fail. LoadObject logs nothing on a miss.
-		const FString AssetPath = FString::Printf(
-			TEXT("/Game/VtMB/Cloth/CLOTH_%s.CLOTH_%s"), *Stem, *Stem);
+		const FString AssetPath = FElysiumContentPaths::BakedCharacterCloth(Stem);
 		UChaosClothAsset* Asset = LoadObject<UChaosClothAsset>(nullptr, *AssetPath, nullptr,
 			LOAD_NoWarn | LOAD_Quiet);
 		if (Asset == nullptr)

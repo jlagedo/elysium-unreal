@@ -32,7 +32,7 @@ DOMAINS = (
     "npc",
     "particles",
     # `policy` is not an export bundle in the exporters' sense: it is the generated
-    # /Game/Elysium + /Game/VtMB packages `ensure_policy_content` writes, cleared by every profile
+    # /Game/ElysiumGenerated packages `ensure_policy_content` writes, cleared by every profile
     # export and by `export bundle policy`.
     "policy",
     "scenes",
@@ -111,9 +111,7 @@ def adopt_export_root(export_root: Path, work_root: Path) -> Path:
 @dataclass(frozen=True)
 class CleanTargets:
     export_root: Path
-    project_content: Path
-    project_input_content: Path
-    boot_map: Path
+    generated_content: Path
     baked_content: Path
 
 
@@ -129,20 +127,16 @@ def validate_clean_targets(
     for dangerous in _dangerous_roots(repo, game, work):
         if _same(export, dangerous):
             raise UnsafeClean(f"refusing dangerous export root: {export}")
-    project_content = (repo / "Content" / "VtMB").resolve()
-    project_input_content = (repo / "Content" / "Input").resolve()
-    boot_map = (repo / "Content" / "Elysium.umap").resolve()
+    generated_content = (repo / "Content" / "ElysiumGenerated").resolve()
     baked_content = (repo / "Plugins" / "ElysiumBaked" / "Content").resolve()
     expected = (
-        repo / "Content" / "VtMB",
-        repo / "Content" / "Input",
-        repo / "Content" / "Elysium.umap",
+        repo / "Content" / "ElysiumGenerated",
         repo / "Plugins" / "ElysiumBaked" / "Content",
     )
-    actual = (project_content, project_input_content, boot_map, baked_content)
+    actual = (generated_content, baked_content)
     if any(not _same(left, right) for left, right in zip(expected, actual, strict=True)):
         raise UnsafeClean("generated Unreal targets did not resolve to the exact project paths")
-    return CleanTargets(export, project_content, project_input_content, boot_map, baked_content)
+    return CleanTargets(export, generated_content, baked_content)
 
 
 def clean_generated(targets: CleanTargets) -> Path:
@@ -159,12 +153,8 @@ def clean_generated(targets: CleanTargets) -> Path:
             shutil.rmtree(child)
         else:
             child.unlink()
-    if targets.project_content.exists():
-        shutil.rmtree(targets.project_content)
-    if targets.project_input_content.exists():
-        shutil.rmtree(targets.project_input_content)
-    if targets.boot_map.exists():
-        targets.boot_map.unlink()
+    if targets.generated_content.exists():
+        shutil.rmtree(targets.generated_content)
     if targets.baked_content.exists():
         shutil.rmtree(targets.baked_content)
     return mark_incomplete(targets.export_root)

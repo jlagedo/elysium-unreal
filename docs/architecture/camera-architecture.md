@@ -224,7 +224,7 @@ Content/ElysiumAuthored/
 
 These packages contain only original project-authored logic, transforms, timings, curves, and
 settings. A package derived from the user's VtMB install remains prohibited even if copied into
-this namespace. Generated `/Game/VtMB/**`, `/Game/Elysium`, and `/ElysiumBaked/**` packages keep
+this namespace. Generated `/Game/ElysiumGenerated/**` and `/ElysiumBaked/**` packages keep
 their existing ignored/regenerable contracts.
 
 `UElysiumCameraProfile : UPrimaryDataAsset` is the designer-facing tuning unit. It carries:
@@ -262,7 +262,7 @@ ranges. `UCurveFloat` owns intentional blend shapes. `UCameraShakeBase` assets o
 Project-authored multi-shot scenes use Level Sequence and Cine Camera Actors.
 
 Authored sequences bind runtime characters and props through the sequence bridge's project-owned
-binding ids. They do not hard-reference `/Game/VtMB/**` or `/ElysiumBaked/**` packages. The bridge
+binding ids. They do not hard-reference `/Game/ElysiumGenerated/**` or `/ElysiumBaked/**` packages. The bridge
 resolves those ids to the current map's runtime actors when playback starts; a missing binding
 fails the sequence validation or chooses an explicitly authored fallback.
 

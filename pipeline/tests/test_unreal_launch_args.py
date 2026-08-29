@@ -66,10 +66,10 @@ class LaunchArgumentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)
             runner = RecordingRunner()
-            graph = config.repo_root / "Content" / "Elysium" / "Animation"
+            graph = config.repo_root / "Content" / "ElysiumGenerated" / "Animation"
             graph.mkdir(parents=True)
             (graph / "ABP_ElysiumBiped.uasset").write_bytes(b"graph")
-            fonts = config.repo_root / "Content" / "VtMB" / "UI" / "Fonts"
+            fonts = config.repo_root / "Content" / "ElysiumGenerated" / "UI" / "Fonts"
             fonts.mkdir(parents=True)
             for name in unreal.FONT_ASSETS:
                 (fonts / name).write_bytes(b"font")

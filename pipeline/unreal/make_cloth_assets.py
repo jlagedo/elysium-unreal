@@ -29,13 +29,14 @@ for _path in (_REPO, os.path.join(_REPO, "pipeline", "src")):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
+from elysium_pipeline import mounts  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 
 # Where the character bake puts skeletal meshes, and where generated cloth lands. The mesh mount
 # is the bake's, not `/Game`: a cloth asset binds to that mesh's reference skeleton, so it has to
 # name the exact package the bake wrote.
-MESH_PACKAGE = "/ElysiumBaked/Characters/Meshes"
-CLOTH_PACKAGE = "/Game/VtMB/Cloth"
+MESH_PACKAGE = mounts.BAKED + "/Characters/Meshes"
+CLOTH_PACKAGE = mounts.CLOTH
 
 # What each garment is MADE of, and every solver value the build applies, is the authored
 # `/Game/ElysiumAuthored/Cloth/DA_ClothTuning` data asset -- the authored payload states a garment's

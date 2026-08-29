@@ -4,7 +4,10 @@
 # body remains fully lit/masked and never enters the translucent render path.
 import unreal
 
-PKG = "/Game/VtMB/Materials"
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
+
+PKG = mounts.MATERIALS
 ASSET = PKG + "/M_PlayerBody"
 DEFAULT_TEX = "/Engine/EngineResources/WhiteSquareTexture.WhiteSquareTexture"
 DEFAULT_NORMAL = "/Engine/EngineMaterials/DefaultNormal.DefaultNormal"

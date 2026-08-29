@@ -852,7 +852,7 @@ void UElysiumMapVisuals::ApplyEnvironment(const FString& MapName)
 		return;
 	}
 	if (UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr,
-		TEXT("/Game/VtMB/Materials/M_Sky.M_Sky")))
+		*FElysiumContentPaths::Material(TEXT("M_Sky"))))
 	{
 		SkyMid = UMaterialInstanceDynamic::Create(Master, this);
 		UMaterialInstanceDynamic* Mid = SkyMid;

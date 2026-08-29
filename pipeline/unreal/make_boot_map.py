@@ -7,7 +7,10 @@
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_boot_map.py" -unattended -nosplash -nopause
 import unreal
 
-MAP = "/Game/Elysium"
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
+
+MAP = mounts.BOOT_MAP
 
 world = unreal.EditorLoadingAndSavingUtils.new_blank_map(False)
 if not world:

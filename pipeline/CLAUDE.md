@@ -69,8 +69,8 @@ the required winding. Every tracked coordinate-bearing OBJ/sidecar exporter foll
 rule; parsers and orchestration modules do not emit coordinate products. Standard glTF 2.0 is
 self-describing and has isolated inspection/export exemptions: `mdl_gltf.py` writes the on-demand single-clip
 inspection product (`uv run elysium export model <mdl>`), and `exporters/character_glb.py` writes
-the complete character unit (`uv run elysium export_v2 chacter-glb <mdl>`, or
-`uv run elysium export_v2 chacters-glb` for every admitted character) below
+the complete character unit (`uv run elysium export_v2 character-glb <mdl>`, or
+`uv run elysium export_v2 characters-glb` for every admitted character) below
 `$ELYSIUM_EXPORT_ROOT/glb/characters/`. Nothing the game loads reads either product and no profile
 export writes them. `exporters/texture_glb.py` likewise writes one required-extension GLB with one
 native KTX2 payload per patch-first texture below `$ELYSIUM_EXPORT_ROOT/glb/textures/`; the public
@@ -100,8 +100,7 @@ and never tracked.
 
 `pipeline/unreal/` consumes pre-exported files in an editor process:
 
-- `build_content.py` and `make_*.py` generate local `/Game/Elysium` and
-  `/Game/VtMB/**` packages.
+- `build_content.py` and `make_*.py` generate local `/Game/ElysiumGenerated/**` packages.
 - `bake_map.py` generates local `/ElysiumBaked/<map>/**` packages.
 - `bake_wield.py` (`uv run elysium export wield`) generates local `/ElysiumBaked/Items/Wield/**`
   and `/ElysiumBaked/Items/DA_WieldModels` from the wield manifest, instancing from the
@@ -112,8 +111,10 @@ and never tracked.
 — to reuse a helper, or to inspect it — rebuilds and saves the Animation Blueprint as a side
 effect of the import.
 
-The virtual package names are immutable contracts. The generated `.uasset` and `.umap`
-files are ignored.
+The virtual package names are defined once in `elysium_pipeline.mounts`, the single source of truth
+every generator and bake resolves its packages against; renaming one is a deliberate change guarded
+by `pipeline/tests/test_profile_package_contract.py::test_virtual_package_roots_remain_immutable`.
+The generated `.uasset` and `.umap` files are ignored.
 
 VtMB format and behavior facts belong in `docs/vtmb/`; Unreal designs belong in
 `docs/architecture/`; task status belongs only in `docs/project/roadmap.md`.

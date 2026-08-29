@@ -1,6 +1,6 @@
 """Rebuild the project-owned dialogue camera grammar from reviewable JSON.
 
-The package is generated under /Game/Elysium and ignored. It contains only numeric project tuning
+The package is generated under /Game/ElysiumGenerated and ignored. It contains only numeric project tuning
 and enum values; no source-game path, transform, timing, or dependency is permitted in the input.
 """
 
@@ -9,9 +9,11 @@ from pathlib import Path
 
 import unreal
 
+from pipeline.unreal import _bootstrap  # noqa: F401, E402
+from elysium_pipeline import mounts
 
 SOURCE = Path(unreal.Paths.project_dir()) / "pipeline" / "unreal" / "dialogue_camera_set.json"
-PACKAGE = "/Game/Elysium/Camera"
+PACKAGE = mounts.CAMERA
 NAME = "DA_ElysiumDialogueCameraSet"
 TARGET = "%s/%s" % (PACKAGE, NAME)
 

@@ -34,7 +34,6 @@ compile_commands.json
 
 # Local path configuration and Python environments
 .elysium.local.env
-.elysium-task-worktree.json
 .venv/
 *.egg-info/
 **/__pycache__/
@@ -58,8 +57,7 @@ compile_commands.json
 
 # Generated project packages. The virtual package paths remain /Game and
 # /ElysiumBaked; only their Git posture changes.
-Content/VtMB/
-Content/Elysium.umap
+Content/ElysiumGenerated/
 Plugins/ElysiumBaked/Content/
 
 # Pinned third-party plugins are restored by `uv run elysium deps sync`.

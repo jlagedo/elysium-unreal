@@ -23,7 +23,7 @@ work on the next `reconstruct` or put game-derived bytes inside the tracked set.
 | Rain | `VFX/NS_ElysiumRain`, `M_ElysiumRain`, `MI_ElysiumRainStreak`, `MI_ElysiumRainMist`, `T_Rain*` | the per-map height-masked material instances bound at runtime through `User.RainStreakMaterial` / `User.RainMistMaterial` (`ElysiumMapActorWeather.cpp`) |
 | Melee weapon trail | `VFX/NS_ElysiumMeleeTrail`, `M_ElysiumMeleeTrail` | the wield mesh's `TrailTip` socket, baked with the mesh (`ElysiumMeleeTrail.cpp` drives `User.TrailPointA/B` off it) |
 | Hair dynamics | `Hair/DA_HairDynamics` — the chain set and every parameter | the `SK_*` bodies and `SKEL_*` skeletons the chains name |
-| Cloth | `Cloth/DA_ClothTuning` — material and solver judgment values | `/Game/VtMB/Cloth/CLOTH_<stem>`, built by `pipeline/unreal/make_cloth_assets.py` |
+| Cloth | `Cloth/DA_ClothTuning` — material and solver judgment values | `/ElysiumBaked/Characters/Cloth/CLOTH_<stem>`, built by `pipeline/unreal/make_cloth_assets.py` |
 
 Design and behaviour for these live in `docs/architecture/effects-architecture.md`,
 `docs/architecture/animation-architecture.md` §8, and `docs/architecture/bouncy-boobs-dynamics.md`.

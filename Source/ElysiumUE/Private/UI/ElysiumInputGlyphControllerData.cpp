@@ -13,8 +13,7 @@ namespace
 
 	FString TexturePath(const TCHAR* Family, const TCHAR* SourceStem)
 	{
-		return FString::Printf(TEXT("/Game/Input/Glyphs/Kenney/%s/T_Kenney_%s.T_Kenney_%s"),
-			Family, SourceStem, SourceStem);
+		return ElysiumInputAssets::GlyphTexturePath(Family, SourceStem);
 	}
 
 	void AddStandardGamepadGlyphs(
@@ -110,11 +109,11 @@ void UElysiumInputGlyphControllerData::AddHardwareId(
 UElysiumKeyboardControllerData::UElysiumKeyboardControllerData()
 {
 	InputType = ECommonInputType::MouseAndKeyboard;
-	AddGlyph(EKeys::E, TEXT("/Game/Input/Glyphs/Kenney/Keyboard/T_Kenney_keyboard_e.T_Kenney_keyboard_e"));
+	AddGlyph(EKeys::E, *ElysiumInputAssets::GlyphTexturePath(TEXT("Keyboard"), TEXT("keyboard_e")));
 	AddGlyph(EKeys::Enter,
-		TEXT("/Game/Input/Glyphs/Kenney/Keyboard/T_Kenney_keyboard_enter.T_Kenney_keyboard_enter"));
+		*ElysiumInputAssets::GlyphTexturePath(TEXT("Keyboard"), TEXT("keyboard_enter")));
 	AddGlyph(EKeys::Escape,
-		TEXT("/Game/Input/Glyphs/Kenney/Keyboard/T_Kenney_keyboard_escape.T_Kenney_keyboard_escape"));
+		*ElysiumInputAssets::GlyphTexturePath(TEXT("Keyboard"), TEXT("keyboard_escape")));
 }
 
 UElysiumXboxControllerData::UElysiumXboxControllerData()
@@ -152,9 +151,7 @@ UElysiumDualSenseControllerData::UElysiumDualSenseControllerData()
 		TEXT("playstation_dpad_left"), TEXT("playstation_dpad_right"),
 		TEXT("playstation5_touchpad_press"), TEXT("playstation5_button_options"));
 	AddGlyph(FKey(ElysiumInputAssets::DualSenseCreateKey),
-		TEXT("/Game/Input/Glyphs/Kenney/PlayStation/T_Kenney_playstation5_button_create."
-			"T_Kenney_playstation5_button_create"));
+		*ElysiumInputAssets::GlyphTexturePath(TEXT("PlayStation"), TEXT("playstation5_button_create")));
 	AddGlyph(FKey(ElysiumInputAssets::DualSenseMuteKey),
-		TEXT("/Game/Input/Glyphs/Kenney/PlayStation/T_Kenney_playstation5_button_mute."
-			"T_Kenney_playstation5_button_mute"));
+		*ElysiumInputAssets::GlyphTexturePath(TEXT("PlayStation"), TEXT("playstation5_button_mute")));
 }

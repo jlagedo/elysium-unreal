@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 
+from elysium_pipeline import mounts
 from elysium_pipeline.formats import eskm
 
 SCHEMA = "elysium.character-families"
@@ -27,7 +28,7 @@ VERSION = 2
 #: Names the shape of an entry, for a reader of the file; nothing hashes it.
 REVISION = "elysium-character-families-v2"
 
-SKELETON_DIR = "/ElysiumBaked/Characters/Skeletons"
+SKELETON_DIR = mounts.BAKED + "/Characters/Skeletons"
 MODEL_SKELETON_PREFIX = "SKEL_Elysium_"
 BANK_SKELETON_PREFIX = "SKEL_ElysiumBank_"
 

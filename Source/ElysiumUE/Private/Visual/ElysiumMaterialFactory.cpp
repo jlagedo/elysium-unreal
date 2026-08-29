@@ -1,5 +1,6 @@
 #include "Visual/ElysiumMaterialFactory.h"
 
+#include "ElysiumContentPaths.h"
 #include "Visual/ElysiumObjModel.h"
 #include "ElysiumReflections.h"
 #include "Visual/ElysiumTextureCache.h"
@@ -35,12 +36,12 @@ namespace
 {
 	// The hand-authored masters (make_world_materials.py). Selected per surface by the OBJ
 	// material's blend flags.
-	constexpr const TCHAR* OpaqueMasterPath = TEXT("/Game/VtMB/Materials/M_World_Opaque.M_World_Opaque");
-	constexpr const TCHAR* MaskedMasterPath = TEXT("/Game/VtMB/Materials/M_World_Masked.M_World_Masked");
-	constexpr const TCHAR* TranslucentMasterPath = TEXT("/Game/VtMB/Materials/M_World_Translucent.M_World_Translucent");
-	constexpr const TCHAR* GlassMasterPath = TEXT("/Game/VtMB/Materials/M_World_Glass.M_World_Glass");
-	constexpr const TCHAR* RefractMasterPath = TEXT("/Game/VtMB/Materials/M_Refract.M_Refract");
-	constexpr const TCHAR* AdditiveMasterPath = TEXT("/Game/VtMB/Materials/M_Additive.M_Additive");
+	const FString OpaqueMasterPath = FElysiumContentPaths::Material(TEXT("M_World_Opaque"));
+	const FString MaskedMasterPath = FElysiumContentPaths::Material(TEXT("M_World_Masked"));
+	const FString TranslucentMasterPath = FElysiumContentPaths::Material(TEXT("M_World_Translucent"));
+	const FString GlassMasterPath = FElysiumContentPaths::Material(TEXT("M_World_Glass"));
+	const FString RefractMasterPath = FElysiumContentPaths::Material(TEXT("M_Refract"));
+	const FString AdditiveMasterPath = FElysiumContentPaths::Material(TEXT("M_Additive"));
 
 	// Parameter names, identical across the four world masters (build_world_graph authors them).
 	const FName AlbedoParam(TEXT("Albedo"));
@@ -87,13 +88,13 @@ namespace
 	{
 		if (Def)
 		{
-			if (Def->bAdditive) { return AdditiveMasterPath; }
-			if (Def->bRefract)  { return RefractMasterPath; }
-			if (Def->bGlass)    { return GlassMasterPath; }
-			if (Def->bBlend)    { return TranslucentMasterPath; }
-			if (Def->bScissor)  { return MaskedMasterPath; }
+			if (Def->bAdditive) { return *AdditiveMasterPath; }
+			if (Def->bRefract)  { return *RefractMasterPath; }
+			if (Def->bGlass)    { return *GlassMasterPath; }
+			if (Def->bBlend)    { return *TranslucentMasterPath; }
+			if (Def->bScissor)  { return *MaskedMasterPath; }
 		}
-		return OpaqueMasterPath;
+		return *OpaqueMasterPath;
 	}
 }
 

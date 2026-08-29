@@ -26,12 +26,12 @@ import unreal
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
 from pipeline.unreal import bake_lib as bl  # noqa: E402
 from elysium_pipeline import (  # noqa: E402
-    asset_names, character_partition, character_recipes as cr)
+    asset_names, character_partition, character_recipes as cr, mounts)
 from elysium_pipeline.formats import eskm  # noqa: E402
 from elysium_pipeline.tasking import ContentDigestCache, DIGEST_CACHE_FILE  # noqa: E402
 from elysium_pipeline.paths import export_root  # noqa: E402
 
-MOUNT = "/ElysiumBaked"
+MOUNT = mounts.BAKED
 CHARACTERS = MOUNT + "/Characters"
 #: Every skeleton package path comes off `npc/families.json`; this exists so the folder can be
 #: created. The partition module is the one authority on the spelling.
@@ -54,13 +54,13 @@ PROPS = MOUNT + "/Props"
 #: Every body section is instanced from this one master. Its parameter names are glTF's, which is
 #: what lets one instance serve a body drawn as an NPC and the same body worn by the player -- the
 #: two differ only in the ModelAlpha the runtime drives, not in the asset.
-BODY_MASTER = "/Game/VtMB/Materials/M_PlayerBody.M_PlayerBody"
+BODY_MASTER = mounts.MATERIALS + "/M_PlayerBody.M_PlayerBody"
 
 #: The eyeball sections take this instead. `UElysiumEntityBodies::InstallEyes` finds an eye by
 #: asking whether a slot's base material IS this master -- two independent tests, it says, "because
 #: either alone can be defeated" -- so a body whose every section is parented to BODY_MASTER
 #: defeats both at once and no eye is ever installed.
-EYE_MASTER = "/Game/VtMB/Materials/M_Eyes.M_Eyes"
+EYE_MASTER = mounts.MATERIALS + "/M_Eyes.M_Eyes"
 
 OUT_ROOT = os.fspath(export_root())
 NPC_DIR = os.path.join(OUT_ROOT, "npc")

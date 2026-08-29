@@ -1,5 +1,6 @@
 #include "ElysiumCameraService.h"
 
+#include "ElysiumContentPaths.h"
 #include "ElysiumDialogueCamera.h"
 #include "ElysiumMapSubsystem.h"
 #include "ElysiumUserSettings.h"
@@ -333,9 +334,8 @@ bool UElysiumCameraService::DialogueCamerasEnabled() const
 void UElysiumCameraService::GetDialogueProfiles(
 	TArray<FElysiumDialogueCameraProfile>& Out) const
 {
-	static const TCHAR* AssetPath =
-		TEXT("/Game/Elysium/Camera/DA_ElysiumDialogueCameraSet.DA_ElysiumDialogueCameraSet");
-	if (const UElysiumDialogueCameraSet* Set = LoadObject<UElysiumDialogueCameraSet>(nullptr, AssetPath))
+	static const FString AssetPath = FElysiumContentPaths::DialogueCameraSet();
+	if (const UElysiumDialogueCameraSet* Set = LoadObject<UElysiumDialogueCameraSet>(nullptr, *AssetPath))
 	{
 		if (!Set->Profiles.IsEmpty())
 		{

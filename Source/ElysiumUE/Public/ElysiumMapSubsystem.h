@@ -43,9 +43,9 @@ public:
 	// landmark's facing) instead of info_player_start — the console/direct entry to the landmark path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
-	// Enter the empty `/Game/Elysium` front-end shell. If it is already the current world (cold
-	// boot), this only latches front-end mode and reports no travel. From a game map it hard-travels
-	// back to the shell and reports that travel through bOutTravelStarted.
+	// Enter the empty `/Game/ElysiumGenerated/Boot` front-end shell. If it is already the current
+	// world (cold boot), this only latches front-end mode and reports no travel. From a game map it
+	// hard-travels back to the shell and reports that travel through bOutTravelStarted.
 	bool EnterFrontEnd(bool& bOutTravelStarted);
 
 	// True while the current world is the front-end shell. The historical name remains because map

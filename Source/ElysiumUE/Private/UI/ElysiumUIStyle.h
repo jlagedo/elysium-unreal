@@ -104,7 +104,7 @@ enum class EElysiumFontWeight : uint8
 };
 
 // Resolves role+weight to a drawable face, composing the generated local `UFontFace` assets under
-// `/Game/VtMB/UI/Fonts` into runtime `UFont`s. The faces are real cooked assets (built by
+// `/Game/ElysiumGenerated/UI/Fonts` into runtime `UFont`s. The faces are real cooked assets (built by
 // `pipeline/unreal/make_ui_fonts.py`), not loose TTFs read at draw time — so they stream and cook like any
 // other content. One `UFont` is built per role, with the weights as named typeface entries.
 class FElysiumUIFontLibrary

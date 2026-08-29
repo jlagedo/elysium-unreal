@@ -14,4 +14,4 @@ symbols remain the property of their respective owners and are used only to iden
 controls.
 
 `pipeline/unreal/make_input_glyphs.py` imports these sources into ignored, regenerable textures
-under `/Game/Input/Glyphs/Kenney/**`.
+under `/Game/ElysiumGenerated/Input/Glyphs/Kenney/**`.

@@ -22,6 +22,8 @@ import re
 import struct
 from typing import NamedTuple
 
+from elysium_pipeline import mounts
+
 MANIFEST_SCHEMA = "elysium.item-wield-models"
 VERSION = 1
 
@@ -34,7 +36,7 @@ WIELD = "wield"
 MANIFEST = "wield_models.json"
 
 # --- the corpus on the /ElysiumBaked mount ------------------------------------------------------
-BAKED_ROOT = "/ElysiumBaked/Items/Wield"
+BAKED_ROOT = mounts.BAKED + "/Items/Wield"
 
 #: `vdata/items/*.txt`, one definition per file -- the same enumeration `UE_extract_items` walks.
 ITEM_DIR = "vdata/items/"
