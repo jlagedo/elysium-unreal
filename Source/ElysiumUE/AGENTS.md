@@ -1,13 +1,5 @@
 # Elysium — the C++ runtime (`Source/ElysiumUE/`)
 
-## Layout
-
-- `Private/` is subfoldered by layer; `Public/` is flat.
-- Types: `FElysium*` (substrate and value types), `UElysium*`/`AElysium*` (Unreal half), `IElysium*` (service seam).
-- `FElysiumContentPaths::Root()` is the pipeline's `$ELYSIUM_EXPORT_ROOT` mount point.
-- `Cog` (MIT debug UI, stripped from Shipping via `ENABLE_COG`) and `glTFRuntime` are vendored in `Plugins/External/`.
-- The CPython 2.7.18 SDK is fetched by `pipeline/src/elysium_pipeline/devtools/fetch_cpython27.py` into gitignored `ThirdParty/CPython27/`, gated by `ELYSIUM_WITH_CPYTHON`, Win64 only.
-
 ## Gotchas
 
 - `Config/DefaultInput.ini` holds engine-side input settings and the GameInput device layer only. Action and axis bindings live in `UInputMappingContext` assets, loaded by `UElysiumInputSubsystem` and bound by `UElysiumInputRouter`.
@@ -19,7 +11,6 @@
 - CharacterMovement wires an NPC's movement tick to `AElysiumMapActor::PrimaryActorTick`. GameFrame is a separate node (`GameplayTickFunction`) off that barrier; making a motor tick a prerequisite of `PrimaryActorTick` closes a cycle and floods `LogTick`.
 - `RecomputeCurrent(Stats)` compiles with the effect layer defaulted to null and silently drops every clan bane and gift. Use `FElysiumCombatCharacter::RecomputeSheet()`.
 - `IElysiumNpcMotor::SetEnabled(false)` also hides the body. `SetFrozen` immobilises a cutscene actor on camera; `SetIgnoreCharacterCollision` is the character-vs-character switch. Each setter resolves the whole state via `ApplyEnabledState`/`ApplyCollisionState`/`ApplyCrowdState` — never touch the capsule directly.
-- Activatable screens enter through `UElysiumPlayerUISubsystem` containers; adding one to a viewport bypasses CommonUI activation, Back routing and focus restoration, and `FElysiumUICompositionPolicyTest` rejects it.
 - The player hull is a box, not a capsule — `StepMove` needs a flat bottom and `ACharacter` will not take a box root.
 
 ## Tests

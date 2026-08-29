@@ -1,17 +1,14 @@
 # Research (`research/`)
 
-This tree contains reproducible research intent and authored instruments, never evidence
-copied from the game or a decompiler.
+This tree contains reproducible research intent and authored instruments.
 
-- `tooling/ghidra/scripts/` contains tracked analysis scripts.
 - `tooling/ghidra/driver/` contains the headless runner, context builder, and parsers; its
   `README.md` is the workspace manual — read it before running a Ghidra pass.
 - `tooling/ghidra/driver/corpus.py` holds the whole-body corpus: every module's functions
   decompiled, its strings, its named globals, its class vtables, its class structures and the
   field ledger, in one SQLite database, with the disassembly beside it in a second.
   **Query it before running a headless pass** — `uv run elysium research corpus`, or the
-  `vtmb_*` MCP tools. A pass is for changing the project, not for asking it a question. The
-  corpus reports itself stale when a naming or typing pass has run since it was dumped.
+  `vtmb_*` MCP tools. A pass is for changing the project, not for asking it a question.
   `callers` answers virtually as well as directly, in labelled sections — VtMB dispatches its
   game logic through vtables, so for most class methods the direct section is empty and an
   unlabelled "none" would be a wrong answer rather than a missing one.
@@ -23,8 +20,6 @@ copied from the game or a decompiler.
   third-party reference source: it lives under `ELYSIUM_WORK_ROOT/research/reference-source/`
   and is never committed.
 - `tooling/capture/` contains live hook/injector source and capture analysis.
-- `tooling/probes/` contains focused surveys and static probes.
-- `cases/` contains hash-pinned specifications grouped by topic.
 - `experiments/` is for reusable, game-independent spikes.
 
 Ghidra distributions and projects, decompilation, dumps, captured matrices, reports,
@@ -33,7 +28,7 @@ models, extracted game trees, and third-party reference source live under
 
 A case records input hashes and provenance, the question, eliminated leads, open
 questions, and its consuming `docs/vtmb/` topic or RE identifier. Findings are written
-into the owning topic document; generated evidence is not copied into Git.
+into the owning topic document.
 
 Research commands run through `uv run elysium research <case>`. A command that modifies
 the original VtMB install must require an explicit install action and provide a verified

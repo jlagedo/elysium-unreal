@@ -21,9 +21,49 @@ from ..adapters import hooks, materials
 from ..core import report
 
 CLIP_MODES = (
-    ("ALL", "All clips", "Import every animation the file declares"),
     ("NONE", "No clips", "Import geometry and skeleton only"),
+    ("ALL", "All clips", "Import every animation the file declares"),
 )
+
+
+def import_unit(
+    context: bpy.types.Context,
+    path: Path,
+    *,
+    clips: str = "NONE",
+    build_materials: bool = True,
+) -> tuple[bool, str]:
+    """Import one unit and rebuild what it references.
+
+    Returns `(ok, message)` so both the file dialog and the browser can report the same
+    thing in their own way.
+    """
+    hooks.ImportState.reset()
+    hooks.ImportState.wanted_clips = set() if clips == "NONE" else None
+
+    before = set(bpy.data.materials)
+    if "FINISHED" not in bpy.ops.import_scene.gltf(filepath=str(path)):
+        return False, "glTF import failed for %s" % path.name
+
+    if not build_materials:
+        return True, "imported %s" % path.name
+
+    root = prefs.corpus_root(context, near=path)
+    if root is None:
+        return True, (
+            "imported %s; no corpus root, so materials are placeholders" % path.name
+        )
+
+    created = [material for material in bpy.data.materials if material not in before]
+    summary = materials.rebuild_all(created, root)
+    message = "imported %s: %d material(s), %d approximate" % (
+        path.name,
+        summary.rebuilt,
+        summary.approximated,
+    )
+    if summary.unresolved:
+        message += ", %d unresolved" % summary.unresolved
+    return True, message
 
 
 class ELYSIUM_OT_import_glb(bpy.types.Operator, ImportHelper):
@@ -73,40 +113,13 @@ class ELYSIUM_OT_import_glb(bpy.types.Operator, ImportHelper):
         window.cursor_set("WAIT")
         try:
             for path in paths:
-                self._import_one(context, path)
+                ok, message = import_unit(
+                    context, path, clips=self.clips, build_materials=self.build_materials
+                )
+                self.report({"INFO"} if ok else {"ERROR"}, message)
         finally:
             window.cursor_set("DEFAULT")
         return {"FINISHED"}
-
-    def _import_one(self, context: bpy.types.Context, path: Path) -> None:
-        hooks.ImportState.reset()
-        hooks.ImportState.wanted_clips = set() if self.clips == "NONE" else None
-
-        before = set(bpy.data.materials)
-        result = bpy.ops.import_scene.gltf(filepath=str(path))
-        if "FINISHED" not in result:
-            self.report({"ERROR"}, "glTF import failed for %s" % path.name)
-            return
-
-        if not self.build_materials:
-            return
-        root = prefs.corpus_root(context, near=path)
-        if root is None:
-            self.report(
-                {"WARNING"},
-                "No corpus root: materials left as placeholders. Set one in the add-on "
-                "preferences.",
-            )
-            return
-
-        created = [material for material in bpy.data.materials if material not in before]
-        summary = materials.rebuild_all(created, root)
-        if summary.approximated:
-            self.report(
-                {"INFO"},
-                "%d material(s) rebuilt, %d carry approximations"
-                % (summary.rebuilt, summary.approximated),
-            )
 
 
 class ELYSIUM_OT_corpus_report(bpy.types.Operator):
