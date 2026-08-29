@@ -25,29 +25,26 @@ def wet_vmt(scales=(0.6, 0.6, 0.6), *, comments=False):
     }''' % "\n".join(blocks)
 
 
-class GlobalWetnessVmtTests(unittest.TestCase):
-    def test_proxy_casing_comments_quoting_and_scalar_extraction(self):
-        assert vmt.parse(wet_vmt(comments=True))["globalwetness"] == 0.6
+def test_proxy_casing_comments_quoting_and_scalar_extraction():
+    assert vmt.parse(wet_vmt(comments=True))["globalwetness"] == 0.6
 
-    def test_absent_proxy_is_not_wetness_driven(self):
-        assert vmt.parse('LightmappedGeneric { "$basetexture" "x" }')["globalwetness"] is None
 
-    def test_partial_malformed_and_unequal_triples_fail(self):
-        for document in (
-            wet_vmt((0.6, 0.6)),
-            wet_vmt((0.6, "nope", 0.6)),
-            wet_vmt((0.6, 0.5, 0.6)),
-        ):
-            with self.subTest(document=document):
-                with pytest.raises(vmt.VmtContractError):
-                    vmt.parse(document)
+def test_absent_proxy_is_not_wetness_driven():
+    assert vmt.parse('LightmappedGeneric { "$basetexture" "x" }')["globalwetness"] is None
 
-    def test_patch_inherits_parent_proxy(self):
-        result = vmt.parse(
-            'Patch { "include" "materials/base.vmt" }',
-            resolve_include=lambda _path: wet_vmt((0.25, 0.25, 0.25)),
-        )
-        assert result["globalwetness"] == 0.25
+
+@pytest.mark.parametrize("scales", [(0.6, 0.6), (0.6, "nope", 0.6), (0.6, 0.5, 0.6)])
+def test_partial_malformed_and_unequal_triples_fail(scales):
+    with pytest.raises(vmt.VmtContractError):
+        vmt.parse(wet_vmt(scales))
+
+
+def test_patch_inherits_parent_proxy():
+    result = vmt.parse(
+        'Patch { "include" "materials/base.vmt" }',
+        resolve_include=lambda _path: wet_vmt((0.25, 0.25, 0.25)),
+    )
+    assert result["globalwetness"] == 0.25
 
 
 def test_six_faces_keep_vtf_order_and_bgra_bytes():

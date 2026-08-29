@@ -92,129 +92,138 @@ def _omission(model_or_extension, role):
     return next((row for row in rows if row["role"] == role), None)
 
 
-class TextureDecodeTests(unittest.TestCase):
-    def test_every_admitted_format_builds_one_complete_model(self):
-        for fmt in FORMATS:
-            with self.subTest(fmt=fmt):
-                model = decode_texture(_closure(fmt))
-                assert len(model.levels) == 1
-                assert model.byte_coverage[0]["coveragePercent"] == 100.0
-                assert model.omissions[0]["role"] == "low-res-cpu-sample"
-                assert "sourceSrgb" not in model.sampling
-                assert "normal" not in model.sampling
-                assert "pointSample" in model.sampling
+@pytest.mark.parametrize("fmt", FORMATS)
+def test_every_admitted_format_builds_one_complete_model(fmt):
+    model = decode_texture(_closure(fmt))
+    assert len(model.levels) == 1
+    assert model.byte_coverage[0]["coveragePercent"] == 100.0
+    assert model.omissions[0]["role"] == "low-res-cpu-sample"
+    assert "sourceSrgb" not in model.sampling
+    assert "normal" not in model.sampling
+    assert "pointSample" in model.sampling
 
-    def test_inline_and_external_mips_reconstruct_largest_first(self):
-        model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
-        assert [(level.width, level.height) for level in model.levels] == [(8, 8), (4, 4), (2, 2)]
-        assert len(model.byte_coverage) == 2
 
-    def test_cubemap_keeps_six_faces_and_ledgers_the_low_end_spheremap(self):
-        model = decode_texture(_closure(13, cubemap=True))
-        assert len(model.levels[0].images) == 6
-        assert [face["sourceFace"] for face in model.faces] == [0, 1, 4, 5, 3, 2]
-        assert model.omissions[-1]["role"] == "low-end-spheremap"
-        states = model.byte_coverage[0]["stateBytes"]
-        assert states["omitted-proven"] > 128
+def test_inline_and_external_mips_reconstruct_largest_first():
+    model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
+    assert [(level.width, level.height) for level in model.levels] == [(8, 8), (4, 4), (2, 2)]
+    assert len(model.byte_coverage) == 2
 
-    def test_incomplete_external_base_falls_back_to_the_complete_inline_chain(self):
-        closure = _closure(15, width=8, height=8, mips=4, inline=3)
-        partial = zlib.compress(bytes(range(32)))
-        changed_tth = bytearray(closure.tth.data)
-        struct.pack_into("<I", changed_tth, 12 + 4 * 8 + 4, len(partial))
-        changed = TextureSourceClosure(
-            closure.texture_path,
-            closure.asset_id,
-            _source("tth", closure.tth.path, bytes(changed_tth)),
-            _source("ttz", closure.ttz.path, partial),
-        )
-        model = decode_texture(changed)
-        assert (model.width, model.height, model.mip_count) == (4, 4, 3)
-        assert model.omissions[-1]["role"] == "incomplete-lower-mips"
 
-    def test_a_stale_inline_mip_count_is_restated_as_the_source_wrote_it(self):
-        """`declaredInlineMips` is the header's claim; `resolvedInlineMips` is what fits.
+def test_cubemap_keeps_six_faces_and_ledgers_the_low_end_spheremap():
+    model = decode_texture(_closure(13, cubemap=True))
+    assert len(model.levels[0].images) == 6
+    assert [face["sourceFace"] for face in model.faces] == [0, 1, 4, 5, 3, 2]
+    assert model.omissions[-1]["role"] == "low-end-spheremap"
+    states = model.byte_coverage[0]["stateBytes"]
+    assert states["omitted-proven"] > 128
 
-        No shipped unit carries a stale count, so only a synthetic one exercises the split. The
-        clamped value drives the extent arithmetic, but publishing it would erase the evidence
-        that the source over-declared.
-        """
-        closure = _closure(13, width=4, height=4, mips=1, inline=1)
-        stale = bytearray(closure.tth.data)
-        stale[7] = 9                                  # the TTH's declared inline mip count
-        changed = TextureSourceClosure(
-            closure.texture_path,
-            closure.asset_id,
-            _source("tth", closure.tth.path, bytes(stale)),
-            None,
-        )
-        model = decode_texture(changed)
-        assert model.header["declaredInlineMips"] == 9
-        assert model.header["resolvedInlineMips"] == 1
-        assert model.byte_coverage[0]["coveragePercent"] == 100.0
 
-    def test_declared_lengths_exclude_arbitrary_compiler_allocation_tails(self):
-        closure = _closure(13, width=8, height=8, mips=2, inline=1)
-        changed = TextureSourceClosure(
-            closure.texture_path,
-            closure.asset_id,
-            _source("tth", closure.tth.path, closure.tth.data + b"\x13\x37"),
-            _source("ttz", closure.ttz.path, closure.ttz.data + b"\x99\x42"),
-        )
-        model = decode_texture(changed)
-        assert model.byte_coverage[0]["stateBytes"]["omitted-proven"] == 130
-        assert model.byte_coverage[1]["stateBytes"]["omitted-proven"] == 2
+def test_incomplete_external_base_falls_back_to_the_complete_inline_chain():
+    closure = _closure(15, width=8, height=8, mips=4, inline=3)
+    partial = zlib.compress(bytes(range(32)))
+    changed_tth = bytearray(closure.tth.data)
+    struct.pack_into("<I", changed_tth, 12 + 4 * 8 + 4, len(partial))
+    changed = TextureSourceClosure(
+        closure.texture_path,
+        closure.asset_id,
+        _source("tth", closure.tth.path, bytes(changed_tth)),
+        _source("ttz", closure.ttz.path, partial),
+    )
+    model = decode_texture(changed)
+    assert (model.width, model.height, model.mip_count) == (4, 4, 3)
+    assert model.omissions[-1]["role"] == "incomplete-lower-mips"
 
-    def test_a_repeated_full_resolution_stream_admits_one_level(self):
-        """A stream the declared chain cannot explain must not be sliced into levels.
 
-        Retail units of this shape store the full-resolution image twice and no pyramid. Sliding
-        the chain onto the tail would compose every level below the first from unrelated bytes.
-        """
-        closure = _closure(15, width=16, height=16, mips=3, inline=1)
-        full = bytes([0x7E]) * image_size(16, 16, FORMATS[15])
-        changed = _with_external(closure, bytes([0x11]) * len(full) + full)
-        model = decode_texture(changed)
-        assert model.mip_count == 1
-        assert (model.width, model.height) == (16, 16)
-        assert model.levels[0].images[0] == full
-        row = _omission(model, "unexplained-leading-image-storage")
-        assert row is not None
-        assert row["byteLength"] == len(full)
-        assert row["streamFullResolutionImages"] == 2.0
-        assert row["admittedFullResolutionImageOnly"]
+def test_a_stale_inline_mip_count_is_restated_as_the_source_wrote_it():
+    """`declaredInlineMips` is the header's claim; `resolvedInlineMips` is what fits.
 
-    def test_a_blob_larger_than_the_declared_colour_sample_is_not_the_colour_sample(self):
-        closure = _closure(15, width=16, height=16, mips=3, inline=1)
-        full = bytes([0x7E]) * image_size(16, 16, FORMATS[15])
-        model = decode_texture(_with_external(closure, bytes(len(full)) + full))
-        assert _omission(model, "low-res-cpu-sample")["externalByteLength"] == 0
+    No shipped unit carries a stale count, so only a synthetic one exercises the split. The
+    clamped value drives the extent arithmetic, but publishing it would erase the evidence
+    that the source over-declared.
+    """
+    closure = _closure(13, width=4, height=4, mips=1, inline=1)
+    stale = bytearray(closure.tth.data)
+    stale[7] = 9                                  # the TTH's declared inline mip count
+    changed = TextureSourceClosure(
+        closure.texture_path,
+        closure.asset_id,
+        _source("tth", closure.tth.path, bytes(stale)),
+        None,
+    )
+    model = decode_texture(changed)
+    assert model.header["declaredInlineMips"] == 9
+    assert model.header["resolvedInlineMips"] == 1
+    assert model.byte_coverage[0]["coveragePercent"] == 100.0
 
-    def test_a_small_leading_blob_stays_the_colour_sample(self):
-        model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
-        assert model.mip_count == 3
-        assert _omission(model, "unexplained-leading-image-storage") is None
 
-    def test_a_lost_primary_image_is_recorded_rather_than_published_quietly(self):
-        closure = _closure(15, width=8, height=8, mips=4, inline=3)
-        model = decode_texture(_with_external(closure, bytes(range(32))))
-        assert (model.width, model.height) == (4, 4)
-        assert (model.declared_width, model.declared_height) == (8, 8)
-        row = _omission(model, "primary-image-not-recoverable")
-        assert row is not None
-        assert (row["declaredWidth"], row["declaredHeight"]) == (8, 8)
-        assert (row["recoveredWidth"], row["recoveredHeight"]) == (4, 4)
+def test_declared_lengths_exclude_arbitrary_compiler_allocation_tails():
+    closure = _closure(13, width=8, height=8, mips=2, inline=1)
+    changed = TextureSourceClosure(
+        closure.texture_path,
+        closure.asset_id,
+        _source("tth", closure.tth.path, closure.tth.data + b"\x13\x37"),
+        _source("ttz", closure.ttz.path, closure.ttz.data + b"\x99\x42"),
+    )
+    model = decode_texture(changed)
+    assert model.byte_coverage[0]["stateBytes"]["omitted-proven"] == 130
+    assert model.byte_coverage[1]["stateBytes"]["omitted-proven"] == 2
 
-    def test_cubemap_rotation_preserves_uncompressed_texels(self):
-        source = bytes((0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3))
-        rotated = transform_cubemap_face(source, 2, 2, FORMATS[3], "rotate-cw")
-        assert rotated == bytes((2, 2, 2, 0, 0, 0, 3, 3, 3, 1, 1, 1))
 
-    def test_cubemap_bc_selector_rotation_is_lossless(self):
-        source = bytes.fromhex("00112233e4e4e4e4")
-        clockwise = transform_cubemap_face(source, 4, 4, FORMATS[13], "rotate-cw")
-        restored = transform_cubemap_face(clockwise, 4, 4, FORMATS[13], "rotate-ccw")
-        assert restored == source
+def test_a_repeated_full_resolution_stream_admits_one_level():
+    """A stream the declared chain cannot explain must not be sliced into levels.
+
+    Retail units of this shape store the full-resolution image twice and no pyramid. Sliding
+    the chain onto the tail would compose every level below the first from unrelated bytes.
+    """
+    closure = _closure(15, width=16, height=16, mips=3, inline=1)
+    full = bytes([0x7E]) * image_size(16, 16, FORMATS[15])
+    changed = _with_external(closure, bytes([0x11]) * len(full) + full)
+    model = decode_texture(changed)
+    assert model.mip_count == 1
+    assert (model.width, model.height) == (16, 16)
+    assert model.levels[0].images[0] == full
+    row = _omission(model, "unexplained-leading-image-storage")
+    assert row is not None
+    assert row["byteLength"] == len(full)
+    assert row["streamFullResolutionImages"] == 2.0
+    assert row["admittedFullResolutionImageOnly"]
+
+
+def test_a_blob_larger_than_the_declared_colour_sample_is_not_the_colour_sample():
+    closure = _closure(15, width=16, height=16, mips=3, inline=1)
+    full = bytes([0x7E]) * image_size(16, 16, FORMATS[15])
+    model = decode_texture(_with_external(closure, bytes(len(full)) + full))
+    assert _omission(model, "low-res-cpu-sample")["externalByteLength"] == 0
+
+
+def test_a_small_leading_blob_stays_the_colour_sample():
+    model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
+    assert model.mip_count == 3
+    assert _omission(model, "unexplained-leading-image-storage") is None
+
+
+def test_a_lost_primary_image_is_recorded_rather_than_published_quietly():
+    closure = _closure(15, width=8, height=8, mips=4, inline=3)
+    model = decode_texture(_with_external(closure, bytes(range(32))))
+    assert (model.width, model.height) == (4, 4)
+    assert (model.declared_width, model.declared_height) == (8, 8)
+    row = _omission(model, "primary-image-not-recoverable")
+    assert row is not None
+    assert (row["declaredWidth"], row["declaredHeight"]) == (8, 8)
+    assert (row["recoveredWidth"], row["recoveredHeight"]) == (4, 4)
+
+
+def test_cubemap_rotation_preserves_uncompressed_texels():
+    source = bytes((0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3))
+    rotated = transform_cubemap_face(source, 2, 2, FORMATS[3], "rotate-cw")
+    assert rotated == bytes((2, 2, 2, 0, 0, 0, 3, 3, 3, 1, 1, 1))
+
+
+def test_cubemap_bc_selector_rotation_is_lossless():
+    source = bytes.fromhex("00112233e4e4e4e4")
+    clockwise = transform_cubemap_face(source, 4, 4, FORMATS[13], "rotate-cw")
+    restored = transform_cubemap_face(clockwise, 4, 4, FORMATS[13], "rotate-ccw")
+    assert restored == source
 
 
 def test_complete_texture_writes_one_ktx2_payload_and_validates():

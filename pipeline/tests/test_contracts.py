@@ -1119,30 +1119,37 @@ def test_missing_work_root_has_no_repository_fallback() -> None:
             paths.work_root()
 
 
-class RepositoryPolicyTests(unittest.TestCase):
-    def test_forbidden_assets_and_backups_are_detected(self) -> None:
-        for path in (
-            "Content/Test.uasset",
-            "Plugins/ElysiumBaked/Content/Test.umap",
-            "scratch/note.py",
-            "Source/Fix.cpp.orig",
-            "logs/build.log",
-            "extracted/maps/sp_theatre.bsp",
-            "research/evidence/vampire.gpr",
-        ):
-            with self.subTest(path=path):
-                assert POLICY.prohibited(path) is not None
+@pytest.mark.parametrize(
+    "path",
+    [
+        "Content/Test.uasset",
+        "Plugins/ElysiumBaked/Content/Test.umap",
+        "scratch/note.py",
+        "Source/Fix.cpp.orig",
+        "logs/build.log",
+        "extracted/maps/sp_theatre.bsp",
+        "research/evidence/vampire.gpr",
+    ],
+)
+def test_forbidden_assets_and_backups_are_detected(path: str) -> None:
+    assert POLICY.prohibited(path) is not None
 
-    def test_authored_source_is_not_prohibited(self) -> None:
-        assert POLICY.prohibited("pipeline/src/elysium_pipeline/formats/bsp.py") is None
 
-    def test_project_authored_unreal_packages_have_one_namespace(self) -> None:
-        for path in (
-            "Content/ElysiumAuthored/Camera/Profiles/DA_Default.uasset",
-            "Content/ElysiumAuthored/Cinematics/Sequences/LS_Test.uasset",
-            "Content/ElysiumAuthored/Cinematics/Maps/CameraLab.umap",
-        ):
-            with self.subTest(path=path):
-                assert POLICY.prohibited(path) is None
+def test_authored_source_is_not_prohibited() -> None:
+    assert POLICY.prohibited("pipeline/src/elysium_pipeline/formats/bsp.py") is None
 
-        assert POLICY.prohibited("Content/ElysiumAuthored/Camera/copied_game_data.vpk") is not None
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "Content/ElysiumAuthored/Camera/Profiles/DA_Default.uasset",
+        "Content/ElysiumAuthored/Cinematics/Sequences/LS_Test.uasset",
+        "Content/ElysiumAuthored/Cinematics/Maps/CameraLab.umap",
+    ],
+)
+def test_project_authored_unreal_packages_have_one_namespace(path: str) -> None:
+    assert POLICY.prohibited(path) is None
+
+
+def test_a_copied_game_file_under_the_authored_namespace_is_still_prohibited() -> None:
+    assert POLICY.prohibited("Content/ElysiumAuthored/Camera/copied_game_data.vpk") is not None
