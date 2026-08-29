@@ -105,9 +105,6 @@ DEFINITIONS = {
 }
 
 
-# ImpactParticleContractTests
-# The non-precipitation vocabulary the cinematic emitters use.
-
 def compile(*, sprites=None):
     available = sprites or {"dropletfast", "fortituderings", "d_targetblob"}
     return particles.compile_closure(

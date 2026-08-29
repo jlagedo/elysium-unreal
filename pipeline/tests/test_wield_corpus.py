@@ -417,13 +417,6 @@ def _pose(frames, mover=None):
     return out
 
 
-# BoneMotionTests
-# `bone_motion`'s envelope across every local sequence, at full precision. The four
-# ground-truth wield magnitudes it mirrors -- `w_m_flamethrower`'s unskinned `trigger` at
-# 0.3203in/1.2535deg and `w_m_lockpick`'s skinned `lockpick` at 0.0313in/6.3565deg -- are
-# measured against the real install and are not reproduced here; what is exercised is the same
-# decision shape at representative magnitudes.
-
 def _bones():
     return [bone(0, "Bip01 R Hand", -1), bone(1, "slide", 0)]
 
