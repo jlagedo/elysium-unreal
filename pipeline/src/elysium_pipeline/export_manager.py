@@ -54,6 +54,16 @@ def _require_export_config(config) -> None:
         raise ValueError("export requires configured game and work roots")
 
 
+def _require_export_v2_config(config) -> None:
+    if config.game_root is None or config.work_root is None or config.export_v2_root is None:
+        raise ValueError("export_v2 requires configured game and work roots")
+
+
+def _export_v2_root(config, seam: str) -> Path:
+    """The publish root for one isolated GLB seam, under the export_v2 tree."""
+    return config.export_v2_root / seam
+
+
 def _source_index_fingerprint(index: dict) -> str:
     digest = hashlib.sha256()
     for key in sorted(index):
@@ -368,11 +378,15 @@ def run_offline_profile(
 ) -> tuple[list[str], dict[str, TaskResult]]:
     _require_export_config(config)
     if clean:
+        # A clean empties every root this repository generates into, the isolated GLB seams'
+        # included, so it needs both configured even though the profile writes only the first.
+        _require_export_v2_config(config)
         targets = validate_clean_targets(
             repo_root=config.repo_root,
             game_root=config.game_root,
             work_root=config.work_root,
             export_root=config.export_root,
+            export_v2_root=config.export_v2_root,
         )
         clean_generated(targets)
         force = True
@@ -1355,7 +1369,7 @@ def export_model(
 def export_character_glb(config, runner, model: str) -> Path:
     """Write one isolated full-slice Character GLB and validate the published file."""
     del runner  # This exporter is pure offline Python; kept for the public workflow signature.
-    _require_export_config(config)
+    _require_export_v2_config(config)
     from elysium_pipeline.exporters import character_glb
     from elysium_pipeline.formats import install, mdl_skel
     from elysium_pipeline.validation import character_glb as character_glb_validation
@@ -1364,7 +1378,7 @@ def export_character_glb(config, runner, model: str) -> Path:
     if not normalized.lower().endswith(".mdl"):
         normalized += ".mdl"
     index = install.build_index()
-    output_root = config.export_root / "glb" / "characters"
+    output_root = _export_v2_root(config, "characters")
     anorms = mdl_skel.load_anorms()
     try:
         destination = character_glb.export(
@@ -1477,14 +1491,14 @@ def _run_glb_pool(label: str, worker, items: list[str], output_root: Path, jobs:
 def export_all_character_glbs(config, runner, *, jobs=None) -> list[Path]:
     """Write every admitted character through the isolated schema-1.1 GLB pipeline."""
     del runner
-    _require_export_config(config)
+    _require_export_v2_config(config)
     from elysium_pipeline.formats import install, mdl_skel
 
     index = install.build_index()
     models = _character_glb_models(index)
     if not models:
         raise OfflineExportFailure("character GLB corpus has no admitted models")
-    output_root = config.export_root / "glb" / "characters"
+    output_root = _export_v2_root(config, "characters")
     jobs = max(1, default_jobs() if jobs is None else int(jobs))
     jobs = min(jobs, len(models))
     if jobs <= 1:
@@ -1508,13 +1522,13 @@ def export_all_character_glbs(config, runner, *, jobs=None) -> list[Path]:
 def export_texture_glb(config, runner, texture: str) -> Path:
     """Write and validate one isolated Texture GLB product."""
     del runner
-    _require_export_config(config)
+    _require_export_v2_config(config)
     from elysium_pipeline.exporters import texture_glb
     from elysium_pipeline.formats import install
     from elysium_pipeline.validation import texture_glb as texture_glb_validation
 
     index = install.build_index()
-    output_root = config.export_root / "glb" / "textures"
+    output_root = _export_v2_root(config, "textures")
     try:
         destination = texture_glb.export(index, texture, output_root)
         summary = texture_glb_validation.validate(destination)
@@ -1566,14 +1580,14 @@ def _texture_glb_one(index, texture: str, output_root: Path) -> dict:
 def export_all_texture_glbs(config, runner, *, jobs=None) -> list[Path]:
     """Write every selected TTH identity; any incomplete unit fails the corpus."""
     del runner
-    _require_export_config(config)
+    _require_export_v2_config(config)
     from elysium_pipeline.formats import install
 
     index = install.build_index()
     textures = _texture_glb_sources(index)
     if not textures:
         raise OfflineExportFailure("texture GLB corpus has no selected TTH members")
-    output_root = config.export_root / "glb" / "textures"
+    output_root = _export_v2_root(config, "textures")
     jobs = max(1, default_jobs() if jobs is None else int(jobs))
     jobs = min(jobs, len(textures))
     if jobs <= 1:
@@ -1596,13 +1610,13 @@ def export_all_texture_glbs(config, runner, *, jobs=None) -> list[Path]:
 def export_material_glb(config, runner, material: str) -> Path:
     """Write and validate one isolated Material GLB product."""
     del runner
-    _require_export_config(config)
+    _require_export_v2_config(config)
     from elysium_pipeline.exporters import material_glb
     from elysium_pipeline.formats import install
     from elysium_pipeline.validation import material_glb as material_glb_validation
 
     index = install.build_index()
-    output_root = config.export_root / "glb" / "materials"
+    output_root = _export_v2_root(config, "materials")
     try:
         destination = material_glb.export(index, material, output_root)
         summary = material_glb_validation.validate(destination)
@@ -1660,14 +1674,14 @@ def _material_glb_one(index, material: str, output_root: Path) -> dict:
 def export_all_material_glbs(config, runner, *, jobs=None) -> list[Path]:
     """Write every addressable VMT identity; any incomplete unit fails the corpus."""
     del runner
-    _require_export_config(config)
+    _require_export_v2_config(config)
     from elysium_pipeline.formats import install
 
     index = install.build_index()
     materials = _material_glb_sources(index)
     if not materials:
         raise OfflineExportFailure("material GLB corpus has no selected VMT members")
-    output_root = config.export_root / "glb" / "materials"
+    output_root = _export_v2_root(config, "materials")
     jobs = max(1, default_jobs() if jobs is None else int(jobs))
     jobs = min(jobs, len(materials))
     if jobs <= 1:
@@ -1685,6 +1699,120 @@ def export_all_material_glbs(config, runner, *, jobs=None) -> list[Path]:
             jobs,
         )
     return _finalize_glb_corpus("material GLB", "materials", rows, output_root)
+
+
+def export_surface_property_glb(config, runner, name: str) -> Path:
+    """Write and validate one isolated Surface-property GLB product."""
+    del runner
+    _require_export_v2_config(config)
+    from elysium_pipeline.exporters import surface_property_glb
+    from elysium_pipeline.formats import install
+    from elysium_pipeline.validation import surface_property_glb as surface_glb_validation
+
+    index = install.build_index()
+    output_root = _export_v2_root(config, "surface-properties")
+    try:
+        destination = surface_property_glb.export(index, name, output_root)
+        summary = surface_glb_validation.validate(destination)
+    except Exception as exc:
+        raise OfflineExportFailure(
+            f"surface-property GLB export failed for {name}: {exc}"
+        ) from exc
+    print(
+        f"surface-property GLB: {summary['asset']} -> {destination} "
+        f"({summary['parameters']} parameters, {summary['footsteps']} footsteps, "
+        f"{summary['impacts']} impacts, {summary['dependencies']} dependencies, "
+        f"{summary['accountedBytes']}/{summary['sourceBytes']} source bytes)"
+    )
+    for warning in surface_glb_validation.warnings_for(summary):
+        print(f"  warning: {name}: {warning}")
+    return destination
+
+
+def _surface_property_glb_one(index, name: str, output_root: Path, table, scripts) -> dict:
+    from elysium_pipeline.exporters import surface_property_glb
+    from elysium_pipeline.validation import surface_property_glb as surface_glb_validation
+
+    try:
+        destination = surface_property_glb.export(
+            index, name, output_root, table=table, sound_scripts=scripts
+        )
+        summary = surface_glb_validation.validate(destination)
+        return {
+            "item": name,
+            "destination": str(destination),
+            "summary": summary,
+            "warnings": surface_glb_validation.warnings_for(summary),
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "item": name,
+            "destination": "",
+            "summary": None,
+            "warnings": [],
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def export_all_surface_property_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every named table entry; any incomplete unit fails the corpus."""
+    del runner
+    _require_export_v2_config(config)
+    from elysium_pipeline.formats import install
+    from elysium_pipeline.formats import surface_property_glb as surface_property_format
+
+    index = install.build_index()
+    try:
+        table = surface_property_format.load_table(index)
+        scripts = surface_property_format.load_sound_script_names(index)
+    except surface_property_format.SurfacePropertySourceError as exc:
+        raise OfflineExportFailure(f"surface-property GLB corpus has no table: {exc}") from exc
+    names = list(table.names)
+    output_root = _export_v2_root(config, "surface-properties")
+    # The corpus is 63 entries cut from one 24 KB table, so a worker pool would spend more on
+    # rebuilding the install index per process than the whole decode costs. It runs here.
+    rows = []
+    for ordinal, name in enumerate(names, 1):
+        row = _surface_property_glb_one(index, name, output_root, table, scripts)
+        rows.append(row)
+        _print_glb_row("surface-property GLB", ordinal, len(names), row)
+    return _finalize_glb_corpus("surface-property GLB", "surfaces", rows, output_root)
+
+
+#: Every isolated GLB seam, in the order `export_v2 export-all` runs them. Each seam owns its own
+#: source selection and publishes under its own directory of the export_v2 root.
+GLB_SEAMS = (
+    ("texture", export_all_texture_glbs),
+    ("surface-property", export_all_surface_property_glbs),
+    ("material", export_all_material_glbs),
+    ("character", export_all_character_glbs),
+)
+
+
+def export_all_glb_seams(config, runner, *, jobs=None) -> dict[str, list[Path]]:
+    """Run every isolated GLB seam and report each one's outcome."""
+    _require_export_v2_config(config)
+    published: dict[str, list[Path]] = {}
+    failures: list[tuple[str, str]] = []
+    for seam, export_corpus in GLB_SEAMS:
+        print(f"== {seam} GLB seam", flush=True)
+        try:
+            published[seam] = export_corpus(config, runner, jobs=jobs)
+        except OfflineExportFailure as exc:
+            # A seam that fails must not discard the seams that already succeeded, nor stop the
+            # ones still to run: each is an independent corpus and each costs its own hours.
+            published[seam] = []
+            failures.append((seam, str(exc)))
+            print(f"! {seam} GLB seam failed: {exc}", flush=True)
+    for seam, destinations in published.items():
+        print(f"{seam} GLB seam: {len(destinations)} unit(s)", flush=True)
+    if failures:
+        raise OfflineExportFailure(
+            "export_v2 export-all failed for "
+            + "; ".join(f"{seam}: {error}" for seam, error in failures)
+        )
+    return published
 
 
 def _placed_row_satisfies(row: dict, use) -> bool:

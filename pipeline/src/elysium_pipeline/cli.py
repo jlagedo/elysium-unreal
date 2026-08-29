@@ -837,6 +837,74 @@ def export_v2_materials_glb(ctx: typer.Context) -> None:
     )
 
 
+@export_v2_app.command("surface-property-glb")
+def export_v2_surface_property_glb(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="Surface name from scripts/surfaceproperties.txt."),
+) -> None:
+    """Export one named surface-property table entry to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_surface_property_glb(config, runner, name)
+        console.print(f"surface-property GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 surface-property-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("surface-properties-glb")
+def export_v2_surface_properties_glb(ctx: typer.Context) -> None:
+    """Export every surface-property table entry through the lossless surface seam."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_surface_property_glbs(config, runner)
+        console.print(
+            f"surface-property GLB corpus export complete: {len(destinations)} surfaces"
+        )
+
+    _execute(
+        _state(ctx),
+        "export_v2 surface-properties-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("export-all")
+def export_v2_export_all(ctx: typer.Context) -> None:
+    """Export every isolated GLB seam: textures, surfaces, materials, then characters."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        published = export_manager.export_all_glb_seams(config, runner)
+        counts = ", ".join(
+            f"{len(destinations)} {seam}" for seam, destinations in published.items()
+        )
+        console.print(f"export_v2 corpus export complete: {counts}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 export-all",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
 def _corpus_unit(ctx: typer.Context, label: str, **selectors) -> None:
     """Re-decode and re-bake one shared-corpus unit. No map is exported and no `.umap` changes."""
 

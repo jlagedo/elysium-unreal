@@ -112,6 +112,7 @@ class ProjectConfig:
     game_root: Path | None
     work_root: Path | None
     export_root: Path | None
+    export_v2_root: Path | None
     ue_root: Path | None
     unreal_zen_data_path: Path | None
     unreal_local_data_cache_path: Path | None
@@ -125,6 +126,7 @@ class ProjectConfig:
         work: Path | None,
         ue: Path | None,
         export: Path | None = None,
+        export_v2: Path | None = None,
         require_game: bool = False,
         require_work: bool = False,
         require_ue: bool = False,
@@ -141,6 +143,11 @@ class ProjectConfig:
         )
         if export_root is None and work_root is not None:
             export_root = work_root / "exports"
+        export_v2_root = _configured_path(
+            export_v2, "ELYSIUM_EXPORT_V2_ROOT", environment, local
+        )
+        if export_v2_root is None and work_root is not None:
+            export_v2_root = work_root / "exports_v2"
         ue_root = _configured_path(ue, "ELYSIUM_UE_ROOT", environment, local)
         if ue_root is None:
             ue_root = _detect_unreal(environment)
@@ -171,6 +178,7 @@ class ProjectConfig:
             game_root=game_root,
             work_root=work_root,
             export_root=export_root,
+            export_v2_root=export_v2_root,
             ue_root=ue_root,
             unreal_zen_data_path=unreal_zen_data_path,
             unreal_local_data_cache_path=unreal_local_data_cache_path,
@@ -194,6 +202,7 @@ class ProjectConfig:
             "ELYSIUM_VTMB_ROOT": self.game_root,
             "ELYSIUM_WORK_ROOT": self.work_root,
             "ELYSIUM_EXPORT_ROOT": self.export_root,
+            "ELYSIUM_EXPORT_V2_ROOT": self.export_v2_root,
             "UE-ZenDataPath": self.unreal_zen_data_path,
             "UE-LocalDataCachePath": self.unreal_local_data_cache_path,
             "ELYSIUM_UNREAL_SHADER_WORK_ROOT": self.unreal_shader_work_root,

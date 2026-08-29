@@ -9,7 +9,7 @@ of the owning VtMB topic documents.
 ```text
 <VTMB>/Vampire/pack*.vpk -> materials/<material>.vmt
   -> vtmb:material:<material>
-  -> materials/<material>.glb
+  -> $ELYSIUM_EXPORT_V2_ROOT/materials/<material>.glb
 ```
 
 The VMT member resolves UP-first. One normalized install-relative VMT path produces one material

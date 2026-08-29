@@ -40,7 +40,7 @@ One UP-first TTH path produces one texture GLB:
 materials/<texture>.tth
 materials/<texture>.ttz
   -> vtmb:texture:<texture>
-  -> $ELYSIUM_EXPORT_ROOT/glb/textures/<texture>.glb
+  -> $ELYSIUM_EXPORT_V2_ROOT/textures/<texture>.glb
 ```
 
 The unit key is the normalized path below `materials/`, lowercased, forward-slashed, without the

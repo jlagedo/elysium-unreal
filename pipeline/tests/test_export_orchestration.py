@@ -38,6 +38,7 @@ class ExportProfileTests(unittest.TestCase):
             game_root=Path("C:/game"),
             work_root=Path("C:/work"),
             export_root=Path("C:/export"),
+            export_v2_root=Path("C:/export_v2"),
         )
 
         def write(_index, texture, output_root):
@@ -93,6 +94,7 @@ class ExportProfileTests(unittest.TestCase):
             game_root=Path("C:/game"),
             work_root=Path("C:/work"),
             export_root=Path("C:/export"),
+            export_v2_root=Path("C:/export_v2"),
         )
 
         def write(_index, material, output_root):
@@ -156,6 +158,7 @@ class ExportProfileTests(unittest.TestCase):
             game_root=Path("C:/game"),
             work_root=Path("C:/work"),
             export_root=Path("C:/export"),
+            export_v2_root=Path("C:/export_v2"),
         )
 
         def write(_index, model, output_root, *, anorms):
@@ -184,6 +187,100 @@ class ExportProfileTests(unittest.TestCase):
         load_anorms.assert_called_once_with()
         self.assertEqual(export.call_count, 2)
         self.assertEqual(validate.call_count, 2)
+
+    def test_export_all_runs_every_seam_and_reports_a_failing_one(self) -> None:
+        # A seam is an independent corpus costing its own hours; one failure must not cancel the
+        # seams still to run, and must not be swallowed either.
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        config = SimpleNamespace(
+            game_root=Path("C:/game"),
+            work_root=Path("C:/work"),
+            export_root=Path("C:/work/exports"),
+            export_v2_root=Path("C:/work/exports_v2"),
+        )
+        ran = []
+
+        def corpus(name, result):
+            def run(_config, _runner, *, jobs=None):
+                ran.append(name)
+                if isinstance(result, Exception):
+                    raise result
+                return result
+
+            return run
+
+        seams = (
+            ("texture", corpus("texture", [Path("a.glb")])),
+            ("material", corpus(
+                "material", export_manager.OfflineExportFailure("2 of 9 failed"))),
+            ("character", corpus("character", [Path("b.glb"), Path("c.glb")])),
+        )
+        with mock.patch.object(export_manager, "GLB_SEAMS", seams):
+            with self.assertRaises(export_manager.OfflineExportFailure) as raised:
+                export_manager.export_all_glb_seams(config, object())
+
+        self.assertEqual(ran, ["texture", "material", "character"])
+        self.assertIn("material", str(raised.exception))
+        self.assertIn("2 of 9 failed", str(raised.exception))
+
+    def test_export_all_returns_every_seam_that_published(self) -> None:
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        config = SimpleNamespace(
+            game_root=Path("C:/game"),
+            work_root=Path("C:/work"),
+            export_root=Path("C:/work/exports"),
+            export_v2_root=Path("C:/work/exports_v2"),
+        )
+
+        def corpus(destinations):
+            return lambda _config, _runner, *, jobs=None: destinations
+
+        seams = (
+            ("texture", corpus([Path("a.glb")])),
+            ("material", corpus([Path("b.glb"), Path("c.glb")])),
+            ("character", corpus([])),
+        )
+        with mock.patch.object(export_manager, "GLB_SEAMS", seams):
+            published = export_manager.export_all_glb_seams(config, object())
+
+        self.assertEqual(
+            {seam: len(paths) for seam, paths in published.items()},
+            {"texture": 1, "material": 2, "character": 0},
+        )
+
+    def test_glb_seams_publish_under_the_export_v2_root(self) -> None:
+        # The isolated seams feed the new bake pipeline, so they must never land inside the
+        # bake corpus `elysium clean` and the manifest own.
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        config = SimpleNamespace(
+            game_root=Path("C:/game"),
+            work_root=Path("C:/work"),
+            export_root=Path("C:/work/exports"),
+            export_v2_root=Path("C:/work/exports_v2"),
+        )
+        for seam in ("characters", "textures", "materials", "surface-properties"):
+            root = export_manager._export_v2_root(config, seam)
+            self.assertEqual(root, Path("C:/work/exports_v2") / seam)
+            self.assertNotIn(config.export_root, root.parents)
+
+    def test_glb_seams_reject_a_config_without_an_export_v2_root(self) -> None:
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        config = SimpleNamespace(
+            game_root=Path("C:/game"),
+            work_root=Path("C:/work"),
+            export_root=Path("C:/work/exports"),
+            export_v2_root=None,
+        )
+        with self.assertRaises(ValueError):
+            export_manager._require_export_v2_config(config)
 
     def test_glb_corpus_workers_are_spawn_importable(self) -> None:
         import pickle

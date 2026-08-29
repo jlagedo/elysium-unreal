@@ -43,7 +43,7 @@ One UP-first character MDL path produces one character-body GLB:
 ```text
 models/character/<model>.mdl
   -> vtmb:character-body:<model>
-  -> $ELYSIUM_EXPORT_ROOT/glb/characters/<model>.glb
+  -> $ELYSIUM_EXPORT_V2_ROOT/characters/<model>.glb
 ```
 
 The unit key is the normalized path below `models/character/`, without `.mdl`. One MDL produces

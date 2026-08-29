@@ -67,11 +67,15 @@ def _dangerous_roots(repo: Path, game: Path, work: Path) -> tuple[Path, ...]:
 
 
 def ensure_export_ownership(
-    export_root: Path, work_root: Path, *, adopt_standard: bool = True
+    export_root: Path,
+    work_root: Path,
+    *,
+    standard_name: str = "exports",
+    adopt_standard: bool = True,
 ) -> Path:
     export_root = export_root.resolve()
     work_root = work_root.resolve()
-    standard = (work_root / "exports").resolve()
+    standard = (work_root / standard_name).resolve()
     if not _is_within(export_root, work_root) or _same(export_root, work_root):
         raise UnsafeClean(f"export root must be a child of the configured work root: {export_root}")
     marker = export_root / OWNERSHIP_FILE
@@ -111,22 +115,34 @@ def adopt_export_root(export_root: Path, work_root: Path) -> Path:
 @dataclass(frozen=True)
 class CleanTargets:
     export_root: Path
+    export_v2_root: Path
     generated_content: Path
     baked_content: Path
 
 
 def validate_clean_targets(
-    *, repo_root: Path, game_root: Path, work_root: Path, export_root: Path
+    *,
+    repo_root: Path,
+    game_root: Path,
+    work_root: Path,
+    export_root: Path,
+    export_v2_root: Path,
 ) -> CleanTargets:
     repo = repo_root.resolve()
     game = game_root.resolve()
     work = work_root.resolve()
     export = export_root.resolve()
+    export_v2 = export_v2_root.resolve()
     ensure_export_ownership(export, work)
+    ensure_export_ownership(export_v2, work, standard_name="exports_v2")
 
+    if _same(export, export_v2):
+        raise UnsafeClean(f"export and export_v2 roots must differ: {export}")
     for dangerous in _dangerous_roots(repo, game, work):
         if _same(export, dangerous):
             raise UnsafeClean(f"refusing dangerous export root: {export}")
+        if _same(export_v2, dangerous):
+            raise UnsafeClean(f"refusing dangerous export_v2 root: {export_v2}")
     generated_content = (repo / "Content" / "ElysiumGenerated").resolve()
     baked_content = (repo / "Plugins" / "ElysiumBaked" / "Content").resolve()
     expected = (
@@ -136,23 +152,28 @@ def validate_clean_targets(
     actual = (generated_content, baked_content)
     if any(not _same(left, right) for left, right in zip(expected, actual, strict=True)):
         raise UnsafeClean("generated Unreal targets did not resolve to the exact project paths")
-    return CleanTargets(export, generated_content, baked_content)
+    return CleanTargets(export, export_v2, generated_content, baked_content)
 
 
-def clean_generated(targets: CleanTargets) -> Path:
-    marker = targets.export_root / OWNERSHIP_FILE
+def _empty_owned_root(root: Path) -> None:
+    """Delete everything under one adopted root except the files that mark it as ours."""
     controls = {
-        marker.resolve(),
-        (targets.export_root / LOCK_FILE).resolve(),
-        (targets.export_root / OWNER_FILE).resolve(),
+        (root / OWNERSHIP_FILE).resolve(),
+        (root / LOCK_FILE).resolve(),
+        (root / OWNER_FILE).resolve(),
     }
-    for child in targets.export_root.iterdir():
+    for child in root.iterdir():
         if child.resolve() in controls:
             continue
         if child.is_dir():
             shutil.rmtree(child)
         else:
             child.unlink()
+
+
+def clean_generated(targets: CleanTargets) -> Path:
+    _empty_owned_root(targets.export_root)
+    _empty_owned_root(targets.export_v2_root)
     if targets.generated_content.exists():
         shutil.rmtree(targets.generated_content)
     if targets.baked_content.exists():

@@ -38,6 +38,12 @@ def export_root() -> Path:
     return Path(override).expanduser().resolve() if override else work_root() / "exports"
 
 
+def export_v2_root() -> Path:
+    """The root the isolated GLB seams publish under, separate from the bake corpus."""
+    override = os.environ.get("ELYSIUM_EXPORT_V2_ROOT", "").strip()
+    return Path(override).expanduser().resolve() if override else work_root() / "exports_v2"
+
+
 def research_root() -> Path:
     return work_root() / "research"
 

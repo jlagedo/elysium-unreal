@@ -10,20 +10,23 @@ from elysium_pipeline.workspace_lock import LOCK_FILE, OWNER_FILE
 
 
 class CleanContractTests(unittest.TestCase):
-    def _layout(self, root: Path) -> tuple[Path, Path, Path, Path]:
+    def _layout(self, root: Path) -> tuple[Path, Path, Path, Path, Path]:
         repo = root / "repo"
         game = root / "game"
         work = root / "work"
         export = work / "exports"
-        for path in (repo, game, export):
+        export_v2 = work / "exports_v2"
+        for path in (repo, game, export, export_v2):
             path.mkdir(parents=True)
-        return repo, game, work, export
+        return repo, game, work, export, export_v2
 
     def test_clean_deletes_only_generated_targets_and_marks_corpus_incomplete(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            repo, game, work, export = self._layout(Path(temporary))
+            repo, game, work, export, export_v2 = self._layout(Path(temporary))
             (export / "sp_tutorial_1").mkdir()
             (export / "sp_tutorial_1" / "map.obj").write_text("derived")
+            (export_v2 / "materials").mkdir()
+            (export_v2 / "materials" / "brick.glb").write_text("derived")
             (export / LOCK_FILE).write_bytes(b"\0")
             (export / OWNER_FILE).write_text("{}", encoding="utf-8")
             (repo / "Content" / "Fonts").mkdir(parents=True)
@@ -46,6 +49,7 @@ class CleanContractTests(unittest.TestCase):
                 game_root=game,
                 work_root=work,
                 export_root=export,
+                export_v2_root=export_v2,
             )
             incomplete = clean.clean_generated(targets)
 
@@ -56,6 +60,8 @@ class CleanContractTests(unittest.TestCase):
                 (repo / "Content" / "InputPrompts" / "Kenney" / "glyph.png").is_file()
             )
             self.assertTrue((external / "source.cpp").is_file())
+            self.assertFalse((export_v2 / "materials").exists())
+            self.assertTrue((export_v2 / clean.OWNERSHIP_FILE).is_file())
             self.assertTrue((export / clean.OWNERSHIP_FILE).is_file())
             self.assertTrue((export / LOCK_FILE).is_file())
             self.assertTrue((export / OWNER_FILE).is_file())
@@ -74,6 +80,38 @@ class CleanContractTests(unittest.TestCase):
             clean.mark_complete(export)
             self.assertEqual(clean.incomplete_domains(export), ())
             self.assertFalse(incomplete.exists())
+
+    def test_a_custom_export_v2_root_requires_its_own_ownership_marker(self) -> None:
+        # `exports_v2` is adopted by name exactly as `exports` is; anything else the operator
+        # points the seams at must be marked by hand before a clean may empty it.
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            work = root / "work"
+            custom = work / "authored-glb"
+            custom.mkdir(parents=True)
+            (custom / "valuable.glb").write_text("authored", encoding="utf-8")
+
+            with self.assertRaises(clean.UnsafeClean):
+                clean.ensure_export_ownership(custom, work, standard_name="exports_v2")
+
+            self.assertFalse((custom / clean.OWNERSHIP_FILE).exists())
+            self.assertTrue((custom / "valuable.glb").is_file())
+
+            standard = work / "exports_v2"
+            marker = clean.ensure_export_ownership(standard, work, standard_name="exports_v2")
+            self.assertTrue(marker.is_file())
+
+    def test_clean_refuses_one_root_pointed_at_both_export_trees(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repo, game, work, export, _ = self._layout(Path(temporary))
+            with self.assertRaises(clean.UnsafeClean):
+                clean.validate_clean_targets(
+                    repo_root=repo,
+                    game_root=game,
+                    work_root=work,
+                    export_root=export,
+                    export_v2_root=export,
+                )
 
     def test_unknown_domain_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
