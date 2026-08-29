@@ -75,6 +75,9 @@ def test_the_separator_and_case_do_not_decide_it() -> None:
     assert is_body_model("MODELS\\CHARACTER\\PC\\male\\x.mdl")
 
 
+# IndexSpaceTests
+# The trap: the same number names a different clip in each space.
+
 def test_a_body_contribution_reads_as_a_global_number() -> None:
     space = _space()
     assert space.resolve(BODY, 401) == ("aim_layer", "bank", 0x0)
@@ -141,31 +144,34 @@ def test_an_unreadable_contribution_is_counted_not_dropped_silently() -> None:
     assert unresolved == 1
 
 
-class CapacityTests(unittest.TestCase):
-    """One overlay node and one `_delta` node is what the graph carries."""
+# CapacityTests
+# One overlay node and one `_delta` node is what the graph carries.
 
-    @staticmethod
-    def _row(plain: int, additive: int) -> dict:
-        channels = [{"label": f"p{i}", "additive": False} for i in range(plain)]
-        channels += [{"label": f"a{i}", "additive": True} for i in range(additive)]
-        return {"channels": channels}
+def _row(plain: int, additive: int) -> dict:
+    channels = [{"label": f"p{i}", "additive": False} for i in range(plain)]
+    channels += [{"label": f"a{i}", "additive": True} for i in range(additive)]
+    return {"channels": channels}
 
-    def test_a_base_and_one_overlay_and_one_additive_fits(self) -> None:
-        report = summarise([self._row(2, 1)])
-        assert report["frames_beyond_the_graph"] == 0
 
-    def test_a_second_additive_does_not_fit(self) -> None:
-        report = summarise([self._row(2, 2)])
-        assert report["frames_over_one_additive"] == 1
-        assert report["frames_beyond_the_graph"] == 1
+def test_a_base_and_one_overlay_and_one_additive_fits() -> None:
+    report = summarise([_row(2, 1)])
+    assert report["frames_beyond_the_graph"] == 0
 
-    def test_a_third_plain_channel_does_not_fit(self) -> None:
-        report = summarise([self._row(3, 0)])
-        assert report["frames_over_one_overlay"] == 1
-        assert report["frames_beyond_the_graph"] == 1
 
-    def test_a_frame_over_on_both_counts_is_one_frame_beyond_the_graph(self) -> None:
-        report = summarise([self._row(4, 2)])
-        assert report["frames_over_one_overlay"] == 1
-        assert report["frames_over_one_additive"] == 1
-        assert report["frames_beyond_the_graph"] == 1
+def test_a_second_additive_does_not_fit() -> None:
+    report = summarise([_row(2, 2)])
+    assert report["frames_over_one_additive"] == 1
+    assert report["frames_beyond_the_graph"] == 1
+
+
+def test_a_third_plain_channel_does_not_fit() -> None:
+    report = summarise([_row(3, 0)])
+    assert report["frames_over_one_overlay"] == 1
+    assert report["frames_beyond_the_graph"] == 1
+
+
+def test_a_frame_over_on_both_counts_is_one_frame_beyond_the_graph() -> None:
+    report = summarise([_row(4, 2)])
+    assert report["frames_over_one_overlay"] == 1
+    assert report["frames_over_one_additive"] == 1
+    assert report["frames_beyond_the_graph"] == 1

@@ -205,80 +205,83 @@ def _minimal_mdl_vtx() -> tuple[bytes, bytes]:
     return bytes(mdl_data), bytes(vtx_data)
 
 
-class SourceClosureTests(unittest.TestCase):
-    def _images(self, *, checksum: int = 0x12345678):
-        mdl = bytearray(424)
-        mdl[:4] = b"IDST"
-        struct.pack_into("<I", mdl, 8, checksum)
-        vtx_data = bytearray(36)
-        struct.pack_into("<I", vtx_data, 16, checksum)
-        return bytes(mdl), bytes(vtx_data)
+def _images(*, checksum: int = 0x12345678):
+    mdl = bytearray(424)
+    mdl[:4] = b"IDST"
+    struct.pack_into("<I", mdl, 8, checksum)
+    vtx_data = bytearray(36)
+    struct.pack_into("<I", vtx_data, 16, checksum)
+    return bytes(mdl), bytes(vtx_data)
 
-    def test_dx80_is_primary_and_dx7_is_an_independent_alternate(self) -> None:
-        mdl, topology = self._images()
-        paths = {
-            "models/character/test/body.mdl": mdl,
-            "models/character/test/body.dx80.vtx": topology,
-            "models/character/test/body.dx7_2bone.vtx": topology,
-        }
-        index = {
-            key: ("loose", f"C:/VTMB/Unofficial_Patch/{key}") for key in paths
-        }
-        closure = load_source_closure(
-            index,
-            "models/character/test/body",
-            read_bytes=lambda _index, key: paths.get(key),
-        )
-        assert closure.primary_vtx.role == "vtx-dx80"
-        assert closure.alternate_vtx.role == "vtx-dx7-2bone"
-        assert len(closure.members()) == 3
 
-    def test_a_companion_checksum_mismatch_is_refused(self) -> None:
-        mdl, _ = self._images(checksum=1)
-        _, topology = self._images(checksum=2)
-        paths = {
-            "models/character/test/body.mdl": mdl,
-            "models/character/test/body.dx80.vtx": topology,
-        }
-        index = {key: ("loose", f"C:/VTMB/Vampire/{key}") for key in paths}
-        with pytest.raises(CharacterSourceError, match="checksum mismatch"):
-            load_source_closure(
-                index,
-                "models/character/test/body.mdl",
-                read_bytes=lambda _index, key: paths.get(key),
-            )
+def test_dx80_is_primary_and_dx7_is_an_independent_alternate() -> None:
+    mdl, topology = _images()
+    paths = {
+        "models/character/test/body.mdl": mdl,
+        "models/character/test/body.dx80.vtx": topology,
+        "models/character/test/body.dx7_2bone.vtx": topology,
+    }
+    index = {
+        key: ("loose", f"C:/VTMB/Unofficial_Patch/{key}") for key in paths
+    }
+    closure = load_source_closure(
+        index,
+        "models/character/test/body",
+        read_bytes=lambda _index, key: paths.get(key),
+    )
+    assert closure.primary_vtx.role == "vtx-dx80"
+    assert closure.alternate_vtx.role == "vtx-dx7-2bone"
+    assert len(closure.members()) == 3
 
-    def test_a_selected_facial_resource_is_retained_without_a_twin(self) -> None:
-        mdl, topology = self._images()
-        paths = {
-            "models/character/test/body.mdl": mdl,
-            "models/character/test/body.dx80.vtx": topology,
-            "expressions/body_phonemes.txt": b"$keys jaw\n",
-        }
-        index = {key: ("loose", f"C:/VTMB/Vampire/{key}") for key in paths}
-        closure = load_source_closure(
+
+def test_a_companion_checksum_mismatch_is_refused() -> None:
+    mdl, _ = _images(checksum=1)
+    _, topology = _images(checksum=2)
+    paths = {
+        "models/character/test/body.mdl": mdl,
+        "models/character/test/body.dx80.vtx": topology,
+    }
+    index = {key: ("loose", f"C:/VTMB/Vampire/{key}") for key in paths}
+    with pytest.raises(CharacterSourceError, match="checksum mismatch"):
+        load_source_closure(
             index,
             "models/character/test/body.mdl",
             read_bytes=lambda _index, key: paths.get(key),
         )
-        assert [member.role for member in closure.facial] == ["facial-phonemes-txt"]
 
-    def test_phy_checksum_mismatch_is_retained_as_provenance(self) -> None:
-        mdl, topology = self._images(checksum=1)
-        phy = bytearray(16)
-        struct.pack_into("<4i", phy, 0, 16, 0, 1, 2)
-        paths = {
-            "models/character/test/body.mdl": mdl,
-            "models/character/test/body.dx80.vtx": topology,
-            "models/character/test/body.phy": bytes(phy),
-        }
-        index = {key: ("loose", f"C:/VTMB/Vampire/{key}") for key in paths}
-        closure = load_source_closure(
-            index,
-            "models/character/test/body.mdl",
-            read_bytes=lambda _index, key: paths.get(key),
-        )
-        assert struct.unpack_from("<I", closure.phy.data, 12)[0] == 2
+
+def test_a_selected_facial_resource_is_retained_without_a_twin() -> None:
+    mdl, topology = _images()
+    paths = {
+        "models/character/test/body.mdl": mdl,
+        "models/character/test/body.dx80.vtx": topology,
+        "expressions/body_phonemes.txt": b"$keys jaw\n",
+    }
+    index = {key: ("loose", f"C:/VTMB/Vampire/{key}") for key in paths}
+    closure = load_source_closure(
+        index,
+        "models/character/test/body.mdl",
+        read_bytes=lambda _index, key: paths.get(key),
+    )
+    assert [member.role for member in closure.facial] == ["facial-phonemes-txt"]
+
+
+def test_phy_checksum_mismatch_is_retained_as_provenance() -> None:
+    mdl, topology = _images(checksum=1)
+    phy = bytearray(16)
+    struct.pack_into("<4i", phy, 0, 16, 0, 1, 2)
+    paths = {
+        "models/character/test/body.mdl": mdl,
+        "models/character/test/body.dx80.vtx": topology,
+        "models/character/test/body.phy": bytes(phy),
+    }
+    index = {key: ("loose", f"C:/VTMB/Vampire/{key}") for key in paths}
+    closure = load_source_closure(
+        index,
+        "models/character/test/body.mdl",
+        read_bytes=lambda _index, key: paths.get(key),
+    )
+    assert struct.unpack_from("<I", closure.phy.data, 12)[0] == 2
 
 
 def test_weighted_txt_and_vfe_header_agree_on_the_row_count() -> None:
@@ -568,64 +571,65 @@ def test_vtmb_packed_material_replacement_is_typed() -> None:
         }]
 
 
-class WholeCharacterDecodeTests(unittest.TestCase):
-    @staticmethod
-    def _closure_inputs():
-        mdl_data, topology = _minimal_mdl_vtx()
-        material = b'VertexLitGeneric\n{\n"$basetexture" "synthetic/body"\n}\n'
-        paths = {
-            "models/character/synthetic/body.mdl": mdl_data,
-            "models/character/synthetic/body.dx80.vtx": topology,
-            "materials/body.vmt": material,
-        }
-        index = {key: ("loose", f"C:/VTMB/Vampire/{key}") for key in paths}
-        return mdl_data, paths, index
+def _closure_inputs():
+    mdl_data, topology = _minimal_mdl_vtx()
+    material = b'VertexLitGeneric\n{\n"$basetexture" "synthetic/body"\n}\n'
+    paths = {
+        "models/character/synthetic/body.mdl": mdl_data,
+        "models/character/synthetic/body.dx80.vtx": topology,
+        "materials/body.vmt": material,
+    }
+    index = {key: ("loose", f"C:/VTMB/Vampire/{key}") for key in paths}
+    return mdl_data, paths, index
 
-    def test_minimal_direct_closure_decodes_end_to_end(self) -> None:
-        _mdl_data, paths, index = self._closure_inputs()
-        closure = load_source_closure(
+
+def test_minimal_direct_closure_decodes_end_to_end() -> None:
+    _mdl_data, paths, index = _closure_inputs()
+    closure = load_source_closure(
+        index,
+        "models/character/synthetic/body.mdl",
+        read_bytes=lambda _index, key: paths.get(key),
+    )
+    model = decode_character(
+        closure,
+        index,
+        read_bytes=lambda _index, key: paths.get(key),
+    )
+    assert model.asset_id == "vtmb:character-body:synthetic/body"
+    assert len(model.bones) == 1
+    assert len(model.lods) == 2
+    assert model.materials[0]["material"] == "vtmb:material:body"
+    assert (model.header["reserved412"], model.header["reserved416"]) == (0, 0)
+    assert model.header["bodyParts"][0]["models"][0]["reserved184"] == [0, 0]
+    assert [row["path"] for row in model.typed_unidentified] == [
+            "mdl.secondaryMotion[].unusedAuthoredPreset",
+        ]
+
+
+def test_declared_image_allows_bounded_patch_newline() -> None:
+    mdl_data, _topology = _minimal_mdl_vtx()
+    header = _header(mdl_data + b"\n")
+    assert header["length"] == len(mdl_data)
+    assert header["physicalLength"] == len(mdl_data) + 1
+    assert header["trailingPatchWhitespace"] == "0a"
+
+
+def test_public_exporter_writes_the_isolated_relative_path() -> None:
+    _mdl_data, paths, index = _closure_inputs()
+    with tempfile.TemporaryDirectory() as temporary:
+        destination = character_glb.export(
             index,
             "models/character/synthetic/body.mdl",
+            Path(temporary),
             read_bytes=lambda _index, key: paths.get(key),
+            anorms=[],
         )
-        model = decode_character(
-            closure,
-            index,
-            read_bytes=lambda _index, key: paths.get(key),
-        )
-        assert model.asset_id == "vtmb:character-body:synthetic/body"
-        assert len(model.bones) == 1
-        assert len(model.lods) == 2
-        assert model.materials[0]["material"] == "vtmb:material:body"
-        assert (model.header["reserved412"], model.header["reserved416"]) == (0, 0)
-        assert model.header["bodyParts"][0]["models"][0]["reserved184"] == [0, 0]
-        assert [row["path"] for row in model.typed_unidentified] == [
-                "mdl.secondaryMotion[].unusedAuthoredPreset",
-            ]
-
-    def test_declared_image_allows_bounded_patch_newline(self) -> None:
-        mdl_data, _topology = _minimal_mdl_vtx()
-        header = _header(mdl_data + b"\n")
-        assert header["length"] == len(mdl_data)
-        assert header["physicalLength"] == len(mdl_data) + 1
-        assert header["trailingPatchWhitespace"] == "0a"
-
-    def test_public_exporter_writes_the_isolated_relative_path(self) -> None:
-        _mdl_data, paths, index = self._closure_inputs()
-        with tempfile.TemporaryDirectory() as temporary:
-            destination = character_glb.export(
-                index,
-                "models/character/synthetic/body.mdl",
-                Path(temporary),
-                read_bytes=lambda _index, key: paths.get(key),
-                anorms=[],
-            )
-            summary = validation.validate(destination)
-            document, _binary = validation.read_glb(destination)
-            relative = destination.relative_to(temporary).as_posix()
-        assert relative == "synthetic/body.glb"
-        assert summary["lods"] == 2
-        assert "TANGENT" in document["meshes"][0]["primitives"][0]["attributes"]
+        summary = validation.validate(destination)
+        document, _binary = validation.read_glb(destination)
+        relative = destination.relative_to(temporary).as_posix()
+    assert relative == "synthetic/body.glb"
+    assert summary["lods"] == 2
+    assert "TANGENT" in document["meshes"][0]["primitives"][0]["attributes"]
 
 
 def test_complete_synthetic_character_publishes_and_validates() -> None:

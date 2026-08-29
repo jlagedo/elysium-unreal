@@ -69,296 +69,308 @@ def test_model_obj_writer_is_unreal_only() -> None:
     assert "f 1/1 3/3 2/2" in obj
 
 
-class PropMaterialContractTests(unittest.TestCase):
-    #: A realistic model header search path. The engine composes one candidate per search
-    #: path and has no flat last resort, so a fixture VMT lives under one of them.
-    SEARCH = ["models/props/"]
+SEARCH = ["models/props/"]
 
-    @staticmethod
-    def _triangle(material: str) -> mdl.Mesh:
-        mesh = mdl.Mesh(material)
-        mesh.verts = [
-            (1.0, 2.0, 3.0, 0.0, 0.0),
-            (2.0, 2.0, 3.0, 1.0, 0.0),
-            (1.0, 3.0, 3.0, 0.0, 1.0),
-        ]
-        mesh.tris = [(0, 1, 2)]
-        return mesh
 
-    def _record_for_vmt(self, vmt_body: str, read_bytes=None) -> dict:
-        """One material's corpus definition. The `.mtl` names the material and the map's own
-        facts; every channel and flag is stated once here."""
-        def default_read(path):
-            return vmt_body.encode("ascii") if path == "materials/models/props/glasswin.vmt" else None
+def _triangle(material: str) -> mdl.Mesh:
+    mesh = mdl.Mesh(material)
+    mesh.verts = [
+        (1.0, 2.0, 3.0, 0.0, 0.0),
+        (2.0, 2.0, 3.0, 1.0, 0.0),
+        (1.0, 3.0, 3.0, 0.0, 1.0),
+    ]
+    mesh.tris = [(0, 1, 2)]
+    return mesh
 
-        channels = mdl.material_channels("glasswin", self.SEARCH, read_bytes or default_read)
-        return shared_corpus.material_record(channels) if channels else {}
 
-    def _mtl_for_vmt(self, vmt_body: str) -> str:
-        """The `.mtl` a model writes: its slot names and the material key each draws."""
-        mesh = self._triangle("glasswin")
+def _record_for_vmt(vmt_body: str, read_bytes=None) -> dict:
+    """One material's corpus definition. The `.mtl` names the material and the map's own
+    facts; every channel and flag is stated once here."""
+    def default_read(path):
+        return vmt_body.encode("ascii") if path == "materials/models/props/glasswin.vmt" else None
 
-        def read_bytes(path):
-            return vmt_body.encode("ascii") if path == "materials/models/props/glasswin.vmt" else None
+    channels = mdl.material_channels("glasswin", SEARCH, read_bytes or default_read)
+    return shared_corpus.material_record(channels) if channels else {}
 
-        with tempfile.TemporaryDirectory() as out:
-            mdl.write_obj_scene([mesh], "test", out, self.SEARCH, read_bytes, {})
-            return (Path(out) / "test.mtl").read_text(encoding="utf-8")
 
-    def test_translucent_prop_material_carries_blend_flag(self) -> None:
-        body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$translucent" "1"\n}\n'
-        assert self._record_for_vmt(body)["blend"]
-        assert "mat models/props/glasswin" in self._mtl_for_vmt(body)
+def _mtl_for_vmt(vmt_body: str) -> str:
+    """The `.mtl` a model writes: its slot names and the material key each draws."""
+    mesh = _triangle("glasswin")
 
-    def test_alphatest_prop_material_carries_illum_flag(self) -> None:
-        body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$alphatest" "1"\n}\n'
-        record = self._record_for_vmt(body)
-        assert record["scissor"]
-        assert not record["blend"]
+    def read_bytes(path):
+        return vmt_body.encode("ascii") if path == "materials/models/props/glasswin.vmt" else None
 
-    def test_semantic_glass_prop_carries_glass_and_derived_normal(self) -> None:
-        vmt_body = (
-            '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n'
-            '"$translucent" "1"\n"$envmap" "env_cubemap"\n}\n'
-        )
+    with tempfile.TemporaryDirectory() as out:
+        mdl.write_obj_scene([mesh], "test", out, SEARCH, read_bytes, {})
+        return (Path(out) / "test.mtl").read_text(encoding="utf-8")
 
-        def read_bytes(path):
-            if path == "materials/models/props/glasswin.vmt":
-                return vmt_body.encode("ascii")
-            if path in ("materials/props/glasswin.tth", "materials/props/glasswin.ttz"):
-                return b"synthetic"
-            return None
 
-        source = Image.new("RGBA", (5, 5), (110, 140, 160, 80))
-        source.putpixel((2, 2), (180, 200, 210, 80))
-        with tempfile.TemporaryDirectory() as out, mock.patch(
-            "elysium_pipeline.formats.tex_to_png.decode", return_value=source
-        ):
-            mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
-            mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
-            normal = Path(out) / "tex" / "props_glasswin_glass_n.png"
-            assert normal.is_file()
-        assert "mat models/props/glasswin" in mtl
-        record = self._record_for_vmt(vmt_body, read_bytes)
-        assert record["blend"]
-        assert record["glass"]
-        assert record["bump"] == "tex/props_glasswin_glass_n.png"
+def test_translucent_prop_material_carries_blend_flag() -> None:
+    body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$translucent" "1"\n}\n'
+    assert _record_for_vmt(body)["blend"]
+    assert "mat models/props/glasswin" in _mtl_for_vmt(body)
 
-    def test_authored_glass_bumpmap_takes_precedence(self) -> None:
-        vmt_body = (
-            '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n'
-            '"$translucent" "1"\n"$envmap" "env_cubemap"\n'
-            '"$bumpmap" "props/authored"\n}\n'
-        )
 
-        def read_bytes(path):
-            if path == "materials/models/props/glasswin.vmt":
-                return vmt_body.encode("ascii")
-            if path.endswith((".tth", ".ttz")):
-                return path.encode("ascii")
-            return None
+def test_alphatest_prop_material_carries_illum_flag() -> None:
+    body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$alphatest" "1"\n}\n'
+    record = _record_for_vmt(body)
+    assert record["scissor"]
+    assert not record["blend"]
 
-        def decode(tth, _ttz):
-            color = (128, 128, 255, 255) if b"authored" in tth else (100, 130, 150, 80)
-            return Image.new("RGBA", (4, 4), color)
 
-        with tempfile.TemporaryDirectory() as out, mock.patch(
-            "elysium_pipeline.formats.tex_to_png.decode", side_effect=decode
-        ):
-            mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
-            mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
-            assert not (Path(out) / "tex" / "props_glasswin_glass_n.png").exists()
-        record = self._record_for_vmt(vmt_body, read_bytes)
-        assert record["bump"] == "tex/props_authored_n.png"
+def test_semantic_glass_prop_carries_glass_and_derived_normal() -> None:
+    vmt_body = (
+        '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n'
+        '"$translucent" "1"\n"$envmap" "env_cubemap"\n}\n'
+    )
 
-    def test_one_fold_names_the_mtl_slot_the_skins_slot_and_the_manifest_slot(self) -> None:
-        """A model's material slot has one spelling in three places, and it is `mdl.sanitize`.
+    def read_bytes(path):
+        if path == "materials/models/props/glasswin.vmt":
+            return vmt_body.encode("ascii")
+        if path in ("materials/props/glasswin.tth", "materials/props/glasswin.ttz"):
+            return b"synthetic"
+        return None
 
-        `bl.safe_name` is the other fold in this repo: it collapses runs and drops `.` and `-`.
-        The two agree on ordinary names and disagree on exactly the names that carry those
-        characters, so a slot folded the wrong way joins on most models and silently misses the
-        rest -- which shows up as a prop that ignores its alternate skin.
-        """
-        awkward = "Panel-A.2 x"
-        mesh = self._triangle(awkward)
-        mesh.skinref = 0
+    source = Image.new("RGBA", (5, 5), (110, 140, 160, 80))
+    source.putpixel((2, 2), (180, 200, 210, 80))
+    with tempfile.TemporaryDirectory() as out, mock.patch(
+        "elysium_pipeline.formats.tex_to_png.decode", return_value=source
+    ):
+        mdl.write_obj_scene(
+            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
+        mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
+        normal = Path(out) / "tex" / "props_glasswin_glass_n.png"
+        assert normal.is_file()
+    assert "mat models/props/glasswin" in mtl
+    record = _record_for_vmt(vmt_body, read_bytes)
+    assert record["blend"]
+    assert record["glass"]
+    assert record["bump"] == "tex/props_glasswin_glass_n.png"
 
-        def read_bytes(path):
-            return None
 
-        with tempfile.TemporaryDirectory() as out:
-            mdl.write_obj_scene(
-                [mesh], "test", out, self.SEARCH, read_bytes, {},
-                skins=[[awkward], ["Panel-B.2 x"]])
-            mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
-            skins = (Path(out) / "test.skins").read_text(encoding="utf-8")
+def test_authored_glass_bumpmap_takes_precedence() -> None:
+    vmt_body = (
+        '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n'
+        '"$translucent" "1"\n"$envmap" "env_cubemap"\n'
+        '"$bumpmap" "props/authored"\n}\n'
+    )
 
-        folded = mdl.sanitize(awkward)
-        assert folded == "panel-a.2_x"
-        assert f"newmtl {folded}" in mtl
-        assert folded in skins
-        # The other fold would have produced a different name in each place.
-        assert folded != shared_corpus.material_asset(awkward)[len("MI_"):]
+    def read_bytes(path):
+        if path == "materials/models/props/glasswin.vmt":
+            return vmt_body.encode("ascii")
+        if path.endswith((".tth", ".ttz")):
+            return path.encode("ascii")
+        return None
 
-    def test_source_refract_prop_exports_dudv_as_distortion_not_albedo(self) -> None:
-        vmt_body = (
-            '"Refract"\n{\n"$dudvmap" "props/rain_dudv"\n'
-            '"$refractamount" ".01"\n"$model" "1"\n}\n'
-        )
+    def decode(tth, _ttz):
+        color = (128, 128, 255, 255) if b"authored" in tth else (100, 130, 150, 80)
+        return Image.new("RGBA", (4, 4), color)
 
-        def read_bytes(path):
-            if path == "materials/models/props/glasswin.vmt":
-                return vmt_body.encode("ascii")
-            if path in ("materials/props/rain_dudv.tth", "materials/props/rain_dudv.ttz"):
-                return b"synthetic"
-            return None
+    with tempfile.TemporaryDirectory() as out, mock.patch(
+        "elysium_pipeline.formats.tex_to_png.decode", side_effect=decode
+    ):
+        mdl.write_obj_scene(
+            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
+        mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
+        assert not (Path(out) / "tex" / "props_glasswin_glass_n.png").exists()
+    record = _record_for_vmt(vmt_body, read_bytes)
+    assert record["bump"] == "tex/props_authored_n.png"
 
-        signed = Image.new("RGBA", (2, 1))
-        signed.putdata([(0, 0, 127, 255), (255, 1, 127, 255)])
-        with tempfile.TemporaryDirectory() as out, mock.patch(
-            "elysium_pipeline.formats.tex_to_png.decode", return_value=signed
-        ):
-            mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
-            mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
-            normal_path = Path(out) / "tex" / "props_rain_dudv_refract_n.png"
-            with Image.open(normal_path) as normal:
-                assert list(normal.get_flattened_data()) == [
-                    (128, 128, 255), (127, 129, 255)]
 
-        record = self._record_for_vmt(vmt_body, read_bytes)
-        assert record["refract"]
-        assert record["refract_amount"] == 0.01
-        assert record["refract_map"] == "tex/props_rain_dudv_refract_n.png"
-        assert not record["blend"]
-        assert not record["glass"]
-        assert record["albedo"] == ""
+def test_one_fold_names_the_mtl_slot_the_skins_slot_and_the_manifest_slot() -> None:
+    """A model's material slot has one spelling in three places, and it is `mdl.sanitize`.
 
-    def test_source_refract_prefers_authored_normal_over_dudv_fallback(self) -> None:
-        vmt_body = (
-            '"Refract"\n{\n"$dudvmap" "props/old_dudv"\n'
-            '"$normalmap" "props/authored_normal"\n"$refractamount" "2"\n}\n'
-        )
-        decoded = []
+    `bl.safe_name` is the other fold in this repo: it collapses runs and drops `.` and `-`.
+    The two agree on ordinary names and disagree on exactly the names that carry those
+    characters, so a slot folded the wrong way joins on most models and silently misses the
+    rest -- which shows up as a prop that ignores its alternate skin.
+    """
+    awkward = "Panel-A.2 x"
+    mesh = _triangle(awkward)
+    mesh.skinref = 0
 
-        def read_bytes(path):
-            if path == "materials/models/props/glasswin.vmt":
-                return vmt_body.encode("ascii")
-            if path in (
-                    "materials/props/authored_normal.tth",
-                    "materials/props/authored_normal.ttz"):
-                return path.encode("ascii")
-            return None
+    def read_bytes(path):
+        return None
 
-        def decode(tth, _ttz):
-            decoded.append(tth)
-            return Image.new("RGBA", (1, 1), (128, 128, 255, 255))
+    with tempfile.TemporaryDirectory() as out:
+        mdl.write_obj_scene(
+            [mesh], "test", out, SEARCH, read_bytes, {},
+            skins=[[awkward], ["Panel-B.2 x"]])
+        mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
+        skins = (Path(out) / "test.skins").read_text(encoding="utf-8")
 
-        with tempfile.TemporaryDirectory() as out, mock.patch(
-            "elysium_pipeline.formats.tex_to_png.decode", side_effect=decode
-        ):
-            mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
-            mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
+    folded = mdl.sanitize(awkward)
+    assert folded == "panel-a.2_x"
+    assert f"newmtl {folded}" in mtl
+    assert folded in skins
+    # The other fold would have produced a different name in each place.
+    assert folded != shared_corpus.material_asset(awkward)[len("MI_"):]
 
-        assert len(decoded) == 1
-        assert b"authored_normal" in decoded[0]
-        assert "mat models/props/glasswin" in mtl
-        record = self._record_for_vmt(vmt_body, read_bytes)
-        assert record["refract_map"] == "tex/props_authored_normal_refract_n.png"
 
-    def _export_texture(self, flag: str) -> Image.Image:
-        vmt_body = (
+def test_source_refract_prop_exports_dudv_as_distortion_not_albedo() -> None:
+    vmt_body = (
+        '"Refract"\n{\n"$dudvmap" "props/rain_dudv"\n'
+        '"$refractamount" ".01"\n"$model" "1"\n}\n'
+    )
+
+    def read_bytes(path):
+        if path == "materials/models/props/glasswin.vmt":
+            return vmt_body.encode("ascii")
+        if path in ("materials/props/rain_dudv.tth", "materials/props/rain_dudv.ttz"):
+            return b"synthetic"
+        return None
+
+    signed = Image.new("RGBA", (2, 1))
+    signed.putdata([(0, 0, 127, 255), (255, 1, 127, 255)])
+    with tempfile.TemporaryDirectory() as out, mock.patch(
+        "elysium_pipeline.formats.tex_to_png.decode", return_value=signed
+    ):
+        mdl.write_obj_scene(
+            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
+        mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
+        normal_path = Path(out) / "tex" / "props_rain_dudv_refract_n.png"
+        with Image.open(normal_path) as normal:
+            assert list(normal.get_flattened_data()) == [
+                (128, 128, 255), (127, 129, 255)]
+
+    record = _record_for_vmt(vmt_body, read_bytes)
+    assert record["refract"]
+    assert record["refract_amount"] == 0.01
+    assert record["refract_map"] == "tex/props_rain_dudv_refract_n.png"
+    assert not record["blend"]
+    assert not record["glass"]
+    assert record["albedo"] == ""
+
+
+def test_source_refract_prefers_authored_normal_over_dudv_fallback() -> None:
+    vmt_body = (
+        '"Refract"\n{\n"$dudvmap" "props/old_dudv"\n'
+        '"$normalmap" "props/authored_normal"\n"$refractamount" "2"\n}\n'
+    )
+    decoded = []
+
+    def read_bytes(path):
+        if path == "materials/models/props/glasswin.vmt":
+            return vmt_body.encode("ascii")
+        if path in (
+                "materials/props/authored_normal.tth",
+                "materials/props/authored_normal.ttz"):
+            return path.encode("ascii")
+        return None
+
+    def decode(tth, _ttz):
+        decoded.append(tth)
+        return Image.new("RGBA", (1, 1), (128, 128, 255, 255))
+
+    with tempfile.TemporaryDirectory() as out, mock.patch(
+        "elysium_pipeline.formats.tex_to_png.decode", side_effect=decode
+    ):
+        mdl.write_obj_scene(
+            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
+        mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
+
+    assert len(decoded) == 1
+    assert b"authored_normal" in decoded[0]
+    assert "mat models/props/glasswin" in mtl
+    record = _record_for_vmt(vmt_body, read_bytes)
+    assert record["refract_map"] == "tex/props_authored_normal_refract_n.png"
+
+
+def _export_texture(flag: str) -> Image.Image:
+    vmt_body = (
+        '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n'
+        + (f'"${flag}" "1"\n' if flag else "")
+        + "}\n"
+    )
+
+    def read_bytes(path):
+        if path == "materials/models/props/glasswin.vmt":
+            return vmt_body.encode("ascii")
+        if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
+            return b"synthetic"
+        return None
+
+    source = Image.new("RGBA", (2, 1))
+    source.putdata([(10, 20, 30, 0), (40, 50, 60, 191)])
+    with tempfile.TemporaryDirectory() as out, mock.patch(
+        "elysium_pipeline.formats.tex_to_png.decode", return_value=source
+    ):
+        mdl.write_obj_scene(
+            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
+        with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
+            return exported.copy()
+
+
+def test_translucent_prop_preserves_source_alpha() -> None:
+    image = _export_texture("translucent")
+    assert image.mode == "RGBA"
+    assert [image.getpixel((x, 0))[3] for x in range(2)] == [0, 191]
+
+
+def test_alphatest_prop_preserves_source_alpha() -> None:
+    image = _export_texture("alphatest")
+    assert image.mode == "RGBA"
+    assert [image.getpixel((x, 0))[3] for x in range(2)] == [0, 191]
+
+
+def test_opaque_prop_keeps_stored_alpha() -> None:
+    # Alpha is a fact of the source file, not of the material drawing it: an opaque VMT does
+    # not flatten a texture whose source stores a real alpha plane.
+    image = _export_texture("")
+    assert image.mode == "RGBA"
+    assert [image.getpixel((x, 0))[3] for x in range(2)] == [0, 191]
+
+
+def test_blank_alpha_folds_to_rgb() -> None:
+    # A uniformly opaque plane encodes nothing, so the write folds it away -- losslessly.
+    vmt_body = '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n'
+
+    def read_bytes(path):
+        if path == "materials/models/props/glasswin.vmt":
+            return vmt_body.encode("ascii")
+        if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
+            return b"synthetic"
+        return None
+
+    source = Image.new("RGBA", (2, 1), (10, 20, 30, 255))
+    with tempfile.TemporaryDirectory() as out, mock.patch(
+        "elysium_pipeline.formats.tex_to_png.decode", return_value=source
+    ):
+        mdl.write_obj_scene(
+            [_triangle("glasswin")], "test", out, SEARCH, read_bytes, {})
+        with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
+            assert exported.mode == "RGB"
+
+
+def test_shared_basetexture_writes_one_file_whatever_the_order() -> None:
+    vmts = {
+        "materials/models/props/opaque.vmt": (
+            '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n'
+        ),
+        "materials/models/props/glass.vmt": (
             '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n'
-            + (f'"${flag}" "1"\n' if flag else "")
-            + "}\n"
-        )
+            '"$translucent" "1"\n}\n'
+        ),
+    }
 
-        def read_bytes(path):
-            if path == "materials/models/props/glasswin.vmt":
-                return vmt_body.encode("ascii")
-            if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
-                return b"synthetic"
-            return None
+    def read_bytes(path):
+        if path in vmts:
+            return vmts[path].encode("ascii")
+        if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
+            return b"synthetic"
+        return None
 
-        source = Image.new("RGBA", (2, 1))
-        source.putdata([(10, 20, 30, 0), (40, 50, 60, 191)])
+    source = Image.new("RGBA", (1, 1), (10, 20, 30, 73))
+    for order in (("opaque", "glass"), ("glass", "opaque")):
         with tempfile.TemporaryDirectory() as out, mock.patch(
             "elysium_pipeline.formats.tex_to_png.decode", return_value=source
         ):
             mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
+                [_triangle(name) for name in order],
+                "test", out, SEARCH, read_bytes, {})
             with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
-                return exported.copy()
-
-    def test_translucent_prop_preserves_source_alpha(self) -> None:
-        image = self._export_texture("translucent")
-        assert image.mode == "RGBA"
-        assert [image.getpixel((x, 0))[3] for x in range(2)] == [0, 191]
-
-    def test_alphatest_prop_preserves_source_alpha(self) -> None:
-        image = self._export_texture("alphatest")
-        assert image.mode == "RGBA"
-        assert [image.getpixel((x, 0))[3] for x in range(2)] == [0, 191]
-
-    def test_opaque_prop_keeps_stored_alpha(self) -> None:
-        # Alpha is a fact of the source file, not of the material drawing it: an opaque VMT does
-        # not flatten a texture whose source stores a real alpha plane.
-        image = self._export_texture("")
-        assert image.mode == "RGBA"
-        assert [image.getpixel((x, 0))[3] for x in range(2)] == [0, 191]
-
-    def test_blank_alpha_folds_to_rgb(self) -> None:
-        # A uniformly opaque plane encodes nothing, so the write folds it away -- losslessly.
-        vmt_body = '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n'
-
-        def read_bytes(path):
-            if path == "materials/models/props/glasswin.vmt":
-                return vmt_body.encode("ascii")
-            if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
-                return b"synthetic"
-            return None
-
-        source = Image.new("RGBA", (2, 1), (10, 20, 30, 255))
-        with tempfile.TemporaryDirectory() as out, mock.patch(
-            "elysium_pipeline.formats.tex_to_png.decode", return_value=source
-        ):
-            mdl.write_obj_scene(
-                [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
-            with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
-                assert exported.mode == "RGB"
-
-    def test_shared_basetexture_writes_one_file_whatever_the_order(self) -> None:
-        vmts = {
-            "materials/models/props/opaque.vmt": (
-                '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n'
-            ),
-            "materials/models/props/glass.vmt": (
-                '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n'
-                '"$translucent" "1"\n}\n'
-            ),
-        }
-
-        def read_bytes(path):
-            if path in vmts:
-                return vmts[path].encode("ascii")
-            if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
-                return b"synthetic"
-            return None
-
-        source = Image.new("RGBA", (1, 1), (10, 20, 30, 73))
-        for order in (("opaque", "glass"), ("glass", "opaque")):
-            with tempfile.TemporaryDirectory() as out, mock.patch(
-                "elysium_pipeline.formats.tex_to_png.decode", return_value=source
-            ):
-                mdl.write_obj_scene(
-                    [self._triangle(name) for name in order],
-                    "test", out, self.SEARCH, read_bytes, {})
-                with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
-                    assert exported.mode == "RGBA"
-                    assert exported.getchannel("A").getpixel((0, 0)) == 73
+                assert exported.mode == "RGBA"
+                assert exported.getchannel("A").getpixel((0, 0)) == 73
 
 
 class TextureDecodeMemoTests(unittest.TestCase):
@@ -416,54 +428,57 @@ class TextureDecodeMemoTests(unittest.TestCase):
         assert decode.call_count == 2   # the albedo, then the mask's re-decode
 
 
-class SourceFormatAlphaTests(unittest.TestCase):
-    """`decode` answers the fold-to-RGB question from the source format where provable."""
+# SourceFormatAlphaTests
+# `decode` answers the fold-to-RGB question from the source format where provable.
 
-    @staticmethod
-    def _tth(w, h, fmt):
-        import struct
-        vtf = bytearray(64)
-        vtf[0:4] = b"VTF\x00"
-        struct.pack_into("<HH", vtf, 16, w, h)
-        struct.pack_into("<I", vtf, 52, fmt)
-        vtf[56] = 1
-        return b"TTH\x00" + b"\x00" * 12 + bytes(vtf)
+def _tth(w, h, fmt):
+    import struct
+    vtf = bytearray(64)
+    vtf[0:4] = b"VTF\x00"
+    struct.pack_into("<HH", vtf, 16, w, h)
+    struct.pack_into("<I", vtf, 52, fmt)
+    vtf[56] = 1
+    return b"TTH\x00" + b"\x00" * 12 + bytes(vtf)
 
-    def _roundtrip(self, tth, ttz):
-        image = tex_to_png.decode(tth, ttz)
-        with tempfile.TemporaryDirectory() as out:
-            path = Path(out) / "t.png"
-            tex_to_png.save_png(image, path)
-            with Image.open(path) as saved:
-                return image, saved.mode
 
-    def test_bgr888_is_format_answered_opaque_and_folds(self) -> None:
-        import zlib
-        tth = self._tth(2, 1, tex_to_png.FMT_BGR888)
-        image, mode = self._roundtrip(tth, zlib.compress(bytes((30, 20, 10, 60, 50, 40))))
-        assert image.info.get("opaque_alpha") is True
-        assert mode == "RGB"
+def _roundtrip(tth, ttz):
+    image = tex_to_png.decode(tth, ttz)
+    with tempfile.TemporaryDirectory() as out:
+        path = Path(out) / "t.png"
+        tex_to_png.save_png(image, path)
+        with Image.open(path) as saved:
+            return image, saved.mode
 
-    def test_dxt1_without_punch_through_blocks_is_format_answered_opaque(self) -> None:
-        import struct
-        import zlib
-        block = struct.pack("<HH4B", 0xF800, 0x001F, 0, 0, 0, 0)   # color0 > color1
-        tth = self._tth(4, 4, tex_to_png.FMT_DXT1)
-        image, mode = self._roundtrip(tth, zlib.compress(block))
-        assert image.info.get("opaque_alpha") is True
-        assert mode == "RGB"
 
-    def test_dxt1_punch_through_blocks_keep_their_alpha(self) -> None:
-        # color0 <= color1 selects BC1's three-colour mode; index 3 decodes transparent, so
-        # the format cannot claim opacity and the scan (and the alpha plane) must survive.
-        import struct
-        import zlib
-        block = struct.pack("<HH4B", 0x001F, 0xF800, 0xFF, 0xFF, 0xFF, 0xFF)
-        tth = self._tth(4, 4, tex_to_png.FMT_DXT1)
-        image, mode = self._roundtrip(tth, zlib.compress(block))
-        assert image.info.get("opaque_alpha") is None
-        assert image.getchannel("A").getextrema() == (0, 0)
-        assert mode == "RGBA"
+def test_bgr888_is_format_answered_opaque_and_folds() -> None:
+    import zlib
+    tth = _tth(2, 1, tex_to_png.FMT_BGR888)
+    image, mode = _roundtrip(tth, zlib.compress(bytes((30, 20, 10, 60, 50, 40))))
+    assert image.info.get("opaque_alpha") is True
+    assert mode == "RGB"
+
+
+def test_dxt1_without_punch_through_blocks_is_format_answered_opaque() -> None:
+    import struct
+    import zlib
+    block = struct.pack("<HH4B", 0xF800, 0x001F, 0, 0, 0, 0)   # color0 > color1
+    tth = _tth(4, 4, tex_to_png.FMT_DXT1)
+    image, mode = _roundtrip(tth, zlib.compress(block))
+    assert image.info.get("opaque_alpha") is True
+    assert mode == "RGB"
+
+
+def test_dxt1_punch_through_blocks_keep_their_alpha() -> None:
+    # color0 <= color1 selects BC1's three-colour mode; index 3 decodes transparent, so
+    # the format cannot claim opacity and the scan (and the alpha plane) must survive.
+    import struct
+    import zlib
+    block = struct.pack("<HH4B", 0x001F, 0xF800, 0xFF, 0xFF, 0xFF, 0xFF)
+    tth = _tth(4, 4, tex_to_png.FMT_DXT1)
+    image, mode = _roundtrip(tth, zlib.compress(block))
+    assert image.info.get("opaque_alpha") is None
+    assert image.getchannel("A").getextrema() == (0, 0)
+    assert mode == "RGBA"
 
 
 def test_reads_rgba_alpha_range_and_rejects_rgb_as_alpha() -> None:
@@ -500,73 +515,76 @@ def test_uvwq_signed_vectors_convert_deterministically_to_tangent_normal() -> No
     assert tex_to_png.mip_byte_size(3, 1, tex_to_png.FMT_UVWQ8888) == 12
 
 
-class GlassMaterialContractTests(unittest.TestCase):
-    @staticmethod
-    def _info(shader="lightmappedgeneric", **overrides):
-        info = {
-            "shader": shader,
-            "basetexture": "glass/window",
-            "translucent": True,
-            "envmap": "env_cubemap",
-            "additive": False,
-            "decal": False,
-            "water": False,
-        }
-        info.update(overrides)
-        return info
+def _info(shader="lightmappedgeneric", **overrides):
+    info = {
+        "shader": shader,
+        "basetexture": "glass/window",
+        "translucent": True,
+        "envmap": "env_cubemap",
+        "additive": False,
+        "decal": False,
+        "water": False,
+    }
+    info.update(overrides)
+    return info
 
-    def test_world_and_prop_lit_reflective_glass_classify(self) -> None:
-        assert is_glass(self._info(), "glass/pawnwndwglass")
-        assert is_glass(
-            self._info(shader="vertexlitgeneric",
-                       basetexture="models/scenery/misc/wall_clock/clockglass"),
-            "models/scenery/misc/wall_clock/clockglass")
 
-    def test_non_glass_transparency_combinations_stay_generic(self) -> None:
-        assert not is_glass(
-            self._info(envmap=None, basetexture="models/scenery/theater/neta"),
-            "models/scenery/theater/neta")
-        assert not is_glass(self._info(shader="unlitgeneric"), "effects/glass_fleck")
-        assert not is_glass(self._info(additive=True), "models/light/glass")
-        assert not is_glass(self._info(decal=True), "glass/poster")
-        assert not is_glass(self._info(water=True), "glass/water")
-        assert not is_glass(
-            self._info(basetexture="models/scenery/theater/curtains"),
-            "models/scenery/theater/curtains")
+def test_world_and_prop_lit_reflective_glass_classify() -> None:
+    assert is_glass(_info(), "glass/pawnwndwglass")
+    assert is_glass(
+        _info(shader="vertexlitgeneric",
+                   basetexture="models/scenery/misc/wall_clock/clockglass"),
+        "models/scenery/misc/wall_clock/clockglass")
 
-    def test_derived_normal_is_deterministic_and_flat_outside_mask(self) -> None:
-        source = Image.new("RGBA", (7, 7), (80, 100, 120, 90))
-        for y in range(7):
-            for x in range(7):
-                source.putpixel((x, y), (60 + x * 20, 70 + y * 15, 100, 90))
-        mask = Image.new("L", (7, 7), 255)
-        for y in range(7):
-            mask.putpixel((3, y), 0)
-        first = derive_normal(source, mask)
-        second = derive_normal(source, mask)
-        assert first.tobytes() == second.tobytes()
-        assert first.getpixel((3, 3)) == (128, 128, 255)
-        assert first.getpixel((1, 3)) != (128, 128, 255)
 
-    def test_derived_normal_resamples_independently_sized_mask(self) -> None:
-        source = Image.new("RGBA", (8, 8), (0, 0, 0, 255))
-        for y in range(8):
-            for x in range(8):
-                value = x * 30
-                source.putpixel((x, y), (value, value, value, 255))
-        mask = Image.new("L", (2, 2), 0)
-        mask.putpixel((0, 0), 255)
-        mask.putpixel((0, 1), 255)
+def test_non_glass_transparency_combinations_stay_generic() -> None:
+    assert not is_glass(
+        _info(envmap=None, basetexture="models/scenery/theater/neta"),
+        "models/scenery/theater/neta")
+    assert not is_glass(_info(shader="unlitgeneric"), "effects/glass_fleck")
+    assert not is_glass(_info(additive=True), "models/light/glass")
+    assert not is_glass(_info(decal=True), "glass/poster")
+    assert not is_glass(_info(water=True), "glass/water")
+    assert not is_glass(
+        _info(basetexture="models/scenery/theater/curtains"),
+        "models/scenery/theater/curtains")
 
-        normal = derive_normal(source, mask, blur_radius=0.0)
 
-        assert normal.size == source.size
-        assert normal.getpixel((1, 3)) != (128, 128, 255)
-        assert normal.getpixel((6, 3)) == (128, 128, 255)
+def test_derived_normal_is_deterministic_and_flat_outside_mask() -> None:
+    source = Image.new("RGBA", (7, 7), (80, 100, 120, 90))
+    for y in range(7):
+        for x in range(7):
+            source.putpixel((x, y), (60 + x * 20, 70 + y * 15, 100, 90))
+    mask = Image.new("L", (7, 7), 255)
+    for y in range(7):
+        mask.putpixel((3, y), 0)
+    first = derive_normal(source, mask)
+    second = derive_normal(source, mask)
+    assert first.tobytes() == second.tobytes()
+    assert first.getpixel((3, 3)) == (128, 128, 255)
+    assert first.getpixel((1, 3)) != (128, 128, 255)
 
-    def test_uniform_glass_normal_is_neutral(self) -> None:
-        normal = derive_normal(Image.new("RGBA", (5, 5), (100, 120, 140, 80)))
-        assert set(normal.get_flattened_data()) == {(128, 128, 255)}
+
+def test_derived_normal_resamples_independently_sized_mask() -> None:
+    source = Image.new("RGBA", (8, 8), (0, 0, 0, 255))
+    for y in range(8):
+        for x in range(8):
+            value = x * 30
+            source.putpixel((x, y), (value, value, value, 255))
+    mask = Image.new("L", (2, 2), 0)
+    mask.putpixel((0, 0), 255)
+    mask.putpixel((0, 1), 255)
+
+    normal = derive_normal(source, mask, blur_radius=0.0)
+
+    assert normal.size == source.size
+    assert normal.getpixel((1, 3)) != (128, 128, 255)
+    assert normal.getpixel((6, 3)) == (128, 128, 255)
+
+
+def test_uniform_glass_normal_is_neutral() -> None:
+    normal = derive_normal(Image.new("RGBA", (5, 5), (100, 120, 140, 80)))
+    assert set(normal.get_flattened_data()) == {(128, 128, 255)}
 
 
 class BakeTextureImportContractTests(unittest.TestCase):

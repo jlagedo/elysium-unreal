@@ -222,109 +222,114 @@ class SequenceNumberTests(unittest.TestCase):
         assert report["rows_checked"] == 1
 
 
-class OwnershipTests(unittest.TestCase):
-    STEMS = {
-        "models/shared/misc.mdl": "shared_misc",
-        "models/shared/pc_idles.mdl": "shared_pc_idles",
-        "models/shared/fists.mdl": "shared_fists",
+STEMS = {
+    "models/shared/misc.mdl": "shared_misc",
+    "models/shared/pc_idles.mdl": "shared_pc_idles",
+    "models/shared/fists.mdl": "shared_fists",
+}
+
+
+def _witness(label: str, owners: dict[str, int], activity: str = "") -> dict:
+    return {
+        "label": label, "owners": Counter(owners),
+        "activity_names": Counter({activity: 1} if activity else {}),
+        "targets": Counter(), "activity_ids": Counter(), "sequences": Counter(),
     }
 
-    @staticmethod
-    def _witness(label: str, owners: dict[str, int], activity: str = "") -> dict:
-        return {
-            "label": label, "owners": Counter(owners),
-            "activity_names": Counter({activity: 1} if activity else {}),
-            "targets": Counter(), "activity_ids": Counter(), "sequences": Counter(),
-        }
 
-    def test_agreement_mismatch_absence_and_conflict_are_told_apart(self) -> None:
-        witnessed = {
-            "idle01": self._witness("idle01", {"models/shared/misc.mdl": 5}, "ACT_IDLE"),
-            "kick": self._witness("kick", {"models/shared/fists.mdl": 1}, "ACT_KICK"),
-            "gone": self._witness("gone", {"models/shared/fists.mdl": 1}),
-            "both": self._witness(
-                "both", {"models/shared/misc.mdl": 1, "models/shared/pc_idles.mdl": 1}
-            ),
-        }
-        exported = {
-            "idle01": [{"label": "idle01", "owner_stem": "shared_pc_idles",
-                        "activity_name": "ACT_IDLE"}],
-            "kick": [{"label": "kick", "owner_stem": "shared_fists",
-                      "activity_name": "ACT_KICK"}],
-        }
-        report = compare_ownership(witnessed, exported, self.STEMS)
-        assert report["agreed"] == 1
-        assert report["owner_mismatches"] == 1
-        assert report["examples"]["owner_mismatches"][0] == {"label": "idle01", "retail": "shared_misc", "export": ["shared_pc_idles"], "hits": 5}
-        assert report["absent_from_export"] == 1
-        assert report["retail_conflicts"] == 1
-
-    def test_a_same_owner_different_activity_is_its_own_count(self) -> None:
-        witnessed = {
-            "stealth": self._witness(
-                "stealth", {"models/shared/fists.mdl": 1}, "ACT_SNEAK_FISTS"
-            ),
-        }
-        exported = {
-            "stealth": [{"label": "stealth", "owner_stem": "shared_fists",
-                         "activity_name": "ACT_SNEAK_BAT"}],
-        }
-        report = compare_ownership(witnessed, exported, self.STEMS)
-        assert report["activity_mismatches"] == 1
-        assert report["agreed"] == 0
-
-    def test_the_right_owner_among_several_is_what_agrees(self) -> None:
-        """A label several banks declare agrees when ANY row is retail's own owner."""
-        witnessed = {
-            "stealth": self._witness(
-                "stealth", {"models/shared/fists.mdl": 1}, "ACT_SNEAK_FISTS"),
-        }
-        exported = {
-            "stealth": [
-                {"label": "stealth", "owner_stem": "shared_misc",
-                 "activity_name": "ACT_SNEAK_BAT"},
-                {"label": "stealth", "owner_stem": "shared_fists",
-                 "activity_name": "ACT_SNEAK_FISTS"},
-            ],
-        }
-        report = compare_ownership(witnessed, exported, self.STEMS)
-        assert report["agreed"] == 1
-        assert report["owner_mismatches"] == 0
-
-    def test_a_retail_owner_the_export_never_named_is_reported_not_failed(self) -> None:
-        witnessed = {"x": self._witness("x", {"models/weapons/w_null.mdl": 1})}
-        report = compare_ownership(witnessed, {}, self.STEMS)
-        assert report["retail_owners_without_export_stem"] == {"models/weapons/w_null.mdl": 1}
-        assert report["absent_from_export"] == 0
+def test_agreement_mismatch_absence_and_conflict_are_told_apart() -> None:
+    witnessed = {
+        "idle01": _witness("idle01", {"models/shared/misc.mdl": 5}, "ACT_IDLE"),
+        "kick": _witness("kick", {"models/shared/fists.mdl": 1}, "ACT_KICK"),
+        "gone": _witness("gone", {"models/shared/fists.mdl": 1}),
+        "both": _witness(
+            "both", {"models/shared/misc.mdl": 1, "models/shared/pc_idles.mdl": 1}
+        ),
+    }
+    exported = {
+        "idle01": [{"label": "idle01", "owner_stem": "shared_pc_idles",
+                    "activity_name": "ACT_IDLE"}],
+        "kick": [{"label": "kick", "owner_stem": "shared_fists",
+                  "activity_name": "ACT_KICK"}],
+    }
+    report = compare_ownership(witnessed, exported, STEMS)
+    assert report["agreed"] == 1
+    assert report["owner_mismatches"] == 1
+    assert report["examples"]["owner_mismatches"][0] == {"label": "idle01", "retail": "shared_misc", "export": ["shared_pc_idles"], "hits": 5}
+    assert report["absent_from_export"] == 1
+    assert report["retail_conflicts"] == 1
 
 
-class FlatSpaceTests(unittest.TestCase):
-    FLAT = _flat(
-        ("body.mdl", 0, "ragdoll", "ACT_DIERAGDOLL"),
-        ("pc_idles.mdl", 0, "idle01", "ACT_IDLE"),
-        ("baseball.mdl", 0, "stealth", "ACT_SNEAK_BAT"),
-        ("misc.mdl", 0, "Idle01", "ACT_IDLE"),
-        ("fists.mdl", 0, "stealth", "ACT_SNEAK_FISTS"),
-        ("fists.mdl", 1, "kick", "ACT_KICK"),
-    )
+def test_a_same_owner_different_activity_is_its_own_count() -> None:
+    witnessed = {
+        "stealth": _witness(
+            "stealth", {"models/shared/fists.mdl": 1}, "ACT_SNEAK_FISTS"
+        ),
+    }
+    exported = {
+        "stealth": [{"label": "stealth", "owner_stem": "shared_fists",
+                     "activity_name": "ACT_SNEAK_BAT"}],
+    }
+    report = compare_ownership(witnessed, exported, STEMS)
+    assert report["activity_mismatches"] == 1
+    assert report["agreed"] == 0
 
-    def test_first_occurrence_is_case_insensitive_and_keeps_the_first_spelling(self) -> None:
-        firsts = first_occurrence_owners(self.FLAT)
-        assert firsts["idle01"]["owner_model"] == model_key("pc_idles.mdl")
-        assert firsts["idle01"]["label"] == "idle01"
-        assert firsts["stealth"]["global_index"] == 2
 
-    def test_collisions_are_split_by_whether_the_copies_share_an_activity(self) -> None:
-        report = label_collisions(self.FLAT)
-        assert report["labels_repeated_across_banks"] == 2
-        assert report["same_activity"] == 1
-        assert report["different_activity"] == 1
-        assert report["examples"]["same_activity"][0]["label"] == "idle01"
-        assert report["examples"]["different_activity"][0]["activities"] == ["ACT_SNEAK_BAT", "ACT_SNEAK_FISTS"]
+def test_the_right_owner_among_several_is_what_agrees() -> None:
+    """A label several banks declare agrees when ANY row is retail's own owner."""
+    witnessed = {
+        "stealth": _witness(
+            "stealth", {"models/shared/fists.mdl": 1}, "ACT_SNEAK_FISTS"),
+    }
+    exported = {
+        "stealth": [
+            {"label": "stealth", "owner_stem": "shared_misc",
+             "activity_name": "ACT_SNEAK_BAT"},
+            {"label": "stealth", "owner_stem": "shared_fists",
+             "activity_name": "ACT_SNEAK_FISTS"},
+        ],
+    }
+    report = compare_ownership(witnessed, exported, STEMS)
+    assert report["agreed"] == 1
+    assert report["owner_mismatches"] == 0
 
-    def test_a_label_repeated_inside_one_bank_is_not_a_cross_bank_collision(self) -> None:
-        flat = _flat(("bank.mdl", 0, "x", "A"), ("bank.mdl", 1, "x", "B"))
-        assert label_collisions(flat)["labels_repeated_across_banks"] == 0
+
+def test_a_retail_owner_the_export_never_named_is_reported_not_failed() -> None:
+    witnessed = {"x": _witness("x", {"models/weapons/w_null.mdl": 1})}
+    report = compare_ownership(witnessed, {}, STEMS)
+    assert report["retail_owners_without_export_stem"] == {"models/weapons/w_null.mdl": 1}
+    assert report["absent_from_export"] == 0
+
+
+FLAT = _flat(
+    ("body.mdl", 0, "ragdoll", "ACT_DIERAGDOLL"),
+    ("pc_idles.mdl", 0, "idle01", "ACT_IDLE"),
+    ("baseball.mdl", 0, "stealth", "ACT_SNEAK_BAT"),
+    ("misc.mdl", 0, "Idle01", "ACT_IDLE"),
+    ("fists.mdl", 0, "stealth", "ACT_SNEAK_FISTS"),
+    ("fists.mdl", 1, "kick", "ACT_KICK"),
+)
+
+
+def test_first_occurrence_is_case_insensitive_and_keeps_the_first_spelling() -> None:
+    firsts = first_occurrence_owners(FLAT)
+    assert firsts["idle01"]["owner_model"] == model_key("pc_idles.mdl")
+    assert firsts["idle01"]["label"] == "idle01"
+    assert firsts["stealth"]["global_index"] == 2
+
+
+def test_collisions_are_split_by_whether_the_copies_share_an_activity() -> None:
+    report = label_collisions(FLAT)
+    assert report["labels_repeated_across_banks"] == 2
+    assert report["same_activity"] == 1
+    assert report["different_activity"] == 1
+    assert report["examples"]["same_activity"][0]["label"] == "idle01"
+    assert report["examples"]["different_activity"][0]["activities"] == ["ACT_SNEAK_BAT", "ACT_SNEAK_FISTS"]
+
+
+def test_a_label_repeated_inside_one_bank_is_not_a_cross_bank_collision() -> None:
+    flat = _flat(("bank.mdl", 0, "x", "A"), ("bank.mdl", 1, "x", "B"))
+    assert label_collisions(flat)["labels_repeated_across_banks"] == 0
 
 
 def test_bodies_and_banks_map_by_normalised_model() -> None:
@@ -358,43 +363,48 @@ class _FakeLibrary:
         return self._banks.get(analyzer.BankLibrary.key_for(name)) if name else None
 
 
-class AnalyzerLiveMapTests(unittest.TestCase):
-    """`analyze_rig_resolution.sequence_map` completes an unlabelled live row off the install."""
+# AnalyzerLiveMapTests
+# `analyze_rig_resolution.sequence_map` completes an unlabelled live row off the install.
 
-    def _write(self, directory: str, rows: list[str]) -> None:
-        header = "body_model,global_index,owner_model,owner_index,depth,label,activity_name,resolved\n"
-        with open(os.path.join(directory, "sequence_map.csv"), "w", encoding="utf-8") as stream:
-            stream.write(header + "".join(row + "\n" for row in rows))
+def _write(directory: str, rows: list[str]) -> None:
+    header = "body_model,global_index,owner_model,owner_index,depth,label,activity_name,resolved\n"
+    with open(os.path.join(directory, "sequence_map.csv"), "w", encoding="utf-8") as stream:
+        stream.write(header + "".join(row + "\n" for row in rows))
 
-    def test_an_unlabelled_row_is_completed_and_marked(self) -> None:
-        from pathlib import Path
 
-        with tempfile.TemporaryDirectory() as directory:
-            self._write(directory, [
-                "pc/body.mdl,0,pc/body.mdl,0,0,ragdoll,ACT_DIERAGDOLL,True",
-                "pc/body.mdl,1,shared/bank.mdl,3,2,,,False",
-                "pc/body.mdl,2,shared/missing.mdl,0,2,,,False",
-            ])
-            library = _FakeLibrary({
-                analyzer.BankLibrary.key_for("shared/bank.mdl"): _FakeBank(
-                    ["a", "b", "c", "walk"], ["", "", "", "ACT_WALK"]
-                ),
-            })
-            table = analyzer.sequence_map(Path(directory), library)
-        body = analyzer.BankLibrary.key_for("pc/body.mdl")
-        assert table[(body, 0)]["label"] == "ragdoll"
-        assert table[(body, 1)]["label"] == "walk"
-        assert table[(body, 1)]["activity_name"] == "ACT_WALK"
-        assert table[(body, 1)]["resolved"] == "install"
-        assert (body, 2) not in table
+def test_an_unlabelled_row_is_completed_and_marked() -> None:
+    from pathlib import Path
 
-    def test_without_a_library_unlabelled_rows_are_still_dropped(self) -> None:
-        from pathlib import Path
+    with tempfile.TemporaryDirectory() as directory:
+        _write(directory, [
+            "pc/body.mdl,0,pc/body.mdl,0,0,ragdoll,ACT_DIERAGDOLL,True",
+            "pc/body.mdl,1,shared/bank.mdl,3,2,,,False",
+            "pc/body.mdl,2,shared/missing.mdl,0,2,,,False",
+        ])
+        library = _FakeLibrary({
+            analyzer.BankLibrary.key_for("shared/bank.mdl"): _FakeBank(
+                ["a", "b", "c", "walk"], ["", "", "", "ACT_WALK"]
+            ),
+        })
+        table = analyzer.sequence_map(Path(directory), library)
+    body = analyzer.BankLibrary.key_for("pc/body.mdl")
+    assert table[(body, 0)]["label"] == "ragdoll"
+    assert table[(body, 1)]["label"] == "walk"
+    assert table[(body, 1)]["activity_name"] == "ACT_WALK"
+    assert table[(body, 1)]["resolved"] == "install"
+    assert (body, 2) not in table
 
-        with tempfile.TemporaryDirectory() as directory:
-            self._write(directory, ["pc/body.mdl,1,shared/bank.mdl,3,2,,,False"])
-            assert analyzer.sequence_map(Path(directory)) == {}
 
+def test_without_a_library_unlabelled_rows_are_still_dropped() -> None:
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as directory:
+        _write(directory, ["pc/body.mdl,1,shared/bank.mdl,3,2,,,False"])
+        assert analyzer.sequence_map(Path(directory)) == {}
+
+
+# AnalyzerChainFallbackTests
+# A selection whose body is known never borrows another body's chain.
 
 def test_head_only_key_is_used_only_when_the_body_is_unknown() -> None:
     ownership = [

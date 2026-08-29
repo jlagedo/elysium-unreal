@@ -88,24 +88,27 @@ def test_a_cube_declares_every_face_and_complexity() -> None:
     assert field(header, 112) & dds.DDSCAPS2_CUBEMAP
 
 
-class Bc1AlphaTests(unittest.TestCase):
-    """BC1 carries punch-through alpha in the mode where color0 <= color1."""
+# Bc1AlphaTests
+# BC1 carries punch-through alpha in the mode where color0 <= color1.
 
-    @staticmethod
-    def block(color0: int, color1: int) -> bytes:
-        return struct.pack("<HH", color0, color1) + b"\x00" * 4
+def block(color0: int, color1: int) -> bytes:
+    return struct.pack("<HH", color0, color1) + b"\x00" * 4
 
-    def test_four_colour_blocks_are_reported_opaque(self) -> None:
-        payload = self.block(0xF800, 0x0001) + self.block(0x07E0, 0x0002)
-        assert dds.bc1_blocks_are_opaque(payload)
 
-    def test_a_single_punch_through_block_makes_the_surface_transparent(self) -> None:
-        payload = self.block(0xF800, 0x0001) + self.block(0x0001, 0xF800)
-        assert not dds.bc1_blocks_are_opaque(payload)
+def test_four_colour_blocks_are_reported_opaque() -> None:
+    payload = block(0xF800, 0x0001) + block(0x07E0, 0x0002)
+    assert dds.bc1_blocks_are_opaque(payload)
 
-    def test_equal_endpoints_select_the_punch_through_mode(self) -> None:
-        # The test is color0 > color1, so equality is the transparent branch.
-        assert not dds.bc1_blocks_are_opaque(self.block(0x1234, 0x1234))
 
-    def test_an_empty_surface_is_vacuously_opaque(self) -> None:
-        assert dds.bc1_blocks_are_opaque(b"")
+def test_a_single_punch_through_block_makes_the_surface_transparent() -> None:
+    payload = block(0xF800, 0x0001) + block(0x0001, 0xF800)
+    assert not dds.bc1_blocks_are_opaque(payload)
+
+
+def test_equal_endpoints_select_the_punch_through_mode() -> None:
+    # The test is color0 > color1, so equality is the transparent branch.
+    assert not dds.bc1_blocks_are_opaque(block(0x1234, 0x1234))
+
+
+def test_an_empty_surface_is_vacuously_opaque() -> None:
+    assert dds.bc1_blocks_are_opaque(b"")

@@ -33,103 +33,111 @@ def test_an_absent_directory_is_an_empty_census_rather_than_an_error() -> None:
         assert bank_containers_present(npc_dir) == set()
 
 
-class AnswerableOwnerTests(unittest.TestCase):
-    CONTAINERS = {"fists", "katana"}
-
-    def test_a_bank_with_a_container_answers_and_one_without_does_not(self) -> None:
-        assert answerable_owner("body", "fists", self.CONTAINERS, True)
-        assert not answerable_owner("body", "pc_br", self.CONTAINERS, True)
-
-    def test_a_body_always_answers_its_own_clips(self) -> None:
-        # The body's own container is a different file and a different stage's failure; a body
-        # missing from the bank census is not a body that cannot play its own dialogue.
-        assert answerable_owner("body", "body", self.CONTAINERS, True)
-        assert answerable_owner("body", "body", set(), False)
-
-    def test_no_census_admits_every_owner(self) -> None:
-        """The container stage not having run is an ordering fact, not a coverage failure.
-
-        Filtering against an empty census would drop every shared clip in the cast, which is
-        the whole vocabulary of every body.
-        """
-        assert answerable_owner("body", "pc_br", set(), False)
+CONTAINERS = {"fists", "katana"}
 
 
-class UnreferencedBankTests(unittest.TestCase):
-    CINEMATICS: dict = {}
+def test_a_bank_with_a_container_answers_and_one_without_does_not() -> None:
+    assert answerable_owner("body", "fists", CONTAINERS, True)
+    assert not answerable_owner("body", "pc_br", CONTAINERS, True)
 
-    @staticmethod
-    def _body(clips):
-        return {"clips": clips}
 
-    def test_a_container_backed_bank_nobody_names_is_orphaned(self) -> None:
-        """The defect this census exists to catch: work the bake did for no reader."""
-        orphaned, containerless = unreferenced_banks(
-            {"fists": {}, "katana": {}},
-            {"body": self._body({"jab": ["fists"]})},
-            self.CINEMATICS,
-            {"fists", "katana"},
-            True,
-        )
-        assert orphaned == ["katana"]
-        assert containerless == []
+def test_a_body_always_answers_its_own_clips() -> None:
+    # The body's own container is a different file and a different stage's failure; a body
+    # missing from the bank census is not a body that cannot play its own dialogue.
+    assert answerable_owner("body", "body", CONTAINERS, True)
+    assert answerable_owner("body", "body", set(), False)
 
-    def test_a_containerless_bank_nobody_names_is_the_filter_working(self) -> None:
-        orphaned, containerless = unreferenced_banks(
-            {"fists": {}, "pc_br": {}},
-            {"body": self._body({"jab": ["fists"]})},
-            self.CINEMATICS,
-            {"fists"},
-            True,
-        )
-        assert orphaned == []
-        assert containerless == ["pc_br"]
 
-    def test_a_bank_named_by_any_body_is_referenced(self) -> None:
-        orphaned, containerless = unreferenced_banks(
-            {"fists": {}},
-            {"a": self._body({"jab": ["fists"]}), "b": self._body({})},
-            self.CINEMATICS,
-            {"fists"},
-            True,
-        )
-        assert (orphaned, containerless) == ([], [])
+def test_no_census_admits_every_owner() -> None:
+    """The container stage not having run is an ordering fact, not a coverage failure.
 
-    def test_a_non_first_owner_still_counts_as_a_reference(self) -> None:
-        """A label several banks declare names every one of them, not just the first."""
-        orphaned, containerless = unreferenced_banks(
-            {"baseball": {}, "fists": {}},
-            {"body": self._body({"stealth": ["baseball", "fists"]})},
-            self.CINEMATICS,
-            {"baseball", "fists"},
-            True,
-        )
-        assert (orphaned, containerless) == ([], [])
+    Filtering against an empty census would drop every shared clip in the cast, which is
+    the whole vocabulary of every body.
+    """
+    assert answerable_owner("body", "pc_br", set(), False)
 
-    def test_a_pre_multi_owner_record_reads_as_a_single_reference(self) -> None:
-        orphaned, _ = unreferenced_banks(
-            {"fists": {}},
-            {"body": self._body({"jab": "fists"})},
-            self.CINEMATICS,
-            {"fists"},
-            True,
-        )
-        assert orphaned == []
 
-    def test_a_cinematic_root_bank_is_referenced_by_its_scene(self) -> None:
-        """No body's clip map names a cinematic bank; the scene's root list is its only reader."""
-        orphaned, _ = unreferenced_banks(
-            {"scene_bip01": {}},
-            {"body": self._body({})},
-            {"scene": {"stem": "scene", "roots": [{"root": "Bip01", "bank": "scene_bip01"}]}},
-            {"scene_bip01"},
-            True,
-        )
-        assert orphaned == []
+CINEMATICS: dict = {}
 
-    def test_without_a_census_an_unreferenced_bank_is_reported_as_orphaned(self) -> None:
-        """Cannot-tell resolves toward the loud answer: an unread bank is still a defect."""
-        orphaned, containerless = unreferenced_banks(
-            {"fists": {}}, {"body": self._body({})}, self.CINEMATICS, set(), False)
-        assert orphaned == ["fists"]
-        assert containerless == []
+
+def _body(clips):
+    return {"clips": clips}
+
+
+def test_a_container_backed_bank_nobody_names_is_orphaned() -> None:
+    """The defect this census exists to catch: work the bake did for no reader."""
+    orphaned, containerless = unreferenced_banks(
+        {"fists": {}, "katana": {}},
+        {"body": _body({"jab": ["fists"]})},
+        CINEMATICS,
+        {"fists", "katana"},
+        True,
+    )
+    assert orphaned == ["katana"]
+    assert containerless == []
+
+
+def test_a_containerless_bank_nobody_names_is_the_filter_working() -> None:
+    orphaned, containerless = unreferenced_banks(
+        {"fists": {}, "pc_br": {}},
+        {"body": _body({"jab": ["fists"]})},
+        CINEMATICS,
+        {"fists"},
+        True,
+    )
+    assert orphaned == []
+    assert containerless == ["pc_br"]
+
+
+def test_a_bank_named_by_any_body_is_referenced() -> None:
+    orphaned, containerless = unreferenced_banks(
+        {"fists": {}},
+        {"a": _body({"jab": ["fists"]}), "b": _body({})},
+        CINEMATICS,
+        {"fists"},
+        True,
+    )
+    assert (orphaned, containerless) == ([], [])
+
+
+def test_a_non_first_owner_still_counts_as_a_reference() -> None:
+    """A label several banks declare names every one of them, not just the first."""
+    orphaned, containerless = unreferenced_banks(
+        {"baseball": {}, "fists": {}},
+        {"body": _body({"stealth": ["baseball", "fists"]})},
+        CINEMATICS,
+        {"baseball", "fists"},
+        True,
+    )
+    assert (orphaned, containerless) == ([], [])
+
+
+def test_a_pre_multi_owner_record_reads_as_a_single_reference() -> None:
+    orphaned, _ = unreferenced_banks(
+        {"fists": {}},
+        {"body": _body({"jab": "fists"})},
+        CINEMATICS,
+        {"fists"},
+        True,
+    )
+    assert orphaned == []
+
+
+def test_a_cinematic_root_bank_is_referenced_by_its_scene() -> None:
+    """No body's clip map names a cinematic bank; the scene's root list is its only reader."""
+    orphaned, _ = unreferenced_banks(
+        {"scene_bip01": {}},
+        {"body": _body({})},
+        {"scene": {"stem": "scene", "roots": [{"root": "Bip01", "bank": "scene_bip01"}]}},
+        {"scene_bip01"},
+        True,
+    )
+    assert orphaned == []
+
+
+def test_without_a_census_an_unreferenced_bank_is_reported_as_orphaned() -> None:
+    """Cannot-tell resolves toward the loud answer: an unread bank is still a defect."""
+    orphaned, containerless = unreferenced_banks(
+        {"fists": {}}, {"body": _body({})}, CINEMATICS, set(), False)
+    assert orphaned == ["fists"]
+    assert containerless == []

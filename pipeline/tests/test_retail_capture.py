@@ -688,316 +688,330 @@ POSE_PARAMETERS = (
     ("aim_pitch", 0, -45.0, 45.0, 0.0),
 )
 
-class BlendGridTests(unittest.TestCase):
-    """CAP5.3: the blend grid the exporter carries out beside the clips.
+# ProceduralRuleExportTests
+# CAP7.1: the `ProcType == 1` rule table the model exporter carries out.
+#
+# A rule's six entries and its axis index are Source quantities and the export's
+# change of basis conjugates a bone local, so the table is checked in both
+# directions: back into VtMB's basis against the bytes it was read from, and
+# forward against the transcription of the rule this module already holds. A
+# table that named the wrong axis after conversion passes neither.
 
-    `local_sequences` used to bake cell `[0][0]` and read nothing else, so a
-    9x1 walk grid shipped as one clip out of nine and the fields naming the
-    other eight went unread. What is checked here is the decode — extents, the
-    pose-parameter binding, and the cell address that retail's own witnessed
-    cells fix — and the export that turns every cell into a clip without
-    blending any of them.
+def _image(grids, *, labels=("walk", "aim", "idle", "turn"), **kwargs):
+    return model_image(
+        TRANSFORM_CHECKSUM,
+        TRANSFORM_MODEL,
+        labels=labels,
+        grids=grids,
+        pose_parameters=POSE_PARAMETERS,
+        **kwargs,
+    )
+
+
+def _sequences(image):
+    from elysium_pipeline.formats import mdl_skel
+
+    return {seq.label: seq for seq in mdl_skel.local_sequences(image)}
+
+
+def _with_movements(image, animation, records):
+    """Append real 44-byte movement records and point one animdesc at them."""
+    data = bytearray(image)
+    descriptor = CONTRIBUTION_ANIM_INDEX_OFF + animation * ANIM_DESC_STRIDE
+    movement = len(data)
+    struct.pack_into("<ii", data, descriptor + 16, len(records), movement - descriptor)
+    for record in records:
+        data += struct.pack("<ii9f", *record)
+    return bytes(data)
+
+
+def test_movement_records_decode_and_report_source_ground_speed() -> None:
+    """The record layout and Source's distance/duration ground-speed calculation."""
+    from elysium_pipeline.formats import mdl_skel
+
+    records = (
+        (2, 0x10C0, 2.0, 3.0, 0.0, 1.0, 0.0, 0.0, 5.0, 1.0, 0.0),
+        (3, 0x10C0, 3.0, 4.0, 0.0, 1.0, 0.0, 0.0, 12.0, 0.0, 0.0),
+    )
+    image = _with_movements(_image({0: NINE_BY_ONE}), 4, records)
+    _name, descriptor, frames, fps = mdl_skel.local_animation(image, 4)
+    decoded = mdl_skel.read_movements(image, descriptor)
+    assert len(decoded) == 2
+    assert decoded[0].endframe == 2
+    assert decoded[0].motionflags == 0x10C0
+    assert decoded[0].vector == (1.0, 0.0, 0.0)
+    assert decoded[-1].position == (12.0, 0.0, 0.0)
+
+    summary = mdl_skel.movement_summary(image, descriptor, frames, fps)
+    assert summary is not None
+    assert summary.cycle_seconds == pytest.approx(0.1, abs=1e-6)
+    assert summary.ground_distance_cm == pytest.approx(30.48, abs=1e-5)
+    assert summary.ground_speed_cm_s == pytest.approx(304.8, abs=1e-4)
+
+
+def test_absent_or_malformed_movement_keeps_the_fallback() -> None:
+    """A damaged optional array never reads beyond the image or invents a speed."""
+    from elysium_pipeline.formats import mdl_skel
+
+    image = _image({0: NINE_BY_ONE})
+    _name, descriptor, frames, fps = mdl_skel.local_animation(image, 4)
+    assert mdl_skel.read_movements(image, descriptor) == ()
+    assert mdl_skel.movement_summary(image, descriptor, frames, fps) is None
+
+    malformed = bytearray(image)
+    struct.pack_into("<ii", malformed, descriptor + 16, 2, len(malformed) - descriptor - 10)
+    assert mdl_skel.read_movements(malformed, descriptor) == ()
+    assert mdl_skel.movement_summary(malformed, descriptor, frames, fps) is None
+
+
+def test_a_resolved_cell_exports_its_motion_summary() -> None:
+    """The neutral walk cell carries the scalar its Unreal motor consumes."""
+    from elysium_pipeline.formats import mdl_gltf, mdl_skel
+
+    records = (
+        (3, 0x10C0, 3.0, 4.0, 0.0, 1.0, 0.0, 0.0, 12.0, 0.0, 0.0),
+    )
+    image = _with_movements(_image({0: NINE_BY_ONE}), 4, records)
+    _extra, blends = mdl_skel.blend_clip_plan(image, mdl_skel.local_sequences(image))
+    forward = next(cell for cell in blends["walk"]["cells"] if cell["axis"] == [4, 0])
+    assert forward["clip"] == "aim#4"
+    assert (forward["motion"] == {
+            "cycle_seconds": 0.1,
+            "ground_distance_cm": 30.48,
+            "ground_speed_cm_s": 304.8,
+        })
+    assert "motion" not in blends["walk"]["cells"][0]
+
+
+def test_a_single_cell_sequence_carries_its_movement_records() -> None:
+    """The melee case: every attack is one cell, and the lunge is only in this array."""
+    from elysium_pipeline.formats import mdl_skel
+
+    records = (
+        (2, 0x1040, 2.0, 4.0, 0.0, 1.0, 0.0, 0.0, 3.0, 0.0, 0.0),
+        (4, 0x1040, 6.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+    )
+    # No grid at all, so all four sequences are the single cell a blend-cell walk never
+    # reaches; `aim` alone selects the animation carrying the records.
+    image = _with_movements(
+        _image({}, base_cells=(0, 4, 0, 0)), 4, records)
+    sequences = _sequences(image)
+    assert len(sequences["aim"].grid.cells) == 1
+    assert len(sequences["aim"].movement) == 2
+    assert sequences["aim"].movement[0].endframe == 2
+    # Asked and empty is the other answer, and it is not the same as never asked.
+    assert sequences["idle"].movement == ()
+
+    extra, blends = mdl_skel.blend_clip_plan(image, list(sequences.values()))
+    assert (extra, blends) == ([], {})
+    sidecar = mdl_skel.blend_sidecar(image, blends, list(sequences.values()))
+    assert (sidecar["movement_fields"] == ["end_frame", "flags", "v0_cm", "v1_cm", "yaw_deg",
+                      "dir_x", "dir_y", "dir_z", "pos_x_cm", "pos_y_cm", "pos_z_cm"])
+    assert sorted(sidecar["movement"]) == ["aim"]
+    # The path is piecewise and the cumulative position returns to zero: a scalar summary
+    # would call this "no movement" while the file states a real displacement out and back.
+    assert (sidecar["movement"]["aim"] == [[2, 0x1040, 5.08, 10.16, 0.0, 1.0, 0.0, 0.0, 7.62, 0.0, 0.0],
+                      [4, 0x1040, 15.24, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
+    assert (mdl_skel.movement_summary(
+        image, sequences["aim"].base, sequences["aim"].frames, sequences["aim"].fps) is None)
+
+
+def test_movement_rows_are_stated_unreal_native() -> None:
+    """The sidecar states the path in centimetres on Unreal axes, converted exactly once."""
+    from elysium_pipeline.formats import mdl_skel
+
+    # A record with a real Y and Z: 8,169 of the 13,505 shipped records state a non-zero Y,
+    # so the reflection is observable rather than a formality.
+    records = ((3, 0x11C0, 4.0, 6.0, 90.0, 0.0, -1.0, 0.0, 0.0, -10.0, 2.0),)
+    image = _with_movements(
+        _image({}, base_cells=(0, 4, 0, 0)), 4, records)
+    sequences = _sequences(image)
+    row, = mdl_skel.blend_sidecar(image, {}, list(sequences.values()))["movement"]["aim"]
+    assert row == [3, 0x11C0, 10.16, 15.24, -90.0, 0.0, 1.0, 0.0, 0.0, 25.4, 5.08]
+    # The reflection turns a zero component into `-0.0`; an axis-aligned path reads as one.
+    assert not any(math.copysign(1.0, value) < 0.0 for value in row if value == 0.0)
+
+
+def test_a_model_whose_sequences_state_no_movement_says_so() -> None:
+    """Asked-and-empty ships the column list and no rows, which is not silence."""
+    from elysium_pipeline.formats import mdl_skel
+
+    image = _image({})
+    sequences = list(_sequences(image).values())
+    assert all(clip.movement == () for clip in sequences)
+    table = mdl_skel.movement_table(sequences)
+    assert "movement_fields" in table
+    assert "movement" not in table
+    # Nothing else is authored either, so there is no sidecar to carry the column list.
+    assert mdl_skel.blend_sidecar(image, {}, sequences) == {}
+
+
+def test_a_nine_by_one_grid_reads_its_extents_binding_and_every_cell() -> None:
+    """The shape the theatre corpus fires throughout, read end to end."""
+    sequences = _sequences(_image({0: NINE_BY_ONE}))
+    grid = sequences["walk"].grid
+    assert grid.numblends == 9
+    assert grid.groupsize == (9, 1)
+    assert grid.paramindex == (0, -1)
+    assert grid.paramstart == (-180.0, 0.0)
+    assert grid.paramend == (180.0, 0.0)
+    assert ([(cell.axis0, cell.axis1, cell.anim) for cell in grid.cells] == [(0, 0, 0), (1, 0, 1), (2, 0, 2), (3, 0, 3), (4, 0, 4),
+         (5, 0, 5), (6, 0, 6), (7, 0, 2), (8, 0, 0)])
+    # The clip the sequence still bakes is the base cell's, unchanged.
+    assert (sequences["walk"].base == grid.cells[0].anim * ANIM_DESC_STRIDE
+                     + CONTRIBUTION_ANIM_INDEX_OFF)
+
+
+def test_a_three_by_three_grid_takes_axis_zero_down_the_row_stride() -> None:
+    """The cell address, in the orientation retail's own witness fixes.
+
+    A capture of `smith_aim_layer` records the cell `[1, 0]` decoding the
+    four animations at rows 1-2 and columns 0-1 of the inline array. So axis
+    0 takes the fixed 16-short row stride and axis 1 the column, and the
+    transposed address would name six of these nine cells wrongly.
     """
+    grid = _sequences(_image({1: THREE_BY_THREE}))["aim"].grid
+    assert grid.groupsize == (3, 3)
+    assert grid.paramindex == (2, 3)
+    assert {(cell.axis0, cell.axis1): cell.anim for cell in grid.cells} == THREE_BY_THREE.cells
 
-    def _image(self, grids, *, labels=("walk", "aim", "idle", "turn"), **kwargs):
-        return model_image(
-            TRANSFORM_CHECKSUM,
-            TRANSFORM_MODEL,
-            labels=labels,
-            grids=grids,
-            pose_parameters=POSE_PARAMETERS,
-            **kwargs,
-        )
 
-    def _sequences(self, image):
-        from elysium_pipeline.formats import mdl_skel
+def test_a_single_cell_sequence_reads_a_one_by_one_grid() -> None:
+    """The 913-of-1,166 case: a sequence that is a clip and nothing more."""
+    grid = _sequences(_image({}))["walk"].grid
+    assert grid.numblends == 1
+    assert grid.groupsize == (1, 1)
+    assert grid.paramindex == (-1, -1)
+    assert len(grid.cells) == 1
+    assert (grid.cells[0].axis0, grid.cells[0].axis1) == (0, 0)
 
-        return {seq.label: seq for seq in mdl_skel.local_sequences(image)}
 
-    def _with_movements(self, image, animation, records):
-        """Append real 44-byte movement records and point one animdesc at them."""
-        data = bytearray(image)
-        descriptor = CONTRIBUTION_ANIM_INDEX_OFF + animation * ANIM_DESC_STRIDE
-        movement = len(data)
-        struct.pack_into("<ii", data, descriptor + 16, len(records), movement - descriptor)
-        for record in records:
-            data += struct.pack("<ii9f", *record)
-        return bytes(data)
+def test_extents_disagreeing_with_numblends_fall_back_to_the_base_cell() -> None:
+    """`groupsize[0] * groupsize[1] == numblends` holds on all 294 authored
+    multi-blend sequences, so a descriptor where it does not is one this
+    format does not explain — and it yields the clip it always did rather
+    than a grid of whatever the inline array happens to hold."""
+    broken = Grid((9, 1), {(0, 0): 3, (1, 0): 1}, numblends=5)
+    grid = _sequences(_image({0: broken}))["walk"].grid
+    assert grid.numblends == 5
+    assert grid.groupsize == (9, 1)
+    assert [cell.anim for cell in grid.cells] == [3]
 
-    def test_movement_records_decode_and_report_source_ground_speed(self) -> None:
-        """The record layout and Source's distance/duration ground-speed calculation."""
-        from elysium_pipeline.formats import mdl_skel
 
-        records = (
-            (2, 0x10C0, 2.0, 3.0, 0.0, 1.0, 0.0, 0.0, 5.0, 1.0, 0.0),
-            (3, 0x10C0, 3.0, 4.0, 0.0, 1.0, 0.0, 0.0, 12.0, 0.0, 0.0),
-        )
-        image = self._with_movements(self._image({0: NINE_BY_ONE}), 4, records)
-        _name, descriptor, frames, fps = mdl_skel.local_animation(image, 4)
-        decoded = mdl_skel.read_movements(image, descriptor)
-        assert len(decoded) == 2
-        assert decoded[0].endframe == 2
-        assert decoded[0].motionflags == 0x10C0
-        assert decoded[0].vector == (1.0, 0.0, 0.0)
-        assert decoded[-1].position == (12.0, 0.0, 0.0)
+def test_the_pose_parameters_a_grid_axis_binds_to_are_read() -> None:
+    """A `paramindex` is an index into this model's own array, so the axis
+    cannot be wrapped or normalized without the record it names."""
+    from elysium_pipeline.formats import mdl_skel
 
-        summary = mdl_skel.movement_summary(image, descriptor, frames, fps)
-        assert summary is not None
-        assert summary.cycle_seconds == pytest.approx(0.1, abs=1e-6)
-        assert summary.ground_distance_cm == pytest.approx(30.48, abs=1e-5)
-        assert summary.ground_speed_cm_s == pytest.approx(304.8, abs=1e-4)
+    parameters = mdl_skel.pose_parameters(_image({0: NINE_BY_ONE}))
+    assert ([(p.index, p.name, p.flags, p.start, p.end, p.loop) for p in parameters] == [(index, name, flags, start, end, loop)
+         for index, (name, flags, start, end, loop) in enumerate(POSE_PARAMETERS)])
+    grid = _sequences(_image({0: NINE_BY_ONE}))["walk"].grid
+    assert parameters[grid.paramindex[0]].name == "move_yaw"
+    assert parameters[grid.paramindex[0]].loop == 360.0
 
-    def test_absent_or_malformed_movement_keeps_the_fallback(self) -> None:
-        """A damaged optional array never reads beyond the image or invents a speed."""
-        from elysium_pipeline.formats import mdl_skel
 
-        image = self._image({0: NINE_BY_ONE})
-        _name, descriptor, frames, fps = mdl_skel.local_animation(image, 4)
-        assert mdl_skel.read_movements(image, descriptor) == ()
-        assert mdl_skel.movement_summary(image, descriptor, frames, fps) is None
+def test_every_cell_becomes_its_own_clip_and_none_of_them_are_blended() -> None:
+    """The export shortfall CAP4.1 measured, closed.
 
-        malformed = bytearray(image)
-        struct.pack_into("<ii", malformed, descriptor + 16, 2, len(malformed) - descriptor - 10)
-        assert mdl_skel.read_movements(malformed, descriptor) == ()
-        assert mdl_skel.movement_summary(malformed, descriptor, frames, fps) is None
+    Ten fired cells over 6,878 records had no exported counterpart because
+    the base cell was the only clip. Every cell now names one, keyed by the
+    animation's own name, and the grid ships beside them rather than being
+    mixed into them — evaluate-then-blend is the host's job.
+    """
+    from elysium_pipeline.formats import mdl_gltf, mdl_skel
 
-    def test_a_resolved_cell_exports_its_motion_summary(self) -> None:
-        """The neutral walk cell carries the scalar its Unreal motor consumes."""
-        from elysium_pipeline.formats import mdl_gltf, mdl_skel
+    image = _image({0: NINE_BY_ONE, 1: THREE_BY_THREE})
+    sequences = mdl_skel.local_sequences(image)
+    extra, blends = mdl_skel.blend_clip_plan(image, sequences)
 
-        records = (
-            (3, 0x10C0, 3.0, 4.0, 0.0, 1.0, 0.0, 0.0, 12.0, 0.0, 0.0),
-        )
-        image = self._with_movements(self._image({0: NINE_BY_ONE}), 4, records)
-        _extra, blends = mdl_skel.blend_clip_plan(image, mdl_skel.local_sequences(image))
-        forward = next(cell for cell in blends["walk"]["cells"] if cell["axis"] == [4, 0])
-        assert forward["clip"] == "aim#4"
-        assert (forward["motion"] == {
-                "cycle_seconds": 0.1,
-                "ground_distance_cm": 30.48,
-                "ground_speed_cm_s": 304.8,
-            })
-        assert "motion" not in blends["walk"]["cells"][0]
+    # One extra clip per distinct animation the two grids reach that the
+    # base-cell bake does not: animations 1-6 over the two of them, each
+    # named by the animation's own name. `idle`, `aim` and `turn` are also
+    # sequence labels in this fixture, so those three take the index
+    # disambiguation and the rest read as the animation the content named.
+    assert sorted(clip.label for clip in extra) == ["aim#4", "dead", "idle#2", "run", "skip", "turn#5"]
+    assert len({clip.base for clip in extra}) == len(extra)
 
-    def test_a_single_cell_sequence_carries_its_movement_records(self) -> None:
-        """The melee case: every attack is one cell, and the lunge is only in this array."""
-        from elysium_pipeline.formats import mdl_skel
+    walk = blends["walk"]
+    assert walk["groupsize"] == [9, 1]
+    assert walk["paramindex"] == [0, -1]
+    assert ([cell["clip"] for cell in walk["cells"]] == ["walk", "run", "idle#2", "dead", "aim#4", "turn#5", "skip", "idle#2",
+         "walk"])
+    assert [cell["axis"] for cell in blends["aim"]["cells"]] == [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]]
+    # Nothing in the plan carries a blended clip: every cell names a clip
+    # that decodes one animation of the model, and the weights that mix them
+    # are absent because they are not the exporter's to apply.
+    bases = {clip.label: clip.base for clip in (*sequences, *extra)}
+    for grid in blends.values():
+        for cell in grid["cells"]:
+            assert cell["clip"] in bases
 
-        records = (
-            (2, 0x1040, 2.0, 4.0, 0.0, 1.0, 0.0, 0.0, 3.0, 0.0, 0.0),
-            (4, 0x1040, 6.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0),
-        )
-        # No grid at all, so all four sequences are the single cell a blend-cell walk never
-        # reaches; `aim` alone selects the animation carrying the records.
-        image = self._with_movements(
-            self._image({}, base_cells=(0, 4, 0, 0)), 4, records)
-        sequences = self._sequences(image)
-        assert len(sequences["aim"].grid.cells) == 1
-        assert len(sequences["aim"].movement) == 2
-        assert sequences["aim"].movement[0].endframe == 2
-        # Asked and empty is the other answer, and it is not the same as never asked.
-        assert sequences["idle"].movement == ()
 
-        extra, blends = mdl_skel.blend_clip_plan(image, list(sequences.values()))
-        assert (extra, blends) == ([], {})
-        sidecar = mdl_skel.blend_sidecar(image, blends, list(sequences.values()))
-        assert (sidecar["movement_fields"] == ["end_frame", "flags", "v0_cm", "v1_cm", "yaw_deg",
-                          "dir_x", "dir_y", "dir_z", "pos_x_cm", "pos_y_cm", "pos_z_cm"])
-        assert sorted(sidecar["movement"]) == ["aim"]
-        # The path is piecewise and the cumulative position returns to zero: a scalar summary
-        # would call this "no movement" while the file states a real displacement out and back.
-        assert (sidecar["movement"]["aim"] == [[2, 0x1040, 5.08, 10.16, 0.0, 1.0, 0.0, 0.0, 7.62, 0.0, 0.0],
-                          [4, 0x1040, 15.24, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
-        assert (mdl_skel.movement_summary(
-            image, sequences["aim"].base, sequences["aim"].frames, sequences["aim"].fps) is None)
+def test_a_cell_outside_the_animation_count_is_carried_as_unresolved() -> None:
+    """A cell the model's own declaration cannot answer is a shortfall the
+    sidecar names, not a grid quietly shortened to the cells that worked."""
+    from elysium_pipeline.formats import mdl_gltf, mdl_skel
 
-    def test_movement_rows_are_stated_unreal_native(self) -> None:
-        """The sidecar states the path in centimetres on Unreal axes, converted exactly once."""
-        from elysium_pipeline.formats import mdl_skel
+    image = _image({0: Grid((3, 1), {(0, 0): 0, (1, 0): 1, (2, 0): 99})})
+    _extra, blends = mdl_skel.blend_clip_plan(
+        image, mdl_skel.local_sequences(image)
+    )
+    assert [cell["clip"] for cell in blends["walk"]["cells"]] == ["walk", "run", None]
 
-        # A record with a real Y and Z: 8,169 of the 13,505 shipped records state a non-zero Y,
-        # so the reflection is observable rather than a formality.
-        records = ((3, 0x11C0, 4.0, 6.0, 90.0, 0.0, -1.0, 0.0, 0.0, -10.0, 2.0),)
-        image = self._with_movements(
-            self._image({}, base_cells=(0, 4, 0, 0)), 4, records)
-        sequences = self._sequences(image)
-        row, = mdl_skel.blend_sidecar(image, {}, list(sequences.values()))["movement"]["aim"]
-        assert row == [3, 0x11C0, 10.16, 15.24, -90.0, 0.0, 1.0, 0.0, 0.0, 25.4, 5.08]
-        # The reflection turns a zero component into `-0.0`; an axis-aligned path reads as one.
-        assert not any(math.copysign(1.0, value) < 0.0 for value in row if value == 0.0)
 
-    def test_a_model_whose_sequences_state_no_movement_says_so(self) -> None:
-        """Asked-and-empty ships the column list and no rows, which is not silence."""
-        from elysium_pipeline.formats import mdl_skel
+def test_a_grid_whose_cells_did_not_bake_is_dropped_rather_than_promised(
+) -> None:
+    """`_bake_animation` returns nothing for a clip whose tracks came out
+    empty, so a cell naming it would promise an animation the glb does not
+    carry. Below two surviving cells there is no blend space left."""
+    from elysium_pipeline.formats import mdl_gltf
 
-        image = self._image({})
-        sequences = list(self._sequences(image).values())
-        assert all(clip.movement == () for clip in sequences)
-        table = mdl_skel.movement_table(sequences)
-        assert "movement_fields" in table
-        assert "movement" not in table
-        # Nothing else is authored either, so there is no sidecar to carry the column list.
-        assert mdl_skel.blend_sidecar(image, {}, sequences) == {}
+    blends = {
+        "walk": {"groupsize": [3, 1], "cells": [
+            {"axis": [0, 0], "clip": "walk"},
+            {"axis": [1, 0], "clip": "run"},
+            {"axis": [2, 0], "clip": "idle"},
+        ]},
+        "aim": {"groupsize": [2, 1], "cells": [
+            {"axis": [0, 0], "clip": "aim"},
+            {"axis": [1, 0], "clip": "idle"},
+        ]},
+    }
+    kept = mdl_gltf._reconcile_blends(blends, {"walk", "run", "aim"})
+    assert sorted(kept) == ["walk"]
+    assert [cell["clip"] for cell in kept["walk"]["cells"]] == ["walk", "run", None]
 
-    def test_a_nine_by_one_grid_reads_its_extents_binding_and_every_cell(self) -> None:
-        """The shape the theatre corpus fires throughout, read end to end."""
-        sequences = self._sequences(self._image({0: NINE_BY_ONE}))
-        grid = sequences["walk"].grid
-        assert grid.numblends == 9
-        assert grid.groupsize == (9, 1)
-        assert grid.paramindex == (0, -1)
-        assert grid.paramstart == (-180.0, 0.0)
-        assert grid.paramend == (180.0, 0.0)
-        assert ([(cell.axis0, cell.axis1, cell.anim) for cell in grid.cells] == [(0, 0, 0), (1, 0, 1), (2, 0, 2), (3, 0, 3), (4, 0, 4),
-             (5, 0, 5), (6, 0, 6), (7, 0, 2), (8, 0, 0)])
-        # The clip the sequence still bakes is the base cell's, unchanged.
-        assert (sequences["walk"].base == grid.cells[0].anim * ANIM_DESC_STRIDE
-                         + CONTRIBUTION_ANIM_INDEX_OFF)
 
-    def test_a_three_by_three_grid_takes_axis_zero_down_the_row_stride(self) -> None:
-        """The cell address, in the orientation retail's own witness fixes.
+def test_a_zero_weight_record_decodes_to_zero_rather_than_to_a_pose() -> None:
+    """CAP5.3's second half, and the one claim on this page that no captured
+    byte backs.
 
-        A capture of `smith_aim_layer` records the cell `[1, 0]` decoding the
-        four animations at rows 1-2 and columns 0-1 of the inline array. So axis
-        0 takes the fixed 16-short row stride and axis 1 the column, and the
-        transposed address would name six of these nine cells wrongly.
-        """
-        grid = self._sequences(self._image({1: THREE_BY_THREE}))["aim"].grid
-        assert grid.groupsize == (3, 3)
-        assert grid.paramindex == (2, 3)
-        assert {(cell.axis0, cell.axis1): cell.anim for cell in grid.cells} == THREE_BY_THREE.cells
+    Both retail channel decoders compare `weight`@0 against zero before
+    anything else and, on zero, write a zero position and a zero quaternion
+    and return. All 2,254 decoded `(owner, animation, bone)` triples of the
+    retail corpus carry 1.0, so the branch is transcribed from the
+    decompiled decoders and exercised only here. It is **not** validated
+    against retail bytes, and this fixture is the whole of its evidence.
+    """
+    from elysium_pipeline.formats import mdl_skel
 
-    def test_a_single_cell_sequence_reads_a_one_by_one_grid(self) -> None:
-        """The 913-of-1,166 case: a sequence that is a clip and nothing more."""
-        grid = self._sequences(self._image({}))["walk"].grid
-        assert grid.numblends == 1
-        assert grid.groupsize == (1, 1)
-        assert grid.paramindex == (-1, -1)
-        assert len(grid.cells) == 1
-        assert (grid.cells[0].axis0, grid.cells[0].axis1) == (0, 0)
+    image = _image({})
+    bones = mdl_skel.read_bones(image)
+    # `@dead` carries weight 0.0 on both bones; `@walk` carries 1.0 on both.
+    dead = CONTRIBUTION_ANIM_INDEX_OFF + ANIM_DESC_STRIDE * 3
+    frames = mdl_skel.read_anim(image, bones, dead, 2)
+    for frame in frames:
+        for position, quaternion in frame:
+            assert position == (0.0, 0.0, 0.0)
+            assert quaternion == (0.0, 0.0, 0.0, 0.0)
 
-    def test_extents_disagreeing_with_numblends_fall_back_to_the_base_cell(self) -> None:
-        """`groupsize[0] * groupsize[1] == numblends` holds on all 294 authored
-        multi-blend sequences, so a descriptor where it does not is one this
-        format does not explain — and it yields the clip it always did rather
-        than a grid of whatever the inline array happens to hold."""
-        broken = Grid((9, 1), {(0, 0): 3, (1, 0): 1}, numblends=5)
-        grid = self._sequences(self._image({0: broken}))["walk"].grid
-        assert grid.numblends == 5
-        assert grid.groupsize == (9, 1)
-        assert [cell.anim for cell in grid.cells] == [3]
-
-    def test_the_pose_parameters_a_grid_axis_binds_to_are_read(self) -> None:
-        """A `paramindex` is an index into this model's own array, so the axis
-        cannot be wrapped or normalized without the record it names."""
-        from elysium_pipeline.formats import mdl_skel
-
-        parameters = mdl_skel.pose_parameters(self._image({0: NINE_BY_ONE}))
-        assert ([(p.index, p.name, p.flags, p.start, p.end, p.loop) for p in parameters] == [(index, name, flags, start, end, loop)
-             for index, (name, flags, start, end, loop) in enumerate(POSE_PARAMETERS)])
-        grid = self._sequences(self._image({0: NINE_BY_ONE}))["walk"].grid
-        assert parameters[grid.paramindex[0]].name == "move_yaw"
-        assert parameters[grid.paramindex[0]].loop == 360.0
-
-    def test_every_cell_becomes_its_own_clip_and_none_of_them_are_blended(self) -> None:
-        """The export shortfall CAP4.1 measured, closed.
-
-        Ten fired cells over 6,878 records had no exported counterpart because
-        the base cell was the only clip. Every cell now names one, keyed by the
-        animation's own name, and the grid ships beside them rather than being
-        mixed into them — evaluate-then-blend is the host's job.
-        """
-        from elysium_pipeline.formats import mdl_gltf, mdl_skel
-
-        image = self._image({0: NINE_BY_ONE, 1: THREE_BY_THREE})
-        sequences = mdl_skel.local_sequences(image)
-        extra, blends = mdl_skel.blend_clip_plan(image, sequences)
-
-        # One extra clip per distinct animation the two grids reach that the
-        # base-cell bake does not: animations 1-6 over the two of them, each
-        # named by the animation's own name. `idle`, `aim` and `turn` are also
-        # sequence labels in this fixture, so those three take the index
-        # disambiguation and the rest read as the animation the content named.
-        assert sorted(clip.label for clip in extra) == ["aim#4", "dead", "idle#2", "run", "skip", "turn#5"]
-        assert len({clip.base for clip in extra}) == len(extra)
-
-        walk = blends["walk"]
-        assert walk["groupsize"] == [9, 1]
-        assert walk["paramindex"] == [0, -1]
-        assert ([cell["clip"] for cell in walk["cells"]] == ["walk", "run", "idle#2", "dead", "aim#4", "turn#5", "skip", "idle#2",
-             "walk"])
-        assert [cell["axis"] for cell in blends["aim"]["cells"]] == [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]]
-        # Nothing in the plan carries a blended clip: every cell names a clip
-        # that decodes one animation of the model, and the weights that mix them
-        # are absent because they are not the exporter's to apply.
-        bases = {clip.label: clip.base for clip in (*sequences, *extra)}
-        for grid in blends.values():
-            for cell in grid["cells"]:
-                assert cell["clip"] in bases
-
-    def test_a_cell_outside_the_animation_count_is_carried_as_unresolved(self) -> None:
-        """A cell the model's own declaration cannot answer is a shortfall the
-        sidecar names, not a grid quietly shortened to the cells that worked."""
-        from elysium_pipeline.formats import mdl_gltf, mdl_skel
-
-        image = self._image({0: Grid((3, 1), {(0, 0): 0, (1, 0): 1, (2, 0): 99})})
-        _extra, blends = mdl_skel.blend_clip_plan(
-            image, mdl_skel.local_sequences(image)
-        )
-        assert [cell["clip"] for cell in blends["walk"]["cells"]] == ["walk", "run", None]
-
-    def test_a_grid_whose_cells_did_not_bake_is_dropped_rather_than_promised(
-        self,
-    ) -> None:
-        """`_bake_animation` returns nothing for a clip whose tracks came out
-        empty, so a cell naming it would promise an animation the glb does not
-        carry. Below two surviving cells there is no blend space left."""
-        from elysium_pipeline.formats import mdl_gltf
-
-        blends = {
-            "walk": {"groupsize": [3, 1], "cells": [
-                {"axis": [0, 0], "clip": "walk"},
-                {"axis": [1, 0], "clip": "run"},
-                {"axis": [2, 0], "clip": "idle"},
-            ]},
-            "aim": {"groupsize": [2, 1], "cells": [
-                {"axis": [0, 0], "clip": "aim"},
-                {"axis": [1, 0], "clip": "idle"},
-            ]},
-        }
-        kept = mdl_gltf._reconcile_blends(blends, {"walk", "run", "aim"})
-        assert sorted(kept) == ["walk"]
-        assert [cell["clip"] for cell in kept["walk"]["cells"]] == ["walk", "run", None]
-
-    def test_a_zero_weight_record_decodes_to_zero_rather_than_to_a_pose(self) -> None:
-        """CAP5.3's second half, and the one claim on this page that no captured
-        byte backs.
-
-        Both retail channel decoders compare `weight`@0 against zero before
-        anything else and, on zero, write a zero position and a zero quaternion
-        and return. All 2,254 decoded `(owner, animation, bone)` triples of the
-        retail corpus carry 1.0, so the branch is transcribed from the
-        decompiled decoders and exercised only here. It is **not** validated
-        against retail bytes, and this fixture is the whole of its evidence.
-        """
-        from elysium_pipeline.formats import mdl_skel
-
-        image = self._image({})
-        bones = mdl_skel.read_bones(image)
-        # `@dead` carries weight 0.0 on both bones; `@walk` carries 1.0 on both.
-        dead = CONTRIBUTION_ANIM_INDEX_OFF + ANIM_DESC_STRIDE * 3
-        frames = mdl_skel.read_anim(image, bones, dead, 2)
-        for frame in frames:
-            for position, quaternion in frame:
-                assert position == (0.0, 0.0, 0.0)
-                assert quaternion == (0.0, 0.0, 0.0, 0.0)
-
-        # The zero is the weight's doing, not the clip's: the same bones under a
-        # weight of 1.0 fall back to their bind values on an unanimated channel.
-        alive = CONTRIBUTION_ANIM_INDEX_OFF + ANIM_DESC_STRIDE * 2
-        for position, quaternion in mdl_skel.read_anim(image, bones, alive, 1)[0]:
-            assert quaternion != (0.0, 0.0, 0.0, 0.0)
-        assert mdl_skel.read_anim(image, bones, alive, 1)[0][1][0] == bones[1].pos
+    # The zero is the weight's doing, not the clip's: the same bones under a
+    # weight of 1.0 fall back to their bind values on an unanimated channel.
+    alive = CONTRIBUTION_ANIM_INDEX_OFF + ANIM_DESC_STRIDE * 2
+    for position, quaternion in mdl_skel.read_anim(image, bones, alive, 1)[0]:
+        assert quaternion != (0.0, 0.0, 0.0, 0.0)
+    assert mdl_skel.read_anim(image, bones, alive, 1)[0][1][0] == bones[1].pos
 
 class ProceduralRuleExportTests(unittest.TestCase):
     """CAP7.1: the `ProcType == 1` rule table the model exporter carries out.

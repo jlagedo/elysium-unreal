@@ -225,117 +225,126 @@ def test_ordinary_bind_carries_no_anomaly() -> None:
     assert W.classify_bones(bones, {10}).anomalies == ()
 
 
-class TrailTipTests(unittest.TestCase):
-    """`trail_tip_from_geometry`: the melee weapon-trail VFX's synthetic `TrailTip` attachment,
-    the model's own geometry's farthest point from the mount along its own long axis."""
+# TrailTipTests
+# `trail_tip_from_geometry`: the melee weapon-trail VFX's synthetic `TrailTip` attachment,
+# the model's own geometry's farthest point from the mount along its own long axis.
 
-    def _rig(self):
-        # Every arm bone is at the origin with an identity bind (the `bone()` default), so the
-        # mount's bind-space WORLD transform equals its own local: a pure translation to (4,0,0).
-        bones = with_subrig(("handle", None))
-        bones[10] = bone(10, "handle", 9, pos=(4.0, 0.0, 0.0))
-        return bones, W.classify_bones(bones, {10})
-
-    def test_tip_sits_on_the_long_axis_at_the_far_extreme(self) -> None:
-        bones, cls = self._rig()
-        # In the mount's local frame (subtract the mount's world translation, (4,0,0)): the grip
-        # end at the origin, the blade's far corners 6 units out on X, 2 wide on Y and Z.
-        positions = [(4.0, 0.0, 0.0), (10.0, 2.0, -1.0), (10.0, 0.0, 1.0)]
-
-        pos, quat = W.trail_tip_from_geometry(bones, cls, positions)
-
-        # X is the long axis (extent 6 against 2 on Y/Z) and the far end is the +X extreme.
-        assert pos[0] == pytest.approx(6.0, abs=1e-7)
-        # The other two axes sit at the geometry's own midpoint, not the origin -- Y's bbox is
-        # [0,2], not [-1,1], so a wrong "midpoint is always zero" implementation would fail this.
-        assert pos[1] == pytest.approx(1.0, abs=1e-7)
-        assert pos[2] == pytest.approx(0.0, abs=1e-7)
-        assert quat == (0.0, 0.0, 0.0, 1.0)
-
-    def test_long_axis_is_read_per_model_not_assumed(self) -> None:
-        bones, cls = self._rig()
-        # The same rig, but this time the geometry's long axis is Z, not X -- the function must
-        # not hardcode which axis is "the blade direction" (the corpus itself disagrees by sex on
-        # `bushhook`: local-Y in the male file, local-Z in the female).
-        positions = [(4.0, 0.0, 0.0), (4.0, 1.0, 8.0), (4.0, -1.0, 8.0)]
-
-        pos, _ = W.trail_tip_from_geometry(bones, cls, positions)
-
-        assert pos[2] == pytest.approx(8.0, abs=1e-7)
-        assert pos[0] == pytest.approx(4.0 - 4.0, abs=1e-7)  # X sits at its own (degenerate) midpoint, 0
-        assert pos[1] == pytest.approx(0.0, abs=1e-7)
-
-    def test_degenerate_mount_bind_still_produces_a_sane_offset(self) -> None:
-        # Mirrors `test_degenerate_identity_bind_is_recorded_not_corrected`: a literal identity
-        # local bind on the mount is a retail authoring defect (`w_f_bushhook.mdl`), reproduced
-        # rather than corrected. The geometry bbox math must not raise or blow up over it -- only
-        # the vertex positions matter, not whether the bind itself is well-formed.
-        bones = with_subrig(("bush hook", None))
-        bones[10] = bone(10, "bush hook", 9, pos=(0.0, 0.0, 1e-7), quat=IDENTITY_Q)
-        cls = W.classify_bones(bones, {10})
-        positions = [(0.0, 0.0, 0.0), (0.0, 0.0, 5.0)]
-
-        pos, _ = W.trail_tip_from_geometry(bones, cls, positions)
-
-        assert pos[2] == pytest.approx(5.0, abs=1e-3)
-
-    def test_no_positions_returns_the_origin(self) -> None:
-        bones, cls = self._rig()
-
-        pos, quat = W.trail_tip_from_geometry(bones, cls, [])
-
-        assert pos == (0.0, 0.0, 0.0)
-        assert quat == (0.0, 0.0, 0.0, 1.0)
-
-    def test_wrapper_is_none_off_socket_prop(self) -> None:
-        bones = with_subrig(("body", None), ("slide", 0))
-        cls = W.classify_bones(bones, {10, 11})
-        assert cls.binding == "socket_hand"
-
-        assert W.trail_tip(b"", b"", bones, cls) is None
+def _rig():
+    # Every arm bone is at the origin with an identity bind (the `bone()` default), so the
+    # mount's bind-space WORLD transform equals its own local: a pure translation to (4,0,0).
+    bones = with_subrig(("handle", None))
+    bones[10] = bone(10, "handle", 9, pos=(4.0, 0.0, 0.0))
+    return bones, W.classify_bones(bones, {10})
 
 
-class NonSocketBindingTests(unittest.TestCase):
-    """The three non-socket modes need the character corpus: whether a rig is worn at all is a
-    fact about the cast, not about the file."""
+def test_tip_sits_on_the_long_axis_at_the_far_extreme() -> None:
+    bones, cls = _rig()
+    # In the mount's local frame (subtract the mount's world translation, (4,0,0)): the grip
+    # end at the origin, the blade's far corners 6 units out on X, 2 wide on Y and Z.
+    positions = [(4.0, 0.0, 0.0), (10.0, 2.0, -1.0), (10.0, 0.0, 1.0)]
 
-    def _claws(self):
-        # Skinned across both hands, so there is no single skinned root.
-        bones = arm()
-        bones.append(bone(10, "Bip01 L Hand", 5))
-        bones.append(bone(11, "Bip01 R Finger1", 9))
-        bones.append(bone(12, "Bip01 L Finger1", 10))
-        return bones, {11, 12}
+    pos, quat = W.trail_tip_from_geometry(bones, cls, positions)
 
-    def test_unresolved_without_a_body_index(self) -> None:
-        bones, skinned = self._claws()
+    # X is the long axis (extent 6 against 2 on Y/Z) and the far end is the +X extreme.
+    assert pos[0] == pytest.approx(6.0, abs=1e-7)
+    # The other two axes sit at the geometry's own midpoint, not the origin -- Y's bbox is
+    # [0,2], not [-1,1], so a wrong "midpoint is always zero" implementation would fail this.
+    assert pos[1] == pytest.approx(1.0, abs=1e-7)
+    assert pos[2] == pytest.approx(0.0, abs=1e-7)
+    assert quat == (0.0, 0.0, 0.0, 1.0)
 
-        assert W.classify_bones(bones, skinned).binding is None
 
-    def test_worn_and_static_is_leader_pose(self) -> None:
-        bones, skinned = self._claws()
-        bodies = {"a": {"bip01 r finger1": "bip01 r hand", "bip01 l finger1": "bip01 l hand"}}
+def test_long_axis_is_read_per_model_not_assumed() -> None:
+    bones, cls = _rig()
+    # The same rig, but this time the geometry's long axis is Z, not X -- the function must
+    # not hardcode which axis is "the blade direction" (the corpus itself disagrees by sex on
+    # `bushhook`: local-Y in the male file, local-Z in the female).
+    positions = [(4.0, 0.0, 0.0), (4.0, 1.0, 8.0), (4.0, -1.0, 8.0)]
 
-        cls = W.classify_bones(bones, skinned, bodies=bodies, animated=False)
+    pos, _ = W.trail_tip_from_geometry(bones, cls, positions)
 
-        assert cls.binding == "leader_pose"
+    assert pos[2] == pytest.approx(8.0, abs=1e-7)
+    assert pos[0] == pytest.approx(4.0 - 4.0, abs=1e-7)  # X sits at its own (degenerate) midpoint, 0
+    assert pos[1] == pytest.approx(0.0, abs=1e-7)
 
-    def test_worn_and_animated_is_copy_pose(self) -> None:
-        bones, skinned = self._claws()
-        bodies = {"a": {"bip01 r finger1": "bip01 r hand", "bip01 l finger1": "bip01 l hand"}}
 
-        cls = W.classify_bones(bones, skinned, bodies=bodies, animated=True)
+def test_degenerate_mount_bind_still_produces_a_sane_offset() -> None:
+    # Mirrors `test_degenerate_identity_bind_is_recorded_not_corrected`: a literal identity
+    # local bind on the mount is a retail authoring defect (`w_f_bushhook.mdl`), reproduced
+    # rather than corrected. The geometry bbox math must not raise or blow up over it -- only
+    # the vertex positions matter, not whether the bind itself is well-formed.
+    bones = with_subrig(("bush hook", None))
+    bones[10] = bone(10, "bush hook", 9, pos=(0.0, 0.0, 1e-7), quat=IDENTITY_Q)
+    cls = W.classify_bones(bones, {10})
+    positions = [(0.0, 0.0, 0.0), (0.0, 0.0, 5.0)]
 
-        assert cls.binding == "copy_pose"
+    pos, _ = W.trail_tip_from_geometry(bones, cls, positions)
 
-    def test_no_body_can_wear_it_is_a_projectile(self) -> None:
-        bones = [bone(0, "polySurface49", -1), bone(1, "polySurface50", 0)]
-        bodies = {"a": {"bip01": "", "bip01 r hand": "bip01 r forearm"}}
+    assert pos[2] == pytest.approx(5.0, abs=1e-3)
 
-        cls = W.classify_bones(bones, {1}, bodies=bodies)
 
-        assert cls.binding == "projectile"
-        assert "no_single_skinned_root" in cls.anomalies
+def test_no_positions_returns_the_origin() -> None:
+    bones, cls = _rig()
+
+    pos, quat = W.trail_tip_from_geometry(bones, cls, [])
+
+    assert pos == (0.0, 0.0, 0.0)
+    assert quat == (0.0, 0.0, 0.0, 1.0)
+
+
+def test_wrapper_is_none_off_socket_prop() -> None:
+    bones = with_subrig(("body", None), ("slide", 0))
+    cls = W.classify_bones(bones, {10, 11})
+    assert cls.binding == "socket_hand"
+
+    assert W.trail_tip(b"", b"", bones, cls) is None
+
+
+# NonSocketBindingTests
+# The three non-socket modes need the character corpus: whether a rig is worn at all is a
+# fact about the cast, not about the file.
+
+def _claws():
+    # Skinned across both hands, so there is no single skinned root.
+    bones = arm()
+    bones.append(bone(10, "Bip01 L Hand", 5))
+    bones.append(bone(11, "Bip01 R Finger1", 9))
+    bones.append(bone(12, "Bip01 L Finger1", 10))
+    return bones, {11, 12}
+
+
+def test_unresolved_without_a_body_index() -> None:
+    bones, skinned = _claws()
+
+    assert W.classify_bones(bones, skinned).binding is None
+
+
+def test_worn_and_static_is_leader_pose() -> None:
+    bones, skinned = _claws()
+    bodies = {"a": {"bip01 r finger1": "bip01 r hand", "bip01 l finger1": "bip01 l hand"}}
+
+    cls = W.classify_bones(bones, skinned, bodies=bodies, animated=False)
+
+    assert cls.binding == "leader_pose"
+
+
+def test_worn_and_animated_is_copy_pose() -> None:
+    bones, skinned = _claws()
+    bodies = {"a": {"bip01 r finger1": "bip01 r hand", "bip01 l finger1": "bip01 l hand"}}
+
+    cls = W.classify_bones(bones, skinned, bodies=bodies, animated=True)
+
+    assert cls.binding == "copy_pose"
+
+
+def test_no_body_can_wear_it_is_a_projectile() -> None:
+    bones = [bone(0, "polySurface49", -1), bone(1, "polySurface50", 0)]
+    bodies = {"a": {"bip01": "", "bip01 r hand": "bip01 r forearm"}}
+
+    cls = W.classify_bones(bones, {1}, bodies=bodies)
+
+    assert cls.binding == "projectile"
+    assert "no_single_skinned_root" in cls.anomalies
 
 
 def test_skin_confined_to_the_collapse_subtree_passes() -> None:
@@ -357,79 +366,91 @@ def test_skin_on_a_second_matched_bone_fails_and_names_it() -> None:
     assert result.detail == ("Bip01 R Forearm",)
 
 
-class CollapseCheckTests(unittest.TestCase):
-    def _consistent(self):
-        """A two-bone chain whose stored inverse bind agrees with the composed one."""
-        import numpy as np
+def _consistent():
+    """A two-bone chain whose stored inverse bind agrees with the composed one."""
+    import numpy as np
 
-        bones = [bone(0, "Bip01 R Hand", -1, pos=(1.0, 2.0, 3.0)),
-                 bone(1, "body", 0, pos=(4.0, 0.0, 0.0))]
-        world = np.eye(4)
-        for item in bones:
-            local = np.eye(4)
-            local[:3, :3] = mdl_skel.rot_matrix(item.quat)
-            local[:3, 3] = item.pos
-            world = world @ local if item.parent >= 0 else local
-            item.pose_to_bone = tuple(np.linalg.inv(world)[:3, :4].reshape(-1))
-        return bones
-
-    def test_self_consistent_file_passes(self) -> None:
-        bones = self._consistent()
-        cls = W.classify_bones(bones, {1})
-
-        assert W.check_collapse(bones, {1}, cls).ok
-
-    def test_inconsistent_stored_inverse_bind_fails_and_names_the_bone(self) -> None:
-        bones = self._consistent()
-        bones[1].pose_to_bone = (1.0, 0.0, 0.0, 99.0,
-                                 0.0, 1.0, 0.0, 0.0,
-                                 0.0, 0.0, 1.0, 0.0)
-        cls = W.classify_bones(bones, {1})
-
-        result = W.check_collapse(bones, {1}, cls)
-
-        assert not result.ok
-        assert result.detail[0][0] == "body"
+    bones = [bone(0, "Bip01 R Hand", -1, pos=(1.0, 2.0, 3.0)),
+             bone(1, "body", 0, pos=(4.0, 0.0, 0.0))]
+    world = np.eye(4)
+    for item in bones:
+        local = np.eye(4)
+        local[:3, :3] = mdl_skel.rot_matrix(item.quat)
+        local[:3, 3] = item.pos
+        world = world @ local if item.parent >= 0 else local
+        item.pose_to_bone = tuple(np.linalg.inv(world)[:3, :4].reshape(-1))
+    return bones
 
 
-class MotionTests(unittest.TestCase):
-    """Measured across frames, not against the bind pose. A clip sitting at a constant offset from
-    bind is still a rigid weapon -- `bake_pose` carries that offset -- so only frame-to-frame
-    variation makes a socket wrong."""
+def test_self_consistent_file_passes() -> None:
+    bones = _consistent()
+    cls = W.classify_bones(bones, {1})
 
-    def _pose(self, frames, mover=None):
-        out = []
-        for index in range(frames):
-            row = [((0.0, 0.0, 0.0), IDENTITY_Q), ((5.0, 0.0, 0.0), IDENTITY_Q)]
-            if mover is not None:
-                row[1] = (mover(index), IDENTITY_Q)
-            out.append(row)
-        return out
+    assert W.check_collapse(bones, {1}, cls).ok
 
-    def _bones(self):
-        return [bone(0, "Bip01 R Hand", -1), bone(1, "slide", 0)]
 
-    def test_sixty_one_static_frames_pass(self) -> None:
-        assert W.frame_variance(self._bones(), self._pose(61), [1]) == []
+def test_inconsistent_stored_inverse_bind_fails_and_names_the_bone() -> None:
+    bones = _consistent()
+    bones[1].pose_to_bone = (1.0, 0.0, 0.0, 99.0,
+                             0.0, 1.0, 0.0, 0.0,
+                             0.0, 0.0, 1.0, 0.0)
+    cls = W.classify_bones(bones, {1})
 
-    def test_a_moving_sub_rig_bone_is_caught_and_named(self) -> None:
-        pose = self._pose(61, mover=lambda f: (5.0 + f * 0.1, 0.0, 0.0))
+    result = W.check_collapse(bones, {1}, cls)
 
-        found = W.frame_variance(self._bones(), pose, [1])
+    assert not result.ok
+    assert result.detail[0][0] == "body"
 
-        assert len(found) == 1
-        assert found[0][0] == "slide"
-        assert found[0][1] > 5.0
 
-    def test_rotation_alone_is_caught(self) -> None:
-        half = math.sin(math.radians(20.0) / 2.0)
-        pose = self._pose(2)
-        pose[1][1] = ((5.0, 0.0, 0.0), (0.0, 0.0, half, math.cos(math.radians(20.0) / 2.0)))
+# MotionTests
+# Measured across frames, not against the bind pose. A clip sitting at a constant offset from
+# bind is still a rigid weapon -- `bake_pose` carries that offset -- so only frame-to-frame
+# variation makes a socket wrong.
 
-        found = W.frame_variance(self._bones(), pose, [1])
+def _pose(frames, mover=None):
+    out = []
+    for index in range(frames):
+        row = [((0.0, 0.0, 0.0), IDENTITY_Q), ((5.0, 0.0, 0.0), IDENTITY_Q)]
+        if mover is not None:
+            row[1] = (mover(index), IDENTITY_Q)
+        out.append(row)
+    return out
 
-        assert len(found) == 1
-        assert found[0][2] > 19.0
+
+# BoneMotionTests
+# `bone_motion`'s envelope across every local sequence, at full precision. The four
+# ground-truth wield magnitudes it mirrors -- `w_m_flamethrower`'s unskinned `trigger` at
+# 0.3203in/1.2535deg and `w_m_lockpick`'s skinned `lockpick` at 0.0313in/6.3565deg -- are
+# measured against the real install and are not reproduced here; what is exercised is the same
+# decision shape at representative magnitudes.
+
+def _bones():
+    return [bone(0, "Bip01 R Hand", -1), bone(1, "slide", 0)]
+
+
+def test_sixty_one_static_frames_pass() -> None:
+    assert W.frame_variance(_bones(), _pose(61), [1]) == []
+
+
+def test_a_moving_sub_rig_bone_is_caught_and_named() -> None:
+    pose = _pose(61, mover=lambda f: (5.0 + f * 0.1, 0.0, 0.0))
+
+    found = W.frame_variance(_bones(), pose, [1])
+
+    assert len(found) == 1
+    assert found[0][0] == "slide"
+    assert found[0][1] > 5.0
+
+
+def test_rotation_alone_is_caught() -> None:
+    half = math.sin(math.radians(20.0) / 2.0)
+    pose = _pose(2)
+    pose[1][1] = ((5.0, 0.0, 0.0), (0.0, 0.0, half, math.cos(math.radians(20.0) / 2.0)))
+
+    found = W.frame_variance(_bones(), pose, [1])
+
+    assert len(found) == 1
+    assert found[0][2] > 19.0
 
 
 def test_a_prop_bone_under_a_hand_reports_its_parent() -> None:
@@ -464,65 +485,72 @@ def test_an_unknown_name_reports_no_bodies() -> None:
     assert not scope["under_hand"]
 
 
-class MaterialResolutionTests(unittest.TestCase):
-    """`_resolve_material_row`'s three outcomes: a real decode, a VMT that never resolves, and a
-    texture whose bytes do not decode -- the corpus's one real case, `handleclaws`'s ``null``
-    material and its 20-byte empty `.ttz`."""
+# MaterialResolutionTests
+# `_resolve_material_row`'s three outcomes: a real decode, a VMT that never resolves, and a
+# texture whose bytes do not decode -- the corpus's one real case, `handleclaws`'s ``null``
+# material and its 20-byte empty `.ttz`.
 
-    def _bgr_texture(self, pixel=(10, 20, 30)):
-        return _tth(1, 1, FMT_BGR888), zlib.compress(bytes(pixel))
+def _bgr_texture(pixel=(10, 20, 30)):
+    return _tth(1, 1, FMT_BGR888), zlib.compress(bytes(pixel))
 
-    def test_a_resolved_material_decodes_and_carries_its_flags(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install_ = _Install(Path(root))
-            install_.add(
-                "materials/models/weapons/claws/claws.vmt",
-                '"VertexLitGeneric"\n{\n\t"$basetexture" "models/weapons/claws/claws"\n'
-                '\t"$alphatest" "1"\n\t"$envmap" "env_cubemap"\n}\n',
-            )
-            tth, ttz = self._bgr_texture()
-            install_.add_bytes("materials/models/weapons/claws/claws.tth", tth)
-            install_.add_bytes("materials/models/weapons/claws/claws.ttz", ttz)
-            read_bytes = lambda key: install.read(install_.index, key)
 
-            albedo, flags, failure, envmask, bump = W._resolve_material_row(
-                "models/weapons/claws/claws", [""], read_bytes)
+def test_a_resolved_material_decodes_and_carries_its_flags() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install_ = _Install(Path(root))
+        install_.add(
+            "materials/models/weapons/claws/claws.vmt",
+            '"VertexLitGeneric"\n{\n\t"$basetexture" "models/weapons/claws/claws"\n'
+            '\t"$alphatest" "1"\n\t"$envmap" "env_cubemap"\n}\n',
+        )
+        tth, ttz = _bgr_texture()
+        install_.add_bytes("materials/models/weapons/claws/claws.tth", tth)
+        install_.add_bytes("materials/models/weapons/claws/claws.ttz", ttz)
+        read_bytes = lambda key: install.read(install_.index, key)
 
-            assert albedo == "models/weapons/claws/claws"
-            assert flags == frozenset({"alphatest", "envmap"})
-            assert failure == ""
-            # This VMT names neither $envmapmask nor $bumpmap -- the normal case.
-            assert envmask == ""
-            assert bump == ""
+        albedo, flags, failure, envmask, bump = W._resolve_material_row(
+            "models/weapons/claws/claws", [""], read_bytes)
 
-    def test_a_texture_that_fails_to_decode_is_recorded_not_fatal(self) -> None:
-        # The handleclaws real case: the VMT resolves and names a basetexture, but the .ttz is a
-        # 20-byte empty file and the DXT mip it should hold is not there.
-        with tempfile.TemporaryDirectory() as root:
-            install_ = _Install(Path(root))
-            install_.add(
-                "materials/weapons/null.vmt",
-                '"VertexLitGeneric"\n{\n\t"$basetexture" "weapons/null"\n\t"$alphatest" "1"\n}\n',
-            )
-            install_.add_bytes("materials/weapons/null.tth", _tth(4, 4, FMT_DXT1))
-            install_.add_bytes("materials/weapons/null.ttz", zlib.compress(b""))
-            read_bytes = lambda key: install.read(install_.index, key)
+        assert albedo == "models/weapons/claws/claws"
+        assert flags == frozenset({"alphatest", "envmap"})
+        assert failure == ""
+        # This VMT names neither $envmapmask nor $bumpmap -- the normal case.
+        assert envmask == ""
+        assert bump == ""
 
-            albedo, flags, failure, _envmask, _bump = W._resolve_material_row(
-                "weapons/null", [""], read_bytes)
 
-            assert albedo == ""
-            assert flags == frozenset({"alphatest"})
-            assert failure != ""
+def test_a_texture_that_fails_to_decode_is_recorded_not_fatal() -> None:
+    # The handleclaws real case: the VMT resolves and names a basetexture, but the .ttz is a
+    # 20-byte empty file and the DXT mip it should hold is not there.
+    with tempfile.TemporaryDirectory() as root:
+        install_ = _Install(Path(root))
+        install_.add(
+            "materials/weapons/null.vmt",
+            '"VertexLitGeneric"\n{\n\t"$basetexture" "weapons/null"\n\t"$alphatest" "1"\n}\n',
+        )
+        install_.add_bytes("materials/weapons/null.tth", _tth(4, 4, FMT_DXT1))
+        install_.add_bytes("materials/weapons/null.ttz", zlib.compress(b""))
+        read_bytes = lambda key: install.read(install_.index, key)
 
-    def test_a_vmt_with_no_drawable_texture_is_not_a_failure(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install_ = _Install(Path(root))
-            install_.add("materials/empty.vmt", '"UnlitGeneric"\n{\n}\n')
-            read_bytes = lambda key: install.read(install_.index, key)
+        albedo, flags, failure, _envmask, _bump = W._resolve_material_row(
+            "weapons/null", [""], read_bytes)
 
-            assert W._resolve_material_row("empty", [""], read_bytes) == ("", frozenset(), "", "", "")
+        assert albedo == ""
+        assert flags == frozenset({"alphatest"})
+        assert failure != ""
 
+
+def test_a_vmt_with_no_drawable_texture_is_not_a_failure() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install_ = _Install(Path(root))
+        install_.add("materials/empty.vmt", '"UnlitGeneric"\n{\n}\n')
+        read_bytes = lambda key: install.read(install_.index, key)
+
+        assert W._resolve_material_row("empty", [""], read_bytes) == ("", frozenset(), "", "", "")
+
+
+# ModelMaterialsTests
+# `model_materials` over an already-loaded model: header material order, one row per
+# material, and a per-row failure that never raises.
 
 def test_materials_are_reported_in_header_order_with_per_row_failures() -> None:
     with tempfile.TemporaryDirectory() as root:
@@ -546,6 +574,10 @@ def test_materials_are_reported_in_header_order_with_per_row_failures() -> None:
         assert rows[1].albedo == ""
         assert rows[1].failure != ""
 
+
+# SkinFamilyOverrideTests
+# `skin_families` diffs every extra family against family 0 and resolves the override the
+# same way a drawn material resolves -- the fire_axe ghost reskin is the one real case.
 
 def test_no_extra_family_reports_nothing() -> None:
     with (mock.patch.object(mdl, "skin_families", return_value=[["a", "b"]]),

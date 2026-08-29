@@ -95,107 +95,107 @@ def test_worker_failure_carries_the_captured_tail() -> None:
             workers.character_source_worker("bank", "bank_a", "models/bank_a.mdl", "out")
 
 
-class PrefixBucketTests(unittest.TestCase):
-    #: Dotted directories, dotted stems, prefix-sharing stems and extensionless keys are the
-    #: shapes where a naive bucket and the linear scan could disagree.
-    INDEX = {
-        "models/character/x.mdl": ("vpk", 1),
-        "models/character/x.dx80.vtx": ("vpk", 2),
-        "models/character/x.vvd": ("loose", "E:/nowhere/x.vvd"),
-        "models/character/xy.mdl": ("vpk", 4),
-        "models/dir.v2/x.mdl": ("vpk", 5),
-        "models/dir.v2/x.vvd": ("vpk", 6),
-        "models/character/x.foo.mdl": ("vpk", 7),
-        "models/character/x.foo.vvd": ("vpk", 8),
-        "models/character/noext": ("vpk", 9),
-    }
-
-    def test_sibling_files_move_the_detail_and_foreign_stems_do_not(self) -> None:
-        buckets = export_manager._index_prefix_buckets(self.INDEX)
-        base = export_manager._character_source_detail(
-            self.INDEX, "models/character/x.mdl", buckets)
-        grown = dict(self.INDEX)
-        grown["models/character/x.ani"] = ("vpk", 10)
-        assert base != export_manager._character_source_detail(
-                grown, "models/character/x.mdl",
-                export_manager._index_prefix_buckets(grown))
-        foreign = dict(self.INDEX)
-        foreign["models/character/xz.mdl"] = ("vpk", 11)
-        assert base == export_manager._character_source_detail(
-                foreign, "models/character/x.mdl",
-                export_manager._index_prefix_buckets(foreign))
+INDEX = {
+    "models/character/x.mdl": ("vpk", 1),
+    "models/character/x.dx80.vtx": ("vpk", 2),
+    "models/character/x.vvd": ("loose", "E:/nowhere/x.vvd"),
+    "models/character/xy.mdl": ("vpk", 4),
+    "models/dir.v2/x.mdl": ("vpk", 5),
+    "models/dir.v2/x.vvd": ("vpk", 6),
+    "models/character/x.foo.mdl": ("vpk", 7),
+    "models/character/x.foo.vvd": ("vpk", 8),
+    "models/character/noext": ("vpk", 9),
+}
 
 
-class WriteCharacterSourcesTests(unittest.TestCase):
-    MANIFEST = {
-        "npcs": {"amy": {"model": "models/amy.mdl", "clips": {"idle": "amy"}}},
-        "banks": {},
-        "cinematics": {},
-        "placed_models": {},
-    }
+def test_sibling_files_move_the_detail_and_foreign_stems_do_not() -> None:
+    buckets = export_manager._index_prefix_buckets(INDEX)
+    base = export_manager._character_source_detail(
+        INDEX, "models/character/x.mdl", buckets)
+    grown = dict(INDEX)
+    grown["models/character/x.ani"] = ("vpk", 10)
+    assert base != export_manager._character_source_detail(
+            grown, "models/character/x.mdl",
+            export_manager._index_prefix_buckets(grown))
+    foreign = dict(INDEX)
+    foreign["models/character/xz.mdl"] = ("vpk", 11)
+    assert base == export_manager._character_source_detail(
+            foreign, "models/character/x.mdl",
+            export_manager._index_prefix_buckets(foreign))
 
-    def _config(self, temporary: str) -> SimpleNamespace:
-        root = Path(temporary)
-        (root / "exports" / "npc").mkdir(parents=True)
-        return SimpleNamespace(
-            repo_root=root / "repo",
-            export_root=root / "exports",
-            log_root=root / "logs",
-        )
 
-    def test_inline_dispatch_writes_once_and_a_warm_second_run_skips(self) -> None:
-        from elysium_pipeline.exporters import UE_mdl_skeletal
+MANIFEST = {
+    "npcs": {"amy": {"model": "models/amy.mdl", "clips": {"idle": "amy"}}},
+    "banks": {},
+    "cinematics": {},
+    "placed_models": {},
+}
 
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            npc_dir = config.export_root / "npc"
-            index = {"models/amy.mdl": ("vpk", ("entry", 1))}
 
-            def write(_index, _model_rel, out_dir, *, stem, **_kwargs):
-                (Path(out_dir) / f"{stem}.eskm").write_bytes(b"container")
+def _config(temporary: str) -> SimpleNamespace:
+    root = Path(temporary)
+    (root / "exports" / "npc").mkdir(parents=True)
+    return SimpleNamespace(
+        repo_root=root / "repo",
+        export_root=root / "exports",
+        log_root=root / "logs",
+    )
 
-            with (
-                mock.patch.object(install, "build_index", return_value=index),
-                mock.patch.object(UE_mdl_skeletal, "write_model", side_effect=write) as writer,
-                mock.patch.object(workers, "_ANORMS", [None]),
-            ):
-                manifest = Manifest(config.export_root / ".elysium-manifest.json")
-                bodies, banks = export_manager.write_character_sources(
-                    config, npc_dir, manifest=manifest, jobs=1,
-                    npc_manifest=self.MANIFEST)
-                assert (bodies, banks) == (["amy"], [])
-                assert writer.call_count == 1
 
-                manifest = Manifest(config.export_root / ".elysium-manifest.json")
-                export_manager.write_character_sources(
-                    config, npc_dir, manifest=manifest, jobs=1,
-                    npc_manifest=self.MANIFEST)
-                assert writer.call_count == 1
+def test_inline_dispatch_writes_once_and_a_warm_second_run_skips() -> None:
+    from elysium_pipeline.exporters import UE_mdl_skeletal
 
-    def test_force_rewrites_the_container(self) -> None:
-        from elysium_pipeline.exporters import UE_mdl_skeletal
+    with tempfile.TemporaryDirectory() as temporary:
+        config = _config(temporary)
+        npc_dir = config.export_root / "npc"
+        index = {"models/amy.mdl": ("vpk", ("entry", 1))}
 
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            npc_dir = config.export_root / "npc"
-            index = {"models/amy.mdl": ("vpk", ("entry", 1))}
+        def write(_index, _model_rel, out_dir, *, stem, **_kwargs):
+            (Path(out_dir) / f"{stem}.eskm").write_bytes(b"container")
 
-            def write(_index, _model_rel, out_dir, *, stem, **_kwargs):
-                (Path(out_dir) / f"{stem}.eskm").write_bytes(b"container")
+        with (
+            mock.patch.object(install, "build_index", return_value=index),
+            mock.patch.object(UE_mdl_skeletal, "write_model", side_effect=write) as writer,
+            mock.patch.object(workers, "_ANORMS", [None]),
+        ):
+            manifest = Manifest(config.export_root / ".elysium-manifest.json")
+            bodies, banks = export_manager.write_character_sources(
+                config, npc_dir, manifest=manifest, jobs=1,
+                npc_manifest=MANIFEST)
+            assert (bodies, banks) == (["amy"], [])
+            assert writer.call_count == 1
 
-            with (
-                mock.patch.object(install, "build_index", return_value=index),
-                mock.patch.object(UE_mdl_skeletal, "write_model", side_effect=write) as writer,
-                mock.patch.object(workers, "_ANORMS", [None]),
-            ):
-                manifest = Manifest(config.export_root / ".elysium-manifest.json")
-                export_manager.write_character_sources(
-                    config, npc_dir, manifest=manifest, jobs=1,
-                    npc_manifest=self.MANIFEST)
-                export_manager.write_character_sources(
-                    config, npc_dir, manifest=manifest, jobs=1, force=True,
-                    npc_manifest=self.MANIFEST)
-                assert writer.call_count == 2
+            manifest = Manifest(config.export_root / ".elysium-manifest.json")
+            export_manager.write_character_sources(
+                config, npc_dir, manifest=manifest, jobs=1,
+                npc_manifest=MANIFEST)
+            assert writer.call_count == 1
+
+
+def test_force_rewrites_the_container() -> None:
+    from elysium_pipeline.exporters import UE_mdl_skeletal
+
+    with tempfile.TemporaryDirectory() as temporary:
+        config = _config(temporary)
+        npc_dir = config.export_root / "npc"
+        index = {"models/amy.mdl": ("vpk", ("entry", 1))}
+
+        def write(_index, _model_rel, out_dir, *, stem, **_kwargs):
+            (Path(out_dir) / f"{stem}.eskm").write_bytes(b"container")
+
+        with (
+            mock.patch.object(install, "build_index", return_value=index),
+            mock.patch.object(UE_mdl_skeletal, "write_model", side_effect=write) as writer,
+            mock.patch.object(workers, "_ANORMS", [None]),
+        ):
+            manifest = Manifest(config.export_root / ".elysium-manifest.json")
+            export_manager.write_character_sources(
+                config, npc_dir, manifest=manifest, jobs=1,
+                npc_manifest=MANIFEST)
+            export_manager.write_character_sources(
+                config, npc_dir, manifest=manifest, jobs=1, force=True,
+                npc_manifest=MANIFEST)
+            assert writer.call_count == 2
 
 
 class PartitionSectionReadTests(unittest.TestCase):

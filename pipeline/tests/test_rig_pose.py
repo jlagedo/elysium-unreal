@@ -141,35 +141,39 @@ def test_a_pose_no_model_target_named_is_counted_not_hidden() -> None:
     assert agreement == {"posed_entities": 1, "resolved_to_a_model": 0}
 
 
-class PlayerStateTests(unittest.TestCase):
-    STATES = [_player(1, 10.000, cycle=0.1), _player(2, 10.016, cycle=0.2),
-              _player(3, 10.032, cycle=0.3)]
+STATES = [_player(1, 10.000, cycle=0.1), _player(2, 10.016, cycle=0.2),
+          _player(3, 10.032, cycle=0.3)]
 
-    def test_states_come_back_in_clock_order(self) -> None:
-        shuffled = [self.STATES[2], self.STATES[0], self.STATES[1]]
-        assert [s["curtime"] for s in player_states(shuffled)] == [10.000, 10.016, 10.032]
 
-    def test_a_state_with_no_clock_cannot_be_placed(self) -> None:
-        assert player_states([{
-            "kind": "call", "target": "vampire.player_item_post_frame",
-            "sequence": 1, "ecx": "0xp", "fields": {"cycle": 0.5}}]) == []
+def test_states_come_back_in_clock_order() -> None:
+    shuffled = [STATES[2], STATES[0], STATES[1]]
+    assert [s["curtime"] for s in player_states(shuffled)] == [10.000, 10.016, 10.032]
 
-    def test_the_nearest_frame_wins_on_either_side(self) -> None:
-        states = player_states(self.STATES)
-        assert nearest_state(states, 10.017)["cycle"] == pytest.approx(0.2, abs=1e-7)
-        assert nearest_state(states, 10.015)["cycle"] == pytest.approx(0.2, abs=1e-7)
 
-    def test_a_clock_outside_tolerance_matches_nothing(self) -> None:
-        # Half a second past the last frame read: a pose that far from any state
-        # belongs to a frame the player target never reported.
-        states = player_states(self.STATES)
-        assert nearest_state(states, 10.532) is None
-        # And the boundary itself is inclusive, so a frame exactly one tolerance
-        # away is still that frame rather than a miss.
-        assert nearest_state(states, 10.032 + CLOCK_TOLERANCE_SECONDS) is not None
+def test_a_state_with_no_clock_cannot_be_placed() -> None:
+    assert player_states([{
+        "kind": "call", "target": "vampire.player_item_post_frame",
+        "sequence": 1, "ecx": "0xp", "fields": {"cycle": 0.5}}]) == []
 
-    def test_an_empty_stream_answers_nothing_rather_than_raising(self) -> None:
-        assert nearest_state([], 1.0) is None
+
+def test_the_nearest_frame_wins_on_either_side() -> None:
+    states = player_states(STATES)
+    assert nearest_state(states, 10.017)["cycle"] == pytest.approx(0.2, abs=1e-7)
+    assert nearest_state(states, 10.015)["cycle"] == pytest.approx(0.2, abs=1e-7)
+
+
+def test_a_clock_outside_tolerance_matches_nothing() -> None:
+    # Half a second past the last frame read: a pose that far from any state
+    # belongs to a frame the player target never reported.
+    states = player_states(STATES)
+    assert nearest_state(states, 10.532) is None
+    # And the boundary itself is inclusive, so a frame exactly one tolerance
+    # away is still that frame rather than a miss.
+    assert nearest_state(states, 10.032 + CLOCK_TOLERANCE_SECONDS) is not None
+
+
+def test_an_empty_stream_answers_nothing_rather_than_raising() -> None:
+    assert nearest_state([], 1.0) is None
 
 
 def test_a_contribution_carries_its_model_index_weight_and_clock() -> None:
@@ -267,46 +271,52 @@ def test_a_matrix_the_bone_list_cannot_name_is_reported() -> None:
     assert surplus == 1
 
 
-class BodyResolutionTests(unittest.TestCase):
-    """Which model a frame's matrices belong to.
+COUNTS = {"male.mdl": 79, "female.mdl": 88, "twin.mdl": 79, "prop.mdl": 2}
 
-    The bone count the engine filled is the hard measurement: a model may only name a frame
-    whose array is exactly as long as that model's own bone list, because naming an 88-bone
-    array with a 79-name list does not fail -- it answers 79 matrices under the wrong names
-    and drops nine.
-    """
 
-    COUNTS = {"male.mdl": 79, "female.mdl": 88, "twin.mdl": 79, "prop.mdl": 2}
+# BodyResolutionTests
+# Which model a frame's matrices belong to.
+#
+# The bone count the engine filled is the hard measurement: a model may only name a frame
+# whose array is exactly as long as that model's own bone list, because naming an 88-bone
+# array with a 79-name list does not fail -- it answers 79 matrices under the wrong names
+# and drops nine.
 
-    def test_a_pose_that_names_its_own_model_answers_directly(self) -> None:
-        assert resolve_body(88, "female.mdl", ["male.mdl"], [], [], self.COUNTS) == ("female.mdl", "stated by the pose record")
+def test_a_pose_that_names_its_own_model_answers_directly() -> None:
+    assert resolve_body(88, "female.mdl", ["male.mdl"], [], [], COUNTS) == ("female.mdl", "stated by the pose record")
 
-    def test_a_stated_model_that_cannot_carry_the_array_is_refused(self) -> None:
-        """A decode fault in the read chain, and guessing past it would bury it."""
-        model, reason = resolve_body(88, "male.mdl", [], [], [], self.COUNTS)
-        assert model is None
-        assert "does not carry this bone count" in reason
 
-    def test_the_census_answers_when_it_fits_the_count(self) -> None:
-        assert resolve_body(79, None, ["male.mdl"], ["male.mdl", "female.mdl"], [], self.COUNTS) == ("male.mdl", "census")
+def test_a_stated_model_that_cannot_carry_the_array_is_refused() -> None:
+    """A decode fault in the read chain, and guessing past it would bury it."""
+    model, reason = resolve_body(88, "male.mdl", [], [], [], COUNTS)
+    assert model is None
+    assert "does not carry this bone count" in reason
 
-    def test_a_census_the_count_contradicts_is_re_attributed(self) -> None:
-        """The entity redrew as another body; the count says which one."""
-        assert resolve_body(88, None, ["male.mdl"], ["male.mdl", "female.mdl"], [], self.COUNTS) == ("female.mdl", "re-attributed by bone count")
 
-    def test_a_contribution_breaks_a_tie_the_count_cannot(self) -> None:
-        model, reason = resolve_body(
-            79, None, ["female.mdl"], ["male.mdl", "twin.mdl"], ["twin.mdl"], self.COUNTS)
-        assert model == "twin.mdl"
-        assert "contribution" in reason
+def test_the_census_answers_when_it_fits_the_count() -> None:
+    assert resolve_body(79, None, ["male.mdl"], ["male.mdl", "female.mdl"], [], COUNTS) == ("male.mdl", "census")
 
-    def test_two_models_of_one_count_and_no_contribution_are_refused(self) -> None:
-        model, reason = resolve_body(
-            79, None, ["female.mdl"], ["male.mdl", "twin.mdl"], [], self.COUNTS)
-        assert model is None
-        assert "several models" in reason
 
-    def test_a_count_no_session_model_carries_is_refused(self) -> None:
-        model, reason = resolve_body(31, None, ["male.mdl"], ["male.mdl"], [], self.COUNTS)
-        assert model is None
-        assert "no model" in reason
+def test_a_census_the_count_contradicts_is_re_attributed() -> None:
+    """The entity redrew as another body; the count says which one."""
+    assert resolve_body(88, None, ["male.mdl"], ["male.mdl", "female.mdl"], [], COUNTS) == ("female.mdl", "re-attributed by bone count")
+
+
+def test_a_contribution_breaks_a_tie_the_count_cannot() -> None:
+    model, reason = resolve_body(
+        79, None, ["female.mdl"], ["male.mdl", "twin.mdl"], ["twin.mdl"], COUNTS)
+    assert model == "twin.mdl"
+    assert "contribution" in reason
+
+
+def test_two_models_of_one_count_and_no_contribution_are_refused() -> None:
+    model, reason = resolve_body(
+        79, None, ["female.mdl"], ["male.mdl", "twin.mdl"], [], COUNTS)
+    assert model is None
+    assert "several models" in reason
+
+
+def test_a_count_no_session_model_carries_is_refused() -> None:
+    model, reason = resolve_body(31, None, ["male.mdl"], ["male.mdl"], [], COUNTS)
+    assert model is None
+    assert "no model" in reason

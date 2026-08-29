@@ -126,6 +126,10 @@ def test_a_fan_resolves_a_cell_and_a_fraction():
     assert rc._axis(model, grid, 1, {"move_yaw": 0.0}) == (0, 0.0)
 
 
+# BindRemapBranchTests
+# The three-branch bind-pose remap (`vampire.dll FUN_100c67b0` / `0x1008cfa0`), on
+# hand-built bind pairs -- never a model's data.
+
 def test_close_binds_copy_the_position_unchanged():
     owner = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0))
     body = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0 + 0.09))  # |a-b|^2 = 0.0081 < 0.01
@@ -255,59 +259,59 @@ class RemapTests(unittest.TestCase):
             assert entry[1] == self.rot
 
 
-class ClosureRemapTests(unittest.TestCase):
-    """`compose()` remaps a channel's WHOLE closure -- its sequence plus its autolayers,
-    composed in the owner's own bind space -- exactly ONCE, never per layer.
+# ClosureRemapTests
+# `compose()` remaps a channel's WHOLE closure -- its sequence plus its autolayers,
+# composed in the owner's own bind space -- exactly ONCE, never per layer.
+#
+# A translate-branch bone makes the distinction observable: remapping each layer on its own
+# would add the bind offset twice (once to the base, once to the raw additive delta), which is
+# exactly the wrong-shaped defect this module exists to catch.
 
-    A translate-branch bone makes the distinction observable: remapping each layer on its own
-    would add the bind offset twice (once to the base, once to the raw additive delta), which is
-    exactly the wrong-shaped defect this module exists to catch.
-    """
+def _corpus():
+    identity = (0.0, 0.0, 0.0, 1.0)
+    owner_bones = [_bone(0, "root", -1, pos=(0.0, 0.0, 0.0)),
+                   _bone(1, "target", 0, pos=(1.0, 0.0, 0.0))]
+    body_bones = [_bone(0, "root", -1, pos=(0.0, 0.0, 0.0)),
+                  _bone(1, "target", 0, pos=(0.0, 0.0, 0.0))]  # |b|^2 <= eps: translate branch
 
-    def _corpus(self):
-        identity = (0.0, 0.0, 0.0, 1.0)
-        owner_bones = [_bone(0, "root", -1, pos=(0.0, 0.0, 0.0)),
-                       _bone(1, "target", 0, pos=(1.0, 0.0, 0.0))]
-        body_bones = [_bone(0, "root", -1, pos=(0.0, 0.0, 0.0)),
-                      _bone(1, "target", 0, pos=(0.0, 0.0, 0.0))]  # |b|^2 <= eps: translate branch
+    owner = _FakeModel(owner_bones)
+    owner.pose_params = {}
+    base_grid = mdl_skel.Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
+                              paramstart=(0.0, 0.0), paramend=(0.0, 0.0),
+                              cells=(mdl_skel.Cell(axis0=0, axis1=0, anim=0),))
+    delta_grid = mdl_skel.Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
+                               paramstart=(0.0, 0.0), paramend=(0.0, 0.0),
+                               cells=(mdl_skel.Cell(axis0=0, axis1=0, anim=1),))
+    base_seq = mdl_skel.Seq(label="base_seq", base=0, frames=1, fps=30.0, activity="",
+                            actweight=0.0, flags=0, grid=base_grid, autolayers=("delta_seq",))
+    delta_seq = mdl_skel.Seq(label="delta_seq", base=0, frames=1, fps=30.0, activity="",
+                             actweight=0.0, flags=rc.FLAG_DELTA, grid=delta_grid,
+                             autolayers=())
+    owner.sequences = {"base_seq": base_seq, "delta_seq": delta_seq}
+    # anim 0 (base): both bones exactly at the owner's own bind. anim 1 (delta): an additive
+    # +0.5 on X for the target bone only.
+    frame_table = {
+        0: [[((0.0, 0.0, 0.0), identity), ((1.0, 0.0, 0.0), identity)]],
+        1: [[((0.0, 0.0, 0.0), identity), ((0.5, 0.0, 0.0), identity)]],
+    }
+    owner.frames = lambda index: frame_table[index]
 
-        owner = _FakeModel(owner_bones)
-        owner.pose_params = {}
-        base_grid = mdl_skel.Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
-                                  paramstart=(0.0, 0.0), paramend=(0.0, 0.0),
-                                  cells=(mdl_skel.Cell(axis0=0, axis1=0, anim=0),))
-        delta_grid = mdl_skel.Grid(numblends=1, groupsize=(1, 1), paramindex=(-1, -1),
-                                   paramstart=(0.0, 0.0), paramend=(0.0, 0.0),
-                                   cells=(mdl_skel.Cell(axis0=0, axis1=0, anim=1),))
-        base_seq = mdl_skel.Seq(label="base_seq", base=0, frames=1, fps=30.0, activity="",
-                                actweight=0.0, flags=0, grid=base_grid, autolayers=("delta_seq",))
-        delta_seq = mdl_skel.Seq(label="delta_seq", base=0, frames=1, fps=30.0, activity="",
-                                 actweight=0.0, flags=rc.FLAG_DELTA, grid=delta_grid,
-                                 autolayers=())
-        owner.sequences = {"base_seq": base_seq, "delta_seq": delta_seq}
-        # anim 0 (base): both bones exactly at the owner's own bind. anim 1 (delta): an additive
-        # +0.5 on X for the target bone only.
-        frame_table = {
-            0: [[((0.0, 0.0, 0.0), identity), ((1.0, 0.0, 0.0), identity)]],
-            1: [[((0.0, 0.0, 0.0), identity), ((0.5, 0.0, 0.0), identity)]],
-        }
-        owner.frames = lambda index: frame_table[index]
+    body = _FakeModel(body_bones)
 
-        body = _FakeModel(body_bones)
+    class _StubCorpus:
+        def model(self, name):
+            return {"owner_stem": owner, "body_stem": body}[name]
 
-        class _StubCorpus:
-            def model(self, name):
-                return {"owner_stem": owner, "body_stem": body}[name]
+    return _StubCorpus()
 
-        return _StubCorpus()
 
-    def test_the_additive_delta_is_remapped_once_with_the_base_not_twice(self):
-        corpus = self._corpus()
-        channels = [{"owner": "owner_stem", "label": "base_seq", "cycle": 0.0, "weight": 1.0}]
-        _body, locals_ = rc.compose(corpus, "body_stem", channels, {})
-        # Owner-space closure: bind(1.0) -[base, replace]-> 1.0 -[delta, additive]-> 1.5.
-        # Remapped ONCE (translate: b - a = 0.0 - 1.0 = -1.0): 1.5 + (-1.0) = 0.5.
-        assert locals_[1][0][0] == pytest.approx(0.5, abs=1e-6)
-        # The wrong, per-layer answer (offset applied to the base AND to the raw delta) would
-        # read -0.5 here; guard against silently regressing back to it.
-        assert locals_[1][0][0] != pytest.approx(-0.5, abs=1e-6)
+def test_the_additive_delta_is_remapped_once_with_the_base_not_twice():
+    corpus = _corpus()
+    channels = [{"owner": "owner_stem", "label": "base_seq", "cycle": 0.0, "weight": 1.0}]
+    _body, locals_ = rc.compose(corpus, "body_stem", channels, {})
+    # Owner-space closure: bind(1.0) -[base, replace]-> 1.0 -[delta, additive]-> 1.5.
+    # Remapped ONCE (translate: b - a = 0.0 - 1.0 = -1.0): 1.5 + (-1.0) = 0.5.
+    assert locals_[1][0][0] == pytest.approx(0.5, abs=1e-6)
+    # The wrong, per-layer answer (offset applied to the base AND to the raw delta) would
+    # read -0.5 here; guard against silently regressing back to it.
+    assert locals_[1][0][0] != pytest.approx(-0.5, abs=1e-6)

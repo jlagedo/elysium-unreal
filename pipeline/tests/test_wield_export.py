@@ -145,203 +145,200 @@ def _fake_write_model(_idx, _model_path, out_dir, stem=None, ref_pose=None, **_k
     return {"stem": stem, "bones": len(ref_pose or ())}
 
 
-class WieldExportTests(unittest.TestCase):
-    """Shared fixture: one real model plus a null/empty/absent row apiece, patched onto the
-    exporter's decision-layer calls. `_run` mocks the census constants to the fixture's own shape
-    so `main` does not fail its own drift assertion against the 244-definition install."""
+# WieldExportTests
+# Shared fixture: one real model plus a null/empty/absent row apiece, patched onto the
+# exporter's decision-layer calls. `_run` mocks the census constants to the fixture's own shape
+# so `main` does not fail its own drift assertion against the 244-definition install.
 
-    def _install(self, root: Path) -> _Install:
-        inst = _Install(root)
-        inst.item("item_a_real", f'\t"wieldmodel_f"\t"{REAL_MODEL}"\n'
-                                 f'\t"wieldmodel_m"\t"{REAL_MODEL}"\n')
-        inst.item("item_b_null", f'\t"wieldmodel_f"\t"{NULL_F}"\n\t"wieldmodel_m"\t"{NULL_M}"\n')
-        inst.item("item_c_empty", '\t"wieldmodel_f"\t""\n\t"wieldmodel_m"\t""\n')
-        inst.item("item_d_absent", f'\t"wieldmodel_f"\t"{ABSENT_MODEL}"\n'
-                                   f'\t"wieldmodel_m"\t"{ABSENT_MODEL}"\n')
-        # `mdl.load` needs both companions present for the one model meant to resolve as real.
-        inst.add_bytes(REAL_MODEL, b"IDST-fake-mdl")
-        inst.add_bytes(REAL_MODEL[:-4] + ".dx80.vtx", b"fake-vtx")
-        # The skin-family-only envmask this module must decode for real.
-        inst.add(
-            "materials/ghost_mask.vmt",
-            '"VertexLitGeneric"\n{\n\t"$basetexture" "ghost_mask"\n}\n',
-        )
-        inst.add_bytes("materials/ghost_mask.tth", _tth())
-        inst.add_bytes("materials/ghost_mask.ttz", zlib.compress(bytes((1, 2, 3))))
-        return inst
+def _install(root: Path) -> _Install:
+    inst = _Install(root)
+    inst.item("item_a_real", f'\t"wieldmodel_f"\t"{REAL_MODEL}"\n'
+                             f'\t"wieldmodel_m"\t"{REAL_MODEL}"\n')
+    inst.item("item_b_null", f'\t"wieldmodel_f"\t"{NULL_F}"\n\t"wieldmodel_m"\t"{NULL_M}"\n')
+    inst.item("item_c_empty", '\t"wieldmodel_f"\t""\n\t"wieldmodel_m"\t""\n')
+    inst.item("item_d_absent", f'\t"wieldmodel_f"\t"{ABSENT_MODEL}"\n'
+                               f'\t"wieldmodel_m"\t"{ABSENT_MODEL}"\n')
+    # `mdl.load` needs both companions present for the one model meant to resolve as real.
+    inst.add_bytes(REAL_MODEL, b"IDST-fake-mdl")
+    inst.add_bytes(REAL_MODEL[:-4] + ".dx80.vtx", b"fake-vtx")
+    # The skin-family-only envmask this module must decode for real.
+    inst.add(
+        "materials/ghost_mask.vmt",
+        '"VertexLitGeneric"\n{\n\t"$basetexture" "ghost_mask"\n}\n',
+    )
+    inst.add_bytes("materials/ghost_mask.tth", _tth())
+    inst.add_bytes("materials/ghost_mask.ttz", zlib.compress(bytes((1, 2, 3))))
+    return inst
 
-    def _run(self, root: Path, out: Path, *, bone_locals=None, census=None, bindings=None,
-             classification=None, trail_tip=None, capture_attachments=None):
-        """One `main()` call with the decision layer and the geometry writer replaced, against a
-        fresh install rooted at `root` and an export root at `out`.
 
-        `capture_attachments`, when given a list, receives `write_model`'s `extra_attachments`
-        kwarg from every call -- how the socket_prop trail-tip tests observe what would have
-        been baked into the `.eskm` without a real geometry writer.
-        """
-        inst = self._install(root)
+def _run(root: Path, out: Path, *, bone_locals=None, census=None, bindings=None,
+         classification=None, trail_tip=None, capture_attachments=None):
+    """One `main()` call with the decision layer and the geometry writer replaced, against a
+    fresh install rooted at `root` and an export root at `out`.
 
-        def _write_model(idx, model_path, out_dir_, stem=None, ref_pose=None,
-                         extra_attachments=None, **kw):
-            if capture_attachments is not None:
-                capture_attachments.append(extra_attachments)
-            return _fake_write_model(idx, model_path, out_dir_, stem=stem, ref_pose=ref_pose, **kw)
+    `capture_attachments`, when given a list, receives `write_model`'s `extra_attachments`
+    kwarg from every call -- how the socket_prop trail-tip tests observe what would have
+    been baked into the `.eskm` without a real geometry writer.
+    """
+    inst = _install(root)
 
-        patches = [
-            mock.patch.object(export, "export_root", return_value=out),
-            mock.patch.object(export, "write_model", side_effect=_write_model),
-            mock.patch.object(export, "EXPECTED_CENSUS", census or _CENSUS),
-            mock.patch.object(export, "EXPECTED_BINDINGS", bindings or _BINDINGS),
-            mock.patch.object(mdl_skel, "read_bones", return_value=_bones()),
-            # main() decodes each model's geometry once and hands it to the decision layer; the
-            # decision layer is mocked here, so the shared decode is stubbed the same way
-            # read_bones is.
-            mock.patch.object(mdl_skel, "decode_skinned", return_value={}),
-            mock.patch.object(W, "skinned_bones", return_value={1}),
-            mock.patch.object(W, "classify", return_value=classification or _classification()),
-            mock.patch.object(W, "check_subtree",
-                              return_value=W.Check("subtree", True, ())),
-            mock.patch.object(W, "check_collapse",
-                              return_value=W.Check("collapse", True, ())),
-            mock.patch.object(W, "check_motion",
-                              return_value=W.Check("motion", True, ())),
-            mock.patch.object(W, "trail_tip", return_value=trail_tip),
-            mock.patch.object(W, "bake_pose", return_value=_pose()),
-            mock.patch.object(W, "model_materials", return_value=_materials()),
-            mock.patch.object(W, "skin_families", return_value=_skins()),
-            mock.patch.object(W, "bone_motion", return_value=[
-                W.BoneMotion(name="Bip01", max_pos=0.0, max_rot=0.0, skinned=False),
-                W.BoneMotion(name="handle", max_pos=0.02, max_rot=1.4, skinned=True),
-            ]),
-            mock.patch.object(mdl_skel, "local_sequences", return_value=[
-                mdl_skel.Seq(label="idle", base=0, frames=30, fps=30.0,
-                            activity="ACT_IDLE", actweight=1, flags=0)]),
-            mock.patch.object(eskm, "read", return_value=b""),
-            mock.patch.object(eskm, "bone_locals",
-                              return_value=bone_locals if bone_locals is not None
-                              else _passing_readback()),
-        ]
-        with mock.patch.object(W, "npc_carried", return_value={"item_a_real"}):
+    def _write_model(idx, model_path, out_dir_, stem=None, ref_pose=None,
+                     extra_attachments=None, **kw):
+        if capture_attachments is not None:
+            capture_attachments.append(extra_attachments)
+        return _fake_write_model(idx, model_path, out_dir_, stem=stem, ref_pose=ref_pose, **kw)
+
+    patches = [
+        mock.patch.object(export, "export_root", return_value=out),
+        mock.patch.object(export, "write_model", side_effect=_write_model),
+        mock.patch.object(export, "EXPECTED_CENSUS", census or _CENSUS),
+        mock.patch.object(export, "EXPECTED_BINDINGS", bindings or _BINDINGS),
+        mock.patch.object(mdl_skel, "read_bones", return_value=_bones()),
+        # main() decodes each model's geometry once and hands it to the decision layer; the
+        # decision layer is mocked here, so the shared decode is stubbed the same way
+        # read_bones is.
+        mock.patch.object(mdl_skel, "decode_skinned", return_value={}),
+        mock.patch.object(W, "skinned_bones", return_value={1}),
+        mock.patch.object(W, "classify", return_value=classification or _classification()),
+        mock.patch.object(W, "check_subtree",
+                          return_value=W.Check("subtree", True, ())),
+        mock.patch.object(W, "check_collapse",
+                          return_value=W.Check("collapse", True, ())),
+        mock.patch.object(W, "check_motion",
+                          return_value=W.Check("motion", True, ())),
+        mock.patch.object(W, "trail_tip", return_value=trail_tip),
+        mock.patch.object(W, "bake_pose", return_value=_pose()),
+        mock.patch.object(W, "model_materials", return_value=_materials()),
+        mock.patch.object(W, "skin_families", return_value=_skins()),
+        mock.patch.object(W, "bone_motion", return_value=[
+            W.BoneMotion(name="Bip01", max_pos=0.0, max_rot=0.0, skinned=False),
+            W.BoneMotion(name="handle", max_pos=0.02, max_rot=1.4, skinned=True),
+        ]),
+        mock.patch.object(mdl_skel, "local_sequences", return_value=[
+            mdl_skel.Seq(label="idle", base=0, frames=30, fps=30.0,
+                        activity="ACT_IDLE", actweight=1, flags=0)]),
+        mock.patch.object(eskm, "read", return_value=b""),
+        mock.patch.object(eskm, "bone_locals",
+                          return_value=bone_locals if bone_locals is not None
+                          else _passing_readback()),
+    ]
+    with mock.patch.object(W, "npc_carried", return_value={"item_a_real"}):
+        for patch in patches:
+            patch.start()
+        try:
+            export.main(index=inst.index)
+        finally:
             for patch in patches:
-                patch.start()
-            try:
-                export.main(index=inst.index)
-            finally:
-                for patch in patches:
-                    patch.stop()
-        return json.loads((out / "items" / "wield_models.json").read_text(encoding="utf-8"))
+                patch.stop()
+    return json.loads((out / "items" / "wield_models.json").read_text(encoding="utf-8"))
 
-    # --- kind classification --------------------------------------------------------------------
 
-    def test_the_four_kinds_land_on_their_rows(self) -> None:
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            manifest = self._run(Path(root), Path(out))
+def test_the_four_kinds_land_on_their_rows() -> None:
+    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
+        manifest = _run(Path(root), Path(out))
 
-            rows = manifest["rows"]
-            assert rows["item_a_real"]["f"]["kind"] == "real"
-            assert rows["item_a_real"]["f"]["stem"] == "w_real"
-            assert rows["item_b_null"]["f"]["kind"] == "null"
-            assert rows["item_c_empty"]["f"]["kind"] == "empty"
-            assert rows["item_c_empty"]["f"]["source"] == ""
-            assert rows["item_d_absent"]["f"]["kind"] == "absent"
-            assert rows["item_a_real"]["npc_carried"]
-            assert not rows["item_b_null"]["npc_carried"]
+        rows = manifest["rows"]
+        assert rows["item_a_real"]["f"]["kind"] == "real"
+        assert rows["item_a_real"]["f"]["stem"] == "w_real"
+        assert rows["item_b_null"]["f"]["kind"] == "null"
+        assert rows["item_c_empty"]["f"]["kind"] == "empty"
+        assert rows["item_c_empty"]["f"]["source"] == ""
+        assert rows["item_d_absent"]["f"]["kind"] == "absent"
+        assert rows["item_a_real"]["npc_carried"]
+        assert not rows["item_b_null"]["npc_carried"]
 
-    def test_an_absent_model_is_recorded_not_fatal(self) -> None:
-        # The whole run must complete -- an absent model is an authored possibility, never fatal
-        # (`docs/vtmb/wielded_weapons.md`) -- and the census must count it rather than drop it.
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            manifest = self._run(Path(root), Path(out))
 
-            assert manifest["census"]["absent_rows"] == 2
-            assert manifest["census"]["absent_paths"] == 1
-            assert ABSENT_MODEL not in manifest["models"]
+def test_an_absent_model_is_recorded_not_fatal() -> None:
+    # The whole run must complete -- an absent model is an authored possibility, never fatal
+    # (`docs/vtmb/wielded_weapons.md`) -- and the census must count it rather than drop it.
+    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
+        manifest = _run(Path(root), Path(out))
 
-    # --- motion -------------------------------------------------------------------------------
+        assert manifest["census"]["absent_rows"] == 2
+        assert manifest["census"]["absent_paths"] == 1
+        assert ABSENT_MODEL not in manifest["models"]
 
-    def test_motion_rows_exclude_bip01_bones(self) -> None:
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            manifest = self._run(Path(root), Path(out))
 
-            motion = manifest["models"]["w_real"]["motion"]
-            assert [row["name"] for row in motion] == ["handle"]
+def test_motion_rows_exclude_bip01_bones() -> None:
+    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
+        manifest = _run(Path(root), Path(out))
 
-    # --- textures -----------------------------------------------------------------------------
+        motion = manifest["models"]["w_real"]["motion"]
+        assert [row["name"] for row in motion] == ["handle"]
 
-    def test_texture_inventory_includes_a_skin_family_only_key(self) -> None:
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            manifest = self._run(Path(root), Path(out))
 
-            # One flat key namespace across all three channels (`_register_texture`'s docstring):
-            # a key used by two different roles is still one install file and one manifest entry.
-            textures = manifest["textures"]
-            assert "claws" in textures
-            assert "ghost" in textures
-            assert "ghost_mask" in textures
-            assert textures["ghost_mask"] == "tex/ghost_mask.png"
-            # The decode is real -- the file this key names actually exists.
-            assert (Path(out) / "items" / "wield" / "tex" / "ghost_mask.png").is_file()
-            assert manifest["census"]["texture_union"] == 3
+def test_texture_inventory_includes_a_skin_family_only_key() -> None:
+    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
+        manifest = _run(Path(root), Path(out))
 
-    # --- reference-pose readback ----------------------------------------------------------------
+        # One flat key namespace across all three channels (`_register_texture`'s docstring):
+        # a key used by two different roles is still one install file and one manifest entry.
+        textures = manifest["textures"]
+        assert "claws" in textures
+        assert "ghost" in textures
+        assert "ghost_mask" in textures
+        assert textures["ghost_mask"] == "tex/ghost_mask.png"
+        # The decode is real -- the file this key names actually exists.
+        assert (Path(out) / "items" / "wield" / "tex" / "ghost_mask.png").is_file()
+        assert manifest["census"]["texture_union"] == 3
 
-    def test_ref_pose_readback_mismatch_fails_loudly(self) -> None:
-        wrong = list(_passing_readback())
-        name, parent, _pos, quat = wrong[1]
-        wrong[1] = (name, parent, (99.0, 0.0, 0.0), quat)          # "handle" moved 99cm
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            with pytest.raises(AssertionError) as ctx:
-                self._run(Path(root), Path(out), bone_locals=wrong)
 
-        message = str(ctx.value)
-        assert REAL_MODEL in message
-        assert "handle" in message
+def test_ref_pose_readback_mismatch_fails_loudly() -> None:
+    wrong = list(_passing_readback())
+    name, parent, _pos, quat = wrong[1]
+    wrong[1] = (name, parent, (99.0, 0.0, 0.0), quat)          # "handle" moved 99cm
+    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
+        with pytest.raises(AssertionError) as ctx:
+            _run(Path(root), Path(out), bone_locals=wrong)
 
-    # --- trail tip ------------------------------------------------------------------------------
+    message = str(ctx.value)
+    assert REAL_MODEL in message
+    assert "handle" in message
 
-    def test_socket_hand_model_carries_no_trail_tip(self) -> None:
-        # The fixture's REAL_MODEL classifies socket_hand (a firearm shape); a melee-only
-        # attachment must not appear on it.
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            manifest = self._run(Path(root), Path(out))
 
-            assert manifest["models"]["w_real"]["trail_tip"] is None
+def test_socket_hand_model_carries_no_trail_tip() -> None:
+    # The fixture's REAL_MODEL classifies socket_hand (a firearm shape); a melee-only
+    # attachment must not appear on it.
+    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
+        manifest = _run(Path(root), Path(out))
 
-    def test_socket_prop_model_carries_a_trail_tip_attachment(self) -> None:
-        prop_cls = W.Classification(binding="socket_prop", mount_bone="handle", hand_bone="Bip01",
-                                    collapse_bone="handle", grip="right",
-                                    mount_bind=((4.0, 1.0, 0.0), IDENTITY_Q),
-                                    bone_count=2, skinned_bone_count=1, anomalies=())
-        tip = ((6.0, 1.0, 0.0), IDENTITY_Q)
-        captured: list = []
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            manifest = self._run(Path(root), Path(out), bindings={"socket_prop": 1},
-                                 classification=prop_cls, trail_tip=tip,
-                                 capture_attachments=captured)
+        assert manifest["models"]["w_real"]["trail_tip"] is None
 
-        trail_tip_out = manifest["models"]["w_real"]["trail_tip"]
-        assert trail_tip_out["bone"] == "handle"
-        assert trail_tip_out["pos"] == [6.0, 1.0, 0.0]
-        assert trail_tip_out["quat"] == list(IDENTITY_Q)
 
-        # write_model must have received the synthetic attachment record too -- the manifest field
-        # and the baked socket are the same fact stated twice, and both have to agree.
-        [attachments] = captured
-        assert len(attachments) == 1
-        assert attachments[0].name == "TrailTip"
-        assert attachments[0].bone == 1   # "handle" is StudioBone index 1 in `_bones()`
-        assert attachments[0].pos == (6.0, 1.0, 0.0)
-        assert attachments[0].quat == IDENTITY_Q
+def test_socket_prop_model_carries_a_trail_tip_attachment() -> None:
+    prop_cls = W.Classification(binding="socket_prop", mount_bone="handle", hand_bone="Bip01",
+                                collapse_bone="handle", grip="right",
+                                mount_bind=((4.0, 1.0, 0.0), IDENTITY_Q),
+                                bone_count=2, skinned_bone_count=1, anomalies=())
+    tip = ((6.0, 1.0, 0.0), IDENTITY_Q)
+    captured: list = []
+    with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
+        manifest = _run(Path(root), Path(out), bindings={"socket_prop": 1},
+                             classification=prop_cls, trail_tip=tip,
+                             capture_attachments=captured)
 
-    # --- determinism --------------------------------------------------------------------------
+    trail_tip_out = manifest["models"]["w_real"]["trail_tip"]
+    assert trail_tip_out["bone"] == "handle"
+    assert trail_tip_out["pos"] == [6.0, 1.0, 0.0]
+    assert trail_tip_out["quat"] == list(IDENTITY_Q)
 
-    def test_manifest_is_byte_identical_across_two_runs(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            with tempfile.TemporaryDirectory() as out_a, tempfile.TemporaryDirectory() as out_b:
-                self._run(Path(root), Path(out_a))
-                self._run(Path(root), Path(out_b))
+    # write_model must have received the synthetic attachment record too -- the manifest field
+    # and the baked socket are the same fact stated twice, and both have to agree.
+    [attachments] = captured
+    assert len(attachments) == 1
+    assert attachments[0].name == "TrailTip"
+    assert attachments[0].bone == 1   # "handle" is StudioBone index 1 in `_bones()`
+    assert attachments[0].pos == (6.0, 1.0, 0.0)
+    assert attachments[0].quat == IDENTITY_Q
 
-                text_a = (Path(out_a) / "items" / "wield_models.json").read_text(encoding="utf-8")
-                text_b = (Path(out_b) / "items" / "wield_models.json").read_text(encoding="utf-8")
 
-        assert text_a == text_b
+def test_manifest_is_byte_identical_across_two_runs() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        with tempfile.TemporaryDirectory() as out_a, tempfile.TemporaryDirectory() as out_b:
+            _run(Path(root), Path(out_a))
+            _run(Path(root), Path(out_b))
+
+            text_a = (Path(out_a) / "items" / "wield_models.json").read_text(encoding="utf-8")
+            text_b = (Path(out_b) / "items" / "wield_models.json").read_text(encoding="utf-8")
+
+    assert text_a == text_b

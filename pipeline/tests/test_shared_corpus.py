@@ -32,106 +32,116 @@ def test_static_stem_keeps_the_characters_the_c_twin_keeps():
     assert SC.static_stem("models/scenery/a-b/c.d e.mdl") == "models_scenery_a-b_c.d_e"
 
 
-class PropMaterialKeyNormalizationTests(unittest.TestCase):
-    """One material key, one fold, on both sides of the join.
+SEARCH = ["models/scenery/furniture/MilkCrate/"]
 
-    A model header states its texture search paths and its material names in the install's own
-    mixed case; `shared/materials.json` is keyed by `material_key`, which is lower case. Every
-    lookup against that document -- `bake_lib.read_mtl`'s above all -- is case-sensitive, so a
-    `.mtl` naming the header's spelling joins nothing and the mesh bakes with a null material.
-    """
+KEY = "models/scenery/furniture/milkcrate/milkcrate"
 
-    SEARCH = ["models/scenery/furniture/MilkCrate/"]
-    KEY = "models/scenery/furniture/milkcrate/milkcrate"
-    VMT = b'"VertexLitGeneric"\n{\n"$basetexture" "models/scenery/milkcrate"\n}\n'
-
-    def _read(self, key):
-        # The install index is case-folded (`install.read` lowers), so a mixed-case candidate
-        # reads the same file a lower-case one would.
-        return self.VMT if key.lower() == "materials/%s.vmt" % self.KEY else None
-
-    def test_the_recorded_key_is_the_one_the_corpus_document_carries(self):
-        channels = mdl.material_channels("MilkCrate", self.SEARCH, self._read)
-        assert channels["vmt"] == self.KEY
-        assert channels["vmt"] == SC.material_key(channels["vmt"])
-
-    def test_a_prop_mtl_names_that_key(self):
-        mesh = mdl.Mesh("MilkCrate")
-        mesh.verts = [(1.0, 2.0, 3.0, 0.0, 0.0),
-                      (2.0, 2.0, 3.0, 1.0, 0.0),
-                      (1.0, 3.0, 3.0, 0.0, 1.0)]
-        mesh.tris = [(0, 1, 2)]
-        with tempfile.TemporaryDirectory() as out:
-            mdl.write_obj_scene([mesh], "crate", out, self.SEARCH, self._read, {})
-            mtl = (Path(out) / "crate.mtl").read_text(encoding="utf-8")
-        assert "mat %s\n" % self.KEY in mtl
+VMT = b'"VertexLitGeneric"\n{\n"$basetexture" "models/scenery/milkcrate"\n}\n'
 
 
-class MaterialResolutionTests(unittest.TestCase):
-    """`resolve_vmt` is the engine's own walk and only that walk (research case
-    `material-resolution`): the model header's search paths, in header order, each composed into
-    `materials/<path><name>.vmt`, with nothing after the last one."""
+# PropMaterialKeyNormalizationTests
+# One material key, one fold, on both sides of the join.
+#
+# A model header states its texture search paths and its material names in the install's own
+# mixed case; `shared/materials.json` is keyed by `material_key`, which is lower case. Every
+# lookup against that document -- `bake_lib.read_mtl`'s above all -- is case-sensitive, so a
+# `.mtl` naming the header's spelling joins nothing and the mesh bakes with a null material.
 
-    HIT = b'"VertexLitGeneric"\n{\n"$basetexture" "models/spike"\n}\n'
+def _read(key):
+    # The install index is case-folded (`install.read` lowers), so a mixed-case candidate
+    # reads the same file a lower-case one would.
+    return VMT if key.lower() == "materials/%s.vmt" % KEY else None
 
-    def test_the_header_search_paths_are_tried_in_header_order(self):
-        tried = []
 
-        def read(key):
-            tried.append(key)
-            return self.HIT if key == "materials/models/props/second/spike.vmt" else None
+def test_the_recorded_key_is_the_one_the_corpus_document_carries():
+    channels = mdl.material_channels("MilkCrate", SEARCH, _read)
+    assert channels["vmt"] == KEY
+    assert channels["vmt"] == SC.material_key(channels["vmt"])
 
-        path, info = mdl.resolve_vmt(
-            "spike", ["models/props/first/", "models/props/second/"], read)
-        assert info is not None
-        assert path == "models/props/second/spike"
-        assert tried == ["materials/models/props/first/spike.vmt",
-                                 "materials/models/props/second/spike.vmt"]
 
-    def test_a_flat_material_is_not_a_last_resort(self):
-        # The engine composes one path per search path and stops; there is no global
-        # `materials/<name>.vmt` step, so a name that only exists flat misses.
-        tried = []
+def test_a_prop_mtl_names_that_key():
+    mesh = mdl.Mesh("MilkCrate")
+    mesh.verts = [(1.0, 2.0, 3.0, 0.0, 0.0),
+                  (2.0, 2.0, 3.0, 1.0, 0.0),
+                  (1.0, 3.0, 3.0, 0.0, 1.0)]
+    mesh.tris = [(0, 1, 2)]
+    with tempfile.TemporaryDirectory() as out:
+        mdl.write_obj_scene([mesh], "crate", out, SEARCH, _read, {})
+        mtl = (Path(out) / "crate.mtl").read_text(encoding="utf-8")
+    assert "mat %s\n" % KEY in mtl
 
-        def read(key):
-            tried.append(key)
-            return self.HIT if key == "materials/spike.vmt" else None
 
-        assert mdl.resolve_vmt("spike", ["models/props/"], read) == (None, None)
-        assert tried == ["materials/models/props/spike.vmt"]
+HIT = b'"VertexLitGeneric"\n{\n"$basetexture" "models/spike"\n}\n'
 
-    def test_a_model_with_no_search_path_resolves_nothing(self):
-        assert mdl.resolve_vmt("spike", [], lambda key: self.HIT) == (None, None)
 
-    def test_a_world_name_resolves_against_the_materials_root(self):
-        # A world or decal material's authored name is already its path, and the engine's brush
-        # path composes exactly `materials/<name>.vmt` for it.
-        tried = []
+# MaterialResolutionTests
+# `resolve_vmt` is the engine's own walk and only that walk (research case
+# `material-resolution`): the model header's search paths, in header order, each composed into
+# `materials/<path><name>.vmt`, with nothing after the last one.
 
-        def read(key):
-            tried.append(key)
-            return self.HIT if key == "materials/brick/brickwall001a.vmt" else None
+def test_the_header_search_paths_are_tried_in_header_order():
+    tried = []
 
-        path, info = mdl.resolve_vmt("brick/brickwall001a", mdl.WORLD_SEARCH, read)
-        assert path == "brick/brickwall001a"
-        assert tried == ["materials/brick/brickwall001a.vmt"]
+    def read(key):
+        tried.append(key)
+        return HIT if key == "materials/models/props/second/spike.vmt" else None
 
-    def test_a_total_miss_answers_no_material(self):
-        assert mdl.material_channels("spike", ["models/props/"], lambda key: None) is None
+    path, info = mdl.resolve_vmt(
+        "spike", ["models/props/first/", "models/props/second/"], read)
+    assert info is not None
+    assert path == "models/props/second/spike"
+    assert tried == ["materials/models/props/first/spike.vmt",
+                             "materials/models/props/second/spike.vmt"]
 
-    def test_a_missed_slot_writes_newmtl_with_no_mat_line(self):
-        """The bake's signal for a miss is the absence of the `mat` line, which is what lets it
-        bind the error material on exactly that slot."""
-        mesh = mdl.Mesh("spike")
-        mesh.verts = [(1.0, 2.0, 3.0, 0.0, 0.0),
-                      (2.0, 2.0, 3.0, 1.0, 0.0),
-                      (1.0, 3.0, 3.0, 0.0, 1.0)]
-        mesh.tris = [(0, 1, 2)]
-        with tempfile.TemporaryDirectory() as out:
-            mdl.write_obj_scene([mesh], "spike", out, ["models/props/"], lambda key: None, {})
-            mtl = (Path(out) / "spike.mtl").read_text(encoding="utf-8")
-        assert "newmtl spike\n" in mtl
-        assert "mat " not in mtl
+
+def test_a_flat_material_is_not_a_last_resort():
+    # The engine composes one path per search path and stops; there is no global
+    # `materials/<name>.vmt` step, so a name that only exists flat misses.
+    tried = []
+
+    def read(key):
+        tried.append(key)
+        return HIT if key == "materials/spike.vmt" else None
+
+    assert mdl.resolve_vmt("spike", ["models/props/"], read) == (None, None)
+    assert tried == ["materials/models/props/spike.vmt"]
+
+
+def test_a_model_with_no_search_path_resolves_nothing():
+    assert mdl.resolve_vmt("spike", [], lambda key: HIT) == (None, None)
+
+
+def test_a_world_name_resolves_against_the_materials_root():
+    # A world or decal material's authored name is already its path, and the engine's brush
+    # path composes exactly `materials/<name>.vmt` for it.
+    tried = []
+
+    def read(key):
+        tried.append(key)
+        return HIT if key == "materials/brick/brickwall001a.vmt" else None
+
+    path, info = mdl.resolve_vmt("brick/brickwall001a", mdl.WORLD_SEARCH, read)
+    assert path == "brick/brickwall001a"
+    assert tried == ["materials/brick/brickwall001a.vmt"]
+
+
+def test_a_total_miss_answers_no_material():
+    assert mdl.material_channels("spike", ["models/props/"], lambda key: None) is None
+
+
+def test_a_missed_slot_writes_newmtl_with_no_mat_line():
+    """The bake's signal for a miss is the absence of the `mat` line, which is what lets it
+    bind the error material on exactly that slot."""
+    mesh = mdl.Mesh("spike")
+    mesh.verts = [(1.0, 2.0, 3.0, 0.0, 0.0),
+                  (2.0, 2.0, 3.0, 1.0, 0.0),
+                  (1.0, 3.0, 3.0, 0.0, 1.0)]
+    mesh.tris = [(0, 1, 2)]
+    with tempfile.TemporaryDirectory() as out:
+        mdl.write_obj_scene([mesh], "spike", out, ["models/props/"], lambda key: None, {})
+        mtl = (Path(out) / "spike.mtl").read_text(encoding="utf-8")
+    assert "newmtl spike\n" in mtl
+    assert "mat " not in mtl
 
 
 def test_an_unpatched_face_keys_by_its_authored_material():
@@ -184,6 +194,10 @@ def test_a_material_only_this_maps_pakfile_carries_stays_with_its_map():
     assert SC.is_map_scoped_material(
         "maps/sm_pier_1/water/invisible_water_depth_33", local=True)
 
+
+# RigBoneNameTests
+# `rig_bone_name` must be a fixed point of Control Rig's own sanitizer: every character it
+# emits is one `URigHierarchy::SanitizeName` keeps, or the track and the bone diverge again.
 
 def test_control_rig_illegal_characters_fold_to_underscores():
     from elysium_pipeline.asset_names import rig_bone_name
@@ -286,61 +300,67 @@ def test_every_texture_bearing_field_is_declared_a_channel():
     assert set(SC.CHANNEL_FIELDS) == stated
 
 
-class MaterialRecordTests(unittest.TestCase):
-    def _channels(self, **overrides):
-        base = {
-            "material": "spike", "vmt": "models/scenery/spike", "albedo": "models/scenery/spike",
-            "selfillum": False, "additive": False, "translucent": False,
-            "alphatest": False, "glass": False, "envmap": "", "envmap_path": "", "envmask": "",
-            "envmask_from_alpha": False, "envtint": None, "globalwetness": None, "bump": "",
-            "base_tex2": "", "refract": False, "refract_amount": 0.0, "refract_map": "",
-            "refract_is_dudv": False, "iris": "", "vampire": False, "water": False,
-            "water_normal": "", "water_fog_color": None, "water_fog_start": None,
-            "water_fog_end": None, "water_reflect_tint": None, "decal_scale": 0.0, "unlit": False,
-        }
-        base.update(overrides)
-        return base
+def _channels(**overrides):
+    base = {
+        "material": "spike", "vmt": "models/scenery/spike", "albedo": "models/scenery/spike",
+        "selfillum": False, "additive": False, "translucent": False,
+        "alphatest": False, "glass": False, "envmap": "", "envmap_path": "", "envmask": "",
+        "envmask_from_alpha": False, "envtint": None, "globalwetness": None, "bump": "",
+        "base_tex2": "", "refract": False, "refract_amount": 0.0, "refract_map": "",
+        "refract_is_dudv": False, "iris": "", "vampire": False, "water": False,
+        "water_normal": "", "water_fog_color": None, "water_fog_start": None,
+        "water_fog_end": None, "water_reflect_tint": None, "decal_scale": 0.0, "unlit": False,
+    }
+    base.update(overrides)
+    return base
 
-    def test_a_channel_whose_file_the_corpus_lacks_is_stated_empty(self):
-        # A record that pointed at a file the decode never wrote would bake as the master's own
-        # placeholder, which is exactly the silent grey surface the guard exists to prevent.
-        record = SC.material_record(self._channels(), files=set())
-        assert record["albedo"] == ""
-        assert record["albedo_key"] == "models/scenery/spike"
 
-    def test_a_present_channel_is_stated_corpus_relative(self):
-        record = SC.material_record(
-            self._channels(), files={"models_scenery_spike.png"})
-        assert record["albedo"] == "tex/models_scenery_spike.png"
+def test_a_channel_whose_file_the_corpus_lacks_is_stated_empty():
+    # A record that pointed at a file the decode never wrote would bake as the master's own
+    # placeholder, which is exactly the silent grey surface the guard exists to prevent.
+    record = SC.material_record(_channels(), files=set())
+    assert record["albedo"] == ""
+    assert record["albedo_key"] == "models/scenery/spike"
 
-    def test_without_a_file_set_every_named_channel_is_stated(self):
-        # `files=None` is "state what the VMT names": the caller has no decoded set to check
-        # against. Every caller that does have one passes it, including the map exporter's
-        # PAKFILE-local fallback -- a local material can name a texture the corpus never decoded.
-        record = SC.material_record(self._channels())
-        assert record["albedo"] == "tex/models_scenery_spike.png"
 
-    def test_an_authored_bumpmap_outranks_the_derived_glass_normal(self):
-        record = SC.material_record(
-            self._channels(glass=True, bump="models/scenery/authored"))
-        assert record["bump"] == "tex/models_scenery_authored_n.png"
+def test_a_present_channel_is_stated_corpus_relative():
+    record = SC.material_record(
+        _channels(), files={"models_scenery_spike.png"})
+    assert record["albedo"] == "tex/models_scenery_spike.png"
 
-    def test_semantic_glass_falls_back_to_the_normal_derived_from_its_albedo(self):
-        record = SC.material_record(self._channels(glass=True))
-        assert record["bump"] == "tex/models_scenery_spike_glass_n.png"
 
-    def test_a_water_material_carries_its_own_normal_and_fog(self):
-        # The Water shader names no $basetexture, so a record built only from albedo would drop
-        # every canal and sewer in the game.
-        record = SC.material_record(self._channels(
-            albedo="", water=True, water_normal="dev/water_normal",
-            water_fog_end=1024.0, water_reflect_tint=[0.5, 0.6, 0.7]))
-        assert record["water"]
-        assert record["water_normal"] == "tex/dev_water_normal_n.png"
-        assert record["water_fog_end"] == 1024.0
-        assert record["water_reflect_tint"] == [0.5, 0.6, 0.7]
+def test_without_a_file_set_every_named_channel_is_stated():
+    # `files=None` is "state what the VMT names": the caller has no decoded set to check
+    # against. Every caller that does have one passes it, including the map exporter's
+    # PAKFILE-local fallback -- a local material can name a texture the corpus never decoded.
+    record = SC.material_record(_channels())
+    assert record["albedo"] == "tex/models_scenery_spike.png"
 
-    def test_the_base_alpha_env_mask_reads_the_albedo_key(self):
-        record = SC.material_record(
-            self._channels(envmap="env_cubemap", envmask_from_alpha=True))
-        assert record["env_mask"] == "tex/models_scenery_spike_envmask.png"
+
+def test_an_authored_bumpmap_outranks_the_derived_glass_normal():
+    record = SC.material_record(
+        _channels(glass=True, bump="models/scenery/authored"))
+    assert record["bump"] == "tex/models_scenery_authored_n.png"
+
+
+def test_semantic_glass_falls_back_to_the_normal_derived_from_its_albedo():
+    record = SC.material_record(_channels(glass=True))
+    assert record["bump"] == "tex/models_scenery_spike_glass_n.png"
+
+
+def test_a_water_material_carries_its_own_normal_and_fog():
+    # The Water shader names no $basetexture, so a record built only from albedo would drop
+    # every canal and sewer in the game.
+    record = SC.material_record(_channels(
+        albedo="", water=True, water_normal="dev/water_normal",
+        water_fog_end=1024.0, water_reflect_tint=[0.5, 0.6, 0.7]))
+    assert record["water"]
+    assert record["water_normal"] == "tex/dev_water_normal_n.png"
+    assert record["water_fog_end"] == 1024.0
+    assert record["water_reflect_tint"] == [0.5, 0.6, 0.7]
+
+
+def test_the_base_alpha_env_mask_reads_the_albedo_key():
+    record = SC.material_record(
+        _channels(envmap="env_cubemap", envmask_from_alpha=True))
+    assert record["env_mask"] == "tex/models_scenery_spike_envmask.png"

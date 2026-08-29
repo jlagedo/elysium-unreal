@@ -99,212 +99,225 @@ def test_an_undecodable_model_is_not_animation() -> None:
         assert not npc_export.has_animation(b"")
 
 
-class PlacedModelPolicyTests(unittest.TestCase):
-    MODEL = "models/scenery/structural/doorknoba/drknobantique.mdl"
+MODEL = "models/scenery/structural/doorknoba/drknobantique.mdl"
 
-    @staticmethod
-    def seq(label, activity="", weight=0, index=0):
-        return SimpleNamespace(label=label, activity=activity, actweight=weight, index=index)
 
-    def test_fnv_seed_has_cross_language_golden_vectors(self) -> None:
-        assert placed_models.fnv1a_32(self.MODEL, 0) == 2282856472
-        assert placed_models.fnv1a_32(self.MODEL, 42) == 2895120338
+def seq(label, activity="", weight=0, index=0):
+    return SimpleNamespace(label=label, activity=activity, actweight=weight, index=index)
 
-    def test_act_idle_candidates_preserve_declaration_order_and_weight(self) -> None:
-        clips = [self.seq("open"), self.seq("idle_a", "ACT_IDLE", 1),
-                 self.seq("idle_b", "ACT_IDLE", 9)]
-        assert [c.label for c in placed_models.rest_candidates(clips)] == ["idle_a", "idle_b"]
-        picks = [placed_models.select_rest_sequence(self.MODEL, clips, token).label
-                 for token in range(64)]
-        assert "idle_a" in picks
-        assert picks.count("idle_b") > picks.count("idle_a")
 
-    def test_sequence_zero_is_the_fallback(self) -> None:
-        clips = [self.seq("declared_first"), self.seq("alphabetically_first")]
-        assert placed_models.select_rest_sequence(self.MODEL, clips, 12).label == "declared_first"
+def test_fnv_seed_has_cross_language_golden_vectors() -> None:
+    assert placed_models.fnv1a_32(MODEL, 0) == 2282856472
+    assert placed_models.fnv1a_32(MODEL, 42) == 2895120338
 
-    def test_serialized_selection_matches_the_sequence_policy(self) -> None:
-        clips = [self.seq("idle_a", "ACT_IDLE", 2), self.seq("idle_b", "ACT_IDLE", 7)]
-        row = {"rest_candidates": ["idle_a", "idle_b"],
-               "clips": [{"name": "idle_a", "weight": 2},
-                         {"name": "idle_b", "weight": 7}]}
-        for token in range(20):
-            assert placed_models.select_rest_label(self.MODEL, row, token) == placed_models.select_rest_sequence(self.MODEL, clips, token).label
 
-    def test_discovery_covers_entities_and_new_game_lump_rows(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            map_dir = root / "sp_test"
+def test_act_idle_candidates_preserve_declaration_order_and_weight() -> None:
+    clips = [seq("open"), seq("idle_a", "ACT_IDLE", 1),
+             seq("idle_b", "ACT_IDLE", 9)]
+    assert [c.label for c in placed_models.rest_candidates(clips)] == ["idle_a", "idle_b"]
+    picks = [placed_models.select_rest_sequence(MODEL, clips, token).label
+             for token in range(64)]
+    assert "idle_a" in picks
+    assert picks.count("idle_b") > picks.count("idle_a")
+
+
+def test_sequence_zero_is_the_fallback() -> None:
+    clips = [seq("declared_first"), seq("alphabetically_first")]
+    assert placed_models.select_rest_sequence(MODEL, clips, 12).label == "declared_first"
+
+
+def test_serialized_selection_matches_the_sequence_policy() -> None:
+    clips = [seq("idle_a", "ACT_IDLE", 2), seq("idle_b", "ACT_IDLE", 7)]
+    row = {"rest_candidates": ["idle_a", "idle_b"],
+           "clips": [{"name": "idle_a", "weight": 2},
+                     {"name": "idle_b", "weight": 7}]}
+    for token in range(20):
+        assert placed_models.select_rest_label(MODEL, row, token) == placed_models.select_rest_sequence(MODEL, clips, token).label
+
+
+def test_discovery_covers_entities_and_new_game_lump_rows() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        map_dir = root / "sp_test"
+        map_dir.mkdir()
+        (map_dir / "sp_test.ents").write_text(json.dumps({"entities": [{
+            "classname": "prop_switch", "targetname": "switch",
+            "model_mesh": "models_scenery_structural_doorknoba_drknobantique",
+            "keys": {"model": MODEL},
+            "outputs": [{"target": "switch", "input": "SetAnimation"}],
+        }]}), encoding="utf-8")
+        second = "models/scenery/props/palm.mdl"
+        (map_dir / "sp_test.props").write_text(
+            "models_scenery_props_palm 0 0 0 0 0 0 1 0 0 0 %s\n" % second,
+            encoding="utf-8")
+        uses = placed_models.discover(str(root))
+    assert {use.model for use in uses} == {MODEL, second}
+    switch = next(use for use in uses if use.model == MODEL)
+    assert switch.full_clips
+    assert switch.static_stem == "models_scenery_structural_doorknoba_drknobantique"
+    assert switch.required_clips == ("activate", "deactivate", "idle_off", "idle_on")
+    assert next(use for use in uses if use.model == second).static_stem == "models_scenery_props_palm"
+
+
+def test_an_untargeted_switch_still_declares_its_intrinsic_clip_vocabulary() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        map_dir = root / "sp_test"
+        map_dir.mkdir()
+        (map_dir / "sp_test.ents").write_text(json.dumps({"entities": [{
+            "classname": "prop_switch",
+            "model_mesh": "models_scenery_switch",
+            "keys": {"model": "models/scenery/switch.mdl"},
+        }]}), encoding="utf-8")
+        use = placed_models.discover(str(root))[0]
+    assert not use.full_clips
+    assert use.required_clips == ("activate", "deactivate", "idle_off", "idle_on")
+
+
+def test_conflicting_static_stems_fail_the_export_contract() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        for name, stem in (("a", "models_switch_a"), ("b", "models_switch_b")):
+            map_dir = root / name
             map_dir.mkdir()
-            (map_dir / "sp_test.ents").write_text(json.dumps({"entities": [{
-                "classname": "prop_switch", "targetname": "switch",
-                "model_mesh": "models_scenery_structural_doorknoba_drknobantique",
-                "keys": {"model": self.MODEL},
-                "outputs": [{"target": "switch", "input": "SetAnimation"}],
+            (map_dir / f"{name}.ents").write_text(json.dumps({"entities": [{
+                "classname": "prop_dynamic", "model_mesh": stem,
+                "keys": {"model": "models/switch.mdl"},
             }]}), encoding="utf-8")
-            second = "models/scenery/props/palm.mdl"
-            (map_dir / "sp_test.props").write_text(
-                "models_scenery_props_palm 0 0 0 0 0 0 1 0 0 0 %s\n" % second,
-                encoding="utf-8")
-            uses = placed_models.discover(str(root))
-        assert {use.model for use in uses} == {self.MODEL, second}
-        switch = next(use for use in uses if use.model == self.MODEL)
-        assert switch.full_clips
-        assert switch.static_stem == "models_scenery_structural_doorknoba_drknobantique"
-        assert switch.required_clips == ("activate", "deactivate", "idle_off", "idle_on")
-        assert next(use for use in uses if use.model == second).static_stem == "models_scenery_props_palm"
+        with pytest.raises(ValueError, match="conflicting static stems"):
+            placed_models.discover(str(root))
 
-    def test_an_untargeted_switch_still_declares_its_intrinsic_clip_vocabulary(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            map_dir = root / "sp_test"
+
+def test_map_slice_reads_only_the_selected_maps() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        for name, model in (("a", "models/a.mdl"), ("b", "models/b.mdl")):
+            map_dir = root / name
             map_dir.mkdir()
-            (map_dir / "sp_test.ents").write_text(json.dumps({"entities": [{
-                "classname": "prop_switch",
-                "model_mesh": "models_scenery_switch",
-                "keys": {"model": "models/scenery/switch.mdl"},
+            (map_dir / f"{name}.ents").write_text(json.dumps({"entities": [{
+                "classname": "prop_dynamic",
+                "model_mesh": f"models_{name}",
+                "keys": {"model": model},
             }]}), encoding="utf-8")
-            use = placed_models.discover(str(root))[0]
-        assert not use.full_clips
-        assert use.required_clips == ("activate", "deactivate", "idle_off", "idle_on")
-
-    def test_conflicting_static_stems_fail_the_export_contract(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            for name, stem in (("a", "models_switch_a"), ("b", "models_switch_b")):
-                map_dir = root / name
-                map_dir.mkdir()
-                (map_dir / f"{name}.ents").write_text(json.dumps({"entities": [{
-                    "classname": "prop_dynamic", "model_mesh": stem,
-                    "keys": {"model": "models/switch.mdl"},
-                }]}), encoding="utf-8")
-            with pytest.raises(ValueError, match="conflicting static stems"):
-                placed_models.discover(str(root))
-
-    def test_map_slice_reads_only_the_selected_maps(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            for name, model in (("a", "models/a.mdl"), ("b", "models/b.mdl")):
-                map_dir = root / name
-                map_dir.mkdir()
-                (map_dir / f"{name}.ents").write_text(json.dumps({"entities": [{
-                    "classname": "prop_dynamic",
-                    "model_mesh": f"models_{name}",
-                    "keys": {"model": model},
-                }]}), encoding="utf-8")
-                (map_dir / f"{name}.props").write_text("", encoding="utf-8")
-            uses = placed_models.discover(str(root), map_names=["a"])
-        assert [use.model for use in uses] == ["models/a.mdl"]
-        assert uses[0].static_stem == "models_a"
-
-    def test_missing_switch_clips_warn_for_any_model(self) -> None:
-        missing = ["activate", "deactivate", "idle_off", "idle_on"]
-        warning = source_warnings.missing_intrinsic_prop_clips_warning(
-            "models/scenery/structural/warrens/warr_02_container_door.mdl", missing)
-        assert warning["fallback"] == "authored static rest pose"
-        partial = source_warnings.missing_intrinsic_prop_clips_warning(
-            "models/scenery/misc/curcuitbreaker/curcuitbreaker.mdl",
-            ["deactivate"], declared=3)
-        assert partial["fallback"] == "the declared clip subset"
-        assert "deactivate" in partial["detail"]
-
-    def test_legacy_game_lump_stem_joins_with_its_models_prefix(self) -> None:
-        model = "models/scenery/street/payphone/payphone_pair.mdl"
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            map_dir = root / "sp_test"
-            map_dir.mkdir()
-            (map_dir / "sp_test.props").write_text(
-                "models_scenery_street_payphone_payphone_pair 0 0 0 0 0 0 1 0 0 0\n",
-                encoding="utf-8")
-            uses = placed_models.discover(str(root), {model: object()})
-        assert [use.model for use in uses] == [model]
-        assert uses[0].static_stem == "models_scenery_street_payphone_payphone_pair"
-
-    def test_static_equivalence_accepts_identity_and_rejects_quarter_turn(self) -> None:
-        bone = mdl_skel.Bone(index=0, name="root", parent=-1, flags=0,
-                             pos=(0.0, 0.0, 0.0), quat=(0.0, 0.0, 0.0, 1.0),
-                             pose_to_bone=(1.0, 0.0, 0.0, 0.0,
-                                           0.0, 1.0, 0.0, 0.0,
-                                           0.0, 0.0, 1.0, 0.0))
-        surface = {"pos": [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 0.0)],
-                   "nrm": [(0.0, 0.0, 1.0)] * 3,
-                   "joints": [[0, 0, 0, 0]] * 3,
-                   "weights": [[1.0, 0.0, 0.0, 0.0]] * 3,
-                   "tris": [(0, 1, 2)]}
-        sequence = SimpleNamespace(base=0, frames=1)
-        identity = [[((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]]
-        quarter = [[((0.0, 0.0, 0.0), (0.0, 0.0, 2**-0.5, 2**-0.5))]]
-        with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
-              mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
-              mock.patch.object(UEK, "_split_rotation_tracks", return_value={}),
-              mock.patch.object(mdl_skel, "read_anim", return_value=identity)):
-            assert placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
-        with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
-              mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
-              mock.patch.object(UEK, "_split_rotation_tracks", return_value={}),
-              mock.patch.object(mdl_skel, "read_anim", return_value=quarter)):
-            assert not placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
+            (map_dir / f"{name}.props").write_text("", encoding="utf-8")
+        uses = placed_models.discover(str(root), map_names=["a"])
+    assert [use.model for use in uses] == ["models/a.mdl"]
+    assert uses[0].static_stem == "models_a"
 
 
-class PlacedModelClipEmissionTests(unittest.TestCase):
-    def _write(self, labels, ensure=()):
-        clips = [SimpleNamespace(label="idle"), SimpleNamespace(label="open")]
-        seen = []
-        ensured = []
+def test_missing_switch_clips_warn_for_any_model() -> None:
+    missing = ["activate", "deactivate", "idle_off", "idle_on"]
+    warning = source_warnings.missing_intrinsic_prop_clips_warning(
+        "models/scenery/structural/warrens/warr_02_container_door.mdl", missing)
+    assert warning["fallback"] == "authored static rest pose"
+    partial = source_warnings.missing_intrinsic_prop_clips_warning(
+        "models/scenery/misc/curcuitbreaker/curcuitbreaker.mdl",
+        ["deactivate"], declared=3)
+    assert partial["fallback"] == "the declared clip subset"
+    assert "deactivate" in partial["detail"]
 
-        def anim(_data, _bones, emitted, _bone_map, _count, _masks, ensure_labels=(),
-                 reparented=None):
-            seen.extend(clip.label for clip in emitted)
-            ensured.extend(ensure_labels)
-            return b"", len(emitted)
 
-        with (tempfile.TemporaryDirectory() as temporary,
-                mock.patch.object(UEK.mdl, "load", return_value=(b"mdl", b"vtx")),
-                mock.patch.object(mdl_skel, "read_bones", return_value=[]),
-                mock.patch.object(mdl_skel, "decode_skinned", return_value={}),
-                mock.patch.object(UEK.mdl, "search_paths", return_value=[]),
-                mock.patch.object(UEK, "unreal_bones", return_value=([], {}, {})),
-                mock.patch.object(UEK, "_mesh_section", return_value=(b"", {})),
-                mock.patch.object(mdl_skel, "local_sequences", return_value=clips),
-                mock.patch.object(mdl_skel, "blend_clip_plan", return_value=([], {})),
-                mock.patch.object(UEK, "_attachment_section", return_value=b""),
-                mock.patch.object(UEK, "_anim_section", side_effect=anim)):
-            UEK.write_model({}, "models/test/prop.mdl", temporary, clip_labels=labels,
-                            ensure_labels=ensure)
-        return seen, ensured
+def test_legacy_game_lump_stem_joins_with_its_models_prefix() -> None:
+    model = "models/scenery/street/payphone/payphone_pair.mdl"
+    with tempfile.TemporaryDirectory() as temporary:
+        root = Path(temporary)
+        map_dir = root / "sp_test"
+        map_dir.mkdir()
+        (map_dir / "sp_test.props").write_text(
+            "models_scenery_street_payphone_payphone_pair 0 0 0 0 0 0 1 0 0 0\n",
+            encoding="utf-8")
+        uses = placed_models.discover(str(root), {model: object()})
+    assert [use.model for use in uses] == [model]
+    assert uses[0].static_stem == "models_scenery_street_payphone_payphone_pair"
 
-    def test_rest_only_container_emits_only_selected_candidates(self) -> None:
-        assert self._write(("idle",), ("idle",)) == (["idle"], ["idle"])
 
-    def test_full_container_emits_the_complete_sequence_inventory(self) -> None:
-        assert self._write(None) == (["idle", "open"], [])
+def test_static_equivalence_accepts_identity_and_rejects_quarter_turn() -> None:
+    bone = mdl_skel.Bone(index=0, name="root", parent=-1, flags=0,
+                         pos=(0.0, 0.0, 0.0), quat=(0.0, 0.0, 0.0, 1.0),
+                         pose_to_bone=(1.0, 0.0, 0.0, 0.0,
+                                       0.0, 1.0, 0.0, 0.0,
+                                       0.0, 0.0, 1.0, 0.0))
+    surface = {"pos": [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 0.0)],
+               "nrm": [(0.0, 0.0, 1.0)] * 3,
+               "joints": [[0, 0, 0, 0]] * 3,
+               "weights": [[1.0, 0.0, 0.0, 0.0]] * 3,
+               "tris": [(0, 1, 2)]}
+    sequence = SimpleNamespace(base=0, frames=1)
+    identity = [[((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]]
+    quarter = [[((0.0, 0.0, 0.0), (0.0, 0.0, 2**-0.5, 2**-0.5))]]
+    with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
+          mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
+          mock.patch.object(UEK, "_split_rotation_tracks", return_value={}),
+          mock.patch.object(mdl_skel, "read_anim", return_value=identity)):
+        assert placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
+    with (mock.patch.object(mdl_skel, "read_bones", return_value=[bone]),
+          mock.patch.object(mdl_skel, "decode_skinned", return_value={"m": surface}),
+          mock.patch.object(UEK, "_split_rotation_tracks", return_value={}),
+          mock.patch.object(mdl_skel, "read_anim", return_value=quarter)):
+        assert not placed_models.rest_pose_static_equivalent(b"", b"", [sequence])
 
-    def test_clip_policy_and_inventory_invalidate_the_container_fingerprint(self) -> None:
-        rest = {"clip_mode": "rest", "clips": {"idle": {}},
-                "rest_candidates": ["idle"]}
-        full = {"clip_mode": "full", "clips": {"idle": {}, "open": {}}}
-        first = export_manager.placed_model_source_fingerprint(
-            "prop", rest, "code", "source")
-        assert first != export_manager.placed_model_source_fingerprint(
-            "prop", full, "code", "source")
 
-    def test_ensured_rest_forces_complete_bind_local_tracks(self) -> None:
-        clip = mdl_skel.Seq(label="idle", base=0, frames=1, fps=30.0,
-                            activity="", actweight=0, flags=0)
-        forced = []
+def _write(labels, ensure=()):
+    clips = [SimpleNamespace(label="idle"), SimpleNamespace(label="open")]
+    seen = []
+    ensured = []
 
-        def payload(*_args, **kwargs):
-            forced.append(kwargs.get("forced_channels"))
-            return b"clip"
+    def anim(_data, _bones, emitted, _bone_map, _count, _masks, ensure_labels=(),
+             reparented=None):
+        seen.extend(clip.label for clip in emitted)
+        ensured.extend(ensure_labels)
+        return b"", len(emitted)
 
-        with (mock.patch.object(UEK, "_derived_bindings", return_value=[]),
-              mock.patch.object(UEK, "_cell_names", return_value={}),
-              mock.patch.object(UEK, "_clip_payload", side_effect=payload)):
-            _blob, count = UEK._anim_section(
-                b"", [SimpleNamespace()], [clip], [0], 1, {}, ensure_labels=("idle",))
-        assert count == 1
-        assert forced == [[(True, True)]]
+    with (tempfile.TemporaryDirectory() as temporary,
+            mock.patch.object(UEK.mdl, "load", return_value=(b"mdl", b"vtx")),
+            mock.patch.object(mdl_skel, "read_bones", return_value=[]),
+            mock.patch.object(mdl_skel, "decode_skinned", return_value={}),
+            mock.patch.object(UEK.mdl, "search_paths", return_value=[]),
+            mock.patch.object(UEK, "unreal_bones", return_value=([], {}, {})),
+            mock.patch.object(UEK, "_mesh_section", return_value=(b"", {})),
+            mock.patch.object(mdl_skel, "local_sequences", return_value=clips),
+            mock.patch.object(mdl_skel, "blend_clip_plan", return_value=([], {})),
+            mock.patch.object(UEK, "_attachment_section", return_value=b""),
+            mock.patch.object(UEK, "_anim_section", side_effect=anim)):
+        UEK.write_model({}, "models/test/prop.mdl", temporary, clip_labels=labels,
+                        ensure_labels=ensure)
+    return seen, ensured
+
+
+def test_rest_only_container_emits_only_selected_candidates() -> None:
+    assert _write(("idle",), ("idle",)) == (["idle"], ["idle"])
+
+
+def test_full_container_emits_the_complete_sequence_inventory() -> None:
+    assert _write(None) == (["idle", "open"], [])
+
+
+def test_clip_policy_and_inventory_invalidate_the_container_fingerprint() -> None:
+    rest = {"clip_mode": "rest", "clips": {"idle": {}},
+            "rest_candidates": ["idle"]}
+    full = {"clip_mode": "full", "clips": {"idle": {}, "open": {}}}
+    first = export_manager.placed_model_source_fingerprint(
+        "prop", rest, "code", "source")
+    assert first != export_manager.placed_model_source_fingerprint(
+        "prop", full, "code", "source")
+
+
+def test_ensured_rest_forces_complete_bind_local_tracks() -> None:
+    clip = mdl_skel.Seq(label="idle", base=0, frames=1, fps=30.0,
+                        activity="", actweight=0, flags=0)
+    forced = []
+
+    def payload(*_args, **kwargs):
+        forced.append(kwargs.get("forced_channels"))
+        return b"clip"
+
+    with (mock.patch.object(UEK, "_derived_bindings", return_value=[]),
+          mock.patch.object(UEK, "_cell_names", return_value={}),
+          mock.patch.object(UEK, "_clip_payload", side_effect=payload)):
+        _blob, count = UEK._anim_section(
+            b"", [SimpleNamespace()], [clip], [0], 1, {}, ensure_labels=("idle",))
+    assert count == 1
+    assert forced == [[(True, True)]]
 
 def test_a_compact_one_bone_model_binds_every_vertex_to_its_bone() -> None:
     data = bytearray(244)
@@ -395,48 +408,50 @@ class CompleteOwnedPoseTests(unittest.TestCase):
             assert actual == pytest.approx(expected, abs=1e-6)
 
 
-class AnimatedPropIndexRowTests(unittest.TestCase):
-    # `drknobantique`'s real shape: declaration order puts `idle` first, alphabetical order would
-    # put `handle_locked` first, and retail's rest pose is sequence index 0.
-    RECORD = {
-        "eskm": "animated_props/drknobantique.eskm",
-        "model": "models/scenery/doorknoba/drknobantique.mdl",
-        "bones": 2,
-        "clips": {
-            "idle": {"activity": "", "weight": 0, "flags": 1, "frames": 16, "fps": 15.0},
-            "handle_locked": {"activity": "", "weight": 0, "flags": 0, "frames": 16, "fps": 15.0},
-            "handle_unlocked": {"activity": "", "weight": 0, "flags": 0, "frames": 16, "fps": 15.0},
-        },
-    }
+RECORD = {
+    "eskm": "animated_props/drknobantique.eskm",
+    "model": "models/scenery/doorknoba/drknobantique.mdl",
+    "bones": 2,
+    "clips": {
+        "idle": {"activity": "", "weight": 0, "flags": 1, "frames": 16, "fps": 15.0},
+        "handle_locked": {"activity": "", "weight": 0, "flags": 0, "frames": 16, "fps": 15.0},
+        "handle_unlocked": {"activity": "", "weight": 0, "flags": 0, "frames": 16, "fps": 15.0},
+    },
+}
 
-    def test_declaration_order_is_preserved(self) -> None:
-        row = npc_export.animated_prop_index_row(self.RECORD)
-        assert [c["name"] for c in row["clips"]] == ["idle", "handle_locked", "handle_unlocked"]
 
-    def test_each_clip_carries_its_ordinal_and_selection_keys(self) -> None:
-        row = npc_export.animated_prop_index_row(self.RECORD)
-        assert [c["index"] for c in row["clips"]] == [0, 1, 2]
-        first = row["clips"][0]
-        assert first["flags"] == 1          # STUDIO_LOOPING
-        assert first["activity"] == ""
-        assert first["frames"] == 16
-        assert first["fps"] == 15.0
+def test_declaration_order_is_preserved() -> None:
+    row = npc_export.animated_prop_index_row(RECORD)
+    assert [c["name"] for c in row["clips"]] == ["idle", "handle_locked", "handle_unlocked"]
 
-    def test_optional_sidecars_are_omitted_when_absent(self) -> None:
-        row = npc_export.animated_prop_index_row(self.RECORD)
-        assert "procedural" not in row
-        assert "blends" not in row
-        assert row["split_bones"] == []
 
-    def test_a_clipless_record_projects_an_empty_list(self) -> None:
-        row = npc_export.animated_prop_index_row({"eskm": "e", "model": "m"})
-        assert row["clips"] == []
+def test_each_clip_carries_its_ordinal_and_selection_keys() -> None:
+    row = npc_export.animated_prop_index_row(RECORD)
+    assert [c["index"] for c in row["clips"]] == [0, 1, 2]
+    first = row["clips"][0]
+    assert first["flags"] == 1          # STUDIO_LOOPING
+    assert first["activity"] == ""
+    assert first["frames"] == 16
+    assert first["fps"] == 15.0
 
-    def test_a_bounds_radius_reaches_the_runtime_row(self) -> None:
-        record = dict(self.RECORD, clips={
-            "idle": dict(self.RECORD["clips"]["idle"], bounds_radius_m=22.388)})
-        row = npc_export.animated_prop_index_row(record)
-        assert row["clips"][0]["bounds_radius_m"] == 22.388
+
+def test_optional_sidecars_are_omitted_when_absent() -> None:
+    row = npc_export.animated_prop_index_row(RECORD)
+    assert "procedural" not in row
+    assert "blends" not in row
+    assert row["split_bones"] == []
+
+
+def test_a_clipless_record_projects_an_empty_list() -> None:
+    row = npc_export.animated_prop_index_row({"eskm": "e", "model": "m"})
+    assert row["clips"] == []
+
+
+def test_a_bounds_radius_reaches_the_runtime_row() -> None:
+    record = dict(RECORD, clips={
+        "idle": dict(RECORD["clips"]["idle"], bounds_radius_m=22.388)})
+    row = npc_export.animated_prop_index_row(record)
+    assert row["clips"][0]["bounds_radius_m"] == 22.388
 
 
 def _seq(label, bbmin, bbmax):
@@ -444,36 +459,42 @@ def _seq(label, bbmin, bbmax):
                         actweight=0, flags=0, bbmin=bbmin, bbmax=bbmax)
 
 
-class ClipBoundsRadiusTests(unittest.TestCase):
-    """What a clip declares about its own reach, reconciled with what baked.
+SWORD = _seq("scene", (-881.4, -162.6, -6.7), (0.0, 89.3, 166.2))
 
-    `cin_sheriff_sword`'s `scene` is the shape these guard: a 2 m mesh whose sequence bbox
-    spans 881 Source units because the rig carries the sword across the courtroom.
-    """
 
-    SWORD = _seq("scene", (-881.4, -162.6, -6.7), (0.0, 89.3, 166.2))
+# ClipBoundsRadiusTests
+# What a clip declares about its own reach, reconciled with what baked.
+#
+# `cin_sheriff_sword`'s `scene` is the shape these guard: a 2 m mesh whose sequence bbox
+# spans 881 Source units because the rig carries the sword across the courtroom.
 
-    def test_the_authored_radius_wins_when_it_covers_the_bake(self) -> None:
-        # The real case: studiomdl's box sits a little outside the extent it was computed from.
-        assert npc_export.clip_bounds_radius_m(self.SWORD, 21.833) == pytest.approx(881.4 * 0.0254, abs=1e-6)
+def test_the_authored_radius_wins_when_it_covers_the_bake() -> None:
+    # The real case: studiomdl's box sits a little outside the extent it was computed from.
+    assert npc_export.clip_bounds_radius_m(SWORD, 21.833) == pytest.approx(881.4 * 0.0254, abs=1e-6)
 
-    def test_a_zeroed_descriptor_falls_back_to_the_bake(self) -> None:
-        # Every model's header ViewBBMin/ViewBBMax is (0,0,0) in this corpus, so a sequence box
-        # that was never filled in is a shape the export has to survive rather than trust.
-        blank = _seq("scene", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
-        assert npc_export.authored_radius_m(blank) == 0.0
-        assert npc_export.clip_bounds_radius_m(blank, 9.99) == pytest.approx(9.99, abs=1e-6)
 
-    def test_an_authored_radius_short_of_the_bake_loses(self) -> None:
-        short = _seq("scene", (-1.0, 0.0, 0.0), (1.0, 0.0, 0.0))
-        assert npc_export.clip_bounds_radius_m(short, 4.0) == pytest.approx(4.0, abs=1e-6)
+def test_a_zeroed_descriptor_falls_back_to_the_bake() -> None:
+    # Every model's header ViewBBMin/ViewBBMax is (0,0,0) in this corpus, so a sequence box
+    # that was never filled in is a shape the export has to survive rather than trust.
+    blank = _seq("scene", (0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+    assert npc_export.authored_radius_m(blank) == 0.0
+    assert npc_export.clip_bounds_radius_m(blank, 9.99) == pytest.approx(9.99, abs=1e-6)
 
-    def test_the_key_is_absent_until_it_has_been_reconciled(self) -> None:
-        # Presence is the promise that the number covers the geometry; a bank or NPC clip, which
-        # nothing measures, must not look like it carries one.
-        assert "bounds_radius_m" not in npc_export._clip_meta(self.SWORD)
-        assert npc_export._clip_meta(self.SWORD, 22.38812)["bounds_radius_m"] == 22.3881
 
+def test_an_authored_radius_short_of_the_bake_loses() -> None:
+    short = _seq("scene", (-1.0, 0.0, 0.0), (1.0, 0.0, 0.0))
+    assert npc_export.clip_bounds_radius_m(short, 4.0) == pytest.approx(4.0, abs=1e-6)
+
+
+def test_the_key_is_absent_until_it_has_been_reconciled() -> None:
+    # Presence is the promise that the number covers the geometry; a bank or NPC clip, which
+    # nothing measures, must not look like it carries one.
+    assert "bounds_radius_m" not in npc_export._clip_meta(SWORD)
+    assert npc_export._clip_meta(SWORD, 22.38812)["bounds_radius_m"] == 22.3881
+
+
+# ClipExtentTests
+# The measured half of the same question: how far a bone chain actually reaches.
 
 def test_a_rotated_parent_carries_its_child_out() -> None:
     bones = [mdl_skel.Bone(index=0, parent=-1), mdl_skel.Bone(index=1, parent=0)]

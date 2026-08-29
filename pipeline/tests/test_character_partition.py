@@ -46,6 +46,9 @@ def test_distinguishes_an_added_bone():
     assert cp.tree_fingerprint(M_PLAIN) != cp.tree_fingerprint(A_SEED)
 
 
+# RigFamilySemanticsTests
+# The properties `character_partition` relies on, pinned so a change to them is visible.
+
 def test_agreeing_trees_merge():
     families = eskm.rig_families({"a": A_SEED, "b": A_SEED}, ["a", "b"])
     assert len(families) == 1
@@ -66,6 +69,15 @@ def test_a_family_is_named_for_its_lowest_sorted_member():
     families = eskm.rig_families({"zz": A_SEED, "aa": A_SEED}, ["zz", "aa"])
     assert families[0]["name"] == "aa"
 
+
+# SubsetInstabilityTests
+# Why the BANK partition is declared rather than recomputed.
+#
+# These assert the behaviour of the RAW partition function, which is subset-sensitive by
+# construction. They are the reason `build_partition` is fed the whole corpus and the answer is
+# written down -- not a defect in `rig_families`, which documents this contract itself. The
+# model half of the declared partition has no such hazard: every stem is a singleton regardless
+# of who else is in the input set.
 
 def test_a_slice_renames_a_family():
     whole = cp.build_partition({}, MODELS)
@@ -158,33 +170,34 @@ def test_rejects_a_missing_table():
         cp.check(partition)
 
 
-class FocusedScopeTests(unittest.TestCase):
-    """`scopes_for` reading the cast manifest's clip table.
-
-    A clip label names every bank that DECLARES it, in include-tree order, so the manifest maps a
-    label to a LIST of owners. A focused bake resolves the bank families its named bodies reach by
-    reading that table, and read as if each value were one owner it puts a list into a set --
-    which raised before the run had written anything, so no bake could be scoped to a body at all.
-    """
-
-    MANIFEST = {
-        "npcs": {
-            # Both shapes, because both are written: a label declared by two banks and one
-            # declared by a single bank.
-            "a_seed": {"clips": {"walk": ["bank_one", "bank_two"], "idle": "bank_one"}},
-            "m_plain": {"clips": {"idle": ["bank_two"]}},
-        }
+MANIFEST = {
+    "npcs": {
+        # Both shapes, because both are written: a label declared by two banks and one
+        # declared by a single bank.
+        "a_seed": {"clips": {"walk": ["bank_one", "bank_two"], "idle": "bank_one"}},
+        "m_plain": {"clips": {"idle": ["bank_two"]}},
     }
+}
 
-    def test_a_multi_owner_clip_label_resolves_its_banks(self):
-        partition = cp.build_partition(MODELS, BANKS)
-        got = character_recipes.scopes_for(partition, ["a_seed"], manifest=self.MANIFEST)
-        families = {cp.bank_family(partition, owner) for owner in ("bank_one", "bank_two")}
-        assert sorted(got) == sorted([character_recipes.GLOBAL_SCOPE, "model.a_seed",
-                    *(f"bank.{family}" for family in families)])
 
-    def test_a_single_owner_string_still_resolves(self):
-        partition = cp.build_partition(MODELS, BANKS)
-        got = character_recipes.scopes_for(partition, ["m_plain"], manifest=self.MANIFEST)
-        assert f"bank.{cp.bank_family(partition, 'bank_two')}" in got
-        assert "model.m_plain" in got
+# FocusedScopeTests
+# `scopes_for` reading the cast manifest's clip table.
+#
+# A clip label names every bank that DECLARES it, in include-tree order, so the manifest maps a
+# label to a LIST of owners. A focused bake resolves the bank families its named bodies reach by
+# reading that table, and read as if each value were one owner it puts a list into a set --
+# which raised before the run had written anything, so no bake could be scoped to a body at all.
+
+def test_a_multi_owner_clip_label_resolves_its_banks():
+    partition = cp.build_partition(MODELS, BANKS)
+    got = character_recipes.scopes_for(partition, ["a_seed"], manifest=MANIFEST)
+    families = {cp.bank_family(partition, owner) for owner in ("bank_one", "bank_two")}
+    assert sorted(got) == sorted([character_recipes.GLOBAL_SCOPE, "model.a_seed",
+                *(f"bank.{family}" for family in families)])
+
+
+def test_a_single_owner_string_still_resolves():
+    partition = cp.build_partition(MODELS, BANKS)
+    got = character_recipes.scopes_for(partition, ["m_plain"], manifest=MANIFEST)
+    assert f"bank.{cp.bank_family(partition, 'bank_two')}" in got
+    assert "model.m_plain" in got

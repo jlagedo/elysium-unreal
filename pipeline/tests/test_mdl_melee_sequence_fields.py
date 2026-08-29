@@ -246,6 +246,9 @@ def test_an_ordinary_sequence_states_neither() -> None:
     assert seq.combo is None
 
 
+# LowReachTests
+# `low_reach`@716 — the near edge of the band whose far edge is `reach`@720.
+
 def test_the_unset_marker_is_flt_min_and_not_flt_max():
     # The whole reason this field needs its own reader. `FLT_MIN` is a finite POSITIVE float, so
     # a reader that copied `read_reach`'s `>= FLT_MAX` test would report 13,496 descriptors as
@@ -309,6 +312,10 @@ class EnvelopeTests(unittest.TestCase):
         assert len(seq.swings) == 1
         assert len(seq.envelopes) == 2
 
+
+# ComboChainTests
+# `read_combo_chain` -- the descriptor's last 44 bytes: which key selects this attack,
+# which attack it hands off to, and when the hand-off may be asked for.
 
 def test_the_first_fists_link_states_its_mask_chain_and_window() -> None:
     # Both player sexes' `fists.mdl` `Fists_attack_W1`, verbatim.
@@ -410,6 +417,9 @@ def test_the_names_are_addressed_from_the_descriptor() -> None:
     assert sibling.combo is None
 
 
+# ComboChainOrphanTests
+# `combo_chain_orphans` -- the census of links naming a sequence the model does not have.
+
 def test_a_link_resolving_to_a_local_sequence_is_no_orphan() -> None:
     clips = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
                        siblings=("fists_attack_Roundhouse",))
@@ -460,6 +470,9 @@ def test_a_model_with_no_dangling_link_warns_nothing() -> None:
         assert npc_export.warn_combo_chain_orphans("models/x.mdl", clips) == 0
     printed.assert_not_called()
 
+
+# SwingContactRecordTests
+# `read_swing_records` -- the 188-byte records `numswingcentres`@708 declares.
 
 def test_a_swing_states_its_window_bone_and_segment() -> None:
     # The shape of male `fists.mdl`'s `Fists_attack_W1` record 0.
@@ -555,6 +568,9 @@ def test_a_sequence_declaring_none_carries_none() -> None:
     assert _sequence().swings == ()
 
 
+# ClipMetaTests
+# `_clip_meta` states the reach in the centimetres every sidecar is written in.
+
 def test_the_reach_crosses_the_seam_in_centimetres() -> None:
     meta = npc_export._clip_meta(_sequence(reach=64.0))
     assert meta["reach_cm"] == pytest.approx(162.56, abs=1e-4)
@@ -614,270 +630,289 @@ def test_the_degenerate_flag_is_stated_on_every_swing_row() -> None:
     assert [row["degenerate"] for row in rows] == [False, True]
 
 
-class ClipSidecarRowTests(unittest.TestCase):
-    """The clip slice row, which is truncated at its last stated column."""
+# ClipSidecarRowTests
+# The clip slice row, which is truncated at its last stated column.
 
-    def _slice(self, own_clips, clips=None, banks=None, clip_seq=None):
-        # `clips` maps a label to the stems that declare it, in include-tree order; the fixture
-        # defaults to the body owning every one of its own. `clip_seq` is parallel to it and
-        # carries each row's global sequence number.
-        resolved = (clips if clips is not None
-                    else {label: ["fighter"] for label in own_clips})
-        manifest = {
-            "manifest_version": npc_export.MANIFEST_VERSION,
-            "npcs": {"fighter": {"model": "models/fighter.mdl",
-                                 "bones": 2,
-                                 "clips": resolved,
-                                 "clip_seq": (clip_seq if clip_seq is not None
-                                              else {label: list(range(len(owners)))
-                                                    for label, owners in resolved.items()}),
-                                 "own_clips": own_clips}},
-            "banks": banks or {},
-        }
-        with tempfile.TemporaryDirectory() as temporary:
-            with (mock.patch.object(npc_export, "CLIPS_DIR",
-                                    os.path.join(temporary, "clips")),
-                  mock.patch.object(npc_export, "INDEX",
-                                    os.path.join(temporary, "npc_index.json"))):
-                npc_export.write_sidecars(manifest)
-                with open(os.path.join(temporary, "clips", "fighter.json"),
-                          encoding="utf-8") as f:
-                    return json.load(f)
+def _slice(own_clips, clips=None, banks=None, clip_seq=None):
+    # `clips` maps a label to the stems that declare it, in include-tree order; the fixture
+    # defaults to the body owning every one of its own. `clip_seq` is parallel to it and
+    # carries each row's global sequence number.
+    resolved = (clips if clips is not None
+                else {label: ["fighter"] for label in own_clips})
+    manifest = {
+        "manifest_version": npc_export.MANIFEST_VERSION,
+        "npcs": {"fighter": {"model": "models/fighter.mdl",
+                             "bones": 2,
+                             "clips": resolved,
+                             "clip_seq": (clip_seq if clip_seq is not None
+                                          else {label: list(range(len(owners)))
+                                                for label, owners in resolved.items()}),
+                             "own_clips": own_clips}},
+        "banks": banks or {},
+    }
+    with tempfile.TemporaryDirectory() as temporary:
+        with (mock.patch.object(npc_export, "CLIPS_DIR",
+                                os.path.join(temporary, "clips")),
+              mock.patch.object(npc_export, "INDEX",
+                                os.path.join(temporary, "npc_index.json"))):
+            npc_export.write_sidecars(manifest)
+            with open(os.path.join(temporary, "clips", "fighter.json"),
+                      encoding="utf-8") as f:
+                return json.load(f)
 
-    @staticmethod
-    def _row(written, label):
-        """One label's first row. A label carries a LIST of rows, one per declaring owner."""
-        rows = written["clips"][label]
-        assert isinstance(rows, list) and rows and isinstance(rows[0], list), rows
-        return rows[0]
 
-    def test_the_sequence_numbers_are_positionally_parallel_to_the_rows(self) -> None:
-        # `seq[label][i]` is the global sequence number of `clips[label][i]`. The runtime orders
-        # candidates by it and breaks a weight tie on it, so a list that fell out of step would
-        # hand the tie-break another owner's number.
-        fists = npc_export._clip_meta(
-            _sequence(label="stealth", activity="ACT_SNEAK_FISTS", reach=FLT_MAX, blocked=None))
-        bat = npc_export._clip_meta(
-            _sequence(label="stealth", activity="ACT_SNEAK_BAT", reach=FLT_MAX, blocked=None))
-        written = self._slice(
-            {},
-            clips={"stealth": ["bat", "fists"]},
-            clip_seq={"stealth": [317, 908]},
-            banks={"bat": {"model": "models/bat.mdl", "clips": {"stealth": bat}},
-                   "fists": {"model": "models/fists.mdl", "clips": {"stealth": fists}}},
-        )
-        assert written["seq"]["stealth"] == [317, 908]
-        assert [written["owners"][row[0]] for row in written["clips"]["stealth"]] == ["bat", "fists"]
+def _row(written, label):
+    """One label's first row. A label carries a LIST of rows, one per declaring owner."""
+    rows = written["clips"][label]
+    assert isinstance(rows, list) and rows and isinstance(rows[0], list), rows
+    return rows[0]
 
-    def test_a_row_the_walk_could_not_number_holds_its_slot_open(self) -> None:
-        # The two lists are read positionally, so an unnumbered row states a null rather than
-        # shortening the list and shifting every number behind it onto the wrong owner.
-        fists = npc_export._clip_meta(
-            _sequence(label="stealth", activity="ACT_SNEAK_FISTS", reach=FLT_MAX, blocked=None))
-        bat = npc_export._clip_meta(
-            _sequence(label="stealth", activity="ACT_SNEAK_BAT", reach=FLT_MAX, blocked=None))
-        written = self._slice(
-            {},
-            clips={"stealth": ["bat", "fists"]},
-            clip_seq={"stealth": [None, 908]},
-            banks={"bat": {"model": "models/bat.mdl", "clips": {"stealth": bat}},
-                   "fists": {"model": "models/fists.mdl", "clips": {"stealth": fists}}},
-        )
-        assert written["seq"]["stealth"] == [None, 908]
 
-    def test_a_record_written_before_the_numbering_reads_as_unnumbered(self) -> None:
-        # A manifest `reindex` re-derives sidecars from, written before `clip_seq` existed.
-        written = self._slice(
-            {"idle": npc_export._clip_meta(
-                _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None))},
-            clips={"idle": ["fighter"]},
-            clip_seq={},
-        )
-        assert written["seq"]["idle"] == [None]
+def test_the_sequence_numbers_are_positionally_parallel_to_the_rows() -> None:
+    # `seq[label][i]` is the global sequence number of `clips[label][i]`. The runtime orders
+    # candidates by it and breaks a weight tie on it, so a list that fell out of step would
+    # hand the tie-break another owner's number.
+    fists = npc_export._clip_meta(
+        _sequence(label="stealth", activity="ACT_SNEAK_FISTS", reach=FLT_MAX, blocked=None))
+    bat = npc_export._clip_meta(
+        _sequence(label="stealth", activity="ACT_SNEAK_BAT", reach=FLT_MAX, blocked=None))
+    written = _slice(
+        {},
+        clips={"stealth": ["bat", "fists"]},
+        clip_seq={"stealth": [317, 908]},
+        banks={"bat": {"model": "models/bat.mdl", "clips": {"stealth": bat}},
+               "fists": {"model": "models/fists.mdl", "clips": {"stealth": fists}}},
+    )
+    assert written["seq"]["stealth"] == [317, 908]
+    assert [written["owners"][row[0]] for row in written["clips"]["stealth"]] == ["bat", "fists"]
 
-    def test_a_label_two_banks_declare_writes_one_row_per_owner(self) -> None:
-        # The shipped corpus repeats a label across banks with a different activity on each -- all
-        # ten weapon banks declare `stealth_success_attacker_shortvictim`. Keeping only the first
-        # would make the other nine activities unanswerable, so every owner gets its own row and
-        # include-tree order decides which one a label-only lookup resolves to.
-        fists = npc_export._clip_meta(
-            _sequence(label="stealth", activity="ACT_SNEAK_FISTS", reach=FLT_MAX, blocked=None))
-        bat = npc_export._clip_meta(
-            _sequence(label="stealth", activity="ACT_SNEAK_BAT", reach=FLT_MAX, blocked=None))
-        written = self._slice(
-            {},
-            clips={"stealth": ["bat", "fists"]},
-            banks={"bat": {"model": "models/bat.mdl", "clips": {"stealth": bat}},
-                   "fists": {"model": "models/fists.mdl", "clips": {"stealth": fists}}},
-        )
-        rows = written["clips"]["stealth"]
-        assert len(rows) == 2
-        owners = [written["owners"][row[0]] for row in rows]
-        activities = [written["activities"][row[1]] for row in rows]
-        assert owners == ["bat", "fists"]
-        assert activities == ["ACT_SNEAK_BAT", "ACT_SNEAK_FISTS"]
-        # The tree's first is first, which is the answer a label-only lookup keeps giving.
-        assert self._row(written, "stealth")[0] == written["owners"].index("bat")
 
-    def test_the_envelope_corners_are_not_positionally_converted(self) -> None:
-        # **The negative that matters.** An envelope's corners are not a point in the model's frame:
-        # the axes are reach distance, lateral tolerance and vertical offset. Putting them through
-        # the positional projection would apply the Y reflection as well as the scale, mirroring an
-        # axis that is symmetric about zero — so the mirrored record would compare equal against
-        # every symmetric enemy box and disagree with nothing that could report it.
-        #
-        # The check is a scale and ONLY a scale, asserted on a corner whose Y is non-zero and
-        # asymmetric so a sign flip cannot hide.
-        corners = (((10.0, -3.0, -8.0), (40.0, 7.0, 8.0)),)
-        meta = npc_export._clip_meta(_sequence(envelopes=corners))
-        cm = npc_export.INCH_TO_CM
-        assert meta["envelopes"] == [{
-            "min": [round(10.0 * cm, 4), round(-3.0 * cm, 4), round(-8.0 * cm, 4)],
-            "max": [round(40.0 * cm, 4), round(7.0 * cm, 4), round(8.0 * cm, 4)],
-        }]
-        # And the same corner through the positional path, to name what was avoided.
-        assert meta["envelopes"][0]["min"][1] != round(UEK._conv_pos((10.0, -3.0, -8.0))[1], 4)
+def test_a_row_the_walk_could_not_number_holds_its_slot_open() -> None:
+    # The two lists are read positionally, so an unnumbered row states a null rather than
+    # shortening the list and shifting every number behind it onto the wrong owner.
+    fists = npc_export._clip_meta(
+        _sequence(label="stealth", activity="ACT_SNEAK_FISTS", reach=FLT_MAX, blocked=None))
+    bat = npc_export._clip_meta(
+        _sequence(label="stealth", activity="ACT_SNEAK_BAT", reach=FLT_MAX, blocked=None))
+    written = _slice(
+        {},
+        clips={"stealth": ["bat", "fists"]},
+        clip_seq={"stealth": [None, 908]},
+        banks={"bat": {"model": "models/bat.mdl", "clips": {"stealth": bat}},
+               "fists": {"model": "models/fists.mdl", "clips": {"stealth": fists}}},
+    )
+    assert written["seq"]["stealth"] == [None, 908]
 
-    def test_a_low_reach_converts_to_centimetres_and_keeps_a_zero(self) -> None:
-        assert npc_export._clip_meta(_sequence(low_reach=30.0))["low_reach_cm"] == pytest.approx(round(30.0 * npc_export.INCH_TO_CM, 4), abs=1e-4)
-        # A stated zero is a band that starts at the body, and it has to survive the seam.
-        assert npc_export._clip_meta(_sequence(low_reach=0.0))["low_reach_cm"] == 0.0
-        assert "low_reach_cm" not in npc_export._clip_meta(_sequence(low_reach=FLT_MIN))
 
-    def test_a_low_reach_lands_behind_the_four_melee_columns(self) -> None:
-        # 14 shipped descriptors state a low edge with `reach` unset, so every column before this
-        # one has to be held open — and each with its own placeholder, because the readers differ.
-        written = self._slice({"swing": npc_export._clip_meta(
-            _sequence(label="swing", reach=FLT_MAX, blocked=None, low_reach=12.0))})
-        row = self._row(written, "swing")
-        assert len(row) == 12
-        assert row[7] is None            # reach_cm — read guarded against a null
-        assert row[8] == ""         # blocked_reaction — read as a string
-        assert row[9] == []         # swings — read as an array
-        assert row[10] is None           # combo — read guarded against a null
-        assert row[11] == pytest.approx(round(12.0 * npc_export.INCH_TO_CM, 4), abs=1e-4)
+def test_a_record_written_before_the_numbering_reads_as_unnumbered() -> None:
+    # A manifest `reindex` re-derives sidecars from, written before `clip_seq` existed.
+    written = _slice(
+        {"idle": npc_export._clip_meta(
+            _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None))},
+        clips={"idle": ["fighter"]},
+        clip_seq={},
+    )
+    assert written["seq"]["idle"] == [None]
 
-    def test_envelopes_land_last_and_hold_every_column_open(self) -> None:
-        written = self._slice({"swing": npc_export._clip_meta(
-            _sequence(label="swing", reach=FLT_MAX, blocked=None,
-                      envelopes=(((1.0, -2.0, -3.0), (4.0, 2.0, 3.0)),)))})
-        row = self._row(written, "swing")
-        assert len(row) == 13
-        assert row[7] is None
-        assert row[8] == ""
-        assert row[9] == []
-        assert row[10] is None
-        assert row[11] is None           # low_reach_cm — the same null guard as reach_cm
-        assert len(row[12]) == 1
 
-    def test_a_plain_clip_stops_at_fade(self) -> None:
-        written = self._slice({"idle": npc_export._clip_meta(
-            _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None))})
-        # The column names, in the order a reader indexes them by. New columns APPEND: the index of
-        # an existing one is a contract with every slice already on disk.
-        assert written["fields"] == ["owner", "activity", "weight", "flags", "frames", "fps", "fade",
-                          "reach_cm", "blocked_reaction", "swings", "combo",
-                          "low_reach_cm", "envelopes"]
-        assert self._row(written, "idle") == [0, 1, 3, 0, 21, 30.0, 0.2]
+def test_a_label_two_banks_declare_writes_one_row_per_owner() -> None:
+    # The shipped corpus repeats a label across banks with a different activity on each -- all
+    # ten weapon banks declare `stealth_success_attacker_shortvictim`. Keeping only the first
+    # would make the other nine activities unanswerable, so every owner gets its own row and
+    # include-tree order decides which one a label-only lookup resolves to.
+    fists = npc_export._clip_meta(
+        _sequence(label="stealth", activity="ACT_SNEAK_FISTS", reach=FLT_MAX, blocked=None))
+    bat = npc_export._clip_meta(
+        _sequence(label="stealth", activity="ACT_SNEAK_BAT", reach=FLT_MAX, blocked=None))
+    written = _slice(
+        {},
+        clips={"stealth": ["bat", "fists"]},
+        banks={"bat": {"model": "models/bat.mdl", "clips": {"stealth": bat}},
+               "fists": {"model": "models/fists.mdl", "clips": {"stealth": fists}}},
+    )
+    rows = written["clips"]["stealth"]
+    assert len(rows) == 2
+    owners = [written["owners"][row[0]] for row in rows]
+    activities = [written["activities"][row[1]] for row in rows]
+    assert owners == ["bat", "fists"]
+    assert activities == ["ACT_SNEAK_BAT", "ACT_SNEAK_FISTS"]
+    # The tree's first is first, which is the answer a label-only lookup keeps giving.
+    assert _row(written, "stealth")[0] == written["owners"].index("bat")
 
-    def test_a_reach_without_a_reaction_adds_one_column(self) -> None:
-        written = self._slice({"swing": npc_export._clip_meta(
-            _sequence(label="swing", reach=64.0, blocked=None))})
-        assert self._row(written, "swing") == [0, 1, 3, 0, 21, 30.0, 0.2, 162.56]
 
-    def test_a_blocked_reaction_is_inlined_not_interned(self) -> None:
-        # `activities` is the stem's playable vocabulary -- runtime conformance unions it to
-        # answer "can some model play this activity" -- so a reaction a clip only reacts to
-        # (never performs) must not join it. The literal is written straight into the row.
-        written = self._slice({"jab": npc_export._clip_meta(_sequence(reach=64.0))})
-        assert written["activities"] == ["", "ACT_MELEE_ATTACK"]
-        assert self._row(written, "jab") == [0, 1, 3, 0, 21, 30.0, 0.2, 162.56, "ACT_BLOCKED_REACTION_LEFT"]
+def test_the_envelope_corners_are_not_positionally_converted() -> None:
+    # **The negative that matters.** An envelope's corners are not a point in the model's frame:
+    # the axes are reach distance, lateral tolerance and vertical offset. Putting them through
+    # the positional projection would apply the Y reflection as well as the scale, mirroring an
+    # axis that is symmetric about zero — so the mirrored record would compare equal against
+    # every symmetric enemy box and disagree with nothing that could report it.
+    #
+    # The check is a scale and ONLY a scale, asserted on a corner whose Y is non-zero and
+    # asymmetric so a sign flip cannot hide.
+    corners = (((10.0, -3.0, -8.0), (40.0, 7.0, 8.0)),)
+    meta = npc_export._clip_meta(_sequence(envelopes=corners))
+    cm = npc_export.INCH_TO_CM
+    assert meta["envelopes"] == [{
+        "min": [round(10.0 * cm, 4), round(-3.0 * cm, 4), round(-8.0 * cm, 4)],
+        "max": [round(40.0 * cm, 4), round(7.0 * cm, 4), round(8.0 * cm, 4)],
+    }]
+    # And the same corner through the positional path, to name what was avoided.
+    assert meta["envelopes"][0]["min"][1] != round(UEK._conv_pos((10.0, -3.0, -8.0))[1], 4)
 
-    def test_a_reaction_without_a_reach_still_lands_in_its_own_column(self) -> None:
-        # No shipped descriptor states a reaction without a reach -- all 147 carriers state both --
-        # but the row is positional, so the reach column is held open rather than closed up. A
-        # reader reaching column 8 must find the reaction literal there, not a reach.
-        written = self._slice({"phantom": npc_export._clip_meta(
-            _sequence(label="phantom", reach=FLT_MAX,
-                      blocked="ACT_BLOCKED_REACTION_RIGHT"))})
-        row = self._row(written, "phantom")
-        assert len(row) == 9
-        assert row[7] is None
-        assert row[8] == "ACT_BLOCKED_REACTION_RIGHT"
 
-    def test_a_blocked_reaction_literal_never_joins_the_activities_table(self) -> None:
-        # Even when a different clip's own activity happens to equal a reaction literal (so
-        # that literal already sits in `activities`), the reaction column still carries a
-        # plain inline string -- never an index into a table it does not depend on.
-        written = self._slice({
-            "jab": npc_export._clip_meta(
-                _sequence(reach=64.0, blocked="ACT_BLOCKED_REACTION_RIGHT")),
-            "recoil": npc_export._clip_meta(_sequence(
-                label="recoil", activity="ACT_BLOCKED_REACTION_LEFT",
-                reach=FLT_MAX, blocked=None)),
-        })
-        assert written["activities"] == ["", "ACT_MELEE_ATTACK", "ACT_BLOCKED_REACTION_LEFT"]
-        assert self._row(written, "jab")[8] == "ACT_BLOCKED_REACTION_RIGHT"
-        assert self._row(written, "recoil") == [0, 2, 3, 0, 21, 30.0, 0.2]
+def test_a_low_reach_converts_to_centimetres_and_keeps_a_zero() -> None:
+    assert npc_export._clip_meta(_sequence(low_reach=30.0))["low_reach_cm"] == pytest.approx(round(30.0 * npc_export.INCH_TO_CM, 4), abs=1e-4)
+    # A stated zero is a band that starts at the body, and it has to survive the seam.
+    assert npc_export._clip_meta(_sequence(low_reach=0.0))["low_reach_cm"] == 0.0
+    assert "low_reach_cm" not in npc_export._clip_meta(_sequence(low_reach=FLT_MIN))
 
-    def test_a_swing_lands_behind_the_melee_pair(self) -> None:
-        written = self._slice({"jab": npc_export._clip_meta(
-            _sequence(reach=64.0, swings=[_swing()]))})
-        row = self._row(written, "jab")
-        assert len(row) == 10
-        assert row[7:9] == [162.56, "ACT_BLOCKED_REACTION_LEFT"]
-        assert row[9][0]["bone"] == "Bip01 R Forearm"
 
-    def test_a_swing_without_the_melee_pair_holds_both_columns_open(self) -> None:
-        # 427 of the 574 swing carriers name no blocked reaction (all 574 state a reach), so the
-        # row must hold the columns a swing sits behind rather than close them up and put a list
-        # where a literal belongs. The reaction's placeholder is the empty literal, because that
-        # column is read as a string unconditionally where `reach_cm`'s null is read guarded.
-        written = self._slice({"claw": npc_export._clip_meta(
-            _sequence(label="claw", reach=FLT_MAX, blocked=None, swings=[_swing()]))})
-        row = self._row(written, "claw")
-        assert len(row) == 10
-        assert row[7] is None
-        assert row[8] == ""
-        assert [bucket[0] for bucket in row[9][0]["kb_names"]] == list(FISTS_KNOCKBACK)
+def test_a_low_reach_lands_behind_the_four_melee_columns() -> None:
+    # 14 shipped descriptors state a low edge with `reach` unset, so every column before this
+    # one has to be held open — and each with its own placeholder, because the readers differ.
+    written = _slice({"swing": npc_export._clip_meta(
+        _sequence(label="swing", reach=FLT_MAX, blocked=None, low_reach=12.0))})
+    row = _row(written, "swing")
+    assert len(row) == 12
+    assert row[7] is None            # reach_cm — read guarded against a null
+    assert row[8] == ""         # blocked_reaction — read as a string
+    assert row[9] == []         # swings — read as an array
+    assert row[10] is None           # combo — read guarded against a null
+    assert row[11] == pytest.approx(round(12.0 * npc_export.INCH_TO_CM, 4), abs=1e-4)
 
-    def test_a_knockback_name_never_joins_the_activities_table(self) -> None:
-        # Same rule as the blocked reaction, for the same reason: a knockback is what the
-        # *victim* plays, so it must not enter this stem's playable vocabulary.
-        written = self._slice({"claw": npc_export._clip_meta(
-            _sequence(label="claw", reach=FLT_MAX, blocked=None, swings=[_swing()]))})
-        assert written["activities"] == ["", "ACT_MELEE_ATTACK"]
 
-    def test_a_combo_lands_behind_the_swing(self) -> None:
-        written = self._slice({"jab": npc_export._clip_meta(
-            _sequence(reach=64.0, swings=[_swing()], mask=0x008, chain="Fists_attack_W2",
-                      window=(0.5, 0.9, 0.91)))})
-        row = self._row(written, "jab")
-        assert len(row) == 11
-        assert row[7:9] == [162.56, "ACT_BLOCKED_REACTION_LEFT"]
-        assert row[9][0]["bone"] == "Bip01 R Forearm"
-        assert row[10]["chain"] == "Fists_attack_W2"
+def test_envelopes_land_last_and_hold_every_column_open() -> None:
+    written = _slice({"swing": npc_export._clip_meta(
+        _sequence(label="swing", reach=FLT_MAX, blocked=None,
+                  envelopes=(((1.0, -2.0, -3.0), (4.0, 2.0, 3.0)),)))})
+    row = _row(written, "swing")
+    assert len(row) == 13
+    assert row[7] is None
+    assert row[8] == ""
+    assert row[9] == []
+    assert row[10] is None
+    assert row[11] is None           # low_reach_cm — the same null guard as reach_cm
+    assert len(row[12]) == 1
 
-    def test_a_combo_without_the_melee_trio_holds_all_three_columns_open(self) -> None:
-        # 28 of the 208 carriers -- the `meleeshared_onehand` flying-knockback reaction chain --
-        # state no reach, no reaction and no swing. The row holds those columns rather than
-        # closing them up and putting a dict where a list belongs.
-        written = self._slice({"flung": npc_export._clip_meta(
-            _sequence(label="flung", reach=FLT_MAX, blocked=None,
-                      chain="knockback_flying_idle",
-                      chain_alt="knockback_flying_wall_hit"))})
-        row = self._row(written, "flung")
-        assert len(row) == 11
-        assert row[7] is None
-        assert row[8] == ""
-        assert row[9] == []
-        assert row[10]["chain_alt"] == "knockback_flying_wall_hit"
 
-    def test_a_chain_label_never_joins_the_activities_table(self) -> None:
-        # A successor is a sequence label, not an activity, so `activities` is not a table it
-        # indexes -- and the runtime conformance union must not learn it as playable.
-        written = self._slice({"jab": npc_export._clip_meta(
-            _sequence(mask=0x008, chain="Fists_attack_W2", dodge="ACT_DODGE_DUCK",
-                      window=(0.5, 0.9, 0.91)))})
-        assert written["activities"] == ["", "ACT_MELEE_ATTACK"]
-        assert self._row(written, "jab")[10]["dodge"] == "ACT_DODGE_DUCK"
+def test_a_plain_clip_stops_at_fade() -> None:
+    written = _slice({"idle": npc_export._clip_meta(
+        _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None))})
+    # The column names, in the order a reader indexes them by. New columns APPEND: the index of
+    # an existing one is a contract with every slice already on disk.
+    assert written["fields"] == ["owner", "activity", "weight", "flags", "frames", "fps", "fade",
+                      "reach_cm", "blocked_reaction", "swings", "combo",
+                      "low_reach_cm", "envelopes"]
+    assert _row(written, "idle") == [0, 1, 3, 0, 21, 30.0, 0.2]
+
+
+def test_a_reach_without_a_reaction_adds_one_column() -> None:
+    written = _slice({"swing": npc_export._clip_meta(
+        _sequence(label="swing", reach=64.0, blocked=None))})
+    assert _row(written, "swing") == [0, 1, 3, 0, 21, 30.0, 0.2, 162.56]
+
+
+def test_a_blocked_reaction_is_inlined_not_interned() -> None:
+    # `activities` is the stem's playable vocabulary -- runtime conformance unions it to
+    # answer "can some model play this activity" -- so a reaction a clip only reacts to
+    # (never performs) must not join it. The literal is written straight into the row.
+    written = _slice({"jab": npc_export._clip_meta(_sequence(reach=64.0))})
+    assert written["activities"] == ["", "ACT_MELEE_ATTACK"]
+    assert _row(written, "jab") == [0, 1, 3, 0, 21, 30.0, 0.2, 162.56, "ACT_BLOCKED_REACTION_LEFT"]
+
+
+def test_a_reaction_without_a_reach_still_lands_in_its_own_column() -> None:
+    # No shipped descriptor states a reaction without a reach -- all 147 carriers state both --
+    # but the row is positional, so the reach column is held open rather than closed up. A
+    # reader reaching column 8 must find the reaction literal there, not a reach.
+    written = _slice({"phantom": npc_export._clip_meta(
+        _sequence(label="phantom", reach=FLT_MAX,
+                  blocked="ACT_BLOCKED_REACTION_RIGHT"))})
+    row = _row(written, "phantom")
+    assert len(row) == 9
+    assert row[7] is None
+    assert row[8] == "ACT_BLOCKED_REACTION_RIGHT"
+
+
+def test_a_blocked_reaction_literal_never_joins_the_activities_table() -> None:
+    # Even when a different clip's own activity happens to equal a reaction literal (so
+    # that literal already sits in `activities`), the reaction column still carries a
+    # plain inline string -- never an index into a table it does not depend on.
+    written = _slice({
+        "jab": npc_export._clip_meta(
+            _sequence(reach=64.0, blocked="ACT_BLOCKED_REACTION_RIGHT")),
+        "recoil": npc_export._clip_meta(_sequence(
+            label="recoil", activity="ACT_BLOCKED_REACTION_LEFT",
+            reach=FLT_MAX, blocked=None)),
+    })
+    assert written["activities"] == ["", "ACT_MELEE_ATTACK", "ACT_BLOCKED_REACTION_LEFT"]
+    assert _row(written, "jab")[8] == "ACT_BLOCKED_REACTION_RIGHT"
+    assert _row(written, "recoil") == [0, 2, 3, 0, 21, 30.0, 0.2]
+
+
+def test_a_swing_lands_behind_the_melee_pair() -> None:
+    written = _slice({"jab": npc_export._clip_meta(
+        _sequence(reach=64.0, swings=[_swing()]))})
+    row = _row(written, "jab")
+    assert len(row) == 10
+    assert row[7:9] == [162.56, "ACT_BLOCKED_REACTION_LEFT"]
+    assert row[9][0]["bone"] == "Bip01 R Forearm"
+
+
+def test_a_swing_without_the_melee_pair_holds_both_columns_open() -> None:
+    # 427 of the 574 swing carriers name no blocked reaction (all 574 state a reach), so the
+    # row must hold the columns a swing sits behind rather than close them up and put a list
+    # where a literal belongs. The reaction's placeholder is the empty literal, because that
+    # column is read as a string unconditionally where `reach_cm`'s null is read guarded.
+    written = _slice({"claw": npc_export._clip_meta(
+        _sequence(label="claw", reach=FLT_MAX, blocked=None, swings=[_swing()]))})
+    row = _row(written, "claw")
+    assert len(row) == 10
+    assert row[7] is None
+    assert row[8] == ""
+    assert [bucket[0] for bucket in row[9][0]["kb_names"]] == list(FISTS_KNOCKBACK)
+
+
+def test_a_knockback_name_never_joins_the_activities_table() -> None:
+    # Same rule as the blocked reaction, for the same reason: a knockback is what the
+    # *victim* plays, so it must not enter this stem's playable vocabulary.
+    written = _slice({"claw": npc_export._clip_meta(
+        _sequence(label="claw", reach=FLT_MAX, blocked=None, swings=[_swing()]))})
+    assert written["activities"] == ["", "ACT_MELEE_ATTACK"]
+
+
+def test_a_combo_lands_behind_the_swing() -> None:
+    written = _slice({"jab": npc_export._clip_meta(
+        _sequence(reach=64.0, swings=[_swing()], mask=0x008, chain="Fists_attack_W2",
+                  window=(0.5, 0.9, 0.91)))})
+    row = _row(written, "jab")
+    assert len(row) == 11
+    assert row[7:9] == [162.56, "ACT_BLOCKED_REACTION_LEFT"]
+    assert row[9][0]["bone"] == "Bip01 R Forearm"
+    assert row[10]["chain"] == "Fists_attack_W2"
+
+
+def test_a_combo_without_the_melee_trio_holds_all_three_columns_open() -> None:
+    # 28 of the 208 carriers -- the `meleeshared_onehand` flying-knockback reaction chain --
+    # state no reach, no reaction and no swing. The row holds those columns rather than
+    # closing them up and putting a dict where a list belongs.
+    written = _slice({"flung": npc_export._clip_meta(
+        _sequence(label="flung", reach=FLT_MAX, blocked=None,
+                  chain="knockback_flying_idle",
+                  chain_alt="knockback_flying_wall_hit"))})
+    row = _row(written, "flung")
+    assert len(row) == 11
+    assert row[7] is None
+    assert row[8] == ""
+    assert row[9] == []
+    assert row[10]["chain_alt"] == "knockback_flying_wall_hit"
+
+
+def test_a_chain_label_never_joins_the_activities_table() -> None:
+    # A successor is a sequence label, not an activity, so `activities` is not a table it
+    # indexes -- and the runtime conformance union must not learn it as playable.
+    written = _slice({"jab": npc_export._clip_meta(
+        _sequence(mask=0x008, chain="Fists_attack_W2", dodge="ACT_DODGE_DUCK",
+                  window=(0.5, 0.9, 0.91)))})
+    assert written["activities"] == ["", "ACT_MELEE_ATTACK"]
+    assert _row(written, "jab")[10]["dodge"] == "ACT_DODGE_DUCK"

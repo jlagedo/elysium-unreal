@@ -128,237 +128,264 @@ def test_a_proxy_operand_is_not_mistaken_for_a_material_input():
     assert model.dependencies == []
 
 
-class MalformedSourceTests(unittest.TestCase):
-    """Eleven shipped VMTs are not well-formed. Each departure publishes with its evidence."""
+# MalformedSourceTests
+# Eleven shipped VMTs are not well-formed. Each departure publishes with its evidence.
 
-    def _roles(self, model):
-        return sorted({row["role"] for row in model.anomalies})
-
-    def test_a_valueless_key_publishes_as_a_flag(self):
-        body = b'"VertexLitGeneric"\r\n{\r\n\t"$basetexture" "models/teeth"\r\n\t"nomip"\r\n}\r\n'
-        model = _decode(body)
-        assert self._roles(model) == ["valueless-key"]
-        flag = model.parameters[-1]
-        assert (flag.key, flag.value, flag.value_type) == ("nomip", "", "none")
-        assert model.byte_coverage[0]["coveragePercent"] == 100.0
-
-    def test_a_block_unclosed_at_end_of_file_still_publishes(self):
-        body = b'"Sprite"\n{\n"$basetexture" "models/teeth"\n"Proxies"\n{\n"Sine"\n{\n"rate" "1"\n}'
-        model = _decode(body)
-        assert "unclosed-block-at-end-of-file" in self._roles(model)
-        assert model.byte_coverage[0]["accountedBytes"] == len(body)
-
-    def test_a_stray_close_brace_after_the_shader_block_is_claimed(self):
-        body = b'"UnlitGeneric"\n{\n"$basetexture" "models/teeth"\n}\n}\n'
-        model = _decode(body)
-        assert self._roles(model) == ["content-after-shader-block"]
-        assert model.byte_coverage[0]["accountedBytes"] == len(body)
-
-    def test_a_stray_quote_runs_to_end_of_file_without_losing_a_byte(self):
-        body = b'"VertexLitGeneric"\n{\n"$nocull" 1"\t// added by psycho-a\n}\n'
-        model = _decode(body, present=())
-        assert "unterminated-quoted-string" in self._roles(model)
-        assert model.byte_coverage[0]["accountedBytes"] == len(body)
-
-    def test_a_commented_out_block_header_leaves_an_anonymous_block(self):
-        body = (
-            b'"LightmappedGeneric"\n{\n"Proxies"\n{\n'
-            b'//\t"GaussianNoise"\n\t{\n\t"resultVar" "$temp"\n\t}\n}\n}\n'
-        )
-        model = _decode(body, present=())
-        assert "anonymous-block" in self._roles(model)
-        assert model.byte_coverage[0]["coveragePercent"] == 100.0
+def _roles(model):
+    return sorted({row["role"] for row in model.anomalies})
 
 
-class ShaderResolutionTests(unittest.TestCase):
-    """Combo rules transcribed from `stdshader_dx8.dll`; see `docs/vtmb/shader_combos.md`."""
+def test_a_valueless_key_publishes_as_a_flag():
+    body = b'"VertexLitGeneric"\r\n{\r\n\t"$basetexture" "models/teeth"\r\n\t"nomip"\r\n}\r\n'
+    model = _decode(body)
+    assert _roles(model) == ["valueless-key"]
+    flag = model.parameters[-1]
+    assert (flag.key, flag.value, flag.value_type) == ("nomip", "", "none")
+    assert model.byte_coverage[0]["coveragePercent"] == 100.0
 
-    def _resolution(self, body, present=("models/teeth", "models/mask")):
-        return _decode(body, present=present).shader_resolution
 
-    def _only(self, body, field, present=("models/teeth", "models/mask")):
-        """The single program a family with no render-config axis resolves to."""
-        programs = self._resolution(body, present=present)["programs"]
-        assert len(programs) == 1
-        return programs[0][field]
+def test_a_block_unclosed_at_end_of_file_still_publishes():
+    body = b'"Sprite"\n{\n"$basetexture" "models/teeth"\n"Proxies"\n{\n"Sine"\n{\n"rate" "1"\n}'
+    model = _decode(body)
+    assert "unclosed-block-at-end-of-file" in _roles(model)
+    assert model.byte_coverage[0]["accountedBytes"] == len(body)
 
-    def test_a_family_with_no_transcribed_selector_resolves_unresolved(self):
-        resolution = self._resolution(UNTRANSCRIBED)
-        assert resolution["family"] == "wireframe"
-        assert not resolution["resolved"]
-        assert resolution["programs"] == []
-        assert resolution["reason"] == "selector-not-transcribed"
 
-    def test_a_plain_lightmapped_material_selects_the_base_program(self):
-        resolution = self._resolution(RESOLVED)
-        assert resolution["resolved"]
-        assert len(resolution["programs"]) == 1
-        assert resolution["programs"][0]["vertexShader"] == "LightmappedGeneric"
-        assert resolution["programs"][0]["pixelShader"] == "LightmappedGeneric"
-        assert resolution["programs"][0]["condition"] == ""
+def test_a_stray_close_brace_after_the_shader_block_is_claimed():
+    body = b'"UnlitGeneric"\n{\n"$basetexture" "models/teeth"\n}\n}\n'
+    model = _decode(body)
+    assert _roles(model) == ["content-after-shader-block"]
+    assert model.byte_coverage[0]["accountedBytes"] == len(body)
 
-    def test_the_eyes_family_leaves_the_overbright_choice_to_render_config(self):
-        """`$vampire` picks the pair; the remaining choice is engine state, not the VMT."""
-        body = b'"Eyes"\n{\n"$basetexture" "models/teeth"\n"$vampire" "1"\n}\n'
-        programs = self._resolution(body)["programs"]
-        assert {(p["condition"], p["pixelShader"]) for p in programs} == {("overbright==2", "Eyes_Vampire_Overbright2"), ("", "Eyes_Vampire")}
-        assert all(p["vertexShader"] == "Eyes" for p in programs)
 
-    def test_eyes_without_the_vampire_flag_selects_the_stock_pair(self):
-        body = b'"Eyes"\n{\n"$basetexture" "models/teeth"\n"$iris" "models/mask"\n}\n'
-        programs = self._resolution(body)["programs"]
-        assert {p["pixelShader"] for p in programs} == {"Eyes", "Eyes_Overbright2"}
+def test_a_stray_quote_runs_to_end_of_file_without_losing_a_byte():
+    body = b'"VertexLitGeneric"\n{\n"$nocull" 1"\t// added by psycho-a\n}\n'
+    model = _decode(body, present=())
+    assert "unterminated-quoted-string" in _roles(model)
+    assert model.byte_coverage[0]["accountedBytes"] == len(body)
 
-    def test_teeth_draws_with_a_pixel_program_outside_its_own_family(self):
-        """Teeth ships a vertex program but no pixel program; it reuses VertexLitTexture."""
-        body = b'"Teeth"\n{\n"$basetexture" "models/teeth"\n}\n'
-        programs = self._resolution(body)["programs"]
-        assert {p["pixelShader"] for p in programs} == {"VertexLitTexture", "VertexLitTexture_Overbright2"}
-        assert all(p["vertexShader"] == "Teeth" for p in programs)
 
-    def test_an_envmap_mask_texture_overrides_base_alpha_env_map_mask(self):
-        """Pixel table 0x10021620 indexes 6 and 7: a bound `$envmapmask` wins.
+def test_a_commented_out_block_header_leaves_an_anonymous_block():
+    body = (
+        b'"LightmappedGeneric"\n{\n"Proxies"\n{\n'
+        b'//\t"GaussianNoise"\n\t{\n\t"resultVar" "$temp"\n\t}\n}\n}\n'
+    )
+    model = _decode(body, present=())
+    assert "anonymous-block" in _roles(model)
+    assert model.byte_coverage[0]["coveragePercent"] == 100.0
 
-        `_BaseAlphaMaskedEnvMapV2` is therefore unreachable whenever both are authored -- a
-        precedence rule the combo filenames do not state.
-        """
-        body = (
-            b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmap" "env_cubemap"\n"$envmapmask" "models/mask"\n'
-            b'"$basealphaenvmapmask" "1"\n}\n'
-        )
-        assert self._only(body, "pixelShader") == "LightmappedGeneric_MaskedEnvMapV2"
 
-    def test_base_alpha_env_map_mask_applies_when_no_mask_texture_is_bound(self):
-        body = (
-            b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmap" "env_cubemap"\n"$basealphaenvmapmask" "1"\n}\n'
-        )
-        assert self._only(body, "pixelShader") == "LightmappedGeneric_BaseAlphaMaskedEnvMapV2"
+# ShaderResolutionTests
+# Combo rules transcribed from `stdshader_dx8.dll`; see `docs/vtmb/shader_combos.md`.
 
-    def test_the_env_cubemap_placeholder_still_counts_as_a_bound_environment(self):
-        """VBSP patches the face to a baked cube, so the selector sees a texture."""
-        body = (
-            b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmap" "env_cubemap"\n}\n'
-        )
-        assert self._only(body, "pixelShader") == "LightmappedGeneric_EnvMapV2"
+def _resolution(body, present=("models/teeth", "models/mask")):
+    return _decode(body, present=present).shader_resolution
 
-    def test_sphere_and_camera_space_flags_do_nothing_without_an_envmap(self):
-        """Vertex table 0x100214f0 indexes 2, 4 and 6 all fall back to the plain program."""
-        body = (
-            b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmapsphere" "1"\n"$envmapcameraspace" "1"\n}\n'
-        )
-        assert self._only(body, "vertexShader") == "LightmappedGeneric"
 
-    def test_sphere_overrides_camera_space_when_an_envmap_is_present(self):
-        """Vertex table indexes 14 and 15 pick the sphere program."""
-        body = (
-            b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmap" "env_cubemap"\n"$envmapsphere" "1"\n"$envmapcameraspace" "1"\n}\n'
-        )
-        assert self._only(body, "vertexShader") == "LightmappedGeneric_EnvMapSphere"
+def _only(body, field, present=("models/teeth", "models/mask")):
+    """The single program a family with no render-config axis resolves to."""
+    programs = _resolution(body, present=present)["programs"]
+    assert len(programs) == 1
+    return programs[0][field]
 
-    def test_a_material_with_no_base_texture_selects_a_no_texture_program(self):
-        body = b'"LightmappedGeneric"\n{\n"$selfillum" "1"\n}\n'
-        assert self._only(body, "pixelShader", present=()) == "LightmappedGeneric_NoTexture"
 
-    def test_a_bumpmapped_material_draws_the_envmap_in_a_second_pass(self):
-        """VertexLitGeneric suppresses the envmap in pass 0 and adds it back in pass 1.
+def test_a_family_with_no_transcribed_selector_resolves_unresolved():
+    resolution = _resolution(UNTRANSCRIBED)
+    assert resolution["family"] == "wireframe"
+    assert not resolution["resolved"]
+    assert resolution["programs"] == []
+    assert resolution["reason"] == "selector-not-transcribed"
 
-        The `_ps14` row is the same pass on hardware that supports ps.1.4.
-        """
-        body = (
-            b'"VertexLitGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmap" "env_cubemap"\n"$bumpmap" "models/mask"\n}\n'
-        )
-        programs = self._resolution(body)["programs"]
-        base = [p for p in programs if p["condition"] == "bumpmapping" and p["drawPass"] == 0]
-        second = [p for p in programs if p["drawPass"] == 1]
-        assert base[0]["pixelShader"] == "VertexLitGeneric"
-        assert {p["pixelShader"] for p in second} == {"VertexLitGeneric_EnvmappedBumpmapV2",
-             "VertexLitGeneric_EnvmappedBumpmapV2_ps14"}
 
-    def test_envmapoptional_deletes_the_envmap_outright(self):
-        """The help text says "dx9 and higher", but VtMB ships no dx9 VertexLitGeneric."""
-        body = (
-            b'"VertexLitGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmap" "env_cubemap"\n"$envmapoptional" "1"\n}\n'
-        )
-        assert self._only(body, "pixelShader") == "VertexLitGeneric"
+def test_a_plain_lightmapped_material_selects_the_base_program():
+    resolution = _resolution(RESOLVED)
+    assert resolution["resolved"]
+    assert len(resolution["programs"]) == 1
+    assert resolution["programs"][0]["vertexShader"] == "LightmappedGeneric"
+    assert resolution["programs"][0]["pixelShader"] == "LightmappedGeneric"
+    assert resolution["programs"][0]["condition"] == ""
 
-    def test_a_normal_map_alpha_mask_without_a_bumpmap_deletes_the_envmap(self):
-        body = (
-            b'"VertexLitGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmap" "env_cubemap"\n"$normalmapalphaenvmapmask" "1"\n}\n'
-        )
-        assert self._only(body, "pixelShader") == "VertexLitGeneric"
 
-    def test_unlit_generic_base_alpha_mask_yields_to_a_bound_mask_texture(self):
-        """The base-alpha branch sits ahead of the table and requires the mask to be absent."""
-        masked = (
-            b'"UnlitGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmap" "env_cubemap"\n"$envmapmask" "models/mask"\n'
-            b'"$basealphaenvmapmask" "1"\n}\n'
-        )
-        assert self._only(masked, "pixelShader") == "UnlitGeneric_EnvMapMask"
-        unmasked = (
-            b'"UnlitGeneric"\n{\n"$basetexture" "models/teeth"\n'
-            b'"$envmap" "env_cubemap"\n"$basealphaenvmapmask" "1"\n}\n'
-        )
-        assert self._only(unmasked, "pixelShader") == "UnlitGeneric_BaseAlphaMaskedEnvMap"
+def test_the_eyes_family_leaves_the_overbright_choice_to_render_config():
+    """`$vampire` picks the pair; the remaining choice is engine state, not the VMT."""
+    body = b'"Eyes"\n{\n"$basetexture" "models/teeth"\n"$vampire" "1"\n}\n'
+    programs = _resolution(body)["programs"]
+    assert {(p["condition"], p["pixelShader"]) for p in programs} == {("overbright==2", "Eyes_Vampire_Overbright2"), ("", "Eyes_Vampire")}
+    assert all(p["vertexShader"] == "Eyes" for p in programs)
 
-    def test_a_sprite_render_mode_selects_its_program_pair(self):
-        body = b'"Sprite"\n{\n"$basetexture" "models/teeth"\n"$spriterendermode" "5"\n}\n'
-        assert self._only(body, "pixelShader") == "SpriteRenderTransAdd"
-        assert self._only(body, "vertexShader") == "unlitgeneric_vertexcolor"
 
-    def test_ignore_vertex_colors_only_changes_the_additive_sprite_mode(self):
-        additive = (
-            b'"Sprite"\n{\n"$spriterendermode" "5"\n"$ignorevertexcolors" "1"\n}\n'
-        )
-        assert self._only(additive, "vertexShader", present=()) == "unlitgeneric"
-        animated = (
-            b'"Sprite"\n{\n"$spriterendermode" "7"\n"$ignorevertexcolors" "1"\n}\n'
-        )
-        assert self._only(animated, "vertexShader", present=()) == "unlitgeneric_vertexcolor"
+def test_eyes_without_the_vampire_flag_selects_the_stock_pair():
+    body = b'"Eyes"\n{\n"$basetexture" "models/teeth"\n"$iris" "models/mask"\n}\n'
+    programs = _resolution(body)["programs"]
+    assert {p["pixelShader"] for p in programs} == {"Eyes", "Eyes_Overbright2"}
 
-    def test_the_one_unimplemented_sprite_mode_binds_no_program(self):
-        """Mode 6 is `kRenderEnvironmental`; the shader warns and binds nothing."""
-        body = b'"Sprite"\n{\n"$spriterendermode" "6"\n}\n'
-        resolution = self._resolution(body, present=())
-        assert not resolution["resolved"]
-        assert resolution["programs"] == []
-        assert "binds-no-program" in resolution["reason"]
 
-    def test_the_validator_refuses_conditional_programs_with_no_default(self):
-        _, document, binary = _publish(RESOLVED)
-        resolution = document["extensions"][MATERIAL_EXTENSION]["shaderResolution"]
-        resolution["programs"] = [
-            {"pixelShader": "A", "vertexShader": "V", "condition": "overbright==2"},
-            {"pixelShader": "B", "vertexShader": "V", "condition": "other"},
-        ]
-        with pytest.raises(validation.MaterialGlbValidationError):
-            validation.validate_document(document, binary)
+def test_teeth_draws_with_a_pixel_program_outside_its_own_family():
+    """Teeth ships a vertex program but no pixel program; it reuses VertexLitTexture."""
+    body = b'"Teeth"\n{\n"$basetexture" "models/teeth"\n}\n'
+    programs = _resolution(body)["programs"]
+    assert {p["pixelShader"] for p in programs} == {"VertexLitTexture", "VertexLitTexture_Overbright2"}
+    assert all(p["vertexShader"] == "Teeth" for p in programs)
 
-    def test_the_validator_refuses_a_repeated_program_condition(self):
-        _, document, binary = _publish(RESOLVED)
-        resolution = document["extensions"][MATERIAL_EXTENSION]["shaderResolution"]
-        resolution["programs"] = [
-            {"pixelShader": "A", "vertexShader": "V", "condition": ""},
-            {"pixelShader": "B", "vertexShader": "V", "condition": ""},
-        ]
-        with pytest.raises(validation.MaterialGlbValidationError):
-            validation.validate_document(document, binary)
 
-    def test_the_validator_refuses_an_unresolved_shader_that_names_a_program(self):
-        _, document, binary = _publish(UNTRANSCRIBED)
-        document["extensions"][MATERIAL_EXTENSION]["shaderResolution"]["programs"] = [
-            {"pixelShader": "invented", "vertexShader": "invented", "condition": ""}
-        ]
-        with pytest.raises(validation.MaterialGlbValidationError):
-            validation.validate_document(document, binary)
+def test_an_envmap_mask_texture_overrides_base_alpha_env_map_mask():
+    """Pixel table 0x10021620 indexes 6 and 7: a bound `$envmapmask` wins.
+
+    `_BaseAlphaMaskedEnvMapV2` is therefore unreachable whenever both are authored -- a
+    precedence rule the combo filenames do not state.
+    """
+    body = (
+        b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmap" "env_cubemap"\n"$envmapmask" "models/mask"\n'
+        b'"$basealphaenvmapmask" "1"\n}\n'
+    )
+    assert _only(body, "pixelShader") == "LightmappedGeneric_MaskedEnvMapV2"
+
+
+def test_base_alpha_env_map_mask_applies_when_no_mask_texture_is_bound():
+    body = (
+        b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmap" "env_cubemap"\n"$basealphaenvmapmask" "1"\n}\n'
+    )
+    assert _only(body, "pixelShader") == "LightmappedGeneric_BaseAlphaMaskedEnvMapV2"
+
+
+def test_the_env_cubemap_placeholder_still_counts_as_a_bound_environment():
+    """VBSP patches the face to a baked cube, so the selector sees a texture."""
+    body = (
+        b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmap" "env_cubemap"\n}\n'
+    )
+    assert _only(body, "pixelShader") == "LightmappedGeneric_EnvMapV2"
+
+
+def test_sphere_and_camera_space_flags_do_nothing_without_an_envmap():
+    """Vertex table 0x100214f0 indexes 2, 4 and 6 all fall back to the plain program."""
+    body = (
+        b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmapsphere" "1"\n"$envmapcameraspace" "1"\n}\n'
+    )
+    assert _only(body, "vertexShader") == "LightmappedGeneric"
+
+
+def test_sphere_overrides_camera_space_when_an_envmap_is_present():
+    """Vertex table indexes 14 and 15 pick the sphere program."""
+    body = (
+        b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmap" "env_cubemap"\n"$envmapsphere" "1"\n"$envmapcameraspace" "1"\n}\n'
+    )
+    assert _only(body, "vertexShader") == "LightmappedGeneric_EnvMapSphere"
+
+
+def test_a_material_with_no_base_texture_selects_a_no_texture_program():
+    body = b'"LightmappedGeneric"\n{\n"$selfillum" "1"\n}\n'
+    assert _only(body, "pixelShader", present=()) == "LightmappedGeneric_NoTexture"
+
+
+def test_a_bumpmapped_material_draws_the_envmap_in_a_second_pass():
+    """VertexLitGeneric suppresses the envmap in pass 0 and adds it back in pass 1.
+
+    The `_ps14` row is the same pass on hardware that supports ps.1.4.
+    """
+    body = (
+        b'"VertexLitGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmap" "env_cubemap"\n"$bumpmap" "models/mask"\n}\n'
+    )
+    programs = _resolution(body)["programs"]
+    base = [p for p in programs if p["condition"] == "bumpmapping" and p["drawPass"] == 0]
+    second = [p for p in programs if p["drawPass"] == 1]
+    assert base[0]["pixelShader"] == "VertexLitGeneric"
+    assert {p["pixelShader"] for p in second} == {"VertexLitGeneric_EnvmappedBumpmapV2",
+         "VertexLitGeneric_EnvmappedBumpmapV2_ps14"}
+
+
+def test_envmapoptional_deletes_the_envmap_outright():
+    """The help text says "dx9 and higher", but VtMB ships no dx9 VertexLitGeneric."""
+    body = (
+        b'"VertexLitGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmap" "env_cubemap"\n"$envmapoptional" "1"\n}\n'
+    )
+    assert _only(body, "pixelShader") == "VertexLitGeneric"
+
+
+def test_a_normal_map_alpha_mask_without_a_bumpmap_deletes_the_envmap():
+    body = (
+        b'"VertexLitGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmap" "env_cubemap"\n"$normalmapalphaenvmapmask" "1"\n}\n'
+    )
+    assert _only(body, "pixelShader") == "VertexLitGeneric"
+
+
+def test_unlit_generic_base_alpha_mask_yields_to_a_bound_mask_texture():
+    """The base-alpha branch sits ahead of the table and requires the mask to be absent."""
+    masked = (
+        b'"UnlitGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmap" "env_cubemap"\n"$envmapmask" "models/mask"\n'
+        b'"$basealphaenvmapmask" "1"\n}\n'
+    )
+    assert _only(masked, "pixelShader") == "UnlitGeneric_EnvMapMask"
+    unmasked = (
+        b'"UnlitGeneric"\n{\n"$basetexture" "models/teeth"\n'
+        b'"$envmap" "env_cubemap"\n"$basealphaenvmapmask" "1"\n}\n'
+    )
+    assert _only(unmasked, "pixelShader") == "UnlitGeneric_BaseAlphaMaskedEnvMap"
+
+
+def test_a_sprite_render_mode_selects_its_program_pair():
+    body = b'"Sprite"\n{\n"$basetexture" "models/teeth"\n"$spriterendermode" "5"\n}\n'
+    assert _only(body, "pixelShader") == "SpriteRenderTransAdd"
+    assert _only(body, "vertexShader") == "unlitgeneric_vertexcolor"
+
+
+def test_ignore_vertex_colors_only_changes_the_additive_sprite_mode():
+    additive = (
+        b'"Sprite"\n{\n"$spriterendermode" "5"\n"$ignorevertexcolors" "1"\n}\n'
+    )
+    assert _only(additive, "vertexShader", present=()) == "unlitgeneric"
+    animated = (
+        b'"Sprite"\n{\n"$spriterendermode" "7"\n"$ignorevertexcolors" "1"\n}\n'
+    )
+    assert _only(animated, "vertexShader", present=()) == "unlitgeneric_vertexcolor"
+
+
+def test_the_one_unimplemented_sprite_mode_binds_no_program():
+    """Mode 6 is `kRenderEnvironmental`; the shader warns and binds nothing."""
+    body = b'"Sprite"\n{\n"$spriterendermode" "6"\n}\n'
+    resolution = _resolution(body, present=())
+    assert not resolution["resolved"]
+    assert resolution["programs"] == []
+    assert "binds-no-program" in resolution["reason"]
+
+
+def test_the_validator_refuses_conditional_programs_with_no_default():
+    _, document, binary = _publish(RESOLVED)
+    resolution = document["extensions"][MATERIAL_EXTENSION]["shaderResolution"]
+    resolution["programs"] = [
+        {"pixelShader": "A", "vertexShader": "V", "condition": "overbright==2"},
+        {"pixelShader": "B", "vertexShader": "V", "condition": "other"},
+    ]
+    with pytest.raises(validation.MaterialGlbValidationError):
+        validation.validate_document(document, binary)
+
+
+def test_the_validator_refuses_a_repeated_program_condition():
+    _, document, binary = _publish(RESOLVED)
+    resolution = document["extensions"][MATERIAL_EXTENSION]["shaderResolution"]
+    resolution["programs"] = [
+        {"pixelShader": "A", "vertexShader": "V", "condition": ""},
+        {"pixelShader": "B", "vertexShader": "V", "condition": ""},
+    ]
+    with pytest.raises(validation.MaterialGlbValidationError):
+        validation.validate_document(document, binary)
+
+
+def test_the_validator_refuses_an_unresolved_shader_that_names_a_program():
+    _, document, binary = _publish(UNTRANSCRIBED)
+    document["extensions"][MATERIAL_EXTENSION]["shaderResolution"]["programs"] = [
+        {"pixelShader": "invented", "vertexShader": "invented", "condition": ""}
+    ]
+    with pytest.raises(validation.MaterialGlbValidationError):
+        validation.validate_document(document, binary)
 
 
 def test_a_published_unit_validates_and_carries_no_scene_core():

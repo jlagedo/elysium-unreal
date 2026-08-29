@@ -78,60 +78,65 @@ def test_missing_unequal_and_non_square_faces_fail():
         tex_to_png.cubemap_dds([Image.new("RGBA", (2, 3))] * 6)
 
 
-class ParticleClosureTests(unittest.TestCase):
-    DEFINITIONS = {
-        "rain_follow_emitter": '''Particle {
-            loop 1 precipitation 1
-            // disabled blocks must not become live dependencies
-            // spawn { particle disabled rate 999 }
-            spawn { particle raindrops2 rate 1000 radius 0 theta "0~360" phi 0 }
-        }''',
-        "raindrops2": '''Particle {
-            sprite dropletfast frames 15 movealign 1
-            x_speed 20 y_speed 20 z_speed "-400~-600" size 3 height 10
-            color "0,80(10)" mask 0 precipitation 1
-            collide {
-                spawn { particle rainsplash_new friction 0 bounce 0 }
-                decal { particle rainstain }
-            }
-        }''',
-        "rainsplash_new": '''Particle {
-            sprite fortituderings frames 12 flat 1 x_speed 0 y_speed 0 z_speed 0
-            size "1,8,14" rotation 0 color "60,0" mask "40,0" precipitation 1
-        }''',
-        "rainstain": '''Particle {
-            sprite d_targetblob frames 30 size "2~4" color "10,0" mask "90,0"
-            precipitation 1
-        }''',
-    }
+DEFINITIONS = {
+    "rain_follow_emitter": '''Particle {
+        loop 1 precipitation 1
+        // disabled blocks must not become live dependencies
+        // spawn { particle disabled rate 999 }
+        spawn { particle raindrops2 rate 1000 radius 0 theta "0~360" phi 0 }
+    }''',
+    "raindrops2": '''Particle {
+        sprite dropletfast frames 15 movealign 1
+        x_speed 20 y_speed 20 z_speed "-400~-600" size 3 height 10
+        color "0,80(10)" mask 0 precipitation 1
+        collide {
+            spawn { particle rainsplash_new friction 0 bounce 0 }
+            decal { particle rainstain }
+        }
+    }''',
+    "rainsplash_new": '''Particle {
+        sprite fortituderings frames 12 flat 1 x_speed 0 y_speed 0 z_speed 0
+        size "1,8,14" rotation 0 color "60,0" mask "40,0" precipitation 1
+    }''',
+    "rainstain": '''Particle {
+        sprite d_targetblob frames 30 size "2~4" color "10,0" mask "90,0"
+        precipitation 1
+    }''',
+}
 
-    def compile(self, *, sprites=None):
-        available = sprites or {"dropletfast", "fortituderings", "d_targetblob"}
-        return particles.compile_closure(
-            ["rain_follow_emitter"], self.DEFINITIONS.get, available.__contains__
+
+# ImpactParticleContractTests
+# The non-precipitation vocabulary the cinematic emitters use.
+
+def compile(*, sprites=None):
+    available = sprites or {"dropletfast", "fortituderings", "d_targetblob"}
+    return particles.compile_closure(
+        ["rain_follow_emitter"], DEFINITIONS.get, available.__contains__
+    )
+
+
+def test_comment_handling_dependency_collision_and_unit_conversion():
+    result = compile()
+    assert list(result["definitions"]) == ["rain_follow_emitter", "raindrops2", "rainsplash_new", "rainstain"]
+    rain = result["definitions"]["raindrops2"]
+    assert rain["velocity_cm_per_second"]["x"]["values"][0] == pytest.approx(50.8, abs=1e-7)
+    assert rain["velocity_cm_per_second"]["y"]["values"][0] == pytest.approx(-50.8, abs=1e-7)
+    assert rain["collision"]["decal"]["particle"] == "rainstain"
+    assert "disabled" not in result["definitions"]
+
+
+def test_missing_asset_and_unsupported_live_field_fail():
+    with pytest.raises(particles.ParticleContractError):
+        compile(sprites={"dropletfast", "fortituderings"})
+    changed = dict(DEFINITIONS)
+    changed["raindrops2"] = changed["raindrops2"].replace(
+        "sprite dropletfast", "sprite dropletfast unknown_live_field 1"
+    )
+    with pytest.raises(particles.ParticleContractError):
+        particles.compile_closure(
+            ["rain_follow_emitter"], changed.get,
+            {"dropletfast", "fortituderings", "d_targetblob"}.__contains__,
         )
-
-    def test_comment_handling_dependency_collision_and_unit_conversion(self):
-        result = self.compile()
-        assert list(result["definitions"]) == ["rain_follow_emitter", "raindrops2", "rainsplash_new", "rainstain"]
-        rain = result["definitions"]["raindrops2"]
-        assert rain["velocity_cm_per_second"]["x"]["values"][0] == pytest.approx(50.8, abs=1e-7)
-        assert rain["velocity_cm_per_second"]["y"]["values"][0] == pytest.approx(-50.8, abs=1e-7)
-        assert rain["collision"]["decal"]["particle"] == "rainstain"
-        assert "disabled" not in result["definitions"]
-
-    def test_missing_asset_and_unsupported_live_field_fail(self):
-        with pytest.raises(particles.ParticleContractError):
-            self.compile(sprites={"dropletfast", "fortituderings"})
-        changed = dict(self.DEFINITIONS)
-        changed["raindrops2"] = changed["raindrops2"].replace(
-            "sprite dropletfast", "sprite dropletfast unknown_live_field 1"
-        )
-        with pytest.raises(particles.ParticleContractError):
-            particles.compile_closure(
-                ["rain_follow_emitter"], changed.get,
-                {"dropletfast", "fortituderings", "d_targetblob"}.__contains__,
-            )
 
 
 class ImpactParticleContractTests(unittest.TestCase):

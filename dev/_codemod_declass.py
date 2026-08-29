@@ -51,21 +51,8 @@ def member_names(node):
     return names
 
 
-def self_references_are_all_members(node, names):
-    for sub in ast.walk(node):
-        if isinstance(sub, ast.Attribute) and isinstance(sub.value, ast.Name):
-            if sub.value.id == "self":
-                if sub.attr not in names:
-                    return False
-                continue
-        if isinstance(sub, ast.Name) and sub.id == "self":
-            # A bare `self` that is not the base of a member attribute.
-            return False
-    return True
-
-
 def bare_self_is_only_a_receiver(node, names):
-    """`ast.walk` cannot tell a receiver from a value, so re-check with a parent map."""
+    """True when every `self` in the class is the receiver of one of its own members."""
     receivers = set()
     for sub in ast.walk(node):
         if isinstance(sub, ast.Attribute) and isinstance(sub.value, ast.Name):
@@ -113,7 +100,8 @@ def block(lines, start, end, indent, names):
 
 
 def first_line(node):
-    return (node.decorator_list[0].lineno if node.decorator_list else node.lineno) - 1
+    decorators = getattr(node, "decorator_list", None)
+    return (decorators[0].lineno if decorators else node.lineno) - 1
 
 
 def convert(source):
@@ -130,8 +118,6 @@ def convert(source):
         if names is None or not names:
             continue
         if not bare_self_is_only_a_receiver(node, names):
-            continue
-        if not self_references_are_all_members(node, names):
             continue
         if any(name in taken for name in names):
             continue
