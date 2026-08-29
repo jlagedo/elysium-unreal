@@ -77,10 +77,42 @@ convenience and set the preference.
 
 ## Usage
 
+### Browsing
+
+**Elysium ▸ Browse** in the 3D viewport sidebar (`N`) lists the corpus without opening
+anything. Pick a seam, press refresh, and filter the result three ways: the **Subtree**
+menu narrows to a first-level directory (`monster`, `npc`, `pc`, `shared`, `gibs` for
+characters), the list's own search box matches on the identity path, and the column
+sorts alphabetically.
+
+The list is built from filenames and sizes alone — 0.1 s for the 484 characters, about a
+second for the 11,624 materials — because parsing every unit to list it would cost forty
+seconds. Highlighting a unit reads that one file and shows what it contains:
+
+```
+npc/common/blood_doll/blood_doll
+  bones 88 | clips 1 | materials 13 | LODs 7 | morph targets 53
+  banks declared 1 | slots with no VMT 2
+```
+
+Materials report their shader family, texture count and surface property; textures report
+size, format, type and mip count; surface properties report their physics or say that
+they declare none and inherit. Anything a unit says about its own gaps — an untranscribed
+shader family, a parse anomaly, an include-stub bank with no clips, a texture below its
+declared size — appears as a warning on the row.
+
+Characters get an **Import Selected** button with the same animation option as the file
+dialog. Reading one unit takes 0–110 ms, so browsing stays responsive; the two largest
+animation banks are about a second.
+
+There is no thumbnail grid. Blender's Asset Browser needs assets marked inside `.blend`
+libraries with generated previews, which for 484 characters is a batch job in its own
+right rather than something the browser can do live.
+
 ### Importing
 
-**File ▸ Import ▸ Elysium GLB (.glb)**, or `uv run elysium blender review <path>`.
-Multi-select works.
+**File ▸ Import ▸ Elysium GLB (.glb)**, or `uv run elysium blender review <path>`, or the
+Browse panel above. Multi-select works in the file dialog.
 
 Two options:
 
@@ -100,6 +132,7 @@ root the import still succeeds and the materials stay grey.
 The **Elysium** tab in the 3D viewport sidebar (`N`):
 
 - **Corpus** — the active root, the import operator, and the integrity report.
+- **Browse** — the corpus listing described above.
 - **Character** — the selected body's identity, its coverage block, and its full
   extension payload as a collapsible tree.
 - **Material** — the identity the primitive named, the VMT shader family, and an explicit
@@ -151,8 +184,8 @@ fallback is the intended path and the result is correct.
 ## Layout
 
 ```
-core/       No bpy. GLB, identities, KTX2, DDS, seam readers, bank closure,
-            surface-property inheritance, the corpus sweep.
+core/       No bpy. GLB, identities, KTX2, DDS, seam readers, the browsable index,
+            bank closure, surface-property inheritance, the corpus sweep.
 adapters/   The glTF import hook, texture decoding, material reconstruction.
 ui/         Operators and panels.
 tests/      Contract tests for core; tests/blender/ runs inside Blender.
