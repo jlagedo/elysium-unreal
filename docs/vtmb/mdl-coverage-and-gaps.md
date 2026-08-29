@@ -107,7 +107,7 @@ by their separate export products.
 
 ### 1.5 Full character-export census
 
-The strict `export_v2 chacters-glb` pass admits **484** installed character models. The first
+The strict `export_v2 characters-glb` pass admits **484** installed character models. The first
 corpus run published **280** and refused **204**. These are first-stop categories: correcting one
 gate can expose a later problem in the same model, so they describe why that run stopped rather
 than disjoint properties of the source files.

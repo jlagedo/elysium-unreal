@@ -20,13 +20,7 @@ from typing import Any, Callable
 import typer
 from rich.console import Console
 
-from elysium_pipeline import task_worktrees
-from elysium_pipeline.config import (
-    ConfigError,
-    ProjectConfig,
-    default_build_parallelism,
-    validate_engine_root,
-)
+from elysium_pipeline.config import ConfigError, ProjectConfig
 from elysium_pipeline.dependencies import (
     DependencyError,
     check_dependencies,
@@ -53,7 +47,6 @@ verify_app = typer.Typer(help="Check baked packages against what the export decl
 run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
 ide_app = typer.Typer(help="Configure supported development environments.")
-worktree_app = typer.Typer(help="Manage mutable, isolated development-task worktrees.")
 app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
 app.add_typer(export_v2_app, name="export_v2")
@@ -61,7 +54,6 @@ app.add_typer(verify_app, name="verify")
 app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
 app.add_typer(ide_app, name="ide")
-app.add_typer(worktree_app, name="worktree")
 
 
 @dataclass(slots=True)
@@ -207,14 +199,12 @@ def _execute(
     require_ue: bool = False,
     quiet_report: bool = False,
     activity: bool = False,
-    primary_only: bool = False,
 ) -> Any:
     report = RunReport(command=name, arguments=sys.argv[1:])
     config: ProjectConfig | None = None
     log_handle = None
     child_echo: _ChildEcho | None = None
     report_path: Path | None = None
-    task: task_worktrees.TaskWorktreeRecord | None = None
     started = datetime.now(timezone.utc).isoformat()
     before = time.monotonic()
     try:
@@ -244,24 +234,6 @@ def _execute(
                 else lambda line: console.print(line, markup=False)
             ),
         )
-        task = task_worktrees.current_task_worktree(
-            config.repo_root, config.work_root
-        )
-        if task is not None:
-            head = task_worktrees.assert_task_worktree_runnable(task, runner)
-            report.metadata.update(
-                {
-                    "task_worktree": task.name,
-                    "task_base_commit": task.base_commit,
-                    "task_head": head,
-                    "worktree": str(task.worktree),
-                    "export_root": str(task.export_root),
-                }
-            )
-        if primary_only:
-            task_worktrees.assert_primary_operation(
-                config.repo_root, config.work_root, name
-            )
         lease = nullcontext()
         if activity:
             assert_project_idle(config.project)
@@ -270,7 +242,6 @@ def _execute(
                     config.export_root,
                     name,
                     config.repo_root,
-                    metadata=({"task_worktree": task.name} if task else None),
                 )
         with lease:
             result = action(config, runner)
@@ -325,229 +296,9 @@ def _execute(
 
 
 def _shared_cache_root(config: ProjectConfig) -> Path | None:
-    """Downloaded dependency archives belong to the machine, not to one checkout.
+    """Downloaded dependency archives live in one cache below the work root."""
 
-    A task worktree owns its own generated state, but a locked archive is byte-identical for
-    every checkout and is already addressed by its own hash, so giving each worktree a private
-    cache only buys a re-download. The primary work root holds the one copy.
-    """
-
-    task = task_worktrees.current_task_worktree(config.repo_root, config.work_root)
-    root = task.source_work_root if task is not None else config.work_root
-    return None if root is None else root / "cache"
-
-
-def _claimed_engines(config: ProjectConfig) -> dict[str, str]:
-    """Every engine copy a live checkout already builds against, keyed by normalised path."""
-
-    claims: dict[str, str] = {}
-    if config.ue_root is not None:
-        claims[os.path.normcase(str(config.ue_root))] = "the primary checkout"
-    if config.work_root is None:
-        return claims
-    for task in task_worktrees.task_worktree_records(config.repo_root, config.work_root):
-        if task.ue_root is not None and task.worktree.is_dir():
-            claims.setdefault(
-                os.path.normcase(str(task.ue_root)), f"task worktree {task.name!r}"
-            )
-    return claims
-
-
-def _assign_engine(config: ProjectConfig, override: Path | None, owner: str) -> Path:
-    """Choose the engine copy a new checkout builds against.
-
-    UnrealBuildTool's single-instance mutex is keyed on its own assembly path, so two
-    checkouts pointed at one engine copy wait for each other even though every other piece
-    of their state is separate. A dedicated copy is what makes their builds concurrent.
-    """
-
-    if config.ue_root is None:
-        raise RuntimeError(f"{owner} needs ELYSIUM_UE_ROOT")
-    if override is None:
-        console.print(
-            f"[yellow]warning:[/yellow] no --ue-root given, so {owner} shares "
-            f"{config.ue_root} with the primary checkout; their builds serialize on "
-            "UnrealBuildTool's global mutex"
-        )
-        return config.ue_root
-    engine = validate_engine_root(override)
-    owner_of_engine = _claimed_engines(config).get(os.path.normcase(str(engine)))
-    if owner_of_engine is not None:
-        raise RuntimeError(
-            f"{engine} is already the engine copy for {owner_of_engine}; give "
-            f"{owner} its own copy or its builds will serialize on UnrealBuildTool's "
-            "global mutex"
-        )
-    return engine
-
-
-def _resolve_build_jobs(build_jobs: int | None) -> int | None:
-    """The UBT action cap written into a new checkout, or None to leave UBT's heuristic."""
-
-    if build_jobs == 0:
-        return None
-    return default_build_parallelism() if build_jobs is None else build_jobs
-
-
-@worktree_app.command("create")
-def worktree_create(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Task name, such as inventory-fix."),
-    at: str = typer.Option("HEAD", "--at", help="Commit or ref to detach at."),
-    path: Path | None = typer.Option(
-        None,
-        "--path",
-        help="Worktree path; defaults to a sibling named <repo>-task-<name>.",
-    ),
-    ue_root: Path | None = typer.Option(
-        None,
-        "--ue-root",
-        help="Dedicated engine copy for this task; required for builds that run "
-        "concurrently with the primary checkout.",
-    ),
-    build_jobs: int | None = typer.Option(
-        None,
-        "--build-jobs",
-        min=0,
-        help="UnrealBuildTool actions this task may run at once; 0 leaves UBT's own "
-        "heuristic in place. Defaults to one share of the machine.",
-    ),
-) -> None:
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        if config.game_root is None or config.work_root is None or config.ue_root is None:
-            raise RuntimeError("worktree creation needs the game, work, and UE roots")
-        engine = _assign_engine(config, ue_root, f"task worktree {name!r}")
-        jobs = _resolve_build_jobs(build_jobs)
-        creation = task_worktrees.create_task_worktree(
-            source_repo=config.repo_root,
-            source_work_root=config.work_root,
-            game_root=config.game_root,
-            ue_root=engine,
-            runner=runner,
-            name=name,
-            ref=at,
-            worktree_path=path,
-            max_parallel_actions=jobs,
-        )
-        record = creation.record
-        console.print(
-            f"task worktree {record.name} created at {record.worktree} "
-            f"({record.base_commit[:12]})"
-        )
-        console.print(f"task work root: {record.work_root}")
-        console.print(f"task engine: {record.ue_root}")
-        console.print(
-            "task build parallelism: "
-            + ("UnrealBuildTool default" if jobs is None else f"{jobs} action(s)")
-        )
-        # A slot that cannot build yet is not a slot. Materializing the locked dependencies
-        # here leaves the checkout ready for `build` on its own, and the archives come from
-        # the shared cache rather than the network.
-        ready = sync_dependencies(record.worktree, cache_root=_shared_cache_root(config))
-        console.print(f"task dependencies: {', '.join(ready) or 'none locked'}")
-        if creation.source_dirty:
-            console.print(
-                "[yellow]warning:[/yellow] main has uncommitted changes; "
-                "the task worktree contains only the named commit"
-            )
-        console.print(f"assign the task agent to: {record.worktree}")
-        console.print("allowed: incremental build and focused tests")
-        console.print("main only: export, bake, editor, play, debug, gr, and mcp")
-
-    _execute(
-        _state(ctx),
-        "worktree create",
-        ExitCode.VALIDATION,
-        action,
-        require_game=True,
-        require_ue=True,
-    )
-
-
-def _print_task_worktree_status(value: dict[str, Any]) -> None:
-    active = value["active"]
-    activity = "idle" if active is None else (
-        f"{active.get('command', 'busy')} (pid {active.get('pid', '?')})"
-    )
-    console.print(f"{value['name']}: {value['worktree']}")
-    if value["missing"] or value["error"]:
-        detail = "checkout missing" if value["missing"] else value["error"]
-        console.print(f"  [red]{detail}[/red]")
-        console.print(f"  work root {value['work_root']}; close to prune it")
-        return
-    cleanliness = "clean" if not value["dirty"] else f"dirty ({len(value['dirty'])})"
-    unlanded = value["unlanded_commits"]
-    landing = "landed" if not unlanded else f"{len(unlanded)} commit(s) to land"
-    console.print(
-        f"  source {value['head'][:12]} from {value['base_commit'][:12]} "
-        f"({cleanliness}, {landing})"
-    )
-    console.print(f"  activity {activity}; work root {value['work_root']}")
-    console.print(f"  engine {value['ue_root'] or 'inherited from the primary checkout'}")
-
-
-@worktree_app.command("status")
-def worktree_status_command(
-    ctx: typer.Context,
-    name: str | None = typer.Argument(None, help="One task; omit to list every task."),
-    json_output: bool = typer.Option(False, "--json"),
-) -> None:
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        if config.work_root is None:
-            raise RuntimeError("worktree status needs ELYSIUM_WORK_ROOT")
-        records = task_worktrees.task_worktree_records(
-            config.repo_root, config.work_root, name
-        )
-        values = [
-            task_worktrees.task_worktree_status(record, runner)
-            for record in records
-        ]
-        if json_output:
-            typer.echo(json.dumps(values, indent=2, sort_keys=True))
-            return
-        if not values:
-            console.print("no task worktrees")
-            return
-        for index, value in enumerate(values):
-            if index:
-                console.print()
-            _print_task_worktree_status(value)
-
-    _execute(
-        _state(ctx),
-        "worktree status",
-        ExitCode.VALIDATION,
-        action,
-        quiet_report=True,
-    )
-
-
-@worktree_app.command("close")
-def worktree_close(
-    ctx: typer.Context,
-    name: str = typer.Argument(..., help="Landed task worktree to remove."),
-) -> None:
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        if config.work_root is None:
-            raise RuntimeError("worktree close needs ELYSIUM_WORK_ROOT")
-        if task_worktrees.current_task_worktree(config.repo_root, config.work_root):
-            raise task_worktrees.TaskWorktreeError(
-                "close task worktrees from the primary main checkout"
-            )
-        records = task_worktrees.task_worktree_records(
-            config.repo_root, config.work_root, name
-        )
-        task_worktrees.close_task_worktree(records[0], runner)
-        console.print(f"task worktree {name} closed")
-
-    _execute(
-        _state(ctx),
-        "worktree close",
-        ExitCode.VALIDATION,
-        action,
-    )
-
-
+    return None if config.work_root is None else config.work_root / "cache"
 
 
 @deps_app.command("sync")
@@ -710,7 +461,6 @@ def _export_profile_command(
         require_game=True,
         require_ue=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -794,7 +544,6 @@ def export_map(
         require_game=True,
         require_ue=not intermediate_only,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -840,7 +589,6 @@ def export_characters(
         require_game=True,
         require_ue=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -870,7 +618,6 @@ def export_wield(
         require_game=True,
         require_ue=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -949,12 +696,11 @@ def export_model(
         require_game=True,
         require_ue=integrate,
         activity=True,
-        primary_only=True,
     )
 
 
-@export_v2_app.command("chacter-glb")
-def export_v2_chacter_glb(
+@export_v2_app.command("character-glb")
+def export_v2_character_glb(
     ctx: typer.Context,
     model: str = typer.Argument(
         ...,
@@ -971,17 +717,16 @@ def export_v2_chacter_glb(
 
     _execute(
         _state(ctx),
-        "export_v2 chacter-glb",
+        "export_v2 character-glb",
         ExitCode.OFFLINE_EXPORT,
         action,
         require_game=True,
         activity=True,
-        primary_only=True,
     )
 
 
-@export_v2_app.command("chacters-glb")
-def export_v2_chacters_glb(ctx: typer.Context) -> None:
+@export_v2_app.command("characters-glb")
+def export_v2_characters_glb(ctx: typer.Context) -> None:
     """Export every character body admitted by an MDL plus VTX companion."""
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
@@ -992,12 +737,11 @@ def export_v2_chacters_glb(ctx: typer.Context) -> None:
 
     _execute(
         _state(ctx),
-        "export_v2 chacters-glb",
+        "export_v2 characters-glb",
         ExitCode.OFFLINE_EXPORT,
         action,
         require_game=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1024,7 +768,6 @@ def export_v2_texture_glb(
         action,
         require_game=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1045,7 +788,6 @@ def export_v2_textures_glb(ctx: typer.Context) -> None:
         action,
         require_game=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1073,7 +815,6 @@ def _corpus_unit(ctx: typer.Context, label: str, **selectors) -> None:
         require_game=True,
         require_ue=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1129,7 +870,6 @@ def export_placed_model(
         require_game=True,
         require_ue=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1163,7 +903,6 @@ def export_bundle(
         require_game=bundle != "policy",
         require_ue=needs_editor,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1198,7 +937,6 @@ def reconstruct(
         require_game=True,
         require_ue=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1252,7 +990,6 @@ def run_editor(ctx: typer.Context, extra: list[str] = typer.Argument(None)) -> N
         action,
         require_ue=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1283,7 +1020,6 @@ def run_play(
         action,
         require_ue=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1474,7 +1210,6 @@ def _debug(ctx: typer.Context, kind: str, args: list[str]) -> None:
         action,
         require_ue=True,
         activity=True,
-        primary_only=True,
     )
 
 
@@ -1564,14 +1299,6 @@ def ide_vscode(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> No
 )
 def mcp(ctx: typer.Context) -> None:
     config = _state(ctx).resolve(require_work=False)
-    try:
-        task_worktrees.assert_primary_operation(
-            config.repo_root, config.work_root, "mcp"
-        )
-    except task_worktrees.TaskWorktreeError as exc:
-        console.print("[red]error:[/red] ", end="")
-        console.print(str(exc), markup=False)
-        raise typer.Exit(int(ExitCode.USAGE_OR_CONFIG)) from exc
     result = subprocess.run(
         [sys.executable, "-m", "elysium_pipeline.devtools.mcp_proxy", *ctx.args],
         cwd=config.repo_root,

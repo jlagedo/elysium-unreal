@@ -52,8 +52,8 @@ one GLB; each distinct body or armor MDL produces its own GLB.
 The public command is:
 
 ```text
-uv run elysium export_v2 chacter-glb models/character/<model>.mdl
-uv run elysium export_v2 chacters-glb
+uv run elysium export_v2 character-glb models/character/<model>.mdl
+uv run elysium export_v2 characters-glb
 ```
 
 The feature's code is isolated from the ESKM writer: format aggregation lives below

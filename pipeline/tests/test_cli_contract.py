@@ -26,7 +26,6 @@ class CliContractTests(unittest.TestCase):
             "debug",
             "research",
             "ide",
-            "worktree",
             "mcp",
         ):
             self.assertIn(command, result.output)
@@ -38,16 +37,11 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 2, result.output)
         self.assertIn("No such option", result.output)
 
-    def test_the_task_worktree_is_the_only_detached_checkout_family(self) -> None:
-        result = self.runner.invoke(app, ["lane", "--help"])
-        self.assertEqual(result.exit_code, 2, result.output)
-        self.assertIn("No such command", result.output)
-
-    def test_worktree_help_exposes_task_lifecycle(self) -> None:
-        result = self.runner.invoke(app, ["worktree", "--help"])
-        self.assertEqual(result.exit_code, 0, result.output)
-        for command in ("create", "status", "close"):
-            self.assertIn(command, result.output)
+    def test_no_detached_checkout_family_is_exposed(self) -> None:
+        for command in ("lane", "worktree"):
+            result = self.runner.invoke(app, [command, "--help"])
+            self.assertEqual(result.exit_code, 2, result.output)
+            self.assertIn("No such command", result.output)
 
     def test_export_help_exposes_wield(self) -> None:
         result = self.runner.invoke(app, ["export", "--help"])
@@ -57,8 +51,8 @@ class CliContractTests(unittest.TestCase):
     def test_export_v2_exposes_the_isolated_glb_commands(self) -> None:
         result = self.runner.invoke(app, ["export_v2", "--help"])
         self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("chacter-glb", result.output)
-        self.assertIn("chacters-glb", result.output)
+        self.assertIn("character-glb", result.output)
+        self.assertIn("characters-glb", result.output)
         self.assertIn("texture-glb", result.output)
         self.assertIn("textures-glb", result.output)
 
