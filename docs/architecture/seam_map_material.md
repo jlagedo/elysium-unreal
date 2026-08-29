@@ -45,6 +45,7 @@ material.glb
       "sourceResolution": {},
       "shader": "VertexLitGeneric",
       "parameters": {},
+      "shaderResolution": {},
       "textureBindings": [],
       "dependencies": [],
       "coverage": {}
@@ -58,6 +59,7 @@ material.glb
 | Material datum | GLB mapping |
 |---|---|
 | Shader and ordered parameters | `ELYSIUM_vtmb_material.shader` and `parameters` |
+| Selected shipped program | `shaderResolution.programs` |
 | Core PBR approximation | `materials[0]` and applicable Khronos material extensions |
 | Texture parameters | stable texture asset IDs in `textureBindings` |
 | Patch/include relationship | material dependency asset ID |
@@ -82,6 +84,39 @@ material.glb
   ]
 }
 ```
+
+## Shader resolution
+
+The VMT names a shader *family*; the engine draws with one of that family's shipped combos, chosen
+from the material's parameter and flag state. `shaderResolution` records which:
+
+```json
+{
+  "shaderResolution": {
+    "family": "eyes",
+    "resolved": true,
+    "programs": [
+      {"pixelShader": "Eyes_Vampire_Overbright2", "vertexShader": "Eyes",
+       "condition": "overbright==2"},
+      {"pixelShader": "Eyes_Vampire", "vertexShader": "Eyes", "condition": ""}
+    ],
+    "inputs": ["$vampire", "overbright==2"],
+    "reason": ""
+  }
+}
+```
+
+`programs` holds every pair the material's own state admits. More than one row means the remaining
+choice is render configuration rather than anything the VMT says, and exactly one row carries the
+empty default `condition`. A pixel program need not belong to its family's name: `Teeth` ships a
+vertex program only and draws with `VertexLitTexture`.
+
+The rules are transcribed from `stdshader_dx8.dll` and owned, with their evidence, by
+`docs/vtmb/shader_combos.md`. A family whose selector is not transcribed publishes
+`"resolved": false` with a `reason` and no programs, because only 11 of 52 family names match a
+shipped program stem, so a name-to-file guess is wrong more often than right. That is a join to
+another seam's data, not a gap in this material's decode, so it warns rather than entering
+`coverage.unresolved`.
 
 ## LaCroix examples
 

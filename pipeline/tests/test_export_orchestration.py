@@ -63,6 +63,63 @@ class ExportProfileTests(unittest.TestCase):
         self.assertEqual(export.call_count, 2)
         self.assertEqual(validate.call_count, 2)
 
+    def test_material_glb_corpus_admits_each_addressable_vmt_once(self) -> None:
+        index = {
+            "materials/a/brick.vmt": object(),
+            "materials/a/brick.tth": object(),
+            "materials/b/glass.vmt": object(),
+            # The engine composes `materials/<search path><name>.vmt`, so a VMT packed outside
+            # `materials/` names no material and is not a unit.
+            "models/character/monster/hengeyokai/hengeyokai_frozen.vmt": object(),
+        }
+        self.assertEqual(
+            export_manager._material_glb_sources(index),
+            ["a/brick", "b/glass"],
+        )
+
+    def test_all_material_glbs_reuses_one_patch_first_index(self) -> None:
+        from pathlib import Path
+        from types import SimpleNamespace
+
+        from elysium_pipeline.exporters import material_glb
+        from elysium_pipeline.formats import install
+        from elysium_pipeline.validation import material_glb as validation
+
+        index = {
+            "materials/a/brick.vmt": object(),
+            "materials/b/glass.vmt": object(),
+        }
+        config = SimpleNamespace(
+            game_root=Path("C:/game"),
+            work_root=Path("C:/work"),
+            export_root=Path("C:/export"),
+        )
+
+        def write(_index, material, output_root):
+            self.assertIs(_index, index)
+            return output_root / (material.replace("/", "_") + ".glb")
+
+        summary = {
+            "asset": "vtmb:material:test",
+            "accountedBytes": 10,
+            "sourceBytes": 10,
+            "anomalies": [],
+            "missingTextures": [],
+        }
+        with (
+            mock.patch.object(install, "build_index", return_value=index) as build_index,
+            mock.patch.object(material_glb, "export", side_effect=write) as export,
+            mock.patch.object(validation, "validate", return_value=summary) as validate,
+        ):
+            destinations = export_manager.export_all_material_glbs(
+                config, object(), jobs=1
+            )
+
+        self.assertEqual(len(destinations), 2)
+        build_index.assert_called_once_with()
+        self.assertEqual(export.call_count, 2)
+        self.assertEqual(validate.call_count, 2)
+
     def test_character_glb_corpus_admits_only_models_with_topology(self) -> None:
         index = {
             "models/character/a/body.mdl": object(),
@@ -133,7 +190,8 @@ class ExportProfileTests(unittest.TestCase):
 
         from elysium_pipeline import workers
 
-        for worker in (workers.character_glb_worker, workers.texture_glb_worker):
+        for worker in (workers.character_glb_worker, workers.texture_glb_worker,
+                       workers.material_glb_worker):
             restored = pickle.loads(pickle.dumps(worker))
             self.assertEqual(restored.__name__, worker.__name__)
 

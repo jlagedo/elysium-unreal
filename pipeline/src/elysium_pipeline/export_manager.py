@@ -1593,6 +1593,100 @@ def export_all_texture_glbs(config, runner, *, jobs=None) -> list[Path]:
     return _finalize_glb_corpus("texture GLB", "textures", rows, output_root)
 
 
+def export_material_glb(config, runner, material: str) -> Path:
+    """Write and validate one isolated Material GLB product."""
+    del runner
+    _require_export_config(config)
+    from elysium_pipeline.exporters import material_glb
+    from elysium_pipeline.formats import install
+    from elysium_pipeline.validation import material_glb as material_glb_validation
+
+    index = install.build_index()
+    output_root = config.export_root / "glb" / "materials"
+    try:
+        destination = material_glb.export(index, material, output_root)
+        summary = material_glb_validation.validate(destination)
+    except Exception as exc:
+        raise OfflineExportFailure(f"material GLB export failed for {material}: {exc}") from exc
+    print(
+        f"material GLB: {summary['asset']} -> {destination} "
+        f"({summary['shader']}, {summary['parameters']} parameters, "
+        f"{summary['proxies']} proxies, {summary['dependencies']} dependencies, "
+        f"{summary['accountedBytes']}/{summary['sourceBytes']} source bytes)"
+    )
+    for warning in material_glb_validation.warnings_for(summary):
+        print(f"  warning: {material}: {warning}")
+    return destination
+
+
+def _material_glb_sources(index: dict) -> list[str]:
+    """Every VMT identity the engine can address.
+
+    The engine composes `materials/<search path><name>.vmt`, so a VMT packed outside `materials/`
+    names no material and is not a unit.
+    """
+    prefix, suffix = "materials/", ".vmt"
+    return sorted(
+        path[len(prefix):-len(suffix)]
+        for path in index
+        if path.startswith(prefix) and path.endswith(suffix)
+    )
+
+
+def _material_glb_one(index, material: str, output_root: Path) -> dict:
+    from elysium_pipeline.exporters import material_glb
+    from elysium_pipeline.validation import material_glb as material_glb_validation
+
+    try:
+        destination = material_glb.export(index, material, output_root)
+        summary = material_glb_validation.validate(destination)
+        return {
+            "item": material,
+            "destination": str(destination),
+            "summary": summary,
+            "warnings": material_glb_validation.warnings_for(summary),
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "item": material,
+            "destination": "",
+            "summary": None,
+            "warnings": [],
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def export_all_material_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every addressable VMT identity; any incomplete unit fails the corpus."""
+    del runner
+    _require_export_config(config)
+    from elysium_pipeline.formats import install
+
+    index = install.build_index()
+    materials = _material_glb_sources(index)
+    if not materials:
+        raise OfflineExportFailure("material GLB corpus has no selected VMT members")
+    output_root = config.export_root / "glb" / "materials"
+    jobs = max(1, default_jobs() if jobs is None else int(jobs))
+    jobs = min(jobs, len(materials))
+    if jobs <= 1:
+        rows = []
+        for ordinal, material in enumerate(materials, 1):
+            row = _material_glb_one(index, material, output_root)
+            rows.append(row)
+            _print_glb_row("material GLB", ordinal, len(materials), row)
+    else:
+        rows = _run_glb_pool(
+            "material GLB",
+            workers.material_glb_worker,
+            materials,
+            output_root,
+            jobs,
+        )
+    return _finalize_glb_corpus("material GLB", "materials", rows, output_root)
+
+
 def _placed_row_satisfies(row: dict, use) -> bool:
     """Whether an integrated catalogue row already covers one map-authored use."""
     if not row or row.get("model", "").lower().replace("\\", "/") != use.model:

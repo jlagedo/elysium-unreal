@@ -215,3 +215,32 @@ def texture_glb_worker(texture: str, output_root: str) -> dict[str, Any]:
             "warnings": [],
             "error": f"{type(exc).__name__}: {exc}",
         }
+
+
+def material_glb_worker(material: str, output_root: str) -> dict[str, Any]:
+    """Export one Material GLB in this process. Never raises: the parent collects failures."""
+    from pathlib import Path
+
+    from elysium_pipeline.exporters import material_glb
+    from elysium_pipeline.formats import install
+    from elysium_pipeline.validation import material_glb as validation
+
+    try:
+        index = install.build_index(verbose=False)
+        destination = material_glb.export(index, material, Path(output_root))
+        summary = validation.validate(destination)
+        return {
+            "item": material,
+            "destination": str(destination),
+            "summary": summary,
+            "warnings": validation.warnings_for(summary),
+            "error": "",
+        }
+    except (Exception, SystemExit) as exc:
+        return {
+            "item": material,
+            "destination": "",
+            "summary": None,
+            "warnings": [],
+            "error": f"{type(exc).__name__}: {exc}",
+        }

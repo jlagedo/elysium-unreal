@@ -55,6 +55,8 @@ class CliContractTests(unittest.TestCase):
         self.assertIn("characters-glb", result.output)
         self.assertIn("texture-glb", result.output)
         self.assertIn("textures-glb", result.output)
+        self.assertIn("material-glb", result.output)
+        self.assertIn("materials-glb", result.output)
 
         old = self.runner.invoke(app, ["export", "--help"])
         self.assertEqual(old.exit_code, 0, old.output)

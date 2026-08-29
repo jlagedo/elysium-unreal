@@ -791,6 +791,52 @@ def export_v2_textures_glb(ctx: typer.Context) -> None:
     )
 
 
+@export_v2_app.command("material-glb")
+def export_v2_material_glb(
+    ctx: typer.Context,
+    material: str = typer.Argument(
+        ...,
+        help="VtMB material path, with optional materials/ prefix and .vmt suffix.",
+    ),
+) -> None:
+    """Export one complete VMT material identity to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_material_glb(config, runner, material)
+        console.print(f"material GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 material-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("materials-glb")
+def export_v2_materials_glb(ctx: typer.Context) -> None:
+    """Export every patch-first VMT identity through the lossless material seam."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_material_glbs(config, runner)
+        console.print(f"material GLB corpus export complete: {len(destinations)} materials")
+
+    _execute(
+        _state(ctx),
+        "export_v2 materials-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
 def _corpus_unit(ctx: typer.Context, label: str, **selectors) -> None:
     """Re-decode and re-bake one shared-corpus unit. No map is exported and no `.umap` changes."""
 
