@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-import unittest
 
 # Importing the map exporter resolves its configured roots at module load. Point those
 # contracts at the committed synthetic fixture tree; these pure tests read no game data.

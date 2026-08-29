@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import tempfile
-import unittest
 
 # `analyze_rig_layers` defers its `install` import to `build`, so the module
 # imports without a configured game root. The default keeps a sibling module on

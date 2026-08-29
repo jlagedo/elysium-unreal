@@ -1,7 +1,6 @@
 import math
 import struct
 from types import SimpleNamespace
-import unittest
 
 import pytest
 

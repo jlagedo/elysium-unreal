@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import unittest
 
 from typer.testing import CliRunner
 

@@ -12,7 +12,6 @@ from __future__ import annotations
 from collections import Counter
 import os
 import tempfile
-import unittest
 
 # `analyze_rig_resolution` imports `install`, which resolves the VtMB root as it
 # loads; an existing directory is all the import needs, and nothing here reads it.

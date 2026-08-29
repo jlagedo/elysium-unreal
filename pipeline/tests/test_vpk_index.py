@@ -9,7 +9,6 @@ import io
 import os
 import struct
 import tempfile
-import unittest
 from unittest import mock
 
 import pytest

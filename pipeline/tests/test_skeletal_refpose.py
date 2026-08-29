@@ -21,7 +21,6 @@ Every skeleton here is synthesised in-code; nothing depends on the user's game i
 from __future__ import annotations
 
 import struct
-import unittest
 
 import numpy as np
 

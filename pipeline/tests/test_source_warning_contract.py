@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import unittest
 
 from elysium_pipeline.exporters.source_warnings import (
     animated_prop_warning,

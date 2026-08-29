@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
-import unittest
 from unittest import mock
 
 import pytest

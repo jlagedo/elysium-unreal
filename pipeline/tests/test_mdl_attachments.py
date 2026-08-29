@@ -1,6 +1,5 @@
 import math
 import struct
-import unittest
 
 import pytest
 

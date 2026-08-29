@@ -8,7 +8,6 @@ cell fraction resolves -- and never a model's data.
 from __future__ import annotations
 
 import math
-import unittest
 
 import pytest
 
@@ -212,52 +211,51 @@ def test_antiparallel_far_binds_resolve_a_half_turn():
     assert rotated[2] == pytest.approx(0.0, abs=1e-4)
 
 
-class RemapTests(unittest.TestCase):
-    """`remap()` on a two-bone owner/body pair covering all three branches at once, plus the
-    rotation-untouched guarantee."""
+ROT = _axis_angle((0, 1, 0), 37.0)
 
-    def setUp(self):
-        self.rot = _axis_angle((0, 1, 0), 37.0)
-        # copy_bone: binds coincide.  translate_bone: owner far, body near the origin.
-        # similarity_bone: both far and not parallel.
-        self.owner = _FakeModel([
-            _bone(0, "copy_bone", -1, pos=(1.0, 1.0, 1.0)),
-            _bone(1, "translate_bone", -1, pos=(3.0, 0.0, 0.0)),
-            _bone(2, "similarity_bone", -1, pos=(2.0, 0.0, 0.0)),
-        ])
-        self.body = _FakeModel([
-            _bone(0, "copy_bone", -1, pos=(1.0, 1.0, 1.0)),
-            _bone(1, "translate_bone", -1, pos=(0.0, 0.0, 0.0)),
-            _bone(2, "similarity_bone", -1, pos=(0.0, 2.0, 0.0)),
-        ])
+OWNER = _FakeModel([
+    _bone(0, "copy_bone", -1, pos=(1.0, 1.0, 1.0)),
+    _bone(1, "translate_bone", -1, pos=(3.0, 0.0, 0.0)),
+    _bone(2, "similarity_bone", -1, pos=(2.0, 0.0, 0.0)),
+])
 
-    def test_copy_branch_passes_the_animated_position_through(self):
-        pose = [((5.0, 6.0, 7.0), self.rot), None, None]
-        out = rc.remap(self.body, self.owner, pose)
-        assert out[0][0] == (5.0, 6.0, 7.0)
+BODY = _FakeModel([
+    _bone(0, "copy_bone", -1, pos=(1.0, 1.0, 1.0)),
+    _bone(1, "translate_bone", -1, pos=(0.0, 0.0, 0.0)),
+    _bone(2, "similarity_bone", -1, pos=(0.0, 2.0, 0.0)),
+])
 
-    def test_translate_branch_adds_the_raw_bind_offset(self):
-        pose = [None, ((3.5, 0.0, 0.0), self.rot), None]
-        out = rc.remap(self.body, self.owner, pose)
-        # p + (b - a) = 3.5 + (0 - 3) = 0.5
-        for got, want in zip(out[1][0], (0.5, 0.0, 0.0)):
-            assert got == pytest.approx(want, abs=1e-6)
 
-    def test_similarity_branch_rotates_and_rescales(self):
-        pose = [None, None, ((2.0, 0.0, 0.0), self.rot)]  # animated pos == owner bind exactly
-        out = rc.remap(self.body, self.owner, pose)
-        # Rotating the owner's own bind direction onto the body's and rescaling to |b| must
-        # reproduce the body's own bind exactly (both binds' lengths are 2.0 here).
-        for got, want in zip(out[2][0], (0.0, 2.0, 0.0)):
-            assert got == pytest.approx(want, abs=1e-6)
+def test_copy_branch_passes_the_animated_position_through():
+    pose = [((5.0, 6.0, 7.0), ROT), None, None]
+    out = rc.remap(BODY, OWNER, pose)
+    assert out[0][0] == (5.0, 6.0, 7.0)
 
-    def test_rotation_is_never_touched_in_any_branch(self):
-        pose = [((5.0, 6.0, 7.0), self.rot), ((3.5, 0.0, 0.0), self.rot),
-                ((2.0, 0.0, 0.0), self.rot)]
-        out = rc.remap(self.body, self.owner, pose)
-        for entry in out:
-            assert entry is not None
-            assert entry[1] == self.rot
+
+def test_translate_branch_adds_the_raw_bind_offset():
+    pose = [None, ((3.5, 0.0, 0.0), ROT), None]
+    out = rc.remap(BODY, OWNER, pose)
+    # p + (b - a) = 3.5 + (0 - 3) = 0.5
+    for got, want in zip(out[1][0], (0.5, 0.0, 0.0)):
+        assert got == pytest.approx(want, abs=1e-6)
+
+
+def test_similarity_branch_rotates_and_rescales():
+    pose = [None, None, ((2.0, 0.0, 0.0), ROT)]  # animated pos == owner bind exactly
+    out = rc.remap(BODY, OWNER, pose)
+    # Rotating the owner's own bind direction onto the body's and rescaling to |b| must
+    # reproduce the body's own bind exactly (both binds' lengths are 2.0 here).
+    for got, want in zip(out[2][0], (0.0, 2.0, 0.0)):
+        assert got == pytest.approx(want, abs=1e-6)
+
+
+def test_rotation_is_never_touched_in_any_branch():
+    pose = [((5.0, 6.0, 7.0), ROT), ((3.5, 0.0, 0.0), ROT),
+            ((2.0, 0.0, 0.0), ROT)]
+    out = rc.remap(BODY, OWNER, pose)
+    for entry in out:
+        assert entry is not None
+        assert entry[1] == ROT
 
 
 # ClosureRemapTests

@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import tempfile
-import unittest
 from types import SimpleNamespace
 
 from elysium_pipeline import export_manager, mounts

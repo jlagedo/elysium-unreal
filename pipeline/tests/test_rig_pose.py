@@ -12,7 +12,6 @@ from __future__ import annotations
 import os
 import struct
 import tempfile
-import unittest
 
 # `rig_parity` imports the format modules, which resolve the VtMB root as they
 # load; an existing directory is all the import needs, and nothing here reads it.

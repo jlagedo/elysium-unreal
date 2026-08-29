@@ -1,6 +1,5 @@
 import math
 import struct
-import unittest
 
 from elysium_pipeline.formats import mdl_skel
 

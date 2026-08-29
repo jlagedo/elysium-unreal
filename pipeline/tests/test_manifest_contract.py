@@ -6,7 +6,6 @@ import json
 import os
 import tempfile
 import time
-import unittest
 from unittest import mock
 
 import pytest

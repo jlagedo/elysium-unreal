@@ -13,7 +13,6 @@ import struct
 import zlib
 from pathlib import Path
 import tempfile
-import unittest
 from unittest import mock
 
 import pytest

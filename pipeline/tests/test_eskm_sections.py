@@ -7,7 +7,6 @@ import hashlib
 import os
 import tempfile
 import struct
-import unittest
 
 import pytest
 

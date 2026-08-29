@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import tempfile
-import unittest
 from unittest import mock
 
 from elysium_pipeline import config

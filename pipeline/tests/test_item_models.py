@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import tempfile
-import unittest
 from unittest import mock
 
 from elysium_pipeline.exporters import UE_extract_items as items

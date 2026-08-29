@@ -11,7 +11,6 @@ from pathlib import Path
 import sys
 import tempfile
 from types import SimpleNamespace
-import unittest
 from unittest import mock
 
 
@@ -61,171 +60,180 @@ def _load_bake_wield(fake_unreal, export_root):
     return module
 
 
-class WieldReuseTests(unittest.TestCase):
-    def _module(self, out):
-        self.logs: list[str] = []
-        self.warnings: list[str] = []
-        self.errors: list[str] = []
-        return _load_bake_wield(
-            _fake_unreal(self.logs, self.warnings, self.errors), out)
+def _module(out, errors=None):
+    """The bake module under a recording `unreal` double; `errors` collects what it logged."""
+    return _load_bake_wield(_fake_unreal([], [], errors if errors is not None else []), out)
 
-    @staticmethod
-    def _model(eskm_rel="items/wield/w_test.eskm"):
-        return {
-            "eskm": eskm_rel,
-            "binding": "socket_hand",
-            "bone_count": 2,
-            "materials": [{"name": "blade", "albedo": "key_a", "flags": []}],
-            "skin_families": [],
+
+@staticmethod
+def _model(eskm_rel="items/wield/w_test.eskm"):
+    return {
+        "eskm": eskm_rel,
+        "binding": "socket_hand",
+        "bone_count": 2,
+        "materials": [{"name": "blade", "albedo": "key_a", "flags": []}],
+        "skin_families": [],
+    }
+
+
+def test_fingerprint_is_stable_and_moves_with_its_inputs() -> None:
+    with tempfile.TemporaryDirectory() as out:
+        module = _module(out)
+        source = Path(out) / "items" / "wield" / "w_test.eskm"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"container v1")
+        model = _model()
+        table = {"key_a": "tex/blade.png"}
+
+        first = module.stem_fingerprint("w_test", model, table)
+        assert module.stem_fingerprint("w_test", model, table) == first
+
+        # The container's bytes are an input...
+        source.write_bytes(b"container v2")
+        container_moved = module.stem_fingerprint("w_test", model, table)
+        assert container_moved != first
+
+        # ...so is the manifest row...
+        repainted = _model()
+        repainted["materials"][0]["flags"] = ["additive"]
+        assert module.stem_fingerprint("w_test", repainted, table) != container_moved
+
+        # ...and so is a re-pointed texture key.
+        assert module.stem_fingerprint("w_test", model, {"key_a": "tex/other.png"}) != container_moved
+
+
+def test_a_missing_container_digests_as_a_changed_input() -> None:
+    with tempfile.TemporaryDirectory() as out:
+        module = _module(out)
+        model = _model("items/wield/absent.eskm")
+        table: dict = {}
+        absent = module.stem_fingerprint("w_test", model, table)
+        source = Path(out) / "items" / "wield" / "absent.eskm"
+        source.parent.mkdir(parents=True)
+        source.write_bytes(b"now present")
+        assert module.stem_fingerprint("w_test", model, table) != absent
+
+
+def _stamped_mount(module, stamps, textures=True):
+    """Point the fake registry at a folder of `stamps` ({object path: stored recipe});
+    `textures` is whether the shared texture mount carries every asset asked for."""
+    module.unreal.EditorAssetLibrary.list_assets = (
+        lambda package, recursive=True, include_folder=False: sorted(
+            "%s.%s" % (path, path.rsplit("/", 1)[-1]) for path in stamps))
+    module.unreal.EditorAssetLibrary.does_asset_exist = lambda target: textures
+    module.bl.stored_recipe = lambda path: stamps.get(path, "")
+
+WIELD_REUSE_TABLE = {"key_a": "tex/blade.png"}
+
+
+def _current(module, force=False):
+    return module.stem_is_current("w_test", _model(), WIELD_REUSE_TABLE, "fp", force)
+
+
+def test_reuse_needs_every_asset_on_the_current_recipe() -> None:
+    with tempfile.TemporaryDirectory() as out:
+        module = _module(out)
+        stamps = {
+            "%s/w_test/SKEL_w_test" % WIELD: "fp",
+            "%s/w_test/SK_w_test" % WIELD: "fp",
+            "%s/w_test/MI_SK_w_test_blade" % WIELD: "fp",
         }
+        _stamped_mount(module, stamps)
+        assert _current(module)
 
-    def test_fingerprint_is_stable_and_moves_with_its_inputs(self) -> None:
-        with tempfile.TemporaryDirectory() as out:
-            module = self._module(out)
-            source = Path(out) / "items" / "wield" / "w_test.eskm"
-            source.parent.mkdir(parents=True)
-            source.write_bytes(b"container v1")
-            model = self._model()
-            table = {"key_a": "tex/blade.png"}
+        # One asset off the recipe makes the whole stem stale.
+        stamps["%s/w_test/MI_SK_w_test_blade" % WIELD] = "older"
+        assert not _current(module)
 
-            first = module.stem_fingerprint("w_test", model, table)
-            assert module.stem_fingerprint("w_test", model, table) == first
 
-            # The container's bytes are an input...
-            source.write_bytes(b"container v2")
-            container_moved = module.stem_fingerprint("w_test", model, table)
-            assert container_moved != first
+def test_a_stamped_skeleton_beside_no_mesh_is_stale() -> None:
+    # The builders stamp as they save, so a build that failed after the skeleton
+    # leaves one current-looking asset; the pair is the minimum a reuse accepts.
+    with tempfile.TemporaryDirectory() as out:
+        module = _module(out)
+        _stamped_mount(module, {"%s/w_test/SKEL_w_test" % WIELD: "fp"})
+        assert not _current(module)
+        _stamped_mount(module, {"%s/w_test/SK_w_test" % WIELD: "fp"})
+        assert not _current(module)
 
-            # ...so is the manifest row...
-            repainted = self._model()
-            repainted["materials"][0]["flags"] = ["additive"]
-            assert module.stem_fingerprint("w_test", repainted, table) != container_moved
 
-            # ...and so is a re-pointed texture key.
-            assert module.stem_fingerprint("w_test", model, {"key_a": "tex/other.png"}) != container_moved
+def test_a_texture_gone_from_the_mount_is_stale() -> None:
+    with tempfile.TemporaryDirectory() as out:
+        module = _module(out)
+        stamps = {
+            "%s/w_test/SKEL_w_test" % WIELD: "fp",
+            "%s/w_test/SK_w_test" % WIELD: "fp",
+        }
+        _stamped_mount(module, stamps, textures=False)
+        assert not _current(module)
+        # A key the manifest's table does not carry is stale too: the build reports it.
+        _stamped_mount(module, stamps)
+        assert not module.stem_is_current("w_test", _model(), {}, "fp", False)
 
-    def test_a_missing_container_digests_as_a_changed_input(self) -> None:
-        with tempfile.TemporaryDirectory() as out:
-            module = self._module(out)
-            model = self._model("items/wield/absent.eskm")
-            table: dict = {}
-            absent = module.stem_fingerprint("w_test", model, table)
-            source = Path(out) / "items" / "wield" / "absent.eskm"
-            source.parent.mkdir(parents=True)
-            source.write_bytes(b"now present")
-            assert module.stem_fingerprint("w_test", model, table) != absent
 
-    def _stamped_mount(self, module, stamps, textures=True):
-        """Point the fake registry at a folder of `stamps` ({object path: stored recipe});
-        `textures` is whether the shared texture mount carries every asset asked for."""
-        module.unreal.EditorAssetLibrary.list_assets = (
+def test_an_empty_folder_is_stale() -> None:
+    with tempfile.TemporaryDirectory() as out:
+        module = _module(out)
+        _stamped_mount(module, {})
+        assert not _current(module)
+
+
+def test_force_defeats_the_reuse_whole() -> None:
+    with tempfile.TemporaryDirectory() as out:
+        module = _module(out)
+        stamps = {
+            "%s/w_test/SKEL_w_test" % WIELD: "fp",
+            "%s/w_test/SK_w_test" % WIELD: "fp",
+        }
+        _stamped_mount(module, stamps)
+        assert _current(module)
+        assert not _current(module, force=True)
+
+
+def test_stamping_covers_only_the_assets_the_builders_left_unstamped() -> None:
+    with tempfile.TemporaryDirectory() as out:
+        module = _module(out)
+        skeleton = "%s/w_test/SKEL_w_test" % WIELD
+        instance = "%s/w_test/MI_SK_w_test_blade" % WIELD
+        metadata = {skeleton: "fp"}  # the builder stamped it pre-save
+        loaded = {skeleton: object(), instance: object()}
+        saved: list[str] = []
+        stamped: list[str] = []
+        editor = module.unreal.EditorAssetLibrary
+        editor.list_assets = (
             lambda package, recursive=True, include_folder=False: sorted(
-                "%s.%s" % (path, path.rsplit("/", 1)[-1]) for path in stamps))
-        module.unreal.EditorAssetLibrary.does_asset_exist = lambda target: textures
-        module.bl.stored_recipe = lambda path: stamps.get(path, "")
+                "%s.%s" % (path, path.rsplit("/", 1)[-1]) for path in loaded))
+        editor.load_asset = lambda path: loaded.get(path)
+        editor.get_metadata_tag = (
+            lambda asset, tag: metadata.get(
+                next(path for path, obj in loaded.items() if obj is asset), ""))
+        module.bl.stamp_recipe = (
+            lambda asset, fingerprint: stamped.append(
+                next(path for path, obj in loaded.items() if obj is asset)))
+        module.bl.save = lambda path: saved.append(path) or True
 
-    TABLE = {"key_a": "tex/blade.png"}
+        failed: list[str] = []
+        module.stamp_stem_assets("w_test", "fp", failed)
+        assert failed == []
+        assert stamped == [instance]
+        assert saved == [instance]
 
-    def _current(self, module, force=False):
-        return module.stem_is_current("w_test", self._model(), self.TABLE, "fp", force)
 
-    def test_reuse_needs_every_asset_on_the_current_recipe(self) -> None:
-        with tempfile.TemporaryDirectory() as out:
-            module = self._module(out)
-            stamps = {
-                "%s/w_test/SKEL_w_test" % WIELD: "fp",
-                "%s/w_test/SK_w_test" % WIELD: "fp",
-                "%s/w_test/MI_SK_w_test_blade" % WIELD: "fp",
-            }
-            self._stamped_mount(module, stamps)
-            assert self._current(module)
+def test_a_failed_stamp_save_is_loud_and_fails_the_stem() -> None:
+    errors: list[str] = []
+    with tempfile.TemporaryDirectory() as out:
+        module = _module(out, errors)
+        instance = "%s/w_test/MI_SK_w_test_blade" % WIELD
+        editor = module.unreal.EditorAssetLibrary
+        editor.list_assets = (
+            lambda package, recursive=True, include_folder=False: [
+                "%s.%s" % (instance, instance.rsplit("/", 1)[-1])])
+        editor.load_asset = lambda path: object()
+        editor.get_metadata_tag = lambda asset, tag: ""
+        module.bl.stamp_recipe = lambda asset, fingerprint: None
+        module.bl.save = lambda path: False
 
-            # One asset off the recipe makes the whole stem stale.
-            stamps["%s/w_test/MI_SK_w_test_blade" % WIELD] = "older"
-            assert not self._current(module)
-
-    def test_a_stamped_skeleton_beside_no_mesh_is_stale(self) -> None:
-        # The builders stamp as they save, so a build that failed after the skeleton
-        # leaves one current-looking asset; the pair is the minimum a reuse accepts.
-        with tempfile.TemporaryDirectory() as out:
-            module = self._module(out)
-            self._stamped_mount(module, {"%s/w_test/SKEL_w_test" % WIELD: "fp"})
-            assert not self._current(module)
-            self._stamped_mount(module, {"%s/w_test/SK_w_test" % WIELD: "fp"})
-            assert not self._current(module)
-
-    def test_a_texture_gone_from_the_mount_is_stale(self) -> None:
-        with tempfile.TemporaryDirectory() as out:
-            module = self._module(out)
-            stamps = {
-                "%s/w_test/SKEL_w_test" % WIELD: "fp",
-                "%s/w_test/SK_w_test" % WIELD: "fp",
-            }
-            self._stamped_mount(module, stamps, textures=False)
-            assert not self._current(module)
-            # A key the manifest's table does not carry is stale too: the build reports it.
-            self._stamped_mount(module, stamps)
-            assert not module.stem_is_current("w_test", self._model(), {}, "fp", False)
-
-    def test_an_empty_folder_is_stale(self) -> None:
-        with tempfile.TemporaryDirectory() as out:
-            module = self._module(out)
-            self._stamped_mount(module, {})
-            assert not self._current(module)
-
-    def test_force_defeats_the_reuse_whole(self) -> None:
-        with tempfile.TemporaryDirectory() as out:
-            module = self._module(out)
-            stamps = {
-                "%s/w_test/SKEL_w_test" % WIELD: "fp",
-                "%s/w_test/SK_w_test" % WIELD: "fp",
-            }
-            self._stamped_mount(module, stamps)
-            assert self._current(module)
-            assert not self._current(module, force=True)
-
-    def test_stamping_covers_only_the_assets_the_builders_left_unstamped(self) -> None:
-        with tempfile.TemporaryDirectory() as out:
-            module = self._module(out)
-            skeleton = "%s/w_test/SKEL_w_test" % WIELD
-            instance = "%s/w_test/MI_SK_w_test_blade" % WIELD
-            metadata = {skeleton: "fp"}  # the builder stamped it pre-save
-            loaded = {skeleton: object(), instance: object()}
-            saved: list[str] = []
-            stamped: list[str] = []
-            editor = module.unreal.EditorAssetLibrary
-            editor.list_assets = (
-                lambda package, recursive=True, include_folder=False: sorted(
-                    "%s.%s" % (path, path.rsplit("/", 1)[-1]) for path in loaded))
-            editor.load_asset = lambda path: loaded.get(path)
-            editor.get_metadata_tag = (
-                lambda asset, tag: metadata.get(
-                    next(path for path, obj in loaded.items() if obj is asset), ""))
-            module.bl.stamp_recipe = (
-                lambda asset, fingerprint: stamped.append(
-                    next(path for path, obj in loaded.items() if obj is asset)))
-            module.bl.save = lambda path: saved.append(path) or True
-
-            failed: list[str] = []
-            module.stamp_stem_assets("w_test", "fp", failed)
-            assert failed == []
-            assert stamped == [instance]
-            assert saved == [instance]
-
-    def test_a_failed_stamp_save_is_loud_and_fails_the_stem(self) -> None:
-        with tempfile.TemporaryDirectory() as out:
-            module = self._module(out)
-            instance = "%s/w_test/MI_SK_w_test_blade" % WIELD
-            editor = module.unreal.EditorAssetLibrary
-            editor.list_assets = (
-                lambda package, recursive=True, include_folder=False: [
-                    "%s.%s" % (instance, instance.rsplit("/", 1)[-1])])
-            editor.load_asset = lambda path: object()
-            editor.get_metadata_tag = lambda asset, tag: ""
-            module.bl.stamp_recipe = lambda asset, fingerprint: None
-            module.bl.save = lambda path: False
-
-            failed: list[str] = []
-            module.stamp_stem_assets("w_test", "fp", failed)
-            assert failed == ["w_test"]
-            assert any("could not be saved" in line for line in self.errors)
+        failed: list[str] = []
+        module.stamp_stem_assets("w_test", "fp", failed)
+        assert failed == ["w_test"]
+        assert any("could not be saved" in line for line in errors)

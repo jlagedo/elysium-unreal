@@ -9,7 +9,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import tempfile
-import unittest
 
 from elysium_pipeline.exporters import UE_extract_corpus as corpus
 

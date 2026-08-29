@@ -4,7 +4,6 @@ import hashlib
 from pathlib import Path
 import struct
 import tempfile
-import unittest
 
 import pytest
 

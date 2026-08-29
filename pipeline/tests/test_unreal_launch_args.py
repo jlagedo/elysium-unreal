@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
-import unittest
 from unittest import mock
 
 from elysium_pipeline import unreal

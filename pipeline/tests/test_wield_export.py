@@ -15,7 +15,6 @@ import json
 import os
 import struct
 import tempfile
-import unittest
 import zlib
 from pathlib import Path
 from unittest import mock

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import os
 import tempfile
-import unittest
 
 # `npc_export` imports `install`, which resolves ELYSIUM_VTMB_ROOT as it loads; an existing
 # directory is all the import needs, and nothing here reads it.

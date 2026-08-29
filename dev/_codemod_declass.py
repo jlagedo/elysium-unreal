@@ -45,6 +45,8 @@ def member_names(node):
             if item.name in SKIP_METHODS:
                 return None
             names.append(item.name)
+        elif isinstance(item, ast.ClassDef):
+            names.append(item.name)
         elif isinstance(item, ast.Expr) and isinstance(item.value, ast.Constant):
             continue  # the class docstring
         else:
@@ -52,23 +54,41 @@ def member_names(node):
     return names
 
 
+def walk_methods(node):
+    """Every node inside the class's methods, without descending into a nested class.
+
+    A nested helper class has its own `self`, which says nothing about whether the enclosing
+    TestCase can be hoisted.
+    """
+    stack = [item for item in node.body if isinstance(item, ast.FunctionDef)]
+    while stack:
+        current = stack.pop()
+        yield current
+        for child in ast.iter_child_nodes(current):
+            if not isinstance(child, ast.ClassDef):
+                stack.append(child)
+
+
 def bare_self_is_only_a_receiver(node, names):
     """True when every `self` in the class is the receiver of one of its own members."""
     receivers = set()
-    for sub in ast.walk(node):
+    for sub in walk_methods(node):
         if isinstance(sub, ast.Attribute) and isinstance(sub.value, ast.Name):
             if sub.value.id == "self" and sub.attr in names:
                 receivers.add(id(sub.value))
-    for sub in ast.walk(node):
+    for sub in walk_methods(node):
         if isinstance(sub, ast.Name) and sub.id == "self" and id(sub) not in receivers:
             return False
     return True
 
 
 def local_bindings(node):
-    """Names the class's methods bind as locals, which would shadow a hoisted member."""
+    """Names the class's methods bind as locals, which would shadow a hoisted member.
+
+    The class body's own assignments are not bindings of that kind -- they are the members.
+    """
     bound = set()
-    for sub in ast.walk(node):
+    for sub in walk_methods(node):
         if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store):
             bound.add(sub.id)
     return bound
@@ -113,7 +133,8 @@ def block(lines, start, end, indent, names, rename):
     out = []
     for offset, raw in enumerate(lines[start:end]):
         text = raw[indent:] if raw[:indent].strip() == "" else raw.lstrip()
-        if offset == 0 or "def " in text[:8]:
+        if offset == 0:
+            # Only the member's own signature; a nested class's methods keep their `self`.
             text = strip_self_parameter(text)
         text = pattern.sub(lambda m: rename.get(m.group(1), m.group(1)), text)
         for original, renamed in rename.items():
