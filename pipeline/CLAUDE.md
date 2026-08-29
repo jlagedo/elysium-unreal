@@ -8,22 +8,21 @@ No module constructs a repository-relative output path or assumes a current dire
 
 ## Tests
 
-Python tests are `unittest`, and pytest is not installed. Running one module, choosing a scope,
-and the approvals a broad export/bake/reconstruct run needs are the **`elysium-testing`** skill.
+Python tests are `pytest`, run from the repository root as `uv run pytest`. Running one module,
+choosing a scope, and the approvals a broad export/bake/reconstruct run needs are the
+**`elysium-testing`** skill.
+
+The root `conftest.py` resolves `.elysium.local.env` into the environment before collection, so a
+module that imports a format or exporter — which resolves `ELYSIUM_VTMB_ROOT` at import time —
+collects on a shell that exported nothing.
 
 `tests/fixtures/synthetic/` is the only location for committed fixtures; fixtures must be
 game-independent.
 
-`elysium_pipeline.formats.install` resolves `ELYSIUM_VTMB_ROOT` at **import time**, so importing
-any format or exporter module needs a configured install — and `uv run python` does not load
-`.elysium.local.env`; only the `elysium` CLI does. A test module on that chain fails at collection
-with `RuntimeError: ELYSIUM_VTMB_ROOT is not configured`, which reads as a broken test rather than
-an unconfigured shell.
-
 `sqlite3.connect()` used as a context manager commits but does not close. On Windows the
-open handle blocks `TemporaryDirectory` cleanup, so a test that opens a session database
-closes it explicitly or fails in teardown with `PermissionError` rather than on the
-assertion it was making.
+open handle blocks `tmp_path` cleanup, so a test that opens a session database closes it
+explicitly or fails in teardown with `PermissionError` rather than on the assertion it was
+making.
 
 ## Path contract
 

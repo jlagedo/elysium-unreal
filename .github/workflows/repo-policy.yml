@@ -19,7 +19,7 @@ jobs:
       - run: uv sync --locked
       - run: uv run elysium doctor --repo-only
       - run: uv run python -m compileall -q pipeline/src research dev tools
-      - run: uv run python -m unittest discover -s pipeline/tests -v
-      # The Blender add-on's core is bpy-free precisely so it runs here, without an
-      # install. Its Blender-side tests live under tests/blender and need one.
-      - run: uv run python -m unittest discover -s tools/elysium_glb_review -t tools/elysium_glb_review -p "test_core_*.py" -v
+      # One run covers both suites: `testpaths` in pyproject names them, and the Blender add-on's
+      # core is bpy-free precisely so it runs here without an install. Its Blender-side tests live
+      # under tests/blender, which `norecursedirs` keeps out of collection.
+      - run: uv run pytest -q

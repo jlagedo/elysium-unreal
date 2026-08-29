@@ -35,8 +35,17 @@ if [ -z "$reason" ]; then
   case "$cmd" in
     *elysium*--force*|*elysium*--clean*)
       reason="--force/--clean discards generated state and forces a full regeneration." ;;
-    *"unittest discover"*)
-      reason="this runs the complete Python suite." ;;
+  esac
+fi
+
+# A bare `pytest` is the whole suite; a run that names a path, a node id or a `-k` selection
+# is a focused one and is not gated.
+if [ -z "$reason" ]; then
+  case "$cmd" in
+    *pytest*)
+      if ! printf '%s' "$cmd" | grep -Eq 'pytest[[:space:]]+[^-]|::|-k[[:space:]=]|--last-failed|--lf'; then
+        reason="this runs the complete Python suite."
+      fi ;;
   esac
 fi
 

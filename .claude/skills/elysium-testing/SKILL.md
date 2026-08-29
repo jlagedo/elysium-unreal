@@ -1,6 +1,6 @@
 ---
 name: elysium-testing
-description: Run, scope or write tests for this project — the C++ automation tiers (Substrate, Policy, Content) and the Python unittest suite — and decide how much export/bake work a change authorizes. Use when a task asks to test, verify or validate a change, names `uv run elysium test`, an `Elysium.Substrate.*`/`Elysium.Policy.*` filter, `ElysiumTestServices.h`, a new automation test, or a Python test under `pipeline/tests/`.
+description: Run, scope or write tests for this project — the C++ automation tiers (Substrate, Policy, Content) and the Python pytest suite — and decide how much export/bake work a change authorizes. Use when a task asks to test, verify or validate a change, names `uv run elysium test`, an `Elysium.Substrate.*`/`Elysium.Policy.*` filter, `ElysiumTestServices.h`, a new automation test, or a Python test under `pipeline/tests/`.
 ---
 
 # Testing and QA scope
@@ -75,18 +75,25 @@ First add content-free `Substrate` coverage against `Private/Tests/ElysiumTestSe
 
 ## Python
 
-Python tests are `unittest`, and pytest is not installed. Run one module from the repo root as
-`uv run python -m unittest pipeline.tests.<module>`.
+Python tests are `pytest`. Run the whole suite from the repo root as `uv run pytest`, one module
+as `uv run pytest pipeline/tests/<module>.py`, and one test as
+`uv run pytest pipeline/tests/<module>.py::<test>`. `uv run elysium test` runs the C++ tiers only
+and has no Python path.
 
-`uv run python` does not load `.elysium.local.env` — only the `elysium` CLI does — and
-`elysium_pipeline.formats.install` resolves `ELYSIUM_VTMB_ROOT` at import time. So a module that
-imports a format or exporter (24 of the 56 do) fails at collection with `RuntimeError:
-ELYSIUM_VTMB_ROOT is not configured` on a shell that has no exported roots, whatever the test
-asserts. Export the roots into the shell, or invoke through a wrapper that reads the env file.
+`elysium_pipeline.formats.install` resolves `ELYSIUM_VTMB_ROOT` at import time, so about half the
+`pipeline/tests` modules need the roots before collection, not at assertion time. The repository
+root `conftest.py` resolves them through `ProjectConfig.resolve(...).apply_environment()`, which is
+what reads `.elysium.local.env`. A shell with no exported roots therefore collects and passes; a
+checkout with no env file collects too, and the roots stay unset.
+
+The add-on suite under `tools/elysium_glb_review/tests` has its own `conftest.py` putting the
+add-on root on `sys.path`, so `from core import ...` resolves the way Blender loads it. The
+Blender-side script at `tests/blender/test_import.py` needs a Blender and is kept out of collection
+by `norecursedirs`.
 
 ## Scope is gated
 
-Start with the narrowest owning automation filter, pure-rules test, or Python test method, and the
+Start with the narrowest owning automation filter, pure-rules test, or Python test node id, and the
 smallest export/bake selector. An exporter or Unreal-generator change does not authorize a complete
 profile as validation. If the requested change affects export or bake products and the owner has
 not named the scope, ask for the exact map, model, placed model, NPC/body stem, bundle, or

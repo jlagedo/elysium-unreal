@@ -231,7 +231,7 @@ tested without launching Blender.
 Contract tests, no Blender needed:
 
 ```
-uv run python -m unittest discover -s tools/elysium_glb_review -t tools/elysium_glb_review -p "test_core_*.py"
+uv run pytest tools/elysium_glb_review/tests
 ```
 
 Acceptance inside Blender, against the real corpus:
