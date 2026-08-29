@@ -101,9 +101,13 @@ they declare none and inherit. Anything a unit says about its own gaps — an un
 shader family, a parse anomaly, an include-stub bank with no clips, a texture below its
 declared size — appears as a warning on the row.
 
-Characters get an **Import Selected** button with the same animation option as the file
-dialog. Reading one unit takes 0–110 ms, so browsing stays responsive; the two largest
-animation banks are about a second.
+The **Open Selected** button does whatever the seam allows: a character imports, a texture
+decodes into an image (shown in an Image Editor if one is open), a material is built onto
+a plane so its shader can be looked at. A surface property has nothing to instantiate, so
+the detail box is all there is.
+
+Reading one unit takes 0–110 ms, so browsing stays responsive; the two largest animation
+banks are about a second.
 
 There is no thumbnail grid. Blender's Asset Browser needs assets marked inside `.blend`
 libraries with generated previews, which for 484 characters is a batch job in its own
@@ -133,10 +137,37 @@ The **Elysium** tab in the 3D viewport sidebar (`N`):
 
 - **Corpus** — the active root, the import operator, and the integrity report.
 - **Browse** — the corpus listing described above.
+- **Animation Banks** — the bank closure of the selected body, and clip loading.
 - **Character** — the selected body's identity, its coverage block, and its full
   extension payload as a collapsible tree.
 - **Material** — the identity the primitive named, the VMT shader family, and an explicit
   list of what was **not** reproduced.
+
+### Animation banks
+
+A body carries only its own clips — usually one, a ragdoll pose — and names its banks by
+identity. Those names are not the whole story: banks include other banks, and several of
+the ones a body names directly are include stubs holding nothing. `blood_doll` declares
+one bank; the clips actually reachable from it live across **35 files and 1,722 clips**.
+
+Select an imported body and open **Elysium ▸ Animation Banks**, then press Scan. The list
+shows every reachable bank with its clip count, marking include stubs and any bank that
+was named but never exported. Highlighting one lists its clips; **Load All** takes the
+bank, **Load Highlighted** takes a single clip.
+
+Loading a single clip out of a 674-clip bank takes about three seconds, almost all of it
+parsing that bank's JSON. Loading the whole closure is not offered: at this median it
+would be minutes of import and a `bpy.data.actions` nobody can navigate.
+
+A bank is a character body in its own right, so importing it brings a proxy mesh and a
+second armature. Both are discarded; only the Actions are kept, and each is bound to the
+body's armature explicitly. Assigning an Action to a second armature does **not** bind a
+slot on its own, and an unbound Action animates nothing while reporting no error.
+
+Clips address bones by name, which is usually every bone the body has. Not always:
+`shared/female/move_and_ranged` animates a `bush hook` bone a blood doll does not carry,
+so those channels land nowhere. The load says how many bones went unmatched rather than
+leaving a clip that silently half-plays.
 
 ### Integrity report
 
@@ -186,7 +217,8 @@ fallback is the intended path and the result is correct.
 ```
 core/       No bpy. GLB, identities, KTX2, DDS, seam readers, the browsable index,
             bank closure, surface-property inheritance, the corpus sweep.
-adapters/   The glTF import hook, texture decoding, material reconstruction.
+adapters/   The glTF import hook, texture decoding, material reconstruction,
+            bank clip loading.
 ui/         Operators and panels.
 tests/      Contract tests for core; tests/blender/ runs inside Blender.
 ```

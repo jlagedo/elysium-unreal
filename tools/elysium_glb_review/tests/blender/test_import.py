@@ -156,6 +156,72 @@ def check_data_only_seams(corpus: Path) -> None:
     print("data-only seams ok")
 
 
+def check_bank_loading(corpus: Path) -> None:
+    """A body's clips live in banks it only names, several files away."""
+    animation = importlib.import_module(ARGS.module + ".adapters.animation")
+
+    clear()
+    path = corpus / "characters" / "npc" / "common" / "blood_doll" / "blood_doll.glb"
+    assert "FINISHED" in bpy.ops.import_scene.gltf(filepath=str(path))
+    body = next(o for o in bpy.data.objects if o.type == "ARMATURE")
+    mesh = next(o for o in bpy.data.objects if o.name.startswith("vtmb:"))
+
+    # A reviewer selects the visible mesh, not the armature.
+    assert animation.armature_for(mesh) is body, "the mesh must resolve to its armature"
+
+    payload = animation.body_payload(mesh)
+    assert payload is not None, "the body payload was not stashed during import"
+    closure = animation.closure_of({"extensions": {"ELYSIUM_vtmb_character": payload}}, corpus)
+    assert len(closure.nodes) > 20, "expected a transitive closure, got %d" % len(closure.nodes)
+    assert closure.clip_count > 1000, "expected four figures of clips"
+    stubs = [node for node in closure.nodes if node.is_stub]
+    assert stubs, "expected at least one include stub carrying no clips"
+
+    bank = max(closure.with_clips(), key=lambda node: node.clip_count)
+    names = animation.clip_names(bank.identity, corpus)
+    assert len(names) == bank.clip_count, "clip listing disagrees with the closure"
+
+    before = len(bpy.data.actions)
+    objects_before = {o.name for o in bpy.data.objects}
+    result = animation.load_clips(body, bank.identity, corpus, {names[0]})
+    assert result.loaded == 1, "filter kept %d clip(s), wanted 1: %s" % (
+        result.loaded, result.message
+    )
+    assert len(bpy.data.actions) == before + 1
+
+    # The bank is a body in its own right; its proxy mesh and armature must not survive.
+    assert {o.name for o in bpy.data.objects} == objects_before, "bank scaffolding was left behind"
+
+    bound = body.animation_data
+    assert bound is not None and bound.action is result.actions[0]
+    assert bound.action_slot is not None, (
+        "assigning an action to a second armature does not bind a slot, and an unbound "
+        "action animates nothing while reporting no error"
+    )
+    print(
+        "banks ok: %d file(s), %d clip(s), loaded 1 from %s"
+        % (len(closure.nodes), closure.clip_count, bank.identity.split(":")[-1])
+    )
+
+
+def check_previews(corpus: Path) -> None:
+    """Materials and textures carry no scene, so opening one means building something."""
+    operators = importlib.import_module(ARGS.module + ".ui.operators")
+
+    clear()
+    ok, message = operators.preview_texture(bpy.context, corpus, "vtmb:texture:brick/aspdra")
+    assert ok, message
+    assert any("elysium_texture" in image for image in bpy.data.images), "no image was made"
+
+    ok, message = operators.preview_material(
+        bpy.context, corpus, "vtmb:material:glass/breaksurf/break_glass_1"
+    )
+    assert ok, message
+    surfaces = [o for o in bpy.data.objects if o.type == "MESH" and o.data.materials]
+    assert surfaces, "a material preview needs a surface to be seen on"
+    print("previews ok: %s" % message)
+
+
 def main() -> None:
     global ARGS
     ARGS = parse_args()
@@ -167,6 +233,8 @@ def main() -> None:
     check_data_only_seams(corpus)
     check_materials_and_textures(corpus)
     check_clip_filter(corpus)
+    check_bank_loading(corpus)
+    check_previews(corpus)
     print("ALL CHECKS PASSED")
 
 

@@ -182,6 +182,38 @@ class ClosureTests(unittest.TestCase):
         self.assertEqual({node.depth for node in closure.nodes}, {1, 2, 3})
 
 
+class ClipListingTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._scratch = tempfile.TemporaryDirectory()
+        self.root = Path(self._scratch.name)
+        self.addCleanup(self._scratch.cleanup)
+
+    def test_clips_come_back_in_file_order(self) -> None:
+        # Names carry the source index, which is what the import filter matches on.
+        support.write_corpus(
+            self.root,
+            {
+                "characters/shared/frenzy.glb": support.character_unit(
+                    "vtmb:character-body:shared/frenzy", animations=3
+                )
+            },
+        )
+        self.assertEqual(
+            banks.clip_names("vtmb:animation-bank:shared/frenzy", self.root),
+            ["0:clip", "1:clip", "2:clip"],
+        )
+
+    def test_a_bank_with_no_clips_lists_none(self) -> None:
+        support.write_corpus(
+            self.root,
+            {"characters/shared/stub.glb": support.character_unit("vtmb:character-body:shared/stub")},
+        )
+        self.assertEqual(banks.clip_names("vtmb:animation-bank:shared/stub", self.root), [])
+
+    def test_a_bank_with_no_file_lists_none_rather_than_raising(self) -> None:
+        self.assertEqual(banks.clip_names("vtmb:animation-bank:shared/gone", self.root), [])
+
+
 class SkeletonJoinTests(unittest.TestCase):
     def test_bone_names_come_back_in_declared_order(self) -> None:
         # Bank and body declare their own bone tables, so name order is the only join.

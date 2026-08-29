@@ -17,7 +17,7 @@ from bpy.props import BoolProperty, CollectionProperty, EnumProperty, StringProp
 from bpy_extras.io_utils import ImportHelper
 
 from .. import prefs
-from ..adapters import hooks, materials
+from ..adapters import hooks, images, materials
 from ..core import report
 
 CLIP_MODES = (
@@ -167,6 +167,63 @@ class ELYSIUM_OT_corpus_report(bpy.types.Operator):
             % (sum(result.files.values()), len(result.findings), result.seconds),
         )
         return {"FINISHED"}
+
+
+def preview_texture(context: bpy.types.Context, root: Path, identity: str) -> tuple[bool, str]:
+    """Decode a texture unit into an image, and show it if an editor is open.
+
+    A texture unit has no scene to import, so the reviewable product is the image
+    itself.
+    """
+    cache = images.TextureCache(root)
+    decoded = cache.get(identity, non_color=False)
+    if decoded is None or decoded.image is None:
+        return False, "%s could not be decoded" % identity
+
+    for area in context.screen.areas:
+        if area.type == "IMAGE_EDITOR":
+            area.spaces.active.image = decoded.image
+            break
+    return True, "%s: %s" % (identity.split(":", 2)[-1], decoded.note)
+
+
+def preview_material(context: bpy.types.Context, root: Path, identity: str) -> tuple[bool, str]:
+    """Build a material unit onto a plane, so its shader can be looked at.
+
+    A material unit carries one placeholder core material and no geometry. Giving it a
+    surface is the only way to see what the reconstruction actually does.
+    """
+    stem = identity.split(":", 2)[-1]
+    material = bpy.data.materials.new(stem)
+    material[hooks.MATERIAL_REFERENCE_PROPERTY] = identity
+
+    status = materials.rebuild(material, root, images.TextureCache(root))
+    if status == "missing":
+        bpy.data.materials.remove(material)
+        return False, "%s names no exported unit" % identity
+
+    mesh = bpy.data.meshes.new(stem)
+    mesh.from_pydata(
+        [(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], [], [(0, 1, 2, 3)]
+    )
+    layer = mesh.uv_layers.new()
+    for position, coordinate in enumerate([(0, 0), (1, 0), (1, 1), (0, 1)]):
+        layer.data[position].uv = coordinate
+    mesh.update()
+    mesh.materials.append(material)
+
+    obj = bpy.data.objects.new(stem, mesh)
+    obj[hooks.MARKER_PROPERTY] = True
+    context.scene.collection.objects.link(obj)
+
+    unreproduced = json.loads(material.get(materials.APPROXIMATION_PROPERTY, "[]"))
+    if status == "sentinel":
+        return True, "%s names no VMT; showing the engine error checker" % stem
+    return True, "%s: %s, %d parameter(s) not reproduced" % (
+        stem,
+        material.get(materials.SHADER_PROPERTY, "?"),
+        len(unreproduced),
+    )
 
 
 def _menu_import(self, context: bpy.types.Context) -> None:

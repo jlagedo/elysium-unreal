@@ -120,6 +120,22 @@ def closure(document: dict, root: str | Path, *, max_depth: int = 16) -> Closure
     return Closure(root=identity, nodes=tuple(nodes))
 
 
+def clip_names(identity: str, root: str | Path) -> list[str]:
+    """The clips one bank declares, in file order.
+
+    Names carry the source index (`0:npc_run_0`), which is what the clip filter matches
+    on and what a reviewer sees in the list.
+    """
+    path = ids.resolve(identity, root)
+    if path is None or not path.is_file():
+        return []
+    document = glb.read_json(path)
+    return [
+        animation.get("name", str(position))
+        for position, animation in enumerate(document.get("animations") or [])
+    ]
+
+
 def bone_names(document: dict) -> tuple[str, ...]:
     """Bone names in MDL order, the only key that joins a bank to a body.
 

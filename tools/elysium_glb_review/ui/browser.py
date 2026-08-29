@@ -172,17 +172,26 @@ class ELYSIUM_OT_refresh_index(bpy.types.Operator):
         return {"FINISHED"}
 
 
+#: What "open" means for each seam. Only a character has a scene to import; a texture
+#: is an image and a material is a shader that needs a surface to be seen on.
+OPENABLE = {
+    "characters": "Import",
+    "textures": "Show Image",
+    "materials": "Preview on a Plane",
+}
+
+
 class ELYSIUM_OT_import_selected(bpy.types.Operator):
-    """Import the highlighted unit."""
+    """Open the highlighted unit in whatever way its seam allows."""
 
     bl_idname = "elysium.import_selected"
-    bl_label = "Import Selected"
+    bl_label = "Open Selected"
     bl_options = {"REGISTER", "UNDO"}
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
         entry = _active(context)
-        return entry is not None and entry.seam == "characters"
+        return entry is not None and entry.seam in OPENABLE
 
     def execute(self, context: bpy.types.Context):
         entry = _active(context)
@@ -195,9 +204,14 @@ class ELYSIUM_OT_import_selected(bpy.types.Operator):
         window = context.window
         window.cursor_set("WAIT")
         try:
-            ok, message = operators.import_unit(
-                context, root / entry.relative, clips=scene.elysium_clips
-            )
+            if entry.seam == "characters":
+                ok, message = operators.import_unit(
+                    context, root / entry.relative, clips=scene.elysium_clips
+                )
+            elif entry.seam == "textures":
+                ok, message = operators.preview_texture(context, root, entry.identity)
+            else:
+                ok, message = operators.preview_material(context, root, entry.identity)
         finally:
             window.cursor_set("DEFAULT")
         self.report({"INFO"} if ok else {"ERROR"}, message)
@@ -239,10 +253,12 @@ class ELYSIUM_PT_browser(bpy.types.Panel):
         if entry is None:
             return
 
-        if entry.seam == "characters":
+        action = OPENABLE.get(entry.seam)
+        if action:
             column = layout.column(align=True)
-            column.prop(scene, "elysium_clips", text="")
-            column.operator("elysium.import_selected", icon="IMPORT")
+            if entry.seam == "characters":
+                column.prop(scene, "elysium_clips", text="")
+            column.operator("elysium.import_selected", text=action, icon="IMPORT")
 
         detail = _details.get(entry.identity)
         if detail is None:
