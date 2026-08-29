@@ -8,14 +8,14 @@ import struct
 import tempfile
 import unittest
 
+import pytest
+
 from elysium_pipeline.exporters import material_glb
 from elysium_pipeline.formats.material_glb import decode_material
 from elysium_pipeline.formats.material_glb import lexer
 from elysium_pipeline.formats.material_glb.model import MATERIAL_EXTENSION
 from elysium_pipeline.formats.material_glb.source import MaterialSourceClosure, SourceMember
 from elysium_pipeline.validation import material_glb as validation
-import pytest
-
 SIMPLE = b'"VertexLitGeneric"\r\n{\r\n\t"$basetexture" "models/teeth"\r\n}\r\n'
 #: A family whose selector is transcribed from the binary, so it resolves to a program.
 RESOLVED = b'"LightmappedGeneric"\r\n{\r\n\t"$basetexture" "models/teeth"\r\n}\r\n'

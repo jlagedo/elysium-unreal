@@ -8,7 +8,6 @@ exported. All three appear here.
 from __future__ import annotations
 
 import tempfile
-import unittest
 from pathlib import Path
 
 from core import banks, glb

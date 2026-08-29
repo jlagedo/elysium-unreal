@@ -12,9 +12,9 @@ import tempfile
 import unittest
 from unittest import mock
 
-from elysium_pipeline.formats import vpk
 import pytest
 
+from elysium_pipeline.formats import vpk
 
 def pack_bytes(files, footer=None):
     """One synthetic pack: concatenated payloads, the entry table, then a footer whose

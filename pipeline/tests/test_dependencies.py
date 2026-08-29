@@ -6,9 +6,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from elysium_pipeline import dependencies
 import pytest
 
+from elysium_pipeline import dependencies
 
 def test_managed_content_hash_excludes_marker_and_build_products() -> None:
     with tempfile.TemporaryDirectory() as temporary:

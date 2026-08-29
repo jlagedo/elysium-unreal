@@ -5,14 +5,13 @@ from __future__ import annotations
 import json
 import struct
 import tempfile
-import unittest
 from pathlib import Path
+
+import pytest
 
 from core import glb
 
 from . import support
-import pytest
-
 
 def _write(root: Path, payload: bytes, name: str = "unit.glb") -> Path:
     path = root / name
@@ -62,35 +61,38 @@ def test_rejects_a_document_with_no_json_chunk(tmp_path: Path) -> None:
         glb.read(path)
 
 
-class BufferViewTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.binary = bytes(range(64))
-        self.document = {
-            "bufferViews": [
-                {"buffer": 0, "byteOffset": 8, "byteLength": 16},
-                {"buffer": 0, "byteLength": 4},
-                {"buffer": 1, "byteOffset": 0, "byteLength": 4},
-                {"buffer": 0, "byteOffset": 60, "byteLength": 32},
-            ]
-        }
+BINARY = bytes(range(64))
+DOCUMENT = {
+    "bufferViews": [
+        {"buffer": 0, "byteOffset": 8, "byteLength": 16},
+        {"buffer": 0, "byteLength": 4},
+        {"buffer": 1, "byteOffset": 0, "byteLength": 4},
+        {"buffer": 0, "byteOffset": 60, "byteLength": 32},
+    ]
+}
 
-    def test_slices_at_the_declared_offset(self) -> None:
-        assert glb.buffer_view_bytes(self.document, self.binary, 0) == self.binary[8:24]
 
-    def test_byte_offset_defaults_to_zero(self) -> None:
-        assert glb.buffer_view_bytes(self.document, self.binary, 1) == self.binary[0:4]
+def test_slices_at_the_declared_offset() -> None:
+    assert glb.buffer_view_bytes(DOCUMENT, BINARY, 0) == BINARY[8:24]
 
-    def test_rejects_a_view_into_a_buffer_that_is_not_the_bin_chunk(self) -> None:
-        with pytest.raises(glb.GlbError):
-            glb.buffer_view_bytes(self.document, self.binary, 2)
 
-    def test_rejects_a_view_that_runs_past_the_binary(self) -> None:
-        with pytest.raises(glb.GlbError):
-            glb.buffer_view_bytes(self.document, self.binary, 3)
+def test_byte_offset_defaults_to_zero() -> None:
+    assert glb.buffer_view_bytes(DOCUMENT, BINARY, 1) == BINARY[0:4]
 
-    def test_rejects_a_view_that_does_not_exist(self) -> None:
-        with pytest.raises(glb.GlbError):
-            glb.buffer_view_bytes(self.document, self.binary, 9)
+
+def test_rejects_a_view_into_a_buffer_that_is_not_the_bin_chunk() -> None:
+    with pytest.raises(glb.GlbError):
+        glb.buffer_view_bytes(DOCUMENT, BINARY, 2)
+
+
+def test_rejects_a_view_that_runs_past_the_binary() -> None:
+    with pytest.raises(glb.GlbError):
+        glb.buffer_view_bytes(DOCUMENT, BINARY, 3)
+
+
+def test_rejects_a_view_that_does_not_exist() -> None:
+    with pytest.raises(glb.GlbError):
+        glb.buffer_view_bytes(DOCUMENT, BINARY, 9)
 
 
 def test_json_chunk_padding_does_not_break_parsing() -> None:

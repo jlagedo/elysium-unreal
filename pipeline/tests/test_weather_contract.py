@@ -5,10 +5,10 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from elysium_pipeline import shared_corpus
-from elysium_pipeline.formats import particles, tex_to_png, vmt, weather
 import pytest
 
+from elysium_pipeline import shared_corpus
+from elysium_pipeline.formats import particles, tex_to_png, vmt, weather
 
 def wet_vmt(scales=(0.6, 0.6, 0.6), *, comments=False):
     blocks = []

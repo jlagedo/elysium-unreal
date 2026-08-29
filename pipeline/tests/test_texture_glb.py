@@ -8,6 +8,8 @@ from pathlib import Path
 import unittest
 import zlib
 
+import pytest
+
 from elysium_pipeline.exporters import texture_glb
 from elysium_pipeline.formats.texture_glb import decode_texture
 from elysium_pipeline.formats.texture_glb.decode import (
@@ -18,8 +20,6 @@ from elysium_pipeline.formats.texture_glb.decode import (
 )
 from elysium_pipeline.formats.texture_glb.source import SourceMember, TextureSourceClosure
 from elysium_pipeline.validation import texture_glb as validation
-import pytest
-
 
 def _source(role, path, data):
     return SourceMember(role, path, data, {"kind": "synthetic"})

@@ -10,11 +10,11 @@ from __future__ import annotations
 import math
 import unittest
 
+import pytest
+
 from elysium_pipeline.formats import mdl_skel
 from elysium_pipeline.formats.mdl_skel import Bone
 from elysium_pipeline.validation import retail_compositor as rc
-import pytest
-
 
 def _axis_angle(axis, degrees):
     x, y, z = axis

@@ -2,35 +2,37 @@
 
 from __future__ import annotations
 
-import unittest
+import pytest
 
 from core import seams
 
 from . import support
 
 
-class ExtensionDiscoveryTests(unittest.TestCase):
-    def test_each_seam_is_recognised_by_its_root_extension(self) -> None:
-        cases = {
-            seams.CHARACTER_EXTENSION: support.character_unit("vtmb:character-body:a/b"),
-            seams.MATERIAL_EXTENSION: support.material_unit("vtmb:material:a/b"),
-            seams.TEXTURE_EXTENSION: support.texture_unit(),
-            seams.SURFACE_PROPERTY_EXTENSION: support.surface_property_unit("brick"),
-        }
-        for expected, payload in cases.items():
-            with self.subTest(extension=expected):
-                document = support.document_of(payload)
-                name, block = seams.extension_of(document)
-                assert name == expected
-                assert isinstance(block, dict)
+@pytest.mark.parametrize(
+    ("expected", "payload"),
+    [
+        (seams.CHARACTER_EXTENSION, support.character_unit("vtmb:character-body:a/b")),
+        (seams.MATERIAL_EXTENSION, support.material_unit("vtmb:material:a/b")),
+        (seams.TEXTURE_EXTENSION, support.texture_unit()),
+        (seams.SURFACE_PROPERTY_EXTENSION, support.surface_property_unit("brick")),
+    ],
+)
+def test_each_seam_is_recognised_by_its_root_extension(expected: str, payload: bytes) -> None:
+    document = support.document_of(payload)
+    name, block = seams.extension_of(document)
+    assert name == expected
+    assert isinstance(block, dict)
 
-    def test_a_document_with_no_seam_extension_is_reported_as_such(self) -> None:
-        assert seams.extension_of({"asset": {"version": "2.0"}}) is None
-        assert seams.asset_id({"asset": {"version": "2.0"}}) is None
 
-    def test_the_identity_comes_from_the_extension_not_the_filename(self) -> None:
-        document = support.document_of(support.material_unit("vtmb:material:brick/aspdra"))
-        assert seams.asset_id(document) == "vtmb:material:brick/aspdra"
+def test_a_document_with_no_seam_extension_is_reported_as_such() -> None:
+    assert seams.extension_of({"asset": {"version": "2.0"}}) is None
+    assert seams.asset_id({"asset": {"version": "2.0"}}) is None
+
+
+def test_the_identity_comes_from_the_extension_not_the_filename() -> None:
+    document = support.document_of(support.material_unit("vtmb:material:brick/aspdra"))
+    assert seams.asset_id(document) == "vtmb:material:brick/aspdra"
 
 
 def test_a_character_names_its_materials_through_the_reference_extension() -> None:
@@ -41,7 +43,8 @@ def test_a_character_names_its_materials_through_the_reference_extension() -> No
         )
     )
     references = seams.material_references(document)
-    assert [reference.identity for reference in references] == ["vtmb:material:a/one", "vtmb:material:a/two"]
+    identities = [reference.identity for reference in references]
+    assert identities == ["vtmb:material:a/one", "vtmb:material:a/two"]
     assert references[0].origin == "materials[0]"
 
 
@@ -99,16 +102,14 @@ def test_export_time_resolution_is_carried_through() -> None:
     assert not seams.texture_bindings(payload)[0].resolved
 
 
-class ColorSpaceTests(unittest.TestCase):
-    def test_data_parameters_are_recognised_as_non_colour(self) -> None:
-        for parameter in ("$bumpmap", "$NormalMap", "  $envmapmask "):
-            with self.subTest(parameter=parameter):
-                assert seams.is_non_color(parameter)
+@pytest.mark.parametrize("parameter", ["$bumpmap", "$NormalMap", "  $envmapmask "])
+def test_data_parameters_are_recognised_as_non_colour(parameter: str) -> None:
+    assert seams.is_non_color(parameter)
 
-    def test_colour_parameters_are_not(self) -> None:
-        for parameter in ("$basetexture", "$iris", None, ""):
-            with self.subTest(parameter=parameter):
-                assert not seams.is_non_color(parameter)
+
+@pytest.mark.parametrize("parameter", ["$basetexture", "$iris", None, ""])
+def test_colour_parameters_are_not(parameter: str | None) -> None:
+    assert not seams.is_non_color(parameter)
 
 
 def test_a_unit_that_accounted_for_everything_is_clean() -> None:

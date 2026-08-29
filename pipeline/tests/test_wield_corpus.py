@@ -16,11 +16,11 @@ import tempfile
 import unittest
 from unittest import mock
 
+import pytest
+
 from elysium_pipeline import wield_corpus as W
 from elysium_pipeline.formats import install, mdl, mdl_skel
 from elysium_pipeline.formats.tex_to_png import FMT_BGR888, FMT_DXT1
-import pytest
-
 
 IDENTITY_Q = (0.0, 0.0, 0.0, 1.0)
 

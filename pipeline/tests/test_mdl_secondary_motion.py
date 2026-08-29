@@ -3,9 +3,9 @@ import struct
 from types import SimpleNamespace
 import unittest
 
-from elysium_pipeline.formats import mdl_secondary_motion as motion
 import pytest
 
+from elysium_pipeline.formats import mdl_secondary_motion as motion
 
 def _model(records):
     blob = bytearray(512 + len(records) * motion.CHAIN_STRIDE)

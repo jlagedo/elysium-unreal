@@ -6,9 +6,9 @@ import sys
 import tempfile
 import unittest
 
-from elysium_pipeline.process import ProcessTimeout, run_process
 import pytest
 
+from elysium_pipeline.process import ProcessTimeout, run_process
 
 class _CountingLog(io.StringIO):
     """A log mirror that counts its flushes."""

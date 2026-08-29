@@ -9,6 +9,8 @@ import time
 import unittest
 from unittest import mock
 
+import pytest
+
 from elysium_pipeline.tasking import (
     ContentDigestCache,
     Manifest,
@@ -17,8 +19,6 @@ from elysium_pipeline.tasking import (
     TaskGraph,
     fingerprint_content,
 )
-import pytest
-
 
 def test_content_fingerprint_ignores_identical_rewrite_and_detects_new_bytes() -> None:
     with tempfile.TemporaryDirectory() as temporary:

@@ -8,52 +8,56 @@ and reinterpreted by something else tomorrow.
 from __future__ import annotations
 
 import struct
-import unittest
 
-from core import dds
 import pytest
 
+from core import dds
 
 def field(header: bytes, offset: int) -> int:
     return struct.unpack_from("<I", header, offset)[0]
 
 
-class HeaderLayoutTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.payload = b"\xaa" * 32
-        self.header = dds.build(self.payload, 8, 4, b"DXT1")
+PAYLOAD = b"\xaa" * 32
+HEADER = dds.build(PAYLOAD, 8, 4, b"DXT1")
 
-    def test_magic_and_structure_sizes_are_the_declared_constants(self) -> None:
-        assert self.header[0:4] == b"DDS "
-        assert field(self.header, 4) == 124
-        assert field(self.header, 76) == 32
-        assert len(self.header) == dds.HEADER_SIZE + len(self.payload)
 
-    def test_width_and_height_are_not_transposed(self) -> None:
-        # Height precedes width in a DDS header and reads naturally the other way.
-        assert field(self.header, 12) == 4
-        assert field(self.header, 16) == 8
+def test_magic_and_structure_sizes_are_the_declared_constants() -> None:
+    assert HEADER[0:4] == b"DDS "
+    assert field(HEADER, 4) == 124
+    assert field(HEADER, 76) == 32
+    assert len(HEADER) == dds.HEADER_SIZE + len(PAYLOAD)
 
-    def test_compressed_surfaces_declare_linear_size_not_pitch(self) -> None:
-        # Pitch describes a scanline, which a block-compressed surface does not have.
-        flags = field(self.header, 8)
-        assert flags & dds.DDSD_LINEARSIZE
-        assert not flags & 0x8, "DDSD_PITCH must not be set on a block surface"
-        assert flags == dds.DDSD_CAPS | dds.DDSD_HEIGHT | dds.DDSD_WIDTH | dds.DDSD_PIXELFORMAT | dds.DDSD_LINEARSIZE
 
-    def test_pixel_format_declares_a_fourcc(self) -> None:
-        assert field(self.header, 80) == dds.DDPF_FOURCC
-        assert self.header[84:88] == b"DXT1"
+def test_width_and_height_are_not_transposed() -> None:
+    # Height precedes width in a DDS header and reads naturally the other way.
+    assert field(HEADER, 12) == 4
+    assert field(HEADER, 16) == 8
 
-    def test_linear_size_defaults_to_the_whole_payload(self) -> None:
-        assert field(self.header, 20) == len(self.payload)
 
-    def test_payload_follows_the_header_unmodified(self) -> None:
-        assert self.header[dds.HEADER_SIZE :] == self.payload
+def test_compressed_surfaces_declare_linear_size_not_pitch() -> None:
+    # Pitch describes a scanline, which a block-compressed surface does not have.
+    flags = field(HEADER, 8)
+    assert flags & dds.DDSD_LINEARSIZE
+    assert not flags & 0x8, "DDSD_PITCH must not be set on a block surface"
+    assert flags == dds.DDSD_CAPS | dds.DDSD_HEIGHT | dds.DDSD_WIDTH | dds.DDSD_PIXELFORMAT | dds.DDSD_LINEARSIZE
 
-    def test_rejects_a_fourcc_that_is_not_four_bytes(self) -> None:
-        with pytest.raises(ValueError):
-            dds.build(self.payload, 8, 4, b"DXT")
+
+def test_pixel_format_declares_a_fourcc() -> None:
+    assert field(HEADER, 80) == dds.DDPF_FOURCC
+    assert HEADER[84:88] == b"DXT1"
+
+
+def test_linear_size_defaults_to_the_whole_payload() -> None:
+    assert field(HEADER, 20) == len(PAYLOAD)
+
+
+def test_payload_follows_the_header_unmodified() -> None:
+    assert HEADER[dds.HEADER_SIZE :] == PAYLOAD
+
+
+def test_rejects_a_fourcc_that_is_not_four_bytes() -> None:
+    with pytest.raises(ValueError):
+        dds.build(PAYLOAD, 8, 4, b"DXT")
 
 
 def test_a_lone_level_declares_neither_mipmaps_nor_complexity() -> None:
@@ -87,6 +91,9 @@ def test_a_cube_declares_every_face_and_complexity() -> None:
     assert field(header, 112) == dds.DDSCAPS2_CUBEMAP_ALL
     assert field(header, 112) & dds.DDSCAPS2_CUBEMAP
 
+
+# Bc1AlphaTests
+# BC1 carries punch-through alpha in the mode where color0 <= color1.
 
 # Bc1AlphaTests
 # BC1 carries punch-through alpha in the mode where color0 <= color1.

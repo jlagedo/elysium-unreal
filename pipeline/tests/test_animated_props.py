@@ -13,14 +13,14 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
+import pytest
+
 from elysium_pipeline.exporters import npc_export
 from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 from elysium_pipeline.formats import mdl_skel
 from elysium_pipeline import placed_models
 from elysium_pipeline.exporters import source_warnings
 from elysium_pipeline import export_manager
-import pytest
-
 
 def _run(valid_keys, total, stored=None):
     """One `mstudioanimvalue_t` run: byte valid, byte total, then the int16 keys.

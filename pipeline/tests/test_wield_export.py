@@ -20,12 +20,12 @@ import zlib
 from pathlib import Path
 from unittest import mock
 
+import pytest
+
 from elysium_pipeline import wield_corpus as W
 from elysium_pipeline.exporters import UE_extract_wield as export
 from elysium_pipeline.formats import bsp, eskm, mdl, mdl_skel
 from elysium_pipeline.formats.tex_to_png import FMT_BGR888
-import pytest
-
 IDENTITY_Q = (0.0, 0.0, 0.0, 1.0)
 
 

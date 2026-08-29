@@ -7,11 +7,11 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
+import pytest
+
 from elysium_pipeline import export_manager, shared_corpus, wield_corpus
 from elysium_pipeline.placed_models import PlacedModelUse
 from elysium_pipeline.tasking import Manifest, TaskFailure, TaskResult
-import pytest
-
 
 def _config(temporary: str):
     repo = Path(temporary) / "repo"

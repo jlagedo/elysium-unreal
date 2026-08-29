@@ -9,7 +9,6 @@ missing references the real corpus contains.
 from __future__ import annotations
 
 import tempfile
-import unittest
 from pathlib import Path
 
 from core import report

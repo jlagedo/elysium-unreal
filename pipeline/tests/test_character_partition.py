@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import unittest
 
+import pytest
+
 from elysium_pipeline import character_partition as cp
 from elysium_pipeline import character_recipes
 from elysium_pipeline.formats import eskm
-import pytest
-
 
 # Synthetic bone trees. Game-independent by construction, per pipeline/CLAUDE.md: these are the
 # SHAPES the partition reasons about, not any model's actual rig.

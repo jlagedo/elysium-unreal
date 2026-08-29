@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import unittest
 
-from elysium_pipeline.unreal import _take_options
 import pytest
 
+from elysium_pipeline.unreal import _take_options
 
 # HarnessOptionTests
 # A switch left in the positional list becomes an argument.

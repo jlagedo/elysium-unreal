@@ -26,10 +26,10 @@ import tempfile
 import unittest
 from unittest import mock
 
-from elysium_pipeline.exporters import UE_mdl_skeletal as UEK, npc_export
-from elysium_pipeline.formats import mdl_skel
 import pytest
 
+from elysium_pipeline.exporters import UE_mdl_skeletal as UEK, npc_export
+from elysium_pipeline.formats import mdl_skel
 SEQ_STRIDE = 764
 ANIM_STRIDE = 72
 BONE_STRIDE = 160

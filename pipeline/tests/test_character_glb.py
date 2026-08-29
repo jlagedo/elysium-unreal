@@ -6,6 +6,8 @@ import struct
 import tempfile
 import unittest
 
+import pytest
+
 from elysium_pipeline.formats import mdl_cloth
 from elysium_pipeline.exporters import character_glb
 from elysium_pipeline.formats.character_glb import coverage, expressions, physics, vtx
@@ -27,8 +29,6 @@ from elysium_pipeline.formats.character_glb.source import (
     load_source_closure,
 )
 from elysium_pipeline.validation import character_glb as validation
-import pytest
-
 
 def _source(role: str = "mdl") -> SourceIdentity:
     payload = b"synthetic-source"

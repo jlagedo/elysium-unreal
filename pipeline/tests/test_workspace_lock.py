@@ -9,6 +9,8 @@ from unittest import mock
 
 import psutil
 
+import pytest
+
 from elysium_pipeline import workspace_lock
 from elysium_pipeline.workspace_lock import (
     WorkspaceBusy,
@@ -17,8 +19,6 @@ from elysium_pipeline.workspace_lock import (
     active_unreal_processes,
     assert_project_idle,
 )
-import pytest
-
 
 def test_lease_is_exclusive_and_process_release_clears_the_owner() -> None:
     with tempfile.TemporaryDirectory() as temporary:

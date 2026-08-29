@@ -12,12 +12,12 @@ from unittest import mock
 
 from PIL import Image
 
+import pytest
+
 from elysium_pipeline.formats import bsp, mdl, tex_to_png, vmt
 from elysium_pipeline.formats.glass import derive_normal, is_glass
 from elysium_pipeline import paths, shared_corpus, unreal as unreal_driver
 from elysium_pipeline.validation.png_alpha import alpha_range
-import pytest
-
 
 REPO = Path(__file__).resolve().parents[2]
 POLICY_SPEC = importlib.util.spec_from_file_location(

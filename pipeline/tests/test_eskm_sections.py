@@ -9,9 +9,9 @@ import tempfile
 import struct
 import unittest
 
-from elysium_pipeline.formats import eskm
 import pytest
 
+from elysium_pipeline.formats import eskm
 
 def container_bytes(sections, magic=eskm.MAGIC, version=eskm.VERSION):
     """One synthetic container: the 16-byte header, the section directory, then the

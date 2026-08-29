@@ -6,6 +6,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
+import pytest
+
 from elysium_pipeline.exporters import surface_property_glb
 from elysium_pipeline.formats.surface_property_glb import (
     SURFACE_PROPERTY_EXTENSION,
@@ -14,8 +16,6 @@ from elysium_pipeline.formats.surface_property_glb import (
 )
 from elysium_pipeline.formats.surface_property_glb.decode import decode_surface_property
 from elysium_pipeline.validation import surface_property_glb as validation
-import pytest
-
 TABLE = (
     b'// the table\r\n'
     b'"default"\r\n{\r\n'

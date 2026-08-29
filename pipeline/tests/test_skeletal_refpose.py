@@ -25,10 +25,10 @@ import unittest
 
 import numpy as np
 
-from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
-from elysium_pipeline.formats import mdl_skel
 import pytest
 
+from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
+from elysium_pipeline.formats import mdl_skel
 IDENTITY_Q = (0.0, 0.0, 0.0, 1.0)
 #: A 90-degree rotation about Z, used wherever a test needs a root whose orientation actually
 #: moves a reparented child's local transform -- an identity root would let a reparenting bug

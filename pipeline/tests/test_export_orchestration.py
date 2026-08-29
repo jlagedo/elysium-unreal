@@ -3,10 +3,10 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from elysium_pipeline import export_manager, wield_corpus
-from elysium_pipeline.exporters import export_all
 import pytest
 
+from elysium_pipeline import export_manager, wield_corpus
+from elysium_pipeline.exporters import export_all
 
 class ExportProfileTests(unittest.TestCase):
     def test_texture_glb_corpus_admits_each_tth_identity_once(self) -> None:

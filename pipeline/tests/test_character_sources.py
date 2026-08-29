@@ -15,13 +15,13 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
+import pytest
+
 from elysium_pipeline import character_sweep, export_manager, workers
 from elysium_pipeline.formats import eskm, install
 from elysium_pipeline.tasking import Manifest
 
 from pipeline.tests.test_eskm_sections import container_bytes
-import pytest
-
 
 def _string(value: str) -> bytes:
     encoded = value.encode("utf-8")

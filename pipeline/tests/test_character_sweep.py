@@ -6,10 +6,10 @@ import tempfile
 import unittest
 from unittest import mock
 
-from elysium_pipeline import character_partition as cp, character_sweep
-from elysium_pipeline.export_manager import resolve_character_slice
 import pytest
 
+from elysium_pipeline import character_partition as cp, character_sweep
+from elysium_pipeline.export_manager import resolve_character_slice
 
 TREE = {"root": "", "spine": "root"}
 # Disagrees with BANK_A about tail's parent, so the two banks cannot share a skeleton and the
