@@ -8,6 +8,7 @@ import pytest
 
 from elysium_pipeline.tasking import Task, TaskFailure, TaskGraph
 
+
 def test_dependency_order_and_deduplication_are_deterministic() -> None:
     calls: list[str] = []
     graph = TaskGraph(

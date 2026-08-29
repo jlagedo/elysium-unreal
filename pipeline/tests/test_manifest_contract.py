@@ -20,6 +20,7 @@ from elysium_pipeline.tasking import (
     fingerprint_content,
 )
 
+
 def test_content_fingerprint_ignores_identical_rewrite_and_detects_new_bytes() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary)

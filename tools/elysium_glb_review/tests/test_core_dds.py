@@ -13,6 +13,7 @@ import pytest
 
 from core import dds
 
+
 def field(header: bytes, offset: int) -> int:
     return struct.unpack_from("<I", header, offset)[0]
 

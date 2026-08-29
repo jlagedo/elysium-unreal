@@ -10,6 +10,7 @@ import pytest
 from elysium_pipeline import unreal
 from elysium_pipeline.unreal import TEST_ABSTENTION_TOKEN, summarize_test_report
 
+
 def summarize(tests: list[dict]) -> dict:
     with TemporaryDirectory() as temp:
         report = Path(temp)

@@ -20,6 +20,7 @@ from elysium_pipeline.workspace_lock import (
     assert_project_idle,
 )
 
+
 def test_lease_is_exclusive_and_process_release_clears_the_owner() -> None:
     with tempfile.TemporaryDirectory() as temporary:
         root = Path(temporary) / "exports"

@@ -23,6 +23,7 @@ from elysium_pipeline.tasking import Manifest
 
 from pipeline.tests.test_eskm_sections import container_bytes
 
+
 def _string(value: str) -> bytes:
     encoded = value.encode("utf-8")
     return struct.pack("<I", len(encoded)) + encoded

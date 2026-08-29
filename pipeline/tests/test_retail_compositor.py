@@ -16,6 +16,7 @@ from elysium_pipeline.formats import mdl_skel
 from elysium_pipeline.formats.mdl_skel import Bone
 from elysium_pipeline.validation import retail_compositor as rc
 
+
 def _axis_angle(axis, degrees):
     x, y, z = axis
     n = math.sqrt(x * x + y * y + z * z)

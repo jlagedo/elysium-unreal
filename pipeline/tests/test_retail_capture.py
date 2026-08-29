@@ -35,6 +35,7 @@ POSE_PARAM_STRIDE = 20
 # declares them.
 CHANNEL_COUNT = 7
 
+
 def _matrix_3x4(
     position: tuple[float, float, float],
     quaternion: tuple[float, float, float, float],
@@ -46,6 +47,7 @@ def _matrix_3x4(
         2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y), position[2],
     )
 
+
 def _multiply_3x4(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float, ...]:
     out = []
     for row in range(3):
@@ -55,6 +57,7 @@ def _multiply_3x4(a: tuple[float, ...], b: tuple[float, ...]) -> tuple[float, ..
                 total += a[row * 4 + 3]
             out.append(total)
     return tuple(out)
+
 
 def _invert_rigid_3x4(matrix: tuple[float, ...]) -> tuple[float, ...]:
     out = [0.0] * 12
@@ -69,6 +72,7 @@ def _invert_rigid_3x4(matrix: tuple[float, ...]) -> tuple[float, ...]:
 
 IDENTITY_3X4 = (1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
 
+
 def _bone_spec(entry) -> tuple[str, int, tuple[float, ...], tuple[float, ...], int]:
     """Normalize a fixture bone entry.
 
@@ -80,6 +84,7 @@ def _bone_spec(entry) -> tuple[str, int, tuple[float, ...], tuple[float, ...], i
     quaternion = tuple(entry[3]) if len(entry) > 3 else (0.0, 0.0, 0.0, 1.0)
     flags = int(entry[4]) if len(entry) > 4 else 0
     return name, int(parent), position, quaternion, flags
+
 
 def _bind_world(bones) -> list[tuple[float, ...]]:
     """Bind-pose bone-to-model by the ordinary hierarchy.
@@ -101,6 +106,7 @@ def _bind_world(bones) -> list[tuple[float, ...]]:
         else:
             world.append(_multiply_3x4(world[parent], local))
     return world
+
 
 def _expected_world(
     bones,
@@ -151,6 +157,7 @@ def _expected_world(
             world.append(_multiply_3x4(world[parent], local))
     return world
 
+
 def _slerp_one(a, b, alpha):
     """Shortest-arc quaternion interpolation of two 4-tuples, by hand."""
     a = list(a)
@@ -172,6 +179,7 @@ def _slerp_one(a, b, alpha):
         ]
     norm = math.sqrt(sum(v * v for v in out)) or 1.0
     return tuple(v / norm for v in out)
+
 
 def _axis_interp_local(rule, world, bones):
     """The local a `ProcType == 1` table produces, by hand.
@@ -212,6 +220,7 @@ def _axis_interp_local(rule, world, bones):
         position = positions[picked[2]]
     return _matrix_3x4(position, quaternion)
 
+
 class Track:
     """One channel's RLE runs, as ``(total, keys)`` per run.
 
@@ -231,6 +240,7 @@ class Track:
             for key in keys:
                 blob += struct.pack("<h", key)
         return bytes(blob)
+
 
 class Grid:
     """One StudioSeqDesc's blend space, as the fixture writes it.
@@ -259,6 +269,7 @@ class Grid:
         self.numblends = (
             groupsize[0] * groupsize[1] if numblends is None else numblends
         )
+
 
 class Clip:
     """One StudioAnimDesc and the animation block it points at."""
@@ -313,6 +324,7 @@ DEFAULT_CLIPS = (
     ),
 )
 
+
 def _animation_section(bones: int, clips: tuple[Clip, ...]) -> bytearray:
     """The animdesc array followed by one animation block per clip.
 
@@ -343,6 +355,7 @@ def _animation_section(bones: int, clips: tuple[Clip, ...]) -> bytearray:
         struct.pack_into("<i", section, desc, len(section) - desc)
         section += clip.name.encode("ascii") + b"\0"
     return section
+
 
 def model_image(
     checksum: int,
@@ -516,6 +529,7 @@ def model_image(
 # rather than to a band.
 HALF = math.sqrt(0.5)
 
+
 def _bind_locals(bones):
     return [(spec[2], spec[3]) for spec in (_bone_spec(entry) for entry in bones)]
 
@@ -568,11 +582,13 @@ UNREAL_M = ((1.0, 0.0, 0.0), (0.0, -1.0, 0.0), (0.0, 0.0, 1.0))
 
 UNREAL_SCALE = 2.54
 
+
 def _raw_axis_interp(image: bytes, bone: int) -> bytes:
     """The 176-byte `mstudioaxisinterpbone_t` a bone record's `ProcIndex` points at."""
     record = struct.unpack_from("<i", image, 244)[0] + BONE_STRIDE * bone
     offset = record + struct.unpack_from("<i", image, record + 144)[0]
     return bytes(image[offset : offset + 176])
+
 
 def _decoded_axis_interp(raw: bytes):
     """A raw rule record as `_axis_interp_local` takes it.
@@ -585,6 +601,7 @@ def _decoded_axis_interp(raw: bytes):
     positions = [struct.unpack_from("<3f", raw, 8 + 12 * i) for i in range(6)]
     quaternions = [struct.unpack_from("<4f", raw, 80 + 16 * i) for i in range(6)]
     return control, axis, positions, quaternions
+
 
 def _to_basis_3x4(matrix: tuple[float, ...], basis, scale: float) -> tuple[float, ...]:
     """A Source-basis 3x4 in another basis.
@@ -610,6 +627,7 @@ def _to_basis_3x4(matrix: tuple[float, ...], basis, scale: float) -> tuple[float
     return tuple(
         value for row in range(3) for value in (*rotation[row], translation[row])
     )
+
 
 def _exported_axis_interp_local(rule, driver_axes, world, bones):
     """The local an exported rule produces, read out of the exported table alone.
@@ -687,6 +705,7 @@ POSE_PARAMETERS = (
     ("aim_yaw", 0, -45.0, 45.0, 0.0),
     ("aim_pitch", 0, -45.0, 45.0, 0.0),
 )
+
 
 def _image(grids, *, labels=("walk", "aim", "idle", "turn"), **kwargs):
     return model_image(
@@ -1003,6 +1022,7 @@ def test_a_zero_weight_record_decodes_to_zero_rather_than_to_a_pose() -> None:
     for position, quaternion in mdl_skel.read_anim(image, bones, alive, 1)[0]:
         assert quaternion != (0.0, 0.0, 0.0, 0.0)
     assert mdl_skel.read_anim(image, bones, alive, 1)[0][1][0] == bones[1].pos
+
 
 class ProceduralRuleExportTests(unittest.TestCase):
     """CAP7.1: the `ProcType == 1` rule table the model exporter carries out.

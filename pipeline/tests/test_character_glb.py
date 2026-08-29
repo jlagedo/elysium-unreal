@@ -30,6 +30,7 @@ from elysium_pipeline.formats.character_glb.source import (
 )
 from elysium_pipeline.validation import character_glb as validation
 
+
 def _source(role: str = "mdl") -> SourceIdentity:
     payload = b"synthetic-source"
     return SourceIdentity(

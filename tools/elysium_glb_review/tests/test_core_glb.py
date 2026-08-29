@@ -13,6 +13,7 @@ from core import glb
 
 from . import support
 
+
 def _write(root: Path, payload: bytes, name: str = "unit.glb") -> Path:
     path = root / name
     path.write_bytes(payload)

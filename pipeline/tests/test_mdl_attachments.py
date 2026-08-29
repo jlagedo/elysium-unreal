@@ -7,6 +7,7 @@ import pytest
 from elysium_pipeline.exporters import UE_mdl_skeletal
 from elysium_pipeline.formats import eskm, mdl_skel
 
+
 def _image(matrix=None):
     image = bytearray(560)
     struct.pack_into("<i", image, 240, 2)       # NumBones

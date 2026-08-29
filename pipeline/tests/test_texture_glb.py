@@ -21,6 +21,7 @@ from elysium_pipeline.formats.texture_glb.decode import (
 from elysium_pipeline.formats.texture_glb.source import SourceMember, TextureSourceClosure
 from elysium_pipeline.validation import texture_glb as validation
 
+
 def _source(role, path, data):
     return SourceMember(role, path, data, {"kind": "synthetic"})
 

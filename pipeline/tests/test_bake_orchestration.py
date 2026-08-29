@@ -13,6 +13,7 @@ from elysium_pipeline import export_manager, shared_corpus, wield_corpus
 from elysium_pipeline.placed_models import PlacedModelUse
 from elysium_pipeline.tasking import Manifest, TaskFailure, TaskResult
 
+
 def _config(temporary: str):
     repo = Path(temporary) / "repo"
     export = Path(temporary) / "exports"

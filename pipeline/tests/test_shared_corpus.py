@@ -7,6 +7,7 @@ import pytest
 from elysium_pipeline import shared_corpus as SC
 from elysium_pipeline.formats import mdl
 
+
 def test_texture_key_accepts_every_authored_spelling():
     for spelling in (
         "metal/metalox",

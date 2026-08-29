@@ -22,6 +22,7 @@ from elysium_pipeline import placed_models
 from elysium_pipeline.exporters import source_warnings
 from elysium_pipeline import export_manager
 
+
 def _run(valid_keys, total, stored=None):
     """One `mstudioanimvalue_t` run: byte valid, byte total, then the int16 keys.
 
@@ -318,6 +319,7 @@ def test_ensured_rest_forces_complete_bind_local_tracks() -> None:
             b"", [SimpleNamespace()], [clip], [0], 1, {}, ensure_labels=("idle",))
     assert count == 1
     assert forced == [[(True, True)]]
+
 
 def test_a_compact_one_bone_model_binds_every_vertex_to_its_bone() -> None:
     data = bytearray(244)

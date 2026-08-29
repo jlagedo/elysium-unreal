@@ -16,6 +16,7 @@ import pytest
 
 from elysium_pipeline.formats import vpk
 
+
 def pack_bytes(files, footer=None):
     """One synthetic pack: concatenated payloads, the entry table, then a footer whose
     u32 at n-5 points at the directory start (the observed retail layout)."""

@@ -10,6 +10,7 @@ import pytest
 from elysium_pipeline import clean
 from elysium_pipeline.workspace_lock import LOCK_FILE, OWNER_FILE
 
+
 def _layout(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     repo = root / "repo"
     game = root / "game"
