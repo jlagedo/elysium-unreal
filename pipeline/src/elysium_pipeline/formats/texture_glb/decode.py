@@ -214,14 +214,17 @@ def decode_texture(closure) -> TextureModel:
         per_image = image_size(mip_width, mip_height, info)
         source_level_sizes.append((mip_width, mip_height, per_image, per_image * frames * source_faces))
     expected_total = sum(row[3] for row in source_level_sizes)
-    declared_inline = min(declared_inline, image_mip_count)
-    declared_inline_bytes = sum(row[3] for row in source_level_sizes[:declared_inline])
+    # The header's own claim survives into `sourceFormat.declaredInlineMips` even where it is
+    # stale, so the unit restates what the source wrote; the clamped count is what the following
+    # extent arithmetic can actually index.
+    admitted_inline = min(declared_inline, image_mip_count)
+    declared_inline_bytes = sum(row[3] for row in source_level_sizes[:admitted_inline])
     meaningful_trailing = vtf_blob_length - header_size
     has_external_file = closure.ttz is not None and bool(closure.ttz.data)
     if not has_external_file and meaningful_trailing >= expected_total:
         actual_inline = image_mip_count
     else:
-        actual_inline = declared_inline
+        actual_inline = admitted_inline
         while actual_inline and sum(
             row[3] for row in source_level_sizes[:actual_inline]
         ) > meaningful_trailing:

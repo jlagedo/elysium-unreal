@@ -314,7 +314,8 @@ rule the consumer has to know.
 ### `omissions`
 
 Every source range that contributes no payload byte is named here with its evidence, as is every
-image the source declares but does not contain. Five roles occur:
+image the source declares but does not contain. Every row carries its `role` and a `reason` string
+naming why the range is omitted, plus the per-role fields below. Five roles occur:
 
 | Role | Meaning |
 |---|---|
@@ -380,7 +381,7 @@ the file's own extents:
   rest enters `omissions` and the ledger.
 - The declared low-resolution image is internally inconsistent, or the inflated TTZ carries image
   bytes ahead of the admitted chain. Those bytes contribute nothing to the payload and are counted
-  in `low-res-cpu-sample.externalDecodedBytes`.
+  in `low-res-cpu-sample.externalByteLength`.
 - The mip table's `ttz_prefix` column is stale or non-monotonic. Per-mip TTZ spans are used only
   when that column is monotonic, starts at 0 and ends at the declared meaningful length; otherwise
   the stream is claimed as one range.
@@ -462,14 +463,24 @@ safe.
 ## Validation
 
 Export-time validation receives the selected source members and runs before the destination is
-published. It re-reads the members' bytes, re-decodes the texture independently of the writer, and
-compares dimensions, source format, every admitted mip, face and frame, the decoded pixel bytes,
-the source identities and the whole KTX2 structure. Only then is the GLB written to a temporary
-sibling and atomically renamed over the destination.
+published. It re-reads the members' bytes, re-hashes them against the declared source identities,
+and verifies every range a `-zero` state claims really is zero. It then re-decodes the texture
+independently of the writer and compares the level count, the `vkFormat` and every level's decoded
+pixel bytes against the KTX2 payload — which covers each admitted mip, face and frame, since a
+level is the concatenation of its images. Only then is the GLB written to a temporary sibling and
+atomically renamed over the destination.
+
+The re-decode is a payload check, not a whole-extension check. `dimensions` and
+`sourceFormat.sourceFormatEnum` are held against the KTX2 payload's own extent and format, and
+each `mips` row against its level's digest; `sampling` and the `faces` rows are carried without a
+cross-check, because neither has a counterpart in the payload to disagree with.
 
 The standalone validator reads a published GLB with no install present and verifies the container,
 the chunk order, the scene-less core, the extension's presence and version, the identity prefix,
 the single buffer and bufferView, the payload hash and length, the KTX2 header, level index and
 data format descriptor against the declared `vkFormat`, each level's extent and digest, the
-ledger's range continuity, state totals, zero-range honesty, source identities and range-table
-digest, and the absence of any embedded opaque source payload.
+ledger's range continuity, state totals, source identities and range-table digest, and the absence
+of any embedded opaque source payload.
+
+Zero-range honesty is the one ledger claim it cannot re-check: proving a `padding-zero` range is
+zero needs the source bytes, so that check runs only in the export-time path above.

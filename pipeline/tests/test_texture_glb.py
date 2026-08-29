@@ -130,6 +130,27 @@ class TextureDecodeTests(unittest.TestCase):
         self.assertEqual((model.width, model.height, model.mip_count), (4, 4, 3))
         self.assertEqual(model.omissions[-1]["role"], "incomplete-lower-mips")
 
+    def test_a_stale_inline_mip_count_is_restated_as_the_source_wrote_it(self):
+        """`declaredInlineMips` is the header's claim; `resolvedInlineMips` is what fits.
+
+        No shipped unit carries a stale count, so only a synthetic one exercises the split. The
+        clamped value drives the extent arithmetic, but publishing it would erase the evidence
+        that the source over-declared.
+        """
+        closure = _closure(13, width=4, height=4, mips=1, inline=1)
+        stale = bytearray(closure.tth.data)
+        stale[7] = 9                                  # the TTH's declared inline mip count
+        changed = TextureSourceClosure(
+            closure.texture_path,
+            closure.asset_id,
+            _source("tth", closure.tth.path, bytes(stale)),
+            None,
+        )
+        model = decode_texture(changed)
+        self.assertEqual(model.header["declaredInlineMips"], 9)
+        self.assertEqual(model.header["resolvedInlineMips"], 1)
+        self.assertEqual(model.byte_coverage[0]["coveragePercent"], 100.0)
+
     def test_declared_lengths_exclude_arbitrary_compiler_allocation_tails(self):
         closure = _closure(13, width=8, height=8, mips=2, inline=1)
         changed = TextureSourceClosure(
