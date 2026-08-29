@@ -282,14 +282,6 @@ COUNTS = {"male.mdl": 79, "female.mdl": 88, "twin.mdl": 79, "prop.mdl": 2}
 # array with a 79-name list does not fail -- it answers 79 matrices under the wrong names
 # and drops nine.
 
-# BodyResolutionTests
-# Which model a frame's matrices belong to.
-#
-# The bone count the engine filled is the hard measurement: a model may only name a frame
-# whose array is exactly as long as that model's own bone list, because naming an 88-bone
-# array with a 79-name list does not fail -- it answers 79 matrices under the wrong names
-# and drops nine.
-
 def test_a_pose_that_names_its_own_model_answers_directly() -> None:
     assert resolve_body(88, "female.mdl", ["male.mdl"], [], [], COUNTS) == ("female.mdl", "stated by the pose record")
 

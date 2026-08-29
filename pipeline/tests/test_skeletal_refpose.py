@@ -149,9 +149,6 @@ def test_only_the_overridden_bones_seven_floats_change() -> None:
 # SingleRootedRegressionTests
 # A skeleton that was never forked takes the identity path exactly as before.
 
-# SingleRootedRegressionTests
-# A skeleton that was never forked takes the identity path exactly as before.
-
 def test_single_rooted_rows_and_bone_map_are_untouched() -> None:
     bones = [
         bone(0, "root", -1, (0.0, 0.0, 0.0), IDENTITY_Q),
@@ -354,9 +351,6 @@ class RealCorpusShapeTests(unittest.TestCase):
 # CinematicMultiRootTests
 # `_cinematic_rows` threads the same resolution through its subset + rename remap.
 
-# CinematicMultiRootTests
-# `_cinematic_rows` threads the same resolution through its subset + rename remap.
-
 def test_forked_actor_subset_resolves_without_a_synthetic_root() -> None:
     sub = [
         bone(10, "Bip02", -1, (1.0, 1.0, 1.0)),
@@ -461,15 +455,6 @@ REF_POSE = [
     ((4.0, -1.0, 0.5), (0.38268343, 0.0, 0.0, 0.92387953)),  # 45 deg about X, moved
 ]
 
-
-# RefPoseGeometryTests
-# `_reskin_surfaces`: the MESH geometry follows the SKEL section's reference-pose override.
-#
-# The vertices in the container are meaningful only against the reference pose they are stored
-# with (`CalculateInvRefMatrices` derives the skinning inverses from the SKEL rows), so an
-# override that moved the skeleton but not the geometry bakes a self-contradictory file -- the
-# wield corpus's measured placement defect. Expectations here are composed through
-# `_world_transform`'s numpy matrices, independent of the quaternion helpers under test.
 
 # RefPoseGeometryTests
 # `_reskin_surfaces`: the MESH geometry follows the SKEL section's reference-pose override.

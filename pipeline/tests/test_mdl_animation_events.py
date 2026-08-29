@@ -52,9 +52,6 @@ CLIPS = (
 # EventTableTests
 # The interned per-owning-model timeline the blend sidecar carries.
 
-# EventTableTests
-# The interned per-owning-model timeline the blend sidecar carries.
-
 def test_only_sequences_carrying_events_appear():
     table = mdl_skel.event_table(CLIPS)
     assert sorted(table["events"]) == ["run", "walk"]
@@ -98,14 +95,6 @@ def test_a_model_authoring_none_of_the_four_ships_no_sidecar():
 RECORD = mdl_skel.Movement(endframe=4, motionflags=0x1040, v0=2.0, v1=4.0, angle=0.0,
                            vector=(1.0, 0.0, 0.0), position=(3.0, 0.0, 0.0))
 
-
-# MovementTableTests
-# The per-owning-model displacement paths the same sidecar carries.
-#
-# A `Seq` built outside `local_sequences` from a raw animation carries `movement=None` and
-# was never asked; `()` is the model's own answer that the animation authors no displacement.
-# The sidecar has to keep those apart, because the second is what makes retail's
-# `Studio_AnimMovement` refuse and the first is a reader looking at an older file.
 
 # MovementTableTests
 # The per-owning-model displacement paths the same sidecar carries.

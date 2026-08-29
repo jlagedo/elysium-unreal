@@ -47,14 +47,6 @@ VMT = b'"VertexLitGeneric"\n{\n"$basetexture" "models/scenery/milkcrate"\n}\n'
 # lookup against that document -- `bake_lib.read_mtl`'s above all -- is case-sensitive, so a
 # `.mtl` naming the header's spelling joins nothing and the mesh bakes with a null material.
 
-# PropMaterialKeyNormalizationTests
-# One material key, one fold, on both sides of the join.
-#
-# A model header states its texture search paths and its material names in the install's own
-# mixed case; `shared/materials.json` is keyed by `material_key`, which is lower case. Every
-# lookup against that document -- `bake_lib.read_mtl`'s above all -- is case-sensitive, so a
-# `.mtl` naming the header's spelling joins nothing and the mesh bakes with a null material.
-
 def _read(key):
     # The install index is case-folded (`install.read` lowers), so a mixed-case candidate
     # reads the same file a lower-case one would.
@@ -81,11 +73,6 @@ def test_a_prop_mtl_names_that_key():
 
 HIT = b'"VertexLitGeneric"\n{\n"$basetexture" "models/spike"\n}\n'
 
-
-# MaterialResolutionTests
-# `resolve_vmt` is the engine's own walk and only that walk (research case
-# `material-resolution`): the model header's search paths, in header order, each composed into
-# `materials/<path><name>.vmt`, with nothing after the last one.
 
 # MaterialResolutionTests
 # `resolve_vmt` is the engine's own walk and only that walk (research case
@@ -207,10 +194,6 @@ def test_a_material_only_this_maps_pakfile_carries_stays_with_its_map():
     assert SC.is_map_scoped_material(
         "maps/sm_pier_1/water/invisible_water_depth_33", local=True)
 
-
-# RigBoneNameTests
-# `rig_bone_name` must be a fixed point of Control Rig's own sanitizer: every character it
-# emits is one `URigHierarchy::SanitizeName` keeps, or the track and the bone diverge again.
 
 # RigBoneNameTests
 # `rig_bone_name` must be a fixed point of Control Rig's own sanitizer: every character it

@@ -433,9 +433,6 @@ def test_selfillum_arriving_on_a_later_model_still_writes_the_emission_mask() ->
 # SourceFormatAlphaTests
 # `decode` answers the fold-to-RGB question from the source format where provable.
 
-# SourceFormatAlphaTests
-# `decode` answers the fold-to-RGB question from the source format where provable.
-
 def _tth(w, h, fmt):
     import struct
     vtf = bytearray(64)

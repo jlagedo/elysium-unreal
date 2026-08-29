@@ -130,10 +130,6 @@ def test_a_fan_resolves_a_cell_and_a_fraction():
 # The three-branch bind-pose remap (`vampire.dll FUN_100c67b0` / `0x1008cfa0`), on
 # hand-built bind pairs -- never a model's data.
 
-# BindRemapBranchTests
-# The three-branch bind-pose remap (`vampire.dll FUN_100c67b0` / `0x1008cfa0`), on
-# hand-built bind pairs -- never a model's data.
-
 def test_close_binds_copy_the_position_unchanged():
     owner = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0))
     body = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0 + 0.09))  # |a-b|^2 = 0.0081 < 0.01
@@ -262,14 +258,6 @@ class RemapTests(unittest.TestCase):
             assert entry is not None
             assert entry[1] == self.rot
 
-
-# ClosureRemapTests
-# `compose()` remaps a channel's WHOLE closure -- its sequence plus its autolayers,
-# composed in the owner's own bind space -- exactly ONCE, never per layer.
-#
-# A translate-branch bone makes the distinction observable: remapping each layer on its own
-# would add the bind offset twice (once to the base, once to the raw additive delta), which is
-# exactly the wrong-shaped defect this module exists to catch.
 
 # ClosureRemapTests
 # `compose()` remaps a channel's WHOLE closure -- its sequence plus its autolayers,

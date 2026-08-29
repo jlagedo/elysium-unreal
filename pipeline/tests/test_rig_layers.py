@@ -78,9 +78,6 @@ def test_the_separator_and_case_do_not_decide_it() -> None:
 # IndexSpaceTests
 # The trap: the same number names a different clip in each space.
 
-# IndexSpaceTests
-# The trap: the same number names a different clip in each space.
-
 def test_a_body_contribution_reads_as_a_global_number() -> None:
     space = _space()
     assert space.resolve(BODY, 401) == ("aim_layer", "bank", 0x0)
@@ -146,9 +143,6 @@ def test_an_unreadable_contribution_is_counted_not_dropped_silently() -> None:
     assert len(channels) == 1
     assert unresolved == 1
 
-
-# CapacityTests
-# One overlay node and one `_delta` node is what the graph carries.
 
 # CapacityTests
 # One overlay node and one `_delta` node is what the graph carries.

@@ -138,9 +138,6 @@ def test_a_bank_the_loader_cannot_read_numbers_nothing() -> None:
 # GlobalNumberTests
 # A clip's number is its owner's base plus its own on-disk position.
 
-# GlobalNumberTests
-# A clip's number is its owner's base plus its own on-disk position.
-
 def test_the_positional_list_keeps_a_label_the_playable_read_would_drop() -> None:
     # `local_sequence_labels` is positional and unskipped, which is what a global sequence
     # number indexes; `local_sequences` dedups by lowercased label and skips a descriptor

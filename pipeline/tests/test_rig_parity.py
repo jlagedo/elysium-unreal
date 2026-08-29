@@ -366,9 +366,6 @@ class _FakeLibrary:
 # AnalyzerLiveMapTests
 # `analyze_rig_resolution.sequence_map` completes an unlabelled live row off the install.
 
-# AnalyzerLiveMapTests
-# `analyze_rig_resolution.sequence_map` completes an unlabelled live row off the install.
-
 def _write(directory: str, rows: list[str]) -> None:
     header = "body_model,global_index,owner_model,owner_index,depth,label,activity_name,resolved\n"
     with open(os.path.join(directory, "sequence_map.csv"), "w", encoding="utf-8") as stream:
@@ -405,9 +402,6 @@ def test_without_a_library_unlabelled_rows_are_still_dropped() -> None:
         _write(directory, ["pc/body.mdl,1,shared/bank.mdl,3,2,,,False"])
         assert analyzer.sequence_map(Path(directory)) == {}
 
-
-# AnalyzerChainFallbackTests
-# A selection whose body is known never borrows another body's chain.
 
 # AnalyzerChainFallbackTests
 # A selection whose body is known never borrows another body's chain.

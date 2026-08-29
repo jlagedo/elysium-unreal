@@ -468,12 +468,6 @@ SWORD = _seq("scene", (-881.4, -162.6, -6.7), (0.0, 89.3, 166.2))
 # `cin_sheriff_sword`'s `scene` is the shape these guard: a 2 m mesh whose sequence bbox
 # spans 881 Source units because the rig carries the sword across the courtroom.
 
-# ClipBoundsRadiusTests
-# What a clip declares about its own reach, reconciled with what baked.
-#
-# `cin_sheriff_sword`'s `scene` is the shape these guard: a 2 m mesh whose sequence bbox
-# spans 881 Source units because the rig carries the sword across the courtroom.
-
 def test_the_authored_radius_wins_when_it_covers_the_bake() -> None:
     # The real case: studiomdl's box sits a little outside the extent it was computed from.
     assert npc_export.clip_bounds_radius_m(SWORD, 21.833) == pytest.approx(881.4 * 0.0254, abs=1e-6)
@@ -498,9 +492,6 @@ def test_the_key_is_absent_until_it_has_been_reconciled() -> None:
     assert "bounds_radius_m" not in npc_export._clip_meta(SWORD)
     assert npc_export._clip_meta(SWORD, 22.38812)["bounds_radius_m"] == 22.3881
 
-
-# ClipExtentTests
-# The measured half of the same question: how far a bone chain actually reaches.
 
 # ClipExtentTests
 # The measured half of the same question: how far a bone chain actually reaches.

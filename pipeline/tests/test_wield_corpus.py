@@ -229,10 +229,6 @@ def test_ordinary_bind_carries_no_anomaly() -> None:
 # `trail_tip_from_geometry`: the melee weapon-trail VFX's synthetic `TrailTip` attachment,
 # the model's own geometry's farthest point from the mount along its own long axis.
 
-# TrailTipTests
-# `trail_tip_from_geometry`: the melee weapon-trail VFX's synthetic `TrailTip` attachment,
-# the model's own geometry's farthest point from the mount along its own long axis.
-
 def _rig():
     # Every arm bone is at the origin with an identity bind (the `bone()` default), so the
     # mount's bind-space WORLD transform equals its own local: a pure translation to (4,0,0).
@@ -303,10 +299,6 @@ def test_wrapper_is_none_off_socket_prop() -> None:
 
     assert W.trail_tip(b"", b"", bones, cls) is None
 
-
-# NonSocketBindingTests
-# The three non-socket modes need the character corpus: whether a rig is worn at all is a
-# fact about the cast, not about the file.
 
 # NonSocketBindingTests
 # The three non-socket modes need the character corpus: whether a rig is worn at all is a
@@ -415,11 +407,6 @@ def test_inconsistent_stored_inverse_bind_fails_and_names_the_bone() -> None:
 # bind is still a rigid weapon -- `bake_pose` carries that offset -- so only frame-to-frame
 # variation makes a socket wrong.
 
-# MotionTests
-# Measured across frames, not against the bind pose. A clip sitting at a constant offset from
-# bind is still a rigid weapon -- `bake_pose` carries that offset -- so only frame-to-frame
-# variation makes a socket wrong.
-
 def _pose(frames, mover=None):
     out = []
     for index in range(frames):
@@ -503,11 +490,6 @@ def test_an_unknown_name_reports_no_bodies() -> None:
 # texture whose bytes do not decode -- the corpus's one real case, `handleclaws`'s ``null``
 # material and its 20-byte empty `.ttz`.
 
-# MaterialResolutionTests
-# `_resolve_material_row`'s three outcomes: a real decode, a VMT that never resolves, and a
-# texture whose bytes do not decode -- the corpus's one real case, `handleclaws`'s ``null``
-# material and its 20-byte empty `.ttz`.
-
 def _bgr_texture(pixel=(10, 20, 30)):
     return _tth(1, 1, FMT_BGR888), zlib.compress(bytes(pixel))
 
@@ -570,10 +552,6 @@ def test_a_vmt_with_no_drawable_texture_is_not_a_failure() -> None:
 # `model_materials` over an already-loaded model: header material order, one row per
 # material, and a per-row failure that never raises.
 
-# ModelMaterialsTests
-# `model_materials` over an already-loaded model: header material order, one row per
-# material, and a per-row failure that never raises.
-
 def test_materials_are_reported_in_header_order_with_per_row_failures() -> None:
     with tempfile.TemporaryDirectory() as root:
         install_ = _Install(Path(root))
@@ -596,10 +574,6 @@ def test_materials_are_reported_in_header_order_with_per_row_failures() -> None:
         assert rows[1].albedo == ""
         assert rows[1].failure != ""
 
-
-# SkinFamilyOverrideTests
-# `skin_families` diffs every extra family against family 0 and resolves the override the
-# same way a drawn material resolves -- the fire_axe ghost reskin is the one real case.
 
 # SkinFamilyOverrideTests
 # `skin_families` diffs every extra family against family 0 and resolves the override the
