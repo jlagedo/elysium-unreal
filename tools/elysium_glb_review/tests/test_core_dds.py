@@ -91,6 +91,9 @@ def test_a_cube_declares_every_face_and_complexity() -> None:
 # Bc1AlphaTests
 # BC1 carries punch-through alpha in the mode where color0 <= color1.
 
+# Bc1AlphaTests
+# BC1 carries punch-through alpha in the mode where color0 <= color1.
+
 def block(color0: int, color1: int) -> bytes:
     return struct.pack("<HH", color0, color1) + b"\x00" * 4
 

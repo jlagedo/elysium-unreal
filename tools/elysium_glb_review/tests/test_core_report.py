@@ -17,194 +17,197 @@ from core import report
 from . import support
 
 
-class ScanTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self._scratch = tempfile.TemporaryDirectory()
-        self.root = Path(self._scratch.name)
-        self.addCleanup(self._scratch.cleanup)
+def _scan(root: Path, units: dict[str, bytes]) -> report.Report:
+    support.write_corpus(root, units)
+    return report.scan(root)
 
-    def _scan(self, units: dict[str, bytes]) -> report.Report:
-        support.write_corpus(self.root, units)
-        return report.scan(self.root)
 
-    def test_a_corpus_that_holds_together_reports_nothing(self) -> None:
-        result = self._scan(
-            {
-                "materials/a/b.glb": support.material_unit(
-                    "vtmb:material:a/b", textures={"$basetexture": "a/t"},
-                    surface_property="brick",
-                ),
-                "textures/a/t.glb": support.texture_unit(),
-                "surface-properties/brick.glb": support.surface_property_unit("brick"),
-            }
-        )
-        assert result.ok, [str(f) for f in result.findings]
-        assert result.files["materials"] == 1
-
-    def test_a_reference_to_a_unit_that_does_not_exist_is_a_finding(self) -> None:
-        result = self._scan(
-            {
-                "materials/a/b.glb": support.material_unit(
-                    "vtmb:material:a/b", textures={"$basetexture": "a/gone"}
-                )
-            }
-        )
-        kinds = {finding.kind for finding in result.findings}
-        assert kinds == {"missing-reference"}
-        assert any("vtmb:texture:a/gone" in finding.detail for finding in result.findings)
-
-    def test_one_missing_unit_named_twice_is_one_finding(self) -> None:
-        # A material names each texture in both dependencies and textureBindings.
-        result = self._scan(
-            {
-                "materials/a/b.glb": support.material_unit(
-                    "vtmb:material:a/b", textures={"$basetexture": "a/gone"}
-                )
-            }
-        )
-        assert len(result.findings) == 1
-        detail = result.findings[0].detail
-        assert "dependencies[0]" in detail
-        assert "textureBindings[0]" in detail
-
-    def test_a_sentinel_is_counted_as_a_fact_not_reported_as_breakage(self) -> None:
-        # 336 of 484 bodies carry sentinels; treating them as findings would drown the
-        # report in the normal case.
-        result = self._scan(
-            {
-                "characters/npc/body.glb": support.character_unit(
-                    "vtmb:character-body:npc/body",
-                    materials=["vtmb:missing-material:9:glint"],
-                )
-            }
-        )
-        assert result.ok, [str(f) for f in result.findings]
-        assert result.counts["sentinel-slots"] == 1
-        assert result.counts["bodies-with-sentinels"] == 1
-
-    def test_a_reference_to_a_seam_that_exports_nothing_is_a_fact(self) -> None:
-        # Surface properties name sound files; no seam exports sounds.
-        units = {"surface-properties/brick.glb": support.surface_property_unit("brick")}
-        support.write_corpus(self.root, units)
-        path = self.root / "surface-properties/brick.glb"
-        document = support.document_of(path.read_bytes())
-        payload = document["extensions"]["ELYSIUM_vtmb_surface_property"]
-        payload["dependencies"] = [
-            {"role": "sound", "asset": "vtmb:sound:surfaces/step.wav", "sourcePath": ""}
-        ]
-        path.write_bytes(support.build_glb(document))
-
-        result = report.scan(self.root)
-        assert result.ok, [str(f) for f in result.findings]
-        assert result.counts["reference-outside-corpus"] == 1
-
-    def test_a_material_anomaly_is_reported(self) -> None:
-        result = self._scan(
-            {
-                "materials/a/b.glb": support.material_unit(
-                    "vtmb:material:a/b", anomalies=[{"role": "valueless-key", "key": "nomip"}]
-                )
-            }
-        )
-        assert [f.kind for f in result.findings] == ["material-anomaly"]
-        assert "valueless-key" in result.findings[0].detail
-
-    def test_an_untranscribed_shader_is_counted_not_reported(self) -> None:
-        result = self._scan(
-            {
-                "materials/a/b.glb": support.material_unit(
-                    "vtmb:material:a/b", shader="worlddiffusebumpmap", resolved=False
-                )
-            }
-        )
-        assert result.ok, [str(f) for f in result.findings]
-        assert result.counts["shader-unresolved"] == 1
-        assert result.counts["shader:worlddiffusebumpmap"] == 1
-
-    def test_a_unit_declaring_its_own_gaps_is_reported(self) -> None:
-        units = {"materials/a/b.glb": support.material_unit("vtmb:material:a/b")}
-        support.write_corpus(self.root, units)
-        path = self.root / "materials/a/b.glb"
-        document = support.document_of(path.read_bytes())
-        document["extensions"]["ELYSIUM_vtmb_material"]["coverage"] = {
-            "unresolved": [{"path": "x"}],
-            "unsupported": [{"key": "y"}],
+def test_a_corpus_that_holds_together_reports_nothing(tmp_path: Path) -> None:
+    result = _scan(tmp_path,
+        {
+            "materials/a/b.glb": support.material_unit(
+                "vtmb:material:a/b", textures={"$basetexture": "a/t"},
+                surface_property="brick",
+            ),
+            "textures/a/t.glb": support.texture_unit(),
+            "surface-properties/brick.glb": support.surface_property_unit("brick"),
         }
-        path.write_bytes(support.build_glb(document))
-
-        result = report.scan(self.root)
-        assert {finding.kind for finding in result.findings} == {"coverage-unresolved", "coverage-unsupported"}
-
-    def test_a_texture_smaller_than_its_source_declared_is_reported(self) -> None:
-        units = {"textures/a/t.glb": support.texture_unit()}
-        support.write_corpus(self.root, units)
-        path = self.root / "textures/a/t.glb"
-        payload_bytes = path.read_bytes()
-        document = support.document_of(payload_bytes)
-        extension = document["extensions"]["ELYSIUM_vtmb_texture"]
-        extension["dimensions"] = {"width": 128, "height": 128}
-        extension["sourceFormat"] = {"sourceWidth": 512, "sourceHeight": 512}
-        path.write_bytes(support.build_glb(document))
-
-        result = report.scan(self.root)
-        assert [f.kind for f in result.findings] == ["texture-below-declared-size"]
-
-    def test_a_unit_that_will_not_parse_is_itself_the_finding(self) -> None:
-        support.write_corpus(self.root, {"materials/a/b.glb": b"not a glb"})
-        result = report.scan(self.root)
-        assert [f.kind for f in result.findings] == ["unreadable"]
-
-    def test_a_glb_without_a_seam_extension_is_reported(self) -> None:
-        support.write_corpus(
-            self.root, {"materials/a/b.glb": support.build_glb({"asset": {"version": "2.0"}})}
-        )
-        result = report.scan(self.root)
-        assert [f.kind for f in result.findings] == ["no-seam-extension"]
-
-    def test_a_unit_filed_under_the_wrong_seam_is_reported(self) -> None:
-        support.write_corpus(
-            self.root, {"materials/a/b.glb": support.surface_property_unit("brick")}
-        )
-        result = report.scan(self.root)
-        assert "seam-mismatch" in {finding.kind for finding in result.findings}
-
-    def test_an_empty_corpus_scans_cleanly(self) -> None:
-        result = report.scan(self.root)
-        assert result.ok
-        assert sum(result.files.values()) == 0
+    )
+    assert result.ok, [str(f) for f in result.findings]
+    assert result.files["materials"] == 1
 
 
-class OutputTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self._scratch = tempfile.TemporaryDirectory()
-        self.root = Path(self._scratch.name)
-        self.addCleanup(self._scratch.cleanup)
-
-    def test_the_summary_names_the_facts_even_when_nothing_is_wrong(self) -> None:
-        support.write_corpus(
-            self.root, {"materials/a/b.glb": support.material_unit("vtmb:material:a/b")}
-        )
-        text = report.summary(report.scan(self.root))
-        assert "no findings" in text
-        assert "sentinel slots" in text
-
-    def test_the_summary_truncates_a_long_finding_list(self) -> None:
-        units = {
-            "materials/a/b%d.glb" % index: support.material_unit(
-                "vtmb:material:a/b%d" % index, textures={"$basetexture": "a/gone"}
+def test_a_reference_to_a_unit_that_does_not_exist_is_a_finding(tmp_path: Path) -> None:
+    result = _scan(tmp_path,
+        {
+            "materials/a/b.glb": support.material_unit(
+                "vtmb:material:a/b", textures={"$basetexture": "a/gone"}
             )
-            for index in range(6)
         }
-        support.write_corpus(self.root, units)
-        text = report.summary(report.scan(self.root), max_findings=2)
-        assert "... and 4 more" in text
+    )
+    kinds = {finding.kind for finding in result.findings}
+    assert kinds == {"missing-reference"}
+    assert any("vtmb:texture:a/gone" in finding.detail for finding in result.findings)
 
-    def test_the_dictionary_form_is_json_shaped(self) -> None:
-        support.write_corpus(
-            self.root,
-            {"materials/a/b.glb": support.material_unit(
-                "vtmb:material:a/b", textures={"$basetexture": "a/gone"})},
+
+def test_one_missing_unit_named_twice_is_one_finding(tmp_path: Path) -> None:
+    # A material names each texture in both dependencies and textureBindings.
+    result = _scan(tmp_path,
+        {
+            "materials/a/b.glb": support.material_unit(
+                "vtmb:material:a/b", textures={"$basetexture": "a/gone"}
+            )
+        }
+    )
+    assert len(result.findings) == 1
+    detail = result.findings[0].detail
+    assert "dependencies[0]" in detail
+    assert "textureBindings[0]" in detail
+
+
+def test_a_sentinel_is_counted_as_a_fact_not_reported_as_breakage(tmp_path: Path) -> None:
+    # 336 of 484 bodies carry sentinels; treating them as findings would drown the
+    # report in the normal case.
+    result = _scan(tmp_path,
+        {
+            "characters/npc/body.glb": support.character_unit(
+                "vtmb:character-body:npc/body",
+                materials=["vtmb:missing-material:9:glint"],
+            )
+        }
+    )
+    assert result.ok, [str(f) for f in result.findings]
+    assert result.counts["sentinel-slots"] == 1
+    assert result.counts["bodies-with-sentinels"] == 1
+
+
+def test_a_reference_to_a_seam_that_exports_nothing_is_a_fact(tmp_path: Path) -> None:
+    # Surface properties name sound files; no seam exports sounds.
+    units = {"surface-properties/brick.glb": support.surface_property_unit("brick")}
+    support.write_corpus(tmp_path, units)
+    path = tmp_path / "surface-properties/brick.glb"
+    document = support.document_of(path.read_bytes())
+    payload = document["extensions"]["ELYSIUM_vtmb_surface_property"]
+    payload["dependencies"] = [
+        {"role": "sound", "asset": "vtmb:sound:surfaces/step.wav", "sourcePath": ""}
+    ]
+    path.write_bytes(support.build_glb(document))
+
+    result = report.scan(tmp_path)
+    assert result.ok, [str(f) for f in result.findings]
+    assert result.counts["reference-outside-corpus"] == 1
+
+
+def test_a_material_anomaly_is_reported(tmp_path: Path) -> None:
+    result = _scan(tmp_path,
+        {
+            "materials/a/b.glb": support.material_unit(
+                "vtmb:material:a/b", anomalies=[{"role": "valueless-key", "key": "nomip"}]
+            )
+        }
+    )
+    assert [f.kind for f in result.findings] == ["material-anomaly"]
+    assert "valueless-key" in result.findings[0].detail
+
+
+def test_an_untranscribed_shader_is_counted_not_reported(tmp_path: Path) -> None:
+    result = _scan(tmp_path,
+        {
+            "materials/a/b.glb": support.material_unit(
+                "vtmb:material:a/b", shader="worlddiffusebumpmap", resolved=False
+            )
+        }
+    )
+    assert result.ok, [str(f) for f in result.findings]
+    assert result.counts["shader-unresolved"] == 1
+    assert result.counts["shader:worlddiffusebumpmap"] == 1
+
+
+def test_a_unit_declaring_its_own_gaps_is_reported(tmp_path: Path) -> None:
+    units = {"materials/a/b.glb": support.material_unit("vtmb:material:a/b")}
+    support.write_corpus(tmp_path, units)
+    path = tmp_path / "materials/a/b.glb"
+    document = support.document_of(path.read_bytes())
+    document["extensions"]["ELYSIUM_vtmb_material"]["coverage"] = {
+        "unresolved": [{"path": "x"}],
+        "unsupported": [{"key": "y"}],
+    }
+    path.write_bytes(support.build_glb(document))
+
+    result = report.scan(tmp_path)
+    assert {finding.kind for finding in result.findings} == {"coverage-unresolved", "coverage-unsupported"}
+
+
+def test_a_texture_smaller_than_its_source_declared_is_reported(tmp_path: Path) -> None:
+    units = {"textures/a/t.glb": support.texture_unit()}
+    support.write_corpus(tmp_path, units)
+    path = tmp_path / "textures/a/t.glb"
+    payload_bytes = path.read_bytes()
+    document = support.document_of(payload_bytes)
+    extension = document["extensions"]["ELYSIUM_vtmb_texture"]
+    extension["dimensions"] = {"width": 128, "height": 128}
+    extension["sourceFormat"] = {"sourceWidth": 512, "sourceHeight": 512}
+    path.write_bytes(support.build_glb(document))
+
+    result = report.scan(tmp_path)
+    assert [f.kind for f in result.findings] == ["texture-below-declared-size"]
+
+
+def test_a_unit_that_will_not_parse_is_itself_the_finding(tmp_path: Path) -> None:
+    support.write_corpus(tmp_path, {"materials/a/b.glb": b"not a glb"})
+    result = report.scan(tmp_path)
+    assert [f.kind for f in result.findings] == ["unreadable"]
+
+
+def test_a_glb_without_a_seam_extension_is_reported(tmp_path: Path) -> None:
+    support.write_corpus(
+        tmp_path, {"materials/a/b.glb": support.build_glb({"asset": {"version": "2.0"}})}
+    )
+    result = report.scan(tmp_path)
+    assert [f.kind for f in result.findings] == ["no-seam-extension"]
+
+
+def test_a_unit_filed_under_the_wrong_seam_is_reported(tmp_path: Path) -> None:
+    support.write_corpus(
+        tmp_path, {"materials/a/b.glb": support.surface_property_unit("brick")}
+    )
+    result = report.scan(tmp_path)
+    assert "seam-mismatch" in {finding.kind for finding in result.findings}
+
+
+def test_an_empty_corpus_scans_cleanly(tmp_path: Path) -> None:
+    result = report.scan(tmp_path)
+    assert result.ok
+    assert sum(result.files.values()) == 0
+
+
+def test_the_summary_names_the_facts_even_when_nothing_is_wrong(tmp_path: Path) -> None:
+    support.write_corpus(
+        tmp_path, {"materials/a/b.glb": support.material_unit("vtmb:material:a/b")}
+    )
+    text = report.summary(report.scan(tmp_path))
+    assert "no findings" in text
+    assert "sentinel slots" in text
+
+
+def test_the_summary_truncates_a_long_finding_list(tmp_path: Path) -> None:
+    units = {
+        "materials/a/b%d.glb" % index: support.material_unit(
+            "vtmb:material:a/b%d" % index, textures={"$basetexture": "a/gone"}
         )
-        data = report.to_dict(report.scan(self.root))
-        assert set(data) == {"root", "seconds", "files", "counts", "findings"}
-        assert data["findings"][0]["kind"] == "missing-reference"
+        for index in range(6)
+    }
+    support.write_corpus(tmp_path, units)
+    text = report.summary(report.scan(tmp_path), max_findings=2)
+    assert "... and 4 more" in text
+
+
+def test_the_dictionary_form_is_json_shaped(tmp_path: Path) -> None:
+    support.write_corpus(
+        tmp_path,
+        {"materials/a/b.glb": support.material_unit(
+            "vtmb:material:a/b", textures={"$basetexture": "a/gone"})},
+    )
+    data = report.to_dict(report.scan(tmp_path))
+    assert set(data) == {"root", "seconds", "files", "counts", "findings"}
+    assert data["findings"][0]["kind"] == "missing-reference"

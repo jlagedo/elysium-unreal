@@ -14,52 +14,52 @@ from . import support
 import pytest
 
 
-class GlbReadTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self._scratch = tempfile.TemporaryDirectory()
-        self.root = Path(self._scratch.name)
-        self.addCleanup(self._scratch.cleanup)
+def _write(root: Path, payload: bytes, name: str = "unit.glb") -> Path:
+    path = root / name
+    path.write_bytes(payload)
+    return path
 
-    def _write(self, payload: bytes, name: str = "unit.glb") -> Path:
-        path = self.root / name
-        path.write_bytes(payload)
-        return path
 
-    def test_reads_json_and_binary(self) -> None:
-        path = self._write(support.build_glb({"asset": {"version": "2.0"}}, b"\x01\x02\x03\x04"))
-        document, binary = glb.read(path)
-        assert document["asset"]["version"] == "2.0"
-        assert binary[:4] == b"\x01\x02\x03\x04"
+def test_reads_json_and_binary(tmp_path: Path) -> None:
+    path = _write(tmp_path, support.build_glb({"asset": {"version": "2.0"}}, b"\x01\x02\x03\x04"))
+    document, binary = glb.read(path)
+    assert document["asset"]["version"] == "2.0"
+    assert binary[:4] == b"\x01\x02\x03\x04"
 
-    def test_json_only_read_skips_the_binary_chunk(self) -> None:
-        # The panel path re-reads headers constantly; paging in a 35 MB BIN chunk to
-        # answer a question about JSON would dominate the tool's cost.
-        path = self._write(support.build_glb({"asset": {"version": "2.0"}}, b"\xff" * 4096))
-        assert glb.read_json(path)["asset"]["version"] == "2.0"
 
-    def test_document_without_binary_chunk_yields_empty_bytes(self) -> None:
-        path = self._write(support.build_glb({"asset": {"version": "2.0"}}))
-        _document, binary = glb.read(path)
-        assert binary == b""
+def test_json_only_read_skips_the_binary_chunk(tmp_path: Path) -> None:
+    # The panel path re-reads headers constantly; paging in a 35 MB BIN chunk to
+    # answer a question about JSON would dominate the tool's cost.
+    path = _write(tmp_path, support.build_glb({"asset": {"version": "2.0"}}, b"\xff" * 4096))
+    assert glb.read_json(path)["asset"]["version"] == "2.0"
 
-    def test_rejects_a_file_that_is_not_a_glb(self) -> None:
-        path = self._write(b"not a glb at all, really")
-        with pytest.raises(glb.GlbError):
-            glb.read(path)
-        with pytest.raises(glb.GlbError):
-            glb.read_json(path)
 
-    def test_rejects_an_unsupported_container_version(self) -> None:
-        body = support.build_glb({"asset": {"version": "2.0"}})
-        path = self._write(body[:4] + struct.pack("<I", 3) + body[8:])
-        with pytest.raises(glb.GlbError):
-            glb.read(path)
+def test_document_without_binary_chunk_yields_empty_bytes(tmp_path: Path) -> None:
+    path = _write(tmp_path, support.build_glb({"asset": {"version": "2.0"}}))
+    _document, binary = glb.read(path)
+    assert binary == b""
 
-    def test_rejects_a_document_with_no_json_chunk(self) -> None:
-        chunk = struct.pack("<II", 4, glb.CHUNK_BIN) + b"\x00\x00\x00\x00"
-        path = self._write(b"glTF" + struct.pack("<II", 2, 12 + len(chunk)) + chunk)
-        with pytest.raises(glb.GlbError):
-            glb.read(path)
+
+def test_rejects_a_file_that_is_not_a_glb(tmp_path: Path) -> None:
+    path = _write(tmp_path, b"not a glb at all, really")
+    with pytest.raises(glb.GlbError):
+        glb.read(path)
+    with pytest.raises(glb.GlbError):
+        glb.read_json(path)
+
+
+def test_rejects_an_unsupported_container_version(tmp_path: Path) -> None:
+    body = support.build_glb({"asset": {"version": "2.0"}})
+    path = _write(tmp_path, body[:4] + struct.pack("<I", 3) + body[8:])
+    with pytest.raises(glb.GlbError):
+        glb.read(path)
+
+
+def test_rejects_a_document_with_no_json_chunk(tmp_path: Path) -> None:
+    chunk = struct.pack("<II", 4, glb.CHUNK_BIN) + b"\x00\x00\x00\x00"
+    path = _write(tmp_path, b"glTF" + struct.pack("<II", 2, 12 + len(chunk)) + chunk)
+    with pytest.raises(glb.GlbError):
+        glb.read(path)
 
 
 class BufferViewTests(unittest.TestCase):
