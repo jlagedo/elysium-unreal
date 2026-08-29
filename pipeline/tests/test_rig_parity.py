@@ -366,6 +366,9 @@ class _FakeLibrary:
 # AnalyzerLiveMapTests
 # `analyze_rig_resolution.sequence_map` completes an unlabelled live row off the install.
 
+# AnalyzerLiveMapTests
+# `analyze_rig_resolution.sequence_map` completes an unlabelled live row off the install.
+
 def _write(directory: str, rows: list[str]) -> None:
     header = "body_model,global_index,owner_model,owner_index,depth,label,activity_name,resolved\n"
     with open(os.path.join(directory, "sequence_map.csv"), "w", encoding="utf-8") as stream:
@@ -402,6 +405,9 @@ def test_without_a_library_unlabelled_rows_are_still_dropped() -> None:
         _write(directory, ["pc/body.mdl,1,shared/bank.mdl,3,2,,,False"])
         assert analyzer.sequence_map(Path(directory)) == {}
 
+
+# AnalyzerChainFallbackTests
+# A selection whose body is known never borrows another body's chain.
 
 # AnalyzerChainFallbackTests
 # A selection whose body is known never borrows another body's chain.
@@ -532,72 +538,78 @@ def _remap_row(**overrides):
     return row
 
 
-class CompareRetargetTests(unittest.TestCase):
-    STEMS = {"models/pc/body.mdl": "body", "models/shared/bank.mdl": "bank"}
+COMPARE_RETARGET_STEMS = {"models/pc/body.mdl": "body", "models/shared/bank.mdl": "bank"}
 
-    @staticmethod
-    def _binds(body_translation, bank_translation):
-        return _StubBinds({
-            "body": [("Bip01", -1, body_translation, (0, 0, 0, 1))],
-            "bank": [("Bip01", -1, bank_translation, (0, 0, 0, 1))],
-        })
 
-    def test_a_pair_both_engines_copy_agrees(self) -> None:
-        binds = self._binds((0.0, 0.0, 10.0), (0.0, 0.0, 10.0))
-        out = compare_retarget([_remap_row()], binds, self.STEMS)
-        assert out["copy"]["agree"] == 1
-        assert out["copy"]["diverges"] == 0
+def _binds(body_translation, bank_translation):
+    return _StubBinds({
+        "body": [("Bip01", -1, body_translation, (0, 0, 0, 1))],
+        "bank": [("Bip01", -1, bank_translation, (0, 0, 0, 1))],
+    })
 
-    def test_retail_copying_a_pair_we_retarget_is_a_divergence(self) -> None:
-        # Inside retail's own epsilon and outside Unreal's, which is the whole finding.
-        binds = self._binds((0.0, 0.0, 10.2), (0.0, 0.0, 10.0))
-        out = compare_retarget([_remap_row()], binds, self.STEMS)
-        assert out["copy"]["diverges"] == 1
-        assert out["copy"]["examples"][0]["separation_cm"] == pytest.approx(0.2, abs=1e-5)
 
-    def test_retails_origin_branch_against_our_length_ratio(self) -> None:
-        binds = self._binds((0.14496, 0.0, 0.0), (2.96802, 0.0, 0.0))
-        row = _remap_row(sub="1", matrix3x4=_matrix(IDENTITY, (3.11281 / 2.54, 0.0, 0.0)))
-        out = compare_retarget([row], binds, self.STEMS)
-        assert out["transform"]["diverges"] == 1
-        example = out["transform"]["examples"][0]
-        assert example["kind"] == "branch"
-        assert example["retail"] == "translation"
-        assert example["ours"] == "axis_angle"
+def test_a_pair_both_engines_copy_agrees() -> None:
+    binds = _binds((0.0, 0.0, 10.0), (0.0, 0.0, 10.0))
+    out = compare_retarget([_remap_row()], binds, COMPARE_RETARGET_STEMS)
+    assert out["copy"]["agree"] == 1
+    assert out["copy"]["diverges"] == 0
 
-    def test_a_matching_length_ratio_agrees(self) -> None:
-        scaled = tuple(tuple(3.0 * v for v in r) for r in IDENTITY)
-        binds = self._binds((0.0, 0.0, 6.0), (0.0, 0.0, 2.0))
-        out = compare_retarget([_remap_row(sub="1", matrix3x4=_matrix(scaled))],
-                               binds, self.STEMS)
-        assert out["transform"]["agree"] == 1
-        assert out["transform"]["diverges"] == 0
 
-    def test_an_undriven_bone_the_bank_does_not_carry_agrees(self) -> None:
-        binds = _StubBinds({
-            "body": [("Bip01", -1, (0.0, 0.0, 1.0), (0, 0, 0, 1)),
-                     ("Bat", -1, (0.0, 0.0, 2.0), (0, 0, 0, 1))],
-            "bank": [("Bip01", -1, (0.0, 0.0, 1.0), (0, 0, 0, 1))],
-        })
-        row = _remap_row(body_bone="Bat", bank_bone="", bank_bone_index="-1")
-        out = compare_retarget([row], binds, self.STEMS)
-        assert out["driven"]["undriven_agree"] == 1
-        assert out["driven"]["undriven_we_carry"] == 0
+def test_retail_copying_a_pair_we_retarget_is_a_divergence() -> None:
+    # Inside retail's own epsilon and outside Unreal's, which is the whole finding.
+    binds = _binds((0.0, 0.0, 10.2), (0.0, 0.0, 10.0))
+    out = compare_retarget([_remap_row()], binds, COMPARE_RETARGET_STEMS)
+    assert out["copy"]["diverges"] == 1
+    assert out["copy"]["examples"][0]["separation_cm"] == pytest.approx(0.2, abs=1e-5)
 
-    def test_an_undriven_bone_our_bank_does_carry_is_reported(self) -> None:
-        binds = _StubBinds({
-            "body": [("Bat", -1, (0.0, 0.0, 2.0), (0, 0, 0, 1))],
-            "bank": [("Bat", -1, (0.0, 0.0, 2.0), (0, 0, 0, 1))],
-        })
-        row = _remap_row(body_bone="Bat", bank_bone="", bank_bone_index="-1")
-        out = compare_retarget([row], binds, self.STEMS)
-        assert out["driven"]["undriven_we_carry"] == 1
 
-    def test_a_hub_with_no_container_is_not_applicable_rather_than_a_miss(self) -> None:
-        """Retail composes its chain hop by hop; this repository retargets a bank straight onto
-        the playing mesh, so an intermediate hop's remap describes a stage that does not exist."""
-        binds = self._binds((0.0, 0.0, 1.0), (0.0, 0.0, 1.0))
-        row = _remap_row(bank="models/shared/hub.mdl")
-        out = compare_retarget([row], binds, self.STEMS)
-        assert out["rows_applicable"] == 0
-        assert out["rows_not_applicable"] == 1
+def test_retails_origin_branch_against_our_length_ratio() -> None:
+    binds = _binds((0.14496, 0.0, 0.0), (2.96802, 0.0, 0.0))
+    row = _remap_row(sub="1", matrix3x4=_matrix(IDENTITY, (3.11281 / 2.54, 0.0, 0.0)))
+    out = compare_retarget([row], binds, COMPARE_RETARGET_STEMS)
+    assert out["transform"]["diverges"] == 1
+    example = out["transform"]["examples"][0]
+    assert example["kind"] == "branch"
+    assert example["retail"] == "translation"
+    assert example["ours"] == "axis_angle"
+
+
+def test_a_matching_length_ratio_agrees() -> None:
+    scaled = tuple(tuple(3.0 * v for v in r) for r in IDENTITY)
+    binds = _binds((0.0, 0.0, 6.0), (0.0, 0.0, 2.0))
+    out = compare_retarget([_remap_row(sub="1", matrix3x4=_matrix(scaled))],
+                           binds, COMPARE_RETARGET_STEMS)
+    assert out["transform"]["agree"] == 1
+    assert out["transform"]["diverges"] == 0
+
+
+def test_an_undriven_bone_the_bank_does_not_carry_agrees() -> None:
+    binds = _StubBinds({
+        "body": [("Bip01", -1, (0.0, 0.0, 1.0), (0, 0, 0, 1)),
+                 ("Bat", -1, (0.0, 0.0, 2.0), (0, 0, 0, 1))],
+        "bank": [("Bip01", -1, (0.0, 0.0, 1.0), (0, 0, 0, 1))],
+    })
+    row = _remap_row(body_bone="Bat", bank_bone="", bank_bone_index="-1")
+    out = compare_retarget([row], binds, COMPARE_RETARGET_STEMS)
+    assert out["driven"]["undriven_agree"] == 1
+    assert out["driven"]["undriven_we_carry"] == 0
+
+
+def test_an_undriven_bone_our_bank_does_carry_is_reported() -> None:
+    binds = _StubBinds({
+        "body": [("Bat", -1, (0.0, 0.0, 2.0), (0, 0, 0, 1))],
+        "bank": [("Bat", -1, (0.0, 0.0, 2.0), (0, 0, 0, 1))],
+    })
+    row = _remap_row(body_bone="Bat", bank_bone="", bank_bone_index="-1")
+    out = compare_retarget([row], binds, COMPARE_RETARGET_STEMS)
+    assert out["driven"]["undriven_we_carry"] == 1
+
+
+def test_a_hub_with_no_container_is_not_applicable_rather_than_a_miss() -> None:
+    """Retail composes its chain hop by hop; this repository retargets a bank straight onto
+    the playing mesh, so an intermediate hop's remap describes a stage that does not exist."""
+    binds = _binds((0.0, 0.0, 1.0), (0.0, 0.0, 1.0))
+    row = _remap_row(bank="models/shared/hub.mdl")
+    out = compare_retarget([row], binds, COMPARE_RETARGET_STEMS)
+    assert out["rows_applicable"] == 0
+    assert out["rows_not_applicable"] == 1

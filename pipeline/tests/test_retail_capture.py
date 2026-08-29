@@ -688,6 +688,15 @@ POSE_PARAMETERS = (
     ("aim_pitch", 0, -45.0, 45.0, 0.0),
 )
 
+# ProceduralRuleExportTests
+# CAP7.1: the `ProcType == 1` rule table the model exporter carries out.
+#
+# A rule's six entries and its axis index are Source quantities and the export's
+# change of basis conjugates a bone local, so the table is checked in both
+# directions: back into VtMB's basis against the bytes it was read from, and
+# forward against the transcription of the rule this module already holds. A
+# table that named the wrong axis after conversion passes neither.
+
 def _image(grids, *, labels=("walk", "aim", "idle", "turn"), **kwargs):
     return model_image(
         TRANSFORM_CHECKSUM,

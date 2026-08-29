@@ -131,6 +131,9 @@ def test_a_proxy_operand_is_not_mistaken_for_a_material_input():
 # MalformedSourceTests
 # Eleven shipped VMTs are not well-formed. Each departure publishes with its evidence.
 
+# MalformedSourceTests
+# Eleven shipped VMTs are not well-formed. Each departure publishes with its evidence.
+
 def _roles(model):
     return sorted({row["role"] for row in model.anomalies})
 
@@ -174,6 +177,9 @@ def test_a_commented_out_block_header_leaves_an_anonymous_block():
     assert "anonymous-block" in _roles(model)
     assert model.byte_coverage[0]["coveragePercent"] == 100.0
 
+
+# ShaderResolutionTests
+# Combo rules transcribed from `stdshader_dx8.dll`; see `docs/vtmb/shader_combos.md`.
 
 # ShaderResolutionTests
 # Combo rules transcribed from `stdshader_dx8.dll`; see `docs/vtmb/shader_combos.md`.

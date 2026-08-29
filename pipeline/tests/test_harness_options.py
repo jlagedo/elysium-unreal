@@ -13,6 +13,13 @@ from elysium_pipeline.unreal import _take_options
 # green room as `-GreenRoomClip=--drive` and stand a clip that does not exist, with the drive mode
 # never armed and nothing saying so.
 
+# HarnessOptionTests
+# A switch left in the positional list becomes an argument.
+#
+# This is the whole reason `_take_options` exists: `gr <stem> --drive` would otherwise reach the
+# green room as `-GreenRoomClip=--drive` and stand a clip that does not exist, with the drive mode
+# never armed and nothing saying so.
+
 def test_drive_is_taken_out_of_the_positional_list() -> None:
     positional, options = _take_options(["tremere_male_armor_0", "--drive"])
     assert positional == ["tremere_male_armor_0"]
@@ -49,6 +56,14 @@ def test_arena_and_drive_are_independent_flags() -> None:
     assert options.arena
     assert options.drive
 
+
+# ComposeBodyOptionTests
+# `--body` names the bodies a harness stands, and it must leave the positionals alone.
+#
+# The composed-pose harness seats one body per launch, so a set of bodies is a set of launches
+# and the set has to survive one command line. Left in the positional list `--body` would reach
+# the harness as its weapon argument and the run would refuse to grant an item class named
+# `--body`.
 
 # ComposeBodyOptionTests
 # `--body` names the bodies a harness stands, and it must leave the positionals alone.

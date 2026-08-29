@@ -105,7 +105,7 @@ DEFINITIONS = {
 }
 
 
-def compile(*, sprites=None):
+def compile_rain(*, sprites=None):
     available = sprites or {"dropletfast", "fortituderings", "d_targetblob"}
     return particles.compile_closure(
         ["rain_follow_emitter"], DEFINITIONS.get, available.__contains__
@@ -113,7 +113,7 @@ def compile(*, sprites=None):
 
 
 def test_comment_handling_dependency_collision_and_unit_conversion():
-    result = compile()
+    result = compile_rain()
     assert list(result["definitions"]) == ["rain_follow_emitter", "raindrops2", "rainsplash_new", "rainstain"]
     rain = result["definitions"]["raindrops2"]
     assert rain["velocity_cm_per_second"]["x"]["values"][0] == pytest.approx(50.8, abs=1e-7)
@@ -124,7 +124,7 @@ def test_comment_handling_dependency_collision_and_unit_conversion():
 
 def test_missing_asset_and_unsupported_live_field_fail():
     with pytest.raises(particles.ParticleContractError):
-        compile(sprites={"dropletfast", "fortituderings"})
+        compile_rain(sprites={"dropletfast", "fortituderings"})
     changed = dict(DEFINITIONS)
     changed["raindrops2"] = changed["raindrops2"].replace(
         "sprite dropletfast", "sprite dropletfast unknown_live_field 1"
@@ -136,142 +136,147 @@ def test_missing_asset_and_unsupported_live_field_fail():
         )
 
 
-class ImpactParticleContractTests(unittest.TestCase):
-    """The non-precipitation vocabulary the cinematic emitters use."""
+IMPACT_PARTICLE_CONTRACT_DEFINITIONS = {
+    "impact_emitter": '''Particle {
+        loop 1
+        spawn { particle impact_fx burst 40 phi "-40~40" theta "-40~40" x 2 y 3 z "-1" }
+        spawn { particle impact_fx rate 30 }
+    }''',
+    "impact_fx": '''Particle {
+        frames 30 sprite bloodspray size 5 height "3,1" width 2 movealign 1
+        parent_speed 1 radius_speed "-40~-100,0" elevation_speed "0,-150" depth_offset 10
+        red "255~150" green 0 blue 0 color "100,0" mask "255,0"
+    }''',
+}
 
-    DEFINITIONS = {
-        "impact_emitter": '''Particle {
-            loop 1
-            spawn { particle impact_fx burst 40 phi "-40~40" theta "-40~40" x 2 y 3 z "-1" }
-            spawn { particle impact_fx rate 30 }
-        }''',
-        "impact_fx": '''Particle {
-            frames 30 sprite bloodspray size 5 height "3,1" width 2 movealign 1
-            parent_speed 1 radius_speed "-40~-100,0" elevation_speed "0,-150" depth_offset 10
-            red "255~150" green 0 blue 0 color "100,0" mask "255,0"
-        }''',
-    }
 
-    def compile(self):
-        return particles.compile_closure(
-            ["impact_emitter"], self.DEFINITIONS.get, {"bloodspray"}.__contains__
+def impact_particle_contract_compile():
+    return particles.compile_closure(
+        ["impact_emitter"], IMPACT_PARTICLE_CONTRACT_DEFINITIONS.get, {"bloodspray"}.__contains__
+    )
+
+
+def test_burst_and_cartesian_spawn_offset():
+    spawns = impact_particle_contract_compile()["definitions"]["impact_emitter"]["spawns"]
+    assert spawns[0]["burst"]["values"][0] == pytest.approx(40.0, abs=1e-7)
+    offset = spawns[0]["offset_cm"]
+    assert offset["x"]["values"][0] == pytest.approx(5.08, abs=1e-7)
+    # `y` takes the same Source reflection the velocities do.
+    assert offset["y"]["values"][0] == pytest.approx(-7.62, abs=1e-7)
+    assert offset["z"]["values"][0] == pytest.approx(-2.54, abs=1e-7)
+    assert "offset_cm" not in spawns[1]
+    assert spawns[1]["rate"]["values"][0] == pytest.approx(30.0, abs=1e-7)
+
+
+def test_spherical_speeds_convert_and_parent_speed_stays_dimensionless():
+    fx = impact_particle_contract_compile()["definitions"]["impact_fx"]
+    radial = fx["radial_velocity_cm_per_second"]
+    assert radial["radius"]["values"][0] == pytest.approx(-101.6, abs=1e-7)
+    assert radial["elevation"]["values"][1] == pytest.approx(-381.0, abs=1e-7)
+    assert radial["radius"]["kind"] == "range"
+    # A fraction of the parent's velocity, not a length.
+    assert fx["parent_speed"]["values"][0] == pytest.approx(1.0, abs=1e-7)
+    # Unresolved unit, so carried verbatim.
+    assert fx["depth_offset"]["values"][0] == pytest.approx(10.0, abs=1e-7)
+
+
+def test_rgb_channels_and_width_are_carried():
+    fx = impact_particle_contract_compile()["definitions"]["impact_fx"]
+    assert fx["red"]["values"] == [255.0, 150.0]
+    assert fx["green"]["values"] == [0.0]
+    assert fx["blue"]["values"] == [0.0]
+    assert fx["width_cm"]["values"][0] == pytest.approx(5.08, abs=1e-7)
+
+
+MAP_PARTICLE_DOCUMENT_DEFINITIONS = {
+    "good_emitter": 'Particle { loop 1 spawn { particle good_fx burst 4 } }',
+    "good_fx": 'Particle { frames 10 sprite spark size 1 }',
+    "force_feeding_emitter":
+        'Particle { frames 10 spawn { particle force_feeding_fx1 burst 20 } }',
+    "force_feeding_fx1": 'Particle { frames 10 sprite spark size 4 }',
+    # Uses a key the contract has not established.
+    "broken_emitter": 'Particle { frames 10 sprite spark sortfront 1 }',
+}
+
+
+def map_particle_document():
+    entities = {"entities": [
+        {"classname": "env_particle", "targetname": "attached",
+         "origin": [1.0, 2.0, 3.0],
+         "keys": {"particle_definition": "good_emitter", "active": "1",
+                  "attach_type": "2", "parentname": "Sire2", "bone": "Bip01 Neck",
+                  "bounds": "512"}},
+        # Spelled as a path with an extension - the same file.
+        {"classname": "env_particle", "targetname": "pathspelled",
+         "keys": {"particle_definition": "particles/good_emitter.txt"}},
+        {"classname": "env_particle", "targetname": "unresolvable",
+         "keys": {"particle_definition": "broken_emitter"}},
+        {"classname": "env_particle", "targetname": "nodefinition", "keys": {}},
+        {"classname": "logic_relay", "targetname": "notaparticle", "keys": {}},
+    ]}
+    return particles.build_particle_document(
+        "testmap", entities, MAP_PARTICLE_DOCUMENT_DEFINITIONS.get, {"spark"}.__contains__
+    )
+
+
+def test_attachment_keys_and_definition_spelling():
+    document = map_particle_document()
+    assert document["schema"] == particles.MAP_PARTICLE_SCHEMA
+    # The keyless entity is skipped; the logic_relay is not an emitter.
+    assert [e["targetname"] for e in document["emitters"]] == ["attached", "pathspelled", "unresolvable"]
+    attached = document["emitters"][0]
+    assert attached["attach_type"] == 2
+    assert attached["parentname"] == "Sire2"
+    assert attached["bone"] == "Bip01 Neck"
+    assert attached["bounds_cm"] == pytest.approx(512 * 2.54, abs=1e-7)
+    # `particles/good_emitter.txt` resolves to the same definition as `good_emitter`.
+    assert document["emitters"][1]["particle_definition"] == "good_emitter"
+
+
+def test_one_bad_definition_does_not_lose_the_others():
+    document = map_particle_document()
+    assert "good_emitter" in document["particles"]["definitions"]
+    assert "good_fx" in document["particles"]["definitions"]
+    assert "broken_emitter" not in document["particles"]["definitions"]
+    assert [u["definition"] for u in document["unresolved"]] == ["broken_emitter"]
+    assert "sortfront" in document["unresolved"][0]["reason"]
+    # The emitter is still listed, so the map records what it wanted to play.
+    assert document["emitters"][2]["particle_definition"] == "broken_emitter"
+
+
+def test_a_map_with_no_entities_still_bakes_gameplay_event_roots():
+    document = particles.build_particle_document(
+        "empty", {"entities": []}, MAP_PARTICLE_DOCUMENT_DEFINITIONS.get, {"spark"}.__contains__)
+    assert document["emitters"] == []
+    assert document["particles"]["roots"] == ["force_feeding_emitter"]
+    assert "force_feeding_fx1" in document["particles"]["definitions"]
+
+
+def test_spawn_wrapper_accepts_zero_frames_and_inert_sortfront():
+    wrapper, refs, sprites = particles.compile_definition(
+        "muzzleflash_emitter_up",
+        'Particle { frames 0 spawn { particle W_thirtyeight_flash-1 burst 1 '
+        'z 12 depth_offset 1 } }',
+    )
+    child, child_refs, child_sprites = particles.compile_definition(
+        "W_thirtyeight_flash-1",
+        'Particle { frames 2 sprite flash sortfront 0 }',
+    )
+    assert wrapper["frames"] == 0
+    assert refs == {"w_thirtyeight_flash-1"}
+    assert sprites == set()
+    assert wrapper["spawns"][0]["depth_offset"]["values"] == [1.0]
+    assert wrapper["spawns"][0]["offset_cm"]["z"]["values"][0] == pytest.approx(30.48, abs=1e-7)
+    assert not child["sortfront"]
+    assert child_refs == set()
+    assert child_sprites == {"flash"}
+
+    with pytest.raises(particles.ParticleContractError, match="sortfront"):
+        particles.compile_definition(
+            "sorted_fx", 'Particle { frames 2 sprite flash sortfront 1 }'
         )
-
-    def test_burst_and_cartesian_spawn_offset(self):
-        spawns = self.compile()["definitions"]["impact_emitter"]["spawns"]
-        assert spawns[0]["burst"]["values"][0] == pytest.approx(40.0, abs=1e-7)
-        offset = spawns[0]["offset_cm"]
-        assert offset["x"]["values"][0] == pytest.approx(5.08, abs=1e-7)
-        # `y` takes the same Source reflection the velocities do.
-        assert offset["y"]["values"][0] == pytest.approx(-7.62, abs=1e-7)
-        assert offset["z"]["values"][0] == pytest.approx(-2.54, abs=1e-7)
-        assert "offset_cm" not in spawns[1]
-        assert spawns[1]["rate"]["values"][0] == pytest.approx(30.0, abs=1e-7)
-
-    def test_spherical_speeds_convert_and_parent_speed_stays_dimensionless(self):
-        fx = self.compile()["definitions"]["impact_fx"]
-        radial = fx["radial_velocity_cm_per_second"]
-        assert radial["radius"]["values"][0] == pytest.approx(-101.6, abs=1e-7)
-        assert radial["elevation"]["values"][1] == pytest.approx(-381.0, abs=1e-7)
-        assert radial["radius"]["kind"] == "range"
-        # A fraction of the parent's velocity, not a length.
-        assert fx["parent_speed"]["values"][0] == pytest.approx(1.0, abs=1e-7)
-        # Unresolved unit, so carried verbatim.
-        assert fx["depth_offset"]["values"][0] == pytest.approx(10.0, abs=1e-7)
-
-    def test_rgb_channels_and_width_are_carried(self):
-        fx = self.compile()["definitions"]["impact_fx"]
-        assert fx["red"]["values"] == [255.0, 150.0]
-        assert fx["green"]["values"] == [0.0]
-        assert fx["blue"]["values"] == [0.0]
-        assert fx["width_cm"]["values"][0] == pytest.approx(5.08, abs=1e-7)
-
-
-class MapParticleDocumentTests(unittest.TestCase):
-    DEFINITIONS = {
-        "good_emitter": 'Particle { loop 1 spawn { particle good_fx burst 4 } }',
-        "good_fx": 'Particle { frames 10 sprite spark size 1 }',
-        "force_feeding_emitter":
-            'Particle { frames 10 spawn { particle force_feeding_fx1 burst 20 } }',
-        "force_feeding_fx1": 'Particle { frames 10 sprite spark size 4 }',
-        # Uses a key the contract has not established.
-        "broken_emitter": 'Particle { frames 10 sprite spark sortfront 1 }',
-    }
-
-    def document(self):
-        entities = {"entities": [
-            {"classname": "env_particle", "targetname": "attached",
-             "origin": [1.0, 2.0, 3.0],
-             "keys": {"particle_definition": "good_emitter", "active": "1",
-                      "attach_type": "2", "parentname": "Sire2", "bone": "Bip01 Neck",
-                      "bounds": "512"}},
-            # Spelled as a path with an extension - the same file.
-            {"classname": "env_particle", "targetname": "pathspelled",
-             "keys": {"particle_definition": "particles/good_emitter.txt"}},
-            {"classname": "env_particle", "targetname": "unresolvable",
-             "keys": {"particle_definition": "broken_emitter"}},
-            {"classname": "env_particle", "targetname": "nodefinition", "keys": {}},
-            {"classname": "logic_relay", "targetname": "notaparticle", "keys": {}},
-        ]}
-        return particles.build_particle_document(
-            "testmap", entities, self.DEFINITIONS.get, {"spark"}.__contains__
-        )
-
-    def test_attachment_keys_and_definition_spelling(self):
-        document = self.document()
-        assert document["schema"] == particles.MAP_PARTICLE_SCHEMA
-        # The keyless entity is skipped; the logic_relay is not an emitter.
-        assert [e["targetname"] for e in document["emitters"]] == ["attached", "pathspelled", "unresolvable"]
-        attached = document["emitters"][0]
-        assert attached["attach_type"] == 2
-        assert attached["parentname"] == "Sire2"
-        assert attached["bone"] == "Bip01 Neck"
-        assert attached["bounds_cm"] == pytest.approx(512 * 2.54, abs=1e-7)
-        # `particles/good_emitter.txt` resolves to the same definition as `good_emitter`.
-        assert document["emitters"][1]["particle_definition"] == "good_emitter"
-
-    def test_one_bad_definition_does_not_lose_the_others(self):
-        document = self.document()
-        assert "good_emitter" in document["particles"]["definitions"]
-        assert "good_fx" in document["particles"]["definitions"]
-        assert "broken_emitter" not in document["particles"]["definitions"]
-        assert [u["definition"] for u in document["unresolved"]] == ["broken_emitter"]
-        assert "sortfront" in document["unresolved"][0]["reason"]
-        # The emitter is still listed, so the map records what it wanted to play.
-        assert document["emitters"][2]["particle_definition"] == "broken_emitter"
-
-    def test_a_map_with_no_entities_still_bakes_gameplay_event_roots(self):
-        document = particles.build_particle_document(
-            "empty", {"entities": []}, self.DEFINITIONS.get, {"spark"}.__contains__)
-        assert document["emitters"] == []
-        assert document["particles"]["roots"] == ["force_feeding_emitter"]
-        assert "force_feeding_fx1" in document["particles"]["definitions"]
-
-    def test_spawn_wrapper_accepts_zero_frames_and_inert_sortfront(self):
-        wrapper, refs, sprites = particles.compile_definition(
-            "muzzleflash_emitter_up",
-            'Particle { frames 0 spawn { particle W_thirtyeight_flash-1 burst 1 '
-            'z 12 depth_offset 1 } }',
-        )
-        child, child_refs, child_sprites = particles.compile_definition(
-            "W_thirtyeight_flash-1",
-            'Particle { frames 2 sprite flash sortfront 0 }',
-        )
-        assert wrapper["frames"] == 0
-        assert refs == {"w_thirtyeight_flash-1"}
-        assert sprites == set()
-        assert wrapper["spawns"][0]["depth_offset"]["values"] == [1.0]
-        assert wrapper["spawns"][0]["offset_cm"]["z"]["values"][0] == pytest.approx(30.48, abs=1e-7)
-        assert not child["sortfront"]
-        assert child_refs == set()
-        assert child_sprites == {"flash"}
-
-        with pytest.raises(particles.ParticleContractError, match="sortfront"):
-            particles.compile_definition(
-                "sorted_fx", 'Particle { frames 2 sprite flash sortfront 1 }'
-            )
-        with pytest.raises(particles.ParticleContractError, match="frames"):
-            particles.compile_definition("zero_sprite", 'Particle { frames 0 sprite flash }')
+    with pytest.raises(particles.ParticleContractError, match="frames"):
+        particles.compile_definition("zero_sprite", 'Particle { frames 0 sprite flash }')
 
 
 def test_only_solid_non_sky_props_become_placed_cover():

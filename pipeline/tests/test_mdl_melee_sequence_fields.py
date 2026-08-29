@@ -249,6 +249,9 @@ def test_an_ordinary_sequence_states_neither() -> None:
 # LowReachTests
 # `low_reach`@716 — the near edge of the band whose far edge is `reach`@720.
 
+# LowReachTests
+# `low_reach`@716 — the near edge of the band whose far edge is `reach`@720.
+
 def test_the_unset_marker_is_flt_min_and_not_flt_max():
     # The whole reason this field needs its own reader. `FLT_MIN` is a finite POSITIVE float, so
     # a reader that copied `read_reach`'s `>= FLT_MAX` test would report 13,496 descriptors as
@@ -312,6 +315,10 @@ class EnvelopeTests(unittest.TestCase):
         assert len(seq.swings) == 1
         assert len(seq.envelopes) == 2
 
+
+# ComboChainTests
+# `read_combo_chain` -- the descriptor's last 44 bytes: which key selects this attack,
+# which attack it hands off to, and when the hand-off may be asked for.
 
 # ComboChainTests
 # `read_combo_chain` -- the descriptor's last 44 bytes: which key selects this attack,
@@ -420,6 +427,9 @@ def test_the_names_are_addressed_from_the_descriptor() -> None:
 # ComboChainOrphanTests
 # `combo_chain_orphans` -- the census of links naming a sequence the model does not have.
 
+# ComboChainOrphanTests
+# `combo_chain_orphans` -- the census of links naming a sequence the model does not have.
+
 def test_a_link_resolving_to_a_local_sequence_is_no_orphan() -> None:
     clips = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
                        siblings=("fists_attack_Roundhouse",))
@@ -470,6 +480,9 @@ def test_a_model_with_no_dangling_link_warns_nothing() -> None:
         assert npc_export.warn_combo_chain_orphans("models/x.mdl", clips) == 0
     printed.assert_not_called()
 
+
+# SwingContactRecordTests
+# `read_swing_records` -- the 188-byte records `numswingcentres`@708 declares.
 
 # SwingContactRecordTests
 # `read_swing_records` -- the 188-byte records `numswingcentres`@708 declares.
@@ -571,6 +584,9 @@ def test_a_sequence_declaring_none_carries_none() -> None:
 # ClipMetaTests
 # `_clip_meta` states the reach in the centimetres every sidecar is written in.
 
+# ClipMetaTests
+# `_clip_meta` states the reach in the centimetres every sidecar is written in.
+
 def test_the_reach_crosses_the_seam_in_centimetres() -> None:
     meta = npc_export._clip_meta(_sequence(reach=64.0))
     assert meta["reach_cm"] == pytest.approx(162.56, abs=1e-4)
@@ -629,6 +645,9 @@ def test_the_degenerate_flag_is_stated_on_every_swing_row() -> None:
         _sequence(swings=[_swing(), _swing(window=(0.302, 0.0))]))["swings"]
     assert [row["degenerate"] for row in rows] == [False, True]
 
+
+# ClipSidecarRowTests
+# The clip slice row, which is truncated at its last stated column.
 
 # ClipSidecarRowTests
 # The clip slice row, which is truncated at its last stated column.

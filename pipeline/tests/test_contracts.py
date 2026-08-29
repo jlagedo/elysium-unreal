@@ -373,60 +373,65 @@ def test_shared_basetexture_writes_one_file_whatever_the_order() -> None:
                 assert exported.getchannel("A").getpixel((0, 0)) == 73
 
 
-class TextureDecodeMemoTests(unittest.TestCase):
-    """`mdl._png_memo`: one decode+write per output path across per-model caches."""
+TEXTURE_DECODE_MEMO_SEARCH = ["models/props/"]
 
-    SEARCH = ["models/props/"]
 
-    @staticmethod
-    def _read_bytes_for(vmts):
-        def read_bytes(path):
-            if path in vmts:
-                return vmts[path].encode("ascii")
-            if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
-                return b"synthetic"
-            return None
-        return read_bytes
+# TextureDecodeMemoTests
+# `mdl._png_memo`: one decode+write per output path across per-model caches.
 
-    def test_a_shared_texture_decodes_once_across_per_model_caches(self) -> None:
-        read_bytes = self._read_bytes_for({
-            "materials/models/props/glasswin.vmt":
-                '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n',
-        })
-        source = Image.new("RGBA", (2, 1))
-        source.putdata([(10, 20, 30, 0), (40, 50, 60, 191)])
-        with tempfile.TemporaryDirectory() as out, mock.patch(
-            "elysium_pipeline.formats.tex_to_png.decode", return_value=source
-        ) as decode:
-            (Path(out) / "tex").mkdir()          # write_obj_scene's own makedirs
-            first = mdl._resolve_material("glasswin", self.SEARCH, read_bytes, out, {})
-            second = mdl._resolve_material("glasswin", self.SEARCH, read_bytes, out, {})
-        assert first["albedo"] == "props_shared.png"
-        assert second["albedo"] == first["albedo"]
-        assert decode.call_count == 1
+def _read_bytes_for(vmts):
+    def read_bytes(path):
+        if path in vmts:
+            return vmts[path].encode("ascii")
+        if path in ("materials/props/shared.tth", "materials/props/shared.ttz"):
+            return b"synthetic"
+        return None
+    return read_bytes
 
-    def test_selfillum_arriving_on_a_later_model_still_writes_the_emission_mask(self) -> None:
-        # The memo keeps filenames, not images, so a derived product first requested by a
-        # later model re-decodes its base once rather than losing the mask.
-        read_bytes = self._read_bytes_for({
-            "materials/models/props/plain.vmt":
-                '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n',
-            "materials/models/props/glow.vmt":
-                '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n"$selfillum" "1"\n}\n',
-        })
-        source = Image.new("RGBA", (2, 1))
-        source.putdata([(10, 20, 30, 0), (40, 50, 60, 191)])
-        with tempfile.TemporaryDirectory() as out, mock.patch(
-            "elysium_pipeline.formats.tex_to_png.decode", return_value=source
-        ) as decode:
-            (Path(out) / "tex").mkdir()          # write_obj_scene's own makedirs
-            first = mdl._resolve_material("plain", self.SEARCH, read_bytes, out, {})
-            second = mdl._resolve_material("glow", self.SEARCH, read_bytes, out, {})
-            assert (Path(out) / "tex" / "props_shared_ke.png").is_file()
-        assert first["emis"] is None
-        assert second["emis"] == "props_shared_ke.png"
-        assert decode.call_count == 2   # the albedo, then the mask's re-decode
 
+def test_a_shared_texture_decodes_once_across_per_model_caches() -> None:
+    read_bytes = _read_bytes_for({
+        "materials/models/props/glasswin.vmt":
+            '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n',
+    })
+    source = Image.new("RGBA", (2, 1))
+    source.putdata([(10, 20, 30, 0), (40, 50, 60, 191)])
+    with tempfile.TemporaryDirectory() as out, mock.patch(
+        "elysium_pipeline.formats.tex_to_png.decode", return_value=source
+    ) as decode:
+        (Path(out) / "tex").mkdir()          # write_obj_scene's own makedirs
+        first = mdl._resolve_material("glasswin", TEXTURE_DECODE_MEMO_SEARCH, read_bytes, out, {})
+        second = mdl._resolve_material("glasswin", TEXTURE_DECODE_MEMO_SEARCH, read_bytes, out, {})
+    assert first["albedo"] == "props_shared.png"
+    assert second["albedo"] == first["albedo"]
+    assert decode.call_count == 1
+
+
+def test_selfillum_arriving_on_a_later_model_still_writes_the_emission_mask() -> None:
+    # The memo keeps filenames, not images, so a derived product first requested by a
+    # later model re-decodes its base once rather than losing the mask.
+    read_bytes = _read_bytes_for({
+        "materials/models/props/plain.vmt":
+            '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n}\n',
+        "materials/models/props/glow.vmt":
+            '"VertexLitGeneric"\n{\n"$basetexture" "props/shared"\n"$selfillum" "1"\n}\n',
+    })
+    source = Image.new("RGBA", (2, 1))
+    source.putdata([(10, 20, 30, 0), (40, 50, 60, 191)])
+    with tempfile.TemporaryDirectory() as out, mock.patch(
+        "elysium_pipeline.formats.tex_to_png.decode", return_value=source
+    ) as decode:
+        (Path(out) / "tex").mkdir()          # write_obj_scene's own makedirs
+        first = mdl._resolve_material("plain", TEXTURE_DECODE_MEMO_SEARCH, read_bytes, out, {})
+        second = mdl._resolve_material("glow", TEXTURE_DECODE_MEMO_SEARCH, read_bytes, out, {})
+        assert (Path(out) / "tex" / "props_shared_ke.png").is_file()
+    assert first["emis"] is None
+    assert second["emis"] == "props_shared_ke.png"
+    assert decode.call_count == 2   # the albedo, then the mask's re-decode
+
+
+# SourceFormatAlphaTests
+# `decode` answers the fold-to-RGB question from the source format where provable.
 
 # SourceFormatAlphaTests
 # `decode` answers the fold-to-RGB question from the source format where provable.

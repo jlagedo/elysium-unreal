@@ -229,6 +229,10 @@ def test_ordinary_bind_carries_no_anomaly() -> None:
 # `trail_tip_from_geometry`: the melee weapon-trail VFX's synthetic `TrailTip` attachment,
 # the model's own geometry's farthest point from the mount along its own long axis.
 
+# TrailTipTests
+# `trail_tip_from_geometry`: the melee weapon-trail VFX's synthetic `TrailTip` attachment,
+# the model's own geometry's farthest point from the mount along its own long axis.
+
 def _rig():
     # Every arm bone is at the origin with an identity bind (the `bone()` default), so the
     # mount's bind-space WORLD transform equals its own local: a pure translation to (4,0,0).
@@ -299,6 +303,10 @@ def test_wrapper_is_none_off_socket_prop() -> None:
 
     assert W.trail_tip(b"", b"", bones, cls) is None
 
+
+# NonSocketBindingTests
+# The three non-socket modes need the character corpus: whether a rig is worn at all is a
+# fact about the cast, not about the file.
 
 # NonSocketBindingTests
 # The three non-socket modes need the character corpus: whether a rig is worn at all is a
@@ -407,6 +415,11 @@ def test_inconsistent_stored_inverse_bind_fails_and_names_the_bone() -> None:
 # bind is still a rigid weapon -- `bake_pose` carries that offset -- so only frame-to-frame
 # variation makes a socket wrong.
 
+# MotionTests
+# Measured across frames, not against the bind pose. A clip sitting at a constant offset from
+# bind is still a rigid weapon -- `bake_pose` carries that offset -- so only frame-to-frame
+# variation makes a socket wrong.
+
 def _pose(frames, mover=None):
     out = []
     for index in range(frames):
@@ -416,6 +429,13 @@ def _pose(frames, mover=None):
         out.append(row)
     return out
 
+
+# BoneMotionTests
+# `bone_motion`'s envelope across every local sequence, at full precision. The four
+# ground-truth wield magnitudes it mirrors -- `w_m_flamethrower`'s unskinned `trigger` at
+# 0.3203in/1.2535deg and `w_m_lockpick`'s skinned `lockpick` at 0.0313in/6.3565deg -- are
+# measured against the real install and are not reproduced here; what is exercised is the same
+# decision shape at representative magnitudes.
 
 def _bones():
     return [bone(0, "Bip01 R Hand", -1), bone(1, "slide", 0)]
@@ -477,6 +497,11 @@ def test_an_unknown_name_reports_no_bodies() -> None:
     assert scope["bodies"] == 0
     assert not scope["under_hand"]
 
+
+# MaterialResolutionTests
+# `_resolve_material_row`'s three outcomes: a real decode, a VMT that never resolves, and a
+# texture whose bytes do not decode -- the corpus's one real case, `handleclaws`'s ``null``
+# material and its 20-byte empty `.ttz`.
 
 # MaterialResolutionTests
 # `_resolve_material_row`'s three outcomes: a real decode, a VMT that never resolves, and a
@@ -545,6 +570,10 @@ def test_a_vmt_with_no_drawable_texture_is_not_a_failure() -> None:
 # `model_materials` over an already-loaded model: header material order, one row per
 # material, and a per-row failure that never raises.
 
+# ModelMaterialsTests
+# `model_materials` over an already-loaded model: header material order, one row per
+# material, and a per-row failure that never raises.
+
 def test_materials_are_reported_in_header_order_with_per_row_failures() -> None:
     with tempfile.TemporaryDirectory() as root:
         install_ = _Install(Path(root))
@@ -567,6 +596,10 @@ def test_materials_are_reported_in_header_order_with_per_row_failures() -> None:
         assert rows[1].albedo == ""
         assert rows[1].failure != ""
 
+
+# SkinFamilyOverrideTests
+# `skin_families` diffs every extra family against family 0 and resolves the override the
+# same way a drawn material resolves -- the fire_axe ghost reskin is the one real case.
 
 # SkinFamilyOverrideTests
 # `skin_families` diffs every extra family against family 0 and resolves the override the
@@ -605,60 +638,56 @@ def test_an_extra_family_reports_the_repainted_slot_resolved() -> None:
         assert override.bump == ""
 
 
-class BoneMotionTests(unittest.TestCase):
-    """`bone_motion`'s envelope across every local sequence, at full precision. The four
-    ground-truth wield magnitudes it mirrors -- `w_m_flamethrower`'s unskinned `trigger` at
-    0.3203in/1.2535deg and `w_m_lockpick`'s skinned `lockpick` at 0.0313in/6.3565deg -- are
-    measured against the real install and are not reproduced here; what is exercised is the same
-    decision shape at representative magnitudes."""
+def _bone_motion_bones():
+    return [bone(0, "mount", -1), bone(1, "trigger", 0)]
 
-    def _bones(self):
-        return [bone(0, "mount", -1), bone(1, "trigger", 0)]
 
-    def _quat(self, degrees):
-        half = math.radians(degrees) / 2.0
-        return (0.0, 0.0, math.sin(half), math.cos(half))
+def _quat(degrees):
+    half = math.radians(degrees) / 2.0
+    return (0.0, 0.0, math.sin(half), math.cos(half))
 
-    def test_motion_is_measured_from_each_sequences_own_frame_zero(self) -> None:
-        bones = self._bones()
-        rest = ((0.0, 0.0, 0.0), IDENTITY_Q)
-        moved = ((0.3203, 0.0, 0.0), self._quat(1.2535))
-        seq = mdl_skel.Seq(label="fire", base=0, frames=2, fps=30.0, activity="", actweight=0,
-                           flags=0)
 
-        with (mock.patch.object(mdl_skel, "local_sequences", return_value=[seq]),
-              mock.patch.object(mdl_skel, "read_anim",
-                                return_value=[[rest, rest], [rest, moved]]),
-              mock.patch.object(mdl_skel, "decode_skinned",
-                                return_value={"m": {"joints": [[0, 0, 0, 0]],
-                                                     "weights": [[1.0, 0.0, 0.0, 0.0]]}})):
-            rows = {row.name: row for row in W.bone_motion(b"mdl", b"vtx", bones)}
+def test_motion_is_measured_from_each_sequences_own_frame_zero() -> None:
+    bones = _bone_motion_bones()
+    rest = ((0.0, 0.0, 0.0), IDENTITY_Q)
+    moved = ((0.3203, 0.0, 0.0), _quat(1.2535))
+    seq = mdl_skel.Seq(label="fire", base=0, frames=2, fps=30.0, activity="", actweight=0,
+                       flags=0)
 
-        assert rows["mount"].max_pos == 0.0
-        assert rows["mount"].max_rot == 0.0
-        assert rows["mount"].skinned
+    with (mock.patch.object(mdl_skel, "local_sequences", return_value=[seq]),
+          mock.patch.object(mdl_skel, "read_anim",
+                            return_value=[[rest, rest], [rest, moved]]),
+          mock.patch.object(mdl_skel, "decode_skinned",
+                            return_value={"m": {"joints": [[0, 0, 0, 0]],
+                                                 "weights": [[1.0, 0.0, 0.0, 0.0]]}})):
+        rows = {row.name: row for row in W.bone_motion(b"mdl", b"vtx", bones)}
 
-        assert rows["trigger"].max_pos == pytest.approx(0.3203, abs=1e-4)
-        assert rows["trigger"].max_rot == pytest.approx(1.2535, abs=1e-3)
-        assert not rows["trigger"].skinned
+    assert rows["mount"].max_pos == 0.0
+    assert rows["mount"].max_rot == 0.0
+    assert rows["mount"].skinned
 
-    def test_the_envelope_is_the_max_across_every_sequence(self) -> None:
-        bones = self._bones()
-        rest = ((0.0, 0.0, 0.0), IDENTITY_Q)
-        small = ((0.01, 0.0, 0.0), IDENTITY_Q)
-        big = ((0.5, 0.0, 0.0), IDENTITY_Q)
-        seq_a = mdl_skel.Seq(label="a", base=0, frames=2, fps=30.0, activity="", actweight=0,
-                             flags=0)
-        seq_b = mdl_skel.Seq(label="b", base=100, frames=2, fps=30.0, activity="", actweight=0,
-                             flags=0)
+    assert rows["trigger"].max_pos == pytest.approx(0.3203, abs=1e-4)
+    assert rows["trigger"].max_rot == pytest.approx(1.2535, abs=1e-3)
+    assert not rows["trigger"].skinned
 
-        def read_anim(_d, _bones, base, _frames):
-            return [[rest, rest], [rest, small]] if base == 0 else [[rest, rest], [rest, big]]
 
-        with (mock.patch.object(mdl_skel, "local_sequences", return_value=[seq_a, seq_b]),
-              mock.patch.object(mdl_skel, "read_anim", side_effect=read_anim),
-              mock.patch.object(mdl_skel, "decode_skinned", return_value={})):
-            rows = {row.name: row for row in W.bone_motion(b"mdl", b"vtx", bones)}
+def test_the_envelope_is_the_max_across_every_sequence() -> None:
+    bones = _bone_motion_bones()
+    rest = ((0.0, 0.0, 0.0), IDENTITY_Q)
+    small = ((0.01, 0.0, 0.0), IDENTITY_Q)
+    big = ((0.5, 0.0, 0.0), IDENTITY_Q)
+    seq_a = mdl_skel.Seq(label="a", base=0, frames=2, fps=30.0, activity="", actweight=0,
+                         flags=0)
+    seq_b = mdl_skel.Seq(label="b", base=100, frames=2, fps=30.0, activity="", actweight=0,
+                         flags=0)
 
-        assert rows["trigger"].max_pos == 0.5
-        assert not rows["mount"].skinned
+    def read_anim(_d, _bones, base, _frames):
+        return [[rest, rest], [rest, small]] if base == 0 else [[rest, rest], [rest, big]]
+
+    with (mock.patch.object(mdl_skel, "local_sequences", return_value=[seq_a, seq_b]),
+          mock.patch.object(mdl_skel, "read_anim", side_effect=read_anim),
+          mock.patch.object(mdl_skel, "decode_skinned", return_value={})):
+        rows = {row.name: row for row in W.bone_motion(b"mdl", b"vtx", bones)}
+
+    assert rows["trigger"].max_pos == 0.5
+    assert not rows["mount"].skinned

@@ -12,6 +12,7 @@ multi-line expressions shift with the statement they belong to.
 from __future__ import annotations
 
 import ast
+import builtins
 import re
 import sys
 
@@ -64,6 +65,15 @@ def bare_self_is_only_a_receiver(node, names):
     return True
 
 
+def local_bindings(node):
+    """Names the class's methods bind as locals, which would shadow a hoisted member."""
+    bound = set()
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store):
+            bound.add(sub.id)
+    return bound
+
+
 def module_level_names(tree):
     names = set()
     for node in tree.body:
@@ -87,7 +97,17 @@ def strip_self_parameter(line):
     return line
 
 
-def block(lines, start, end, indent, names):
+def qualify(class_name, member):
+    """`MapParticleDocumentTests`, `DEFINITIONS` -> `MAP_PARTICLE_DOCUMENT_DEFINITIONS`."""
+    stem = re.sub(r"Tests?$", "", class_name)
+    words = re.findall(r"[A-Z]+(?![a-z])|[A-Z][a-z]*|[a-z]+|\d+", stem)
+    if member.isupper():
+        return "_".join(word.upper() for word in words) + "_" + member
+    prefix = "_".join(word.lower() for word in words)
+    return ("_" + prefix + member) if member.startswith("_") else (prefix + "_" + member)
+
+
+def block(lines, start, end, indent, names, rename):
     """Source lines [start, end) dedented by `indent` with `self.member` renamed."""
     pattern = re.compile(r"\bself\.(" + "|".join(re.escape(n) for n in names) + r")\b")
     out = []
@@ -95,7 +115,11 @@ def block(lines, start, end, indent, names):
         text = raw[indent:] if raw[:indent].strip() == "" else raw.lstrip()
         if offset == 0 or "def " in text[:8]:
             text = strip_self_parameter(text)
-        out.append(pattern.sub(r"\1", text))
+        text = pattern.sub(lambda m: rename.get(m.group(1), m.group(1)), text)
+        for original, renamed in rename.items():
+            if offset == 0:
+                text = re.sub(r"^(def |)" + re.escape(original) + r"\b", r"\1" + renamed, text)
+        out.append(text)
     return out
 
 
@@ -119,7 +143,25 @@ def convert(source):
             continue
         if not bare_self_is_only_a_receiver(node, names):
             continue
-        if any(name in taken for name in names):
+        # A helper or constant that already exists at module level is renamed after its
+        # class; a test whose name collides is left for hand conversion, because renaming
+        # one silently changes the node id the owner selects it by.
+        # A member that a method also binds as a local, or that shadows a builtin, has to be
+        # renamed too: at module level the local would shadow the function it calls.
+        shadowed = local_bindings(node) | set(dir(builtins))
+        rename = {}
+        for name in names:
+            if name not in taken and name not in shadowed:
+                continue
+            if name.startswith("test"):
+                if name not in taken:
+                    continue
+                rename = None
+                break
+            rename[name] = qualify(node.name, name)
+        if rename is None:
+            continue
+        if any(rename.get(name, name) in taken for name in names):
             continue
 
         body = [item for item in node.body
@@ -131,11 +173,11 @@ def convert(source):
                 emitted.append("")
                 if isinstance(item, ast.FunctionDef):
                     emitted.append("")
-            emitted.extend(block(lines, first_line(item), item.end_lineno, indent, names))
+            emitted.extend(block(lines, first_line(item), item.end_lineno, indent, names, rename))
         while emitted and not emitted[-1].strip():
             emitted.pop()
         replacements[first_line(node)] = (node.end_lineno, emitted)
-        taken.update(names)
+        taken.update(rename.get(name, name) for name in names)
         converted += 1
 
     if not converted:

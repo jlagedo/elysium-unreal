@@ -49,6 +49,9 @@ def test_distinguishes_an_added_bone():
 # RigFamilySemanticsTests
 # The properties `character_partition` relies on, pinned so a change to them is visible.
 
+# RigFamilySemanticsTests
+# The properties `character_partition` relies on, pinned so a change to them is visible.
+
 def test_agreeing_trees_merge():
     families = eskm.rig_families({"a": A_SEED, "b": A_SEED}, ["a", "b"])
     assert len(families) == 1
@@ -69,6 +72,15 @@ def test_a_family_is_named_for_its_lowest_sorted_member():
     families = eskm.rig_families({"zz": A_SEED, "aa": A_SEED}, ["zz", "aa"])
     assert families[0]["name"] == "aa"
 
+
+# SubsetInstabilityTests
+# Why the BANK partition is declared rather than recomputed.
+#
+# These assert the behaviour of the RAW partition function, which is subset-sensitive by
+# construction. They are the reason `build_partition` is fed the whole corpus and the answer is
+# written down -- not a defect in `rig_families`, which documents this contract itself. The
+# model half of the declared partition has no such hazard: every stem is a singleton regardless
+# of who else is in the input set.
 
 # SubsetInstabilityTests
 # Why the BANK partition is declared rather than recomputed.
@@ -179,6 +191,14 @@ MANIFEST = {
     }
 }
 
+
+# FocusedScopeTests
+# `scopes_for` reading the cast manifest's clip table.
+#
+# A clip label names every bank that DECLARES it, in include-tree order, so the manifest maps a
+# label to a LIST of owners. A focused bake resolves the bank families its named bodies reach by
+# reading that table, and read as if each value were one owner it puts a list into a set --
+# which raised before the run had written anything, so no bake could be scoped to a body at all.
 
 # FocusedScopeTests
 # `scopes_for` reading the cast manifest's clip table.

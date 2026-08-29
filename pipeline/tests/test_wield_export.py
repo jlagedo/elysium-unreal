@@ -150,6 +150,11 @@ def _fake_write_model(_idx, _model_path, out_dir, stem=None, ref_pose=None, **_k
 # exporter's decision-layer calls. `_run` mocks the census constants to the fixture's own shape
 # so `main` does not fail its own drift assertion against the 244-definition install.
 
+# WieldExportTests
+# Shared fixture: one real model plus a null/empty/absent row apiece, patched onto the
+# exporter's decision-layer calls. `_run` mocks the census constants to the fixture's own shape
+# so `main` does not fail its own drift assertion against the 244-definition install.
+
 def _install(root: Path) -> _Install:
     inst = _Install(root)
     inst.item("item_a_real", f'\t"wieldmodel_f"\t"{REAL_MODEL}"\n'
