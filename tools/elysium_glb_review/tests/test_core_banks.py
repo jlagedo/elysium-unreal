@@ -210,15 +210,15 @@ class ClipListingTests(unittest.TestCase):
         assert banks.clip_names("vtmb:animation-bank:shared/gone", self.root) == []
 
 
-class SkeletonJoinTests(unittest.TestCase):
-    def test_bone_names_come_back_in_declared_order(self) -> None:
-        # Bank and body declare their own bone tables, so name order is the only join.
-        names = ["Bip01", "Bip01 Pelvis", "Bip01 Spine"]
-        document = support.document_of(
-            support.character_unit("vtmb:character-body:npc/body", bones=names)
-        )
-        assert banks.bone_names(document) == tuple(names)
+def test_bone_names_come_back_in_declared_order() -> None:
+    # Bank and body declare their own bone tables, so name order is the only join.
+    names = ["Bip01", "Bip01 Pelvis", "Bip01 Spine"]
+    document = support.document_of(
+        support.character_unit("vtmb:character-body:npc/body", bones=names)
+    )
+    assert banks.bone_names(document) == tuple(names)
 
-    def test_a_document_without_a_skeleton_yields_no_names(self) -> None:
-        assert banks.bone_names({}) == ()
-        assert banks.bone_remaps({}) == {}
+
+def test_a_document_without_a_skeleton_yields_no_names() -> None:
+    assert banks.bone_names({}) == ()
+    assert banks.bone_remaps({}) == {}

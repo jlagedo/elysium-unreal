@@ -28,44 +28,45 @@ POLICY = importlib.util.module_from_spec(POLICY_SPEC)
 POLICY_SPEC.loader.exec_module(POLICY)
 
 
-class CoordinateContractTests(unittest.TestCase):
-    def test_source_to_unreal_contract(self) -> None:
-        assert bsp.source_to_unreal(1.0, 2.0, 3.0) == (2.54, -5.08, 7.62)
-        assert bsp.source_dir_to_unreal(1.0, 2.0, 3.0) == (1.0, -2.0, 3.0)
+def test_source_to_unreal_contract() -> None:
+    assert bsp.source_to_unreal(1.0, 2.0, 3.0) == (2.54, -5.08, 7.62)
+    assert bsp.source_dir_to_unreal(1.0, 2.0, 3.0) == (1.0, -2.0, 3.0)
 
-    def test_coordinate_owners_are_unique(self) -> None:
-        definitions: list[Path] = []
-        for root in (REPO / "pipeline/src", REPO / "pipeline/unreal"):
-            for source in root.rglob("*.py"):
-                text = source.read_text(encoding="utf-8")
-                names = {
-                    node.name for node in ast.walk(ast.parse(text))
-                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                }
-                if {"source_to_unreal", "source_dir_to_unreal"} & names:
-                    definitions.append(source)
-        assert definitions == [REPO / "pipeline/src/elysium_pipeline/formats/bsp.py"]
 
-    def test_model_obj_writer_is_unreal_only(self) -> None:
-        mesh = mdl.Mesh("test")
-        mesh.verts = [
-            (1.0, 2.0, 3.0, 0.0, 0.0),
-            (2.0, 2.0, 3.0, 1.0, 0.0),
-            (1.0, 3.0, 3.0, 0.0, 1.0),
-        ]
-        mesh.tris = [(0, 1, 2)]
-        with tempfile.TemporaryDirectory() as out:
-            mdl.write_obj_scene(
-                [mesh],
-                "test",
-                out,
-                [],
-                lambda _key: None,
-                {},
-            )
-            obj = (Path(out) / "test.obj").read_text(encoding="utf-8")
-        assert "v 2.540000 -5.080000 7.620000" in obj
-        assert "f 1/1 3/3 2/2" in obj
+def test_coordinate_owners_are_unique() -> None:
+    definitions: list[Path] = []
+    for root in (REPO / "pipeline/src", REPO / "pipeline/unreal"):
+        for source in root.rglob("*.py"):
+            text = source.read_text(encoding="utf-8")
+            names = {
+                node.name for node in ast.walk(ast.parse(text))
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            if {"source_to_unreal", "source_dir_to_unreal"} & names:
+                definitions.append(source)
+    assert definitions == [REPO / "pipeline/src/elysium_pipeline/formats/bsp.py"]
+
+
+def test_model_obj_writer_is_unreal_only() -> None:
+    mesh = mdl.Mesh("test")
+    mesh.verts = [
+        (1.0, 2.0, 3.0, 0.0, 0.0),
+        (2.0, 2.0, 3.0, 1.0, 0.0),
+        (1.0, 3.0, 3.0, 0.0, 1.0),
+    ]
+    mesh.tris = [(0, 1, 2)]
+    with tempfile.TemporaryDirectory() as out:
+        mdl.write_obj_scene(
+            [mesh],
+            "test",
+            out,
+            [],
+            lambda _key: None,
+            {},
+        )
+        obj = (Path(out) / "test.obj").read_text(encoding="utf-8")
+    assert "v 2.540000 -5.080000 7.620000" in obj
+    assert "f 1/1 3/3 2/2" in obj
 
 
 class PropMaterialContractTests(unittest.TestCase):
@@ -465,39 +466,38 @@ class SourceFormatAlphaTests(unittest.TestCase):
         assert mode == "RGBA"
 
 
-class PngAlphaContractTests(unittest.TestCase):
-    def test_reads_rgba_alpha_range_and_rejects_rgb_as_alpha(self) -> None:
-        with tempfile.TemporaryDirectory() as out:
-            rgba = Path(out) / "rgba.png"
-            rgb = Path(out) / "rgb.png"
-            image = Image.new("RGBA", (2, 1))
-            image.putdata([(0, 0, 0, 17), (0, 0, 0, 239)])
-            image.save(rgba)
-            image.convert("RGB").save(rgb)
-            assert alpha_range(rgba) == (17, 239)
-            assert alpha_range(rgb) is None
+def test_reads_rgba_alpha_range_and_rejects_rgb_as_alpha() -> None:
+    with tempfile.TemporaryDirectory() as out:
+        rgba = Path(out) / "rgba.png"
+        rgb = Path(out) / "rgb.png"
+        image = Image.new("RGBA", (2, 1))
+        image.putdata([(0, 0, 0, 17), (0, 0, 0, 239)])
+        image.save(rgba)
+        image.convert("RGB").save(rgb)
+        assert alpha_range(rgba) == (17, 239)
+        assert alpha_range(rgb) is None
 
 
-class SourceRefractContractTests(unittest.TestCase):
-    def test_vmt_parser_keeps_refract_shader_inputs_without_basetexture(self) -> None:
-        info = vmt.parse(
-            '"Refract"\n{\n"$dudvmap" "Props\\Rain_DUDV"\n'
-            '"$refractamount" ".01"\n}\n')
-        assert info["refract"]
-        assert info["basetexture"] is None
-        assert info["dudvmap"] == "props/rain_dudv"
-        assert info["refractamount"] == 0.01
+def test_vmt_parser_keeps_refract_shader_inputs_without_basetexture() -> None:
+    info = vmt.parse(
+        '"Refract"\n{\n"$dudvmap" "Props\\Rain_DUDV"\n'
+        '"$refractamount" ".01"\n}\n')
+    assert info["refract"]
+    assert info["basetexture"] is None
+    assert info["dudvmap"] == "props/rain_dudv"
+    assert info["refractamount"] == 0.01
 
-    def test_uvwq_signed_vectors_convert_deterministically_to_tangent_normal(self) -> None:
-        raw = bytes((0, 0, 127, 255, 127, 128, 127, 255, 255, 1, 127, 255))
-        decoded = tex_to_png._decode_mip(
-            raw, 3, 1, tex_to_png.FMT_UVWQ8888)
-        first = tex_to_png.dudv_to_normal(decoded)
-        second = tex_to_png.dudv_to_normal(decoded)
-        assert first.tobytes() == second.tobytes()
-        assert list(first.get_flattened_data()) == [
-            (128, 128, 255), (255, 0, 255), (127, 129, 255)]
-        assert tex_to_png.mip_byte_size(3, 1, tex_to_png.FMT_UVWQ8888) == 12
+
+def test_uvwq_signed_vectors_convert_deterministically_to_tangent_normal() -> None:
+    raw = bytes((0, 0, 127, 255, 127, 128, 127, 255, 255, 1, 127, 255))
+    decoded = tex_to_png._decode_mip(
+        raw, 3, 1, tex_to_png.FMT_UVWQ8888)
+    first = tex_to_png.dudv_to_normal(decoded)
+    second = tex_to_png.dudv_to_normal(decoded)
+    assert first.tobytes() == second.tobytes()
+    assert list(first.get_flattened_data()) == [
+        (128, 128, 255), (255, 0, 255), (127, 129, 255)]
+    assert tex_to_png.mip_byte_size(3, 1, tex_to_png.FMT_UVWQ8888) == 12
 
 
 class GlassMaterialContractTests(unittest.TestCase):
@@ -1033,72 +1033,70 @@ class BakeErrorMaterialContractTests(unittest.TestCase):
         assert "emissive" in connected
 
 
-class UnrealPlayDriverContractTests(unittest.TestCase):
-    def test_play_opens_unreals_live_log_console_without_stdout_redirection(self) -> None:
-        submitted = []
-        runner = SimpleNamespace(
-            run=lambda command, cwd, tail_lines=None, timeout=None: submitted.append((command, cwd))
-            or SimpleNamespace(returncode=0)
-        )
-        config = SimpleNamespace(
-            repo_root=REPO,
-            project=REPO / "ElysiumUE.uproject",
-            export_root=REPO / "exports",
-        )
-        with mock.patch.object(
-                unreal_driver, "editor_executable", return_value=Path("UnrealEditor.exe")):
-            unreal_driver.run_play(config, runner)
+def test_play_opens_unreals_live_log_console_without_stdout_redirection() -> None:
+    submitted = []
+    runner = SimpleNamespace(
+        run=lambda command, cwd, tail_lines=None, timeout=None: submitted.append((command, cwd))
+        or SimpleNamespace(returncode=0)
+    )
+    config = SimpleNamespace(
+        repo_root=REPO,
+        project=REPO / "ElysiumUE.uproject",
+        export_root=REPO / "exports",
+    )
+    with mock.patch.object(
+            unreal_driver, "editor_executable", return_value=Path("UnrealEditor.exe")):
+        unreal_driver.run_play(config, runner)
 
-        assert len(submitted) == 1
-        arguments = submitted[0][0]
-        assert "-log" in arguments
-        assert "-NewConsole" in arguments
-        assert "-stdout" not in arguments
-        assert "-FullStdOutLogOutput" not in arguments
-        assert "-LogCmds=LogElysiumWorld Verbose, LogElysiumIO Verbose" in arguments
-
-
-class UnrealBakeDriverContractTests(unittest.TestCase):
-    def test_texture_bake_enables_commandlet_rendering(self) -> None:
-        submitted = []
-        runner = SimpleNamespace(
-            run=lambda command, cwd, tail_lines=None, timeout=None: submitted.append((command, cwd))
-            or SimpleNamespace(returncode=0)
-        )
-        config = SimpleNamespace(
-            repo_root=REPO,
-            project=REPO / "ElysiumUE.uproject",
-            unreal_shader_work_root=Path("D:/UnrealCache/ShaderWorking"),
-        )
-        with mock.patch.object(
-                unreal_driver, "editor_executable", return_value=Path("UnrealEditor-Cmd.exe")):
-            unreal_driver.bake_maps(config, runner, ["sp_theatre"])
-
-        assert len(submitted) == 1
-        assert "-AllowCommandletRendering" in submitted[0][0]
-        assert "-shaderworkingdir=D:\\UnrealCache\\ShaderWorking" in submitted[0][0]
+    assert len(submitted) == 1
+    arguments = submitted[0][0]
+    assert "-log" in arguments
+    assert "-NewConsole" in arguments
+    assert "-stdout" not in arguments
+    assert "-FullStdOutLogOutput" not in arguments
+    assert "-LogCmds=LogElysiumWorld Verbose, LogElysiumIO Verbose" in arguments
 
 
-class PathContractTests(unittest.TestCase):
-    def test_work_root_derivations(self) -> None:
-        with tempfile.TemporaryDirectory() as work:
-            with mock.patch.dict(
-                os.environ,
-                {"ELYSIUM_WORK_ROOT": work},
-                clear=False,
-            ):
-                os.environ.pop("ELYSIUM_EXPORT_ROOT", None)
-                root = Path(work).resolve()
-                assert paths.export_root() == root / "exports"
-                assert paths.research_root() == root / "research"
-                assert paths.cache_root() == root / "cache"
-                assert paths.log_root() == root / "logs"
-                assert paths.scratch_root() == root / "scratch"
+def test_texture_bake_enables_commandlet_rendering() -> None:
+    submitted = []
+    runner = SimpleNamespace(
+        run=lambda command, cwd, tail_lines=None, timeout=None: submitted.append((command, cwd))
+        or SimpleNamespace(returncode=0)
+    )
+    config = SimpleNamespace(
+        repo_root=REPO,
+        project=REPO / "ElysiumUE.uproject",
+        unreal_shader_work_root=Path("D:/UnrealCache/ShaderWorking"),
+    )
+    with mock.patch.object(
+            unreal_driver, "editor_executable", return_value=Path("UnrealEditor-Cmd.exe")):
+        unreal_driver.bake_maps(config, runner, ["sp_theatre"])
 
-    def test_missing_work_root_has_no_repository_fallback(self) -> None:
-        with mock.patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(RuntimeError, match="ELYSIUM_WORK_ROOT"):
-                paths.work_root()
+    assert len(submitted) == 1
+    assert "-AllowCommandletRendering" in submitted[0][0]
+    assert "-shaderworkingdir=D:\\UnrealCache\\ShaderWorking" in submitted[0][0]
+
+
+def test_work_root_derivations() -> None:
+    with tempfile.TemporaryDirectory() as work:
+        with mock.patch.dict(
+            os.environ,
+            {"ELYSIUM_WORK_ROOT": work},
+            clear=False,
+        ):
+            os.environ.pop("ELYSIUM_EXPORT_ROOT", None)
+            root = Path(work).resolve()
+            assert paths.export_root() == root / "exports"
+            assert paths.research_root() == root / "research"
+            assert paths.cache_root() == root / "cache"
+            assert paths.log_root() == root / "logs"
+            assert paths.scratch_root() == root / "scratch"
+
+
+def test_missing_work_root_has_no_repository_fallback() -> None:
+    with mock.patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(RuntimeError, match="ELYSIUM_WORK_ROOT"):
+            paths.work_root()
 
 
 class RepositoryPolicyTests(unittest.TestCase):

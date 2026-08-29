@@ -91,131 +91,138 @@ def _tth(width, height, fmt, mips=1):
     return bytes(buf)
 
 
-class ItemJoinTests(unittest.TestCase):
-    def test_repeated_key_resolves_last_wins(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install = _Install(Path(root))
-            install.item("item_w_x", '\t"anim_prefix"\t"first"\n\t"anim_prefix"\t"last"\n'
-                                     '\t"wieldmodel_f"\t"models/weapons/w_f_x.mdl"\n'
-                                     '\t"wieldmodel_m"\t"models/weapons/w_m_x.mdl"\n')
+def test_repeated_key_resolves_last_wins() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install = _Install(Path(root))
+        install.item("item_w_x", '\t"anim_prefix"\t"first"\n\t"anim_prefix"\t"last"\n'
+                                 '\t"wieldmodel_f"\t"models/weapons/w_f_x.mdl"\n'
+                                 '\t"wieldmodel_m"\t"models/weapons/w_m_x.mdl"\n')
 
-            rows = W.wield_rows(install.index)
+        rows = W.wield_rows(install.index)
 
-            assert [row.anim_prefix for row in rows] == ["last", "last"]
-
-    def test_shows_view_model_defaults_to_one_and_zero_is_explicit(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install = _Install(Path(root))
-            install.item("item_w_default", '\t"wieldmodel_f"\t"models/weapons/w_f_a.mdl"\n')
-            install.item("item_a_armor", '\t"shows_view_model"\t"0"\n'
-                                         '\t"wieldmodel_f"\t"models/weapons/w_null.mdl"\n')
-
-            gates = {row.classname: row.shows_view_model for row in W.wield_rows(install.index)}
-
-            assert gates["item_w_default"] == 1
-            assert gates["item_a_armor"] == 0
-
-    def test_null_empty_and_named_are_three_distinct_values(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install = _Install(Path(root))
-            install.item("item_null", '\t"wieldmodel_f"\t"models/weapons/w_null.mdl"\n'
-                                      '\t"wieldmodel_m"\t"models/weapons/w_null.mdl"\n')
-            install.item("item_empty", '\t"wieldmodel_f"\t""\n\t"wieldmodel_m"\t""\n')
-            install.item("item_real", '\t"wieldmodel_f"\t"models/weapons/katana/w_f_katana"\n'
-                                      '\t"wieldmodel_m"\t"models/weapons/katana/w_m_katana.mdl"\n')
-
-            rows = {(r.classname, r.sex): r.model for r in W.wield_rows(install.index)}
-
-            assert W.is_null(rows[("item_null", "f")])
-            assert rows[("item_empty", "f")] == ""
-            assert not W.is_null(rows[("item_empty", "f")])
-            # A definition may omit the extension; the engine resolves it as a `.mdl` all the same.
-            assert rows[("item_real", "f")] == "models/weapons/katana/w_f_katana.mdl"
-
-    def test_bit_flags_are_read_off_their_own_keys(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install = _Install(Path(root))
-            install.item("item_w_y", '\t"BitFlag_CantBeLast"\t"1"\n'
-                                     '\t"reload_single"\t"1"\n'
-                                     '\t"wieldmodel_f"\t"models/weapons/w_f_y.mdl"\n')
-
-            row = W.wield_rows(install.index)[0]
-
-            assert row.cant_be_last
-            assert row.reload_single
-            assert not row.discipline_tgt
+        assert [row.anim_prefix for row in rows] == ["last", "last"]
 
 
-class StemTests(unittest.TestCase):
-    def test_stem_is_the_basename_and_survives_backslashes(self) -> None:
-        assert W.stem("models\\weapons\\Katana\\wield\\W_M_Katana.mdl") == "w_m_katana"
-        assert W.stem("") == ""
+def test_shows_view_model_defaults_to_one_and_zero_is_explicit() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install = _Install(Path(root))
+        install.item("item_w_default", '\t"wieldmodel_f"\t"models/weapons/w_f_a.mdl"\n')
+        install.item("item_a_armor", '\t"shows_view_model"\t"0"\n'
+                                     '\t"wieldmodel_f"\t"models/weapons/w_null.mdl"\n')
+
+        gates = {row.classname: row.shows_view_model for row in W.wield_rows(install.index)}
+
+        assert gates["item_w_default"] == 1
+        assert gates["item_a_armor"] == 0
 
 
-class ClassificationTests(unittest.TestCase):
-    def test_prop_bone_mount_is_socket_prop(self) -> None:
-        bones = with_subrig(("handle", None))
-        cls = W.classify_bones(bones, {10})
+def test_null_empty_and_named_are_three_distinct_values() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install = _Install(Path(root))
+        install.item("item_null", '\t"wieldmodel_f"\t"models/weapons/w_null.mdl"\n'
+                                  '\t"wieldmodel_m"\t"models/weapons/w_null.mdl"\n')
+        install.item("item_empty", '\t"wieldmodel_f"\t""\n\t"wieldmodel_m"\t""\n')
+        install.item("item_real", '\t"wieldmodel_f"\t"models/weapons/katana/w_f_katana"\n'
+                                  '\t"wieldmodel_m"\t"models/weapons/katana/w_m_katana.mdl"\n')
 
-        assert cls.binding == "socket_prop"
-        assert cls.mount_bone == "handle"
-        assert cls.collapse_bone == "handle"
-        assert cls.grip == "right"
+        rows = {(r.classname, r.sex): r.model for r in W.wield_rows(install.index)}
 
-    def test_unmatched_mount_collapses_onto_the_hand(self) -> None:
-        bones = with_subrig(("body", None), ("slide", 0), ("mag", 0))
-        cls = W.classify_bones(bones, {10, 11, 12})
+        assert W.is_null(rows[("item_null", "f")])
+        assert rows[("item_empty", "f")] == ""
+        assert not W.is_null(rows[("item_empty", "f")])
+        # A definition may omit the extension; the engine resolves it as a `.mdl` all the same.
+        assert rows[("item_real", "f")] == "models/weapons/katana/w_f_katana.mdl"
 
-        assert cls.binding == "socket_hand"
-        assert cls.mount_bone == "body"
-        assert cls.collapse_bone == "Bip01 R Hand"
 
-    def test_left_hand_chain_reports_left_grip(self) -> None:
-        bones = with_subrig(("bush hook", None), hand="Bip01 L Hand")
-        bones[6] = bone(6, "Bip01 L Clavicle", 5)
-        bones[7] = bone(7, "Bip01 L UpperArm", 6)
-        bones[8] = bone(8, "Bip01 L Forearm", 7)
+def test_bit_flags_are_read_off_their_own_keys() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install = _Install(Path(root))
+        install.item("item_w_y", '\t"BitFlag_CantBeLast"\t"1"\n'
+                                 '\t"reload_single"\t"1"\n'
+                                 '\t"wieldmodel_f"\t"models/weapons/w_f_y.mdl"\n')
 
-        assert W.classify_bones(bones, {10}).grip == "left"
+        row = W.wield_rows(install.index)[0]
 
-    def test_unskinned_leftover_beside_the_mount_is_ignored(self) -> None:
-        # Two bones hang off the hand; only one carries weight, so only one is a skinned root.
-        bones = with_subrig(("hands box", None), ("body", None), ("slide", 1))
-        cls = W.classify_bones(bones, {11, 12})
+        assert row.cant_be_last
+        assert row.reload_single
+        assert not row.discipline_tgt
 
-        assert cls.binding == "socket_hand"
-        assert cls.mount_bone == "body"
 
-    def test_leftover_on_a_second_root_outside_the_biped_chain_is_ignored(self) -> None:
-        bones = with_subrig(("body", None))
-        bones.append(bone(11, "hands box", -1))          # its own root, no Biped parent
-        cls = W.classify_bones(bones, {10})
+def test_stem_is_the_basename_and_survives_backslashes() -> None:
+    assert W.stem("models\\weapons\\Katana\\wield\\W_M_Katana.mdl") == "w_m_katana"
+    assert W.stem("") == ""
 
-        assert cls.binding == "socket_hand"
-        assert cls.mount_bone == "body"
 
-    def test_mount_one_unskinned_bone_below_the_hand_still_resolves(self) -> None:
-        # The general "topmost skinned in the hand's subtree" rule, not "direct child of the hand".
-        bones = with_subrig(("filler", None), ("body", 0))
-        cls = W.classify_bones(bones, {11})
+def test_prop_bone_mount_is_socket_prop() -> None:
+    bones = with_subrig(("handle", None))
+    cls = W.classify_bones(bones, {10})
 
-        assert cls.binding == "socket_hand"
-        assert cls.mount_bone == "body"
+    assert cls.binding == "socket_prop"
+    assert cls.mount_bone == "handle"
+    assert cls.collapse_bone == "handle"
+    assert cls.grip == "right"
 
-    def test_degenerate_identity_bind_is_recorded_not_corrected(self) -> None:
-        bones = with_subrig(("bush hook", None))
-        bones[10] = bone(10, "bush hook", 9, pos=(0.0, 0.0, 1e-7), quat=IDENTITY_Q)
-        cls = W.classify_bones(bones, {10})
 
-        assert "degenerate_bind" in cls.anomalies
-        assert cls.binding == "socket_prop"
-        assert cls.mount_bind[0] == (0.0, 0.0, 1e-7)
+def test_unmatched_mount_collapses_onto_the_hand() -> None:
+    bones = with_subrig(("body", None), ("slide", 0), ("mag", 0))
+    cls = W.classify_bones(bones, {10, 11, 12})
 
-    def test_ordinary_bind_carries_no_anomaly(self) -> None:
-        bones = with_subrig(("handle", None))
-        bones[10] = bone(10, "handle", 9, pos=(4.0, 0.5, 0.0))
+    assert cls.binding == "socket_hand"
+    assert cls.mount_bone == "body"
+    assert cls.collapse_bone == "Bip01 R Hand"
 
-        assert W.classify_bones(bones, {10}).anomalies == ()
+
+def test_left_hand_chain_reports_left_grip() -> None:
+    bones = with_subrig(("bush hook", None), hand="Bip01 L Hand")
+    bones[6] = bone(6, "Bip01 L Clavicle", 5)
+    bones[7] = bone(7, "Bip01 L UpperArm", 6)
+    bones[8] = bone(8, "Bip01 L Forearm", 7)
+
+    assert W.classify_bones(bones, {10}).grip == "left"
+
+
+def test_unskinned_leftover_beside_the_mount_is_ignored() -> None:
+    # Two bones hang off the hand; only one carries weight, so only one is a skinned root.
+    bones = with_subrig(("hands box", None), ("body", None), ("slide", 1))
+    cls = W.classify_bones(bones, {11, 12})
+
+    assert cls.binding == "socket_hand"
+    assert cls.mount_bone == "body"
+
+
+def test_leftover_on_a_second_root_outside_the_biped_chain_is_ignored() -> None:
+    bones = with_subrig(("body", None))
+    bones.append(bone(11, "hands box", -1))          # its own root, no Biped parent
+    cls = W.classify_bones(bones, {10})
+
+    assert cls.binding == "socket_hand"
+    assert cls.mount_bone == "body"
+
+
+def test_mount_one_unskinned_bone_below_the_hand_still_resolves() -> None:
+    # The general "topmost skinned in the hand's subtree" rule, not "direct child of the hand".
+    bones = with_subrig(("filler", None), ("body", 0))
+    cls = W.classify_bones(bones, {11})
+
+    assert cls.binding == "socket_hand"
+    assert cls.mount_bone == "body"
+
+
+def test_degenerate_identity_bind_is_recorded_not_corrected() -> None:
+    bones = with_subrig(("bush hook", None))
+    bones[10] = bone(10, "bush hook", 9, pos=(0.0, 0.0, 1e-7), quat=IDENTITY_Q)
+    cls = W.classify_bones(bones, {10})
+
+    assert "degenerate_bind" in cls.anomalies
+    assert cls.binding == "socket_prop"
+    assert cls.mount_bind[0] == (0.0, 0.0, 1e-7)
+
+
+def test_ordinary_bind_carries_no_anomaly() -> None:
+    bones = with_subrig(("handle", None))
+    bones[10] = bone(10, "handle", 9, pos=(4.0, 0.5, 0.0))
+
+    assert W.classify_bones(bones, {10}).anomalies == ()
 
 
 class TrailTipTests(unittest.TestCase):
@@ -331,23 +338,23 @@ class NonSocketBindingTests(unittest.TestCase):
         assert "no_single_skinned_root" in cls.anomalies
 
 
-class SubtreeCheckTests(unittest.TestCase):
-    def test_skin_confined_to_the_collapse_subtree_passes(self) -> None:
-        bones = with_subrig(("body", None), ("slide", 0))
-        cls = W.classify_bones(bones, {10, 11})
+def test_skin_confined_to_the_collapse_subtree_passes() -> None:
+    bones = with_subrig(("body", None), ("slide", 0))
+    cls = W.classify_bones(bones, {10, 11})
 
-        assert W.check_subtree(bones, {10, 11}, cls).ok
+    assert W.check_subtree(bones, {10, 11}, cls).ok
 
-    def test_skin_on_a_second_matched_bone_fails_and_names_it(self) -> None:
-        # A vertex weighted to the forearm as well as the weapon deforms between two independently
-        # matched bones, so one socket cannot place it.
-        bones = with_subrig(("handle", None))
-        cls = W.classify_bones(bones, {10})
 
-        result = W.check_subtree(bones, {8, 10}, cls)
+def test_skin_on_a_second_matched_bone_fails_and_names_it() -> None:
+    # A vertex weighted to the forearm as well as the weapon deforms between two independently
+    # matched bones, so one socket cannot place it.
+    bones = with_subrig(("handle", None))
+    cls = W.classify_bones(bones, {10})
 
-        assert not result.ok
-        assert result.detail == ("Bip01 R Forearm",)
+    result = W.check_subtree(bones, {8, 10}, cls)
+
+    assert not result.ok
+    assert result.detail == ("Bip01 R Forearm",)
 
 
 class CollapseCheckTests(unittest.TestCase):
@@ -425,35 +432,36 @@ class MotionTests(unittest.TestCase):
         assert found[0][2] > 19.0
 
 
-class OnBodyScopeTests(unittest.TestCase):
-    def test_a_prop_bone_under_a_hand_reports_its_parent(self) -> None:
-        bodies = {
-            "a": {"handle": "bip01 r hand", "bip01 r hand": "bip01 r forearm"},
-            "b": {"handle": "bip01 r hand", "bip01 r hand": "bip01 r forearm"},
-        }
+def test_a_prop_bone_under_a_hand_reports_its_parent() -> None:
+    bodies = {
+        "a": {"handle": "bip01 r hand", "bip01 r hand": "bip01 r forearm"},
+        "b": {"handle": "bip01 r hand", "bip01 r hand": "bip01 r forearm"},
+    }
 
-        scope = W.on_body_scope({}, "handle", bodies=bodies)
+    scope = W.on_body_scope({}, "handle", bodies=bodies)
 
-        assert scope["bodies"] == 2
-        assert scope["parents"] == {"bip01 r hand": 2}
-        assert scope["under_hand"]
+    assert scope["bodies"] == 2
+    assert scope["parents"] == {"bip01 r hand": 2}
+    assert scope["under_hand"]
 
-    def test_a_name_hanging_off_the_pelvis_is_not_under_a_hand(self) -> None:
-        # `Box01` matches four NPC bodies but hangs from the pelvis; a boolean scope would route
-        # its item families to a hip socket.
-        bodies = {"swat": {"box01": "bip01 pelvis"}, "bomb_guy": {"box02": "bip01 r finger1"}}
 
-        scope = W.on_body_scope({}, "Box01", bodies=bodies)
+def test_a_name_hanging_off_the_pelvis_is_not_under_a_hand() -> None:
+    # `Box01` matches four NPC bodies but hangs from the pelvis; a boolean scope would route
+    # its item families to a hip socket.
+    bodies = {"swat": {"box01": "bip01 pelvis"}, "bomb_guy": {"box02": "bip01 r finger1"}}
 
-        assert scope["bodies"] == 1
-        assert scope["parents"] == {"bip01 pelvis": 1}
-        assert not scope["under_hand"]
+    scope = W.on_body_scope({}, "Box01", bodies=bodies)
 
-    def test_an_unknown_name_reports_no_bodies(self) -> None:
-        scope = W.on_body_scope({}, "flamethrower", bodies={"a": {"handle": "bip01 r hand"}})
+    assert scope["bodies"] == 1
+    assert scope["parents"] == {"bip01 pelvis": 1}
+    assert not scope["under_hand"]
 
-        assert scope["bodies"] == 0
-        assert not scope["under_hand"]
+
+def test_an_unknown_name_reports_no_bodies() -> None:
+    scope = W.on_body_scope({}, "flamethrower", bodies={"a": {"handle": "bip01 r hand"}})
+
+    assert scope["bodies"] == 0
+    assert not scope["under_hand"]
 
 
 class MaterialResolutionTests(unittest.TestCase):
@@ -516,67 +524,60 @@ class MaterialResolutionTests(unittest.TestCase):
             assert W._resolve_material_row("empty", [""], read_bytes) == ("", frozenset(), "", "", "")
 
 
-class ModelMaterialsTests(unittest.TestCase):
-    """`model_materials` over an already-loaded model: header material order, one row per
-    material, and a per-row failure that never raises."""
+def test_materials_are_reported_in_header_order_with_per_row_failures() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install_ = _Install(Path(root))
+        install_.add(
+            "materials/claws.vmt",
+            '"VertexLitGeneric"\n{\n\t"$basetexture" "claws"\n\t"$bumpmap" "claws_n"\n}\n')
+        install_.add_bytes("materials/claws.tth", _tth(1, 1, FMT_BGR888))
+        install_.add_bytes("materials/claws.ttz", zlib.compress(bytes((1, 2, 3))))
 
-    def test_materials_are_reported_in_header_order_with_per_row_failures(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install_ = _Install(Path(root))
-            install_.add(
-                "materials/claws.vmt",
-                '"VertexLitGeneric"\n{\n\t"$basetexture" "claws"\n\t"$bumpmap" "claws_n"\n}\n')
-            install_.add_bytes("materials/claws.tth", _tth(1, 1, FMT_BGR888))
-            install_.add_bytes("materials/claws.ttz", zlib.compress(bytes((1, 2, 3))))
+        with (mock.patch.object(mdl, "search_paths", return_value=[""]),
+              mock.patch.object(mdl_skel, "decode_skinned",
+                                return_value={"claws": {}, "handle": {}})):
+            rows = W.model_materials(b"mdl", b"vtx", install_.index)
 
-            with (mock.patch.object(mdl, "search_paths", return_value=[""]),
-                  mock.patch.object(mdl_skel, "decode_skinned",
-                                    return_value={"claws": {}, "handle": {}})):
-                rows = W.model_materials(b"mdl", b"vtx", install_.index)
-
-            assert [row.name for row in rows] == ["claws", "handle"]
-            assert rows[0].albedo == "claws"
-            assert rows[0].failure == ""
-            assert rows[0].bump == "claws_n"
-            assert rows[0].envmask == ""
-            assert rows[1].albedo == ""
-            assert rows[1].failure != ""
+        assert [row.name for row in rows] == ["claws", "handle"]
+        assert rows[0].albedo == "claws"
+        assert rows[0].failure == ""
+        assert rows[0].bump == "claws_n"
+        assert rows[0].envmask == ""
+        assert rows[1].albedo == ""
+        assert rows[1].failure != ""
 
 
-class SkinFamilyOverrideTests(unittest.TestCase):
-    """`skin_families` diffs every extra family against family 0 and resolves the override the
-    same way a drawn material resolves -- the fire_axe ghost reskin is the one real case."""
+def test_no_extra_family_reports_nothing() -> None:
+    with (mock.patch.object(mdl, "skin_families", return_value=[["a", "b"]]),
+          mock.patch.object(mdl, "search_paths", return_value=[""])):
+        assert W.skin_families(b"mdl", {}) == []
 
-    def test_no_extra_family_reports_nothing(self) -> None:
-        with (mock.patch.object(mdl, "skin_families", return_value=[["a", "b"]]),
-              mock.patch.object(mdl, "search_paths", return_value=[""])):
-            assert W.skin_families(b"mdl", {}) == []
 
-    def test_an_extra_family_reports_the_repainted_slot_resolved(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install_ = _Install(Path(root))
-            install_.add(
-                "materials/transparent.vmt",
-                '"VertexLitGeneric"\n{\n\t"$basetexture" "ghost"\n\t"$translucent" "1"\n'
-                '\t"$envmapmask" "ghost_mask"\n}\n')
-            install_.add_bytes("materials/ghost.tth", _tth(1, 1, FMT_BGR888))
-            install_.add_bytes("materials/ghost.ttz", zlib.compress(bytes((4, 5, 6))))
+def test_an_extra_family_reports_the_repainted_slot_resolved() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install_ = _Install(Path(root))
+        install_.add(
+            "materials/transparent.vmt",
+            '"VertexLitGeneric"\n{\n\t"$basetexture" "ghost"\n\t"$translucent" "1"\n'
+            '\t"$envmapmask" "ghost_mask"\n}\n')
+        install_.add_bytes("materials/ghost.tth", _tth(1, 1, FMT_BGR888))
+        install_.add_bytes("materials/ghost.ttz", zlib.compress(bytes((4, 5, 6))))
 
-            with (mock.patch.object(mdl, "search_paths", return_value=[""]),
-                  mock.patch.object(mdl, "skin_families",
-                                    return_value=[["axe", "wood"], ["transparent", "wood"]])):
-                overrides = W.skin_families(b"mdl", install_.index)
+        with (mock.patch.object(mdl, "search_paths", return_value=[""]),
+              mock.patch.object(mdl, "skin_families",
+                                return_value=[["axe", "wood"], ["transparent", "wood"]])):
+            overrides = W.skin_families(b"mdl", install_.index)
 
-            assert len(overrides) == 1
-            override = overrides[0]
-            assert override.family == 1
-            assert override.slot == "axe"
-            assert override.material == "transparent"
-            assert override.albedo == "ghost"
-            assert "translucent" in override.flags
-            assert override.failure == ""
-            assert override.envmask == "ghost_mask"
-            assert override.bump == ""
+        assert len(overrides) == 1
+        override = overrides[0]
+        assert override.family == 1
+        assert override.slot == "axe"
+        assert override.material == "transparent"
+        assert override.albedo == "ghost"
+        assert "translucent" in override.flags
+        assert override.failure == ""
+        assert override.envmask == "ghost_mask"
+        assert override.bump == ""
 
 
 class BoneMotionTests(unittest.TestCase):

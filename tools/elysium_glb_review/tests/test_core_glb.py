@@ -93,10 +93,9 @@ class BufferViewTests(unittest.TestCase):
             glb.buffer_view_bytes(self.document, self.binary, 9)
 
 
-class PaddingTests(unittest.TestCase):
-    def test_json_chunk_padding_does_not_break_parsing(self) -> None:
-        # glTF pads the JSON chunk with spaces to a four-byte boundary.
-        payload = support.build_glb({"a": 1})
-        length = struct.unpack_from("<I", payload, 12)[0]
-        assert length % 4 == 0
-        assert json.loads(payload[20 : 20 + length]) == {"a": 1}
+def test_json_chunk_padding_does_not_break_parsing() -> None:
+    # glTF pads the JSON chunk with spaces to a four-byte boundary.
+    payload = support.build_glb({"a": 1})
+    length = struct.unpack_from("<I", payload, 12)[0]
+    assert length % 4 == 0
+    assert json.loads(payload[20 : 20 + length]) == {"a": 1}

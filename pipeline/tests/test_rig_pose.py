@@ -75,66 +75,70 @@ def _player(sequence: int, curtime: float, **fields) -> dict:
     }
 
 
-class EntityJoinTests(unittest.TestCase):
-    def test_a_model_is_taken_from_the_call_that_asked_for_it(self) -> None:
-        events = [
-            {"kind": "call", "target": "client.get_studio_hdr", "sequence": 1,
-             "ecx": "0x100"},
-            {"kind": "return", "target": "client.get_studio_hdr", "sequence": 1,
-             "fields": {"model": "character/pc/body.mdl", "numbones": 77}},
-        ]
-        models = entity_models(events)
-        assert models["0x100"][0]["model"] == "character/pc/body.mdl"
-        assert models["0x100"][0]["numbones"] == 77
+def test_a_model_is_taken_from_the_call_that_asked_for_it() -> None:
+    events = [
+        {"kind": "call", "target": "client.get_studio_hdr", "sequence": 1,
+         "ecx": "0x100"},
+        {"kind": "return", "target": "client.get_studio_hdr", "sequence": 1,
+         "fields": {"model": "character/pc/body.mdl", "numbones": 77}},
+    ]
+    models = entity_models(events)
+    assert models["0x100"][0]["model"] == "character/pc/body.mdl"
+    assert models["0x100"][0]["numbones"] == 77
 
-    def test_an_entity_keeps_every_model_it_answered_with_in_order(self) -> None:
-        """An entity outlives the model it draws, so a swap is a second answer on one pointer."""
-        events = [
-            {"kind": "call", "target": "client.get_studio_hdr", "sequence": 1, "ecx": "0x100"},
-            {"kind": "return", "target": "client.get_studio_hdr", "sequence": 1,
-             "fields": {"model": "first.mdl"}},
-            {"kind": "call", "target": "client.get_studio_hdr", "sequence": 2, "ecx": "0x100"},
-            {"kind": "return", "target": "client.get_studio_hdr", "sequence": 2,
-             "fields": {"model": "second.mdl"}},
-        ]
-        assert [entry["model"] for entry in entity_models(events)["0x100"]] == ["first.mdl", "second.mdl"]
 
-    def test_one_model_answered_twice_is_recorded_once(self) -> None:
-        events = [
-            {"kind": "call", "target": "client.get_studio_hdr", "sequence": 1, "ecx": "0x100"},
-            {"kind": "return", "target": "client.get_studio_hdr", "sequence": 1,
-             "fields": {"model": "only.mdl"}},
-            {"kind": "call", "target": "client.get_studio_hdr", "sequence": 2, "ecx": "0x100"},
-            {"kind": "return", "target": "client.get_studio_hdr", "sequence": 2,
-             "fields": {"model": "only.mdl"}},
-        ]
-        assert len(entity_models(events)["0x100"]) == 1
+def test_an_entity_keeps_every_model_it_answered_with_in_order() -> None:
+    """An entity outlives the model it draws, so a swap is a second answer on one pointer."""
+    events = [
+        {"kind": "call", "target": "client.get_studio_hdr", "sequence": 1, "ecx": "0x100"},
+        {"kind": "return", "target": "client.get_studio_hdr", "sequence": 1,
+         "fields": {"model": "first.mdl"}},
+        {"kind": "call", "target": "client.get_studio_hdr", "sequence": 2, "ecx": "0x100"},
+        {"kind": "return", "target": "client.get_studio_hdr", "sequence": 2,
+         "fields": {"model": "second.mdl"}},
+    ]
+    assert [entry["model"] for entry in entity_models(events)["0x100"]] == ["first.mdl", "second.mdl"]
 
-    def test_a_return_whose_read_failed_names_nothing(self) -> None:
-        events = [
-            {"kind": "call", "target": "client.get_studio_hdr", "sequence": 1, "ecx": "0x100"},
-            {"kind": "return", "target": "client.get_studio_hdr", "sequence": 1,
-             "fields": {"model": {"error": "unreadable"}}},
-        ]
-        assert entity_models(events) == {}
 
-    def test_a_pose_resolves_to_its_model_across_the_subobject_delta(self) -> None:
-        """`setup_bones` runs on the entity plus four; the model target on the entity."""
-        entity = 0x15942828
-        events = [
-            _pose_call(1, hex(entity + ENTITY_DELTA), 10.0),
-            {"kind": "call", "target": "client.get_studio_hdr", "sequence": 2,
-             "ecx": hex(entity)},
-            {"kind": "return", "target": "client.get_studio_hdr", "sequence": 2,
-             "fields": {"model": "character/pc/body.mdl"}},
-        ]
-        agreement = entity_delta_agreement(events, entity_models(events))
-        assert agreement == {"posed_entities": 1, "resolved_to_a_model": 1}
+def test_one_model_answered_twice_is_recorded_once() -> None:
+    events = [
+        {"kind": "call", "target": "client.get_studio_hdr", "sequence": 1, "ecx": "0x100"},
+        {"kind": "return", "target": "client.get_studio_hdr", "sequence": 1,
+         "fields": {"model": "only.mdl"}},
+        {"kind": "call", "target": "client.get_studio_hdr", "sequence": 2, "ecx": "0x100"},
+        {"kind": "return", "target": "client.get_studio_hdr", "sequence": 2,
+         "fields": {"model": "only.mdl"}},
+    ]
+    assert len(entity_models(events)["0x100"]) == 1
 
-    def test_a_pose_no_model_target_named_is_counted_not_hidden(self) -> None:
-        events = [_pose_call(1, "0x2000", 10.0)]
-        agreement = entity_delta_agreement(events, {})
-        assert agreement == {"posed_entities": 1, "resolved_to_a_model": 0}
+
+def test_a_return_whose_read_failed_names_nothing() -> None:
+    events = [
+        {"kind": "call", "target": "client.get_studio_hdr", "sequence": 1, "ecx": "0x100"},
+        {"kind": "return", "target": "client.get_studio_hdr", "sequence": 1,
+         "fields": {"model": {"error": "unreadable"}}},
+    ]
+    assert entity_models(events) == {}
+
+
+def test_a_pose_resolves_to_its_model_across_the_subobject_delta() -> None:
+    """`setup_bones` runs on the entity plus four; the model target on the entity."""
+    entity = 0x15942828
+    events = [
+        _pose_call(1, hex(entity + ENTITY_DELTA), 10.0),
+        {"kind": "call", "target": "client.get_studio_hdr", "sequence": 2,
+         "ecx": hex(entity)},
+        {"kind": "return", "target": "client.get_studio_hdr", "sequence": 2,
+         "fields": {"model": "character/pc/body.mdl"}},
+    ]
+    agreement = entity_delta_agreement(events, entity_models(events))
+    assert agreement == {"posed_entities": 1, "resolved_to_a_model": 1}
+
+
+def test_a_pose_no_model_target_named_is_counted_not_hidden() -> None:
+    events = [_pose_call(1, "0x2000", 10.0)]
+    agreement = entity_delta_agreement(events, {})
+    assert agreement == {"posed_entities": 1, "resolved_to_a_model": 0}
 
 
 class PlayerStateTests(unittest.TestCase):
@@ -168,92 +172,99 @@ class PlayerStateTests(unittest.TestCase):
         assert nearest_state([], 1.0) is None
 
 
-class ContributionTests(unittest.TestCase):
-    def test_a_contribution_carries_its_model_index_weight_and_clock(self) -> None:
-        rows, unplaceable = contributions([
-            _contribution(1, "shared/frenzy.mdl", 42, 0.75, 10.0)])
-        assert unplaceable == 0
-        assert rows[0]["model"] == "shared/frenzy.mdl"
-        assert rows[0]["sequence"] == 42
-        assert rows[0]["weight"] == pytest.approx(0.75, abs=1e-5)
-
-    def test_a_contribution_with_no_clock_is_counted_not_attached(self) -> None:
-        row = _contribution(1, "m.mdl", 1, 1.0, 10.0)
-        row["fields"].pop("curtime")
-        rows, unplaceable = contributions([row])
-        assert (rows, unplaceable) == ([], 1)
-
-    def test_only_the_contributions_of_that_frame_attach_to_it(self) -> None:
-        rows, _ = contributions([
-            _contribution(1, "a.mdl", 1, 1.0, 10.000),
-            _contribution(2, "b.mdl", 2, 0.5, 10.002),
-            _contribution(3, "c.mdl", 3, 0.25, 10.500),
-        ])
-        window = contributions_at(rows, 10.001)
-        assert [row["model"] for row in window] == ["a.mdl", "b.mdl"]
+def test_a_contribution_carries_its_model_index_weight_and_clock() -> None:
+    rows, unplaceable = contributions([
+        _contribution(1, "shared/frenzy.mdl", 42, 0.75, 10.0)])
+    assert unplaceable == 0
+    assert rows[0]["model"] == "shared/frenzy.mdl"
+    assert rows[0]["sequence"] == 42
+    assert rows[0]["weight"] == pytest.approx(0.75, abs=1e-5)
 
 
-class FrameTests(unittest.TestCase):
-    def test_a_frame_carries_its_entity_clock_and_matrices(self) -> None:
-        matrices = [float(v) for v in range(24)]
-        frames, nested = group_frames([
-            _pose_call(1, "0x100", 10.0), _pose_return(1, 2, matrices)])
-        assert len(frames) == 1
-        assert frames[0]["entity"] == "0x100"
-        assert frames[0]["curtime"] == pytest.approx(10.0, abs=1e-4)
-        assert frames[0]["bone_count"] == 2
-        assert nested == 0
-
-    def test_a_call_the_sampler_declined_yields_no_frame(self) -> None:
-        """Only a call that was recorded can close into a frame."""
-        frames, _ = group_frames([_pose_return(7, 2, [0.0] * 24)])
-        assert frames == []
-
-    def test_a_return_whose_matrix_read_failed_is_not_a_frame(self) -> None:
-        frames, _ = group_frames([
-            _pose_call(1, "0x100", 10.0),
-            {"kind": "return", "target": "client.setup_bones", "sequence": 1,
-             "fields": {"bone_count": 2, "bone_matrices": {"error": "unreadable"}}},
-        ])
-        assert frames == []
-
-    def test_a_contribution_inside_a_recorded_call_is_counted_as_nested(self) -> None:
-        frames, nested = group_frames([
-            _pose_call(1, "0x100", 10.0),
-            _contribution(2, "m.mdl", 1, 1.0, 10.0),
-            _pose_return(1, 2, [0.0] * 24),
-        ])
-        assert (len(frames), nested) == (1, 1)
-
-    def test_a_contribution_outside_every_recorded_call_is_not_nested(self) -> None:
-        _, nested = group_frames([_contribution(1, "m.mdl", 1, 1.0, 10.0)])
-        assert nested == 0
+def test_a_contribution_with_no_clock_is_counted_not_attached() -> None:
+    row = _contribution(1, "m.mdl", 1, 1.0, 10.0)
+    row["fields"].pop("curtime")
+    rows, unplaceable = contributions([row])
+    assert (rows, unplaceable) == ([], 1)
 
 
-class MatrixTests(unittest.TestCase):
-    def test_a_flat_run_becomes_one_matrix_a_bone(self) -> None:
-        shaped = shape_matrices([float(v) for v in range(36)], 3)
-        assert len(shaped) == 3
-        assert shaped[1] == [float(v) for v in range(12, 24)]
+def test_only_the_contributions_of_that_frame_attach_to_it() -> None:
+    rows, _ = contributions([
+        _contribution(1, "a.mdl", 1, 1.0, 10.000),
+        _contribution(2, "b.mdl", 2, 0.5, 10.002),
+        _contribution(3, "c.mdl", 3, 0.25, 10.500),
+    ])
+    window = contributions_at(rows, 10.001)
+    assert [row["model"] for row in window] == ["a.mdl", "b.mdl"]
 
-    def test_the_stated_count_bounds_the_run_rather_than_its_length(self) -> None:
-        # The capture reads a generous window; the engine's own count is the authority.
-        assert len(shape_matrices([0.0] * 120, 4)) == 4
 
-    def test_a_run_shorter_than_the_count_yields_what_it_carries(self) -> None:
-        assert len(shape_matrices([0.0] * 24, 9)) == 2
+def test_a_frame_carries_its_entity_clock_and_matrices() -> None:
+    matrices = [float(v) for v in range(24)]
+    frames, nested = group_frames([
+        _pose_call(1, "0x100", 10.0), _pose_return(1, 2, matrices)])
+    assert len(frames) == 1
+    assert frames[0]["entity"] == "0x100"
+    assert frames[0]["curtime"] == pytest.approx(10.0, abs=1e-4)
+    assert frames[0]["bone_count"] == 2
+    assert nested == 0
 
-    def test_matrices_are_keyed_by_the_models_own_bone_names(self) -> None:
-        named, surplus = name_matrices([[1.0] * 12, [2.0] * 12], ["Bip01", "Bip01 Pelvis"])
-        assert list(named) == ["Bip01", "Bip01 Pelvis"]
-        assert named["Bip01 Pelvis"][0] == 2.0
-        assert surplus == 0
 
-    def test_a_matrix_the_bone_list_cannot_name_is_reported(self) -> None:
-        """The two disagreeing means the model resolved wrongly, so it is counted."""
-        named, surplus = name_matrices([[1.0] * 12, [2.0] * 12], ["Bip01"])
-        assert list(named) == ["Bip01"]
-        assert surplus == 1
+def test_a_call_the_sampler_declined_yields_no_frame() -> None:
+    """Only a call that was recorded can close into a frame."""
+    frames, _ = group_frames([_pose_return(7, 2, [0.0] * 24)])
+    assert frames == []
+
+
+def test_a_return_whose_matrix_read_failed_is_not_a_frame() -> None:
+    frames, _ = group_frames([
+        _pose_call(1, "0x100", 10.0),
+        {"kind": "return", "target": "client.setup_bones", "sequence": 1,
+         "fields": {"bone_count": 2, "bone_matrices": {"error": "unreadable"}}},
+    ])
+    assert frames == []
+
+
+def test_a_contribution_inside_a_recorded_call_is_counted_as_nested() -> None:
+    frames, nested = group_frames([
+        _pose_call(1, "0x100", 10.0),
+        _contribution(2, "m.mdl", 1, 1.0, 10.0),
+        _pose_return(1, 2, [0.0] * 24),
+    ])
+    assert (len(frames), nested) == (1, 1)
+
+
+def test_a_contribution_outside_every_recorded_call_is_not_nested() -> None:
+    _, nested = group_frames([_contribution(1, "m.mdl", 1, 1.0, 10.0)])
+    assert nested == 0
+
+
+def test_a_flat_run_becomes_one_matrix_a_bone() -> None:
+    shaped = shape_matrices([float(v) for v in range(36)], 3)
+    assert len(shaped) == 3
+    assert shaped[1] == [float(v) for v in range(12, 24)]
+
+
+def test_the_stated_count_bounds_the_run_rather_than_its_length() -> None:
+    # The capture reads a generous window; the engine's own count is the authority.
+    assert len(shape_matrices([0.0] * 120, 4)) == 4
+
+
+def test_a_run_shorter_than_the_count_yields_what_it_carries() -> None:
+    assert len(shape_matrices([0.0] * 24, 9)) == 2
+
+
+def test_matrices_are_keyed_by_the_models_own_bone_names() -> None:
+    named, surplus = name_matrices([[1.0] * 12, [2.0] * 12], ["Bip01", "Bip01 Pelvis"])
+    assert list(named) == ["Bip01", "Bip01 Pelvis"]
+    assert named["Bip01 Pelvis"][0] == 2.0
+    assert surplus == 0
+
+
+def test_a_matrix_the_bone_list_cannot_name_is_reported() -> None:
+    """The two disagreeing means the model resolved wrongly, so it is counted."""
+    named, surplus = name_matrices([[1.0] * 12, [2.0] * 12], ["Bip01"])
+    assert list(named) == ["Bip01"]
+    assert surplus == 1
 
 
 class BodyResolutionTests(unittest.TestCase):

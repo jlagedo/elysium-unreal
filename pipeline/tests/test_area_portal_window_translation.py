@@ -20,57 +20,58 @@ def _entity(**keys: str) -> str:
     return "{\n%s\n}" % body
 
 
-class AreaPortalWindowTranslationTests(unittest.TestCase):
-    def test_only_the_linked_backing_model_is_suppressed(self) -> None:
-        entities = "\n".join(
-            (
-                _entity(
-                    classname="func_areaportalwindow",
-                    target="WNDWBLACK1",
-                    BackgroundBModel="wndw1",
-                ),
-                _entity(classname="func_brush", targetname="wndw1", model="*20"),
-                _entity(classname="func_brush", targetname="wndwblack1", model="*21"),
-                _entity(classname="func_brush", targetname="unrelated_black", model="*22"),
-            )
+def test_only_the_linked_backing_model_is_suppressed() -> None:
+    entities = "\n".join(
+        (
+            _entity(
+                classname="func_areaportalwindow",
+                target="WNDWBLACK1",
+                BackgroundBModel="wndw1",
+            ),
+            _entity(classname="func_brush", targetname="wndw1", model="*20"),
+            _entity(classname="func_brush", targetname="wndwblack1", model="*21"),
+            _entity(classname="func_brush", targetname="unrelated_black", model="*22"),
         )
+    )
 
-        models, warnings = source_visibility_backing_models(entities)
+    models, warnings = source_visibility_backing_models(entities)
 
-        assert models == {21}
-        assert warnings == []
+    assert models == {21}
+    assert warnings == []
 
-    def test_multiple_windows_resolve_in_entity_order(self) -> None:
-        entities = "\n".join(
-            (
-                _entity(classname="func_brush", targetname="black", model="*4"),
-                _entity(classname="func_brush", targetname="black", model="*5"),
-                _entity(classname="FUNC_AREAPORTALWINDOW", target="Black"),
-                _entity(classname="func_areaportalwindow", target="black2"),
-                _entity(classname="func_brush", targetname="black2", model="*6"),
-            )
+
+def test_multiple_windows_resolve_in_entity_order() -> None:
+    entities = "\n".join(
+        (
+            _entity(classname="func_brush", targetname="black", model="*4"),
+            _entity(classname="func_brush", targetname="black", model="*5"),
+            _entity(classname="FUNC_AREAPORTALWINDOW", target="Black"),
+            _entity(classname="func_areaportalwindow", target="black2"),
+            _entity(classname="func_brush", targetname="black2", model="*6"),
         )
+    )
 
-        models, warnings = source_visibility_backing_models(entities)
+    models, warnings = source_visibility_backing_models(entities)
 
-        assert models == {4, 6}
-        assert warnings == []
+    assert models == {4, 6}
+    assert warnings == []
 
-    def test_malformed_links_warn_and_do_not_hide_an_unrelated_model(self) -> None:
-        entities = "\n".join(
-            (
-                _entity(classname="func_areaportalwindow"),
-                _entity(classname="func_areaportalwindow", target="missing"),
-                _entity(classname="func_areaportalwindow", target="point_helper"),
-                _entity(classname="info_target", targetname="point_helper"),
-                _entity(classname="func_brush", targetname="other", model="*8"),
-            )
+
+def test_malformed_links_warn_and_do_not_hide_an_unrelated_model() -> None:
+    entities = "\n".join(
+        (
+            _entity(classname="func_areaportalwindow"),
+            _entity(classname="func_areaportalwindow", target="missing"),
+            _entity(classname="func_areaportalwindow", target="point_helper"),
+            _entity(classname="info_target", targetname="point_helper"),
+            _entity(classname="func_brush", targetname="other", model="*8"),
         )
+    )
 
-        models, warnings = source_visibility_backing_models(entities)
+    models, warnings = source_visibility_backing_models(entities)
 
-        assert models == set()
-        assert len(warnings) == 3
-        assert "has no target" in warnings[0]
-        assert "does not resolve" in warnings[1]
-        assert "has no brush model" in warnings[2]
+    assert models == set()
+    assert len(warnings) == 3
+    assert "has no target" in warnings[0]
+    assert "does not resolve" in warnings[1]
+    assert "has no brush model" in warnings[2]

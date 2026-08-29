@@ -281,286 +281,291 @@ class SourceClosureTests(unittest.TestCase):
         assert struct.unpack_from("<I", closure.phy.data, 12)[0] == 2
 
 
-class FacialResourceTests(unittest.TestCase):
-    def test_weighted_txt_and_vfe_header_agree_on_the_row_count(self) -> None:
-        table = expressions.decode_txt(
-            b'$keys jaw smile\n$hasweighting\n"aa" "a" 0.5 1.0 0.25 0.75 "open"\n'
-        )
-        assert table["keys"] == ["jaw", "smile"]
-        assert table["rows"][0]["values"][1]["weight"] == 0.75
+def test_weighted_txt_and_vfe_header_agree_on_the_row_count() -> None:
+    table = expressions.decode_txt(
+        b'$keys jaw smile\n$hasweighting\n"aa" "a" 0.5 1.0 0.25 0.75 "open"\n'
+    )
+    assert table["keys"] == ["jaw", "smile"]
+    assert table["rows"][0]["values"][1]["weight"] == 0.75
 
-        vfe = bytearray(144)
-        vfe[:4] = b"EFV\0"
-        internal_name = b"expressions/test.vfe\0"
-        vfe[8:8 + len(internal_name)] = internal_name
-        struct.pack_into("<ii", vfe, 136, len(vfe), 1)
-        header = expressions.decode_vfe_header(bytes(vfe))
-        assert header["rowCount"] == len(table["rows"])
-
-    def test_compiled_vfe_decodes_to_the_same_semantic_row_as_txt(self) -> None:
-        txt = expressions.decode_txt(
-            b'$keys jaw\n$hasweighting\n"aa" "a" 0.5 1.0 "open"\n'
-        )
-        vfe = bytearray(224)
-        vfe[:4] = b"EFV\0"
-        struct.pack_into("<9i", vfe, 136, 224, 1, 172, 0, 0, 0, 1, 216, 220)
-        struct.pack_into("<6i", vfe, 172, 36, 0, 1, ord("a"), 0, 24)
-        struct.pack_into("<iff", vfe, 196, 0, 0.5, 1.0)
-        vfe[208:211] = b"aa\0"
-        vfe[211:215] = b"jaw\0"
-        struct.pack_into("<i", vfe, 216, 211)
-        struct.pack_into("<i", vfe, 220, -1)
-        compiled = expressions.decode_vfe(bytes(vfe))
-        expressions.compare_txt_vfe(txt, compiled)
-        assert compiled["settings"][0]["values"][0]["controller"] == "jaw"
-
-    def test_unknown_txt_directive_is_not_silently_ignored(self) -> None:
-        with pytest.raises(expressions.CharacterFacialError, match="unsupported directive"):
-            expressions.decode_txt(b"$keys jaw\n$unknown\n")
-
-    def test_zero_key_table_retains_labelled_empty_rows(self) -> None:
-        table = expressions.decode_txt(
-            b'$keys\n$hasweighting\n"neutral" "_" "No controller values"\n'
-        )
-        assert table["keys"] == []
-        assert table["rows"][0]["values"] == []
-        assert table["rows"][0]["description"] == "No controller values"
-
-    def test_unused_flex_operand_does_not_project_nan(self) -> None:
-        row = _flex_operation(4, -1, float("nan"))
-        assert row["operandKind"] == "unused"
-        assert row["rawOperandBits"] == 0xFFFFFFFF
-        assert "value" not in row
-        named = _flex_operation("FETCH1", 3, float("nan"))
-        assert named["operandKind"] == "flexControllerIndex"
-        assert named["index"] == 3
-        assert "value" not in named
+    vfe = bytearray(144)
+    vfe[:4] = b"EFV\0"
+    internal_name = b"expressions/test.vfe\0"
+    vfe[8:8 + len(internal_name)] = internal_name
+    struct.pack_into("<ii", vfe, 136, len(vfe), 1)
+    header = expressions.decode_vfe_header(bytes(vfe))
+    assert header["rowCount"] == len(table["rows"])
 
 
-class PhysicsTailTests(unittest.TestCase):
-    def test_ragdoll_constraint_fields_are_retained(self) -> None:
-        blocks = physics._blocks(
-            'ragdollconstraint {\n"parent" "0"\n"child" "3"\n'
-            '"xmin" "-25.0"\n"xmax" "20.0"\n}\n\0'
-        )
-        assert blocks[0]["type"] == "ragdollconstraint"
-        assert blocks[0]["values"]["child"] == "3"
-        assert blocks[0]["values"]["xmin"] == "-25.0"
-
-    def test_known_physics_values_are_typed(self) -> None:
-        values = physics._typed_values(
-            "ragdollconstraint", {"parent": "0", "child": "3", "xmin": "-25.0"}
-        )
-        assert values == {"parent": 0, "child": 3, "xmin": -25.0}
-
-    def test_inline_break_block_preserves_backslash_path_and_health(self) -> None:
-        blocks = physics._blocks(
-            'break { "model" "character\\monster\\gib.mdl" "health" "100" }'
-        )
-        assert blocks[0]["values"]["model"] == "character\\monster\\gib.mdl"
-        assert physics._typed_values("break", blocks[0]["values"])["health"] == 100
-
-    def test_ledge_keeps_triangle_edges_and_point_w(self) -> None:
-        data = bytearray(144)
-        struct.pack_into("<iiIhh", data, 0, 80, 12, 0x123408, 4, 7)
-        faces = ((0, 1, 2), (0, 3, 1), (0, 2, 3), (1, 3, 2))
-        for triangle, corners in enumerate(faces):
-            record = 16 + triangle * 16
-            struct.pack_into("<I", data, record, 0xA0000000 + triangle)
-            for edge, point in enumerate(corners):
-                raw = point | ((edge + 1) << 16)
-                if triangle == 0 and edge == 0:
-                    raw |= 0x80000000
-                struct.pack_into("<I", data, record + 4 + edge * 4, raw)
-        points = ((0.0, 0.0, 0.0, 1.0), (1.0, 0.0, 0.0, 2.0),
-                  (0.0, 1.0, 0.0, 3.0), (0.0, 0.0, 1.0, 4.0))
-        for index, point in enumerate(points):
-            struct.pack_into("<4f", data, 80 + index * 16, *point)
-        ledge = physics._ledge(bytes(data), 0)
-        assert ledge["padding"] == 7
-        assert ledge["sourcePoints"][3]["ivp"][3] == 4.0
-        assert ledge["triangleRecords"][0]["edges"][0]["virtual"]
-        assert ledge["triangleRecords"][0]["edges"][0]["oppositeIndex"] == 1
+def test_compiled_vfe_decodes_to_the_same_semantic_row_as_txt() -> None:
+    txt = expressions.decode_txt(
+        b'$keys jaw\n$hasweighting\n"aa" "a" 0.5 1.0 "open"\n'
+    )
+    vfe = bytearray(224)
+    vfe[:4] = b"EFV\0"
+    struct.pack_into("<9i", vfe, 136, 224, 1, 172, 0, 0, 0, 1, 216, 220)
+    struct.pack_into("<6i", vfe, 172, 36, 0, 1, ord("a"), 0, 24)
+    struct.pack_into("<iff", vfe, 196, 0, 0.5, 1.0)
+    vfe[208:211] = b"aa\0"
+    vfe[211:215] = b"jaw\0"
+    struct.pack_into("<i", vfe, 216, 211)
+    struct.pack_into("<i", vfe, 220, -1)
+    compiled = expressions.decode_vfe(bytes(vfe))
+    expressions.compare_txt_vfe(txt, compiled)
+    assert compiled["settings"][0]["values"][0]["controller"] == "jaw"
 
 
-class ClothSourceCoverageTests(unittest.TestCase):
-    def test_lod_matrix_and_complete_particle_vertex_map_are_retained(self) -> None:
-        data = bytearray(520)
-        struct.pack_into("<2i", data, 200, 1, 220)
-        struct.pack_into("<2i", data, 220, 228, 360)
-        for lod, record in enumerate((228, 360)):
-            struct.pack_into("<f4i", data, record, 3.0, 3, 1, 2, 92)
-            struct.pack_into("<3H", data, record + 92, 10 + lod, 20 + lod, 30 + lod)
-        _table, rows, columns, records = mdl_cloth.definition_table(bytes(data), 0)
-        decoded = mdl_cloth.read_definition(bytes(data), 0, 0, lod=1)
-        assert (rows, columns) == (2, 1)
-        assert records == [228, 360]
-        assert decoded["particle_vertex_indices"] == [11, 21, 31]
-        assert decoded["anchor_vertex_indices"] == [11]
+def test_unknown_txt_directive_is_not_silently_ignored() -> None:
+    with pytest.raises(expressions.CharacterFacialError, match="unsupported directive"):
+        expressions.decode_txt(b"$keys jaw\n$unknown\n")
 
 
-class HitboxDecodeTests(unittest.TestCase):
-    def test_compact_hitbox_set_keeps_bone_group_and_bounds(self) -> None:
-        data = bytearray(384)
-        struct.pack_into("<2i", data, 256, 1, 300)
-        struct.pack_into("<3i", data, 300, 80, 1, 12)
-        struct.pack_into(
-            "<2i3f3f",
-            data,
-            312,
-            0,
-            3,
-            -1.0,
-            -2.0,
-            -3.0,
-            4.0,
-            5.0,
-            6.0,
-        )
-        data[380:382] = b"A\0"
-        sets = _hitbox_sets(bytes(data), [{"name": "root"}])
-        assert sets[0]["name"] == "A"
-        assert sets[0]["boxes"][0]["group"] == 3
-        assert sets[0]["boxes"][0]["boundsMax"] == (4.0, 5.0, 6.0)
+def test_zero_key_table_retains_labelled_empty_rows() -> None:
+    table = expressions.decode_txt(
+        b'$keys\n$hasweighting\n"neutral" "_" "No controller values"\n'
+    )
+    assert table["keys"] == []
+    assert table["rows"][0]["values"] == []
+    assert table["rows"][0]["description"] == "No controller values"
 
 
-class SequenceDescriptorTests(unittest.TestCase):
-    def test_complete_descriptor_keeps_fixed_table_and_typed_tail(self) -> None:
-        source, _topology = _minimal_mdl_vtx()
-        data = bytearray(source)
-        sequence_base = len(data)
-        animation_base = sequence_base + 764
-        data.extend(b"\0" * (764 + 72 + 32))
-        label = animation_base + 72
-        activity = label + 5
-        data.extend(b"idle\0ACT_IDLE\0")
-        struct.pack_into("<2i", data, 264, 1, animation_base)
-        struct.pack_into("<2i", data, 272, 1, sequence_base)
-        struct.pack_into("<i", data, sequence_base, label - sequence_base)
-        struct.pack_into("<i", data, sequence_base + 4, activity - sequence_base)
-        struct.pack_into("<i", data, sequence_base + 52, 1)
-        struct.pack_into("<h", data, sequence_base + 56, 0)
-        struct.pack_into("<2i", data, sequence_base + 572, 1, 1)
-        struct.pack_into("<2i", data, sequence_base + 580, -1, -1)
-        struct.pack_into("<3f", data, sequence_base + 612, 0.2, 0.2, 0.2)
-        struct.pack_into("<3f", data, sequence_base + 672, -1.0, -2.0, -3.0)
-        struct.pack_into("<3f", data, sequence_base + 684, 4.0, 5.0, 6.0)
-        struct.pack_into("<i", data, sequence_base + 696, 9)
-        struct.pack_into("<f", data, sequence_base + 716, 1.17549435e-38)
-        struct.pack_into("<f", data, sequence_base + 720, 3.40282347e38)
-        struct.pack_into("<5i", data, sequence_base + 724, -1, -1, -1, -1, -1)
-        struct.pack_into("<2i", data, sequence_base + 744, -1, -1)
-        struct.pack_into("<3f", data, sequence_base + 752, 0.0, 1.0, 1.0)
-        struct.pack_into("<f", data, animation_base + 4, 30.0)
-        struct.pack_into("<i", data, animation_base + 12, 1)
-        rows = _local_sequences(bytes(data))
-        assert len(rows[0]["animationTable"]) == 256
-        assert rows[0]["statGate"] == 9
-        assert rows[0]["secondaryBoundsMax"] == (4.0, 5.0, 6.0)
-        assert rows[0]["comboWindow"] == [0.0, 1.0, 1.0]
-
-    def test_swing_unknown_block_is_split_into_recovered_fields(self) -> None:
-        data = bytearray(952)
-        struct.pack_into("<2i", data, 708, 1, 764)
-        record = 764
-        struct.pack_into("<2fi", data, record, 0.1, 0.2, 0)
-        struct.pack_into("<6f", data, record + 12, *(0.0,) * 6)
-        struct.pack_into("<i", data, record + 0x24, 0)
-        struct.pack_into("<4i", data, record + 0x28, 1, 0, 0, 0)
-        struct.pack_into("<16i", data, record + 0x38, *([-1] * 16))
-        data[record + 0xB8:record + 0xBC] = bytes((0, 1, 2, 0))
-        row = _swing_records_complete(bytes(data), 0, ["foot"])[0]
-        assert row["kickOnlyMarker"] == 0
-        assert row["candidateCounts"] == [1, 0, 0, 0]
-        assert row["resolvedKnockbackActivities"] == [-1] * 16
-        assert row["bucket0LowHeightMarker"] == 1
-        assert "unidentified" not in row
+def test_unused_flex_operand_does_not_project_nan() -> None:
+    row = _flex_operation(4, -1, float("nan"))
+    assert row["operandKind"] == "unused"
+    assert row["rawOperandBits"] == 0xFFFFFFFF
+    assert "value" not in row
+    named = _flex_operation("FETCH1", 3, float("nan"))
+    assert named["operandKind"] == "flexControllerIndex"
+    assert named["index"] == 3
+    assert "value" not in named
 
 
-class AuxiliaryMdlRecordTests(unittest.TestCase):
-    def test_texture_record_keeps_vtmb_float_fields(self) -> None:
-        data = bytearray(325)
-        struct.pack_into("<2i", data, 292, 1, 300)
-        struct.pack_into("<2i3f", data, 300, 20, 5, 1.5, 2.5, 0.25)
-        data[320:325] = b"body\0"
-        row = _texture_records(bytes(data))[0]
-        assert row["flags"] == 5
-        assert (row["width"], row["height"], row["maxWorldUnitsPerTexel"]) == (1.5, 2.5, 0.25)
-
-    def test_sequence_group_decodes_both_record_relative_strings(self) -> None:
-        data = bytearray(332)
-        struct.pack_into("<2i", data, 284, 1, 300)
-        struct.pack_into("<4i", data, 300, 16, 24, 0, 0)
-        data[316:324] = b"default\0"
-        data[324] = 0
-        row = _sequence_groups(bytes(data))[0]
-        assert (row["label"], row["name"]) == ("default", "")
-
-    def test_include_group_decodes_pose_maps_and_bone_remap(self) -> None:
-        data = bytearray(700)
-        struct.pack_into("<2i", data, 404, 1, 500)
-        struct.pack_into("<5i", data, 500, 172, 0, 0x7FFFFFFF, 0, 116)
-        struct.pack_into("<24h", data, 520, *([-1] * 24))
-        struct.pack_into("<24h", data, 568, *([-1] * 24))
-        struct.pack_into("<h2B2h", data, 616, -1, 0, 0, -1, -1)
-        struct.pack_into(
-            "<12f",
-            data,
-            624,
-            1.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            0.0, 0.0, 1.0, 0.0,
-        )
-        data[672:688] = b"shared/test.mdl\0"
-        row = _include_models(bytes(data), [{"name": "root"}])[0]
-        assert row["path"] == "models/shared/test.mdl"
-        assert row["globalToLocalPoseParameters"] == [-1] * 24
-        assert row["boneRemap"][0]["sourceBone"] == (-1)
+def test_ragdoll_constraint_fields_are_retained() -> None:
+    blocks = physics._blocks(
+        'ragdollconstraint {\n"parent" "0"\n"child" "3"\n'
+        '"xmin" "-25.0"\n"xmax" "20.0"\n}\n\0'
+    )
+    assert blocks[0]["type"] == "ragdollconstraint"
+    assert blocks[0]["values"]["child"] == "3"
+    assert blocks[0]["values"]["xmin"] == "-25.0"
 
 
-class TopologyComparisonTests(unittest.TestCase):
-    def test_signature_uses_source_vertices_instead_of_output_numbering(self) -> None:
-        first = [{
-            "index": 0,
-            "primitives": [{
-                "bodyPart": 0, "model": 0, "mesh": 0, "skinReference": 0,
-                "sourceVertices": [7, 8, 9], "triangles": [(0, 1, 2)],
-            }],
+def test_known_physics_values_are_typed() -> None:
+    values = physics._typed_values(
+        "ragdollconstraint", {"parent": "0", "child": "3", "xmin": "-25.0"}
+    )
+    assert values == {"parent": 0, "child": 3, "xmin": -25.0}
+
+
+def test_inline_break_block_preserves_backslash_path_and_health() -> None:
+    blocks = physics._blocks(
+        'break { "model" "character\\monster\\gib.mdl" "health" "100" }'
+    )
+    assert blocks[0]["values"]["model"] == "character\\monster\\gib.mdl"
+    assert physics._typed_values("break", blocks[0]["values"])["health"] == 100
+
+
+def test_ledge_keeps_triangle_edges_and_point_w() -> None:
+    data = bytearray(144)
+    struct.pack_into("<iiIhh", data, 0, 80, 12, 0x123408, 4, 7)
+    faces = ((0, 1, 2), (0, 3, 1), (0, 2, 3), (1, 3, 2))
+    for triangle, corners in enumerate(faces):
+        record = 16 + triangle * 16
+        struct.pack_into("<I", data, record, 0xA0000000 + triangle)
+        for edge, point in enumerate(corners):
+            raw = point | ((edge + 1) << 16)
+            if triangle == 0 and edge == 0:
+                raw |= 0x80000000
+            struct.pack_into("<I", data, record + 4 + edge * 4, raw)
+    points = ((0.0, 0.0, 0.0, 1.0), (1.0, 0.0, 0.0, 2.0),
+              (0.0, 1.0, 0.0, 3.0), (0.0, 0.0, 1.0, 4.0))
+    for index, point in enumerate(points):
+        struct.pack_into("<4f", data, 80 + index * 16, *point)
+    ledge = physics._ledge(bytes(data), 0)
+    assert ledge["padding"] == 7
+    assert ledge["sourcePoints"][3]["ivp"][3] == 4.0
+    assert ledge["triangleRecords"][0]["edges"][0]["virtual"]
+    assert ledge["triangleRecords"][0]["edges"][0]["oppositeIndex"] == 1
+
+
+def test_lod_matrix_and_complete_particle_vertex_map_are_retained() -> None:
+    data = bytearray(520)
+    struct.pack_into("<2i", data, 200, 1, 220)
+    struct.pack_into("<2i", data, 220, 228, 360)
+    for lod, record in enumerate((228, 360)):
+        struct.pack_into("<f4i", data, record, 3.0, 3, 1, 2, 92)
+        struct.pack_into("<3H", data, record + 92, 10 + lod, 20 + lod, 30 + lod)
+    _table, rows, columns, records = mdl_cloth.definition_table(bytes(data), 0)
+    decoded = mdl_cloth.read_definition(bytes(data), 0, 0, lod=1)
+    assert (rows, columns) == (2, 1)
+    assert records == [228, 360]
+    assert decoded["particle_vertex_indices"] == [11, 21, 31]
+    assert decoded["anchor_vertex_indices"] == [11]
+
+
+def test_compact_hitbox_set_keeps_bone_group_and_bounds() -> None:
+    data = bytearray(384)
+    struct.pack_into("<2i", data, 256, 1, 300)
+    struct.pack_into("<3i", data, 300, 80, 1, 12)
+    struct.pack_into(
+        "<2i3f3f",
+        data,
+        312,
+        0,
+        3,
+        -1.0,
+        -2.0,
+        -3.0,
+        4.0,
+        5.0,
+        6.0,
+    )
+    data[380:382] = b"A\0"
+    sets = _hitbox_sets(bytes(data), [{"name": "root"}])
+    assert sets[0]["name"] == "A"
+    assert sets[0]["boxes"][0]["group"] == 3
+    assert sets[0]["boxes"][0]["boundsMax"] == (4.0, 5.0, 6.0)
+
+
+def test_complete_descriptor_keeps_fixed_table_and_typed_tail() -> None:
+    source, _topology = _minimal_mdl_vtx()
+    data = bytearray(source)
+    sequence_base = len(data)
+    animation_base = sequence_base + 764
+    data.extend(b"\0" * (764 + 72 + 32))
+    label = animation_base + 72
+    activity = label + 5
+    data.extend(b"idle\0ACT_IDLE\0")
+    struct.pack_into("<2i", data, 264, 1, animation_base)
+    struct.pack_into("<2i", data, 272, 1, sequence_base)
+    struct.pack_into("<i", data, sequence_base, label - sequence_base)
+    struct.pack_into("<i", data, sequence_base + 4, activity - sequence_base)
+    struct.pack_into("<i", data, sequence_base + 52, 1)
+    struct.pack_into("<h", data, sequence_base + 56, 0)
+    struct.pack_into("<2i", data, sequence_base + 572, 1, 1)
+    struct.pack_into("<2i", data, sequence_base + 580, -1, -1)
+    struct.pack_into("<3f", data, sequence_base + 612, 0.2, 0.2, 0.2)
+    struct.pack_into("<3f", data, sequence_base + 672, -1.0, -2.0, -3.0)
+    struct.pack_into("<3f", data, sequence_base + 684, 4.0, 5.0, 6.0)
+    struct.pack_into("<i", data, sequence_base + 696, 9)
+    struct.pack_into("<f", data, sequence_base + 716, 1.17549435e-38)
+    struct.pack_into("<f", data, sequence_base + 720, 3.40282347e38)
+    struct.pack_into("<5i", data, sequence_base + 724, -1, -1, -1, -1, -1)
+    struct.pack_into("<2i", data, sequence_base + 744, -1, -1)
+    struct.pack_into("<3f", data, sequence_base + 752, 0.0, 1.0, 1.0)
+    struct.pack_into("<f", data, animation_base + 4, 30.0)
+    struct.pack_into("<i", data, animation_base + 12, 1)
+    rows = _local_sequences(bytes(data))
+    assert len(rows[0]["animationTable"]) == 256
+    assert rows[0]["statGate"] == 9
+    assert rows[0]["secondaryBoundsMax"] == (4.0, 5.0, 6.0)
+    assert rows[0]["comboWindow"] == [0.0, 1.0, 1.0]
+
+
+def test_swing_unknown_block_is_split_into_recovered_fields() -> None:
+    data = bytearray(952)
+    struct.pack_into("<2i", data, 708, 1, 764)
+    record = 764
+    struct.pack_into("<2fi", data, record, 0.1, 0.2, 0)
+    struct.pack_into("<6f", data, record + 12, *(0.0,) * 6)
+    struct.pack_into("<i", data, record + 0x24, 0)
+    struct.pack_into("<4i", data, record + 0x28, 1, 0, 0, 0)
+    struct.pack_into("<16i", data, record + 0x38, *([-1] * 16))
+    data[record + 0xB8:record + 0xBC] = bytes((0, 1, 2, 0))
+    row = _swing_records_complete(bytes(data), 0, ["foot"])[0]
+    assert row["kickOnlyMarker"] == 0
+    assert row["candidateCounts"] == [1, 0, 0, 0]
+    assert row["resolvedKnockbackActivities"] == [-1] * 16
+    assert row["bucket0LowHeightMarker"] == 1
+    assert "unidentified" not in row
+
+
+def test_texture_record_keeps_vtmb_float_fields() -> None:
+    data = bytearray(325)
+    struct.pack_into("<2i", data, 292, 1, 300)
+    struct.pack_into("<2i3f", data, 300, 20, 5, 1.5, 2.5, 0.25)
+    data[320:325] = b"body\0"
+    row = _texture_records(bytes(data))[0]
+    assert row["flags"] == 5
+    assert (row["width"], row["height"], row["maxWorldUnitsPerTexel"]) == (1.5, 2.5, 0.25)
+
+
+def test_sequence_group_decodes_both_record_relative_strings() -> None:
+    data = bytearray(332)
+    struct.pack_into("<2i", data, 284, 1, 300)
+    struct.pack_into("<4i", data, 300, 16, 24, 0, 0)
+    data[316:324] = b"default\0"
+    data[324] = 0
+    row = _sequence_groups(bytes(data))[0]
+    assert (row["label"], row["name"]) == ("default", "")
+
+
+def test_include_group_decodes_pose_maps_and_bone_remap() -> None:
+    data = bytearray(700)
+    struct.pack_into("<2i", data, 404, 1, 500)
+    struct.pack_into("<5i", data, 500, 172, 0, 0x7FFFFFFF, 0, 116)
+    struct.pack_into("<24h", data, 520, *([-1] * 24))
+    struct.pack_into("<24h", data, 568, *([-1] * 24))
+    struct.pack_into("<h2B2h", data, 616, -1, 0, 0, -1, -1)
+    struct.pack_into(
+        "<12f",
+        data,
+        624,
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+    )
+    data[672:688] = b"shared/test.mdl\0"
+    row = _include_models(bytes(data), [{"name": "root"}])[0]
+    assert row["path"] == "models/shared/test.mdl"
+    assert row["globalToLocalPoseParameters"] == [-1] * 24
+    assert row["boneRemap"][0]["sourceBone"] == (-1)
+
+
+def test_signature_uses_source_vertices_instead_of_output_numbering() -> None:
+    first = [{
+        "index": 0,
+        "primitives": [{
+            "bodyPart": 0, "model": 0, "mesh": 0, "skinReference": 0,
+            "sourceVertices": [7, 8, 9], "triangles": [(0, 1, 2)],
+        }],
+    }]
+    reordered = [{
+        "index": 0,
+        "primitives": [{
+            "bodyPart": 0, "model": 0, "mesh": 0, "skinReference": 0,
+            "sourceVertices": [9, 7, 8], "triangles": [(1, 2, 0)],
+        }],
+    }]
+    assert vtx.topology_signature(first) == vtx.topology_signature(reordered)
+
+
+def test_every_declared_lod_is_decoded() -> None:
+    mdl_data, topology = _minimal_mdl_vtx()
+    lods = vtx.decode_lods(mdl_data, topology, variant="synthetic")
+    assert [lod["index"] for lod in lods] == [0, 1]
+    assert [lod["switchPoints"] for lod in lods] == [[0.0], [10.0]]
+    assert lods[1]["primitives"][0]["triangles"] == [(0, 1, 2)]
+    assert lods[0]["primitives"][0]["tangents"][0] == (1.0, 0.0, 0.0, 1.0)
+    assert vtx.decode_material_replacements(topology) == [
+            {"lod": 0, "count": 0, "relativeOffset": 0, "replacements": []},
+            {"lod": 1, "count": 0, "relativeOffset": 0, "replacements": []},
+        ]
+
+
+def test_vtmb_packed_material_replacement_is_typed() -> None:
+    data = bytearray(55)
+    struct.pack_into("<i", data, 20, 1)
+    struct.pack_into("<i", data, 24, 36)
+    struct.pack_into("<2i", data, 36, 1, 8)
+    struct.pack_into("<hi", data, 44, 2, 6)
+    data[50:55] = b"skin\0"
+    assert vtx.decode_material_replacements(bytes(data)) == [{
+            "lod": 0,
+            "count": 1,
+            "relativeOffset": 8,
+            "replacements": [{"index": 0, "material": 2, "name": "skin"}],
         }]
-        reordered = [{
-            "index": 0,
-            "primitives": [{
-                "bodyPart": 0, "model": 0, "mesh": 0, "skinReference": 0,
-                "sourceVertices": [9, 7, 8], "triangles": [(1, 2, 0)],
-            }],
-        }]
-        assert vtx.topology_signature(first) == vtx.topology_signature(reordered)
-
-    def test_every_declared_lod_is_decoded(self) -> None:
-        mdl_data, topology = _minimal_mdl_vtx()
-        lods = vtx.decode_lods(mdl_data, topology, variant="synthetic")
-        assert [lod["index"] for lod in lods] == [0, 1]
-        assert [lod["switchPoints"] for lod in lods] == [[0.0], [10.0]]
-        assert lods[1]["primitives"][0]["triangles"] == [(0, 1, 2)]
-        assert lods[0]["primitives"][0]["tangents"][0] == (1.0, 0.0, 0.0, 1.0)
-        assert vtx.decode_material_replacements(topology) == [
-                {"lod": 0, "count": 0, "relativeOffset": 0, "replacements": []},
-                {"lod": 1, "count": 0, "relativeOffset": 0, "replacements": []},
-            ]
-
-    def test_vtmb_packed_material_replacement_is_typed(self) -> None:
-        data = bytearray(55)
-        struct.pack_into("<i", data, 20, 1)
-        struct.pack_into("<i", data, 24, 36)
-        struct.pack_into("<2i", data, 36, 1, 8)
-        struct.pack_into("<hi", data, 44, 2, 6)
-        data[50:55] = b"skin\0"
-        assert vtx.decode_material_replacements(bytes(data)) == [{
-                "lod": 0,
-                "count": 1,
-                "relativeOffset": 8,
-                "replacements": [{"index": 0, "material": 2, "name": "skin"}],
-            }]
 
 
 class WholeCharacterDecodeTests(unittest.TestCase):
@@ -623,131 +628,136 @@ class WholeCharacterDecodeTests(unittest.TestCase):
         assert "TANGENT" in document["meshes"][0]["primitives"][0]["attributes"]
 
 
-class CharacterGlbWriterTests(unittest.TestCase):
-    def test_complete_synthetic_character_publishes_and_validates(self) -> None:
-        model = _model()
-        document, binary = character_glb.build_document(model, b"")
-        with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "body.glb"
-            character_glb.write_glb(document, binary, path)
-            summary = validation.validate(path)
-        assert summary["asset"] == model.asset_id
-        assert summary["bones"] == 1
-        assert summary["lods"] == 1
-        assert summary["animations"] == 0
-        assert summary["sourceBytes"] == summary["accountedBytes"]
-        assert summary["byteCoveragePercent"] == 100.0
-        coverage = document["extensions"]["ELYSIUM_vtmb_character"]["coverage"]
-        assert "typedUnidentified" in coverage
-        assert coverage["byteLedger"][0]["coveragePercent"] == 100.0
-        assert "states" not in coverage
+def test_complete_synthetic_character_publishes_and_validates() -> None:
+    model = _model()
+    document, binary = character_glb.build_document(model, b"")
+    with tempfile.TemporaryDirectory() as temporary:
+        path = Path(temporary) / "body.glb"
+        character_glb.write_glb(document, binary, path)
+        summary = validation.validate(path)
+    assert summary["asset"] == model.asset_id
+    assert summary["bones"] == 1
+    assert summary["lods"] == 1
+    assert summary["animations"] == 0
+    assert summary["sourceBytes"] == summary["accountedBytes"]
+    assert summary["byteCoveragePercent"] == 100.0
+    coverage = document["extensions"]["ELYSIUM_vtmb_character"]["coverage"]
+    assert "typedUnidentified" in coverage
+    assert coverage["byteLedger"][0]["coveragePercent"] == 100.0
+    assert "states" not in coverage
 
-    def test_validator_refuses_an_opaque_source_blob(self) -> None:
-        document, binary = character_glb.build_document(_model(), b"")
-        extension = document["extensions"]["ELYSIUM_vtmb_character"]
-        extension["mdl"]["rawData"] = "SUQ="
-        with pytest.raises(
-            validation.CharacterGlbValidationError, match="opaque source payload"
-        ):
-            validation.validate_document(document, binary)
 
-    def test_validator_refuses_a_byte_ledger_gap(self) -> None:
-        document, binary = character_glb.build_document(_model(), b"")
-        ledger = document["extensions"]["ELYSIUM_vtmb_character"]["coverage"][
-            "byteLedger"
-        ][0]
-        ledger["ranges"][0]["length"] -= 1
-        with pytest.raises(
-            validation.CharacterGlbValidationError, match="byte ledger"
-        ):
-            validation.validate_document(document, binary)
+def test_validator_refuses_an_opaque_source_blob() -> None:
+    document, binary = character_glb.build_document(_model(), b"")
+    extension = document["extensions"]["ELYSIUM_vtmb_character"]
+    extension["mdl"]["rawData"] = "SUQ="
+    with pytest.raises(
+        validation.CharacterGlbValidationError, match="opaque source payload"
+    ):
+        validation.validate_document(document, binary)
 
-    def test_prepublication_validation_rechecks_source_bytes(self) -> None:
-        document, binary = character_glb.build_document(_model(), b"")
-        source = _source()
-        changed = SourceMember(
-            role="mdl",
-            path=source.path,
-            data=b"changed-source",
-            origin={"kind": "synthetic"},
+
+def test_validator_refuses_a_byte_ledger_gap() -> None:
+    document, binary = character_glb.build_document(_model(), b"")
+    ledger = document["extensions"]["ELYSIUM_vtmb_character"]["coverage"][
+        "byteLedger"
+    ][0]
+    ledger["ranges"][0]["length"] -= 1
+    with pytest.raises(
+        validation.CharacterGlbValidationError, match="byte ledger"
+    ):
+        validation.validate_document(document, binary)
+
+
+def test_prepublication_validation_rechecks_source_bytes() -> None:
+    document, binary = character_glb.build_document(_model(), b"")
+    source = _source()
+    changed = SourceMember(
+        role="mdl",
+        path=source.path,
+        data=b"changed-source",
+        origin={"kind": "synthetic"},
+    )
+    with pytest.raises(
+        validation.CharacterGlbValidationError,
+        match="prepublication source bytes disagree",
+    ):
+        validation.validate_document(
+            document,
+            binary,
+            source_members=(changed,),
         )
-        with pytest.raises(
-            validation.CharacterGlbValidationError,
-            match="prepublication source bytes disagree",
-        ):
-            validation.validate_document(
-                document,
-                binary,
-                source_members=(changed,),
-            )
 
 
-class ByteCoverageTests(unittest.TestCase):
-    def test_unclaimed_nonzero_byte_is_a_hard_failure(self) -> None:
-        ledger = coverage.ByteLedger("source.bin", b"\0\x7f")
-        ledger.claim(0, 1, "mapped", "header")
-        with pytest.raises(
-            coverage.CharacterByteCoverageError, match="unclaimed non-zero byte"
-        ):
-            ledger.finish()
-
-    def test_zero_gap_is_verified_and_accounted(self) -> None:
-        ledger = coverage.ByteLedger("source.bin", b"A\0\0")
-        ledger.claim(0, 1, "mapped", "value")
-        result = ledger.finish()
-        assert result["accountedBytes"] == 3
-        assert result["coveragePercent"] == 100.0
-        assert result["stateBytes"]["padding-zero"] == 2
-
-    def test_minimal_mdl_has_gapless_byte_ledger(self) -> None:
-        mdl_data, topology = _minimal_mdl_vtx()
-        result = coverage.cover_mdl("synthetic.mdl", mdl_data, vtx_data=topology)
-        assert result["coveragePercent"] == 100.0
-        assert result["accountedBytes"] == len(mdl_data)
-
-    def test_qndbtm_eof_trailer_is_a_mapped_compiler_record(self) -> None:
-        payload = b"skin\0" + bytes.fromhex("64001100516e4462546d")
-        ledger = coverage.ByteLedger("tail.bin", payload)
-        ledger.claim(0, 5, "mapped-string", "texture[9].name")
-        coverage._cover_retained_mdl_payloads(ledger, payload, bone_count=1)
-        result = ledger.finish()
-        assert result["ranges"][-1]["owner"] == "compilerTrailerQnDbTm"
-        assert result["ranges"][-1]["state"] == "mapped"
-        assert result["ranges"][-1]["length"] == 10
-        trailer = coverage.compiler_trailer(payload)
-        assert trailer["magic"] == "QnDbTm"
-        assert trailer["pathOffset"] == 0x00110064
-
-    def test_cloth_map_layout_uses_the_pointer_span(self) -> None:
-        verts = 4
-        selectors = bytes([0, 0xFF, 0, 0xFF]) + bytes([0xFF] * 4)
-        positions = bytes(verts * 2 * 2)
-        tangents = bytes(verts * 2 * 2)
-        image = bytearray(60 + len(selectors) + len(positions) + len(tangents))
-        struct.pack_into("<i", image, 8, verts)
-        struct.pack_into("<i", image, 48, 60)
-        struct.pack_into("<i", image, 52, 60 + len(selectors))
-        struct.pack_into("<i", image, 56, 60 + len(selectors) + len(positions))
-        image[60:60 + len(selectors)] = selectors
-        layout = mdl_cloth.map_layout(bytes(image), 0)
-        assert layout["rows"] == 2
-        assert layout["position_rows"] == 2
-        assert layout["selector_align"] == 0
-        assert layout["vertex_count"] == verts
-
-    def test_overlapping_vtx_strip_groups_reuse_the_declared_range(self) -> None:
-        ledger = coverage.ByteLedger("mesh.vtx", bytes(44))
-        ledger.array(4, 1, 20, "lod[0].mesh[0].stripGroups")
-        ledger.array(4, 1, 20, "lod[1].mesh[0].stripGroups", allow_existing=True)
-        result = ledger.finish()
-        assert result["ranges"][1]["owner"] == "lod[0].mesh[0].stripGroups"
+def test_unclaimed_nonzero_byte_is_a_hard_failure() -> None:
+    ledger = coverage.ByteLedger("source.bin", b"\0\x7f")
+    ledger.claim(0, 1, "mapped", "header")
+    with pytest.raises(
+        coverage.CharacterByteCoverageError, match="unclaimed non-zero byte"
+    ):
+        ledger.finish()
 
 
-class CharacterCoverageSemanticsTests(unittest.TestCase):
-    def test_writer_records_the_source_to_gltf_transform(self) -> None:
-        document, _binary = character_glb.build_document(_model(), b"")
-        extension = document["extensions"]["ELYSIUM_vtmb_character"]
-        assert extension["identity"]["sourcePolicy"] == "up-first"
-        assert extension["coordinateTransform"]["scale"] == 0.0254
-        assert extension["coverage"]["unresolved"] == []
-        assert extension["coverage"]["unsupported"] == []
+def test_zero_gap_is_verified_and_accounted() -> None:
+    ledger = coverage.ByteLedger("source.bin", b"A\0\0")
+    ledger.claim(0, 1, "mapped", "value")
+    result = ledger.finish()
+    assert result["accountedBytes"] == 3
+    assert result["coveragePercent"] == 100.0
+    assert result["stateBytes"]["padding-zero"] == 2
+
+
+def test_minimal_mdl_has_gapless_byte_ledger() -> None:
+    mdl_data, topology = _minimal_mdl_vtx()
+    result = coverage.cover_mdl("synthetic.mdl", mdl_data, vtx_data=topology)
+    assert result["coveragePercent"] == 100.0
+    assert result["accountedBytes"] == len(mdl_data)
+
+
+def test_qndbtm_eof_trailer_is_a_mapped_compiler_record() -> None:
+    payload = b"skin\0" + bytes.fromhex("64001100516e4462546d")
+    ledger = coverage.ByteLedger("tail.bin", payload)
+    ledger.claim(0, 5, "mapped-string", "texture[9].name")
+    coverage._cover_retained_mdl_payloads(ledger, payload, bone_count=1)
+    result = ledger.finish()
+    assert result["ranges"][-1]["owner"] == "compilerTrailerQnDbTm"
+    assert result["ranges"][-1]["state"] == "mapped"
+    assert result["ranges"][-1]["length"] == 10
+    trailer = coverage.compiler_trailer(payload)
+    assert trailer["magic"] == "QnDbTm"
+    assert trailer["pathOffset"] == 0x00110064
+
+
+def test_cloth_map_layout_uses_the_pointer_span() -> None:
+    verts = 4
+    selectors = bytes([0, 0xFF, 0, 0xFF]) + bytes([0xFF] * 4)
+    positions = bytes(verts * 2 * 2)
+    tangents = bytes(verts * 2 * 2)
+    image = bytearray(60 + len(selectors) + len(positions) + len(tangents))
+    struct.pack_into("<i", image, 8, verts)
+    struct.pack_into("<i", image, 48, 60)
+    struct.pack_into("<i", image, 52, 60 + len(selectors))
+    struct.pack_into("<i", image, 56, 60 + len(selectors) + len(positions))
+    image[60:60 + len(selectors)] = selectors
+    layout = mdl_cloth.map_layout(bytes(image), 0)
+    assert layout["rows"] == 2
+    assert layout["position_rows"] == 2
+    assert layout["selector_align"] == 0
+    assert layout["vertex_count"] == verts
+
+
+def test_overlapping_vtx_strip_groups_reuse_the_declared_range() -> None:
+    ledger = coverage.ByteLedger("mesh.vtx", bytes(44))
+    ledger.array(4, 1, 20, "lod[0].mesh[0].stripGroups")
+    ledger.array(4, 1, 20, "lod[1].mesh[0].stripGroups", allow_existing=True)
+    result = ledger.finish()
+    assert result["ranges"][1]["owner"] == "lod[0].mesh[0].stripGroups"
+
+
+def test_writer_records_the_source_to_gltf_transform() -> None:
+    document, _binary = character_glb.build_document(_model(), b"")
+    extension = document["extensions"]["ELYSIUM_vtmb_character"]
+    assert extension["identity"]["sourcePolicy"] == "up-first"
+    assert extension["coordinateTransform"]["scale"] == 0.0254
+    assert extension["coverage"]["unresolved"] == []
+    assert extension["coverage"]["unsupported"] == []

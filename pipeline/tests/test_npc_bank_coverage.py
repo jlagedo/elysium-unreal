@@ -28,10 +28,9 @@ from elysium_pipeline.exporters.npc_export import (  # noqa: E402
 )
 
 
-class BankContainerCensusTests(unittest.TestCase):
-    def test_an_absent_directory_is_an_empty_census_rather_than_an_error(self) -> None:
-        with tempfile.TemporaryDirectory() as npc_dir:
-            assert bank_containers_present(npc_dir) == set()
+def test_an_absent_directory_is_an_empty_census_rather_than_an_error() -> None:
+    with tempfile.TemporaryDirectory() as npc_dir:
+        assert bank_containers_present(npc_dir) == set()
 
 
 class AnswerableOwnerTests(unittest.TestCase):

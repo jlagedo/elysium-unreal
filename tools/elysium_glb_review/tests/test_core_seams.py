@@ -33,66 +33,70 @@ class ExtensionDiscoveryTests(unittest.TestCase):
         assert seams.asset_id(document) == "vtmb:material:brick/aspdra"
 
 
-class ReferenceTests(unittest.TestCase):
-    def test_a_character_names_its_materials_through_the_reference_extension(self) -> None:
-        document = support.document_of(
-            support.character_unit(
-                "vtmb:character-body:npc/body",
-                materials=["vtmb:material:a/one", "vtmb:material:a/two"],
-            )
+def test_a_character_names_its_materials_through_the_reference_extension() -> None:
+    document = support.document_of(
+        support.character_unit(
+            "vtmb:character-body:npc/body",
+            materials=["vtmb:material:a/one", "vtmb:material:a/two"],
         )
-        references = seams.material_references(document)
-        assert [reference.identity for reference in references] == ["vtmb:material:a/one", "vtmb:material:a/two"]
-        assert references[0].origin == "materials[0]"
+    )
+    references = seams.material_references(document)
+    assert [reference.identity for reference in references] == ["vtmb:material:a/one", "vtmb:material:a/two"]
+    assert references[0].origin == "materials[0]"
 
-    def test_a_material_names_its_textures_and_its_surface_property(self) -> None:
-        document = support.document_of(
-            support.material_unit(
-                "vtmb:material:glass/pane",
-                textures={"$basetexture": "glass/glassb", "$bumpmap": "glass/glassn"},
-                surface_property="glass",
-            )
+
+def test_a_material_names_its_textures_and_its_surface_property() -> None:
+    document = support.document_of(
+        support.material_unit(
+            "vtmb:material:glass/pane",
+            textures={"$basetexture": "glass/glassb", "$bumpmap": "glass/glassn"},
+            surface_property="glass",
         )
-        references = seams.outgoing_references(document)
-        by_role = {}
-        for reference in references:
-            by_role.setdefault(reference.role, []).append(reference.identity)
-        assert "vtmb:texture:glass/glassb" in by_role["texture"]
-        assert "vtmb:surface-property:glass" in by_role["surface-property"]
+    )
+    references = seams.outgoing_references(document)
+    by_role = {}
+    for reference in references:
+        by_role.setdefault(reference.role, []).append(reference.identity)
+    assert "vtmb:texture:glass/glassb" in by_role["texture"]
+    assert "vtmb:surface-property:glass" in by_role["surface-property"]
 
-    def test_a_bare_surface_property_name_is_promoted_to_an_identity(self) -> None:
-        # A material writes the bare name where a character writes the full identity.
-        document = support.document_of(
-            support.material_unit("vtmb:material:a/b", surface_property="Glass")
-        )
-        _name, payload = seams.extension_of(document)
-        reference = seams.surface_property_reference(payload)
-        assert reference.identity == "vtmb:surface-property:glass"
 
-    def test_a_material_with_no_surface_property_names_none(self) -> None:
-        document = support.document_of(support.material_unit("vtmb:material:a/b"))
-        _name, payload = seams.extension_of(document)
-        assert seams.surface_property_reference(payload) is None
+def test_a_bare_surface_property_name_is_promoted_to_an_identity() -> None:
+    # A material writes the bare name where a character writes the full identity.
+    document = support.document_of(
+        support.material_unit("vtmb:material:a/b", surface_property="Glass")
+    )
+    _name, payload = seams.extension_of(document)
+    reference = seams.surface_property_reference(payload)
+    assert reference.identity == "vtmb:surface-property:glass"
 
-    def test_a_binding_with_no_asset_is_not_a_reference(self) -> None:
-        # An engine-supplied render target never had a source file, so a binding that
-        # names one is complete rather than dangling.
-        document = support.document_of(support.material_unit("vtmb:material:a/b"))
-        _name, payload = seams.extension_of(document)
-        payload["textureBindings"] = [
-            {"parameter": "$refracttexture", "value": "_rt_WaterRefraction",
-             "kind": "render-target", "asset": None, "resolved": True}
-        ]
-        assert seams.texture_bindings(payload) == []
 
-    def test_export_time_resolution_is_carried_through(self) -> None:
-        document = support.document_of(support.material_unit("vtmb:material:a/b"))
-        _name, payload = seams.extension_of(document)
-        payload["textureBindings"] = [
-            {"parameter": "$basetexture", "value": "x", "kind": "texture",
-             "asset": "vtmb:texture:x", "resolved": False}
-        ]
-        assert not seams.texture_bindings(payload)[0].resolved
+def test_a_material_with_no_surface_property_names_none() -> None:
+    document = support.document_of(support.material_unit("vtmb:material:a/b"))
+    _name, payload = seams.extension_of(document)
+    assert seams.surface_property_reference(payload) is None
+
+
+def test_a_binding_with_no_asset_is_not_a_reference() -> None:
+    # An engine-supplied render target never had a source file, so a binding that
+    # names one is complete rather than dangling.
+    document = support.document_of(support.material_unit("vtmb:material:a/b"))
+    _name, payload = seams.extension_of(document)
+    payload["textureBindings"] = [
+        {"parameter": "$refracttexture", "value": "_rt_WaterRefraction",
+         "kind": "render-target", "asset": None, "resolved": True}
+    ]
+    assert seams.texture_bindings(payload) == []
+
+
+def test_export_time_resolution_is_carried_through() -> None:
+    document = support.document_of(support.material_unit("vtmb:material:a/b"))
+    _name, payload = seams.extension_of(document)
+    payload["textureBindings"] = [
+        {"parameter": "$basetexture", "value": "x", "kind": "texture",
+         "asset": "vtmb:texture:x", "resolved": False}
+    ]
+    assert not seams.texture_bindings(payload)[0].resolved
 
 
 class ColorSpaceTests(unittest.TestCase):
@@ -107,17 +111,18 @@ class ColorSpaceTests(unittest.TestCase):
                 assert not seams.is_non_color(parameter)
 
 
-class CoverageTests(unittest.TestCase):
-    def test_a_unit_that_accounted_for_everything_is_clean(self) -> None:
-        coverage = seams.coverage({"coverage": {"mapped": [1, 2], "unresolved": [], "unsupported": []}})
-        assert coverage.clean
-        assert len(coverage.mapped) == 2
+def test_a_unit_that_accounted_for_everything_is_clean() -> None:
+    coverage = seams.coverage({"coverage": {"mapped": [1, 2], "unresolved": [], "unsupported": []}})
+    assert coverage.clean
+    assert len(coverage.mapped) == 2
 
-    def test_unresolved_or_unsupported_rows_make_a_unit_unclean(self) -> None:
-        assert not seams.coverage({"coverage": {"unresolved": [{}]}}).clean
-        assert not seams.coverage({"coverage": {"unsupported": [{}]}}).clean
 
-    def test_a_missing_coverage_block_reads_as_empty_rather_than_failing(self) -> None:
-        coverage = seams.coverage({})
-        assert coverage.clean
-        assert coverage.mapped == []
+def test_unresolved_or_unsupported_rows_make_a_unit_unclean() -> None:
+    assert not seams.coverage({"coverage": {"unresolved": [{}]}}).clean
+    assert not seams.coverage({"coverage": {"unsupported": [{}]}}).clean
+
+
+def test_a_missing_coverage_block_reads_as_empty_rather_than_failing() -> None:
+    coverage = seams.coverage({})
+    assert coverage.clean
+    assert coverage.mapped == []

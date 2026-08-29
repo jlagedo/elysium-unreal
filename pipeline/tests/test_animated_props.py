@@ -32,36 +32,42 @@ def _run(valid_keys, total, stored=None):
     return bytes([len(valid_keys), total]) + struct.pack(f"<{len(keys)}h", *keys)
 
 
-class RleChannelTests(unittest.TestCase):
-    def test_explicit_keys_decode_exactly(self) -> None:
-        assert mdl_skel._rle_channel(_run([10, 20, 30], 3), 0, 3) == [10, 20, 30]
+def test_explicit_keys_decode_exactly() -> None:
+    assert mdl_skel._rle_channel(_run([10, 20, 30], 3), 0, 3) == [10, 20, 30]
 
-    def test_frames_past_valid_hold_the_last_key(self) -> None:
-        # Frames [0,valid) take the explicit keys; [valid,total) clamp to the last one.
-        assert mdl_skel._rle_channel(_run([7, 9], 5), 0, 5) == [7, 9, 9, 9, 9]
 
-    def test_two_runs_are_concatenated(self) -> None:
-        buffer = _run([1, 2], 2) + _run([5], 2)
-        assert mdl_skel._rle_channel(buffer, 0, 4) == [1, 2, 5, 5]
+def test_frames_past_valid_hold_the_last_key() -> None:
+    # Frames [0,valid) take the explicit keys; [valid,total) clamp to the last one.
+    assert mdl_skel._rle_channel(_run([7, 9], 5), 0, 5) == [7, 9, 9, 9, 9]
 
-    def test_a_run_claiming_more_keys_than_the_file_stores_is_clamped(self) -> None:
-        # `stage_light.mdl` is 11,400 bytes and a literal walk asks for 11,419. Retail's
-        # ExtractAnimValue stops at the frame it wants and never notices; decoding every frame
-        # eagerly has to clamp rather than raise.
-        buffer = _run([3, 4, 5, 6], 4, stored=2)
-        assert mdl_skel._rle_channel(buffer, 0, 4) == [3, 4, 4, 4]
 
-    def test_a_channel_that_ends_early_pads_to_numframes(self) -> None:
-        assert mdl_skel._rle_channel(_run([2], 1), 0, 4) == [2, 2, 2, 2]
+def test_two_runs_are_concatenated() -> None:
+    buffer = _run([1, 2], 2) + _run([5], 2)
+    assert mdl_skel._rle_channel(buffer, 0, 4) == [1, 2, 5, 5]
 
-    def test_a_truncated_header_terminates(self) -> None:
-        assert mdl_skel._rle_channel(b"\x02", 0, 3) == [0, 0, 0]
 
-    def test_zero_valid_does_not_index_an_empty_key_list(self) -> None:
-        assert mdl_skel._rle_channel(_run([], 3), 0, 3) == [0, 0, 0]
+def test_a_run_claiming_more_keys_than_the_file_stores_is_clamped() -> None:
+    # `stage_light.mdl` is 11,400 bytes and a literal walk asks for 11,419. Retail's
+    # ExtractAnimValue stops at the frame it wants and never notices; decoding every frame
+    # eagerly has to clamp rather than raise.
+    buffer = _run([3, 4, 5, 6], 4, stored=2)
+    assert mdl_skel._rle_channel(buffer, 0, 4) == [3, 4, 4, 4]
 
-    def test_a_zero_length_run_cannot_loop_forever(self) -> None:
-        assert mdl_skel._rle_channel(_run([1], 0), 0, 2) == [0, 0]
+
+def test_a_channel_that_ends_early_pads_to_numframes() -> None:
+    assert mdl_skel._rle_channel(_run([2], 1), 0, 4) == [2, 2, 2, 2]
+
+
+def test_a_truncated_header_terminates() -> None:
+    assert mdl_skel._rle_channel(b"\x02", 0, 3) == [0, 0, 0]
+
+
+def test_zero_valid_does_not_index_an_empty_key_list() -> None:
+    assert mdl_skel._rle_channel(_run([], 3), 0, 3) == [0, 0, 0]
+
+
+def test_a_zero_length_run_cannot_loop_forever() -> None:
+    assert mdl_skel._rle_channel(_run([1], 0), 0, 2) == [0, 0]
 
 
 class _Seq:
@@ -69,26 +75,28 @@ class _Seq:
         self.frames = frames
 
 
-class HasAnimationTests(unittest.TestCase):
-    def test_a_single_frame_sequence_is_an_authored_pose(self) -> None:
-        # `stage_light`, `lampfloor`, `glassa`, `junkyardcraneb`, `bottleb` and `bottlec` each
-        # declare exactly one 1-frame `idle` while authoring LoopSequence.
-        with mock.patch.object(mdl_skel, "local_sequences", return_value=[_Seq(1)]):
-            assert npc_export.has_animation(b"")
+def test_a_single_frame_sequence_is_an_authored_pose() -> None:
+    # `stage_light`, `lampfloor`, `glassa`, `junkyardcraneb`, `bottleb` and `bottlec` each
+    # declare exactly one 1-frame `idle` while authoring LoopSequence.
+    with mock.patch.object(mdl_skel, "local_sequences", return_value=[_Seq(1)]):
+        assert npc_export.has_animation(b"")
 
-    def test_any_multi_frame_sequence_qualifies(self) -> None:
-        # `clamp`'s `idle` is one frame beside its real 45-frame open/close, so the test is "any",
-        # not "every".
-        with mock.patch.object(mdl_skel, "local_sequences", return_value=[_Seq(1), _Seq(45)]):
-            assert npc_export.has_animation(b"")
 
-    def test_a_model_with_no_sequences_is_not_animation(self) -> None:
-        with mock.patch.object(mdl_skel, "local_sequences", return_value=[]):
-            assert not npc_export.has_animation(b"")
+def test_any_multi_frame_sequence_qualifies() -> None:
+    # `clamp`'s `idle` is one frame beside its real 45-frame open/close, so the test is "any",
+    # not "every".
+    with mock.patch.object(mdl_skel, "local_sequences", return_value=[_Seq(1), _Seq(45)]):
+        assert npc_export.has_animation(b"")
 
-    def test_an_undecodable_model_is_not_animation(self) -> None:
-        with mock.patch.object(mdl_skel, "local_sequences", side_effect=struct.error("truncated")):
-            assert not npc_export.has_animation(b"")
+
+def test_a_model_with_no_sequences_is_not_animation() -> None:
+    with mock.patch.object(mdl_skel, "local_sequences", return_value=[]):
+        assert not npc_export.has_animation(b"")
+
+
+def test_an_undecodable_model_is_not_animation() -> None:
+    with mock.patch.object(mdl_skel, "local_sequences", side_effect=struct.error("truncated")):
+        assert not npc_export.has_animation(b"")
 
 
 class PlacedModelPolicyTests(unittest.TestCase):
@@ -298,17 +306,17 @@ class PlacedModelClipEmissionTests(unittest.TestCase):
         assert count == 1
         assert forced == [[(True, True)]]
 
-class CompactRigidSkinTests(unittest.TestCase):
-    def test_a_compact_one_bone_model_binds_every_vertex_to_its_bone(self) -> None:
-        data = bytearray(244)
-        struct.pack_into("<i", data, 240, 1)
-        assert mdl_skel.read_skin(bytes(data), 0, 0, 3, vlist=2) == [([0], [1.0]), ([0], [1.0]), ([0], [1.0])]
+def test_a_compact_one_bone_model_binds_every_vertex_to_its_bone() -> None:
+    data = bytearray(244)
+    struct.pack_into("<i", data, 240, 1)
+    assert mdl_skel.read_skin(bytes(data), 0, 0, 3, vlist=2) == [([0], [1.0]), ([0], [1.0]), ([0], [1.0])]
 
-    def test_a_compact_multi_bone_model_is_refused_as_ambiguous(self) -> None:
-        data = bytearray(244)
-        struct.pack_into("<i", data, 240, 2)
-        with pytest.raises(ValueError, match="rigid binding is ambiguous"):
-            mdl_skel.read_skin(bytes(data), 0, 0, 1, vlist=1)
+
+def test_a_compact_multi_bone_model_is_refused_as_ambiguous() -> None:
+    data = bytearray(244)
+    struct.pack_into("<i", data, 240, 2)
+    with pytest.raises(ValueError, match="rigid binding is ambiguous"):
+        mdl_skel.read_skin(bytes(data), 0, 0, 1, vlist=1)
 
 
 class CompleteOwnedPoseTests(unittest.TestCase):
@@ -467,28 +475,27 @@ class ClipBoundsRadiusTests(unittest.TestCase):
         assert npc_export._clip_meta(self.SWORD, 22.38812)["bounds_radius_m"] == 22.3881
 
 
-class ClipExtentTests(unittest.TestCase):
-    """The measured half of the same question: how far a bone chain actually reaches."""
+def test_a_rotated_parent_carries_its_child_out() -> None:
+    bones = [mdl_skel.Bone(index=0, parent=-1), mdl_skel.Bone(index=1, parent=0)]
+    # Frame 0 rests; frame 1 turns the root a quarter turn about Z, which swings the child's
+    # 100-unit local offset onto +Y. Either way the reach is 100 units = 2.54 m.
+    rest = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)), ((100.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
+    turn = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.7071067811865476, 0.7071067811865476)),
+            ((100.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
+    with mock.patch.object(mdl_skel, "read_anim", return_value=[rest, turn]):
+        assert mdl_skel.clip_extent(b"", bones, 0, 2) == pytest.approx(100.0 * 0.0254, abs=1e-6)
 
-    def test_a_rotated_parent_carries_its_child_out(self) -> None:
-        bones = [mdl_skel.Bone(index=0, parent=-1), mdl_skel.Bone(index=1, parent=0)]
-        # Frame 0 rests; frame 1 turns the root a quarter turn about Z, which swings the child's
-        # 100-unit local offset onto +Y. Either way the reach is 100 units = 2.54 m.
-        rest = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)), ((100.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
-        turn = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.7071067811865476, 0.7071067811865476)),
-                ((100.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))]
-        with mock.patch.object(mdl_skel, "read_anim", return_value=[rest, turn]):
-            assert mdl_skel.clip_extent(b"", bones, 0, 2) == pytest.approx(100.0 * 0.0254, abs=1e-6)
 
-    def test_a_clip_with_no_bones_or_no_frames_claims_nothing(self) -> None:
-        assert mdl_skel.clip_extent(b"", [], 0, 16) == 0.0
-        assert mdl_skel.clip_extent(b"", [mdl_skel.Bone(index=0, parent=-1)], 0, 0) == 0.0
+def test_a_clip_with_no_bones_or_no_frames_claims_nothing() -> None:
+    assert mdl_skel.clip_extent(b"", [], 0, 16) == 0.0
+    assert mdl_skel.clip_extent(b"", [mdl_skel.Bone(index=0, parent=-1)], 0, 0) == 0.0
 
-    def test_the_vectorised_rotation_matches_the_scalar_one(self) -> None:
-        import numpy as np
-        quats = np.array([[0.0, 0.0, 0.0, 1.0],
-                          [0.5, -0.5, 0.5, 0.5],
-                          [0.0, 0.0, 0.7071067811865476, 0.7071067811865476]])
-        stacked = mdl_skel.rot_matrices(quats)
-        for i, q in enumerate(quats):
-            np.testing.assert_allclose(stacked[i], mdl_skel.rot_matrix(q), atol=1e-12)
+
+def test_the_vectorised_rotation_matches_the_scalar_one() -> None:
+    import numpy as np
+    quats = np.array([[0.0, 0.0, 0.0, 1.0],
+                      [0.5, -0.5, 0.5, 0.5],
+                      [0.0, 0.0, 0.7071067811865476, 0.7071067811865476]])
+    stacked = mdl_skel.rot_matrices(quats)
+    for i, q in enumerate(quats):
+        np.testing.assert_allclose(stacked[i], mdl_skel.rot_matrix(q), atol=1e-12)

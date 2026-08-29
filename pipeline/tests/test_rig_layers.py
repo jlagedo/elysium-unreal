@@ -65,78 +65,80 @@ def _contrib(model: str, sequence: int, weight: float = 1.0) -> dict:
     return {"model": model, "sequence": sequence, "weight": weight}
 
 
-class ModelKindTests(unittest.TestCase):
-    def test_a_body_path_is_told_from_a_bank_path(self) -> None:
-        assert is_body_model(BODY)
-        assert is_body_model("models/character/npc/common/bum/male/bum_male.mdl")
-        assert not is_body_model(BANK)
-
-    def test_the_separator_and_case_do_not_decide_it(self) -> None:
-        assert is_body_model("MODELS\\CHARACTER\\PC\\male\\x.mdl")
+def test_a_body_path_is_told_from_a_bank_path() -> None:
+    assert is_body_model(BODY)
+    assert is_body_model("models/character/npc/common/bum/male/bum_male.mdl")
+    assert not is_body_model(BANK)
 
 
-class IndexSpaceTests(unittest.TestCase):
-    """The trap: the same number names a different clip in each space."""
-
-    def test_a_body_contribution_reads_as_a_global_number(self) -> None:
-        space = _space()
-        assert space.resolve(BODY, 401) == ("aim_layer", "bank", 0x0)
-        assert space.resolve(BODY, 410) == ("walk", "bank", 0x1)
-
-    def test_a_bank_contribution_reads_as_a_local_index(self) -> None:
-        space = _space()
-        assert space.resolve(BANK, 0) == ("aim_layer", "bank", 0x0)
-        assert space.resolve(BANK, 3) == ("walk", "bank", 0x1)
-
-    def test_one_number_answers_differently_in_each_space(self) -> None:
-        # 401 is `aim_layer` globally and out of range locally; 0 is `aim_layer`
-        # locally and absent globally. Reading either through the wrong space
-        # would answer a clip that exists and is wrong.
-        space = _space()
-        assert space.resolve(BODY, 401)[0] == "aim_layer"
-        assert space.resolve(BANK, 401) is None
-        assert space.resolve(BODY, 0) is None
+def test_the_separator_and_case_do_not_decide_it() -> None:
+    assert is_body_model("MODELS\\CHARACTER\\PC\\male\\x.mdl")
 
 
-class ChannelTests(unittest.TestCase):
-    def test_a_repeated_contribution_is_one_channel_that_counts_its_repeats(self) -> None:
-        frame = {"contributions": [
-            _contrib(BANK, 0), _contrib(BANK, 0), _contrib(BANK, 1),
-        ]}
-        channels, unresolved = channels_for_frame(frame, _space())
-        assert unresolved == 0
-        assert len(channels) == 2
-        aim = next(c for c in channels if c["label"] == "aim_layer")
-        assert aim["times_accumulated"] == 2
-        assert "weight_disagreement" not in aim
+def test_a_body_contribution_reads_as_a_global_number() -> None:
+    space = _space()
+    assert space.resolve(BODY, 401) == ("aim_layer", "bank", 0x0)
+    assert space.resolve(BODY, 410) == ("walk", "bank", 0x1)
 
-    def test_a_repeat_that_disagrees_on_weight_says_so(self) -> None:
-        frame = {"contributions": [_contrib(BANK, 0, 1.0), _contrib(BANK, 0, 0.25)]}
-        channels, _ = channels_for_frame(frame, _space())
-        assert len(channels) == 1
-        assert channels[0]["weight"] == 1.0
-        assert channels[0]["weight_disagreement"] == 0.25
 
-    def test_the_two_spaces_name_one_channel_rather_than_two(self) -> None:
-        # The same clip reached as a bank-local index and as a body-global number
-        # is one channel, because the dedup key is (owner, label).
-        frame = {"contributions": [_contrib(BANK, 0), _contrib(BODY, 401)]}
-        channels, _ = channels_for_frame(frame, _space())
-        assert [c["label"] for c in channels] == ["aim_layer"]
-        assert channels[0]["times_accumulated"] == 2
+def test_a_bank_contribution_reads_as_a_local_index() -> None:
+    space = _space()
+    assert space.resolve(BANK, 0) == ("aim_layer", "bank", 0x0)
+    assert space.resolve(BANK, 3) == ("walk", "bank", 0x1)
 
-    def test_the_delta_flag_is_what_marks_an_additive(self) -> None:
-        frame = {"contributions": [_contrib(BANK, 0), _contrib(BANK, 1)]}
-        channels, _ = channels_for_frame(frame, _space())
-        by = {c["label"]: c["additive"] for c in channels}
-        assert not by["aim_layer"]
-        assert by["bobble_delta"]
 
-    def test_an_unreadable_contribution_is_counted_not_dropped_silently(self) -> None:
-        frame = {"contributions": [_contrib(BANK, 0), _contrib(BANK, 99)]}
-        channels, unresolved = channels_for_frame(frame, _space())
-        assert len(channels) == 1
-        assert unresolved == 1
+def test_one_number_answers_differently_in_each_space() -> None:
+    # 401 is `aim_layer` globally and out of range locally; 0 is `aim_layer`
+    # locally and absent globally. Reading either through the wrong space
+    # would answer a clip that exists and is wrong.
+    space = _space()
+    assert space.resolve(BODY, 401)[0] == "aim_layer"
+    assert space.resolve(BANK, 401) is None
+    assert space.resolve(BODY, 0) is None
+
+
+def test_a_repeated_contribution_is_one_channel_that_counts_its_repeats() -> None:
+    frame = {"contributions": [
+        _contrib(BANK, 0), _contrib(BANK, 0), _contrib(BANK, 1),
+    ]}
+    channels, unresolved = channels_for_frame(frame, _space())
+    assert unresolved == 0
+    assert len(channels) == 2
+    aim = next(c for c in channels if c["label"] == "aim_layer")
+    assert aim["times_accumulated"] == 2
+    assert "weight_disagreement" not in aim
+
+
+def test_a_repeat_that_disagrees_on_weight_says_so() -> None:
+    frame = {"contributions": [_contrib(BANK, 0, 1.0), _contrib(BANK, 0, 0.25)]}
+    channels, _ = channels_for_frame(frame, _space())
+    assert len(channels) == 1
+    assert channels[0]["weight"] == 1.0
+    assert channels[0]["weight_disagreement"] == 0.25
+
+
+def test_the_two_spaces_name_one_channel_rather_than_two() -> None:
+    # The same clip reached as a bank-local index and as a body-global number
+    # is one channel, because the dedup key is (owner, label).
+    frame = {"contributions": [_contrib(BANK, 0), _contrib(BODY, 401)]}
+    channels, _ = channels_for_frame(frame, _space())
+    assert [c["label"] for c in channels] == ["aim_layer"]
+    assert channels[0]["times_accumulated"] == 2
+
+
+def test_the_delta_flag_is_what_marks_an_additive() -> None:
+    frame = {"contributions": [_contrib(BANK, 0), _contrib(BANK, 1)]}
+    channels, _ = channels_for_frame(frame, _space())
+    by = {c["label"]: c["additive"] for c in channels}
+    assert not by["aim_layer"]
+    assert by["bobble_delta"]
+
+
+def test_an_unreadable_contribution_is_counted_not_dropped_silently() -> None:
+    frame = {"contributions": [_contrib(BANK, 0), _contrib(BANK, 99)]}
+    channels, unresolved = channels_for_frame(frame, _space())
+    assert len(channels) == 1
+    assert unresolved == 1
 
 
 class CapacityTests(unittest.TestCase):

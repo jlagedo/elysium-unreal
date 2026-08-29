@@ -44,79 +44,80 @@ class _Install:
         self.add(f"vdata/items/{classname}.txt", _definition(playermodel, sole_root=sole_root))
 
 
-class GroundModelEnumerationTests(unittest.TestCase):
-    def test_distinct_models_dedupe_and_carry_every_classname(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install = _Install(Path(root))
-            install.item("item_k_gimble_key", "models/items/Key/Ground/Key.mdl")
-            install.item("item_k_malcolm_office_key", "models\\items\\key\\ground\\key.mdl")
-            install.item("item_g_ring_gold", "models/items/Rings/Ground/Ring01.mdl")
+def test_distinct_models_dedupe_and_carry_every_classname() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install = _Install(Path(root))
+        install.item("item_k_gimble_key", "models/items/Key/Ground/Key.mdl")
+        install.item("item_k_malcolm_office_key", "models\\items\\key\\ground\\key.mdl")
+        install.item("item_g_ring_gold", "models/items/Rings/Ground/Ring01.mdl")
 
-            found = items.ground_models(install.index)
+        found = items.ground_models(install.index)
 
-            assert found == {
-                    "models/items/key/ground/key.mdl": [
-                        "item_k_gimble_key",
-                        "item_k_malcolm_office_key",
-                    ],
-                    "models/items/rings/ground/ring01.mdl": ["item_g_ring_gold"],
-                }
-
-    def test_an_extensionless_playermodel_resolves_as_a_model(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install = _Install(Path(root))
-            install.item(
-                "item_w_throwing_star", "models/weapons/throwing_star/ground/g_throwing_star"
-            )
-
-            assert list(items.ground_models(install.index)) == ["models/weapons/throwing_star/ground/g_throwing_star.mdl"]
-
-    def test_a_definition_with_no_ground_model_contributes_nothing(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install = _Install(Path(root))
-            install.item("item_a_body_armor", "")
-            install.item("item_d_dominate", "   ")
-            install.add("vdata/items/notes.dat", "ignored")
-            install.add("vdata/system/feats.txt", _definition("models/items/x/y.mdl"))
-
-            assert items.ground_models(install.index) == {}
-
-    def test_weapondata_reads_whether_or_not_the_parser_unwrapped_it(self) -> None:
-        # kv.parse unwraps a single leading root key, so a shipped file arrives already AS the
-        # WeaponData contents. A file with a second top-level key does not unwrap, and the same
-        # definition still has to be found.
-        with tempfile.TemporaryDirectory() as root:
-            install = _Install(Path(root))
-            install.item("item_g_stake", "models/items/stake/ground/stake.mdl", sole_root=True)
-            install.item("item_g_watch", "models/items/watch/ground/watch.mdl", sole_root=False)
-
-            assert sorted(items.ground_models(install.index)) == [
-                    "models/items/stake/ground/stake.mdl",
-                    "models/items/watch/ground/watch.mdl",
-                ]
+        assert found == {
+                "models/items/key/ground/key.mdl": [
+                    "item_k_gimble_key",
+                    "item_k_malcolm_office_key",
+                ],
+                "models/items/rings/ground/ring01.mdl": ["item_g_ring_gold"],
+            }
 
 
-class LandingPathTests(unittest.TestCase):
-    def test_the_corpus_stem_is_the_whole_model_path_folded(self) -> None:
-        # The stem is the model path folded, not its base filename: two `pendant.mdl` under
-        # different directories are different items and must not collide. Reached through the map
-        # exporter's own decoder, which is where the rule lives.
-        keys = [
-            "models/items/rings/ground/ring03.mdl",
-            "models/items/occult/ground/pendant.mdl",
-            "models/items/occult_gargoyle/ground/pendant.mdl",
-        ]
-        expected = {key: mdl.sanitize(key[:-4]) for key in keys}
-        with tempfile.TemporaryDirectory() as propdir:
-            # Every stem pre-declared, so the decoder answers with its naming and reads no model.
-            resolved, ok, missing = decode_prop_models(
-                {}, keys, propdir, {}, set(expected.values())
-            )
+def test_an_extensionless_playermodel_resolves_as_a_model() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install = _Install(Path(root))
+        install.item(
+            "item_w_throwing_star", "models/weapons/throwing_star/ground/g_throwing_star"
+        )
 
-        assert resolved == expected
-        assert (ok, missing) == (len(keys), 0)
-        assert len(set(expected.values())) == len(keys)
-        assert expected["models/items/rings/ground/ring03.mdl"] == "models_items_rings_ground_ring03"
+        assert list(items.ground_models(install.index)) == ["models/weapons/throwing_star/ground/g_throwing_star.mdl"]
+
+
+def test_a_definition_with_no_ground_model_contributes_nothing() -> None:
+    with tempfile.TemporaryDirectory() as root:
+        install = _Install(Path(root))
+        install.item("item_a_body_armor", "")
+        install.item("item_d_dominate", "   ")
+        install.add("vdata/items/notes.dat", "ignored")
+        install.add("vdata/system/feats.txt", _definition("models/items/x/y.mdl"))
+
+        assert items.ground_models(install.index) == {}
+
+
+def test_weapondata_reads_whether_or_not_the_parser_unwrapped_it() -> None:
+    # kv.parse unwraps a single leading root key, so a shipped file arrives already AS the
+    # WeaponData contents. A file with a second top-level key does not unwrap, and the same
+    # definition still has to be found.
+    with tempfile.TemporaryDirectory() as root:
+        install = _Install(Path(root))
+        install.item("item_g_stake", "models/items/stake/ground/stake.mdl", sole_root=True)
+        install.item("item_g_watch", "models/items/watch/ground/watch.mdl", sole_root=False)
+
+        assert sorted(items.ground_models(install.index)) == [
+                "models/items/stake/ground/stake.mdl",
+                "models/items/watch/ground/watch.mdl",
+            ]
+
+
+def test_the_corpus_stem_is_the_whole_model_path_folded() -> None:
+    # The stem is the model path folded, not its base filename: two `pendant.mdl` under
+    # different directories are different items and must not collide. Reached through the map
+    # exporter's own decoder, which is where the rule lives.
+    keys = [
+        "models/items/rings/ground/ring03.mdl",
+        "models/items/occult/ground/pendant.mdl",
+        "models/items/occult_gargoyle/ground/pendant.mdl",
+    ]
+    expected = {key: mdl.sanitize(key[:-4]) for key in keys}
+    with tempfile.TemporaryDirectory() as propdir:
+        # Every stem pre-declared, so the decoder answers with its naming and reads no model.
+        resolved, ok, missing = decode_prop_models(
+            {}, keys, propdir, {}, set(expected.values())
+        )
+
+    assert resolved == expected
+    assert (ok, missing) == (len(keys), 0)
+    assert len(set(expected.values())) == len(keys)
+    assert expected["models/items/rings/ground/ring03.mdl"] == "models_items_rings_ground_ring03"
 
 
 class ExportRunTests(unittest.TestCase):

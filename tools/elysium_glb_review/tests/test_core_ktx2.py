@@ -16,52 +16,55 @@ from . import support
 import pytest
 
 
-class HeaderTests(unittest.TestCase):
-    def test_level_index_begins_after_the_thirty_two_byte_index_block(self) -> None:
-        # 12 identifier + 36 header + 32 index. Reading the index at 48 is the classic
-        # way to get plausible-looking garbage out of a valid file.
-        assert ktx2.LEVEL_INDEX_OFFSET == 80
-
-    def test_parses_the_declared_header_fields(self) -> None:
-        data, _images = support.build_ktx2(
-            vk_format=ktx2.VK_BC3_UNORM, width=64, height=32, levels=4
-        )
-        texture = ktx2.parse(data)
-        assert texture.vk_format == ktx2.VK_BC3_UNORM
-        assert (texture.width, texture.height) == (64, 32)
-        assert texture.level_count == 4
-        assert len(texture.levels) == 4
-        assert texture.format.fourcc == b"DXT5"
-
-    def test_rejects_bytes_that_are_not_ktx2(self) -> None:
-        with pytest.raises(ktx2.Ktx2Error):
-            ktx2.parse(b"\x00" * 128)
+def test_level_index_begins_after_the_thirty_two_byte_index_block() -> None:
+    # 12 identifier + 36 header + 32 index. Reading the index at 48 is the classic
+    # way to get plausible-looking garbage out of a valid file.
+    assert ktx2.LEVEL_INDEX_OFFSET == 80
 
 
-class LevelIndexTests(unittest.TestCase):
-    def test_level_zero_is_the_largest_level(self) -> None:
-        data, _images = support.build_ktx2(width=64, height=64, levels=5)
-        texture = ktx2.parse(data)
-        assert (texture.levels[0].width, texture.levels[0].height) == (64, 64)
-        assert (texture.levels[4].width, texture.levels[4].height) == (4, 4)
+def test_parses_the_declared_header_fields() -> None:
+    data, _images = support.build_ktx2(
+        vk_format=ktx2.VK_BC3_UNORM, width=64, height=32, levels=4
+    )
+    texture = ktx2.parse(data)
+    assert texture.vk_format == ktx2.VK_BC3_UNORM
+    assert (texture.width, texture.height) == (64, 32)
+    assert texture.level_count == 4
+    assert len(texture.levels) == 4
+    assert texture.format.fourcc == b"DXT5"
 
-    def test_level_offsets_descend_as_the_index_ascends(self) -> None:
-        # The index is ordered largest-first while the data is stored smallest-first.
-        data, _images = support.build_ktx2(width=64, height=64, levels=5)
-        offsets = [level.byte_offset for level in ktx2.parse(data).levels]
-        assert offsets == sorted(offsets, reverse=True)
 
-    def test_level_dimensions_floor_at_one(self) -> None:
-        data, _images = support.build_ktx2(width=8, height=1, levels=4)
-        texture = ktx2.parse(data)
-        assert [(l.width, l.height) for l in texture.levels] == [(8, 1), (4, 1), (2, 1), (1, 1)]
+def test_rejects_bytes_that_are_not_ktx2() -> None:
+    with pytest.raises(ktx2.Ktx2Error):
+        ktx2.parse(b"\x00" * 128)
 
-    def test_level_count_zero_still_yields_one_entry(self) -> None:
-        # levelCount == 0 asks a loader to generate the chain from the base level.
-        data, _images = support.build_ktx2(levels=0)
-        texture = ktx2.parse(data)
-        assert texture.level_count == 0
-        assert len(texture.levels) == 1
+
+def test_level_zero_is_the_largest_level() -> None:
+    data, _images = support.build_ktx2(width=64, height=64, levels=5)
+    texture = ktx2.parse(data)
+    assert (texture.levels[0].width, texture.levels[0].height) == (64, 64)
+    assert (texture.levels[4].width, texture.levels[4].height) == (4, 4)
+
+
+def test_level_offsets_descend_as_the_index_ascends() -> None:
+    # The index is ordered largest-first while the data is stored smallest-first.
+    data, _images = support.build_ktx2(width=64, height=64, levels=5)
+    offsets = [level.byte_offset for level in ktx2.parse(data).levels]
+    assert offsets == sorted(offsets, reverse=True)
+
+
+def test_level_dimensions_floor_at_one() -> None:
+    data, _images = support.build_ktx2(width=8, height=1, levels=4)
+    texture = ktx2.parse(data)
+    assert [(l.width, l.height) for l in texture.levels] == [(8, 1), (4, 1), (2, 1), (1, 1)]
+
+
+def test_level_count_zero_still_yields_one_entry() -> None:
+    # levelCount == 0 asks a loader to generate the chain from the base level.
+    data, _images = support.build_ktx2(levels=0)
+    texture = ktx2.parse(data)
+    assert texture.level_count == 0
+    assert len(texture.levels) == 1
 
 
 class ImageSlicingTests(unittest.TestCase):

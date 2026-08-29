@@ -216,96 +216,103 @@ class TextureDecodeTests(unittest.TestCase):
         assert restored == source
 
 
-class TextureGlbWriterTests(unittest.TestCase):
-    def test_complete_texture_writes_one_ktx2_payload_and_validates(self):
-        model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
-        document, binary = texture_glb.build_document(model)
-        assert "images" not in document
-        assert "textures" not in document
-        assert len(document["bufferViews"]) == 1
-        summary = validation.validate_document(document, binary)
-        assert summary["mips"] == 3
-        assert summary["sourceBytes"] == summary["accountedBytes"]
+def test_complete_texture_writes_one_ktx2_payload_and_validates():
+    model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
+    document, binary = texture_glb.build_document(model)
+    assert "images" not in document
+    assert "textures" not in document
+    assert len(document["bufferViews"]) == 1
+    summary = validation.validate_document(document, binary)
+    assert summary["mips"] == 3
+    assert summary["sourceBytes"] == summary["accountedBytes"]
 
-    def test_cubemap_ktx2_is_six_faced(self):
-        model = decode_texture(_closure(13, cubemap=True))
-        document, binary = texture_glb.build_document(model)
-        summary = validation.validate_document(document, binary)
-        assert summary["faces"] == 6
 
-    def test_validator_refuses_payload_corruption(self):
-        model = decode_texture(_closure(13))
-        document, binary = texture_glb.build_document(model)
-        changed = bytearray(binary)
-        changed[-1] ^= 1
-        with pytest.raises(validation.TextureGlbValidationError, match="identity"):
-            validation.validate_document(document, bytes(changed))
+def test_cubemap_ktx2_is_six_faced():
+    model = decode_texture(_closure(13, cubemap=True))
+    document, binary = texture_glb.build_document(model)
+    summary = validation.validate_document(document, binary)
+    assert summary["faces"] == 6
 
-    def test_validation_reports_a_degraded_unit_and_refuses_to_lose_the_record(self):
-        closure = _closure(15, width=8, height=8, mips=4, inline=3)
-        model = decode_texture(_with_external(closure, bytes(range(32))))
-        document, binary = texture_glb.build_document(model)
-        summary = validation.validate_document(document, binary)
-        assert summary["degraded"]
-        assert (summary["declaredWidth"], summary["declaredHeight"]) == (8, 8)
-        extension = document["extensions"][validation.TEXTURE_EXTENSION]
-        extension["omissions"] = [
-            row for row in extension["omissions"]
-            if row["role"] != "primary-image-not-recoverable"
-        ]
-        with pytest.raises(validation.TextureGlbValidationError, match="must be recorded"):
-            validation.validate_document(document, binary)
 
-    def test_validation_refuses_levels_sliced_from_an_unexplained_stream(self):
-        model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
-        document, binary = texture_glb.build_document(model)
-        extension = document["extensions"][validation.TEXTURE_EXTENSION]
-        extension["omissions"].append({
-            "role": "unexplained-leading-image-storage",
-            "byteLength": 64,
-            "admittedFullResolutionImageOnly": True,
-        })
-        with pytest.raises(validation.TextureGlbValidationError, match="one level only"):
-            validation.validate_document(document, binary)
+def test_validator_refuses_payload_corruption():
+    model = decode_texture(_closure(13))
+    document, binary = texture_glb.build_document(model)
+    changed = bytearray(binary)
+    changed[-1] ^= 1
+    with pytest.raises(validation.TextureGlbValidationError, match="identity"):
+        validation.validate_document(document, bytes(changed))
 
-    def test_validation_refuses_an_oversized_colour_sample_claim(self):
-        model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
-        document, binary = texture_glb.build_document(model)
-        row = _omission(document["extensions"][validation.TEXTURE_EXTENSION], "low-res-cpu-sample")
-        row["externalByteLength"] = row["declaredByteLength"] + 4096
-        with pytest.raises(validation.TextureGlbValidationError, match="image storage"):
-            validation.validate_document(document, binary)
 
-    def test_public_exporter_publishes_expected_relative_path(self):
-        closure = _closure(13)
-        files = {member.path: member.data for member in closure.members()}
-        index = {path: ("loose", Path("synthetic") / path) for path in files}
-        with tempfile.TemporaryDirectory() as temporary:
-            destination = texture_glb.export(
-                index,
-                "materials/synthetic/texture.ttz",
-                Path(temporary),
-                read_bytes=lambda _index, path: files.get(path),
-            )
-            summary = validation.validate(destination)
-            relative = destination.relative_to(temporary).as_posix()
-        assert relative == "synthetic/texture.glb"
-        assert summary["asset"] == "vtmb:texture:synthetic/texture"
+def test_validation_reports_a_degraded_unit_and_refuses_to_lose_the_record():
+    closure = _closure(15, width=8, height=8, mips=4, inline=3)
+    model = decode_texture(_with_external(closure, bytes(range(32))))
+    document, binary = texture_glb.build_document(model)
+    summary = validation.validate_document(document, binary)
+    assert summary["degraded"]
+    assert (summary["declaredWidth"], summary["declaredHeight"]) == (8, 8)
+    extension = document["extensions"][validation.TEXTURE_EXTENSION]
+    extension["omissions"] = [
+        row for row in extension["omissions"]
+        if row["role"] != "primary-image-not-recoverable"
+    ]
+    with pytest.raises(validation.TextureGlbValidationError, match="must be recorded"):
+        validation.validate_document(document, binary)
 
-    def test_prepublication_validation_rechecks_source_hashes(self):
-        closure = _closure(13)
-        model = decode_texture(closure)
-        document, binary = texture_glb.build_document(model)
-        changed = _source("tth", closure.tth.path, closure.tth.data + b"x")
-        with pytest.raises(validation.TextureGlbValidationError, match="source bytes disagree"):
-            validation.validate_document(document, binary, source_members=(changed,))
 
-    def test_prepublication_validation_compares_decoded_pixels(self):
-        closure = _closure(15, width=8, height=8, mips=3, inline=1)
-        model = decode_texture(closure)
-        document, binary = texture_glb.build_document(model)
-        summary = validation.validate_document(
-            document, binary, source_members=closure.members()
+def test_validation_refuses_levels_sliced_from_an_unexplained_stream():
+    model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
+    document, binary = texture_glb.build_document(model)
+    extension = document["extensions"][validation.TEXTURE_EXTENSION]
+    extension["omissions"].append({
+        "role": "unexplained-leading-image-storage",
+        "byteLength": 64,
+        "admittedFullResolutionImageOnly": True,
+    })
+    with pytest.raises(validation.TextureGlbValidationError, match="one level only"):
+        validation.validate_document(document, binary)
+
+
+def test_validation_refuses_an_oversized_colour_sample_claim():
+    model = decode_texture(_closure(15, width=8, height=8, mips=3, inline=1))
+    document, binary = texture_glb.build_document(model)
+    row = _omission(document["extensions"][validation.TEXTURE_EXTENSION], "low-res-cpu-sample")
+    row["externalByteLength"] = row["declaredByteLength"] + 4096
+    with pytest.raises(validation.TextureGlbValidationError, match="image storage"):
+        validation.validate_document(document, binary)
+
+
+def test_public_exporter_publishes_expected_relative_path():
+    closure = _closure(13)
+    files = {member.path: member.data for member in closure.members()}
+    index = {path: ("loose", Path("synthetic") / path) for path in files}
+    with tempfile.TemporaryDirectory() as temporary:
+        destination = texture_glb.export(
+            index,
+            "materials/synthetic/texture.ttz",
+            Path(temporary),
+            read_bytes=lambda _index, path: files.get(path),
         )
-        assert summary["mips"] == 3
-        assert summary["sourceBytes"] == summary["accountedBytes"]
+        summary = validation.validate(destination)
+        relative = destination.relative_to(temporary).as_posix()
+    assert relative == "synthetic/texture.glb"
+    assert summary["asset"] == "vtmb:texture:synthetic/texture"
+
+
+def test_prepublication_validation_rechecks_source_hashes():
+    closure = _closure(13)
+    model = decode_texture(closure)
+    document, binary = texture_glb.build_document(model)
+    changed = _source("tth", closure.tth.path, closure.tth.data + b"x")
+    with pytest.raises(validation.TextureGlbValidationError, match="source bytes disagree"):
+        validation.validate_document(document, binary, source_members=(changed,))
+
+
+def test_prepublication_validation_compares_decoded_pixels():
+    closure = _closure(15, width=8, height=8, mips=3, inline=1)
+    model = decode_texture(closure)
+    document, binary = texture_glb.build_document(model)
+    summary = validation.validate_document(
+        document, binary, source_members=closure.members()
+    )
+    assert summary["mips"] == 3
+    assert summary["sourceBytes"] == summary["accountedBytes"]

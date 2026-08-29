@@ -56,38 +56,36 @@ class HeaderLayoutTests(unittest.TestCase):
             dds.build(self.payload, 8, 4, b"DXT")
 
 
-class SingleSurfaceTests(unittest.TestCase):
-    def test_a_lone_level_declares_neither_mipmaps_nor_complexity(self) -> None:
-        header = dds.build(b"\x00" * 8, 4, 4, b"DXT1")
-        assert not field(header, 8) & dds.DDSD_MIPMAPCOUNT
-        assert field(header, 28) == 0
-        assert field(header, 108) == dds.DDSCAPS_TEXTURE
-        assert field(header, 112) == 0
+def test_a_lone_level_declares_neither_mipmaps_nor_complexity() -> None:
+    header = dds.build(b"\x00" * 8, 4, 4, b"DXT1")
+    assert not field(header, 8) & dds.DDSD_MIPMAPCOUNT
+    assert field(header, 28) == 0
+    assert field(header, 108) == dds.DDSCAPS_TEXTURE
+    assert field(header, 112) == 0
 
 
-class MipChainTests(unittest.TestCase):
-    def test_a_chain_sets_complex_so_a_reader_can_seek_past_level_zero(self) -> None:
-        # OpenImageIO refuses miplevel != 0 unless DDSCAPS_COMPLEX is set, so a chain
-        # written without it is silently truncated to its base level.
-        header = dds.build(b"\x00" * 40, 8, 8, b"DXT5", level_zero_bytes=32, mip_count=3)
-        caps = field(header, 108)
-        assert caps & dds.DDSCAPS_COMPLEX
-        assert caps & dds.DDSCAPS_MIPMAP
-        assert field(header, 8) & dds.DDSD_MIPMAPCOUNT
-        assert field(header, 28) == 3
-
-    def test_linear_size_describes_level_zero_not_the_whole_chain(self) -> None:
-        header = dds.build(b"\x00" * 40, 8, 8, b"DXT5", level_zero_bytes=32, mip_count=3)
-        assert field(header, 20) == 32
+def test_a_chain_sets_complex_so_a_reader_can_seek_past_level_zero() -> None:
+    # OpenImageIO refuses miplevel != 0 unless DDSCAPS_COMPLEX is set, so a chain
+    # written without it is silently truncated to its base level.
+    header = dds.build(b"\x00" * 40, 8, 8, b"DXT5", level_zero_bytes=32, mip_count=3)
+    caps = field(header, 108)
+    assert caps & dds.DDSCAPS_COMPLEX
+    assert caps & dds.DDSCAPS_MIPMAP
+    assert field(header, 8) & dds.DDSD_MIPMAPCOUNT
+    assert field(header, 28) == 3
 
 
-class CubemapTests(unittest.TestCase):
-    def test_a_cube_declares_every_face_and_complexity(self) -> None:
-        # Without DDSCAPS_COMPLEX a cube DDS is rejected outright rather than degraded.
-        header = dds.build(b"\x00" * 48, 4, 4, b"DXT1", cubemap=True)
-        assert field(header, 108) & dds.DDSCAPS_COMPLEX
-        assert field(header, 112) == dds.DDSCAPS2_CUBEMAP_ALL
-        assert field(header, 112) & dds.DDSCAPS2_CUBEMAP
+def test_linear_size_describes_level_zero_not_the_whole_chain() -> None:
+    header = dds.build(b"\x00" * 40, 8, 8, b"DXT5", level_zero_bytes=32, mip_count=3)
+    assert field(header, 20) == 32
+
+
+def test_a_cube_declares_every_face_and_complexity() -> None:
+    # Without DDSCAPS_COMPLEX a cube DDS is rejected outright rather than degraded.
+    header = dds.build(b"\x00" * 48, 4, 4, b"DXT1", cubemap=True)
+    assert field(header, 108) & dds.DDSCAPS_COMPLEX
+    assert field(header, 112) == dds.DDSCAPS2_CUBEMAP_ALL
+    assert field(header, 112) & dds.DDSCAPS2_CUBEMAP
 
 
 class Bc1AlphaTests(unittest.TestCase):

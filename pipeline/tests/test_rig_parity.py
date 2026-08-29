@@ -66,93 +66,93 @@ def _live(*rows: tuple[str, int, str | None, bool]) -> list[dict]:
     ]
 
 
-class ModelKeyTests(unittest.TestCase):
-    def test_captured_and_exported_names_meet_on_one_key(self) -> None:
-        assert model_key("character/shared/male/Katana.mdl") == model_key("/character/shared/male/katana.mdl")
-        assert model_key("models\\character\\shared\\male\\katana.mdl") == "models/character/shared/male/katana.mdl"
+def test_captured_and_exported_names_meet_on_one_key() -> None:
+    assert model_key("character/shared/male/Katana.mdl") == model_key("/character/shared/male/katana.mdl")
+    assert model_key("models\\character\\shared\\male\\katana.mdl") == "models/character/shared/male/katana.mdl"
 
 
-class NumberingTests(unittest.TestCase):
-    def test_an_unlabelled_live_row_still_checks_its_owner(self) -> None:
-        """A bank the session never loaded carries no label but a real owner and index."""
-        flat = _flat(("body.mdl", 0, "ragdoll", ""), ("bank.mdl", 0, "walk", "ACT_WALK"))
-        agreeing = _live(("body.mdl", 0, None, False), ("bank.mdl", 0, None, False))
-        assert compare_numbering(agreeing, flat)["owner_mismatches"] == 0
-        disagreeing = _live(("body.mdl", 0, None, False), ("other.mdl", 0, None, False))
-        report = compare_numbering(disagreeing, flat)
-        assert report["owner_mismatches"] == 1
-        assert report["examples"][0]["global_index"] == 1
-
-    def test_a_live_number_past_the_offline_space_is_a_mismatch(self) -> None:
-        flat = _flat(("body.mdl", 0, "ragdoll", ""))
-        live = _live(("body.mdl", 0, "ragdoll", True), ("bank.mdl", 0, "walk", True))
-        report = compare_numbering(live, flat)
-        assert report["owner_mismatches"] == 1
-        assert report["compared"] == 1
-
-    def test_the_ordering_with_fewer_mismatches_wins(self) -> None:
-        # A bank reached twice contributes twice under `nodedup`; the live space says it did.
-        dedup = _flat(("body.mdl", 0, "a", ""), ("bank.mdl", 0, "w", ""), ("last.mdl", 0, "z", ""))
-        nodedup = _flat(
-            ("body.mdl", 0, "a", ""), ("bank.mdl", 0, "w", ""), ("bank.mdl", 0, "w", ""),
-            ("last.mdl", 0, "z", ""),
-        )
-        live = _live(
-            ("body.mdl", 0, "a", True), ("bank.mdl", 0, "w", True), ("bank.mdl", 0, "w", True),
-            ("last.mdl", 0, "z", True),
-        )
-        ordering, report = best_numbering(live, {"dedup": dedup, "nodedup": nodedup})
-        assert ordering == "nodedup"
-        assert report["owner_mismatches"] == 0
+def test_an_unlabelled_live_row_still_checks_its_owner() -> None:
+    """A bank the session never loaded carries no label but a real owner and index."""
+    flat = _flat(("body.mdl", 0, "ragdoll", ""), ("bank.mdl", 0, "walk", "ACT_WALK"))
+    agreeing = _live(("body.mdl", 0, None, False), ("bank.mdl", 0, None, False))
+    assert compare_numbering(agreeing, flat)["owner_mismatches"] == 0
+    disagreeing = _live(("body.mdl", 0, None, False), ("other.mdl", 0, None, False))
+    report = compare_numbering(disagreeing, flat)
+    assert report["owner_mismatches"] == 1
+    assert report["examples"][0]["global_index"] == 1
 
 
-class WitnessTests(unittest.TestCase):
-    def test_selections_and_chains_witness_the_same_body_label_owner(self) -> None:
-        resolution = [
-            {
-                "target": "vampire.select_heaviest_sequence", "body_model": "pc/body.mdl",
-                "resolved_label": "walk", "resolved_owner": "shared/bank.mdl",
-                "resolved_activity_name": "ACT_WALK", "result_kind": "sequence",
-                "requested": "7", "result": "12",
-            },
-            # An activity answer names no clip and witnesses nothing.
-            {
-                "target": "vampire.weapon_translate_activity", "body_model": "pc/body.mdl",
-                "resolved_label": "", "resolved_owner": "", "resolved_activity_name": "",
-                "result_kind": "activity", "requested": "7", "result": "9",
-            },
-        ]
-        ownership = [
-            {
-                "requested_model": "pc/body.mdl", "requested_index": "12",
-                "owner_model": "/shared/bank.mdl", "label": "Walk", "activity_name": "ACT_WALK",
-            }
-        ]
-        seen = witnessed_owners(resolution, ownership)
-        body = seen[model_key("pc/body.mdl")]
-        assert list(body) == ["walk"]
-        assert body["walk"]["owners"] == Counter({model_key("shared/bank.mdl"): 2})
-        assert body["walk"]["activity_ids"] == Counter({"7": 1})
-        assert body["walk"]["sequences"] == Counter({"12": 2})
+def test_a_live_number_past_the_offline_space_is_a_mismatch() -> None:
+    flat = _flat(("body.mdl", 0, "ragdoll", ""))
+    live = _live(("body.mdl", 0, "ragdoll", True), ("bank.mdl", 0, "walk", True))
+    report = compare_numbering(live, flat)
+    assert report["owner_mismatches"] == 1
+    assert report["compared"] == 1
 
-    def test_a_witness_outside_the_tree_is_rejected_not_diffed(self) -> None:
-        witnessed = {
-            "walk": {"label": "walk", "owners": Counter({"models/male/bank.mdl": 3}),
-                     "activity_names": Counter(), "targets": Counter(),
-                     "activity_ids": Counter(), "sequences": Counter()},
-            "idle": {"label": "idle", "owners": Counter({"models/female/bank.mdl": 1}),
-                     "activity_names": Counter(), "targets": Counter(),
-                     "activity_ids": Counter(), "sequences": Counter()},
-            "run": {"label": "run", "owners": Counter(
-                        {"models/male/bank.mdl": 2, "models/female/bank.mdl": 1}),
-                    "activity_names": Counter(), "targets": Counter(),
-                    "activity_ids": Counter(), "sequences": Counter()},
+
+def test_the_ordering_with_fewer_mismatches_wins() -> None:
+    # A bank reached twice contributes twice under `nodedup`; the live space says it did.
+    dedup = _flat(("body.mdl", 0, "a", ""), ("bank.mdl", 0, "w", ""), ("last.mdl", 0, "z", ""))
+    nodedup = _flat(
+        ("body.mdl", 0, "a", ""), ("bank.mdl", 0, "w", ""), ("bank.mdl", 0, "w", ""),
+        ("last.mdl", 0, "z", ""),
+    )
+    live = _live(
+        ("body.mdl", 0, "a", True), ("bank.mdl", 0, "w", True), ("bank.mdl", 0, "w", True),
+        ("last.mdl", 0, "z", True),
+    )
+    ordering, report = best_numbering(live, {"dedup": dedup, "nodedup": nodedup})
+    assert ordering == "nodedup"
+    assert report["owner_mismatches"] == 0
+
+
+def test_selections_and_chains_witness_the_same_body_label_owner() -> None:
+    resolution = [
+        {
+            "target": "vampire.select_heaviest_sequence", "body_model": "pc/body.mdl",
+            "resolved_label": "walk", "resolved_owner": "shared/bank.mdl",
+            "resolved_activity_name": "ACT_WALK", "result_kind": "sequence",
+            "requested": "7", "result": "12",
+        },
+        # An activity answer names no clip and witnesses nothing.
+        {
+            "target": "vampire.weapon_translate_activity", "body_model": "pc/body.mdl",
+            "resolved_label": "", "resolved_owner": "", "resolved_activity_name": "",
+            "result_kind": "activity", "requested": "7", "result": "9",
+        },
+    ]
+    ownership = [
+        {
+            "requested_model": "pc/body.mdl", "requested_index": "12",
+            "owner_model": "/shared/bank.mdl", "label": "Walk", "activity_name": "ACT_WALK",
         }
-        admitted, rejected = admissible_witnesses(witnessed, {"models/male/bank.mdl"})
-        assert set(admitted) == {"walk", "run"}
-        assert admitted["run"]["owners"] == Counter({"models/male/bank.mdl": 2})
-        assert set(rejected) == {"idle", "run"}
-        assert rejected["run"]["owners"] == Counter({"models/female/bank.mdl": 1})
+    ]
+    seen = witnessed_owners(resolution, ownership)
+    body = seen[model_key("pc/body.mdl")]
+    assert list(body) == ["walk"]
+    assert body["walk"]["owners"] == Counter({model_key("shared/bank.mdl"): 2})
+    assert body["walk"]["activity_ids"] == Counter({"7": 1})
+    assert body["walk"]["sequences"] == Counter({"12": 2})
+
+
+def test_a_witness_outside_the_tree_is_rejected_not_diffed() -> None:
+    witnessed = {
+        "walk": {"label": "walk", "owners": Counter({"models/male/bank.mdl": 3}),
+                 "activity_names": Counter(), "targets": Counter(),
+                 "activity_ids": Counter(), "sequences": Counter()},
+        "idle": {"label": "idle", "owners": Counter({"models/female/bank.mdl": 1}),
+                 "activity_names": Counter(), "targets": Counter(),
+                 "activity_ids": Counter(), "sequences": Counter()},
+        "run": {"label": "run", "owners": Counter(
+                    {"models/male/bank.mdl": 2, "models/female/bank.mdl": 1}),
+                "activity_names": Counter(), "targets": Counter(),
+                "activity_ids": Counter(), "sequences": Counter()},
+    }
+    admitted, rejected = admissible_witnesses(witnessed, {"models/male/bank.mdl"})
+    assert set(admitted) == {"walk", "run"}
+    assert admitted["run"]["owners"] == Counter({"models/male/bank.mdl": 2})
+    assert set(rejected) == {"idle", "run"}
+    assert rejected["run"]["owners"] == Counter({"models/female/bank.mdl": 1})
 
 
 class SequenceNumberTests(unittest.TestCase):
@@ -327,15 +327,14 @@ class FlatSpaceTests(unittest.TestCase):
         assert label_collisions(flat)["labels_repeated_across_banks"] == 0
 
 
-class ExportIndexTests(unittest.TestCase):
-    def test_bodies_and_banks_map_by_normalised_model(self) -> None:
-        index = {
-            "npcs": {"body": {"model": "models/character/pc/Body.mdl"}},
-            "banks": {"shared_bank": {"model": "character/shared/bank.mdl"}},
-        }
-        stems = stems_by_model(index)
-        assert stems[model_key("character/pc/body.mdl")] == "body"
-        assert stems[model_key("/character/shared/bank.mdl")] == "shared_bank"
+def test_bodies_and_banks_map_by_normalised_model() -> None:
+    index = {
+        "npcs": {"body": {"model": "models/character/pc/Body.mdl"}},
+        "banks": {"shared_bank": {"model": "character/shared/bank.mdl"}},
+    }
+    stems = stems_by_model(index)
+    assert stems[model_key("character/pc/body.mdl")] == "body"
+    assert stems[model_key("/character/shared/bank.mdl")] == "shared_bank"
 
 
 class _FakeBank:
@@ -397,35 +396,32 @@ class AnalyzerLiveMapTests(unittest.TestCase):
             assert analyzer.sequence_map(Path(directory)) == {}
 
 
-class AnalyzerChainFallbackTests(unittest.TestCase):
-    """A selection whose body is known never borrows another body's chain."""
-
-    def test_head_only_key_is_used_only_when_the_body_is_unknown(self) -> None:
-        ownership = [
-            {"requested_model": "pc/female.mdl", "requested_index": 769,
-             "owner_model": "shared/female/katana.mdl", "label": "katana_combo_C2",
-             "activity_name": "ACT_MELEE_ATTACK_KATANA"},
-        ]
-        calls = [
-            {"target": "vampire.get_model_ptr", "sequence": 1, "ecx": "0x1",
-             "stack_words": ["0", "ffffffff"]},
-            {"target": "vampire.select_heaviest_sequence", "sequence": 2, "ecx": "0x1",
-             "stack_words": ["0", "7"]},
-            {"target": "vampire.select_heaviest_sequence", "sequence": 3, "ecx": "0x2",
-             "stack_words": ["0", "7"]},
-        ]
-        returns = {
-            ("vampire.get_model_ptr", 1): {"return_value": "0x10", "fields": {"model": "pc/male.mdl"}},
-            ("vampire.select_heaviest_sequence", 2): {"return_value": "0x301"},
-            ("vampire.select_heaviest_sequence", 3): {"return_value": "0x301"},
-        }
-        rows = analyzer.selections(calls, returns, ownership, live_map={})
-        known, unknown = rows
-        assert known["body_model"] == "pc/male.mdl"
-        assert known["resolved_owner"] is None
-        assert unknown["body_model"] is None
-        assert unknown["resolved_owner"] == "shared/female/katana.mdl"
-        assert unknown["resolved_from"] == "chain"
+def test_head_only_key_is_used_only_when_the_body_is_unknown() -> None:
+    ownership = [
+        {"requested_model": "pc/female.mdl", "requested_index": 769,
+         "owner_model": "shared/female/katana.mdl", "label": "katana_combo_C2",
+         "activity_name": "ACT_MELEE_ATTACK_KATANA"},
+    ]
+    calls = [
+        {"target": "vampire.get_model_ptr", "sequence": 1, "ecx": "0x1",
+         "stack_words": ["0", "ffffffff"]},
+        {"target": "vampire.select_heaviest_sequence", "sequence": 2, "ecx": "0x1",
+         "stack_words": ["0", "7"]},
+        {"target": "vampire.select_heaviest_sequence", "sequence": 3, "ecx": "0x2",
+         "stack_words": ["0", "7"]},
+    ]
+    returns = {
+        ("vampire.get_model_ptr", 1): {"return_value": "0x10", "fields": {"model": "pc/male.mdl"}},
+        ("vampire.select_heaviest_sequence", 2): {"return_value": "0x301"},
+        ("vampire.select_heaviest_sequence", 3): {"return_value": "0x301"},
+    }
+    rows = analyzer.selections(calls, returns, ownership, live_map={})
+    known, unknown = rows
+    assert known["body_model"] == "pc/male.mdl"
+    assert known["resolved_owner"] is None
+    assert unknown["body_model"] is None
+    assert unknown["resolved_owner"] == "shared/female/katana.mdl"
+    assert unknown["resolved_from"] == "chain"
 
 
 def _matrix(rows, translation=(0.0, 0.0, 0.0)) -> str:
@@ -440,53 +436,56 @@ def _matrix(rows, translation=(0.0, 0.0, 0.0)) -> str:
 IDENTITY = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 
 
-class RetailMatrixTests(unittest.TestCase):
-    def test_the_fourth_column_is_the_translation(self) -> None:
-        rows, translation = retail_matrix(_matrix(IDENTITY, (1.0, 2.0, 3.0)))
-        assert rows == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
-        assert translation == (1.0, 2.0, 3.0)
-
-    def test_a_pure_translation_reads_as_unit_scale_and_no_angle(self) -> None:
-        # Retail's origin branch: identity rotation, `b - a` in the fourth column, stated in
-        # inches, which is why the invariant comes back in centimetres.
-        read = read_retail_transform(_matrix(IDENTITY, (1.22551, 0.0, 0.0)))
-        assert read["scale"] == pytest.approx(1.0, abs=1e-6)
-        assert read["angle_degrees"] == pytest.approx(0.0, abs=1e-4)
-        assert read["translation_cm"] == pytest.approx(1.22551 * 2.54, abs=1e-5)
-
-    def test_a_uniform_scale_reads_as_that_scale(self) -> None:
-        scaled = tuple(tuple(0.7 * v for v in row) for row in IDENTITY)
-        read = read_retail_transform(_matrix(scaled))
-        assert read["scale"] == pytest.approx(0.7, abs=1e-6)
-        assert read["row_norm_spread"] == pytest.approx(0.0, abs=1e-9)
+def test_the_fourth_column_is_the_translation() -> None:
+    rows, translation = retail_matrix(_matrix(IDENTITY, (1.0, 2.0, 3.0)))
+    assert rows == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    assert translation == (1.0, 2.0, 3.0)
 
 
-class DeriveTransformTests(unittest.TestCase):
-    def test_a_length_ratio_with_no_rotation(self) -> None:
-        out = derive_transform((0.0, 0.0, 2.0), (0.0, 0.0, 6.0))
-        assert out["branch"] == "axis_angle"
-        assert out["scale"] == pytest.approx(3.0, abs=1e-9)
-        assert out["angle_degrees"] == pytest.approx(0.0, abs=1e-9)
+def test_a_pure_translation_reads_as_unit_scale_and_no_angle() -> None:
+    # Retail's origin branch: identity rotation, `b - a` in the fourth column, stated in
+    # inches, which is why the invariant comes back in centimetres.
+    read = read_retail_transform(_matrix(IDENTITY, (1.22551, 0.0, 0.0)))
+    assert read["scale"] == pytest.approx(1.0, abs=1e-6)
+    assert read["angle_degrees"] == pytest.approx(0.0, abs=1e-4)
+    assert read["translation_cm"] == pytest.approx(1.22551 * 2.54, abs=1e-5)
 
-    def test_the_angle_is_between_the_two_bind_directions(self) -> None:
-        out = derive_transform((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
-        assert out["angle_degrees"] == pytest.approx(90.0, abs=1e-6)
-        assert out["scale"] == pytest.approx(1.0, abs=1e-9)
 
-    def test_a_bind_at_the_origin_takes_the_translation_branch(self) -> None:
-        # Retail writes a pure `b - a` there, and no stock Unreal translation mode carries it.
-        out = derive_transform((0.0, 0.0, 0.0), (0.0, 0.0, 4.0))
-        assert out["branch"] == "translation"
-        assert out["translation_cm"] == pytest.approx(4.0, abs=1e-9)
+def test_a_uniform_scale_reads_as_that_scale() -> None:
+    scaled = tuple(tuple(0.7 * v for v in row) for row in IDENTITY)
+    read = read_retail_transform(_matrix(scaled))
+    assert read["scale"] == pytest.approx(0.7, abs=1e-6)
+    assert read["row_norm_spread"] == pytest.approx(0.0, abs=1e-9)
 
-    def test_the_reflection_is_not_a_difference(self) -> None:
-        """`source_to_unreal` negates Y, which preserves an angle and flips the axis, so the
-        invariants this compares survive the basis change."""
-        a, b = (1.0, 2.0, 3.0), (2.0, 1.0, 5.0)
-        straight = derive_transform(a, b)
-        mirrored = derive_transform((a[0], -a[1], a[2]), (b[0], -b[1], b[2]))
-        assert straight["scale"] == pytest.approx(mirrored["scale"], abs=1e-9)
-        assert straight["angle_degrees"] == pytest.approx(mirrored["angle_degrees"], abs=1e-9)
+
+def test_a_length_ratio_with_no_rotation() -> None:
+    out = derive_transform((0.0, 0.0, 2.0), (0.0, 0.0, 6.0))
+    assert out["branch"] == "axis_angle"
+    assert out["scale"] == pytest.approx(3.0, abs=1e-9)
+    assert out["angle_degrees"] == pytest.approx(0.0, abs=1e-9)
+
+
+def test_the_angle_is_between_the_two_bind_directions() -> None:
+    out = derive_transform((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    assert out["angle_degrees"] == pytest.approx(90.0, abs=1e-6)
+    assert out["scale"] == pytest.approx(1.0, abs=1e-9)
+
+
+def test_a_bind_at_the_origin_takes_the_translation_branch() -> None:
+    # Retail writes a pure `b - a` there, and no stock Unreal translation mode carries it.
+    out = derive_transform((0.0, 0.0, 0.0), (0.0, 0.0, 4.0))
+    assert out["branch"] == "translation"
+    assert out["translation_cm"] == pytest.approx(4.0, abs=1e-9)
+
+
+def test_the_reflection_is_not_a_difference() -> None:
+    """`source_to_unreal` negates Y, which preserves an angle and flips the axis, so the
+    invariants this compares survive the basis change."""
+    a, b = (1.0, 2.0, 3.0), (2.0, 1.0, 5.0)
+    straight = derive_transform(a, b)
+    mirrored = derive_transform((a[0], -a[1], a[2]), (b[0], -b[1], b[2]))
+    assert straight["scale"] == pytest.approx(mirrored["scale"], abs=1e-9)
+    assert straight["angle_degrees"] == pytest.approx(mirrored["angle_degrees"], abs=1e-9)
 
 
 class _StubBinds:

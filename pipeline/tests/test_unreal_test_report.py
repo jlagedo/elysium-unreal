@@ -153,20 +153,20 @@ class UnrealTestReportTests(unittest.TestCase):
             assert summary["abstained"] == 1
 
 
-class PruneTestReportsTests(unittest.TestCase):
-    def test_only_the_newest_reports_survive(self) -> None:
-        with TemporaryDirectory() as temp:
-            reports = Path(temp) / "tests"
-            reports.mkdir()
-            for stamp in range(6):
-                (reports / f"2026082{stamp}T000000.0Z-elysium-substrate").mkdir()
+def test_only_the_newest_reports_survive() -> None:
+    with TemporaryDirectory() as temp:
+        reports = Path(temp) / "tests"
+        reports.mkdir()
+        for stamp in range(6):
+            (reports / f"2026082{stamp}T000000.0Z-elysium-substrate").mkdir()
 
-            removed = unreal.prune_test_reports(reports, keep=2)
+        removed = unreal.prune_test_reports(reports, keep=2)
 
-            assert removed == 4
-            assert sorted(child.name for child in reports.iterdir()) == ["20260824T000000.0Z-elysium-substrate",
-                 "20260825T000000.0Z-elysium-substrate"]
+        assert removed == 4
+        assert sorted(child.name for child in reports.iterdir()) == ["20260824T000000.0Z-elysium-substrate",
+             "20260825T000000.0Z-elysium-substrate"]
 
-    def test_a_missing_directory_is_not_an_error(self) -> None:
-        with TemporaryDirectory() as temp:
-            assert unreal.prune_test_reports(Path(temp) / "absent") == 0
+
+def test_a_missing_directory_is_not_an_error() -> None:
+    with TemporaryDirectory() as temp:
+        assert unreal.prune_test_reports(Path(temp) / "absent") == 0

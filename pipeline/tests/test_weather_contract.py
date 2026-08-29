@@ -49,33 +49,33 @@ class GlobalWetnessVmtTests(unittest.TestCase):
         assert result["globalwetness"] == 0.25
 
 
-class CubemapDdsTests(unittest.TestCase):
-    def test_six_faces_keep_vtf_order_and_bgra_bytes(self):
-        colours = [
-            (1, 2, 3, 4), (11, 12, 13, 14), (21, 22, 23, 24),
-            (31, 32, 33, 34), (41, 42, 43, 44), (51, 52, 53, 54),
-        ]
-        data = tex_to_png.cubemap_dds([
-            Image.new("RGBA", (2, 2), colour) for colour in colours
-        ])
-        assert data[:4] == b"DDS "
-        assert int.from_bytes(data[12:16], "little") == 2
-        assert int.from_bytes(data[16:20], "little") == 2
-        assert int.from_bytes(data[112:116], "little") == 0xFE00
-        pixels = data[128:]
-        face_bytes = 2 * 2 * 4
-        for index, (r, g, b, a) in enumerate(colours):
-            assert pixels[index * face_bytes:index * face_bytes + 4] == bytes((b, g, r, a))
+def test_six_faces_keep_vtf_order_and_bgra_bytes():
+    colours = [
+        (1, 2, 3, 4), (11, 12, 13, 14), (21, 22, 23, 24),
+        (31, 32, 33, 34), (41, 42, 43, 44), (51, 52, 53, 54),
+    ]
+    data = tex_to_png.cubemap_dds([
+        Image.new("RGBA", (2, 2), colour) for colour in colours
+    ])
+    assert data[:4] == b"DDS "
+    assert int.from_bytes(data[12:16], "little") == 2
+    assert int.from_bytes(data[16:20], "little") == 2
+    assert int.from_bytes(data[112:116], "little") == 0xFE00
+    pixels = data[128:]
+    face_bytes = 2 * 2 * 4
+    for index, (r, g, b, a) in enumerate(colours):
+        assert pixels[index * face_bytes:index * face_bytes + 4] == bytes((b, g, r, a))
 
-    def test_missing_unequal_and_non_square_faces_fail(self):
-        with pytest.raises(ValueError):
-            tex_to_png.cubemap_dds([Image.new("RGBA", (2, 2))] * 5)
-        with pytest.raises(ValueError):
-            tex_to_png.cubemap_dds(
-                [Image.new("RGBA", (2, 2))] * 5 + [Image.new("RGBA", (4, 4))]
-            )
-        with pytest.raises(ValueError):
-            tex_to_png.cubemap_dds([Image.new("RGBA", (2, 3))] * 6)
+
+def test_missing_unequal_and_non_square_faces_fail():
+    with pytest.raises(ValueError):
+        tex_to_png.cubemap_dds([Image.new("RGBA", (2, 2))] * 5)
+    with pytest.raises(ValueError):
+        tex_to_png.cubemap_dds(
+            [Image.new("RGBA", (2, 2))] * 5 + [Image.new("RGBA", (4, 4))]
+        )
+    with pytest.raises(ValueError):
+        tex_to_png.cubemap_dds([Image.new("RGBA", (2, 3))] * 6)
 
 
 class ParticleClosureTests(unittest.TestCase):
@@ -272,43 +272,43 @@ class MapParticleDocumentTests(unittest.TestCase):
             particles.compile_definition("zero_sprite", 'Particle { frames 0 sprite flash }')
 
 
-class HeightTextureTests(unittest.TestCase):
-    def test_only_solid_non_sky_props_become_placed_cover(self):
-        with tempfile.TemporaryDirectory() as directory:
-            # The map directory holds placements; the mesh they name is the shared corpus's.
-            root = Path(directory) / "map"
-            root.mkdir()
-            props = shared_corpus.props_dir(root.parent)
-            props.mkdir(parents=True)
-            (props / "awning.obj").write_text(
-                "v 0 0 0\nv 10 0 0\nv 0 10 0\nf 1 2 3\n", encoding="utf-8"
-            )
-            (root / "map.props").write_text(
-                "awning 100 200 300 0 0 0 1 1 0 0 models/awning.mdl\n"
-                "awning 400 500 600 0 0 0 1 0 0 0 models/awning.mdl\n"
-                "awning 700 800 900 0 0 0 1 1 0 1 models/awning.mdl\n",
-                encoding="utf-8",
-            )
-            triangles = weather.static_prop_cover_triangles(root, "map")
-            assert len(triangles) == 1
-            assert triangles[0][0] == (100.0, 200.0, 300.0)
-            assert triangles[0][2] == (100.0, 210.0, 300.0)
+def test_only_solid_non_sky_props_become_placed_cover():
+    with tempfile.TemporaryDirectory() as directory:
+        # The map directory holds placements; the mesh they name is the shared corpus's.
+        root = Path(directory) / "map"
+        root.mkdir()
+        props = shared_corpus.props_dir(root.parent)
+        props.mkdir(parents=True)
+        (props / "awning.obj").write_text(
+            "v 0 0 0\nv 10 0 0\nv 0 10 0\nf 1 2 3\n", encoding="utf-8"
+        )
+        (root / "map.props").write_text(
+            "awning 100 200 300 0 0 0 1 1 0 0 models/awning.mdl\n"
+            "awning 400 500 600 0 0 0 1 0 0 0 models/awning.mdl\n"
+            "awning 700 800 900 0 0 0 1 1 0 1 models/awning.mdl\n",
+            encoding="utf-8",
+        )
+        triangles = weather.static_prop_cover_triangles(root, "map")
+        assert len(triangles) == 1
+        assert triangles[0][0] == (100.0, 200.0, 300.0)
+        assert triangles[0][2] == (100.0, 210.0, 300.0)
 
-    def test_r16_sentinel_bounds_resolution_and_decode(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "height.png"
-            metadata = weather.rasterize_height(
-                [((0.0, 0.0, 50.0), (100.0, 0.0, 50.0), (0.0, 100.0, 50.0))],
-                path,
-                (0.0, 0.0, -100.0),
-                (28971.24, 19639.28, 1300.48),
-                resolution=2048,
-            )
-            image = np.asarray(Image.open(path), dtype=np.uint16)
-            assert image.shape == (2048, 2048)
-            assert int(image[-1, -1]) == 0
-            sample = int(image[1, 1])
-            assert sample > 0
-            decoded = metadata["min_z_cm"] + (sample - 1) * metadata["z_scale_cm"]
-            assert decoded == pytest.approx(50.0, abs=metadata["z_scale_cm"])
-            assert metadata["format"] == "R16_UNORM"
+
+def test_r16_sentinel_bounds_resolution_and_decode():
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "height.png"
+        metadata = weather.rasterize_height(
+            [((0.0, 0.0, 50.0), (100.0, 0.0, 50.0), (0.0, 100.0, 50.0))],
+            path,
+            (0.0, 0.0, -100.0),
+            (28971.24, 19639.28, 1300.48),
+            resolution=2048,
+        )
+        image = np.asarray(Image.open(path), dtype=np.uint16)
+        assert image.shape == (2048, 2048)
+        assert int(image[-1, -1]) == 0
+        sample = int(image[1, 1])
+        assert sample > 0
+        decoded = metadata["min_z_cm"] + (sample - 1) * metadata["z_scale_cm"]
+        assert decoded == pytest.approx(50.0, abs=metadata["z_scale_cm"])
+        assert metadata["format"] == "R16_UNORM"

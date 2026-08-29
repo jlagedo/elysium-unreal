@@ -36,175 +36,175 @@ class _FakeModel:
         self.key = key if key is not None else str(id(self))
 
 
-class QuaternionKitTests(unittest.TestCase):
-    def test_scale_is_a_slerp_from_identity(self):
-        q = _axis_angle((0, 0, 1), 60.0)
-        half = rc.qscale(q, 0.5)
-        expected = _axis_angle((0, 0, 1), 30.0)
-        for a, b in zip(half, expected):
-            assert a == pytest.approx(b, abs=1e-6)
-        assert rc.qscale(q, 1.0) == q
-        assert rc.qscale(q, 0.0) == (0.0, 0.0, 0.0, 1.0)
-
-    def test_nlerp_flips_to_the_nearer_hemisphere(self):
-        q = _axis_angle((1, 0, 0), 20.0)
-        flipped = tuple(-c for c in q)
-        mixed = rc.qnlerp(q, flipped, 0.5)
-        for a, b in zip(mixed, q):
-            assert a == pytest.approx(b, abs=1e-6)
+def test_scale_is_a_slerp_from_identity():
+    q = _axis_angle((0, 0, 1), 60.0)
+    half = rc.qscale(q, 0.5)
+    expected = _axis_angle((0, 0, 1), 30.0)
+    for a, b in zip(half, expected):
+        assert a == pytest.approx(b, abs=1e-6)
+    assert rc.qscale(q, 1.0) == q
+    assert rc.qscale(q, 0.0) == (0.0, 0.0, 0.0, 1.0)
 
 
-class AccumulateTests(unittest.TestCase):
-    def test_a_post_delta_lands_on_the_right(self):
-        base = _axis_angle((0, 0, 1), 90.0)
-        delta = _axis_angle((1, 0, 0), 30.0)
-        out = [((1.0, 2.0, 3.0), base)]
-        rc.accumulate(out, [((0.5, 0.0, 0.0), delta)], 1.0, rc.FLAG_DELTA | rc.FLAG_POST)
-        expected = rc.qnorm(rc.qmul(base, delta))
-        for a, b in zip(out[0][1], expected):
-            assert a == pytest.approx(b, abs=1e-6)
-        assert out[0][0] == (1.5, 2.0, 3.0)
-
-    def test_a_pre_delta_lands_on_the_left_and_differs(self):
-        base = _axis_angle((0, 0, 1), 90.0)
-        delta = _axis_angle((1, 0, 0), 30.0)
-        out = [((0.0, 0.0, 0.0), base)]
-        rc.accumulate(out, [((0.0, 0.0, 0.0), delta)], 1.0, rc.FLAG_DELTA)
-        expected = rc.qnorm(rc.qmul(delta, base))
-        for a, b in zip(out[0][1], expected):
-            assert a == pytest.approx(b, abs=1e-6)
-        post = rc.qnorm(rc.qmul(base, delta))
-        assert max(abs(a - b) for a, b in zip(expected, post)) > 0.1
-
-    def test_an_ordinary_layer_replaces_at_full_weight_and_skips_a_masked_bone(self):
-        out = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)), ((9.0, 9.0, 9.0), (0.0, 0.0, 0.0, 1.0))]
-        layer_rot = _axis_angle((0, 1, 0), 45.0)
-        rc.accumulate(out, [((1.0, 1.0, 1.0), layer_rot), None], 1.0, 0)
-        assert out[0][0] == (1.0, 1.0, 1.0)
-        assert out[0][1] == layer_rot
-        assert out[1][0] == (9.0, 9.0, 9.0)
+def test_nlerp_flips_to_the_nearer_hemisphere():
+    q = _axis_angle((1, 0, 0), 20.0)
+    flipped = tuple(-c for c in q)
+    mixed = rc.qnlerp(q, flipped, 0.5)
+    for a, b in zip(mixed, q):
+        assert a == pytest.approx(b, abs=1e-6)
 
 
-class SlotGateTests(unittest.TestCase):
-    def test_a_slot_gate_drops_every_bone_the_slot_does_not_own(self):
-        layer = [((1.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))] * 4
-        gated = rc.gate_to(layer, {1, 2})
-        assert [c is not None for c in gated] == [False, True, True, False]
-        assert rc.gate_to(layer, None) is layer
+def test_a_post_delta_lands_on_the_right():
+    base = _axis_angle((0, 0, 1), 90.0)
+    delta = _axis_angle((1, 0, 0), 30.0)
+    out = [((1.0, 2.0, 3.0), base)]
+    rc.accumulate(out, [((0.5, 0.0, 0.0), delta)], 1.0, rc.FLAG_DELTA | rc.FLAG_POST)
+    expected = rc.qnorm(rc.qmul(base, delta))
+    for a, b in zip(out[0][1], expected):
+        assert a == pytest.approx(b, abs=1e-6)
+    assert out[0][0] == (1.5, 2.0, 3.0)
 
 
-class SplitRotationTests(unittest.TestCase):
-    def test_a_split_bone_takes_its_rotation_as_model_space(self):
-        turn = _axis_angle((0, 0, 1), 90.0)
-        bones = [_bone(0, "root", -1), _bone(1, "spine", 0, pos=(0.0, 0.0, 10.0)),
-                 _bone(2, "split", 1, pos=(0.0, 0.0, 10.0), flags=rc.SPLIT_ROTATION)]
-        model = _FakeModel(bones)
-        locals_ = [((0.0, 0.0, 0.0), turn), ((0.0, 0.0, 10.0), turn), ((0.0, 0.0, 10.0), turn)]
-        world = rc.model_space(model, locals_)
-        # Conventional inheritance would give the split bone 270 deg; the rule gives it its own 90.
-        assert world[1][1][2] == pytest.approx(math.sin(math.radians(90.0)), abs=1e-6)
-        for a, b in zip(world[2][1], turn):
-            assert a == pytest.approx(b, abs=1e-6)
-        # Translation still composes through the (rotated) parent.
-        assert world[2][0][2] == pytest.approx(20.0, abs=1e-6)
+def test_a_pre_delta_lands_on_the_left_and_differs():
+    base = _axis_angle((0, 0, 1), 90.0)
+    delta = _axis_angle((1, 0, 0), 30.0)
+    out = [((0.0, 0.0, 0.0), base)]
+    rc.accumulate(out, [((0.0, 0.0, 0.0), delta)], 1.0, rc.FLAG_DELTA)
+    expected = rc.qnorm(rc.qmul(delta, base))
+    for a, b in zip(out[0][1], expected):
+        assert a == pytest.approx(b, abs=1e-6)
+    post = rc.qnorm(rc.qmul(base, delta))
+    assert max(abs(a - b) for a, b in zip(expected, post)) > 0.1
 
 
-class AxisTests(unittest.TestCase):
-    def test_a_fan_resolves_a_cell_and_a_fraction(self):
-        from elysium_pipeline.formats.mdl_skel import Grid, PoseParam
-        model = _FakeModel([])
-        model.pose_params = {"move_yaw": PoseParam(index=0, name="move_yaw", flags=1,
-                                                   start=-180.0, end=180.0, loop=360.0)}
-        grid = Grid(numblends=9, groupsize=(9, 1), paramindex=(0, -1),
-                    paramstart=(-180.0, 0.0), paramend=(180.0, 0.0), cells=())
-        assert rc._axis(model, grid, 0, {"move_yaw": 0.0}) == (4, 0.0)
-        i, s = rc._axis(model, grid, 0, {"move_yaw": 22.5})
-        assert i == 4
-        assert s == pytest.approx(0.5, abs=1e-6)
-        # Wrap through the loop: 190 is -170.
-        i, s = rc._axis(model, grid, 0, {"move_yaw": 190.0})
-        assert i == 0
-        assert s == pytest.approx(10.0 / 45.0, abs=1e-6)
-        assert rc._axis(model, grid, 1, {"move_yaw": 0.0}) == (0, 0.0)
+def test_an_ordinary_layer_replaces_at_full_weight_and_skips_a_masked_bone():
+    out = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)), ((9.0, 9.0, 9.0), (0.0, 0.0, 0.0, 1.0))]
+    layer_rot = _axis_angle((0, 1, 0), 45.0)
+    rc.accumulate(out, [((1.0, 1.0, 1.0), layer_rot), None], 1.0, 0)
+    assert out[0][0] == (1.0, 1.0, 1.0)
+    assert out[0][1] == layer_rot
+    assert out[1][0] == (9.0, 9.0, 9.0)
 
 
-class BindRemapBranchTests(unittest.TestCase):
-    """The three-branch bind-pose remap (`vampire.dll FUN_100c67b0` / `0x1008cfa0`), on
-    hand-built bind pairs -- never a model's data."""
+def test_a_slot_gate_drops_every_bone_the_slot_does_not_own():
+    layer = [((1.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))] * 4
+    gated = rc.gate_to(layer, {1, 2})
+    assert [c is not None for c in gated] == [False, True, True, False]
+    assert rc.gate_to(layer, None) is layer
 
-    def test_close_binds_copy_the_position_unchanged(self):
-        owner = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0))
-        body = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0 + 0.09))  # |a-b|^2 = 0.0081 < 0.01
-        kind, payload = rc._bind_branch(owner.pos, body.pos)
-        assert kind == "copy"
-        assert payload is None
 
-    def test_close_binds_boundary_just_outside_is_not_copy(self):
-        owner = _bone(0, "root", -1, pos=(0.0, 0.0, 0.0))
-        body = _bone(0, "root", -1, pos=(0.0, 0.0, 0.11))  # |a-b|^2 = 0.0121 > 0.01
-        kind, _payload = rc._bind_branch(owner.pos, body.pos)
-        assert kind != "copy"
+def test_a_split_bone_takes_its_rotation_as_model_space():
+    turn = _axis_angle((0, 0, 1), 90.0)
+    bones = [_bone(0, "root", -1), _bone(1, "spine", 0, pos=(0.0, 0.0, 10.0)),
+             _bone(2, "split", 1, pos=(0.0, 0.0, 10.0), flags=rc.SPLIT_ROTATION)]
+    model = _FakeModel(bones)
+    locals_ = [((0.0, 0.0, 0.0), turn), ((0.0, 0.0, 10.0), turn), ((0.0, 0.0, 10.0), turn)]
+    world = rc.model_space(model, locals_)
+    # Conventional inheritance would give the split bone 270 deg; the rule gives it its own 90.
+    assert world[1][1][2] == pytest.approx(math.sin(math.radians(90.0)), abs=1e-6)
+    for a, b in zip(world[2][1], turn):
+        assert a == pytest.approx(b, abs=1e-6)
+    # Translation still composes through the (rotated) parent.
+    assert world[2][0][2] == pytest.approx(20.0, abs=1e-6)
 
-    def test_both_binds_near_origin_is_still_a_copy_not_a_translation(self):
-        # |a-b|^2 exceeds the threshold but BOTH |a|^2 and |b|^2 are within it: the disassembly
-        # takes neither the translate nor the similarity path.
-        a = (0.09, 0.0, 0.0)
-        b = (-0.09, 0.0, 0.0)
-        assert sum(c * c for c in (a[0] - b[0], a[1] - b[1], a[2] - b[2])) > 0.01
-        assert sum(c * c for c in a) <= 0.01
-        assert sum(c * c for c in b) <= 0.01
-        kind, payload = rc._bind_branch(a, b)
-        assert kind == "copy"
-        assert payload is None
 
-    def test_one_bind_near_origin_is_a_pure_translation(self):
-        a = (3.0, 0.0, 0.0)     # owner/bank bind, far from the origin
-        b = (0.02, 0.0, 0.0)    # body bind, within the threshold
-        kind, payload = rc._bind_branch(a, b)
-        assert kind == "translate"
-        for got, want in zip(payload, (b[0] - a[0], b[1] - a[1], b[2] - a[2])):
-            assert got == pytest.approx(want, abs=1e-6)
+def test_a_fan_resolves_a_cell_and_a_fraction():
+    from elysium_pipeline.formats.mdl_skel import Grid, PoseParam
+    model = _FakeModel([])
+    model.pose_params = {"move_yaw": PoseParam(index=0, name="move_yaw", flags=1,
+                                               start=-180.0, end=180.0, loop=360.0)}
+    grid = Grid(numblends=9, groupsize=(9, 1), paramindex=(0, -1),
+                paramstart=(-180.0, 0.0), paramend=(180.0, 0.0), cells=())
+    assert rc._axis(model, grid, 0, {"move_yaw": 0.0}) == (4, 0.0)
+    i, s = rc._axis(model, grid, 0, {"move_yaw": 22.5})
+    assert i == 4
+    assert s == pytest.approx(0.5, abs=1e-6)
+    # Wrap through the loop: 190 is -170.
+    i, s = rc._axis(model, grid, 0, {"move_yaw": 190.0})
+    assert i == 0
+    assert s == pytest.approx(10.0 / 45.0, abs=1e-6)
+    assert rc._axis(model, grid, 1, {"move_yaw": 0.0}) == (0, 0.0)
 
-    def test_two_far_binds_are_a_similarity(self):
-        a = (2.0, 0.0, 0.0)
-        b = (0.0, 4.0, 0.0)
-        kind, payload = rc._bind_branch(a, b)
-        assert kind == "similarity"
-        arc, scale = payload
-        assert scale == pytest.approx(2.0, abs=1e-6)  # |b|/|a| = 4/2
-        rotated = rc.qrotate(arc, a)
-        for got, want in zip(rotated, (0.0, 2.0, 0.0)):  # a rotated onto b's direction, |a| kept
-            assert got == pytest.approx(want, abs=1e-6)
 
-    def test_the_measured_ash_tremere_pelvis_case_is_the_origin_translate_branch(self):
-        # The measured defect case, converted from its own cm reading to the Source units this
-        # module works in: `Bip01 Pelvis` bank bind 2.968 cm / body bind 0.145 cm, 177.2 degrees
-        # apart. The body's own bind is within the threshold in Source units too (0.145 cm /
-        # 2.54 = 0.0571 in, under the 0.1 in threshold), so this is the "one bind near the
-        # origin" branch -- not a similarity -- which is exactly the defect: Unreal's
-        # `OrientAndScale` has no such branch at all, and rotate-and-scale on a bone whose body
-        # bind sits this close to the origin annihilates the animated deviation.
-        a = (2.968 / rc.SOURCE_UNIT_TO_CM, 0.0, 0.0)
-        b = (-0.145 / rc.SOURCE_UNIT_TO_CM, 0.0, 0.0)
-        kind, payload = rc._bind_branch(a, b)
-        assert kind == "translate"
-        for got, want in zip(payload, (b[0] - a[0], b[1] - a[1], b[2] - a[2])):
-            assert got == pytest.approx(want, abs=1e-6)
+def test_close_binds_copy_the_position_unchanged():
+    owner = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0))
+    body = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0 + 0.09))  # |a-b|^2 = 0.0081 < 0.01
+    kind, payload = rc._bind_branch(owner.pos, body.pos)
+    assert kind == "copy"
+    assert payload is None
 
-    def test_antiparallel_far_binds_resolve_a_half_turn(self):
-        # A synthetic (not model-measured) antiparallel pair where NEITHER bind is near the
-        # origin, to exercise `_shortest_arc`'s degenerate 180-degree branch under the
-        # similarity path specifically.
-        a = (2.0, 0.0, 0.0)
-        b = (-1.0, 0.0, 0.0)
-        kind, payload = rc._bind_branch(a, b)
-        assert kind == "similarity"
-        arc, scale = payload
-        assert scale == pytest.approx(0.5, abs=1e-6)
-        rotated = rc.qrotate(arc, a)
-        assert rotated[0] == pytest.approx(-a[0], abs=1e-4)
-        assert rotated[1] == pytest.approx(0.0, abs=1e-4)
-        assert rotated[2] == pytest.approx(0.0, abs=1e-4)
+
+def test_close_binds_boundary_just_outside_is_not_copy():
+    owner = _bone(0, "root", -1, pos=(0.0, 0.0, 0.0))
+    body = _bone(0, "root", -1, pos=(0.0, 0.0, 0.11))  # |a-b|^2 = 0.0121 > 0.01
+    kind, _payload = rc._bind_branch(owner.pos, body.pos)
+    assert kind != "copy"
+
+
+def test_both_binds_near_origin_is_still_a_copy_not_a_translation():
+    # |a-b|^2 exceeds the threshold but BOTH |a|^2 and |b|^2 are within it: the disassembly
+    # takes neither the translate nor the similarity path.
+    a = (0.09, 0.0, 0.0)
+    b = (-0.09, 0.0, 0.0)
+    assert sum(c * c for c in (a[0] - b[0], a[1] - b[1], a[2] - b[2])) > 0.01
+    assert sum(c * c for c in a) <= 0.01
+    assert sum(c * c for c in b) <= 0.01
+    kind, payload = rc._bind_branch(a, b)
+    assert kind == "copy"
+    assert payload is None
+
+
+def test_one_bind_near_origin_is_a_pure_translation():
+    a = (3.0, 0.0, 0.0)     # owner/bank bind, far from the origin
+    b = (0.02, 0.0, 0.0)    # body bind, within the threshold
+    kind, payload = rc._bind_branch(a, b)
+    assert kind == "translate"
+    for got, want in zip(payload, (b[0] - a[0], b[1] - a[1], b[2] - a[2])):
+        assert got == pytest.approx(want, abs=1e-6)
+
+
+def test_two_far_binds_are_a_similarity():
+    a = (2.0, 0.0, 0.0)
+    b = (0.0, 4.0, 0.0)
+    kind, payload = rc._bind_branch(a, b)
+    assert kind == "similarity"
+    arc, scale = payload
+    assert scale == pytest.approx(2.0, abs=1e-6)  # |b|/|a| = 4/2
+    rotated = rc.qrotate(arc, a)
+    for got, want in zip(rotated, (0.0, 2.0, 0.0)):  # a rotated onto b's direction, |a| kept
+        assert got == pytest.approx(want, abs=1e-6)
+
+
+def test_the_measured_ash_tremere_pelvis_case_is_the_origin_translate_branch():
+    # The measured defect case, converted from its own cm reading to the Source units this
+    # module works in: `Bip01 Pelvis` bank bind 2.968 cm / body bind 0.145 cm, 177.2 degrees
+    # apart. The body's own bind is within the threshold in Source units too (0.145 cm /
+    # 2.54 = 0.0571 in, under the 0.1 in threshold), so this is the "one bind near the
+    # origin" branch -- not a similarity -- which is exactly the defect: Unreal's
+    # `OrientAndScale` has no such branch at all, and rotate-and-scale on a bone whose body
+    # bind sits this close to the origin annihilates the animated deviation.
+    a = (2.968 / rc.SOURCE_UNIT_TO_CM, 0.0, 0.0)
+    b = (-0.145 / rc.SOURCE_UNIT_TO_CM, 0.0, 0.0)
+    kind, payload = rc._bind_branch(a, b)
+    assert kind == "translate"
+    for got, want in zip(payload, (b[0] - a[0], b[1] - a[1], b[2] - a[2])):
+        assert got == pytest.approx(want, abs=1e-6)
+
+
+def test_antiparallel_far_binds_resolve_a_half_turn():
+    # A synthetic (not model-measured) antiparallel pair where NEITHER bind is near the
+    # origin, to exercise `_shortest_arc`'s degenerate 180-degree branch under the
+    # similarity path specifically.
+    a = (2.0, 0.0, 0.0)
+    b = (-1.0, 0.0, 0.0)
+    kind, payload = rc._bind_branch(a, b)
+    assert kind == "similarity"
+    arc, scale = payload
+    assert scale == pytest.approx(0.5, abs=1e-6)
+    rotated = rc.qrotate(arc, a)
+    assert rotated[0] == pytest.approx(-a[0], abs=1e-4)
+    assert rotated[1] == pytest.approx(0.0, abs=1e-4)
+    assert rotated[2] == pytest.approx(0.0, abs=1e-4)
 
 
 class RemapTests(unittest.TestCase):

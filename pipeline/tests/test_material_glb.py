@@ -38,89 +38,94 @@ def _publish(body: bytes, **kwargs):
     return model, document, binary
 
 
-class MaterialLedgerTests(unittest.TestCase):
-    def test_every_source_byte_is_claimed_exactly_once(self):
-        model = _decode(SIMPLE)
-        ledger = model.byte_coverage[0]
-        assert ledger["coveragePercent"] == 100.0
-        assert ledger["accountedBytes"] == len(SIMPLE)
-        cursor = 0
-        for row in ledger["ranges"]:
-            assert row["offset"] == cursor
-            cursor += row["length"]
-        assert cursor == len(SIMPLE)
-
-    def test_whitespace_is_the_only_omission_and_comments_are_kept(self):
-        body = b'"UnlitGeneric"\n{\n\t"$additive" "1" // authored note\n}\n'
-        model = _decode(body, present=())
-        assert [row["text"] for row in model.comments] == ["// authored note"]
-        states = model.byte_coverage[0]["stateBytes"]
-        assert set(states) == {"mapped", "omitted-proven"}
-
-    def test_a_tokenizer_run_covers_the_source_gaplessly(self):
-        text = lexer.decode_text(SIMPLE)
-        cursor = 0
-        for token in lexer.tokenize(text):
-            assert token.offset == cursor
-            cursor = token.end
-        assert cursor == len(SIMPLE)
+def test_every_source_byte_is_claimed_exactly_once():
+    model = _decode(SIMPLE)
+    ledger = model.byte_coverage[0]
+    assert ledger["coveragePercent"] == 100.0
+    assert ledger["accountedBytes"] == len(SIMPLE)
+    cursor = 0
+    for row in ledger["ranges"]:
+        assert row["offset"] == cursor
+        cursor += row["length"]
+    assert cursor == len(SIMPLE)
 
 
-class MaterialDecodeTests(unittest.TestCase):
-    def test_parameters_keep_source_order_casing_and_offsets(self):
-        body = b'"VertexLitGeneric"\n{\n"$baseTexture" "models/teeth"\n"$surfaceProp" "flesh"\n}\n'
-        model = _decode(body)
-        assert [p.key for p in model.parameters] == ["$basetexture", "$surfaceprop"]
-        assert [p.source_key for p in model.parameters] == ["$baseTexture", "$surfaceProp"]
-        assert [p.index for p in model.parameters] == [0, 1]
-        assert model.surface_property == "flesh"
-        assert {"role": "surface-property", "asset": "vtmb:surface-property:flesh",
-             "sourcePath": "scripts/surfaceproperties.txt#flesh"} in model.dependencies
+def test_whitespace_is_the_only_omission_and_comments_are_kept():
+    body = b'"UnlitGeneric"\n{\n\t"$additive" "1" // authored note\n}\n'
+    model = _decode(body, present=())
+    assert [row["text"] for row in model.comments] == ["// authored note"]
+    states = model.byte_coverage[0]["stateBytes"]
+    assert set(states) == {"mapped", "omitted-proven"}
 
-    def test_a_repeated_proxy_stays_three_ordered_records(self):
-        """The GlobalWetness triple is three blocks, one per `$envmaptint` channel.
 
-        A reader that collapsed duplicate keys would keep one and silently recolour the material.
-        """
-        body = (
-            b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n"Proxies"\n{\n'
-            b'"GlobalWetness"{"resultVar" "$envmaptint[0]" "scale" "0.56"}\n'
-            b'"GlobalWetness"{"resultVar" "$envmaptint[1]" "scale" "0.56"}\n'
-            b'"GlobalWetness"{"resultVar" "$envmaptint[2]" "scale" "0.56"}\n}\n}\n'
-        )
-        model = _decode(body)
-        assert [proxy.name for proxy in model.proxies] == ["globalwetness"] * 3
-        channels = [proxy.parameters[0].value for proxy in model.proxies]
-        assert channels == ["$envmaptint[0]", "$envmaptint[1]", "$envmaptint[2]"]
+def test_a_tokenizer_run_covers_the_source_gaplessly():
+    text = lexer.decode_text(SIMPLE)
+    cursor = 0
+    for token in lexer.tokenize(text):
+        assert token.offset == cursor
+        cursor = token.end
+    assert cursor == len(SIMPLE)
 
-    def test_the_env_cubemap_placeholder_is_a_symbol_not_a_binding(self):
-        body = b'"LightmappedGeneric"\n{\n"$envmap" "env_cubemap"\n}\n'
-        model = _decode(body, present=())
-        assert model.environment == {"parameter": "$envmap", "symbol": "env_cubemap"}
-        assert model.texture_bindings == []
 
-    def test_an_absent_texture_binds_unresolved_without_a_dependency(self):
-        body = b'"VertexLitGeneric"\n{\n"$basetexture" "models/gone"\n}\n'
-        model = _decode(body, present=())
-        assert len(model.texture_bindings) == 1
-        assert not model.texture_bindings[0]["resolved"]
-        assert model.dependencies == []
+def test_parameters_keep_source_order_casing_and_offsets():
+    body = b'"VertexLitGeneric"\n{\n"$baseTexture" "models/teeth"\n"$surfaceProp" "flesh"\n}\n'
+    model = _decode(body)
+    assert [p.key for p in model.parameters] == ["$basetexture", "$surfaceprop"]
+    assert [p.source_key for p in model.parameters] == ["$baseTexture", "$surfaceProp"]
+    assert [p.index for p in model.parameters] == [0, 1]
+    assert model.surface_property == "flesh"
+    assert {"role": "surface-property", "asset": "vtmb:surface-property:flesh",
+         "sourcePath": "scripts/surfaceproperties.txt#flesh"} in model.dependencies
 
-    def test_a_render_target_value_is_not_a_texture_dependency(self):
-        body = b'"Water"\n{\n"$refracttexture" "_rt_WaterRefraction"\n}\n'
-        model = _decode(body, present=())
-        assert model.texture_bindings[0]["kind"] == "render-target"
-        assert model.texture_bindings[0]["asset"] is None
-        assert model.dependencies == []
 
-    def test_a_proxy_operand_is_not_mistaken_for_a_material_input(self):
-        body = (
-            b'"UnlitGeneric"\n{\n"Proxies"\n{\n"TextureScroll"\n'
-            b'{"texturescrollvar" "$basetexture"}\n}\n}\n'
-        )
-        model = _decode(body, present=("models/teeth",))
-        assert model.texture_bindings == []
-        assert model.dependencies == []
+def test_a_repeated_proxy_stays_three_ordered_records():
+    """The GlobalWetness triple is three blocks, one per `$envmaptint` channel.
+
+    A reader that collapsed duplicate keys would keep one and silently recolour the material.
+    """
+    body = (
+        b'"LightmappedGeneric"\n{\n"$basetexture" "models/teeth"\n"Proxies"\n{\n'
+        b'"GlobalWetness"{"resultVar" "$envmaptint[0]" "scale" "0.56"}\n'
+        b'"GlobalWetness"{"resultVar" "$envmaptint[1]" "scale" "0.56"}\n'
+        b'"GlobalWetness"{"resultVar" "$envmaptint[2]" "scale" "0.56"}\n}\n}\n'
+    )
+    model = _decode(body)
+    assert [proxy.name for proxy in model.proxies] == ["globalwetness"] * 3
+    channels = [proxy.parameters[0].value for proxy in model.proxies]
+    assert channels == ["$envmaptint[0]", "$envmaptint[1]", "$envmaptint[2]"]
+
+
+def test_the_env_cubemap_placeholder_is_a_symbol_not_a_binding():
+    body = b'"LightmappedGeneric"\n{\n"$envmap" "env_cubemap"\n}\n'
+    model = _decode(body, present=())
+    assert model.environment == {"parameter": "$envmap", "symbol": "env_cubemap"}
+    assert model.texture_bindings == []
+
+
+def test_an_absent_texture_binds_unresolved_without_a_dependency():
+    body = b'"VertexLitGeneric"\n{\n"$basetexture" "models/gone"\n}\n'
+    model = _decode(body, present=())
+    assert len(model.texture_bindings) == 1
+    assert not model.texture_bindings[0]["resolved"]
+    assert model.dependencies == []
+
+
+def test_a_render_target_value_is_not_a_texture_dependency():
+    body = b'"Water"\n{\n"$refracttexture" "_rt_WaterRefraction"\n}\n'
+    model = _decode(body, present=())
+    assert model.texture_bindings[0]["kind"] == "render-target"
+    assert model.texture_bindings[0]["asset"] is None
+    assert model.dependencies == []
+
+
+def test_a_proxy_operand_is_not_mistaken_for_a_material_input():
+    body = (
+        b'"UnlitGeneric"\n{\n"Proxies"\n{\n"TextureScroll"\n'
+        b'{"texturescrollvar" "$basetexture"}\n}\n}\n'
+    )
+    model = _decode(body, present=("models/teeth",))
+    assert model.texture_bindings == []
+    assert model.dependencies == []
 
 
 class MalformedSourceTests(unittest.TestCase):
@@ -356,131 +361,142 @@ class ShaderResolutionTests(unittest.TestCase):
             validation.validate_document(document, binary)
 
 
-class MaterialGlbWriterTests(unittest.TestCase):
-    def test_a_published_unit_validates_and_carries_no_scene_core(self):
-        _, document, binary = _publish(SIMPLE)
-        summary = validation.validate_document(document, binary)
-        assert summary["asset"] == "vtmb:material:synthetic/material"
-        assert summary["byteCoveragePercent"] == 100.0
-        for absent in ("images", "textures", "samplers", "scenes", "nodes", "meshes"):
-            assert absent not in document
-        assert len(document["materials"]) == 1
-        assert document["extensionsRequired"] == [MATERIAL_EXTENSION]
+def test_a_published_unit_validates_and_carries_no_scene_core():
+    _, document, binary = _publish(SIMPLE)
+    summary = validation.validate_document(document, binary)
+    assert summary["asset"] == "vtmb:material:synthetic/material"
+    assert summary["byteCoveragePercent"] == 100.0
+    for absent in ("images", "textures", "samplers", "scenes", "nodes", "meshes"):
+        assert absent not in document
+    assert len(document["materials"]) == 1
+    assert document["extensionsRequired"] == [MATERIAL_EXTENSION]
 
-    def test_the_unit_carries_no_bin_chunk_and_no_buffer(self):
-        _, document, binary = _publish(SIMPLE)
-        assert binary == b""
-        assert "buffers" not in document
-        assert "bufferViews" not in document
 
-    def test_an_unlit_shader_declares_the_khronos_unlit_extension(self):
-        _, document, binary = _publish(b'"UnlitGeneric"\n{\n"$additive" "1"\n}\n', present=())
-        assert "KHR_materials_unlit" in document["extensionsUsed"]
-        assert document["materials"][0]["alphaMode"] == "BLEND"
+def test_the_unit_carries_no_bin_chunk_and_no_buffer():
+    _, document, binary = _publish(SIMPLE)
+    assert binary == b""
+    assert "buffers" not in document
+    assert "bufferViews" not in document
+
+
+def test_an_unlit_shader_declares_the_khronos_unlit_extension():
+    _, document, binary = _publish(b'"UnlitGeneric"\n{\n"$additive" "1"\n}\n', present=())
+    assert "KHR_materials_unlit" in document["extensionsUsed"]
+    assert document["materials"][0]["alphaMode"] == "BLEND"
+    validation.validate_document(document, binary)
+
+
+def test_alpha_test_becomes_a_masked_core_material():
+    _, document, _ = _publish(
+        b'"VertexLitGeneric"\n{\n"$alphatest" "1"\n"$nocull" "1"\n}\n', present=()
+    )
+    assert document["materials"][0]["alphaMode"] == "MASK"
+    assert document["materials"][0]["doubleSided"]
+
+
+def test_the_validator_refuses_a_byte_ledger_gap():
+    _, document, binary = _publish(SIMPLE)
+    ledger = document["extensions"][MATERIAL_EXTENSION]["coverage"]["byteLedger"][0]
+    ledger["ranges"][0]["length"] = int(ledger["ranges"][0]["length"]) - 1
+    with pytest.raises(validation.MaterialGlbValidationError):
         validation.validate_document(document, binary)
 
-    def test_alpha_test_becomes_a_masked_core_material(self):
-        _, document, _ = _publish(
-            b'"VertexLitGeneric"\n{\n"$alphatest" "1"\n"$nocull" "1"\n}\n', present=()
+
+def test_the_validator_refuses_an_opaque_source_blob():
+    _, document, binary = _publish(SIMPLE)
+    document["extensions"][MATERIAL_EXTENSION]["sourceText"] = "..."
+    with pytest.raises(validation.MaterialGlbValidationError):
+        validation.validate_document(document, binary)
+
+
+def test_the_validator_refuses_a_dependency_without_a_binding():
+    _, document, binary = _publish(SIMPLE)
+    document["extensions"][MATERIAL_EXTENSION]["dependencies"].append(
+        {"role": "texture", "parameter": "$bumpmap", "asset": "vtmb:texture:invented"}
+    )
+    with pytest.raises(validation.MaterialGlbValidationError):
+        validation.validate_document(document, binary)
+
+
+def test_the_validator_refuses_an_unknown_source_anomaly():
+    _, document, binary = _publish(SIMPLE)
+    document["extensions"][MATERIAL_EXTENSION]["anomalies"] = [{"role": "invented"}]
+    with pytest.raises(validation.MaterialGlbValidationError):
+        validation.validate_document(document, binary)
+
+
+def test_the_validator_refuses_a_proxy_naming_a_missing_parameter():
+    _, document, binary = _publish(SIMPLE)
+    document["extensions"][MATERIAL_EXTENSION]["proxies"] = [
+        {"index": 0, "name": "sine", "sourceName": "Sine", "parameters": [99]}
+    ]
+    with pytest.raises(validation.MaterialGlbValidationError):
+        validation.validate_document(document, binary)
+
+
+def test_prepublication_validation_rechecks_source_bytes():
+    closure = _closure(SIMPLE)
+    model = decode_material(closure, texture_exists=lambda value: True)
+    document, binary = material_glb.build_document(model)
+    tampered = MaterialSourceClosure(
+        closure.material_path,
+        closure.asset_id,
+        SourceMember("vmt", closure.vmt.path, SIMPLE + b" ", {"kind": "synthetic"}),
+    )
+    with pytest.raises(validation.MaterialGlbValidationError):
+        validation.validate_document(document, binary, source_members=tampered.members())
+
+
+def test_the_public_exporter_publishes_the_expected_relative_path():
+    index = {"materials/synthetic/material.vmt": ("loose", "synthetic"),
+             "materials/models/teeth.tth": ("loose", "synthetic")}
+
+    def read_bytes(_index, key):
+        return SIMPLE if key == "materials/synthetic/material.vmt" else None
+
+    with tempfile.TemporaryDirectory() as root:
+        destination = material_glb.export(
+            index, "materials/synthetic/material.vmt", Path(root), read_bytes=read_bytes
         )
-        assert document["materials"][0]["alphaMode"] == "MASK"
-        assert document["materials"][0]["doubleSided"]
-
-    def test_the_validator_refuses_a_byte_ledger_gap(self):
-        _, document, binary = _publish(SIMPLE)
-        ledger = document["extensions"][MATERIAL_EXTENSION]["coverage"]["byteLedger"][0]
-        ledger["ranges"][0]["length"] = int(ledger["ranges"][0]["length"]) - 1
-        with pytest.raises(validation.MaterialGlbValidationError):
-            validation.validate_document(document, binary)
-
-    def test_the_validator_refuses_an_opaque_source_blob(self):
-        _, document, binary = _publish(SIMPLE)
-        document["extensions"][MATERIAL_EXTENSION]["sourceText"] = "..."
-        with pytest.raises(validation.MaterialGlbValidationError):
-            validation.validate_document(document, binary)
-
-    def test_the_validator_refuses_a_dependency_without_a_binding(self):
-        _, document, binary = _publish(SIMPLE)
-        document["extensions"][MATERIAL_EXTENSION]["dependencies"].append(
-            {"role": "texture", "parameter": "$bumpmap", "asset": "vtmb:texture:invented"}
-        )
-        with pytest.raises(validation.MaterialGlbValidationError):
-            validation.validate_document(document, binary)
-
-    def test_the_validator_refuses_an_unknown_source_anomaly(self):
-        _, document, binary = _publish(SIMPLE)
-        document["extensions"][MATERIAL_EXTENSION]["anomalies"] = [{"role": "invented"}]
-        with pytest.raises(validation.MaterialGlbValidationError):
-            validation.validate_document(document, binary)
-
-    def test_the_validator_refuses_a_proxy_naming_a_missing_parameter(self):
-        _, document, binary = _publish(SIMPLE)
-        document["extensions"][MATERIAL_EXTENSION]["proxies"] = [
-            {"index": 0, "name": "sine", "sourceName": "Sine", "parameters": [99]}
-        ]
-        with pytest.raises(validation.MaterialGlbValidationError):
-            validation.validate_document(document, binary)
-
-    def test_prepublication_validation_rechecks_source_bytes(self):
-        closure = _closure(SIMPLE)
-        model = decode_material(closure, texture_exists=lambda value: True)
-        document, binary = material_glb.build_document(model)
-        tampered = MaterialSourceClosure(
-            closure.material_path,
-            closure.asset_id,
-            SourceMember("vmt", closure.vmt.path, SIMPLE + b" ", {"kind": "synthetic"}),
-        )
-        with pytest.raises(validation.MaterialGlbValidationError):
-            validation.validate_document(document, binary, source_members=tampered.members())
-
-    def test_the_public_exporter_publishes_the_expected_relative_path(self):
-        index = {"materials/synthetic/material.vmt": ("loose", "synthetic"),
-                 "materials/models/teeth.tth": ("loose", "synthetic")}
-
-        def read_bytes(_index, key):
-            return SIMPLE if key == "materials/synthetic/material.vmt" else None
-
-        with tempfile.TemporaryDirectory() as root:
-            destination = material_glb.export(
-                index, "materials/synthetic/material.vmt", Path(root), read_bytes=read_bytes
-            )
-            assert destination.relative_to(root).as_posix() == "synthetic/material.glb"
-            summary = validation.validate(destination)
-            assert summary["asset"] == "vtmb:material:synthetic/material"
-            assert summary["dependencies"] == 1
-
-    def test_a_published_container_is_one_json_chunk(self):
-        with tempfile.TemporaryDirectory() as root:
-            destination = Path(root) / "unit.glb"
-            document, binary = material_glb.build_document(_decode(SIMPLE))
-            material_glb.write_glb(document, binary, destination)
-            raw = destination.read_bytes()
-            magic, version, total = struct.unpack_from("<III", raw)
-            assert (magic, version, total) == (0x46546C67, 2, len(raw))
-            size, kind = struct.unpack_from("<II", raw, 12)
-            assert kind == 0x4E4F534A
-            assert 20 + size == len(raw)
-            json.loads(raw[20:20 + size].decode("utf-8").rstrip(" "))
+        assert destination.relative_to(root).as_posix() == "synthetic/material.glb"
+        summary = validation.validate(destination)
+        assert summary["asset"] == "vtmb:material:synthetic/material"
+        assert summary["dependencies"] == 1
 
 
-class MaterialWarningTests(unittest.TestCase):
-    def test_an_unresolved_texture_and_a_grammar_departure_both_warn(self):
-        _, document, binary = _publish(
-            b'"LightmappedGeneric"\n{\n"$basetexture" "models/gone"\n"nomip"\n}\n', present=()
-        )
-        summary = validation.validate_document(document, binary)
-        warnings = validation.warnings_for(summary)
-        assert len(warnings) == 2
-        assert "models/gone" in warnings[0]
-        assert "valueless-key" in warnings[1]
+def test_a_published_container_is_one_json_chunk():
+    with tempfile.TemporaryDirectory() as root:
+        destination = Path(root) / "unit.glb"
+        document, binary = material_glb.build_document(_decode(SIMPLE))
+        material_glb.write_glb(document, binary, destination)
+        raw = destination.read_bytes()
+        magic, version, total = struct.unpack_from("<III", raw)
+        assert (magic, version, total) == (0x46546C67, 2, len(raw))
+        size, kind = struct.unpack_from("<II", raw, 12)
+        assert kind == 0x4E4F534A
+        assert 20 + size == len(raw)
+        json.loads(raw[20:20 + size].decode("utf-8").rstrip(" "))
 
-    def test_a_complete_unit_warns_about_nothing(self):
-        _, document, binary = _publish(RESOLVED)
-        assert validation.warnings_for(validation.validate_document(document, binary)) == []
 
-    def test_an_untranscribed_selector_warns(self):
-        """A family whose rule is not recovered says so rather than guessing a program."""
-        _, document, binary = _publish(UNTRANSCRIBED)
-        warnings = validation.warnings_for(validation.validate_document(document, binary))
-        assert len(warnings) == 1
-        assert "no transcribed selector" in warnings[0]
+def test_an_unresolved_texture_and_a_grammar_departure_both_warn():
+    _, document, binary = _publish(
+        b'"LightmappedGeneric"\n{\n"$basetexture" "models/gone"\n"nomip"\n}\n', present=()
+    )
+    summary = validation.validate_document(document, binary)
+    warnings = validation.warnings_for(summary)
+    assert len(warnings) == 2
+    assert "models/gone" in warnings[0]
+    assert "valueless-key" in warnings[1]
+
+
+def test_a_complete_unit_warns_about_nothing():
+    _, document, binary = _publish(RESOLVED)
+    assert validation.warnings_for(validation.validate_document(document, binary)) == []
+
+
+def test_an_untranscribed_selector_warns():
+    """A family whose rule is not recovered says so rather than guessing a program."""
+    _, document, binary = _publish(UNTRANSCRIBED)
+    warnings = validation.warnings_for(validation.validate_document(document, binary))
+    assert len(warnings) == 1
+    assert "no transcribed selector" in warnings[0]

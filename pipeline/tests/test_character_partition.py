@@ -28,135 +28,134 @@ MODELS = {"a_seed": A_SEED, "m_plain": M_PLAIN, "z_fork": Z_FORK}
 BANKS = {"bank_one": M_PLAIN, "bank_two": A_SEED}
 
 
-class TreeFingerprintTests(unittest.TestCase):
-    def test_case_folds(self):
-        # FName is case-insensitive and rig_trees_compatible folds case, so two trees Unreal
-        # would call identical must not fingerprint apart.
-        assert cp.tree_fingerprint({"Root": "", "Spine": "Root"}) == cp.tree_fingerprint({"root": "", "spine": "root"})
-
-    def test_ignores_insertion_order(self):
-        assert cp.tree_fingerprint({"root": "", "spine": "root", "head": "spine"}) == cp.tree_fingerprint({"head": "spine", "root": "", "spine": "root"})
-
-    def test_distinguishes_reparenting(self):
-        assert cp.tree_fingerprint(A_SEED) != cp.tree_fingerprint(Z_FORK)
-
-    def test_distinguishes_an_added_bone(self):
-        assert cp.tree_fingerprint(M_PLAIN) != cp.tree_fingerprint(A_SEED)
+def test_case_folds():
+    # FName is case-insensitive and rig_trees_compatible folds case, so two trees Unreal
+    # would call identical must not fingerprint apart.
+    assert cp.tree_fingerprint({"Root": "", "Spine": "Root"}) == cp.tree_fingerprint({"root": "", "spine": "root"})
 
 
-class RigFamilySemanticsTests(unittest.TestCase):
-    """The properties `character_partition` relies on, pinned so a change to them is visible."""
-
-    def test_agreeing_trees_merge(self):
-        families = eskm.rig_families({"a": A_SEED, "b": A_SEED}, ["a", "b"])
-        assert len(families) == 1
-        assert families[0]["stems"] == ["a", "b"]
-
-    def test_parent_disagreement_splits(self):
-        families = eskm.rig_families({"a_seed": A_SEED, "z_fork": Z_FORK}, ["a_seed", "z_fork"])
-        assert [f["name"] for f in families] == ["a_seed", "z_fork"]
-
-    def test_a_second_root_splits_even_with_no_shared_bone(self):
-        families = eskm.rig_families({"a_seed": A_SEED, "prop": PROP}, ["a_seed", "prop"])
-        assert len(families) == 2
-
-    def test_a_family_is_named_for_its_lowest_sorted_member(self):
-        families = eskm.rig_families({"zz": A_SEED, "aa": A_SEED}, ["zz", "aa"])
-        assert families[0]["name"] == "aa"
+def test_ignores_insertion_order():
+    assert cp.tree_fingerprint({"root": "", "spine": "root", "head": "spine"}) == cp.tree_fingerprint({"head": "spine", "root": "", "spine": "root"})
 
 
-class SubsetInstabilityTests(unittest.TestCase):
-    """Why the BANK partition is declared rather than recomputed.
-
-    These assert the behaviour of the RAW partition function, which is subset-sensitive by
-    construction. They are the reason `build_partition` is fed the whole corpus and the answer is
-    written down -- not a defect in `rig_families`, which documents this contract itself. The
-    model half of the declared partition has no such hazard: every stem is a singleton regardless
-    of who else is in the input set.
-    """
-
-    def test_a_slice_renames_a_family(self):
-        whole = cp.build_partition({}, MODELS)
-        assert cp.bank_family(whole, "m_plain") == "a_seed"
-
-        sliced = eskm.rig_families({"m_plain": M_PLAIN, "z_fork": Z_FORK},
-                                   ["m_plain", "z_fork"])
-        assert sliced[0]["name"] == "m_plain"
-
-    def test_a_slice_merges_two_families_the_corpus_splits(self):
-        whole = cp.build_partition({}, MODELS)
-        assert cp.bank_family(whole, "m_plain") != cp.bank_family(whole, "z_fork")
-
-        sliced = eskm.rig_families({"m_plain": M_PLAIN, "z_fork": Z_FORK},
-                                   ["m_plain", "z_fork"])
-        assert len(sliced) == 1
-        assert sliced[0]["stems"] == ["m_plain", "z_fork"]
+def test_distinguishes_reparenting():
+    assert cp.tree_fingerprint(A_SEED) != cp.tree_fingerprint(Z_FORK)
 
 
-class BuildPartitionTests(unittest.TestCase):
-    def test_is_independent_of_input_ordering(self):
-        forward = cp.build_partition(MODELS, BANKS)
-        backward = cp.build_partition(dict(reversed(list(MODELS.items()))),
-                                      dict(reversed(list(BANKS.items()))), )
-        assert forward == backward
-
-    def test_names_every_member_exactly_once(self):
-        partition = cp.build_partition(MODELS, BANKS)
-        named = [stem for entry in partition["models"].values() for stem in entry["members"]]
-        assert sorted(named) == sorted(MODELS)
-        assert sorted(partition["model_family_of"]) == sorted(MODELS)
-        assert sorted(partition["bank_family_of"]) == sorted(BANKS)
-
-    def test_carries_a_skeleton_path_per_family(self):
-        partition = cp.build_partition(MODELS, BANKS)
-        assert partition["models"]["a_seed"]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}a_seed"
-        assert partition["models"]["m_plain"]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain"
-        bank_family = cp.bank_family(partition, "bank_one")
-        assert partition["banks"][bank_family]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.BANK_SKELETON_PREFIX}{bank_family}"
-
-    def test_every_model_gets_its_own_skeleton(self):
-        # m_plain's tree is compatible with a_seed's -- the old family partition would have
-        # merged them onto one skeleton -- but every model now names its own regardless.
-        partition = cp.build_partition(MODELS, {})
-        assert partition["models"]["m_plain"]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain"
-        assert partition["models"]["m_plain"]["skeleton"] != partition["models"]["a_seed"]["skeleton"]
-
-    def test_every_models_tree_fingerprint_is_its_own(self):
-        # m_plain's tree is compatible with a_seed's, but each model's entry states only its own
-        # container's tree -- no union, no absorption.
-        partition = cp.build_partition(MODELS, {})
-        assert partition["models"]["m_plain"]["tree_fingerprint"] == cp.tree_fingerprint(M_PLAIN)
-        assert partition["models"]["m_plain"]["bones"] == len(M_PLAIN)
-
-    def test_bank_tree_fingerprint_covers_the_merged_union(self):
-        # a_seed-shaped bank absorbs m_plain-shaped bank, which adds no bone, so the family's
-        # tree is a_seed's own.
-        partition = cp.build_partition({}, MODELS)
-        assert partition["banks"]["a_seed"]["tree_fingerprint"] == cp.tree_fingerprint(A_SEED)
-        assert partition["banks"]["a_seed"]["bones"] == len(A_SEED)
-
-    def test_models_and_banks_partition_independently(self):
-        partition = cp.build_partition(MODELS, BANKS)
-        assert "bank_one" not in partition["model_family_of"]
-        assert "a_seed" not in partition["bank_family_of"]
+def test_distinguishes_an_added_bone():
+    assert cp.tree_fingerprint(M_PLAIN) != cp.tree_fingerprint(A_SEED)
 
 
-class CheckTests(unittest.TestCase):
-    def test_rejects_a_stale_version(self):
-        partition = cp.build_partition(MODELS, {})
-        partition["version"] = cp.VERSION + 1
-        with pytest.raises(ValueError):
-            cp.check(partition)
+def test_agreeing_trees_merge():
+    families = eskm.rig_families({"a": A_SEED, "b": A_SEED}, ["a", "b"])
+    assert len(families) == 1
+    assert families[0]["stems"] == ["a", "b"]
 
-    def test_rejects_a_foreign_document(self):
-        with pytest.raises(ValueError):
-            cp.check({"schema": "something.else", "version": cp.VERSION})
 
-    def test_rejects_a_missing_table(self):
-        partition = cp.build_partition(MODELS, {})
-        del partition["bank_family_of"]
-        with pytest.raises(ValueError):
-            cp.check(partition)
+def test_parent_disagreement_splits():
+    families = eskm.rig_families({"a_seed": A_SEED, "z_fork": Z_FORK}, ["a_seed", "z_fork"])
+    assert [f["name"] for f in families] == ["a_seed", "z_fork"]
+
+
+def test_a_second_root_splits_even_with_no_shared_bone():
+    families = eskm.rig_families({"a_seed": A_SEED, "prop": PROP}, ["a_seed", "prop"])
+    assert len(families) == 2
+
+
+def test_a_family_is_named_for_its_lowest_sorted_member():
+    families = eskm.rig_families({"zz": A_SEED, "aa": A_SEED}, ["zz", "aa"])
+    assert families[0]["name"] == "aa"
+
+
+def test_a_slice_renames_a_family():
+    whole = cp.build_partition({}, MODELS)
+    assert cp.bank_family(whole, "m_plain") == "a_seed"
+
+    sliced = eskm.rig_families({"m_plain": M_PLAIN, "z_fork": Z_FORK},
+                               ["m_plain", "z_fork"])
+    assert sliced[0]["name"] == "m_plain"
+
+
+def test_a_slice_merges_two_families_the_corpus_splits():
+    whole = cp.build_partition({}, MODELS)
+    assert cp.bank_family(whole, "m_plain") != cp.bank_family(whole, "z_fork")
+
+    sliced = eskm.rig_families({"m_plain": M_PLAIN, "z_fork": Z_FORK},
+                               ["m_plain", "z_fork"])
+    assert len(sliced) == 1
+    assert sliced[0]["stems"] == ["m_plain", "z_fork"]
+
+
+def test_is_independent_of_input_ordering():
+    forward = cp.build_partition(MODELS, BANKS)
+    backward = cp.build_partition(dict(reversed(list(MODELS.items()))),
+                                  dict(reversed(list(BANKS.items()))), )
+    assert forward == backward
+
+
+def test_names_every_member_exactly_once():
+    partition = cp.build_partition(MODELS, BANKS)
+    named = [stem for entry in partition["models"].values() for stem in entry["members"]]
+    assert sorted(named) == sorted(MODELS)
+    assert sorted(partition["model_family_of"]) == sorted(MODELS)
+    assert sorted(partition["bank_family_of"]) == sorted(BANKS)
+
+
+def test_carries_a_skeleton_path_per_family():
+    partition = cp.build_partition(MODELS, BANKS)
+    assert partition["models"]["a_seed"]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}a_seed"
+    assert partition["models"]["m_plain"]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain"
+    bank_family = cp.bank_family(partition, "bank_one")
+    assert partition["banks"][bank_family]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.BANK_SKELETON_PREFIX}{bank_family}"
+
+
+def test_every_model_gets_its_own_skeleton():
+    # m_plain's tree is compatible with a_seed's -- the old family partition would have
+    # merged them onto one skeleton -- but every model now names its own regardless.
+    partition = cp.build_partition(MODELS, {})
+    assert partition["models"]["m_plain"]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain"
+    assert partition["models"]["m_plain"]["skeleton"] != partition["models"]["a_seed"]["skeleton"]
+
+
+def test_every_models_tree_fingerprint_is_its_own():
+    # m_plain's tree is compatible with a_seed's, but each model's entry states only its own
+    # container's tree -- no union, no absorption.
+    partition = cp.build_partition(MODELS, {})
+    assert partition["models"]["m_plain"]["tree_fingerprint"] == cp.tree_fingerprint(M_PLAIN)
+    assert partition["models"]["m_plain"]["bones"] == len(M_PLAIN)
+
+
+def test_bank_tree_fingerprint_covers_the_merged_union():
+    # a_seed-shaped bank absorbs m_plain-shaped bank, which adds no bone, so the family's
+    # tree is a_seed's own.
+    partition = cp.build_partition({}, MODELS)
+    assert partition["banks"]["a_seed"]["tree_fingerprint"] == cp.tree_fingerprint(A_SEED)
+    assert partition["banks"]["a_seed"]["bones"] == len(A_SEED)
+
+
+def test_models_and_banks_partition_independently():
+    partition = cp.build_partition(MODELS, BANKS)
+    assert "bank_one" not in partition["model_family_of"]
+    assert "a_seed" not in partition["bank_family_of"]
+
+
+def test_rejects_a_stale_version():
+    partition = cp.build_partition(MODELS, {})
+    partition["version"] = cp.VERSION + 1
+    with pytest.raises(ValueError):
+        cp.check(partition)
+
+
+def test_rejects_a_foreign_document():
+    with pytest.raises(ValueError):
+        cp.check({"schema": "something.else", "version": cp.VERSION})
+
+
+def test_rejects_a_missing_table():
+    partition = cp.build_partition(MODELS, {})
+    del partition["bank_family_of"]
+    with pytest.raises(ValueError):
+        cp.check(partition)
 
 
 class FocusedScopeTests(unittest.TestCase):

@@ -213,62 +213,64 @@ def _sequence(**kwargs):
     return _sequences(**kwargs)[0]
 
 
-class MeleeSequenceDescriptorTests(unittest.TestCase):
-    def test_a_swing_carries_its_reach_and_blocked_reaction(self) -> None:
-        seq = _sequence(reach=63.75)
-        assert seq.reach == pytest.approx(63.75, abs=1e-4)
-        assert seq.blocked_reaction == "ACT_BLOCKED_REACTION_LEFT"
-        # The fields already read off the same descriptor are untouched by the two new ones.
-        assert seq.activity == "ACT_MELEE_ATTACK"
-        assert (seq.actweight, seq.frames, seq.fps) == (3, 21, 30.0)
-
-    def test_the_unset_markers_read_as_no_value(self) -> None:
-        # FLT_MAX at @720 and -1 at @740 are what 13,431 and 13,865 shipped descriptors carry.
-        seq = _sequence(reach=FLT_MAX, blocked=None)
-        assert seq.reach is None
-        assert seq.blocked_reaction is None
-
-    def test_a_zeroed_custom_block_states_no_reach(self) -> None:
-        # Seven single-`idle` scenery and prop models zero the block instead of marking it unset,
-        # and a zero query distance acquires nothing.
-        assert _sequence(reach=0.0, blocked=None).reach is None
-
-    def test_a_blocked_reaction_index_off_the_image_is_refused(self) -> None:
-        assert _sequence(blocked_index=1 << 20).blocked_reaction is None
-
-    def test_an_ordinary_sequence_states_neither(self) -> None:
-        seq = _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None)
-        assert (seq.reach, seq.blocked_reaction) == (None, None)
-        assert seq.swings == ()
-        assert seq.combo is None
+def test_a_swing_carries_its_reach_and_blocked_reaction() -> None:
+    seq = _sequence(reach=63.75)
+    assert seq.reach == pytest.approx(63.75, abs=1e-4)
+    assert seq.blocked_reaction == "ACT_BLOCKED_REACTION_LEFT"
+    # The fields already read off the same descriptor are untouched by the two new ones.
+    assert seq.activity == "ACT_MELEE_ATTACK"
+    assert (seq.actweight, seq.frames, seq.fps) == (3, 21, 30.0)
 
 
-class LowReachTests(unittest.TestCase):
-    """`low_reach`@716 — the near edge of the band whose far edge is `reach`@720."""
+def test_the_unset_markers_read_as_no_value() -> None:
+    # FLT_MAX at @720 and -1 at @740 are what 13,431 and 13,865 shipped descriptors carry.
+    seq = _sequence(reach=FLT_MAX, blocked=None)
+    assert seq.reach is None
+    assert seq.blocked_reaction is None
 
-    def test_the_unset_marker_is_flt_min_and_not_flt_max(self):
-        # The whole reason this field needs its own reader. `FLT_MIN` is a finite POSITIVE float, so
-        # a reader that copied `read_reach`'s `>= FLT_MAX` test would report 13,496 descriptors as
-        # stating a near edge of 1.18e-38 — a band every distance clears, silently.
-        assert _sequence(low_reach=FLT_MIN).low_reach is None
-        assert _sequence(low_reach=FLT_MAX).low_reach is not None
 
-    def test_a_genuine_authored_zero_is_kept(self):
-        # `werewolf`/`werewolf_damaged` `claw_attack_close` state exactly this against a reach of
-        # 114.9. A near edge of zero is a band that starts at the body, which is a real claim —
-        # unlike a zero FAR edge, which `read_reach` reads as unstated because it would be a swing
-        # that can never reach.
-        assert _sequence(low_reach=0.0).low_reach == 0.0
+def test_a_zeroed_custom_block_states_no_reach() -> None:
+    # Seven single-`idle` scenery and prop models zero the block instead of marking it unset,
+    # and a zero query distance acquires nothing.
+    assert _sequence(reach=0.0, blocked=None).reach is None
 
-    def test_the_two_edges_are_independent(self):
-        # 72 descriptors state a reach with no low edge and 14 state a low edge with reach unset, so
-        # neither field may be read as gating the other.
-        reach_only = _sequence(reach=120.0, low_reach=FLT_MIN)
-        assert reach_only.reach == pytest.approx(120.0, abs=1e-4)
-        assert reach_only.low_reach is None
-        low_only = _sequence(reach=FLT_MAX, low_reach=30.0)
-        assert low_only.reach is None
-        assert low_only.low_reach == pytest.approx(30.0, abs=1e-4)
+
+def test_a_blocked_reaction_index_off_the_image_is_refused() -> None:
+    assert _sequence(blocked_index=1 << 20).blocked_reaction is None
+
+
+def test_an_ordinary_sequence_states_neither() -> None:
+    seq = _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None)
+    assert (seq.reach, seq.blocked_reaction) == (None, None)
+    assert seq.swings == ()
+    assert seq.combo is None
+
+
+def test_the_unset_marker_is_flt_min_and_not_flt_max():
+    # The whole reason this field needs its own reader. `FLT_MIN` is a finite POSITIVE float, so
+    # a reader that copied `read_reach`'s `>= FLT_MAX` test would report 13,496 descriptors as
+    # stating a near edge of 1.18e-38 — a band every distance clears, silently.
+    assert _sequence(low_reach=FLT_MIN).low_reach is None
+    assert _sequence(low_reach=FLT_MAX).low_reach is not None
+
+
+def test_a_genuine_authored_zero_is_kept():
+    # `werewolf`/`werewolf_damaged` `claw_attack_close` state exactly this against a reach of
+    # 114.9. A near edge of zero is a band that starts at the body, which is a real claim —
+    # unlike a zero FAR edge, which `read_reach` reads as unstated because it would be a swing
+    # that can never reach.
+    assert _sequence(low_reach=0.0).low_reach == 0.0
+
+
+def test_the_two_edges_are_independent():
+    # 72 descriptors state a reach with no low edge and 14 state a low edge with reach unset, so
+    # neither field may be read as gating the other.
+    reach_only = _sequence(reach=120.0, low_reach=FLT_MIN)
+    assert reach_only.reach == pytest.approx(120.0, abs=1e-4)
+    assert reach_only.low_reach is None
+    low_only = _sequence(reach=FLT_MAX, low_reach=30.0)
+    assert low_only.reach is None
+    assert low_only.low_reach == pytest.approx(30.0, abs=1e-4)
 
 
 class EnvelopeTests(unittest.TestCase):
@@ -308,287 +310,308 @@ class EnvelopeTests(unittest.TestCase):
         assert len(seq.envelopes) == 2
 
 
-class ComboChainTests(unittest.TestCase):
-    """`read_combo_chain` -- the descriptor's last 44 bytes: which key selects this attack,
-    which attack it hands off to, and when the hand-off may be asked for."""
-
-    def test_the_first_fists_link_states_its_mask_chain_and_window(self) -> None:
-        # Both player sexes' `fists.mdl` `Fists_attack_W1`, verbatim.
-        combo = _sequence(label="Fists_attack_W1", mask=0x008, chain="Fists_attack_W2",
-                          window=(0.5, 0.9, 0.91)).combo
-        assert combo.mask == 0x008
-        assert combo.chain == "Fists_attack_W2"
-        assert combo.w_open == pytest.approx(0.5, abs=1e-6)
-        assert combo.w_close == pytest.approx(0.9, abs=1e-6)
-        assert combo.w_hold == pytest.approx(0.91, abs=1e-6)
-        # The two names it does not state are absent, not missing keys.
-        assert (combo.dodge, combo.chain_alt) == ("", "")
-
-    def test_the_mask_is_carried_raw(self) -> None:
-        # The five stated masks are the neutral `0` and one `IN_*` direction bit each. They are
-        # exported as the file's int: nothing here maps a bit to a direction.
-        for mask in (0, mdl_skel.IN_FORWARD, mdl_skel.IN_BACK,
-                     mdl_skel.IN_MOVELEFT, mdl_skel.IN_MOVERIGHT):
-            assert _sequence(mask=mask).combo.mask == mask
-
-    def test_a_neutral_mask_is_a_stated_mask_not_an_absence(self) -> None:
-        # `fists_attack_JabLeft` states `0` -- the attack a press with no direction held
-        # selects -- and chains. 36 descriptors do; a reader treating a falsy mask as unset
-        # would drop every one of them.
-        combo = _sequence(label="fists_attack_JabLeft", mask=0, chain="fists_attack_longright",
-                          window=(0.65, 0.9, 0.91)).combo
-        assert combo is not None
-        assert (combo.mask, combo.chain) == (0, "fists_attack_longright")
-
-    def test_an_unset_mask_alone_authors_nothing(self) -> None:
-        # -1 at +0x2D4 with no name and the default window is what 13,804 descriptors carry.
-        assert _sequence(mask=-1).combo is None
-
-    def test_the_default_window_is_what_unauthored_reads_as(self) -> None:
-        # 13,841 descriptors state 0.0 / 1.0 / 1.0 -- open at the start, close at the end, hold
-        # to the end. It gates nothing, and on its own it is not an authored block.
-        assert _sequence(window=WINDOW_DEFAULT).combo is None
-
-    def test_a_wholly_zeroed_custom_block_authors_nothing(self) -> None:
-        # The seven single-`idle` scenery and prop models zero the block rather than marking it
-        # unset, so their window triple is all-zero rather than the default.
-        assert _sequence(window=(0.0, 0.0, 0.0)).combo is None
-
-    def test_the_default_window_is_still_carried_beside_an_authored_field(self) -> None:
-        # 20 `meleeshared_onehand` reaction links chain on the default window. Once the block is
-        # authored every field is stated, because a consumer cannot re-derive a window.
-        combo = _sequence(label="knockback_flying_into_back", chain="knockback_flying_idle",
-                          chain_alt="knockback_flying_wall_hit").combo
-        assert (combo.w_open, combo.w_close, combo.w_hold) == WINDOW_DEFAULT
-        assert combo.mask == (-1)
-
-    def test_a_hold_below_the_close_is_carried_verbatim(self) -> None:
-        # `katana_running_attack` authors 0.25 / 1.0 / 0.9 and `baseballbat_attack_jump`
-        # 0.5 / 0.9 / 0.8. The three floats are per-sequence: nothing orders or repairs them.
-        combo = _sequence(label="katana_running_attack", mask=0x008, chain="katana_combo_C2",
-                          window=(0.25, 1.0, 0.9)).combo
-        assert combo.w_open == pytest.approx(0.25, abs=1e-6)
-        assert combo.w_close == pytest.approx(1.0, abs=1e-6)
-        assert combo.w_hold == pytest.approx(0.9, abs=1e-6)
-        assert combo.w_hold < combo.w_close
-
-    def test_the_dodge_activity_resolves_from_its_name(self) -> None:
-        # `ACT_DODGE_DUCK` on all 12 that state one. The enum slot at +0x2D8 beside it is -1 on
-        # disk everywhere, filled by the DLL at load, so the name is the durable key.
-        combo = _sequence(label="katana_attack_Left_Right2", dodge="ACT_DODGE_DUCK").combo
-        assert combo.dodge == "ACT_DODGE_DUCK"
-        assert (combo.chain, combo.chain_alt) == ("", "")
-
-    def test_the_alternate_successor_is_read_from_its_own_offset(self) -> None:
-        # The flying-knockback wall branch: 28 `meleeshared_onehand` descriptors name a second
-        # successor at +0x2EC beside the ordinary one at +0x2E8.
-        combo = _sequence(chain="knockback_flying_idle",
-                          chain_alt="knockback_flying_wall_hit").combo
-        assert combo.chain == "knockback_flying_idle"
-        assert combo.chain_alt == "knockback_flying_wall_hit"
-
-    def test_a_name_index_off_the_image_is_refused(self) -> None:
-        assert _sequence(chain_index=1 << 20).combo is None
-        assert _sequence(dodge_index=1 << 20).combo is None
-
-    def test_the_names_are_addressed_from_the_descriptor(self) -> None:
-        # Every index in this block is descriptor-relative, so a sibling descriptor reading the
-        # same absolute string would need a different index. Resolving from the wrong base on the
-        # second descriptor would name whatever bytes happen to sit there.
-        seq, sibling = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
-                                  siblings=("fists_attack_Roundhouse",))
-        assert seq.combo.chain == "fists_attack_Roundhouse"
-        assert sibling.combo is None
+def test_the_first_fists_link_states_its_mask_chain_and_window() -> None:
+    # Both player sexes' `fists.mdl` `Fists_attack_W1`, verbatim.
+    combo = _sequence(label="Fists_attack_W1", mask=0x008, chain="Fists_attack_W2",
+                      window=(0.5, 0.9, 0.91)).combo
+    assert combo.mask == 0x008
+    assert combo.chain == "Fists_attack_W2"
+    assert combo.w_open == pytest.approx(0.5, abs=1e-6)
+    assert combo.w_close == pytest.approx(0.9, abs=1e-6)
+    assert combo.w_hold == pytest.approx(0.91, abs=1e-6)
+    # The two names it does not state are absent, not missing keys.
+    assert (combo.dodge, combo.chain_alt) == ("", "")
 
 
-class ComboChainOrphanTests(unittest.TestCase):
-    """`combo_chain_orphans` -- the census of links naming a sequence the model does not have."""
-
-    def test_a_link_resolving_to_a_local_sequence_is_no_orphan(self) -> None:
-        clips = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
-                           siblings=("fists_attack_Roundhouse",))
-        assert mdl_skel.combo_chain_orphans(clips) == ()
-
-    def test_the_match_is_case_insensitive(self) -> None:
-        # Ten shipped links disagree with their target's case and resolve fine at runtime --
-        # `tireiron_attack_slash` -> `tireiron_attack_Heavy` against the label
-        # `tireiron_attack_heavy`.
-        clips = _sequences(label="tireiron_attack_slash", chain="tireiron_attack_Heavy",
-                           window=(0.5, 0.9, 0.91), siblings=("tireiron_attack_heavy",))
-        assert mdl_skel.combo_chain_orphans(clips) == ()
-
-    def test_a_dangling_chain_keeps_its_string_and_is_named(self) -> None:
-        # `Fists_attack_W2` chains to a `Fists_attack_W3` neither sex's `fists.mdl` defines.
-        # The string is authored data and stays; the census is what says it goes nowhere.
-        clips = _sequences(label="Fists_attack_W2", mask=0x008, chain="Fists_attack_W3",
-                           window=(0.5, 0.9, 0.91), siblings=("Fists_attack_W1",))
-        assert clips[0].combo.chain == "Fists_attack_W3"
-        assert mdl_skel.combo_chain_orphans(clips) == (("Fists_attack_W2", "Fists_attack_W3"),)
-
-    def test_a_dangling_alternate_is_censused_on_the_same_terms(self) -> None:
-        clips = _sequences(chain="knockback_flying_idle", chain_alt="knockback_flying_wall_hit",
-                           siblings=("knockback_flying_idle",))
-        assert mdl_skel.combo_chain_orphans(clips) == (("fists_attack_JabLeft", "knockback_flying_wall_hit"),)
-
-    def test_the_exporter_warns_naming_model_sequence_and_target(self) -> None:
-        clips = _sequences(label="Fists_attack_W2", mask=0x008, chain="Fists_attack_W3",
-                           window=(0.5, 0.9, 0.91), siblings=("Fists_attack_W1",))
-        with mock.patch("builtins.print") as printed:
-            count = npc_export.warn_combo_chain_orphans(
-                "models/character/shared/male/fists.mdl", clips)
-        assert count == 1
-        line, = (call.args[0] for call in printed.call_args_list)
-        for fragment in ("models/character/shared/male/fists.mdl", "Fists_attack_W2",
-                         "Fists_attack_W3"):
-            assert fragment in line
-
-    def test_a_model_with_no_dangling_link_warns_nothing(self) -> None:
-        clips = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
-                           siblings=("fists_attack_Roundhouse",))
-        with mock.patch("builtins.print") as printed:
-            assert npc_export.warn_combo_chain_orphans("models/x.mdl", clips) == 0
-        printed.assert_not_called()
+def test_the_mask_is_carried_raw() -> None:
+    # The five stated masks are the neutral `0` and one `IN_*` direction bit each. They are
+    # exported as the file's int: nothing here maps a bit to a direction.
+    for mask in (0, mdl_skel.IN_FORWARD, mdl_skel.IN_BACK,
+                 mdl_skel.IN_MOVELEFT, mdl_skel.IN_MOVERIGHT):
+        assert _sequence(mask=mask).combo.mask == mask
 
 
-class SwingContactRecordTests(unittest.TestCase):
-    """`read_swing_records` -- the 188-byte records `numswingcentres`@708 declares."""
-
-    def test_a_swing_states_its_window_bone_and_segment(self) -> None:
-        # The shape of male `fists.mdl`'s `Fists_attack_W1` record 0.
-        record, = _sequence(swings=[_swing()]).swings
-        assert record.start == pytest.approx(0.26, abs=1e-6)
-        assert record.end == pytest.approx(0.47, abs=1e-6)
-        assert (record.bone_index, record.bone) == (1, "Bip01 R Forearm")
-        # Source units, unconverted: the parser leaves the file's units alone exactly as
-        # `read_reach` does, and the export seam states the centimetres.
-        assert record.a == (25.0, 0.0, 0.0)
-        assert record.b == (0.0, 0.0, 0.0)
-        assert not record.degenerate
-
-    def test_every_declared_record_is_read_in_array_order(self) -> None:
-        seq = _sequence(swings=[_swing(bone=1, a=(25.0, 0.0, 0.0)),
-                                _swing(bone=2, a=(15.0, 0.0, 0.0))])
-        assert [(r.bone, r.a[0]) for r in seq.swings] == [("Bip01 R Forearm", 25.0), ("Bip01 R Hand", 15.0)]
-
-    def test_the_record_array_is_addressed_from_the_descriptor(self) -> None:
-        # `swingcentreindex` is descriptor-relative. A decoy record sits at the offset an
-        # absolute reading would resolve to, so reading it that way returns the wrong window
-        # rather than failing a bounds check and looking correct.
-        record, = _sequence(swings=[_swing()], decoy_swing=True).swings
-        assert record.start == pytest.approx(0.26, abs=1e-6)
-        assert record.knockback[0] == ("ACT_KNOCKBACK_SMALL_HIGH_RIGHT",)
-
-    def test_a_knockback_name_is_addressed_from_its_own_record(self) -> None:
-        # Each name index is relative to the record that states it, not to the array or the
-        # descriptor, so two records naming the same activity store two different indices.
-        image = _image(swings=[_swing(), _swing()])
-        first = struct.unpack_from("<i", image, _SWING_BASE + 0x78)[0]
-        second = struct.unpack_from("<i", image, _SWING_BASE + SWING_STRIDE + 0x78)[0]
-        assert first != second
-        assert [r.knockback[0] for r in mdl_skel.local_sequences(image)[0].swings] == [("ACT_KNOCKBACK_SMALL_HIGH_RIGHT",)] * 2
-
-    def test_the_four_buckets_keep_the_order_the_record_states_them_in(self) -> None:
-        record, = _sequence(swings=[_swing()]).swings
-        assert record.knockback == tuple((name,) for name in FISTS_KNOCKBACK)
-
-    def test_a_bucket_carries_every_candidate_it_lists(self) -> None:
-        # `gargoyle`'s ten two-record attacks put a second name in bucket 0; the slot array is
-        # four wide, so a reader taking only the first slot drops them.
-        record, = _sequence(swings=[_swing(knockback=(
-            ("ACT_KNOCKBACK_BIGHIGHRIGHT_MELEESHARED_ONEHAND", "1"), None, None, None))]).swings
-        assert record.knockback[0] == ("ACT_KNOCKBACK_BIGHIGHRIGHT_MELEESHARED_ONEHAND", "1")
-        assert record.knockback[1:] == ((), (), ())
-
-    def test_an_unset_bucket_names_nothing(self) -> None:
-        # A slot's unset marker is `0` -- Source's usual string-index convention, and not the
-        # `-1` `szblockedreactionindex` uses.
-        record, = _sequence(swings=[_swing(knockback=(None, None, None, None))]).swings
-        assert record.knockback == ((), (), (), ())
-
-    def test_a_backwards_window_is_flagged_rather_than_repaired(self) -> None:
-        # `fists_attack_heavy` and `fists_attack_heavy_old` on both player sexes state
-        # start=0.302, end=0.0. Authored data is reproduced; the flag is what says so.
-        record, = _sequence(swings=[_swing(window=(0.302, 0.0))]).swings
-        assert record.degenerate
-        assert record.start == pytest.approx(0.302, abs=1e-6)
-        assert record.end == 0.0
-
-    def test_both_range_test_bytes_and_the_unidentified_region_are_carried_raw(self) -> None:
-        record, = _sequence(swings=[_swing(b8=3, ba=2)]).swings
-        assert (record.byte_b8, record.byte_ba) == (3, 2)
-        assert record.unidentified == (-1,) * 21
-
-    def test_a_bone_index_outside_the_table_names_no_bone(self) -> None:
-        record, = _sequence(swings=[_swing(bone=99)]).swings
-        assert (record.bone_index, record.bone) == (99, "")
-
-    def test_a_count_past_the_runtime_clamp_is_refused(self) -> None:
-        # Both runtime consumers clamp the walk; a descriptor claiming more than they would ever
-        # read is a damaged descriptor, not a swing with more contacts.
-        assert _sequence(swings=[_swing()], swing_count=21).swings == ()
-
-    def test_an_array_off_the_image_is_refused(self) -> None:
-        assert _sequence(swings=[_swing()], swing_index=1 << 20).swings == ()
-        assert _sequence(swings=[_swing()], swing_index=-4).swings == ()
-
-    def test_a_sequence_declaring_none_carries_none(self) -> None:
-        assert _sequence().swings == ()
+def test_a_neutral_mask_is_a_stated_mask_not_an_absence() -> None:
+    # `fists_attack_JabLeft` states `0` -- the attack a press with no direction held
+    # selects -- and chains. 36 descriptors do; a reader treating a falsy mask as unset
+    # would drop every one of them.
+    combo = _sequence(label="fists_attack_JabLeft", mask=0, chain="fists_attack_longright",
+                      window=(0.65, 0.9, 0.91)).combo
+    assert combo is not None
+    assert (combo.mask, combo.chain) == (0, "fists_attack_longright")
 
 
-class ClipMetaTests(unittest.TestCase):
-    """`_clip_meta` states the reach in the centimetres every sidecar is written in."""
+def test_an_unset_mask_alone_authors_nothing() -> None:
+    # -1 at +0x2D4 with no name and the default window is what 13,804 descriptors carry.
+    assert _sequence(mask=-1).combo is None
 
-    def test_the_reach_crosses_the_seam_in_centimetres(self) -> None:
-        meta = npc_export._clip_meta(_sequence(reach=64.0))
-        assert meta["reach_cm"] == pytest.approx(162.56, abs=1e-4)
-        assert meta["blocked_reaction"] == "ACT_BLOCKED_REACTION_LEFT"
 
-    def test_a_clip_stating_neither_carries_neither_key(self) -> None:
-        meta = npc_export._clip_meta(_sequence(reach=FLT_MAX, blocked=None))
-        assert "reach_cm" not in meta
-        assert "blocked_reaction" not in meta
-        assert "swings" not in meta
-        assert "combo" not in meta
+def test_the_default_window_is_what_unauthored_reads_as() -> None:
+    # 13,841 descriptors state 0.0 / 1.0 / 1.0 -- open at the start, close at the end, hold
+    # to the end. It gates nothing, and on its own it is not an authored block.
+    assert _sequence(window=WINDOW_DEFAULT).combo is None
 
-    def test_the_combo_block_crosses_the_seam_whole_and_unconverted(self) -> None:
-        # Nothing in it is a length or a direction: a button mask is a mask, an activity and a
-        # sequence label are names, and a fraction of a clip cycle has no units.
-        meta = npc_export._clip_meta(
-            _sequence(label="Fists_attack_W1", mask=0x008, chain="Fists_attack_W2",
-                      window=(0.5, 0.9, 0.91)))
-        assert meta["combo"] == {"mask": 0x008, "dodge": "", "chain": "Fists_attack_W2",
-                                         "chain_alt": "", "w_open": 0.5, "w_close": 0.9,
-                                         "w_hold": 0.91}
 
-    def test_a_dangling_chain_label_still_crosses_the_seam(self) -> None:
-        # The exporter warns; the data stays authored.
-        combo = npc_export._clip_meta(
-            _sequence(label="Fists_attack_W2", mask=0x008, chain="Fists_attack_W3",
-                      window=(0.5, 0.9, 0.91)))["combo"]
-        assert combo["chain"] == "Fists_attack_W3"
+def test_a_wholly_zeroed_custom_block_authors_nothing() -> None:
+    # The seven single-`idle` scenery and prop models zero the block rather than marking it
+    # unset, so their window triple is all-zero rather than the default.
+    assert _sequence(window=(0.0, 0.0, 0.0)).combo is None
 
-    def test_a_swing_segment_crosses_the_seam_as_a_bone_local_point(self) -> None:
-        # The same `source_to_unreal` an attachment's bone-local translation and every bone's
-        # own bind translation go through: inches to centimetres, with the handedness flip on Y.
-        swing, = npc_export._clip_meta(
-            _sequence(swings=[_swing(a=(25.0, 4.0, 0.0), b=(0.0, -2.0, 1.0))]))["swings"]
-        assert swing["a_cm"] == [63.5, -10.16, 0.0]
-        assert swing["b_cm"] == [0.0, 5.08, 2.54]
 
-    def test_a_swing_states_its_window_bone_knockback_and_flags(self) -> None:
-        swing, = npc_export._clip_meta(_sequence(swings=[_swing(ba=2)]))["swings"]
-        # The window is a fraction of the clip cycle, so it crosses unitless and unconverted.
-        assert (swing["start"], swing["end"]) == (0.26, 0.47)
-        assert swing["bone"] == "Bip01 R Forearm"
-        assert swing["kb_names"] == [[name] for name in FISTS_KNOCKBACK]
-        assert (swing["b8"], swing["ba"]) == (3, 2)
-        assert not swing["degenerate"]
+def test_the_default_window_is_still_carried_beside_an_authored_field() -> None:
+    # 20 `meleeshared_onehand` reaction links chain on the default window. Once the block is
+    # authored every field is stated, because a consumer cannot re-derive a window.
+    combo = _sequence(label="knockback_flying_into_back", chain="knockback_flying_idle",
+                      chain_alt="knockback_flying_wall_hit").combo
+    assert (combo.w_open, combo.w_close, combo.w_hold) == WINDOW_DEFAULT
+    assert combo.mask == (-1)
 
-    def test_the_degenerate_flag_is_stated_on_every_swing_row(self) -> None:
-        # A consumer forbidden to repair authored data reads the flag rather than re-deriving it.
-        rows = npc_export._clip_meta(
-            _sequence(swings=[_swing(), _swing(window=(0.302, 0.0))]))["swings"]
-        assert [row["degenerate"] for row in rows] == [False, True]
+
+def test_a_hold_below_the_close_is_carried_verbatim() -> None:
+    # `katana_running_attack` authors 0.25 / 1.0 / 0.9 and `baseballbat_attack_jump`
+    # 0.5 / 0.9 / 0.8. The three floats are per-sequence: nothing orders or repairs them.
+    combo = _sequence(label="katana_running_attack", mask=0x008, chain="katana_combo_C2",
+                      window=(0.25, 1.0, 0.9)).combo
+    assert combo.w_open == pytest.approx(0.25, abs=1e-6)
+    assert combo.w_close == pytest.approx(1.0, abs=1e-6)
+    assert combo.w_hold == pytest.approx(0.9, abs=1e-6)
+    assert combo.w_hold < combo.w_close
+
+
+def test_the_dodge_activity_resolves_from_its_name() -> None:
+    # `ACT_DODGE_DUCK` on all 12 that state one. The enum slot at +0x2D8 beside it is -1 on
+    # disk everywhere, filled by the DLL at load, so the name is the durable key.
+    combo = _sequence(label="katana_attack_Left_Right2", dodge="ACT_DODGE_DUCK").combo
+    assert combo.dodge == "ACT_DODGE_DUCK"
+    assert (combo.chain, combo.chain_alt) == ("", "")
+
+
+def test_the_alternate_successor_is_read_from_its_own_offset() -> None:
+    # The flying-knockback wall branch: 28 `meleeshared_onehand` descriptors name a second
+    # successor at +0x2EC beside the ordinary one at +0x2E8.
+    combo = _sequence(chain="knockback_flying_idle",
+                      chain_alt="knockback_flying_wall_hit").combo
+    assert combo.chain == "knockback_flying_idle"
+    assert combo.chain_alt == "knockback_flying_wall_hit"
+
+
+def test_a_name_index_off_the_image_is_refused() -> None:
+    assert _sequence(chain_index=1 << 20).combo is None
+    assert _sequence(dodge_index=1 << 20).combo is None
+
+
+def test_the_names_are_addressed_from_the_descriptor() -> None:
+    # Every index in this block is descriptor-relative, so a sibling descriptor reading the
+    # same absolute string would need a different index. Resolving from the wrong base on the
+    # second descriptor would name whatever bytes happen to sit there.
+    seq, sibling = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
+                              siblings=("fists_attack_Roundhouse",))
+    assert seq.combo.chain == "fists_attack_Roundhouse"
+    assert sibling.combo is None
+
+
+def test_a_link_resolving_to_a_local_sequence_is_no_orphan() -> None:
+    clips = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
+                       siblings=("fists_attack_Roundhouse",))
+    assert mdl_skel.combo_chain_orphans(clips) == ()
+
+
+def test_the_match_is_case_insensitive() -> None:
+    # Ten shipped links disagree with their target's case and resolve fine at runtime --
+    # `tireiron_attack_slash` -> `tireiron_attack_Heavy` against the label
+    # `tireiron_attack_heavy`.
+    clips = _sequences(label="tireiron_attack_slash", chain="tireiron_attack_Heavy",
+                       window=(0.5, 0.9, 0.91), siblings=("tireiron_attack_heavy",))
+    assert mdl_skel.combo_chain_orphans(clips) == ()
+
+
+def test_a_dangling_chain_keeps_its_string_and_is_named() -> None:
+    # `Fists_attack_W2` chains to a `Fists_attack_W3` neither sex's `fists.mdl` defines.
+    # The string is authored data and stays; the census is what says it goes nowhere.
+    clips = _sequences(label="Fists_attack_W2", mask=0x008, chain="Fists_attack_W3",
+                       window=(0.5, 0.9, 0.91), siblings=("Fists_attack_W1",))
+    assert clips[0].combo.chain == "Fists_attack_W3"
+    assert mdl_skel.combo_chain_orphans(clips) == (("Fists_attack_W2", "Fists_attack_W3"),)
+
+
+def test_a_dangling_alternate_is_censused_on_the_same_terms() -> None:
+    clips = _sequences(chain="knockback_flying_idle", chain_alt="knockback_flying_wall_hit",
+                       siblings=("knockback_flying_idle",))
+    assert mdl_skel.combo_chain_orphans(clips) == (("fists_attack_JabLeft", "knockback_flying_wall_hit"),)
+
+
+def test_the_exporter_warns_naming_model_sequence_and_target() -> None:
+    clips = _sequences(label="Fists_attack_W2", mask=0x008, chain="Fists_attack_W3",
+                       window=(0.5, 0.9, 0.91), siblings=("Fists_attack_W1",))
+    with mock.patch("builtins.print") as printed:
+        count = npc_export.warn_combo_chain_orphans(
+            "models/character/shared/male/fists.mdl", clips)
+    assert count == 1
+    line, = (call.args[0] for call in printed.call_args_list)
+    for fragment in ("models/character/shared/male/fists.mdl", "Fists_attack_W2",
+                     "Fists_attack_W3"):
+        assert fragment in line
+
+
+def test_a_model_with_no_dangling_link_warns_nothing() -> None:
+    clips = _sequences(mask=0x008, chain="fists_attack_Roundhouse",
+                       siblings=("fists_attack_Roundhouse",))
+    with mock.patch("builtins.print") as printed:
+        assert npc_export.warn_combo_chain_orphans("models/x.mdl", clips) == 0
+    printed.assert_not_called()
+
+
+def test_a_swing_states_its_window_bone_and_segment() -> None:
+    # The shape of male `fists.mdl`'s `Fists_attack_W1` record 0.
+    record, = _sequence(swings=[_swing()]).swings
+    assert record.start == pytest.approx(0.26, abs=1e-6)
+    assert record.end == pytest.approx(0.47, abs=1e-6)
+    assert (record.bone_index, record.bone) == (1, "Bip01 R Forearm")
+    # Source units, unconverted: the parser leaves the file's units alone exactly as
+    # `read_reach` does, and the export seam states the centimetres.
+    assert record.a == (25.0, 0.0, 0.0)
+    assert record.b == (0.0, 0.0, 0.0)
+    assert not record.degenerate
+
+
+def test_every_declared_record_is_read_in_array_order() -> None:
+    seq = _sequence(swings=[_swing(bone=1, a=(25.0, 0.0, 0.0)),
+                            _swing(bone=2, a=(15.0, 0.0, 0.0))])
+    assert [(r.bone, r.a[0]) for r in seq.swings] == [("Bip01 R Forearm", 25.0), ("Bip01 R Hand", 15.0)]
+
+
+def test_the_record_array_is_addressed_from_the_descriptor() -> None:
+    # `swingcentreindex` is descriptor-relative. A decoy record sits at the offset an
+    # absolute reading would resolve to, so reading it that way returns the wrong window
+    # rather than failing a bounds check and looking correct.
+    record, = _sequence(swings=[_swing()], decoy_swing=True).swings
+    assert record.start == pytest.approx(0.26, abs=1e-6)
+    assert record.knockback[0] == ("ACT_KNOCKBACK_SMALL_HIGH_RIGHT",)
+
+
+def test_a_knockback_name_is_addressed_from_its_own_record() -> None:
+    # Each name index is relative to the record that states it, not to the array or the
+    # descriptor, so two records naming the same activity store two different indices.
+    image = _image(swings=[_swing(), _swing()])
+    first = struct.unpack_from("<i", image, _SWING_BASE + 0x78)[0]
+    second = struct.unpack_from("<i", image, _SWING_BASE + SWING_STRIDE + 0x78)[0]
+    assert first != second
+    assert [r.knockback[0] for r in mdl_skel.local_sequences(image)[0].swings] == [("ACT_KNOCKBACK_SMALL_HIGH_RIGHT",)] * 2
+
+
+def test_the_four_buckets_keep_the_order_the_record_states_them_in() -> None:
+    record, = _sequence(swings=[_swing()]).swings
+    assert record.knockback == tuple((name,) for name in FISTS_KNOCKBACK)
+
+
+def test_a_bucket_carries_every_candidate_it_lists() -> None:
+    # `gargoyle`'s ten two-record attacks put a second name in bucket 0; the slot array is
+    # four wide, so a reader taking only the first slot drops them.
+    record, = _sequence(swings=[_swing(knockback=(
+        ("ACT_KNOCKBACK_BIGHIGHRIGHT_MELEESHARED_ONEHAND", "1"), None, None, None))]).swings
+    assert record.knockback[0] == ("ACT_KNOCKBACK_BIGHIGHRIGHT_MELEESHARED_ONEHAND", "1")
+    assert record.knockback[1:] == ((), (), ())
+
+
+def test_an_unset_bucket_names_nothing() -> None:
+    # A slot's unset marker is `0` -- Source's usual string-index convention, and not the
+    # `-1` `szblockedreactionindex` uses.
+    record, = _sequence(swings=[_swing(knockback=(None, None, None, None))]).swings
+    assert record.knockback == ((), (), (), ())
+
+
+def test_a_backwards_window_is_flagged_rather_than_repaired() -> None:
+    # `fists_attack_heavy` and `fists_attack_heavy_old` on both player sexes state
+    # start=0.302, end=0.0. Authored data is reproduced; the flag is what says so.
+    record, = _sequence(swings=[_swing(window=(0.302, 0.0))]).swings
+    assert record.degenerate
+    assert record.start == pytest.approx(0.302, abs=1e-6)
+    assert record.end == 0.0
+
+
+def test_both_range_test_bytes_and_the_unidentified_region_are_carried_raw() -> None:
+    record, = _sequence(swings=[_swing(b8=3, ba=2)]).swings
+    assert (record.byte_b8, record.byte_ba) == (3, 2)
+    assert record.unidentified == (-1,) * 21
+
+
+def test_a_bone_index_outside_the_table_names_no_bone() -> None:
+    record, = _sequence(swings=[_swing(bone=99)]).swings
+    assert (record.bone_index, record.bone) == (99, "")
+
+
+def test_a_count_past_the_runtime_clamp_is_refused() -> None:
+    # Both runtime consumers clamp the walk; a descriptor claiming more than they would ever
+    # read is a damaged descriptor, not a swing with more contacts.
+    assert _sequence(swings=[_swing()], swing_count=21).swings == ()
+
+
+def test_an_array_off_the_image_is_refused() -> None:
+    assert _sequence(swings=[_swing()], swing_index=1 << 20).swings == ()
+    assert _sequence(swings=[_swing()], swing_index=-4).swings == ()
+
+
+def test_a_sequence_declaring_none_carries_none() -> None:
+    assert _sequence().swings == ()
+
+
+def test_the_reach_crosses_the_seam_in_centimetres() -> None:
+    meta = npc_export._clip_meta(_sequence(reach=64.0))
+    assert meta["reach_cm"] == pytest.approx(162.56, abs=1e-4)
+    assert meta["blocked_reaction"] == "ACT_BLOCKED_REACTION_LEFT"
+
+
+def test_a_clip_stating_neither_carries_neither_key() -> None:
+    meta = npc_export._clip_meta(_sequence(reach=FLT_MAX, blocked=None))
+    assert "reach_cm" not in meta
+    assert "blocked_reaction" not in meta
+    assert "swings" not in meta
+    assert "combo" not in meta
+
+
+def test_the_combo_block_crosses_the_seam_whole_and_unconverted() -> None:
+    # Nothing in it is a length or a direction: a button mask is a mask, an activity and a
+    # sequence label are names, and a fraction of a clip cycle has no units.
+    meta = npc_export._clip_meta(
+        _sequence(label="Fists_attack_W1", mask=0x008, chain="Fists_attack_W2",
+                  window=(0.5, 0.9, 0.91)))
+    assert meta["combo"] == {"mask": 0x008, "dodge": "", "chain": "Fists_attack_W2",
+                                     "chain_alt": "", "w_open": 0.5, "w_close": 0.9,
+                                     "w_hold": 0.91}
+
+
+def test_a_dangling_chain_label_still_crosses_the_seam() -> None:
+    # The exporter warns; the data stays authored.
+    combo = npc_export._clip_meta(
+        _sequence(label="Fists_attack_W2", mask=0x008, chain="Fists_attack_W3",
+                  window=(0.5, 0.9, 0.91)))["combo"]
+    assert combo["chain"] == "Fists_attack_W3"
+
+
+def test_a_swing_segment_crosses_the_seam_as_a_bone_local_point() -> None:
+    # The same `source_to_unreal` an attachment's bone-local translation and every bone's
+    # own bind translation go through: inches to centimetres, with the handedness flip on Y.
+    swing, = npc_export._clip_meta(
+        _sequence(swings=[_swing(a=(25.0, 4.0, 0.0), b=(0.0, -2.0, 1.0))]))["swings"]
+    assert swing["a_cm"] == [63.5, -10.16, 0.0]
+    assert swing["b_cm"] == [0.0, 5.08, 2.54]
+
+
+def test_a_swing_states_its_window_bone_knockback_and_flags() -> None:
+    swing, = npc_export._clip_meta(_sequence(swings=[_swing(ba=2)]))["swings"]
+    # The window is a fraction of the clip cycle, so it crosses unitless and unconverted.
+    assert (swing["start"], swing["end"]) == (0.26, 0.47)
+    assert swing["bone"] == "Bip01 R Forearm"
+    assert swing["kb_names"] == [[name] for name in FISTS_KNOCKBACK]
+    assert (swing["b8"], swing["ba"]) == (3, 2)
+    assert not swing["degenerate"]
+
+
+def test_the_degenerate_flag_is_stated_on_every_swing_row() -> None:
+    # A consumer forbidden to repair authored data reads the flag rather than re-deriving it.
+    rows = npc_export._clip_meta(
+        _sequence(swings=[_swing(), _swing(window=(0.302, 0.0))]))["swings"]
+    assert [row["degenerate"] for row in rows] == [False, True]
 
 
 class ClipSidecarRowTests(unittest.TestCase):

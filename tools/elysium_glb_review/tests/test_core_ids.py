@@ -78,10 +78,9 @@ class ResolutionTests(unittest.TestCase):
         assert first.name == second.name
 
 
-class SurfacePropertyNameTests(unittest.TestCase):
-    def test_a_bare_name_becomes_the_same_identity_a_character_writes(self) -> None:
-        assert ids.surface_property_id("Glass") == "vtmb:surface-property:glass"
-        assert ids.surface_property_id("  brick ") == "vtmb:surface-property:brick"
+def test_a_bare_name_becomes_the_same_identity_a_character_writes() -> None:
+    assert ids.surface_property_id("Glass") == "vtmb:surface-property:glass"
+    assert ids.surface_property_id("  brick ") == "vtmb:surface-property:brick"
 
 
 class RenderTargetTests(unittest.TestCase):

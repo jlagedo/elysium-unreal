@@ -43,54 +43,56 @@ def matl_payload(materials) -> bytes:
     return out
 
 
-class WorkerDispatchTests(unittest.TestCase):
-    def test_worker_captures_output_and_forwards_the_write(self) -> None:
-        from elysium_pipeline.exporters import UE_mdl_skeletal
+def test_worker_captures_output_and_forwards_the_write() -> None:
+    from elysium_pipeline.exporters import UE_mdl_skeletal
 
-        with tempfile.TemporaryDirectory() as temporary:
-            index = {"models/amy.mdl": ("vpk", ("entry", 1))}
+    with tempfile.TemporaryDirectory() as temporary:
+        index = {"models/amy.mdl": ("vpk", ("entry", 1))}
 
-            def write(_index, model_rel, out_dir, **_kwargs):
-                print(f"wrote {model_rel}")
-
-            with (
-                mock.patch.object(install, "build_index", return_value=index),
-                mock.patch.object(UE_mdl_skeletal, "write_model", side_effect=write),
-                mock.patch.object(workers, "_ANORMS", [None]),
-            ):
-                out = workers.character_source_worker(
-                    "model", "amy", "models/amy.mdl", temporary)
-            assert "wrote models/amy.mdl" in out
-
-    def test_worker_refuses_an_unknown_kind_loudly(self) -> None:
-        with pytest.raises(RuntimeError, match="unknown character source kind"):
-            workers.character_source_worker("nope", "amy", "models/amy.mdl", "out")
-
-    def test_worker_round_trips_a_spawned_process(self) -> None:
-        # Windows spawns rather than forks, so the worker, its arguments and its raised
-        # errors must all cross a real process boundary. The unknown-kind error is raised
-        # before any install read, which keeps this game-independent.
-        from concurrent.futures import ProcessPoolExecutor
-
-        with ProcessPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(
-                workers.character_source_worker, "nope", "amy", "models/amy.mdl", "out")
-            with pytest.raises(RuntimeError, match="unknown character source kind"):
-                future.result(timeout=120)
-
-    def test_worker_failure_carries_the_captured_tail(self) -> None:
-        from elysium_pipeline.exporters import UE_mdl_skeletal
-
-        def explode(*_args, **_kwargs):
-            print("decoding amy")
-            raise ValueError("bad sequence block")
+        def write(_index, model_rel, out_dir, **_kwargs):
+            print(f"wrote {model_rel}")
 
         with (
-            mock.patch.object(install, "build_index", return_value={}),
-            mock.patch.object(UE_mdl_skeletal, "write_bank", side_effect=explode),
+            mock.patch.object(install, "build_index", return_value=index),
+            mock.patch.object(UE_mdl_skeletal, "write_model", side_effect=write),
+            mock.patch.object(workers, "_ANORMS", [None]),
         ):
-            with pytest.raises(RuntimeError, match="decoding amy"):
-                workers.character_source_worker("bank", "bank_a", "models/bank_a.mdl", "out")
+            out = workers.character_source_worker(
+                "model", "amy", "models/amy.mdl", temporary)
+        assert "wrote models/amy.mdl" in out
+
+
+def test_worker_refuses_an_unknown_kind_loudly() -> None:
+    with pytest.raises(RuntimeError, match="unknown character source kind"):
+        workers.character_source_worker("nope", "amy", "models/amy.mdl", "out")
+
+
+def test_worker_round_trips_a_spawned_process() -> None:
+    # Windows spawns rather than forks, so the worker, its arguments and its raised
+    # errors must all cross a real process boundary. The unknown-kind error is raised
+    # before any install read, which keeps this game-independent.
+    from concurrent.futures import ProcessPoolExecutor
+
+    with ProcessPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(
+            workers.character_source_worker, "nope", "amy", "models/amy.mdl", "out")
+        with pytest.raises(RuntimeError, match="unknown character source kind"):
+            future.result(timeout=120)
+
+
+def test_worker_failure_carries_the_captured_tail() -> None:
+    from elysium_pipeline.exporters import UE_mdl_skeletal
+
+    def explode(*_args, **_kwargs):
+        print("decoding amy")
+        raise ValueError("bad sequence block")
+
+    with (
+        mock.patch.object(install, "build_index", return_value={}),
+        mock.patch.object(UE_mdl_skeletal, "write_bank", side_effect=explode),
+    ):
+        with pytest.raises(RuntimeError, match="decoding amy"):
+            workers.character_source_worker("bank", "bank_a", "models/bank_a.mdl", "out")
 
 
 class PrefixBucketTests(unittest.TestCase):
@@ -255,20 +257,19 @@ class PartitionSectionReadTests(unittest.TestCase):
                     npc_dir, npc_manifest=self.MANIFEST)
 
 
-class ManifestPlumbingTests(unittest.TestCase):
-    def test_a_supplied_manifest_needs_no_file_on_disk(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            npc_dir = Path(temporary)  # deliberately carries no npc_manifest.json
-            manifest = {
-                "npcs": {"amy": {"model": "models/amy.mdl", "clips": {"idle": "amy"}}},
-                "banks": {},
-                "cinematics": {},
-                "placed_models": {},
-            }
-            models, banks, cinematics, props = export_manager.character_source_plan(
-                npc_dir, manifest)
-            assert models == {"amy": "models/amy.mdl"}
-            assert (banks, cinematics, props) == ({}, {}, {})
+def test_a_supplied_manifest_needs_no_file_on_disk() -> None:
+    with tempfile.TemporaryDirectory() as temporary:
+        npc_dir = Path(temporary)  # deliberately carries no npc_manifest.json
+        manifest = {
+            "npcs": {"amy": {"model": "models/amy.mdl", "clips": {"idle": "amy"}}},
+            "banks": {},
+            "cinematics": {},
+            "placed_models": {},
+        }
+        models, banks, cinematics, props = export_manager.character_source_plan(
+            npc_dir, manifest)
+        assert models == {"amy": "models/amy.mdl"}
+        assert (banks, cinematics, props) == ({}, {}, {})
 
 
 class SweepReceiptTests(unittest.TestCase):
