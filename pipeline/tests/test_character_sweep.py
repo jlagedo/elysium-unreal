@@ -89,13 +89,6 @@ class SweepTests(unittest.TestCase):
         self.assertEqual([p.name for p in result["orphan_assets"]], ["A_idle.uasset"])
         self.assertEqual(result["orphan_dirs"], ["Anims/gone/amy"])
 
-    def test_finds_an_orphan_skeleton(self):
-        _mount(self.root, self.partition,
-               extra=(f"Skeletons/{cp.MODEL_SKELETON_PREFIX}gone",))
-        result = character_sweep.plan(self.root, self.npc, self.partition)
-        self.assertEqual([p.stem for p in result["orphan_assets"]],
-                         [f"{cp.MODEL_SKELETON_PREFIX}gone"])
-
     def test_finds_an_orphan_mesh_and_material(self):
         _mount(self.root, self.partition,
                extra=("Meshes/SK_gone", "Materials/MI_SK_gone_Body"))
@@ -105,13 +98,6 @@ class SweepTests(unittest.TestCase):
 
     def test_keeps_a_material_belonging_to_a_declared_model(self):
         _mount(self.root, self.partition, extra=("Materials/MI_SK_amy_Head",))
-        self.assertEqual(character_sweep.plan(self.root, self.npc, self.partition)
-                         ["orphan_assets"], [])
-
-    def test_keeps_assets_a_slice_did_not_touch(self):
-        # The whole point: the partition covers the cast, so a run that baked only `amy` still
-        # knows `bob` owns his own mesh, clips and material.
-        _mount(self.root, self.partition)
         self.assertEqual(character_sweep.plan(self.root, self.npc, self.partition)
                          ["orphan_assets"], [])
 

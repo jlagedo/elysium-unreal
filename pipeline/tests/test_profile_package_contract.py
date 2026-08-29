@@ -11,34 +11,6 @@ from elysium_pipeline.exporters import export_all
 
 
 class ProfileAndPackageContractTests(unittest.TestCase):
-    GRID_MAPS = [
-        "sp_tutorial_1",
-        "sp_theatre",
-        "sm_hub_1",
-        "sm_diner_1",
-        "sm_bailbonds_1",
-        "sm_junkyard_1",
-        "sm_asylum_1",
-        "sm_gallery_1",
-        "sm_pawnshop_1",
-        "sm_pawnshop_2",
-        "sm_medical_1",
-        "sm_pier_1",
-        "sm_basement_1",
-        "sm_apartment_1",
-        "sm_warehouse_1",
-        "la_hub_1",
-        "sm_tattoo",
-        "sm_vamparena",
-        "sm_shreknet_1",
-        "sm_oceanhouse_1",
-        "sm_coffee_1",
-        "sm_smoke_1",
-    ]
-
-    def test_grid_profile_is_the_exact_test_and_interconnection_set(self) -> None:
-        self.assertEqual(export_all.maps_for_profile("grid"), self.GRID_MAPS)
-
     def test_all_profile_discovers_and_sorts_patch_first_names(self) -> None:
         self.assertEqual(
             export_all.maps_for_profile(

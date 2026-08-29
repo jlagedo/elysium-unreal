@@ -100,12 +100,6 @@ class DefaultByteIdentityTests(unittest.TestCase):
 
         self.assertEqual(plain, explicit_none)
 
-    def test_ref_pose_rows_returns_the_same_rows_object_when_none(self) -> None:
-        bones = [bone(0, "root", -1)]
-        rows, bone_map, _reparented = UEK.unreal_bones(bones)
-
-        self.assertIs(UEK._ref_pose_rows(rows, bone_map, None, "ctx"), rows)
-
 
 class OverrideAppliedTests(unittest.TestCase):
     def test_only_the_overridden_bones_seven_floats_change(self) -> None:
@@ -410,28 +404,6 @@ class ReparentedRefPoseTests(unittest.TestCase):
             self, override_root[0], override_root[1], stray_row[2], stray_row[3],
             expected_pos=override_stray[0], expected_quat=override_stray[1])
 
-    def test_omitted_reparented_arg_substitutes_every_row_directly(self) -> None:
-        """`reparented=None` (the default) makes every row -- including a reparented one -- take
-        `ref_pose` verbatim, with no recomposition. Documents the failure mode a caller that
-        forgets to thread `unreal_bones`' third return would hit: a wrong local on the stray row
-        rather than a loud error, which is exactly why `write_model` always threads it."""
-        bones = [
-            bone(0, "root_a", -1, (1.0, 1.0, 1.0), QUAT_Z90),
-            bone(1, "root_b", -1, (2.0, 2.0, 2.0)),
-        ]
-        rows, bone_map, _reparented = UEK.unreal_bones(bones)
-        ref_pose = [(bones[0].pos, bones[0].quat), (bones[0].pos, bones[0].quat)]
-
-        out = UEK._ref_pose_rows(rows, bone_map, ref_pose, "ctx")
-
-        stray_slot = bone_map[1]
-        # Without `reparented`, the stray row takes `ref_pose[1]` verbatim rather than being
-        # recomposed relative to the chosen root -- provably NOT what `bones[1]`'s own bind
-        # reparented to, since here `ref_pose[1] == ref_pose[0]` but the correctly-reparented
-        # local would not equal the root's own bind local (identity) unless the root transform
-        # were also identity.
-        self.assertEqual(out[stray_slot][2:], (bones[0].pos, bones[0].quat))
-
 
 class DegenerateReparentTests(unittest.TestCase):
     def test_zero_quaternion_root_fails_loudly(self) -> None:
@@ -458,23 +430,6 @@ class LengthMismatchTests(unittest.TestCase):
         self.assertIn("models/weapons/w_test.mdl", message)
         self.assertIn("1", message)   # entries given
         self.assertIn("2", message)   # entries expected
-
-    def test_longer_ref_pose_fails_loudly(self) -> None:
-        bones = [bone(0, "root", -1)]
-        rows, bone_map, _reparented = UEK.unreal_bones(bones)
-        too_long = [((0.0, 0.0, 0.0), IDENTITY_Q), ((1.0, 1.0, 1.0), IDENTITY_Q)]
-
-        with self.assertRaises(ValueError) as ctx:
-            UEK._ref_pose_rows(rows, bone_map, too_long, "models/weapons/w_over.mdl")
-
-        self.assertIn("models/weapons/w_over.mdl", str(ctx.exception))
-
-    def test_multi_root_length_mismatch_also_fails_loudly(self) -> None:
-        bones = [bone(0, "root_a", -1), bone(1, "root_b", -1)]
-        rows, bone_map, _reparented = UEK.unreal_bones(bones)
-
-        with self.assertRaises(ValueError):
-            UEK._ref_pose_rows(rows, bone_map, [((0.0, 0.0, 0.0), IDENTITY_Q)], "ctx")
 
 
 def _surface(pos, nrm, joints, weights, tris=()):

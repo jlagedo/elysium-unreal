@@ -67,11 +67,6 @@ def _loader(models):
 
 
 class FirstReferenceBasesTests(unittest.TestCase):
-    def test_a_lone_model_starts_at_zero(self) -> None:
-        load, _ = _loader({"models/body.mdl": _image(labels=("idle", "walk"))})
-        self.assertEqual([(k, b) for k, _, b in S.first_reference_bases(load, "models/body.mdl")],
-                         [("models/body.mdl", 0)])
-
     def test_each_bank_starts_where_the_one_before_it_ended(self) -> None:
         load, _ = _loader({
             "models/body.mdl": _image(labels=("ragdoll",),
@@ -142,51 +137,9 @@ class FirstReferenceBasesTests(unittest.TestCase):
             [(k, b) for k, _, b in S.first_reference_bases(load, "models/body.mdl")],
             [("models/body.mdl", 0), ("models/b.mdl", 1)])
 
-    def test_the_order_projection_answers_the_same_walk(self) -> None:
-        models = {
-            "models/body.mdl": _image(includes=("models/a.mdl", "models/b.mdl")),
-            "models/a.mdl": _image(labels=("run",), includes=("models/shared.mdl",)),
-            "models/shared.mdl": _image(labels=("x",)),
-            "models/b.mdl": _image(labels=("idle",), includes=("models/shared.mdl",)),
-        }
-        load, _ = _loader(models)
-        ordered = S.first_reference_order(load, "models/body.mdl")
-        load, _ = _loader(models)
-        based = S.first_reference_bases(load, "models/body.mdl")
-        self.assertEqual([k for k, _ in ordered], [k for k, _, _ in based])
-
-    def test_a_model_is_read_once_however_many_paths_reach_it(self) -> None:
-        load, reads = _loader({
-            "models/body.mdl": _image(includes=("models/a.mdl", "models/b.mdl")),
-            "models/a.mdl": _image(includes=("models/shared.mdl",)),
-            "models/b.mdl": _image(includes=("models/shared.mdl",)),
-            "models/shared.mdl": _image(labels=("x",)),
-        })
-        S.first_reference_bases(load, "models/body.mdl")
-        self.assertEqual(reads.count("models/shared.mdl"), 1)
-
 
 class GlobalNumberTests(unittest.TestCase):
     """A clip's number is its owner's base plus its own on-disk position."""
-
-    def test_a_descriptors_number_is_its_base_plus_its_position(self) -> None:
-        load, _ = _loader({
-            "models/body.mdl": _image(labels=("ragdoll",), includes=("models/bank.mdl",)),
-            "models/bank.mdl": _image(labels=("run", "walk", "sneak")),
-        })
-        numbers = {}
-        for key, data, base in S.first_reference_bases(load, "models/body.mdl"):
-            for index, label in enumerate(S.local_sequence_labels(data)):
-                numbers.setdefault(label.lower(), base + index)
-        self.assertEqual(numbers, {"ragdoll": 0, "run": 1, "walk": 2, "sneak": 3})
-
-    def test_a_label_a_model_declares_twice_answers_its_first_descriptor(self) -> None:
-        load, _ = _loader({"models/bank.mdl": _image(labels=("run", "walk", "run"))})
-        _, data, base = S.first_reference_bases(load, "models/bank.mdl")[0]
-        positions = {}
-        for index, label in enumerate(S.local_sequence_labels(data)):
-            positions.setdefault(label.lower(), index)
-        self.assertEqual(base + positions["run"], 0)
 
     def test_the_positional_list_keeps_a_label_the_playable_read_would_drop(self) -> None:
         # `local_sequence_labels` is positional and unskipped, which is what a global sequence

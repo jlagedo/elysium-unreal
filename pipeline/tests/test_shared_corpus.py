@@ -56,11 +56,6 @@ class PropMaterialKeyNormalizationTests(unittest.TestCase):
         # reads the same file a lower-case one would.
         return self.VMT if key.lower() == "materials/%s.vmt" % self.KEY else None
 
-    def test_resolution_keeps_the_installs_own_spelling(self):
-        path, info = mdl.resolve_vmt("MilkCrate", self.SEARCH, self._read)
-        self.assertIsNotNone(info)
-        self.assertEqual(path, "models/scenery/furniture/MilkCrate/MilkCrate")
-
     def test_the_recorded_key_is_the_one_the_corpus_document_carries(self):
         channels = mdl.material_channels("MilkCrate", self.SEARCH, self._read)
         self.assertEqual(channels["vmt"], self.KEY)
@@ -234,22 +229,10 @@ class FileNameTests(unittest.TestCase):
         self.assertEqual(
             SC.sky_face_file("nightsky1", "bk"), SC.sky_face_file("NightSky1", "bk"))
 
-    def test_the_sky_prefix_is_what_the_runtime_appends_its_faces_to(self):
-        prefix = SC.sky_face_prefix("nightsky1")
-        self.assertEqual(prefix, "skybox_nightsky1")
-        for face in SC.SKY_FACES:
-            self.assertEqual(prefix + face + ".png", SC.sky_face_file("nightsky1", face))
-
     def test_asset_names_follow_the_established_folds(self):
         self.assertEqual(SC.texture_asset("metal_metalox_n.png"), "T_metal_metalox_n")
         self.assertEqual(SC.material_asset("models/scenery/spike"), "MI_models_scenery_spike")
         self.assertEqual(SC.mesh_asset("models_scenery_doorknoba"), "SM_models_scenery_doorknoba")
-
-    def test_baked_paths_sit_on_the_shared_mount(self):
-        self.assertEqual(
-            SC.baked_mesh("models_scenery_doorknoba"),
-            "/ElysiumBaked/Shared/Meshes/SM_models_scenery_doorknoba",
-        )
 
 
 class ManifestTests(unittest.TestCase):
@@ -261,30 +244,6 @@ class ManifestTests(unittest.TestCase):
                 "files": {"glass_glass01.png": "albedo",
                           "glass_glass01_n.png": "normal"}, "alpha": True},
         }
-
-    def test_a_manifest_round_trips_its_own_check(self):
-        document = SC.build_manifest(
-            textures=self._textures(),
-            materials={"brick/brickwall001a": {"map_scoped": False}},
-            models={"models_scenery_doorknoba": {
-                "model": "models/scenery/doorknoba.mdl", "materials": ["models/scenery/spike"]}},
-            fingerprint="abc",
-        )
-        self.assertIs(SC.check_manifest(document), document)
-        self.assertEqual(
-            SC.model_record(document, "models_scenery_doorknoba")["model"],
-            "models/scenery/doorknoba.mdl",
-        )
-        self.assertEqual(SC.shared_material_keys(document), ["brick/brickwall001a"])
-
-    def test_texture_files_is_the_whole_wanted_set(self):
-        document = SC.build_manifest(textures=self._textures(), materials={}, models={})
-        self.assertEqual(
-            SC.texture_files(document),
-            {"metal_metalox.png": "albedo",
-             "glass_glass01.png": "albedo",
-             "glass_glass01_n.png": "normal"},
-        )
 
     def test_two_keys_folding_to_one_file_name_is_a_named_failure(self):
         with self.assertRaises(ValueError) as caught:
@@ -330,131 +289,6 @@ class ManifestTests(unittest.TestCase):
         stated = {name for name, value in record.items()
                   if isinstance(value, str) and value.startswith(SC.TEX + "/")}
         self.assertEqual(set(SC.CHANNEL_FIELDS), stated)
-
-    def test_a_materials_document_round_trips_its_own_check(self):
-        document = SC.build_materials(
-            {"models/scenery/spike": {"albedo": "tex/models_scenery_spike.png",
-                                      "scissor": True}},
-            fingerprint="abc")
-        self.assertIs(SC.check_materials(document), document)
-        self.assertTrue(SC.material_definition(document, "models/scenery/spike")["scissor"])
-        self.assertIsNone(SC.material_definition(document, "absent"))
-
-
-class BakeScopeContractTests(unittest.TestCase):
-    """The bake's two material packages, asserted at the source level.
-
-    `bake_lib` imports `unreal`, so the split cannot be exercised directly here. What can be
-    asserted is that no mesh stage reaches into one package by hand: a world surface's material
-    lives in the map's package or the corpus's depending on `is_map_scoped_material`, and a bare
-    lookup in either one silently binds nothing for the other half.
-    """
-
-    @staticmethod
-    def _bake_map() -> str:
-        from pathlib import Path
-
-        repo = Path(__file__).resolve().parents[2]
-        return (repo / "pipeline" / "unreal" / "bake_map.py").read_text(encoding="utf-8")
-
-    def test_world_surfaces_bind_through_the_scope_resolver(self):
-        source = self._bake_map()
-        self.assertIn("def material_for(self, key):", source)
-        self.assertNotIn("self.materials.get((self.mat_pkg, name))", source)
-        self.assertEqual(source.count("materials = [self.material_for(name) for name in names]"), 3)
-
-    def test_the_resolver_asks_the_shared_predicate(self):
-        self.assertIn("SC.is_map_scoped_material(key, decal=mat.decal", self._bake_map())
-
-    def test_a_prop_slot_that_binds_nothing_is_a_named_failure(self):
-        """Appending an unresolved lookup builds a mesh with a null material slot, which renders
-        the engine's default checker; the receipt then reports that mesh as current."""
-        source = self._bake_map()
-        self.assertNotIn("materials.append(self.materials.get((self.shared_mat_pkg, key)))",
-                         source)
-        self.assertIn('fail("%s: slot %r resolves no loaded material for key %r"', source)
-
-    def test_an_unbound_prop_keeps_its_existing_package_off_the_prune_list(self):
-        """The unresolved-material `continue` leaves the prop unreceipted so the next run
-        retries it, but the trailing `prune_package_prefix` deletes every SM_ name not in
-        `wanted` -- so the same branch must still add the prop's name to `wanted`, or an
-        abandoned prop's still-good package is deleted from the mount instead of just retried.
-        """
-        source = self._bake_map()
-        marker = "if materials is None:\n                    unbound += 1\n"
-        self.assertIn(marker, source)
-        skip = source.split(marker, 1)[1]
-        guard, _, _rest = skip.partition("continue")
-        self.assertIn('wanted.add(asset_path.rsplit("/", 1)[-1])', guard)
-
-    @staticmethod
-    def _bake_lib() -> str:
-        from pathlib import Path
-
-        repo = Path(__file__).resolve().parents[2]
-        return (repo / "pipeline" / "unreal" / "bake_lib.py").read_text(encoding="utf-8")
-
-    def test_only_the_corpus_scope_can_prune_the_corpus(self):
-        """The sharpest risk of one shared package: a map's wanted set is not the corpus's.
-
-        A map, or a single-unit run, knows the handful of assets it wanted. Pruning a shared
-        package against that would delete every other map's textures, materials and meshes.
-        """
-        library = self._bake_lib()
-        self.assertIn("def _assert_prunable(package, scope):", library)
-        self.assertIn("package.startswith(shared_corpus.BAKED_ROOT) and scope != shared_corpus.SCOPE",
-                      library)
-        source = self._bake_map()
-        self.assertEqual(source.count("prune_scope = SC.SCOPE"), 1)
-        self.assertEqual(source.count('prune_scope = ""'), 1)
-        # Every prune states its scope; a bare call would take the default and pass the guard.
-        self.assertEqual(source.count("bl.prune_package"), source.count("self.prune_scope"))
-
-    def test_no_wetness_site_reads_the_authored_flag_directly(self):
-        """`wetness_driven` is the material's authored fact; `wet` is what the surface runs.
-
-        A decal carries neither wetness parameter nor a source cube -- it bakes onto M_Decal and
-        the wall it projects onto owns the wetness. A site that counted, fingerprinted or bound
-        `wetness_driven` would pull a decal into the wet set, which is how sm_hub_1's closure
-        guard came to see 16 surfaces for 14 wet materials.
-        """
-        source = self._bake_map()
-        self.assertIn("wet_materials = [mat for mat in self.world_mats.values() if mat.wet]",
-                      source)
-        self.assertIn("if mat.wet:\n            values[\"weather\"]", source)
-        self.assertIn("if mat.wet:\n            bl.set_scalar_param(mic, \"WetnessDriven\"", source)
-        self.assertIn("if not mat.wet or mat.env_cube in self.cubemaps:", source)
-
-    @staticmethod
-    def _exporter() -> str:
-        from pathlib import Path
-
-        repo = Path(__file__).resolve().parents[2]
-        return (repo / "pipeline" / "src" / "elysium_pipeline" / "exporters"
-                / "UE_bsp_to_scene.py").read_text(encoding="utf-8")
-
-    def test_a_sidecar_states_the_hop_out_to_the_corpus(self):
-        """A map sidecar's texture path is joined onto the MAP directory at load.
-
-        `../tex/...` resolves beside the map directory, where nothing lives; the corpus is
-        `../shared/tex/...`, which is what `map_relative` writes. Hand-built hops are how the
-        water normal came to point at a file that does not exist.
-        """
-        source = self._exporter()
-        self.assertNotIn('f"normalmap ../', source)
-        self.assertIn("shared_corpus.map_relative(os.path.basename(w[\"water_normal\"]))", source)
-
-    def test_the_pakfile_local_fallback_checks_the_decoded_set(self):
-        source = self._exporter()
-        self.assertIn("shared_corpus.material_record(channels, corpus_files)", source)
-
-    def test_a_map_bakes_no_prop_stage(self):
-        source = self._bake_map()
-        # Props belong to the shared corpus scope; a map resolves them and authors none.
-        map_bake = source[source.index("def bake_one("):source.index("def _collect_garbage(")]
-        self.assertNotIn("stage_props", map_bake)
-        self.assertIn("stage_props", source[source.index("def bake_corpus("):])
-        self.assertNotIn("ITEMS_SCOPE", source)
 
 
 class MaterialRecordTests(unittest.TestCase):

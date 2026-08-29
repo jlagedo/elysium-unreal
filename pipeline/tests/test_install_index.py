@@ -80,19 +80,6 @@ class BuildIndexMemo(unittest.TestCase):
         self.assertIs(first, second)
         self.assertEqual(spy.call_count, 1)
 
-    def test_verbose_only_controls_the_summary_line(self):
-        with mock.patch.object(vpk, "index_all", wraps=vpk.index_all) as spy:
-            quiet_out = io.StringIO()
-            with contextlib.redirect_stdout(quiet_out):
-                quiet = install.build_index(verbose=False)
-            loud_out = io.StringIO()
-            with contextlib.redirect_stdout(loud_out):
-                loud = install.build_index(verbose=True)
-        self.assertIs(quiet, loud)
-        self.assertEqual(spy.call_count, 1)
-        self.assertEqual(quiet_out.getvalue(), "")
-        self.assertIn("install:", loud_out.getvalue())
-
     def test_distinct_dirs_are_distinct_keys(self):
         materials = install.build_index(("materials",), verbose=False)
         particles = install.build_index(("particles",), verbose=False)

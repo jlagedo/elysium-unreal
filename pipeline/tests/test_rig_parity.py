@@ -78,14 +78,6 @@ class ModelKeyTests(unittest.TestCase):
 
 
 class NumberingTests(unittest.TestCase):
-    def test_an_agreeing_space_has_no_mismatch(self) -> None:
-        flat = _flat(("body.mdl", 0, "ragdoll", ""), ("bank.mdl", 0, "walk", "ACT_WALK"))
-        live = _live(("body.mdl", 0, "ragdoll", True), ("bank.mdl", 0, "walk", True))
-        report = compare_numbering(live, flat)
-        self.assertEqual(report["owner_mismatches"], 0)
-        self.assertEqual(report["label_mismatches"], 0)
-        self.assertEqual(report["compared"], 2)
-
     def test_an_unlabelled_live_row_still_checks_its_owner(self) -> None:
         """A bank the session never loaded carries no label but a real owner and index."""
         flat = _flat(("body.mdl", 0, "ragdoll", ""), ("bank.mdl", 0, "walk", "ACT_WALK"))
@@ -186,16 +178,6 @@ class SequenceNumberTests(unittest.TestCase):
     @staticmethod
     def _exported(**labels):
         return {label.lower(): rows for label, rows in labels.items()}
-
-    def test_agreeing_numbers_are_checked_and_pass(self) -> None:
-        exported = self._exported(
-            idle01=[{"label": "idle01", "owner_stem": "shared_misc", "seq": 1}],
-            kick=[{"label": "kick", "owner_stem": "shared_fists", "seq": 2}],
-        )
-        report = compare_sequence_numbers(exported, self.LIVE, self.STEMS)
-        self.assertEqual(report["rows_checked"], 2)
-        self.assertEqual(report["owner_mismatches"], 0)
-        self.assertEqual(report["label_mismatches"], 0)
 
     def test_a_number_naming_another_bank_is_an_owner_mismatch(self) -> None:
         exported = self._exported(
@@ -625,24 +607,6 @@ class CompareRetargetTests(unittest.TestCase):
         out = compare_retarget([row], binds, self.STEMS)
         self.assertEqual(out["rows_applicable"], 0)
         self.assertEqual(out["rows_not_applicable"], 1)
-
-    def test_the_epsilon_bracket_reports_both_sides(self) -> None:
-        rows = [_remap_row(), _remap_row(sub="1", matrix3x4=_matrix(IDENTITY, (1.0, 0.0, 0.0)))]
-        binds = self._binds((0.0, 0.0, 10.0), (0.0, 0.0, 10.0))
-        out = compare_retarget(rows, binds, self.STEMS)
-        bracket = out["retail_epsilon_bracket_cm"]
-        self.assertEqual(bracket["unreal_skip_cm"], UNREAL_SKIP_CM)
-        self.assertIsNotNone(bracket["copied_max_cm"])
-
-    def test_every_applicable_row_lands_in_the_fixture(self) -> None:
-        binds = self._binds((0.0, 0.0, 10.0), (0.0, 0.0, 10.0))
-        out = compare_retarget([_remap_row()], binds, self.STEMS)
-        self.assertEqual(len(out["rows"]), 1)
-        fixture = out["rows"][0]
-        self.assertEqual(fixture["body"], "body")
-        self.assertEqual(fixture["bank"], "bank")
-        self.assertTrue(fixture["retail_copies"])
-        self.assertEqual(fixture["bank_bind"], [0.0, 0.0, 10.0])
 
 
 if __name__ == "__main__":

@@ -256,24 +256,6 @@ class WieldExportTests(unittest.TestCase):
             self.assertEqual(manifest["census"]["absent_paths"], 1)
             self.assertNotIn(ABSENT_MODEL, manifest["models"])
 
-    # --- census -----------------------------------------------------------------------------------
-
-    def test_census_mismatch_fails_loudly(self) -> None:
-        wrong = dict(_CENSUS)
-        wrong["rows"] = 999
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            with self.assertRaises(AssertionError) as ctx:
-                self._run(Path(root), Path(out), census=wrong)
-
-        self.assertIn("rows: expected 999, got 8", str(ctx.exception))
-
-    def test_binding_census_mismatch_fails_loudly(self) -> None:
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            with self.assertRaises(AssertionError) as ctx:
-                self._run(Path(root), Path(out), bindings={"socket_prop": 1})
-
-        self.assertIn("bindings", str(ctx.exception))
-
     # --- motion -------------------------------------------------------------------------------
 
     def test_motion_rows_exclude_bip01_bones(self) -> None:

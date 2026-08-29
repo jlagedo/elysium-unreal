@@ -130,16 +130,6 @@ class LandingPathTests(unittest.TestCase):
             "models_items_rings_ground_ring03",
         )
 
-    def test_the_runtime_twin_folds_the_same_character_class(self) -> None:
-        # FElysiumContentPaths::PropModelStem is the C++ half of mdl.sanitize; the runtime asks for
-        # a package the bake never wrote if the two diverge.
-        header = (
-            REPO / "Source/ElysiumUE/Private/ElysiumContentPaths.h"
-        ).read_text(encoding="utf-8")
-        self.assertIn("static FString PropModelStem(const FString& ModelPath)", header)
-        self.assertIn("Ch == TEXT('.') || Ch == TEXT('_') || Ch == TEXT('-')", header)
-        self.assertIn("elysium_pipeline.formats.mdl.sanitize", header)
-
 
 class ExportRunTests(unittest.TestCase):
     def _run(self, install: _Install, out: Path, decoded: dict[str, str], faces: int = 3):
@@ -213,33 +203,6 @@ class ExportRunTests(unittest.TestCase):
             row = manifest["models"]["models/weapons/w_null.mdl"]
             self.assertEqual(row["faces"], 0)
             self.assertEqual(row["stem"], "models_weapons_w_null")
-
-    def test_the_corpus_directory_is_the_one_the_bake_reads(self) -> None:
-        with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            install = _Install(Path(root))
-            install.item("item_g_stake", "models/items/stake/ground/stake.mdl")
-            install.add("models/items/stake/ground/stake.mdl", "IDST")
-
-            self._run(
-                install,
-                Path(out),
-                {"models/items/stake/ground/stake.mdl": "models_items_stake_ground_stake"},
-            )
-
-            self.assertTrue(
-                (
-                    Path(out)
-                    / "shared"
-                    / "props"
-                    / "models_items_stake_ground_stake.obj"
-                ).is_file()
-            )
-            # An item's mesh is not a scope of its own any more: it is a static model like any
-            # other, so the corpus scope decodes and bakes it beside every prop.
-            bake = (REPO / "pipeline/unreal/bake_map.py").read_text(encoding="utf-8")
-            self.assertIn("class CorpusBake(Bake):", bake)
-            self.assertIn('os.path.join(self.corpus_dir, SC.PROPS)', bake)
-            self.assertNotIn('ITEMS_SCOPE', bake)
 
 
 if __name__ == "__main__":

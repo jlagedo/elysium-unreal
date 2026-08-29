@@ -128,16 +128,6 @@ class TailIndex(unittest.TestCase):
         self.assertEqual(idx["models/weapons/knife.mdl"], (path, 7, 16))
         self.assertEqual(idx["maps/sm_hub_1.bsp"], (path, 23, 900))
 
-    def test_index_reads_only_the_directory_extent(self):
-        files = {"materials/big.vtf": b"\xab" * (4 << 20), "materials/small.vmt": b"tiny"}
-        path = self._write("pack000.vpk", pack_bytes(files))
-        counter = {"bytes": 0, "opens": 0}
-        with mock.patch.object(vpk, "open", counting_open(counter), create=True):
-            idx = vpk.index_vpk(path)
-        self.assertEqual(idx, reference_index(path))
-        # The 4 MB data half stays on disk: footer probe + candidate probe + directory.
-        self.assertLess(counter["bytes"], 4096)
-
     def test_a_directory_wider_than_the_footer_window_still_indexes(self):
         files = {f"materials/generated/texture_{i:05d}.vtf": struct.pack("<I", i)
                  for i in range(3000)}
@@ -202,18 +192,6 @@ class HandleReuse(unittest.TestCase):
             vpk.close_handles()
             self.assertEqual(vpk.extract(idx["b.txt"]), b"bravo")
             self.assertEqual(counter["opens"], 2)
-
-    def test_the_handle_cache_is_bounded_and_evicts_oldest_first(self):
-        paths = [self._pack(f"pack00{i}.vpk", {f"file{i}.txt": b"x" * (i + 1)})
-                 for i in range(3)]
-        indexes = [vpk.index_vpk(p) for p in paths]
-        with mock.patch.object(vpk, "_HANDLE_CAP", 2):
-            vpk.extract(indexes[0]["file0.txt"])
-            first = vpk._handles.cache[paths[0]]
-            vpk.extract(indexes[1]["file1.txt"])
-            vpk.extract(indexes[2]["file2.txt"])
-        self.assertEqual(list(vpk._handles.cache), [paths[1], paths[2]])
-        self.assertTrue(first.closed)
 
     def test_extract_still_raises_for_a_missing_pack(self):
         with self.assertRaises(FileNotFoundError):

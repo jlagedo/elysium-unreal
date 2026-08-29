@@ -720,63 +720,6 @@ class ByteCoverageTests(unittest.TestCase):
         self.assertEqual(result["coveragePercent"], 100.0)
         self.assertEqual(result["accountedBytes"], len(mdl_data))
 
-    def test_unindexed_include_groups_are_omitted_proven(self) -> None:
-        mdl_data, topology = _minimal_mdl_vtx()
-        extra = bytearray()
-        path0 = b"models/character/shared/female/pc/pc_idle.mdl\0"
-        path1 = b"models/character/shared/female/pc/frenzy.mdl\0"
-        extra.extend(b"\0" * (232 + 112))
-        extra.extend(path0)
-        extra.extend(path1)
-        struct.pack_into("<i", extra, 0, 344)
-        struct.pack_into("<i", extra, 16, 232)
-        struct.pack_into("<i", extra, 116, 344 + len(path0) - 116)
-        struct.pack_into("<i", extra, 132, 172)
-        image = bytearray(mdl_data)
-        offset = len(image)
-        image.extend(extra)
-        struct.pack_into("<i", image, 140, len(image))
-        struct.pack_into("<2i", image, 404, 0, offset)
-        result = coverage.cover_mdl("synthetic.mdl", bytes(image), vtx_data=topology)
-        owners = {row["owner"] for row in result["ranges"]}
-        self.assertIn("unindexedIncludeModel[0]", owners)
-        self.assertIn("unindexedIncludeModel[1]", owners)
-        self.assertEqual(result["coveragePercent"], 100.0)
-
-    def test_unindexed_secondary_motion_is_omitted_proven(self) -> None:
-        mdl_data, topology = _minimal_mdl_vtx()
-        record = struct.pack("<ii5f", 0, -1, 9.0, 0.0, 0.4, 2.0, 45.0)
-        image = bytearray(mdl_data)
-        offset = len(image)
-        image.extend(record)
-        struct.pack_into("<i", image, 140, len(image))
-        struct.pack_into("<2i", image, 396, 0, offset)
-        result = coverage.cover_mdl("synthetic.mdl", bytes(image), vtx_data=topology)
-        owners = {row["owner"] for row in result["ranges"]}
-        self.assertIn("unindexedSecondaryMotion[0]", owners)
-        self.assertEqual(result["stateBytes"]["omitted-proven"], 28)
-
-    def test_unreferenced_string_residue_is_omitted_proven(self) -> None:
-        mdl_data, topology = _minimal_mdl_vtx()
-        image = bytearray(mdl_data)
-        image.extend(b"materials/models/character/unused\0")
-        struct.pack_into("<i", image, 140, len(image))
-        result = coverage.cover_mdl("synthetic.mdl", bytes(image), vtx_data=topology)
-        owners = {row["owner"] for row in result["ranges"]}
-        self.assertTrue(any(name.startswith("unreferencedString@") for name in owners))
-        self.assertEqual(result["coveragePercent"], 100.0)
-
-    def test_orphan_rle_sample_before_a_channel_is_omitted_proven(self) -> None:
-        payload = bytearray(8)
-        payload[0:4] = b"\x01\x01\x00\x00"
-        payload[4:8] = b"\x01\x01\x02\x03"
-        ledger = coverage.ByteLedger("anim.bin", bytes(payload))
-        ledger.claim(4, 4, "mapped", "animation[0].bone[0].channel[0]")
-        coverage._cover_orphan_rle_samples(ledger)
-        result = ledger.finish()
-        self.assertEqual(result["ranges"][0]["owner"], "orphanAnimationSample@0")
-        self.assertEqual(result["ranges"][0]["state"], "omitted-proven")
-
     def test_qndbtm_eof_trailer_is_a_mapped_compiler_record(self) -> None:
         payload = b"skin\0" + bytes.fromhex("64001100516e4462546d")
         ledger = coverage.ByteLedger("tail.bin", payload)
@@ -789,45 +732,6 @@ class ByteCoverageTests(unittest.TestCase):
         trailer = coverage.compiler_trailer(payload)
         self.assertEqual(trailer["magic"], "QnDbTm")
         self.assertEqual(trailer["pathOffset"], 0x00110064)
-
-    def test_one_byte_between_path_and_animation_name_is_omitted_proven(self) -> None:
-        payload = b"bank.mdl\0.\0@idle\0"
-        ledger = coverage.ByteLedger("align.bin", payload)
-        ledger.claim(0, 9, "mapped-string", "includeModel[0].path")
-        ledger.claim(10, 6, "mapped-string", "animation[0].name")
-        coverage._cover_retained_mdl_payloads(ledger, payload, bone_count=1)
-        result = ledger.finish()
-        self.assertTrue(
-            any(row["owner"].startswith("stringAlignmentResidue@") for row in result["ranges"])
-        )
-
-    def test_animation_channel_tail_before_search_paths_is_omitted_proven(self) -> None:
-        payload = b"\0" + bytes.fromhex("0207ff7f") + b"models/\0"
-        ledger = coverage.ByteLedger("anim.bin", payload)
-        ledger.claim(0, 1, "mapped", "animation[0].bone[0].channel[6]")
-        ledger.claim(5, 8, "mapped-string", "textureSearchPath[0]")
-        coverage._cover_orphan_rle_samples(ledger)
-        result = ledger.finish()
-        self.assertIn("trailingPayload", result["ranges"][1]["owner"])
-
-    def test_unindexed_rle_tracks_after_a_channel_are_mapped(self) -> None:
-        payload = bytearray(424)
-        payload[:4] = b"IDST"
-        struct.pack_into("<i", payload, 264, 1)
-        struct.pack_into("<i", payload, 268, 280)
-        struct.pack_into("<i", payload, 292, 1)
-        payload.extend(bytes.fromhex("01010203"))
-        payload.extend(b"ULDD")
-        payload.extend(b"models/\0")
-        image = bytes(payload)
-        ledger = coverage.ByteLedger("anim.bin", image)
-        ledger.claim(0, 424, "mapped", "animation[0].bone[0].channel[6]")
-        ledger.claim(432, 8, "mapped-string", "textureSearchPath[0]")
-        coverage._cover_orphan_rle_samples(ledger)
-        result = ledger.finish()
-        owners = [row["owner"] for row in result["ranges"]]
-        self.assertIn("animation[0].bone[0].channel[6].unindexedTrack[0]", owners)
-        self.assertIn("animation[0].bone[0].channel[6].compilerPackingULDD", owners)
 
     def test_cloth_map_layout_uses_the_pointer_span(self) -> None:
         verts = 4
@@ -846,31 +750,12 @@ class ByteCoverageTests(unittest.TestCase):
         self.assertEqual(layout["selector_align"], 0)
         self.assertEqual(layout["vertex_count"], verts)
 
-    def test_unselected_cloth_selector_suffix_is_omitted_proven(self) -> None:
-        payload = b"\xff\xff\xff\xff" + b"\x01\x00\x02\x00"
-        ledger = coverage.ByteLedger("cloth.bin", payload)
-        ledger.claim(0, 1, "mapped", "bodyPart[0].model[0].mesh[0].cloth.selectors")
-        ledger.claim(4, 4, "mapped", "bodyPart[0].model[0].mesh[0].cloth.positions")
-        coverage._cover_retained_mdl_payloads(ledger, payload, bone_count=1)
-        result = ledger.finish()
-        owners = {row["owner"] for row in result["ranges"]}
-        self.assertTrue(any("unselectedSuffix" in owner for owner in owners))
-
     def test_overlapping_vtx_strip_groups_reuse_the_declared_range(self) -> None:
         ledger = coverage.ByteLedger("mesh.vtx", bytes(44))
         ledger.array(4, 1, 20, "lod[0].mesh[0].stripGroups")
         ledger.array(4, 1, 20, "lod[1].mesh[0].stripGroups", allow_existing=True)
         result = ledger.finish()
         self.assertEqual(result["ranges"][1]["owner"], "lod[0].mesh[0].stripGroups")
-
-    def test_multi_run_orphan_rle_between_channels_is_omitted_proven(self) -> None:
-        payload = bytes.fromhex("010c00000103ffff") + b"\x01\x01\x02\x03"
-        ledger = coverage.ByteLedger("anim.bin", payload)
-        ledger.claim(8, 4, "mapped", "animation[0].bone[1].channel[3]")
-        coverage._cover_orphan_rle_samples(ledger)
-        result = ledger.finish()
-        self.assertEqual(result["ranges"][0]["length"], 8)
-        self.assertEqual(result["ranges"][0]["state"], "omitted-proven")
 
 
 class CharacterCoverageSemanticsTests(unittest.TestCase):

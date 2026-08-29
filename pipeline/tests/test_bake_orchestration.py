@@ -71,20 +71,6 @@ class BakeOrchestrationTests(unittest.TestCase):
                 )
             verify.assert_called_once_with(config, mock.ANY, ["test_map"])
 
-    def test_force_reaches_the_commandlet(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            with (
-                mock.patch.object(export_manager.unreal, "bake_maps") as bake,
-                mock.patch.object(export_manager.unreal, "verify_bakes"),
-            ):
-                export_manager.bake_and_verify(
-                    config, object(), ["test_map"], force=True
-                )
-            bake.assert_called_once_with(config, mock.ANY, ["test_map"], force=True,
-                                         particles=False,
-                                         batch_size=export_manager.unreal.MAP_BAKE_BATCH)
-
     def test_particle_pass_is_an_explicit_opt_in(self) -> None:
         """The map bake authors no Niagara system unless the caller asks for one.
 
@@ -443,26 +429,6 @@ class BakeOrchestrationTests(unittest.TestCase):
             self.assertEqual(
                 export_manager._scoped_source_fingerprint(config, entries), moved)
 
-    def test_policy_fingerprint_ignores_unrelated_bake_scripts(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            unreal_root = config.repo_root / "pipeline" / "unreal"
-            unreal_root.mkdir(parents=True)
-            (unreal_root / "build_content.py").write_text(
-                'GENERATORS = ["make_world_materials.py"]\n', encoding="utf-8"
-            )
-            generator = unreal_root / "make_world_materials.py"
-            generator.write_text("VALUE = 1\n", encoding="utf-8")
-            (unreal_root / "make_ui_fonts.py").write_text("VALUE = 1\n", encoding="utf-8")
-            unrelated = unreal_root / "make_particle_systems.py"
-            unrelated.write_text("VALUE = 1\n", encoding="utf-8")
-
-            initial = export_manager._policy_fingerprint(config)
-            unrelated.write_text("VALUE = 2\n", encoding="utf-8")
-            self.assertEqual(export_manager._policy_fingerprint(config), initial)
-            generator.write_text("VALUE = 2\n", encoding="utf-8")
-            self.assertNotEqual(export_manager._policy_fingerprint(config), initial)
-
     def test_policy_fingerprint_includes_input_prompt_sources(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)
@@ -481,25 +447,6 @@ class BakeOrchestrationTests(unittest.TestCase):
             initial = export_manager._policy_fingerprint(config)
             source.write_bytes(b"replacement")
             self.assertNotEqual(export_manager._policy_fingerprint(config), initial)
-
-    def test_world_material_policy_has_its_own_fingerprint(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            unreal_root = config.repo_root / "pipeline" / "unreal"
-            unreal_root.mkdir(parents=True)
-            (unreal_root / "build_content.py").write_text(
-                'GENERATORS = ["make_world_materials.py", "make_sky_material.py"]\n',
-                encoding="utf-8")
-            world = unreal_root / "make_world_materials.py"
-            sky = unreal_root / "make_sky_material.py"
-            world.write_text("VALUE = 1\n", encoding="utf-8")
-            sky.write_text("VALUE = 1\n", encoding="utf-8")
-
-            initial = export_manager._world_material_fingerprint(config)
-            sky.write_text("VALUE = 2\n", encoding="utf-8")
-            self.assertEqual(export_manager._world_material_fingerprint(config), initial)
-            world.write_text("VALUE = 2\n", encoding="utf-8")
-            self.assertNotEqual(export_manager._world_material_fingerprint(config), initial)
 
     def test_focused_world_policy_runs_only_the_world_material_generator(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

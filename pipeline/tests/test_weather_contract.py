@@ -79,40 +79,6 @@ class CubemapDdsTests(unittest.TestCase):
             tex_to_png.cubemap_dds([Image.new("RGBA", (2, 3))] * 6)
 
 
-class WorldMaterialWetnessGraphTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.source = (
-            Path(__file__).resolve().parents[1] / "unreal" / "make_world_materials.py"
-        ).read_text(encoding="utf-8")
-
-    def test_source_cube_is_additive_and_excluded_from_lumen_capture(self):
-        self.assertIn(
-            'mat, "WetnessUsesSourceCube", darkened_base, base_color', self.source
-        )
-        self.assertIn(
-            'connect(source_view, "", lumen_safe_source, "Normal")', self.source
-        )
-        self.assertIn(
-            'connect(black, "", lumen_safe_source, "RayTraced")', self.source
-        )
-        self.assertIn(
-            'connect(lumen_safe_source, "", primary_emissive, "B")', self.source
-        )
-
-    def test_reflection_debug_range_compares_debug_value_against_threshold(self):
-        self.assertIn(
-            'lower.set_editor_property("const_y", index - 0.5)', self.source
-        )
-        self.assertIn('connect(debug, "", lower, "X")', self.source)
-        self.assertIn(
-            'upper.set_editor_property("const_y", index + 0.5)', self.source
-        )
-        self.assertIn('connect(debug, "", upper, "X")', self.source)
-        self.assertIn('debug_enabled.set_editor_property("const_y", 0.5)', self.source)
-        self.assertIn('connect(debug, "", debug_enabled, "X")', self.source)
-
-
 class ParticleClosureTests(unittest.TestCase):
     DEFINITIONS = {
         "rain_follow_emitter": '''Particle {

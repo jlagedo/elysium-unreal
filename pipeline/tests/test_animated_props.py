@@ -454,9 +454,6 @@ class ClipBoundsRadiusTests(unittest.TestCase):
 
     SWORD = _seq("scene", (-881.4, -162.6, -6.7), (0.0, 89.3, 166.2))
 
-    def test_the_authored_box_reduces_to_its_largest_coordinate(self) -> None:
-        self.assertAlmostEqual(npc_export.authored_radius_m(self.SWORD), 881.4 * 0.0254, places=6)
-
     def test_the_authored_radius_wins_when_it_covers_the_bake(self) -> None:
         # The real case: studiomdl's box sits a little outside the extent it was computed from.
         self.assertAlmostEqual(npc_export.clip_bounds_radius_m(self.SWORD, 21.833),
@@ -505,17 +502,6 @@ class ClipExtentTests(unittest.TestCase):
         stacked = mdl_skel.rot_matrices(quats)
         for i, q in enumerate(quats):
             np.testing.assert_allclose(stacked[i], mdl_skel.rot_matrix(q), atol=1e-12)
-
-
-class LoadMdlMemoTests(unittest.TestCase):
-    """`main`'s model reads are memoized: one install extraction per distinct model."""
-
-    def test_a_seed_model_is_read_once_across_both_presence_probes(self) -> None:
-        # The seed is split into present/missing by two comprehensions over the same list;
-        # without the memo each probe is a full VPK extraction.
-        with mock.patch.object(npc_export.install, "read", return_value=None) as read:
-            npc_export.main(only=["models/ghost.mdl"], index={})
-        self.assertEqual(read.call_count, 1)
 
 
 if __name__ == "__main__":

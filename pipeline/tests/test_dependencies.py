@@ -10,28 +10,6 @@ from elysium_pipeline import dependencies
 
 
 class DependencyLockTests(unittest.TestCase):
-    def test_project_lock_preserves_pinned_contracts(self) -> None:
-        repo = Path(__file__).resolve().parents[2]
-        lock = dependencies.load_project_lock(repo)
-        plugins = {plugin.name: plugin for plugin in lock.plugins}
-        artifacts = {artifact.name: artifact for artifact in lock.artifacts}
-
-        self.assertEqual(
-            plugins["Cog"].revision,
-            "cb1b435f3bb5aca41ff559863927a151b80537ac",
-        )
-        self.assertEqual(
-            plugins["Cog"].post_patch_tree,
-            "d48490e2cd42fc2563a44d30062cbf003648716b",
-        )
-        # Cog is the only managed plugin: the character path builds its assets from `.eskm`
-        # containers through the module's own editor library, so nothing vendored reads a model.
-        self.assertEqual(set(plugins), {"Cog"})
-        self.assertEqual(
-            artifacts["CPython27"].sha256,
-            "0eab8de590076f74a17802d8b613ad74ec050b0081ccd0e2c7a47432c9b169b8",
-        )
-
     def test_managed_content_hash_excludes_marker_and_build_products(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

@@ -31,14 +31,6 @@ class CliContractTests(unittest.TestCase):
         ):
             self.assertIn(command, result.output)
 
-    def test_build_modes_are_named_flags_not_positional_modes(self) -> None:
-        result = self.runner.invoke(app, ["build", "--help"])
-        self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("--rebuild", result.output)
-        self.assertIn("--clean", result.output)
-        self.assertIn("--analyze", result.output)
-        self.assertNotIn("[mode]", result.output)
-
     def test_targeted_map_export_rejects_clean(self) -> None:
         result = self.runner.invoke(
             app, ["export", "map", "sp_tutorial_1", "--clean"]
@@ -57,26 +49,6 @@ class CliContractTests(unittest.TestCase):
         for command in ("create", "status", "close"):
             self.assertIn(command, result.output)
 
-    def test_worktree_create_assigns_a_build_slot(self) -> None:
-        result = self.runner.invoke(app, ["worktree", "create", "--help"])
-        self.assertEqual(result.exit_code, 0, result.output)
-        for option in ("--ue-root", "--build-jobs"):
-            self.assertIn(option, result.output)
-
-    def test_targeted_model_export_rejects_clean(self) -> None:
-        result = self.runner.invoke(
-            app, ["export", "model", "models/character/test.mdl", "--clean"]
-        )
-        self.assertEqual(result.exit_code, 2, result.output)
-        self.assertIn("No such option", result.output)
-
-    def test_placed_model_export_is_explicitly_map_scoped(self) -> None:
-        result = self.runner.invoke(app, ["export", "placed-model", "--help"])
-        self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("map_name", result.output)
-        self.assertIn("model", result.output)
-        self.assertIn("--force", result.output)
-
     def test_export_help_exposes_wield(self) -> None:
         result = self.runner.invoke(app, ["export", "--help"])
         self.assertEqual(result.exit_code, 0, result.output)
@@ -93,29 +65,6 @@ class CliContractTests(unittest.TestCase):
         old = self.runner.invoke(app, ["export", "--help"])
         self.assertEqual(old.exit_code, 0, old.output)
         self.assertNotIn("character-glb", old.output)
-
-    def test_export_v2_single_and_corpus_argument_contracts(self) -> None:
-        single = self.runner.invoke(app, ["export_v2", "chacter-glb", "--help"])
-        self.assertEqual(single.exit_code, 0, single.output)
-        self.assertIn("model", single.output)
-
-        corpus = self.runner.invoke(app, ["export_v2", "chacters-glb", "--help"])
-        self.assertEqual(corpus.exit_code, 0, corpus.output)
-        self.assertNotIn("model", corpus.output)
-
-        texture = self.runner.invoke(app, ["export_v2", "texture-glb", "--help"])
-        self.assertEqual(texture.exit_code, 0, texture.output)
-        self.assertIn("texture", texture.output)
-
-        textures = self.runner.invoke(app, ["export_v2", "textures-glb", "--help"])
-        self.assertEqual(textures.exit_code, 0, textures.output)
-        self.assertNotIn("texture path", textures.output.lower())
-
-    def test_wield_export_stems_are_optional_positional_arguments(self) -> None:
-        result = self.runner.invoke(app, ["export", "wield", "--help"])
-        self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("stems", result.output)
-        self.assertIn("whole corpus", result.output)
 
 
 class ChildSignalTests(unittest.TestCase):

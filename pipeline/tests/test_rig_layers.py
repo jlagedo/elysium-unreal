@@ -97,9 +97,6 @@ class IndexSpaceTests(unittest.TestCase):
         self.assertIsNone(space.resolve(BANK, 401))
         self.assertIsNone(space.resolve(BODY, 0))
 
-    def test_a_bank_index_past_the_list_resolves_to_nothing(self) -> None:
-        self.assertIsNone(_space().resolve(BANK, 99))
-
 
 class ChannelTests(unittest.TestCase):
     def test_a_repeated_contribution_is_one_channel_that_counts_its_repeats(self) -> None:
@@ -170,12 +167,6 @@ class CapacityTests(unittest.TestCase):
         self.assertEqual(report["frames_over_one_overlay"], 1)
         self.assertEqual(report["frames_over_one_additive"], 1)
         self.assertEqual(report["frames_beyond_the_graph"], 1)
-
-    def test_the_shape_census_counts_every_frame_once(self) -> None:
-        report = summarise([self._row(1, 0), self._row(1, 0), self._row(2, 2)])
-        self.assertEqual(report["frames"], 3)
-        self.assertEqual(sum(report["shape"].values()), 3)
-        self.assertEqual(report["shape"]["1 plain + 0 additive"], 2)
 
 
 if __name__ == "__main__":

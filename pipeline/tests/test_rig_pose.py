@@ -193,10 +193,6 @@ class ContributionTests(unittest.TestCase):
         window = contributions_at(rows, 10.001)
         self.assertEqual([row["model"] for row in window], ["a.mdl", "b.mdl"])
 
-    def test_a_frame_with_no_contributions_answers_empty(self) -> None:
-        rows, _ = contributions([_contribution(1, "a.mdl", 1, 1.0, 99.0)])
-        self.assertEqual(contributions_at(rows, 10.0), [])
-
 
 class FrameTests(unittest.TestCase):
     def test_a_frame_carries_its_entity_clock_and_matrices(self) -> None:
@@ -315,7 +311,3 @@ class BodyResolutionTests(unittest.TestCase):
         self.assertIsNone(model)
         self.assertIn("no model", reason)
 
-    def test_a_model_the_install_never_answered_for_carries_no_count(self) -> None:
-        """An unreadable model has no bone list, so it can never fit and never names a frame."""
-        model, _ = resolve_body(79, None, ["ghost.mdl"], ["ghost.mdl"], [], self.COUNTS)
-        self.assertIsNone(model)

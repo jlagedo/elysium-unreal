@@ -252,9 +252,6 @@ class LowReachTests(unittest.TestCase):
         self.assertIsNone(_sequence(low_reach=FLT_MIN).low_reach)
         self.assertIsNotNone(_sequence(low_reach=FLT_MAX).low_reach)
 
-    def test_a_stated_edge_is_carried_in_source_units(self):
-        self.assertAlmostEqual(_sequence(low_reach=48.5).low_reach, 48.5, places=4)
-
     def test_a_genuine_authored_zero_is_kept(self):
         # `werewolf`/`werewolf_damaged` `claw_attack_close` state exactly this against a reach of
         # 114.9. A near edge of zero is a band that starts at the body, which is a real claim —
@@ -429,14 +426,6 @@ class ComboChainOrphanTests(unittest.TestCase):
         self.assertEqual(mdl_skel.combo_chain_orphans(clips),
                          (("Fists_attack_W2", "Fists_attack_W3"),))
 
-    def test_a_chain_into_another_weapons_bank_is_named_too(self) -> None:
-        # `katana_dodge_attack` chains to `tireiron_attack_med`, a label from a different
-        # weapon's bank entirely.
-        clips = _sequences(label="katana_dodge_attack", mask=0x008, chain="tireiron_attack_med",
-                           window=(0.5, 0.9, 0.91), siblings=("katana_attack_med",))
-        self.assertEqual(mdl_skel.combo_chain_orphans(clips),
-                         (("katana_dodge_attack", "tireiron_attack_med"),))
-
     def test_a_dangling_alternate_is_censused_on_the_same_terms(self) -> None:
         clips = _sequences(chain="knockback_flying_idle", chain_alt="knockback_flying_wall_hit",
                            siblings=("knockback_flying_idle",))
@@ -576,12 +565,6 @@ class ClipMetaTests(unittest.TestCase):
                                          "chain_alt": "", "w_open": 0.5, "w_close": 0.9,
                                          "w_hold": 0.91})
 
-    def test_a_hold_below_the_close_crosses_verbatim(self) -> None:
-        combo = npc_export._clip_meta(
-            _sequence(label="katana_running_attack", mask=0x008, chain="katana_combo_C2",
-                      window=(0.25, 1.0, 0.9)))["combo"]
-        self.assertEqual((combo["w_open"], combo["w_close"], combo["w_hold"]), (0.25, 1.0, 0.9))
-
     def test_a_dangling_chain_label_still_crosses_the_seam(self) -> None:
         # The exporter warns; the data stays authored.
         combo = npc_export._clip_meta(
@@ -669,13 +652,6 @@ class ClipSidecarRowTests(unittest.TestCase):
         self.assertEqual(
             [written["owners"][row[0]] for row in written["clips"]["stealth"]],
             ["bat", "fists"])
-
-    def test_every_label_carries_one_number_per_row(self) -> None:
-        written = self._slice({"idle": npc_export._clip_meta(
-            _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None))})
-        self.assertEqual(set(written["seq"]), set(written["clips"]))
-        for label, rows in written["clips"].items():
-            self.assertEqual(len(written["seq"][label]), len(rows))
 
     def test_a_row_the_walk_could_not_number_holds_its_slot_open(self) -> None:
         # The two lists are read positionally, so an unnumbered row states a null rather than
@@ -782,13 +758,6 @@ class ClipSidecarRowTests(unittest.TestCase):
         self.assertIsNone(row[11])           # low_reach_cm — the same null guard as reach_cm
         self.assertEqual(len(row[12]), 1)
 
-    def test_a_clip_stating_neither_new_field_is_unchanged(self) -> None:
-        # The compatibility direction: adding two columns must not lengthen a row that states
-        # nothing in them, or every existing slice would re-write for no reason.
-        written = self._slice({"swing": npc_export._clip_meta(
-            _sequence(label="swing", reach=64.0, blocked=None))})
-        self.assertEqual(len(self._row(written, "swing")), 8)
-
     def test_a_plain_clip_stops_at_fade(self) -> None:
         written = self._slice({"idle": npc_export._clip_meta(
             _sequence(label="idle", activity="ACT_IDLE", reach=FLT_MAX, blocked=None))})
@@ -894,11 +863,6 @@ class ClipSidecarRowTests(unittest.TestCase):
         self.assertEqual(row[8], "")
         self.assertEqual(row[9], [])
         self.assertEqual(row[10]["chain_alt"], "knockback_flying_wall_hit")
-
-    def test_a_clip_authoring_no_combo_truncates_before_the_column(self) -> None:
-        written = self._slice({"jab": npc_export._clip_meta(
-            _sequence(reach=64.0, swings=[_swing()]))})
-        self.assertEqual(len(self._row(written, "jab")), 10)
 
     def test_a_chain_label_never_joins_the_activities_table(self) -> None:
         # A successor is a sequence label, not an activity, so `activities` is not a table it

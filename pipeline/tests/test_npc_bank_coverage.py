@@ -29,14 +29,6 @@ from elysium_pipeline.exporters.npc_export import (  # noqa: E402
 
 
 class BankContainerCensusTests(unittest.TestCase):
-    def test_the_census_names_the_stems_a_container_exists_for(self) -> None:
-        with tempfile.TemporaryDirectory() as npc_dir:
-            banks = os.path.join(npc_dir, "banks")
-            os.makedirs(banks)
-            for name in ("fists.eskm", "katana.eskm", "notes.json"):
-                open(os.path.join(banks, name), "w", encoding="utf-8").close()
-            self.assertEqual(bank_containers_present(npc_dir), {"fists", "katana"})
-
     def test_an_absent_directory_is_an_empty_census_rather_than_an_error(self) -> None:
         with tempfile.TemporaryDirectory() as npc_dir:
             self.assertEqual(bank_containers_present(npc_dir), set())

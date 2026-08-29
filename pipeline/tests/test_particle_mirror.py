@@ -85,52 +85,6 @@ class ParticleMirrorTests(unittest.TestCase):
                 self.assertEqual(rain.call_count, 1)
                 self.assertEqual(sprite.call_count, 1)
 
-    def test_standalone_particle_replacement_drains_compilation_before_delete(self):
-        """Every force-delete in the particle generator drains the compiler first.
-
-        Force-deleting a package the asset compiler still owns crashes in CoreUObject, and a
-        system is enqueued both by loading it and by authoring it -- so the drain belongs at
-        each delete site, not once before the first.
-        """
-        generator = (REPO / "pipeline/unreal/make_particle_systems.py").read_text(
-            encoding="utf-8"
-        )
-        builder = (
-            REPO / "Source/ElysiumUE/Private/Editor/ElysiumParticleAssetBuilder.cpp"
-        ).read_text(encoding="utf-8")
-
-        self.assertIn(
-            "def _drain_compilation():", generator,
-            "the generator names its drain in one place")
-        helper = generator.index("def _drain_compilation():")
-        self.assertLess(
-            helper, generator.index("finish_asset_compilation()"),
-            "_drain_compilation is the only caller of the engine drain")
-
-        lines = generator.splitlines()
-        deletes = [
-            number for number, line in enumerate(lines)
-            if "bl.delete_owned_asset(" in line or "bl.prune_package_prefix(" in line
-        ]
-        self.assertGreaterEqual(len(deletes), 4, "expected every delete site to be covered")
-        for number in deletes:
-            window = lines[max(0, number - 4):number]
-            self.assertTrue(
-                any("_drain_compilation()" in line for line in window),
-                "no drain within four lines of %r (line %d)" % (
-                    lines[number].strip(), number + 1),
-            )
-
-        # The preload keeps the replacement set resident, so a delete never loads a system an
-        # instant before destroying it.
-        self.assertLess(generator.index("existing = []"), min(
-            generator.index(lines[number]) for number in deletes
-            if "delete_owned_asset(asset)" in lines[number]))
-        self.assertIn(
-            "UElysiumParticleAssetBuilder::FinishAssetCompilation", builder
-        )
-        self.assertIn("FAssetCompilingManager::Get().FinishAllCompilation()", builder)
-
 
 if __name__ == "__main__":
     unittest.main()

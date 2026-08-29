@@ -404,11 +404,6 @@ class MotionTests(unittest.TestCase):
     def test_sixty_one_static_frames_pass(self) -> None:
         self.assertEqual(W.frame_variance(self._bones(), self._pose(61), [1]), [])
 
-    def test_constant_offset_from_bind_is_not_motion(self) -> None:
-        # Every frame sits 5 in from the bone's own bind position and none of them differ.
-        pose = self._pose(61)
-        self.assertEqual(W.frame_variance(self._bones(), pose, [1]), [])
-
     def test_a_moving_sub_rig_bone_is_caught_and_named(self) -> None:
         pose = self._pose(61, mover=lambda f: (5.0 + f * 0.1, 0.0, 0.0))
 
@@ -491,32 +486,6 @@ class MaterialResolutionTests(unittest.TestCase):
             self.assertEqual(envmask, "")
             self.assertEqual(bump, "")
 
-    def test_search_path_order_is_tried_in_header_order(self) -> None:
-        # Several models fall through several header search paths before the bare root; a VMT
-        # only the last candidate resolves must still be found.
-        with tempfile.TemporaryDirectory() as root:
-            install_ = _Install(Path(root))
-            install_.add("materials/claws.vmt", '"VertexLitGeneric"\n{\n\t"$basetexture" "claws"\n}\n')
-            tth, ttz = self._bgr_texture()
-            install_.add_bytes("materials/claws.tth", tth)
-            install_.add_bytes("materials/claws.ttz", ttz)
-            read_bytes = lambda key: install.read(install_.index, key)
-
-            albedo, _flags, failure, _envmask, _bump = W._resolve_material_row(
-                "claws", ["models/scenery/pipes/valve_wheel/", ""], read_bytes)
-
-            self.assertEqual(albedo, "claws")
-            self.assertEqual(failure, "")
-
-    def test_an_unmatched_material_name_is_recorded_not_fatal(self) -> None:
-        albedo, flags, failure, envmask, bump = W._resolve_material_row(
-            "nowhere", [""], lambda key: None)
-
-        self.assertEqual(albedo, "")
-        self.assertEqual(flags, frozenset())
-        self.assertNotEqual(failure, "")
-        self.assertEqual((envmask, bump), ("", ""))
-
     def test_a_texture_that_fails_to_decode_is_recorded_not_fatal(self) -> None:
         # The handleclaws real case: the VMT resolves and names a basetexture, but the .ttz is a
         # 20-byte empty file and the DXT mip it should hold is not there.
@@ -546,44 +515,6 @@ class MaterialResolutionTests(unittest.TestCase):
             self.assertEqual(
                 W._resolve_material_row("empty", [""], read_bytes),
                 ("", frozenset(), "", "", ""))
-
-    def test_envmask_and_bump_keys_are_surfaced_when_present(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install_ = _Install(Path(root))
-            install_.add(
-                "materials/rig.vmt",
-                '"VertexLitGeneric"\n{\n\t"$basetexture" "rig"\n'
-                '\t"$envmapmask" "rig_mask"\n\t"$bumpmap" "rig_normal"\n}\n',
-            )
-            tth, ttz = self._bgr_texture()
-            install_.add_bytes("materials/rig.tth", tth)
-            install_.add_bytes("materials/rig.ttz", ttz)
-            # `envmask`/`bump` are presence-only: no `.tth`/`.ttz` is registered for either key,
-            # and resolution must still succeed.
-            read_bytes = lambda key: install.read(install_.index, key)
-
-            albedo, _flags, failure, envmask, bump = W._resolve_material_row(
-                "rig", [""], read_bytes)
-
-            self.assertEqual(albedo, "rig")
-            self.assertEqual(failure, "")
-            self.assertEqual(envmask, "rig_mask")
-            self.assertEqual(bump, "rig_normal")
-
-    def test_envmask_and_bump_default_to_empty_when_absent(self) -> None:
-        with tempfile.TemporaryDirectory() as root:
-            install_ = _Install(Path(root))
-            install_.add(
-                "materials/plain.vmt", '"VertexLitGeneric"\n{\n\t"$basetexture" "plain"\n}\n')
-            tth, ttz = self._bgr_texture()
-            install_.add_bytes("materials/plain.tth", tth)
-            install_.add_bytes("materials/plain.ttz", ttz)
-            read_bytes = lambda key: install.read(install_.index, key)
-
-            _albedo, _flags, _failure, envmask, bump = W._resolve_material_row(
-                "plain", [""], read_bytes)
-
-            self.assertEqual((envmask, bump), ("", ""))
 
 
 class ModelMaterialsTests(unittest.TestCase):

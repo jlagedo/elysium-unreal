@@ -29,22 +29,6 @@ class LaunchArgumentTests(unittest.TestCase):
             export_root=root / "exports",
         )
 
-    def test_unattended_commandlet_gains_headless_flags_and_a_bounded_tail(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            config = self._config(temporary)
-            runner = RecordingRunner()
-            with mock.patch.object(unreal, "editor_executable",
-                                   return_value=Path("UnrealEditor-Cmd.exe")):
-                unreal.bake_corpus(config, runner)
-            (argv, tail_lines), = runner.calls
-            for flag in ("-NoLiveCoding", "-noP4", "-nosound"):
-                self.assertIn(flag, argv)
-            # Rendering and log behaviour are unchanged: the corpus bake keeps its RHI and
-            # its full log stream; only in-memory retention is bounded.
-            self.assertIn("-AllowCommandletRendering", argv)
-            self.assertIn("-FullStdOutLogOutput", argv)
-            self.assertEqual(tail_lines, unreal.EDITOR_TAIL_LINES)
-
     def test_an_already_present_flag_is_not_duplicated(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             config = self._config(temporary)

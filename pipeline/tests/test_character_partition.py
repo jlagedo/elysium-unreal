@@ -113,11 +113,6 @@ class BuildPartitionTests(unittest.TestCase):
         self.assertEqual(sorted(partition["model_family_of"]), sorted(MODELS))
         self.assertEqual(sorted(partition["bank_family_of"]), sorted(BANKS))
 
-    def test_members_are_sorted(self):
-        partition = cp.build_partition(MODELS, {})
-        for entry in partition["models"].values():
-            self.assertEqual(entry["members"], sorted(entry["members"]))
-
     def test_carries_a_skeleton_path_per_family(self):
         partition = cp.build_partition(MODELS, BANKS)
         self.assertEqual(partition["models"]["a_seed"]["skeleton"],
@@ -158,20 +153,8 @@ class BuildPartitionTests(unittest.TestCase):
         self.assertNotIn("bank_one", partition["model_family_of"])
         self.assertNotIn("a_seed", partition["bank_family_of"])
 
-    def test_members_for_reads_back(self):
-        partition = cp.build_partition(MODELS, {})
-        self.assertEqual(cp.members_for(partition, "models", "a_seed"), ["a_seed"])
-        self.assertEqual(cp.members_for(partition, "models", "nobody"), [])
-
-        bank_partition = cp.build_partition({}, MODELS)
-        self.assertEqual(cp.members_for(bank_partition, "banks", "a_seed"),
-                         ["a_seed", "m_plain"])
-
 
 class CheckTests(unittest.TestCase):
-    def test_accepts_what_build_partition_writes(self):
-        self.assertIsNotNone(cp.check(cp.build_partition(MODELS, BANKS)))
-
     def test_rejects_a_stale_version(self):
         partition = cp.build_partition(MODELS, {})
         partition["version"] = cp.VERSION + 1

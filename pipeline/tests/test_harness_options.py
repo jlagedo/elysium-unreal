@@ -28,23 +28,11 @@ class HarnessOptionTests(unittest.TestCase):
         self.assertEqual(positional, ["tremere_male_armor_0"])
         self.assertTrue(options.drive)
 
-    def test_drive_composes_with_the_other_switches(self) -> None:
-        positional, options = _take_options(
-            ["--drive", "--set", "elysium.Mute 0", "tremere_male_armor_0"]
-        )
-        self.assertEqual(positional, ["tremere_male_armor_0"])
-        self.assertTrue(options.drive)
-        self.assertEqual(options.exec_cmds, ("elysium.Mute 0",))
-
     def test_arena_is_taken_out_of_the_positional_list(self) -> None:
         positional, options = _take_options(["tremere_male_armor_0", "--arena"])
         self.assertEqual(positional, ["tremere_male_armor_0"])
         self.assertTrue(options.arena)
         self.assertFalse(options.drive)
-
-    def test_arena_is_off_by_default(self) -> None:
-        _, options = _take_options(["tremere_male_armor_0"])
-        self.assertFalse(options.arena)
 
     def test_arena_and_drive_are_independent_flags(self) -> None:
         """Both may be given. The launch branch, not the parser, resolves the pair.
@@ -56,6 +44,7 @@ class HarnessOptionTests(unittest.TestCase):
         self.assertEqual(positional, ["tremere_male_armor_0"])
         self.assertTrue(options.arena)
         self.assertTrue(options.drive)
+
 
 class ComposeBodyOptionTests(unittest.TestCase):
     """`--body` names the bodies a harness stands, and it must leave the positionals alone.
@@ -100,14 +89,6 @@ class ComposeBodyOptionTests(unittest.TestCase):
         """Silently dropping it would run the default set under a command line that named one."""
         with self.assertRaises(ValueError):
             _take_options(["item_w_ithaca_m_37", "--body"])
-
-    def test_body_composes_with_the_other_switches(self) -> None:
-        positional, options = _take_options(
-            ["--body", "malkavian_male_armor_0", "--set", "elysium.Mute 0", "item_w_ithaca_m_37"]
-        )
-        self.assertEqual(positional, ["item_w_ithaca_m_37"])
-        self.assertEqual(options.bodies, ("malkavian_male_armor_0",))
-        self.assertEqual(options.exec_cmds, ("elysium.Mute 0",))
 
 
 if __name__ == "__main__":

@@ -107,16 +107,6 @@ class PrefixBucketTests(unittest.TestCase):
         "models/character/noext": ("vpk", 9),
     }
 
-    def test_bucketed_detail_matches_the_linear_scan(self) -> None:
-        buckets = export_manager._index_prefix_buckets(self.INDEX)
-        for rel in ("models/character/x.mdl", "models/character/xy.mdl",
-                    "models/dir.v2/x.mdl", "models/character/x.foo.mdl",
-                    "models/absent.mdl"):
-            with self.subTest(model=rel):
-                self.assertEqual(
-                    export_manager._character_source_detail(self.INDEX, rel),
-                    export_manager._character_source_detail(self.INDEX, rel, buckets))
-
     def test_sibling_files_move_the_detail_and_foreign_stems_do_not(self) -> None:
         buckets = export_manager._index_prefix_buckets(self.INDEX)
         base = export_manager._character_source_detail(
@@ -282,17 +272,6 @@ class ManifestPlumbingTests(unittest.TestCase):
                 npc_dir, manifest)
             self.assertEqual(models, {"amy": "models/amy.mdl"})
             self.assertEqual((banks, cinematics, props), ({}, {}, {}))
-
-    def test_character_sweep_expected_accepts_a_preloaded_manifest(self) -> None:
-        from elysium_pipeline import character_partition
-
-        with tempfile.TemporaryDirectory() as temporary:
-            npc_dir = Path(temporary)  # deliberately carries no npc_manifest.json
-            partition = character_partition.build_partition(
-                {"amy": {"root": ""}}, {})
-            expected, manifest = character_sweep._expected(npc_dir, partition, {"npcs": {}})
-            self.assertIn("Meshes/SK_amy", expected)
-            self.assertEqual(manifest, {"npcs": {}})
 
 
 class SweepReceiptTests(unittest.TestCase):

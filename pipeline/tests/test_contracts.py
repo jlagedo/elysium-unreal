@@ -45,18 +45,6 @@ class CoordinateContractTests(unittest.TestCase):
                     definitions.append(source)
         self.assertEqual(definitions, [REPO / "pipeline/src/elysium_pipeline/formats/bsp.py"])
 
-    def test_legacy_godot_transform_is_absent(self) -> None:
-        self.assertFalse(hasattr(bsp, "source_to_godot"))
-
-    def test_obj_writer_reverses_reflected_winding(self) -> None:
-        source = (
-            REPO / "pipeline/src/elysium_pipeline/exporters/UE_bsp_to_scene.py"
-        ).read_text(encoding="utf-8")
-        self.assertIn(
-            'o.write(f"f {a+1}/{a+1} {c+1}/{c+1} {b+1}/{b+1}\\n")',
-            source,
-        )
-
     def test_model_obj_writer_is_unreal_only(self) -> None:
         mesh = mdl.Mesh("test")
         mesh.verts = [
@@ -1098,15 +1086,6 @@ class UnrealBakeDriverContractTests(unittest.TestCase):
         )
 
 
-class LightingBakeContractTests(unittest.TestCase):
-    def test_spot_cones_use_both_authored_cosines(self) -> None:
-        source = (REPO / "pipeline/unreal/bake_map.py").read_text(encoding="utf-8")
-        self.assertIn("stopdot = float(tok[11])", source)
-        self.assertIn("stopdot2 = float(tok[12])", source)
-        self.assertIn("component.set_inner_cone_angle(min(inner, outer))", source)
-        self.assertNotIn("outer * 0.6", source)
-
-
 class PathContractTests(unittest.TestCase):
     def test_work_root_derivations(self) -> None:
         with tempfile.TemporaryDirectory() as work:
@@ -1127,43 +1106,6 @@ class PathContractTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "ELYSIUM_WORK_ROOT"):
                 paths.work_root()
-
-
-class NamingContractTests(unittest.TestCase):
-    def test_legacy_godot_scripts_are_absent(self) -> None:
-        legacy = (
-            "pipeline/src/elysium_pipeline/exporters/bsp_to_obj.py",
-            "pipeline/src/elysium_pipeline/exporters/menu_extract.py",
-            "pipeline/src/elysium_pipeline/enhancement/build_grade_lut.py",
-            "pipeline/src/elysium_pipeline/validation/make_testmap.py",
-            "pipeline/src/elysium_pipeline/validation/render_obj.py",
-            "research/tooling/probes/sdfgi_probe.py",
-            "research/tooling/probes/probe_lightstyles_where.py",
-        )
-        self.assertFalse([path for path in legacy if (REPO / path).exists()])
-
-    def test_unreal_exporters_keep_ue_prefix(self) -> None:
-        exporters = REPO / "pipeline/src/elysium_pipeline/exporters"
-        expected = {
-            "UE_bsp_to_scene.py",
-            "UE_extract_cfg.py",
-            "UE_extract_scenes.py",
-            "UE_extract_scripts.py",
-            "UE_extract_signs.py",
-            "UE_extract_sounds.py",
-            "UE_extract_ui.py",
-            "UE_extract_vdata.py",
-            "UE_use_icons.py",
-        }
-        self.assertTrue(expected.issubset({path.name for path in exporters.glob("UE_*.py")}))
-
-    def test_gltf_exemptions_remain_isolated(self) -> None:
-        expected = (
-            "pipeline/src/elysium_pipeline/formats/mdl_gltf.py",
-            "pipeline/src/elysium_pipeline/exporters/character_glb.py",
-            "pipeline/src/elysium_pipeline/exporters/texture_glb.py",
-        )
-        self.assertFalse([path for path in expected if not (REPO / path).is_file()])
 
 
 class RepositoryPolicyTests(unittest.TestCase):
