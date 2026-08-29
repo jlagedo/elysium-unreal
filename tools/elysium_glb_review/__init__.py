@@ -20,7 +20,7 @@ except ImportError:  # imported by the Blender-free test run
 if bpy is not None:
     from . import prefs
     from .adapters import hooks
-    from .ui import operators, panels
+    from .ui import browser, operators, panels
 
     if _needs_reload:
         import importlib
@@ -28,6 +28,7 @@ if bpy is not None:
         prefs = importlib.reload(prefs)
         hooks = importlib.reload(hooks)
         operators = importlib.reload(operators)
+        browser = importlib.reload(browser)
         panels = importlib.reload(panels)
 
     #: The glTF importer scans every enabled add-on for this exact name at module level.
@@ -35,15 +36,17 @@ if bpy is not None:
     #: unit in the corpus fails its extensionsRequired check.
     glTF2ImportUserExtension = hooks.glTF2ImportUserExtension
 
-    _CLASSES = (*prefs.CLASSES, *operators.CLASSES, *panels.CLASSES)
+    _CLASSES = (*prefs.CLASSES, *operators.CLASSES, *browser.CLASSES, *panels.CLASSES)
 
     def register() -> None:
         for cls in _CLASSES:
             bpy.utils.register_class(cls)
+        browser.register_properties()
         operators.register_menus()
 
     def unregister() -> None:
         operators.unregister_menus()
+        browser.unregister_properties()
         for cls in reversed(_CLASSES):
             # Reinstalling reloads the module, so a class here may not be the one
             # Blender holds. Leaving the rest registered would be worse than skipping.
