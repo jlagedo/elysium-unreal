@@ -69,28 +69,27 @@ class BuildIndexMemo(unittest.TestCase):
             with open(os.path.join(self.patch, *rel), "wb") as f:
                 f.write(b"x")
         index = install.build_index(verbose=False)
-        self.assertIn("maps/sm_hub_1.bsp", index)
-        self.assertFalse([k for k in index if k.startswith("maps/graphs/")
-                          or k.startswith("maps/soundcache/")])
+        assert "maps/sm_hub_1.bsp" in index
+        assert not [k for k in index if k.startswith("maps/graphs/")
+                          or k.startswith("maps/soundcache/")]
 
     def test_a_repeat_call_returns_the_same_index_object(self):
         with mock.patch.object(vpk, "index_all", wraps=vpk.index_all) as spy:
             first = install.build_index(verbose=False)
             second = install.build_index(verbose=False)
-        self.assertIs(first, second)
-        self.assertEqual(spy.call_count, 1)
+        assert first is second
+        assert spy.call_count == 1
 
     def test_distinct_dirs_are_distinct_keys(self):
         materials = install.build_index(("materials",), verbose=False)
         particles = install.build_index(("particles",), verbose=False)
-        self.assertIsNot(materials, particles)
-        self.assertIn("materials/retail_only.vmt", materials)
-        self.assertNotIn("particles/rain.txt", materials)
-        self.assertIn("particles/rain.txt", particles)
+        assert materials is not particles
+        assert "materials/retail_only.vmt" in materials
+        assert "particles/rain.txt" not in materials
+        assert "particles/rain.txt" in particles
 
     def test_a_list_and_a_tuple_of_dirs_share_one_key(self):
-        self.assertIs(install.build_index(["materials"], verbose=False),
-                      install.build_index(("materials",), verbose=False))
+        assert install.build_index(["materials"], verbose=False) is install.build_index(("materials",), verbose=False)
 
     def test_changed_roots_are_distinct_keys(self):
         first = install.build_index(verbose=False)
@@ -98,30 +97,25 @@ class BuildIndexMemo(unittest.TestCase):
         os.makedirs(other_game)
         with mock.patch.object(install, "GAME", other_game):
             other = install.build_index(verbose=False)
-        self.assertIsNot(first, other)
+        assert first is not other
         # The other game root has no packs and no retail loose tree; only the patch
         # root (still on LOOSE_ROOTS) contributes.
-        self.assertNotIn("materials/vpkonly.vmt", other)
-        self.assertNotIn("materials/retail_only.vmt", other)
-        self.assertIn("materials/shared.vmt", other)
+        assert "materials/vpkonly.vmt" not in other
+        assert "materials/retail_only.vmt" not in other
+        assert "materials/shared.vmt" in other
 
     def test_invalidate_forces_a_rebuild(self):
         first = install.build_index(verbose=False)
         install.invalidate_index_cache()
         second = install.build_index(verbose=False)
-        self.assertIsNot(first, second)
-        self.assertEqual(first, second)
+        assert first is not second
+        assert first == second
 
     def test_shadowing_and_read_are_unchanged(self):
         idx = install.build_index(verbose=False)
-        self.assertEqual(idx["materials/shared.vmt"],
-                         ("loose", os.path.join(self.patch, "materials", "shared.vmt")))
-        self.assertEqual(idx["materials/vpkonly.vmt"][0], "vpk")
-        self.assertEqual(install.read(idx, "materials/VpkOnly.vmt"), b"vpk only")
-        self.assertEqual(install.read(idx, "materials/shared.vmt"), b"patch shadow")
-        self.assertEqual(install.read(idx, "materials/retail_only.vmt"), b"retail loose")
-        self.assertIsNone(install.read(idx, "materials/absent.vmt"))
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert idx["materials/shared.vmt"] == ("loose", os.path.join(self.patch, "materials", "shared.vmt"))
+        assert idx["materials/vpkonly.vmt"][0] == "vpk"
+        assert install.read(idx, "materials/VpkOnly.vmt") == b"vpk only"
+        assert install.read(idx, "materials/shared.vmt") == b"patch shadow"
+        assert install.read(idx, "materials/retail_only.vmt") == b"retail loose"
+        assert install.read(idx, "materials/absent.vmt") is None

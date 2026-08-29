@@ -7,6 +7,7 @@ from PIL import Image
 
 from elysium_pipeline import shared_corpus
 from elysium_pipeline.formats import particles, tex_to_png, vmt, weather
+import pytest
 
 
 def wet_vmt(scales=(0.6, 0.6, 0.6), *, comments=False):
@@ -25,10 +26,10 @@ def wet_vmt(scales=(0.6, 0.6, 0.6), *, comments=False):
 
 class GlobalWetnessVmtTests(unittest.TestCase):
     def test_proxy_casing_comments_quoting_and_scalar_extraction(self):
-        self.assertEqual(vmt.parse(wet_vmt(comments=True))["globalwetness"], 0.6)
+        assert vmt.parse(wet_vmt(comments=True))["globalwetness"] == 0.6
 
     def test_absent_proxy_is_not_wetness_driven(self):
-        self.assertIsNone(vmt.parse('LightmappedGeneric { "$basetexture" "x" }')["globalwetness"])
+        assert vmt.parse('LightmappedGeneric { "$basetexture" "x" }')["globalwetness"] is None
 
     def test_partial_malformed_and_unequal_triples_fail(self):
         for document in (
@@ -37,7 +38,7 @@ class GlobalWetnessVmtTests(unittest.TestCase):
             wet_vmt((0.6, 0.5, 0.6)),
         ):
             with self.subTest(document=document):
-                with self.assertRaises(vmt.VmtContractError):
+                with pytest.raises(vmt.VmtContractError):
                     vmt.parse(document)
 
     def test_patch_inherits_parent_proxy(self):
@@ -45,7 +46,7 @@ class GlobalWetnessVmtTests(unittest.TestCase):
             'Patch { "include" "materials/base.vmt" }',
             resolve_include=lambda _path: wet_vmt((0.25, 0.25, 0.25)),
         )
-        self.assertEqual(result["globalwetness"], 0.25)
+        assert result["globalwetness"] == 0.25
 
 
 class CubemapDdsTests(unittest.TestCase):
@@ -57,25 +58,23 @@ class CubemapDdsTests(unittest.TestCase):
         data = tex_to_png.cubemap_dds([
             Image.new("RGBA", (2, 2), colour) for colour in colours
         ])
-        self.assertEqual(data[:4], b"DDS ")
-        self.assertEqual(int.from_bytes(data[12:16], "little"), 2)
-        self.assertEqual(int.from_bytes(data[16:20], "little"), 2)
-        self.assertEqual(int.from_bytes(data[112:116], "little"), 0xFE00)
+        assert data[:4] == b"DDS "
+        assert int.from_bytes(data[12:16], "little") == 2
+        assert int.from_bytes(data[16:20], "little") == 2
+        assert int.from_bytes(data[112:116], "little") == 0xFE00
         pixels = data[128:]
         face_bytes = 2 * 2 * 4
         for index, (r, g, b, a) in enumerate(colours):
-            self.assertEqual(
-                pixels[index * face_bytes:index * face_bytes + 4], bytes((b, g, r, a))
-            )
+            assert pixels[index * face_bytes:index * face_bytes + 4] == bytes((b, g, r, a))
 
     def test_missing_unequal_and_non_square_faces_fail(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             tex_to_png.cubemap_dds([Image.new("RGBA", (2, 2))] * 5)
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             tex_to_png.cubemap_dds(
                 [Image.new("RGBA", (2, 2))] * 5 + [Image.new("RGBA", (4, 4))]
             )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             tex_to_png.cubemap_dds([Image.new("RGBA", (2, 3))] * 6)
 
 
@@ -114,24 +113,21 @@ class ParticleClosureTests(unittest.TestCase):
 
     def test_comment_handling_dependency_collision_and_unit_conversion(self):
         result = self.compile()
-        self.assertEqual(
-            list(result["definitions"]),
-            ["rain_follow_emitter", "raindrops2", "rainsplash_new", "rainstain"],
-        )
+        assert list(result["definitions"]) == ["rain_follow_emitter", "raindrops2", "rainsplash_new", "rainstain"]
         rain = result["definitions"]["raindrops2"]
-        self.assertAlmostEqual(rain["velocity_cm_per_second"]["x"]["values"][0], 50.8)
-        self.assertAlmostEqual(rain["velocity_cm_per_second"]["y"]["values"][0], -50.8)
-        self.assertEqual(rain["collision"]["decal"]["particle"], "rainstain")
-        self.assertNotIn("disabled", result["definitions"])
+        assert rain["velocity_cm_per_second"]["x"]["values"][0] == pytest.approx(50.8, abs=1e-7)
+        assert rain["velocity_cm_per_second"]["y"]["values"][0] == pytest.approx(-50.8, abs=1e-7)
+        assert rain["collision"]["decal"]["particle"] == "rainstain"
+        assert "disabled" not in result["definitions"]
 
     def test_missing_asset_and_unsupported_live_field_fail(self):
-        with self.assertRaises(particles.ParticleContractError):
+        with pytest.raises(particles.ParticleContractError):
             self.compile(sprites={"dropletfast", "fortituderings"})
         changed = dict(self.DEFINITIONS)
         changed["raindrops2"] = changed["raindrops2"].replace(
             "sprite dropletfast", "sprite dropletfast unknown_live_field 1"
         )
-        with self.assertRaises(particles.ParticleContractError):
+        with pytest.raises(particles.ParticleContractError):
             particles.compile_closure(
                 ["rain_follow_emitter"], changed.get,
                 {"dropletfast", "fortituderings", "d_targetblob"}.__contains__,
@@ -161,32 +157,32 @@ class ImpactParticleContractTests(unittest.TestCase):
 
     def test_burst_and_cartesian_spawn_offset(self):
         spawns = self.compile()["definitions"]["impact_emitter"]["spawns"]
-        self.assertAlmostEqual(spawns[0]["burst"]["values"][0], 40.0)
+        assert spawns[0]["burst"]["values"][0] == pytest.approx(40.0, abs=1e-7)
         offset = spawns[0]["offset_cm"]
-        self.assertAlmostEqual(offset["x"]["values"][0], 5.08)
+        assert offset["x"]["values"][0] == pytest.approx(5.08, abs=1e-7)
         # `y` takes the same Source reflection the velocities do.
-        self.assertAlmostEqual(offset["y"]["values"][0], -7.62)
-        self.assertAlmostEqual(offset["z"]["values"][0], -2.54)
-        self.assertNotIn("offset_cm", spawns[1])
-        self.assertAlmostEqual(spawns[1]["rate"]["values"][0], 30.0)
+        assert offset["y"]["values"][0] == pytest.approx(-7.62, abs=1e-7)
+        assert offset["z"]["values"][0] == pytest.approx(-2.54, abs=1e-7)
+        assert "offset_cm" not in spawns[1]
+        assert spawns[1]["rate"]["values"][0] == pytest.approx(30.0, abs=1e-7)
 
     def test_spherical_speeds_convert_and_parent_speed_stays_dimensionless(self):
         fx = self.compile()["definitions"]["impact_fx"]
         radial = fx["radial_velocity_cm_per_second"]
-        self.assertAlmostEqual(radial["radius"]["values"][0], -101.6)
-        self.assertAlmostEqual(radial["elevation"]["values"][1], -381.0)
-        self.assertEqual(radial["radius"]["kind"], "range")
+        assert radial["radius"]["values"][0] == pytest.approx(-101.6, abs=1e-7)
+        assert radial["elevation"]["values"][1] == pytest.approx(-381.0, abs=1e-7)
+        assert radial["radius"]["kind"] == "range"
         # A fraction of the parent's velocity, not a length.
-        self.assertAlmostEqual(fx["parent_speed"]["values"][0], 1.0)
+        assert fx["parent_speed"]["values"][0] == pytest.approx(1.0, abs=1e-7)
         # Unresolved unit, so carried verbatim.
-        self.assertAlmostEqual(fx["depth_offset"]["values"][0], 10.0)
+        assert fx["depth_offset"]["values"][0] == pytest.approx(10.0, abs=1e-7)
 
     def test_rgb_channels_and_width_are_carried(self):
         fx = self.compile()["definitions"]["impact_fx"]
-        self.assertEqual(fx["red"]["values"], [255.0, 150.0])
-        self.assertEqual(fx["green"]["values"], [0.0])
-        self.assertEqual(fx["blue"]["values"], [0.0])
-        self.assertAlmostEqual(fx["width_cm"]["values"][0], 5.08)
+        assert fx["red"]["values"] == [255.0, 150.0]
+        assert fx["green"]["values"] == [0.0]
+        assert fx["blue"]["values"] == [0.0]
+        assert fx["width_cm"]["values"][0] == pytest.approx(5.08, abs=1e-7)
 
 
 class MapParticleDocumentTests(unittest.TestCase):
@@ -221,34 +217,33 @@ class MapParticleDocumentTests(unittest.TestCase):
 
     def test_attachment_keys_and_definition_spelling(self):
         document = self.document()
-        self.assertEqual(document["schema"], particles.MAP_PARTICLE_SCHEMA)
+        assert document["schema"] == particles.MAP_PARTICLE_SCHEMA
         # The keyless entity is skipped; the logic_relay is not an emitter.
-        self.assertEqual([e["targetname"] for e in document["emitters"]],
-                         ["attached", "pathspelled", "unresolvable"])
+        assert [e["targetname"] for e in document["emitters"]] == ["attached", "pathspelled", "unresolvable"]
         attached = document["emitters"][0]
-        self.assertEqual(attached["attach_type"], 2)
-        self.assertEqual(attached["parentname"], "Sire2")
-        self.assertEqual(attached["bone"], "Bip01 Neck")
-        self.assertAlmostEqual(attached["bounds_cm"], 512 * 2.54)
+        assert attached["attach_type"] == 2
+        assert attached["parentname"] == "Sire2"
+        assert attached["bone"] == "Bip01 Neck"
+        assert attached["bounds_cm"] == pytest.approx(512 * 2.54, abs=1e-7)
         # `particles/good_emitter.txt` resolves to the same definition as `good_emitter`.
-        self.assertEqual(document["emitters"][1]["particle_definition"], "good_emitter")
+        assert document["emitters"][1]["particle_definition"] == "good_emitter"
 
     def test_one_bad_definition_does_not_lose_the_others(self):
         document = self.document()
-        self.assertIn("good_emitter", document["particles"]["definitions"])
-        self.assertIn("good_fx", document["particles"]["definitions"])
-        self.assertNotIn("broken_emitter", document["particles"]["definitions"])
-        self.assertEqual([u["definition"] for u in document["unresolved"]], ["broken_emitter"])
-        self.assertIn("sortfront", document["unresolved"][0]["reason"])
+        assert "good_emitter" in document["particles"]["definitions"]
+        assert "good_fx" in document["particles"]["definitions"]
+        assert "broken_emitter" not in document["particles"]["definitions"]
+        assert [u["definition"] for u in document["unresolved"]] == ["broken_emitter"]
+        assert "sortfront" in document["unresolved"][0]["reason"]
         # The emitter is still listed, so the map records what it wanted to play.
-        self.assertEqual(document["emitters"][2]["particle_definition"], "broken_emitter")
+        assert document["emitters"][2]["particle_definition"] == "broken_emitter"
 
     def test_a_map_with_no_entities_still_bakes_gameplay_event_roots(self):
         document = particles.build_particle_document(
             "empty", {"entities": []}, self.DEFINITIONS.get, {"spark"}.__contains__)
-        self.assertEqual(document["emitters"], [])
-        self.assertEqual(document["particles"]["roots"], ["force_feeding_emitter"])
-        self.assertIn("force_feeding_fx1", document["particles"]["definitions"])
+        assert document["emitters"] == []
+        assert document["particles"]["roots"] == ["force_feeding_emitter"]
+        assert "force_feeding_fx1" in document["particles"]["definitions"]
 
     def test_spawn_wrapper_accepts_zero_frames_and_inert_sortfront(self):
         wrapper, refs, sprites = particles.compile_definition(
@@ -260,20 +255,20 @@ class MapParticleDocumentTests(unittest.TestCase):
             "W_thirtyeight_flash-1",
             'Particle { frames 2 sprite flash sortfront 0 }',
         )
-        self.assertEqual(wrapper["frames"], 0)
-        self.assertEqual(refs, {"w_thirtyeight_flash-1"})
-        self.assertEqual(sprites, set())
-        self.assertEqual(wrapper["spawns"][0]["depth_offset"]["values"], [1.0])
-        self.assertAlmostEqual(wrapper["spawns"][0]["offset_cm"]["z"]["values"][0], 30.48)
-        self.assertFalse(child["sortfront"])
-        self.assertEqual(child_refs, set())
-        self.assertEqual(child_sprites, {"flash"})
+        assert wrapper["frames"] == 0
+        assert refs == {"w_thirtyeight_flash-1"}
+        assert sprites == set()
+        assert wrapper["spawns"][0]["depth_offset"]["values"] == [1.0]
+        assert wrapper["spawns"][0]["offset_cm"]["z"]["values"][0] == pytest.approx(30.48, abs=1e-7)
+        assert not child["sortfront"]
+        assert child_refs == set()
+        assert child_sprites == {"flash"}
 
-        with self.assertRaisesRegex(particles.ParticleContractError, "sortfront"):
+        with pytest.raises(particles.ParticleContractError, match="sortfront"):
             particles.compile_definition(
                 "sorted_fx", 'Particle { frames 2 sprite flash sortfront 1 }'
             )
-        with self.assertRaisesRegex(particles.ParticleContractError, "frames"):
+        with pytest.raises(particles.ParticleContractError, match="frames"):
             particles.compile_definition("zero_sprite", 'Particle { frames 0 sprite flash }')
 
 
@@ -295,9 +290,9 @@ class HeightTextureTests(unittest.TestCase):
                 encoding="utf-8",
             )
             triangles = weather.static_prop_cover_triangles(root, "map")
-            self.assertEqual(len(triangles), 1)
-            self.assertEqual(triangles[0][0], (100.0, 200.0, 300.0))
-            self.assertEqual(triangles[0][2], (100.0, 210.0, 300.0))
+            assert len(triangles) == 1
+            assert triangles[0][0] == (100.0, 200.0, 300.0)
+            assert triangles[0][2] == (100.0, 210.0, 300.0)
 
     def test_r16_sentinel_bounds_resolution_and_decode(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -310,14 +305,10 @@ class HeightTextureTests(unittest.TestCase):
                 resolution=2048,
             )
             image = np.asarray(Image.open(path), dtype=np.uint16)
-            self.assertEqual(image.shape, (2048, 2048))
-            self.assertEqual(int(image[-1, -1]), 0)
+            assert image.shape == (2048, 2048)
+            assert int(image[-1, -1]) == 0
             sample = int(image[1, 1])
-            self.assertGreater(sample, 0)
+            assert sample > 0
             decoded = metadata["min_z_cm"] + (sample - 1) * metadata["z_scale_cm"]
-            self.assertAlmostEqual(decoded, 50.0, delta=metadata["z_scale_cm"])
-            self.assertEqual(metadata["format"], "R16_UNORM")
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert decoded == pytest.approx(50.0, abs=metadata["z_scale_cm"])
+            assert metadata["format"] == "R16_UNORM"

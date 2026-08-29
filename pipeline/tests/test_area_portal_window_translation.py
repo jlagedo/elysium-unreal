@@ -37,8 +37,8 @@ class AreaPortalWindowTranslationTests(unittest.TestCase):
 
         models, warnings = source_visibility_backing_models(entities)
 
-        self.assertEqual(models, {21})
-        self.assertEqual(warnings, [])
+        assert models == {21}
+        assert warnings == []
 
     def test_multiple_windows_resolve_in_entity_order(self) -> None:
         entities = "\n".join(
@@ -53,8 +53,8 @@ class AreaPortalWindowTranslationTests(unittest.TestCase):
 
         models, warnings = source_visibility_backing_models(entities)
 
-        self.assertEqual(models, {4, 6})
-        self.assertEqual(warnings, [])
+        assert models == {4, 6}
+        assert warnings == []
 
     def test_malformed_links_warn_and_do_not_hide_an_unrelated_model(self) -> None:
         entities = "\n".join(
@@ -69,12 +69,8 @@ class AreaPortalWindowTranslationTests(unittest.TestCase):
 
         models, warnings = source_visibility_backing_models(entities)
 
-        self.assertEqual(models, set())
-        self.assertEqual(len(warnings), 3)
-        self.assertIn("has no target", warnings[0])
-        self.assertIn("does not resolve", warnings[1])
-        self.assertIn("has no brush model", warnings[2])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert models == set()
+        assert len(warnings) == 3
+        assert "has no target" in warnings[0]
+        assert "does not resolve" in warnings[1]
+        assert "has no brush model" in warnings[2]

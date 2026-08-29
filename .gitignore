@@ -121,3 +121,4 @@ CLAUDE.local.md
 
 # clangd background index
 .cache/
+.pytest_cache/

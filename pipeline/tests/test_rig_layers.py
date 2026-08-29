@@ -67,12 +67,12 @@ def _contrib(model: str, sequence: int, weight: float = 1.0) -> dict:
 
 class ModelKindTests(unittest.TestCase):
     def test_a_body_path_is_told_from_a_bank_path(self) -> None:
-        self.assertTrue(is_body_model(BODY))
-        self.assertTrue(is_body_model("models/character/npc/common/bum/male/bum_male.mdl"))
-        self.assertFalse(is_body_model(BANK))
+        assert is_body_model(BODY)
+        assert is_body_model("models/character/npc/common/bum/male/bum_male.mdl")
+        assert not is_body_model(BANK)
 
     def test_the_separator_and_case_do_not_decide_it(self) -> None:
-        self.assertTrue(is_body_model("MODELS\\CHARACTER\\PC\\male\\x.mdl"))
+        assert is_body_model("MODELS\\CHARACTER\\PC\\male\\x.mdl")
 
 
 class IndexSpaceTests(unittest.TestCase):
@@ -80,22 +80,22 @@ class IndexSpaceTests(unittest.TestCase):
 
     def test_a_body_contribution_reads_as_a_global_number(self) -> None:
         space = _space()
-        self.assertEqual(space.resolve(BODY, 401), ("aim_layer", "bank", 0x0))
-        self.assertEqual(space.resolve(BODY, 410), ("walk", "bank", 0x1))
+        assert space.resolve(BODY, 401) == ("aim_layer", "bank", 0x0)
+        assert space.resolve(BODY, 410) == ("walk", "bank", 0x1)
 
     def test_a_bank_contribution_reads_as_a_local_index(self) -> None:
         space = _space()
-        self.assertEqual(space.resolve(BANK, 0), ("aim_layer", "bank", 0x0))
-        self.assertEqual(space.resolve(BANK, 3), ("walk", "bank", 0x1))
+        assert space.resolve(BANK, 0) == ("aim_layer", "bank", 0x0)
+        assert space.resolve(BANK, 3) == ("walk", "bank", 0x1)
 
     def test_one_number_answers_differently_in_each_space(self) -> None:
         # 401 is `aim_layer` globally and out of range locally; 0 is `aim_layer`
         # locally and absent globally. Reading either through the wrong space
         # would answer a clip that exists and is wrong.
         space = _space()
-        self.assertEqual(space.resolve(BODY, 401)[0], "aim_layer")
-        self.assertIsNone(space.resolve(BANK, 401))
-        self.assertIsNone(space.resolve(BODY, 0))
+        assert space.resolve(BODY, 401)[0] == "aim_layer"
+        assert space.resolve(BANK, 401) is None
+        assert space.resolve(BODY, 0) is None
 
 
 class ChannelTests(unittest.TestCase):
@@ -104,39 +104,39 @@ class ChannelTests(unittest.TestCase):
             _contrib(BANK, 0), _contrib(BANK, 0), _contrib(BANK, 1),
         ]}
         channels, unresolved = channels_for_frame(frame, _space())
-        self.assertEqual(unresolved, 0)
-        self.assertEqual(len(channels), 2)
+        assert unresolved == 0
+        assert len(channels) == 2
         aim = next(c for c in channels if c["label"] == "aim_layer")
-        self.assertEqual(aim["times_accumulated"], 2)
-        self.assertNotIn("weight_disagreement", aim)
+        assert aim["times_accumulated"] == 2
+        assert "weight_disagreement" not in aim
 
     def test_a_repeat_that_disagrees_on_weight_says_so(self) -> None:
         frame = {"contributions": [_contrib(BANK, 0, 1.0), _contrib(BANK, 0, 0.25)]}
         channels, _ = channels_for_frame(frame, _space())
-        self.assertEqual(len(channels), 1)
-        self.assertEqual(channels[0]["weight"], 1.0)
-        self.assertEqual(channels[0]["weight_disagreement"], 0.25)
+        assert len(channels) == 1
+        assert channels[0]["weight"] == 1.0
+        assert channels[0]["weight_disagreement"] == 0.25
 
     def test_the_two_spaces_name_one_channel_rather_than_two(self) -> None:
         # The same clip reached as a bank-local index and as a body-global number
         # is one channel, because the dedup key is (owner, label).
         frame = {"contributions": [_contrib(BANK, 0), _contrib(BODY, 401)]}
         channels, _ = channels_for_frame(frame, _space())
-        self.assertEqual([c["label"] for c in channels], ["aim_layer"])
-        self.assertEqual(channels[0]["times_accumulated"], 2)
+        assert [c["label"] for c in channels] == ["aim_layer"]
+        assert channels[0]["times_accumulated"] == 2
 
     def test_the_delta_flag_is_what_marks_an_additive(self) -> None:
         frame = {"contributions": [_contrib(BANK, 0), _contrib(BANK, 1)]}
         channels, _ = channels_for_frame(frame, _space())
         by = {c["label"]: c["additive"] for c in channels}
-        self.assertFalse(by["aim_layer"])
-        self.assertTrue(by["bobble_delta"])
+        assert not by["aim_layer"]
+        assert by["bobble_delta"]
 
     def test_an_unreadable_contribution_is_counted_not_dropped_silently(self) -> None:
         frame = {"contributions": [_contrib(BANK, 0), _contrib(BANK, 99)]}
         channels, unresolved = channels_for_frame(frame, _space())
-        self.assertEqual(len(channels), 1)
-        self.assertEqual(unresolved, 1)
+        assert len(channels) == 1
+        assert unresolved == 1
 
 
 class CapacityTests(unittest.TestCase):
@@ -150,24 +150,20 @@ class CapacityTests(unittest.TestCase):
 
     def test_a_base_and_one_overlay_and_one_additive_fits(self) -> None:
         report = summarise([self._row(2, 1)])
-        self.assertEqual(report["frames_beyond_the_graph"], 0)
+        assert report["frames_beyond_the_graph"] == 0
 
     def test_a_second_additive_does_not_fit(self) -> None:
         report = summarise([self._row(2, 2)])
-        self.assertEqual(report["frames_over_one_additive"], 1)
-        self.assertEqual(report["frames_beyond_the_graph"], 1)
+        assert report["frames_over_one_additive"] == 1
+        assert report["frames_beyond_the_graph"] == 1
 
     def test_a_third_plain_channel_does_not_fit(self) -> None:
         report = summarise([self._row(3, 0)])
-        self.assertEqual(report["frames_over_one_overlay"], 1)
-        self.assertEqual(report["frames_beyond_the_graph"], 1)
+        assert report["frames_over_one_overlay"] == 1
+        assert report["frames_beyond_the_graph"] == 1
 
     def test_a_frame_over_on_both_counts_is_one_frame_beyond_the_graph(self) -> None:
         report = summarise([self._row(4, 2)])
-        self.assertEqual(report["frames_over_one_overlay"], 1)
-        self.assertEqual(report["frames_over_one_additive"], 1)
-        self.assertEqual(report["frames_beyond_the_graph"], 1)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert report["frames_over_one_overlay"] == 1
+        assert report["frames_over_one_additive"] == 1
+        assert report["frames_beyond_the_graph"] == 1

@@ -7,6 +7,7 @@ import unittest
 
 from elysium_pipeline import clean
 from elysium_pipeline.workspace_lock import LOCK_FILE, OWNER_FILE
+import pytest
 
 
 class CleanContractTests(unittest.TestCase):
@@ -53,33 +54,31 @@ class CleanContractTests(unittest.TestCase):
             )
             incomplete = clean.clean_generated(targets)
 
-            self.assertFalse((repo / "Content" / "ElysiumGenerated").exists())
-            self.assertFalse(baked.exists())
-            self.assertTrue((repo / "Content" / "Fonts" / "source.ttf").is_file())
-            self.assertTrue(
-                (repo / "Content" / "InputPrompts" / "Kenney" / "glyph.png").is_file()
-            )
-            self.assertTrue((external / "source.cpp").is_file())
-            self.assertFalse((export_v2 / "materials").exists())
-            self.assertTrue((export_v2 / clean.OWNERSHIP_FILE).is_file())
-            self.assertTrue((export / clean.OWNERSHIP_FILE).is_file())
-            self.assertTrue((export / LOCK_FILE).is_file())
-            self.assertTrue((export / OWNER_FILE).is_file())
-            self.assertEqual(incomplete.resolve(), (export / clean.INCOMPLETE_FILE).resolve())
-            self.assertTrue(incomplete.is_file())
+            assert not (repo / "Content" / "ElysiumGenerated").exists()
+            assert not baked.exists()
+            assert (repo / "Content" / "Fonts" / "source.ttf").is_file()
+            assert (repo / "Content" / "InputPrompts" / "Kenney" / "glyph.png").is_file()
+            assert (external / "source.cpp").is_file()
+            assert not (export_v2 / "materials").exists()
+            assert (export_v2 / clean.OWNERSHIP_FILE).is_file()
+            assert (export / clean.OWNERSHIP_FILE).is_file()
+            assert (export / LOCK_FILE).is_file()
+            assert (export / OWNER_FILE).is_file()
+            assert incomplete.resolve() == (export / clean.INCOMPLETE_FILE).resolve()
+            assert incomplete.is_file()
 
             # Every domain is gated after a clean, and each clears on its own.
-            self.assertEqual(clean.incomplete_domains(export), clean.DOMAINS)
+            assert clean.incomplete_domains(export) == clean.DOMAINS
 
             clean.mark_complete(export, ("npc",))
-            self.assertNotIn("npc", clean.incomplete_domains(export))
-            self.assertIn("maps", clean.incomplete_domains(export))
+            assert "npc" not in clean.incomplete_domains(export)
+            assert "maps" in clean.incomplete_domains(export)
             # The aggregate outlives any single domain.
-            self.assertTrue(incomplete.is_file())
+            assert incomplete.is_file()
 
             clean.mark_complete(export)
-            self.assertEqual(clean.incomplete_domains(export), ())
-            self.assertFalse(incomplete.exists())
+            assert clean.incomplete_domains(export) == ()
+            assert not incomplete.exists()
 
     def test_a_custom_export_v2_root_requires_its_own_ownership_marker(self) -> None:
         # `exports_v2` is adopted by name exactly as `exports` is; anything else the operator
@@ -91,20 +90,20 @@ class CleanContractTests(unittest.TestCase):
             custom.mkdir(parents=True)
             (custom / "valuable.glb").write_text("authored", encoding="utf-8")
 
-            with self.assertRaises(clean.UnsafeClean):
+            with pytest.raises(clean.UnsafeClean):
                 clean.ensure_export_ownership(custom, work, standard_name="exports_v2")
 
-            self.assertFalse((custom / clean.OWNERSHIP_FILE).exists())
-            self.assertTrue((custom / "valuable.glb").is_file())
+            assert not (custom / clean.OWNERSHIP_FILE).exists()
+            assert (custom / "valuable.glb").is_file()
 
             standard = work / "exports_v2"
             marker = clean.ensure_export_ownership(standard, work, standard_name="exports_v2")
-            self.assertTrue(marker.is_file())
+            assert marker.is_file()
 
     def test_clean_refuses_one_root_pointed_at_both_export_trees(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repo, game, work, export, _ = self._layout(Path(temporary))
-            with self.assertRaises(clean.UnsafeClean):
+            with pytest.raises(clean.UnsafeClean):
                 clean.validate_clean_targets(
                     repo_root=repo,
                     game_root=game,
@@ -115,7 +114,7 @@ class CleanContractTests(unittest.TestCase):
 
     def test_unknown_domain_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            with self.assertRaises(ValueError):
+            with pytest.raises(ValueError):
                 clean.domain_marker(Path(temporary), "not-a-domain")
 
     def test_custom_export_root_requires_existing_ownership_marker(self) -> None:
@@ -126,11 +125,11 @@ class CleanContractTests(unittest.TestCase):
             custom.mkdir(parents=True)
             (custom / "valuable.py").write_text("print('keep me')", encoding="utf-8")
 
-            with self.assertRaises(clean.UnsafeClean):
+            with pytest.raises(clean.UnsafeClean):
                 clean.adopt_export_root(custom, work)
 
-            self.assertFalse((custom / clean.OWNERSHIP_FILE).exists())
-            self.assertTrue((custom / "valuable.py").is_file())
+            assert not (custom / clean.OWNERSHIP_FILE).exists()
+            assert (custom / "valuable.py").is_file()
 
     def test_malformed_ownership_marker_is_rejected_as_unsafe(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -140,7 +139,7 @@ class CleanContractTests(unittest.TestCase):
             export.mkdir(parents=True)
             (export / clean.OWNERSHIP_FILE).write_text("{not json", encoding="utf-8")
 
-            with self.assertRaises(clean.UnsafeClean):
+            with pytest.raises(clean.UnsafeClean):
                 clean.ensure_export_ownership(export, work)
 
     def test_marker_for_another_root_is_rejected(self) -> None:
@@ -160,9 +159,5 @@ class CleanContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with self.assertRaises(clean.UnsafeClean):
+            with pytest.raises(clean.UnsafeClean):
                 clean.ensure_export_ownership(export, work)
-
-
-if __name__ == "__main__":
-    unittest.main()

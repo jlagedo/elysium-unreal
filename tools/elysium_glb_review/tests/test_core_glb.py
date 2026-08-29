@@ -11,6 +11,7 @@ from pathlib import Path
 from core import glb
 
 from . import support
+import pytest
 
 
 class GlbReadTests(unittest.TestCase):
@@ -27,37 +28,37 @@ class GlbReadTests(unittest.TestCase):
     def test_reads_json_and_binary(self) -> None:
         path = self._write(support.build_glb({"asset": {"version": "2.0"}}, b"\x01\x02\x03\x04"))
         document, binary = glb.read(path)
-        self.assertEqual(document["asset"]["version"], "2.0")
-        self.assertEqual(binary[:4], b"\x01\x02\x03\x04")
+        assert document["asset"]["version"] == "2.0"
+        assert binary[:4] == b"\x01\x02\x03\x04"
 
     def test_json_only_read_skips_the_binary_chunk(self) -> None:
         # The panel path re-reads headers constantly; paging in a 35 MB BIN chunk to
         # answer a question about JSON would dominate the tool's cost.
         path = self._write(support.build_glb({"asset": {"version": "2.0"}}, b"\xff" * 4096))
-        self.assertEqual(glb.read_json(path)["asset"]["version"], "2.0")
+        assert glb.read_json(path)["asset"]["version"] == "2.0"
 
     def test_document_without_binary_chunk_yields_empty_bytes(self) -> None:
         path = self._write(support.build_glb({"asset": {"version": "2.0"}}))
         _document, binary = glb.read(path)
-        self.assertEqual(binary, b"")
+        assert binary == b""
 
     def test_rejects_a_file_that_is_not_a_glb(self) -> None:
         path = self._write(b"not a glb at all, really")
-        with self.assertRaises(glb.GlbError):
+        with pytest.raises(glb.GlbError):
             glb.read(path)
-        with self.assertRaises(glb.GlbError):
+        with pytest.raises(glb.GlbError):
             glb.read_json(path)
 
     def test_rejects_an_unsupported_container_version(self) -> None:
         body = support.build_glb({"asset": {"version": "2.0"}})
         path = self._write(body[:4] + struct.pack("<I", 3) + body[8:])
-        with self.assertRaises(glb.GlbError):
+        with pytest.raises(glb.GlbError):
             glb.read(path)
 
     def test_rejects_a_document_with_no_json_chunk(self) -> None:
         chunk = struct.pack("<II", 4, glb.CHUNK_BIN) + b"\x00\x00\x00\x00"
         path = self._write(b"glTF" + struct.pack("<II", 2, 12 + len(chunk)) + chunk)
-        with self.assertRaises(glb.GlbError):
+        with pytest.raises(glb.GlbError):
             glb.read(path)
 
 
@@ -74,21 +75,21 @@ class BufferViewTests(unittest.TestCase):
         }
 
     def test_slices_at_the_declared_offset(self) -> None:
-        self.assertEqual(glb.buffer_view_bytes(self.document, self.binary, 0), self.binary[8:24])
+        assert glb.buffer_view_bytes(self.document, self.binary, 0) == self.binary[8:24]
 
     def test_byte_offset_defaults_to_zero(self) -> None:
-        self.assertEqual(glb.buffer_view_bytes(self.document, self.binary, 1), self.binary[0:4])
+        assert glb.buffer_view_bytes(self.document, self.binary, 1) == self.binary[0:4]
 
     def test_rejects_a_view_into_a_buffer_that_is_not_the_bin_chunk(self) -> None:
-        with self.assertRaises(glb.GlbError):
+        with pytest.raises(glb.GlbError):
             glb.buffer_view_bytes(self.document, self.binary, 2)
 
     def test_rejects_a_view_that_runs_past_the_binary(self) -> None:
-        with self.assertRaises(glb.GlbError):
+        with pytest.raises(glb.GlbError):
             glb.buffer_view_bytes(self.document, self.binary, 3)
 
     def test_rejects_a_view_that_does_not_exist(self) -> None:
-        with self.assertRaises(glb.GlbError):
+        with pytest.raises(glb.GlbError):
             glb.buffer_view_bytes(self.document, self.binary, 9)
 
 
@@ -97,9 +98,5 @@ class PaddingTests(unittest.TestCase):
         # glTF pads the JSON chunk with spaces to a four-byte boundary.
         payload = support.build_glb({"a": 1})
         length = struct.unpack_from("<I", payload, 12)[0]
-        self.assertEqual(length % 4, 0)
-        self.assertEqual(json.loads(payload[20 : 20 + length]), {"a": 1})
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert length % 4 == 0
+        assert json.loads(payload[20 : 20 + length]) == {"a": 1}

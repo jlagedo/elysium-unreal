@@ -35,15 +35,12 @@ class ScanTests(unittest.TestCase):
             }
         )
         found = {unit.identity for unit in index.scan(self.root)}
-        self.assertEqual(
-            found,
-            {
+        assert found == {
                 "vtmb:character-body:npc/body",
                 "vtmb:material:brick/aspdra",
                 "vtmb:texture:brick/aspdra",
                 "vtmb:surface-property:brick",
-            },
-        )
+            }
 
     def test_a_bank_is_listed_as_the_character_body_it_is_stored_as(self) -> None:
         # A bank is exported through the character exporter, so its file identity says
@@ -56,8 +53,8 @@ class ScanTests(unittest.TestCase):
             }
         )
         unit = index.scan(self.root)[0]
-        self.assertEqual(unit.identity, "vtmb:character-body:shared/female/frenzy")
-        self.assertEqual(unit.stem, "shared/female/frenzy")
+        assert unit.identity == "vtmb:character-body:shared/female/frenzy"
+        assert unit.stem == "shared/female/frenzy"
 
     def test_a_seam_can_be_listed_alone(self) -> None:
         self._corpus(
@@ -67,12 +64,12 @@ class ScanTests(unittest.TestCase):
             }
         )
         units = index.scan(self.root, "materials")
-        self.assertEqual([unit.seam for unit in units], ["materials"])
+        assert [unit.seam for unit in units] == ["materials"]
 
     def test_units_carry_their_size_without_being_parsed(self) -> None:
         self._corpus({"materials/a/b.glb": support.material_unit("vtmb:material:a/b")})
         unit = index.scan(self.root)[0]
-        self.assertEqual(unit.byte_size, (self.root / unit.relative).stat().st_size)
+        assert unit.byte_size == (self.root / unit.relative).stat().st_size
 
     def test_the_listing_is_ordered_so_a_browser_is_stable(self) -> None:
         self._corpus(
@@ -83,14 +80,11 @@ class ScanTests(unittest.TestCase):
             }
         )
         units = index.scan(self.root)
-        self.assertEqual(
-            [unit.identity for unit in units],
-            [
+        assert [unit.identity for unit in units] == [
                 "vtmb:character-body:npc/body",
                 "vtmb:material:a/first",
                 "vtmb:material:z/last",
-            ],
-        )
+            ]
 
     def test_groups_are_the_first_path_segment(self) -> None:
         self._corpus(
@@ -101,17 +95,17 @@ class ScanTests(unittest.TestCase):
             }
         )
         units = index.scan(self.root)
-        self.assertEqual(index.groups(units), ["monster", "npc"])
+        assert index.groups(units) == ["monster", "npc"]
         # A flat seam has no subtrees to group by.
         flat = [unit for unit in units if unit.seam == "surface-properties"][0]
-        self.assertEqual(flat.group, "")
+        assert flat.group == ""
 
     def test_a_missing_seam_directory_is_not_an_error(self) -> None:
         self._corpus({"materials/a/b.glb": support.material_unit("vtmb:material:a/b")})
-        self.assertEqual(len(index.scan(self.root)), 1)
+        assert len(index.scan(self.root)) == 1
 
     def test_an_empty_corpus_lists_nothing(self) -> None:
-        self.assertEqual(index.scan(self.root), [])
+        assert index.scan(self.root) == []
 
 
 class DetailTests(unittest.TestCase):
@@ -141,9 +135,9 @@ class DetailTests(unittest.TestCase):
             "characters/npc/body.glb",
         )
         rows = self._rows(detail)
-        self.assertEqual(rows["bones"], "2")
-        self.assertEqual(rows["clips"], "7")
-        self.assertEqual(rows["materials"], "2")
+        assert rows["bones"] == "2"
+        assert rows["clips"] == "7"
+        assert rows["materials"] == "2"
 
     def test_sentinel_slots_are_counted_as_a_fact(self) -> None:
         detail = self._detail(
@@ -155,8 +149,8 @@ class DetailTests(unittest.TestCase):
             },
             "characters/npc/body.glb",
         )
-        self.assertEqual(self._rows(detail)["slots with no VMT"], "1")
-        self.assertEqual(detail.warnings, ())
+        assert self._rows(detail)["slots with no VMT"] == "1"
+        assert detail.warnings == ()
 
     def test_a_bank_that_carries_no_clips_is_called_a_stub(self) -> None:
         detail = self._detail(
@@ -169,7 +163,7 @@ class DetailTests(unittest.TestCase):
             },
             "characters/shared/all.glb",
         )
-        self.assertTrue(any("include stub" in warning for warning in detail.warnings))
+        assert any("include stub" in warning for warning in detail.warnings)
 
     def test_a_material_reports_its_shader_and_bindings(self) -> None:
         detail = self._detail(
@@ -184,16 +178,16 @@ class DetailTests(unittest.TestCase):
             "materials/a/b.glb",
         )
         rows = self._rows(detail)
-        self.assertEqual(rows["shader"], "lightmappedgeneric")
-        self.assertEqual(rows["textures"], "1")
-        self.assertEqual(rows["surface property"], "glass")
+        assert rows["shader"] == "lightmappedgeneric"
+        assert rows["textures"] == "1"
+        assert rows["surface property"] == "glass"
 
     def test_an_untranscribed_shader_warns(self) -> None:
         detail = self._detail(
             {"materials/a/b.glb": support.material_unit("vtmb:material:a/b", resolved=False)},
             "materials/a/b.glb",
         )
-        self.assertTrue(any("selector" in w for w in detail.warnings))
+        assert any("selector" in w for w in detail.warnings)
 
     def test_a_material_anomaly_warns(self) -> None:
         detail = self._detail(
@@ -204,7 +198,7 @@ class DetailTests(unittest.TestCase):
             },
             "materials/a/b.glb",
         )
-        self.assertTrue(any("valueless-key" in w for w in detail.warnings))
+        assert any("valueless-key" in w for w in detail.warnings)
 
     def test_a_surface_property_that_inherits_says_so(self) -> None:
         detail = self._detail(
@@ -212,13 +206,9 @@ class DetailTests(unittest.TestCase):
             "surface-properties/brick.glb",
         )
         rows = self._rows(detail)
-        self.assertEqual(rows["base"], "concrete")
-        self.assertEqual(rows["physics"], "declares none; inherited")
+        assert rows["base"] == "concrete"
+        assert rows["physics"] == "declares none; inherited"
 
     def test_a_unit_that_vanished_reports_nothing_rather_than_raising(self) -> None:
         unit = index.Unit("materials", "materials/gone.glb", "vtmb:material:gone", 0)
-        self.assertIsNone(index.details(unit, self.root))
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert index.details(unit, self.root) is None

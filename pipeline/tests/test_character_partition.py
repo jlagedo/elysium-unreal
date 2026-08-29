@@ -5,6 +5,7 @@ import unittest
 from elysium_pipeline import character_partition as cp
 from elysium_pipeline import character_recipes
 from elysium_pipeline.formats import eskm
+import pytest
 
 
 # Synthetic bone trees. Game-independent by construction, per pipeline/CLAUDE.md: these are the
@@ -31,22 +32,16 @@ class TreeFingerprintTests(unittest.TestCase):
     def test_case_folds(self):
         # FName is case-insensitive and rig_trees_compatible folds case, so two trees Unreal
         # would call identical must not fingerprint apart.
-        self.assertEqual(
-            cp.tree_fingerprint({"Root": "", "Spine": "Root"}),
-            cp.tree_fingerprint({"root": "", "spine": "root"}),
-        )
+        assert cp.tree_fingerprint({"Root": "", "Spine": "Root"}) == cp.tree_fingerprint({"root": "", "spine": "root"})
 
     def test_ignores_insertion_order(self):
-        self.assertEqual(
-            cp.tree_fingerprint({"root": "", "spine": "root", "head": "spine"}),
-            cp.tree_fingerprint({"head": "spine", "root": "", "spine": "root"}),
-        )
+        assert cp.tree_fingerprint({"root": "", "spine": "root", "head": "spine"}) == cp.tree_fingerprint({"head": "spine", "root": "", "spine": "root"})
 
     def test_distinguishes_reparenting(self):
-        self.assertNotEqual(cp.tree_fingerprint(A_SEED), cp.tree_fingerprint(Z_FORK))
+        assert cp.tree_fingerprint(A_SEED) != cp.tree_fingerprint(Z_FORK)
 
     def test_distinguishes_an_added_bone(self):
-        self.assertNotEqual(cp.tree_fingerprint(M_PLAIN), cp.tree_fingerprint(A_SEED))
+        assert cp.tree_fingerprint(M_PLAIN) != cp.tree_fingerprint(A_SEED)
 
 
 class RigFamilySemanticsTests(unittest.TestCase):
@@ -54,20 +49,20 @@ class RigFamilySemanticsTests(unittest.TestCase):
 
     def test_agreeing_trees_merge(self):
         families = eskm.rig_families({"a": A_SEED, "b": A_SEED}, ["a", "b"])
-        self.assertEqual(len(families), 1)
-        self.assertEqual(families[0]["stems"], ["a", "b"])
+        assert len(families) == 1
+        assert families[0]["stems"] == ["a", "b"]
 
     def test_parent_disagreement_splits(self):
         families = eskm.rig_families({"a_seed": A_SEED, "z_fork": Z_FORK}, ["a_seed", "z_fork"])
-        self.assertEqual([f["name"] for f in families], ["a_seed", "z_fork"])
+        assert [f["name"] for f in families] == ["a_seed", "z_fork"]
 
     def test_a_second_root_splits_even_with_no_shared_bone(self):
         families = eskm.rig_families({"a_seed": A_SEED, "prop": PROP}, ["a_seed", "prop"])
-        self.assertEqual(len(families), 2)
+        assert len(families) == 2
 
     def test_a_family_is_named_for_its_lowest_sorted_member(self):
         families = eskm.rig_families({"zz": A_SEED, "aa": A_SEED}, ["zz", "aa"])
-        self.assertEqual(families[0]["name"], "aa")
+        assert families[0]["name"] == "aa"
 
 
 class SubsetInstabilityTests(unittest.TestCase):
@@ -82,21 +77,20 @@ class SubsetInstabilityTests(unittest.TestCase):
 
     def test_a_slice_renames_a_family(self):
         whole = cp.build_partition({}, MODELS)
-        self.assertEqual(cp.bank_family(whole, "m_plain"), "a_seed")
+        assert cp.bank_family(whole, "m_plain") == "a_seed"
 
         sliced = eskm.rig_families({"m_plain": M_PLAIN, "z_fork": Z_FORK},
                                    ["m_plain", "z_fork"])
-        self.assertEqual(sliced[0]["name"], "m_plain")
+        assert sliced[0]["name"] == "m_plain"
 
     def test_a_slice_merges_two_families_the_corpus_splits(self):
         whole = cp.build_partition({}, MODELS)
-        self.assertNotEqual(cp.bank_family(whole, "m_plain"),
-                            cp.bank_family(whole, "z_fork"))
+        assert cp.bank_family(whole, "m_plain") != cp.bank_family(whole, "z_fork")
 
         sliced = eskm.rig_families({"m_plain": M_PLAIN, "z_fork": Z_FORK},
                                    ["m_plain", "z_fork"])
-        self.assertEqual(len(sliced), 1)
-        self.assertEqual(sliced[0]["stems"], ["m_plain", "z_fork"])
+        assert len(sliced) == 1
+        assert sliced[0]["stems"] == ["m_plain", "z_fork"]
 
 
 class BuildPartitionTests(unittest.TestCase):
@@ -104,71 +98,64 @@ class BuildPartitionTests(unittest.TestCase):
         forward = cp.build_partition(MODELS, BANKS)
         backward = cp.build_partition(dict(reversed(list(MODELS.items()))),
                                       dict(reversed(list(BANKS.items()))), )
-        self.assertEqual(forward, backward)
+        assert forward == backward
 
     def test_names_every_member_exactly_once(self):
         partition = cp.build_partition(MODELS, BANKS)
         named = [stem for entry in partition["models"].values() for stem in entry["members"]]
-        self.assertEqual(sorted(named), sorted(MODELS))
-        self.assertEqual(sorted(partition["model_family_of"]), sorted(MODELS))
-        self.assertEqual(sorted(partition["bank_family_of"]), sorted(BANKS))
+        assert sorted(named) == sorted(MODELS)
+        assert sorted(partition["model_family_of"]) == sorted(MODELS)
+        assert sorted(partition["bank_family_of"]) == sorted(BANKS)
 
     def test_carries_a_skeleton_path_per_family(self):
         partition = cp.build_partition(MODELS, BANKS)
-        self.assertEqual(partition["models"]["a_seed"]["skeleton"],
-                         f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}a_seed")
-        self.assertEqual(partition["models"]["m_plain"]["skeleton"],
-                         f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain")
+        assert partition["models"]["a_seed"]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}a_seed"
+        assert partition["models"]["m_plain"]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain"
         bank_family = cp.bank_family(partition, "bank_one")
-        self.assertEqual(partition["banks"][bank_family]["skeleton"],
-                         f"{cp.SKELETON_DIR}/{cp.BANK_SKELETON_PREFIX}{bank_family}")
+        assert partition["banks"][bank_family]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.BANK_SKELETON_PREFIX}{bank_family}"
 
     def test_every_model_gets_its_own_skeleton(self):
         # m_plain's tree is compatible with a_seed's -- the old family partition would have
         # merged them onto one skeleton -- but every model now names its own regardless.
         partition = cp.build_partition(MODELS, {})
-        self.assertEqual(partition["models"]["m_plain"]["skeleton"],
-                         f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain")
-        self.assertNotEqual(partition["models"]["m_plain"]["skeleton"],
-                            partition["models"]["a_seed"]["skeleton"])
+        assert partition["models"]["m_plain"]["skeleton"] == f"{cp.SKELETON_DIR}/{cp.MODEL_SKELETON_PREFIX}m_plain"
+        assert partition["models"]["m_plain"]["skeleton"] != partition["models"]["a_seed"]["skeleton"]
 
     def test_every_models_tree_fingerprint_is_its_own(self):
         # m_plain's tree is compatible with a_seed's, but each model's entry states only its own
         # container's tree -- no union, no absorption.
         partition = cp.build_partition(MODELS, {})
-        self.assertEqual(partition["models"]["m_plain"]["tree_fingerprint"],
-                         cp.tree_fingerprint(M_PLAIN))
-        self.assertEqual(partition["models"]["m_plain"]["bones"], len(M_PLAIN))
+        assert partition["models"]["m_plain"]["tree_fingerprint"] == cp.tree_fingerprint(M_PLAIN)
+        assert partition["models"]["m_plain"]["bones"] == len(M_PLAIN)
 
     def test_bank_tree_fingerprint_covers_the_merged_union(self):
         # a_seed-shaped bank absorbs m_plain-shaped bank, which adds no bone, so the family's
         # tree is a_seed's own.
         partition = cp.build_partition({}, MODELS)
-        self.assertEqual(partition["banks"]["a_seed"]["tree_fingerprint"],
-                         cp.tree_fingerprint(A_SEED))
-        self.assertEqual(partition["banks"]["a_seed"]["bones"], len(A_SEED))
+        assert partition["banks"]["a_seed"]["tree_fingerprint"] == cp.tree_fingerprint(A_SEED)
+        assert partition["banks"]["a_seed"]["bones"] == len(A_SEED)
 
     def test_models_and_banks_partition_independently(self):
         partition = cp.build_partition(MODELS, BANKS)
-        self.assertNotIn("bank_one", partition["model_family_of"])
-        self.assertNotIn("a_seed", partition["bank_family_of"])
+        assert "bank_one" not in partition["model_family_of"]
+        assert "a_seed" not in partition["bank_family_of"]
 
 
 class CheckTests(unittest.TestCase):
     def test_rejects_a_stale_version(self):
         partition = cp.build_partition(MODELS, {})
         partition["version"] = cp.VERSION + 1
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             cp.check(partition)
 
     def test_rejects_a_foreign_document(self):
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             cp.check({"schema": "something.else", "version": cp.VERSION})
 
     def test_rejects_a_missing_table(self):
         partition = cp.build_partition(MODELS, {})
         del partition["bank_family_of"]
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             cp.check(partition)
 
 
@@ -194,17 +181,11 @@ class FocusedScopeTests(unittest.TestCase):
         partition = cp.build_partition(MODELS, BANKS)
         got = character_recipes.scopes_for(partition, ["a_seed"], manifest=self.MANIFEST)
         families = {cp.bank_family(partition, owner) for owner in ("bank_one", "bank_two")}
-        self.assertEqual(
-            sorted(got),
-            sorted([character_recipes.GLOBAL_SCOPE, "model.a_seed",
-                    *(f"bank.{family}" for family in families)]))
+        assert sorted(got) == sorted([character_recipes.GLOBAL_SCOPE, "model.a_seed",
+                    *(f"bank.{family}" for family in families)])
 
     def test_a_single_owner_string_still_resolves(self):
         partition = cp.build_partition(MODELS, BANKS)
         got = character_recipes.scopes_for(partition, ["m_plain"], manifest=self.MANIFEST)
-        self.assertIn(f"bank.{cp.bank_family(partition, 'bank_two')}", got)
-        self.assertIn("model.m_plain", got)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert f"bank.{cp.bank_family(partition, 'bank_two')}" in got
+        assert "model.m_plain" in got

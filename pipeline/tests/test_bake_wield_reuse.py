@@ -89,23 +89,20 @@ class WieldReuseTests(unittest.TestCase):
             table = {"key_a": "tex/blade.png"}
 
             first = module.stem_fingerprint("w_test", model, table)
-            self.assertEqual(module.stem_fingerprint("w_test", model, table), first)
+            assert module.stem_fingerprint("w_test", model, table) == first
 
             # The container's bytes are an input...
             source.write_bytes(b"container v2")
             container_moved = module.stem_fingerprint("w_test", model, table)
-            self.assertNotEqual(container_moved, first)
+            assert container_moved != first
 
             # ...so is the manifest row...
             repainted = self._model()
             repainted["materials"][0]["flags"] = ["additive"]
-            self.assertNotEqual(
-                module.stem_fingerprint("w_test", repainted, table), container_moved)
+            assert module.stem_fingerprint("w_test", repainted, table) != container_moved
 
             # ...and so is a re-pointed texture key.
-            self.assertNotEqual(
-                module.stem_fingerprint("w_test", model, {"key_a": "tex/other.png"}),
-                container_moved)
+            assert module.stem_fingerprint("w_test", model, {"key_a": "tex/other.png"}) != container_moved
 
     def test_a_missing_container_digests_as_a_changed_input(self) -> None:
         with tempfile.TemporaryDirectory() as out:
@@ -116,7 +113,7 @@ class WieldReuseTests(unittest.TestCase):
             source = Path(out) / "items" / "wield" / "absent.eskm"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"now present")
-            self.assertNotEqual(module.stem_fingerprint("w_test", model, table), absent)
+            assert module.stem_fingerprint("w_test", model, table) != absent
 
     def _stamped_mount(self, module, stamps, textures=True):
         """Point the fake registry at a folder of `stamps` ({object path: stored recipe});
@@ -141,11 +138,11 @@ class WieldReuseTests(unittest.TestCase):
                 "%s/w_test/MI_SK_w_test_blade" % WIELD: "fp",
             }
             self._stamped_mount(module, stamps)
-            self.assertTrue(self._current(module))
+            assert self._current(module)
 
             # One asset off the recipe makes the whole stem stale.
             stamps["%s/w_test/MI_SK_w_test_blade" % WIELD] = "older"
-            self.assertFalse(self._current(module))
+            assert not self._current(module)
 
     def test_a_stamped_skeleton_beside_no_mesh_is_stale(self) -> None:
         # The builders stamp as they save, so a build that failed after the skeleton
@@ -153,9 +150,9 @@ class WieldReuseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as out:
             module = self._module(out)
             self._stamped_mount(module, {"%s/w_test/SKEL_w_test" % WIELD: "fp"})
-            self.assertFalse(self._current(module))
+            assert not self._current(module)
             self._stamped_mount(module, {"%s/w_test/SK_w_test" % WIELD: "fp"})
-            self.assertFalse(self._current(module))
+            assert not self._current(module)
 
     def test_a_texture_gone_from_the_mount_is_stale(self) -> None:
         with tempfile.TemporaryDirectory() as out:
@@ -165,16 +162,16 @@ class WieldReuseTests(unittest.TestCase):
                 "%s/w_test/SK_w_test" % WIELD: "fp",
             }
             self._stamped_mount(module, stamps, textures=False)
-            self.assertFalse(self._current(module))
+            assert not self._current(module)
             # A key the manifest's table does not carry is stale too: the build reports it.
             self._stamped_mount(module, stamps)
-            self.assertFalse(module.stem_is_current("w_test", self._model(), {}, "fp", False))
+            assert not module.stem_is_current("w_test", self._model(), {}, "fp", False)
 
     def test_an_empty_folder_is_stale(self) -> None:
         with tempfile.TemporaryDirectory() as out:
             module = self._module(out)
             self._stamped_mount(module, {})
-            self.assertFalse(self._current(module))
+            assert not self._current(module)
 
     def test_force_defeats_the_reuse_whole(self) -> None:
         with tempfile.TemporaryDirectory() as out:
@@ -184,8 +181,8 @@ class WieldReuseTests(unittest.TestCase):
                 "%s/w_test/SK_w_test" % WIELD: "fp",
             }
             self._stamped_mount(module, stamps)
-            self.assertTrue(self._current(module))
-            self.assertFalse(self._current(module, force=True))
+            assert self._current(module)
+            assert not self._current(module, force=True)
 
     def test_stamping_covers_only_the_assets_the_builders_left_unstamped(self) -> None:
         with tempfile.TemporaryDirectory() as out:
@@ -211,9 +208,9 @@ class WieldReuseTests(unittest.TestCase):
 
             failed: list[str] = []
             module.stamp_stem_assets("w_test", "fp", failed)
-            self.assertEqual(failed, [])
-            self.assertEqual(stamped, [instance])
-            self.assertEqual(saved, [instance])
+            assert failed == []
+            assert stamped == [instance]
+            assert saved == [instance]
 
     def test_a_failed_stamp_save_is_loud_and_fails_the_stem(self) -> None:
         with tempfile.TemporaryDirectory() as out:
@@ -230,9 +227,5 @@ class WieldReuseTests(unittest.TestCase):
 
             failed: list[str] = []
             module.stamp_stem_assets("w_test", "fp", failed)
-            self.assertEqual(failed, ["w_test"])
-            self.assertTrue(any("could not be saved" in line for line in self.errors))
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert failed == ["w_test"]
+            assert any("could not be saved" in line for line in self.errors)

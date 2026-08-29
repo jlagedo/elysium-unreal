@@ -54,16 +54,13 @@ class GroundModelEnumerationTests(unittest.TestCase):
 
             found = items.ground_models(install.index)
 
-            self.assertEqual(
-                found,
-                {
+            assert found == {
                     "models/items/key/ground/key.mdl": [
                         "item_k_gimble_key",
                         "item_k_malcolm_office_key",
                     ],
                     "models/items/rings/ground/ring01.mdl": ["item_g_ring_gold"],
-                },
-            )
+                }
 
     def test_an_extensionless_playermodel_resolves_as_a_model(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -72,10 +69,7 @@ class GroundModelEnumerationTests(unittest.TestCase):
                 "item_w_throwing_star", "models/weapons/throwing_star/ground/g_throwing_star"
             )
 
-            self.assertEqual(
-                list(items.ground_models(install.index)),
-                ["models/weapons/throwing_star/ground/g_throwing_star.mdl"],
-            )
+            assert list(items.ground_models(install.index)) == ["models/weapons/throwing_star/ground/g_throwing_star.mdl"]
 
     def test_a_definition_with_no_ground_model_contributes_nothing(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -85,7 +79,7 @@ class GroundModelEnumerationTests(unittest.TestCase):
             install.add("vdata/items/notes.dat", "ignored")
             install.add("vdata/system/feats.txt", _definition("models/items/x/y.mdl"))
 
-            self.assertEqual(items.ground_models(install.index), {})
+            assert items.ground_models(install.index) == {}
 
     def test_weapondata_reads_whether_or_not_the_parser_unwrapped_it(self) -> None:
         # kv.parse unwraps a single leading root key, so a shipped file arrives already AS the
@@ -96,13 +90,10 @@ class GroundModelEnumerationTests(unittest.TestCase):
             install.item("item_g_stake", "models/items/stake/ground/stake.mdl", sole_root=True)
             install.item("item_g_watch", "models/items/watch/ground/watch.mdl", sole_root=False)
 
-            self.assertEqual(
-                sorted(items.ground_models(install.index)),
-                [
+            assert sorted(items.ground_models(install.index)) == [
                     "models/items/stake/ground/stake.mdl",
                     "models/items/watch/ground/watch.mdl",
-                ],
-            )
+                ]
 
 
 class LandingPathTests(unittest.TestCase):
@@ -122,13 +113,10 @@ class LandingPathTests(unittest.TestCase):
                 {}, keys, propdir, {}, set(expected.values())
             )
 
-        self.assertEqual(resolved, expected)
-        self.assertEqual((ok, missing), (len(keys), 0))
-        self.assertEqual(len(set(expected.values())), len(keys))
-        self.assertEqual(
-            expected["models/items/rings/ground/ring03.mdl"],
-            "models_items_rings_ground_ring03",
-        )
+        assert resolved == expected
+        assert (ok, missing) == (len(keys), 0)
+        assert len(set(expected.values())) == len(keys)
+        assert expected["models/items/rings/ground/ring03.mdl"] == "models_items_rings_ground_ring03"
 
 
 class ExportRunTests(unittest.TestCase):
@@ -162,17 +150,14 @@ class ExportRunTests(unittest.TestCase):
                 {"models/items/stake/ground/stake.mdl": "models_items_stake_ground_stake"},
             )
 
-            self.assertEqual(list(manifest["models"]), ["models/items/stake/ground/stake.mdl"])
-            self.assertEqual(
-                manifest["skipped"],
-                [
+            assert list(manifest["models"]) == ["models/items/stake/ground/stake.mdl"]
+            assert manifest["skipped"] == [
                     {
                         "model": "models/weapons/pistol/world/w_pistol.mdl",
                         "reason": "not in the install",
                         "classes": ["item_w_pistol", "item_w_pistol-null"],
                     }
-                ],
-            )
+                ]
 
     def test_a_model_present_but_undecodable_is_named_as_such(self) -> None:
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
@@ -182,8 +167,8 @@ class ExportRunTests(unittest.TestCase):
 
             manifest = self._run(install, Path(out), {})
 
-            self.assertEqual(manifest["models"], {})
-            self.assertEqual([row["reason"] for row in manifest["skipped"]], ["decode failed"])
+            assert manifest["models"] == {}
+            assert [row["reason"] for row in manifest["skipped"]] == ["decode failed"]
 
     def test_a_geometry_free_model_is_recorded_with_no_faces(self) -> None:
         # `models/weapons/w_null.mdl` decodes cleanly and writes no triangles; the bake authors no
@@ -201,9 +186,5 @@ class ExportRunTests(unittest.TestCase):
             )
 
             row = manifest["models"]["models/weapons/w_null.mdl"]
-            self.assertEqual(row["faces"], 0)
-            self.assertEqual(row["stem"], "models_weapons_w_null")
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert row["faces"] == 0
+            assert row["stem"] == "models_weapons_w_null"

@@ -36,6 +36,7 @@ from research.tooling.capture.rig_parity import (  # noqa: E402
     stems_by_model,
     witnessed_owners,
 )
+import pytest
 
 
 def _flat(*rows: tuple[str, int, str, str]) -> list[dict]:
@@ -67,14 +68,8 @@ def _live(*rows: tuple[str, int, str | None, bool]) -> list[dict]:
 
 class ModelKeyTests(unittest.TestCase):
     def test_captured_and_exported_names_meet_on_one_key(self) -> None:
-        self.assertEqual(
-            model_key("character/shared/male/Katana.mdl"),
-            model_key("/character/shared/male/katana.mdl"),
-        )
-        self.assertEqual(
-            model_key("models\\character\\shared\\male\\katana.mdl"),
-            "models/character/shared/male/katana.mdl",
-        )
+        assert model_key("character/shared/male/Katana.mdl") == model_key("/character/shared/male/katana.mdl")
+        assert model_key("models\\character\\shared\\male\\katana.mdl") == "models/character/shared/male/katana.mdl"
 
 
 class NumberingTests(unittest.TestCase):
@@ -82,18 +77,18 @@ class NumberingTests(unittest.TestCase):
         """A bank the session never loaded carries no label but a real owner and index."""
         flat = _flat(("body.mdl", 0, "ragdoll", ""), ("bank.mdl", 0, "walk", "ACT_WALK"))
         agreeing = _live(("body.mdl", 0, None, False), ("bank.mdl", 0, None, False))
-        self.assertEqual(compare_numbering(agreeing, flat)["owner_mismatches"], 0)
+        assert compare_numbering(agreeing, flat)["owner_mismatches"] == 0
         disagreeing = _live(("body.mdl", 0, None, False), ("other.mdl", 0, None, False))
         report = compare_numbering(disagreeing, flat)
-        self.assertEqual(report["owner_mismatches"], 1)
-        self.assertEqual(report["examples"][0]["global_index"], 1)
+        assert report["owner_mismatches"] == 1
+        assert report["examples"][0]["global_index"] == 1
 
     def test_a_live_number_past_the_offline_space_is_a_mismatch(self) -> None:
         flat = _flat(("body.mdl", 0, "ragdoll", ""))
         live = _live(("body.mdl", 0, "ragdoll", True), ("bank.mdl", 0, "walk", True))
         report = compare_numbering(live, flat)
-        self.assertEqual(report["owner_mismatches"], 1)
-        self.assertEqual(report["compared"], 1)
+        assert report["owner_mismatches"] == 1
+        assert report["compared"] == 1
 
     def test_the_ordering_with_fewer_mismatches_wins(self) -> None:
         # A bank reached twice contributes twice under `nodedup`; the live space says it did.
@@ -107,8 +102,8 @@ class NumberingTests(unittest.TestCase):
             ("last.mdl", 0, "z", True),
         )
         ordering, report = best_numbering(live, {"dedup": dedup, "nodedup": nodedup})
-        self.assertEqual(ordering, "nodedup")
-        self.assertEqual(report["owner_mismatches"], 0)
+        assert ordering == "nodedup"
+        assert report["owner_mismatches"] == 0
 
 
 class WitnessTests(unittest.TestCase):
@@ -135,10 +130,10 @@ class WitnessTests(unittest.TestCase):
         ]
         seen = witnessed_owners(resolution, ownership)
         body = seen[model_key("pc/body.mdl")]
-        self.assertEqual(list(body), ["walk"])
-        self.assertEqual(body["walk"]["owners"], Counter({model_key("shared/bank.mdl"): 2}))
-        self.assertEqual(body["walk"]["activity_ids"], Counter({"7": 1}))
-        self.assertEqual(body["walk"]["sequences"], Counter({"12": 2}))
+        assert list(body) == ["walk"]
+        assert body["walk"]["owners"] == Counter({model_key("shared/bank.mdl"): 2})
+        assert body["walk"]["activity_ids"] == Counter({"7": 1})
+        assert body["walk"]["sequences"] == Counter({"12": 2})
 
     def test_a_witness_outside_the_tree_is_rejected_not_diffed(self) -> None:
         witnessed = {
@@ -154,10 +149,10 @@ class WitnessTests(unittest.TestCase):
                     "activity_ids": Counter(), "sequences": Counter()},
         }
         admitted, rejected = admissible_witnesses(witnessed, {"models/male/bank.mdl"})
-        self.assertEqual(set(admitted), {"walk", "run"})
-        self.assertEqual(admitted["run"]["owners"], Counter({"models/male/bank.mdl": 2}))
-        self.assertEqual(set(rejected), {"idle", "run"})
-        self.assertEqual(rejected["run"]["owners"], Counter({"models/female/bank.mdl": 1}))
+        assert set(admitted) == {"walk", "run"}
+        assert admitted["run"]["owners"] == Counter({"models/male/bank.mdl": 2})
+        assert set(rejected) == {"idle", "run"}
+        assert rejected["run"]["owners"] == Counter({"models/female/bank.mdl": 1})
 
 
 class SequenceNumberTests(unittest.TestCase):
@@ -183,42 +178,39 @@ class SequenceNumberTests(unittest.TestCase):
         exported = self._exported(
             kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": 2}])
         report = compare_sequence_numbers(exported, self.LIVE, self.STEMS)
-        self.assertEqual(report["owner_mismatches"], 1)
-        self.assertEqual(report["examples"][0],
-                         {"label": "kick", "seq": 2, "live": "shared_fists",
-                          "export": "shared_misc"})
+        assert report["owner_mismatches"] == 1
+        assert report["examples"][0] == {"label": "kick", "seq": 2, "live": "shared_fists",
+                          "export": "shared_misc"}
 
     def test_a_number_naming_another_clip_is_a_label_mismatch(self) -> None:
         exported = self._exported(
             kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": 1}])
         report = compare_sequence_numbers(exported, self.LIVE, self.STEMS)
-        self.assertEqual(report["label_mismatches"], 1)
-        self.assertEqual(report["owner_mismatches"], 0)
+        assert report["label_mismatches"] == 1
+        assert report["owner_mismatches"] == 0
 
     def test_an_unlabelled_live_row_still_checks_its_owner(self) -> None:
         agreeing = self._exported(
             spare=[{"label": "spare", "owner_stem": "shared_fists", "seq": 3}])
-        self.assertEqual(
-            compare_sequence_numbers(agreeing, self.LIVE, self.STEMS)["owner_mismatches"], 0)
+        assert compare_sequence_numbers(agreeing, self.LIVE, self.STEMS)["owner_mismatches"] == 0
         disagreeing = self._exported(
             spare=[{"label": "spare", "owner_stem": "shared_misc", "seq": 3}])
-        self.assertEqual(
-            compare_sequence_numbers(disagreeing, self.LIVE, self.STEMS)["owner_mismatches"], 1)
+        assert compare_sequence_numbers(disagreeing, self.LIVE, self.STEMS)["owner_mismatches"] == 1
 
     def test_an_unnumbered_row_is_counted_rather_than_compared(self) -> None:
         exported = self._exported(
             kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": None}])
         report = compare_sequence_numbers(exported, self.LIVE, self.STEMS)
-        self.assertEqual(report["rows_unnumbered"], 1)
-        self.assertEqual(report["rows_checked"], 0)
-        self.assertEqual(report["owner_mismatches"], 0)
+        assert report["rows_unnumbered"] == 1
+        assert report["rows_checked"] == 0
+        assert report["owner_mismatches"] == 0
 
     def test_a_number_past_the_live_table_is_counted_rather_than_compared(self) -> None:
         exported = self._exported(
             kick=[{"label": "kick", "owner_stem": "shared_misc", "seq": 900}])
         report = compare_sequence_numbers(exported, self.LIVE, self.STEMS)
-        self.assertEqual(report["numbers_absent_from_live_table"], 1)
-        self.assertEqual(report["rows_checked"], 0)
+        assert report["numbers_absent_from_live_table"] == 1
+        assert report["rows_checked"] == 0
 
     def test_a_live_owner_with_no_export_stem_is_not_a_mismatch(self) -> None:
         # A weapon or viewmodel the character export never names cannot be compared against.
@@ -226,8 +218,8 @@ class SequenceNumberTests(unittest.TestCase):
         exported = self._exported(
             idle=[{"label": "idle", "owner_stem": "shared_misc", "seq": 0}])
         report = compare_sequence_numbers(exported, live, self.STEMS)
-        self.assertEqual(report["owner_mismatches"], 0)
-        self.assertEqual(report["rows_checked"], 1)
+        assert report["owner_mismatches"] == 0
+        assert report["rows_checked"] == 1
 
 
 class OwnershipTests(unittest.TestCase):
@@ -261,14 +253,11 @@ class OwnershipTests(unittest.TestCase):
                       "activity_name": "ACT_KICK"}],
         }
         report = compare_ownership(witnessed, exported, self.STEMS)
-        self.assertEqual(report["agreed"], 1)
-        self.assertEqual(report["owner_mismatches"], 1)
-        self.assertEqual(
-            report["examples"]["owner_mismatches"][0],
-            {"label": "idle01", "retail": "shared_misc", "export": ["shared_pc_idles"], "hits": 5},
-        )
-        self.assertEqual(report["absent_from_export"], 1)
-        self.assertEqual(report["retail_conflicts"], 1)
+        assert report["agreed"] == 1
+        assert report["owner_mismatches"] == 1
+        assert report["examples"]["owner_mismatches"][0] == {"label": "idle01", "retail": "shared_misc", "export": ["shared_pc_idles"], "hits": 5}
+        assert report["absent_from_export"] == 1
+        assert report["retail_conflicts"] == 1
 
     def test_a_same_owner_different_activity_is_its_own_count(self) -> None:
         witnessed = {
@@ -281,8 +270,8 @@ class OwnershipTests(unittest.TestCase):
                          "activity_name": "ACT_SNEAK_BAT"}],
         }
         report = compare_ownership(witnessed, exported, self.STEMS)
-        self.assertEqual(report["activity_mismatches"], 1)
-        self.assertEqual(report["agreed"], 0)
+        assert report["activity_mismatches"] == 1
+        assert report["agreed"] == 0
 
     def test_the_right_owner_among_several_is_what_agrees(self) -> None:
         """A label several banks declare agrees when ANY row is retail's own owner."""
@@ -299,15 +288,14 @@ class OwnershipTests(unittest.TestCase):
             ],
         }
         report = compare_ownership(witnessed, exported, self.STEMS)
-        self.assertEqual(report["agreed"], 1)
-        self.assertEqual(report["owner_mismatches"], 0)
+        assert report["agreed"] == 1
+        assert report["owner_mismatches"] == 0
 
     def test_a_retail_owner_the_export_never_named_is_reported_not_failed(self) -> None:
         witnessed = {"x": self._witness("x", {"models/weapons/w_null.mdl": 1})}
         report = compare_ownership(witnessed, {}, self.STEMS)
-        self.assertEqual(report["retail_owners_without_export_stem"],
-                         {"models/weapons/w_null.mdl": 1})
-        self.assertEqual(report["absent_from_export"], 0)
+        assert report["retail_owners_without_export_stem"] == {"models/weapons/w_null.mdl": 1}
+        assert report["absent_from_export"] == 0
 
 
 class FlatSpaceTests(unittest.TestCase):
@@ -322,24 +310,21 @@ class FlatSpaceTests(unittest.TestCase):
 
     def test_first_occurrence_is_case_insensitive_and_keeps_the_first_spelling(self) -> None:
         firsts = first_occurrence_owners(self.FLAT)
-        self.assertEqual(firsts["idle01"]["owner_model"], model_key("pc_idles.mdl"))
-        self.assertEqual(firsts["idle01"]["label"], "idle01")
-        self.assertEqual(firsts["stealth"]["global_index"], 2)
+        assert firsts["idle01"]["owner_model"] == model_key("pc_idles.mdl")
+        assert firsts["idle01"]["label"] == "idle01"
+        assert firsts["stealth"]["global_index"] == 2
 
     def test_collisions_are_split_by_whether_the_copies_share_an_activity(self) -> None:
         report = label_collisions(self.FLAT)
-        self.assertEqual(report["labels_repeated_across_banks"], 2)
-        self.assertEqual(report["same_activity"], 1)
-        self.assertEqual(report["different_activity"], 1)
-        self.assertEqual(report["examples"]["same_activity"][0]["label"], "idle01")
-        self.assertEqual(
-            report["examples"]["different_activity"][0]["activities"],
-            ["ACT_SNEAK_BAT", "ACT_SNEAK_FISTS"],
-        )
+        assert report["labels_repeated_across_banks"] == 2
+        assert report["same_activity"] == 1
+        assert report["different_activity"] == 1
+        assert report["examples"]["same_activity"][0]["label"] == "idle01"
+        assert report["examples"]["different_activity"][0]["activities"] == ["ACT_SNEAK_BAT", "ACT_SNEAK_FISTS"]
 
     def test_a_label_repeated_inside_one_bank_is_not_a_cross_bank_collision(self) -> None:
         flat = _flat(("bank.mdl", 0, "x", "A"), ("bank.mdl", 1, "x", "B"))
-        self.assertEqual(label_collisions(flat)["labels_repeated_across_banks"], 0)
+        assert label_collisions(flat)["labels_repeated_across_banks"] == 0
 
 
 class ExportIndexTests(unittest.TestCase):
@@ -349,8 +334,8 @@ class ExportIndexTests(unittest.TestCase):
             "banks": {"shared_bank": {"model": "character/shared/bank.mdl"}},
         }
         stems = stems_by_model(index)
-        self.assertEqual(stems[model_key("character/pc/body.mdl")], "body")
-        self.assertEqual(stems[model_key("/character/shared/bank.mdl")], "shared_bank")
+        assert stems[model_key("character/pc/body.mdl")] == "body"
+        assert stems[model_key("/character/shared/bank.mdl")] == "shared_bank"
 
 
 class _FakeBank:
@@ -398,18 +383,18 @@ class AnalyzerLiveMapTests(unittest.TestCase):
             })
             table = analyzer.sequence_map(Path(directory), library)
         body = analyzer.BankLibrary.key_for("pc/body.mdl")
-        self.assertEqual(table[(body, 0)]["label"], "ragdoll")
-        self.assertEqual(table[(body, 1)]["label"], "walk")
-        self.assertEqual(table[(body, 1)]["activity_name"], "ACT_WALK")
-        self.assertEqual(table[(body, 1)]["resolved"], "install")
-        self.assertNotIn((body, 2), table)
+        assert table[(body, 0)]["label"] == "ragdoll"
+        assert table[(body, 1)]["label"] == "walk"
+        assert table[(body, 1)]["activity_name"] == "ACT_WALK"
+        assert table[(body, 1)]["resolved"] == "install"
+        assert (body, 2) not in table
 
     def test_without_a_library_unlabelled_rows_are_still_dropped(self) -> None:
         from pathlib import Path
 
         with tempfile.TemporaryDirectory() as directory:
             self._write(directory, ["pc/body.mdl,1,shared/bank.mdl,3,2,,,False"])
-            self.assertEqual(analyzer.sequence_map(Path(directory)), {})
+            assert analyzer.sequence_map(Path(directory)) == {}
 
 
 class AnalyzerChainFallbackTests(unittest.TestCase):
@@ -436,11 +421,11 @@ class AnalyzerChainFallbackTests(unittest.TestCase):
         }
         rows = analyzer.selections(calls, returns, ownership, live_map={})
         known, unknown = rows
-        self.assertEqual(known["body_model"], "pc/male.mdl")
-        self.assertIsNone(known["resolved_owner"])
-        self.assertIsNone(unknown["body_model"])
-        self.assertEqual(unknown["resolved_owner"], "shared/female/katana.mdl")
-        self.assertEqual(unknown["resolved_from"], "chain")
+        assert known["body_model"] == "pc/male.mdl"
+        assert known["resolved_owner"] is None
+        assert unknown["body_model"] is None
+        assert unknown["resolved_owner"] == "shared/female/katana.mdl"
+        assert unknown["resolved_from"] == "chain"
 
 
 def _matrix(rows, translation=(0.0, 0.0, 0.0)) -> str:
@@ -458,41 +443,41 @@ IDENTITY = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 class RetailMatrixTests(unittest.TestCase):
     def test_the_fourth_column_is_the_translation(self) -> None:
         rows, translation = retail_matrix(_matrix(IDENTITY, (1.0, 2.0, 3.0)))
-        self.assertEqual(rows, [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
-        self.assertEqual(translation, (1.0, 2.0, 3.0))
+        assert rows == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+        assert translation == (1.0, 2.0, 3.0)
 
     def test_a_pure_translation_reads_as_unit_scale_and_no_angle(self) -> None:
         # Retail's origin branch: identity rotation, `b - a` in the fourth column, stated in
         # inches, which is why the invariant comes back in centimetres.
         read = read_retail_transform(_matrix(IDENTITY, (1.22551, 0.0, 0.0)))
-        self.assertAlmostEqual(read["scale"], 1.0, places=6)
-        self.assertAlmostEqual(read["angle_degrees"], 0.0, places=4)
-        self.assertAlmostEqual(read["translation_cm"], 1.22551 * 2.54, places=5)
+        assert read["scale"] == pytest.approx(1.0, abs=1e-6)
+        assert read["angle_degrees"] == pytest.approx(0.0, abs=1e-4)
+        assert read["translation_cm"] == pytest.approx(1.22551 * 2.54, abs=1e-5)
 
     def test_a_uniform_scale_reads_as_that_scale(self) -> None:
         scaled = tuple(tuple(0.7 * v for v in row) for row in IDENTITY)
         read = read_retail_transform(_matrix(scaled))
-        self.assertAlmostEqual(read["scale"], 0.7, places=6)
-        self.assertAlmostEqual(read["row_norm_spread"], 0.0, places=9)
+        assert read["scale"] == pytest.approx(0.7, abs=1e-6)
+        assert read["row_norm_spread"] == pytest.approx(0.0, abs=1e-9)
 
 
 class DeriveTransformTests(unittest.TestCase):
     def test_a_length_ratio_with_no_rotation(self) -> None:
         out = derive_transform((0.0, 0.0, 2.0), (0.0, 0.0, 6.0))
-        self.assertEqual(out["branch"], "axis_angle")
-        self.assertAlmostEqual(out["scale"], 3.0, places=9)
-        self.assertAlmostEqual(out["angle_degrees"], 0.0, places=9)
+        assert out["branch"] == "axis_angle"
+        assert out["scale"] == pytest.approx(3.0, abs=1e-9)
+        assert out["angle_degrees"] == pytest.approx(0.0, abs=1e-9)
 
     def test_the_angle_is_between_the_two_bind_directions(self) -> None:
         out = derive_transform((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
-        self.assertAlmostEqual(out["angle_degrees"], 90.0, places=6)
-        self.assertAlmostEqual(out["scale"], 1.0, places=9)
+        assert out["angle_degrees"] == pytest.approx(90.0, abs=1e-6)
+        assert out["scale"] == pytest.approx(1.0, abs=1e-9)
 
     def test_a_bind_at_the_origin_takes_the_translation_branch(self) -> None:
         # Retail writes a pure `b - a` there, and no stock Unreal translation mode carries it.
         out = derive_transform((0.0, 0.0, 0.0), (0.0, 0.0, 4.0))
-        self.assertEqual(out["branch"], "translation")
-        self.assertAlmostEqual(out["translation_cm"], 4.0, places=9)
+        assert out["branch"] == "translation"
+        assert out["translation_cm"] == pytest.approx(4.0, abs=1e-9)
 
     def test_the_reflection_is_not_a_difference(self) -> None:
         """`source_to_unreal` negates Y, which preserves an angle and flips the axis, so the
@@ -500,8 +485,8 @@ class DeriveTransformTests(unittest.TestCase):
         a, b = (1.0, 2.0, 3.0), (2.0, 1.0, 5.0)
         straight = derive_transform(a, b)
         mirrored = derive_transform((a[0], -a[1], a[2]), (b[0], -b[1], b[2]))
-        self.assertAlmostEqual(straight["scale"], mirrored["scale"], places=9)
-        self.assertAlmostEqual(straight["angle_degrees"], mirrored["angle_degrees"], places=9)
+        assert straight["scale"] == pytest.approx(mirrored["scale"], abs=1e-9)
+        assert straight["angle_degrees"] == pytest.approx(mirrored["angle_degrees"], abs=1e-9)
 
 
 class _StubBinds:
@@ -551,33 +536,33 @@ class CompareRetargetTests(unittest.TestCase):
     def test_a_pair_both_engines_copy_agrees(self) -> None:
         binds = self._binds((0.0, 0.0, 10.0), (0.0, 0.0, 10.0))
         out = compare_retarget([_remap_row()], binds, self.STEMS)
-        self.assertEqual(out["copy"]["agree"], 1)
-        self.assertEqual(out["copy"]["diverges"], 0)
+        assert out["copy"]["agree"] == 1
+        assert out["copy"]["diverges"] == 0
 
     def test_retail_copying_a_pair_we_retarget_is_a_divergence(self) -> None:
         # Inside retail's own epsilon and outside Unreal's, which is the whole finding.
         binds = self._binds((0.0, 0.0, 10.2), (0.0, 0.0, 10.0))
         out = compare_retarget([_remap_row()], binds, self.STEMS)
-        self.assertEqual(out["copy"]["diverges"], 1)
-        self.assertAlmostEqual(out["copy"]["examples"][0]["separation_cm"], 0.2, places=5)
+        assert out["copy"]["diverges"] == 1
+        assert out["copy"]["examples"][0]["separation_cm"] == pytest.approx(0.2, abs=1e-5)
 
     def test_retails_origin_branch_against_our_length_ratio(self) -> None:
         binds = self._binds((0.14496, 0.0, 0.0), (2.96802, 0.0, 0.0))
         row = _remap_row(sub="1", matrix3x4=_matrix(IDENTITY, (3.11281 / 2.54, 0.0, 0.0)))
         out = compare_retarget([row], binds, self.STEMS)
-        self.assertEqual(out["transform"]["diverges"], 1)
+        assert out["transform"]["diverges"] == 1
         example = out["transform"]["examples"][0]
-        self.assertEqual(example["kind"], "branch")
-        self.assertEqual(example["retail"], "translation")
-        self.assertEqual(example["ours"], "axis_angle")
+        assert example["kind"] == "branch"
+        assert example["retail"] == "translation"
+        assert example["ours"] == "axis_angle"
 
     def test_a_matching_length_ratio_agrees(self) -> None:
         scaled = tuple(tuple(3.0 * v for v in r) for r in IDENTITY)
         binds = self._binds((0.0, 0.0, 6.0), (0.0, 0.0, 2.0))
         out = compare_retarget([_remap_row(sub="1", matrix3x4=_matrix(scaled))],
                                binds, self.STEMS)
-        self.assertEqual(out["transform"]["agree"], 1)
-        self.assertEqual(out["transform"]["diverges"], 0)
+        assert out["transform"]["agree"] == 1
+        assert out["transform"]["diverges"] == 0
 
     def test_an_undriven_bone_the_bank_does_not_carry_agrees(self) -> None:
         binds = _StubBinds({
@@ -587,8 +572,8 @@ class CompareRetargetTests(unittest.TestCase):
         })
         row = _remap_row(body_bone="Bat", bank_bone="", bank_bone_index="-1")
         out = compare_retarget([row], binds, self.STEMS)
-        self.assertEqual(out["driven"]["undriven_agree"], 1)
-        self.assertEqual(out["driven"]["undriven_we_carry"], 0)
+        assert out["driven"]["undriven_agree"] == 1
+        assert out["driven"]["undriven_we_carry"] == 0
 
     def test_an_undriven_bone_our_bank_does_carry_is_reported(self) -> None:
         binds = _StubBinds({
@@ -597,7 +582,7 @@ class CompareRetargetTests(unittest.TestCase):
         })
         row = _remap_row(body_bone="Bat", bank_bone="", bank_bone_index="-1")
         out = compare_retarget([row], binds, self.STEMS)
-        self.assertEqual(out["driven"]["undriven_we_carry"], 1)
+        assert out["driven"]["undriven_we_carry"] == 1
 
     def test_a_hub_with_no_container_is_not_applicable_rather_than_a_miss(self) -> None:
         """Retail composes its chain hop by hop; this repository retargets a bank straight onto
@@ -605,9 +590,5 @@ class CompareRetargetTests(unittest.TestCase):
         binds = self._binds((0.0, 0.0, 1.0), (0.0, 0.0, 1.0))
         row = _remap_row(bank="models/shared/hub.mdl")
         out = compare_retarget([row], binds, self.STEMS)
-        self.assertEqual(out["rows_applicable"], 0)
-        self.assertEqual(out["rows_not_applicable"], 1)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert out["rows_applicable"] == 0
+        assert out["rows_not_applicable"] == 1

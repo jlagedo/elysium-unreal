@@ -86,13 +86,10 @@ class ProjectConfigPrecedenceTests(unittest.TestCase):
                 ue=roots["argument", "ue"],
             )
 
-            self.assertEqual(resolved.game_root, roots["argument", "game"].resolve())
-            self.assertEqual(resolved.work_root, roots["argument", "work"].resolve())
-            self.assertEqual(resolved.ue_root, roots["argument", "ue"].resolve())
-            self.assertEqual(
-                resolved.export_root,
-                (roots["argument", "work"] / "exports").resolve(),
-            )
+            assert resolved.game_root == roots["argument", "game"].resolve()
+            assert resolved.work_root == roots["argument", "work"].resolve()
+            assert resolved.ue_root == roots["argument", "ue"].resolve()
+            assert resolved.export_root == (roots["argument", "work"] / "exports").resolve()
 
     def test_environment_overrides_local_file_and_export_override_is_independent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -137,10 +134,10 @@ class ProjectConfigPrecedenceTests(unittest.TestCase):
                 },
             )
 
-            self.assertEqual(resolved.game_root, env_game.resolve())
-            self.assertEqual(resolved.work_root, env_work.resolve())
-            self.assertEqual(resolved.ue_root, env_ue.resolve())
-            self.assertEqual(resolved.export_root, export.resolve())
+            assert resolved.game_root == env_game.resolve()
+            assert resolved.work_root == env_work.resolve()
+            assert resolved.ue_root == env_ue.resolve()
+            assert resolved.export_root == export.resolve()
 
     def test_local_file_is_used_when_arguments_and_environment_are_absent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -173,27 +170,17 @@ class ProjectConfigPrecedenceTests(unittest.TestCase):
 
             resolved = self._resolve(repo, {})
 
-            self.assertEqual(resolved.game_root, game.resolve())
-            self.assertEqual(resolved.work_root, work.resolve())
-            self.assertEqual(resolved.ue_root, ue.resolve())
-            self.assertEqual(resolved.unreal_zen_data_path, zen.resolve())
-            self.assertEqual(
-                resolved.unreal_local_data_cache_path, local_ddc.resolve()
-            )
-            self.assertEqual(
-                resolved.unreal_shader_work_root, shader_work.resolve()
-            )
-            self.assertEqual(resolved.temp_root, process_temp.resolve())
+            assert resolved.game_root == game.resolve()
+            assert resolved.work_root == work.resolve()
+            assert resolved.ue_root == ue.resolve()
+            assert resolved.unreal_zen_data_path == zen.resolve()
+            assert resolved.unreal_local_data_cache_path == local_ddc.resolve()
+            assert resolved.unreal_shader_work_root == shader_work.resolve()
+            assert resolved.temp_root == process_temp.resolve()
 
             with mock.patch.dict(os.environ, {}, clear=True):
                 resolved.apply_environment()
-                self.assertEqual(os.environ["UE-ZenDataPath"], str(zen.resolve()))
-                self.assertEqual(
-                    os.environ["UE-LocalDataCachePath"], str(local_ddc.resolve())
-                )
-                self.assertEqual(os.environ["TEMP"], str(process_temp.resolve()))
-                self.assertEqual(os.environ["TMP"], str(process_temp.resolve()))
-
-
-if __name__ == "__main__":
-    unittest.main()
+                assert os.environ["UE-ZenDataPath"] == str(zen.resolve())
+                assert os.environ["UE-LocalDataCachePath"] == str(local_ddc.resolve())
+                assert os.environ["TEMP"] == str(process_temp.resolve())
+                assert os.environ["TMP"] == str(process_temp.resolve())

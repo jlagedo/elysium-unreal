@@ -24,6 +24,7 @@ from elysium_pipeline import wield_corpus as W
 from elysium_pipeline.exporters import UE_extract_wield as export
 from elysium_pipeline.formats import bsp, eskm, mdl, mdl_skel
 from elysium_pipeline.formats.tex_to_png import FMT_BGR888
+import pytest
 
 IDENTITY_Q = (0.0, 0.0, 0.0, 1.0)
 
@@ -237,14 +238,14 @@ class WieldExportTests(unittest.TestCase):
             manifest = self._run(Path(root), Path(out))
 
             rows = manifest["rows"]
-            self.assertEqual(rows["item_a_real"]["f"]["kind"], "real")
-            self.assertEqual(rows["item_a_real"]["f"]["stem"], "w_real")
-            self.assertEqual(rows["item_b_null"]["f"]["kind"], "null")
-            self.assertEqual(rows["item_c_empty"]["f"]["kind"], "empty")
-            self.assertEqual(rows["item_c_empty"]["f"]["source"], "")
-            self.assertEqual(rows["item_d_absent"]["f"]["kind"], "absent")
-            self.assertTrue(rows["item_a_real"]["npc_carried"])
-            self.assertFalse(rows["item_b_null"]["npc_carried"])
+            assert rows["item_a_real"]["f"]["kind"] == "real"
+            assert rows["item_a_real"]["f"]["stem"] == "w_real"
+            assert rows["item_b_null"]["f"]["kind"] == "null"
+            assert rows["item_c_empty"]["f"]["kind"] == "empty"
+            assert rows["item_c_empty"]["f"]["source"] == ""
+            assert rows["item_d_absent"]["f"]["kind"] == "absent"
+            assert rows["item_a_real"]["npc_carried"]
+            assert not rows["item_b_null"]["npc_carried"]
 
     def test_an_absent_model_is_recorded_not_fatal(self) -> None:
         # The whole run must complete -- an absent model is an authored possibility, never fatal
@@ -252,9 +253,9 @@ class WieldExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
             manifest = self._run(Path(root), Path(out))
 
-            self.assertEqual(manifest["census"]["absent_rows"], 2)
-            self.assertEqual(manifest["census"]["absent_paths"], 1)
-            self.assertNotIn(ABSENT_MODEL, manifest["models"])
+            assert manifest["census"]["absent_rows"] == 2
+            assert manifest["census"]["absent_paths"] == 1
+            assert ABSENT_MODEL not in manifest["models"]
 
     # --- motion -------------------------------------------------------------------------------
 
@@ -263,7 +264,7 @@ class WieldExportTests(unittest.TestCase):
             manifest = self._run(Path(root), Path(out))
 
             motion = manifest["models"]["w_real"]["motion"]
-            self.assertEqual([row["name"] for row in motion], ["handle"])
+            assert [row["name"] for row in motion] == ["handle"]
 
     # --- textures -----------------------------------------------------------------------------
 
@@ -274,14 +275,13 @@ class WieldExportTests(unittest.TestCase):
             # One flat key namespace across all three channels (`_register_texture`'s docstring):
             # a key used by two different roles is still one install file and one manifest entry.
             textures = manifest["textures"]
-            self.assertIn("claws", textures)
-            self.assertIn("ghost", textures)
-            self.assertIn("ghost_mask", textures)
-            self.assertEqual(textures["ghost_mask"], "tex/ghost_mask.png")
+            assert "claws" in textures
+            assert "ghost" in textures
+            assert "ghost_mask" in textures
+            assert textures["ghost_mask"] == "tex/ghost_mask.png"
             # The decode is real -- the file this key names actually exists.
-            self.assertTrue(
-                (Path(out) / "items" / "wield" / "tex" / "ghost_mask.png").is_file())
-            self.assertEqual(manifest["census"]["texture_union"], 3)
+            assert (Path(out) / "items" / "wield" / "tex" / "ghost_mask.png").is_file()
+            assert manifest["census"]["texture_union"] == 3
 
     # --- reference-pose readback ----------------------------------------------------------------
 
@@ -290,12 +290,12 @@ class WieldExportTests(unittest.TestCase):
         name, parent, _pos, quat = wrong[1]
         wrong[1] = (name, parent, (99.0, 0.0, 0.0), quat)          # "handle" moved 99cm
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
-            with self.assertRaises(AssertionError) as ctx:
+            with pytest.raises(AssertionError) as ctx:
                 self._run(Path(root), Path(out), bone_locals=wrong)
 
-        message = str(ctx.exception)
-        self.assertIn(REAL_MODEL, message)
-        self.assertIn("handle", message)
+        message = str(ctx.value)
+        assert REAL_MODEL in message
+        assert "handle" in message
 
     # --- trail tip ------------------------------------------------------------------------------
 
@@ -305,7 +305,7 @@ class WieldExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root, tempfile.TemporaryDirectory() as out:
             manifest = self._run(Path(root), Path(out))
 
-            self.assertIsNone(manifest["models"]["w_real"]["trail_tip"])
+            assert manifest["models"]["w_real"]["trail_tip"] is None
 
     def test_socket_prop_model_carries_a_trail_tip_attachment(self) -> None:
         prop_cls = W.Classification(binding="socket_prop", mount_bone="handle", hand_bone="Bip01",
@@ -320,18 +320,18 @@ class WieldExportTests(unittest.TestCase):
                                  capture_attachments=captured)
 
         trail_tip_out = manifest["models"]["w_real"]["trail_tip"]
-        self.assertEqual(trail_tip_out["bone"], "handle")
-        self.assertEqual(trail_tip_out["pos"], [6.0, 1.0, 0.0])
-        self.assertEqual(trail_tip_out["quat"], list(IDENTITY_Q))
+        assert trail_tip_out["bone"] == "handle"
+        assert trail_tip_out["pos"] == [6.0, 1.0, 0.0]
+        assert trail_tip_out["quat"] == list(IDENTITY_Q)
 
         # write_model must have received the synthetic attachment record too -- the manifest field
         # and the baked socket are the same fact stated twice, and both have to agree.
         [attachments] = captured
-        self.assertEqual(len(attachments), 1)
-        self.assertEqual(attachments[0].name, "TrailTip")
-        self.assertEqual(attachments[0].bone, 1)   # "handle" is StudioBone index 1 in `_bones()`
-        self.assertEqual(attachments[0].pos, (6.0, 1.0, 0.0))
-        self.assertEqual(attachments[0].quat, IDENTITY_Q)
+        assert len(attachments) == 1
+        assert attachments[0].name == "TrailTip"
+        assert attachments[0].bone == 1   # "handle" is StudioBone index 1 in `_bones()`
+        assert attachments[0].pos == (6.0, 1.0, 0.0)
+        assert attachments[0].quat == IDENTITY_Q
 
     # --- determinism --------------------------------------------------------------------------
 
@@ -344,8 +344,4 @@ class WieldExportTests(unittest.TestCase):
                 text_a = (Path(out_a) / "items" / "wield_models.json").read_text(encoding="utf-8")
                 text_b = (Path(out_b) / "items" / "wield_models.json").read_text(encoding="utf-8")
 
-        self.assertEqual(text_a, text_b)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert text_a == text_b

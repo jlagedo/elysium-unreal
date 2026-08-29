@@ -20,6 +20,7 @@ from elysium_pipeline.formats import eskm, install
 from elysium_pipeline.tasking import Manifest
 
 from pipeline.tests.test_eskm_sections import container_bytes
+import pytest
 
 
 def _string(value: str) -> bytes:
@@ -59,10 +60,10 @@ class WorkerDispatchTests(unittest.TestCase):
             ):
                 out = workers.character_source_worker(
                     "model", "amy", "models/amy.mdl", temporary)
-            self.assertIn("wrote models/amy.mdl", out)
+            assert "wrote models/amy.mdl" in out
 
     def test_worker_refuses_an_unknown_kind_loudly(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "unknown character source kind"):
+        with pytest.raises(RuntimeError, match="unknown character source kind"):
             workers.character_source_worker("nope", "amy", "models/amy.mdl", "out")
 
     def test_worker_round_trips_a_spawned_process(self) -> None:
@@ -74,7 +75,7 @@ class WorkerDispatchTests(unittest.TestCase):
         with ProcessPoolExecutor(max_workers=1) as pool:
             future = pool.submit(
                 workers.character_source_worker, "nope", "amy", "models/amy.mdl", "out")
-            with self.assertRaisesRegex(RuntimeError, "unknown character source kind"):
+            with pytest.raises(RuntimeError, match="unknown character source kind"):
                 future.result(timeout=120)
 
     def test_worker_failure_carries_the_captured_tail(self) -> None:
@@ -88,7 +89,7 @@ class WorkerDispatchTests(unittest.TestCase):
             mock.patch.object(install, "build_index", return_value={}),
             mock.patch.object(UE_mdl_skeletal, "write_bank", side_effect=explode),
         ):
-            with self.assertRaisesRegex(RuntimeError, "decoding amy"):
+            with pytest.raises(RuntimeError, match="decoding amy"):
                 workers.character_source_worker("bank", "bank_a", "models/bank_a.mdl", "out")
 
 
@@ -113,18 +114,14 @@ class PrefixBucketTests(unittest.TestCase):
             self.INDEX, "models/character/x.mdl", buckets)
         grown = dict(self.INDEX)
         grown["models/character/x.ani"] = ("vpk", 10)
-        self.assertNotEqual(
-            base,
-            export_manager._character_source_detail(
+        assert base != export_manager._character_source_detail(
                 grown, "models/character/x.mdl",
-                export_manager._index_prefix_buckets(grown)))
+                export_manager._index_prefix_buckets(grown))
         foreign = dict(self.INDEX)
         foreign["models/character/xz.mdl"] = ("vpk", 11)
-        self.assertEqual(
-            base,
-            export_manager._character_source_detail(
+        assert base == export_manager._character_source_detail(
                 foreign, "models/character/x.mdl",
-                export_manager._index_prefix_buckets(foreign)))
+                export_manager._index_prefix_buckets(foreign))
 
 
 class WriteCharacterSourcesTests(unittest.TestCase):
@@ -164,14 +161,14 @@ class WriteCharacterSourcesTests(unittest.TestCase):
                 bodies, banks = export_manager.write_character_sources(
                     config, npc_dir, manifest=manifest, jobs=1,
                     npc_manifest=self.MANIFEST)
-                self.assertEqual((bodies, banks), (["amy"], []))
-                self.assertEqual(writer.call_count, 1)
+                assert (bodies, banks) == (["amy"], [])
+                assert writer.call_count == 1
 
                 manifest = Manifest(config.export_root / ".elysium-manifest.json")
                 export_manager.write_character_sources(
                     config, npc_dir, manifest=manifest, jobs=1,
                     npc_manifest=self.MANIFEST)
-                self.assertEqual(writer.call_count, 1)
+                assert writer.call_count == 1
 
     def test_force_rewrites_the_container(self) -> None:
         from elysium_pipeline.exporters import UE_mdl_skeletal
@@ -196,7 +193,7 @@ class WriteCharacterSourcesTests(unittest.TestCase):
                 export_manager.write_character_sources(
                     config, npc_dir, manifest=manifest, jobs=1, force=True,
                     npc_manifest=self.MANIFEST)
-                self.assertEqual(writer.call_count, 2)
+                assert writer.call_count == 2
 
 
 class PartitionSectionReadTests(unittest.TestCase):
@@ -231,20 +228,20 @@ class PartitionSectionReadTests(unittest.TestCase):
             npc_dir = self._npc_dir(temporary)
             partition = export_manager.write_character_partition(
                 npc_dir, npc_manifest=self.MANIFEST)
-            self.assertEqual(sorted(partition["model_family_of"]), ["amy"])
-            self.assertEqual(sorted(partition["bank_family_of"]), ["bank_a"])
+            assert sorted(partition["model_family_of"]) == ["amy"]
+            assert sorted(partition["bank_family_of"]) == ["bank_a"]
             with (npc_dir / "textures.json").open(encoding="utf-8") as handle:
                 textures = json.load(handle)
             (name, entry), = textures["textures"].items()
-            self.assertEqual(entry, {"uri": "tex/amy_body.png", "used_by": ["amy"]})
-            self.assertEqual(textures["bindings"], {"amy": {"skin": name}})
+            assert entry == {"uri": "tex/amy_body.png", "used_by": ["amy"]}
+            assert textures["bindings"] == {"amy": {"skin": name}}
 
     def test_a_corrupt_prop_container_fails_loudly(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             npc_dir = self._npc_dir(temporary)
             (npc_dir / "placed_models" / "switch.eskm").write_bytes(b"NOPE not a container")
-            with self.assertRaisesRegex(export_manager.OfflineExportFailure,
-                                        "switch.eskm"):
+            with pytest.raises(export_manager.OfflineExportFailure,
+                                        match="switch.eskm"):
                 export_manager.write_character_partition(
                     npc_dir, npc_manifest=self.MANIFEST)
 
@@ -253,7 +250,7 @@ class PartitionSectionReadTests(unittest.TestCase):
             npc_dir = self._npc_dir(temporary)
             (npc_dir / "amy.eskm").write_bytes(container_bytes(
                 {b"SKEL": skel_payload((("root", -1),))}, version=eskm.VERSION + 1))
-            with self.assertRaisesRegex(export_manager.OfflineExportFailure, "amy.eskm"):
+            with pytest.raises(export_manager.OfflineExportFailure, match="amy.eskm"):
                 export_manager.write_character_partition(
                     npc_dir, npc_manifest=self.MANIFEST)
 
@@ -270,8 +267,8 @@ class ManifestPlumbingTests(unittest.TestCase):
             }
             models, banks, cinematics, props = export_manager.character_source_plan(
                 npc_dir, manifest)
-            self.assertEqual(models, {"amy": "models/amy.mdl"})
-            self.assertEqual((banks, cinematics, props), ({}, {}, {}))
+            assert models == {"amy": "models/amy.mdl"}
+            assert (banks, cinematics, props) == ({}, {}, {})
 
 
 class SweepReceiptTests(unittest.TestCase):
@@ -297,10 +294,10 @@ class SweepReceiptTests(unittest.TestCase):
                     config, {}, skip_unchanged=True)
                 third = export_manager.sweep_characters(
                     config, {}, skip_unchanged=True, force=True)
-            self.assertEqual(swept.call_count, 2)
-            self.assertNotIn("skipped", first)
-            self.assertTrue(second["skipped"])
-            self.assertNotIn("skipped", third)
+            assert swept.call_count == 2
+            assert "skipped" not in first
+            assert second["skipped"]
+            assert "skipped" not in third
 
     def test_a_moved_partition_reopens_the_scan(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -314,7 +311,7 @@ class SweepReceiptTests(unittest.TestCase):
                 (npc_dir / "families.json").write_text(
                     '{"models": {}}', encoding="utf-8")
                 export_manager.sweep_characters(config, {}, skip_unchanged=True)
-            self.assertEqual(swept.call_count, 2)
+            assert swept.call_count == 2
 
     def test_a_refused_sweep_writes_no_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -325,8 +322,7 @@ class SweepReceiptTests(unittest.TestCase):
             refused = dict(self.CLEAN, refused="66% look orphaned")
             with mock.patch.object(character_sweep, "sweep", return_value=refused):
                 export_manager.sweep_characters(config, {}, skip_unchanged=True)
-            self.assertFalse(
-                (config.export_root / export_manager.SWEEP_RECEIPT_FILE).is_file())
+            assert not (config.export_root / export_manager.SWEEP_RECEIPT_FILE).is_file()
 
 
 class ClothGateTests(unittest.TestCase):
@@ -341,8 +337,7 @@ class ClothGateTests(unittest.TestCase):
             garment_dir = config.export_root / "npc" / "garment"
             (garment_dir / "amy.json").write_text("{}", encoding="utf-8")
             # amy authors a garment with no generated asset yet -> stale; bob authors none.
-            self.assertEqual(
-                export_manager._cloth_bake_stems(config, ["amy", "bob"]), ["amy"])
+            assert export_manager._cloth_bake_stems(config, ["amy", "bob"]) == ["amy"]
             cloth = config.repo_root / "Plugins" / "ElysiumBaked" / "Content" / "Characters" / "Cloth"
             cloth.mkdir(parents=True)
             (cloth / "CLOTH_amy.uasset").write_bytes(b"cloth")
@@ -350,12 +345,6 @@ class ClothGateTests(unittest.TestCase):
             import os
 
             os.utime(cloth / "CLOTH_amy.uasset", (future, future))
-            self.assertEqual(export_manager._cloth_bake_stems(config, ["amy", "bob"]), [])
+            assert export_manager._cloth_bake_stems(config, ["amy", "bob"]) == []
             # --force launches for every authored garment, and never for unauthored stems.
-            self.assertEqual(
-                export_manager._cloth_bake_stems(config, ["amy", "bob"], force=True),
-                ["amy"])
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert export_manager._cloth_bake_stems(config, ["amy", "bob"], force=True) == ["amy"]

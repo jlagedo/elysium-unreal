@@ -19,6 +19,7 @@ from unittest import mock
 from elysium_pipeline import wield_corpus as W
 from elysium_pipeline.formats import install, mdl, mdl_skel
 from elysium_pipeline.formats.tex_to_png import FMT_BGR888, FMT_DXT1
+import pytest
 
 
 IDENTITY_Q = (0.0, 0.0, 0.0, 1.0)
@@ -100,7 +101,7 @@ class ItemJoinTests(unittest.TestCase):
 
             rows = W.wield_rows(install.index)
 
-            self.assertEqual([row.anim_prefix for row in rows], ["last", "last"])
+            assert [row.anim_prefix for row in rows] == ["last", "last"]
 
     def test_shows_view_model_defaults_to_one_and_zero_is_explicit(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -111,8 +112,8 @@ class ItemJoinTests(unittest.TestCase):
 
             gates = {row.classname: row.shows_view_model for row in W.wield_rows(install.index)}
 
-            self.assertEqual(gates["item_w_default"], 1)
-            self.assertEqual(gates["item_a_armor"], 0)
+            assert gates["item_w_default"] == 1
+            assert gates["item_a_armor"] == 0
 
     def test_null_empty_and_named_are_three_distinct_values(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -125,11 +126,11 @@ class ItemJoinTests(unittest.TestCase):
 
             rows = {(r.classname, r.sex): r.model for r in W.wield_rows(install.index)}
 
-            self.assertTrue(W.is_null(rows[("item_null", "f")]))
-            self.assertEqual(rows[("item_empty", "f")], "")
-            self.assertFalse(W.is_null(rows[("item_empty", "f")]))
+            assert W.is_null(rows[("item_null", "f")])
+            assert rows[("item_empty", "f")] == ""
+            assert not W.is_null(rows[("item_empty", "f")])
             # A definition may omit the extension; the engine resolves it as a `.mdl` all the same.
-            self.assertEqual(rows[("item_real", "f")], "models/weapons/katana/w_f_katana.mdl")
+            assert rows[("item_real", "f")] == "models/weapons/katana/w_f_katana.mdl"
 
     def test_bit_flags_are_read_off_their_own_keys(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -140,15 +141,15 @@ class ItemJoinTests(unittest.TestCase):
 
             row = W.wield_rows(install.index)[0]
 
-            self.assertTrue(row.cant_be_last)
-            self.assertTrue(row.reload_single)
-            self.assertFalse(row.discipline_tgt)
+            assert row.cant_be_last
+            assert row.reload_single
+            assert not row.discipline_tgt
 
 
 class StemTests(unittest.TestCase):
     def test_stem_is_the_basename_and_survives_backslashes(self) -> None:
-        self.assertEqual(W.stem("models\\weapons\\Katana\\wield\\W_M_Katana.mdl"), "w_m_katana")
-        self.assertEqual(W.stem(""), "")
+        assert W.stem("models\\weapons\\Katana\\wield\\W_M_Katana.mdl") == "w_m_katana"
+        assert W.stem("") == ""
 
 
 class ClassificationTests(unittest.TestCase):
@@ -156,18 +157,18 @@ class ClassificationTests(unittest.TestCase):
         bones = with_subrig(("handle", None))
         cls = W.classify_bones(bones, {10})
 
-        self.assertEqual(cls.binding, "socket_prop")
-        self.assertEqual(cls.mount_bone, "handle")
-        self.assertEqual(cls.collapse_bone, "handle")
-        self.assertEqual(cls.grip, "right")
+        assert cls.binding == "socket_prop"
+        assert cls.mount_bone == "handle"
+        assert cls.collapse_bone == "handle"
+        assert cls.grip == "right"
 
     def test_unmatched_mount_collapses_onto_the_hand(self) -> None:
         bones = with_subrig(("body", None), ("slide", 0), ("mag", 0))
         cls = W.classify_bones(bones, {10, 11, 12})
 
-        self.assertEqual(cls.binding, "socket_hand")
-        self.assertEqual(cls.mount_bone, "body")
-        self.assertEqual(cls.collapse_bone, "Bip01 R Hand")
+        assert cls.binding == "socket_hand"
+        assert cls.mount_bone == "body"
+        assert cls.collapse_bone == "Bip01 R Hand"
 
     def test_left_hand_chain_reports_left_grip(self) -> None:
         bones = with_subrig(("bush hook", None), hand="Bip01 L Hand")
@@ -175,46 +176,46 @@ class ClassificationTests(unittest.TestCase):
         bones[7] = bone(7, "Bip01 L UpperArm", 6)
         bones[8] = bone(8, "Bip01 L Forearm", 7)
 
-        self.assertEqual(W.classify_bones(bones, {10}).grip, "left")
+        assert W.classify_bones(bones, {10}).grip == "left"
 
     def test_unskinned_leftover_beside_the_mount_is_ignored(self) -> None:
         # Two bones hang off the hand; only one carries weight, so only one is a skinned root.
         bones = with_subrig(("hands box", None), ("body", None), ("slide", 1))
         cls = W.classify_bones(bones, {11, 12})
 
-        self.assertEqual(cls.binding, "socket_hand")
-        self.assertEqual(cls.mount_bone, "body")
+        assert cls.binding == "socket_hand"
+        assert cls.mount_bone == "body"
 
     def test_leftover_on_a_second_root_outside_the_biped_chain_is_ignored(self) -> None:
         bones = with_subrig(("body", None))
         bones.append(bone(11, "hands box", -1))          # its own root, no Biped parent
         cls = W.classify_bones(bones, {10})
 
-        self.assertEqual(cls.binding, "socket_hand")
-        self.assertEqual(cls.mount_bone, "body")
+        assert cls.binding == "socket_hand"
+        assert cls.mount_bone == "body"
 
     def test_mount_one_unskinned_bone_below_the_hand_still_resolves(self) -> None:
         # The general "topmost skinned in the hand's subtree" rule, not "direct child of the hand".
         bones = with_subrig(("filler", None), ("body", 0))
         cls = W.classify_bones(bones, {11})
 
-        self.assertEqual(cls.binding, "socket_hand")
-        self.assertEqual(cls.mount_bone, "body")
+        assert cls.binding == "socket_hand"
+        assert cls.mount_bone == "body"
 
     def test_degenerate_identity_bind_is_recorded_not_corrected(self) -> None:
         bones = with_subrig(("bush hook", None))
         bones[10] = bone(10, "bush hook", 9, pos=(0.0, 0.0, 1e-7), quat=IDENTITY_Q)
         cls = W.classify_bones(bones, {10})
 
-        self.assertIn("degenerate_bind", cls.anomalies)
-        self.assertEqual(cls.binding, "socket_prop")
-        self.assertEqual(cls.mount_bind[0], (0.0, 0.0, 1e-7))
+        assert "degenerate_bind" in cls.anomalies
+        assert cls.binding == "socket_prop"
+        assert cls.mount_bind[0] == (0.0, 0.0, 1e-7)
 
     def test_ordinary_bind_carries_no_anomaly(self) -> None:
         bones = with_subrig(("handle", None))
         bones[10] = bone(10, "handle", 9, pos=(4.0, 0.5, 0.0))
 
-        self.assertEqual(W.classify_bones(bones, {10}).anomalies, ())
+        assert W.classify_bones(bones, {10}).anomalies == ()
 
 
 class TrailTipTests(unittest.TestCase):
@@ -237,12 +238,12 @@ class TrailTipTests(unittest.TestCase):
         pos, quat = W.trail_tip_from_geometry(bones, cls, positions)
 
         # X is the long axis (extent 6 against 2 on Y/Z) and the far end is the +X extreme.
-        self.assertAlmostEqual(pos[0], 6.0)
+        assert pos[0] == pytest.approx(6.0, abs=1e-7)
         # The other two axes sit at the geometry's own midpoint, not the origin -- Y's bbox is
         # [0,2], not [-1,1], so a wrong "midpoint is always zero" implementation would fail this.
-        self.assertAlmostEqual(pos[1], 1.0)
-        self.assertAlmostEqual(pos[2], 0.0)
-        self.assertEqual(quat, (0.0, 0.0, 0.0, 1.0))
+        assert pos[1] == pytest.approx(1.0, abs=1e-7)
+        assert pos[2] == pytest.approx(0.0, abs=1e-7)
+        assert quat == (0.0, 0.0, 0.0, 1.0)
 
     def test_long_axis_is_read_per_model_not_assumed(self) -> None:
         bones, cls = self._rig()
@@ -253,9 +254,9 @@ class TrailTipTests(unittest.TestCase):
 
         pos, _ = W.trail_tip_from_geometry(bones, cls, positions)
 
-        self.assertAlmostEqual(pos[2], 8.0)
-        self.assertAlmostEqual(pos[0], 4.0 - 4.0)  # X sits at its own (degenerate) midpoint, 0
-        self.assertAlmostEqual(pos[1], 0.0)
+        assert pos[2] == pytest.approx(8.0, abs=1e-7)
+        assert pos[0] == pytest.approx(4.0 - 4.0, abs=1e-7)  # X sits at its own (degenerate) midpoint, 0
+        assert pos[1] == pytest.approx(0.0, abs=1e-7)
 
     def test_degenerate_mount_bind_still_produces_a_sane_offset(self) -> None:
         # Mirrors `test_degenerate_identity_bind_is_recorded_not_corrected`: a literal identity
@@ -269,22 +270,22 @@ class TrailTipTests(unittest.TestCase):
 
         pos, _ = W.trail_tip_from_geometry(bones, cls, positions)
 
-        self.assertAlmostEqual(pos[2], 5.0, places=3)
+        assert pos[2] == pytest.approx(5.0, abs=1e-3)
 
     def test_no_positions_returns_the_origin(self) -> None:
         bones, cls = self._rig()
 
         pos, quat = W.trail_tip_from_geometry(bones, cls, [])
 
-        self.assertEqual(pos, (0.0, 0.0, 0.0))
-        self.assertEqual(quat, (0.0, 0.0, 0.0, 1.0))
+        assert pos == (0.0, 0.0, 0.0)
+        assert quat == (0.0, 0.0, 0.0, 1.0)
 
     def test_wrapper_is_none_off_socket_prop(self) -> None:
         bones = with_subrig(("body", None), ("slide", 0))
         cls = W.classify_bones(bones, {10, 11})
-        self.assertEqual(cls.binding, "socket_hand")
+        assert cls.binding == "socket_hand"
 
-        self.assertIsNone(W.trail_tip(b"", b"", bones, cls))
+        assert W.trail_tip(b"", b"", bones, cls) is None
 
 
 class NonSocketBindingTests(unittest.TestCase):
@@ -302,7 +303,7 @@ class NonSocketBindingTests(unittest.TestCase):
     def test_unresolved_without_a_body_index(self) -> None:
         bones, skinned = self._claws()
 
-        self.assertIsNone(W.classify_bones(bones, skinned).binding)
+        assert W.classify_bones(bones, skinned).binding is None
 
     def test_worn_and_static_is_leader_pose(self) -> None:
         bones, skinned = self._claws()
@@ -310,7 +311,7 @@ class NonSocketBindingTests(unittest.TestCase):
 
         cls = W.classify_bones(bones, skinned, bodies=bodies, animated=False)
 
-        self.assertEqual(cls.binding, "leader_pose")
+        assert cls.binding == "leader_pose"
 
     def test_worn_and_animated_is_copy_pose(self) -> None:
         bones, skinned = self._claws()
@@ -318,7 +319,7 @@ class NonSocketBindingTests(unittest.TestCase):
 
         cls = W.classify_bones(bones, skinned, bodies=bodies, animated=True)
 
-        self.assertEqual(cls.binding, "copy_pose")
+        assert cls.binding == "copy_pose"
 
     def test_no_body_can_wear_it_is_a_projectile(self) -> None:
         bones = [bone(0, "polySurface49", -1), bone(1, "polySurface50", 0)]
@@ -326,8 +327,8 @@ class NonSocketBindingTests(unittest.TestCase):
 
         cls = W.classify_bones(bones, {1}, bodies=bodies)
 
-        self.assertEqual(cls.binding, "projectile")
-        self.assertIn("no_single_skinned_root", cls.anomalies)
+        assert cls.binding == "projectile"
+        assert "no_single_skinned_root" in cls.anomalies
 
 
 class SubtreeCheckTests(unittest.TestCase):
@@ -335,7 +336,7 @@ class SubtreeCheckTests(unittest.TestCase):
         bones = with_subrig(("body", None), ("slide", 0))
         cls = W.classify_bones(bones, {10, 11})
 
-        self.assertTrue(W.check_subtree(bones, {10, 11}, cls).ok)
+        assert W.check_subtree(bones, {10, 11}, cls).ok
 
     def test_skin_on_a_second_matched_bone_fails_and_names_it(self) -> None:
         # A vertex weighted to the forearm as well as the weapon deforms between two independently
@@ -345,8 +346,8 @@ class SubtreeCheckTests(unittest.TestCase):
 
         result = W.check_subtree(bones, {8, 10}, cls)
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.detail, ("Bip01 R Forearm",))
+        assert not result.ok
+        assert result.detail == ("Bip01 R Forearm",)
 
 
 class CollapseCheckTests(unittest.TestCase):
@@ -369,7 +370,7 @@ class CollapseCheckTests(unittest.TestCase):
         bones = self._consistent()
         cls = W.classify_bones(bones, {1})
 
-        self.assertTrue(W.check_collapse(bones, {1}, cls).ok)
+        assert W.check_collapse(bones, {1}, cls).ok
 
     def test_inconsistent_stored_inverse_bind_fails_and_names_the_bone(self) -> None:
         bones = self._consistent()
@@ -380,8 +381,8 @@ class CollapseCheckTests(unittest.TestCase):
 
         result = W.check_collapse(bones, {1}, cls)
 
-        self.assertFalse(result.ok)
-        self.assertEqual(result.detail[0][0], "body")
+        assert not result.ok
+        assert result.detail[0][0] == "body"
 
 
 class MotionTests(unittest.TestCase):
@@ -402,16 +403,16 @@ class MotionTests(unittest.TestCase):
         return [bone(0, "Bip01 R Hand", -1), bone(1, "slide", 0)]
 
     def test_sixty_one_static_frames_pass(self) -> None:
-        self.assertEqual(W.frame_variance(self._bones(), self._pose(61), [1]), [])
+        assert W.frame_variance(self._bones(), self._pose(61), [1]) == []
 
     def test_a_moving_sub_rig_bone_is_caught_and_named(self) -> None:
         pose = self._pose(61, mover=lambda f: (5.0 + f * 0.1, 0.0, 0.0))
 
         found = W.frame_variance(self._bones(), pose, [1])
 
-        self.assertEqual(len(found), 1)
-        self.assertEqual(found[0][0], "slide")
-        self.assertGreater(found[0][1], 5.0)
+        assert len(found) == 1
+        assert found[0][0] == "slide"
+        assert found[0][1] > 5.0
 
     def test_rotation_alone_is_caught(self) -> None:
         half = math.sin(math.radians(20.0) / 2.0)
@@ -420,8 +421,8 @@ class MotionTests(unittest.TestCase):
 
         found = W.frame_variance(self._bones(), pose, [1])
 
-        self.assertEqual(len(found), 1)
-        self.assertGreater(found[0][2], 19.0)
+        assert len(found) == 1
+        assert found[0][2] > 19.0
 
 
 class OnBodyScopeTests(unittest.TestCase):
@@ -433,9 +434,9 @@ class OnBodyScopeTests(unittest.TestCase):
 
         scope = W.on_body_scope({}, "handle", bodies=bodies)
 
-        self.assertEqual(scope["bodies"], 2)
-        self.assertEqual(scope["parents"], {"bip01 r hand": 2})
-        self.assertTrue(scope["under_hand"])
+        assert scope["bodies"] == 2
+        assert scope["parents"] == {"bip01 r hand": 2}
+        assert scope["under_hand"]
 
     def test_a_name_hanging_off_the_pelvis_is_not_under_a_hand(self) -> None:
         # `Box01` matches four NPC bodies but hangs from the pelvis; a boolean scope would route
@@ -444,15 +445,15 @@ class OnBodyScopeTests(unittest.TestCase):
 
         scope = W.on_body_scope({}, "Box01", bodies=bodies)
 
-        self.assertEqual(scope["bodies"], 1)
-        self.assertEqual(scope["parents"], {"bip01 pelvis": 1})
-        self.assertFalse(scope["under_hand"])
+        assert scope["bodies"] == 1
+        assert scope["parents"] == {"bip01 pelvis": 1}
+        assert not scope["under_hand"]
 
     def test_an_unknown_name_reports_no_bodies(self) -> None:
         scope = W.on_body_scope({}, "flamethrower", bodies={"a": {"handle": "bip01 r hand"}})
 
-        self.assertEqual(scope["bodies"], 0)
-        self.assertFalse(scope["under_hand"])
+        assert scope["bodies"] == 0
+        assert not scope["under_hand"]
 
 
 class MaterialResolutionTests(unittest.TestCase):
@@ -479,12 +480,12 @@ class MaterialResolutionTests(unittest.TestCase):
             albedo, flags, failure, envmask, bump = W._resolve_material_row(
                 "models/weapons/claws/claws", [""], read_bytes)
 
-            self.assertEqual(albedo, "models/weapons/claws/claws")
-            self.assertEqual(flags, frozenset({"alphatest", "envmap"}))
-            self.assertEqual(failure, "")
+            assert albedo == "models/weapons/claws/claws"
+            assert flags == frozenset({"alphatest", "envmap"})
+            assert failure == ""
             # This VMT names neither $envmapmask nor $bumpmap -- the normal case.
-            self.assertEqual(envmask, "")
-            self.assertEqual(bump, "")
+            assert envmask == ""
+            assert bump == ""
 
     def test_a_texture_that_fails_to_decode_is_recorded_not_fatal(self) -> None:
         # The handleclaws real case: the VMT resolves and names a basetexture, but the .ttz is a
@@ -502,9 +503,9 @@ class MaterialResolutionTests(unittest.TestCase):
             albedo, flags, failure, _envmask, _bump = W._resolve_material_row(
                 "weapons/null", [""], read_bytes)
 
-            self.assertEqual(albedo, "")
-            self.assertEqual(flags, frozenset({"alphatest"}))
-            self.assertNotEqual(failure, "")
+            assert albedo == ""
+            assert flags == frozenset({"alphatest"})
+            assert failure != ""
 
     def test_a_vmt_with_no_drawable_texture_is_not_a_failure(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -512,9 +513,7 @@ class MaterialResolutionTests(unittest.TestCase):
             install_.add("materials/empty.vmt", '"UnlitGeneric"\n{\n}\n')
             read_bytes = lambda key: install.read(install_.index, key)
 
-            self.assertEqual(
-                W._resolve_material_row("empty", [""], read_bytes),
-                ("", frozenset(), "", "", ""))
+            assert W._resolve_material_row("empty", [""], read_bytes) == ("", frozenset(), "", "", "")
 
 
 class ModelMaterialsTests(unittest.TestCase):
@@ -535,13 +534,13 @@ class ModelMaterialsTests(unittest.TestCase):
                                     return_value={"claws": {}, "handle": {}})):
                 rows = W.model_materials(b"mdl", b"vtx", install_.index)
 
-            self.assertEqual([row.name for row in rows], ["claws", "handle"])
-            self.assertEqual(rows[0].albedo, "claws")
-            self.assertEqual(rows[0].failure, "")
-            self.assertEqual(rows[0].bump, "claws_n")
-            self.assertEqual(rows[0].envmask, "")
-            self.assertEqual(rows[1].albedo, "")
-            self.assertNotEqual(rows[1].failure, "")
+            assert [row.name for row in rows] == ["claws", "handle"]
+            assert rows[0].albedo == "claws"
+            assert rows[0].failure == ""
+            assert rows[0].bump == "claws_n"
+            assert rows[0].envmask == ""
+            assert rows[1].albedo == ""
+            assert rows[1].failure != ""
 
 
 class SkinFamilyOverrideTests(unittest.TestCase):
@@ -551,7 +550,7 @@ class SkinFamilyOverrideTests(unittest.TestCase):
     def test_no_extra_family_reports_nothing(self) -> None:
         with (mock.patch.object(mdl, "skin_families", return_value=[["a", "b"]]),
               mock.patch.object(mdl, "search_paths", return_value=[""])):
-            self.assertEqual(W.skin_families(b"mdl", {}), [])
+            assert W.skin_families(b"mdl", {}) == []
 
     def test_an_extra_family_reports_the_repainted_slot_resolved(self) -> None:
         with tempfile.TemporaryDirectory() as root:
@@ -568,16 +567,16 @@ class SkinFamilyOverrideTests(unittest.TestCase):
                                     return_value=[["axe", "wood"], ["transparent", "wood"]])):
                 overrides = W.skin_families(b"mdl", install_.index)
 
-            self.assertEqual(len(overrides), 1)
+            assert len(overrides) == 1
             override = overrides[0]
-            self.assertEqual(override.family, 1)
-            self.assertEqual(override.slot, "axe")
-            self.assertEqual(override.material, "transparent")
-            self.assertEqual(override.albedo, "ghost")
-            self.assertIn("translucent", override.flags)
-            self.assertEqual(override.failure, "")
-            self.assertEqual(override.envmask, "ghost_mask")
-            self.assertEqual(override.bump, "")
+            assert override.family == 1
+            assert override.slot == "axe"
+            assert override.material == "transparent"
+            assert override.albedo == "ghost"
+            assert "translucent" in override.flags
+            assert override.failure == ""
+            assert override.envmask == "ghost_mask"
+            assert override.bump == ""
 
 
 class BoneMotionTests(unittest.TestCase):
@@ -609,13 +608,13 @@ class BoneMotionTests(unittest.TestCase):
                                                      "weights": [[1.0, 0.0, 0.0, 0.0]]}})):
             rows = {row.name: row for row in W.bone_motion(b"mdl", b"vtx", bones)}
 
-        self.assertEqual(rows["mount"].max_pos, 0.0)
-        self.assertEqual(rows["mount"].max_rot, 0.0)
-        self.assertTrue(rows["mount"].skinned)
+        assert rows["mount"].max_pos == 0.0
+        assert rows["mount"].max_rot == 0.0
+        assert rows["mount"].skinned
 
-        self.assertAlmostEqual(rows["trigger"].max_pos, 0.3203, places=4)
-        self.assertAlmostEqual(rows["trigger"].max_rot, 1.2535, places=3)
-        self.assertFalse(rows["trigger"].skinned)
+        assert rows["trigger"].max_pos == pytest.approx(0.3203, abs=1e-4)
+        assert rows["trigger"].max_rot == pytest.approx(1.2535, abs=1e-3)
+        assert not rows["trigger"].skinned
 
     def test_the_envelope_is_the_max_across_every_sequence(self) -> None:
         bones = self._bones()
@@ -635,9 +634,5 @@ class BoneMotionTests(unittest.TestCase):
               mock.patch.object(mdl_skel, "decode_skinned", return_value={})):
             rows = {row.name: row for row in W.bone_motion(b"mdl", b"vtx", bones)}
 
-        self.assertEqual(rows["trigger"].max_pos, 0.5)
-        self.assertFalse(rows["mount"].skinned)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert rows["trigger"].max_pos == 0.5
+        assert not rows["mount"].skinned

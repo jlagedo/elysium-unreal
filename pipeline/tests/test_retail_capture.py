@@ -7,6 +7,7 @@ import struct
 import unittest
 
 import numpy as np
+import pytest
 
 CONTRIBUTION_SEQ_INDEX_OFF = 0x1000
 
@@ -734,17 +735,17 @@ class BlendGridTests(unittest.TestCase):
         image = self._with_movements(self._image({0: NINE_BY_ONE}), 4, records)
         _name, descriptor, frames, fps = mdl_skel.local_animation(image, 4)
         decoded = mdl_skel.read_movements(image, descriptor)
-        self.assertEqual(len(decoded), 2)
-        self.assertEqual(decoded[0].endframe, 2)
-        self.assertEqual(decoded[0].motionflags, 0x10C0)
-        self.assertEqual(decoded[0].vector, (1.0, 0.0, 0.0))
-        self.assertEqual(decoded[-1].position, (12.0, 0.0, 0.0))
+        assert len(decoded) == 2
+        assert decoded[0].endframe == 2
+        assert decoded[0].motionflags == 0x10C0
+        assert decoded[0].vector == (1.0, 0.0, 0.0)
+        assert decoded[-1].position == (12.0, 0.0, 0.0)
 
         summary = mdl_skel.movement_summary(image, descriptor, frames, fps)
-        self.assertIsNotNone(summary)
-        self.assertAlmostEqual(summary.cycle_seconds, 0.1, places=6)
-        self.assertAlmostEqual(summary.ground_distance_cm, 30.48, places=5)
-        self.assertAlmostEqual(summary.ground_speed_cm_s, 304.8, places=4)
+        assert summary is not None
+        assert summary.cycle_seconds == pytest.approx(0.1, abs=1e-6)
+        assert summary.ground_distance_cm == pytest.approx(30.48, abs=1e-5)
+        assert summary.ground_speed_cm_s == pytest.approx(304.8, abs=1e-4)
 
     def test_absent_or_malformed_movement_keeps_the_fallback(self) -> None:
         """A damaged optional array never reads beyond the image or invents a speed."""
@@ -752,13 +753,13 @@ class BlendGridTests(unittest.TestCase):
 
         image = self._image({0: NINE_BY_ONE})
         _name, descriptor, frames, fps = mdl_skel.local_animation(image, 4)
-        self.assertEqual(mdl_skel.read_movements(image, descriptor), ())
-        self.assertIsNone(mdl_skel.movement_summary(image, descriptor, frames, fps))
+        assert mdl_skel.read_movements(image, descriptor) == ()
+        assert mdl_skel.movement_summary(image, descriptor, frames, fps) is None
 
         malformed = bytearray(image)
         struct.pack_into("<ii", malformed, descriptor + 16, 2, len(malformed) - descriptor - 10)
-        self.assertEqual(mdl_skel.read_movements(malformed, descriptor), ())
-        self.assertIsNone(mdl_skel.movement_summary(malformed, descriptor, frames, fps))
+        assert mdl_skel.read_movements(malformed, descriptor) == ()
+        assert mdl_skel.movement_summary(malformed, descriptor, frames, fps) is None
 
     def test_a_resolved_cell_exports_its_motion_summary(self) -> None:
         """The neutral walk cell carries the scalar its Unreal motor consumes."""
@@ -770,16 +771,13 @@ class BlendGridTests(unittest.TestCase):
         image = self._with_movements(self._image({0: NINE_BY_ONE}), 4, records)
         _extra, blends = mdl_skel.blend_clip_plan(image, mdl_skel.local_sequences(image))
         forward = next(cell for cell in blends["walk"]["cells"] if cell["axis"] == [4, 0])
-        self.assertEqual(forward["clip"], "aim#4")
-        self.assertEqual(
-            forward["motion"],
-            {
+        assert forward["clip"] == "aim#4"
+        assert (forward["motion"] == {
                 "cycle_seconds": 0.1,
                 "ground_distance_cm": 30.48,
                 "ground_speed_cm_s": 304.8,
-            },
-        )
-        self.assertNotIn("motion", blends["walk"]["cells"][0])
+            })
+        assert "motion" not in blends["walk"]["cells"][0]
 
     def test_a_single_cell_sequence_carries_its_movement_records(self) -> None:
         """The melee case: every attack is one cell, and the lunge is only in this array."""
@@ -794,26 +792,24 @@ class BlendGridTests(unittest.TestCase):
         image = self._with_movements(
             self._image({}, base_cells=(0, 4, 0, 0)), 4, records)
         sequences = self._sequences(image)
-        self.assertEqual(len(sequences["aim"].grid.cells), 1)
-        self.assertEqual(len(sequences["aim"].movement), 2)
-        self.assertEqual(sequences["aim"].movement[0].endframe, 2)
+        assert len(sequences["aim"].grid.cells) == 1
+        assert len(sequences["aim"].movement) == 2
+        assert sequences["aim"].movement[0].endframe == 2
         # Asked and empty is the other answer, and it is not the same as never asked.
-        self.assertEqual(sequences["idle"].movement, ())
+        assert sequences["idle"].movement == ()
 
         extra, blends = mdl_skel.blend_clip_plan(image, list(sequences.values()))
-        self.assertEqual((extra, blends), ([], {}))
+        assert (extra, blends) == ([], {})
         sidecar = mdl_skel.blend_sidecar(image, blends, list(sequences.values()))
-        self.assertEqual(sidecar["movement_fields"],
-                         ["end_frame", "flags", "v0_cm", "v1_cm", "yaw_deg",
+        assert (sidecar["movement_fields"] == ["end_frame", "flags", "v0_cm", "v1_cm", "yaw_deg",
                           "dir_x", "dir_y", "dir_z", "pos_x_cm", "pos_y_cm", "pos_z_cm"])
-        self.assertEqual(sorted(sidecar["movement"]), ["aim"])
+        assert sorted(sidecar["movement"]) == ["aim"]
         # The path is piecewise and the cumulative position returns to zero: a scalar summary
         # would call this "no movement" while the file states a real displacement out and back.
-        self.assertEqual(sidecar["movement"]["aim"],
-                         [[2, 0x1040, 5.08, 10.16, 0.0, 1.0, 0.0, 0.0, 7.62, 0.0, 0.0],
+        assert (sidecar["movement"]["aim"] == [[2, 0x1040, 5.08, 10.16, 0.0, 1.0, 0.0, 0.0, 7.62, 0.0, 0.0],
                           [4, 0x1040, 15.24, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0]])
-        self.assertIsNone(mdl_skel.movement_summary(
-            image, sequences["aim"].base, sequences["aim"].frames, sequences["aim"].fps))
+        assert (mdl_skel.movement_summary(
+            image, sequences["aim"].base, sequences["aim"].frames, sequences["aim"].fps) is None)
 
     def test_movement_rows_are_stated_unreal_native(self) -> None:
         """The sidecar states the path in centimetres on Unreal axes, converted exactly once."""
@@ -826,9 +822,9 @@ class BlendGridTests(unittest.TestCase):
             self._image({}, base_cells=(0, 4, 0, 0)), 4, records)
         sequences = self._sequences(image)
         row, = mdl_skel.blend_sidecar(image, {}, list(sequences.values()))["movement"]["aim"]
-        self.assertEqual(row, [3, 0x11C0, 10.16, 15.24, -90.0, 0.0, 1.0, 0.0, 0.0, 25.4, 5.08])
+        assert row == [3, 0x11C0, 10.16, 15.24, -90.0, 0.0, 1.0, 0.0, 0.0, 25.4, 5.08]
         # The reflection turns a zero component into `-0.0`; an axis-aligned path reads as one.
-        self.assertFalse(any(math.copysign(1.0, value) < 0.0 for value in row if value == 0.0))
+        assert not any(math.copysign(1.0, value) < 0.0 for value in row if value == 0.0)
 
     def test_a_model_whose_sequences_state_no_movement_says_so(self) -> None:
         """Asked-and-empty ships the column list and no rows, which is not silence."""
@@ -836,29 +832,26 @@ class BlendGridTests(unittest.TestCase):
 
         image = self._image({})
         sequences = list(self._sequences(image).values())
-        self.assertTrue(all(clip.movement == () for clip in sequences))
+        assert all(clip.movement == () for clip in sequences)
         table = mdl_skel.movement_table(sequences)
-        self.assertIn("movement_fields", table)
-        self.assertNotIn("movement", table)
+        assert "movement_fields" in table
+        assert "movement" not in table
         # Nothing else is authored either, so there is no sidecar to carry the column list.
-        self.assertEqual(mdl_skel.blend_sidecar(image, {}, sequences), {})
+        assert mdl_skel.blend_sidecar(image, {}, sequences) == {}
 
     def test_a_nine_by_one_grid_reads_its_extents_binding_and_every_cell(self) -> None:
         """The shape the theatre corpus fires throughout, read end to end."""
         sequences = self._sequences(self._image({0: NINE_BY_ONE}))
         grid = sequences["walk"].grid
-        self.assertEqual(grid.numblends, 9)
-        self.assertEqual(grid.groupsize, (9, 1))
-        self.assertEqual(grid.paramindex, (0, -1))
-        self.assertEqual(grid.paramstart, (-180.0, 0.0))
-        self.assertEqual(grid.paramend, (180.0, 0.0))
-        self.assertEqual(
-            [(cell.axis0, cell.axis1, cell.anim) for cell in grid.cells],
-            [(0, 0, 0), (1, 0, 1), (2, 0, 2), (3, 0, 3), (4, 0, 4),
-             (5, 0, 5), (6, 0, 6), (7, 0, 2), (8, 0, 0)],
-        )
+        assert grid.numblends == 9
+        assert grid.groupsize == (9, 1)
+        assert grid.paramindex == (0, -1)
+        assert grid.paramstart == (-180.0, 0.0)
+        assert grid.paramend == (180.0, 0.0)
+        assert ([(cell.axis0, cell.axis1, cell.anim) for cell in grid.cells] == [(0, 0, 0), (1, 0, 1), (2, 0, 2), (3, 0, 3), (4, 0, 4),
+             (5, 0, 5), (6, 0, 6), (7, 0, 2), (8, 0, 0)])
         # The clip the sequence still bakes is the base cell's, unchanged.
-        self.assertEqual(sequences["walk"].base, grid.cells[0].anim * ANIM_DESC_STRIDE
+        assert (sequences["walk"].base == grid.cells[0].anim * ANIM_DESC_STRIDE
                          + CONTRIBUTION_ANIM_INDEX_OFF)
 
     def test_a_three_by_three_grid_takes_axis_zero_down_the_row_stride(self) -> None:
@@ -870,21 +863,18 @@ class BlendGridTests(unittest.TestCase):
         transposed address would name six of these nine cells wrongly.
         """
         grid = self._sequences(self._image({1: THREE_BY_THREE}))["aim"].grid
-        self.assertEqual(grid.groupsize, (3, 3))
-        self.assertEqual(grid.paramindex, (2, 3))
-        self.assertEqual(
-            {(cell.axis0, cell.axis1): cell.anim for cell in grid.cells},
-            THREE_BY_THREE.cells,
-        )
+        assert grid.groupsize == (3, 3)
+        assert grid.paramindex == (2, 3)
+        assert {(cell.axis0, cell.axis1): cell.anim for cell in grid.cells} == THREE_BY_THREE.cells
 
     def test_a_single_cell_sequence_reads_a_one_by_one_grid(self) -> None:
         """The 913-of-1,166 case: a sequence that is a clip and nothing more."""
         grid = self._sequences(self._image({}))["walk"].grid
-        self.assertEqual(grid.numblends, 1)
-        self.assertEqual(grid.groupsize, (1, 1))
-        self.assertEqual(grid.paramindex, (-1, -1))
-        self.assertEqual(len(grid.cells), 1)
-        self.assertEqual((grid.cells[0].axis0, grid.cells[0].axis1), (0, 0))
+        assert grid.numblends == 1
+        assert grid.groupsize == (1, 1)
+        assert grid.paramindex == (-1, -1)
+        assert len(grid.cells) == 1
+        assert (grid.cells[0].axis0, grid.cells[0].axis1) == (0, 0)
 
     def test_extents_disagreeing_with_numblends_fall_back_to_the_base_cell(self) -> None:
         """`groupsize[0] * groupsize[1] == numblends` holds on all 294 authored
@@ -893,9 +883,9 @@ class BlendGridTests(unittest.TestCase):
         than a grid of whatever the inline array happens to hold."""
         broken = Grid((9, 1), {(0, 0): 3, (1, 0): 1}, numblends=5)
         grid = self._sequences(self._image({0: broken}))["walk"].grid
-        self.assertEqual(grid.numblends, 5)
-        self.assertEqual(grid.groupsize, (9, 1))
-        self.assertEqual([cell.anim for cell in grid.cells], [3])
+        assert grid.numblends == 5
+        assert grid.groupsize == (9, 1)
+        assert [cell.anim for cell in grid.cells] == [3]
 
     def test_the_pose_parameters_a_grid_axis_binds_to_are_read(self) -> None:
         """A `paramindex` is an index into this model's own array, so the axis
@@ -903,14 +893,11 @@ class BlendGridTests(unittest.TestCase):
         from elysium_pipeline.formats import mdl_skel
 
         parameters = mdl_skel.pose_parameters(self._image({0: NINE_BY_ONE}))
-        self.assertEqual(
-            [(p.index, p.name, p.flags, p.start, p.end, p.loop) for p in parameters],
-            [(index, name, flags, start, end, loop)
-             for index, (name, flags, start, end, loop) in enumerate(POSE_PARAMETERS)],
-        )
+        assert ([(p.index, p.name, p.flags, p.start, p.end, p.loop) for p in parameters] == [(index, name, flags, start, end, loop)
+             for index, (name, flags, start, end, loop) in enumerate(POSE_PARAMETERS)])
         grid = self._sequences(self._image({0: NINE_BY_ONE}))["walk"].grid
-        self.assertEqual(parameters[grid.paramindex[0]].name, "move_yaw")
-        self.assertEqual(parameters[grid.paramindex[0]].loop, 360.0)
+        assert parameters[grid.paramindex[0]].name == "move_yaw"
+        assert parameters[grid.paramindex[0]].loop == 360.0
 
     def test_every_cell_becomes_its_own_clip_and_none_of_them_are_blended(self) -> None:
         """The export shortfall CAP4.1 measured, closed.
@@ -931,34 +918,22 @@ class BlendGridTests(unittest.TestCase):
         # named by the animation's own name. `idle`, `aim` and `turn` are also
         # sequence labels in this fixture, so those three take the index
         # disambiguation and the rest read as the animation the content named.
-        self.assertEqual(
-            sorted(clip.label for clip in extra),
-            ["aim#4", "dead", "idle#2", "run", "skip", "turn#5"],
-        )
-        self.assertEqual(len({clip.base for clip in extra}), len(extra))
+        assert sorted(clip.label for clip in extra) == ["aim#4", "dead", "idle#2", "run", "skip", "turn#5"]
+        assert len({clip.base for clip in extra}) == len(extra)
 
         walk = blends["walk"]
-        self.assertEqual(walk["groupsize"], [9, 1])
-        self.assertEqual(walk["paramindex"], [0, -1])
-        self.assertEqual(
-            [cell["clip"] for cell in walk["cells"]],
-            # Cell 0 keeps the sequence label; cells 7 and 8 repeat animations
-            # cells 2 and 0 already named, so they resolve to the same clips
-            # rather than baking the tracks twice.
-            ["walk", "run", "idle#2", "dead", "aim#4", "turn#5", "skip", "idle#2",
-             "walk"],
-        )
-        self.assertEqual(
-            [cell["axis"] for cell in blends["aim"]["cells"]],
-            [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]],
-        )
+        assert walk["groupsize"] == [9, 1]
+        assert walk["paramindex"] == [0, -1]
+        assert ([cell["clip"] for cell in walk["cells"]] == ["walk", "run", "idle#2", "dead", "aim#4", "turn#5", "skip", "idle#2",
+             "walk"])
+        assert [cell["axis"] for cell in blends["aim"]["cells"]] == [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2], [2, 0], [2, 1], [2, 2]]
         # Nothing in the plan carries a blended clip: every cell names a clip
         # that decodes one animation of the model, and the weights that mix them
         # are absent because they are not the exporter's to apply.
         bases = {clip.label: clip.base for clip in (*sequences, *extra)}
         for grid in blends.values():
             for cell in grid["cells"]:
-                self.assertIn(cell["clip"], bases)
+                assert cell["clip"] in bases
 
     def test_a_cell_outside_the_animation_count_is_carried_as_unresolved(self) -> None:
         """A cell the model's own declaration cannot answer is a shortfall the
@@ -969,10 +944,7 @@ class BlendGridTests(unittest.TestCase):
         _extra, blends = mdl_skel.blend_clip_plan(
             image, mdl_skel.local_sequences(image)
         )
-        self.assertEqual(
-            [cell["clip"] for cell in blends["walk"]["cells"]],
-            ["walk", "run", None],
-        )
+        assert [cell["clip"] for cell in blends["walk"]["cells"]] == ["walk", "run", None]
 
     def test_a_grid_whose_cells_did_not_bake_is_dropped_rather_than_promised(
         self,
@@ -994,10 +966,8 @@ class BlendGridTests(unittest.TestCase):
             ]},
         }
         kept = mdl_gltf._reconcile_blends(blends, {"walk", "run", "aim"})
-        self.assertEqual(sorted(kept), ["walk"])
-        self.assertEqual(
-            [cell["clip"] for cell in kept["walk"]["cells"]], ["walk", "run", None]
-        )
+        assert sorted(kept) == ["walk"]
+        assert [cell["clip"] for cell in kept["walk"]["cells"]] == ["walk", "run", None]
 
     def test_a_zero_weight_record_decodes_to_zero_rather_than_to_a_pose(self) -> None:
         """CAP5.3's second half, and the one claim on this page that no captured
@@ -1019,17 +989,15 @@ class BlendGridTests(unittest.TestCase):
         frames = mdl_skel.read_anim(image, bones, dead, 2)
         for frame in frames:
             for position, quaternion in frame:
-                self.assertEqual(position, (0.0, 0.0, 0.0))
-                self.assertEqual(quaternion, (0.0, 0.0, 0.0, 0.0))
+                assert position == (0.0, 0.0, 0.0)
+                assert quaternion == (0.0, 0.0, 0.0, 0.0)
 
         # The zero is the weight's doing, not the clip's: the same bones under a
         # weight of 1.0 fall back to their bind values on an unanimated channel.
         alive = CONTRIBUTION_ANIM_INDEX_OFF + ANIM_DESC_STRIDE * 2
         for position, quaternion in mdl_skel.read_anim(image, bones, alive, 1)[0]:
-            self.assertNotEqual(quaternion, (0.0, 0.0, 0.0, 0.0))
-        self.assertEqual(
-            mdl_skel.read_anim(image, bones, alive, 1)[0][1][0], bones[1].pos
-        )
+            assert quaternion != (0.0, 0.0, 0.0, 0.0)
+        assert mdl_skel.read_anim(image, bones, alive, 1)[0][1][0] == bones[1].pos
 
 class ProceduralRuleExportTests(unittest.TestCase):
     """CAP7.1: the `ProcType == 1` rule table the model exporter carries out.
@@ -1066,14 +1034,11 @@ class ProceduralRuleExportTests(unittest.TestCase):
         """
         from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 
-        self.assertEqual(
-            UEK.DRIVER_AXES,
-            [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]],
-        )
+        assert UEK.DRIVER_AXES == [[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, 1.0]]
         # `-0.0` is normalized away, so the table reads as the signed unit vectors it is.
         for axis in UEK.DRIVER_AXES:
             for component in axis:
-                self.assertFalse(math.copysign(1.0, component) < 0.0 and component == 0.0)
+                assert not (math.copysign(1.0, component) < 0.0 and component == 0.0)
 
     def test_the_table_takes_the_same_basis_change_the_mesh_and_clips_take(self) -> None:
         """The quaternion route the table uses names the rotation the matrix does.
@@ -1090,18 +1055,14 @@ class ProceduralRuleExportTests(unittest.TestCase):
         for quaternion in (*AXIS_RULE[3], OBLIQUE, (0.0, HALF, 0.0, -HALF)):
             with self.subTest(quaternion=quaternion):
                 exact = bsp.source_quat_to_unreal(*quaternion)
-                self.assertTrue(
-                    np.allclose(
+                assert (np.allclose(
                         mdl_skel.rot_matrix(exact),
                         basis @ mdl_skel.rot_matrix(quaternion) @ basis,
                         atol=1.0e-12,
-                    )
-                )
+                    ))
                 # A component negation is its own inverse, so the exported table
                 # recovers the bytes it was read from exactly rather than nearly.
-                self.assertEqual(
-                    bsp.source_quat_to_unreal(*exact), tuple(quaternion)
-                )
+                assert bsp.source_quat_to_unreal(*exact) == tuple(quaternion)
 
     def test_the_exported_table_inverts_to_the_bytes_it_was_read_from(self) -> None:
         from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
@@ -1118,13 +1079,13 @@ class ProceduralRuleExportTests(unittest.TestCase):
             with self.subTest(axis=axis):
                 image = self._image(axis)
                 rules, faults = self._rules(image)
-                self.assertEqual(faults, [])
-                self.assertEqual(len(rules), 1)
+                assert faults == []
+                assert len(rules) == 1
                 rule = rules[0]
-                self.assertEqual(rule["bone"], "Bip01 L Bicep")
-                self.assertEqual(rule["bone_index"], 3)
-                self.assertEqual(rule["control"], "Bip01 Spine")
-                self.assertEqual(rule["control_index"], 1)
+                assert rule["bone"] == "Bip01 L Bicep"
+                assert rule["bone_index"] == 3
+                assert rule["control"] == "Bip01 Spine"
+                assert rule["control_index"] == 1
                 # The axis is carried as a direction, so recovering the index it
                 # was written from is a lookup rather than a conversion.
                 rebuilt = struct.pack(
@@ -1138,7 +1099,7 @@ class ProceduralRuleExportTests(unittest.TestCase):
                     "<24f",
                     *[c for entry in rule["quat"] for c in unconv_quat(entry)],
                 )
-                self.assertEqual(rebuilt, _raw_axis_interp(image, 3))
+                assert rebuilt == _raw_axis_interp(image, 3)
 
     def test_the_exported_table_evaluates_to_the_converted_correction(self) -> None:
         from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
@@ -1154,24 +1115,22 @@ class ProceduralRuleExportTests(unittest.TestCase):
             with self.subTest(axis=axis):
                 image = self._image(axis)
                 raw = _decoded_axis_interp(_raw_axis_interp(image, 3))
-                self.assertEqual(raw[1], axis)
+                assert raw[1] == axis
                 expected = to_unreal(_axis_interp_local(raw, world, PROCEDURAL_BONES))
                 rules, _ = self._rules(image)
                 produced = _exported_axis_interp_local(
                     rules[0], UEK.DRIVER_AXES, converted, PROCEDURAL_BONES
                 )
                 for index, (a, b) in enumerate(zip(produced, expected)):
-                    self.assertAlmostEqual(a, b, places=9, msg=f"element {index}")
+                    assert a == pytest.approx(b, abs=1e-9)
                 # The rule has to be doing work, or agreeing about nothing would
                 # pass: the correction is not the bone's own animated local.
-                self.assertFalse(
-                    np.allclose(produced, to_unreal(world[3]), atol=1.0e-3)
-                )
+                assert not np.allclose(produced, to_unreal(world[3]), atol=1.0e-3)
 
     def test_a_rule_that_does_not_resolve_is_a_named_fault(self) -> None:
         rules, faults = self._rules(self._image(rule=(1, 2, *AXIS_RULE[2:])))
-        self.assertEqual(len(rules), 1)
-        self.assertEqual(faults, [])
+        assert len(rules) == 1
+        assert faults == []
 
         # `ProcIndex` left at zero resolves onto the bone record itself, whose
         # first field is a string index rather than a bone.
@@ -1180,9 +1139,9 @@ class ProceduralRuleExportTests(unittest.TestCase):
             bones=PROCEDURAL_BONES, procedural={3: None},
         )
         rules, faults = self._rules(image)
-        self.assertEqual(rules, [])
-        self.assertEqual(len(faults), 1)
-        self.assertIn("control bone", faults[0])
+        assert rules == []
+        assert len(faults) == 1
+        assert "control bone" in faults[0]
 
     def test_a_rule_naming_an_axis_outside_the_three_is_a_named_fault(self) -> None:
         image = bytearray(self._image())
@@ -1190,9 +1149,6 @@ class ProceduralRuleExportTests(unittest.TestCase):
         offset = record + struct.unpack_from("<i", image, record + 144)[0]
         struct.pack_into("<i", image, offset + 4, 3)
         rules, faults = self._rules(bytes(image))
-        self.assertEqual(rules, [])
-        self.assertEqual(len(faults), 1)
-        self.assertIn("axis 3", faults[0])
-
-if __name__ == "__main__":
-    unittest.main()
+        assert rules == []
+        assert len(faults) == 1
+        assert "axis 3" in faults[0]

@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from elysium_pipeline.process import ProcessTimeout, run_process
+import pytest
 
 
 class _CountingLog(io.StringIO):
@@ -41,14 +42,14 @@ class ProcessRunnerTests(unittest.TestCase):
             output_sink=rejected_sink,
         )
 
-        self.assertEqual(result.returncode, 0)
-        self.assertEqual(mirrored_lines, ["first"])
-        self.assertIn("first\n", result.output)
-        self.assertIn("second\n", result.output)
-        self.assertIn("WARNING - child output mirror to output sink failed", result.output)
-        self.assertIn("first\n", log.getvalue())
-        self.assertIn("second\n", log.getvalue())
-        self.assertIn("WARNING - child output mirror to output sink failed", log.getvalue())
+        assert result.returncode == 0
+        assert mirrored_lines == ["first"]
+        assert "first\n" in result.output
+        assert "second\n" in result.output
+        assert "WARNING - child output mirror to output sink failed" in result.output
+        assert "first\n" in log.getvalue()
+        assert "second\n" in log.getvalue()
+        assert "WARNING - child output mirror to output sink failed" in log.getvalue()
 
     def test_tail_lines_bounds_retention_but_not_the_log(self) -> None:
         log = io.StringIO()
@@ -63,16 +64,12 @@ class ProcessRunnerTests(unittest.TestCase):
             tail_lines=10,
         )
 
-        self.assertEqual(result.returncode, 0)
-        self.assertEqual(
-            result.output.splitlines(), [f"line-{i:02d}" for i in range(40, 50)]
-        )
-        self.assertEqual(
-            log.getvalue().splitlines(), [f"line-{i:02d}" for i in range(50)]
-        )
+        assert result.returncode == 0
+        assert result.output.splitlines() == [f"line-{i:02d}" for i in range(40, 50)]
+        assert log.getvalue().splitlines() == [f"line-{i:02d}" for i in range(50)]
 
     def test_tail_lines_must_be_positive(self) -> None:
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             run_process(
                 [sys.executable, "-c", "pass"],
                 cwd=Path.cwd(),
@@ -92,10 +89,10 @@ class ProcessRunnerTests(unittest.TestCase):
             log=log,
         )
 
-        self.assertEqual(result.returncode, 0)
-        self.assertEqual(len(log.getvalue().splitlines()), line_count)
-        self.assertGreaterEqual(log.flush_count, 1)
-        self.assertLess(log.flush_count, line_count // 4)
+        assert result.returncode == 0
+        assert len(log.getvalue().splitlines()) == line_count
+        assert log.flush_count >= 1
+        assert log.flush_count < line_count // 4
 
     def test_mirror_log_reaches_disk_before_run_process_returns(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -106,22 +103,22 @@ class ProcessRunnerTests(unittest.TestCase):
                     cwd=Path.cwd(),
                     log=handle,
                 )
-                self.assertEqual(result.returncode, 0)
+                assert result.returncode == 0
                 # The exit flush lands before the caller closes the handle, so a
                 # short final burst never sits in the file buffer.
-                self.assertIn("tail-marker", log_path.read_text(encoding="utf-8"))
+                assert "tail-marker" in log_path.read_text(encoding="utf-8")
 
     def test_a_child_that_outlives_its_deadline_is_killed(self) -> None:
         # The streaming read is what blocks when a child wedges, so the watchdog has to kill
         # the process rather than wait on it.
-        with self.assertRaises(ProcessTimeout) as caught:
+        with pytest.raises(ProcessTimeout) as caught:
             run_process(
                 [sys.executable, "-c", "import time; time.sleep(30)"],
                 cwd=Path.cwd(),
                 timeout=0.5,
             )
-        self.assertIn("deadline", str(caught.exception))
-        self.assertLess(caught.exception.result.duration_seconds, 20)
+        assert "deadline" in str(caught.value)
+        assert caught.value.result.duration_seconds < 20
 
     def test_a_child_that_finishes_in_time_is_unaffected(self) -> None:
         result = run_process(
@@ -129,9 +126,5 @@ class ProcessRunnerTests(unittest.TestCase):
             cwd=Path.cwd(),
             timeout=30,
         )
-        self.assertEqual(result.returncode, 0)
-        self.assertIn("done", result.output)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert result.returncode == 0
+        assert "done" in result.output

@@ -7,6 +7,7 @@ from unittest import mock
 
 from elysium_pipeline import unreal
 from elysium_pipeline.unreal import TEST_ABSTENTION_TOKEN, summarize_test_report
+import pytest
 
 
 class UnrealTestReportTests(unittest.TestCase):
@@ -30,26 +31,26 @@ class UnrealTestReportTests(unittest.TestCase):
             self.make_entry("Elysium.Content.Pure"),
         ])
 
-        self.assertEqual(summary["total"], 2)
-        self.assertEqual(summary["executed"], 1)
-        self.assertEqual(summary["abstained"], 1)
-        self.assertEqual(summary["abstentions"], ["Elysium.Content.Corpus"])
+        assert summary["total"] == 2
+        assert summary["executed"] == 1
+        assert summary["abstained"] == 1
+        assert summary["abstentions"] == ["Elysium.Content.Corpus"]
 
     def test_legacy_incomplete_marker_remains_visible(self) -> None:
         summary = self.summarize([
             self.make_entry("Elysium.Content.Legacy", "npc export domain is marked incomplete")
         ])
 
-        self.assertEqual(summary["executed"], 0)
-        self.assertEqual(summary["abstained"], 1)
+        assert summary["executed"] == 0
+        assert summary["abstained"] == 1
 
     def test_unrelated_skip_word_does_not_abstain_the_test(self) -> None:
         summary = self.summarize([
             self.make_entry("Elysium.Content.Partial", "one optional comparison was skipped")
         ])
 
-        self.assertEqual(summary["executed"], 1)
-        self.assertEqual(summary["abstained"], 0)
+        assert summary["executed"] == 1
+        assert summary["abstained"] == 0
 
     @staticmethod
     def stub_config(root: Path) -> SimpleNamespace:
@@ -96,23 +97,23 @@ class UnrealTestReportTests(unittest.TestCase):
             first_path = Path(first["report_path"])
             second_path = Path(second["report_path"])
             report_root = (config.work_root / "reports" / "tests").resolve()
-            self.assertTrue(first_path.is_relative_to(report_root))
-            self.assertTrue(second_path.is_relative_to(report_root))
-            self.assertNotEqual(first_path, second_path)
-            self.assertFalse(first_path.is_relative_to(config.export_root.resolve()))
+            assert first_path.is_relative_to(report_root)
+            assert second_path.is_relative_to(report_root)
+            assert first_path != second_path
+            assert not first_path.is_relative_to(config.export_root.resolve())
 
     def test_a_selection_that_matched_nothing_is_a_failure(self) -> None:
         # `Automation RunTest` reports success for a filter that matched no test, so a mistyped
         # tier used to be indistinguishable from a clean run.
         with TemporaryDirectory() as temp:
             config = self.stub_config(Path(temp))
-            with self.assertRaisesRegex(unreal.UnrealFailure, "matched no test"):
+            with pytest.raises(unreal.UnrealFailure, match="matched no test"):
                 self.run_tests_against(config, [])
 
     def test_an_unknown_tier_name_is_refused_before_launching(self) -> None:
         with TemporaryDirectory() as temp:
             config = self.stub_config(Path(temp))
-            with self.assertRaisesRegex(unreal.UnrealFailure, "unknown test tier 'Substate'"):
+            with pytest.raises(unreal.UnrealFailure, match="unknown test tier 'Substate'"):
                 self.run_tests_against(config, [], filter_name="Substate")
 
     def test_a_fully_qualified_filter_is_passed_through(self) -> None:
@@ -123,19 +124,19 @@ class UnrealTestReportTests(unittest.TestCase):
                 [self.make_entry("Elysium.Substrate.Knockback.Rule")],
                 filter_name="Elysium.Substrate.Knockback.",
             )
-            self.assertEqual(summary["executed"], 1)
+            assert summary["executed"] == 1
 
     def test_a_reported_failure_raises_even_when_the_commandlet_exits_clean(self) -> None:
         with TemporaryDirectory() as temp:
             config = self.stub_config(Path(temp))
-            with self.assertRaisesRegex(unreal.UnrealFailure, r"1 of 1 test\(s\) failed"):
+            with pytest.raises(unreal.UnrealFailure, match=r"1 of 1 test\(s\) failed"):
                 self.run_tests_against(config, [self.make_entry("Elysium.Substrate.Case")],
                                        failed=1)
 
     def test_a_wholly_abstained_tier_is_vacuous_and_raises(self) -> None:
         with TemporaryDirectory() as temp:
             config = self.stub_config(Path(temp))
-            with self.assertRaisesRegex(unreal.UnrealFailure, "abstained"):
+            with pytest.raises(unreal.UnrealFailure, match="abstained"):
                 self.run_tests_against(config, [
                     self.make_entry("Elysium.Content.A", f"{TEST_ABSTENTION_TOKEN}: no corpus"),
                     self.make_entry("Elysium.Content.B", f"{TEST_ABSTENTION_TOKEN}: no corpus"),
@@ -148,8 +149,8 @@ class UnrealTestReportTests(unittest.TestCase):
                 self.make_entry("Elysium.Content.A", f"{TEST_ABSTENTION_TOKEN}: no corpus"),
                 self.make_entry("Elysium.Content.B"),
             ])
-            self.assertEqual(summary["executed"], 1)
-            self.assertEqual(summary["abstained"], 1)
+            assert summary["executed"] == 1
+            assert summary["abstained"] == 1
 
 
 class PruneTestReportsTests(unittest.TestCase):
@@ -162,17 +163,10 @@ class PruneTestReportsTests(unittest.TestCase):
 
             removed = unreal.prune_test_reports(reports, keep=2)
 
-            self.assertEqual(removed, 4)
-            self.assertEqual(
-                sorted(child.name for child in reports.iterdir()),
-                ["20260824T000000.0Z-elysium-substrate",
-                 "20260825T000000.0Z-elysium-substrate"],
-            )
+            assert removed == 4
+            assert sorted(child.name for child in reports.iterdir()) == ["20260824T000000.0Z-elysium-substrate",
+                 "20260825T000000.0Z-elysium-substrate"]
 
     def test_a_missing_directory_is_not_an_error(self) -> None:
         with TemporaryDirectory() as temp:
-            self.assertEqual(unreal.prune_test_reports(Path(temp) / "absent"), 0)
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert unreal.prune_test_reports(Path(temp) / "absent") == 0

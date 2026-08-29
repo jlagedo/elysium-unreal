@@ -74,9 +74,7 @@ class FirstReferenceBasesTests(unittest.TestCase):
             "models/a.mdl": _image(labels=("run", "walk")),
             "models/b.mdl": _image(labels=("idle",)),
         })
-        self.assertEqual(
-            [(k, b) for k, _, b in S.first_reference_bases(load, "models/body.mdl")],
-            [("models/body.mdl", 0), ("models/a.mdl", 1), ("models/b.mdl", 3)])
+        assert [(k, b) for k, _, b in S.first_reference_bases(load, "models/body.mdl")] == [("models/body.mdl", 0), ("models/a.mdl", 1), ("models/b.mdl", 3)]
 
     def test_the_walk_is_depth_first_so_a_banks_own_banks_precede_its_sibling(self) -> None:
         load, _ = _loader({
@@ -85,10 +83,8 @@ class FirstReferenceBasesTests(unittest.TestCase):
             "models/deep.mdl": _image(labels=("crouch", "crawl")),
             "models/b.mdl": _image(labels=("idle",)),
         })
-        self.assertEqual(
-            [(k, b) for k, _, b in S.first_reference_bases(load, "models/body.mdl")],
-            [("models/body.mdl", 0), ("models/a.mdl", 0), ("models/deep.mdl", 1),
-             ("models/b.mdl", 3)])
+        assert [(k, b) for k, _, b in S.first_reference_bases(load, "models/body.mdl")] == [("models/body.mdl", 0), ("models/a.mdl", 0), ("models/deep.mdl", 1),
+             ("models/b.mdl", 3)]
 
     def test_a_model_reached_twice_records_its_first_appearance(self) -> None:
         # The whole reason this cannot be `resolve_tree`: the counter advances over the repeat,
@@ -101,10 +97,10 @@ class FirstReferenceBasesTests(unittest.TestCase):
             "models/b.mdl": _image(labels=("idle",), includes=("models/shared.mdl",)),
         })
         bases = {k: b for k, _, b in S.first_reference_bases(load, "models/body.mdl")}
-        self.assertEqual(bases["models/shared.mdl"], 1)
+        assert bases["models/shared.mdl"] == 1
         # body(0) + a(1) + shared(3) + b(1) puts the second `shared` block at 5, so `models/b.mdl`
         # is numbered behind the repeat rather than behind one copy of it.
-        self.assertEqual(bases["models/b.mdl"], 4)
+        assert bases["models/b.mdl"] == 4
 
     def test_a_repeat_is_counted_even_though_it_yields_no_entry(self) -> None:
         load, _ = _loader({
@@ -114,16 +110,15 @@ class FirstReferenceBasesTests(unittest.TestCase):
             "models/last.mdl": _image(labels=("z",)),
         })
         bases = {k: b for k, _, b in S.first_reference_bases(load, "models/body.mdl")}
-        self.assertEqual(bases["models/shared.mdl"], 0)
-        self.assertEqual(bases["models/last.mdl"], 4)
+        assert bases["models/shared.mdl"] == 0
+        assert bases["models/last.mdl"] == 4
 
     def test_a_cycle_is_refused_rather_than_walked_forever(self) -> None:
         load, _ = _loader({
             "models/a.mdl": _image(labels=("one",), includes=("models/b.mdl",)),
             "models/b.mdl": _image(labels=("two",), includes=("models/a.mdl",)),
         })
-        self.assertEqual([(k, b) for k, _, b in S.first_reference_bases(load, "models/a.mdl")],
-                         [("models/a.mdl", 0), ("models/b.mdl", 1)])
+        assert [(k, b) for k, _, b in S.first_reference_bases(load, "models/a.mdl")] == [("models/a.mdl", 0), ("models/b.mdl", 1)]
 
     def test_a_bank_the_loader_cannot_read_numbers_nothing(self) -> None:
         # A missing bank contributes neither an entry nor a count, so the numbering of everything
@@ -133,9 +128,7 @@ class FirstReferenceBasesTests(unittest.TestCase):
                                       includes=("models/absent.mdl", "models/b.mdl")),
             "models/b.mdl": _image(labels=("idle",)),
         })
-        self.assertEqual(
-            [(k, b) for k, _, b in S.first_reference_bases(load, "models/body.mdl")],
-            [("models/body.mdl", 0), ("models/b.mdl", 1)])
+        assert [(k, b) for k, _, b in S.first_reference_bases(load, "models/body.mdl")] == [("models/body.mdl", 0), ("models/b.mdl", 1)]
 
 
 class GlobalNumberTests(unittest.TestCase):
@@ -147,8 +140,4 @@ class GlobalNumberTests(unittest.TestCase):
         # whose base cell is out of range, so a number read off it would name the wrong clip.
         load, _ = _loader({"models/bank.mdl": _image(labels=("run", "RUN", "walk"))})
         _, data, _ = S.first_reference_bases(load, "models/bank.mdl")[0]
-        self.assertEqual(S.local_sequence_labels(data), ["run", "RUN", "walk"])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert S.local_sequence_labels(data) == ["run", "RUN", "walk"]

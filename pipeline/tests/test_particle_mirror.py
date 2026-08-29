@@ -25,10 +25,10 @@ class ParticleMirrorTests(unittest.TestCase):
             normalise_rain_sprite(source.read_bytes(), destination)
 
             with Image.open(destination) as result:
-                self.assertEqual(result.mode, "RGBA")
-                self.assertEqual(result.size, (5, 3))
-                self.assertEqual(result.getpixel((0, 0)), (68, 68, 68, 255))
-                self.assertEqual(result.getpixel((2, 1)), (50, 50, 50, 255))
+                assert result.mode == "RGBA"
+                assert result.size == (5, 3)
+                assert result.getpixel((0, 0)) == (68, 68, 68, 255)
+                assert result.getpixel((2, 1)) == (50, 50, 50, 255)
 
     def _synthetic_mirror(self, root: Path):
         """A two-sprite loose index (one rain-closure slice, one ordinary sprite)."""
@@ -51,8 +51,8 @@ class ParticleMirrorTests(unittest.TestCase):
                                    return_value=root / "export"):
                 UE_extract_particles.main(index=idx)
                 out = root / "export" / "particles"
-                self.assertTrue((out / "dropletfast.png").is_file())
-                self.assertTrue((out / "blood.png").is_file())
+                assert (out / "dropletfast.png").is_file()
+                assert (out / "blood.png").is_file()
                 manifest = out / "manifest.json"
                 before_bytes = manifest.read_bytes()
                 before_mtime = manifest.stat().st_mtime_ns
@@ -65,8 +65,8 @@ class ParticleMirrorTests(unittest.TestCase):
                         UE_extract_particles, "normalise_sprite",
                         side_effect=AssertionError("re-encoded a sprite"))):
                     UE_extract_particles.main(index=idx)
-                self.assertEqual(manifest.read_bytes(), before_bytes)
-                self.assertEqual(manifest.stat().st_mtime_ns, before_mtime)
+                assert manifest.read_bytes() == before_bytes
+                assert manifest.stat().st_mtime_ns == before_mtime
 
     def test_force_re_encodes_both_sprite_kinds(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -82,9 +82,5 @@ class ParticleMirrorTests(unittest.TestCase):
                         UE_extract_particles, "normalise_sprite",
                         side_effect=UE_extract_particles.normalise_sprite) as sprite):
                     UE_extract_particles.main(index=idx, force=True)
-                self.assertEqual(rain.call_count, 1)
-                self.assertEqual(sprite.call_count, 1)
-
-
-if __name__ == "__main__":
-    unittest.main()
+                assert rain.call_count == 1
+                assert sprite.call_count == 1

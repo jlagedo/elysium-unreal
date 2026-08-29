@@ -31,21 +31,21 @@ from elysium_pipeline.exporters.npc_export import (  # noqa: E402
 class BankContainerCensusTests(unittest.TestCase):
     def test_an_absent_directory_is_an_empty_census_rather_than_an_error(self) -> None:
         with tempfile.TemporaryDirectory() as npc_dir:
-            self.assertEqual(bank_containers_present(npc_dir), set())
+            assert bank_containers_present(npc_dir) == set()
 
 
 class AnswerableOwnerTests(unittest.TestCase):
     CONTAINERS = {"fists", "katana"}
 
     def test_a_bank_with_a_container_answers_and_one_without_does_not(self) -> None:
-        self.assertTrue(answerable_owner("body", "fists", self.CONTAINERS, True))
-        self.assertFalse(answerable_owner("body", "pc_br", self.CONTAINERS, True))
+        assert answerable_owner("body", "fists", self.CONTAINERS, True)
+        assert not answerable_owner("body", "pc_br", self.CONTAINERS, True)
 
     def test_a_body_always_answers_its_own_clips(self) -> None:
         # The body's own container is a different file and a different stage's failure; a body
         # missing from the bank census is not a body that cannot play its own dialogue.
-        self.assertTrue(answerable_owner("body", "body", self.CONTAINERS, True))
-        self.assertTrue(answerable_owner("body", "body", set(), False))
+        assert answerable_owner("body", "body", self.CONTAINERS, True)
+        assert answerable_owner("body", "body", set(), False)
 
     def test_no_census_admits_every_owner(self) -> None:
         """The container stage not having run is an ordering fact, not a coverage failure.
@@ -53,7 +53,7 @@ class AnswerableOwnerTests(unittest.TestCase):
         Filtering against an empty census would drop every shared clip in the cast, which is
         the whole vocabulary of every body.
         """
-        self.assertTrue(answerable_owner("body", "pc_br", set(), False))
+        assert answerable_owner("body", "pc_br", set(), False)
 
 
 class UnreferencedBankTests(unittest.TestCase):
@@ -72,8 +72,8 @@ class UnreferencedBankTests(unittest.TestCase):
             {"fists", "katana"},
             True,
         )
-        self.assertEqual(orphaned, ["katana"])
-        self.assertEqual(containerless, [])
+        assert orphaned == ["katana"]
+        assert containerless == []
 
     def test_a_containerless_bank_nobody_names_is_the_filter_working(self) -> None:
         orphaned, containerless = unreferenced_banks(
@@ -83,8 +83,8 @@ class UnreferencedBankTests(unittest.TestCase):
             {"fists"},
             True,
         )
-        self.assertEqual(orphaned, [])
-        self.assertEqual(containerless, ["pc_br"])
+        assert orphaned == []
+        assert containerless == ["pc_br"]
 
     def test_a_bank_named_by_any_body_is_referenced(self) -> None:
         orphaned, containerless = unreferenced_banks(
@@ -94,7 +94,7 @@ class UnreferencedBankTests(unittest.TestCase):
             {"fists"},
             True,
         )
-        self.assertEqual((orphaned, containerless), ([], []))
+        assert (orphaned, containerless) == ([], [])
 
     def test_a_non_first_owner_still_counts_as_a_reference(self) -> None:
         """A label several banks declare names every one of them, not just the first."""
@@ -105,7 +105,7 @@ class UnreferencedBankTests(unittest.TestCase):
             {"baseball", "fists"},
             True,
         )
-        self.assertEqual((orphaned, containerless), ([], []))
+        assert (orphaned, containerless) == ([], [])
 
     def test_a_pre_multi_owner_record_reads_as_a_single_reference(self) -> None:
         orphaned, _ = unreferenced_banks(
@@ -115,7 +115,7 @@ class UnreferencedBankTests(unittest.TestCase):
             {"fists"},
             True,
         )
-        self.assertEqual(orphaned, [])
+        assert orphaned == []
 
     def test_a_cinematic_root_bank_is_referenced_by_its_scene(self) -> None:
         """No body's clip map names a cinematic bank; the scene's root list is its only reader."""
@@ -126,15 +126,11 @@ class UnreferencedBankTests(unittest.TestCase):
             {"scene_bip01"},
             True,
         )
-        self.assertEqual(orphaned, [])
+        assert orphaned == []
 
     def test_without_a_census_an_unreferenced_bank_is_reported_as_orphaned(self) -> None:
         """Cannot-tell resolves toward the loud answer: an unread bank is still a defect."""
         orphaned, containerless = unreferenced_banks(
             {"fists": {}}, {"body": self._body({})}, self.CINEMATICS, set(), False)
-        self.assertEqual(orphaned, ["fists"])
-        self.assertEqual(containerless, [])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert orphaned == ["fists"]
+        assert containerless == []

@@ -16,6 +16,7 @@ from elysium_pipeline.formats import bsp, mdl, tex_to_png, vmt
 from elysium_pipeline.formats.glass import derive_normal, is_glass
 from elysium_pipeline import paths, shared_corpus, unreal as unreal_driver
 from elysium_pipeline.validation.png_alpha import alpha_range
+import pytest
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -29,8 +30,8 @@ POLICY_SPEC.loader.exec_module(POLICY)
 
 class CoordinateContractTests(unittest.TestCase):
     def test_source_to_unreal_contract(self) -> None:
-        self.assertEqual(bsp.source_to_unreal(1.0, 2.0, 3.0), (2.54, -5.08, 7.62))
-        self.assertEqual(bsp.source_dir_to_unreal(1.0, 2.0, 3.0), (1.0, -2.0, 3.0))
+        assert bsp.source_to_unreal(1.0, 2.0, 3.0) == (2.54, -5.08, 7.62)
+        assert bsp.source_dir_to_unreal(1.0, 2.0, 3.0) == (1.0, -2.0, 3.0)
 
     def test_coordinate_owners_are_unique(self) -> None:
         definitions: list[Path] = []
@@ -43,7 +44,7 @@ class CoordinateContractTests(unittest.TestCase):
                 }
                 if {"source_to_unreal", "source_dir_to_unreal"} & names:
                     definitions.append(source)
-        self.assertEqual(definitions, [REPO / "pipeline/src/elysium_pipeline/formats/bsp.py"])
+        assert definitions == [REPO / "pipeline/src/elysium_pipeline/formats/bsp.py"]
 
     def test_model_obj_writer_is_unreal_only(self) -> None:
         mesh = mdl.Mesh("test")
@@ -63,8 +64,8 @@ class CoordinateContractTests(unittest.TestCase):
                 {},
             )
             obj = (Path(out) / "test.obj").read_text(encoding="utf-8")
-        self.assertIn("v 2.540000 -5.080000 7.620000", obj)
-        self.assertIn("f 1/1 3/3 2/2", obj)
+        assert "v 2.540000 -5.080000 7.620000" in obj
+        assert "f 1/1 3/3 2/2" in obj
 
 
 class PropMaterialContractTests(unittest.TestCase):
@@ -105,14 +106,14 @@ class PropMaterialContractTests(unittest.TestCase):
 
     def test_translucent_prop_material_carries_blend_flag(self) -> None:
         body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$translucent" "1"\n}\n'
-        self.assertTrue(self._record_for_vmt(body)["blend"])
-        self.assertIn("mat models/props/glasswin", self._mtl_for_vmt(body))
+        assert self._record_for_vmt(body)["blend"]
+        assert "mat models/props/glasswin" in self._mtl_for_vmt(body)
 
     def test_alphatest_prop_material_carries_illum_flag(self) -> None:
         body = '"VertexLitGeneric"\n{\n"$basetexture" "props/glasswin"\n"$alphatest" "1"\n}\n'
         record = self._record_for_vmt(body)
-        self.assertTrue(record["scissor"])
-        self.assertFalse(record["blend"])
+        assert record["scissor"]
+        assert not record["blend"]
 
     def test_semantic_glass_prop_carries_glass_and_derived_normal(self) -> None:
         vmt_body = (
@@ -136,12 +137,12 @@ class PropMaterialContractTests(unittest.TestCase):
                 [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
             normal = Path(out) / "tex" / "props_glasswin_glass_n.png"
-            self.assertTrue(normal.is_file())
-        self.assertIn("mat models/props/glasswin", mtl)
+            assert normal.is_file()
+        assert "mat models/props/glasswin" in mtl
         record = self._record_for_vmt(vmt_body, read_bytes)
-        self.assertTrue(record["blend"])
-        self.assertTrue(record["glass"])
-        self.assertEqual(record["bump"], "tex/props_glasswin_glass_n.png")
+        assert record["blend"]
+        assert record["glass"]
+        assert record["bump"] == "tex/props_glasswin_glass_n.png"
 
     def test_authored_glass_bumpmap_takes_precedence(self) -> None:
         vmt_body = (
@@ -167,9 +168,9 @@ class PropMaterialContractTests(unittest.TestCase):
             mdl.write_obj_scene(
                 [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
-            self.assertFalse((Path(out) / "tex" / "props_glasswin_glass_n.png").exists())
+            assert not (Path(out) / "tex" / "props_glasswin_glass_n.png").exists()
         record = self._record_for_vmt(vmt_body, read_bytes)
-        self.assertEqual(record["bump"], "tex/props_authored_n.png")
+        assert record["bump"] == "tex/props_authored_n.png"
 
     def test_one_fold_names_the_mtl_slot_the_skins_slot_and_the_manifest_slot(self) -> None:
         """A model's material slot has one spelling in three places, and it is `mdl.sanitize`.
@@ -194,11 +195,11 @@ class PropMaterialContractTests(unittest.TestCase):
             skins = (Path(out) / "test.skins").read_text(encoding="utf-8")
 
         folded = mdl.sanitize(awkward)
-        self.assertEqual(folded, "panel-a.2_x")
-        self.assertIn(f"newmtl {folded}", mtl)
-        self.assertIn(folded, skins)
+        assert folded == "panel-a.2_x"
+        assert f"newmtl {folded}" in mtl
+        assert folded in skins
         # The other fold would have produced a different name in each place.
-        self.assertNotEqual(folded, shared_corpus.material_asset(awkward)[len("MI_"):])
+        assert folded != shared_corpus.material_asset(awkward)[len("MI_"):]
 
     def test_source_refract_prop_exports_dudv_as_distortion_not_albedo(self) -> None:
         vmt_body = (
@@ -223,16 +224,16 @@ class PropMaterialContractTests(unittest.TestCase):
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
             normal_path = Path(out) / "tex" / "props_rain_dudv_refract_n.png"
             with Image.open(normal_path) as normal:
-                self.assertEqual(list(normal.get_flattened_data()), [
-                    (128, 128, 255), (127, 129, 255)])
+                assert list(normal.get_flattened_data()) == [
+                    (128, 128, 255), (127, 129, 255)]
 
         record = self._record_for_vmt(vmt_body, read_bytes)
-        self.assertTrue(record["refract"])
-        self.assertEqual(record["refract_amount"], 0.01)
-        self.assertEqual(record["refract_map"], "tex/props_rain_dudv_refract_n.png")
-        self.assertFalse(record["blend"])
-        self.assertFalse(record["glass"])
-        self.assertEqual(record["albedo"], "")
+        assert record["refract"]
+        assert record["refract_amount"] == 0.01
+        assert record["refract_map"] == "tex/props_rain_dudv_refract_n.png"
+        assert not record["blend"]
+        assert not record["glass"]
+        assert record["albedo"] == ""
 
     def test_source_refract_prefers_authored_normal_over_dudv_fallback(self) -> None:
         vmt_body = (
@@ -261,11 +262,11 @@ class PropMaterialContractTests(unittest.TestCase):
                 [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
             mtl = (Path(out) / "test.mtl").read_text(encoding="utf-8")
 
-        self.assertEqual(len(decoded), 1)
-        self.assertIn(b"authored_normal", decoded[0])
-        self.assertIn("mat models/props/glasswin", mtl)
+        assert len(decoded) == 1
+        assert b"authored_normal" in decoded[0]
+        assert "mat models/props/glasswin" in mtl
         record = self._record_for_vmt(vmt_body, read_bytes)
-        self.assertEqual(record["refract_map"], "tex/props_authored_normal_refract_n.png")
+        assert record["refract_map"] == "tex/props_authored_normal_refract_n.png"
 
     def _export_texture(self, flag: str) -> Image.Image:
         vmt_body = (
@@ -293,20 +294,20 @@ class PropMaterialContractTests(unittest.TestCase):
 
     def test_translucent_prop_preserves_source_alpha(self) -> None:
         image = self._export_texture("translucent")
-        self.assertEqual(image.mode, "RGBA")
-        self.assertEqual([image.getpixel((x, 0))[3] for x in range(2)], [0, 191])
+        assert image.mode == "RGBA"
+        assert [image.getpixel((x, 0))[3] for x in range(2)] == [0, 191]
 
     def test_alphatest_prop_preserves_source_alpha(self) -> None:
         image = self._export_texture("alphatest")
-        self.assertEqual(image.mode, "RGBA")
-        self.assertEqual([image.getpixel((x, 0))[3] for x in range(2)], [0, 191])
+        assert image.mode == "RGBA"
+        assert [image.getpixel((x, 0))[3] for x in range(2)] == [0, 191]
 
     def test_opaque_prop_keeps_stored_alpha(self) -> None:
         # Alpha is a fact of the source file, not of the material drawing it: an opaque VMT does
         # not flatten a texture whose source stores a real alpha plane.
         image = self._export_texture("")
-        self.assertEqual(image.mode, "RGBA")
-        self.assertEqual([image.getpixel((x, 0))[3] for x in range(2)], [0, 191])
+        assert image.mode == "RGBA"
+        assert [image.getpixel((x, 0))[3] for x in range(2)] == [0, 191]
 
     def test_blank_alpha_folds_to_rgb(self) -> None:
         # A uniformly opaque plane encodes nothing, so the write folds it away -- losslessly.
@@ -326,7 +327,7 @@ class PropMaterialContractTests(unittest.TestCase):
             mdl.write_obj_scene(
                 [self._triangle("glasswin")], "test", out, self.SEARCH, read_bytes, {})
             with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
-                self.assertEqual(exported.mode, "RGB")
+                assert exported.mode == "RGB"
 
     def test_shared_basetexture_writes_one_file_whatever_the_order(self) -> None:
         vmts = {
@@ -355,8 +356,8 @@ class PropMaterialContractTests(unittest.TestCase):
                     [self._triangle(name) for name in order],
                     "test", out, self.SEARCH, read_bytes, {})
                 with Image.open(Path(out) / "tex" / "props_shared.png") as exported:
-                    self.assertEqual(exported.mode, "RGBA")
-                    self.assertEqual(exported.getchannel("A").getpixel((0, 0)), 73)
+                    assert exported.mode == "RGBA"
+                    assert exported.getchannel("A").getpixel((0, 0)) == 73
 
 
 class TextureDecodeMemoTests(unittest.TestCase):
@@ -387,9 +388,9 @@ class TextureDecodeMemoTests(unittest.TestCase):
             (Path(out) / "tex").mkdir()          # write_obj_scene's own makedirs
             first = mdl._resolve_material("glasswin", self.SEARCH, read_bytes, out, {})
             second = mdl._resolve_material("glasswin", self.SEARCH, read_bytes, out, {})
-        self.assertEqual(first["albedo"], "props_shared.png")
-        self.assertEqual(second["albedo"], first["albedo"])
-        self.assertEqual(decode.call_count, 1)
+        assert first["albedo"] == "props_shared.png"
+        assert second["albedo"] == first["albedo"]
+        assert decode.call_count == 1
 
     def test_selfillum_arriving_on_a_later_model_still_writes_the_emission_mask(self) -> None:
         # The memo keeps filenames, not images, so a derived product first requested by a
@@ -408,10 +409,10 @@ class TextureDecodeMemoTests(unittest.TestCase):
             (Path(out) / "tex").mkdir()          # write_obj_scene's own makedirs
             first = mdl._resolve_material("plain", self.SEARCH, read_bytes, out, {})
             second = mdl._resolve_material("glow", self.SEARCH, read_bytes, out, {})
-            self.assertTrue((Path(out) / "tex" / "props_shared_ke.png").is_file())
-        self.assertIsNone(first["emis"])
-        self.assertEqual(second["emis"], "props_shared_ke.png")
-        self.assertEqual(decode.call_count, 2)   # the albedo, then the mask's re-decode
+            assert (Path(out) / "tex" / "props_shared_ke.png").is_file()
+        assert first["emis"] is None
+        assert second["emis"] == "props_shared_ke.png"
+        assert decode.call_count == 2   # the albedo, then the mask's re-decode
 
 
 class SourceFormatAlphaTests(unittest.TestCase):
@@ -439,8 +440,8 @@ class SourceFormatAlphaTests(unittest.TestCase):
         import zlib
         tth = self._tth(2, 1, tex_to_png.FMT_BGR888)
         image, mode = self._roundtrip(tth, zlib.compress(bytes((30, 20, 10, 60, 50, 40))))
-        self.assertIs(image.info.get("opaque_alpha"), True)
-        self.assertEqual(mode, "RGB")
+        assert image.info.get("opaque_alpha") is True
+        assert mode == "RGB"
 
     def test_dxt1_without_punch_through_blocks_is_format_answered_opaque(self) -> None:
         import struct
@@ -448,8 +449,8 @@ class SourceFormatAlphaTests(unittest.TestCase):
         block = struct.pack("<HH4B", 0xF800, 0x001F, 0, 0, 0, 0)   # color0 > color1
         tth = self._tth(4, 4, tex_to_png.FMT_DXT1)
         image, mode = self._roundtrip(tth, zlib.compress(block))
-        self.assertIs(image.info.get("opaque_alpha"), True)
-        self.assertEqual(mode, "RGB")
+        assert image.info.get("opaque_alpha") is True
+        assert mode == "RGB"
 
     def test_dxt1_punch_through_blocks_keep_their_alpha(self) -> None:
         # color0 <= color1 selects BC1's three-colour mode; index 3 decodes transparent, so
@@ -459,9 +460,9 @@ class SourceFormatAlphaTests(unittest.TestCase):
         block = struct.pack("<HH4B", 0x001F, 0xF800, 0xFF, 0xFF, 0xFF, 0xFF)
         tth = self._tth(4, 4, tex_to_png.FMT_DXT1)
         image, mode = self._roundtrip(tth, zlib.compress(block))
-        self.assertIsNone(image.info.get("opaque_alpha"))
-        self.assertEqual(image.getchannel("A").getextrema(), (0, 0))
-        self.assertEqual(mode, "RGBA")
+        assert image.info.get("opaque_alpha") is None
+        assert image.getchannel("A").getextrema() == (0, 0)
+        assert mode == "RGBA"
 
 
 class PngAlphaContractTests(unittest.TestCase):
@@ -473,8 +474,8 @@ class PngAlphaContractTests(unittest.TestCase):
             image.putdata([(0, 0, 0, 17), (0, 0, 0, 239)])
             image.save(rgba)
             image.convert("RGB").save(rgb)
-            self.assertEqual(alpha_range(rgba), (17, 239))
-            self.assertIsNone(alpha_range(rgb))
+            assert alpha_range(rgba) == (17, 239)
+            assert alpha_range(rgb) is None
 
 
 class SourceRefractContractTests(unittest.TestCase):
@@ -482,10 +483,10 @@ class SourceRefractContractTests(unittest.TestCase):
         info = vmt.parse(
             '"Refract"\n{\n"$dudvmap" "Props\\Rain_DUDV"\n'
             '"$refractamount" ".01"\n}\n')
-        self.assertTrue(info["refract"])
-        self.assertIsNone(info["basetexture"])
-        self.assertEqual(info["dudvmap"], "props/rain_dudv")
-        self.assertEqual(info["refractamount"], 0.01)
+        assert info["refract"]
+        assert info["basetexture"] is None
+        assert info["dudvmap"] == "props/rain_dudv"
+        assert info["refractamount"] == 0.01
 
     def test_uvwq_signed_vectors_convert_deterministically_to_tangent_normal(self) -> None:
         raw = bytes((0, 0, 127, 255, 127, 128, 127, 255, 255, 1, 127, 255))
@@ -493,11 +494,10 @@ class SourceRefractContractTests(unittest.TestCase):
             raw, 3, 1, tex_to_png.FMT_UVWQ8888)
         first = tex_to_png.dudv_to_normal(decoded)
         second = tex_to_png.dudv_to_normal(decoded)
-        self.assertEqual(first.tobytes(), second.tobytes())
-        self.assertEqual(list(first.get_flattened_data()), [
-            (128, 128, 255), (255, 0, 255), (127, 129, 255)])
-        self.assertEqual(
-            tex_to_png.mip_byte_size(3, 1, tex_to_png.FMT_UVWQ8888), 12)
+        assert first.tobytes() == second.tobytes()
+        assert list(first.get_flattened_data()) == [
+            (128, 128, 255), (255, 0, 255), (127, 129, 255)]
+        assert tex_to_png.mip_byte_size(3, 1, tex_to_png.FMT_UVWQ8888) == 12
 
 
 class GlassMaterialContractTests(unittest.TestCase):
@@ -516,23 +516,23 @@ class GlassMaterialContractTests(unittest.TestCase):
         return info
 
     def test_world_and_prop_lit_reflective_glass_classify(self) -> None:
-        self.assertTrue(is_glass(self._info(), "glass/pawnwndwglass"))
-        self.assertTrue(is_glass(
+        assert is_glass(self._info(), "glass/pawnwndwglass")
+        assert is_glass(
             self._info(shader="vertexlitgeneric",
                        basetexture="models/scenery/misc/wall_clock/clockglass"),
-            "models/scenery/misc/wall_clock/clockglass"))
+            "models/scenery/misc/wall_clock/clockglass")
 
     def test_non_glass_transparency_combinations_stay_generic(self) -> None:
-        self.assertFalse(is_glass(
+        assert not is_glass(
             self._info(envmap=None, basetexture="models/scenery/theater/neta"),
-            "models/scenery/theater/neta"))
-        self.assertFalse(is_glass(self._info(shader="unlitgeneric"), "effects/glass_fleck"))
-        self.assertFalse(is_glass(self._info(additive=True), "models/light/glass"))
-        self.assertFalse(is_glass(self._info(decal=True), "glass/poster"))
-        self.assertFalse(is_glass(self._info(water=True), "glass/water"))
-        self.assertFalse(is_glass(
+            "models/scenery/theater/neta")
+        assert not is_glass(self._info(shader="unlitgeneric"), "effects/glass_fleck")
+        assert not is_glass(self._info(additive=True), "models/light/glass")
+        assert not is_glass(self._info(decal=True), "glass/poster")
+        assert not is_glass(self._info(water=True), "glass/water")
+        assert not is_glass(
             self._info(basetexture="models/scenery/theater/curtains"),
-            "models/scenery/theater/curtains"))
+            "models/scenery/theater/curtains")
 
     def test_derived_normal_is_deterministic_and_flat_outside_mask(self) -> None:
         source = Image.new("RGBA", (7, 7), (80, 100, 120, 90))
@@ -544,9 +544,9 @@ class GlassMaterialContractTests(unittest.TestCase):
             mask.putpixel((3, y), 0)
         first = derive_normal(source, mask)
         second = derive_normal(source, mask)
-        self.assertEqual(first.tobytes(), second.tobytes())
-        self.assertEqual(first.getpixel((3, 3)), (128, 128, 255))
-        self.assertNotEqual(first.getpixel((1, 3)), (128, 128, 255))
+        assert first.tobytes() == second.tobytes()
+        assert first.getpixel((3, 3)) == (128, 128, 255)
+        assert first.getpixel((1, 3)) != (128, 128, 255)
 
     def test_derived_normal_resamples_independently_sized_mask(self) -> None:
         source = Image.new("RGBA", (8, 8), (0, 0, 0, 255))
@@ -560,13 +560,13 @@ class GlassMaterialContractTests(unittest.TestCase):
 
         normal = derive_normal(source, mask, blur_radius=0.0)
 
-        self.assertEqual(normal.size, source.size)
-        self.assertNotEqual(normal.getpixel((1, 3)), (128, 128, 255))
-        self.assertEqual(normal.getpixel((6, 3)), (128, 128, 255))
+        assert normal.size == source.size
+        assert normal.getpixel((1, 3)) != (128, 128, 255)
+        assert normal.getpixel((6, 3)) == (128, 128, 255)
 
     def test_uniform_glass_normal_is_neutral(self) -> None:
         normal = derive_normal(Image.new("RGBA", (5, 5), (100, 120, 140, 80)))
-        self.assertEqual(set(normal.get_flattened_data()), {(128, 128, 255)})
+        assert set(normal.get_flattened_data()) == {(128, 128, 255)}
 
 
 class BakeTextureImportContractTests(unittest.TestCase):
@@ -604,10 +604,10 @@ class BakeTextureImportContractTests(unittest.TestCase):
         module = self._load_bake_lib(fake_unreal)
 
         result = module.import_textures([("updated.png", "T_existing")], "/Test")
-        self.assertEqual(result, {"T_existing": asset})
-        self.assertEqual(len(tasks), 1)
-        self.assertTrue(tasks[0].replace_existing)
-        self.assertTrue(tasks[0].replace_existing_settings)
+        assert result == {"T_existing": asset}
+        assert len(tasks) == 1
+        assert tasks[0].replace_existing
+        assert tasks[0].replace_existing_settings
 
     def test_stored_recipe_reads_the_registry_by_object_path(self) -> None:
         # Callers name assets by package path; the registry answers only the object path.
@@ -630,9 +630,9 @@ class BakeTextureImportContractTests(unittest.TestCase):
             AssetRegistryHelpers=SimpleNamespace(get_asset_registry=lambda: registry),
         )
         module = self._load_bake_lib(fake_unreal)
-        self.assertEqual(module.stored_recipe("/ElysiumBaked/Shared/Textures/T_x"), "abc123")
-        self.assertEqual(module.stored_recipe("/ElysiumBaked/Shared/Textures/T_x.T_x"), "abc123")
-        self.assertEqual(module.stored_recipe("/ElysiumBaked/Shared/Textures/T_other"), "")
+        assert module.stored_recipe("/ElysiumBaked/Shared/Textures/T_x") == "abc123"
+        assert module.stored_recipe("/ElysiumBaked/Shared/Textures/T_x.T_x") == "abc123"
+        assert module.stored_recipe("/ElysiumBaked/Shared/Textures/T_other") == ""
 
     def test_bake_mtl_parser_keeps_semantic_glass_flag(self) -> None:
         fake_unreal = SimpleNamespace(
@@ -647,9 +647,9 @@ class BakeTextureImportContractTests(unittest.TestCase):
             mat = module.read_mtl(path, corpus={"glass/pane": {
                 "albedo": "tex/pane.png", "blend": True, "glass": True,
                 "bump": "tex/pane_glass_n.png"}})["pane"]
-        self.assertTrue(mat.blend)
-        self.assertTrue(mat.glass)
-        self.assertEqual(mat.bump, "tex/pane_glass_n.png")
+        assert mat.blend
+        assert mat.glass
+        assert mat.bump == "tex/pane_glass_n.png"
 
     def test_bake_mtl_parser_keeps_source_refract_contract(self) -> None:
         fake_unreal = SimpleNamespace(
@@ -664,10 +664,10 @@ class BakeTextureImportContractTests(unittest.TestCase):
             mat = module.read_mtl(path, corpus={"effects/rain": {
                 "refract": True, "refract_amount": 0.01,
                 "refract_map": "tex/rain_refract_n.png"}})["rain"]
-        self.assertTrue(mat.refract)
-        self.assertFalse(mat.opaque)
-        self.assertEqual(mat.refract_amount, 0.01)
-        self.assertEqual(mat.refract_map, "tex/rain_refract_n.png")
+        assert mat.refract
+        assert not mat.opaque
+        assert mat.refract_amount == 0.01
+        assert mat.refract_map == "tex/rain_refract_n.png"
 
     def test_bake_mtl_parser_keeps_exact_env_cube_identifier(self) -> None:
         fake_unreal = SimpleNamespace(
@@ -684,9 +684,9 @@ class BakeTextureImportContractTests(unittest.TestCase):
                 "env_cube": "env_cubemap", "wetness": 0.6}})["wet"]
         # The material names `env_cubemap`; the map's own `cube` line says which baked cube that
         # resolved to here, and that is the one the bake must bind.
-        self.assertEqual(mat.env_cube, "cubemapdefault")
-        self.assertTrue(mat.wetness_driven)
-        self.assertEqual(mat.wetness_scale, 0.6)
+        assert mat.env_cube == "cubemapdefault"
+        assert mat.wetness_driven
+        assert mat.wetness_scale == 0.6
 
     def test_two_maps_naming_one_material_read_one_definition(self) -> None:
         """The regression the corpus exists for.
@@ -716,12 +716,12 @@ class BakeTextureImportContractTests(unittest.TestCase):
             a = module.read_mtl(first, corpus=corpus)["brick/brickwall001a@cubemapdefault"]
             b = module.read_mtl(second, corpus=corpus)["brick/brickwall001a@c12_34_56"]
 
-        self.assertEqual(a.albedo, b.albedo)
-        self.assertEqual(a.scissor, b.scissor)
-        self.assertEqual(a.material_key, b.material_key)
+        assert a.albedo == b.albedo
+        assert a.scissor == b.scissor
+        assert a.material_key == b.material_key
         # ...and differ in exactly the one thing their maps own.
-        self.assertEqual(a.env_cube, "cubemapdefault")
-        self.assertEqual(b.env_cube, "c12_34_56")
+        assert a.env_cube == "cubemapdefault"
+        assert b.env_cube == "c12_34_56"
 
     def test_a_surface_whose_material_no_document_names_is_dropped(self) -> None:
         # Silently binding the master's placeholder would render a grey wall with nothing logged.
@@ -738,10 +738,10 @@ class BakeTextureImportContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as out:
             path = Path(out) / "gap.mtl"
             path.write_text("newmtl wall\nmat brick/absent\n", encoding="utf-8")
-            self.assertEqual(module.read_mtl(path, corpus={}), {})
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("brick/absent", warnings[0])
-        self.assertIn("wall", warnings[0])
+            assert module.read_mtl(path, corpus={}) == {}
+        assert len(warnings) == 1
+        assert "brick/absent" in warnings[0]
+        assert "wall" in warnings[0]
 
     def test_a_slot_with_no_mat_line_is_absent_and_unnamed(self) -> None:
         """The exporter writes `newmtl` with no `mat` line when the slot's material name resolved
@@ -759,8 +759,8 @@ class BakeTextureImportContractTests(unittest.TestCase):
             path = Path(out) / "miss.mtl"
             path.write_text("newmtl gone\n\nnewmtl lid\nmat props/lid\n", encoding="utf-8")
             mats = module.read_mtl(path, corpus={"props/lid": {"albedo": "tex/lid.png"}})
-        self.assertEqual(sorted(mats), ["lid"])
-        self.assertEqual(warnings, [])
+        assert sorted(mats) == ["lid"]
+        assert warnings == []
 
     def test_a_material_key_is_matched_exactly_and_a_case_mismatch_is_named(self) -> None:
         """The corpus is keyed by `shared_corpus.material_key`, which is lower case, and this
@@ -780,14 +780,13 @@ class BakeTextureImportContractTests(unittest.TestCase):
             path.write_text(
                 "newmtl milkcrate\nmat models/scenery/furniture/MilkCrate/MilkCrate\n",
                 encoding="utf-8")
-            self.assertEqual(module.read_mtl(path, corpus=corpus), {})
+            assert module.read_mtl(path, corpus=corpus) == {}
             path.write_text(
                 "newmtl milkcrate\nmat models/scenery/furniture/milkcrate/milkcrate\n",
                 encoding="utf-8")
-            self.assertEqual(
-                module.read_mtl(path, corpus=corpus)["milkcrate"].albedo, "tex/crate.png")
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("MilkCrate", warnings[0])
+            assert module.read_mtl(path, corpus=corpus)["milkcrate"].albedo == "tex/crate.png"
+        assert len(warnings) == 1
+        assert "MilkCrate" in warnings[0]
 
     def test_a_map_local_definition_outranks_the_corpus(self) -> None:
         # VBSP writes per-water-volume depth-blend instances into a map's own PAKFILE and nowhere
@@ -805,8 +804,8 @@ class BakeTextureImportContractTests(unittest.TestCase):
                 path,
                 corpus={"dev/pool_water": {"albedo": "tex/shared.png"}},
                 local={"dev/pool_water": {"albedo": "tex/local.png"}})["pool"]
-        self.assertEqual(mat.albedo, "tex/local.png")
-        self.assertTrue(mat.water)
+        assert mat.albedo == "tex/local.png"
+        assert mat.water
 
 
 class BakeErrorMaterialContractTests(unittest.TestCase):
@@ -928,17 +927,17 @@ class BakeErrorMaterialContractTests(unittest.TestCase):
         # Built and receipted, with the error material on exactly the slot that missed. Slots are
         # the mesh's own sorted material groups, so `gone` precedes `lid`.
         recipe = tracker.recipes["%s/%s" % (bake.shared_mesh_pkg, shared_corpus.mesh_asset("crate"))]
-        self.assertEqual(recipe["slot_names"], ["gone", "lid"])
-        self.assertEqual(recipe["materials"], [self.ERROR_PATH, self.LID_PATH])
-        self.assertEqual(tracker.build_count, 2)
+        assert recipe["slot_names"] == ["gone", "lid"]
+        assert recipe["materials"] == [self.ERROR_PATH, self.LID_PATH]
+        assert tracker.build_count == 2
         # One warning for the one distinct missing name, naming the key and the first stem that
         # hit it -- not one per slot instance.
-        self.assertEqual(len(warnings), 1)
-        self.assertIn("'gone'", warnings[0])
-        self.assertIn("barrel", warnings[0])
+        assert len(warnings) == 1
+        assert "'gone'" in warnings[0]
+        assert "barrel" in warnings[0]
         # ...and both slot instances counted in the stage summary.
-        self.assertEqual(bake.error_keys, {"gone": 2})
-        self.assertTrue(any("2 slots error-bound across 2 props" in line for line in logs))
+        assert bake.error_keys == {"gone": 2}
+        assert any("2 slots error-bound across 2 props" in line for line in logs)
 
     def test_two_runs_over_the_same_inputs_produce_the_same_recipes(self) -> None:
         recipes = []
@@ -950,8 +949,8 @@ class BakeErrorMaterialContractTests(unittest.TestCase):
                 tracker = self._Tracker()
                 self._prop_bake(module, tracker, ["crate"]).stage_props()
             recipes.append(tracker.recipes)
-        self.assertEqual(recipes[0], recipes[1])
-        self.assertIn(self.ERROR_PATH, str(recipes[0]))
+        assert recipes[0] == recipes[1]
+        assert self.ERROR_PATH in str(recipes[0])
 
     def test_a_world_surface_with_no_definition_binds_the_error_material(self) -> None:
         logs: list[str] = []
@@ -961,10 +960,10 @@ class BakeErrorMaterialContractTests(unittest.TestCase):
             error_asset = SimpleNamespace(get_path_name=lambda: self.ERROR_PATH)
             module.bl.ensure_error_material = lambda: error_asset
             bake = module.Bake("sp_test", self._Tracker(), None)
-            self.assertIs(bake.material_for("brick/absent"), error_asset)
-            self.assertIs(bake.material_for("brick/absent"), error_asset)
-        self.assertEqual(len(warnings), 1)
-        self.assertEqual(bake.error_keys, {"brick/absent": 2})
+            assert bake.material_for("brick/absent") is error_asset
+            assert bake.material_for("brick/absent") is error_asset
+        assert len(warnings) == 1
+        assert bake.error_keys == {"brick/absent": 2}
 
     def test_the_error_material_is_reused_and_authored_unlit(self) -> None:
         """Authored once from constants, so every run leaves the same asset and a recipe naming it
@@ -1025,13 +1024,13 @@ class BakeErrorMaterialContractTests(unittest.TestCase):
             setattr(fake_unreal, name, named(name))
         module = BakeTextureImportContractTests._load_bake_lib(fake_unreal)
 
-        self.assertIs(module.ensure_error_material(), existing)
-        self.assertEqual(created, [])
-        self.assertIs(module.ensure_error_material(), material)
-        self.assertEqual(created, [module.ERROR_MATERIAL_PATH])
-        self.assertEqual(properties["shading_model"], "unlit")
-        self.assertIn("MaterialExpressionCeil", expressions)
-        self.assertIn("emissive", connected)
+        assert module.ensure_error_material() is existing
+        assert created == []
+        assert module.ensure_error_material() is material
+        assert created == [module.ERROR_MATERIAL_PATH]
+        assert properties["shading_model"] == "unlit"
+        assert "MaterialExpressionCeil" in expressions
+        assert "emissive" in connected
 
 
 class UnrealPlayDriverContractTests(unittest.TestCase):
@@ -1050,16 +1049,13 @@ class UnrealPlayDriverContractTests(unittest.TestCase):
                 unreal_driver, "editor_executable", return_value=Path("UnrealEditor.exe")):
             unreal_driver.run_play(config, runner)
 
-        self.assertEqual(len(submitted), 1)
+        assert len(submitted) == 1
         arguments = submitted[0][0]
-        self.assertIn("-log", arguments)
-        self.assertIn("-NewConsole", arguments)
-        self.assertNotIn("-stdout", arguments)
-        self.assertNotIn("-FullStdOutLogOutput", arguments)
-        self.assertIn(
-            "-LogCmds=LogElysiumWorld Verbose, LogElysiumIO Verbose",
-            arguments,
-        )
+        assert "-log" in arguments
+        assert "-NewConsole" in arguments
+        assert "-stdout" not in arguments
+        assert "-FullStdOutLogOutput" not in arguments
+        assert "-LogCmds=LogElysiumWorld Verbose, LogElysiumIO Verbose" in arguments
 
 
 class UnrealBakeDriverContractTests(unittest.TestCase):
@@ -1078,12 +1074,9 @@ class UnrealBakeDriverContractTests(unittest.TestCase):
                 unreal_driver, "editor_executable", return_value=Path("UnrealEditor-Cmd.exe")):
             unreal_driver.bake_maps(config, runner, ["sp_theatre"])
 
-        self.assertEqual(len(submitted), 1)
-        self.assertIn("-AllowCommandletRendering", submitted[0][0])
-        self.assertIn(
-            "-shaderworkingdir=D:\\UnrealCache\\ShaderWorking",
-            submitted[0][0],
-        )
+        assert len(submitted) == 1
+        assert "-AllowCommandletRendering" in submitted[0][0]
+        assert "-shaderworkingdir=D:\\UnrealCache\\ShaderWorking" in submitted[0][0]
 
 
 class PathContractTests(unittest.TestCase):
@@ -1096,15 +1089,15 @@ class PathContractTests(unittest.TestCase):
             ):
                 os.environ.pop("ELYSIUM_EXPORT_ROOT", None)
                 root = Path(work).resolve()
-                self.assertEqual(paths.export_root(), root / "exports")
-                self.assertEqual(paths.research_root(), root / "research")
-                self.assertEqual(paths.cache_root(), root / "cache")
-                self.assertEqual(paths.log_root(), root / "logs")
-                self.assertEqual(paths.scratch_root(), root / "scratch")
+                assert paths.export_root() == root / "exports"
+                assert paths.research_root() == root / "research"
+                assert paths.cache_root() == root / "cache"
+                assert paths.log_root() == root / "logs"
+                assert paths.scratch_root() == root / "scratch"
 
     def test_missing_work_root_has_no_repository_fallback(self) -> None:
         with mock.patch.dict(os.environ, {}, clear=True):
-            with self.assertRaisesRegex(RuntimeError, "ELYSIUM_WORK_ROOT"):
+            with pytest.raises(RuntimeError, match="ELYSIUM_WORK_ROOT"):
                 paths.work_root()
 
 
@@ -1120,10 +1113,10 @@ class RepositoryPolicyTests(unittest.TestCase):
             "research/evidence/vampire.gpr",
         ):
             with self.subTest(path=path):
-                self.assertIsNotNone(POLICY.prohibited(path))
+                assert POLICY.prohibited(path) is not None
 
     def test_authored_source_is_not_prohibited(self) -> None:
-        self.assertIsNone(POLICY.prohibited("pipeline/src/elysium_pipeline/formats/bsp.py"))
+        assert POLICY.prohibited("pipeline/src/elysium_pipeline/formats/bsp.py") is None
 
     def test_project_authored_unreal_packages_have_one_namespace(self) -> None:
         for path in (
@@ -1132,12 +1125,6 @@ class RepositoryPolicyTests(unittest.TestCase):
             "Content/ElysiumAuthored/Cinematics/Maps/CameraLab.umap",
         ):
             with self.subTest(path=path):
-                self.assertIsNone(POLICY.prohibited(path))
+                assert POLICY.prohibited(path) is None
 
-        self.assertIsNotNone(
-            POLICY.prohibited("Content/ElysiumAuthored/Camera/copied_game_data.vpk")
-        )
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert POLICY.prohibited("Content/ElysiumAuthored/Camera/copied_game_data.vpk") is not None

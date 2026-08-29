@@ -10,6 +10,7 @@ from unittest import mock
 from elysium_pipeline import export_manager, shared_corpus, wield_corpus
 from elysium_pipeline.placed_models import PlacedModelUse
 from elysium_pipeline.tasking import Manifest, TaskFailure, TaskResult
+import pytest
 
 
 class BakeOrchestrationTests(unittest.TestCase):
@@ -54,9 +55,9 @@ class BakeOrchestrationTests(unittest.TestCase):
                 mock.patch.object(export_manager.unreal, "bake_maps"),
                 mock.patch.object(export_manager.unreal, "verify_bakes") as verify,
             ):
-                with self.assertRaises(export_manager.ExportBakeFailure) as caught:
+                with pytest.raises(export_manager.ExportBakeFailure) as caught:
                     export_manager.bake_and_verify(config, object(), ["absent_map"])
-            self.assertIn("absent_map", str(caught.exception))
+            assert "absent_map" in str(caught.value)
             verify.assert_not_called()
 
     def test_verify_is_an_explicit_opt_in(self) -> None:
@@ -93,10 +94,10 @@ class BakeOrchestrationTests(unittest.TestCase):
             (editor / "UnrealEditor-Cmd.exe").write_bytes(b"")
 
             export_manager.unreal.bake_maps(config, _Runner(), ["test_map"])
-            self.assertNotIn("-BakeParticles=1", recorded[-1])
+            assert "-BakeParticles=1" not in recorded[-1]
 
             export_manager.unreal.bake_maps(config, _Runner(), ["test_map"], particles=True)
-            self.assertIn("-BakeParticles=1", recorded[-1])
+            assert "-BakeParticles=1" in recorded[-1]
 
     def test_particle_pass_is_part_of_the_profile_recipe(self) -> None:
         """Turning the pass on or off changes the maps-bake receipt, so a toggled run relaunches."""
@@ -105,7 +106,7 @@ class BakeOrchestrationTests(unittest.TestCase):
             (config.export_root / "test_map").mkdir(parents=True, exist_ok=True)
             off = export_manager._maps_bake_fingerprint(config, ["test_map"], particles=False)
             on = export_manager._maps_bake_fingerprint(config, ["test_map"], particles=True)
-            self.assertNotEqual(off, on)
+            assert off != on
 
     def test_corpus_bake_gate_skips_a_warm_second_run_and_force_defeats_it(self) -> None:
         # The launch rides a manifest receipt over the decoded shared corpus; per-asset reuse
@@ -121,8 +122,7 @@ class BakeOrchestrationTests(unittest.TestCase):
                 export_manager.ensure_corpus_bake(config, object())
                 export_manager.ensure_corpus_bake(config, object())
                 export_manager.ensure_corpus_bake(config, object(), force=True)
-            self.assertEqual(
-                [call.kwargs["force"] for call in bake.call_args_list], [False, True])
+            assert [call.kwargs["force"] for call in bake.call_args_list] == [False, True]
 
     def test_corpus_bake_relaunches_when_a_shared_input_moves(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -136,7 +136,7 @@ class BakeOrchestrationTests(unittest.TestCase):
                 export_manager.ensure_corpus_bake(config, object())
                 (shared / "manifest.json").write_text('{"textures": {}}', encoding="utf-8")
                 export_manager.ensure_corpus_bake(config, object())
-            self.assertEqual(bake.call_count, 2)
+            assert bake.call_count == 2
 
     def test_failed_corpus_bake_records_no_success(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -150,7 +150,7 @@ class BakeOrchestrationTests(unittest.TestCase):
                 export_manager.unreal, "bake_corpus",
                 side_effect=export_manager.unreal.UnrealFailure("editor exited with 1"),
             ):
-                with self.assertRaises(export_manager.ExportBakeFailure):
+                with pytest.raises(export_manager.ExportBakeFailure):
                     export_manager.ensure_corpus_bake(config, object())
             # The failed launch left no usable receipt, so the next run launches again.
             with mock.patch.object(export_manager.unreal, "bake_corpus") as bake:
@@ -172,7 +172,7 @@ class BakeOrchestrationTests(unittest.TestCase):
                 export_manager._ensure_wield_bake(config, object())
                 export_manager._ensure_wield_bake(config, object())
                 export_manager._ensure_wield_bake(config, object(), force=True)
-            self.assertEqual(bake.call_count, 2)
+            assert bake.call_count == 2
 
     def test_profile_map_bake_gate_skips_warm_and_verify_still_reads_back(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -190,9 +190,9 @@ class BakeOrchestrationTests(unittest.TestCase):
                                                   verify=True)
                 export_manager._bake_profile_maps(config, object(), ["test_map"],
                                                   force=True)
-            self.assertEqual(bake.call_count, 2)
+            assert bake.call_count == 2
             # --verify is an explicit read-back request and runs even off a warm receipt.
-            self.assertEqual(verify.call_count, 1)
+            assert verify.call_count == 1
 
     def test_profile_map_bake_skip_requires_the_baked_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -207,7 +207,7 @@ class BakeOrchestrationTests(unittest.TestCase):
                 package.unlink()
                 bake.side_effect = lambda *_args, **_kwargs: package.write_bytes(b"level")
                 export_manager._bake_profile_maps(config, object(), ["test_map"])
-            self.assertEqual(bake.call_count, 2)
+            assert bake.call_count == 2
 
     def test_character_bake_gate_skips_warm_and_missing_mesh_defeats_it(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -232,7 +232,7 @@ class BakeOrchestrationTests(unittest.TestCase):
                 mesh.unlink()
                 export_manager._run_character_bake(config, object(), ["amy"])
                 export_manager._run_character_bake(config, object(), ["amy"], force=True)
-            self.assertEqual(bake.call_count, 3)
+            assert bake.call_count == 3
             verify.assert_not_called()
 
     def test_policy_generators_merge_into_one_commandlet_launch(self) -> None:
@@ -253,7 +253,7 @@ class BakeOrchestrationTests(unittest.TestCase):
             font_root = config.repo_root / "Content" / "ElysiumGenerated" / "UI" / "Fonts"
 
             def generate(_config, _runner, generators, *, include_auxiliary):
-                self.assertFalse(include_auxiliary)
+                assert not include_auxiliary
                 material_root.mkdir(parents=True, exist_ok=True)
                 for master in (
                     "M_World_Opaque", "M_World_Masked", "M_World_Translucent",
@@ -288,12 +288,12 @@ class BakeOrchestrationTests(unittest.TestCase):
             # All three receipt sets were stale together, so one commandlet carried the
             # union in the generator list's declared order; the auxiliary pair launched
             # once behind it.
-            self.assertEqual(content.call_count, 2)
-            self.assertEqual(content.call_args_list[0].args[2], names)
-            self.assertEqual(extras.call_count, 2)
-            self.assertEqual(first.status, "ok")
-            self.assertEqual(second.status, "skipped")
-            self.assertEqual(third.status, "ok")
+            assert content.call_count == 2
+            assert content.call_args_list[0].args[2] == names
+            assert extras.call_count == 2
+            assert first.status == "ok"
+            assert second.status == "skipped"
+            assert third.status == "ok"
 
     def test_stale_world_materials_alone_launch_only_that_generator(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -346,11 +346,9 @@ class BakeOrchestrationTests(unittest.TestCase):
                 export_manager.ensure_policy_content(
                     config, object(), particles_covered=True)
 
-            self.assertEqual(content.call_count, 2)
-            self.assertEqual(
-                content.call_args_list[1].args[2],
-                [export_manager.WORLD_MATERIAL_GENERATOR])
-            self.assertEqual(extras.call_count, 1)
+            assert content.call_count == 2
+            assert content.call_args_list[1].args[2] == [export_manager.WORLD_MATERIAL_GENERATOR]
+            assert extras.call_count == 1
 
     def test_export_profile_sequences_gated_launches_and_covers_particles(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -378,11 +376,11 @@ class BakeOrchestrationTests(unittest.TestCase):
                     side_effect=lambda *_a, **_k: order.append("maps")),
             ):
                 maps = export_manager.export_profile(config, object(), "all")
-            self.assertEqual(maps, ["m1"])
+            assert maps == ["m1"]
             # The `all` profile carries the particles bundle, so the policy phase skips its
             # duplicate mirror; the cast and wield mounts precede the map bake.
-            self.assertEqual(order, [
-                "offline", ("policy", True), "corpus", "characters", "wield", "maps"])
+            assert order == [
+                "offline", ("policy", True), "corpus", "characters", "wield", "maps"]
 
     def test_particle_mirror_is_gated_and_skipped_when_a_profile_covers_it(self) -> None:
         from elysium_pipeline.exporters import UE_extract_particles
@@ -408,10 +406,10 @@ class BakeOrchestrationTests(unittest.TestCase):
                     config, manifest=manifest, covered=False)
                 export_manager._ensure_particle_mirror(
                     config, manifest=manifest, covered=False)
-                self.assertEqual(main.call_count, 1)
+                assert main.call_count == 1
                 export_manager._ensure_particle_mirror(
                     config, manifest=manifest, covered=False, force=True)
-                self.assertEqual(main.call_count, 2)
+                assert main.call_count == 2
 
     def test_scoped_fingerprint_moves_with_reached_modules_only(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -430,12 +428,11 @@ class BakeOrchestrationTests(unittest.TestCase):
             (package / "shared_corpus.py").write_text("VALUE = 2\n", encoding="utf-8")
             export_manager._DECODER_CLOSURES.clear()
             moved = export_manager._scoped_source_fingerprint(config, entries)
-            self.assertNotEqual(moved, initial)
+            assert moved != initial
             # ...and a module outside it does not.
             (package / "exporters" / "other.py").write_text("VALUE = 2\n", encoding="utf-8")
             export_manager._DECODER_CLOSURES.clear()
-            self.assertEqual(
-                export_manager._scoped_source_fingerprint(config, entries), moved)
+            assert export_manager._scoped_source_fingerprint(config, entries) == moved
 
     def test_policy_fingerprint_includes_input_prompt_sources(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -454,7 +451,7 @@ class BakeOrchestrationTests(unittest.TestCase):
 
             initial = export_manager._policy_fingerprint(config)
             source.write_bytes(b"replacement")
-            self.assertNotEqual(export_manager._policy_fingerprint(config), initial)
+            assert export_manager._policy_fingerprint(config) != initial
 
     def test_focused_world_policy_runs_only_the_world_material_generator(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -462,8 +459,8 @@ class BakeOrchestrationTests(unittest.TestCase):
             material_root = config.repo_root / "Content" / "ElysiumGenerated" / "Materials"
 
             def generate(_config, _runner, generators, *, include_auxiliary):
-                self.assertEqual(generators, (export_manager.WORLD_MATERIAL_GENERATOR,))
-                self.assertFalse(include_auxiliary)
+                assert generators == (export_manager.WORLD_MATERIAL_GENERATOR,)
+                assert not include_auxiliary
                 material_root.mkdir(parents=True)
                 for name in (
                     "M_World_Opaque", "M_World_Masked", "M_World_Translucent",
@@ -476,7 +473,7 @@ class BakeOrchestrationTests(unittest.TestCase):
             ) as policy:
                 result = export_manager.ensure_world_material_content(config, object())
 
-            self.assertEqual(result.status, "ok")
+            assert result.status == "ok"
             policy.assert_called_once()
 
     def test_focused_character_policy_runs_only_character_material_generators(self) -> None:
@@ -485,8 +482,8 @@ class BakeOrchestrationTests(unittest.TestCase):
             material_root = config.repo_root / "Content" / "ElysiumGenerated" / "Materials"
 
             def generate(_config, _runner, generators, *, include_auxiliary):
-                self.assertEqual(generators, export_manager.CHARACTER_MATERIAL_GENERATORS)
-                self.assertFalse(include_auxiliary)
+                assert generators == export_manager.CHARACTER_MATERIAL_GENERATORS
+                assert not include_auxiliary
                 material_root.mkdir(parents=True)
                 (material_root / "M_PlayerBody.uasset").write_bytes(b"body")
                 (material_root / "M_Eyes.uasset").write_bytes(b"eyes")
@@ -496,7 +493,7 @@ class BakeOrchestrationTests(unittest.TestCase):
             ) as policy:
                 result = export_manager.ensure_character_material_content(config, object())
 
-            self.assertEqual(result.status, "ok")
+            assert result.status == "ok"
             policy.assert_called_once()
 
     def test_focused_character_sources_name_only_the_body_and_reached_banks(self) -> None:
@@ -546,9 +543,9 @@ class BakeOrchestrationTests(unittest.TestCase):
                     body_stems=("amy",),
                 )
 
-            self.assertEqual(bodies, ["amy"])
-            self.assertEqual(banks, ["bank_a"])
-            self.assertEqual(reached, ["eskm:amy", "eskm:bank:bank_a"])
+            assert bodies == ["amy"]
+            assert banks == ["bank_a"]
+            assert reached == ["eskm:amy", "eskm:bank:bank_a"]
 
     def test_focused_placed_model_never_downgrades_global_clip_policy(self) -> None:
         rest = PlacedModelUse(
@@ -559,19 +556,15 @@ class BakeOrchestrationTests(unittest.TestCase):
             "rest_candidates": ["idle"],
             "clips": {"idle": {}, "activate": {}, "deactivate": {}},
         }
-        self.assertTrue(export_manager._placed_row_satisfies(full_row, rest))
+        assert export_manager._placed_row_satisfies(full_row, rest)
         preserved = export_manager._preserve_placed_row_policy(rest, full_row)
-        self.assertTrue(preserved.full_clips)
+        assert preserved.full_clips
 
         required = PlacedModelUse(
             "models/switch.mdl", "switch", "models_switch", False,
             ("idle", "activate", "deactivate"))
-        self.assertFalse(export_manager._placed_row_satisfies(full_row | {
+        assert not export_manager._placed_row_satisfies(full_row | {
             "clip_mode": "required",
             "clips": {"idle": {}, "activate": {}},
-        }, required))
-        self.assertTrue(export_manager._placed_row_satisfies(full_row, required))
-
-
-if __name__ == "__main__":
-    unittest.main()
+        }, required)
+        assert export_manager._placed_row_satisfies(full_row, required)

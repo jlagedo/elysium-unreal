@@ -41,8 +41,8 @@ class InheritanceTests(unittest.TestCase):
             }
         )
         resolved = self._resolve("brick")
-        self.assertEqual(resolved.values["physics"], {"density": 2400.0, "friction": 0.8})
-        self.assertTrue(resolved.is_inherited("physics", "density"))
+        assert resolved.values["physics"] == {"density": 2400.0, "friction": 0.8}
+        assert resolved.is_inherited("physics", "density")
 
     def test_a_nearer_declaration_wins_over_a_further_one(self) -> None:
         self._corpus(
@@ -56,10 +56,10 @@ class InheritanceTests(unittest.TestCase):
             }
         )
         resolved = self._resolve("a")
-        self.assertEqual(resolved.values["physics"]["friction"], 0.1)
-        self.assertEqual(resolved.values["physics"]["density"], 100.0)
-        self.assertFalse(resolved.is_inherited("physics", "friction"))
-        self.assertTrue(resolved.is_inherited("physics", "density"))
+        assert resolved.values["physics"]["friction"] == 0.1
+        assert resolved.values["physics"]["density"] == 100.0
+        assert not resolved.is_inherited("physics", "friction")
+        assert resolved.is_inherited("physics", "density")
 
     def test_the_chain_records_every_unit_it_walked_nearest_first(self) -> None:
         self._corpus(
@@ -72,14 +72,11 @@ class InheritanceTests(unittest.TestCase):
             }
         )
         resolved = self._resolve("a")
-        self.assertEqual(
-            resolved.chain,
-            (
+        assert resolved.chain == (
                 "vtmb:surface-property:a",
                 "vtmb:surface-property:b",
                 "vtmb:surface-property:c",
-            ),
-        )
+            )
 
     def test_origins_name_the_unit_each_value_came_from(self) -> None:
         self._corpus(
@@ -91,7 +88,7 @@ class InheritanceTests(unittest.TestCase):
             }
         )
         resolved = self._resolve("a")
-        self.assertEqual(resolved.origins[("physics", "density")], "vtmb:surface-property:b")
+        assert resolved.origins[("physics", "density")] == "vtmb:surface-property:b"
 
     def test_a_root_unit_walks_only_itself(self) -> None:
         self._corpus(
@@ -102,8 +99,8 @@ class InheritanceTests(unittest.TestCase):
             }
         )
         resolved = self._resolve("concrete")
-        self.assertEqual(resolved.chain, ("vtmb:surface-property:concrete",))
-        self.assertFalse(resolved.is_inherited("physics", "density"))
+        assert resolved.chain == ("vtmb:surface-property:concrete",)
+        assert not resolved.is_inherited("physics", "density")
 
     def test_a_base_with_no_file_is_reported_rather_than_ignored(self) -> None:
         # The seam treats an unresolvable base as a hard failure, so the tool must not
@@ -112,8 +109,8 @@ class InheritanceTests(unittest.TestCase):
             {"surface-properties/a.glb": support.surface_property_unit("a", base="gone")}
         )
         resolved = self._resolve("a")
-        self.assertEqual(resolved.broken_base, "vtmb:surface-property:gone")
-        self.assertFalse(resolved.cyclic)
+        assert resolved.broken_base == "vtmb:surface-property:gone"
+        assert not resolved.cyclic
 
     def test_a_cycle_terminates_and_is_flagged(self) -> None:
         self._corpus(
@@ -125,8 +122,8 @@ class InheritanceTests(unittest.TestCase):
             }
         )
         resolved = self._resolve("a")
-        self.assertTrue(resolved.cyclic)
-        self.assertEqual(resolved.values["physics"]["friction"], 1.0)
+        assert resolved.cyclic
+        assert resolved.values["physics"]["friction"] == 1.0
 
     def test_scalars_inherit_from_the_nearest_unit_that_declares_them(self) -> None:
         self._corpus(
@@ -137,7 +134,7 @@ class InheritanceTests(unittest.TestCase):
                 ),
             }
         )
-        self.assertEqual(self._resolve("a").values["gameMaterial"], "C")
+        assert self._resolve("a").values["gameMaterial"] == "C"
 
     def test_the_walk_stops_at_the_depth_limit(self) -> None:
         units = {}
@@ -148,8 +145,4 @@ class InheritanceTests(unittest.TestCase):
         self._corpus(units)
         document = glb.read_json(self.root / "surface-properties/s0.glb")
         resolved = surfprop.resolve(document, self.root, max_depth=3)
-        self.assertEqual(len(resolved.chain), 3)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert len(resolved.chain) == 3

@@ -32,6 +32,7 @@ from research.tooling.capture.analyze_rig_pose import (  # noqa: E402
     player_states,
     shape_matrices,
 )
+import pytest
 
 
 def _bits(value: float) -> str:
@@ -83,8 +84,8 @@ class EntityJoinTests(unittest.TestCase):
              "fields": {"model": "character/pc/body.mdl", "numbones": 77}},
         ]
         models = entity_models(events)
-        self.assertEqual(models["0x100"][0]["model"], "character/pc/body.mdl")
-        self.assertEqual(models["0x100"][0]["numbones"], 77)
+        assert models["0x100"][0]["model"] == "character/pc/body.mdl"
+        assert models["0x100"][0]["numbones"] == 77
 
     def test_an_entity_keeps_every_model_it_answered_with_in_order(self) -> None:
         """An entity outlives the model it draws, so a swap is a second answer on one pointer."""
@@ -96,8 +97,7 @@ class EntityJoinTests(unittest.TestCase):
             {"kind": "return", "target": "client.get_studio_hdr", "sequence": 2,
              "fields": {"model": "second.mdl"}},
         ]
-        self.assertEqual([entry["model"] for entry in entity_models(events)["0x100"]],
-                         ["first.mdl", "second.mdl"])
+        assert [entry["model"] for entry in entity_models(events)["0x100"]] == ["first.mdl", "second.mdl"]
 
     def test_one_model_answered_twice_is_recorded_once(self) -> None:
         events = [
@@ -108,7 +108,7 @@ class EntityJoinTests(unittest.TestCase):
             {"kind": "return", "target": "client.get_studio_hdr", "sequence": 2,
              "fields": {"model": "only.mdl"}},
         ]
-        self.assertEqual(len(entity_models(events)["0x100"]), 1)
+        assert len(entity_models(events)["0x100"]) == 1
 
     def test_a_return_whose_read_failed_names_nothing(self) -> None:
         events = [
@@ -116,7 +116,7 @@ class EntityJoinTests(unittest.TestCase):
             {"kind": "return", "target": "client.get_studio_hdr", "sequence": 1,
              "fields": {"model": {"error": "unreadable"}}},
         ]
-        self.assertEqual(entity_models(events), {})
+        assert entity_models(events) == {}
 
     def test_a_pose_resolves_to_its_model_across_the_subobject_delta(self) -> None:
         """`setup_bones` runs on the entity plus four; the model target on the entity."""
@@ -129,12 +129,12 @@ class EntityJoinTests(unittest.TestCase):
              "fields": {"model": "character/pc/body.mdl"}},
         ]
         agreement = entity_delta_agreement(events, entity_models(events))
-        self.assertEqual(agreement, {"posed_entities": 1, "resolved_to_a_model": 1})
+        assert agreement == {"posed_entities": 1, "resolved_to_a_model": 1}
 
     def test_a_pose_no_model_target_named_is_counted_not_hidden(self) -> None:
         events = [_pose_call(1, "0x2000", 10.0)]
         agreement = entity_delta_agreement(events, {})
-        self.assertEqual(agreement, {"posed_entities": 1, "resolved_to_a_model": 0})
+        assert agreement == {"posed_entities": 1, "resolved_to_a_model": 0}
 
 
 class PlayerStateTests(unittest.TestCase):
@@ -143,46 +143,45 @@ class PlayerStateTests(unittest.TestCase):
 
     def test_states_come_back_in_clock_order(self) -> None:
         shuffled = [self.STATES[2], self.STATES[0], self.STATES[1]]
-        self.assertEqual([s["curtime"] for s in player_states(shuffled)],
-                         [10.000, 10.016, 10.032])
+        assert [s["curtime"] for s in player_states(shuffled)] == [10.000, 10.016, 10.032]
 
     def test_a_state_with_no_clock_cannot_be_placed(self) -> None:
-        self.assertEqual(player_states([{
+        assert player_states([{
             "kind": "call", "target": "vampire.player_item_post_frame",
-            "sequence": 1, "ecx": "0xp", "fields": {"cycle": 0.5}}]), [])
+            "sequence": 1, "ecx": "0xp", "fields": {"cycle": 0.5}}]) == []
 
     def test_the_nearest_frame_wins_on_either_side(self) -> None:
         states = player_states(self.STATES)
-        self.assertAlmostEqual(nearest_state(states, 10.017)["cycle"], 0.2)
-        self.assertAlmostEqual(nearest_state(states, 10.015)["cycle"], 0.2)
+        assert nearest_state(states, 10.017)["cycle"] == pytest.approx(0.2, abs=1e-7)
+        assert nearest_state(states, 10.015)["cycle"] == pytest.approx(0.2, abs=1e-7)
 
     def test_a_clock_outside_tolerance_matches_nothing(self) -> None:
         # Half a second past the last frame read: a pose that far from any state
         # belongs to a frame the player target never reported.
         states = player_states(self.STATES)
-        self.assertIsNone(nearest_state(states, 10.532))
+        assert nearest_state(states, 10.532) is None
         # And the boundary itself is inclusive, so a frame exactly one tolerance
         # away is still that frame rather than a miss.
-        self.assertIsNotNone(nearest_state(states, 10.032 + CLOCK_TOLERANCE_SECONDS))
+        assert nearest_state(states, 10.032 + CLOCK_TOLERANCE_SECONDS) is not None
 
     def test_an_empty_stream_answers_nothing_rather_than_raising(self) -> None:
-        self.assertIsNone(nearest_state([], 1.0))
+        assert nearest_state([], 1.0) is None
 
 
 class ContributionTests(unittest.TestCase):
     def test_a_contribution_carries_its_model_index_weight_and_clock(self) -> None:
         rows, unplaceable = contributions([
             _contribution(1, "shared/frenzy.mdl", 42, 0.75, 10.0)])
-        self.assertEqual(unplaceable, 0)
-        self.assertEqual(rows[0]["model"], "shared/frenzy.mdl")
-        self.assertEqual(rows[0]["sequence"], 42)
-        self.assertAlmostEqual(rows[0]["weight"], 0.75, places=5)
+        assert unplaceable == 0
+        assert rows[0]["model"] == "shared/frenzy.mdl"
+        assert rows[0]["sequence"] == 42
+        assert rows[0]["weight"] == pytest.approx(0.75, abs=1e-5)
 
     def test_a_contribution_with_no_clock_is_counted_not_attached(self) -> None:
         row = _contribution(1, "m.mdl", 1, 1.0, 10.0)
         row["fields"].pop("curtime")
         rows, unplaceable = contributions([row])
-        self.assertEqual((rows, unplaceable), ([], 1))
+        assert (rows, unplaceable) == ([], 1)
 
     def test_only_the_contributions_of_that_frame_attach_to_it(self) -> None:
         rows, _ = contributions([
@@ -191,7 +190,7 @@ class ContributionTests(unittest.TestCase):
             _contribution(3, "c.mdl", 3, 0.25, 10.500),
         ])
         window = contributions_at(rows, 10.001)
-        self.assertEqual([row["model"] for row in window], ["a.mdl", "b.mdl"])
+        assert [row["model"] for row in window] == ["a.mdl", "b.mdl"]
 
 
 class FrameTests(unittest.TestCase):
@@ -199,16 +198,16 @@ class FrameTests(unittest.TestCase):
         matrices = [float(v) for v in range(24)]
         frames, nested = group_frames([
             _pose_call(1, "0x100", 10.0), _pose_return(1, 2, matrices)])
-        self.assertEqual(len(frames), 1)
-        self.assertEqual(frames[0]["entity"], "0x100")
-        self.assertAlmostEqual(frames[0]["curtime"], 10.0, places=4)
-        self.assertEqual(frames[0]["bone_count"], 2)
-        self.assertEqual(nested, 0)
+        assert len(frames) == 1
+        assert frames[0]["entity"] == "0x100"
+        assert frames[0]["curtime"] == pytest.approx(10.0, abs=1e-4)
+        assert frames[0]["bone_count"] == 2
+        assert nested == 0
 
     def test_a_call_the_sampler_declined_yields_no_frame(self) -> None:
         """Only a call that was recorded can close into a frame."""
         frames, _ = group_frames([_pose_return(7, 2, [0.0] * 24)])
-        self.assertEqual(frames, [])
+        assert frames == []
 
     def test_a_return_whose_matrix_read_failed_is_not_a_frame(self) -> None:
         frames, _ = group_frames([
@@ -216,7 +215,7 @@ class FrameTests(unittest.TestCase):
             {"kind": "return", "target": "client.setup_bones", "sequence": 1,
              "fields": {"bone_count": 2, "bone_matrices": {"error": "unreadable"}}},
         ])
-        self.assertEqual(frames, [])
+        assert frames == []
 
     def test_a_contribution_inside_a_recorded_call_is_counted_as_nested(self) -> None:
         frames, nested = group_frames([
@@ -224,41 +223,37 @@ class FrameTests(unittest.TestCase):
             _contribution(2, "m.mdl", 1, 1.0, 10.0),
             _pose_return(1, 2, [0.0] * 24),
         ])
-        self.assertEqual((len(frames), nested), (1, 1))
+        assert (len(frames), nested) == (1, 1)
 
     def test_a_contribution_outside_every_recorded_call_is_not_nested(self) -> None:
         _, nested = group_frames([_contribution(1, "m.mdl", 1, 1.0, 10.0)])
-        self.assertEqual(nested, 0)
+        assert nested == 0
 
 
 class MatrixTests(unittest.TestCase):
     def test_a_flat_run_becomes_one_matrix_a_bone(self) -> None:
         shaped = shape_matrices([float(v) for v in range(36)], 3)
-        self.assertEqual(len(shaped), 3)
-        self.assertEqual(shaped[1], [float(v) for v in range(12, 24)])
+        assert len(shaped) == 3
+        assert shaped[1] == [float(v) for v in range(12, 24)]
 
     def test_the_stated_count_bounds_the_run_rather_than_its_length(self) -> None:
         # The capture reads a generous window; the engine's own count is the authority.
-        self.assertEqual(len(shape_matrices([0.0] * 120, 4)), 4)
+        assert len(shape_matrices([0.0] * 120, 4)) == 4
 
     def test_a_run_shorter_than_the_count_yields_what_it_carries(self) -> None:
-        self.assertEqual(len(shape_matrices([0.0] * 24, 9)), 2)
+        assert len(shape_matrices([0.0] * 24, 9)) == 2
 
     def test_matrices_are_keyed_by_the_models_own_bone_names(self) -> None:
         named, surplus = name_matrices([[1.0] * 12, [2.0] * 12], ["Bip01", "Bip01 Pelvis"])
-        self.assertEqual(list(named), ["Bip01", "Bip01 Pelvis"])
-        self.assertEqual(named["Bip01 Pelvis"][0], 2.0)
-        self.assertEqual(surplus, 0)
+        assert list(named) == ["Bip01", "Bip01 Pelvis"]
+        assert named["Bip01 Pelvis"][0] == 2.0
+        assert surplus == 0
 
     def test_a_matrix_the_bone_list_cannot_name_is_reported(self) -> None:
         """The two disagreeing means the model resolved wrongly, so it is counted."""
         named, surplus = name_matrices([[1.0] * 12, [2.0] * 12], ["Bip01"])
-        self.assertEqual(list(named), ["Bip01"])
-        self.assertEqual(surplus, 1)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert list(named) == ["Bip01"]
+        assert surplus == 1
 
 
 class BodyResolutionTests(unittest.TestCase):
@@ -273,41 +268,34 @@ class BodyResolutionTests(unittest.TestCase):
     COUNTS = {"male.mdl": 79, "female.mdl": 88, "twin.mdl": 79, "prop.mdl": 2}
 
     def test_a_pose_that_names_its_own_model_answers_directly(self) -> None:
-        self.assertEqual(
-            resolve_body(88, "female.mdl", ["male.mdl"], [], [], self.COUNTS),
-            ("female.mdl", "stated by the pose record"))
+        assert resolve_body(88, "female.mdl", ["male.mdl"], [], [], self.COUNTS) == ("female.mdl", "stated by the pose record")
 
     def test_a_stated_model_that_cannot_carry_the_array_is_refused(self) -> None:
         """A decode fault in the read chain, and guessing past it would bury it."""
         model, reason = resolve_body(88, "male.mdl", [], [], [], self.COUNTS)
-        self.assertIsNone(model)
-        self.assertIn("does not carry this bone count", reason)
+        assert model is None
+        assert "does not carry this bone count" in reason
 
     def test_the_census_answers_when_it_fits_the_count(self) -> None:
-        self.assertEqual(
-            resolve_body(79, None, ["male.mdl"], ["male.mdl", "female.mdl"], [], self.COUNTS),
-            ("male.mdl", "census"))
+        assert resolve_body(79, None, ["male.mdl"], ["male.mdl", "female.mdl"], [], self.COUNTS) == ("male.mdl", "census")
 
     def test_a_census_the_count_contradicts_is_re_attributed(self) -> None:
         """The entity redrew as another body; the count says which one."""
-        self.assertEqual(
-            resolve_body(88, None, ["male.mdl"], ["male.mdl", "female.mdl"], [], self.COUNTS),
-            ("female.mdl", "re-attributed by bone count"))
+        assert resolve_body(88, None, ["male.mdl"], ["male.mdl", "female.mdl"], [], self.COUNTS) == ("female.mdl", "re-attributed by bone count")
 
     def test_a_contribution_breaks_a_tie_the_count_cannot(self) -> None:
         model, reason = resolve_body(
             79, None, ["female.mdl"], ["male.mdl", "twin.mdl"], ["twin.mdl"], self.COUNTS)
-        self.assertEqual(model, "twin.mdl")
-        self.assertIn("contribution", reason)
+        assert model == "twin.mdl"
+        assert "contribution" in reason
 
     def test_two_models_of_one_count_and_no_contribution_are_refused(self) -> None:
         model, reason = resolve_body(
             79, None, ["female.mdl"], ["male.mdl", "twin.mdl"], [], self.COUNTS)
-        self.assertIsNone(model)
-        self.assertIn("several models", reason)
+        assert model is None
+        assert "several models" in reason
 
     def test_a_count_no_session_model_carries_is_refused(self) -> None:
         model, reason = resolve_body(31, None, ["male.mdl"], ["male.mdl"], [], self.COUNTS)
-        self.assertIsNone(model)
-        self.assertIn("no model", reason)
-
+        assert model is None
+        assert "no model" in reason

@@ -27,6 +27,7 @@ from elysium_pipeline.formats.character_glb.source import (
     load_source_closure,
 )
 from elysium_pipeline.validation import character_glb as validation
+import pytest
 
 
 def _source(role: str = "mdl") -> SourceIdentity:
@@ -228,9 +229,9 @@ class SourceClosureTests(unittest.TestCase):
             "models/character/test/body",
             read_bytes=lambda _index, key: paths.get(key),
         )
-        self.assertEqual(closure.primary_vtx.role, "vtx-dx80")
-        self.assertEqual(closure.alternate_vtx.role, "vtx-dx7-2bone")
-        self.assertEqual(len(closure.members()), 3)
+        assert closure.primary_vtx.role == "vtx-dx80"
+        assert closure.alternate_vtx.role == "vtx-dx7-2bone"
+        assert len(closure.members()) == 3
 
     def test_a_companion_checksum_mismatch_is_refused(self) -> None:
         mdl, _ = self._images(checksum=1)
@@ -240,7 +241,7 @@ class SourceClosureTests(unittest.TestCase):
             "models/character/test/body.dx80.vtx": topology,
         }
         index = {key: ("loose", f"C:/VTMB/Vampire/{key}") for key in paths}
-        with self.assertRaisesRegex(CharacterSourceError, "checksum mismatch"):
+        with pytest.raises(CharacterSourceError, match="checksum mismatch"):
             load_source_closure(
                 index,
                 "models/character/test/body.mdl",
@@ -260,7 +261,7 @@ class SourceClosureTests(unittest.TestCase):
             "models/character/test/body.mdl",
             read_bytes=lambda _index, key: paths.get(key),
         )
-        self.assertEqual([member.role for member in closure.facial], ["facial-phonemes-txt"])
+        assert [member.role for member in closure.facial] == ["facial-phonemes-txt"]
 
     def test_phy_checksum_mismatch_is_retained_as_provenance(self) -> None:
         mdl, topology = self._images(checksum=1)
@@ -277,7 +278,7 @@ class SourceClosureTests(unittest.TestCase):
             "models/character/test/body.mdl",
             read_bytes=lambda _index, key: paths.get(key),
         )
-        self.assertEqual(struct.unpack_from("<I", closure.phy.data, 12)[0], 2)
+        assert struct.unpack_from("<I", closure.phy.data, 12)[0] == 2
 
 
 class FacialResourceTests(unittest.TestCase):
@@ -285,8 +286,8 @@ class FacialResourceTests(unittest.TestCase):
         table = expressions.decode_txt(
             b'$keys jaw smile\n$hasweighting\n"aa" "a" 0.5 1.0 0.25 0.75 "open"\n'
         )
-        self.assertEqual(table["keys"], ["jaw", "smile"])
-        self.assertEqual(table["rows"][0]["values"][1]["weight"], 0.75)
+        assert table["keys"] == ["jaw", "smile"]
+        assert table["rows"][0]["values"][1]["weight"] == 0.75
 
         vfe = bytearray(144)
         vfe[:4] = b"EFV\0"
@@ -294,7 +295,7 @@ class FacialResourceTests(unittest.TestCase):
         vfe[8:8 + len(internal_name)] = internal_name
         struct.pack_into("<ii", vfe, 136, len(vfe), 1)
         header = expressions.decode_vfe_header(bytes(vfe))
-        self.assertEqual(header["rowCount"], len(table["rows"]))
+        assert header["rowCount"] == len(table["rows"])
 
     def test_compiled_vfe_decodes_to_the_same_semantic_row_as_txt(self) -> None:
         txt = expressions.decode_txt(
@@ -311,29 +312,29 @@ class FacialResourceTests(unittest.TestCase):
         struct.pack_into("<i", vfe, 220, -1)
         compiled = expressions.decode_vfe(bytes(vfe))
         expressions.compare_txt_vfe(txt, compiled)
-        self.assertEqual(compiled["settings"][0]["values"][0]["controller"], "jaw")
+        assert compiled["settings"][0]["values"][0]["controller"] == "jaw"
 
     def test_unknown_txt_directive_is_not_silently_ignored(self) -> None:
-        with self.assertRaisesRegex(expressions.CharacterFacialError, "unsupported directive"):
+        with pytest.raises(expressions.CharacterFacialError, match="unsupported directive"):
             expressions.decode_txt(b"$keys jaw\n$unknown\n")
 
     def test_zero_key_table_retains_labelled_empty_rows(self) -> None:
         table = expressions.decode_txt(
             b'$keys\n$hasweighting\n"neutral" "_" "No controller values"\n'
         )
-        self.assertEqual(table["keys"], [])
-        self.assertEqual(table["rows"][0]["values"], [])
-        self.assertEqual(table["rows"][0]["description"], "No controller values")
+        assert table["keys"] == []
+        assert table["rows"][0]["values"] == []
+        assert table["rows"][0]["description"] == "No controller values"
 
     def test_unused_flex_operand_does_not_project_nan(self) -> None:
         row = _flex_operation(4, -1, float("nan"))
-        self.assertEqual(row["operandKind"], "unused")
-        self.assertEqual(row["rawOperandBits"], 0xFFFFFFFF)
-        self.assertNotIn("value", row)
+        assert row["operandKind"] == "unused"
+        assert row["rawOperandBits"] == 0xFFFFFFFF
+        assert "value" not in row
         named = _flex_operation("FETCH1", 3, float("nan"))
-        self.assertEqual(named["operandKind"], "flexControllerIndex")
-        self.assertEqual(named["index"], 3)
-        self.assertNotIn("value", named)
+        assert named["operandKind"] == "flexControllerIndex"
+        assert named["index"] == 3
+        assert "value" not in named
 
 
 class PhysicsTailTests(unittest.TestCase):
@@ -342,24 +343,22 @@ class PhysicsTailTests(unittest.TestCase):
             'ragdollconstraint {\n"parent" "0"\n"child" "3"\n'
             '"xmin" "-25.0"\n"xmax" "20.0"\n}\n\0'
         )
-        self.assertEqual(blocks[0]["type"], "ragdollconstraint")
-        self.assertEqual(blocks[0]["values"]["child"], "3")
-        self.assertEqual(blocks[0]["values"]["xmin"], "-25.0")
+        assert blocks[0]["type"] == "ragdollconstraint"
+        assert blocks[0]["values"]["child"] == "3"
+        assert blocks[0]["values"]["xmin"] == "-25.0"
 
     def test_known_physics_values_are_typed(self) -> None:
         values = physics._typed_values(
             "ragdollconstraint", {"parent": "0", "child": "3", "xmin": "-25.0"}
         )
-        self.assertEqual(values, {"parent": 0, "child": 3, "xmin": -25.0})
+        assert values == {"parent": 0, "child": 3, "xmin": -25.0}
 
     def test_inline_break_block_preserves_backslash_path_and_health(self) -> None:
         blocks = physics._blocks(
             'break { "model" "character\\monster\\gib.mdl" "health" "100" }'
         )
-        self.assertEqual(blocks[0]["values"]["model"], "character\\monster\\gib.mdl")
-        self.assertEqual(
-            physics._typed_values("break", blocks[0]["values"])["health"], 100
-        )
+        assert blocks[0]["values"]["model"] == "character\\monster\\gib.mdl"
+        assert physics._typed_values("break", blocks[0]["values"])["health"] == 100
 
     def test_ledge_keeps_triangle_edges_and_point_w(self) -> None:
         data = bytearray(144)
@@ -378,12 +377,10 @@ class PhysicsTailTests(unittest.TestCase):
         for index, point in enumerate(points):
             struct.pack_into("<4f", data, 80 + index * 16, *point)
         ledge = physics._ledge(bytes(data), 0)
-        self.assertEqual(ledge["padding"], 7)
-        self.assertEqual(ledge["sourcePoints"][3]["ivp"][3], 4.0)
-        self.assertTrue(ledge["triangleRecords"][0]["edges"][0]["virtual"])
-        self.assertEqual(
-            ledge["triangleRecords"][0]["edges"][0]["oppositeIndex"], 1
-        )
+        assert ledge["padding"] == 7
+        assert ledge["sourcePoints"][3]["ivp"][3] == 4.0
+        assert ledge["triangleRecords"][0]["edges"][0]["virtual"]
+        assert ledge["triangleRecords"][0]["edges"][0]["oppositeIndex"] == 1
 
 
 class ClothSourceCoverageTests(unittest.TestCase):
@@ -396,10 +393,10 @@ class ClothSourceCoverageTests(unittest.TestCase):
             struct.pack_into("<3H", data, record + 92, 10 + lod, 20 + lod, 30 + lod)
         _table, rows, columns, records = mdl_cloth.definition_table(bytes(data), 0)
         decoded = mdl_cloth.read_definition(bytes(data), 0, 0, lod=1)
-        self.assertEqual((rows, columns), (2, 1))
-        self.assertEqual(records, [228, 360])
-        self.assertEqual(decoded["particle_vertex_indices"], [11, 21, 31])
-        self.assertEqual(decoded["anchor_vertex_indices"], [11])
+        assert (rows, columns) == (2, 1)
+        assert records == [228, 360]
+        assert decoded["particle_vertex_indices"] == [11, 21, 31]
+        assert decoded["anchor_vertex_indices"] == [11]
 
 
 class HitboxDecodeTests(unittest.TestCase):
@@ -422,9 +419,9 @@ class HitboxDecodeTests(unittest.TestCase):
         )
         data[380:382] = b"A\0"
         sets = _hitbox_sets(bytes(data), [{"name": "root"}])
-        self.assertEqual(sets[0]["name"], "A")
-        self.assertEqual(sets[0]["boxes"][0]["group"], 3)
-        self.assertEqual(sets[0]["boxes"][0]["boundsMax"], (4.0, 5.0, 6.0))
+        assert sets[0]["name"] == "A"
+        assert sets[0]["boxes"][0]["group"] == 3
+        assert sets[0]["boxes"][0]["boundsMax"] == (4.0, 5.0, 6.0)
 
 
 class SequenceDescriptorTests(unittest.TestCase):
@@ -457,10 +454,10 @@ class SequenceDescriptorTests(unittest.TestCase):
         struct.pack_into("<f", data, animation_base + 4, 30.0)
         struct.pack_into("<i", data, animation_base + 12, 1)
         rows = _local_sequences(bytes(data))
-        self.assertEqual(len(rows[0]["animationTable"]), 256)
-        self.assertEqual(rows[0]["statGate"], 9)
-        self.assertEqual(rows[0]["secondaryBoundsMax"], (4.0, 5.0, 6.0))
-        self.assertEqual(rows[0]["comboWindow"], [0.0, 1.0, 1.0])
+        assert len(rows[0]["animationTable"]) == 256
+        assert rows[0]["statGate"] == 9
+        assert rows[0]["secondaryBoundsMax"] == (4.0, 5.0, 6.0)
+        assert rows[0]["comboWindow"] == [0.0, 1.0, 1.0]
 
     def test_swing_unknown_block_is_split_into_recovered_fields(self) -> None:
         data = bytearray(952)
@@ -473,11 +470,11 @@ class SequenceDescriptorTests(unittest.TestCase):
         struct.pack_into("<16i", data, record + 0x38, *([-1] * 16))
         data[record + 0xB8:record + 0xBC] = bytes((0, 1, 2, 0))
         row = _swing_records_complete(bytes(data), 0, ["foot"])[0]
-        self.assertEqual(row["kickOnlyMarker"], 0)
-        self.assertEqual(row["candidateCounts"], [1, 0, 0, 0])
-        self.assertEqual(row["resolvedKnockbackActivities"], [-1] * 16)
-        self.assertEqual(row["bucket0LowHeightMarker"], 1)
-        self.assertNotIn("unidentified", row)
+        assert row["kickOnlyMarker"] == 0
+        assert row["candidateCounts"] == [1, 0, 0, 0]
+        assert row["resolvedKnockbackActivities"] == [-1] * 16
+        assert row["bucket0LowHeightMarker"] == 1
+        assert "unidentified" not in row
 
 
 class AuxiliaryMdlRecordTests(unittest.TestCase):
@@ -487,9 +484,8 @@ class AuxiliaryMdlRecordTests(unittest.TestCase):
         struct.pack_into("<2i3f", data, 300, 20, 5, 1.5, 2.5, 0.25)
         data[320:325] = b"body\0"
         row = _texture_records(bytes(data))[0]
-        self.assertEqual(row["flags"], 5)
-        self.assertEqual((row["width"], row["height"], row["maxWorldUnitsPerTexel"]),
-                         (1.5, 2.5, 0.25))
+        assert row["flags"] == 5
+        assert (row["width"], row["height"], row["maxWorldUnitsPerTexel"]) == (1.5, 2.5, 0.25)
 
     def test_sequence_group_decodes_both_record_relative_strings(self) -> None:
         data = bytearray(332)
@@ -498,7 +494,7 @@ class AuxiliaryMdlRecordTests(unittest.TestCase):
         data[316:324] = b"default\0"
         data[324] = 0
         row = _sequence_groups(bytes(data))[0]
-        self.assertEqual((row["label"], row["name"]), ("default", ""))
+        assert (row["label"], row["name"]) == ("default", "")
 
     def test_include_group_decodes_pose_maps_and_bone_remap(self) -> None:
         data = bytearray(700)
@@ -517,9 +513,9 @@ class AuxiliaryMdlRecordTests(unittest.TestCase):
         )
         data[672:688] = b"shared/test.mdl\0"
         row = _include_models(bytes(data), [{"name": "root"}])[0]
-        self.assertEqual(row["path"], "models/shared/test.mdl")
-        self.assertEqual(row["globalToLocalPoseParameters"], [-1] * 24)
-        self.assertEqual(row["boneRemap"][0]["sourceBone"], -1)
+        assert row["path"] == "models/shared/test.mdl"
+        assert row["globalToLocalPoseParameters"] == [-1] * 24
+        assert row["boneRemap"][0]["sourceBone"] == (-1)
 
 
 class TopologyComparisonTests(unittest.TestCase):
@@ -538,22 +534,19 @@ class TopologyComparisonTests(unittest.TestCase):
                 "sourceVertices": [9, 7, 8], "triangles": [(1, 2, 0)],
             }],
         }]
-        self.assertEqual(vtx.topology_signature(first), vtx.topology_signature(reordered))
+        assert vtx.topology_signature(first) == vtx.topology_signature(reordered)
 
     def test_every_declared_lod_is_decoded(self) -> None:
         mdl_data, topology = _minimal_mdl_vtx()
         lods = vtx.decode_lods(mdl_data, topology, variant="synthetic")
-        self.assertEqual([lod["index"] for lod in lods], [0, 1])
-        self.assertEqual([lod["switchPoints"] for lod in lods], [[0.0], [10.0]])
-        self.assertEqual(lods[1]["primitives"][0]["triangles"], [(0, 1, 2)])
-        self.assertEqual(lods[0]["primitives"][0]["tangents"][0], (1.0, 0.0, 0.0, 1.0))
-        self.assertEqual(
-            vtx.decode_material_replacements(topology),
-            [
+        assert [lod["index"] for lod in lods] == [0, 1]
+        assert [lod["switchPoints"] for lod in lods] == [[0.0], [10.0]]
+        assert lods[1]["primitives"][0]["triangles"] == [(0, 1, 2)]
+        assert lods[0]["primitives"][0]["tangents"][0] == (1.0, 0.0, 0.0, 1.0)
+        assert vtx.decode_material_replacements(topology) == [
                 {"lod": 0, "count": 0, "relativeOffset": 0, "replacements": []},
                 {"lod": 1, "count": 0, "relativeOffset": 0, "replacements": []},
-            ],
-        )
+            ]
 
     def test_vtmb_packed_material_replacement_is_typed(self) -> None:
         data = bytearray(55)
@@ -562,15 +555,12 @@ class TopologyComparisonTests(unittest.TestCase):
         struct.pack_into("<2i", data, 36, 1, 8)
         struct.pack_into("<hi", data, 44, 2, 6)
         data[50:55] = b"skin\0"
-        self.assertEqual(
-            vtx.decode_material_replacements(bytes(data)),
-            [{
+        assert vtx.decode_material_replacements(bytes(data)) == [{
                 "lod": 0,
                 "count": 1,
                 "relativeOffset": 8,
                 "replacements": [{"index": 0, "material": 2, "name": "skin"}],
-            }],
-        )
+            }]
 
 
 class WholeCharacterDecodeTests(unittest.TestCase):
@@ -598,27 +588,22 @@ class WholeCharacterDecodeTests(unittest.TestCase):
             index,
             read_bytes=lambda _index, key: paths.get(key),
         )
-        self.assertEqual(model.asset_id, "vtmb:character-body:synthetic/body")
-        self.assertEqual(len(model.bones), 1)
-        self.assertEqual(len(model.lods), 2)
-        self.assertEqual(model.materials[0]["material"], "vtmb:material:body")
-        self.assertEqual((model.header["reserved412"], model.header["reserved416"]), (0, 0))
-        self.assertEqual(
-            model.header["bodyParts"][0]["models"][0]["reserved184"], [0, 0]
-        )
-        self.assertEqual(
-            [row["path"] for row in model.typed_unidentified],
-            [
+        assert model.asset_id == "vtmb:character-body:synthetic/body"
+        assert len(model.bones) == 1
+        assert len(model.lods) == 2
+        assert model.materials[0]["material"] == "vtmb:material:body"
+        assert (model.header["reserved412"], model.header["reserved416"]) == (0, 0)
+        assert model.header["bodyParts"][0]["models"][0]["reserved184"] == [0, 0]
+        assert [row["path"] for row in model.typed_unidentified] == [
                 "mdl.secondaryMotion[].unusedAuthoredPreset",
-            ],
-        )
+            ]
 
     def test_declared_image_allows_bounded_patch_newline(self) -> None:
         mdl_data, _topology = _minimal_mdl_vtx()
         header = _header(mdl_data + b"\n")
-        self.assertEqual(header["length"], len(mdl_data))
-        self.assertEqual(header["physicalLength"], len(mdl_data) + 1)
-        self.assertEqual(header["trailingPatchWhitespace"], "0a")
+        assert header["length"] == len(mdl_data)
+        assert header["physicalLength"] == len(mdl_data) + 1
+        assert header["trailingPatchWhitespace"] == "0a"
 
     def test_public_exporter_writes_the_isolated_relative_path(self) -> None:
         _mdl_data, paths, index = self._closure_inputs()
@@ -633,9 +618,9 @@ class WholeCharacterDecodeTests(unittest.TestCase):
             summary = validation.validate(destination)
             document, _binary = validation.read_glb(destination)
             relative = destination.relative_to(temporary).as_posix()
-        self.assertEqual(relative, "synthetic/body.glb")
-        self.assertEqual(summary["lods"], 2)
-        self.assertIn("TANGENT", document["meshes"][0]["primitives"][0]["attributes"])
+        assert relative == "synthetic/body.glb"
+        assert summary["lods"] == 2
+        assert "TANGENT" in document["meshes"][0]["primitives"][0]["attributes"]
 
 
 class CharacterGlbWriterTests(unittest.TestCase):
@@ -646,23 +631,23 @@ class CharacterGlbWriterTests(unittest.TestCase):
             path = Path(temporary) / "body.glb"
             character_glb.write_glb(document, binary, path)
             summary = validation.validate(path)
-        self.assertEqual(summary["asset"], model.asset_id)
-        self.assertEqual(summary["bones"], 1)
-        self.assertEqual(summary["lods"], 1)
-        self.assertEqual(summary["animations"], 0)
-        self.assertEqual(summary["sourceBytes"], summary["accountedBytes"])
-        self.assertEqual(summary["byteCoveragePercent"], 100.0)
+        assert summary["asset"] == model.asset_id
+        assert summary["bones"] == 1
+        assert summary["lods"] == 1
+        assert summary["animations"] == 0
+        assert summary["sourceBytes"] == summary["accountedBytes"]
+        assert summary["byteCoveragePercent"] == 100.0
         coverage = document["extensions"]["ELYSIUM_vtmb_character"]["coverage"]
-        self.assertIn("typedUnidentified", coverage)
-        self.assertEqual(coverage["byteLedger"][0]["coveragePercent"], 100.0)
-        self.assertNotIn("states", coverage)
+        assert "typedUnidentified" in coverage
+        assert coverage["byteLedger"][0]["coveragePercent"] == 100.0
+        assert "states" not in coverage
 
     def test_validator_refuses_an_opaque_source_blob(self) -> None:
         document, binary = character_glb.build_document(_model(), b"")
         extension = document["extensions"]["ELYSIUM_vtmb_character"]
         extension["mdl"]["rawData"] = "SUQ="
-        with self.assertRaisesRegex(
-            validation.CharacterGlbValidationError, "opaque source payload"
+        with pytest.raises(
+            validation.CharacterGlbValidationError, match="opaque source payload"
         ):
             validation.validate_document(document, binary)
 
@@ -672,8 +657,8 @@ class CharacterGlbWriterTests(unittest.TestCase):
             "byteLedger"
         ][0]
         ledger["ranges"][0]["length"] -= 1
-        with self.assertRaisesRegex(
-            validation.CharacterGlbValidationError, "byte ledger"
+        with pytest.raises(
+            validation.CharacterGlbValidationError, match="byte ledger"
         ):
             validation.validate_document(document, binary)
 
@@ -686,9 +671,9 @@ class CharacterGlbWriterTests(unittest.TestCase):
             data=b"changed-source",
             origin={"kind": "synthetic"},
         )
-        with self.assertRaisesRegex(
+        with pytest.raises(
             validation.CharacterGlbValidationError,
-            "prepublication source bytes disagree",
+            match="prepublication source bytes disagree",
         ):
             validation.validate_document(
                 document,
@@ -701,8 +686,8 @@ class ByteCoverageTests(unittest.TestCase):
     def test_unclaimed_nonzero_byte_is_a_hard_failure(self) -> None:
         ledger = coverage.ByteLedger("source.bin", b"\0\x7f")
         ledger.claim(0, 1, "mapped", "header")
-        with self.assertRaisesRegex(
-            coverage.CharacterByteCoverageError, "unclaimed non-zero byte"
+        with pytest.raises(
+            coverage.CharacterByteCoverageError, match="unclaimed non-zero byte"
         ):
             ledger.finish()
 
@@ -710,15 +695,15 @@ class ByteCoverageTests(unittest.TestCase):
         ledger = coverage.ByteLedger("source.bin", b"A\0\0")
         ledger.claim(0, 1, "mapped", "value")
         result = ledger.finish()
-        self.assertEqual(result["accountedBytes"], 3)
-        self.assertEqual(result["coveragePercent"], 100.0)
-        self.assertEqual(result["stateBytes"]["padding-zero"], 2)
+        assert result["accountedBytes"] == 3
+        assert result["coveragePercent"] == 100.0
+        assert result["stateBytes"]["padding-zero"] == 2
 
     def test_minimal_mdl_has_gapless_byte_ledger(self) -> None:
         mdl_data, topology = _minimal_mdl_vtx()
         result = coverage.cover_mdl("synthetic.mdl", mdl_data, vtx_data=topology)
-        self.assertEqual(result["coveragePercent"], 100.0)
-        self.assertEqual(result["accountedBytes"], len(mdl_data))
+        assert result["coveragePercent"] == 100.0
+        assert result["accountedBytes"] == len(mdl_data)
 
     def test_qndbtm_eof_trailer_is_a_mapped_compiler_record(self) -> None:
         payload = b"skin\0" + bytes.fromhex("64001100516e4462546d")
@@ -726,12 +711,12 @@ class ByteCoverageTests(unittest.TestCase):
         ledger.claim(0, 5, "mapped-string", "texture[9].name")
         coverage._cover_retained_mdl_payloads(ledger, payload, bone_count=1)
         result = ledger.finish()
-        self.assertEqual(result["ranges"][-1]["owner"], "compilerTrailerQnDbTm")
-        self.assertEqual(result["ranges"][-1]["state"], "mapped")
-        self.assertEqual(result["ranges"][-1]["length"], 10)
+        assert result["ranges"][-1]["owner"] == "compilerTrailerQnDbTm"
+        assert result["ranges"][-1]["state"] == "mapped"
+        assert result["ranges"][-1]["length"] == 10
         trailer = coverage.compiler_trailer(payload)
-        self.assertEqual(trailer["magic"], "QnDbTm")
-        self.assertEqual(trailer["pathOffset"], 0x00110064)
+        assert trailer["magic"] == "QnDbTm"
+        assert trailer["pathOffset"] == 0x00110064
 
     def test_cloth_map_layout_uses_the_pointer_span(self) -> None:
         verts = 4
@@ -745,28 +730,24 @@ class ByteCoverageTests(unittest.TestCase):
         struct.pack_into("<i", image, 56, 60 + len(selectors) + len(positions))
         image[60:60 + len(selectors)] = selectors
         layout = mdl_cloth.map_layout(bytes(image), 0)
-        self.assertEqual(layout["rows"], 2)
-        self.assertEqual(layout["position_rows"], 2)
-        self.assertEqual(layout["selector_align"], 0)
-        self.assertEqual(layout["vertex_count"], verts)
+        assert layout["rows"] == 2
+        assert layout["position_rows"] == 2
+        assert layout["selector_align"] == 0
+        assert layout["vertex_count"] == verts
 
     def test_overlapping_vtx_strip_groups_reuse_the_declared_range(self) -> None:
         ledger = coverage.ByteLedger("mesh.vtx", bytes(44))
         ledger.array(4, 1, 20, "lod[0].mesh[0].stripGroups")
         ledger.array(4, 1, 20, "lod[1].mesh[0].stripGroups", allow_existing=True)
         result = ledger.finish()
-        self.assertEqual(result["ranges"][1]["owner"], "lod[0].mesh[0].stripGroups")
+        assert result["ranges"][1]["owner"] == "lod[0].mesh[0].stripGroups"
 
 
 class CharacterCoverageSemanticsTests(unittest.TestCase):
     def test_writer_records_the_source_to_gltf_transform(self) -> None:
         document, _binary = character_glb.build_document(_model(), b"")
         extension = document["extensions"]["ELYSIUM_vtmb_character"]
-        self.assertEqual(extension["identity"]["sourcePolicy"], "up-first")
-        self.assertEqual(extension["coordinateTransform"]["scale"], 0.0254)
-        self.assertEqual(extension["coverage"]["unresolved"], [])
-        self.assertEqual(extension["coverage"]["unsupported"], [])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert extension["identity"]["sourcePolicy"] == "up-first"
+        assert extension["coordinateTransform"]["scale"] == 0.0254
+        assert extension["coverage"]["unresolved"] == []
+        assert extension["coverage"]["unsupported"] == []

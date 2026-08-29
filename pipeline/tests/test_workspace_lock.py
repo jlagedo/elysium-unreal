@@ -17,6 +17,7 @@ from elysium_pipeline.workspace_lock import (
     active_unreal_processes,
     assert_project_idle,
 )
+import pytest
 
 
 class WorkspaceLeaseTests(unittest.TestCase):
@@ -28,14 +29,14 @@ class WorkspaceLeaseTests(unittest.TestCase):
 
             with WorkspaceLease(root, "export map", worktree, metadata={"lane": "qa"}):
                 owner = active_lease(root)
-                self.assertIsNotNone(owner)
-                self.assertEqual(owner["command"], "export map")
-                self.assertEqual(owner["lane"], "qa")
-                with self.assertRaises(WorkspaceBusy):
+                assert owner is not None
+                assert owner["command"] == "export map"
+                assert owner["lane"] == "qa"
+                with pytest.raises(WorkspaceBusy):
                     with WorkspaceLease(root, "run play", worktree):
-                        self.fail("a second lease must not be acquired")
+                        pytest.fail("a second lease must not be acquired")
 
-            self.assertIsNone(active_lease(root))
+            assert active_lease(root) is None
 
     def test_terminated_owner_releases_the_os_lock(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -58,10 +59,10 @@ class WorkspaceLeaseTests(unittest.TestCase):
             )
             try:
                 assert process.stdout is not None
-                self.assertEqual(process.stdout.readline().strip(), "ready")
-                with self.assertRaises(WorkspaceBusy):
+                assert process.stdout.readline().strip() == "ready"
+                with pytest.raises(WorkspaceBusy):
                     with WorkspaceLease(root, "parent play", worktree):
-                        self.fail("the child owns the lane")
+                        pytest.fail("the child owns the lane")
             finally:
                 process.terminate()
                 process.wait(timeout=10)
@@ -69,7 +70,7 @@ class WorkspaceLeaseTests(unittest.TestCase):
                     process.stdout.close()
                 if process.stderr is not None:
                     process.stderr.close()
-            self.assertIsNone(active_lease(root))
+            assert active_lease(root) is None
 
 
 class _FakeProcess:
@@ -101,7 +102,7 @@ class ProjectIdleTests(unittest.TestCase):
             project = Path(temporary) / "ElysiumUE.uproject"
             project.write_text("{}\n", encoding="utf-8")
             # Matching is per project path, so one checkout never sees another's editors.
-            self.assertEqual(active_unreal_processes(project), ())
+            assert active_unreal_processes(project) == ()
             assert_project_idle(project)
 
     def test_cmdline_is_fetched_only_for_unreal_process_names(self) -> None:
@@ -129,14 +130,10 @@ class ProjectIdleTests(unittest.TestCase):
             ):
                 found = active_unreal_processes(project)
 
-        self.assertEqual(found, ({"pid": 202, "name": "UnrealEditor.exe"},))
+        assert found == ({"pid": 202, "name": "UnrealEditor.exe"},)
         # A name outside the Unreal set never pays for a command-line fetch.
-        self.assertEqual(bystander.cmdline_calls, 0)
-        self.assertEqual(editor.cmdline_calls, 1)
-        self.assertEqual(other_project.cmdline_calls, 1)
+        assert bystander.cmdline_calls == 0
+        assert editor.cmdline_calls == 1
+        assert other_project.cmdline_calls == 1
         # A process that vanishes mid-iteration is tolerated, not raised.
-        self.assertEqual(vanished.cmdline_calls, 1)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert vanished.cmdline_calls == 1

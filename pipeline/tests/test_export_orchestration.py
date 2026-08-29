@@ -5,6 +5,7 @@ from unittest import mock
 
 from elysium_pipeline import export_manager, wield_corpus
 from elysium_pipeline.exporters import export_all
+import pytest
 
 
 class ExportProfileTests(unittest.TestCase):
@@ -16,10 +17,7 @@ class ExportProfileTests(unittest.TestCase):
             "materials/b/glass.vmt": object(),
             "models/not-a-texture.tth": object(),
         }
-        self.assertEqual(
-            export_manager._texture_glb_sources(index),
-            ["a/brick", "b/glass"],
-        )
+        assert export_manager._texture_glb_sources(index) == ["a/brick", "b/glass"]
 
     def test_all_texture_glbs_reuses_one_patch_first_index(self) -> None:
         from pathlib import Path
@@ -42,7 +40,7 @@ class ExportProfileTests(unittest.TestCase):
         )
 
         def write(_index, texture, output_root):
-            self.assertIs(_index, index)
+            assert _index is index
             return output_root / (texture.replace("/", "_") + ".glb")
 
         summary = {
@@ -59,10 +57,10 @@ class ExportProfileTests(unittest.TestCase):
                 config, object(), jobs=1
             )
 
-        self.assertEqual(len(destinations), 2)
+        assert len(destinations) == 2
         build_index.assert_called_once_with()
-        self.assertEqual(export.call_count, 2)
-        self.assertEqual(validate.call_count, 2)
+        assert export.call_count == 2
+        assert validate.call_count == 2
 
     def test_material_glb_corpus_admits_each_addressable_vmt_once(self) -> None:
         index = {
@@ -73,10 +71,7 @@ class ExportProfileTests(unittest.TestCase):
             # `materials/` names no material and is not a unit.
             "models/character/monster/hengeyokai/hengeyokai_frozen.vmt": object(),
         }
-        self.assertEqual(
-            export_manager._material_glb_sources(index),
-            ["a/brick", "b/glass"],
-        )
+        assert export_manager._material_glb_sources(index) == ["a/brick", "b/glass"]
 
     def test_all_material_glbs_reuses_one_patch_first_index(self) -> None:
         from pathlib import Path
@@ -98,7 +93,7 @@ class ExportProfileTests(unittest.TestCase):
         )
 
         def write(_index, material, output_root):
-            self.assertIs(_index, index)
+            assert _index is index
             return output_root / (material.replace("/", "_") + ".glb")
 
         summary = {
@@ -117,10 +112,10 @@ class ExportProfileTests(unittest.TestCase):
                 config, object(), jobs=1
             )
 
-        self.assertEqual(len(destinations), 2)
+        assert len(destinations) == 2
         build_index.assert_called_once_with()
-        self.assertEqual(export.call_count, 2)
-        self.assertEqual(validate.call_count, 2)
+        assert export.call_count == 2
+        assert validate.call_count == 2
 
     def test_character_glb_corpus_admits_only_models_with_topology(self) -> None:
         index = {
@@ -132,13 +127,10 @@ class ExportProfileTests(unittest.TestCase):
             "models/scenery/prop.mdl": object(),
             "models/scenery/prop.dx80.vtx": object(),
         }
-        self.assertEqual(
-            export_manager._character_glb_models(index),
-            [
+        assert export_manager._character_glb_models(index) == [
                 "models/character/a/body.mdl",
                 "models/character/b/body.mdl",
-            ],
-        )
+            ]
 
     def test_all_character_glbs_reuses_one_index_and_anorm_table(self) -> None:
         from pathlib import Path
@@ -162,8 +154,8 @@ class ExportProfileTests(unittest.TestCase):
         )
 
         def write(_index, model, output_root, *, anorms):
-            self.assertIs(_index, index)
-            self.assertIs(anorms, vectors)
+            assert _index is index
+            assert anorms is vectors
             return output_root / (model.rsplit("/", 1)[-1][:-4] + ".glb")
 
         vectors = [(1.0, 0.0, 0.0)]
@@ -182,11 +174,11 @@ class ExportProfileTests(unittest.TestCase):
                 config, object(), jobs=1
             )
 
-        self.assertEqual(len(destinations), 2)
+        assert len(destinations) == 2
         build_index.assert_called_once_with()
         load_anorms.assert_called_once_with()
-        self.assertEqual(export.call_count, 2)
-        self.assertEqual(validate.call_count, 2)
+        assert export.call_count == 2
+        assert validate.call_count == 2
 
     def test_export_all_runs_every_seam_and_reports_a_failing_one(self) -> None:
         # A seam is an independent corpus costing its own hours; one failure must not cancel the
@@ -218,12 +210,12 @@ class ExportProfileTests(unittest.TestCase):
             ("character", corpus("character", [Path("b.glb"), Path("c.glb")])),
         )
         with mock.patch.object(export_manager, "GLB_SEAMS", seams):
-            with self.assertRaises(export_manager.OfflineExportFailure) as raised:
+            with pytest.raises(export_manager.OfflineExportFailure) as raised:
                 export_manager.export_all_glb_seams(config, object())
 
-        self.assertEqual(ran, ["texture", "material", "character"])
-        self.assertIn("material", str(raised.exception))
-        self.assertIn("2 of 9 failed", str(raised.exception))
+        assert ran == ["texture", "material", "character"]
+        assert "material" in str(raised.value)
+        assert "2 of 9 failed" in str(raised.value)
 
     def test_export_all_returns_every_seam_that_published(self) -> None:
         from pathlib import Path
@@ -247,10 +239,7 @@ class ExportProfileTests(unittest.TestCase):
         with mock.patch.object(export_manager, "GLB_SEAMS", seams):
             published = export_manager.export_all_glb_seams(config, object())
 
-        self.assertEqual(
-            {seam: len(paths) for seam, paths in published.items()},
-            {"texture": 1, "material": 2, "character": 0},
-        )
+        assert {seam: len(paths) for seam, paths in published.items()} == {"texture": 1, "material": 2, "character": 0}
 
     def test_glb_seams_publish_under_the_export_v2_root(self) -> None:
         # The isolated seams feed the new bake pipeline, so they must never land inside the
@@ -266,8 +255,8 @@ class ExportProfileTests(unittest.TestCase):
         )
         for seam in ("characters", "textures", "materials", "surface-properties"):
             root = export_manager._export_v2_root(config, seam)
-            self.assertEqual(root, Path("C:/work/exports_v2") / seam)
-            self.assertNotIn(config.export_root, root.parents)
+            assert root == Path("C:/work/exports_v2") / seam
+            assert config.export_root not in root.parents
 
     def test_glb_seams_reject_a_config_without_an_export_v2_root(self) -> None:
         from pathlib import Path
@@ -279,7 +268,7 @@ class ExportProfileTests(unittest.TestCase):
             export_root=Path("C:/work/exports"),
             export_v2_root=None,
         )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             export_manager._require_export_v2_config(config)
 
     def test_glb_corpus_workers_are_spawn_importable(self) -> None:
@@ -290,7 +279,7 @@ class ExportProfileTests(unittest.TestCase):
         for worker in (workers.character_glb_worker, workers.texture_glb_worker,
                        workers.material_glb_worker):
             restored = pickle.loads(pickle.dumps(worker))
-            self.assertEqual(restored.__name__, worker.__name__)
+            assert restored.__name__ == worker.__name__
 
     def test_only_ents_consuming_bundles_wait_on_the_maps(self) -> None:
         # `audio` and `npc` read the exported per-map `.ents`; every other bundle reads the
@@ -308,14 +297,13 @@ class ExportProfileTests(unittest.TestCase):
             config, bundles, ["m1", "m2"], {}, {bundle: "fp" for bundle in bundles})
         by_name = {task.name: task for task in tasks}
         map_edges = ("map:m1", "map:m2")
-        self.assertEqual(by_name["bundle:audio"].dependencies, map_edges)
-        self.assertEqual(by_name["bundle:npc"].dependencies,
-                         (*map_edges, "bundle:vdata"))
+        assert by_name["bundle:audio"].dependencies == map_edges
+        assert by_name["bundle:npc"].dependencies == (*map_edges, "bundle:vdata")
         for bundle in bundles:
             if bundle in ("audio", "npc"):
                 continue
             with self.subTest(bundle=bundle):
-                self.assertEqual(by_name[f"bundle:{bundle}"].dependencies, ())
+                assert by_name[f"bundle:{bundle}"].dependencies == ()
 
     def test_npc_bundle_drops_the_vdata_edge_when_vdata_is_not_requested(self) -> None:
         from pathlib import Path
@@ -324,15 +312,15 @@ class ExportProfileTests(unittest.TestCase):
         config = SimpleNamespace(export_root=Path("/fake/export/root"))
         tasks = export_manager._bundle_tasks(
             config, ["npc"], ["m1"], {}, {"npc": "fp"})
-        self.assertEqual(tasks[0].dependencies, ("map:m1",))
+        assert tasks[0].dependencies == ("map:m1",)
 
     def test_items_bundle_outputs_include_both_manifests(self) -> None:
         from pathlib import Path
 
         export_root = Path("/fake/export/root")
         outputs = export_manager._bundle_outputs(export_root, "items")
-        self.assertIn(export_root / "items" / "ground_models.json", outputs)
-        self.assertIn(wield_corpus.manifest_path(export_root), outputs)
+        assert export_root / "items" / "ground_models.json" in outputs
+        assert wield_corpus.manifest_path(export_root) in outputs
 
     def test_structured_failure_is_strict(self) -> None:
         result = export_all.ExportBatchResult(
@@ -344,10 +332,6 @@ class ExportProfileTests(unittest.TestCase):
                 )
             ]
         )
-        with self.assertRaises(export_all.ExportFailed) as caught:
+        with pytest.raises(export_all.ExportFailed) as caught:
             result.require_success()
-        self.assertIs(caught.exception.result, result)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert caught.value.result is result

@@ -13,6 +13,7 @@ import unittest
 from elysium_pipeline.formats import mdl_skel
 from elysium_pipeline.formats.mdl_skel import Bone
 from elysium_pipeline.validation import retail_compositor as rc
+import pytest
 
 
 def _axis_angle(axis, degrees):
@@ -41,16 +42,16 @@ class QuaternionKitTests(unittest.TestCase):
         half = rc.qscale(q, 0.5)
         expected = _axis_angle((0, 0, 1), 30.0)
         for a, b in zip(half, expected):
-            self.assertAlmostEqual(a, b, places=6)
-        self.assertEqual(rc.qscale(q, 1.0), q)
-        self.assertEqual(rc.qscale(q, 0.0), (0.0, 0.0, 0.0, 1.0))
+            assert a == pytest.approx(b, abs=1e-6)
+        assert rc.qscale(q, 1.0) == q
+        assert rc.qscale(q, 0.0) == (0.0, 0.0, 0.0, 1.0)
 
     def test_nlerp_flips_to_the_nearer_hemisphere(self):
         q = _axis_angle((1, 0, 0), 20.0)
         flipped = tuple(-c for c in q)
         mixed = rc.qnlerp(q, flipped, 0.5)
         for a, b in zip(mixed, q):
-            self.assertAlmostEqual(a, b, places=6)
+            assert a == pytest.approx(b, abs=1e-6)
 
 
 class AccumulateTests(unittest.TestCase):
@@ -61,8 +62,8 @@ class AccumulateTests(unittest.TestCase):
         rc.accumulate(out, [((0.5, 0.0, 0.0), delta)], 1.0, rc.FLAG_DELTA | rc.FLAG_POST)
         expected = rc.qnorm(rc.qmul(base, delta))
         for a, b in zip(out[0][1], expected):
-            self.assertAlmostEqual(a, b, places=6)
-        self.assertEqual(out[0][0], (1.5, 2.0, 3.0))
+            assert a == pytest.approx(b, abs=1e-6)
+        assert out[0][0] == (1.5, 2.0, 3.0)
 
     def test_a_pre_delta_lands_on_the_left_and_differs(self):
         base = _axis_angle((0, 0, 1), 90.0)
@@ -71,25 +72,25 @@ class AccumulateTests(unittest.TestCase):
         rc.accumulate(out, [((0.0, 0.0, 0.0), delta)], 1.0, rc.FLAG_DELTA)
         expected = rc.qnorm(rc.qmul(delta, base))
         for a, b in zip(out[0][1], expected):
-            self.assertAlmostEqual(a, b, places=6)
+            assert a == pytest.approx(b, abs=1e-6)
         post = rc.qnorm(rc.qmul(base, delta))
-        self.assertGreater(max(abs(a - b) for a, b in zip(expected, post)), 0.1)
+        assert max(abs(a - b) for a, b in zip(expected, post)) > 0.1
 
     def test_an_ordinary_layer_replaces_at_full_weight_and_skips_a_masked_bone(self):
         out = [((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0)), ((9.0, 9.0, 9.0), (0.0, 0.0, 0.0, 1.0))]
         layer_rot = _axis_angle((0, 1, 0), 45.0)
         rc.accumulate(out, [((1.0, 1.0, 1.0), layer_rot), None], 1.0, 0)
-        self.assertEqual(out[0][0], (1.0, 1.0, 1.0))
-        self.assertEqual(out[0][1], layer_rot)
-        self.assertEqual(out[1][0], (9.0, 9.0, 9.0))
+        assert out[0][0] == (1.0, 1.0, 1.0)
+        assert out[0][1] == layer_rot
+        assert out[1][0] == (9.0, 9.0, 9.0)
 
 
 class SlotGateTests(unittest.TestCase):
     def test_a_slot_gate_drops_every_bone_the_slot_does_not_own(self):
         layer = [((1.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0))] * 4
         gated = rc.gate_to(layer, {1, 2})
-        self.assertEqual([c is not None for c in gated], [False, True, True, False])
-        self.assertIs(rc.gate_to(layer, None), layer)
+        assert [c is not None for c in gated] == [False, True, True, False]
+        assert rc.gate_to(layer, None) is layer
 
 
 class SplitRotationTests(unittest.TestCase):
@@ -101,11 +102,11 @@ class SplitRotationTests(unittest.TestCase):
         locals_ = [((0.0, 0.0, 0.0), turn), ((0.0, 0.0, 10.0), turn), ((0.0, 0.0, 10.0), turn)]
         world = rc.model_space(model, locals_)
         # Conventional inheritance would give the split bone 270 deg; the rule gives it its own 90.
-        self.assertAlmostEqual(world[1][1][2], math.sin(math.radians(90.0)), places=6)
+        assert world[1][1][2] == pytest.approx(math.sin(math.radians(90.0)), abs=1e-6)
         for a, b in zip(world[2][1], turn):
-            self.assertAlmostEqual(a, b, places=6)
+            assert a == pytest.approx(b, abs=1e-6)
         # Translation still composes through the (rotated) parent.
-        self.assertAlmostEqual(world[2][0][2], 20.0, places=6)
+        assert world[2][0][2] == pytest.approx(20.0, abs=1e-6)
 
 
 class AxisTests(unittest.TestCase):
@@ -116,15 +117,15 @@ class AxisTests(unittest.TestCase):
                                                    start=-180.0, end=180.0, loop=360.0)}
         grid = Grid(numblends=9, groupsize=(9, 1), paramindex=(0, -1),
                     paramstart=(-180.0, 0.0), paramend=(180.0, 0.0), cells=())
-        self.assertEqual(rc._axis(model, grid, 0, {"move_yaw": 0.0}), (4, 0.0))
+        assert rc._axis(model, grid, 0, {"move_yaw": 0.0}) == (4, 0.0)
         i, s = rc._axis(model, grid, 0, {"move_yaw": 22.5})
-        self.assertEqual(i, 4)
-        self.assertAlmostEqual(s, 0.5, places=6)
+        assert i == 4
+        assert s == pytest.approx(0.5, abs=1e-6)
         # Wrap through the loop: 190 is -170.
         i, s = rc._axis(model, grid, 0, {"move_yaw": 190.0})
-        self.assertEqual(i, 0)
-        self.assertAlmostEqual(s, 10.0 / 45.0, places=6)
-        self.assertEqual(rc._axis(model, grid, 1, {"move_yaw": 0.0}), (0, 0.0))
+        assert i == 0
+        assert s == pytest.approx(10.0 / 45.0, abs=1e-6)
+        assert rc._axis(model, grid, 1, {"move_yaw": 0.0}) == (0, 0.0)
 
 
 class BindRemapBranchTests(unittest.TestCase):
@@ -135,45 +136,45 @@ class BindRemapBranchTests(unittest.TestCase):
         owner = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0))
         body = _bone(0, "root", -1, pos=(1.0, 2.0, 3.0 + 0.09))  # |a-b|^2 = 0.0081 < 0.01
         kind, payload = rc._bind_branch(owner.pos, body.pos)
-        self.assertEqual(kind, "copy")
-        self.assertIsNone(payload)
+        assert kind == "copy"
+        assert payload is None
 
     def test_close_binds_boundary_just_outside_is_not_copy(self):
         owner = _bone(0, "root", -1, pos=(0.0, 0.0, 0.0))
         body = _bone(0, "root", -1, pos=(0.0, 0.0, 0.11))  # |a-b|^2 = 0.0121 > 0.01
         kind, _payload = rc._bind_branch(owner.pos, body.pos)
-        self.assertNotEqual(kind, "copy")
+        assert kind != "copy"
 
     def test_both_binds_near_origin_is_still_a_copy_not_a_translation(self):
         # |a-b|^2 exceeds the threshold but BOTH |a|^2 and |b|^2 are within it: the disassembly
         # takes neither the translate nor the similarity path.
         a = (0.09, 0.0, 0.0)
         b = (-0.09, 0.0, 0.0)
-        self.assertGreater(sum(c * c for c in (a[0] - b[0], a[1] - b[1], a[2] - b[2])), 0.01)
-        self.assertLessEqual(sum(c * c for c in a), 0.01)
-        self.assertLessEqual(sum(c * c for c in b), 0.01)
+        assert sum(c * c for c in (a[0] - b[0], a[1] - b[1], a[2] - b[2])) > 0.01
+        assert sum(c * c for c in a) <= 0.01
+        assert sum(c * c for c in b) <= 0.01
         kind, payload = rc._bind_branch(a, b)
-        self.assertEqual(kind, "copy")
-        self.assertIsNone(payload)
+        assert kind == "copy"
+        assert payload is None
 
     def test_one_bind_near_origin_is_a_pure_translation(self):
         a = (3.0, 0.0, 0.0)     # owner/bank bind, far from the origin
         b = (0.02, 0.0, 0.0)    # body bind, within the threshold
         kind, payload = rc._bind_branch(a, b)
-        self.assertEqual(kind, "translate")
+        assert kind == "translate"
         for got, want in zip(payload, (b[0] - a[0], b[1] - a[1], b[2] - a[2])):
-            self.assertAlmostEqual(got, want, places=6)
+            assert got == pytest.approx(want, abs=1e-6)
 
     def test_two_far_binds_are_a_similarity(self):
         a = (2.0, 0.0, 0.0)
         b = (0.0, 4.0, 0.0)
         kind, payload = rc._bind_branch(a, b)
-        self.assertEqual(kind, "similarity")
+        assert kind == "similarity"
         arc, scale = payload
-        self.assertAlmostEqual(scale, 2.0, places=6)  # |b|/|a| = 4/2
+        assert scale == pytest.approx(2.0, abs=1e-6)  # |b|/|a| = 4/2
         rotated = rc.qrotate(arc, a)
         for got, want in zip(rotated, (0.0, 2.0, 0.0)):  # a rotated onto b's direction, |a| kept
-            self.assertAlmostEqual(got, want, places=6)
+            assert got == pytest.approx(want, abs=1e-6)
 
     def test_the_measured_ash_tremere_pelvis_case_is_the_origin_translate_branch(self):
         # The measured defect case, converted from its own cm reading to the Source units this
@@ -186,9 +187,9 @@ class BindRemapBranchTests(unittest.TestCase):
         a = (2.968 / rc.SOURCE_UNIT_TO_CM, 0.0, 0.0)
         b = (-0.145 / rc.SOURCE_UNIT_TO_CM, 0.0, 0.0)
         kind, payload = rc._bind_branch(a, b)
-        self.assertEqual(kind, "translate")
+        assert kind == "translate"
         for got, want in zip(payload, (b[0] - a[0], b[1] - a[1], b[2] - a[2])):
-            self.assertAlmostEqual(got, want, places=6)
+            assert got == pytest.approx(want, abs=1e-6)
 
     def test_antiparallel_far_binds_resolve_a_half_turn(self):
         # A synthetic (not model-measured) antiparallel pair where NEITHER bind is near the
@@ -197,13 +198,13 @@ class BindRemapBranchTests(unittest.TestCase):
         a = (2.0, 0.0, 0.0)
         b = (-1.0, 0.0, 0.0)
         kind, payload = rc._bind_branch(a, b)
-        self.assertEqual(kind, "similarity")
+        assert kind == "similarity"
         arc, scale = payload
-        self.assertAlmostEqual(scale, 0.5, places=6)
+        assert scale == pytest.approx(0.5, abs=1e-6)
         rotated = rc.qrotate(arc, a)
-        self.assertAlmostEqual(rotated[0], -a[0], places=4)
-        self.assertAlmostEqual(rotated[1], 0.0, places=4)
-        self.assertAlmostEqual(rotated[2], 0.0, places=4)
+        assert rotated[0] == pytest.approx(-a[0], abs=1e-4)
+        assert rotated[1] == pytest.approx(0.0, abs=1e-4)
+        assert rotated[2] == pytest.approx(0.0, abs=1e-4)
 
 
 class RemapTests(unittest.TestCase):
@@ -228,14 +229,14 @@ class RemapTests(unittest.TestCase):
     def test_copy_branch_passes_the_animated_position_through(self):
         pose = [((5.0, 6.0, 7.0), self.rot), None, None]
         out = rc.remap(self.body, self.owner, pose)
-        self.assertEqual(out[0][0], (5.0, 6.0, 7.0))
+        assert out[0][0] == (5.0, 6.0, 7.0)
 
     def test_translate_branch_adds_the_raw_bind_offset(self):
         pose = [None, ((3.5, 0.0, 0.0), self.rot), None]
         out = rc.remap(self.body, self.owner, pose)
         # p + (b - a) = 3.5 + (0 - 3) = 0.5
         for got, want in zip(out[1][0], (0.5, 0.0, 0.0)):
-            self.assertAlmostEqual(got, want, places=6)
+            assert got == pytest.approx(want, abs=1e-6)
 
     def test_similarity_branch_rotates_and_rescales(self):
         pose = [None, None, ((2.0, 0.0, 0.0), self.rot)]  # animated pos == owner bind exactly
@@ -243,15 +244,15 @@ class RemapTests(unittest.TestCase):
         # Rotating the owner's own bind direction onto the body's and rescaling to |b| must
         # reproduce the body's own bind exactly (both binds' lengths are 2.0 here).
         for got, want in zip(out[2][0], (0.0, 2.0, 0.0)):
-            self.assertAlmostEqual(got, want, places=6)
+            assert got == pytest.approx(want, abs=1e-6)
 
     def test_rotation_is_never_touched_in_any_branch(self):
         pose = [((5.0, 6.0, 7.0), self.rot), ((3.5, 0.0, 0.0), self.rot),
                 ((2.0, 0.0, 0.0), self.rot)]
         out = rc.remap(self.body, self.owner, pose)
         for entry in out:
-            self.assertIsNotNone(entry)
-            self.assertEqual(entry[1], self.rot)
+            assert entry is not None
+            assert entry[1] == self.rot
 
 
 class ClosureRemapTests(unittest.TestCase):
@@ -306,11 +307,7 @@ class ClosureRemapTests(unittest.TestCase):
         _body, locals_ = rc.compose(corpus, "body_stem", channels, {})
         # Owner-space closure: bind(1.0) -[base, replace]-> 1.0 -[delta, additive]-> 1.5.
         # Remapped ONCE (translate: b - a = 0.0 - 1.0 = -1.0): 1.5 + (-1.0) = 0.5.
-        self.assertAlmostEqual(locals_[1][0][0], 0.5, places=6)
+        assert locals_[1][0][0] == pytest.approx(0.5, abs=1e-6)
         # The wrong, per-layer answer (offset applied to the base AND to the raw delta) would
         # read -0.5 here; guard against silently regressing back to it.
-        self.assertNotAlmostEqual(locals_[1][0][0], -0.5, places=6)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert locals_[1][0][0] != pytest.approx(-0.5, abs=1e-6)

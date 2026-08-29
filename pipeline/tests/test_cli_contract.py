@@ -13,7 +13,7 @@ class CliContractTests(unittest.TestCase):
 
     def test_root_help_exposes_the_single_public_command_families(self) -> None:
         result = self.runner.invoke(app, ["--help"])
-        self.assertEqual(result.exit_code, 0, result.output)
+        assert result.exit_code == 0, result.output
         for command in (
             "reconstruct",
             "deps",
@@ -28,42 +28,42 @@ class CliContractTests(unittest.TestCase):
             "ide",
             "mcp",
         ):
-            self.assertIn(command, result.output)
+            assert command in result.output
 
     def test_targeted_map_export_rejects_clean(self) -> None:
         result = self.runner.invoke(
             app, ["export", "map", "sp_tutorial_1", "--clean"]
         )
-        self.assertEqual(result.exit_code, 2, result.output)
-        self.assertIn("No such option", result.output)
+        assert result.exit_code == 2, result.output
+        assert "No such option" in result.output
 
     def test_no_detached_checkout_family_is_exposed(self) -> None:
         for command in ("lane", "worktree"):
             result = self.runner.invoke(app, [command, "--help"])
-            self.assertEqual(result.exit_code, 2, result.output)
-            self.assertIn("No such command", result.output)
+            assert result.exit_code == 2, result.output
+            assert "No such command" in result.output
 
     def test_export_help_exposes_wield(self) -> None:
         result = self.runner.invoke(app, ["export", "--help"])
-        self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("wield", result.output)
+        assert result.exit_code == 0, result.output
+        assert "wield" in result.output
 
     def test_export_v2_exposes_the_isolated_glb_commands(self) -> None:
         result = self.runner.invoke(app, ["export_v2", "--help"])
-        self.assertEqual(result.exit_code, 0, result.output)
-        self.assertIn("character-glb", result.output)
-        self.assertIn("characters-glb", result.output)
-        self.assertIn("texture-glb", result.output)
-        self.assertIn("textures-glb", result.output)
-        self.assertIn("material-glb", result.output)
-        self.assertIn("materials-glb", result.output)
-        self.assertIn("surface-property-glb", result.output)
-        self.assertIn("surface-properties-glb", result.output)
-        self.assertIn("export-all", result.output)
+        assert result.exit_code == 0, result.output
+        assert "character-glb" in result.output
+        assert "characters-glb" in result.output
+        assert "texture-glb" in result.output
+        assert "textures-glb" in result.output
+        assert "material-glb" in result.output
+        assert "materials-glb" in result.output
+        assert "surface-property-glb" in result.output
+        assert "surface-properties-glb" in result.output
+        assert "export-all" in result.output
 
         old = self.runner.invoke(app, ["export", "--help"])
-        self.assertEqual(old.exit_code, 0, old.output)
-        self.assertNotIn("character-glb", old.output)
+        assert old.exit_code == 0, old.output
+        assert "character-glb" not in old.output
 
 
 class ChildSignalTests(unittest.TestCase):
@@ -83,10 +83,4 @@ class ChildSignalTests(unittest.TestCase):
             "",
         )
         for line in samples:
-            self.assertEqual(
-                _child_signal(line), _CHILD_SIGNAL.search(line) is not None, line
-            )
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert _child_signal(line) == (_CHILD_SIGNAL.search(line) is not None), line

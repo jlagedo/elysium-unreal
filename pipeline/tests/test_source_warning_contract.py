@@ -13,9 +13,9 @@ class SourceWarningContractTests(unittest.TestCase):
         warning = missing_npc_warning(
             "models/character/npc/doppleganger/doppleganger.mdl"
         )
-        self.assertIsNotNone(warning)
-        self.assertEqual(warning["fallback"], "unresolved")
-        self.assertIsNone(missing_npc_warning("models/character/npc/other/missing.mdl"))
+        assert warning is not None
+        assert warning["fallback"] == "unresolved"
+        assert missing_npc_warning("models/character/npc/other/missing.mdl") is None
 
     def test_known_malformed_prop_requires_a_static_fallback(self) -> None:
         model = "models/scenery/misc/bottles/bottleb.mdl"
@@ -24,23 +24,15 @@ class SourceWarningContractTests(unittest.TestCase):
             ValueError("truncated"),
             has_static_fallback=True,
         )
-        self.assertIsNotNone(warning)
-        self.assertEqual(warning["fallback"], "per-map static model_mesh")
-        self.assertIsNone(
-            animated_prop_warning(
+        assert warning is not None
+        assert warning["fallback"] == "per-map static model_mesh"
+        assert animated_prop_warning(
                 model,
                 ValueError("truncated"),
                 has_static_fallback=False,
-            )
-        )
-        self.assertIsNone(
-            animated_prop_warning(
+            ) is None
+        assert animated_prop_warning(
                 "models/scenery/misc/other.mdl",
                 ValueError("truncated"),
                 has_static_fallback=True,
-            )
-        )
-
-
-if __name__ == "__main__":
-    unittest.main()
+            ) is None

@@ -12,13 +12,10 @@ from elysium_pipeline.exporters import export_all
 
 class ProfileAndPackageContractTests(unittest.TestCase):
     def test_all_profile_discovers_and_sorts_patch_first_names(self) -> None:
-        self.assertEqual(
-            export_all.maps_for_profile(
+        assert (export_all.maps_for_profile(
                 "all",
                 available=["sm_hub_1", "sp_tutorial_1", "sm_hub_1", "sp_theatre"],
-            ),
-            ["sm_hub_1", "sp_theatre", "sp_tutorial_1"],
-        )
+            ) == ["sm_hub_1", "sp_theatre", "sp_tutorial_1"])
 
     def test_complete_profiles_include_use_icons_and_every_global_bundle(self) -> None:
         expected = {
@@ -37,22 +34,19 @@ class ProfileAndPackageContractTests(unittest.TestCase):
         for profile in ("grid", "all"):
             with self.subTest(profile=profile):
                 bundles = export_all.bundles_for_profile(profile)
-                self.assertEqual(set(bundles), expected)
-                self.assertEqual(len(bundles), len(set(bundles)))
+                assert set(bundles) == expected
+                assert len(bundles) == len(set(bundles))
 
     def test_baked_physical_path_preserves_elysium_baked_mount_layout(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repo = Path(temporary)
             config = SimpleNamespace(repo_root=repo)
-            self.assertEqual(
-                export_manager._baked_package(config, "sp_theatre"),
-                repo
+            assert (export_manager._baked_package(config, "sp_theatre") == repo
                 / "Plugins"
                 / "ElysiumBaked"
                 / "Content"
                 / "sp_theatre"
-                / "sp_theatre.umap",
-            )
+                / "sp_theatre.umap")
 
     def test_virtual_package_roots_remain_immutable(self) -> None:
         repo = Path(__file__).resolve().parents[2]
@@ -63,12 +57,8 @@ class ProfileAndPackageContractTests(unittest.TestCase):
             )
         )
 
-        self.assertIn("GameDefaultMap=/Game/ElysiumGenerated/Boot.Boot", engine)
-        self.assertEqual(mounts.BAKED, "/ElysiumBaked")
-        self.assertEqual(mounts.MATERIALS, "/Game/ElysiumGenerated/Materials")
-        self.assertEqual(mounts.CLOTH, "/ElysiumBaked/Characters/Cloth")
-        self.assertTrue(descriptor["CanContainContent"])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert "GameDefaultMap=/Game/ElysiumGenerated/Boot.Boot" in engine
+        assert mounts.BAKED == "/ElysiumBaked"
+        assert mounts.MATERIALS == "/Game/ElysiumGenerated/Materials"
+        assert mounts.CLOTH == "/ElysiumBaked/Characters/Cloth"
+        assert descriptor["CanContainContent"]

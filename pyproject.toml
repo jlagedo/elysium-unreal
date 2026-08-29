@@ -36,5 +36,14 @@ where = ["pipeline/src"]
 [tool.setuptools.package-data]
 elysium_pipeline = ["exporters/*.toml"]
 
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["pipeline/tests", "tools/elysium_glb_review/tests"]
+norecursedirs = ["tools/elysium_glb_review/tests/blender"]
+
 [tool.uv]
 package = true

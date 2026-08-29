@@ -31,7 +31,7 @@ class WriteSkipsUnchangedPayload(unittest.TestCase):
             corpus._write(path, document)
 
             after = os.stat(path).st_mtime_ns
-            self.assertEqual(before, after)
+            assert before == after
 
     def test_changed_payload_rewrites_content(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -45,9 +45,5 @@ class WriteSkipsUnchangedPayload(unittest.TestCase):
             corpus._write(path, {"a": 2})
 
             after = os.stat(path).st_mtime_ns
-            self.assertNotEqual(before, after)
-            self.assertEqual(Path(path).read_text(encoding="utf-8"), '{"a":2}')
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert before != after
+            assert Path(path).read_text(encoding="utf-8") == '{"a":2}'

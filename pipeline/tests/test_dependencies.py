@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from elysium_pipeline import dependencies
+import pytest
 
 
 class DependencyLockTests(unittest.TestCase):
@@ -21,14 +22,14 @@ class DependencyLockTests(unittest.TestCase):
                 + "\n"
             )
             expected = hashlib.sha256(expected_line.encode()).hexdigest()
-            self.assertEqual(dependencies._content_hash(root), expected)
+            assert dependencies._content_hash(root) == expected
 
             (root / dependencies.MANAGED_MARKER).write_text("{}", encoding="utf-8")
             (root / "Binaries").mkdir()
             (root / "Binaries" / "generated.dll").write_bytes(b"generated")
             (root / "Intermediate").mkdir()
             (root / "Intermediate" / "generated.obj").write_bytes(b"generated")
-            self.assertEqual(dependencies._content_hash(root), expected)
+            assert dependencies._content_hash(root) == expected
 
     def test_managed_tree_cleanup_handles_read_only_git_objects(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -40,7 +41,7 @@ class DependencyLockTests(unittest.TestCase):
 
             dependencies._remove_tree(staging)
 
-            self.assertFalse(staging.exists())
+            assert not staging.exists()
 
     def test_plugin_destination_cannot_escape_managed_root(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -49,8 +50,8 @@ class DependencyLockTests(unittest.TestCase):
             accepted = dependencies._managed_plugin_destination(
                 repo, "Plugins/External/Cog"
             )
-            self.assertEqual(accepted, (repo / "Plugins/External/Cog").resolve())
-            with self.assertRaises(dependencies.DependencyError):
+            assert accepted == (repo / "Plugins/External/Cog").resolve()
+            with pytest.raises(dependencies.DependencyError):
                 dependencies._managed_plugin_destination(repo, "Content/Cog")
 
     def test_artifact_marker_detects_local_modification(self) -> None:
@@ -79,10 +80,6 @@ class DependencyLockTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            self.assertTrue(dependencies._artifact_matches(artifact, destination))
+            assert dependencies._artifact_matches(artifact, destination)
             library.write_bytes(b"modified")
-            self.assertFalse(dependencies._artifact_matches(artifact, destination))
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert not dependencies._artifact_matches(artifact, destination)

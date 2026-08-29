@@ -38,8 +38,8 @@ class LaunchArgumentTests(unittest.TestCase):
                 unreal._run(config, runner, Path("UnrealEditor-Cmd.exe"),
                             ["-unattended", "-nosound"])
             (argv, _tail), = runner.calls
-            self.assertEqual(argv.count("-nosound"), 1)
-            self.assertIn("-NoLiveCoding", argv)
+            assert argv.count("-nosound") == 1
+            assert "-NoLiveCoding" in argv
 
     def test_interactive_editor_keeps_live_coding_and_sound(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -50,8 +50,8 @@ class LaunchArgumentTests(unittest.TestCase):
                 unreal.run_editor(config, runner)
             (argv, tail_lines), = runner.calls
             for flag in ("-NoLiveCoding", "-noP4", "-nosound"):
-                self.assertNotIn(flag, argv)
-            self.assertEqual(tail_lines, unreal.EDITOR_TAIL_LINES)
+                assert flag not in argv
+            assert tail_lines == unreal.EDITOR_TAIL_LINES
 
     def test_a_non_editor_executable_is_untouched(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -59,8 +59,8 @@ class LaunchArgumentTests(unittest.TestCase):
             runner = RecordingRunner()
             unreal._run(config, runner, Path("Build.bat"), ["-unattended"])
             (argv, tail_lines), = runner.calls
-            self.assertEqual(argv[1:], ["-unattended"])
-            self.assertIsNone(tail_lines)
+            assert argv[1:] == ["-unattended"]
+            assert tail_lines is None
 
     def test_auxiliary_policy_content_is_its_own_pair_of_launches(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -79,14 +79,10 @@ class LaunchArgumentTests(unittest.TestCase):
                     "UnrealEditor-Cmd.exe" if commandlet else "UnrealEditor.exe"),
             ):
                 unreal.generate_auxiliary_policy_content(config, runner)
-            self.assertEqual(len(runner.calls), 2)
+            assert len(runner.calls) == 2
             font_argv, _ = runner.calls[0]
-            self.assertTrue(any(
-                value.startswith("-ExecutePythonScript=") for value in font_argv))
+            assert any(
+                value.startswith("-ExecutePythonScript=") for value in font_argv)
             graph_argv, _ = runner.calls[1]
-            self.assertTrue(any(
-                "make_player_anim_bp.py" in value for value in graph_argv))
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert any(
+                "make_player_anim_bp.py" in value for value in graph_argv)

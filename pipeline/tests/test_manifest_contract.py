@@ -17,6 +17,7 @@ from elysium_pipeline.tasking import (
     TaskGraph,
     fingerprint_content,
 )
+import pytest
 
 
 class ManifestContractTests(unittest.TestCase):
@@ -28,14 +29,14 @@ class ManifestContractTests(unittest.TestCase):
             product.write_bytes(b"first")
             cache = ContentDigestCache(cache_path)
             initial = fingerprint_content([product], cache=cache)
-            self.assertEqual(fingerprint_content([product]), initial)
+            assert fingerprint_content([product]) == initial
             cache.write()
 
             product.write_bytes(b"first")
             cache = ContentDigestCache(cache_path)
-            self.assertEqual(fingerprint_content([product], cache=cache), initial)
+            assert fingerprint_content([product], cache=cache) == initial
             product.write_bytes(b"other")
-            self.assertNotEqual(fingerprint_content([product], cache=cache), initial)
+            assert fingerprint_content([product], cache=cache) != initial
 
     def test_manifest_records_run_context_tool_version_and_task_dependencies(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -63,14 +64,11 @@ class ManifestContractTests(unittest.TestCase):
             graph.run(manifest=manifest)
             saved = json.loads(manifest.path.read_text(encoding="utf-8"))
 
-            self.assertEqual(saved["profile"], "grid")
-            self.assertEqual(saved["source_fingerprint"], "source")
-            self.assertEqual(saved["dependency_fingerprint"], "dependencies")
-            self.assertTrue(saved["tool_version"])
-            self.assertEqual(
-                saved["tasks"]["bundle:audio"]["dependencies"],
-                ["map:test"],
-            )
+            assert saved["profile"] == "grid"
+            assert saved["source_fingerprint"] == "source"
+            assert saved["dependency_fingerprint"] == "dependencies"
+            assert saved["tool_version"]
+            assert saved["tasks"]["bundle:audio"]["dependencies"] == ["map:test"]
 
     def test_matching_task_is_skipped_and_force_reexecutes_it(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -95,11 +93,11 @@ class ManifestContractTests(unittest.TestCase):
             second = TaskGraph([task]).run(manifest=manifest)
             forced = TaskGraph([task]).run(manifest=manifest, force=True)
 
-            self.assertEqual(first["map:test"].status, "ok")
-            self.assertEqual(second["map:test"].status, "skipped")
-            self.assertEqual(forced["map:test"].status, "ok")
-            self.assertEqual(calls, 2)
-            self.assertEqual(output.read_text(encoding="utf-8"), "2")
+            assert first["map:test"].status == "ok"
+            assert second["map:test"].status == "skipped"
+            assert forced["map:test"].status == "ok"
+            assert calls == 2
+            assert output.read_text(encoding="utf-8") == "2"
 
     def test_changed_fingerprint_invalidates_saved_task(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -124,8 +122,8 @@ class ManifestContractTests(unittest.TestCase):
             fingerprint[0] = "two"
             result = TaskGraph([task]).run(manifest=manifest)
 
-            self.assertEqual(result["bundle:ui"].status, "ok")
-            self.assertEqual(calls, 2)
+            assert result["bundle:ui"].status == "ok"
+            assert calls == 2
 
     def test_missing_output_invalidates_saved_task(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -149,8 +147,8 @@ class ManifestContractTests(unittest.TestCase):
             output.unlink()
             result = TaskGraph([task]).run(manifest=manifest)
 
-            self.assertEqual(result["bundle:audio"].status, "ok")
-            self.assertEqual(calls, 2)
+            assert result["bundle:audio"].status == "ok"
+            assert calls == 2
 
     def test_changed_output_inventory_invalidates_saved_task(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -181,8 +179,8 @@ class ManifestContractTests(unittest.TestCase):
             )
             result = TaskGraph([expanded]).run(manifest=manifest)
 
-            self.assertEqual(result["bake:test:textures"].status, "ok")
-            self.assertEqual(calls, 2)
+            assert result["bake:test:textures"].status == "ok"
+            assert calls == 2
 
     def test_failed_task_is_never_a_skip_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -196,10 +194,10 @@ class ManifestContractTests(unittest.TestCase):
                 fingerprint=lambda: "inputs",
                 outputs=(output,),
             )
-            with self.assertRaises(TaskFailure):
+            with pytest.raises(TaskFailure):
                 TaskGraph([task]).run(manifest=manifest)
 
-            self.assertFalse(manifest.can_skip(task, "inputs"))
+            assert not manifest.can_skip(task, "inputs")
 
     def test_task_failure_still_persists_the_records_of_completed_tasks(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -221,12 +219,12 @@ class ManifestContractTests(unittest.TestCase):
                     Task("zz:fail", fail, dependencies=("map:good",)),
                 ]
             )
-            with self.assertRaises(TaskFailure):
+            with pytest.raises(TaskFailure):
                 graph.run(manifest=manifest)
 
             saved = json.loads(manifest.path.read_text(encoding="utf-8"))
-            self.assertEqual(saved["tasks"]["map:good"]["status"], "complete")
-            self.assertEqual(saved["tasks"]["zz:fail"]["status"], "failed")
+            assert saved["tasks"]["map:good"]["status"] == "complete"
+            assert saved["tasks"]["zz:fail"]["status"] == "failed"
 
     def test_graph_run_batches_receipts_into_a_single_flush(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -237,9 +235,9 @@ class ManifestContractTests(unittest.TestCase):
             with mock.patch.object(manifest, "write", wraps=manifest.write) as writes:
                 graph.run(manifest=manifest)
 
-            self.assertEqual(writes.call_count, 1)
+            assert writes.call_count == 1
             saved = json.loads(manifest.path.read_text(encoding="utf-8"))
-            self.assertEqual(set(saved["tasks"]), {"map:a", "map:b", "map:c"})
+            assert set(saved["tasks"]) == {"map:a", "map:b", "map:c"}
 
     def test_skip_run_still_records_and_persists_the_receipt(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -261,9 +259,9 @@ class ManifestContractTests(unittest.TestCase):
 
             result = TaskGraph([task]).run(manifest=Manifest(manifest_path))
 
-            self.assertEqual(result["map:test"].status, "skipped")
+            assert result["map:test"].status == "skipped"
             rewritten = json.loads(manifest_path.read_text(encoding="utf-8"))
-            self.assertIsNone(rewritten["tasks"]["map:test"]["error"])
+            assert rewritten["tasks"]["map:test"]["error"] is None
 
     def test_digest_cache_tolerates_entries_with_extra_or_malformed_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -290,14 +288,14 @@ class ManifestContractTests(unittest.TestCase):
 
             # An entry carrying metadata beyond the identity still hits without a re-hash.
             cache = ContentDigestCache(cache_path)
-            self.assertEqual(cache.digest(product), expected)
-            self.assertFalse(cache.dirty)
+            assert cache.digest(product) == expected
+            assert not cache.dirty
 
             # An entry that is not a mapping is a plain miss that re-hashes once.
             cache.entries[key] = ["not", "a", "mapping"]
-            self.assertEqual(cache.digest(product), expected)
-            self.assertTrue(cache.dirty)
-            self.assertNotIn("ctime_ns", cache.entries[key])
+            assert cache.digest(product) == expected
+            assert cache.dirty
+            assert "ctime_ns" not in cache.entries[key]
 
     def test_digest_cache_write_keeps_entries_another_instance_added(self) -> None:
         # The parent process and an editor commandlet hash into one store; the later
@@ -317,7 +315,7 @@ class ManifestContractTests(unittest.TestCase):
             child.write()
             parent.write()
             reloaded = ContentDigestCache(store)
-            self.assertEqual(set(reloaded.entries), {str(first.resolve()), str(second.resolve())})
+            assert set(reloaded.entries) == {str(first.resolve()), str(second.resolve())}
 
     def test_digest_cache_hashes_a_racy_file_and_leaves_it_unrecorded(self) -> None:
         # A file inside the racy window can be rewritten at the same size within one
@@ -328,19 +326,14 @@ class ManifestContractTests(unittest.TestCase):
             product = root / "product"
             product.write_bytes(b"first!")
             cache = ContentDigestCache(root / "digests.json")
-            self.assertEqual(cache.digest(product), hashlib.sha256(b"first!").hexdigest())
-            self.assertFalse(cache.dirty)
+            assert cache.digest(product) == hashlib.sha256(b"first!").hexdigest()
+            assert not cache.dirty
             product.write_bytes(b"second")
-            self.assertEqual(cache.digest(product), hashlib.sha256(b"second").hexdigest())
-            self.assertFalse(cache.dirty)
+            assert cache.digest(product) == hashlib.sha256(b"second").hexdigest()
+            assert not cache.dirty
 
             settled = time.time_ns() - 2 * ContentDigestCache.RACY_WINDOW_NS
             os.utime(product, ns=(settled, settled))
-            self.assertEqual(cache.digest(product), hashlib.sha256(b"second").hexdigest())
-            self.assertTrue(cache.dirty)
-            self.assertEqual(cache.entries[str(product.resolve())]["sha256"],
-                             hashlib.sha256(b"second").hexdigest())
-
-
-if __name__ == "__main__":
-    unittest.main()
+            assert cache.digest(product) == hashlib.sha256(b"second").hexdigest()
+            assert cache.dirty
+            assert cache.entries[str(product.resolve())]["sha256"] == hashlib.sha256(b"second").hexdigest()

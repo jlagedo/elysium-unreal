@@ -4,6 +4,7 @@ from pathlib import Path
 
 from elysium_pipeline import shared_corpus as SC
 from elysium_pipeline.formats import mdl
+import pytest
 
 
 class KeyRuleTests(unittest.TestCase):
@@ -16,26 +17,17 @@ class KeyRuleTests(unittest.TestCase):
             "materials/metal/metalox.tth",
             "metal/metalox.vtf",
         ):
-            self.assertEqual(SC.texture_key(spelling), "metal/metalox", spelling)
+            assert SC.texture_key(spelling) == "metal/metalox", spelling
 
     def test_material_key_drops_the_prefix_and_the_extension(self):
-        self.assertEqual(
-            SC.material_key("materials\\Models/Scenery/spike.vmt"),
-            "models/scenery/spike",
-        )
+        assert SC.material_key("materials\\Models/Scenery/spike.vmt") == "models/scenery/spike"
 
     def test_static_stem_folds_the_whole_path_including_models(self):
-        self.assertEqual(
-            SC.static_stem("models/items/Rings/Ground/Ring03.mdl"),
-            "models_items_rings_ground_ring03",
-        )
+        assert SC.static_stem("models/items/Rings/Ground/Ring03.mdl") == "models_items_rings_ground_ring03"
 
     def test_static_stem_keeps_the_characters_the_c_twin_keeps(self):
         # FElysiumContentPaths::PropModelStem replaces one-for-one and keeps '.', '_' and '-'.
-        self.assertEqual(
-            SC.static_stem("models/scenery/a-b/c.d e.mdl"),
-            "models_scenery_a-b_c.d_e",
-        )
+        assert SC.static_stem("models/scenery/a-b/c.d e.mdl") == "models_scenery_a-b_c.d_e"
 
 
 class PropMaterialKeyNormalizationTests(unittest.TestCase):
@@ -58,8 +50,8 @@ class PropMaterialKeyNormalizationTests(unittest.TestCase):
 
     def test_the_recorded_key_is_the_one_the_corpus_document_carries(self):
         channels = mdl.material_channels("MilkCrate", self.SEARCH, self._read)
-        self.assertEqual(channels["vmt"], self.KEY)
-        self.assertEqual(channels["vmt"], SC.material_key(channels["vmt"]))
+        assert channels["vmt"] == self.KEY
+        assert channels["vmt"] == SC.material_key(channels["vmt"])
 
     def test_a_prop_mtl_names_that_key(self):
         mesh = mdl.Mesh("MilkCrate")
@@ -70,7 +62,7 @@ class PropMaterialKeyNormalizationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as out:
             mdl.write_obj_scene([mesh], "crate", out, self.SEARCH, self._read, {})
             mtl = (Path(out) / "crate.mtl").read_text(encoding="utf-8")
-        self.assertIn("mat %s\n" % self.KEY, mtl)
+        assert "mat %s\n" % self.KEY in mtl
 
 
 class MaterialResolutionTests(unittest.TestCase):
@@ -89,10 +81,10 @@ class MaterialResolutionTests(unittest.TestCase):
 
         path, info = mdl.resolve_vmt(
             "spike", ["models/props/first/", "models/props/second/"], read)
-        self.assertIsNotNone(info)
-        self.assertEqual(path, "models/props/second/spike")
-        self.assertEqual(tried, ["materials/models/props/first/spike.vmt",
-                                 "materials/models/props/second/spike.vmt"])
+        assert info is not None
+        assert path == "models/props/second/spike"
+        assert tried == ["materials/models/props/first/spike.vmt",
+                                 "materials/models/props/second/spike.vmt"]
 
     def test_a_flat_material_is_not_a_last_resort(self):
         # The engine composes one path per search path and stops; there is no global
@@ -103,11 +95,11 @@ class MaterialResolutionTests(unittest.TestCase):
             tried.append(key)
             return self.HIT if key == "materials/spike.vmt" else None
 
-        self.assertEqual(mdl.resolve_vmt("spike", ["models/props/"], read), (None, None))
-        self.assertEqual(tried, ["materials/models/props/spike.vmt"])
+        assert mdl.resolve_vmt("spike", ["models/props/"], read) == (None, None)
+        assert tried == ["materials/models/props/spike.vmt"]
 
     def test_a_model_with_no_search_path_resolves_nothing(self):
-        self.assertEqual(mdl.resolve_vmt("spike", [], lambda key: self.HIT), (None, None))
+        assert mdl.resolve_vmt("spike", [], lambda key: self.HIT) == (None, None)
 
     def test_a_world_name_resolves_against_the_materials_root(self):
         # A world or decal material's authored name is already its path, and the engine's brush
@@ -119,11 +111,11 @@ class MaterialResolutionTests(unittest.TestCase):
             return self.HIT if key == "materials/brick/brickwall001a.vmt" else None
 
         path, info = mdl.resolve_vmt("brick/brickwall001a", mdl.WORLD_SEARCH, read)
-        self.assertEqual(path, "brick/brickwall001a")
-        self.assertEqual(tried, ["materials/brick/brickwall001a.vmt"])
+        assert path == "brick/brickwall001a"
+        assert tried == ["materials/brick/brickwall001a.vmt"]
 
     def test_a_total_miss_answers_no_material(self):
-        self.assertIsNone(mdl.material_channels("spike", ["models/props/"], lambda key: None))
+        assert mdl.material_channels("spike", ["models/props/"], lambda key: None) is None
 
     def test_a_missed_slot_writes_newmtl_with_no_mat_line(self):
         """The bake's signal for a miss is the absence of the `mat` line, which is what lets it
@@ -136,50 +128,44 @@ class MaterialResolutionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as out:
             mdl.write_obj_scene([mesh], "spike", out, ["models/props/"], lambda key: None, {})
             mtl = (Path(out) / "spike.mtl").read_text(encoding="utf-8")
-        self.assertIn("newmtl spike\n", mtl)
-        self.assertNotIn("mat ", mtl)
+        assert "newmtl spike\n" in mtl
+        assert "mat " not in mtl
 
 
 class WorldMaterialKeyTests(unittest.TestCase):
     def test_an_unpatched_face_keys_by_its_authored_material(self):
-        self.assertEqual(SC.world_material_key("art/bdiorama1", "sm_hub_1"), "art/bdiorama1")
+        assert SC.world_material_key("art/bdiorama1", "sm_hub_1") == "art/bdiorama1"
 
     def test_a_map_wide_cubemap_face_carries_the_default_tag(self):
-        self.assertEqual(
-            SC.world_material_key("maps/sm_hub_1/asphalt/asphaltasan", "sm_hub_1"),
-            "asphalt/asphaltasan@cubemapdefault",
-        )
+        assert SC.world_material_key("maps/sm_hub_1/asphalt/asphaltasan", "sm_hub_1") == "asphalt/asphaltasan@cubemapdefault"
 
     def test_a_positioned_cubemap_face_carries_its_own_cube(self):
-        self.assertEqual(
-            SC.world_material_key("maps/sm_hub_1/glass/glass01_660_671_73", "sm_hub_1"),
-            "glass/glass01@c660_671_73",
-        )
+        assert SC.world_material_key("maps/sm_hub_1/glass/glass01_660_671_73", "sm_hub_1") == "glass/glass01@c660_671_73"
 
     def test_another_maps_patch_is_not_read_as_this_maps_cubemap(self):
         # base_material strips any map's prefix, but only the owning map's patch names a cube.
-        self.assertIsNone(SC.cubemap_of("maps/la_hub_1/glass/glass01", "sm_hub_1"))
+        assert SC.cubemap_of("maps/la_hub_1/glass/glass01", "sm_hub_1") is None
 
     def test_two_maps_naming_one_material_resolve_to_one_key(self):
         # The regression this corpus exists for: the same authored surface in two maps was two
         # assets, free to disagree.
         first = SC.world_material_key("brick/brickwall001a", "sm_hub_1")
         second = SC.world_material_key("brick/brickwall001a", "sm_junkyard_1")
-        self.assertEqual(first, second)
+        assert first == second
 
 
 class PredicateTests(unittest.TestCase):
     def test_a_plain_material_is_shared(self):
-        self.assertFalse(SC.is_map_scoped_material("brick/brickwall001a"))
+        assert not SC.is_map_scoped_material("brick/brickwall001a")
 
     def test_a_cubemap_patched_material_stays_with_its_map(self):
-        self.assertTrue(SC.is_map_scoped_material("asphalt/asphaltasan@cubemapdefault"))
+        assert SC.is_map_scoped_material("asphalt/asphaltasan@cubemapdefault")
 
     def test_a_decal_stays_with_its_map(self):
-        self.assertTrue(SC.is_map_scoped_material("decals/stains/blooda", decal=True))
+        assert SC.is_map_scoped_material("decals/stains/blooda", decal=True)
 
     def test_a_wetness_driven_surface_stays_with_its_map(self):
-        self.assertTrue(SC.is_map_scoped_material("concrete/wet", wetness_driven=True))
+        assert SC.is_map_scoped_material("concrete/wet", wetness_driven=True)
 
     def test_a_material_only_this_maps_pakfile_carries_stays_with_its_map(self):
         """The corpus reads the install, so it never holds a VBSP-written map-local material.
@@ -187,8 +173,8 @@ class PredicateTests(unittest.TestCase):
         Called shared, no package would author it and the surface would bind the master's own
         placeholder rather than failing.
         """
-        self.assertTrue(SC.is_map_scoped_material(
-            "maps/sm_pier_1/water/invisible_water_depth_33", local=True))
+        assert SC.is_map_scoped_material(
+            "maps/sm_pier_1/water/invisible_water_depth_33", local=True)
 
 
 class RigBoneNameTests(unittest.TestCase):
@@ -197,42 +183,40 @@ class RigBoneNameTests(unittest.TestCase):
 
     def test_control_rig_illegal_characters_fold_to_underscores(self):
         from elysium_pipeline.asset_names import rig_bone_name
-        self.assertEqual(rig_bone_name("[2]upper_teeth"), "_2_upper_teeth")
-        self.assertEqual(rig_bone_name("[2]GeoSphere02"), "_2_GeoSphere02")
+        assert rig_bone_name("[2]upper_teeth") == "_2_upper_teeth"
+        assert rig_bone_name("[2]GeoSphere02") == "_2_GeoSphere02"
 
     def test_legal_names_pass_verbatim(self):
         from elysium_pipeline.asset_names import rig_bone_name
         for name in ("Bip01 L Finger0", "lower_teeth", "bush hook", "a-b.c|d"):
-            self.assertEqual(rig_bone_name(name), name)
+            assert rig_bone_name(name) == name
 
     def test_a_leading_space_folds_and_a_later_space_does_not(self):
         from elysium_pipeline.asset_names import rig_bone_name
-        self.assertEqual(rig_bone_name(" tail bone"), "_tail bone")
+        assert rig_bone_name(" tail bone") == "_tail bone"
 
 
 class FileNameTests(unittest.TestCase):
     def test_every_product_of_one_key_is_a_distinct_file(self):
         key = "models/scenery/structural/doorknoba/doorknob1"
         names = {SC.texture_file(key, suffix) for suffix in SC.ROLES}
-        self.assertEqual(len(names), len(SC.ROLES))
-        self.assertIn("models_scenery_structural_doorknoba_doorknob1.png", names)
-        self.assertIn("models_scenery_structural_doorknoba_doorknob1_ke.png", names)
+        assert len(names) == len(SC.ROLES)
+        assert "models_scenery_structural_doorknoba_doorknob1.png" in names
+        assert "models_scenery_structural_doorknoba_doorknob1_ke.png" in names
 
     def test_the_corpus_relative_path_is_what_materials_json_records(self):
-        self.assertEqual(
-            SC.texture_rel("metal/metalox", SC.NORMAL), "tex/metal_metalox_n.png")
+        assert SC.texture_rel("metal/metalox", SC.NORMAL) == "tex/metal_metalox_n.png"
 
     def test_a_sky_face_is_addressed_by_the_sky_not_by_the_map(self):
         # The map export writes these as the map-local alias `sky_<face>`, which is why two maps
         # sharing one sky held two copies under one name.
-        self.assertEqual(SC.sky_face_file("nightsky1", "bk"), "skybox_nightsky1bk.png")
-        self.assertEqual(
-            SC.sky_face_file("nightsky1", "bk"), SC.sky_face_file("NightSky1", "bk"))
+        assert SC.sky_face_file("nightsky1", "bk") == "skybox_nightsky1bk.png"
+        assert SC.sky_face_file("nightsky1", "bk") == SC.sky_face_file("NightSky1", "bk")
 
     def test_asset_names_follow_the_established_folds(self):
-        self.assertEqual(SC.texture_asset("metal_metalox_n.png"), "T_metal_metalox_n")
-        self.assertEqual(SC.material_asset("models/scenery/spike"), "MI_models_scenery_spike")
-        self.assertEqual(SC.mesh_asset("models_scenery_doorknoba"), "SM_models_scenery_doorknoba")
+        assert SC.texture_asset("metal_metalox_n.png") == "T_metal_metalox_n"
+        assert SC.material_asset("models/scenery/spike") == "MI_models_scenery_spike"
+        assert SC.mesh_asset("models_scenery_doorknoba") == "SM_models_scenery_doorknoba"
 
 
 class ManifestTests(unittest.TestCase):
@@ -246,25 +230,25 @@ class ManifestTests(unittest.TestCase):
         }
 
     def test_two_keys_folding_to_one_file_name_is_a_named_failure(self):
-        with self.assertRaises(ValueError) as caught:
+        with pytest.raises(ValueError) as caught:
             SC.build_manifest(
                 textures={"a/b c": {"files": {"a_b_c.png": "albedo"}},
                           "a/b_c": {"files": {"a_b_c.png": "albedo"}}},
                 materials={}, models={})
-        self.assertIn("collision", str(caught.exception))
+        assert "collision" in str(caught.value)
 
     def test_the_fingerprint_ignores_discovery_order(self):
         first = SC.corpus_fingerprint(["b", "a"], ["y", "x"], ["q", "p"])
         second = SC.corpus_fingerprint(["a", "b"], ["x", "y"], ["p", "q"])
-        self.assertEqual(first, second)
-        self.assertNotEqual(first, SC.corpus_fingerprint(["a"], ["x", "y"], ["p", "q"]))
+        assert first == second
+        assert first != SC.corpus_fingerprint(["a"], ["x", "y"], ["p", "q"])
 
     def test_a_stale_version_names_the_command_that_regenerates_it(self):
         document = SC.build_manifest(textures={}, materials={}, models={})
         document["version"] = SC.VERSION + 1
-        with self.assertRaises(ValueError) as caught:
+        with pytest.raises(ValueError) as caught:
             SC.check_manifest(document)
-        self.assertIn("export bundle corpus", str(caught.exception))
+        assert "export bundle corpus" in str(caught.value)
 
     def test_a_placed_stem_the_corpus_never_decoded_is_named(self):
         document = SC.build_manifest(
@@ -272,8 +256,7 @@ class ManifestTests(unittest.TestCase):
             models={"models_scenery_doorknoba": {"model": "models/scenery/doorknoba.mdl"}})
         placed = ["models_scenery_doorknoba", "models_scenery_ashtray",
                   "models_scenery_ashtray", ""]
-        self.assertEqual(SC.missing_models(document["models"], placed),
-                         ["models_scenery_ashtray"])
+        assert SC.missing_models(document["models"], placed) == ["models_scenery_ashtray"]
 
     def test_every_texture_bearing_field_is_declared_a_channel(self):
         """`CHANNEL_FIELDS` is how a texture is traced back to the materials that draw it.
@@ -288,7 +271,7 @@ class ManifestTests(unittest.TestCase):
         })
         stated = {name for name, value in record.items()
                   if isinstance(value, str) and value.startswith(SC.TEX + "/")}
-        self.assertEqual(set(SC.CHANNEL_FIELDS), stated)
+        assert set(SC.CHANNEL_FIELDS) == stated
 
 
 class MaterialRecordTests(unittest.TestCase):
@@ -310,29 +293,29 @@ class MaterialRecordTests(unittest.TestCase):
         # A record that pointed at a file the decode never wrote would bake as the master's own
         # placeholder, which is exactly the silent grey surface the guard exists to prevent.
         record = SC.material_record(self._channels(), files=set())
-        self.assertEqual(record["albedo"], "")
-        self.assertEqual(record["albedo_key"], "models/scenery/spike")
+        assert record["albedo"] == ""
+        assert record["albedo_key"] == "models/scenery/spike"
 
     def test_a_present_channel_is_stated_corpus_relative(self):
         record = SC.material_record(
             self._channels(), files={"models_scenery_spike.png"})
-        self.assertEqual(record["albedo"], "tex/models_scenery_spike.png")
+        assert record["albedo"] == "tex/models_scenery_spike.png"
 
     def test_without_a_file_set_every_named_channel_is_stated(self):
         # `files=None` is "state what the VMT names": the caller has no decoded set to check
         # against. Every caller that does have one passes it, including the map exporter's
         # PAKFILE-local fallback -- a local material can name a texture the corpus never decoded.
         record = SC.material_record(self._channels())
-        self.assertEqual(record["albedo"], "tex/models_scenery_spike.png")
+        assert record["albedo"] == "tex/models_scenery_spike.png"
 
     def test_an_authored_bumpmap_outranks_the_derived_glass_normal(self):
         record = SC.material_record(
             self._channels(glass=True, bump="models/scenery/authored"))
-        self.assertEqual(record["bump"], "tex/models_scenery_authored_n.png")
+        assert record["bump"] == "tex/models_scenery_authored_n.png"
 
     def test_semantic_glass_falls_back_to_the_normal_derived_from_its_albedo(self):
         record = SC.material_record(self._channels(glass=True))
-        self.assertEqual(record["bump"], "tex/models_scenery_spike_glass_n.png")
+        assert record["bump"] == "tex/models_scenery_spike_glass_n.png"
 
     def test_a_water_material_carries_its_own_normal_and_fog(self):
         # The Water shader names no $basetexture, so a record built only from albedo would drop
@@ -340,16 +323,12 @@ class MaterialRecordTests(unittest.TestCase):
         record = SC.material_record(self._channels(
             albedo="", water=True, water_normal="dev/water_normal",
             water_fog_end=1024.0, water_reflect_tint=[0.5, 0.6, 0.7]))
-        self.assertTrue(record["water"])
-        self.assertEqual(record["water_normal"], "tex/dev_water_normal_n.png")
-        self.assertEqual(record["water_fog_end"], 1024.0)
-        self.assertEqual(record["water_reflect_tint"], [0.5, 0.6, 0.7])
+        assert record["water"]
+        assert record["water_normal"] == "tex/dev_water_normal_n.png"
+        assert record["water_fog_end"] == 1024.0
+        assert record["water_reflect_tint"] == [0.5, 0.6, 0.7]
 
     def test_the_base_alpha_env_mask_reads_the_albedo_key(self):
         record = SC.material_record(
             self._channels(envmap="env_cubemap", envmask_from_alpha=True))
-        self.assertEqual(record["env_mask"], "tex/models_scenery_spike_envmask.png")
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert record["env_mask"] == "tex/models_scenery_spike_envmask.png"

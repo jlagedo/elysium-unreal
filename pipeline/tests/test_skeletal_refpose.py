@@ -27,6 +27,7 @@ import numpy as np
 
 from elysium_pipeline.exporters import UE_mdl_skeletal as UEK
 from elysium_pipeline.formats import mdl_skel
+import pytest
 
 IDENTITY_Q = (0.0, 0.0, 0.0, 1.0)
 #: A 90-degree rotation about Z, used wherever a test needs a root whose orientation actually
@@ -98,7 +99,7 @@ class DefaultByteIdentityTests(unittest.TestCase):
         plain = UEK._skel_section(rows)
         explicit_none = UEK._skel_section(UEK._ref_pose_rows(rows, bone_map, None, "ctx"))
 
-        self.assertEqual(plain, explicit_none)
+        assert plain == explicit_none
 
 
 class OverrideAppliedTests(unittest.TestCase):
@@ -119,32 +120,32 @@ class OverrideAppliedTests(unittest.TestCase):
         without = UEK._skel_section(rows)
         overridden = UEK._skel_section(UEK._ref_pose_rows(rows, bone_map, ref_pose, "ctx"))
 
-        self.assertEqual(len(without), len(overridden))
+        assert len(without) == len(overridden)
         count_a, rows_a = _parse_skel(without)
         count_b, rows_b = _parse_skel(overridden)
-        self.assertEqual(count_a, count_b)
+        assert count_a == count_b
         # Names and parents, and therefore every row's byte offsets, are identical -- only the
         # transform range at the overridden row's offset may differ.
-        self.assertEqual([(n, p) for n, p, _s, _e in rows_a], [(n, p) for n, p, _s, _e in rows_b])
+        assert [(n, p) for n, p, _s, _e in rows_a] == [(n, p) for n, p, _s, _e in rows_b]
 
         target = 2  # "tip" -- index 2 in both `bones` and the single-root `rows`.
         for i in range(len(rows_a)):
             s_a, e_a = rows_a[i][2], rows_a[i][3]
             s_b, e_b = rows_b[i][2], rows_b[i][3]
-            self.assertEqual((s_a, e_a), (s_b, e_b))
+            assert (s_a, e_a) == (s_b, e_b)
             if i == target:
-                self.assertNotEqual(without[s_a:e_a], overridden[s_b:e_b])
+                assert without[s_a:e_a] != overridden[s_b:e_b]
                 expected = (struct.pack("<3f", *UEK._conv_pos(new_pos))
                            + struct.pack("<4f", *UEK._conv_quat(new_quat)))
-                self.assertEqual(overridden[s_b:e_b], expected)
+                assert overridden[s_b:e_b] == expected
             else:
-                self.assertEqual(without[s_a:e_a], overridden[s_b:e_b])
+                assert without[s_a:e_a] == overridden[s_b:e_b]
 
         # Masking the one differing range out of both blobs leaves them byte-identical --
         # "differs ONLY in that bone's seven transform floats" stated as a whole-file check
         # rather than only a per-row one.
         s, e = rows_a[target][2], rows_a[target][3]
-        self.assertEqual(without[:s] + without[e:], overridden[:s] + overridden[e:])
+        assert without[:s] + without[e:] == overridden[:s] + overridden[e:]
 
 
 class SingleRootedRegressionTests(unittest.TestCase):
@@ -158,9 +159,9 @@ class SingleRootedRegressionTests(unittest.TestCase):
         ]
         rows, bone_map, reparented = UEK.unreal_bones(bones)
 
-        self.assertEqual(rows, [(b.name, b.parent, b.pos, b.quat) for b in bones])
-        self.assertEqual(bone_map, [0, 1, 2])
-        self.assertEqual(reparented, {})
+        assert rows == [(b.name, b.parent, b.pos, b.quat) for b in bones]
+        assert bone_map == [0, 1, 2]
+        assert reparented == {}
 
 
 class MultiRootResolutionTests(unittest.TestCase):
@@ -174,9 +175,9 @@ class MultiRootResolutionTests(unittest.TestCase):
         rows, _bone_map, _reparented = UEK.unreal_bones(bones)
 
         names = [name for name, _p, _pos, _q in rows]
-        self.assertNotIn("__elysium_skeleton_root", names)
-        self.assertEqual(len(rows), len(bones))
-        self.assertFalse(hasattr(UEK, "SYNTHETIC_ROOT"))
+        assert "__elysium_skeleton_root" not in names
+        assert len(rows) == len(bones)
+        assert not hasattr(UEK, "SYNTHETIC_ROOT")
 
     def test_root_is_the_largest_subtree_not_the_first_bone(self) -> None:
         # Mirrors `regular_cop`: bone 0 is a childless leaf root, bone 1 is the real root with
@@ -189,10 +190,10 @@ class MultiRootResolutionTests(unittest.TestCase):
         ]
         rows, bone_map, reparented = UEK.unreal_bones(bones)
 
-        self.assertEqual(rows[0][0], "Bip01")
-        self.assertEqual(rows[0][1], -1)
-        self.assertEqual(bone_map[1], 0)
-        self.assertEqual(reparented, {0: 1})  # tongue (original 0) folded onto Bip01 (original 1)
+        assert rows[0][0] == "Bip01"
+        assert rows[0][1] == (-1)
+        assert bone_map[1] == 0
+        assert reparented == {0: 1}  # tongue (original 0) folded onto Bip01 (original 1)
 
     def test_root_stays_put_when_it_is_already_the_largest_subtree(self) -> None:
         # Mirrors `prophet`: bone 0 is the real root, the fork (a childless leaf) comes last.
@@ -203,9 +204,9 @@ class MultiRootResolutionTests(unittest.TestCase):
         ]
         rows, bone_map, reparented = UEK.unreal_bones(bones)
 
-        self.assertEqual(rows[0][0], "Bip01")
-        self.assertEqual(bone_map[0], 0)
-        self.assertEqual(reparented, {2: 0})
+        assert rows[0][0] == "Bip01"
+        assert bone_map[0] == 0
+        assert reparented == {2: 0}
 
     def test_ties_break_on_lowest_original_index(self) -> None:
         # Two childless roots -- equal (zero) subtree size -- must resolve deterministically.
@@ -215,8 +216,8 @@ class MultiRootResolutionTests(unittest.TestCase):
         ]
         _rows, bone_map, reparented = UEK.unreal_bones(bones)
 
-        self.assertEqual(bone_map[0], 0)
-        self.assertEqual(reparented, {1: 0})
+        assert bone_map[0] == 0
+        assert reparented == {1: 0}
 
     def test_reparented_stray_reproduces_its_original_model_space_transform(self) -> None:
         bones = [
@@ -227,11 +228,11 @@ class MultiRootResolutionTests(unittest.TestCase):
         ]
         rows, bone_map, reparented = UEK.unreal_bones(bones)
 
-        self.assertEqual(reparented, {3: 0})
+        assert reparented == {3: 0}
         root_slot, stray_slot = bone_map[0], bone_map[3]
         root_pos, root_quat = rows[root_slot][2], rows[root_slot][3]
         local_pos, local_quat = rows[stray_slot][2], rows[stray_slot][3]
-        self.assertEqual(rows[stray_slot][1], root_slot)  # parent now points at the chosen root
+        assert rows[stray_slot][1] == root_slot  # parent now points at the chosen root
 
         _assert_reproduces_model_space(self, root_pos, root_quat, local_pos, local_quat,
                                        expected_pos=bones[3].pos, expected_quat=bones[3].quat)
@@ -250,20 +251,20 @@ class MultiRootResolutionTests(unittest.TestCase):
         # Every parent's emitted slot precedes its child's.
         for slot, (_name, parent, _pos, _quat) in enumerate(rows):
             if parent >= 0:
-                self.assertLess(parent, slot)
+                assert parent < slot
 
         # `bone_map` is a bijection over every original StudioBone index.
-        self.assertEqual(len(bone_map), len(bones))
-        self.assertEqual(sorted(bone_map), list(range(len(bones))))
+        assert len(bone_map) == len(bones)
+        assert sorted(bone_map) == list(range(len(bones)))
 
         # It round-trips: the row at `bone_map[i]` is bone `i`'s own row.
         for original, b in enumerate(bones):
-            self.assertEqual(rows[bone_map[original]][0], b.name)
+            assert rows[bone_map[original]][0] == b.name
 
-        self.assertEqual(reparented, {0: 1, 4: 1})
+        assert reparented == {0: 1, 4: 1}
         # The chosen root (Bip01, 2 descendants) beats both leaf-adjacent roots (0 and 1
         # descendants respectively).
-        self.assertEqual(bone_map[1], 0)
+        assert bone_map[1] == 0
 
 
 class RealCorpusShapeTests(unittest.TestCase):
@@ -289,18 +290,18 @@ class RealCorpusShapeTests(unittest.TestCase):
         rows, bone_map, reparented = UEK.unreal_bones(bones)
 
         # The biped root (2 descendants) beats every childless prop root.
-        self.assertEqual(bone_map[0], 0)
-        self.assertEqual(reparented, {3: 0, 4: 0, 5: 0, 6: 0})
+        assert bone_map[0] == 0
+        assert reparented == {3: 0, 4: 0, 5: 0, 6: 0}
 
         # Every bone survives as its own row, INDEX-addressed -- the near-duplicate never
         # collapses bone 3 and bone 6 into one, and `bone_map` is still a full permutation.
         # Names come out FOLDED, because the fold is applied once at this boundary.
-        self.assertEqual(len(rows), len(bones))
-        self.assertEqual(sorted(bone_map), list(range(len(bones))))
+        assert len(rows) == len(bones)
+        assert sorted(bone_map) == list(range(len(bones)))
         for original, b in enumerate(bones):
-            self.assertEqual(rows[bone_map[original]][0], UEK.rig_bone_name(b.name))
+            assert rows[bone_map[original]][0] == UEK.rig_bone_name(b.name)
         emitted_names = {name.lower() for name, _p, _pos, _q in rows}
-        self.assertEqual(len(emitted_names), len(bones))
+        assert len(emitted_names) == len(bones)
 
         # Every stray -- both "lower_teeth" bones included -- reproduces its OWN original
         # model-space transform under the chosen root, independently of the others.
@@ -308,14 +309,14 @@ class RealCorpusShapeTests(unittest.TestCase):
         root_pos, root_quat = rows[root_slot][2], rows[root_slot][3]
         for original in (3, 4, 5, 6):
             slot = bone_map[original]
-            self.assertEqual(rows[slot][1], root_slot)
+            assert rows[slot][1] == root_slot
             _assert_reproduces_model_space(
                 self, root_pos, root_quat, rows[slot][2], rows[slot][3],
                 expected_pos=bones[original].pos, expected_quat=bones[original].quat)
 
         for slot, (_name, parent, _pos, _quat) in enumerate(rows):
             if parent >= 0:
-                self.assertLess(parent, slot)
+                assert parent < slot
 
     def test_a_verbatim_duplicate_bone_name_is_a_fatal_export_error(self) -> None:
         # Two bones sharing one rig name cannot both bind: skeleton, data-model control and bank
@@ -326,7 +327,7 @@ class RealCorpusShapeTests(unittest.TestCase):
             bone(1, "lower_teeth", -1, (1.0, 70.0, 3.0)),
             bone(2, "lower_teeth", -1, (1.1, 70.1, 3.1)),
         ]
-        with self.assertRaises(SystemExit):
+        with pytest.raises(SystemExit):
             UEK.unreal_bones(bones)
 
     def test_low_z_stray_resolves_the_same_as_a_head_height_one(self) -> None:
@@ -340,8 +341,8 @@ class RealCorpusShapeTests(unittest.TestCase):
         ]
         rows, bone_map, reparented = UEK.unreal_bones(bones)
 
-        self.assertEqual(bone_map[0], 0)
-        self.assertEqual(reparented, {2: 0})
+        assert bone_map[0] == 0
+        assert reparented == {2: 0}
         root_slot, stray_slot = bone_map[0], bone_map[2]
         root_pos, root_quat = rows[root_slot][2], rows[root_slot][3]
         _assert_reproduces_model_space(
@@ -361,18 +362,18 @@ class CinematicMultiRootTests(unittest.TestCase):
         ]
         rows, order, reparented = UEK._cinematic_rows(sub, "Bip02")
         # The forked prop resolved onto the actor's own root, keyed by ORIGINAL bone index.
-        self.assertEqual(reparented, {13: 10})
+        assert reparented == {13: 10}
 
         names = [name for name, _p, _pos, _q in rows]
-        self.assertNotIn("__elysium_skeleton_root", names)
-        self.assertEqual(len(rows), len(sub))
-        self.assertEqual(rows[order[10]][0], "Bip01")  # the prefix folds Bip02 -> Bip01
-        self.assertEqual(rows[order[10]][1], -1)
+        assert "__elysium_skeleton_root" not in names
+        assert len(rows) == len(sub)
+        assert rows[order[10]][0] == "Bip01"  # the prefix folds Bip02 -> Bip01
+        assert rows[order[10]][1] == (-1)
         # order round-trips every original StudioBone index into a valid emitted slot.
-        self.assertEqual(sorted(order.values()), list(range(len(sub))))
+        assert sorted(order.values()) == list(range(len(sub)))
         for slot, (_name, parent, _pos, _quat) in enumerate(rows):
             if parent >= 0:
-                self.assertLess(parent, slot)
+                assert parent < slot
 
 
 class ReparentedRefPoseTests(unittest.TestCase):
@@ -384,7 +385,7 @@ class ReparentedRefPoseTests(unittest.TestCase):
             bone(1, "root_b", -1, (2.0, 2.0, 2.0)),
         ]
         rows, bone_map, reparented = UEK.unreal_bones(bones)
-        self.assertEqual(reparented, {1: 0})
+        assert reparented == {1: 0}
 
         # A caller-supplied override (e.g. the wielded-weapon bake's clip frame 0) with values
         # that differ from the bind on BOTH bones -- so a bug that silently fell back to the
@@ -396,9 +397,9 @@ class ReparentedRefPoseTests(unittest.TestCase):
         out = UEK._ref_pose_rows(rows, bone_map, ref_pose, "ctx", reparented)
 
         root_slot, stray_slot = bone_map[0], bone_map[1]
-        self.assertEqual(out[root_slot][2:], override_root)
+        assert out[root_slot][2:] == override_root
         stray_row = out[stray_slot]
-        self.assertEqual(stray_row[1], root_slot)
+        assert stray_row[1] == root_slot
 
         _assert_reproduces_model_space(
             self, override_root[0], override_root[1], stray_row[2], stray_row[3],
@@ -411,10 +412,10 @@ class DegenerateReparentTests(unittest.TestCase):
             bone(0, "root_a", -1, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0)),
             bone(1, "root_b", -1, (1.0, 0.0, 0.0)),
         ]
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             UEK.unreal_bones(bones)
-        self.assertIn("root_b", str(ctx.exception))
-        self.assertIn("root_a", str(ctx.exception))
+        assert "root_b" in str(ctx.value)
+        assert "root_a" in str(ctx.value)
 
 
 class LengthMismatchTests(unittest.TestCase):
@@ -422,14 +423,14 @@ class LengthMismatchTests(unittest.TestCase):
         bones = [bone(0, "root", -1), bone(1, "child", 0)]
         rows, bone_map, _reparented = UEK.unreal_bones(bones)
 
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             UEK._ref_pose_rows(rows, bone_map, [((0.0, 0.0, 0.0), IDENTITY_Q)],
                                "models/weapons/w_test.mdl")
 
-        message = str(ctx.exception)
-        self.assertIn("models/weapons/w_test.mdl", message)
-        self.assertIn("1", message)   # entries given
-        self.assertIn("2", message)   # entries expected
+        message = str(ctx.value)
+        assert "models/weapons/w_test.mdl" in message
+        assert "1" in message   # entries given
+        assert "2" in message   # entries expected
 
 
 def _surface(pos, nrm, joints, weights, tris=()):
@@ -489,8 +490,8 @@ class RefPoseGeometryTests(unittest.TestCase):
 
         UEK._reskin_surfaces(surfaces, self.BONES, bind, "ctx")
 
-        self.assertTrue(np.allclose(surface["pos"][0], (0.5, 0.25, -1.0), atol=1e-6))
-        self.assertTrue(np.allclose(surface["nrm"][0], (0.0, 1.0, 0.0), atol=1e-6))
+        assert np.allclose(surface["pos"][0], (0.5, 0.25, -1.0), atol=1e-6)
+        assert np.allclose(surface["nrm"][0], (0.0, 1.0, 0.0), atol=1e-6)
 
     def test_single_influence_vertex_moves_rigidly_with_its_bone(self) -> None:
         vertex = (0.5, 0.25, -1.0)
@@ -502,13 +503,12 @@ class RefPoseGeometryTests(unittest.TestCase):
         UEK._reskin_surfaces({"mat": surface}, self.BONES, self.REF_POSE, "ctx")
 
         expected = _rigid_move(bind_ms[1], ref_ms[1], vertex)
-        self.assertTrue(np.allclose(surface["pos"][0], expected, atol=1e-6),
-                        f"{surface['pos'][0]} != {expected}")
+        assert np.allclose(surface["pos"][0], expected, atol=1e-6), f"{surface['pos'][0]} != {expected}"
         # The normal takes the rotation alone: same move, zero translation.
         expected_nrm = _rigid_move(bind_ms[1], ref_ms[1], (0.0, 1.0, 0.0)) \
             - _rigid_move(bind_ms[1], ref_ms[1], (0.0, 0.0, 0.0))
-        self.assertTrue(np.allclose(surface["nrm"][0], expected_nrm, atol=1e-6))
-        self.assertAlmostEqual(float(np.linalg.norm(surface["nrm"][0])), 1.0, places=6)
+        assert np.allclose(surface["nrm"][0], expected_nrm, atol=1e-6)
+        assert float(np.linalg.norm(surface["nrm"][0])) == pytest.approx(1.0, abs=1e-6)
 
     def test_blended_vertex_interpolates_its_influences(self) -> None:
         vertex = (2.0, 0.0, 1.0)
@@ -521,8 +521,7 @@ class RefPoseGeometryTests(unittest.TestCase):
 
         expected = (0.25 * _rigid_move(bind_ms[0], ref_ms[0], vertex)
                     + 0.75 * _rigid_move(bind_ms[1], ref_ms[1], vertex))
-        self.assertTrue(np.allclose(surface["pos"][0], expected, atol=1e-6),
-                        f"{surface['pos'][0]} != {expected}")
+        assert np.allclose(surface["pos"][0], expected, atol=1e-6), f"{surface['pos'][0]} != {expected}"
 
     def test_weightless_vertex_binds_wholly_to_bone_zero(self) -> None:
         # Mirrors `ElysiumSkeletalBuild`'s own fallback (`Influences.Emplace(0, 1.0f)`), so the
@@ -534,7 +533,7 @@ class RefPoseGeometryTests(unittest.TestCase):
 
         UEK._reskin_surfaces({"mat": surface}, self.BONES, ref_pose, "ctx")
 
-        self.assertTrue(np.allclose(surface["pos"][0], (6.0, 1.0, 1.0), atol=1e-6))
+        assert np.allclose(surface["pos"][0], (6.0, 1.0, 1.0), atol=1e-6)
 
     def test_zero_authored_normal_stays_zero_for_the_geometric_fallback(self) -> None:
         surface = _surface(pos=[(0.5, 0.25, -1.0)], nrm=[(0.0, 0.0, 0.0)],
@@ -542,25 +541,21 @@ class RefPoseGeometryTests(unittest.TestCase):
 
         UEK._reskin_surfaces({"mat": surface}, self.BONES, self.REF_POSE, "ctx")
 
-        self.assertEqual(surface["nrm"][0], (0.0, 0.0, 0.0))
+        assert surface["nrm"][0] == (0.0, 0.0, 0.0)
 
     def test_length_mismatch_fails_loudly(self) -> None:
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             UEK._reskin_surfaces({}, self.BONES, [((0.0, 0.0, 0.0), IDENTITY_Q)],
                                  "models/weapons/w_short.mdl")
 
-        self.assertIn("models/weapons/w_short.mdl", str(ctx.exception))
+        assert "models/weapons/w_short.mdl" in str(ctx.value)
 
     def test_zero_quaternion_in_the_override_fails_loudly(self) -> None:
         ref_pose = [((0.0, 0.0, 0.0), IDENTITY_Q), ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0))]
 
-        with self.assertRaises(ValueError) as ctx:
+        with pytest.raises(ValueError) as ctx:
             UEK._reskin_surfaces({}, self.BONES, ref_pose, "models/weapons/w_zero.mdl")
 
-        message = str(ctx.exception)
-        self.assertIn("models/weapons/w_zero.mdl", message)
-        self.assertIn("grip", message)
-
-
-if __name__ == "__main__":
-    unittest.main()
+        message = str(ctx.value)
+        assert "models/weapons/w_zero.mdl" in message
+        assert "grip" in message
