@@ -102,99 +102,99 @@ def counting_open(counter):
     return lambda path, mode="rb": _CountingFile(open(path, mode), counter)
 
 
-class TailIndex(unittest.TestCase):
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.dir = self._tmp.name
+@pytest.fixture
+def pack_dir(tmp_path):
+    """A scratch directory whose pack handles are released before it is torn down.
 
-    def tearDown(self):
-        vpk.close_handles()
-        self._tmp.cleanup()
+    `vpk` memoizes one file handle per pack, and on Windows an open handle blocks the
+    directory's removal.
+    """
+    yield tmp_path
+    vpk.close_handles()
 
-    def _write(self, name, blob):
-        path = os.path.join(self.dir, name)
-        with open(path, "wb") as f:
-            f.write(blob)
-        return path
 
-    def test_index_matches_the_full_read_oracle(self):
-        files = {
-            "materials/Brick01.vmt": b"vmt one",
-            "models\\Weapons\\Knife.mdl": b"knife bytes here",
-            "maps/sm_hub_1.bsp": b"z" * 900,
-        }
-        path = self._write("pack000.vpk", pack_bytes(files))
-        idx = vpk.index_vpk(path)
-        assert idx == reference_index(path)
-        assert idx["materials/brick01.vmt"] == (path, 0, 7)
-        assert idx["models/weapons/knife.mdl"] == (path, 7, 16)
-        assert idx["maps/sm_hub_1.bsp"] == (path, 23, 900)
+def _write(directory, name, blob):
+    path = os.path.join(directory, name)
+    with open(path, "wb") as f:
+        f.write(blob)
+    return path
 
-    def test_a_directory_wider_than_the_footer_window_still_indexes(self):
-        files = {f"materials/generated/texture_{i:05d}.vtf": struct.pack("<I", i)
-                 for i in range(3000)}
-        path = self._write("pack000.vpk", pack_bytes(files))
-        idx = vpk.index_vpk(path)
-        assert len(idx) == 3000
-        assert idx == reference_index(path)
 
-    def test_a_pointer_at_the_deepest_probe_position_resolves(self):
-        files = {"materials/one.vmt": b"x" * 512}
-        footer = struct.pack("<I", 512) + b"\x00" * 5   # pointer lands on the n-9 probe
-        path = self._write("pack000.vpk", pack_bytes(files, footer=footer))
-        idx = vpk.index_vpk(path)
-        assert idx == reference_index(path)
-        assert idx["materials/one.vmt"] == (path, 0, 512)
+def test_index_matches_the_full_read_oracle(pack_dir):
+    files = {
+        "materials/Brick01.vmt": b"vmt one",
+        "models\\Weapons\\Knife.mdl": b"knife bytes here",
+        "maps/sm_hub_1.bsp": b"z" * 900,
+    }
+    path = _write(pack_dir, "pack000.vpk", pack_bytes(files))
+    idx = vpk.index_vpk(path)
+    assert idx == reference_index(path)
+    assert idx["materials/brick01.vmt"] == (path, 0, 7)
+    assert idx["models/weapons/knife.mdl"] == (path, 7, 16)
+    assert idx["maps/sm_hub_1.bsp"] == (path, 23, 900)
 
-    def test_an_unindexable_pack_raises_without_a_tail_warning(self):
-        path = self._write("pack000.vpk", b"\x00" * 32)
-        stderr = io.StringIO()
-        with contextlib.redirect_stderr(stderr):
-            with pytest.raises(ValueError):
-                vpk.index_vpk(path)
+
+def test_a_directory_wider_than_the_footer_window_still_indexes(pack_dir):
+    files = {f"materials/generated/texture_{i:05d}.vtf": struct.pack("<I", i)
+             for i in range(3000)}
+    path = _write(pack_dir, "pack000.vpk", pack_bytes(files))
+    idx = vpk.index_vpk(path)
+    assert len(idx) == 3000
+    assert idx == reference_index(path)
+
+
+def test_a_pointer_at_the_deepest_probe_position_resolves(pack_dir):
+    files = {"materials/one.vmt": b"x" * 512}
+    footer = struct.pack("<I", 512) + b"\x00" * 5   # pointer lands on the n-9 probe
+    path = _write(pack_dir, "pack000.vpk", pack_bytes(files, footer=footer))
+    idx = vpk.index_vpk(path)
+    assert idx == reference_index(path)
+    assert idx["materials/one.vmt"] == (path, 0, 512)
+
+
+def test_an_unindexable_pack_raises_without_a_tail_warning(pack_dir):
+    path = _write(pack_dir, "pack000.vpk", b"\x00" * 32)
+    stderr = io.StringIO()
+    with contextlib.redirect_stderr(stderr):
         with pytest.raises(ValueError):
-            reference_index(path)
-        assert stderr.getvalue() == ""
-
-    def test_index_all_skips_the_incompatible_pack(self):
-        good = self._write("pack000.vpk", pack_bytes({"scripts/a.txt": b"aaa"}))
-        self._write("pack001.vpk", b"\x00" * 32)
-        stdout = io.StringIO()
-        with contextlib.redirect_stdout(stdout):
-            merged = vpk.index_all(self.dir, verbose=True)
-        assert merged == {"scripts/a.txt": (good, 0, 3)}
-        assert "skip pack001.vpk" in stdout.getvalue()
+            vpk.index_vpk(path)
+    with pytest.raises(ValueError):
+        reference_index(path)
+    assert stderr.getvalue() == ""
 
 
-class HandleReuse(unittest.TestCase):
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.dir = self._tmp.name
+def test_index_all_skips_the_incompatible_pack(pack_dir):
+    good = _write(pack_dir, "pack000.vpk", pack_bytes({"scripts/a.txt": b"aaa"}))
+    _write(pack_dir, "pack001.vpk", b"\x00" * 32)
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        merged = vpk.index_all(pack_dir, verbose=True)
+    assert merged == {"scripts/a.txt": (good, 0, 3)}
+    assert "skip pack001.vpk" in stdout.getvalue()
 
-    def tearDown(self):
+
+def _pack(directory, name, files):
+    path = os.path.join(directory, name)
+    with open(path, "wb") as f:
+        f.write(pack_bytes(files))
+    return path
+
+
+def test_extract_reuses_one_handle_per_pack(pack_dir):
+    files = {"a.txt": b"alpha", "b.txt": b"bravo", "c.txt": b"charlie"}
+    path = _pack(pack_dir, "pack000.vpk", files)
+    idx = vpk.index_vpk(path)
+    counter = {"bytes": 0, "opens": 0}
+    with mock.patch.object(vpk, "open", counting_open(counter), create=True):
+        assert vpk.extract(idx["a.txt"]) == b"alpha"
+        assert vpk.extract(idx["c.txt"]) == b"charlie"
+        assert vpk.extract(idx["b.txt"]) == b"bravo"
+        assert counter["opens"] == 1
         vpk.close_handles()
-        self._tmp.cleanup()
+        assert vpk.extract(idx["b.txt"]) == b"bravo"
+        assert counter["opens"] == 2
 
-    def _pack(self, name, files):
-        path = os.path.join(self.dir, name)
-        with open(path, "wb") as f:
-            f.write(pack_bytes(files))
-        return path
 
-    def test_extract_reuses_one_handle_per_pack(self):
-        files = {"a.txt": b"alpha", "b.txt": b"bravo", "c.txt": b"charlie"}
-        path = self._pack("pack000.vpk", files)
-        idx = vpk.index_vpk(path)
-        counter = {"bytes": 0, "opens": 0}
-        with mock.patch.object(vpk, "open", counting_open(counter), create=True):
-            assert vpk.extract(idx["a.txt"]) == b"alpha"
-            assert vpk.extract(idx["c.txt"]) == b"charlie"
-            assert vpk.extract(idx["b.txt"]) == b"bravo"
-            assert counter["opens"] == 1
-            vpk.close_handles()
-            assert vpk.extract(idx["b.txt"]) == b"bravo"
-            assert counter["opens"] == 2
-
-    def test_extract_still_raises_for_a_missing_pack(self):
-        with pytest.raises(FileNotFoundError):
-            vpk.extract((os.path.join(self.dir, "pack999.vpk"), 0, 4))
+def test_extract_still_raises_for_a_missing_pack(pack_dir):
+    with pytest.raises(FileNotFoundError):
+        vpk.extract((os.path.join(pack_dir, "pack999.vpk"), 0, 4))

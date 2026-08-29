@@ -334,80 +334,82 @@ def test_a_compact_multi_bone_model_is_refused_as_ambiguous() -> None:
         mdl_skel.read_skin(bytes(data), 0, 0, 1, vlist=1)
 
 
-class CompleteOwnedPoseTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.bones = [mdl_skel.Bone(index=0, name="root", parent=-1, flags=0,
-                                    pos=(1.0, 2.0, 3.0),
-                                    quat=(0.0, 0.0, 0.0, 1.0))]
-        self.clip = mdl_skel.Seq(label="idle", base=0, frames=1, fps=30.0,
-                                 activity="", actweight=0, flags=0)
-        self.pose = [[((1.0, 2.0, 3.0), (0.0, 0.0, 0.0, 1.0))]]
+OWNED_BONES = [mdl_skel.Bone(index=0, name="root", parent=-1, flags=0,
+                             pos=(1.0, 2.0, 3.0),
+                             quat=(0.0, 0.0, 0.0, 1.0))]
+OWNED_CLIP = mdl_skel.Seq(label="idle", base=0, frames=1, fps=30.0,
+                          activity="", actweight=0, flags=0)
+OWNED_POSE = [[((1.0, 2.0, 3.0), (0.0, 0.0, 0.0, 1.0))]]
 
-    def test_an_owned_bind_only_frame_writes_both_local_tracks(self) -> None:
-        with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
-              mock.patch.object(UEK, "_owned_bones", return_value={0}),
-              mock.patch.object(UEK, "_bone_mask", return_value=None),
-              mock.patch.object(mdl_skel, "read_anim", return_value=self.pose)):
-            payload = UEK._clip_payload(
-                b"", self.bones, self.clip, [0], 1, {})
-        assert payload is not None
-        offset = 0
-        for _ in range(2):
-            length = struct.unpack_from("<I", payload, offset)[0]
-            offset += 4 + length
-        _frames, _fps, _flags, _mask, tracks = struct.unpack_from("<IfIiI", payload, offset)
-        offset += struct.calcsize("<IfIiI")
-        bone, has_translation, has_rotation = struct.unpack_from("<I2B", payload, offset)
-        assert (tracks, bone, has_translation, has_rotation) == (1, 0, 1, 1)
 
-    def test_a_zero_weight_bone_does_not_become_a_track(self) -> None:
-        with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
-              mock.patch.object(UEK, "_owned_bones", return_value=set()),
-              mock.patch.object(mdl_skel, "read_anim", return_value=self.pose)):
-            assert UEK._clip_payload(
-                b"", self.bones, self.clip, [0], 1, {}) is None
+def test_an_owned_bind_only_frame_writes_both_local_tracks() -> None:
+    with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
+          mock.patch.object(UEK, "_owned_bones", return_value={0}),
+          mock.patch.object(UEK, "_bone_mask", return_value=None),
+          mock.patch.object(mdl_skel, "read_anim", return_value=OWNED_POSE)):
+        payload = UEK._clip_payload(
+            b"", OWNED_BONES, OWNED_CLIP, [0], 1, {})
+    assert payload is not None
+    offset = 0
+    for _ in range(2):
+        length = struct.unpack_from("<I", payload, offset)[0]
+        offset += 4 + length
+    _frames, _fps, _flags, _mask, tracks = struct.unpack_from("<IfIiI", payload, offset)
+    offset += struct.calcsize("<IfIiI")
+    bone, has_translation, has_rotation = struct.unpack_from("<I2B", payload, offset)
+    assert (tracks, bone, has_translation, has_rotation) == (1, 0, 1, 1)
 
-    def test_an_additive_forces_its_owned_bind_only_bones_onto_the_host(self) -> None:
-        host = self.clip._replace(label="host")
-        layer = self.clip._replace(label="delta", flags=UEK.DELTA_SEQUENCE)
-        with (mock.patch.object(UEK, "_derived_bindings",
-                               return_value=[(layer, host, None)]),
-              mock.patch.object(UEK, "_owned_channels",
-                               side_effect=[[(True, True)], [(False, False)]]),
-              mock.patch.object(UEK, "_composed_frames", return_value=self.pose),
-              mock.patch.object(UEK, "_clip_payload", return_value=b"clip") as payload):
-            UEK._anim_section(b"", self.bones, [host, layer], [0], 1, {})
 
-        host_call = next(call for call in payload.call_args_list
-                         if call.args[2].label == "host")
-        assert host_call.kwargs["forced_channels"] == [(True, True)]
+def test_a_zero_weight_bone_does_not_become_a_track() -> None:
+    with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
+          mock.patch.object(UEK, "_owned_bones", return_value=set()),
+          mock.patch.object(mdl_skel, "read_anim", return_value=OWNED_POSE)):
+        assert UEK._clip_payload(
+            b"", OWNED_BONES, OWNED_CLIP, [0], 1, {}) is None
 
-    def test_a_forced_host_track_uses_donor_bind_not_zero_weight_sentinels(self) -> None:
-        masked_frame = [[((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0))]]
-        with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
-              mock.patch.object(UEK, "_owned_bones", return_value=set()),
-              mock.patch.object(UEK, "_bone_mask", return_value=None),
-              mock.patch.object(mdl_skel, "read_anim", return_value=masked_frame)):
-            payload = UEK._clip_payload(
-                b"", self.bones, self.clip, [0], 1, {},
-                forced_channels=[(True, True)])
 
-        assert payload is not None
-        offset = 0
-        for _ in range(2):
-            length = struct.unpack_from("<I", payload, offset)[0]
-            offset += 4 + length
-        offset += struct.calcsize("<IfIiI")
-        bone, has_translation, has_rotation = struct.unpack_from("<I2B", payload, offset)
-        offset += struct.calcsize("<I2B")
-        position = struct.unpack_from("<3f", payload, offset)
-        offset += struct.calcsize("<3f")
-        rotation = struct.unpack_from("<4f", payload, offset)
-        assert (bone, has_translation, has_rotation) == (0, 1, 1)
-        for actual, expected in zip(position, UEK._conv_pos(self.bones[0].pos)):
-            assert actual == pytest.approx(expected, abs=1e-5)
-        for actual, expected in zip(rotation, UEK._conv_quat(self.bones[0].quat)):
-            assert actual == pytest.approx(expected, abs=1e-6)
+def test_an_additive_forces_its_owned_bind_only_bones_onto_the_host() -> None:
+    host = OWNED_CLIP._replace(label="host")
+    layer = OWNED_CLIP._replace(label="delta", flags=UEK.DELTA_SEQUENCE)
+    with (mock.patch.object(UEK, "_derived_bindings",
+                           return_value=[(layer, host, None)]),
+          mock.patch.object(UEK, "_owned_channels",
+                           side_effect=[[(True, True)], [(False, False)]]),
+          mock.patch.object(UEK, "_composed_frames", return_value=OWNED_POSE),
+          mock.patch.object(UEK, "_clip_payload", return_value=b"clip") as payload):
+        UEK._anim_section(b"", OWNED_BONES, [host, layer], [0], 1, {})
+
+    host_call = next(call for call in payload.call_args_list
+                     if call.args[2].label == "host")
+    assert host_call.kwargs["forced_channels"] == [(True, True)]
+
+
+def test_a_forced_host_track_uses_donor_bind_not_zero_weight_sentinels() -> None:
+    masked_frame = [[((0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0))]]
+    with (mock.patch.object(UEK, "_authored_channels", return_value=[(False, False)]),
+          mock.patch.object(UEK, "_owned_bones", return_value=set()),
+          mock.patch.object(UEK, "_bone_mask", return_value=None),
+          mock.patch.object(mdl_skel, "read_anim", return_value=masked_frame)):
+        payload = UEK._clip_payload(
+            b"", OWNED_BONES, OWNED_CLIP, [0], 1, {},
+            forced_channels=[(True, True)])
+
+    assert payload is not None
+    offset = 0
+    for _ in range(2):
+        length = struct.unpack_from("<I", payload, offset)[0]
+        offset += 4 + length
+    offset += struct.calcsize("<IfIiI")
+    bone, has_translation, has_rotation = struct.unpack_from("<I2B", payload, offset)
+    offset += struct.calcsize("<I2B")
+    position = struct.unpack_from("<3f", payload, offset)
+    offset += struct.calcsize("<3f")
+    rotation = struct.unpack_from("<4f", payload, offset)
+    assert (bone, has_translation, has_rotation) == (0, 1, 1)
+    for actual, expected in zip(position, UEK._conv_pos(OWNED_BONES[0].pos)):
+        assert actual == pytest.approx(expected, abs=1e-5)
+    for actual, expected in zip(rotation, UEK._conv_quat(OWNED_BONES[0].quat)):
+        assert actual == pytest.approx(expected, abs=1e-6)
 
 
 RECORD = {

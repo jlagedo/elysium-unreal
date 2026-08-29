@@ -7,63 +7,66 @@ from typer.testing import CliRunner
 from elysium_pipeline.cli import _CHILD_SIGNAL, _child_signal, app
 
 
-class CliContractTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.runner = CliRunner()
+RUNNER = CliRunner()
 
-    def test_root_help_exposes_the_single_public_command_families(self) -> None:
-        result = self.runner.invoke(app, ["--help"])
-        assert result.exit_code == 0, result.output
-        for command in (
-            "reconstruct",
-            "deps",
-            "doctor",
-            "build",
-            "export",
-            "export_v2",
-            "test",
-            "run",
-            "debug",
-            "research",
-            "ide",
-            "mcp",
-        ):
-            assert command in result.output
 
-    def test_targeted_map_export_rejects_clean(self) -> None:
-        result = self.runner.invoke(
-            app, ["export", "map", "sp_tutorial_1", "--clean"]
-        )
+def test_root_help_exposes_the_single_public_command_families() -> None:
+    result = RUNNER.invoke(app, ["--help"])
+    assert result.exit_code == 0, result.output
+    for command in (
+        "reconstruct",
+        "deps",
+        "doctor",
+        "build",
+        "export",
+        "export_v2",
+        "test",
+        "run",
+        "debug",
+        "research",
+        "ide",
+        "mcp",
+    ):
+        assert command in result.output
+
+
+def test_targeted_map_export_rejects_clean() -> None:
+    result = RUNNER.invoke(
+        app, ["export", "map", "sp_tutorial_1", "--clean"]
+    )
+    assert result.exit_code == 2, result.output
+    assert "No such option" in result.output
+
+
+def test_no_detached_checkout_family_is_exposed() -> None:
+    for command in ("lane", "worktree"):
+        result = RUNNER.invoke(app, [command, "--help"])
         assert result.exit_code == 2, result.output
-        assert "No such option" in result.output
+        assert "No such command" in result.output
 
-    def test_no_detached_checkout_family_is_exposed(self) -> None:
-        for command in ("lane", "worktree"):
-            result = self.runner.invoke(app, [command, "--help"])
-            assert result.exit_code == 2, result.output
-            assert "No such command" in result.output
 
-    def test_export_help_exposes_wield(self) -> None:
-        result = self.runner.invoke(app, ["export", "--help"])
-        assert result.exit_code == 0, result.output
-        assert "wield" in result.output
+def test_export_help_exposes_wield() -> None:
+    result = RUNNER.invoke(app, ["export", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "wield" in result.output
 
-    def test_export_v2_exposes_the_isolated_glb_commands(self) -> None:
-        result = self.runner.invoke(app, ["export_v2", "--help"])
-        assert result.exit_code == 0, result.output
-        assert "character-glb" in result.output
-        assert "characters-glb" in result.output
-        assert "texture-glb" in result.output
-        assert "textures-glb" in result.output
-        assert "material-glb" in result.output
-        assert "materials-glb" in result.output
-        assert "surface-property-glb" in result.output
-        assert "surface-properties-glb" in result.output
-        assert "export-all" in result.output
 
-        old = self.runner.invoke(app, ["export", "--help"])
-        assert old.exit_code == 0, old.output
-        assert "character-glb" not in old.output
+def test_export_v2_exposes_the_isolated_glb_commands() -> None:
+    result = RUNNER.invoke(app, ["export_v2", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "character-glb" in result.output
+    assert "characters-glb" in result.output
+    assert "texture-glb" in result.output
+    assert "textures-glb" in result.output
+    assert "material-glb" in result.output
+    assert "materials-glb" in result.output
+    assert "surface-property-glb" in result.output
+    assert "surface-properties-glb" in result.output
+    assert "export-all" in result.output
+
+    old = RUNNER.invoke(app, ["export", "--help"])
+    assert old.exit_code == 0, old.output
+    assert "character-glb" not in old.output
 
 
 def test_prefilter_agrees_with_the_regex_on_every_vocabulary_shape() -> None:
