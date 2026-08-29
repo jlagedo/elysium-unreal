@@ -5,7 +5,7 @@
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumContentPaths.h"
 #include "ElysiumEntityDefs.h"               // what a map stands each cast body as
-#include "ElysiumGaitSpeeds.h"               // the per-direction speed table (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the per-direction speed table
 #include "ElysiumMoveSolve.h"                // the sv_*scale constants and the unit factor
 #include "ElysiumOverlayStack.h"            // retail's CBaseAnimatingOverlay, as this runtime holds it
 #include "ElysiumEntityWorld.h"              // the release-on-scene-stop fixture drives a real scene
@@ -22,7 +22,7 @@
 #include "HAL/FileManager.h"
 #include "Misc/Paths.h"
 
-// CCC4 — the intent, the resolver and the selection record.
+// The intent, the resolver and the selection record.
 //
 // The whole rung is asserted here because the whole rung is content-free: the classifier reads the
 // body sample, the resolver reads a clip vocabulary and a blend table, and neither needs a world, a
@@ -57,12 +57,10 @@ namespace
 	int32 AsInt(EElysiumAirPhase Phase) { return static_cast<int32>(Phase); }
 }
 
-// =====================================================================================
 // Step 2 and step 3 — the classifier, the jump latch and the translation pass. Every threshold here
-// is a fraction of an injected speed authority rather than a number, because `CCC7` may halve the
-// gait; the assertion that says so runs the identical sample against two references and requires two
-// different answers.
-// =====================================================================================
+// is a fraction of an injected speed authority rather than a number, because the per-direction
+// speed table may halve the gait; the assertion that says so runs the identical sample against two
+// references and requires two different answers.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationIntentTest,
 	"Elysium.Substrate.AnimationIntent", GElysiumAnimationTestFlags)
@@ -72,7 +70,7 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 
 	const FElysiumGaitReference Gait;
 
-	// --- The grounded gait ----------------------------------------------------------------------
+	// The grounded gait.
 	{
 		FElysiumJumpLatch Latch;
 		TestEqual(TEXT("a still standing body idles"),
@@ -101,7 +99,7 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 			AsInt(EElysiumAnimActivityCode::RunRelaxed));
 	}
 
-	// --- The CCC7 assertion: no absolute speed is baked in ---------------------------------------
+	// No absolute speed is baked in.
 	{
 		// The identical sample, classified against two speed authorities. If any threshold in the
 		// classifier were a number rather than a fraction, both would answer the same.
@@ -304,7 +302,7 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 	{
 		// --- The air phases belong to the producer that commands jumps ---------------------------
 		//
-		// LIFE3: retail's ground/air classifier is the player chain's — the cast's air activities are
+		// Retail's ground/air classifier is the player chain's — the cast's air activities are
 		// requested by scripted tasks (ManBat's fall, the Asian Vampire's jump) and there is no
 		// generic NPC producer of ACT_FALLING in the shipped binary. So the SAME airborne sample has
 		// to answer two different ways depending on who published it; one answer for both would mean
@@ -441,7 +439,7 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 			AsInt(EElysiumAnimActivityCode::WalkRelaxed));
 	}
 
-	// --- CCC10 — weapon grip, which is not melee-versus-ranged ---------------------------------------
+	// Weapon grip, which is not melee-versus-ranged.
 	{
 		// The property under test: a resolver keyed on "is this melee" gets `bushhook` and
 		// `sledgehammer` wrong, because their upper-body mask is the SAME 49-bone gate every firearm
@@ -572,7 +570,6 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // Steps 4, 5 and 6 — the resolver, against a catalog built on the stack.
 //
 // The fixture is two banks and two bodies, because that is the smallest thing that can fail the way
@@ -580,7 +577,6 @@ bool FElysiumAnimationIntentTest::RunTest(const FString&)
 // the shared cast bank on an NPC. A resolver keyed on the label alone passes the first assertion here
 // and fails the second, which is exactly the bug that would otherwise ship as "the player runs a bit
 // oddly".
-// =====================================================================================
 
 namespace
 {
@@ -700,7 +696,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 	// the walk has to keep going.
 	Pc.Clips.Add(TEXT("pistol_attack"),
 		MakeClip(CastBank, TEXT("ACT_RANGE_ATTACK_PISTOL"), 30, 0x0, 22));
-	// The combat-ready stand (LIFE4). The glock ladder's block-0 exception names `ACT_AIM_GLOCK`
+	// The combat-ready stand. The glock ladder's block-0 exception names `ACT_AIM_GLOCK`
 	// and this body carries only the shared pistol form, so a combat-ready stand answers at rung
 	// 2, the same shape as the relaxed walk above.
 	Pc.Clips.Add(TEXT("pistol_ready"), MakeClip(CastBank, TEXT("ACT_AIM_PISTOL"), 30, 0x1));
@@ -960,7 +956,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("and no availability probe"), PlayerWalk.AvailabilityRung, 0);
 	}
 
-	// --- The chain forks on the BODY, not on the producer (LIFE5) ------------------------------------
+	// The chain forks on the BODY, not on the producer.
 	{
 		// Retail discriminates on the receiver's own class: `CAI_BaseNPC` descendants run the cast
 		// chain and `CBasePlayer` runs its one pass. `Source` is who asked, and an NPC's damage
@@ -1286,7 +1282,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 			TestEqual(TEXT("and the overlay second"), Walk.LayerLabels[1],
 				FString(TEXT("pistol_aim_overlay")));
 		}
-		// A cast request the body itself answers reads availability rung 1 off the record (LIFE4).
+		// A cast request the body itself answers reads availability rung 1 off the record.
 		TestEqual(TEXT("a playable cast request answers at availability rung 1"),
 			Walk.AvailabilityRung, 1);
 	}
@@ -1362,14 +1358,14 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestEqual(TEXT("resolved outright, because the weapon table already probed availability"),
 			static_cast<int32>(ArmedSelection.Outcome),
 			static_cast<int32>(EElysiumAnimOutcome::Resolved));
-		// The hops the walk took reach the RECORD (LIFE4), so a readout shows which rung fired.
+		// The hops the walk took reach the RECORD, so a readout shows which rung fired.
 		TestEqual(TEXT("the rung that fired is on the record"), ArmedSelection.WeaponRung, 2);
 		TestEqual(TEXT("...with no class answer on the player"), ArmedSelection.ClassActivity,
 			FString());
 		TestEqual(TEXT("...and no availability probe on the player"),
 			ArmedSelection.AvailabilityRung, 0);
 
-		// **The combat-ready stand, per weapon** (LIFE4): the gait ladder's `ACT_AIM` request
+		// **The combat-ready stand, per weapon**: the gait ladder's `ACT_AIM` request
 		// reaches the weapon table like any other base — the glock's block-0 exception names
 		// `ACT_AIM_GLOCK`, which this body cannot play, so block 1's `ACT_AIM_PISTOL` stands a
 		// combat-ready glock. No Combat special case anywhere in the chain.
@@ -1538,7 +1534,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 			static_cast<int32>(PlainClip.Outcome),
 			static_cast<int32>(EElysiumAnimOutcome::TranslatedFallback));
 
-		// LIFE5 — the same classification taken all the way to a CLIP. What a producer plays is the
+		// The same classification taken all the way to a CLIP. What a producer plays is the
 		// translated label, never the raw request's own weighted pick, so a seam that dropped the
 		// classname, the weapon or the state would pose a different body's walk with nothing said.
 		Armed.ActorState = EElysiumNpcState::Alert;
@@ -1566,7 +1562,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 		TestFalse(TEXT("...and says so rather than posing something"), NoClassification.IsResolved());
 	}
 
-	// --- CCC10 — the activity-keyed upper-body path, reached by weapon translation -------------------
+	// The activity-keyed upper-body path, reached by weapon translation.
 	{
 		// The bake-time bound path is asserted above (the "layer binding keeps its declaration
 		// order" block); this is the OTHER producer — an intent naming the ordinary player attack
@@ -1602,7 +1598,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 			static_cast<int32>(Missed.Outcome), static_cast<int32>(EElysiumAnimOutcome::MissingSequence));
 	}
 
-	// --- CCC10 — AimYaw/AimPitch pass through the resolver unmodified, on any channel ----------------
+	// AimYaw/AimPitch pass through the resolver unmodified, on any channel.
 	{
 		// The player's own producer is what pins `AimYaw` at the literal 0.0f
 		// (`docs/vtmb/animation_and_movers.md`); the resolver's job is only to carry whatever it was
@@ -1696,7 +1692,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 			FString(TEXT("nothing")));
 	}
 
-	// --- LIFE5 — the directional hit fan, as the PAIR its angle sits between ---------------------
+	// The directional hit fan, as the PAIR its angle sits between.
 	//
 	// The shipped shape, reproduced exactly: a nine-cell fan bound to a SECOND declared pose
 	// parameter named `hit_yaw`. Two rules meet here — the parameter reaches the grid at all, and the
@@ -1836,8 +1832,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 
 		// **One rule for both fans.** The same table's `move_yaw` grid, sampled the same fraction past
 		// a cell, answers in exactly the same shape — a floor cell, its neighbour, and the weight
-		// between them. This used to be a guard asserting that the hit fan behaved DIFFERENTLY; it is
-		// now the positive statement that it does not.
+		// between them. Treating the hit fan as a different rule would reintroduce a false split.
 		FElysiumAnimationIntent Strafing = ActivityIntent(TEXT("hit_body"), TEXT("ACT_WALK"),
 			EElysiumAnimSource::Npc, EElysiumAnimBodyKind::Cast);
 		Strafing.Body.MoveYawVelocity = 115.0f;
@@ -1967,8 +1962,7 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// LIFE5 — direction-keyed attack entry selection, the rung that sits AHEAD of the weighted draw.
+// Direction-keyed attack entry selection, the rung that sits AHEAD of the weighted draw.
 //
 // `docs/vtmb/combat-and-damage.md` § "Melee attack, combo, block and damage": the player selector at
 // `0x10160F90` reads each candidate sequence's authored state mask (`mstudioseqdesc_t`+0x2D4) and
@@ -1979,7 +1973,6 @@ bool FElysiumAnimationResolveTest::RunTest(const FString&)
 // Everything below is the rule and its catalogue — no world, no weapon and no buttons — which is the
 // only way "a held direction changes WHICH attack, and spends no randomness doing it" can be stated
 // exactly.
-// =====================================================================================
 
 namespace
 {
@@ -2229,15 +2222,13 @@ bool FElysiumAnimationStateMaskTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// CCC5 — the graph's own two rules: which state realizes a selection, and how long the transition
+// The graph's own two rules: which state realizes a selection, and how long the transition
 // into it lasts.
 //
 // Both are content-free, and deliberately so. The transition duration is the one number the
 // authored graph asset may NOT carry — `Content/ElysiumAuthored/README.md` forbids encoding
 // game-derived timings in a tracked package — so it arrives at runtime from the clip's own record,
 // and this is where the combine is proven rather than in the asset.
-// =====================================================================================
 
 namespace
 {
@@ -2470,7 +2461,7 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 		TestEqual(TEXT("and so does an activity this slice cannot name"),
 			AsInt(StateForActivity(EElysiumAnimActivityCode::Unknown)),
 			AsInt(EElysiumGraphState::Idle));
-		// The death family (LIFE5) is in the vocabulary and is deliberately NOT a locomotion state:
+		// The death family is in the vocabulary and is deliberately NOT a locomotion state:
 		// a death pose plays on the reaction branch over whatever the graph is posing, so this
 		// projection names the state underneath it rather than a ninth state the asset does not have.
 		TestEqual(TEXT("ACT_DIESIMPLE names the state underneath the reaction, not one of its own"),
@@ -2492,11 +2483,10 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 		// classifier answer with no state is what would leave a body in the reference pose with
 		// nothing in the log, so the enum is walked whole rather than sampled.
 		//
-		// **The bound is the enum's own `Count`, and it has to be.** It was previously the literal
-		// `DieRagdoll`, which the comment described as "the last enumerator" — but the ten grounded
-		// knockback cells already sat past it, so the walk had silently stopped covering them. A
-		// sentinel cannot go stale that way, and every family added to the vocabulary now joins this
-		// walk with it.
+		// **The bound is the enum's own `Count`, and it has to be.** Bounding on a last enumerator
+		// (`DieRagdoll`) silently drops every family that sits past it — the grounded knockback
+		// cells already do. A sentinel cannot go stale that way, and every family added to the
+		// vocabulary joins this walk with it.
 		using ElysiumAnimGraph::StateCanPlay;
 		for (uint8 Code = 0; Code < static_cast<uint8>(EElysiumAnimActivityCode::Count); ++Code)
 		{
@@ -2633,15 +2623,13 @@ bool FElysiumAnimationGraphTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// LIFE3 - the driver, and the one speed number it publishes.
+// The driver, and the one speed number it publishes.
 //
 // The whole chain is content-free, so all of it is asserted here: the body key the tables resolve
 // under, the gait the stride is read at, the discrete key that decides when anything re-resolves,
 // and the sample the record was classified from. Every one of them is a place the speed and the
 // pose can come apart, and the failure they share is the same one -- the body plays a cell it is
 // not travelling at.
-// =====================================================================================
 
 namespace
 {
@@ -2845,7 +2833,7 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 		TestEqual(TEXT("a reset forgets the sample with the record"), Driver.Sample.Speed2D(), 0.0f);
 	}
 
-	// --- LIFE5 — a reaction's verdict rides the published record, not a second channel -------------
+	// A reaction's verdict rides the published record, not a second channel.
 	// The flinch is armed off the damage commit and the graph obeys the record, so the two facts a
 	// graph reads have to be on the record the driver publishes every frame: that the base is not the
 	// publish's to take, and who is holding it. Asserted on the ordinary tick path, because that is
@@ -2936,14 +2924,12 @@ bool FElysiumAnimationDriverTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// LIFE4, Option A - the player's grounded stand/gait comes off the committed retail ladder.
+// The player's grounded stand/gait comes off the committed retail ladder.
 //
 // The driver walks `PlayerGaitLadder()` with a live state query: `CombatReady` gates `ACT_AIM`
 // on an armed, in-stance, unmorphed body, and `Relaxed` selects the relaxed gaits for an armed
 // body out of stance. Water and the air phases stay with `Classify` and the latch, and the cast
 // never consults the ladder at all. All content-free: no catalog, no world.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationPlayerGaitTest,
 	"Elysium.Substrate.AnimationPlayerGait", GElysiumAnimationTestFlags)
@@ -3080,15 +3066,13 @@ bool FElysiumAnimationPlayerGaitTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// LIFE4 - the channel arbitration slot.
+// The channel arbitration slot.
 //
 // Who owns the base pose is a priority decision made in the driver and carried on the record, and
 // every one of its rows is content-free: the locomotion publish's own rank comes off the projected
 // graph state, a claim's off the request a producer wrote, and the verdict is the comparison. The
 // graph merely obeys the verdict (`Elysium.Content.GraphOneShotArbitration` proves that half), so
 // everything decided is asserted here with no catalog and no world.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationArbitrationTest,
 	"Elysium.Substrate.AnimationArbitration", GElysiumAnimationTestFlags)
@@ -3265,7 +3249,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 			Driver.Selection.BaseHoldSeconds, 0.0f);
 	}
 
-	// --- (c) LIFE5 — the Reaction band, which is the flinch's own claim -------------------------
+	// (c) The Reaction band, which is the flinch's own claim.
 	//
 	// One band, three relationships, and each is a behaviour a player sees: a flinch interrupts a
 	// walking body and a scripted beat, it cannot interrupt a choreographed scene, and it hands the
@@ -3323,7 +3307,7 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 		TestFalse(TEXT("...so the expired handle releases nothing"), Driver.ReleaseRequest(Handle));
 	}
 
-	// --- (d) LIFE5 — a scene-held base REFUSES a flinch ------------------------------------------
+	// (d) A scene-held base REFUSES a flinch.
 	// The claim is submitted BEFORE the clip is played, so a refusal here is the whole of "a reaction
 	// must not ride over a choreographed scene": nothing plays at all.
 	{
@@ -4009,14 +3993,12 @@ bool FElysiumAnimationArbitrationTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // The same resolver, against the real corpus.
 //
 // The fixture above proves the *rule* — that a resolver keyed on the owner and not on the label
 // separates two banks. This proves the **data** still says what the RE says it says: the player's
 // `ACT_RUN` really does reach a PC-only bank the cast never touches, and `ACT_LAND_CROUCH` really
 // does resolve nothing. A fixture cannot fail when an export regresses; this can.
-// =====================================================================================
 
 static constexpr EAutomationTestFlags GElysiumAnimationContentFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -4117,13 +4099,11 @@ namespace
 
 
 
-// =====================================================================================
 // The graph against the real corpus.
 //
 // The fixtures above prove the rule. This proves that the authored fades the transition arithmetic
 // reads are really what the export carries; the graph asset-kind matrix is a property of what the
 // bake wrote, and the character verifier owns it.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerGraphTransitionParityTest,
 	"Elysium.Content.PlayerGraphTransitionParity", GElysiumAnimationContentFlags)
@@ -4207,8 +4187,7 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 }
 
 
-// =====================================================================================
-// The two pickers (LIFE5). Retail collects an activity's candidates once and hands the array to
+// The two pickers. Retail collects an activity's candidates once and hands the array to
 // one of two functions: `SelectWeightedSequence` (`vampire.dll 0x1008dc40` -> `FUN_10427fc0`) draws
 // by authored `actweight`, and `SelectHeaviestSequence` (`0x1008dd30` -> `FUN_104280f0`) keeps the
 // largest. Which one answers is latched per commit by entity flag `0x40000000`
@@ -4217,7 +4196,6 @@ bool FElysiumPlayerGraphTransitionParityTest::RunTest(const FString&)
 // The arithmetic is what this asserts, because the corpus cannot: `run` carries two candidates at
 // weight 1 whose only difference is 30 fps against 18, so the tie rule alone decides whether a gait
 // cycles at the rate its ground speed asks for.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimationSelectorsTest,
 	"Elysium.Substrate.AnimationSelectors", GElysiumAnimationTestFlags)

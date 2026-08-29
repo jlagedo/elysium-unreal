@@ -52,7 +52,6 @@ namespace ElysiumGameSounds
 		static const FName Name(TEXT("PLAYER_AGGRESSIVE_FEED"));
 		return Name;
 	}
-	// ======================= Cycle 11b hunk 1/9 — the discipline alert row ======================
 	// `NPC_DISCIPLINE_ALERT` — "An NPC was hit by a discipline that should alert others", the
 	// authored `sound_volume_table.txt` row a `disciplinetgt` record with `TriggerAISound` emits at
 	// each committed target (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "Overt/AI-sound
@@ -66,7 +65,6 @@ namespace ElysiumGameSounds
 		static const FName Name(TEXT("NPC_DISCIPLINE_ALERT"));
 		return Name;
 	}
-	// ===========================================================================================
 
 	// `DOOR_NORMAL` — a door moved audibly.
 	//

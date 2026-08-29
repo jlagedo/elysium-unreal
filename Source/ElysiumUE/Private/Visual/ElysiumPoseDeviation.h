@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "ReferenceSkeleton.h"
 
-// How far an evaluated pose is from another one (CCC5/CCC6).
+// How far an evaluated pose is from another one.
 //
 // **This measures the one failure an animation graph has that logs nothing.** A blend-list pin left
 // dead, an asset pin left null, a request that resolved nothing projected anyway: each of them

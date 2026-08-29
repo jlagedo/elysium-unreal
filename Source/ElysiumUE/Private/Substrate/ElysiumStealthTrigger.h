@@ -5,7 +5,7 @@
 #include "ElysiumEntityHandle.h"
 #include "Substrate/ElysiumTriggerBase.h"
 
-// 13.1 — `trigger_stealth_mod` (`docs/vtmb/stealth.md` -> "`trigger_stealth_mod`").
+// `trigger_stealth_mod` (`docs/vtmb/stealth.md` -> "`trigger_stealth_mod`").
 //
 // A `CBaseTrigger` leaf whose whole specialization is two lines: the authored integer
 // `stealth_modifier` is ADDED to the toucher's raw aggregate on begin and SUBTRACTED on end. That

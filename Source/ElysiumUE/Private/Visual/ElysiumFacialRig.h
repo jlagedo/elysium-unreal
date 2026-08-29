@@ -3,8 +3,8 @@
 #include "CoreMinimal.h"
 #include "Containers/ArrayView.h"
 
-// A rigged NPC's facial flex rig, read off `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json` (roadmap 12.3,
-// pipeline PL10). Plain C++ with no UObject reflection, like `FElysiumNpcClipSet`: this holds names
+// A rigged NPC's facial flex rig, read off `$ELYSIUM_EXPORT_ROOT/npc/facial/<stem>.json`.
+// Plain C++ with no UObject reflection, like `FElysiumNpcClipSet`: this holds names
 // and arithmetic, and the UObject-side cache that hands one out is `UElysiumAnimSubsystem`.
 //
 // The morph targets themselves are baked into the NPC's `.glb`. Three layers sit between a flex
@@ -46,7 +46,7 @@ struct FElysiumFlexRule
 
 // One of the 44 named inputs. `Type` groups them into the five shipped families — `eyelid`, `brow`,
 // `nose`, `mouth`, `phoneme` — and the phoneme family is exactly the set `expressions/phonemes.txt`
-// writes, i.e. the surface 12.5's lipsync drives.
+// writes, i.e. the surface lipsync drives.
 struct FElysiumFlexController
 {
 	FString Name;
@@ -111,7 +111,7 @@ struct FElysiumJawInput
 // supersedes this per flexdesc.
 //
 // This reconstruction still runs for any hinged lid flexdesc no record names, and it is what every
-// body falls back to on an export predating the eyeball decode: the three angles are recovered from
+// body falls back to when no eyeball record names the lid: the three angles are recovered from
 // the ramps instead — the lowered angle is the low ramp's `Target2`, the hinge (the neutral angle)
 // is where the two ramps meet, and the raised angle is the high ramp's `Target1`. The three source
 // flexdescs are the rig's own `<lid>_lowerer`/`_neutral`/`_raiser`.
@@ -210,7 +210,7 @@ struct FElysiumFacialRig
 	// 23%, and roughly a third of a line's phonemes fall below either, so a runtime that hardcodes one
 	// is visibly wrong on the half of the cast carrying the other.
 	//
-	// Defaults are the modal rigged pair, which is what stands in when a sidecar predates the field or
+	// Defaults are the modal rigged pair, which is what stands in when a sidecar omits the field or
 	// reads (0, 0) — the value 113 of the 339 loose models carry, all of them unrigged. Zero would
 	// make `1/S` infinite, and nothing in retail's own clamp guards it either.
 	float PhonemeFilterMin = 0.065f;
@@ -251,7 +251,7 @@ struct FElysiumFacialRig
 	bool Load(const FString& RelPath, FString& OutError);
 	bool LoadJsonText(const FString& JsonText, FString& OutError);
 
-	// --- evaluation ------------------------------------------------------------------------
+	// Evaluation.
 	// All three layers are pure functions of the controller values, so they are static/const and
 	// testable without a mesh, a world or an anim instance.
 
@@ -273,7 +273,7 @@ struct FElysiumFacialRig
 	void Evaluate(TArrayView<const float> ControllerValues, TArray<float>& OutFlexWeights,
 		TArray<float>& OutMorphWeights) const;
 
-	// --- the amplitude jaw ---------------------------------------------------------------------
+	// The amplitude jaw.
 	//
 	// The rig's second input, and the only one that is not a controller write. **Precedence is the
 	// whole point of the ordering below**: 85 of the 86 exported rigs carry a rule that computes the
@@ -292,7 +292,7 @@ struct FElysiumFacialRig
 	void Evaluate(TArrayView<const float> ControllerValues, const FElysiumJawInput& Jaw,
 		TArray<float>& OutFlexWeights, TArray<float>& OutMorphWeights) const;
 
-	// --- the eyes ------------------------------------------------------------------------------
+	// The eyes.
 	//
 	// The rig's third input, and the second that is not a controller. The full order, with the two
 	// eye steps in the places retail puts them:

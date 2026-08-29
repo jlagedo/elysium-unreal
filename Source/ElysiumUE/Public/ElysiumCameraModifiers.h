@@ -7,7 +7,7 @@
 
 class UElysiumCameraComponent;
 
-// The post-composition layers (CCC2, `docs/architecture/camera-architecture.md`).
+// The post-composition layers (`docs/architecture/camera-architecture.md`).
 //
 // A base request supplies the viewpoint; a **post layer** is composed over whichever base won.
 // They are `UCameraModifier` subclasses rather than a hand-rolled stack because the base class

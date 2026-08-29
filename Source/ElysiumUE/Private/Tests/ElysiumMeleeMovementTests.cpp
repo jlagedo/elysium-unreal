@@ -8,7 +8,7 @@
 #include "Visual/ElysiumAnimationDriver.h"
 #include "Visual/ElysiumBlendGrids.h"
 
-// VtMB's animation-driven movement, asserted as pure rules plus one driver (LIFE5).
+// VtMB's animation-driven movement, asserted as pure rules plus one driver.
 //
 // Everything here is content-free: the movement records are the shipped baseball bat's own values,
 // transcribed, so the sampler is checked against numbers the exporter really wrote rather than

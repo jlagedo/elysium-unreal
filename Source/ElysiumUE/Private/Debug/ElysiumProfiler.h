@@ -5,8 +5,8 @@
 
 class UElysiumMapSubsystem;
 
-// Headless profiling harness for roadmap task 0.1 (profiling baseline) and 0.2
-// (MegaLights engagement check). Activated by the -ElysiumProfile command-line switch.
+// Headless profiling harness: a profiling baseline and the MegaLights engagement check.
+// Activated by the -ElysiumProfile command-line switch.
 //
 // It removes the human from the loop that normally types `stat GPU` / `ProfileGPU` in a
 // live session. Once the boot map's pawn has settled (collision cooked), it drives a fixed
@@ -18,7 +18,7 @@ class UElysiumMapSubsystem;
 // written to a JSON summary under $ELYSIUM_EXPORT_ROOT/_profile/, then the process exits.
 //
 // A real RHI is required (GPU timings are meaningless under -nullrhi); the run self-cancels
-// if the null RHI is active. pipeline/src/elysium_pipeline/validation/profile_report.py turns the CSVs into the roadmap table.
+// if the null RHI is active. pipeline/src/elysium_pipeline/validation/profile_report.py turns the CSVs into the profile report.
 class FElysiumProfileRun
 {
 public:

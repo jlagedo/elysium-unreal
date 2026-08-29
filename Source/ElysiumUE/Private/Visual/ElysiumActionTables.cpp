@@ -346,9 +346,7 @@ void CollectPlayerActivities(TArray<FString>& OutActivities)
 	Add(PlayerTuning().MeleeHoldIdeal);
 }
 
-// =================================================================================================
 // The NPC translation surface.
-// =================================================================================================
 
 namespace
 {

@@ -416,9 +416,8 @@ void AElysiumMapActor::RefreshFollowRain()
 		AddInstanceComponent(RainFollowComponent);
 		// The shared system is a tracked authored asset and is never rewritten per map; this
 		// map's height-masked material instances come off its own baked Weather package and bind
-		// through the system's material user parameters. A missing instance (a bake from before
-		// the weather package carried them) falls back to the authored default material on the
-		// renderer -- rain still draws, without the map's height mask.
+		// through the system's material user parameters. A missing instance falls back to the
+		// authored default material on the renderer -- rain still draws, without the map's height mask.
 		const FString WeatherPkg = FElysiumContentPaths::BakedMapDir(MapName) / TEXT("Weather");
 		const auto LoadRainInstance = [&](const TCHAR* Name) -> UMaterialInterface*
 		{

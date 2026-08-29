@@ -5,11 +5,11 @@
 class SWidget;
 struct FElysiumUserCmd;
 
-// S6 — the input scope stack (roadmap 11.5, `docs/architecture/runtime-architecture.md` §8.1). Plain C++, no UObject
+// S6 — the input scope stack (`docs/architecture/runtime-architecture.md` §8.1). Plain C++, no UObject
 // reflection: the stack and its arbitration are the whole rule set, so they are asserted with no
 // game instance, no world, no local player and no RHI — `Elysium.Substrate.InputScopes`.
 // `UElysiumInputSubsystem` owns one of these and is the only thing that writes the engine's input
-// mode, the cursor and (at 10.6) the mapping contexts.
+// mode, the cursor and the mapping contexts.
 
 // What the top scope asks the engine for. Mirrors the three FInputMode* shapes, kept as our own
 // enum so the stack carries no engine type and the test tier needs no viewport.
@@ -94,8 +94,8 @@ namespace ElysiumInput
 	{
 		inline constexpr int32 Game      = 0;    // the empty stack: gameplay owns the mouse
 		inline constexpr int32 Sign      = 10;   // game_sign / popup panel
-		inline constexpr int32 Cinematic = 20;   // scripted camera + choreography (P12)
-		inline constexpr int32 Chargen   = 30;   // the genesis screens (9.4)
+		inline constexpr int32 Cinematic = 20;   // scripted camera + choreography
+		inline constexpr int32 Chargen   = 30;   // the genesis screens
 		inline constexpr int32 Dialogue  = 40;   // the .dlg conversation box
 		inline constexpr int32 Loot      = 42;   // explicit loot-container session
 		inline constexpr int32 Terminal  = 42;   // explicit physical-computer session

@@ -6,7 +6,7 @@
 #include "ElysiumMeleeEnvelope.h"
 #include "ElysiumSwingRecord.h"
 
-// The NPC animation vocabulary, read off the offline sidecars (roadmap 8.5, pipeline PL4).
+// The NPC animation vocabulary, read off the offline sidecars.
 //
 // A VtMB NPC's own `.mdl` carries only its own clips (mostly dialogue); idle, locomotion and
 // combat come from shared **animation banks** pulled in through the studiohdr include DAG
@@ -110,7 +110,7 @@ struct FElysiumNpcClip
 	// themselves, so a melee clip declaring none simply never opens a contact window.
 	bool HasSwings() const { return !Swings.IsEmpty(); }
 	// Whether the sidecar stated this sequence's combo block. Same shape as `HasSwings()`: an
-	// unstated block is the ordinary case and also what an export predating the column gives.
+	// unstated block is the ordinary case and also what an omitted column gives.
 	bool HasCombo() const { return Combo.bStated; }
 	// Whether this clip knows its own place in the flat sequence space.
 	bool HasRawIndex() const { return RawIndex != INDEX_NONE; }
@@ -318,29 +318,29 @@ struct FElysiumNpcIndexEntry
 	// carries — two on every character model. Deliberately independent of `Facial`: 57 of the 59
 	// player bodies carry eyeballs and no flex rig at all, so their irises aim while their lids
 	// have no flexdesc to land on. Both empty/zero on a model with none (gibs, props, scenery)
-	// and on any export predating manifest v5.
+	// and when the sidecar omits the column.
 	FString Eyes;
 	int32   EyeballCount = 0;
 	// StudioBone names whose Flags & 0x2 select retail split rotation/translation inheritance.
-	// Optional in v3/v4 manifests; an older sidecar therefore retains conventional composition.
+	// Optional in v3/v4 manifests; a sidecar that omits it retains conventional composition.
 	TArray<FString> SplitRotationBones;
 	// The procedural bone rule table sidecar, relative to out/npc ("procedural/<stem>.json", or
 	// "animated_props/procedural/<stem>.json"), and how many driven bones it declares. Both
-	// empty/zero on a model with no `ProcType == 1` bone, and on any export predating CAP7.1.
+	// empty/zero on a model with no `ProcType == 1` bone, and when the sidecar omits the column.
 	FString Procedural;
 	int32   ProceduralBones = 0;
 	// The blend-space sidecar, relative to out/npc ("blends/<stem>.json"), and how many multi-cell
 	// sequences it declares. Both empty/zero on a model whose every sequence names a single
-	// animation — most of them — and on any export predating CAP7.3.
+	// animation — most of them — and when the sidecar omits the column.
 	FString Blends;
 	int32   BlendGrids = 0;
 	// How many of that same sidecar's sequences carry an event timeline. The sidecar is written for
 	// any of the three payloads, so a non-zero count here with `BlendGrids` at zero is an ordinary
-	// model that authors events and no grid. Zero on an export predating manifest v8.
+	// model that authors events and no grid. Zero when the sidecar omits the column.
 	int32   EventSequences = 0;
 };
 
-// One cinematic anim set (12.1 / PL16): the whole-cast performance a choreo scene's
+// One cinematic anim set: the whole-cast performance a choreo scene's
 // `BaseAnim`/`MaleAnim`/`FemaleAnim` names, split offline into one bank per bone root because a
 // single clip carries several co-located skeletons. A scene actor's `bonerename "BipNN" "Bip01"`
 // picks which root — and therefore which bank — is that actor's.

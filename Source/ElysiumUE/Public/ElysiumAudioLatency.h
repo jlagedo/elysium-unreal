@@ -4,7 +4,7 @@
 
 #include <atomic>
 
-// 12.2b — where the lead a choreographed scene schedules its speech with comes from.
+// Where the lead a choreographed scene schedules its speech with comes from.
 //
 // VtMB hands its scenes `snd_mixahead`, 0.1 s by default. That constant is Source's *mixer's*
 // lead: the behaviour it buys is "the sample is heard at the authored instant", and the number is
@@ -69,7 +69,7 @@ using FElysiumVoiceRenderProbePtr = TSharedPtr<FElysiumVoiceRenderProbe, ESPMode
 // Lead(), and a reader that wants to know *why* reads the terms.
 struct FElysiumAudioLatency
 {
-	// --- read off the running device --------------------------------------------------------
+	// Read off the running device.
 	FString PlatformApi;
 	FString DeviceName;
 	int32 SampleRate = 0;
@@ -84,7 +84,7 @@ struct FElysiumAudioLatency
 	// number of device periods.
 	int32 EndpointFrames = 0;
 
-	// --- the terms, in seconds --------------------------------------------------------------
+	// The terms, in seconds.
 	// Queried: the mixer's own queue between rendering a buffer and submitting it to the endpoint.
 	float MixerQueueSeconds = 0.f;
 	// Modelled from the two queried frame counts — the steady-state fill of the endpoint buffer.

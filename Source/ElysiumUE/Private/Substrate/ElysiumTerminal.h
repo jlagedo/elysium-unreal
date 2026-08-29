@@ -132,8 +132,8 @@ public:
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
 	virtual void GetDebugState(TArray<TPair<FString, FString>>& Out) const override;
 
-	// Also used by the content-independent tests and, later, a cached rulebook reader. Replaces the
-	// parsed immutable definition and re-sizes only its derived persistent arrays.
+	// Also used by the content-independent tests. Replaces the parsed immutable definition and
+	// re-sizes only its derived persistent arrays.
 	void InstallDefinition(FElysiumTerminalDefinition InDefinition);
 
 protected:

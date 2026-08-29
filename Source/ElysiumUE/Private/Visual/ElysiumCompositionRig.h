@@ -2,8 +2,8 @@
 
 #include "CoreMinimal.h"
 
-// The two composition stages VtMB runs between blended locals and the drawn skeleton, as data
-// (roadmap CAP7.1/CAP7.2). Plain C++ with no UObject reflection, like `FElysiumFacialRig`: this
+// The two composition stages VtMB runs between blended locals and the drawn skeleton, as data.
+// Plain C++ with no UObject reflection, like `FElysiumFacialRig`: this
 // holds a table and the arithmetic over it, and the cache that hands one out is
 // `UElysiumAnimSubsystem`.
 //
@@ -60,7 +60,7 @@ struct FElysiumCompositionRig
 	FString Stem;
 
 	// StudioBone names carrying `Flags & 0x2`, off `npc_index.json`'s `split_bones`. One per
-	// ordinary biped; empty on animals, most props, and any model the export predates.
+	// ordinary biped; empty on animals, most props, and any model whose sidecar omits `split_bones`.
 	TArray<FName> SplitBones;
 
 	// Every `ProcType == 1` rule, off `npc/procedural/<stem>.json`. 130 of 185 exported models

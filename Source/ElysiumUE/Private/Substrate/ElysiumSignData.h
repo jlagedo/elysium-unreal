@@ -4,7 +4,7 @@
 
 class FElysiumEntityWorld;
 
-// P4.10 — the `SignData` panel a `game_sign`/`prop_sign` names through `definition_file`.
+// The `SignData` panel a `game_sign`/`prop_sign` names through `definition_file`.
 //
 // Provenance: the whole draw model below is read out of the decompiled **client.dll**
 // (`CSignUI`; dumps in $ELYSIUM_WORK_ROOT/research/ghidra/out/signui_*.txt). The entity and its `definition_file`

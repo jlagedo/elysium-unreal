@@ -5,11 +5,9 @@
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumNpcGait.h"   // the travel speeds and the scripted-move bounds
 
-// ============================================================================================
-// FElysiumScriptedCharacter — the one movement-only owner shared by ordinary NPCs and the
-// scene-owned player duplicate. Unreal owns path following through IElysiumNpcMotor; this class
-// owns the authored scripted_sequence gait, arrival/facing order and failure bounds.
-// ============================================================================================
+// The one movement-only owner shared by ordinary NPCs and the scene-owned player duplicate. Unreal
+// owns path following through IElysiumNpcMotor; this class owns the authored scripted_sequence
+// gait, arrival/facing order and failure bounds.
 
 class FElysiumScriptedCharacter : public FElysiumCombatCharacter
 {

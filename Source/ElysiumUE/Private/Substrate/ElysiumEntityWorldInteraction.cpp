@@ -38,7 +38,7 @@ void FElysiumEntityWorld::RouteEntityTouch(const FElysiumEntityHandle& Brush,
 	FElysiumEntity* E = Resolve(Brush);
 	if (!E || E->IsInert())
 	{
-		// A dormant/dead brush cannot be touched (R6). On the end edge this is also the retail
+		// A dormant/dead brush cannot be touched. On the end edge this is also the retail
 		// asymmetry: `~CBaseEntity` reaches PhysicsRemoveTouchedList, which notifies the OTHER side
 		// of each link and frees it without PhysicsRemoveToucher — so a dying trigger never receives
 		// its own EndTouch, and a self-removing trigger_once emits no final OnEndTouch to occupants
@@ -349,7 +349,7 @@ void FElysiumEntityWorld::UpdatePlayerWeaponFrame()
 	{
 		return;
 	}
-	// RE-A6 — retail skips the whole live `PostThink` main body, and `ItemPostFrame` with it, while
+	// Retail skips the whole live `PostThink` main body, and `ItemPostFrame` with it, while
 	// `m_iPlayerLocked` is set or the player is not alive (`docs/vtmb/player-entity.md` § "Recovered
 	// `PostThink` body"). This runtime publishes no such field; `IsMobile()` is the latch every other
 	// producer already gates on for the states that raise it — a cutscene, a scripted beat, a
@@ -361,7 +361,7 @@ void FElysiumEntityWorld::UpdatePlayerWeaponFrame()
 
 	// Retail's `ItemPostFrame` gives a controlling use entity FIRST REFUSAL
 	// (`docs/vtmb/player-entity.md` § "Recovered `PostThink` body"). An open sign panel is this
-	// runtime's other controlling surface, and mapping the first refusal onto it is CHOSEN (C4):
+	// runtime's other controlling surface, and mapping the first refusal onto it is CHOSEN:
 	// every VtMB popup instructs "left-click to continue", so the primary press that dismisses one
 	// must not also swing. The press is spent either way — `MinShowTime` refusing the dismissal is
 	// not a reason to let the click through to the weapon.

@@ -21,10 +21,8 @@ struct FElysiumDmg;
 struct FElysiumSaveArchive;
 struct FElysiumStatTable;
 
-// ============================================================================================
-// FElysiumNpc — the character leaf shared by every living `npc_*` classname. It stands a skeletal
-// model at its origin, follows named patrols or interesting-place routes, and owns dialogue gates.
-// ============================================================================================
+// The character leaf shared by every living `npc_*` classname. It stands a skeletal model at its
+// origin, follows named patrols or interesting-place routes, and owns dialogue gates.
 
 class FElysiumNpc final : public FElysiumScriptedCharacter, public IElysiumScheduleRunner
 {
@@ -56,12 +54,12 @@ public:
 	FElysiumScheduleState Schedule;
 	int32 ScheduleActivityCycle = 0;
 
-	// --- Cycle 7: the authored director's pushed order ------------------------------------------
+	// --- The authored director's pushed order ---
 	// What an `aiscripted_schedule` last pushed onto this NPC, live for exactly as long as the
 	// program it started. Session state, not save state — the reasoning is on the struct.
 	FElysiumScriptedScheduleOrder ScriptedScheduleOrder;
 
-	// --- Cycle 6: the combat loadout ------------------------------------------------------------
+	// --- Combat loadout ---
 	// `additionalequipment` (267 authored rows) and `alternateequipment` (184). The corpus authors
 	// ONE classname per row, with the literal `0` as the "none" sentinel on 78 of them; the
 	// resolution is `Substrate/ElysiumNpcLoadout.h`.
@@ -132,7 +130,7 @@ public:
 	float DamageFilters[4] = { 0.f, 0.f, 0.f, 0.f };
 	bool  bHasDamageFilter[4] = { false, false, false, false };
 
-	// --- Cycle 4: senses, perception tuning and memory ------------------------------------------
+	// --- Senses, perception tuning and memory ---
 	// The three authored perception keyfields `InitPerceptionDistances` (`0x1028fb70`) reads, kept
 	// exactly as authored; the RESOLVED pair lives on `Senses.Perception`.
 	//
@@ -148,7 +146,7 @@ public:
 	// NPC took (`Senses.Memory.LastDamage*`, written by the typed commit below).
 	FElysiumNpcSenses Senses;
 
-	// ================== Cycle 10c — player-law witnessing (`ElysiumNpcWitness.h`) ==================
+	// --- Player-law witnessing (`ElysiumNpcWitness.h`) ---
 	// The four authored thresholds the two law lanes compare a player activity level against, and
 	// `pl_investigate` beside them. 424 of the corpus's 426 NPC rows author all five. The default is
 	// the authored-disable 6 and a negative authored value resolves to it; both are stated, with
@@ -172,14 +170,13 @@ public:
 	// The retained witness block: independent criminal and supernatural processed counts, witnessed
 	// levels/locations/offenders, the flee-only policy and the three ignore deadlines.
 	FElysiumNpcWitness Witness;
-	// ==============================================================================================
 
 	FString InterestingPlaceGroups;   // authored group allowlist; prevents cross-district wandering
 	FString PatrolType;               // raw SetupPatrolType contract (kept for save/debug and later modes)
 	FString PatrolPath;               // authored space-separated info_node_patrol_point names
 	int32 PatrolIndex = 0;            // next point in the looping authored sequence
 	// The sheet, the WillTalk latch, `default_disposition`, the skeletal body and everything that
-	// plays a clip on it now come from the chain (11.4): FElysiumCombatCharacter over
+	// plays a clip on it come from the chain: FElysiumCombatCharacter over
 	// FElysiumAnimating, which is where VtMB puts them. This leaf is the dialogue half.
 	virtual bool ResistsFeeding() const override;
 
@@ -247,15 +244,14 @@ public:
 	 */
 	void InputNamedSchedule(const FElysiumInputArgs& Args);
 
-	// ================ Cycle 11b hunk 7/9 — the named-schedule door, shared ======================
+	// --- The named-schedule door, shared ---
 	/**
 	 * Assign a NAMED native schedule to this NPC and run it through the ordinary kernel.
 	 *
-	 * The body `InputNamedSchedule` always had, lifted so it has more than one producer. The second
-	 * one is the Discipline runtime's `HitInfo.AI_Schedule` channel
-	 * (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "AI schedule assignment (§5.5
-	 * kernel)"): a `disciplinetgt` record names a schedule the victim is to run, which is the same
-	 * operation a script's `ChangeSchedule` performs and must not become a second one.
+	 * One door, two producers: the script input, and the Discipline runtime's `HitInfo.AI_Schedule`
+	 * channel (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "AI schedule assignment
+	 * (§5.5 kernel)"). A `disciplinetgt` record names a schedule the victim is to run, which is the
+	 * same operation a script's `ChangeSchedule` performs and must not become a second one.
 	 *
 	 * Resolution is `ElysiumScheduleIdFromName` and nothing else, so only a REGISTERED program
 	 * starts; an unregistered name funnels to the stub surface keyed on the name and returns false.
@@ -266,7 +262,6 @@ public:
 	 * `Detail` the marshalled context that key's report carries. Returns whether a program started.
 	 */
 	bool StartNamedSchedule(const FString& Requested, const FString& Surface, const FString& Detail);
-	// ===========================================================================================
 
 	/**
 	 * The one door an `aiscripted_schedule` pushes through.
@@ -323,7 +318,7 @@ public:
 
 	virtual void ReleaseScriptBody(const TCHAR* Reason) override;
 
-	// An open conversation owns this body as surely as a beat does, so it refuses a feed (B6).
+	// An open conversation owns this body as surely as a beat does, so it refuses a feed.
 	virtual bool IsFeedBusy() const override;
 
 	virtual void Think() override;
@@ -478,8 +473,8 @@ public:
 	void ThinkAmbient();
 
 	// StartPlayerDialogRemote opens a dialog session: fire OnDialogBegin, then run the NPC's `.dlg`
-	// conversation (B4). When the `dialogname` file is missing/unloadable the session falls back to the
-	// B3 seam — it waits for a manual EndDialog (ent_fire), so the beat is still driveable by hand.
+	// conversation. When the `dialogname` file is missing/unloadable the session falls back to the
+	// manual seam — it waits for EndDialog (ent_fire), so the beat is still driveable by hand.
 	virtual FElysiumBodyOwnerToken BeginDialogueBodySession() override;
 
 	virtual void EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bool bSilent) override;
@@ -503,13 +498,13 @@ public:
 
 	// Load this NPC's `dialogname` `.dlg`, open a branch conversation bound to the installed script host,
 	// and hand it to the world (the visual-novel box renders it; the runner fires EndDialog on close).
-	// Returns false when there is no dialogue to run, leaving bInDialog latched for the B3 manual seam.
+	// Returns false when there is no dialogue to run, leaving bInDialog latched for the manual seam.
 	bool OpenConversation(const FElysiumEntityHandle& Activator, EElysiumDialogOpenerKind Opener);
 
 	// The sheet, from `stats.txt`'s defaults overlaid with this NPC's `stattemplate`. That overlay
 	// is the whole of an NPC's health track: `npctemplate*` authors `Max_Health` as a literal, and a
 	// template that omits it inherits `stats.txt`'s `Default 100` (`docs/vtmb/vdata-catalog.md`). Without it
-	// every NPC had a zero ceiling and TakeDamage only logged.
+	// every NPC has a zero ceiling and TakeDamage only logs.
 	void SeedSheet();
 
 	virtual void Spawn() override;
@@ -550,13 +545,13 @@ private:
 	// The activation barrier: the mind is admitted on its first frozen-time think.
 	bool RunAdmissionBarrier();
 
-	// Cycle 6: the combat loadout, resolved once on the first ordinary think after admission.
+	// The combat loadout, resolved once on the first ordinary think after admission.
 	void ResolveLoadout();
 
-	// Cycle 7: a director's push that fired before this NPC's first think replays here.
+	// A director's push that fired before this NPC's first think replays here.
 	void ReplayDeferredScriptedOrder();
 
-	// Cycle 4/5: senses and the recovered decision pass — or the stale-condition reset where a
+	// Senses and the recovered decision pass — or the stale-condition reset where a
 	// scripted owner suppresses gathering.
 	void RunConditionPass();
 
@@ -570,7 +565,7 @@ private:
 	// A scripted owner drives this body's pose; the think only lands a deferred beat claim.
 	bool ThinkScriptOwned();
 
-	// Cycle 7: schedule selection pre-empts an autonomous executor.
+	// Schedule selection pre-empts an autonomous executor.
 	bool ThinkSchedulePolicy();
 
 	// The autonomous executors: the patrol route, an interesting place, or the standing stance.
@@ -658,13 +653,11 @@ private:
 	bool bAmbientGroupsParsed = false;
 };
 
-// ============================================================================================
 // npc_VPlayerController — the scene-owned duplicate of the player. It shares only the authored
 // scripted-sequence motor with ordinary NPCs: no dialogue, AI, use body, or autonomous think.
 //
 // It lives beside FElysiumNpc rather than in its own file because the two share exactly one thing:
 // the `elysium.NpcBodies` A/B, which is a file-static in `ElysiumNpc.cpp`.
-// ============================================================================================
 
 class FElysiumPlayerControllerNpc final : public FElysiumScriptedCharacter
 {

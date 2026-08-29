@@ -92,9 +92,9 @@ namespace
 	using ElysiumReaction::FComputeResult;
 }
 
-// =====================================================================================
+
 // Band resolution: exact boundaries and out-of-range clamping.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionBandsTest,
 	"Elysium.Substrate.Reaction.Bands", GElysiumTestFlags)
@@ -170,9 +170,9 @@ bool FElysiumReactionBandsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `Targets` string parsing and scope matching.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionTargetsTest,
 	"Elysium.Substrate.Reaction.Targets", GElysiumTestFlags)
@@ -227,10 +227,10 @@ bool FElysiumReactionTargetsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `Modifier` string parsing: scalar Add/Multiply, the free-form Formula shape, and the
 // unrecognized carried-but-inert case.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionModifierExprTest,
 	"Elysium.Substrate.Reaction.ModifierExpr", GElysiumTestFlags)
@@ -268,9 +268,9 @@ bool FElysiumReactionModifierExprTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `ReactionGroup` InternalName -> condition classification.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionConditionTest,
 	"Elysium.Substrate.Reaction.Condition", GElysiumTestFlags)
@@ -298,9 +298,9 @@ bool FElysiumReactionConditionTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The Dementation-Passion formula, evaluated directly.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionFormulaEvalTest,
 	"Elysium.Substrate.Reaction.FormulaEval", GElysiumTestFlags)
@@ -331,9 +331,9 @@ bool FElysiumReactionFormulaEvalTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Compute(): each modifier, its Targets gate, and the History-before-Discipline order.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionComputeTest,
 	"Elysium.Substrate.Reaction.Compute", GElysiumTestFlags)
@@ -470,10 +470,10 @@ bool FElysiumReactionComputeTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Carried-but-inert rows: an unrecognized group, an unrecognized WhoModifies, and an
 // unrecognized Modifier shape are all parsed and kept, never applied.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumReactionInertModifierTest,
 	"Elysium.Substrate.Reaction.InertModifier", GElysiumTestFlags)

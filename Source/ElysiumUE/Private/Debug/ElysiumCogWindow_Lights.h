@@ -12,7 +12,7 @@
 
 class UElysiumLightRig;
 
-// P2.5 Lights window: the F1-first surface for the real-time light rig (UElysiumLightRig). A
+// F1-first surface for the real-time light rig (UElysiumLightRig). A
 // visibility toggle, human-scale live calibration controls (brightness, reach, Lumen bounce,
 // fog scattering, source shape, shadows and sun) that re-tune the running rig with no map reload, and
 // a scrollable per-source list (type / colour / raw magnitude / reach / lightstyle). It also owns

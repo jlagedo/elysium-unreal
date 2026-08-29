@@ -246,7 +246,7 @@ void FElysiumConsole::ExecuteStatement(const FString& Statement, int32 Depth)
 	}
 	const FString Name = Tokens[0].ToLower();
 
-	// 1) a registered command (the VtMB bindable-verb inventory, S7). Commands outrank aliases the
+	// 1) a registered command (the VtMB bindable-verb inventory). Commands outrank aliases the
 	// way Source's own Cmd_ExecuteString does, so nothing a player writes into user.cfg can shadow
 	// `+forward`. Execute() reports false for a word that names no verb, which is the cue to go on.
 	if (FElysiumCommands::Get().Execute(S))

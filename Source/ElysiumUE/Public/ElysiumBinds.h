@@ -3,8 +3,8 @@
 #include "CoreMinimal.h"
 #include "InputCoreTypes.h"
 
-// VtMB's default bind set, as `FKey` -> console command string (roadmap 11.6; the Enhanced Input
-// mapping contexts this becomes are **10.6**'s). It is `cfg/default.cfg` from the Unofficial Patch,
+// VtMB's default bind set, as `FKey` -> console command string. The Enhanced Input mapping
+// contexts project this table. It is `cfg/default.cfg` from the Unofficial Patch,
 // which is the set that ships (`docs/vtmb/controls.md` § "Default bindings"):
 // the patch's arrow/comma-period swap, its ten `vhotkey` slots and its numpad camera verbs, with
 // `vphysicshand` dropped and the `kb_def.lst` disagreements resolved to `default.cfg`.
@@ -20,7 +20,7 @@ struct FElysiumDefaultBind
 	// The console line the key fires. A leading `+` marks a press/release pair: the router binds the
 	// release to the matching `-cmd` and nothing else needs to know.
 	const TCHAR* Command;
-	// The VtMB keyname this row reproduces, for the `config.cfg` projection (10.6) and the dump.
+	// The VtMB keyname this row reproduces, for the `config.cfg` projection and the dump.
 	const TCHAR* VtmbKey;
 };
 

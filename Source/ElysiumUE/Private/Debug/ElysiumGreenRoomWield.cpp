@@ -11,7 +11,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/SkeletalMesh.h"
 
-// --- the wielded weapon (CCC10.2) ----------------------------------------------------------------
+// The wielded weapon.
 
 EElysiumWieldResult FElysiumGreenRoomRun::LabSetWield(const FString& Classname, bool bFemale,
 	FString& OutDetail)

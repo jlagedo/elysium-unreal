@@ -271,7 +271,7 @@ namespace ElysiumSkeletalBuildImpl
 	 * that move are weapon props (`Bat`, `Sledgehammer`, `tire iron` ...) travelling hundreds of
 	 * centimetres. No bank rotates a hair bone at all, so the separation costs no animation.
 	 *
-	 * **A prop bone is exempt whether or not it moves**, because the argument above answers a
+	 * A prop bone is exempt whether or not it moves, because the argument above answers a
 	 * question it does not raise: the seven names are unambiguous, so binding one by name reaches the
 	 * chain that authored it. Leaving the rule to decide them means a bank keeps the channel only
 	 * where some clip happens to clear the thresholds, which is what makes the male locomotion bank
@@ -477,7 +477,7 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		return FString::Printf(TEXT("%s carries no geometry"), *SourcePath);
 	}
 
-	// --- the skeleton this mesh binds to ------------------------------------------------------
+	// The skeleton this mesh binds to.
 	// Named rather than private, because the clip stage authors sequences against the same asset
 	// and a sequence is bound to exactly one `USkeleton`. It is built ahead of this call from this
 	// same container, so the merge below finds every bone already present and the mesh keeps its
@@ -510,7 +510,7 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 	ElysiumSkeletalBuildImpl::ClearForRewrite(Package, AssetName);
 	USkeletalMesh* Mesh = NewObject<USkeletalMesh>(Package, *AssetName, RF_Public | RF_Standalone);
 
-	// --- the reference skeleton -------------------------------------------------------------
+	// The reference skeleton.
 	// Authored on the MESH. It keeps the exact MDL bind; the separate `USkeleton` carries the
 	// rotation-neutral compatibility frame used to share bank assets.
 	FReferenceSkeleton RefSkeleton;
@@ -706,7 +706,7 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		}
 	}
 
-	// --- skin weights -----------------------------------------------------------------------
+	// Skin weights.
 	FSkinWeightsVertexAttributesRef SkinWeights = Attributes.GetVertexSkinWeights();
 	const int32 BoneCount = Source.Bones.Num();
 	for (int32 Index = 0; Index < Source.Vertices.Num(); ++Index)
@@ -729,7 +729,7 @@ FString UElysiumSkeletalBuildLibrary::BuildSkeletalMeshFromSource(const FString&
 		SkinWeights.Set(Vertices[Index], UE::AnimationCore::FBoneWeights::Create(Influences));
 	}
 
-	// --- morph targets ----------------------------------------------------------------------
+	// Morph targets.
 	for (const FElysiumSourceMorph& Morph : Source.Morphs)
 	{
 		const FName MorphName(*Morph.Name);
@@ -900,8 +900,8 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 	TArray<FCarriedProfile> CarriedProfiles;
 	TMap<FName, FReferencePose> CarriedRetargetSources;
 	TArray<FName> PreviousBoneNames;
-	// **The retarget sources are carried whenever there is a skeleton to carry them from, not only on
-	// a rebuild.** They are assigned back unconditionally below, so seeding them under `bNewSkeleton`
+	// The retarget sources are carried whenever there is a skeleton to carry them from, not only on
+	// a rebuild. They are assigned back unconditionally below, so seeding them under `bNewSkeleton`
 	// would hand an incremental call (`bRebuild == false` on an existing skeleton) an EMPTY map to
 	// write over a live one — dropping every donor bind pose already registered. Nothing would report
 	// it either: `USkeleton::GetRefLocalPoses` answers an unknown source name with the skeleton's own
@@ -1006,7 +1006,7 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 		}
 	}
 
-	// **The bone tree is not the reference skeleton, and authoring one does not grow the other.**
+	// The bone tree is not the reference skeleton, and authoring one does not grow the other.
 	// `FReferenceSkeletonModifier` owns bones and bind poses; `BoneTree` is `USkeleton`'s own
 	// parallel array, and it is where per-bone retargeting lives. Nothing above touches it, so a
 	// skeleton built straight through the modifier carries a full reference skeleton and an EMPTY
@@ -1032,7 +1032,7 @@ FString UElysiumSkeletalBuildLibrary::BuildFamilySkeleton(const TArray<FString>&
 
 	OutBones = Skeleton->GetReferenceSkeleton().GetRawBoneNum();
 
-	// **Verbatim, because this repo applies retail's own remap instead.** VtMB carries a shared
+	// Verbatim, because this repo applies retail's own remap instead. VtMB carries a shared
 	// bank's clip onto a body through a per-bone table its loader builds from the two bind poses
 	// (`vampire.dll 0x100c67b0`), and that table has four observable outcomes: a copy where the binds
 	// agree, a pure `target - source` translation where exactly one bind sits at the origin, another
@@ -1252,7 +1252,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	// The pose every sequence below is a difference from, and the appendix bones none of them
 	// animates. Both are properties of the whole container, so both are resolved once.
 	//
-	// **Silencing applies to a BANK and not to a body's own container**, on the same test that
+	// Silencing applies to a BANK and not to a body's own container, on the same test that
 	// separates them above. The leak it closes is a rest pose delivered to a body that did not
 	// author it, which only a shared clip can do; a body's own clips play on that body alone, where
 	// the track states its own bind and dropping it would trade a correct authored pose for a
@@ -1262,7 +1262,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	const TSet<int32> Silent = Source.Vertices.IsEmpty()
 		? ElysiumSkeletalBuildImpl::SilentAppendixBones(Source) : TSet<int32>();
 
-	// --- blend masks ---------------------------------------------------------------------------
+	// Blend masks.
 	// A layer sequence owns some of the rig and leaves the rest to the pose it is composed over,
 	// stated per bone as the animation record's `weight`@0 (`docs/vtmb/animation_and_movers.md`
 	// A.4). That gate becomes one `UBlendProfile` in BlendMask mode on the skeleton the sequence is
@@ -1370,7 +1370,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	// the pose its split bone was resolved against; ordering the two passes here is what
 	// guarantees the host exists by then without a second lookup pass or a fixup.
 	//
-	// **A `_delta` is built from its RAW payload and its derived form is not built at all.** The
+	// A `_delta` is built from its RAW payload and its derived form is not built at all. The
 	// container ships both -- the raw record, and that record composed onto each declaring host's
 	// frame 0 -- and which one becomes an asset is the whole of retail's combine order. Composed,
 	// the clip is a pose that only means anything over the one host it was folded onto, and
@@ -1458,7 +1458,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		// `EAdditiveAnimationType` Unreal ships composes `D ⊗ q` instead, and the difference
 		// between the two is a conjugation by the base's rotation -- a property of the pose the
 		// delta lands on, not of the clip. No base and no `RefPoseType` reaches the right answer,
-		// so **the family carries no additive stamp at all**: it ships as an ordinary sequence
+		// so the family carries no additive stamp at all: it ships as an ordinary sequence
 		// holding the raw decoded delta, tagged for the runtime node that states the combine.
 		// Keyed on the studio flag alone. A derived OVERLAY is a different thing that also names
 		// a base -- a masked layer written against the host whose chain resolves its split bone --
@@ -1482,7 +1482,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 		Tracked.Reserve(Clip.Tracks.Num());
 		for (const FElysiumSourceTrack& Track : Clip.Tracks)
 		{
-			// **The retarget-source invariant, stated where it is relied on.** The whole shared-bank
+			// The retarget-source invariant, stated where it is relied on. The whole shared-bank
 			// scheme is sound only because a clip animates no bone outside its own donor container:
 			// `RegisterRetargetSource` overwrites exactly the donor's bones and leaves every other
 			// entry at the FAMILY skeleton's reference pose, which is some other member's bind. A
@@ -1599,7 +1599,7 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 			}
 		}
 
-		// **A `_delta`'s untracked bones are the additive identity, and they have to be written.**
+		// A `_delta`'s untracked bones are the additive identity, and they have to be written.
 		// A bone with no track evaluates to the REFERENCE POSE, not to nothing
 		// (`FAnimationRuntime`'s pose init, and `ElysiumPoseOracle` reads it the same way), and
 		// this clip is composed by post-multiplying whatever it evaluates to. A reference rotation
@@ -1727,10 +1727,10 @@ FString UElysiumSkeletalBuildLibrary::BuildAnimSequencesFromSource(const FString
 	// Sweep this owner's folder against what the run actually wrote.
 	//
 	// Deleting per skipped clip is not enough, because the strongest kind of orphan is one the
-	// CONTAINER no longer lists at all -- a clip that used to bake under its plain label and now
-	// ships only in derived form. There is no loop over those; the only record that they are stale
-	// is that nothing wrote them. The mount resolves by name, so an orphan keeps answering for a
-	// label whose meaning changed underneath it, which is worse than a missing asset.
+	// CONTAINER does not list at all -- a clip that ships only in derived form, or a label that
+	// left the container. There is no loop over those; the only record that they are stale is that
+	// nothing wrote them. The mount resolves by name, so an orphan keeps answering for a label
+	// whose meaning changed underneath it, which is worse than a missing asset.
 	//
 	// Scoped to the `A_` prefix: blend spaces are `BS_` and are written by a later pass over the
 	// same folder, so sweeping everything here would delete assets that have not been built yet.

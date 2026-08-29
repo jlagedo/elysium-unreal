@@ -40,7 +40,7 @@ enum class EElysiumTask : uint8
 	// Step back from the saved position (`TASK_MOVE_AWAY_PATH` and its follow-ups).
 	MoveAwayFromSavePosition,
 
-	// --- The combat vocabulary ------------------------------------------------------------------
+	// The combat vocabulary.
 	// The 12 additional task identities the registered combat families use, under their recovered
 	// names (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Schedules and tasks"). Everything else in
 	// the 441-identity library stays absent: an unknown task is a schedule this runtime cannot
@@ -80,7 +80,7 @@ enum class EElysiumTask : uint8
 	// because `SCHED_SMALL_FLINCH` opens with it and dropping a step would misreport the program.
 	Remember,
 
-	// --- The death vocabulary --------------------------------------------------------------------
+	// The death vocabulary.
 	// `TASK_PLAY_DEATH_SEQUENCE` (0x149, the last identity in the recovered 441-task library). It
 	// walks the recovered ladder — the task's own argument as an activity, then `ACT_DIESIMPLE`, then
 	// `ACT_IDLE` — and hands the surviving choice to the body
@@ -88,7 +88,7 @@ enum class EElysiumTask : uint8
 	// `FElysiumTaskStep::Activity`; empty means the program named none.
 	PlayDeathSequence,
 
-	// --- The scripted-director vocabulary --------------------------------------------------------
+	// The scripted-director vocabulary.
 	// Path to the goal an `aiscripted_schedule` pushed (`TASK_GET_PATH_TO_GOAL`). It reads no
 	// operand: the goal, the route and the gait are the pushed order's, exactly as
 	// `TASK_GET_PATH_TO_ENEMY` reads the committed enemy off memory rather than off a task column.
@@ -104,7 +104,7 @@ enum class EElysiumScheduleId : uint8
 	BackAwayFromDoorWaitNe,   // 0x96 SCHED_TROIKA_BACK_AWAY_FROM_DOOR_WAIT_NE
 	TakeCoverHintDoor,        // 0x9c SCHED_TROIKA_TAKE_COVER_HINT_DOOR
 
-	// --- The combat families (`Substrate/ElysiumNpcCombatSchedules.cpp` registers every one) -----
+	// The combat families (`Substrate/ElysiumNpcCombatSchedules.cpp` registers every one).
 	MeleeAttack1,             // 0xdc SCHED_TROIKA_MELEE_ATTACK1
 	MeleeAttack1Nr,           // 0xdd SCHED_TROIKA_MELEE_ATTACK1_NR
 	MeleeAttack1Swing,        //      SCHED_TROIKA_MELEE_ATTACK1_SWING (number not decoded)
@@ -123,10 +123,10 @@ enum class EElysiumScheduleId : uint8
 	AlertSmallFlinch,         // 0x07 SCHED_ALERT_SMALL_FLINCH
 	TakeCoverFromOrigin,      // 0x19 SCHED_TAKE_COVER_FROM_ORIGIN
 
-	// --- The death family (`Substrate/ElysiumNpcCombatSchedules.cpp` registers it) ---------------
+	// The death family (`Substrate/ElysiumNpcCombatSchedules.cpp` registers it).
 	Die,                      // SCHED_DIE (number not decoded)
 
-	// --- The scripted-director family (`Substrate/ElysiumAiScriptedSchedule.cpp` registers both) --
+	// The scripted-director family (`Substrate/ElysiumAiScriptedSchedule.cpp` registers both).
 	ScriptedMoveToGoal,       // `aiscripted_schedule` modes 1 and 2
 	ScriptedFollowPath,       // `aiscripted_schedule` modes 4 and 5
 };
@@ -136,17 +136,15 @@ int32 ElysiumScheduleNumber(EElysiumScheduleId Id);
 const TCHAR* ElysiumScheduleName(EElysiumScheduleId Id);
 const TCHAR* ElysiumTaskName(EElysiumTask Task);
 
-/**
- * The name -> id direction, for the two script-facing schedule commands.
- *
- * `ChangeSchedule` and `StartSchedule` "name native schedules explicitly"
- * (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Direct schedule changes"), so schedule identity is
- * authored API and needs a lookup rather than a number. Only a REGISTERED program resolves: a name
- * this runtime carries no program for has to fail by name, because starting some other schedule
- * under an authored name would be a behaviour invented out of a string.
- *
- * Matching is case-insensitive over `ElysiumScheduleName`.
- */
+// The name -> id direction, for the two script-facing schedule commands.
+//
+// `ChangeSchedule` and `StartSchedule` "name native schedules explicitly"
+// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Direct schedule changes"), so schedule identity is
+// authored API and needs a lookup rather than a number. Only a REGISTERED program resolves: a name
+// this runtime carries no program for has to fail by name, because starting some other schedule
+// under an authored name would be a behaviour invented out of a string.
+//
+// Matching is case-insensitive over `ElysiumScheduleName`.
 bool ElysiumScheduleIdFromName(const FString& Name, EElysiumScheduleId& OutId);
 
 struct FElysiumTaskStep
@@ -169,26 +167,24 @@ struct FElysiumSchedule
 	// Where a failed task goes. `None` ends the schedule and returns the NPC to selection.
 	EElysiumScheduleId FailSchedule = EElysiumScheduleId::None;
 
-	/**
-	 * Which newly gathered conditions may abort this task program
-	 * (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Interrupt conditions").
-	 *
-	 * **Empty means interruptible by nothing**, and that is a real recovered posture rather than an
-	 * unfilled default: `SCHED_TROIKA_MELEE_ATTACK1_SWING` declares no interrupts at all, "so once
-	 * that terminal attack task owns the NPC it is not reevaluated as a fresh attack choice each
-	 * tick". The schedule — not the mere existence of a condition — decides whether a new stimulus
-	 * pre-empts behaviour, which is why a faithful AI cannot be one global priority list.
-	 *
-	 * A mask is filled in from a decoded registration site wherever there is one, and is otherwise
-	 * either left empty or filled from the interrupt census with a CHOSEN mark beside the program —
-	 * the distinction between those two, and why the idle pair could not stay empty, is stated at
-	 * the registry and at `MinimalCombatMask` in `Substrate/ElysiumNpcCombatSchedules.cpp`.
-	 *
-	 * An interrupt is NOT a task failure: a failed task goes to `FailSchedule`, while an interrupt
-	 * ends the program and returns the NPC to selection ("until it completes, fails, or an interrupt
-	 * condition forces reselection"). Routing an interrupt through the fail schedule would send an
-	 * NPC that just acquired an enemy into a cover or flinch program instead of re-selecting.
-	 */
+	// Which newly gathered conditions may abort this task program
+	// (`docs/vtmb/npc-ai-reverse-engineering.md` -> "Interrupt conditions").
+	//
+	// **Empty means interruptible by nothing**, and that is a real recovered posture rather than an
+	// unfilled default: `SCHED_TROIKA_MELEE_ATTACK1_SWING` declares no interrupts at all, "so once
+	// that terminal attack task owns the NPC it is not reevaluated as a fresh attack choice each
+	// tick". The schedule — not the mere existence of a condition — decides whether a new stimulus
+	// pre-empts behaviour, which is why a faithful AI cannot be one global priority list.
+	//
+	// A mask is filled in from a decoded registration site wherever there is one, and is otherwise
+	// either left empty or filled from the interrupt census with a CHOSEN mark beside the program —
+	// the distinction between those two, and why the idle pair could not stay empty, is stated at
+	// the registry and at `MinimalCombatMask` in `Substrate/ElysiumNpcCombatSchedules.cpp`.
+	//
+	// An interrupt is NOT a task failure: a failed task goes to `FailSchedule`, while an interrupt
+	// ends the program and returns the NPC to selection ("until it completes, fails, or an interrupt
+	// condition forces reselection"). Routing an interrupt through the fail schedule would send an
+	// NPC that just acquired an enemy into a cover or flinch program instead of re-selecting.
 	FElysiumNpcConditions Interrupts;
 
 	// SEAM (named, unimplemented): 42 schedules carry a `DELAY_INTERRUPTS` flag. What "delayed"
@@ -207,17 +203,15 @@ const FElysiumSchedule* ElysiumScheduleFor(EElysiumScheduleId Id);
 
 namespace ElysiumSchedule
 {
-	/**
-	 * The registry's one growth point.
-	 *
-	 * A domain file states its own programs and installs them here at static init — the combat
-	 * families live in `Substrate/ElysiumNpcCombatSchedules.cpp` beside the selectors that choose
-	 * them, because a program and the policy that picks it are one decision. This kernel carries the
-	 * task vocabulary and the two idle/door programs it was written around, and nothing else.
-	 *
-	 * Registering an id twice replaces the earlier program and says so: a duplicate is a build
-	 * mistake, not a merge.
-	 */
+	// The registry's one growth point.
+	//
+	// A domain file states its own programs and installs them here at static init — the combat
+	// families live in `Substrate/ElysiumNpcCombatSchedules.cpp` beside the selectors that choose
+	// them, because a program and the policy that picks it are one decision. This kernel carries the
+	// task vocabulary and the two idle/door programs it was written around, and nothing else.
+	//
+	// Registering an id twice replaces the earlier program and says so: a duplicate is a build
+	// mistake, not a merge.
 	void Register(FElysiumSchedule&& Program);
 }
 
@@ -315,7 +309,7 @@ public:
 	// One trace row, so a decision is readable without a rebuild.
 	virtual void RecordScheduleEvent(const FString& Row) {}
 
-	// --- The combat verbs -----------------------------------------------------------------------
+	// The combat verbs.
 	// Every one defaults to the answer a runner with no body can honestly give. The movement verbs
 	// default to refusing, which fails their task by name; `StopMoving` and `RememberFact` cannot
 	// fail, because neither asserts anything about the world.
@@ -391,23 +385,21 @@ namespace ElysiumSchedule
 	// which leaves the state cleared rather than half-started.
 	bool Start(FElysiumScheduleState& State, EElysiumScheduleId Id, IElysiumScheduleRunner& Runner);
 
-	/**
-	 * Advance the running schedule by one think.
-	 *
-	 * `OutNextThinkDelay` receives how long the caller should wait before asking again -- a timed
-	 * task hands back its own remainder, so a five-second wait costs one think rather than fifty.
-	 * Returns false once the schedule has ended (completed, failed through to nothing, or been
-	 * interrupted), which is the caller's signal to select again.
-	 *
-	 * `Conditions` is this decision pass's gathered set, checked against the active schedule's
-	 * interrupt mask at the top of the tick and before any task work. Null means "no conditions
-	 * were gathered for this pass" -- a headless kernel test, or a think that ran with condition
-	 * gathering suppressed -- and skips the check entirely rather than testing an empty set.
-	 */
+	// Advance the running schedule by one think.
+	//
+	// `OutNextThinkDelay` receives how long the caller should wait before asking again -- a timed
+	// task hands back its own remainder, so a five-second wait costs one think rather than fifty.
+	// Returns false once the schedule has ended (completed, failed through to nothing, or been
+	// interrupted), which is the caller's signal to select again.
+	//
+	// `Conditions` is this decision pass's gathered set, checked against the active schedule's
+	// interrupt mask at the top of the tick and before any task work. Null means "no conditions
+	// were gathered for this pass" -- a headless kernel test, or a think that ran with condition
+	// gathering suppressed -- and skips the check entirely rather than testing an empty set.
 	bool Tick(FElysiumScheduleState& State, IElysiumScheduleRunner& Runner, double Now,
 		double& OutNextThinkDelay, const FElysiumNpcConditions* Conditions = nullptr);
 
-	// --- `TASK_MOVE_AWAY_PATH`, whole (11.14) --------------------------------------------------
+	// `TASK_MOVE_AWAY_PATH`, whole.
 	// Where the step back wants to land, whether the world will have it, and whether what the world
 	// handed back is still a retreat. It lives here rather than inside the NPC leaf for the reason
 	// the rest of this file does: the leaf class is file-local, so a rule spelled out there is a
@@ -429,16 +421,14 @@ namespace ElysiumSchedule
 	// step back.
 	inline constexpr double RetreatMarginCm = 8.0;
 
-	/**
-	 * Extrapolate `DistanceCm` directly away from `SavePosition` in the horizontal plane, project
-	 * that point onto the navigable surface through the motor, RE-TEST the projection against the
-	 * retreat rule, and issue the move.
-	 *
-	 * The re-test is the point of the task: projection answers "where can someone stand", not "is
-	 * this still away from the door", so a point pulled back through the doorway is a navigable
-	 * point that must fail the schedule rather than walk the NPC into the swing it was told to
-	 * leave. `OutDestination` receives the projected point on every result that got that far.
-	 */
+	// Extrapolate `DistanceCm` directly away from `SavePosition` in the horizontal plane, project
+	// that point onto the navigable surface through the motor, RE-TEST the projection against the
+	// retreat rule, and issue the move.
+	//
+	// The re-test is the point of the task: projection answers "where can someone stand", not "is
+	// this still away from the door", so a point pulled back through the doorway is a navigable
+	// point that must fail the schedule rather than walk the NPC into the swing it was told to
+	// leave. `OutDestination` receives the projected point on every result that got that far.
 	ERetreat StepAwayFromSavePosition(IElysiumNpcMotor* Motor, const FVector& Origin,
 		const FVector& SavePosition, float DistanceCm, FVector& OutDestination);
 }

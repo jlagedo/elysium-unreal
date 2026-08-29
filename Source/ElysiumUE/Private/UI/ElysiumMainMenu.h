@@ -26,24 +26,23 @@ enum class EElysiumMenuCommand : uint8
 	Quit,
 };
 
-// The main / pause / game-over menu (roadmap 8.6, driven by the app state machine at 11.3). A
-// `UCommonActivatableWidget` whose visual tree is built in C++ Slate — CommonUI supplies the
-// activation stack, input routing and focus; no Widget Blueprint asset is involved
-// (`docs/architecture/ui-architecture.md`).
+// Main / pause / game-over menu, driven by the app state machine. Visual tree is built in C++
+// Slate — CommonUI supplies the activation stack, input routing and focus; no Widget Blueprint
+// asset is involved (`docs/architecture/ui-architecture.md`).
 //
-// The screen has **two layouts**, A/B'd live by `elysium.MenuLayout`, both authored in VtMB's own
-// 1024x768 virtual canvas under one `SDPIScaler` at `ScreenH/768`:
+// Two layouts, selected by `elysium.MenuLayout`, both authored in VtMB's 1024x768 virtual canvas
+// under one `SDPIScaler` at `ScreenH/768`:
 //
-//  - **Rail** (1, default) — the menu stands in a right-hand rail over a veil that falls to nothing
-//    by mid-frame, so the backdrop's own darkness carries the type and the lit half of the scene is
-//    never dimmed to rescue it. Items rest in bone and arm in blood, marked by one tick sliding
-//    along the rail's hairline; the seal behind them is a `mm_<clan>` sigil off the menu particle
-//    sheet. Why this diverges from the recovered law: `docs/architecture/ui-architecture.md`.
-//  - **Classic** (0) — `CVMainMenu::PerformLayout` verbatim: every item sized to the **widest**
-//    label plus 20x4 virtual px, stacked at `pitch = height + 2`, the column centred, the whole
-//    screen behind it knocked back by `elysium.MenuScrim`. Kept so the divergence stays measurable.
+//  - Rail (1, default) — a right-hand rail over a veil that falls to nothing by mid-frame, so the
+//    backdrop's own darkness carries the type and the lit half of the scene is never dimmed to
+//    rescue it. Items rest in bone and arm in blood, marked by one tick sliding along the rail's
+//    hairline; the seal behind them is a `mm_<clan>` sigil off the menu particle sheet. Why this
+//    diverges from the recovered law: `docs/architecture/ui-architecture.md`.
+//  - Column (0) — `CVMainMenu::PerformLayout`: every item sized to the widest label plus 20x4
+//    virtual px, stacked at `pitch = height + 2`, the column centred, the whole screen behind it
+//    knocked back by `elysium.MenuScrim`.
 //
-// Neither reproduces the craft: vector small caps instead of a 640x480 bitmap atlas.
+// Type is vector small caps, not a bitmap atlas.
 UCLASS()
 class UElysiumMainMenu : public UElysiumNavigableScreen
 {
@@ -70,8 +69,7 @@ protected:
 
 	// Escape closes the pause menu (the same key that opened it) and is swallowed everywhere else a
 	// menu is up, so it can never fall through to the game while a screen owns the screen. The
-	// keyboard route exists because CommonUI's Back action needs the `CommonUIInputData` asset that
-	// 8.6 still owes; when that lands this becomes the back handler instead.
+	// keyboard route exists because CommonUI's Back action is not the owner of this policy.
 	virtual FReply NativeOnKeyDown(const FGeometry& Geometry, const FKeyEvent& KeyEvent) override;
 	virtual bool NativeOnHandleBackAction() override;
 
@@ -84,7 +82,7 @@ private:
 		bool                 bEnabled;
 		// What the rail's caption says while this row is armed, or null for the rows that need no
 		// explaining. It carries two jobs: why a drawn-but-dead row is dead, and what a row that
-		// ends the run is about to do. Unused by the classic layout.
+		// ends the run is about to do. Unused by the column layout.
 		const TCHAR*         Caption = nullptr;
 		// Start a new group above this row. The item set is not a peer list — an act, a ledger and
 		// the exits — and the 14 virtual px gap is the only thing that says so.

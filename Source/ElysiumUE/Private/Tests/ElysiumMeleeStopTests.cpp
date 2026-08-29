@@ -1,5 +1,5 @@
 // Content-free Substrate automation: `CBasePlayer::PostThink`'s MELEE STOP, driven through the
-// producer that performs it (LIFE5).
+// producer that performs it.
 //
 // The rule is a few instructions of retail — every frame from a swing's `w_hold` to the end of its
 // clip, with no direction key held, the body's carried motion is discarded — but it only means
@@ -140,9 +140,9 @@ namespace
 	};
 }   // namespace
 
-// =====================================================================================
+
 // The tail window, end to end
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementStopWindowTest,
 	"Elysium.Substrate.MeleeMovementStop.Window", GElysiumMeleeStopTestFlags)
@@ -214,9 +214,9 @@ bool FElysiumMeleeMovementStopWindowTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The held-direction refusal, and what counts as a direction
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementStopDirectionTest,
 	"Elysium.Substrate.MeleeMovementStop.Direction", GElysiumMeleeStopTestFlags)
@@ -284,9 +284,9 @@ bool FElysiumMeleeMovementStopDirectionTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Which swings reach it at all, and what decides the release
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementStopScopeTest,
 	"Elysium.Substrate.MeleeMovementStop.Scope", GElysiumMeleeStopTestFlags)
@@ -409,9 +409,9 @@ bool FElysiumMeleeMovementStopScopeTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The rule itself, at the boundaries the frames above cannot land exactly on
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMeleeMovementStopRuleTest,
 	"Elysium.Substrate.MeleeMovementStop.Rule", GElysiumMeleeStopTestFlags)
@@ -469,9 +469,9 @@ bool FElysiumMeleeMovementStopRuleTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The payoff: what stopping the body actually buys the swing
-// =====================================================================================
+
 //
 // Every suite above proves the DECISION — that the stop is asked for on the right frames. This one
 // proves it is worth asking: it walks the real gait ladder with the two states the stop sits

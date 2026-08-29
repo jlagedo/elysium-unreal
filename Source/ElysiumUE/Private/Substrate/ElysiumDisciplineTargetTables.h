@@ -2,9 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// ================================================================================================
-// 19. disciplinetgt_000..004.txt — the targeted Discipline records
-// ================================================================================================
+// --- disciplinetgt_000..004.txt — the targeted Discipline records ---
 //
 // `docs/vtmb/disciplines.md` → "Targeted `DisciplineTgt` path" owns the behaviour. The five files
 // are Animalism, Dementation, Dominate, Presence and Thaumaturgy in that order; each holds one

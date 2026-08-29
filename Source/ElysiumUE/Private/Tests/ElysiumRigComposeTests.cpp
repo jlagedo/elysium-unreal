@@ -2,8 +2,7 @@
 //
 // `Elysium.Content.RigPose` scores one clip and only on a frame that had **nothing layered on**;
 // `Elysium.Content.RigLayers` scores which **channels** a frame needs and whether four slots reach
-// them. Neither asks what the layer composes TO, and that is the half an overlay stack owns
-// (LIFE10).
+// them. Neither asks what the layer composes TO, and that is the half an overlay stack owns.
 //
 // The capture answers it. A `life_rig_pose` session writes both reports over the same frames:
 // `pose_oracle.json` carries the bone-to-world matrices `C_BaseAnimating::SetupBones` left in the

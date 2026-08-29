@@ -1409,7 +1409,7 @@ bool FElysiumGreenRoomRun::LabSetBody(const FString& Stem, const FString& Clip, 
 	return true;
 }
 
-// --- drive mode (CCC6) ---------------------------------------------------------------------------
+// Drive mode: the shipping path on the gym or the arena.
 
 namespace ElysiumGreenRoom
 {

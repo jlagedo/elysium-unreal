@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// VtMB's eye system, as data plus the arithmetic over it (roadmap 12.4). Plain C++ with no UObject
+// VtMB's eye system, as data plus the arithmetic over it. Plain C++ with no UObject
 // reflection, like `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands one out is
 // `UElysiumAnimSubsystem`, and the per-body application is `UElysiumEntityBodies`.
 //
@@ -137,7 +137,7 @@ struct FElysiumEyeState
 	FVector IrisV = FVector::ZeroVector;
 
 	// The basis rotated back into the eye bone's own space, which is the only part of the pass the
-	// flex layer sees (the eyelid write-back, 12.4).
+	// flex layer sees (the eyelid write-back).
 	FVector UpLocal = FVector::ZeroVector;
 	FVector ForwardLocal = FVector::ZeroVector;
 

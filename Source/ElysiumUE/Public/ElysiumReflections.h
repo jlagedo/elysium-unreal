@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The $envmap reflection channel (roadmap 7.5), shared by everything that binds it: the
+// The $envmap reflection channel, shared by everything that binds it: the
 // runtime material factory, the map actor's live overrides, and the tests.
 //
 // VtMB composites its cubemap reflection as `(base + cube*mask*tint) * lightmap * 2` -- an

@@ -200,7 +200,7 @@ namespace
 		Out.WeaponActivity = Translation.WeaponActivity;
 		Out.TranslationIterations = Translation.Iterations;
 		Out.ResolvedActivity = Translation.Resolved;
-		// The remaining hops the walk took (LIFE4): the class answer and the two rungs. Together
+		// The remaining hops the walk took: the class answer and the two rungs. Together
 		// with the lines above they are the whole chain a readout renders, so a wrong pose names
 		// the rung that produced it rather than only the final answer.
 		Out.ClassActivity = Translation.ClassActivity;
@@ -584,7 +584,7 @@ FElysiumTranslationResult TranslateActivity(const FElysiumAnimationIntent& Inten
 	// 5. availability, in the recovered order: the final weapon answer, the remembered class answer,
 	// the first weapon answer, then the original logical request.
 	//
-	// A caller whose contract predates the fallback ladder reads the miss and keeps its own answer,
+	// A caller that refuses the fallback ladder reads the miss and keeps its own answer,
 	// so the probe is what its `bAllowFallbackLadder` switches off: a gait resolved through rung 3
 	// is not that gait, and reporting it as one is the silent substitution the record exists to
 	// prevent.

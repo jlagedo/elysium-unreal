@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -58,7 +58,7 @@
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
 #include "ElysiumAnimationIntent.h"          // the jump latch and classifier the cast poses from
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -125,13 +125,13 @@ namespace ElysiumPlayerWorldTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// =====================================================================================
-// The player entity (11.4, S3). The claim under test is that the player stopped being a
+
+// The player entity. The claim under test is that the player stopped being a
 // special case: it is a registry class on VtMB's own chain, it answers to a targetname the
 // maps already write (`!player`), its inputs arrive through the same R2 walk from either
 // direction, it is a real `!activator`, and `point_teleport` moves it exactly as it moves
 // anything else. No RHI, no actors, no `$ELYSIUM_EXPORT_ROOT` — the recording stub is the body.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerEntityTest, "Elysium.Substrate.PlayerEntity", GElysiumTestFlags)
 bool FElysiumPlayerEntityTest::RunTest(const FString&)
@@ -557,10 +557,10 @@ bool FElysiumPointTeleportContractTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Opening-embrace embodiment: the controller is a real map-epoch entity, and prop_dynamic
 // selects the generated v4 skeletal representation only for indexed models.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropManifestTest,
 	"Elysium.Substrate.AnimatedPropManifest", GElysiumTestFlags)
@@ -967,10 +967,9 @@ bool FElysiumOpeningEmbodimentTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================// Genesis's recovered exit: the chargen panel teleports the player into `firetrans`, whose
+// Genesis's recovered exit: the chargen panel teleports the player into `firetrans`, whose
 // OnStartTouch forces `boogieout,ChangeNow`. The recording services keep this content-free while
 // exercising the real command parser, entity I/O and travel seam end to end.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGenesisExitTest,
 	"Elysium.Substrate.GenesisExit", GElysiumTestFlags)
@@ -1214,11 +1213,11 @@ bool FElysiumTouchReconcileOrderTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Engine integration for the one part GenesisExit cannot model on a bare entity world:
 // SetActorLocation(..., TeleportPhysics) may synchronously recompute the real hull overlap. The
 // map wrapper deliberately suppresses only entity-bus ingress; raw UE delegates remain observable.
-// =====================================================================================
+
 
 // The transient-game-world preamble every native-actor case below rebuilt by hand: create the world,
 // start play, and (as each case needs it) spawn the faithful player pawn, its controller, and the
@@ -1340,9 +1339,10 @@ bool FElysiumNpcMotorSleepTest::RunTest(const FString&)
 //
 // `MovementMode` is zero-initialised to `MOVE_None` and only becomes `MOVE_Walking` when a
 // controller possesses the character — which happens on the body's first accepted travel request
-// and never at all for a background NPC. `IsMovingOnGround()` reads the mode alone, so such a body
-// used to report itself airborne for its whole life, and the animation latch pinned it at
-// `ACT_FALLING` while it stood on the pavement. Retail has no ground/air poll for the cast at all
+// and never at all for a background NPC. `IsMovingOnGround()` reads the mode alone, so a body
+// that never received a travel request reports airborne unless the standing-ground path sets
+// `MOVE_Walking`. The animation latch would pin it at `ACT_FALLING` while it stands on the
+// pavement. Retail has no ground/air poll for the cast at all
 // (`docs/vtmb/animation_and_movers.md` — the compact-code classifier is the player chain's), so a
 // standing NPC selecting a fall is a defect with no faithful counterpart.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcStandingGroundTest,
@@ -1403,7 +1403,7 @@ bool FElysiumNpcStandingGroundTest::RunTest(const FString&)
 		return false;
 	}
 
-	// The body has never been issued a travel request — the exact case that used to read airborne.
+	// The body has never been issued a travel request — the case `IsMovingOnGround()` would read as airborne off `MOVE_None`.
 	TestNull(TEXT("the standing body still has no controller"), Body->GetController());
 	TestTrue(TEXT("a settled standing body reports a grounded movement mode"),
 		Movement->IsMovingOnGround());
@@ -1527,7 +1527,7 @@ bool FElysiumEngineTeleportOverlapTest::RunTest(const FString&)
 	return true;
 }
 
-// LIFE4 "Visibility": the world weapon submits or not by the camera's own gate
+// Visibility: the world weapon submits or not by the camera's own gate.
 // (`FElysiumCameraDrawPolicy::bWorldWeaponEligible`, published as `FElysiumCameraView::bDrawWorldWeapon`),
 // suppression-only — the attachment, its leader pose and its model survive the toggle in both
 // directions, and an NPC body never consults the local player's camera policy at all.
@@ -2007,10 +2007,10 @@ bool FElysiumMapActorTeardownTest::RunTest(const FString&)
 	return !HasAnyErrors();
 }
 
-// =====================================================================================
+
 // The theatre detour is a pure decision at the travel funnel: only the authored genesis→theatre
 // destination is rewritten, and a rewrite is a direct tutorial-landmark entry.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStorySkipTest,
 	"Elysium.Substrate.StorySkip", GElysiumTestFlags)

@@ -90,7 +90,7 @@ public:
 	// not a light and is absent here.
 	const TArray<FLightSource>& Sources() const { return LightSources; }
 
-	// --- per-source live override ----------------------------------------------------------------
+	// Per-source live override.
 	// The Lights window's per-light inspector edits one source by hand. Such a source is marked
 	// overridden, which takes it out of both passes that would otherwise write over the edit: the
 	// global calibration (ApplyLiveTuning, which every calibration slider triggers) and the
@@ -107,7 +107,7 @@ public:
 	void RevertSource(int32 Index);
 	void RevertAllSources();
 
-	// --- per-source disable ----------------------------------------------------------------------
+	// Per-source disable.
 	// Switching one source off by hand, orthogonal to the override: it changes no value, so a
 	// disabled light keeps its calibrated intensity/reach and comes back exactly as it was. This is
 	// the switch the fill-light survey is driven from (the Lights window saves the disabled set),
@@ -176,7 +176,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SunSourceAngleDegrees = 0.5357f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float SunSoftSourceAngleDegrees = 0.0f;
 	UPROPERTY(EditAnywhere, Category = "Elysium|Lighting") float FallbackRadiusCm = 2500.f;
-	// B7 — the 3D-skybox miniature's uniform scale, applied to a sky source's reach only (its
+	// The 3D-skybox miniature's uniform scale, applied to a sky source's reach only (its
 	// position is baked already scaled). Set from `<map>.sky` at Adopt; 1 on a map with no
 	// miniature. MinSkyReachCm floors it, so an authored radius near zero still lights something
 	// after the scale rather than collapsing.

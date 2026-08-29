@@ -3,7 +3,7 @@
 #include "ElysiumClipMovement.h"            // the animation-driven predicate and its refuse set
 #include "ElysiumEntityWorld.h"             // the clock the combat-stance window is read against
 #include "ElysiumPlayer.h"
-#include "Visual/ElysiumActionTables.h"     // the committed player gait ladder (LIFE4, Option A)
+#include "Visual/ElysiumActionTables.h"     // the committed player gait ladder
 
 void FElysiumAnimationDriver::AddReferencedObjects(FReferenceCollector& Collector)
 {
@@ -691,7 +691,7 @@ void FElysiumAnimationDriver::Tick(float DeltaSeconds, const FElysiumLocomotionS
 	Intent.ActorState = ActorState;
 	Intent.FormTag = FormTag;
 
-	// LIFE4, Option A — the player's grounded stand/gait comes off the committed retail ladder,
+	// The player's grounded stand/gait comes off the committed retail ladder,
 	// walked live with the combat-stance query. `ACT_AIM` for a combat-ready armed stand, the
 	// plain gaits in stance, the relaxed ones out of it; translation renames per weapon
 	// downstream, so no Combat special case exists anywhere in the chain. Empty means the

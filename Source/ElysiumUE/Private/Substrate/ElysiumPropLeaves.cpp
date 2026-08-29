@@ -5,8 +5,6 @@
 #include "ElysiumSaveArchive.h"
 #include "Substrate/ElysiumSignData.h"
 
-// --- FElysiumPropButton -------------------------------------------------------------------------
-
 void FElysiumPropButton::Spawn()
 {
 	FElysiumProp::Spawn();
@@ -54,7 +52,7 @@ void FElysiumPropButton::SetButtonState(int32 NewState, const FElysiumEntityHand
 	SetSkin(CurrentState);
 }
 
-// --- FElysiumPropSwitch -------------------------------------------------------------------------
+
 
 void FElysiumPropSwitch::Spawn()
 {
@@ -199,7 +197,7 @@ void FElysiumPropSwitch::PlayIdle()
 	InputSetAnimation(Args);
 }
 
-// --- FElysiumPropSign ---------------------------------------------------------------------------
+
 
 FElysiumUseBeginResult FElysiumPropSign::BeginPlayerUse(const FElysiumUseContext& Context)
 {

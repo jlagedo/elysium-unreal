@@ -10,7 +10,7 @@ class FElysiumEntityWorld;
 class UInstancedStaticMeshComponent;
 class UMaterialInstanceDynamic;
 
-// P2.4 retained entity-gizmo layer — the answer to "avoid the per-frame CPU round trip". Instead of
+// Retained entity-gizmo layer — the answer to "avoid the per-frame CPU round trip". Instead of
 // re-issuing ~1,200 DrawDebug boxes every frame (immediate mode: re-marshalled to the render thread
 // each frame), this builds ONE UInstancedStaticMeshComponent of unit cubes at map load — one instance
 // per entity, colour packed into per-instance custom data (RGBA floats 0..3, read by M_Gizmo). The

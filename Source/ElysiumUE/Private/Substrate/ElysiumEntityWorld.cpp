@@ -27,7 +27,7 @@
 
 DEFINE_LOG_CATEGORY(LogElysiumWorld);
 
-// A/B toggle for the P1.5 brush bodies (per-entity convex collision + trigger overlaps). Read at
+// Load-time gate for brush bodies (per-entity convex collision + trigger overlaps). Read at
 // Load, so it takes effect on the next map load (like elysium.BrushCollision for the world hulls).
 static TAutoConsoleVariable<int32> CVarBrushBodies(
 	TEXT("elysium.BrushBodies"),
@@ -90,11 +90,11 @@ FElysiumEntityWorld::FElysiumEntityWorld(AActor* InOwner, UElysiumGameStateSubsy
 	, Epoch(GElysiumNextWorldEpoch++)
 {
 	GameSoundBus = MakeUnique<FElysiumGameSoundBus>();
-	// Cycle 10c — the law-record store, built beside the sound bus it is modelled on.
+	// The law-record store, built beside the sound bus it is modelled on.
 	LawEventBus = MakeUnique<ElysiumNpcWitness::FElysiumLawEventBus>();
 	LineService = MakeUnique<FElysiumLineService>(WorldServices.Audio);
-	// R5 — the chokepoints are never uninstrumented: the ring buffer (always-on history) and
-	// the log/VLOG stream are installed before any entity spawns. Phase 2 UI adds more sinks.
+	// The chokepoints are never uninstrumented: the ring buffer (always-on history) and
+	// the log/VLOG stream are installed before any entity spawns. The debug subsystem adds more sinks.
 	TUniquePtr<FElysiumRingBufferSink> RingSink = MakeUnique<FElysiumRingBufferSink>(*this, 1000);
 	Ring = RingSink.Get();
 	Sinks.Add(MoveTemp(RingSink));
@@ -172,7 +172,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	for (int32 i = 0; i < Defs.Defs.Num(); ++i)
 	{
 		const FElysiumEntityDef& D = Defs.Defs[i];
-		// The handle index IS the def-array index (R3): stable, never recycled.
+		// The handle index IS the def-array index: stable, never recycled.
 		TUniquePtr<FElysiumEntity> Ent = FElysiumClassRegistry::Get().Create(D, FElysiumEntityHandle(i, Epoch));
 		Ent->World = this;   // the seam an entity uses to fire outputs (set before Spawn)
 
@@ -185,7 +185,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 	}
 
 	// Spawn pass — keyvalues are already applied (Construct); Spawn() is the leaf class's own
-	// wiring (no-op for base/inert records in P1.4). Then attach the brush body (P1.5): after
+	// wiring (no-op for base/inert records). Then attach the brush body: after
 	// Spawn() so a leaf class can have adjusted its own state first.
 	const bool bBuildBodies = CVarBrushBodies.GetValueOnGameThread() != 0;
 	for (const TUniquePtr<FElysiumEntity>& Ent : EntityList)
@@ -212,7 +212,7 @@ void FElysiumEntityWorld::Load(FElysiumEntityDefs&& InDefs)
 		}
 	}
 
-	// 11.9 — the spawn pass is finished, so this is what a rebuild of this map produces: record it
+	// The spawn pass is finished, so this is what a rebuild of this map produces: record it
 	// as the omission baseline a freeze diffs against (`docs/architecture/save-architecture.md` §4).
 	Baseline.Reset();
 	Baseline.SetNum(EntityList.Num());
@@ -347,7 +347,7 @@ void FElysiumEntityWorld::Activate(double Now)
 
 void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 {
-	// R1 — only brush entities get a body; point/logic entities never do. A killed entity (a
+	// Only brush entities get a body; point/logic entities never do. A killed entity (a
 	// class Spawn() may have self-destructed) gets nothing.
 	if (!Owner || !Ent.Def || !Ent.Def->IsBrush() || Ent.Def->Hulls.Num() == 0 || Ent.IsDead())
 	{
@@ -376,7 +376,7 @@ void FElysiumEntityWorld::BuildBrushBody(FElysiumEntity& Ent)
 
 	// Standard runtime-component recipe: NewObject → cook the setup + place → SetupAttachment →
 	// RegisterComponent (which creates the physics body from the now-valid setup, at the origin).
-	// P1.7 — a readable Outliner name (Body_<idx>_<name>_<class>); the exact canonical debug string
+	// A readable Outliner name (Body_<idx>_<name>_<class>); the exact canonical debug string
 	// rides along as a component tag (engine-core.md: labels mirror the debug string).
 	FName BodyName = NAME_None;
 #if WITH_EDITOR
@@ -485,7 +485,7 @@ void FElysiumEntityWorld::CallEntitySpawn(FElysiumEntity& Ent)
 			}
 		}
 	}
-	// 11.9 — a runtime entity's rebuild is this same create+spawn replayed from its saved def, so
+	// A runtime entity's rebuild is this same create+spawn replayed from its saved def, so
 	// its baseline is taken at the same point in its life as a def entity's.
 	CaptureBaseline(Ent.Handle.Index);
 	UE_LOG(LogElysiumWorld, Log, TEXT("(%8.3f) runtime spawn %s"), NowSeconds(), *Ent.DebugString());
@@ -512,7 +512,7 @@ FElysiumEntityHandle FElysiumEntityWorld::SpawnRuntimeEntity(FElysiumEntityDef D
 	return H;
 }
 
-// --- The player entity (11.4, S3) --------------------------------------------------------
+// --- The player entity ---
 
 FElysiumEntityHandle FElysiumEntityWorld::SpawnPlayer()
 {
@@ -782,7 +782,7 @@ void FElysiumEntityWorld::AddSink(TUniquePtr<IElysiumIOSink> InSink)
 	}
 }
 
-// --- Screen fade (P4.5 env_fade) --------------------------------------------------------
+// --- Screen fade (env_fade) ---
 
 void FElysiumEntityWorld::StartScreenFade(const FLinearColor& Color, float Duration, float HoldTime,
 	float MaxAlpha, bool bFadeIn, bool bAutoReverse)
@@ -796,8 +796,8 @@ void FElysiumEntityWorld::StartScreenFade(const FLinearColor& Color, float Durat
 	ScreenFade.bAutoReverse = bAutoReverse;
 	ScreenFade.StartTime    = NowSeconds();
 
-	// 11.2 — announce it as well as hold it. The state stays here because it has the map's lifetime;
-	// the announcement is what tells the publisher a fade *started* this frame (11.8).
+	// Announce it as well as hold it. The state stays here because it has the map's lifetime;
+	// the announcement is what tells the publisher a fade *started* this frame.
 	if (IElysiumPresenter* P = Presenter())
 	{
 		P->StartFade(ScreenFade.Color, ScreenFade.Duration, ScreenFade.HoldTime, ScreenFade.MaxAlpha,
@@ -853,7 +853,7 @@ bool FElysiumEntityWorld::GetScreenFade(FLinearColor& OutColor) const
 	return OutColor.A > KINDA_SMALL_NUMBER;
 }
 
-// --- Open sign window (P4.10) -----------------------------------------------------------
+// --- Open sign window ---
 
 void FElysiumEntityWorld::OpenSign(const FElysiumEntityHandle& NewOwner,
 	TSharedPtr<const FElysiumSignData> Data, float FadeInSeconds)
@@ -1168,7 +1168,7 @@ void FElysiumEntityWorld::Tick(double Now)
 	}
 	WeatherState.Tick(Now);
 	PublishWetness();
-	// 11.4 — sample the pawn into the player entity first, so everything this frame reads (a think
+	// Sample the pawn into the player entity first, so everything this frame reads (a think
 	// measuring distance, a landmark offset, `pc.GetOrigin()`) sees where the player actually is.
 	// The body moved earlier in THIS frame (step 4), which is the relationship retail has: the move
 	// writes the player's origin out of the packet drain, and every think in `GameFrame` reads it.
@@ -1176,13 +1176,13 @@ void FElysiumEntityWorld::Tick(double Now)
 	{
 		PlayerEnt->SyncFromBody();
 	}
-	// LIFE5 — the sequence-event pass, immediately before the thinks. Retail dispatches a body's
+	// The sequence-event pass, immediately before the thinks. Retail dispatches a body's
 	// animation events out of the animating object's own frame advance, ahead of the AI, so the
 	// position in the frame is the recovered one.
 	//
 	// What that position guarantees is SAME-FRAME delivery, not pre-think application. A handler
 	// that acts directly — an attachment toggle, a bodygroup — is applied before the thinks read it.
-	// A handler that raises work instead enqueues it (K11: producers enqueue, only queue service
+	// A handler that raises work instead enqueues it (producers enqueue, only queue service
 	// delivers), and a zero-delay input raised here is due at this frame's `Now`, so `ServiceEvents`
 	// below delivers it one phase later in this same tick. The weapon band's shot and melee commits
 	// are that second shape.
@@ -1219,7 +1219,7 @@ FElysiumGameSoundBus& FElysiumEntityWorld::GameSounds()
 	return *GameSoundBus;
 }
 
-// ================= Cycle 10c — the world-event law lane's record store =========================
+// --- The world-event law lane's record store ---
 const ElysiumNpcWitness::FElysiumLawEventBus& FElysiumEntityWorld::LawEvents() const
 {
 	return *LawEventBus;
@@ -1229,7 +1229,6 @@ ElysiumNpcWitness::FElysiumLawEventBus& FElysiumEntityWorld::LawEvents()
 {
 	return *LawEventBus;
 }
-// ==============================================================================================
 
 void FElysiumEntityWorld::EmitGameSound(const FVector& PositionCm, FName Category, float RadiusCm,
 	const FElysiumEntityHandle& Source, float StealthHearingReductionCm)
@@ -1367,7 +1366,7 @@ void FElysiumEntityWorld::ServiceEvents(double Now)
 
 void FElysiumEntityWorld::AddEvent(FElysiumIOEvent&& Event)
 {
-	// Chokepoint 2 (R5): the sole entry to the queue. Notify sinks before the queue consumes the
+	// Chokepoint 2: the sole entry to the queue. Notify sinks before the queue consumes the
 	// event (Add sorts it into place, so it is not necessarily the tail afterwards); sinks read
 	// the event's fields, not its Serial, which Add assigns.
 	const double Now = NowSeconds();
@@ -1481,7 +1480,7 @@ void FElysiumEntityWorld::EnqueueInput(const FString& Target, FName Input, const
 void FElysiumEntityWorld::EnqueuePython(const FString& Source, double Delay,
 	const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller)
 {
-	// ScheduleTask(delay, "<source>") (P5 5.4): a python-only deferred event — no I/O target, just a
+	// ScheduleTask(delay, "<source>"): a python-only deferred event — no I/O target, just a
 	// field-6 source string that DeliverEvent hands to the script host at fire time. Same chokepoint
 	// (2) and same queue as a delayed output, so it single-steps and serializes like everything else.
 	FElysiumIOEvent Ev;
@@ -1520,7 +1519,7 @@ void FElysiumEntityWorld::AcceptInputFromWire(const FString& Target, FName Input
 	const FElysiumVariant& Param, const FElysiumEntityHandle& Activator,
 	const FElysiumEntityHandle& Caller, const FElysiumWireRef& Wire)
 {
-	// Chokepoint 1 (R5): the sole input path. A transient event carries the dispatch context to
+	// Chokepoint 1: the sole input path. A transient event carries the dispatch context to
 	// the sinks whether the caller is the queue (DeliverEvent) or a hand-fired console verb.
 	if (!IsTriggerResolutionEnabled())
 	{
@@ -1612,7 +1611,7 @@ void FElysiumEntityWorld::DeliverInputTo(
 		}
 		const FString Key = FString::Printf(
 			TEXT("%s.%s"), *Target.Def->Classname, *Event.Input.ToString());
-		// The generic stub surface: an input the R2 walk cannot resolve is unimplemented whether
+		// The generic stub surface: an input the class-chain walk cannot resolve is unimplemented whether
 		// the classname has a leaf that lacks this one input or no leaf at all (an unregistered
 		// classname resolves to the inert base record, whose chain owns only the base inputs). Both
 		// report here, so every unwired input in every map is on the work list without each
@@ -1689,7 +1688,7 @@ void FElysiumEntityWorld::DeliverEvent(const FElysiumIOEvent& Event, double Now)
 void FElysiumEntityWorld::ResolveTargets(const FElysiumIOEvent& Event, TArray<FElysiumEntity*>& Out)
 {
 	const FString& T = Event.Target;
-	// Runtime references resolve at dispatch time (R3), against the event's provenance.
+	// Runtime references resolve at dispatch time, against the event's provenance.
 	if (T.Equals(ElysiumEntityWorldShared::GSelfTarget, ESearchCase::IgnoreCase) || T.Equals(GCallerTarget, ESearchCase::IgnoreCase))
 	{
 		if (FElysiumEntity* E = Resolve(Event.Caller))
@@ -1726,16 +1725,16 @@ void FElysiumEntityWorld::ResolveTargets(const FElysiumIOEvent& Event, TArray<FE
 		}
 		return;
 	}
-	// Every other leading-`!` name is retail's separate single-result path (RE29) with no case for
+	// Every other leading-`!` name is retail's separate single-result path with no case for
 	// it, so it resolves to nothing rather than fanning out over the name index. AcceptInput counts
-	// the empty result as an unknown target — the same non-fatal posture as a dead wire (K2).
+	// the empty result as an unknown target — the same non-fatal posture as a dead wire.
 	if (T.StartsWith(TEXT("!"), ESearchCase::CaseSensitive))
 	{
 		return;
 	}
 
 	// Targetnames are non-unique — fan out over every live (non-dead) match. A wire may name a
-	// trailing-`*` prefix (RE29); 68 shipped outputs do, `patrol_cop_*` alone 51 times.
+	// trailing-`*` prefix; 68 shipped outputs do, `patrol_cop_*` alone 51 times.
 	ForEachMatch(T, [&Out](FElysiumEntity& E) { Out.Add(&E); return true; });
 }
 
@@ -1829,7 +1828,7 @@ FElysiumEntity* FElysiumEntityWorld::FindByName(const FString& Name)
 		// fall through to the entity's literal targetname so scene restore can bind in that window.
 	}
 	// FindEntityByName with a null start entity: the first live match in entity-list order, under the
-	// same matching rule everything else uses (RE29) — so a trailing-`*` name resolves here too.
+	// same matching rule everything else uses — so a trailing-`*` name resolves here too.
 	FElysiumEntity* Found = nullptr;
 	ForEachMatch(Name, [&Found](FElysiumEntity& E) { Found = &E; return false; });
 	return Found;
@@ -1849,7 +1848,7 @@ bool FElysiumEntityWorld::IsNpcMakerSceneBlocked() const
 
 FElysiumEntity* FElysiumEntityWorld::FindLandmark(const FString& Name)
 {
-	// info_landmark lookup for the P4.6 landmark transition (the source-map anchor a
+	// info_landmark lookup for the landmark transition (the source-map anchor a
 	// trigger_changelevel measures the player against, and the dest-map anchor the next load places
 	// against). Same name index as FindByName, but filtered to the info_landmark classname so a
 	// coincidental targetname reuse can't be mistaken for the landmark.
@@ -1871,7 +1870,7 @@ FElysiumEntity* FElysiumEntityWorld::FindLandmark(const FString& Name)
 
 bool FElysiumEntityWorld::NameMatches(const FString& TargetName, const FString& Pattern)
 {
-	// RE29 (vampire.dll FUN_100f7770). An empty pattern matches nothing — the image tests
+	// vampire.dll FUN_100f7770. An empty pattern matches nothing — the image tests
 	// `*szName == '\0'` and returns null before it walks anything — and a nameless entity is never a
 	// candidate, because the walk skips a null targetname pointer.
 	const int32 Len = Pattern.Len();
@@ -1999,7 +1998,7 @@ void FElysiumEntityWorld::Teardown()
 	bActive = false;
 	ActiveTouches.Empty();
 
-	// 11.4 — the player's live state goes back into the session record before the entity holding it
+	// The player's live state goes back into the session record before the entity holding it
 	// dies. This is the only dehydrate point, and it covers every way a map epoch ends: a travel, a
 	// reload, quit-to-menu, and the world being rebuilt on a surviving actor.
 	if (GameState)
@@ -2008,7 +2007,7 @@ void FElysiumEntityWorld::Teardown()
 		{
 			PlayerEnt->Dehydrate(GameState->PlayerRecord());
 
-			// 11.9 — and the map itself is frozen into the session, beside the record, by the same
+			// And the map itself is frozen into the session, beside the record, by the same
 			// call a save uses (`docs/architecture/save-architecture.md` §5). Gated on there having been a player: a
 			// menu backdrop and a headless logic world run the substrate in full but are not part of
 			// anyone's run, so they must not join the visited-map set.
@@ -2026,7 +2025,7 @@ void FElysiumEntityWorld::Teardown()
 	ClearTrackCamera(/*BlendOutSeconds*/ 0.0f);
 	ClearScriptedCamera();
 
-	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once (R3).
+	// Epoch 0 matches no minted handle, so every outstanding handle goes stale at once.
 	Epoch = 0;
 	EventQueue.Reset();
 	NameIndex.Empty();
@@ -2036,15 +2035,15 @@ void FElysiumEntityWorld::Teardown()
 	// them when it is destroyed; this handles a world rebuild on a surviving actor, e.g. reload.)
 	ElysiumWorldDestroyWeakComponents(Bodies);
 
-	// NPC skeletal bodies (B3): components of the map actor, destroyed here for the same reason as
+	// NPC skeletal bodies: components of the map actor, destroyed here for the same reason as
 	// Bodies — a world rebuild on a surviving actor (reload) must not leak them.
 	ElysiumWorldDestroyWeakComponents(NpcBodies);
 
-	// Dynamic-prop bodies (8.3): same reason as NpcBodies — components of the map actor, destroyed
+	// Dynamic-prop bodies: same reason as NpcBodies — components of the map actor, destroyed
 	// here so a world rebuild on a surviving actor (reload) does not leak them.
 	ElysiumWorldDestroyWeakComponents(PropBodies);
 
-	// phys_hinge constraints (8.4): destroyed with the map, like the bodies they wired.
+	// phys_hinge constraints: destroyed with the map, like the bodies they wired.
 	ElysiumWorldDestroyWeakComponents(Constraints);
 
 	EntityList.Empty();

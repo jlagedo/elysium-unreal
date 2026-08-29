@@ -20,9 +20,7 @@ namespace
 	const FName GElysiumSaveCompressor = NAME_Oodle;
 }
 
-// ================================================================================================
-// Value types
-// ================================================================================================
+// Value types.
 
 FArchive& operator<<(FArchive& Ar, FElysiumVariant& V)
 {
@@ -122,9 +120,7 @@ FArchive& operator<<(FArchive& Ar, ElysiumRng::FState& S)
 	return Ar;
 }
 
-// ================================================================================================
-// Blocks
-// ================================================================================================
+// Blocks.
 
 FArchive& operator<<(FArchive& Ar, FElysiumSheet& S)
 {
@@ -155,14 +151,14 @@ FArchive& operator<<(FArchive& Ar, FElysiumAssignedQuest& Q)
 FArchive& operator<<(FArchive& Ar, FElysiumLawState& L)
 {
 	Ar << L.Criminal << L.Supernatural << L.Investigate;
-	// Cycle 10b — the two timed channels' deadlines and act counts. This operator is called
-	// MID-RECORD (between the XP accumulators and `bUnkillable`), so the block is gated on its own
-	// version rather than appended blindly: a `Stealth` payload skips these bytes entirely and
-	// restores three bare levels with no deadline, which is exactly what it was written with.
+	// The two timed channels' deadlines and act counts. This operator is called MID-RECORD
+	// (between the XP accumulators and `bUnkillable`), so the block is gated on its own version
+	// rather than appended blindly: a `Stealth` payload skips these bytes entirely and restores
+	// three bare levels with no deadline, which is exactly what it was written with.
 	//
 	// A restored level with no deadline would never age out, so the load installs the sentinel and
-	// the first think leaves it alone — the levels then behave as the pre-law build's did until
-	// something writes them, rather than being silently expired on the first frame after a load.
+	// the first think leaves it alone — the levels then hold until something writes them, rather
+	// than being silently expired on the first frame after a load.
 	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::Law)
 	{
 		Ar << L.CriminalExpiry << L.SupernaturalExpiry;
@@ -211,7 +207,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	}
 	else if (Ar.IsLoading())
 	{
-		// Version 6 predates appearance identity; retail's first body slot is the migration default.
+		// Version 6 has no appearance identity; retail's first body slot is the restore default.
 		R.ArmorSlot = 0;
 	}
 	if (Ar.IsLoading())
@@ -234,7 +230,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	// The History is the choice; the trait-effect group it names rides in `Effects` above, so a
 	// patched `histories000.txt` re-applies on load exactly as a patched rulebook does.
 	Ar << R.HistoryId;
-	// B6 — an in-progress feed. Appended, and read behind its own version, so a payload written
+	// An in-progress feed. Appended, and read behind its own version, so a payload written
 	// before feeding existed simply restores with no feed rather than being refused.
 	if (Ar.IsSaving() || Version >= FElysiumSaveVersion::Feeding)
 	{
@@ -272,7 +268,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 	{
 		Ar << R.DisciplineMap;
 		Ar << R.SelectedDiscipline << R.SelectedTier << R.DisciplineCastCount;
-		// Cycle 11b — the field list moved onto the state itself so the NPC leaf writes the
+		// The field list lives on the state itself so the NPC leaf writes the
 		// identical bytes; the prologue above stays here because it is player-record state, not
 		// discipline state. The stream shape is byte-for-byte what this block already wrote.
 		R.Disciplines.Serialize(Ar);
@@ -334,7 +330,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumPlayerRecord& R)
 		R.StealthModRaw = 0;
 		R.StealthMap.Reset();
 	}
-	// Cycle 10b — the police-response / Masquerade-timer / pursuit block. Appended to the END of the
+	// The police-response / Masquerade-timer / pursuit block. Appended to the END of the
 	// player record and read behind its own version, so an older supported payload restores with a
 	// clean street rather than being refused.
 	//
@@ -401,8 +397,8 @@ FArchive& operator<<(FArchive& Ar, FElysiumMapSnapshot& M)
 	//
 	// A file older than this field predates the record, and every blob in it was written by the build
 	// that wrote the file, so the file's own version IS the blobs' version. Reading it back that way
-	// repairs every leaf gate from `NpcMaker` onwards for old payloads, which until now all read as
-	// `Latest` and consumed bytes their writer never emitted.
+	// keeps every leaf gate from `NpcMaker` onwards aligned with the bytes the writer emitted,
+	// instead of consuming as `Latest`.
 	if (Ar.IsSaving() || Ar.CustomVer(FElysiumSaveVersion::GUID) >= FElysiumSaveVersion::WeaponAnimEvent)
 	{
 		Ar << M.SchemaVersion;
@@ -445,9 +441,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumSaveHeaderData& H)
 	return Ar;
 }
 
-// ================================================================================================
-// The payload
-// ================================================================================================
+// The payload.
 
 namespace ElysiumSave
 {
@@ -626,7 +620,7 @@ bool Read(const TArray<uint8>& Bytes, FElysiumSavePayload& OutPayload, FString& 
 	return true;
 }
 
-// --- The readable dump ---------------------------------------------------------------------------
+// The readable dump.
 
 void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 {
@@ -659,7 +653,7 @@ void Describe(const FElysiumSavePayload& Payload, TArray<FString>& OutLines)
 	OutLines.Add(FString::Printf(TEXT("player.money = %d"), P.Money));
 	OutLines.Add(FString::Printf(TEXT("player.law = %d/%d/%d"),
 		P.Law.Criminal, P.Law.Supernatural, P.Law.Investigate));
-	// Cycle 10b — the deadlines and act counts beside the levels, then the response/pursuit block.
+	// The deadlines and act counts beside the levels, then the response/pursuit block.
 	OutLines.Add(FString::Printf(TEXT("player.law.expiry = %.3f/%.3f acts %d/%d"),
 		P.Law.CriminalExpiry, P.Law.SupernaturalExpiry, P.Law.CriminalCount, P.Law.SupernaturalCount));
 	OutLines.Add(FString::Printf(

@@ -10,7 +10,7 @@ class FElysiumEntityWorld;
 class FElysiumPlayer;
 struct FElysiumStealthTables;
 
-// 13.1 — the rules over the player's stealth target surface
+// The rules over the player's stealth target surface
 // (`docs/architecture/gameplay-systems-architecture.md` §5.9, `docs/vtmb/stealth.md`).
 //
 // The storage is `FElysiumStealthSurface` on `FElysiumPlayer` (retail's `+0x1c6c..+0x1c8c`); the
@@ -66,7 +66,7 @@ namespace ElysiumStealth
 	// SEAM: retail's `debug_stealth_light` replaces the normalized aggregate with `value * 0.1` when
 	// enabled. It is a retail developer console variable, and this project's debug surface is Cog
 	// rather than a cvar — but the surface has no Cog window of its own yet, and adding one to carry
-	// a single override is not this cycle's work. Nothing here reads an override; the recompute is a
+	// a single override is not wired here. Nothing here reads an override; the recompute is a
 	// pure function over explicit inputs, so the override lands as one more input on
 	// `FRecomputeInputs` whenever a stealth Cog tab exists to drive it.
 
@@ -81,7 +81,7 @@ namespace ElysiumStealth
 	// not read off the end of a row.
 	inline constexpr int32 MaxStealthRow = 10;
 
-	// --- The pure rule ---------------------------------------------------------------------------
+	// The pure rule.
 
 	struct FRecomputeInputs
 	{
@@ -134,7 +134,7 @@ namespace ElysiumStealth
 
 	FRecomputeResult Recompute(const FElysiumStealthTables& Tables, const FRecomputeInputs& In);
 
-	// --- The wiring half -------------------------------------------------------------------------
+	// The wiring half.
 
 	// One player think's worth of stealth work: the 0.1 s cadence gate, the one rotating
 	// `QueryLightAtPoint`, the recompute, and the observer snapshot commit. Safe on a player with no
@@ -154,7 +154,7 @@ namespace ElysiumStealth
 	// The tables this world reads, or the neutral fallback. Never null.
 	const FElysiumStealthTables& TablesFor(const FElysiumEntityWorld* World);
 
-	// --- The producer-side hearing reduction -----------------------------------------------------
+	// The producer-side hearing reduction.
 	// `CBaseEntity::AdjustSoundDistForStealth`: the SOURCE's own `m_flStealthHearingDist`, which
 	// `FElysiumEntityWorld::EmitGameSound` subtracts from the radius at insertion.
 	//

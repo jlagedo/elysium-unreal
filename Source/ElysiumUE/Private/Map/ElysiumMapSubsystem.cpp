@@ -161,7 +161,7 @@ void UElysiumMapSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	{
 		ProbeRun = MakePimpl<FElysiumProbeRun>(this);
 	}
-	// Under -ElysiumMove, arm the headless movement-regression run (4.7): a fixed command stream
+	// Under -ElysiumMove, arm the headless movement-regression run: a fixed command stream
 	// per course, sampled against real geometry.
 	if (FElysiumMoveRun::IsRequested())
 	{

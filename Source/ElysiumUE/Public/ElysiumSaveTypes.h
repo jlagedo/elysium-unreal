@@ -9,9 +9,9 @@
 #include "ElysiumVariant.h"
 #include "ElysiumWeatherState.h"
 
-// 11.9 — the four blocks a save holds (`docs/architecture/save-architecture.md` §3), as plain C++ structs we own.
+// The four blocks a save holds (`docs/architecture/save-architecture.md` §3), as plain C++ structs we own.
 // None of this is UPROPERTY-reflected and none of it should become so: the substrate is plain C++
-// precisely so serialization, determinism and travel teardown stay in our hands (engine-core.md R1).
+// precisely so serialization, determinism and travel teardown stay in our hands (`docs/architecture/engine-core.md`).
 // `UElysiumSaveGame` is the only reflected part, and it carries these as an opaque byte payload.
 
 // The payload's schema id. It is also registered as an engine custom version
@@ -32,7 +32,7 @@ struct FElysiumSaveVersion
 		BodyIdentity  = 7,   // the authored M_BodyN/F_BodyN armor-slot appearance
 		Weather       = 8,   // map wetness transition and env_particle ramps
 		ScriptedBody  = 9,   // the cutscene body state: a scene's frozen cast, a beat's NPC claim
-		Feeding       = 10,  // an in-progress feed on the player record (B6)
+		Feeding       = 10,  // an in-progress feed on the player record
 		EventClock    = 11,  // the event queue's backward-clock guard state
 		WireIdentity  = 12,  // the authored output row a pending queue record came from
 		NpcMaker      = 13,  // maker ownership and once-only child termination notification
@@ -47,9 +47,9 @@ struct FElysiumSaveVersion
 		Stealth       = 22,  // the player's stealth surface, as one generation, and its raw aggregate
 		Law           = 23,  // the activity-channel deadlines/counts and the police-response block
 		NpcWitness    = 24,  // the NPC's retained law witness block: processed counts, records, windows
-		// Cycle 11b hunk 9/9 — the NPC's own discipline state: the targeted effects a cast tracked
-		// on it, their expiry serials and the caster's per-record recovery deadlines. Appended to
-		// the END of the NPC leaf behind its own version, so it is additive.
+		// The NPC's own discipline state: the targeted effects a cast tracked on it, their
+		// expiry serials and the caster's per-record recovery deadlines. Appended to the END
+		// of the NPC leaf behind its own version, so it is additive.
 		NpcDisciplines = 25,
 
 		// The weapon transaction's commit route: whether the staged swing waits on its clip's own
@@ -90,11 +90,9 @@ struct FElysiumSaveVersion
 // 'ELYS' — the payload's first four bytes, so a truncated or foreign file fails loudly.
 inline constexpr uint32 ElysiumSaveMagic = 0x53594C45u;
 
-// ------------------------------------------------------------------------------------------------
-// The `Maps` block — one frozen map (`docs/architecture/save-architecture.md` §5)
-// ------------------------------------------------------------------------------------------------
+// The `Maps` block — one frozen map (`docs/architecture/save-architecture.md` §5).
 
-// One entity's saved state. Identity is the **def index** (R3: stable across runs, never reused
+// One entity's saved state. Identity is the **def index** (stable across runs, never reused
 // within a map load), so it is also the save id with no extra id space.
 //
 // `Fields` holds only what differs from what a fresh build of the same def would produce — the
@@ -137,7 +135,7 @@ struct FElysiumEntityState
 	bool bCaptured = false;
 };
 
-// The `env_fade` screen fade — world state with the map epoch's lifetime (11.8), so it is the map's.
+// The `env_fade` screen fade — world state with the map epoch's lifetime, so it is the map's.
 struct FElysiumSavedFade
 {
 	bool         bActive = false;
@@ -194,9 +192,7 @@ struct FElysiumMapSnapshot
 	bool IsValid() const { return !MapName.IsEmpty(); }
 };
 
-// ------------------------------------------------------------------------------------------------
-// The `Session`, `Player` and `World` blocks
-// ------------------------------------------------------------------------------------------------
+// The `Session`, `Player` and `World` blocks.
 
 // `G`, the quest map, the clock and the RNG streams — everything that outlives any one map and is
 // not the player. `G` serializes as a variant map with no pickling and no interpreter involvement,

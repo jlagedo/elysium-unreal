@@ -18,7 +18,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumAnim, Log, All);
 
 namespace
 {
-	// CCC10 — resolve `Selection.LayerLabels` (the bake-time autolayer binding the base channel's
+	// Resolve `Selection.LayerLabels` (the bake-time autolayer binding the base channel's
 	// own resolved host declared) into the assets the graph's upper-body nodes read. Sorted by the
 	// CLIP's own additive flag, never by declaration position: the order in `LayerLabels` is
 	// composition order, not a kind tag, and exactly one shipped host (`throwing_star_midcrouch_idle`)
@@ -700,9 +700,8 @@ TSharedPtr<const FElysiumBankRemap> UElysiumAnimSubsystem::GetBankRemap(USkeleta
 {
 	if (Mesh == nullptr || RetargetSource.IsNone())
 	{
-		// No retarget source is the ordinary case for a clip that never got one baked (predates the
-		// registration, or an asset this closure is not actually playing off a bank sequence for) —
-		// nothing to correct, not a fault.
+		// No retarget source is the ordinary case for a clip whose bake omitted one, or an asset
+		// this closure is not actually playing off a bank sequence — nothing to correct, not a fault.
 		return nullptr;
 	}
 	if (SourceSkeleton == nullptr)
@@ -880,7 +879,7 @@ bool UElysiumAnimSubsystem::ResolveGrid(const FString& Stem, const FString& Clip
 	}
 
 	// Derived form first when a host is known, then the standalone label. A layer grid ships only
-	// as `<label>@<host>`; asking for the bare name is how 299 of 527 spaces used to look missing.
+	// as `<label>@<host>`; asking for the bare name misses 299 of 527 spaces.
 	UBlendSpace* Space = nullptr;
 	ElysiumAnimResolve::ELayerAssetForm Form = ElysiumAnimResolve::ELayerAssetForm::None;
 	if (!Host.IsEmpty())
@@ -1218,7 +1217,7 @@ void UElysiumAnimSubsystem::ResolveAnimation(const FElysiumAnimationIntent& Inte
 	OutAssets = FElysiumResolvedAnimation();
 
 	// The record comes out of the sidecars and is always producible. The asset needs a skeleton, and
-	// that is a separate question with a separate answer. Kept rather than re-built below: CCC10's
+	// that is a separate question with a separate answer. Kept rather than re-built below: the
 	// layer resolution reads the same catalog the primary asset resolved against.
 	const FElysiumAnimationCatalog Catalog = BuildCatalog(Intent.Stem);
 	ElysiumAnimResolve::Resolve(Intent, Catalog, OutSelection);
@@ -1363,7 +1362,7 @@ bool UElysiumAnimSubsystem::ResolveGaitSpeeds(const FElysiumGaitSpeedRequest& Re
 		Intent.Variant = Request.Variant;
 		Intent.WeaponClassname = Request.WeaponClassname;
 		Intent.FormTag = Request.FormTag;
-		// **The same chain the pose walks** (LIFE3). The body kind selects the pre-translation body,
+		// **The same chain the pose walks.** The body kind selects the pre-translation body,
 		// the classname finds the recovered `+0x5dc`/`+0x5e0` class rows and the state picks the
 		// alert or the relaxed set — so a cast body's speeds come off the sequences that body is
 		// actually about to play rather than off the player fan the request happens to name.
@@ -1490,7 +1489,7 @@ bool UElysiumAnimSubsystem::ResolveActivityClip(const FElysiumActivityClipReques
 	// task, before `ActivityOverride` and the class bodies rename anything, so asking under the
 	// resolved name would answer false for every weapon-translated attack.
 	Out.bRestart = ElysiumActionTables::ActivityRestartsIdenticalRequest(Request.Activity);
-	// LIFE5 — the fan half, carried out so a producer can route a directional reaction without
+	// The fan half, carried out so a producer can route a directional reaction without
 	// re-resolving anything. The axis value is read off the SELECTION rather than off the request: the
 	// grid states which pose parameter it binds, and a producer's `HitYaw` is the answer only for a
 	// fan that binds `hit_yaw`.

@@ -249,9 +249,9 @@ namespace
 	}
 }
 
-// =====================================================================================
-// sp_tutorial_1 — the canonical vertical slice. Its shape is the roadmap baseline.
-// =====================================================================================
+
+// sp_tutorial_1 — the canonical vertical slice.
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialEntsTest,
 	"Elysium.Content.TutorialEnts", GElysiumContentTestFlags)
@@ -464,11 +464,11 @@ bool FElysiumTutorialEntsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Genesis's routing premises. These are deliberately content assertions rather than a hand-built
 // duplicate: if the exporter drops the trigger, rewrites its wire, or moves the spawn out of it,
 // New Game must fail here before the live route silently stops opening the wizard.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGenesisEntsTest,
 	"Elysium.Content.GenesisEnts", GElysiumContentTestFlags)
@@ -570,11 +570,11 @@ bool FElysiumGenesisEntsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Every exported ChangeNow output must resolve through the real trigger_changelevel registry.
 // The 23-map test bench additionally guards all 88 shipped wires, including the five authored
 // wires whose target names are not present in their own map and cannot be classified by target.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChangeLevelInputCoverageTest,
 	"Elysium.Content.ChangeLevelInputs", GElysiumContentTestFlags)
@@ -657,10 +657,10 @@ bool FElysiumChangeLevelInputCoverageTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // sm_pawnshop_1 — the cross-map travel destination. Confirms it parses and offers a
 // landmark to travel to (the P4.6 precondition), without standing up a live travel.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPawnshopEntsTest,
 	"Elysium.Content.PawnshopEnts", GElysiumContentTestFlags)
@@ -680,11 +680,11 @@ bool FElysiumPawnshopEntsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// Decals (7.2) — the `<map>.decals` projector sidecar. Validates that every line is a
+
+// Decals — the `<map>.decals` projector sidecar. Validates that every line is a
 // well-formed projector (unit normal, positive extents) and that its material resolves in
 // the shared `<map>.mtl`, so the bake always finds a texture for each ADecalActor it places.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialDecalsTest,
 	"Elysium.Content.TutorialDecals", GElysiumContentTestFlags)
@@ -737,13 +737,13 @@ bool FElysiumTutorialDecalsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// Ropes (8.7) — the `<map>.ropes` cable sidecar. Validates that every segment is a well-formed
+
+// Ropes — the `<map>.ropes` cable sidecar. Validates that every segment is a well-formed
 // cable (distinct endpoints, positive width, non-negative slack, a node count inside VtMB's
 // [2, 10] ROPE_MAX_SEGMENTS bound) and
 // that its decoded RopeMaterial texture exists on disk, so the runtime's BuildRopes always finds
 // an albedo for each UCableComponent. The tutorial strings its telephone lines this way.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialRopesTest,
 	"Elysium.Content.TutorialRopes", GElysiumContentTestFlags)
@@ -1103,11 +1103,11 @@ bool FElysiumRefractMasterTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // 9.1 / B4 — the `.dlg` parser + branch machine against the real jack_tutorial.dlg. Self-skips when
 // the dialogue mirror has not been exported (out/dlg). Confirms the physical-format parse holds and
 // that the branch machine can drive Jack's beat from entry to the `G.Tut_Jack = 1` action and END.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgJackTutorialTest, "Elysium.Content.DlgJackTutorial",
 	GElysiumContentTestFlags)
@@ -1317,11 +1317,11 @@ bool FElysiumDlgJackTutorialTest::RunTest(const FString&)
 }
 
 
-// =====================================================================================
+
 // The captured Sheriff transaction depends on a small authored join spanning touch, controller
 // locomotion, camera tracks, and three particle attachment shapes. Pin that join against the user's
 // exported map so a patch/corpus drift cannot silently turn the focused runtime tests into fiction.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialSheriffEncounterShapeTest,
 	"Elysium.Content.TutorialSheriffEncounterShape", GElysiumContentTestFlags)
@@ -1414,8 +1414,8 @@ bool FElysiumTutorialSheriffEncounterShapeTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// scripted_sequence × the NPC clip manifest (8.5) — every animation a cutscene beat names must
+
+// scripted_sequence × the NPC clip manifest — every animation a cutscene beat names must
 // resolve in the vocabulary the offline export gives that NPC. This is the seam that breaks
 // silently: a clip lives in a shared animation bank pulled through the studiohdr include DAG, so
 // an exporter change that drops a bank turns a beat into a no-op with only a runtime warning.
@@ -1423,7 +1423,7 @@ bool FElysiumTutorialSheriffEncounterShapeTest::RunTest(const FString&)
 // Measured over the 10 exported maps: 94 animation references across 108 sequences, 90 resolving.
 // The 4 that do not all name the embodied `!playercontroller`; its PC clip vocabulary is separate
 // from the NPC manifest this test audits and is excluded here.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumScriptedSequenceClipsTest,
 	"Elysium.Content.ScriptedSequenceClips", GElysiumContentTestFlags)
@@ -1558,15 +1558,15 @@ bool FElysiumScriptedSequenceClipsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The player bodies × the character export (PL13) — every `.mdl` the clan table names as a PC
+
+// The player bodies × the character export — every `.mdl` the clan table names as a PC
 // body has a glb on disk. No entity on any map references a player model, so the export seeds
 // this half of the set from `vdata/system/clandoc000.txt` itself; this asserts the two have not
 // drifted, which is the whole reason the seed is the rulebook and not a hand-written list.
 //
 // Measured over the merged install: 7 playable clans × 2 sexes × 6 armour slots = 84 slots,
 // resolving to 56 distinct models (each clan's top two slots repeat its tier-3 suit).
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerBodiesTest,
 	"Elysium.Content.PlayerBodies", GElysiumContentTestFlags)
@@ -1707,11 +1707,11 @@ bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // 12.1 opening content: the authored camera graphs are closed acyclic chains, the six embrace
 // props resolve through npc_index v4 with every clip their wires request, and the player material
 // keeps the masked/dithered ModelAlpha contract the scripted-camera body path depends on.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumOpeningCameraContentTest,
 	"Elysium.Content.OpeningCameraTracks", GElysiumContentTestFlags)
@@ -2841,11 +2841,10 @@ bool FElysiumSantaMonicaRainContentTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================// 11.9 — freeze/thaw a real map's `.ents` world (`docs/architecture/save-architecture.md` §10, the content
+// Freeze/thaw a real map's `.ents` world (`docs/architecture/save-architecture.md` §10, the content
 // tier). The substrate tier proves the mechanism on three synthetic entities; this proves
 // it against the shapes the shipped data actually holds — 1,000+ records, every registered
 // classname, real output tables, the runtime-spawned player. Self-skips with no export.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMapSnapshotTest,
 	"Elysium.Content.MapSnapshot", GElysiumContentTestFlags)
@@ -3020,8 +3019,8 @@ bool FElysiumMapSnapshotTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The rulebook (9.4a) — every `vdata/system/` table the RPG layer reads, against the real
+
+// The rulebook — every `vdata/system/` table the RPG layer reads, against the real
 // exported files. Two kinds of assertion, and the second is the point of the test:
 //
 //   * **shape** — the row counts, so a re-export that drops or duplicates rows is a failure
@@ -3033,7 +3032,7 @@ bool FElysiumMapSnapshotTest::RunTest(const FString&)
 //
 // Counts are exact where the number is a documented invariant of the shipped data and a floor
 // where a data revision is plausible.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRulebookContentTest,
 	"Elysium.Content.Rulebook", GElysiumContentTestFlags)
@@ -3596,7 +3595,7 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 	return true;
 }
 
-// =================================================================================================
+
 // 9.6 — `dicerolls.txt` against the real file, and the resolver over what it loaded.
 //
 // The claim under test is that the shipped weighting tables are a plain uniform d10, which is what
@@ -3605,7 +3604,7 @@ bool FElysiumRulebookContentTest::RunTest(const FString&)
 // reported rather than failed, and the structural assertions still hold.
 //
 // The algorithm itself is pinned content-free in `Elysium.Substrate.Dice`.
-// =================================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDiceContentTest,
 	"Elysium.Content.Dice", GElysiumContentTestFlags)
@@ -3732,7 +3731,7 @@ bool FElysiumDiceContentTest::RunTest(const FString&)
 	return true;
 }
 
-// =================================================================================================
+
 // `sound_volume_table.txt` against the real file — the authored half of NPC hearing.
 //
 // Two claims: the four documented levels still carry the radii and occlusion policy
@@ -3742,7 +3741,7 @@ bool FElysiumDiceContentTest::RunTest(const FString&)
 // change how far a gunshot carries.
 //
 // The bus's own resolution rules are pinned content-free in `Elysium.Substrate.GameSound.Resolve`.
-// =================================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSoundVolumeContentTest,
 	"Elysium.Content.SoundVolumes", GElysiumContentTestFlags)
@@ -3832,14 +3831,14 @@ bool FElysiumSoundVolumeContentTest::RunTest(const FString&)
 	return true;
 }
 
-// =================================================================================================
+
 // The character sheet against the real rulebook — the audit that keeps the compiled slot table
 // honest.
 //
 // `ElysiumSheetSlots.h` freezes the layout in C++ because VtMB freezes it in `vampire.dll`; the
 // values come from `stats.txt`. That split only holds while the two agree, so this walks every
 // compiled slot and asserts the file names the same trait at the same index.
-// =================================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetContentTest,
 	"Elysium.Content.Sheet", GElysiumContentTestFlags)
@@ -3983,11 +3982,11 @@ bool FElysiumSheetContentTest::RunTest(const FString&)
 	return true;
 }
 
-// =================================================================================================
-// The sheet's arithmetic against the real rulebook (9.4c) — the halves the content-free tier
+
+// The sheet's arithmetic against the real rulebook — the halves the content-free tier
 // cannot reach: the trait-effect layer resolved out of `traiteffects000.txt`, the feat evaluator
 // over the shipped 23 feats, and the award values in `experience_table.txt`.
-// =================================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetMathContentTest,
 	"Elysium.Content.SheetMath", GElysiumContentTestFlags)
@@ -4136,12 +4135,12 @@ bool FElysiumSheetMathContentTest::RunTest(const FString&)
 	return true;
 }
 
-// =================================================================================================
-// Quests against the real catalogue (9.4d) — what the content-free tier's hand-built fixture
+
+// Quests against the real catalogue — what the content-free tier's hand-built fixture
 // cannot answer: that the shipped 161 `AwardXP` keys are actually REACHABLE through the state
 // change that owes them, not merely present in the file. The entity-side award walk itself
 // (give-once, Experience_Modifier, the remainder-keeping /100) is `Elysium.Content.SheetMath`'s.
-// =================================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestContentTest,
 	"Elysium.Content.Quests", GElysiumContentTestFlags)
@@ -4233,7 +4232,7 @@ bool FElysiumQuestContentTest::RunTest(const FString&)
 	TestTrue(TEXT("Tutorial assigns"), Out.bChanged);
 	TestEqual(TEXT("as the second quest, order 2"), Out.Order, 2);
 
-	// --- The screen's read of the same data (9.4e) ----------------------------------------------
+	// The screen's read of the same data.
 	// Assign every shipped quest at its first state, then check the view places each one exactly
 	// once across the four hub tabs. A row that lands in no tab is a quest the player can never
 	// read, which is the failure this catches.
@@ -4294,9 +4293,9 @@ bool FElysiumQuestContentTest::RunTest(const FString&)
 }
 
 
-// ================================================================================================
-// Chargen over the real rulebook — the pools a clan produces and the baseline it stands on (9.4f)
-// ================================================================================================
+
+// Chargen over the real rulebook — the pools a clan produces and the baseline it stands on.
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChargenContentTest,
 	"Elysium.Content.Chargen", GElysiumContentTestFlags)
@@ -4692,7 +4691,7 @@ bool FElysiumChargenContentTest::RunTest(const FString&)
 }
 
 
-// The blink cadence the eye pass schedules from (roadmap 12.4). The table authors the key under two
+// The blink cadence the eye pass schedules from. The table authors the key under two
 // spellings — `"Min Blink Interval"` on four rows and `"MinBlinkInterval"` on six — and reading only
 // one is a silent fallback to the defaults rather than a parse error, which is exactly the shape of
 // bug this tier exists to catch: the two rows that carry a cadence other than 2.5/6.0 are both
@@ -5295,7 +5294,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The script/entity action surface — every name the shipped content calls has to resolve.
 //
 // `docs/vtmb/script_api.md` is the recovered inventory: the `vampire` module's 11 globals, the 24
@@ -5312,7 +5311,7 @@ bool FElysiumGamepadInputAssetsContentTest::RunTest(const FString&)
 // independent of our source, so those halves are cross-checked against it when the export carries
 // it. The manifest is committed reverse-engineering fact about VtMB's binding tables, not game
 // data, which is why it can live in the checkout at all.
-// =====================================================================================
+
 
 namespace
 {
@@ -5429,14 +5428,14 @@ namespace
 
 
 
-// =====================================================================================
-// `vdata/items` (9.8a) — the item catalogue against the real exported corpus.
+
+// `vdata/items` — the item catalogue against the real exported corpus.
 //
 // The recovered figures in `docs/vtmb/inventory.md` §4 are PATCH-FIRST facts about the
 // content this project consumes, not stock-retail authoring facts, so a local corpus that
 // differs is reported rather than failed: each block asserts structural validity first and
 // reports the actuals through AddInfo when they disagree with the recorded numbers.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumItemsContentTest,
 	"Elysium.Content.Items", GElysiumContentTestFlags)
@@ -5654,14 +5653,14 @@ bool FElysiumItemsContentTest::RunTest(const FString&)
 }
 
 
-// =====================================================================================
+
 // B6 — the tutorial's authored feeding wires, against the real `sp_tutorial_1.ents`.
 //
 // `blueblood_maker.Spawn` creates the child; feeding the child has to reach the MAKER-authored
 // `OnFedUponBegin` / `OnFedUponEnd` rows (`docs/vtmb/sp_tutorial_1-event-surface.md` §11.2), which
 // on this map are `G.Tutorial_Blueblood = 1` (a Python-only wire) and
 // `trig_dialog_outside_chopshop.Enable`.
-// =====================================================================================
+
 
 namespace
 {
@@ -5906,7 +5905,7 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 	return true;
 }
 
-// ============================================================================================
+
 // A hub door stays selectable through the transition volume it stands in.
 //
 // sm_hub_1's exits are wired `OnFullyOpen -> <Teleport>.ChangeNow`, and the `trigger_changelevel`
@@ -5915,7 +5914,7 @@ bool FElysiumTutorialFeedingContentTest::RunTest(const FString&)
 // the ElysiumUse channel at all it blocks the look-ray where it starts and nothing behind it can
 // ever be selected. Both bodies are built from the map's own exported hulls at their own relative
 // placement, carried rigidly in front of the test pawn.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorUseThroughChangelevelTest,
 	"Elysium.Content.DoorUseThroughChangelevel", GElysiumContentTestFlags)
 bool FElysiumDoorUseThroughChangelevelTest::RunTest(const FString&)

@@ -5,14 +5,13 @@
 
 #if !UE_BUILD_SHIPPING
 
-// The one recorder every harness run writes through (CCC0).
+// The one recorder every harness run writes through.
 //
-// It replaces the per-harness format each self-driving run grew for itself. What a run produces is
-// a CSV of the frame channels it declared and a `.channels.json` manifest beside it carrying those
-// declarations, the run's own metadata, the constants the geometry was derived from, and the run
-// channels — so the comparator needs no knowledge of the harness that wrote it, and a camera or
-// animation producer joins by declaring rows in `ElysiumChannels::Defs()` rather than by adding a
-// second file.
+// What a run produces is a CSV of the frame channels it declared and a `.channels.json` manifest
+// beside it carrying those declarations, the run's own metadata, the constants the geometry was
+// derived from, and the run channels — so the comparator needs no knowledge of the harness that
+// wrote it, and a camera or animation producer joins by declaring rows in `ElysiumChannels::Defs()`
+// rather than by adding a second file.
 //
 // **A name that is not in the registry is refused at `Open`, not written.** That is the whole
 // point: the failure mode being closed is a value that reaches disk with nothing that knows how to

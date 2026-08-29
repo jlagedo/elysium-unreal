@@ -3,9 +3,7 @@
 #include "ElysiumCameraComponent.h"
 #include "ElysiumPlayerCameraManager.h"
 
-// =====================================================================================
 // The base layer
-// =====================================================================================
 
 bool UElysiumCameraModifier::ModifyCamera(float DeltaTime, FMinimalViewInfo& InOutPOV)
 {
@@ -32,9 +30,7 @@ UElysiumCameraComponent* UElysiumCameraModifier::ResolveRig() const
 	return nullptr;
 }
 
-// =====================================================================================
 // The legacy scripted channel
-// =====================================================================================
 
 UElysiumCameraModifier_LegacyShot::UElysiumCameraModifier_LegacyShot()
 {
@@ -76,8 +72,6 @@ bool UElysiumCameraModifier_LegacyShot::ApplyElysiumLayer(float DeltaTime, FMini
 	}
 
 	// While an authored shot has weight, nothing further composes over it: an edit is exact, and the
-	// stock camera-shake modifier sitting at the default priority is the layer this suppresses
-	// today. When a layer needs to survive a cutscene, this is where a per-layer allow mask goes —
-	// building one before there is a layer to exempt would be building it blind.
+	// stock camera-shake modifier sitting at the default priority is the layer this suppresses.
 	return Shot.Weight > 0.0f;
 }

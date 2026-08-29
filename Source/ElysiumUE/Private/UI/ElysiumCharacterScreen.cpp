@@ -358,9 +358,7 @@ void UElysiumCharacterScreen::RegisterNavigationGroups()
 	SetNavigationGroup(ActionGroup::BaseHistory, true, false);
 }
 
-// ================================================================================================
-// The shell
-// ================================================================================================
+// The shell.
 
 TSharedRef<SWidget> UElysiumCharacterScreen::BuildRule(const FText& Label)
 {
@@ -434,7 +432,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildHeader()
 	const int32 Humanity  = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity);
 	const int32 Masquerade = Sheet.GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Masquerade);
 
-	// --- identity ---
+	// Identity.
 	TSharedRef<SHorizontalBox> Who = SNew(SHorizontalBox);
 	if (const TCHAR* Stem = ClanSigilStem(Clan))
 	{
@@ -496,7 +494,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildHeader()
 		]
 	];
 
-	// --- Humanity: ten bubbles, VtMB's own rating notation ---
+	// Humanity: ten bubbles, VtMB's own rating notation.
 	TSharedRef<SHorizontalBox> Dots = SNew(SHorizontalBox);
 	const FSlateBrush* BubOn  = Art(ArtPath::BubbleOn, FLinearColor::White);
 	const FSlateBrush* BubOff = Art(ArtPath::BubbleOff, FLinearColor::White);
@@ -519,7 +517,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildHeader()
 		];
 	}
 
-	// --- Masquerade: five slots, a strike over each violation ---
+	// Masquerade: five slots, a strike over each violation.
 	TSharedRef<SHorizontalBox> Marks = SNew(SHorizontalBox);
 	const FSlateBrush* Strike = Art(ArtPath::Strike, FLinearColor::White);
 	for (int32 i = 0; i < 5; ++i)
@@ -765,9 +763,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildPlaceholder(const FText& Headi
 		];
 }
 
-// ================================================================================================
-// The quest log
-// ================================================================================================
+// The quest log.
 
 TSharedRef<SWidget> UElysiumCharacterScreen::BuildEntry(const ElysiumQuestView::FEntry& Entry,
                                                          bool bLedger)
@@ -985,9 +981,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildQuestLog()
 		];
 }
 
-// ================================================================================================
-// The sheet — one body, two currencies
-// ================================================================================================
+// The sheet — one body, two currencies.
 
 void UElysiumCharacterScreen::SetSpendState(TSharedPtr<FElysiumChargenState> InState)
 {
@@ -1437,9 +1431,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildSheet()
 		];
 }
 
-// ================================================================================================
-// The Base tab — chargen's own
-// ================================================================================================
+// The Base tab — chargen's own.
 
 TSharedRef<SWidget> UElysiumCharacterScreen::BuildChoiceRow(FName GroupId,
 	const FText& Heading, const TArray<FText>& Options, int32 Selected,
@@ -1448,9 +1440,8 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildChoiceRow(FName GroupId,
 	FElysiumUIFontLibrary& Fonts = ElysiumUIFonts();
 
 	// A row of selectable words rather than a dropdown: at chargen every list is short enough to
-	// show whole, and a list that is always open is one fewer state than a combo box. The retail
-	// screen's dropdown is a 640x480 concession, and the UI has no classic mode
-	// (`docs/project/remaster-direction.md`).
+	// show whole, and a list that is always open is one fewer state than a combo box. The UI has
+	// no classic mode (`docs/project/remaster-direction.md`).
 	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox);
 	for (int32 i = 0; i < Options.Num(); ++i)
 	{
@@ -1494,7 +1485,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildBase()
 	FElysiumUIFontLibrary& Fonts = ElysiumUIFonts();
 	const FElysiumChargenRules Rules = SpendRules();
 
-	// --- clan: the seven playable templates, in clandoc order ---
+	// Clan: the seven playable templates, in clandoc order.
 	TArray<FText> ClanNames;
 	TArray<int32> ClanIndices;
 	for (int32 Clan = 2; Clan <= 8; ++Clan)
@@ -1504,7 +1495,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildBase()
 	}
 	const int32 ClanAt = Spend.IsValid() ? ClanIndices.IndexOfByKey(Spend->Clan) : INDEX_NONE;
 
-	// --- history: whatever `histories000.txt` holds, in file order ---
+	// History: whatever `histories000.txt` holds, in file order.
 	TArray<FText> HistoryNames;
 	if (Rules.Histories)
 	{
@@ -1520,7 +1511,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildBase()
 		NSLOCTEXT("Elysium", "SexMale", "MALE"),
 	};
 
-	// --- the write-up for whatever is selected ---
+	// The write-up for whatever is selected.
 	FString Blurb;
 	if (Spend.IsValid())
 	{
@@ -1604,9 +1595,7 @@ TSharedRef<SWidget> UElysiumCharacterScreen::BuildBase()
 		];
 }
 
-// ================================================================================================
-// Assembly
-// ================================================================================================
+// Assembly.
 
 TSharedRef<SWidget> UElysiumCharacterScreen::BuildBody()
 {

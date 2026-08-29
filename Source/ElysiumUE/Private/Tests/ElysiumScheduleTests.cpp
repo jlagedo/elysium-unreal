@@ -43,7 +43,7 @@ namespace
 		// so a duration is a literal in the test rather than a seed to reverse-engineer.
 		float RandomFraction = 1.f;
 
-		// `TASK_MOVE_AWAY_PATH` runs the REAL rule (11.14) rather than a double of it: the runner
+		// `TASK_MOVE_AWAY_PATH` runs the REAL rule rather than a double of it: the runner
 		// supplies the two positions and a recording motor, and
 		// `ElysiumSchedule::StepAwayFromSavePosition` does the extrapolating, the projecting and the
 		// re-testing. The NPC stands 200 cm out from what obstructed it, so a retreat is +X.
@@ -79,7 +79,7 @@ namespace
 		}
 		virtual float RandomSeconds(float Max) override { return Max * RandomFraction; }
 
-		// LIFE5 — the death ladder's one rung. `PlayableDeathActivities` is this body's vocabulary:
+		// The death ladder's one rung. `PlayableDeathActivities` is this body's vocabulary:
 		// EMPTY but for `ACT_IDLE` is the shipped corpus, where `ACT_DIESIMPLE` resolves on zero
 		// bodies. FString comparison is case-insensitive, like every other vocabulary key here.
 		TSet<FString> PlayableDeathActivities = { FString(TEXT("ACT_IDLE")) };

@@ -10,9 +10,8 @@ class UElysiumMainMenu;
 class UElysiumCharacterScreen;
 
 // Which body the character screen shows. Retail splits these across three client.dll classes
-// (`VCharWizardUI`, `CharEditPanel`, `QuestLogPanel`) that share art and layout but not code; we
-// carry one screen and switch the body, which is what the player sees either way
-// (`docs/vtmb/vtmb-ui.md`). `Base` belongs to chargen (9.4f) and is not built yet.
+// (`VCharWizardUI`, `CharEditPanel`, `QuestLogPanel`) that share art and layout but not code; this
+// rebuild carries one screen and switches the body (`docs/vtmb/vtmb-ui.md`). `Base` belongs to chargen.
 enum class EElysiumCharacterTab : uint8
 {
 	Sheet,
@@ -23,7 +22,7 @@ enum class EElysiumCharacterTab : uint8
 
 // Which item set the menu screen is showing. Retail's own main/pause split is a single gate on
 // `IsInGame` (`docs/vtmb/vtmb-ui.md` §2); GameOver is the third, reached from the app state machine's
-// loss condition (11.3) and offering only Load / Main Menu / Quit.
+// loss condition and offering only Load / Main Menu / Quit.
 enum class EElysiumMenuMode : uint8
 {
 	Main,
@@ -34,9 +33,9 @@ enum class EElysiumMenuMode : uint8
 // GameInstance-scoped UI facade. Game flow decides when policy-owned screens exist; this object
 // prepares per-open screen state and forwards presentation to the local player's one UI root.
 //
-	// The screens are `UCommonActivatableWidget`s built in C++ Slate. The local-player subsystem owns
-	// their CommonUI containers and the screen base owns its Elysium input scope. *When* a menu is up
-	// is not this facade's call: `UElysiumGameFlowSubsystem` drives it from app state (11.3). Verbs:
+// The screens are `UCommonActivatableWidget`s built in C++ Slate. The local-player subsystem owns
+// their CommonUI containers and the screen base owns its Elysium input scope. *When* a menu is up
+// is not this facade's call: `UElysiumGameFlowSubsystem` drives it from app state. Verbs:
 // `elysium.menu` / `elysium.menu.close`.
 UCLASS()
 class UElysiumUISubsystem : public UGameInstanceSubsystem
@@ -53,8 +52,8 @@ public:
 	void HideMenu();
 
 	// Rebuild the open screen in place, keeping its mode. The look knobs (`elysium.MenuLayout`,
-	// `elysium.MenuScrim`) are read when the tree is built, so an A/B typed at the console has to
-	// take the screen down and put it back up; no-op when no screen is up.
+	// `elysium.MenuScrim`) are read when the tree is built, so a console change has to take the
+	// screen down and put it back up; no-op when no screen is up.
 	void RebuildMenu();
 	bool IsMenuOpen() const { return Menu != nullptr; }
 	bool IsModalScreenOpen() const
@@ -100,8 +99,7 @@ private:
 	// `ElysiumBinds.cpp`); this subsystem supplies what they do, because it owns the screen.
 	void RegisterCommands();
 	void UnregisterCommands();
-	// The map-epoch boundary (S4): close the character screen and its stage before the world the
-	// stage's actors live in goes away.
+	// Close the character screen and its stage before the world the stage's actors live in goes away.
 	void OnMapEpochRetired(uint64 Epoch);
 	// Drop the wizard's pause latch without running its `teleport_player firetrans` close tail. What
 	// a teardown wants; a panel close goes through HideCharacterScreen's own tail instead.

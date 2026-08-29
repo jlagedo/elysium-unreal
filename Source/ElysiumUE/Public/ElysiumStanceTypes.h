@@ -18,8 +18,8 @@ struct FElysiumDisposition;
 // Substrate tier against literals (`gameplay-systems-architecture.md` K10).
 namespace ElysiumStance
 {
-	//: VtMB authors exactly three stances per disposition and indexes them directly. It is not a
-	//: weighted pick and not a count of what the model happens to carry.
+	// VtMB authors exactly three stances per disposition and indexes them directly. It is not a
+	// weighted pick and not a count of what the model happens to carry.
 	inline constexpr int32 Count = 3;
 }
 
@@ -69,39 +69,33 @@ struct FElysiumStanceChoice
 
 namespace ElysiumStance
 {
-	/**
-	 * Choose the clip a standing character shows now, advancing `State`.
-	 *
-	 * Called once per idle-clip completion, which is the cadence retail runs it at: the idle task's
-	 * per-tick body re-requests `ACT_DISPOSITION` only when the current sequence has finished, so
-	 * nothing re-enters the selector mid-clip.
-	 *
-	 * `bTalking` is "a dialogue line is playing on this character", not "a dialogue is open" — the
-	 * distinction is the file's own, and it selects which threshold/chance pair applies.
-	 *
-	 * `Now` is the substrate clock. The stance-change floor is measured against
-	 * `State.LastChangeTime`, so a character that has just changed cannot change again until the
-	 * disposition's threshold has passed however many clips complete in between.
-	 */
+	// Choose the clip a standing character shows now, advancing `State`.
+	//
+	// Called once per idle-clip completion, which is the cadence retail runs it at: the idle task's
+	// per-tick body re-requests `ACT_DISPOSITION` only when the current sequence has finished, so
+	// nothing re-enters the selector mid-clip.
+	//
+	// `bTalking` is "a dialogue line is playing on this character", not "a dialogue is open" — the
+	// distinction is the file's own, and it selects which threshold/chance pair applies.
+	//
+	// `Now` is the substrate clock. The stance-change floor is measured against
+	// `State.LastChangeTime`, so a character that has just changed cannot change again until the
+	// disposition's threshold has passed however many clips complete in between.
 	FElysiumStanceChoice Select(const FElysiumStanceClips& Clips, const FElysiumDisposition& Tuning,
 		FElysiumStanceState& State, bool bTalking, double Now, FRandomStream& Rng);
 
-	/**
-	 * The stance change itself, exposed because the dialogue-pause driver runs it directly.
-	 *
-	 * Retail's `ChangeStance` picks uniformly among the two stances that are *not* current, plays
-	 * the authored transition into the new one, and stamps the clock. A model with only one usable
-	 * stance has nothing to move to and keeps the one it has.
-	 */
+	// The stance change itself, exposed because the dialogue-pause driver runs it directly.
+	//
+	// Retail's `ChangeStance` picks uniformly among the two stances that are *not* current, plays
+	// the authored transition into the new one, and stamps the clock. A model with only one usable
+	// stance has nothing to move to and keeps the one it has.
 	FElysiumStanceChoice ChangeStance(const FElysiumStanceClips& Clips, FElysiumStanceState& State,
 		double Now, FRandomStream& Rng);
 
-	/**
-	 * Apply retail's precache fallback ladder to a partially-filled table, in place.
-	 *
-	 * Split out from whoever gathered the labels so the rule is stated once and can be asserted
-	 * without an export: a missing idle becomes `Idle[0]`, a missing fidget becomes the idle at the
-	 * same index, and a missing transition becomes the destination idle.
-	 */
+	// Apply retail's precache fallback ladder to a partially-filled table, in place.
+	//
+	// Split out from whoever gathered the labels so the rule is stated once and can be asserted
+	// without an export: a missing idle becomes `Idle[0]`, a missing fidget becomes the idle at the
+	// same index, and a missing transition becomes the destination idle.
 	void ApplyPrecacheFallbacks(FElysiumStanceClips& Clips);
 }

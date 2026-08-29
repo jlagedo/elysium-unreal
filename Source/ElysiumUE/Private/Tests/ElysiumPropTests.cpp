@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -122,7 +122,7 @@ namespace ElysiumPropTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// ============================================================================================
+
 // CDynamicProp's spawn/activate/think lifecycle (RE35). Four facts, in the order they happen:
 //   * `CBaseProp::Spawn` (FUN_1018df70) stands the prop on a HELD pose — the rest sequence at
 //     frame 0 with the play rate at zero — not on a playing clip. `demo_sequence` is not an
@@ -133,7 +133,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 //   * A finished one-shot HOLDS ITS FINAL FRAME. The think returns without rewriting
 //     m_flNextThink once `RandomAnimation` is 0 — true on all 749 shipped entities — so it
 //     disarms permanently and the revert-to-LoopSequence branch is unreachable in shipped data.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropAnimateThinkTest,
 	"Elysium.Substrate.PropAnimateThink", GElysiumTestFlags)
 bool FElysiumPropAnimateThinkTest::RunTest(const FString&)
@@ -225,7 +225,7 @@ bool FElysiumPropAnimateThinkTest::RunTest(const FString&)
 	return true;
 }
 
-// ============================================================================================
+
 // A prop's clip phase is a function of the substrate clock, not of accumulated animation delta.
 //
 // Retail gets this without trying: `CBaseAnimating::StudioFrameAdvance` (FUN_1008f120) recomputes
@@ -238,7 +238,7 @@ bool FElysiumPropAnimateThinkTest::RunTest(const FString&)
 // The correction is deliberately NOT `SeekCinematicClip`: that pins the body at play rate 0 and
 // collapses any crossfade, which is right for a scene driving every frame and wrong for a clip that
 // must keep running smoothly between corrections.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropClipResyncTest,
 	"Elysium.Substrate.PropClipResync", GElysiumTestFlags)
 bool FElysiumPropClipResyncTest::RunTest(const FString&)
@@ -358,13 +358,13 @@ bool FElysiumPropClipResyncTest::RunTest(const FString&)
 	return true;
 }
 
-// ============================================================================================
+
 // A skeletal prop is placed exactly like its static mesh. Both are built from the same model in
 // the same frame, so `model_quat` — the placement of the exporter's Unreal-native OBJ — is the
 // whole answer for either, and the two representations of one prop must not disagree. Taking the
 // full quaternion rather than rederiving a yaw is what keeps a placement's pitch and roll: 15 of
 // the corpus's animated-prop placements are leaning palms.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimatedPropPlacementTest,
 	"Elysium.Substrate.AnimatedPropPlacement", GElysiumTestFlags)
 bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
@@ -439,12 +439,12 @@ bool FElysiumAnimatedPropPlacementTest::RunTest(const FString&)
 	return true;
 }
 
-// ============================================================================================
+
 // An indexed model that bakes no playable clip is not an animated representation — it is a
 // bind-pose skeleton standing where the baked static mesh should be. `lampfloor`, `glassa` and
 // `junkyardcraneb` are the shipped cases; the exporter now keeps them out of the index, and this
 // is the runtime's own guard for an index that still carries one.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropZeroClipFallbackTest,
 	"Elysium.Substrate.PropZeroClipFallback", GElysiumTestFlags)
 bool FElysiumPropZeroClipFallbackTest::RunTest(const FString&)
@@ -477,11 +477,11 @@ bool FElysiumPropZeroClipFallbackTest::RunTest(const FString&)
 	return true;
 }
 
-// ============================================================================================
+
 // 8.4a — the fallback (non-catalogue) path's `solid` keyfield. `VPhysicsInitStatic` builds static
 // collision from the model's `.phy` for any nonzero, non-2 value; solid 0 (or the key absent)
 // stays the prior no-collision default.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidCollisionTest,
 	"Elysium.Substrate.PropSolidCollision", GElysiumTestFlags)
 bool FElysiumPropSolidCollisionTest::RunTest(const FString&)
@@ -525,10 +525,10 @@ bool FElysiumPropSolidCollisionTest::RunTest(const FString&)
 	return true;
 }
 
-// ============================================================================================
+
 // 8.4a — the catalogue (v7, production) path. `solid` decides `FElysiumPlacedModelRequest::Physics`
 // before `BuildPlacedModelBody` runs, so the request itself is the observable surface here.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidCatalogueTest,
 	"Elysium.Substrate.PropSolidCatalogue", GElysiumTestFlags)
 bool FElysiumPropSolidCatalogueTest::RunTest(const FString&)
@@ -554,10 +554,10 @@ bool FElysiumPropSolidCatalogueTest::RunTest(const FString&)
 	return true;
 }
 
-// ============================================================================================
+
 // 8.4a — `disableshadows`, a CBaseEntity keyfield `CBaseEntity::KeyValue` folds into `m_fEffects`
 // (docs/vtmb/entity_visuals.md); here it is read once and applied to the cast-shadow flag.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropDisableShadowsTest,
 	"Elysium.Substrate.PropDisableShadows", GElysiumTestFlags)
 bool FElysiumPropDisableShadowsTest::RunTest(const FString&)
@@ -599,10 +599,10 @@ bool FElysiumPropDisableShadowsTest::RunTest(const FString&)
 	return true;
 }
 
-// ============================================================================================
+
 // 8.4a — a hidden/broken solid prop stops blocking, mirroring FElysiumPhysProp::GateBody's own
 // static case: it is undrawn and non-colliding while down, and both restore together.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPropSolidGatingTest,
 	"Elysium.Substrate.PropSolidGating", GElysiumTestFlags)
 bool FElysiumPropSolidGatingTest::RunTest(const FString&)

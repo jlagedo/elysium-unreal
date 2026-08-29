@@ -9,7 +9,7 @@
 #include "ElysiumMoveSolve.h"
 #include "ElysiumNpcMindTypes.h"
 
-// What a body asks the animation layer for, and what it is told back (CCC4).
+// What a body asks the animation layer for, and what it is told back.
 //
 // `FElysiumAnimationIntent` in, `FElysiumAnimationSelection` out, over steps 2, 4, 5 and 6 of
 // `docs/architecture/animation-architecture.md` section 3.3. This header owns the pure half: the
@@ -137,7 +137,7 @@ enum class EElysiumAnimPriority : uint8
 	// consults the cine handle, so a swing displaces a standing beat's pose there too
 	// (`docs/vtmb/animation_and_movers.md` → "Protected activities and player paired-action modes").
 	Scripted,
-	// The damage and combat action families (LIFE5).
+	// The damage and combat action families.
 	Reaction,
 	// A choreographed scene, which owns the body outright for its duration.
 	Scene,
@@ -191,7 +191,7 @@ struct FElysiumAnimationRequest
 	bool bSnap = false;
 };
 
-// One segment of a montage-slot run: what a producer hands the clip funnel, band and all (LIFE5).
+// One segment of a montage-slot run: what a producer hands the clip funnel, band and all.
 //
 // **`scripted_sequence`'s `m_iszIdle` -> `m_iszCustomMove` -> `m_iszPlay` -> `m_iszPostIdle` and an
 // interesting place's enter/hold/leave are the same shape**, and they play through one mechanism —
@@ -303,7 +303,7 @@ namespace ElysiumAnimIntent
 }
 
 // The overlay layer's weight arithmetic, which is retail's `CBaseAnimatingOverlay` and not this
-// runtime's claim system (LIFE10).
+// runtime's claim system.
 //
 // It sits here rather than in `ElysiumOverlayStack.h` because `FElysiumAnimationSelection` below
 // carries the published result and a header cannot include the one that includes it. The stack that
@@ -614,7 +614,7 @@ enum class EElysiumAirPhase : uint8
 
 struct FElysiumAnimationIntent
 {
-	// --- Who ---------------------------------------------------------------------------------
+	// Who.
 	FElysiumEntityHandle Character;
 	// The model. Empty is a real state rather than an error: the gym stands a body with no entity
 	// world and no exported model behind it.
@@ -631,7 +631,7 @@ struct FElysiumAnimationIntent
 	// running" from "the same activity, asked for again".
 	uint32 Generation = 0;
 
-	// --- What: exactly one of these two, never both ---------------------------------------------
+	// What: exactly one of these two, never both.
 	// A stable ACT_* name. An explicit label is the escape hatch for content that actually names one
 	// — a scripted sequence, a SetAnimation wire, a choreographed event. A gameplay system naming
 	// `walk_0` here is a layer violation: it has skipped weighted choice, include ownership and the
@@ -643,7 +643,7 @@ struct FElysiumAnimationIntent
 	// The repeatable selection token weighted choice keys on. Same token, same pick, forever.
 	int32 Variant = 0;
 
-	// --- Continuous state -----------------------------------------------------------------------
+	// Continuous state.
 	// Carried whole rather than as a handful of copied scalars. The record's job is to make a wrong
 	// pose traceable, and "speed 3.2, wish scale 0, stance Rising -> ACT_CROUCH" is a diagnosis where
 	// "ACT_CROUCH" alone is a guess.
@@ -678,7 +678,7 @@ struct FElysiumAnimationIntent
 	// `EElysiumAnimSelect`.
 	EElysiumAnimSelect Select = EElysiumAnimSelect::Weighted;
 
-	// --- Translation context ---------------------------------------------------------------------
+	// Translation context.
 	// The active weapon's ENTITY CLASSNAME (`item_w_glock_17c`), which is the key authored content
 	// spells and the key the committed ladders are joined to. Empty is a body with empty hands, and
 	// its translation is the empty table retail's own unarmed body walks.
@@ -695,7 +695,7 @@ struct FElysiumAnimationIntent
 	// it rather than growing a parameter later.
 	FString FormTag;
 
-	// --- Completion --------------------------------------------------------------------------
+	// Completion.
 	bool bLoop = true;
 	// Whether a miss may walk `CAI_BaseNPC`'s recovered fallback ladder — the translation's own
 	// four-way availability probe and its run-to-walk last resort, then the whole request as a
@@ -715,7 +715,7 @@ struct FElysiumAnimationIntent
 };
 
 // One published overlay slot — what is layering in slot N this frame, at what weight and where on its
-// own clip (LIFE10).
+// own clip.
 //
 // The layer's live state belongs to `FElysiumOverlayStack`; this is the readout the record, Cog, the
 // MCP surface and the graph all take, so none of them derives a second answer.
@@ -756,7 +756,7 @@ struct FElysiumOverlaySlotRecord
 
 struct FElysiumAnimationSelection
 {
-	// --- Who asked ------------------------------------------------------------------------------
+	// Who asked.
 	EElysiumAnimSource Source = EElysiumAnimSource::Player;
 	// Which chain the walk below actually took. Carried beside the producer because the two answer
 	// different questions on the same readout — a `Damage` request that walked the cast chain and
@@ -767,7 +767,7 @@ struct FElysiumAnimationSelection
 	uint32 Generation = 0;
 	FString Stem;
 
-	// --- Step 1: the base-channel arbitration verdict ---------------------------------------------
+	// Step 1: the base-channel arbitration verdict.
 	// Whether the publish carrying this record owns the base pose. The driver computes it from the
 	// priority table — the locomotion publish's own rank (`LocomotionIdle` standing,
 	// `LocomotionTravel` travelling) against the base slot's active claim — and the graph obeys it:
@@ -782,7 +782,7 @@ struct FElysiumAnimationSelection
 	// grows. Zero while owned.
 	float BaseHoldSeconds = 0.0f;
 
-	// --- Step 1's other half: the overlay slot, which composes rather than competes ----------------
+	// Step 1's other half: the overlay slot, which composes rather than competes.
 	// Retail's `CBaseAnimatingOverlay` slot 0 — the masked partial-body layer every ranged fire,
 	// reload and dry-fire plays through. It never touches `bBasePoseOwned` above, because it does not
 	// take the base pose: it is accumulated ON TOP of whatever does, gated by the layer clip's own
@@ -812,7 +812,7 @@ struct FElysiumAnimationSelection
 		return Count;
 	}
 
-	// --- Steps 2 and 3: the activity chain, one line per witnessed hop ---------------------------
+	// Steps 2 and 3: the activity chain, one line per witnessed hop.
 	// The LOGICAL request, un-translated. Retail's `m_Activity` stays this: translation changes the
 	// sequence set that realizes a request, not the AI-visible state.
 	FString RequestedActivity;
@@ -840,12 +840,12 @@ struct FElysiumAnimationSelection
 	// zero on a request nothing could play.
 	int32 AvailabilityRung = 0;
 
-	// --- Step 4: the model vocabulary -------------------------------------------------------------
+	// Step 4: the model vocabulary.
 	// The vocabulary key — `walk`, not `walk_0`. This is the key that owns the include-DAG mapping to
 	// a bank; the concrete animation is downstream of it and does not identify anything.
 	FString SequenceLabel;
 	// Exact identity is (owner, raw index) because 1,430 of 1,484 label groups carry more than one
-	// owner/sequence identity. The character export writes no raw index yet, so this is set only on
+	// owner/sequence identity. The character export writes no raw index, so this is set only on
 	// the prop route, where the sidecar carries declaration order. The identity this rung can prove
 	// is (OwnerStem, SequenceLabel), which is exactly what bank ownership needs.
 	int32 RawSequenceIndex = INDEX_NONE;
@@ -857,7 +857,7 @@ struct FElysiumAnimationSelection
 	int32 Weight = 0;
 	int32 Candidates = 0;
 
-	// --- Step 5: the asset shape ------------------------------------------------------------------
+	// Step 5: the asset shape.
 	EElysiumAnimAssetKind AssetKind = EElysiumAnimAssetKind::None;
 	// The concrete animation in the owner's glb — `walk_0`. Not in the character's vocabulary and not
 	// to be looked up there. On a grid it is the FLOOR cell of the pair below.
@@ -882,7 +882,7 @@ struct FElysiumAnimationSelection
 	// player's rule and lives with the graph, not here.
 	float FadeSeconds = 0.0f;
 
-	// --- Step 6: the published parameters. It does not repeat selection. --------------------------
+	// Step 6: the published parameters. It does not repeat selection.
 	// Which of the eight graph states realizes this selection. **Projected once, here, and read
 	// everywhere else**: the anim instance, the Cog row, the trace and the MCP surface all have to
 	// agree about where the body is standing, and a projection each of them derived for itself is
@@ -912,7 +912,7 @@ struct FElysiumAnimationSelection
 	float AxisFraction[2] = { 0.0f, 0.0f };
 	int32 Axes = 0;
 
-	// --- The verdict ------------------------------------------------------------------------------
+	// The verdict.
 	EElysiumAnimOutcome Outcome = EElysiumAnimOutcome::NoVocabulary;
 	// One line naming what missed, in words. Read straight out of Cog and the MCP surface.
 	FString Detail;
@@ -1002,7 +1002,7 @@ struct FElysiumJumpLatch
 	float LandHoldSeconds = 0.35f;
 };
 
-// A weapon's grip, which selects the upper-body mask a layer composes against (CCC10). It is not
+// A weapon's grip, which selects the upper-body mask a layer composes against. It is not
 // melee-versus-ranged: every firearm and thrown weapon is two-handed, and so are the melee
 // `bushhook` and `sledgehammer` — a resolver keyed on "is this melee" gets those two wrong
 // (`docs/vtmb/animation_and_movers.md` A.4).
@@ -1027,7 +1027,7 @@ enum class EElysiumOneShotState : uint8
 	Complete,
 };
 
-// What a body has to state to be given its tables (CCC7).
+// What a body has to state to be given its tables.
 //
 // **The key is the same chain the POSE resolves through**, and nothing else: everything that can
 // change which sequence `ACT_WALK` resolves to is here, and everything that cannot is absent — the
@@ -1082,7 +1082,7 @@ struct FElysiumGaitSpeedRequest
 	bool IsValid() const { return !Stem.IsEmpty(); }
 };
 
-// One producer's ACT_* request, stated whole (LIFE5).
+// One producer's ACT_* request, stated whole.
 //
 // **The same membership key as `FElysiumGaitSpeedRequest` above**, plus the activity being asked
 // for: everything that decides which sequence an `ACT_*` resolves to travels together, so a
@@ -1201,7 +1201,7 @@ struct FElysiumActivityClip
 	// one hand.
 	bool bRestart = false;
 
-	// --- what the label resolved to, when it named a FAN (LIFE5) ---------------------------------
+	// What the label resolved to, when it named a FAN.
 	//
 	// Whether the label names a multi-cell grid at all. A producer routing a reaction needs it: a fan
 	// is played as a blend space steered by its axis, and a single cell as a plain clip.
@@ -1218,7 +1218,7 @@ struct FElysiumActivityClip
 	float AxisFraction = 0.0f;
 };
 
-// Which channel of the graph a one-shot is played through (LIFE5).
+// Which channel of the graph a one-shot is played through.
 //
 // **Two doors, not one with a flag.** `Slot` rides the DefaultSlot montage OVER the locomotion pose,
 // which is what a scripted beat or an ambient stance wants. `Reaction` REPLACES the base pose on the
@@ -1230,7 +1230,7 @@ enum class EElysiumOneShotRoute : uint8
 	Reaction,
 };
 
-// What ENDS a Reaction-band play — the claim's release condition, stated by the producer (LIFE5).
+// What ENDS a Reaction-band play — the claim's release condition, stated by the producer.
 //
 // **A reaction ends because its own condition is met, never because a wall-clock stamp expired.** The
 // three conditions are the three shapes the combat families actually have, and each one names both the
@@ -1253,7 +1253,7 @@ enum class EElysiumReactionRelease : uint8
 	Predicate,
 };
 
-// What a body's base channel says about a `Predicate` play the producer took (LIFE5).
+// What a body's base channel says about a `Predicate` play the producer took.
 //
 // **A held claim can be lost without its predicate ending**, and that is not an error: an equal or
 // higher band takes the base channel on `>=`, which is exactly what the first blocked hit does when
@@ -1276,7 +1276,7 @@ enum class EElysiumHeldReactionState : uint8
 	Displaced,
 };
 
-// One already-resolved cell, ready to play over whatever owns the base pose (LIFE5).
+// One already-resolved cell, ready to play over whatever owns the base pose.
 //
 // It carries no translation context and no activity, because nothing here resolves: the (owner,
 // animation name) pair names one baked clip outright, and the label rides only so the channel claim
@@ -1351,7 +1351,7 @@ namespace ElysiumAnimIntent
 	}
 }
 
-// WHICH clip a play seam is arming, in the vocabulary the event dispatcher is keyed on (LIFE5).
+// WHICH clip a play seam is arming, in the vocabulary the event dispatcher is keyed on.
 //
 // It travels beside the asset because the asset cannot answer it. A baked `UAnimSequence` is named
 // after the ANIMATION the bake wrote, while `FElysiumBlendTable::Events` is keyed by the SEQUENCE
@@ -1380,7 +1380,7 @@ struct FElysiumClipIdentity
 	bool IsValid() const { return !OwnerStem.IsEmpty() && !Label.IsEmpty(); }
 };
 
-// Where one channel of a body is standing on its clip, this frame (LIFE5).
+// Where one channel of a body is standing on its clip, this frame.
 //
 // **`Cycle` is a phase, never a time.** VtMB's event dispatcher stores and compares a normalized
 // `[0,1)` position, and the whole firing rule is an interval test over that number
@@ -1438,7 +1438,7 @@ namespace ElysiumAnimIntent
 	const TCHAR* ActivityName(EElysiumAnimActivityCode Code);
 	EElysiumAnimActivityCode ActivityCode(const FString& Name);
 
-	// The classifier's thresholds, taken from the body's own authored fans (CCC7). The walk/run
+	// The classifier's thresholds, taken from the body's own authored fans. The walk/run
 	// split becomes the forward walk cell plus one unit, which is retail's rule and a **per-model**
 	// number. A set with no resolved fans yields the defaults, so this is safe to call on any body.
 	FElysiumGaitReference GaitFrom(const FElysiumGaitSpeeds& Speeds);

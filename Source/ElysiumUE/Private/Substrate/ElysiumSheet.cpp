@@ -1,4 +1,4 @@
-// 9.4b — the character sheet's compiled half: the slot tables, the `CVStatList_t` accessors, and
+// The character sheet's compiled half: the slot tables, the `CVStatList_t` accessors, and
 // the seed that fills them from `vdata/system/stats.txt`.
 //
 // `Public/ElysiumSheetSlots.h` is the design note. In short: the slot layout and the datamap names
@@ -12,9 +12,7 @@
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumSheetMath.h"
 
-// ================================================================================================
-// The slot tables — `stats.txt` file order, transcribed
-// ================================================================================================
+// The slot tables — `stats.txt` file order, transcribed.
 
 namespace
 {
@@ -187,9 +185,7 @@ bool ElysiumFindSheetSlot(const TCHAR* InternalName, EElysiumTraitContainer& Out
 	return false;
 }
 
-// ================================================================================================
-// FElysiumSheet
-// ================================================================================================
+
 
 FElysiumSheet::FElysiumSheet()
 {

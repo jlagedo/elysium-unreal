@@ -11,7 +11,7 @@
 class UElysiumUserSettings;
 class UTexture2D;
 
-// The player camera (roadmap 11.7). Design + the recovered solve: `docs/vtmb/camera-view-modes.md`;
+// The player camera. Design + the recovered solve: `docs/vtmb/camera-view-modes.md`;
 // where it sits in the spine: `docs/architecture/runtime-architecture.md` §9.
 //
 // It is a `UCameraComponent` subclass rather than a state object beside one, because VtMB has
@@ -32,6 +32,7 @@ class UTexture2D;
 //     `FElysiumUserCmd` (S5), like everything else;
 //   * **it does not know what an entity is.** A scripted shot is pushed as *values* and whoever
 //     pushed it keeps them current, so a `Follow` attach type is the pusher re-resolving each frame.
+
 // What the scripted channel resolved to this frame: the pose the top shot has chased to, its field
 // of view, and the stack's own timed weight. It is published as values because the layer that
 // composes it runs later in the frame than the solve that produced it — and because the same values
@@ -60,7 +61,7 @@ public:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 
-	// --- The frame, in two phases -------------------------------------------------------------
+	// The frame, in two phases.
 	// The frame splits where the boom lands, because the two halves have opposite dependencies: the
 	// weights decide *whether* there is a boom, and the fade band reads *how long* it turned out to
 	// be. Running them as one call is what made the body's alpha trail the boom by a frame.
@@ -131,14 +132,14 @@ public:
 	// from clearing the one-frame temporal-history signal before the viewport builds its view.
 	bool ConsumeTemporalCameraCutRequest();
 
-	// --- Intent -----------------------------------------------------------------------------
+	// Intent.
 	// The frame's user command, handed on by the body. Only the camera pairs are read here.
 	void SetUserCmd(const FElysiumUserCmd& Cmd) { PendingCmd = Cmd; }
 
-	// --- The mode ---------------------------------------------------------------------------
+	// The mode.
 	// `CAM_ToThirdPerson` / `CAM_ToFirstPerson` (`0x100ff7c0` / `0x100ff7e0`) — the minimal pair: set
 	// the latch, clear `cam_command`. Neither runs the weapon arbitration or the holster check; only
-	// `togglecamera` does (4.9 owns that half, since it needs weapons).
+	// `togglecamera` does, because both need weapons.
 	void SetThirdPerson(bool bThird);
 	// `CAM_ToggleCamera` (`0x100ff800`) in full: the latch flip, the per-class preference write, the
 	// weapon arbitration and the forced-third holster branch.
@@ -182,7 +183,7 @@ public:
 		return bWas;
 	}
 
-	// --- The scripted-shot channel ----------------------------------------------------------
+	// The scripted-shot channel.
 	// `SetCamera`, `camera_keyframe`, the conversation camera and the feed camera all arrive here.
 	// Returns the shot's id (never reused, 0 on failure); `PopShot` gives control back.
 	int32 PushShot(const FElysiumCameraShot& Shot);
@@ -191,7 +192,7 @@ public:
 	void ClearShots() { Shots.Clear(); }
 	const FElysiumCameraShotStack& GetShots() const { return Shots; }
 
-	// --- Debug ------------------------------------------------------------------------------
+	// Debug.
 	// The solved boom length in cm (0 in first person), for `elysium_player_get` and the Cog window.
 	float BoomLength() const { return SolvedOffset.Size() * Weights.ThirdBlend(); }
 	// The damper's own result, before the weight is applied — what the boom solve left behind
@@ -216,8 +217,8 @@ public:
 
 private:
 	// The camera verbs, installed while this component is alive: `togglecamera`, `thirdperson`,
-	// `firstperson`, `snapto`, `cam_command`, `centerview`, `force_centerview`. Implementations stack
-	// (11.6), so a fresh pawn's camera takes the verbs over and hands them back when it dies.
+	// `firstperson`, `snapto`, `cam_command`, `centerview`, `force_centerview`. Implementations stack,
+	// so a fresh pawn's camera takes the verbs over and hands them back when it dies.
 	void RegisterCommands();
 	void UnregisterCommands();
 

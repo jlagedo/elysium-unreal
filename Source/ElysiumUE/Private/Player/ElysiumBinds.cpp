@@ -3,7 +3,7 @@
 const TArray<FElysiumDefaultBind>& ElysiumBinds::Defaults()
 {
 	static const TArray<FElysiumDefaultBind> Table = {
-		// --- Movement ---------------------------------------------------------------------
+		// Movement.
 		{ EKeys::W,            TEXT("+forward"),          TEXT("w") },
 		{ EKeys::S,            TEXT("+back"),             TEXT("s") },
 		{ EKeys::A,            TEXT("+moveleft"),         TEXT("a") },
@@ -29,7 +29,7 @@ const TArray<FElysiumDefaultBind>& ElysiumBinds::Defaults()
 		{ EKeys::J,            TEXT("+lookdown"),         TEXT("j") },
 		{ EKeys::Semicolon,    TEXT("+mlook"),            TEXT(";") },
 
-		// --- Combat, items, disciplines ---------------------------------------------------
+		// Combat, items, disciplines.
 		{ EKeys::LeftMouseButton,  TEXT("+attack"),       TEXT("MOUSE1") },
 		{ EKeys::Enter,            TEXT("+attack"),       TEXT("ENTER") },
 		{ EKeys::RightMouseButton, TEXT("vm_discipline"), TEXT("MOUSE2") },
@@ -71,7 +71,7 @@ const TArray<FElysiumDefaultBind>& ElysiumBinds::Defaults()
 		{ EKeys::F6,           TEXT("slot2"),             TEXT("F6") },
 		{ EKeys::F8,           TEXT("vdiscipline_endall"),TEXT("F8") },
 
-		// --- UI, camera, system -----------------------------------------------------------
+		// UI, camera, system.
 		{ EKeys::Escape,       TEXT("cancelselect"),      TEXT("ESCAPE") },
 		{ EKeys::C,            TEXT("+chareditor"),       TEXT("c") },
 		{ EKeys::L,            TEXT("+questlog"),         TEXT("l") },

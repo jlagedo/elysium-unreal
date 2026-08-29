@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -123,7 +123,7 @@ namespace ElysiumEntityIOTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// =====================================================================================
+
 // The event-resolution contract — `docs/architecture/gameplay-systems-architecture.md` §2.5.1,
 // over the retail facts in `docs/vtmb/entity_io.md` → "Output-list and queue order" and the two
 // worked orderings in `docs/vtmb/sp_tutorial_1-event-surface.md` §5.2 / §11.5.
@@ -143,7 +143,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // FElysiumOrderedIOSink (Private/Tests/ElysiumTestServices.h) records every chokepoint tap into a
 // single array. Everything is driven through the real chokepoints — EnqueueInput and Tick — on a
 // bare world of generic logic classes.
-// =====================================================================================
+
 
 namespace ElysiumEventOrderTests
 {
@@ -801,7 +801,7 @@ bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The other half of the same contract: which TRANSPORT a caller is entitled to, and what a
 // trigger's own latched state is worth across a save.
 //
@@ -828,7 +828,7 @@ bool FElysiumMissingTargetClassificationTest::RunTest(const FString&)
 // on the FElysiumOrderedIOSink stream, which now closes each event line with its `act=`/`cal=`
 // provenance. Rules 9-10 are state claims, asserted through the house freeze/rebuild/apply
 // round trip.
-// =====================================================================================
+
 
 namespace ElysiumEventTransportTests
 {
@@ -1470,11 +1470,11 @@ bool FElysiumDyingTriggerEndTouchTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The per-wire accounting instrument (`ElysiumWireReport.h`): the tally that turns "are the map's
 // events working?" into a number per authored output row, and the report that joins it back to the
 // authored surface so a wire nothing ever reached is visible at all.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWireTallyTest,
 	"Elysium.Substrate.WireTally", GElysiumTestFlags)

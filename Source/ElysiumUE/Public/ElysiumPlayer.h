@@ -22,7 +22,7 @@ struct FElysiumDmg;            // Private/Substrate/ElysiumDamage.h — the type
 struct FElysiumClipPhase;      // ElysiumAnimationIntent.h — one channel's place on one clip
 enum class EElysiumDmgFamily : int32;
 
-// 11.4 (S3) — the player is an entity; the pawn is its body.
+// S3 — the player is an entity; the pawn is its body.
 //
 // This header holds the two middle chain nodes VtMB's own datamap chain has and the player leaf
 // under them, plus the session-lifetime record the entity hydrates from:
@@ -80,7 +80,7 @@ struct FElysiumSheet
 	// this only catches a `base_*` name the shipped `stats.txt` does not own.
 	TMap<FName, int32> Extra;
 
-	// --- The CVStatList_t accessors -----------------------------------------------------------
+	// The CVStatList_t accessors.
 	int32 GetBase(EElysiumTraitContainer Container, int32 Slot) const;
 	int32 GetCurrent(EElysiumTraitContainer Container, int32 Slot) const;
 	// Writes the base and re-derives the current. An out-of-range slot is ignored.
@@ -113,7 +113,7 @@ struct FElysiumSheet
 	void ApplyTemplate(const FElysiumClanTemplate& Template, const FElysiumStatTable* Stats,
 		const FElysiumSheetEffects* Effects = nullptr);
 
-	// --- The named slots the runtime speaks ---------------------------------------------------
+	// The named slots the runtime speaks.
 	int32 Clan() const  { return GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Clan); }
 	void  SetClan(int32 Value) { SetBase(EElysiumTraitContainer::Attributes, ElysiumSlot::Clan, Value); }
 	bool  IsMale() const { return GetCurrent(EElysiumTraitContainer::Attributes, ElysiumSlot::Gender) != 0; }
@@ -155,12 +155,10 @@ struct FElysiumAssignedQuest
 	bool bUnread = false;
 };
 
-// ============================================================================================
-// Law, Masquerade and world response (cycle 10b) — `docs/vtmb/player-entity.md` § "Law,
-// Masquerade and world response". The rules over these two structs are
-// `Private/Substrate/ElysiumLaw.h`; this is only their storage, which lives on the player leaf
-// because retail's fields do (`+0x1ccc..+0x1cec` and `+0x1d10..+0x1d1c` on CBasePlayer).
-// ============================================================================================
+// Law, Masquerade and world response — `docs/vtmb/player-entity.md` § "Law, Masquerade and world
+// response". The rules over these two structs are `Private/Substrate/ElysiumLaw.h`; this is only
+// their storage, which lives on the player leaf because retail's fields do (`+0x1ccc..+0x1cec` and
+// `+0x1d10..+0x1d1c` on CBasePlayer).
 
 // The three activity channels `SetCriminalLevel`, `SetSupernaturalLevel` and `SetInvestigateLevel`
 // write. They are NOT one generic "wanted" value: criminal and supernatural each carry a deadline
@@ -194,7 +192,7 @@ struct FElysiumPoliceState
 	// at or after this absolute time, and then reschedules by `debug_masquerade_timer`.
 	double MasqueradeTimerNext = 0.0;
 
-	// --- The retained, delayed response record ------------------------------------------------
+	// The retained, delayed response record.
 	// One record, not a queue: a second incident before the deadline replaces it only when it is
 	// strictly more severe, and never reschedules.
 	bool  bResponsePending = false;
@@ -210,14 +208,14 @@ struct FElysiumPoliceState
 	double GraceUntil = -1.0;
 	int32  GraceSpawned = 0;
 
-	// --- Pursuit and alert ---------------------------------------------------------------------
+	// Pursuit and alert.
 	int32 CopsInPursuit = 0;      // +0x1d10
 	int32 HuntersInPursuit = 0;   // +0x1d14 — suppresses new response admission while non-zero
 	bool  bHeightenedAlert = false;       // +0x1d18
 	double HeightenedAlertExpiry = 0.0;   // +0x1d1c
 };
 
-// ============================ Cycle 10c — the player-owned scare queue ==========================
+// The player-owned scare queue.
 // "A supernatural flee-only branch instead inserts a 16-byte player-owned scare record keyed by NPC
 // identity: a repeat keeps the greater severity and refreshes its timestamp. `PlayerRuleUpdate`
 // selects from that queue, submits the supernatural incident and removes consumed/expired records."
@@ -239,10 +237,8 @@ struct FElysiumScareRecord
 	double Time = 0.0;
 };
 
-// ============================================================================================
-// Feeding (B6) — the paired action's phase and the authoritative transaction's field set.
+// Feeding — the paired action's phase and the authoritative transaction's field set.
 // `docs/vtmb/feeding.md` owns the behaviour; `Substrate/ElysiumFeed.h` owns the rules over these.
-// ============================================================================================
 
 // The ordinary (paired mode 0) state family: engage, bite, feed loop, release. The attacker
 // advances the pair; a role-1 victim never chooses the next base activity.
@@ -278,7 +274,7 @@ struct FElysiumFeedState
 	bool bInterrupting = false;
 
 	// The grapple peer. Retail keeps this on the common paired-action state rather than in the feed
-	// block; this runtime has no grapple router (B6 is deliberately the transaction only), so the
+	// block; this runtime has no grapple router (the feed path is the transaction only), so the
 	// one pairing link lives here. On the attacker it is the victim, on the victim the attacker.
 	FElysiumEntityHandle Peer;
 	// This character is the role-1 half of the pair.
@@ -317,11 +313,9 @@ inline bool ElysiumFeedAccepted(EElysiumFeedVerdict Verdict)
 		|| Verdict == EElysiumFeedVerdict::AcceptedOpposedCheck;
 }
 
-// ============================================================================================
-// Disciplines (13.2) — the two execution families' live state.
+// Disciplines — the two execution families' live state.
 // `docs/vtmb/disciplines.md` owns the behaviour; `Substrate/ElysiumDisciplines.h` owns the rules
 // over these fields.
-// ============================================================================================
 
 // One targeted-Discipline effect running on the character it was applied to. Retail tracks active
 // targeted effects as bits on the affected character so that replacement and
@@ -381,7 +375,6 @@ struct FElysiumDisciplineState
 	}
 	void Reset() { *this = FElysiumDisciplineState(); }
 
-	// ================= Cycle 11b hunk 9/9 — one field list, two owners ==========================
 	// The whole block, both directions (`Substrate/ElysiumDisciplines.cpp`). It has two save homes
 	// — the player record's own block, because the player entity is excluded from the map snapshot,
 	// and the NPC leaf, because a targeted effect lands on whichever character the cast hit — and
@@ -395,11 +388,9 @@ struct FElysiumDisciplineState
 	// version branch of its own: each of the two homes gates the whole call on ITS OWN schema
 	// version, which is what lets the same bytes be additive at two different version numbers.
 	void Serialize(FArchive& Ar);
-	// ============================================================================================
 };
 
-// ============================================================================================
-// 13.1 — the player's stealth target surface (`docs/vtmb/stealth.md` -> "Player target-surface
+// The player's stealth target surface (`docs/vtmb/stealth.md` -> "Player target-surface
 // update"). ONE player-owned surface: the retained three-point light cycle and the three values
 // an observer reads off the TARGET — sight-range scalar, cone scalar, hearing-distance reduction.
 //
@@ -409,7 +400,6 @@ struct FElysiumDisciplineState
 //
 // The rules over it — the cadence, the sample rotation, the normalization and the row selection —
 // are `Private/Substrate/ElysiumStealth.h`. This struct is storage and nothing else.
-// ============================================================================================
 
 struct FElysiumStealthSurface
 {
@@ -473,17 +463,17 @@ struct FElysiumStealthObserver
 
 // The durable half of the player: session lifetime, so it crosses a map boundary. The entity is the
 // *live* view; this is the truth that survives the world it lived in. Hydrated into the player
-// entity at map build, dehydrated back out when the world is torn down (travel, quit, reload) and,
-// at 11.9, into the save.
+// entity at map build, dehydrated back out when the world is torn down (travel, quit, reload) and
+// into the save.
 //
 // Health is deliberately NOT a "player stat" here: `m_iHealth` is a Save-flagged entity field on the
 // chain (`docs/architecture/save-architecture.md` section 4 — VtMB's own placement), and the copy below exists only
 // because our entity dies with its map, so something has to carry the value across a travel. The
 // entity's field stays the one the save walk enumerates.
 //
-// Inventory (`item_*` entities owned by the player) and the equipped-weapon handles join this record
-// at 9.8; the quest map and `G` are still the game-state subsystem's own stores until 11.9 gathers
-// the save blocks. Neither is stubbed here — an empty field nothing fills would read as support.
+// Inventory (`item_*` entities owned by the player) and the equipped-weapon handles live on this
+// record. The quest map and `G` remain the game-state subsystem's own stores. Neither is stubbed
+// here — an empty field nothing fills would read as support.
 struct FElysiumPlayerRecord
 {
 	// The name the player types at chargen. Not a Stat and not a datamap field — VtMB carries it as
@@ -508,7 +498,7 @@ struct FElysiumPlayerRecord
 	TArray<FString>         EmailFlags;      // the Player block, save-architecture.md section 3
 	FElysiumLawState        Law;
 
-	// Cycle 10b — the police-response / Masquerade-timer / pursuit block beside the activity
+	// The police-response / Masquerade-timer / pursuit block beside the activity
 	// channels. Deliberately NOT map-scoped the way `FeedMap`, `DisciplineMap` and `StealthMap`
 	// are: every deadline in both structs is on the session clock, which
 	// `UElysiumGameStateSubsystem` owns and which persists across map travel, and a wanted level
@@ -543,7 +533,7 @@ struct FElysiumPlayerRecord
 	// entity because the tutorial sets it at map load and it must survive the warp into the next map.
 	bool bUnkillable = false;
 
-	// B6 — an in-progress feed, so a save taken mid-transaction restores without duplicating a pulse
+	// An in-progress feed, so a save taken mid-transaction restores without duplicating a pulse
 	// or losing the victim link (`docs/vtmb/feeding.md` recreation contract item 9; retail's own save
 	// schema names `m_flNextFeedPulse` and `m_flFeedStartTime`).
 	//
@@ -555,7 +545,7 @@ struct FElysiumPlayerRecord
 	FElysiumFeedState Feed;
 	FString FeedMap;
 
-	// 13.2 — the discipline block. The player entity is excluded from the map snapshot by design,
+	// The discipline block. The player entity is excluded from the map snapshot by design,
 	// so its half of every domain rides this record; the sheet's own `Active_*` slots come across
 	// with `Sheet` above, and this carries what the sheet cannot say — when each owned expiry event
 	// is due, which trait-effect groups the activation installed, the tracked targeted effects and
@@ -576,7 +566,7 @@ struct FElysiumPlayerRecord
 	// The player's Discipline cast counter, incremented by a committed targeted cast (step 6).
 	int32 DisciplineCastCount = 0;
 
-	// 13.1 — the stealth block, carried as ONE group. `docs/vtmb/stealth.md`: a restored sample
+	// The stealth block, carried as ONE group. `docs/vtmb/stealth.md`: a restored sample
 	// triplet must never be combined with newly defaulted derived values, so the surface travels
 	// whole (samples, rotation index, derived scalars and the generation that ties them together)
 	// or not at all.
@@ -593,8 +583,7 @@ struct FElysiumPlayerRecord
 	void Reset() { *this = FElysiumPlayerRecord(); }
 };
 
-// ============================================================================================
-// FElysiumInventory — CBaseCombatCharacter's carried-item storage (9.8, `docs/vtmb/inventory.md` §2).
+// FElysiumInventory — CBaseCombatCharacter's carried-item storage (`docs/vtmb/inventory.md` §2).
 //
 // Inventory is **not** a bag of class names. An ordinary carried item stays a full server entity;
 // what the character holds is a list of handles to those entities (`m_hMyWeapons[224]` at +0x1624)
@@ -604,7 +593,6 @@ struct FElysiumPlayerRecord
 // Item POLICY — stackability, droppability, permanence, ammunition — is never decided here. It is
 // read from the item's own `vdata/items` definition (`FElysiumItemDef`), never inferred from a
 // classname prefix.
-// ============================================================================================
 
 class FElysiumItem;
 class FElysiumKeyring;
@@ -636,8 +624,8 @@ struct FElysiumInventory
 	// asymmetry that the tutorial's `.38` beat rides on lives across these two homes: `AmmoCount`
 	// reports the item's LOADED MAGAZINE, `GiveAmmo` adds to this RESERVE.
 	//
-	// Not persisted yet: it is character state no entity field can hold, so it needs the record /
-	// save-block half that slice (c) owns.
+	// Not persisted: it is character state no entity field can hold, so it lives on the session
+	// record / save-block half.
 	TMap<FString, int32> AmmoReserve;
 
 	int32 Num() const { return Slots.Num(); }
@@ -703,10 +691,9 @@ struct FElysiumInventory
 
 	// Still distinct and unbuilt: player drop (`inven_drop`, world entity PRESERVED — never a
 	// shortcut through ScriptRemove) and priced `Buy`/`Sell` barter. Take/Give use TransferSlot;
-	// pricing belongs to 9.10 (`inventory.md` §5.3, §7).
+	// pricing lives in the barter path (`inventory.md` §5.3, §7).
 };
 
-// ============================================================================================
 // FElysiumMeleeRoll — the opposed record a melee contact stages ON THE DEFENDER
 // (`docs/vtmb/combat-and-damage.md` § "Opposed record and reaction margin").
 //
@@ -717,7 +704,6 @@ struct FElysiumInventory
 //
 // It is live combat state, not persistence: the record exists between one contact and the
 // reaction it selects, so it rides no save block.
-// ============================================================================================
 
 struct FElysiumMeleeRoll
 {
@@ -741,22 +727,20 @@ struct FElysiumMeleeRoll
 	int32 Margin() const { return Lethality - Defense - Soak; }
 };
 
-// ============================================================================================
 // FElysiumAnimating — CBaseAnimating. Everything that owns a skeletal body: standing it, moving
 // it with the entity, gating it on dormancy, and playing clips on it. NPCs and the player share
 // this because in VtMB they share the class.
-// ============================================================================================
 
 class FElysiumAnimating : public FElysiumEntity
 {
 public:
 	// `skin` — a material family swap. One VtMB datamap record flagged both KEY and INPUT with a
 	// null inputFunc, so the keyvalue, the wire and `.skin =` are the same direct write
-	// (`docs/vtmb/entity_io.md`). Carried here for the whole chain; only the prop leaf paints with it today.
+	// (`docs/vtmb/entity_io.md`). Carried here for the whole chain; only the prop leaf paints with it.
 	int32 Skin = 0;
 
 	// `default_disposition` — the emotional stance that selects the standing animation set through
-	// `vdata/system/dispositiontable.txt` (8.5). Runtime state, not a spawn-time constant: 9.9's
+	// `vdata/system/dispositiontable.txt`. Runtime state, not a spawn-time constant:
 	// `SetDisposition` (2,510 calls, 2,467 of them a `.dlg` line's action) writes it mid-conversation.
 	FString Disposition;
 	// SetDisposition's second argument. `default_disposition` starts at level 1; the resolved level
@@ -771,7 +755,7 @@ public:
 	// selects. Called from the leaf's Spawn(); no-op with no embodiment, no model, or bodies off.
 	void BuildBody();
 
-	// --- The animation seam (8.5), implemented once for every character ---------------------
+	// The animation seam, implemented once for every character.
 	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) override;
 	virtual bool PlayAnimSegment(const struct FElysiumClipSegment& Segment,
 		float* OutSeconds = nullptr) override;
@@ -802,7 +786,7 @@ public:
 	virtual void OnRuntimeModelChanged() override;
 	// R6 — a ScriptHidden/dead character is undrawn and stops ticking its clip.
 	virtual void OnDormancyChanged() override;
-	// The body a camera shot's `Bone: Bip01 Head` attach point resolves against (11.7).
+	// The body a camera shot's `Bone: Bip01 Head` attach point resolves against.
 	virtual USkeletalMeshComponent* GetSkeletalBody() const override { return Visual; }
 
 	// The `parentname` attach point for a character (an ornament or an emitter worn on an NPC).
@@ -813,7 +797,7 @@ public:
 	// The model stem the clip manifest is keyed by: the model file's lowercased basename.
 	FString ModelStem() const;
 
-	// --- The sequence-event pass (LIFE5), implemented once for every character ---------------
+	// The sequence-event pass, implemented once for every character.
 	//
 	// Pull each polled channel's phase off the body, walk its clip's own timeline that far, and
 	// dispatch what the interval contained: an id inside the server band is offered to
@@ -860,28 +844,25 @@ private:
 	bool bDispositionTalking = false;
 	TMap<FString, float> DispositionFacialPose;
 
-	// One cursor per channel actually polled — the base channel alone today, which is the only
+	// One cursor per channel actually polled — the base channel alone, which is the only
 	// channel any producer publishes a phase for. It is an array rather than a fixed
 	// `ElysiumAnimIntent::NumChannels` block because a channel nothing polls owns no timeline
 	// position, and a slot standing at cycle 0 forever would read as a clip that never advances.
 	TArray<FElysiumAnimEventCursor> EventCursors;
 };
 
-// ============================================================================================
 // FElysiumCombatCharacter — CBaseCombatCharacter. The sheet, and the 25 datamap inputs
 // `docs/vtmb/script_api.md` recovered from datamap 0x1061664c. Shared by the player and every NPC, which is
 // where VtMB put it: `MoneyAdd` on a Hammer wire and `pc.MoneyAdd(50)` from a level script are the
 // same input on the same class.
 //
 // The counters below are real fields with real arithmetic behind their inputs; the systems that
-// give them *meaning* — the economy (9.10), the sheet and its meters (9.4), disciplines and frenzy
-// (P13), inventory (9.8), barter (9.8), the look-at rig (P12) — are not here, and every input they
-// belong to logs and no-ops. That is the fail-closed contract 11.4 signs up for: the name resolves
-// through the R2 walk and reaches a defined place, so the system that lands later replaces a stub
-// rather than inventing a dispatch.
-// ============================================================================================
+// give them *meaning* — the economy, the sheet and its meters, disciplines and frenzy, inventory,
+// barter, the look-at rig — are not here, and every input they belong to logs and no-ops. That is
+// the fail-closed contract: the name resolves through the R2 walk and reaches a defined place, so
+// a later system replaces a stub rather than inventing a dispatch.
 
-// LIFE5 — what a reaction producer states, for the one Reaction-band play path every combat
+// What a reaction producer states, for the one Reaction-band play path every combat
 // reaction goes through. The flinch, the defender's block and the attacker's blocked reaction are
 // the same transaction with different activities: fill the translation context, resolve through the
 // embodiment seam, play the resolved cell on the graph's reaction branch. A parameter struct rather
@@ -918,11 +899,11 @@ class FElysiumCombatCharacter : public FElysiumAnimating
 public:
 	FElysiumSheet Sheet;
 
-	// The 224 item-entity handles, the active weapon and the reserve ammo pools (9.8). On this node
+	// The 224 item-entity handles, the active weapon and the reserve ammo pools. On this node
 	// because VtMB puts them here: the player, every NPC and every `item_container` own one.
 	FElysiumInventory Inventory;
 
-	// 13.2 — the native active states and the tracked targeted effects. On this node because the
+	// The native active states and the tracked targeted effects. On this node because the
 	// thirteen `Active_*` slots are, and because a targeted effect lands on whichever character the
 	// cast resolved onto. The rules over it are `Substrate/ElysiumDisciplines.h`.
 	FElysiumDisciplineState Disciplines;
@@ -933,7 +914,7 @@ public:
 	// class of whatever the last run was holding. A no-op for anything that is not the player.
 	void PublishEquippedCameraClass() const;
 
-	// LIFE5 — fill the translation context an `ACT_*` request resolves through: this character's
+	// Fill the translation context an `ACT_*` request resolves through: this character's
 	// model stem, the classname a map authored it under, its active weapon's classname and its own
 	// state. Those are the three keys the recovered `+0x5dc` class body, the committed weapon
 	// ladders and the armed/alert branch are joined to, so every producer that asks for an activity
@@ -946,7 +927,7 @@ public:
 
 	int32 Money = 0;              // m_iMoney — the one counter `stats.txt` does not carry as a Stat
 
-	// 13.1 — `trigger_stealth_mod`'s raw aggregate (retail `+0x1084`, which is a
+	// `trigger_stealth_mod`'s raw aggregate (retail `+0x1084`, which is a
 	// CBaseCombatCharacter offset: the trigger's own body is guarded by combat-character
 	// embodiment, not by player-ness, so every character can carry one).
 	//
@@ -971,7 +952,7 @@ public:
 	// `AwardMoney` go through. Raw `+=`, no floor, as the engine's is.
 	void AddMoney(int32 Delta);
 
-	// --- The 25 CBaseCombatCharacter inputs -------------------------------------------------
+	// The 25 CBaseCombatCharacter inputs.
 	// Backed: the four counters. VtMB's own InputMoneyAdd is
 	//     if (value.fieldType == FIELD_INTEGER && value.int != 0) MoneyAdd(value.int);
 	// i.e. a zero-valued input is a silent no-op (`docs/vtmb/script_api.md`, worked semantics). The typed
@@ -989,7 +970,7 @@ public:
 	// It is NOT Python's `RemoveItem(classname)`, which also destroys the final entity.
 	void InputInventoryRemove(const FElysiumInputArgs& Args);
 
-	// --- Damage and death -------------------------------------------------------------------
+	// Damage and death.
 	// Two entries, one commit (K6). Typed damage — weapons, disciplines, `trigger_hurt` — carries a
 	// descriptor through the shared resolver; the scalar overload is the compatibility fallback and
 	// never grows semantics. Both spend what they resolved through `CommitDamage`.
@@ -1025,7 +1006,7 @@ public:
 	// slots from a damage path.
 	void CommitDamage(const FElysiumDmg& Dmg);
 
-	// LIFE5 — `CBaseCombatCharacter::DamageFlinch`, from the one health commit. Picks the head or
+	// `CBaseCombatCharacter::DamageFlinch`, from the one health commit. Picks the head or
 	// torso hit activity, steers the `hit_yaw` fan by where the attacker stands relative to this
 	// body's facing, and plays the resolved cell as a Reaction-band one-shot over whatever owns the
 	// base pose. The pure rules are `Substrate/ElysiumReactions.h`; this is the gate and the
@@ -1036,7 +1017,7 @@ public:
 	// last of those.
 	void StartDamageFlinch(const FElysiumDmg& Dmg);
 
-	// LIFE5 — the one Reaction-band producer: fill the translation context, resolve one `ACT_*`
+	// The one Reaction-band producer: fill the translation context, resolve one `ACT_*`
 	// through the embodiment seam, and play the resolved cell on the graph's reaction branch. Every
 	// combat reaction is this transaction, which is why it is one function rather than one per family
 	// — the fork that matters is the body kind, and `FillActivityClipRequest` already sets it.
@@ -1051,7 +1032,7 @@ public:
 	// selection record already names.
 	bool PlayReactionActivity(const FElysiumReactionPlayRequest& Request, float* OutSeconds = nullptr);
 
-	// LIFE5 — give back a HELD reaction claim this character took, on the one door every release path
+	// Give back a HELD reaction claim this character took, on the one door every release path
 	// uses: the predicate going false, the character dying, its body being taken away.
 	//
 	// Idempotent, and deliberately so — a character that holds nothing releases nothing rather than
@@ -1060,7 +1041,7 @@ public:
 	// be resumed.
 	void ReleaseHeldReaction();
 
-	// LIFE5 — re-derive the held claim against the body, and RE-TAKE it once the channel comes free.
+	// Re-derive the held claim against the body, and RE-TAKE it once the channel comes free.
 	// Called by the producer whose predicate still stands, on the think it already has.
 	//
 	// **The gap this closes is ours, not retail's.** An equal or higher band takes the base channel on
@@ -1087,7 +1068,7 @@ public:
 	// a producer that never polls would go on yielding its flinches to a claim nobody holds.
 	bool IsHoldingReaction() const { return bHoldsReactionClaim; }
 
-	// LIFE5 — `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`), the body six server classes
+	// `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`), the body six server classes
 	// share. Its whole weapon route is a forward: every id in 3000..3999 goes to the ACTIVE weapon's
 	// `Operator_HandleAnimEvent` `+0x5c8` and the answer is the weapon's. Nothing about the id is
 	// read here — a shot commit and a melee contact are the weapon's vocabulary, not the character's.
@@ -1104,7 +1085,7 @@ public:
 	// dispatcher is what would make the clause reachable.
 	virtual bool HandleAnimEvent(const struct FElysiumAnimEvent& Event) override;
 
-	// --- The melee opposed records (`combat-and-damage.md` § "Opposed record and reaction margin")
+	// The melee opposed records (`combat-and-damage.md` § "Opposed record and reaction margin").
 	// The defender's own array, keyed by attacker. A second contact from the same attacker REPLACES
 	// its row rather than appending a duplicate, because every reader searches by attacker and would
 	// otherwise read a stale margin.
@@ -1154,7 +1135,7 @@ public:
 		return Roll ? Roll->Lethality : 0;
 	}
 
-	// --- The combat-stance clock (`docs/vtmb/animation_and_movers.md` — `IsInCombatStance`) --
+	// The combat-stance clock (`docs/vtmb/animation_and_movers.md` — `IsInCombatStance`).
 	// `m_flLastCombatAnimTime` (+0x19b0): the world time of the attacker's last attack ANIMATION
 	// request, not of a contact. Retail stamps it in `CBasePlayer::SetAnimation` (`0x10164870`)
 	// on the `PLAYER_ATTACK1` arm, gated only on there being an active weapon, through the sole
@@ -1175,7 +1156,7 @@ public:
 			&& NowSeconds - LastCombatAnimSeconds < CombatStanceHoldSeconds;
 	}
 
-	// --- The melee reaction's hold on the base channel ---------------------------------------
+	// The melee reaction's hold on the base channel.
 	// Until when a melee contact reaction owns this body's base pose. Negative means never.
 	//
 	// **OURS, NOT RETAIL'S.** Retail's block reaction and its flinch do not contend: the flinch is a
@@ -1202,7 +1183,7 @@ public:
 		MeleeReactionHoldsBaseUntil = FMath::Max(MeleeReactionHoldsBaseUntil, UntilSeconds);
 	}
 
-	// --- Knockback eligibility -----------------------------------------------------------------
+	// Knockback eligibility.
 	// The NPC template's authored `General/Disallow_Knockbacks`, which eight `npctemplate*.txt`
 	// files set on the zombies, the cabbie, the tutorial cast and the other bodies that must never
 	// be thrown. Only the NPC leaf wears a template, so the chain's own answer is no.
@@ -1306,7 +1287,7 @@ public:
 	// Move a trait's base by Delta and re-derive the current value under the effective bounds.
 	void AddTrait(EElysiumTraitContainer Container, int32 Slot, int32 Delta);
 
-	// --- The sheet reads the script surface calls (9.4c) --------------------------------------
+	// The sheet reads the script surface calls.
 	// `CalcFeat(feat)` — the feat RATING, not a roll. A name the feat table does not own falls back
 	// to the trait of that name (`docs/vtmb/script_api.md`, a marked divergence); neither resolving reads 0.
 	int32 CalcFeat(const FString& Name) const;
@@ -1318,9 +1299,9 @@ public:
 	// `DialogDiscipline` is deliberately NOT here. Its whole spec is one doc string ("uses a
 	// discipline in dialog, doesn't deduct blood points"), the corpus never calls it, and its
 	// handler is undecompiled — so any number it returned would be invented. It stays a logged
-	// stub until the discipline layer (P13) defines what using a power in dialogue does.
+	// stub until the discipline layer defines what using a power in dialogue does.
 
-	// --- The counters, with their rules ------------------------------------------------------
+	// The counters, with their rules.
 	// Humanity moves by `Delta`, DOUBLED when the character's effect layer carries
 	// `Fx_Humanity_Mods_Doubled` — Toreador's gift and its bane are the same flag.
 	void AddHumanity(int32 Delta);
@@ -1337,7 +1318,7 @@ public:
 	// blood-pool increment already happened. Returns the damage actually healed.
 	int32 HealDamage(int32 Points);
 
-	// --- Feeding (B6, `docs/vtmb/feeding.md`) --------------------------------------------------
+	// Feeding (`docs/vtmb/feeding.md`).
 	// The whole transaction is here rather than in a service because retail puts it here: `FeedBegin`,
 	// `Feed` and `FeedInterrupt` are CBaseCombatCharacter virtuals, and the fields they own are this
 	// class's. Implemented in `Substrate/ElysiumFeed.cpp`.
@@ -1406,7 +1387,7 @@ public:
 	void PendingInput(const TCHAR* Input, const TCHAR* Owner, const FElysiumInputArgs& Args,
 		const TCHAR* DeclaringClass = nullptr) const;
 
-	// --- Gaze (12.4) --------------------------------------------------------------------------
+	// Gaze.
 	// VtMB puts this on CBaseCombatCharacter and so do we. The class decides *where to look*; the
 	// visual layer decides what that looks like, and the only thing crossing between them is one
 	// world point per character per frame — which is exactly the hop retail networks as
@@ -1488,10 +1469,10 @@ protected:
 	// Drop the Bloodshield effect an exhausted `HealthBuffer` ends, and rebuild the effect layer.
 	void EndBloodshield();
 
-	// --- Feeding internals ---------------------------------------------------------------------
+	// Feeding internals.
 	// The pair's other half as a combat character, or null.
 	FElysiumCombatCharacter* ResolveFeedPeer() const;
-	// `StartGrappleAttack(target, mode 0)` reduced to what B6 owns: claim both bodies, face the
+	// `StartGrappleAttack(target, mode 0)` reduced to what the feed path owns: claim both bodies, face the
 	// attacker at the victim, freeze the victim's motor, and start the engage clip on both.
 	void StartFeedPair(FElysiumCombatCharacter& Victim, double Now);
 	// `EndGrapple` — release both bodies and clear the pairing on both halves. Idempotent.
@@ -1536,7 +1517,7 @@ protected:
 	bool bUnkillable = false;
 	bool bDeathReported = false;   // OnKilled fires once, however much damage arrives after
 
-	// LIFE5 — whether a HELD reaction claim this character took is still outstanding. Set by a
+	// Whether a HELD reaction claim this character took is still outstanding. Set by a
 	// `Predicate` play the seam accepted, refreshed against the seam by `TickHeldReaction`, cleared by
 	// `ReleaseHeldReaction`.
 	//
@@ -1560,7 +1541,6 @@ protected:
 	TSharedPtr<FElysiumSheetEffects> EffectLayer;
 };
 
-// ============================================================================================
 // FElysiumPlayer — CBasePlayer / CHL2_Player. The player character: the sheet above, the 10
 // recovered player-datamap inputs (`docs/vtmb/script_api.md`, datamap 0x10580edc — the header states 11 and
 // one is still unrecovered), and the link to the pawn that is its body.
@@ -1569,22 +1549,21 @@ protected:
 // a landmark offset and a `trigger_look` all read the same place every other entity reads. Writing
 // them (`point_teleport`, a scripted `pc.SetOrigin(...)`) moves the pawn through the embodiment,
 // which is the same shape as an NPC moving its skeletal body.
-// ============================================================================================
 
 class FElysiumPlayer final : public FElysiumCombatCharacter
 {
 public:
 	FElysiumLawState Law;
-	// Cycle 10b — the response/Masquerade-timer/pursuit half of the same domain. Mirrored from the
+	// The response/Masquerade-timer/pursuit half of the same domain. Mirrored from the
 	// record for the map's lifetime exactly as `Law` is.
 	FElysiumPoliceState Police;
-	// Cycle 10c — the flee-only scare records an NPC's supernatural schedule branch queues, drained
+	// The flee-only scare records an NPC's supernatural schedule branch queues, drained
 	// by `ElysiumLaw::TickPlayerLaw`. Session state; the reasoning is on `FElysiumScareRecord`.
 	TArray<FElysiumScareRecord> ScareQueue;
 	TArray<FElysiumXpEntry> ExperienceLog;
 	TArray<FString> EmailFlags;
 
-	// 13.2 — `vdiscipline_int`'s stored compiled index and the remembered tier beside it, plus the
+	// `vdiscipline_int`'s stored compiled index and the remembered tier beside it, plus the
 	// cast counter a committed targeted cast increments. Mirrored from the record for the map's
 	// lifetime, exactly as `ExperienceLog` and `Money` are.
 	int32 SelectedDiscipline = INDEX_NONE;
@@ -1595,7 +1574,7 @@ public:
 	float ExperienceRemainder = 0.f;
 	float LifetimeExperience = 0.f;
 
-	// 13.1 — the stealth target surface and the observer snapshot it publishes. Both live on the
+	// The stealth target surface and the observer snapshot it publishes. Both live on the
 	// player leaf because retail's fields do (`+0x1c6c..` and `+0x1cc0..`). The rules are
 	// `Private/Substrate/ElysiumStealth.h`; the recompute hangs off `Think` below, which is reached
 	// only through `FElysiumEntityWorld::RunPlayerThink`.
@@ -1612,8 +1591,8 @@ public:
 	void SetHiddenByController(bool bInHidden);
 	bool IsMobile() const { return !bImmobilized && !bHiddenByController; }
 
-	// --- The block intent (`docs/vtmb/controls.md` § "Attack, block and weapon commands", -----
-	//     `docs/vtmb/combat-and-damage.md` § "Block and stagger reactions") ---------------------
+	// The block intent (`docs/vtmb/controls.md` § "Attack, block and weapon commands",
+	// `docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
 	//
 	// Retail's block is a server input classification, not a weapon transaction: the predicate at
 	// `0x10160ec0` wants the dedicated `+wpn_secondaryatk` bit, ground contact and an active weapon
@@ -1641,7 +1620,7 @@ public:
 	virtual void Spawn() override;
 
 	// The player's own think, run PRE-move by `FElysiumEntityWorld::RunPlayerThink` — which is
-	// where retail runs it, inside CPlayerMove::RunCommand. B6 drives the feed transaction from
+	// where retail runs it, inside CPlayerMove::RunCommand. The feed transaction is driven from
 	// here, so a pulse deadline is measured on the substrate clock and never on a timer.
 	virtual void Think() override;
 
@@ -1683,21 +1662,19 @@ public:
 	virtual void OnKilled() override;
 	// The other way a run ends — the masquerade counter at 5.
 	virtual void OnMasqueradeBreached() override;
-	// ============= Cycle 11b hunk 6/9 — the recovered level-5 destination =====================
 	// The map an increment past four loads (`docs/vtmb/player-entity.md` § "Law, Masquerade and
 	// world response"). Named rather than inlined at the one call site so the acceptance test
 	// asserts the recovered string instead of restating it.
 	static const FString& MasqueradeLossMap();
-	// ==========================================================================================
 
-	// --- The 10 recovered player inputs ------------------------------------------------------
-	void InputGiveItem(const FElysiumInputArgs& Args);            // STRING, 126 calls — 9.8
+	// The 10 recovered player inputs.
+	void InputGiveItem(const FElysiumInputArgs& Args);            // STRING, 126 calls
 	void InputAwardExperience(const FElysiumInputArgs& Args);      // STRING (a vdata key), 77 calls
 	void InputSetCriminalLevel(const FElysiumInputArgs& Args);
 	void InputSetInvestigateLevel(const FElysiumInputArgs& Args);
 	void InputSetSupernaturalLevel(const FElysiumInputArgs& Args);
 
-	// Cycle 10b — the monotonic act counts, read by the NPC condition lane (conditions 31-34) that
+	// The monotonic act counts, read by the NPC condition lane (conditions 31-34) that
 	// compares them against its own processed counts. Read-only here: only a channel write through
 	// `ElysiumLaw` increments them.
 	int32 CriminalActCount() const { return Law.CriminalCount; }

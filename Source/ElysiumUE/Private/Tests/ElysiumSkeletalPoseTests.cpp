@@ -327,11 +327,10 @@ bool FElysiumOpeningScenePlacementTest::RunTest(const FString&)
 	TestTrue(TEXT("the theatre scene keeps its authored 270 degree yaw"),
 		FMath::IsNearlyEqual(SourceAngles.Y, 270.0f));
 
-	// Both sides off the baked mount, which is what fixes the expected answer below. A clip read out
-	// of a `.glb` used to arrive in glTFRuntime's basis -- `(y, x, z)` against the container's
-	// `(x, -y, z)`, a 90 degree yaw carried on the `Bip01` root -- and needed a compensating
-	// quarter turn at placement. Nothing loads a `.glb` any more, so the placement is the reflected
-	// Source yaw and nothing else (`ElysiumSkeletalBasis`).
+	// Both sides off the baked mount. A clip read out of a `.glb` arrives in glTFRuntime's basis --
+	// `(y, x, z)` against the container's `(x, -y, z)`, a 90 degree yaw carried on the `Bip01` root
+	// -- and needs a compensating quarter turn at placement. Nothing loads a `.glb`; the placement
+	// is the reflected Source yaw and nothing else (`ElysiumSkeletalBasis`).
 	USkeletalMesh* Mesh = ElysiumNpcVisual::LoadBakedMesh(TEXT("brujah_male_armor_0"));
 	UAnimSequence* Anim = Mesh != nullptr
 		? ElysiumNpcVisual::LoadBakedClip(Mesh,

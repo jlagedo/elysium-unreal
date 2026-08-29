@@ -34,10 +34,9 @@ static FAutoConsoleCommand GElysiumTrigger(
 		}
 	}));
 
-// --- Verification / test verbs ----------------------------------------------------------
-// The P1.4 test harness: prove the world, the two chokepoints, the queue, and the ring buffer
-// end-to-end with nothing but the log. Phase 2 replaces these with the Cog entity/queue windows
-// and the full `ent_*` verb set (which fire through this same AcceptInput/queue).
+// Prove the world, the two chokepoints, the queue, and the ring buffer end-to-end with nothing
+// but the log. The Cog entity/queue windows and the `ent_*` verb set fire through this same
+// AcceptInput/queue.
 
 namespace ElysiumWorldVerbsPrivate
 {

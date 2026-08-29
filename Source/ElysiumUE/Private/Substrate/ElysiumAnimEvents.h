@@ -57,7 +57,7 @@ namespace ElysiumAnimEvents
 		FElysiumAnimEventCursor& InOut, TArray<const FElysiumAnimEvent*>& OutFired);
 }
 
-// The census of event ids nothing has claimed yet (LIFE5 slice 1).
+// The census of event ids nothing has claimed yet.
 //
 // **The census IS the observability for an unclaimed id.** An id with no handler is not a failure —
 // it is work that has not landed — and a warning per occurrence would fire dozens of times a second

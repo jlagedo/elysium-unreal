@@ -74,11 +74,10 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 	// value, which a mouse flick shows as the body trailing the camera.
 	Super::ProcessPlayerInput(DeltaTime, bGamePaused);
 
-	// `TickPlayerInput` reaches here on two paths, and only one of them used to run the router:
-	// `PlayerTick` on a live frame, and `TickActor`'s pause path, which `PlayerTick` never sees. A
-	// held world must keep producing no command at all, so the paused entry stops here — the same
-	// thing that was true when this lived behind `PlayerTick`. Pause as an explicit input policy is
-	// the mapping-context landing's, not this one's.
+	// `TickPlayerInput` reaches here on two paths: `PlayerTick` on a live frame, and `TickActor`'s
+	// pause path, which `PlayerTick` never sees. A held world must keep producing no command at all,
+	// so the paused entry stops here. Pause as an explicit input policy belongs to the mapping
+	// contexts, not this controller.
 	if (!Router || bGamePaused)
 	{
 		return;
@@ -149,7 +148,7 @@ void AElysiumPlayerController::ProcessPlayerInput(const float DeltaTime, const b
 		{
 			World->QueuePlayerFeedEdge(EElysiumUseEdge::Released);
 		}
-		// LIFE5 — the combat buttons, forwarded as a LEVEL rather than as edge pairs. Retail keeps
+		// The combat buttons, forwarded as a LEVEL rather than as edge pairs. Retail keeps
 		// one current-button field on the player (`+0x2088`) and every consumer reads the bits it
 		// wants off it: the block classifier takes a held bit, the weapon frame derives its own press
 		// edges (`docs/vtmb/controls.md` § "Attack, block and weapon commands"). So what crosses here
@@ -200,8 +199,7 @@ void AElysiumPlayerController::RegisterCommands()
 	// the whole transport: `FElysiumCommands::Invoke` latches a declared button-pair verb's bit into
 	// the user command whether or not anything has bound a handler to it, the pre-move sample
 	// forwards the combat mask to the world, and `FElysiumEntityWorld::UpdatePlayerWeaponFrame`
-	// drains it after the move — including the sign panel's first refusal, which used to live on
-	// this verb.
+	// drains it after the move — including the sign panel's first refusal.
 
 	Bindings.Add(Registry.Bind(TEXT("noclip"), [this](const FElysiumCommandCall&)
 	{

@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -124,11 +124,11 @@ namespace ElysiumProgressionTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// ==================================================================================================
+
 // 9.4d — the quest log: the decision and the journal bookkeeping, with no world and no disk.
 // `FElysiumQuestTables` is plain C++ with public arrays, so the catalogue below is hand-built and
 // every rule `docs/vtmb/game_runtime.md` -> "Quests" records is driven directly.
-// ==================================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestLogTest, "Elysium.Substrate.QuestLog", GElysiumTestFlags)
 
@@ -295,12 +295,12 @@ bool FElysiumQuestLogTest::RunTest(const FString&)
 	return true;
 }
 
-// ==================================================================================================
-// The journal as a screen reads it (9.4e) — `ElysiumQuestView`. The read side of the same rows
+
+// The journal as a screen reads it — `ElysiumQuestView`. The read side of the same rows
 // `ElysiumQuestLog` writes: which column a row lands in, which hub tab shows it, and what order the
 // list is in. Pure over a catalogue and an array, so the whole screen's model is testable with no
 // world, no subsystem and no viewport.
-// ==================================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestViewTest, "Elysium.Substrate.QuestView", GElysiumTestFlags)
 
@@ -424,9 +424,9 @@ bool FElysiumQuestViewTest::RunTest(const FString&)
 }
 
 
-// ================================================================================================
-// Chargen — the pools, the price of a dot, and the row filter (9.4f)
-// ================================================================================================
+
+// Chargen — the pools, the price of a dot, and the row filter.
+
 
 namespace ElysiumChargenTest
 {

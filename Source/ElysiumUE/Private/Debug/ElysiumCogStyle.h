@@ -23,7 +23,6 @@
 // `elysium.CogTheme 0` restores stock ImGui dark for an A/B.
 namespace ElysiumCogStyle
 {
-	// --- Palette ---------------------------------------------------------------------------------
 	inline const ImVec4 Ink(0.047f, 0.039f, 0.043f, 0.94f);      // window ground
 	inline const ImVec4 InkChild(0.071f, 0.059f, 0.063f, 0.55f); // child / scrolling region
 	inline const ImVec4 InkPopup(0.086f, 0.071f, 0.075f, 0.98f); // popups, menus, tooltips
@@ -46,7 +45,6 @@ namespace ElysiumCogStyle
 	inline const ImVec4 Wound(0.882f, 0.310f, 0.290f, 1.00f);      // error / dead / missing
 	inline const ImVec4 Ash(0.478f, 0.451f, 0.435f, 1.00f);        // inert record, stubs
 
-	// --- Semantic aliases the windows use --------------------------------------------------------
 	inline const ImVec4& ColOk = Absinthe;        // healthy, live, loaded, current
 	inline const ImVec4& ColWarn = Candle;        // hidden, pending, totals worth the eye
 	inline const ImVec4& ColError = Wound;        // dead, failed, missing

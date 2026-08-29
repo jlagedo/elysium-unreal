@@ -382,7 +382,7 @@ void FElysiumCogWindow_GreenRoom::RenderModel(FElysiumGreenRoomRun& Lab)
 		ImGui::TextColored(ElysiumCogStyle::ColError, "%s", COG_TCHAR_TO_CHAR(*LastError));
 	}
 
-	// --- models -------------------------------------------------------------------------------
+	// Models.
 	ImGui::SeparatorText("Models");
 	ImGui::SetNextItemWidth(FieldWidth);
 	FCogWidgets::InputTextWithHint("##StemFilter", "(filter)", StemFilter);
@@ -480,7 +480,7 @@ void FElysiumCogWindow_GreenRoom::RebuildClipCache()
 
 void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 {
-	// --- clips --------------------------------------------------------------------------------
+	// Clips.
 	if (PendingStem.IsEmpty())
 	{
 		ImGui::TextDisabled("Select a model first on the Model tab.");
@@ -506,7 +506,7 @@ void FElysiumCogWindow_GreenRoom::RenderClips(FElysiumGreenRoomRun& Lab)
 			COG_TCHAR_TO_CHAR(*PendingStem));
 		return;
 	}
-	// --- filters ------------------------------------------------------------------------------
+	// Filters.
 	// A substring box alone is not a filter over 1,500 clips. Source, kind and root motion are the
 	// three axes that actually partition a vocabulary, and they are ANDed with the text.
 	const float ThirdWidth = (ImGui::GetContentRegionAvail().x
@@ -721,7 +721,7 @@ void FElysiumCogWindow_GreenRoom::RenderLayers(FElysiumGreenRoomRun& Lab)
 		return;
 	}
 
-	// CCC10's acceptance, one click per claim. Ahead of the hand controls because this is the door
+	// Preset acceptance, one click per claim. Ahead of the hand controls because this is the door
 	// the owner should come through: a body carries ~1,500 clips and each claim needs one specific
 	// layer, so a case that has to be hunted for is a case that does not get run.
 	ImGui::SeparatorText("Layer test cases (CCC10)");
@@ -1304,7 +1304,7 @@ void FElysiumCogWindow_GreenRoom::RenderEyes(FElysiumGreenRoomRun& Lab)
 		return;
 	}
 
-	// --- what the pass actually bound -------------------------------------------------------------
+	// What the pass actually bound.
 	//
 	// First, because every control below is meaningless on a body that bound nothing, and because
 	// this is the one eye failure that looks like a working eye: an unjoined section still draws the
@@ -1340,7 +1340,7 @@ void FElysiumCogWindow_GreenRoom::RenderEyes(FElysiumGreenRoomRun& Lab)
 	}
 	ImGui::BeginDisabled(Eyes.BoundCount == 0);
 
-	// --- where it looks ---------------------------------------------------------------------------
+	// Where it looks.
 	UElysiumEntityBodies::FElysiumEyeDebug& Debug = Bodies->EyeDebug();
 	ImGui::SeparatorText("Aim");
 	typedef UElysiumEntityBodies::FElysiumEyeDebug::EGaze EGaze;
@@ -1399,7 +1399,7 @@ void FElysiumCogWindow_GreenRoom::RenderEyes(FElysiumGreenRoomRun& Lab)
 	ImGui::TextColored(Eyes.bAiming ? ElysiumCogStyle::ColOk : ElysiumCogStyle::ColWarn,
 		Eyes.bAiming ? "aiming" : "resting on the authored aim");
 
-	// --- the lids ---------------------------------------------------------------------------------
+	// The lids.
 	ImGui::SeparatorText("Blink");
 	ImGui::Checkbox("Hold open", &Debug.bHoldBlink);
 	ImGui::SameLine();
@@ -1420,7 +1420,7 @@ void FElysiumCogWindow_GreenRoom::RenderEyes(FElysiumGreenRoomRun& Lab)
 		ImGui::TextDisabled("The envelope drives the material either way; a morph needs a facial rig.");
 	}
 
-	// --- the renderer's own knobs -----------------------------------------------------------------
+	// The renderer's own knobs.
 	ImGui::SeparatorText("Tuning");
 	ImGui::SetNextItemWidth(-GetDpiScale() * 90.f);
 	ImGui::SliderFloat("Iris size", &Debug.Tuning.EyeSize, -1.f, 2.f, "%.2f");
@@ -1460,7 +1460,7 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 	ImGui::TextDisabled("F1 hands the keyboard to this window, and hands it back.");
 	ImGui::Separator();
 
-	// --- what the mover published, and what the resolver made of it ---------------------------
+	// What the mover published, and what the resolver made of it.
 	const ImGuiTableFlags TableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders |
 		ImGuiTableFlags_ScrollX | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp;
 	if (ImGui::BeginTable("##DriveLocomotion", ElysiumCogLocomotion::NumColumns, TableFlags,
@@ -1496,7 +1496,7 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 		return;
 	}
 
-	// --- what the graph is posing from ---------------------------------------------------------
+	// What the graph is posing from.
 	ImGui::SeparatorText("Graph");
 	// The transition flag comes off the blend REPORT rather than off a live property: the graph
 	// carries no state machine to be mid-transition in, so the only place the crossing is still
@@ -1507,7 +1507,7 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 		Graph->MoveYaw, Graph->Speed, Graph->GridAxis0,
 		Graph->bHasBlendSpace ? "blend space" : "one clip");
 
-	// --- held, playing, or nothing published yet ------------------------------------------------
+	// Held, playing, or nothing published yet.
 	//
 	// Three states rather than two, because a body that has never been handed a selection poses the
 	// bind pose BY CONSTRUCTION — it has nothing to hold — and that is a correct frame that looks
@@ -1534,7 +1534,7 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 			COG_TCHAR_TO_CHAR(*Applied.AnimationName));
 	}
 
-	// --- the last real transition ----------------------------------------------------------------
+	// The last real transition.
 	//
 	// The blend that produced the pose on screen, not the current frame: a fade is over in a third of
 	// a second and is unobservable afterward, so the graph records the decision and this reads it
@@ -1577,7 +1577,7 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 			FMath::Max(0.0, NowSeconds - BlendReport.StampSeconds));
 	}
 
-	// --- the one-shot report the jump chain rides on --------------------------------------------
+	// The one-shot report the jump chain rides on.
 	const FElysiumOneShotReport& OneShot = Graph->GetOneShotReport();
 	const FElysiumAnimationSelection& Current = Map->GetPlayerAnimSelection();
 	ImGui::Text("one-shot: %s", OneShot.bInOneShotState ? "in state" : "--");
@@ -1594,7 +1594,7 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 	ImGui::TextColored(bGenerationMatches ? ElysiumCogStyle::ColDim : ElysiumCogStyle::ColWarn,
 		"gen %u/%u", OneShot.Generation, Current.Generation);
 
-	// --- the T-pose observable -------------------------------------------------------------------
+	// The T-pose observable.
 	//
 	// A dead pin, a null asset, a miss projected anyway: all of them evaluate a player node with
 	// nothing to play, and all of them answer the bind pose. The bones are the only thing that says
@@ -1628,7 +1628,7 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 		}
 	}
 
-	// --- where the body stands -------------------------------------------------------------------
+	// Where the body stands.
 	// The arena has no lanes: it is one flat plate rather than a bracket ladder, so the only
 	// placement question it has is "put me back at the start", which the mode row above answers.
 	// Drawing an empty lane combo here would read as a gym that failed to build.
@@ -1647,7 +1647,7 @@ void FElysiumCogWindow_GreenRoom::RenderDrive(FElysiumGreenRoomRun& Lab)
 			Room.Solids.Num(), Room.Pads.Num(), Room.Anchors.Num());
 		ImGui::TextDisabled("and they are the only thing in this runtime that breaks an eye line.");
 
-		// --- navigation pins --------------------------------------------------------------------
+		// Navigation pins.
 		ImGui::SeparatorText("Navigation pins");
 		FCogWidgets::InputTextWithHint("##PinName", "pin name", PendingPinName);
 		ImGui::SameLine();
@@ -1780,7 +1780,7 @@ void FElysiumCogWindow_GreenRoom::RenderContent()
 
 	// The mode selector, above the tabs because it changes what they mean. Review is the animation
 	// programme's stage — one body, one clip, the orbit; Drive is the shipping path with the
-	// movement gym under it (CCC6); Arena is the same shipping path on a navigable room, which is
+	// movement gym under it; Arena is the same shipping path on a navigable room, which is
 	// what a cast needs to path at all.
 	const bool bDriving = Lab->IsDriving();
 	const bool bArena = Lab->IsArena();

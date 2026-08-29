@@ -1,4 +1,4 @@
-// B4 — the scriptable echo of the visual-novel dialogue box. `elysium.dlg` dumps the open
+// The scriptable echo of the visual-novel dialogue box. `elysium.dlg` dumps the open
 // conversation; `elysium.dlg.choose` / `.advance` drive it exactly as clicking a choice / pressing a
 // number key does (through the world's PlayerDialog* chokepoints), so a headless QA agent (or the MCP
 // console_exec tool) can walk a `.dlg` beat with no UI. Non-Shipping only, like the other debug verbs.

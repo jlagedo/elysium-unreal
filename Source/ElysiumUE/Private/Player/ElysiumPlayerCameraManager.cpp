@@ -25,15 +25,12 @@ AElysiumPlayerCameraManager::AElysiumPlayerCameraManager()
 
 	// VtMB's pitch clamp (`cl_pitchup` / `cl_pitchdown`, both 89). It lives here because
 	// `UpdateRotation` now owns the integration and runs these limits through
-	// `ProcessViewRotation`; the engine's own default is ±89.9, which would quietly widen the clamp
-	// the router used to apply by hand.
+	// `ProcessViewRotation`; the engine's own default is ±89.9, which would quietly widen it.
 	ViewPitchMin = -ElysiumInput::PitchClampDegrees;
 	ViewPitchMax = ElysiumInput::PitchClampDegrees;
 }
 
-// =====================================================================================
 // The view
-// =====================================================================================
 
 UElysiumCameraComponent* AElysiumPlayerCameraManager::ResolveRig(AActor* Target)
 {
@@ -116,9 +113,7 @@ void AElysiumPlayerCameraManager::UpdateViewTargetInternal(FTViewTarget& OutVT, 
 	PublishSample(*Camera);
 }
 
-// =====================================================================================
-// The modern rig (CCC2 stage two)
-// =====================================================================================
+// The modern rig.
 
 void AElysiumPlayerCameraManager::SolveModernRig(UElysiumCameraComponent& Camera,
 	float DeltaSeconds)
@@ -250,9 +245,7 @@ void AElysiumPlayerCameraManager::PublishSample(const UElysiumCameraComponent& C
 	Sample.DamperDistance = ModernDistance;
 }
 
-// =====================================================================================
 // showdebug camera
-// =====================================================================================
 
 void AElysiumPlayerCameraManager::DisplayDebug(UCanvas* Canvas, const FDebugDisplayInfo& DebugDisplay,
 	float& YL, float& YPos)

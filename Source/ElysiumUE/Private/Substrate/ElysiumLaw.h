@@ -4,7 +4,7 @@
 
 #include "ElysiumEntityHandle.h"
 
-// Cycle 10b — the player law channels: activity levels and their deadlines, the two witnessed
+// The player law channels: activity levels and their deadlines, the two witnessed
 // incident consumers, the delayed police response, the Masquerade rate limiter and the
 // pursuit/alert state machine.
 //
@@ -273,7 +273,7 @@ namespace ElysiumLaw
 	EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 		const FElysiumEntityHandle& Witness, const FVector& Position);
 
-	// ============================ Cycle 10c hunk 1/3 — the scare queue ===========================
+	// --- The scare queue ---
 	// "A supernatural flee-only branch instead inserts a 16-byte player-owned scare record keyed by
 	// NPC identity: a repeat keeps the greater severity and refreshes its timestamp.
 	// `PlayerRuleUpdate` selects from that queue, submits the supernatural incident and removes
@@ -299,14 +299,13 @@ namespace ElysiumLaw
 	// remaining one and submit it as a supernatural incident. Returns whether one was consumed.
 	bool ConsumeScareQueue(FElysiumPlayer& Player, double Now);
 
-	// ============================ Cycle 10c hunk 2/3 — the witness record ========================
+	// --- The witness record ---
 	// The world-event lane's producer is the criminal/supernatural activity WRITE itself: an act
 	// that counted an incident publishes an expiring record (severity, origin, offender) into the
 	// world's law-record store, which is how an NPC that never saw the offender still witnesses the
 	// crime. The store and its per-NPC acceptance are `Substrate/ElysiumNpcWitness.h`; the choice of
 	// producer, and why the witnessed incident cannot be one, is marked at the publish site in
 	// `ApplyTimedWrite`.
-	// =============================================================================================
 
 	// ------------------------------------------------------------------------------------------
 	// The wiring half — the world area
@@ -358,9 +357,8 @@ namespace ElysiumLaw
 	void FireWorldEvent(FElysiumEntityWorld& World, const FName& Output,
 		const FElysiumEntityHandle& Activator);
 
-	// The two pursuit counters, as the systems that own cop and hunter bodies will drive them.
-	// They are the door for the edge outputs; nothing in this cycle produces a cop, so the only
-	// callers today are the tests and whatever lands the spawn seam.
+	// The two pursuit counters, as the systems that own cop and hunter bodies drive them.
+	// They are the door for the edge outputs; nothing here produces a cop.
 	void SetCopPursuitCount(FElysiumPlayer& Player, int32 NewCount);
 	void SetHunterPursuitCount(FElysiumPlayer& Player, int32 NewCount);
 }

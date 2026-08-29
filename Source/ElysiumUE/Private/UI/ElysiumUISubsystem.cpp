@@ -40,8 +40,8 @@ void UElysiumUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	Super::Initialize(Collection);
 
 	// The character stage stands real actors in the map's world (UI/ElysiumCharacterStage.h), so the
-	// screen holding it is application-lifetime but its rig is map-epoch state (S4). Close the screen
-	// at the boundary, while that world is still standing.
+	// screen holding it is application-lifetime but its rig is map-epoch state. Close the screen at
+	// the boundary, while that world is still standing.
 	if (UElysiumMapSubsystem* Maps = Collection.InitializeDependency<UElysiumMapSubsystem>())
 	{
 		MapEpochRetiredHandle = Maps->OnMapEpochRetired().AddUObject(
@@ -78,7 +78,7 @@ void UElysiumUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		ECVF_Default));
 
 	// The two look knobs are read at tree-build time, so an open screen has to be rebuilt for a
-	// console A/B to show. They are declared by the menu's own translation unit (they are its
+	// console change to show. They are declared by the menu's own translation unit (they are its
 	// knobs); this subsystem is what owns a live screen, so the sink lives here. Found rather than
 	// referenced because a static TAutoConsoleVariable in another TU has no header.
 	static const TCHAR* const LookCvars[] = { TEXT("elysium.MenuLayout"), TEXT("elysium.MenuScrim") };
@@ -124,9 +124,7 @@ void UElysiumUISubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	RegisterCommands();
 }
 
-// ================================================================================================
-// `questlog` / `chareditor` — two doors into one screen
-// ================================================================================================
+// `questlog` / `chareditor` — two doors into one screen.
 
 void UElysiumUISubsystem::RegisterCommands()
 {
@@ -296,9 +294,7 @@ void UElysiumUISubsystem::HideMenu()
 	UE_LOG(LogElysiumUI, Log, TEXT("menu hidden"));
 }
 
-// ================================================================================================
-// The character screen
-// ================================================================================================
+// The character screen.
 
 void UElysiumUISubsystem::ShowCharacterScreen(EElysiumCharacterTab Tab)
 {

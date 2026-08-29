@@ -14,9 +14,7 @@ namespace
 	using ElysiumVdata::Index;
 }
 
-// ================================================================================================
-// 16. system/sound_volume_table.txt
-// ================================================================================================
+// `system/sound_volume_table.txt`
 
 bool FElysiumSoundVolumeTable::Load(FString& OutError)
 {

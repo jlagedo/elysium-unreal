@@ -80,8 +80,8 @@ namespace
 	 * How far a free particle may leave its skinned position is not a property of the garment as a
 	 * whole. A waistband particle should barely move and a hem particle legitimately swings, and
 	 * both are on the same sheet — so a single constant serves neither. Measured against each
-	 * garment's own edge length, the 15 cm this used to hand out was eighteen edge lengths on
-	 * Rosa's bead cord and a little over one on the Sheriff's cloak.
+	 * garment's own edge length, a 15 cm leash is eighteen edge lengths on Rosa's bead cord and a
+	 * little over one on the Sheriff's cloak.
 	 *
 	 * Geodesic rather than straight-line because the leash bounds travel over the surface the
 	 * constraints act on, which is also what `FClothEngineTools::GenerateTethers` measures when it
@@ -445,7 +445,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			TuningTable->ResolveGarment(Stem, GarmentIndex, TuningMaterial, Result.Errors);
 		Result.Material = TuningMaterial.ToString();
 
-		// --- the authored simulation mesh -------------------------------------------------
+		// The authored simulation mesh.
 		TArray<FVector3f> Rest;
 		for (const TSharedPtr<FJsonValue>& Value : Garment->GetArrayField(TEXT("rest_positions")))
 		{
@@ -484,7 +484,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			}
 		}
 
-		// --- collision, first ---------------------------------------------------------------
+		// Collision, first.
 		//
 		// Built ahead of the collection because Chaos reads the physics asset through the
 		// COLLECTION, not off the built asset: `Build` consumes what the collection names, so a
@@ -496,7 +496,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		UPhysicsAsset* Physics = BuildPhysicsAsset(
 			Garment, PackageDirectory, BaseName + TEXT("_PHYS"), Mesh, Bodies, Result.Errors);
 
-		// --- the collection ---------------------------------------------------------------
+		// The collection.
 		const TSharedRef<FManagedArrayCollection> Collection = MakeShared<FManagedArrayCollection>();
 		FCollectionClothFacade Cloth(Collection);
 		Cloth.DefineSchema();
@@ -551,7 +551,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		FCollectionClothSimPatternFacade Pattern = Cloth.GetSimPattern(PatternIndex);
 		Pattern.Initialize(Flat, Rest, Indices);
 
-		// --- binding ----------------------------------------------------------------------
+		// Binding.
 		//
 		// The engine's own converter binds the simulation mesh to the root bone and lets the
 		// solver take it from there. That is done first here so every vertex has valid skinning
@@ -613,7 +613,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 				TEXT("anchor bone '%s' is not on the bound skeleton"), *Bone));
 		}
 
-		// --- pinning: VtMB's anchored prefix as a zero max distance ------------------------
+		// Pinning: VtMB's anchored prefix as a zero max distance.
 		//
 		// Legacy mask convention: the map holds CENTIMETRES and the property that reads it keeps
 		// the unit range, because the solver evaluates `Low + Map * (High - Low)`. Zero is
@@ -644,7 +644,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			Result.KinematicVertices += bPinned ? 1 : 0;
 		}
 
-		// --- the config -------------------------------------------------------------------
+		// The config.
 		//
 		// Built the way the engine's own default-config node builds it: a `UChaosClothConfig`
 		// pair is turned into a property collection by `FClothingSimulationConfig` and copied
@@ -737,7 +737,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		Result.ConfigProperties =
 			::Chaos::Softs::FCollectionPropertyConstFacade(Collection).Num();
 
-		// --- long range attachment --------------------------------------------------------
+		// Long range attachment.
 		//
 		// Tethers are what actually hold a garment on a body. They cap the geodesic distance
 		// from every free particle to the kinematic set it hangs from, so a skirt cannot stretch
@@ -751,7 +751,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 		FClothEngineTools::GenerateTethers(Collection, MaxDistanceMap,
 			ClothConfig->bUseGeodesicDistance, FVector2f(0.f, 1.f));
 
-		// --- the render surface: the body's own geometry, driven per vertex ---------------
+		// The render surface: the body's own geometry, driven per vertex.
 		//
 		// VtMB does not add a garment to a character. It draws the character's own surface and
 		// SUBSTITUTES simulated positions into the vertices its selector map names, leaving every
@@ -964,7 +964,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 				RenderTangentV[Index] = RenderTangentV[Index].GetSafeNormal(
 					UE_SMALL_NUMBER, FVector3f::YAxisVector);
 
-				// --- the binding -------------------------------------------------------------
+				// The binding.
 				//
 				// The deformer evaluates `Bary.X*(A + NA*W) + ...` three times, for the position,
 				// for a point offset along the normal, and for one offset along the tangent; it
@@ -1073,7 +1073,7 @@ TArray<FElysiumClothBuildResult> UElysiumClothBuildLibrary::BuildClothAssetsFrom
 			}
 		}
 
-		// --- the asset --------------------------------------------------------------------
+		// The asset.
 		FString ObjectPath;
 		UPackage* Package = MakePackage(PackageDirectory, BaseName, ObjectPath);
 		UChaosClothAsset* Asset = NewObject<UChaosClothAsset>(

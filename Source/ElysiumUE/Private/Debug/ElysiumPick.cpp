@@ -27,7 +27,7 @@ namespace
 {
 	constexpr double PickReach = 100000.0;   // 1 km, the same reach as the ent_* crosshair picker
 
-	// --- ray primitives ----------------------------------------------------------------------
+	// Ray primitives.
 
 	// Slab test, reporting the entry parameter. D is never normalized here (it comes through
 	// inverse transforms unnormalized so `t` stays in the world parameterization), so the
@@ -54,7 +54,7 @@ namespace
 		return T1 >= T0;
 	}
 
-	// --- highlight geometry ------------------------------------------------------------------
+	// Highlight geometry.
 
 	// Append a box's 12 edges (as a line list) and 12 triangles (as a triangle list), both in
 	// world space. Corners come from the local box through Xform, so a rotated body reads as an
@@ -95,7 +95,7 @@ namespace
 		}
 	}
 
-	// --- the geometry caster -----------------------------------------------------------------
+	// The geometry caster.
 
 	// What the ray hit in the baked level. The map's geometry is real static-mesh assets now, so
 	// this is one physics trace on the dedicated ElysiumPick channel rather than the CPU triangle
@@ -209,7 +209,7 @@ bool ElysiumPick::Trace(UWorld* World, const FVector& Origin, const FVector& Dir
 	AElysiumMapActor* Map = FindMapActor(World);
 	FElysiumEntityWorld* EW = Map ? Map->GetEntityWorld() : nullptr;
 
-	// --- 1) the baked level's geometry -------------------------------------------------------
+	// 1) The baked level's geometry.
 	// This runs first so RenderT ends up as the distance to the nearest thing that actually
 	// renders. The gizmo depth test below needs exactly that: brush bodies draw nothing, so an
 	// invisible trigger volume must not occlude a gizmo marker behind it.
@@ -217,7 +217,7 @@ bool ElysiumPick::Trace(UWorld* World, const FVector& Origin, const FVector& Dir
 	FBakedHit Baked;
 	CastBaked(World, Origin, D, RenderT, Baked);
 
-	// --- 2) entity brush bodies (physics) ----------------------------------------------------
+	// 2) Entity brush bodies (physics).
 	// A multi-trace returns trigger overlaps as well as blocking hits in near->far order, so an
 	// invisible trigger volume is pickable and a wall still occludes what is behind it.
 	double BodyT = PickReach;
@@ -250,7 +250,7 @@ bool ElysiumPick::Trace(UWorld* World, const FVector& Origin, const FVector& Dir
 		}
 	}
 
-	// --- 3) World Viz gizmo markers ----------------------------------------------------------
+	// 3) World Viz gizmo markers.
 	// A gizmo outranks whatever it is drawn over: it is a deliberate handle, and for the ~1,000
 	// bodiless entities on a map (lights, ambient_generic, logic) it is the only clickable
 	// representation there is. "Drawn" is the whole test — Visible depth-tests the markers, so
@@ -339,7 +339,7 @@ bool ElysiumPick::Trace(UWorld* World, const FVector& Origin, const FVector& Dir
 		HitBody = nullptr;
 	}
 
-	// --- resolve the winner into a result ----------------------------------------------------
+	// Resolve the winner into a result.
 	if (Baked.IsSet())
 	{
 		Out.Kind = Baked.bProp ? EElysiumPickKind::PropInstance : EElysiumPickKind::WorldSurface;
@@ -352,7 +352,7 @@ bool ElysiumPick::Trace(UWorld* World, const FVector& Origin, const FVector& Dir
 		Out.Distance = BestT;
 
 		// The bake names each material slot after the OBJ group key ("<material>@<cubemap>"), so
-		// the slot name is the same string the runtime-built world used to report.
+		// the slot name is the same string the runtime-built world reports.
 		UStaticMesh* Mesh = Baked.Comp->GetStaticMesh();
 		if (Mesh != nullptr)
 		{
@@ -432,7 +432,7 @@ bool ElysiumPick::Trace(UWorld* World, const FVector& Origin, const FVector& Dir
 		return true;
 	}
 
-	// --- last resort: a bodiless logic entity near the ray -----------------------------------
+	// Last resort: a bodiless logic entity near the ray.
 	// Logic entities have no geometry to click, so (as the ent_* picker does) the one whose origin
 	// lies nearest the ray wins, capped so an off-screen entity is never silently selected. This
 	// only runs with gizmos off: a 2 m perpendicular tolerance is far looser than the 28 cm marker

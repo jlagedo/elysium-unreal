@@ -127,9 +127,7 @@ const TCHAR* ChannelName(EChannel Channel)
 	}
 }
 
-// ================================================================================================
-// The authored threshold rule
-// ================================================================================================
+// --- The authored threshold rule ---
 
 int32 ResolveThreshold(int32 Authored)
 {
@@ -149,9 +147,7 @@ bool PassesThreshold(int32 Level, int32 ResolvedThreshold)
 	return Level >= ResolvedThreshold;
 }
 
-// ================================================================================================
-// The window rule
-// ================================================================================================
+// --- The window rule ---
 
 bool IsWindowOpen(double Deadline, double Now)
 {
@@ -165,9 +161,7 @@ bool IsChannelOpen(const FElysiumNpc& Npc, EChannel Channel, double Now)
 	return IsWindowOpen(Npc.Witness.Channel(Channel).IgnoreUntil, Now);
 }
 
-// ================================================================================================
-// The global-event lane's record store
-// ================================================================================================
+// --- The global-event lane's record store ---
 
 FElysiumLawEvent FElysiumLawEventBus::Publish(EChannel Channel, int32 Severity,
 	const FVector& Origin, const FElysiumEntityHandle& Offender, double Now)
@@ -226,9 +220,7 @@ void PublishLawEvent(FElysiumEntityWorld* World, EChannel Channel, int32 Severit
 
 }   // namespace ElysiumNpcWitness
 
-// ================================================================================================
-// FElysiumNpcWitness — the per-NPC retained state
-// ================================================================================================
+// --- The per-NPC retained state ---
 
 void FElysiumNpcWitness::Reset()
 {
@@ -289,9 +281,7 @@ void FElysiumNpcWitness::Rebase(const FElysiumEntityWorld& World)
 namespace ElysiumNpcWitness
 {
 
-// ================================================================================================
-// The three recovered deadline setters
-// ================================================================================================
+// --- The three recovered deadline setters ---
 
 void OpenFeedWindows(FElysiumNpc& Victim, double Now)
 {
@@ -342,9 +332,7 @@ void OnClosestPlayerUpdated(FElysiumNpc& Npc, const FElysiumPlayer& Player, doub
 	Npc.Witness.NosferatuIgnoreUntil = Now + NosferatuWindowSeconds;
 }
 
-// ================================================================================================
-// The gather half
-// ================================================================================================
+// --- The gather half ---
 
 bool IsLawPassSuppressed(const FElysiumNpc&)
 {
@@ -568,9 +556,7 @@ void GatherLawConditions(FElysiumNpc& Npc, double Now, FElysiumNpcConditions& Ou
 	}
 }
 
-// ================================================================================================
-// The select half
-// ================================================================================================
+// --- The select half ---
 
 namespace
 {

@@ -2,20 +2,17 @@
 
 #include "CoreMinimal.h"
 
-// What a harness run may record, and how each value is compared (CCC0).
+// What a harness run may record, and how each value is compared.
 //
-// The harnesses grew one hand-rolled format each, and a comparator that hardcoded which columns it
-// knew about — so a column in neither of its two tolerance classes was written to disk and silently
-// never checked. This table closes that by construction: **a channel's comparison rule is part of
-// its declaration**, the run publishes the table it used as a manifest beside its own output, and
-// the differ reads the manifest rather than carrying a second copy. Registering a channel *is*
-// registering its comparison, and a channel nothing declares cannot be written at all.
+// **A channel's comparison rule is part of its declaration**: the run publishes the table it used
+// as a manifest beside its own output, and the differ reads the manifest rather than carrying a
+// second copy. Registering a channel *is* registering its comparison, and a channel nothing
+// declares cannot be written at all.
 //
 // This is the pure half — a static table and two lookups, no UObject and no filesystem, so it is
 // asserted with no world (`Elysium.Substrate.ChannelRegistry`). `FElysiumChannelRecorder` is the
-// engine half that fills it in. The camera and animation producers add rows here when they land
-// (`CCC2`, `CCC1`/`CCC4`); a new producer is a table edit and some writes, never a second format,
-// and the differ does not change at all.
+// engine half that fills it in. A new producer is a table edit and some writes, never a second
+// format, and the differ does not change at all.
 
 namespace ElysiumChannels
 {
@@ -53,10 +50,10 @@ namespace ElysiumChannels
 		// for no reason.
 		int8 Precision;
 		const TCHAR* Unit;      // "u", "u/s", "deg", "s", "" — what the tolerance is measured in
-		// True when the value moves if the speed authority moves (`CCC7`). Every per-frame channel
-		// is one: *when* a body reaches a feature depends on its gait even when *whether* it does
-		// not. A committed baseline compares only the channels this is false for, which is what
-		// lets the speed-invariant thresholds be promoted now and the rest wait.
+		// True when the value moves if the speed authority moves. Every per-frame channel is one:
+		// *when* a body reaches a feature depends on its gait even when *whether* it does not. A
+		// committed baseline compares only the channels this is false for, so speed-invariant
+		// thresholds are independent of the gait tables.
 		bool bSpeedDependent;
 		const TCHAR* Help;
 	};

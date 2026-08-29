@@ -109,7 +109,7 @@ namespace ElysiumAiScriptedSchedule
  * The order one `aiscripted_schedule` pushed onto one NPC, and the whole of what the two moving
  * programs read.
  *
- * SESSION STATE, NOT SAVE STATE (K8). It carries a live goal handle and a route resolved out of the
+ * SESSION STATE, NOT SAVE STATE. It carries a live goal handle and a route resolved out of the
  * current map epoch; the two things a push durably changes — the mind's state and, for mode 3, the
  * committed enemy — are already carried by the `NpcMind` and `NpcSenses` save blocks. A save cannot
  * normally be taken while an order is in flight either, because `FElysiumNpc::SaveBlockReason`

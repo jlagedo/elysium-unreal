@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -124,7 +124,7 @@ namespace ElysiumEntityLifecycleTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// =====================================================================================
+
 // S2 — the frame order (runtime-architecture.md §3), asserted at both levels it is declared
 // at: the engine tick table (tick groups + the pause split, read off the class defaults —
 // the late-bound prerequisites are wired at registration and belong to the Play tier), and
@@ -134,7 +134,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // ProcessUsercmds -> CPlayerMove::RunCommand chain while draining the client's `clc_move`
 // message, strictly before SV_Frame calls GameFrame — so the pawn has already moved by the
 // time the first think or queued event runs.
-// =====================================================================================
+
 
 // The preset New Game entries. Held as data so registration and the requests they build are
 // assertable without a game instance — every row must name a verb and an entry point, spell each
@@ -724,7 +724,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 		static_cast<int32>(Map->PostMoveTickFunction.TickGroup)
 			> static_cast<int32>(Map->PreMoveTickFunction.TickGroup));
 
-	// CCC1 — and it is later than the mover too, which is what makes the post-move pass a safe place
+	// And it is later than the mover too, which is what makes the post-move pass a safe place
 	// to read the published body sample: by the time it runs, the mover's tick tail has written it.
 	//
 	// What this does **not** cover is the player visual's own ordering. `AElysiumMapActor::
@@ -739,7 +739,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 				> static_cast<int32>(Mover->PrimaryComponentTick.TickGroup));
 	}
 
-	// CCC4 — the cast's half of the same rule. An NPC body's actor tick carries no ordering against
+	// The cast's half of the same rule. An NPC body's actor tick carries no ordering against
 	// its own CharacterMovement (the engine wires no such prerequisite; `ACharacter` orders only the
 	// mesh), so a selection read from `Tick` would be reading whichever of the two happened to
 	// register first. The animation pass is therefore its own tick function, in the same group as the
@@ -767,7 +767,7 @@ bool FElysiumFrameOrderTest::RunTest(const FString&)
 	}
 
 	// Step 10 rebuilds the view state after everything that could change it has run, so it is later
-	// than all four map passes (11.8).
+	// than all four map passes.
 	const UElysiumPresentationSubsystem* Present = GetDefault<UElysiumPresentationSubsystem>();
 	if (TestNotNull(TEXT("presentation subsystem class defaults"), Present))
 	{
@@ -909,9 +909,9 @@ bool FElysiumHullCollisionBoundsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // FElysiumClassRegistry — the case-folded base-chain walk that drives all I/O dispatch.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRegistryTest, "Elysium.Substrate.Registry", GElysiumTestFlags)
 bool FElysiumRegistryTest::RunTest(const FString&)
@@ -952,10 +952,10 @@ bool FElysiumRegistryTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // RE29 — CGlobalEntityList::FindEntityByName's exact matching rule. Only a final `*` is special;
 // matching is case-insensitive, and a bare star selects every named entity.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEntityNameMatchTest,
 	"Elysium.Substrate.EntityNameMatch", GElysiumTestFlags)
@@ -976,11 +976,11 @@ bool FElysiumEntityNameMatchTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // End-to-end I/O through a bare world: logic_relay -> math_counter, no bodies, no PIE.
 // Exercises both chokepoints (AcceptInput + the event queue), FireOutput, and the
 // "falsy when dead" identity contract.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumIOChainTest, "Elysium.Substrate.IOChain", GElysiumTestFlags)
 bool FElysiumIOChainTest::RunTest(const FString&)

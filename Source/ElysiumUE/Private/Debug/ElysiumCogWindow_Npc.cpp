@@ -213,9 +213,7 @@ void FElysiumCogWindow_Npc::GatherNpcs(TArray<FElysiumNpc*>& Out) const
 	}
 }
 
-// ================================================================================================
-// The cast — the one tab that writes
-// ================================================================================================
+// The cast — the one tab that writes.
 
 void FElysiumCogWindow_Npc::RenderSpawnControls(FElysiumEntityWorld& World)
 {
@@ -260,7 +258,7 @@ void FElysiumCogWindow_Npc::RenderSpawnControls(FElysiumEntityWorld& World)
 	const float Third = FMath::Max(GetDpiScale() * 120.0f,
 		(ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x * 2.0f) / 3.0f);
 
-	// --- body ---------------------------------------------------------------------------------
+	// Body.
 	ImGui::TextDisabled("body");
 	ImGui::SetNextItemWidth(Third);
 	FCogWidgets::InputTextWithHint("##StemFilter", "(filter bodies)", StemFilter);
@@ -287,7 +285,7 @@ void FElysiumCogWindow_Npc::RenderSpawnControls(FElysiumEntityWorld& World)
 		bCatalogsDirty = true;
 	}
 
-	// --- stat template ------------------------------------------------------------------------
+	// Stat template.
 	// Named, not optional-by-omission: a character with no `stattemplate` seeds a zeroed sheet, and
 	// the damage path is fail-closed against one. That is the difference between an opponent that
 	// can be killed and one that silently absorbs everything.
@@ -322,7 +320,7 @@ void FElysiumCogWindow_Npc::RenderSpawnControls(FElysiumEntityWorld& World)
 		ImGui::TextColored(ElysiumCogStyle::ColError, "no rulebook");
 	}
 
-	// --- class and weapon -----------------------------------------------------------------------
+	// Class and weapon.
 	ImGui::TextDisabled("class and weapon");
 	ImGui::SetNextItemWidth(Third);
 	if (ImGui::BeginCombo("##Class", COG_TCHAR_TO_CHAR(*PendingClass)))
@@ -360,7 +358,7 @@ void FElysiumCogWindow_Npc::RenderSpawnControls(FElysiumEntityWorld& World)
 		ImGui::EndCombo();
 	}
 
-	// --- reaction and placement -------------------------------------------------------------------
+	// Reaction and placement.
 	ImGui::TextDisabled("reaction to the player, and where");
 	ImGui::SetNextItemWidth(Third);
 	if (ImGui::BeginCombo("##Reaction",
@@ -415,7 +413,7 @@ void FElysiumCogWindow_Npc::RenderSpawnControls(FElysiumEntityWorld& World)
 		ImGui::EndCombo();
 	}
 
-	// --- the navigation gate ----------------------------------------------------------------------
+	// The navigation gate.
 	// Stated before the button rather than after the spawn. A character standing on a room with no
 	// Recast graph looks exactly like a character with broken AI: it acquires an enemy, selects a
 	// chase, and every `TASK_GET_PATH_TO_ENEMY` fails by name. Saying so up front is the difference
@@ -518,7 +516,7 @@ void FElysiumCogWindow_Npc::RenderPlayerLoadout(FElysiumEntityWorld& World)
 		return;
 	}
 
-	// --- the character preset ---------------------------------------------------------------------
+	// The character preset.
 	// Entering a stage world seeds the session's character, so this is the re-seeder rather than the
 	// seeder: it swaps the standing player for a baseline of any of the seven clans, which is how a
 	// clan's own gifts, banes and disciplines get exercised without relaunching. In a map it is a
@@ -603,7 +601,7 @@ void FElysiumCogWindow_Npc::RenderPlayerLoadout(FElysiumEntityWorld& World)
 	ImGui::SameLine();
 	ImGui::TextDisabled("slot1..slot8 select · +attack · +reload · discipline");
 
-	// --- what is actually in the player's hands ---------------------------------------------------
+	// What is actually in the player's hands.
 	// Its own section rather than a row in the facts table, because it answers three questions at
 	// once and two of them are not obvious from the model: what is drawn, whether it is a weapon the
 	// combat path can drive, and — the one that costs an afternoon when it is missing — what its
@@ -798,9 +796,7 @@ void FElysiumCogWindow_Npc::RenderCast(FElysiumEntityWorld& World)
 	RenderRoster(World, Npcs);
 }
 
-// ================================================================================================
-// The decision chain
-// ================================================================================================
+// The decision chain.
 
 void FElysiumCogWindow_Npc::RenderMind(FElysiumNpc& Npc)
 {
@@ -1180,9 +1176,7 @@ void FElysiumCogWindow_Npc::RenderCombat(FElysiumEntityWorld& World, FElysiumNpc
 	}
 }
 
-// ================================================================================================
-// The world overlay
-// ================================================================================================
+// The world overlay.
 
 void FElysiumCogWindow_Npc::GameTick(float DeltaTime)
 {
@@ -1259,11 +1253,7 @@ void FElysiumCogWindow_Npc::DrawWorldOverlay() const
 	}
 }
 
-// ================================================================================================
-// The body-facing half, unchanged
-// ================================================================================================
-
-// The facial flex rig (12.3). Everything below a flex controller is arithmetic, so this tab is the
+// The facial flex rig. Everything below a flex controller is arithmetic, so this tab is the
 // whole system in one view: the 44 controllers as sliders, and beside them the 65 flexdesc weights
 // the RPN rules derive and the morph-target weights the per-flex ramps derive from those. Sliding
 // `blink` moves four flexdescs and four morph targets and closes both pairs of lids.
@@ -1390,7 +1380,7 @@ void FElysiumCogWindow_Npc::RenderFacial()
 	}
 }
 
-// The body sample, from both producers at once (CCC1). The player's mover published its row at its
+// The body sample, from both producers at once. The player's mover published its row at its
 // own tick tail; each NPC row is pulled from its motor here. What the view is for is the claim the
 // contract makes — that these are the same record — so they are drawn by one function over one
 // struct rather than by two panels that happen to look alike.
@@ -1515,8 +1505,6 @@ void FElysiumCogWindow_Npc::RenderAnimEventCensus()
 	}
 	ImGui::EndTable();
 }
-
-// ================================================================================================
 
 void FElysiumCogWindow_Npc::RenderContent()
 {

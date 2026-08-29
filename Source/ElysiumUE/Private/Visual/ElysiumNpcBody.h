@@ -10,7 +10,7 @@
 class AElysiumMapActor;
 class AElysiumNpcBody;
 
-// CCC4 — the cast's animation pass, in TG_PostPhysics. A SECOND tick function rather than the
+// The cast's animation pass, in TG_PostPhysics. A SECOND tick function rather than the
 // actor's own tick, because the engine wires no prerequisite between an actor's tick and its own
 // CharacterMovement: a selection read from `Tick` would be reading whichever of the two happened to
 // register first. Declaring it as a class default is also what lets `Elysium.Substrate.FrameOrder`
@@ -67,7 +67,7 @@ public:
 	virtual void Tick(float DeltaSeconds) override;
 	virtual void RegisterActorTickFunctions(bool bRegister) override;
 
-	// CCC4 — this body's own animation pass, driven from the tick function below.
+	// This body's own animation pass, driven from the tick function below.
 	void AnimTick(float DeltaSeconds);
 	// The frame's selection record. Never null, for the same reason the player's is not.
 	const FElysiumAnimationSelection& GetAnimSelection() const;
@@ -83,7 +83,7 @@ public:
 	void GetAnimTranslationContext(FString& OutActorClassname, FString& OutWeaponClassname,
 		EElysiumNpcState& OutActorState) const;
 
-	// LIFE4 — the channel arbitration slot on this body's driver. An action family claims a channel
+	// The channel arbitration slot on this body's driver. An action family claims a channel
 	// here; the driver's next anim pass ranks the claim against the locomotion publish and the
 	// record carries the verdict. Builds the driver when the claim arrives ahead of the first anim
 	// pass, so a same-frame scripted beat is not dropped. Handle contract as on the driver: 0 is a
@@ -94,10 +94,10 @@ public:
 	// — a shot fired during a reload composes on the higher index.
 	int32 OverlaySlotForHandle(uint32 Handle) const;
 	bool ReleaseAnimRequest(uint32 Handle);
-	// LIFE5 — every standing claim at once, for the death transaction. A driver that was never built
+	// Every standing claim at once, for the death transaction. A driver that was never built
 	// holds nothing, so this does not build one.
 	int32 ReleaseAllAnimRequests();
-	// LIFE5 — the claim standing on one channel, or null. Read-only, and deliberately not building a
+	// The claim standing on one channel, or null. Read-only, and deliberately not building a
 	// driver either, for the same reason: a body that has never been claimed on holds nothing.
 	const FElysiumAnimationRequest* ActiveAnimRequest(EElysiumAnimChannel Channel) const;
 
@@ -144,7 +144,7 @@ private:
 	// body brushing a doorframe never leaves a normal for a chain that is not running.
 	bool bLaunched = false;
 
-	// CCC7 — build the driver if it does not exist yet and re-point it at the model this body wears.
+	// Build the driver if it does not exist yet and re-point it at the model this body wears.
 	// The driver holds the body's gait tables, and a travel request wants them before the first
 	// animation pass has run.
 	void EnsureAnimDriver();
@@ -154,7 +154,7 @@ private:
 	// resolved in one place and re-applied from every one of them.
 	void ApplyCollisionState();
 	void ApplyCrowdState();
-	// **The one speed number** (LIFE3): what this body's mover is commanded with while a leg driven
+	// **The one speed number**: what this body's mover is commanded with while a leg driven
 	// by one of its own fans is in flight, cm/s.
 	//
 	// It is the cell the record just published, read back off the published record rather than
@@ -168,7 +168,7 @@ private:
 	float RequestedAcceptanceCm = 20.0f;
 	float RequestedYaw = 0.0f;
 	// Which of this body's own authored fans the in-flight move's speed came from — unset for a
-	// caller-authored speed, which `AnimTick` must never overwrite (CCC7/LIFE, the equip-mid-leg fix).
+	// caller-authored speed, which `AnimTick` must never overwrite (the equip-mid-leg fix).
 	TOptional<EElysiumNpcGaitKind> RequestedGaitKind;
 	bool bMoveRequested = false;
 	bool bFaceRequested = false;
@@ -188,7 +188,7 @@ private:
 	FElysiumEntityHandle OwningEntity;
 	TWeakObjectPtr<AElysiumMapActor> OwningMap;
 
-	// CCC4 — the same driver the player body runs, on the same contract. Held by value: it is plain
+	// The same driver the player body runs, on the same contract. Held by value: it is plain
 	// C++ with no UObject in it, and it dies with the body.
 	TPimplPtr<struct FElysiumAnimationDriver> AnimDriver;
 	FString ModelStem;

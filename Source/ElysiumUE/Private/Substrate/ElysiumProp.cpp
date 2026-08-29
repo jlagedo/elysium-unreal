@@ -17,9 +17,9 @@
 
 DEFINE_LOG_CATEGORY(LogElysiumProp);
 
-// A/B toggle for the dynamic-prop bodies (mirrors elysium.NpcBodies). Read in the leaf's Spawn, so it
-// takes effect on the next map load: 1 stands the meshes, 0 leaves the props bodiless records (their
-// I/O still resolves — this only gates the visual).
+// Console gate for the dynamic-prop bodies (mirrors elysium.NpcBodies). Read in the leaf's Spawn,
+// so it takes effect on the next map load: 1 stands the meshes, 0 leaves the props bodiless
+// records (their I/O still resolves — this only gates the visual).
 static TAutoConsoleVariable<int32> CVarPropBodies(
 	TEXT("elysium.PropBodies"),
 	1,
@@ -612,8 +612,8 @@ void FElysiumProp::BuildBody(bool bFromSetModel)
 	}
 	else if (!AnimatedStem.IsEmpty())
 	{
-		// v3-v6 developer exports predate complete placed-model coverage. Preserve their former
-		// animated-prop path; v7 never reaches this branch and therefore cannot display a fallback.
+		// Catalogues without complete placed-model coverage take this animated-prop path; a
+		// complete catalogue never reaches this branch and therefore cannot display a fallback.
 		AnimatedVisual = Embodiment->BuildAnimatedPropVisual(AnimatedStem, Loc, SkeletalRot,
 			Embodiment->BodyScaleFor(*Def), Handle.Index);
 		if (AnimatedVisual)

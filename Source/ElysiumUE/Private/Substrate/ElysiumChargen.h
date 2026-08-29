@@ -23,9 +23,7 @@
 // `Current_Rating * 4` could not buy a single dot, and the one discipline point could never buy
 // anything at all.
 
-// ================================================================================================
-// The seven pools
-// ================================================================================================
+// --- The seven pools ---
 
 // The categories chargen spends into. They are code, not data: `stats.txt` authors no category key,
 // and the engine's own sheet screen hardcodes which slot range each heading covers — the same way
@@ -62,9 +60,7 @@ struct FElysiumChargenPools
 	void Reset();
 };
 
-// ================================================================================================
-// The state a chargen run carries
-// ================================================================================================
+// --- The state a chargen run carries ---
 
 // What a dot is paid with. The two spend screens are the same screen — the same rows, the same
 // gates, the same buy/sell symmetry — differing only in the currency and where its floor is.
@@ -141,9 +137,7 @@ struct FElysiumChargenRules
 	bool IsValid() const { return Stats != nullptr && Clans != nullptr; }
 };
 
-// ================================================================================================
-// The rules
-// ================================================================================================
+// --- The rules ---
 
 namespace ElysiumChargen
 {
@@ -219,9 +213,7 @@ namespace ElysiumChargen
 	// SuggestClan is declared with the quiz below, which is what produces the ordering it scores.
 }
 
-// ================================================================================================
-// The quiz
-// ================================================================================================
+// --- The quiz ---
 
 // One run of `charcreatewizard.txt`'s popup chain: the entry popup, the personality questions, and
 // the clan suggestion they produce. Pure — it holds pointers into the loaded wizard and mutates the

@@ -38,7 +38,7 @@ void FElysiumCogWindow_Logic::RenderContent()
 	}
 	ImGui::TextDisabled("Only entity families present on this map are shown. Open one to inspect or fire it.");
 
-	// --- env_fade screen fade (what the HUD draws this frame) -------------------------------
+	// env_fade screen fade (what the HUD draws this frame).
 	ImGui::SeparatorText("Screen fade (env_fade)");
 	FLinearColor FadeColor;
 	if (World->GetScreenFade(FadeColor))
@@ -59,7 +59,7 @@ void FElysiumCogWindow_Logic::RenderContent()
 		ImGui::TextDisabled("idle");
 	}
 
-	// --- The logic/point/brush classes ------------------------------------------------------
+	// The logic/point/brush classes.
 	RenderClassSection("math_counter", TEXT("math_counter"), TEXT("Add"), TEXT("1"));
 	RenderClassSection("logic_timer", TEXT("logic_timer"), TEXT("Toggle"), TEXT(""));
 	RenderClassSection("logic_case_toggle", TEXT("logic_case_toggle"), TEXT("InValue"), TEXT("1"));

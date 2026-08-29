@@ -1,9 +1,9 @@
 #pragma once
 
-// The recording world-services stub (11.2). Implements all five FElysiumWorldServices interfaces
+// The recording world-services stub. Implements all five FElysiumWorldServices interfaces
 // and writes one line per call into `Calls`, so a Substrate-tier test can assert what a map's logic
 // *did* — stood this body, played that voice, faded the screen, asked to travel — with no RHI, no
-// actors and no `$ELYSIUM_EXPORT_ROOT`. That is the tier the back-pointers used to make impossible.
+// actors and no `$ELYSIUM_EXPORT_ROOT`.
 //
 // It lives in the module (like the tests themselves — the substrate carries no ELYSIUMUE_API
 // exports, so a same-module test links its symbols directly) and compiles only where the automation
@@ -43,7 +43,7 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	float RequestedYaw = 0.0f;
 	float RequestedSpeedCmPerSecond = 0.0f;
 	// Which fan the in-flight request's speed came from, or unset for a caller-authored speed that
-	// must never be re-derived from a changed fan (LIFE, the equip-mid-leg fix).
+	// must never be re-derived from a changed fan (the equip-mid-leg fix).
 	TOptional<EElysiumNpcGaitKind> RequestedGaitKind;
 	bool bEnabled = true;
 	bool bMoving = false;
@@ -55,14 +55,14 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	// clearing bAcceptMoves is how "this mark has no path" is expressed.
 	bool bAcceptMoves = true;
 	EElysiumNpcMoveStatus SampleStatus = EElysiumNpcMoveStatus::Moving;
-	// 11.14 — the reachability query. The stub projects to the point it was handed, which is the
+	// The reachability query. The stub projects to the point it was handed, which is the
 	// "open floor, nothing to correct" world every existing case already assumes; clearing
 	// bProjectsToNavigable is how "there is no navmesh under that" is expressed, and setting
 	// ProjectedOverride is how a projection that MOVED the point is expressed. Both branches matter:
 	// the consumer's re-test only fires on the second.
 	bool bProjectsToNavigable = true;
 	TOptional<FVector> ProjectedOverride;
-	// CCC7/LIFE3 — the body's own authored forward cell per gait. Zero is the default and means
+	// The body's own authored forward cell per gait. Zero is the default and means
 	// "this body resolves no fan", which is how the caller's fallback to the stated constants is
 	// exercised; setting one is how an authored travel speed is expressed.
 	float AuthoredWalkSpeedCmPerSecond = 0.f;
@@ -151,7 +151,7 @@ struct FElysiumRecordingNpcMotor final : IElysiumNpcMotor
 	}
 	// The stub has no movement component to derive one from, so it reports a body standing still at
 	// the yaw it was placed at. What a substrate test asserts is the request contract, not motion.
-	// --- The ballistic pair, MODELLED rather than recorded --------------------------------------
+	// The ballistic pair, MODELLED rather than recorded.
 	//
 	// A recorded-only stub cannot serve a chain: the terminator reads whether the body is grounded,
 	// so a stub answering the same thing every think either ends the chain on its first look or
@@ -313,7 +313,7 @@ struct FElysiumRecordingServices final
 	// The selected row's own loop bit, which a producer ORs into its own request. False by default:
 	// the ambient and schedule callers ask for one-shots, and that is the shape most cases assert.
 	bool ResolvedNpcActivityLoops = false;
-	// CCC7/LIFE3 — the authored forward cells every motor this service builds answers with. Zero,
+	// The authored forward cells every motor this service builds answers with. Zero,
 	// the default, is a body whose export resolves no fan: its travel requests fall back to the
 	// stated `ElysiumNpcGait` constants, which is the path most Substrate cases exercise.
 	float NpcWalkSpeedCmPerSecond = 0.f;
@@ -324,7 +324,7 @@ struct FElysiumRecordingServices final
 		return NpcMotors.IsEmpty() ? nullptr : NpcMotors.Last().Get();
 	}
 
-	// --- IElysiumEmbodiment ----------------------------------------------------------------
+	// IElysiumEmbodiment.
 	virtual float BodyScaleFor(const FElysiumEntityDef& Def) const override { return Def.bSky ? 16.f : 1.f; }
 
 	// A body the CASE stood, handed to whatever entity asks for one. Null by default, which is every
@@ -413,7 +413,7 @@ struct FElysiumRecordingServices final
 	{
 		return bNpcBodyVisible;
 	}
-	// LIFE5 — the band and the hold ride at the TAIL of the line, after the tokens every existing
+	// The band and the hold ride at the TAIL of the line, after the tokens every existing
 	// case matches on: `Saw` is a prefix match, so a run's band is readable by a case that wants it
 	// without moving the ground under one that does not.
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
@@ -445,7 +445,7 @@ struct FElysiumRecordingServices final
 		return Body != nullptr;
 	}
 
-	// LIFE5 — whether this fixture's body is holding a montage-slot RUN claim, modelled rather than
+	// Whether this fixture's body is holding a montage-slot RUN claim, modelled rather than
 	// only recorded: the whole point of the run bracket is that every stop path gives the claim back,
 	// and a double that only logged the calls could not say whether one was left standing.
 	bool bNpcSegmentHeld = false;
@@ -501,7 +501,7 @@ struct FElysiumRecordingServices final
 		// seam field the stub never writes is a field whose consumer cannot be asserted at all, and a
 		// melee swing reads this one to decide who it reserves.
 		Out.MaxReachCm = ResolvedNpcActivityMaxReachCm;
-		// LIFE5 — the fan half. The axis value is the request's own hit yaw rather than a fixture
+		// The fan half. The axis value is the request's own hit yaw rather than a fixture
 		// constant: a producer that dropped it would answer every reaction at the fan's forward cell,
 		// and a stub that invented an angle would hide exactly that.
 		Out.bGrid = bResolvedNpcActivityIsGrid;
@@ -521,7 +521,7 @@ struct FElysiumRecordingServices final
 	// because it is the honest answer for a vocabulary that authors no reach column at all, and it is
 	// what puts a swing on the stated stand-in distance — the path most Substrate cases exercise.
 	float ResolvedNpcActivityMaxReachCm = 0.0f;
-	// LIFE5 — whether a one-shot request is played, and the length it reports. Opt-in like every
+	// Whether a one-shot request is played, and the length it reports. Opt-in like every
 	// other fixture flag: default false is the body that resolves no clip, which is what most
 	// Substrate cases stand.
 	bool bNpcOneShotsPlay = false;
@@ -529,7 +529,7 @@ struct FElysiumRecordingServices final
 	virtual bool PlayNpcOneShot(USkeletalMeshComponent* Body,
 		const FElysiumOneShotClipRequest& Request, float* OutSeconds) override
 	{
-		// The three LIFE5 fields sit BEFORE `prio=`, which several suites already split on as the
+		// The three fields sit BEFORE `prio=`, which several suites already split on as the
 		// line's tail: a reader that took the last token would otherwise start reading the axis. The
 		// release condition is appended AFTER it for the same reason, in the other direction.
 		Record(FString::Printf(
@@ -568,7 +568,7 @@ struct FElysiumRecordingServices final
 		return bPlayed;
 	}
 
-	// --- LIFE5: the held reaction claim ------------------------------------------------------------
+	// The held reaction claim.
 	//
 	// The body-side half of a `Predicate` play, in the smallest form a Substrate case needs: whether
 	// this fixture's body is holding one, and whether anything else stands on the base channel. The
@@ -583,7 +583,7 @@ struct FElysiumRecordingServices final
 	// is already gone. The one door a case should use to simulate being outranked.
 	void PreemptNpcReaction() { bNpcReactionHeld = false; }
 
-	// LIFE5 — the release half of a held reaction claim.
+	// The release half of a held reaction claim.
 	virtual void ReleaseNpcReaction(USkeletalMeshComponent* Body) override
 	{
 		Record(FString::Printf(TEXT("ReleaseNpcReaction body=%d"), Body != nullptr ? 1 : 0));
@@ -602,7 +602,7 @@ struct FElysiumRecordingServices final
 		return State;
 	}
 
-	// --- LIFE5: the death handoff ----------------------------------------------------------------
+	// The death handoff.
 	// Whether this fixture's bodies carry a physics asset. FALSE by default, and that default is the
 	// shipped answer rather than a convenience: the character bake writes no physics asset, so every
 	// death in the game today takes the frozen-final-pose arm. A case that wants the ragdoll arm has
@@ -627,7 +627,7 @@ struct FElysiumRecordingServices final
 		Record(FString::Printf(TEXT("HoldBodyFinalPose body=%d"), Body != nullptr ? 1 : 0));
 	}
 
-	// --- LIFE5: the sequence-event seam ---------------------------------------------------------
+	// The sequence-event seam.
 	//
 	// The phase is a settable CURRENT record rather than a scripted sequence of them, matching every
 	// other fixture in this file: a suite drives the pass frame by frame anyway, so mutating
@@ -987,7 +987,7 @@ struct FElysiumRecordingServices final
 		return Body != nullptr && !Definition.IsEmpty() && !Attachment.IsNone();
 	}
 
-	// 12.5 — the per-model phoneme filter this fake cast answers with. Per body, because the point of
+	// The per-model phoneme filter this fake cast answers with. Per body, because the point of
 	// the read is that two speakers in one scene can carry different pairs. A body with no entry falls
 	// back to the shared pair, so a test that does not care sets nothing.
 	float PhonemeFilterMin = 0.065f;
@@ -1011,7 +1011,7 @@ struct FElysiumRecordingServices final
 		return true;
 	}
 
-	// 12.4 — the gaze seam, recorded rather than drawn. The head frame is test-controlled so a
+	// The gaze seam, recorded rather than drawn. The head frame is test-controlled so a
 	// cascade assertion can put a candidate inside or outside the ±30° cone on purpose.
 	TMap<const USkeletalMeshComponent*, FVector> ViewTargetByBody;
 	bool bHasHeadFrame = false;
@@ -1136,8 +1136,8 @@ struct FElysiumRecordingServices final
 
 	// The authored length every stub clip reports. A scripted_sequence's OnEndSequence lands here.
 	float ClipSeconds = 1.0f;
-	// Whether a cinematic anim set resolves. Default false, which is the state of the world until
-	// PL16's banks are exported — a scene must run its timeline and outputs either way.
+	// Whether a cinematic anim set resolves. Default false — a scene must run its timeline and
+	// outputs either way.
 	bool bCinematicClipsResolve = false;
 	// Opt-in so existing body-path tests continue to exercise the legacy-index fallback. The v7
 	// closure tests enable this and receive a real composite with distinct visual/proxy components.
@@ -1371,7 +1371,7 @@ struct FElysiumRecordingServices final
 			PlayerBaseActivity.IsEmpty() ? TEXT("(none)") : *PlayerBaseActivity));
 		return PlayerBaseActivity;
 	}
-	// LIFE5 — the melee stop. Counted as well as recorded, because the assertion that matters most
+	// The melee stop. Counted as well as recorded, because the assertion that matters most
 	// is that it fires on EVERY frame of the swing's tail: the recovered block carries no latch, so
 	// the count is what tells a window apart from a one-shot.
 	int32 StopPlayerBodyCount = 0;

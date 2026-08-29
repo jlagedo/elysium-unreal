@@ -1,4 +1,4 @@
-// Mover sounds (P6.4) — the soundgroup manifest loader.
+// Mover sounds — the soundgroup manifest loader.
 //
 // Reference: `docs/vtmb/audio_pipeline.md` + the decompiled CBaseDoor::Spawn (FUN_100ef060, reads the
 // subkeys "close"/"open"/"swing"/"locked") and CBaseButton::Spawn (FUN_100c8810, reads "on"/"off").

@@ -15,8 +15,7 @@ class IConsoleObject;
 // appear. Entirely compiled out of Shipping (ENABLE_COG = !UE_BUILD_SHIPPING).
 //
 // Custom Elysium windows (FElysiumCogWindow subclasses) are registered here alongside the
-// stock ones: roadmap 2.1 adds the Status window; the entity browser/inspector (2.2) and
-// Maps/Lights windows (2.5) follow the same pattern.
+// stock ones.
 UCLASS()
 class UElysiumCogSubsystem : public UWorldSubsystem
 {

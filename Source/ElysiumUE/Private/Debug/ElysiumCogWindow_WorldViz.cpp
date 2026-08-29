@@ -124,7 +124,7 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 	ImGui::Checkbox("Color by enabled/dormant state (else by class)", &V.bTriggerColorByState);
 	ImGui::EndDisabled();
 
-	// --- I/O beams -------------------------------------------------------------------------
+	// I/O beams.
 	ImGui::SeparatorText("Event beams");
 	ImGui::Checkbox("Fading caller->target arrows on fire", &V.bShowBeams);
 	ImGui::BeginDisabled(!V.bShowBeams);
@@ -135,7 +135,7 @@ void FElysiumCogWindow_WorldViz::RenderContent()
 	ImGui::EndDisabled();
 	ImGui::TextDisabled("Beams follow I/O delivery - hand-fire from the Entity Inspector to see one.");
 
-	// --- Live counts (a quick sense of what the layers are drawing) ------------------------
+	// Live counts: a quick sense of what the layers are drawing.
 	const TArray<TUniquePtr<FElysiumEntity>>& Entities = World->Entities();
 	int32 NumLive = 0, NumTriggers = 0;
 	for (const TUniquePtr<FElysiumEntity>& EntPtr : Entities)

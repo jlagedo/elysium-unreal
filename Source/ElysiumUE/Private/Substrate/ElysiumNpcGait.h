@@ -58,9 +58,9 @@ namespace ElysiumNpcGait
 	inline constexpr float ScriptAcceptanceCm = 24.0f;
 	// And how close counts for a body that has stopped closing. A beat sends several NPCs to marks
 	// a few centimetres apart — sp_theatre's walk-out lands five of them inside 30 cm — which two
-	// 34 cm crowd agents cannot resolve while they collide. They no longer do: spawnflag 4096 turns
-	// character collision off for the beat's duration, so the cluster this was written for does not
-	// form and the walkers reach the tight acceptance above. What is left is a failure net for a
+	// 34 cm crowd agents cannot resolve while they collide. Spawnflag 4096 turns character
+	// collision off for the beat's duration, so that cluster does not form and the walkers reach
+	// the tight acceptance above. What remains is a failure net for a
 	// mark a body genuinely cannot stand on (world geometry, a bad graph), and a net wants to be
 	// small — declaring a body "arrived" a metre and a half out would hide exactly that failure.
 	inline constexpr float ScriptCrowdedCm = 90.0f;

@@ -141,9 +141,7 @@ void FElysiumActivityTrigger::GetDebugState(TArray<TPair<FString, FString>>& Out
 	Out.Emplace(TEXT("Refreshes"), FString::FromInt(Refreshes));
 }
 
-// ================================================================================================
-// Registration
-// ================================================================================================
+// --- Registration ---
 
 namespace
 {

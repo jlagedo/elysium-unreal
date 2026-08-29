@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "Math/RandomStream.h"
 
-// S8 determinism (`docs/architecture/save-architecture.md` §8) — every game-visible random draw comes from a **named,
+// Determinism (`docs/architecture/save-architecture.md` §8) — every game-visible random draw comes from a **named,
 // owned stream** whose state is in the save's `Session` block. `FMath::Rand()` is banned in gameplay
 // code for the same reason `FTimerManager` is: a save is only worth as much as the run that follows
 // it, and a draw the save cannot carry makes the run after a load a different run.
@@ -19,16 +19,16 @@
 // reorder or delete.
 enum class EElysiumRngStream : uint8
 {
-	OneOfSet,      // the 589 dialogue gates' 1-of-N selector (9.7d)
+	OneOfSet,      // the 589 dialogue gates' 1-of-N selector
 	LogicTimer,    // logic_timer's UseRandomTime refire interval
 	LogicCase,     // logic_case PickRandom / PickRandomShuffle
-	Dice,          // the World-of-Darkness d10 resolver (9.6, `recovered/dice-system.md`)
+	Dice,          // the World-of-Darkness d10 resolver (`docs/recovered/dice-system.md`)
 	Ambient,       // ambient idle picks and the RandomSound scheduler
-	Chargen,       // which phrasing of a wizard question the quiz asks (9.4f)
+	Chargen,       // which phrasing of a wizard question the quiz asks
 	NpcMaker,      // npc_maker's transient-admission retry interval
 	NpcSchedule,   // the NPC idle branch: schedule selection and the disposition stance rolls
 	Reaction,      // the damage flinch's head/torso coin, its +-30 degree jitter and its
-	               // weighted-sequence draw (LIFE5)
+	               // weighted-sequence draw
 	Count
 };
 

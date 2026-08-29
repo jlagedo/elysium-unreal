@@ -67,7 +67,7 @@ namespace
 		{ TEXT("IsFollowerOf"),        true,  TEXT("stub") },
 	};
 
-	// OneOfSet's roll (9.7d). -1 = draw one per engine frame; >= 0 pins it.
+	// OneOfSet's roll. -1 = draw one per engine frame; >= 0 pins it.
 	int32 GOneOfSetPinnedRoll = -1;
 	FAutoConsoleVariableRef CVarOneOfSetRoll(
 		TEXT("elysium.script.oneofset"),
@@ -90,7 +90,7 @@ namespace
 		if (RolledOnFrame != GFrameCounter)
 		{
 			RolledOnFrame = GFrameCounter;
-			// S8 — the roll comes from the session's own OneOfSet stream, whose position is in the
+			// The roll comes from the session's own OneOfSet stream, whose position is in the
 			// save (`docs/architecture/save-architecture.md` §8). A conversation reopened after a load then selects the
 			// same row it would have without one, which is the whole point of the per-frame draw.
 			Roll = ElysiumRng::Stream(EElysiumRngStream::OneOfSet).RandHelper(MAX_int32);
@@ -230,7 +230,7 @@ namespace ElysiumScriptNatives
 		const FString Display = FString::Printf(TEXT("%s.%s(%s)"), *Recv, *Method.ToString(), *DescribeArgs(LogArgs));
 
 		// Real backing: the game-state subsystem's quest funnel — the map write plus the completion
-		// state's awards and journal row (9.4d). The receiver is deliberately ignored, as VtMB's own
+		// state's awards and journal row. The receiver is deliberately ignored, as VtMB's own
 		// thunk ignores it: `SetQuest` always lands on the player (`docs/vtmb/script_api.md`).
 		if (Method == FName(TEXT("SetQuest")))
 		{
@@ -266,9 +266,9 @@ namespace ElysiumScriptNatives
 			return FElysiumVariant::Void();
 		}
 
-		// CurrentMoney reads the receiver's own money field (11.4 put it on the combat character,
+		// CurrentMoney reads the receiver's own money field (it lives on the combat character,
 		// which is where VtMB has it and where MoneyAdd/MoneyRemove write). The rest of the economy
-		// — prices, barter, the HUD readout — is still 9.10's.
+		// — prices, barter, the HUD readout — is not this method.
 		if (Method == FName(TEXT("CurrentMoney")))
 		{
 			const FElysiumCombatCharacter* Char = ResolveCharacter(World, Self);
@@ -277,7 +277,7 @@ namespace ElysiumScriptNatives
 			return R;
 		}
 
-		// The sheet-counter surface (9.4c). All four read or write the RECEIVER's own sheet — the
+		// The sheet-counter surface. All four read or write the RECEIVER's own sheet — the
 		// class is `CBaseCombatCharacter`, so an NPC answers for itself exactly as the PC does.
 		if (Method == FName(TEXT("CalcFeat")))
 		{
@@ -308,7 +308,7 @@ namespace ElysiumScriptNatives
 			return R;
 		}
 
-		// --- The inventory surface (9.8a, `docs/vtmb/inventory.md` §6) ----------------------------
+		// The inventory surface (`docs/vtmb/inventory.md` §6).
 		// All six read or write the RECEIVER's own inventory, except `GiveItem`, which is a
 		// player-only service in retail and stays one here. Item names are classnames throughout.
 		if (Method == FName(TEXT("HasItem")))
@@ -415,7 +415,7 @@ namespace ElysiumScriptNatives
 		// SetCamera(char, shotfile) — "Sets the entity to use the named shot file as their cinematic
 		// camera mode" (ml_doc), so the argument keys `vdata/camerashots/` (115 calls). The receiver is
 		// the shot's subject: its `DialogTarget` anchors resolve to whoever the script called it on,
-		// which for a `.dlg` action is the NPC on screen. 11.7's channel is what it lands on.
+		// which for a `.dlg` action is the NPC on screen. The scripted-shot channel is what it lands on.
 		if (Method == FName(TEXT("SetCamera")) && World && Args.Num() >= 1)
 		{
 			World->SetScriptedCamera(Args[0].ToString(), Self);
@@ -425,7 +425,7 @@ namespace ElysiumScriptNatives
 		}
 		// SetDisposition(char, name, level) — 2,510 calls, 2,467 of them a `.dlg` line's action.
 		// One transaction updates the resolved row, stance transition, expression, gaze/blink policy
-		// and saved level. It does not touch combat relationships or the RPG reaction score (K4).
+		// and saved level. It does not touch combat relationships or the RPG reaction score.
 		if (Method == FName(TEXT("SetDisposition")) && World && Args.Num() >= 2)
 		{
 			FElysiumEntity* E = World->Resolve(Self);
@@ -450,7 +450,7 @@ namespace ElysiumScriptNatives
 
 		if (Name == FName(TEXT("ChangeMap")))
 		{
-			// ChangeMap(delay, landmark, trigger) (P4.6): the scripted map transition. After `delay`
+			// ChangeMap(delay, landmark, trigger): the scripted map transition. After `delay`
 			// seconds, activate the named trigger_changelevel — it carries the destination map + the
 			// landmark, so this reduces to path 2 (level_transitions.md). Enqueue its ChangeNow input
 			// through the real event queue (chokepoint 2), so it single-steps in the Event Queue window
@@ -468,7 +468,7 @@ namespace ElysiumScriptNatives
 		}
 		if (Name == FName(TEXT("ScheduleTask")))
 		{
-			// ScheduleTask(delay, "<source>") (5.4): defer the source string on the event queue,
+			// ScheduleTask(delay, "<source>"): defer the source string on the event queue,
 			// evaluated at now+delay through the installed host — the real deferred-task mechanism, not
 			// a stub. Provenance is this eval's `!self` (the scheduling entity).
 			if (World && Args.Num() >= 2)
@@ -480,8 +480,8 @@ namespace ElysiumScriptNatives
 		}
 
 		// OneOfSet(which, count) — the 1-based one-of-N dialogue selector, `(roll % count) == which - 1`
-		// over an engine counter (script_api.md; the roll model is in this module's header). Real since
-		// 9.7d — until then it was hardcoded false, which failed all 589 gates riding on it closed.
+		// over an engine counter (`docs/vtmb/script_api.md`; the roll model is in this module's header).
+		// A hardcoded false would fail all 589 gates riding on it closed.
 		if (Name == FName(TEXT("OneOfSet")))
 		{
 			const int32 Which = Args.Num() >= 1 ? Args[0].ToInt() : 0;

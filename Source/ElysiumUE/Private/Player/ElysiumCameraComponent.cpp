@@ -58,9 +58,7 @@ void UElysiumCameraComponent::EndPlay(const EEndPlayReason::Type Reason)
 	Super::EndPlay(Reason);
 }
 
-// =====================================================================================
 // The frame
-// =====================================================================================
 
 FRotator UElysiumCameraComponent::ViewRotation() const
 {
@@ -88,7 +86,7 @@ void UElysiumCameraComponent::AdvanceFrame(float DeltaSeconds)
 	const UWorld* World = GetWorld();
 	// A held world holds the camera. The delta CalcCamera is handed is real time while paused, since
 	// the controller keeps ticking; and while running it has already been scaled by the world's
-	// dilation, which is why the weight driver is passed a time scale of 1 (11.1's rule for the clock,
+	// dilation, which is why the weight driver is passed a time scale of 1 (the game clock's rule,
 	// applied to the same problem).
 	const float Dt = (World && World->IsPaused()) ? 0.0f : FMath::Max(0.0f, DeltaSeconds);
 
@@ -246,9 +244,7 @@ void UElysiumCameraComponent::EnsureFeedVisionMask()
 			*Path);
 	}
 }
-// =====================================================================================
 // The apply point (`CAM_ApplyToView`, 0x100ffb00)
-// =====================================================================================
 
 void UElysiumCameraComponent::ApplyToView(FMinimalViewInfo& View) const
 {
@@ -408,14 +404,12 @@ bool UElysiumCameraComponent::CalcCameraFor(UElysiumCameraComponent* Camera, flo
 	return true;
 }
 
-// =====================================================================================
 // The mode
-// =====================================================================================
 
 void UElysiumCameraComponent::SetThirdPerson(bool bThird)
 {
 	// The minimal pair: set the latch, clear the one-shot request. No weapon arbitration and no
-	// holster check — only `togglecamera` runs those, and both need weapons (4.9).
+	// holster check — only `togglecamera` runs those, and both need weapons.
 	Weights.bUserThird = bThird;
 	ElysiumCommandBus::Console().SetCvar(TEXT("cam_command"), TEXT("0"));
 }
@@ -589,9 +583,7 @@ void UElysiumCameraComponent::WriteCameraPrefs(int32 Prefs)
 	}
 }
 
-// =====================================================================================
 // The scripted-shot channel
-// =====================================================================================
 
 int32 UElysiumCameraComponent::PushShot(const FElysiumCameraShot& Shot)
 {
@@ -641,9 +633,7 @@ bool UElysiumCameraComponent::PopShot(int32 Id, float BlendOutSeconds)
 	return true;
 }
 
-// =====================================================================================
 // The verbs
-// =====================================================================================
 
 void UElysiumCameraComponent::RegisterCommands()
 {
@@ -748,9 +738,7 @@ FString UElysiumCameraComponent::Describe() const
 		*Shots.Describe());
 }
 
-// =====================================================================================
 // Dev verb
-// =====================================================================================
 
 static FAutoConsoleCommandWithWorld GElysiumCameraDump(
 	TEXT("elysium.camera"),

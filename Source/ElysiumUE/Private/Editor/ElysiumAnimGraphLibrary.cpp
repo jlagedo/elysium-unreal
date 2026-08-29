@@ -102,7 +102,6 @@ namespace
 	}
 }
 
-// ------------------------------------------------------------------------------------------------
 // The bootstrap that produced the tracked graph text, and what regenerates it when an engine upgrade
 // changes a node's layout.
 //
@@ -265,7 +264,6 @@ FString UElysiumAnimGraphLibrary::ExportGraphToText(const UBlueprint* Blueprint,
 	return Text;
 }
 
-// ------------------------------------------------------------------------------------------------
 // Reflection helpers for the bootstrap. Everything below sets a property the concrete editor node
 // declares, without linking against the module that declares it.
 
@@ -314,7 +312,7 @@ namespace ElysiumAnimGraphBootstrap
 		return true;
 	}
 
-	// Resize an array member inside the node's own `FAnimNode_*` struct — CCC10's
+	// Resize an array member inside the node's own `FAnimNode_*` struct —
 	// `FAnimNode_LayeredBoneBlend::BlendMasks`/`LayerSetup`, which a raw `BlendMode` write does not
 	// resize on its own. Mirrors what the editor's `PostEditChangeProperty` handler does
 	// (`SyncBlendMasksAndLayers`: `BlendMasks.SetNum(BlendPoses.Num()); LayerSetup.Reset();`), which
@@ -512,18 +510,18 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			}
 		};
 
-		// --- the spine ---------------------------------------------------------------------------
+		// The spine.
 		//
-		// The blend stack owns the body and one-shots layer over it on a slot. **There is no
-		// inertialization node**, and that is a decision rather than an omission: every crossfade this
+		// The blend stack owns the body and one-shots layer over it on a slot. There is no
+		// inertialization node, and that is a decision rather than an omission: every crossfade this
 		// graph performs already belongs to a node that owns it -- the stack cross-fades its own
 		// players on the authored `BlendTime`, the reaction branch takes its own two per-pose times,
 		// and the slot's dynamic montage carries its own blend pair. An inertializer between them
-		// serves requests nobody raises: nothing in this graph is an `IInertializationRequester`, so
-		// the node was placed and unreached. The composition tail runs after the output pose, in the
+		// serves requests nobody raises: nothing in this graph is an `IInertializationRequester`.
+		// The composition tail runs after the output pose, in the
 		// proxy, because axis interpolation is a rig rule over the finished pose.
 		//
-		// **The stack IS the locomotion transitioner** (S2), which is why nothing below places a
+		// The stack IS the locomotion transitioner, which is why nothing below places a
 		// state, a conduit or a transition rule. It carries no vocabulary and no edges: the
 		// resolver's answer arrives whole on four pins — the asset, its loop bit, the authored fade
 		// and the grid's steering pair — and `FAnimNode_BlendStack` pushes one player per request
@@ -539,7 +537,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			return;
 		}
 
-		// --- the stack's own settings ---------------------------------------------------------------
+		// The stack's own settings.
 		//
 		// Every one of these is a HIDDEN property rather than a shown pin, so the value on the node
 		// is what the compiler bakes — `SetPinDefault` above would write a pin that does not exist.
@@ -559,7 +557,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// is", it is the value `MaxAnimationDeltaTime` would be compared against and the time a
 			// new player is seeded at. Every clip this graph plays starts at its head.
 			Wire(SetNodeValue<float>(Stack, TEXT("AnimationTime"), 0.f), TEXT("stack AnimationTime"));
-			// **A named divergence.** Retail caps concurrent transitions at NOTHING: the append path
+			// A named divergence. Retail caps concurrent transitions at NOTHING: the append path
 			// is `EnsureCapacity(1)` plus `InsertMultiple` with no bound check, and a record leaves
 			// only when its own weight reaches zero (`docs/vtmb/animation_and_movers.md`). Four is
 			// the deepest stack the capture ever observed (`0 -> 1 -> 2 -> 3 -> 4`), not a rule the
@@ -583,7 +581,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// request would be logged as unserviced and the authored duration on the pin would decide
 			// nothing.
 			Wire(SetNodeBool(Stack, TEXT("bUseInertialBlend"), false), TEXT("stack bUseInertialBlend"));
-			// **The most dangerous default in the node.** `InitialOnly` samples a blend space's xy
+			// The most dangerous default in the node. `InitialOnly` samples a blend space's xy
 			// once, at `BlendTo`, and never again — so a gait fan would freeze at the steering value
 			// it was entered with and `move_yaw` would stop turning the body.
 			Wire(SetNodeValue<uint8>(Stack, TEXT("BlendspaceUpdateMode"),
@@ -597,7 +595,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// own steering is applied by `UpdateBlendspaceParameters` above instead.
 			Wire(SetNodeValue<float>(Stack, TEXT("BlendParametersDeltaThreshold"), 1.0e6f),
 				TEXT("stack BlendParametersDeltaThreshold"));
-			// **False, against the engine's `true`.** The reaction branch makes this node
+			// False, against the engine's `true`. The reaction branch makes this node
 			// non-relevant while a full-weight flinch stands — `FAnimNode_BlendListBase` skips a
 			// child under `ZERO_ANIMWEIGHT_THRESH` — so the true default would `Reset()` the stack
 			// on the frame the flinch releases and restart the gait at frame 0 on every hit. False
@@ -609,7 +607,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// the experimental stitch fields stay at their own defaults.
 			Wire(SetOwnValue<FName>(Stack, TEXT("Tag"),
 				FName(ElysiumAnimGraph::LocomotionStackTag)), TEXT("stack tag"));
-			// **The base sync group, and the stack leads it.** Retail evaluates a host's autolayers
+			// The base sync group, and the stack leads it. Retail evaluates a host's autolayers
 			// at the HOST's cycle; a `_delta` player on its own clock laps at its clip's natural
 			// length while the gait laps at the fan's, and the reference compositor measured the
 			// upper body drifting 0.1-2.7 cm in and out of step with legs that matched to 0.01. A
@@ -622,7 +620,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			Wire(SetNodeValue<uint8>(Stack, TEXT("Method"), 1), TEXT("stack Method"));
 		}
 
-		// --- the four pins the whole base channel arrives on ----------------------------------------
+		// The four pins the whole base channel arrives on.
 		//
 		// Same rule as every other node in this graph: it holds no asset and decides nothing. The
 		// resolver answered, the native instance projected the answer, and these carry it.
@@ -652,7 +650,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 		Wire(Link(FirstPin(Stack, EGPD_Output), FirstPin(Slot, EGPD_Input)),
 			TEXT("blend stack -> slot"));
 
-		// --- the reaction branch (LIFE5) -----------------------------------------------------------
+		// The reaction branch.
 		//
 		// A reaction REPLACES the locomotion pose rather than riding over it, so it sits on the base
 		// channel between the one-shot slot and the upper-body layer: `bReactionActive` picks either
@@ -683,7 +681,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				return;
 			}
 
-			// **Whether the reaction repeats is a PIN on both players, not a folded constant** (LIFE5).
+			// Whether the reaction repeats is a PIN on both players, not a folded constant.
 			// A struck reaction ends and must not loop — a looping flinch never reports complete and
 			// would hold the body in its reaction forever — but a HELD one stands for exactly as long
 			// as the predicate that asked for it, and a pose that does not repeat freezes on its
@@ -753,7 +751,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// retrigger needs comes from republishing the asset: a sequence player whose `Sequence` pin
 			// changes restarts, and so does the blend space player on a new `BlendSpace`.
 			//
-			// **It is one half of a pair, and the other half is on the stack.** The same
+			// It is one half of a pair, and the other half is on the stack. The same
 			// `ZERO_ANIMWEIGHT_THRESH` skip that makes the base child un-updated also makes the blend
 			// stack NON-RELEVANT for the duration of a full-weight flinch, and
 			// `FAnimNode_BlendStack::NeedsReset` would then reset it on the frame it becomes relevant
@@ -771,7 +769,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				FName(ElysiumAnimGraph::ReactionBranchTag)), TEXT("reaction blend tag"));
 		}
 
-		// --- the upper-body layer (CCC10) ----------------------------------------------------------
+		// The upper-body layer.
 		//
 		// Sits after the reaction branch, outside the base channel: a weapon layer rides beside the
 		// locomotion state rather than through it, so it does not wait on a gait transition or
@@ -792,7 +790,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				TEXT("/Script/AnimGraph.AnimGraphNode_LayeredBoneBlend"), 280, 0);
 			UEdGraphNode* AdditiveSequence = Place(*Graph,
 				TEXT("/Script/AnimGraph.AnimGraphNode_SequencePlayer"), 280, 460);
-			// **This project's own node, not `ApplyAdditive`.** VtMB accumulates a `_delta` with the
+			// This project's own node, not `ApplyAdditive`. VtMB accumulates a `_delta` with the
 			// delta on the RIGHT and every `EAdditiveAnimationType` puts it on the left, so a stock
 			// additive node cannot reach the answer at any reference-pose setting. The clip ships
 			// raw and the node states the combine; the class lives in the editor-only
@@ -820,7 +818,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			ExposePin(UpperBodySequence, TEXT("Sequence"));
 			Wire(DriveFromBool(*Graph, PinNamed(UpperBodySequence, TEXT("Sequence")),
 				TEXT("RequestedUpperBodySequence"), -560, 420), TEXT("layer melee Sequence pin"));
-			// **Both autolayer players follow the host's clock.** Retail evaluates every autolayer of
+			// Both autolayer players follow the host's clock. Retail evaluates every autolayer of
 			// a sequence -- the aim grid, a plain overlay such as `m37_relaxed_move_layer`, the delta
 			// -- at the HOST's cycle. A player left on its own clock laps at its clip's natural
 			// length while the gait laps at the fan's, and the reference compositor measured the
@@ -842,7 +840,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			Wire(Link(FirstPin(UpperBodySequence, EGPD_Output), PinNamed(UpperBodyPick, TEXT("BlendPose_1"))),
 				TEXT("layer sequence -> false pose"));
 
-			// The mask lives on the blend node, not on a dedicated aim node — the roadmap's own point.
+			// The mask lives on the blend node, not on a dedicated aim node.
 			// BlendMask mode over a single layer: one base pose, one masked rider, the mask read off
 			// whichever clip the resolver selected rather than guessed from a weapon's grip.
 			SetNodeValue<uint8>(Layer, TEXT("BlendMode"), 1);   // ELayeredBoneBlendMode::BlendMask
@@ -852,14 +850,14 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// means.
 			ResizeNodeArray(Layer, TEXT("BlendMasks"), 1);
 			ResizeNodeArray(Layer, TEXT("LayerSetup"), 0);
-			// **The mask slot is left NULL, and stays null in the tracked text.** It is not a pin —
+			// The mask slot is left NULL, and stays null in the tracked text. It is not a pin —
 			// `BlendMasks` is edit-time state on the node — so the mask is written at runtime by
 			// `UElysiumBipedAnimInstance::ApplyUpperBodyMask` through the tag below, the same door
 			// Epic's own `ULayeredBoneBlendLibrary::SetBlendMask` uses. A null mask is legal here
 			// precisely because this is a TEMPLATE Animation Blueprint, which the engine's own
 			// `ValidateAnimNodeDuringCompilation` exempts from its null-mask error — and it is what
 			// keeps a generated, game-derived profile asset out of the tracked graph.
-			// **Mesh space, exactly as the slot's blends are, and for the same bone.** The layer's
+			// Mesh space, exactly as the slot's blends are, and for the same bone. The layer's
 			// split-bone rotation is stated against the BIND chain by the bake, so blending it in
 			// mesh space writes the torso's model-space orientation absolutely — retail's own rule
 			// for the flag. Blended locally the correction is only true at the host frame it was
@@ -876,9 +874,9 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			Wire(DriveFromBool(*Graph, PinNamed(Layer, TEXT("BlendWeights_0")),
 				TEXT("UpperBodyLayerWeight"), 40, -100), TEXT("layer weight pin"));
 
-			// --- the overlay stack: four slots, chained, composed in index order ---------------------
+			// The overlay stack: four slots, chained, composed in index order.
 			//
-			// **Masked blends AFTER the autolayer blend, and the order is retail's.**
+			// Masked blends AFTER the autolayer blend, and the order is retail's.
 			// `CBaseAnimatingOverlay` accumulates its slots after the host sequence's own autolayer
 			// bindings, so what slot 0 composes over is the pose the node above already produced, and
 			// each later slot composes over the one before it. Folding them into one blend's four
@@ -908,7 +906,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			// Every setting on the evaluator is a `WITH_EDITORONLY_DATA` `FoldProperty`, so a
 			// reflection write lands somewhere the runtime cannot see; the pin is the only honest
 			// door, which is why both inputs are exposed and driven rather than set.
-			// **The host's own `_delta` composes here, BEFORE the slots.** Retail evaluates a
+			// The host's own `_delta` composes here, BEFORE the slots. Retail evaluates a
 			// sequence's autolayers -- overlay, then delta -- inside the host's own evaluation and
 			// accumulates the overlay slots after that, and a slot is a hard replace on its mask:
 			// under a standing attack layer the host's delta is overwritten on every masked bone.
@@ -930,7 +928,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 			Wire(DriveFromBool(*Graph, PinNamed(Additive, TEXT("Alpha")),
 				TEXT("AdditiveLayerWeight"), 780, 160), TEXT("additive Alpha pin"));
 
-			// **Retail's bone remap, once, over the base channel's whole closure.** The host, its
+			// Retail's bone remap, once, over the base channel's whole closure. The host, its
 			// aim/overlay autolayer and its `_delta` have all composed by here, in the BANK's own
 			// space -- which is the exact point `client.dll FUN_10089c40` remaps on return from the
 			// include recursion (`vampire.dll 0x100c67b0` builds the table). Unreal's own
@@ -1003,7 +1001,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				SetNodeValue<uint8>(SlotLayer, TEXT("BlendMode"), 1);  // BlendMask
 				ResizeNodeArray(SlotLayer, TEXT("BlendMasks"), 1);
 				ResizeNodeArray(SlotLayer, TEXT("LayerSetup"), 0);
-				// **Mesh space, and it is what makes a slot layer standable at all.** VtMB flags
+				// Mesh space, and it is what makes a slot layer standable at all. VtMB flags
 				// `Bip01 Spine1` with `SPLIT_ROTATION`: its animated rotation is the bone's
 				// MODEL-SPACE orientation, absolute and independent of the chain below it, which is
 				// what lets one attack layer compose over any gait. A slot clip is masked, so the
@@ -1031,7 +1029,7 @@ static FAutoConsoleCommand GElysiumAnimBpBuild(
 				Wire(Link(FirstPin(SlotChainTail, EGPD_Output), PinNamed(SlotLayer, TEXT("BasePose"))),
 					TEXT("previous pose -> slot base pose"));
 
-				// --- the slot's two shapes, picked by what the resolver answered with ----------------
+				// The slot's two shapes, picked by what the resolver answered with.
 				// A grid where the layer clip declares one and the bake composed it (every fire and
 				// dry-fire layer), the plain sequence where it does not (every reload layer). Both are
 				// the SAME layer, so the pick is a hard switch and not a fade — a blend between them

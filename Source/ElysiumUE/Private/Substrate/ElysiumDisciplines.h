@@ -4,17 +4,17 @@
 
 #include "ElysiumEntityHandle.h"
 
-// 13.2 — the Discipline runtime: selection, the shared cast authority, the two execution families
+// The Discipline runtime: selection, the shared cast authority, the two execution families
 // and the one teardown.
 //
 // `docs/vtmb/disciplines.md` owns the behaviour, `docs/architecture/gameplay-systems-architecture.md`
 // §5.6 owns the decomposition. This is a plain-C++ domain service beside `ElysiumDamage` and
 // `ElysiumSheetMath`: it reaches the engine only through `FElysiumWorldServices`, adds no clock and
-// no scheduler, and every timed step is an owned event on the one queue (K11).
+// no scheduler, and every timed step is an owned event on the one queue.
 //
 // The state it drives lives on the chain: `FElysiumDisciplineState` on `FElysiumCombatCharacter`
 // (the native active slots and the tracked targeted effects) and the three selection members on
-// `FElysiumPlayer`, both mirrored onto `FElysiumPlayerRecord` (K8).
+// `FElysiumPlayer`, both mirrored onto `FElysiumPlayerRecord`.
 //
 // Where the recovered record is open, this file marks a **SEAM** (a channel parsed and carried but
 // not executed, named with what would close it) or states a **CHOSEN** rule with its citation.
@@ -88,7 +88,7 @@ namespace ElysiumDisciplines
 
 	// The shared authority: the eligibility virtual, the learned check, then the `Is_Instant`
 	// branch into the native active-state path or the targeted `DisciplineTgt` transaction. Public
-	// because it is the K10 door — a Substrate test drives (character, index, tier) directly rather
+	// because it is the testable door — a Substrate test drives (character, index, tier) directly rather
 	// than through the verb.
 	EResult Use(FElysiumCombatCharacter& Char, int32 Index, int32 Tier);
 
@@ -141,12 +141,8 @@ namespace ElysiumDisciplines
 	void ExecuteLast(FElysiumEntityWorld& World);
 	void ExecuteEndAll(FElysiumEntityWorld& World);
 
-	// ======================= Cycle 11b hunk 2/9 — the alert row moved out ========================
-	// The `TriggerAISound` category this domain emits is `ElysiumGameSounds::DisciplineAlert()`.
-	// It was named locally here while the shared catalogue was outside the owning cycle's file
-	// fence; it is now one entry in `Substrate/ElysiumGameSound.h` beside every other producer
-	// category, which is where a name two domains switch on belongs.
-	// ============================================================================================
+	// The `TriggerAISound` category this domain emits is `ElysiumGameSounds::DisciplineAlert()`,
+	// one entry in `Substrate/ElysiumGameSound.h` beside every other producer category.
 
 	// --- Stated interim constants ---------------------------------------------------------------
 	// Each stands in for a value the recovered record does not carry. They are named, not

@@ -1,4 +1,4 @@
-// 12.1 — `logic_choreographed_scene`: VtMB's cinematic and dialogue player.
+// `logic_choreographed_scene`: VtMB's cinematic and dialogue player.
 //
 // The class is **`CSceneEntity`** in `vampire.dll` (factory FUN_100802e0, object size 0x580,
 // datamap 0x10548180) — Valve's own sceneentity, forked. It owns one `.vcd` scene, binds its actors
@@ -18,7 +18,7 @@
 // What is NOT, and why:
 //   - `speak` resolves and plays through the audio seam, but no `Character/dlg/**` audio is
 //     exported yet, so every line currently misses. The gain curve, subtitles, `full_sound` and
-//     `fixedlength`-from-asset are 12.2's.
+//     `fixedlength`-from-asset are the speak path's.
 //   - `silence`/`loud` (21,898 uses) drive the jaw through `mstudiomouth_t`'s flexdesc rather than
 //     through the flex controllers the expression track writes. Two divergences ride on that track
 //     and are named where they are made: the envelope a `speak` event borrows from its own per-line
@@ -64,10 +64,10 @@ namespace
 	// the scene every think, which pulls each speak event's start earlier by that much so the sample
 	// reaches the ear on time.
 	//
-	// 12.2b — the behaviour that reproduces is "speech is heard at the authored instant"; the 0.1 is
+	// The behaviour that reproduces is "speech is heard at the authored instant"; the 0.1 is
 	// Source's *mixer's* lead, and inheriting it while running Unreal's mixer reproduces the wrong
 	// half. Negative therefore means "ask the audio path what its own lead is", which is the default;
-	// a value >= 0 forces a constant, which is how VtMB's 0.1 stays A/B-able beside the derived one.
+	// a value >= 0 forces a constant, which is how VtMB's 0.1 stays forceable beside the derived one.
 	TAutoConsoleVariable<float> CVarSceneMixahead(
 		TEXT("elysium.SceneMixahead"),
 		-1.f,
@@ -84,7 +84,7 @@ namespace
 		TEXT("Longest a choreo scene may run before it is forced to completion (seconds)."),
 		ECVF_Default);
 
-	// A/B for the actor half only, in the mould of `elysium.SeqTeleport`. 0 runs the timeline and
+	// Debug switch for the actor half only, in the mould of `elysium.SeqTeleport`. 0 runs the timeline and
 	// every output while touching no actor transform and playing no animation — which is how the
 	// alley fight's trigger and completion wiring can be verified while its cinematic animation
 	// asset is still missing.
@@ -108,7 +108,7 @@ namespace
 		TEXT("Honour a choreo scene's hide_ents keyvalue (selection filter is only partly decoded)."),
 		ECVF_Default);
 
-	// A/B for the facial track alone, in the mould of `elysium.SceneActors`: 0 leaves every scene
+	// Debug switch for the facial track alone, in the mould of `elysium.SceneActors`: 0 leaves every scene
 	// actor's face at rest so a body-only performance can be looked at without the expression layer
 	// on top of it.
 	TAutoConsoleVariable<int32> CVarSceneExpressions(
@@ -117,7 +117,7 @@ namespace
 		TEXT("A choreo scene drives its actors' faces from its expression events (1, default) or leaves them at rest (0)."),
 		ECVF_Default);
 
-	// The same A/B for lipsync (12.5). Independent of the expression switch for the same reason the
+	// The same debug switch for lipsync. Independent of the expression switch for the same reason the
 	// jaw is: the phoneme track and the expression track write the same controllers through the same
 	// push, and telling them apart on a live face means being able to turn one off.
 	TAutoConsoleVariable<int32> CVarSceneLipsync(
@@ -126,7 +126,7 @@ namespace
 		TEXT("A choreo scene drives its actors' mouths from each line's .lip phoneme track (1, default) or leaves the phoneme controllers at rest (0)."),
 		ECVF_Default);
 
-	// The same A/B for the jaw. Independent of the expression switch: the two tracks meet on one face
+	// The same debug switch for the jaw. Independent of the expression switch: the two tracks meet on one face
 	// but at different layers, and either alone is a thing worth looking at.
 	TAutoConsoleVariable<int32> CVarSceneJaw(
 		TEXT("elysium.SceneJaw"),
@@ -232,9 +232,7 @@ namespace
 	};
 }
 
-// ============================================================================================
-// FElysiumChoreoScene
-// ============================================================================================
+// --- FElysiumChoreoScene ---
 
 class FElysiumChoreoScene final : public FElysiumEntity, public IElysiumChoreoCallback
 {
@@ -253,7 +251,7 @@ public:
 	int32   PositionEnd = 0;        // where the actors are left at completion
 	bool    bHideEnts = false;      // hide the surrounding NPCs for the scene's duration
 	bool    bForceLod = false;      // force_lod_2 — LOD is not reproduced; read for the inspector
-	bool    bFullSound = false;     // full_sound — 12.2's (the speak path's attenuation)
+	bool    bFullSound = false;     // full_sound — the speak path's attenuation
 
 	// --- Live state --------------------------------------------------------------------------
 	TSharedPtr<const FElysiumSceneData> Scene;
@@ -302,7 +300,7 @@ public:
 	mutable bool bLoggedMissingFlexKey = false;
 	mutable bool bLoggedUnresolvedPhoneme = false;
 
-	// --- the facial track (12.3) --------------------------------------------------------------
+	// --- the facial track ---
 	// One live `expression` event: its table and the row inside it, resolved once when the event
 	// starts. `param`/`param2` never change, and the table cache is shared across every scene.
 	struct FLiveExpression
@@ -317,12 +315,12 @@ public:
 	// pose costs no rig evaluation, and when an expression ends the scene has to write the keys it
 	// was driving back to zero — nothing else knows which those were.
 	TMap<int32, TMap<FString, float>> ActorFacialPose;
-	// --- lipsync (12.5 slice 2) ---------------------------------------------------------------
+	// --- lipsync ---
 	// Per live `speak` event, its `.lip` phoneme track joined to the speaker's own phoneme table.
 	// Keyed by event index like everything else here, so `RestoreEvent` rebuilds it for free by
 	// routing a restored Speak back through SpeakLine. Absent for a line that resolved neither.
 	TMap<int32, FElysiumLipSyncBinding> ActiveLipsync;
-	// --- the amplitude jaw (12.5 slice 1) -----------------------------------------------------
+	// --- the amplitude jaw ---
 	// One authored span of the line's amplitude envelope, on the SCENE clock.
 	struct FJawSpan
 	{
@@ -986,9 +984,7 @@ public:
 
 	virtual bool BlocksNpcMakerSpawns() const override { return bPlaying; }
 
-	// ============================================================================================
-	// IElysiumChoreoCallback — what an event MEANS.
-	// ============================================================================================
+	// --- IElysiumChoreoCallback — what an event MEANS ---
 
 	virtual void StartEvent(const FElysiumSceneData&, const FElysiumSceneEvent& Event, float SceneTime) override
 	{
@@ -1271,8 +1267,8 @@ public:
 			AttachTo = A->GetSkeletalBody();
 			LineOrigin = A->Origin;
 		}
-		// param2 is a dB level ("70dB"). Parsed and carried; the dB->gain curve and full_sound are
-		// 12.2's, so the line plays at the seam's own level for now.
+		// param2 is a dB level ("70dB"). Parsed and carried; the dB->gain curve and full_sound
+		// belong to the speak path, so the line plays at the seam's own level.
 		const FString Session = FString::Printf(TEXT("scene:%u:%d:event:%d"),
 			Handle.Epoch, Handle.Index, EventIndex(Event));
 		const FElysiumAudioVoiceHandle Voice = World->Lines()->PlayDirect(
@@ -1340,7 +1336,7 @@ public:
 		}
 	}
 
-	// --- expression: the facial track (12.3) ---------------------------------------------------
+	// --- expression: the facial track ---
 	//
 	// `param` names a Faceposer weight table under `expressions/` and `param2` a row inside it; the
 	// row is a value + an influence per flex controller, and `event_ramp` is the event's own
@@ -1539,7 +1535,7 @@ public:
 		ActorFacialPose = MoveTemp(Next);
 	}
 
-	// --- silence / loud: the amplitude jaw (12.5 slice 1) --------------------------------------
+	// --- silence / loud: the amplitude jaw ---
 	//
 	// `SILENCE` and `LOUD` are not markers to interpret: their `param` is the span's own duration as a
 	// string (exact on 21,877 of the 21,898 authored uses) and they sit on a `Speech Triggers` channel
@@ -1553,7 +1549,7 @@ public:
 	// audio. Against the audio itself, normalised to each line's own p99 RMS, a `silence` span
 	// averages 0.037, a `loud` span 0.640 and the gaps between them 0.312. So the track marks the
 	// pauses and the peaks of a line and says nothing about the rest of it: roughly two of each per
-	// line, not a per-syllable flap. The dense motion is the `.lip` phoneme track's, which is 12.5's
+	// line, not a per-syllable flap. The dense motion is the `.lip` phoneme track's.
 	// second slice and not here.
 	//
 	// Hence three levels, in this precedence: a live `loud` opens the jaw fully, a live `silence`
@@ -1634,7 +1630,7 @@ public:
 		if (Spans.IsEmpty()) { ++NumLinesWithoutEnvelope; } else { ++NumLineEnvelopes; }
 	}
 
-	// --- lipsync: the three-file join for one line (12.5 slice 2) ------------------------------
+	// --- lipsync: the three-file join for one line ---
 	//
 	// `.lip` for the phoneme timing, `expressions/<model stem>_phonemes.txt` for the weights, and the
 	// model's own phoneme filter for the blend width. Resolved once when the line starts, beside
@@ -1764,7 +1760,7 @@ public:
 		}
 
 		// A first-order lag, framerate-independent. Tau 0 steps, which is the literal reading of the
-		// authored spans and the A/B baseline for the smoothing divergence.
+		// authored spans and the debug-switch baseline for the smoothing divergence.
 		const float Tau = FMath::Max(0.f, CVarJawSmoothing.GetValueOnGameThread());
 		const float Alpha = (Tau <= 0.f || DeltaSeconds <= 0.f)
 			? 1.f : 1.f - FMath::Exp(-DeltaSeconds / Tau);

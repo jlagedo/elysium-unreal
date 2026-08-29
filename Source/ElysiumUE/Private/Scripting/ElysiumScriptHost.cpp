@@ -14,7 +14,7 @@ FElysiumVariant FElysiumNullScriptHost::Eval(const FString& Source, const FElysi
 	FString* OutError)
 {
 	// Scripting is switched off (`elysium.script.live 0`). Make the call observable and return Void
-	// so the caller's truthiness test reads false (error-to-false, RE3), exactly as a failed retail
+	// so the caller's truthiness test reads false (error-to-false), exactly as a failed retail
 	// eval would. Not an error condition — nothing was attempted.
 	UE_LOG(LogElysiumScript, Verbose, TEXT("[null] eval __main__.%s"), *Source);
 	if (OutError) { OutError->Reset(); }
@@ -82,7 +82,7 @@ FElysiumVariant FElysiumCPythonScriptHost::Eval(const FString& Source, const FEl
 {
 	// Run the payload through the real CPython VM. It resolves against the loaded level-script
 	// namespace (level constants, __main__ builtins) — the whole point of the embed. Record the
-	// outcome for the debug layer; Void on any error (error-to-false, RE3).
+	// outcome for the debug layer; Void on any error (error-to-false).
 	FString Err;
 	const FElysiumVariant Result = FElysiumPythonVM::Get().Eval(Source, Ctx, Err);
 	if (State)

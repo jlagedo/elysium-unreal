@@ -5,7 +5,7 @@
 
 class FElysiumEntityWorld;
 
-// S7 — one command registry (roadmap 11.6, `docs/architecture/runtime-architecture.md` §8.2). VtMB has no action
+// S7 — one command registry (`docs/architecture/runtime-architecture.md` §8.2). VtMB has no action
 // abstraction: **an action is a console command string**, and the Unofficial Patch's whole
 // vocabulary is aliases over those strings (`f` → `vm_feed` → `checkFeed()`), so a key bound to a
 // compiled verb and a key bound to a user alias have to be indistinguishable. That is only true if
@@ -24,7 +24,7 @@ enum class EElysiumCmdKind : uint8
 	ButtonPair,
 };
 
-// Where a verb comes from, for the options screen's grouping (10.6/8.10) and the dump verb.
+// Where a verb comes from, for the options screen's grouping and the dump verb.
 enum class EElysiumCmdGroup : uint8
 {
 	Movement,
@@ -68,8 +68,7 @@ struct FElysiumCommandDef
 	// player because it is `+forward`, with no handler in sight.
 	uint64 Button = 0;
 
-	// Human text for the options screen and the dump. For a verb nothing implements yet, this names
-	// the task that owns it, so the dump reads as a work list rather than as a wall of "stub".
+	// Human text for the options screen and the dump.
 	const TCHAR* Help = nullptr;
 };
 
@@ -90,7 +89,7 @@ public:
 	// first call declares the VtMB inventory.
 	static FElysiumCommands& Get();
 
-	// --- Declaration -----------------------------------------------------------------------
+	// Declaration.
 	// Declare a verb. A name declared twice keeps the first declaration (the static inventory wins
 	// over anything that tries to add a verb behind its back).
 	void Declare(const FElysiumCommandDef& Def);
@@ -99,7 +98,7 @@ public:
 	bool IsDeclared(FName Name) const { return Find(Name) != nullptr; }
 	const TArray<FElysiumCommandDef>& All() const { return Defs; }
 
-	// --- Implementation --------------------------------------------------------------------
+	// Implementation.
 	// Install the implementation of a declared verb. Implementations stack, so a system that owns a
 	// verb for a while (a cutscene, a screen) can take it and give it back; the most recently
 	// installed one runs. Binding an undeclared name fails loudly rather than inventing a verb.
@@ -108,7 +107,7 @@ public:
 	bool Unbind(FElysiumCommandBinding& Binding);
 	bool IsBound(FName Name) const;
 
-	// --- Execution -------------------------------------------------------------------------
+	// Execution.
 	// Run one `;`-free statement. Returns **false when the first word is not a declared verb**,
 	// which is the console's cue to try an alias — the registry never guesses.
 	bool Execute(const FString& Statement);
@@ -116,14 +115,14 @@ public:
 	// The same, pre-split: used by the input router, which already knows the verb and the edge.
 	bool Invoke(FName Name, bool bPressed, const FString& Args = FString());
 
-	// --- The user command ------------------------------------------------------------------
+	// The user command.
 	// Where a ButtonPair verb's latch lands. The local player's router owns the builder and installs
 	// itself here; with no sink the button half of a `+cmd` is simply dropped, which is what a
 	// headless logic world and the front end both want.
 	void SetUserCmdSink(FElysiumUserCmdBuilder* Sink) { UserCmdSink = Sink; }
 	FElysiumUserCmdBuilder* GetUserCmdSink() const { return UserCmdSink; }
 
-	// --- Introspection ---------------------------------------------------------------------
+	// Introspection.
 	// How many times each verb has run this session — the coverage report behind `elysium.commands`,
 	// the same shape the script-natives table uses.
 	int32 CallCount(FName Name) const;

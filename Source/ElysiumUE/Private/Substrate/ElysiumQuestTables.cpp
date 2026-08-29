@@ -12,9 +12,7 @@ namespace
 	using ElysiumVdata::ReadVdata;
 }
 
-// ================================================================================================
-// 7. the five quests_*.txt
-// ================================================================================================
+// The five `quests_*.txt` files.
 
 // Fixed and alphabetical, because the save stores the table index: re-ordering this array would
 // silently re-point every journal entry in every existing save.

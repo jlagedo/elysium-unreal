@@ -53,7 +53,7 @@ namespace
 	// of a body standing still; this fails loudly instead.
 	constexpr int32 CastNavigationWaitFrames = 600;
 
-	// --- The no-slide predicate's own numbers, Source units ------------------------------------
+	// The no-slide predicate's own numbers, Source units.
 	// How far the realized speed may sit from the cell being played before the body is sliding. It is
 	// tight on purpose: the mover is commanded with that exact cell every frame, so anything above
 	// rounding means the two numbers came from different places, which is the whole defect.
@@ -401,7 +401,7 @@ bool FElysiumCastRun::BeginCourse(int32 Index)
 	// which reads as a regression in every column. A course begins from the same position, always.
 	ElysiumRng::SeedAll(0);
 
-	// --- Where the course begins ----------------------------------------------------------------
+	// Where the course begins.
 	// An arena course is written against the room's own extent; a sited course begins on the first
 	// node of the map's own route, facing the second, because those are the only coordinates in it
 	// the map itself authored.
@@ -441,7 +441,7 @@ bool FElysiumCastRun::BeginCourse(int32 Index)
 		}
 	}
 
-	// --- Stand the character up -----------------------------------------------------------------
+	// Stand the character up.
 	// Before the props: a `scripted_sequence` names its NPC by targetname, and a marker standing up
 	// ahead of the body it names reports it missing before the course has begun.
 	ElysiumArenaCast::FSpawnRequest Request;
@@ -481,7 +481,7 @@ bool FElysiumCastRun::BeginCourse(int32 Index)
 		HushOtherBodies();
 	}
 
-	// --- Dress the room -------------------------------------------------------------------------
+	// Dress the room.
 	// A sited course dresses nothing: its route is already standing in the map.
 	if (!bSited && Course.Order == ElysiumCastCourses::EOrder::Patrol)
 	{
@@ -669,9 +669,8 @@ bool FElysiumCastRun::Sample()
 	const AElysiumNpcBody* Body = FindBody();
 	if (!Body)
 	{
-		// A body that has gone is a course that cannot be measured. It used to be a warning and a
-		// short recording, and a short recording that still reaches disk is one the comparator reads
-		// as this run.
+		// A body that has gone is a course that cannot be measured. A short recording that still
+		// reaches disk is one the comparator reads as this run, so the course fails instead.
 		Fail(TEXT("the character lost its engine body mid-course"));
 		return false;
 	}
@@ -703,7 +702,7 @@ bool FElysiumCastRun::Sample()
 		return false;
 	}
 
-	// --- The no-slide predicate -----------------------------------------------------------------
+	// The no-slide predicate.
 	// It is asked of the row against the cell that STEERED the row, which is the one the previous
 	// animation pass published: this frame's velocity was realized under the command that pass left
 	// on the mover. Comparing a row's speed against the cell it publishes for the next frame is
@@ -793,7 +792,7 @@ bool FElysiumCastRun::Sample()
 	Previous.MoveYaw = Selection.MoveYaw;
 	Previous.State = Selection.GraphState;
 
-	// --- The selection record, once per request -------------------------------------------------
+	// The selection record, once per request.
 	if (Selection.Generation != LoggedGeneration)
 	{
 		LoggedGeneration = Selection.Generation;
@@ -871,7 +870,7 @@ bool FElysiumCastRun::FinishCourse()
 		Recorder.SetMetaNumber(TEXT("cast_state"), static_cast<int32>(ActorState));
 	}
 
-	// The body's own authored fans (CCC7), the same three the movement harness records: a course run
+	// The body's own authored fans, the same three the movement harness records: a course run
 	// on the no-fan fallback must not be mistaken for one run on the animation.
 	if (const AElysiumNpcBody* Body = FindBody())
 	{
@@ -928,7 +927,7 @@ bool FElysiumCastRun::FinishCourse()
 		NoSlide.WorstSlide, NoSlide.WorstCommand, NoSlide.WorstCell, NoSlide.CellFrames,
 		NoSlide.WorstForward, NoSlide.WorstForwardAllowed, NoSlide.ForwardFrames, *Stem);
 
-	// --- The claim ------------------------------------------------------------------------------
+	// The claim.
 	bool bHeld = true;
 	auto Refuse = [&bHeld, &Course](const FString& Line)
 	{

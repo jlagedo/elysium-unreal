@@ -57,7 +57,7 @@ struct FElysiumEyeReadout
 	bool bAiming = false;
 };
 
-// 12.4 — the per-body application of VtMB's eye system: which slots draw as eyes, the per-frame
+// The per-body application of VtMB's eye system: which slots draw as eyes, the per-frame
 // basis rebuild and material publish, the blink cadence, and the gaze debug seam. Plain C++ owned
 // by `UElysiumEntityBodies` (one instance per map epoch), which forwards its public eye methods
 // here; the iris textures are strong-ref'd by the cache below, so lifetime does not depend on the
@@ -120,8 +120,8 @@ private:
 		int32 DispositionLevel = 1;
 
 		// Blink is two halves in retail: the server picks *when* (a random interval from the
-		// disposition table) and the client runs the 300 ms envelope. Both sit here until 12.4's
-		// gaze cascade lands, which owns the cadence and pushes the toggle through the seam.
+		// disposition table) and the client runs the 300 ms envelope. Both sit here until a
+		// gaze cascade owns the cadence and pushes the toggle through the seam.
 		//
 		// The envelope is asymmetric and that is authored: `w = 2*sqrt(cos(pi*u/2))` folded about
 		// 1 closes the lid 48 ms after the toggle and reopens it over the remaining 252 ms.

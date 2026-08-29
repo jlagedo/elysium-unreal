@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 
 // Minimal Source KeyValues reader, shared by every runtime consumer of VtMB's `.res`/`.vmt`
-// grammar: the P6.3 sound schemes (`ElysiumSoundScheme.cpp`) and the P4.10 sign definitions
+// grammar: the sound schemes (`ElysiumSoundScheme.cpp`) and the sign definitions
 // (`ElysiumSignData.cpp`).
 //
 // Grammar: quoted or bare tokens, `{ }` nesting, `//` line comments outside quotes. Keys fold

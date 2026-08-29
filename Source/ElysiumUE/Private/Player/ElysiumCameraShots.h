@@ -125,9 +125,7 @@ namespace ElysiumCameraShots
 	const TCHAR* LexToString(EElysiumShotAttach Attach);
 }
 
-// --------------------------------------------------------------------------------------------
 // The director
-// --------------------------------------------------------------------------------------------
 
 // What turns a parsed shot into the values `UElysiumCameraComponent` blends, and keeps them current
 // while the shot is up. It lives on `AElysiumMapActor` because resolving an anchor needs the entity

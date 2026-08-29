@@ -1,9 +1,9 @@
-// 12.1 — the choreo timeline: a parsed scene walked against a clock.
+// The choreo timeline: a parsed scene walked against a clock.
 //
-// Split out of the entity so the per-line dialogue path (12.2's CInstancedSceneEntity — ~5,300 of
-// the 5,444 shipped scenes are one `.vcd` per spoken line) can reuse it without an entity, a world
-// or a map. Nothing here knows what an event *means*; it decides only when each one starts,
-// continues and ends, and hands that to a callback.
+// Split out of the entity so the per-line dialogue path (CInstancedSceneEntity — ~5,300 of the
+// 5,444 shipped scenes are one `.vcd` per spoken line) can reuse it without an entity, a world or
+// a map. Nothing here knows what an event *means*; it decides only when each one starts, continues
+// and ends, and hands that to a callback.
 //
 // The model is Valve's, which VtMB forked unchanged: each frame every event is classified
 // START / CONTINUE / STOP / IGNORE against the current time, and the callback is the four-method
@@ -17,8 +17,8 @@
 #include "CoreMinimal.h"
 #include "Substrate/ElysiumSceneData.h"
 
-// What a scene does with its events. One implementer today (the `logic_choreographed_scene`
-// entity); 12.2 adds the dialogue one.
+// What a scene does with its events. Implementers: the `logic_choreographed_scene` entity and the
+// per-line dialogue path.
 class IElysiumChoreoCallback
 {
 public:

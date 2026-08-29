@@ -6,7 +6,7 @@
 
 class UTexture2D;
 
-/** CommonInput controller data backed by soft references to generated Kenney textures. */
+// CommonInput controller data backed by soft references to generated Kenney textures.
 UCLASS(Abstract)
 class UElysiumInputGlyphControllerData : public UCommonInputBaseControllerData
 {

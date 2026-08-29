@@ -17,7 +17,7 @@ class FElysiumNpc;
 // selection" for both selector orders, the decoded chase/attack/dodge/block programs and the
 // interrupt census; "Incapacitation, feeding, grapple, and death" for the three damage schedules;
 // `docs/vtmb/combat-and-damage.md` -> "Target acquisition, sequence commit and recovery" for the
-// announce notice this cycle's `TASK_ANNOUNCE_ATTACK` sends.
+// announce notice `TASK_ANNOUNCE_ATTACK` sends.
 //
 // Every program below whose contents the survey does not decode is marked CHOSEN, NOT RECOVERED at
 // its construction, with the recovered INTENT quoted beside it. A marked program is composed from

@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// R3 — identity is a generation-checked handle; targetnames are non-unique.
+// Identity is a generation-checked handle; targetnames are non-unique.
 //
 // Index is the entity's position in the map's parsed `.ents` def array: stable across
 // runs, never reused within a single map load (killed entities are marked dead, not
@@ -10,7 +10,7 @@
 // a map load carries that load's epoch, and a map teardown bumps the world epoch so all
 // outstanding handles go stale at once.
 //
-// A handle is only *resolved* by FElysiumEntityWorld (P1.4): resolution returns null when
+// A handle is only *resolved* by FElysiumEntityWorld: resolution returns null when
 // the index is unset, the epoch does not match the live world, or the entity is dead —
 // that is the "falsy when dead/stale" contract VtMB scripts rely on (`if(ent):` after a
 // delete). This struct is the pure value; it carries no world pointer, so IsSet() here is

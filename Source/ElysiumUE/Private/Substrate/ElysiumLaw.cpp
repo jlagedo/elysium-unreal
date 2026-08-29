@@ -8,7 +8,7 @@
 #include "ElysiumRng.h"
 #include "ElysiumVariant.h"
 #include "Substrate/ElysiumDisciplines.h"
-#include "Substrate/ElysiumNpcWitness.h"   // Cycle 10c — the world-event lane's record store
+#include "Substrate/ElysiumNpcWitness.h"   // the world-event lane's record store
 #include "Substrate/ElysiumPlayerLog.h"
 
 namespace
@@ -84,9 +84,7 @@ namespace
 namespace ElysiumLaw
 {
 
-// ================================================================================================
-// The pure channel rule
-// ================================================================================================
+// --- The pure channel rule ---
 
 int32 SanitizeLevel(bool bIntegerVariant, int32 Raw)
 {
@@ -176,9 +174,7 @@ bool ExpireTimedChannel(FChannel& Channel, double Now)
 	return true;
 }
 
-// ================================================================================================
-// The pure police-response rule
-// ================================================================================================
+// --- The pure police-response rule ---
 
 int32 DesiredCops(int32 Severity)
 {
@@ -262,9 +258,7 @@ FMasqueradeVerdict DecideMasquerade(const FElysiumPoliceState& Police, double No
 	return Verdict;
 }
 
-// ================================================================================================
-// The pure pursuit / alert edges
-// ================================================================================================
+// --- The pure pursuit / alert edges ---
 
 EEdge SetCopsInPursuit(FElysiumPoliceState& Police, int32 NewCount, double Now)
 {
@@ -308,9 +302,7 @@ bool ExpireHeightenedAlert(FElysiumPoliceState& Police, double Now)
 	return true;
 }
 
-// ================================================================================================
-// The wiring half — producers
-// ================================================================================================
+// --- The wiring half — producers ---
 
 namespace
 {
@@ -336,7 +328,6 @@ namespace
 				*Player.DebugString(), ChannelName);
 			return;
 		}
-		// ============ Cycle 10c hunk 2/3 — the world-event lane's one producer ==================
 		// An act that counted an incident is also published as an expiring world law record, which
 		// is what an NPC's global witness lane accepts on cone, `m_flSeekDistInspection` and a
 		// trace. The record's severity is the level written and its origin is where the player was
@@ -356,7 +347,6 @@ namespace
 			ElysiumNpcWitness::PublishLawEvent(Player.World, Channel, Level, Player.Origin,
 				Player.Handle);
 		}
-		// =======================================================================================
 		UE_LOG(LogElysiumPlayer, Verbose,
 			TEXT("%s %s activity %d for %.2fs (%s, act count %d)"),
 			*Player.DebugString(), ChannelName, Level, Result.Duration,
@@ -392,9 +382,7 @@ void SetInvestigateLevel(FElysiumPlayer& Player, int32 Level)
 // lands, its criminal reassertion is one `SetCriminalLevel(Player, 1)` per classified frame; the
 // channel it writes into needs nothing further.
 
-// ================================================================================================
-// The wiring half — the world outputs
-// ================================================================================================
+// --- The wiring half — the world outputs ---
 
 namespace Outputs
 {
@@ -438,9 +426,7 @@ void FireWorldEvent(FElysiumEntityWorld& World, const FName& Output,
 	WorldEvents->FireOutput(Output, Activator);
 }
 
-// ================================================================================================
-// The wiring half — the world area
-// ================================================================================================
+// --- The wiring half — the world area ---
 
 int32 WorldAreaType(const FElysiumEntityWorld& World)
 {
@@ -506,9 +492,7 @@ void ApplyWorldAreaTransition(FElysiumEntityWorld& World, int32 NewArea)
 	}
 }
 
-// ================================================================================================
-// The wiring half — the two witnessed-incident consumers
-// ================================================================================================
+// --- The wiring half — the two witnessed-incident consumers ---
 
 // The two consumers below are reached from an NPC's schedule branch, after condition gathering set
 // one of the four law conditions (`COND_CRIMINAL_FLEE_LEVEL` 31, `COND_CRIMINAL_ATTACK_LEVEL` 32,
@@ -624,9 +608,7 @@ EAdmission PlayerSupernaturalIncident(FElysiumPlayer& Player, int32 Severity,
 	return Result;
 }
 
-// ================================================================================================
-// Cycle 10c hunk 1/3 — the player-owned scare queue
-// ================================================================================================
+// The player-owned scare queue.
 
 void QueueScareRecord(FElysiumPlayer& Player, const FElysiumEntityHandle& Npc, int32 Severity)
 {
@@ -694,9 +676,7 @@ bool ConsumeScareQueue(FElysiumPlayer& Player, double Now)
 	return true;
 }
 
-// ================================================================================================
-// The wiring half — the pursuit counters and the expiry pass
-// ================================================================================================
+// --- The wiring half — the pursuit counters and the expiry pass ---
 
 namespace
 {
@@ -763,7 +743,7 @@ void TickPlayerLaw(FElysiumPlayer& Player, double Now)
 	}
 
 	// --- 1b. The scare queue ---------------------------------------------------------------------
-	// Cycle 10c hunk 3/3. `PlayerRuleUpdate` "selects from that queue, submits the supernatural
+	// `PlayerRuleUpdate` "selects from that queue, submits the supernatural
 	// incident and removes consumed/expired records", and `PlayerRuleUpdate` is the first call of
 	// `PreThink` — which is this pass. It runs ahead of the response consume below so a scare
 	// record's own incident can be the one that queues this pass's response, rather than always

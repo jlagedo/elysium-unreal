@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumLocomotionSample.h"   // EElysiumWaterLevel — body state, which WaterMove branches on
 
-// The mover's rule set (roadmap 4.7, `docs/vtmb/source_movement.md`).
+// The mover's rule set (`docs/vtmb/source_movement.md`).
 //
 // VtMB runs an early-Source `CGameMovement`: the *math* is stock Source, the *constants* are
 // Troika's, and several differ from Half-Life 2. What lives here is that math as plain C++ with no
@@ -34,7 +34,7 @@ namespace ElysiumMove
 	inline constexpr float MaxVelocity  = 3500.0f * U;// sv_maxvelocity
 	inline constexpr float JumpMaxSpeed = 350.0f * U; // sv_jump_maxspeed, while airborne
 
-	// --- The jump, which is Troika's and not Source's ------------------------------------------
+	// The jump, which is Troika's and not Source's.
 	// `sv_jump_boost` is an instant **origin** displacement on the press frame, in inches — its own
 	// help string says so — not an apex height. The rest of the jump is authored in
 	// `vdata/system/rules.txt` → `RuleData/Jumping`.
@@ -53,7 +53,7 @@ namespace ElysiumMove
 	// table slot holds. What still reads them is the animation classifier's reference gait
 	// (`FElysiumGaitReference`), which needs a walk/run split even for a body that publishes no fan.
 	inline constexpr float WalkSpeed    = 100.0f * U; // speed_walk
-	inline constexpr float RunSpeed     = 225.0f * U; // speed_runbase (+5 per Athletics at 9.4)
+	inline constexpr float RunSpeed     = 225.0f * U; // speed_runbase (+5 per Athletics)
 
 	// What the animation authority scales each gait's authored cells by — function-local statics in
 	// `CHL2_Player::PreThink`, and the reason retail's crouch outruns its walk. Dimensionless.
@@ -66,7 +66,7 @@ namespace ElysiumMove
 	inline constexpr float StandableZ   = 0.7f;
 	inline constexpr float DistEpsilon  = 0.08f;      // cm
 
-	// --- The hulls (RE22, read out of the CGameMovement ctor 0x1011e0d0) --------------------
+	// The hulls, read out of the CGameMovement ctor 0x1011e0d0.
 	// Standing is (-16,-16,0)..(16,16,72) with the eye at 64; ducked keeps the footprint and halves
 	// the height, and its eye sits at **30** — not stock Source's VEC_DUCK_VIEW of 28.
 	inline constexpr float HullHalfWidth  = 16.0f * U;
@@ -75,14 +75,14 @@ namespace ElysiumMove
 	inline constexpr float StandViewZ     = 64.0f * U;
 	inline constexpr float DuckViewZ      = 30.0f * U;
 
-	// --- Duck timing (0x10447ee0 / 0x1044a2bc / 0x10449198) ---------------------------------
+	// Duck timing (0x10447ee0 / 0x1044a2bc / 0x10449198).
 	// `m_flDucktime` counts in milliseconds from GameMovementDuckTime; the elapsed fraction is
 	// `(1000 - ducktime) * 0.001` and is compared against these two.
 	inline constexpr float GameMovementDuckTime = 1000.0f;  // ms
 	inline constexpr float TimeToDuck           = 0.4f;     // s
 	inline constexpr float TimeToUnduck         = 0.2f;     // s
 
-	// --- Water (`WaterMove` 0x101200c0) ------------------------------------------------------
+	// Water (`WaterMove` 0x101200c0).
 	// Two constants differ from HL2: the idle sink is **40**, not 60, and vertical placement uses
 	// the hull midpoint rather than the eye. The 0.8 speed scale is stock.
 	inline constexpr float WaterSpeedScale = 0.8f;          // 0x104491a8, a double
@@ -93,9 +93,7 @@ namespace ElysiumMove
 	inline constexpr float NoclipBoost  = 3.0f;
 }
 
-// --------------------------------------------------------------------------------------------
-// The math
-// --------------------------------------------------------------------------------------------
+// The math.
 //
 // Every one of these is a value transform on a velocity: no component, no pawn, no UWorld. That is
 // what lets `Elysium.Substrate.Movement` assert the numbers `docs/vtmb/source_movement.md` records rather
@@ -182,9 +180,7 @@ namespace ElysiumMove
 	bool ClampCommandSpeed(FVector& CommandCmS, float MaxSpeed);
 }
 
-// --------------------------------------------------------------------------------------------
-// The timestep
-// --------------------------------------------------------------------------------------------
+// The timestep.
 
 // How a frame's delta is chopped into integration steps.
 //
@@ -198,9 +194,7 @@ namespace ElysiumMove
 // The mover therefore integrates the command's own delta once per frame, with no accumulator and
 // no substepping — the same shape retail has.
 
-// --------------------------------------------------------------------------------------------
-// The cvar surface
-// --------------------------------------------------------------------------------------------
+// The cvar surface.
 
 // VtMB's movement cvars, reproduced 1:1 by name and default (`docs/vtmb/source_movement.md` § Movement).
 // They are **declared into the VtMB console store**, not registered as `elysium.*` engine cvars, so
@@ -221,7 +215,7 @@ struct FElysiumMoveTuning
 	float MaxVelocity  = ElysiumMove::MaxVelocity;
 	float JumpMaxSpeed = ElysiumMove::JumpMaxSpeed;
 
-	// --- The jump -----------------------------------------------------------------------------
+	// The jump.
 	// VtMB does **not** use Source's jump. Its own model is a *constant upward push held for a
 	// window*, under reduced gravity, preceded by an instant origin pop — all four numbers below
 	// come from `vdata/system/rules.txt` → `RuleData/Jumping`, not from a `CGameMovement` constant

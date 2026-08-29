@@ -103,7 +103,7 @@ static TAutoConsoleVariable<float> CVarDiffuseColorBoost(
 	     "the bounce and 1 is neutral. Negative = neutral (no override)."),
 	ECVF_Default);
 
-// The $envmap reflection channel (roadmap 7.5), live over the baked materials.
+// The $envmap reflection channel, live over the baked materials.
 //
 // The bake authors MaterialInstanceConstants, and a constant has no runtime setter — so without
 // ApplyMaterialOverrides standing a MID in front of each, every one of these is dead on the path

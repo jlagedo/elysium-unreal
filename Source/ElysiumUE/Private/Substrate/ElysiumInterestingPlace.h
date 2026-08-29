@@ -5,11 +5,9 @@
 #include "ElysiumEntity.h"
 #include "Substrate/ElysiumInterestingPlaces.h"
 
-// ============================================================================================
-// intersting_place — retail's shipped classname is misspelled. The entity owns enable/capacity,
+// `intersting_place` — retail's shipped classname is misspelled. The entity owns enable/capacity,
 // the authored timing/orientation/type fields, and arrival/leave outputs. NPCs own reservations:
 // the logical state remains saveable in the substrate while Unreal only moves the body.
-// ============================================================================================
 
 class FElysiumInterestingPlace final : public FElysiumEntity
 {

@@ -43,7 +43,7 @@ protected:
 	UElysiumGameStateSubsystem* GetGameState() const;
 	// The audio subsystem (WAV decode registry + preview playback), or null.
 	UElysiumAudioSubsystem* GetAudioSubsystem() const;
-	// The NPC skeletal-test subsystem (P8 8.2 glTFRuntime spike), or null.
+	// The NPC skeletal-test subsystem, or null.
 	UElysiumNpcSubsystem* GetNpcSubsystem() const;
 
 	// Shared debug selection across the Elysium windows: the browser sets it, the inspector reads
@@ -52,9 +52,9 @@ protected:
 	static const FElysiumEntityHandle& GetSelection() { return Selection; }
 	static void SetSelection(const FElysiumEntityHandle& InHandle) { Selection = InHandle; }
 
-	// P2.6 — what the last click in the world resolved to (entity body, world surface, or prop
-	// instance) and the geometry the inspector's overlay highlights. Shares the selection's
-	// debug-only single-instance assumption. A pick whose component died reports IsStale().
+	// What the last click in the world resolved to (entity body, world surface, or prop instance)
+	// and the geometry the inspector's overlay highlights. Shares the selection's debug-only
+	// single-instance assumption. A pick whose component died reports IsStale().
 	static const FElysiumPickResult& GetPick() { return Pick; }
 	static void SetPick(const FElysiumPickResult& InPick) { Pick = InPick; }
 	static void ClearPick() { Pick.Reset(); }

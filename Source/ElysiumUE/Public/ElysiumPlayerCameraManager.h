@@ -9,7 +9,7 @@
 
 class UElysiumCameraComponent;
 
-// The frame's settled camera state (CCC2), published at the tail of the view update.
+// The frame's settled camera state, published at the tail of the view update.
 //
 // It exists because the two consumers that need camera values run at different points in the engine
 // frame: the view update happens inside `UWorld::Tick`, while the `-ElysiumMove` harness samples
@@ -22,7 +22,6 @@ struct FElysiumCameraSample
 	// `GFrameCounter` when this was published. Zero means the camera has never solved.
 	uint64 Frame = 0;
 
-	// --- the boom -------------------------------------------------------------------------------
 	// The boom, in cm, with the third-person weight already applied — zero in true first person.
 	float BoomLength = 0.0f;
 	// The damper's result before the weight, so a recording separates "the boom is short" from
@@ -90,11 +89,9 @@ private:
 
 	FElysiumCameraSample Sample;
 
-	// The modern rig's tuning and its integrator state. The tuning is code defaults for now;
-	// `UElysiumCameraProfile` carries it when the options surface that consumes it lands
-	// (`docs/project/roadmap.md` 11.13d). It is deliberately **not** the VtMB console store, which
-	// tunes the faithful evaluator alone — that partition is what stops one value having two owners
-	// while both rigs are live.
+	// The modern rig's tuning and its integrator state. The tuning is code defaults. It is
+	// deliberately **not** the VtMB console store, which tunes the faithful evaluator alone — that
+	// partition is what stops one value having two owners while both rigs are live.
 	ElysiumRig::FElysiumCameraRigTuning RigTuning;
 	// The damped pivot the boom hangs off. The damper lives here rather than on the camera position
 	// so it covers the pivot's own motion — stairs, crouch, gait bob — without also lagging the
@@ -104,11 +101,11 @@ private:
 	FRotator ModernAngles = FRotator::ZeroRotator;
 	float ModernDistance = 0.0f;
 	bool bModernClipped = false;
-	// Snap rather than ease on the next solve — the same re-seed the faithful damper takes, so a
-	// teleport does not record the spring flying in from where the body used to be.
 	// The player's hand-orbit. Rig state like the pivot and the length, so it lives here rather than
 	// on the component; the verbs latch a restore request on the component and this consumes it.
 	ElysiumRig::FElysiumOrbitState ModernOrbit;
+	// Snap rather than ease on the next solve — the same re-seed the faithful damper takes, so a
+	// teleport does not record the spring flying in from where the body used to be.
 	bool bModernNeedsReseed = true;
 	uint64 ModernSolvedFrame = TNumericLimits<uint64>::Max();
 };

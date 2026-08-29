@@ -12,11 +12,10 @@
  * engine's own authoring path -- FMeshDescription plus FSkeletalMeshAttributes for geometry, skin
  * weights and morph deltas -- which is the same path every shipped importer writes into. Owning
  * this removes the vendored glTFRuntime patch, removes glTF's standing exemption from the repo's
-	 * "coordinates are read verbatim" rule, and writes mesh-less animation banks as native assets.
+ * "coordinates are read verbatim" rule, and writes mesh-less animation banks as native assets.
  *
- * This header currently carries the construction spike that proves the path before the format work
- * commits to it: the one risk in the whole approach is whether a mesh built this way keeps its
- * morph targets across a save and a reload, which is exactly where the glTFRuntime bake failed.
+ * The persistence trap is whether a mesh built this way keeps its morph targets across a save and
+ * a reload, which is where the glTFRuntime bake failed.
  */
 UCLASS()
 class ELYSIUMUE_API UElysiumSkeletalBuildLibrary final : public UBlueprintFunctionLibrary

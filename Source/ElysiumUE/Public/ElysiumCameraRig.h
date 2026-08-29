@@ -42,8 +42,7 @@ namespace ElysiumRig
 	// keep governing the boom. The defaults below are retail's own values, so a store with nothing in
 	// it behaves exactly like a stock install. The remaining fields — the collision floor, the
 	// recovery rate and the shoulder offset — are the ones the store does not name, and they are the
-	// project's; `UElysiumCameraProfile` will carry those as a data asset when the options surface
-	// that consumes it lands (`docs/project/roadmap.md` 11.13d).
+	// project's, and they live here as code defaults rather than in the console store.
 	struct FElysiumCameraRigTuning
 	{
 		// The boom at rest, owned by `cam_idealdist` (85 u).

@@ -104,7 +104,7 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	BeginCatalogLoad();
 
 	// Every voice carries its owner's map epoch, so unloading a map is what stops the ambient bed
-	// and the dialogue line it was holding (S4).
+	// and the dialogue line it was holding.
 	if (UElysiumMapSubsystem* Maps = Collection.InitializeDependency<UElysiumMapSubsystem>())
 	{
 		MapEpochRetiredHandle = Maps->OnMapEpochRetired().AddUObject(
@@ -157,7 +157,7 @@ void UElysiumAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 				Info->Error.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" error=%s"), *Info->Error));
 		}), ECVF_Cheat));
 
-	// 12.2b — the lead a cue is scheduled with, term by term and labelled by where each came from,
+	// The lead a cue is scheduled with, term by term and labelled by where each came from,
 	// so the number is explicable instead of trusted.
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(
 		TEXT("elysium.audio_latency"),
@@ -497,7 +497,7 @@ FElysiumVoiceHandle UElysiumAudioSubsystem::Submit(const FElysiumAudioRequest& R
 	Voice.Event.MediaOffsetSeconds = FMath::Max(Request.StartOffsetSeconds, 0.f);
 	Voice.Event.ScheduledAudioClock =
 		Request.ScheduledAudioClock >= 0.0 ? Request.ScheduledAudioClock : AudioClock();
-	// 12.2b — the submit instant on the wall clock, stamped here because everything that follows
+	// The submit instant on the wall clock, stamped here because everything that follows
 	// (the file read, the mp3 decode, the game-thread realization) happens after this line and is
 	// invisible to ScheduledAudioClock. The probe itself is minted by the wave, so the stamp rides
 	// on the voice until there is one to hand it to.

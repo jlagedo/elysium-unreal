@@ -8,12 +8,12 @@
 #include "Debug/ElysiumCogWindow.h"
 #include "imgui.h"
 
-// P6.1/6.2 audio debug window — the test harness for the runtime WAV (dr_wav) + MP3 (dr_mp3)
-// decoders. Type (or pick from the map's ambient_generic references) a path under out/sound/, Play
-// it 2D, and inspect every decode's format/metadata (codec/on-disk tag, channels, sample rate, bits,
-// frames, duration, decode ms, errors) in a live table over the audio subsystem's shared registry —
-// plus a summary of the MS-ADPCM/IMA/PCM/MP3 mix. Drives + reads UElysiumAudioSubsystem, the WorldViz
-// window<->subsystem shared-state pattern.
+// Test harness for the runtime WAV (dr_wav) + MP3 (dr_mp3) decoders. Type (or pick from the map's
+// ambient_generic references) a path under out/sound/, Play it 2D, and inspect every decode's
+// format/metadata (codec/on-disk tag, channels, sample rate, bits, frames, duration, decode ms,
+// errors) in a live table over the audio subsystem's shared registry — plus a summary of the
+// MS-ADPCM/IMA/PCM/MP3 mix. Drives + reads UElysiumAudioSubsystem, the WorldViz window<->subsystem
+// shared-state pattern.
 class FElysiumCogWindow_Audio : public FElysiumCogWindow
 {
 	typedef FElysiumCogWindow Super;

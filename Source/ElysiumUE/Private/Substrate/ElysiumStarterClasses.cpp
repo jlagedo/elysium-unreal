@@ -1,7 +1,7 @@
-// P1.6 — the starter entity classes: the smallest set that makes the substrate observable
-// end-to-end on sp_tutorial_1. `logic_auto` ignites the map (OnMapLoad), `logic_relay` is the
-// indirection layer a quarter of all wires pass through (OnTrigger), and `trigger_multiple`/
-// `trigger_once` turn a brush body's begin/end overlap into OnStartTouch/OnEndTouch/OnTrigger.
+// The starter entity classes: the smallest set that makes the substrate observable end-to-end on
+// sp_tutorial_1. `logic_auto` ignites the map (OnMapLoad), `logic_relay` is the indirection layer
+// a quarter of all wires pass through (OnTrigger), and `trigger_multiple`/`trigger_once` turn a
+// brush body's begin/end overlap into OnStartTouch/OnEndTouch/OnTrigger.
 //
 // Each is a plain-C++ FElysiumEntity subclass (R1, no reflection) registered by a module-static
 // FElysiumClassRegistrar; the class chain (R2) reaches the base Kill/ScriptHide/ScriptUnhide +
@@ -26,10 +26,8 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumTrigger, Log, All);
 
-// ============================================================================================
 // logic_auto — map-load ignition (678 wires across all maps; 5 instances / 13 OnMapLoad rows on
 // the tutorial). Its only job is to fire its OnMapLoad outputs once the map is up.
-// ============================================================================================
 
 class FElysiumLogicAuto final : public FElysiumEntity
 {
@@ -47,16 +45,14 @@ public:
 		static const FName OnMapLoad(TEXT("OnMapLoad"));
 		FireOutput(OnMapLoad, Handle);
 		// Fire-once — no reschedule. (Stock Source SF 1 = remove-on-fire; not modelled: the one-shot
-		// think already fires exactly once, and save/load reaping is a later concern.)
+		// think already fires exactly once.)
 	}
 };
 
-// ============================================================================================
 // logic_relay — the indirection layer (5,957 OnTrigger wires — a quarter of all game wires; 107
 // instances on the tutorial). `Trigger` re-fires the entity's OnTrigger outputs, propagating the
 // activator, then either removes the relay or locks out re-entry until its longest delayed output
 // has gone out; Enable/Disable/Toggle gate it (a disabled relay swallows Trigger).
-// ============================================================================================
 
 class FElysiumLogicRelay final : public FElysiumEntity
 {
@@ -143,11 +139,9 @@ private:
 // above. The registration below is still its one site.
 
 
-// ============================================================================================
 // CBaseFilter — the two filter leaves used by exported trigger `filtername` wires. Resolution is
 // deliberately late and handle-based: filters and triggers are all spawned before Activate, and a
 // killed/stale filter passes just as retail's invalid m_hFilter does.
-// ============================================================================================
 
 class FElysiumFilterBase : public FElysiumEntity
 {
@@ -259,14 +253,12 @@ public:
 	}
 };
 
-// ============================================================================================
-// trigger_hurt (P4.5) — CTriggerHurt (2 on the tutorial), on the substrate clock (R4).
+// trigger_hurt — CTriggerHurt (2 on the tutorial), on the substrate clock (R4).
 //
 // The cadence is retail's own (`docs/vtmb/entity_io.md` -> "Damage cadence"): entry deals
 // `damage x 0.5` and the think deals `damage x 3.0` every 3.0 s, so the sustained rate is
 // `damage` per second. A think that hurt nobody does not re-arm; the next StartTouch does.
 // Enable/Disable + StartDisabled come from CBaseTrigger.
-// ============================================================================================
 
 class FElysiumTriggerHurt final : public FElysiumTriggerBase
 {
@@ -396,7 +388,7 @@ private:
 			return 0;
 		}
 		int32 Hurt = 0;
-		// 11.4 — the damage receiver is the player *entity*: `health` is a CBaseEntity keyfield and
+		// The damage receiver is the player *entity*: `health` is a CBaseEntity keyfield and
 		// the combat character owns what running out of it means. The body still gets the hit (the
 		// engine damage event a flinch/hit reaction will hang off), but it is no longer where the
 		// number lives.
@@ -459,12 +451,10 @@ private:
 	FElysiumEntityHandle LastActivator;
 };
 
-// ============================================================================================
-// trigger_look (P4.5) — CTriggerLook (4 on the tutorial). Fires OnTrigger once the player, standing
+// trigger_look — CTriggerLook (4 on the tutorial). Fires OnTrigger once the player, standing
 // in the volume, looks at the `target` entity within `FieldOfView` (a forward-dot threshold) for a
 // cumulative `LookTime` seconds. Self-contained (needs only the pawn camera + the target origin);
 // fires once, then disables (the common Source case).
-// ============================================================================================
 
 class FElysiumTriggerLook final : public FElysiumTriggerBase
 {
@@ -581,12 +571,10 @@ private:
 	FElysiumEntityHandle LastActivator;
 };
 
-// ============================================================================================
-// trigger_autosave (P4.5) — CTriggerAutosave (1 on the tutorial). A checkpoint volume: the player
-// entering it triggers a save. 11.9 makes that real — it fires the `Auto` ring through the one save
-// seam every other caller uses. Still one-shot per arming, so it does not spam every frame the
-// player lingers in the volume; a ScriptUnhide/Enable re-arms it.
-// ============================================================================================
+// trigger_autosave — CTriggerAutosave (1 on the tutorial). A checkpoint volume: the player
+// entering it fires the `Auto` ring through the one save seam every other caller uses. Still
+// one-shot per arming, so it does not spam every frame the player lingers in the volume; a
+// ScriptUnhide/Enable re-arms it.
 
 class FElysiumTriggerAutosave final : public FElysiumTriggerBase
 {
@@ -628,15 +616,13 @@ private:
 	bool  bLastSaveAccepted = false;
 };
 
-// ============================================================================================
-// info_landmark (P4.6) — CBaseLandmark (FUN_100b7590). A bodiless anchor point shared by name
+// info_landmark — CBaseLandmark (FUN_100b7590). A bodiless anchor point shared by name
 // between two maps: a trigger_changelevel measures the player's offset from the SOURCE map's
 // landmark, and the DESTINATION map re-adds that offset to its own same-named landmark to place
 // the player (level_transitions.md path 2). The runtime placement lives in the map subsystem +
 // AElysiumMapActor::ResolveLandmarkSpawn; this leaf exists so the landmark is a first-class entity
 // (not an inert record) with inspectable state and its own OnEnterMapHere output (fired by the map
 // actor when the player enters here — e.g. pawnshop's newgame/haven landmarks silence Radio2).
-// ============================================================================================
 
 class FElysiumInfoLandmark final : public FElysiumEntity
 {
@@ -648,8 +634,7 @@ public:
 	}
 };
 
-// ============================================================================================
-// trigger_changelevel (P4.6) — CChangeLevel (FUN_101c71f0). A brush trigger over CBaseTrigger that
+// trigger_changelevel — CChangeLevel (FUN_101c71f0). A brush trigger over CBaseTrigger that
 // carries a `map` (destination) + `landmark` (the shared info_landmark name). When the player is in
 // the volume, TouchChangeLevel (FUN_101c7890) fires the transition; VtMB defers the actual swap to
 // end-of-frame, so we request a deferred landmark travel through the map subsystem (the swap can't
@@ -658,7 +643,6 @@ public:
 // scripted path (level-script `ChangeMap(delay, landmark, trigger)` -> the ChangeLevel input) forces
 // the same transition without a touch. OnChangeLevel (field-5 Python on some triggers, e.g.
 // werewolfBloodHavenExit()) fires just before the swap.
-// ============================================================================================
 
 class FElysiumChangeLevel final : public FElysiumTriggerBase
 {
@@ -749,7 +733,7 @@ private:
 		// re-adds the offset to its same-named landmark (translation only; the player keeps their yaw).
 		FVector Offset = FVector::ZeroVector;
 		float   Yaw = 0.0f;
-		// 11.4 — the player's position is the player entity's, sampled from its body at the top of
+		// The player's position is the player entity's, sampled from its body at the top of
 		// this frame like every other entity's origin. `angles` is Source-space, so the Unreal yaw
 		// the destination re-applies is the negated one.
 		if (const FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
@@ -779,8 +763,7 @@ private:
 	}
 };
 
-// ============================================================================================
-// logic_pythoncheck (P5 5.4) — a Python expression gate (51 game-wide). Its `python_script`
+// logic_pythoncheck — a Python expression gate (51 game-wide). Its `python_script`
 // keyvalue is an expression (e.g. `G.Story_State < 110`); the `Test` input evaluates it and fires
 // OnTrue only when the result is a non-zero Python integer, OnFalse otherwise — the standard VtMB
 // branch node (FUN_10135290, entity_io.md / python_bridge.md). Retail decides truth by an exact
@@ -790,7 +773,6 @@ private:
 // (EvalCondition), so error-to-false (a raise / an unresolved name) reads OnFalse, and disabling
 // live eval (`elysium.script.live 0`) makes every gate fail closed — matching retail's Py_eval_input
 // path. The incoming activator is propagated onto the fired branch (Source I/O convention).
-// ============================================================================================
 
 class FElysiumPythonCheck final : public FElysiumEntity
 {
@@ -824,10 +806,6 @@ public:
 			bEverTested ? (bLastResult ? TEXT("OnTrue") : TEXT("OnFalse")) : TEXT("(not tested yet)"));
 	}
 };
-
-// ============================================================================================
-// Registration
-// ============================================================================================
 
 static TUniquePtr<FElysiumEntity> MakeLogicAuto()       { return MakeUnique<FElysiumLogicAuto>(); }
 static TUniquePtr<FElysiumEntity> MakeLogicRelay()      { return MakeUnique<FElysiumLogicRelay>(); }
@@ -930,7 +908,7 @@ static FElysiumClassRegistrar GRegTriggerEnvironmentalAudio(
 	TEXT("trigger_environmental_audio"), FName(TEXT("CBaseTrigger")), &MakeTriggerBase,
 	[](FElysiumClassDesc& /*D*/) { /* room_type is consumed when environmental audio presentation lands */ });
 
-// The P4.5 trigger family — CBaseTrigger leaves (Enable/Disable/Toggle + StartDisabled inherited).
+// The trigger family — CBaseTrigger leaves (Enable/Disable/Toggle + StartDisabled inherited).
 static FElysiumClassRegistrar GRegTriggerHurt(
 	TEXT("trigger_hurt"), FName(TEXT("CBaseTrigger")), &MakeTriggerHurt,
 	[](FElysiumClassDesc& D)

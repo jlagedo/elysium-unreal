@@ -465,9 +465,7 @@ void UElysiumInputRouter::PublishCurrentToBody()
 	}
 }
 
-// =====================================================================================
 // Record / replay
-// =====================================================================================
 
 void UElysiumInputRouter::StartRecording()
 {

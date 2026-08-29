@@ -8,8 +8,8 @@ struct FElysiumVariant;
 class FElysiumEntity;
 class FElysiumEntityWorld;
 
-// R5 — the debug tap on the two chokepoints. Every observability facility (the LogElysiumIO
-// stream, the always-on ring buffer, VLOG, and the Phase-2 entity/queue windows) is a sink;
+// The debug tap on the two chokepoints. Every observability facility (the LogElysiumIO
+// stream, the always-on ring buffer, VLOG, and the entity/queue windows) is a sink;
 // three log lines instrument the whole game. The world notifies its sinks at each I/O event.
 // Params are passed by reference to forward-declared types, so a sink implementation includes
 // only what it actually reads.
@@ -35,7 +35,7 @@ public:
 };
 
 // The always-on I/O history (Source's env_debughistory, 1,000 lines). Holds formatted, ordered
-// lines for postmortem forensics — dumpable on demand, cheap to serialize into saves later. It
+// lines for postmortem forensics — dumpable on demand, cheap to serialize into saves. It
 // records the *delivered* events (I/O, unknowns, Python) — the causality stream — not the
 // intermediate queue churn. Formatting is delegated to the world so handles resolve to the
 // canonical `#idx name(class)` string.

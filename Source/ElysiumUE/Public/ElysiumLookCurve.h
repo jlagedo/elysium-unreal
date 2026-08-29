@@ -30,14 +30,14 @@ namespace ElysiumInput
 	// last four are ours and are inert at their defaults.
 	struct FElysiumLookTuning
 	{
-		// --- Recovered (`docs/vtmb/source_movement.md` § View / camera) ---------------------------
+		// Recovered (`docs/vtmb/source_movement.md` § View / camera).
 		float Sensitivity = 3.0f;      // `sensitivity`
 		float MouseYaw    = 0.022f;    // `m_yaw`
 		// `m_pitch`. A negative value is VtMB's invert-Y, so the sign rides through the scale and the
 		// curve untouched rather than being read as a setting anywhere.
 		float MousePitch  = 0.022f;
 
-		// --- Ours. At these values the curve is the identity ---------------------------------------
+		// Ours. At these values the curve is the identity.
 		// How much gain the curve may add. **Zero is exactly retail**, and it is the shipped default.
 		float Curve     = 0.0f;
 		// Shapes how the gain ramps with speed. Inert while `Curve` is zero.
@@ -75,9 +75,7 @@ namespace ElysiumInput
 	FVector2D ShapeMouseLook(const FVector2D& MouseDegrees, const FElysiumLookTuning& Tuning,
 		float DeltaSeconds);
 
-	// =================================================================================================
-	// The stick path
-	// =================================================================================================
+	// The stick path.
 	//
 	// A thumbstick is not a mouse and cannot be shaped like one. The mouse reports a *displacement*
 	// the hand already made; IA_MouseLook's Enhanced Input Smooth modifier normalizes how those device

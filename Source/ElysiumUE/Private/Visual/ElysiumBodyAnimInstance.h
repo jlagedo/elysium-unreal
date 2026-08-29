@@ -63,7 +63,7 @@ struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
 	// A derived proxy that owns nodes of its own caches them here too, through `Super::CacheBones`.
 	virtual void CacheBones() override;
 
-	// VtMB's one composition stage (CAP7.2); null clears it.
+	// VtMB's one composition stage; null clears it.
 	void SetCompositionRig(TSharedPtr<const FElysiumCompositionRig> InRig);
 	int32 NumAxisInterpRules() const { return AxisInterp.NumResolvedRules(); }
 	void SetHairDynamics(const TArray<FElysiumHairDynamicsChainConfig>& InChains,
@@ -76,7 +76,7 @@ struct FElysiumBodyAnimProxy : public FAnimInstanceProxy
 	bool HairDynamicsRequestedResetForTest(ETeleportType TeleportType) const;
 #endif
 
-	// The facial morph track (12.3): the rig's evaluated morph weights, published from the game
+	// The facial morph track: the rig's evaluated morph weights, published from the game
 	// thread and emitted as morph-target anim curves over whatever pose the body produced. Two
 	// parallel arrays in the rig's own morph order — a name list that changes only when the body's
 	// model does, and weights that change whenever a flex controller is written.
@@ -122,7 +122,7 @@ public:
 	// 98.7% of the vocabulary.
 	static constexpr float DefaultBlendSeconds = 0.2f;
 
-	// --- the one-shot seam ----------------------------------------------------------------------
+	// The one-shot seam.
 	//
 	// Play one clip over whatever owns the base pose. A graph-backed body plays it on a montage slot
 	// and a body with no compiled graph on its own clip player, and a caller holding an
@@ -135,7 +135,7 @@ public:
 	// The two fades are stated apart because retail states them apart — the flinch fades in over 0.1
 	// and out over 0.3 — and because `PlaySlotAnimationAsDynamicMontage` takes them separately.
 	//
-	// **`Identity` is what the event dispatcher walks, and only the caller knows it** (LIFE5). The
+	// **`Identity` is what the event dispatcher walks, and only the caller knows it.** The
 	// sequence is named after the animation the bake wrote; the timeline is keyed by the vocabulary
 	// label the caller resolved it through. An empty identity is legal and means the clip carries no
 	// timeline to walk — see `FElysiumClipIdentity`.
@@ -160,7 +160,7 @@ public:
 	}
 	virtual void StopOneShot(float BlendSeconds) {}
 
-	// --- the phase seam (LIFE5) -----------------------------------------------------------------
+	// The phase seam.
 	//
 	// Where one channel of this body stands on its clip, as the normalized cycle VtMB's own event
 	// dispatcher compares (`docs/vtmb/animation_and_movers.md` → "Sequence events and native
@@ -176,7 +176,7 @@ public:
 		return false;
 	}
 
-	// --- the facial flex track (roadmap 12.3) ------------------------------------------------
+	// The facial flex track.
 	//
 	// Install the body's flex rig (null for a model with no facial sidecar, which is an ordinary
 	// load — most animals, crowd bodies and every player body carry no flex data at all). Every
@@ -187,7 +187,7 @@ public:
 	// Flex controllers are the only writable facial state; the flexdesc weights and morph weights
 	// below them are arithmetic, re-derived on every write. Names are the rig's own (`blink`,
 	// `jaw_drop`, `right_lid_droop`), matched case-insensitively; false when this rig has no such
-	// controller. 12.1's scene expression tracks and 12.5's lipsync both land here.
+	// controller. Scene expression tracks and lipsync both land here.
 	bool SetFlexController(const FString& Name, float Value);
 	bool SetFlexControllerByIndex(int32 Index, float Value);
 	// A whole set of named writes, evaluated once rather than once per controller — an expression row
@@ -198,7 +198,7 @@ public:
 	// Back to rest — every controller at zero, the jaw closed, every morph target off.
 	void ResetFlexControllers();
 
-	// --- the amplitude jaw (roadmap 12.5) ----------------------------------------------------
+	// The amplitude jaw.
 	//
 	// The face's second input, and deliberately not a controller: `mstudiomouth_t` names a FLEXDESC,
 	// so this write lands *downstream* of the rule layer that every controller feeds. 0 is a closed
@@ -209,7 +209,7 @@ public:
 	float GetMouthOpen() const { return MouthOpen; }
 	bool HasMouth() const;
 
-	// --- the eyes (12.4) -----------------------------------------------------------------------
+	// The eyes.
 	//
 	// The face's third input. Written once per frame by `UElysiumEntityBodies::TickEyes`, which is
 	// the only thing that has both the settled bone transforms the aim is built from and the gaze
@@ -221,7 +221,7 @@ public:
 	bool SetEyeInput(const FElysiumEyeInput& Eyes);
 	const FElysiumEyeInput& GetEyeInput() const { return EyeInput; }
 
-	// --- the two composition stages (roadmap CAP7.2) -----------------------------------------
+	// The two composition stages.
 	//
 	// Install the body's composition rig — the `ProcType == 1` rule table. Null for a model that
 	// declares none, which is an ordinary load: the body then poses under Unreal's own hierarchy

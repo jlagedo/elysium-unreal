@@ -21,7 +21,7 @@ class FElysiumDlgConversation;
 struct FElysiumDialogueSession;
 class FElysiumGameSoundBus;
 class FElysiumLineService;
-// Cycle 10c — the law-record store's own type, forward-declared through its namespace so this
+// The law-record store's own type, forward-declared through its namespace so this
 // public header stays clear of the substrate's private ones (the sound bus's own posture).
 namespace ElysiumNpcWitness { class FElysiumLawEventBus; }
 class AActor;
@@ -32,19 +32,19 @@ class UPrimitiveComponent;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
 
-// R1/R5 — the Track-B substrate: one plain-C++ object per map, owned by AElysiumMapActor, that
+// The substrate: one plain-C++ object per map, owned by AElysiumMapActor, that
 // dies with it. It parses `.ents` into live entities, indexes them by name and class, and routes
 // every input delivery and every deferred output through the two chokepoints (AcceptInput and the
 // event queue) with the debug sinks always installed. It is driven twice per frame with the game
 // clock's `now`, straddling the pawn's move the way retail does: RunPlayerThink before it, then
 // Tick after it — think-first (retail order) — run due thinks, then service the queue.
 //
-// Identity (R3) is generation-checked: each world instance takes a unique epoch, every handle it
+// Identity is generation-checked: each world instance takes a unique epoch, every handle it
 // mints carries that epoch, and Resolve returns null for a stale-epoch, out-of-range, or dead
 // handle — the "falsy when dead/stale" contract VtMB scripts rely on. Teardown bumps the epoch,
 // invalidating all outstanding handles at once.
 //
-// Everything it needs *from* the engine arrives as FElysiumWorldServices (11.2, S-seam): bodies,
+// Everything it needs *from* the engine arrives as FElysiumWorldServices: bodies,
 // voices, travel and presentation. `InOwner` is not a fifth service — it is the component outer and
 // the VLOG context, nothing more. No code under this class casts it to a map actor or walks it to a
 // subsystem, which is what lets the whole substrate run with `nullptr, nullptr, {}`.
@@ -58,7 +58,7 @@ public:
 	FElysiumEntityWorld(const FElysiumEntityWorld&) = delete;
 	FElysiumEntityWorld& operator=(const FElysiumEntityWorld&) = delete;
 
-	// --- Lifecycle ---------------------------------------------------------------------
+	// --- Lifecycle ---
 	// Build one entity per def via the registry (inert record when the classname is
 	// unregistered), index names/classes, run the spawn pass (Spawn() on each). The resulting
 	// substrate is dormant: construction may queue work, but no think, event, cursor or physical
@@ -95,7 +95,7 @@ public:
 	// body into the player entity, then think-first — RunThinks(Now) then ServiceEvents(Now).
 	void Tick(double Now);
 
-	// --- Chokepoints (R5) --------------------------------------------------------------
+	// --- Chokepoints ---
 	// Deliver an input to a target: resolve `!self`/`!activator`, fan out over the name index,
 	// walk each target's class-chain input table (case-folded), invoke the thunk, notify sinks.
 	// Unknown target/input: notify (log-once) and keep going. The only input path in the game.
@@ -107,40 +107,40 @@ public:
 		const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller);
 	// Fire a named output from an entity: for each matching def row whose `times` is not spent,
 	// count it down and queue the delivery at now + delay (attaching field-6 Python). The only
-	// way outputs become queue entries. `ValueOverride` (P4.5) is a Source COutput<T> runtime value:
+	// way outputs become queue entries. `ValueOverride` is a Source COutput<T> runtime value:
 	// it fills any wire whose map-authored param is empty; a Void override leaves the empty param.
 	void FireOutput(FElysiumEntity& Source, FName OutputName, const FElysiumEntityHandle& Activator,
 		const FElysiumVariant& ValueOverride = FElysiumVariant::Void());
 
-	// Debug/console injection (P2.2 inspector fire buttons, P2.3 `ent_fire`): queue a hand-made
+	// Debug/console injection (inspector fire buttons, `ent_fire`): queue a hand-made
 	// input delivery through the real event queue (chokepoint 2) at now + delay — the same code
 	// path a game output takes, so manual tests are faithful, show up in the queue window, and are
 	// single-steppable. Targeting one specific entity uses Target "!self" with Caller = its handle.
 	void EnqueueInput(const FString& Target, FName Input, const FElysiumVariant& Param, double Delay,
 		const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller);
 
-	// B3 — runtime entity creation (npc_maker.Spawn): synthesize a live entity from a def built at
+	// Runtime entity creation (npc_maker.Spawn): synthesize a live entity from a def built at
 	// runtime rather than parsed from the map. The def is stored (the entity holds Def*), the handle
 	// index continues past the map's def array (Resolve indexes EntityList directly), name/class
 	// indices are updated so the new entity is a live I/O target immediately, then Spawn() runs — a
 	// leaf builds its body/visual there. Returns the new entity's handle (Invalid on a bad def).
 	FElysiumEntityHandle SpawnRuntimeEntity(FElysiumEntityDef Def);
 
-	// 9.3 — the scripted two-phase create (VtMB's CreateEntityNoSpawn / CallEntitySpawn). Phase 1
+	// The scripted two-phase create (VtMB's CreateEntityNoSpawn / CallEntitySpawn). Phase 1
 	// appends a live entity from a runtime def and indexes it by name/class WITHOUT running Spawn(),
 	// so the script can SetModel/SetName/SetOrigin on it first; phase 2 runs Spawn() (once, gated by
 	// bSpawnCalled) and builds its brush body. SpawnRuntimeEntity is the two fused (npc_maker's path).
 	FElysiumEntityHandle CreateRuntimeEntityNoSpawn(FElysiumEntityDef Def);
 	void CallEntitySpawn(FElysiumEntity& Ent);
 
-	// 11.4 — create this map's player entity (S3): an ordinary runtime entity of classname `player`,
+	// Create this map's player entity: an ordinary runtime entity of classname `player`,
 	// named `!player` so the 48 `point_teleport.target` keys the maps author resolve through the
 	// name index like any other targetname. Hydrated from the session record when a game state is
 	// attached. It also stands up the four engine-owned `viewmodel` companions patch Python expects.
 	// Call it once, after Load and before the first Tick; a second call is a no-op.
 	// A map built without a player (the menu backdrop, a headless logic test) simply never calls it,
-	// and every reader handles FindPlayer() being null — that is the same null-service discipline
-	// 11.2 established.
+	// and every reader handles FindPlayer() being null — the same null-service discipline the
+	// outbound seam established.
 	FElysiumEntityHandle SpawnPlayer();
 	// This world's player entity, or null when the map was built without one.
 	class FElysiumPlayer* FindPlayer() const;
@@ -160,7 +160,7 @@ public:
 	// `EndSession` returns).
 	void ForgetPlayer() { Player = FElysiumEntityHandle::Invalid(); }
 
-	// --- Persistence (11.9, `docs/architecture/save-architecture.md` §5) ----------------------------------
+	// --- Persistence (`docs/architecture/save-architecture.md` §5) ---
 	// Freeze this map to a snapshot. Pure read: the same call serves a travel boundary and a save,
 	// which is what keeps the two from drifting apart. Every entity is diffed against a **fresh
 	// build of its own def** and contributes nothing when it matches — the generalisation of VtMB's
@@ -185,16 +185,16 @@ public:
 	// the dying world's teardown lands afterwards and must not write over them.
 	void Detach();
 
-	// 9.3 — VtMB's Entity.SetName: re-key the name index so the renamed entity is immediately findable
+	// VtMB's Entity.SetName: re-key the name index so the renamed entity is immediately findable
 	// under its new targetname (and no longer under the old). Empty names are handled (add/remove skip).
 	void RenameEntity(FElysiumEntity& Ent, const FString& NewName);
 
-	// B3 — register an NPC skeletal body (built by AElysiumMapActor::BuildNpcVisual) so the world tears
+	// Register an NPC skeletal body (built by AElysiumMapActor::BuildNpcVisual) so the world tears
 	// it down with the map. The FElysiumNpc leaf calls this from Spawn(); mirrors how brush bodies are
 	// tracked, so a world rebuild on a surviving actor (reload) does not leak the components.
 	void RegisterNpcBody(USkeletalMeshComponent* Component);
 
-	// 8.3 — register a dynamic-prop body (built by AElysiumMapActor::BuildPropVisual) so the world
+	// Register a dynamic-prop body (built by AElysiumMapActor::BuildPropVisual) so the world
 	// tears it down with the map, exactly like NPC bodies. The FElysiumProp leaf calls this from Spawn().
 	void RegisterPropBody(UPrimitiveComponent* Component,
 		const FElysiumEntityHandle& UseOwner = FElysiumEntityHandle::Invalid());
@@ -206,28 +206,28 @@ public:
 	void SetUseAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled);
 	void SetTouchAnchorEnabled(const FElysiumEntityHandle& Owner, bool bEnabled);
 
-	// 8.4 — register a physics constraint (built by a phys_hinge leaf) so the world tears it down
+	// Register a physics constraint (built by a phys_hinge leaf) so the world tears it down
 	// with the map, like the prop/NPC bodies. The FElysiumPhysHinge leaf calls this from PostSpawn().
 	void RegisterConstraintBody(UPhysicsConstraintComponent* Component);
 
-	// P5 5.4 — ScheduleTask(delay, "<source>"): defer a field-6 Python source string on the same
+	// ScheduleTask(delay, "<source>"): defer a field-6 Python source string on the same
 	// event queue, evaluated at now+delay through the installed script host (DeliverEvent's Python
 	// half). No I/O target — it is a python-only event, exactly the shape a field-6-only output
-	// produces — so it single-steps in the queue window and serializes into a save (R8). The source
+	// produces — so it single-steps in the queue window and serializes into a save. The source
 	// resolves against the delivery's provenance (Caller = the scheduling entity, `!self`).
 	void EnqueuePython(const FString& Source, double Delay,
 		const FElysiumEntityHandle& Activator, const FElysiumEntityHandle& Caller);
 
-	// P5 5.4 — the logic_pythoncheck / condition path: evaluate an expression string through the
+	// The logic_pythoncheck / condition path: evaluate an expression string through the
 	// installed script host with the given provenance and return its value (Void when the source is
 	// empty, there is no host/state, or the eval failed — error-to-false, so a gate over it reads
 	// OnFalse). Goes through the host (not ElysiumExpr directly) so `elysium.script.live 0` disables
-	// conditions in lockstep with field-6 for A/B, and the eval lands in the recent-eval debug log.
+	// conditions in lockstep with field-6, and the eval lands in the recent-eval debug log.
 	FElysiumVariant EvalCondition(const FString& Source, const FElysiumEntityHandle& Self,
 		const FElysiumEntityHandle& Activator);
 
-	// Overlap routing (P1.5): a brush body's begin/end overlap lands here. Resolve the brush
-	// entity, skip if inert (R6), and call its OnTouchStart/OnTouchEnd (P1.6 triggers override).
+	// Overlap routing: a brush body's begin/end overlap lands here. Resolve the brush
+	// entity, skip if inert, and call its OnTouchStart/OnTouchEnd (triggers override).
 	void RouteEntityTouch(const FElysiumEntityHandle& Touched, const FElysiumEntityHandle& Activator,
 		bool bBegin);
 	void RouteBrushTouch(const FElysiumEntityHandle& Brush, const FElysiumEntityHandle& Activator,
@@ -248,7 +248,7 @@ public:
 	void QueuePlayerUseEdge(EElysiumUseEdge Edge);
 	void UpdatePlayerInteraction();
 
-	// B6 — the `+feed` / `-feed` pair, queued in the controller's pre-move sample and consumed after
+	// The `+feed` / `-feed` pair, queued in the controller's pre-move sample and consumed after
 	// the move beside `+use` (`docs/vtmb/feeding.md` § "Command and initial request"). An
 	// unpaired press runs one target query and `AttemptFeed`; a paired feeder press clears the
 	// continuation latch, while button-up is inert. The action owns the latch independently of the
@@ -256,7 +256,7 @@ public:
 	void QueuePlayerFeedEdge(EElysiumUseEdge Edge);
 	void UpdatePlayerFeed();
 
-	// LIFE5 — the player's own weapon frame, run once per post-move tick in retail's `PostThink`
+	// The player's own weapon frame, run once per post-move tick in retail's `PostThink`
 	// order (`docs/vtmb/player-entity.md` § "Recovered `PostThink` body": controlled-use first
 	// refusal, then `ItemPostFrame`). It computes this frame's press edges off the button field
 	// above, applies the refusals, and hands the held/pressed pair to the active weapon's
@@ -264,7 +264,7 @@ public:
 	// stays its schedule tasks' direct `AttackIntent` calls.
 	void UpdatePlayerWeaponFrame();
 
-	// LIFE5 — `CBasePlayer::PostThink`'s melee stop, run once per post-move tick immediately before
+	// `CBasePlayer::PostThink`'s melee stop, run once per post-move tick immediately before
 	// the frame's animation selection. No `docs/vtmb/` section owns this block yet: it sits between
 	// the grounded fall-sound reset and the realized-action classifier, which is a gap in
 	// `player-entity.md`'s recovered `PostThink` listing.
@@ -286,7 +286,7 @@ public:
 	// did not already say.
 	void UpdatePlayerMeleeMovementStop(const FElysiumIdealActivityState& State);
 
-	// LIFE5 — one frame of the melee contact walk, for EVERY character holding a live melee swing.
+	// One frame of the melee contact walk, for EVERY character holding a live melee swing.
 	//
 	// Retail runs the swept contact on the CHARACTER's own update rather than on the player's input
 	// path, so this is not a sibling of the weapon frame above: the player and every swinging NPC
@@ -298,7 +298,7 @@ public:
 	// actor's tick instead of from `Tick(Now)`.
 	void AdvanceMeleeSwings(float DeltaSeconds);
 
-	// LIFE5 — the whole combat button field, forwarded as a LEVEL rather than as an edge pair. This
+	// The whole combat button field, forwarded as a LEVEL rather than as an edge pair. This
 	// is retail's one current-button field at player `+0x2088`: every consumer reads bits off it and
 	// derives whatever edge it needs, rather than each verb queueing its own press/release history
 	// (`docs/vtmb/controls.md` § "Attack, block and weapon commands"). The block classifier wants a
@@ -341,9 +341,9 @@ public:
 	bool PlayerBeginTerminalHack(const FElysiumEntityHandle& OwnerHandle, uint32 SessionSerial);
 	EElysiumUseOutcome GetLastUseOutcome() const { return LastUseOutcome; }
 
-	// --- Screen fade (P4.5 env_fade) ---------------------------------------------------
+	// --- Screen fade (env_fade) ---
 	// A full-screen colour fade driven by env_fade's `Fade` input, advanced off the game clock and
-	// published each frame by UElysiumPresentationSubsystem (11.8). Held on the world so it dies with
+	// published each frame by UElysiumPresentationSubsystem. Held on the world so it dies with
 	// the map. One active fade at a time — a new Fade replaces the running one; VtMB keeps a fade
 	// *list*, but its colours sum and its alphas max, which is indistinguishable from one slot while
 	// every fade on a map is the same colour (all of them are black on the tutorial).
@@ -354,9 +354,9 @@ public:
 	// visible; false when idle. Const — the HUD polls it; an expired fade reports idle.
 	bool GetScreenFade(FLinearColor& OutColor) const;
 
-	// --- Open sign window (P4.10 game_sign) --------------------------------------------
+	// --- Open sign window (game_sign) ---
 	// The one sign panel currently on screen, driven by game_sign's OpenWindow/CloseWindow and
-	// published each frame by UElysiumPresentationSubsystem (11.8). Same shape as the screen fade:
+	// published each frame by UElysiumPresentationSubsystem. Same shape as the screen fade:
 	// held on the world so it dies with the map, one at a time (a second OpenWindow replaces the
 	// first, matching CSignUI's single panel). The handle identifies the owning entity so dismissal
 	// can fire its OnUseEnd back through the real output path.
@@ -381,9 +381,9 @@ public:
 	// The open sign's `fade_in` seconds (0 = appear instantly).
 	float GetOpenSignFadeIn() const { return OpenSignFadeIn; }
 
-	// --- Open dialogue (P9 9.1 / B4 `.dlg` conversation) --------------------------------
+	// --- Open dialogue (`.dlg` conversation) ---
 	// The one conversation currently on screen, driven by an NPC's StartPlayerDialogRemote and drawn
-	// by the visual-novel Slate box off the published view state (11.8 — same held-on-the-world
+	// by the visual-novel Slate box off the published view state (same held-on-the-world
 	// lifetime as the sign/fade). The owning NPC's OnDialogEnd fires when it closes (the beat
 	// machine's hinge — DialogPostProcess reads the `G` flags the dialogue's field-5 actions wrote).
 	void OpenDialog(const FElysiumEntityHandle& Owner, TSharedRef<FElysiumDlgConversation> Conversation,
@@ -416,7 +416,7 @@ public:
 	void GetDialogueDebugState(TArray<TPair<FString, FString>>& Out) const;
 	FString ScriptedSessionSaveBlockReason() const;
 
-	// The one scripted camera the map has up (11.7), held here for exactly the reason the sign and the
+	// The one scripted camera the map has up, held here for exactly the reason the sign and the
 	// conversation are: it is world state with a lifetime, and the thing that draws it is replaceable.
 	// `SetCamera(shotfile)` (115 script calls) sets it and `RemoveCamera` clears it; setting a second
 	// one replaces the first, which is what "*the* cinematic camera mode" means. Both no-op with no
@@ -446,7 +446,7 @@ public:
 	// The game-state subsystem (the `G`/quest store, player sheet, script host). Outlives the world.
 	UElysiumGameStateSubsystem* GetGameState() const { return GameState; }
 
-	// --- The outbound seam (11.2) ------------------------------------------------------
+	// --- The outbound seam ---
 	// The five services, injected at construction. **Every one may be null** — a headless world has
 	// none, `elysium.NpcBodies 0` runs without an embodiment, and Presenter has no production
 	// implementation where nothing publishes a view. Call sites check; the world never manufactures
@@ -476,7 +476,7 @@ public:
 	const FElysiumGameSoundBus& GameSounds() const;
 	FElysiumGameSoundBus& GameSounds();
 
-	// ================= Cycle 10c — the world-event law lane's record store =====================
+	// --- The world-event law lane's record store ---
 	// The expiring criminal/supernatural records an NPC's global witness lane polls, in exactly the
 	// game-sound bus's shape and held by pointer for the same reason: a producer stamps a record, no
 	// receiver is bound, and every consumer scans the retained window during its own think. It is
@@ -484,19 +484,18 @@ public:
 	// `ElysiumNpcWitness::FElysiumLawEventBus`.
 	const ElysiumNpcWitness::FElysiumLawEventBus& LawEvents() const;
 	ElysiumNpcWitness::FElysiumLawEventBus& LawEvents();
-	// ==========================================================================================
 
 	const FElysiumWeatherState& GetWeatherState() const { return WeatherState; }
 	void FadeGlobalWetness(float Target);
 	FElysiumLineService* Lines() const { return LineService.Get(); }
 
-	// Debug tap seam (P2.3 `ent_*`): install an extra I/O sink, owned by the world and torn down
+	// Debug tap seam (`ent_*`): install an extra I/O sink, owned by the world and torn down
 	// with it. The ent_* debug subsystem taps the two chokepoints for its overlay/break tooling
 	// through the same sink interface the ring buffer and log stream already use — no I/O side
-	// channel (R5). Re-installed by the subsystem whenever a new world epoch appears.
+	// channel. Re-installed by the subsystem whenever a new world epoch appears.
 	void AddSink(TUniquePtr<IElysiumIOSink> InSink);
 
-	// Visual-change seam (P2.4 retained gizmo layer): a callback fired whenever an entity's
+	// Visual-change seam (retained gizmo layer): a callback fired whenever an entity's
 	// dormancy/liveness flips (from FElysiumEntity::OnDormancyChanged / Kill). It lets a retained
 	// visualizer dirty just that one instance on the event instead of polling every entity every
 	// frame. Optional (unset in normal play); the debug subsystem sets it per epoch. Called by the
@@ -504,16 +503,16 @@ public:
 	void SetVisualChangedHook(TFunction<void(const FElysiumEntity&)> Hook) { VisualChangedHook = MoveTemp(Hook); }
 	void NotifyVisualChanged(const FElysiumEntity& Ent) const { if (VisualChangedHook) { VisualChangedHook(Ent); } }
 
-	// --- Resolution / iteration --------------------------------------------------------
+	// --- Resolution / iteration ---
 	FElysiumEntity* Resolve(const FElysiumEntityHandle& Handle);
 	const FElysiumEntity* Resolve(const FElysiumEntityHandle& Handle) const;
 	FElysiumEntity* FindByName(const FString& Name);   // first live match, or null
 	bool IsNpcMakerSceneBlocked() const;
-	// First live info_landmark with this targetname (the P4.6 landmark-transition anchor), or null.
+	// First live info_landmark with this targetname (the landmark-transition anchor), or null.
 	FElysiumEntity* FindLandmark(const FString& Name);
 	void ForEachNamed(const FString& Pattern, TFunctionRef<void(FElysiumEntity&)> Fn);
 
-	// RE29 — how VtMB matches a targetname against a search string
+	// How VtMB matches a targetname against a search string
 	// (`CGlobalEntityList::FindEntityByName`, vampire.dll FUN_100f7770). A **trailing** `*` makes it a
 	// case-insensitive prefix match over the characters before it (`_strnicmp`, n = len-1); anything
 	// else is a case-insensitive exact match (`_stricmp`). Only the final character is special — a `*`
@@ -554,7 +553,7 @@ public:
 	// found" from "receiver refused" instead of reading a whole map as one pass/fail. Accounting
 	// only — nothing here participates in delivery, ordering or outcome.
 	//
-	// Live, keyed, and readable without the console (K10): the map holds only the wires something
+	// Live, keyed, and readable without the console: the map holds only the wires something
 	// reached, which is why the report below joins it against the def array rather than being read
 	// straight. It is per-session and deliberately NOT serialized: a restored save that claimed the
 	// firing history of the run that wrote it would answer a question nobody asked — the question is
@@ -584,9 +583,9 @@ private:
 	void TransitionUseFocus(const FElysiumUseCandidate* Candidate);
 	void EndActiveUse(EElysiumUseEndReason Reason);
 	float InteractionPromptAlpha(double Now) const;
-	// Build the brush body (P1.5) for one entity, if it is a brush with hulls: cook the convex
+	// Build the brush body for one entity, if it is a brush with hulls: cook the convex
 	// UBodySetup from the def, place it at the def origin, attach it to the owner actor, store it
-	// on the entity, and start it dormant when born hidden. Point/logic entities get no body (R1).
+	// on the entity, and start it dormant when born hidden. Point/logic entities get no body.
 	void BuildBrushBody(FElysiumEntity& Ent);
 	void CallEntityActivate(FElysiumEntity& Ent);
 	// The by-name AcceptInput, carrying the wire the delivery came from. The public overload is this
@@ -604,7 +603,7 @@ private:
 	// The queue.Add wrapper: assigns time/serial upstream, notifies OnQueued.
 	void AddEvent(FElysiumIOEvent&& Event);
 	void ServiceEvents(double Now);
-	// LIFE5 — one frame of every bodied entity's sequence-event timelines, run before the thinks.
+	// One frame of every bodied entity's sequence-event timelines, run before the thinks.
 	//
 	// It takes no clock: the dispatcher's whole rule is an interval over a NORMALIZED cycle the pose
 	// layer publishes, so nothing in the walk reads world time (`Substrate/ElysiumAnimEvents.h`).
@@ -614,17 +613,17 @@ private:
 	void DeliverInputTo(FElysiumEntity& Target, const FElysiumIOEvent& Event, double Now);
 	// Resolve a due event's target string to live entities (skips dead), honouring !self/!activator.
 	void ResolveTargets(const FElysiumIOEvent& Event, TArray<FElysiumEntity*>& Out);
-	// The one name-search walk (RE29), shared by ForEachNamed / FindByName / ResolveTargets so a
+	// The one name-search walk, shared by ForEachNamed / FindByName / ResolveTargets so a
 	// pattern can never mean different things to a script, the I/O bus and a console verb. Visits every
 	// live match in entity-list order until `Fn` returns false. An exact pattern takes the NameIndex
 	// hash and sorts what it finds; only a trailing-`*` pattern pays for the linear scan.
 	void ForEachMatch(const FString& Pattern, TFunctionRef<bool(FElysiumEntity&)> Fn);
-	// 11.9 — re-stamp a handle read out of a payload with this world's epoch (Invalid when its index
+	// Re-stamp a handle read out of a payload with this world's epoch (Invalid when its index
 	// no longer exists). The only place a saved handle becomes a live one.
 	FElysiumEntityHandle RebaseHandle(const FElysiumEntityHandle& Saved) const;
 	// One entity's full state, undiffed — the shared half of the freeze and the baseline.
 	FElysiumEntityState CaptureState(const FElysiumEntity& Ent) const;
-	// 11.9 — restore one snapshot record onto its live entity (ApplySnapshot's per-record half):
+	// Restore one snapshot record onto its live entity (ApplySnapshot's per-record half):
 	// fields, rename, origin, lifecycle flags, leaf state, then dormancy, in that order. Returns
 	// false — with a warning naming the snapshot — when the record has no live entity at its index
 	// or the entity's classname no longer matches the saved one.
@@ -640,12 +639,12 @@ private:
 
 	AActor* Owner = nullptr;                          // component outer + VLOG context; not owned
 	UElysiumGameStateSubsystem* GameState = nullptr;  // clock + script host; outlives the world
-	FElysiumWorldServices WorldServices;              // the outbound seam (11.2); members may be null
+	FElysiumWorldServices WorldServices;              // the outbound seam; members may be null
 	FElysiumWeatherState WeatherState;
 	// The game-sound stimulus window. Held by pointer so the substrate's own header stays out of
 	// this public one, the way LineService below already does.
 	TUniquePtr<FElysiumGameSoundBus> GameSoundBus;
-	// Cycle 10c — the law-record store, held the same way and for the same reason.
+	// The law-record store, held the same way and for the same reason.
 	TUniquePtr<ElysiumNpcWitness::FElysiumLawEventBus> LawEventBus;
 	// Set once the rulebook has been asked for the sound-volume table. Latched rather than retried,
 	// so a world with no game state (or with no exported `vdata`) costs one lookup and then runs on
@@ -671,18 +670,18 @@ private:
 	FElysiumEventQueue EventQueue;
 	TArray<TUniquePtr<IElysiumIOSink>> Sinks;
 	FElysiumRingBufferSink* Ring = nullptr;           // owned in Sinks; the always-on history
-	TFunction<void(const FElysiumEntity&)> VisualChangedHook;   // P2.4 gizmo dirty seam (debug-only)
+	TFunction<void(const FElysiumEntity&)> VisualChangedHook;   // gizmo dirty seam (debug-only)
 
-	// Brush bodies (P1.5): the map actor owns them (they are its components); we hold weak refs to
+	// Brush bodies: the map actor owns them (they are its components); we hold weak refs to
 	// gate them and to destroy them on teardown (the world logically owns the embodiments).
 	TArray<TWeakObjectPtr<UElysiumBrushComponent>> Bodies;
-	// B3 NPC skeletal bodies (built on the map actor, gated by their leaf on dormancy): weak refs held
+	// NPC skeletal bodies (built on the map actor, gated by their leaf on dormancy): weak refs held
 	// so a world rebuild on a surviving actor destroys them, like Bodies.
 	TArray<TWeakObjectPtr<USkeletalMeshComponent>> NpcBodies;
-	// 8.3 dynamic-prop bodies (built on the map actor, gated/moved by their FElysiumProp leaf): weak
+	// Dynamic-prop bodies (built on the map actor, gated/moved by their FElysiumProp leaf): weak
 	// refs held so a world rebuild on a surviving actor destroys them, like NpcBodies.
 	TArray<TWeakObjectPtr<UPrimitiveComponent>> PropBodies;
-	// 8.4 phys_hinge constraints (built on the map actor by the leaf's PostSpawn): weak refs held so
+	// phys_hinge constraints (built on the map actor by the leaf's PostSpawn): weak refs held so
 	// a world rebuild on a surviving actor destroys them, like PropBodies.
 	TArray<TWeakObjectPtr<UPhysicsConstraintComponent>> Constraints;
 	// UE may report the same overlap once from its movement update and once from the explicit
@@ -692,17 +691,17 @@ private:
 	int32 TouchBeginCount = 0;
 	int32 TouchEndCount = 0;
 
-	// 11.4 — this map's player entity (S3), or Invalid when the map was built without one).
+	// This map's player entity, or Invalid when the map was built without one.
 	FElysiumEntityHandle Player;
 	// The active npc_VPlayerController stand-in, restored by finding the saved runtime entity after
 	// snapshot application. It is never valid outside this map epoch.
 	FElysiumEntityHandle PlayerControllerEntity;
 
-	// 11.9 — set by Detach(): this world no longer owns any part of the session, so Teardown neither
+	// Set by Detach(): this world no longer owns any part of the session, so Teardown neither
 	// dehydrates the player nor freezes a snapshot over the one a load just restored.
 	bool bDetached = false;
 
-	// 11.9 — the omission baseline: each entity's state as the spawn pass left it, index-aligned
+	// The omission baseline: each entity's state as the spawn pass left it, index-aligned
 	// with EntityList. A freeze records only what has moved since, which is what makes a 2,600-entity
 	// map a few kilobytes. Captured once at Load and never updated by a restore, because a rebuild
 	// always starts from the spawn pass.
@@ -745,7 +744,7 @@ private:
 	};
 	FInteractionPrompt InteractionPrompt;
 
-	// P4.5 env_fade screen-fade state (one at a time). GetScreenFade derives the current alpha from
+	// env_fade screen-fade state (one at a time). GetScreenFade derives the current alpha from
 	// NowSeconds() against StartTime, so no per-frame advance is needed; an expired fade simply
 	// reports idle (bActive stays set but the phase math returns false past the last phase).
 	struct FScreenFade
@@ -790,7 +789,7 @@ private:
 	};
 	FScreenFade ScreenFade;
 
-	// P4.10 open-sign state (one at a time). The panel content itself is parsed and cached on the
+	// Open-sign state (one at a time). The panel content itself is parsed and cached on the
 	// game_sign entity; the world only tracks which entity owns the screen and since when.
 	// The scripted camera's handle on IElysiumEmbodiment's channel; 0 = none up.
 	int32 ScriptedCameraShot = 0;
@@ -812,18 +811,18 @@ private:
 	TSharedPtr<const FElysiumSignData> OpenSignData;   // incomplete here; freed in the .cpp
 	float OpenSignFadeIn = 0.0f;
 
-	// 9.1 / B4 open-dialogue state (one at a time). The conversation owns the branch cursor; the world
+	// Open-dialogue state (one at a time). The conversation owns the branch cursor; the world
 	// tracks which NPC it belongs to so ending it can fire that NPC's OnDialogEnd.
 	TUniquePtr<FElysiumDialogueSession> DialogueSession;  // incomplete here; freed in the .cpp
 	// End the open session: clear the slot and (unless bSilent) enqueue the owner's EndDialog input so
-	// OnDialogEnd fires through the real chokepoint (the B3 seam the runner reuses).
+	// OnDialogEnd fires through the real chokepoint (the same seam the runner reuses).
 	void EndDialogSession(bool bSilent);
 	void BeginDialogueTurn();
 	void UpdateDialogueAutomatic();
 	void SelectDialogueCamera(bool bLineBoundary);
 	void UpdateSelectedDialogueCamera();
 
-	// --- 12.5, the dialogue half of lipsync ----------------------------------------------------
+	// --- The dialogue half of lipsync ---
 	// A conversation turn has no authored timeline — the line simply starts when the turn opens — so
 	// unlike a choreo scene there is no scene clock to ride and no per-event latch to key off. The
 	// world holds the one open turn's join and drives it from its own tick.

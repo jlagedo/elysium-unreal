@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -125,11 +125,11 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 
 using ElysiumSaveTestHelpers::SaveTestCounterValue;
 
-// =====================================================================================
+
 // B6 feeding — the cadence, the unit transaction, the acceptance policy, the paired state
 // machine, idempotent teardown, the depleted-victim death path, and save/restore of an
 // in-progress feed. `docs/vtmb/feeding.md` owns every number asserted here.
-// =====================================================================================
+
 
 namespace
 {
@@ -818,10 +818,10 @@ bool FElysiumFeedingTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The maker's child output provenance (§5.5.1): a synthesized child carries the maker's authored
 // lifecycle wires and fires them itself.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFeedMakerOutputsTest,
 	"Elysium.Substrate.FeedMakerOutputs", GElysiumTestFlags)

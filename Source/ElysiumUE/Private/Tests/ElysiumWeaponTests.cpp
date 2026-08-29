@@ -672,7 +672,7 @@ bool FElysiumWeaponInstallTest::RunTest(const FString&)
 // =====================================================================================
 // The equip funnel: OnEquipped/OnHolstered are the ONE door a real equip/holster
 // transaction reaches the wield attach through, for an NPC and the player alike
-// (`docs/project/plans/animation.md` -> LIFE4 "The equip funnels"). This suite is
+// (`docs/project/plans/animation.md` -> "The equip funnels"). This suite is
 // content-free and builds neither wearer a `model`, so neither stands a skeletal body
 // (`FElysiumAnimating::BuildBody`) and `ApplyWieldVisual`'s
 // `Wearer.GetSkeletalBody() == nullptr` early-out is what actually runs on both sides
@@ -2056,7 +2056,7 @@ bool FElysiumWeaponComboTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// The band a melee swing claims the base channel at, and the air fork (LIFE5).
+// The band a melee swing claims the base channel at, and the air fork.
 //
 // A melee swing replaces the BASE pose, while the ranged and reload arms write only a layer and
 // leave the base to the gait ladder. Two consequences are asserted here, because both are invisible
@@ -3122,7 +3122,7 @@ bool FElysiumWeaponRangedTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// The attack clip's chain: one weapon entity, two bodies (LIFE5).
+// The attack clip's chain: one weapon entity, two bodies.
 //
 // `FElysiumWeapon` is the same class in the player's hand and in a combatant's, so the
 // activity it asks for cannot pick its translator off the weapon or off the stem. It picks
@@ -3257,7 +3257,7 @@ bool FElysiumWeaponAnimBodyKindTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// The sequence-event weapon route (LIFE5 slice 2).
+// The sequence-event weapon route.
 //
 // `CBaseCombatCharacter::HandleAnimEvent` (`0x1032e330`) forwards the whole 3000..3999
 // band to its active weapon's `Operator_HandleAnimEvent` `+0x5c8`; the 17 ranged classes'
@@ -3881,7 +3881,7 @@ bool FElysiumWeaponAnimEventTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// The leaf blob's schema (11.9 rider).
+// The leaf blob's schema.
 //
 // A `FElysiumEntityState::LeafState` is opaque bytes: the freeze writes the entity
 // through its own `Serialize` into a private memory archive and stores the result. That
@@ -4135,7 +4135,7 @@ bool FElysiumWeaponLeafSchemaTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// Inventory selection — the selector's authority (8.9's selector clause).
+// Inventory selection — the selector's authority (the selector clause).
 //
 // `system/items.txt` declares the categories and the section each item type files
 // under, so the cursor's vocabulary is authored rather than chosen. What this suite pins

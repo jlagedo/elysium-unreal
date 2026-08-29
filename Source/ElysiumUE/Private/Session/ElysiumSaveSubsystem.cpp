@@ -59,9 +59,7 @@ void UElysiumSaveSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-// ================================================================================================
-// Slots
-// ================================================================================================
+// Slots.
 
 FString UElysiumSaveSubsystem::ResolveSlotName(EElysiumSaveKind Kind, const FString& Requested) const
 {
@@ -136,9 +134,7 @@ bool UElysiumSaveSubsystem::DeleteSlot(const FString& Slot)
 	return UGameplayStatics::DeleteGameInSlot(Slot, GUserIndex);
 }
 
-// ================================================================================================
-// Freeze / thaw
-// ================================================================================================
+// Freeze / thaw.
 
 bool UElysiumSaveSubsystem::CanSave(FString& OutReason) const
 {
@@ -208,7 +204,7 @@ bool UElysiumSaveSubsystem::BuildPayload(FElysiumSavePayload& Out, FString& OutE
 		return false;
 	}
 
-	// --- Session ------------------------------------------------------------------------------
+	// Session.
 	Out.Session.ClockNow = State->GameClock().GetNow();
 	for (const TPair<FString, FElysiumVariant>& G : State->GetGlobals())
 	{
@@ -232,7 +228,7 @@ bool UElysiumSaveSubsystem::BuildPayload(FElysiumSavePayload& Out, FString& OutE
 	Out.Session.RngSessionSeed = ElysiumRng::SessionSeed();
 	ElysiumRng::Snapshot(Out.Session.Rng);
 
-	// --- Player -------------------------------------------------------------------------------
+	// Player.
 	// The live entity is the truth while a map is up, so dehydrate it into a copy of the record
 	// rather than reading the record, which is only refreshed at teardown.
 	Out.Player = State->PlayerRecord();
@@ -242,7 +238,7 @@ bool UElysiumSaveSubsystem::BuildPayload(FElysiumSavePayload& Out, FString& OutE
 		PlayerEnt->Dehydrate(Out.Player);
 	}
 
-	// --- Maps ---------------------------------------------------------------------------------
+	// Maps.
 	// Every map visited this run, plus the current one frozen right now through the same call a
 	// travel boundary uses.
 	Out.Maps = State->MapSnapshots();
@@ -253,7 +249,7 @@ bool UElysiumSaveSubsystem::BuildPayload(FElysiumSavePayload& Out, FString& OutE
 		Out.Maps.Add(Current.MapName, MoveTemp(Current));
 	}
 
-	// --- World --------------------------------------------------------------------------------
+	// World.
 	Out.World.VisitedMaps = State->VisitedMaps();
 	if (World)
 	{
@@ -295,7 +291,7 @@ void UElysiumSaveSubsystem::ApplyPayload(const FElysiumSavePayload& In)
 	}
 
 	// The world that is about to die must not write over any of this: travel is deferred to the end
-	// of the frame, so its teardown lands after we return. Detach is what 11.4's ForgetPlayer is for
+	// of the frame, so its teardown lands after we return. Detach is what ForgetPlayer is for
 	// EndSession — the same "this world no longer owns the session" statement, one step wider.
 	if (FElysiumEntityWorld* Dying = State->CurrentEntityWorld())
 	{
@@ -343,9 +339,7 @@ FElysiumSaveHeaderData UElysiumSaveSubsystem::MakeHeader(const FElysiumSavePaylo
 	return H;
 }
 
-// ================================================================================================
-// Save / load
-// ================================================================================================
+// Save / load.
 
 bool UElysiumSaveSubsystem::Save(EElysiumSaveKind Kind, const FString& RequestedSlot,
 	FString& OutSlot, FString& OutError)
@@ -469,9 +463,7 @@ bool UElysiumSaveSubsystem::Load(const FString& Slot, FString& OutError)
 	return true;
 }
 
-// ================================================================================================
-// Verbs
-// ================================================================================================
+// Verbs.
 
 void UElysiumSaveSubsystem::RegisterCommands()
 {

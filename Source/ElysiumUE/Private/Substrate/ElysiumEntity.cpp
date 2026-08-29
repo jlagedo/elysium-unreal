@@ -21,7 +21,7 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 	TargetName = InDef.TargetName;
 	Origin = InDef.Origin;   // the live copy; the def's is immutable (SetOrigin moves this one)
 
-	// Apply the raw keyvalues through the class chain field table (R2). Only mapped base/leaf
+	// Apply the raw keyvalues through the class chain field table. Only mapped base/leaf
 	// fields are copied onto members; unmapped keys stay on the def (property-bag reads land
 	// with the script host later). Spawn-time application ignores bKeyable — the write-gate is
 	// for runtime Python/I/O, not the map's own keyvalues.
@@ -44,7 +44,7 @@ void FElysiumEntity::Construct(const FElysiumEntityDef& InDef, FElysiumEntityHan
 		OutputTimesRemaining.Add(O.Times);
 	}
 
-	// start_hidden — born fully OFF (R6). No prior think to save; the body build (P1.5) skips
+	// start_hidden — born fully OFF. No prior think to save; the body build skips
 	// collision + draw while bHidden.
 	if (InDef.bStartHidden)
 	{
@@ -83,8 +83,8 @@ void FElysiumEntity::ScriptUnhide()
 void FElysiumEntity::Kill()
 {
 	// Terminal: mark dead and go inert immediately (a killed-but-not-yet-reaped entity must
-	// not touch, trace, or think). The slot removal + handle invalidation is the world's job
-	// in P1.4; this only flips the entity's own state.
+	// not touch, trace, or think). The slot removal + handle invalidation is the world's job;
+	// this only flips the entity's own state.
 	if (bDead)
 	{
 		return;
@@ -111,7 +111,7 @@ void FElysiumEntity::Kill()
 	NextThink = ELYSIUM_NEVER_THINK;
 	if (!bHidden)
 	{
-		OnDormancyChanged();   // drop the body's collision + draw (no-op until P1.5); notifies below
+		OnDormancyChanged();   // drop the body's collision + draw (no-op with no body); notifies below
 	}
 	else if (World)
 	{
@@ -272,7 +272,7 @@ bool FElysiumEntity::ResolveParentAttachment(bool bWarnIfPending)
 
 void FElysiumEntity::OnDormancyChanged()
 {
-	// R6 — one reversible switch. Inert (hidden or dead) drops the body's collision so it cannot
+	// One reversible switch. Inert (hidden or dead) drops the body's collision so it cannot
 	// be touched or traced; active restores its built solidity. Idempotent (SetDormant re-applies).
 	RefreshBrushBodyState();
 	if (GenericModelBody)
@@ -283,7 +283,7 @@ void FElysiumEntity::OnDormancyChanged()
 	{
 		World->SetUseAnchorEnabled(Handle, !IsInert());
 	}
-	// P2.4 — the visual (colour/visibility) changed; let a retained gizmo layer dirty this one
+	// The visual (colour/visibility) changed; let a retained gizmo layer dirty this one
 	// instance on the event rather than polling every entity every frame. No-op in normal play.
 	if (World)
 	{

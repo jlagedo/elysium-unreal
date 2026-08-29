@@ -19,15 +19,15 @@ class FElysiumComposeRun;
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumCurrentMapReady, AElysiumMapActor*);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumCurrentMapFailed, AElysiumMapActor*, const FString&);
 
-// The only owner of VtMB-map lifecycle. Map change is UE5 hard travel (roadmap 10.8): Travel
-// stows the target map + landmark in this GI-scoped state and OpenLevels the map's own baked
-// `.umap` under /ElysiumBaked (which carries the map's whole look as real assets); the engine tears
-// down the current UWorld and runs GC, and the fresh world's game mode spawns the AElysiumMapActor
-// for the pending map (SpawnPendingMap), which reads the map + landmark from here on BeginPlay and
+// The only owner of VtMB-map lifecycle. Map change is UE5 hard travel: Travel stows the target
+// map + landmark in this GI-scoped state and OpenLevels the map's own baked `.umap` under
+// /ElysiumBaked (which carries the map's whole look as real assets); the engine tears down the
+// current UWorld and runs GC, and the fresh world's game mode spawns the AElysiumMapActor for
+// the pending map (SpawnPendingMap), which reads the map + landmark from here on BeginPlay and
 // builds what is not baked — collision, ropes, the entity substrate, entity-driven bodies.
-// Cross-map state lives at GameInstance scope and survives the travel. The
-// P4.6 landmark transition (trigger_changelevel / scripted ChangeMap) places the player at the
-// destination `info_landmark`, preserving their offset from the source landmark.
+// Cross-map state lives at GameInstance scope and survives the travel. A landmark transition
+// (trigger_changelevel / scripted ChangeMap) places the player at the destination
+// `info_landmark`, preserving their offset from the source landmark.
 UCLASS()
 class UElysiumMapSubsystem : public UGameInstanceSubsystem
 {
@@ -40,7 +40,7 @@ public:
 	// Load a map, replacing the current one. Returns false unless the map has both a baked level
 	// and an export (the runtime reads sidecars from the export beside the baked look). A
 	// non-empty Landmark makes the fresh map place the player at that `info_landmark` (at the
-	// landmark's facing) instead of info_player_start — the console/direct entry to the P4.6 path.
+	// landmark's facing) instead of info_player_start — the console/direct entry to the landmark path.
 	bool Travel(const FString& Map, const FString& Landmark = FString());
 
 	// Enter the empty `/Game/Elysium` front-end shell. If it is already the current world (cold
@@ -52,7 +52,7 @@ public:
 	// and save call sites use it as the established "not a playable map" predicate.
 	bool IsMenuBackdrop() const { return bCurrentIsMenuBackdrop; }
 
-	// P4.6 — a landmark transition (from a trigger_changelevel touch / scripted ChangeMap). Safe to
+	// A landmark transition (from a trigger_changelevel touch / scripted ChangeMap). Safe to
 	// call from inside the entity-world tick: it records the destination placement and Travels, and
 	// OpenLevel defers the actual world teardown to end of frame (UEngine::TickWorldTravel), so
 	// nothing is freed under the caller's stack. `PlayerOffset` is the player's position relative to
@@ -75,7 +75,7 @@ public:
 	FOnElysiumCurrentMapReady& OnCurrentMapReady() { return CurrentMapReady; }
 	FOnElysiumCurrentMapFailed& OnCurrentMapFailed() { return CurrentMapFailed; }
 
-	// --- The map-epoch boundary (S4) ------------------------------------------------------------
+	// The map-epoch boundary.
 	// Mint an epoch for a map actor entering play, and retire it when that actor leaves. The map
 	// actor drives both — it is the only object that knows the ordered teardown — but the epoch
 	// itself belongs here, with the rest of map lifecycle.
@@ -90,14 +90,14 @@ public:
 	FOnElysiumMapEpochBegin& OnMapEpochBegin() { return MapEpochBegin; }
 	FOnElysiumMapEpochRetired& OnMapEpochRetired() { return MapEpochRetired; }
 
-	// Consumed once by the freshly-loaded map actor (P4.6): if this load is a landmark transition,
+	// Consumed once by the freshly-loaded map actor: if this load is a landmark transition,
 	// returns true and fills the destination `info_landmark` name + the player offset/yaw to place
 	// them at. `bOutHasYaw` distinguishes a real transition (true: preserve the player's view yaw,
 	// offset already carries capsule height) from a direct/console landmark entry (false: face the
 	// landmark, lift onto it). Returns false for a plain info_player_start load.
 	bool ConsumeLandmarkSpawn(FString& OutLandmark, FVector& OutOffset, float& OutYaw, bool& bOutHasYaw);
 
-	// 11.9 — a loaded save places the player where they were standing, which is neither
+	// A loaded save places the player where they were standing, which is neither
 	// info_player_start nor a landmark offset but an absolute pose the World block carried. Set by
 	// UElysiumSaveSubsystem before it travels; consumed once by the freshly-loaded map actor, after
 	// the landmark pass, so it wins over both.
@@ -179,7 +179,7 @@ private:
 		bool    bValid = false;
 		FString Map;
 		FString Landmark;
-		bool    bMenuBackdrop = false;   // 8.6: build the full runtime world, omit player seating
+		bool    bMenuBackdrop = false;   // build the full runtime world, omit player seating
 		bool    bStageOnly = false;      // the green room: no map at all, Map is empty
 	};
 	FPendingMapLoad PendingMapLoad;
@@ -206,7 +206,7 @@ private:
 	};
 	FLandmarkSpawn NextLandmarkSpawn;
 
-	// The absolute pose a loaded save places the player at (11.9); cleared on consume.
+	// The absolute pose a loaded save places the player at; cleared on consume.
 	struct FRestorePlacement
 	{
 		bool    bValid = false;
@@ -215,11 +215,11 @@ private:
 	};
 	FRestorePlacement NextRestorePlacement;
 
-	// Headless profiling harness (task 0.1/0.2), created only under -ElysiumProfile.
+	// Headless profiling harness, created only under -ElysiumProfile.
 	// TPimplPtr keeps the deleter type-erased, so the forward declaration suffices.
 	TPimplPtr<FElysiumProfileRun> ProfileRun;
 
-	// Headless screenshot-regression harness (P2.9), created only under -ElysiumShots.
+	// Headless screenshot-regression harness, created only under -ElysiumShots.
 	TPimplPtr<FElysiumShotRun> ShotRun;
 
 	// Rendered skeletal body/clip validation, created only under -ElysiumGreenRoom.
@@ -229,7 +229,7 @@ private:
 	TPimplPtr<FElysiumGreenRoomConsole> GreenRoomConsole;
 	TPimplPtr<FElysiumProbeRun> ProbeRun;
 
-	// Headless movement-regression harness (4.7), created only under -ElysiumMove.
+	// Headless movement-regression harness, created only under -ElysiumMove.
 	TPimplPtr<FElysiumMoveRun> MoveRun;
 
 	// Headless cast-locomotion harness, created only under -ElysiumCast: the body trace's second

@@ -61,9 +61,7 @@ namespace
 			ECond::HeavyDamage });
 	}
 
-	// ============================================================================================
-	// The programs
-	// ============================================================================================
+	// --- The programs ---
 
 	void RegisterCombatSchedules()
 	{
@@ -438,9 +436,7 @@ namespace
 	};
 	FElysiumCombatScheduleRegistrar GElysiumCombatScheduleRegistrar;
 
-	// ============================================================================================
-	// Selector helpers
-	// ============================================================================================
+	// --- Selector helpers ---
 
 	// Stamp the position a retreat leaves. `TASK_MOVE_AWAY_PATH` reads `m_vSavePosition`, and the
 	// door-obstruction selector stamps it the same way for the same task.
@@ -475,9 +471,7 @@ namespace
 	}
 }
 
-// ================================================================================================
-// The melee selector (`0x10385e40`)
-// ================================================================================================
+// --- The melee selector (`0x10385e40`) ---
 
 EElysiumScheduleId ElysiumNpcCombat::SelectMeleeSchedule(FElysiumNpc& Npc, double Now)
 {
@@ -572,9 +566,7 @@ EElysiumScheduleId ElysiumNpcCombat::SelectMeleeSchedule(FElysiumNpc& Npc, doubl
 	return EElysiumScheduleId::MeleeIdle;
 }
 
-// ================================================================================================
-// The ranged selector (`0x10386560`)
-// ================================================================================================
+// --- The ranged selector (`0x10386560`) ---
 
 EElysiumScheduleId ElysiumNpcCombat::SelectRangedSchedule(FElysiumNpc& Npc, double Now)
 {

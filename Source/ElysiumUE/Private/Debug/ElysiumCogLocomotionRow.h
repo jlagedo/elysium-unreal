@@ -9,7 +9,7 @@
 struct FElysiumAnimationSelection;
 struct FElysiumLocomotionSample;
 
-// One row of the shared body record (CCC1/CCC4), drawn by one function for every producer.
+// One row of the shared body record, drawn by one function for every producer.
 //
 // **The contract is the point.** `FElysiumLocomotionSample` has two producers — the player's mover
 // publishes its row at its own tick tail, an NPC motor's is pulled — and the claim the contract

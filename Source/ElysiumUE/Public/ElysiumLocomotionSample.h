@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// What a moving body publishes about itself, once per frame (CCC1).
+// What a moving body publishes about itself, once per frame.
 //
 // One struct, two producers: the player's mover fills it at its tick tail and the NPC motor fills it
 // from its own movement, so the cast's locomotion and the player's cannot become two systems that
@@ -61,9 +61,9 @@ struct FElysiumLocomotionSample
 	float ViewPitch = 0.0f;
 
 	// The two candidate movement yaws, both facing-relative and both in (-180, 180]. **Both are
-	// recorded from the first day on purpose**: `CCC7` recovers the sign of `move_yaw` by comparing
-	// the retail selector's own input against these, and that comparison should run against
-	// recordings rather than against fresh instrumentation.
+	// recorded on purpose**: the speed authority recovers the sign of `move_yaw` by comparing the
+	// retail selector's own input against these, and that comparison runs against recordings
+	// rather than against fresh instrumentation.
 	//
 	// `MoveYawWish` is the direction the command asked for, `MoveYawVelocity` the direction the body
 	// actually went. They differ whenever the body is not yet at speed, is sliding along a wall, or
@@ -148,7 +148,7 @@ namespace ElysiumLocomotion
 	// yaw direction, so a body strafing right reads positive.
 	float RelativeYaw(float WorldYaw, float FacingYaw);
 
-	// LIFE5 — `SetLocalVelocity(vec3_origin)`: clear what the sample says the body is DOING, and
+	// `SetLocalVelocity(vec3_origin)`: clear what the sample says the body is DOING, and
 	// nothing it says about the command or the posture.
 	//
 	// The three fields are exactly the ones `PublishLocomotionSample` derives from the velocity, so

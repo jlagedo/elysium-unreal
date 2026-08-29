@@ -8,7 +8,7 @@
 
 // A single representative world point for an entity (the gizmo marker, the beam endpoint, the
 // label anchor, and the click-pick target): the brush body's world center if it has one, else the
-// def origin (the point/logic entity's placement). One definition, because the P2.6 pick must
+// def origin (the point/logic entity's placement). One definition, because the click-pick must
 // agree exactly with where the gizmo is drawn — "what you see is what you click" only holds if
 // both read the same anchor.
 inline FVector ElysiumGizmoAnchor(const FElysiumEntity& Ent)
@@ -58,7 +58,7 @@ inline EElysiumGizmoClass ElysiumGizmoClassOf(const FString& Cls)
 }
 
 // Triggers red, lights/sprites yellow, sound/ambient cyan, logic/math/relay magenta, props/models
-// green, everything else grey. Shared by the retained gizmo ISM layer (P2.4), the show-triggers
+// green, everything else grey. Shared by the retained gizmo ISM layer, the show-triggers
 // overlay, and the World Viz filter's swatches.
 inline FColor ElysiumGizmoClassColor(EElysiumGizmoClass C)
 {

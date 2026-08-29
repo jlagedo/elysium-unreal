@@ -12,7 +12,7 @@ class UElysiumCameraComponent;
 class UElysiumMovementComponent;
 class USkeletalMeshComponent;
 
-// The player's **body** (S3, roadmap 11.4/11.6): collision, movement, the camera, and the handle of
+// The player's **body** (S3): collision, movement, the camera, and the handle of
 // the entity it embodies. All player game state — the sheet, health, money, blood, the law counters
 // — lives on that entity (`FElysiumPlayer`), and nothing a save would need lives here.
 //
@@ -36,13 +36,13 @@ public:
 	virtual void BeginPlay() override;
 	virtual UPawnMovementComponent* GetMovementComponent() const override;
 
-	// The one place the view is modified (11.7) — the structural analogue of VtMB's `CAM_ApplyToView`.
+	// The one place the view is modified — the structural analogue of VtMB's `CAM_ApplyToView`.
 	// It delegates to the camera component's `GetCameraView` first, then lets it apply the weight
 	// stack; skipping that delegation is the documented cause of first-person rendering silently not
 	// applying.
 	virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult) override;
 
-	// --- IElysiumPlayerBody ---------------------------------------------------------------
+	// IElysiumPlayerBody
 	virtual bool IsNoclip() const override;
 	virtual void SetNoclip(bool bEnable) override;
 	virtual FElysiumEntityHandle GetPlayerEntity() const override { return PlayerEntity; }

@@ -1,4 +1,4 @@
-// B6 — ordinary player-on-humanoid feeding: the command's acceptance, the minimal paired action,
+// Ordinary player-on-humanoid feeding: the command's acceptance, the minimal paired action,
 // the authoritative blood transaction on the substrate clock, and the `OnFedUponBegin` /
 // `OnFedUponEnd` outputs that reach authored map wires.
 //
@@ -21,10 +21,6 @@
 // That also satisfies K10: with no body at all the state machine alone carries engage -> bite ->
 // loop -> release, so headless correctness never depends on something being rendered.
 
-// Cycle 10b (the player law channels) touches this file in two places, both banner-marked:
-//   1. `Feed` — the accepted pulse's law production (supernatural 2 + criminal 3, two seconds);
-//   2. `FeedInterrupt` — the interrupted path's criminal 1, two seconds.
-
 #include "Substrate/ElysiumFeed.h"
 
 #include "ElysiumCameraSolve.h"
@@ -38,8 +34,8 @@
 #include "Substrate/ElysiumDice.h"
 #include "Substrate/ElysiumDiceTables.h"
 #include "Substrate/ElysiumGameSound.h"
-#include "Substrate/ElysiumLaw.h"        // Cycle 10b — the pulse / interrupt law producers
-#include "Substrate/ElysiumNpc.h"        // Cycle 10c — the victim's law observation windows
+#include "Substrate/ElysiumLaw.h"        // pulse / interrupt law producers
+#include "Substrate/ElysiumNpc.h"        // victim's law observation windows
 #include "Substrate/ElysiumNpcWitness.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -50,9 +46,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumFeed, Log, All);
 
-// ================================================================================================
-// The pure rules
-// ================================================================================================
+// --- The pure rules ---
 
 namespace ElysiumFeed
 {
@@ -154,9 +148,7 @@ const TCHAR* LexToString(EElysiumFeedVerdict Verdict)
 	return TEXT("?");
 }
 
-// ================================================================================================
-// The transaction, on the character chain
-// ================================================================================================
+// --- The transaction, on the character chain ---
 
 namespace
 {
@@ -211,11 +203,9 @@ bool FElysiumCombatCharacter::IsFeedAutoAcceptState() const
 	// Retail tests the target's current activity: `ACT_DISPOSITION_MESMERIZED`, `ACT_DISORIENTED`,
 	// `ACT_LOST` and `ACT_COWER` all accept without a roll.
 	//
-	// OPEN — this runtime has no ACT_* state machine to ask (the NPC mind is
-	// `gameplay-systems-architecture.md` §5.5.4 and lands after B6), so the stand-in is the
-	// character's current disposition name, which is the one emotional-state value the substrate
-	// does carry and which selects the standing set those activities belong to. When the mind
-	// lands, this reads the activity instead and the four names move with it.
+	// OPEN — this runtime has no ACT_* state machine to ask, so the stand-in is the character's
+	// current disposition name: the one emotional-state value the substrate carries, and the one
+	// that selects the standing set those activities belong to.
 	return IsAutoAcceptDispositionName(Disposition);
 }
 
@@ -809,33 +799,25 @@ bool FElysiumCombatCharacter::Feed(double Now)
 			ElysiumStealth::HearingReductionCmFor(this));
 	}
 
-	// ------------------------------------------------------------------------------------------
-	// Cycle 10b hunk 1/2 — the feed pulse is also a player-law PRODUCER
-	// (`docs/vtmb/feeding.md`: "The same accepted ordinary feed pulse is also a player-law
-	// producer"). For a player feeder it raises supernatural activity to 2 and criminal activity to
-	// 3, each for an EXPLICIT two seconds — the one recovered case where a caller names its own
-	// duration instead of passing the derive sentinel, which is why the pulse's wanted level dies
-	// two seconds after the fangs come off rather than lasting a level's worth of seconds.
+	// The accepted ordinary feed pulse is also a player-law producer (`docs/vtmb/feeding.md`).
+	// For a player feeder it raises supernatural activity to 2 and criminal activity to 3, each
+	// for an EXPLICIT two seconds — the one recovered case where a caller names its own duration
+	// instead of passing the derive sentinel, which is why the pulse's wanted level dies two
+	// seconds after the fangs come off rather than lasting a level's worth of seconds.
 	//
-	// It does not mutate Masquerade and does not spawn police: whether an NPC witnesses the feed is
-	// the condition lane's question, and only the admitted incident reaches those consumers. The
-	// victim's own three-second observation windows belong to that same next cycle.
-	// ------------------------------------------------------------------------------------------
+	// It does not mutate Masquerade and does not spawn police: whether an NPC witnesses the feed
+	// is the condition lane's question, and only the admitted incident reaches those consumers.
 	if (FElysiumPlayer* PlayerFeeder = (World && World->FindPlayer() == this)
 		? World->FindPlayer() : nullptr)
 	{
 		ElysiumLaw::SetSupernaturalLevel(*PlayerFeeder, 2, ElysiumLaw::FeedActivitySeconds);
 		ElysiumLaw::SetCriminalLevel(*PlayerFeeder, 3, ElysiumLaw::FeedActivitySeconds);
-		// --------------------------------------------------------------------------------------
-		// Cycle 10c hunk 1/2 — the other half of the same recovered producer, now that the lane it
-		// feeds exists. `docs/vtmb/feeding.md`: the pulse "opens the victim NPC's criminal and
-		// supernatural observation windows for three seconds, allowing that NPC's ordinary
-		// condition-gathering pass to compare the new player act counts with its authored `pl_*`
-		// thresholds."
+		// The pulse also opens the victim NPC's criminal and supernatural observation windows for
+		// three seconds (`docs/vtmb/feeding.md`), so that NPC's ordinary condition-gathering pass
+		// can compare the new player act counts with its authored `pl_*` thresholds.
 		//
-		// On the VICTIM, and only when the victim is an ordinary NPC: the windows are per-NPC state
-		// and the recovered caller names the fed-upon character.
-		// --------------------------------------------------------------------------------------
+		// On the VICTIM, and only when the victim is an ordinary NPC: the windows are per-NPC
+		// state and the recovered caller names the fed-upon character.
 		if (FElysiumNpc* VictimNpc = Victim->AsNpc())
 		{
 			ElysiumNpcWitness::OpenFeedWindows(*VictimNpc, Now);
@@ -850,27 +832,22 @@ bool FElysiumCombatCharacter::Feed(double Now)
 
 void FElysiumCombatCharacter::FeedInterrupt()
 {
-	// ------------------------------------------------------------------------------------------
-	// Cycle 10b hunk 2/2 — the interrupted-feed law write. `docs/vtmb/feeding.md`: the interrupted
-	// path "opens the same victim windows and raises only criminal activity 1 for two seconds" —
-	// one criminal level, no supernatural at all, and the same explicit two seconds the pulse uses.
+	// Interrupted-feed law write (`docs/vtmb/feeding.md`): the path opens the same victim windows
+	// and raises only criminal activity 1 for two seconds — one criminal level, no supernatural
+	// at all, and the same explicit two seconds the pulse uses.
 	//
-	// Guarded on a LIVE transaction and on the feeder half: `CompleteFeedTransaction` is idempotent
-	// and is also reached on the victim, so without this guard a repeated teardown would count a
-	// second incident for an interruption that already happened.
-	// ------------------------------------------------------------------------------------------
+	// Guarded on a LIVE transaction and on the feeder half: `CompleteFeedTransaction` is
+	// idempotent and is also reached on the victim, so without this guard a repeated teardown
+	// would count a second incident for an interruption that already happened.
 	if (FeedState.IsPaired() && !FeedState.bVictim && !FeedState.bInterrupting)
 	{
 		if (FElysiumPlayer* PlayerFeeder = (World && World->FindPlayer() == this)
 			? World->FindPlayer() : nullptr)
 		{
 			ElysiumLaw::SetCriminalLevel(*PlayerFeeder, 1, ElysiumLaw::FeedActivitySeconds);
-			// ----------------------------------------------------------------------------------
-			// Cycle 10c hunk 2/2 — "The interrupted-feed path opens the same victim windows". Both
-			// channels again, not just the criminal one the activity write raises: the recovered
-			// sentence says "the same victim windows", and the windows are an observation grant
-			// rather than a mirror of what was raised.
-			// ----------------------------------------------------------------------------------
+			// Both channels again, not just the criminal one the activity write raises: the
+			// recovered sentence says "the same victim windows", and the windows are an
+			// observation grant rather than a mirror of what was raised.
 			FElysiumCombatCharacter* Peer = ResolveFeedPeer();
 			FElysiumNpc* VictimNpc = Peer ? Peer->AsNpc() : nullptr;
 			if (VictimNpc != nullptr)
@@ -902,8 +879,8 @@ void FElysiumCombatCharacter::CompleteFeedTransaction(bool bKeepReleaseTail)
 		static_cast<ElysiumFeed::EPartnerHeight>(FeedVictimHeightCell());
 
 	// Clear the continuation latch. The cant-break and frenzy-grapple latches retail also clears
-	// here belong to systems B6 does not build (the grapple router and frenzy); they are named
-	// rather than faked.
+	// here belong to the grapple router and frenzy, which this ordinary-feed path does not build;
+	// they are named rather than faked.
 	FeedState.bContinuation = false;
 
 	FElysiumEntity* TargetEnt = World ? World->Resolve(FeedState.Target) : nullptr;

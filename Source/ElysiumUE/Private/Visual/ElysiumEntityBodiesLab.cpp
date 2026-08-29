@@ -51,7 +51,7 @@ bool UElysiumEntityBodies::PlayNpcLayer(USkeletalMeshComponent* Body, const FStr
 	}
 	if (!Inst->HasCompiledGraph())
 	{
-		// The layer is composed by the graph's own layered blend (CCC10), so a body with no compiled
+		// The layer is composed by the graph's own layered blend, so a body with no compiled
 		// graph has nowhere to put one — the same refusal `PlayNpcGrid` gives for the same reason.
 		return Refuse(TEXT("this body is on the native host, which carries no compiled graph — the "
 			"generated ABP is not on the mount. Run `uv run elysium export bundle policy`"));

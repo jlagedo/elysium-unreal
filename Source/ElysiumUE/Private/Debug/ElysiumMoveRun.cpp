@@ -108,7 +108,7 @@ namespace
 		// records movement, and the camera columns hold their last settled values.
 		UElysiumCameraComponent* Camera = nullptr;
 		AElysiumPlayerCameraManager* CameraManager = nullptr;
-		// The animation half (CCC4), also optional: the map actor is what publishes the player's
+		// The animation half, also optional: the map actor is what publishes the player's
 		// selection record, and a run with none records the classifier's columns as their defaults.
 		AElysiumMapActor* Map = nullptr;
 		explicit operator bool() const { return PC && Pawn && Move && Router; }
@@ -168,7 +168,7 @@ bool FElysiumMoveRun::BuildGym()
 		return false;
 	}
 
-	// **The body the gym stands** (CCC7). Without one the speed authority has no tables and every
+	// **The body the gym stands.** Without one the speed authority has no tables and every
 	// grounded command resolves to zero, so the whole run records a body that never moves. It is the
 	// shipping `BuildPlayerVisual`, so the attachment, the hull offset, the mover tick prerequisite
 	// and the cached stem are the game's own.
@@ -328,15 +328,15 @@ void FElysiumMoveRun::Sample()
 	// ever taken). The frame columns are the shared trace's, which converts the same way.
 	const double Inv = 1.0 / ElysiumMove::U;
 
-	// The body sample (CCC1) and the selection (CCC4), both read rather than re-derived: the mover
-	// published the sample at its tick tail and the post-move pass published the record off it, so
-	// these are the frame that was actually integrated and the request it actually resolved. Two
-	// derivations of one answer are how a recording comes to disagree with what ran.
+	// The body sample and the selection, both read rather than re-derived: the mover published the
+	// sample at its tick tail and the post-move pass published the record off it, so these are the
+	// frame that was actually integrated and the request it actually resolved. Two derivations of
+	// one answer are how a recording comes to disagree with what ran.
 	//
 	// In the gym the selection carries the classifier alone. There is no map, no player entity and
 	// no visual there, so the outcome is `NoVocabulary` and the asset is none — which is the right
-	// split: the gym brackets the classification `CCC7` will move, and the sited courses carry the
-	// resolution.
+	// split: the gym brackets the classification the speed authority moves, and the sited courses
+	// carry the resolution.
 	//
 	// Both halves come off the DRIVER where there is one, because the driver is what published the
 	// record: its sample carries the filtered pose parameter the graph was steered by, where the
@@ -362,7 +362,7 @@ void FElysiumMoveRun::Sample()
 	Recorder.Set(TEXT("canunduck"), Body.Move->CanUnduck());
 	Recorder.Set(TEXT("surffric"), Body.Move->GetSurfaceFriction());
 
-	// The camera (CCC2), read off the manager's settled sample. This runs from the core ticker,
+	// The camera, read off the manager's settled sample. This runs from the core ticker,
 	// which the engine ticks *after* the world — so the sample published inside this frame's view
 	// update is the one that was rendered, and no lag compensation is needed. The frame stamp is
 	// still checked, because a frame whose view never updated (a paused world, an unpossessed body)
@@ -389,7 +389,7 @@ void FElysiumMoveRun::Sample()
 		CamThirdMax = FMath::Max(CamThirdMax, static_cast<double>(Cam.ThirdWeight));
 	}
 
-	// --- The run channels, which are what a committed baseline actually compares ---------------
+	// The run channels, which are what a committed baseline actually compares.
 	// Each is written to **saturate**: how far the body got before something stopped it, and how
 	// high it stood or reached. A body either climbs a riser or is stopped by it, and either answer
 	// is the same at any gait — which is what no per-frame trace can be, because *when* a body
@@ -489,7 +489,7 @@ void FElysiumMoveRun::FinishCourse()
 	Recorder.SetMeta(TEXT("host"), Host);
 	Recorder.SetMeta(TEXT("course"), Course.Name.ToString());
 	// Whether this recording may be promoted to a committed baseline yet. A course whose answer
-	// moves with the speed authority is validated but never compared until `CCC7` settles it.
+	// moves with the speed authority is validated but never compared while that value still moves.
 	Recorder.SetMeta(TEXT("baseline"), Course.bDeferBaseline ? TEXT("deferred") : TEXT("committed"));
 	Recorder.SetMetaNumber(TEXT("hz"), Hz);
 
@@ -514,7 +514,7 @@ void FElysiumMoveRun::FinishCourse()
 		Recorder.SetConstant(TEXT("Accelerate"), T.Accelerate);
 		Recorder.SetConstant(TEXT("WalkSpeed"), ElysiumMove::WalkSpeed * Inv);
 		Recorder.SetConstant(TEXT("RunSpeed"), ElysiumMove::RunSpeed * Inv);
-		// What the body's own fans answered (CCC7). The constants block is metadata and is never
+		// What the body's own fans answered. The constants block is metadata and is never
 		// compared, so this is free — and three zeroes here are what identify a recording made with
 		// no speed authority at all.
 		const FElysiumGaitSpeeds& Fans = Body.Move->GetGaitSpeeds();
@@ -527,7 +527,7 @@ void FElysiumMoveRun::FinishCourse()
 		Recorder.SetOverride(Override.Key, Override.Value);
 	}
 
-	// The body trace's own run channels and the selection's string identities (CCC4), written by the
+	// The body trace's own run channels and the selection's string identities, written by the
 	// same accumulator the cast's harness writes — empty on a gym course that stood a body with no
 	// model behind it.
 	Totals.Write(Recorder);
@@ -542,7 +542,8 @@ void FElysiumMoveRun::FinishCourse()
 	Recorder.SetRun(TEXT("cam_third_max"), CamThirdMax);
 
 	// Only the leniency courses carry these. A course that merely *holds* jump re-fires on landing at
-	// a gait-dependent moment, so declaring the count universally would commit a number `CCC7` moves.
+	// a gait-dependent moment, so declaring the count universally would commit a number the speed
+	// authority moves.
 	if (Course.EventJump.IsSet())
 	{
 		Recorder.SetRun(TEXT("jumps_taken"), JumpsTaken);

@@ -6,7 +6,7 @@
 // **aliases** and **cvars** parsed from `out/cfg/*.cfg` (Valve console syntax), plus the execute
 // path a `ccmd` attribute-set drives: a script runs `c.patchtype = ""` and the console executes
 // the command `patchtype`. Resolution, per command word -- the precedence is stated here once and
-// asserted by `Elysium.Substrate.Console` (roadmap 11.6):
+// asserted by `Elysium.Substrate.Console`:
 //
 //   * a **registered command** (FElysiumCommands, the VtMB bindable-verb inventory) -> run it,
 //     `+`/`-` edges included. Commands outrank aliases, matching Source's own Cmd_ExecuteString,
@@ -51,7 +51,7 @@ public:
 	// Splits on top-level `;`, resolves each part (alias / cvar / Python fallthrough).
 	void Execute(const FString& CommandLine);
 
-	// Declare a cvar the *engine* registers rather than a cfg file: the camera surface (11.7) and
+	// Declare a cvar the *engine* registers rather than a cfg file: the camera surface and
 	// anything else compiled code owns. A declared name is a **known** cvar, so `cam_idealdist 50`
 	// resolves as a cvar set rather than falling through to Python, and it reads back its default when
 	// no cfg on disk carries it. Declarations survive a re-seed; a cfg value shadows one.

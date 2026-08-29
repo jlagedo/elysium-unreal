@@ -50,8 +50,8 @@ enum class EElysiumOwnedEntityTermination : uint8
 
 // The context an input carries to its thunk. `Param` is the marshalled parameter string
 // (field 2 of the output); `Activator`/`Caller` are the I/O provenance the entity world
-// resolves in P1.4 (Invalid for a hand-fired input). Kept a struct so P1.4 can grow the
-// context without re-signing every registered thunk.
+// resolves (Invalid for a hand-fired input). Kept a struct so the context can grow
+// without re-signing every registered thunk.
 struct FElysiumInputArgs
 {
 	FElysiumVariant Param;
@@ -66,19 +66,19 @@ struct FElysiumInputArgs
 // One flex-controller write, by name. A face's only writable state is its 44 flex controllers;
 // everything under them — the RPN rules, the flexdesc weights, the target ramps — is arithmetic
 // re-derived on every write. A choreo scene's `expression` events compose a set of these out of a
-// Faceposer weight table, and lipsync will compose one out of the phoneme table.
+// Faceposer weight table, and lipsync composes one out of the phoneme table.
 struct FElysiumFlexWrite
 {
 	FString Name;
 	float Value = 0.f;
 };
 
-// R1 — a live entity is a plain C++ object: no UObject, no actor, no reflection. Unreal
-// actors/components are optional *bodies* attached in P1.5 for rendering/physics/overlap;
-// all game state lives here. This base owns identity (R3), the CBaseEntity keyfield
-// contract (python_bridge.md), the whole-entity dormancy switch (R6), and the three base
-// inputs (Kill/ScriptHide/ScriptUnhide) that reach every subclass through the class chain
-// (R2). Leaf classes (P1.6+) derive from this and register their own inputs/fields.
+// A live entity is a plain C++ object: no UObject, no actor, no reflection. Unreal
+// actors/components are optional *bodies* attached for rendering/physics/overlap;
+// all game state lives here. This base owns identity, the CBaseEntity keyfield
+// contract (python_bridge.md), the whole-entity dormancy switch, and the three base
+// inputs (Kill/ScriptHide/ScriptUnhide) that reach every subclass through the class chain.
+// Leaf classes derive from this and register their own inputs/fields.
 class FElysiumEntity
 {
 public:
@@ -89,7 +89,7 @@ public:
 	FElysiumEntity(const FElysiumEntity&) = delete;
 	FElysiumEntity& operator=(const FElysiumEntity&) = delete;
 
-	// --- Identity / data ---------------------------------------------------------------
+	// --- Identity / data ---
 	// Handle/Def/Class are bound by the registry at Construct; Def and Class outlive the
 	// entity (the def array is the map asset, the descriptor is module-static).
 	FElysiumEntityHandle Handle;
@@ -102,14 +102,14 @@ public:
 	// entity (elysium.classes), so every world call guards on it.
 	FElysiumEntityWorld* World = nullptr;
 
-	// The brush body (P1.5), or null for point/logic entities (R1: logic ents never get a body).
-	// Owned by the map actor; the entity only gates its collision on dormancy (R6). Non-owning.
+	// The brush body, or null for point/logic entities (logic ents never get a body).
+	// Owned by the map actor; the entity only gates its collision on dormancy. Non-owning.
 	UElysiumBrushComponent* Body = nullptr;
 	// Generic skeletal embodiment for a model-backed point entity whose leaf supplied no body.
 	// It carries no inferred interaction semantics; the world creates it between Spawn/PostSpawn.
 	USkeletalMeshComponent* GenericModelBody = nullptr;
 
-	// --- Base keyfields — the CBaseEntity contract (python_bridge.md) -------------------
+	// --- Base keyfields — the CBaseEntity contract (python_bridge.md) ---
 	// Registered once on the base class field table; every subclass inherits them through
 	// the chain walk. These are the live, writable copies (TargetName/Model mirror the def).
 	FString TargetName;
@@ -143,11 +143,11 @@ public:
 	int32   UseIcon = 0;                             // use_icon — reticle icon index (1-based; 0 = none)
 	int32   LockedIcon = 0;                          // locked_icon — reticle icon when use-locked
 
-	// --- Dormancy (R6) + liveness (R3) -------------------------------------------------
+	// --- Dormancy + liveness ---
 	// ScriptHide/StartHidden is one reversible whole-entity OFF switch: non-solid, undrawn,
 	// next-think = never — all together. `bDead` (Kill) is terminal; the world reaps the
-	// slot and bumps handles in P1.4. NextThink is absolute game seconds (ELYSIUM_NEVER_THINK
-	// = never); the queue services thinks in P1.4.
+	// slot and bumps handles. NextThink is absolute game seconds (ELYSIUM_NEVER_THINK
+	// = never); the queue services thinks.
 	bool  bHidden = false;
 	bool  bDead = false;
 	// Spawn() has run. The world's spawn pass and the two-phase runtime create (CreateEntityNoSpawn
@@ -168,7 +168,7 @@ public:
 	FElysiumEntityHandle OwnerEntity;
 	bool bOwnerTerminationNotified = false;
 
-	// --- Output firing state (R2) ------------------------------------------------------
+	// --- Output firing state ---
 	// The runtime `times` countdown, one entry per Def->Outputs row (the def is immutable, so
 	// the mutable counter lives here). Seeded from each row's `Times` at Construct: -1 stays
 	// unlimited, N counts down to 0 (spent). The entity world decrements it as it fires outputs.
@@ -180,9 +180,9 @@ public:
 	// Fully OFF for game purposes: cannot be touched, traced, used, or thought.
 	bool IsInert() const { return bDead || bHidden; }
 
-	// --- Base inputs (reach every class through the chain) -----------------------------
-	void Kill();          // terminal: mark dead + go inert (world reaps in P1.4)
-	void ScriptHide();    // whole-entity OFF (saves prior think; body gated in P1.5)
+	// --- Base inputs (reach every class through the chain) ---
+	void Kill();          // terminal: mark dead + go inert (world reaps the slot)
+	void ScriptHide();    // whole-entity OFF (saves prior think; body collision gated)
 	void ScriptUnhide();  // the exact inverse
 	void PlayDialogFile(const FString& AuthoredPath);
 	void SetSoundOverrideEnt(const FString& EntityName);
@@ -190,11 +190,11 @@ public:
 	void SetOwnerEntity(const FElysiumEntityHandle& InOwner) { OwnerEntity = InOwner; }
 	FElysiumEntityHandle GetOwnerEntity() const { return OwnerEntity; }
 
-	// Fire a named output through the world (R2 → the event queue). No-op on a worldless probe
-	// entity. Leaf classes (P1.6+) call this from their inputs and touch hooks.
+	// Fire a named output through the world (the event queue). No-op on a worldless probe
+	// entity. Leaf classes call this from their inputs and touch hooks.
 	void FireOutput(FName Output, const FElysiumEntityHandle& Activator);
 
-	// Value-carrying variant (P4.5): a Source COutput<T> fires with a runtime value that fills any
+	// Value-carrying variant: a Source COutput<T> fires with a runtime value that fills any
 	// wire whose map-authored param is empty (math_counter OutValue, logic_case OnCaseNN, …). Wires
 	// that DID specify a param keep their override. `Value` is ignored (Void) by the plain overload.
 	void FireOutput(FName Output, const FElysiumEntityHandle& Activator, const FElysiumVariant& Value);
@@ -208,7 +208,7 @@ public:
 	// standing view height; the player leaf additionally accounts for ducking.
 	virtual FVector EyePosition() const { return Origin; }
 
-	// --- Runtime writers (9.3 — VtMB's Entity.SetOrigin/SetAngles/SetModel) ------------
+	// --- Runtime writers (VtMB's Entity.SetOrigin/SetAngles/SetModel) ---
 	// Scripts move, re-face, and re-skin live entities. These mutate the authoritative field
 	// (so GetOrigin/GetAngles/GetModelName reflect it and other entities' logic reads it), then
 	// hand off to the body-follow hook. SetName re-keys the world name index and so lives on the
@@ -225,8 +225,8 @@ public:
 	virtual void OnRuntimeTransformChanged();
 	virtual void OnRuntimeModelChanged();
 
-	// Overlap terminus (P1.5 routing): a brush body's begin/end overlap lands here. Base no-op;
-	// P1.6 trigger classes override to fire OnStartTouch/OnEndTouch (respecting spawnflags).
+	// Overlap terminus: a brush body's begin/end overlap lands here. Base no-op;
+	// trigger classes override to fire OnStartTouch/OnEndTouch (respecting spawnflags).
 	virtual void OnTouchStart(const FElysiumEntityHandle& Activator) {}
 	virtual void OnTouchEnd(const FElysiumEntityHandle& Activator) {}
 	// Admission precedes the world's active-touch latch. A rejected observation must never suppress
@@ -236,7 +236,7 @@ public:
 	// remains non-blocking; registered filter leaves override this exact seam.
 	virtual bool PassesFilter(const FElysiumEntityHandle& Activator) const { return true; }
 
-	// --- Player interaction -------------------------------------------------------------
+	// --- Player interaction ---
 	// Spatial focus is separate from the class verb. The modern query supplies a context, the
 	// substrate owns eligibility/session state, and scripted AcceptInput("Use") continues to call
 	// Use directly without pretending it came from a player standing in front of the entity.
@@ -255,7 +255,7 @@ public:
 	virtual void OnUseCursorLeave() {}                                  // look-cursor left (OnOut)
 	virtual void Use(const FElysiumEntityHandle& Activator) {}          // +use / Press pressed it
 
-	// The reticle icon this entity shows while it is the +use look-cursor target (P4.4). VtMB's
+	// The reticle icon this entity shows while it is the +use look-cursor target. VtMB's
 	// GetUseIcon (FUN_100c8940) returns locked_icon when the locked byte +0x5c4 is set, else
 	// use_icon; IsUseLocked() is the leaf's locked flag (doors/buttons). 0 = draw no icon.
 	virtual bool IsUseLocked() const { return false; }
@@ -266,7 +266,7 @@ public:
 	// item ownership.
 	virtual int32 ResolveUseIcon(const FElysiumEntityHandle& Activator) const { return GetUseIcon(); }
 
-	// --- Debug introspection (P4.3) ----------------------------------------------------
+	// --- Debug introspection ---
 	// Runtime, non-keyfield state a leaf class wants surfaced in the Cog inspector's "Live state"
 	// section (mover toggle-state, current move, resolved links, spawnflag decode) — the fields the
 	// registry tables don't carry because they are internal state, not keyvalues. Base emits nothing.
@@ -281,12 +281,12 @@ public:
 	virtual class UPrimitiveComponent* GetAttachBody() const;
 	void EnsurePlacedModelBody();
 
-	// The skeletal body a camera shot's `Bone:` / `Attachment:` attach point resolves against (11.7),
-	// and the bone lookup a look-at rig will want (P12). Base returns null; `FElysiumAnimating`
+	// The skeletal body a camera shot's `Bone:` / `Attachment:` attach point resolves against,
+	// and the bone lookup a look-at rig uses. Base returns null; `FElysiumAnimating`
 	// returns its standing `Visual`. Declared here for the same no-RTTI reason `GetAttachBody` is.
 	virtual class USkeletalMeshComponent* GetSkeletalBody() const { return nullptr; }
 
-	// --- The sequence-event chain (LIFE5) -------------------------------------------------
+	// --- The sequence-event chain ---
 	// Walk this entity's playing clips one frame further along their own timelines and dispatch
 	// whatever the interval contained. Called once per frame by the world's event pass, before the
 	// thinks; the base is a no-op because only an entity that owns a skeletal body has a clip to
@@ -304,7 +304,7 @@ public:
 	// dispatch"). Same no-RTTI rationale again: the dispatcher holds a `FElysiumEntity&`.
 	virtual bool HandleAnimEvent(const struct FElysiumAnimEvent& Event) { return false; }
 
-	// The animation seam (8.5). Play a named sequence on this entity's body, resolved through the
+	// The animation seam. Play a named sequence on this entity's body, resolved through the
 	// NPC clip manifest. Base answers false — only an entity that owns a skeletal body can play
 	// one. Every script-facing animation call lands here: the `SetAnimation` input (21 sites), the
 	// `SetGesture` Character method, and `scripted_sequence`'s `m_iszPlay`. Kept virtual on the base
@@ -313,7 +313,7 @@ public:
 	// `scripted_sequence` times its `OnEndSequence` off it.
 	virtual bool PlayAnimClip(const FString& ClipName, bool bLoop, float* OutSeconds = nullptr) { return false; }
 
-	// The same seam with the producer's own band on it — one segment of a montage-slot run (LIFE5).
+	// The same seam with the producer's own band on it — one segment of a montage-slot run.
 	//
 	// `PlayAnimClip` above is the band-less door: it means `Ambient`, one clip, one claim that goes
 	// when the clip does. A **run** — a `scripted_sequence`'s idle/travel/play/post-idle, an
@@ -326,12 +326,12 @@ public:
 
 	virtual bool PreloadAnimClip(const FString& ClipName) { return false; }
 
-	// Hand the body back to its resting pose — the disposition idle 8.5 picked for it. What a
+	// Hand the body back to its resting pose — the disposition idle picked for it. What a
 	// `scripted_sequence` does to its NPC on `CancelSequence`: VtMB returns the NPC to AI, which
 	// idles it, and the stance idle is the closest thing this runtime has to that. Base answers false.
 	virtual bool ResetAnimToIdle() { return false; }
 
-	// --- The scripted-move seam (8.5) ---------------------------------------------------
+	// --- The scripted-move seam ---
 	// Send this entity to a beat's mark under the script's ownership, travelling at `Gait`. Only a
 	// character standing on a movement motor can travel, so the base answers false and the caller
 	// places it on the mark instead — the supported path for the player stand-in, a bodiless
@@ -365,7 +365,7 @@ public:
 	// cast lifetime rather than CCineNPC's CancelSequence transition.
 	virtual bool CancelScriptedSequenceForDialogue(const FElysiumEntityHandle& NpcHandle) { return false; }
 
-	// --- Dialogue body ownership (K7) --------------------------------------------------
+	// --- Dialogue body ownership ---
 	// The open world session holds this token beside its camera handle. Only the NPC leaf backs
 	// these calls; keeping the seam on the base avoids RTTI and lets replacement/teardown release
 	// exactly the resolved owner. A null token means acquisition was refused.
@@ -374,7 +374,7 @@ public:
 	// EndDialog input, preserving OnDialogEnd ordering through the one event transport.
 	virtual void EndDialogueBodySession(const FElysiumBodyOwnerToken& Token, bool bSilent) {}
 
-	// --- Body state a cutscene borrows (entity_io.md, choreographed_scenes.md) -----------
+	// --- Body state a cutscene borrows (entity_io.md, choreographed_scenes.md) ---
 	// A choreographed scene with `position_start 1` places its cast once and then immobilises it:
 	// VtMB's FUN_10081ed0 follows the placement with SetMoveType(MOVETYPE_NONE), SetSolid(SOLID_NONE)
 	// and AddSolidFlags(FSOLID_NOT_SOLID), restoring all four at OnSceneFinished. The actors hold
@@ -388,7 +388,7 @@ public:
 	// unaffected — only character-vs-character.
 	virtual void SetIgnoreCharacterCollision(bool bIgnore) {}
 
-	// --- Scripted-beat ownership (VtMB's m_pCine) ---------------------------------------
+	// --- Scripted-beat ownership (VtMB's m_pCine) ---
 	// The `scripted_sequence` currently driving this entity, and whether that owner refuses to be
 	// kicked out of the queue (spawnflag 512, or an authored `m_iszNextScript`). Claimed on a
 	// successful BeginSequence and released when the beat ends or is cancelled. Not part of the
@@ -397,7 +397,7 @@ public:
 	FElysiumEntityHandle ScriptOwner;
 	bool bScriptOwnerLocked = false;
 
-	// 12.1 — play a clip out of a choreographed scene's own anim set (the whole-cast cinematic
+	// Play a clip out of a choreographed scene's own anim set (the whole-cast cinematic
 	// model), selecting this actor's skeleton inside it by the scene's `bonerename` source. Kept
 	// beside PlayAnimClip for the same no-RTTI reason; base answers false.
 	virtual bool PlayCinematicClip(const FString& AnimSetModel, const FString& BoneRoot,
@@ -407,7 +407,7 @@ public:
 	virtual bool SeekCinematicClip(float PositionSeconds) { return false; }
 	virtual void StopCinematicClip() {}
 
-	// 12.3 — write named flex controllers on this entity's face. Purely additive: a controller the
+	// Write named flex controllers on this entity's face. Purely additive: a controller the
 	// write set does not name keeps whatever it held, so the caller owns clearing what it stopped
 	// driving. That is what lets a scene's expression track and a line's lipsync write the same face
 	// without a layer stack between them.
@@ -434,7 +434,7 @@ public:
 
 	// A disposition write from script — the animation half of `SetDisposition` (2,510 calls, the
 	// largest single engine demand in the game). Re-picks the standing stance; the emotional-state
-	// and reaction half is 9.9's. Base answers false.
+	// and reaction half. Base answers false.
 	virtual bool SetDispositionName(const FString& Disposition) { return false; }
 
 	// No-RTTI downcast to the door base (UE builds compile without RTTI, so no dynamic_cast). Base
@@ -452,7 +452,7 @@ public:
 		return const_cast<FElysiumEntity*>(this)->AsTerminal();
 	}
 
-	// No-RTTI downcast to the combat character (11.4), for the callers that need the sheet or the
+	// No-RTTI downcast to the combat character, for the callers that need the sheet or the
 	// damage receiver off a base pointer — the same reason AsDoorBase exists.
 	virtual class FElysiumCombatCharacter* AsCombatCharacter() { return nullptr; }
 	const class FElysiumCombatCharacter* AsCombatCharacter() const
@@ -460,7 +460,7 @@ public:
 		return const_cast<FElysiumEntity*>(this)->AsCombatCharacter();
 	}
 
-	// The same, for the item leaf (9.8): an inventory holds handles, and resolving one has to
+	// The same, for the item leaf: an inventory holds handles, and resolving one has to
 	// recognise an item without reflection. Base returns null; FElysiumItem overrides.
 	virtual class FElysiumItem* AsItem() { return nullptr; }
 	const class FElysiumItem* AsItem() const
@@ -468,7 +468,7 @@ public:
 		return const_cast<FElysiumEntity*>(this)->AsItem();
 	}
 
-	// The same, for the loot-container leaf (9.8). Containers sit on the combat-character chain,
+	// The same, for the loot-container leaf. Containers sit on the combat-character chain,
 	// but callers resolving an arbitrary entity still need to distinguish the leaf without RTTI.
 	virtual class FElysiumItemContainer* AsItemContainer() { return nullptr; }
 	const class FElysiumItemContainer* AsItemContainer() const
@@ -486,27 +486,27 @@ public:
 		return const_cast<FElysiumEntity*>(this)->AsNpc();
 	}
 
-	// --- Open-ended attribute names (11.4) ----------------------------------------------
+	// --- Open-ended attribute names ---
 	// The registry's field table is a static list of names, which is exactly right for a datamap
 	// and wrong for the part of the character sheet that is `vdata`-driven (`base_<discipline>`,
 	// the attribute/ability ratings). Both script hosts consult these AFTER the class-chain walk
 	// and before their Character-method fallback, so a sheet name reads a number instead of
-	// binding as a method. Base answers false — no dynamic names. 9.4 shrinks the bag as it turns
-	// the names VtMB's own datamap carries into registered fields.
+	// binding as a method. Base answers false — no dynamic names. The bag shrinks as names
+	// VtMB's own datamap carries become registered fields.
 	virtual bool GetDynamicField(FName Name, FElysiumVariant& Out) const { return false; }
 	virtual bool SetDynamicField(FName Name, const FElysiumVariant& Value) { return false; }
 
-	// --- Persistence (11.9) -------------------------------------------------------------
-	// Everything a class registers as a `Save` field is enumerated by the R2 walk and needs no code
+	// --- Persistence ---
+	// Everything a class registers as a `Save` field is enumerated by the field walk and needs no code
 	// here (`docs/architecture/save-architecture.md` §4). This is the hook for the one thing that does not fit it: a
 	// leaf's *derived* runtime state — a mover's phase and its move endpoints, a sequence cursor —
 	// state that is neither a keyvalue nor a field, and that a rebuild from the def cannot re-derive.
 	// Called after the field walk, in both directions (the archive knows which). Bodies are never
-	// saved: they are disposable presentation (R1) and rebuild from the def plus the restored state.
+	// saved: they are disposable presentation and rebuild from the def plus the restored state.
 	virtual void Serialize(FElysiumSaveArchive& Ar) {}
 
 	// True when this entity leaves the map with the player rather than staying behind — an inventory
-	// item, once 9.8 makes items owned entities. The freeze records such an entity in the snapshot's
+	// item that is an owned entity. The freeze records such an entity in the snapshot's
 	// `AbsentEntities` set instead of its state, which is what stops walking back into a map from
 	// re-materialising everything carried out of it (VtMB's `.HL3`, `docs/architecture/save-architecture.md` §5).
 	virtual bool TravelsWithPlayer() const { return false; }
@@ -516,9 +516,9 @@ public:
 	float GetSavedNextThink() const { return SavedNextThink; }
 	void  SetSavedNextThink(float InThink) { SavedNextThink = InThink; }
 
-	// --- Lifecycle --------------------------------------------------------------------
+	// --- Lifecycle ---
 	// Bind identity and copy the base keyfields out of the def's raw keys through the class
-	// chain field table (R2), honouring start_hidden. The world's spawn pass (P1.4) calls
+	// chain field table, honouring start_hidden. The world's spawn pass calls
 	// this, then Spawn(); a leaf class overrides Spawn() for its own wiring.
 	void Construct(const FElysiumEntityDef& InDef, FElysiumEntityHandle InHandle, const FElysiumClassDesc& InClass);
 	virtual void Spawn() {}
@@ -560,7 +560,7 @@ public:
 	// into its new parent-local space here. Point visuals and non-movers need no adjustment.
 	virtual void OnParentAttached(const FTransform& ParentWorldTransform) {}
 
-	// Body hook (R6): mirror dormancy onto the attached body's collision. No-op while an entity
+	// Body hook: mirror dormancy onto the attached body's collision. No-op while an entity
 	// has no body (all point/logic entities).
 	virtual void OnDormancyChanged();
 	// Class state such as CBaseTrigger::StartDisabled participates in the same physical gate as
@@ -568,7 +568,7 @@ public:
 	virtual bool IsBrushBodyEnabled() const { return !IsInert(); }
 	void RefreshBrushBodyState();
 
-	// `#<idx> <targetname>(<classname>)` — the canonical debug string (R3), used everywhere.
+	// `#<idx> <targetname>(<classname>)` — the canonical debug string, used everywhere.
 	FString DebugString() const;
 
 protected:

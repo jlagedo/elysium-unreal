@@ -13,9 +13,9 @@
 #include "PhysicsEngine/BodySetup.h"
 #include "PhysicsEngine/PhysicsConstraintComponent.h"
 
-// A/B toggle for prop_physics simulation. 1 (default) simulates the body as a Chaos rigid
-// body; 0 leaves it standing as a static, non-solid mesh (visual parity, like a prop_dynamic), so
-// a map can be compared with and without physics. Read in the leaf's Spawn — takes effect next load.
+// Console gate for prop_physics simulation. 1 (default) simulates the body as a Chaos rigid body;
+// 0 leaves it standing as a static, non-solid mesh (visual parity, like a prop_dynamic). Read in
+// the leaf's Spawn — takes effect next load.
 static TAutoConsoleVariable<int32> CVarPhysicsProps(
 	TEXT("elysium.PhysicsProps"),
 	1,
@@ -51,8 +51,6 @@ namespace
 			? Body->DefaultInstance.GetMassOverride() : 0.0f;
 	}
 }
-
-// --- FElysiumPhysProp ---------------------------------------------------------------------------
 
 void FElysiumPhysProp::Spawn()
 {
@@ -225,7 +223,7 @@ void FElysiumPhysProp::BuildBody()
 		Visual->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		bSimulating = false;
 	}
-	// Simulate (or stand static under the A/B toggle). Mass is the model's authored `.phy` value
+	// Simulate (or stand static under the console gate). Mass is the model's authored `.phy` value
 	// (baked onto the mesh) unless the entity's own override_mass > 0, which outranks it —
 	// Source's precedence. override_mass is -1 on every prop_physics in the exported maps, so
 	// the authored mass is what nearly all of them weigh.
@@ -282,8 +280,6 @@ void FElysiumPhysProp::GateBody()
 		Visual->SetSimulatePhysics(true);
 	}
 }
-
-// --- FElysiumPhysHinge --------------------------------------------------------------------------
 
 void FElysiumPhysHinge::PostSpawn()
 {

@@ -13,7 +13,7 @@
 // A course is authored as **segments** — hold this intent for this long — and expanded into one
 // `FElysiumUserCmd` per frame at run time, because the harness forces a fixed frame rate. That is
 // what lets the same course run at 60, 120 and 240 fps and be compared: the *intent* is identical,
-// only the integration differs, which is exactly the frame-rate dependence 4.7 had to settle.
+// only the integration differs, which is exactly the frame-rate dependence the comparison has to settle.
 //
 // There are two hosts and they answer different questions. A **sited** course runs on a real map
 // and is the only thing a retail capture could ever be compared against. A **gym** course runs on
@@ -40,7 +40,7 @@ namespace ElysiumMoveCourses
 		float Yaw = NAN;
 	};
 
-	// A body event a course can time a press against (CCC3). The ground state's two edges, which is
+	// A body event a course can time a press against. The ground state's two edges, which is
 	// everything the leniency brackets need: one names the moment the feet leave the lip, the other
 	// the moment they find the floor again.
 	enum class EBodyEvent : uint8
@@ -51,11 +51,11 @@ namespace ElysiumMoveCourses
 
 	// One jump press, placed relative to a body event rather than to the clock.
 	//
-	// This is the only thing in the course table that cannot be written down in advance, and the
-	// reason is `CCC7`: the time it takes to walk to a lip moves with the gait, so a press timed off
-	// the clock would silently drift the day the speed authority changes. The *offset from the
-	// event* does not move, which is what makes a leniency bracket promotable now. The harness
-	// resolves the event frame in a probe pass and hands it to `Expand`, which stays pure.
+	// This is the only thing in the course table that cannot be written down in advance: the time
+	// it takes to walk to a lip moves with the gait, so a press timed off the clock silently
+	// drifts the day the speed authority changes. The *offset from the event* does not move, which
+	// is what makes a leniency bracket comparable. The harness resolves the event frame in a probe
+	// pass and hands it to `Expand`, which stays pure.
 	struct FEventJump
 	{
 		EBodyEvent Event = EBodyEvent::GroundLost;
@@ -94,8 +94,8 @@ namespace ElysiumMoveCourses
 		TOptional<FEventJump> EventJump;
 
 		// This course's recording is written but not compared. Two reasons reach it: what it
-		// measures moves when the speed authority moves, so promoting it before `CCC7` bakes in a
-		// number that is about to change; or the course does not yet measure what it is named for.
+		// measures moves when the speed authority moves, so a committed baseline would bake in a
+		// number the gait changes; or the course does not yet measure what it is named for.
 		// Either way a run records it and no baseline claims it means anything.
 		bool bDeferBaseline = false;
 	};

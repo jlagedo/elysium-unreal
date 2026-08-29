@@ -5,7 +5,7 @@
 
 class UElysiumMapSubsystem;
 
-// P2.9 — the headless screenshot-regression harness, sibling to FElysiumProfileRun. Activated by
+// The headless screenshot-regression harness, sibling to FElysiumProfileRun. Activated by
 // `-ElysiumShots`. It removes the human from "load the map, walk to each vantage, take a shot":
 // once the boot map's pawn has settled, it visits each vantage in ElysiumVantages.h, pins the
 // camera stock-still, lets the frame settle (Lumen temporal accumulation + first-run shader

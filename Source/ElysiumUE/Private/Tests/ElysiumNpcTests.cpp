@@ -38,7 +38,7 @@
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
 #include "ElysiumAnimationIntent.h"          // ElysiumAnimIntent::GaitFrom — the classifier's reference
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -48,8 +48,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -58,7 +58,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -125,9 +125,9 @@ namespace ElysiumNpcTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// =====================================================================================
+
 // CNPCMaker's recovered admission order, tutorial live ceiling, and saved owner lifecycle.
-// =====================================================================================
+
 
 namespace
 {
@@ -569,10 +569,10 @@ bool FElysiumNpcMakerLifecycleTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // FElysiumNpc / npc_maker — registry coverage, npc_maker.Spawn creating a live child on a bare
 // world, dialogue latches, and the engine-neutral half of named patrol resolution/persistence.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInterestingPlacePolicyTest,
 	"Elysium.Substrate.InterestingPlacePolicy", GElysiumTestFlags)
@@ -972,7 +972,7 @@ bool FElysiumNpcTest::RunTest(const FString&)
 	return true;
 }
 
-// LIFE3 — the cast travels at its own body's authored cell speed, not at a constant.
+// The cast travels at its own body's authored cell speed, not at a constant.
 //
 // The two halves of the same rule: a body whose export resolves a walk fan commands that fan's
 // forward cell, and a body that resolves none commands `ElysiumNpcGait::WalkSpeed`. A patrol leg is
@@ -1103,7 +1103,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		}
 	}
 
-	// LIFE3 — a scripted `m_fMoveTo 2` (Run) rides the run FAN rather than a named clip, so it names
+	// A scripted `m_fMoveTo 2` (Run) rides the run FAN rather than a named clip, so it names
 	// the fan on its way out: that tag is what lets the body's own animation pass re-derive the cell
 	// as the leg turns. It is the exact opposite of the Walk case above, and both have to hold.
 	{
@@ -1154,7 +1154,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 		}
 	}
 
-	// LIFE3 — and the number itself is per-direction. A travel request being ISSUED asks at forward,
+	// And the number itself is per-direction. A travel request being ISSUED asks at forward,
 	// because the leg has not started; the body's own animation pass asks again at the realized
 	// `move_yaw` every frame after that, and a turnaround is where the two answers separate.
 	{
@@ -1193,7 +1193,7 @@ bool FElysiumNpcTravelSpeedTest::RunTest(const FString&)
 	return true;
 }
 
-// LIFE5 — the one activity seam, from the producer's side.
+// The one activity seam, from the producer's side.
 //
 // Patrol travel, the schedule's activity task and the ambient interesting-place cycle share one
 // shape: state the whole translation context, resolve, then play the vocabulary label that came
@@ -1435,11 +1435,11 @@ bool FElysiumNpcTeleportToEntityTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // 9.3 scripted entity manipulation — the two-phase runtime create (CreateEntityNoSpawn ->
 // CallEntitySpawn), Entity.SetName re-keying the name index, and the runtime origin backing
 // SetOrigin. A bare world (Owner null) exercises the substrate half; bodies no-op.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRuntimeSpawnTest, "Elysium.Substrate.RuntimeSpawn", GElysiumTestFlags)
 bool FElysiumRuntimeSpawnTest::RunTest(const FString&)

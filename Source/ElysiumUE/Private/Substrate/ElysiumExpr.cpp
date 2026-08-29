@@ -489,7 +489,7 @@ namespace
 		bool& bErr;
 	};
 
-	// --- Native binding surface (5.3) ----------------------------------------------------------
+	// --- Native binding surface ---
 	// The engine `vampire` module — the table, the stub defaults, and the call log — lives in
 	// ElysiumScriptNatives, shared with the CPython host so a name cannot stub differently
 	// depending on which host is installed. The evaluator only adapts its own object model to it.
@@ -499,7 +499,7 @@ namespace
 	// --- Runtime values ------------------------------------------------------------------------
 	// The evaluator carries values richer than FElysiumVariant during a walk: besides a plain
 	// variant it can hold the `G` bag, a bound entity input (a callable that fires the input), one of
-	// G's own methods, a `vampire`-module global (5.3), a character object (the PC or an NPC handle),
+	// G's own methods, a `vampire`-module global, a character object (the PC or an NPC handle),
 	// or a bound Character method. Non-variant kinds are Python "objects" — truthy, and an error to
 	// coerce into arithmetic.
 	struct FVal
@@ -592,7 +592,7 @@ namespace
 			if (Name == TEXT("G")) { return FVal::MakeGBag(); }
 
 			// The `vampire`-module globals (FindPlayer, FindEntityByName, ...) resolve as bare names,
-			// ahead of targetnames — no entity would carry such a name (5.3).
+			// ahead of targetnames — no entity would carry such a name.
 			if (IsNativeGlobal(Name)) { return FVal::MakeNativeGlobal(FName(*Name)); }
 
 			// `self`/`activator` — the evaluation's I/O provenance, when bound (a live field-6 delivery).
@@ -601,7 +601,7 @@ namespace
 			if (Name == TEXT("self") && Env.Ctx.Self.IsSet()) { return FVal::FromVar(FElysiumVariant::Handle(Env.Ctx.Self)); }
 			if (Name == TEXT("activator") && Env.Ctx.Activator.IsSet()) { return FVal::FromVar(FElysiumVariant::Handle(Env.Ctx.Activator)); }
 
-			// `pc` = the player entity (11.4 — an ordinary handle, like every other entity);
+			// `pc` = the player entity (an ordinary handle, like every other entity);
 			// `npc` = the firing entity (Self) in a dialogue/entity context. The two names the dialogue
 			// gates and level scripts actually read, mirroring the CPython host. With no player (a
 			// menu backdrop, a bare probe world) `pc` falls through to a Character receiver on the
@@ -615,8 +615,8 @@ namespace
 			}
 			if (Name == TEXT("npc") && Env.Ctx.Self.IsSet()) { return FVal::FromVar(FElysiumVariant::Handle(Env.Ctx.Self)); }
 
-			// Otherwise a bare name resolves to an entity by targetname (the one namespace, 5.2). Level-
-			// script functions/constants (cCelerity, the level's On* callbacks) are 5.5 — NameError here.
+			// Otherwise a bare name resolves to an entity by targetname (the one namespace). Level-
+			// script functions/constants (cCelerity, the level's On* callbacks) arrive with the host — NameError here.
 			if (FElysiumEntityWorld* W = World())
 			{
 				if (FElysiumEntity* E = W->FindByName(Name))
@@ -682,7 +682,7 @@ namespace
 					return FVal::FromVar(F->Get(E));
 				}
 			}
-			// The vdata-driven half of the character sheet (11.4): `pc.base_Celerity` reads a number
+			// The vdata-driven half of the character sheet: `pc.base_Celerity` reads a number
 			// rather than binding as a method. Same position in the order as the CPython host's.
 			{
 				FElysiumVariant Dynamic;
@@ -692,7 +692,7 @@ namespace
 				}
 			}
 			// A Character method invoked on an NPC entity handle (FindEntityByName("bob").SetExpression(...)):
-			// bind the method against that entity so it dispatches through the same stub as the PC (5.3).
+			// bind the method against that entity so it dispatches through the same stub as the PC.
 			if (IsCharacterMethod(Attr))
 			{
 				return FVal::MakeCharMethod(E.Handle, AttrName);
@@ -772,7 +772,7 @@ namespace
 			return Void();
 		}
 
-		// --- Native binding dispatch (5.3) -----------------------------------------------------
+		// --- Native binding dispatch ---
 		// Only the two globals whose result is an evaluator-side object (the PC object and an entity
 		// handle) are resolved here; everything else — ScheduleTask, ChangeMap, the unbacked stubs,
 		// and the whole Character surface — goes through the shared ElysiumScriptNatives module, so
@@ -1015,7 +1015,7 @@ namespace
 					const FElysiumFieldAccessor* F = E->Class ? Reg.FindField(*E->Class, AttrName) : nullptr;
 					if (!F)
 					{
-						// The sheet bag (11.4), mirroring the read path.
+						// The sheet bag, mirroring the read path.
 						if (E->SetDynamicField(AttrName, V)) { return FVal::FromVar(V); }
 						Fail(FString::Printf(TEXT("entity has no writable attribute '%s'"), *Attr));
 						return Void();
@@ -1028,7 +1028,7 @@ namespace
 				return Void();
 			}
 
-			// Bare-name target (`x = ...`) would write __main__; no module dict modelled in 5.2.
+			// Bare-name target (`x = ...`) would write __main__; no module dict is modelled.
 			Fail(TEXT("assignment to a bare name is not supported yet"));
 			return Void();
 		}

@@ -1,9 +1,7 @@
-// 11.4 — CBaseCombatCharacter: the character sheet, its 25 datamap inputs, the damage entries and
-// the gaze rig (S3).
+// CBaseCombatCharacter: the character sheet, its 25 datamap inputs, the damage entries and
+// the gaze rig.
 //
-// Moved verbatim out of `ElysiumPlayerClasses.cpp` when the discipline runtime landed; the file
-// granularity rule in `Source/ElysiumUE/CLAUDE.md` puts one primary class per `.cpp`. The public
-// declaration stays the chain header `Public/ElysiumPlayer.h`, the feed transaction stays
+// The public declaration stays the chain header `Public/ElysiumPlayer.h`, the feed transaction stays
 // `Substrate/ElysiumFeed.cpp`, the discipline transactions stay `Substrate/ElysiumDisciplines.cpp`,
 // and the class registration stays at the one registration site, `ElysiumPlayerClasses.cpp`.
 
@@ -16,36 +14,34 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U / StandViewZ — the one units conversion
-#include "ElysiumRng.h"                // the session's owned random streams (S8)
+#include "ElysiumRng.h"                // the session's owned random streams
 #include "ElysiumSheetSlots.h"
 #include "ElysiumSkeletalBasis.h"      // FromSourceAngles — the entity's facing as an Unreal yaw
 #include "ElysiumStub.h"
 #include "ElysiumWorldServices.h"
-#include "Substrate/ElysiumAnimEvents.h"    // LIFE5 — the recovered dispatch bands
+#include "Substrate/ElysiumAnimEvents.h"    // the recovered dispatch bands
 #include "Substrate/ElysiumDamage.h"        // FElysiumDmg + the shared apply path
-#include "Substrate/ElysiumDisciplines.h"    // Cycle 9 — the interruption + teardown entries
+#include "Substrate/ElysiumDisciplines.h"    // the interruption + teardown entries
 #include "Substrate/ElysiumDisposition.h"   // FElysiumEyeTargetTuning, the gaze layer's content
 #include "Substrate/ElysiumGameSound.h"     // the sound-event bus + its category names
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Inventory_Remove's parameter, the equipped item's record
 #include "Substrate/ElysiumItemTable.h"     // FElysiumItemDef — the equipped item's definition record
-#include "Substrate/ElysiumLaw.h"           // Cycle 11b — FireWorldEvent, the `events_world` bus
+#include "Substrate/ElysiumLaw.h"           // FireWorldEvent, the `events_world` bus
 #include "Substrate/ElysiumNpc.h"           // FElysiumNpc::GetMind — the cast body's own state
 #include "Substrate/ElysiumPlayerLog.h"
-#include "Substrate/ElysiumReactions.h"     // LIFE5 — the damage flinch's pure rules
+#include "Substrate/ElysiumReactions.h"     // the damage flinch's pure rules
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
 #include "Substrate/ElysiumSheetMath.h"
 #include "Substrate/ElysiumStealth.h"
 #include "Substrate/ElysiumWeaponClasses.h"  // FElysiumWeapon — the operator hop the weapon band takes
 
-// ============================================================================================
-// FElysiumCombatCharacter — CBaseCombatCharacter
-// ============================================================================================
+// --- FElysiumCombatCharacter — CBaseCombatCharacter ---
 
 void FElysiumCombatCharacter::PendingInput(const TCHAR* Input, const TCHAR* Owner,
 	const FElysiumInputArgs& Args, const TCHAR* DeclaringClass) const
 {
-	// Registered so the name resolves through the R2 walk, but nothing behind it yet — the same
+	// Registered so the name resolves through the class-chain walk, but nothing behind it — the same
 	// condition as an unregistered classname's input, so it reports through the same surface and
 	// lands in the same work list. Keyed on the class the input is declared on, not on the
 	// receiver, so one row covers every NPC that receives it.
@@ -72,7 +68,7 @@ void FElysiumCombatCharacter::InputMoneyRemove(const FElysiumInputArgs& Args)
 {
 	const int32 N = Args.Param.ToInt();
 	// The floor is the runtime's, not a recovered rule: VtMB's MoneyRemove is reached through the
-	// barter/quest paths that check affordability first (9.10 owns those checks).
+	// barter/quest paths that check affordability first.
 	if (N != 0) { Money = FMath::Max(0, Money - N); }
 }
 
@@ -83,7 +79,7 @@ const FElysiumStatTable* FElysiumCombatCharacter::SheetRules() const
 	{
 		return GameState->Stats();
 	}
-	// Cycle 9 — no GameInstance behind this world (a Substrate-tier run). The bound fallback is
+	// No GameInstance behind this world (a Substrate-tier run). The bound fallback is
 	// null in a real run and in an unbound test alike, so this changes nothing that had a subsystem
 	// (`Substrate/ElysiumSheetMath.h` → "The headless table binding").
 	return ElysiumSheetRules::BoundTables().Stats;
@@ -99,7 +95,7 @@ static UElysiumRulebookSubsystem* CharRulebook(const FElysiumCombatCharacter& Ch
 void FElysiumCombatCharacter::RebuildEffects()
 {
 	UElysiumRulebookSubsystem* Rules = CharRulebook(*this);
-	// Cycle 9 — the headless fallback, so a Substrate-tier run resolves the same groups a live one
+	// The headless fallback, so a Substrate-tier run resolves the same groups a live one
 	// does. The subsystem always wins; the bound tables are null in a real run.
 	const ElysiumSheetRules::FBoundTables& Bound = ElysiumSheetRules::BoundTables();
 	const FElysiumTraitEffects* EffectTable = Rules ? &Rules->TraitEffects() : Bound.TraitEffects;
@@ -135,7 +131,7 @@ void FElysiumCombatCharacter::AddTrait(EElysiumTraitContainer Container, int32 S
 int32 FElysiumCombatCharacter::CalcFeat(const FString& Name) const
 {
 	UElysiumRulebookSubsystem* Rules = CharRulebook(*this);
-	// Cycle 9 — same headless fallback as the effect layer above.
+	// Same headless fallback as the effect layer above.
 	const FElysiumFeatTable* FeatTable =
 		Rules ? &Rules->Feats() : ElysiumSheetRules::BoundTables().Feats;
 	if (FeatTable == nullptr)
@@ -195,7 +191,7 @@ int32 FElysiumCombatCharacter::BumpStat(const FString& Stat, int32 Times)
 		++Landed;
 	}
 	SyncHealthFromSheet();
-	// One client notification fires after the loop, not per dot (8.9 owns the readout).
+	// One client notification fires after the loop, not per dot (the HUD owns the readout).
 	return Landed;
 }
 
@@ -217,7 +213,7 @@ void FElysiumCombatCharacter::AddHumanity(int32 Delta)
 	AddTrait(EElysiumTraitContainer::Attributes, ElysiumSlot::Humanity, Scaled);
 }
 
-// ==================== Cycle 11b hunk 4/9 — the Masquerade level outputs =========================
+// --- The Masquerade level outputs ---
 // `docs/vtmb/player-entity.md` § "Law, Masquerade and world response": "`ChangeMasqueradeLevel`
 // mutates sheet stat index `0x1c`, republishes player client state and fires the game-rules output
 // for the resulting level plus the generic level-changed output."
@@ -300,7 +296,6 @@ void FElysiumCombatCharacter::ChangeMasqueradeLevel(int32 Delta)
 		OnMasqueradeBreached();
 	}
 }
-// ================================================================================================
 
 void FElysiumCombatCharacter::OnMasqueradeBreached()
 {
@@ -488,9 +483,7 @@ void FElysiumCombatCharacter::FillActivityClipRequest(FElysiumActivityClipReques
 		? World->PlayerSelectionStateMask() : INDEX_NONE;
 }
 
-// ============================================================================================
-// Gaze — the selection cascade, the saccade layer and the integrator (12.4)
-// ============================================================================================
+// --- Gaze — the selection cascade, the saccade layer and the integrator ---
 
 namespace
 {
@@ -581,8 +574,8 @@ FVector FElysiumCombatCharacter::TickGaze(float Now, float DeltaSeconds,
 	const FVector Ahead = HeadPos + HeadForward * GAheadReach;
 
 	// --- Selection ---------------------------------------------------------------------------
-	// The priority cascade. Three of retail's arms have nothing to read yet and are marked rather
-	// than faked: `enemy` needs the combat layer (P13), `navigation goal` needs a move-goal
+	// The priority cascade. Three of retail's arms have nothing to read and are marked rather
+	// than faked: `enemy` needs the combat layer, `navigation goal` needs a move-goal
 	// accessor on FElysiumNpc, and `heard sound` needs a sound record. Each would sit here, in this
 	// order, between the scripted target and the autonomous scan. Their absence makes a character
 	// fall through to the scan, which is the same thing retail does when those arms find nothing.
@@ -811,7 +804,7 @@ void FElysiumCombatCharacter::TakeDamage(const FElysiumDmg& Dmg, FElysiumCombatC
 	{
 		return;   // invincible: retail refuses ahead of life state, the resolver and the commit
 	}
-	// B6 — incoming damage while paired tears the feed down BEFORE the damage commits, whichever
+	// Incoming damage while paired tears the feed down BEFORE the damage commits, whichever
 	// half of the pair is hit (`docs/vtmb/feeding.md` § "Interruption, completion and outputs").
 	BreakFeed();
 
@@ -924,7 +917,7 @@ void FElysiumCombatCharacter::CommitDamage(const FElysiumDmg& Dmg)
 	// later claim replaces this one on the base channel rather than racing it here.
 	StartDamageFlinch(Dmg);
 
-	// Cycle 9 — `ShouldRemove_OnTakeDamage`, from the one typed health commit. It also reconciles
+	// `ShouldRemove_OnTakeDamage`, from the one typed health commit. It also reconciles
 	// the Bloodshield teardown above: `EndBloodshield` drops the power's trait group when the buffer
 	// exhausts, and this is where the tracked targeted effect that installed it is retired with it.
 	ElysiumDisciplines::NotifyDamaged(*this);
@@ -1001,7 +994,7 @@ void FElysiumCombatCharacter::StartDamageFlinch(const FElysiumDmg& Dmg)
 	}
 
 	// Retail's flinch draws at random, so this one does too — off the session's own Reaction stream,
-	// whose position is in the save (S8, `docs/architecture/save-architecture.md` §8). Every blow is a
+	// whose position is in the save (`docs/architecture/save-architecture.md` §8). Every blow is a
 	// fresh pick, jitter and weighted choice; nothing here is a function of the victim or of how many
 	// times it has been hit.
 	FRandomStream& Rng = ElysiumRng::Stream(EElysiumRngStream::Reaction);
@@ -1128,7 +1121,7 @@ bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayReq
 	Resolve.Activity = Request.Activity;
 	// Retail's `SelectWeightedSequence` picks among the equal activity's variants with `random()`, so
 	// the weighted pick re-rolls with every reaction. Off the session's own Reaction stream, whose
-	// position is in the save (S8, `docs/architecture/save-architecture.md` §8).
+	// position is in the save (`docs/architecture/save-architecture.md` §8).
 	Resolve.Variant = ElysiumRng::Stream(EElysiumRngStream::Reaction).RandHelper(MAX_int32);
 	Resolve.HitYaw = Request.HitYawDegrees;
 	Resolve.Source = EElysiumAnimSource::Damage;
@@ -1200,9 +1193,7 @@ bool FElysiumCombatCharacter::PlayReactionActivity(const FElysiumReactionPlayReq
 	return bPlayed;
 }
 
-// ============================================================================================
-// The sequence-event weapon route
-// ============================================================================================
+// --- The sequence-event weapon route ---
 
 bool FElysiumCombatCharacter::HandleAnimEvent(const FElysiumAnimEvent& Event)
 {
@@ -1254,7 +1245,7 @@ void FElysiumCombatCharacter::OnKilled()
 		return;
 	}
 	bDeathReported = true;
-	// LIFE5 — the held reaction claim goes back on the death commit, ahead of every output. A held
+	// The held reaction claim goes back on the death commit, ahead of every output. A held
 	// claim is released by a predicate its producer re-checks, and a dead character re-checks nothing:
 	// leaving it standing parks the base channel of a body whose death schedule is about to ask for
 	// it. The NPC leaf's wholesale `ReleaseBodyAnimClaims` releases the driver slot too; this is what
@@ -1271,7 +1262,7 @@ void FElysiumCombatCharacter::OnKilled()
 
 bool FElysiumCombatCharacter::GetDynamicField(FName Name, FElysiumVariant& Out) const
 {
-	// Every compiled slot is a registered field, so the R2 walk has already answered by the time
+	// Every compiled slot is a registered field, so the class-chain walk has already answered by the time
 	// this runs. What is left is a `base_*` name the shipped `stats.txt` does not own — which still
 	// reads 0 rather than raising, the same default-on-miss `G` has, because the gates that ask
 	// (`pc.base_Celerity > 0`) are written against a sheet where every name resolves.
@@ -1327,7 +1318,7 @@ void FElysiumCombatCharacter::GetDebugState(TArray<TPair<FString, FString>>& Out
 			EffectLayer.IsValid() ? EffectLayer->NumRows() : 0));
 	Out.Emplace(TEXT("WillTalk"), bWillTalk ? TEXT("yes") : TEXT("no"));
 	Out.Emplace(TEXT("Disposition"), Disposition.IsEmpty() ? TEXT("(none)") : Disposition);
-	// Cycle 9 — the discipline block: which of the thirteen are active, and how many targeted
+	// The discipline block: which of the thirteen are active, and how many targeted
 	// effects this character is currently carrying.
 	{
 		TArray<FString> Active;

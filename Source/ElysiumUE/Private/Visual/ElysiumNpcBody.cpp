@@ -46,7 +46,7 @@ FName FElysiumNpcAnimTickFunction::DiagnosticContext(bool bDetailed)
 AElysiumNpcBody::AElysiumNpcBody(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	// CCC4 — the animation pass runs after this body's own movement has produced the frame's final
+	// The animation pass runs after this body's own movement has produced the frame's final
 	// velocity, which the tick group is what guarantees. It stops when the world is held, because a
 	// held body is not moving and re-classifying it every frame would only churn the record.
 	AnimTickFunction.bCanEverTick = true;
@@ -100,7 +100,7 @@ void AElysiumNpcBody::SetModelStem(const FString& InStem, USkeletalMeshComponent
 	// A model swap is a new body: the latch, the last request and the previous model's tables all go.
 	AnimDriver->Reset();
 
-	// A clip already playing on the visual predates this driver — `BuildNpcVisual` arms the
+	// A clip already playing on the visual when this driver is built — `BuildNpcVisual` arms the
 	// disposition idle before the motor exists, so that arm could not claim a slot that was not
 	// there. The body therefore enters arbitration holding the ambient claim its clip stands for;
 	// without it, the first standing publish would own the base and replace the ambient cast's
@@ -348,7 +348,7 @@ void AElysiumNpcBody::AnimTick(float DeltaSeconds)
 	// component state, and calling it twice in one frame is how a reader comes to describe a frame
 	// the record does not.
 
-	// **The speed authority's push, this body's half** (LIFE3, mirroring the player's push in
+	// **The speed authority's push, this body's half** (mirroring the player's push in
 	// `AElysiumMapActor::TickPlayerAnimation`). The mover is commanded with the cell the record it
 	// just published names — literally that number, not a second reading keyed on the travel order's
 	// own gait. Per frame rather than on a generation change, because the direction moves every
@@ -585,9 +585,9 @@ void AElysiumNpcBody::ApplyEnabledState()
 		}
 		else
 		{
-			// Authored NPC origins are approximate feet positions. Active CharacterMovement used to
-			// settle every body under gravity, but sleeping idle movement leaves those raw positions
-			// visibly above or below collision. The entity's enabled transition occurs just after the
+			// Authored NPC origins are approximate feet positions. Sleeping idle movement leaves
+			// those raw positions visibly above or below collision. The entity's enabled transition
+			// occurs just after the
 			// map activation barrier, when collision is ready and this capsule has become queryable.
 			// Perform CharacterMovement's own capsule-aware floor query and swept height adjustment
 			// once here, then leave it asleep without spawning a controller or crowd agent.
@@ -619,7 +619,7 @@ FElysiumLocomotionSample AElysiumNpcBody::SampleLocomotion() const
 	FElysiumLocomotionSample Out = ElysiumLocomotion::FromCharacterMovement(*this,
 		static_cast<float>(GetActorRotation().Yaw));
 
-	// **What this body was commanded** (LIFE3). A cast body's command stream is its travel order:
+	// **What this body was commanded.** A cast body's command stream is its travel order:
 	// the motor is handed one number per leg and re-handed the cell it is about to play every frame
 	// after that, and `MaxWalkSpeed` is where that number lives. Publishing it makes the cast's gait
 	// test the same disjunction the player's is — retail tests the realized speed *or* the commanded

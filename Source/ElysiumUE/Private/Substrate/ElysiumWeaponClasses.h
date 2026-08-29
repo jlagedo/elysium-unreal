@@ -1,6 +1,6 @@
 #pragma once
 
-// 13.3 — the weapon controller: mode dispatch, next-attack scheduling on the substrate clock, the
+// The weapon controller: mode dispatch, next-attack scheduling on the substrate clock, the
 // two-half attack transaction, reload and dry fire.
 //
 // The behaviour reproduced here is canonical in `docs/vtmb/combat-and-damage.md`; the design seam
@@ -63,9 +63,7 @@ inline FName ElysiumWeaponClassName() { return FName(TEXT("CWeapon")); }
 inline FName ElysiumWeaponCommitInput() { return FName(TEXT("WeaponAttackCommit")); }
 inline FName ElysiumWeaponReloadInput() { return FName(TEXT("WeaponReloadCommit")); }
 
-// ================================================================================================
-// The `rules.txt` melee reaction margins
-// ================================================================================================
+// The `rules.txt` melee reaction margins.
 //
 // `RuleData/Melee_Reactions` (`combat-and-damage.md` § "Opposed record and reaction margin"). K9:
 // these are read, never retyped — an absent block leaves the table invalid and the classifier says
@@ -107,9 +105,7 @@ enum class EElysiumMeleeDefenderReaction : uint8
 	HitKnockback,
 };
 
-// ================================================================================================
-// The rulebook halves the weapon transactions need
-// ================================================================================================
+// The rulebook halves the weapon transactions need.
 //
 // Gathered once per transaction so the controller stays free of the subsystem and runs headless.
 // Every member may be absent; each consumer then fails safe and says so once.
@@ -144,9 +140,7 @@ struct FElysiumWeaponContext
 	static FElysiumWeaponContext FromCharacter(const FElysiumCombatCharacter& Char);
 };
 
-// ================================================================================================
-// The pure rules
-// ================================================================================================
+// The pure rules.
 
 namespace ElysiumWeapons
 {
@@ -190,8 +184,8 @@ namespace ElysiumWeapons
 	// no defence at all — that asymmetry is the recovered behaviour, not an optimisation.
 	int32 RangedRemainingLethality(int32 InTotalLethality, bool bKindredVictim, int32 DefenseNet);
 
-	// --- The two post-soak damage formulas (`combat-and-damage.md` § RE40 -> Ranged and Melee
-	// Damage Post-Soak Operations) ---------------------------------------------------------------
+	// The two post-soak damage formulas (`combat-and-damage.md` § RE40 -> Ranged and Melee
+	// Damage Post-Soak Operations).
 	// Both truncate toward zero, which is retail's own `__ftol` conversion at the point a float
 	// damage value is turned into the integer the health commit spends.
 
@@ -229,7 +223,7 @@ namespace ElysiumWeapons
 	const TCHAR* AttackerReactionName(EElysiumMeleeAttackerReaction Reaction);
 	const TCHAR* DefenderReactionName(EElysiumMeleeDefenderReaction Reaction);
 
-	// --- The sequence-event ids the weapon bodies claim ----------------------------------------
+	// The sequence-event ids the weapon bodies claim.
 	//
 	// `Operator_HandleAnimEvent` `+0x5c8` is not one policy. All 169 server weapon subclasses collapse
 	// to seven bodies (`docs/vtmb/animation_and_movers.md` → "Sequence events and native dispatch"),
@@ -295,7 +289,7 @@ namespace ElysiumWeapons
 	// The class-registry factory for every weapon-family item classname.
 	TUniquePtr<FElysiumEntity> MakeWeapon();
 
-	// --- Stated interim constants -------------------------------------------------------------
+	// Stated interim constants.
 	// Each of these stands in for a value the export does not yet carry. They are named, not
 	// scattered, so the RE that closes one lands as a single replacement.
 
@@ -327,7 +321,7 @@ namespace ElysiumWeapons
 	// acquisition cone tests against.
 	inline constexpr float MeleeConeHalfAngleDegrees = 30.0f;
 
-	// --- The opposed roll's own opponent query -------------------------------------------------
+	// The opposed roll's own opponent query.
 	// `MeleeRollAndSendNoticeCallback` runs its OWN `FindEntityFOV` before any contact test, at a
 	// fixed 60 Source units and a half-cone dot of 0.7 — not the acquisition query's authored
 	// per-sequence reach and 30-degree cone. The two are separate retail calls asking separate
@@ -344,9 +338,7 @@ namespace ElysiumWeapons
 	inline constexpr float RangedRangeSourceUnits = 1024.0f;
 }
 
-// ================================================================================================
-// FElysiumWeapon — the controller
-// ================================================================================================
+// FElysiumWeapon — the controller.
 
 // The three buttons a weapon frame reads, as this file's own vocabulary rather than the user
 // command's. `FElysiumEntityWorld::UpdatePlayerWeaponFrame` translates the player's button field
@@ -388,7 +380,7 @@ public:
 
 	static const TCHAR* VerdictName(EVerdict Verdict);
 
-	// --- Fire-mode state ----------------------------------------------------------------------
+	// Fire-mode state.
 	// Index into the record's `Modes` of the primary mode in force. `Toggle_Primary_Mode` swaps it
 	// between the `Primary` and `PrimaryMode2` records.
 	int32 PrimaryModeIndex = INDEX_NONE;
@@ -400,13 +392,13 @@ public:
 	// entity spawns rather than on every swing.
 	TArray<FElysiumDmg> ModeDamage;
 
-	// --- Next-attack scheduling (absolute substrate seconds) -----------------------------------
+	// Next-attack scheduling (absolute substrate seconds).
 	// `m_flNextPrimaryAttack` / `m_flNextSecondaryAttack`. Every write is a MAXIMUM operation: a
 	// pre-existing later deadline is never shortened.
 	double NextPrimaryAttackTime = 0.0;
 	double NextSecondaryAttackTime = 0.0;
 
-	// --- The accepted-swing transaction --------------------------------------------------------
+	// The accepted-swing transaction.
 	struct FSwing
 	{
 		bool bActive = false;
@@ -416,7 +408,7 @@ public:
 		int32 Serial = 0;
 		int32 ModeIndex = INDEX_NONE;
 		bool bMelee = false;
-		// --- The attack's own identity across a combo chain -------------------------------------
+		// The attack's own identity across a combo chain.
 		// `Serial` is bumped by every LINK, because the queued commit has to be able to tell one
 		// link from the next. These two name the ATTACK instead: `ChainRoot` is the serial of the
 		// press that opened it and holds still for the whole chain, and `ChainLink` counts 1, 2, 3
@@ -445,7 +437,7 @@ public:
 		// before its event then commits nothing, which is retail's own shape: the shot simply misses.
 		bool bAwaitingAnimEvent = false;
 
-		// --- The melee contact walk's state (see `AdvanceSwingContact`) --------------------------
+		// The melee contact walk's state (see `AdvanceSwingContact`).
 		// All of it is TRANSIENT mid-swing state and none of it is saved, for the same reason
 		// `FElysiumCombatCharacter::MeleeRolls` is not: it exists between one frame of a playing clip
 		// and the next. A restored swing therefore meets its clip afresh — and in practice never
@@ -513,7 +505,7 @@ public:
 	};
 	FSwing Swing;
 
-	// --- The reload transaction ----------------------------------------------------------------
+	// The reload transaction.
 	bool bReloading = false;
 	int32 ReloadSerial = 0;
 	double ReloadEndTime = 0.0;
@@ -522,7 +514,7 @@ public:
 	// transaction before normal firing resumes" means.
 	bool bFireIntentDuringReload = false;
 
-	// --- The controller surface ----------------------------------------------------------------
+	// The controller surface.
 	// One attack press. `Victim` is the explicit ranged target: the shot's world trace and spread
 	// cone are a producer that joins with the perception and player-crosshair cycles, so the
 	// transaction takes the handle rather than inventing a trace. Melee ignores it and acquires its
@@ -579,8 +571,8 @@ public:
 	bool OperatorHandleAnimEvent(FElysiumCombatCharacter& Operator, const FElysiumAnimEvent& Event);
 
 	// Every write to the two deadlines goes through here: a MAXIMUM operation, never a shortening
-	// write. Public because a later owner — a discipline, a scripted beat, an AI schedule — holds a
-	// weapon the same way, and must not reach the fields directly.
+	// write. Public because a discipline, a scripted beat, or an AI schedule holds a weapon the
+	// same way, and must not reach the fields directly.
 	void HoldAttacksUntil(double Deadline);
 
 	// How many swing transactions this weapon has ever accepted. `Swing.Serial` is the LIVE
@@ -630,7 +622,7 @@ private:
 	// The two halves of an accepted swing.
 	EVerdict BeginMeleeSwing(EIntent Intent, int32 ModeIndex, const FElysiumWeaponMode& Mode);
 
-	// --- The busy path: what a melee primary press does DURING an attack ------------------------
+	// The busy path: what a melee primary press does DURING an attack.
 	//
 	// Retail's melee frame does not simply refuse a press while an attack runs. A press arriving
 	// while the weapon is busy — the next-attack deadline has not passed, or the playing attack's own

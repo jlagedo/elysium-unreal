@@ -2,18 +2,16 @@
 
 #include "CoreMinimal.h"
 
-// VtMB's disposition table — `vdata/system/dispositiontable.txt`, mirrored by PL5b.
+// VtMB's disposition table — `vdata/system/dispositiontable.txt`.
 //
 // A disposition is the NPC's emotional stance toward the player. It decides two things the
 // shipped data states outright: which **animation set** the NPC idles in ("Animation Name", which
 // keys the `Stance_<Name>_*` clips in the gendered stances bank), and how often it fidgets or
 // changes stance while talking or waiting.
 //
-// The table is the data behind two roadmap tasks, so it lives on its own rather than inside
-// either: **8.5** reads `AnimName` to pick a standing idle, and **9.9** — the single largest
-// engine demand in the game at 2,862 calls, `SetDisposition(name, level)` alone being 2,510 —
-// needs the same rows plus the expression/eye-target blocks for the NPC emotional-state model.
-// This reader carries the whole row so 9.9 extends it rather than reparsing.
+// `AnimName` picks a standing idle. The same rows also carry the expression and eye-target
+// blocks for the NPC emotional-state model — `SetDisposition(name, level)` alone is 2,510 of
+// 2,862 engine calls. This reader carries the whole row so both consumers share one parse.
 //
 // `default_disposition` is authored on 242 of 243 `npc_*` entities across the exported maps
 // (239 of them `Neutral`).

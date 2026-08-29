@@ -33,7 +33,7 @@ EElysiumBrushSolidity ElysiumBrushSolidityForClass(const FString& Classname)
 UElysiumBrushComponent::UElysiumBrushComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-	// Runtime-placed (SetRelativeLocation after spawn) and moved by the P4 movers — Movable, not
+	// Runtime-placed (SetRelativeLocation after spawn) and moved by the movers — Movable, not
 	// Static, so those transforms don't warn/no-op.
 	Mobility = EComponentMobility::Movable;
 	SetCastShadow(false);
@@ -82,7 +82,7 @@ void UElysiumBrushComponent::ApplySolidity(EElysiumBrushSolidity Solidity)
 	{
 	case EElysiumBrushSolidity::Solid:
 		// Blocks like the world brushes. A solid brush blocking the pawn produces Hit, not
-		// begin/end overlap, so no overlap events are generated here (P4 movers handle OnBlocked).
+		// begin/end overlap, so no overlap events are generated here (movers handle OnBlocked).
 		SetCollisionProfileName(TEXT("BlockAll"));
 		SetGenerateOverlapEvents(false);
 		break;
@@ -174,7 +174,7 @@ void UElysiumBrushComponent::RouteTouch(const AActor* Toucher, bool bBegin) cons
 	// `elysium.newgame` from a loaded map tripped `trig_feed_fix.OnStartTouch -> fix_fade.Fade ->
 	// teleport_player.Teleport` and warped the player off the porch into the downtown alley.
 	// Only movers touch. Player and NPC bodies retain distinct substrate identities; physics props
-	// widen this dispatch when they exist (8.4).
+	// widen this dispatch when they exist.
 	if (!Toucher || !Toucher->IsA<APawn>())
 	{
 		return;

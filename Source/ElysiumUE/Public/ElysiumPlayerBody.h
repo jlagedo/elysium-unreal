@@ -18,7 +18,7 @@ class UElysiumPlayerBody : public UInterface
 	GENERATED_BODY()
 };
 
-// The player's **body**, as everything outside it needs it (S3, roadmap 11.4/11.6). All player game
+// The player's **body**, as everything outside it needs it (S3). All player game
 // state lives on the player *entity* (`FElysiumPlayer`); a body is collision, movement, the camera
 // and nothing else, which is exactly the surface here.
 //
@@ -53,14 +53,14 @@ public:
 	// look delta to the controller; everything else the body does with it is the body's business.
 	virtual void ApplyUserCmd(const FElysiumUserCmd& Cmd) = 0;
 
-	// The frame's settled body state (CCC1) — the same record the NPC motor publishes, so the
+	// The frame's settled body state — the same record the NPC motor publishes, so the
 	// player's locomotion and the cast's cannot become two systems that happen to play the same
 	// files (`docs/architecture/animation-architecture.md` §3.2). It is on the interface rather than
 	// on the pawn because both bodies can answer it: the box body hands back what its mover
 	// published, the capsule body derives it from CharacterMovement.
 	virtual FElysiumLocomotionSample GetLocomotionSample() const = 0;
 
-	// The body's camera (11.7): the weight stack, the boom solve and the scripted-shot channel.
+	// The body's camera: the weight stack, the boom solve and the scripted-shot channel.
 	// Never null on a spawned body.
 	virtual UElysiumCameraComponent* GetCameraComponent() const = 0;
 
@@ -83,10 +83,9 @@ public:
 	// with the camera's eligibility: the body draws only when the entity permits it *and* the mode
 	// predicate makes it eligible.
 	//
-	// This is not the old cutscene suppression under a new name. Its producer is the player entity's
-	// own dormancy, which is a recovered gate; the `npc_VPlayerController` double has no say in
-	// whether the real body draws, because retail gives it none — a first-person cutscene already
-	// yields an eligible but fully transparent body through the fade band
-	// (`docs/vtmb/camera-view-modes.md` §6).
+	// Its producer is the player entity's own dormancy, which is a recovered gate; the
+	// `npc_VPlayerController` double has no say in whether the real body draws, because retail gives
+	// it none — a first-person cutscene already yields an eligible but fully transparent body
+	// through the fade band (`docs/vtmb/camera-view-modes.md` §6).
 	virtual void SetBodyEntityHidden(bool bHidden) = 0;
 };

@@ -94,9 +94,7 @@ FVector2D ShapeMouseLook(const FVector2D& MouseDegrees, const FElysiumLookTuning
 	return MouseDegrees * Gain;
 }
 
-// =====================================================================================
 // The stick path
-// =====================================================================================
 
 void FElysiumStickTuning::LoadFrom(TFunctionRef<FString(const TCHAR*)> Lookup)
 {

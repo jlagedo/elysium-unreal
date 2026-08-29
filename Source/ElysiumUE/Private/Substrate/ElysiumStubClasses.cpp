@@ -16,8 +16,7 @@
 //   * A classname whose every wire is a base input is absent entirely — `inspection_node` and
 //     `info_node_cover_corner` take only `Kill`/`ScriptHide`, so no wire of theirs is dead even
 //     though their behaviour is unbuilt. Their gap is a body/AI gap, not an I/O one, and
-//     overstating it here would make the work list lie. `trigger_stealth_mod` was in that set and
-//     is now a real class (`Substrate/ElysiumStealthTrigger.h`).
+//     overstating it here would make the work list lie.
 //
 // A row claims nothing about behaviour. It says: this name is fired, it lands nowhere, and here is
 // what it was aimed at. `FElysiumClassRegistry::RegisterStub` skips a name an implementation has

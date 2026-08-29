@@ -17,10 +17,6 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 
-// ============================================================================================
-// FElysiumItemContainer
-// ============================================================================================
-
 void FElysiumItemContainer::Spawn()
 {
 	BuildWorldBody();
@@ -475,9 +471,7 @@ void FElysiumItemContainer::GetDebugState(TArray<TPair<FString, FString>>& Out) 
 	Out.Emplace(TEXT("Seeds"), bSeedsMaterialized ? TEXT("materialized") : TEXT("pending"));
 }
 
-// ============================================================================================
-// Registration
-// ============================================================================================
+// --- Registration ---
 
 namespace
 {

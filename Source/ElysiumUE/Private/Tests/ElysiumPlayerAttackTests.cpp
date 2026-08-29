@@ -1,4 +1,4 @@
-// Content-free Substrate automation: the PLAYER's attack producer (LIFE5) — the combat button
+// Content-free Substrate automation: the PLAYER's attack producer — the combat button
 // field the world retains, the press edges it derives, the refusals that stand ahead of the weapon,
 // and `FElysiumWeapon::ItemPostFrame` turning one frame of buttons into at most one transaction.
 //
@@ -345,9 +345,9 @@ namespace
 	bool NearlyEqual(double A, double B) { return FMath::Abs(A - B) < 1.0e-3; }
 }
 
-// =====================================================================================
+
 // The transport: one button field, and the edges derived from it
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackButtonsTest,
 	"Elysium.Substrate.PlayerAttack.Buttons", GElysiumTestFlags)
@@ -419,9 +419,9 @@ bool FElysiumPlayerAttackButtonsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The producer: which button route each weapon family takes
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackProducerTest,
 	"Elysium.Substrate.PlayerAttack.Producer", GElysiumTestFlags)
@@ -539,7 +539,7 @@ bool FElysiumPlayerAttackProducerTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The direction keys: how the movement half of the button field reaches attack selection
 //
 // The player selector compares each candidate sequence's authored mask with `+0x2088 & 0x79A`
@@ -547,7 +547,7 @@ bool FElysiumPlayerAttackProducerTest::RunTest(const FString&)
 // masks are exported RAW in the file's own `IN_*` numbering. This runtime numbers its own button
 // bits differently, so the field has to carry the movement bits AND be translated by direction on
 // its way to the resolver — and this is where both halves are pinned.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackDirectionKeysTest,
 	"Elysium.Substrate.PlayerAttack.DirectionKeys", GElysiumTestFlags)
@@ -624,9 +624,9 @@ bool FElysiumPlayerAttackDirectionKeysTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The refusals: each one by name, none of them silent
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackRefusalsTest,
 	"Elysium.Substrate.PlayerAttack.Refusals", GElysiumTestFlags)
@@ -896,9 +896,9 @@ bool FElysiumPlayerAttackRefusalsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `+wpn_secondaryatk` — one bit field, two independent consumers
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackSecondaryCompositeTest,
 	"Elysium.Substrate.PlayerAttack.SecondaryComposite", GElysiumTestFlags)
@@ -1014,9 +1014,9 @@ bool FElysiumPlayerAttackSecondaryCompositeTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Reload — the fourth button, and the fire intent that arrives during it
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerAttackReloadTest,
 	"Elysium.Substrate.PlayerAttack.Reload", GElysiumTestFlags)

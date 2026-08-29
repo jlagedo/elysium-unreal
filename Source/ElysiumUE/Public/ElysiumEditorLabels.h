@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// P1.7 — editor-only World Outliner affordance (debug-tooling.md Layer 0). Every runtime spawn
+// Editor-only World Outliner affordance (`docs/architecture/debug-tooling.md` Layer 0). Every runtime spawn
 // path (the map actor, brush bodies, the light rig's lights, the prop ISMs) names its object from
 // a readable label, so the PIE Outliner reads as a live scene browser. `SetActorLabel`/`SetFolderPath`
 // are the actor-level hooks; component labels are just the object name shown under the actor.

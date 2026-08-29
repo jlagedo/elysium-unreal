@@ -4,12 +4,10 @@
 #include "Widgets/SCompoundWidget.h"
 #include "Widgets/DeclarativeSyntaxSupport.h"
 
-// B4 — the interim visual-novel dialogue box. Pure geometry + transparency on native Slate (no
-// textures, no VGUI, no sign machinery): a translucent panel docked to the lower screen with the
-// speaker name, the NPC subtitle, and a numbered list of clickable PC choices. It is a dumb view —
-// it snapshots one conversation turn and reports the player's pick through OnChoose; the branch
-// machine, the `.dlg` data, and OnDialogEnd all live in the substrate. 9.2 replaces it with the real
-// UI on the 8.6 stack. Number keys 1-9 select; a terminal line offers a single "continue".
+// Translucent panel docked to the lower screen: speaker name, NPC subtitle, and a numbered list of
+// clickable PC choices. A dumb view — it snapshots one conversation turn and reports the player's
+// pick through OnChoose; the branch machine, the `.dlg` data, and OnDialogEnd all live in the
+// substrate. Number keys 1-9 select; a terminal line offers a single "continue".
 DECLARE_DELEGATE_OneParam(FElysiumOnDlgChoice, int32);   // choice index >= 0, or -1 to advance a terminal line
 DECLARE_DELEGATE_RetVal_TwoParams(TSharedRef<SWidget>, FElysiumBuildDlgChoice,
 	int32 /*choice index*/, const FText& /*label*/);

@@ -10,7 +10,7 @@
 class FElysiumDlgConversation;
 struct FElysiumSignData;
 
-// The presentation seam's value type and its rules (runtime-architecture.md section 11, roadmap 11.8).
+// The presentation seam's value type and its rules (`docs/architecture/runtime-architecture.md` §11).
 //
 // Plain C++, no UObject reflection, exactly like ElysiumAppState.h and ElysiumInputScope.h: the
 // struct is data and the rules below are total functions over it, so the whole set is asserted with
@@ -20,14 +20,12 @@ struct FElysiumSignData;
 // the CommonUI screens and the dialogue box read it and nothing else: no widget resolves the map
 // actor, walks it to FElysiumEntityWorld, or polls the substrate for what to draw.
 
-// ============================================================================================
 // FElysiumVitals — the player's meters.
 //
 // Health is the player entity's own `health` field (VtMB's m_iHealth); blood/humanity/masquerade
-// are the combat character's counters (11.4). 8.9 draws them; nothing else derives from them here.
+// are the combat character's counters. The HUD draws them; nothing else derives from them here.
 // `bValid` is false whenever there is no player entity — a menu backdrop and a headless logic world
 // both run without one, so "no player" is a state, not an error.
-// ============================================================================================
 struct FElysiumVitals
 {
 	bool  bValid = false;
@@ -63,13 +61,11 @@ struct FElysiumFeedView
 	uint8 Phase = 0;
 };
 
-// ============================================================================================
 // FElysiumDialogueView — one conversation turn, snapshotted.
 //
 // The box is built from the strings here, not from the conversation: `Conversation` is identity
 // only (what the reconcile compares against), and `Revision` is what changes when the turn does.
 // Speaker resolution needs the entity world, which is precisely why it happens in the publisher.
-// ============================================================================================
 struct FElysiumDialogueView
 {
 	// Valid until the next publish and never stored — the map epoch it points into ends at travel.
@@ -140,15 +136,13 @@ struct FElysiumTerminalView
 	bool IsOpen() const { return Owner.IsSet(); }
 };
 
-// ============================================================================================
-// FElysiumStealthView — how exposed the player is, and who is looking (8.9's stealth slot).
+// FElysiumStealthView — how exposed the player is, and who is looking.
 //
-// `bSneaking` is the body's own settled posture and is live today. Concealment and the observer
-// are PP6's: gameplay owns every range, cone, trace and enemy-selection decision, and this view
-// only carries the answer it committed (`docs/vtmb/stealth.md` -> "HUD observability is not
-// authority"). Each half states its own validity, so an unmeasured gauge renders as unmeasured
-// rather than as a confident zero.
-// ============================================================================================
+// `bSneaking` is the body's own settled posture. Concealment and the observer are gameplay's:
+// gameplay owns every range, cone, trace and enemy-selection decision, and this view only carries
+// the answer it committed (`docs/vtmb/stealth.md` -> "HUD observability is not authority"). Each
+// half states its own validity, so an unmeasured gauge renders as unmeasured rather than as a
+// confident zero.
 enum class EElysiumDetection : uint8
 {
 	Unaware,
@@ -182,13 +176,11 @@ struct FElysiumStealthView
 	bool operator!=(const FElysiumStealthView& Other) const { return !(*this == Other); }
 };
 
-// ============================================================================================
-// FElysiumEquipmentView — the carried weapons and which one is in hand (8.9's selector).
+// FElysiumEquipmentView — the carried weapons and which one is in hand.
 //
 // The families are mirrored as a plain enum so this header keeps its no-UObject rule; the HUD model
 // maps them onto its own Blueprint-readable `EElysiumWeaponClass`. Rows arrive in the order the
 // item records author (`bucket`, then `bucket_position`), which is the order the selector cycles.
-// ============================================================================================
 enum class EElysiumViewWeaponFamily : uint8
 {
 	None,
@@ -266,9 +258,7 @@ struct FElysiumEquipmentView
 	bool operator!=(const FElysiumEquipmentView& Other) const { return !(*this == Other); }
 };
 
-// ============================================================================================
 // The camera's contribution to the frame — its resolved draw policy, projected once.
-// ============================================================================================
 struct FElysiumCameraView
 {
 	// A camera manager published a sample for this frame. False on a backdrop or during character
@@ -290,7 +280,7 @@ struct FElysiumCameraView
 	// only the dialogue session's stored request is read, and only through that predicate.
 	bool bShowHud = true;
 
-	// **The first-person hands/weapon submission gate** (CCC10.1's seam). Its consumer suppresses
+	// **The first-person hands/weapon submission gate.** Its consumer suppresses
 	// submission only: never destroy either component, never clear a model, never reset a sequence or
 	// cycle. The frame the third-person weight reaches exactly zero resumes the existing visual state
 	// rather than rebuilding it.
@@ -305,9 +295,7 @@ struct FElysiumCameraView
 	EElysiumReticlePath ReticlePath = EElysiumReticlePath::FirstPerson;
 };
 
-// ============================================================================================
 // FElysiumViewState — everything on screen, rebuilt each frame in TG_PostUpdateWork.
-// ============================================================================================
 struct FElysiumViewState
 {
 	EElysiumAppState App = EElysiumAppState::Boot;
@@ -317,21 +305,21 @@ struct FElysiumViewState
 	// cannot draw one by forgetting to check.
 	bool bPlayerSurface = false;
 
-	// --- The camera's resolved draw policy, projected once ------------------------------------
+	// The camera's resolved draw policy, projected once.
 	// The only camera facts on this state. Widgets read these and never query the pawn or the camera
 	// manager (`docs/architecture/camera-architecture.md` → Input, settings and presentation).
 	FElysiumCameraView Camera;
 
-	// --- Interaction (P4.4) -----------------------------------------------------------------
+	// Interaction.
 	// The complete +use presentation projection. A retained fade-out remains visible but is never
 	// actionable, so presentation cannot imply an entity which the same frame would use.
 	FElysiumInteractionView Interaction;
 
-	// --- Screen fade (P4.5 env_fade) --------------------------------------------------------
+	// Screen fade (`env_fade`).
 	// rgb = the authored fade colour, a = the current 0..1 alpha. Alpha 0 means no fade is up.
 	FLinearColor Fade = FLinearColor(0, 0, 0, 0);
 
-	// --- Sign panel (P4.10 game_sign) -------------------------------------------------------
+	// Sign panel (`game_sign`).
 	// The parsed panel, valid until the next publish and never stored. `SignAlpha` is the fade_in
 	// ramp already resolved against the game clock, so nothing downstream needs the clock.
 	// `bSignHidesHUD` is the panel's own HideHUD flag lifted out, because FElysiumSignData is a
@@ -342,27 +330,27 @@ struct FElysiumViewState
 	bool bSignHidesHUD = false;
 	bool bSignDismissible = false;
 
-	// --- Conversation (9.1 / B4) ------------------------------------------------------------
+	// Conversation.
 	FElysiumDialogueView Dialogue;
 
-	// --- Loot container (9.8) --------------------------------------------------------------
+	// Loot container.
 	// An explicit +use session. The CommonUI screen submits Take/Give/Close intents only; slot
 	// validation and entity transfer remain on the substrate.
 	FElysiumLootView Loot;
 
-	// --- Computer terminal (13.4) ---------------------------------------------------------
+	// Computer terminal.
 	FElysiumTerminalView Terminal;
 
-	// --- Stealth (8.9's slot; PP6 fills the observer half) ----------------------------------
+	// Stealth.
 	FElysiumStealthView Stealth;
 
-	// --- Equipment and the weapon selector (8.9) --------------------------------------------
+	// Equipment and the weapon selector.
 	// The carried weapons and the one in hand. The selector renders this and submits `invnext` /
 	// `invprev` / `lastinv` / `slotN` back through the command bus; it never switches a weapon
 	// itself.
 	FElysiumEquipmentView Equipment;
 
-	// --- Meters (8.9 draws them) ------------------------------------------------------------
+	// Meters.
 	FElysiumVitals Vitals;
 	FElysiumFeedView Feed;
 };
@@ -376,8 +364,8 @@ namespace ElysiumView
 	// menu's own open flag covers the hand `elysium.menu` verb, which raises a screen without
 	// moving the state.
 	//
-	// This replaces the IsMenuUp() checks that used to sit in every draw path, and it is a rule
-	// about *publishing* rather than about drawing: a conversation already on screen when the pause
+	// Every draw path reads this rather than calling `IsMenuUp()`, and it is a rule about
+	// *publishing* rather than about drawing: a conversation already on screen when the pause
 	// menu opens is republished as closed, so the box comes down instead of drawing through.
 	inline bool ShowsPlayerSurface(EElysiumAppState App, bool bMenuOpen)
 	{

@@ -7,7 +7,7 @@
 #include "Visual/ElysiumNpcClips.h"
 
 // Steps 4, 5 and 6 of `docs/architecture/animation-architecture.md` section 3.3 — resolve the model
-// vocabulary, resolve the asset shape, publish the graph parameters (CCC4).
+// vocabulary, resolve the asset shape, publish the graph parameters.
 //
 // Pure C++: a catalog view in, a selection record out. No UObject, no filesystem, no mesh — which is
 // what lets `Elysium.Substrate.AnimationResolve` build a two-bank fixture on the stack and assert the
@@ -15,8 +15,7 @@
 // cast body. The engine half that turns the resolved label into a `UAnimSequence*`/`UBlendSpace*`
 // lives on `UElysiumAnimSubsystem`.
 //
-// It sits in `Visual/` rather than beside the intent because the catalog types it reads are private,
-// and because `CCC9` moves this whole cluster out of its NPC-named host together.
+// It sits in `Visual/` rather than beside the intent because the catalog types it reads are private.
 
 // Everything the resolver may read about a character, as a view rather than an owner.
 //
@@ -136,14 +135,14 @@ namespace ElysiumAnimResolve
 	//
 	// Empty is the ordinary answer and means "nothing here is selected by direction" — a body with no
 	// button field (`StateMask == INDEX_NONE`), an activity whose candidates all author `-1`, or a
-	// held direction no candidate answers. The caller then draws, exactly as it always did.
+	// held direction no candidate answers. The caller then draws.
 	//
 	// **It spends no randomness.** A mask-selected entry never reaches `PickWeighted`, so a player
 	// holding a direction and one holding none consume the same amount of every stream.
 	FElysiumClipRef PickByStateMask(const FElysiumNpcClipSet& Set, const FString& Activity,
 		int32 StateMask);
 
-	// The activity seam's request, as the resolver's own intent (LIFE5).
+	// The activity seam's request, as the resolver's own intent.
 	//
 	// This is the whole of what `UElysiumAnimSubsystem::ResolveActivityClip` does before it calls
 	// `Resolve`, split out so the forwarding is a pure function that can be asserted with no
@@ -183,7 +182,7 @@ namespace ElysiumAnimResolve
 	// One host-resolution rule for every layer path: the sequence the body is standing on first,
 	// the first sorted declaring host when that is empty. A standing label is the host even when
 	// the table does not name it — the derived form is `<layer>@<standing>`, and picking a
-	// different table host is how the lab used to stand the wrong derived asset.
+	// different table host stands the wrong derived asset.
 	FString ResolveLayerHost(const FString& StandingSequence, const FElysiumBlendTable* Table,
 		const FString& LayerLabel);
 

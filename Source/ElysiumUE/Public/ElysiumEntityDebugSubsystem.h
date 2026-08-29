@@ -13,8 +13,9 @@ struct FElysiumIOEvent;
 struct FElysiumOutputDef;
 class IConsoleObject;
 
-// P2.3 (debug-tooling.md Layer 2) — the Source-style `ent_*` verb set, on the Track-B chokepoints.
-// A world subsystem (one per game/PIE world, surviving map-actor travels) that:
+// The Source-style `ent_*` verb set, on the entity-substrate chokepoints
+// (`docs/architecture/debug-tooling.md` Layer 2). A world subsystem (one per game/PIE world,
+// surviving map-actor travels) that:
 //   * registers the `elysium.ent_*` console verbs and drives them off the live entity world
 //     (reached through the map subsystem's current map actor),
 //   * ticks to render the per-entity overlay bitmask (ent_text / ent_bbox / ent_messages), and
@@ -29,20 +30,17 @@ class UElysiumEntityDebugSubsystem : public UTickableWorldSubsystem
 	GENERATED_BODY()
 
 public:
-	// --- USubsystem ---------------------------------------------------------------------
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	// --- UTickableWorldSubsystem (FTickableGameObject) ----------------------------------
 	virtual void Tick(float DeltaTime) override;
-	// S2 — debug drawing is presentation, so it keeps running while the world is held: the
-	// overlays, gizmos and I/O beams have to stay on screen through a pause and a frame step,
-	// which is exactly when they are read (debug-tooling.md).
+	// Debug drawing is presentation, so it keeps running while the world is held: the overlays,
+	// gizmos and I/O beams have to stay on screen through a pause and a frame step, which is
+	// exactly when they are read (`docs/architecture/debug-tooling.md`).
 	virtual bool IsTickableWhenPaused() const override { return true; }
 	virtual TStatId GetStatId() const override;
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
 
-	// --- Chokepoint tap (called by the installed sink) ----------------------------------
 	// An input was delivered to Target: evaluate the ent_break breakpoint and capture an
 	// ent_messages line for the overlay.
 	void TapDelivered(FElysiumEntityWorld& World, double Now, const FElysiumEntity& Target,
@@ -60,10 +58,10 @@ public:
 		Overlay_Messages = 1 << 2,
 	};
 
-	// --- P2.4 world visualization (map-wide layers; distinct from the per-entity picked overlays) ----
-	// The three layers are driven from the World Viz Cog window (the primary surface) and echoed by the
-	// elysium.showtriggers / ent_gizmos / ent_beams verbs. State lives here (the always-running tick
-	// renders it whether or not any Cog window is open), so it stays on screen while you play.
+	// Map-wide visualization layers, distinct from the per-entity picked overlays. Driven from the
+	// World Viz Cog window (the primary surface) and echoed by the elysium.showtriggers / ent_gizmos
+	// / ent_beams verbs. State lives here (the always-running tick renders it whether or not any Cog
+	// window is open), so it stays on screen while you play.
 
 	// Entity-gizmo display: Off, Visible (depth-tested — walls occlude), All (foreground
 	// x-ray — drawn on top of everything).
@@ -88,7 +86,7 @@ public:
 	FVizSettings& Viz() { return VizSettings; }
 	const FVizSettings& Viz() const { return VizSettings; }
 
-	// --- UI-facing controls (the Cog Inspector calls these; the ent_* verbs share the state) -----
+	// The Cog Inspector calls these; the ent_* verbs share the same state.
 	// The entity under the crosshair (resolves world + substrate internally); Invalid if none close.
 	FElysiumEntityHandle PickSelection();
 	bool IsOverlayOn(int32 EntityIndex, uint8 Bit) const;
@@ -117,7 +115,6 @@ private:
 		double  Time = 0.0;
 	};
 
-	// --- Verb handlers ------------------------------------------------------------------
 	void HandleFire(const TArray<FString>& Args, UWorld* World);
 	void HandleDump(const TArray<FString>& Args, UWorld* World);
 	void HandleInfo(const TArray<FString>& Args);
@@ -126,12 +123,11 @@ private:
 	void HandleBreak(const TArray<FString>& Args, UWorld* World);
 	void HandleOverlay(const TArray<FString>& Args, UWorld* World, uint8 Bit, const TCHAR* Name);
 	void HandleClear();
-	// P2.4 world-viz verbs (thin echoes of the Cog window; they flip VizSettings).
+	// World-viz verbs: thin echoes of the Cog window; they flip VizSettings.
 	void HandleShowTriggers(const TArray<FString>& Args);
 	void HandleGizmos(const TArray<FString>& Args);
 	void HandleBeams(const TArray<FString>& Args);
 
-	// --- Helpers ------------------------------------------------------------------------
 	FElysiumEntityWorld* GetSubstrate() const;
 	// Resolve a target argument to live entity handles: "!picker" / empty = the entity under the
 	// crosshair; otherwise every live entity whose targetname or classname matches (case-folded).
@@ -143,7 +139,7 @@ private:
 	// Drop overlay/break/message state (on world change — handles are per-epoch).
 	void ResetState();
 	void RenderOverlays(FElysiumEntityWorld& EW);
-	// P2.4: draw the map-wide layers (entity gizmos, trigger hulls, I/O beams) per VizSettings.
+	// Draw the map-wide layers (entity gizmos, trigger hulls, I/O beams) per VizSettings.
 	void RenderWorldViz(FElysiumEntityWorld& EW);
 
 	TArray<IConsoleObject*> ConsoleObjects;
@@ -161,7 +157,7 @@ private:
 	FElysiumEntityHandle BreakHandle;
 	FName BreakInput = NAME_None;           // NAME_None = any input
 
-	// P2.4 world-viz state (valid for the currently hooked world epoch).
+	// World-viz state (valid for the currently hooked world epoch).
 	FVizSettings VizSettings;
 	TArray<FBeam> Beams;                    // captured at delivery, drawn+pruned each tick
 

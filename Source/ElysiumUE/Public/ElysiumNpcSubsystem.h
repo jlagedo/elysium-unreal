@@ -64,7 +64,7 @@ public:
 	// glb stems available under out/npc (scanned from disk; for the window's picker + npc.list).
 	static TArray<FString> AvailableBodyStems();
 
-	// Every live NPC animation host in this world carrying a facial flex rig (12.3) — the map's own
+	// Every live NPC animation host in this world carrying a facial flex rig — the map's own
 	// characters as readily as this harness's preview bodies, since both stand on the same anim
 	// instance. StemFilter, when non-empty, keeps only rigs whose model stem contains it. The
 	// elysium.npc.flex verbs and the Cog NPC window's Facial tab read this one list, so they always
@@ -76,7 +76,7 @@ private:
 	FVector ComputeSpawnLocation(FRotator& OutRotation) const;
 	// Drop records whose actor was torn down (e.g. by map travel) so the list stays truthful.
 	void PruneDead();
-	// The map-epoch boundary (S4): a preview body and the assets it resolved belong to the map it was
+	// The map-epoch boundary: a preview body and the assets it resolved belong to the map it was
 	// spawned into, so both go when that map does.
 	void OnMapEpochRetired(uint64 Epoch);
 

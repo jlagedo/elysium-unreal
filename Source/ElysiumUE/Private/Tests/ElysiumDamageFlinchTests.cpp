@@ -1,5 +1,5 @@
 // Content-free Substrate automation: the damage flinch — its pure direction rule, the fan cell that
-// rule selects, and the producer gate on the one health commit (LIFE5).
+// rule selects, and the producer gate on the one health commit.
 //
 // Every number here is a fact from `docs/vtmb/npc-ai-reverse-engineering.md` (the head/torso pick,
 // the incoming-vector derivation, the +-30 degree jitter, the 0.1/0.3 fades) or from
@@ -271,9 +271,9 @@ namespace
 	}
 }
 
-// =====================================================================================
+
 // The pure rule: which activity, and at what angle
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageFlinchRuleTest,
 	"Elysium.Substrate.DamageFlinch.Rule", GElysiumTestFlags)
@@ -667,9 +667,9 @@ bool FElysiumDamageFlinchRuleTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The producer: the gate on the one health commit
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageFlinchProducerTest,
 	"Elysium.Substrate.DamageFlinch.Producer", GElysiumTestFlags)

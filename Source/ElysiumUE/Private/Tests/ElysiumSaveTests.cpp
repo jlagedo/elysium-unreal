@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -182,15 +182,15 @@ using ElysiumSaveTestHelpers::ElysiumSaveDigest;
 using ElysiumSaveTestHelpers::MakeSaveTestDefs;
 using ElysiumSaveTestHelpers::SaveTestCounterValue;
 
-// =====================================================================================
+
 // Persistence needs a freeze/rebuild/apply/re-freeze digest round trip on a bare world, payload
 // version and integrity gates, and schema rules that let a payload survive a later build.
-// =====================================================================================
 
-// ============================================================================================
+
+
 // CLogicRelay::InputTrigger (FUN_101364e0): spawnflag 0x1 removes the relay once it has fired, and
 // without 0x2 a fired relay locks out re-entry until its longest delayed output has gone out.
-// ============================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLogicRelayLifetimeTest,
 	"Elysium.Substrate.LogicRelayLifetime", GElysiumTestFlags)
 bool FElysiumLogicRelayLifetimeTest::RunTest(const FString&)
@@ -399,7 +399,7 @@ bool FElysiumSavePayloadTest::RunTest(const FString&)
 	Payload.Player.MaxHealth = 100;
 	Payload.Player.Law.Criminal = 2;
 	Payload.Player.ExperienceLog.Add({ TEXT("xp_tutorial"), 0 });
-	// The journal rides with the record (9.4d) — the quest map is the Session block's, so a payload
+	// The journal rides with the record — the quest map is the Session block's, so a payload
 	// that loses these rows keeps the states and forgets the order they were taken in.
 	Payload.Player.Journal.Add({ TEXT("Arthur Knox"), /*Table*/ 4, /*Quest*/ 0, /*State*/ 2,
 		/*Order*/ 1, /*bUnread*/ true });

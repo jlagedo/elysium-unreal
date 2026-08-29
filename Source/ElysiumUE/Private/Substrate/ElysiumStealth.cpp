@@ -19,9 +19,7 @@ static_assert(FElysiumStealthSurface::NumSamples == 3,
 namespace ElysiumStealth
 {
 
-// ================================================================================================
-// The pure rule
-// ================================================================================================
+// The pure rule.
 
 float NormalizeBodyLight(float Feet, float Centre, float Head, float Min, float Max)
 {
@@ -98,9 +96,7 @@ FRecomputeResult Recompute(const FElysiumStealthTables& Tables, const FRecompute
 	return Out;
 }
 
-// ================================================================================================
-// The wiring half
-// ================================================================================================
+// The wiring half.
 
 const FElysiumStealthTables& TablesFor(const FElysiumEntityWorld* World)
 {
@@ -272,9 +268,7 @@ float HearingReductionCmFor(const FElysiumEntityWorld* World, const FElysiumEnti
 
 }   // namespace ElysiumStealth
 
-// ================================================================================================
-// The observer snapshot (`docs/vtmb/stealth.md` -> "HUD observability is not authority")
-// ================================================================================================
+// The observer snapshot (`docs/vtmb/stealth.md` -> "HUD observability is not authority").
 
 void FElysiumPlayer::OfferStealthObserver(const FElysiumEntityHandle& Who, float DistanceCm,
 	float RadiusCm, bool bDetected, double Now)

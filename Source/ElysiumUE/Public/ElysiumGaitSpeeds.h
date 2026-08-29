@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The animation's own speed, per direction (CCC7, `docs/vtmb/source_movement.md` → "Player speed is
+// The animation's own speed, per direction (`docs/vtmb/source_movement.md` → "Player speed is
 // animation-driven").
 //
 // VtMB has no scalar gait speed. `CHL2_Player::PreThink` reads each locomotion fan's per-cell root

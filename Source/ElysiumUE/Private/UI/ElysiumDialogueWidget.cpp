@@ -72,7 +72,6 @@ void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString&
 		"Regular", ElysiumDialogueUI::LineFontPoints);
 	TSharedRef<SVerticalBox> Inner = SNew(SVerticalBox);
 
-	// Speaker name.
 	Inner->AddSlot().AutoHeight().Padding(0, 0, 0, 6)
 	[
 		SNew(STextBlock)
@@ -81,7 +80,6 @@ void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString&
 		.Text(FText::FromString(Speaker.IsEmpty() ? TEXT("???") : Speaker))
 	];
 
-	// NPC subtitle (word-wrapped to the panel width).
 	Inner->AddSlot().AutoHeight().Padding(0, 0, 0, 10)
 	[
 		SNew(STextBlock)
@@ -117,7 +115,6 @@ void SElysiumDialogueBox::RebuildDialogue(const FString& Speaker, const FString&
 	}
 	else
 	{
-		// One numbered, clickable row per choice.
 		for (int32 i = 0; i < NumChoices; ++i)
 		{
 			const FString Label = FString::Printf(TEXT("%d.  %s"), i + 1, *Choices[i]);

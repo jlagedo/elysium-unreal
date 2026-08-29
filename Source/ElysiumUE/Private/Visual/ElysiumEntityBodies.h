@@ -69,7 +69,7 @@ public:
 	// The map whose baked assets these bodies draw. Set once at map load, before the spawn pass.
 	void SetMap(const FString& InMapName) { MapName = InMapName; }
 
-	// B3/8.5 — build one NPC skeletal body: load (cached per stem) out/npc/<Stem>.glb through
+	// Build one NPC skeletal body: load (cached per stem) out/npc/<Stem>.glb through
 	// glTFRuntime and stand a movable USkeletalMeshComponent on the owning actor at the given
 	// transform, playing the standing idle its disposition selects (reference pose when nothing
 	// resolves). The idle usually lives in a **shared animation bank**, not the NPC's own glb, and
@@ -80,7 +80,7 @@ public:
 		bool bPlayerMaterial = false);
 
 	// Re-run the default-idle policy on a live body and crossfade to the result. The seam a
-	// disposition change reaches animation through: 9.9's `SetDisposition` is 2,510 calls, 2,467
+	// disposition change reaches animation through: `SetDisposition` is 2,510 calls, 2,467
 	// of them a .dlg line's action, so an NPC's stance follows the conversation.
 	bool RefreshNpcIdle(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& Disposition, int32 DispositionLevel, int32 IdleVariant);
@@ -104,7 +104,7 @@ public:
 	// Crossfade a live NPC body to a named clip, resolved through the manifest. Returns false when
 	// the name resolves nothing. OutSeconds receives the clip's authored length — what a
 	// `scripted_sequence` schedules its `OnEndSequence` off.
-	// 12.1 — play a clip out of a named cinematic bank (a choreo scene's anim set), resolved and
+	// Play a clip out of a named cinematic bank (a choreo scene's anim set), resolved and
 	// cached per (target stem, bank, clip). The target stem is load-bearing: glTFRuntime binds the
 	// returned UAnimSequence to that model's USkeleton.
 	bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem, const FString& BankStem,
@@ -123,23 +123,23 @@ public:
 	bool GetCinematicClipPosition(USkeletalMeshComponent* Body, float& OutSeconds) const;
 	bool ResyncCinematicClip(USkeletalMeshComponent* Body, float PositionSeconds);
 
-	// 12.3 — write named flex controllers on a body's facial rig. INDEX_NONE when the body has no
+	// Write named flex controllers on a body's facial rig. INDEX_NONE when the body has no
 	// Elysium animation host or no rig on it; otherwise the number of writes that landed, with the
 	// names the rig does not carry appended to OutMissing.
 	int32 SetFlexControllers(USkeletalMeshComponent* Body, TArrayView<const FElysiumFlexWrite> Writes,
 		TArray<FString>* OutMissing);
 
-	// 12.5 — the amplitude jaw. False on a body with no animation host, no rig, or a rig carrying no
+	// The amplitude jaw. False on a body with no animation host, no rig, or a rig carrying no
 	// `mstudiomouth_t` record.
 	bool SetMouthOpen(USkeletalMeshComponent* Body, float Open);
 	bool GetPhonemeFilter(USkeletalMeshComponent* Body, float& OutMin, float& OutMax) const;
 
-	// 12.4 — the one value crossing from the gaze decision to the eye pass, and the head frame the
+	// The one value crossing from the gaze decision to the eye pass, and the head frame the
 	// decision measures itself in.
 	bool SetViewTarget(USkeletalMeshComponent* Body, const FVector& WorldTarget);
 	bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition, FVector& OutForward) const;
 
-	// The one montage-slot mechanism (LIFE5). Every named clip a producer puts on a body arrives here,
+	// The one montage-slot mechanism. Every named clip a producer puts on a body arrives here,
 	// takes its base-channel claim at the band its segment states, and plays into the body's
 	// `DefaultSlot`; a run holds one claim across its segments and gives it back through
 	// `ReleaseNpcSegment`.
@@ -156,23 +156,23 @@ public:
 	// to give the rest back with, so a release that took one channel would leave a held claim on the
 	// others that nothing can ever return.
 	void ReleaseNpcSegment(USkeletalMeshComponent* Body);
-	// LIFE5 — play one already-resolved cell over whatever owns the base pose. The (owner, animation
+	// Play one already-resolved cell over whatever owns the base pose. The (owner, animation
 	// name) pair goes straight at the baked clip, never through the vocabulary. The channel claim is
 	// submitted BEFORE the clip: a refused claim plays nothing, which is how a reaction is kept off a
 	// body a choreographed scene owns.
 	bool PlayNpcOneShot(USkeletalMeshComponent* Body, const FElysiumOneShotClipRequest& Request,
 		float* OutSeconds);
-	// LIFE5 — give back the HELD reaction claim standing on this body and take its pose down. The
+	// Give back the HELD reaction claim standing on this body and take its pose down. The
 	// release half of a `EElysiumReactionRelease::Predicate` play: that claim carries no duration, so
 	// this call is the only thing that ends it. A body holding none releases nothing, which is the
 	// ordinary end of a claim whose producer came back late rather than a failure.
 	void ReleaseNpcReaction(USkeletalMeshComponent* Body);
-	// LIFE5 — whether the held reaction claim on this body still stands, and if not whether the base
+	// Whether the held reaction claim on this body still stands, and if not whether the base
 	// channel is free for a resume. The poll a predicate-holding producer answers its own claim
 	// against; the seam's own header states why it is a query rather than a notification.
 	EElysiumHeldReactionState QueryNpcReactionHold(USkeletalMeshComponent* Body) const;
 
-	// --- The death handoff (LIFE5) ---------------------------------------------------------------
+	// The death handoff.
 	// Give back every channel claim standing on this body, and the cinematic claim tracked here
 	// beside them, so a character that stops having behaviour stops owning every channel at once.
 	void ReleaseBodyAnimClaims(USkeletalMeshComponent* Body);
@@ -183,7 +183,7 @@ public:
 	// Stop advancing the pose and leave the last drawn frame on screen.
 	void HoldBodyFinalPose(USkeletalMeshComponent* Body);
 
-	// LIFE5 — where one channel of a body stands on its clip this frame, and the timeline that clip
+	// Where one channel of a body stands on its clip this frame, and the timeline that clip
 	// declares. Both are passthroughs: the phase is the animation host's own (only it knows whether
 	// a montage, a graph state or a fan is producing the pose), and the timeline is the owning
 	// model's blend sidecar, cached whole by `UElysiumAnimSubsystem`.
@@ -197,7 +197,7 @@ public:
 	// independent of the standing clip and survives a stance change. False when the label does not
 	// resolve, when the body has no compiled graph, or when the resolved sequence is neither kind.
 	//
-	// Composed by the graph's own layered blend (CCC10), armed as the lab's hand driver — an
+	// Composed by the graph's own layered blend, armed as the lab's hand driver — an
 	// **override** over the published record, so it survives a driven body republishing every frame
 	// and the owner can judge a layer over a moving host. The overlay and the additive are separate
 	// slots and do not displace each other.
@@ -217,7 +217,7 @@ public:
 	void StopNpcLayers(USkeletalMeshComponent* Body);
 
 	// Stand this body on a label's whole blend grid rather than on the single cell the pose
-	// parameters resolve to (ANM3). `OutGrid` comes back with the axes the caller steers through
+	// parameters resolve to. `OutGrid` comes back with the axes the caller steers through
 	// `SetNpcGridPosition` and can label a control with. False when the label names no grid — which
 	// is most labels — when the bake has not covered it, when the grid is a layer's, or when the
 	// compiled target state has no blend-space player. `OutError` names which of those it was;
@@ -302,7 +302,7 @@ public:
 	UStaticMeshComponent* BuildBrushVisual(const FString& Stem, USceneComponent* ParentBody,
 		float UniformScale, bool bSky);
 
-	// 8.3 — build one dynamic-prop body: stand a movable UStaticMeshComponent on the owning actor
+	// Build one dynamic-prop body: stand a movable UStaticMeshComponent on the owning actor
 	// at the given transform, drawing the baked prop mesh. Non-solid — a prop_dynamic is dressing,
 	// and the mesh's own collision belongs to the physics props that share it. Null on an empty
 	// stem / unbaked model. The Rotation is the exporter's pre-converted Unreal-space model_quat,
@@ -311,7 +311,7 @@ public:
 		const FQuat& Rotation, float UniformScale);
 	EElysiumItemGroundModelState ItemGroundModelState(const FString& ModelPath);
 
-	// 8.4 — build one physics-prop body: the same baked mesh BuildPropVisual stands, which for a
+	// Build one physics-prop body: the same baked mesh BuildPropVisual stands, which for a
 	// physics model carries VtMB's own convex collision (one shape per `.phy` ledge, from the
 	// props/<Stem>.phys sidecar) and its authored mass on the body setup, under
 	// CTF_UseSimpleAndComplex so a Chaos body can simulate against the simple shapes while the debug
@@ -328,12 +328,12 @@ public:
 	// disables the whole pass.
 	void ApplyPropSkin(UStaticMeshComponent* Comp, const FString& Stem, int32 Family);
 
-	// 12.4 — rebuild every bound eye's basis against this frame's final pose and publish it to the
+	// Rebuild every bound eye's basis against this frame's final pose and publish it to the
 	// material. Driven from AElysiumMapActor::PostMoveTick for the reason the camera director is:
 	// it reads the frame's settled bone transforms, so the iris never lags the head by a frame.
 	void TickEyes(float DeltaSeconds);
 
-	// --- the eye pass's debug seam ---------------------------------------------------------------
+	// The eye pass's debug seam.
 	//
 	// The debug override surface and the per-body readout are the eye pass's own types
 	// (`Visual/ElysiumEyePass.h`); the aliases keep this component the name external callers — the
@@ -364,18 +364,18 @@ private:
 	// The manifest record for a prop stem, or null. Shared by the two query members above.
 	const struct FElysiumAnimatedPropEntry* FindAnimatedPropEntry(const FString& Stem) const;
 
-	// LIFE4 — route a channel claim to the driver of the body it is armed on: an NPC motor's driver
+	// Route a channel claim to the driver of the body it is armed on: an NPC motor's driver
 	// through the visual's attach parent, the player's through the owning map actor. A body with no
 	// driver — a green-room stand, a preview, a prop — answers `NoArbiter`, which is a body nothing
 	// arbitrates against rather than a failure. The release mirror answers false for the same bodies.
 	// `OutHandle` is non-zero only on `Granted`.
 	EElysiumAnimClaim SubmitBodyAnimRequest(USkeletalMeshComponent* Body,
 		const struct FElysiumAnimationRequest& Request, uint32& OutHandle);
-	// Which overlay slot a granted `UpperBody` handle landed in, or `INDEX_NONE` (LIFE10). The
+	// Which overlay slot a granted `UpperBody` handle landed in, or `INDEX_NONE`. The
 	// driver's stack allocates lowest-free, so the arm seam has to be told which slot's pins to write
 	// rather than assuming slot 0 — a shot fired during a reload is the higher index.
 	int32 BodyOverlaySlot(USkeletalMeshComponent* Body, uint32 Handle) const;
-	// LIFE5 — the baked clip one already-resolved (owner, animation name) pair names, cached per
+	// The baked clip one already-resolved (owner, animation name) pair names, cached per
 	// (mesh, owner, animation) exactly as the cinematic path is. Never consults the vocabulary.
 	UAnimSequence* ResolveOneShotClip(USkeletalMesh* Mesh, const FString& OwnerStem,
 		const FString& AnimationName);
@@ -389,7 +389,7 @@ private:
 	// the body rather than of the clip and belongs to the body for its whole life.
 	TSet<FString> ReportedSlotRefusals;
 	bool ReleaseBodyAnimRequest(USkeletalMeshComponent* Body, uint32 Handle);
-	// LIFE5 — the standing claim on one of a body's channels, or null. Read-only mirror of the two
+	// The standing claim on one of a body's channels, or null. Read-only mirror of the two
 	// submit/release routes above, and it never BUILDS a driver: a body that has never been claimed
 	// on holds nothing, and building one to answer a question would hand it a locomotion publisher it
 	// never had.
@@ -406,7 +406,7 @@ private:
 	// remembers; this map is the per-body index over it.
 	TMap<FObjectKey, FElysiumSegmentClaims> SegmentClaims;
 
-	// LIFE5 — one standing HELD reaction claim per body, the same shape and for the same reason as
+	// One standing HELD reaction claim per body, the same shape and for the same reason as
 	// the cinematic claims above: a `Predicate` play has no duration, so its claim holds until the
 	// producer gives it back and this map is what remembers the handle to give back.
 	//
@@ -459,7 +459,7 @@ private:
 	TMap<FString, EElysiumItemGroundModelState> ItemGroundModels;
 	TSet<FString> ReportedMissingItemGroundModels;
 
-	// 12.4 — the whole eye system as one unit: the per-body bindings, the blink cadence, the gaze
+	// The whole eye system as one unit: the per-body bindings, the blink cadence, the gaze
 	// debug seam and the strong-ref'd iris textures, released with this component. The public eye
 	// methods above are thin forwarders into it.
 	FElysiumEyePass EyePass;
@@ -468,7 +468,7 @@ private:
 	// site keeps its own null branch — this only owns the three-hop lookup.
 	UElysiumAnimSubsystem* GetAnims() const;
 
-	// B3/8.5 NPC skeletal bodies: per-stem mesh cache and a per-(stem, clip) animation cache,
+	// NPC skeletal bodies: per-stem mesh cache and a per-(stem, clip) animation cache,
 	// GC-rooted here so a model shared by several NPCs loads once and survives until unload. The
 	// USkeletalMeshComponents themselves are components of the owning actor (rooted via
 	// AddInstanceComponent), freed with it.
@@ -488,7 +488,7 @@ private:
 	UPROPERTY() TMap<FString, TObjectPtr<USkeletalMesh>> AnimatedPropMeshCache;
 	UPROPERTY() TMap<FString, TObjectPtr<UAnimSequence>> AnimatedPropAnimCache;
 
-	// 8.3 dynamic-prop static meshes: per-stem cache, GC-rooted here so a model placed by several
+	// Dynamic-prop static meshes: per-stem cache, GC-rooted here so a model placed by several
 	// prop entities builds once and survives until unload.
 	UPROPERTY() TMap<FString, TObjectPtr<UStaticMesh>> PropMeshCache;
 	UPROPERTY() TMap<FString, TObjectPtr<UStaticMesh>> BrushMeshCache;
@@ -512,7 +512,7 @@ namespace ElysiumEntityAnimation
 		EElysiumAnimChannel Channel = EElysiumAnimChannel::Base);
 	FString CinematicClipCacheKey(const FString& Stem, const FString& BankStem, const FString& ClipName);
 
-	// How long the pose a fan strikes at `AxisValue` actually lasts (LIFE5) — **the engine's own
+	// How long the pose a fan strikes at `AxisValue` actually lasts — **the engine's own
 	// answer**, over the samples the blend input selects and weighted the way it weights them.
 	//
 	// It is not the longest cell, the base cell's length, or an average: a nine-cell hit fan's

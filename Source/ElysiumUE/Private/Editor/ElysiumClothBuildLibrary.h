@@ -120,8 +120,8 @@ struct FElysiumClothBuildResult
  * `elysium_pipeline.formats.mdl_cloth`, which writes `npc/garment/<stem>.json` beside the
  * character's Unreal-native ESKM container and in the same basis.
  *
- * This turns that sidecar into a `UChaosClothAsset`, so the running game carries **no VtMB
- * cloth rule at all** — a stock Chaos solver consumes a generated asset, the same way blend
+ * This turns that sidecar into a `UChaosClothAsset`, so the running game carries no VtMB
+ * cloth rule at all — a stock Chaos solver consumes a generated asset, the same way blend
  * grids became `UBlendSpace` assets rather than a runtime evaluator. That is the repository's
  * standing rule for a representation the frame path should not have to know about.
  *
@@ -133,21 +133,21 @@ struct FElysiumClothBuildResult
  *
  * What the sidecar supplies and what is derived here:
  *
- *  - **Simulation positions** are authored particle rest positions, already reconstructed
+ *  - Simulation positions are authored particle rest positions, already reconstructed
  *    offline from the payload's anchor indices and its position map. Nothing is resampled.
- *  - **Simulation topology** is the surface induced from the render mesh. The payload's own
+ *  - Simulation topology is the surface induced from the render mesh. The payload's own
  *    collision-triangle array is a per-particle proxy, not a manifold, and cannot serve.
- *  - **Pinning** comes from the anchored prefix, written as a zero `MaxDistance` weight. Chaos
+ *  - Pinning comes from the anchored prefix, written as a zero `MaxDistance` weight. Chaos
  *    pins by weight map; VtMB pins by skinning those particles from the bone palette, and the
  *    two agree because a zero max distance leaves a vertex on its skinned position.
- *  - **Skin weights** for the simulation mesh are the anchors' own render-vertex weights.
- *  - **2D pattern positions are derived, not authored.** VtMB has no flat pattern, so a
+ *  - Skin weights for the simulation mesh are the anchors' own render-vertex weights.
+ *  - 2D pattern positions are derived, not authored. VtMB has no flat pattern, so a
  *    cylindrical unwrap of the rest pose stands in. It drives pattern-space anisotropy only;
  *    the 3D rest positions the constraints were authored against are what the solver uses.
- *  - **Colliders** become a generated `UPhysicsAsset` of capsule and sphere bodies on the
+ *  - Colliders become a generated `UPhysicsAsset` of capsule and sphere bodies on the
  *    authored bones, because Chaos gathers cloth collision from a physics asset rather than
  *    from the cloth collection.
- *  - **Material is not decoded at all.** VtMB's solver had no density, friction or thickness to
+ *  - Material is not decoded at all. VtMB's solver had no density, friction or thickness to
  *    state, so what a garment is MADE of is a reading of it rather than a fact in the file. It
  *    lives in the authored `UElysiumClothTuningConfig` beside every other tuned value, and no
  *    number in the implementation is a tuning value.

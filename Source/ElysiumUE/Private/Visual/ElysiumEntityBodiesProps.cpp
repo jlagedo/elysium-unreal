@@ -142,7 +142,7 @@ namespace ElysiumPropBounds
 	}
 }
 
-// A/B toggle for the prop skin pass (8.3/8.4). 1 applies alternate skin families; 0 leaves every
+// A/B toggle for the prop skin pass. 1 applies alternate skin families; 0 leaves every
 // prop on its authored materials, so a look change can be attributed. Read per apply, so it takes
 // effect on the next Skin input without a reload.
 static TAutoConsoleVariable<int32> CVarPropSkins(
@@ -338,7 +338,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildAnimatedPropVisualWithStaticS
 	Comp->RegisterComponent();
 	Owner->AddInstanceComponent(Comp);
 	// A skeletal prop declares the same two composition stages a character does — 19 of them carry
-	// a rule table — so it takes the same install (CAP7.2).
+	// a rule table — so it takes the same install.
 	if (UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance()))
 	{
 		Inst->SetCompositionRig(Anims->GetAnimatedPropCompositionRig(Entry->Model));
@@ -383,7 +383,7 @@ UAnimSequence* UElysiumEntityBodies::ResolveAnimatedPropClip(USkeletalMesh* Mesh
 		return nullptr;
 	}
 
-	// CAP7.3 — collapse a grid label to its cell BEFORE the key is built, or the label would cache one
+	// Collapse a grid label to its cell BEFORE the key is built, or the label would cache one
 	// cell forever and no pose parameter could ever move it. `wolf_form` is the one skeletal prop
 	// declaring a grid; every other prop label resolves to itself.
 	const FString AnimName = Anims->ResolveGridClip(Stem, ClipName);
@@ -425,7 +425,7 @@ bool UElysiumEntityBodies::PlayAnimatedPropClip(USkeletalMeshComponent* Body, co
 	}
 	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
-		// LIFE5 — a skeletal prop owns every clip it can play, so its own stem IS the owner; there is
+		// A skeletal prop owns every clip it can play, so its own stem IS the owner; there is
 		// no bank indirection to resolve (`FElysiumPropClip`).
 		Inst->PlayClip(FElysiumClipIdentity(Stem, ClipName), Anim, bLoop);
 	}
@@ -655,12 +655,12 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPropVisual(const FString& Stem,
 	Comp->SetCanEverAffectNavigation(false);
 	Comp->SetMobility(EComponentMobility::Movable);
 	Comp->SetStaticMesh(Mesh);
-	// prop_dynamic is visual-only (8.3); prop_physics owns collision (8.4). The baked mesh carries
+	// prop_dynamic is visual-only; prop_physics owns collision. The baked mesh carries
 	// collision geometry for the props that do need it, so it is switched off here per component.
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Comp->SetupAttachment(Root);
 	Comp->SetRelativeLocationAndRotation(Location, Rotation);
-	// B7 — a 3D-skybox body is the miniature at its own scale: scenery the player can never
+	// A 3D-skybox body is the miniature at its own scale: scenery the player can never
 	// reach, so it is never solid, casts nothing, and stays out of the ray-tracing scene (a mesh
 	// blown up 16x overlaps the whole playable space, the canonical HWRT overlap cost).
 	if (UniformScale != 1.f)
@@ -744,7 +744,7 @@ UStaticMeshComponent* UElysiumEntityBodies::BuildPhysPropVisual(const FString& S
 	// Collide as a physics body (blocks the world's BlockAll hull colliders). Simulation, mass and
 	// the elysium.PhysicsProps gate are the leaf's call — the body stands here inert until it decides.
 	Comp->SetCollisionProfileName(TEXT("PhysicsActor"));
-	// B7 — a 3D-skybox body is the miniature at its own scale: scenery the player can never
+	// A 3D-skybox body is the miniature at its own scale: scenery the player can never
 	// reach, so it is never solid, casts nothing, and stays out of the ray-tracing scene (a mesh
 	// blown up 16x overlaps the whole playable space, the canonical HWRT overlap cost).
 	if (UniformScale != 1.f)

@@ -38,7 +38,7 @@ namespace ElysiumDamage
 	// --- Word 4: the Source `DMG_*` bits the authored `Dmg` grammar names --------------------
 	// The recovered string-to-bit table. `DMG_FIST` is authored by the fists item record and is not
 	// an engine damage bit of its own: the parser aliases it to `DMG_CLUB`, so an unarmed hit carries
-	// the club bit (`combat-and-damage.md` § "Reverse-engineered mechanics (RE40)" -> DMG_FIST Alias).
+	// the club bit (`combat-and-damage.md` § "Reverse-engineered mechanics" -> DMG_FIST Alias).
 	inline constexpr uint32 DmgBullet        = 0x00000002u;
 	inline constexpr uint32 DmgSlash         = 0x00000004u;
 	inline constexpr uint32 DmgBurn          = 0x00000008u;
@@ -98,7 +98,7 @@ struct FElysiumDmg
 	int32 ForcedSoak = -1;
 	// Word 15 — the accumulated template damage filter. Populated where the victim's data allows
 	// and deliberately NOT multiplied into the result: the point at which retail turns it into
-	// committed health damage is an open join (`combat-and-damage.md` step 9). RE40 places the
+	// committed health damage is an open join (`combat-and-damage.md` step 9). The recovered body places the
 	// special-modifier/immunity half of that step in `ApplySpecialDamageModifier`, whose 224-entry
 	// weapon/damage-id table raises condition flags and reactive audio rather than scaling the
 	// number, so the accumulator's own commit point stays unrecovered. Authored inputs are float

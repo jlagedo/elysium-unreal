@@ -1,6 +1,6 @@
 #pragma once
 
-// 9.8 — items are entities (`docs/vtmb/inventory.md`).
+// Items are entities (`docs/vtmb/inventory.md`).
 //
 // VtMB's carried inventory is an array of handles to real server entities, so an item has to BE
 // one: `FElysiumItem` sits on the character chain at CBaseCombatWeapon's place, under
@@ -35,10 +35,6 @@ inline FName ElysiumKeyringClassName() { return FName(TEXT("item_g_keyring")); }
 // The chain node every item classname registers under — CBaseCombatWeapon's place in VtMB's own
 // datamap chain. Like the other chain nodes it never appears in a `.ents` file.
 inline FName ElysiumItemClassName() { return FName(TEXT("CBaseCombatWeapon")); }
-
-// ============================================================================================
-// FElysiumItem — CBaseCombatWeapon
-// ============================================================================================
 
 class FElysiumItem : public FElysiumAnimating
 {
@@ -123,9 +119,7 @@ protected:
 	UStaticMeshComponent* WorldBody = nullptr;
 };
 
-// ============================================================================================
-// FElysiumKeyring — the one carried entity that owns logical records
-// ============================================================================================
+// The one carried entity that owns logical records.
 //
 // Collected keys are the deliberate exception to one-entity-per-item storage (`inventory.md` §3):
 // the player carries one ordinary `item_g_keyring` entity, and that entity owns a dynamic array of
@@ -156,9 +150,7 @@ public:
 // reach it through here.
 #include "Substrate/ElysiumItemContainer.h"
 
-// ============================================================================================
-// The catalogue -> class-registry install
-// ============================================================================================
+// --- The catalogue -> class-registry install ---
 
 struct FElysiumEquipmentView;
 
@@ -184,7 +176,7 @@ namespace ElysiumItems
 	// remain the economy slice and fail closed.
 	bool ExecuteBarter(FElysiumEntityWorld& World, const FString& Args);
 
-	// --- Inventory selection (8.9's selector, LIFE4's missing `SetActiveWeapon` caller) ----------
+	// --- Inventory selection ---
 	//
 	// Whether a section's selection is held in the hand. The three weapon families are the types
 	// `items.txt` marks `IsWielded` inside a browsable section, so a wielded section commits through

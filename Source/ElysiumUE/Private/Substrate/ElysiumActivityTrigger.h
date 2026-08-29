@@ -5,9 +5,9 @@
 #include "ElysiumEntityHandle.h"
 #include "Substrate/ElysiumTriggerBase.h"
 
-// Cycle 10b — `trigger_player_activity_level` (`docs/vtmb/entity_io.md` §
-// "`trigger_player_activity_level`" and `docs/vtmb/exported-map-event-surface.md` § "per-touch
-// refresh, guarded release, invalid output").
+// `trigger_player_activity_level` (`docs/vtmb/entity_io.md` § "`trigger_player_activity_level`"
+// and `docs/vtmb/exported-map-event-surface.md` § "per-touch refresh, guarded release, invalid
+// output").
 //
 // A `CBaseTrigger` leaf that authors the player's three activity channels directly. Six volumes in
 // the corpus, all of them criminal-only: four enabled `restricted_section` brushes in `sm_medical_1`

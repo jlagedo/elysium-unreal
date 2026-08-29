@@ -37,7 +37,7 @@ namespace
 	// The retarget source a closure's own resolved asset was baked against — `Sequence->RetargetSource`
 	// for a plain clip, or the same field off any one cell's sample for a grid (every cell of one
 	// blend space is baked from the same owning bank, the same property `Content/CLAUDE.md`'s masks
-	// share). `NAME_None` is the ordinary case for an asset whose bake predates the registration, or
+	// share). `NAME_None` is the ordinary case for an asset whose bake omitted the registration, or
 	// for no asset at all — nothing to correct, not a fault.
 	FElysiumClosureBankSource BankSourceForClosure(UAnimSequence* Sequence, UBlendSpace* Space)
 	{
@@ -67,9 +67,7 @@ namespace
 	}
 }
 
-// ================================================================================================
 // FElysiumBipedAnimProxy
-// ================================================================================================
 
 void FElysiumBipedAnimProxy::Initialize(UAnimInstance* InAnimInstance)
 {
@@ -117,10 +115,9 @@ bool FElysiumBipedAnimProxy::Evaluate(FPoseContext& Output)
 		// the graph", so calling it here would evaluate nothing and pose the reference pose.
 		EvaluateAnimationNode(Output);
 	}
-	// VtMB's autolayers used to be accumulated here, between the body pose and the composition
-	// stages. `CCC10` moved them into the compiled graph, where the mask is a property of the blend
-	// node rather than of the pose feeding it — so they now arrive inside `EvaluateAnimationNode`
-	// above, still under the composition tail, which is retail's own order either way.
+	// VtMB's autolayers compose inside the compiled graph, where the mask is a property of the blend
+	// node rather than of the pose feeding it — they arrive inside `EvaluateAnimationNode` above,
+	// still under the composition tail, which is retail's own order.
 	//
 	// Then the composition stages and the face, over whatever produced the pose — the same tail every
 	// body wears, which is what stops a body shipping frozen eyes and untwisted forearms.
@@ -148,9 +145,7 @@ void FElysiumBipedAnimProxy::UpdateAnimationNode(const FAnimationUpdateContext& 
 	FElysiumBodyAnimProxy::UpdateAnimationNode(InContext);
 }
 
-// ================================================================================================
-// The cinematic clip path
-// ================================================================================================
+// The cinematic clip path.
 
 bool FElysiumBipedAnimProxy::PlayDirect(UAnimSequence* Sequence, bool bLoop, bool bRestart,
 	float PlayRate)
@@ -242,9 +237,7 @@ void FElysiumBipedAnimProxy::StopDirect()
 }
 
 
-// ================================================================================================
-// UElysiumBipedAnimInstance
-// ================================================================================================
+// UElysiumBipedAnimInstance.
 
 FAnimNode_BlendStack* UElysiumBipedAnimInstance::FindLocomotionStack()
 {
@@ -319,7 +312,7 @@ void UElysiumBipedAnimInstance::PublishSelection(const FElysiumAnimationSelectio
 		}
 		StopOneShot(0.f);
 		StopClip();
-		// LIFE5 — and the reaction branch with them. A publish that has WON the base pose owns the
+		// And the reaction branch with them. A publish that has WON the base pose owns the
 		// base pose; leaving the branch holding a fan would leave the body reacting to a hit the
 		// arbitration has already handed away, with the reaction's own assets pinned behind it.
 		StopReaction();
@@ -349,7 +342,7 @@ void UElysiumBipedAnimInstance::PublishSelection(const FElysiumAnimationSelectio
 		|| PendingUpperBodySequence != nullptr) ? 1.0f : 0.0f;
 	PendingAdditiveLayerWeight = PendingAdditiveSequence != nullptr ? 1.0f : 0.0f;
 
-	// --- the overlay slot, staged off the SAME record and gated by nothing -------------------------
+	// The overlay slot, staged off the SAME record and gated by nothing.
 	//
 	// **`bBasePoseOwned` is deliberately not consulted here, and the asymmetry with the autolayers
 	// above is the whole point.** An autolayer belongs to the host sequence that owns the base pose,
@@ -1155,7 +1148,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// The garment's game-thread pass.
 	Super::NativeUpdateAnimation(DeltaSeconds);
 
-	// --- a request that resolved no asset holds the pose it had -----------------------------------
+	// A request that resolved no asset holds the pose it had.
 	//
 	// **This is retail's behaviour, not a guard bolted on.** A failed selection never reaches
 	// `ResetSequenceInfo`: `m_nSequence` keeps whatever it held and the body goes on playing it. The
@@ -1171,7 +1164,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// is a named one. Holding also leaves `OneShot` describing the pose that is actually on screen,
 	// so the generation gate in the driver's owner reads stale and the latch falls back to its
 	// timer — which is what ends the landing.
-	// --- the upper-body layer, projected AHEAD of the hold branch ----------------------------------
+	// The upper-body layer, projected AHEAD of the hold branch.
 	//
 	// It rides beside the locomotion state rather than through it, so it does not wait on a gait
 	// transition — and, for the same reason, a base pose that is being HELD must not freeze it. The
@@ -1188,7 +1181,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// freeze either. `ApplySlotBankRemap` runs per slot inside `ProjectSlotLayer` above.
 	ApplyBaseBankRemap();
 
-	// --- the reaction's phase clock, advanced AHEAD of the hold branch too (LIFE5) -----------------
+	// The reaction's phase clock, advanced AHEAD of the hold branch too.
 	//
 	// Same reason as the layer above: a base pose that is being HELD is a locomotion answer, and a
 	// reaction is a separate request that must not be frozen by it. A held base with a running
@@ -1242,7 +1235,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	UAnimationAsset* const PreviousAsset = RequestedAsset;
 	const bool bPreviousLooping = bRequestedLooping;
 
-	// --- project the record onto what the graph reads --------------------------------------------
+	// Project the record onto what the graph reads.
 	// The state is READ off the record rather than derived here. The resolver projected it once, and
 	// an instance that re-derived its own would be a second answer to the question the record exists
 	// to settle — visible the day a readout and the pose disagree about where the body is standing.
@@ -1268,7 +1261,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	MoveYaw = Pending.MoveYaw;
 	bHasBlendSpace = PendingBlendSpace != nullptr;
 
-	// --- the loop bit the node cannot notice on its own -------------------------------------------
+	// The loop bit the node cannot notice on its own.
 	//
 	// `FAnimNode_BlendStack::ConditionalBlendTo` compares the requested asset against the one it is
 	// playing and returns early when they match; `bLoop` is read only inside `BlendTo`, as an
@@ -1276,7 +1269,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// changes nothing, with nothing logged — and `Crouch` is exactly that request, a non-looping
 	// into-pose republished as a held stance. The forced re-blend is what makes the pin honest.
 	//
-	// LIFE5's repeated-identical-request restart is this door's second caller when it lands: a hit
+	// The repeated-identical-request restart is this door's second caller when it lands: a hit
 	// that re-fires the same clip is the same "the asset did not change and it still has to blend
 	// again" shape, and it goes through this predicate rather than growing one of its own.
 	//
@@ -1294,7 +1287,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		Stack->ForceBlendNextUpdate();
 	}
 
-	// --- one blend per discrete request change ---------------------------------------------------
+	// One blend per discrete request change.
 	if (!bHasApplied || Pending.Generation != Applied.Generation)
 	{
 		// The authored fade, combined as retail combines it. It reaches the blend stack on its
@@ -1402,7 +1395,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		bAppliedPosedAnAsset = RequestedAsset != nullptr;
 	}
 
-	// --- read the graph back ---------------------------------------------------------------------
+	// Read the graph back.
 	OneShot = FElysiumOneShotReport();
 	OneShot.Generation = Pending.Generation;
 	// One-shots are single clips; a fan is a gait, and a `Cast` here is what keeps the length below
@@ -1438,7 +1431,7 @@ void UElysiumBipedAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		}
 	}
 
-	// --- the base channel's phase, last (LIFE5) ---------------------------------------------------
+	// The base channel's phase, last.
 	//
 	// After the publish, so the locomotion arm's identity comes off the record the stack is about to
 	// pose rather than the one it just left. Every other arm was armed synchronously at its own play
@@ -1679,12 +1672,10 @@ void UElysiumBipedAnimInstance::StopOneShot(float BlendSeconds)
 	}
 }
 
-// ================================================================================================
-// The cinematic clip path and the autolayers, over the proxy
+// The cinematic clip path and the autolayers, over the proxy.
 //
 // Every one of these goes through GetProxyOnGameThread, which blocks on any in-flight parallel
 // evaluation — that block is the whole reason the writes below cannot race the worker.
-// ================================================================================================
 
 void UElysiumBipedAnimInstance::PlayClip(const FElysiumClipIdentity& Identity,
 	UAnimSequence* Sequence, bool bLoop, bool bRestart, float PlayRate)
@@ -1743,8 +1734,7 @@ void UElysiumBipedAnimInstance::ResyncClip(float PositionSeconds)
 	GetProxyOnGameThread<FElysiumBipedAnimProxy>().ResyncPosition(PositionSeconds);
 }
 
-// ================================================================================================
-// The base channel's phase clock (LIFE5)
+// The base channel's phase clock.
 //
 // One PUBLISHED timeline per body, because retail has exactly one: `DispatchAnimEvents` stores the
 // last checked cycle on the animating object at `+0x658`, and nothing advances a layer's own cycle
@@ -1755,7 +1745,6 @@ void UElysiumBipedAnimInstance::ResyncClip(float PositionSeconds)
 // which never stopped either. Precedence decides which one is the timeline; it never decides which
 // ones exist. A single shared record would let the newest arm erase a clip that is still playing,
 // and the displaced one could never take the channel back.
-// ================================================================================================
 
 void UElysiumBipedAnimInstance::ArmBasePhase(EElysiumBasePhaseSource Source,
 	const FElysiumClipIdentity& Identity, float LengthSeconds, bool bLoop, float PlayRate)
@@ -2045,15 +2034,13 @@ void UElysiumBipedAnimInstance::RefreshBasePhase(FElysiumBipedAnimProxy& InProxy
 	PublishBasePhase(InProxy, Stack, /*bReadClocks=*/true);
 }
 
-// ================================================================================================
-// The overlay slot's phase clock
+// The overlay slot's phase clock.
 //
 // The slot's clip is not clocked by any node: `FAnimNode_SequenceEvaluator` is PINNED, and the
 // number that moves it is the claim's own phase (`ElysiumAnimGraph::SlotEvaluatorTime` over
 // `SlotCycle`). So this record is read off the claim rather than off the graph, and it is the same
 // one clock the envelope and the expiry ride — a timeline walked against any other number would
 // dispatch a shot's commit id at an instant the pose never reaches.
-// ================================================================================================
 
 void UElysiumBipedAnimInstance::ArmSlotPhase(int32 SlotIndex,
 	const FElysiumClipIdentity& Identity, float LengthSeconds, bool bLoop, float PlayRate,

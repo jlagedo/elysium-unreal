@@ -1,4 +1,4 @@
-// Content-free Substrate automation for the stealth target surface (13.1), plus one Content-tier
+// Content-free Substrate automation for the stealth target surface, plus one Content-tier
 // case that parses the real `vdata/system/stealth.txt`.
 //
 // Every number asserted here is either a fact from `docs/vtmb/stealth.md` — the 0.1 s cadence, the
@@ -201,8 +201,7 @@ namespace
 		FElysiumRecordingServices Services;
 		FElysiumEntityWorld World;
 		// Declared AFTER `World` on purpose: members destruct in reverse declaration order, so this
-		// unbinds the fallback tables before the world it configured tears down, exactly as this
-		// fixture's own explicit destructor used to by running before any member's.
+		// unbinds the fallback tables before the world it configured tears down.
 		ElysiumRulebookTest::FScopedRulebookBinding Binding;
 		FElysiumPlayer* Player = nullptr;
 		FElysiumNpc* Guard = nullptr;

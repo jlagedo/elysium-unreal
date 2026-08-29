@@ -2,9 +2,7 @@
 
 #include "ElysiumUserCmd.h"
 
-// =====================================================================================
 // The damper
-// =====================================================================================
 
 namespace
 {
@@ -68,9 +66,7 @@ float ElysiumRig::DampToward(float Current, float Target, float HalfLifeSeconds,
 	return Target + (Current - Target) * Retained;
 }
 
-// =====================================================================================
 // The boom
-// =====================================================================================
 
 FRotator ElysiumRig::BoomRotation(const FRotator& ViewRot, const FElysiumCameraRigTuning& Tuning)
 {

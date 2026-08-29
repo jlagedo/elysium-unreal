@@ -281,13 +281,13 @@ bool FElysiumHUDModelProjectionTest::RunTest(const FString& Parameters)
 	return true;
 }
 
-// =====================================================================================
+
 // The equipment readout and the weapon selector, projected from a real published snapshot
-// rather than from the preview fixture (8.9's selector clause).
+// rather than from the preview fixture (the selector clause).
 //
 // The peek is a screen state the publisher resolved: the selector is open exactly while
 // `PeekAlpha` is up, and the readout describing the hand stays up either way.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumHUDEquipmentProjectionTest,
 	"Elysium.Substrate.UI.HUDEquipmentProjection",

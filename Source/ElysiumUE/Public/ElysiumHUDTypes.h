@@ -41,7 +41,7 @@ enum class EElysiumWeaponClass : uint8
 };
 
 // Zone-state indicator above the Life bar: combat (free attack), Masquerade (uphold the Masquerade),
-// Elysium (no attacks or disciplines). Stubbed and mocked until area-rule subsystem is wired.
+// Elysium (no attacks or disciplines). Stubbed; area-rule authority is not this type.
 UENUM(BlueprintType)
 enum class EElysiumZoneState : uint8
 {
@@ -207,7 +207,7 @@ struct FElysiumHUDSelectorView
 };
 
 // Decoded HUD art paths under `$ELYSIUM_EXPORT_ROOT/ui/art`. The widget loads `<path>.png`; the
-// publisher (preview today, the view-state owner later) is the only writer of these names.
+// publisher is the only writer of these names.
 namespace ElysiumHUDArt
 {
 	inline FName Inventory(const TCHAR* RelStem)
@@ -265,10 +265,10 @@ namespace ElysiumHUDArt
 	// name. A classname with neither falls back to a category glyph, which is a readable icon rather
 	// than a hole.
 	//
-	// **Worn armour is deliberately not resolved to its own art.** The tree files clothing per clan,
+	// Worn armour is deliberately not resolved to its own art. The tree files clothing per clan,
 	// per sex and per tier (`armors/brujahf/brujah_f_a0`), and no decoded field on the item record
 	// names that tier — so the portrait needs a join this runtime does not have, and the category
-	// glyph is the honest answer until it does.
+	// glyph is the honest answer.
 	inline FName ItemIcon(const FString& Classname, EElysiumWeaponClass Class)
 	{
 		FString Stem = Classname;

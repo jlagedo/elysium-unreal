@@ -1,8 +1,8 @@
-// 11.4 — the registration site for the player entity and the two chain nodes above it (S3).
+// The registration site for the player entity and the two chain nodes above it (S3).
 //
-// `docs/architecture/runtime-architecture.md` sections 5-6 is the design; `docs/vtmb/script_api.md` is the input inventory. The
-// three classes here are ordinary registry nodes: nothing about the player is special-cased, which
-// is the whole point — `pc.MoneyAdd(50)` from a level script, `MoneyAdd` on a Hammer wire and
+// `docs/architecture/runtime-architecture.md` sections 5-6 is the design; `docs/vtmb/script_api.md`
+// is the input inventory. The three classes here are ordinary registry nodes: nothing about the
+// player is special-cased — `pc.MoneyAdd(50)` from a level script, `MoneyAdd` on a Hammer wire and
 // `elysium.ent_fire !player MoneyAdd 50` from the console are one input, reached by one R2 walk.
 //
 // The three implementations live beside this file, one class per `.cpp`:
@@ -10,9 +10,8 @@
 // remains here is the chain's field/input/output declaration, the datamap helpers those
 // declarations share, and `FElysiumSheet`'s clan naming.
 //
-// What is deliberately NOT here: the economy (9.10), inventory and barter (9.8), disposition
-// reactions (9.9) and the look-at rig (P12). Their inputs register and log; the field they will
-// write is already in place.
+// Economy, inventory/barter, disposition reactions and the look-at rig are not implemented here.
+// Their inputs register and log; the field they write is already in place.
 
 #include "ElysiumPlayer.h"
 
@@ -23,7 +22,7 @@
 #include "ElysiumSheetSlots.h"
 #include "ElysiumWorldServices.h"
 #include "Substrate/ElysiumClassFields.h"
-#include "Substrate/ElysiumDisciplines.h"   // Cycle 9
+#include "Substrate/ElysiumDisciplines.h"
 #include "Substrate/ElysiumItemClasses.h"   // FElysiumItem — Holster's carried-weapon fallback
 #include "Substrate/ElysiumPendingInput.h"
 #include "Substrate/ElysiumPlayerLog.h"
@@ -101,7 +100,7 @@ namespace
 		D.Fields.Add(FName(Name), MoveTemp(Acc));
 	}
 
-	// B6 — the feed transaction's state, as Save-flagged chain fields (K8: a registered field, the
+	// The feed transaction's state, as Save-flagged chain fields (K8: a registered field, the
 	// session record, or a declared save block, and nothing else). The save schema names
 	// `m_flNextFeedPulse` and `m_flFeedStartTime`, which is what makes an in-progress feed survive a
 	// restore without duplicating a pulse; the rest of the block is registered beside them so the
@@ -208,8 +207,6 @@ namespace
 	}
 }
 
-// --- FElysiumSheet ---------------------------------------------------------------------------
-
 bool FElysiumSheet::IsValidClan(int32 Clan)
 {
 	return Clan >= GClanMin && Clan <= GClanMax;
@@ -237,10 +234,6 @@ int32 FElysiumSheet::ClanFromName(const FString& Name)
 	}
 	return 0;
 }
-
-// ============================================================================================
-// Registration
-// ============================================================================================
 
 static TUniquePtr<FElysiumEntity> MakePlayer() { return MakeUnique<FElysiumPlayer>(); }
 static TUniquePtr<FElysiumEntity> MakeViewModel() { return MakeUnique<FElysiumAnimating>(); }
@@ -291,21 +284,21 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		D.Input(TEXT("Bloodgain"),             [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputBloodgain(A); });
 		D.Input(TEXT("BloodHeal"),             [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputBloodHeal(A); });
 		D.Input(TEXT("WillTalk"),              [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputWillTalk(A); });
-		// CLASSPTR — an entity-valued detach that never destroys (9.8).
+		// CLASSPTR — an entity-valued detach that never destroys.
 		D.Input(TEXT("Inventory_Remove"),      [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FC&>(E).InputInventoryRemove(A); });
 
 		// The sixteen whose system has not landed. They register so the name resolves through the
-		// R2 walk and reaches a defined place — fail-closed, not missing (roadmap 11.4). An input
-		// thunk is a captureless function pointer, so each row states its own name and owner.
+		// R2 walk and reaches a defined place — fail-closed, not missing. An input thunk is a
+		// captureless function pointer, so each row states its own name and owner.
 		ELYSIUM_PENDING_INPUT(FC, FrenzyTrigger,          "P13 — disciplines and frenzy");
 		ELYSIUM_PENDING_INPUT(FC, FrenzyCheck,            "P13 — disciplines and frenzy");
 		// HungerCheck shares FrenzyCheck's handler in VtMB — two external names, one behaviour.
 		ELYSIUM_PENDING_INPUT(FC, HungerCheck,            "P13 — disciplines and frenzy");
 		ELYSIUM_PENDING_INPUT(FC, FrenzyUpdate,           "P13 — disciplines and frenzy");
 
-		// Cycle 9 (13.2) — the one real teardown. `vdiscipline_endall` and this input converge on it: remove
-		// the owned expiry events, drop every trait-effect group both families installed, zero the
-		// thirteen active slots and recompute. The pending row retires with it.
+		// The one real teardown. `vdiscipline_endall` and this input converge on it: remove the
+		// owned expiry events, drop every trait-effect group both families installed, zero the
+		// thirteen active slots and recompute.
 		D.Input(TEXT("ClearActiveDisciplines"), [](FElysiumEntity& E, const FElysiumInputArgs&)
 			{ ElysiumDisciplines::ClearAll(static_cast<FC&>(E)); });
 
@@ -334,7 +327,7 @@ static FElysiumClassRegistrar GRegCombatCharacter(
 		// blood, masquerade, clan and sex are all trait slots, and arrive with the rest of the sheet.
 		ElysiumAddClassField(D, TEXT("money"), &FC::Money);
 
-		// 13.1 — `trigger_stealth_mod`'s raw aggregate (`+0x1084`). Registered on THIS chain node
+		// `trigger_stealth_mod`'s raw aggregate (`+0x1084`). Registered on THIS chain node
 		// rather than on the player, because the trigger's own increment is guarded by
 		// combat-character embodiment and every character can therefore carry a contribution. Saved
 		// through the ordinary field walk, which is what carries an NPC's across a map snapshot;
@@ -431,8 +424,8 @@ static FElysiumClassRegistrar GRegPlayer(
 				Request.ConcurrencyKey = TEXT("player.whisper");
 				E.World->Audio()->Submit(MoveTemp(Request));
 			});
-		// RemoveCamera — the other half of `SetCamera`: hand the view back to the player. It clears the
-		// map's one scripted camera whether a script, a wire or the theatre put it up (11.7).
+		// RemoveCamera — the other half of `SetCamera`: hand the view back to the player. It clears
+		// the map's one scripted camera whether a script, a wire or the theatre put it up.
 		D.Input(TEXT("RemoveCamera"),    [](FElysiumEntity& E, const FElysiumInputArgs&)
 			{ if (E.World) { E.World->ClearScriptedCamera(); } });
 		D.Input(TEXT("PlayHUDParticle"), [](FElysiumEntity& E, const FElysiumInputArgs& A)

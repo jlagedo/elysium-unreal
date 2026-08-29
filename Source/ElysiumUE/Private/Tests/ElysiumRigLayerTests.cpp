@@ -11,7 +11,7 @@
 // records the global sequence number it committed, and T1 put that number on every clip as
 // `RawIndex`. So the base is read rather than re-derived.
 //
-// **The model under test is the whole composition, not one channel of it** (LIFE10):
+// **The model under test is the whole composition, not one channel of it**:
 //
 //  * the base clip's own autolayer closure, walked TRANSITIVELY — retail's resolution walk recurses
 //    once per `numautolayers` entry at a hardcoded weight of 1.0, so a host brings its layers'

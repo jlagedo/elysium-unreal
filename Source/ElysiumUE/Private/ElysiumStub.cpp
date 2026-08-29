@@ -100,7 +100,6 @@ namespace ElysiumStub
 	}
 }
 
-// --- Verification command -----------------------------------------------------------------
 // `elysium.stubs` reads the work list back: every unimplemented surface reached since load, what
 // owns it, and how hard the shipped content leans on it. `elysium.stubs clear` resets the counts
 // so a single map load or a single scene can be measured on its own.

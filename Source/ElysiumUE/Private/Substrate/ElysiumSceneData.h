@@ -1,4 +1,4 @@
-// 12.1 — the choreographed-scene file (`.vcd`) as parsed data.
+// The choreographed-scene file (`.vcd`) as parsed data.
 //
 // VtMB plays every cinematic and every spoken line out of a Faceposer choreo scene. The format is
 // plain ASCII with one uniform rule: **every line is a whitespace-separated word list, optionally
@@ -7,7 +7,7 @@
 //
 // This is the data half only: no world, no entity, no engine. `ElysiumScenePlayer.h` walks a parsed
 // scene against a clock, and `ElysiumChoreoScene.cpp` is the entity that owns both. The split is so
-// the per-line dialogue path (12.2's CInstancedSceneEntity, ~5,300 of the 5,444 shipped scenes) can
+// the per-line dialogue path (CInstancedSceneEntity, ~5,300 of the 5,444 shipped scenes) can
 // reuse the same reader and timeline without an entity.
 //
 // Format, event-type enum and the shipped corpus counts: `docs/vtmb/choreographed_scenes.md`.
@@ -69,7 +69,8 @@ struct FElysiumSceneEvent
 	// enter the runtime timeline.
 	bool  bActive = true;
 
-	// `fixedlength` — the event's length is the asset's, not the authored range (12.2 acts on it).
+	// `fixedlength` — the event's length is the asset's, not the authored range. The dialogue path
+	// acts on it.
 	bool  bFixedLength = false;
 	// `sequenceduration <s>` — 56 gesture events carry it. Parsed and surfaced, not acted on.
 	float SequenceDuration = 0.f;

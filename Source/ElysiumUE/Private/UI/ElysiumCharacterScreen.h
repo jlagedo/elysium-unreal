@@ -19,7 +19,7 @@ namespace ElysiumQuestView { struct FEntry; }
 enum class EElysiumSpendMode : uint8
 {
 	None,
-	Chargen,    // the tier pools, priced by RE25's table (9.4f)
+	Chargen,    // the tier pools, priced by the chargen table
 	LevelUp,    // the XP total, priced the same way against `Experience`
 };
 
@@ -32,20 +32,19 @@ struct FElysiumCharacterScreenMode
 	bool bNameEditable = false;   // the `NAME:` text entry — chargen only
 };
 
-// The character screen: one screen, entered on a tab (roadmap 9.4e). `L` opens it on the quest log,
-// `C` on the sheet, and pressing the other key while it is up switches tab rather than closing —
-// which is what makes them two doors into one screen rather than two screens.
+// One screen entered on a tab. `L` opens it on the quest log, `C` on the sheet, and pressing the
+// other key while it is up switches tab rather than closing — two doors into one screen.
 //
-// A `UCommonActivatableWidget` whose tree is built in C++ Slate under one `SDPIScaler` at
-// `ScreenH/768`, like the menu (`docs/architecture/ui-architecture.md`). The chrome is VtMB's own decoded sheet
-// art, each piece guarded: `out/ui/art/` is gitignored, so every image degrades to a token-drawn
-// equivalent rather than leaving a hole.
+// Tree is built in C++ Slate under one `SDPIScaler` at `ScreenH/768`
+// (`docs/architecture/ui-architecture.md`). The chrome is VtMB's own decoded sheet art, each piece
+// guarded: `out/ui/art/` is gitignored, so every image degrades to a token-drawn equivalent rather
+// than leaving a hole.
 //
-// **The Sheet body is one widget serving both hosts.** Chargen and the in-game level-up screen draw
-// the same rows, the same feats panel and the same detail panel over the same
-// `FElysiumChargenState`; only `Mode.Spend` differs, and it selects which currency the state spends
-// (`EElysiumChargenCurrency`). The spend state is a scratch — nothing reaches the character until
-// ACCEPT — so CANCEL is a discard rather than an undo log.
+// The Sheet body serves both hosts. Chargen and the in-game level-up screen draw the same rows, the
+// same feats panel and the same detail panel over the same `FElysiumChargenState`; only
+// `Mode.Spend` differs, and it selects which currency the state spends (`EElysiumChargenCurrency`).
+// The spend state is a scratch — nothing reaches the character until ACCEPT — so CANCEL is a
+// discard rather than an undo log.
 UCLASS()
 class UElysiumCharacterScreen : public UElysiumNavigableScreen
 {
@@ -98,7 +97,6 @@ public:
 private:
 	float VirtualScale() const;
 
-	// --- art ------------------------------------------------------------------------------------
 	// Thin forwarders into the screen's art cache, so every builder draws through one name.
 	const FSlateBrush* Art(const TCHAR* RelPath, const FLinearColor& Tint,
 	                       const FBox2f& Uv = FBox2f(FVector2f::ZeroVector, FVector2f::UnitVector),
@@ -112,7 +110,6 @@ private:
 		return ArtCache.Framed(RelPath, Uv, Slice, Content);
 	}
 
-	// --- the shell ------------------------------------------------------------------------------
 	TSharedRef<SWidget> BuildHeader();
 	TSharedRef<SWidget> BuildTabStrip();
 	TSharedRef<SWidget> BuildFooter();
@@ -120,12 +117,10 @@ private:
 	TSharedRef<SWidget> BuildRule(const FText& Label);
 	TSharedRef<SWidget> BuildPlaceholder(const FText& Heading, const FText& Line);
 
-	// --- the quest log --------------------------------------------------------------------------
 	TSharedRef<SWidget> BuildQuestLog();
 	TSharedRef<SWidget> BuildHubRow(const int32* HubActive);
 	TSharedRef<SWidget> BuildEntry(const ElysiumQuestView::FEntry& Entry, bool bLedger);
 
-	// --- the sheet ------------------------------------------------------------------------------
 	// The rulebook gathered for the model layer, and the sheet the body reads — the scratch when
 	// there is one, the live character otherwise.
 	FElysiumChargenRules SpendRules() const;
@@ -133,8 +128,8 @@ private:
 	const FElysiumSheetEffects* ViewEffects() const;
 
 	TSharedRef<SWidget> BuildSheet();
-	// One heading plus its rows. `Pool` is `None` for a block that spends nothing (nothing does
-	// today, but the parameter is what keeps the heading's counter optional rather than implied).
+	// One heading plus its rows. `Pool` is `None` for a block that spends nothing (the parameter
+	// keeps the heading's counter optional rather than implied).
 	TSharedRef<SWidget> BuildTraitBlock(EElysiumChargenPool Pool, EElysiumTraitContainer Container,
 	                                    int32 First, int32 Last);
 	TSharedRef<SWidget> BuildTraitRow(EElysiumTraitContainer Container, int32 TraitSlot);
@@ -142,7 +137,6 @@ private:
 	TSharedRef<SWidget> BuildFeats();
 	TSharedRef<SWidget> BuildDetail();
 
-	// --- the Base tab ---------------------------------------------------------------------------
 	TSharedRef<SWidget> BuildBase();
 	TSharedRef<SWidget> BuildChoiceRow(FName GroupId, const FText& Heading,
 	                                   const TArray<FText>& Options,

@@ -40,7 +40,7 @@ void FElysiumCogWindow_EventQueue::RenderContent()
 	FElysiumEventQueue& Queue = World->Queue();
 	const double Now = World->NowSeconds();
 
-	// --- Pause / step controls -------------------------------------------------------------
+	// Pause / step controls.
 	const bool bPaused = Queue.IsPaused();
 	if (ImGui::Button(bPaused ? "Resume" : "Pause"))
 	{

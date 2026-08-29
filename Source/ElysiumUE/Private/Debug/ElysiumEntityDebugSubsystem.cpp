@@ -138,9 +138,7 @@ private:
 	TWeakObjectPtr<UElysiumEntityDebugSubsystem> Sub;
 };
 
-// ============================================================================================
-// Subsystem lifecycle
-// ============================================================================================
+
 
 void UElysiumEntityDebugSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -202,7 +200,7 @@ void UElysiumEntityDebugSubsystem::Initialize(FSubsystemCollectionBase& Collecti
 		FConsoleCommandWithWorldAndArgsDelegate::CreateWeakLambda(this, [this](const TArray<FString>&, UWorld*) { HandleClear(); }),
 		ECVF_Cheat));
 
-	// --- P2.4 world-viz verbs (thin echoes of the World Viz Cog window; they flip VizSettings) -------
+	// World-viz verbs: thin echoes of the World Viz Cog window; they flip VizSettings.
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(TEXT("elysium.showtriggers"),
 		TEXT("elysium.showtriggers [0|1] [state] — toggle wireframe trigger-body hulls (no arg = toggle). "
 		     "'state' colors by enabled/dormant instead of by class."),
@@ -296,9 +294,7 @@ void UElysiumEntityDebugSubsystem::Tick(float DeltaTime)
 #endif // !UE_BUILD_SHIPPING
 }
 
-// ============================================================================================
-// Helpers
-// ============================================================================================
+
 
 FElysiumEntityWorld* UElysiumEntityDebugSubsystem::GetSubstrate() const
 {
@@ -410,9 +406,7 @@ void UElysiumEntityDebugSubsystem::ResolveTargets(FElysiumEntityWorld& EW, UWorl
 	}
 }
 
-// ============================================================================================
-// UI-facing controls (shared by the Cog Inspector and the ent_* verbs)
-// ============================================================================================
+// UI-facing controls (shared by the Cog Inspector and the ent_* verbs).
 
 FElysiumEntityHandle UElysiumEntityDebugSubsystem::PickSelection()
 {
@@ -453,9 +447,7 @@ void UElysiumEntityDebugSubsystem::ClearBreak()
 	BreakInput = NAME_None;
 }
 
-// ============================================================================================
-// Verbs
-// ============================================================================================
+
 
 void UElysiumEntityDebugSubsystem::HandleFire(const TArray<FString>& Args, UWorld* World)
 {
@@ -773,7 +765,7 @@ void UElysiumEntityDebugSubsystem::HandleClear()
 	UE_LOG(LogElysiumEnt, Display, TEXT("ent_clear: all overlays cleared"));
 }
 
-// --- P2.4 world-viz verbs — the scriptable echo of the World Viz Cog window's controls -------------
+// World-viz verbs: the scriptable echo of the World Viz Cog window's controls.
 
 void UElysiumEntityDebugSubsystem::HandleShowTriggers(const TArray<FString>& Args)
 {
@@ -838,9 +830,7 @@ void UElysiumEntityDebugSubsystem::HandleBeams(const TArray<FString>& Args)
 	UE_LOG(LogElysiumEnt, Display, TEXT("ent_beams: %s"), VizSettings.bShowBeams ? TEXT("on") : TEXT("off"));
 }
 
-// ============================================================================================
-// Chokepoint tap (ent_break + ent_messages capture)
-// ============================================================================================
+// Chokepoint tap: ent_break + ent_messages capture.
 
 void UElysiumEntityDebugSubsystem::TapDelivered(FElysiumEntityWorld& World, double /*Now*/,
 	const FElysiumEntity& Target, const FElysiumIOEvent& Event)
@@ -932,9 +922,7 @@ void UElysiumEntityDebugSubsystem::TapOutput(FElysiumEntityWorld& /*World*/, dou
 #endif
 }
 
-// ============================================================================================
-// Overlay rendering
-// ============================================================================================
+
 
 void UElysiumEntityDebugSubsystem::RenderOverlays(FElysiumEntityWorld& EW)
 {
@@ -1005,9 +993,7 @@ void UElysiumEntityDebugSubsystem::RenderOverlays(FElysiumEntityWorld& EW)
 #endif // ENABLE_DRAW_DEBUG
 }
 
-// ============================================================================================
-// P2.4 world visualization — map-wide layers (entity gizmos, trigger hulls, I/O beams)
-// ============================================================================================
+// Map-wide visualization layers: entity gizmos, trigger hulls, I/O beams.
 
 void UElysiumEntityDebugSubsystem::RenderWorldViz(FElysiumEntityWorld& EW)
 {
@@ -1039,7 +1025,6 @@ void UElysiumEntityDebugSubsystem::RenderWorldViz(FElysiumEntityWorld& EW)
 
 	const TArray<TUniquePtr<FElysiumEntity>>& Entities = EW.Entities();
 
-	// --- Entity gizmo labels ------------------------------------------------------------------------
 	// The gizmo *boxes* are the retained ISM layer (FElysiumGizmoLayer) — built once, updated only on
 	// entity events, zero per-frame draw cost. Only the labels stay immediate-mode (DrawDebugString
 	// has no instanced equivalent), so they are culled hard by distance to keep the string count low.
@@ -1075,7 +1060,7 @@ void UElysiumEntityDebugSubsystem::RenderWorldViz(FElysiumEntityWorld& EW)
 		}
 	}
 
-	// --- Show triggers: the wireframe convex-hull AABBs of every trigger brush entity ---------------
+	// Show triggers: the wireframe convex-hull AABBs of every trigger brush entity
 	// (VtMB triggers are axis-aligned box brushes, so the per-hull AABB is the exact volume.) Colored
 	// by class (the gizmo palette) or by enabled/dormant state.
 	if (VizSettings.bShowTriggers)
@@ -1117,7 +1102,7 @@ void UElysiumEntityDebugSubsystem::RenderWorldViz(FElysiumEntityWorld& EW)
 		}
 	}
 
-	// --- I/O beams: fade + draw the captured caller->target arrows (foreground, follow through walls) -
+	// I/O beams: fade + draw the captured caller->target arrows (foreground, follow through walls).
 	if (Beams.Num() > 0)
 	{
 		const double Window = FMath::Max(0.5, double(VizSettings.BeamSeconds));

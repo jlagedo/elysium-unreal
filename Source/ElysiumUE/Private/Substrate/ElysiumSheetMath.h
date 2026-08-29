@@ -20,15 +20,13 @@
 struct FElysiumSheet;
 class FElysiumCombatCharacter;
 
-// ================================================================================================
-// The resolved effect layer — one character's `m_tEffectList`
-// ================================================================================================
+// The resolved effect layer — one character's `m_tEffectList`.
 
 // A character's active `TraitEffectGroup`s, flattened into what a read needs: per-trait modifier
 // rows, per-feat modifier rows, and the `Fx_*` code-side flags.
 //
-// The names come from the character's clan (`ClanEffect`), its History (`Effect`) and, later, its
-// items and its frenzy state. `Build` resolves them once; every read is a map lookup.
+// The names come from the character's clan (`ClanEffect`) and its History (`Effect`). `Build`
+// resolves them once; every read is a map lookup.
 struct FElysiumSheetEffects
 {
 	// One applicable modifier. `Cost`/`BloodCost`/`Damage`/`Duration` are **payload** operators:
@@ -91,10 +89,10 @@ struct FElysiumSheetEffects
 	int32 ApplyToBound(EElysiumTraitContainer Container, int32 Slot, int32 Bound) const;
 
 	// An `Fx_*` flag's summed amount; 0 when no group sets it. `Fx_Humanity_Mods_Doubled` is the
-	// one 9.4c reads (Toreador's gift and bane are the same flag).
+	// one the humanity-mod path reads (Toreador's gift and bane are the same flag).
 	int32 Flag(const TCHAR* FxName) const;
 
-	// --- The payload operators ------------------------------------------------------------------
+	// The payload operators.
 	// `Value` through every payload row of `Op` that targets this trait slot. Rows without a `%`
 	// add; rows with one scale.
 	//
@@ -130,9 +128,7 @@ private:
 	int32 SkippedRows = 0;               // rows no operator family claims
 };
 
-// ================================================================================================
-// The feat evaluator
-// ================================================================================================
+// The feat evaluator.
 
 namespace ElysiumFeats
 {
@@ -163,9 +159,7 @@ namespace ElysiumFeats
 		bool& bOutResolved, bool& bOutIsFeat, const FElysiumCombatCharacter* Owner = nullptr);
 }
 
-// ================================================================================================
-// Shared sheet predicates
-// ================================================================================================
+// Shared sheet predicates.
 
 namespace ElysiumXp
 {
@@ -187,9 +181,7 @@ namespace ElysiumSheetRules
 	// reads TRUE: a gate we cannot read must not silently refuse a raise.
 	bool EvalPredependency(const FString& Expr, const FElysiumSheet& Sheet);
 
-	// ============================================================================================
-	// The headless table binding
-	// ============================================================================================
+	// The headless table binding.
 	//
 	// Every sheet reader ordinarily reaches its tables through
 	// `UElysiumGameStateSubsystem::Rulebook()`, which is a GameInstance subsystem — so a bare

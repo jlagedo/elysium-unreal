@@ -32,8 +32,6 @@ namespace
 	}
 }
 
-// --- Registration -----------------------------------------------------------------------------
-
 static TUniquePtr<FElysiumEntity> MakeProp() { return MakeUnique<FElysiumProp>(); }
 static TUniquePtr<FElysiumEntity> MakePropButton() { return MakeUnique<FElysiumPropButton>(); }
 static TUniquePtr<FElysiumEntity> MakePropSwitch() { return MakeUnique<FElysiumPropSwitch>(); }

@@ -69,15 +69,15 @@ namespace
 		}
 		// Every lane ends in a wall so a body that gets through its feature stops at a known place
 		// instead of running off the slab. That is what makes "how far did it get" saturate, and a
-		// saturating answer is the same at any gait — which is the whole reason these recordings
-		// survive `CCC7`. It reaches below floor level too: a body that fell into the gap lane's
+		// saturating answer is the same at any gait — which is why these recordings are
+		// speed-invariant. It reaches below floor level too: a body that fell into the gap lane's
 		// hole would otherwise carry its speed straight underneath the wall and never stop.
 		S.Placements.Add(Block(LaneName, TEXT("backwall"), Length, Length + WallThick,
 			LaneY - LaneHalfWidth, LaneY + LaneHalfWidth, -PitDepth, WallHeight));
 		return LaneY;
 	}
 
-	// --- The families -------------------------------------------------------------------------
+	// The families.
 
 	// A step-up the body either climbs or is stopped by. Each rung is its own lane and is measured
 	// from the floor, so a rung's height is absolute rather than relative to the one below it —
@@ -244,7 +244,7 @@ namespace
 	}
 
 	// A hole in the floor, graded. What clears it is the held-jump arc *and* the speed carried into
-	// it, so every one of these is speed-dependent and none may be promoted before `CCC7`.
+	// it, so every one of these is speed-dependent.
 	void AddGaps(FSpec& S, const FElysiumMoveTuning& T)
 	{
 		static const TCHAR* const Names[] =
@@ -281,7 +281,7 @@ namespace
 			/*bFloor*/ true, /*Length*/ LaneLength * 4.0f);
 	}
 
-	// --- The leniency lanes (CCC3) ---------------------------------------------------------------
+	// The leniency lanes.
 	// One lip and one drop, shared by both families. The body walks off the edge at X = 0 and falls
 	// `PitDepth` to a lower floor it then keeps walking along until the back wall stops it.
 	//
@@ -302,7 +302,7 @@ namespace
 			// decision, so "one decision late" is the rate-invariant statement and a wall-clock offset
 			// would not be. Both families are speed-invariant — exactly one press exists in the whole
 			// stream and it is placed against a body event, so the count it produces is 0 or 1 at any
-			// gait, which is what lets these be committed before `CCC7`.
+			// gait, which is what makes them speed-invariant.
 			const float LaneY = BeginLane(S, Names[i], Family, Offsets[i],
 				/*bSpeedDependent*/ false, /*bFloor*/ false);
 			const FName Lane = S.Lanes.Last().Name;

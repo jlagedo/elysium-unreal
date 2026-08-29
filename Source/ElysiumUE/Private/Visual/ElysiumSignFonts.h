@@ -6,7 +6,7 @@
 
 class UFont;
 
-// The sign/popup typeface set (P4.10 type pass). VtMB's `game_sign` panels author face names
+// The sign/popup typeface set. VtMB's `game_sign` panels author face names
 // against client.dll's trackerscheme.res (ParagraphText, Newsprint, Trebuchet, Headline,
 // Vamp_Handwriting1, MainMenu, Copperplate, Tahoma; "Default" otherwise — see
 // FElysiumSignTextBlock::ResolveFont). The UI has no classic mode, so those names re-skin onto a

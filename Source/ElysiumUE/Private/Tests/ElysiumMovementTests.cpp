@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -48,10 +48,10 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
 #include "Debug/ElysiumCastRun.h"             // the body trace's second producer
 #include "Debug/ElysiumLocomotionTrace.h"     // the recorded body trace, both producers
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "Debug/ElysiumMoveRun.h"             // the body trace's first producer
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
@@ -61,7 +61,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -126,10 +126,10 @@ namespace ElysiumMovementTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// =====================================================================================
-// The mover's arithmetic (4.7) — every number here is one `docs/vtmb/source_movement.md` records
+
+// The mover's arithmetic — every number here is one `docs/vtmb/source_movement.md` records
 // off the decompile, asserted without a pawn, a world or an RHI.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMovementTest, "Elysium.Substrate.Movement", GElysiumTestFlags)
 bool FElysiumMovementTest::RunTest(const FString&)
@@ -406,12 +406,12 @@ bool FElysiumMovementTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The gym's specification (CCC0). The layout is derived from `ElysiumMove`'s constants, so what
+
+// The gym's specification. The layout is derived from `ElysiumMove`'s constants, so what
 // is asserted here is the **derivation** — that each lane straddles the value it names — and never
 // what a body will do on it. An expectation recomputed from the same constants as the geometry
 // moves with the geometry and could never fail; the behaviour is the headless run's to record.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGymSpecTest, "Elysium.Substrate.GymSpec", GElysiumTestFlags)
 bool FElysiumGymSpecTest::RunTest(const FString&)
@@ -571,7 +571,7 @@ bool FElysiumGymSpecTest::RunTest(const FString&)
 		}
 	}
 
-	// --- The leniency lanes: one lip, one drop, brackets in frames (CCC3) ---------------------
+	// The leniency lanes: one lip, one drop, brackets in frames.
 	{
 		static const TCHAR* const LedgeNames[] =
 			{ TEXT("ledge_m1"), TEXT("ledge_0"), TEXT("ledge_p1"),
@@ -649,7 +649,7 @@ bool FElysiumGymSpecTest::RunTest(const FString&)
 			&& LandAfter->BracketUnits > 0.0f && LandBefore->BracketUnits < 0.0f);
 	}
 
-	// --- What `CCC7` may move is flagged, and what it may not is not --------------------------
+	// What the per-direction speed table may move is flagged, and what it may not is not.
 	{
 		for (const ElysiumGym::FLane& L : Spec.Lanes)
 		{
@@ -754,7 +754,7 @@ bool FElysiumGymSeatTest::RunTest(const FString&)
 				FMath::IsNearlyEqual(L.FeetOrigin.Z, 0.0, 1e-4));
 		}
 
-		// The lane the green room's drive mode seats a body on by default (CCC6). It is named here
+		// The lane the green room's drive mode seats a body on by default. It is named here
 		// because the harness names it: a lane that is renamed or dropped would otherwise turn a
 		// hand-driven session into a body standing in the void, with nothing red to say so.
 		const ElysiumGym::FLane* Drive = Spec.FindLane(TEXT("flat"));
@@ -822,11 +822,11 @@ bool FElysiumPlayerPlacementSpaceTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The pose deviation measure (CCC5/CCC6). Two callers share it: the Content tier asserts a real
+
+// The pose deviation measure. Two callers share it: the Content tier asserts a real
 // baked body left its bind pose, and the green room's drive panel reports the same number live. It
 // is the only observable the T-pose failure has, so the arithmetic is worth pinning on its own.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPoseDeviationTest,
 	"Elysium.Substrate.PoseDeviation", GElysiumTestFlags)
@@ -883,13 +883,13 @@ bool FElysiumPoseDeviationTest::RunTest(const FString&)
 }
 
 #if !UE_BUILD_SHIPPING
-// =====================================================================================
-// The event-timed press (CCC3). A leniency course cannot say "jump at 2.4 seconds": the time it
-// takes to reach a lip moves with the gait, and `CCC7` may halve it. It says "jump K frames after
+
+// The event-timed press. A leniency course cannot say "jump at 2.4 seconds": the time it
+// takes to reach a lip moves with the gait, and the per-direction speed table may halve it. It says "jump K frames after
 // the ground is lost" instead, and the harness measures the event in a probe pass. What is pure —
 // and therefore asserted here — is the placement: given a resolved frame, exactly one command in
 // the stream carries the press, and nothing else about the stream moves.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMoveCoursesTest,
 	"Elysium.Substrate.MoveCourses", GElysiumTestFlags)
@@ -1013,12 +1013,12 @@ bool FElysiumMoveCoursesTest::RunTest(const FString&)
 }
 #endif // !UE_BUILD_SHIPPING
 
-// =====================================================================================
-// The animation's per-direction speed (CCC7). The fan below is the male body's authored `walk`
+
+// The animation's per-direction speed. The fan below is the male body's authored `walk`
 // grid, in cm/s, read out of `docs/vtmb/animation_and_movers.md` — so what is asserted is the
 // table's arithmetic against numbers the export produces, not the export itself, which is
 // `Elysium.Content.GaitSpeeds`.
-// =====================================================================================
+
 
 namespace
 {
@@ -1235,8 +1235,8 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	TestEqual(TEXT("...cut to sv_jump_maxspeed when the held value is above the pin"),
 		ElysiumGait::WishSpeedFrom(In, Body), ElysiumMove::JumpMaxSpeed, 0.01f);
 	// A body that left the ground standing still held zero, and zero is a held value rather than a
-	// missing one — reading it as absent is what used to hand a standing jump the whole 350 u/s and
-	// latch the run gait for the arc.
+	// missing one — reading it as absent hands a standing jump the whole 350 u/s and latches the
+	// run gait for the arc.
 	In.LastGroundedWishSpeed = 0.0f;
 	TestEqual(TEXT("...and a jump from a standstill commands nothing, not the pin"),
 		ElysiumGait::WishSpeedFrom(In, Body), 0.0f, 0.01f);
@@ -1262,13 +1262,13 @@ bool FElysiumGaitSpeedsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The body sample (CCC1). One struct, two producers — so what is asserted here is the part of it
+
+// The body sample. One struct, two producers — so what is asserted here is the part of it
 // that is a *rule* rather than a reading: how a world yaw becomes a facing-relative one, how
 // Source's two duck flags become one stance, and how the jump phase falls out of the hold window
 // and the vertical sign. A reading needs a body; a rule does not, and a rule the two producers
 // disagreed about would be the contract failing quietly.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLocomotionSampleTest,
 	"Elysium.Substrate.Locomotion", GElysiumTestFlags)
@@ -1423,7 +1423,7 @@ bool FElysiumLocomotionSampleTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The recorded body trace (`Debug/ElysiumLocomotionTrace.h`). The file-on-disk half of the same
 // contract the sample above states: two producers, one schema, one writer.
 //
@@ -1431,7 +1431,7 @@ bool FElysiumLocomotionSampleTest::RunTest(const FString&)
 // the player's columns, that the writer fills every one of them, and that each lands the value its
 // own record carries rather than a plausible neighbour. No world is needed for any of it — the
 // writer takes the two published records and nothing else, which is the property being asserted.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLocomotionTraceTest,
 	"Elysium.Substrate.LocomotionTrace", GElysiumTestFlags)
@@ -1594,9 +1594,9 @@ bool FElysiumLocomotionTraceTest::RunTest(const FString&)
 	return true;
 }
 
-// ================================================================================================
+
 // The combat arena's spec (`Debug/ElysiumArenaSpec.h`)
-// ================================================================================================
+
 //
 // **Nothing below restates a dimension.** An expectation recomputed from the same constants as the
 // geometry moves with the geometry and can never turn red — the rule the gym spec states and the

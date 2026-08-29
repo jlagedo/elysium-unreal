@@ -576,7 +576,7 @@ TSharedRef<SWidget> UElysiumHUDWidget::RebuildWidget()
 
 	// What the player is wearing, beside the hand. Persistent and independent of the browsed
 	// category, the way retail keeps the worn clothing on screen rather than inside the selector.
-	// Its own art is a clan/sex/tier portrait this runtime cannot yet resolve, so the row leads with
+	// Its own art is a clan/sex/tier portrait this runtime cannot resolve, so the row leads with
 	// the category glyph and names the garment.
 	Content->AddSlot().HAlign(HAlign_Left).VAlign(VAlign_Bottom)
 		.Padding(FMargin(38, 0, 0, EquipmentBottomPad + 44.0f))

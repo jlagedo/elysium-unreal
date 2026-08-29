@@ -54,14 +54,12 @@ private:
 	// Every live `npc_*` character leaf in the world, in entity order.
 	void GatherNpcs(TArray<FElysiumNpc*>& Out) const;
 
-	// --- The cast ---------------------------------------------------------------------------------
 	// The roster, the spawn controls, and the player's loadout. The one tab that writes.
 	void RenderCast(FElysiumEntityWorld& World);
 	void RenderSpawnControls(FElysiumEntityWorld& World);
 	void RenderPlayerLoadout(FElysiumEntityWorld& World);
 	void RenderRoster(FElysiumEntityWorld& World, const TArray<FElysiumNpc*>& Npcs);
 
-	// --- The decision chain, one tab per link -----------------------------------------------------
 	// Admission, state vs ideal state, the body-owner arbiter and its generation, and the mind's own
 	// 16-row transition trace — which the schedule runner also writes into, so one read shows
 	// stimulus, state, owner and program in order.
@@ -82,24 +80,22 @@ private:
 	// relationship rows against the player, and the last committed damage packet.
 	void RenderCombat(FElysiumEntityWorld& World, FElysiumNpc& Npc);
 
-	// --- Kept from the body-facing half -----------------------------------------------------------
-	// The facial flex rig (12.3): one slider per flex controller on every live rigged body, and the
+	// The facial flex rig: one slider per flex controller on every live rigged body, and the
 	// weights the rules and ramps derive from them.
 	void RenderFacial();
-	// The body sample both producers publish (CCC1): the player's mover and every live NPC motor
-	// filling one `FElysiumLocomotionSample`. Side by side on purpose — the contract's whole claim is
-	// that the cast's locomotion and the player's are the same record.
+	// The body sample both producers publish: the player's mover and every live NPC motor filling
+	// one `FElysiumLocomotionSample`. Side by side on purpose — the contract's whole claim is that
+	// the cast's locomotion and the player's are the same record.
 	void RenderLocomotion();
-	// The unclaimed sequence-event work list (LIFE5), drawn under the locomotion table. Session-wide
-	// rather than per-character, which is why it is a section there rather than a selected-character
-	// tab; `elysium.animevents` reads the same rows.
+	// The unclaimed sequence-event work list, drawn under the locomotion table. Session-wide rather
+	// than per-character, which is why it is a section there rather than a selected-character tab;
+	// `elysium.animevents` reads the same rows.
 	void RenderAnimEventCensus();
 
 	// The over-the-head readout: state, running schedule, and a line to the committed enemy. Drawn
 	// in the world because a fight is watched in the world; everything it says is also in the tabs.
 	void DrawWorldOverlay() const;
 
-	// --- Spawn form state -------------------------------------------------------------------------
 	FString PendingStem;
 	FString PendingTemplate;
 	FString PendingWeapon;
@@ -137,7 +133,6 @@ private:
 	// a map full of characters would otherwise stack forty labels into one smear.
 	float OverlayRangeCm = 4000.0f;
 
-	// --- Per-tab view state -----------------------------------------------------------------------
 	// Hide the condition identities that are clear. Off by default: a bit that is ABSENT is half of
 	// every AI diagnosis, and a filtered list cannot show you the one that failed to gather.
 	bool bConditionsSetOnly = false;

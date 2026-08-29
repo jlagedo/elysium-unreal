@@ -18,9 +18,7 @@ namespace
 	using ElysiumVdata::Trim;
 }
 
-// ================================================================================================
-// Shared value types
-// ================================================================================================
+// Shared value types.
 
 bool FElysiumStatCost::Parse(const FString& Raw)
 {
@@ -216,9 +214,7 @@ float FElysiumRuleTable::Lookup(int32 Key, float Def) const
 	return Def;
 }
 
-// ================================================================================================
-// 1. stats.txt
-// ================================================================================================
+// stats.txt
 
 // `ElysiumTraitContainerName` lives with the slot tables in `ElysiumSheet.cpp`.
 
@@ -402,9 +398,7 @@ const FElysiumStat* FElysiumStatTable::Find(const FString& InName,
 	return nullptr;
 }
 
-// ================================================================================================
-// FElysiumStat::FAction — the `Value` predicate
-// ================================================================================================
+// FElysiumStat::FAction — the `Value` predicate.
 
 bool FElysiumStat::FAction::Admits(int32 Value) const
 {
@@ -444,9 +438,7 @@ bool FElysiumStat::FAction::Admits(int32 Value) const
 	return Value == FCString::Atoi(*S);
 }
 
-// ================================================================================================
-// 2. feats.txt
-// ================================================================================================
+// feats.txt
 
 // Probing until a key is ABSENT is the rule, not scanning a fixed range: `feats.txt` comments out
 // a `Base2` while leaving `Base0`/`Base1` live, so a range scan would resurrect it the moment the
@@ -551,9 +543,7 @@ const FElysiumFeat* FElysiumFeatTable::At(int32 Index) const
 	return Feats.IsValidIndex(Index) ? &Feats[Index] : nullptr;
 }
 
-// ================================================================================================
-// 3. rules.txt + rules_tables.txt
-// ================================================================================================
+// rules.txt + rules_tables.txt
 
 bool FElysiumRules::Load(FString& OutError)
 {
@@ -680,9 +670,7 @@ const FElysiumRuleTable* FElysiumRules::Table(const FString& InName) const
 	return Idx ? &Tables[*Idx] : nullptr;
 }
 
-// ================================================================================================
-// 4. traiteffect.txt + traiteffects000.txt
-// ================================================================================================
+// traiteffect.txt + traiteffects000.txt
 
 const TCHAR* ElysiumTraitOpName(EElysiumTraitOp Op)
 {
@@ -909,9 +897,7 @@ int32 FElysiumTraitEffects::NumEffects() const
 	return N;
 }
 
-// ================================================================================================
-// 5. clandoc000.txt + npctemplate*.txt
-// ================================================================================================
+// clandoc000.txt + npctemplate*.txt
 
 namespace
 {
@@ -1200,9 +1186,7 @@ bool FElysiumClanTable::Resolve(const FString& TemplateName, FElysiumClanTemplat
 	return true;
 }
 
-// ================================================================================================
-// 6. histories000.txt
-// ================================================================================================
+// histories000.txt
 
 bool FElysiumHistoryTable::Load(FString& OutError)
 {
@@ -1265,9 +1249,7 @@ const FElysiumHistory* FElysiumHistoryTable::At(int32 Index) const
 	return Rows.IsValidIndex(Index) ? &Rows[Index] : nullptr;
 }
 
-// ================================================================================================
-// 8. experience_table.txt — pipe-delimited, not KeyValues
-// ================================================================================================
+// experience_table.txt — pipe-delimited, not KeyValues
 
 bool FElysiumExperienceTable::ParseRow(const FString& Line, FElysiumExperienceEntry& Out)
 {
@@ -1348,9 +1330,7 @@ void FElysiumExperienceTable::FindPrefixCollisions(TArray<TPair<FString, FString
 	}
 }
 
-// ================================================================================================
-// 9. levelingtemplate_000.txt
-// ================================================================================================
+// levelingtemplate_000.txt
 
 int32 FElysiumLevelingTemplate::NumSteps() const
 {
@@ -1469,9 +1449,7 @@ int32 FElysiumLevelingTemplates::NumSteps() const
 	return N;
 }
 
-// ================================================================================================
-// 14. strings.txt + strings_internal.txt
-// ================================================================================================
+// strings.txt + strings_internal.txt
 
 namespace
 {

@@ -15,7 +15,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Misc/Paths.h"
 
-// --- Open dialogue (P9 9.1 / B4) ------------------------------------------------------------
+// --- Open dialogue ---
 
 FElysiumDlgConversation* FElysiumEntityWorld::GetOpenDialog() const
 {
@@ -592,7 +592,7 @@ FString FElysiumEntityWorld::ScriptedSessionSaveBlockReason() const
 	return FString();
 }
 
-// --- 12.5, the dialogue half of lipsync ----------------------------------------------------------
+// --- The dialogue half of lipsync ---
 //
 // The same join as a map scene's — the line's `.lip`, the speaker's
 // `expressions/<stem>_phonemes` table, and the model's phoneme filter. A dialogue line now owns its

@@ -9,7 +9,7 @@
 
 #include "ElysiumMovementComponent.generated.h"
 
-// The player's mover (roadmap 11.6; the faithful `CGameMovement` port is **4.7**).
+// The player's mover.
 //
 // It exists because `ACharacter` cannot take a box root and Source's `StepMove` depends on the hull
 // being an AABB: a capsule's rounded bottom catches a step's top edge and reports ~0.65 against the
@@ -17,7 +17,7 @@
 // an `APawn` with a `UBoxComponent` and this replaces `UCharacterMovementComponent` wholesale.
 //
 // The structure is Source's and the constants are RE'd; the math itself lives in
-// `ElysiumMoveSolve.h` so it is asserted without a world. What 4.7 still owns here is the state
+// `ElysiumMoveSolve.h` so it is asserted without a world. What remains on the component is the state
 // machine around it — the gravity half-step split, ducking, water, and `CategorizePosition`'s full
 // contract. Everything reads one `FElysiumUserCmd` and nothing polls a key (S5).
 UCLASS()
@@ -35,13 +35,13 @@ public:
 	virtual bool IsFalling() const override { return !bOnGround && !bNoclip; }
 
 	// The frame's intent, from the router. Held rather than acted on immediately: movement runs at
-	// step 5 of the frame, after the substrate's thinks have moved the doors (11.1).
+	// step 5 of the frame, after the substrate's thinks have moved the doors.
 	void SetUserCmd(const FElysiumUserCmd& InCmd) { PendingCmd = InCmd; }
 
 	void SetNoclip(bool bEnable);
 	bool IsNoclip() const { return bNoclip; }
 
-	// --- The speed authority (CCC7) ----------------------------------------------------------
+	// The speed authority.
 	// The animation's own per-direction speeds, pushed by whoever built the body's visual rather
 	// than pulled per frame: the tables depend on the body, not on the frame, and the mover runs
 	// ahead of the resolver that could answer for one.
@@ -64,7 +64,7 @@ public:
 	}
 	const FElysiumGaitSpeeds& GetGaitSpeeds() const { return GaitSpeeds; }
 
-	// --- Animation-driven movement (`CPlayerMove::SetupMove`) --------------------------------------
+	// Animation-driven movement (`CPlayerMove::SetupMove`).
 	// The swing that owns this body's command, pushed by the animation pass exactly as the gait
 	// tables above are and for the same reason: the mover runs before the driver that knows the
 	// answer, so it is told one frame later — which is where retail reads the cycle from too.
@@ -92,7 +92,7 @@ public:
 	// accumulator. What a teleport wants — a body arriving somewhere new must not still be running.
 	void ResetState();
 
-	// LIFE5 — discard the body's carried motion, and nothing else: `CBasePlayer::PostThink`'s melee
+	// Discard the body's carried motion, and nothing else: `CBasePlayer::PostThink`'s melee
 	// stop, driven from the substrate on every frame of a swing's tail — from the playing sequence's
 	// own `w_hold` to the end of its clip — with no direction key held
 	// (`ElysiumClipMovement::StopsMeleeTailMotion`).
@@ -114,7 +114,7 @@ public:
 	bool IsOnGround() const { return bOnGround; }
 	// Press-edge jumps taken since the last `ResetState`. The leniency courses' measurement: a jump
 	// refused for being airborne never increments it, so this is what the gym's `ledge_*`/`land_*`
-	// brackets read (CCC3).
+	// brackets read.
 	int32 GetJumpsTaken() const { return JumpsTaken; }
 	bool IsDucked() const { return bDucked; }
 	bool IsDucking() const { return bDucking; }
@@ -144,7 +144,7 @@ public:
 	// what changed when it disagrees with its baseline.
 	const FElysiumMoveTuning& GetTuning() const { return Tuning; }
 
-	// The frame's settled body state (CCC1), written once at the tick tail. This is the *published*
+	// The frame's settled body state, written once at the tick tail. This is the *published*
 	// half of the mover: every scalar getter above answers about the mover's own bookkeeping, while
 	// this answers about the body, in the vocabulary an animation graph steers on.
 	//
@@ -207,7 +207,7 @@ private:
 	// with a planar re-derivation.
 	FVector WishDirection(const FElysiumUserCmd& Cmd, float& OutScale, bool bForcePitch = false);
 
-	// **The speed authority's one seam** (CCC7). What the body commands in `WishDir`, cm/s, already
+	// **The speed authority's one seam.** What the body commands in `WishDir`, cm/s, already
 	// scaled by the command's own deflection.
 	//
 	// Retail has no scalar gait speed to read: it publishes a per-direction table and the client
@@ -325,7 +325,7 @@ private:
 	// everything resolves to the `default` prop at 0.8 (`docs/vtmb/source_movement.md`).
 	float SurfaceFriction = 1.0f;
 
-	// The body state this mover publishes (CCC1). Written at the tick tail; read by everything that
+	// The body state this mover publishes. Written at the tick tail; read by everything that
 	// wants the body rather than the mover.
 	FElysiumLocomotionSample LastSample;
 

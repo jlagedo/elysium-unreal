@@ -53,7 +53,7 @@ int32 FElysiumFacialRig::FindFlexDesc(const FString& Name) const
 	return INDEX_NONE;
 }
 
-// --- load ----------------------------------------------------------------------------------
+// Load.
 
 bool FElysiumFacialRig::Load(const FString& RelPath, FString& OutError)
 {
@@ -306,7 +306,7 @@ bool FElysiumFacialRig::LoadJsonText(const FString& JsonText, FString& OutError)
 	return true;
 }
 
-// --- evaluation ------------------------------------------------------------------------------
+// Evaluation.
 
 float FElysiumFacialRig::RampWeight(const float Targets[4], float FlexWeight)
 {

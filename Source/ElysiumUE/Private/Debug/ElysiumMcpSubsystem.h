@@ -8,7 +8,7 @@
 class FElysiumMcpTools;
 class IConsoleObject;
 
-// P2.7 (debug-tooling.md Layer 3) — the agent-facing surface: the `elysium_*` MCP tools and the
+// The agent-facing surface (`docs/architecture/debug-tooling.md` Layer 3): the `elysium_*` MCP tools and the
 // server that serves them. Every tool is a thin structured wrapper over the same runtime state the
 // Cog windows render and the `elysium.*` verbs flip; nothing here is a second dispatch mechanism,
 // and entity injection still goes through `FElysiumEntityWorld::EnqueueInput` like everything else.

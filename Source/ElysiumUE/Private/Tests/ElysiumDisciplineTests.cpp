@@ -1,4 +1,4 @@
-// Content-free Substrate automation for the Discipline runtime (13.2), plus one Content-tier case
+// Content-free Substrate automation for the Discipline runtime, plus one Content-tier case
 // that parses the real `disciplinetgt_*` corpus.
 //
 // Every number asserted here is either a fact from `docs/vtmb/disciplines.md` (the two execution
@@ -534,9 +534,9 @@ namespace
 	}
 }
 
-// =====================================================================================
+
 // The rulebook: the record parser's own shapes, with no file behind them
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineRulebookTest,
 	"Elysium.Substrate.Discipline.Rulebook", GElysiumTestFlags)
@@ -632,9 +632,9 @@ bool FElysiumDisciplineRulebookTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `FElysiumSheetEffects::FRow` — the payload operators
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplinePayloadTest,
 	"Elysium.Substrate.Discipline.Payload", GElysiumTestFlags)
@@ -670,9 +670,9 @@ bool FElysiumDisciplinePayloadTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Activation: the learned gate, the single payment, tier memory and renewal
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineActivationTest,
 	"Elysium.Substrate.Discipline.Activation", GElysiumTestFlags)
@@ -804,9 +804,9 @@ bool FElysiumDisciplineActivationTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Expiry: the owned event, the stale-renewal guard and the recompute
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineExpiryTest,
 	"Elysium.Substrate.Discipline.Expiry", GElysiumTestFlags)
@@ -867,9 +867,9 @@ bool FElysiumDisciplineExpiryTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The one teardown: `vdiscipline_endall` and the `ClearActiveDisciplines` input
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineTeardownTest,
 	"Elysium.Substrate.Discipline.Teardown", GElysiumTestFlags)
@@ -940,9 +940,9 @@ bool FElysiumDisciplineTeardownTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The per-power joins: Fortitude -> soak, Potence -> the melee floor, Bloodshield -> buffer
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineFortitudeTest,
 	"Elysium.Substrate.Discipline.Fortitude", GElysiumTestFlags)
@@ -1184,9 +1184,9 @@ bool FElysiumDisciplineBloodshieldTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The targeted transaction: gate order, the single payment, per-target application
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineTargetedTest,
 	"Elysium.Substrate.Discipline.Targeted", GElysiumTestFlags)
@@ -1325,9 +1325,9 @@ bool FElysiumDisciplineTargetedTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The three interruption flags, each through its own subscription
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineInterruptionTest,
 	"Elysium.Substrate.Discipline.Interruption", GElysiumTestFlags)
@@ -1405,9 +1405,9 @@ bool FElysiumDisciplineInterruptionTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Law production: the supernatural level, and the independent Overt criminal write
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineLawTest,
 	"Elysium.Substrate.Discipline.Law", GElysiumTestFlags)
@@ -1465,9 +1465,9 @@ bool FElysiumDisciplineLawTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Cycle 11b — the `HitInfo.AI_Schedule` channel into the NPC kernel
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineAiScheduleTest,
 	"Elysium.Substrate.Discipline.AiSchedule", GElysiumTestFlags)
@@ -1561,9 +1561,9 @@ bool FElysiumDisciplineAiScheduleTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Cycle 11b — the overt cast's AI sound, from the shared catalogue into an NPC's hearing
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineAlertSoundTest,
 	"Elysium.Substrate.Discipline.AlertSound", GElysiumTestFlags)
@@ -1634,9 +1634,9 @@ bool FElysiumDisciplineAlertSoundTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Cycle 11b — the NPC leaf carries its own tracked targeted effects across a save
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineNpcPersistenceTest,
 	"Elysium.Substrate.Discipline.NpcPersistence", GElysiumTestFlags)
@@ -1795,9 +1795,9 @@ bool FElysiumDisciplineNpcPersistenceTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The Content tier: the real `disciplinetgt_*` corpus, and the `Active_*` blocks beside it
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDisciplineCorpusTest,
 	"Elysium.Content.Disciplines", GElysiumTestFlags)

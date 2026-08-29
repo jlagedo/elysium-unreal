@@ -13,7 +13,7 @@
 enum class EElysiumMeleeDefenderReaction : uint8;
 
 // The damage reaction's pure rules — `CBaseCombatCharacter::DamageFlinch` (`0x103229d0`) stated as a
-// function over two origins, a facing and a random stream (LIFE5).
+// function over two origins, a facing and a random stream.
 //
 // World-free, the same shape as `Substrate/ElysiumDice.h`: no entity, no clock, no engine service.
 // The stream is the caller's — `FRandomStream` is engine-core math, not a world — so a test drives
@@ -102,7 +102,7 @@ namespace ElysiumReactions
 	bool BuildFlinch(const FVector& AttackerOriginCm, const FVector& VictimOriginCm,
 		float VictimUnrealYawDegrees, FRandomStream& Rng, FElysiumFlinch& Out);
 
-	// --- The block family (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions") -----
+	// The block family (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
 
 	// What the ATTACKER plays when its own swing sequence names no blocked reaction. Retail's
 	// fallback at `0x10160D00` is this one literal, not a coin: the left/right split is authored per
@@ -137,8 +137,8 @@ namespace ElysiumReactions
 	bool IsFrontalContact(const FVector& AttackerOriginCm, const FVector& VictimOriginCm,
 		float VictimUnrealYawDegrees);
 
-	// --- The grounded knockback family (`docs/vtmb/combat-and-damage.md` § "The authored knockback
-	// inputs", `docs/vtmb/animation_and_movers.md` § "The knockback and death corpus") ------------
+	// The grounded knockback family (`docs/vtmb/combat-and-damage.md` § "The authored knockback
+	// inputs", `docs/vtmb/animation_and_movers.md` § "The knockback and death corpus").
 	//
 	// The GROUNDED cells only, and an NPC victim only. The nine-activity flying chain is a separate
 	// outcome: its contract is recovered whole — a two-stage velocity assignment with a one-think

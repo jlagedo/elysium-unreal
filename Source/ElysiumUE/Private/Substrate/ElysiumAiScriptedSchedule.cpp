@@ -8,9 +8,7 @@
 #include "Substrate/ElysiumNpc.h"
 #include "Substrate/ElysiumNpcLog.h"
 
-// ================================================================================================
-// The recovered tables
-// ================================================================================================
+// --- The recovered tables ---
 
 bool ElysiumAiScriptedSchedule::IsKnownMode(int32 Authored)
 {
@@ -121,9 +119,7 @@ void ElysiumAiScriptedSchedule::BuildRoute(FElysiumEntityWorld& World, const FEl
 	}
 }
 
-// ================================================================================================
-// The two programs
-// ================================================================================================
+// --- The two programs ---
 
 namespace
 {
@@ -193,9 +189,7 @@ namespace
 
 }
 
-// ================================================================================================
-// FElysiumAiScriptedSchedule — the entity
-// ================================================================================================
+// --- FElysiumAiScriptedSchedule — the entity ---
 
 // A point entity that carries five keyvalues and one input. It derives from the base rather than
 // from the `scripted_sequence` leaf on purpose: the two share a keyfield spelling (`m_iszEntity`)
@@ -381,9 +375,7 @@ void FElysiumAiScriptedSchedule::GetDebugState(TArray<TPair<FString, FString>>& 
 	}
 }
 
-// ================================================================================================
-// Registration
-// ================================================================================================
+// --- Registration ---
 
 static TUniquePtr<FElysiumEntity> MakeAiScriptedSchedule()
 {

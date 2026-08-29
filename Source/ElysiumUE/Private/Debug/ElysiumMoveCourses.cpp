@@ -18,8 +18,6 @@ namespace
 	const FVector2D Fwd(1.0f, 0.0f);
 	const FVector2D Still = FVector2D::ZeroVector;
 
-	// --- The surveyed sites, feet-anchored world cm ---------------------------------------------
-	//
 	// Surveyed by probing the walkable surface with the **real pawn** in a running session — fly to
 	// a point with collision off, turn it back on, and read where the body settles — then read back
 	// with `elysium.playerpos`. Nothing else answers the question: the map's own `.hulls` sidecar
@@ -34,8 +32,6 @@ namespace
 	// and lands the jump and the air-strafe.
 	const FVector WarehouseFloor(-3750.0f, -1780.0f, 0.2f);
 
-	// --- The three feature sites, and why they are still not baselined --------------------------
-	//
 	// **These are surveyed and they still do not work headless.** A played session puts the body on
 	// solid floor at each of them; the `-ElysiumMove` run finds nothing there and the body falls
 	// through, or is seated inside a solid and cannot move at all. Whatever supplies that floor in
@@ -150,11 +146,10 @@ namespace
 		return C;
 	}
 
-	// --- The gym's segment recipes, one per lane family ----------------------------------------
-	//
 	// A recipe is written so the run channel it feeds **saturates**: a body either clears the
 	// feature and runs on to the lane's back wall, or is stopped by it, and both answers are the
-	// same at any gait. That is the whole reason these recordings can be promoted before `CCC7`.
+	// same at any gait. That is the whole reason these recordings can be compared before the speed
+	// authority moves.
 
 	// **The crouch is a toggle, so releasing the key does not stand a body up.** The press edge flips
 	// the request and the release does nothing (`UElysiumMovementComponent::Duck`), which means a

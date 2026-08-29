@@ -58,7 +58,7 @@ void FElysiumCogWindow_Camera::RenderContent()
 	const FElysiumCameraSample& Sample = Manager->GetCameraSample();
 	const bool bFresh = Sample.Frame == GFrameCounter || Sample.Frame + 1 == GFrameCounter;
 
-	// --- the mode -------------------------------------------------------------------------------
+	// The mode.
 	if (Camera)
 	{
 		const FElysiumCameraWeights& W = Camera->GetWeights();
@@ -84,7 +84,7 @@ void FElysiumCogWindow_Camera::RenderContent()
 		ImGui::TextDisabled("The view target is not a player body.");
 	}
 
-	// --- the rig --------------------------------------------------------------------------------
+	// The rig.
 	ImGui::Separator();
 	if (!bFresh)
 	{
@@ -115,7 +115,7 @@ void FElysiumCogWindow_Camera::RenderContent()
 		ImGui::EndTable();
 	}
 
-	// --- the scripted stack ---------------------------------------------------------------------
+	// The scripted stack.
 	if (Camera && ImGui::CollapsingHeader("Scripted shots"))
 	{
 		const FElysiumCameraShotStack& Shots = Camera->GetShots();
@@ -136,7 +136,7 @@ void FElysiumCogWindow_Camera::RenderContent()
 		}
 	}
 
-	// --- scoped director requests ---------------------------------------------------------------
+	// Scoped director requests.
 	if (ImGui::CollapsingHeader("Director requests", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		const ULocalPlayer* LocalPlayer = PC->GetLocalPlayer();
@@ -189,7 +189,7 @@ void FElysiumCogWindow_Camera::RenderContent()
 		}
 	}
 
-	// --- the post layers ------------------------------------------------------------------------
+	// The post layers.
 	if (ImGui::CollapsingHeader("Post layers"))
 	{
 		// The same list `showdebug camera` walks, in application order — priority 0 first.

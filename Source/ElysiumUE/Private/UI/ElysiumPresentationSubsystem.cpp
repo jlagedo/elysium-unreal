@@ -33,7 +33,7 @@ namespace
 	constexpr float WeaponPeekFadeSeconds = 0.35f;
 }
 
-// --- The tick function ------------------------------------------------------------------------
+// Tick function.
 
 void FElysiumPublishTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
 	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
@@ -54,14 +54,14 @@ FName FElysiumPublishTickFunction::DiagnosticContext(bool bDetailed)
 	return FName(TEXT("ElysiumPublish"));
 }
 
-// --- Lifetime ---------------------------------------------------------------------------------
+// Lifetime.
 
 UElysiumPresentationSubsystem::UElysiumPresentationSubsystem()
 {
 	// Declared on the class, not set up at Initialize, so the frame position is readable off the
 	// class defaults the way the map actor's two passes are (`Elysium.Substrate.FrameOrder`).
 	//
-	// S2 — the presentation side of the frame keeps running while the world is held. That is not a
+	// The presentation side of the frame keeps running while the world is held. That is not a
 	// nicety: pause is exactly when a conversation box has to be taken down, and a held world
 	// publishes no new state of its own but still has to publish the *suppression*.
 	PublishTickFunction.bCanEverTick = true;
@@ -167,7 +167,7 @@ const AElysiumPlayerCameraManager* UElysiumPresentationSubsystem::ResolveLocalCa
 	return PC ? Cast<AElysiumPlayerCameraManager>(PC->PlayerCameraManager) : nullptr;
 }
 
-// --- IElysiumPresenter — the substrate's announcements -----------------------------------------
+// IElysiumPresenter — the substrate's announcements.
 
 void UElysiumPresentationSubsystem::StartFade(const FLinearColor& Color, float Duration, float HoldTime,
 	float MaxAlpha, bool bFadeIn, bool bAutoReverse)
@@ -224,7 +224,7 @@ void UElysiumPresentationSubsystem::PostNotification(const FElysiumNotification&
 	PendingNotifications.Add(MoveTemp(Stored));
 }
 
-// --- The publish pass --------------------------------------------------------------------------
+// The publish pass.
 
 void UElysiumPresentationSubsystem::DialogueChoose(int32 VisibleIndex)
 {
@@ -357,8 +357,8 @@ void UElysiumPresentationSubsystem::Publish()
 	Next.bPlayerSurface = ElysiumView::ShowsPlayerSurface(Next.App, UI && UI->IsMenuOpen());
 
 	// The one gate. Everything below fills a surface; not filling it is what "stand the HUD down"
-	// means now, and it is why a conversation on screen when the pause menu opens comes down
-	// instead of drawing through — the box reconciles against a state that says it is not open.
+	// means, and it is why a conversation on screen when the pause menu opens comes down instead of
+	// drawing through — the box reconciles against a state that says it is not open.
 	const AElysiumMapActor* Map = Next.bPlayerSurface ? ResolveMapActor() : nullptr;
 	const FElysiumEntityWorld* World = Map ? Map->GetEntityWorld() : nullptr;
 	if (World)
@@ -517,9 +517,9 @@ void UElysiumPresentationSubsystem::Publish()
 			}
 		}
 
-		// The meters come off the player entity's own fields (11.4), live — the session record is
-		// the durable copy, and reading it here would report the value the entity is about to
-		// overwrite. No player entity (a backdrop, a headless logic world) leaves bValid false.
+		// The meters come off the player entity's own fields, live — the session record is the
+		// durable copy, and reading it here would report the value the entity is about to overwrite.
+		// No player entity (a backdrop, a headless logic world) leaves bValid false.
 		if (PlayerEnt)
 		{
 			FElysiumVitals& Vit = Next.Vitals;
@@ -534,8 +534,8 @@ void UElysiumPresentationSubsystem::Publish()
 		}
 
 		// The stance half of the stealth readout, off the same locomotion sample the animation graph
-		// is steered by. The concealment gauge and the observer are PP6's and stay invalid until
-		// stealth authority commits them; presentation runs no perception of its own.
+		// is steered by. The concealment gauge and the observer stay invalid until stealth authority
+		// commits them; presentation runs no perception of its own.
 		Next.Stealth.bSneaking = Map->IsPlayerSneaking();
 
 		// The hand, what is worn, and the browsed section. Built every frame from the inventory
@@ -555,7 +555,6 @@ void UElysiumPresentationSubsystem::Publish()
 
 	ViewState = MoveTemp(Next);
 
-	// --- the discrete events ------------------------------------------------------------------
 	// Broadcast after the state is in place, so a listener that reads View() sees what the event is
 	// telling it about. An announcement that arrived while the surface is suppressed is dropped
 	// rather than queued: the state itself carries the sign or the conversation back when the

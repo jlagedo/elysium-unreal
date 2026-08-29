@@ -33,8 +33,8 @@ inline bool ElysiumSectionIsBrowsable(EElysiumInvSection Section)
 }
 
 // The section a `slotN` verb selects. Retail's `kb_act.lst` numbers the keys from the same block,
-// offset by one because `slot1` addressed the `Disciplines` section this file now keeps commented
-// out — so `slot2` is `Weapon_Melee`, the first section that survived. A number outside the block
+// offset by one because `slot1` addressed a `Disciplines` section this runtime does not browse —
+// so `slot2` is `Weapon_Melee`, the first remaining section. A number outside the block
 // resolves to `None`, which is not browsable and therefore selects nothing.
 inline EElysiumInvSection ElysiumSectionForSlot(int32 SlotNumber)
 {

@@ -1,10 +1,8 @@
-// 11.4 — CBaseAnimating, the chain node that owns a skeletal body (S3).
+// CBaseAnimating, the chain node that owns a skeletal body.
 //
-// Moved verbatim out of `ElysiumPlayerClasses.cpp` when the discipline runtime landed; the file
-// granularity rule in `Source/ElysiumUE/CLAUDE.md` puts one primary class per `.cpp`. The design is
-// `docs/architecture/runtime-architecture.md` sections 5-6; the public declaration stays the chain
-// header `Public/ElysiumPlayer.h`, and the class registration stays at the one registration site,
-// `ElysiumPlayerClasses.cpp`.
+// The design is `docs/architecture/runtime-architecture.md` sections 5-6; the public declaration
+// stays the chain header `Public/ElysiumPlayer.h`, and the class registration stays at the one
+// registration site, `ElysiumPlayerClasses.cpp`.
 
 #include "ElysiumPlayer.h"
 
@@ -55,9 +53,7 @@ namespace
 	}
 }
 
-// ============================================================================================
-// FElysiumAnimating — CBaseAnimating
-// ============================================================================================
+// --- FElysiumAnimating — CBaseAnimating ---
 
 FString FElysiumAnimating::ModelStem() const
 {

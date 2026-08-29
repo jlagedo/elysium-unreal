@@ -25,7 +25,7 @@
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumFlow, Log, All);
 
 // Boot to the menu (1) or straight into play (0). -ElysiumMap= already bypasses the menu entirely,
-// so this is the A/B for the story boot path. Read once, at game-instance init.
+// so this is the story boot path's menu-vs-play switch. Read once, at game-instance init.
 static TAutoConsoleVariable<int32> CVarBootMenu(
 	TEXT("elysium.BootMenu"),
 	1,
@@ -33,7 +33,7 @@ static TAutoConsoleVariable<int32> CVarBootMenu(
 	ECVF_Default);
 
 // New Game always enters the chain at genesis; this governs only the leg AFTER it. The theatre act
-// is P12's, so with the skip on, a transition into `sp_theatre` is rewritten to the tutorial landmark
+// so with the skip on, a transition into `sp_theatre` is rewritten to the tutorial landmark
 // that act would have delivered to — applied once, at the travel funnel (ElysiumStory::ResolveIntroSkip,
 // UElysiumMapSubsystem::RequestLandmarkTravel). Ours, not VtMB's: retail's own switch is the
 // `vchar_skip_intro` ConVar behind the wizard's `Skip Intro` checkbox, whose reader is not yet
@@ -59,9 +59,7 @@ static TAutoConsoleVariable<float> CVarLoadingScreenMinTime(
 	TEXT("Minimum seconds the loading screen stays up."),
 	ECVF_Default);
 
-// ================================================================================================
-// Lifetime
-// ================================================================================================
+// Lifetime.
 
 void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -108,7 +106,7 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		}),
 		ECVF_Default));
 
-	// The player-facing pause, not the dev hold. `elysium.pause` (11.1) holds the clock and engine
+	// The player-facing pause, not the dev hold. `elysium.pause` holds the clock and engine
 	// with no menu and no state change; this is what Esc does.
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.pausemenu"),
@@ -126,8 +124,7 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		}),
 		ECVF_Default));
 
-	// Moved here from the map subsystem with 11.3: New Game is a session decision, and the session
-	// is this subsystem's. The argument form is unchanged.
+	// New Game is a session decision, and the session is this subsystem's.
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.newgame"),
 		TEXT("elysium.newgame [clan] [m|f] [entry] — seed a new story context and enter it. Defaults "
@@ -201,8 +198,7 @@ void UElysiumGameFlowSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		FConsoleCommandDelegate::CreateWeakLambda(this, [this]() { QuitToMenu(); }),
 		ECVF_Default));
 
-	// S10 — the game-over path has a named command, so a script, a test and an agent can reach it
-	// while the systems that will drive it (damage 9.4, the masquerade meter) are still unbuilt.
+	// The game-over path has a named command, so a script, a test and an agent can reach it.
 	ConsoleObjects.Add(Console.RegisterConsoleCommand(
 		TEXT("elysium.gameover"),
 		TEXT("elysium.gameover [killed|masquerade] — end the run and raise the game-over screen"),
@@ -243,9 +239,7 @@ void UElysiumGameFlowSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-// ================================================================================================
-// The named verbs (11.6)
-// ================================================================================================
+// The named verbs.
 
 void UElysiumGameFlowSubsystem::RegisterCommands()
 {
@@ -253,7 +247,7 @@ void UElysiumGameFlowSubsystem::RegisterCommands()
 
 	// `cancelselect` is VtMB's Escape verb, and it is one verb with two key sources: the router's
 	// binding while the game has input, and `UElysiumMainMenu::NativeOnKeyDown` while a screen holds
-	// it UI-only and the controller sees nothing. Both arrive here, which is what 11.5 left open.
+	// it UI-only and the controller sees nothing. Both arrive here.
 	Bindings.Add(Registry.Bind(TEXT("cancelselect"), [this](const FElysiumCommandCall&)
 	{
 		// "Close panel, else open menu" — VtMB's own reading of Escape (`docs/vtmb/controls.md`). A panel the
@@ -289,7 +283,7 @@ void UElysiumGameFlowSubsystem::RegisterCommands()
 	}));
 
 	// `save quick` / `load quick` are the two the default binds carry (F9 / F12); a bare slot name
-	// is a manual save. Both land on the 11.9 seam, which is UElysiumSaveSubsystem.
+	// is a manual save. Both land on UElysiumSaveSubsystem.
 	Bindings.Add(Registry.Bind(TEXT("save"), [this](const FElysiumCommandCall& Call)
 	{
 		const bool bQuick = Call.Args.Equals(TEXT("quick"), ESearchCase::IgnoreCase);
@@ -317,9 +311,7 @@ void UElysiumGameFlowSubsystem::UnregisterCommands()
 	Bindings.Reset();
 }
 
-// ================================================================================================
-// State
-// ================================================================================================
+// State.
 
 bool UElysiumGameFlowSubsystem::SetAppState(EElysiumAppState NewState)
 {
@@ -365,7 +357,7 @@ void UElysiumGameFlowSubsystem::ReleasePauseHold()
 	if (!ElysiumAppState::HoldsWorld(State))
 	{
 		// A hand `elysium.pause` on a running world is the dev's, not ours — leaving it alone is
-		// what keeps a hold alive across a travel (S1, 11.1).
+		// what keeps a hold alive across a travel.
 		return;
 	}
 	if (UElysiumGameStateSubsystem* GameState = GetGameInstance()
@@ -375,9 +367,7 @@ void UElysiumGameFlowSubsystem::ReleasePauseHold()
 	}
 }
 
-// ================================================================================================
-// Boot
-// ================================================================================================
+// Boot.
 
 void UElysiumGameFlowSubsystem::BootFromCommandLine()
 {
@@ -416,7 +406,7 @@ void UElysiumGameFlowSubsystem::BootFromCommandLine()
 	else if (NewGameFlag == 0)
 	{
 		// -ElysiumNewGame=0 loads the story map through the dev path instead of through New Game,
-		// to A/B a bare load against the seeded run.
+		// a bare load against the seeded run.
 		BootKind = EBootKind::DevMap;
 		BootMap = UElysiumMapSubsystem::StoryEntryMap();
 	}
@@ -520,9 +510,7 @@ void UElysiumGameFlowSubsystem::NotifyWorldReady(AGameModeBase* Mode)
 	}
 }
 
-// ================================================================================================
-// Session
-// ================================================================================================
+// Session.
 
 bool UElysiumGameFlowSubsystem::ResolveEntryPoint(const FString& EntryPoint,
 	FString& OutMap, FString& OutLandmark) const
@@ -778,7 +766,7 @@ bool UElysiumGameFlowSubsystem::NewGame(const FElysiumNewGameRequest& Request)
 
 bool UElysiumGameFlowSubsystem::LoadGame(const FString& SlotName)
 {
-	// 11.9 — one restore path, and it is the one travel already uses: the save subsystem writes the
+	// One restore path, and it is the one travel already uses: the save subsystem writes the
 	// payload back over the session and asks for the travel, and this subsystem owns the state move.
 	UGameInstance* GI = GetGameInstance();
 	UElysiumSaveSubsystem* Saves = GI ? GI->GetSubsystem<UElysiumSaveSubsystem>() : nullptr;
@@ -787,7 +775,7 @@ bool UElysiumGameFlowSubsystem::LoadGame(const FString& SlotName)
 		return false;
 	}
 
-	// An empty slot name is the menu's "Load Game" with no picker yet (9.5's UI half): take the most
+	// An empty slot name is the menu's "Load Game" with no picker: take the most
 	// recent slot on disk, which is what a player pressing it with one save expects.
 	FString Slot = SlotName;
 	if (Slot.IsEmpty())
@@ -952,9 +940,7 @@ bool UElysiumGameFlowSubsystem::EnterStage(FString& OutError, bool bWithGreenRoo
 	return true;
 }
 
-// ================================================================================================
-// Pause and game over
-// ================================================================================================
+// Pause and game over.
 
 void UElysiumGameFlowSubsystem::SetPaused(bool bPaused)
 {
@@ -975,7 +961,7 @@ void UElysiumGameFlowSubsystem::SetPaused(bool bPaused)
 	if (UElysiumGameStateSubsystem* GameState = GI ? GI->GetSubsystem<UElysiumGameStateSubsystem>() : nullptr)
 	{
 		// Both halves at once: engine pause freezes actor ticks, physics and animation; the clock
-		// hold freezes thinks, the event queue, movers and ScheduleTask (S1).
+		// hold freezes thinks, the event queue, movers and ScheduleTask.
 		GameState->TimeControl().SetPaused(bPaused);
 	}
 	// The pause menu follows the state, not this call (ApplyMenuForState).
@@ -1009,9 +995,7 @@ void UElysiumGameFlowSubsystem::TriggerGameOver(EElysiumGameOverReason Reason)
 		Reason == EElysiumGameOverReason::MasqueradeBreach ? TEXT("masquerade breached") : TEXT("killed"));
 }
 
-// ================================================================================================
-// Loading screen
-// ================================================================================================
+// Loading screen.
 
 void UElysiumGameFlowSubsystem::OnPrepareLoadingScreen()
 {

@@ -1,10 +1,10 @@
-// P4.9 — the two singleton event-bus entities every VtMB map carries: `events_player` (the
+// The two singleton event-bus entities every VtMB map carries: `events_player` (the
 // player's event surface, targetnames pc_0 / pcevents / controller) and `events_world` (the
 // world-policy + world-event surface, targetname `world`). They are the map's data bus: level
 // scripts hang their world-event callbacks off `events_world`'s outputs, and the discipline /
-// frenzy / morph outputs off `events_player`. Both are plain-C++ FElysiumEntity leaves (R1)
+// frenzy / morph outputs off `events_player`. Both are plain-C++ FElysiumEntity leaves
 // registered by a module-static FElysiumClassRegistrar, inheriting the base
-// Kill/ScriptHide/ScriptUnhide + keyfields (and OnUseBegin/OnUseEnd) through the class chain (R2).
+// Kill/ScriptHide/ScriptUnhide + keyfields (and OnUseBegin/OnUseEnd) through the class chain.
 //
 // Provenance: both datamaps were read out of the decompiled vampire.dll.
 //   CPlayerEvents  factory FUN_10226630 (object 0x67c), ctor 0x102270b0, vftable 0x1048d844,
@@ -16,16 +16,10 @@
 // Both chain to the shared CBaseEntity map 0x10552e18, which is where OnUseBegin/OnUseEnd come
 // from (the tutorial's `world` wires them) — they are not declared on CWorldEvents itself.
 //
-// Scope: the input/field surface is complete and faithful. The *outputs* are fired by systems
-// that do not exist yet (disciplines, frenzy, wolf morph, the cop/masquerade AI, the music state
-// machine), so this task lands the bus itself — inputs deliver, policy state is recorded and
-// inspectable, and every output wire resolves — not the systems that will drive it. Each input
+// The input/field surface is complete and faithful. The *outputs* are fired by other systems
+// (disciplines, frenzy, wolf morph, the cop/masquerade AI, the music state machine). Inputs
+// deliver, policy state is recorded and inspectable, and every output wire resolves. Each input
 // that fronts an unbuilt system records its state and logs; none of them silently no-op.
-
-// Cycle 10b (the player law channels) touches this file in three places, all banner-marked:
-//   1. `FElysiumWorldEvents::Spawn` — the authored `worldspawn` policy baseline;
-//   2. `InputSetSafeArea` — the world-to-player transaction the value change performs;
-//   3. the registrar — the five world-policy fields, so the R2 walk and the save walk reach them.
 
 #include "ElysiumClassRegistry.h"
 #include "ElysiumEntity.h"
@@ -33,7 +27,7 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumClassFields.h"
-#include "Substrate/ElysiumLaw.h"   // Cycle 10b — the SetSafeArea world-to-player transaction
+#include "Substrate/ElysiumLaw.h"   // the SetSafeArea world-to-player transaction
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEvents, Log, All);
 
@@ -42,15 +36,14 @@ namespace
 	const TCHAR* OnOff(bool b) { return b ? TEXT("on") : TEXT("off"); }
 }
 
-// ============================================================================================
-// events_player — CPlayerEvents. 12 inputs, 23 outputs, one keyfield (`enabled`). The tutorial
-// carries three instances: `pc_0` (the map-load MakePlayerUnkillable target and the discipline
-// output source), `pcevents` (Jack's OnDamaged -> ClearDialogCombatTimers), and `controller`
-// (sp_observatory_1 fires ImmobilizePlayer at its own copy).
+// --- events_player — CPlayerEvents ---
+// 12 inputs, 23 outputs, one keyfield (`enabled`). The tutorial carries three instances: `pc_0`
+// (the map-load MakePlayerUnkillable target and the discipline output source), `pcevents` (Jack's
+// OnDamaged -> ClearDialogCombatTimers), and `controller` (sp_observatory_1 fires ImmobilizePlayer
+// at its own copy).
 //
 // EnableOutputs/DisableOutputs gate the whole output surface — modelled here as the real gate
 // (FireEvent early-outs), so a disabled bus stays silent exactly as retail's does.
-// ============================================================================================
 
 class FElysiumPlayerEvents final : public FElysiumEntity
 {
@@ -58,8 +51,8 @@ public:
 	// `enabled` keyfield (m_bEnabled @0x450). Every exported instance sets it to 1.
 	bool bEnabled = true;
 
-	// Player-policy state these inputs latch. The systems that read them are later phases
-	// (damage/RPG 9.4, NPC 8.5), so the bus records the intent and reports it in the inspector.
+	// Player-policy state these inputs latch. The systems that read them live elsewhere
+	// (damage/RPG, NPC AI), so the bus records the intent and reports it in the inspector.
 	bool bUnkillable       = false;   // MakePlayerUnkillable / MakePlayerKillable
 	bool bImmobilized      = false;   // ImmobilizePlayer / MobilizePlayer
 	int32 DisciplineClears = 0;       // RemoveDisciplines(+Now) call count
@@ -69,7 +62,7 @@ public:
 	void InputEnableOutputs()  { bEnabled = true; }
 	void InputDisableOutputs() { bEnabled = false; }
 
-	// The latch is the damage system's gate, and since 11.4 the damage system is the player entity's
+	// The latch is the damage system's gate, and the damage system is the player entity's
 	// — so the write lands there. The copy kept here is what the inspector shows and what a second
 	// events_player on the same map would report; the player's own copy is the one that decides.
 	void InputMakePlayerUnkillable() { SetPlayerUnkillable(true);  Note(TEXT("MakePlayerUnkillable")); }
@@ -121,13 +114,13 @@ public:
 	void InputAwardExp(const FElysiumInputArgs& A)
 	{
 		LastAwardExp = A.Param.ToString();
-		// experience_table.txt lookup + XP award is 9.4; the key is recorded so the wire is traceable.
+		// The key is recorded so the wire is traceable; the experience_table.txt lookup awards XP.
 		UE_LOG(LogElysiumEvents, Log, TEXT("%s AwardExp '%s' (XP award is 9.4)"),
 			*DebugString(), *LastAwardExp);
 	}
 
 	// The one output chokepoint: honours the EnableOutputs/DisableOutputs gate. The discipline /
-	// frenzy / morph events that drive these live in later phases; this is the seam they call.
+	// frenzy / morph events that drive these live in their own systems; this is the seam they call.
 	void FireEvent(FName Output, const FElysiumEntityHandle& Activator)
 	{
 		if (!bEnabled)
@@ -155,15 +148,14 @@ private:
 	}
 };
 
-// ============================================================================================
-// events_world — CWorldEvents. 10 inputs, 21 outputs (+ the base OnUseBegin/OnUseEnd). One
-// instance per map, targetname `world`. Its inputs are world *policy* (safe area, cop grace,
-// frenzy suppression, AI enable, wetness) — all of them read by systems that land later, so the
-// faithful minimal implementation is to hold them accurately and expose them.
+// --- events_world — CWorldEvents ---
+// 10 inputs, 21 outputs (+ the base OnUseBegin/OnUseEnd). One instance per map, targetname
+// `world`. Its inputs are world *policy* (safe area, cop grace, frenzy suppression, AI enable,
+// wetness) — all of them read by other systems, so the faithful implementation is to hold them
+// accurately and expose them.
 //
 // The tutorial sets SetNoFrenzyArea 1 at OnMapLoad; worldspawn also carries `copwaitarea` and
 // `nosferatu_tolerrant` keys that mirror two of these, so the entity is the runtime override.
-// ============================================================================================
 
 class FElysiumWorldEvents final : public FElysiumEntity
 {
@@ -177,8 +169,7 @@ public:
 	bool  bAIEnabled        = true;   // AIEnable (bool)
 	bool  bCutsceneHidden   = false;  // Hide/UnhideCutsceneInterferingEntities
 
-	// ------------------------------------------------------------------------------------------
-	// Cycle 10b hunk 1/3 — the authored `worldspawn` baseline.
+	// The authored `worldspawn` baseline.
 	//
 	// The world's area type and its three companion policies are AUTHORED ON `worldspawn`, not on
 	// this entity: sixteen of the exported maps carry `safearea`, fourteen `copwaitarea`, six
@@ -186,7 +177,6 @@ public:
 	// policy key at all. Retail's world singleton derives its `m_nAreaType` from that key and
 	// `CWorldEvents` mutates the same field, so seeding here is what makes this leaf the same
 	// store rather than a second one that starts at zero in a map authored `safearea 1`.
-	// ------------------------------------------------------------------------------------------
 	virtual void Spawn() override
 	{
 		const FElysiumEntityDef* WorldSpawn = FindWorldSpawnDef();
@@ -214,14 +204,12 @@ public:
 		SeedBool(TEXT("nofrenzyarea"), bNoFrenzyArea);
 	}
 
-	// ------------------------------------------------------------------------------------------
-	// Cycle 10b hunk 2/3 — `CWorldEvents::SetSafeArea` is a world-to-player TRANSACTION, not a
-	// field write. The server applies the new area's policy to every connected player before it
-	// marks the world state dirty: Elysium runs the ordinary all-Discipline teardown, safe /
-	// Masquerade ends only Celerity and Protean, and combat has no immediate teardown. The policy
-	// itself is `ElysiumLaw::ApplyWorldAreaTransition`; the value stays here, where retail's
-	// world keeps it, and the transition runs only when it actually changed.
-	// ------------------------------------------------------------------------------------------
+	// `CWorldEvents::SetSafeArea` is a world-to-player TRANSACTION, not a field write. The server
+	// applies the new area's policy to every connected player before it marks the world state dirty:
+	// Elysium runs the ordinary all-Discipline teardown, safe / Masquerade ends only Celerity and
+	// Protean, and combat has no immediate teardown. The policy itself is
+	// `ElysiumLaw::ApplyWorldAreaTransition`; the value stays here, where retail's world keeps it,
+	// and the transition runs only when it actually changed.
 	void InputSetSafeArea(const FElysiumInputArgs& A)
 	{
 		const int32 NewArea = FMath::Clamp(A.Param.ToInt(), 0, 2);
@@ -300,9 +288,7 @@ private:
 	}
 };
 
-// ============================================================================================
-// Registration
-// ============================================================================================
+// --- Registration ---
 
 static TUniquePtr<FElysiumEntity> MakePlayerEvents() { return MakeUnique<FElysiumPlayerEvents>(); }
 static TUniquePtr<FElysiumEntity> MakeWorldEvents()  { return MakeUnique<FElysiumWorldEvents>(); }
@@ -341,16 +327,10 @@ static FElysiumClassRegistrar GRegWorldEvents(
 		D.Input(TEXT("UnhideCutsceneInterferingEntities"),[](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumWorldEvents&>(E).InputUnhideCutsceneInterferingEntities(); });
 		D.Input(TEXT("PlayEndCredits"),                   [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumWorldEvents&>(E).InputPlayEndCredits(A); });
 
-		// ----------------------------------------------------------------------------------------
-		// Cycle 10b hunk 3/3 — the world-policy field surface. These were plain members with no
-		// class-chain accessor, so the ordinary R2 walk could not read them: the Discipline
-		// world-area gate had to give up, and the save walk carried none of them. Registered at the
-		// default Key|Save, so the area type a level script sets mid-map survives a save and the
-		// substrate reads the value through one door.
-		//
-		// `safearea` is the one this cycle consumes on both sides (the Elysium refusal and the
-		// terminal incident guards); `copwaitarea` selects the police response's wait-area path.
-		// ----------------------------------------------------------------------------------------
+		// The world-policy field surface. Registered at the default Key|Save so the area type a
+		// level script sets mid-map survives a save and the substrate reads the value through one
+		// door. `safearea` is the one both the Elysium refusal and the terminal incident guards
+		// consume; `copwaitarea` selects the police response's wait-area path.
 		ElysiumAddClassField(D, TEXT("safearea"),            &FElysiumWorldEvents::SafeArea);
 		ElysiumAddClassField(D, TEXT("copwaitarea"),         &FElysiumWorldEvents::bCopWaitArea);
 		ElysiumAddClassField(D, TEXT("copgrace"),            &FElysiumWorldEvents::CopGrace);

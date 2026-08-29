@@ -2,9 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// ================================================================================================
-// 18. system/stealth.txt — the four StealthData tables
-// ================================================================================================
+// `system/stealth.txt` — the four StealthData tables.
 //
 // `docs/vtmb/stealth.md` -> "The rulebook" owns the behaviour. Four named sections under one
 // `StealthData` root:

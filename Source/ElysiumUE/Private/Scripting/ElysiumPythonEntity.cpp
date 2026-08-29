@@ -30,7 +30,7 @@ namespace
 		return FElysiumPythonVM::Get().GameState();
 	}
 
-	// --- vampire.Entity ------------------------------------------------------------------------
+	// vampire.Entity.
 	// A handle, not a pointer: resolution is generation-checked every access, so a reference held
 	// across a Kill (or a map travel) reports "game entity has been deleted" exactly as retail's
 	// null `_entity_ptr_` unwrap does. `Dict` is the instance __dict__ that script-set names fall
@@ -46,9 +46,9 @@ namespace
 		PyObject* Dict;
 	};
 
-	// There is no second player type (11.4): `FindPlayer()` returns an ordinary `vampire.Entity`
+	// There is no second player type: `FindPlayer()` returns an ordinary `vampire.Entity`
 	// over the player entity's handle, so `pc.clan` is a datamap field, `pc.MoneyAdd(50)` is a
-	// datamap input, and both take the R2 walk every other entity's attributes take.
+	// datamap input, and both take the same attribute walk every other entity's attributes take.
 
 	PyTypeObject GEntityType = { PyVarObject_HEAD_INIT(nullptr, 0) "vampire.Entity", sizeof(FPyEntity) };
 
@@ -120,7 +120,7 @@ namespace
 		return false;
 	}
 
-	// --- bound entity input --------------------------------------------------------------------
+	// Bound entity input.
 	// `ent.<Input>` manufactures a callable on the spot, exactly as VtMB's __getattr__ does with
 	// PyCFunction_New over a generic thunk (python_bridge.md step 4). Self is the (entity, name)
 	// pair; calling it delivers the input through the real chokepoint.
@@ -171,7 +171,7 @@ namespace
 		return Fn;
 	}
 
-	// --- bound Character method ----------------------------------------------------------------
+	// Bound Character method.
 	// Dispatched off the player object or an NPC entity handle, through the shared native surface.
 
 	PyObject* Char_call_method(PyObject* Bound, PyObject* Args)
@@ -210,10 +210,10 @@ namespace
 		return Fn;
 	}
 
-	// --- Entity base methods (the 0x1058f698 table) --------------------------------------------
-	// The readers run off the live substrate. The writers have no backing yet — moving a brush
-	// body, re-indexing a targetname, swapping a model are all P8/9.3 work — so they record a
-	// native-call stub, which is what the Scripting window's counters are for.
+	// Entity base methods (the 0x1058f698 table).
+	// The readers run off the live substrate. The writers that still have no backing — moving a
+	// brush body, re-indexing a targetname, swapping a model — record a native-call stub, which
+	// is what the Scripting window's counters are for.
 
 	PyObject* Vec3ToPy(const FVector& V)
 	{
@@ -291,7 +291,7 @@ namespace
 		ElysiumScriptNatives::Record(State(), FName(Method), Display, FElysiumVariant::Void(), /*bStub*/ false);
 	}
 
-	// The four writers, real (9.3): mutate the authoritative field, move/re-skin any body that follows,
+	// The four writers, real: mutate the authoritative field, move/re-skin any body that follows,
 	// re-key the name index. GetOrigin/GetAngles/GetModelName/GetName read the mutated state back.
 	PyObject* Entity_SetOrigin(PyObject* Self, PyObject* Args)
 	{
@@ -356,7 +356,7 @@ namespace
 		{ nullptr, nullptr, 0, nullptr }
 	};
 
-	// --- Entity attribute protocol -------------------------------------------------------------
+	// Entity attribute protocol.
 
 	// Read order mirrors retail: the class method table and the instance __dict__ resolve first
 	// (an old-style class only calls __getattr__ once the normal lookup fails), then the datamap
@@ -392,9 +392,9 @@ namespace
 				return VariantToPy(F->Get(*E));
 			}
 		}
-		// The vdata-driven half of the character sheet (11.4): `pc.base_Celerity` has to read a
-		// number, not bind as a method, and the registry's static field table cannot name it until
-		// 9.4 loads the sheet. Consulted after the chain walk, before the method fallback.
+		// The vdata-driven half of the character sheet: `pc.base_Celerity` has to read a
+		// number, not bind as a method, and the registry's static field table cannot name it;
+		// the sheet supplies those names. Consulted after the chain walk, before the method fallback.
 		{
 			FElysiumVariant Dynamic;
 			if (E->GetDynamicField(AttrName, Dynamic))
@@ -459,7 +459,7 @@ namespace
 				return -1;
 			}
 		}
-		// The sheet bag, mirroring the read path (11.4): `pc.base_Celerity = 3` writes the sheet
+		// The sheet bag, mirroring the read path: `pc.base_Celerity = 3` writes the sheet
 		// rather than shadowing it in the property bag.
 		if (E->SetDynamicField(AttrName, PyToVariant(Value)))
 		{
@@ -482,10 +482,10 @@ namespace
 		PyObject_Del(Self);
 	}
 
-	// --- the 11 module globals -----------------------------------------------------------------
+	// The 11 module globals.
 
 	// "Find the first player entity, or NULL if there is not one spawned" — the binding's own
-	// docstring, and since 11.4 exactly what it does: the player IS an entity, so this is the same
+	// docstring, and exactly what it does: the player IS an entity, so this is the same
 	// lookup FindEntityByName does, and `None` on a map built without a player (a menu backdrop) is
 	// the documented answer rather than an invented one.
 	PyObject* Mod_FindPlayer(PyObject*, PyObject* Args)
@@ -596,10 +596,10 @@ namespace
 	PyObject* Mod_IsPCMalk(PyObject*, PyObject* A)            { return CallSimple(TEXT("IsPCMalk"), A); }
 	PyObject* Mod_IsClan(PyObject*, PyObject* A)              { return CallSimple(TEXT("IsClan"), A); }
 
-	// CreateEntityNoSpawn(classname, origin, angles) (9.3): build a runtime def, append a live-but-
+	// CreateEntityNoSpawn(classname, origin, angles): build a runtime def, append a live-but-
 	// unspawned entity, and return the Entity object so the script can SetModel/SetName/SetOrigin on it
 	// before CallEntitySpawn. Classes with no leaf (item_*, prop_*) become logic-valid but bodiless
-	// entities — findable, I/O-wired, no mesh — until a per-entity prop/item render path lands.
+	// entities — findable, I/O-wired, no mesh.
 	PyObject* Mod_CreateEntityNoSpawn(PyObject*, PyObject* Args)
 	{
 		const char* Cls = nullptr;
@@ -628,7 +628,7 @@ namespace
 		return NewEntity(H);
 	}
 
-	// CallEntitySpawn(entity) (9.3): run the deferred Spawn() (+ brush body) on the entity that
+	// CallEntitySpawn(entity): run the deferred Spawn() (+ brush body) on the entity that
 	// CreateEntityNoSpawn made. Forgiving on a None/non-entity arg (a create under no world), so a map
 	// script never aborts on it — error-to-false's spirit.
 	PyObject* Mod_CallEntitySpawn(PyObject*, PyObject* Args)
@@ -669,7 +669,7 @@ namespace
 		{ nullptr, nullptr, 0, nullptr }
 	};
 
-	// --- vampire.ccmd : the console command object (python_bridge.md, the fifth surface) --------
+	// vampire.ccmd : the console command object (`docs/vtmb/python_bridge.md`, the fifth surface).
 	// TOUCHING an attribute executes a console command through the shared FElysiumConsole -- both
 	// assigning one and merely reading one. `c.patchtype = ""` runs the alias `patchtype`, which the
 	// Unofficial Patch's user.cfg defines as `setPlus()` -> the console falls through to Python ->
@@ -728,7 +728,7 @@ namespace
 		sizeof(PyObject),   // tp_basicsize
 	};
 
-	// --- vampire.cvar : console variables ------------------------------------------------------
+	// vampire.cvar : console variables.
 	// Attribute-GET reads a cvar value as a string (empty on a miss; never raises -- `cvar.name`
 	// is read by setPlus's haven personalization); attribute-SET stores it.
 	PyObject* Cvar_getattro(PyObject* Self, PyObject* NameObj)
@@ -770,9 +770,7 @@ namespace
 	};
 }   // anonymous namespace
 
-// ------------------------------------------------------------------------------------------
-// Public surface
-// ------------------------------------------------------------------------------------------
+// Public surface.
 
 PyObject* VariantToPy(const FElysiumVariant& V)
 {
@@ -869,9 +867,9 @@ bool InstallEntityBindings(PyObject* Module, FString& OutError)
 
 	Py_INCREF(&GEntityType);
 	PyModule_AddObject(Module, "Entity", reinterpret_cast<PyObject*>(&GEntityType));
-	// There is no `vampire.Player`: 11.4 retired it. The player is an Entity like everything else.
+	// There is no `vampire.Player`: the player is an Entity like everything else.
 
-	// The console objects (9.3b): vampire.ccmd (attribute-set executes) + vampire.cvar. Both are
+	// The console objects: vampire.ccmd (attribute-set executes) + vampire.cvar. Both are
 	// data-less singletons forwarding to FElysiumPythonVM's FElysiumConsole.
 	GCcmdType.tp_flags    = Py_TPFLAGS_DEFAULT;
 	GCcmdType.tp_getattro = Ccmd_getattro;

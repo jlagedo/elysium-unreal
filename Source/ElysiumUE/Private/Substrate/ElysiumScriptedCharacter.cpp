@@ -153,9 +153,6 @@ EElysiumNpcMoveStatus FElysiumScriptedCharacter::SampleMotorIntoEntity()
 	FVector Feet = Origin;
 	float Yaw = -Angles.Y;
 	const EElysiumNpcMoveStatus Status = Motor->Sample(Feet, Yaw);
-	// The motor is the physical authority while it holds a request. Its feet/yaw are written
-	// straight into the entity rather than through SetRuntimeOrigin, which would teleport the
-	// body back.
 	Origin = Feet;
 	Angles.Y = -Yaw;
 	if (World)
@@ -296,8 +293,6 @@ void FElysiumScriptedCharacter::RebuildForModelChange(bool bBodiesEnabled)
 	{
 		return;
 	}
-	// The swap destroys the motor the beat is steering, so release the hold first — the beat
-	// reads Unsupported next tick and finishes on the placement fallback.
 	EndScriptMove();
 	DestroyMotor();
 	FElysiumAnimating::OnRuntimeModelChanged();

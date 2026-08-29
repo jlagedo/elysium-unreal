@@ -12,7 +12,7 @@ namespace
 	const TCHAR* const GClipMovementMeleeAttack2Combo = TEXT("ACT_MELEE_ATTACK_2COMBO");
 	const TCHAR* const GClipMovementMeleeAttackHeavy  = TEXT("ACT_MELEE_ATTACK_HEAVY");
 	// The one activity `vt+0x674` adds over `vt+0x670`. It is not a row of `AnimDrivenArmFor`, so
-	// today it reaches nothing but the movement-lock arm below.
+	// it reaches nothing but the movement-lock arm below.
 	const TCHAR* const GClipMovementLandHard          = TEXT("ACT_LAND_HARD");
 }
 

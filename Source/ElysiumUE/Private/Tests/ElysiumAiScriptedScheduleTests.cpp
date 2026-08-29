@@ -51,7 +51,7 @@ namespace
 	// Where `goal_a` stands. Far enough that no acquisition or attack condition is in play.
 	const FVector GGoalOrigin(500.0, 0.0, 0.0);
 
-	// --- The world -------------------------------------------------------------------------------
+	// The world.
 	// One directed NPC at the origin, one other NPC it can be pointed at, one `point_target` goal
 	// (which is what four of the six named corpus goals are), the `aiscripted_schedule` itself, and
 	// two patrol points for the executor hand-over cases.
@@ -218,7 +218,7 @@ namespace
 			}
 		}
 
-		// One deliberate think for the directed NPC.
+
 		void Step(double Now)
 		{
 			if (Guard != nullptr)
@@ -271,9 +271,7 @@ namespace
 	};
 }
 
-// =====================================================================================
 // The two recovered tables: `forcestate`'s asymmetry and the mode set.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleTablesTest,
 	"Elysium.Substrate.AiScriptedSchedule.Tables", GElysiumTestFlags)
@@ -363,15 +361,13 @@ bool FElysiumAiScriptedScheduleTablesTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // Mode 1/2 — the move to the goal, over the recording motor.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleMoveTest,
 	"Elysium.Substrate.AiScriptedSchedule.MoveToGoal", GElysiumTestFlags)
 bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 {
-	// --- Mode 2 with `forcestate 2`: the three warehouse thug rows, in miniature ----------------
+	// Mode 2 with `forcestate 2`: the three warehouse thug rows, in miniature.
 	{
 		FAiScheduleFixture::FSetup Setup;
 		Setup.Mode = 2;
@@ -424,7 +420,7 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 			F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Alert")));
 	}
 
-	// --- Mode 1 walks, which is the CHOSEN half of the pair ------------------------------------
+	// Mode 1 walks, which is the CHOSEN half of the pair.
 	{
 		FAiScheduleFixture::FSetup Setup;
 		Setup.Mode = 1;
@@ -444,7 +440,7 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 			F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Idle")));
 	}
 
-	// --- Mode 4/5: the follow-path family runs its own program ----------------------------------
+	// Mode 4/5: the follow-path family runs its own program.
 	{
 		FAiScheduleFixture::FSetup Setup;
 		Setup.Mode = 4;
@@ -472,9 +468,7 @@ bool FElysiumAiScriptedScheduleMoveTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // Mode 3 — the goal becomes the enemy, through the ordinary acquisition transaction.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleAssignEnemyTest,
 	"Elysium.Substrate.AiScriptedSchedule.AssignEnemy", GElysiumTestFlags)
@@ -537,15 +531,13 @@ bool FElysiumAiScriptedScheduleAssignEnemyTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // The recovered refusals: a missing goal, a bare row, and the route-failure switch.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleRefusalTest,
 	"Elysium.Substrate.AiScriptedSchedule.Refusals", GElysiumTestFlags)
 bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 {
-	// --- A missing goal logs and stops, and pushes NOTHING --------------------------------------
+	// A missing goal logs and stops, and pushes NOTHING.
 	// This fires in shipped content: `sm_medical_1`'s `guard_to_cs` names `cs_target`, which that
 	// map does not contain.
 	{
@@ -571,7 +563,7 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		F.FireStartSchedule();
 	}
 
-	// --- The spawn validator: neither a schedule nor a forced state -----------------------------
+	// The spawn validator: neither a schedule nor a forced state.
 	{
 		AddExpectedError(TEXT("authors neither a schedule mode nor a forced state"),
 			EAutomationExpectedErrorFlags::Contains, 1);
@@ -582,7 +574,7 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 		TestNotNull(TEXT("the bare row still constructs as an entity"), F.Director);
 	}
 
-	// --- A forced state with no movement mode is an ordinary row --------------------------------
+	// A forced state with no movement mode is an ordinary row.
 	{
 		FAiScheduleFixture::FSetup Setup;
 		Setup.Mode = 0;
@@ -599,7 +591,7 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 			F.Debug(F.Guard, TEXT("Scripted schedule")) == TEXT("(none)"));
 	}
 
-	// --- A body that will not take the route reports it once -------------------------------------
+	// A body that will not take the route reports it once.
 	{
 		AddExpectedError(TEXT("could not take the route an aiscripted_schedule pushed"),
 			EAutomationExpectedErrorFlags::Contains, 1);
@@ -622,7 +614,7 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("None")));
 	}
 
-	// --- A director that fires before the NPC's first think is DEFERRED, not lost ---------------
+	// A director that fires before the NPC's first think is DEFERRED, not lost.
 	// `sm_medical_1` wires `guard_to_nurse` off an `npc_maker`'s `OnSpawnNPC`, so this is the
 	// shipped case rather than a synthetic one.
 	{
@@ -651,7 +643,7 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 			F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Alert")));
 	}
 
-	// --- Spawn flag 0x800 suppresses exactly that warning ---------------------------------------
+	// Spawn flag 0x800 suppresses exactly that warning.
 	{
 		// No AddExpectedError here on purpose: the point of the case is that nothing is emitted.
 		FAiScheduleFixture::FSetup Setup;
@@ -676,9 +668,7 @@ bool FElysiumAiScriptedScheduleRefusalTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // `ChangeSchedule` / `StartSchedule` — a native schedule named by a script.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedScheduleNamedTest,
 	"Elysium.Substrate.AiScriptedSchedule.NamedSchedule", GElysiumTestFlags)
@@ -707,7 +697,7 @@ bool FElysiumAiScriptedScheduleNamedTest::RunTest(const FString&)
 	TestEqual(TEXT("the lookup is case-insensitive, and StartSchedule takes the same door"),
 		F.Guard->Schedule.Current, EId::ChaseEnemy);
 
-	// --- The unknown names, which is every name the shipped scripts actually use ----------------
+	// The unknown names, which is every name the shipped scripts actually use.
 	AddExpectedError(TEXT("SCHED_VDOG_SNARL"), EAutomationExpectedErrorFlags::Contains, 1);
 	F.World.AcceptInput(TEXT("!self"), FName(TEXT("ChangeSchedule")),
 		FElysiumVariant::String(TEXT("SCHED_VDOG_SNARL")), F.Guard->Handle, F.Guard->Handle);
@@ -742,15 +732,13 @@ bool FElysiumAiScriptedScheduleNamedTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // Precedence: the ScriptedSchedule owner's place in the arbiter.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedSchedulePrecedenceTest,
 	"Elysium.Substrate.AiScriptedSchedule.Precedence", GElysiumTestFlags)
 bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 {
-	// --- A director displaces a patrol route, and the route resumes ------------------------------
+	// A director displaces a patrol route, and the route resumes.
 	{
 		FAiScheduleFixture::FSetup Setup;
 		Setup.Mode = 2;
@@ -790,7 +778,7 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 			|| Motor->RequestedFeet.Equals(FVector(0.0, -400.0, 0.0)));
 	}
 
-	// --- A scripted sequence displaces the director ---------------------------------------------
+	// A scripted sequence displaces the director.
 	{
 		FAiScheduleFixture::FSetup Setup;
 		Setup.Mode = 2;
@@ -818,7 +806,7 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 			F.Debug(F.Guard, TEXT("Body owner")).StartsWith(TEXT("None")));
 	}
 
-	// --- Three deep: a beat over a combat claim over a patrol route ------------------------------
+	// Three deep: a beat over a combat claim over a patrol route.
 	// The arbiter has ONE parked slot. A combat schedule that took the body off a route is holding
 	// that route in it, so a beat parking the SCHEDULE on top would discard the route and strand the
 	// mind owning a claim whose token the leaf has already retired.
@@ -850,9 +838,7 @@ bool FElysiumAiScriptedSchedulePrecedenceTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // The pre-emption fix: a committed enemy outranks an autonomous executor.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAiScriptedSchedulePreemptionTest,
 	"Elysium.Substrate.AiScriptedSchedule.CombatPreemption", GElysiumTestFlags)
@@ -879,10 +865,10 @@ bool FElysiumAiScriptedSchedulePreemptionTest::RunTest(const FString&)
 	TestTrue(TEXT("the acquisition promotes the mind to combat"),
 		F.Debug(F.Guard, TEXT("Mind")).Contains(TEXT("current=Combat")));
 
-	// Before this cycle, `Think` routed a patrolling NPC to `ThinkPatrol` and combat selection was
-	// never reached at all. It is reached now: the melee selector answers `CAN_MELEE_ATTACK1` with
-	// `SCHED_TROIKA_MELEE_ATTACK1`, whose `TASK_FACE_ENEMY` claims the body and turns it. A patrol
-	// executor issues `MoveTo` and never `Face`, so the turn is the discriminator.
+	// A committed enemy must reach combat selection: the melee selector answers `CAN_MELEE_ATTACK1`
+	// with `SCHED_TROIKA_MELEE_ATTACK1`, whose `TASK_FACE_ENEMY` claims the body and turns it. A
+	// patrol executor issues `MoveTo` and never `Face`, so the turn is the discriminator. Routing
+	// a patrolling NPC to `ThinkPatrol` skips combat selection entirely.
 	F.Step(0.6);
 	TestTrue(TEXT("the committed enemy raises CAN_MELEE_ATTACK1"),
 		F.Debug(F.Guard, TEXT("Conditions")).Contains(TEXT("CAN_MELEE_ATTACK1")));

@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// B6 — the pure rules half of feeding, beside `ElysiumDice` and `ElysiumSheetMath`.
+// The pure rules half of feeding, beside `ElysiumDice` and `ElysiumSheetMath`.
 //
 // Everything here is a function of numbers: no world, no clock, no entity. The transaction that
 // consumes it lives on `FElysiumCombatCharacter` (`Public/ElysiumPlayer.h`) because that is where
@@ -118,9 +118,9 @@ namespace ElysiumFeed
 		bool IsComplete() const { return !Attacker.IsEmpty() && !Victim.IsEmpty(); }
 	};
 
-	// The source pair has no equal-height cell. A tie takes the historical short-victim cell on the
-	// attacker and therefore the complementary tall-attacker cell on the victim. The important rule
-	// is that the two roles are always opposites; the old implementation selected short for both.
+	// The source pair has no equal-height cell. A tie takes the short-victim cell on the attacker
+	// and therefore the complementary tall-attacker cell on the victim — the two roles are always
+	// opposites; a tie must not pick short for both.
 	inline EPartnerHeight VictimHeightFor(float AttackerHeightCm, float VictimHeightCm)
 	{
 		return VictimHeightCm > AttackerHeightCm ? EPartnerHeight::Taller : EPartnerHeight::Shorter;

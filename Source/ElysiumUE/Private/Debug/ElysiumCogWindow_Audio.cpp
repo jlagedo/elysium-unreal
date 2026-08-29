@@ -114,7 +114,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 	}
 	ImGui::EndDisabled();
 
-	// --- This map's ambient_generic references (one-click test material) --------------------
+	// This map's ambient_generic references (one-click test material).
 	const AElysiumMapActor* Map = GetMapActor();
 	const FString CurrentMap = Map ? Map->LoadedMap : FString();
 	if (bRefsDirty || CurrentMap != LastMap)
@@ -158,7 +158,7 @@ void FElysiumCogWindow_Audio::RenderContent()
 		ImGui::EndChild();
 	}
 
-	// --- Mover soundgroups (P6.4: door/button `soundgroup` → usable/<cat>/<group>/<sub>.wav) ---
+	// Mover soundgroups: door/button `soundgroup` → usable/<cat>/<group>/<sub>.wav.
 	// The offline manifest resolves a token to its subkey WAVs by directory convention (no VtMB data
 	// file). Browse it and Play any subkey 2D to audition what a door/button will emit.
 	const TMap<FString, TMap<FString, TMap<FName, FString>>>& Manifest = ElysiumMoverSoundManifest();

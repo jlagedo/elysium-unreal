@@ -22,7 +22,7 @@ public:
 	virtual ISoundGeneratorPtr CreateSoundGenerator(
 		const FSoundGeneratorInitParams& InParams) override;
 
-	// 12.2b — the generator's own view of the mixer's render head, shared with whoever submitted
+	// The generator's own view of the mixer's render head, shared with whoever submitted
 	// the voice. It is created here rather than by the caller because the generator is the only
 	// thing that knows when the mixer actually pulled, and it outlives this wave (Audio Mixer holds
 	// the generator until the source is released), so a shared block is what both ends can hold.

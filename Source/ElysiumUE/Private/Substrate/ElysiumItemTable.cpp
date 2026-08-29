@@ -17,10 +17,6 @@ namespace
 	using ElysiumVdata::Index;
 }
 
-// ================================================================================================
-// 15. vdata/items/*.txt — the item definitions
-// ================================================================================================
-
 namespace
 {
 	// In `EElysiumItemType` order, which is `system/items.txt`'s own `ItemTypes` order.

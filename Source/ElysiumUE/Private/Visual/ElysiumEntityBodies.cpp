@@ -250,7 +250,7 @@ UAnimSequence* UElysiumEntityBodies::ResolveNpcClip(const FString& Stem, const F
 
 	UElysiumAnimSubsystem* Anims = GetAnims();
 
-	// CAP7.3 — key on the animation the label will actually load, not the label. A blend-grid label
+	// Key on the animation the label will actually load, not the label. A blend-grid label
 	// selects a cell from the pose parameters, so a cache keyed on `walk` would pin whichever cell was
 	// resolved first and no parameter could ever move it again.
 	//
@@ -506,7 +506,7 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	// The authored fade both ways: this funnel carries one number and passes it as both (in = the
 	// fade, out = the fade unless the clip loops).
 	const float Fade = ClipFadeSeconds(Stem, ClipName);
-	// LIFE5 — the identity the clip's event timeline is keyed by. The OWNER is the include DAG's
+	// The identity the clip's event timeline is keyed by. The OWNER is the include DAG's
 	// answer (this body's own stem, or the bank that carries the clip) and the label is the name the
 	// caller asked for, never the animation the cell resolved to. It is the same vocabulary lookup
 	// `ClipFadeSeconds` just made; a clip the vocabulary does not carry falls back to this stem,
@@ -523,7 +523,7 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	const FElysiumClipIdentity Identity(
 		Clip == nullptr || Clip->IsOwnedBy(Stem) ? Stem : Clip->Owner, ClipName);
 
-	// LIFE4/LIFE5 — the segment's claim on the base channel, at the band the PRODUCER states. The
+	// The segment's claim on the base channel, at the band the PRODUCER states. The
 	// band-less door means `Ambient`: it holds the pose against a standing body's every-tick publish
 	// and yields the moment the body travels, which is the priority-table row the interim
 	// while-locomoting rule became. A run states its own band instead — a scripted beat claims
@@ -657,7 +657,7 @@ bool UElysiumEntityBodies::PlayNpcClip(USkeletalMeshComponent* Body, const FStri
 	}
 	else if (FElysiumSegmentClaims* Claims = SegmentClaims.Find(FObjectKey(Body)))
 	{
-		// **The overlay channel clears only a handle the stack has actually let go** (LIFE10). Every
+		// **The overlay channel clears only a handle the stack has actually let go.** Every
 		// other channel holds ONE claim, so a new clip on it replaced whatever was there and the
 		// remembered handle is dead by construction. The overlay channel holds four layers allocated
 		// lowest-free, so an ordinary shot takes its own slot and displaces nothing — clearing the row
@@ -807,14 +807,14 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 		return false;
 	}
 
-	// --- which channel plays it, decided before anything is resolved (LIFE5) ----------------------
+	// Which channel plays it, decided before anything is resolved.
 	//
 	// The reaction route needs the graph's own branch, which only a compiled biped class carries. A
 	// body without one — the plain native host, or a generated class built before the branch existed —
 	// falls back to the montage slot with a single cell, which is a lesser pose rather than none.
 	UElysiumBipedAnimInstance* Biped = Cast<UElysiumBipedAnimInstance>(Inst);
 	// A HELD reaction — one a predicate releases — has to REPEAT for as long as it stands. Both hosts
-	// can: the branch's two players take their loop bit off the `bReactionLoops` pin (LIFE5), and the
+	// can: the branch's two players take their loop bit off the `bReactionLoops` pin, and the
 	// DefaultSlot montage has always repeated one (`PlayOneShot` already asks for it).
 	//
 	// **The fork is on the GRID, and it is a fork rather than a refusal because a montage plays one
@@ -908,7 +908,7 @@ bool UElysiumEntityBodies::PlayNpcOneShot(USkeletalMeshComponent* Body,
 	// The reaction, built before the claim because the claim's own duration is derived from it: the
 	// three release conditions each state a different life, and one expression answers both halves
 	// (`ActiveSeconds`/`TotalSeconds` on the play), which is what stops the claim expiring mid-fade.
-	// LIFE5 — the identity both routes publish their phase under. The LABEL is the vocabulary key the
+	// The identity both routes publish their phase under. The LABEL is the vocabulary key the
 	// request was addressed by, which is what `FElysiumBlendTable::Events` is keyed on; a request
 	// that carries none was addressed by the animation name directly, so that is the key. It is the
 	// same expression the channel claim below takes for the same reason.
@@ -1176,7 +1176,7 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 	}
 	if (UElysiumBipedAnimInstance* Inst = Cast<UElysiumBipedAnimInstance>(Body->GetAnimInstance()))
 	{
-		// LIFE5 — the cinematic bank owns the clip and the scene addressed it by name, so the two
+		// The cinematic bank owns the clip and the scene addressed it by name, so the two
 		// together are the key its event timeline is filed under.
 		Inst->PlayClip(FElysiumClipIdentity(BankStem, ClipName), Anim, bLoop);
 	}
@@ -1185,7 +1185,7 @@ bool UElysiumEntityBodies::PlayCinematicClip(USkeletalMeshComponent* Body, const
 		Body->PlayAnimation(Anim, bLoop);
 	}
 
-	// LIFE4 — the scene's claim on the base channel. A choreographed clip is pinned to scene time
+	// The scene's claim on the base channel. A choreographed clip is pinned to scene time
 	// and can be held past its own length, so the claim has no expiry: the scene owns the body until
 	// `StopCinematicClip` gives the claim back, and the every-tick locomotion publish — idle or
 	// travelling — yields to it in between.
@@ -1310,9 +1310,7 @@ void UElysiumEntityBodies::ReleaseCinematicClaim(USkeletalMeshComponent* Body)
 	}
 }
 
-// ================================================================================================
-// The death handoff (LIFE5)
-// ================================================================================================
+// The death handoff.
 
 void UElysiumEntityBodies::ReleaseNpcReaction(USkeletalMeshComponent* Body)
 {
@@ -1640,15 +1638,15 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// The visible mesh never collides; mobile NPCs wrap it in a native character capsule.
 	Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	Owner->AddInstanceComponent(Comp);
-	// The face (12.3). A model with no facial sidecar gets a null rig and animates with a still
+	// The face. A model with no facial sidecar gets a null rig and animates with a still
 	// face — the normal case for animals, crowd bodies and every player body, none of which carry
-	// flex data. Nothing drives the controllers yet: scene expressions are 12.1's and lipsync 12.5's.
+	// flex data. Nothing drives the controllers except explicit writes: scene expressions and lipsync.
 	if (UElysiumBodyAnimInstance* Inst = Cast<UElysiumBodyAnimInstance>(Comp->GetAnimInstance()))
 	{
 		if (Anims != nullptr)
 		{
 			Inst->SetFacialRig(Anims->GetFacialRig(Stem));
-			// The composition stage (CAP7.2). Null for a model declaring no procedural rule,
+			// The composition stage. Null for a model declaring no procedural rule,
 			// which poses under Unreal's own hierarchy alone.
 			Inst->SetCompositionRig(Anims->GetCompositionRig(Stem));
 		}
@@ -1657,7 +1655,7 @@ USkeletalMeshComponent* UElysiumEntityBodies::BuildNpcVisual(const FString& Stem
 	// The authored garment, if this model has one. After the anim instance is installed, because
 	// the cloth component follows this body as its leader pose and needs it already posed.
 	ElysiumNpcVisual::InstallGarment(Comp, Stem);
-	// The eyes (12.4). Independent of the facial rig above: a player body binds eyes here and no
+	// The eyes. Independent of the facial rig above: a player body binds eyes here and no
 	// flex rig at all, which is the shipped state for 57 of the 59 of them.
 	EyePass.InstallEyes(Comp, EyeSet, Disposition);
 	// Visibility is a pose-commit boundary for characters as well as placed models. This is the

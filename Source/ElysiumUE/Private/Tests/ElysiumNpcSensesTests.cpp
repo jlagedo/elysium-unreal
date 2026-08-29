@@ -212,10 +212,10 @@ namespace
 	};
 }
 
-// =====================================================================================
+
 // `InitPerceptionDistances`: the `-1.0` sentinel, the two inspection tables, and what an
 // unreachable table falls back to.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesPerceptionTest,
 	"Elysium.Substrate.NpcSenses.Perception", GElysiumTestFlags)
@@ -301,10 +301,10 @@ bool FElysiumNpcSensesPerceptionTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `SetClosestPlayer` + `SetPlayerLOS`: the 2 s cadence, the 512-unit no-trace bypass, the
 // far trace, and the eight-second in-cone grace.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesSightTest,
 	"Elysium.Substrate.NpcSenses.Sight", GElysiumTestFlags)
@@ -408,10 +408,10 @@ bool FElysiumNpcSensesSightTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `GatherEnemyConditions`: the ten-failure debounce, and the memory bit that makes the
 // found/lost outputs edges rather than a per-think stream.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesEnemyLosTest,
 	"Elysium.Substrate.NpcSenses.EnemyLos", GElysiumTestFlags)
@@ -513,10 +513,10 @@ bool FElysiumNpcSensesEnemyLosTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Hearing: the bus cursor, radius x scalar admission, the occlusion policy, and the
 // category -> output mapping.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesHearingTest,
 	"Elysium.Substrate.NpcSenses.Hearing", GElysiumTestFlags)
@@ -629,9 +629,9 @@ bool FElysiumNpcSensesHearingTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The memory is what survives losing sight, so it is what a save has to carry.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesMemorySaveTest,
 	"Elysium.Substrate.NpcSenses.MemorySave", GElysiumTestFlags)
@@ -720,10 +720,10 @@ bool FElysiumNpcSensesMemorySaveTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Where the senses do NOT run: a scripted owner suppresses condition gathering, and an
 // inert or dead body has no senses at all.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcSensesSuppressionTest,
 	"Elysium.Substrate.NpcSenses.Suppression", GElysiumTestFlags)

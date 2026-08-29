@@ -10,9 +10,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumEnv, Log, All);
 
-// ---------------------------------------------------------------------------
-// .env sidecar
-// ---------------------------------------------------------------------------
+// .env sidecar.
 
 bool FElysiumEnvDef::Parse(const FString& EnvPath, FElysiumEnvDef& Out)
 {
@@ -277,9 +275,7 @@ void ElysiumEnvironment::SkySliceSource(int32 Slice, int32 X, int32 Y, int32 N,
 	RotSource(SkySlices[FMath::Clamp(Slice, 0, 5)].Rot, X, Y, N, OutSrcX, OutSrcY);
 }
 
-// ---------------------------------------------------------------------------
-// Sky faces -> IBL cubemap
-// ---------------------------------------------------------------------------
+// Sky faces -> IBL cubemap.
 
 UTextureCube* ElysiumEnvironment::BuildSkyCube(const FString& TexDir)
 {

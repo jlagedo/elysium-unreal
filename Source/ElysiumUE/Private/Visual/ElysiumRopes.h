@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// One cable segment recovered from a map's `.ropes` sidecar (roadmap 8.7). VtMB strings its
+// One cable segment recovered from a map's `.ropes` sidecar. VtMB strings its
 // overhead wires as chains of move_rope/keyframe_rope nodes linked by NextKey; both classnames
 // construct the same `CRopeKeyframe`, and the exporter (UE_bsp_to_scene.py) resolves each chain
 // into per-segment lines, already in Unreal space (cm, Z-up, left-handed), so the runtime reads

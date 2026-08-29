@@ -8,7 +8,7 @@
 #include "Serialization/MemoryReader.h"
 #include "Serialization/MemoryWriter.h"
 
-// --- Persistence (11.9) ------------------------------------------------------------------
+// --- Persistence ---
 // The map snapshot. Both halves run against the *same* world the game runs against, which is what
 // `docs/architecture/save-architecture.md` §5 means by "a snapshot is produced by exactly the same code path a save
 // uses": a travel boundary and a Save Game call reach Freeze identically.
@@ -30,10 +30,10 @@ FElysiumEntityState FElysiumEntityWorld::CaptureState(const FElysiumEntity& E) c
 	// The live origin is not a registered field and cannot become one: the def's `origin` key is
 	// still the raw Source-space string, and Construct applies every key that has a field, so a
 	// registered `origin` would overwrite the converted placement at every spawn. It rides here
-	// instead — `point_teleport` and `Entity.SetOrigin` move entities for real (11.4).
+	// instead — `point_teleport` and `Entity.SetOrigin` move entities for real.
 	S.Origin = E.Origin;
 
-	// The R2 field walk, in the registry's sorted order so two captures of one state agree byte
+	// The field walk, in the registry's sorted order so two captures of one state agree byte
 	// for byte (§8).
 	const FElysiumClassRegistry& Reg = FElysiumClassRegistry::Get();
 	if (E.Class)
@@ -96,13 +96,13 @@ void FElysiumEntityWorld::Freeze(FElysiumMapSnapshot& Out) const
 		const FElysiumEntity& E = *EntPtr;
 
 		// The player is the Player block's, not this map's — it travels, and its record already
-		// carries everything the entity holds (11.4's hydrate/dehydrate pair).
+		// carries everything the entity holds (the hydrate/dehydrate pair).
 		if (Player.IsSet() && E.Handle.Index == Player.Index)
 		{
 			continue;
 		}
 		// Anything carried out of the map is recorded absent rather than saved here (§5). Nothing
-		// answers true until 9.8 makes items owned entities; the rule is the mechanism, not a stub.
+		// answers true for an inventory item that travels with the player; the rule is the mechanism, not a stub.
 		if (E.TravelsWithPlayer())
 		{
 			Out.AbsentEntities.Add(E.Handle.Index);
@@ -252,7 +252,7 @@ int32 FElysiumEntityWorld::ApplySnapshot(const FElysiumMapSnapshot& Snapshot)
 		}
 	}
 
-	// 9.8 — an inventory's handle list is a CACHE of what the items' own Save-flagged fields say, so
+	// An inventory's handle list is a CACHE of what the items' own Save-flagged fields say, so
 	// it is re-derived rather than serialized twice. It runs here, after every record has landed and
 	// every dead flag is final, because an item may restore either side of the character carrying it.
 	for (const TUniquePtr<FElysiumEntity>& Candidate : EntityList)
@@ -371,8 +371,8 @@ bool FElysiumEntityWorld::ApplyEntityRecord(const FElysiumEntityState& S,
 	// restoring a live record re-arms NPC admission and replaces the saved schedule/leaf state.
 	// Records which omit this field came from an older active-map payload and default to true.
 	// point_teleport is the one class whose activation-derived cache must persist; before that
-	// cache was serialized, an empty leaf meant Activate had to rebuild it from the restored
-	// live transform. Preserve that legacy migration instead of letting the new latch skip it.
+	// cache is absent from the leaf blob, Activate rebuilds it from the restored live transform.
+	// Skipping that rebuild on an empty leaf would drop the cache.
 	E->bActivateCalled = S.bActivateCalled
 		&& !(E->ActivationStateMustPersist() && S.LeafState.IsEmpty());
 	E->NextThink = S.NextThink;

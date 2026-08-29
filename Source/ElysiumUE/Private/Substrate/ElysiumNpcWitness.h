@@ -11,8 +11,8 @@ class FElysiumNpc;
 class FElysiumPlayer;
 struct FElysiumSaveArchive;
 
-// Cycle 10c — NPC law witnessing: the per-NPC half of the player-law transaction whose player half
-// landed in cycle 10b (`Substrate/ElysiumLaw.h`).
+// NPC law witnessing: the per-NPC half of the player-law transaction whose player half lives in
+// `Substrate/ElysiumLaw.h`.
 //
 // The behaviour is owned by `docs/vtmb/npc-ai-reverse-engineering.md` § "Player-law observation
 // transaction" and `docs/vtmb/player-entity.md` § "Law, Masquerade and world response"; the feed
@@ -220,9 +220,7 @@ namespace ElysiumNpcWitness
 		const FVector& Origin, const FElysiumEntityHandle& Offender);
 }
 
-// ================================================================================================
-// The per-NPC retained state
-// ================================================================================================
+// --- The per-NPC retained state ---
 
 // One channel's retained half. "independent criminal and supernatural processed counts, witnessed
 // levels, locations and offender handles" plus that channel's own ignore deadline.

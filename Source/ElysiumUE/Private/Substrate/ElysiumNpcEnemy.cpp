@@ -41,7 +41,7 @@ namespace
 		return true;
 	}
 
-	// Is this candidate currently seen? Cycle 4's sight path tracks only the player, so any other
+	// Is this candidate currently seen? The sight path tracks only the player, so any other
 	// candidate is unseen — the same deliberate scope as `ElysiumNpcConditions.cpp`'s seen set, and
 	// the reason step 4 of the arbitration is exercisable at all today.
 	bool NpcEnemyIsCandidateVisible(const FElysiumNpc& Npc, const FElysiumEntityHandle& Handle)
@@ -434,7 +434,7 @@ bool ElysiumNpcEnemy::ChooseEnemy(FElysiumNpc& Npc, FElysiumNpcConditions& Cond,
 	{
 		Cond.Set(EElysiumNpcCond::LostEnemy);
 		// The remembered target kind decides which surface fires. These are the LOST-THE-ACTOR
-		// outputs, distinct from cycle 4's lost-LINE-OF-SIGHT pair: losing sight neither clears the
+		// outputs, distinct from the lost-LINE-OF-SIGHT pair: losing sight neither clears the
 		// enemy nor forgets the player, and this transaction does both.
 		static const FName OnLostPlayer(TEXT("OnLostPlayer"));
 		static const FName OnLostEnemy(TEXT("OnLostEnemy"));
@@ -502,7 +502,7 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	ElysiumNpcCond::GatherHearing(Npc, Previous, Cond);
 	ElysiumNpcCond::GatherSight(Npc, Now, Cond);
 
-	// ===================== Cycle 10c — the player-law lanes join step 1 =========================
+	// The player-law lanes join step 1.
 	// The recovered pass "clears and recomputes `COND_INVESTIGATE_LEVEL` plus four law conditions"
 	// as part of condition gathering, and the direct-player lane consumes the player-LOS latch
 	// `GatherSight` has just run against — so it lands at the TAIL of step 1, after sight and before
@@ -514,7 +514,6 @@ void ElysiumNpcEnemy::GatherConditions(FElysiumNpc& Npc, double Now)
 	// no player state, and never mutates Masquerade or spawns police — that is schedule selection's
 	// half, and keeping the two apart is the recovered split.
 	ElysiumNpcWitness::GatherLawConditions(Npc, Now, Cond);
-	// =============================================================================================
 
 	// 2. The enemy-memory refresh: the recovered pass updates its records BEFORE `ChooseEnemy` runs,
 	//    which is what lets the stickiness test see a death in the same pass that noticed it. The

@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "ElysiumLookCurve.h"
 
-// S5 — intent is data (roadmap 11.6, `docs/architecture/runtime-architecture.md` §8.3). One frame of player intent as
+// S5 — intent is data (`docs/architecture/runtime-architecture.md` §8.3). One frame of player intent as
 // a value: what the player asked for, not which key is currently down. Movement, the camera and the
 // command bus all read this, and nothing anywhere polls a key — which is what makes headless play,
 // deterministic replay and a rebindable `+speed` gait the same mechanism rather than three.
@@ -50,7 +50,7 @@ enum class EElysiumButton : uint64
 	CharEditor  = 1ull << 23,
 	QuestLog    = 1ull << 24,
 
-	// Camera (`docs/vtmb/camera-view-modes.md`; consumed at 11.7)
+	// Camera (`docs/vtmb/camera-view-modes.md`)
 	CamIn       = 1ull << 25,
 	CamOut      = 1ull << 26,
 	CamPitchUp  = 1ull << 27,
@@ -214,7 +214,7 @@ struct FElysiumUserCmd
 	FString Describe() const;
 
 	// One line of a recorded stream: `seq dt fwd side up yaw pitch buttons`. Plain text so a stream
-	// is diffable and hand-editable, which is what makes it usable as a beat-script input (11.10).
+	// is diffable and hand-editable, which is what makes it usable as a beat-script input.
 	FString ToLine() const;
 	static bool FromLine(const FString& Line, FElysiumUserCmd& Out);
 };
@@ -223,7 +223,7 @@ struct FElysiumUserCmd
 //
 // Latches, not polls: VtMB's `+speed` is a press/release pair, and a key held across an input-scope
 // change must not bleed into whatever comes next — `ClearButtons` is what the arbiter calls, which
-// is the same thing Enhanced Input's `bIgnoreAllPressedKeysUntilRelease` does at 10.6.
+// is the same thing Enhanced Input's `bIgnoreAllPressedKeysUntilRelease` does.
 struct FElysiumUserCmdBuilder
 {
 	// A `+cmd` / `-cmd` pair. Idempotent: two keys bound to one verb both press and the release of
@@ -296,7 +296,7 @@ private:
 };
 
 // A recorded run of commands. Recording and replaying the same stream is the acceptance test for
-// S5 — the whole point of intent being a value — and it is what 11.10's play tier drives the game
+// S5 — the whole point of intent being a value — and it is what a play-tier driver feeds the game
 // with when there is no input device at all.
 struct FElysiumUserCmdStream
 {

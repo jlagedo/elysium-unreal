@@ -72,9 +72,9 @@ struct FElysiumPlacedModelBody
 	bool IsValid() const { return Visual != nullptr && Attach != nullptr; }
 };
 
-// Every authored runtime placement is expressed in Source feet space. The one exception is the
-// existing save/stage payload, which predates the player entity and stores Unreal's capsule centre.
-// Carry the space with the value and convert exactly once, when the real body's half-height is known.
+// Every authored runtime placement is expressed in Source feet space. The save/stage payload stores
+// Unreal's capsule centre instead. Carry the space with the value and convert exactly once, when
+// the real body's half-height is known.
 enum class EElysiumPlayerPlacementSpace : uint8
 {
 	Feet,
@@ -115,7 +115,7 @@ enum class EElysiumNpcGaitKind : uint8
 	Sneak,
 };
 
-// What a launched body is doing right now, as the motor can observe it (LIFE5).
+// What a launched body is doing right now, as the motor can observe it.
 //
 // **Geometry and engine state only — no verdict.** Whether a flight has ENDED, and whether a
 // contact counts as the wall that diverts a chain into its `..._WALL_FALL` sub-chain, are the
@@ -141,7 +141,7 @@ class IElysiumNpcMotor
 public:
 	virtual ~IElysiumNpcMotor() = default;
 
-	// --- The ballistic pair (LIFE5) ------------------------------------------------------------
+	// --- The ballistic pair ---
 	//
 	// EXECUTION. Retail's `SetAbsVelocity(m_KnockbackVelocity)` — a straight ASSIGNMENT, not an
 	// impulse and not a physics solve (`docs/vtmb/combat-and-damage.md` -> "Launch is a velocity
@@ -222,10 +222,9 @@ public:
 	// place that states it — rather than the motor inventing a constant of its own.
 	virtual float GaitSpeed(EElysiumNpcGaitKind Gait, float MoveYawDegrees = 0.0f) const { return 0.f; }
 
-	// 11.14 — the reachability query: where on the navigable surface does this arbitrary point
-	// land? Geometry only. The caller keeps the decision — whether the projected point is still the
-	// point it wanted — which is what stops this from becoming "give me somewhere good to stand"
-	// (S11/K13).
+	// Where on the navigable surface this arbitrary point lands. Geometry only. The caller keeps
+	// the decision — whether the projected point is still the point it wanted — which is what stops
+	// this from becoming "give me somewhere good to stand" (S11/K13).
 	//
 	// **False means unprojectable**, and that is also the default: a motor implementation with no
 	// navigation behind it (a headless world, a recording double that has not opted in) genuinely
@@ -236,7 +235,7 @@ public:
 		return false;
 	}
 
-	// The body's realized locomotion (CCC1) — **the same record the player's mover publishes**, so
+	// The body's realized locomotion — **the same record the player's mover publishes**, so
 	// the cast's locomotion and the player's cannot become two systems that happen to play the same
 	// files (`docs/architecture/animation-architecture.md` §3.2). Distinct from `Sample` above, which
 	// answers where the body is and whether its request is done; this answers how it is moving.
@@ -248,7 +247,7 @@ public:
 	virtual FElysiumLocomotionSample SampleLocomotion() const = 0;
 };
 
-// The substrate's outbound seam (runtime-architecture.md §7, roadmap 11.2).
+// The substrate's outbound seam (`docs/architecture/runtime-architecture.md` §7).
 //
 // FElysiumEntityWorld and every entity class under it are plain C++. What they need from the
 // engine — a body to stand, a voice to play, a map to travel to, a panel to put on screen — comes
@@ -290,8 +289,8 @@ struct FElysiumSwingSweep
 //
 // Implemented by AElysiumMapActor: every component it builds belongs to it and dies with it, so
 // "the world logically owns the embodiments, the actor physically owns them" stays true (R1).
-// The player half is here because the pawn IS the player's body (S3); 11.4 re-homes the player's
-// *state* onto an entity, and these calls become ordinary entity operations at that point.
+// The player half is here because the pawn IS the player's body (S3); player state lives on the
+// entity, and these calls are ordinary entity operations.
 // --------------------------------------------------------------------------------------------
 class IElysiumEmbodiment
 {
@@ -307,7 +306,7 @@ public:
 	// sky-scope entity, 1 for everything else).
 	virtual float BodyScaleFor(const FElysiumEntityDef& Def) const = 0;
 
-	// B3/8.5 — stand one NPC skeletal body, playing the standing idle its disposition selects.
+	// Stand one NPC skeletal body, playing the standing idle its disposition selects.
 	// Null on a missing/failed glb or an empty stem.
 	virtual USkeletalMeshComponent* BuildNpcVisual(const FString& Stem, const FVector& Location,
 		const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant) = 0;
@@ -315,7 +314,7 @@ public:
 	// identity through collision ingress. Null is the supported headless, backdrop,
 	// disabled-navigation, or failed-spawn path; the NPC remains a standing entity.
 	//
-	// `Stem` and `Variant` are what the body's own animation selection is keyed on (CCC4): the model
+	// `Stem` and `Variant` are what the body's own animation selection is keyed on: the model
 	// names its clip vocabulary, and the variant is the repeatable token weighted choice rides on. The
 	// caller is the one place that knows both, so they travel with the body rather than being looked
 	// back up from it.
@@ -338,7 +337,7 @@ public:
 	// Crossfade a live body to a named clip; OutSeconds (optional) receives its authored length,
 	// which is what a scripted_sequence schedules its OnEndSequence off.
 	//
-	// **The one montage-slot mechanism** (LIFE5): every named clip a producer puts on a body arrives
+	// **The one montage-slot mechanism**: every named clip a producer puts on a body arrives
 	// here, takes its base-channel claim at the band the segment states, and plays into the body's
 	// `DefaultSlot`. A `scripted_sequence`'s idle/play/post-idle and an interesting place's
 	// enter/hold/leave are the same run through it, differing only in band and in where the run's
@@ -349,7 +348,7 @@ public:
 	virtual bool PlayNpcClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FElysiumClipSegment& Segment, float* OutSeconds) = 0;
 
-	// Give back the HELD segment claim standing on this body (LIFE5).
+	// Give back the HELD segment claim standing on this body.
 	//
 	// The release half of a `FElysiumClipSegment::bHoldUntilReleased` run. That claim has no duration
 	// — it spans every segment of the run — so this call is the only thing that ends one, and every
@@ -400,7 +399,7 @@ public:
 		OutGroundSpeedCmPerSecond = 0.f;
 		return false;
 	}
-	// Play one already-resolved cell over whatever owns the base pose (LIFE5). The (owner, animation
+	// Play one already-resolved cell over whatever owns the base pose. The (owner, animation
 	// name) pair addresses the baked clip directly, so nothing here consults the clip vocabulary — a
 	// vocabulary lookup would re-resolve the label at neutral pose parameters and collapse a
 	// directional fan onto its forward cell.
@@ -414,7 +413,7 @@ public:
 		return false;
 	}
 
-	// Give back the HELD reaction claim standing on this body and take its pose down (LIFE5).
+	// Give back the HELD reaction claim standing on this body and take its pose down.
 	//
 	// The release half of a `EElysiumReactionRelease::Predicate` play. That claim carries no duration
 	// at all — the pose stands for exactly as long as the predicate that asked for it — so this call
@@ -424,7 +423,7 @@ public:
 	virtual void ReleaseNpcReaction(USkeletalMeshComponent* Body) {}
 
 	// Whether the HELD reaction claim taken on this body still stands, and if not, whether the base
-	// channel is free for one to be re-taken (LIFE5).
+	// channel is free for one to be re-taken.
 	//
 	// **A query, not a callback**, which is the direction this seam runs in: the substrate asks the
 	// engine and nothing in the engine reaches back into an entity — a presentation backchannel is
@@ -439,7 +438,7 @@ public:
 		return EElysiumHeldReactionState::Free;
 	}
 
-	// --- The death handoff (LIFE5) ---------------------------------------------------------------
+	// --- The death handoff ---
 	//
 	// Three calls, because death is the one transaction that ends every claim a body holds at once
 	// and then takes the pose away from animation altogether.
@@ -464,7 +463,7 @@ public:
 	// keeps its transform; only the pose stops advancing.
 	virtual void HoldBodyFinalPose(USkeletalMeshComponent* Body) {}
 
-	// --- The sequence-event seam (LIFE5) --------------------------------------------------------
+	// --- The sequence-event seam ---
 	//
 	// Where one channel of a body is standing on its clip THIS frame. The pose layer is the only
 	// thing that knows: a montage, a graph state and a blended fan all carry their own position, and
@@ -590,9 +589,9 @@ public:
 	// every idle schedule in exactly the headless runs meant to prove it.
 	virtual bool IsNpcBodyVisible(USkeletalMeshComponent* Body) { return true; }
 
-	// 12.1 — a choreo scene's whole-cast performance. The clip lives in a cinematic anim set that
-	// no NPC's include tree names, so it is addressed by the scene's own anim-set model plus the
-	// actor's `bonerename` root (PL16) rather than through the clip vocabulary.
+	// A choreo scene's whole-cast performance. The clip lives in a cinematic anim set that no NPC's
+	// include tree names, so it is addressed by the scene's own anim-set model plus the actor's
+	// `bonerename` root rather than through the clip vocabulary.
 	virtual bool PlayCinematicClip(USkeletalMeshComponent* Body, const FString& Stem,
 		const FString& AnimSetModel, const FString& BoneRoot, const FString& ClipName,
 		bool bLoop, float* OutSeconds) = 0;
@@ -662,7 +661,7 @@ public:
 	virtual bool GetHeadFrame(USkeletalMeshComponent* Body, FVector& OutPosition,
 		FVector& OutForward) const { return false; }
 
-	// LIFE5 — one bone's CURRENT world transform on a body, by name.
+	// One bone's CURRENT world transform on a body, by name.
 	//
 	// The swing's contact segment is stated bone-local, so the frame it is stated in has to be
 	// asked for rather than derived: where a limb IS this frame is the pose layer's answer and the
@@ -712,8 +711,8 @@ public:
 	virtual UStaticMeshComponent* BuildBrushVisual(const FString& Stem,
 		USceneComponent* ParentBody, float UniformScale, bool bSky) = 0;
 
-	// 8.3 — stand a non-solid dynamic-prop body. 8.4 — stand the same mesh with its `.phy` collision
-	// and authored mass, ready for the leaf to drive SetSimulatePhysics. Null on an unbaked model.
+	// Stand a non-solid dynamic-prop body, or the same mesh with its `.phy` collision and authored
+	// mass, ready for the leaf to drive SetSimulatePhysics. Null on an unbaked model.
 	virtual UStaticMeshComponent* BuildPropVisual(const FString& Stem, const FVector& Location,
 		const FQuat& Rotation, float UniformScale) = 0;
 	virtual EElysiumItemGroundModelState ItemGroundModelState(const FString& ModelPath)
@@ -769,7 +768,7 @@ public:
 	virtual FElysiumUseQueryResult QueryPlayerUse(
 		const FElysiumEntityHandle& CurrentFocus) const = 0;
 
-	// B6 — `CBasePlayer::Replenish`'s direct victim search (`docs/vtmb/feeding.md` § "Target
+	// `CBasePlayer::Replenish`'s direct victim search (`docs/vtmb/feeding.md` § "Target
 	// acquisition and acceptance"): a hull trace from the view position toward the local offset
 	// (32 forward, 0 right, -32 vertical) with extents (-8,-8,-8)..(8,8,8). It is a separate query
 	// from `+use` because it is a separate retail search with its own shape and its own mask — the
@@ -779,16 +778,16 @@ public:
 	// (paired state, automatic acceptance, `ResistsFeeding`, the opposed check) stays in the
 	// substrate. Invalid means nothing was in the hull, which is the ordinary answer. The cone /
 	// radius survey that supplies the small-animal route (`rat_feed_arc`, `rat_feed_radius`) is
-	// deliberately absent: rat feeding is out of B6's scope.
+	// deliberately absent: rat feeding is out of this ordinary-feed scope.
 	virtual FElysiumEntityHandle QueryFeedTarget() const { return FElysiumEntityHandle::Invalid(); }
 
-	// LIFE5 — the ranged shot's aim query: what the player's crosshair is on, out to `MaxRangeCm`.
+	// The ranged shot's aim query: what the player's crosshair is on, out to `MaxRangeCm`.
 	//
 	// **A stated divergence, not a reproduction.** Retail's ranged attack builds a fire packet
 	// carrying a muzzle origin, an aim vector and a spread cone, and traces one ray per `Ammo_Fired`
 	// through that cone. The cone itself is the authored `SpreadAngle`/`SpreadAngleMax` pair
 	// selected by the live ranged-accuracy value, and THAT interpolation input is unrecovered
-	// (RE-A3, owned by 13.3) — so no honest reproduction of the dispersion exists to write yet.
+	// (`docs/vtmb/combat-and-damage.md`) — so no honest reproduction of the dispersion exists to write yet.
 	// This answers the cone's degenerate zero-spread case: one ray down the aim, reduced to the
 	// single victim handle the attack transaction's `Swing.Opponent` already carries. When the input
 	// is recovered, the packet replaces this rather than wrapping it.
@@ -801,7 +800,7 @@ public:
 		return FElysiumEntityHandle::Invalid();
 	}
 
-	// 11.15 — the two perception queries (`docs/architecture/gameplay-systems-architecture.md`
+	// The two perception queries (`docs/architecture/gameplay-systems-architecture.md`
 	// §5.5.3). Each supplies a missing WORLD TERM and never a verdict: cone, range, cadence, grace,
 	// debounce, the `vision`/`hearing`/`npc_perception` tuning and every threshold stay substrate
 	// rules (K13). A service that answered "this NPC can see the player" would have taken the
@@ -822,7 +821,7 @@ public:
 	// carries no NPC/player bits, so a body standing between two points does not break the line.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const { return true; }
 
-	// LIFE5 — one sub-step of a melee swing's swept contact: which live characters' bodies the
+	// One sub-step of a melee swing's swept contact: which live characters' bodies the
 	// authored contact segment passed through as it moved from where it was at the start of the
 	// sub-step to where it is at its end.
 	//
@@ -906,7 +905,7 @@ public:
 	// is what a player who is not airborne anywhere gets.
 	virtual FString GetPlayerBaseActivity() const { return FString(); }
 
-	// LIFE5 — discard the player body's carried motion, `CBasePlayer::PostThink`'s melee stop.
+	// Discard the player body's carried motion, `CBasePlayer::PostThink`'s melee stop.
 	//
 	// Retail's pair is `SetAbsVelocity(vec3_origin)` then `SetLocalVelocity(vec3_origin)`, and this
 	// runtime's body carries the same two: the mover's world velocity, and the locomotion sample
@@ -929,7 +928,7 @@ public:
 	virtual bool IsNpcMakerInPlayerViewCone(const FVector&) const { return false; }
 	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector&, float) const { return false; }
 
-	// 11.7 — the legacy scripted-shot channel. `SetCamera(shotfile)`, `camera_keyframe`, and the feed
+	// The legacy scripted-shot channel. `SetCamera(shotfile)`, `camera_keyframe`, and the feed
 	// camera push onto the player camera's one weight stack through here, and
 	// `RemoveCamera` pops. `ShotFile` keys `vdata/camerashots/`; `Subject` is the entity the shot is
 	// about, which is what its `DialogTarget` anchors resolve to. Returns 0 when the shot does not
@@ -1005,7 +1004,7 @@ class IElysiumTravel
 public:
 	virtual ~IElysiumTravel() = default;
 
-	// P4.6 trigger_changelevel — queue a landmark transition. Offset is the player's displacement
+	// `trigger_changelevel` — queue a landmark transition. Offset is the player's displacement
 	// from THIS map's landmark, re-added to the destination's same-named one; Yaw is carried across.
 	virtual void RequestLandmarkTravel(const FString& Map, const FString& Landmark,
 		const FVector& Offset, float Yaw) = 0;
@@ -1016,10 +1015,10 @@ public:
 // --------------------------------------------------------------------------------------------
 // Presenter — what the substrate puts on screen.
 //
-// Implemented by UElysiumPresentationSubsystem (11.8), the world-scoped publisher of
+// Implemented by UElysiumPresentationSubsystem, the world-scoped publisher of
 // FElysiumViewState. These are **announcements of discrete moments**, not the state itself: the
 // fade, the open panel and the open conversation stay on FElysiumEntityWorld, because each is world
-// state with a lifetime (the map epoch owns it, and 11.9 saves it). The publisher samples that state
+// state with a lifetime (the map epoch owns it and saves it). The publisher samples that state
 // once per frame and uses these calls to know *when* something happened, which is what its discrete
 // delegates carry — a diff cannot tell a conversation that closed and reopened in one frame from one
 // that never moved.
@@ -1071,21 +1070,21 @@ class IElysiumPresenter
 public:
 	virtual ~IElysiumPresenter() = default;
 
-	// P4.5 env_fade — a full-screen colour fade. Parameters are the Fade input's, verbatim.
+	// `env_fade` — a full-screen colour fade. Parameters are the Fade input's, verbatim.
 	virtual void StartFade(const FLinearColor& Color, float Duration, float HoldTime, float MaxAlpha,
 		bool bFadeIn, bool bAutoReverse) = 0;
 
-	// P4.10 game_sign — the one sign panel on screen. CloseSign is the dismissal (left-click,
+	// `game_sign` — the one sign panel on screen. CloseSign is the dismissal (left-click,
 	// CloseWindow, or the owner dying).
 	virtual void OpenSign(const FElysiumEntityHandle& Owner, const TSharedPtr<const FElysiumSignData>& Data,
 		float FadeInSeconds) = 0;
 	virtual void CloseSign() = 0;
 
-	// 9.1/B4 — the one conversation on screen.
+	// The one conversation on screen.
 	virtual void OpenDialog(const FElysiumEntityHandle& Owner, FElysiumDlgConversation& Conversation) = 0;
 	virtual void CloseDialog() = 0;
 
-	// 8.9 — a FIFO HUD notification. Unlike the replaceable retained surfaces above, every admitted
+	// A FIFO HUD notification. Unlike the replaceable retained surfaces above, every admitted
 	// event matters: same-frame grants stay distinct and are presented in arrival order.
 	virtual void PostNotification(const FElysiumNotification& Notification) = 0;
 };

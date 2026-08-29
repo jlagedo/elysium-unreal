@@ -5,7 +5,7 @@
 
 class UElysiumAudioSubsystem;
 
-// P6.3 — the VtMB SoundScheme system (audio_pipeline.md §5/§6; decompiled CSoundScheme parser
+// The VtMB SoundScheme system (`docs/vtmb/audio_pipeline.md` §5/§6; decompiled CSoundScheme parser
 // vampire.dll @0x1022a930). A scheme is one per-area unit that bundles: a looping ambient bed, an
 // explore/combat/alert music triad, N polar-placed random one-shots, and a DSP room assignment.
 // `ambient_soundscheme` entities point at a `sound/Schemes/*.txt` file and are crossfaded by Source
@@ -17,7 +17,7 @@ class UElysiumAudioSubsystem;
 // in FElysiumSoundSchemeManager (a plain-C++ object owned by AElysiumMapActor, ticked per frame).
 
 // Which music stem the state machine is crossfading toward. VtMB gates this from combat scoring
-// (Python world.SetSafeArea, P9); until that lands the state is debug/cvar-driven (elysium.MusicState).
+// (Python world.SetSafeArea). The live state is debug/cvar-driven (`elysium.MusicState`).
 enum class EElysiumMusicState : uint8
 {
 	Explore,   // safe area — the scheme's `Music` stem
@@ -97,18 +97,18 @@ public:
 	// Fade the named scheme out if it is the active one (else no-op).
 	void FadeOutScheme(UElysiumAudioSubsystem* Audio, const FString& SchemeRel, float FadeSeconds);
 
-	// Per-frame: advance the random scheduler + music crossfade. PlayerLoc is the listener (unused for
-	// anchor-centred placement today, kept for a future player-relative mode). Safe with null Audio.
+	// Per-frame: advance the random scheduler + music crossfade. PlayerLoc is the listener
+	// (unused for anchor-centred placement). Safe with null Audio.
 	void Tick(UElysiumAudioSubsystem* Audio, const FVector& PlayerLoc, float DeltaSeconds);
 
 	// Stop every voice (map unload). Audio may be null (best-effort).
 	void StopAll(UElysiumAudioSubsystem* Audio);
 
-	// --- Music state machine ------------------------------------------------------------
+	// Music state machine.
 	void SetMusicState(UElysiumAudioSubsystem* Audio, EElysiumMusicState NewState, float CrossfadeSeconds = -1.f);
 	EElysiumMusicState MusicState() const { return CurrentMusicState; }
 
-	// --- Debug read (Cog Sound Schemes window) ------------------------------------------
+	// Debug read (Cog Sound Schemes window).
 	bool HasActiveScheme() const { return Active.Scheme.bParsed; }
 	const FElysiumSoundScheme& ActiveScheme() const { return Active.Scheme; }
 	const FString& ActiveSchemeRel() const { return Active.SchemeRel; }

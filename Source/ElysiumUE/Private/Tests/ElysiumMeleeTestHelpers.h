@@ -1,12 +1,11 @@
 #pragma once
 
-// Shared Substrate-tier scaffolding for the melee contact path (LIFE5).
+// Shared Substrate-tier scaffolding for the melee contact path.
 //
 // **What this exists to remove.** The melee reaction bands come out of `rules.txt`'s
 // `Melee_Reactions` block, and without them `ClassifyDefender` answers `Unclassified` — which is
-// deliberately not a band, so no blocked reaction and no knockback is ever produced. Suites
-// therefore used to re-make the composition a contact performs by calling the same functions in the
-// same order, rather than driving `FElysiumWeapon::MeleeContact` itself. That proves a copy of the
+// deliberately not a band, so no blocked reaction and no knockback is ever produced. Re-calling
+// the same functions in the same order as `FElysiumWeapon::MeleeContact` proves a copy of the
 // producer, not the producer.
 //
 // It is not necessary. `ElysiumSheetRules::BindTables` takes a `const FElysiumRules*` as the

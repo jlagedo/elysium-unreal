@@ -4,10 +4,10 @@
 #include "ElysiumEntityHandle.h"
 
 // The variant's active type. These are our own runtime categories, not VtMB's on-disk
-// `fieldtype_t` codes — the field tables (P1.3) map each VtMB code to one of these when
-// they marshal a value in or out (e.g. FLOAT/TIME -> Float, STRING/MODELNAME/SOUNDNAME ->
-// String, VECTOR/POSITION_VECTOR -> Vector, INTEGER -> Int, BOOLEAN -> Bool, the EHANDLE
-// family -> Handle; see `docs/vtmb/python_bridge.md` "Divergence").
+// `fieldtype_t` codes — the field tables map each VtMB code to one of these when they marshal a
+// value in or out (e.g. FLOAT/TIME -> Float, STRING/MODELNAME/SOUNDNAME -> String,
+// VECTOR/POSITION_VECTOR -> Vector, INTEGER -> Int, BOOLEAN -> Bool, the EHANDLE family ->
+// Handle; see `docs/vtmb/python_bridge.md` "Divergence").
 enum class EElysiumVariantType : uint8
 {
 	Void,
@@ -19,7 +19,7 @@ enum class EElysiumVariantType : uint8
 	Handle,
 };
 
-// R2/R8 — the marshalling currency for the whole entity substrate. One small tagged value
+// The marshalling currency for the whole entity substrate (R2/R8). One small tagged value
 // carries input parameters, keyvalue/field values, `G` store entries, and script results
 // through the two chokepoints. Kept a plain C++ struct (R1): no UObject, no reflection, so
 // the store, save/load, and the inspector stay in our hands.

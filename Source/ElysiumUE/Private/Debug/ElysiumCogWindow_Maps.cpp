@@ -46,7 +46,7 @@ void FElysiumCogWindow_Maps::RenderContent()
 
 	const FString CurrentName = Maps->GetCurrentMapName();
 
-	// --- Reload (the hot loop) -----------------------------------------------------------------
+	// Reload: the export→reload hot loop.
 	ImGui::BeginDisabled(CurrentName.IsEmpty());
 	if (ImGui::Button("Reload current map"))
 	{
@@ -149,13 +149,11 @@ void FElysiumCogWindow_Maps::RenderContent()
 	Row("Entered via", Map->EntryLandmark.IsEmpty()
 		? FString(TEXT("info_player_start")) : FString::Printf(TEXT("landmark %s"), *Map->EntryLandmark));
 
-	// --- Player pose + FPS (the removed elysium.debug overlay's readout) ------------------------
 	RenderPlayer();
 
-	// --- P4.6 transitions (trigger_changelevel + info_landmark) ---------------------------------
 	RenderTransitions();
 
-	// --- Load-phase timings --------------------------------------------------------------------
+	// Load-phase timings.
 	if (Map->LoadPhases.Num() > 0)
 	{
 		ImGui::SeparatorText("Load timings");

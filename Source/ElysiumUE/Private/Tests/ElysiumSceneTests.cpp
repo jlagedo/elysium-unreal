@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -122,13 +122,13 @@ namespace ElysiumSceneTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// =====================================================================================
+
 // 12.1 — the `.vcd` choreo grammar.
 //
 // Ported from research/tooling/probes/probe_scenes.py; these cases pin the traps that make such a port wrong.
 // The whole-corpus histogram check over all 5,444 shipped files is the Content tier's
 // `Elysium.Content.SceneCorpus` — this one is content-free and runs on inline text.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneParseTest, "Elysium.Substrate.SceneParse", GElysiumTestFlags)
 
@@ -335,11 +335,11 @@ bool FElysiumSceneParseTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // 12.1 — the choreo timeline. Drives FElysiumScenePlayer directly against a recording callback,
 // with no entity and no world: start/continue/end classification, the audio mixahead, and the
 // two-condition completion test.
-// =====================================================================================
+
 
 namespace
 {
@@ -626,7 +626,7 @@ bool FElysiumSceneTimelineTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // 12.2b — the lead a scene schedules its speech with belongs to the audio path we run on.
 //
 // VtMB hands its scenes `snd_mixahead`, 0.1 s. The *behaviour* that buys is "the sample is heard
@@ -637,7 +637,7 @@ bool FElysiumSceneTimelineTest::RunTest(const FString&)
 //
 // This test holds the derivation in place. It fails if the lead stops tracking what the output
 // path reports — which is what reintroducing any constant inherited from a different mixer does.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSceneMixaheadTest, "Elysium.Substrate.SceneMixahead", GElysiumTestFlags)
 
@@ -744,13 +744,13 @@ bool FElysiumSceneMixaheadTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // 12.1 — `logic_choreographed_scene` end to end, through the real world and event queue.
 //
 // The scene text is seeded into the parse cache inline, so this stays in the content-free tier.
 // Outputs land on a math_counter with distinct Add values, which is what lets one number prove
 // both which outputs fired and in what order they did not.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChoreoSceneTest, "Elysium.Substrate.ChoreoScene", GElysiumTestFlags)
 

@@ -6,7 +6,7 @@
 
 // Retail's `CBaseAnimatingOverlay` layer stack: four game-pushed animation layers, each carrying its
 // own sequence, cycle, playback rate, weight envelope and lifetime, composed over whatever owns the
-// base pose and faded independently of it (LIFE10).
+// base pose and faded independently of it.
 //
 // **A peer of the studio autolayer mechanism, not a member of it.** A base clip's `autolayers`
 // binding is data the model declares and travels with the clip; a layer here is pushed by game code

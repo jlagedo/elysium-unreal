@@ -30,10 +30,10 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMenu, Log, All);
 
-// How far the backdrop is knocked back behind the menu, 0..1. The **classic** layout's global
-// dimmer: it darkens the whole frame, because a centred column can land on anything the camera
-// framed. The rail layout does not use it — its veil is local, so the lit half of the scene is
-// never paid for. Live — the menu re-reads it on rebuild.
+// How far the backdrop is knocked back behind the menu, 0..1. The column layout's global dimmer:
+// it darkens the whole frame, because a centred column can land on anything the camera framed. The
+// rail layout does not use it — its veil is local, so the lit half of the scene is never paid for.
+// Live — the menu re-reads it on rebuild.
 static TAutoConsoleVariable<float> CVarMenuScrim(
 	TEXT("elysium.MenuScrim"),
 	0.22f,
@@ -41,7 +41,7 @@ static TAutoConsoleVariable<float> CVarMenuScrim(
 	ECVF_Default);
 
 // Which layout the screen builds. 1 = the rail (default); 0 = `CVMainMenu::PerformLayout`'s centred
-// column, kept as the A/B against the recovered original.
+// column.
 static TAutoConsoleVariable<int32> CVarMenuLayout(
 	TEXT("elysium.MenuLayout"),
 	1,
@@ -50,13 +50,12 @@ static TAutoConsoleVariable<int32> CVarMenuLayout(
 
 namespace
 {
-	// Title art is 1024x512. VtMB stretches it with the window (VGUI scales width/640 and
-	// height/480 independently, so the lockup distorts); we hold its aspect instead — a technical
-	// deficit fixed, not an artist decision overridden.
+	// Title art is 1024x512. The lockup holds its authored aspect rather than stretching
+	// independently with the window.
 	constexpr float TitleAspect = 1024.0f / 512.0f;
 	constexpr float ClassicTitleWidth = 620.0f;
 
-	// --- The rail, in virtual px on the 1024x768 canvas ----------------------------------------
+	// The rail, in virtual px on the 1024x768 canvas.
 	// Every horizontal number is measured from the **right edge**, never as a fraction of 1024:
 	// the virtual canvas is `ScreenW*768/ScreenH` wide, so it grows past 1024 with the aspect and a
 	// fraction would drift the rail inward on ultrawide.
@@ -150,7 +149,7 @@ TArray<UElysiumMainMenu::FMenuEntry> UElysiumMainMenu::BuildItemSet() const
 {
 	// Retail's own two sets. Multiplayer ships in gamemenu.res and is suppressed by the game, so it
 	// is suppressed here too; View Intro / Tutorial / Manual are shipped tokens with no destination
-	// in this rebuild yet and are left out rather than shown dead.
+	// and are left out rather than shown dead.
 	//
 	// Grouping is ours and is the item set's own shape: the act, the ledger, the exits. Captions
 	// speak in the interface's voice and name the state, not the missing system.
@@ -174,7 +173,7 @@ TArray<UElysiumMainMenu::FMenuEntry> UElysiumMainMenu::BuildItemSet() const
 
 	case EElysiumMenuMode::GameOver:
 		// The run is over: there is nothing to continue, reload without a save is the same dead
-		// run, and saving a corpse is not offered. Load lands with 11.9.
+		// run, and saving a corpse is not offered.
 		return {
 			{ TEXT("VMainMenu_BTN_LOADGAME"), TEXT("Load Game"), EElysiumMenuCommand::LoadGame, false,
 				TEXT("No saved games yet."), false, true },
@@ -247,8 +246,8 @@ void UElysiumMainMenu::Run(EElysiumMenuCommand Command)
 		break;
 
 	default:
-		// Options has no backing system yet (8.10) and is drawn disabled, so this is only reachable
-		// if an item's enabled flag is wrong.
+		// Options has no backing system and is drawn disabled, so this is only reachable if an
+		// item's enabled flag is wrong.
 		UE_LOG(LogElysiumMenu, Log, TEXT("menu command %d has no destination yet"), int32(Command));
 		break;
 	}
@@ -258,11 +257,10 @@ FReply UElysiumMainMenu::NativeOnKeyDown(const FGeometry& Geometry, const FKeyEv
 {
 	if (KeyEvent.GetKey() == EKeys::Escape)
 	{
-		// The screen is the *other* key source for one named verb (11.6). While a menu is up the
-		// input mode is UI-only and the player controller sees nothing, so the router's binding
-		// cannot fire — but `cancelselect` is the same verb either way, and the flow subsystem's
-		// implementation is what decides that Pause is the only mode Escape leaves. Consumed in
-		// every mode regardless, so the key cannot reach the game underneath.
+		// While a menu is up the input mode is UI-only and the player controller sees nothing, so
+		// the router's binding cannot fire — but `cancelselect` is the same verb either way, and
+		// the flow subsystem's implementation is what decides that Pause is the only mode Escape
+		// leaves. Consumed in every mode regardless, so the key cannot reach the game underneath.
 		ElysiumCommandBus::Exec(TEXT("cancelselect"));
 		return FReply::Handled();
 	}
@@ -336,8 +334,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRailRow(const FMenuEntry& Item, const
 				// rather than to a darker blood, which retail's own column could not distinguish.
 				return FSlateColor(ElysiumUI::Palette::BoneDim);
 			}
-			// Bone at rest, blood when armed. The recovered 0xc00000a8 is the accent the token
-			// layer always said it was — it now marks *selection* instead of being the ground.
+			// Bone at rest, blood when armed. The recovered 0xc00000a8 is the selection accent.
 			const UElysiumActionButton* Action = WeakButton.Get();
 			return FSlateColor(Action && Action->IsActionSelected()
 				? ElysiumUI::Palette::BloodLit
@@ -365,7 +362,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
 	ArmedIndex = FMath::Clamp(ArmedIndex, 0, FMath::Max(0, Items.Num() - 1));
 	bTickSeeded = false;
 
-	// --- the item column ------------------------------------------------------------------------
+	// The item column.
 	const TSharedRef<SVerticalBox> Column = SNew(SVerticalBox);
 	float RowTop = Rail::ListTop;
 	for (int32 i = 0; i < Items.Num(); ++i)
@@ -382,7 +379,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
 	}
 	const float ListBottom = RowTop;
 
-	// --- the head -------------------------------------------------------------------------------
+	// The head.
 	// The front end flies the wordmark; a pause has no business repeating it, and a lost run is not
 	// what the wordmark is about. Each is set on the head block's bottom edge, so the list below
 	// starts at the same Y in all three modes.
@@ -426,7 +423,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
 		}
 		else
 		{
-			// Absent (no export yet) -> the wordmark is set in type instead, so the menu still
+			// Absent (no export) -> the wordmark is set in type instead, so the menu still
 			// reads rather than showing a hole.
 			UE_LOG(LogElysiumMenu, Warning,
 				TEXT("no title lockup at %s — run: uv run elysium export bundle ui"),
@@ -440,7 +437,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
 		}
 	}
 
-	// --- the code-authored ramps ----------------------------------------------------------------
+	// The code-authored ramps.
 	if (!VeilTexture)
 	{
 		constexpr int32 VeilSteps = 128;
@@ -498,7 +495,7 @@ TSharedRef<SWidget> UElysiumMainMenu::BuildRail(const TArray<FMenuEntry>& Items,
 	BarBrush  = MakeBrush(BarTexture, ElysiumUI::Palette::Blood);
 	SealBrush = MakeBrush(SealTexture, ElysiumUI::Palette::Gold.CopyWithNewOpacity(0.10f));
 
-	// --- assembly -------------------------------------------------------------------------------
+	// Assembly.
 	const TSharedRef<SOverlay> Root = SNew(SOverlay);
 
 	if (VeilBrush.IsValid())
@@ -811,7 +808,7 @@ TSharedRef<SWidget> UElysiumMainMenu::RebuildWidget()
 		];
 
 	// Pause and game-over menus remain overlays over the held play world. Only the true front end
-	// owns the static plate that replaces the old live sm_hub_1 backdrop.
+	// owns the static wallpaper plate.
 	if (Mode != EElysiumMenuMode::Main)
 	{
 		FinalizeNavigationBuild(Items.IsEmpty() ? NAME_None : FName(Items[0].Token));

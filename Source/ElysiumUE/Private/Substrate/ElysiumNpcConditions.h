@@ -38,7 +38,7 @@ enum class EElysiumNpcCond : uint8
 	None = 0x00,
 
 	// --- Recovered identities --------------------------------------------------------------------
-	// ============================ Cycle 10c — the four law conditions ============================
+	// --- The four law conditions ---
 	// The registry numbers the survey states in decimal (`docs/vtmb/npc-ai-reverse-engineering.md`
 	// -> "Player-law observation transaction"): 31, 32, 33, 34. Spelled in hex here so the whole
 	// enum reads in one base; the decimal is beside each one because that is how the table names it.
@@ -47,7 +47,6 @@ enum class EElysiumNpcCond : uint8
 	CriminalAttackLevel     = 0x20,   // 32 — `pl_criminal_attack`
 	SupernaturalFleeLevel   = 0x21,   // 33 — `pl_supernatural_flee`
 	SupernaturalAttackLevel = 0x22,   // 34 — `pl_supernatural_attack`
-	// =============================================================================================
 	ShouldDodge           = 0x0c,
 	ShouldBlock           = 0x0d,
 	ShouldStepback        = 0x0e,
@@ -89,12 +88,11 @@ enum class EElysiumNpcCond : uint8
 	HearPlayer = 0xe3,
 	HearWorld  = 0xe4,
 	HearDanger = 0xe5,
-	// ============================ Cycle 10c — the fifth law condition ============================
+	// --- The fifth law condition ---
 	// `COND_INVESTIGATE_LEVEL` is named beside the four above ("clears and recomputes
 	// `COND_INVESTIGATE_LEVEL` plus four law conditions") and its registry number is NOT stated, so
 	// it lands in this band rather than being guessed at 30 or 35.
 	InvestigateLevel = 0xe6,
-	// =============================================================================================
 };
 
 const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond);
@@ -272,7 +270,7 @@ namespace ElysiumNpcCond
 	void AccumulateDamage(FElysiumNpcMemory& Memory, int32 CommittedDamage, double Now);
 
 	// --- Sound categories ---------------------------------------------------------------------------
-	// CHOSEN, NOT RECOVERED (cycle 4, stated once here now that both hearing and the condition
+	// CHOSEN, NOT RECOVERED (stated once here because both hearing and the condition
 	// producer read it): the recovered material names `HEAR_COMBAT` and `OnHearCombat` and states
 	// that combat noise drives them — gunshots, `NPC_TAKE_DAMAGE`, explosions and weapon impacts —
 	// but no per-category table survives. The set is therefore matched by name.
@@ -288,8 +286,8 @@ namespace ElysiumNpcCond
 	// `LIGHT_DAMAGE` / `HEAVY_DAMAGE` / `REPEATED_DAMAGE` from the last committed packet.
 	void GatherDamage(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
 
-	// The `HEAR_*` family from the last accepted stimulus, by the same category mapping cycle 4's
-	// output selection uses.
+	// The `HEAR_*` family from the last accepted stimulus, by the same category mapping the
+	// senses output selection uses.
 	void GatherHearing(const FElysiumNpc& Npc, double PreviousGatherTime, FElysiumNpcConditions& Out);
 
 	// The seen set joined to the relationship table: `SEE_HATE` / `SEE_FEAR`, and the last-seen
@@ -343,7 +341,7 @@ namespace ElysiumNpcCond
 	ECapability WeaponCapability(const FElysiumNpc& Npc);
 
 	// --- Attack conditions ------------------------------------------------------------------------
-	// CHOSEN, NOT RECOVERED: the melee reach and cone are cycle 2's, reused rather than restated —
+	// CHOSEN, NOT RECOVERED: the melee reach and cone are the weapon controller's, reused rather than restated —
 	// `ElysiumWeapons::MeleeReachSourceUnits` (retail's own maximum custom sequence reach stands in
 	// at 64 Source units) and `MeleeConeHalfAngleDegrees` (`FindEntityFOV`'s recovered 30-degree
 	// half-angle). Using the swing's own numbers is what keeps `CAN_MELEE_ATTACK1` from promising a

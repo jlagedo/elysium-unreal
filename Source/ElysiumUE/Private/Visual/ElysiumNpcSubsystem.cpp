@@ -24,7 +24,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumNpc, Log, All);
 
 namespace
 {
-	// 12.4 — the eye pass's own inputs and what they solve to. Every wrong answer the lid write-back
+	// The eye pass's own inputs and what they solve to. Every wrong answer the lid write-back
 	// can give is a plausible-looking number, so the terms print separately rather than only the
 	// result: at rest `upL.up` must be 1, `fwL.up` must be 0, and the lid must land exactly on the
 	// neutral target, which is the hinge the two morph ramps meet at.
@@ -181,7 +181,7 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	// elysium.npc.play <clip> [index] -- re-apply a clip to an already-spawned test NPC, resolving
 	// it through the manifest so any of its ~1,540 resolved clips plays, not just its own glb's.
-	// This is how a named sequence is checked before wiring it to anything (8.5: scripted_sequence
+	// This is how a named sequence is checked before wiring it to anything (scripted_sequence
 	// `m_iszPlay`, the `SetAnimation` input, the `SetGesture` Character method).
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(
 		TEXT("elysium.npc.play"),
@@ -256,9 +256,9 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		ECVF_Cheat));
 
 	// elysium.npc.flex <controller> <value> [stem] -- write one flex controller on every live facial
-	// body (12.3). Controllers are the whole input surface: everything below one is arithmetic
-	// replayed from the rig, so this is the acceptance instrument until 12.1's scene expression
-	// tracks and 12.5's lipsync start writing the same values. `blink 1` closes both pairs of lids
+	// body. Controllers are the whole input surface: everything below one is arithmetic
+	// replayed from the rig, so this is the acceptance instrument until scene expression
+	// tracks and lipsync start writing the same values. `blink 1` closes both pairs of lids
 	// through the four eyelid rules; `right_lid_droop 1` moves one lid partway, which is the RPN
 	// layer showing itself rather than a 1:1 passthrough.
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(
@@ -302,7 +302,7 @@ void UElysiumNpcSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// The read side of the same surface, and the way to find out what a face can be told to do.
 	// With a live body it reports what the three layers currently resolve to; with none, a stem
 	// argument reads the sidecar off disk, so the controller names are answerable before a map is.
-	// 12.4 — the eye pass's own inputs and what they solve to. The lid write-back is a chain of
+	// The eye pass's own inputs and what they solve to. The lid write-back is a chain of
 	// dots and an asin, and every wrong answer it can give is a plausible-looking number, so the
 	// terms are printed separately rather than only the result.
 	ConsoleObjects.Add(CM.RegisterConsoleCommand(
@@ -558,8 +558,8 @@ AActor* UElysiumNpcSubsystem::LoadTestNpc(const FString& Stem, const FString& An
 
 	PruneDead();
 
-	// The clips this body OWNS, off the resolved vocabulary rather than off a parsed glb: same set
-	// the model's own file used to answer with -- its dialogue -- and the only one whose names are
+	// The clips this body OWNS, off the resolved vocabulary rather than off a parsed glb: the
+	// model's own dialogue, and the only one whose names are
 	// short enough to be a row of buttons. Everything else it can play belongs to a shared bank.
 	TArray<FString> OwnClips;
 	if (const FElysiumNpcClipSet* Set = Anims != nullptr ? Anims->GetClipSet(Stem) : nullptr)

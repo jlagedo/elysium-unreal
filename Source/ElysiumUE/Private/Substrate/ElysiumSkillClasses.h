@@ -14,7 +14,7 @@ inline FName ElysiumSkillEntityClassName()
 
 // The shared timed-threshold state. One accepted use resolves one deterministic feat check; the
 // five outputs always use the ordinary entity queue and the think only produces them. Presentation
-// is deliberately diagnostic until the Intrusion view publishes this state.
+// is diagnostic: this state is not the Intrusion view's published surface.
 class FElysiumSkillEntity : public FElysiumEntity
 {
 public:

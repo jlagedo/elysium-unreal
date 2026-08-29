@@ -38,7 +38,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -48,8 +48,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -58,7 +58,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -123,10 +123,10 @@ namespace ElysiumInputTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// =====================================================================================
-// FElysiumConsole — VtMB's console surface (9.3b): cfg alias/cvar parse + the ccmd execute
+
+// FElysiumConsole — VtMB's console surface: cfg alias/cvar parse + the ccmd execute
 // path (alias expansion -> cvar set -> Python fallthrough). Content-free: no Python, no world.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumConsoleTest, "Elysium.Substrate.Console", GElysiumTestFlags)
 bool FElysiumConsoleTest::RunTest(const FString&)
@@ -184,7 +184,7 @@ bool FElysiumConsoleTest::RunTest(const FString&)
 	TestEqual(TEXT("cvar set does not fall through"), Fell.Num(), 0);
 	TestEqual(TEXT("cvar updated"), C.GetCvar(TEXT("fps_max")), FString(TEXT("30")));
 
-	// The precedence, stated once in the header and asserted here (11.6): **registered command ->
+	// The precedence, stated once in the header and asserted here: **registered command ->
 	// alias -> cvar -> Python**. The patch's `run` alias expands to `-speed;`, which is a declared
 	// ButtonPair verb, so the registry consumes it and it never reaches the sink.
 	Fell.Reset();
@@ -262,11 +262,11 @@ bool FElysiumPlayerViewModelsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// S7 — the command registry (11.6, runtime-architecture.md §8.2). The inventory, the +/- pair
+
+// The command registry (`docs/architecture/runtime-architecture.md` §8.2). The inventory, the +/- pair
 // semantics, implementation stacking and the button latch are plain C++, so all of it is
 // asserted with no world, no controller and no input device.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCommandsTest, "Elysium.Substrate.Commands", GElysiumTestFlags)
 bool FElysiumCommandsTest::RunTest(const FString&)
@@ -417,11 +417,11 @@ bool FElysiumCommandsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// S5 — intent is data (11.6, runtime-architecture.md §8.3). The user command is built from
+
+// Intent is data (`docs/architecture/runtime-architecture.md` §8.3). The user command is built from
 // button latches and analog accumulators with no engine input in sight, which is what makes
 // headless play and replay the same mechanism as playing.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumUserCmdTest, "Elysium.Substrate.UserCmd", GElysiumTestFlags)
 bool FElysiumUserCmdTest::RunTest(const FString&)
@@ -559,7 +559,7 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 	Cmd = Builder.Build(1.0f / 60.0f);
 	TestEqual(TEXT("the accumulator is consumed"), (float)Cmd.LookDelta.X, 0.0f, 0.001f);
 
-	// --- The look curve is the MOUSE's alone (CCC3) ----------------------------------------
+	// The look curve is the MOUSE's alone.
 	// Three sources reach LookDelta and only one of them is a hand on a mouse. Build the same frame
 	// twice under a deliberately extreme curve, once with mouse counts and once without: the
 	// difference must be exactly what ShapeMouseLook returns, which means the turn key's
@@ -692,12 +692,12 @@ bool FElysiumUserCmdTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// CCC3 — the look response curve (`docs/architecture/input-architecture.md` § Feel). The whole
+
+// The look response curve (`docs/architecture/input-architecture.md` § Feel). The whole
 // mouse path from counts to degrees is one pure function, which is what lets the retail claim be
 // asserted rather than recalled: at the shipped tuning the curve is the identity, exactly, so
 // `Elysium.Substrate.LookCurve` failing means the faithful path moved.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLookCurveTest, "Elysium.Substrate.LookCurve", GElysiumTestFlags)
 bool FElysiumLookCurveTest::RunTest(const FString&)
@@ -836,13 +836,13 @@ bool FElysiumLookCurveTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The stick path (`docs/architecture/input-architecture.md` § Gamepad). A pad reports a *held
 // deflection* that the game integrates, so the device's noise is integrated with it — measured on
 // the shipped pad, the resting centre sits ~0.04 off zero and a steady hold swings ±0.2 between
 // frames. Every property below is one of the terms that answers that, asserted with no world, no
 // device and no local player.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStickLookTest, "Elysium.Substrate.StickLook", GElysiumTestFlags)
 bool FElysiumStickLookTest::RunTest(const FString&)
@@ -1088,11 +1088,11 @@ bool FElysiumStickLookTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The recorded channels (CCC0). A value that reaches disk with nothing that knows how to compare
+
+// The recorded channels. A value that reaches disk with nothing that knows how to compare
 // it is the failure this registry exists to close, so what is asserted is that every declaration
 // carries a usable rule and that the recorder refuses anything undeclared.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChannelRegistryTest,
 	"Elysium.Substrate.ChannelRegistry", GElysiumTestFlags)
@@ -1154,7 +1154,8 @@ bool FElysiumChannelRegistryTest::RunTest(const FString&)
 
 	// Every per-frame channel is speed-dependent, and that is structural rather than incidental:
 	// *when* a body reaches a feature moves with its gait even when *whether* it does not. The
-	// committed baselines are the run channels, which is what lets them be promoted before `CCC7`.
+	// committed baselines are the run channels, which is what lets them be promoted before the
+	// per-direction speed table moves them.
 	for (const FChannelDef& Def : Defs())
 	{
 		if (Def.Scope == EScope::Frame)
@@ -1262,12 +1263,12 @@ bool FElysiumChannelRecorderTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The application state machine (11.3, runtime-architecture.md §10). The transition table is
+
+// The application state machine (`docs/architecture/runtime-architecture.md` §10). The transition table is
 // plain C++ with no game instance behind it, so the whole rule set is asserted here rather than
 // inferred from a play-through — including the two rules the acceptance turns on: the front end
 // deliberately does not pause, and Boot is reachable from nowhere.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAppStateTest, "Elysium.Substrate.AppState", GElysiumTestFlags)
 bool FElysiumAppStateTest::RunTest(const FString&)
@@ -1353,12 +1354,12 @@ bool FElysiumAppStateTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// S6 — the input scope stack (11.5, runtime-architecture.md §8.1). The arbitration is plain
+
+// The input scope stack (`docs/architecture/runtime-architecture.md` §8.1). The arbitration is plain
 // C++, so the whole rule set is asserted with no local player, no controller and no viewport:
 // what the top scope resolves to, what an out-of-order pop restores, and that the stack is
 // balanced across every screen transition the game can make.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInputScopesTest, "Elysium.Substrate.InputScopes", GElysiumTestFlags)
 bool FElysiumInputScopesTest::RunTest(const FString&)

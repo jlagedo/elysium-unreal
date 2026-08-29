@@ -36,7 +36,7 @@
 
 #include "HAL/IConsoleManager.h"
 
-// A/B toggle for the B3 NPC skeletal bodies (mirrors elysium.BrushBodies). Read in the leaf's Spawn,
+// A/B toggle for NPC skeletal bodies (mirrors elysium.BrushBodies). Read in the leaf's Spawn,
 // so it takes effect on the next map load: 1 stands the models, 0 leaves the NPCs bodiless records
 // (their I/O still resolves — this only gates the visual).
 static TAutoConsoleVariable<int32> CVarNpcBodies(
@@ -573,7 +573,7 @@ void FElysiumNpc::Think()
 	ResolveLoadout();
 	ReplayDeferredScriptedOrder();
 	RunConditionPass();
-	// B6 — a pair this NPC is part of owns the body outright: it advances the transaction from
+	// A pair this NPC is part of owns the body outright: it advances the transaction from
 	// the feeder's think and nothing else moves either actor while it runs.
 	if (TickFeed(World ? World->NowSeconds() : 0.0))
 	{
@@ -678,7 +678,7 @@ bool FElysiumNpc::RunAdmissionBarrier()
 
 void FElysiumNpc::ResolveLoadout()
 {
-	// --- Cycle 6: the combat loadout -------------------------------------------------------------
+	// --- Combat loadout ---
 	// The first ordinary think after admission, not `Spawn`: creating an item entity inside the
 	// world's range-based spawn pass would invalidate the array being iterated, which is why
 	// `FElysiumItemContainer` materialises its equip seeds from a think too.
@@ -693,7 +693,7 @@ void FElysiumNpc::ResolveLoadout()
 
 void FElysiumNpc::ReplayDeferredScriptedOrder()
 {
-	// --- Cycle 7: a director that fired before this NPC's first think -----------------------------
+	// --- A director that fired before this NPC's first think ---
 	// The push was deferred whole (`BeginScriptedSchedule`), because admission establishes idle and
 	// would have wiped a forced state applied ahead of it. Replaying it here is the first thing an
 	// admitted NPC does, so the order is in force before any condition is gathered against it.
@@ -707,7 +707,7 @@ void FElysiumNpc::ReplayDeferredScriptedOrder()
 
 void FElysiumNpc::RunConditionPass()
 {
-	// --- Cycle 4: condition gathering ------------------------------------------------------------
+	// --- Condition gathering ---
 	// Senses run before any executor picks work, which is where the recovered pass puts them, and
 	// are suppressed exactly where retail suppresses condition gathering: a scripted owner or an
 	// in-flight scripted move is driving this body (`docs/vtmb/npc-ai-reverse-engineering.md`).
@@ -716,7 +716,7 @@ void FElysiumNpc::RunConditionPass()
 	{
 		const double SenseNow = World ? World->NowSeconds() : 0.0;
 		Senses.Tick(*this, SenseNow);
-		// Cycle 5: the rest of the recovered decision pass, in `RunAI`'s own order — condition
+		// The rest of the recovered decision pass, in `RunAI`'s own order — condition
 		// gathering (which contains the enemy transaction), then ideal-state selection, then the
 		// schedule work every executor below performs.
 		ElysiumNpcEnemy::GatherConditions(*this, SenseNow);
@@ -808,15 +808,14 @@ bool FElysiumNpc::ThinkScriptOwned()
 
 bool FElysiumNpc::ThinkSchedulePolicy()
 {
-	// --- Cycle 7: schedule selection pre-empts an autonomous executor ---------------------------
+	// Schedule selection pre-empts an autonomous executor.
 	// A committed enemy or an authored director outranks this NPC's own patrol route and
-	// interesting-place visit. Until this branch existed, `Think` reached the executor before
-	// schedule selection ran at all, so a patrolling guard that acquired an enemy kept walking its
-	// route and `SelectCombatSchedule` was never called for it.
+	// interesting-place visit: without this routing a patrolling guard that acquired an enemy
+	// would keep walking its route and never reach `SelectCombatSchedule`.
 	//
-	// The change is deliberately in the ROUTING and not in either executor: the arbiter already
-	// carries both hand-over shapes (patrol suspends and resumes, ambient owns a claimed place that
-	// has to be given back), and the programs are the ones cycle 6 registered.
+	// The hand-over lives in the ROUTING and not in either executor: the arbiter already carries
+	// both shapes (patrol suspends and resumes, ambient owns a claimed place that has to be given
+	// back), and the combat programs are the registered ones.
 	const bool bScriptedPolicy = ScriptedScheduleOrder.IsSet() || ScriptedScheduleOwner.IsSet();
 	if (!bScriptedPolicy && Mind.State() != EElysiumNpcState::Combat)
 	{
@@ -932,7 +931,7 @@ EElysiumScheduleId FElysiumNpc::SelectSchedule()
 	{
 		return EElysiumScheduleId::None;
 	}
-	// =============== Cycle 10c — the law branch of schedule selection ============================
+	// The law branch of schedule selection.
 	// "Schedule branches, not condition gathering, call the two player incident consumers." This is
 	// the only place in the runtime that reaches them from an NPC.
 	//
@@ -942,14 +941,13 @@ EElysiumScheduleId FElysiumNpc::SelectSchedule()
 	// selection/translation". It therefore sits at the outermost selection entry, ahead of the state
 	// switch, which is the one point every state passes through and which displaces no decoded
 	// order. It declines by returning `None` on all but the flee arm, so an NPC that witnessed
-	// nothing takes exactly the selection it took before.
+	// nothing takes the ordinary selection.
 	if (const EElysiumScheduleId Law =
 			ElysiumNpcWitness::SelectLawSchedule(*this, World ? World->NowSeconds() : 0.0);
 		Law != EElysiumScheduleId::None)
 	{
 		return Law;
 	}
-	// =============================================================================================
 	switch (Mind.State())
 	{
 	case EElysiumNpcState::Combat:  return SelectCombatSchedule();
@@ -971,7 +969,7 @@ EElysiumScheduleId FElysiumNpc::SelectAlertSchedule()
 	{
 		Cognition.bReportedAlertRefusal = true;
 		// The recovered alert branch's damage reactions, refused BY NAME rather than approximated.
-		// Two of the three programs are now registered (`TAKE_COVER_FROM_ORIGIN` 0x19 and
+		// Two of the three programs are registered (`TAKE_COVER_FROM_ORIGIN` 0x19 and
 		// `ALERT_SMALL_FLINCH` 0x07, both minimal and marked in
 		// `Substrate/ElysiumNpcCombatSchedules.cpp`) and `ALERT_FACE` is not — but what is missing
 		// here is the SELECTION, not the programs: the branch turns on "when the attack origin lies
@@ -1064,7 +1062,7 @@ void FElysiumNpc::UpdateIdealState(double Now)
 		return;
 	}
 	Mind.RequestState(Ideal, TEXT("SelectIdealState"));
-	// ============ Cycle 10c — "entering NPC state 14 opens the criminal window" =================
+	// "entering NPC state 14 opens the criminal window".
 	// The CHOSEN mapping of retail state 14 onto this runtime's Alert, and why Alert rather than
 	// Combat or Idle, is stated in full at `ElysiumNpcWitness::OnEnteredAlertState`. This is its one
 	// call site: the promotion edge, after the transition is committed and not on every pass spent in
@@ -1073,7 +1071,6 @@ void FElysiumNpc::UpdateIdealState(double Now)
 	{
 		ElysiumNpcWitness::OnEnteredAlertState(*this, Now);
 	}
-	// =============================================================================================
 	// An authored director outranks the state change it may itself have caused. `forcestate 3` puts
 	// an NPC in combat with no enemy, whose recovered fallback is a drop back to alert on the very
 	// next pass — and discarding the program here would cancel the walk the same director pushed
@@ -1564,9 +1561,7 @@ bool FElysiumNpc::StepAwayFromSavePosition(float DistanceCm)
 	return true;
 }
 
-// ================================================================================================
-// The combat task bodies (cycle 6)
-// ================================================================================================
+// --- Combat task bodies ---
 
 bool FElysiumNpc::AcquireProgramBody(EElysiumBodyOwner Owner, FElysiumBodyOwnerToken& Token,
 	const TCHAR* Reason)
@@ -1629,9 +1624,7 @@ void FElysiumNpc::ReleaseScriptedScheduleBody(const TCHAR* Reason)
 	ReleaseProgramBody(EElysiumBodyOwner::ScriptedSchedule, ScriptedScheduleOwner, Reason);
 }
 
-// ================================================================================================
-// The authored director (cycle 7)
-// ================================================================================================
+// --- The authored director ---
 
 bool FElysiumNpc::BeginScriptedSchedule(const FElysiumScriptedScheduleOrder& Order,
 	bool bHasForcedState, EElysiumNpcState ForcedState)
@@ -1825,8 +1818,8 @@ void FElysiumNpc::InputNamedSchedule(const FElysiumInputArgs& Args)
 			TEXT("%s %s was fired with no schedule name — refused"), *DebugString(), *InputName);
 		return;
 	}
-	// Cycle 11b hunk 7/9 — the body below moved to `StartNamedSchedule`; the input keeps the
-	// arg-shaped half (the empty-name refusal and the surface key) that only an input has.
+	// The input keeps the arg-shaped half (the empty-name refusal and the surface key) that only
+	// an input has; `StartNamedSchedule` is the shared door.
 	StartNamedSchedule(Requested,
 		FString::Printf(TEXT("CAI_BaseNPC.%s(%s)"), *InputName, *Requested),
 		ElysiumStub::DescribeInput(Args));
@@ -2625,7 +2618,7 @@ void FElysiumNpc::Spawn()
 void FElysiumNpc::Activate()
 {
 	SeedPlayerRelationship();
-	// Cycle 4: `InitPerceptionDistances` runs once, on authored data that is already applied, and
+	// `InitPerceptionDistances` runs once, on authored data that is already applied, and
 	// the hearing cursor starts at the live head so an NPC never hears the map's own load.
 	Senses.ResolveTuning(*this);
 	Senses.StartSoundCursorAtHead(*this);
@@ -2946,7 +2939,7 @@ void FElysiumNpc::SerializeSocialBlock(FElysiumSaveArchive& Ar)
 
 void FElysiumNpc::SerializeSensesBlock(FElysiumSaveArchive& Ar)
 {
-	// Cycle 4. The memory is what survives losing sight, so it is what a save has to carry; the
+	// The memory is what survives losing sight, so it is what a save has to carry; the
 	// resolved perception pair is not saved because it is derived from the keyfields the field
 	// walk already restored.
 	if (Ar.Version() >= FElysiumSaveVersion::NpcSenses)
@@ -2957,7 +2950,7 @@ void FElysiumNpc::SerializeSensesBlock(FElysiumSaveArchive& Ar)
 
 void FElysiumNpc::SerializeLoadoutBlock(FElysiumSaveArchive& Ar)
 {
-	// Cycle 6. The loadout latch, and only the latch: the weapon it granted is a real runtime entity
+	// The loadout latch, and only the latch: the weapon it granted is a real runtime entity
 	// the snapshot already carries with its own owner field, so re-running the resolution on a
 	// restore would hand a restored NPC a second gun. A payload that predates this restores the
 	// latch CLEAR, which is correct for it — an older payload was written by a build that granted
@@ -2979,7 +2972,7 @@ void FElysiumNpc::SerializeLoadoutBlock(FElysiumSaveArchive& Ar)
 
 void FElysiumNpc::SerializeWitnessBlock(FElysiumSaveArchive& Ar)
 {
-	// ==================== Cycle 10c — the retained witness block =================================
+	// The retained witness block.
 	// Appended at the very end of the NPC leaf behind its own version, so it is additive: an
 	// `NpcCombat` payload restores an NPC that has witnessed nothing and whose three windows are at
 	// the spawn-zero default, which is exactly what the pre-witness build wrote. The processed counts
@@ -3004,22 +2997,21 @@ void FElysiumNpc::SerializeWitnessBlock(FElysiumSaveArchive& Ar)
 	{
 		Witness.Reset();
 	}
-	// =============================================================================================
 }
 
 void FElysiumNpc::SerializeDisciplineBlock(FElysiumSaveArchive& Ar)
 {
-	// ============ Cycle 11b hunk 9/9 — the NPC's own tracked discipline effects ==================
+	// The NPC's own tracked discipline effects.
 	// A targeted `disciplinetgt` cast lands its trait-effect groups on whichever character it hit
 	// (`docs/architecture/gameplay-systems-architecture.md` §5.6 — "Active targeted effects are
-	// tracked on the affected character"), and the affected character is usually an NPC. The player
-	// half has ridden the player record since the domain landed; this is the other half, without
-	// which a Dominate group on a guard silently evaporated across a save while its owned expiry
-	// event rode the map snapshot's queue block and came back looking for it.
+	// tracked on the affected character"), and the affected character is usually an NPC. Both
+	// halves must persist: without this block a Dominate group on a guard evaporates across a save
+	// while its owned expiry event rides the map snapshot's queue block and comes back looking for
+	// it.
 	//
 	// Appended at the very END of the NPC leaf behind its own version, so it is additive: an
-	// `NpcWitness` payload restores an NPC carrying no discipline state, which is exactly what the
-	// build before this one wrote.
+	// `NpcWitness` payload restores an NPC carrying no discipline state, which is what a payload
+	// written before this block carries.
 	//
 	// The owned expiry events themselves are NOT written here — they are queue records and the map
 	// snapshot's queue block already carries them, serial and all. That is what makes the restore
@@ -3084,7 +3076,6 @@ void FElysiumNpc::SerializeDisciplineBlock(FElysiumSaveArchive& Ar)
 	{
 		Disciplines.Reset();
 	}
-	// =============================================================================================
 }
 
 const TCHAR* FElysiumNpc::SaveBlockReason() const
@@ -3164,7 +3155,7 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			ScriptPhase == EScriptPhase::Travel ? TEXT("travelling") : TEXT("facing"),
 			*ScriptMark.ToString(), FVector::Dist2D(Origin, ScriptMark)));
 
-	// Cycle 4 — the sensory transaction.
+	// --- Sensory transaction ---
 	Out.Emplace(TEXT("Perception"), FString::Printf(
 		TEXT("npc_perception %d, vision %.0fcm, hearing %.2fx%s"), AuthoredPerception,
 		Senses.Perception.VisionDistanceCm, Senses.Perception.HearingScalar,
@@ -3194,7 +3185,7 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			*Mem.LastDamageAttacker.ToString(), Mem.LastDamageTime,
 			Mem.RepeatedDamageAccumulated));
 
-	// Cycle 5 — the decision pass.
+	// --- Decision pass ---
 	Out.Emplace(TEXT("Conditions"), FString::Printf(TEXT("%s (gathered t=%.2f)"),
 		*Cognition.Conditions.Describe(), Cognition.GatheredAt));
 	Out.Emplace(TEXT("no_alert_state"), bNoAlertState ? TEXT("yes") : TEXT("no"));
@@ -3203,7 +3194,7 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 			ElysiumScheduleNumber(Schedule.Current), Schedule.TaskIndex)
 		: TEXT("(none)"));
 
-	// Cycle 6 — the loadout and the combat policy it selects.
+	// --- Loadout and the combat policy it selects ---
 	const FElysiumItem* Active = Inventory.Active(*this);
 	const ElysiumNpcCond::ECapability Capability = ElysiumNpcCond::WeaponCapability(*this);
 	Out.Emplace(TEXT("Weapon"), FString::Printf(TEXT("%s — capability %s (0x%x)"),
@@ -3221,7 +3212,7 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		: FString::Printf(TEXT("%s at t=%.2f"), *Mem.DetectedAttackAttacker.ToString(),
 			Mem.DetectedAttackTime));
 
-	// ==================== Cycle 10c — the witness block =========================================
+	// --- Witness block ---
 	const double LawNow = World ? World->NowSeconds() : 0.0;
 	Out.Emplace(TEXT("Law thresholds"), FString::Printf(
 		TEXT("crim flee %d / attack %d, super flee %d / attack %d, investigate %d"),
@@ -3240,12 +3231,9 @@ void FElysiumNpc::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		ElysiumNpcWitness::IsWindowOpen(Witness.NosferatuIgnoreUntil, LawNow)
 			? TEXT("OPEN") : TEXT("closed"),
 		Witness.bSupernaturalFleeOnly ? TEXT(", flee only") : TEXT("")));
-	// =============================================================================================
 }
 
-// ============================================================================================
-// npc_VPlayerController
-// ============================================================================================
+// --- npc_VPlayerController ---
 
 void FElysiumPlayerControllerNpc::Spawn()
 {

@@ -15,7 +15,7 @@ namespace
 {
 	// The seen set for one decision pass.
 	//
-	// SCOPE, DELIBERATE: cycle 4's sight path tracks exactly one candidate — the player
+	// SCOPE, DELIBERATE: the sight path tracks exactly one candidate — the player
 	// (`FElysiumNpcSenses::TickSight` resolves `SetClosestPlayer` and nothing else), because that is
 	// the only observer transaction the stealth recovery closes. NPC-vs-NPC sight has no recovered
 	// admission rule here yet, so this runtime does not invent one. Everything downstream of this
@@ -87,13 +87,11 @@ const TCHAR* ElysiumNpcCondName(EElysiumNpcCond Cond)
 	case EElysiumNpcCond::HearPlayer:            return TEXT("HEAR_PLAYER");
 	case EElysiumNpcCond::HearWorld:             return TEXT("HEAR_WORLD");
 	case EElysiumNpcCond::HearDanger:            return TEXT("HEAR_DANGER");
-	// ============================ Cycle 10c — the five law conditions ============================
 	case EElysiumNpcCond::CriminalFleeLevel:       return TEXT("CRIMINAL_FLEE_LEVEL");
 	case EElysiumNpcCond::CriminalAttackLevel:     return TEXT("CRIMINAL_ATTACK_LEVEL");
 	case EElysiumNpcCond::SupernaturalFleeLevel:   return TEXT("SUPERNATURAL_FLEE_LEVEL");
 	case EElysiumNpcCond::SupernaturalAttackLevel: return TEXT("SUPERNATURAL_ATTACK_LEVEL");
 	case EElysiumNpcCond::InvestigateLevel:        return TEXT("INVESTIGATE_LEVEL");
-	// =============================================================================================
 	}
 	return TEXT("COND_?");
 }
@@ -133,9 +131,7 @@ FString FElysiumNpcConditions::Describe() const
 	return Out.IsEmpty() ? FString(TEXT("(none)")) : Out;
 }
 
-// ================================================================================================
-// Producers
-// ================================================================================================
+// --- Producers ---
 
 bool ElysiumNpcCond::IsCombatSoundCategory(const FString& FoldedCategory)
 {
@@ -298,7 +294,7 @@ void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcCon
 	}
 	if (Enemy->IsInert())
 	{
-		// Dead, or hidden — the two collapse here for the same reason cycle 4's debounce collapses
+		// Dead, or hidden — the two collapse here for the same reason the senses debounce collapses
 		// them: an entity the world has taken off the board is not fightable, and VtMB carries no
 		// hidden-NPC state distinct from removed. The senses debounce deliberately declines to
 		// infer this (it is enemy SELECTION's transaction), which is why it lands here.
@@ -306,7 +302,7 @@ void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcCon
 		return;
 	}
 
-	// The debounce's own two answers, straight off the latch cycle 4 maintains: below ten
+	// The debounce's own two answers, straight off the latch senses maintains: below ten
 	// consecutive failures the committed enemy retains `HAVE_ENEMY_LOS`; at ten it flips.
 	Out.Set(Memory.bEnemyOccluded ? EElysiumNpcCond::EnemyOccluded : EElysiumNpcCond::HaveEnemyLos);
 
@@ -325,9 +321,7 @@ void ElysiumNpcCond::GatherCommittedEnemy(const FElysiumNpc& Npc, FElysiumNpcCon
 	// unreachable enemy the NPC can in fact reach re-routes the whole combat branch.
 }
 
-// ================================================================================================
-// Weapon capability
-// ================================================================================================
+// --- Weapon capability ---
 
 const TCHAR* ElysiumNpcCond::CapabilityName(ECapability Capability)
 {
@@ -380,9 +374,7 @@ ElysiumNpcCond::ECapability ElysiumNpcCond::WeaponCapability(const FElysiumComba
 	return Record->Type == EElysiumItemType::WeaponMelee ? ECapability::Melee : ECapability::Ranged;
 }
 
-// ================================================================================================
-// Attack conditions
-// ================================================================================================
+// --- Attack conditions ---
 
 namespace
 {
@@ -535,9 +527,7 @@ void ElysiumNpcCond::GatherAttackConditions(const FElysiumNpc& Npc, double Now,
 	}
 }
 
-// ================================================================================================
-// The incoming-attack notice
-// ================================================================================================
+// --- The incoming-attack notice ---
 
 bool ElysiumNpcCond::NoticeMeleeAttack(FElysiumNpc& Victim, const FElysiumEntityHandle& Attacker,
 	const FVector& AttackerOrigin, double Now)
@@ -550,7 +540,7 @@ bool ElysiumNpcCond::NoticeMeleeAttack(FElysiumNpc& Victim, const FElysiumEntity
 	const double AcceptanceCm =
 		static_cast<double>(MeleeNoticeAcceptanceUnits) * ElysiumMove::U;
 	const bool bNear = FVector::Dist(Victim.Origin, AttackerOrigin) <= AcceptanceCm;
-	// The visibility route, at cycle 4's single-observer scope: the only actor this NPC tracks sight
+	// The visibility route, at the senses' single-observer scope: the only actor this NPC tracks sight
 	// of is the player.
 	const bool bVisible = Memory.bPlayerLos && Memory.ClosestPlayer.IsSet()
 		&& Memory.ClosestPlayer == Attacker;
@@ -570,9 +560,7 @@ bool ElysiumNpcCond::HasDetectedAttack(const FElysiumNpc& Npc, double Now)
 		&& (Now - Memory.DetectedAttackTime) <= DetectedAttackRetentionSeconds;
 }
 
-// ================================================================================================
-// Ideal state — the two layers, kept two
-// ================================================================================================
+// --- Ideal state — the two layers, kept two ---
 
 namespace
 {

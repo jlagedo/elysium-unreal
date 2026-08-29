@@ -1,4 +1,4 @@
-// 12.5 — the `.lip` phoneme document, and the join that turns one into flex-controller writes.
+// The `.lip` phoneme document, and the join that turns one into flex-controller writes.
 //
 // A `.lip` sits beside a line's audio with the extension swapped (`line1015_col_f.mp3` ->
 // `line1015_col_f.lip`) and says which phoneme is on screen when. Same uniform grammar as the

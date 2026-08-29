@@ -2,9 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// ================================================================================================
-// 17. system/reaction.txt + reactions000.txt — the RPG/social reaction score and its modifiers
-// ================================================================================================
+// `system/reaction.txt` + `reactions000.txt` — the RPG/social reaction score and its modifiers.
 //
 // The third social domain (`docs/architecture/gameplay-systems-architecture.md` §5.5.7, K4): a
 // score separate from the native combat-relationship table (`D_HT`/`D_FR`/`D_LI`/`D_NU`, read

@@ -800,9 +800,9 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 		return;
 	}
 
-	// Retail rebinds `frametime` to the user command's OWN timing for the duration of the move
-	// (RE21): CPlayerMove::RunCommand runs on the command's interval, not on the server frame's.
-	// The router builds one command per frame, so today this is the identity — it stops being the
+	// Retail rebinds `frametime` to the user command's OWN timing for the duration of the move:
+	// CPlayerMove::RunCommand runs on the command's interval, not on the server frame's.
+	// The router builds one command per frame, so this is the identity — it stops being the
 	// identity the moment a frame carries more or fewer than one command (a replayed command
 	// stream, a hitch clamp, a fixed step), and the mover must follow the command either way.
 	if (PendingCmd.DeltaSeconds > 0.0f)
@@ -866,7 +866,7 @@ void UElysiumMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 	PrevCmd = PendingCmd;
 	UpdateComponentVelocity();
 
-	// The tick tail (CCC1). After the move is the only point where the state is settled, so no
+	// The tick tail. After the move is the only point where the state is settled, so no
 	// consumer can read a half-integrated frame; after `UpdateComponentVelocity` so the sample and
 	// `GetVelocity()` agree by construction.
 	//
@@ -1028,10 +1028,10 @@ void UElysiumMovementComponent::CheckJumpButton()
 	{
 		// **`vt+0x670`, which is NOT the bit the movement substitution reads.** The movement lock is
 		// `vt+0x674` — the same predicate OR `m_IdealActivity == ACT_LAND_HARD` — so during a hard
-		// landing retail drives the body from the clip and still permits the jump. Every row this
-		// rung implements is a melee one, and none of them is `ACT_LAND_HARD`, so the two flags agree
-		// on every frame today; they are read apart so the landing and knockback families can land
-		// without inheriting a refusal retail does not have.
+		// landing retail drives the body from the clip and still permits the jump. Every implemented
+		// row is a melee one, and none of them is `ACT_LAND_HARD`, so the two flags agree on every
+		// melee frame; they are read apart so the landing and knockback families do not inherit a
+		// refusal retail does not have.
 		//
 		// The press is NOT consumed. Retail's busy bail in `CheckJumpButton` jumps to a plain `ret`
 		// and skips the `m_nOldButtons |= IN_JUMP` the water-jump bail runs, so a held jump key fires
@@ -1043,7 +1043,7 @@ void UElysiumMovementComponent::CheckJumpButton()
 		return;
 	}
 
-	// --- The press edge -------------------------------------------------------------------------
+	// The press edge.
 	// `sv_jump_boost` first: an instant **origin** pop of 25 inches, scaled by 0.99 and by how far
 	// the hull actually gets, so it can never seat the body inside a ceiling.
 	ApplyJumpBoost();
@@ -1065,7 +1065,7 @@ void UElysiumMovementComponent::CheckJumpButton()
 	bOnGround = false;
 	OldButtons |= static_cast<uint64>(EElysiumButton::Jump);
 
-	// The leniency courses' whole measurement (CCC3): a press that reached this line became a jump,
+	// The leniency courses' whole measurement: a press that reached this line became a jump,
 	// and one that hit the `!bOnGround` bail above did not. Counted here rather than inferred from a
 	// trace because the two are indistinguishable in the recorded position of a body that was
 	// falling anyway.

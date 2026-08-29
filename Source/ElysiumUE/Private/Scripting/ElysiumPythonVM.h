@@ -7,7 +7,7 @@
 class UElysiumGameStateSubsystem;
 struct FElysiumScriptContext;
 
-// Process-global embedded CPython 2.7 VM (P5 5.5 decision -> 9.3 foundation).
+// Process-global embedded CPython 2.7 VM.
 //
 // VtMB's real VM is stock CPython 2.1 (vampire_python21.dll, 653 exports); the loose level scripts
 // ($ELYSIUM_EXPORT_ROOT/scripts, 16.5k lines) run 1:1 on 2.7 -- verified against all 36 scripts: no string
@@ -18,15 +18,15 @@ struct FElysiumScriptContext;
 //
 // This owns: the vendored PythonHome + Py_Initialize/Finalize and the `vampire` C-module -- `G`
 // proxied onto UElysiumGameStateSubsystem (attribute AND mapping protocol, since VtMB's `G[k]` is
-// its `G.k`), plus the entity/native object surface in ElysiumPythonEntity (the Entity and Player
-// types and the 11 module globals) -- and the Python bootstrap that star-imports that module into
+// its `G.k`), plus the entity/native object surface in ElysiumPythonEntity (the Entity type
+// and the 11 module globals) -- and the Python bootstrap that star-imports that module into
 // `__main__`, which is the bus every level script reaches the engine through.
 //
 // Win64 only. When ELYSIUM_WITH_CPYTHON==0 every method is inert (EnsureStarted fails, Eval returns
 // Void) and the existing null / expr script hosts stand in unchanged.
 //
 // Threading: single interpreter, game-thread only. The GIL is held by the game thread from
-// Py_Initialize on; nothing here releases it, so no PyGILState dance is needed for the PoC.
+// Py_Initialize on; nothing here releases it, so no PyGILState dance is needed.
 class FElysiumPythonVM
 {
 public:
@@ -52,7 +52,7 @@ public:
 
 	// Evaluate a field-6 / pythoncheck payload against the loaded level-script namespace (or
 	// __main__ when none is loaded). An expression yields its marshaled value; a statement yields
-	// Void on success. Any exception -> Void (error-to-false, RE3) with OutError set. Never throws.
+	// Void on success. Any exception -> Void (error-to-false) with OutError set. Never throws.
 	FElysiumVariant Eval(const FString& Source, const FElysiumScriptContext& Ctx, FString& OutError);
 
 	// Import a level script (absolute .py path) as a module after injecting the vampire builtins
@@ -68,14 +68,14 @@ public:
 	//
 	// **Seam.** The level script's names stay merged in `__main__` and its module stays in
 	// `sys.modules`, so re-entering a map does not re-execute its top level. Whether retail re-runs a
-	// level script on re-entry is unrecovered (`docs/vtmb/python_bridge.md`); until that fact lands
-	// or an owner calls the divergence, this releases only what is unambiguously ours to release.
+	// level script on re-entry is unrecovered (`docs/vtmb/python_bridge.md`); this releases only
+	// what is unambiguously ours to release.
 	void ReleaseMapScriptPath();
 
 	// Call a top-level callback (e.g. "OnMasqueradeEnd") in the loaded level script.
 	bool FireCallback(const FString& FuncName, FString& OutError);
 
-	// --- Console bridge (9.3b) -----------------------------------------------------------
+	// Console bridge.
 	// The alias/cvar store the `vampire.ccmd` / `vampire.cvar` objects drive. Seeded from
 	// out/cfg at EnsureStarted; the ccmd attribute-set path calls Console().Execute(...).
 	FElysiumConsole& Console() { return ConsoleStore; }
@@ -84,7 +84,7 @@ public:
 	// error-to-false), false on NameError/SyntaxError (an engine cvar/command we do not model).
 	bool ExecConsoleLine(const FString& Line);
 
-	// --- Cog / debug introspection -------------------------------------------------------
+	// Cog / debug introspection.
 	FString GetVersion() const;
 	TArray<FString> GetSysPath() const;
 	FString GetLoadedModule() const { return LoadedModule; }

@@ -397,7 +397,7 @@ static bool RunGraphMontageSlotCase(FAutomationTestBase& Test, USkeletalMeshComp
 	Test.TestTrue(TEXT("and stopping it hands the frame back to the blend stack underneath"),
 		Stopped.MovedBones < Looped.MovedBones);
 
-	// --- LIFE5: two fades, stated apart, and the source pose that gates the blend IN ---------------
+	// Two fades, stated apart, and the source pose that gates the blend IN.
 	//
 	// Retail fades a flinch in over 0.1 and out over 0.3, and `PlaySlotAnimationAsDynamicMontage`
 	// takes the two separately — so the seam takes them separately too, and both have to survive the
@@ -466,7 +466,7 @@ static bool RunGraphMontageSlotCase(FAutomationTestBase& Test, USkeletalMeshComp
 // Every body with a mover publishes a locomotion selection on every anim tick, a standing one
 // included, and a stood body resolves an idle that binds an asset — so a publish that ends the
 // DefaultSlot one-shot whenever it holds an asset ends every clip another owner armed on the frame
-// after it started. LIFE4's channel arbitration slot decides who wins by priority in the driver
+// after it started. The channel arbitration slot decides who wins by priority in the driver
 // and writes the verdict onto the record (`bBasePoseOwned`); the instance's whole job is to obey
 // it. Asserted here on the real generated graph: a yielded publish leaves the clip alone whatever
 // its graph state — an ambient stance holding against a standing body, a scene holding against a
@@ -531,7 +531,7 @@ static bool RunGraphOneShotArbitrationCase(FAutomationTestBase& Test, USkeletalM
 	Test.TestNull(TEXT("and a publish that owns the base takes the pose back"),
 		Inst->GetCurrentActiveMontage());
 
-	// LIFE4, the expiry preempt pinned as deliberate: a one-shot's channel claim holds exactly its
+	// The expiry preempt pinned as deliberate: a one-shot's channel claim holds exactly its
 	// clip's play length, so the frame the driver's expired claim hands the base to a standing
 	// publish (`Elysium.Substrate.AnimationArbitration` pins that timing), the montage has already
 	// completed its own blend-out — there is nothing left for the takeover to cut, which is why the
@@ -556,7 +556,7 @@ static bool RunGraphOneShotArbitrationCase(FAutomationTestBase& Test, USkeletalM
 	return true;
 }
 
-// The reaction branch is on the compiled graph, and it is INERT (LIFE5 slice B1).
+// The reaction branch is on the compiled graph, and it is INERT.
 //
 // The branch replaces the base channel rather than riding over it, so a defect in it is a body
 // posing nothing at all -- and every symptom of that is identical to the ones the two tests above
@@ -722,7 +722,7 @@ static bool RunGraphBlendStackCase(FAutomationTestBase& Test, USkeletalMeshCompo
 	Test.TestFalse(TEXT("the stack blends itself rather than raising an inertialization request"),
 		Stack->bUseInertialBlend);
 
-	// **And there is no inertialization node to answer one** (LIFE5). Every crossfade this graph
+	// **And there is no inertialization node to answer one.** Every crossfade this graph
 	// performs belongs to a node that owns it already — the stack's own `BlendTime`, the reaction
 	// branch's two per-pose times, the slot montage's blend pair — so the node was placed and
 	// unreached. It is asserted on the COMPILED class because that is the only place it can be:
@@ -818,9 +818,9 @@ static bool RunGraphBlendStackCase(FAutomationTestBase& Test, USkeletalMeshCompo
 	return true;
 }
 
-// ================================================================================================
-// LIFE5 slice B2 — the reaction branch DRIVEN, over a real directional hit fan
-// ================================================================================================
+
+// The reaction branch DRIVEN, over a real directional hit fan.
+
 
 namespace
 {

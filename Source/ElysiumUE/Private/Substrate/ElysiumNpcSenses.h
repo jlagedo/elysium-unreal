@@ -98,7 +98,7 @@ struct FElysiumNpcMemory
 	// The four relation categories the recovered `SEE_*` conditions name.
 	enum class ESeen : uint8 { Hate, Fear, Dislike, Nemesis, Count };
 
-	// --- Enemy selection (cycle 5 owns the writer; the fields are plumbed now) ----------------
+	// --- Enemy selection (cognition owns the writer) ---
 	FElysiumEntityHandle Enemy;
 	FElysiumEntityHandle LastEnemy;
 

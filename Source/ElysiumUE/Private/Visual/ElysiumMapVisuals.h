@@ -43,7 +43,7 @@ public:
 
 	virtual void BeginPlay() override;
 
-	// --- Build, in load order --------------------------------------------------------------
+	// Build, in load order.
 	// Walk the baked level once and bucket its actors by the tag pipeline/unreal/bake_map.py stamped on them
 	// (elysium.world / .sky / .prop / .light / .skylight / .fog / .postprocess / .decal), filling the
 	// actor buckets, SkyLight, HeightFog and PostProcess, and handing the light rig its sources to
@@ -51,7 +51,7 @@ public:
 	// found; 0 means this world is not a baked level.
 	int32 AdoptBakedLevel(const FString& MapName, const FElysiumSkyDef& SkyDef);
 
-	// Build the overhead cables from <map>.ropes (8.7): one Verlet UCableComponent per segment,
+	// Build the overhead cables from <map>.ropes: one Verlet UCableComponent per segment,
 	// fixed at both endpoints, rest length straight off the sidecar (below the span for a taut cable,
 	// above it for one that hangs), width/texture from the sidecar, material a MID off M_World_Opaque.
 	// No-op when the sidecar is absent or elysium.Ropes is 0.
@@ -70,7 +70,7 @@ public:
 	// only — the offenders are warnings and the map goes on loading.
 	void AuditMaterials(const FString& MapName) const;
 
-	// --- The live knobs (each is also a cvar callback, so each is idempotent) ----------------
+	// The live knobs (each is also a cvar callback, so each is idempotent).
 	// Stand a UMaterialInstanceDynamic in front of every unique baked material on the world, sky
 	// and prop components, so the look-tuning cvars can reach them (a baked MaterialInstanceConstant
 	// has no runtime setter). Builds the MID set on the first call and re-applies the current cvar
@@ -84,14 +84,14 @@ public:
 	// Push elysium.SkyBrightness onto the live backdrop MID. The faithful value is 1 (D7): VtMB's
 	// sky transfer is the identity, so this is an A/B knob, not a calibration. No-op with no sky.
 	void ApplySkyBrightness();
-	// B8b — stamp each adopted primitive with the fog set that owns it: `worldspawn`'s on the world
+	// Stamp each adopted primitive with the fog set that owns it: `worldspawn`'s on the world
 	// and its props, the `sky_camera`'s on the 3D-skybox miniature. Custom primitive data, because
 	// the two share screen depth and a deferred fog pass cannot scope by anything else
 	// (ElysiumFog.h). Re-run by elysium.Fog, which stamps zeros instead.
 	void ApplySceneFog();
 	void RegisterRuntimeBrush(UStaticMeshComponent* Comp, bool bSky);
 
-	// --- Visibility A/Bs --------------------------------------------------------------------
+	// Visibility A/Bs.
 	// Show/hide the 3D skybox miniature and the backdrop dome together (elysium.togglesky).
 	void ToggleSkybox();
 	bool IsSkyboxVisible() const { return bSkyVisible; }
@@ -102,7 +102,7 @@ public:
 	void ToggleLights();
 	bool AreLightsVisible() const;
 
-	// --- The adopted scene ------------------------------------------------------------------
+	// The adopted scene.
 	// The baked level's actors, bucketed by the bake's tags. Not owned — they belong to the level
 	// and die with it; these are handles for the visibility toggles and the debug pick.
 	const TArray<TObjectPtr<AStaticMeshActor>>& GetWorldActors() const { return WorldActors; }
@@ -129,9 +129,9 @@ public:
 	int32 WorldLightCount = 0;
 	int32 PropInstanceCount = 0;
 	int32 PropModelCount = 0;
-	// Decals (7.2): number of deferred decal actors adopted from the baked level.
+	// Decals: number of deferred decal actors adopted from the baked level.
 	int32 DecalCount = 0;
-	// Ropes (8.7): number of UCableComponents built from <map>.ropes (0 if the map has no ropes or
+	// Ropes: number of UCableComponents built from <map>.ropes (0 if the map has no ropes or
 	// elysium.Ropes is off).
 	int32 RopeCount = 0;
 
@@ -150,7 +150,7 @@ private:
 	UPROPERTY() TObjectPtr<UMaterialInstanceDynamic> SkyMid;
 	UPROPERTY() TObjectPtr<UElysiumLightRig> LightRig;
 
-	// B8/B8b — `<map>.env`: the sky name and orientation convention, and the map's TWO fog sets
+	// `<map>.env`: the sky name and orientation convention, and the map's TWO fog sets
 	// (`worldspawn`'s for the world, `sky_camera`'s for the miniature). Kept past load so
 	// `elysium.Fog` can re-stamp the primitives live.
 	FElysiumEnvDef EnvDef;
@@ -179,7 +179,7 @@ private:
 	// MID, not 40. Populated by ApplyMaterialOverrides at adopt; dropped with the component.
 	UPROPERTY() TMap<TObjectPtr<UMaterialInterface>, TObjectPtr<UMaterialInstanceDynamic>> MaterialOverrides;
 
-	// Ropes (8.7): one Verlet UCableComponent per <map>.ropes segment (an overhead cable), kept
+	// Ropes: one Verlet UCableComponent per <map>.ropes segment (an overhead cable), kept
 	// alive for the map's lifetime. MIDs off M_World_Opaque bound to the decoded RopeMaterial
 	// texture; the cable's fixed endpoints and rest length come straight from the sidecar.
 	UPROPERTY() TArray<TObjectPtr<UCableComponent>> Ropes;

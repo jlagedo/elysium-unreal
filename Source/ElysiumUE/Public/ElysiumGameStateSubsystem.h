@@ -35,7 +35,7 @@ namespace ElysiumQuestNotifications
 }
 
 // One recorded expression evaluation (field-6 payload or a hand-run elysium.eval/exec) for the
-// debug layer's recent-eval log (P5 5.2). Debug-only history; not saved.
+// debug layer's recent-eval log. Debug-only history; not saved.
 struct FElysiumEvalRecord
 {
 	double Time = 0.0;      // game-clock seconds at record time
@@ -45,7 +45,7 @@ struct FElysiumEvalRecord
 };
 
 // One recorded native-binding call (a `vampire`-module global or a Character method) for the
-// debug layer's native-call log (P5 5.3). The evaluator pushes one whenever a native name is
+// debug layer's native-call log. The evaluator pushes one whenever a native name is
 // invoked, so `FindPlayer().RemoveItem(...)` and friends are visible even while their backing
 // systems are still stubs. Debug-only history; not saved.
 struct FElysiumNativeCallRecord
@@ -56,14 +56,14 @@ struct FElysiumNativeCallRecord
 	bool bStub = false;    // true when the call only logged (no backing system yet)
 };
 
-// Persistent-across-travel game state (R8). Owns the three things that outlive any single
+// Persistent-across-travel game state. Owns the three things that outlive any single
 // map load: the `G` global flag store, the quest string->int map, and the game clock. The
 // entity world and its event queue die with AElysiumMapActor; this lives on the game
 // instance, so travel keeps `G`, quests, and curtime intact.
 //
 // It holds no UObject-reflected state — the stores are plain structs carrying only
 // FElysiumVariant/int (no object refs), so there is nothing for the GC to trace and
-// save/load (M6) is mechanical.
+// save/load is mechanical.
 UCLASS()
 class UElysiumGameStateSubsystem : public UGameInstanceSubsystem
 {
@@ -73,7 +73,7 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	// --- `G` — the global flag bag -------------------------------------------------
+	// `G` — the global flag bag.
 	// Engine-owned in VtMB (a `PyDataManager` injected into __main__), one flat namespace,
 	// values overwhelmingly small ints. Default-on-miss is integer 0 (decompiled tp_getattr,
 	// `docs/vtmb/python_bridge.md`): Get never fails. Setting a Void value deletes the key, mirroring
@@ -92,7 +92,7 @@ public:
 
 	const FElysiumGlobalMap& GetGlobals() const { return Globals; }
 
-	// --- Quests --------------------------------------------------------------------
+	// Quests.
 	// String->int quest state; miss -> 0. The map stays authoritative (732 `SetQuest` call sites,
 	// default-0 on miss is VtMB's own contract); what hangs off it is everything that happens
 	// AROUND a change — the completion state's awards and the journal row (`docs/vtmb/game_runtime.md` ->
@@ -123,14 +123,14 @@ public:
 	// write and never reads it, so the panel's own clear rule is unrecovered (`docs/architecture/ui-architecture.md`).
 	void MarkQuestsRead(int32 Hub);
 
-	// --- The player record + New Game (11.4) ---------------------------------------
-	// S3: the player *is* an entity, so the live sheet lives on that entity for as long as a map
-	// does; this record is the durable half that crosses a map boundary and, at 11.9, a save. The
+	// The player record + New Game.
+	// The player *is* an entity, so the live sheet lives on that entity for as long as a map
+	// does; this record is the durable half that crosses a map boundary and a save. The
 	// entity hydrates from it at map build and dehydrates back into it when the world is torn down.
 	const FElysiumPlayerRecord& PlayerRecord() const { return Record; }
 	FElysiumPlayerRecord& PlayerRecord() { return Record; }
 
-	// The name typed at chargen (9.4f). Empty until then, and every reader must render that state
+	// The name typed at chargen. Empty until chargen fills it, and every reader must render that state
 	// rather than substituting a placeholder.
 	const FString& PlayerName() const { return Record.Name; }
 	void SetPlayerName(const FString& In) { Record.Name = In; }
@@ -152,8 +152,8 @@ public:
 	// built without one). The one place that resolution happens.
 	class FElysiumPlayer* PlayerEntity() const;
 
-	// The run is lost: the combat character's death path calls this and the session raises 11.3's
-	// GameOver state. It lives here rather than on a world service because the substrate already
+	// The run is lost: the combat character's death path calls this and the session raises
+	// GameOver. It lives here rather than on a world service because the substrate already
 	// holds this subsystem, and "the run ended" is session state, not a map capability.
 	void NotifyPlayerKilled();
 
@@ -163,9 +163,8 @@ public:
 
 	// Seed the state a fresh story run starts from. New Game in retail is four maps
 	// (`docs/vtmb/level_transitions.md`): chargen on `sp_genesisdevice_1` writes the sheet, then the theatre
-	// embrace + trial, then a landmark transition into `sp_tutorial_1`. Chargen (8.6) and the
-	// choreographed intro (P9) are unbuilt, so this seeds exactly what survives that chain and is
-	// read afterwards, and the caller travels straight to the story entry.
+	// embrace + trial, then a landmark transition into `sp_tutorial_1`. This seeds the flags that
+	// survive that chain and are read afterwards; the caller travels to the story entry.
 	//
 	// Seeded flags, and why each one:
 	//   Story_State = -4   the intro spine's "theatre done" value (chargen -5, leaving tutorial -2)
@@ -186,12 +185,12 @@ public:
 	void CommitChargen(const struct FElysiumChargenState& State);
 
 	// Drop the run: `G`, the quest map, the player record and the clock all go back to their
-	// fresh-process values. Called by UElysiumGameFlowSubsystem::QuitToMenu (11.3) so the menu's
+	// fresh-process values. Called by UElysiumGameFlowSubsystem::QuitToMenu so the menu's
 	// backdrop world cannot be running behind a half-live session, and so the next New Game starts
-	// from nothing. `G` and the quest map join the record as save blocks at 11.9.
+	// from nothing. `G` and the quest map join the record as save blocks.
 	void EndSession();
 
-	// --- The per-map snapshots (11.9) ------------------------------------------------
+	// The per-map snapshots.
 	// A run holds the current map plus a frozen snapshot of every other map visited, so walking back
 	// into Santa Monica finds it as you left it (`docs/architecture/save-architecture.md` §5). They live here for the
 	// same reason `G` does: session lifetime, not map lifetime. The entity world writes one at every
@@ -210,7 +209,7 @@ public:
 	const TArray<FString>& VisitedMaps() const { return Visited; }
 	void SetVisitedMaps(TArray<FString>&& In) { Visited = MoveTemp(In); }
 
-	// --- Clock + time control (S1) -------------------------------------------------
+	// Clock + time control.
 	// The clock is read-only to everyone but the facade beside it (FElysiumGameClock friends
 	// FElysiumTimeControl and nothing else), so `Now` moves in exactly one place: the map
 	// actor's gameplay tick, through TimeControl().AdvanceFrame.
@@ -221,14 +220,14 @@ public:
 	FElysiumTimeControl& TimeControl() { return TimeCtl; }
 	const FElysiumTimeControl& TimeControl() const { return TimeCtl; }
 
-	// --- Script host (B6) ----------------------------------------------------------
+	// Script host.
 	// The seam field-6 Python payloads evaluate through. Initialized to FElysiumNullScriptHost
-	// (logs + returns Void); the M4 evaluator installs itself via SetScriptHost. Lives here (GI
+	// (logs + returns Void); the live evaluator installs itself via SetScriptHost. Lives here (GI
 	// scope) so it persists across map travel, like the entity world's other collaborators.
 	IElysiumScriptHost& ScriptHost() const { return *ScriptHostPtr; }
 	void SetScriptHost(TUniquePtr<IElysiumScriptHost> InHost);
 
-	// --- Level script (P9 9.3) -----------------------------------------------------------
+	// Level script.
 	// Import the map's `worldspawn.levelscript` module into the installed host. AElysiumMapActor
 	// calls this once per map load, before the spawn pass, so the module's top-level code (its
 	// constants, imports and class defs) is in place before any entity evaluates a field-6 payload
@@ -243,7 +242,7 @@ public:
 	bool IsLevelScriptLoaded() const { return bLevelScriptLoaded; }
 	const FString& LevelScriptError() const { return LevelScriptLoadError; }
 
-	// --- Live script evaluation (P5 5.4) --------------------------------------------------
+	// Live script evaluation.
 	// Arm/disarm real evaluation on the whole scripting surface (field-6, logic_pythoncheck,
 	// ScheduleTask): on -> the preferred real host, off -> the null host (logs + Void). Live is the
 	// map-load default. Driven by the `elysium.script.live` verb and the Scripting Cog window.
@@ -252,17 +251,17 @@ public:
 
 	// The real host installed when evaluation is live: the embedded CPython VM when the module was
 	// built with it and the interpreter comes up, else the ElysiumExpr evaluator. `elysium.script.
-	// cpython [0|1]` overrides the choice for A/B; a CPython VM that fails to start falls back
+	// cpython [0|1]` overrides the choice; a CPython VM that fails to start falls back
 	// rather than leaving every eval Void, which would be indistinguishable from error-to-false.
 	TUniquePtr<IElysiumScriptHost> MakePreferredScriptHost();
 
-	// --- Expression-eval convenience + debug history (P5 5.2) ----------------------------
+	// Expression-eval convenience + debug history.
 	// Evaluate a script string against the CURRENT map's entity world + this G store, for the
 	// console verbs and the Cog window. Runs through the installed host, so it resolves exactly what
 	// a field-6 payload resolves — including the loaded level script's names. Expression and
 	// statement shapes both work; the value is the expression's, or the last statement's. Records
 	// into the recent-eval log. Total (never throws): on error OutError carries the reason and the
-	// result is Void (error-to-false, RE3).
+	// result is Void (error-to-false).
 	FElysiumVariant EvalScript(const FString& Source, FString& OutError);
 
 	// Push one evaluation onto the recent-eval ring (called by the expr host + EvalScript).
@@ -270,7 +269,7 @@ public:
 	const TArray<FElysiumEvalRecord>& RecentEvals() const { return EvalHistory; }
 	void ClearEvalHistory() { EvalHistory.Reset(); }
 
-	// --- Native-binding call history (P5 5.3) --------------------------------------------
+	// Native-binding call history.
 	// The evaluator records every native global / Character-method dispatch here (and bumps the
 	// per-name call counter) so the debug layer can show which parts of the `vampire` surface the
 	// running content exercises. Debug-only; not saved.
@@ -285,15 +284,15 @@ public:
 private:
 	// `elysium.quest` — the journal, one quest, or a real state change.
 	void ExecQuest(const TArray<FString>& Args);
-	// The map-epoch boundary (S4): drop the leaving map's level-script state and forward the retire
+	// The map-epoch boundary: drop the leaving map's level-script state and forward the retire
 	// to the installed host, which is plain C++ and cannot subscribe on its own.
 	void OnMapEpochRetired(uint64 Epoch);
 
 	FElysiumGlobalMap Globals;
 	FElysiumQuestMap Quests;
-	// The durable player (11.4). The live one is the entity in the current map.
+	// The durable player. The live one is the entity in the current map.
 	FElysiumPlayerRecord Record;
-	// The frozen maps of this run (11.9), keyed by map name, plus first-visit order.
+	// The frozen maps of this run, keyed by map name, plus first-visit order.
 	TMap<FString, FElysiumMapSnapshot> Snapshots;
 	TArray<FString> Visited;
 	FElysiumGameClock Clock;
@@ -301,7 +300,7 @@ private:
 	FElysiumTimeControl TimeCtl{ Clock };
 	TUniquePtr<IElysiumScriptHost> ScriptHostPtr;
 
-	// The current map's level-script module + the last import's outcome (P9 9.3).
+	// The current map's level-script module + the last import's outcome.
 	FString LevelScriptModule;
 	FString LevelScriptLoadError;
 	bool bLevelScriptLoaded = false;
@@ -310,7 +309,7 @@ private:
 	static constexpr int32 EvalHistoryMax = 64;
 	TArray<FElysiumEvalRecord> EvalHistory;
 
-	// Recent native-call ring + per-name call counters (debug-only), newest last (P5 5.3).
+	// Recent native-call ring + per-name call counters (debug-only), newest last.
 	static constexpr int32 NativeCallHistoryMax = 64;
 	TArray<FElysiumNativeCallRecord> NativeCallHistory;
 	TMap<FName, int32> NativeCallCounts;

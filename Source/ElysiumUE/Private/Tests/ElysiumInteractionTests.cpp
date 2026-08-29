@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -172,8 +172,8 @@ static TUniquePtr<FElysiumEntity> MakeTestUseSessionEntity()
 static FElysiumClassRegistrar GTestUseSessionRegistrar(
 	TEXT("test_use_session"), ElysiumBaseClassName(), &MakeTestUseSessionEntity,
 	[](FElysiumClassDesc&) {});
-// =====================================================================================
-// FElysiumWorldServices (11.2) — the substrate's outbound seam. Runs the shape of the
+
+// FElysiumWorldServices — the substrate's outbound seam. Runs the shape of the
 // tutorial's own logic_auto chain end to end against the recording stub: no RHI, no actors,
 // no `$ELYSIUM_EXPORT_ROOT`. sp_tutorial_1's five logic_autos fire OnMapLoad at an NPC (WillTalk), a
 // door (Lock), a math_counter and a delayed wire; this reproduces that shape and adds one
@@ -182,7 +182,7 @@ static FElysiumClassRegistrar GTestUseSessionRegistrar(
 // The second half is the contract that makes the first half meaningful: the SAME defs on a
 // world with NO services must reach the SAME logical state. Embodiment, audio, travel,
 // presentation, and weather are outputs of the logic, never inputs to it.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWorldServicesTest, "Elysium.Substrate.WorldServices", GElysiumTestFlags)
 bool FElysiumWorldServicesTest::RunTest(const FString&)
@@ -290,7 +290,7 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 	{
 		FElysiumEntityWorld World(/*Owner*/ nullptr, /*GameState*/ nullptr, Rec.Bundle());
 		World.Load(BuildDefs());
-		// A played map has a player entity (11.4) — the map actor creates one after Load, and the
+		// A played map has a player entity — the map actor creates one after Load, and the
 		// travel seam below reads its placement, so the test builds the same shape.
 		World.SpawnPlayer();
 		World.Activate(0.0);
@@ -342,7 +342,7 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 			Rec.Saw(TEXT("StartFade dur=2.50 hold=1.50")));
 
 		// The travel seam: a forced ChangeLevel captures the placement of the
-		// player entity — sampled off the body at the top of the frame (11.4) — and asks the travel
+		// player entity — sampled off the body at the top of the frame — and asks the travel
 		// service for the transition. This map has no source landmark, so the offset stays zero —
 		// the warning path — and the yaw is the one the body reported.
 		FElysiumEntity* Change = World.FindByName(TEXT("toalley"));
@@ -404,9 +404,9 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // 11.15 — the two perception queries on the same seam. Nothing in the substrate consumes
-// them yet (13.1's light sampling and 13.5's senses are their callers), so what is under
+// them yet (light sampling and senses are their callers), so what is under
 // test here is the CONTRACT every one of those callers will be written against: the
 // headless answers, and that a scripted answer actually comes back through the seam.
 //
@@ -414,7 +414,7 @@ bool FElysiumWorldServicesTest::RunTest(const FString&)
 // no collision world and no light rig; an implementation that answered "blocked" and
 // "dark" there would blind every NPC and hand the stealth surface a free pass in exactly
 // the runs meant to prove neither happens.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPerceptionQueryTest,
 	"Elysium.Substrate.PerceptionQueries", GElysiumTestFlags)
@@ -462,9 +462,9 @@ bool FElysiumPerceptionQueryTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Modern +use — deterministic selection order and the world-owned focus/session lifecycle.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInteractionLifecycleTest,
 	"Elysium.Substrate.InteractionLifecycle", GElysiumTestFlags)
@@ -809,10 +809,10 @@ bool FElysiumPropSwitchUseTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Brush movers — visible body attachment, PASSABLE doors, use_override, prop_button,
 // and the recovered func_elevator state machine exercised as one authored-style chain.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDoorElevatorTest,
 	"Elysium.Substrate.DoorElevator", GElysiumTestFlags)
@@ -1137,14 +1137,14 @@ bool FElysiumDoorElevatorTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // func_rotating + the character attach point.
 //
 // Two things a `parentname` needs that the substrate did not have: a character that can BE a
 // parent (an ornament worn on an NPC, which survives the model swap a level script does), and the
 // continuous spinner its own children ride. The rate is the assertion that matters — VtMB authors
 // clock hands as `maxspeed` in degrees/second, so a second hand is 6 and a minute hand is 0.1.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRotatingAttachTest,
 	"Elysium.Substrate.RotatingAttach", GElysiumTestFlags)
@@ -1413,11 +1413,11 @@ bool FElysiumRotatingAttachTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Computer-terminal first slice: ordered KeyValues, exclusive serial-checked authority,
 // password and deterministic skill paths, and Function output delivery on the one queue.
 // The fixture is project-authored and content-independent; no retail strings are embedded.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTerminalDefinitionTest,
 	"Elysium.Substrate.TerminalDefinition", GElysiumTestFlags)
@@ -1630,7 +1630,7 @@ TerminalDefinition
 	return true;
 }
 
-// ============================================================================================
+
 // The retail integer-only Python truth gate at the terminal and sign dependency surfaces.
 //
 // Retail evaluates a computer-terminal dependency (CPropHacking::TestDependency -> the shared
@@ -1642,7 +1642,7 @@ TerminalDefinition
 // non-empty string, the float 1.0), which ToBool calls TRUE, must read FALSE at both surfaces.
 // These two tests drive EvalCondition onto each variant category through a sentinel host and
 // assert the observable outcome (a rendered directory, a selected wrapper block).
-// ============================================================================================
+
 
 // A script host whose result is fully determined by the source string, so the dependency gates
 // can be driven onto any FElysiumVariant category without a Python VM or the export corpus.

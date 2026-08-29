@@ -1,4 +1,4 @@
-// The facial flex chain (roadmap 12.3). Two tiers, because the chain has two halves.
+// The facial flex chain. Two tiers, because the chain has two halves.
 //
 // The arithmetic — the RPN rule machine, the eyelid lid combine, and the four-value target ramp —
 // is content-free and runs against a hand-written rig with hand-computed expectations. It is the
@@ -189,9 +189,9 @@ namespace
 	}
 }
 
-// =====================================================================================
+
 // The target ramp — `R_StudioFlexVerts`' trapezoid, against hand-computed values.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFlexRampTest, "Elysium.Substrate.FlexRamp", GElysiumFacialTestFlags)
 bool FElysiumFlexRampTest::RunTest(const FString&)
@@ -238,9 +238,9 @@ bool FElysiumFlexRampTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The rule machine and the lid combine, over the hand-written rig.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumFlexRulesTest, "Elysium.Substrate.FlexRules", GElysiumFacialTestFlags)
 bool FElysiumFlexRulesTest::RunTest(const FString&)
@@ -350,9 +350,9 @@ bool FElysiumFlexRulesTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The amplitude jaw — the rig's second input, and its precedence against the rule layer.
-// =====================================================================================
+
 //
 // The jaw is the only facial write that is not a controller: `mstudiomouth_t` names a FLEXDESC, so
 // it lands downstream of the 60 RPN rules instead of upstream of them. That ordering is the whole
@@ -461,9 +461,9 @@ bool FElysiumFlexJawTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The eye basis — `R_StudioEyeballPosition`, without a mesh under it.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumEyeSolveTest, "Elysium.Substrate.EyeSolve", GElysiumFacialTestFlags)
 bool FElysiumEyeSolveTest::RunTest(const FString&)
@@ -589,9 +589,9 @@ bool FElysiumEyeSolveTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The eyelid bridge — the record's write-back, against the reconstruction it supersedes.
-// =====================================================================================
+
 //
 // The four eyelid rules compute weights no morph reads, and the lid morphs hang off flexdescs no
 // rule computes. `StudioEyeball` is the authored bridge between them, and the failure mode is that
@@ -727,9 +727,9 @@ bool FElysiumEyeLidTest::RunTest(const FString&)
 
 
 
-// =====================================================================================
+
 // The whole chain on a real body: a controller write reaching the component's morph weights.
-// =====================================================================================
+
 //
 // Everything above this point checks one link. This drives the assembled thing — a registered
 // skeletal-mesh component running UElysiumBipedAnimInstance over the real mesh — and reads the answer
@@ -915,9 +915,9 @@ bool FElysiumFacialTrackTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The Faceposer weight table (roadmap 12.3) — the reader, against a hand-written fixture.
-// =====================================================================================
+
+// The Faceposer weight table — the reader, against a hand-written fixture.
+
 //
 // The one thing this format lets a reader get wrong while still producing a plausible face is
 // `$hasweighting`: a row carries value and influence interleaved, two floats per key, and reading
@@ -1032,9 +1032,9 @@ bool FElysiumExpressionTableTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The wire: a scene's expression events composed onto an actor's flex controllers.
-// =====================================================================================
+
 //
 // Content-free — an inline `.vcd`, an inline table, and the recording embodiment standing in for a
 // rig. What it covers is the part that is arithmetic over the scene clock and therefore silent when
@@ -1188,9 +1188,9 @@ bool FElysiumSceneExpressionTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The wire: a scene's silence/loud envelope composed onto its actors' jaws.
-// =====================================================================================
+
 //
 // Content-free — two inline `.vcd`s and the recording embodiment standing in for a rig. What it
 // covers is the arithmetic over the scene clock that is silent when it is wrong: the three levels
@@ -1299,7 +1299,7 @@ bool FElysiumSceneJawTest::RunTest(const FString&)
 	FElysiumRecordingServices Services;
 	Services.FlexControllers = { TEXT("jaw_drop") };
 	// A speak event is dispatched a lead early so its sample is HEARD at the authored instant; the
-	// jaw below runs on the unoffset clock. The lead is normally the audio path's own (12.2b), so
+	// jaw below runs on the unoffset clock. The lead is normally the audio path's own, so
 	// it is pinned here rather than inherited — this test is about the jaw, not about the device.
 	Services.OutputLead = 0.1f;
 
@@ -1406,9 +1406,9 @@ bool FElysiumSceneJawTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The theatre's own scenes: every expression event, end to end, against the real export.
-// =====================================================================================
+
 //
 // The acceptance corpus. For each `expression` event on each of sp_theatre's twelve scenes, the
 // three joins have to hold: `param` names a table on disk, `param2` names a row in it, and every
@@ -1576,9 +1576,9 @@ bool FElysiumTheatreExpressionsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The amplitude jaw against the real export: every envelope, and the face it has to reach.
-// =====================================================================================
+
 //
 // Two joins, over every map-placed choreo scene the export resolves. For a `silence`/`loud` event:
 // the actor it was authored under has to name a map entity whose model carries a facial sidecar with
@@ -1774,9 +1774,9 @@ bool FElysiumTheatreJawTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// Lipsync (12.5): the `.lip` reader, the recovered envelope, and the scene driver.
-// =====================================================================================
+
+// Lipsync: the `.lip` reader, the recovered envelope, and the scene driver.
+
 
 namespace
 {
@@ -2159,7 +2159,7 @@ bool FElysiumSceneLipsyncTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // 12.5 — the phoneme filter is the SPEAKER'S, not a constant.
 //
 // `studiohdr` +232/+236 clamps a phoneme's span into the envelope's blend width, and the pair is
@@ -2171,7 +2171,7 @@ bool FElysiumSceneLipsyncTest::RunTest(const FString&)
 // This drives the same scene as SceneLipsync with one thing changed: the body answers the wider
 // floor. Both halves are asserted — the rig reads the field off the sidecar, and the value survives
 // the whole trip out through IElysiumEmbodiment, into the driver's binding, and into the arithmetic.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPhonemeFilterTest,
 	"Elysium.Substrate.PhonemeFilter", GElysiumFacialTestFlags)
@@ -2433,7 +2433,7 @@ bool FElysiumTheatreLipsyncTest::RunTest(const FString&)
 	return true;
 }
 
-// CCC5 — the player body on the graph, and the two regressions that log nothing.
+// The player body on the graph, and the two regressions that log nothing.
 //
 // The **portrait stack**: a player body carries eyeballs and axis-interpolation rules and no flex
 // rig, and both live on the shared base rather than on the host that poses it. An instance that

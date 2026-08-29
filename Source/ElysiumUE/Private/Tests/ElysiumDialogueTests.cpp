@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -159,11 +159,11 @@ namespace ElysiumDialogueTests
 using ElysiumDialogueTestHelpers::ElysiumDlgBytes;
 using ElysiumDialogueTestHelpers::ElysiumDlgRow;
 
-// =====================================================================================
+
 // 9.1 / B4 — `.dlg` parser, the dlgexpr normalizer, and the branch state machine. All
 // content-free: a synthetic in-memory `.dlg` and injected condition/action callbacks, so
 // the branch logic is tested independently of both the normalizer and the script host.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDlgParseTest, "Elysium.Substrate.DlgParse", GElysiumTestFlags)
 bool FElysiumDlgParseTest::RunTest(const FString&)
@@ -758,12 +758,12 @@ bool FElysiumDlgStartingLineTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // 9.3 CPython end-to-end — the writers and the two-phase spawn driven through the REAL
 // Python glue (arg parsing, __getattr__ dispatch, the module globals), not just the C++
 // substrate. Self-skips when the embedded VM is unavailable, so it never yields a false
 // failure on a non-CPython build/host.
-// =====================================================================================
+
 
 #if defined(ELYSIUM_WITH_CPYTHON) && ELYSIUM_WITH_CPYTHON
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCPythonWritersTest, "Elysium.Substrate.CPythonWriters", GElysiumTestFlags)

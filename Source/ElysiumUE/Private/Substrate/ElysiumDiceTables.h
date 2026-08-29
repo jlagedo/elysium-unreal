@@ -6,9 +6,7 @@ namespace ElysiumKeyValues { struct FKvNode; }
 
 struct FElysiumFeat;
 
-// ================================================================================================
-// 12. dicerolls.txt — the d10 weighting tables and the wound penalty
-// ================================================================================================
+// --- dicerolls.txt — the d10 weighting tables and the wound penalty ---
 
 // One `Rules/TableWeightings` child. The engine draws `RandomInt(0, 99)` and reads `Faces[draw]`,
 // so the table IS the die rather than a bias applied to one: it is the whole mapping from the raw

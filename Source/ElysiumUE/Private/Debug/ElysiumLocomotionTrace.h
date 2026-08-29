@@ -9,7 +9,7 @@ struct FElysiumAnimationSelection;
 struct FElysiumLocomotionSample;
 
 // The recorded body trace: one channel schema and one writer, for every harness that records a
-// moving body (CCC1/CCC4).
+// moving body.
 //
 // **Two producers, one schema.** `FElysiumLocomotionSample` is what a moving body publishes about
 // itself and `FElysiumAnimationSelection` is what its driver resolved from it; this turns that pair

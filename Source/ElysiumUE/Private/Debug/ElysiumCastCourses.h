@@ -64,7 +64,6 @@ namespace ElysiumCastCourses
 		// a body that got less far rather than a course of a different length.
 		float RecordSeconds = 6.0f;
 
-		// --- Who stands it -----------------------------------------------------------------------
 		// Empty asks the harness for its own default. A sited course names the map's own authored
 		// values, so the body that walks the route is the body the map stands there.
 		FString Classname;
@@ -74,7 +73,6 @@ namespace ElysiumCastCourses
 		// retail's own unarmed cast walks — which is the other half of the armed/unarmed pair.
 		FString Weapon;
 
-		// --- What the recording has to show ------------------------------------------------------
 		// The gait the course is a course OF. `Unknown` declares none, and the no-slide predicate
 		// then asks nothing of the activity codes. Anything else must appear in them.
 		EElysiumAnimActivityCode ExpectGait = EElysiumAnimActivityCode::Unknown;

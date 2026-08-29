@@ -14,9 +14,7 @@ namespace
 	using ElysiumVdata::Trim;
 }
 
-// ================================================================================================
-// disciplinetgt_000..004.txt
-// ================================================================================================
+// --- disciplinetgt_000..004.txt ---
 
 const TCHAR* ElysiumDiscFilterName(EElysiumDiscFilter Filter)
 {

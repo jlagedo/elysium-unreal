@@ -59,7 +59,7 @@ namespace ElysiumNpcVisual
 	USkeletalMesh* LoadBakedMesh(const FString& Stem, bool bPlayerMaterial = false);
 	UAnimSequence* LoadBakedClip(const USkeletalMesh* Mesh, const FString& Owner,
 		const FString& ClipName);
-	// One baked blend grid (ANM3), addressed the same way and for the same reason. Unlike a clip
+	// One baked blend grid, addressed the same way and for the same reason. Unlike a clip
 	// this takes the LABEL — a grid is the thing a label names when it does not name one animation,
 	// so there is no cell selection to resolve first. Null for every label that is one clip, which
 	// is most of them, and for every body the bake has not covered.

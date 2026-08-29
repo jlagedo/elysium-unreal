@@ -140,7 +140,7 @@ void FElysiumCogWindow_Scripting::RenderContent()
 		Rescan();
 	}
 
-	// --- Current map's level script -------------------------------------------------------
+	// Current map's level script.
 	ImGui::SeparatorText("This map's level script");
 	const AElysiumMapActor* Map = GetMapActor();
 	if (Map == nullptr)
@@ -421,8 +421,8 @@ void FElysiumCogWindow_Scripting::RenderEvalPanel()
 		bLastEvalError = !Err.IsEmpty();
 		LastEvalResult = bLastEvalError ? Err : R.Describe();
 	}
-	// The disabled scope covers the button only. Inside it, the host name — which is a fact about
-	// the runtime, not a control — was greyed out whenever the box happened to be empty.
+	// The disabled scope covers the button only, so the host name — a fact about the runtime, not
+	// a control — stays readable even when the box is empty.
 	ImGui::EndDisabled();
 	ImGui::SameLine();
 	ImGui::TextColored(GColorDim, "(host: %s)", COG_TCHAR_TO_CHAR(State->ScriptHost().Name()));

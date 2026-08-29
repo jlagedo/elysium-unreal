@@ -13,8 +13,8 @@ class UElysiumInputActionSet;
 struct FInputActionValue;
 struct FElysiumInputState;
 
-// The one thing that turns keys into verbs and verbs into intent (roadmap 11.6,
-// `docs/architecture/runtime-architecture.md` §8.2–8.3). It sits on `AElysiumPlayerController` and does three jobs,
+// The one thing that turns keys into verbs and verbs into intent
+// (`docs/architecture/runtime-architecture.md` §8.2–8.3). It sits on `AElysiumPlayerController` and does three jobs,
 // in this order, every frame:
 //
 //   1. **binds** — every key in the default bind table fires its VtMB console line through
@@ -26,9 +26,9 @@ struct FElysiumInputState;
 //      rotation and the whole command handed to the body. **Nothing polls a key**, so headless play
 //      and deterministic replay are the same mechanism as playing.
 //
-// Enhanced Input mapping contexts, the remapping screen and the `config.cfg` projection are
-// **10.6**'s; this is the layer they replace the *front* of, not the whole path — the command bus
-// and the user command stay exactly as they are.
+// Enhanced Input mapping contexts, the remapping screen and the `config.cfg` projection sit in
+// front of this layer, not in place of it — the command bus and the user command stay exactly as
+// they are.
 UCLASS()
 class UElysiumInputRouter : public UObject
 {
@@ -64,7 +64,7 @@ public:
 	// stop controller sampling before another frame can publish a neutral command.
 	void ApplyScopeState(const FElysiumInputState& State);
 
-	// --- Record / replay -------------------------------------------------------------------
+	// Record / replay.
 	// The acceptance for S5: a recorded stream replays identically. Recording captures the command
 	// the router built; replay feeds recorded commands in instead of building them, so movement,
 	// the camera and the bus cannot tell the difference.

@@ -83,7 +83,7 @@ namespace
 		}
 	}
 
-	// --- selection overlay -------------------------------------------------------------------
+	// Selection overlay.
 	// The highlight is drawn with imgui rather than as scene geometry, which buys three things the
 	// project needs: it costs no assets, it reaches things with no renderable mesh at all (trigger
 	// volumes), and it keeps drawing if the world is time-scaled to a stop — Cog's render tick is
@@ -431,7 +431,7 @@ void FElysiumCogWindow_Inspector::RenderContent()
 {
 	Super::RenderContent();
 
-	// --- Pick controls + what the last click resolved to --------------------------------------
+	// Pick controls + what the last click resolved to.
 	ImGui::Checkbox("Pick from world", &bClickToSelect);
 	ImGui::SetItemTooltip("LMB over the world picks; RMB clears. Armed only while this window is "
 		"open and the Cog menu owns the mouse. The selection itself survives closing either.");
@@ -537,7 +537,7 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 		Row("Spawned at", Ent->Def->Origin.ToCompactString());
 	}
 
-	// --- +use (P4.4) — the context-icon reticle state. Shown for anything the player can look-and-use
+	// +use — the context-icon reticle state. Shown for anything the player can look-and-use
 	// or that carries an icon: whether the +use trace is armed on it, the use_icon/locked_icon it
 	// names, its live lock, and the icon GetUseIcon() resolves to (= exactly what the HUD draws).
 	if (Ent->IsUsable() || Ent->UseIcon != 0 || Ent->LockedIcon != 0)
@@ -557,7 +557,7 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 		Row("Look-cursor", bAimed ? TEXT("ON THIS (aimed)") : TEXT("not aimed"));
 	}
 
-	// --- Live state (P4.3) — runtime, non-keyfield state a leaf surfaces (mover toggle-state, current
+	// Live state — runtime, non-keyfield state a leaf surfaces (mover toggle-state, current
 	// move, resolved links, spawnflag decode). Empty for classes that don't override GetDebugState.
 	TArray<TPair<FString, FString>> DebugState;
 	Ent->GetDebugState(DebugState);
@@ -570,7 +570,7 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 		}
 	}
 
-	// --- In-world debug (drives the same overlays/breakpoint as the ent_* verbs) ------------
+	// In-world debug: drives the same overlays/breakpoint as the ent_* verbs.
 	if (Dbg != nullptr)
 	{
 		ImGui::SeparatorText("In-world debug");
@@ -682,7 +682,7 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 		}
 	}
 
-	// --- Raw keyvalues ---------------------------------------------------------------------
+	// Raw keyvalues.
 	// The verbatim `.ents` record. For the inert majority (light, info_node, infodecal, env_sprite)
 	// this is the whole of what the map author wrote, so it opens by default for them.
 	ImGui::SetNextItemOpen(Ent->IsRecordOnly() || FieldsSet == 0,
@@ -776,7 +776,7 @@ void FElysiumCogWindow_Inspector::RenderEntityDetails(FElysiumEntity& EntRef, FE
 		}
 	}
 
-	// --- Fire input (through the real queue, targeting this entity) ------------------------
+	// Fire input through the real queue, targeting this entity.
 	// An inert record answers no inputs at all, which is the common case; skip the param/delay
 	// widgets entirely for it rather than showing controls that drive nothing.
 	TArray<FName> InputNames;

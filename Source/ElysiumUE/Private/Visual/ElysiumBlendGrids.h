@@ -9,8 +9,8 @@
 #include "ElysiumClipMovement.h"
 #include "ElysiumGaitSpeeds.h"   // FElysiumGaitSpeedTable — what a locomotion fan's motion becomes
 
-// What a model's own sequence descriptors declare beside their clips, off `npc/blends/<stem>.json`
-// (CAP7.3): its blend spaces, its autolayer bindings and its event timelines. All three come from
+// What a model's own sequence descriptors declare beside their clips, off `npc/blends/<stem>.json`:
+// its blend spaces, its autolayer bindings and its event timelines. All three come from
 // the same 764-byte record, so they ship in one file and are read by one parser. Plain C++ with no
 // UObject reflection, like `FElysiumFacialRig` and `FElysiumCompositionRig`; the cache that hands
 // one out is `UElysiumAnimSubsystem`.
@@ -149,13 +149,13 @@ struct FElysiumBlendTable
 	// looked in.
 	TMap<FString, FElysiumClipMovementPath> Movement;
 	// Whether the sidecar carried `movement_fields`. **The two absences are different and a reader
-	// must not collapse them**: false means this file was written by an exporter that never read the
+	// must not collapse them**: false means this file never read the
 	// `mstudiomovement_t` array, so it says nothing about any clip and a consumer reports the gap;
 	// true with a label missing from `Movement` is the file stating that the clip authors no
 	// movement, which is the value retail's own `Studio_AnimMovement` returns false for.
 	bool bMovementStated = false;
 	// **Why `bMovementStated` is false, when it is.** A file that carries no `movement_fields` at all
-	// predates the column and is fixed by re-exporting it; a file that carries one this reader cannot
+	// omitted the column and is fixed by re-exporting it; a file that carries one this reader cannot
 	// address names columns the reader does not, and re-exporting it changes nothing. Both leave every
 	// clip unanswerable, and they have opposite remedies, so the consumer is told which it has.
 	bool bMovementSchemaUnreadable = false;
@@ -225,7 +225,7 @@ namespace ElysiumBlendGrids
 	FElysiumBlendPick SelectCell(const FElysiumBlendGrid& Grid, const FElysiumBlendTable& Table,
 		const FElysiumPoseParams& Pose);
 
-	// The single cell a body that cannot evaluate a fan collapses one onto (LIFE5): the floor pick,
+	// The single cell a body that cannot evaluate a fan collapses one onto: the floor pick,
 	// stepped to its neighbour on whichever axis sat past the half-cell, with the fractions cleared.
 	//
 	// It exists for exactly one caller — a body with no compiled reaction branch, which has a montage
@@ -239,7 +239,7 @@ namespace ElysiumBlendGrids
 	// `SelectCell` has already walked past the hole to reach.
 	FElysiumBlendPick NearerCell(const FElysiumBlendPick& Pick, const FElysiumBlendGrid& Grid);
 
-	// One locomotion fan's authored per-cell ground speeds, as the table the mover steers by (CCC7).
+	// One locomotion fan's authored per-cell ground speeds, as the table the mover steers by.
 	//
 	// Refuses anything that is not a wrapping single-axis fan spanning its parameter's whole loop: a
 	// partial slice or a two-axis grid is not a gait, and answering a speed for one would be worse

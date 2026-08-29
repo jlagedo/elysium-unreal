@@ -5,7 +5,7 @@
 class USoundWaveProcedural;
 
 // Which single-header decoder produced an FDecoded. Chosen from the file extension: WAV goes
-// through dr_wav (MS-ADPCM/IMA/PCM — 6.1), MP3 through dr_mp3 (dialogue/music/radio — 6.2).
+// through dr_wav (MS-ADPCM/IMA/PCM), MP3 through dr_mp3 (dialogue/music/radio).
 enum class EElysiumAudioCodec : uint8
 {
 	Wav,

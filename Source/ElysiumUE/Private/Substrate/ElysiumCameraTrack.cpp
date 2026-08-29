@@ -208,10 +208,10 @@ namespace ElysiumCameraTrack
 				Out.Rotation.Yaw = R1.Yaw + FMath::FindDeltaAngleDegrees(R1.Yaw, R2.Yaw) * T;
 				Out.Rotation.Roll = 0.0f;
 
-				// Retail packs roll and FOV into one vector and runs the SAME Catmull over both, which
-				// fixes two things this used to get wrong: the focal length is converted to a field of
-				// view BEFORE interpolating rather than after, and roll takes no shortest-path
-				// unwrapping — the keys are normalised once at spawn and interpolated as plain values.
+				// Retail packs roll and FOV into one vector and runs the SAME Catmull over both:
+				// the focal length is converted to a field of view BEFORE interpolating rather than
+				// after, and roll takes no shortest-path unwrapping — the keys are normalised once
+				// at spawn and interpolated as plain values.
 				Out.Roll = Catmull(Points[I0].Roll, Points[Index].Roll,
 					Points[Index + 1].Roll, Points[I3].Roll, T);
 				Out.FieldOfView = Catmull(

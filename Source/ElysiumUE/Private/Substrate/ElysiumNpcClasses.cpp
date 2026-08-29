@@ -45,8 +45,8 @@ static TUniquePtr<FElysiumEntity> MakeInterestingPlace() { return MakeUnique<FEl
 static void BuildNpcClass(FElysiumClassDesc& D)
 {
 	// `WillTalk` and `SetAnimation` are not here: they belong to CBaseCombatCharacter and
-	// CBaseAnimating, and the chain walk (R2) reaches them — which is the point of 11.4 giving the
-	// NPC the same two ancestors VtMB gives it.
+	// CBaseAnimating, and the chain walk (R2) reaches them — the NPC shares those two ancestors
+	// with the player, as VtMB's chain does.
 	D.Input(TEXT("UseInteresting"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
 		{ static_cast<FElysiumNpc&>(E).InputUseInteresting(Args); });
 	D.Input(TEXT("StartPlayerDialogRemote"), [](FElysiumEntity& E, const FElysiumInputArgs& Args)
@@ -132,7 +132,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	ElysiumAddClassField(D, TEXT("interesting_place_groups"), &FElysiumNpc::InterestingPlaceGroups);
 	// times_talked: santamonica/chinatown/e3/demo read `npc.times_talked` to branch first-vs-repeat
 	// dialogue. Register it read-only (engine-written, script-read) so the read resolves to a defined
-	// value instead of raising AttributeError. B4's dialogue runner drives the count; it stays 0 until then.
+	// value instead of raising AttributeError. The dialogue runner drives the count; it stays 0 until a conversation closes.
 	ElysiumAddClassField(D, TEXT("times_talked"), &FElysiumNpc::TimesTalked, EElysiumField::Save);
 
 	// The stance pair, under retail's own datamap names. Save-only: they carry flag `0x2` there, so
@@ -166,11 +166,11 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 		D.Fields.Add(FName(TEXT("m_flStanceTime")), MoveTemp(Acc));
 	}
 
-	// --- Cycle 4 (senses): the three authored perception keyfields ------------------------------
+	// --- Senses: the three authored perception keyfields ---
 	// `InitPerceptionDistances` reads all three at spawn. They are Save-flagged like the rest of
 	// the authored NPC tuning: a map may not rewrite them, but a payload has to carry what the
 	// entity was authored with, because the resolved pair is derived from them at Activate.
-	// --- Cycle 5 (cognition): the acquisition counter behind the lookaround chance --------------
+	// --- Cognition: the acquisition counter behind the lookaround chance ---
 	// `m_iEnemySightings` (+0x60a8) is engine-written, never authored — the same Save-only posture
 	// the two stance members take. It is saved because the chance it feeds is a per-character
 	// history: a guard who has fought the player before looks around more often.
@@ -180,7 +180,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	ElysiumAddClassField(D, TEXT("vision"),         &FElysiumNpc::AuthoredVision,     EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("hearing"),        &FElysiumNpc::AuthoredHearing,    EElysiumField::Save);
 
-	// --- Cycle 6 (combat): the three authored loadout keyfields ---------------------------------
+	// --- Combat: the three authored loadout keyfields ---
 	// `additionalequipment` (267 authored rows), `alternateequipment` (184) and `cantdropweapons`
 	// (78). Save-flagged like the rest of the authored NPC tuning: a map may not rewrite them, but a
 	// payload has to carry what the entity was authored with, because the resolved loadout is
@@ -190,7 +190,7 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	ElysiumAddClassField(D, TEXT("alternateequipment"),  &FElysiumNpc::AlternateEquipment,  EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("cantdropweapons"),     &FElysiumNpc::bCantDropWeapons,    EElysiumField::Save);
 
-	// ================ Cycle 10c — the authored player-law thresholds and policy ==================
+	// --- Authored player-law thresholds and policy ---
 	// The four `pl_*` thresholds the law lanes compare against, `pl_investigate` beside them, and
 	// the three investigation-policy keys that are parsed and carried with their meanings
 	// unrecovered (the SEAM is on the members). All 424-row keyfields, Save-flagged for the same
@@ -208,7 +208,6 @@ static void BuildNpcClass(FElysiumClassDesc& D)
 	ElysiumAddClassField(D, TEXT("investigate_mode"),        &FElysiumNpc::InvestigateMode,        EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("investigate_mode_combat"), &FElysiumNpc::InvestigateModeCombat,  EElysiumField::Save);
 	ElysiumAddClassField(D, TEXT("full_investigate"),        &FElysiumNpc::FullInvestigate,        EElysiumField::Save);
-	// =============================================================================================
 }
 
 static void BuildInterestingPlaceClass(FElysiumClassDesc& D)
@@ -279,7 +278,7 @@ struct FElysiumNpcRegistrar
 		for (const TCHAR* Name : NpcClasses)
 		{
 			// CAI_BaseNPC's place in VtMB's chain: under CBaseCombatCharacter, which is under
-			// CBaseAnimating (11.4). The sheet, the counters and the body all arrive through it.
+			// CBaseAnimating. The sheet, the counters and the body all arrive through it.
 			BuildNpcClass(Reg.Register(FName(Name), ElysiumCombatCharacterClassName(), &MakeNpc));
 		}
 

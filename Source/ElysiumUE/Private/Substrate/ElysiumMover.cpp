@@ -1,10 +1,10 @@
-// P4.1-4.3 — the mover base (CBaseToggle constant-velocity primitive + the CBaseDoor 4-state
-// machine) and both door leaves (func_door_rotating swings, func_door slides).
+// The mover base (CBaseToggle constant-velocity primitive + the CBaseDoor 4-state machine) and
+// both door leaves (func_door_rotating swings, func_door slides).
 // Reference: `docs/vtmb/animation_and_movers.md` Part B + the decompiled `vampire.dll` (CBaseDoor::Spawn
-// FUN_100ef260, CBaseDoor::Use FUN_100efc90). P4.3 completes the
-// door: the full spawnflag table (B.5), the sliding leaf (open pose = pos + movedir·(|size·movedir|
-// − lip)), NO_AUTO_RETURN, the PUSE +use doorknob path, and `linked_door` (the paired-leaf swing).
-// The full use-only trace channel + use-icon HUD are P4.4; here doors ride the P4.2 look-cursor.
+// FUN_100ef260, CBaseDoor::Use FUN_100efc90). Completes the door: the full spawnflag table (B.5),
+// the sliding leaf (open pose = pos + movedir·(|size·movedir| − lip)), NO_AUTO_RETURN, the PUSE
+// +use doorknob path, and `linked_door` (the paired-leaf swing). The use-only trace channel and
+// use-icon HUD live elsewhere; here doors ride the look-cursor.
 
 #include "Substrate/ElysiumMover.h"
 
@@ -139,9 +139,7 @@ namespace
 
 }
 
-// ============================================================================================
-// FElysiumMoverBase — the CBaseToggle constant-velocity primitive
-// ============================================================================================
+// --- CBaseToggle constant-velocity primitive ---
 
 void FElysiumMoverBase::SnapBody(const FVector& RelLoc, const FRotator& RelRot)
 {
@@ -200,8 +198,8 @@ void FElysiumMoverBase::TickMove(double Now)
 	const FVector  Loc = FMath::Lerp(MoveStartLoc, MoveDestLoc, Alpha);
 	const FRotator Rot = FQuat::Slerp(MoveStartRot.Quaternion(), MoveDestRot.Quaternion(), Alpha).Rotator();
 
-	// Swept so a solid kinematic body pushes the pawn and reports a blocker (the Chaos behaviour
-	// P4.1 exists to de-risk). SetDormant-gated bodies don't reach here (an inert mover doesn't think).
+	// Swept so a solid kinematic body pushes the pawn and reports a blocker. SetDormant-gated
+	// bodies don't reach here (an inert mover doesn't think).
 	FHitResult Hit;
 	Body->SetRelativeLocationAndRotation(Loc, Rot, /*bSweep*/ true, &Hit);
 
@@ -231,14 +229,12 @@ void FElysiumMoverBase::TickMove(double Now)
 	}
 }
 
-// ============================================================================================
-// Mover sounds (P6.4) — per-mover playback (the manifest loader lives in ElysiumMoverSounds.cpp)
-// ============================================================================================
+// Mover sounds — per-mover playback (the manifest loader lives in ElysiumMoverSounds.cpp).
 //
 // Reference: `docs/vtmb/audio_pipeline.md` + the decompiled CBaseDoor::Spawn (FUN_100ef060, reads the
 // subkeys "close"/"open"/"swing"/"locked") and CBaseButton::Spawn (FUN_100c8810, reads "on"/"off").
 // The movers resolve their `soundgroup` through the offline manifest (ElysiumMoverSoundManifest)
-// and play through the GI audio subsystem's voice pool (the 6.3 path).
+// and play through the GI audio subsystem's voice pool.
 
 namespace
 {
@@ -371,9 +367,7 @@ void FElysiumMoverBase::AppendSoundDebug(TArray<TPair<FString, FString>>& Out) c
 	}
 }
 
-// ============================================================================================
-// FElysiumDoorBase — the CBaseDoor 4-state machine
-// ============================================================================================
+// --- CBaseDoor 4-state machine ---
 
 void FElysiumDoorBase::Spawn()
 {
@@ -383,7 +377,7 @@ void FElysiumDoorBase::Spawn()
 	ClosedRot = Body ? Body->GetRelativeRotation() : FRotator::ZeroRotator;
 	ComputeOpenTransform(OpenLoc, OpenRot);
 
-	// Mover sounds (P6.4): open/close/swing/locked from usable/openable/<soundgroup>/. SF_DOOR_SILENT
+	// Mover sounds: open/close/swing/locked from usable/openable/<soundgroup>/. SF_DOOR_SILENT
 	// (0x1000) mutes them (RE: FUN_100ee4e0 gates on `m_spawnflags & 0x1000`).
 	InitMoverSounds(TEXT("openable"), SF_DOOR_SILENT);
 
@@ -594,7 +588,7 @@ void FElysiumDoorBase::Think()
 
 	if (bRestoreSeatPending)
 	{
-		// 11.9 — the pose a restored door rests in. Same reason START_OPEN seats on the first think:
+		// The pose a restored door rests in. Same reason START_OPEN seats on the first think:
 		// the brush body is built after Spawn, and the snapshot is applied after that.
 		bRestoreSeatPending = false;
 		const bool bOpen = (ToggleState == EToggleState::AtTop);
@@ -772,7 +766,7 @@ void FElysiumDoorBase::OnMoveBlocked(const FHitResult& Hit)
 	{
 		if (Dmg > 0)
 		{
-			// 11.4 — the same two halves trigger_hurt uses: the entity owns the health, the body
+			// The same two halves trigger_hurt uses: the entity owns the health, the body
 			// gets the engine damage event.
 			if (FElysiumPlayer* Player = World ? World->FindPlayer() : nullptr)
 			{
@@ -792,7 +786,7 @@ void FElysiumDoorBase::OnMoveBlocked(const FHitResult& Hit)
 	}
 }
 
-// --- +use doorknob path + linked_door (P4.3) --------------------------------------------
+// --- +use doorknob path + linked_door ---
 
 bool FElysiumDoorBase::IsUsable() const
 {
@@ -1114,9 +1108,7 @@ void FElysiumDoorBase::OnParentAttached(const FTransform& ParentWorldTransform)
 	OpenRot = (ParentInverse * OpenRot.Quaternion()).Rotator();
 }
 
-// ============================================================================================
-// func_door_rotating — the prototype swinging door (the workhorse: 1236 uses / 22 on the tutorial)
-// ============================================================================================
+// func_door_rotating — the prototype swinging door (the workhorse: 1236 uses / 22 on the tutorial).
 
 class FElysiumFuncDoorRotating final : public FElysiumDoorBase
 {
@@ -1234,9 +1226,7 @@ FRotator FElysiumFuncDoorRotating::ChooseOpenTarget()
 	return bSwingBack ? BackRot : OpenRot;
 }
 
-// ============================================================================================
-// func_door — the sliding door / drawer / cabinet (214 uses / 40 maps; 7 on the tutorial)
-// ============================================================================================
+// func_door — the sliding door / drawer / cabinet (214 uses / 40 maps; 7 on the tutorial).
 //
 // Reference: animation_and_movers.md B.2/B.4 + the decompiled CBaseDoor::Spawn (FUN_100ef260),
 // which computes the open pose as pos2 = pos1 + movedir · (|size·movedir| − lip). The door slides
@@ -1271,9 +1261,7 @@ protected:
 	virtual bool ResolvesEndpointFromRotation() const override { return false; }
 };
 
-// ============================================================================================
-// Registration
-// ============================================================================================
+// --- Registration ---
 
 void ElysiumBuildCBaseDoor(FElysiumClassDesc& D)
 {
@@ -1283,7 +1271,7 @@ void ElysiumBuildCBaseDoor(FElysiumClassDesc& D)
 	D.Input(TEXT("Toggle"), [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumDoorBase&>(E).InputToggle(A.Activator); });
 	D.Input(TEXT("Lock"),   [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumDoorBase&>(E).InputLock(); });
 	D.Input(TEXT("Unlock"), [](FElysiumEntity& E, const FElysiumInputArgs&)   { static_cast<FElysiumDoorBase&>(E).InputUnlock(); });
-	// Use is the +use doorknob path (P4.2 look-cursor / the pawn E key drive it in-world): a player
+	// Use is the +use doorknob path (look-cursor / the pawn E key drive it in-world): a player
 	// use on an unlocked door toggles it (and its linked partner); on a locked door it plays the
 	// `locked` sound and fires no output. Wired here so `ent_fire <door> Use` exercises the same path.
 	D.Input(TEXT("Use"),    [](FElysiumEntity& E, const FElysiumInputArgs& A) { static_cast<FElysiumDoorBase&>(E).DoorUse(A.Activator); });

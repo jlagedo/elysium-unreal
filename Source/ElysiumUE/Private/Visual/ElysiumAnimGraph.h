@@ -5,7 +5,7 @@
 #include "ElysiumAnimationIntent.h"
 #include "ElysiumGraphState.h"
 
-// The rules that project a selection onto the player graph's state vocabulary (CCC5).
+// The rules that project a selection onto the player graph's state vocabulary.
 //
 // Pure: a selection record in, a state and a duration out. No UObject, no asset, no world — which
 // is what lets `Elysium.Substrate.AnimationGraph` assert the whole projection on the stack, and what
@@ -18,7 +18,7 @@
 
 namespace ElysiumAnimGraph
 {
-	// The graph tag on the locomotion `FAnimNode_BlendStack` (S2), read by the generator that stamps
+	// The graph tag on the locomotion `FAnimNode_BlendStack`, read by the generator that stamps
 	// it and by the native instance that looks the node up, so the two cannot drift into two
 	// spellings of one node.
 	//
@@ -31,7 +31,7 @@ namespace ElysiumAnimGraph
 	// which is how a host's autolayer is evaluated at the host's own cycle.
 	inline constexpr const TCHAR* BaseSyncGroup = TEXT("ElysiumBase");
 
-	// The graph tag on the upper-body `FAnimNode_LayeredBoneBlend` (CCC10), read by both the
+	// The graph tag on the upper-body `FAnimNode_LayeredBoneBlend`, read by both the
 	// generator that stamps it and the native instance that looks the node up, so the two cannot
 	// drift into two spellings of one node.
 	//
@@ -121,7 +121,7 @@ namespace ElysiumAnimGraph
 		return Tags[FMath::Clamp(SlotIndex, 0, ElysiumOverlay::NumSlots - 1)];
 	}
 
-	// The graph tag on the reaction branch's own `FAnimNode_BlendListByBool` (LIFE5), read by the
+	// The graph tag on the reaction branch's own `FAnimNode_BlendListByBool`, read by the
 	// generator that stamps it and by anything that has to find the node on a compiled class, so the
 	// two cannot drift into two spellings of one node.
 	//
@@ -213,10 +213,8 @@ namespace ElysiumAnimGraph
 	// never reports complete, and the latch would hold the body in phase 8 forever.
 	bool ShouldRepeatClip(EElysiumGraphState State, bool bAuthoredLooping);
 
-	// =============================================================================================
 	// Three decisions that each cost a visible defect once. They are pure so they are asserted with
 	// no world and no body — every one of them failed in a way that compiled, exported and ran green.
-	// =============================================================================================
 
 	// Whether a remaining-time answer describes the clip that was asked for.
 	//

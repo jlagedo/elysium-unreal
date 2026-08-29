@@ -87,7 +87,7 @@ public:
 	// case-insensitively (the overlay wins). Backs `nt.listdir`.
 	static bool ListDir(const FString& VirtualPath, TArray<FString>& OutNames, FString& OutError);
 
-	// --- the pieces, factored out so the policy is testable without a filesystem ----------------
+	// The pieces, factored out so the policy is testable without a filesystem.
 
 	// Absolutize against VirtualRoot(), fold `\` to `/`, collapse `.` and `..`, and drop one leading
 	// `Vampire/` so both spellings of a tree path land on the same sandbox-relative form. False when

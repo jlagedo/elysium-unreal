@@ -1,4 +1,4 @@
-// 13.2 — the Discipline runtime. `Substrate/ElysiumDisciplines.h` is the contract;
+// The Discipline runtime. `Substrate/ElysiumDisciplines.h` is the contract;
 // `docs/vtmb/disciplines.md` is the behaviour and `docs/architecture/gameplay-systems-architecture.md`
 // §5.6 the decomposition.
 //
@@ -6,17 +6,6 @@
 // (blood, the thirteen learned/active slot pairs, `HealthBuffer`, `Automatic_Soak_Successes`), the
 // trait-effect layer, the typed damage path, and one owned timed event per (character, discipline)
 // on the one queue. Nothing here adds a clock, a scheduler or a dispatcher.
-
-// Cycle 10b (the player law channels) touches this file in two places, both banner-marked, and both
-// of them retire a warned SEAM this file used to report:
-//   1. the world-area eligibility read — the gate now reads `ElysiumLaw::WorldAreaType` instead of
-//      hunting for an unregistered `events_world` member and giving up;
-//   2. the targeted-commit law production — both writes go through the player setters, so they
-//      refresh the activity deadlines and increment the act counts the expiry pass ages out.
-//
-// Cycle 11b retires two more of this file's marks, both banner-marked: the `HitInfo.AI_Schedule`
-// channel now executes through the NPC kernel's named-schedule door instead of being carried and
-// warned, and the `TriggerAISound` category moved into the shared `ElysiumGameSounds` catalogue.
 // `AI_NPCFlag` remains a carried, warned channel.
 
 #include "Substrate/ElysiumDisciplines.h"
@@ -27,13 +16,13 @@
 #include "ElysiumMoveSolve.h"          // ElysiumMove::U — the one units conversion
 #include "ElysiumPlayer.h"
 #include "ElysiumRng.h"
-#include "ElysiumSaveArchive.h"        // Cycle 11b — the block's one field list
+#include "ElysiumSaveArchive.h"        // the block's one field list
 #include "ElysiumSheetSlots.h"
 #include "Substrate/ElysiumDamage.h"
 #include "Substrate/ElysiumDisciplineTargetTables.h"
 #include "Substrate/ElysiumGameSound.h"
-#include "Substrate/ElysiumLaw.h"      // Cycle 10b — the law channels the commit writes through
-#include "Substrate/ElysiumNpc.h"      // Cycle 11b — the `AI_Schedule` channel's one door
+#include "Substrate/ElysiumLaw.h"      // the law channels the commit writes through
+#include "Substrate/ElysiumNpc.h"      // the `AI_Schedule` channel's one door
 #include "Substrate/ElysiumPlayerLog.h"
 #include "Substrate/ElysiumRulebook.h"
 #include "Substrate/ElysiumRulebookSubsystem.h"
@@ -109,7 +98,7 @@ namespace
 		UE_LOG(LogElysiumPlayer, Warning, TEXT("discipline: %s"), *Message);
 	}
 
-	// Every random draw in this domain comes off the owned Dice stream (S8), so a save carries the
+	// Every random draw in this domain comes off the owned Dice stream, so a save carries the
 	// run across a load and a seeded test is deterministic.
 	int32 RollPercent()
 	{
@@ -129,11 +118,10 @@ namespace
 		return Amount.IsRange() ? RollRange(Amount.Min, Amount.Max) : Amount.Min;
 	}
 
-	// --- The world-area eligibility read --------------------------------------------------------
-	// Cycle 10b — the gate reads the world area type through the one owner,
-	// `ElysiumLaw::WorldAreaType`: the registered `events_world.safearea` field, falling back to the
-	// authored `worldspawn` baseline the entity is seeded from. The seam that stood here (an
-	// unregistered member the R2 walk could not reach) is closed.
+	// --- The world-area eligibility read ---
+	// The gate reads the world area type through the one owner, `ElysiumLaw::WorldAreaType`: the
+	// registered `events_world.safearea` field, falling back to the authored `worldspawn` baseline
+	// the entity is seeded from.
 
 	// The player eligibility virtual (`docs/vtmb/disciplines.md` § "World-area eligibility and
 	// transition teardown"): the ordinary path refuses world area type 2, Elysium, and one branch
@@ -390,7 +378,7 @@ namespace
 			return RollPercent() <= Row.Number;
 		case EElysiumDiscFilter::NoFriends:
 			// **SEAM** — the combat relationship table lives on the NPC leaf and this service does
-			// not reach it (K4 keeps the three social domains apart, so nothing else answers it).
+			// not reach it (the three social domains stay apart, so nothing else answers it).
 			// "Not a friend" is the passing side, so an unevaluable row admits the candidate.
 			ReportOnce(FString::Printf(TEXT("filter.nofriends.%s"), *RecordName),
 				FString::Printf(TEXT("`%s` filters on No_Friends and the relationship read is "
@@ -625,9 +613,7 @@ namespace
 	}
 }
 
-// ================================================================================================
-// Names and results
-// ================================================================================================
+// --- Names and results ---
 
 namespace ElysiumDisciplines
 {
@@ -701,9 +687,7 @@ const FName& ExpiryInput()
 	return Name;
 }
 
-// ================================================================================================
-// The native active-state path
-// ================================================================================================
+// --- The native active-state path ---
 
 namespace
 {
@@ -864,9 +848,7 @@ void EndNative(FElysiumCombatCharacter& Char, int32 Index)
 	}
 }
 
-// ================================================================================================
-// The targeted `DisciplineTgt` transaction
-// ================================================================================================
+// --- The targeted `DisciplineTgt` transaction ---
 
 namespace
 {
@@ -917,11 +899,10 @@ namespace
 				FString::Printf(TEXT("`%s`/%s authors %s \"%s\" — parsed and carried, not executed (%s)"),
 					*Record.InternalName, *Hit.Name, Channel, *Value, Owner));
 		};
-		// Cycle 11b hunk 8/9 — `AI_Schedule` is no longer carried: it executes in `ApplyAiSchedule`
-		// below, through the same named-schedule door a script's `ChangeSchedule` takes. Only the
-		// flag half of this channel remains unexecuted.
+		// `AI_Schedule` executes in `ApplyAiSchedule` below, through the same named-schedule door
+		// a script's `ChangeSchedule` takes. Only the flag half of this channel remains unexecuted.
 		//
-		// SEAM — `AI_NPCFlag` stays exactly as it was. The authored values are NPC condition/flag
+		// SEAM — `AI_NPCFlag` remains unexecuted. The authored values are NPC condition/flag
 		// names whose table is not decoded, so there is nothing to set: unlike a schedule name,
 		// which resolves against a registry this runtime owns, a flag name has no registry to fail
 		// against. It closes when the condition/flag table is recovered.
@@ -955,7 +936,7 @@ namespace
 		}
 	}
 
-	// ============ Cycle 11b hunk 8/9 — the `HitInfo` AI-schedule channel =========================
+	// --- The `HitInfo` AI-schedule channel ---
 	// `docs/architecture/gameplay-systems-architecture.md` §5.6: the cast "executes `HitInfo` as
 	// independent channels — ... AI schedule assignment (§5.5 kernel) ...". §5.5.4's kernel owns
 	// what a schedule IS; this channel only names one, so it goes through the one door that already
@@ -988,7 +969,6 @@ namespace
 				*Record.InternalName, *Hit.Name, *Hit.AiSchedule),
 			FString::Printf(TEXT("record=%s hit=%s"), *Record.InternalName, *Hit.Name));
 	}
-	// =============================================================================================
 
 	// Apply one resolved `HitInfo` to one target. Returns whether anything committed.
 	bool ApplyHit(FElysiumCombatCharacter& Caster, FElysiumCombatCharacter& Target,
@@ -1123,7 +1103,7 @@ namespace
 				// `DMG_*` mask, and it is stated as a fraction of the victim's health rather than as
 				// a dice pool. The descriptor is therefore direct-input Lethal with a forced soak of
 				// zero: the authored number is the health delta, so the resolver has no pool to roll
-				// and no soak to subtract. It still travels the one typed path (K6), so the commit,
+				// and no soak to subtract. It still travels the one typed path, so the commit,
 				// the buffer, the aggravated tracking, `OnDamaged` and the death test are the shared
 				// ones.
 				FElysiumDmg Dmg;
@@ -1183,7 +1163,7 @@ namespace
 			bCommitted = true;
 		}
 
-		// --- The AI schedule channel (Cycle 11b hunk 8/9) ----------------------------------------
+		// --- The AI schedule channel ---
 		// Last of the independent channels, and deliberately after the sheet ones: the program the
 		// victim starts runs against the state this hit has already committed (a `Dmg_Health` that
 		// killed it leaves an inert NPC, which the door refuses), not against the state before it.
@@ -1199,9 +1179,7 @@ namespace
 	}
 }
 
-// ================================================================================================
-// The shared authority
-// ================================================================================================
+// --- The shared authority ---
 
 namespace
 {
@@ -1300,7 +1278,7 @@ namespace
 			if (!Record->ResolveHit(HitTable, Hit))
 			{
 				// An authored mapping naming a table the record does not hold: a counted defect,
-				// preserved rather than repaired (K2).
+				// preserved rather than repaired.
 				ReportOnce(FString::Printf(TEXT("hit.missing.%s.%s"), *Record->InternalName, *HitTable),
 					FString::Printf(TEXT("`%s` maps to `%s`, which the record does not define"),
 						*Record->InternalName, *HitTable));
@@ -1315,7 +1293,7 @@ namespace
 				// is not read here (`docs/vtmb/disciplines.md` — the parser stores the two apart).
 				if (Record->bTriggerAISound && Char.World)
 				{
-					// Cycle 11b hunk 3/9 — the category is the shared catalogue's row.
+					// The category is the shared catalogue's row.
 					Char.World->EmitGameSound(Candidate.Char->Origin,
 						ElysiumGameSounds::DisciplineAlert(),
 						/*RadiusCm, table-resolved*/ -1.f, Char.Handle);
@@ -1329,12 +1307,11 @@ namespace
 		// `Overt` byte is set. Whether an NPC witnesses it is not this commit's question.
 		if (Committed > 0 && bPlayerCaster)
 		{
-			// Cycle 10b — both writes go through the player setters, which is what makes them
-			// raise-never-lower, refresh the deadline, and increment the channel's act count. Both
-			// pass `DeriveDuration` (-1), the finite-duration sentinel every recovered non-native
-			// caller passes: the deadline becomes `max(previously retained level, pl_min_act_timer)`
-			// rather than indefinite. The expiry pass in the player think ages them out; the seam
-			// that stood here is closed.
+			// Both writes go through the player setters, which is what makes them raise-never-lower,
+			// refresh the deadline, and increment the channel's act count. Both pass `DeriveDuration`
+			// (-1), the finite-duration sentinel every recovered non-native caller passes: the
+			// deadline becomes `max(previously retained level, pl_min_act_timer)` rather than
+			// indefinite. The expiry pass in the player think ages them out.
 			ElysiumLaw::SetSupernaturalLevel(*Player, Record->SupernaturalLvl);
 			if (Record->bOvert)
 			{
@@ -1444,9 +1421,7 @@ EResult UseLast(FElysiumPlayer& Player)
 	return Use(Player, Player.SelectedDiscipline, TierFor(Player, Player.SelectedDiscipline));
 }
 
-// ================================================================================================
-// Teardown, expiry and interruption
-// ================================================================================================
+// --- Teardown, expiry and interruption ---
 
 void ClearAll(FElysiumCombatCharacter& Char)
 {
@@ -1597,9 +1572,7 @@ void NotifyBumped(FElysiumCombatCharacter& Char)
 		{ return Effect.bRemoveOnWasBumped; });
 }
 
-// ================================================================================================
-// The declared verbs
-// ================================================================================================
+// --- The declared verbs ---
 
 namespace
 {
@@ -1652,7 +1625,7 @@ void ExecuteEndAll(FElysiumEntityWorld& World)
 
 }   // namespace ElysiumDisciplines
 
-// ================== Cycle 11b hunk 9/9 — the block's one field list ==============================
+// --- The block's one field list ---
 // `docs/architecture/save-architecture.md` — persistent state is a declared save block with one
 // owner. This domain's state has two HOMES (the player record, because the player entity is
 // excluded from the map snapshot; the NPC leaf, because a targeted effect lands on whichever
@@ -1683,4 +1656,3 @@ void FElysiumDisciplineState::Serialize(FArchive& Ar)
 		Ar << Effect.Source;
 	}
 }
-// ================================================================================================

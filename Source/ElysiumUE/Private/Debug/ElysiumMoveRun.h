@@ -45,7 +45,7 @@ public:
 	explicit FElysiumMoveRun(UElysiumMapSubsystem* InSubsystem);
 	~FElysiumMoveRun();
 
-	// A leniency course runs twice (CCC3). The **probe** pass drives the course with no press at all
+	// A leniency course runs twice. The **probe** pass drives the course with no press at all
 	// and watches for the ground edge it is timed against; the **record** pass then replays the same
 	// course with the press placed at that frame plus the lane's offset, and is the only one that
 	// touches the recorder.
@@ -103,7 +103,7 @@ private:
 	FVector StartFeet = FVector::ZeroVector;
 	FVector StartForward = FVector::ForwardVector;
 
-	// The body trace's own accumulator (CCC1/CCC4) — the activity totals, the peak speed and the
+	// The body trace's own accumulator — the activity totals, the peak speed and the
 	// string identities, counted the same way the cast's harness counts them.
 	ElysiumLocomotionTrace::FTotals Totals;
 
@@ -121,7 +121,6 @@ private:
 	int32 GroundTransitions = 0;
 	bool bWasOnGround = false;
 
-	// --- The two-pass probe (CCC3) --------------------------------------------------------------
 	ECoursePhase Phase = ECoursePhase::Record;
 	// What the probe pass measured, or INDEX_NONE for "the event never happened" — which the record
 	// pass then turns into a course with no press, so the bracket's sentinel rungs disagree with

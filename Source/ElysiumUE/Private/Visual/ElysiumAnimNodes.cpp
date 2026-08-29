@@ -75,7 +75,7 @@ void ElysiumHairDynamics::PreserveChainLocalTransforms(
 	Transforms = MoveTemp(Corrected);
 }
 
-// --- stock AnimDynamics hair proof -------------------------------------------------------------
+// Stock AnimDynamics hair proof.
 
 namespace
 {
@@ -238,7 +238,7 @@ void FAnimNode_ElysiumHairDynamics::Apply(FComponentSpacePoseContext& Output)
 	}
 }
 
-// --- axis interpolation ------------------------------------------------------------------------
+// Axis interpolation.
 
 void FAnimNode_ElysiumAxisInterp::SetRig(TSharedPtr<const FElysiumCompositionRig> InRig)
 {

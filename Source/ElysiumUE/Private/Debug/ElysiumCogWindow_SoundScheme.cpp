@@ -74,7 +74,7 @@ void FElysiumCogWindow_SoundScheme::RenderContent()
 	StateButton("Combat", EElysiumMusicState::Combat, 1);   ImGui::SameLine();
 	StateButton("Alert", EElysiumMusicState::Alert, 2);
 
-	// --- Active scheme ----------------------------------------------------------------------
+	// Active scheme.
 	ImGui::SeparatorText("Active scheme");
 	if (!Mgr->HasActiveScheme())
 	{

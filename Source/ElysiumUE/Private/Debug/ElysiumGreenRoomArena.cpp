@@ -29,7 +29,7 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 
-// --- the arena (the combat playtest room) --------------------------------------------------------
+// The arena (the combat playtest room).
 
 bool FElysiumGreenRoomRun::BuildArena(FString& OutError)
 {
@@ -210,7 +210,7 @@ void FElysiumGreenRoomRun::DrawArenaOverlays() const
 	}
 }
 
-// --- arena navigation pins ------------------------------------------------------------------------
+// Arena navigation pins.
 
 bool FElysiumGreenRoomRun::ArenaSetPin(const FName& Name, const FVector* FeetWorld, FString& OutError)
 {

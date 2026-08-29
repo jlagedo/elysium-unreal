@@ -362,15 +362,15 @@ namespace
 		}
 	}
 
-	// --- the shared parse cache ---------------------------------------------------------------
+	// The shared parse cache.
 	FCriticalSection GCacheLock;
 	TMap<FString, TSharedPtr<const FElysiumSceneData>> GCache;
 	int32 GCacheHits = 0;
 	int32 GCacheMisses = 0;
 
-	// 12.1 alone would not need a cache (≤13 scenes on the busiest map), but 12.2 parses one `.vcd`
-	// per spoken line and a conversation replays the same lines, so the entry count is bounded here
-	// rather than left to grow.
+	// The map-scene path alone would not need a cache (≤13 scenes on the busiest map), but dialogue
+	// parses one `.vcd` per spoken line and a conversation replays the same lines, so the entry
+	// count is bounded here rather than left to grow.
 	constexpr int32 GMaxCacheEntries = 512;
 }
 
@@ -548,7 +548,7 @@ TSharedPtr<const FElysiumSceneData> ElysiumScene::Load(const FString& SceneFile)
 	++GCacheMisses;
 	if (GCache.Num() >= GMaxCacheEntries)
 	{
-		GCache.Reset();   // the 12.2 per-line path is unbounded; drop the lot rather than grow
+		GCache.Reset();   // the per-line dialogue path is unbounded; drop the lot rather than grow
 	}
 	GCache.Add(Key, Result);
 	return Result;

@@ -32,16 +32,15 @@ struct FElysiumResolvedAnimation;
 // model the resolver picks assets for, and the tracked graph source encodes nothing derived from
 // the user's game.
 //
-// One stage rides beside the graph rather than inside it, and it is temporary by design: the
-// **cinematic clip player**, one standalone sequence player the theatre pins to absolute scene
-// time. A montage cannot hold that phase lock, so the clip path survives until `ANM6` migrates
-// choreographed playback. While it holds a clip it IS the body pose — the graph's output is not
-// consumed at all — which is what makes a scene's pose a function of scene time rather than of
-// accumulated animation delta.
+// One stage rides beside the graph rather than inside it: the **cinematic clip player**, one
+// standalone sequence player the theatre pins to absolute scene time. A montage cannot hold that
+// phase lock. While it holds a clip it IS the body pose — the graph's output is not consumed at
+// all — which is what makes a scene's pose a function of scene time rather than of accumulated
+// animation delta.
 //
-// The autolayer accumulator that used to sit beside it is gone: `CCC10` moved VtMB's layers into
-// the compiled graph, where the bone mask is a property of the blend node rather than of the pose
-// feeding it. The mask itself is the one thing the graph cannot carry as a pin — it is edit-time
+// VtMB's autolayers live in the compiled graph, where the bone mask is a property of the blend
+// node rather than of the pose feeding it. The mask itself is the one thing the graph cannot carry
+// as a pin — it is edit-time
 // state on `FAnimNode_LayeredBoneBlend` — so it is written at runtime through
 // `ApplyUpperBodyMask`, which is the same door Epic's own `ULayeredBoneBlendLibrary` uses.
 //
@@ -99,7 +98,7 @@ struct FElysiumBlendReport
 	double StampSeconds = -1.0;
 };
 
-// One reaction, whole, as the graph's reaction branch needs it (LIFE5).
+// One reaction, whole, as the graph's reaction branch needs it.
 //
 // **`Space` and `Sequence` are never both set**, the same "exactly one of these two" shape the base
 // channel and the upper-body overlay take: a directional hit resolves to its baked fan and a plain
@@ -182,7 +181,7 @@ struct FElysiumReactionPlay
 	}
 };
 
-// Which producer a base-channel phase is being read off (LIFE5), in the order the pose composes.
+// Which producer a base-channel phase is being read off, in the order the pose composes.
 //
 // The four run CONCURRENTLY, which is the whole reason this is an enumeration of arms rather than a
 // mode: a reaction replaces the locomotion pose without stopping the montage under it, and that
@@ -226,8 +225,7 @@ struct FElysiumArmedClip
 	bool IsArmed() const { return Identity.IsValid(); }
 };
 
-// One overlay slot's staged state, between the driver's publish and the pins the graph evaluates
-// (LIFE10).
+// One overlay slot's staged state, between the driver's publish and the pins the graph evaluates.
 //
 // A `USTRUCT` rather than nine parallel arrays because three of its members are object pointers the
 // graph holds across frames and have to be GC-rooted; a static array of a reflected struct is the one
@@ -316,7 +314,7 @@ struct FElysiumBipedAnimProxy : public FElysiumBodyAnimProxy
 	// the base call cannot reach a node that is not in the compiled graph.
 	virtual void UpdateAnimationNode(const FAnimationUpdateContext& InContext) override;
 
-	// --- the cinematic clip path (survives until `ANM6`) ------------------------------------------
+	// The cinematic clip path.
 	//
 	// Stand one clip as the whole body pose, replacing the graph's output for as long as it holds.
 	// The theatre's own path: a scene starts a clip and then pins it to absolute scene time every
@@ -370,7 +368,7 @@ class UElysiumBipedAnimInstance : public UElysiumBodyAnimInstance
 	GENERATED_BODY()
 
 public:
-	// --- what the graph reads ---------------------------------------------------------------------
+	// What the graph reads.
 	//
 	// Written once per frame on the game thread in `NativeUpdateAnimation`; read on the worker by the
 	// transition rules and by the asset pins' generated property copies. That generated copy IS the
@@ -442,7 +440,7 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	bool bHasBlendSpace = false;
 
-	// --- the upper-body layer (CCC10) ---------------------------------------------------------------
+	// The upper-body layer.
 	//
 	// Either the bake-time autolayer binding the base channel's own resolved host declared, or an
 	// activity-keyed `UpperBody`/`Additive` selection's own single asset — the caller decides which
@@ -465,8 +463,8 @@ public:
 	// generated property copy. Published because the debug surface reads what the graph was given.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	FName RequestedUpperBodyMaskName;
-	// Retail's per-layer caller weight has no recovered value (`docs/project/animation-roadmap.md`
-	// ANM2): 1.0 is the named stand-in whenever `PublishSelection` hands over a layer, and
+	// Retail's per-layer caller weight has no recovered value (`docs/project/animation-roadmap.md`):
+	// 1.0 is the named stand-in whenever `PublishSelection` hands over a layer, and
 	// `SetUpperBodyLayerWeight`/`SetAdditiveLayerWeight` below are the seam a caller ramps instead.
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	float UpperBodyLayerWeight = 0.0f;
@@ -475,9 +473,9 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	float AdditiveLayerWeight = 0.0f;
 
-	// --- the overlay SLOT, which is a different mechanism from the three layers above --------------
+	// The overlay SLOT, which is a different mechanism from the three layers above.
 	//
-	// --- retail's `CBaseAnimatingOverlay` layer stack: four slots, in composition order (LIFE10) ---
+	// Retail's `CBaseAnimatingOverlay` layer stack: four slots, in composition order.
 	//
 	// The three properties above are the bake-time autolayers the base channel's own resolved HOST
 	// declares, and they travel with the base clip. These are layers a PRODUCER armed on the UpperBody
@@ -602,13 +600,13 @@ public:
 
 	// Where the upper-body layer aims, in the pose parameters' own degrees — the aim grid's own axes.
 	// The player's own producer pins this at the literal 0.0f/pitch-only
-	// (`docs/vtmb/animation_and_movers.md`); an NPC's own aim producer arrives with `CCC11`.
+	// (`docs/vtmb/animation_and_movers.md`).
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	float AimYaw = 0.0f;
 	UPROPERTY(BlueprintReadOnly, Category = "Elysium|Locomotion")
 	float AimPitch = 0.0f;
 
-	// --- the reaction branch (LIFE5) ----------------------------------------------------------------
+	// The reaction branch.
 	//
 	// The publish surface for the branch the graph carries between the one-shot slot and the
 	// upper-body layer. Written by `PlayReaction`/`StopReaction` below and by nothing else — a
@@ -664,7 +662,7 @@ public:
 	// first.
 	const UAnimMontage* GetActiveSlotMontage() const { return ActiveSlotMontage; }
 
-	// --- the seam ---------------------------------------------------------------------------------
+	// The seam.
 	//
 	// Pushed once per frame by whichever pass owns the driver — the map actor's post-move pass for
 	// the player. The instance does not reach for the driver: it lives on `AElysiumMapActor` behind a
@@ -695,7 +693,7 @@ public:
 	// defect it prevents, so a debug surface has to be able to tell a reader which it is looking at.
 	bool IsHoldingPose() const { return bHoldingPose; }
 
-	// --- the shared one-shot seam -----------------------------------------------------------------
+	// The shared one-shot seam.
 	//
 	// Answered over a dynamic slot montage, which is the design's own shape for a one-shot and needs
 	// no baked montage asset. Nothing here reaches the locomotion blend stack: a scripted clip plays
@@ -705,7 +703,7 @@ public:
 		float PlayRate = 1.0f) override;
 	virtual void StopOneShot(float BlendSeconds) override;
 
-	// --- the overlay slot seam --------------------------------------------------------------------
+	// The overlay slot seam.
 	//
 	// Arm retail's `CBaseAnimatingOverlay` slot 0 on this body. **This is not a second one-shot
 	// slot**: the layer COMPOSES over whatever owns the base pose through its own bone mask, so
@@ -755,7 +753,7 @@ public:
 	// means — a shot standing in another slot is a different producer's and is not this one's to end.
 	static void StopSlotLayerOn(USkeletalMeshComponent* Body, int32 SlotIndex = INDEX_NONE);
 
-	// --- the phase seam (LIFE5) ---------------------------------------------------------------
+	// The phase seam.
 	//
 	// Where a channel stands on its clip. A pure member read: the snapshot is armed at play time and
 	// its cycle refreshed once per update, so every reader in a frame — the event pass, the weapon's
@@ -783,7 +781,7 @@ public:
 	// the reload's records.
 	bool GetSlotClipPhase(int32 SlotIndex, FElysiumClipPhase& Out) const;
 
-	// --- the reaction seam (LIFE5) ----------------------------------------------------------------
+	// The reaction seam.
 	//
 	// Hand the graph's reaction branch a fan or a clip and switch it on. The branch REPLACES the base
 	// pose rather than riding over it, so this is not a second one-shot slot: nothing the blend stack
@@ -803,7 +801,7 @@ public:
 	// reason the caller has a collapse path rather than an assertion.
 	bool HasCompiledReactionBranch() const;
 
-	// --- the cinematic clip path ------------------------------------------------------------------
+	// The cinematic clip path.
 	//
 	// Stand one clip as the whole body pose, over the proxy's own player rather than over the graph.
 	// A choreographed scene owns the body outright for its duration and pins the clip to scene time,
@@ -850,7 +848,7 @@ public:
 		PendingAdditiveLayerWeight = FMath::Clamp(Weight, 0.f, 1.f);
 	}
 
-	// --- the layer lab's hand driver (CCC10) --------------------------------------------------------
+	// The layer lab's hand driver.
 	//
 	// Hold an upper-body layer OVER whatever the driver publishes. It is an override rather than a
 	// second publisher for one reason: a driven body republishes a selection every frame, so a write
@@ -909,7 +907,7 @@ private:
 	// it runs ahead of the hold branch: a held gait must not freeze a weapon layer.
 	void ProjectUpperBodyLayer();
 
-	// Hand the layered blend its bone mask (CCC10). The node's mask is edit-time state with no pin,
+	// Hand the layered blend its bone mask. The node's mask is edit-time state with no pin,
 	// so it is written directly on the node — found through `FAnimSubsystem_Tag` under
 	// `ElysiumAnimGraph::UpperBodyLayerTag` — which is the same door Epic's own
 	// `ULayeredBoneBlendLibrary::SetBlendMask` goes through.
@@ -977,7 +975,7 @@ private:
 	bool ShouldReportSlotArmRefusalOnce(const TCHAR* Reason, const FElysiumClipIdentity& Identity,
 		const FElysiumAnimationRequest& Claim, const UAnimSequence* Sequence);
 
-	// --- the base channel's phase clock (LIFE5) ---------------------------------------------------
+	// The base channel's phase clock.
 
 	// Stand a new play on one producer's arm: identity, length and loop bit in, a fresh `PlayId`,
 	// and an anchor of zero because a play seam STARTED this clip. It writes that producer's slot
@@ -1018,7 +1016,7 @@ private:
 	// calls a seam for it and it maintains its own record here — live or not.
 	void RefreshLocomotionArm(const FAnimNode_BlendStack* Stack);
 
-	// --- the overlay slot's own phase clock -------------------------------------------------------
+	// The overlay slot's own phase clock.
 	//
 	// **A second published record, not a fifth arm on the first.** The base arms are four producers
 	// competing for ONE timeline, so precedence picks the one that publishes; the slot is not
@@ -1055,7 +1053,7 @@ private:
 	FElysiumAnimationSelection Applied;
 	UPROPERTY(Transient) TObjectPtr<UBlendSpace> PendingBlendSpace = nullptr;
 	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingSequence = nullptr;
-	// CCC10 — the upper-body layer half of the same publish, staged the same way.
+	// The upper-body layer half of the same publish, staged the same way.
 	UPROPERTY(Transient) TObjectPtr<UBlendSpace> PendingUpperBodySpace = nullptr;
 	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingUpperBodySequence = nullptr;
 	UPROPERTY(Transient) TObjectPtr<UAnimSequence> PendingAdditiveSequence = nullptr;
@@ -1120,7 +1118,7 @@ private:
 	// whatever else the slot may have picked up.
 	UPROPERTY(Transient) TObjectPtr<UAnimMontage> ActiveSlotMontage = nullptr;
 
-	// --- the reaction's phase clock (LIFE5) --------------------------------------------------------
+	// The reaction's phase clock.
 	//
 	// **A phase clock, not a weight.** The engine owns every frame of the fade: `FAnimNode_BlendListBase`
 	// takes the newly-active child's own blend time and drives the weight itself, and nothing here ever
@@ -1162,7 +1160,7 @@ private:
 	FElysiumOneShotReport OneShot;
 	FElysiumBlendReport Blend;
 
-	// --- what the base channel publishes (LIFE5) --------------------------------------------------
+	// What the base channel publishes.
 	//
 	// One PUBLISHED record, because retail has one server timeline per body: `DispatchAnimEvents`
 	// stores the last checked cycle on the animating object itself at `+0x658`, and nothing advances

@@ -6,17 +6,15 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumCloth, Log, All);
 
-/**
- * The values the resolver walks, as flag/member/name triples.
- *
- * A macro rather than eighteen hand-written members in each of two functions: the overlay and the
- * completeness report differ only in what they do per value, and spelling the list out twice is how
- * one of them silently loses a key when a nineteenth is added.
- *
- * `Material` is not in the list. It selects which material layer to overlay rather than being one
- * of that layer's values, so it is read off the garment entry directly and reported with the stem
- * in the message.
- */
+// The values the resolver walks, as flag/member/name triples.
+//
+// A macro rather than eighteen hand-written members in each of two functions: the overlay and the
+// completeness report differ only in what they do per value, and spelling the list out twice is how
+// one of them silently loses a key when a nineteenth is added.
+//
+// `Material` is not in the list. It selects which material layer to overlay rather than being one
+// of that layer's values, so it is read off the garment entry directly and reported with the stem
+// in the message.
 #define ELYSIUM_CLOTH_TUNING_VALUES(Visit) \
 	Visit(bOverrideDensity, Density, TEXT("density")) \
 	Visit(bOverrideEdgeStiffness, EdgeStiffness, TEXT("edge_stiffness")) \

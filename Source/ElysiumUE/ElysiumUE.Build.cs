@@ -43,8 +43,8 @@ public class ElysiumUE : ModuleRules
 			// importer writes into. SkeletalMeshDescription carries FSkeletalMeshAttributes;
 			// AnimationCore carries the bone-weight types it stores.
 			"SkeletalMeshDescription", "AnimationCore",
-			// CAP7.2: VtMB's two composition stages are FAnimNode_SkeletalControlBase nodes, which
-			// live in AnimGraphRuntime. A runtime module -- the nodes are native and driven from
+			// VtMB's two composition stages are FAnimNode_SkeletalControlBase nodes, which live in
+			// AnimGraphRuntime. A runtime module -- the nodes are native and driven from
 			// FElysiumBodyAnimProxy's tail, so none of the editor AnimGraph stack is involved.
 			"AnimGraphRuntime",
 			// The locomotion transitioner. `FAnimNode_BlendStack` is the compiled node the generated
@@ -53,32 +53,32 @@ public class ElysiumUE : ModuleRules
 			// module — the editor half (`BlendStackEditor`) is never linked, because the generator
 			// places its node by class path through reflection like every other node in the graph.
 			"BlendStack",
-			// 8.7 ropes: the stock (enabled-by-default) CableComponent plugin's UCableComponent
+			// Ropes: the stock (enabled-by-default) CableComponent plugin's UCableComponent
 			// renders each overhead cable as a Verlet-simulated strand built at map load.
 			"CableComponent",
 			// The `.ents` entity sidecar is one JSON blob (unlike the line-based sidecars).
 			"Json",
 			// Dev console UI is built directly in Slate.
 			"Slate", "SlateCore",
-			// 8.6 the UI foundation. CommonUI is the engine-native game-UI stack: the
-			// activatable-widget stack, input routing, focus and gamepad navigation that
-			// roadmap 8.10 would otherwise hand-roll. The widget
-			// *visual trees* are still built in C++ Slate inside UCommonActivatableWidget
-			// subclasses. Back/Accept defaults come from the native CommonUIInputData class,
-			// so the source-authored foundation requires no Widget Blueprint or data assets.
+			// The UI foundation. CommonUI is the engine-native game-UI stack: the
+			// activatable-widget stack, input routing, focus and gamepad navigation.
+			// The widget *visual trees* are still built in C++ Slate inside
+			// UCommonActivatableWidget subclasses. Back/Accept defaults come from the native
+			// CommonUIInputData class, so the source-authored foundation requires no Widget
+			// Blueprint or data assets.
 			// DeveloperSettings owns UPlatformSettingsManager, read directly by the generated-glyph
 			// regression to prove the Windows CommonInput controller-data configuration resolves.
 			"UMG", "CommonUI", "CommonInput", "DeveloperSettings",
-			// 11.3 the loading screen. The engine's own movie player is the only thing that can
+			// The loading screen. The engine's own movie player is the only thing that can
 			// draw while the game thread is blocked inside LoadMap. It resolves to
 			// FNullGameMoviePlayer in the editor and under -nullrhi, so the hook is an automatic
 			// no-op in PIE and in the headless test tiers.
 			"MoviePlayer"
 		});
 
-		// P6 audio: Audio Mixer/Modulation own semantic routing and user control buses. Loose
+		// Audio: Audio Mixer/Modulation own semantic routing and user control buses. Loose
 		// VtMB media remains procedural and uses the vendored single-header decoders below --
-		// dr_wav (6.1, MS-ADPCM/IMA/PCM) and dr_mp3 (6.2, dialogue/music/radio MP3). Only the
+		// dr_wav (MS-ADPCM/IMA/PCM) and dr_mp3 (dialogue/music/radio MP3). Only the
 		// include path is added -- USoundWave/USoundWaveProcedural and PlaySound2D/SpawnSound2D
 		// all live in Engine (already a public dep), so no audio module dependency is needed.
 		PrivateIncludePaths.Add(Path.Combine(ModuleDirectory, "Private", "ThirdParty"));
@@ -94,7 +94,7 @@ public class ElysiumUE : ModuleRules
 			});
 		}
 
-		// P2.7 -- the agent-facing MCP surface (debug-tooling.md Layer 3). The engine's
+		// The agent-facing MCP surface (debug-tooling.md Layer 3). The engine's
 		// experimental ModelContextProtocol plugin is NoRedist and its toolset->MCP adapter is
 		// editor-only, so the .uproject pins it to the Editor target; this dep follows that pin.
 		// ELYSIUM_WITH_MCP gates every call site, so the module still compiles for a Game/Shipping
@@ -113,7 +113,7 @@ public class ElysiumUE : ModuleRules
 				// so the commandlet's own does-asset-exist checks and the verifier see it without a
 				// rescan.
 				"AssetRegistry",
-				// CCC5: the player animation graph is generated from tracked T3D text through
+				// The player animation graph is generated from tracked T3D text through
 				// FEdGraphUtilities -- the engine's own clipboard paste path -- plus the blueprint
 				// create/compile entry points beside it. Editor-only by construction: a graph is
 				// authored once and cooked into a generated class, and nothing reads UnrealEd at
@@ -142,7 +142,7 @@ public class ElysiumUE : ModuleRules
 			PublicDefinitions.Add("ELYSIUM_WITH_CARDGEN=0");
 		}
 
-		// P5.5 / 9.3 -- embedded CPython 2.7.18 (qnox/python-2.7) for VtMB level scripts.
+		// Embedded CPython 2.7.18 (qnox/python-2.7) for VtMB level scripts.
 		// VtMB's VM is stock CPython 2.1 (vampire_python21.dll); the 2.1->2.7 script delta is ~0
 		// (no string-exceptions, no __future__ -- verified against all 36 loose scripts). We link
 		// the vendored release DLL by its import lib + point PythonHome at the vendored stdlib at

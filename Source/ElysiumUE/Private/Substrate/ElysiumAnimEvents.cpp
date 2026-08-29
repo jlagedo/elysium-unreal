@@ -106,9 +106,7 @@ namespace ElysiumAnimEvents
 	}
 }
 
-// ============================================================================================
-// The census — the work list of event ids nothing claims yet
-// ============================================================================================
+// --- The census — the work list of event ids nothing claims yet ---
 
 namespace
 {

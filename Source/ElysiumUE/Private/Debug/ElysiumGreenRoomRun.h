@@ -44,14 +44,13 @@ public:
 
 	static bool IsRequested();
 
-	// --- the interactive lab (`elysium.gr`) -------------------------------------------------
-	//
-	// Everything above this line is a one-shot: resolve fixed cases, seek fixed times, capture,
-	// exit. The lab is the same stage and the same body factory with the state machine's tail
-	// removed — it builds the room, stands one body on it, and then does nothing until asked. It
-	// captures nothing and never exits, because the questions it answers are the ones a still
-	// cannot hold: whether a garment settles, whether it flares too eagerly, whether a hem clears
-	// the knee at walking speed. The Cog window is the only thing that drives it.
+	// The interactive lab (`elysium.gr`). The capture harness is a one-shot: resolve fixed cases,
+	// seek fixed times, capture, exit. The lab is the same stage and the same body factory with
+	// the state machine's tail removed — it builds the room, stands one body on it, and then does
+	// nothing until asked. It captures nothing and never exits, because the questions it answers
+	// are the ones a still cannot hold: whether a garment settles, whether it flares too eagerly,
+	// whether a hem clears the knee at walking speed. The Cog window is the only thing that drives
+	// it.
 
 	// How the stage lights whatever is standing on it.
 	//
@@ -112,8 +111,6 @@ public:
 	// The stage exists and the lab is accepting bodies.
 	bool IsLabReady() const { return bLab && Phase == EPhase::Lab; }
 
-	// --- the two lab modes ---------------------------------------------------------------------
-	//
 	// **Review** is the stage the animation programme verifies on: one body standing at the stage
 	// origin, its clip driven by absolute time, framed by the orbit. Nothing about it is the game —
 	// the body is a visual the map actor owns, posed by the cast's native host, and the orbit is a
@@ -124,7 +121,7 @@ public:
 	// graph, driven by real input and framed by the shipping camera. The lab supplies the floor and
 	// then gets out of the way — no camera shot, no control-rotation pin, no clip seek. What is under
 	// test is the shipping path, so anything the lab does *to* the body is something the acceptance
-	// would not have proven (CCC6).
+	// would not have proven.
 	//
 	// **Arena** is drive mode standing on a different floor, and the floor is the whole difference.
 	// The gym is a bracket instrument — ramps, risers, apertures, gaps at `<movement constant> +
@@ -142,8 +139,6 @@ public:
 	bool IsDriving() const { return Mode == ELabMode::Drive || Mode == ELabMode::Arena; }
 	bool IsArena() const { return Mode == ELabMode::Arena; }
 
-	// --- the arena (the combat playtest room) ----------------------------------------------------
-
 	// The room standing under the driven body, for a panel that draws its pads and anchors. Empty
 	// outside arena mode.
 	const ElysiumArena::FSpec& ArenaSpec() const { return Arena; }
@@ -158,14 +153,12 @@ public:
 	// Whether the arena's solids are drawn. They are collision either way.
 	bool ArenaVisible() const { return bGymMeshes; }
 
-	// --- arena navigation pins ---------------------------------------------------------------
-	//
 	// Named points on the arena floor, world-absolute feet positions, for `gr_pin`/`gr_walk` and
 	// their Cog equivalents. `gr_walk` commands either the driven player body or an arena-spawned
 	// character (found by targetname, the AI window's own spawns) to walk them in order, through
 	// the command path its producer already consumes: `IElysiumNpcMotor::MoveTo` for a cast body
 	// (the same door a schedule or a patrol order arms), the input router's own record/replay
-	// door for the player (11.10 — "the same mechanism as playing", not a second one this feature
+	// door for the player ("the same mechanism as playing", not a second one this feature
 	// invents). Either way gaits and layers resolve off the real published sample, exactly as
 	// they would under a real order or a real key.
 
@@ -226,8 +219,6 @@ public:
 	void LabSetAimFollowsLook(bool bFollow) { bLayerAimFollowsLook = bFollow; }
 	void LabClearLayers();
 
-	// --- the wielded weapon (CCC10.2) ----------------------------------------------------------
-	//
 	// Put an item's wield model in the standing body's hand. The stage carries no
 	// `FElysiumCombatCharacter`, so there is no inventory here to equip through and the lab installs
 	// directly — but *what* it installs and *how* is the shipping path: the row is resolved out of
@@ -300,8 +291,6 @@ public:
 	// has not run — a caller reports that rather than drawing an empty picker.
 	static TArray<FString> LabWieldClassnames(bool bFemale);
 
-	// --- CCC10's acceptance, as preset cases ---------------------------------------------------
-	//
 	// One click stands a whole case: a base to layer over, the right layer armed in the right slot,
 	// and the aim steered somewhere the claim is visible. A body resolves ~1,500 clips and the four
 	// claims this rung has to answer each need a specific one, so hunting for it by hand is how the
@@ -478,7 +467,7 @@ private:
 	// the first version of this measured distance in "assumed frames at 60 Hz" and undershot every
 	// leg by however far the real rate outran that guess. Every tick instead reads the driven
 	// body's live position, turns and pushes forward through exactly one fresh single-frame replay
-	// command (11.10's record/replay door — never a direct ApplyUserCmd, so this never fights a
+	// command (the record/replay door — never a direct ApplyUserCmd, so this never fights a
 	// live key), and advances the leg once the acceptance radius is reached — the same
 	// distance-to-target shape TickArenaWalkNpc reads off the motor's Sample(), just measured off
 	// the pawn instead of off IElysiumNpcMotor.

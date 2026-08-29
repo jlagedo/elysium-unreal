@@ -193,7 +193,7 @@ struct FElysiumVoiceEvent
 	EElysiumVoiceCompletion Completion = EElysiumVoiceCompletion::None;
 };
 
-// Compatibility shape for callers while each source integration is migrated to Submit. It is
+// Compatibility shape for callers that still submit through PlayVoice. It is
 // deliberately translated at the seam and never enters the ledger as a second request type.
 struct FElysiumPlayParams
 {
@@ -223,7 +223,7 @@ struct FElysiumAudioVoice
 	double InactiveSinceAudioClock = -1.0;
 	// FPlatformTime::Seconds() at Submit, ahead of the async decode.
 	double SubmitSeconds = -1.0;
-	// 12.2b — the mixer's render head for this voice, written by the sound generator on the audio
+	// The mixer's render head for this voice, written by the sound generator on the audio
 	// render thread. Null until the voice is realized, and on any wave the PCM path did not build.
 	FElysiumVoiceRenderProbePtr Render;
 	// Latched once the voice's submit → first-pull has been folded into the rolling measurement, so
@@ -294,7 +294,7 @@ public:
 	// place a live voice inside its own media instead of inferring it from game time.
 	double AudioClock() const;
 
-	// 12.2b — the output path's latency, term by term, and the lead a cue must be scheduled with so
+	// The output path's latency, term by term, and the lead a cue must be scheduled with so
 	// its first sample is heard at the authored instant. The device half is queried once and cached
 	// (it only changes on a device swap); the submit → first-pull half accumulates over every voice
 	// that plays, so the reading gets better the longer the session runs.

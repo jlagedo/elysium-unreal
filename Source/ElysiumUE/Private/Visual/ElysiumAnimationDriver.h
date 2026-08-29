@@ -11,7 +11,7 @@
 class FElysiumCombatCharacter;
 class USkeletalMesh;
 
-// One body's animation selection, driven once per frame from its settled locomotion sample (CCC4).
+// One body's animation selection, driven once per frame from its settled locomotion sample.
 //
 // The same struct serves both producers: the player's lives on the map actor and ticks in the
 // post-move pass, an NPC's lives on its own body and ticks in its own post-physics pass. One
@@ -22,9 +22,8 @@ class USkeletalMesh;
 // on an activity change; every other frame rewrites the continuous parameters in place. That is
 // `docs/architecture/animation-architecture.md` section 3.7 made structural rather than remembered.
 //
-// This rung resolves and records; it drives no pose. What consumes the published selection is the
-// player graph, and building a second driver into the native proxy would build scaffolding that
-// `CCC9` exists to delete.
+// This rung resolves and records; it drives no pose. The player graph consumes the published
+// selection.
 struct FElysiumAnimationDriver : public FGCObject
 {
 	// **The resolved assets are rooted here, because nothing else can root them.** This struct is
@@ -36,7 +35,7 @@ struct FElysiumAnimationDriver : public FGCObject
 	virtual void AddReferencedObjects(FReferenceCollector& Collector) override;
 	virtual FString GetReferencerName() const override { return TEXT("FElysiumAnimationDriver"); }
 
-	// --- Identity, set once when the body is built ------------------------------------------------
+	// Identity, set once when the body is built.
 	FString Stem;
 	EElysiumAnimSource Source = EElysiumAnimSource::Player;
 	// The chain this body's requests translate through, set beside `Source` by whoever builds the
@@ -55,7 +54,7 @@ struct FElysiumAnimationDriver : public FGCObject
 	// and it is modelled here so the asymmetry is structural rather than a comment.
 	float SpeedScale = 1.0f;
 
-	// --- What the activity translation keys on ------------------------------------------------------
+	// What the activity translation keys on.
 	// The body's own entity classname and its active weapon's, pushed by whoever owns the body
 	// because only they can see the entity. They select the recovered translation bodies and the
 	// weapon ladder, so they change which sequence set every request resolves against — and they are
@@ -66,14 +65,14 @@ struct FElysiumAnimationDriver : public FGCObject
 	// The body's own state. The recovered human pre-translation reads it to choose between the alert
 	// and relaxed animation sets, so it belongs to the same push and moves the discrete key with it.
 	EElysiumNpcState ActorState = EElysiumNpcState::Idle;
-	// The live `IsInCombatStance` answer (LIFE4), read off the character in the same push as the
+	// The live `IsInCombatStance` answer, read off the character in the same push as the
 	// weapon because the player gait ladder's `CombatReady`/`Relaxed` predicates consume the two
 	// together. Not part of the gait key: stance moves which ladder row fires — and so the
 	// activity, which already IS the discrete key — never which fan tables answer, exactly as
 	// retail's `T` reads the walk cell in and out of stance alike.
 	bool bCombatStance = false;
 
-	// --- Per-frame state ---------------------------------------------------------------------------
+	// Per-frame state.
 	FElysiumJumpLatch Latch;
 	FElysiumGaitReference Gait;
 	// The pose parameter's slew and hold. Owned here because this ticks once per body per frame,
@@ -81,7 +80,7 @@ struct FElysiumAnimationDriver : public FGCObject
 	FElysiumMoveYawFilter MoveYawFilter;
 	uint32 Generation = 0;
 
-	// --- The body key, and the gait speed tables it resolves to (CCC7) -----------------------------
+	// The body key, and the gait speed tables it resolves to.
 	// Separate from the request key below because it moves for different reasons: the tables depend
 	// on the **body**, never on what the body is doing, so a turn, a sprint or a strafe cannot move
 	// them. Re-resolved only when this key does, which is what lets the mover be handed a table
@@ -102,7 +101,7 @@ struct FElysiumAnimationDriver : public FGCObject
 	// armed or class-translated body as "not a gait" and freezes its stride at the resolve-time cell.
 	float GaitSpeedForSelection(float MoveYawDegrees) const;
 
-	// --- The standing-with-weapon call (LIFE4, Option A) -------------------------------------------
+	// The standing-with-weapon call.
 	// **The live selector split, stated once:** the player's grounded stand/gait comes off the
 	// COMMITTED retail gait ladder — `ElysiumActionTables::PlayerGaitLadder()` walked by
 	// `SelectRule` against a live state query — while water, the air phases and the whole cast
@@ -135,13 +134,12 @@ struct FElysiumAnimationDriver : public FGCObject
 	// tables behind it travels at a constant while the body's own cycle authors something else.
 	bool RefreshGaitSpeeds(UElysiumAnimSubsystem* Anims);
 
-	// --- The channel arbitration slot (LIFE4) -------------------------------------------------------
+	// The channel arbitration slot.
 	// One request slot per channel, written by the action families and read by the arbitration:
 	// each `Tick` ranks the base slot's claim against the locomotion publish's own row of the
 	// priority table and writes the verdict onto the record (`bBasePoseOwned`/`BaseHold`), which is
 	// what the graph obeys — a publish ends a foreign one-shot only where the table says it wins.
-	// This replaces the interim while-locomoting rule, whose behaviour survives as the
-	// Ambient-vs-locomotion rows of the table.
+	// The Ambient-vs-locomotion rows of the table are the while-locomoting rule.
 	struct FElysiumAnimRequestSlot
 	{
 		FElysiumAnimationRequest Request;
@@ -155,7 +153,7 @@ struct FElysiumAnimationDriver : public FGCObject
 	// names one thing whichever mechanism holds it.
 	uint32 RequestSerial = 0;
 
-	// --- The overlay stack (LIFE10) ----------------------------------------------------------------
+	// The overlay stack.
 	//
 	// **The `UpperBody` channel is not a request slot, and that asymmetry is the mechanism.** Every
 	// other channel holds one claim arbitrated by band; this one holds retail's four
@@ -192,7 +190,7 @@ struct FElysiumAnimationDriver : public FGCObject
 	// answer a four-slot stack has; a caller that means a particular layer reads `Overlay` directly.
 	const FElysiumAnimationRequest* ActiveRequest(EElysiumAnimChannel Channel) const;
 
-	// --- The forced ideal activity, and the movement lock over it (LIFE5) --------------------------
+	// The forced ideal activity, and the movement lock over it.
 	// Where the base channel's clip stands, read off the pose layer by the body's owner and pushed
 	// here before `Tick` — the driver never reaches for an anim instance, because it also serves
 	// bodies that have none. Zeroed by `Reset`, like every other per-frame input.
@@ -248,7 +246,7 @@ struct FElysiumAnimationDriver : public FGCObject
 	// not re-loaded per frame.
 	void ResolveSlotClaims(UElysiumAnimSubsystem* Anims, USkeletalMesh* Mesh);
 
-	// --- The discrete key: what a change of request actually means ---------------------------------
+	// The discrete key: what a change of request actually means.
 	FString LastActivity;
 	FString LastStem;
 	// The actor's own classname, which is what finds its recovered `+0x5dc`/`+0x5e0` class bodies —
@@ -274,7 +272,7 @@ struct FElysiumAnimationDriver : public FGCObject
 	// body's gait as a new selection once per trigger pull.
 	uint32 LastSlotHandles[ElysiumOverlay::NumSlots] = {};
 
-	// --- The published answers, always valid --------------------------------------------------------
+	// The published answers, always valid.
 	// A default-constructed record reads `NoVocabulary`, so every consumer — the channel recorder, Cog,
 	// the MCP surface — can read this unconditionally rather than testing a pointer.
 	FElysiumAnimationSelection Selection;

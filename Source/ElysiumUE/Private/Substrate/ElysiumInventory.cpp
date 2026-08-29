@@ -6,10 +6,6 @@
 #include "Substrate/ElysiumItemTable.h"
 #include "Substrate/ElysiumRulebook.h"
 
-// ============================================================================================
-// FElysiumInventory
-// ============================================================================================
-
 namespace
 {
 	// The item an inventory handle points at, or null when it went stale.

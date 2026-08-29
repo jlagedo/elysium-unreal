@@ -163,8 +163,8 @@ static FElysiumClassRegistrar GRegBaseEntity(
 			{ E.SetFakeSilence(A.Param.ToInt() != 0); });
 
 		// Base keyfields — the CBaseEntity datamap contract (python_bridge.md). All keyable
-		// (the base builder sets flags bit 0x8); the fields with no consumer yet still round-
-		// trip through the tables for spawn keyvalues, save enumeration (R8), and the inspector.
+		// (the base builder sets flags bit 0x8); the fields with no consumer still round-
+		// trip through the tables for spawn keyvalues, save enumeration, and the inspector.
 		D.Field(TEXT("angles"),          &FElysiumEntity::Angles);
 		D.Field(TEXT("model"),           &FElysiumEntity::Model);
 		D.Field(TEXT("target"),          &FElysiumEntity::Target);

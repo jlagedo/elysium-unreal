@@ -32,9 +32,8 @@ void AElysiumGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// The whole of what used to live here — the boot decision, the pending-map spawn, the backdrop
-	// camera — belongs to the application, not to a per-world object, and moved to
-	// UElysiumGameFlowSubsystem with roadmap 11.3. This is the one call left.
+	// The boot decision, pending-map spawn and backdrop camera belong to the application, not
+	// to a per-world object. This is the one call left.
 	if (UGameInstance* GI = GetGameInstance())
 	{
 		if (UElysiumGameFlowSubsystem* Flow = GI->GetSubsystem<UElysiumGameFlowSubsystem>())

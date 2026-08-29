@@ -63,7 +63,7 @@ void FElysiumCogWindow_Entities::RenderContent()
 		ImGui::Checkbox("Dead", &bShowDead);       ImGui::SameLine();
 		ImGui::Checkbox("Unhandled", &bShowRecordOnly);
 
-	// --- Filtered index list ---------------------------------------------------------------
+	// Filtered index list.
 		TArray<int32> Rows;
 		Rows.Reserve(Entities.Num());
 		for (int32 i = 0; i < Entities.Num(); ++i)

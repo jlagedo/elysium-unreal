@@ -4,7 +4,7 @@
 
 struct IModelContextProtocolTool;
 
-// P2.7 — the `elysium_*` MCP tool collection, owned by UElysiumMcpSubsystem.
+// The `elysium_*` MCP tool collection, owned by UElysiumMcpSubsystem.
 //
 // Split from the subsystem so the UCLASS header stays free of the engine's experimental MCP
 // includes, and so the whole tool surface compiles away to an empty shell (below, under

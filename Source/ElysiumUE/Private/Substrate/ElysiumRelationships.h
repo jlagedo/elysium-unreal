@@ -35,15 +35,13 @@ struct FElysiumClassRelationship
 	int32 Priority = 0;
 };
 
-/**
- * A row this runtime DERIVED from a live stimulus rather than reading it off authored content, a
- * script or dialogue — today only the damage memory (`ElysiumNpcEnemy::RememberAttacker`).
- *
- * Two properties separate it from the rows beside it, and both come from the stimulus rather than
- * from the store: it carries an absolute expiry on the substrate clock, and it never enters a save.
- * A derived row is a fact about the last few seconds of a fight; restoring one would hand a loaded
- * game a hostility whose stimulus the player never produced.
- */
+// A row this runtime DERIVED from a live stimulus rather than reading it off authored content, a
+// script or dialogue — today only the damage memory (`ElysiumNpcEnemy::RememberAttacker`).
+//
+// Two properties separate it from the rows beside it, and both come from the stimulus rather than
+// from the store: it carries an absolute expiry on the substrate clock, and it never enters a save.
+// A derived row is a fact about the last few seconds of a fight; restoring one would hand a loaded
+// game a hostility whose stimulus the player never produced.
 struct FElysiumDerivedRelationship
 {
 	FElysiumEntityHandle Target;
@@ -71,15 +69,13 @@ public:
 	bool SetEntity(const FElysiumEntityHandle& Target, EElysiumRelationship Value, int32 Priority);
 	bool SetClass(const FString& Classname, EElysiumRelationship Value, int32 Priority);
 
-	/**
-	 * Install or refresh the derived row toward `Target`, expiring at the absolute `ExpiresAt`.
-	 *
-	 * Refused — false, and nothing stored — when a persistent exact-entity row outranks it, which is
-	 * `SetEntity`'s own replacement rule applied across the two surfaces: an authored
-	 * `player_reaction D_LI 10` keeps its character friendly through a punch. A row already present
-	 * for the same target at the same or a lower priority is RE-STAMPED, so a repeated stimulus
-	 * renews the window rather than being swallowed.
-	 */
+	// Install or refresh the derived row toward `Target`, expiring at the absolute `ExpiresAt`.
+	//
+	// Refused — false, and nothing stored — when a persistent exact-entity row outranks it, which is
+	// `SetEntity`'s own replacement rule applied across the two surfaces: an authored
+	// `player_reaction D_LI 10` keeps its character friendly through a punch. A row already present
+	// for the same target at the same or a lower priority is RE-STAMPED, so a repeated stimulus
+	// renews the window rather than being swallowed.
 	bool SetDerivedEntity(const FElysiumEntityHandle& Target, EElysiumRelationship Value,
 		int32 Priority, double ExpiresAt);
 
@@ -95,14 +91,12 @@ public:
 	EElysiumRelationship Resolve(const FElysiumEntityHandle& Target,
 		const FString& Classname) const;
 
-	/**
-	 * `IRelationPriority` (`0x10333700`) — the arbitration weight beside the relation.
-	 *
-	 * The exact entity row is consulted before the class row and its RAW integer is returned:
-	 * the diagnostic text describes a 1-10 range but the parser never clamps, and the installed
-	 * corpus writes zero and 99, so out-of-range values stay ordered rather than folded. A target
-	 * with no row at all answers 5 for a live actor; a null target answers 0.
-	 */
+	// `IRelationPriority` (`0x10333700`) — the arbitration weight beside the relation.
+	//
+	// The exact entity row is consulted before the class row and its RAW integer is returned:
+	// the diagnostic text describes a 1-10 range but the parser never clamps, and the installed
+	// corpus writes zero and 99, so out-of-range values stay ordered rather than folded. A target
+	// with no row at all answers 5 for a live actor; a null target answers 0.
 	int32 ResolvePriority(const FElysiumEntityHandle& Target, const FString& Classname) const;
 
 	// Both halves of one lookup, so an enemy arbitration pass does not walk the rows twice.

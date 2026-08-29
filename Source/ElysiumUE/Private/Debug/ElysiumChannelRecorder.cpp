@@ -231,7 +231,7 @@ void FElysiumChannelRecorder::SetOverride(const TCHAR* Name, double Value)
 
 void FElysiumChannelRecorder::Serialize(FString& OutCsv, FString& OutManifest) const
 {
-	// --- The CSV ------------------------------------------------------------------------------
+	// The CSV.
 	{
 		TArray<FString> Names;
 		Names.Reserve(Columns.Num());
@@ -256,7 +256,7 @@ void FElysiumChannelRecorder::Serialize(FString& OutCsv, FString& OutManifest) c
 		OutCsv = FString::Join(Lines, TEXT("\n")) + TEXT("\n");
 	}
 
-	// --- The manifest -------------------------------------------------------------------------
+	// The manifest.
 	FString J;
 	J += TEXT("{\n");
 	J += TEXT("  \"schema\": 1,\n");

@@ -15,7 +15,7 @@ struct FElysiumSaveSlotInfo
 	FElysiumSaveHeaderData Header;
 };
 
-// 11.9 — the owner of the slot list, the autosave ring and the freeze/thaw pass
+// The owner of the slot list, the autosave ring and the freeze/thaw pass
 // (`docs/architecture/save-architecture.md` §9). GI-scoped, because a save outlives every world it describes.
 //
 // **Writing is off the game thread in the half that can be**: the freeze is a synchronous memory
@@ -33,7 +33,7 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	// --- Slots -----------------------------------------------------------------------------
+	// Slots.
 	// The canonical slot name for a kind. An empty request takes the next free `Elysium-NNN` for a
 	// manual save, the single `Quick` slot for a quicksave, and the next entry of the `Auto0..4`
 	// ring for an autosave — VtMB's rotating ring, so a bad autosave never eats the only one.
@@ -44,7 +44,7 @@ public:
 	bool ReadSlotHeader(const FString& Slot, FElysiumSaveHeaderData& Out) const;
 	bool DeleteSlot(const FString& Slot);
 
-	// --- The two verbs ---------------------------------------------------------------------
+	// The two verbs.
 	// False and a readable reason rather than a wrong file: mid-travel, with a modal panel or a
 	// conversation on screen (neither carries a resume point), or when the payload cannot be
 	// produced. VtMB refuses saves in similar states; a broken slot is worse than a missing one.
@@ -56,7 +56,7 @@ public:
 	// Read, restore the session, and travel. The app-state transition is the flow subsystem's.
 	bool Load(const FString& Slot, FString& OutError);
 
-	// --- The payload, for the tests and `elysium.save.diff` ---------------------------------
+	// The payload, for the tests and `elysium.save.diff`.
 	// Gather the four blocks off the live session. Freezes the current map too, through the same
 	// FElysiumEntityWorld::Freeze a travel boundary uses.
 	bool BuildPayload(FElysiumSavePayload& Out, FString& OutError) const;

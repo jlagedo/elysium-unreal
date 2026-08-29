@@ -328,9 +328,9 @@ namespace
 	};
 }
 
-// =====================================================================================
+
 // Cycle 11b — the Masquerade level outputs and the level-5 loss transaction
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawMasqueradeOutputsTest,
 	"Elysium.Substrate.Law.MasqueradeOutputs", GElysiumTestFlags)
@@ -402,9 +402,9 @@ bool FElysiumLawMasqueradeOutputsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The pure channel rule: raise / never-lower / refresh / count / clear / duration
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawChannelTest,
 	"Elysium.Substrate.Law.Channels", GElysiumTestFlags)
@@ -512,9 +512,9 @@ bool FElysiumLawChannelTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The setters and the expiry pass, driven on the real player heartbeat
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawExpiryTest,
 	"Elysium.Substrate.Law.Expiry", GElysiumTestFlags)
@@ -587,9 +587,9 @@ bool FElysiumLawExpiryTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The Masquerade rate limiter, and the area-type-0 suppression end to end
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawMasqueradeTest,
 	"Elysium.Substrate.Law.Masquerade", GElysiumTestFlags)
@@ -669,9 +669,9 @@ bool FElysiumLawMasqueradeTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The delayed police response: admission, replacement, the witness check, the delta
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawResponseTest,
 	"Elysium.Substrate.Law.Response", GElysiumTestFlags)
@@ -788,9 +788,9 @@ bool FElysiumLawResponseTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Pursuit and alert: one output per edge, and the alert's own expiry
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawPursuitTest,
 	"Elysium.Substrate.Law.Pursuit", GElysiumTestFlags)
@@ -872,9 +872,9 @@ bool FElysiumLawPursuitTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The world area: the Discipline refusal and the two transition teardowns
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawWorldAreaTest,
 	"Elysium.Substrate.Law.WorldArea", GElysiumTestFlags)
@@ -942,9 +942,9 @@ bool FElysiumLawWorldAreaTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The feed producers
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawFeedProducerTest,
 	"Elysium.Substrate.Law.FeedProducer", GElysiumTestFlags)
@@ -1013,9 +1013,9 @@ bool FElysiumLawFeedProducerTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `trigger_player_activity_level`
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawActivityTriggerTest,
 	"Elysium.Substrate.Law.ActivityTrigger", GElysiumTestFlags)
@@ -1129,9 +1129,9 @@ bool FElysiumLawActivityTriggerTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The save block
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawSaveTest,
 	"Elysium.Substrate.Law.Save", GElysiumTestFlags)
@@ -1286,9 +1286,9 @@ bool FElysiumLawSaveTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Hydrate/Dehydrate: the block is unscoped, but its witness handle is not
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumLawRecordTest,
 	"Elysium.Substrate.Law.Record", GElysiumTestFlags)

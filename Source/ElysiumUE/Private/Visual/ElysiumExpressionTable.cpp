@@ -331,7 +331,7 @@ void ElysiumExpressions::CacheStats(int32& OutEntries, int32& OutHits, int32& Ou
 	OutMisses = GCacheMisses;
 }
 
-// --- elysium.expression -------------------------------------------------------------------------
+// elysium.expression.
 //
 // The expression reader's own verb, in the role `elysium.scene parse` plays for the `.vcd` reader:
 // resolve a scene's `param`/`param2` the way the runtime resolves it, before asking a face to move.

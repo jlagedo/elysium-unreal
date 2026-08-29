@@ -7,9 +7,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumRulebook, Log, All);
 
-// ================================================================================================
-// Lifetime + the lazy accessors
-// ================================================================================================
+
 
 void UElysiumRulebookSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -281,9 +279,7 @@ void UElysiumRulebookSubsystem::GetStatus(TArray<FStatus>& Out)
 		DisciplineTargets().Num(), DisciplineTargets().IsValid(), DisciplineTargetTable.Error });
 }
 
-// ================================================================================================
-// Verbs
-// ================================================================================================
+
 
 namespace
 {
@@ -402,7 +398,7 @@ void UElysiumRulebookSubsystem::ExecRules(const TArray<FString>& Args)
 
 	const FString What = Args[0].ToLower();
 
-	// --- whole-table dumps ----------------------------------------------------------------------
+	// Whole-table dumps.
 	if (Args.Num() == 1)
 	{
 		if (What == TEXT("stats"))
@@ -535,7 +531,7 @@ void UElysiumRulebookSubsystem::ExecRules(const TArray<FString>& Args)
 		return;
 	}
 
-	// --- single-row lookups ---------------------------------------------------------------------
+	// Single-row lookups.
 	// Quest titles carry spaces, so the name is everything after the selector rejoined.
 	FString Name;
 	for (int32 i = 1; i < Args.Num(); ++i)

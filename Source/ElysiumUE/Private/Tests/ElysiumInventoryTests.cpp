@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -123,8 +123,8 @@ namespace ElysiumInventoryTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// =====================================================================================
-// Inventory (9.8a): items are entities, the character owns handles to them, and the six
+
+// Inventory: items are entities, the character owns handles to them, and the six
 // Character methods read and write that one container. The contract is
 // `docs/vtmb/inventory.md` §§2-6.
 //
@@ -132,7 +132,7 @@ static constexpr EAutomationTestFlags GElysiumTestFlags =
 // case, so the classnames and the policy values below are this test's statement of the
 // retail contract rather than a reading of the export. `Elysium.Content.Items` is what
 // checks the same values against the corpus.
-// =====================================================================================
+
 
 namespace
 {
@@ -476,10 +476,10 @@ bool FElysiumInventoryTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Tutorial beat three: DefaultTouch lockpick acquisition -> held Intrusion attempt -> the
 // attached doorknob unlocks and drives the existing door's real OnOpen producer.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumTutorialLockpickDoorTest,
 	"Elysium.Substrate.TutorialLockpickDoor", GElysiumTestFlags)
@@ -675,10 +675,10 @@ bool FElysiumTutorialLockpickDoorTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// Inventory containers (9.8): combat-character ownership, deferred seed materialization,
+
+// Inventory containers: combat-character ownership, deferred seed materialization,
 // the recovered inputs, authoritative Take/Give, output delivery, and restore idempotence.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumInventoryContainerTest,
 	"Elysium.Substrate.InventoryContainers", GElysiumTestFlags)

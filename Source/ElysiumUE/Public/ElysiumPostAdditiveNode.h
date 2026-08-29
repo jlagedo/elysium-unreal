@@ -47,7 +47,7 @@ struct ELYSIUMUE_API FAnimNode_ElysiumPostAdditive : public FAnimNode_Base
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Links)
 	FPoseLink Base;
 
-	/** The raw `_delta`, evaluated as the ordinary sequence it now ships as. */
+	/** The raw `_delta`, evaluated as the ordinary sequence it ships as. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Links)
 	FPoseLink Additive;
 
@@ -63,14 +63,12 @@ struct ELYSIUMUE_API FAnimNode_ElysiumPostAdditive : public FAnimNode_Base
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Performance, meta = (DisplayName = "LOD Threshold"))
 	int32 LODThreshold = INDEX_NONE;
 
-	// FAnimNode_Base interface
 	virtual void Initialize_AnyThread(const FAnimationInitializeContext& Context) override;
 	virtual void CacheBones_AnyThread(const FAnimationCacheBonesContext& Context) override;
 	virtual void Update_AnyThread(const FAnimationUpdateContext& Context) override;
 	virtual void Evaluate_AnyThread(FPoseContext& Output) override;
 	virtual void GatherDebugData(FNodeDebugData& DebugData) override;
 	virtual int32 GetLODThreshold() const override { return LODThreshold; }
-	// End of FAnimNode_Base interface
 
 private:
 	/** The clamped weight `Update_AnyThread` resolved, which is what `Evaluate` composes with. */

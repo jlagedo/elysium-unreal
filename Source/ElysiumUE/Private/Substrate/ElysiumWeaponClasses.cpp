@@ -1,4 +1,4 @@
-// 13.3 — the weapon controller over the 9.8 item entity and the 13.3 damage spine.
+// The weapon controller over the item entity and the damage spine.
 //
 // `docs/vtmb/combat-and-damage.md` is the specification and owns every fact below; the seam layout
 // is `docs/architecture/gameplay-systems-architecture.md` §5.4. Nothing here re-implements the
@@ -56,9 +56,7 @@ DEFINE_LOG_CATEGORY_STATIC(LogElysiumWeapon, Log, All);
 // answer. Nothing here decides anything; a line removed changes no behaviour.
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumMelee, Log, All);
 
-// ================================================================================================
-// The logical activities the controller requests
-// ================================================================================================
+// The logical activities the controller requests.
 //
 // `CWeaponMelee::PrimaryAttack` requests `ACT_MELEE_ATTACK` and substitutes
 // `ACT_MELEE_AIR_ATTACK` for a player whose ideal activity is one of the recovered airborne
@@ -210,9 +208,7 @@ namespace
 	}
 }
 
-// ================================================================================================
-// The `rules.txt` margins
-// ================================================================================================
+// The `rules.txt` margins.
 
 FElysiumMeleeMargins FElysiumMeleeMargins::FromRules(const FElysiumRules& Rules)
 {
@@ -281,9 +277,7 @@ FElysiumWeaponContext FElysiumWeaponContext::FromCharacter(const FElysiumCombatC
 	return Context;
 }
 
-// ================================================================================================
-// The pure rules
-// ================================================================================================
+// The pure rules.
 
 namespace ElysiumWeapons
 {
@@ -515,9 +509,7 @@ const TCHAR* FElysiumWeapon::VerdictName(EVerdict Verdict)
 	}
 }
 
-// ================================================================================================
-// Lifecycle
-// ================================================================================================
+
 
 namespace
 {
@@ -754,9 +746,7 @@ void FElysiumWeapon::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		: FString(TEXT("(idle)")));
 }
 
-// ================================================================================================
-// Accessors
-// ================================================================================================
+
 
 const FElysiumWeaponMode* FElysiumWeapon::ModeAt(int32 Index) const
 {
@@ -805,9 +795,7 @@ int32 FElysiumWeapon::TotalLethality(int32 ModeIndex, const FElysiumCombatCharac
 	return FMath::Max(Mode->BaseLethality + Adjustment, 0);
 }
 
-// ================================================================================================
-// Scheduling
-// ================================================================================================
+
 
 void FElysiumWeapon::HoldAttacksUntil(double Deadline)
 {
@@ -835,9 +823,7 @@ void FElysiumWeapon::ClearSwing()
 	Swing = FSwing();
 }
 
-// ================================================================================================
-// Clip resolution — the one door to the animation half
-// ================================================================================================
+// Clip resolution — the one door to the animation half.
 
 bool FElysiumWeapon::BuildActivityClipRequest(FElysiumCombatCharacter& Char,
 	const FString& Activity, FElysiumActivityClipRequest& Out) const
@@ -1001,9 +987,7 @@ float FElysiumWeapon::ResolveAndPlay(const FString& Activity, EElysiumAnimPriori
 	return Mode.AttackRate > 0.0f ? Mode.AttackRate : ElysiumWeapons::FallbackClipSeconds;
 }
 
-// ================================================================================================
-// Which route names the commit instant
-// ================================================================================================
+// Which route names the commit instant.
 
 ElysiumWeapons::EOperatorBody FElysiumWeapon::OperatorBody() const
 {
@@ -1176,9 +1160,7 @@ bool FElysiumWeapon::OperatorHandleAnimEvent(FElysiumCombatCharacter& Operator,
 	return false;
 }
 
-// ================================================================================================
-// Melee target acquisition
-// ================================================================================================
+// Melee target acquisition.
 
 FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCharacter& Attacker,
 	float ReachCm, float ConeDot) const
@@ -1250,9 +1232,7 @@ FElysiumEntityHandle FElysiumWeapon::AcquireMeleeOpponent(const FElysiumCombatCh
 	return Best;
 }
 
-// ================================================================================================
-// The attack intent — mode dispatch and the accepted swing
-// ================================================================================================
+// The attack intent — mode dispatch and the accepted swing.
 
 bool FElysiumWeapon::WantsPrimaryPress(EElysiumWeaponButton Held,
 	EElysiumWeaponButton Pressed) const
@@ -1687,9 +1667,7 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginMeleeSwing(EIntent Intent, int32 M
 	return EVerdict::Accepted;
 }
 
-// ================================================================================================
-// The busy path — what a press does while an attack is already running
-// ================================================================================================
+// The busy path — what a press does while an attack is already running.
 
 bool FElysiumWeapon::IsMeleePressBusy() const
 {
@@ -1948,7 +1926,7 @@ FElysiumWeapon::EVerdict FElysiumWeapon::BeginRangedShot(EIntent Intent, int32 M
 	Swing.Opponent = Victim;
 	// The shot leaves with no dispersion at all — the degenerate zero-spread member of retail's cone
 	// family rather than the cone itself. `SpreadAngle`/`SpreadAngleMax` are authored, but the live
-	// ranged-accuracy value that interpolates between them is unrecovered (RE-A3, owned by 13.3), so
+	// ranged-accuracy value that interpolates between them is unrecovered (RE-A3), so
 	// there is no honest dispersion to apply yet. RE40 settled what does NOT enter it: the Presence
 	// bonus and the Shaky Hands penalty only print diagnostics in the shot body and leave the
 	// physical dispersion alone, and the crosshair is a HUD mirror of `CrosshairMinSize` /
@@ -2021,9 +1999,7 @@ void FElysiumWeapon::FireOnEmpty(int32 ModeIndex, const FElysiumWeaponMode& Mode
 		*DebugString(), ModeIndex, MagazineCount, Mode.AmmoCost);
 }
 
-// ================================================================================================
-// The commit half — it can miss
-// ================================================================================================
+// The commit half — it can miss.
 
 void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 {
@@ -2120,9 +2096,7 @@ void FElysiumWeapon::CommitQueuedAttack(int32 Serial)
 	RangedImpact(*Attacker, *Victim, ModeIndex);
 }
 
-// ================================================================================================
-// The melee contact — a per-frame swept walk over the clip's own authored windows
-// ================================================================================================
+// The melee contact — a per-frame swept walk over the clip's own authored windows.
 
 namespace
 {
@@ -2171,7 +2145,7 @@ void FElysiumWeapon::StageSwingOpposedRoll(FElysiumCombatCharacter& Attacker,
 	const FElysiumWeaponContext Context = FElysiumWeaponContext::FromCharacter(*Victim);
 	const FElysiumDmg& ModeDmg = DamageForMode(ModeIndex);
 
-	// --- The opposed record, staged on the DEFENDER ------------------------------------------
+	// The opposed record, staged on the DEFENDER.
 	// Stamped with this swing's serial, which is what stands in for retail's `ForceMeleeReset`:
 	// every record an earlier swing of this attacker's staged stops answering the moment a new one
 	// is accepted, so a later sweep cannot consume a margin nobody rolled for it. `StageMeleeRoll`
@@ -2212,7 +2186,7 @@ void FElysiumWeapon::StageSwingOpposedRoll(FElysiumCombatCharacter& Attacker,
 
 	Victim->StageMeleeRoll(Roll);
 
-	// --- The incoming-swing notice ------------------------------------------------------------
+	// The incoming-swing notice.
 	// The other half of the same callback, sent from the same staging instant. A player victim has
 	// no such memory — its reaction is its own input — so a swing at the player stages the record
 	// and notices nobody, which is an ordinary negative rather than a miss.
@@ -2329,7 +2303,7 @@ void FElysiumWeapon::AdvanceSwingContact(float DeltaSeconds)
 		Swing.WalkPlayId = Phase.PlayId;
 	}
 
-	// --- The batch decision, and nothing before it is recorded --------------------------------
+	// The batch decision, and nothing before it is recorded.
 	//
 	// Retail's update walks on a server tick, and a tick is never shorter than a sub-step: its
 	// `dt <= 0` exit is the only path that does not write the stored timestamp, so a call either
@@ -2442,7 +2416,7 @@ void FElysiumWeapon::AdvanceSwingContact(float DeltaSeconds)
 	// nothing, which is what an unprimed cursor means everywhere else in this runtime.
 	bool bPrimed = Swing.PrevCycle >= 0.0f && Swing.PrevSegmentsLocal.Num() == Records->Num();
 
-	// --- The discontinuity guard (OURS) --------------------------------------------------------
+	// The discontinuity guard (OURS).
 	// Between two batches an engine event can move the attacker or its pose by a distance no swing
 	// produces: a teleport, a map travel, a scene handing the body back, a pose-layer hitch. Swept
 	// as motion, that reads as a limb crossing the whole intervening space — it would land on every
@@ -2574,7 +2548,7 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	const FElysiumWeaponContext Context = FElysiumWeaponContext::FromCharacter(Victim);
 	const FElysiumDmg& ModeDmg = DamageForMode(ModeIndex);
 
-	// --- The opposed record, CONSUMED from the defender ---------------------------------------
+	// The opposed record, CONSUMED from the defender.
 	// It was staged on this victim on the swing's first batched frame, before any contact test, by
 	// `StageSwingOpposedRoll` — which is where retail rolls it. Nothing is rolled here.
 	//
@@ -2595,7 +2569,7 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	}
 	const FElysiumMeleeRoll Roll = *Staged;
 
-	// --- The `rules.txt` margin classifier ----------------------------------------------------
+	// The `rules.txt` margin classifier.
 	const int32 Margin = Roll.Margin();
 	const EElysiumMeleeAttackerReaction AttackerReaction =
 		ElysiumWeapons::ClassifyAttacker(Context.Margins, Margin);
@@ -2610,7 +2584,7 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	// SEAM — the blocked-contact `Dexterity` bonus soak re-roll at `0x10160BC0` and the knockback
 	// impulse still belong to a later cycle. The re-roll is a SOAK rule, not a reaction one: it adds
 	// bonus soak dice from attribute slot 2 and re-classifies, so it changes the NUMBER the block
-	// family then reacts to. It lands with 13.3's soak work rather than here, which owns the pose and
+	// family then reacts to. It lands with the soak work rather than here, which owns the pose and
 	// not the number (`docs/vtmb/combat-and-damage.md:485-488`, `docs/project/plans/animation.md:69-70`).
 	//
 	// The attacker's own classification stays on this line rather than branching the reaction below:
@@ -2622,7 +2596,7 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 		Roll.Soak, ElysiumWeapons::AttackerReactionName(AttackerReaction),
 		ElysiumWeapons::DefenderReactionName(DefenderReaction));
 
-	// --- The two block reactions --------------------------------------------------------------
+	// The two block reactions.
 	// Both callbacks fire on a blocked contact, and both run BEFORE the damage test below: retail's
 	// blocked path plays its reactions and only then asks whether positive damage remains
 	// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions").
@@ -2699,7 +2673,7 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	}
 	else if (DefenderReaction == EElysiumMeleeDefenderReaction::HitKnockback)
 	{
-		// --- The grounded knockback ---------------------------------------------------------------
+		// The grounded knockback.
 		// "A stronger unblocked result takes the separate normal-hit or knockback callbacks"
 		// (`docs/vtmb/combat-and-damage.md` § "Block and stagger reactions"), so this is the sibling
 		// branch of the blocked callbacks above — but it does NOT sit at the same point in the
@@ -2732,7 +2706,7 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	// stands between them.
 	if (Margin > 0)
 	{
-	// --- The damage commit --------------------------------------------------------------------
+	// The damage commit.
 	int32 DamageInflicted = Margin;
 	// Potence guarantees a minimum on what the formula multiplies: the remaining lethality is floored
 	// up to the active rank when Potence is higher.
@@ -2763,7 +2737,7 @@ void FElysiumWeapon::MeleeContact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	Victim.TakeDamage(Dmg, &Attacker, Record && Record->bDisallowFirearmsToBashing);
 	}
 
-	// --- The knockback, AFTER the health commit -------------------------------------------------
+	// The knockback, AFTER the health commit.
 	// Retail's own order, and the reason a killing blow is not thrown: the commit above may have
 	// killed this victim, and `IsKnockbackAllowed`'s alive term then refuses. A body killed by a
 	// swing dies where it stands and hands off to the corpse path.
@@ -2854,7 +2828,7 @@ void FElysiumWeapon::KnockbackContact(FElysiumCombatCharacter& Attacker,
 	ElysiumReactions::BuildKnockback(
 		ElysiumReactions::KnockbackAwayFrom(Attacker.Origin, Victim.Origin), VictimYaw, Knockback);
 
-	// --- The cell, off the attack's own authored candidate table ------------------------------
+	// The cell, off the attack's own authored candidate table.
 	// Retail selects out of the swing record's four direction buckets — up to four candidates each,
 	// rotated by the record's `+0xB8` byte, one drawn with `RandomInt`
 	// (`docs/vtmb/combat-and-damage.md` → "The authored table lives in the swing record"). The
@@ -3009,9 +2983,7 @@ void FElysiumWeapon::RangedImpact(FElysiumCombatCharacter& Attacker, FElysiumCom
 	Victim.TakeDamage(Dmg, &Attacker, Record && Record->bDisallowFirearmsToBashing);
 }
 
-// ================================================================================================
-// Reload
-// ================================================================================================
+
 
 bool FElysiumWeapon::BeginReload()
 {
@@ -3153,9 +3125,7 @@ void FElysiumWeapon::CommitQueuedReload(int32 Serial)
 	BeginReload();
 }
 
-// ================================================================================================
-// Registration — `CWeapon`, the chain node the weapon families register under
-// ================================================================================================
+// Registration — `CWeapon`, the chain node the weapon families register under.
 
 namespace
 {

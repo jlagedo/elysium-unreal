@@ -8,9 +8,7 @@ class UPrimitiveComponent;
 class FElysiumLockableEntity;
 struct FElysiumLootView;
 
-// ============================================================================================
-// FElysiumItemContainer — CItemContainer over CBaseCombatCharacter
-// ============================================================================================
+// CItemContainer over CBaseCombatCharacter.
 
 class FElysiumItemContainer final : public FElysiumCombatCharacter
 {

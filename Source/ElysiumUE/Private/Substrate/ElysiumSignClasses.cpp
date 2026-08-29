@@ -1,4 +1,4 @@
-// P4.10 — `game_sign`: VtMB's full-screen sign/popup window, the tutorial's teaching layer.
+// `game_sign`: VtMB's full-screen sign/popup window, the tutorial's teaching layer.
 //
 // 71 of the game's 73 game_sign sit on sp_tutorial_1 as popup_1..popup_59, and the tutorial's
 // whole progression runs through them: the player dismisses a panel, its OnUseEnd fires, and
@@ -22,10 +22,8 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSignEnt, Log, All);
 
-// ============================================================================================
 // game_sign — CGameSign. Bodiless (no brush, no model): it exists only to own a definition_file
 // and put that panel on screen when something fires OpenWindow.
-// ============================================================================================
 
 class FElysiumGameSign final : public FElysiumEntity
 {

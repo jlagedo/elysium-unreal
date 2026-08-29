@@ -20,17 +20,17 @@ enum class EElysiumBrushSolidity : uint8
 	None,     // non-solid, no touch (func_illusionary): the body carries the handle only
 };
 
-// Classify a brush entity's runtime solidity from its classname. P1.6 leaf classes can override
-// the result on their own body in Spawn(); this is the P1.5 default the world builds with.
+// Classify a brush entity's runtime solidity from its classname. Leaf classes can override
+// the result on their own body in Spawn(); this is the default the world builds with.
 EElysiumBrushSolidity ElysiumBrushSolidityForClass(const FString& Classname);
 
-// R1 body (P1.5) — the collision/overlap embodiment of one brush entity. A live entity is a
-// plain-C++ FElysiumEntity; this component is a disposable body the map actor owns, positioned
-// at the def origin (brush hulls are entity-local, origin = hinge for the rotating doors P4
-// animates). It renders nothing (no scene proxy); its whole job is a convex UBodySetup cooked
-// from the def's hulls plus the overlap tap that routes begin/end touch back to the entity
-// world. It carries its owning handle so a crosshair trace (P2) resolves to an entity in one
-// step, and its collision is gated by the entity's dormancy switch (R6).
+// The collision/overlap embodiment of one brush entity. A live entity is a plain-C++
+// FElysiumEntity; this component is a disposable body the map actor owns, positioned at the
+// def origin (brush hulls are entity-local, origin = hinge for the rotating doors). It
+// renders nothing (no scene proxy); its whole job is a convex UBodySetup cooked from the
+// def's hulls plus the overlap tap that routes begin/end touch back to the entity world.
+// It carries its owning handle so a crosshair trace resolves to an entity in one step, and
+// its collision is gated by the entity's dormancy switch.
 UCLASS()
 class UElysiumBrushComponent : public UPrimitiveComponent
 {
@@ -45,7 +45,7 @@ public:
 	void InitBrush(const FElysiumEntityHandle& InOwner, const TArray<FElysiumConvexHull>& Hulls,
 		EElysiumBrushSolidity Solidity);
 
-	// Dormancy (R6): dormant → collision off (cannot be touched/traced) and visual hidden;
+	// Dormancy: dormant → collision off (cannot be touched/traced) and visual hidden;
 	// active → restore the built solidity and attached visual.
 	void SetDormant(bool bDormant);
 	void SetVisual(UStaticMeshComponent* InVisual);

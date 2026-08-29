@@ -6,7 +6,7 @@
 #include "ElysiumWireReport.h"
 
 // One queued I/O delivery — the unit the event queue sorts and services. `Target` is the raw
-// output target string kept verbatim so `!self`/`!activator` resolve at *dispatch* time (R3),
+// output target string kept verbatim so `!self`/`!activator` resolve at *dispatch* time,
 // against `Caller`/`Activator`. `PythonSrc` is field 6 (may be set with or without an I/O
 // target). `Serial` breaks FireTime ties so equal-time events keep insertion (FIFO) order.
 struct FElysiumIOEvent
@@ -27,15 +27,15 @@ struct FElysiumIOEvent
 	FElysiumWireRef Wire;
 };
 
-// R4 — the one time-sorted event queue. Every delayed I/O, field-6 Python payload, and (later)
+// The one time-sorted event queue. Every delayed I/O, field-6 Python payload, and
 // think/discipline event lives here, keyed on absolute game seconds; never FTimerManager, so
-// the queue serializes into saves (R8). Passive: it sorts and hands back due events; the entity
+// the queue serializes into saves. Passive: it sorts and hands back due events; the entity
 // world drives the drain loop (with the zero-delay loop guard) and delivers through AcceptInput.
-// Pause/step flags are here for the Phase-2 single-stepper; the world's service loop honours them.
+// Pause/step flags are here for the single-stepper; the world's service loop honours them.
 class FElysiumEventQueue
 {
 public:
-	// Chokepoint 2 (R5): the only way an event enters the queue. Inserts keeping
+	// Chokepoint 2: the only way an event enters the queue. Inserts keeping
 	// (FireTime, Serial) ascending, so equal-time events stay FIFO.
 	void Add(FElysiumIOEvent&& Event)
 	{
@@ -52,7 +52,7 @@ public:
 		Events.Insert(MoveTemp(Event), Insert);
 	}
 
-	// 11.9 — the restore path (`docs/architecture/save-architecture.md` §6). A saved event already carries the serial
+	// The restore path (`docs/architecture/save-architecture.md` §6). A saved event already carries the serial
 	// it was queued under, so re-adding it must keep that serial rather than mint a new one: the
 	// serial is the FIFO tiebreaker, and re-numbering would reorder equal-time events. Insertion is
 	// the same (FireTime, Serial) ordering Add uses, so a payload written out of order still lands
@@ -110,7 +110,7 @@ public:
 	int32 Num() const { return Events.Num(); }
 	const TArray<FElysiumIOEvent>& Pending() const { return Events; }
 
-	// --- Pause / single-step (Phase 2 `ent_pause`/`ent_step`) ------------------------------
+	// --- Pause / single-step (`ent_pause`/`ent_step`) ---
 	void Pause() { bPaused = true; }
 	void Resume() { bPaused = false; PendingSteps = 0; }
 	bool IsPaused() const { return bPaused; }

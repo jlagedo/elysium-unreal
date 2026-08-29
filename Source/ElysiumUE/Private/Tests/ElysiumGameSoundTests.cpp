@@ -191,10 +191,10 @@ namespace
 	}
 }
 
-// =====================================================================================
+
 // Resolution: what a category costs, what an explicit radius overrides, and what an
 // unknown category does.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGameSoundResolveTest,
 	"Elysium.Substrate.GameSound.Resolve", GElysiumTestFlags)
@@ -306,10 +306,10 @@ bool FElysiumGameSoundResolveTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The window: a serial cursor a consumer polls with, and the two bounds that keep the
 // buffer from growing.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGameSoundWindowTest,
 	"Elysium.Substrate.GameSound.Window", GElysiumTestFlags)
@@ -401,10 +401,10 @@ bool FElysiumGameSoundWindowTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The producers. A bus nothing pushes into is not a hearing surface — these drive the
 // real commit paths and assert the stimulus came out of them.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumGameSoundProducerTest,
 	"Elysium.Substrate.GameSound.Producers", GElysiumTestFlags)

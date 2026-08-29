@@ -11,15 +11,15 @@ class FElysiumEntity;
 class FElysiumEntityWorld;
 struct FElysiumPickResult;
 
-// P2.2/P2.6 entity inspector: the detail view of the shared-selected entity and the "primary test
-// harness" (debug-tooling.md). It reads one entity's identity, chain-walked live fields, raw
-// keyvalues, and 7-field outputs, and fires any input on it by hand through the real event queue
-// (FElysiumEntityWorld::EnqueueInput) so the delivery shows up in the Event Queue window and is
-// single-steppable. Everything but the fire buttons is read-only.
+// Detail view of the shared-selected entity and the primary test harness
+// (`docs/architecture/debug-tooling.md`). It reads one entity's identity, chain-walked live
+// fields, raw keyvalues, and 7-field outputs, and fires any input on it by hand through the real
+// event queue (FElysiumEntityWorld::EnqueueInput) so the delivery shows up in the Event Queue
+// window and is single-steppable. Everything but the fire buttons is read-only.
 //
-// Selection is by click (P2.6): while this window is open and the Cog menu owns the mouse, LMB
-// anywhere over the world picks whatever is under the cursor — brush entity, world surface, or
-// prop instance — and the window draws a translucent highlight on it. RMB clears. The game is not
+// Selection is by click: while this window is open and the Cog menu owns the mouse, LMB anywhere
+// over the world picks whatever is under the cursor — brush entity, world surface, or prop
+// instance — and the window draws a translucent highlight on it. RMB clears. The game is not
 // paused; it keeps running under the cursor.
 //
 // The pick runs from RenderTick, which Cog calls for every window whether or not it is visible, so

@@ -4,7 +4,7 @@
 #include "ElysiumAudioSubsystem.h"
 #include "ElysiumEntity.h"
 
-// P4.1 — the brush-mover substrate. `docs/vtmb/animation_and_movers.md` Part B (decompiled `vampire.dll`:
+// The brush-mover substrate. `docs/vtmb/animation_and_movers.md` Part B (decompiled `vampire.dll`:
 // the Source CBaseToggle/CBaseDoor lineage, RTTI-confirmed) is the reference for everything here.
 //
 // FElysiumMoverBase is the CBaseToggle primitive: LinearMove/AngularMove drive the entity's brush
@@ -18,7 +18,7 @@
 // blocked-while-closing (deal `dmg`, reverse, OnBlockedClosing) +
 // the full spawnflag table (B.5) + `linked_door` (the paired leaf) + the +use doorknob path. Two
 // leaves derive from it: func_door_rotating (swings `distance` about the hinge) and func_door
-// (slides `movedir` by its own depth, P4.3). A leaf supplies only how it computes its open transform
+// (slides `movedir` by its own depth). A leaf supplies only how it computes its open transform
 // and which primitive it issues. Registered as the "CBaseDoor" chain node so both leaves inherit the
 // inputs/fields through one case-folded chain walk (R2).
 
@@ -83,7 +83,7 @@ protected:
 	// pose (START_OPEN) before any motion.
 	void SnapBody(const FVector& RelLoc, const FRotator& RelRot);
 
-	// --- Mover sounds (P6.4) -----------------------------------------------------------------
+	// --- Mover sounds ---
 	// VtMB resolves a mover's `soundgroup` token by directory convention (no data file): the WAVs
 	// live under sound/usable/<Category>/<soundgroup>/<subkey>.wav (RE: CBaseDoor::Spawn @0x100ef060
 	// reads open/close/swing/locked; CBaseButton::Spawn @0x100c8810 reads on/off). InitMoverSounds
@@ -129,7 +129,7 @@ private:
 };
 
 // The CBaseDoor 4-state machine over the mover primitive. func_door_rotating (this file) and
-// func_door (P4.3) derive from it; both register with BaseName "CBaseDoor".
+// func_door derive from it; both register with BaseName "CBaseDoor".
 class FElysiumDoorBase : public FElysiumMoverBase
 {
 public:
@@ -192,12 +192,12 @@ public:
 	// again — the fix for a stale AtTop/GoingUp belief silently dropping a later +use.
 	void ResolveToggleStateFromTransform();
 
-	// --- +use / debug hooks (P4.3) -----------------------------------------------------
+	// --- +use / debug hooks ---
 	// PUSE (0x100) is the dominant door bit (105 doors): it arms the +use look-cursor. Doors fire no
 	// OnIn/OnOut (those are button-only outputs), so the cursor enter/leave stays a base no-op — only
 	// activation and the reticle-arming (world-side) matter.
 	virtual bool IsUsable() const override;
-	// locked_icon on the reticle (P4.4). The reticle is always the player's, so this asks the
+	// locked_icon on the reticle. The reticle is always the player's, so this asks the
 	// predicate with the player as the user — otherwise a knob-gated door would draw its unlocked
 	// icon and then refuse the +use behind it.
 	virtual bool IsUseLocked() const override;
@@ -231,7 +231,7 @@ public:
 	virtual void Spawn() override;
 	virtual void Think() override;
 
-	// 11.9 — the door's derived state is exactly the case `docs/architecture/save-architecture.md` §4 carves out for a
+	// The door's derived state is exactly the case `docs/architecture/save-architecture.md` §4 carves out for a
 	// leaf hook: `m_toggle_state` and the lock are neither keyvalues nor registered fields, and a
 	// rebuild from the def cannot re-derive them (it would put every door back at its spawn pose).
 	virtual void Serialize(FElysiumSaveArchive& Ar) override;
@@ -289,7 +289,7 @@ protected:
 	// applied in Spawn() itself.
 	bool bStartOpenSeatPending = false;
 
-	// 11.9 — a restored door has to be re-seated at the pose its saved state implies, and the body
+	// A restored door has to be re-seated at the pose its saved state implies, and the body
 	// does not exist while the snapshot is being applied. Serialize arms this and forces an
 	// immediate think; the seat pass snaps the pose and hands the saved think back.
 	bool  bRestoreSeatPending = false;

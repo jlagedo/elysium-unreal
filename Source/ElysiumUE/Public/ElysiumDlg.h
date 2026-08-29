@@ -4,14 +4,14 @@
 #include "Templates/Function.h"
 #include "Templates/SharedPointer.h"
 
-// P9 9.1 / B4 — VtMB `.dlg` conversations. Three separable pieces, each unit-testable on its own:
+// VtMB `.dlg` conversations. Three separable pieces, each unit-testable on its own:
 //
 //   * FElysiumDlgFile     — the 13-field CRLF/Latin-1 parser (physical format, docs/vtmb/game_runtime.md §5).
 //   * ElysiumDlgExpr      — the `dlgexpr` front-normalizer that rewrites a raw field-4/5 string into the
 //                           pure-Python subset the installed script host evaluates (skillchecks ->
 //                           CalcFeat compares; the condition-level `&`/`|` -> `and`/`or`; the action-level
 //                           `&` -> `;`). It is total; a string it cannot classify passes through, so the
-//                           host's own error-to-false (RE3) hides the line / aborts the action.
+//                           host's own error-to-false hides the line / aborts the action.
 //   * FElysiumDlgConversation — the branch state machine. Pure C++/no UObject/no world: it takes a
 //                           condition-eval and an action-exec callback, so it drives equally from a unit
 //                           test (a fake `G`) and from the game (routed to the script host).

@@ -10,7 +10,7 @@
 // silently miss rather than fail.
 inline FString ElysiumFold(const FString& S) { return S.ToLower(); }
 
-// VtMB's rulebook — the RPG rules layer under `vdata/system/`, mirrored verbatim by PL5b.
+// VtMB's rulebook — the RPG rules layer under `vdata/system/`, mirrored verbatim.
 //
 // Twelve table families, one struct pair each: a row struct and a table struct carrying
 // `Load(FString& OutError)`, following `FElysiumDispositionTable`'s shape. Every `Load` is
@@ -36,9 +36,7 @@ inline FString ElysiumFold(const FString& S) { return S.ToLower(); }
 
 namespace ElysiumKeyValues { struct FKvNode; }
 
-// ================================================================================================
-// Shared value types
-// ================================================================================================
+// Shared value types.
 
 // One price line out of a `Costs` block. Three authored forms, per `CVStatCost_t::Load`:
 // `"Current_Rating * N"`, `"Table: a, b, c, …"`, or a bare integer.
@@ -119,9 +117,7 @@ struct FElysiumRuleTable
 	void KeyRange(int32& OutMin, int32& OutMax) const;
 };
 
-// ================================================================================================
-// 1. stats.txt — the four trait containers
-// ================================================================================================
+// stats.txt — the four trait containers
 
 // `EElysiumTraitContainer` and `ElysiumTraitContainerName` are the compiled side's
 // (`Public/ElysiumSheetSlots.h`) — one enum serves the file and the sheet it fills.
@@ -162,7 +158,7 @@ struct FElysiumStat
 	// than once per block on 17 of the Active_Disciplines, which is why this is a list.
 	TArray<FString> IncPredependency;
 
-	// --- The Discipline half of a Stat block (`docs/vtmb/disciplines.md`) ---------------------
+	// The Discipline half of a Stat block (`docs/vtmb/disciplines.md`).
 	// The four classification bytes the learned Discipline blocks author. `Is_Instant` is the
 	// native-path discriminator the shared cast authority branches on; the other three are
 	// authored classification the same blocks carry beside it.
@@ -251,9 +247,7 @@ struct FElysiumStatTable
 		EElysiumTraitContainer* OutContainer = nullptr) const;
 };
 
-// ================================================================================================
-// 2. feats.txt — the derived feats
-// ================================================================================================
+// feats.txt — the derived feats
 
 struct FElysiumFeat
 {
@@ -291,8 +285,8 @@ struct FElysiumFeatTable
 	int32 Num() const { return Feats.Num(); }
 
 	// `Base0`, `Base1`, … read by probing until a key is ABSENT, which is what makes the list
-	// genuinely variable-length. Public because the probe rule is the piece 9.4c depends on and
-	// `Elysium.Substrate.Rulebook` drives it directly.
+	// genuinely variable-length. Public because `Elysium.Substrate.Rulebook` drives the probe
+	// rule directly.
 	static void ProbeTraitRefs(const ElysiumKeyValues::FKvNode& Node, const TCHAR* Prefix,
 		TArray<FElysiumTraitRef>& Out);
 
@@ -306,9 +300,7 @@ private:
 	TMap<FString, int32> ByName;
 };
 
-// ================================================================================================
-// 3. rules.txt + rules_tables.txt — the constants and the shared tables
-// ================================================================================================
+// rules.txt + rules_tables.txt — the constants and the shared tables
 
 // `rules.txt` is a bag of named blocks whose key sets differ per block and are Unofficial-Patch
 // tuned, so it is held as parsed key/value rather than as a row struct: a patch that adds a key
@@ -337,9 +329,7 @@ private:
 	TMap<FString, int32> TableByName;
 };
 
-// ================================================================================================
-// 4. traiteffect.txt + traiteffects000.txt — the modifier vocabulary and the effects
-// ================================================================================================
+// traiteffect.txt + traiteffects000.txt — the modifier vocabulary and the effects
 
 // The operator enum. Its values ARE the `traiteffect.txt` `ModifierNames` indices — that file is
 // the vocabulary and this is the compile-time mirror of it, which `Elysium.Content.Rulebook`
@@ -425,9 +415,7 @@ private:
 	TMap<FString, int32> ByName;
 };
 
-// ================================================================================================
-// 5. clandoc000.txt + the 36 npctemplate*.txt — clan and NPC stat templates
-// ================================================================================================
+// clandoc000.txt + the 36 npctemplate*.txt — clan and NPC stat templates
 
 // One `ClanData` block. The trait blocks are name -> rating maps rather than fixed fields, because
 // a template authors only the traits it sets: an ABSENT key means "inherit", not zero, which is
@@ -507,9 +495,7 @@ private:
 	TMap<FString, int32> NpcByName;
 };
 
-// ================================================================================================
-// 6. histories000.txt — the History background traits
-// ================================================================================================
+// histories000.txt — the History background traits
 
 struct FElysiumHistory
 {
@@ -540,9 +526,7 @@ private:
 	TMap<FString, int32> ByName;
 };
 
-// ================================================================================================
-// 8. experience_table.txt — the quest-reward -> XP map  (NOT KeyValues)
-// ================================================================================================
+// experience_table.txt — the quest-reward -> XP map (NOT KeyValues)
 
 // Pipe-delimited: `key | description | value`. `>` starts a comment line, a line under three
 // characters is skipped, and a row splits into exactly three fields.
@@ -576,9 +560,7 @@ private:
 	TMap<FString, int32> ByKey;
 };
 
-// ================================================================================================
-// 9. levelingtemplate_000.txt — the ordered auto-level templates
-// ================================================================================================
+// levelingtemplate_000.txt — the ordered auto-level templates
 
 // One `Level { "<Trait>" "<Value>" }` — buy this trait up to this value, then move on.
 struct FElysiumLevelStep
@@ -624,9 +606,7 @@ private:
 	TMap<FString, int32> ByName;
 };
 
-// ================================================================================================
-// 14. strings.txt + strings_internal.txt — the named string lists
-// ================================================================================================
+// strings.txt + strings_internal.txt — the named string lists
 
 // `StringData.Strings` — a flat set of named groups, each a sparse `Name<N>` list. The file's own
 // note says they "are referenced by the `NameMapping` fields in stats", which is what makes this a

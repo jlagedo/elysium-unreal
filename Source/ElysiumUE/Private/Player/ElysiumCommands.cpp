@@ -86,9 +86,7 @@ bool ElysiumCommands::TeleportPlayer(FElysiumEntityWorld& World, const FString& 
 	return true;
 }
 
-// =====================================================================================
 // The inventory
-// =====================================================================================
 
 namespace
 {
@@ -109,10 +107,9 @@ namespace
 		EB Also = EB::None;
 	};
 
-	// `docs/vtmb/controls.md` § "What is bindable" in declaration order. A verb with no implementation names
-	// the roadmap task that owns it, so `elysium.commands` reads as a work list.
+	// `docs/vtmb/controls.md` § "What is bindable" in declaration order.
 	const FRow GInventory[] = {
-		// --- Movement ---------------------------------------------------------------------
+		// Movement.
 		{ TEXT("forward"),      EK::ButtonPair, EG::Movement, EB::Forward,      TEXT("move forward") },
 		{ TEXT("back"),         EK::ButtonPair, EG::Movement, EB::Back,         TEXT("move back") },
 		{ TEXT("moveleft"),     EK::ButtonPair, EG::Movement, EB::MoveLeft,     TEXT("strafe left") },
@@ -140,7 +137,7 @@ namespace
 		{ TEXT("force_centerview"), EK::Once,   EG::Movement, EB::None,         TEXT("recentre pitch, unconditional") },
 		{ TEXT("impulse"),      EK::Once,       EG::Movement, EB::None,         TEXT("classic impulse channel -- no consumer") },
 
-		// --- Combat and items -------------------------------------------------------------
+		// Combat and items.
 		{ TEXT("attack"),       EK::ButtonPair, EG::Combat,   EB::Attack,       TEXT("primary fire; dismisses an open sign panel") },
 		{ TEXT("attack2"),      EK::ButtonPair, EG::Combat,   EB::Attack2,      TEXT("secondary fire -- 4.9") },
 		// `+wpn_secondaryatk` forwards into `+attack2` as well as latching its own dedicated bit
@@ -181,7 +178,7 @@ namespace
 		{ TEXT("vdiscipline_endall"), EK::Once, EG::Combat,   EB::None,         TEXT("end every active discipline -- 9.7") },
 		{ TEXT("vdiscipline_int"), EK::Once,    EG::Combat,   EB::None,         TEXT("cast discipline <name> -- 9.7") },
 
-		// --- Camera -----------------------------------------------------------------------
+		// Camera.
 		{ TEXT("togglecamera"), EK::Once,       EG::Camera,   EB::None,         TEXT("flip first/third person") },
 		{ TEXT("thirdperson"),  EK::Once,       EG::Camera,   EB::None,         TEXT("go third person") },
 		{ TEXT("firstperson"),  EK::Once,       EG::Camera,   EB::None,         TEXT("go first person") },
@@ -201,7 +198,7 @@ namespace
 		{ TEXT("camdistance"),  EK::ButtonPair, EG::Camera,   EB::CamDistance,  TEXT("mouse-driven dolly -- 10.6") },
 		{ TEXT("commandermousemove"), EK::ButtonPair, EG::Camera, EB::CommanderMouseMove, TEXT("commander-mode mouse camera -- 10.6") },
 
-		// --- Interface --------------------------------------------------------------------
+		// Interface.
 		{ TEXT("chareditor"),   EK::ButtonPair, EG::Interface, EB::CharEditor,  TEXT("character sheet -- 9.4") },
 		{ TEXT("togglechareditor"), EK::Once,   EG::Interface, EB::None,        TEXT("toggle the character sheet -- 9.4") },
 		{ TEXT("questlog"),     EK::ButtonPair, EG::Interface, EB::QuestLog,    TEXT("quest log -- 9.6") },
@@ -218,14 +215,14 @@ namespace
 		{ TEXT("cancelselect"), EK::Once,       EG::Interface, EB::None,        TEXT("the Escape verb -- close the top screen, else pause") },
 		{ TEXT("togglemainmenu"), EK::Once,     EG::Interface, EB::None,        TEXT("open/close the menu") },
 
-		// --- System -----------------------------------------------------------------------
+		// System.
 		{ TEXT("pause"),        EK::Once,       EG::System,   EB::None,         TEXT("hold the world") },
 		{ TEXT("save"),         EK::Once,       EG::System,   EB::None,         TEXT("save <slot|quick> -- 11.9") },
 		{ TEXT("load"),         EK::Once,       EG::System,   EB::None,         TEXT("load <slot|quick> -- 11.9") },
 		{ TEXT("snapshot"),     EK::Once,       EG::System,   EB::None,         TEXT("screenshot to Saved/Screenshots") },
 		{ TEXT("toggleconsole"), EK::Once,      EG::System,   EB::None,         TEXT("the console key -- the engine's viewport client owns it (plane 0)") },
 
-		// --- The vampire.dll verbs the patch's aliases and the debug binds call -------------
+		// The vampire.dll verbs the patch's aliases and the debug binds call.
 		{ TEXT("noclip"),       EK::Once,       EG::Cheat,    EB::None,         TEXT("fly through geometry") },
 		{ TEXT("god"),          EK::Once,       EG::Cheat,    EB::None,         TEXT("the player's unkillable latch") },
 		{ TEXT("vstats"),       EK::Once,       EG::Cheat,    EB::None,         TEXT("dump the player sheet -- 9.4") },
@@ -256,9 +253,7 @@ void ElysiumCommands::DeclareVtmbInventory(FElysiumCommands& Registry)
 	}
 }
 
-// =====================================================================================
 // FElysiumCommands
-// =====================================================================================
 
 FElysiumCommands& FElysiumCommands::Get()
 {
@@ -444,7 +439,7 @@ bool FElysiumCommands::Invoke(FName Name, bool bPressed, const FString& Args)
 		return true;
 	}
 
-	// Unimplemented but declared. Verbose, not Warning: this is most of the inventory today, and the
+	// Unimplemented but declared. Verbose, not Warning: this is most of the inventory, and the
 	// coverage report (`elysium.commands`) is where it is meant to be read, not the log.
 	UE_LOG(LogElysiumCmd, Verbose, TEXT("'%s%s%s' has no implementation (%s)"),
 		Entry->Def.Kind == EElysiumCmdKind::ButtonPair ? (bPressed ? TEXT("+") : TEXT("-")) : TEXT(""),

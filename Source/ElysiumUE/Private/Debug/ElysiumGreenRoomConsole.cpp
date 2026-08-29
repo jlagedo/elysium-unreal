@@ -47,7 +47,7 @@ namespace
 FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner)
 	: Owner(InOwner)
 {
-	// --- the body ---------------------------------------------------------------------------------
+	// The body.
 
 	Register(TEXT("elysium.gr_stand"),
 		TEXT("Stand a body: `elysium.gr_stand malkavian_female_armor_0 katana_idle`. "
@@ -88,7 +88,7 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			}
 		});
 
-	// --- the clip vocabulary ----------------------------------------------------------------------
+	// The clip vocabulary.
 
 	Register(TEXT("elysium.gr_clips"),
 		TEXT("List the standing body's clip labels, optionally filtered: `elysium.gr_clips katana`. "
@@ -133,7 +133,7 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 				Set->Clips.Num(), FMath::Min(Hits.Num(), Cap));
 		});
 
-	// --- layers, grids and aim --------------------------------------------------------------------
+	// Layers, grids and aim.
 
 	Register(TEXT("elysium.gr_layer"),
 		TEXT("Lay an autolayer over the standing body: `elysium.gr_layer glock_aim_layer 1.0`. "
@@ -212,7 +212,7 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 				Run.LabGridAxis(0), Run.LabGridAxis(1));
 		});
 
-	// --- playback ---------------------------------------------------------------------------------
+	// Playback.
 
 	Register(TEXT("elysium.gr_time"),
 		TEXT("Seek the standing clip to an absolute time in seconds: `elysium.gr_time 0.5`."),
@@ -241,7 +241,7 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_speed: %.2fx"), Run.LabView().Speed);
 		});
 
-	// --- the view ---------------------------------------------------------------------------------
+	// The view.
 	//
 	// The one control a screenshot-driven caller cannot do without. A weapon in a hand is a few
 	// centimetres of a body-sized frame, and whether it is held or merely near the hand is a question
@@ -383,7 +383,7 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			}
 		});
 
-	// --- the wielded weapon (CCC10.2) -------------------------------------------------------------
+	// The wielded weapon.
 
 	Register(TEXT("elysium.gr_wield"),
 		TEXT("Put an item's wield model in the standing body's hand: "
@@ -434,7 +434,7 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			}
 		});
 
-	// --- the mode ---------------------------------------------------------------------------------
+	// The mode.
 
 	Register(TEXT("elysium.gr_mode"),
 		TEXT("Switch the lab: `elysium.gr_mode review|drive|arena`."),
@@ -472,7 +472,7 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			UE_LOG(LogElysiumGreenRoomCmd, Display, TEXT("gr_mode: %s"), Name);
 		});
 
-	// --- arena navigation pins ----------------------------------------------------------------------
+	// Arena navigation pins.
 
 	Register(TEXT("elysium.gr_pin"),
 		TEXT("Drop or update a named arena waypoint: `elysium.gr_pin corner [x y z]`. With no "
@@ -563,7 +563,7 @@ FElysiumGreenRoomConsole::FElysiumGreenRoomConsole(UElysiumMapSubsystem* InOwner
 			}
 		});
 
-	// --- the readout ------------------------------------------------------------------------------
+	// The readout.
 
 	Register(TEXT("elysium.gr_status"),
 		TEXT("What the lab is currently doing: mode, body, clip, layers, grid, held weapon and the ")

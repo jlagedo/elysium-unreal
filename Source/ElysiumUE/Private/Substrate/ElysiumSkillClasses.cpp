@@ -33,8 +33,7 @@ void FElysiumSkillEntity::InputResetDifficulty(int32 NewDifficulty)
 float FElysiumSkillEntity::AttemptIntervalSeconds(int32 Rating) const
 {
 	// vampire.dll FUN_1020aea0: (5.0 - rating * 0.25) / m_flSpeedScale. The current player
-	// runtime carries the retail default scale of 1; when speed-scale effects land this denominator
-	// becomes the shared character value rather than a lock-local setting.
+	// runtime carries the retail default scale of 1.
 	return FMath::Max(KINDA_SMALL_NUMBER, 5.0f - FMath::Max(0, Rating) * 0.25f);
 }
 

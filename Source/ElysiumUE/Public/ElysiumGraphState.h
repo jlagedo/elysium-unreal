@@ -4,7 +4,7 @@
 
 #include "ElysiumGraphState.generated.h"
 
-// The body graph's own state vocabulary — the eight names, spelled once (CCC5).
+// The body graph's own state vocabulary — the eight names, spelled once.
 //
 // It lives beside the animation records rather than with the graph's projection rules because the
 // **selection record names the state it resolved to**, and a record that crosses the substrate

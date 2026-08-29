@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "Delegates/Delegate.h"
 
-// The map epoch as a value (runtime-architecture.md S4). One epoch spans one AElysiumMapActor's
+// The map epoch as a value (`docs/architecture/runtime-architecture.md`). One epoch spans one AElysiumMapActor's
 // life: minted when the actor enters play, retired when it leaves. Anything an application-lifetime
 // object holds ON BEHALF OF a map is keyed by it, so the boundary that frees it is a broadcast
 // rather than a hand-maintained list of collaborators.

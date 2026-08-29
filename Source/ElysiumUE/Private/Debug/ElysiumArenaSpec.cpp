@@ -79,14 +79,14 @@ FSpec Build()
 {
 	FSpec S;
 
-	// --- The plate ------------------------------------------------------------------------------
+	// The plate.
 	// Its TOP is at Z = 0, so every feet-anchored point in the room is at zero and a recorded
 	// coordinate reads as a position in the room rather than as a position plus a slab thickness.
 	const float H = RoomHalfExtent;
 	const float Outer = H + WallThickness;
 	S.Solids.Add(Block(TEXT("floor"), -Outer, Outer, -Outer, Outer, -FloorThickness, 0.0f));
 
-	// --- The four walls -------------------------------------------------------------------------
+	// The four walls.
 	// Placed OUTSIDE the interior half-extent, so `RoomHalfExtent` is the usable floor rather than
 	// the distance to a wall's centreline. Named for the axis they face down: +X is north.
 	S.Solids.Add(Block(TEXT("wall_north"),  H, Outer, -Outer, Outer, 0.0f, WallHeight));
@@ -94,11 +94,11 @@ FSpec Build()
 	S.Solids.Add(Block(TEXT("wall_east"),  -H, H,  H, Outer, 0.0f, WallHeight));
 	S.Solids.Add(Block(TEXT("wall_west"),  -H, H, -Outer, -H,  0.0f, WallHeight));
 
-	// --- The cover block ------------------------------------------------------------------------
+	// The cover block.
 	const float B = BlockHalfWidth;
 	S.Solids.Add(Block(TEXT("cover"), -B, B, -B, B, 0.0f, BlockHeight));
 
-	// --- The anchors ----------------------------------------------------------------------------
+	// The anchors.
 	// Four against the block's faces and four in the corners. The face anchors face OUT of the room
 	// with their backs to the solid, which is the posture a body in cover stands in; the corner
 	// anchors face the middle, because a corner has nothing to put a back against that is not
@@ -119,7 +119,7 @@ FSpec Build()
 	S.Anchors.Add(MakeAnchor(TEXT("corner_se"), -C,  C, YawToward(-C,  C, 0.0f, 0.0f), 4, false));
 	S.Anchors.Add(MakeAnchor(TEXT("corner_sw"), -C, -C, YawToward(-C, -C, 0.0f, 0.0f), 4, false));
 
-	// --- The spawn pads -------------------------------------------------------------------------
+	// The spawn pads.
 	// Three at the far half's edges plus the middle, all facing in. `north` is directly across the
 	// room from where the player starts, which is the pad a first spawn wants.
 	const float P = H - PadInset;
@@ -133,7 +133,7 @@ FSpec Build()
 	// already acquired.
 	S.Pads.Add(MakePad(TEXT("behind_cover"), B + FaceAnchorSetback * 2.5f, 0.0f));
 
-	// --- The player's start ---------------------------------------------------------------------
+	// The player's start.
 	// Against the south wall, looking down the long axis at the block. Feet-anchored; `SeatOrigin`
 	// is the one conversion to the pawn's centre and there is no other.
 	S.PlayerFeet = FVector(-(H - PadInset) * U, 0.0f, 0.0f);

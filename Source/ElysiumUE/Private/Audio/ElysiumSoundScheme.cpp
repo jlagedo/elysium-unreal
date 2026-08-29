@@ -1,9 +1,9 @@
-// P6.3 — SoundScheme runtime: the KeyValues scheme parser, the playback manager (ambient bed +
+// SoundScheme runtime: the KeyValues scheme parser, the playback manager (ambient bed +
 // music state machine + polar random-one-shot scheduler), and the `ambient_soundscheme` entity.
-// Reference: audio_pipeline.md §5/§6 + the decompiled CSoundScheme parser (vampire.dll @0x1022a930,
-// $ELYSIUM_WORK_ROOT/research/ghidra/out/aud_scheme_parser.txt) — the field set and every retail default below come from
-// that decompile. The music-stem crossfade is documented (§6); the exact combat-state driver is
-// Python world.SetSafeArea (P9), so until then the state is cvar/Cog-driven (elysium.MusicState).
+// Reference: `docs/vtmb/audio_pipeline.md` §5/§6 + the decompiled CSoundScheme parser (vampire.dll @0x1022a930,
+// `$ELYSIUM_WORK_ROOT/research/ghidra/out/aud_scheme_parser.txt`) — the field set and every retail default below come from
+// that decompile. The music-stem crossfade is documented (§6); the live state is cvar/Cog-driven
+// (`elysium.MusicState`).
 
 #include "Audio/ElysiumSoundScheme.h"
 
@@ -22,7 +22,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumScheme, Log, All);
 
-// --- Tunables (debug/calibration) -----------------------------------------------------------
+// Tunables (debug/calibration).
 static TAutoConsoleVariable<float> CVarMusicCrossfade(
 	TEXT("elysium.MusicCrossfade"), 2.0f,
 	TEXT("SoundScheme music state-change crossfade time in seconds (explore<->combat<->alert)."),
@@ -49,7 +49,7 @@ namespace
 {
 	constexpr float SchemeInchToCm = 2.54f;
 
-	// The Source KeyValues reader lives in ElysiumKeyValues.h (shared with the P4.10 sign
+	// The Source KeyValues reader lives in ElysiumKeyValues.h (shared with the sign
 	// definitions); pull its names into this file's anonymous namespace unchanged.
 	using ElysiumKeyValues::FKvNode;
 	using ElysiumKeyValues::Tokenize;
@@ -70,9 +70,7 @@ namespace
 	}
 }
 
-// ============================================================================================
-// FElysiumSoundScheme::ParseFile
-// ============================================================================================
+// FElysiumSoundScheme::ParseFile.
 
 bool FElysiumSoundScheme::ParseFile(const FString& AbsPath, FElysiumSoundScheme& Out)
 {
@@ -152,9 +150,7 @@ bool FElysiumSoundScheme::ParseFile(const FString& AbsPath, FElysiumSoundScheme&
 	return true;
 }
 
-// ============================================================================================
-// FElysiumSoundSchemeManager
-// ============================================================================================
+// FElysiumSoundSchemeManager.
 
 const FElysiumSoundScheme* FElysiumSoundSchemeManager::LoadScheme(const FString& SchemeRel)
 {
@@ -417,9 +413,7 @@ void FElysiumSoundSchemeManager::StopAll(UElysiumAudioSubsystem* Audio)
 	Active.RandomVoices.Reset();
 }
 
-// ============================================================================================
-// ambient_soundscheme — the scheme anchor entity (FadeIn 205 / FadeOut 179; entity_io.md)
-// ============================================================================================
+// ambient_soundscheme — the scheme anchor entity (FadeIn 205 / FadeOut 179; `docs/vtmb/entity_io.md`).
 
 
 class FElysiumAmbientSoundscheme final : public FElysiumEntity

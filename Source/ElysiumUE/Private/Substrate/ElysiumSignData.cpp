@@ -1,4 +1,4 @@
-// P4.10 — SignData parsing + the CSignUI coordinate model. See ElysiumSignData.h for the
+// SignData parsing + the CSignUI coordinate model. See ElysiumSignData.h for the
 // decompile provenance (client.dll CSignUI; $ELYSIUM_WORK_ROOT/research/ghidra/out/signui_*.txt).
 
 #include "Substrate/ElysiumSignData.h"
@@ -131,9 +131,7 @@ namespace
 	}
 }
 
-// ============================================================================================
-// ElysiumSign::RectToScreen — the CSignUI coordinate model
-// ============================================================================================
+// ElysiumSign::RectToScreen — the CSignUI coordinate model.
 
 void ElysiumSign::RectToScreen(int32 X, int32 Y, int32 W, int32 H, float ScreenW, float ScreenH,
 	bool bCentre, FVector2D& OutPos, FVector2D& OutSize)
@@ -168,9 +166,7 @@ void ElysiumSign::RectToScreen(int32 X, int32 Y, int32 W, int32 H, float ScreenW
 	}
 }
 
-// ============================================================================================
-// FElysiumSignTextBlock::ResolveFont
-// ============================================================================================
+
 
 FString FElysiumSignTextBlock::ResolveFont(int32 ScreenWidth) const
 {
@@ -186,9 +182,7 @@ FString FElysiumSignTextBlock::ResolveFont(int32 ScreenWidth) const
 	return FontDefault.IsEmpty() ? TEXT("Default") : FontDefault;
 }
 
-// ============================================================================================
-// FElysiumSignData
-// ============================================================================================
+
 
 FString FElysiumSignData::ResolvePath(const FString& DefinitionFile)
 {

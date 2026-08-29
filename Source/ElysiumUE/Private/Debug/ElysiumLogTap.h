@@ -3,8 +3,8 @@
 #include "CoreMinimal.h"
 #include "Misc/OutputDevice.h"
 
-// P2.7 — a bounded ring of recent log lines, so a caller that was not watching when something
-// happened can still read it back. Same shape as the entity world's I/O ring buffer
+// A bounded ring of recent log lines, so a caller that was not watching when something happened
+// can still read it back. Same shape as the entity world's I/O ring buffer
 // (`FElysiumRingBufferSink`) and for the same reason: postmortem forensics without having had
 // logging on. Backs the `elysium_log_tail` MCP tool and the output capture around
 // `elysium_console_exec`.
@@ -24,7 +24,6 @@ public:
 	explicit FElysiumLogTap(int32 InCapacity = 2000);
 	virtual ~FElysiumLogTap() override;
 
-	// --- FOutputDevice ---
 	virtual void Serialize(const TCHAR* V, ELogVerbosity::Type Verbosity, const FName& Category) override;
 	virtual bool CanBeUsedOnAnyThread() const override { return true; }
 	virtual bool CanBeUsedOnMultipleThreads() const override { return true; }

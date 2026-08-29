@@ -6,8 +6,8 @@
 
 class UFont;
 
-// The UI design-token layer (roadmap 8.6). One place that owns the palette, the type ramp and
-// the metric scale, so every screen reads the same values instead of re-deriving them.
+// The UI design-token layer. One place that owns the palette, the type ramp and the metric scale,
+// so every screen reads the same values instead of re-deriving them.
 //
 // **The virtual canvas is VtMB's own.** `client.dll` authors its UI in a 1024x768 space and
 // scales it by `screenW/1024` / `screenH/768` (`docs/vtmb/vtmb-ui.md` §2, recovered from
@@ -27,7 +27,6 @@ namespace ElysiumUI
 	// Virtual units -> pixels. Mirrors ElysiumSign::ScaleFor so signs, menu and HUD share one law.
 	inline float ScaleFor(float ScreenH) { return (ScreenH > 0.0f) ? (ScreenH / VirtualH) : 1.0f; }
 
-	// --- Palette -------------------------------------------------------------------------------
 	// Read from the install's own `VampireScheme.res` (the scheme client.dll loads) and confirmed
 	// against reference captures. The chrome is gold; blood red is an accent reserved for the menu
 	// column, the pips and critical states — not the ground.
@@ -59,9 +58,9 @@ namespace ElysiumUI
 		inline const FLinearColor Scrim     = FLinearColor(0.0f, 0.0f, 0.0f, 0.55f);
 	}
 
-	// --- Type ramp (virtual px) ------------------------------------------------------------------
-	// Sizes, not faces: the role/weight picks the face. Tuned against the reference captures rather
-	// than against VtMB's per-resolution `.fnt` tiers, which do not survive vector type.
+	// Type ramp in virtual px. Sizes, not faces: the role/weight picks the face. Tuned against the
+	// reference captures rather than against VtMB's per-resolution `.fnt` tiers, which do not
+	// survive vector type.
 	namespace Type
 	{
 		inline constexpr float Display  = 46.0f;   // the one big statement
@@ -78,7 +77,7 @@ namespace ElysiumUI
 		inline constexpr float TrackBody  = 0.0f;
 	}
 
-	// --- Spacing (virtual px) --------------------------------------------------------------------
+	// Spacing in virtual px.
 	namespace Space
 	{
 		inline constexpr float XS = 4.0f;

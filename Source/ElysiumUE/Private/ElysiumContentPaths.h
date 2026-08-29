@@ -59,10 +59,9 @@ struct FElysiumContentPaths
 		return !Value.IsEmpty() && IFileManager::Get().FileExists(*IncompleteMarker(Domain));
 	}
 
-	// --- Original authored content (/Game/ElysiumAuthored) ---------------------------------------
-	// The one tracked package namespace. Nothing here is generated and nothing here is derived from
-	// the user's install, so a clean or a regeneration must never write to or remove it
-	// (`Content/CLAUDE.md`).
+	// Original authored content under `/Game/ElysiumAuthored`. The one tracked package namespace.
+	// Nothing here is generated and nothing here is derived from the user's install, so a clean or a
+	// regeneration must never write to or remove it (`Content/CLAUDE.md`).
 	static FString AuthoredMount() { return TEXT("/Game/ElysiumAuthored"); }
 	// What every VtMB garment is made of, in Chaos's own terms, typed by
 	// Public/ElysiumClothTuningConfig.h. The authored payload states a garment's shape and its
@@ -74,7 +73,7 @@ struct FElysiumContentPaths
 		return AuthoredMount() / TEXT("Cloth") / Asset + TEXT(".") + Asset;
 	}
 
-	// --- Baked content (pipeline/unreal/bake_map.py) ---------------------------------------------
+	// Baked map look (`pipeline/unreal/bake_map.py`).
 	// The look of a map — world + sky geometry, materials, textures, props, lights, fog — is
 	// offline-baked into real .uasset content under the /ElysiumBaked plugin mount, and the map
 	// IS a real .umap the engine opens. These are package paths (a virtual content root), not
@@ -84,7 +83,7 @@ struct FElysiumContentPaths
 	static FString BakedMapDir(const FString& Map) { return BakedMount() / Map; }
 	// The .umap UElysiumMapSubsystem::Travel opens for this map.
 	static FString BakedLevel(const FString& Map) { return BakedMapDir(Map) / Map; }
-	// --- The shared corpus (pipeline/unreal/bake_map.py -> CorpusBake) -----------------------
+	// Shared corpus (`pipeline/unreal/bake_map.py` CorpusBake).
 	// A texture, a material and a static model belong to the user's install, not to a map:
 	// `materials/metal/metalox` decodes to the same bytes whichever BSP named it, and one doorknob
 	// model is one doorknob however many maps hang it on a door. So each is decoded once and baked
@@ -151,7 +150,7 @@ struct FElysiumContentPaths
 		return BakedMapDir(Map) / TEXT("Particles") / Asset + TEXT(".") + Asset;
 	}
 
-	// --- Baked characters (pipeline/unreal/bake_characters.py) -----------------------------------
+	// Baked characters (`pipeline/unreal/bake_characters.py`).
 	// The cast bakes to the same mount as the maps but is not per-map: a character outlives any
 	// map epoch. `Stem` is the model name the export uses ("smiling_jack"); `Owner` is the stem
 	// that OWNS a clip — the body itself for its own dialogue clips, the bank stem for everything
@@ -161,15 +160,15 @@ struct FElysiumContentPaths
 	// an animated prop or a wielded weapon has. A shared bank is still one UAnimSequence rather
 	// than one per body: banks bake once onto bank skeletons of their own, and each body skeleton
 	// declares those compatible, so the engine remaps a bank clip by bone name at evaluation.
-	// The player animation graph's generated class (CCC5). A local, regenerable package like every
-	// other under `/Game/Elysium`, rebuilt from the tracked graph text by
+	// The player animation graph's generated class. A local, regenerable package like every other
+	// under `/Game/Elysium`, rebuilt from the tracked graph text by
 	// `pipeline/unreal/make_player_anim_bp.py`.
 	static FString PlayerAnimBlueprintClass()
 	{
 		return TEXT("/Game/Elysium/Animation/ABP_ElysiumBiped.ABP_ElysiumBiped_C");
 	}
 
-	// --- Baked animated props (pipeline/unreal/bake_characters.py) -------------------------------
+	// Baked animated props (`pipeline/unreal/bake_characters.py`).
 	// Apart from the cast only in folder and lifetime: a prop owns its own skeleton the same way
 	// a body does, and its stem is the whole address. It plays no shared bank, so nothing is
 	// declared compatible with it.
@@ -196,7 +195,7 @@ struct FElysiumContentPaths
 		return BakedPropPackage(Stem) / Asset + TEXT(".") + Asset;
 	}
 
-	// --- The baked wield corpus (pipeline/unreal/bake_wield.py) ----------------------------------
+	// Baked wield corpus (`pipeline/unreal/bake_wield.py`).
 	// The geometry a drawn weapon puts in a character's hand. Shaped like an animated prop — a
 	// weapon owns a private skeleton and its stem is the whole address — but kept apart because
 	// the corpus and its lifetime are the item definitions', not the cast's.
@@ -364,18 +363,18 @@ struct FElysiumContentPaths
 	static FString MapEnts(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ents")); }
 	static FString MapHulls(const FString& Map) { return MapDir(Map) / (Map + TEXT(".hulls")); }
 	static FString MapDispCol(const FString& Map) { return MapDir(Map) / (Map + TEXT(".dispcol")); }
-	// Decals (7.2): one deferred-decal projector per line (material + centre + normal + s/t axes +
+	// Decals: one deferred-decal projector per line (material + centre + normal + s/t axes +
 	// half-extents, Unreal cm), written by UE_bsp_to_scene.py. Materials ride the shared <map>.mtl.
 	static FString MapDecals(const FString& Map) { return MapDir(Map) / (Map + TEXT(".decals")); }
 	static FString MapRopes(const FString& Map) { return MapDir(Map) / (Map + TEXT(".ropes")); }
 
-	// Audio (P6). WAVs are game-global (shared across maps), so they live in one mirror of
-	// VtMB's `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.
+	// Audio. WAVs are game-global (shared across maps), so they live in one mirror of VtMB's
+	// `sound/` tree, not per-map. Rel is the engine-relative path under sound/ (e.g.
 	// "Environmental/Fire/Fire_Roaring.wav"), matching an ambient_generic `message` value.
 	static FString SoundDir() { return Root() / TEXT("sound"); }
 	static FString SoundFile(const FString& Rel) { return SoundDir() / Rel; }
 
-	// Choreographed scenes and their phoneme sidecars (PL9), mirrored verbatim from the install by
+	// Choreographed scenes and their phoneme sidecars, mirrored verbatim from the install by
 	// pipeline/src/elysium_pipeline/exporters/UE_extract_scenes.py. Both trees mirror VtMB's `sound/` layout with that prefix already
 	// stripped, so a `logic_choreographed_scene`'s SceneFile ("sound/Character/dlg/.../x.vcd") reads
 	// back as scenes/Character/dlg/.../x.vcd. Rel is that stripped path — run a raw keyvalue through
@@ -385,23 +384,23 @@ struct FElysiumContentPaths
 	static FString LipDir() { return Root() / TEXT("lip"); }
 	static FString LipFile(const FString& Rel) { return LipDir() / Rel; }
 
-	// Faceposer's flex-controller weight tables (PL9), mirrored flat from the install's own
+	// Faceposer's flex-controller weight tables, mirrored flat from the install's own
 	// `expressions/` directory by the same exporter. The shipped `.vfe` is the compiled twin of the
 	// readable `.txt`, so only the `.txt` is mirrored and only it is read. Leaf is the file name with
-	// its extension — a scene's `expression` event names the stem in `param`, and 12.5's lipsync
-	// names `<model stem>_phonemes`.
+	// its extension — a scene's `expression` event names the stem in `param`, and lipsync names
+	// `<model stem>_phonemes`.
 	static FString ExpressionsDir() { return Root() / TEXT("expressions"); }
 	static FString ExpressionFile(const FString& Leaf) { return ExpressionsDir() / Leaf; }
 
-	// Scripting (P5). VtMB's level scripts + dialogue are game-global loose plain-text,
-	// mirrored under the export root's scripts/ and dlg/ directories by
+	// Scripting. VtMB's level scripts + dialogue are game-global loose plain-text, mirrored under
+	// the export root's scripts/ and dlg/ directories by
 	// pipeline/src/elysium_pipeline/exporters/UE_extract_scripts.py. A
 	// worldspawn `levelscript` value (e.g. "tutorial") names the hub module, which lives at
-	// scripts/<module>/<module>.py — imported into the embedded CPython VM at map load (9.3a).
+	// scripts/<module>/<module>.py — imported into the embedded CPython VM at map load.
 	static FString ScriptsDir() { return Root() / TEXT("scripts"); }
 	static FString DlgDir() { return Root() / TEXT("dlg"); }
 	static FString ScriptModuleFile(const FString& Module) { return ScriptsDir() / Module / (Module + TEXT(".py")); }
-	// Console config (PL5d / 9.3b). VtMB's `cfg/*.cfg` alias + cvar tables (Valve console syntax),
+	// Console config. VtMB's `cfg/*.cfg` alias + cvar tables (Valve console syntax),
 	// mirrored under the export root's cfg/ directory by
 	// pipeline/src/elysium_pipeline/exporters/UE_extract_cfg.py. The runtime console bridge
 	// (FElysiumConsole) seeds its alias/cvar store from these. `user.cfg` records the source install's
@@ -412,7 +411,7 @@ struct FElysiumContentPaths
 	static FString CfgFile(const FString& File) { return CfgDir() / File; }
 
 	// VtMB's whole RPG/rules layer is Valve-KeyValues text under `vdata/`, mirrored verbatim by
-	// pipeline/src/elysium_pipeline/exporters/UE_extract_vdata.py (PL5b). Per-table consumer map: `docs/vtmb/vdata-catalog.md`.
+	// pipeline/src/elysium_pipeline/exporters/UE_extract_vdata.py. Per-table consumer map: `docs/vtmb/vdata-catalog.md`.
 	static FString VdataDir() { return Root() / TEXT("vdata"); }
 	static FString VdataFile(const FString& Rel) { return VdataDir() / Rel; }
 
@@ -428,7 +427,7 @@ struct FElysiumContentPaths
 	// lowercased on-disk mirror, but the Windows target's file system is case-insensitive.
 	static FString DlgFromDialogname(const FString& DialogName) { return Root() / DialogName; }
 
-	// Signs (P4.10 / PL5c). VtMB's sign+popup panels are game-global `SignData` KeyValues files,
+	// Signs. VtMB's sign+popup panels are game-global `SignData` KeyValues files,
 	// mirrored flat and lowercased under the export root's signs/ directory by
 	// pipeline/src/elysium_pipeline/exporters/UE_extract_signs.py (a `definition_file`
 	// keyvalue's `vdata/Signs/` prefix and authored case are dropped). Their `BackgroundImage`
@@ -438,7 +437,7 @@ struct FElysiumContentPaths
 	static FString SignTexDir() { return SignsDir() / TEXT("tex"); }
 	static FString SignBackgrounds() { return SignsDir() / TEXT("backgrounds.json"); }
 
-	// UI source (roadmap PL8, pipeline/src/elysium_pipeline/exporters/UE_extract_ui.py). The `.res` layouts and both schemes are
+	// UI source (pipeline/src/elysium_pipeline/exporters/UE_extract_ui.py). The `.res` layouts and both schemes are
 	// mirrored as **design intent** and are not executed as layout; what the runtime actually reads
 	// is the authored string table (menu labels are `VMainMenu_BTN_*` tokens — docs/vtmb/vtmb-ui.md §2)
 	// and the decoded art (the title lockup, HUD frames, clan icons). Game-derived, so gitignored
@@ -488,25 +487,25 @@ struct FElysiumContentPaths
 	// with counts (~47 KB, read once); `clips/<stem>.json` is one character's whole resolved
 	// vocabulary (~95 KB), read only for the stems a map actually places — the full
 	// npc_manifest.json is 15.8 MB and exists for the offline probes. The index also carries the
-	// 56 player bodies (PL13), which no map references and are resolved by clan through
+	// 56 player bodies, which no map references and are resolved by clan through
 	// `clandoc000.txt`.
 	static FString NpcIndex() { return NpcDir() / TEXT("npc_index.json"); }
 	static FString NpcClips(const FString& Stem) { return NpcDir() / TEXT("clips") / (Stem + TEXT(".json")); }
 
-	// The facial flex rig beside a rigged NPC's glb (12.3, PL10): the FACS flexdesc names, the 44
+	// The facial flex rig beside a rigged NPC's glb: the FACS flexdesc names, the 44
 	// flex controllers, the 60 RPN flex rules, the amplitude jaw and the per-morph target ramps,
 	// index-aligned with the glb's morph targets. RelPath is `npc_index.json`'s own
 	// `npcs[stem].facial` ("facial/<stem>.json"); a model with no flex rig names none.
 	static FString NpcFacial(const FString& RelPath) { return NpcDir() / RelPath; }
 
-	// The procedural bone rule table beside a driven model's glb (CAP7.1): per driven bone, its
+	// The procedural bone rule table beside a driven model's glb: per driven bone, its
 	// control bone, the axis as a converted direction, and the six-entry pos/quat table the runtime
 	// blends. RelPath is `npc_index.json`'s own `procedural` value — "procedural/<stem>.json", or
 	// "animated_props/procedural/<stem>.json" for a skeletal prop. A model with no `ProcType == 1`
 	// bone names none; 130 of the 185 exported models carry one.
 	static FString NpcProcedural(const FString& RelPath) { return NpcDir() / RelPath; }
 
-	// The blend spaces a model's multi-cell sequences declare (CAP7.3). A VtMB sequence can name a
+	// The blend spaces a model's multi-cell sequences declare. A VtMB sequence can name a
 	// grid of animations rather than one — a 9x1 `move_yaw` locomotion fan, a 3x3 weapon-aim layer —
 	// and the exporter bakes every cell as its own clip beside a sidecar naming the axes, the pose
 	// parameter driving each, and which clip sits in each cell. Without it a grid label resolves to
@@ -528,13 +527,13 @@ struct FElysiumContentPaths
 	static FString NpcGarmentDir() { return NpcDir() / TEXT("garment"); }
 	static FString NpcGarment(const FString& Stem) { return NpcGarmentDir() / (Stem + TEXT(".json")); }
 
-	// The eyeball pair beside a character's glb (12.4): the eye's bone and resting basis, the iris
+	// The eyeball pair beside a character's glb: the eye's bone and resting basis, the iris
 	// scale and texture, and the eyelid flexdescs the renderer's eye pass writes back into the flex
 	// weights. RelPath is `npc_index.json`'s own `npcs[stem].eyes` value ("eyes/<stem>.json").
 	// Named separately from the flex rig because a player body carries eyeballs and no flex rig.
 	static FString NpcEyes(const FString& RelPath) { return NpcDir() / RelPath; }
 
-	// The labelled sky set (debug, sky-ambience RE-A2/B1). Six self-describing face images —
+	// The labelled sky set (debug). Six self-describing face images —
 	// suffix, predicted axis, TOP banner, up arrow, tagged corners, edge neighbours — authored by
 	// research/tooling/probes/sky_probe.py, which also installs them into the *original* game so the two ends of the
 	// orientation chain are checked against one set of faces. Named `<skyname><face>.png`, unlike

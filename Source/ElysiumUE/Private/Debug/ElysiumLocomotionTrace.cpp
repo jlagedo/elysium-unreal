@@ -148,8 +148,8 @@ void FTotals::Write(FElysiumChannelRecorder& Recorder) const
 	// code, which `Count` bounds well under that. So the whole set crosses as a single number the
 	// comparator can diff.
 	//
-	// The `int32` this used to be is what would NOT work: bit 31 is a real code now, so the masked
-	// value exceeds `INT32_MAX` and would land in the manifest negative.
+	// An `int32` is what would NOT work: bit 31 is a real code, so the masked value exceeds
+	// `INT32_MAX` and would land in the manifest negative.
 	static_assert(static_cast<uint32>(EElysiumAnimActivityCode::Count) <= 53,
 		"the activity-code mask no longer fits a double exactly; it can no longer ride one channel");
 	Recorder.SetRun(TEXT("act_codes"), static_cast<double>(CodesSeen));

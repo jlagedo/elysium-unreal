@@ -1,5 +1,5 @@
-// P6.3 — ambient_generic: VtMB's point sound (66 on the tutorial, 1,631 across 95 maps;
-// audio_pipeline.md §7). A plain-C++ FElysiumEntity leaf (R1) that plays a WAV/MP3 at its origin
+// ambient_generic: VtMB's point sound (66 on the tutorial, 1,631 across 95 maps;
+// audio_pipeline.md §7). A plain-C++ FElysiumEntity leaf that plays a WAV/MP3 at its origin
 // through the GI audio subsystem's voice pool, honouring the Source spawnflags (everywhere / start-
 // silent / not-looped) and the I/O input surface the maps wire (PlaySound 903, StopSound 248,
 // Volume 36, FadeIn/FadeOut 2 each — entity_io.md). Registration follows ElysiumStarterClasses.cpp.
@@ -50,9 +50,7 @@ namespace
 	}
 }
 
-// ============================================================================================
-// ambient_generic
-// ============================================================================================
+// --- ambient_generic ---
 
 class FElysiumAmbientGeneric final : public FElysiumEntity
 {
@@ -206,8 +204,8 @@ private:
 	}
 
 	// SourceEntityName parents the sound to a moving entity (§7, 154 uses). Resolve the named entity
-	// and attach to its brush body so the sound tracks it. NPCs have no body yet (P8) → null → the
-	// sound falls back to a world-static play at the def origin, which is acceptable.
+	// and attach to its brush body so the sound tracks it. An NPC has no brush body, so a named
+	// NPC parent returns null and the sound plays world-static at the def origin.
 	USceneComponent* ResolveParentComponent()
 	{
 		if (SourceEntityName.IsEmpty() || !World)
@@ -235,9 +233,7 @@ private:
 	FElysiumAudioVoiceHandle VoiceHandle;
 };
 
-// ============================================================================================
-// Registration
-// ============================================================================================
+// --- Registration ---
 
 static TUniquePtr<FElysiumEntity> MakeAmbientGeneric() { return MakeUnique<FElysiumAmbientGeneric>(); }
 

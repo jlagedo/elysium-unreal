@@ -27,10 +27,10 @@ inline FVector ElysiumParseVec3(const FString& S)
 
 // An input thunk: applies one named input to an entity. A captureless registration lambda
 // converts to this pointer. The base inputs call FElysiumEntity members; leaf classes
-// (P1.6+) register their own.
+// register their own.
 using FElysiumInputThunk = void(*)(FElysiumEntity& Self, const FElysiumInputArgs& Args);
 
-// R2 — what a registered field is *for*. VtMB's datamap flags carry the same two bits we need:
+// What a registered field is *for*. VtMB's datamap flags carry the same two bits we need:
 // 0x8 (FTYPEDESC_KEY — writable from a keyvalue/Python) and 0x2 (FTYPEDESC_SAVE — walked by the
 // save/restore pass). Persistence is the field table's fifth consumer, beside I/O, the Python
 // datamap walk, keyvalue application and the inspector (`docs/architecture/save-architecture.md` §4), so it is a
@@ -49,11 +49,11 @@ ENUM_CLASS_FLAGS(EElysiumField)
 // generalised from "zero" to "what the rebuild would produce").
 inline constexpr EElysiumField ElysiumFieldDefault = EElysiumField::Key | EElysiumField::Save;
 
-// R2 — one typed accessor over a live entity field. Get/Set marshal through the variant;
+// One typed accessor over a live entity field. Get/Set marshal through the variant;
 // `bKeyable` mirrors the VtMB datamap flags bit 0x8 (writable from a keyvalue/Python). The
-// spawn pass applies map keyvalues regardless; runtime writes (Python/I/O, P1.4+) honour
+// spawn pass applies map keyvalues regardless; runtime writes (Python/I/O) honour
 // bKeyable. `bSave` is bit 0x2 — the save walk's enumeration. `Type` is the marshalling
-// category, surfaced by the P2 inspector.
+// category, surfaced by the inspector.
 struct FElysiumFieldAccessor
 {
 	EElysiumVariantType Type = EElysiumVariantType::Void;
@@ -70,10 +70,10 @@ struct FElysiumFieldAccessor
 };
 
 // Builds one live entity of a class. The base/inert case returns a plain FElysiumEntity;
-// leaf classes return their own subclass (P1.6+).
+// leaf classes return their own subclass.
 using FElysiumEntityFactory = TUniquePtr<FElysiumEntity>(*)();
 
-// R2 — the per-classname descriptor: factory, base-class link, and the input + field tables.
+// The per-classname descriptor: factory, base-class link, and the input + field tables.
 // The tables hold only this class's own rows; the registry walks the base chain at lookup
 // time (derived shadows base), so editing the base reaches every subclass with no flatten.
 // Keys are FName, so lookup folds case (entity_io.md: fold input-name case).
@@ -93,7 +93,7 @@ struct FElysiumClassDesc
 	TMap<FName, FElysiumInputThunk> Inputs;
 	TMap<FName, FElysiumFieldAccessor> Fields;
 
-	// --- Registration helpers (called inside a class's Build callback) -----------------
+	// --- Registration helpers (called inside a class's Build callback) ---
 	FElysiumClassDesc& Input(FName Name, FElysiumInputThunk Thunk)
 	{
 		Inputs.Add(Name, Thunk);
@@ -150,7 +150,7 @@ struct FElysiumClassDesc
 	}
 };
 
-// R2 — the module-static class registry. Descriptors are registered once at module load by
+// The module-static class registry. Descriptors are registered once at module load by
 // FElysiumClassRegistrar statics; lookups (case-folded, base-chain) drive I/O dispatch,
 // Python attribute get/set, spawn keyvalue application, save enumeration, and the inspector.
 // There is no second dispatch mechanism anywhere.

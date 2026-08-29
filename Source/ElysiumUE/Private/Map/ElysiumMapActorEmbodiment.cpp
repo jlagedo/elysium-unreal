@@ -32,11 +32,9 @@ float AElysiumMapActor::BodyScaleFor(const FElysiumEntityDef& Def) const
 	return Def.bSky ? SkyDef.Scale : 1.f;
 }
 
-// ============================================================================================
-// The world services (11.2) — the substrate's engine side. Everything here is a forward: the
+// The world services — the substrate's engine side. Everything here is a forward: the
 // body factory, the player's pawn, the GI-scoped audio subsystem, this map's scheme manager, the
 // map subsystem. Nothing under FElysiumEntityWorld knows any of those exist.
-// ============================================================================================
 
 USkeletalMeshComponent* AElysiumMapActor::BuildNpcVisual(const FString& Stem, const FVector& Location,
 	const FRotator& Rotation, float UniformScale, const FString& Disposition, int32 IdleVariant)

@@ -37,7 +37,7 @@ struct FAnimNode_ElysiumHairDynamics : public FAnimNode_AnimDynamics
 	void Apply(FComponentSpacePoseContext& Output);
 };
 
-// VtMB's one composition stage as an Unreal skeletal control (roadmap CAP7.2).
+// VtMB's one composition stage as an Unreal skeletal control.
 //
 // It derives `FAnimNode_SkeletalControlBase` and runs in the slot a post-process Anim Blueprint
 // occupies — after the graph has blended locals, before skinning — which is retail's own order.

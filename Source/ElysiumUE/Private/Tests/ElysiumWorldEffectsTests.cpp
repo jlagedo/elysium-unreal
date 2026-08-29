@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -354,7 +354,7 @@ bool FElysiumLightRigTest::RunTest(const FString&)
 	// The map-load contract restores global calibration first, then the complete override by the
 	// stable sidecar index. `LightEdits` resolves under the export root, so the survey is written
 	// beneath a scratch one: a Substrate test must not create a directory inside the user's real
-	// corpus, and an aborted run used to leave one behind.
+	// corpus, and the scratch root removes the tree on the way out.
 	const FElysiumScratchContentRoot Scratch(TEXT("LightRig"));
 	const FString EditPath = FElysiumContentPaths::LightEdits(FPaths::GetBaseFilename(LightsPath));
 	if (!TestTrue(TEXT("the light survey resolves under the scratch content root"),
@@ -776,7 +776,7 @@ bool FElysiumEnvSpriteNoOpTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// Gaze — the selection cascade, the cone gate, the scripted inputs and the integrator (12.4)
+// Gaze — the selection cascade, the cone gate, the scripted inputs and the integrator.
 // =====================================================================================
 //
 // Every arm of this is a plain function of positions and time, which is the point: the half that
@@ -1328,7 +1328,7 @@ bool FElysiumBlendGridAxisTest::RunTest(const FString&)
 	// Case-insensitive, the same as the grid and binding lookups beside it.
 	TestNotNull(TEXT("timelines resolve case-insensitively"), Timeline.FindEvents(TEXT("WALK")));
 
-	// --- The speed fan (CCC7): the same grid read as per-direction speed rather than as clips ------
+	// The speed fan: the same grid read as per-direction speed rather than as clips.
 	// `MakeYawTable`'s fan authors motion on cell 4 alone, which is the hole case by construction: a
 	// body that walked at 136.7 cm/s forward and at nothing in every other direction would stand
 	// still the moment it strafed.

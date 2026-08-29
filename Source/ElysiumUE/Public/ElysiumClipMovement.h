@@ -168,9 +168,9 @@ namespace ElysiumClipMovement
 	// divergence is that a hard landing locks the body to its animation while still permitting a
 	// jump.
 	//
-	// **On the melee rows the two answers are identical today**, because those rows are all this
-	// rung implements; the split is structural so the landing, knockback and vomit families can be
-	// added without inheriting a jump refusal retail does not have.
+	// **On the melee rows the two answers are identical**, because those are the implemented
+	// families; the split is structural so the landing, knockback and vomit families do not inherit
+	// a jump refusal retail does not have.
 	bool IsMovementLocked(const FElysiumIdealActivityState& State);
 
 	// Whether an unfinished melee swing REFUSES this reselection — the second half of the same
@@ -252,7 +252,7 @@ struct FElysiumAnimMovementLock
 	bool bActive = false;
 	// `vt+0x670` — whether the same frame also refuses a jump press. It is the narrower arm: retail
 	// permits a jump out of `ACT_LAND_HARD` while still driving the body from that clip. The melee
-	// rows this rung implements set both together, so the two agree on every frame today.
+	// rows this implements set both together, so the two agree on every melee frame.
 	bool bRefusesJump = false;
 	// `m_flCycle` as of the push.
 	float Cycle = 0.0f;

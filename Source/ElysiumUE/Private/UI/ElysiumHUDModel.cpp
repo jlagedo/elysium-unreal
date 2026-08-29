@@ -85,7 +85,7 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 	}
 	Fade = View.Fade;
 
-	// Disciplines have no production owner yet. Invalid is the contract, not a zero-valued fake
+	// Disciplines have no production owner. Invalid is the contract, not a zero-valued fake
 	// item. The preview branch below is compiled in every config so this value type remains
 	// deterministic in tests, but only the non-Shipping subsystem exposes a way to select it.
 	Equipment = FElysiumHUDEquipmentView();
@@ -93,7 +93,7 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 	Discipline = FElysiumHUDDisciplineView();
 	Selector = FElysiumHUDSelectorView();
 
-	// The stealth readout. Only the stance is owned today; each half carries its own validity, so
+	// The stealth readout. Only the stance is owned; each half carries its own validity, so
 	// the gauge renders as unmeasured rather than as a confident zero.
 	Stealth = FElysiumHUDStealthView();
 	Stealth.bSneaking = View.Stealth.bSneaking;
@@ -126,9 +126,10 @@ void UElysiumHUDModel::Apply(const FElysiumViewState& View, EElysiumHUDPreview P
 		Humanity = 6;
 		Masquerade = 1;
 
-		// The stealth cluster's preview stands in for the system PP6 owns. It carries a MEASURED
-		// gauge and an observer on purpose: the unmeasured state is what production already shows,
-		// so the fixture is the only way to see the readout the finished system will draw.
+		// The stealth cluster's preview stands in for concealment and observer owners that have not
+		// committed. It carries a MEASURED gauge and an observer on purpose: the unmeasured state
+		// is what production already shows, so the fixture is the only way to see the readout those
+		// owners will draw.
 		if (Preview == EElysiumHUDPreview::Sneak)
 		{
 			Stealth.bSneaking = true;
@@ -271,7 +272,7 @@ void UElysiumHUDModel::ProjectEquipment(const FElysiumEquipmentView& View)
 		? EElysiumHUDSelector::Weapons : EElysiumHUDSelector::Inventory;
 	Selector.Heading = FText::FromString(ElysiumInvSectionName(View.Section));
 	// Barebones cycling shows the three-item peek on both devices: the full list is the
-	// hold-to-open selector's, and that is not built yet.
+	// hold-to-open selector's.
 	Selector.bBriefMode = true;
 	Selector.Alpha = View.PeekAlpha;
 	Selector.SelectedIndex = View.SelectedIndex;

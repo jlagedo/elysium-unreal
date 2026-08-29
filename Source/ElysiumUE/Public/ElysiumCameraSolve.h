@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// The camera's rule set (roadmap 11.7, `docs/vtmb/camera-view-modes.md`).
+// The camera's rule set (`docs/vtmb/camera-view-modes.md`).
 //
 // VtMB ships **one** player camera with a **blend weight**, not two cameras: `togglecamera` flips a
 // bool, a per-frame driver ramps a 0..1 weight, and every third-person effect — the boom offset, the
@@ -71,16 +71,14 @@ struct FElysiumFeedCameraPose
 	FRotator Rotation = FRotator::ZeroRotator;
 };
 
-// --------------------------------------------------------------------------------------------
 // The four weights
-// --------------------------------------------------------------------------------------------
 
 // `CInput`'s camera block (`docs/vtmb/camera-view-modes.md` §2). Four weights and three latches; there is no
 // state machine and no transition object, which is exactly why reversing mid-blend resumes from
 // where it is instead of restarting.
 struct FElysiumCameraWeights
 {
-	// --- The latches (CInput +0xf0 / +0xf8 / +0xf9) -----------------------------------------
+	// The latches (CInput +0xf0 / +0xf8 / +0xf9).
 	// The user's own toggle. `togglecamera`, `thirdperson` and `firstperson` all write this.
 	bool bUserThird = false;
 	// Weapon-class arbitration forced third person (class 0x10), and the feed camera's own hold.
@@ -91,7 +89,7 @@ struct FElysiumCameraWeights
 	// below; the other two producers still share only this weight channel.
 	bool bFeed = false;
 
-	// --- The weights (CInput +0xfc / +0x100 / +0x108 / +0x138) ------------------------------
+	// The weights (CInput +0xfc / +0x100 / +0x108 / +0x138).
 	// The third-person blend, 0..1. The only one this struct ramps on its own.
 	float Third = 0.0f;
 	// The scripted-camera weight: dialogue and cutscene shots. Written from the shot stack, whose
@@ -106,7 +104,7 @@ struct FElysiumCameraWeights
 	//
 	// `TimeScale` is VtMB's `m_flTimeScale` (player +0x1078), so a bullet-time frame blends slower
 	// rather than running on wall-clock. In the live game the engine has **already** scaled the tick
-	// delta by the world's dilation by the time this is reached — the same property 11.1's clock
+	// delta by the world's dilation by the time this is reached — the same property the game clock
 	// relies on — so the component passes 1.0 and the parameter exists for the driver's own test.
 	void Advance(float DeltaSeconds, float TimeScale = 1.0f);
 
@@ -127,9 +125,7 @@ struct FElysiumCameraWeights
 	void Reset() { *this = FElysiumCameraWeights(); }
 };
 
-// --------------------------------------------------------------------------------------------
 // The draw policy
-// --------------------------------------------------------------------------------------------
 
 // Which crosshair path the frame is on (`docs/vtmb/camera-view-modes.md` §5, `0x1009b9e0`). The mode
 // toggle does not hide the HUD; it selects the other path.
@@ -182,9 +178,7 @@ struct FElysiumCameraDrawPolicy
 	bool bShowHud = true;
 };
 
-// --------------------------------------------------------------------------------------------
 // The scripted-shot channel
-// --------------------------------------------------------------------------------------------
 
 // One scripted shot, as **values**. `SetCamera` (115 script calls, keyed to `vdata/camerashots/`),
 // `camera_keyframe`, the conversation camera and the feed camera all push one of these, which is
@@ -230,7 +224,7 @@ struct FElysiumCameraShot
 };
 
 // The channel. Push/pop is **handle-based, not LIFO** — a conversation ends behind a cutscene that
-// is still running, exactly like the input-scope stack (11.5) — so a pop removes a shot from
+// is still running, exactly like the input-scope stack — so a pop removes a shot from
 // wherever it sits and the top re-resolves. Ids are never reused, so a stale or doubled pop is a
 // no-op.
 class FElysiumCameraShotStack
@@ -279,9 +273,7 @@ private:
 	int32 NextId = 1;
 };
 
-// --------------------------------------------------------------------------------------------
 // The cvar surface
-// --------------------------------------------------------------------------------------------
 
 // VtMB's camera cvars, reproduced 1:1 by name and default (`docs/vtmb/camera-view-modes.md` §1). They are
 // **declared into the VtMB console store**, not registered as `elysium.*` engine cvars, so a user's
@@ -309,7 +301,7 @@ struct FElysiumCameraCvars
 	bool bCollide = true;                         // cam_collide 1
 	float TraceRadius = 9.0f * ElysiumCam::U;     // cam_trace_radius 9
 
-	// The player-model fade band (used once a player mesh exists — 8.11).
+	// The player-model fade band.
 	float FadeStart = 32.0f * ElysiumCam::U;      // cam_fadestart 32
 	float FadeEnd = 18.0f * ElysiumCam::U;        // cam_fadeend 18
 
@@ -359,7 +351,7 @@ namespace ElysiumCam
 	float SolveModelAlpha(const FVector& SolvedOffset, const FElysiumCameraWeights& Weights,
 		const FElysiumCameraCvars& Cvars);
 
-	// --- Weapon-class arbitration (`docs/vtmb/camera-view-modes.md` §2) -------------------------
+	// Weapon-class arbitration (`docs/vtmb/camera-view-modes.md` §2).
 	// The authored `camera_class` bits, from the inlined case-**sensitive** `memcmp` ladder in the
 	// item-record vdata parser (`client.dll` 0x101a5394-0x101a5438, byte-identical in `vampire.dll`).
 	namespace CameraClass

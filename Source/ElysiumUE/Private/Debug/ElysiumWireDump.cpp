@@ -159,7 +159,7 @@ namespace ElysiumWireDump
 	}
 }
 
-// --- The verb ---------------------------------------------------------------------------------
+// The verb.
 // `elysium.wires` is the acceptance instrument's read-out: it dumps every authored wire in the live
 // map with what that wire did, and prints the one line that says whether the map's event surface is
 // working. `clear` restarts the measurement without reloading, so one scene or one beat can be

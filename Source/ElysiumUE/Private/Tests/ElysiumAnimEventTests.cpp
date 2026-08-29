@@ -370,9 +370,7 @@ namespace
 	}
 }
 
-// =====================================================================================
-// The pure rule: which records an interval contains
-// =====================================================================================
+// The pure rule: which records an interval contains.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimEventWindowTest,
 	"Elysium.Substrate.AnimEventWindow", GElysiumTestFlags)
@@ -738,9 +736,7 @@ bool FElysiumAnimEventWindowTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The chain: the world pass, the handler hop, and the census
-// =====================================================================================
+// The chain: the world pass, the handler hop, and the census.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumAnimEventDispatchTest,
 	"Elysium.Substrate.AnimEventDispatch", GElysiumTestFlags)
@@ -934,9 +930,7 @@ bool FElysiumAnimEventDispatchTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The one-shot visibility contract (LIFE5 rider)
-// =====================================================================================
+// The one-shot visibility contract.
 
 // A SIBLING of `AnimEventDispatch`, never a child of it: the automation tree treats a name that is
 // also a prefix as a group, and the leaf under it stops being discoverable.
@@ -995,9 +989,7 @@ bool FElysiumOneShotVisibilityTest::RunTest(const FString&)
 }
 
 
-// =====================================================================================
-// The carrier, end to end (LIFE5 slice 3)
-// =====================================================================================
+// The carrier, end to end.
 
 // A real baked clip, armed on a real animation host, walked by the real world pass.
 //

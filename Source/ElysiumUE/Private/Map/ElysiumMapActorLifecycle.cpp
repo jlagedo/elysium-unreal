@@ -137,7 +137,7 @@ EElysiumMapReadinessResult FElysiumMapRuntimePrerequisites::Evaluate(
 void AElysiumMapActor::BeginPlay()
 {
 	Super::BeginPlay();
-	// Open this map's epoch (S4). The subsystem mints it and tells every application-lifetime
+	// Open this map's epoch. The subsystem mints it and tells every application-lifetime
 	// subscriber; a bare world with no subsystem leaves it 0, which matches no owner and retires
 	// nothing.
 	if (UElysiumMapSubsystem* Maps = GetMapSubsystem())
@@ -148,7 +148,7 @@ void AElysiumMapActor::BeginPlay()
 	RuntimeWaitStartSeconds = FPlatformTime::Seconds();
 
 	// Engine pause and time dilation are per-world; the clock is not. Re-stamp them onto this
-	// world so a hold or a time scale set before travel survives the map change (S1).
+	// world so a hold or a time scale set before travel survives the map change.
 	if (const UGameInstance* GI = GetGameInstance())
 	{
 		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
@@ -253,14 +253,14 @@ void AElysiumMapActor::LoadMap()
 	LoadedMap = MapName;
 	Bodies->SetMap(MapName);
 
-	// B7 — the 3D-skybox miniature's placement transform (`<map>.sky`), read first because three
+	// The 3D-skybox miniature's placement transform (`<map>.sky`), read first because three
 	// later steps need it: the light rig scales a miniature source's reach by it, the `.ents`
 	// parser carries sky-scope entities through it, and a miniature body takes its mesh scale
 	// from it. The identity (scale 1) on the 65 maps with no `sky_camera`.
 	SkyDef = FElysiumSkyDef();
 	FElysiumSkyDef::Parse(FElysiumContentPaths::MapSky(MapName), SkyDef);
 
-	// P1.7 — label the map actor and drop it in an Elysium Outliner folder, so the PIE World
+	// Label the map actor and drop it in an Elysium Outliner folder, so the PIE World
 	// Outliner reads as a live scene browser (debug-tooling.md Layer 0).
 #if WITH_EDITOR
 	SetActorLabel(FString::Printf(TEXT("Map:%s"), *MapName));
@@ -272,8 +272,8 @@ void AElysiumMapActor::LoadMap()
 	const int32 Adopted = Visuals->AdoptBakedLevel(MapName, SkyDef);
 	Phase(TEXT("Adopt baked level"));
 
-	// 8.6 — a menu backdrop builds the map in full, entity substrate included: the NPCs standing and
-	// idling in frame *are* entities, so a look-only build has no one in it (owner call, see
+	// A menu backdrop builds the map in full, entity substrate included: the NPCs standing and
+	// idling in frame *are* entities, so a look-only build has no one in it (owner call).
 	// What a backdrop skips is only the player's placement — it seats no pawn.
 	UElysiumMapSubsystem* MapSubsystem =
 		GetGameInstance() ? GetGameInstance()->GetSubsystem<UElysiumMapSubsystem>() : nullptr;
@@ -310,8 +310,8 @@ void AElysiumMapActor::LoadMap()
 		UE_LOG(LogElysium, Log, TEXT("menu backdrop '%s': full build, no player placement"), *MapName);
 	}
 
-	// Track-B entity substrate (P1.4): parse `.ents`, build the live world, run the spawn pass.
-	// Map-load ignition (OnMapLoad) is the logic_auto class's own first-think (P1.6), not a
+	// Track-B entity substrate: parse `.ents`, build the live world, run the spawn pass.
+	// Map-load ignition (OnMapLoad) is the logic_auto class's own first-think, not a
 	// separate pass. The world ticks from AElysiumMapActor::Tick.
 	if (UGameInstance* GI = GetGameInstance())
 	{
@@ -323,20 +323,20 @@ void AElysiumMapActor::LoadMap()
 			{
 				EntityCount = EntDefs.Num();
 
-				// P9 9.3 — import this map's `worldspawn.levelscript` module before anything can
+				// Import this map's `worldspawn.levelscript` module before anything can
 				// evaluate against it. VtMB's own load order: the level script's top-level code
 				// (constants like cCelerity, `from vamputil import *`, the On* defs) runs first,
 				// then entities spawn and fire their field-6 payloads into that namespace.
 				GameState->LoadLevelScript(EntDefs.LevelScriptModule());
 
 				// The scheme manager must exist before the spawn pass: a start_enabled
-				// ambient_soundscheme fades its scheme in from its own Spawn() (P6.3), and it
+				// ambient_soundscheme fades its scheme in from its own Spawn(), and it
 				// reaches it through this actor's IElysiumAudio.
 				SchemeManager = MakePimpl<FElysiumSoundSchemeManager>();
 				SchemeManager->SetMapEpoch(MapEpoch);
 
-				// 11.2 — hand the substrate its outbound seam. This actor is three of the four
-				// services; the fourth is the world-scoped presentation subsystem (11.8), which is
+				// Hand the substrate its outbound seam. This actor is three of the four
+				// services; the fourth is the world-scoped presentation subsystem, which is
 				// null only where there is no publisher at all (an editor preview world, a
 				// Substrate-tier world with no engine behind it).
 				FElysiumWorldServices Services;
@@ -352,7 +352,7 @@ void AElysiumMapActor::LoadMap()
 				EntityWorld->Load(MoveTemp(EntDefs));
 				BrushBodyCount = EntityWorld->NumBrushBodies();
 
-				// 11.4 (S3) — the player is an entity, created here because the map is where a
+				// The player is an entity, created here because the map is where a
 				// player exists at all: a backdrop seats no pawn, so it gets no player entity and
 				// everything that looks for one handles its absence. Created after the spawn pass
 				// and before the first tick, so `!player` resolves for the map's own logic_auto
@@ -361,7 +361,7 @@ void AElysiumMapActor::LoadMap()
 				{
 					EntityWorld->SpawnPlayer();
 
-					// 11.9 — if the run has been here before (this session, or a loaded save), the
+					// If the run has been here before (this session, or a loaded save), the
 					// map is not new: apply the frozen snapshot over the freshly-built world
 					// (`docs/architecture/save-architecture.md` §5). After SpawnPlayer, so the player exists for the
 					// records that reference it, and before the first Tick, so nothing has run yet.
@@ -389,7 +389,7 @@ void AElysiumMapActor::LoadMap()
 		}
 	}
 
-	// P4.6 — a landmark transition places the player against the destination info_landmark instead of
+	// A landmark transition places the player against the destination info_landmark instead of
 	// info_player_start. Runs after the entity world is built (the landmark is one of its entities),
 	// and not at all on a backdrop, which has no entity world and seats no player.
 	if (!bMenuBackdrop)
@@ -518,7 +518,7 @@ void AElysiumMapActor::ResolveRestorePlacement()
 		return;
 	}
 
-	// 11.9 — a loaded save carries the pose the player was actually standing in, so it outranks both
+	// A loaded save carries the pose the player was actually standing in, so it outranks both
 	// info_player_start and a landmark offset. It is already a pawn-space (capsule-centre) location:
 	// the save read it off the body, so it goes back verbatim with no lift.
 	FVector Origin; float Yaw;
@@ -562,7 +562,7 @@ void AElysiumMapActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		}
 	}
 
-	// Close this map's epoch (S4). Every application-lifetime object holding state on this map's
+	// Close this map's epoch. Every application-lifetime object holding state on this map's
 	// behalf — voices, camera requests, the character stage's actors, debug NPC bodies, the level
 	// script's path entry — frees it from this one broadcast. It happens here, and not in this
 	// actor's destructor, because the world is still standing: a subscriber may destroy actors and

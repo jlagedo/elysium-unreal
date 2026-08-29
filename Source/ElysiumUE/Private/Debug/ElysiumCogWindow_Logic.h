@@ -7,12 +7,12 @@
 #include "CoreMinimal.h"
 #include "Debug/ElysiumCogWindow.h"
 
-// P4.5 logic/state window: an at-a-glance board of the tutorial-logic entities the P4.5 pass added
-// — math_counter values, logic_timer state, logic_case selection, env_fade, func_brush solidity,
-// point_teleport, and the trigger family — each with its live GetDebugState, an Inspect button that
-// hands the row to the Entity Inspector, and a quick-fire button for its primary input. Also shows
-// the world's single env_fade screen-fade state (what AElysiumHUD is drawing this frame). Reads the
-// plain-C++ substrate directly (FElysiumCogWindow); compiled out of Shipping.
+// At-a-glance board of the tutorial-logic entities — math_counter values, logic_timer state,
+// logic_case selection, env_fade, func_brush solidity, point_teleport, and the trigger family —
+// each with its live GetDebugState, an Inspect button that hands the row to the Entity Inspector,
+// and a quick-fire button for its primary input. Also shows the world's single env_fade
+// screen-fade state (what AElysiumHUD is drawing this frame). Reads the plain-C++ substrate
+// directly (FElysiumCogWindow); compiled out of Shipping.
 class FElysiumCogWindow_Logic : public FElysiumCogWindow
 {
 	typedef FElysiumCogWindow Super;

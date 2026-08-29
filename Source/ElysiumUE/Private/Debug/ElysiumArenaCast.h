@@ -25,8 +25,6 @@ class UElysiumGameStateSubsystem;
 
 namespace ElysiumArenaCast
 {
-	// --- The catalogs a picker draws from ---------------------------------------------------------
-
 	// Every character body the `/ElysiumBaked` mount actually carries. A stem the export has not
 	// covered is excluded rather than offered and refused: `ElysiumNpcVisual::LoadMesh` fails by
 	// name for one, so a body that cannot stand should not be in the list.
@@ -56,7 +54,7 @@ namespace ElysiumArenaCast
 	// prefix is a filename convention and nothing in the game reads it as a type.
 	TArray<FItemOption> WeaponCatalog(UElysiumGameStateSubsystem* GameState);
 
-	// --- Standing a character up ------------------------------------------------------------------
+
 
 	struct FSpawnRequest
 	{
@@ -118,7 +116,7 @@ namespace ElysiumArenaCast
 	// The prefix above, so a panel can label a row as arena-owned rather than re-deriving it.
 	const TCHAR* GeneratedNamePrefix();
 
-	// --- Seeding the player character ---------------------------------------------------------------
+
 
 	// The 2..8 clan encoding, as (id, name) pairs, for a picker. Only the seven playable clans:
 	// every one of them resolves a `Player_<name>` template, and a clan that does not is not a
@@ -154,7 +152,7 @@ namespace ElysiumArenaCast
 	bool SeedPlayerCharacter(UElysiumGameStateSubsystem* GameState, int32 Clan, bool bMale,
 		FString& OutBodyStem, FString& OutError);
 
-	// --- Outfitting the player --------------------------------------------------------------------
+
 
 	struct FArmResult
 	{

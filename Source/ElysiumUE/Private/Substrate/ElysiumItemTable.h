@@ -4,9 +4,7 @@
 
 #include "ElysiumInventorySections.h"
 
-// ================================================================================================
-// 15. vdata/items/*.txt — the item definitions
-// ================================================================================================
+// `vdata/items/*.txt` — the item definitions.
 //
 // The one authority on item POLICY (`docs/vtmb/inventory.md` §4). A filename prefix is a
 // convention and not a type system, so nothing anywhere reads `item_w_`/`item_k_` to decide
@@ -148,7 +146,7 @@ struct FElysiumItemDef
 	int32 BucketPosition = 0;           // `bucket_position`
 
 	int32 Worth = 0;                    // `item_worth`
-	int32 PlayerSell = 0;               // `player_sell` — the vendor half is 9.10's
+	int32 PlayerSell = 0;               // `player_sell` — the vendor half is the economy slice
 	int32 Weight = 0;                   // `weight`
 	int32 ItemFlags = 0;                // `item_flags`
 

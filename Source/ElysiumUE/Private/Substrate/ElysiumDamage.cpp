@@ -40,9 +40,7 @@ FString FElysiumDmg::Describe() const
 		RolledSuccesses, SoakSuccesses, Remainder);
 }
 
-// ================================================================================================
-// The rulebook halves
-// ================================================================================================
+// --- The rulebook halves ---
 
 FElysiumDamageContext FElysiumDamageContext::FromCharacter(const FElysiumCombatCharacter& Char)
 {
@@ -56,7 +54,7 @@ FElysiumDamageContext FElysiumDamageContext::FromCharacter(const FElysiumCombatC
 	Context.Feats = &Rulebook->Feats();
 	Context.DiceTables = &Rulebook->Dice();
 
-	// K9 — the two difficulties are `rules.txt` values, so they are read, never retyped. An absent
+	// The two difficulties are `rules.txt` values, so they are read, never retyped. An absent
 	// block leaves them at INDEX_NONE and the soak roll is skipped with a warning.
 	const FElysiumRules& Rules = Rulebook->Rules();
 	static const TCHAR* DamageBlock = TEXT("Damage_Info");
@@ -125,9 +123,7 @@ namespace
 	}
 }
 
-// ================================================================================================
-// The authored `Dmg` grammar
-// ================================================================================================
+// --- The authored `Dmg` grammar ---
 
 namespace ElysiumDamage
 {
@@ -151,7 +147,7 @@ namespace ElysiumDamage
 			{ TEXT("DMG_FAITH"),          DmgFaith },
 			// `DMG_FIST` is not an engine damage flag. An unarmed attack parses it straight to
 			// `DMG_CLUB` — the same bit a baton carries — which is why the fists record authors a
-			// spelling the bit table never held (`combat-and-damage.md` § RE40 -> DMG_FIST Alias).
+			// spelling the bit table never held (`combat-and-damage.md` → DMG_FIST Alias).
 			{ TEXT("DMG_FIST"),           DmgClub },
 		};
 
@@ -424,8 +420,8 @@ namespace ElysiumDamage
 
 		// 9. OPEN JOIN — the template damage filters and descriptor word 15.
 		//    The victim's authored `DamageFilter*` values are accumulated here because the data
-		//    supports it, and are deliberately NOT multiplied into the result. RE40 closed the other
-		//    half of step 9 — the special modifiers and immunities are `ApplySpecialDamageModifier`
+		//    supports it, and are deliberately NOT multiplied into the result. The recovered body
+		//    closed the other half of step 9 — the special modifiers and immunities are `ApplySpecialDamageModifier`
 		//    matching weapon/damage ids against a 224-entry table to raise condition flags and
 		//    reactive audio, which is a reaction path rather than a scale on the number — and left
 		//    the accumulator's own commit point unrecovered. A guessed multiply would silently

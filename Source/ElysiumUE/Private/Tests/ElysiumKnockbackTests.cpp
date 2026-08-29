@@ -1,4 +1,4 @@
-// Content-free Substrate automation: the GROUNDED knockback family (LIFE5) — who is eligible for
+// Content-free Substrate automation: the GROUNDED knockback family — who is eligible for
 // one, the direction bands retail cuts, the yaw it snaps the victim to, the cell that plays, and
 // what the whole path spends off the Reaction stream (nothing).
 //
@@ -127,7 +127,7 @@ namespace
 		return Record;
 	}
 
-	// The `NORMAL`/`HIGH` set, which is what the retired stand-in used to answer for every direction.
+	// The `NORMAL`/`HIGH` set, which a stand-in answers for every direction when a record names no other family.
 	const FElysiumSwingRecord GNormalHighRecord = MakeKnockbackRecord(
 		TEXT("ACT_KNOCKBACK_NORMAL_HIGH_LEFT"), TEXT("ACT_KNOCKBACK_NORMAL_HIGH_FORWARD"),
 		TEXT("ACT_KNOCKBACK_NORMAL_HIGH_RIGHT"), TEXT("ACT_KNOCKBACK_NORMAL_HIGH_BACK"));
@@ -408,9 +408,9 @@ namespace
 	};
 }
 
-// =====================================================================================
+
 // The pure rules
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumKnockbackRuleTest,
 	"Elysium.Substrate.Knockback.Rule", GElysiumTestFlags)
@@ -825,9 +825,9 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 				AwayYawOf(Case.AttackerOrigin, GVictim), 1e-3f);
 		}
 
-		// **The SMALL family and both LOW cells are now REACHABLE**, and that is the whole change the
-		// authored table made: the same classified direction answers a different cell because a
-		// different record was swung. What used to be asserted here is that nothing could reach them.
+		// **The SMALL family and both LOW cells are REACHABLE.** The same classified direction
+		// answers a different cell because a different record was swung. A stand-in that names only
+		// the NORMAL/HIGH set never reaches them.
 		{
 			FString Cell;
 			FRandomStream Unused(1);
@@ -862,9 +862,9 @@ bool FElysiumKnockbackRuleTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The RNG contract: nothing in this family draws
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumKnockbackRngTest,
 	"Elysium.Substrate.Knockback.Rng", GElysiumTestFlags)
@@ -907,9 +907,9 @@ bool FElysiumKnockbackRngTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The producer: what a knocked-back victim actually plays
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumKnockbackProducerTest,
 	"Elysium.Substrate.Knockback.Producer", GElysiumTestFlags)

@@ -8,15 +8,15 @@
 class FElysiumEntityWorld;
 class UElysiumGameStateSubsystem;
 
-// The engine `vampire`-module surface, shared by every scripting host (python_bridge.md
+// The engine `vampire`-module surface, shared by every scripting host (`docs/vtmb/python_bridge.md`
 // "Binding"): the 11 module globals and the 24 Character methods `vampire.dll` binds, their
 // backing (or their stub default), and the debug-layer call log.
 //
 // It lives here rather than inside one host because BOTH hosts dispatch it — the embedded
-// CPython VM (the map-load default) and ElysiumExpr (the A/B fallback) — and a name that
-// stubs differently depending on which host is installed would make the A/B comparison lie.
+// CPython VM (the map-load default) and ElysiumExpr (the fallback evaluator) — and a name that
+// stubs differently depending on which host is installed would make a host comparison lie.
 // One table, one set of stub defaults, one native-call counter set behind the Cog Scripting
-// window, so 9.3's demand-driven "fill the stubs the running content actually hits" reads the
+// window, so demand-driven "fill the stubs the running content actually hits" reads the
 // same numbers whichever host produced them.
 //
 // The four `Find*` globals are NOT here: each host returns them in its own object model (a
@@ -37,7 +37,7 @@ namespace ElysiumScriptNatives
 	bool IsNativeGlobal(const FString& Name);
 	bool IsCharacterMethod(const FString& Name);
 
-	// --- OneOfSet (9.7d) -------------------------------------------------------------------------
+	// OneOfSet.
 	// VtMB's 1-based one-of-N selector, the gate behind 589 `.dlg` rows (`docs/vtmb/script_api.md`):
 	// `(roll % count) == which - 1`. The corpus authors it in sets — N sibling rows carrying the same
 	// choice text, row i gated on `OneOfSet(i, N)` — so exactly one row passes only when every gate in

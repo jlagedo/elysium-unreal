@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// One projected decal recovered from a map's `.decals` sidecar (roadmap 7.2). All vectors are
+// One projected decal recovered from a map's `.decals` sidecar. All vectors are
 // Unreal space (cm, Z-up, left-handed) — the exporter (UE_bsp_to_scene.py) already converted them,
 // so every consumer reads them verbatim: Normal is the room-facing projection axis, SDir/TDir the
 // surface tangent frame, HalfW/HalfH the on-surface half-extents. Mat keys into the shared

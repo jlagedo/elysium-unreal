@@ -8,7 +8,7 @@
 class AActor;
 class UWorld;
 
-// The gym's engine half (CCC0): it turns `ElysiumGym::FSpec`'s values into collision and makes no
+// The gym's engine half: it turns `ElysiumGym::FSpec`'s values into collision and makes no
 // decisions of its own. Every choice about *where* a rung sits belongs to the spec, which is
 // asserted with no world; what is left here is spawning.
 namespace ElysiumGym

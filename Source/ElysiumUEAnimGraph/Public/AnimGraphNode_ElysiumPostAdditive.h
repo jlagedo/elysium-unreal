@@ -25,13 +25,13 @@ public:
 	UPROPERTY(EditAnywhere, Category = Settings)
 	FAnimNode_ElysiumPostAdditive Node;
 
-	// UEdGraphNode interface
+	//~ Begin UEdGraphNode Interface
 	virtual FText GetTooltipText() const override;
 	virtual FText GetNodeTitle(ENodeTitleType::Type TitleType) const override;
 	virtual FLinearColor GetNodeTitleColor() const override;
-	// End of UEdGraphNode interface
+	//~ End UEdGraphNode Interface
 
-	// UAnimGraphNode_Base interface
+	//~ Begin UAnimGraphNode_Base Interface
 	virtual FString GetNodeCategory() const override;
-	// End of UAnimGraphNode_Base interface
+	//~ End UAnimGraphNode_Base Interface
 };

@@ -91,7 +91,7 @@ bool IsFrontalContact(const FVector& AttackerOriginCm, const FVector& VictimOrig
 	return FMath::Abs(Bearing) <= BlockFrontalHalfAngleDegrees;
 }
 
-// --- The grounded knockback family --------------------------------------------------------------
+// The grounded knockback family.
 
 const TCHAR* KnockbackActivity(EKnockbackSize Size, EKnockbackHeight Height,
 	EKnockbackDirection Direction)

@@ -37,7 +37,7 @@ namespace ElysiumDoorCaseTests
 	}
 }
 
-// =====================================================================================
+
 // Activator-relative swing GATES — retail CRotDoor::DoorGoUp(bPropagateLinked, bResolveSwing)
 // (FUN_100f3030) reaches OpenAwayFromEntity ONLY when the activator resolves AND !SF_DOOR_ONEWAY
 // (0x10) AND bResolveSwing != 0. Reference: door-largeitems-spec.md T1.4 (CONFIRMED) and
@@ -53,7 +53,7 @@ namespace ElysiumDoorCaseTests
 // The activator sits on -Y, which (per the OpensAwayFromActivator test above) is the side whose base
 // activator-relative swing is BackRot (tip on +Y). The fixed-forward OpenRot is a normal +90 Source
 // swing, tip on -Y. So "activator-relative" reads as TipY > +90 and "fixed-forward" as TipY < -90.
-// =====================================================================================
+
 
 // The block-reverse seam accessor (friended by FElysiumDoorBase). DoorGoUp(_, false) is otherwise only
 // reachable through OnMoveBlocked, which requires a pawn blocker.
@@ -127,7 +127,7 @@ namespace ElysiumSwingGateTests
 	}
 }
 
-// =====================================================================================
+
 // Locked-door input matrix (retail CBaseDoor, vampire.dll).
 //
 // Reference: research/event-surface/doors-receivers-findings.md (D010 note, D020, D031, D032,
@@ -149,7 +149,7 @@ namespace ElysiumSwingGateTests
 // EMISSION POINT is not observable here. These tests therefore assert the output-and-motion
 // matrix (the phantom-output removal and the no-motion rule), which is the observable core of the
 // slice, plus that the input paths that must be silent submit no audio.
-// =====================================================================================
+
 
 namespace ElysiumLockedDoorTests
 {
@@ -219,7 +219,7 @@ namespace ElysiumLockedDoorTests
 	constexpr int32 SF_DOOR_LOCKED     = 0x800;
 }
 
-// =====================================================================================
+
 // ResolveToggleStateFromTransform — the unconditional +use state-resync (retail CBaseDoor::Use
 // step 5, vt +0x3e0; CRotDoor FUN_100f2520 / CBaseDoor FUN_100eff90).
 //
@@ -229,7 +229,7 @@ namespace ElysiumLockedDoorTests
 // closed endpoint -> AtBottom; of the open endpoint -> AtTop; otherwise the mid-motion state is
 // left as-is. This re-stamps a door whose body never physically moved back to its true endpoint,
 // which is what lets the following toggle re-open it (the stale-AtTop tutorial-door bug).
-// =====================================================================================
+
 
 namespace ElysiumDoorResyncTests
 {
@@ -388,7 +388,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 
 		return true;
 	}
-	// =====================================================================================
+	
 	// Activator-relative swing — retail CRotDoor::OpenAwayFromEntity (FUN_100f3390) + ComputeSwingData
 	// (FUN_100f19b0). Reference: research/event-surface/swing-centres-findings.md ITEM 1 and
 	// door-largeitems-spec.md TARGET 1 (both 100%-CONFIRMED). A rotating door swings toward whichever of
@@ -400,7 +400,7 @@ bool FElysiumDoorCasesTest::RunTest(const FString& Parameters)
 	// regardless of the activator, so the south-activator case (which must now swing to +Y) fails against
 	// the pre-fix code; the mirror across the two sides is the observable contract. The handedness test
 	// above stays green because it opens with NO activator, which falls back to the same forward pose.
-	// =====================================================================================
+	
 	else if (Parameters == TEXT("RotatingDoorOpensAwayFromActivator"))
 	{
 		using EToggleState = FElysiumDoorBase::EToggleState;

@@ -183,8 +183,8 @@ UNiagaraSystem* UElysiumParticleAssetBuilder::BuildParticleSystem(
 		// sanitizes it and then runs it through `FNiagaraUtilities::GetUniqueName`, which appends
 		// an index on collision -- and a VtMB spawn graph CAN name one particle twice, because the
 		// flatten walk's cycle guard is an ancestor path and a diamond legitimately yields two
-		// layers with one name. Configuring by the requested name then wrote both layers onto the
-		// first emitter and left the second holding the raw Fountain template, sprite material and
+		// layers with one name. Configuring by the requested name writes both layers onto the
+		// first emitter and leaves the second holding the raw Fountain template, sprite material and
 		// all, with nothing reporting a difference.
 		const TArray<FNiagaraEmitterHandle>& Handles = System->GetEmitterHandles();
 		if (Handles.Num() != Before + 1)
@@ -282,7 +282,7 @@ bool UElysiumParticleAssetBuilder::BindLayerMaterial(
 				return false;
 			}
 			Root->SetStringField(TEXT("Material"), ObjectReference);
-			// VtMB's `movealign` is per-definition; the offline flatten does not carry it yet, so
+			// VtMB's `movealign` is per-definition; the offline flatten does not carry it, so
 			// every layer draws camera-facing, which is what an unaligned sprite does anyway.
 			Root->SetStringField(TEXT("Alignment"), TEXT("Unaligned"));
 			Root->SetStringField(TEXT("FacingMode"), TEXT("FaceCamera"));

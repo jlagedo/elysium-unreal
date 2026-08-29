@@ -196,9 +196,9 @@ namespace
 	};
 }
 
-// =====================================================================================
+
 // The authored threshold matrix: the `0..5` clamp, the 6 disable and the negative sentinel.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessThresholdTest,
 	"Elysium.Substrate.NpcWitness.Thresholds", GElysiumTestFlags)
@@ -249,9 +249,9 @@ bool FElysiumNpcWitnessThresholdTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The keyfields reach the leaf through the ordinary class-chain walk.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessKeyfieldTest,
 	"Elysium.Substrate.NpcWitness.Keyfields", GElysiumTestFlags)
@@ -296,9 +296,9 @@ bool FElysiumNpcWitnessKeyfieldTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The direct lane: the sight gate, the closed-window advance, and the no-replay rule.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessDirectLaneTest,
 	"Elysium.Substrate.NpcWitness.DirectLane", GElysiumTestFlags)
@@ -440,9 +440,9 @@ bool FElysiumNpcWitnessDirectLaneTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The Nosferatu closest-player case, its flee-only policy, and the attack suppression.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessNosferatuTest,
 	"Elysium.Substrate.NpcWitness.Nosferatu", GElysiumTestFlags)
@@ -520,9 +520,9 @@ bool FElysiumNpcWitnessNosferatuTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The global-event lane: cone, `m_flSeekDistInspection`, trace, strongest-retained, expiry.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessGlobalLaneTest,
 	"Elysium.Substrate.NpcWitness.GlobalLane", GElysiumTestFlags)
@@ -652,9 +652,9 @@ bool FElysiumNpcWitnessGlobalLaneTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The three deadline setters at their real callers.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessDeadlineSetterTest,
 	"Elysium.Substrate.NpcWitness.DeadlineSetters", GElysiumTestFlags)
@@ -740,10 +740,10 @@ bool FElysiumNpcWitnessDeadlineSetterTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The consumers: flee selects the retreat program, attack installs the hate row and lets
 // the ordinary enemy transaction take it into combat.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessConsumerTest,
 	"Elysium.Substrate.NpcWitness.Consumers", GElysiumTestFlags)
@@ -834,10 +834,10 @@ bool FElysiumNpcWitnessConsumerTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The recovered split: gathering never reaches the incident consumers, and schedule
 // selection is what submits and copies the act count.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessSubmissionTest,
 	"Elysium.Substrate.NpcWitness.Submission", GElysiumTestFlags)
@@ -910,9 +910,9 @@ bool FElysiumNpcWitnessSubmissionTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The witness block round-trips, rebases, and is additive against an older payload.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcWitnessSaveTest,
 	"Elysium.Substrate.NpcWitness.Save", GElysiumTestFlags)

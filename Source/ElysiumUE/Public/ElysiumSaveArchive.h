@@ -4,7 +4,7 @@
 #include "ElysiumSaveTypes.h"
 #include "Serialization/ArchiveProxy.h"
 
-// 11.9 — the payload writer/reader (`docs/architecture/save-architecture.md` §2). An `FArchiveProxy`, so every stock
+// The payload writer/reader (`docs/architecture/save-architecture.md` §2). An `FArchiveProxy`, so every stock
 // `operator<<` still works and our own free operators compose with them, and it carries the one
 // thing a bare archive cannot: **the schema id**, so a reader can branch or refuse (`Version()`).
 //
@@ -30,7 +30,7 @@ private:
 	int32 PayloadVersion = FElysiumSaveVersion::Latest;
 };
 
-// --- The value types -----------------------------------------------------------------------------
+// The value types.
 
 FArchive& operator<<(FArchive& Ar, FElysiumVariant& V);
 FArchive& operator<<(FArchive& Ar, FElysiumEntityHandle& H);
@@ -40,7 +40,7 @@ FArchive& operator<<(FArchive& Ar, FElysiumConvexHull& H);
 FArchive& operator<<(FArchive& Ar, FElysiumEntityDef& D);
 FArchive& operator<<(FArchive& Ar, ElysiumRng::FState& S);
 
-// --- The blocks ----------------------------------------------------------------------------------
+// The blocks.
 
 FArchive& operator<<(FArchive& Ar, FElysiumSheet& S);
 FArchive& operator<<(FArchive& Ar, FElysiumXpEntry& E);

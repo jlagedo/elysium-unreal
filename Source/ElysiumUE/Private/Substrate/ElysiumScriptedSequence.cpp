@@ -1,4 +1,4 @@
-// 8.5 — `scripted_sequence` / `aiscripted_sequence`: VtMB's cutscene beat.
+// `scripted_sequence` / `aiscripted_sequence`: VtMB's cutscene beat.
 //
 // The class is **`CCineNPC`** in `vampire.dll` (RE: the `aiscripted_sequence` factory at
 // `101a8fe0` builds vftable `10477d1c`, whose datamap `10593628` names the class) — an HL1
@@ -120,14 +120,12 @@ namespace
 	}
 }
 
-// ============================================================================================
-// FElysiumScriptedSequence — one cutscene beat.
-// ============================================================================================
+// One cutscene beat.
 
 class FElysiumScriptedSequence final : public FElysiumEntity
 {
 public:
-	// --- The authored beat (datamap field names, applied at Construct) ----------------------
+	// The authored beat (datamap field names, applied at Construct).
 	FString TargetEntity;   // m_iszEntity — the NPC's targetname. `!playercontroller` on 10 of 108.
 	FString PreIdle;        // m_iszIdle — the pose the NPC waits in until the beat is triggered
 	FString PreIdleAlt;     // m_iszPreIdle — the binary carries both names; no exported map uses this one
@@ -139,7 +137,7 @@ public:
 	float   Radius = 0.f;   // m_flRadius — parsed and inert: no site in CCineNPC reads it
 	float   Repeat = 0.f;   // m_flRepeat — parsed and inert, same as m_flRadius
 
-	// --- Live state -------------------------------------------------------------------------
+	// Live state.
 	// The beat's three phases. `Travel` is the NPC walking/running/turning onto the mark, `Action`
 	// is `m_iszPlay` running out; both are "between OnBeginSequence and OnEndSequence".
 	enum class EPhase : uint8 { Idle, Travel, Action };
@@ -207,9 +205,9 @@ public:
 		}
 	}
 
-	// Send the NPC to the mark under its own power. False when this beat does not travel, when the
-	// A/B is off, or when the NPC has no motor to travel with — every one of which falls through to
-	// PlaceOnMark, so the beat reaches the same end state either way.
+	// Send the NPC to the mark under its own power. False when this beat does not travel, or when
+	// the NPC has no motor to travel with — every one of which falls through to PlaceOnMark, so the
+	// beat reaches the same end state either way.
 	bool StartTravel(FElysiumEntity* Npc)
 	{
 		EElysiumScriptGait Gait = EElysiumScriptGait::Walk;
@@ -591,7 +589,7 @@ public:
 		}
 	}
 
-	// A beat frozen mid-flight (11.9). The travel phase cannot be resumed from the payload — the
+	// A beat frozen mid-flight. The travel phase cannot be resumed from the payload — the
 	// restored NPC stands wherever the save put it and its motor holds no request — so the beat
 	// re-issues its own move on the first think after the load, from wherever the NPC now is. An
 	// action phase rides on the restored NextThink and needs nothing but its activator back.
@@ -647,7 +645,7 @@ public:
 		}
 		if (FElysiumEntity* Npc = ResolveTarget())
 		{
-			// Overrides the disposition stance 8.5 picked at spawn: this pose is authored for this
+			// Overrides the disposition stance picked at spawn: this pose is authored for this
 			// NPC at this spot, and the stance idle is only the default when nothing else says.
 			//
 			// **The waiting pose is a segment of the same run, at the AMBIENT band rather than the
@@ -739,7 +737,7 @@ public:
 	}
 };
 
-// --- Registration -----------------------------------------------------------------------------
+
 
 static TUniquePtr<FElysiumEntity> MakeScriptedSequence() { return MakeUnique<FElysiumScriptedSequence>(); }
 

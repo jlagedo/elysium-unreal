@@ -421,7 +421,7 @@ FElysiumJumpLatch AdvanceJumpLatch(const FElysiumJumpLatch& Prev,
 	return Next;
 }
 
-// **The live selector split (LIFE4, Option A), stated where both artifacts can cite it:** this
+// **The live selector split, stated where both artifacts can cite it:** this
 // classifier is the live selector for the CAST and for the player's water and air phases. The
 // player's grounded stand/gait is NOT selected here — the player producer walks the committed
 // retail gait ladder (`ElysiumActionTables::PlayerGaitLadder()`, applied by
@@ -562,7 +562,7 @@ FElysiumAnimationIntent BuildLocomotionIntent(const FElysiumLocomotionSample& Sa
 	// The request's own loop intent, which is not the clip's looping flag: the leap and the two lands
 	// are one-shots the body plays through, everything else is a state it holds. A held crouch holds
 	// even though `crouch` is a 61-frame non-looping "into" pose — what the graph does at the end of
-	// that pose is `CCC5`'s provisional answer, not this record's.
+	// that pose is the graph's own answer, not this record's.
 	Out.bLoop = Code != EElysiumAnimActivityCode::Leap
 		&& Code != EElysiumAnimActivityCode::Land
 		&& Code != EElysiumAnimActivityCode::LandCrouch;

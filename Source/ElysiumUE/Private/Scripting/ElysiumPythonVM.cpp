@@ -19,10 +19,8 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumPy, Log, All);
 
-// ---------------------------------------------------------------------------------------------
 // Everything from here to InitVampireModule is compiled only with the vendored CPython SDK.
 // Without it the VM is an inert stub (every method reports "built without CPython").
-// ---------------------------------------------------------------------------------------------
 #if defined(ELYSIUM_WITH_CPYTHON) && ELYSIUM_WITH_CPYTHON
 
 namespace
@@ -33,7 +31,7 @@ namespace
 	using ElysiumPy::PyToVariant;
 	using ElysiumPy::VariantToPy;
 
-	// --- the `vampire.G` proxy type: attribute access <-> the C++ game-state store -------------
+	// The `vampire.G` proxy type: attribute access <-> the C++ game-state store.
 	// A data-less PyObject; every read/write forwards to the current UElysiumGameStateSubsystem.
 	// Methods (keys/has_key/ClearAll) resolve first via the generic path, then any other name is a
 	// G flag (default int 0 on a miss, delete on assign-None) -- exactly VtMB's tp_getattr/tp_setattr.
@@ -75,7 +73,7 @@ namespace
 		UElysiumGameStateSubsystem* S = GStore();
 		if (!S)
 		{
-			return 0; // no store bound yet -- silently drop (PoC)
+			return 0; // no store bound yet -- drop the write
 		}
 		const FString Key(UTF8_TO_TCHAR(Name));
 		if (Value == nullptr || Value == Py_None)
@@ -133,7 +131,7 @@ namespace
 		{ nullptr, nullptr, 0, nullptr }
 	};
 
-	// --- G's mapping protocol: `G[k]` IS `G.k` -------------------------------------------------
+	// G's mapping protocol: `G[k]` IS `G.k`.
 	// PyDataManager carries a tp_as_mapping (type object 0x1058fa08 -> 0x1058f9f8), and both slots
 	// are thin adapters over the attribute path: mp_subscript (0x1019b4a0) checks the key is a
 	// PyString, converts it with PyString_AsString, and TAIL-JUMPS into tp_getattr; mp_ass_subscript
@@ -179,7 +177,7 @@ namespace
 		sizeof(PyObject),   // tp_basicsize
 	};
 
-	// --- the `vampire` module: only _log + G are real; the natives live in the Python bootstrap ---
+	// The `vampire` module: only _log + G are real; the natives live in the Python bootstrap.
 
 	PyObject* Vampire_log(PyObject* /*Self*/, PyObject* Args)
 	{
@@ -195,7 +193,7 @@ namespace
 		Py_RETURN_NONE;
 	}
 
-	// --- the script filesystem natives (FElysiumScriptFS) --------------------------------------
+	// The script filesystem natives (FElysiumScriptFS).
 	// The VM's file layer is a path rewriter, not a file implementation: these hand back a real path
 	// and the shim then calls the real `open`/`nt.*` on it, so script code keeps getting genuine
 	// `file` objects (readlines, binary mode, seek/truncate all work unchanged).
@@ -296,7 +294,7 @@ namespace
 		Py_INCREF(Py_None);
 		PyModule_AddObject(Module, "null", Py_None); // VtMB scripts use bare `null`
 
-		// The entity/native surface (9.3 B2): vampire.Entity, ccmd/cvar, and the 11 globals.
+		// The entity/native surface: vampire.Entity, ccmd/cvar, and the 11 globals.
 		return ElysiumPy::InstallEntityBindings(Module, OutError);
 	}
 
@@ -362,9 +360,9 @@ namespace
 	// no `import vampire` in any script; everything reaches the engine through `__main__`), then
 	// stand up what is still missing.
 	//
-	// All 11 module globals, `G`, and now the console objects `ccmd`/`cvar` (9.3b) are real
+	// All 11 module globals, `G`, and the console objects `ccmd`/`cvar` are real
 	// bindings. With `ccmd`/`cvar` bound, the REAL vamputil.py imports (its module top-level does
-	// `c = __main__.ccmd; cvar = __main__.cvar`), so there is no stub vamputil module any more —
+	// `c = __main__.ccmd; cvar = __main__.cvar`), so there is no stub vamputil module —
 	// tutorial.py's `from vamputil import *` pulls in the real `unhidePlus`/`setPlus`/`IsClan`/...
 	// The `IsClan` binding here is a pre-import fallback so tutorial's `if __main__.IsClan or ...`
 	// guard (what triggers that import) short-circuits true before it reaches `IsIdling`; the merge
@@ -407,7 +405,7 @@ namespace
 		"    setattr(__main__, _nm, _mk(_nm))\n"
 		// `pc` = the player, the name every dialogue gate and level script reads (pc.clan, pc.base_*,
 		// IsClan(pc,...)). Bound here so the name always exists (None before any map builds) and
-		// **re-bound per eval** in Eval() alongside `npc`: since 11.4 it is an Entity over a
+		// **re-bound per eval** in Eval() alongside `npc`: it is an Entity over a
 		// generation-checked handle, and a handle minted by one map is stale in the next.
 		"__main__.pc = FindPlayer()\n";
 
@@ -434,9 +432,7 @@ namespace
 
 #endif // ELYSIUM_WITH_CPYTHON
 
-// ---------------------------------------------------------------------------------------------
 // FElysiumPythonVM -- the same interface whether or not CPython is compiled in.
-// ---------------------------------------------------------------------------------------------
 
 FElysiumPythonVM& FElysiumPythonVM::Get()
 {
@@ -536,7 +532,7 @@ bool FElysiumPythonVM::EnsureStarted(FString& OutError)
 
 	// Seed the console alias/cvar store from out/cfg and wire its Python fallthrough back to us. The
 	// console pins Elysium's Plus profile after parsing personal cfg, so `ccmd.patchtype=""` -> alias
-	// `patchtype` -> `setPlus()` -> exec in __main__ (9.3b).
+	// `patchtype` -> `setPlus()` -> exec in __main__.
 	ConsoleStore.SetPythonSink([this](const FString& Line) { return this->ExecConsoleLine(Line); });
 	ConsoleStore.LoadFromCfgDir(FElysiumContentPaths::CfgDir());
 
@@ -617,8 +613,8 @@ FElysiumVariant FElysiumPythonVM::Eval(const FString& Source, const FElysiumScri
 		PyDict_SetItemString(Ns, "npc", Py_None);
 	}
 
-	// `pc` = the player entity (11.4). Re-bound per eval for the same reason `npc` is: it is a
-	// generation-checked handle now, not a sheet proxy, so the object a previous map minted would
+	// `pc` = the player entity. Re-bound per eval for the same reason `npc` is: it is a
+	// generation-checked handle, not a sheet proxy, so the object a previous map minted would
 	// raise "game entity has been deleted" on every attribute read after a travel.
 	{
 		// ScopedCtx is already installed, so CurrentWorld() is this delivery's world (or the current
@@ -874,10 +870,8 @@ TArray<FString> FElysiumPythonVM::GetModuleCallables(const FString&) const { ret
 
 #endif // ELYSIUM_WITH_CPYTHON
 
-// ---------------------------------------------------------------------------------------------
 // Console verbs (dev only). These resolve the game-state store from the live world so the VM's
 // G proxy is bound even when the CPython script host is not installed.
-// ---------------------------------------------------------------------------------------------
 #if !UE_BUILD_SHIPPING
 
 namespace
@@ -961,7 +955,7 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyLoad(
 		}
 	}));
 
-// One-shot end-to-end PoC: proves the vendored interpreter loads + runs inside the built game,
+// One-shot end-to-end check: proves the vendored interpreter loads + runs inside the built game,
 // the vampire/G binding round-trips with the C++ store, a real level script imports and its
 // callbacks run, and a field-6 statement resolves a level-script constant. Single token (no args)
 // so it survives -ExecCmds. Logs one "POC" line per step + a final verdict.
@@ -1000,7 +994,7 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyPoc(
 		UE_LOG(LogElysiumPy, Display, TEXT("POC 3/5 load tutorial.py: %s  %s"),
 			bLoad ? TEXT("PASS") : TEXT("FAIL"), bLoad ? *ModName : *Err);
 
-		// 4) fire a real On* callback. Its body now runs against REAL entity objects (B2), so this
+		// 4) fire a real On* callback. Its body runs against real entity objects, so this
 		// step needs sp_tutorial_1 loaded: OnKillDisc1 falls through its clan gates to
 		// Find("logic_disc1_nodisc").Trigger(), and off-map that Find is None -> AttributeError.
 		const bool bFire = VM.FireCallback(TEXT("OnKillDisc1"), Err);
@@ -1021,10 +1015,10 @@ static FAutoConsoleCommandWithWorldAndArgs GElysiumPyPoc(
 		UE_LOG(LogElysiumPy, Display, TEXT("POC VERDICT: %s"), bAll ? TEXT("ALL PASS") : TEXT("FAILURES ABOVE"));
 	}));
 
-// The B2 acceptance, as one token so it survives -ExecCmds: seed the tutorial's first beat, run
+// First-beat acceptance, as one token so it survives -ExecCmds: seed the tutorial's first beat, run
 // the level script's own dispatcher through the INSTALLED host (the same path `elysium.exec
 // DialogPostProcess()` takes), and check what the script did. The three checks are the ones that
-// resolve synchronously; the warp itself is B1's already-verified `env_fade` chain, which runs
+// resolve synchronously; the warp itself is the `env_fade` chain, which runs
 // off the queued Fade this reports (watch the position readout, or `elysium.ent_messages 1`).
 static FAutoConsoleCommandWithWorldAndArgs GElysiumPyFirstBeat(
 	TEXT("elysium.py.firstbeat"),

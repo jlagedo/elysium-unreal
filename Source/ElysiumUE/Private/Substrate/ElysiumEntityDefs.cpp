@@ -29,7 +29,7 @@ namespace
 	}
 
 	// Read a JSON [x, y, z, w] number array into an FQuat (identity on any other shape). The
-	// exporter emits it via source_angles_to_unreal_quat, already Unreal-space (8.3).
+	// exporter emits it via source_angles_to_unreal_quat, already Unreal-space.
 	FQuat ParseQuat(const TArray<TSharedPtr<FJsonValue>>& Arr)
 	{
 		if (Arr.Num() == 4)
@@ -203,7 +203,7 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
 			}
 		}
 
-		// Static-mesh render annotation (8.1 → 8.3): the decoded OBJ stem + its Unreal-space
+		// Static-mesh render annotation: the decoded OBJ stem + its Unreal-space
 		// placement rotation. Present only for point entities whose `.mdl` decoded.
 		E->TryGetStringField(TEXT("model_mesh"), Def.ModelMesh);
 		const TArray<TSharedPtr<FJsonValue>>* QuatArr = nullptr;
@@ -212,7 +212,7 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
 			Def.ModelQuat = ParseQuat(*QuatArr);
 		}
 
-		// Constraint axis (8.4): the pre-converted, normalized Unreal-space hinge axis, read
+		// Constraint axis: the pre-converted, normalized Unreal-space hinge axis, read
 		// verbatim like origin. Present only on phys_* constraints carrying `hingeaxis`.
 		const TArray<TSharedPtr<FJsonValue>>* AxisArr = nullptr;
 		if (E->TryGetArrayField(TEXT("hinge_axis"), AxisArr))
@@ -220,7 +220,7 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
 			Def.HingeAxis = ParseVec3(*AxisArr);
 		}
 
-		// B7 — a miniature entity's placement is the 3D-skybox transform of its raw one:
+		// A miniature entity's placement is the 3D-skybox transform of its raw one:
 		// `world(v) = scale * (v - skyOrigin)`. Applied here, once, so every consumer
 		// downstream — brush bodies, prop bodies, gizmos, the click-pick — is placed right
 		// without knowing the miniature exists. Hulls are entity-LOCAL (world = origin +
@@ -245,7 +245,7 @@ bool FElysiumEntityDefs::Parse(const FString& EntsPath, FElysiumEntityDefs& Out,
 
 // --- Verification command ---------------------------------------------------------------
 // `elysium.ents [map]` parses a map's `.ents` off disk and logs a summary. It is a
-// standalone check that the parser round-trips the export before the entity world (P1.4)
+// standalone check that the parser round-trips the export before the entity world
 // consumes the defs; it spawns nothing. No arg uses the currently-loaded map.
 static FString ElysiumResolveEntsMap(UWorld* World, const TArray<FString>& Args)
 {

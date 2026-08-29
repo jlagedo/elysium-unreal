@@ -2,9 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// ================================================================================================
-// 7. the five quests_*.txt — the quest catalogue
-// ================================================================================================
+// The five `quests_*.txt` files — the quest catalogue.
 
 struct FElysiumQuestState
 {

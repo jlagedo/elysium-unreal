@@ -1,4 +1,4 @@
-// P4.5 — the tutorial logic + point/brush classes that climb the sp_tutorial_1 histogram:
+// The tutorial logic + point/brush classes that climb the sp_tutorial_1 histogram:
 // math_counter, logic_timer, logic_case (+ the VtMB logic_case_toggle), env_fade, func_brush,
 // and point_teleport. Each is a plain-C++ FElysiumEntity leaf (R1) registered by a module-static
 // FElysiumClassRegistrar, reaching the base Kill/ScriptHide/ScriptUnhide + keyfields through the
@@ -41,11 +41,9 @@ namespace
 	}
 }
 
-// ============================================================================================
 // math_counter — CMathCounter (7 on the tutorial; stock Source). Holds a float, clamps to
 // [min,max] when either bound is set, fires OutValue (the value) on every change, and OnHitMax/
 // OnHitMin on the edge into a clamped bound. Its OutValue feeds logic_case_toggle.InValue.
-// ============================================================================================
 
 class FElysiumMathCounter final : public FElysiumEntity
 {
@@ -125,11 +123,9 @@ private:
 	bool bHitMin = false;
 };
 
-// ============================================================================================
 // logic_timer — CTimerEntity (1 on the tutorial; stock Source). Fires OnTimer every RefireTime
 // seconds while enabled, on the substrate clock (R4). UseRandomTime picks each interval in
 // [LowerRandomBound, UpperRandomBound].
-// ============================================================================================
 
 class FElysiumLogicTimer final : public FElysiumEntity
 {
@@ -204,7 +200,6 @@ private:
 	}
 };
 
-// ============================================================================================
 // logic_case / logic_case_toggle — the demultiplexer (8 logic_case_toggle on the tutorial).
 // A shared base carries the 16 Case-value strings + the OnCase01..OnCase16 / OnDefault outputs.
 // logic_case (stock): InValue matches the value against the case strings, fires the matching
@@ -212,7 +207,6 @@ private:
 // logic_case_toggle (VtMB, FUN_101344f0/FUN_10134620): InValue retains logic_case's value-match
 //   behavior and updates a current-case pointer. Its added InValueDelta input advances that pointer
 //   by the requested number of configured cases (skipping empty slots, wrapping 0..15).
-// ============================================================================================
 
 class FElysiumLogicCaseBase : public FElysiumEntity
 {
@@ -417,7 +411,6 @@ private:
 	int32 CurrentCase = 0;
 };
 
-// ============================================================================================
 // env_fade — CEnvFade (8 on the tutorial: 27 Fade wires in, 16 OnBeginFade out). Its one input,
 // Fade, starts a full-screen colour fade on the entity world (drawn by AElysiumHUD) and then fires
 // its one output, OnBeginFade, with no delay — the whole class, per its 4-record datamap
@@ -428,7 +421,6 @@ private:
 // client's auto-reverse bit, which FadeCalculate uses to flip a finished fade into a fade-in rather
 // than dropping it. Without it the fade is simply dropped when its hold expires. The client's
 // stay-covered-forever bit is a different one that env_fade never sets.
-// ============================================================================================
 
 class FElysiumEnvFade final : public FElysiumEntity
 {
@@ -492,12 +484,10 @@ private:
 	}
 };
 
-// ============================================================================================
 // func_brush — CFuncBrush (19 on the tutorial). A toggleable solid brush. ScriptHide/ScriptUnhide/
 // Kill are the base dormancy switch (the only inputs the tutorial wires); Enable/Disable/Toggle
 // gate its collision, unified with dormancy through the body's one SetDormant switch. Solidity:
 // 0 = toggle (follows enabled), 1 = never solid, 2 = always solid.
-// ============================================================================================
 
 class FElysiumFuncBrush final : public FElysiumEntity
 {
@@ -582,16 +572,14 @@ private:
 	bool bEnabled = true;
 };
 
-// ============================================================================================
 // point_teleport — CPointTeleport (22 on the tutorial). Its Teleport input moves the entity named
 // by `target` — 48 of the 49 across the exported maps name `!player` — to this point's origin and
 // `angles` facing.
 //
-// 11.4 made that one path: `!player` is the player entity's real targetname, so it resolves through
-// the ordinary name index and the move is one atomic `SetRuntimeTransform`, exactly as it is
-// for an NPC or a brush. Whether the moved entity carries a pawn, a skeletal body or a brush body
-// is the entity's own business — the teleporter no longer knows.
-// ============================================================================================
+// `!player` is the player entity's real targetname, so it resolves through the ordinary name
+// index and the move is one atomic `SetRuntimeTransform`, exactly as it is for an NPC or a
+// brush. Whether the moved entity carries a pawn, a skeletal body or a brush body is the
+// entity's own business.
 
 class FElysiumPointTeleport final : public FElysiumEntity
 {
@@ -686,9 +674,7 @@ private:
 	FVector CachedAngles = FVector::ZeroVector;
 };
 
-// ============================================================================================
-// Registration
-// ============================================================================================
+// --- Registration ---
 
 static TUniquePtr<FElysiumEntity> MakeMathCounter()    { return MakeUnique<FElysiumMathCounter>(); }
 static TUniquePtr<FElysiumEntity> MakeLogicTimer()     { return MakeUnique<FElysiumLogicTimer>(); }

@@ -7,18 +7,13 @@
 #include "ElysiumEntityWorld.h"
 #include "ElysiumSaveArchive.h"
 
-// The shared touch base every trigger leaf derives from. Moved verbatim out of
-// `ElysiumStarterClasses.cpp` when `trigger_stealth_mod` landed in its own file: the file
-// granularity rule in `Source/ElysiumUE/CLAUDE.md` puts one primary class per `.cpp`, and a leaf in
-// its own file needs its base in a header. Nothing about the class changed with the move, and the
-// registration site — `BuildCBaseTrigger` and the `CBaseTrigger` registrar — stays where it was.
+// The shared touch base every trigger leaf derives from. The registration site —
+// `BuildCBaseTrigger` and the `CBaseTrigger` registrar — stays in `ElysiumStarterClasses.cpp`.
 
-// ============================================================================================
-// CBaseTrigger — the shared touch base for trigger_multiple/trigger_once (and the P4.5 trigger
-// family). Enable/Disable/Toggle + the StartDisabled/wait keyfields live here; the overlap→output
+// CBaseTrigger — the shared touch base for trigger_multiple/trigger_once (and the trigger family).
+// Enable/Disable/Toggle + the StartDisabled/wait keyfields live here; the overlap→output
 // translation is the OnTouchStart/OnTouchEnd overrides. The classname never appears in `.ents` —
 // it is purely the chain node the leaf triggers derive from (base CBaseEntity).
-// ============================================================================================
 
 class FElysiumTriggerBase : public FElysiumEntity
 {
@@ -144,8 +139,8 @@ public:
 	virtual void Serialize(FElysiumSaveArchive& Ar) override
 	{
 		// LastTriggerTime is an absolute game-clock time (World->NowSeconds()); a restore resets the
-		// clock to the saved ClockNow before any entity's NextThink/wait gate is read back (11.9's
-		// save/restore pass), so the absolute value still means what it meant when written — the same
+		// clock to the saved ClockNow before any entity's NextThink/wait gate is read back, so the
+		// absolute value still means what it meant when written — the same
 		// reasoning that lets NextThink itself ride the generic entity record unconverted.
 		Ar << LastTriggerTime;
 		Ar << bTouchSuppressed;

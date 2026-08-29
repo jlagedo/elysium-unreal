@@ -51,9 +51,9 @@ struct ELYSIUMUE_API FAnimNode_ElysiumBankRemap : public FAnimNode_Base
 	int32 LODThreshold = INDEX_NONE;
 
 	// The resolved table for this closure's current (mesh, source skeleton, retarget source) tuple,
-	// kept alive for as
-	// long as this node needs it -- `UElysiumAnimSubsystem::GetBankRemap` caches it for the life of
-	// the game instance. Null is the ordinary "nothing to correct" case (no retarget source on the
+	// kept alive as long as this node needs it -- `UElysiumAnimSubsystem::GetBankRemap` caches it
+	// for the life of the game instance. Null is the ordinary "nothing to correct" case (no retarget
+	// source on the
 	// playing asset, or a body whose bind pose tracks that bank closely enough that every bone
 	// copies) and leaves the incoming pose exactly as `Source` produced it. `RequiredBones` is passed
 	// when a table changes after the graph's initial CacheBones pass; without that immediate resolve,
@@ -79,14 +79,12 @@ struct ELYSIUMUE_API FAnimNode_ElysiumBankRemap : public FAnimNode_Base
 	// in an already-composed pose calls directly.
 	void Apply(FPoseContext& Output);
 
-	// FAnimNode_Base interface
 	virtual void  Initialize_AnyThread(const FAnimationInitializeContext& Context) override;
 	virtual void  CacheBones_AnyThread(const FAnimationCacheBonesContext& Context) override;
 	virtual void  Update_AnyThread(const FAnimationUpdateContext& Context) override;
 	virtual void  Evaluate_AnyThread(FPoseContext& Output) override;
 	virtual void  GatherDebugData(FNodeDebugData& DebugData) override;
 	virtual int32 GetLODThreshold() const override { return LODThreshold; }
-	// End of FAnimNode_Base interface
 
 private:
 	struct FResolvedTranslate

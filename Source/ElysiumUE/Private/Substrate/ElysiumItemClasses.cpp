@@ -1,4 +1,4 @@
-// 9.8 — item entities, the keyring, combat-character inventories, and loot containers.
+// Item entities, the keyring, combat-character inventories, and loot containers.
 //
 // The contract is `docs/vtmb/inventory.md` §§2-6 and the design is
 // `docs/architecture/gameplay-systems-architecture.md` §5.2. Player drop (which PRESERVES a world
@@ -23,9 +23,7 @@
 
 DEFINE_LOG_CATEGORY(LogElysiumItem);
 
-// ============================================================================================
-// The installed catalogue
-// ============================================================================================
+// --- The installed catalogue ---
 
 namespace
 {
@@ -46,10 +44,6 @@ namespace ElysiumItems
 		return (GItemTable && !Classname.IsEmpty()) ? GItemTable->Find(Classname) : nullptr;
 	}
 }
-
-// ============================================================================================
-// FElysiumItem
-// ============================================================================================
 
 FElysiumItem::FElysiumItem()
 {
@@ -321,10 +315,6 @@ void FElysiumItem::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 	Out.Emplace(TEXT("World body"), WorldBody ? TEXT("standing") : TEXT("(none)"));
 }
 
-// ============================================================================================
-// FElysiumKeyring
-// ============================================================================================
-
 bool FElysiumKeyring::HasKey(const FString& Classname) const
 {
 	for (const FString& Key : Keys)
@@ -378,9 +368,7 @@ void FElysiumKeyring::GetDebugState(TArray<TPair<FString, FString>>& Out) const
 		? FString(TEXT("(none)")) : FString::Join(Keys, TEXT(", ")));
 }
 
-// ============================================================================================
-// Registration
-// ============================================================================================
+// --- Registration ---
 
 namespace
 {

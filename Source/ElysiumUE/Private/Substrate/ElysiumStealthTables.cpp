@@ -12,9 +12,7 @@ namespace
 	using ElysiumVdata::RootBlock;
 }
 
-// ================================================================================================
-// 18. system/stealth.txt
-// ================================================================================================
+// `system/stealth.txt`
 
 FElysiumStealthTables::FElysiumStealthTables()
 {

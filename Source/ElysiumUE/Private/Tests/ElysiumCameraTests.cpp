@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -122,15 +122,13 @@ namespace ElysiumCameraTests
 static constexpr EAutomationTestFlags GElysiumTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
 
-// =====================================================================================
-// The camera (11.7) — the weight driver and the scripted-shot channel.
+// The camera — the weight driver and the scripted-shot channel.
 //
 // VtMB ships one camera with a blend weight, not two cameras, and the whole first<->third
 // transition is that weight ramping at a fixed rate with a priority order over three latches
 // (`docs/vtmb/camera-view-modes.md` §3). That is a pure function of time and flags, so it is asserted here
 // with no pawn, no world and no RHI — which is also what makes "0 -> 1 in 0.5 s" a number rather
 // than a stopwatch.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTest, "Elysium.Substrate.Camera", GElysiumTestFlags)
 bool FElysiumCameraTest::RunTest(const FString&)
@@ -540,14 +538,12 @@ bool FElysiumCameraTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // The switch-frame table (`docs/vtmb/camera-view-modes.md` §5, the render hand-off).
 //
 // This is a direct transcription of the recovered table and the acceptance for the whole draw
 // policy: every surface that switches, the exact frame it switches on in each direction, and which
 // gates are boolean against the one that fades. It is a pure function of weights, boom and shot
 // keys, so it asserts with no pawn, no world and no RHI.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraDrawTest, "Elysium.Substrate.CameraDraw",
 	GElysiumTestFlags)
@@ -687,13 +683,11 @@ bool FElysiumCameraDrawTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
 // The third-person rig.
 //
 // Nothing here reproduces a decompiled function; it is the project's own third-person rig, and the
 // assertions are about the three properties that make it *different* from the recovered one: the
 // damper is frame-rate independent, collision is asymmetric, and the body sits off-centre.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraRigTest, "Elysium.Substrate.CameraRig", GElysiumTestFlags)
 bool FElysiumCameraRigTest::RunTest(const FString&)
@@ -1048,9 +1042,7 @@ bool FElysiumCameraRigTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// camera_track — paired value streams and the recovered keyframe timing surface (12.1).
-// =====================================================================================
+// camera_track — paired value streams and the recovered keyframe timing surface.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraTrackTest, "Elysium.Substrate.CameraTrack", GElysiumTestFlags)
 bool FElysiumCameraTrackTest::RunTest(const FString&)
@@ -1536,13 +1528,11 @@ bool FElysiumCameraTrackTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// vdata/camerashots — the shot files SetCamera names (11.7).
+// vdata/camerashots — the shot files SetCamera names.
 //
 // The grammar is documented by Troika in the shipped `camera shots how-to.txt`, so this asserts the
 // read against that document rather than against itself: which block wins, how the two target points
 // combine, and that Source units become cm exactly once.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumCameraShotsTest, "Elysium.Substrate.CameraShots", GElysiumTestFlags)
 bool FElysiumCameraShotsTest::RunTest(const FString&)
@@ -1644,15 +1634,13 @@ CameraShotTable { Vantage { End { "Position" "cam_marker_1" "AttachPos" "Origin"
 	return true;
 }
 
-// =====================================================================================
-// The presentation seam (11.8, runtime-architecture.md §11). FElysiumViewState is a value and its
+// The presentation seam (`docs/architecture/runtime-architecture.md` §11). FElysiumViewState is a value and its
 // rules are total functions over it, so the whole set is asserted with no world, no HUD and no
 // viewport — the hand-built state a widget renders from is exactly what is built here.
 //
 // The load-bearing case is the one the polled HUD got wrong: a conversation already on screen when
 // the pause menu opens is republished as *closed*, so the box reconciles to Teardown instead of
 // drawing through the menu.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumViewStateTest, "Elysium.Substrate.ViewState", GElysiumTestFlags)
 bool FElysiumViewStateTest::RunTest(const FString&)

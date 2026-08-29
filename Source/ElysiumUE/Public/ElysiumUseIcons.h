@@ -3,7 +3,7 @@
 #include "CoreMinimal.h"
 #include "Engine/EngineTypes.h"
 
-// P4.4 — the +use context-icon layer.
+// The +use context-icon layer.
 //
 // `use_icon`/`locked_icon` index a 72-entry table of `hud/Context_Icons/<name>` materials
 // (entity_io.md "use_icon enum", recovered from the client.dll pointer array at file offset

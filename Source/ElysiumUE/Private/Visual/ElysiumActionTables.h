@@ -7,7 +7,7 @@
 #include "Containers/UnrealString.h"
 #include "Templates/Function.h"
 
-// The recovered VtMB activity-translation tables, as project source (LIFE2).
+// The recovered VtMB activity-translation tables, as project source.
 //
 // A translation table is a game *rule*, the same category as the `CGameMovement` constants in
 // `ElysiumMoveSolve.h` and the compiled slot tables in `ElysiumSheetSlots.h`: it is written down
@@ -93,13 +93,13 @@ namespace ElysiumActionTables
 		uint64 RetailRowDigest = 0;
 	};
 
-	// --- the generated data -------------------------------------------------------------------
+	// The generated data.
 	TArrayView<const FWeaponLadder> WeaponLadders();
 	TArrayView<const FActionRename> RenameRules();
 	TArrayView<const TCHAR* const> SubstituteBases();
 	const FActionTableCensus& Census();
 
-	// --- the rules over it --------------------------------------------------------------------
+	// The rules over it.
 
 	// Which shape a base takes under a family. Reported so a conformance run can show that no kind
 	// is dead: a misdecoded rule shows up as a kind that resolves nothing.
@@ -174,7 +174,6 @@ namespace ElysiumActionTables
 	// FNV-1a 64 over the expanded stream, byte for byte what the generator hashes.
 	uint64 DigestOf(const TArray<FExpandedRow>& Rows);
 
-	// =============================================================================================
 	// The player action rules.
 	//
 	// VtMB's player animation is not a button-to-clip table. `CBasePlayer::PostThink` asks a compact
@@ -186,7 +185,6 @@ namespace ElysiumActionTables
 	//
 	// The generated data lives in `ElysiumPlayerActionRules.cpp`. The behaviour is
 	// `docs/vtmb/animation_and_movers.md` A.3.
-	// =============================================================================================
 
 	enum class EPlayerReach : uint8
 	{
@@ -394,13 +392,13 @@ namespace ElysiumActionTables
 		int32 Predicates = 0;
 	};
 
-	// --- the generated data -------------------------------------------------------------------
+	// The generated data.
 	TArrayView<const FPlayerAction> PlayerActions();
 	// The idle/aim/crouch/sneak/walk/run choice, which is **not** inside any code's arm: the
 	// selector computes it unconditionally right after the pose writes, and codes `0`, `1` and the
 	// classifier's `-1` match no arm, so it survives to the apply path verbatim.
 	//
-	// **Live for the player's grounded branch (LIFE4, Option A):**
+	// **Live for the player's grounded branch:**
 	// `FElysiumAnimationDriver::SelectPlayerGroundActivity` walks these rows per frame with a
 	// live combat-stance query. The cast and the player's water/air phases keep
 	// `ElysiumAnimIntent::Classify`, so the two selectors own disjoint branches rather than both
@@ -412,7 +410,7 @@ namespace ElysiumActionTables
 	const FPlayerActionTuning& PlayerTuning();
 	const FPlayerActionCensus& PlayerCensus();
 
-	// --- the rules over it --------------------------------------------------------------------
+	// The rules over it.
 
 	const FPlayerAction* FindPlayerAction(int32 Code);
 	const FPlayerAction* FindPlayerAction(const FString& Name);
@@ -435,7 +433,6 @@ namespace ElysiumActionTables
 	// first-named order. The conformance walk's input.
 	void CollectPlayerActivities(TArray<FString>& OutActivities);
 
-	// =============================================================================================
 	// The NPC translation surface.
 	//
 	// `CAI_BaseNPC::TranslateActivity` alternates two class-side virtuals with the weapon translator:
@@ -450,7 +447,6 @@ namespace ElysiumActionTables
 	// vocabulary, first match wins, and the body's `ChainTo` runs the inherited body before or after
 	// its own rules. The generated data lives in `ElysiumNpcActivityTables.cpp`; the behaviour is
 	// `docs/vtmb/animation_and_movers.md` A.3.
-	// =============================================================================================
 
 	enum class ENpcSlot : uint8
 	{
@@ -743,7 +739,7 @@ namespace ElysiumActionTables
 		int32 Predicates = 0;
 	};
 
-	// --- the generated data -------------------------------------------------------------------
+	// The generated data.
 	TArrayView<const FNpcTranslationBody> NpcTranslationBodies();
 	TArrayView<const FNpcClass> NpcClasses();
 	TArrayView<const FNpcEntityAlias> NpcEntityAliases();
@@ -754,7 +750,7 @@ namespace ElysiumActionTables
 	TArrayView<const TCHAR* const> NpcGrappleRoleSuffixes(ENpcGrappleRoleOrder Order);
 	const FNpcTableCensus& NpcCensus();
 
-	// --- the rules over it --------------------------------------------------------------------
+	// The rules over it.
 
 	const FNpcClass* FindNpcClass(const FString& CppClass);
 	// The class a map's `classname` or an `npc_maker`'s `NPCTypE` names. Falls back to the canonical
@@ -808,7 +804,7 @@ namespace ElysiumActionTables
 	// Every task policy naming one task, in table order.
 	void CollectNpcTaskPolicies(const FString& TaskName, TArray<const FNpcTaskPolicy*>& OutPolicies);
 
-	// --- The recovered restart rule ---------------------------------------------------------------
+	// The recovered restart rule.
 	//
 	// `RestartIdealActivity` (`0x10289ee0`) clears the current activity before calling
 	// `SetIdealActivity`, so a request that equals what is already playing is **not** swallowed as an

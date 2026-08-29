@@ -1,4 +1,4 @@
-// Content-free Substrate automation: the player's melee COMBO CHAIN, driven end to end (LIFE5).
+// Content-free Substrate automation: the player's melee COMBO CHAIN, driven end to end.
 //
 // This suite exists because the chain is not one rule, it is a path: the controller's button field,
 // the press edge derived from it, `ItemPostFrame` staging the first swing, the busy predicate
@@ -231,9 +231,7 @@ namespace
 	}
 }   // namespace
 
-// =====================================================================================
-// The whole chain, from the button field to the committed successor
-// =====================================================================================
+// The whole chain, from the button field to the committed successor.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumComboChainSequenceTest,
 	"Elysium.Substrate.ComboChain.Sequence", GElysiumComboTestFlags)
@@ -317,9 +315,7 @@ bool FElysiumComboChainSequenceTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// A held button chains nothing, and the live direction cannot redirect a chain
-// =====================================================================================
+// A held button chains nothing, and the live direction cannot redirect a chain.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumComboChainPressEdgeTest,
 	"Elysium.Substrate.ComboChain.PressEdge", GElysiumComboTestFlags)
@@ -371,9 +367,7 @@ bool FElysiumComboChainPressEdgeTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// What the chain travels: the authored displacement of the links it actually took
-// =====================================================================================
+// What the chain travels: the authored displacement of the links it actually took.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumComboChainDisplacementTest,
 	"Elysium.Substrate.ComboChain.Displacement", GElysiumComboTestFlags)

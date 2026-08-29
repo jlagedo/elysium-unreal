@@ -132,9 +132,9 @@ namespace
 	}
 }
 
-// =====================================================================================
+
 // The authored `Dmg` grammar and the soak table
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageParseTest, "Elysium.Substrate.Damage.Parse",
 	GElysiumTestFlags)
@@ -243,9 +243,9 @@ bool FElysiumDamageParseTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // ElysiumDamage::Apply — the confirmed order
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageApplyTest, "Elysium.Substrate.Damage.Apply",
 	GElysiumTestFlags)
@@ -382,9 +382,9 @@ bool FElysiumDamageApplyTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // FElysiumCombatCharacter::CommitDamage — the one health commit
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageCommitTest, "Elysium.Substrate.Damage.Commit",
 	GElysiumTestFlags)
@@ -475,9 +475,9 @@ bool FElysiumDamageCommitTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The producers: the two NPC outputs, the NPC input and the hurt cadence
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDamageProducersTest, "Elysium.Substrate.Damage.Producers",
 	GElysiumTestFlags)

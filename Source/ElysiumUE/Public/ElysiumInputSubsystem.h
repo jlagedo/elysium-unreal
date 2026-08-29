@@ -14,8 +14,8 @@ class UGameInstance;
 class UInputMappingContext;
 enum class ECommonInputType : uint8;
 
-// S6 — the one input-mode arbiter (roadmap 11.5, `docs/architecture/runtime-architecture.md` §8.1). Mode, cursor and
-// (at 10.6) mapping contexts come from the top of one priority stack, and nothing else in the
+// S6 — the one input-mode arbiter (`docs/architecture/runtime-architecture.md` §8.1). Mode, cursor and
+// mapping contexts come from the top of one priority stack, and nothing else in the
 // project calls SetInputMode: the menu, the dialogue box, sign panels, cutscenes, chargen and Cog
 // all push a scope while they are up and pop it when they go away.
 //
@@ -39,7 +39,7 @@ public:
 
 	// The local player's arbiter. Null before the first local player exists (early boot) and in a
 	// headless world with no player — every caller handles that, the same null-service discipline
-	// 11.2 established for the world services.
+	// the world services use.
 	static UElysiumInputSubsystem* Get(const UGameInstance* GameInstance);
 
 	// Claim input. The returned handle is what releases it; a UIOnly claim also revokes any ImGui
@@ -76,7 +76,7 @@ private:
 	void OnInputMethodChanged(ECommonInputType InputType);
 	bool ResolveCursorVisible(EElysiumCursorPolicy Policy) const;
 
-	// --- Cog ------------------------------------------------------------------------------------
+	// Cog.
 	// Cog owns its own Slate capture and is not going to be taught about this stack (it is a
 	// vendored plugin), so the arbiter *observes* it: a per-frame reconcile pushes a Debug scope
 	// when ImGui takes input and pops it when it lets go. That is what puts the debug UI in the same

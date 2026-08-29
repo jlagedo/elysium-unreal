@@ -13,7 +13,7 @@
 	#include "Misc/MemStack.h"
 	#include "ReferenceSkeleton.h"
 
-// CCC — retail's per-body bank bone-remap (`vampire.dll FUN_100c67b0`), reproduced as
+// Retail's per-body bank bone-remap (`vampire.dll FUN_100c67b0`), reproduced as
 // `FElysiumBankRemap` (the classification and the build from two bind poses) and
 // `FAnimNode_ElysiumBankRemap` (the translation-only correction applied over one closure's
 // composed pose). There is no sidecar: retail itself builds this table at model load, from the
@@ -62,11 +62,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBankRemapTest, "Elysium.Substrate.BankR
 
 bool FElysiumBankRemapTest::RunTest(const FString&)
 {
-	// ===============================================================================================
+
 	// Part 1 — `FElysiumBankRemap::ClassifyBranch` and `::Build`: the classification rule and the
 	// correlate-by-name/skip-if-absent build, against the measured ash / Bip01 Pelvis numbers and a
 	// small synthetic bank/mesh skeleton pair.
-	// ===============================================================================================
+
 
 	// --- the branch rule against the measured ash/Bip01 Pelvis numbers ---------------------------
 	//
@@ -190,11 +190,11 @@ bool FElysiumBankRemapTest::RunTest(const FString&)
 	TestFalse(TEXT("a same-named source on another skeleton gets its own empty cache entry"),
 		AnimSubsystem->GetBankRemap(BodyMesh, CopyBankSkeleton, SharedSourceName).IsValid());
 
-	// ===============================================================================================
+
 	// Part 2 — `FAnimNode_ElysiumBankRemap`: the translation-only correction over a resolved table,
 	// stated inline through `LoadJson` so this does not depend on Part 1's `Build` or on any baked
 	// asset.
-	// ===============================================================================================
+
 
 	USkeleton* NodeSkeleton = BuildTestSkeleton(
 		{ TEXT("root"), TEXT("pelvis"), TEXT("spine"), TEXT("forearm"), TEXT("hand") },

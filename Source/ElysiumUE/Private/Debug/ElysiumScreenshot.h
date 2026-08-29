@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// P2.7/2.9 — the one viewport-capture path, shared by the `elysium_screenshot` MCP tool (which
+// The one viewport-capture path, shared by the `elysium_screenshot` MCP tool (which
 // returns the PNG inline to the agent) and the `-ElysiumShots` regression harness (which writes
 // it to $ELYSIUM_EXPORT_ROOT/_shots). Both need the same two things: a frame's back buffer as an FColor
 // bitmap, and that bitmap as PNG bytes.
@@ -23,8 +23,8 @@ namespace ElysiumScreenshot
 	// bShowUI selects whether Slate/UMG is composited into the capture. It defaults to **false**
 	// because that is what the screenshot-regression harness needs: a shot must not change when a
 	// Cog window happens to be open. The agent-facing MCP tool passes **true** — its job is to show
-	// what the player sees, and since 8.6 that includes the menu and every other UMG screen. The
-	// Canvas HUD draws with the world and appears either way.
+	// what the player sees, including the menu and every other UMG screen. The Canvas HUD draws
+	// with the world and appears either way.
 	bool Request(const FOnCaptured& OnCaptured, int32 TimeoutFrames = 300, bool bShowUI = false);
 
 	// Encode a captured bitmap as PNG. Returns false on an empty bitmap or an encoder failure.

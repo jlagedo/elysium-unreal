@@ -109,9 +109,7 @@ bool FElysiumUserCmd::FromLine(const FString& Line, FElysiumUserCmd& Out)
 	return true;
 }
 
-// =====================================================================================
 // FElysiumUserCmdBuilder
-// =====================================================================================
 
 void FElysiumUserCmdBuilder::SetButton(EElysiumButton Button, bool bDown)
 {
@@ -245,9 +243,7 @@ void FElysiumUserCmdBuilder::Reset()
 	Seq = 0;
 }
 
-// =====================================================================================
 // FElysiumUserCmdStream
-// =====================================================================================
 
 const FElysiumUserCmd* FElysiumUserCmdStream::Next()
 {

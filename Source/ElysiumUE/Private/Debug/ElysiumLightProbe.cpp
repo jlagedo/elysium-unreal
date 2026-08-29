@@ -174,7 +174,7 @@ int32 ElysiumLightProbe::Run(UWorld* World, AElysiumMapActor* Map, int32 NumRays
 		}
 		const FVector O = Light->GetComponentLocation();
 
-		// --- the ray fan ---------------------------------------------------------------------
+		// The ray fan.
 		float Nearest = FLT_MAX;
 		int32 NearestDir = INDEX_NONE;
 		FRayHit NearestHit;

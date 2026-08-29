@@ -275,10 +275,9 @@ bool FElysiumStanceTalkingTest::RunTest(const FString&)
 
 // ============================================================================================
 // The driver, through the real producer path. Every test above asserts the rule in isolation; this
-// one asserts that a standing NPC in a loaded world actually reaches it — which is precisely what
-// was missing, because `Select` was written, tested and never called. It is also the regression
-// guard for the two think-cadence holes: a standing NPC used to fall off the end of `Think()`
-// without setting `NextThink`, so it was asked exactly once and held that pose forever.
+// one asserts that a standing NPC in a loaded world actually reaches it. `Select` is not itself
+// the producer — the think must call it. A standing NPC that falls off the end of `Think()`
+// without setting `NextThink` is asked exactly once and holds that pose forever.
 // ============================================================================================
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumStanceDriverTest,
 	"Elysium.Substrate.Stance.Driver", GElysiumStanceTestFlags)
@@ -337,8 +336,7 @@ bool FElysiumStanceDriverTest::RunTest(const FString&)
 
 	// --- A body with no stance set is not left unscheduled -----------------------------------
 	// The monsters and one-off models carry no `Stance_*` clips at all. They must fall back to the
-	// ACT_IDLE resolution rather than stalling, and — the part that used to be broken — they must
-	// still get a next think.
+	// ACT_IDLE resolution rather than stalling, and they must still get a next think.
 	{
 		FElysiumEntityDefs Defs;
 		BuildDefs(Defs);

@@ -1,8 +1,6 @@
 #include "ElysiumCameraSolve.h"
 
-// =====================================================================================
 // The approach (`client.dll` 0x100fc000)
-// =====================================================================================
 
 float ElysiumCam::Approach(float Current, float Target, float Speed, float Dt)
 {
@@ -51,9 +49,7 @@ float ElysiumCam::SolveViewRoll(const FVector& VelocityCm, const FRotator& ViewR
 		: RollAngleDeg * Sign;
 }
 
-// =====================================================================================
 // Player-model visibility (`CAM_Think` tail, `CInput+0x104`)
-// =====================================================================================
 
 float ElysiumCam::SolveModelAlpha(const FVector& SolvedOffset,
 	const FElysiumCameraWeights& Weights, const FElysiumCameraCvars& Cvars)
@@ -82,9 +78,7 @@ float ElysiumCam::SolveModelAlpha(const FVector& SolvedOffset,
 	return 0.0f;
 }
 
-// =====================================================================================
 // Weapon-class arbitration (`docs/vtmb/camera-view-modes.md` §2)
-// =====================================================================================
 
 int32 ElysiumCam::ParseCameraClass(const FString& Literal)
 {
@@ -175,9 +169,7 @@ FElysiumCameraDrawPolicy ElysiumCam::SolveDrawPolicy(const FElysiumCameraWeights
 	return Out;
 }
 
-// =====================================================================================
 // The scripted composition (`ApplyScriptedBlend`, tail of `CAM_ApplyToView`)
-// =====================================================================================
 
 void ElysiumCam::ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRotation, float& InOutFov,
 	const FVector& ShotLocation, const FRotator& ShotRotation, float ShotFov, float Weight)
@@ -197,9 +189,7 @@ void ElysiumCam::ComposeScriptedShot(FVector& InOutLocation, FRotator& InOutRota
 	}
 }
 
-// =====================================================================================
 // The weight driver (0x100fc900)
-// =====================================================================================
 
 void FElysiumCameraWeights::Advance(float DeltaSeconds, float TimeScale)
 {
@@ -253,9 +243,7 @@ FElysiumFeedCameraPose ElysiumCam::SolveOrdinaryFeedCamera(float T, float EntryY
 	return Out;
 }
 
-// =====================================================================================
 // The scripted-shot channel
-// =====================================================================================
 
 int32 FElysiumCameraShotStack::Push(const FElysiumCameraShot& Shot)
 {
@@ -353,15 +341,13 @@ FString FElysiumCameraShotStack::Describe() const
 	return Out;
 }
 
-// =====================================================================================
 // The cvar surface
-// =====================================================================================
 
 TArrayView<const ElysiumCam::FCvarDef> ElysiumCam::CvarDefs()
 {
 	// Defaults are the values `client.dll` registers, typed exactly as a `config.cfg` carries them.
 	// `camera_prefs` / `camera_weaponswitch` are FCVAR_ARCHIVE and only become meaningful once weapons
-	// exist (4.9); they are declared now so an archived value survives round-tripping a user's cfg.
+	// exist; they are declared so an archived value survives round-tripping a user's cfg.
 	static const FCvarDef Defs[] =
 	{
 		{ TEXT("cam_idealdist"),          TEXT("85"),  TEXT("desired boom length, Source units") },

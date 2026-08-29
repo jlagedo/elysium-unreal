@@ -73,7 +73,7 @@ void ElysiumCogLocomotion::SetupColumns()
 	ImGui::TableSetupColumn("Base hold");
 }
 
-// The six selection columns are CCC4's, and `Owner bank` is the one that carries the acceptance
+// The six selection columns, and `Owner bank` is the one that carries the acceptance
 // visually: the player's row reads its PC-only bank while every cast row reads the shared one, side
 // by side, out of one function. `State` is read off the record rather than projected here, so a row
 // that disagrees with the pose on screen is the resolver's answer being wrong and never this
@@ -110,7 +110,7 @@ void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 	ImGui::TableNextColumn();
 	if (Sel->ResolvedActivity.IsEmpty()) { ImGui::TextDisabled("--"); }
 	else { ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(*Sel->ResolvedActivity)); }
-	// LIFE4 -- the translation hops the resolver walked, on the column where the final answer
+	// The translation hops the resolver walked, on the column where the final answer
 	// already reads: which rung fired is the difference between "the weapon named this pose" and
 	// "the body fell back to what it had", and the hover is where a reader asks.
 	if (!Sel->RequestedActivity.IsEmpty() && ImGui::IsItemHovered())
@@ -140,7 +140,7 @@ void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 
 	ImGui::TableNextColumn();
 	ImGui::TextUnformatted(COG_TCHAR_TO_CHAR(ElysiumAnimIntent::AssetKindName(Sel->AssetKind)));
-	// LIFE5 -- the pair a fan actually evaluates, where the reader is already looking at what shape
+	// The pair a fan actually evaluates, where the reader is already looking at what shape
 	// the asset is. A row naming one cell reads as a snap, and a snap is a different pose from the
 	// two-cell mix the graph strikes.
 	if (!Sel->AnimationName.IsEmpty() && ImGui::IsItemHovered())
@@ -161,7 +161,7 @@ void ElysiumCogLocomotion::Row(const char* Producer, const char* Name,
 		ImGui::SetTooltip("%s", COG_TCHAR_TO_CHAR(*Sel->Detail));
 	}
 
-	// LIFE4 -- the base-channel arbitration verdict. A held frame is correct behaviour that looks
+	// The base-channel arbitration verdict. A held frame is correct behaviour that looks
 	// exactly like a stuck pose, so the row has to name the holder rather than leave a reader to
 	// guess which one is on screen.
 	ImGui::TableNextColumn();

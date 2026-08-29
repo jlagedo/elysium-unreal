@@ -22,8 +22,8 @@ namespace
 
 	void ConfigureInstantLayer(UCommonActivatableWidgetContainerBase& Layer)
 	{
-		// The old viewport surfaces appeared synchronously. Keep that contract until a layer has an
-		// authored transition of its own; CommonUI's inherited 0.4 s default is not presentation policy.
+		// Surfaces appear synchronously. Keep that contract until a layer has an authored transition
+		// of its own; CommonUI's inherited 0.4 s default is not presentation policy.
 		Layer.SetTransitionDuration(0.0f);
 	}
 }

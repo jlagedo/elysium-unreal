@@ -17,15 +17,13 @@ struct FElysiumSaveArchive;
 // whole prop's story. `ElysiumProp.cpp` owns the definition.
 DECLARE_LOG_CATEGORY_EXTERN(LogElysiumProp, Log, All);
 
-// The `elysium.PropBodies` A/B toggle's current value. The cvar is defined once in
+// The `elysium.PropBodies` console gate's current value. The cvar is defined once in
 // `ElysiumProp.cpp`; `prop_physics` gates its own body build on the same switch, so the read
 // is exposed here rather than the variable.
 bool ElysiumPropBodiesEnabled();
 
-// ============================================================================================
-// FElysiumProp — the AI-free static-mesh leaf shared by prop_dynamic / prop_dynamic_ornament. It
-// stands a decoded prop mesh at its placement and exposes the dynamic-prop inputs over it.
-// ============================================================================================
+// The AI-free static-mesh leaf shared by prop_dynamic / prop_dynamic_ornament. It stands a decoded
+// prop mesh at its placement and exposes the dynamic-prop inputs over it.
 
 class FElysiumProp : public FElysiumEntity
 {

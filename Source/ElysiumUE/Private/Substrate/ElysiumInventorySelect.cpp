@@ -7,7 +7,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumInvSelect, Log, All);
 
-// Inventory selection — the selector's authority (8.9's selector clause).
+// Inventory selection — the selector's authority.
 //
 // One cursor, two commits. `system/items.txt` declares the categories (`InventorySections`) and the
 // section each item type files under, so the vocabulary is authored rather than chosen here: the

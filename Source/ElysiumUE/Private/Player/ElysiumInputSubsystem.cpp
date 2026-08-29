@@ -334,7 +334,7 @@ bool UElysiumInputSubsystem::ResolveCursorVisible(EElysiumCursorPolicy Policy) c
 		!CommonInput || CommonInput->GetCurrentInputType() == ECommonInputType::MouseAndKeyboard);
 }
 
-// --- Cog -----------------------------------------------------------------------------------------
+// Cog.
 
 bool UElysiumInputSubsystem::ReconcileDebugCapture(float /*DeltaTime*/)
 {

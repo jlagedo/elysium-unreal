@@ -79,10 +79,8 @@ namespace ElysiumMcpImpl
 		return Rows;
 	}
 
-	// ---------------------------------------------------------------------------------------
 	// Live-state resolution. Tools resolve the world at CALL time (never at registration), so one
 	// registered tool list survives map travel, PIE start/stop, and an idle editor.
-	// ---------------------------------------------------------------------------------------
 
 	// The playing world: PIE wins over a standalone Game world, so a tool called from an editor
 	// session with PIE running targets the session the developer is looking at.
@@ -137,7 +135,7 @@ namespace ElysiumMcpImpl
 		return Map ? Map->GetEntityWorld() : nullptr;
 	}
 
-	// The body sample's own two enums as words (CCC1). The animation record's live in
+	// The body sample's own two enums as words. The animation record's live in
 	// `ElysiumAnimIntent` beside the types they name; these two belong to the sample, which predates
 	// it.
 	const TCHAR* StanceName(EElysiumStance Stance)
@@ -208,9 +206,7 @@ namespace ElysiumMcpImpl
 		return Controller ? Controller->GetPawn() : nullptr;
 	}
 
-	// ---------------------------------------------------------------------------------------
-	// JSON plumbing
-	// ---------------------------------------------------------------------------------------
+	// JSON plumbing.
 
 	TSharedRef<FJsonObject> Obj() { return MakeShared<FJsonObject>(); }
 
@@ -372,8 +368,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// --- Input-schema builder ---------------------------------------------------------------
-	// Small enough to hand-roll; the alternative (a USTRUCT per tool + FJsonSchemaGenerator) buys
+	// Input-schema builder. Small enough to hand-roll; the alternative (a USTRUCT per tool + FJsonSchemaGenerator) buys
 	// nothing here because none of these parameter sets is reused.
 
 	struct FSchema
@@ -412,7 +407,7 @@ namespace ElysiumMcpImpl
 		}
 	};
 
-	// --- Tool shapes -------------------------------------------------------------------------
+	// Tool shapes.
 
 	// Every synchronous tool. Run() is invoked on the game thread (the MCP server ticks off the
 	// core ticker and serializes tool calls there), so a handler may touch the entity world,
@@ -470,9 +465,7 @@ namespace ElysiumMcpImpl
 		return Tool;
 	}
 
-	// ---------------------------------------------------------------------------------------
-	// Entity marshalling
-	// ---------------------------------------------------------------------------------------
+	// Entity marshalling.
 
 	// The class chain, derived first. The registry links each descriptor to its base by name and
 	// walks that chain at lookup time; enumerating (as the inspector does) means walking it here.
@@ -604,7 +597,7 @@ namespace ElysiumMcpImpl
 			Out->SetObjectField(TEXT("live_state"), State);
 		}
 
-		// LIFE4 — the base-channel arbitration verdict for a cast body, the same fields
+		// The base-channel arbitration verdict for a cast body, the same fields
 		// elysium_player_get reports off the player's driver, read off the driver on the body's
 		// motor. An entity with no skeletal body or no motor — a prop, a brush, a green-room
 		// stand — simply has no verdict to report, which is an ordinary absence.
@@ -628,7 +621,7 @@ namespace ElysiumMcpImpl
 				Anim->SetStringField(TEXT("animation"), Sel.AnimationName);
 				Anim->SetStringField(TEXT("next_animation"), Sel.NextAnimationName);
 				Anim->SetNumberField(TEXT("axis_fraction"), Sel.AxisFraction[0]);
-				// LIFE4 — the same translation hops the player readout reports, so a cast body's
+				// The same translation hops the player readout reports, so a cast body's
 				// resolution is auditable without a screenshot: the class answer, the weapon ladder
 				// rung, the availability rung.
 				Anim->SetStringField(TEXT("class_activity"), Sel.ClassActivity);
@@ -645,7 +638,7 @@ namespace ElysiumMcpImpl
 				Anim->SetBoolField(TEXT("base_pose_owned"), Sel.bBasePoseOwned);
 				Anim->SetStringField(TEXT("base_hold"), Sel.BaseHold);
 				Anim->SetNumberField(TEXT("base_hold_seconds"), Sel.BaseHoldSeconds);
-				// The overlay stack (LIFE10).
+				// The overlay stack.
 				Anim->SetArrayField(TEXT("overlay_slots"), OverlayRows(Sel));
 				Out->SetObjectField(TEXT("animation"), Anim);
 			}
@@ -682,9 +675,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// ---------------------------------------------------------------------------------------
-	// Console-exec output capture
-	// ---------------------------------------------------------------------------------------
+	// Console-exec output capture.
 
 	// GEngine->Exec writes a command's direct output to the Ar it is handed, but most `elysium.*`
 	// verbs report through UE_LOG instead. Capturing both means collecting Ar AND the log tap's
@@ -698,11 +689,7 @@ namespace ElysiumMcpImpl
 		}
 	};
 
-	// ---------------------------------------------------------------------------------------
-	// The tools
-	// ---------------------------------------------------------------------------------------
-
-	// --- Status ---------------------------------------------------------------------------
+	// Status.
 
 	void AddStatusTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
@@ -765,7 +752,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// --- Map lifecycle ------------------------------------------------------------------
+	// Map lifecycle.
 
 	void AddMapTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
@@ -792,7 +779,7 @@ namespace ElysiumMcpImpl
 					Body->SetStringField(TEXT("pending_travel"), Maps->PendingTravelDesc());
 					// The app state is what says whether the loaded map is a menu backdrop, a running
 					// session or a held one — the same poll answers "has the travel landed" and "what
-					// kind of world am I in" (11.3).
+					// kind of world am I in".
 					if (const UElysiumGameFlowSubsystem* Flow = Sub<UElysiumGameFlowSubsystem>())
 					{
 						Body->SetStringField(TEXT("app_state"), ElysiumAppState::Name(Flow->AppState()));
@@ -906,7 +893,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// --- Player -------------------------------------------------------------------------
+	// Player.
 
 	void AddPlayerTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
@@ -1023,7 +1010,7 @@ namespace ElysiumMcpImpl
 						}
 						Body->SetObjectField(TEXT("camera"), Camera);
 					}
-					// CCC1/CCC4 — the body sample and the selection it produced. Together they are the
+					// The body sample and the selection it produced. Together they are the
 					// whole diagnosis of a wrong pose: what the body was doing, what activity that
 					// classified to, which label and OWNING BANK it resolved through, and why if it
 					// did not. An agent can drive `+forward` and check the bank without a screenshot.
@@ -1051,7 +1038,7 @@ namespace ElysiumMcpImpl
 						Anim->SetStringField(TEXT("resolved_activity"), Sel.ResolvedActivity);
 						Anim->SetStringField(TEXT("first_weapon_activity"), Sel.FirstWeaponActivity);
 						Anim->SetStringField(TEXT("weapon_activity"), Sel.WeaponActivity);
-						// LIFE4 — the remaining translation hops, so the readout shows which rung
+						// The remaining translation hops, so the readout shows which rung
 						// fired: the class answer, the weapon ladder rung, the availability rung.
 						Anim->SetStringField(TEXT("class_activity"), Sel.ClassActivity);
 						Anim->SetNumberField(TEXT("weapon_rung"), Sel.WeaponRung);
@@ -1103,7 +1090,7 @@ namespace ElysiumMcpImpl
 						Anim->SetStringField(TEXT("outcome"),
 							ElysiumAnimIntent::OutcomeName(Sel.Outcome));
 						Anim->SetStringField(TEXT("detail"), Sel.Detail);
-						// LIFE4 — the base-channel arbitration verdict, so a held pose names its
+						// The base-channel arbitration verdict, so a held pose names its
 						// holder in the same readout every other selection fact lives in.
 						Anim->SetBoolField(TEXT("base_pose_owned"), Sel.bBasePoseOwned);
 						Anim->SetStringField(TEXT("base_hold"), Sel.BaseHold);
@@ -1132,7 +1119,7 @@ namespace ElysiumMcpImpl
 							Aimed.IsSet() ? World->DescribeHandle(Aimed) : FString());
 						Body->SetNumberField(TEXT("game_time"), World->NowSeconds());
 
-						// 11.4 — the pawn above is the body; the state is the entity's.
+						// The pawn above is the body; the state is the entity's.
 						if (const FElysiumPlayer* Player = World->FindPlayer())
 						{
 							TSharedRef<FJsonObject> Ent = Obj();
@@ -1272,7 +1259,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// --- Entities -----------------------------------------------------------------------
+	// Entities.
 
 	void AddEntityTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
@@ -1473,7 +1460,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// --- Event queue --------------------------------------------------------------------
+	// Event queue.
 
 	void AddQueueTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
@@ -1716,7 +1703,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// --- Scripting ----------------------------------------------------------------------
+	// Scripting.
 
 	void AddScriptingTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
@@ -1822,7 +1809,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// --- Audio --------------------------------------------------------------------------
+	// Audio.
 
 	void AddAudioTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
@@ -1848,7 +1835,7 @@ namespace ElysiumMcpImpl
 					// actually reached inside it, which is the read that survives a slow decode.
 					Body->SetNumberField(TEXT("audio_clock"), Audio->AudioClock());
 
-					// 12.2b — the lead every cue is scheduled with and the terms it is made of. The
+					// The lead every cue is scheduled with and the terms it is made of. The
 					// device half is queried, the endpoint half modelled from those queried frame
 					// counts, the submit->render half measured on the voices that have played.
 					const FElysiumAudioLatency& Lat = Audio->OutputLatency();
@@ -1923,7 +1910,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// --- Escape hatches -----------------------------------------------------------------
+	// Escape hatches.
 
 	void AddMiscTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
@@ -2022,7 +2009,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// --- Screenshot ---------------------------------------------------------------------
+	// Screenshot.
 
 	void AddScreenshotTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{
@@ -2101,9 +2088,7 @@ namespace ElysiumMcpImpl
 		}
 	}
 
-	// ---------------------------------------------------------------------------------------
-	// Registration — one call per domain, in the order the tool list presents
-	// ---------------------------------------------------------------------------------------
+	// Registration — one call per domain, in the order the tool list presents.
 
 	void BuildTools(TArray<TSharedRef<IModelContextProtocolTool>>& Out)
 	{

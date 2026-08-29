@@ -4,9 +4,7 @@
 
 #include "ElysiumEntity.h"
 
-// ============================================================================================
-// FElysiumNpcMaker — npc_maker: retail admission, quotas, timed retries and child ownership.
-// ============================================================================================
+// `npc_maker`: retail admission, quotas, timed retries and child ownership.
 
 class FElysiumNpcMaker final : public FElysiumEntity
 {

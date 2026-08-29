@@ -8,7 +8,7 @@ class AElysiumMapActor;
 class IConsoleObject;
 
 // World-hosted developer commands. Every player-facing HUD and modal surface, including game_sign,
-// is owned by UElysiumPlayerUISubsystem's CommonUI root; this actor no longer renders UI on Canvas.
+// lives on UElysiumPlayerUISubsystem's CommonUI root; this actor does not render UI on Canvas.
 UCLASS()
 class AElysiumHUD : public AHUD
 {

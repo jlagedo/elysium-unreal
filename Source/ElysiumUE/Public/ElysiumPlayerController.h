@@ -12,7 +12,7 @@ class FElysiumEntityWorld;
 class UElysiumInputRouter;
 
 // Player controller for the boot game mode. It hosts `UElysiumCheatManager` (CheatClass) and
-// `UElysiumInputRouter` (11.6), and it **binds no key of its own**: every key in VtMB's default set
+// `UElysiumInputRouter`, and it **binds no key of its own**: every key in VtMB's default set
 // is installed by the router and fires a named verb through the command bus.
 //
 // What it does own is the implementation of world verbs that need a live map — `+attack` (which
@@ -34,7 +34,7 @@ public:
 	// Step 1 of the frame. The bindings for this frame have run by the time Super returns, so the
 	// user command is built here — ahead of `UpdateRotation`, which is what applies the look delta,
 	// clamps the pitch and faces the pawn off the same frame's input, and still before the substrate
-	// ticks (11.1).
+	// ticks.
 	virtual void ProcessPlayerInput(const float DeltaTime, const bool bGamePaused) override;
 
 	UElysiumInputRouter* GetInputRouter() const { return Router; }

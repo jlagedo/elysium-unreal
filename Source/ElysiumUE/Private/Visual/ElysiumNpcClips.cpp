@@ -278,7 +278,7 @@ namespace
 	}
 }
 
-// --- FElysiumNpcClipSet ----------------------------------------------------------------
+// FElysiumNpcClipSet.
 
 bool FElysiumNpcClipSet::Load(const FString& InStem, FString& OutError)
 {
@@ -648,7 +648,7 @@ void FElysiumNpcClipSet::SortByWeight(TArray<FElysiumClipRef>& Refs) const
 	});
 }
 
-// --- FElysiumNpcIndex ------------------------------------------------------------------
+// FElysiumNpcIndex.
 
 bool FElysiumNpcIndex::Load(FString& OutError)
 {
@@ -756,9 +756,8 @@ bool FElysiumNpcIndex::LoadJsonText(const FString& JsonText, FString& OutError)
 				Entry.Model.ReplaceInline(TEXT("\\"), TEXT("/"));
 				Entry.Model.ToLowerInline();
 				// Two shapes. v6 writes one object per clip carrying the selection keys; v4/v5
-				// wrote bare, alphabetically sorted names. Both are accepted so an index that
-				// predates the re-export still stands its props — it just has no rest pose and
-				// no loop flags, which is the behaviour those versions already had.
+				// write bare, alphabetically sorted names. Both are accepted so a v4/v5 index
+				// still stands its props — it just has no rest pose and no loop flags.
 				const TArray<TSharedPtr<FJsonValue>>* Clips = nullptr;
 				if ((*Obj)->TryGetArrayField(TEXT("clips"), Clips) && Clips != nullptr)
 				{

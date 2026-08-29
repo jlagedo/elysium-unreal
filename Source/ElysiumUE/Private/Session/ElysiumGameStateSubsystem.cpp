@@ -32,7 +32,7 @@ EElysiumNotificationKind ElysiumQuestNotifications::KindForStateType(const FStri
 	}
 }
 
-// --- The player: live entity first, record second (11.4) -------------------------------------
+// The player: live entity first, record second.
 
 FElysiumPlayer* UElysiumGameStateSubsystem::PlayerEntity() const
 {
@@ -109,7 +109,7 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 		Dying->Detach();
 	}
 
-	// A fresh run starts from a clean bag: travel keeps `G` alive (R8), so without this a second
+	// A fresh run starts from a clean bag: travel keeps `G` alive, so without this a second
 	// New Game would inherit the previous run's beat counter and latches.
 	ClearAllGlobals();
 	Quests.Reset();
@@ -120,13 +120,13 @@ void UElysiumGameStateSubsystem::BeginNewGame(int32 Clan, bool bMale)
 	// time scale and armed dev step, which is what makes the run pristine rather than merely reseeded.
 	TimeCtl.ResetClock();
 
-	// S8 — every game-visible draw comes from an owned, seeded stream whose state is in the save
+	// Every game-visible draw comes from an owned, seeded stream whose state is in the save
 	// (`docs/architecture/save-architecture.md` §8). A run takes one session seed; the five streams derive from it.
 	ElysiumRng::SeedAll(static_cast<int32>(FPlatformTime::Cycles()));
 
 	Record.Reset();
 	// The sheet starts from `stats.txt`'s authored defaults, then takes the two identity slots the
-	// front end chose. Chargen (9.4f) replaces this with the full spend.
+	// front end chose. Chargen replaces this with the full spend.
 	if (const FElysiumStatTable* Table = Stats())
 	{
 		Record.Sheet.SeedFrom(*Table);
@@ -208,7 +208,7 @@ void UElysiumGameStateSubsystem::EndSession()
 		TEXT("session ended — G, quests, the map snapshots, the player record and the clock cleared"));
 }
 
-// --- The per-map snapshots (11.9) -------------------------------------------------------------
+// The per-map snapshots.
 
 const FElysiumMapSnapshot* UElysiumGameStateSubsystem::FindMapSnapshot(const FString& Map) const
 {
@@ -243,18 +243,18 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 {
 	Super::Initialize(Collection);
 
-	// S1 — the time facade reaches the engine (pause, dilation) through the game instance's
+	// The time facade reaches the engine (pause, dilation) through the game instance's
 	// current world, resolved per call so travel never leaves it holding a dead one.
 	TimeCtl.Bind(GetGameInstance());
 
-	// P5 5.4 / P9 9.3 — real evaluation is the map-load default: field-6 payloads, logic_pythoncheck
+	// Real evaluation is the map-load default: field-6 payloads, logic_pythoncheck
 	// gates, and ScheduleTask deferred sources all run live, through the embedded CPython VM when it
 	// is available (so level-script names resolve) and the expression evaluator otherwise.
 	// `elysium.script.live 0` swaps in the null host — the whole surface goes dark together.
 	ScriptHostPtr = MakePreferredScriptHost();
 
 	// The installed host is plain C++ and cannot subscribe to the map-epoch boundary itself, so this
-	// subsystem — which owns it across every host swap — forwards the retire (S4).
+	// subsystem — which owns it across every host swap — forwards the retire.
 	if (UElysiumMapSubsystem* Maps = Collection.InitializeDependency<UElysiumMapSubsystem>())
 	{
 		MapEpochRetiredHandle = Maps->OnMapEpochRetired().AddUObject(
@@ -321,7 +321,7 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 
 	// `elysium.eval <expr>` — evaluate one expression against the current map + G store and print the
 	// value (error-to-false: a bad expression logs the reason and reads Void). Read-only sugar over
-	// the P5 5.2 evaluator; the args are re-joined so quoting is optional.
+	// the evaluator; the args are re-joined so quoting is optional.
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.eval"),
 		TEXT("elysium.eval <expression> — evaluate a script expression (e.g. G.Tut_Elev, 1+2, ent.field)"),
@@ -353,8 +353,8 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 		ECVF_Cheat));
 
 	// `elysium.script.live [0|1]` — arm/disarm live script evaluation (no arg reports state). On by
-	// default (5.4): field-6 payloads, logic_pythoncheck gates, and ScheduleTask sources run live. `0`
-	// swaps in the null host (logs + Void) so the whole scripting surface goes dark together, for A/B.
+	// default: field-6 payloads, logic_pythoncheck gates, and ScheduleTask sources run live. `0`
+	// swaps in the null host (logs + Void) so the whole scripting surface goes dark together.
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
 		TEXT("elysium.script.live"),
 		TEXT("elysium.script.live [0|1] — toggle live script evaluation (default on; 0 = null host for A/B)"),
@@ -373,7 +373,7 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 		ECVF_Cheat));
 
 	// `elysium.script.cpython [0|1]` — swap the field-6/pythoncheck host between the embedded
-	// CPython 2.7 VM (1, the default where available) and the ElysiumExpr evaluator (0), for A/B.
+	// CPython 2.7 VM (1, the default where available) and the ElysiumExpr evaluator (0).
 	// Either way the current map's level script is re-imported into the new host. No arg reports
 	// the current host.
 	ConsoleObjects.Add(IConsoleManager::Get().RegisterConsoleCommand(
@@ -401,7 +401,7 @@ void UElysiumGameStateSubsystem::Initialize(FSubsystemCollectionBase& Collection
 		}),
 		ECVF_Cheat));
 
-	// --- S1: the time facade, reachable by name ------------------------------------------
+	// The time facade, reachable by name.
 	// All three drive FElysiumTimeControl, so each moves the clock and engine time together —
 	// thinks, the event queue, movers and ScheduleTask on one side; actor ticks, physics,
 	// animation and the camera blend on the other.
@@ -499,7 +499,7 @@ void UElysiumGameStateSubsystem::Deinitialize()
 
 void UElysiumGameStateSubsystem::SetScriptHost(TUniquePtr<IElysiumScriptHost> InHost)
 {
-	// M4 swaps the null host for the real evaluator; ignore a null argument so ScriptHost()
+	// Ignore a null argument so ScriptHost()
 	// always dereferences a live host.
 	if (!InHost)
 	{
@@ -622,7 +622,7 @@ void UElysiumGameStateSubsystem::SetQuestState(const FString& Quest, int32 State
 	UElysiumRulebookSubsystem* Rules = Rulebook();
 	if (!Rules)
 	{
-		return;   // a bare test world: the map is the whole system, exactly as before 9.4d
+		return;   // a bare test world: the map is the whole system
 	}
 
 	const ElysiumQuestLog::FOutcome Outcome =

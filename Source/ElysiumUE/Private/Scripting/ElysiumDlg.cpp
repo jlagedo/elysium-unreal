@@ -5,9 +5,7 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumDlg, Log, All);
 
-// ================================================================================================
-// Parser — 13-field, `}{`-joined, CRLF rows, Latin-1 (docs/vtmb/game_runtime.md §5 "Physical format").
-// ================================================================================================
+// Parser — 13-field, `}{`-joined, CRLF rows, Latin-1 (`docs/vtmb/game_runtime.md` §5 "Physical format").
 
 namespace
 {
@@ -157,11 +155,9 @@ bool FElysiumDlgFile::LoadFile(const FString& Path, FElysiumDlgFile& Out, FStrin
 	return bOk;
 }
 
-// ================================================================================================
 // dlgexpr normalizer — rewrite the engine skill-check grammar into the pure-Python subset the host
-// evaluates. The dlgexpr grammar (docs/vtmb/python_bridge.md) has no bitwise operators, so every top-level
+// evaluates. The dlgexpr grammar (`docs/vtmb/python_bridge.md`) has no bitwise operators, so every top-level
 // `&`/`|` is a logical join and every bare `IDENT [relop] INT` run is a skill-check.
-// ================================================================================================
 
 // The module builds with unity on, so a bare `namespace {}` here would still collide with another
 // translation unit's helpers of the same name — `ElysiumExpr.cpp` has its own `ETok`/`Tokenize`. The
@@ -364,9 +360,7 @@ FString ElysiumDlgExpr::ActionToPython(const FString& Raw)
 	return Normalize(Raw, TEXT(";"), TEXT("|"));
 }
 
-// ================================================================================================
-// Branch machine (docs/vtmb/game_runtime.md §5 "Runtime / branching").
-// ================================================================================================
+// Branch machine (`docs/vtmb/game_runtime.md` §5 "Runtime / branching").
 
 FElysiumDlgConversation::FElysiumDlgConversation(TSharedRef<const FElysiumDlgFile> InFile,
 	bool bInPlayerMale, bool bInPlayerMalkavian, FCondFn InCond, FActFn InAct,

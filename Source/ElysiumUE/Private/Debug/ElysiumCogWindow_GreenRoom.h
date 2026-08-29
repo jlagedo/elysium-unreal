@@ -16,11 +16,11 @@ class USkinnedAsset;
 
 // The green room's control surface: pick a body, pick a clip, and watch it move.
 //
-// The green room has always been a one-shot — it resolved a fixed case, seeked fixed times, wrote
-// PNGs and exited — and everything it answered was answered by a still. Most of what a body does is
-// not a still. Whether a gait reads at walking pace, whether a held weapon tracks the hand through
-// one, whether two irises converge on the same point: all of that is timing, and none of it
-// survives being sampled at five fractions. This window drives the same stage in the live lab mode
+// The capture harness is a one-shot: it resolves a fixed case, seeks fixed times, writes PNGs and
+// exits, and everything it answers is answered by a still. Most of what a body does is not a still.
+// Whether a gait reads at walking pace, whether a held weapon tracks the hand through one, whether
+// two irises converge on the same point: all of that is timing, and none of it survives being
+// sampled at five fractions. This window drives the same stage in the live lab mode
 // (`Debug/ElysiumGreenRoomRun.h`), where nothing is captured and nothing exits.
 class FElysiumCogWindow_GreenRoom : public FElysiumCogWindow
 {
@@ -59,7 +59,7 @@ private:
 	void RenderClips(FElysiumGreenRoomRun& Lab);
 	void RenderLayers(FElysiumGreenRoomRun& Lab);
 	void RenderPlayback(FElysiumGreenRoomRun& Lab);
-	// Drive mode's readout (CCC6): what the mover published, what the resolver chose, what the graph
+	// Drive mode's readout: what the mover published, what the resolver chose, what the graph
 	// is playing, and how far off the bind pose the body actually is. The last one is the only
 	// observable the T-pose failure has, and the middle two are what make a wrong pose traceable to
 	// a step instead of guessed at.
@@ -74,7 +74,7 @@ private:
 	void DumpBones(FElysiumGreenRoomRun& Lab);
 	FString BoneDumpText;
 
-	// The eye rig (12.4). The stage carries no `FElysiumNpc`, so nothing supplies a gaze and every eye
+	// The eye rig. The stage carries no `FElysiumNpc`, so nothing supplies a gaze and every eye
 	// rests on its authored aim — a correct state that shows none of what the rig does. This tab is
 	// the aim, the blink and the two renderer knobs, plus the readout that separates "this model has
 	// no eyes" from "its sections drew as eyes and joined no record", which look identical on screen.
@@ -84,7 +84,7 @@ private:
 	UElysiumEntityBodies* GetBodies() const;
 	// The autolayer binding the standing clip declares, beside what the lab actually has riding.
 	void RenderAutoLayers(FElysiumGreenRoomRun& Lab);
-	// The wielded weapon (CCC10.2): pick an item, pick the wielder's sex, and read back the row the
+	// The wielded weapon: pick an item, pick the wielder's sex, and read back the row the
 	// table answered with — the baked mesh, the mount bone and the hand it descends from. The
 	// picker lists only the rows that carry geometry, because the corpus's ordinary answer is that
 	// an item holds none, and 244 mostly-empty rows would hide the 40 that do.
@@ -183,7 +183,7 @@ private:
 	// scalar the accumulator actually receives in retail lives in the DLL and is not recovered, so
 	// this is a control surface rather than a reproduction.
 	float LayerWeight = 1.f;
-	// Where an armed aim grid is sampled, in the pose parameters' own degrees (CCC10). Distinct from
+	// Where an armed aim grid is sampled, in the pose parameters' own degrees. Distinct from
 	// the eye/gaze sliders: those aim a look, these pick the cell of a 3x3 weapon-aim grid. The
 	// ordinary player producer pins both at zero, so a grid that could not be steered here would read
 	// as a still pose and its whole point — that the torso tracks — would be invisible.

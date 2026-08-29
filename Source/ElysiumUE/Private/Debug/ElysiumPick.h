@@ -25,7 +25,7 @@ enum class EElysiumPickKind : uint8
 	PropInstance,   // one instance of one static-prop model
 };
 
-// P2.6 click-pick result: what is under a screen ray, plus the world-space geometry the Cog
+// Click-pick result: what is under a screen ray, plus the world-space geometry the Cog
 // overlay draws to show it. Everything here is a snapshot — components are weak, so a map reload
 // leaves a result that reports itself as stale rather than dangling.
 struct FElysiumPickResult

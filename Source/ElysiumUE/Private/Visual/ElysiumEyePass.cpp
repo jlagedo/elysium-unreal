@@ -16,7 +16,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
-// 12.4 — an unambiguous visual check on the eye basis before the gaze cascade exists. Aiming every
+// An unambiguous visual check on the eye basis before the gaze cascade exists. Aiming every
 // eye at a target that moves is the only way to tell a correct basis from one that merely looks
 // plausible while parked on the record's authored resting aim.
 static TAutoConsoleVariable<int32> CVarEyeTrackPlayer(
@@ -225,7 +225,7 @@ void FElysiumEyePass::TickEyes(const UObject* Context, float)
 	// Everything here reads this frame's settled component-space pose, which is why it runs in the
 	// post-move pass rather than in the component's own tick: at TG_PrePhysics the transforms are
 	// last frame's, and GetProxyOnGameThread would flush a live parallel evaluation.
-	// Until 12.4's gaze cascade supplies a target, an eye sits on the record's own authored resting
+	// Until a gaze cascade supplies a target, an eye sits on the record's own authored resting
 	// aim — the state `bEyeMove` off produces, which is a real retail configuration but is NOT
 	// guaranteed to point out of the face: it is whatever the model's QC authored.
 	//

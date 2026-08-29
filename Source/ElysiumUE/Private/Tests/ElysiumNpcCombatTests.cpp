@@ -339,9 +339,9 @@ namespace
 	};
 }
 
-// =====================================================================================
+
 // The loadout: the authored keyfield, the fists fallback, and the marked unarmed path.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatLoadoutTest,
 	"Elysium.Substrate.NpcCombat.Loadout", GElysiumTestFlags)
@@ -439,9 +439,9 @@ bool FElysiumNpcCombatLoadoutTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The capability split: which selector a weapon routes to, and the two retail bits.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatCapabilityTest,
 	"Elysium.Substrate.NpcCombat.Capability", GElysiumTestFlags)
@@ -510,9 +510,9 @@ bool FElysiumNpcCombatCapabilityTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The committed-enemy attack conditions: reach, facing, readiness, range bands, ammo.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatAttackConditionsTest,
 	"Elysium.Substrate.NpcCombat.AttackConditions", GElysiumTestFlags)
@@ -673,9 +673,9 @@ bool FElysiumNpcCombatAttackConditionsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The melee selector's recovered order, and the retained binary draw.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatMeleeSelectorTest,
 	"Elysium.Substrate.NpcCombat.MeleeSelectorOrder", GElysiumTestFlags)
@@ -767,9 +767,9 @@ bool FElysiumNpcCombatMeleeSelectorTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The ranged selector's recovered order.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRangedSelectorTest,
 	"Elysium.Substrate.NpcCombat.RangedSelectorOrder", GElysiumTestFlags)
@@ -810,9 +810,9 @@ bool FElysiumNpcCombatRangedSelectorTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The chase end to end: the schedule owner, the motor requests, arrival, and release.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatChaseTest,
 	"Elysium.Substrate.NpcCombat.Chase", GElysiumTestFlags)
@@ -891,10 +891,10 @@ bool FElysiumNpcCombatChaseTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The swing program: the notice, the weapon press, the damage that lands through the
 // cycle-1 commit, and the recovered empty mask that owns the NPC while it runs.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatSwingTest,
 	"Elysium.Substrate.NpcCombat.Swing", GElysiumTestFlags)
@@ -1010,9 +1010,9 @@ bool FElysiumNpcCombatSwingTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Interrupts: the chase admits ENEMY_DEAD, and the starvation gate no longer blocks it.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatInterruptTest,
 	"Elysium.Substrate.NpcCombat.ChaseInterrupt", GElysiumTestFlags)
@@ -1061,10 +1061,10 @@ bool FElysiumNpcCombatInterruptTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Live acquisition: the disposition idle now admits NEW_ENEMY, so a standing NPC can be
 // taken into combat between one think and the next.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatIdleAcquisitionTest,
 	"Elysium.Substrate.NpcCombat.IdleAcquisition", GElysiumTestFlags)
@@ -1124,7 +1124,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Retaliation: the whole chain from a struck neutral bystander to a pressed swing.
 //
 // Step 3 of the recovered NPC damage-to-AI transaction is "records the attack position and
@@ -1132,7 +1132,7 @@ bool FElysiumNpcCombatIdleAcquisitionTest::RunTest(const FString&)
 // stagger boundaries", step 3). The store the memory half reaches in this runtime is the relationship
 // table, which is marked at `ElysiumNpcEnemy::RememberAttacker`; everything after it here is the
 // recovered transaction running unchanged.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationTest,
 	"Elysium.Substrate.NpcCombat.Retaliation", GElysiumTestFlags)
@@ -1271,7 +1271,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The damage memory's five seconds: the recovered lifetime, its refresh, and what a fight
 // already in progress does when it runs out.
 //
@@ -1279,7 +1279,7 @@ bool FElysiumNpcCombatRetaliationTest::RunTest(const FString&)
 // the Troika NPC override at `0x102beda0` — "A surviving positive hit remembers the attacker for
 // five seconds and notifies the active schedule." The row the memory is kept in is this runtime's
 // stand-in (marked at `ElysiumNpcEnemy::RememberAttacker`); the five seconds are not.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationExpiryTest,
 	"Elysium.Substrate.NpcCombat.RetaliationExpiry", GElysiumTestFlags)
@@ -1396,9 +1396,9 @@ bool FElysiumNpcCombatRetaliationExpiryTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The derived row is session state: it does not travel in a save, and the rows beside it do.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRetaliationSaveTest,
 	"Elysium.Substrate.NpcCombat.RetaliationSave", GElysiumTestFlags)
@@ -1466,9 +1466,9 @@ bool FElysiumNpcCombatRetaliationSaveTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // Running away: the projected retreat, and its fail path when the world will not have it.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatRunAwayTest,
 	"Elysium.Substrate.NpcCombat.RunAway", GElysiumTestFlags)
@@ -1540,10 +1540,10 @@ bool FElysiumNpcCombatRunAwayTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // A weaponless NPC fails its terminal attack task BY NAME rather than dealing damage
 // out of nothing.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatUnarmedTaskFailureTest,
 	"Elysium.Substrate.NpcCombat.UnarmedTaskFailure", GElysiumTestFlags)
@@ -1573,13 +1573,13 @@ bool FElysiumNpcCombatUnarmedTaskFailureTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The Reaction-band producer every combat reaction goes through (LIFE5). What is pinned here is the
+
+// The Reaction-band producer every combat reaction goes through. What is pinned here is the
 // blend rule, because it is the one thing the producer decides rather than forwards: a reaction is
 // an ideal-activity write and takes the ordinary sequence-blend rules, so a request stating no blend
 // takes the resolved clip's OWN authored fade (`docs/vtmb/combat-and-damage.md` § "Block and stagger
 // reactions"). Only retail's flinch gesture hard-codes a pair, and it states one.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatReactionProducerTest,
 	"Elysium.Substrate.NpcCombat.ReactionProducer", GElysiumTestFlags)
@@ -1672,15 +1672,15 @@ bool FElysiumNpcCombatReactionProducerTest::RunTest(const FString&)
 	return true;
 }
 
-// ================================================================================================
-// The death transaction (LIFE5).
+
+// The death transaction.
 //
 // `docs/vtmb/combat-and-damage.md` -> "NPC and player death transaction": the shared body fires the
 // output and notifies the owner, and the NPC override vacates every claim, makes current and ideal
 // state 7 (dead), applies the solid-body policy and selects the death schedule. What follows the
 // program is ours and is a stated divergence: the handoff to Unreal's physics is seeded from the
 // pose the program left behind, and a body carrying no physics asset holds that pose instead.
-// ================================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatDeathTest,
 	"Elysium.Substrate.NpcCombat.Death", GElysiumTestFlags)
 bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
@@ -1829,15 +1829,15 @@ bool FElysiumNpcCombatDeathTest::RunTest(const FString&)
 	return true;
 }
 
-// ================================================================================================
-// The death transaction across a save (LIFE5).
+
+// The death transaction across a save.
 //
 // A corpse's body state is not save state — the motor is rebuilt at load — so the death
 // transaction's body half is RE-APPLIED on restore. It cannot be deferred to a think: the whole
 // point of the transaction is that a corpse's saved cadence is `never`, and `ApplySnapshot` restamps
 // that saved cadence after every leaf has deserialized. Without the re-application a loaded corpse
 // stands up solid, animating its spawn idle.
-// ================================================================================================
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcCombatDeathRestoreTest,
 	"Elysium.Substrate.NpcCombat.DeathRestore", GElysiumTestFlags)
 bool FElysiumNpcCombatDeathRestoreTest::RunTest(const FString&)

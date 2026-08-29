@@ -41,7 +41,7 @@ namespace
 	}
 } // namespace
 
-// --- the branch rule ---------------------------------------------------------------------------
+// The branch rule.
 
 EElysiumBankRemapBranch FElysiumBankRemap::ClassifyBranch(const FVector& BankBind, const FVector& BodyBind)
 {
@@ -71,7 +71,7 @@ EElysiumBankRemapBranch FElysiumBankRemap::ClassifyBranch(const FVector& BankBin
 	return EElysiumBankRemapBranch::Similarity;
 }
 
-// --- build from the two bind poses --------------------------------------------------------------
+// Build from the two bind poses.
 
 FElysiumBankRemap FElysiumBankRemap::Build(const TArray<FTransform>& BankBindPose,
 	const FReferenceSkeleton& BankSkeleton, const FReferenceSkeleton& MeshSkeleton)
@@ -123,7 +123,7 @@ FElysiumBankRemap FElysiumBankRemap::Build(const TArray<FTransform>& BankBindPos
 	return Table;
 }
 
-// --- test-only inline load -----------------------------------------------------------------------
+// Test-only inline load.
 
 bool FElysiumBankRemap::LoadJson(const FString& JsonText, FString& OutError)
 {

@@ -220,10 +220,10 @@ namespace
 	};
 }
 
-// =====================================================================================
+
 // The recovered `GatherConditions` order: a stale enemy's death is seen by ChooseEnemy in
 // the SAME pass, and the committed-enemy conditions describe the enemy that pass chose.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyGatherOrderTest,
 	"Elysium.Substrate.NpcEnemy.GatherOrder", GElysiumTestFlags)
@@ -266,9 +266,9 @@ bool FElysiumNpcEnemyGatherOrderTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `ShouldChooseNewEnemy`: the trigger set, and the deliberate SEE_FEAR omission.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyShouldChooseTest,
 	"Elysium.Substrate.NpcEnemy.ShouldChoose", GElysiumTestFlags)
@@ -317,10 +317,10 @@ bool FElysiumNpcEnemyShouldChooseTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The starvation rule: the active schedule's interrupt mask is consulted BEFORE any
 // search, and an uninterested schedule keeps ownership of the enemy it has.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyScheduleGateTest,
 	"Elysium.Substrate.NpcEnemy.ScheduleGate", GElysiumTestFlags)
@@ -408,9 +408,9 @@ bool FElysiumNpcEnemyScheduleGateTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `BestEnemy`: eligibility and the four arbitration rules.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyBestEnemyTest,
 	"Elysium.Substrate.NpcEnemy.BestEnemy", GElysiumTestFlags)
@@ -534,10 +534,10 @@ bool FElysiumNpcEnemyBestEnemyTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `SetEnemy` and the `ChooseEnemy` effects: the last-enemy transfer, NEW_ENEMY, the
 // forgotten LOS claim, and the two lost-the-actor outputs.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemySetEnemyTest,
 	"Elysium.Substrate.NpcEnemy.SetEnemy", GElysiumTestFlags)
@@ -585,10 +585,10 @@ bool FElysiumNpcEnemySetEnemyTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The went-null / eluded transaction: `OnLostPlayer` and `OnLostEnemy`, once each, on the
 // real transition and not on losing sight.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyLostOutputsTest,
 	"Elysium.Substrate.NpcEnemy.LostOutputs", GElysiumTestFlags)
@@ -669,9 +669,9 @@ bool FElysiumNpcEnemyLostOutputsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The damage conditions, and the recovered 15%-in-one-second repeated-damage window.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyDamageConditionsTest,
 	"Elysium.Substrate.NpcEnemy.DamageConditions", GElysiumTestFlags)
@@ -760,10 +760,10 @@ bool FElysiumNpcEnemyDamageConditionsTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // `SelectIdealState`, both layers. The `no_alert_state` case is the load-bearing one:
 // the keyvalue skips the Troika layer's promotions and the base tail promotes anyway.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyIdealStateTest,
 	"Elysium.Substrate.NpcEnemy.IdealState", GElysiumTestFlags)
@@ -852,10 +852,10 @@ bool FElysiumNpcEnemyIdealStateTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The state machine end to end on a real NPC: Alert and Combat are admitted, the mind
 // records the transitions, and combat selects a real fight program.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyStateMachineTest,
 	"Elysium.Substrate.NpcEnemy.StateMachine", GElysiumTestFlags)
@@ -916,9 +916,9 @@ bool FElysiumNpcEnemyStateMachineTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The alert-lookaround chance and its new producer.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyLookaroundChanceTest,
 	"Elysium.Substrate.NpcEnemy.LookaroundChance", GElysiumTestFlags)
@@ -1004,10 +1004,10 @@ bool FElysiumNpcEnemyLookaroundChanceTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The interrupt mask on the kernel: a masked condition aborts into reselection, and an
 // empty mask finishes despite the same conditions.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyInterruptTest,
 	"Elysium.Substrate.NpcEnemy.Interrupts", GElysiumTestFlags)
@@ -1102,9 +1102,9 @@ bool FElysiumNpcEnemyInterruptTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
+
 // The bitset itself, and what a save carries of the new memory.
-// =====================================================================================
+
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcEnemyConditionSetTest,
 	"Elysium.Substrate.NpcEnemy.ConditionSet", GElysiumTestFlags)

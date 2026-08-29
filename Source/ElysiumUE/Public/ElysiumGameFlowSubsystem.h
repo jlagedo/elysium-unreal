@@ -13,7 +13,7 @@ class AElysiumMapActor;
 class UElysiumLoadingScreen;
 
 // Which slot ring a save belongs to. `trigger_autosave` fires Auto; the pause menu fires Manual;
-// the quicksave binding fires Quick. The slots themselves are 11.9's.
+// the quicksave binding fires Quick. The slots themselves live on UElysiumSaveSubsystem.
 enum class EElysiumSaveKind : uint8
 {
 	Manual,
@@ -40,10 +40,10 @@ struct FElysiumNewGameRequest
 	int32 Clan = 0;
 	bool  bMale = true;
 
-	// m_iVHistoryID. -1 = unset; chargen writes it (9.4).
+	// m_iVHistoryID. -1 = unset; chargen writes it.
 	int32 HistoryId = -1;
 
-	// Chargen's attribute/ability/discipline allocation, applied onto the sheet (9.4).
+	// Chargen's attribute/ability/discipline allocation, applied onto the sheet.
 	TMap<FName, int32> Spends;
 
 	// Where the chain is entered:
@@ -120,7 +120,7 @@ namespace ElysiumStory
 
 	// The intro skip, as a decision over a requested destination. Returns true when it rewrote one.
 	//
-	// The theatre act is P12's, so with the skip on, a transition into `sp_theatre` lands instead at
+	// With the skip on, a transition into `sp_theatre` lands instead at
 	// the `tutorial` landmark on `sp_tutorial_1` — where the theatre's own `tutorial_change` would
 	// have delivered the player. The offset and yaw are dropped with it: the offset a
 	// trigger_changelevel captures is measured from the SOURCE map's landmark (genesis's `newgame`),
@@ -141,12 +141,11 @@ namespace ElysiumStory
 }
 
 // Old state, new state. Non-dynamic: the listeners are C++ (the UI subsystem, the HUD, the input
-// scope stack at 11.5), and a dynamic delegate would force the enum into UObject reflection for
-// nothing.
+// scope stack), and a dynamic delegate would force the enum into UObject reflection for nothing.
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumAppStateChanged, EElysiumAppState /*Old*/, EElysiumAppState /*New*/);
 
-// The application state machine and the session's entry points (roadmap 11.3,
-// `docs/architecture/runtime-architecture.md` §10). GI-scoped: boot, the session and the app state all outlive any
+// The application state machine and the session's entry points
+// (`docs/architecture/runtime-architecture.md` §10). GI-scoped: boot, the session and the app state all outlive any
 // one world, and travel is exactly when they change.
 //
 // This is the only owner of `EElysiumAppState`, of the boot decision, and of the loading screen.
@@ -161,15 +160,14 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
-	// --- State ---------------------------------------------------------------------------------
+	// State.
 	EElysiumAppState AppState() const { return State; }
 	bool IsInSession() const { return ElysiumAppState::IsInSession(State); }
 	FOnElysiumAppStateChanged& OnAppStateChanged() { return AppStateChanged; }
 
-	// --- Boot ----------------------------------------------------------------------------------
-	// The whole of the old AElysiumGameMode::BeginPlay decision tree, made once. Called from
-	// Initialize (game-instance init), which is before any world exists — so it only *decides*;
-	// the first NotifyWorldReady executes the plan.
+	// Boot.
+	// The boot decision, made once. Called from Initialize (game-instance init), which is before
+	// any world exists — so it only *decides*; the first NotifyWorldReady executes the plan.
 	void BootFromCommandLine();
 
 	// The game mode's one call. Under hard travel this runs in every fresh world: if a map load is
@@ -177,7 +175,7 @@ public:
 	// otherwise this is the boot world and the boot plan runs.
 	void NotifyWorldReady(AGameModeBase* Mode);
 
-	// --- Session -------------------------------------------------------------------------------
+	// Session.
 	// Clear the session and enter the story. Returns false when the entry map is not exported+baked.
 	bool NewGame(const FElysiumNewGameRequest& Request);
 
@@ -186,9 +184,8 @@ public:
 	static bool ShouldSkipIntro();
 	static void SetSkipIntro(bool bSkip);
 
-	// 11.9 owns the payload; these are the seam every caller (menu, `trigger_autosave`, the quicksave
-	// binding, MCP) goes through, so nothing has to be re-plumbed when it lands. They log and report
-	// false today.
+	// UElysiumSaveSubsystem owns the payload; these are the seam every caller (menu,
+	// `trigger_autosave`, the quicksave binding, MCP) goes through.
 	bool LoadGame(const FString& SlotName);
 	bool SaveGame(const FString& SlotName, EElysiumSaveKind Kind);
 
@@ -216,16 +213,16 @@ public:
 	// the same full character sheet.
 	bool SeedNewGameState(const FElysiumNewGameRequest& Request);
 
-	// --- Pause ---------------------------------------------------------------------------------
+	// Pause.
 	// Playing <-> Paused: the world is held (clock + engine) and the pause menu is raised. Only
 	// legal from Playing — the front end is an empty shell and has no run to pause.
 	void SetPaused(bool bPaused);
 	void TogglePause();
 	bool IsPaused() const { return State == EElysiumAppState::Paused; }
 
-	// --- Game over -----------------------------------------------------------------------------
+	// Game over.
 	// The run is lost: hold the world and raise the Load/Quit screen. Called by the combat
-	// character's death path (11.4 / 9.4) and by the masquerade meter; `elysium.gameover` is the
+	// character's death path and by the masquerade meter; `elysium.gameover` is the
 	// scriptable echo. The MakePlayerUnkillable latch on `events_player` is the caller's gate — the
 	// damage system owns it, not the flow.
 	void TriggerGameOver(EElysiumGameOverReason Reason);
@@ -243,14 +240,13 @@ private:
 	void ApplyMenuForState(EElysiumAppState NewState);
 
 	// Release a hold this subsystem put on (Paused / GameOver) before leaving the state. Deliberately
-	// does nothing from a running state, so a hand `elysium.pause` survives a travel exactly as S1
-	// says it does.
+	// does nothing from a running state, so a hand `elysium.pause` survives a travel.
 	void ReleasePauseHold();
 
 	// Resolve FElysiumNewGameRequest::EntryPoint to a map + landmark. False when nothing resolves.
 	bool ResolveEntryPoint(const FString& EntryPoint, FString& OutMap, FString& OutLandmark) const;
 
-	// --- Loading screen ------------------------------------------------------------------------
+	// Loading screen.
 	// The engine's own movie player, over the OpenLevel flush. The hook is
 	// IGameMoviePlayer::OnPrepareLoadingScreen rather than FCoreUObjectDelegates::PreLoadMap,
 	// because the movie player binds PreLoadMap itself at engine init — ahead of this subsystem —
@@ -265,7 +261,7 @@ private:
 	void ShowRuntimeLoadingOverlay(UWorld* World, const FText& Message, bool bForce = false);
 	void HideRuntimeLoadingOverlay();
 
-	// --- The named verbs (11.6) ----------------------------------------------------------------
+	// The named verbs.
 	// `cancelselect`, `togglemainmenu`, `pause`, `save`, `load`. Registered here, not on the player
 	// controller, because Escape has to resolve while a screen holds input UI-only and no controller
 	// is seeing keys — this subsystem outlives every world and every screen.

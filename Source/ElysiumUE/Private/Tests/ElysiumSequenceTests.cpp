@@ -37,7 +37,7 @@
 #include "ElysiumEventQueue.h"
 #include "ElysiumWireReport.h"
 #include "ElysiumExpr.h"
-#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed (CCC7)
+#include "ElysiumGaitSpeeds.h"               // the animation's per-direction speed
 #include "ElysiumGameClock.h"
 #include "ElysiumGameFlowSubsystem.h"
 #include "ElysiumGameStateSubsystem.h"
@@ -47,8 +47,8 @@
 #include "ElysiumInputScope.h"
 #include "ElysiumKeyValues.h"
 #include "ElysiumLineService.h"
-#include "ElysiumLookCurve.h"                // the mouse path's pure rules (CCC3)
-#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half (CCC3)
+#include "ElysiumLookCurve.h"                // the mouse path's pure rules
+#include "Debug/ElysiumMoveCourses.h"        // the event-timed press's pure half
 #include "ElysiumMapActor.h"
 #include "ElysiumMapEpoch.h"
 #include "Map/ElysiumFeedTargeting.h"
@@ -57,7 +57,7 @@
 #include "ElysiumMovementComponent.h"
 #include "Visual/ElysiumObjModel.h"
 #include "Visual/ElysiumNpcClips.h"
-#include "ElysiumLocomotionSample.h"         // the body sample's pure rules (CCC1)
+#include "ElysiumLocomotionSample.h"         // the body sample's pure rules
 #include "ElysiumMoveSolve.h"                // ElysiumMove::StandViewZ / U — the gaze test's units
 #include "ElysiumPlayer.h"
 #include "Substrate/ElysiumDisposition.h"    // FElysiumEyeTargetTuning
@@ -267,7 +267,7 @@ bool FElysiumFogPackTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// scripted_sequence (8.5) — the cutscene beat's state machine, driven through the real queue.
+// scripted_sequence — the cutscene beat's state machine, driven through the real queue.
 //
 // No skeletal body here, so no action animation: this covers the half every map depends on —
 // placement on the mark, OnBeginSequence/OnEndSequence, and the m_iszNextScript chain. A beat
@@ -418,7 +418,7 @@ bool FElysiumScriptedSequenceTest::RunTest(const FString&)
 }
 
 // =====================================================================================
-// scripted_sequence locomotion (8.5) — the travel phase, over the recording motor.
+// scripted_sequence locomotion — the travel phase, over the recording motor.
 //
 // The claim: a beat whose `m_fMoveTo` says walk sends its NPC to the mark under its own power
 // and holds `OnEndSequence` until it gets there. 132 of the 188 exported sequences travel, and
@@ -1068,8 +1068,8 @@ bool FElysiumScriptedSequenceBodyClaimTest::RunTest(const FString&)
 			return false;
 		}
 
-		// The NPC settles onto its own stance idle first: that is the schedule the beat displaces,
-		// and it is what used to come back and overwrite `m_iszPlay` mid-beat.
+		// The NPC settles onto its own stance idle first: that is the schedule the beat displaces.
+		// A stance machine that keeps writing after the beat starts overwrites `m_iszPlay` mid-beat.
 		double Now = 0.0;
 		for (int32 i = 0; i < 4; ++i) { World.Tick(Now); Now += 0.1; }
 		const int32 StanceBefore = Services.Count(StancePrefix);
@@ -1339,7 +1339,7 @@ bool FElysiumScriptedSequenceSelfChainTest::RunTest(const FString&)
 	return true;
 }
 
-// LIFE5 — the montage-slot RUN: one mechanism, the producer's band, and a claim every exit gives back.
+// The montage-slot RUN: one mechanism, the producer's band, and a claim every exit gives back.
 //
 // `scripted_sequence`'s `m_iszIdle` -> travel cycle -> `m_iszPlay` -> `m_iszPostIdle` and an
 // interesting place's enter/hold/leave are the same shape and reach the frame through the same funnel

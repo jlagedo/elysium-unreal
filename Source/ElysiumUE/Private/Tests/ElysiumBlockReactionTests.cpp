@@ -1,4 +1,4 @@
-// Content-free Substrate automation: the melee block family (LIFE5) — its pure rules, the two
+// Content-free Substrate automation: the melee block family — its pure rules, the two
 // reactions a blocked contact produces, the damage that still lands behind them, and the one channel
 // they and the flinch have to share.
 //
@@ -337,9 +337,7 @@ namespace
 	};
 }
 
-// =====================================================================================
-// The pure rules
-// =====================================================================================
+// The pure rules.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlockReactionRuleTest,
 	"Elysium.Substrate.BlockReaction.Rule", GElysiumTestFlags)
@@ -415,9 +413,7 @@ bool FElysiumBlockReactionRuleTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The producer: what a blocked contact actually plays
-// =====================================================================================
+// The producer: what a blocked contact actually plays.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlockReactionProducerTest,
 	"Elysium.Substrate.BlockReaction.Producer", GElysiumTestFlags)
@@ -579,9 +575,7 @@ bool FElysiumBlockReactionProducerTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// Blocked does not mean zero damage
-// =====================================================================================
+// Blocked does not mean zero damage.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlockReactionDamageTest,
 	"Elysium.Substrate.BlockReaction.Damage", GElysiumTestFlags)
@@ -636,9 +630,7 @@ bool FElysiumBlockReactionDamageTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// One channel, one claim: the flinch yields to a contact reaction
-// =====================================================================================
+// One channel, one claim: the flinch yields to a contact reaction.
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlockReactionOwnershipTest,
 	"Elysium.Substrate.BlockReaction.Ownership", GElysiumTestFlags)
@@ -784,13 +776,11 @@ bool FElysiumBlockReactionOwnershipTest::RunTest(const FString&)
 	return true;
 }
 
-// =====================================================================================
-// The held block pose: a claim a PREDICATE releases, not a duration
-// =====================================================================================
+// The held block pose: a claim a PREDICATE releases, not a duration.
 //
 // `docs/vtmb/combat-and-damage.md` § "Block and stagger reactions": retail holds the ideal activity
 // `ACT_PREBLOCK` for as long as the input classification stands, and the clip's own loop bit keeps it
-// on screen. What is asserted here is that our pose has the same LIFE as our classification — the
+// on screen. What is asserted here is that the pose lives exactly as long as the classification — the
 // same predicate starts both, the same predicate ends both, and no clock is involved on either side.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumBlockReactionHeldPoseTest,
 	"Elysium.Substrate.BlockReaction.HeldPose", GElysiumTestFlags)

@@ -2,9 +2,7 @@
 
 #include "CoreMinimal.h"
 
-// ================================================================================================
-// 13. charcreatewizard.txt — the chargen personality quiz and its clan scoring
-// ================================================================================================
+// --- charcreatewizard.txt — the chargen personality quiz and its clan scoring ---
 //
 // The wizard is a `client.dll` panel, so nothing here is a layout: `Region`/`TextRegion` are read
 // as authored *intent* (which answer sits above which, how much room the question wanted), never as

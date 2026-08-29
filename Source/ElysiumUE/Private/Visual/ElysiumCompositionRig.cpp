@@ -50,7 +50,7 @@ const FElysiumAxisInterpRule* FElysiumCompositionRig::FindRule(const FName Bone)
 	return nullptr;
 }
 
-// --- load ------------------------------------------------------------------------------------
+// Load.
 
 bool FElysiumCompositionRig::LoadAxisRules(const FString& RelPath, FString& OutError)
 {
@@ -163,7 +163,7 @@ bool FElysiumCompositionRig::LoadAxisRulesJson(const FString& JsonText, FString&
 	return true;
 }
 
-// --- evaluation ------------------------------------------------------------------------------
+// Evaluation.
 
 FTransform FElysiumCompositionRig::EvaluateRule(const FElysiumAxisInterpRule& Rule,
 	const FQuat& ControlLocalRotation) const

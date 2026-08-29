@@ -34,7 +34,7 @@ bool FElysiumNpcMind::Admit()
 
 bool FElysiumNpcMind::IsSupportedState(EElysiumNpcState State)
 {
-	// `Alert` and `Combat` are admitted now that their recovered producer has landed: the two-layer
+	// `Alert` and `Combat` are admitted: the two-layer
 	// `SelectIdealState` promotes into them from gathered conditions and a committed enemy, and the
 	// state selects its own schedule. `Prone` stays a named refusal — nothing recovered produces it,
 	// and a state with no producer is a diagnostic, not a transition.

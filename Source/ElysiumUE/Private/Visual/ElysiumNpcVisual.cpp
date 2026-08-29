@@ -28,11 +28,11 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumNpcVisual, Log, All);
 
-// The legacy simulated-garment spike (docs/architecture/asset-enhancement.md). Retail garment
+// The simulated-garment enhancement (`docs/architecture/asset-enhancement.md`). Retail garment
 // motion is a StudioRender particle solve carried by the model, independently from its hair/body
 // bone-chain solver. The approximation artifacts are built by
-// pipeline/src/elysium_pipeline/enhancement/cloth_spike.py, but the current baked-character path
-// does not select them; every body comes from the mount.
+// pipeline/src/elysium_pipeline/enhancement/cloth_spike.py; the baked-character path does not
+// select them, so every body comes from the mount.
 //
 // Applied at map load; NPC meshes and their rigs are resolved once per map epoch.
 
@@ -118,8 +118,8 @@ namespace ElysiumNpcVisual
 		return true;
 	}
 
-	// Declare every morph target the mesh came back with as a morph-target *curve* on its skeleton
-	// (12.3). An anim curve only reaches USkeletalMeshComponent::ActiveMorphTargets when the bone
+	// Declare every morph target the mesh came back with as a morph-target *curve* on its skeleton.
+	// An anim curve only reaches USkeletalMeshComponent::ActiveMorphTargets when the bone
 	// container flags it, and the bone container takes those flags from this metadata — so without
 	// this registration the facial track evaluates correctly and moves nothing.
 	void RegisterMorphTargetCurves(USkeletalMesh* Mesh)

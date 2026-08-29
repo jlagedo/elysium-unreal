@@ -52,13 +52,13 @@ public:
 	void InputLock()   { bLocked = true; }
 	void InputUnlock() { bLocked = false; }
 	// A scripted press (ent_fire / a wire), bypassing the +use look-cursor's SF_USE gate — the way
-	// the button is exercised before P4.4's full +use HUD, mirroring how doors expose Use.
+	// a door exposes Use without standing in front of it.
 	void InputPress(const FElysiumEntityHandle& Activator) { ActivateButton(Activator); }
 
-	// --- +use look-cursor terminus (P4.2) ----------------------------------------------
+	// --- +use look-cursor terminus ---
 	// Only USE-armed buttons (0x400) show the reticle / take a +use; touch-only buttons do not.
 	virtual bool IsUsable() const override { return (SpawnFlags & SF_USE) != 0; }
-	virtual bool IsUseLocked() const override { return bLocked; }   // locked_icon on the reticle (P4.4)
+	virtual bool IsUseLocked() const override { return bLocked; }   // locked_icon on the reticle
 	virtual void OnUseCursorEnter() override
 	{
 		static const FName OnIn(TEXT("OnIn"));
@@ -93,7 +93,7 @@ public:
 	{
 		bLocked = (SpawnFlags & SF_LOCKED) != 0;
 		ButtonState = EState::Rest;
-		// Mover sounds (P6.4): soundgroup on/off from usable/switches/<soundgroup>/ (RE: CBaseButton::
+		// Mover sounds: soundgroup on/off from usable/switches/<soundgroup>/ (RE: CBaseButton::
 		// Spawn FUN_100c8810 reads "on"/"off"), plus the explicit locked/unlocked press WAVs. Buttons
 		// have no SILENT spawnflag (0x1000 is USEGATE here), so pass 0.
 		InitMoverSounds(TEXT("switches"), 0);
@@ -144,7 +144,7 @@ private:
 		}
 		if (bLocked)
 		{
-			// Locked press: the deny sound (explicit `locked_sound`), no state change (P4.4 also shows
+			// Locked press: the deny sound (explicit `locked_sound`), no state change (the HUD also shows
 			// the locked_icon on the reticle). Like the door's locked path, this plays only the locked
 			// sfx and fires no output (a locked door/button emits no OnLockedUse — that output is
 			// prop_switch's alone).
@@ -190,7 +190,7 @@ private:
 	}
 
 	// At the pressed pose: fire OnPressed, then either latch (TOGGLE or wait -1) or schedule the
-	// spring-back after `wait` seconds on the substrate clock (R4, no engine timer).
+	// spring-back after `wait` seconds on the substrate clock (no engine timer).
 	void TriggerAndWait()
 	{
 		static const FName OnPressed(TEXT("OnPressed"));

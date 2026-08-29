@@ -229,9 +229,7 @@ const TCHAR* ElysiumCameraShots::LexToString(EElysiumShotAttach Attach)
 	}
 }
 
-// =====================================================================================
 // The director
-// =====================================================================================
 
 namespace ElysiumCameraShotsImpl
 {

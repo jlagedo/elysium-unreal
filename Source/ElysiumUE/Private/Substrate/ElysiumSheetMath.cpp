@@ -29,9 +29,7 @@ namespace
 	}
 }
 
-// ================================================================================================
-// FElysiumSheetEffects
-// ================================================================================================
+
 
 void FElysiumSheetEffects::Reset()
 {
@@ -80,8 +78,8 @@ void FElysiumSheetEffects::Build(const FElysiumTraitEffects& Table,
 				continue;
 			}
 
-			// The seven operators the accumulator switches on. `Cost` belongs to the buy path
-			// (9.4f), and `BloodCost`/`Damage`/`Duration` carry payloads the systems that own them
+			// The seven operators the accumulator switches on. `Cost` belongs to the buy path, and
+			// `BloodCost`/`Damage`/`Duration` carry payloads the systems that own them
 			// read — the discipline transactions, the heal timer — not the trait's value; the
 			// engine's own switch breaks on all four without touching the query. They are stored
 			// under the payload key so their owner can read them, and never enter `TraitRows`.
@@ -299,9 +297,7 @@ int32 FElysiumSheetEffects::Flag(const TCHAR* FxName) const
 	return Value ? *Value : 0;
 }
 
-// ================================================================================================
-// The feat evaluator
-// ================================================================================================
+// The feat evaluator.
 
 namespace ElysiumFeats
 {
@@ -338,13 +334,13 @@ namespace ElysiumFeats
 			}
 		}
 
-		// The per-feat code terms. 13.1's is here: the recovered category-1 walk adds
-		// `GetStealthModifier()` — the CLAMPED read of the raw `trigger_stealth_mod` aggregate — to
-		// feat id 1 and to no other feat, before the effect pass and before the `MaxValue` clamp.
-		// The three combat feats' presence-minus-shaky-hands term (13.3) belongs to a system that
-		// has not landed; it is additive, so its absence is a rating short by exactly that term,
-		// never a wrong shape. `Automatic%d` is deliberately not summed: those are automatic
-		// successes, and the dice resolver reads them separately.
+		// The per-feat code terms. The recovered category-1 walk adds `GetStealthModifier()` — the
+		// CLAMPED read of the raw `trigger_stealth_mod` aggregate — to feat id 1 and to no other
+		// feat, before the effect pass and before the `MaxValue` clamp. The three combat feats'
+		// presence-minus-shaky-hands term belongs to a system that has not landed; it is additive,
+		// so its absence is a rating short by exactly that term, never a wrong shape. `Automatic%d`
+		// is deliberately not summed: those are automatic successes, and the dice resolver reads
+		// them separately.
 		if (Owner != nullptr && Feat.Index == SneakingFeatIndex)
 		{
 			Rating += Owner->GetStealthModifier();
@@ -389,9 +385,7 @@ namespace ElysiumFeats
 	}
 }
 
-// ================================================================================================
-// The XP arithmetic
-// ================================================================================================
+// The XP arithmetic.
 
 namespace ElysiumXp
 {
@@ -418,9 +412,7 @@ namespace ElysiumXp
 	}
 }
 
-// ================================================================================================
-// Shared sheet predicates
-// ================================================================================================
+// Shared sheet predicates.
 
 namespace ElysiumSheetRules
 {

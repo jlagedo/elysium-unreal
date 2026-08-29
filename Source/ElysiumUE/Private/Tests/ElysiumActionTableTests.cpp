@@ -86,7 +86,7 @@ namespace
 		}
 	};
 
-	// --- the NPC side ----------------------------------------------------------------------------
+	// The NPC side.
 
 	int32 NpcBodyIndex(const TCHAR* Name)
 	{
@@ -174,9 +174,7 @@ namespace
 	}
 }
 
-// =====================================================================================
 // Round trip and well-formedness. No game files: the committed model is the whole input.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumWeaponActivityTablesTest,
 	"Elysium.Substrate.WeaponActivityTables", GElysiumActionTableFlags)
@@ -186,7 +184,7 @@ bool FElysiumWeaponActivityTablesTest::RunTest(const FString&)
 
 	const FActionTableCensus& Stored = Census();
 
-	// --- the round trip: the compressed model is the recovered stream ---------------------------
+	// The round trip: the compressed model is the recovered stream.
 	{
 		TArray<FExpandedRow> Rows;
 		ExpandAll(Rows);
@@ -234,7 +232,7 @@ bool FElysiumWeaponActivityTablesTest::RunTest(const FString&)
 		}
 	}
 
-	// --- well-formedness: what a malformed regeneration would break -----------------------------
+	// Well-formedness: what a malformed regeneration would break.
 	{
 		TSet<const TCHAR* const*> Sequences;
 		int32 Blocks = 0;
@@ -321,7 +319,7 @@ bool FElysiumWeaponActivityTablesTest::RunTest(const FString&)
 		TestEqual(TEXT("and the stored `required` flags"), RequiredFlags, Stored.RequiredFlags);
 	}
 
-	// --- no dead rewrite rule --------------------------------------------------------------------
+	// No dead rewrite rule.
 	{
 		TestEqual(TEXT("three rename rules"), RenameRules().Num(), 3);
 		for (const FActionRename& Rule : RenameRules())
@@ -337,7 +335,7 @@ bool FElysiumWeaponActivityTablesTest::RunTest(const FString&)
 		}
 	}
 
-	// --- the rewrite itself -----------------------------------------------------------------------
+	// The rewrite itself.
 	{
 		TestEqual(TEXT("the ordinary case appends the family"),
 			Rewrite(TEXT("ACT_RUN"), TEXT("KATANA")), FString(TEXT("ACT_RUN_KATANA")));
@@ -366,7 +364,7 @@ bool FElysiumWeaponActivityTablesTest::RunTest(const FString&)
 				TEXT("KATANA"))), static_cast<int32>(ERewriteKind::Substitute));
 	}
 
-	// --- the ladder, and the walk over it ---------------------------------------------------------
+	// The ladder, and the walk over it.
 	{
 		const FWeaponLadder* Katana = FindLadderByEntityClass(TEXT("item_w_katana"));
 		if (!TestNotNull(TEXT("`item_w_katana` reaches a ladder"), Katana))
@@ -437,7 +435,6 @@ bool FElysiumWeaponActivityTablesTest::RunTest(const FString&)
 }
 
 
-// =====================================================================================
 // The player action rules. Well-formedness and the walk over them, with no game files: the
 // committed rules are the whole input.
 //
@@ -445,7 +442,6 @@ bool FElysiumWeaponActivityTablesTest::RunTest(const FString&)
 // not a row count but an *order* — a ladder whose unconditional row moved up answers the same
 // activity for every state, and a jump arm whose landing rows lost their gait deferral drops a
 // running body into a land. The walks below are what catch that.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerActionRulesTest,
 	"Elysium.Substrate.PlayerActionRules", GElysiumActionTableFlags)
@@ -455,7 +451,7 @@ bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 
 	const FPlayerActionCensus& Stored = PlayerCensus();
 
-	// --- the compiled vocabulary ------------------------------------------------------------------
+	// The compiled vocabulary.
 	{
 		TestEqual(TEXT("the emission carries the stored code count"), PlayerActions().Num(),
 			Stored.Actions);
@@ -528,7 +524,7 @@ bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 		}
 	}
 
-	// --- well-formedness of every row ------------------------------------------------------------
+	// Well-formedness of every row.
 	{
 		TMap<FString, int32> IdByName;
 		auto CheckActivity = [this, &IdByName](const TCHAR* Activity, int32 Id, const TCHAR* Where)
@@ -634,7 +630,7 @@ bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 		}
 	}
 
-	// --- the gait ladder --------------------------------------------------------------------------
+	// The gait ladder.
 	{
 		TestEqual(TEXT("the ladder carries the stored row count"), PlayerGaitLadder().Num(),
 			Stored.GaitRules);
@@ -698,7 +694,7 @@ bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 			FString(TEXT("ACT_WALK")));
 	}
 
-	// --- the arms ---------------------------------------------------------------------------------
+	// The arms.
 	{
 		const FPlayerAction* Jump = FindPlayerAction(2);
 		if (TestNotNull(TEXT("`PLAYER_JUMP` carries an arm"), Jump))
@@ -836,7 +832,7 @@ bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 		}
 	}
 
-	// --- the pose writes ---------------------------------------------------------------------------
+	// The pose writes.
 	{
 		TestEqual(TEXT("three pose parameters are written"), PlayerPoseWrites().Num(),
 			Stored.PoseWrites);
@@ -879,7 +875,7 @@ bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 			static_cast<int32>(EPlayerPredicate::Always));
 	}
 
-	// --- the translations, the latch and the discipline fields --------------------------------------
+	// The translations, the latch and the discipline fields.
 	{
 		TestEqual(TEXT("two player-side translations"), PlayerTranslations().Num(),
 			Stored.Translations);
@@ -953,7 +949,6 @@ bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 }
 
 
-// =====================================================================================
 // The NPC translation surface, content-free.
 //
 // The census catches a bad regeneration. What it cannot catch is the thing this suite exists for:
@@ -962,7 +957,6 @@ bool FElysiumPlayerActionRulesTest::RunTest(const FString&)
 // hand a forced-low body its medium cover; a chain that flipped from `BeforeRules` to `AfterRules`
 // would let the Tzimisce runner's variant selection run against an untranslated request. Every one
 // of those keeps the same row count.
-// =====================================================================================
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumNpcActivityTablesTest,
 	"Elysium.Substrate.NpcActivityTables", GElysiumActionTableFlags)
@@ -974,7 +968,7 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 	TArrayView<const FNpcTranslationBody> Bodies = NpcTranslationBodies();
 	TArrayView<const FNpcClass> Classes = NpcClasses();
 
-	// --- the census is the table -----------------------------------------------------------------
+	// The census is the table.
 	{
 		int32 PerSlot[5] = { 0, 0, 0, 0, 0 };
 		int32 Rules = 0;
@@ -1010,7 +1004,7 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 		TestEqual(TEXT("and 2 reload delegates"), Stored.ReloadBodies, 2);
 	}
 
-	// --- every body is well formed, and the chain graph terminates --------------------------------
+	// Every body is well formed, and the chain graph terminates.
 	for (int32 Index = 0; Index < Bodies.Num(); ++Index)
 	{
 		const FNpcTranslationBody& Body = Bodies[Index];
@@ -1090,7 +1084,7 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 		}
 	}
 
-	// --- the class ledger points at the bodies it says it does ------------------------------------
+	// The class ledger points at the bodies it says it does.
 	{
 		TArray<int32> Inheritors;
 		Inheritors.SetNumZeroed(Bodies.Num());
@@ -1134,7 +1128,7 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 		}
 	}
 
-	// --- the entity aliases resolve ---------------------------------------------------------------
+	// The entity aliases resolve.
 	{
 		TSet<FString> Seen;
 		for (const FNpcEntityAlias& Alias : NpcEntityAliases())
@@ -1166,7 +1160,7 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 			FindNpcClassByEntityClass(TEXT("npc_BaseVampAI")));
 	}
 
-	// --- the task handlers and their policies ------------------------------------------------------
+	// The task handlers and their policies.
 	{
 		TArrayView<const FNpcTaskHandler> Handlers = NpcTaskHandlers();
 		TArrayView<const FNpcTaskPolicy> Policies = NpcTaskPolicies();
@@ -1232,7 +1226,7 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 		CollectNpcTaskPolicies(TEXT("TASK_MELEE_BLOCK"), Blocking);
 		TestTrue(TEXT("TASK_MELEE_BLOCK is routed by more than one body"), Blocking.Num() > 1);
 
-		// --- the restart rule, as a policy over these rows -----------------------------------------
+		// The restart rule, as a policy over these rows.
 		//
 		// `RestartIdealActivity` (`0x10289ee0`) clears the current activity before `SetIdealActivity`,
 		// so a request equal to what is already playing is not swallowed as an unchanged ideal:
@@ -1300,7 +1294,7 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 		TestFalse(TEXT("and so does an empty one"), ActivityRestartsIdenticalRequest(FString()));
 	}
 
-	// --- the order, which no count catches ---------------------------------------------------------
+	// The order, which no count catches.
 	{
 		const TSet<FString> Nothing;
 		const FNpcState Plain;
@@ -1443,7 +1437,7 @@ bool FElysiumNpcActivityTablesTest::RunTest(const FString&)
 			FString(TEXT("ACT_LAUGH_IDLE")));
 	}
 
-	// --- the grapple arithmetic --------------------------------------------------------------------
+	// The grapple arithmetic.
 	{
 		// The recovered table: `+1`/`+2` attacker with a short/tall victim in front, `+3`/`+4` the
 		// victim's side of the same, `+5`…`+8` the four from behind.

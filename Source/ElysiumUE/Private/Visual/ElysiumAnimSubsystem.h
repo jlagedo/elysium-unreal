@@ -24,7 +24,7 @@ class UBlendSpace;
 class USkeleton;
 class USkeletalMesh;
 
-// One blend grid resolved to everything a caller needs to stand it and steer it (ANM3). `Axes` is 1
+// One blend grid resolved to everything a caller needs to stand it and steer it. `Axes` is 1
 // for a `move_yaw` locomotion fan and 2 for an aim grid; the entries above it are unset.
 struct FElysiumResolvedGrid
 {
@@ -44,7 +44,7 @@ struct FElysiumResolvedGrid
 };
 
 // One overlay slot's resolved assets — the layer a producer armed, plus the trio the layer's OWN
-// clip declares (LIFE10).
+// clip declares.
 //
 // **The layer's autolayer closure is resolved by the same rule the base channel's host gets**, which
 // is retail's rule applied recursively: the motion stays `Sequence`, its declared aim grid composes
@@ -81,7 +81,7 @@ struct FElysiumResolvedOverlaySlot
 	}
 };
 
-// What a selection resolved to on THIS body's skeleton (CCC4). Separate from the record on purpose:
+// What a selection resolved to on THIS body's skeleton. Separate from the record on purpose:
 // the record comes out of the sidecars and is always producible, while an asset needs a
 // `USkeletalMesh` to bind against — and there is none in the gym, none on a menu backdrop, and none
 // until the player visual is built. A record with no assets is `EElysiumAnimOutcome::NoAsset`, which
@@ -98,7 +98,7 @@ struct FElysiumResolvedAnimation
 	TObjectPtr<UAnimSequence> Sequence = nullptr;
 	TObjectPtr<UBlendSpace> Space = nullptr;
 
-	// CCC10 — the upper-body layer(s) the selection named through `LayerLabels`: the bake-time
+	// The upper-body layer(s) the selection named through `LayerLabels`: the bake-time
 	// autolayer binding the base channel's own resolved host declared, or an activity-keyed
 	// `UpperBody`/`Additive`-channel selection's own single asset (routed here by the caller
 	// rather than into `Sequence`/`Space`). `OverlaySequence` and `OverlaySpace` are never both
@@ -115,11 +115,11 @@ struct FElysiumResolvedAnimation
 	// skeleton, while the node rebuilds its per-bone weights against the skeleton being *played* —
 	// and a bank owns every masked overlay, so those are routinely not the same asset. Resolving the
 	// name against the playing skeleton is what Epic's own `ULayeredBoneBlendLibrary::SetBlendMask`
-	// does, and it is the same trap `Source/ElysiumUE/CLAUDE.md` records for the retired accumulator:
-	// a profile taken off the layer's skeleton gates a shifted set of bones and logs nothing.
+	// does, and it is the same trap `Source/ElysiumUE/CLAUDE.md` records: a profile taken off the
+	// layer's skeleton gates a shifted set of bones and logs nothing.
 	FName OverlayMaskName;
 
-	// --- The overlay SLOTS, which are a different thing from the three layers above ----------------
+	// The overlay SLOTS, which are a different thing from the three layers above.
 	//
 	// Those are the bake-time autolayers the base channel's own resolved host DECLARES — they belong
 	// to the base clip and travel with it. These are retail's `CBaseAnimatingOverlay` slots: layers a
@@ -160,7 +160,7 @@ enum class EElysiumIdleTier : uint8
 	Loose,       // no activity, but the label reads as an idle — monsters and one-off models
 };
 
-// GameInstance-scoped owner of everything about NPC animation that outlives a map (roadmap 8.5).
+// GameInstance-scoped owner of everything about NPC animation that outlives a map.
 //
 // Two things are cached here rather than on the map actor, because both are skeleton-independent
 // and expensive: the parsed **bank assets** (a shared animation library is 2-35 MB of glb, and the
@@ -183,21 +183,21 @@ public:
 	const FElysiumNpcIndex& GetIndex();
 	// out/npc/clips/<Stem>.json, cached per stem. Null when the stem has no slice.
 	const FElysiumNpcClipSet* GetClipSet(const FString& Stem);
-	// out/npc/facial/<Stem>.json, cached per stem (12.3). Null for a model with no flex rig, which
+	// out/npc/facial/<Stem>.json, cached per stem. Null for a model with no flex rig, which
 	// is the normal case for animals, crowd bodies and every player body — the caller animates the
 	// body and leaves the face still. Shared rather than raw: an anim instance holds one for as long
 	// as its body lives, across map epochs this GI-scoped cache outlasts.
 	TSharedPtr<const FElysiumFacialRig> GetFacialRig(const FString& Stem);
-	// The eyeball pair for a stem (12.4): `npc/eyes/<stem>.json`. Same shape and lifetime as
+	// The eyeball pair for a stem: `npc/eyes/<stem>.json`. Same shape and lifetime as
 	// GetFacialRig — shared, immutable once built, GI-scoped. Answered independently of the flex
 	// rig, because a player body carries a pair of eyeballs and no flex rig at all.
 	//
 	// Both sidecars are Unreal-native, in the frame the baked body is in, so a rig is read verbatim
 	// and nothing here converts.
 	TSharedPtr<const FElysiumEyeSet> GetEyeSet(const FString& Stem);
-	// The two composition stages' rig for a stem (CAP7.2): `npc_index.json`'s `split_bones` plus
+	// The two composition stages' rig for a stem: `npc_index.json`'s `split_bones` plus
 	// `npc/procedural/<stem>.json`. Null when the model declares neither, which is a normal load —
-	// the body then poses under Unreal's ordinary hierarchy composition, as it did before CAP7.2.
+	// the body then poses under Unreal's ordinary hierarchy composition.
 	// Same shape and lifetime as GetFacialRig: shared, immutable once built, and GI-scoped so it
 	// outlives the map epoch the skeleton belongs to. Same frame rule as above.
 	TSharedPtr<const FElysiumCompositionRig> GetCompositionRig(const FString& Stem);
@@ -215,7 +215,7 @@ public:
 	// from its sequence skeleton is a broken baked prerequisite and warns.
 	TSharedPtr<const FElysiumBankRemap> GetBankRemap(USkeletalMesh* Mesh,
 		USkeleton* SourceSkeleton, FName RetargetSource);
-	// The blend spaces a stem declares (CAP7.3): `npc/blends/<stem>.json`. Null for every model whose
+	// The blend spaces a stem declares: `npc/blends/<stem>.json`. Null for every model whose
 	// sequences each name a single animation, which is most of them and a normal load. The stem may
 	// be a character, a bank or an animated prop — all three can declare grids.
 	TSharedPtr<const FElysiumBlendTable> GetBlendTable(const FString& Stem);
@@ -239,14 +239,14 @@ public:
 	UAnimSequence* ResolveClip(const FString& Stem, const FString& ClipName, USkeletalMesh* Mesh,
 		FString& OutError, EElysiumAnimChannel Channel = EElysiumAnimChannel::Base);
 
-	// 12.1 — retarget a clip out of a NAMED bank, bypassing the clip vocabulary. A choreo scene's
+	// Retarget a clip out of a NAMED bank, bypassing the clip vocabulary. A choreo scene's
 	// `entire_scene` lives in a cinematic anim set that no NPC's include tree mentions, so there is
 	// no vocabulary entry to look it up by; the scene knows the bank because it knows its own
-	// `BaseAnim` and the actor's `bonerename` root (PL16).
+	// `BaseAnim` and the actor's `bonerename` root.
 	UAnimSequence* ResolveClipFromBank(const FString& BankStem, const FString& ClipName,
 		USkeletalMesh* Mesh, FString& OutError);
 
-	// CAP7.3 — the animation a label actually plays on OwnerStem, which is the label itself for every
+	// The animation a label actually plays on OwnerStem, which is the label itself for every
 	// label that does not name a blend grid. **This is the only place a grid is collapsed to a cell**;
 	// the three resolvers above and the animated-prop path all come through here, because a hook in
 	// any one of them would silently leave the others playing the -180 degree base cell.
@@ -265,7 +265,7 @@ public:
 	FString ResolveClipAnimName(const FString& Stem, const FString& ClipName,
 		const FElysiumPoseParams& Pose = FElysiumPoseParams::Neutral());
 
-	// ANM3 — a label resolved to the whole grid rather than to one of its cells: the baked
+	// A label resolved to the whole grid rather than to one of its cells: the baked
 	// `UBlendSpace`, plus what a caller needs to steer and label its axes. The axis metadata travels
 	// with the asset because the blend space states its ranges in the pose parameter's own units but
 	// not which parameter that is — the sidecar owns that binding, and re-deriving it from the axis
@@ -274,7 +274,7 @@ public:
 		struct FElysiumResolvedGrid& OutGrid, const FString& Host = FString(),
 		FString* OutError = nullptr, FString* OutArmed = nullptr);
 
-	// CCC4 — the front door. One intent in, one selection record out, plus whatever of it could be
+	// The front door. One intent in, one selection record out, plus whatever of it could be
 	// bound to `Mesh`. **This is the only resolver**: the player path and the NPC motor both come
 	// through it, and `ResolveActivityClip` below is expressed over it, because two implementations of
 	// one pick are how the player and the cast come to disagree about a bank silently.
@@ -325,7 +325,7 @@ public:
 	// run the same pure resolver over real sidecars.
 	FElysiumAnimationCatalog BuildCatalog(const FString& Stem);
 
-	// CCC7 — the three gait fans as per-direction speed tables, which is what the mover steers by.
+	// The three gait fans as per-direction speed tables, which is what the mover steers by.
 	//
 	// Resolved from the **un-relaxed** `ACT_WALK`/`ACT_RUN`/`ACT_SNEAK`, exactly as retail's
 	// `PreThink` extractor does (activities 9, 19 and 18), so no table depends on the gait currently
@@ -348,7 +348,7 @@ public:
 	// assumed any would answer for a different body than the one being posed.
 	bool ResolveActivityClip(const FElysiumActivityClipRequest& Request, FElysiumActivityClip& Out);
 
-	// LIFE5 — the one cell a body that cannot evaluate a fan collapses one onto: the grid resolved at
+	// The one cell a body that cannot evaluate a fan collapses one onto: the grid resolved at
 	// `AxisValue` on the axis it binds, taken to the NEARER of the two cells the parameter sits
 	// between (`ElysiumBlendGrids::NearerCell`, which owns the arithmetic). Empty when the label names
 	// no grid, which tells the caller there was nothing to collapse.
@@ -417,8 +417,7 @@ private:
 	using FBankRemapKey = TPair<TObjectKey<USkeletalMesh>,
 		TPair<TObjectKey<USkeleton>, FName>>;
 	TMap<FBankRemapKey, TSharedPtr<const FElysiumBankRemap>> BankRemaps;
-	// And again for the garment spike. A null entry here is the common case, not the exception.
-	// And again for the blend spaces. Keyed by the OWNING stem — a bank serves every character that
+	// Blend spaces keyed by the OWNING stem — a bank serves every character that
 	// resolves a clip out of it, so this is parsed once for the whole cast rather than per NPC.
 	TMap<FString, TSharedPtr<const FElysiumBlendTable>> BlendTables;
 

@@ -23,26 +23,26 @@ struct FElysiumOutputDef
 };
 
 // One brush entity's convex volume, in entity-local Unreal centimetres (world position =
-// def origin + vertex). Vertices are an unordered point cloud; the collision cooker (P1.5)
+// def origin + vertex). Vertices are an unordered point cloud; the collision cooker
 // builds the hull, so order is irrelevant.
 struct FElysiumConvexHull
 {
 	TArray<FVector> Vertices;
 };
 
-// R3/R7 — one immutable parsed `.ents` record: everything the runtime needs to spawn one
+// One immutable parsed `.ents` record: everything the runtime needs to spawn one
 // entity and give it I/O identity. The def array is the map's entity "asset"; an entity's
-// stable handle index (R3) is its position in that array. `Keys` holds the raw keyvalues
+// stable handle index is its position in that array. `Keys` holds the raw keyvalues
 // verbatim (classname/targetname hoisted out but the source-space `origin` string, `model`,
-// `StartHidden`, spawnflags, … all still present); the class field tables (P1.3) read typed
+// `StartHidden`, spawnflags, … all still present); the class field tables read typed
 // values back out of it at spawn. `Origin` is the Unreal-space vector to use for placement.
 struct FElysiumEntityDef
 {
 	FString Classname;
-	FString TargetName;                     // may be empty; targetnames are non-unique (R3)
+	FString TargetName;                     // may be empty; targetnames are non-unique
 	FVector Origin = FVector::ZeroVector;   // Unreal cm, read verbatim (UE_ exporter)
 
-	// Raw keyvalues minus classname/targetname. Case-folded typed reads happen in P1.3.
+	// Raw keyvalues minus classname/targetname. Case-folded typed reads happen at spawn.
 	TMap<FString, FString> Keys;
 
 	// Brush-entity fields (present only when the entity carried a "*N" brush model).
@@ -58,10 +58,10 @@ struct FElysiumEntityDef
 	// into Unreal centimetres. Empty for non-elevators and older exports.
 	TArray<float> ElevatorFloors;
 
-	// Spawns fully OFF — non-solid, non-thinking, undrawn — until a ScriptUnhide (R6).
+	// Spawns fully OFF — non-solid, non-thinking, undrawn — until a ScriptUnhide.
 	bool bStartHidden = false;
 
-	// B7 — this entity lives in the 3D-skybox miniature, not the playable world: the moon and
+	// This entity lives in the 3D-skybox miniature, not the playable world: the moon and
 	// window-glow `env_sprite`s, the `logic_timer`s that blink them, the cloud-plane
 	// `prop_dynamic`s, the pier's `func_rotating` ferris wheel. It stays a live entity with its
 	// real I/O — only its placement changes. `Origin` and `Hulls` above are **already** carried
@@ -71,14 +71,14 @@ struct FElysiumEntityDef
 	// and the fact that miniature geometry is scenery the player can never touch.
 	bool bSky = false;
 
-	// Static-mesh render annotation (8.1 export → 8.3 consumer). Present only when this entity's
+	// Static-mesh render annotation. Present only when this entity's
 	// `model` key is a static `.mdl` that decoded: `ModelMesh` is the decoded OBJ stem under
 	// `props/` (so the runtime skips re-deriving it), `ModelQuat` the Unreal-space placement
 	// rotation (source_angles_to_unreal_quat of `angles`, read verbatim). Empty stem = no prop body.
 	FString ModelMesh;
 	FQuat ModelQuat = FQuat::Identity;
 
-	// Constraint axis (8.4 export → phys_hinge consumer). Present only on phys_* constraint
+	// Constraint axis. Present only on phys_* constraint
 	// entities carrying `hingeaxis`: the pre-converted, normalized Unreal-space hinge axis
 	// direction (source_dir_to_unreal of the origin→hingeaxis line, read verbatim). Zero vector
 	// = not a constraint / no axis (the leaf falls back to world Z).
@@ -90,8 +90,8 @@ struct FElysiumEntityDef
 };
 
 // The parsed `<map>.ents` file: the immutable def array for one map load. Built once at map
-// load (P1.4 hands it to the entity world). Parse is a plain function — no UObject, no
-// reflection (R1) — owned entirely by us and trivially testable.
+// load and handed to the entity world. Parse is a plain function — no UObject, no
+// reflection — owned entirely by us and trivially testable.
 struct FElysiumEntityDefs
 {
 	FString MapName;
@@ -101,7 +101,7 @@ struct FElysiumEntityDefs
 
 	// The map's `worldspawn.levelscript` value (e.g. "tutorial"), or empty when worldspawn carries
 	// no such key. Names the hub Python module at scripts/<module>/<module>.py, which the runtime
-	// imports at map load (roadmap 9.3). Read off the parsed defs rather than the live world so the
+	// imports at map load. Read off the parsed defs rather than the live world so the
 	// import happens before the spawn pass — a level script's module-level code must be in place
 	// before any entity can evaluate a field-6 payload against it.
 	FString LevelScriptModule() const;

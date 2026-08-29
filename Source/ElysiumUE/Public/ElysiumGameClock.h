@@ -43,22 +43,22 @@ namespace ElysiumFrame
 	}
 }
 
-// R4 — one clock, no engine timers. Game-visible time is a single absolute-seconds value
+// One clock, no engine timers. Game-visible time is a single absolute-seconds value
 // (VtMB's `curtime`): pausable and scalable, variable step (no fixed tick). Everything
 // time-based in Track B keys off this — delayed I/O, ScheduleTask strings, per-entity
-// next-think — through the one FElysiumEventQueue (P1.4); the queue and think times both
+// next-think — through the one FElysiumEventQueue; the queue and think times both
 // serialize, so game time must be ours, never FTimerManager.
 //
 // The clock lives on UElysiumGameStateSubsystem and persists across map travel (only the
 // entity world and its queue die with the map actor).
 //
-// S1 — one clock, advanced in exactly one place. `Advance` is private and reachable only
-// through FElysiumTimeControl, which the map actor's gameplay tick calls as its first
-// statement (runtime-architecture.md §3, step 2). Pause and scale are recorded here and
-// mirrored onto the engine by that same facade; nothing else writes them.
+// Advanced in exactly one place. `Advance` is private and reachable only through
+// FElysiumTimeControl, which the map actor's gameplay tick calls as its first statement
+// (`docs/architecture/runtime-architecture.md` §3, step 2). Pause and scale are recorded
+// here and mirrored onto the engine by that same facade; nothing else writes them.
 struct FElysiumGameClock
 {
-	// The one pause/scale facade is the only advance site (S1).
+	// The one pause/scale facade is the only advance site.
 	friend struct FElysiumTimeControl;
 
 	// Absolute game seconds (curtime) — the key space for the event queue and think times.

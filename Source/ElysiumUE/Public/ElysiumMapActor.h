@@ -80,7 +80,7 @@ const TCHAR* ElysiumMapRuntimePhaseName(EElysiumMapRuntimePhase Phase);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnElysiumMapRuntimeReady, AElysiumMapActor*);
 DECLARE_MULTICAST_DELEGATE_TwoParams(FOnElysiumMapRuntimeFailed, AElysiumMapActor*, const FString&);
 
-// S2 — the map's pre-move tick (runtime-architecture.md §3, steps 2-3). The first of the actor's
+// The map's pre-move tick (`docs/architecture/runtime-architecture.md` §3, steps 2-3). The first of the actor's
 // four tick functions, in TG_PrePhysics, carrying everything that must be settled BEFORE the pawn
 // moves: the frame order's own wiring, the one clock advance, and the player entity's own think.
 // Retail runs the whole player move out of the `clc_move` drain, ahead of `GameFrame`, with the
@@ -105,7 +105,7 @@ struct TStructOpsTypeTraits<FElysiumPreMoveTickFunction> : public TStructOpsType
 	enum { WithCopy = false };
 };
 
-// S2 — GameFrame after every player/NPC movement tick (runtime-architecture.md §3, steps 5-6).
+// GameFrame after every player/NPC movement tick (`docs/architecture/runtime-architecture.md` §3, steps 5-6).
 // This cannot be AElysiumMapActor::PrimaryActorTick: CharacterMovement automatically depends on
 // the primary tick of the actor owning its floor, and the runtime world collision is map-owned.
 // A separate tick can depend on those movement ticks without forming the reverse edge.
@@ -128,7 +128,7 @@ struct TStructOpsTypeTraits<FElysiumGameplayTickFunction> : public TStructOpsTyp
 	enum { WithCopy = false };
 };
 
-// S2 — the map's post-move tick (runtime-architecture.md §3, step 8). A fourth tick function on
+// The map's post-move tick (`docs/architecture/runtime-architecture.md` §3, step 8). A fourth tick function on
 // the same actor, in TG_PostPhysics, carrying the work that must see the frame's FINAL positions:
 // the `+use` camera/body query sees where a door actually ended up this frame, not where it was
 // before its swept move and the pawn's. Four tick functions on one actor is the engine's own
@@ -159,11 +159,11 @@ struct TStructOpsTypeTraits<FElysiumPostMoveTickFunction> : public TStructOpsTyp
 // level. Spawned only by UElysiumMapSubsystem (deferred, MapName set before FinishSpawning);
 // BeginPlay builds the map.
 //
-// **What this actor is** is the map's ORCHESTRATOR and the substrate's engine side (11.2): it owns
+// **What this actor is** is the map's ORCHESTRATOR and the substrate's engine side: it owns
 // the load order and the ordered frame passes, seats the player, holds the entity world / scheme manager
 // / camera director, and implements three of the four FElysiumWorldServices interfaces so the
 // plain-C++ half below it never casts back up here. The fourth, IElysiumPresenter, is the
-// world-scoped UElysiumPresentationSubsystem (11.8), which this actor looks up and threads in.
+// world-scoped UElysiumPresentationSubsystem, which this actor looks up and threads in.
 //
 // **What it is not** is the map's renderer. Three components carry the work that has nothing to do
 // with entity logic, and the actor holds no piece of their state:
@@ -194,7 +194,7 @@ public:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void RegisterActorTickFunctions(bool bRegister) override;
 
-	// S2 — the frame's pre-move pass (TG_PrePhysics, steps 2-3), driven by PreMoveTickFunction:
+	// The frame's pre-move pass (TG_PrePhysics, steps 2-3), driven by PreMoveTickFunction:
 	// wire the frame order, advance the one clock, place and hold a freshly spawned pawn, then run
 	// the player entity's own think. Everything here happens before the pawn's move, which is where
 	// retail puts it.
@@ -204,14 +204,14 @@ public:
 	// player move and NPC moves; GameFrame itself runs from GameplayTickFunction after both.
 	virtual void Tick(float DeltaSeconds) override;
 
-	// S2 — the frame's gameplay pass (TG_PrePhysics, steps 5-6): substrate think-first, then the
+	// The frame's gameplay pass (TG_PrePhysics, steps 5-6): substrate think-first, then the
 	// audio/scheme pass, after every movement component has produced this frame's final feet/yaw.
 	void GameplayTick(float DeltaSeconds);
 
-	// S2 — the frame's post-move pass (TG_PostPhysics, step 8), driven by PostMoveTickFunction.
+	// The frame's post-move pass (TG_PostPhysics, step 8), driven by PostMoveTickFunction.
 	void PostMoveTick(float DeltaSeconds);
 
-	// 12.4 — run the gaze cascade for every drawn character and publish each answer to its body.
+	// Run the gaze cascade for every drawn character and publish each answer to its body.
 	// Called from PostMoveTick, where the head-bone pose it measures against is settled.
 	void TickGaze(float DeltaSeconds);
 
@@ -240,16 +240,16 @@ public:
 
 	bool IsStageOnly() const { return bStageOnly; }
 
-	// --- The three halves this actor is not ---------------------------------------------------
+	// The three halves this actor is not.
 	// Never null after construction. Anything asking the map what it LOOKS like (the Lights and
 	// Maps Cog windows, the light probe, elysium.togglesky) goes through GetVisuals(); anything
 	// asking what it is SOLID against goes through GetCollision(). The actor deliberately carries
-	// no forwarders for either — a façade over these would rebuild the god object the split removed.
+	// no forwarders for either — a façade over these would rebuild a god object.
 	UElysiumMapVisuals* GetVisuals() const { return Visuals; }
 	UElysiumMapCollision* GetCollision() const { return Collision; }
 	UElysiumEntityBodies* GetBodies() const { return Bodies; }
 
-	// CCC4 — the player body's frame selection: which activity was classified, which label and owning
+	// The player body's frame selection: which activity was classified, which label and owning
 	// bank it resolved through, and why if it did not. Never null: a body with no vocabulary answers a
 	// default record whose outcome says exactly that, so a reader has nothing to test.
 	const FElysiumAnimationSelection& GetPlayerAnimSelection() const;
@@ -258,7 +258,7 @@ public:
 	// mover instead is describing a frame the record never saw.
 	const FElysiumLocomotionSample& GetPlayerAnimSample() const;
 
-	// LIFE4 — the player half of the channel arbitration slot: claim a channel of the player body's
+	// The player half of the channel arbitration slot: claim a channel of the player body's
 	// driver, or give a claim back. Same handle contract as `AElysiumNpcBody`'s pair; the driver is
 	// built on demand so a claim ahead of the first player anim pass is not dropped.
 	uint32 SubmitPlayerAnimRequest(const struct FElysiumAnimationRequest& Request);
@@ -266,10 +266,10 @@ public:
 	// the slot, so the arm seam writes the pins of THAT slot rather than a fixed one.
 	int32 PlayerOverlaySlotForHandle(uint32 Handle) const;
 	bool ReleasePlayerAnimRequest(uint32 Handle);
-	// LIFE5 — every standing claim on the player driver at once. A driver that was never built holds
+	// Every standing claim on the player driver at once. A driver that was never built holds
 	// nothing, so this does not build one.
 	int32 ReleaseAllPlayerAnimRequests();
-	// LIFE5 — the claim standing on one channel of the player driver, or null. Read-only, and it does
+	// The claim standing on one channel of the player driver, or null. Read-only, and it does
 	// not build a driver: a body that has never been claimed on holds nothing.
 	const struct FElysiumAnimationRequest* ActivePlayerAnimRequest(
 		EElysiumAnimChannel Channel) const;
@@ -277,7 +277,7 @@ public:
 	// to the player driver rather than to an NPC motor's.
 	bool IsPlayerVisual(const USkeletalMeshComponent* Body) const;
 
-	// B7 — the uniform scale a body built for this def takes: the 3D-skybox miniature's scale for
+	// The uniform scale a body built for this def takes: the 3D-skybox miniature's scale for
 	// a sky-scope entity (its origin and hulls are already carried through the transform by the
 	// def parser, but a mesh's own size is not a point), 1 for everything else.
 	virtual float BodyScaleFor(const struct FElysiumEntityDef& Def) const override;
@@ -293,7 +293,7 @@ public:
 	FOnElysiumMapRuntimeReady& OnRuntimeReady() { return RuntimeReady; }
 	FOnElysiumMapRuntimeFailed& OnRuntimeFailed() { return RuntimeFailed; }
 
-	// The live Track-B entity world (P1.4), or null if the map has no `.ents`. Owned by this
+	// The live Track-B entity world, or null if the map has no `.ents`. Owned by this
 	// actor, so it dies on map unload. The `elysium.world*` verbs reach it through here.
 	FElysiumEntityWorld* GetEntityWorld() const { return EntityWorld.Get(); }
 	// Engine overlap ingress from UElysiumBrushComponent. Runtime teleports suppress the callbacks
@@ -301,12 +301,12 @@ public:
 	void RouteBrushTouch(const FElysiumEntityHandle& Brush,
 		const FElysiumEntityHandle& Activator, bool bBegin);
 
-	// The P6.3 SoundScheme playback manager (ambient bed + music state machine + random scheduler)
+	// The SoundScheme playback manager (ambient bed + music state machine + random scheduler)
 	// for this map, or null if the map has no entity world. Owned by this actor (dies on unload); the
 	// ambient_soundscheme entities and the Cog Sound Schemes window reach it through here.
 	FElysiumSoundSchemeManager* GetSchemeManager() const { return SchemeManager.Get(); }
 
-	// --- IElysiumEmbodiment: entity bodies ----------------------------------------------------
+	// IElysiumEmbodiment: entity bodies.
 	// Every override in this block forwards to UElysiumEntityBodies, which owns the meshes, the
 	// animation resolution and the per-map asset caches. They stay declared here because this actor
 	// is the substrate's one engine seam (ElysiumWorldServices.h) — the substrate never learns that
@@ -415,11 +415,10 @@ public:
 	virtual void ClearPlayerVisual() override;
 	virtual void SetPlayerBodyEntityHidden(bool bInHidden) override;
 
-	// --- IElysiumEmbodiment: the player's body ----------------------------------------------
+	// IElysiumEmbodiment: the player's body.
 	// Every override in this block resolves the pawn through this world's first player controller
 	// and reports false / no-ops when there is none (the menu backdrop seats no pawn). They are the
-	// substrate's only route to the player until 11.4 makes the player an entity, at which point
-	// they become ordinary entity operations and these overrides shrink to the pawn's own transform.
+	// substrate's route to the player pawn.
 	virtual bool GetPlayerViewPoint(FVector& OutLocation, FRotator& OutRotation) const override;
 	virtual bool GetPlayerUseOrigin(FVector& OutLocation) const override;
 	virtual bool GetPlayerFeetTransform(FVector& OutFeetOrigin, FRotator& OutViewRotation) const override;
@@ -440,15 +439,15 @@ public:
 	virtual FElysiumUseQueryResult QueryPlayerUse(
 		const FElysiumEntityHandle& CurrentFocus) const override;
 	virtual FElysiumEntityHandle QueryFeedTarget() const override;
-	// LIFE5 — the ranged shot's aim query. Geometry only, and the zero-spread case of retail's cone.
+	// The ranged shot's aim query. Geometry only, and the zero-spread case of retail's cone.
 	virtual FElysiumEntityHandle QueryAimTarget(float MaxRangeCm) const override;
-	// 11.15 — the two perception queries. Geometry only; every threshold stays substrate.
+	// The two perception queries. Geometry only; every threshold stays substrate.
 	virtual bool QueryLineOfSight(const FVector& FromCm, const FVector& ToCm) const override;
 	virtual float QueryLightAtPoint(const FVector& PointCm) const override;
 	virtual bool IsPlayerSneaking() const override;
 	virtual bool IsPlayerOnGround() const override;
 	virtual FString GetPlayerBaseActivity() const override;
-	// LIFE5 — the forced-sequence record the melee stop's rule is evaluated over, and the stop
+	// The forced-sequence record the melee stop's rule is evaluated over, and the stop
 	// itself. Both are the player body's, so both live on this actor beside the driver that owns it.
 	virtual void StopPlayerBody() override;
 	virtual float ResolveNpcMakerGroundZ(const FVector& MakerOriginCm,
@@ -457,7 +456,7 @@ public:
 	virtual bool IsNpcMakerInPlayerViewCone(const FVector& MakerOriginCm) const override;
 	virtual bool IsNpcMakerSpawnAreaOccupied(const FVector& GroundOriginCm,
 		float HalfExtentCm) const override;
-	// 11.7 — the scripted-shot channel. The director resolves a `vdata/camerashots/` file against this
+	// The scripted-shot channel. The director resolves a `vdata/camerashots/` file against this
 	// map's entities and bodies and hands the values to the pawn's camera; the camera itself never
 	// learns what an entity is.
 	virtual int32 PushCameraShot(const FString& ShotFile, const FElysiumEntityHandle& Subject) override;
@@ -466,7 +465,7 @@ public:
 	virtual void SetEquippedCameraClass(int32 CameraClass) override;
 	virtual bool PopCameraShot(int32 ShotId, float BlendOutSeconds = -1.0f) override;
 
-	// --- IElysiumAudio ----------------------------------------------------------------------
+	// IElysiumAudio.
 	// Voices forward to the GI-scoped UElysiumAudioSubsystem; the scheme calls drive this map's own
 	// FElysiumSoundSchemeManager. All no-op safely with no subsystem / no scheme manager.
 	virtual FElysiumVoiceHandle Submit(FElysiumAudioRequest Request) override;
@@ -484,13 +483,13 @@ public:
 	virtual FString ActiveSchemeRel() const override;
 	virtual float OutputLeadSeconds() const override;
 
-	// --- IElysiumTravel ---------------------------------------------------------------------
+	// IElysiumTravel.
 	// Both forward to the GI-scoped UElysiumMapSubsystem, which owns when the travel happens.
 	virtual void RequestLandmarkTravel(const FString& Map, const FString& Landmark,
 		const FVector& Offset, float Yaw) override;
 	virtual void ChangeMap(const FString& Map) override;
 
-	// --- IElysiumWeather --------------------------------------------------------------------
+	// IElysiumWeather.
 	virtual void ApplyWetness(const FElysiumWeatherTransition& Transition) override;
 	virtual void ApplyEmitter(const FElysiumWeatherEmitterState& Emitter) override;
 	virtual void RemoveEmitter(const FElysiumEntityHandle& Entity) override;
@@ -511,11 +510,11 @@ public:
 	// UElysiumMapVisuals / UElysiumMapCollision alongside the things they count.
 	FString LoadedMap;
 	// Entity substrate: number of `.ents` records the world spawned (0 if the map has no sidecar),
-	// and how many of them got a P1.5 brush body (convex collision / trigger overlap volume).
+	// and how many of them got a brush body (convex collision / trigger overlap volume).
 	int32 EntityCount = 0;
 	int32 BrushBodyCount = 0;
 
-	// P4.6 — the `info_landmark` this map load entered through (a landmark transition / direct
+	// The `info_landmark` this map load entered through (a landmark transition / direct
 	// landmark Travel), or empty for a plain info_player_start spawn. Shown in the Maps Cog window.
 	FString EntryLandmark;
 
@@ -588,17 +587,17 @@ private:
 	float PresentedWetnessScale = 1.0f;
 	bool bEnvironmentWetnessOverride = false;
 
-	// B7 — the 3D-skybox miniature's placement (`<map>.sky`), or the identity on the 65 maps
+	// The 3D-skybox miniature's placement (`<map>.sky`), or the identity on the 65 maps
 	// with no `sky_camera`. Read at map load and used twice: the def parser carries sky-scope
 	// entities through it, and a miniature body takes its uniform mesh scale from it.
 	FElysiumSkyDef SkyDef;
 
-	// The Track-B entity substrate for this map (P1.4): parsed defs, live entities, the event
+	// The Track-B entity substrate for this map: parsed defs, live entities, the event
 	// queue, and the debug sinks. A plain C++ object (no UObject) held type-erased so the header
 	// needs only a forward declaration; destroyed with the actor on map unload.
 	TPimplPtr<FElysiumEntityWorld> EntityWorld;
 
-	// The P6.3 SoundScheme manager (plain C++, owned here). Constructed alongside EntityWorld so the
+	// The SoundScheme manager (plain C++, owned here). Constructed alongside EntityWorld so the
 	// ambient_soundscheme entities can reach it during their spawn pass; ticked from Tick with the
 	// player location; its voices are stopped on unload (EndPlay).
 	TPimplPtr<FElysiumSoundSchemeManager> SchemeManager;
@@ -609,14 +608,14 @@ private:
 	FVector DeferredSchemeAnchor = FVector::ZeroVector;
 	float DeferredSchemeFadeSeconds = 0.0f;
 
-	// 11.7 — the live scripted camera shots and their entity bindings. Owned here because resolving a
+	// The live scripted camera shots and their entity bindings. Owned here because resolving a
 	// shot's anchors needs the entity world and the bodies standing in it; refreshed in the post-move
 	// pass so a shot following an NPC sees where that NPC ended the frame.
 	TPimplPtr<class FElysiumCameraDirector> CameraDirector;
 	// The pawn's camera, or null (a backdrop map seats no pawn).
 	class UElysiumCameraComponent* PlayerCamera() const;
 
-	// CCC4 — the player body's animation selection, driven from the post-move pass. Owned here rather
+	// The player body's animation selection, driven from the post-move pass. Owned here rather
 	// than on a pawn because the resolution needs the entity world and the model stem, and because
 	// `IElysiumPlayerBody` is what serves both movement implementations through one interface. It dies
 	// with the map epoch, which is also what resets the jump latch across a travel.
@@ -624,13 +623,13 @@ private:
 	// The stem the player visual was built from, kept so the driver can name its catalog without
 	// re-deriving it from the entity record every frame.
 	FString PlayerVisualStem;
-	// The driver's gait-table generation as last handed to the mover (CCC7). The push is on change
+	// The driver's gait-table generation as last handed to the mover. The push is on change
 	// rather than per frame, and the mover keeps the tables across a teleport because they belong to
 	// the body — so this is the only thing that has to remember whether it happened.
 	uint32 PushedGaitGeneration = 0;
 	void TickPlayerAnimation(float DeltaSeconds);
 
-	// --- Animation-driven movement (LIFE5) ---------------------------------------------------------
+	// Animation-driven movement.
 	// Where the base channel's own clip stands, read off the pose layer and pushed onto the driver
 	// before it ticks. The driver never reaches for an anim instance — it also serves bodies that
 	// have none — so this is the one place the two are joined.
@@ -669,17 +668,17 @@ private:
 	// are satisfied by their own "intentionally absent" states rather than skipped.
 	void BuildStageWorld();
 	bool ReadSpawn(FVector& OutLocation, float& OutYaw) const;
-	// P4.6 — if this load is a landmark transition (the map subsystem has a queued landmark spawn),
+	// If this load is a landmark transition (the map subsystem has a queued landmark spawn),
 	// override the info_player_start placement: resolve the destination `info_landmark` in the just-
 	// built entity world and seat the player at landmark origin + the carried offset. Fires the
 	// landmark's OnEnterMapHere. No-op (keeps the .spawn placement) for a plain load or a missing
 	// landmark. Called by LoadMap after the entity world is built.
 	void ResolveLandmarkSpawn();
-	// 11.9 — if this load is a save restore, the World block's absolute player pose outranks both
+	// If this load is a save restore, the World block's absolute player pose outranks both
 	// info_player_start and a landmark offset. Run right after ResolveLandmarkSpawn.
 	void ResolveRestorePlacement();
 
-	// S2 — declare the frame order rather than observe it. Three edges are wired here, all of them
+	// Declare the frame order rather than observe it. Three edges are wired here, all of them
 	// late-binding: pre-move follows the player controller's input sample (step 1), player movement
 	// follows pre-move (step 4), and the map-floor barrier follows player movement so this frame's
 	// gameplay pass ultimately sees where the pawn actually ended up. Each end appears after BeginPlay
@@ -730,7 +729,7 @@ private:
 	bool bMotorsRetired = false;
 	double RuntimeWaitStartSeconds = 0.0;
 	double RuntimeWaitDurationSeconds = 0.0;
-	// This map's epoch, minted by UElysiumMapSubsystem at BeginPlay and retired at EndPlay (S4).
+	// This map's epoch, minted by UElysiumMapSubsystem at BeginPlay and retired at EndPlay.
 	// Everything an application-lifetime object holds on this map's behalf is keyed by it. 0 in a
 	// bare world with no map subsystem, which owns nothing across a boundary that never fires.
 	uint64 MapEpoch = 0;

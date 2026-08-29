@@ -106,9 +106,7 @@ bool ElysiumCommandBus::ParseTap(const FString& Line, FString& OutPressLine, FSt
 	return true;
 }
 
-// =====================================================================================
 // Verbs
-// =====================================================================================
 
 static FAutoConsoleCommand GElysiumCmdExec(
 	TEXT("elysium.cmd"),
@@ -149,9 +147,7 @@ static FAutoConsoleCommand GElysiumBindList(
 			ElysiumBinds::Defaults().Num(), *Out);
 	}));
 
-// =====================================================================================
 // Command-stream record / replay (S5's acceptance: a recorded stream replays identically)
-// =====================================================================================
 
 namespace
 {

@@ -62,10 +62,6 @@ namespace
 	}
 }
 
-// ================================================================================================
-// FElysiumNpcPerception
-// ================================================================================================
-
 void FElysiumNpcPerception::ResolveFromRulebook(int32 AuthoredPerception, float AuthoredVision,
 	float AuthoredHearing, UElysiumRulebookSubsystem* Rules, FString& OutWarning)
 {
@@ -149,10 +145,6 @@ void FElysiumNpcPerception::Resolve(int32 AuthoredPerception, float AuthoredVisi
 	VisionDistanceCm = FMath::Max(0.f, VisionUnits) * ElysiumMove::U;
 	HearingScalar = FMath::Max(0.f, Hearing);
 }
-
-// ================================================================================================
-// FElysiumNpcMemory
-// ================================================================================================
 
 void FElysiumNpcMemory::Reset()
 {
@@ -273,10 +265,6 @@ void FElysiumNpcMemory::Rebase(const FElysiumEntityWorld& World)
 		bEnemyEluded = false;
 	}
 }
-
-// ================================================================================================
-// FElysiumNpcSenses
-// ================================================================================================
 
 void FElysiumNpcSenses::ResolveTuning(FElysiumNpc& Npc)
 {
@@ -408,14 +396,13 @@ void FElysiumNpcSenses::TickSight(FElysiumNpc& Npc, double Now)
 			&& (Now - Memory.PlayerLosLastClearTime) <= ElysiumNpcSense::BlockedInConeGraceSeconds;
 	}
 
-	// ================= Cycle 10c — the closest-player special case ==============================
+	// The closest-player special case.
 	// "the closest-player special case opens the Nosferatu window for five seconds." The setter is
 	// called from `SetClosestPlayer`'s own body, which is this function, so the CALLER stays where
 	// retail's is and the rule itself lives with the rest of the witness transaction
 	// (`Substrate/ElysiumNpcWitness.h`). It runs after the cache above is committed because the
 	// proximity term it reads is `bPlayerInRange`.
 	ElysiumNpcWitness::OnClosestPlayerUpdated(Npc, *Player, Now);
-	// =============================================================================================
 
 	// The HUD observability offer (`docs/vtmb/stealth.md` -> "HUD observability is not authority").
 	// `SetClosestPlayer` feeds this surface, and the player-side update is what filters and ranks:

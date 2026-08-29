@@ -166,9 +166,7 @@ namespace
 		}));
 }
 
-// ================================================================================================
-// FElysiumBodyAnimProxy
-// ================================================================================================
+// FElysiumBodyAnimProxy.
 
 void FElysiumHairDynamicsResetNode::ResetDynamics(ETeleportType InTeleportType)
 {
@@ -279,7 +277,7 @@ void FElysiumBodyAnimProxy::EvaluateTail(FPoseContext& Output)
 
 	// The face is written last, over whatever the body produced — including the ref pose a body
 	// with no clip falls back to, so a facial-only preview still moves. VtMB's clips carry no curves
-	// at all, so nothing is being overwritten here; these names exist only because 12.3 puts them
+	// at all, so nothing is being overwritten here; these names exist only because the facial track puts them
 	// there. The curves reach the component's morph weights through the skeleton's morph-target
 	// curve metadata (`ElysiumNpcVisual::RegisterMorphTargetCurves`), and every morph is written
 	// every frame — including the zeros, which is what releases a controller that went back to rest.
@@ -373,9 +371,7 @@ bool FElysiumBodyAnimProxy::HairDynamicsRequestedResetForTest(ETeleportType Tele
 }
 #endif
 
-// ================================================================================================
-// UElysiumBodyAnimInstance
-// ================================================================================================
+// UElysiumBodyAnimInstance.
 
 void UElysiumBodyAnimInstance::SetFacialRig(TSharedPtr<const FElysiumFacialRig> InRig)
 {

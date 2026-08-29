@@ -161,7 +161,6 @@ bool ClampCommandSpeed(FVector& CommandCmS, float MaxSpeed)
 	return true;
 }
 
-// --------------------------------------------------------------------------------------------
 
 static const FCvarDef GMoveCvars[] =
 {

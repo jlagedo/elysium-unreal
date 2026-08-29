@@ -461,7 +461,7 @@ void FElysiumCogWindow_Lights::RenderContent()
 
 	const TArray<UElysiumLightRig::FLightSource>& Sources = Rig->Sources();
 
-	// --- Visibility + counts -------------------------------------------------------------------
+	// Visibility + counts.
 	bool bVisible = Rig->AreLightsVisible();
 	if (ImGui::Checkbox("Rig visible", &bVisible))
 	{
@@ -617,9 +617,9 @@ void FElysiumCogWindow_Lights::RenderContent()
 			Sky->SetLightColor(Color);
 		}
 
-		// Cubemap off falls back to a flat constant ambient of the light colour — what the sky
-		// light did before it was given the real sky. Kept togglable because it is the A/B that
-		// shows what sky occlusion is actually buying while the map is being recalibrated.
+		// Cubemap off falls back to a flat constant ambient of the light colour — the sky light
+		// without the authored cube. Kept togglable because it shows what sky occlusion is actually
+		// buying while the map is being recalibrated.
 		const bool bUsingAuthoredCube = Sky->Cubemap != nullptr
 			&& Sky->Cubemap != ConstantSkyCube.Get();
 		bool bUseCube = bUsingAuthoredCube;
@@ -800,7 +800,7 @@ void FElysiumCogWindow_Lights::RenderContent()
 	}
 	RenderEditActions(*Rig, Map->MapName);
 
-	// --- Per-source list -----------------------------------------------------------------------
+	// Per-source list.
 	ImGui::SeparatorText("Sources");
 	if (Sources.Num() == 0)
 	{
@@ -1177,7 +1177,7 @@ void FElysiumCogWindow_Lights::RenderSelectedSource(UElysiumLightRig& Rig, int32
 	ImGui::SetItemTooltip("Hide every other light, to see what this one alone is doing. Lifted "
 		"automatically while this window is closed.");
 
-	// --- The authored batch ----------------------------------------------------------------------
+	// The authored batch.
 	// Copy-pasted lights share one authored decision, so navigation and enable/disable are offered
 	// per batch. Recomputed per frame — a few hundred tuple compares.
 	{
@@ -1400,7 +1400,7 @@ void FElysiumCogWindow_Lights::RenderSelectedSource(UElysiumLightRig& Rig, int32
 		ImGui::SetItemTooltip("Faithful baseline is zero; non-zero is an explicit presentation edit.");
 	}
 
-	// --- Transform -----------------------------------------------------------------------------
+	// Transform.
 	// The 3D gizmo. Scale means nothing to a light, and neither does the orientation of a point
 	// light, so both are taken off the handle rather than offered and ignored.
 	const FVector Pos = Light->GetComponentLocation();

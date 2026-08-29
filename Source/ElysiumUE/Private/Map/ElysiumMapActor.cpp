@@ -5,7 +5,7 @@
 #include "ElysiumEntity.h"
 #include "ElysiumEntityWorld.h"
 #include "ElysiumGameStateSubsystem.h"
-#include "ElysiumMovementComponent.h"   // the gait-speed push (CCC7)
+#include "ElysiumMovementComponent.h"   // the gait-speed push
 #include "ElysiumMoveSolve.h"           // ElysiumMove::U — the one Source-unit conversion
 #include "ElysiumPlayer.h"              // FElysiumCombatCharacter — the feed probe's candidate set
 #include "ElysiumPlayerBody.h"
@@ -65,9 +65,7 @@ namespace
 	}
 }
 
-// ------------------------------------------------------------------------------------------
-// S2 — the pre-move tick function (runtime-architecture.md §3, steps 2-3).
-// ------------------------------------------------------------------------------------------
+// The pre-move tick function (`docs/architecture/runtime-architecture.md` §3, steps 2-3).
 
 void FElysiumPreMoveTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
 	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
@@ -93,9 +91,7 @@ FName FElysiumPreMoveTickFunction::DiagnosticContext(bool bDetailed)
 	return FName(TEXT("ElysiumMapActorPreMove"));
 }
 
-// ------------------------------------------------------------------------------------------
-// S2 — the gameplay tick function (runtime-architecture.md §3, steps 5-6).
-// ------------------------------------------------------------------------------------------
+// The gameplay tick function (`docs/architecture/runtime-architecture.md` §3, steps 5-6).
 
 void FElysiumGameplayTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
 	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
@@ -121,9 +117,7 @@ FName FElysiumGameplayTickFunction::DiagnosticContext(bool bDetailed)
 	return FName(TEXT("ElysiumMapActorGameplay"));
 }
 
-// ------------------------------------------------------------------------------------------
-// S2 — the post-move tick function (runtime-architecture.md §3, step 8).
-// ------------------------------------------------------------------------------------------
+// The post-move tick function (`docs/architecture/runtime-architecture.md` §3, step 8).
 
 void FElysiumPostMoveTickFunction::ExecuteTick(float DeltaTime, ELevelTick TickType,
 	ENamedThreads::Type CurrentThread, const FGraphEventRef& MyCompletionGraphEvent)
@@ -151,7 +145,7 @@ FName FElysiumPostMoveTickFunction::DiagnosticContext(bool bDetailed)
 
 AElysiumMapActor::AElysiumMapActor()
 {
-	// S2 — the frame order is declared with tick groups and prerequisites, not left to registration
+	// The frame order is declared with tick groups and prerequisites, not left to registration
 	// order. Pre-move advances the clock/player think; the actor tick is the map-owned floor's
 	// movement-base barrier; gameplay runs after player and NPC movement; post-move runs after
 	// physics. Before activation the first three may poll through a hold; activation restores the
@@ -280,7 +274,7 @@ void AElysiumMapActor::EnsureTickPrerequisites()
 		PrereqMovement = Move;
 	}
 
-	// 11.4 — tell the body which entity it embodies. Resynced every tick (cheap: one handle
+	// Tell the body which entity it embodies. Resynced every tick (cheap: one handle
 	// assignment) rather than gated on the movement-prerequisite wiring above: a fresh world has no
 	// pawn yet when the map builds, and SpawnPlayer can land on a later tick than the one where this
 	// pawn's movement component first appears, so a one-shot assignment here can permanently capture
@@ -319,9 +313,9 @@ USkeletalMeshComponent* AElysiumMapActor::BuildPlayerVisual(const FString& Stem,
 	Visual->SetRelativeLocation(FVector(0.0f, 0.0f, -Body->GetBodyHalfHeight()));
 	Visual->SetRelativeRotation(ElysiumSkeletalBasis::RelativeToParentFacing());
 
-	// The mesh animates from the body sample the mover publishes at its tick tail (CCC1), so it has
+	// The mesh animates from the body sample the mover publishes at its tick tail, so it has
 	// to tick after the mover. `ACharacter` installs this prerequisite itself in
-	// PostInitializeComponents — which covers every NPC and the capsule A/B body — but `AElysiumPawn`
+	// PostInitializeComponents — which covers every NPC — but `AElysiumPawn`
 	// is a plain `APawn` whose visual is built at runtime, so a skeletal mesh sharing the mover's
 	// tick group would otherwise be ordered by registration, i.e. not at all.
 	if (UPawnMovementComponent* Move = Pawn->GetMovementComponent())
@@ -403,13 +397,13 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 			&& Report.Generation == PlayerAnimDriver->Selection.Generation,
 		Report.bInOneShotState, Report.bComplete);
 
-	// **Where the forced sequence stands, read before the driver ticks** (LIFE5). The driver's
+	// **Where the forced sequence stands, read before the driver ticks.** The driver's
 	// animation-driven predicate is rebuilt from this plus the base claim's own forced activity every
 	// frame, so it is pushed here rather than remembered anywhere — and a body with no pose layer
 	// pushes the default, which reports no sequence and is never animation-driven.
 	PlayerAnimDriver->BaseClipCycle = ReadPlayerBaseClipCycle(Visual);
 
-	// **The melee stop, between the pose read and the selector** (LIFE5). Retail zeroes the body's
+	// **The melee stop, between the pose read and the selector.** Retail zeroes the body's
 	// velocity in `PostThink` and then, in the very next instruction block, asks the classifier and
 	// calls `SetAnimation` — so the frame the swing's lock releases is a frame the selector sees a
 	// STANDING body on. Here that is the same seam: the freshly-read cycle above is what the rule's
@@ -433,7 +427,7 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 	// reads the cycle with.
 	PushPlayerAnimMovementLock(Pawn);
 
-	// **The speed authority's push** (CCC7). The mover runs in the pre-physics pass and this driver
+	// **The speed authority's push.** The mover runs in the pre-physics pass and this driver
 	// in the post-move one, so the mover cannot ask for a table — it has to be handed one, and the
 	// tables are a property of the body rather than of the frame, so handing one over on change is
 	// the whole of it. The generation gate is what keeps it from being a per-frame struct copy.
@@ -448,7 +442,7 @@ void AElysiumMapActor::TickPlayerAnimation(float DeltaSeconds)
 			Move->SetGaitSpeeds(PlayerAnimDriver->GaitSpeeds);
 		}
 	}
-	// Hand the settled record to the graph (CCC5). The push is here rather than a pull from the
+	// Hand the settled record to the graph. The push is here rather than a pull from the
 	// instance because the driver lives on this actor behind a pimpl while the visual is a component
 	// of the pawn: an instance reaching for it would invert the layering and carry a null branch for
 	// every map that seats no pawn. A cast body, or a player body whose graph package is missing,
@@ -545,7 +539,7 @@ void AElysiumMapActor::PushPlayerAnimMovementLock(APawn* Pawn)
 		? Pawn->FindComponentByClass<UElysiumMovementComponent>() : nullptr;
 	if (Move == nullptr)
 	{
-		return;   // the capsule A/B body and a backdrop map have no `CGameMovement` port to lock
+		return;   // a pawn with no `CGameMovement` port (a backdrop map, or a capsule body) has nothing to lock
 	}
 
 	const FElysiumBaseClipCycle& Cycle = PlayerAnimDriver->BaseClipCycle;
@@ -1869,7 +1863,7 @@ void AElysiumMapActor::PreMoveTick(float DeltaSeconds)
 	{
 		if (UElysiumGameStateSubsystem* GameState = GI->GetSubsystem<UElysiumGameStateSubsystem>())
 		{
-			// Step 2 — the only place `Now` moves (S1). DeltaSeconds is already dilated by the
+			// Step 2 — the only place `Now` moves. DeltaSeconds is already dilated by the
 			// engine, and the clock applies no factor of its own, so a time scale is applied once.
 			// It sits ahead of the move because retail rebinds `frametime`/`curtime` to the user
 			// command's own timing for the move's duration: the move runs at this frame's `now`,
@@ -2057,7 +2051,7 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		// The feed request is acquired against the same settled frame the use focus is, and for the
 		// same reason: retail's victim search is a trace off the player's final view position.
 		EntityWorld->UpdatePlayerFeed();
-		// LIFE5 — the player's weapon frame, in retail's own `PostThink` order: the controlled-use
+		// The player's weapon frame, in retail's own `PostThink` order: the controlled-use
 		// first refusal and `ItemPostFrame` come after the move that just completed
 		// (`docs/vtmb/player-entity.md` § "Recovered `PostThink` body"). A shot accepted here queues
 		// its commit for the NEXT frame's queue service, which is immaterial: a ranged commit either
@@ -2065,7 +2059,7 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		// the phase of the clip the transaction just armed, so it answers correctly on the arming
 		// frame.
 		EntityWorld->UpdatePlayerWeaponFrame();
-		// LIFE5 — the melee contact walk, for the player and every swinging NPC alike. It runs
+		// The melee contact walk, for the player and every swinging NPC alike. It runs
 		// AFTER the weapon frame, so a swing accepted this frame starts its walk on the next one:
 		// the body's pose layer has not ticked since the clip was armed, and the first frame that
 		// reports the clip playing is the first frame the walk has a cycle to test. That is the
@@ -2081,7 +2075,7 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		ElysiumMeleeTrail::Advance(DeltaSeconds, *EntityWorld);
 	}
 
-	// 11.7 — re-resolve every `Follow` camera shot against this frame's final entity positions. Same
+	// Re-resolve every `Follow` camera shot against this frame's final entity positions. Same
 	// reason as the use cursor: a shot framed on where an NPC *was* reads as a camera that lags the
 	// subject it is supposed to be locked onto.
 	if (CameraDirector)
@@ -2093,7 +2087,7 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		EntityWorld->RefreshDialogueCamera();
 	}
 
-	// 12.4 — decide where each character is looking, then rebuild each eye's basis against this
+	// Decide where each character is looking, then rebuild each eye's basis against this
 	// frame's settled pose and publish it to the material. Both halves are here for the same reason
 	// as the two above, and for one of their own: the head-bone transform the cascade measures its
 	// cone in, and the bone transforms the eye pass reads, are only stable once the frame's parallel
@@ -2108,7 +2102,7 @@ void AElysiumMapActor::PostMoveTick(float DeltaSeconds)
 		Bodies->TickEyes(DeltaSeconds);
 	}
 
-	// CCC4 — the frame's animation selection, taken from the body sample the mover published at its
+	// The frame's animation selection, taken from the body sample the mover published at its
 	// tick tail. It belongs in this pass for the reason the three above do: the sample is settled only
 	// after the last stepper substep, and a selection read before that is a selection made from a
 	// half-integrated frame (`docs/architecture/animation-architecture.md` section 3.2).
