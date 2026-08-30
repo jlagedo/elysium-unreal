@@ -2,9 +2,9 @@
 # PreToolUse(Bash) hook: gate the expensive and destructive elysium commands.
 #
 # `pipeline/CLAUDE.md` requires explicit owner acceptance before a whole-profile export, a
-# reconstruct, a broad --force/--clean, or the complete Python suite. Prose is advisory; this
-# turns the same rule into a permission prompt that states the cost, so the acceptance is
-# recorded as an approval rather than assumed.
+# reconstruct, or a broad --force/--clean. Prose is advisory; this turns the same rule into a
+# permission prompt that states the cost, so the acceptance is recorded as an approval rather
+# than assumed.
 #
 # The decision is "ask", never "deny": the owner may well want the run, and denying would make
 # the approved path unreachable.
@@ -38,27 +38,8 @@ if [ -z "$reason" ]; then
   esac
 fi
 
-# A bare `pytest` is the whole suite; a run that names a path, a node id or a `-k` selection
-# is a focused one and is not gated.
-if [ -z "$reason" ]; then
-  case "$cmd" in
-    *pytest*)
-      if ! printf '%s' "$cmd" | grep -Eq 'pytest[[:space:]]+[^-]|::|-k[[:space:]=]|--last-failed|--lf'; then
-        reason="this runs the complete Python suite."
-      fi ;;
-  esac
-fi
-
 [ -z "$reason" ] && exit 0
 
-python - "$reason" <<'PY' 2>/dev/null || printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"Scope gate: this is a broad export/bake/reconstruct operation. State the command, scope, reason and expected cost, and get explicit owner acceptance first (pipeline/CLAUDE.md)."}}\n'
-import json, sys
-print(json.dumps({"hookSpecificOutput": {
-    "hookEventName": "PreToolUse",
-    "permissionDecision": "ask",
-    "permissionDecisionReason": (
-        "Scope gate: " + sys.argv[1] +
-        " State the command, scope, reason and expected cost, and get explicit owner"
-        " acceptance first (pipeline/CLAUDE.md)."),
-}}))
-PY
+# Escape backslashes and double-quotes for JSON; reason has no other special chars.
+escaped=$(printf '%s' "$reason" | sed 's/\\/\\\\/g; s/"/\\"/g')
+printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask","permissionDecisionReason":"Scope gate: %s State the command, scope, reason and expected cost, and get explicit owner acceptance first (pipeline/CLAUDE.md)."}}\n' "$escaped"
