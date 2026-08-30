@@ -20,8 +20,35 @@ inspectable projection. Every understood source datum maps to glTF core, an exte
 documented equivalent transformation; the original source binaries are not embedded. Unreal assets
 remain generated bake outputs.
 
-The character-body unit and its shared-bank boundary are defined by
-`docs/architecture/seam_map_character.md`.
+The `export_v2` GLB units are specified one per kind. `seam_map_unit_contract.md` owns the rules
+they share; each seam file owns one unit kind:
+
+| Unit | Specification |
+|---|---|
+| `vtmb:model:` (every `models/**.mdl`: bodies, animation banks, props, wield and placed models) | `seam_map_model.md` |
+| `vtmb:material:` | `seam_map_material.md` |
+| `vtmb:texture:` | `seam_map_texture.md` |
+| `vtmb:surface-property:` | `seam_map_surface_property.md` |
+| `vtmb:expression-table:` | `seam_map_expression_table.md` |
+| `vtmb:map:`, `vtmb:map-entities:`, `vtmb:map-lighting:`, `vtmb:map-visibility:` | `seam_map_map.md`, `seam_map_map_entities.md`, `seam_map_map_lighting.md`, `seam_map_map_visibility.md` |
+| `vtmb:nav-graph:` | `seam_map_nav_graph.md` |
+| `vtmb:sound:` | `seam_map_sound.md` |
+| `vtmb:sound-script:`, `vtmb:sentence:`, `vtmb:dsp-preset:`, `vtmb:soundscape:` | `seam_map_sound_script.md` |
+| `vtmb:sound-scheme:` | `seam_map_sound_scheme.md` |
+| `vtmb:scene:` | `seam_map_scene.md` |
+| `vtmb:dialogue:` | `seam_map_dialogue.md` |
+| `vtmb:script:` | `seam_map_script.md` |
+| `vtmb:vdata:` | `seam_map_vdata.md` |
+| `vtmb:particle:` | `seam_map_particle.md` |
+| `vtmb:image:` | `seam_map_image.md` |
+| `vtmb:font:`, `vtmb:font-list:` | `seam_map_font.md` |
+| `vtmb:shader-source:`, `vtmb:shader-program:` | `seam_map_shader_program.md` |
+| `vtmb:ui-resource:` | `seam_map_ui_resource.md` |
+| `vtmb:engine-config:` | `seam_map_engine_config.md` |
+| `vtmb:corpus-index` | `seam_map_corpus_index.md` |
+
+`seam_map_model.md` owns the character-body and animation-bank units; `seam_map_character.md`
+and `seam_map_animation_bank.md` are not current unit specifications.
 
 | Retail source map | Slice | VtMB source | Packaging type | File type | Export mapping | Seam file or absence | Unreal type | What it is |
 |---|---|---|---|---|---|---|---|---|

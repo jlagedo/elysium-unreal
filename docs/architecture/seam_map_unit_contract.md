@@ -1,0 +1,269 @@
+# Export-v2 unit contract
+
+This document owns the rules every `export_v2` GLB unit shares: identity, source resolution,
+container layout, cross-unit references, coverage vocabulary, byte ledger and validation split.
+A seam specification (`seam_map_<kind>.md`) states only what is specific to its unit kind and
+links here for the rest. Where a shipped seam restates one of these rules, this document is the
+owner and the restatement is a copy.
+
+## Unit
+
+A unit is one binary glTF 2.0 file that is the complete inspectable projection of one VtMB
+source identity. One identity produces one file; one file carries one identity. A unit never
+embeds an opaque copy of its source member and never carries data another unit owns.
+
+```text
+vtmb:<kind>:<key>
+  -> $ELYSIUM_EXPORT_V2_ROOT/<family>/<key>.glb
+```
+
+`<key>` is lower-case, forward-slashed and install-relative below the kind's root directory. The
+extension is dropped where one kind has one extension and kept where it disambiguates (`vtmb:sound:`
+keeps `.wav`/`.mp3`, because both spellings of one stem ship). Each seam names its root and its
+extension rule.
+
+The public command surface is uniform:
+
+```text
+uv run elysium export_v2 <kind>-glb <argument>
+uv run elysium export_v2 <kind>s-glb
+uv run elysium export_v2 export-all
+```
+
+The singular command exports one unit and tolerates the root prefix and the source extension on
+its argument; the plural command exports every unit the UP-first install index resolves for the
+kind. Code is isolated per kind: `elysium_pipeline.formats.<kind>_glb` decodes,
+`elysium_pipeline.exporters.<kind>_glb` writes, `elysium_pipeline.validation.<kind>_glb` reads
+back independently of the writer.
+
+## Source resolution
+
+Every member resolves **UP-first**, independently of every other member:
+
+```text
+Unofficial_Patch loose -> retail loose -> retail VPK
+```
+
+An arrow names a member inside a container; loose members use the same install-relative name:
+
+```text
+<VTMB>/Vampire/pack001.vpk -> materials/models/character/teeth/upperteeth.vmt
+<VTMB>/Unofficial_Patch    -> materials/models/character/eyes/prince.vmt
+```
+
+`sourceResolution` lists every member the unit was decoded from:
+
+```json
+{
+  "sourceResolution": {
+    "policy": "up-first",
+    "members": [
+      {"role": "mdl", "path": "models/character/npc/unique/downtown/lacroix/lacroix.mdl",
+       "origin": {"kind": "loose", "root": "Unofficial_Patch"},
+       "byteLength": 1234567, "sha256": "…"}
+    ]
+  }
+}
+```
+
+A member `origin` is one of:
+
+| `kind` | Fields | Meaning |
+|---|---|---|
+| `loose` | `root` | a file below the named install subdirectory |
+| `vpk` | `container`, `offset`, `size` | a member of the named retail pack |
+| `bsp-pakfile` | `map`, `member`, `origin` | a member of a BSP's PAKFILE lump; `origin` is the BSP's own origin |
+
+A member may carry `span` — `{"offset", "length"}` — when the unit is cut from part of a larger
+file (a surface-property entry, a map lump family). The ledger of such a unit is gapless over the
+span alone, and the seam that cuts the file proves the whole file partitions into unit spans plus
+named non-unit bytes before it publishes any unit from it.
+
+An empty member (zero bytes) is recorded with `byteLength: 0`, the SHA-256 of the empty string and
+an `omissions` row `empty-member`; a unit whose selecting member is empty publishes with a warning.
+
+## Container
+
+```text
+unit.glb
+|- header      magic 'glTF', version 2, total length
+|- chunk 0     JSON  (0x4E4F534A), UTF-8, padded to 4 bytes with 0x20
+`- chunk 1     BIN   (0x004E4942), padded to 4 bytes with 0x00; absent when the unit has no accessor
+```
+
+The JSON chunk is serialized with compact separators, sorted-key-free (writer order) and rejects
+`NaN` and infinity, so one source closure yields one byte-identical product. When a BIN chunk
+exists there is exactly one `buffers` entry whose `byteLength` is the BIN payload, every
+`bufferView` uses buffer 0, and view offsets are 4-byte aligned.
+
+`asset.generator` is `Elysium <Kind> GLB Exporter`. Every unit declares its own extension
+`ELYSIUM_vtmb_<kind>` in both `extensionsUsed` and `extensionsRequired`, because the VTMB meaning
+is reachable only through it. Cross-reference extensions (`ELYSIUM_material_reference`,
+`ELYSIUM_model_reference`, `ELYSIUM_texture_reference`, `ELYSIUM_asset_reference`) are declared
+where used.
+
+A unit whose source holds nothing a general consumer can draw or play is **scene-less**: it
+declares no `scenes`, `nodes`, `meshes`, `images`, `textures` or `samplers`, and declaring any of
+them fails validation. Where core glTF can carry the datum (geometry, skins, animations, morphs,
+KTX2 images through a buffer view) it does, and the extension carries the VTMB-only information
+beside it; the same datum is never stated twice.
+
+Every unit's extension root carries these keys, in this order, before its kind-specific keys:
+
+| Key | Contents |
+|---|---|
+| `schemaVersion` | the seam's schema version, semantic |
+| `identity` | `asset` (the stable ID), the source path(s) and `sourcePolicy: "up-first"` |
+| `sourceResolution` | the member table above |
+| `dependencies` | the reference table below |
+| `coverage` | the coverage object below |
+
+Numeric records that came from a file offset keep that offset (`sourceOffset`) so a ledger range
+and the record it pays for name the same place.
+
+## Coordinate transform
+
+Spatial units state the transformation applied per coordinate-bearing domain in
+`coordinateTransform`:
+
+| Field | Value |
+|---|---|
+| `source` | `Source inches, Z-up, right-handed` |
+| `destination` | `glTF metres, Y-up, right-handed` |
+| `scale` | `0.0254` |
+| `position` | `(x, y, z)_gltf = (x, z, -y)_source * 0.0254` |
+| `direction` | `(x, y, z)_gltf = (x, z, -y)_source` |
+| `quaternion` | `(x, y, z, w)_gltf = (x, z, -y, w)_source` |
+| `domains` | the per-domain rule |
+
+The mapping is a rotation, so triangle winding carries through unchanged. Quaternions are
+normalized on conversion; a non-finite or degenerate quaternion fails the export. A domain the
+seam keeps in source units (VPhysics metres, cloth inches, lightmap luxels) says so in `domains`.
+
+## References between units
+
+A unit names another unit by stable ID and never inlines its data. Every reference the unit makes
+is declared once in `dependencies`, whatever produced it:
+
+```json
+{
+  "dependencies": [
+    {"role": "material", "asset": "vtmb:material:models/character/teeth/upperteeth",
+     "sourcePath": "materials/models/character/teeth/upperteeth.vmt", "resolved": true},
+    {"role": "sound", "asset": "vtmb:sound:character/dlg/main characters/jack_tutorial/line191_col_e.mp3",
+     "sourcePath": "sound/character/dlg/main characters/jack_tutorial/line191_col_e.wav",
+     "resolved": true, "resolution": "mp3-first"}
+  ]
+}
+```
+
+`role` names what the referrer needs; `asset` is the referenced identity; `sourcePath` is the
+install-relative path the referrer authored (spelling preserved); `resolved` states whether the
+UP-first index holds a member for it. Optional `byteLength` and `sha256` pin the referenced bytes
+where the referrer's decode depends on them (an included animation bank, a paired VTX).
+
+Object-local references use the reference extensions on the glTF object that binds them:
+
+```json
+{"extensions": {"ELYSIUM_model_reference": {"asset": "vtmb:model:scenery/misc/trashcan01"}}}
+```
+
+A reference that the referenced kind's own rules make unreachable to the engine keeps a sentinel
+identity in the `vtmb:missing-<kind>:` namespace, carries `resolved: false`, produces no
+`dependencies` row and enters coverage as `omitted-proven` with the reason the seam names. A
+reference whose target is another seam's data and merely fails to resolve warns rather than
+failing the unit; a reference that is the unit's own structure (an inheritance base, an include
+model, a paired VTX) enters `coverage.unresolved` and fails it.
+
+## Coverage
+
+Coverage is stated in two vocabularies. The semantic states grade a source *field or record*; the
+ledger states grade a *byte range*. A field graded `equivalent` and the bytes it was read from
+graded `mapped` describe one decode from two directions.
+
+### Semantic states
+
+| State | Meaning |
+|---|---|
+| `mapped` | represented directly by core glTF or the unit's extension |
+| `equivalent` | transformed into a representation with the same understood meaning |
+| `derived` | recoverable completely from other represented data |
+| `omitted-proven` | confirmed padding, dead storage, unreachable content or a redundant mechanism, with recorded evidence |
+| `unresolved` | meaning unknown, or candidate interpretations disagree |
+| `unsupported` | meaning understood but the schema does not yet represent it |
+
+`coverage` carries `mapped[]`, `typedUnidentified[]`, `omittedProven[]`, `byteLedger[]`,
+`unresolved[]` and `unsupported[]`. A complete unit has zero `unresolved` and zero `unsupported`
+rows. A typed value whose meaning is unknown keeps its source-offset identity in
+`typedUnidentified` — it is carried, not dropped, and it still counts against completeness.
+
+### Byte ledger
+
+`coverage.byteLedger` holds one row per member in `sourceResolution.members`:
+
+| Field | Meaning |
+|---|---|
+| `sourcePath` | the member's install-relative path, matching its `sourceResolution` row |
+| `sourceSha256` | SHA-256 of the member's bytes (of the span, for a span member) |
+| `byteLength` | the member or span length |
+| `accountedBytes` | bytes claimed by the range table; equal to `byteLength` |
+| `coveragePercent` | `100.0` |
+| `stateBytes` | claimed bytes per state, key-sorted |
+| `rangesSha256` | digest of the range table |
+| `ranges` | the gapless ordered range table |
+
+A range row is `{"offset", "length", "state", "owner"}`. Rows are ordered by `offset`, each begins
+where the previous ends, the first begins at 0 and the last ends at `byteLength`. `owner` is the
+decoder's path to the record that paid for the range. `rangesSha256` is the SHA-256 of the UTF-8
+encoding of
+
+```text
+json.dumps({"path": sourcePath, "byteLength": byteLength, "ranges": ranges},
+           sort_keys=True, separators=(",", ":"))
+```
+
+| Ledger state | Meaning |
+|---|---|
+| `mapped` | a binary record or payload decoded into the extension or a core accessor, or copied verbatim into a BIN payload whose every byte the extension describes |
+| `mapped-string` | a null-terminated string decoded into a named field |
+| `mapped-text` | a text region decoded into a structured table |
+| `derived` | a compressed or encoded range whose decoded content is represented (zlib spans, ADPCM blocks) |
+| `omitted-proven` | an evidence-backed omission carrying its reason in `omissions` or `coverage.omittedProven` |
+| `reserved-zero` | a declared field the source stores as zero |
+| `padding-zero` | alignment or unreferenced storage the source stores as zero |
+
+`reserved-zero` and `padding-zero` are verified: claiming either over a non-zero source byte aborts
+publication. Publication also fails when ranges overlap, leave one byte unclaimed, disagree with
+the source hash or length, or when a member has no ledger row. This is **100% byte accountability
+without an opaque source mirror**: a unit never embeds its source member, and the ledger is what
+makes that absence safe.
+
+A byte the format stores as text is claimed by the record its token belongs to; comments and
+insignificant whitespace between records are claimed by the enclosing table's `comments[]` and
+`whitespace` owners so that a text unit is gapless too.
+
+## Non-canonical storage
+
+Retail bookkeeping is not uniformly canonical. A seam is written against what the bytes support
+rather than what a header claims, and every case where the two disagree is a named row in the
+unit's `anomalies[]` (a decoded value the source states inconsistently) or `omissions[]` (a range
+that contributes no payload byte), each with the evidence that proves the classification. The
+exporter never pads, fabricates or reorders source data to make it well-formed; a unit that is
+recoverable only in part publishes what the install holds and warns.
+
+## Validation
+
+**Export-time validation** receives the selected source members, runs before the destination is
+written, and is the only place `-zero` claims can be proven: it re-reads the members, re-hashes
+them against the declared identities, verifies every zero-state range, re-decodes the source
+independently of the writer and compares the result against the emitted core and extension. Only
+then is the GLB written to a temporary sibling and atomically renamed over the destination.
+
+**Standalone validation** reads a published unit with no install present and verifies the
+container, chunk order, the scene-less rule where it applies, the extension's presence and
+version, the identity prefix, every accessor's extent and digest, the ledger's continuity, state
+totals, source identities and range-table digest, and the absence of any embedded source payload.
+
+Cross-unit consistency — an inheritance chain, a model's include tree, a map's material closure —
+is a corpus property checked by the corpus index (`seam_map_corpus_index.md`), not something one
+unit can be validated against.
