@@ -12,13 +12,6 @@ Python tests are `pytest`, run from the repository root as `uv run pytest`. Runn
 choosing a scope, and the approvals a broad export/bake/reconstruct run needs are the
 **`elysium-testing`** skill.
 
-The root `conftest.py` resolves `.elysium.local.env` into the environment before collection, so a
-module that imports a format or exporter — which resolves `ELYSIUM_VTMB_ROOT` at import time —
-collects on a shell that exported nothing.
-
-`tests/fixtures/synthetic/` is the only location for committed fixtures; fixtures must be
-game-independent.
-
 `sqlite3.connect()` used as a context manager commits but does not close. On Windows the
 open handle blocks `tmp_path` cleanup, so a test that opens a session database closes it
 explicitly or fails in teardown with `PermissionError` rather than on the assertion it was
@@ -27,8 +20,7 @@ making.
 ## Path contract
 
 `elysium_pipeline.paths` is the only offline path resolver, and `ELYSIUM_EXPORT_ROOT` optionally
-overrides `$ELYSIUM_WORK_ROOT/exports`. VtMB and work roots have no repository-relative fallback.
-Resolution and user-facing configuration are owned by `uv run elysium` and `.elysium.local.env`.
+overrides `$ELYSIUM_WORK_ROOT/exports`.
 
 `elysium_pipeline.workspace_lock` owns the cross-process generated-state lease and the
 Unreal-process liveness check that guards it.
@@ -60,13 +52,8 @@ difference from, leaving the runtime no VtMB rule to apply.
 
 ## Products
 
-Export products are game-derived and never tracked. `pipeline/unreal/` consumes pre-exported
-files in an editor process.
+`pipeline/unreal/` consumes pre-exported files in an editor process.
 
 `make_player_anim_bp.py` calls `main()` at module scope with no `__main__` guard, so importing it
 — to reuse a helper, or to inspect it — rebuilds and saves the Animation Blueprint as a side
 effect of the import.
-
-The virtual package names are defined once in `elysium_pipeline.mounts`, the single source of truth
-every generator and bake resolves its packages against; renaming one is a deliberate change guarded
-by `pipeline/tests/test_profile_package_contract.py::test_virtual_package_roots_remain_immutable`.
