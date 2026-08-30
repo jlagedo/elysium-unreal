@@ -14,6 +14,7 @@ from elysium_pipeline.formats.texture_glb.source import (
     TextureSourceClosure,
     TextureSourceError,
     load_source_closure,
+    source_keys,
 )
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "load_source_closure",
     "normalize_texture_path",
     "output_relative_path",
+    "source_keys",
 ]

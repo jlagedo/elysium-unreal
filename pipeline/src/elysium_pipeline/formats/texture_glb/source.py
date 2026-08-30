@@ -43,6 +43,22 @@ class TextureSourceClosure:
         return (self.tth,) if self.ttz is None else (self.tth, self.ttz)
 
 
+def source_keys(index: dict) -> list[str]:
+    """Every texture identity the install holds, in key order.
+
+    The engine composes `materials/<texture>.tth`, so the `.tth` members are the seam's corpus.
+    This is the one selection rule: the plural export command and the corpus index's member
+    dispositions both call it, so neither can drift from the other.
+    """
+
+    prefix, suffix = "materials/", ".tth"
+    return sorted(
+        path[len(prefix):-len(suffix)]
+        for path in index
+        if path.startswith(prefix) and path.endswith(suffix)
+    )
+
+
 def _origin(entry) -> dict[str, object]:
     kind, value = entry
     if kind == "loose":

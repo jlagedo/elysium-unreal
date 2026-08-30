@@ -50,22 +50,67 @@ def test_export_help_exposes_wield() -> None:
     assert "wield" in result.output
 
 
-def test_export_v2_exposes_the_isolated_glb_commands() -> None:
-    result = RUNNER.invoke(app, ["export_v2", "--help"])
-    assert result.exit_code == 0, result.output
-    assert "character-glb" in result.output
-    assert "characters-glb" in result.output
-    assert "texture-glb" in result.output
-    assert "textures-glb" in result.output
-    assert "material-glb" in result.output
-    assert "materials-glb" in result.output
-    assert "surface-property-glb" in result.output
-    assert "surface-properties-glb" in result.output
-    assert "export-all" in result.output
+#: Every command `export_v2` registers: one singular and one plural per unit kind, plus the
+#: whole-corpus runner and the corpus index. `seam_map_unit_contract.md` owns the shape; each
+#: seam map names its own. The corpus index has no plural: there is exactly one per export root.
+EXPORT_V2_COMMANDS = (
+    "texture-glb", "textures-glb",
+    "surface-property-glb", "surface-properties-glb",
+    "material-glb", "materials-glb",
+    "image-glb", "images-glb",
+    "sound-glb", "sounds-glb",
+    "expression-table-glb", "expression-tables-glb",
+    "shader-source-glb", "shader-sources-glb",
+    "shader-program-glb", "shader-programs-glb",
+    "particle-glb", "particles-glb",
+    "font-glb", "fonts-glb", "font-list-glb",
+    "sound-script-glb", "sound-scripts-glb",
+    "sentence-glb", "sentences-glb",
+    "dsp-preset-glb", "dsp-presets-glb",
+    "sound-scheme-glb", "sound-schemes-glb",
+    "scene-glb", "scenes-glb",
+    "model-glb", "models-glb",
+    "dialogue-glb", "dialogues-glb",
+    "vdata-glb", "vdatas-glb",
+    "ui-resource-glb", "ui-resources-glb",
+    "script-glb", "scripts-glb",
+    "map-glb", "maps-glb",
+    "map-entities-glb", "map-lighting-glb", "map-visibility-glb",
+    "nav-graph-glb", "nav-graphs-glb",
+    "engine-config-glb", "engine-configs-glb",
+    "corpus-index-glb",
+    "export-all",
+)
 
-    old = RUNNER.invoke(app, ["export", "--help"])
-    assert old.exit_code == 0, old.output
-    assert "character-glb" not in old.output
+
+def test_export_v2_registers_exactly_the_isolated_glb_commands() -> None:
+    from elysium_pipeline.cli import export_v2_app
+
+    registered = {command.name for command in export_v2_app.registered_commands}
+    assert registered == set(EXPORT_V2_COMMANDS)
+
+
+def test_export_v2_help_names_every_isolated_glb_command() -> None:
+    result = RUNNER.invoke(app, ["export_v2", "--help"], env={"COLUMNS": "200"})
+    assert result.exit_code == 0, result.output
+    for command in EXPORT_V2_COMMANDS:
+        assert command in result.output, command
+
+
+def test_the_retired_character_seam_is_exposed_nowhere() -> None:
+    for family in ("export", "export_v2"):
+        result = RUNNER.invoke(app, [family, "--help"], env={"COLUMNS": "200"})
+        assert result.exit_code == 0, result.output
+        assert "character-glb" not in result.output
+        assert "characters-glb" not in result.output
+
+
+def test_a_map_sub_unit_needs_one_map_or_all_but_not_both() -> None:
+    for command in ("map-entities-glb", "map-lighting-glb", "map-visibility-glb"):
+        neither = RUNNER.invoke(app, ["export_v2", command])
+        assert neither.exit_code == 2, neither.output
+        both = RUNNER.invoke(app, ["export_v2", command, "sp_tutorial_1", "--all"])
+        assert both.exit_code == 2, both.output
 
 
 def test_prefilter_agrees_with_the_regex_on_every_vocabulary_shape() -> None:

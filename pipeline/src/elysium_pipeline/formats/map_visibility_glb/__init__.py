@@ -1,0 +1,83 @@
+"""Isolated lossless Map-visibility GLB format aggregation.
+
+One BSP's lump 4 -- the potentially-visible and potentially-audible cluster sets -- plus the
+portal graph lumps 22-25 the five maps that carry them, cut from the map root's partition proof.
+"""
+
+from elysium_pipeline.formats.map_visibility_glb.decode import (
+    MapVisibilityDecodeError,
+    decode_map_visibility,
+    decompress_row,
+)
+from elysium_pipeline.formats.map_visibility_glb.model import (
+    ANOMALY_ROLES,
+    FAMILY_DIR,
+    KIND,
+    KIND_TITLE,
+    LEAF_LUMP,
+    LEAF_RECORD_BYTES,
+    MAP_VISIBILITY_EXTENSION,
+    OMISSION_ROLES,
+    OWNED_LUMPS,
+    PORTAL_CANDIDATES,
+    PORTAL_KEYS,
+    PORTAL_LUMPS,
+    SCHEMA_VERSION,
+    VISIBILITY_LUMP,
+    ClusterRow,
+    MapVisibilityKeyError,
+    MapVisibilityModel,
+    PortalLump,
+    RowRef,
+    asset_id,
+    map_asset_id,
+    member_path,
+    normalize_key,
+    output_relative_path,
+    row_byte_length,
+    set_bits,
+    source_path,
+)
+from elysium_pipeline.formats.map_visibility_glb.source import (
+    MapVisibilitySourceClosure,
+    MapVisibilitySourceError,
+    load_source_closure,
+    source_keys,
+)
+
+__all__ = [
+    "ANOMALY_ROLES",
+    "FAMILY_DIR",
+    "KIND",
+    "KIND_TITLE",
+    "LEAF_LUMP",
+    "LEAF_RECORD_BYTES",
+    "MAP_VISIBILITY_EXTENSION",
+    "OMISSION_ROLES",
+    "OWNED_LUMPS",
+    "PORTAL_CANDIDATES",
+    "PORTAL_KEYS",
+    "PORTAL_LUMPS",
+    "SCHEMA_VERSION",
+    "VISIBILITY_LUMP",
+    "ClusterRow",
+    "MapVisibilityDecodeError",
+    "MapVisibilityKeyError",
+    "MapVisibilityModel",
+    "MapVisibilitySourceClosure",
+    "MapVisibilitySourceError",
+    "PortalLump",
+    "RowRef",
+    "asset_id",
+    "decode_map_visibility",
+    "decompress_row",
+    "load_source_closure",
+    "map_asset_id",
+    "member_path",
+    "normalize_key",
+    "output_relative_path",
+    "row_byte_length",
+    "set_bits",
+    "source_keys",
+    "source_path",
+]

@@ -5,7 +5,7 @@ to units that were never exported, a unit's own declaration that it failed to ac
 for something, and the seam-specific warnings each exporter records about itself.
 
 This is the tool's centre of gravity for review. It needs no Blender, and a full pass
-over the corpus costs about half a minute, almost all of it spent parsing the character
+over the corpus costs about half a minute, almost all of it spent parsing the model
 extension JSON.
 
 Two categories are deliberately not findings. A sentinel identity names a studio texture
@@ -24,7 +24,10 @@ from typing import Callable, Iterator
 
 from . import glb, ids, seams
 
-SEAM_DIRECTORIES = ("characters", "materials", "textures", "surface-properties")
+#: The corpus directories this scan reads. The export publishes more families than
+#: these; units under the rest are neither scanned nor available to resolve a
+#: reference against, which is what makes a reference to one uncheckable here.
+SEAM_DIRECTORIES = ("models", "materials", "textures", "surface-properties")
 
 SENTINEL_PREFIX = "vtmb:missing-material:"
 
@@ -95,8 +98,10 @@ def _check_references(
             report.counts["sentinel-reference"] += 1
             continue
         if not asset.resolvable:
-            # A sound or an effect names something no seam exports. That is the seam
-            # map's design, not a gap in this unit.
+            # The identity names a kind this reviewer does not index -- either one no
+            # seam exports (an effect), or a family that publishes but is not in
+            # `SEAM_DIRECTORIES` (a sound, an expression table). Counted, not checked:
+            # a missing one of these would not be seen here.
             report.counts["reference-outside-corpus"] += 1
             continue
 
@@ -164,24 +169,22 @@ def _check_texture(report: Report, unit: str, payload: dict) -> None:
 def _sentinel_slots(document: dict) -> int:
     total = 0
     for material in document.get("materials") or []:
-        extension = (material.get("extensions") or {}).get(
-            seams.MATERIAL_REFERENCE_EXTENSION
-        ) or {}
-        if str(extension.get("material", "")).startswith(SENTINEL_PREFIX):
+        identity = seams.reference_identity(material, seams.MATERIAL_REFERENCE_EXTENSION)
+        if str(identity or "").startswith(SENTINEL_PREFIX):
             total += 1
     return total
 
 
-def _check_character(report: Report, unit: str, document: dict, payload: dict) -> None:
+def _check_model(report: Report, unit: str, document: dict, payload: dict) -> None:
     sentinels = _sentinel_slots(document)
     if sentinels:
         report.counts["bodies-with-sentinels"] += 1
         report.counts["sentinel-slots"] += sentinels
 
-    declares_bank = any(
-        reference.role == "animation-bank" for reference in seams.dependencies(payload)
+    includes_model = any(
+        reference.role == "model" for reference in seams.dependencies(payload)
     )
-    if declares_bank and not document.get("animations"):
+    if includes_model and not document.get("animations"):
         report.counts["include-stub-banks"] += 1
 
 
@@ -217,8 +220,8 @@ def scan(
         name, payload = found
         unit = seams.asset_id(document) or relative
 
-        expected = seams.SEAM_EXTENSION.get(seam)
-        if expected and name != expected:
+        expected = seams.expected_extensions(seam, path.name)
+        if expected and name not in expected:
             report.add("seam-mismatch", seam, unit, "carries %s" % name)
 
         _check_coverage(report, seam, unit, payload)
@@ -228,8 +231,8 @@ def scan(
             _check_material(report, unit, payload)
         elif name == seams.TEXTURE_EXTENSION:
             _check_texture(report, unit, payload)
-        elif name == seams.CHARACTER_EXTENSION:
-            _check_character(report, unit, document, payload)
+        elif name == seams.MODEL_EXTENSION:
+            _check_model(report, unit, document, payload)
 
     report.seconds = time.perf_counter() - started
     return report
@@ -244,7 +247,7 @@ FACTS = (
     ("shaders not transcribed", "shader-unresolved"),
     ("proven omissions", "omitted-proven"),
     ("typed but unidentified", "typed-unidentified"),
-    ("references outside the corpus", "reference-outside-corpus"),
+    ("references to unindexed families", "reference-outside-corpus"),
     ("bindings unresolved at export", "binding-unresolved-at-export"),
 )
 

@@ -1,9 +1,9 @@
-"""What a character unit says about its skeleton that changes how a clip is posed.
+"""What a model unit says about its skeleton that changes how a clip is posed.
 
 One rule does: VtMB flags a single bone per biped -- always `Bip01 Spine1` -- whose animated
 rotation channel is already the bone's MODEL-space orientation. Retail's `BuildTransformations`
 skips the parent's rotation for it and composes only the position through the parent
-(`docs/vtmb/animation_and_movers.md` A.4a). A character GLB writes that channel verbatim, so a
+(`docs/vtmb/animation_and_movers.md` A.4a). A model GLB writes that channel verbatim, so a
 reader that applies ordinary FK to it folds the body backwards at the waist.
 
 A unit states the set outright in `mdl.splitRotationBones`. Units exported before that key
@@ -31,7 +31,7 @@ class SplitBone:
 
 
 def split_rotation_bones(payload: dict | None) -> list[SplitBone]:
-    """Bones of a character payload that carry the split-rotation rule, in bone order.
+    """Bones of a model payload that carry the split-rotation rule, in bone order.
 
     `splitRotationBones` names the rule per bone rather than implying it, so an entry that
     declares some other rotation storage is left to ordinary FK; an entry that declares none

@@ -1,6 +1,6 @@
 """Material reconstruction, faithful and labelled.
 
-A character unit carries no textures. Its core materials are neutral placeholders whose
+A model unit carries no textures. Its core materials are neutral placeholders whose
 only real content is a `vtmb:material:` identity, and the material unit that identity
 names holds a VMT transcription plus a deliberately thin PBR approximation. Rebuilding
 appearance therefore means reading the extension, not the core material.

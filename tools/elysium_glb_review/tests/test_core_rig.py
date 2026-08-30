@@ -14,8 +14,8 @@ from . import support
 
 
 def _payload(**kwargs) -> dict:
-    document = support.document_of(support.character_unit("vtmb:character-body:npc/body", **kwargs))
-    return seams.root_extension(document, seams.CHARACTER_EXTENSION)
+    document = support.document_of(support.model_unit("vtmb:model:npc/body", **kwargs))
+    return seams.root_extension(document, seams.MODEL_EXTENSION)
 
 
 def test_reads_the_bones_a_unit_declares() -> None:

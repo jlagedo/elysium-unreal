@@ -45,7 +45,7 @@ class ElysiumGlbReviewPreferences(bpy.types.AddonPreferences):
 
     corpus_root: bpy.props.StringProperty(
         name="Corpus Root",
-        description="Directory holding the characters, materials, textures and "
+        description="Directory holding the models, materials, textures and "
         "surface-properties export trees",
         subtype="DIR_PATH",
         default=default_corpus_root(),

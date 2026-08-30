@@ -1,0 +1,93 @@
+"""Isolated lossless Map-entities GLB format aggregation.
+
+One binary glTF 2.0 unit per VtMB map's ENTITIES lump (lump 0), published beside the map root.
+`docs/architecture/seam_map_map_entities.md` owns the contract this package implements.
+"""
+
+from elysium_pipeline.formats.map_entities_glb.coverage import (
+    MAPPED_FIELDS,
+    build_coverage,
+    byte_ledger_row,
+)
+from elysium_pipeline.formats.map_entities_glb.decode import (
+    MapEntitiesDecodeError,
+    decode_map_entities,
+)
+from elysium_pipeline.formats.map_entities_glb.model import (
+    ANOMALY_ROLES,
+    DEPENDENCY_ROLES,
+    ENTITIES_LUMP,
+    KIND,
+    KIND_TITLE,
+    MAP_ENTITIES_EXTENSION,
+    MODELS_LUMP,
+    MODEL_STRIDE,
+    OMISSION_ROLES,
+    OUTPUT_FIELDS,
+    OUTPUT_FIELD_COUNT,
+    OUTPUT_KEYS_BY_CLASS,
+    SCHEMA_VERSION,
+    SKYBOX_FACES,
+    UNIT_SUFFIX,
+    Entity,
+    KeyValue,
+    MapEntitiesModel,
+    MapEntitiesModelError,
+    Output,
+    Reference,
+    asset_id,
+    atof,
+    atoi,
+    map_asset_id,
+    member_path,
+    normalize_key,
+    output_relative_path,
+    source_path,
+)
+from elysium_pipeline.formats.map_entities_glb.source import (
+    MapEntitiesSourceClosure,
+    MapEntitiesSourceError,
+    load_source_closure,
+    source_keys,
+)
+
+__all__ = [
+    "ANOMALY_ROLES",
+    "DEPENDENCY_ROLES",
+    "ENTITIES_LUMP",
+    "KIND",
+    "KIND_TITLE",
+    "MAPPED_FIELDS",
+    "MAP_ENTITIES_EXTENSION",
+    "MODELS_LUMP",
+    "MODEL_STRIDE",
+    "OMISSION_ROLES",
+    "OUTPUT_FIELDS",
+    "OUTPUT_FIELD_COUNT",
+    "OUTPUT_KEYS_BY_CLASS",
+    "SCHEMA_VERSION",
+    "SKYBOX_FACES",
+    "UNIT_SUFFIX",
+    "Entity",
+    "KeyValue",
+    "MapEntitiesDecodeError",
+    "MapEntitiesModel",
+    "MapEntitiesModelError",
+    "MapEntitiesSourceClosure",
+    "MapEntitiesSourceError",
+    "Output",
+    "Reference",
+    "asset_id",
+    "atof",
+    "atoi",
+    "build_coverage",
+    "byte_ledger_row",
+    "decode_map_entities",
+    "load_source_closure",
+    "map_asset_id",
+    "member_path",
+    "normalize_key",
+    "output_relative_path",
+    "source_keys",
+    "source_path",
+]

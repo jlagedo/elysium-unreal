@@ -1,8 +1,7 @@
 """Contract tests for asset identities and their resolution.
 
-The three irregular rules are the point of this module: a bank resolves under
-`characters/`, a material's surface property arrives as a bare name, and some identities
-name nothing at all by design.
+The two irregular rules are the point of this module: a material's surface property
+arrives as a bare name, and some identities name nothing at all by design.
 """
 
 from __future__ import annotations
@@ -41,18 +40,11 @@ def test_rejects_strings_that_are_not_identities(text: str) -> None:
         ("vtmb:material:brick/aspdra", "materials/brick/aspdra.glb"),
         ("vtmb:texture:brick/aspdra", "textures/brick/aspdra.glb"),
         ("vtmb:surface-property:brick", "surface-properties/brick.glb"),
-        ("vtmb:character-body:monster/andrei/andrei", "characters/monster/andrei/andrei.glb"),
+        ("vtmb:model:monster/andrei/andrei", "models/monster/andrei/andrei.glb"),
     ],
 )
 def test_each_seam_resolves_into_its_own_directory(identity: str, expected: str) -> None:
     assert ids.resolve(identity, ROOT) == ROOT / expected
-
-
-def test_an_animation_bank_resolves_under_characters() -> None:
-    # Banks are exported through the character exporter, so there is no
-    # animation-banks directory to look in.
-    resolved = ids.resolve("vtmb:animation-bank:shared/female/frenzy", ROOT)
-    assert resolved == ROOT / "characters/shared/female/frenzy.glb"
 
 
 @pytest.mark.parametrize(
@@ -84,7 +76,7 @@ def test_paths_that_differ_only_below_the_stem_stay_distinct() -> None:
     assert first.name == second.name
 
 
-def test_a_bare_name_becomes_the_same_identity_a_character_writes() -> None:
+def test_a_bare_name_becomes_the_same_identity_a_model_writes() -> None:
     assert ids.surface_property_id("Glass") == "vtmb:surface-property:glass"
     assert ids.surface_property_id("  brick ") == "vtmb:surface-property:brick"
 
@@ -102,7 +94,7 @@ def test_ordinary_texture_paths_are_not_render_targets(value: str) -> None:
 def test_the_root_is_the_parent_of_the_seam_directory() -> None:
     # A unit knows its identity but not the corpus layout, so opening one file by
     # hand has to be enough to follow its references.
-    found = ids.corpus_root_for(ROOT / "characters/npc/unique/x/x.glb")
+    found = ids.corpus_root_for(ROOT / "models/npc/unique/x/x.glb")
     assert found == ROOT.resolve()
 
 
@@ -114,7 +106,7 @@ def test_every_seam_directory_locates_the_same_root(seam: str) -> None:
 def test_the_nearest_seam_directory_wins() -> None:
     # A corpus nested inside a path that also mentions a seam name must not resolve
     # to the outer one.
-    path = ROOT / "materials" / "inner" / "characters" / "a" / "b.glb"
+    path = ROOT / "materials" / "inner" / "models" / "a" / "b.glb"
     assert ids.corpus_root_for(path) == (ROOT / "materials" / "inner").resolve()
 
 

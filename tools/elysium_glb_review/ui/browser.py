@@ -102,7 +102,7 @@ class ELYSIUM_UL_units(bpy.types.UIList):
         row = layout.row(align=True)
         row.label(
             text=item.name,
-            icon="OUTLINER_OB_ARMATURE" if item.seam == "characters" else "DOT",
+            icon="OUTLINER_OB_ARMATURE" if item.seam == "models" else "DOT",
         )
         size = row.row()
         size.alignment = "RIGHT"
@@ -172,10 +172,10 @@ class ELYSIUM_OT_refresh_index(bpy.types.Operator):
         return {"FINISHED"}
 
 
-#: What "open" means for each seam. Only a character has a scene to import; a texture
+#: What "open" means for each seam. Only a model has a scene to import; a texture
 #: is an image and a material is a shader that needs a surface to be seen on.
 OPENABLE = {
-    "characters": "Import",
+    "models": "Import",
     "textures": "Show Image",
     "materials": "Preview on a Plane",
 }
@@ -204,7 +204,7 @@ class ELYSIUM_OT_import_selected(bpy.types.Operator):
         window = context.window
         window.cursor_set("WAIT")
         try:
-            if entry.seam == "characters":
+            if entry.seam == "models":
                 ok, message = operators.import_unit(
                     context, root / entry.relative, clips=scene.elysium_clips
                 )
@@ -256,7 +256,7 @@ class ELYSIUM_PT_browser(bpy.types.Panel):
         action = OPENABLE.get(entry.seam)
         if action:
             column = layout.column(align=True)
-            if entry.seam == "characters":
+            if entry.seam == "models":
                 column.prop(scene, "elysium_clips", text="")
             column.operator("elysium.import_selected", text=action, icon="IMPORT")
 

@@ -135,6 +135,7 @@ def export(
         closure,
         base_exists=lambda candidate: candidate in table.spans,
         sound_script_exists=lambda candidate: candidate.lower() in sound_scripts,
+        sound_exists=lambda candidate: candidate in index,
     )
     document, binary = build_document(model)
     from elysium_pipeline.validation import surface_property_glb as validation

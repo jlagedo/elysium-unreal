@@ -53,7 +53,7 @@ class TextureCache:
     """Session-scoped decode cache.
 
     One texture is referenced by many materials, and decoding is the expensive half of
-    building a character, so a unit is decoded once per session and reused.
+    building a model, so a unit is decoded once per session and reused.
     """
 
     def __init__(self, root: Path) -> None:

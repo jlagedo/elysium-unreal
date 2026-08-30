@@ -1,4 +1,4 @@
-"""Loading animation-bank clips onto an imported body.
+"""Loading included-model clips onto an imported body.
 
 A body carries only its own clips and names its banks by identity. Following those names
 transitively reaches a median of 35 files and 1,782 clips, so nothing is loaded until a
@@ -80,7 +80,7 @@ def load_clips(
 ) -> LoadResult:
     """Import selected clips from a bank and put them on `body`.
 
-    A bank is a character body in its own right, so importing it brings a proxy mesh and
+    An included model is a body in its own right, so importing it brings a proxy mesh and
     a second armature. Those are discarded; only the Actions are kept.
     """
     result = LoadResult()
@@ -167,8 +167,8 @@ def closure_of(document: dict, root: Path) -> banks.Closure:
 
 
 def body_payload(obj: bpy.types.Object) -> dict | None:
-    """The character payload stashed on an imported body, if it carries one."""
-    return hooks.unstash(obj, hooks.CHARACTER_PROPERTY)
+    """The model payload stashed on an imported body, if it carries one."""
+    return hooks.unstash(obj, hooks.MODEL_PROPERTY)
 
 
 def armature_for(obj: bpy.types.Object) -> bpy.types.Object | None:

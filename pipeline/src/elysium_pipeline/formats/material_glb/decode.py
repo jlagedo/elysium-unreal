@@ -236,11 +236,15 @@ def decode_material(
             "resolved": present,
         })
         if present:
+            # The row exists only where the install answered the binding, so it states resolved:
+            # the corpus index reads `resolved` to tell a reference the install answers from one
+            # it does not, and a row that omits the key reads as unresolved.
             dependencies.append({
                 "role": "texture",
                 "parameter": parameter.key,
                 "asset": asset,
                 "sourcePath": f"materials/{raw}.tth",
+                "resolved": True,
             })
 
     if surface_property:

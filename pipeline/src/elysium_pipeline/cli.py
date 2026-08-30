@@ -46,6 +46,7 @@ export_v2_app = typer.Typer(help="Run isolated lossless GLB export pipelines.")
 verify_app = typer.Typer(help="Check baked packages against what the export declares.")
 run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
+ide_app = typer.Typer(help="Refresh what a C++ editor reads about this checkout.")
 blender_app = typer.Typer(help="Package and drive the Blender GLB review add-on.")
 app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
@@ -53,6 +54,7 @@ app.add_typer(export_v2_app, name="export_v2")
 app.add_typer(verify_app, name="verify")
 app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
+app.add_typer(ide_app, name="ide")
 app.add_typer(blender_app, name="blender")
 
 
@@ -422,6 +424,31 @@ def build_command(
     )
 
 
+@ide_app.command("clangd")
+def ide_clangd(ctx: typer.Context) -> None:
+    """Regenerate `compile_commands.json` from the target `build` last compiled.
+
+    Run this after adding or removing a C++ source file: clangd has no entry for a file the
+    database predates and falls back to guessed flags, which against Unreal reads as a file
+    of unresolved headers. It is a separate command because it is not free -- see
+    `unreal.generate_clang_database` for why the next build after it is a full one.
+    """
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import unreal
+
+        unreal.generate_clang_database(config, runner)
+
+    _execute(
+        _state(ctx),
+        "ide clangd",
+        ExitCode.BUILD,
+        action,
+        require_ue=True,
+        activity=True,
+    )
+
+
 #: `--particles` on every command that bakes a map.
 PARTICLE_PASS_HELP = (
     "Author each map's Niagara systems during the bake. Off by default: the pass force-deletes Niagara packages the asset compiler may still own, which crashes the editor. A bake without it leaves the mount's existing particle packages alone."
@@ -699,52 +726,6 @@ def export_model(
     )
 
 
-@export_v2_app.command("character-glb")
-def export_v2_character_glb(
-    ctx: typer.Context,
-    model: str = typer.Argument(
-        ...,
-        help="Install-relative models/character path, with or without .mdl.",
-    ),
-) -> None:
-    """Export one complete character body to the isolated GLB product tree."""
-
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import export_manager
-
-        destination = export_manager.export_character_glb(config, runner, model)
-        console.print(f"character GLB export complete: {destination}")
-
-    _execute(
-        _state(ctx),
-        "export_v2 character-glb",
-        ExitCode.OFFLINE_EXPORT,
-        action,
-        require_game=True,
-        activity=True,
-    )
-
-
-@export_v2_app.command("characters-glb")
-def export_v2_characters_glb(ctx: typer.Context) -> None:
-    """Export every character body admitted by an MDL plus VTX companion."""
-
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        from elysium_pipeline import export_manager
-
-        destinations = export_manager.export_all_character_glbs(config, runner)
-        console.print(f"character GLB corpus export complete: {len(destinations)} models")
-
-    _execute(
-        _state(ctx),
-        "export_v2 characters-glb",
-        ExitCode.OFFLINE_EXPORT,
-        action,
-        require_game=True,
-        activity=True,
-    )
-
-
 @export_v2_app.command("texture-glb")
 def export_v2_texture_glb(
     ctx: typer.Context,
@@ -882,9 +863,1082 @@ def export_v2_surface_properties_glb(ctx: typer.Context) -> None:
     )
 
 
+@export_v2_app.command("image-glb")
+def export_v2_image_glb(
+    ctx: typer.Context,
+    path: str = typer.Argument(
+        ...,
+        help="Install-relative `.tga`/`.bmp` path, extension kept.",
+    ),
+) -> None:
+    """Export one TGA or BMP image identity to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_image_glb(config, runner, path)
+        console.print(f"image GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 image-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("images-glb")
+def export_v2_images_glb(ctx: typer.Context) -> None:
+    """Export every image identity the UP-first install resolves."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_image_glbs(config, runner)
+        console.print(f"image GLB corpus export complete: {len(destinations)} images")
+
+    _execute(
+        _state(ctx),
+        "export_v2 images-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("sound-glb")
+def export_v2_sound_glb(
+    ctx: typer.Context,
+    path: str = typer.Argument(
+        ...,
+        help="sound/<path>.wav | sound/<path>.mp3 -- the sound/ prefix is tolerated and the "
+             "extension is required, because seven stems ship as both spellings.",
+    ),
+) -> None:
+    """Export one WAV or MP3 sound identity to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_sound_glb(config, runner, path)
+        console.print(f"sound GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 sound-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("sounds-glb")
+def export_v2_sounds_glb(ctx: typer.Context) -> None:
+    """Export every `.wav` and `.mp3` the UP-first index resolves below `sound/`."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_sound_glbs(config, runner)
+        console.print(f"sound GLB corpus export complete: {len(destinations)} sounds")
+
+    _execute(
+        _state(ctx),
+        "export_v2 sounds-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("expression-table-glb")
+def export_v2_expression_table_glb(
+    ctx: typer.Context,
+    stem: str = typer.Argument(
+        ...,
+        help="Faceposer expression-table stem below expressions/, with or without the "
+             ".vfe/.txt extension or the expressions/ prefix.",
+    ),
+) -> None:
+    """Export one Faceposer expression table to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_expression_table_glb(config, runner, stem)
+        console.print(f"expression-table GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 expression-table-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("expression-tables-glb")
+def export_v2_expression_tables_glb(ctx: typer.Context) -> None:
+    """Export every stem the UP-first install resolves under expressions/."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_expression_table_glbs(config, runner)
+        console.print(f"expression-table GLB corpus export complete: {len(destinations)} tables")
+
+    _execute(
+        _state(ctx),
+        "export_v2 expression-tables-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("shader-source-glb")
+def export_v2_shader_source_glb(
+    ctx: typer.Context,
+    stem: str = typer.Argument(
+        ...,
+        help="<stem> -- tolerates the materials/dxshaders/ root and the .psh extension "
+             "(eyes, dxshaders/eyes, materials/dxshaders/Eyes.psh).",
+    ),
+) -> None:
+    """Export one authored pixel-shader source to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_shader_source_glb(config, runner, stem)
+        console.print(f"shader-source GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 shader-source-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("shader-sources-glb")
+def export_v2_shader_sources_glb(ctx: typer.Context) -> None:
+    """Export every materials/dxshaders/*.psh the index resolves."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_shader_source_glbs(config, runner)
+        console.print(f"shader-source GLB corpus export complete: {len(destinations)} sources")
+
+    _execute(
+        _state(ctx),
+        "export_v2 shader-sources-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("shader-program-glb")
+def export_v2_shader_program_glb(
+    ctx: typer.Context,
+    key: str = typer.Argument(
+        ...,
+        help="<subdir>/<stem> -- tolerates the shaders/ root and the .vcs extension "
+             "(psh/lightmappedgeneric, shaders/fxc/refract_ps20.vcs).",
+    ),
+) -> None:
+    """Export one compiled shader program to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_shader_program_glb(config, runner, key)
+        console.print(f"shader-program GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 shader-program-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("shader-programs-glb")
+def export_v2_shader_programs_glb(ctx: typer.Context) -> None:
+    """Export every shaders/{psh,vsh,fxc}/*.vcs the index resolves."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_shader_program_glbs(config, runner)
+        console.print(f"shader-program GLB corpus export complete: {len(destinations)} programs")
+
+    _execute(
+        _state(ctx),
+        "export_v2 shader-programs-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("particle-glb")
+def export_v2_particle_glb(
+    ctx: typer.Context,
+    name: str = typer.Argument(
+        ...,
+        help="particles/<name>.txt (tolerates the particles/ prefix and the .txt extension).",
+    ),
+) -> None:
+    """Export one particle-system definition to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_particle_glb(config, runner, name)
+        console.print(f"particle GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 particle-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("particles-glb")
+def export_v2_particles_glb(ctx: typer.Context) -> None:
+    """Export every particle key source_keys(index) resolves."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_particle_glbs(config, runner)
+        console.print(f"particle GLB corpus export complete: {len(destinations)} particles")
+
+    _execute(
+        _state(ctx),
+        "export_v2 particles-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("font-glb")
+def export_v2_font_glb(
+    ctx: typer.Context,
+    key: str = typer.Argument(
+        ...,
+        help="<key> -- a materials/fonts/<stem>.fnt identity; the materials/fonts/ root and "
+             "the .fnt extension are optional on the argument.",
+    ),
+) -> None:
+    """Export one bitmap font face to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_font_glb(config, runner, key)
+        console.print(f"font GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 font-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("fonts-glb")
+def export_v2_fonts_glb(ctx: typer.Context) -> None:
+    """Export every `.fnt` the install resolves, plus the fontlist registry unit."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_font_glbs(config, runner)
+        console.print(f"font GLB corpus export complete: {len(destinations)} fonts")
+
+    _execute(
+        _state(ctx),
+        "export_v2 fonts-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("font-list-glb")
+def export_v2_font_list_glb(ctx: typer.Context) -> None:
+    """Export the single vtmb:font-list:fontlist registry unit."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_font_list_glb(config, runner)
+        console.print(f"font-list GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 font-list-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("sound-script-glb")
+def export_v2_sound_script_glb(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="<name> -- a game-sound entry name, case-folded."),
+) -> None:
+    """Export one named game-sound script entry to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_sound_script_glb(config, runner, name)
+        console.print(f"sound-script GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 sound-script-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("sound-scripts-glb")
+def export_v2_sound_scripts_glb(ctx: typer.Context) -> None:
+    """Export every game sound, the game-sound manifest and every soundscape."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_sound_script_glbs(config, runner)
+        console.print(f"sound-script GLB corpus export complete: {len(destinations)} units")
+
+    _execute(
+        _state(ctx),
+        "export_v2 sound-scripts-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("sentence-glb")
+def export_v2_sentence_glb(
+    ctx: typer.Context,
+    name: str = typer.Argument(..., help="<name> -- a scripts/sentences.txt entry name."),
+) -> None:
+    """Export one sentence-table entry to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_sentence_glb(config, runner, name)
+        console.print(f"sentence GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 sentence-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("sentences-glb")
+def export_v2_sentences_glb(ctx: typer.Context) -> None:
+    """Export every entry of scripts/sentences.txt."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_sentence_glbs(config, runner)
+        console.print(f"sentence GLB corpus export complete: {len(destinations)} sentences")
+
+    _execute(
+        _state(ctx),
+        "export_v2 sentences-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("dsp-preset-glb")
+def export_v2_dsp_preset_glb(
+    ctx: typer.Context,
+    preset_id: str = typer.Argument(..., help="<id> -- a scripts/dsp_presets.txt preset number."),
+) -> None:
+    """Export one numbered DSP preset to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_dsp_preset_glb(config, runner, preset_id)
+        console.print(f"dsp-preset GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 dsp-preset-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("dsp-presets-glb")
+def export_v2_dsp_presets_glb(ctx: typer.Context) -> None:
+    """Export every entry of scripts/dsp_presets.txt."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_dsp_preset_glbs(config, runner)
+        console.print(f"dsp-preset GLB corpus export complete: {len(destinations)} presets")
+
+    _execute(
+        _state(ctx),
+        "export_v2 dsp-presets-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("sound-scheme-glb")
+def export_v2_sound_scheme_glb(
+    ctx: typer.Context,
+    stem: str = typer.Argument(
+        ...,
+        help="<stem> | sound/schemes/<stem>.txt (root prefix and .txt extension tolerated, "
+             "case-insensitive).",
+    ),
+) -> None:
+    """Export one music-and-ambience sound scheme to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_sound_scheme_glb(config, runner, stem)
+        console.print(f"sound-scheme GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 sound-scheme-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("sound-schemes-glb")
+def export_v2_sound_schemes_glb(ctx: typer.Context) -> None:
+    """Export every sound/schemes/*.txt identity."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_sound_scheme_glbs(config, runner)
+        console.print(f"sound-scheme GLB corpus export complete: {len(destinations)} schemes")
+
+    _execute(
+        _state(ctx),
+        "export_v2 sound-schemes-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("scene-glb")
+def export_v2_scene_glb(
+    ctx: typer.Context,
+    path: str = typer.Argument(
+        ...,
+        help="sound/<path>.vcd (the root prefix and the extension are tolerated).",
+    ),
+) -> None:
+    """Export one choreography scene to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_scene_glb(config, runner, path)
+        console.print(f"scene GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 scene-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("scenes-glb")
+def export_v2_scenes_glb(ctx: typer.Context) -> None:
+    """Export every `.vcd` choreography the index resolves."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_scene_glbs(config, runner)
+        console.print(f"scene GLB corpus export complete: {len(destinations)} scenes")
+
+    _execute(
+        _state(ctx),
+        "export_v2 scenes-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("model-glb")
+def export_v2_model_glb(
+    ctx: typer.Context,
+    model: str = typer.Argument(
+        ...,
+        help="models/<model>.mdl -- the root prefix and the .mdl extension are both optional.",
+    ),
+) -> None:
+    """Export one complete MDL model identity to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_model_glb(config, runner, model)
+        console.print(f"model GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 model-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("models-glb")
+def export_v2_models_glb(ctx: typer.Context) -> None:
+    """Export every models/**.mdl the UP-first index resolves."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_model_glbs(config, runner)
+        console.print(f"model GLB corpus export complete: {len(destinations)} models")
+
+    _execute(
+        _state(ctx),
+        "export_v2 models-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("dialogue-glb")
+def export_v2_dialogue_glb(
+    ctx: typer.Context,
+    path: str = typer.Argument(
+        ...,
+        help="dlg/<path>.dlg (root prefix and .dlg extension tolerated; slashes and case folded).",
+    ),
+) -> None:
+    """Export one dialogue tree to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_dialogue_glb(config, runner, path)
+        console.print(f"dialogue GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 dialogue-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("dialogues-glb")
+def export_v2_dialogues_glb(ctx: typer.Context) -> None:
+    """Export every dialogue key source_keys(index) resolves."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_dialogue_glbs(config, runner)
+        console.print(f"dialogue GLB corpus export complete: {len(destinations)} dialogues")
+
+    _execute(
+        _state(ctx),
+        "export_v2 dialogues-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("vdata-glb")
+def export_v2_vdata_glb(
+    ctx: typer.Context,
+    key: str = typer.Argument(
+        ...,
+        help="<subtree>/<name> (tolerates a leading vdata/ and a trailing .txt, e.g. "
+             "items/item_w_katana or vdata/items/item_w_katana.txt).",
+    ),
+) -> None:
+    """Export one vdata table to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_vdata_glb(config, runner, key)
+        console.print(f"vdata GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 vdata-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("vdatas-glb")
+def export_v2_vdatas_glb(ctx: typer.Context) -> None:
+    """Export every vdata/<subtree>/<name>.txt identity."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_vdata_glbs(config, runner)
+        console.print(f"vdata GLB corpus export complete: {len(destinations)} units")
+
+    _execute(
+        _state(ctx),
+        "export_v2 vdatas-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("ui-resource-glb")
+def export_v2_ui_resource_glb(
+    ctx: typer.Context,
+    path: str = typer.Argument(
+        ...,
+        help="<path> (tolerates the ui-resources/ prefix and a trailing .glb).",
+    ),
+) -> None:
+    """Export one UI resource definition to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_ui_resource_glb(config, runner, path)
+        console.print(f"ui-resource GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 ui-resource-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("ui-resources-glb")
+def export_v2_ui_resources_glb(ctx: typer.Context) -> None:
+    """Export every UI-resource identity the seam admits."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_ui_resource_glbs(config, runner)
+        console.print(f"ui-resource GLB corpus export complete: {len(destinations)} resources")
+
+    _execute(
+        _state(ctx),
+        "export_v2 ui-resources-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("script-glb")
+def export_v2_script_glb(
+    ctx: typer.Context,
+    path: str = typer.Argument(
+        ...,
+        help="python/<path>.py | <path>.pyc | <path> -- the python/ root prefix and either "
+             "extension are tolerated.",
+    ),
+) -> None:
+    """Export one game-logic Python script to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_script_glb(config, runner, path)
+        console.print(f"script GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 script-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("scripts-glb")
+def export_v2_scripts_glb(ctx: typer.Context) -> None:
+    """Export every key source_keys(index) resolves into <root>/scripts/."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_script_glbs(config, runner)
+        console.print(f"script GLB corpus export complete: {len(destinations)} scripts")
+
+    _execute(
+        _state(ctx),
+        "export_v2 scripts-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("map-glb")
+def export_v2_map_glb(
+    ctx: typer.Context,
+    map_name: str = typer.Argument(
+        ...,
+        help="<map> -- the .bsp stem below maps/; the argument tolerates the maps/ prefix and "
+             "the .bsp extension.",
+    ),
+) -> None:
+    """Export all four units of one BSP: the root plus entities, lighting and visibility."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_map_glb(config, runner, map_name)
+        console.print(f"map GLB export complete: {len(destinations)} units")
+
+    _execute(
+        _state(ctx),
+        "export_v2 map-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("maps-glb")
+def export_v2_maps_glb(ctx: typer.Context) -> None:
+    """Export all four units of every map the UP-first index resolves below maps/."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_map_glbs(config, runner)
+        console.print(f"map GLB corpus export complete: {len(destinations)} units")
+
+    _execute(
+        _state(ctx),
+        "export_v2 maps-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("map-entities-glb")
+def export_v2_map_entities_glb(
+    ctx: typer.Context,
+    map_name: str = typer.Argument(
+        None,
+        help="<map> -- the .bsp stem below maps/ (the maps/ prefix and the .bsp suffix are "
+             "tolerated, case folded).",
+    ),
+    every: bool = typer.Option(
+        False, "--all", help="Export every map's entity unit instead of one."
+    ),
+) -> None:
+    """Export one map's entity-lump unit, or every map's."""
+
+    if bool(map_name) == every:
+        raise typer.BadParameter("name one map, or pass --all")
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        if every:
+            destinations = export_manager.export_all_map_entities_glbs(config, runner)
+            console.print(
+                f"map-entities GLB corpus export complete: {len(destinations)} maps"
+            )
+            return
+        destination = export_manager.export_map_entities_glb(config, runner, map_name)
+        console.print(f"map-entities GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 map-entities-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("map-lighting-glb")
+def export_v2_map_lighting_glb(
+    ctx: typer.Context,
+    map_name: str = typer.Argument(
+        None,
+        help="<map> -- the map stem; the root prefix and the source extension are tolerated.",
+    ),
+    every: bool = typer.Option(
+        False, "--all", help="Export every map's lighting unit instead of one."
+    ),
+) -> None:
+    """Export one map's lighting unit, or every map's."""
+
+    if bool(map_name) == every:
+        raise typer.BadParameter("name one map, or pass --all")
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        if every:
+            destinations = export_manager.export_all_map_lighting_glbs(config, runner)
+            console.print(
+                f"map-lighting GLB corpus export complete: {len(destinations)} maps"
+            )
+            return
+        destination = export_manager.export_map_lighting_glb(config, runner, map_name)
+        console.print(f"map-lighting GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 map-lighting-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("map-visibility-glb")
+def export_v2_map_visibility_glb(
+    ctx: typer.Context,
+    map_name: str = typer.Argument(
+        None,
+        help="<map> stem; tolerates the maps/ prefix and the .bsp extension.",
+    ),
+    every: bool = typer.Option(
+        False, "--all", help="Export every map's visibility unit instead of one."
+    ),
+) -> None:
+    """Export one map's visibility unit, or every map's."""
+
+    if bool(map_name) == every:
+        raise typer.BadParameter("name one map, or pass --all")
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        if every:
+            destinations = export_manager.export_all_map_visibility_glbs(config, runner)
+            console.print(
+                f"map-visibility GLB corpus export complete: {len(destinations)} maps"
+            )
+            return
+        destination = export_manager.export_map_visibility_glb(config, runner, map_name)
+        console.print(f"map-visibility GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 map-visibility-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("nav-graph-glb")
+def export_v2_nav_graph_glb(
+    ctx: typer.Context,
+    map_name: str = typer.Argument(..., help="<map> -- the nav graph's map stem."),
+) -> None:
+    """Export one map's navigation graph to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_nav_graph_glb(config, runner, map_name)
+        console.print(f"nav-graph GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 nav-graph-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("nav-graphs-glb")
+def export_v2_nav_graphs_glb(ctx: typer.Context) -> None:
+    """Export every maps/graphs/*.ain the index resolves."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_nav_graph_glbs(config, runner)
+        console.print(f"nav-graph GLB corpus export complete: {len(destinations)} graphs")
+
+    _execute(
+        _state(ctx),
+        "export_v2 nav-graphs-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("engine-config-glb")
+def export_v2_engine_config_glb(
+    ctx: typer.Context,
+    path: str = typer.Argument(
+        ...,
+        help="<path> -- the config's install-relative key; it keeps its own extension "
+             "(cfg/user.cfg, lights.rad).",
+    ),
+) -> None:
+    """Export one engine-configuration file to one GLB."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_engine_config_glb(config, runner, path)
+        console.print(f"engine-config GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 engine-config-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("engine-configs-glb")
+def export_v2_engine_configs_glb(ctx: typer.Context) -> None:
+    """Export every engine-configuration identity the seam admits."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destinations = export_manager.export_all_engine_config_glbs(config, runner)
+        console.print(f"engine-config GLB corpus export complete: {len(destinations)} configs")
+
+    _execute(
+        _state(ctx),
+        "export_v2 engine-configs-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
+@export_v2_app.command("corpus-index-glb")
+def export_v2_corpus_index_glb(ctx: typer.Context) -> None:
+    """Index the whole published corpus into one GLB; fails on any unclaimed member."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import export_manager
+
+        destination = export_manager.export_corpus_index_glb(config, runner)
+        console.print(f"corpus-index GLB export complete: {destination}")
+
+    _execute(
+        _state(ctx),
+        "export_v2 corpus-index-glb",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_game=True,
+        activity=True,
+    )
+
+
 @export_v2_app.command("export-all")
 def export_v2_export_all(ctx: typer.Context) -> None:
-    """Export every isolated GLB seam: textures, surfaces, materials, then characters."""
+    """Export every isolated GLB seam; corpus-index runs last."""
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import export_manager

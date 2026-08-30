@@ -109,6 +109,16 @@ def test_an_absent_texture_binds_unresolved_without_a_dependency():
     assert model.dependencies == []
 
 
+def test_a_texture_dependency_states_that_the_install_answered_it():
+    """The row exists only where the binding resolved, so it publishes `resolved: true`; the
+    corpus index reads that key to tell a dangling reference from an answered one."""
+
+    body = b'"VertexLitGeneric"\n{\n"$basetexture" "models/wall"\n}\n'
+    model = _decode(body, present=("models/wall",))
+    assert [row["role"] for row in model.dependencies] == ["texture"]
+    assert model.dependencies[0]["resolved"] is True
+
+
 def test_a_render_target_value_is_not_a_texture_dependency():
     body = b'"Water"\n{\n"$refracttexture" "_rt_WaterRefraction"\n}\n'
     model = _decode(body, present=())

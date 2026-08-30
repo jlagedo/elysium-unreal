@@ -1,6 +1,6 @@
 """Posing a split-rotation bone the way retail draws it.
 
-A character GLB writes the flagged bone's rotation channel exactly as the MDL stores it -- a
+A model GLB writes the flagged bone's rotation channel exactly as the MDL stores it -- a
 MODEL-space orientation, the parent's rotation skipped, the position still composed through the
 parent -- and Blender's importer poses every channel by ordinary FK, so the body folds backwards
 at the waist. `core.rig` says which bones those are; this puts them where retail puts them.

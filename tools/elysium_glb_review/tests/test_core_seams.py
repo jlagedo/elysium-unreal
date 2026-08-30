@@ -12,7 +12,7 @@ from . import support
 @pytest.mark.parametrize(
     ("expected", "payload"),
     [
-        (seams.CHARACTER_EXTENSION, support.character_unit("vtmb:character-body:a/b")),
+        (seams.MODEL_EXTENSION, support.model_unit("vtmb:model:a/b")),
         (seams.MATERIAL_EXTENSION, support.material_unit("vtmb:material:a/b")),
         (seams.TEXTURE_EXTENSION, support.texture_unit()),
         (seams.SURFACE_PROPERTY_EXTENSION, support.surface_property_unit("brick")),
@@ -35,10 +35,10 @@ def test_the_identity_comes_from_the_extension_not_the_filename() -> None:
     assert seams.asset_id(document) == "vtmb:material:brick/aspdra"
 
 
-def test_a_character_names_its_materials_through_the_reference_extension() -> None:
+def test_a_model_names_its_materials_through_the_reference_extension() -> None:
     document = support.document_of(
-        support.character_unit(
-            "vtmb:character-body:npc/body",
+        support.model_unit(
+            "vtmb:model:npc/body",
             materials=["vtmb:material:a/one", "vtmb:material:a/two"],
         )
     )
@@ -46,6 +46,22 @@ def test_a_character_names_its_materials_through_the_reference_extension() -> No
     identities = [reference.identity for reference in references]
     assert identities == ["vtmb:material:a/one", "vtmb:material:a/two"]
     assert references[0].origin == "materials[0]"
+
+
+def test_the_reference_reader_reads_the_shape_the_exporters_write() -> None:
+    # The fixtures are hand-built, so pin them to the writer the pipeline actually uses:
+    # a reader keyed on any other field would find nothing in the exported corpus.
+    from elysium_pipeline.formats.unit_contract import references as contract
+
+    for name in seams.REFERENCE_EXTENSIONS:
+        binding = contract.reference_extension(name, "vtmb:material:a/one")
+        assert seams.reference_identity(binding, name) == "vtmb:material:a/one"
+    document = support.document_of(
+        support.model_unit("vtmb:model:npc/body", materials=["vtmb:material:a/one"])
+    )
+    assert document["materials"][0]["extensions"] == contract.reference_extension(
+        seams.MATERIAL_REFERENCE_EXTENSION, "vtmb:material:a/one"
+    )["extensions"]
 
 
 def test_a_material_names_its_textures_and_its_surface_property() -> None:
@@ -65,7 +81,7 @@ def test_a_material_names_its_textures_and_its_surface_property() -> None:
 
 
 def test_a_bare_surface_property_name_is_promoted_to_an_identity() -> None:
-    # A material writes the bare name where a character writes the full identity.
+    # A material writes the bare name where a model writes the full identity.
     document = support.document_of(
         support.material_unit("vtmb:material:a/b", surface_property="Glass")
     )
@@ -127,3 +143,85 @@ def test_a_missing_coverage_block_reads_as_empty_rather_than_failing() -> None:
     coverage = seams.coverage({})
     assert coverage.clean
     assert coverage.mapped == []
+
+
+def test_every_declared_family_admits_only_root_extensions() -> None:
+    for family, admitted in seams.SEAM_EXTENSION.items():
+        assert admitted, family
+        for name in admitted:
+            assert name in seams.ROOT_EXTENSIONS, (family, name)
+
+
+def test_all_extensions_covers_the_roots_and_the_cross_references() -> None:
+    assert set(seams.ALL_EXTENSIONS) == set(seams.ROOT_EXTENSIONS) | set(
+        seams.REFERENCE_EXTENSIONS
+    )
+    assert len(set(seams.ALL_EXTENSIONS)) == len(seams.ALL_EXTENSIONS)
+
+
+def test_a_cross_reference_extension_is_never_mistaken_for_a_unit() -> None:
+    # A material reference binds one glTF material; it does not make the file a unit.
+    document = {"extensions": {seams.MATERIAL_REFERENCE_EXTENSION: {"asset": "vtmb:material:a"}}}
+    assert seams.extension_of(document) is None
+
+
+@pytest.mark.parametrize(
+    ("directory", "expected"),
+    [
+        ("models", (seams.MODEL_EXTENSION,)),
+        ("fonts", (seams.FONT_EXTENSION, seams.FONT_LIST_EXTENSION)),
+        ("shader-programs/source", (seams.SHADER_SOURCE_EXTENSION,)),
+        ("shader-programs/psh", (seams.SHADER_PROGRAM_EXTENSION,)),
+        ("sentences", (seams.SOUND_SCRIPT_EXTENSION,)),
+        ("dsp-presets", (seams.SOUND_SCRIPT_EXTENSION,)),
+    ],
+)
+def test_a_family_directory_names_the_extensions_it_admits(
+    directory: str, expected: tuple[str, ...]
+) -> None:
+    assert seams.expected_extensions(directory) == expected
+
+
+def test_a_nested_family_answers_for_a_whole_unit_path() -> None:
+    # The lookup takes the longest declared family that prefixes the path, so a unit
+    # named by its own subtree resolves as readily as one named by its family alone.
+    assert seams.expected_extensions("vdata/items/weapons") == (seams.VDATA_EXTENSION,)
+    assert seams.expected_extensions("models/character/npc") == (seams.MODEL_EXTENSION,)
+
+
+def test_all_four_map_units_share_one_family_directory() -> None:
+    # A BSP is cut into four units written side by side under `maps/`, told apart by the
+    # unit suffix in the file name rather than by directory.
+    assert seams.expected_extensions("maps") == (
+        seams.MAP_EXTENSION,
+        seams.MAP_ENTITIES_EXTENSION,
+        seams.MAP_LIGHTING_EXTENSION,
+        seams.MAP_VISIBILITY_EXTENSION,
+    )
+
+
+@pytest.mark.parametrize(
+    ("filename", "expected"),
+    [
+        ("ch_cloud_1.glb", seams.MAP_EXTENSION),
+        ("ch_cloud_1.entities.glb", seams.MAP_ENTITIES_EXTENSION),
+        ("ch_cloud_1.lighting.glb", seams.MAP_LIGHTING_EXTENSION),
+        ("ch_cloud_1.visibility.glb", seams.MAP_VISIBILITY_EXTENSION),
+    ],
+)
+def test_a_map_file_name_narrows_the_family_to_one_unit(
+    filename: str, expected: str
+) -> None:
+    # Without the suffix the four kinds would cover for each other and a sub-unit written
+    # under the wrong name would pass the seam check.
+    assert seams.expected_extensions("maps", filename) == (expected,)
+
+
+def test_an_undeclared_directory_carries_no_expectation() -> None:
+    assert seams.expected_extensions("nowhere") == ()
+    assert seams.expected_extensions("nowhere/nested") == ()
+
+
+def test_the_export_root_itself_admits_the_corpus_index() -> None:
+    # The corpus index is the one unit published under no family directory.
+    assert seams.expected_extensions("") == (seams.CORPUS_INDEX_EXTENSION,)

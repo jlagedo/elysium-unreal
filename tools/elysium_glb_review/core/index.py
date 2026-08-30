@@ -6,9 +6,7 @@ to open; this takes about a second, and a unit's contents are read only when som
 looks at it.
 
 Identity comes from the path rather than the file, which is sound because the export
-writes each unit at the path its identity names. The one exception is a bank: it is
-exported as a character body under `characters/`, so a file's identity says
-`character-body` where a reference to it says `animation-bank`.
+writes each unit at the path its identity names.
 """
 
 from __future__ import annotations
@@ -18,9 +16,10 @@ from pathlib import Path
 
 from . import glb, ids, seams
 
-#: Identity kind published by each seam directory.
+#: Identity kind published by each seam directory the browser lists. The export
+#: publishes more families than these; the browser does not open them.
 SEAM_KIND = {
-    "characters": "character-body",
+    "models": "model",
     "materials": "material",
     "textures": "texture",
     "surface-properties": "surface-property",
@@ -94,7 +93,7 @@ def groups(units: list[Unit]) -> list[str]:
     return sorted({unit.group for unit in units if unit.group})
 
 
-def _character_rows(document: dict, payload: dict) -> tuple[list, list]:
+def _model_rows(document: dict, payload: dict) -> tuple[list, list]:
     rows = [
         ("bones", str(len((payload.get("mdl") or {}).get("bones") or []))),
         ("clips", str(len(document.get("animations") or []))),
@@ -104,27 +103,26 @@ def _character_rows(document: dict, payload: dict) -> tuple[list, list]:
     primitives = ((document.get("meshes") or [{}])[0]).get("primitives") or [{}]
     rows.append(("morph targets", str(len(primitives[0].get("targets") or []))))
 
-    banks = [
+    included = [
         reference.identity
         for reference in seams.dependencies(payload)
-        if reference.role == "animation-bank"
+        if reference.role == "model"
     ]
-    rows.append(("banks declared", str(len(banks))))
+    rows.append(("models included", str(len(included))))
 
     sentinels = sum(
         1
         for material in document.get("materials") or []
         if str(
-            ((material.get("extensions") or {}).get(seams.MATERIAL_REFERENCE_EXTENSION) or {})
-            .get("material", "")
+            seams.reference_identity(material, seams.MATERIAL_REFERENCE_EXTENSION) or ""
         ).startswith("vtmb:missing-material:")
     )
     warnings = []
     if sentinels:
         # Normal, not broken: these name studio textures that resolve to no VMT.
         rows.append(("slots with no VMT", str(sentinels)))
-    if not document.get("animations") and banks:
-        warnings.append("include stub: forwards to other banks, carries no clips")
+    if not document.get("animations") and included:
+        warnings.append("include stub: forwards to other models, carries no clips")
     return rows, warnings
 
 
@@ -198,8 +196,8 @@ def details(unit: Unit, root: str | Path) -> Details | None:
         return Details(unit.identity, unit.seam, (), ("no ELYSIUM extension",))
     name, payload = found
 
-    if name == seams.CHARACTER_EXTENSION:
-        rows, warnings = _character_rows(document, payload)
+    if name == seams.MODEL_EXTENSION:
+        rows, warnings = _model_rows(document, payload)
     elif name == seams.MATERIAL_EXTENSION:
         rows, warnings = _material_rows(payload)
     elif name == seams.TEXTURE_EXTENSION:

@@ -24,8 +24,8 @@ from io_scene_gltf2.io.com.gltf2_io_extensions import Extension
 from ..core import seams
 from . import pose
 
-#: Object custom property holding the character payload of the body a node belongs to.
-CHARACTER_PROPERTY = "elysium_vtmb_character"
+#: Object custom property holding the model payload of the body a node belongs to.
+MODEL_PROPERTY = "elysium_vtmb_model"
 #: Material custom property holding the identity the primitive named.
 MATERIAL_REFERENCE_PROPERTY = "elysium_material_reference"
 #: Set on anything this add-on created, so panels can tell it apart from other imports.
@@ -150,7 +150,7 @@ class glTF2ImportUserExtension:  # noqa: N801  (name fixed by the glTF importer)
         are its own. A bank import defers the work to `animation.load_clips`, which knows
         the body the clips are about to be rebound to.
         """
-        payload = ImportState.last_document_extensions.get(seams.CHARACTER_EXTENSION)
+        payload = ImportState.last_document_extensions.get(seams.MODEL_EXTENSION)
         if payload is None or not ImportState.poses_split_rotation:
             return
         created = [
@@ -175,25 +175,25 @@ class glTF2ImportUserExtension:  # noqa: N801  (name fixed by the glTF importer)
         if blender_object.type == "ARMATURE":
             ImportState.armatures.append(blender_object)
 
-        payload = ImportState.last_document_extensions.get(seams.CHARACTER_EXTENSION)
+        payload = ImportState.last_document_extensions.get(seams.MODEL_EXTENSION)
         if payload is not None and blender_object.type in {"MESH", "ARMATURE"}:
-            stash(blender_object, CHARACTER_PROPERTY, payload)
+            stash(blender_object, MODEL_PROPERTY, payload)
 
     def gather_import_material_after_hook(
         self, gltf_material, vertex_color, blender_mat, gltf
     ) -> None:
         """Record the material identity the primitive named.
 
-        The character unit carries no textures at all; its core materials are neutral
+        The model unit carries no textures at all; its core materials are neutral
         placeholders whose only real content is this string. Everything the material
         adapter does starts from it.
         """
         if blender_mat is None:
             return
         blender_mat[MARKER_PROPERTY] = True
-        extension = (getattr(gltf_material, "extensions", None) or {}).get(
-            seams.MATERIAL_REFERENCE_EXTENSION
+        identity = seams.reference_identity(
+            {"extensions": getattr(gltf_material, "extensions", None) or {}},
+            seams.MATERIAL_REFERENCE_EXTENSION,
         )
-        identity = (extension or {}).get("material")
         if identity:
             blender_mat[MATERIAL_REFERENCE_PROPERTY] = identity

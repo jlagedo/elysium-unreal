@@ -69,8 +69,8 @@ def test_a_sentinel_is_counted_as_a_fact_not_reported_as_breakage(tmp_path: Path
     # report in the normal case.
     result = _scan(tmp_path,
         {
-            "characters/npc/body.glb": support.character_unit(
-                "vtmb:character-body:npc/body",
+            "models/npc/body.glb": support.model_unit(
+                "vtmb:model:npc/body",
                 materials=["vtmb:missing-material:9:glint"],
             )
         }

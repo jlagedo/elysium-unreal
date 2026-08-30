@@ -159,35 +159,6 @@ def character_source_worker(kind: str, stem: str, model_rel: str, out_dir: str,
     return buffer.getvalue()
 
 
-def character_glb_worker(model: str, output_root: str) -> dict[str, Any]:
-    """Export one Character GLB in this process. Never raises: the parent collects failures."""
-    from pathlib import Path
-
-    from elysium_pipeline.exporters import character_glb
-    from elysium_pipeline.formats import install
-    from elysium_pipeline.validation import character_glb as validation
-
-    try:
-        index = install.build_index(verbose=False)
-        destination = character_glb.export(
-            index, model, Path(output_root), anorms=_anorms()
-        )
-        summary = validation.validate(destination)
-        return {
-            "item": model,
-            "destination": str(destination),
-            "summary": summary,
-            "error": "",
-        }
-    except (Exception, SystemExit) as exc:
-        return {
-            "item": model,
-            "destination": "",
-            "summary": None,
-            "error": f"{type(exc).__name__}: {exc}",
-        }
-
-
 def texture_glb_worker(texture: str, output_root: str) -> dict[str, Any]:
     """Export one Texture GLB in this process. Never raises: the parent collects failures."""
     from pathlib import Path
@@ -244,3 +215,167 @@ def material_glb_worker(material: str, output_root: str) -> dict[str, Any]:
             "warnings": [],
             "error": f"{type(exc).__name__}: {exc}",
         }
+
+
+def _glb_unit_worker(module: str, key: str, output_root: str,
+                     export_attr: str = "export", **extra: Any) -> dict[str, Any]:
+    """Write and validate one GLB unit in this process. Never raises: the parent collects rows.
+
+    Windows spawns rather than forks, so each process rebuilds the install index once
+    (`install.build_index` is memoized per process) and every unit after the first reuses it.
+    Each named worker below is a top-level function so the pool can pickle it by name.
+    """
+    from importlib import import_module
+    from pathlib import Path
+
+    from elysium_pipeline.formats import install
+
+    try:
+        exporter = import_module("elysium_pipeline.exporters." + module)
+        validation = import_module("elysium_pipeline.validation." + module)
+        index = install.build_index(verbose=False)
+        destination = getattr(exporter, export_attr)(index, key, Path(output_root), **extra)
+        summary = validation.validate(destination)
+        return {
+            "item": key,
+            "destination": str(destination),
+            "summary": summary,
+            "warnings": validation.warnings_for(summary),
+            "error": "",
+        }
+    except (Exception, SystemExit) as exc:
+        return {
+            "item": key,
+            "destination": "",
+            "summary": None,
+            "warnings": [],
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def sound_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Sound GLB in this process."""
+    return _glb_unit_worker("sound_glb", key, output_root)
+
+
+def shader_source_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Shader-source GLB in this process."""
+    return _glb_unit_worker(
+        "shader_program_glb", key, output_root, export_attr="export_shader_source"
+    )
+
+
+def shader_program_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Shader-program GLB in this process."""
+    return _glb_unit_worker("shader_program_glb", key, output_root)
+
+
+def font_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Font GLB in this process; the registry's sentinel key routes itself."""
+    return _glb_unit_worker("font_glb", key, output_root)
+
+
+def sound_scheme_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Sound-scheme GLB in this process."""
+    return _glb_unit_worker("sound_scheme_glb", key, output_root)
+
+
+def scene_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Scene GLB in this process."""
+    return _glb_unit_worker("scene_glb", key, output_root)
+
+
+#: The surface-name table every model unit checks its references against, read once per process.
+_MODEL_SURFACES: list = []
+
+
+def _model_surfaces(index: dict):
+    if not _MODEL_SURFACES:
+        from elysium_pipeline.formats.model_glb import source as model_source
+
+        _MODEL_SURFACES.append(model_source.surface_property_names(index))
+    return _MODEL_SURFACES[0]
+
+
+def model_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Model GLB in this process.
+
+    The unit-vector table and the surface-name table are shared reads, so they are loaded once
+    per process rather than once per model.
+    """
+    from pathlib import Path
+
+    from elysium_pipeline.exporters import model_glb
+    from elysium_pipeline.formats import install
+    from elysium_pipeline.validation import model_glb as validation
+
+    try:
+        index = install.build_index(verbose=False)
+        destination = model_glb.export(
+            index,
+            key,
+            Path(output_root),
+            anorms=_anorms(),
+            surface_properties=_model_surfaces(index),
+        )
+        summary = validation.validate(destination)
+        return {
+            "item": key,
+            "destination": str(destination),
+            "summary": summary,
+            "warnings": validation.warnings_for(summary),
+            "error": "",
+        }
+    except (Exception, SystemExit) as exc:
+        return {
+            "item": key,
+            "destination": "",
+            "summary": None,
+            "warnings": [],
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def dialogue_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Dialogue GLB in this process."""
+    return _glb_unit_worker("dialogue_glb", key, output_root)
+
+
+def vdata_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Vdata GLB in this process."""
+    return _glb_unit_worker("vdata_glb", key, output_root)
+
+
+def ui_resource_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one UI-resource GLB in this process."""
+    return _glb_unit_worker("ui_resource_glb", key, output_root)
+
+
+def map_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one map's root unit in this process."""
+    return _glb_unit_worker("map_glb", key, output_root)
+
+
+def map_entities_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one map's entity-lump unit in this process."""
+    return _glb_unit_worker("map_entities_glb", key, output_root)
+
+
+def map_lighting_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one map's lighting unit in this process."""
+    return _glb_unit_worker("map_lighting_glb", key, output_root)
+
+
+def map_visibility_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one map's visibility unit in this process."""
+    return _glb_unit_worker("map_visibility_glb", key, output_root)
+
+
+def nav_graph_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Nav-graph GLB in this process."""
+    return _glb_unit_worker("nav_graph_glb", key, output_root)
+
+
+def engine_config_glb_worker(key: str, output_root: str) -> dict[str, Any]:
+    """Export one Engine-config GLB in this process."""
+    return _glb_unit_worker("engine_config_glb", key, output_root)

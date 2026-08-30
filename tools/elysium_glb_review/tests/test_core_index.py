@@ -32,7 +32,7 @@ def test_derives_an_identity_from_each_path(tmp_path: Path) -> None:
     _corpus(
         tmp_path,
         {
-            "characters/npc/body.glb": support.character_unit("vtmb:character-body:npc/body"),
+            "models/npc/body.glb": support.model_unit("vtmb:model:npc/body"),
             "materials/brick/aspdra.glb": support.material_unit("vtmb:material:brick/aspdra"),
             "textures/brick/aspdra.glb": support.texture_unit(),
             "surface-properties/brick.glb": support.surface_property_unit("brick"),
@@ -40,26 +40,25 @@ def test_derives_an_identity_from_each_path(tmp_path: Path) -> None:
     )
     found = {unit.identity for unit in index.scan(tmp_path)}
     assert found == {
-        "vtmb:character-body:npc/body",
+        "vtmb:model:npc/body",
         "vtmb:material:brick/aspdra",
         "vtmb:texture:brick/aspdra",
         "vtmb:surface-property:brick",
     }
 
 
-def test_a_bank_is_listed_as_the_character_body_it_is_stored_as(tmp_path: Path) -> None:
-    # A bank is exported through the character exporter, so its file identity says
-    # character-body where a reference to it says animation-bank.
+def test_a_clip_only_model_is_listed_like_any_other(tmp_path: Path) -> None:
+    # An animation bank is a model unit too: one kind, one directory, one identity.
     _corpus(
         tmp_path,
         {
-            "characters/shared/female/frenzy.glb": support.character_unit(
-                "vtmb:character-body:shared/female/frenzy", animations=13
+            "models/shared/female/frenzy.glb": support.model_unit(
+                "vtmb:model:shared/female/frenzy", animations=13
             )
         },
     )
     unit = index.scan(tmp_path)[0]
-    assert unit.identity == "vtmb:character-body:shared/female/frenzy"
+    assert unit.identity == "vtmb:model:shared/female/frenzy"
     assert unit.stem == "shared/female/frenzy"
 
 
@@ -67,7 +66,7 @@ def test_a_seam_can_be_listed_alone(tmp_path: Path) -> None:
     _corpus(
         tmp_path,
         {
-            "characters/npc/body.glb": support.character_unit("vtmb:character-body:npc/body"),
+            "models/npc/body.glb": support.model_unit("vtmb:model:npc/body"),
             "materials/a/b.glb": support.material_unit("vtmb:material:a/b"),
         },
     )
@@ -87,14 +86,14 @@ def test_the_listing_is_ordered_so_a_browser_is_stable(tmp_path: Path) -> None:
         {
             "materials/z/last.glb": support.material_unit("vtmb:material:z/last"),
             "materials/a/first.glb": support.material_unit("vtmb:material:a/first"),
-            "characters/npc/body.glb": support.character_unit("vtmb:character-body:npc/body"),
+            "models/npc/body.glb": support.model_unit("vtmb:model:npc/body"),
         },
     )
     units = index.scan(tmp_path)
     assert [unit.identity for unit in units] == [
-        "vtmb:character-body:npc/body",
         "vtmb:material:a/first",
         "vtmb:material:z/last",
+        "vtmb:model:npc/body",
     ]
 
 
@@ -102,8 +101,8 @@ def test_groups_are_the_first_path_segment(tmp_path: Path) -> None:
     _corpus(
         tmp_path,
         {
-            "characters/npc/a.glb": support.character_unit("vtmb:character-body:npc/a"),
-            "characters/monster/b.glb": support.character_unit("vtmb:character-body:monster/b"),
+            "models/npc/a.glb": support.model_unit("vtmb:model:npc/a"),
+            "models/monster/b.glb": support.model_unit("vtmb:model:monster/b"),
             "surface-properties/brick.glb": support.surface_property_unit("brick"),
         },
     )
@@ -123,18 +122,18 @@ def test_an_empty_corpus_lists_nothing(tmp_path: Path) -> None:
     assert index.scan(tmp_path) == []
 
 
-def test_a_character_reports_what_it_carries(tmp_path: Path) -> None:
+def test_a_model_reports_what_it_carries(tmp_path: Path) -> None:
     detail = _detail(
         tmp_path,
         {
-            "characters/npc/body.glb": support.character_unit(
-                "vtmb:character-body:npc/body",
+            "models/npc/body.glb": support.model_unit(
+                "vtmb:model:npc/body",
                 materials=["vtmb:material:a/one", "vtmb:material:a/two"],
                 animations=7,
                 bones=["Bip01", "Bip01 Pelvis"],
             )
         },
-        "characters/npc/body.glb",
+        "models/npc/body.glb",
     )
     rows = _rows(detail)
     assert rows["bones"] == "2"
@@ -146,28 +145,28 @@ def test_sentinel_slots_are_counted_as_a_fact(tmp_path: Path) -> None:
     detail = _detail(
         tmp_path,
         {
-            "characters/npc/body.glb": support.character_unit(
-                "vtmb:character-body:npc/body",
+            "models/npc/body.glb": support.model_unit(
+                "vtmb:model:npc/body",
                 materials=["vtmb:missing-material:9:glint", "vtmb:material:a/one"],
             )
         },
-        "characters/npc/body.glb",
+        "models/npc/body.glb",
     )
     assert _rows(detail)["slots with no VMT"] == "1"
     assert detail.warnings == ()
 
 
-def test_a_bank_that_carries_no_clips_is_called_a_stub(tmp_path: Path) -> None:
+def test_an_included_model_that_carries_no_clips_is_called_a_stub(tmp_path: Path) -> None:
     detail = _detail(
         tmp_path,
         {
-            "characters/shared/all.glb": support.character_unit(
-                "vtmb:character-body:shared/all",
-                banks=["vtmb:animation-bank:shared/real"],
+            "models/shared/all.glb": support.model_unit(
+                "vtmb:model:shared/all",
+                includes=["vtmb:model:shared/real"],
                 animations=0,
             )
         },
-        "characters/shared/all.glb",
+        "models/shared/all.glb",
     )
     assert any("include stub" in warning for warning in detail.warnings)
 

@@ -1,7 +1,7 @@
 """Inspector panels.
 
 Everything drawn here comes from payloads captured during import and stashed on the
-datablock. Nothing re-reads a file: a character's extension JSON runs to 35 MB, and
+datablock. Nothing re-reads a file: a model's extension JSON runs to 35 MB, and
 paying that to redraw a sidebar would make the panel the most expensive thing in the
 tool.
 """
@@ -75,20 +75,20 @@ class ELYSIUM_PT_corpus(ElysiumPanel, bpy.types.Panel):
         row.operator("elysium.corpus_report", icon="CHECKMARK")
 
 
-class ELYSIUM_PT_character(ElysiumPanel, bpy.types.Panel):
+class ELYSIUM_PT_model(ElysiumPanel, bpy.types.Panel):
     """The body payload of the selected object."""
 
-    bl_idname = "ELYSIUM_PT_character"
-    bl_label = "Character"
+    bl_idname = "ELYSIUM_PT_model"
+    bl_label = "Model"
 
     @classmethod
     def poll(cls, context: bpy.types.Context) -> bool:
         obj = context.object
-        return obj is not None and hooks.CHARACTER_PROPERTY in obj
+        return obj is not None and hooks.MODEL_PROPERTY in obj
 
     def draw(self, context: bpy.types.Context) -> None:
         layout = self.layout
-        payload = hooks.unstash(context.object, hooks.CHARACTER_PROPERTY)
+        payload = hooks.unstash(context.object, hooks.MODEL_PROPERTY)
         if payload is None:
             layout.label(text="Payload could not be read", icon="ERROR")
             return
@@ -107,10 +107,10 @@ class ELYSIUM_PT_character(ElysiumPanel, bpy.types.Panel):
         if coverage.typed_unidentified:
             box.label(text="typed but unidentified: %d" % len(coverage.typed_unidentified))
 
-        header, body = layout.panel("elysium_character_tree", default_closed=True)
+        header, body = layout.panel("elysium_model_tree", default_closed=True)
         header.label(text="Extension payload")
         if body:
-            _draw_tree(body, payload, "elysium_character")
+            _draw_tree(body, payload, "elysium_model")
 
 
 class ELYSIUM_PT_material(ElysiumPanel, bpy.types.Panel):
@@ -159,4 +159,4 @@ class ELYSIUM_PT_material(ElysiumPanel, bpy.types.Panel):
             _draw_tree(body, payload, "elysium_material")
 
 
-CLASSES = (ELYSIUM_PT_corpus, ELYSIUM_PT_character, ELYSIUM_PT_material)
+CLASSES = (ELYSIUM_PT_corpus, ELYSIUM_PT_model, ELYSIUM_PT_material)

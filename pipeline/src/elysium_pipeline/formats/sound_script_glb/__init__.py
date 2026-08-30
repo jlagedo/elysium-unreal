@@ -1,0 +1,90 @@
+"""Isolated lossless Sound-script GLB format aggregation.
+
+Five unit kinds -- game sound, sound-script manifest, soundscape, sentence, DSP preset -- cut
+from the six `scripts/*.txt` tables `docs/architecture/seam_map_sound_script.md` names, sharing
+one extension (`ELYSIUM_vtmb_sound_script`) and one schema version.
+"""
+
+from elysium_pipeline.formats.sound_script_glb.coverage import build_coverage
+from elysium_pipeline.formats.sound_script_glb.decode import (
+    SoundScriptDecodeError,
+    decode_dsp_preset,
+    decode_game_sound,
+    decode_manifest,
+    decode_sentence,
+    decode_soundscape,
+)
+from elysium_pipeline.formats.sound_script_glb.model import (
+    MANIFEST_KEY,
+    SCHEMA_VERSION,
+    SOUND_SCRIPT_EXTENSION,
+    TABLE_PATHS,
+    Parameter,
+    SoundScriptModel,
+    SoundScriptModelError,
+    dsp_preset_asset_id,
+    game_sound_asset_id,
+    manifest_asset_id,
+    normalize_name,
+    sentence_asset_id,
+    sound_asset_id,
+    soundscape_asset_id,
+)
+from elysium_pipeline.formats.sound_script_glb.source import (
+    DspTable,
+    GameSoundDirectory,
+    KvTable,
+    ManifestClosure,
+    SentenceTable,
+    SoundScriptSourceError,
+    dsp_preset_closure,
+    game_sound_closure,
+    load_dsp_table,
+    load_game_sound_directory,
+    load_kv_table,
+    load_sentence_table,
+    load_source_closure,
+    manifest_closure,
+    sentence_closure,
+    soundscape_closure,
+)
+
+__all__ = [
+    "MANIFEST_KEY",
+    "SCHEMA_VERSION",
+    "SOUND_SCRIPT_EXTENSION",
+    "TABLE_PATHS",
+    "DspTable",
+    "GameSoundDirectory",
+    "KvTable",
+    "ManifestClosure",
+    "Parameter",
+    "SentenceTable",
+    "SoundScriptDecodeError",
+    "SoundScriptModel",
+    "SoundScriptModelError",
+    "SoundScriptSourceError",
+    "build_coverage",
+    "decode_dsp_preset",
+    "decode_game_sound",
+    "decode_manifest",
+    "decode_sentence",
+    "decode_soundscape",
+    "dsp_preset_asset_id",
+    "dsp_preset_closure",
+    "game_sound_asset_id",
+    "game_sound_closure",
+    "load_dsp_table",
+    "load_game_sound_directory",
+    "load_kv_table",
+    "load_sentence_table",
+    "load_source_closure",
+    "manifest_asset_id",
+    "manifest_closure",
+    "normalize_name",
+    "sentence_asset_id",
+    "sentence_closure",
+    "sound_asset_id",
+    "soundscape_asset_id",
+    "soundscape_closure",
+]

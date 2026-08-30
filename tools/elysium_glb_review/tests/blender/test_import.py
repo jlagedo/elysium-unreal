@@ -47,8 +47,9 @@ def enable(module: str) -> None:
     assert hasattr(loaded, "glTF2ImportUserExtension"), (
         "%s exposes no glTF2ImportUserExtension at module level" % module
     )
+    core_seams = importlib.import_module(module + ".core.seams")
     declared = {e.name for e in loaded.glTF2ImportUserExtension().extensions if e.required}
-    assert "ELYSIUM_vtmb_character" in declared, (
+    assert core_seams.MODEL_EXTENSION in declared, (
         "extensions must be declared required=True; required=False whitelists nothing"
     )
     print("enabled %s, declaring %d required extension(s)" % (module, len(declared)))
@@ -63,7 +64,7 @@ def clear() -> None:
 
 def check_gate(corpus: Path) -> None:
     """Every unit lists its extensions as required, so the gate is not optional."""
-    path = corpus / "characters" / "gibs" / "head.glb"
+    path = corpus / "models" / "character" / "gibs" / "head.glb"
     clear()
     result = bpy.ops.import_scene.gltf(filepath=str(path))
     assert "FINISHED" in result, "import of %s did not finish: %r" % (path.name, result)
@@ -81,7 +82,7 @@ def check_gate(corpus: Path) -> None:
 
 def check_materials_and_textures(corpus: Path) -> None:
     """A body's appearance lives entirely outside its own unit."""
-    path = corpus / "characters" / "npc" / "common" / "blood_doll" / "blood_doll.glb"
+    path = corpus / "models" / "character" / "npc" / "common" / "blood_doll" / "blood_doll.glb"
     clear()
     assert "FINISHED" in bpy.ops.import_scene.gltf(filepath=str(path))
 
@@ -122,7 +123,7 @@ def check_materials_and_textures(corpus: Path) -> None:
 def check_clip_filter(corpus: Path) -> None:
     """A bank declares hundreds of clips; the filter is what makes it openable."""
     hooks = importlib.import_module(ARGS.module + ".adapters.hooks")
-    path = corpus / "characters" / "monster" / "andrei" / "andrei.glb"
+    path = corpus / "models" / "character" / "monster" / "andrei" / "andrei.glb"
 
     clear()
     hooks.ImportState.reset()
@@ -164,11 +165,12 @@ def check_data_only_seams(corpus: Path) -> None:
 
 
 def check_bank_loading(corpus: Path) -> None:
-    """A body's clips live in banks it only names, several files away."""
+    """A body's clips live in models it only names, several files away."""
     animation = importlib.import_module(ARGS.module + ".adapters.animation")
+    core_seams = importlib.import_module(ARGS.module + ".core.seams")
 
     clear()
-    path = corpus / "characters" / "npc" / "common" / "blood_doll" / "blood_doll.glb"
+    path = corpus / "models" / "character" / "npc" / "common" / "blood_doll" / "blood_doll.glb"
     assert "FINISHED" in bpy.ops.import_scene.gltf(filepath=str(path))
     body = next(o for o in bpy.data.objects if o.type == "ARMATURE")
     mesh = next(o for o in bpy.data.objects if o.name.startswith("vtmb:"))
@@ -178,7 +180,9 @@ def check_bank_loading(corpus: Path) -> None:
 
     payload = animation.body_payload(mesh)
     assert payload is not None, "the body payload was not stashed during import"
-    closure = animation.closure_of({"extensions": {"ELYSIUM_vtmb_character": payload}}, corpus)
+    closure = animation.closure_of(
+        {"extensions": {core_seams.MODEL_EXTENSION: payload}}, corpus
+    )
     assert len(closure.nodes) > 20, "expected a transitive closure, got %d" % len(closure.nodes)
     assert closure.clip_count > 1000, "expected four figures of clips"
     stubs = [node for node in closure.nodes if node.is_stub]
@@ -306,10 +310,10 @@ def check_split_rotation(corpus: Path) -> None:
     core_seams = importlib.import_module(ARGS.module + ".core.seams")
     animation = importlib.import_module(ARGS.module + ".adapters.animation")
 
-    path = (corpus / "characters" / "npc" / "unique" / "santa_monica" / "sm_blueblood"
-            / "sm_blueblood.glb")
+    path = (corpus / "models" / "character" / "npc" / "unique" / "santa_monica"
+            / "sm_blueblood" / "sm_blueblood.glb")
     document, binary = core_glb.read(path)
-    payload = core_seams.root_extension(document, core_seams.CHARACTER_EXTENSION)
+    payload = core_seams.root_extension(document, core_seams.MODEL_EXTENSION)
     declared = core_rig.split_rotation_bones(payload)
     assert declared, "sm_blueblood names no split-rotation bone"
     bone = declared[0].name
@@ -323,7 +327,9 @@ def check_split_rotation(corpus: Path) -> None:
     )
     assert own < 1e-3, "%s is %.4f rad from its own channel in %s" % (bone, own, clip)
 
-    closure = animation.closure_of({"extensions": {"ELYSIUM_vtmb_character": payload}}, corpus)
+    closure = animation.closure_of(
+        {"extensions": {core_seams.MODEL_EXTENSION: payload}}, corpus
+    )
     bank = max(closure.with_clips(), key=lambda node: node.clip_count)
     bank_document, bank_binary = core_glb.read(core_ids.resolve(bank.identity, corpus))
 

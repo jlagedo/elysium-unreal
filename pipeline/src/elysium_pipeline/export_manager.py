@@ -5,8 +5,10 @@ from __future__ import annotations
 import ast
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import hashlib
+import importlib
 import json
 import os
 from pathlib import Path
@@ -1366,72 +1368,24 @@ def export_model(
     return config.export_root / "npc"
 
 
-def export_character_glb(config, runner, model: str) -> Path:
-    """Write one isolated full-slice Character GLB and validate the published file."""
-    del runner  # This exporter is pure offline Python; kept for the public workflow signature.
-    _require_export_v2_config(config)
-    from elysium_pipeline.exporters import character_glb
-    from elysium_pipeline.formats import install, mdl_skel
-    from elysium_pipeline.validation import character_glb as character_glb_validation
+def _glb_source_bytes(summary: Mapping) -> str:
+    """What a seam accounted for, in the terms its own validation summary reports.
 
-    normalized = model.replace("\\", "/")
-    if not normalized.lower().endswith(".mdl"):
-        normalized += ".mdl"
-    index = install.build_index()
-    output_root = _export_v2_root(config, "characters")
-    anorms = mdl_skel.load_anorms()
-    try:
-        destination = character_glb.export(
-            index, normalized, output_root, anorms=anorms
-        )
-        summary = character_glb_validation.validate(destination)
-    except Exception as exc:
-        raise OfflineExportFailure(
-            f"character GLB export failed for {normalized}: {exc}"
-        ) from exc
-    print(
-        "character GLB: "
-        f"{summary['asset']} -> {destination} "
-        f"({summary['bones']} bones, {summary['lods']} LODs, "
-        f"{summary['animations']} animations)"
-    )
-    return destination
-
-
-def _character_glb_models(index: dict) -> list[str]:
-    """Every character MDL with an admitted VTX topology companion."""
-    models = []
-    for path in index:
-        if not path.startswith("models/character/") or not path.endswith(".mdl"):
-            continue
-        stem = path[:-4]
-        if stem + ".dx80.vtx" in index or stem + ".dx7_2bone.vtx" in index:
-            models.append(path)
-    return sorted(models)
-
-
-def _character_glb_one(index, model: str, output_root: Path, anorms) -> dict:
-    from elysium_pipeline.exporters import character_glb
-    from elysium_pipeline.validation import character_glb as character_glb_validation
-
-    try:
-        destination = character_glb.export(
-            index, model, output_root, anorms=anorms
-        )
-        summary = character_glb_validation.validate(destination)
-        return {
-            "item": model,
-            "destination": str(destination),
-            "summary": summary,
-            "error": "",
-        }
-    except Exception as exc:
-        return {
-            "item": model,
-            "destination": "",
-            "summary": None,
-            "error": f"{type(exc).__name__}: {exc}",
-        }
+    Every seam publishes a byte ledger, but not every summary lifts both totals out of it: some
+    report the accounted and source counts, some only the coverage percent they computed from
+    them, and a seam whose unit is cut from several members reports one percent per member. The
+    progress line prints whichever the seam gives it rather than demanding one shape.
+    """
+    accounted, source = summary.get("accountedBytes"), summary.get("sourceBytes")
+    if accounted is not None and source is not None:
+        return f" ({accounted}/{source} bytes)"
+    percent = summary.get("byteCoveragePercent")
+    if isinstance(percent, (int, float)):
+        return f" ({float(percent):.1f}% of source bytes)"
+    if isinstance(percent, (list, tuple)) and percent:
+        # One percent per member: the weakest is what a reader needs to see.
+        return f" ({min(float(value) for value in percent):.1f}% of source bytes)"
+    return ""
 
 
 def _print_glb_row(label: str, ordinal: int, total: int, row: dict) -> None:
@@ -1439,10 +1393,10 @@ def _print_glb_row(label: str, ordinal: int, total: int, row: dict) -> None:
     if row["error"]:
         print(f"! {label} [{ordinal}/{total}] failed for {item}: {row['error']}", flush=True)
         return
-    summary = row["summary"]
+    summary = row["summary"] or {}
     print(
-        f"{label} [{ordinal}/{total}]: {summary['asset']} -> "
-        f"{row['destination']} ({summary['accountedBytes']}/{summary['sourceBytes']} bytes)",
+        f"{label} [{ordinal}/{total}]: {summary.get('asset', item)} -> "
+        f"{row['destination']}{_glb_source_bytes(summary)}",
         flush=True,
     )
     for warning in row.get("warnings", ()):
@@ -1488,37 +1442,6 @@ def _run_glb_pool(label: str, worker, items: list[str], output_root: Path, jobs:
     return rows
 
 
-def export_all_character_glbs(config, runner, *, jobs=None) -> list[Path]:
-    """Write every admitted character through the isolated schema-1.1 GLB pipeline."""
-    del runner
-    _require_export_v2_config(config)
-    from elysium_pipeline.formats import install, mdl_skel
-
-    index = install.build_index()
-    models = _character_glb_models(index)
-    if not models:
-        raise OfflineExportFailure("character GLB corpus has no admitted models")
-    output_root = _export_v2_root(config, "characters")
-    jobs = max(1, default_jobs() if jobs is None else int(jobs))
-    jobs = min(jobs, len(models))
-    if jobs <= 1:
-        anorms = mdl_skel.load_anorms()
-        rows = []
-        for ordinal, model in enumerate(models, 1):
-            row = _character_glb_one(index, model, output_root, anorms)
-            rows.append(row)
-            _print_glb_row("character GLB", ordinal, len(models), row)
-    else:
-        rows = _run_glb_pool(
-            "character GLB",
-            workers.character_glb_worker,
-            models,
-            output_root,
-            jobs,
-        )
-    return _finalize_glb_corpus("character GLB", "models", rows, output_root)
-
-
 def export_texture_glb(config, runner, texture: str) -> Path:
     """Write and validate one isolated Texture GLB product."""
     del runner
@@ -1541,16 +1464,15 @@ def export_texture_glb(config, runner, texture: str) -> Path:
     )
     for warning in texture_glb_validation.warnings_for(summary):
         print(f"  warning: {texture}: {warning}")
+    refresh_corpus_index_row(config, destination)
     return destination
 
 
 def _texture_glb_sources(index: dict) -> list[str]:
-    prefix, suffix = "materials/", ".tth"
-    return sorted(
-        path[len(prefix):-len(suffix)]
-        for path in index
-        if path.startswith(prefix) and path.endswith(suffix)
-    )
+    """Every texture identity, from the seam's own selector."""
+    from elysium_pipeline.formats import texture_glb
+
+    return texture_glb.source_keys(index)
 
 
 def _texture_glb_one(index, texture: str, output_root: Path) -> dict:
@@ -1630,21 +1552,15 @@ def export_material_glb(config, runner, material: str) -> Path:
     )
     for warning in material_glb_validation.warnings_for(summary):
         print(f"  warning: {material}: {warning}")
+    refresh_corpus_index_row(config, destination)
     return destination
 
 
 def _material_glb_sources(index: dict) -> list[str]:
-    """Every VMT identity the engine can address.
+    """Every VMT identity the engine can address, from the seam's own selector."""
+    from elysium_pipeline.formats import material_glb
 
-    The engine composes `materials/<search path><name>.vmt`, so a VMT packed outside `materials/`
-    names no material and is not a unit.
-    """
-    prefix, suffix = "materials/", ".vmt"
-    return sorted(
-        path[len(prefix):-len(suffix)]
-        for path in index
-        if path.startswith(prefix) and path.endswith(suffix)
-    )
+    return material_glb.source_keys(index)
 
 
 def _material_glb_one(index, material: str, output_root: Path) -> dict:
@@ -1726,6 +1642,7 @@ def export_surface_property_glb(config, runner, name: str) -> Path:
     )
     for warning in surface_glb_validation.warnings_for(summary):
         print(f"  warning: {name}: {warning}")
+    refresh_corpus_index_row(config, destination)
     return destination
 
 
@@ -1780,13 +1697,654 @@ def export_all_surface_property_glbs(config, runner, *, jobs=None) -> list[Path]
     return _finalize_glb_corpus("surface-property GLB", "surfaces", rows, output_root)
 
 
-#: Every isolated GLB seam, in the order `export_v2 export-all` runs them. Each seam owns its own
-#: source selection and publishes under its own directory of the export_v2 root.
+# --- the uniform isolated-GLB seam ------------------------------------------------------------
+#
+# `seam_map_unit_contract.md` gives every unit kind one shape: one identity is one file, the
+# singular command writes one unit and the plural command writes every key the kind's own
+# `source_keys(index)` resolves, and the seam's own validator reads each published file back.
+# Only four facts differ per kind -- which module owns it, which family directory it publishes
+# below, which exported function writes one unit and which one lists the keys -- so those are
+# data here and the workflow is written once.
+
+
+@dataclass(frozen=True, slots=True)
+class GlbUnitSeam:
+    """One `export_v2` unit kind: where its code lives and where it publishes."""
+
+    #: The label every progress line carries, e.g. `vdata GLB`.
+    label: str
+    #: What a corpus line counts, e.g. `units`.
+    noun: str
+    #: The `exporters.<module>` / `validation.<module>` base name, e.g. `vdata_glb`.
+    module: str
+    #: The export_v2 subdirectory to publish below. Empty where the exporter's own
+    #: `output_relative_path` already names the family directory.
+    family: str = ""
+    #: The exporter attribute that writes one unit.
+    export_attr: str = "export"
+    #: The exporter attribute that lists every key of this kind.
+    keys_attr: str = "source_keys"
+    #: True where the kind is one single unit the install either has or has not, so its writer
+    #: takes no key: the font registry and the game-sound manifest.
+    keyless: bool = False
+
+
+def _glb_exporter(seam: GlbUnitSeam):
+    """The seam's writer module, imported after `config.apply_environment()` has run."""
+    return importlib.import_module("elysium_pipeline.exporters." + seam.module)
+
+
+def _glb_validation(seam: GlbUnitSeam):
+    """The seam's read-back validator, which shares no state with the writer."""
+    return importlib.import_module("elysium_pipeline.validation." + seam.module)
+
+
+def _glb_seam_root(config, seam: GlbUnitSeam) -> Path:
+    return config.export_v2_root if not seam.family else _export_v2_root(config, seam.family)
+
+
+def _glb_seam_keys(seam: GlbUnitSeam, index: dict) -> list[str]:
+    return list(getattr(_glb_exporter(seam), seam.keys_attr)(index))
+
+
+def _write_glb_unit(seam: GlbUnitSeam, index: dict, key: str, output_root: Path) -> Path:
+    write = getattr(_glb_exporter(seam), seam.export_attr)
+    if seam.keyless:
+        return write(index, output_root)
+    return write(index, key, output_root)
+
+
+def _glb_unit_row(seam: GlbUnitSeam, index: dict, key: str, output_root: Path) -> dict:
+    """Write and validate one unit. A failure is a row the corpus collects, not an exception."""
+    validation = _glb_validation(seam)
+    try:
+        destination = _write_glb_unit(seam, index, key, output_root)
+        summary = validation.validate(destination)
+        return {
+            "item": key,
+            "destination": str(destination),
+            "summary": summary,
+            "warnings": validation.warnings_for(summary),
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "item": key,
+            "destination": "",
+            "summary": None,
+            "warnings": [],
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def refresh_corpus_index_row(config, destination: Path) -> None:
+    """Bring the corpus index's `units[]` row for one just-published unit up to date.
+
+    The corpus index is "rewritten by any single-unit command so that its `units[]` row for that
+    unit is current" (`seam_map_corpus_index.md`, "Unit identity"), so every singular export ends
+    here. Before the first `export-all` there is no index and this does nothing; a refresh that
+    fails is reported and does not fail the export that already succeeded, because the unit on
+    disk is what the command was asked for.
+    """
+    if config.export_v2_root is None:
+        return
+    from elysium_pipeline.exporters import corpus_index_glb
+
+    try:
+        corpus_index_glb.refresh_unit(config.export_v2_root, destination)
+    except Exception as exc:                              # noqa: BLE001 - reported, not fatal
+        print(f"  warning: corpus index not refreshed for {destination}: {exc}")
+
+
+def export_glb_unit(config, runner, seam: GlbUnitSeam, key: str) -> Path:
+    """Write and validate one unit of `seam`.
+
+    The argument tolerates the kind's root prefix and its source extension because each seam's
+    own key normalisation folds them; this passes the argument through to it unchanged.
+    """
+    del runner  # These exporters are pure offline Python; kept for the public workflow signature.
+    _require_export_v2_config(config)
+    from elysium_pipeline.formats import install
+
+    index = install.build_index()
+    output_root = _glb_seam_root(config, seam)
+    validation = _glb_validation(seam)
+    try:
+        destination = _write_glb_unit(seam, index, key, output_root)
+        summary = validation.validate(destination)
+    except Exception as exc:
+        raise OfflineExportFailure(f"{seam.label} export failed for {key}: {exc}") from exc
+    print(
+        f"{seam.label}: {summary.get('asset', key)} -> {destination}"
+        f"{_glb_source_bytes(summary)}"
+    )
+    for warning in validation.warnings_for(summary):
+        print(f"  warning: {key}: {warning}")
+    refresh_corpus_index_row(config, destination)
+    return destination
+
+
+def export_all_glb_units(
+    config, runner, seam: GlbUnitSeam, *, jobs=None, worker=None, index=None
+) -> list[Path]:
+    """Write every key of `seam`; any incomplete unit fails the corpus.
+
+    `index` lets a seam that publishes several kinds out of one BSP or one table build the
+    install index once for all of them.
+    """
+    del runner
+    _require_export_v2_config(config)
+    from elysium_pipeline.formats import install
+
+    if index is None:
+        index = install.build_index()
+    try:
+        items = _glb_seam_keys(seam, index)
+    except Exception as exc:
+        raise OfflineExportFailure(f"{seam.label} corpus has no source: {exc}") from exc
+    if not items:
+        raise OfflineExportFailure(f"{seam.label} corpus has no {seam.noun}")
+    output_root = _glb_seam_root(config, seam)
+    jobs = max(1, default_jobs() if jobs is None else int(jobs))
+    jobs = min(jobs, len(items))
+    if worker is None or jobs <= 1:
+        rows = []
+        for ordinal, key in enumerate(items, 1):
+            row = _glb_unit_row(seam, index, key, output_root)
+            rows.append(row)
+            _print_glb_row(seam.label, ordinal, len(items), row)
+    else:
+        rows = _run_glb_pool(seam.label, worker, items, output_root, jobs)
+    return _finalize_glb_corpus(seam.label, seam.noun, rows, output_root)
+
+
+IMAGE_GLB = GlbUnitSeam("image GLB", "images", "image_glb", family="images")
+SOUND_GLB = GlbUnitSeam("sound GLB", "sounds", "sound_glb", family="sounds")
+EXPRESSION_TABLE_GLB = GlbUnitSeam("expression-table GLB", "tables", "expression_table_glb")
+SHADER_SOURCE_GLB = GlbUnitSeam(
+    "shader-source GLB",
+    "sources",
+    "shader_program_glb",
+    family="shader-programs",
+    export_attr="export_shader_source",
+    keys_attr="shader_source_source_keys",
+)
+SHADER_PROGRAM_GLB = GlbUnitSeam(
+    "shader-program GLB", "programs", "shader_program_glb", family="shader-programs"
+)
+PARTICLE_GLB = GlbUnitSeam("particle GLB", "particles", "particle_glb", family="particles")
+FONT_GLB = GlbUnitSeam("font GLB", "fonts", "font_glb", family="fonts")
+FONT_LIST_GLB = GlbUnitSeam(
+    "font-list GLB",
+    "registries",
+    "font_glb",
+    family="fonts",
+    export_attr="export_font_list",
+    keyless=True,
+)
+SOUND_SCRIPT_GLB = GlbUnitSeam(
+    "sound-script GLB",
+    "game sounds",
+    "sound_script_glb",
+    export_attr="export_game_sound",
+    keys_attr="game_sound_keys",
+)
+SOUND_SCRIPT_MANIFEST_GLB = GlbUnitSeam(
+    "sound-script-manifest GLB",
+    "manifests",
+    "sound_script_glb",
+    export_attr="export_manifest",
+    keys_attr="manifest_keys",
+    keyless=True,
+)
+SOUNDSCAPE_GLB = GlbUnitSeam(
+    "soundscape GLB",
+    "soundscapes",
+    "sound_script_glb",
+    export_attr="export_soundscape",
+    keys_attr="soundscape_keys",
+)
+SENTENCE_GLB = GlbUnitSeam(
+    "sentence GLB",
+    "sentences",
+    "sound_script_glb",
+    export_attr="export_sentence",
+    keys_attr="sentence_keys",
+)
+DSP_PRESET_GLB = GlbUnitSeam(
+    "dsp-preset GLB",
+    "presets",
+    "sound_script_glb",
+    export_attr="export_dsp_preset",
+    keys_attr="dsp_preset_keys",
+)
+SOUND_SCHEME_GLB = GlbUnitSeam(
+    "sound-scheme GLB", "schemes", "sound_scheme_glb", family="sound-schemes"
+)
+SCENE_GLB = GlbUnitSeam("scene GLB", "scenes", "scene_glb", family="scenes")
+MODEL_GLB = GlbUnitSeam("model GLB", "models", "model_glb", family="models")
+DIALOGUE_GLB = GlbUnitSeam("dialogue GLB", "dialogues", "dialogue_glb", family="dialogues")
+VDATA_GLB = GlbUnitSeam("vdata GLB", "units", "vdata_glb", family="vdata")
+UI_RESOURCE_GLB = GlbUnitSeam("ui-resource GLB", "resources", "ui_resource_glb")
+SCRIPT_GLB = GlbUnitSeam("script GLB", "scripts", "script_glb", family="scripts")
+MAP_GLB = GlbUnitSeam("map GLB", "maps", "map_glb")
+MAP_ENTITIES_GLB = GlbUnitSeam("map-entities GLB", "maps", "map_entities_glb")
+MAP_LIGHTING_GLB = GlbUnitSeam("map-lighting GLB", "maps", "map_lighting_glb")
+MAP_VISIBILITY_GLB = GlbUnitSeam("map-visibility GLB", "maps", "map_visibility_glb")
+NAV_GRAPH_GLB = GlbUnitSeam("nav-graph GLB", "graphs", "nav_graph_glb", family="nav-graphs")
+ENGINE_CONFIG_GLB = GlbUnitSeam(
+    "engine-config GLB", "configs", "engine_config_glb", family="engine-config"
+)
+
+
+def export_image_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Image GLB product."""
+    return export_glb_unit(config, runner, IMAGE_GLB, key)
+
+
+def export_all_image_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `.tga`/`.bmp` identity the UP-first index resolves."""
+    # 347 small images: a worker pool would spend more on rebuilding the install index per
+    # process than the whole decode costs, so this runs in the caller.
+    return export_all_glb_units(config, runner, IMAGE_GLB, jobs=jobs)
+
+
+def export_sound_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Sound GLB product."""
+    return export_glb_unit(config, runner, SOUND_GLB, key)
+
+
+def export_all_sound_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `.wav` and `.mp3` identity below `sound/`."""
+    return export_all_glb_units(
+        config, runner, SOUND_GLB, jobs=jobs, worker=workers.sound_glb_worker
+    )
+
+
+def export_expression_table_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Expression-table GLB product."""
+    return export_glb_unit(config, runner, EXPRESSION_TABLE_GLB, key)
+
+
+def export_all_expression_table_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every Faceposer expression table the install resolves below `expressions/`."""
+    return export_all_glb_units(config, runner, EXPRESSION_TABLE_GLB, jobs=jobs)
+
+
+def export_shader_source_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Shader-source GLB product."""
+    return export_glb_unit(config, runner, SHADER_SOURCE_GLB, key)
+
+
+def export_all_shader_source_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `materials/dxshaders/*.psh` identity."""
+    return export_all_glb_units(
+        config, runner, SHADER_SOURCE_GLB, jobs=jobs, worker=workers.shader_source_glb_worker
+    )
+
+
+def export_shader_program_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Shader-program GLB product."""
+    return export_glb_unit(config, runner, SHADER_PROGRAM_GLB, key)
+
+
+def export_all_shader_program_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `shaders/{psh,vsh,fxc}/*.vcs` identity."""
+    return export_all_glb_units(
+        config, runner, SHADER_PROGRAM_GLB, jobs=jobs, worker=workers.shader_program_glb_worker
+    )
+
+
+def export_particle_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Particle GLB product."""
+    return export_glb_unit(config, runner, PARTICLE_GLB, key)
+
+
+def export_all_particle_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every particle identity below `particles/`."""
+    return export_all_glb_units(config, runner, PARTICLE_GLB, jobs=jobs)
+
+
+def export_font_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Font GLB product."""
+    return export_glb_unit(config, runner, FONT_GLB, key)
+
+
+def export_font_list_glb(config, runner) -> Path:
+    """Write and validate the one `vtmb:font-list:fontlist` registry unit."""
+    return export_glb_unit(config, runner, FONT_LIST_GLB, "fontlist")
+
+
+def export_all_font_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `.fnt` identity plus the registry unit.
+
+    `font_glb.source_keys` appends the registry's sentinel key and `font_glb.export` recognises
+    it, so the registry publishes with the faces rather than needing a pass of its own.
+    """
+    return export_all_glb_units(
+        config, runner, FONT_GLB, jobs=jobs, worker=workers.font_glb_worker
+    )
+
+
+def export_sound_script_glb(config, runner, key: str) -> Path:
+    """Write and validate one named game-sound entry."""
+    return export_glb_unit(config, runner, SOUND_SCRIPT_GLB, key)
+
+
+def export_all_sound_script_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every game sound, the game-sound manifest and every soundscape.
+
+    `seam_map_sound_script.md` gives the manifest and the soundscapes no singular command of
+    their own; `sound-scripts-glb` is where those two kinds publish.
+    """
+    from elysium_pipeline.formats import install
+
+    # Before the index build, which costs a full install walk: an unconfigured root must fail
+    # in the second it takes to notice, not after the walk.
+    _require_export_v2_config(config)
+    index = install.build_index()
+    destinations = export_all_glb_units(
+        config, runner, SOUND_SCRIPT_GLB, jobs=jobs, index=index
+    )
+    destinations += export_all_glb_units(
+        config, runner, SOUND_SCRIPT_MANIFEST_GLB, jobs=jobs, index=index
+    )
+    destinations += export_all_glb_units(config, runner, SOUNDSCAPE_GLB, jobs=jobs, index=index)
+    return destinations
+
+
+def export_sentence_glb(config, runner, key: str) -> Path:
+    """Write and validate one named sentence entry."""
+    return export_glb_unit(config, runner, SENTENCE_GLB, key)
+
+
+def export_all_sentence_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every entry of `scripts/sentences.txt`."""
+    return export_all_glb_units(config, runner, SENTENCE_GLB, jobs=jobs)
+
+
+def export_dsp_preset_glb(config, runner, key: str) -> Path:
+    """Write and validate one numbered DSP preset."""
+    return export_glb_unit(config, runner, DSP_PRESET_GLB, key)
+
+
+def export_all_dsp_preset_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every entry of `scripts/dsp_presets.txt`."""
+    return export_all_glb_units(config, runner, DSP_PRESET_GLB, jobs=jobs)
+
+
+def export_sound_scheme_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Sound-scheme GLB product."""
+    return export_glb_unit(config, runner, SOUND_SCHEME_GLB, key)
+
+
+def export_all_sound_scheme_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `sound/schemes/*.txt` identity."""
+    return export_all_glb_units(
+        config, runner, SOUND_SCHEME_GLB, jobs=jobs, worker=workers.sound_scheme_glb_worker
+    )
+
+
+def export_scene_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Scene GLB product."""
+    return export_glb_unit(config, runner, SCENE_GLB, key)
+
+
+def export_all_scene_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `.vcd` choreography identity below `sound/`."""
+    return export_all_glb_units(
+        config, runner, SCENE_GLB, jobs=jobs, worker=workers.scene_glb_worker
+    )
+
+
+def export_model_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Model GLB product."""
+    return export_glb_unit(config, runner, MODEL_GLB, key)
+
+
+def export_all_model_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `models/**.mdl` identity the UP-first index resolves."""
+    return export_all_glb_units(
+        config, runner, MODEL_GLB, jobs=jobs, worker=workers.model_glb_worker
+    )
+
+
+def export_dialogue_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Dialogue GLB product."""
+    return export_glb_unit(config, runner, DIALOGUE_GLB, key)
+
+
+def export_all_dialogue_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `dlg/**.dlg` identity."""
+    return export_all_glb_units(
+        config, runner, DIALOGUE_GLB, jobs=jobs, worker=workers.dialogue_glb_worker
+    )
+
+
+def export_vdata_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Vdata GLB product."""
+    return export_glb_unit(config, runner, VDATA_GLB, key)
+
+
+def export_all_vdata_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `vdata/<subtree>/<name>.txt` identity."""
+    return export_all_glb_units(
+        config, runner, VDATA_GLB, jobs=jobs, worker=workers.vdata_glb_worker
+    )
+
+
+def export_ui_resource_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated UI-resource GLB product."""
+    return export_glb_unit(config, runner, UI_RESOURCE_GLB, key)
+
+
+def export_all_ui_resource_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every UI-resource identity the seam admits."""
+    return export_all_glb_units(
+        config, runner, UI_RESOURCE_GLB, jobs=jobs, worker=workers.ui_resource_glb_worker
+    )
+
+
+def export_script_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Script GLB product."""
+    return export_glb_unit(config, runner, SCRIPT_GLB, key)
+
+
+def export_all_script_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `python/**.py` and `.pyc` identity."""
+    return export_all_glb_units(config, runner, SCRIPT_GLB, jobs=jobs)
+
+
+#: The four units one BSP is cut into: the root and its three lump-family sub-units. They share
+#: one member and one partition proof, so `map-glb <map>` publishes all four.
+MAP_GLB_UNITS = (MAP_GLB, MAP_ENTITIES_GLB, MAP_LIGHTING_GLB, MAP_VISIBILITY_GLB)
+
+#: One worker per map unit, in `MAP_GLB_UNITS` order. All four re-read the same multi-megabyte
+#: BSP, so all four are worth a process.
+MAP_GLB_WORKERS = (
+    workers.map_glb_worker,
+    workers.map_entities_glb_worker,
+    workers.map_lighting_glb_worker,
+    workers.map_visibility_glb_worker,
+)
+
+
+def export_map_glb(config, runner, key: str) -> list[Path]:
+    """Publish all four units of one BSP: the root plus entities, lighting and visibility."""
+    return [export_glb_unit(config, runner, seam, key) for seam in MAP_GLB_UNITS]
+
+
+def export_all_map_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Publish all four units of every map the UP-first index resolves."""
+    from elysium_pipeline.formats import install
+
+    # Before the index build, for the same reason `export_all_sound_script_glbs` does it.
+    _require_export_v2_config(config)
+    index = install.build_index()
+    destinations: list[Path] = []
+    for seam, worker in zip(MAP_GLB_UNITS, MAP_GLB_WORKERS):
+        destinations += export_all_glb_units(
+            config, runner, seam, jobs=jobs, worker=worker, index=index
+        )
+    return destinations
+
+
+def export_map_entities_glb(config, runner, key: str) -> Path:
+    """Write and validate one map's entity-lump unit."""
+    return export_glb_unit(config, runner, MAP_ENTITIES_GLB, key)
+
+
+def export_all_map_entities_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every map's entity-lump unit."""
+    return export_all_glb_units(
+        config, runner, MAP_ENTITIES_GLB, jobs=jobs, worker=workers.map_entities_glb_worker
+    )
+
+
+def export_map_lighting_glb(config, runner, key: str) -> Path:
+    """Write and validate one map's lighting unit."""
+    return export_glb_unit(config, runner, MAP_LIGHTING_GLB, key)
+
+
+def export_all_map_lighting_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every map's lighting unit."""
+    return export_all_glb_units(
+        config, runner, MAP_LIGHTING_GLB, jobs=jobs, worker=workers.map_lighting_glb_worker
+    )
+
+
+def export_map_visibility_glb(config, runner, key: str) -> Path:
+    """Write and validate one map's visibility unit."""
+    return export_glb_unit(config, runner, MAP_VISIBILITY_GLB, key)
+
+
+def export_all_map_visibility_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every map's visibility unit."""
+    return export_all_glb_units(
+        config, runner, MAP_VISIBILITY_GLB, jobs=jobs, worker=workers.map_visibility_glb_worker
+    )
+
+
+def export_nav_graph_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Nav-graph GLB product."""
+    return export_glb_unit(config, runner, NAV_GRAPH_GLB, key)
+
+
+def export_all_nav_graph_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every `maps/graphs/*.ain` identity."""
+    return export_all_glb_units(
+        config, runner, NAV_GRAPH_GLB, jobs=jobs, worker=workers.nav_graph_glb_worker
+    )
+
+
+def export_engine_config_glb(config, runner, key: str) -> Path:
+    """Write and validate one isolated Engine-config GLB product."""
+    return export_glb_unit(config, runner, ENGINE_CONFIG_GLB, key)
+
+
+def export_all_engine_config_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """Write every engine-configuration identity the seam admits."""
+    return export_all_glb_units(
+        config, runner, ENGINE_CONFIG_GLB, jobs=jobs, worker=workers.engine_config_glb_worker
+    )
+
+
+def export_corpus_index_glb(config, runner) -> Path:
+    """Write and validate the one corpus index of the export root.
+
+    The index is a product over other products: it walks the whole merged install, states which
+    unit owns every member or why nothing does, and carries the cross-unit reference graph over
+    every unit already published below `$ELYSIUM_EXPORT_V2_ROOT`. It fails while any member is
+    unclaimed or any cross-unit check fails, which is the mechanical form of "no data left
+    undecoded" (`seam_map_corpus_index.md`, "The guarantee").
+    """
+    del runner
+    _require_export_v2_config(config)
+    from elysium_pipeline.exporters import corpus_index_glb
+    from elysium_pipeline.formats.corpus_index_glb import walk as corpus_walk
+    from elysium_pipeline.validation import corpus_index_glb as corpus_index_validation
+
+    output_root = config.export_v2_root
+    try:
+        walk = corpus_walk.collect()
+        destination = corpus_index_glb.export(walk, output_root)
+        summary = corpus_index_validation.validate(destination)
+    except Exception as exc:
+        raise OfflineExportFailure(f"corpus-index GLB export failed: {exc}") from exc
+    if summary["failedChecks"]:
+        raise OfflineExportFailure(
+            "corpus-index GLB export failed: cross-unit check(s) "
+            + ", ".join(summary["failedChecks"])
+        )
+    counts = summary["byDisposition"]
+    print(
+        f"corpus-index GLB: {summary['asset']} -> {destination} "
+        f"({summary['members']} members, {counts['unit']} unit, {counts['companion']} companion, "
+        f"{counts['residue']} residue, {counts['unclaimed']} unclaimed; "
+        f"{summary['units']} units, {summary['references']} references)"
+    )
+    for warning in corpus_index_validation.warnings_for(summary):
+        print(f"  warning: corpus-index: {warning}")
+    return destination
+
+
+def export_all_corpus_index_glbs(config, runner, *, jobs=None) -> list[Path]:
+    """The corpus-index seam as `export-all` runs it: one unit, so no pool and no jobs."""
+    del jobs
+    return [export_corpus_index_glb(config, runner)]
+
+
+def _glb_seam_of(*corpora):
+    """One `GLB_SEAMS` entry that runs several plural commands as one seam.
+
+    A kind whose command surface is split across more than one plural -- the sound-script tables,
+    the two shader kinds -- is still one seam of the corpus, and `export-all` runs it as one.
+    """
+
+    def run(config, runner, *, jobs=None) -> list[Path]:
+        destinations: list[Path] = []
+        for corpus in corpora:
+            destinations += corpus(config, runner, jobs=jobs)
+        return destinations
+
+    return run
+
+
+#: Every isolated GLB seam, in the order `export_v2 export-all` runs them. The order is a
+#: convenience, not a guarantee: the reference graph has edges in both directions (a surface
+#: property names sound scripts, a script names maps), so no run order makes every reference
+#: already published when it is written. What the order does guarantee is that corpus-index runs
+#: last, over the whole published corpus. Each seam resolves its own references against the
+#: UP-first install index rather than against what earlier seams wrote, so each is independent.
+#: Each seam owns its own source selection and publishes under its own directory of the export_v2
+#: root.
 GLB_SEAMS = (
     ("texture", export_all_texture_glbs),
     ("surface-property", export_all_surface_property_glbs),
     ("material", export_all_material_glbs),
-    ("character", export_all_character_glbs),
+    ("image", export_all_image_glbs),
+    ("sound", export_all_sound_glbs),
+    ("expression-table", export_all_expression_table_glbs),
+    ("shader-program", _glb_seam_of(
+        export_all_shader_source_glbs, export_all_shader_program_glbs)),
+    ("particle", export_all_particle_glbs),
+    ("font", export_all_font_glbs),
+    ("sound-script", _glb_seam_of(
+        export_all_sound_script_glbs, export_all_sentence_glbs, export_all_dsp_preset_glbs)),
+    ("sound-scheme", export_all_sound_scheme_glbs),
+    ("scene", export_all_scene_glbs),
+    ("model", export_all_model_glbs),
+    ("dialogue", export_all_dialogue_glbs),
+    ("vdata", export_all_vdata_glbs),
+    ("ui-resource", export_all_ui_resource_glbs),
+    ("script", export_all_script_glbs),
+    ("map", export_all_map_glbs),
+    ("nav-graph", export_all_nav_graph_glbs),
+    ("engine-config", export_all_engine_config_glbs),
+    # Last, and last for a reason: the corpus index is written over the published corpus, so
+    # every seam above has to have run before it can name what it indexes
+    # (`seam_map_corpus_index.md`, "Unit identity").
+    ("corpus-index", export_all_corpus_index_glbs),
 )
 
 

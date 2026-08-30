@@ -31,8 +31,13 @@ PATCH = os.path.join(GAME_ROOT, "Unofficial_Patch")  # the loose search path
 # patch/add-on roots.
 LOOSE_ROOTS = [PATCH]
 
-# The trees the converters read from, so the walk stays cheap. The patch also
-# ships cfg/save/sound/python/dlg; nothing indexes those through here yet.
+# The whole install below each search root, walked as one tree: the engine searches the install,
+# not a subset of it, so a loose member below `sound/`, `python/`, `dlg/` or `cfg/` shadows its
+# VPK member for every reader, exactly as `origin.SOURCE_POLICY` states. `build_index` defaults
+# to this, and the corpus index's own walk covers the same keys.
+WHOLE_INSTALL = ("",)
+
+# The narrow asset subset, for a caller that wants only the trees its converter reads.
 ASSET_DIRS = ("materials", "models", "maps", "resource", "particles", "scripts", "vdata")
 #: Directories below `maps/` the retail engine writes at run time; never pipeline inputs.
 RUNTIME_CACHE_DIRS = frozenset({"graphs", "soundcache"})
@@ -45,7 +50,7 @@ _INDEX_LOCK = threading.Lock()
 _INDEX_CACHE = {}
 
 
-def build_index(dirs=ASSET_DIRS, verbose=True):
+def build_index(dirs=WHOLE_INSTALL, verbose=True):
     """Index the install the way the engine searches it: loose files shadow VPKs.
 
     Memoized for the process, keyed on the search roots and `dirs`: a repeat call with
@@ -81,6 +86,8 @@ def _build_index(dirs):
                 for fn in files:
                     p = os.path.join(dirpath, fn)
                     rel = os.path.relpath(p, root).replace("\\", "/").lower()
+                    if "/" not in rel and rel.startswith("pack") and rel.endswith(".vpk"):
+                        continue          # the container is the source of its members, not one
                     if rel in idx:
                         shadowed += 1
                     else:

@@ -2,12 +2,10 @@
 
 Every seam names its neighbours with a `vtmb:<kind>:<path>` string and nothing else --
 there is no index and no path baked into any GLB. Resolution is therefore pure string
-work plus a corpus root, but three irregularities make a naive rule wrong:
+work plus a corpus root, but two irregularities make a naive rule wrong:
 
-* an animation bank lives under `characters/`, not an `animation-banks/` directory of
-  its own, because the banks are exported through the character exporter;
-* a material names its surface property with a bare name (`glass`) while a character
-  names the same thing `vtmb:surface-property:glass`;
+* a material names its surface property with a bare name (`glass`) while a model names
+  the same thing `vtmb:surface-property:glass`;
 * some identities deliberately name nothing at all.
 
 Lookups key on the full relative path from the identity. The corpus holds 1189
@@ -22,22 +20,21 @@ from pathlib import Path
 
 PREFIX = "vtmb:"
 
-#: Identity kind -> the corpus directory its product lives in.
+#: Identity kind -> the corpus directory its product lives in, for the families this
+#: reviewer opens. The export publishes more families than these; a kind absent here is
+#: counted as outside the corpus rather than checked, so the reviewer never claims a
+#: reference is missing on the strength of a directory it does not read.
 SEAM_DIRECTORY = {
     "material": "materials",
     "texture": "textures",
     "surface-property": "surface-properties",
-    "character-body": "characters",
-    "animation-bank": "characters",
+    "model": "models",
 }
-
-#: Kinds that name a real thing but have no exported product to open.
-UNRESOLVABLE_KINDS = frozenset({"missing-material", "sound", "sound-script", "effect"})
 
 #: `asset.generator` is written by exactly one exporter per seam, so it identifies a
 #: file's seam without guessing from its path.
 GENERATOR_SEAM = {
-    "Elysium Character GLB Exporter": "characters",
+    "Elysium Model GLB Exporter": "models",
     "Elysium Material GLB Exporter": "materials",
     "Elysium Texture GLB Exporter": "textures",
     "Elysium Surface-property GLB Exporter": "surface-properties",
@@ -54,11 +51,12 @@ class AssetId:
 
     @property
     def resolvable(self) -> bool:
-        """Whether an exported product is expected to exist for this identity.
+        """Whether this reviewer can open an exported product for this identity.
 
-        False is a statement about the seam's design, not about a broken export. A
-        `vtmb:missing-material:` sentinel names a studio texture that resolves to no
-        VMT; the engine draws its error checker and so should the reviewer.
+        False covers two cases: an identity that names no product by design -- a
+        `vtmb:missing-material:` sentinel names a studio texture that resolves to no VMT,
+        and the engine draws its error checker as should the reviewer -- and a kind whose
+        family this reviewer does not index (`SEAM_DIRECTORY`).
         """
         return self.kind in SEAM_DIRECTORY
 
@@ -106,7 +104,7 @@ def resolve(identity: str | AssetId, root: str | Path) -> Path | None:
 def surface_property_id(name: str) -> str:
     """Build the identity a bare `$surfaceprop` value refers to.
 
-    Materials write the bare name; characters write the full identity. Both mean the
+    Materials write the bare name; models write the full identity. Both mean the
     same unit under `surface-properties/`.
     """
     return f"{PREFIX}surface-property:{name.strip().lower()}"

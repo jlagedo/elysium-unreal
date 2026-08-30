@@ -1,0 +1,66 @@
+"""The Model GLB seam: one `models/**.mdl` decoded into one inspectable unit."""
+
+from elysium_pipeline.formats.model_glb.coverage import (
+    ModelByteCoverageError,
+    ModelLedger,
+    cover_closure,
+    cover_mdl,
+    cover_phy,
+    cover_vtx,
+)
+from elysium_pipeline.formats.model_glb.decode import ModelDecodeError, decode_model
+from elysium_pipeline.formats.model_glb.model import (
+    COORDINATE_TRANSFORM,
+    KIND,
+    MODEL_EXTENSION,
+    SCHEMA_VERSION,
+    SHAPE_BANK,
+    SHAPE_SKELETAL,
+    SHAPE_STATIC,
+    ModelIdentityError,
+    ModelUnit,
+    asset_id,
+    family_of,
+    normalize_model_key,
+    output_relative_path,
+    shape_of,
+    source_path,
+)
+from elysium_pipeline.formats.model_glb.source import (
+    ModelSourceClosure,
+    ModelSourceError,
+    load_source_closure,
+    source_keys,
+    surface_property_names,
+)
+
+__all__ = [
+    "COORDINATE_TRANSFORM",
+    "KIND",
+    "MODEL_EXTENSION",
+    "SCHEMA_VERSION",
+    "SHAPE_BANK",
+    "SHAPE_SKELETAL",
+    "SHAPE_STATIC",
+    "ModelByteCoverageError",
+    "ModelDecodeError",
+    "ModelIdentityError",
+    "ModelLedger",
+    "ModelSourceClosure",
+    "ModelSourceError",
+    "ModelUnit",
+    "asset_id",
+    "cover_closure",
+    "cover_mdl",
+    "cover_phy",
+    "cover_vtx",
+    "decode_model",
+    "family_of",
+    "load_source_closure",
+    "normalize_model_key",
+    "output_relative_path",
+    "shape_of",
+    "source_keys",
+    "source_path",
+    "surface_property_names",
+]

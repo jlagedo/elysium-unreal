@@ -20,6 +20,7 @@ from elysium_pipeline.formats.surface_property_glb.model import (
     sound_asset_id,
     sound_script_asset_id,
 )
+from elysium_pipeline.formats.unit_contract import dependency
 
 
 class SurfacePropertyDecodeError(RuntimeError):
@@ -78,12 +79,13 @@ def decode_surface_property(
     *,
     base_exists: Callable[[str], bool] | None = None,
     sound_script_exists: Callable[[str], bool] | None = None,
+    sound_exists: Callable[[str], bool] | None = None,
 ) -> SurfacePropertyModel:
     """The complete surface-property unit for one source closure.
 
-    `base_exists` and `sound_script_exists` answer whether a named target is present in the
-    install. Without them a reference publishes unresolved rather than asserting a target this
-    decode never looked for.
+    `base_exists`, `sound_script_exists` and `sound_exists` answer whether a named target is
+    present in the install. Without them a reference publishes unresolved rather than asserting a
+    target this decode never looked for.
     """
 
     member = closure.entry
@@ -148,11 +150,28 @@ def decode_surface_property(
     dependencies: list[dict[str, Any]] = []
     seen_assets: set[str] = set()
 
-    def depend(role: str, asset: str, source_path: str) -> None:
+    def depend(role: str, asset: str, source_path: str, resolved: bool) -> None:
+        # Every row states its resolution, because the unit contract's dependency row does: the
+        # corpus index reads `resolved` to tell a reference the install answers from one it does
+        # not, and a row that omits the key would read as unresolved.
         if asset in seen_assets:
             return
         seen_assets.add(asset)
-        dependencies.append({"role": role, "asset": asset, "sourcePath": source_path})
+        dependencies.append(dependency(role, asset, source_path, resolved))
+
+    def sound_resolves(value: str) -> bool:
+        """Whether the install ships the `.wav` a footstep or impact key names.
+
+        The value is authored relative to `sound/`, which is where the sound seam keys its
+        units from.
+        """
+
+        if sound_exists is None:
+            return False
+        key = value.replace("\\", "/").strip().strip('"').lower().strip("/")
+        while "//" in key:
+            key = key.replace("//", "/")
+        return bool(key) and bool(sound_exists(f"sound/{key}"))
 
     def scalar(target: dict[str, Any], field: str, parameter: Parameter, value: Any) -> None:
         # KeyValues resolves a repeated scalar to its last value; a variation pool is a property
@@ -193,7 +212,7 @@ def decode_surface_property(
                 "resolved": present,
                 "parameter": parameter.index,
             }
-            depend("surface-property", base["asset"], f"{TABLE_PATH}#{name}")
+            depend("surface-property", base["asset"], f"{TABLE_PATH}#{name}", present)
             if base_exists is not None and not present:
                 unresolved.append(
                     {"path": "base", "name": name, "reason": "base-names-no-defined-surface"}
@@ -222,16 +241,16 @@ def decode_surface_property(
         elif key in FOOTSTEP_KEYS:
             record = sound_record(parameter)
             footsteps.setdefault(FOOTSTEP_KEYS[key], []).append(record)
-            depend("sound", record["asset"], parameter.value)
+            depend("sound", record["asset"], parameter.value, sound_resolves(parameter.value))
         elif key in IMPACT_KEYS:
             weapon, outcome = IMPACT_KEYS[key]
             record = sound_record(parameter)
             impacts.setdefault(weapon, {}).setdefault(outcome, []).append(record)
-            depend("sound", record["asset"], parameter.value)
+            depend("sound", record["asset"], parameter.value, sound_resolves(parameter.value))
         elif key == LEGACY_IMPACT_KEY:
             record = sound_record(parameter)
             impacts.setdefault("legacy", []).append(record)
-            depend("sound", record["asset"], parameter.value)
+            depend("sound", record["asset"], parameter.value, sound_resolves(parameter.value))
         elif key in SOUND_SCRIPT_KEYS:
             name = raw.strip('"')
             resolved = (
@@ -244,7 +263,7 @@ def decode_surface_property(
                 "parameter": parameter.index,
             }
             sounds.setdefault(key, []).append(record)
-            depend("sound-script", record["asset"], name)
+            depend("sound-script", record["asset"], name, resolved)
         elif key == GAME_MATERIAL_KEY:
             if not raw:
                 unsupported.append(

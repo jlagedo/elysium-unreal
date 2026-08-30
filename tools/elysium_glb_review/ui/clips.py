@@ -12,6 +12,7 @@ from bpy.props import BoolProperty, CollectionProperty, IntProperty, StringPrope
 
 from .. import prefs
 from ..adapters import animation, pose
+from ..core import seams
 
 #: Clip names of the highlighted bank, read on demand and kept until it changes.
 _clips: dict = {}
@@ -123,7 +124,7 @@ class ELYSIUM_OT_scan_banks(bpy.types.Operator):
         window.cursor_set("WAIT")
         try:
             closure = animation.closure_of(
-                {"extensions": {"ELYSIUM_vtmb_character": payload}}, root
+                {"extensions": {seams.MODEL_EXTENSION: payload}}, root
             )
         finally:
             window.cursor_set("DEFAULT")

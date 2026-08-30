@@ -19,6 +19,23 @@ class MaterialSourceError(RuntimeError):
     """The selected material source is absent or incoherent."""
 
 
+def source_keys(index: dict) -> list[str]:
+    """Every VMT identity the engine can address, in key order.
+
+    The engine composes `materials/<search path><name>.vmt`, so a VMT packed outside `materials/`
+    names no material and is not a unit. This is the one selection rule: the plural export
+    command and the corpus index's member dispositions both call it, so neither can drift from
+    the other.
+    """
+
+    prefix, suffix = "materials/", ".vmt"
+    return sorted(
+        path[len(prefix):-len(suffix)]
+        for path in index
+        if path.startswith(prefix) and path.endswith(suffix)
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class SourceMember:
     role: str

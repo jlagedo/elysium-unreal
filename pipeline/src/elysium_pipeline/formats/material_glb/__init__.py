@@ -23,6 +23,7 @@ from elysium_pipeline.formats.material_glb.source import (
     MaterialSourceError,
     SourceMember,
     load_source_closure,
+    source_keys,
 )
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     "load_source_closure",
     "normalize_material_path",
     "output_relative_path",
+    "source_keys",
     "surface_property_asset_id",
     "texture_asset_id",
 ]

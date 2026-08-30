@@ -1,12 +1,12 @@
-"""Animation-bank closure.
+"""Include-model closure.
 
-A character body carries only its own clips and names its animation banks by identity.
-That name is not the whole story: banks include other banks, and several of the ones a
-body names directly are include-stubs holding no clips at all. blood_doll declares one
-bank; the clips actually reachable from it live across sixteen files.
+A model unit carries only its own clips and names the models it includes by identity.
+That name is not the whole story: an included model includes others in turn, and several
+of the ones a body names directly are include-stubs holding no clips at all. blood_doll
+declares one; the clips actually reachable from it live across sixteen files.
 
 The closure is therefore a graph walk, and it is expensive: across the 285 bodies that
-declare banks the median closure is 35 files, 1782 clips and 275 MB. Nothing here loads
+declare includes the median closure is 35 files, 1782 clips and 275 MB. Nothing here loads
 a clip. The walk exists so a caller can show the closure and let a reviewer choose,
 because importing it wholesale would take minutes and bury bpy.data.actions.
 """
@@ -18,7 +18,8 @@ from pathlib import Path
 
 from . import glb, ids, seams
 
-BANK_ROLE = "animation-bank"
+#: The dependency role a model unit gives every model it includes.
+BANK_ROLE = "model"
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,7 @@ def _inspect(identity: str, root: Path, depth: int) -> BankNode:
         return BankNode(identity, path or Path(), False, 0, 0, (), depth)
 
     document = glb.read_json(path)
-    payload = seams.root_extension(document, seams.CHARACTER_EXTENSION) or {}
+    payload = seams.root_extension(document, seams.MODEL_EXTENSION) or {}
     children = tuple(
         reference.identity
         for reference in seams.dependencies(payload)
@@ -90,14 +91,14 @@ def _inspect(identity: str, root: Path, depth: int) -> BankNode:
 
 
 def closure(document: dict, root: str | Path, *, max_depth: int = 16) -> Closure:
-    """Walk every bank reachable from a loaded character document.
+    """Walk every included model reachable from a loaded model document.
 
     Breadth-first so a node's recorded depth is its shortest distance from the body.
     Visited identities are skipped, which makes the walk safe on the cycles the include
     graph contains.
     """
     root = Path(root)
-    payload = seams.root_extension(document, seams.CHARACTER_EXTENSION) or {}
+    payload = seams.root_extension(document, seams.MODEL_EXTENSION) or {}
     identity = seams.asset_id(document) or "<unknown>"
 
     queue = [
@@ -142,7 +143,7 @@ def bone_names(document: dict) -> tuple[str, ...]:
     Bank and body declare their own bone tables, so indices do not correspond; a bank's
     bones are a subset of the body's, with names equal. Retargeting matches on name.
     """
-    payload = seams.root_extension(document, seams.CHARACTER_EXTENSION) or {}
+    payload = seams.root_extension(document, seams.MODEL_EXTENSION) or {}
     bones = (payload.get("mdl") or {}).get("bones") or []
     return tuple(bone.get("name", "") for bone in bones)
 
@@ -153,8 +154,8 @@ def bone_remaps(document: dict) -> dict[str, list[dict]]:
     This is the exporter's authoritative record of how a body's bones map onto a bank's,
     and is more trustworthy than assuming the two tables line up.
     """
-    payload = seams.root_extension(document, seams.CHARACTER_EXTENSION) or {}
-    includes = ((payload.get("mdl") or {}).get("header") or {}).get("includeModels") or []
+    payload = seams.root_extension(document, seams.MODEL_EXTENSION) or {}
+    includes = (payload.get("mdl") or {}).get("includeModels") or []
     return {
         entry.get("path", ""): entry.get("boneRemap") or []
         for entry in includes

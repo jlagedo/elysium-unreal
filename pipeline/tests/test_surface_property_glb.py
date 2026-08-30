@@ -153,6 +153,7 @@ def test_base_resolves_against_the_table_and_names_a_dependency():
         "role": "surface-property",
         "asset": "vtmb:surface-property:default",
         "sourcePath": "scripts/surfaceproperties.txt#default",
+        "resolved": True,
     } in model.dependencies
     assert model.unresolved == []
 
@@ -161,6 +162,19 @@ def test_a_base_no_entry_defines_leaves_the_unit_incomplete():
     table = _table()
     model = decode_surface_property(table.closure("flesh"), base_exists=lambda name: False)
     assert [row["reason"] for row in model.unresolved] == ["base-names-no-defined-surface"]
+
+
+def test_a_sound_dependency_states_whether_the_install_ships_the_wave():
+    table = _table()
+    shipped = decode_surface_property(
+        table.closure("flesh"),
+        base_exists=lambda candidate: candidate in table.spans,
+        sound_exists=lambda key: key == "sound/surfaces/legacy.wav",
+    )
+    rows = {row["asset"]: row["resolved"] for row in shipped.dependencies}
+    assert rows["vtmb:sound:surfaces/legacy.wav"] is True
+    # Without a resolver the decode looked for nothing, so it asserts nothing resolved.
+    assert _decode("flesh").dependencies[-1]["resolved"] is False
 
 
 def test_a_sound_script_absent_from_the_install_publishes_unresolved():
