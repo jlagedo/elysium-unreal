@@ -228,7 +228,7 @@ The JSON chunk declares two custom namespaces, both used and both required:
   ],
   "extensions": {
     "ELYSIUM_vtmb_character": {
-      "schemaVersion": "1.1.0",
+      "schemaVersion": "1.2.0",
       "identity": {},
       "sourceResolution": {},
       "coordinateTransform": {},
@@ -388,9 +388,11 @@ Each MDL-local animation becomes one `animations` entry named `<index>:<name>`. 
 entry share one `SCALAR` input accessor holding `frame / fps` seconds. A bone whose per-animation
 weight is zero contributes no channel; every other bone contributes two `LINEAR` samplers and two
 channels, `translation` (`VEC3`) and `rotation` (`VEC4`), targeting that bone's joint node. The
-poses are decoded parent-relative locals, so an ordinary glTF consumer plays the clip with no VtMB
-rule applied. `mdl.localAnimations[]` carries the VtMB-side record for each clip and its
-`animation` index into the core array.
+poses are decoded parent-relative locals for every bone except those listed in
+`mdl.splitRotationBones`, whose rotation channel states the bone's model-space orientation while its
+translation stays attached to the parent; a consumer applies the rule in
+`docs/vtmb/animation_and_movers.md` §A.4a to those bones. `mdl.localAnimations[]` carries the
+VtMB-side record for each clip and its `animation` index into the core array.
 
 ### Physics
 
@@ -403,11 +405,11 @@ the trailing key-value text stay as extension records.
 
 | Root key | Kind | Contents |
 |---|---|---|
-| `schemaVersion` | string | `1.1.0` |
+| `schemaVersion` | string | `1.2.0` |
 | `identity` | object | `asset` (stable body ID), `modelPath`, `sourcePolicy` |
 | `sourceResolution` | object | `policy`, and `members[]` of `role`, `path`, `origin`, `byteLength`, `sha256` |
 | `coordinateTransform` | object | the source-to-glTF rule and its per-domain table |
-| `mdl` | object | `header`, `bones[]`, `localAnimations[]`, `sequences[]`, `poseParameters[]`, `attachments[]`, `hitboxSets[]`, `ikChains[]` |
+| `mdl` | object | `header`, `bones[]`, `splitRotationBones[]`, `localAnimations[]`, `sequences[]`, `poseParameters[]`, `attachments[]`, `hitboxSets[]`, `ikChains[]` |
 | `vtx` | object | `variants[]`, `comparison`, `lods[]` |
 | `physics` | object or null | `header`, `coordinateSystem`, `solids[]`, `editParams[]`, `constraints[]`, `breaks[]`, `keyValues[]` |
 | `materialBindings` | object | `slots[]` and `skinFamilies[]` |
@@ -469,7 +471,7 @@ A complete character GLB has zero `unresolved` and zero `unsupported` rows. Ever
 family, record identity, and reference edge is present in the ledger. Unknown typed values retain
 their source-offset identity.
 
-Schema `1.1.0` additionally requires `coverage.byteLedger`, one row for every direct source member
+Schema `1.2.0` additionally requires `coverage.byteLedger`, one row for every direct source member
 listed by `sourceResolution.members`:
 
 | Field | Meaning |

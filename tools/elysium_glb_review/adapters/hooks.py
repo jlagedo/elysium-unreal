@@ -6,11 +6,12 @@ is the whole reason the add-on exists as an importer extension rather than a pan
 importer whitelists a custom extension only when the declaration says `required=True`,
 and an extension declared `required=False` unlocks nothing.
 
-The hooks then do two things the rest of the tool depends on. They capture each unit's
+The hooks then do three things the rest of the tool depends on. They capture each unit's
 extension payload while the importer still has the parsed document in hand, so no panel
-ever has to re-read a 35 MB JSON chunk to answer a question. And they filter the
-animation list before any Action is built, which is the only way to open a bank whose
-clip closure runs to four figures.
+ever has to re-read a 35 MB JSON chunk to answer a question. They filter the animation
+list before any Action is built, which is the only way to open a bank whose clip closure
+runs to four figures. And once the clips exist they hand them to `pose`, which is where
+the split-rotation bones stop being posed by ordinary FK.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ import bpy
 from io_scene_gltf2.io.com.gltf2_io_extensions import Extension
 
 from ..core import seams
+from . import pose
 
 #: Object custom property holding the character payload of the body a node belongs to.
 CHARACTER_PROPERTY = "elysium_vtmb_character"
@@ -40,16 +42,26 @@ class ImportState:
 
     #: Clip names to keep, or None to keep everything the file declares.
     wanted_clips: set[str] | None = None
+    #: Whether this import poses its own split-rotation bones. A bank import defers: its
+    #: clips are rebound to a body, and it is that body's skeleton they must agree with.
+    poses_split_rotation: bool = True
     #: Root extension payload of the most recent import, by extension name.
     last_document_extensions: dict = {}
     #: Filepath of the most recent import.
     last_filepath: str = ""
+    #: Armature objects the running import created.
+    armatures: list = []
+    #: Actions that existed before it started, so the ones it built can be told apart.
+    previous_actions: set = set()
 
     @classmethod
     def reset(cls) -> None:
         cls.wanted_clips = None
+        cls.poses_split_rotation = True
         cls.last_document_extensions = {}
         cls.last_filepath = ""
+        cls.armatures = []
+        cls.previous_actions = set()
 
 
 def stash(target, key: str, payload) -> None:
@@ -93,6 +105,8 @@ class glTF2ImportUserExtension:  # noqa: N801  (name fixed by the glTF importer)
         ImportState.last_document_extensions = dict(
             getattr(gltf.data, "extensions", None) or {}
         )
+        ImportState.armatures = []
+        ImportState.previous_actions = set(bpy.data.actions)
 
     # -- animations -------------------------------------------------------------
 
@@ -103,26 +117,66 @@ class glTF2ImportUserExtension:  # noqa: N801  (name fixed by the glTF importer)
         change it, and the list is consulted once, before any Action exists. Filtering
         here is therefore the difference between importing four clips and importing the
         seven hundred a shared bank declares.
+
+        Dropping a clip renumbers the list, and the importer indexed every node's channels
+        by each clip's position in it before this hook ran. That table has to be renumbered
+        with the list: left alone, a surviving clip is built from whatever channels the clip
+        that used to hold its index had.
         """
         wanted = ImportState.wanted_clips
         if wanted is None:
             return
-        animations[:] = [
-            animation
-            for animation in animations
+        kept = [
+            index
+            for index, animation in enumerate(animations)
             if getattr(animation, "name", None) in wanted
         ]
+        animations[:] = [animations[index] for index in kept]
+
+        renumbered = {old: new for new, old in enumerate(kept)}
+        for node in getattr(gltf.data, "nodes", None) or []:
+            table = getattr(node, "animations", None)
+            if table:
+                node.animations = {
+                    renumbered[old]: channels
+                    for old, channels in table.items()
+                    if old in renumbered
+                }
+
+    def gather_import_scene_after_animation_hook(self, gltf_scene, blender_scene, gltf) -> None:
+        """Pose the split-rotation bones of the clips this import built.
+
+        The last point at which the Actions exist and the import still knows which of them
+        are its own. A bank import defers the work to `animation.load_clips`, which knows
+        the body the clips are about to be rebound to.
+        """
+        payload = ImportState.last_document_extensions.get(seams.CHARACTER_EXTENSION)
+        if payload is None or not ImportState.poses_split_rotation:
+            return
+        created = [
+            action
+            for action in bpy.data.actions
+            if action not in ImportState.previous_actions
+        ]
+        for armature in ImportState.armatures:
+            pose.apply(armature, payload, created)
 
     # -- objects ----------------------------------------------------------------
 
     def gather_import_node_after_hook(self, vnode, gltf_node, blender_object, gltf) -> None:
-        """Mark created objects and attach the body payload to the mesh object."""
+        """Mark created objects and attach the body payload to the ones that answer for it.
+
+        The mesh is what a reviewer selects; the armature is what carries the clips and the
+        skeleton the payload describes. Both are asked for the payload, so both hold it.
+        """
         if blender_object is None:
             return
         blender_object[MARKER_PROPERTY] = True
+        if blender_object.type == "ARMATURE":
+            ImportState.armatures.append(blender_object)
 
         payload = ImportState.last_document_extensions.get(seams.CHARACTER_EXTENSION)
-        if payload is not None and blender_object.type == "MESH":
+        if payload is not None and blender_object.type in {"MESH", "ARMATURE"}:
             stash(blender_object, CHARACTER_PROPERTY, payload)
 
     def gather_import_material_after_hook(

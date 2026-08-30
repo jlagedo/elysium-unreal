@@ -11,10 +11,23 @@ import bpy
 from bpy.props import BoolProperty, CollectionProperty, IntProperty, StringProperty
 
 from .. import prefs
-from ..adapters import animation
+from ..adapters import animation, pose
 
 #: Clip names of the highlighted bank, read on demand and kept until it changes.
 _clips: dict = {}
+
+
+def _unresolved(context, name: str) -> list:
+    """Split bones a loaded clip was left raw for, from the Action it built.
+
+    A clip row names an Action only once that clip is loaded, and only the bank it was
+    loaded from owns that name, so the bank stamp is what makes the lookup safe.
+    """
+    entry = _active_bank(context)
+    action = bpy.data.actions.get(name)
+    if entry is None or action is None or action.get("elysium_bank") != entry.identity:
+        return []
+    return list(action.get(pose.UNRESOLVED_PROPERTY) or [])
 
 
 def _bank_entries(context):
@@ -81,7 +94,8 @@ class ELYSIUM_UL_clips(bpy.types.UIList):
     bl_idname = "ELYSIUM_UL_clips"
 
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index_):
-        layout.label(text=item.name, icon="ACTION")
+        masked = bool(_unresolved(context, item.name))
+        layout.label(text=item.name, icon="INFO" if masked else "ACTION")
 
 
 class ELYSIUM_OT_scan_banks(bpy.types.Operator):
@@ -238,6 +252,17 @@ class ELYSIUM_PT_clips(bpy.types.Panel):
         layout.template_list(
             "ELYSIUM_UL_clips", "", scene, "elysium_clip_list", scene, "elysium_clip_index", rows=6
         )
+        highlighted = clips[scene.elysium_clip_index] if (
+            0 <= scene.elysium_clip_index < len(clips)
+        ) else None
+        if highlighted is not None:
+            masked = _unresolved(context, highlighted.name)
+            if masked:
+                layout.label(
+                    text="Masked overlay: %s left model-space (no host chain)"
+                    % ", ".join(masked),
+                    icon="INFO",
+                )
         layout.operator("elysium.load_clips", text="Load Highlighted").one = True
 
 

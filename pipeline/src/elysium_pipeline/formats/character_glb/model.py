@@ -9,7 +9,7 @@ from typing import Any
 
 CHARACTER_EXTENSION = "ELYSIUM_vtmb_character"
 MATERIAL_EXTENSION = "ELYSIUM_material_reference"
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 
 
 @dataclass(frozen=True, slots=True)

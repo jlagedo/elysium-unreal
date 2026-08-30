@@ -460,6 +460,25 @@ def _animations(
     return animations, metadata
 
 
+def _split_rotation_bones(model: CharacterModel) -> list[dict[str, Any]]:
+    """Bones whose MDL flag 0x2 splits rotation and translation inheritance.
+
+    The animation channels are written verbatim from the source, so each listed bone's
+    rotation channel states a model-space orientation while its translation channel
+    stays attached to the parent.
+    """
+    return [
+        {
+            "bone": bone["index"],
+            "name": bone["name"],
+            "rotation": "model-space",
+            "translation": "parent-attached",
+        }
+        for bone in model.bones
+        if int(bone.get("flags", 0)) & 0x2
+    ]
+
+
 def _physics_accessors(builder: GlbBuilder, physics: dict[str, Any] | None):
     if physics is None:
         return {}
@@ -523,6 +542,7 @@ def build_document(
         "mdl": {
             "header": model.header,
             "bones": model.bones,
+            "splitRotationBones": _split_rotation_bones(model),
             "localAnimations": animation_rows,
             "sequences": model.sequences,
             "poseParameters": model.pose_parameters,

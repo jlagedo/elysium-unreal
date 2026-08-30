@@ -169,6 +169,29 @@ Clips address bones by name, which is usually every bone the body has. Not alway
 so those channels land nowhere. The load says how many bones went unmatched rather than
 leaving a clip that silently half-plays.
 
+### The spine bone
+
+Every biped has one bone, `Bip01 Spine1`, whose rotation the game reads differently from
+the rest: the file stores it against the whole character rather than against its parent
+bone. Blender has no such rule, so played as written the body folds backwards at the
+waist. The add-on poses that bone the way the game draws it, on import and on every bank
+clip it loads — the clip you see is the pose the game shows, and that bone's rotation
+keys will differ from the numbers in the file. Every other bone is left as written.
+
+That fix needs the bones above the spine to be in the clip. Partial-body layers — the
+`*_aim_layer`, `*_bobble_layer`, `*_relaxed_move_layer` families and the two-handed melee
+layers — animate the upper body only and carry nothing for the pelvis or root, so the
+add-on leaves their spine bone as the file states it. Such a clip shows an info icon in
+the clip list and the panel says:
+
+```
+Masked overlay: Bip01 Spine1 left model-space (no host chain)
+```
+
+Played on its own, that clip will look folded. That is expected: in the game it is only
+ever drawn on top of a full-body clip, and it is the full-body clip that supplies the
+missing bones. Load a locomotion or stance clip alongside it to see the two composed.
+
 ### Integrity report
 
 ```
@@ -216,9 +239,10 @@ fallback is the intended path and the result is correct.
 
 ```
 core/       No bpy. GLB, identities, KTX2, DDS, seam readers, the browsable index,
-            bank closure, surface-property inheritance, the corpus sweep.
+            bank closure, the spine-bone reader, surface-property inheritance, the
+            corpus sweep.
 adapters/   The glTF import hook, texture decoding, material reconstruction,
-            bank clip loading.
+            bank clip loading, spine-bone posing.
 ui/         Operators and panels.
 tests/      Contract tests for core; tests/blender/ runs inside Blender.
 ```

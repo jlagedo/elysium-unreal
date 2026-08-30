@@ -23,7 +23,7 @@ from pathlib import Path
 import bpy
 
 from ..core import banks, ids
-from . import hooks
+from . import hooks, pose
 
 
 @dataclass
@@ -99,12 +99,16 @@ def load_clips(
 
     hooks.ImportState.reset()
     hooks.ImportState.wanted_clips = wanted
+    # The bank's own armature is thrown away in a moment, so its split-rotation bones are
+    # posed against the body's skeleton instead, below.
+    hooks.ImportState.poses_split_rotation = False
     try:
         if "FINISHED" not in bpy.ops.import_scene.gltf(filepath=str(path)):
             result.message = "glTF import failed for %s" % path.name
             return result
     finally:
         hooks.ImportState.wanted_clips = None
+        hooks.ImportState.poses_split_rotation = True
 
     created = [action for action in bpy.data.actions if action not in before_actions]
     _discard(
@@ -112,6 +116,7 @@ def load_clips(
         [m for m in bpy.data.meshes if m not in before_meshes],
         [a for a in bpy.data.armatures if a not in before_armatures],
     )
+    pose.apply(body, body_payload(body), created)
 
     available = body_bone_names(body)
     missing: set[str] = set()

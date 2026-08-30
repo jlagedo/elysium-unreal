@@ -211,6 +211,45 @@ def _check_byte_ledgers(
         raise CharacterGlbValidationError("byte ledgers do not cover every source member")
 
 
+def _check_split_rotation_bones(mdl: dict[str, Any]) -> None:
+    bones = mdl.get("bones")
+    if not isinstance(bones, list):
+        raise CharacterGlbValidationError("mdl.bones is missing")
+    listed = mdl.get("splitRotationBones")
+    if not isinstance(listed, list):
+        raise CharacterGlbValidationError("mdl.splitRotationBones is missing")
+    indexes = []
+    for row in listed:
+        if not isinstance(row, dict):
+            raise CharacterGlbValidationError("split-rotation row is not an object")
+        index = row.get("bone")
+        if not isinstance(index, int) or not 0 <= index < len(bones):
+            raise CharacterGlbValidationError(
+                f"split-rotation row names bone {index!r}"
+            )
+        if row.get("name") != bones[index].get("name"):
+            raise CharacterGlbValidationError(
+                f"split-rotation bone {index} is named {row.get('name')!r}; "
+                f"mdl.bones[{index}] is {bones[index].get('name')!r}"
+            )
+        if row.get("rotation") != "model-space" or row.get("translation") != "parent-attached":
+            raise CharacterGlbValidationError(
+                f"split-rotation bone {index} declares rotation "
+                f"{row.get('rotation')!r} translation {row.get('translation')!r}"
+            )
+        indexes.append(index)
+    flagged = {
+        int(bone.get("index", position))
+        for position, bone in enumerate(bones)
+        if int(bone.get("flags", 0)) & 0x2
+    }
+    if len(set(indexes)) != len(indexes) or set(indexes) != flagged:
+        raise CharacterGlbValidationError(
+            f"mdl.splitRotationBones lists {sorted(indexes)}; bones flagged 0x2 are "
+            f"{sorted(flagged)}"
+        )
+
+
 def validate_document(
     document: dict[str, Any],
     binary: bytes,
@@ -254,6 +293,7 @@ def validate_document(
                 f"source member {member.get('path')} has no byte length"
             )
     _check_byte_ledgers(coverage, members, source_members)
+    _check_split_rotation_bones(extension.get("mdl") or {})
     _reject_opaque_source(extension)
     _check_accessors(document, binary)
     nodes = document.get("nodes") or []

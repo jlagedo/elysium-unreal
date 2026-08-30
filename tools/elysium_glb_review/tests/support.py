@@ -205,7 +205,21 @@ def character_unit(
     banks: list[str] | None = None,
     animations: int = 0,
     bones: list[str] | None = None,
+    bone_flags: dict[str, int] | None = None,
+    split_rotation: list[dict] | None = None,
 ) -> bytes:
+    """A character GLB. `split_rotation` is written verbatim as `mdl.splitRotationBones`.
+
+    A unit that declares the key is a 1.2.0 unit; one that leaves the rule to
+    `mdl.bones[i].flags` is the 1.1.0 corpus, and both are read.
+    """
+    mdl_bones = [
+        {"name": name, "index": index, "flags": (bone_flags or {}).get(name, 0)}
+        for index, name in enumerate(bones or [])
+    ]
+    mdl = {"bones": mdl_bones, "header": {"includeModels": []}}
+    if split_rotation is not None:
+        mdl["splitRotationBones"] = split_rotation
     document = {
         "asset": {"version": "2.0", "generator": "Elysium Character GLB Exporter"},
         "extensionsUsed": [seams.CHARACTER_EXTENSION, seams.MATERIAL_REFERENCE_EXTENSION],
@@ -220,12 +234,9 @@ def character_unit(
         "animations": [{"name": "%d:clip" % i} for i in range(animations)],
         "extensions": {
             seams.CHARACTER_EXTENSION: {
-                "schemaVersion": "1.1.0",
+                "schemaVersion": "1.1.0" if split_rotation is None else "1.2.0",
                 "identity": {"asset": identity},
-                "mdl": {
-                    "bones": [{"name": name, "index": i} for i, name in enumerate(bones or [])],
-                    "header": {"includeModels": []},
-                },
+                "mdl": mdl,
                 "dependencies": [
                     {"role": "animation-bank", "asset": bank, "sourcePath": ""}
                     for bank in (banks or [])

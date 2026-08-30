@@ -21,7 +21,11 @@ from elysium_pipeline.formats.character_glb.decode import (
     _swing_records_complete,
     _texture_records,
 )
-from elysium_pipeline.formats.character_glb.model import CharacterModel, SourceIdentity
+from elysium_pipeline.formats.character_glb.model import (
+    SCHEMA_VERSION,
+    CharacterModel,
+    SourceIdentity,
+)
 from elysium_pipeline.formats.character_glb.source import (
     CharacterSourceError,
     SourceMember,
@@ -116,6 +120,23 @@ def _model() -> CharacterModel:
         typed_unidentified=[],
         omitted_proven=[],
     )
+
+
+def _split_rotation_model() -> CharacterModel:
+    """The synthetic body plus a spine bone carrying the VtMB 0x2 split flag."""
+    model = _model()
+    model.bones[0]["flags"] = 0
+    model.bones.append(
+        {
+            "index": 1,
+            "name": "Bip01 Spine1",
+            "parent": 0,
+            "position": (0.0, 0.0, 1.0),
+            "rotation": (0.0, 0.0, 0.0, 1.0),
+            "flags": 0x2,
+        }
+    )
+    return model
 
 
 def _minimal_mdl_vtx() -> tuple[bytes, bytes]:
@@ -765,3 +786,54 @@ def test_writer_records_the_source_to_gltf_transform() -> None:
     assert extension["coordinateTransform"]["scale"] == 0.0254
     assert extension["coverage"]["unresolved"] == []
     assert extension["coverage"]["unsupported"] == []
+
+
+def test_split_rotation_flag_is_named_beside_the_raw_bone_flags() -> None:
+    document, _binary = character_glb.build_document(_split_rotation_model(), b"")
+    mdl = document["extensions"]["ELYSIUM_vtmb_character"]["mdl"]
+    assert mdl["splitRotationBones"] == [
+        {
+            "bone": 1,
+            "name": "Bip01 Spine1",
+            "rotation": "model-space",
+            "translation": "parent-attached",
+        }
+    ]
+
+
+def test_a_corpus_with_no_split_flag_lists_no_split_rotation_bone() -> None:
+    document, binary = character_glb.build_document(_model(), b"")
+    mdl = document["extensions"]["ELYSIUM_vtmb_character"]["mdl"]
+    assert mdl["splitRotationBones"] == []
+    validation.validate_document(document, binary)
+
+
+def test_validator_refuses_a_split_rotation_list_that_disagrees_with_the_flags() -> None:
+    document, binary = character_glb.build_document(_split_rotation_model(), b"")
+    document["extensions"]["ELYSIUM_vtmb_character"]["mdl"]["splitRotationBones"] = []
+    with pytest.raises(
+        validation.CharacterGlbValidationError, match="splitRotationBones"
+    ):
+        validation.validate_document(document, binary)
+
+
+def test_validator_refuses_a_split_rotation_row_naming_another_bone() -> None:
+    document, binary = character_glb.build_document(_split_rotation_model(), b"")
+    row = document["extensions"]["ELYSIUM_vtmb_character"]["mdl"]["splitRotationBones"][0]
+    row["name"] = "root"
+    with pytest.raises(
+        validation.CharacterGlbValidationError, match="split-rotation bone 1 is named"
+    ):
+        validation.validate_document(document, binary)
+
+
+def test_split_rotation_bones_survive_the_schema_round_trip() -> None:
+    document, binary = character_glb.build_document(_split_rotation_model(), b"")
+    with tempfile.TemporaryDirectory() as temporary:
+        path = Path(temporary) / "body.glb"
+        character_glb.write_glb(document, binary, path)
+        validation.validate(path)
+        written, _chunk = validation.read_glb(path)
+    extension = written["extensions"]["ELYSIUM_vtmb_character"]
+    assert extension["schemaVersion"] == SCHEMA_VERSION == "1.2.0"
+    assert extension["mdl"]["splitRotationBones"][0]["bone"] == 1

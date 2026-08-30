@@ -61,6 +61,10 @@ animation-bank.glb
 | Events and movement | extension records | event payloads, displacement, reach, swings, envelopes and combos |
 | Include-model graph | dependency asset IDs | original include order and remap identity |
 
+Decoded channels are parent-relative locals except for the bones the unit lists under
+`mdl.splitRotationBones`, whose rotation track states a model-space orientation with the
+translation attached to the parent, as `docs/architecture/seam_map_character.md` defines.
+
 ## Dependencies
 
 Each included bank becomes one dependency row:

@@ -14,12 +14,19 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import math
 import os
+import struct
 import sys
 import time
 from pathlib import Path
 
 import bpy
+from mathutils import Matrix, Quaternion
+
+#: The importer's Y-up to Z-up conversion, spelled out here rather than imported so the check
+#: below holds the add-on to the file and not to its own constant.
+Y_UP_TO_Z_UP = Matrix.Rotation(math.pi / 2.0, 4, "X")
 
 
 def parse_args() -> argparse.Namespace:
@@ -204,6 +211,171 @@ def check_bank_loading(corpus: Path) -> None:
     )
 
 
+def _floats(document: dict, binary: bytes, index: int, components: int) -> list:
+    """One float accessor of a GLB, as tuples, without the importer's help."""
+    accessor = document["accessors"][index]
+    view = document["bufferViews"][accessor["bufferView"]]
+    start = view.get("byteOffset", 0)
+    data = binary[start : start + view["byteLength"]]
+    stride = view.get("byteStride") or 4 * components
+    offset = accessor.get("byteOffset", 0)
+    return [
+        struct.unpack_from("<" + "f" * components, data, offset + i * stride)
+        for i in range(accessor["count"])
+    ]
+
+
+def _rotation_channel(document: dict, binary: bytes, clip: str, bone: str) -> list:
+    """`(time, xyzw)` of one bone's rotation channel in one clip, as the file wrote it."""
+    node = next(
+        (i for i, n in enumerate(document.get("nodes") or []) if n.get("name") == bone), None
+    )
+    declared = next((a for a in document.get("animations") or [] if a["name"] == clip), None)
+    if node is None or declared is None:
+        return []
+    for channel in declared["channels"]:
+        target = channel["target"]
+        if target.get("node") == node and target.get("path") == "rotation":
+            sampler = declared["samplers"][channel["sampler"]]
+            times = _floats(document, binary, sampler["input"], 1)
+            values = _floats(document, binary, sampler["output"], 4)
+            return [(t[0], q) for t, q in zip(times, values)]
+    return []
+
+
+def _channel_error(armature, action, document: dict, binary: bytes, clip: str, bone: str, expected):
+    """Widest angle between the posed bone and what `expected` makes of the file's channel.
+
+    Sampled at key times, which is where the rebake is exact; between them the curve
+    interpolates, as every other bone's does.
+    """
+    keys = _rotation_channel(document, binary, clip, bone)
+    assert keys, "%s carries no rotation channel for %s" % (clip, bone)
+
+    animation_data = armature.animation_data or armature.animation_data_create()
+    animation_data.action = action
+    if animation_data.action_slot is None:
+        animation_data.action_slot = animation_data.action_suitable_slots[0]
+
+    # A pose property no Action drives keeps whatever the last one wrote, so a masked
+    # overlay would otherwise be measured against the previous clip's host pose.
+    for pose_bone in armature.pose.bones:
+        pose_bone.location = (0.0, 0.0, 0.0)
+        pose_bone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+        pose_bone.scale = (1.0, 1.0, 1.0)
+
+    fps = bpy.context.scene.render.fps
+    worst = 0.0
+    for time_, (x, y, z, w) in keys[:: max(1, len(keys) // 8)]:
+        frame = time_ * fps
+        bpy.context.scene.frame_set(int(frame), subframe=frame - int(frame))
+        evaluated = armature.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        posed = evaluated.pose.bones[bone].matrix.to_quaternion()
+        angle = expected(Quaternion((w, x, y, z))).rotation_difference(posed).angle
+        # Two quaternions of opposite sign are the same rotation, and one of them reports
+        # the turn the long way round.
+        worst = max(worst, min(angle, 2.0 * math.pi - angle))
+    return worst
+
+
+def _model_space(stated: Quaternion) -> Quaternion:
+    """Where retail puts a split bone: the channel IS the armature-space rotation."""
+    return (Y_UP_TO_Z_UP @ stated.to_matrix().to_4x4()).to_quaternion()
+
+
+def _raw_through(parent_rest: Quaternion):
+    """Where an untouched channel lands: ordinary FK with the chain above it at rest."""
+    return lambda stated: parent_rest @ stated
+
+
+def check_split_rotation(corpus: Path) -> None:
+    """The flagged bone's channel is already a MODEL-space rotation (A.4a).
+
+    Ordinary FK on it folds the body backwards at the waist, so the add-on rebakes it. Held
+    to the file's own statement: at a key time the bone's armature-space rotation IS that
+    quaternion. A bank clip has to reach the same place, and it arrives on a body it was
+    never imported with.
+
+    A masked overlay is the case that does not: it owns the split bone and none of the chain
+    above it, the rebake has nothing to normalise against, and the clip keeps the raw channel
+    and says so on the Action.
+    """
+    core_glb = importlib.import_module(ARGS.module + ".core.glb")
+    core_ids = importlib.import_module(ARGS.module + ".core.ids")
+    core_rig = importlib.import_module(ARGS.module + ".core.rig")
+    core_seams = importlib.import_module(ARGS.module + ".core.seams")
+    animation = importlib.import_module(ARGS.module + ".adapters.animation")
+
+    path = (corpus / "characters" / "npc" / "unique" / "santa_monica" / "sm_blueblood"
+            / "sm_blueblood.glb")
+    document, binary = core_glb.read(path)
+    payload = core_seams.root_extension(document, core_seams.CHARACTER_EXTENSION)
+    declared = core_rig.split_rotation_bones(payload)
+    assert declared, "sm_blueblood names no split-rotation bone"
+    bone = declared[0].name
+
+    clear()
+    assert "FINISHED" in bpy.ops.import_scene.gltf(filepath=str(path))
+    body = next(o for o in bpy.data.objects if o.type == "ARMATURE")
+    clip = next(a["name"] for a in document["animations"] if a["name"].endswith("Line21_col_E"))
+    own = _channel_error(
+        body, bpy.data.actions[clip], document, binary, clip, bone, _model_space
+    )
+    assert own < 1e-3, "%s is %.4f rad from its own channel in %s" % (bone, own, clip)
+
+    closure = animation.closure_of({"extensions": {"ELYSIUM_vtmb_character": payload}}, corpus)
+    bank = max(closure.with_clips(), key=lambda node: node.clip_count)
+    bank_document, bank_binary = core_glb.read(core_ids.resolve(bank.identity, corpus))
+
+    # A clip owns the chain when it animates every ancestor the rebake has to evaluate; the
+    # 49-bone upper-body mask owns the split bone and not one of them.
+    index = {n.get("name"): i for i, n in enumerate(bank_document["nodes"])}
+    ancestors = set()
+    node = body.data.bones[bone].parent
+    while node is not None:
+        ancestors.add(index[node.name])
+        node = node.parent
+
+    owned = masked = None
+    for declared in bank_document["animations"]:
+        rotated = {
+            c["target"]["node"] for c in declared["channels"] if c["target"]["path"] == "rotation"
+        }
+        if index[bone] not in rotated:
+            continue
+        if owned is None and ancestors <= rotated:
+            owned = declared["name"]
+        if masked is None and not (ancestors & rotated):
+            masked = declared["name"]
+    assert owned, "%s has no clip that owns the chain above %s" % (bank.identity, bone)
+    assert masked, "%s has no masked overlay of %s" % (bank.identity, bone)
+
+    result = animation.load_clips(body, bank.identity, corpus, {owned})
+    assert result.loaded == 1, result.message
+    loaded = _channel_error(
+        body, result.actions[0], bank_document, bank_binary, owned, bone, _model_space
+    )
+    assert loaded < 1e-3, "%s is %.4f rad from %s's channel" % (bone, loaded, owned)
+    assert result.actions[0].get("elysium_split_unresolved") is None, (
+        "%s owns the chain above %s and was rebaked" % (owned, bone)
+    )
+
+    result = animation.load_clips(body, bank.identity, corpus, {masked})
+    assert result.loaded == 1, result.message
+    left = list(result.actions[0].get("elysium_split_unresolved") or [])
+    assert left == [bone], "%s should name %s as left raw, names %r" % (masked, bone, left)
+    untouched = _channel_error(
+        body, result.actions[0], bank_document, bank_binary, masked, bone,
+        _raw_through(body.data.bones[bone].parent.matrix_local.to_quaternion()),
+    )
+    assert untouched < 1e-5, "%s's keys were rewritten: %.4e rad" % (masked, untouched)
+
+    print(
+        "split rotation ok: %s within %.2e rad of its own clip and %.2e rad of %s; %s left raw"
+        " within %.2e rad and marked" % (bone, own, loaded, owned, masked, untouched)
+    )
+
+
 def check_previews(corpus: Path) -> None:
     """Materials and textures carry no scene, so opening one means building something."""
     operators = importlib.import_module(ARGS.module + ".ui.operators")
@@ -234,6 +406,7 @@ def main() -> None:
     check_materials_and_textures(corpus)
     check_clip_filter(corpus)
     check_bank_loading(corpus)
+    check_split_rotation(corpus)
     check_previews(corpus)
     print("ALL CHECKS PASSED")
 
