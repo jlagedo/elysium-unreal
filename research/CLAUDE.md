@@ -17,8 +17,7 @@ This tree contains reproducible research intent and authored instruments.
   run **before** a corpus dump, which photographs the project as it stands.
 - `tooling/ghidra/driver/pyapi.py` extracts the CPython 2.1.2 C API from the released source
   tree, and `corpus pyapi` applies it to the modules that embed the interpreter. The tree is
-  third-party reference source: it lives under `ELYSIUM_WORK_ROOT/research/reference-source/`
-  and is never committed.
+  third-party reference source under `ELYSIUM_WORK_ROOT/research/reference-source/`.
 - `tooling/capture/` contains live hook/injector source and capture analysis.
 - `experiments/` is for reusable, game-independent spikes.
 
