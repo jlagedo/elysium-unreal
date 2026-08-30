@@ -46,7 +46,6 @@ export_v2_app = typer.Typer(help="Run isolated lossless GLB export pipelines.")
 verify_app = typer.Typer(help="Check baked packages against what the export declares.")
 run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
-ide_app = typer.Typer(help="Configure supported development environments.")
 blender_app = typer.Typer(help="Package and drive the Blender GLB review add-on.")
 app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
@@ -54,7 +53,6 @@ app.add_typer(export_v2_app, name="export_v2")
 app.add_typer(verify_app, name="verify")
 app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
-app.add_typer(ide_app, name="ide")
 app.add_typer(blender_app, name="blender")
 
 
@@ -1456,31 +1454,6 @@ def research(
         ExitCode.VALIDATION,
         action,
         require_game=False,
-    )
-
-
-@ide_app.command("vscode", context_settings=PASSTHROUGH)
-def ide_vscode(ctx: typer.Context, args: list[str] = typer.Argument(None)) -> None:
-    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
-        result = runner.run(
-            [
-                sys.executable,
-                "-m",
-                "elysium_pipeline.devtools.setup_vscode",
-                *(args or ()),
-                *ctx.args,
-            ]
-        )
-        if result.returncode:
-            raise ProcessFailure(result, int(ExitCode.DEPENDENCY_OR_TOOLCHAIN))
-
-    _execute(
-        _state(ctx),
-        "ide vscode",
-        ExitCode.DEPENDENCY_OR_TOOLCHAIN,
-        action,
-        require_ue=True,
-        activity=True,
     )
 
 
