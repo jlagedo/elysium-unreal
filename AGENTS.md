@@ -23,4 +23,4 @@ as a playable game — **remastered** — on **Unreal Engine 5.8 + C++**.
 - `Content/` — Main unreal folder
   `Content/ElysiumAuthored/**` - Manual authored assets git tracked
   `Content/ElysiumGenerated/**` - Generated content from pipeline (vtmb based or generated helpers)
-- `Plugins/` — assets directly generatedt from VTMB isntall and baked into Unreal Assets.
+- `Plugins/` — assets directly generated from VTMB install and baked into Unreal Assets.
