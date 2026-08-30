@@ -170,13 +170,44 @@ def _resolved_targets(root: Mapping[str, Any], role: str) -> set[str]:
     }
 
 
+#: The role `danglingReferences[]` groups this check's absent expression rows under. A row is
+#: not an edge any unit declares -- it names a row inside a table, not the table -- so it takes a
+#: role of its own rather than being folded into the `expression-table` edges.
+EXPRESSION_ROW_ROLE = "expression-row"
+
+
+def dangling_rows(rows: Iterable[Mapping[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """The `danglingReferences[]` groups the checks contribute, keyed by role.
+
+    A check that finds a retail inconsistency the corpus should document rather than refuse
+    publishes it here instead of in `failures[]`; see `scene_expression_rows`.
+    """
+
+    extra: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        if row.get("name") == "scene-expression-rows":
+            edges = [dict(item) for item in row.get("observations") or ()]
+            if edges:
+                extra[EXPRESSION_ROW_ROLE] = edges
+    return extra
+
+
 def scene_expression_rows(roots: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
     """Every `expression` event names a row its table carries.
 
     An event whose table the install does not ship -- every shipped scene names the stem `dialog`,
     which no `expressions/` member answers -- is a dangling reference and is reported as one, the
     same reading `dialogue-line-audio` takes of a line whose audio is absent. What this check owns
-    is the table a scene *does* resolve: it must be published, and it must carry the named row.
+    is the table a scene *does* resolve: it must be published.
+
+    A published table that does not carry the named row is a third case, and it is retail's, not
+    the corpus's: `cinematic/la/chambers/{camarilla_bip1,sabbat_bip1}` animate
+    `Concern No Deform` against `regent_expressions`, and that table's 33 rows do not include it
+    under any spelling -- five other tables do. Refusing the export would make a shipped
+    authoring mistake fatal to decoding the corpus, which the unit contract's non-canonical
+    storage rule says is exactly backwards: the disagreement is recorded with its evidence and
+    the corpus is published. Each such row becomes an `observations[]` entry and is published in
+    `danglingReferences[]` under `expression-row`, where the index already warns on the total.
     """
 
     tables = {
@@ -185,6 +216,8 @@ def scene_expression_rows(roots: Mapping[str, Mapping[str, Any]]) -> dict[str, A
         if asset.startswith("vtmb:expression-table:")
     }
     failures: list[dict[str, Any]] = []
+    absent: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
     for asset in sorted(roots):
         if not asset.startswith("vtmb:scene:"):
             continue
@@ -204,11 +237,15 @@ def scene_expression_rows(roots: Mapping[str, Mapping[str, Any]]) -> dict[str, A
                      "reason": "the scene names no published expression table"}
                 )
             elif rows and str(row).lower() not in rows:
-                failures.append(
-                    {"from": asset, "to": table, "row": str(row),
+                key = (asset, table, str(row))
+                if key in seen:
+                    continue
+                seen.add(key)
+                absent.append(
+                    {"from": asset, "to": table, "row": str(row), "sourcePath": str(row),
                      "reason": "the table carries no such row"}
                 )
-    return _row("scene-expression-rows", failures)
+    return _row("scene-expression-rows", failures, absent)
 
 
 def surface_sound_scripts(edges, published) -> dict[str, Any]:

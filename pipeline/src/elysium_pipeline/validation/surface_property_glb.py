@@ -285,7 +285,17 @@ def _check_references(
             if not isinstance(record, dict):
                 raise SurfacePropertyGlbValidationError(f"sounds.{key}[{ordinal}] is not a record")
             asset = str(record.get("asset") or "")
-            if not asset.startswith("vtmb:sound-script:"):
+            # `impact` and `scrape` name a sound-script entry, except in the two shipped entries
+            # that spell a `.wav` path there; that value is a file, so it takes the `vtmb:sound:`
+            # namespace, or the contract's `vtmb:missing-sound:` sentinel where the install ships
+            # no such member. A sentinel names no unit, so it declares no dependency row.
+            if asset.startswith("vtmb:sound-script:"):
+                role: str | None = "sound-script"
+            elif asset.startswith("vtmb:sound:"):
+                role = "sound"
+            elif asset.startswith("vtmb:missing-sound:"):
+                role = None
+            else:
                 raise SurfacePropertyGlbValidationError(
                     f"sounds.{key}[{ordinal}] carries no stable sound-script id"
                 )
@@ -294,7 +304,15 @@ def _check_references(
                 raise SurfacePropertyGlbValidationError(
                     f"sounds.{key}[{ordinal}] names no parameter of this entry"
                 )
-            referenced[asset] = "sound-script"
+            if role is None:
+                if record.get("resolved"):
+                    raise SurfacePropertyGlbValidationError(
+                        f"sounds.{key}[{ordinal}] resolves to a sentinel identity"
+                    )
+                continue
+            referenced[asset] = role
+            if role == "sound":
+                continue
             script_records.append(record)
             if not record.get("resolved"):
                 unresolved_scripts.append(str(record.get("script") or asset))

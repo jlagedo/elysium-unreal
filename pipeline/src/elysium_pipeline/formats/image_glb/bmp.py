@@ -87,6 +87,10 @@ def decode_bmp(closure) -> ImageModel:
 
     if off_bits < cursor:
         raise BmpDecodeError(f"{path}: pixel data offset {off_bits} overlaps the headers")
+    if off_bits > len(data):
+        raise BmpDecodeError(
+            f"{path}: pixel data offset {off_bits} is past the {len(data)}-byte member"
+        )
     gap = off_bits - cursor
     gap_non_zero = False
     if gap:

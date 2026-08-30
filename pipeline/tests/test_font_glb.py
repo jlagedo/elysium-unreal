@@ -20,6 +20,7 @@ from elysium_pipeline.formats.font_glb import (
     decode_font_list,
     parse_registry_rows,
 )
+from elysium_pipeline.formats.font_glb.decode import GLYPH_ENTRY_SIZE
 from elysium_pipeline.formats.font_glb.model import (
     asset_id,
     font_list_asset_id,
@@ -242,6 +243,45 @@ def test_a_quirky_fonts_ledger_is_also_gapless_across_three_glyphs_and_a_mixed_t
     assert row["coveragePercent"] == 100.0
 
 
+def _fnt_bytes_with_glyph_table_offset(glyph_off: int, pad: bytes) -> bytes:
+    """One glyph, header word 8 (`glyphTableOffset`) pointed past the char map's own end (292) by
+    `pad` filler bytes -- `_fnt_bytes` cannot build this fixture because it hardcodes 292."""
+
+    count = 1
+    charmap = bytes([0] * 255 + [count - 1])
+    table_end = glyph_off + count * GLYPH_ENTRY_SIZE
+    header = struct.pack("<9I", 1, table_end, 0, 0, 10, 0, 0, 0, glyph_off)
+    return header + charmap + pad + CLEAN_GLYPH
+
+
+def test_a_glyph_table_offset_past_the_char_map_end_claims_the_zero_gap_instead_of_aborting():
+    # A `.fnt` whose header points the glyph table past 292 used to leave the bytes between the
+    # char map and the table unclaimed, aborting the whole export with a raw `ByteLedgerError`
+    # (specDeviation: the seam sweeps this gap the way every other variable-length seam does).
+    pad = b"\x00" * 8
+    glyph_off = GLYPH_TABLE_OFFSET + len(pad)
+    data = _fnt_bytes_with_glyph_table_offset(glyph_off, pad)
+    closure = _closure("padface_10_400_000", data, pages={0: _page("padface_10_400_000", 0)})
+    model = decode_font(closure, font_list_rows=[])
+    row = model.byte_ledger[0]
+    assert row["accountedBytes"] == row["byteLength"] == len(data)
+    assert not any(entry["role"] == "pad-before-glyph-table" for entry in model.omissions)
+
+
+def test_a_glyph_table_offset_past_the_char_map_end_with_non_zero_bytes_is_an_omission_not_a_gap():
+    pad = bytes([0xAB]) * 8
+    glyph_off = GLYPH_TABLE_OFFSET + len(pad)
+    data = _fnt_bytes_with_glyph_table_offset(glyph_off, pad)
+    closure = _closure("padface2_10_400_000", data, pages={0: _page("padface2_10_400_000", 0)})
+    model = decode_font(closure, font_list_rows=[])
+    row = model.byte_ledger[0]
+    assert row["accountedBytes"] == row["byteLength"] == len(data)
+    omission = next(entry for entry in model.omissions if entry["role"] == "pad-before-glyph-table")
+    assert omission["offset"] == GLYPH_TABLE_OFFSET
+    assert omission["length"] == len(pad)
+    assert omission["hex"] == pad.hex()
+
+
 def test_reserved_zero_header_words_and_unread_spans_are_verified_against_the_bytes():
     model = decode_font(_clean_closure())
     row = model.byte_ledger[0]
@@ -298,7 +338,7 @@ def test_the_font_list_unit_declares_its_own_extension_and_generator_title():
     assert document["extensionsUsed"] == [FONT_LIST_EXTENSION]
     assert document["extensionsRequired"] == [FONT_LIST_EXTENSION]
     assert set(document["extensions"]) == {FONT_LIST_EXTENSION}
-    assert document["asset"]["generator"] == "Elysium Font List GLB Exporter"
+    assert document["asset"]["generator"] == "Elysium Font-list GLB Exporter"
 
 
 def test_the_font_units_own_extension_and_generator_title_are_unchanged():
@@ -341,10 +381,19 @@ def test_the_font_list_units_dependency_role_is_font():
     assert roles == {"font"}
 
 
-def test_a_page_the_glyph_table_uses_and_the_install_lacks_is_unresolved():
+def test_a_page_the_glyph_table_uses_and_the_install_lacks_is_a_page_missing_anomaly_not_unresolved():
+    # seam_map_font.md reads a missing referenced page as the font's own structure and grades it
+    # `coverage.unresolved`; the real install ships members that reference a page it never shipped
+    # at all (times_new_roman_98/122/147_900_000 -> page 1), which is
+    # seam_map_unit_contract.md's non-canonical-storage case instead: a reference to another
+    # seam's data that merely fails to resolve, so the unit publishes what the install holds and
+    # warns rather than failing (specDeviation).
     closure = _closure(CLEAN_KEY, CLEAN_DATA, pages={}, font_list_present=True)
     model = decode_font(closure, font_list_rows=[])
-    assert any(row["role"] == "page-texture" for row in model.unresolved)
+    assert not model.unresolved
+    row = next(row for row in model.anomalies if row["role"] == "page-missing")
+    assert row["page"] == 0
+    assert row["glyphs"] == [0]
     assert not any(row["role"] == "material" and row["resolved"] for row in model.dependencies)
 
 
@@ -369,7 +418,8 @@ def test_a_pages_vmt_present_without_a_usable_basetexture_is_an_anomaly_and_fall
     closure = _closure(CLEAN_KEY, CLEAN_DATA, pages={0: page}, font_list_present=True)
     model = decode_font(closure, font_list_rows=[])
     assert any(row["role"] == "page-vmt-missing-basetexture" and row["page"] == 0 for row in model.anomalies)
-    assert any(row["role"] == "page-texture" for row in model.unresolved)
+    assert any(row["role"] == "page-missing" and row["page"] == 0 for row in model.anomalies)
+    assert not model.unresolved
 
 
 # --- typedUnidentified / reserved-zero / omission rules -----------------------------------------
@@ -512,11 +562,18 @@ def test_a_font_a_row_names_resolves_the_join():
     assert model.font_list == {"resolved": True, "index": 0}
 
 
-def test_without_font_list_present_the_join_is_unresolved_not_asserted_false():
+def test_without_font_list_present_the_join_is_a_warning_not_a_failing_unresolved_row():
+    # The registry is another seam's data, not this `.fnt`'s own structure -- the glyph table
+    # decodes completely without it -- so seam_map_unit_contract.md's non-canonical-storage rule
+    # applies (specDeviation): `dependencies` states `resolved: false`, `anomalies[]` names it, and
+    # the unit warns instead of entering `coverage.unresolved` and failing.
     closure = _closure(CLEAN_KEY, CLEAN_DATA, pages={0: _page(CLEAN_KEY, 0)}, font_list_present=False)
     model = decode_font(closure)
     assert model.font_list is None
-    assert any(row["role"] == "font-list" for row in model.unresolved)
+    assert not model.unresolved
+    font_list_row = next(row for row in model.dependencies if row["role"] == "font-list")
+    assert font_list_row["resolved"] is False
+    assert any(row["role"] == "font-list-missing" for row in model.anomalies)
 
 
 # A registry with a comment, a blank line and a malformed line, exercising every non-`row` kind
@@ -574,9 +631,13 @@ def test_the_validator_rejects_a_document_whose_ledger_was_tampered():
 
 
 def test_the_validator_rejects_a_unit_with_a_nonempty_unresolved_list():
-    closure = _closure(CLEAN_KEY, CLEAN_DATA, pages={}, font_list_present=True)
-    model = decode_font(closure, font_list_rows=[])
+    # A missing referenced page or registry no longer populates `coverage.unresolved` (both are
+    # now `anomalies[]` warnings; specDeviation), so this exercises the validator's own
+    # completeness check directly rather than relying on a decode path that produces one.
+    model = decode_font(_clean_closure())
     document, binary = exporter.build_document(model)
+    root = document["extensions"][FONT_EXTENSION]
+    root["coverage"]["unresolved"] = [{"role": "synthetic", "reason": "forced for this test"}]
     with pytest.raises(validation.FontGlbValidationError, match="incomplete"):
         validation.validate_document(document, binary)
 
@@ -685,10 +746,17 @@ def test_export_tolerates_the_root_prefix_and_extension_on_its_argument(tmp_path
     assert destination.name == f"{CLEAN_KEY}.glb"
 
 
-def test_a_font_with_an_unresolved_page_fails_export(tmp_path: Path):
+def test_a_font_with_a_missing_page_and_no_registry_exports_with_warnings_not_a_failure(tmp_path: Path):
+    # Both a glyph-referenced page the install never shipped and an absent `fontlist.txt` are
+    # non-canonical-storage cases (specDeviation): the unit publishes what the install holds,
+    # complete and 100%-covered, and surfaces both gaps as warnings rather than failing export.
     index, read_bytes = _index_and_reader(CLEAN_KEY, CLEAN_DATA, pages=(), font_list=False)
-    with pytest.raises(validation.FontGlbValidationError, match="incomplete"):
-        exporter.export(index, CLEAN_KEY, tmp_path, read_bytes=read_bytes)
+    destination = exporter.export(index, CLEAN_KEY, tmp_path, read_bytes=read_bytes)
+    summary = validation.validate(destination)
+    assert summary["byteCoveragePercent"] == 100.0
+    warnings = validation.warnings_for(summary)
+    assert any("page-missing" in warning for warning in warnings)
+    assert any("fontlist.txt" in warning for warning in warnings)
 
 
 def test_export_dispatches_the_font_list_sentinel_to_the_registry_unit(tmp_path: Path):
@@ -719,4 +787,9 @@ def test_the_validator_reattaches_a_redirected_texture_row_by_pairing_order_not_
     rows = parse_registry_rows(FONT_LIST_DATA)
     model = decode_font(closure, font_list_rows=rows)
     document, binary = exporter.build_document(model)
+    root = document["extensions"][FONT_EXTENSION]
+    texture_row = next(row for row in root["dependencies"] if row["role"] == "texture")
+    assert texture_row["sourcePath"] == "materials/fonts/other_stem-page9.tth"
+    material_row = next(row for row in root["dependencies"] if row["role"] == "material")
+    assert material_row["sourcePath"] == f"materials/fonts/{CLEAN_KEY}-page0.vmt"
     validation.validate_document(document, binary, source_members=(_model_member(model),))

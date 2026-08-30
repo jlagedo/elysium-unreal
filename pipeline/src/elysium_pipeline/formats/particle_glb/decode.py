@@ -219,7 +219,7 @@ def decode_particle(
         # but its bytes are not separately (and doubly) claimed under a `comments[i]` owner.
         if not in_unparsed and token.anomaly == "unterminated-quoted-string":
             # A quote left open runs the string to EOF, so it mis-pairs the key/value that
-            # follow it; the token is still claimed as `mapped` below (it is a real key or
+            # follow it; the token is still claimed as `mapped-text` below (it is a real key or
             # value span), but the departure itself is named once here.
             quote_anomalies.append({"role": "unterminated-quoted-string", "offset": token.offset})
         if token.kind == "whitespace":
@@ -230,7 +230,7 @@ def decode_particle(
             comment_index = len(comments)
             comments.append({"offset": token.offset, "text": token.text})
             if not in_unparsed:
-                ledger.claim(token.offset, token.length, "mapped", f"comments[{comment_index}]")
+                ledger.claim(token.offset, token.length, "mapped-text", f"comments[{comment_index}]")
         elif token.kind == "bom":
             # No shipped file carries a BOM; when one would, its bytes are insignificant leading
             # bytes exactly like whitespace, and the byte-ledger owner table names no separate
@@ -240,7 +240,7 @@ def decode_particle(
                 has_insignificant_whitespace = True
 
     if doc.root is not None:
-        ledger.claim(doc.root.offset, doc.root.length, "mapped", "root")
+        ledger.claim(doc.root.offset, doc.root.length, "mapped-text", "root")
 
     keys: list[KeyEntry] = []
     blocks: list[BlockEntry | None] = [None] * len(doc.blocks)
@@ -287,8 +287,8 @@ def decode_particle(
             # cleanly; this decode never rejects a malformed file, so the spelling is named as an
             # anomaly rather than the export failing.
             anomalies.append({"role": "empty-key", "offset": record.key.offset})
-        ledger.claim(record.key.offset, record.key.length, "mapped", f"keys[{index}].key")
-        ledger.claim(record.value.offset, record.value.length, "mapped", f"keys[{index}].value")
+        ledger.claim(record.key.offset, record.key.length, "mapped-text", f"keys[{index}].key")
+        ledger.claim(record.value.offset, record.value.length, "mapped-text", f"keys[{index}].value")
 
         if record.block is not None:
             block_key_indexes[record.block].append(index)
@@ -323,14 +323,14 @@ def decode_particle(
             length=block.end - block.name.offset,
             keys=block_key_indexes[block.index],
         )
-        ledger.claim(block.name.offset, block.name.length, "mapped", f"blocks[{block.index}].name")
+        ledger.claim(block.name.offset, block.name.length, "mapped-text", f"blocks[{block.index}].name")
         ledger.claim(
-            block.open_token.offset, block.open_token.length, "mapped",
+            block.open_token.offset, block.open_token.length, "mapped-text",
             f"blocks[{block.index}].braces",
         )
         if block.close_token is not None:
             ledger.claim(
-                block.close_token.offset, block.close_token.length, "mapped",
+                block.close_token.offset, block.close_token.length, "mapped-text",
                 f"blocks[{block.index}].braces",
             )
 
@@ -340,9 +340,9 @@ def decode_particle(
     significant = [t for t in tokens if t.kind in ("string", "open", "close")]
     if doc.root is not None and len(significant) > 1 and significant[1].kind == "open":
         open_token = significant[1]
-        ledger.claim(open_token.offset, open_token.length, "mapped", "root")
+        ledger.claim(open_token.offset, open_token.length, "mapped-text", "root")
     if doc.root is not None and doc.root_close is not None:
-        ledger.claim(doc.root_close.offset, doc.root_close.length, "mapped", "root")
+        ledger.claim(doc.root_close.offset, doc.root_close.length, "mapped-text", "root")
 
     omissions: list[dict[str, Any]] = []
     if has_insignificant_whitespace:

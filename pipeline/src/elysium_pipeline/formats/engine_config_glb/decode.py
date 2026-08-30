@@ -25,10 +25,7 @@ from elysium_pipeline.formats.engine_config_glb.model import (
 )
 from elysium_pipeline.formats.unit_contract.ledger import ByteLedger
 from elysium_pipeline.formats.unit_contract.origin import SourceMember
-from elysium_pipeline.formats.unit_contract.references import (
-    asset_id as unit_asset_id,
-    missing_sentinel,
-)
+from elysium_pipeline.formats.unit_contract.references import asset_id as unit_asset_id
 
 Resolver = Callable[[str], bool]
 
@@ -514,12 +511,16 @@ def _scene_reference(path: str) -> tuple[str, str]:
 
 
 def _sound_reference(path: str, path_exists: Resolver | None) -> dict[str, Any]:
-    """The `vtmb:sound:` (or `vtmb:missing-sound:`) reference a `.lip` companion names.
+    """The `vtmb:sound:` reference a `.lip` companion names.
 
     `seam_map_sound.md` keys a sound unit by its audio path *with* extension and resolves
     mp3-first; a `.lip` alone does not say which of the two the install ships, so both candidates
     are checked in that order and the identity is spelled after whichever one answered. Neither
-    resolving is `vtmb:missing-sound:`, `resolved: false`, per `references.missing_sentinel`.
+    resolving is an ordinary reference whose target merely fails to resolve, per
+    `seam_map_unit_contract.md` ("References between units") -- the sound seam's own rules do not
+    make the reference unreachable, the install simply lacks the file, so this is `resolved:
+    false`, not the `vtmb:missing-<kind>:` sentinel (that namespace is reserved for a reference
+    the *referenced kind's own rules* make unreachable to the engine).
     """
 
     normalized = _normalize_localized_path(path)
@@ -532,20 +533,13 @@ def _sound_reference(path: str, path_exists: Resolver | None) -> dict[str, Any]:
     has_mp3 = bool(path_exists(mp3_path)) if path_exists is not None else False
     has_wav = bool(path_exists(wav_path)) if path_exists is not None else False
     if has_mp3:
-        return {
-            "asset": unit_asset_id("sound", f"{normalized}.mp3"), "sourcePath": mp3_path,
-            "resolved": True, "sentinel": False,
-        }
+        return {"asset": unit_asset_id("sound", f"{normalized}.mp3"), "sourcePath": mp3_path, "resolved": True}
     if has_wav:
-        return {
-            "asset": unit_asset_id("sound", f"{normalized}.wav"), "sourcePath": wav_path,
-            "resolved": True, "sentinel": False,
-        }
+        return {"asset": unit_asset_id("sound", f"{normalized}.wav"), "sourcePath": wav_path, "resolved": True}
     return {
-        "asset": missing_sentinel("sound", f"{normalized}.wav"),
+        "asset": unit_asset_id("sound", f"{normalized}.wav"),
         "sourcePath": wav_path,
         "resolved": False,
-        "sentinel": True,
     }
 
 
@@ -556,7 +550,6 @@ def decode_localized_list(member: SourceMember, *, path_exists: Resolver | None 
 
     categories: list[dict[str, Any]] = []
     dependencies: dict[str, dict[str, Any]] = {}
-    sentinel_omissions: list[dict[str, Any]] = []
     anomalies: list[dict[str, Any]] = list(_mixed_line_endings(text))
     current: dict[str, Any] | None = None
 
@@ -594,7 +587,6 @@ def decode_localized_list(member: SourceMember, *, path_exists: Resolver | None 
                 row["resolved"] = False
             else:
                 role, _ = role_info
-                is_sentinel = False
                 if role == "model":
                     source_path, key = _model_reference(stripped)
                     asset = model_asset_id(source_path)
@@ -608,7 +600,6 @@ def decode_localized_list(member: SourceMember, *, path_exists: Resolver | None 
                     asset = reference["asset"]
                     source_path = reference["sourcePath"]
                     resolved = reference["resolved"]
-                    is_sentinel = reference["sentinel"]
                 elif role == "ui-resource":
                     source_path = _normalize_localized_path(stripped)
                     asset = unit_asset_id("ui-resource", source_path)
@@ -620,24 +611,15 @@ def decode_localized_list(member: SourceMember, *, path_exists: Resolver | None 
                 row["role"] = role
                 row["asset"] = asset
                 row["resolved"] = resolved
-                if is_sentinel:
-                    # `seam_map_unit_contract.md` ("References between units"): a sentinel "keeps
-                    # a sentinel identity ..., carries resolved: false, produces no dependencies
-                    # row and enters coverage as omitted-proven with the reason the seam names."
-                    sentinel_omissions.append(
-                        {
-                            "role": "missing-sound-reference",
-                            "field": f"categories[{current['index']}].paths[{path_index}]",
-                            "asset": asset,
-                            "sourceOffset": start,
-                            "reason": "neither a same-stem .mp3 nor .wav exists in the install "
-                                      "for this .lip companion",
-                        }
-                    )
-                else:
-                    dependencies.setdefault(
-                        asset, {"role": role, "asset": asset, "sourcePath": source_path, "resolved": resolved}
-                    )
+                # A reference whose target is another seam's data and merely fails to resolve
+                # (a `.lip` companion the install lacks, a texture the corpus never shipped) is
+                # an ordinary `dependencies` row, `resolved: false` -- per
+                # `seam_map_unit_contract.md` ("References between units"), the `vtmb:missing-
+                # <kind>:` sentinel is reserved for a reference the *referenced kind's own rules*
+                # make unreachable to the engine, which none of this seam's roles ever produce.
+                dependencies.setdefault(
+                    asset, {"role": role, "asset": asset, "sourcePath": source_path, "resolved": resolved}
+                )
             current["paths"].append(row)
         if terminator_end > content_end:
             ledger.claim(content_end, terminator_end - content_end, "omitted-proven", "whitespace")
@@ -648,7 +630,7 @@ def decode_localized_list(member: SourceMember, *, path_exists: Resolver | None 
         "dependencies": list(dependencies.values()),
         "comments": [],
         "anomalies": anomalies,
-        "omissions": whitespace_omission(ledger_row, member.data) + sentinel_omissions,
+        "omissions": whitespace_omission(ledger_row, member.data),
         "ledgerRow": ledger_row,
     }
 

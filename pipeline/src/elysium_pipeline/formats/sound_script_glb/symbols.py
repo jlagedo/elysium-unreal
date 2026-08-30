@@ -9,7 +9,7 @@ header comment states `VOL_NORM 1.0f` without ever using it; `sounds.txt` uses `
 documenting it). This module collects the symbol tables once, across the family the six tables
 form, sourced from whichever header actually states them; `PITCH_*` is undocumented in every
 `scripts/*.txt` header shipped and is carried here from the Source SDK reference
-(`public/soundflags.h`) instead -- see `specDeviations` in the export manifest for this seam.
+(`public/soundflags.h`) instead.
 """
 
 from __future__ import annotations
@@ -146,9 +146,8 @@ NULL_PROCESSOR = "NULL"
 
 #: Which processor-parameter field draws from a symbol table rather than a plain number, keyed
 #: by `(processor type, PROCESSOR_PARAMETERS field name)`. A token that names a field here and
-#: does not parse as a number is resolved against the named table before it is given up as
-#: `typedUnidentified`; see the DSP finding in the export manifest's `specDeviations`/reviewer
-#: fixes for why these tables -- otherwise unread -- exist at all.
+#: does not parse as a number is resolved against the named table before it is given up as a
+#: `typedUnidentified` row -- the published evidence that a table entry went unresolved.
 PROCESSOR_FIELD_SYMBOLS: dict[tuple[str, str], dict[str, int]] = {
     ("FLT", "ftype"): FILTER_TYPES,
     ("FLT", "quality"): FILTER_QUALITY,

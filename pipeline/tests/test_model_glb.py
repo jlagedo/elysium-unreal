@@ -604,9 +604,10 @@ def test_the_secondary_motion_preset_is_carried_as_typed_but_unidentified() -> N
 
 
 def test_the_ragdoll_keyvalues_tail_is_typed_rather_than_kept_as_text() -> None:
-    blocks = physics._blocks(
+    blocks, anomalies = physics._blocks(
         'ragdollconstraint {\n"parent" "0"\n"child" "3"\n"xmin" "-25.0"\n}\n\0'
     )
+    assert anomalies == []
     assert physics._typed_values("ragdollconstraint", blocks[0]["values"]) == {
         "parent": 0, "child": 3, "xmin": -25.0
     }
@@ -1286,3 +1287,239 @@ def test_the_validator_refuses_a_ledger_that_renames_a_model_vertex_pool() -> No
     )
     with pytest.raises(validation.ModelGlbValidationError, match="vertices"):
         validation.validate_document(document, binary, source_members=closure.members())
+
+
+# --- retail bytes the declared tables do not index --------------------------------------------
+
+
+def _donor_mesh(vertex_count: int, model_relative: int = -224) -> bytes:
+    """One `mstudiomesh_t` a superseded compile pass left behind."""
+
+    record = bytearray(60)
+    struct.pack_into("<4i", record, 0, 0, model_relative, vertex_count, 0)
+    return bytes(record)
+
+
+def test_a_retained_donor_pool_is_split_at_the_donor_stride_and_its_zero_lead() -> None:
+    """`scenery/vehicles/yugo` keeps a mesh whose pool is compact, not this model's 44 bytes."""
+
+    total, lead, stride = 3, 12, 12
+    payload = (
+        b"anchor\0"
+        + _donor_mesh(total)
+        + bytes(lead)
+        + bytes(range(1, total * stride + 1))
+        + b"\x7f" * (total * 16)
+        + b"pool\0"
+    )
+    ledger = coverage.ModelLedger("donor.mdl", payload, padding_owner="mdl.padding")
+    ledger.claim(0, 7, "mapped-string", "mdl.textures[0].name")
+    ledger.claim(len(payload) - 5, 5, "mapped-string", "mdl.searchPaths[0].value")
+    coverage._cover_unindexed_meshes(ledger, payload)
+    row = ledger.finish()
+    owners = {entry["owner"]: entry for entry in row["ranges"]}
+    assert owners["mdl.unindexedMesh@7"]["length"] == 60
+    assert (owners["mdl.unindexedMesh@7.vertices"]["offset"],
+            owners["mdl.unindexedMesh@7.vertices"]["length"]) == (79, total * stride)
+    assert owners["mdl.unindexedMesh@7.tangents"]["length"] == total * 16
+    assert owners["mdl.padding"]["offset"] == 67 and owners["mdl.padding"]["length"] == lead
+    assert row["coveragePercent"] == 100.0
+
+
+def test_a_retained_material_table_copy_is_claimed_table_by_table() -> None:
+    """The texture, search-path and skin tables the compiler wrote beside its geometry."""
+
+    pool = b"body\0models\\scenery\\prop\\\0"
+    tables = bytearray(20 * 2 + 4 + 4)
+    base = len(b"anchor\0")
+    for slot, name in enumerate((0, 5)):
+        record = base + slot * 20
+        struct.pack_into("<i", tables, slot * 20, base + len(tables) + name - record)
+        struct.pack_into("<f", tables, slot * 20 + 16, 0.25)
+    struct.pack_into("<i", tables, 40, base + len(tables) + 5)
+    struct.pack_into("<2H", tables, 44, 0, 1)
+    payload = b"anchor\0" + bytes(tables) + pool
+    ledger = coverage.ModelLedger("tables.mdl", payload, padding_owner="mdl.padding")
+    ledger.claim(0, 7, "mapped-string", "mdl.bones[0].name")
+    ledger.claim(7 + len(tables), len(pool), "omitted-proven", "mdl.unreferencedString@0")
+    coverage._cover_retained_material_tables(ledger, payload)
+    row = ledger.finish()
+    owners = {entry["owner"]: entry["length"] for entry in row["ranges"]}
+    assert owners["mdl.unindexedTextureDuplicate"] == 40
+    assert owners["mdl.unindexedSearchPathDuplicate"] == 4
+    assert owners["mdl.unindexedSkinTableDuplicate"] == 4
+    assert row["coveragePercent"] == 100.0
+    for owner in owners:
+        if owner.startswith("mdl.unindexed"):
+            coverage.omission_reason(owner)
+
+
+def test_a_compiler_trailer_inside_the_image_is_named_rather_than_left_unclaimed() -> None:
+    """`scenery/structural/malkavian/malkmazedrd` carries a second `QnDbTm` mid-image."""
+
+    payload = b"path\0\0\0" + bytes.fromhex("00000000") + b"QnDbTm" + b"tail\0"
+    ledger = coverage.ModelLedger("trailer.mdl", payload, padding_owner="mdl.padding")
+    ledger.claim(0, 5, "mapped-string", "mdl.searchPaths[0].value")
+    ledger.claim(len(payload) - 5, 5, "mapped-string", "mdl.textures[0].name")
+    coverage._cover_retained_compiler_trailers(ledger)
+    row = ledger.finish()
+    entry = next(
+        entry for entry in row["ranges"]
+        if entry["owner"].startswith("mdl.retainedCompilerTrailerQnDbTm@")
+    )
+    assert (entry["offset"], entry["length"], entry["state"]) == (7, 10, "omitted-proven")
+    assert coverage.omission_reason(entry["owner"]).startswith("compiler-trailer")
+    assert row["coveragePercent"] == 100.0
+
+
+def test_a_superseded_animation_track_head_between_two_channels_is_claimed() -> None:
+    """`weapons/rifle_rem700/view/v_rifle_rem700` keeps the head of an uncompressed track."""
+
+    head = bytes([116, 116]) + b"\x11" * 30            # 116 samples declared, 15 present
+    payload = b"\x01\x02\x03\x04" + head + b"\x05\x06\x07\x08"
+    ledger = coverage.ModelLedger("anim.mdl", payload, padding_owner="mdl.padding")
+    ledger.claim(0, 4, "mapped", "mdl.localAnimations[7].frames.bone[0].channel[6]")
+    ledger.claim(
+        len(payload) - 4, 4, "mapped", "mdl.localAnimations[7].frames.bone[1].channel[0]"
+    )
+    coverage._cover_superseded_animation_tracks(ledger)
+    row = ledger.finish()
+    entry = next(
+        entry for entry in row["ranges"]
+        if entry["owner"].startswith("mdl.supersededAnimationTrack@")
+    )
+    assert (entry["offset"], entry["length"], entry["state"]) == (4, len(head), "omitted-proven")
+    assert coverage.omission_reason(entry["owner"]).startswith("superseded-animation-track")
+
+
+def test_tracks_after_a_bone_table_that_declares_no_channel_are_still_read() -> None:
+    """`weapons/handleclaws/ground/g_handleclaws` declares no channel and stores two tracks."""
+
+    data = bytearray(300)
+    data[:4] = b"IDST"
+    struct.pack_into("<i", data, 4, 2531)
+    struct.pack_into("<2i", data, 264, 1, 200)             # one animation descriptor at 200
+    struct.pack_into("<i", data, 212, 2)                   # two frames
+    payload = bytes(data) + b"\x02\x02\x01\x02\x03\x04" * 2 + b"ULDD" + b"tail\0"
+    ledger = coverage.ModelLedger("tracks.mdl", payload, padding_owner="mdl.padding")
+    ledger.claim(0, 300, "mapped", "mdl.localAnimations[0].boneRecords")
+    ledger.claim(len(payload) - 5, 5, "mapped-string", "mdl.searchPaths[0].value")
+    coverage._cover_extra_animation_tracks(ledger)
+    row = ledger.finish()
+    owners = [entry["owner"] for entry in row["ranges"]]
+    assert "mdl.localAnimations[0].boneRecords.unindexedTrack[0]" in owners
+    assert "mdl.localAnimations[0].boneRecords.unindexedTrack[1]" in owners
+    assert "mdl.localAnimations[0].boneRecords.compilerPackingULDD" in owners
+    assert row["coveragePercent"] == 100.0
+
+
+# --- the retail PHY KeyValues dialect ----------------------------------------------------------
+
+
+def test_a_phy_block_that_opens_on_a_brace_repeats_the_block_before_it() -> None:
+    """`scenery/structural/ventrue_tower/cinderblocks_breakable` names `break` once."""
+
+    blocks, anomalies = physics._blocks(
+        'break {"model" "brick1" }\n{"model" "brick2" }\n{"model" "brick3" }\n\0'
+    )
+    assert [block["type"] for block in blocks] == ["break", "break", "break"]
+    assert [block["values"]["model"] for block in blocks] == ["brick1", "brick2", "brick3"]
+    assert [row["row"] for row in anomalies] == ["phy-keyvalues-unnamed-block"] * 2
+
+
+def test_a_phy_field_with_no_value_keeps_its_key_and_the_stray_brace_closes_nothing() -> None:
+    """A stray quote in `scenery/misc/plywoodboard/boardsmall` eats a brace and a keyword."""
+
+    blocks, anomalies = physics._blocks('break {"model" "wood2c" "health" }\n }\n\0')
+    assert blocks[0]["pairs"] == [
+        {"key": "model", "value": "wood2c"}, {"key": "health", "value": ""}
+    ]
+    assert [row["row"] for row in anomalies] == [
+        "phy-keyvalues-field-without-value", "phy-keyvalues-unbalanced-brace"
+    ]
+
+
+def test_a_phy_block_with_no_name_at_all_is_still_refused() -> None:
+    with pytest.raises(physics.ModelPhysicsError, match="expected block name"):
+        physics._blocks('{"model" "brick1" }\n\0')
+
+
+# --- a VTX the MDL outgrew ---------------------------------------------------------------------
+
+
+def _stale_topology() -> bytes:
+    """The fixture's VTX with LOD 1 addressing a vertex the MDL's block does not hold."""
+
+    _mdl, topology = _minimal_mdl_vtx()
+    topology = bytearray(topology)
+    struct.pack_into("<3H", topology, 140 + 20, 0, 1, 9)
+    return bytes(topology)
+
+
+def test_a_vtx_triangle_outside_the_model_is_dropped_named_and_still_publishes() -> None:
+    extra = {f"models/{MODEL_KEY}.dx80.vtx": _stale_topology()}
+    _closure, unit = _unit(extra=extra)
+    stale = [row for row in unit.anomalies if row["row"] == "vtx-vertex-outside-model"]
+    assert len(stale) == 1
+    assert stale[0]["lod"] == 1 and stale[0]["mesh"] == 0
+    assert stale[0]["droppedTriangles"] == 1 and stale[0]["staleVertices"] == [9]
+    assert stale[0]["resolved"] is False
+    assert [row["index"] for row in unit.lods] == [0, 1]
+    document, binary = model_glb.build_document(unit)
+    assert len(document["meshes"]) == 1
+    validation.validate_document(document, binary, source_members=_closure.members())
+    document["extensions"][EXTENSION]["anomalies"][0]["staleVertices"] = [0]
+    with pytest.raises(validation.ModelGlbValidationError, match="the MDL does hold stale"):
+        validation.validate_document(document, binary, source_members=_closure.members())
+
+
+def test_a_stale_vtx_publishes_the_sections_that_do_resolve(tmp_path: Path) -> None:
+    extra = {f"models/{MODEL_KEY}.dx80.vtx": _stale_topology()}
+    destination = _export(tmp_path, extra=extra)
+    summary = validation.validate(destination)
+    assert summary["byteCoveragePercent"] == 100.0
+    assert (summary["unresolved"], summary["unsupported"]) == (0, 0)
+    assert "vtx-vertex-outside-model" in summary["anomalies"]
+    assert any("vtx-vertex-outside-model" in row for row in validation.warnings_for(summary))
+
+
+# --- a LOD only the legacy twin carries --------------------------------------------------------
+
+
+def _one_lod_topology(checksum: int = CHECKSUM) -> bytes:
+    """A dx80 twin that carries LOD 0 alone, so LOD 1 is published from the dx7 pair."""
+
+    topology = bytearray(156)
+    struct.pack_into("<i", topology, 0, 107)
+    struct.pack_into("<I", topology, 16, checksum)
+    struct.pack_into("<2i", topology, 20, 1, 140)
+    struct.pack_into("<2i", topology, 28, 1, 36)
+    struct.pack_into("<2i", topology, 36, 1, 8)
+    struct.pack_into("<2i", topology, 44, 1, 8)
+    struct.pack_into("<2if", topology, 52, 1, 12, 0.0)
+    struct.pack_into("<H", topology, 64, 1)
+    struct.pack_into("<i", topology, 68, 8)
+    group = 72
+    struct.pack_into("<3H", topology, group, 3, 3, 1)
+    topology[group + 6] = 0x10
+    struct.pack_into("<3i", topology, group + 8, 20, 26, 32)
+    struct.pack_into("<3H", topology, group + 20, 0, 1, 2)
+    struct.pack_into("<3H", topology, group + 26, 0, 1, 2)
+    struct.pack_into("<4H", topology, group + 32, 3, 0, 3, 0)
+    return bytes(topology)
+
+
+def test_a_lod_only_the_legacy_twin_carries_is_held_to_that_twin(tmp_path: Path) -> None:
+    """`character/npc/unique/chinatown/barabus` ships one dx80 LOD and seven dx7 LODs."""
+
+    _mdl, both_lods = _minimal_mdl_vtx()
+    extra = {
+        f"models/{MODEL_KEY}.dx80.vtx": _one_lod_topology(),
+        f"models/{MODEL_KEY}.dx7_2bone.vtx": both_lods,
+    }
+    _closure, unit = _unit(extra=extra)
+    assert unit.vtx_comparison["alternateOnlyLods"] == [1]
+    assert [row["index"] for row in unit.lods] == [0, 1]
+    destination = _export(tmp_path, extra=extra)
+    summary = validation.validate(destination)
+    assert summary["lods"] == 2 and summary["byteCoveragePercent"] == 100.0

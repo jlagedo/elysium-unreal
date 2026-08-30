@@ -21,7 +21,7 @@ from elysium_pipeline.formats.corpus_index_glb.model import (
     Unit,
     kind_of,
 )
-from elysium_pipeline.formats.unit_contract import read_glb, warnings_for
+from elysium_pipeline.formats.unit_contract import decode_glb, warnings_for
 
 
 class CorpusGraphError(RuntimeError):
@@ -66,8 +66,10 @@ def _warnings(root: Mapping[str, Any]) -> dict[str, Any]:
 def read_unit(path: Path, export_root: Path) -> tuple[Unit, dict[str, Any]]:
     """One published unit as a `units[]` row plus the extension root it was read from."""
 
+    # One read: the digest published in the `units[]` row and the extension root the rest of the
+    # row is read out of are the same bytes, which a second open of the file could not promise.
     data = Path(path).read_bytes()
-    document, _ = read_glb(path)
+    document, _ = decode_glb(data, str(path))
     _, root = extension_root(document)
     identity = root.get("identity") or {}
     asset = str(identity.get("asset", ""))
@@ -152,16 +154,26 @@ def inverse(edges: Sequence[Reference]) -> dict[str, list[dict[str, str]]]:
     return {target: table[target] for target in sorted(table)}
 
 
-def dangling(edges: Sequence[Reference]) -> list[dict[str, Any]]:
-    """Every `resolved: false` edge grouped by role, with the referrer and the authored path."""
+def dangling(
+    edges: Sequence[Reference],
+    extra: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
+) -> list[dict[str, Any]]:
+    """Every `resolved: false` edge grouped by role, with the referrer and the authored path.
 
-    by_role: dict[str, list[dict[str, str]]] = {}
+    `extra` carries the groups a cross-unit check contributes: a reference no unit declares as a
+    dependency row -- an expression *row* inside a table the scene does resolve -- is still a
+    reference the corpus could not answer, and this table is where the index reports one.
+    """
+
+    by_role: dict[str, list[dict[str, Any]]] = {}
     for edge in edges:
         if edge.resolved:
             continue
         by_role.setdefault(edge.role, []).append(
             {"from": edge.source, "to": edge.target, "sourcePath": edge.source_path}
         )
+    for role, rows in (extra or {}).items():
+        by_role.setdefault(role, []).extend(dict(row) for row in rows)
     return [
         {"role": role, "count": len(by_role[role]), "edges": by_role[role]}
         for role in sorted(by_role)

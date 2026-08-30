@@ -38,13 +38,12 @@ SCHEME_PARAMS_KEYS = frozenset({"randomsoundcount", "roomdsp"})
 #: `seam_map_sound_scheme.md`'s own `Ambient` column is `Filename`, `Volume` alone; three shipped
 #: schemes (`la_abandoned_building_1.txt`, `sm_junkyard_1.txt`, `test2.txt`) author `NoPause`
 #: there too, and `test2.txt` authors `Dry` there as well, both with the same meaning `Music`,
-#: `Combat` and `Alert` give them, so `Ambient` is decoded with the same vocabulary as those three
-#: (see `specDeviations`).
+#: `Combat` and `Alert` give them, so `Ambient` is decoded with the same vocabulary as those three.
 MUSIC_LIKE_KEYS = frozenset({"filename", "volume", "dry", "nopause"})
 #: `Dry` is not in `seam_map_sound_scheme.md`'s own `RandomSound` key column, but one shipped
 #: scheme (`test2.txt`) authors it there with the same routes-to-the-dry-bus meaning `Music`,
 #: `Combat` and `Alert` give it; real data would otherwise carry an avoidable `unsupported` row
-#: for a key whose meaning is not actually in question (see `specDeviations`).
+#: for a key whose meaning is not actually in question.
 RANDOM_SOUND_KEYS = frozenset(
     {
         "filename", "pitchmin", "pitchmax", "volume", "frequency", "audibleradius",
@@ -118,7 +117,7 @@ def _number(text: str) -> float | None:
 
 
 def _claim(ledger, token: lexer.Token, owner: str) -> None:
-    ledger.claim(token.offset, token.length, "mapped", owner)
+    ledger.claim(token.offset, token.length, "mapped-text", owner)
 
 
 class _BlockCursor:
@@ -161,7 +160,7 @@ def decode_sound_scheme(
         if token.kind == "whitespace":
             ledger.claim(token.offset, token.length, "omitted-proven", "whitespace")
         elif token.kind == "comment":
-            ledger.claim(token.offset, token.length, "mapped", f"comments[{len(comments)}]")
+            ledger.claim(token.offset, token.length, "mapped-text", f"comments[{len(comments)}]")
             comments.append({"offset": token.offset, "text": token.text})
         elif token.kind == "bom":
             ledger.claim(token.offset, token.length, "mapped", "root.byte-order-mark")
@@ -314,7 +313,7 @@ def decode_sound_scheme(
                     # Ambient record only -- not here, per occurrence -- so a `repeated-block`
                     # overwrite's discarded `Filename` (which owns no `dependencies` row; see
                     # `_collect_dependencies`) never raises an anomaly for a reference the
-                    # published `scheme` no longer makes (see `specDeviations`).
+                    # published `scheme` no longer makes.
             for key in ("volume", "dry", "nopause"):
                 out_key = "noPause" if key == "nopause" else key
                 record[out_key] = None
@@ -412,7 +411,7 @@ def decode_sound_scheme(
 
     # One `unresolved-file` anomaly per reference the *published* scheme still makes -- the same
     # final-state rule `_collect_dependencies` uses -- so a `repeated-block` overwrite's discarded
-    # `Filename` never raises an anomaly `dependencies` carries no row for (see `specDeviations`).
+    # `Filename` never raises an anomaly `dependencies` carries no row for.
     if sound_exists is not None:
         for record in (music, combat, alert, ambient):
             if record and record.get("file") and not sound_exists(record["file"]):

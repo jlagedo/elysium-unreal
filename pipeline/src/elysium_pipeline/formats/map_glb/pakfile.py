@@ -161,6 +161,11 @@ def parse(
     stored span is `derived`, and anything between them is proven fill -- zero fill is
     `padding-zero`, and a non-zero run becomes an evidence-backed `omissions[]` row, so a ZIP
     with bytes no record addresses is named rather than surfacing as a bare ledger gap.
+
+    Every offset the container supplies -- the EOCD's own extent, each central record, each
+    member's local header -- is bounds-checked before it is read, so a lump that is not this ZIP
+    leaves through `PakfileError` and not through a `struct.error`, which is not a `ValueError`
+    and which no caller of this module catches.
     """
 
     if lump_length <= 0:
@@ -170,6 +175,10 @@ def parse(
     eocd = raw.rfind(struct.pack("<I", EOCD_SIGNATURE))
     if eocd < 0:
         raise PakfileError("PAKFILE carries no end-of-central-directory record")
+    if eocd + EOCD_BYTES > len(raw):
+        raise PakfileError(
+            f"PAKFILE end-of-central-directory record at {eocd} runs past the lump"
+        )
     (
         disk,
         central_disk,
@@ -192,6 +201,8 @@ def parse(
     claims: list[tuple[int, int, str, str]] = []
     cursor = central_offset
     for index in range(entries):
+        if cursor + CENTRAL_HEADER_BYTES > central_offset + central_size:
+            raise PakfileError(f"PAKFILE central record {index} runs past the directory")
         if struct.unpack_from("<I", raw, cursor)[0] != CENTRAL_SIGNATURE:
             raise PakfileError(f"PAKFILE central record {index} has no signature")
         (
@@ -216,6 +227,11 @@ def parse(
         central_bytes = CENTRAL_HEADER_BYTES + name_length + extra_length + comment
         if cursor + central_bytes > central_offset + central_size:
             raise PakfileError(f"PAKFILE central record {index} runs past the directory")
+        if local_offset + LOCAL_HEADER_BYTES > len(raw):
+            raise PakfileError(
+                f"PAKFILE member {name!r} names local header offset {local_offset}, "
+                f"which leaves the {len(raw)}-byte lump"
+            )
         if struct.unpack_from("<I", raw, local_offset)[0] != LOCAL_SIGNATURE:
             raise PakfileError(f"PAKFILE member {name!r} has no local header")
         (

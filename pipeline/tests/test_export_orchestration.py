@@ -175,6 +175,98 @@ SINGLE_KIND_UNITS = [
 ]
 
 
+#: The family directory each `GlbUnitSeam` publishes below, written out. `_glb_seam_root` is
+#: what builds that path, so a test that calls it cannot pin the name; these are the literal
+#: directories the corpus is published under. `""` is the export root itself, which is where a
+#: seam whose own `output_relative_path` already names its family directory publishes.
+GLB_SEAM_FAMILY = {
+    "IMAGE_GLB": "images",
+    "SOUND_GLB": "sounds",
+    "EXPRESSION_TABLE_GLB": "",
+    "SHADER_SOURCE_GLB": "shader-programs",
+    "SHADER_PROGRAM_GLB": "shader-programs",
+    "PARTICLE_GLB": "particles",
+    "FONT_GLB": "fonts",
+    "FONT_LIST_GLB": "fonts",
+    "SOUND_SCRIPT_GLB": "",
+    "SOUND_SCRIPT_MANIFEST_GLB": "",
+    "SOUNDSCAPE_GLB": "",
+    "SENTENCE_GLB": "",
+    "DSP_PRESET_GLB": "",
+    "SOUND_SCHEME_GLB": "sound-schemes",
+    "SCENE_GLB": "scenes",
+    "MODEL_GLB": "models",
+    "DIALOGUE_GLB": "dialogues",
+    "VDATA_GLB": "vdata",
+    "UI_RESOURCE_GLB": "",
+    "SCRIPT_GLB": "scripts",
+    "MAP_GLB": "",
+    "MAP_ENTITIES_GLB": "",
+    "MAP_LIGHTING_GLB": "",
+    "MAP_VISIBILITY_GLB": "",
+    "NAV_GRAPH_GLB": "nav-graphs",
+    "ENGINE_CONFIG_GLB": "engine-config",
+}
+
+
+def _seam_name(seam) -> str:
+    """The module-level name a seam is declared under, which is how the table above keys it."""
+
+    for name, value in _declared_glb_seams().items():
+        if value is seam:
+            return name
+    raise AssertionError(f"{seam.label} is declared under no module-level name")
+
+
+def _declared_glb_seams():
+    """Every `GlbUnitSeam` the module declares, by the name it is published under."""
+
+    return {
+        name: value
+        for name, value in vars(export_manager).items()
+        if isinstance(value, export_manager.GlbUnitSeam)
+    }
+
+
+def _review_seam_directories() -> set[str]:
+    """The corpus directories the GLB reviewer knows, keyed the way it keys them."""
+
+    import sys
+    from pathlib import Path
+
+    tools = Path(__file__).resolve().parents[2] / "tools"
+    if str(tools) not in sys.path:
+        sys.path.insert(0, str(tools))
+    from elysium_glb_review.core.seams import SEAM_EXTENSION
+
+    return set(SEAM_EXTENSION)
+
+
+def test_every_glb_seam_names_the_family_directory_it_publishes_below() -> None:
+    config = _glb_config()
+    seams = _declared_glb_seams()
+    assert sorted(seams) == sorted(GLB_SEAM_FAMILY)
+    for name, seam in sorted(seams.items()):
+        family = GLB_SEAM_FAMILY[name]
+        assert seam.family == family, f"{name} publishes below {seam.family!r}"
+        expected = config.export_v2_root / family if family else config.export_v2_root
+        assert export_manager._glb_seam_root(config, seam) == expected
+
+
+def test_the_family_directories_are_the_ones_the_glb_reviewer_reads() -> None:
+    # `tools/elysium_glb_review/core/seams.SEAM_EXTENSION` is the corpus's only other copy of
+    # these directory names, and it keys a nested family (`shader-programs/psh`) on the whole
+    # path. A family renamed on one side only would make the reviewer expect no extension at
+    # all for every unit of the kind rather than flagging the ones that carry the wrong root.
+    directories = _review_seam_directories()
+    for name, family in sorted(GLB_SEAM_FAMILY.items()):
+        if not family:
+            continue
+        assert any(
+            key == family or key.startswith(family + "/") for key in directories
+        ), f"{name} publishes below {family!r}, which the GLB reviewer does not know"
+
+
 def _glb_config():
     from pathlib import Path
     from types import SimpleNamespace
@@ -207,6 +299,7 @@ def _stubbed_seam(seam, index, keys):
     from elysium_pipeline.formats import install
 
     exporter, validation = _seam_modules(seam)
+    from elysium_pipeline.exporters import corpus_index_glb
 
     def write(_index, key, output_root, **_kwargs):
         assert _index is index
@@ -225,8 +318,9 @@ def _stubbed_seam(seam, index, keys):
         ) as export,
         mock.patch.object(validation, "validate", return_value=_GLB_SUMMARY) as validate,
         mock.patch.object(validation, "warnings_for", return_value=[]),
+        mock.patch.object(corpus_index_glb, "refresh_unit", return_value=True) as refresh,
     ):
-        yield build_index, export, validate
+        yield build_index, export, validate, refresh
 
 
 @pytest.mark.parametrize(
@@ -234,7 +328,9 @@ def _stubbed_seam(seam, index, keys):
 )
 def test_each_plural_glb_command_builds_one_index_and_writes_every_key(corpus, seam) -> None:
     index = {"one": object()}
-    with _stubbed_seam(seam, index, ["a/one", "b/two"]) as (build_index, export, validate):
+    with _stubbed_seam(seam, index, ["a/one", "b/two"]) as (
+        build_index, export, validate, _refresh
+    ):
         destinations = corpus(_glb_config(), object(), jobs=1)
 
     assert len(destinations) == 2
@@ -252,22 +348,30 @@ def test_a_plural_glb_command_publishes_below_its_own_family(corpus, seam) -> No
     with _stubbed_seam(seam, index, ["a/one"]):
         destinations = corpus(config, object(), jobs=1)
 
-    root = export_manager._glb_seam_root(config, seam)
-    assert destinations[0].parent == root
-    assert config.export_v2_root in destinations[0].parents
+    # The expected directory is the spelled-out one, not `_glb_seam_root`'s own answer: a
+    # family typed `imagez` would satisfy the function against itself and publish the whole
+    # image corpus somewhere nothing reads.
+    family = GLB_SEAM_FAMILY[_seam_name(seam)]
+    expected = config.export_v2_root / family if family else config.export_v2_root
+    assert destinations[0].parent == expected
 
 
 @pytest.mark.parametrize(
     ("unit", "seam"), SINGLE_KIND_UNITS, ids=[seam.label for _, seam in SINGLE_KIND_UNITS]
 )
 def test_each_singular_glb_command_writes_the_key_it_was_given(unit, seam) -> None:
+    config = _glb_config()
     index = {"one": object()}
-    with _stubbed_seam(seam, index, []) as (build_index, export, _validate):
-        destination = unit(_glb_config(), object(), "a/one")
+    with _stubbed_seam(seam, index, []) as (build_index, export, _validate, refresh):
+        destination = unit(config, object(), "a/one")
 
     build_index.assert_called_once_with()
     assert export.call_args.args[1] == "a/one"
     assert destination.name == "a_one.glb"
+    # `seam_map_corpus_index.md` ("Unit identity"): the index is "rewritten by any single-unit
+    # command so that its `units[]` row for that unit is current", so every singular command
+    # ends by handing the corpus index the file it just wrote.
+    refresh.assert_called_once_with(config.export_v2_root, destination)
 
 
 @pytest.mark.parametrize(
@@ -287,11 +391,40 @@ def test_a_singular_glb_command_reports_a_failure_as_an_offline_export_failure(u
     assert "no such key" in str(raised.value)
 
 
+def test_a_singular_command_reports_a_corpus_index_refresh_it_could_not_make(capsys) -> None:
+    # The unit on disk is what the command was asked for, so a refresh that fails is reported
+    # and the export still succeeds; the index is made current again by the next `export-all`.
+    config = _glb_config()
+    index = {"one": object()}
+    with _stubbed_seam(export_manager.VDATA_GLB, index, []) as (_build, _export, _v, refresh):
+        refresh.side_effect = RuntimeError("index.glb carries no corpus-index extension root")
+        destination = export_manager.export_vdata_glb(config, object(), "a/one")
+
+    assert destination.name == "a_one.glb"
+    printed = capsys.readouterr().out
+    assert "corpus index not refreshed" in printed
+    assert "index.glb carries no corpus-index extension root" in printed
+
+
+def test_a_config_that_names_no_export_v2_root_refreshes_no_corpus_index() -> None:
+    from types import SimpleNamespace
+
+    from elysium_pipeline.exporters import corpus_index_glb
+
+    with mock.patch.object(corpus_index_glb, "refresh_unit") as refresh:
+        export_manager.refresh_corpus_index_row(
+            SimpleNamespace(export_v2_root=None), _glb_config().export_v2_root / "one.glb"
+        )
+    refresh.assert_not_called()
+
+
 def test_a_keyless_seam_writes_its_one_unit_without_a_key() -> None:
     # The font registry and the game-sound manifest are each one unit the install either has
     # or has not, so their writers take no key.
     index = {"one": object()}
-    with _stubbed_seam(export_manager.FONT_LIST_GLB, index, []) as (_build, export, _validate):
+    with _stubbed_seam(export_manager.FONT_LIST_GLB, index, []) as (
+        _build, export, _validate, _refresh
+    ):
         destination = export_manager.export_font_list_glb(_glb_config(), object())
 
     assert export.call_args.args == (index, destination.parent)
@@ -303,7 +436,9 @@ def test_the_font_corpus_publishes_the_registry_with_the_faces() -> None:
     # recognises it, so the registry needs no pass of its own.
     index = {"one": object()}
     keys = ["arial_10_400_0", "fontlist"]
-    with _stubbed_seam(export_manager.FONT_GLB, index, keys) as (_build, export, _validate):
+    with _stubbed_seam(export_manager.FONT_GLB, index, keys) as (
+        _build, export, _validate, _refresh
+    ):
         destinations = export_manager.export_all_font_glbs(_glb_config(), object(), jobs=1)
 
     assert [call.args[1] for call in export.call_args_list] == keys

@@ -537,12 +537,7 @@ def test_an_empty_category_still_produces_a_header_row():
 
 
 def test_a_typed_extension_produces_one_dependency_per_role():
-    # The `.lip` in `LOCALIZED_LIST` has no audio companion on its own (a `vtmb:missing-sound:`
-    # sentinel, see below), so a resolving companion is supplied here to exercise "sound" too.
-    _, _, _, model = _decode(
-        {"localized_list.txt": LOCALIZED_LIST, "sound/character/dlg/line1.mp3": b"x"},
-        "localized_list.txt",
-    )
+    _, _, _, model = _decode({"localized_list.txt": LOCALIZED_LIST}, "localized_list.txt")
     roles = {row["role"] for row in model.dependencies}
     assert roles == {"material", "texture", "sound", "scene", "model", "ui-resource"}
 
@@ -562,14 +557,37 @@ def test_a_lip_reference_resolves_the_paired_mp3_first():
     assert row["resolved"] is True
 
 
-def test_a_lip_reference_with_neither_companion_is_a_missing_sound_sentinel():
-    """A sentinel reference produces no `dependencies` row and is instead graded `omitted-proven`
-    with its own reason (`seam_map_unit_contract.md`, "References between units")."""
+def test_a_lip_reference_with_neither_companion_is_an_ordinary_unresolved_dependency():
+    """Per `seam_map_unit_contract.md` ("References between units"), a reference whose target is
+    another seam's data and merely fails to resolve is an ordinary `dependencies` row, `resolved:
+    false` -- not the `vtmb:missing-<kind>:` sentinel, which is reserved for a reference the
+    *referenced kind's own rules* make unreachable to the engine. Neither `.mp3` nor `.wav`
+    existing in the install is the former, not the latter."""
 
     _, _, _, model = _decode({"localized_list.txt": LOCALIZED_LIST}, "localized_list.txt")
-    assert not any(d["role"] == "sound" for d in model.dependencies)
-    row = next(o for o in model.omissions if o["role"] == "missing-sound-reference")
-    assert row["asset"] == "vtmb:missing-sound:character/dlg/line1.wav"
+    assert not any(o["role"] == "missing-sound-reference" for o in model.omissions)
+    row = next(d for d in model.dependencies if d["role"] == "sound")
+    assert row["asset"] == "vtmb:sound:character/dlg/line1.wav"
+    assert row["sourcePath"] == "sound/character/dlg/line1.wav"
+    assert row["resolved"] is False
+
+
+def test_the_validator_rejects_the_retired_missing_sound_reference_omission_role():
+    """`missing-sound-reference` is a role the decode no longer emits, so the validator's
+    vocabulary no longer names it: a document carrying one is rejected rather than accepted as
+    an omission this seam can prove."""
+
+    assert "missing-sound-reference" not in validation._OMISSION_ROLES
+    _, _, _, model = _decode({"localized_list.txt": LOCALIZED_LIST}, "localized_list.txt")
+    document, binary = exporter.build_document(model)
+    root = document["extensions"][ENGINE_CONFIG_EXTENSION]
+    root["omissions"] = list(root["omissions"]) + [
+        {"role": "missing-sound-reference", "path": "sound/character/dlg/line1.lip"}
+    ]
+    with pytest.raises(
+        validation.EngineConfigGlbValidationError, match="unknown source omission"
+    ):
+        validation.validate_document(document, binary)
 
 
 def test_a_vcd_reference_produces_a_scene_dependency():

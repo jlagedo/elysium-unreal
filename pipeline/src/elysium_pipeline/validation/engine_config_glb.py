@@ -58,9 +58,11 @@ _ANOMALY_ROLES = {
     "unclassified-localized-path",
 }
 
-_OMISSION_ROLES = {
-    "empty-member", "trailing-fill", "insignificant-whitespace", "missing-sound-reference",
-}
+#: The three ranges this seam can prove contribute no payload byte. A localized `.lip` whose
+#: audio the install does not ship is not one of them: it is an ordinary `resolved: false`
+#: dependency row, per `seam_map_unit_contract.md` ("References between units"), so no omission
+#: role names it and a document that carries one is rejected.
+_OMISSION_ROLES = {"empty-member", "trailing-fill", "insignificant-whitespace"}
 
 
 class EngineConfigGlbValidationError(UnitValidationError):

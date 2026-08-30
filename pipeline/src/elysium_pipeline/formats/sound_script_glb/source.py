@@ -13,7 +13,6 @@ from typing import Any, Callable
 
 from elysium_pipeline.formats.sound_script_glb import dsp_tree, kv_tree, lexer
 from elysium_pipeline.formats.sound_script_glb.model import (
-    MANIFEST_KEY,
     TABLE_PATHS,
     dsp_preset_asset_id,
     game_sound_asset_id,
@@ -299,8 +298,8 @@ class GameSoundDirectory:
     is dead data shadowed by the live entry of the same name: the collision is a real property of
     the shipped corpus (16 names, `Metal_Barrel.Impact` and `Test.Sound` among them), not
     something `seam_map_sound_script.md` resolves, and this seam keeps the live entry's identity
-    and records the dormant duplicate as shadowed rather than publishing two units for one asset
-    id. See `specDeviations`.
+    and records the dormant duplicate as shadowed -- the live unit's `shadowed-dormant-entry`
+    anomaly (see `decode.decode_game_sound`) -- rather than publishing two units for one asset id.
     """
 
     live: KvTable

@@ -6,7 +6,7 @@ the suite is a pin on this seam's own decode/export/validate contract, independe
 
 from __future__ import annotations
 
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 
 import pytest
 
@@ -47,8 +47,8 @@ def _fake_install(files: dict[str, bytes]) -> tuple[dict, callable]:
 
 #: Exercises: SchemeParams (both keys), a repeated Music block (last-wins, with the discarded
 #: first occurrence flagged both `repeated-block` and `volume-out-of-range`), Combat's `Dry`,
-#: Ambient's `NoPause` (outside `seam_map_sound_scheme.md`'s own Ambient column -- see
-#: `specDeviations`), an out-of-vocabulary block, two `RandomSound` occurrences (one with a
+#: Ambient's `NoPause` (outside `seam_map_sound_scheme.md`'s own Ambient column -- accepted by
+#: `MUSIC_LIKE_KEYS`), an out-of-vocabulary block, two `RandomSound` occurrences (one with a
 #: repeated `Volume`, an inverted `Pitch` range, a wrapping `Angle` range that is *not* flagged,
 #: an out-of-vocabulary key and an unresolved `Filename`; the other with a second unresolved
 #: `Filename` sharing no asset with the first).
@@ -159,6 +159,24 @@ def test_the_ledger_has_no_span_and_hashes_the_whole_file():
     assert model.ledger_row["sourcePath"] == SCHEME_PATH
     assert model.ledger_row["sourceSha256"] == hashlib.sha256(SAMPLE).hexdigest()
     assert model.member.path == SCHEME_PATH
+
+
+def test_text_ranges_are_graded_mapped_text_not_mapped():
+    """`seam_map_unit_contract.md` reserves the ledger state `mapped` for a binary record or
+    payload; every range this seam claims is a text token (`root.name`, `root.braces`, a block's
+    name/braces, a key/value pair, a comment) decoded into a structured table, so it must be
+    graded `mapped-text`. Only a byte-order-mark claim -- which this sample carries none of -- may
+    still be `mapped`."""
+
+    _, _, _, model = _decode()
+    state_bytes = model.ledger_row["stateBytes"]
+    assert "mapped" not in state_bytes
+    assert state_bytes["mapped-text"] > 0
+    owners_by_state: dict[str, set[str]] = {}
+    for row in model.ledger_row["ranges"]:
+        owners_by_state.setdefault(row["state"], set()).add(row["owner"])
+    assert "root.name" in owners_by_state["mapped-text"]
+    assert any(owner.startswith("comments[") for owner in owners_by_state["mapped-text"])
 
 
 def test_a_false_zero_claim_over_the_files_own_text_is_refused():
@@ -332,8 +350,9 @@ def test_a_discarded_singleton_blocks_unresolved_file_raises_no_anomaly():
     """`music/theme.mp3` (the discarded first `Music` occurrence's `Filename` in `SAMPLE`) is a
     known sound, so it never exercised this path; here the discarded occurrence's file is itself
     unresolved. Since `dependencies` is built from the *final* `scheme` only (see
-    `specDeviations`), an `unresolved-file` anomaly for a reference the published scheme no longer
-    makes would name something `dependencies` carries no row for -- so it must not be raised."""
+    `_collect_dependencies`), an `unresolved-file` anomaly for a reference the published scheme no
+    longer makes would name something `dependencies` carries no row for -- so it must not be
+    raised."""
 
     text = SAMPLE.replace(b'"Filename"\t"music/theme.mp3"', b'"Filename"\t"music/gone.mp3"')
     _, _, _, model = _decode(text)
@@ -347,7 +366,7 @@ def test_a_discarded_singleton_blocks_unresolved_file_raises_no_anomaly():
 def test_ambient_accepts_nopause_beyond_its_own_grammar_column():
     """`seam_map_sound_scheme.md`'s own `Ambient` column is `Filename`, `Volume` alone; real data
     (`la_abandoned_building_1.txt`, `sm_junkyard_1.txt`, `test2.txt`) authors `NoPause` (and, in
-    `test2.txt`, `Dry`) there too -- see `specDeviations`."""
+    `test2.txt`, `Dry`) there too -- accepted by `MUSIC_LIKE_KEYS`."""
 
     _, _, _, model = _decode()
     assert model.ambient["noPause"] == {"value": False, "raw": "0", "parameter": model.ambient["noPause"]["parameter"]}

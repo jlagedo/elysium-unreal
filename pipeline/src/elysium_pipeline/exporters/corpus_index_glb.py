@@ -140,7 +140,7 @@ def index_path(export_root: Path) -> Path:
 
 
 def refresh_unit(export_root: Path, unit_file: Path) -> bool:
-    """Bring the index's `units[]` row for one published unit up to date, in place.
+    """Bring the index's `units[]` row for one published unit up to date.
 
     This is what "rewritten by any single-unit command so that its `units[]` row for that unit is
     current" costs: the row and its `corpus-unit` dependency are re-read from the file the command
@@ -153,7 +153,7 @@ def refresh_unit(export_root: Path, unit_file: Path) -> bool:
     from elysium_pipeline.formats.corpus_index_glb import graph
     from elysium_pipeline.formats.corpus_index_glb.graph import by_kind
     from elysium_pipeline.formats.corpus_index_glb.model import DEPENDENCY_ROLE
-    from elysium_pipeline.formats.unit_contract import dependency, encode_glb, read_glb
+    from elysium_pipeline.formats.unit_contract import dependency, read_glb
 
     root = Path(export_root)
     published = index_path(root)
@@ -203,5 +203,13 @@ def refresh_unit(export_root: Path, unit_file: Path) -> bool:
         census["byKind"] = by_kind(units)
         index_root["census"] = census
 
-    published.write_bytes(encode_glb(document, binary))
+    from elysium_pipeline.validation import corpus_index_glb as validation
+
+    # A refresh publishes the index like any other unit write: what it rewrote is judged first and
+    # lands through a temporary sibling, so an interrupted refresh cannot leave a truncated index
+    # behind. The export root is left out of the validation deliberately -- re-hashing the whole
+    # corpus on every single-unit command would both cost the corpus per unit and fail on rows a
+    # plural re-export left stale, which are the next whole-corpus run's to make current.
+    validation.validate_document(document, binary)
+    write_glb(document, binary, published)
     return True

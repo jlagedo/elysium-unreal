@@ -100,6 +100,11 @@ def _decode_faces(
     The row is `derived`: every field it restates is a byte of the root's lump 7 or lump 6, and
     the root's ledger is where those bytes are accounted. What is decided here is the extent each
     face's samples occupy, because that is what makes lump 8 inspectable.
+
+    A face's blocks are laid out style-major, set-minor: a style's flat lightmap and its three
+    bump-basis lightmaps are contiguous, and the next style's four follow. The corpus proves it --
+    2,572 bumped two-style faces hold exactly four all-zero blocks and in every one the four sit
+    in a contiguous run, never on the stride a set-major layout would put them on.
     """
 
     data = closure.data
@@ -176,9 +181,9 @@ def _decode_faces(
             byte_length = 0
         else:
             built: list[SampleSpan] = []
-            for set_index in range(sets):
-                for style_index, (_slot, style) in enumerate(live):
-                    start = light_offset + (set_index * len(live) + style_index) * block
+            for style_index, (_slot, style) in enumerate(live):
+                for set_index in range(sets):
+                    start = light_offset + (style_index * sets + set_index) * block
                     built.append(
                         SampleSpan(
                             set_index=set_index,

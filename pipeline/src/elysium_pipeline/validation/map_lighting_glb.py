@@ -188,10 +188,10 @@ def _check_faces(root: Mapping[str, Any]) -> None:
                      f"face {index} span {order} starts at {span['offset']}, not {cursor}")
             _require(int(span["length"]) == block,
                      f"face {index} span {order} is {span['length']} bytes, not {block}")
-            _require(int(span["set"]) == order // len(live)
-                     and int(span["styleIndex"]) == order % len(live),
-                     f"face {index} span {order} is not set-major, style-minor")
-            _require(int(span["style"]) == live[order % len(live)],
+            _require(int(span["set"]) == order % sets
+                     and int(span["styleIndex"]) == order // sets,
+                     f"face {index} span {order} is not style-major, set-minor")
+            _require(int(span["style"]) == live[order // sets],
                      f"face {index} span {order} names style {span['style']}")
             cursor += block
         _require(cursor <= sample_bytes,

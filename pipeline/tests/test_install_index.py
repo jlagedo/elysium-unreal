@@ -121,6 +121,23 @@ def test_invalidate_forces_a_rebuild(install_roots):
     assert first == second
 
 
+def test_root_level_pack_vpks_are_not_indexed_as_loose_members(install_roots):
+    # pack000.vpk sits directly under the retail root; the whole-install walk now descends
+    # into that root, and the container is the source of its own members, not a loose file.
+    index = install.build_index(verbose=False)
+    assert "pack000.vpk" not in index
+
+
+def test_the_default_dirs_cover_the_whole_install_not_just_the_asset_subset(install_roots):
+    os.makedirs(os.path.join(install_roots.patch, "sound"))
+    with open(os.path.join(install_roots.patch, "sound", "step.wav"), "wb") as f:
+        f.write(b"footstep")
+    whole = install.build_index(verbose=False)
+    narrow = install.build_index(install.ASSET_DIRS, verbose=False)
+    assert "sound/step.wav" in whole
+    assert "sound/step.wav" not in narrow
+
+
 def test_shadowing_and_read_are_unchanged(install_roots):
     idx = install.build_index(verbose=False)
     assert idx["materials/shared.vmt"] == ("loose", os.path.join(install_roots.patch, "materials", "shared.vmt"))

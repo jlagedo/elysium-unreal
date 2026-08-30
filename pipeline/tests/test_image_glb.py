@@ -642,6 +642,17 @@ def test_an_empty_bmp_member_fails_the_export():
         decode_bmp(_closure("gfx/hlfaceposer/empty.bmp", b""))
 
 
+def test_a_pixel_data_offset_past_the_member_fails_closed_as_a_bmp_decode_error():
+    # A truncated source whose `bfOffBits` points past the file's own length must fail as this
+    # seam's documented error, not escape as a ledger-internal `ByteLedgerError` for what is
+    # really a malformed/truncated BMP.
+    data = bytearray(_bmp(width=2, height=2, bit_count=24, rows=[bytes(6), bytes(6)]))
+    bogus_off_bits = len(data) + 1000
+    data[10:14] = struct.pack("<I", bogus_off_bits)
+    with pytest.raises(BmpDecodeError, match="past the"):
+        decode_bmp(_closure("gfx/hlfaceposer/truncated.bmp", bytes(data)))
+
+
 def test_zero_filled_bmp_trailing_bytes_are_padding_zero_not_an_omission():
     data = _bmp(width=1, height=1, bit_count=24, rows=[bytes([1, 2, 3])]) + bytes(2)
     model = decode_bmp(_closure("gfx/hlfaceposer/ziptrail.bmp", data))

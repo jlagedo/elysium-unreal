@@ -1569,6 +1569,23 @@ def decode_model(
 
     anomalies.extend(_repair_degenerate_normals(lods))
     anomalies.extend(_degenerate_binds(bones))
+    # A VTX variant compiled against a wider vertex block than the MDL ships. The sections that
+    # resolve are published; the triangles whose source vertex the MDL does not hold are named
+    # here and stay unresolved, because no byte of this install can supply them.
+    for lod in lods:
+        for section in lod.get("staleSections") or []:
+            anomalies.append(
+                {
+                    "row": "vtx-vertex-outside-model",
+                    "lod": lod["index"],
+                    **section,
+                    "resolved": False,
+                    "evidence": (
+                        "the VTX addresses vertices the MDL's own vertex block does not hold; "
+                        "the triangles that name them carry no source vertex and are dropped"
+                    ),
+                }
+            )
 
     referenced: dict[tuple[int, int], set[int]] = {}
     for lod in lods:
@@ -1669,6 +1686,8 @@ def decode_model(
         surfaces.add(header["surfaceProperty"])
     surfaces.update(bone["surfaceProperty"] for bone in bones if bone["surfaceProperty"])
     if physics_model is not None:
+        # The PHY text's retail spellings are the unit's anomalies, not a second `physics` key.
+        anomalies.extend(physics_model.pop("textAnomalies", []))
         if physics_model["header"].get("solidBlockCount") != physics_model["header"]["solidCount"]:
             anomalies.append(
                 {

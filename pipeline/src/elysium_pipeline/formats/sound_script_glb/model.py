@@ -67,8 +67,7 @@ def dsp_preset_asset_id(preset_id: int | str) -> str:
 
 #: `role | Produced by` names `sound-script-table` for a manifest `precache_file` row without
 #: naming a kind that owns that identity anywhere in the contract; this seam mints one in the
-#: role's own namespace so the row still carries a stable, joinable asset id. See
-#: `specDeviations`.
+#: role's own namespace so the row still carries a stable, joinable asset id.
 def sound_script_table_asset_id(path: str) -> str:
     return asset_id("sound-script-table", path)
 

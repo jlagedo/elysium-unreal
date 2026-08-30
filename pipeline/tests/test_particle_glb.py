@@ -163,6 +163,24 @@ def test_every_byte_of_a_well_formed_definition_is_claimed_exactly_once():
     assert cursor == len(WELL_FORMED)
 
 
+def test_text_ranges_are_graded_mapped_text_not_mapped():
+    """`seam_map_unit_contract.md` reserves the ledger state `mapped` for a binary record or
+    payload; `particles/*.txt` is a plain-text KeyValues file, so `root`, every `keys[i].key`/
+    `keys[i].value` and every `blocks[i].name`/`blocks[i].braces` this seam claims must be graded
+    `mapped-text`. This grammar's own `bom` token folds onto `whitespace` (`omitted-proven`), so
+    unlike its sibling text seams it publishes no `mapped` range at all."""
+
+    model = _decode()
+    row = model.byte_ledger[0]
+    assert "mapped" not in row["stateBytes"]
+    assert row["stateBytes"]["mapped-text"] > 0
+    owners_by_state: dict[str, set[str]] = {}
+    for entry in row["ranges"]:
+        owners_by_state.setdefault(entry["state"], set()).add(entry["owner"])
+    assert "root" in owners_by_state["mapped-text"]
+    assert any(owner.startswith("keys[") for owner in owners_by_state["mapped-text"])
+
+
 def test_an_empty_member_is_a_zero_length_gapless_ledger_with_an_omission():
     model = _decode(data=b"")
     row = model.byte_ledger[0]

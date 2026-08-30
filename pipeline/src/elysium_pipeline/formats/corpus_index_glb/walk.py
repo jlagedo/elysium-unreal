@@ -148,13 +148,55 @@ def _cut_table_keys(kind: str, path: str, index: dict) -> list[str]:
             return list(script_source.load_sentence_table(index, read_bytes=read).names)
         if kind == "dsp-preset":
             return [str(value) for value in script_source.load_dsp_table(index, read_bytes=read).ids]
-        # `sound-script` and `soundscape` are ordinary KeyValues tables; the game-sound directory
-        # merges two of them, so each table is read on its own here to keep one key on one member.
+        # `soundscape` is an ordinary KeyValues table, one file to one set of names. The game
+        # sounds are not: two tables share one namespace, so `_game_sound_claim` asks the seam's
+        # own directory instead of reading either table here.
         return list(script_source.load_kv_table(index, path, read_bytes=read).names)
     except Exception:                                    # noqa: BLE001 - a table this seam cannot
         # parse still has to appear in the index; it becomes an unclaimed member rather than
         # aborting the whole walk, which is exactly the signal the guarantee exists to raise.
         return []
+
+
+def _game_sound_claim() -> SeamClaim:
+    """The one game-sound claim over the two tables the seam's directory merges.
+
+    `seam_map_sound_script.md` gives `game_sounds_surfaceproperties.txt` and `sounds.txt` one
+    identity namespace, and `source.GameSoundDirectory` resolves the 16 names both declare in
+    favour of the live table -- the manifest precaches only that one -- recording the dormant
+    twin as the live unit's `shadowed-dormant-entry` anomaly. Two independent claims, one per
+    table, would attribute those 16 units to `sounds.txt`, which is not the member their bytes
+    were cut from; this is one claim over both tables applying that same resolution, so a
+    shadowed name's member is the live table and `sounds.txt` claims only the entries it owns.
+    Each table is still loaded on its own, so an install missing one of them keeps the other.
+    """
+
+    owners: dict[str, str] = {}
+
+    def keys(index: dict) -> list[str]:
+        from elysium_pipeline.formats.sound_script_glb import source as script_source
+        from elysium_pipeline.formats.sound_script_glb.model import TABLE_PATHS
+
+        owners.clear()
+        # Dormant first, then live, so a name both tables declare ends on the live table: that is
+        # `GameSoundDirectory.owner`'s rule, and the exporter cuts the unit from the same member.
+        for role in ("game-sound-dormant", "game-sound-live"):
+            try:
+                table = script_source.load_kv_table(
+                    index, TABLE_PATHS[role], read_bytes=_read_key
+                )
+            except Exception:                            # noqa: BLE001 - a table this seam cannot
+                # parse, or does not ship, leaves its members unclaimed exactly as
+                # `_cut_table_keys` does; the other table is still asked.
+                continue
+            for name in table.names:
+                owners[name] = table.path
+        return sorted(owners)
+
+    def member_of(key: str, index: dict) -> str | None:
+        return _first_present(index, owners.get(key, ""))
+
+    return SeamClaim("sound-script", keys, member_of, _asset("sound-script"))
 
 
 def _sibling_companions(suffixes: Sequence[str], owner_suffix: str):
@@ -273,15 +315,7 @@ SEAM_CLAIMS: tuple[SeamClaim, ...] = (
     SeamClaim("font-list", lambda index: ["fontlist"],
               lambda key, index: _first_present(index, "materials/fonts/fontlist.txt"),
               _asset("font-list")),
-    SeamClaim("sound-script",
-              _table_keys("sound-script", "scripts/game_sounds_surfaceproperties.txt"),
-              lambda key, index: _first_present(
-                  index, "scripts/game_sounds_surfaceproperties.txt"),
-              _asset("sound-script")),
-    SeamClaim("sound-script-dormant",
-              _table_keys("sound-script", "scripts/sounds.txt"),
-              lambda key, index: _first_present(index, "scripts/sounds.txt"),
-              _asset("sound-script")),
+    _game_sound_claim(),
     SeamClaim("sound-script-manifest",
               _table_keys("sound-script-manifest", "scripts/game_sounds_manifest.txt"),
               lambda key, index: _first_present(index, "scripts/game_sounds_manifest.txt"),
@@ -353,6 +387,71 @@ class InstallWalk:
 
     def unclaimed(self) -> list[str]:
         return [member.path for member in self.members if member.disposition == "unclaimed"]
+
+    def with_reference_graph(
+        self, targets: Iterable[str], read_bytes: Callable[[tuple[str, Any]], bytes] | None = None
+    ) -> "InstallWalk":
+        """The same walk with the residue rules whose evidence is the reference graph applied.
+
+        One residue rule cannot be decided from the install alone: a `sound/` member with no
+        extension is unreachable because *nothing names it*, and that is a fact about the
+        published corpus, not about the tree. The walk therefore leaves such a member unclaimed
+        and the corpus index re-asks the rules once it has read every unit's dependencies --
+        `targets` is the key set of `inverse`. Only `unclaimed` members are re-asked, so no
+        disposition a seam decided can be overwritten here.
+        """
+
+        facts = _facts(self.index, read_bytes or _default_read, referenced=targets)
+        members: list[Member] = []
+        changed = False
+        for member in self.members:
+            classified = (
+                residue_rules.classify(member.path, facts, member.source.byte_length)
+                if member.disposition == "unclaimed"
+                else None
+            )
+            if classified is None:
+                members.append(member)
+                continue
+            changed = True
+            members.append(
+                Member(
+                    path=member.path,
+                    source=member.source,
+                    shadowed=member.shadowed,
+                    disposition="residue",
+                    embedded=member.embedded,
+                    evidence=classified,
+                )
+            )
+        if not changed:
+            return self
+        members = tuple(members)
+        return InstallWalk(
+            index=self.index,
+            members=members,
+            source_resolution=self.source_resolution,
+            excluded_trees=self.excluded_trees,
+        )
+
+
+def _facts(
+    index: dict,
+    read: Callable[[tuple[str, Any]], bytes],
+    *,
+    referenced: Iterable[str] | None = None,
+) -> residue_rules.InstallFacts:
+    """The install as the residue rules ask about it, over this walk's own index.
+
+    The content-signature rules read the member they classify; the reader is handed in rather
+    than resolved from the environment, so a synthetic install answers them too.
+    """
+
+    def head(key: str) -> bytes:
+        entry = index.get(key)
+        return b"" if entry is None else read(entry)
+
+    return residue_rules.InstallFacts.of(index, head=head, referenced=referenced)
 
 
 def _hash(data: bytes) -> str:
@@ -592,7 +691,7 @@ def collect(
     containers = list(containers or ())
 
     unit_claims, companion_claims = _claims(index, seams)
-    facts = residue_rules.InstallFacts.of(index)
+    facts = _facts(index, read)
     #: Every identity some seam claims, so a PAKFILE member names the unit it became only where
     #: a seam publishes that key and null otherwise.
     claimed = {asset for owners in unit_claims.values() for asset in owners}
@@ -610,7 +709,7 @@ def collect(
         elif path in companion_claims:
             disposition, asset, evidence = "companion", companion_claims[path], None
         else:
-            classified = residue_rules.classify(path, facts)
+            classified = residue_rules.classify(path, facts, source.byte_length)
             if classified is not None:
                 disposition, asset, evidence = "residue", None, classified
             else:

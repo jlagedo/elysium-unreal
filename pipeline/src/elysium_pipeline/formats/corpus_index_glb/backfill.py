@@ -47,6 +47,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import hashlib
+import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -328,6 +329,20 @@ def _write(root: dict[str, Any], where: Sequence[str], rows: list[Any]) -> bool:
     return True
 
 
+def _replace(path: Path, data: bytes) -> None:
+    """Write the rewritten unit to a temporary sibling and rename it over the published file.
+
+    A rewrite is a publication, so it lands the way `write_glb` lands one: the destination holds
+    either the bytes it held before or the whole new unit, never a truncated file whose hash the
+    index has already recorded. The bytes are encoded once and handed here because the caller
+    hashes exactly what it wrote.
+    """
+
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_bytes(data)
+    os.replace(temporary, path)
+
+
 def rewrite(path: Path, asset: str, rows: list[Any]) -> tuple[int, str] | None:
     """Rewrite one published unit's JSON chunk with its inverse rows and re-hash it.
 
@@ -345,7 +360,7 @@ def rewrite(path: Path, asset: str, rows: list[Any]) -> tuple[int, str] | None:
         return None
     document["extensions"][name] = root
     data = encode_glb(document, binary)
-    Path(path).write_bytes(data)
+    _replace(Path(path), data)
     return len(data), hashlib.sha256(data).hexdigest()
 
 

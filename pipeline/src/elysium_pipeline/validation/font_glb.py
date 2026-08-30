@@ -18,7 +18,9 @@ from typing import Any, Sequence
 from elysium_pipeline.formats.font_glb.decode import decode_font, decode_font_list
 from elysium_pipeline.formats.font_glb.model import (
     FONT_EXTENSION,
+    FONT_GENERATOR_TITLE,
     FONT_LIST_EXTENSION,
+    FONT_LIST_GENERATOR_TITLE,
     SCHEMA_VERSION,
     page_material_path,
     page_texture_path,
@@ -42,10 +44,6 @@ from elysium_pipeline.formats.unit_contract import warnings_for as _contract_war
 
 FONT_ASSET_PREFIX = "vtmb:font:"
 FONT_LIST_ASSET_PREFIX = "vtmb:font-list:"
-
-#: The `asset.generator` title each kind signs its product with.
-FONT_GENERATOR_TITLE = "Font"
-FONT_LIST_GENERATOR_TITLE = "Font List"
 
 #: A material row's own `sourcePath` is always this font's own `<stem>-page<n>.vmt` -- never
 #: redirected -- unlike a texture row's `sourcePath`, which may name a `.vmt`-declared target

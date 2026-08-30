@@ -10,6 +10,7 @@ and every one of those carries the raw string it came from beside it.
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from collections import Counter
 import dataclasses
 import hashlib
@@ -118,6 +119,7 @@ class _Decoder:
         self.anomalies: list[dict[str, Any]] = []
         self.omissions: list[dict[str, Any]] = []
         self.comments: list[dict[str, Any]] = []
+        self.comment_spans: list[tuple[int, int]] = []      # ascending, from `text_regions`
         self.unresolved: list[dict[str, Any]] = []
         self.script_expressions: list[dict[str, Any]] = []
         self.dependencies: dict[tuple[str, str], dict[str, Any]] = {}
@@ -129,13 +131,35 @@ class _Decoder:
         if length > 0:
             self.claims.append(Claim(int(offset), int(length), state, owner))
 
+    def claim_around_comments(self, offset: int, end: int, owner: str) -> None:
+        """Claim `offset..end` for one record, minus any comment the span encloses.
+
+        The grammar admits a comment between a key and its value, and a comment is its own
+        record with its own claim. So a pair that straddles one pays for the bytes on either
+        side of it as two ranges under the one owner, and `fill_whitespace` covers the blanks
+        the comment is separated from its neighbours by.
+        """
+
+        position = bisect_right(self.comment_spans, (offset, end))
+        cursor = offset
+        for start, stop in self.comment_spans[max(position - 1, 0):]:
+            if start >= end:
+                break
+            if stop <= cursor:
+                continue
+            if start > cursor:
+                self.claim(cursor, start - cursor, "mapped-text", owner)
+            cursor = stop
+        if cursor < end:
+            self.claim(cursor, end - cursor, "mapped-text", owner)
+
     def fill_whitespace(self, limit: int) -> None:
         """Claim every byte below `limit` no record claimed: the insignificant whitespace.
 
         The tokenizer tiles the text, so a byte no token-owning record claimed is a byte of a
         whitespace token. Filling the gaps here rather than claiming whitespace tokens directly
-        is what lets a keyvalue own its whole pair span -- the blank between the key and the
-        value included -- without two owners meeting over one byte.
+        is what lets a keyvalue own the blank between its key and its value without two owners
+        meeting over one byte.
         """
 
         cursor = 0
@@ -266,6 +290,7 @@ class _Decoder:
                 {"role": "comment-line", "sourceOffset": token.offset, "text": token.text}
             )
             self.claim(token.offset, token.length, "mapped-text", f"comments[{index}]")
+            self.comment_spans.append((token.offset, token.end))
         for token in document.strays:
             self.anomalies.append(
                 {"role": "stray-token", "sourceOffset": token.offset, "text": token.text}
@@ -298,11 +323,8 @@ class _Decoder:
         for position, pair in enumerate(block.pairs):
             key_token, value_token = pair.key, pair.value
             end = (value_token or key_token).end
-            self.claim(
-                key_token.offset,
-                end - key_token.offset,
-                "mapped-text",
-                f"entities[{index}].keyValues[{position}]",
+            self.claim_around_comments(
+                key_token.offset, end, f"entities[{index}].keyValues[{position}]"
             )
             for token, role in ((key_token, "key"), (value_token, "value")):
                 if token is None:

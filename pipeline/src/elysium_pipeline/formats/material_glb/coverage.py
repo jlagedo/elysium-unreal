@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from collections import Counter
 import hashlib
-import json
+
+from elysium_pipeline.formats.unit_contract import ranges_sha256
 
 
 class MaterialByteCoverageError(ValueError):
@@ -68,11 +69,6 @@ class ByteLedger:
             raise MaterialByteCoverageError(
                 f"{self.path}: byte ledger ends at {cursor}/{len(self.data)}"
             )
-        canonical = json.dumps(
-            {"path": self.path, "byteLength": len(self.data), "ranges": rows},
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
         return {
             "sourcePath": self.path,
             "sourceSha256": hashlib.sha256(self.data).hexdigest(),
@@ -80,6 +76,6 @@ class ByteLedger:
             "accountedBytes": len(self.data),
             "coveragePercent": 100.0,
             "stateBytes": dict(sorted(totals.items())),
-            "rangesSha256": hashlib.sha256(canonical).hexdigest(),
+            "rangesSha256": ranges_sha256(self.path, len(self.data), rows),
             "ranges": rows,
         }

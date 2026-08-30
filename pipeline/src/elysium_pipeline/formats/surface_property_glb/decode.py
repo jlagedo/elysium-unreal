@@ -20,7 +20,7 @@ from elysium_pipeline.formats.surface_property_glb.model import (
     sound_asset_id,
     sound_script_asset_id,
 )
-from elysium_pipeline.formats.unit_contract import dependency
+from elysium_pipeline.formats.unit_contract import dependency, missing_sentinel
 
 
 class SurfacePropertyDecodeError(RuntimeError):
@@ -56,11 +56,25 @@ IMPACT_KEYS = {
 #: The pre-matrix bullet key, still carried by three entries.
 LEGACY_IMPACT_KEY = "bulletimpact"
 
-#: Keys whose value names a sound script rather than a `.wav` path.
+#: The two physics keys whose value names a sound script rather than a `.wav` path -- except
+#: where the shipped table spells a `.wav` path there anyway.
 SOUND_SCRIPT_KEYS = ("impact", "scrape")
+
+#: `gargoyle` and `quiet` write `"impact" "null.wav"` and `"scrape" "null.wav"`. A value that
+#: names a file is a file: `sound/null.wav` is a member the sound seam publishes, and no
+#: sound-script table declares an entry called `null.wav`, so classifying it as a script would
+#: manufacture a reference to a unit that cannot exist. The suffix is the whole rule -- a script
+#: name is `<surface>.Impact`, never a path with an audio extension.
+SOUND_PATH_SUFFIXES = (".wav", ".mp3")
 
 BASE_KEY = "base"
 GAME_MATERIAL_KEY = "gamematerial"
+
+
+def _sound_key(value: str) -> str:
+    """The joinable key `sound_asset_id` folds a wave path to, without its namespace."""
+
+    return sound_asset_id(value)[len("vtmb:sound:"):]
 
 
 def _number(text: str) -> float | None:
@@ -147,6 +161,7 @@ def decode_surface_property(
     anomalies: list[dict[str, Any]] = list(entry.anomalies)
     unresolved: list[dict[str, Any]] = []
     unsupported: list[dict[str, Any]] = []
+    omitted: list[dict[str, Any]] = []
     dependencies: list[dict[str, Any]] = []
     seen_assets: set[str] = set()
 
@@ -253,6 +268,35 @@ def decode_surface_property(
             depend("sound", record["asset"], parameter.value, sound_resolves(parameter.value))
         elif key in SOUND_SCRIPT_KEYS:
             name = raw.strip('"')
+            if name.lower().endswith(SOUND_PATH_SUFFIXES):
+                # A path, not a script name. It takes the `vtmb:sound:` namespace the footstep
+                # and impact keys already use, and where the install ships no such member it
+                # keeps the contract's `vtmb:missing-sound:` sentinel: `resolved: false`, no
+                # dependency row, and the reason in `omissions[]`.
+                resolved = sound_resolves(name)
+                record = {
+                    "path": name,
+                    "asset": (
+                        sound_asset_id(name) if resolved
+                        else missing_sentinel("sound", _sound_key(name))
+                    ),
+                    "resolved": resolved,
+                    "parameter": parameter.index,
+                }
+                sounds.setdefault(key, []).append(record)
+                if resolved:
+                    depend("sound", record["asset"], parameter.value, True)
+                else:
+                    omitted.append(
+                        {
+                            "role": "unreachable-sound-path",
+                            "key": key,
+                            "path": name,
+                            "asset": record["asset"],
+                            "reason": "the physics key names a wave the install does not ship",
+                        }
+                    )
+                continue
             resolved = (
                 bool(sound_script_exists(name)) if sound_script_exists is not None else False
             )
@@ -284,10 +328,13 @@ def decode_surface_property(
                 }
             )
 
-    omissions = [{
-        "role": "keyvalues-insignificant-whitespace",
-        "reason": "separator-bytes-carry-no-keyvalues-meaning",
-    }]
+    omissions = [
+        {
+            "role": "keyvalues-insignificant-whitespace",
+            "reason": "separator-bytes-carry-no-keyvalues-meaning",
+        },
+        *omitted,
+    ]
 
     return SurfacePropertyModel(
         name=closure.name,

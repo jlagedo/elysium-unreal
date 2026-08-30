@@ -187,24 +187,73 @@ def _keyvalue_tokens(text: str) -> list[tuple[str, int]]:
     return tokens
 
 
-def _blocks(text: str) -> list[dict[str, Any]]:
-    """Parse flat KeyValues blocks regardless of where braces and fields line-wrap."""
+def _blocks(text: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Parse flat KeyValues blocks, and name every place the retail spelling departs from them.
+
+    Three retail spellings the shipped tails hold are not that grammar. Each is read from what
+    the bytes support and each carries the `anomalies[]` row that records it:
+
+    * a block that opens on `{` with no name is read under the name of the block before it, which
+      is how `scenery/structural/ventrue_tower/cinderblocks_breakable.phy` writes its second and
+      later `break` blocks -- the compiler spelled `break` once and every following block carries
+      that block's own field set;
+    * a field whose value slot holds the block's closing `}` keeps the key with an empty value;
+    * a `}` standing where a block name belongs closes no block and is stepped over, so the
+      blocks around it still parse.
+
+    The last two are what a stray quote leaves behind in
+    `scenery/misc/plywoodboard/boardsmall.phy`, whose quoted run swallows one line break, one
+    `}` and the `break` keyword after it.
+
+    None of the three is repaired: the pairs published are the tokens the file holds.
+    """
 
     tokens = _keyvalue_tokens(text)
-    blocks = []
+    blocks: list[dict[str, Any]] = []
+    anomalies: list[dict[str, Any]] = []
+    previous_name: str | None = None
     cursor = 0
     while cursor < len(tokens):
         name, line = tokens[cursor]
-        cursor += 1
-        if name in {"{", "}"}:
-            raise ModelPhysicsError(
-                f"PHY KeyValues line {line}: expected block name, got {name!r}"
+        if name == "}":
+            # The brace whose opener a malformed quoted string swallowed. It closes no block,
+            # so it is recorded and stepped over rather than ending the parse.
+            anomalies.append(
+                {
+                    "row": "phy-keyvalues-unbalanced-brace",
+                    "field": f"physics.keyValues[{len(blocks)}]",
+                    "line": line,
+                    "evidence": "a '}' stands where a block name belongs and closes no block",
+                }
             )
+            cursor += 1
+            continue
+        if name == "{":
+            if previous_name is None:
+                raise ModelPhysicsError(
+                    f"PHY KeyValues line {line}: expected block name, got '{{'"
+                )
+            name = previous_name
+            anomalies.append(
+                {
+                    "row": "phy-keyvalues-unnamed-block",
+                    "field": f"physics.keyValues[{len(blocks)}]",
+                    "line": line,
+                    "inheritedType": name.lower(),
+                    "evidence": (
+                        "the block opens on '{' with no name and carries the field set of the "
+                        "named block before it, which is the name it is read under"
+                    ),
+                }
+            )
+        else:
+            cursor += 1
         if cursor >= len(tokens) or tokens[cursor][0] != "{":
             raise ModelPhysicsError(
                 f"PHY KeyValues line {line}: block {name!r} has no '{{'"
             )
         cursor += 1
+        previous_name = name
         values: dict[str, str] = {}
         pairs: list[dict[str, str]] = []
         while cursor < len(tokens) and tokens[cursor][0] != "}":
@@ -214,10 +263,26 @@ def _blocks(text: str) -> list[dict[str, Any]]:
                 raise ModelPhysicsError(
                     f"PHY KeyValues line {key_line}: nested blocks are unsupported"
                 )
-            if cursor >= len(tokens) or tokens[cursor][0] in {"{", "}"}:
+            if cursor >= len(tokens) or tokens[cursor][0] == "{":
                 raise ModelPhysicsError(
                     f"PHY KeyValues line {key_line}: field {key!r} has no value"
                 )
+            if tokens[cursor][0] == "}":
+                anomalies.append(
+                    {
+                        "row": "phy-keyvalues-field-without-value",
+                        "field": f"physics.keyValues[{len(blocks)}]",
+                        "line": key_line,
+                        "key": key,
+                        "evidence": (
+                            "the block closes where the field's value belongs; the key is kept "
+                            "with the empty value the file leaves it"
+                        ),
+                    }
+                )
+                values[key] = ""
+                pairs.append({"key": key, "value": ""})
+                continue
             value, _value_line = tokens[cursor]
             cursor += 1
             values[key] = value
@@ -228,7 +293,7 @@ def _blocks(text: str) -> list[dict[str, Any]]:
             )
         cursor += 1
         blocks.append({"type": name.lower(), "values": values, "pairs": pairs})
-    return blocks
+    return blocks, anomalies
 
 
 def _typed_values(kind: str, values: dict[str, str]) -> dict[str, Any]:
@@ -320,7 +385,7 @@ def decode(data: bytes) -> dict[str, Any]:
         position = body + solid_size
 
     tail = data[position:].decode("ascii", "replace")
-    blocks = _blocks(tail)
+    blocks, text_anomalies = _blocks(tail)
     solid_blocks = [block for block in blocks if block["type"] == "solid"]
     # A KeyValues tail that names a different number of solids than the binary declares is a
     # retail fact on some props, so it is reported as `phy-solid-count-mismatch` rather than
@@ -362,4 +427,7 @@ def decode(data: bytes) -> dict[str, Any]:
             {"type": block["type"], "pairs": block["pairs"]}
             for block in blocks
         ],
+        # Lifted into the unit's own `anomalies[]` by the decoder and never published here, so a
+        # retail spelling is stated once, where the seam's anomaly table names it.
+        "textAnomalies": text_anomalies,
     }

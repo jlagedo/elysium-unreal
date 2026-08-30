@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 import shutil
 
+from elysium_pipeline import workspace_lock
+
 
 FONT_ASSETS = (
     "FF_SpectralSC_Regular.uasset",
@@ -24,6 +26,12 @@ FONT_ASSETS = (
 )
 #: A map's stages. Prop meshes belong to the shared corpus scope, whose stages are its own.
 TEST_ABSTENTION_TOKEN = "ELYSIUM_TEST_ABSTAIN"
+
+#: The compile database clangd reads, and the lock guarding the engine-root copy every
+#: checkout on this machine writes through. `.clangd` points clangd at the repository root,
+#: so the generated file is copied out of the engine tree to sit beside it.
+CLANG_DATABASE = "compile_commands.json"
+CLANG_DATABASE_LOCK = ".elysium-clang-database.lock"
 
 #: The tier names `uv run elysium test` accepts, and the automation filter each selects. A bare
 #: word that is not one of these is a typo rather than a filter -- `Automation RunTest` matches by
@@ -47,6 +55,11 @@ TEST_TIMEOUT_SECONDS = 900.0
 #: sized to the work it does. `process.run` kills the child on the deadline and raises
 #: `ProcessTimeout`, which names the command and its bound.
 BUILD_TIMEOUT_SECONDS = 3600.0
+#: Generating the compile database is a UnrealBuildTool run that compiles nothing -- it filters
+#: the actions the build already planned and writes them out, about two seconds here. The bound
+#: is loose enough to absorb a cold `dotnet` start and tight enough that a wedged run does not
+#: hold the build hostage for the hour `BUILD_TIMEOUT_SECONDS` allows.
+CLANG_DATABASE_TIMEOUT_SECONDS = 300.0
 POLICY_TIMEOUT_SECONDS = 1800.0
 CORPUS_TIMEOUT_SECONDS = 7200.0
 #: One batch is `MAP_BAKE_BATCH` maps of Nanite build, Lumen surface-cache fitting and texture
@@ -163,6 +176,58 @@ def build(config, runner, mode: str = "", extra: Sequence[str] = ()) -> None:
     arguments.extend(extra)
     _run(config, runner, config.ue_root / "Engine" / "Build" / "BatchFiles" / script,
          arguments, timeout=BUILD_TIMEOUT_SECONDS)
+
+
+def generate_clang_database(config, runner) -> None:
+    """Refresh this checkout's `compile_commands.json` from the target last built.
+
+    clangd resolves a file's include paths, its forced-included `Definitions.h` and the UHT
+    output directory holding its `.generated.h` by looking the file up in this database. A
+    source file added since the last generation has no entry, so it parses with guessed
+    flags -- against Unreal that yields a file of unresolved headers and no usable symbols
+    rather than a visible error. Run this after adding or removing a source file.
+
+    This is deliberately not on the build path, and running it costs one full rebuild.
+    `-Mode=GenerateClangDatabase` forces `-Compiler=Clang`, `-NoPCH` and a non-unity build,
+    and UnrealBuildTool is supposed to keep that out of the real build's way by suffixing the
+    intermediate folder with `GCD`. On an *installed* engine it does not: `UEBuildTarget`
+    reads `Unreal.IsEngineInstalled() ? UnrealIntermediateEnvironment.Default : ...`, so the
+    suffix is dropped and every module's `.rsp` under `Intermediate/Build/.../<Module>/` is
+    rewritten with clang flags. The next build finds them modified, invalidates the makefile
+    and recompiles the whole target. A build that also refreshed the database would therefore
+    never be incremental again.
+
+    `-NoExecCodeGenActions` skips the header-tool run the last build already did. The
+    generated headers are on disk, so the database comes out byte-identical to a full run at
+    a fraction of the cost.
+    """
+
+    if config.ue_root is None:
+        return
+    engine_copy = config.ue_root / CLANG_DATABASE
+    arguments = [
+        "-Mode=GenerateClangDatabase",
+        "-NoExecCodeGenActions",
+        f"-project={config.project}",
+        "-game",
+        "ElysiumUEEditor",
+        "Win64",
+        "Development",
+        "-WaitMutex",
+    ]
+    log_root = getattr(config, "log_root", None)
+    if log_root is not None:
+        log_root.mkdir(parents=True, exist_ok=True)
+        arguments.append(f"-Log={log_root / 'UnrealBuildTool.ClangDatabase.log'}")
+    # UnrealBuildTool always writes the database to the engine root, which every checkout on
+    # this machine shares, so generating it and copying it here is one critical section --
+    # otherwise a checkout can copy the database another checkout just wrote for its own
+    # sources. The lock lives beside the file it guards, in the tree they contend over.
+    with workspace_lock.exclusive_path_lock(config.ue_root / CLANG_DATABASE_LOCK):
+        _run(config, runner,
+             config.ue_root / "Engine" / "Build" / "BatchFiles" / "Build.bat",
+             arguments, timeout=CLANG_DATABASE_TIMEOUT_SECONDS)
+        shutil.copyfile(engine_copy, config.repo_root / CLANG_DATABASE)
 
 
 def generate_policy_content(config, runner, generators: Sequence[str] | None = None, *,

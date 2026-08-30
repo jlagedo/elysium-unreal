@@ -105,13 +105,19 @@ def decode_corpus_index(walk: InstallWalk, export_root: Path) -> CorpusIndexMode
     root = Path(export_root)
     units, roots = graph.read_corpus(root)
     edges = graph.references(roots)
+    # One residue rule's evidence is the reference graph -- a `sound/` member with no extension
+    # is unreachable because nothing names it -- so the walk's unclaimed members are re-asked
+    # once the graph exists. Nothing a seam claimed is touched.
+    walk = walk.with_reference_graph(edge.target for edge in edges)
     return _assemble(walk, root, units, edges, roots)
 
 
 def _assemble(walk, root, units, edges, roots) -> CorpusIndexModel:
-    dangling_rows = graph.dangling(edges)
-    orphan_rows = graph.orphans(units, edges)
     check_rows = checks.run(units, edges, roots)
+    # A check may find a reference the corpus cannot answer that no unit declares as a dependency
+    # row; `danglingReferences[]` is where the index reports one, so the checks run first.
+    dangling_rows = graph.dangling(edges, checks.dangling_rows(check_rows))
+    orphan_rows = graph.orphans(units, edges)
     unpublished, disagreements = reconcile.failures(walk.members, units, roots)
     return CorpusIndexModel(
         export_root=str(root),

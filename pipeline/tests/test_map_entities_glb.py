@@ -680,6 +680,24 @@ def test_a_comment_line_is_carried_and_claimed(tmp_path):
     assert "comments[0]" in owners
 
 
+def test_a_comment_between_a_key_and_its_value_is_claimed_once(tmp_path):
+    """The grammar admits a comment there, and the pair does not claim the comment's bytes.
+
+    The comment is its own record with its own ledger range, so a pair that claimed its whole
+    span from the key to the value would put two owners on those bytes and fail the unit.
+    """
+
+    entities = _lump(WORLDSPAWN, '{\n"classname"\n// why not\n"light"\n}\n')
+    _, _, root, _ = _export(tmp_path, entities)
+    ranges = root["coverage"]["byteLedger"][0]["ranges"]
+    comment = next(row for row in ranges if row["owner"] == "comments[0]")
+    pair = [row for row in ranges if row["owner"] == "entities[1].keyValues[0]"]
+    assert root["entities"][1]["classname"] == "light"
+    assert len(pair) == 2
+    assert all(row["offset"] + row["length"] <= comment["offset"]
+               or row["offset"] >= comment["offset"] + comment["length"] for row in pair)
+
+
 def test_a_stray_token_shifts_the_pairs_the_way_the_engine_shifts_them(tmp_path):
     entities = _lump(
         WORLDSPAWN,

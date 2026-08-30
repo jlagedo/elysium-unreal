@@ -12,7 +12,6 @@ from elysium_pipeline.formats.sound_script_glb.model import (
     Parameter,
     SoundScriptModel,
     dsp_preset_asset_id,
-    manifest_asset_id,
     sentence_asset_id,
     sound_asset_id,
     sound_script_table_asset_id,
@@ -29,7 +28,8 @@ WAVE_PREFIXES: dict[str, str] = {
 GAME_SOUND_KEYS = {"channel", "volume", "pitch", "soundlevel", "wave", "rndwave"}
 SOUNDSCAPE_TOP_KEYS = {"dsp", "playlooping", "playrandom", "playsoundscape"}
 #: `attenuation` is not in `seam_map_sound_script.md`'s soundscape vocabulary line, but the
-#: shipped `cabin` and `cabin_outdoor` entries use it; see `specDeviations`.
+#: shipped `cabin` and `cabin_outdoor` entries use it, so it is accepted here rather than
+#: raised as `unsupported`.
 SOUNDSCAPE_BLOCK_KEYS = {
     "volume", "pitch", "time", "wave", "rndwave", "position", "soundlevel", "name", "attenuation",
 }
@@ -40,7 +40,7 @@ class SoundScriptDecodeError(RuntimeError):
     """The selected entry cannot be read as its declared kind."""
 
 
-def _claim(ledger: ByteLedger, token: lexer.Token, owner: str, state: str = "mapped") -> None:
+def _claim(ledger: ByteLedger, token: lexer.Token, owner: str, state: str = "mapped-text") -> None:
     ledger.claim(token.offset, token.length, state, owner)
 
 
@@ -54,7 +54,7 @@ def _claim_lexical(ledger: ByteLedger, tokens: list[lexer.Token], covered, prefi
         if token.kind == "whitespace":
             ledger.claim(token.offset, token.length, "omitted-proven", f"{prefix}.insignificant-whitespace")
         elif token.kind == "comment":
-            ledger.claim(token.offset, token.length, "mapped", f"{prefix}.comment[{len(comments)}]")
+            ledger.claim(token.offset, token.length, "mapped-text", f"{prefix}.comment[{len(comments)}]")
             comments.append({"offset": token.offset, "text": token.text})
         elif token.kind == "bom":
             ledger.claim(token.offset, token.length, "mapped", f"{prefix}.byte-order-mark")
@@ -149,14 +149,14 @@ def strip_wave_prefix(raw: str) -> tuple[str, str | None]:
 def _claim_block_tree(
     ledger: ByteLedger, block: kv_tree.Block, owner_prefix: str, covered: list[tuple[int, int]]
 ) -> None:
-    """Claim every byte of `block` -- name, braces, and every item however deep -- as `mapped`.
+    """Claim every byte of `block` -- name, braces, and every item however deep -- as `mapped-text`.
 
     Used for a block whose name is outside the kind's vocabulary: the record has nothing typed
     to say about it, but the ledger still owes every one of its bytes an owner.
     """
 
     def token(t: lexer.Token, suffix: str) -> None:
-        ledger.claim(t.offset, t.length, "mapped", f"{owner_prefix}.{suffix}")
+        ledger.claim(t.offset, t.length, "mapped-text", f"{owner_prefix}.{suffix}")
         covered.append((t.offset, t.end))
 
     token(block.name, "name")
@@ -207,7 +207,7 @@ def decode_game_sound(
     anomalies: list[dict[str, Any]] = list(block.anomalies)
     #: A live entry that shares its folded name with a `sounds.txt` entry takes the identity;
     #: the dormant duplicate is real corpus data this unit drops, so its span is recorded here
-    #: as evidence rather than left to vanish -- see `specDeviations`.
+    #: as the `shadowed-dormant-entry` anomaly below rather than left to vanish.
     shadowed_dormant = getattr(closure, "shadowed_dormant", None)
     if shadowed_dormant:
         anomalies.append({"role": "shadowed-dormant-entry", **shadowed_dormant})
@@ -264,7 +264,7 @@ def decode_game_sound(
         waves.append(record)
         #: `sound` names a member of the sibling `sound_glb` seam's corpus; a miss there is an
         #: absence in another seam's asset space, not a defect in this entry, so it is carried as
-        #: `resolved: false` and warned about rather than failing the unit. See `specDeviations`.
+        #: `resolved: false` in `dependencies[]` and warned about rather than failing the unit.
         exists = sound_exists(path) if sound_exists is not None else True
         depend("sound", asset, "sound/" + path, exists)
 
@@ -706,12 +706,12 @@ def decode_sentence(
 
     #: Built in source order -- name, path, optional length -- so `parameters[]` answers the same
     #: "every token the entry declares, in source order" contract the other four kinds do.
-    add_parameter(0, name_end, "mapped", "name", name_text, name_text)
+    add_parameter(0, name_end, "mapped-text", "name", name_text, name_text)
     if path_end > cursor:
         add_parameter(cursor, path_end - cursor, "mapped-text", "path", path_text, path_text)
     if length_span is not None:
         start, end = length_span
-        add_parameter(start, end - start, "mapped", "length", line[start:end], length_source or "")
+        add_parameter(start, end - start, "mapped-text", "length", line[start:end], length_source or "")
 
     is_hl1 = "," in path_text
     tokens: list[dict[str, Any]] = []
@@ -793,7 +793,7 @@ def decode_dsp_preset(closure) -> SoundScriptModel:
     unsupported: list[dict[str, Any]] = []
     typed_unidentified: list[dict[str, Any]] = []
 
-    def claim_token(token: lexer.Token, owner: str, state: str = "mapped") -> None:
+    def claim_token(token: lexer.Token, owner: str, state: str = "mapped-text") -> None:
         _claim(ledger, token, owner, state)
         covered.append((token.offset, token.end))
 

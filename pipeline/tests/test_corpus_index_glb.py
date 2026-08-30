@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import struct
 import zipfile
@@ -273,6 +274,45 @@ def test_a_complete_install_leaves_nothing_unclaimed(tmp_path):
     assert sum(counts.values()) == len(result.members)
 
 
+#: The shape retail ships: 16 names `scripts/sounds.txt` repeats from the live table, and one
+#: only it declares. `game_sounds_manifest.txt` precaches only the live table, so the live entry
+#: takes the shared identity and the dormant twin is the live unit's `shadowed-dormant-entry`.
+DORMANT_SOUNDS = (
+    b'"Concrete.Impact"\r\n{\r\n\t"wave"\t"surfaces/hl2/impact1.wav"\r\n}\r\n'
+    b'"Dormant.Only"\r\n{\r\n\t"wave"\t"surfaces/hl2/dormant1.wav"\r\n}\r\n'
+)
+
+
+def test_a_name_two_sound_script_tables_declare_is_claimed_by_the_table_it_is_cut_from(tmp_path):
+    """`seam_map_sound_script.md` gives both tables one identity namespace and the seam resolves
+    a repeated name in favour of the live table. Asking each table for its own names would
+    attribute the shared units to `scripts/sounds.txt`, whose bytes they were not cut from."""
+
+    walk = collect(tmp_path, extra={"scripts/sounds.txt": DORMANT_SOUNDS})
+    members = walk.by_path()
+    live = members["scripts/game_sounds_surfaceproperties.txt"]
+    dormant = members["scripts/sounds.txt"]
+    assert live.disposition == dormant.disposition == "unit"
+    assert live.asset == "vtmb:sound-script:concrete.impact"
+    assert dormant.asset == "vtmb:sound-script:dormant.only"
+    # The shared name is claimed once, by the live table alone.
+    assert "vtmb:sound-script:concrete.impact" not in (dormant.assets or (dormant.asset,))
+
+
+def test_a_dormant_table_on_its_own_still_claims_its_entries(tmp_path):
+    """The negative: with no live table the dormant one owns every name it declares."""
+
+    game, patch = install(tmp_path, extra={"scripts/sounds.txt": DORMANT_SOUNDS})
+    (game / "scripts" / "game_sounds_surfaceproperties.txt").unlink()
+    alone = install_walk.collect(game=game, patch=patch)
+    member = alone.by_path()["scripts/sounds.txt"]
+    assert member.disposition == "unit"
+    assert set(member.assets) == {
+        "vtmb:sound-script:concrete.impact", "vtmb:sound-script:dormant.only"
+    }
+    assert "scripts/game_sounds_surfaceproperties.txt" not in alone.by_path()
+
+
 def test_a_member_no_seam_claims_is_unclaimed(tmp_path):
     result = collect(tmp_path, extra={"vdata/system/stealth.qqq": b"?"})
     assert result.unclaimed() == ["vdata/system/stealth.qqq"]
@@ -356,6 +396,170 @@ def test_a_texture_configuration_with_no_neighbour_is_not_claimed(path):
 )
 def test_no_rule_claims_a_member_outside_its_own_evidence(path):
     assert residue.classify(path) is None
+
+
+# --- the rules whose evidence is a neighbour, a signature, a length or the graph ----------------
+
+
+def facts(*members: str, contents=None, referenced=None):
+    """`InstallFacts` for a synthetic key set, with the bytes and graph the rules may ask for."""
+
+    contents = dict(contents or {})
+    return residue.InstallFacts.of(
+        set(members) | set(contents),
+        head=lambda key: contents.get(key, b""),
+        referenced=referenced,
+    )
+
+
+ORPHAN_MODEL = "models/scenery/misc/plates/platedirty"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        f"{ORPHAN_MODEL}.dx80.vtx",
+        f"{ORPHAN_MODEL}.dx7_2bone.vtx",
+        f"{ORPHAN_MODEL}.vtx",
+        f"{ORPHAN_MODEL}.phy",
+    ],
+)
+def test_a_vtx_or_phy_whose_stem_ships_no_mdl_is_unreachable(path):
+    """The model loader opens a VTX or PHY only beside a loaded MDL, so the evidence is the
+    absence of that MDL -- computed from the index, never from a list of paths."""
+
+    row = residue.classify(path, facts("models/scenery/misc/plates/platesclean.mdl"))
+    assert row["category"] == "unreachable-member"
+    assert f"{ORPHAN_MODEL}.mdl is absent" in row["evidence"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        f"{ORPHAN_MODEL}.dx80.vtx",
+        f"{ORPHAN_MODEL}.dx7_2bone.vtx",
+        f"{ORPHAN_MODEL}.vtx",
+        f"{ORPHAN_MODEL}.phy",
+    ],
+)
+def test_a_vtx_or_phy_beside_its_mdl_is_no_rule_of_this_seams(path):
+    """The negative: with the MDL in the index the member is the model's companion, and residue
+    claims nothing. Without any facts at all it claims nothing either."""
+
+    assert residue.classify(path, facts(f"{ORPHAN_MODEL}.mdl")) is None
+    assert residue.classify(path) is None
+
+
+ORPHAN_LIP = "sound/character/dlg/santa monica/trip/line311_col_e .lip"
+
+
+def test_a_lip_with_no_sound_twin_is_unreachable():
+    row = residue.classify(ORPHAN_LIP, facts("sound/character/dlg/santa monica/trip/line1.wav"))
+    assert row["category"] == "unreachable-member"
+    assert "line311_col_e .wav" in row["evidence"] and "line311_col_e .mp3" in row["evidence"]
+
+
+@pytest.mark.parametrize("twin", [".wav", ".mp3"])
+def test_a_lip_beside_either_spelling_of_its_sound_is_no_rule_of_this_seams(twin):
+    assert residue.classify(ORPHAN_LIP, facts(ORPHAN_LIP[: -len(".lip")] + twin)) is None
+    assert residue.classify(ORPHAN_LIP) is None
+
+
+LINE_TABLE = b"{comfort_1.wav}{You okay man?}\r\n{comfort_2.wav}{Hey you, you all right?}\r\n"
+PHONEME_AUDIT = (
+    b"| Microsoft Speech API \t Words \t Phonemes \t Time \t| LipSync API \t Words \t"
+    b" Phonemes \t Time \t| \t Filename \t Line Text \r\n"
+)
+
+
+@pytest.mark.parametrize(
+    "path, payload",
+    [
+        ("sound/character/male/young_thug/young_thug_sound.txt", LINE_TABLE),
+        ("sound/character/male/sabbat_thug/young_thug_sound.txt", LINE_TABLE),
+        ("sound/character/male/young_thug/young_thug_sound_phonemeaudit.txt", PHONEME_AUDIT),
+        ("sound/character/male/sabbat_thug/young_thug_sound_phonemeaudit.txt", PHONEME_AUDIT),
+    ],
+)
+def test_a_lip_sync_tool_product_is_claimed_by_its_content_signature(path, payload):
+    row = residue.classify(path, facts(contents={path: payload}))
+    assert row["category"] == "authoring-leftover"
+    assert "lip-sync tool" in row["evidence"]
+
+
+@pytest.mark.parametrize(
+    "path, payload",
+    [
+        # The spelling alone proves nothing: the same name over other bytes is not the tool's.
+        ("sound/character/male/young_thug/young_thug_sound.txt", b"npc_thug\r\nvolume 1\r\n"),
+        ("sound/character/male/young_thug/young_thug_sound_phonemeaudit.txt", b"nothing\r\n"),
+        # A signature outside the tree the evidence is about claims nothing either.
+        ("vdata/young_thug_sound.txt", LINE_TABLE),
+    ],
+)
+def test_a_sound_text_with_no_signature_is_not_an_authoring_leftover(path, payload):
+    assert residue.classify(path, facts(contents={path: payload})) is None
+    # Without a reader the rule has no evidence, so it claims nothing.
+    assert residue.classify(path, facts(path)) is None
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "sound/disciplines/thaumaturgy/blood salvo/icon_",
+        "stats.txt",
+        "models/scenery/furniture/sabortooth/sabortooth512.txt",
+    ],
+)
+def test_a_zero_length_member_is_an_authoring_leftover(path):
+    row = residue.classify(path, facts(path), 0)
+    assert row == {"category": "authoring-leftover", "evidence": "zero-length member"}
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "sound/disciplines/thaumaturgy/blood salvo/icon_",
+        "stats.txt",
+        "models/scenery/furniture/sabortooth/sabortooth512.txt",
+    ],
+)
+def test_the_same_member_with_bytes_in_it_is_not_claimed_by_length(path):
+    assert residue.classify(path, facts(path), 11) is None
+    assert residue.classify(path, facts(path)) is None
+
+
+LOOSE_WAVE = "sound/disciplines/thaumaturgy/blood shield/hit_1"
+
+
+def test_an_extensionless_sound_member_nothing_names_is_unreachable():
+    row = residue.classify(LOOSE_WAVE, facts(LOOSE_WAVE, referenced=frozenset()), 20314)
+    assert row["category"] == "unreachable-member"
+    assert "vtmb:sound:disciplines/thaumaturgy/blood shield/hit_1" in row["evidence"]
+
+
+def test_an_extensionless_sound_member_the_graph_names_is_not_claimed():
+    named = frozenset({"vtmb:sound:disciplines/thaumaturgy/blood shield/hit_1"})
+    assert residue.classify(LOOSE_WAVE, facts(LOOSE_WAVE, referenced=named), 20314) is None
+    # And with no graph in hand the rule has no evidence at all.
+    assert residue.classify(LOOSE_WAVE, facts(LOOSE_WAVE), 20314) is None
+
+
+def test_the_graph_anchored_rule_runs_only_once_the_corpus_has_been_read(tmp_path):
+    """The walk leaves the member unclaimed; the index re-asks the rules with the graph, and
+    only the members no seam claimed are re-asked."""
+
+    walk = collect(tmp_path, extra={LOOSE_WAVE: b"RIFF____WAVEfmt "})
+    assert walk.unclaimed() == [LOOSE_WAVE]
+    claimed = walk.with_reference_graph(())
+    assert claimed.unclaimed() == []
+    assert claimed.by_path()[LOOSE_WAVE].evidence["category"] == "unreachable-member"
+    assert claimed.by_path()["materials/wall.tth"].disposition == "unit"
+    # A graph that names it leaves it unclaimed, because the evidence is that nothing does.
+    named = walk.with_reference_graph(
+        ["vtmb:sound:disciplines/thaumaturgy/blood shield/hit_1"]
+    )
+    assert named.unclaimed() == [LOOSE_WAVE]
 
 
 # --- embedded PAKFILE members -----------------------------------------------------------------
@@ -627,6 +831,29 @@ def test_units_are_hashed_from_the_files_on_disk(tmp_path):
     assert rows["vtmb:texture:wall"]["byteLength"] == len(on_disk)
 
 
+def test_a_published_unit_is_read_once_to_hash_and_parse_it(tmp_path, monkeypatch):
+    # The digest a `units[]` row publishes and the extension root the rest of the row is read
+    # out of have to be the same bytes; a second open of the file could describe another
+    # revision of it, and over the whole corpus it doubles the read.
+    export_root = tmp_path / "exports_v2"
+    export_root.mkdir()
+    unit = publish(export_root, "textures/wall.glb", "vtmb:texture:wall")
+    reads: list[str] = []
+    real = Path.read_bytes
+
+    def counting(self):
+        reads.append(str(self))
+        return real(self)
+
+    monkeypatch.setattr(Path, "read_bytes", counting)
+    row, root = graph.read_unit(unit, export_root)
+
+    assert reads.count(str(unit)) == 1
+    monkeypatch.undo()
+    assert row.sha256 == hashlib.sha256(unit.read_bytes()).hexdigest()
+    assert root["identity"]["asset"] == "vtmb:texture:wall"
+
+
 def test_references_are_every_dependency_row_and_inverse_is_their_transpose(tmp_path):
     result, export_root = indexed(tmp_path)
     root = root_of(exporter.export(result, export_root))
@@ -826,7 +1053,12 @@ def test_model_include_tree_fails_on_an_unpublished_include(tmp_path):
     assert row["failures"][0]["to"] == "vtmb:model:shared/bank"
 
 
-def test_scene_expression_rows_fails_on_a_row_the_table_does_not_carry(tmp_path):
+def test_scene_expression_rows_reports_a_row_the_table_does_not_carry_as_dangling(tmp_path):
+    """Retail ships two scenes animating `Concern No Deform` against a table whose 33 rows do not
+    include it. The unit contract's non-canonical storage rule makes that a disagreement to
+    record with its evidence, not a reason to refuse the corpus, so the check passes and the row
+    is published in `danglingReferences[]`."""
+
     export_root = corpus(tmp_path / "exports_v2")
     publish(export_root, "scenes/other.glb", "vtmb:scene:other",
             dependencies=[dependency("expression-table", "vtmb:expression-table:joe",
@@ -834,8 +1066,44 @@ def test_scene_expression_rows_fails_on_a_row_the_table_does_not_carry(tmp_path)
             actors=scene_actors({"type": "expression", "expressionTable": "joe",
                                  "expressionName": "frown"}))
     row = named(run_checks(export_root), "scene-expression-rows")
+    assert row["passed"] and row["failures"] == []
+    assert [item["row"] for item in row["observations"]] == ["frown"]
+    assert row["observations"][0]["reason"] == "the table carries no such row"
+    assert row["observations"][0]["from"] == "vtmb:scene:other"
+    assert row["observations"][0]["to"] == "vtmb:expression-table:joe"
+
+
+def test_an_absent_expression_row_is_published_in_dangling_references(tmp_path):
+    export_root = corpus(tmp_path / "exports_v2")
+    publish(export_root, "scenes/other.glb", "vtmb:scene:other",
+            dependencies=[dependency("expression-table", "vtmb:expression-table:joe",
+                                     "expressions/joe.vfe", True)],
+            actors=scene_actors(
+                {"type": "expression", "expressionTable": "joe", "expressionName": "frown"},
+                # The same row twice is one dangling reference, not two: retail's own scenes
+                # animate the missing row from more than one event.
+                {"type": "expression", "expressionTable": "joe", "expressionName": "frown"},
+            ))
+    units, roots = graph.read_corpus(export_root)
+    edges = graph.references(roots)
+    rows = checks.run(units, edges, roots)
+    grouped = {row["role"]: row for row in graph.dangling(edges, checks.dangling_rows(rows))}
+    assert grouped[checks.EXPRESSION_ROW_ROLE]["count"] == 1
+    assert grouped[checks.EXPRESSION_ROW_ROLE]["edges"][0]["row"] == "frown"
+
+
+def test_scene_expression_rows_still_fails_on_a_table_no_unit_publishes(tmp_path):
+    """What the check owns is unchanged: a table the scene resolves must be a published unit."""
+
+    export_root = corpus(tmp_path / "exports_v2")
+    publish(export_root, "scenes/other.glb", "vtmb:scene:other",
+            dependencies=[dependency("expression-table", "vtmb:expression-table:ghost",
+                                     "expressions/ghost.vfe", True)],
+            actors=scene_actors({"type": "expression", "expressionTable": "ghost",
+                                 "expressionName": "frown"}))
+    row = named(run_checks(export_root), "scene-expression-rows")
     assert not row["passed"]
-    assert row["failures"][0]["row"] == "frown"
+    assert row["failures"][0]["reason"] == "the scene names no published expression table"
 
 
 def test_scene_expression_rows_leaves_an_unshipped_table_to_the_dangling_report(tmp_path):
@@ -894,9 +1162,24 @@ def test_scene_expression_rows_reads_a_scene_the_scene_seam_wrote(tmp_path):
         index, key, export_root, read_bytes=lambda _index, path: SCENE_VCD
     )
     row = named(run_checks(export_root), "scene-expression-rows")
-    assert not row["passed"]
-    assert [failure["row"] for failure in row["failures"]] == ["Frown"]
-    assert row["failures"][0]["from"] == f"vtmb:scene:{key}"
+    assert row["passed"]
+    assert [item["row"] for item in row["observations"]] == ["Frown"]
+    assert row["observations"][0]["from"] == f"vtmb:scene:{key}"
+
+
+def test_surface_sound_scripts_accepts_a_physics_key_that_names_a_wave(tmp_path):
+    """`gargoyle` and `quiet` write `"impact" "null.wav"`. The surface-property seam classifies a
+    literal `.wav` as the `vtmb:sound:` reference it is, so no `sound-script` edge is produced
+    and the check has nothing to refuse."""
+
+    export_root = corpus(tmp_path / "exports_v2")
+    publish(export_root, "sounds/null.wav.glb", "vtmb:sound:null.wav")
+    publish(export_root, "surface-properties/quiet.glb", "vtmb:surface-property:quiet",
+            dependencies=[dependency("sound", "vtmb:sound:null.wav", "null.wav", True)],
+            sounds={"impact": [{"path": "null.wav", "asset": "vtmb:sound:null.wav",
+                                "resolved": True, "parameter": 0}]})
+    row = named(run_checks(export_root), "surface-sound-scripts")
+    assert row["passed"] and row["failures"] == []
 
 
 def test_surface_sound_scripts_fails_on_an_undeclared_entry(tmp_path):
@@ -1251,6 +1534,32 @@ def test_the_index_writes_the_fields_no_unit_can_write_about_itself(tmp_path):
     assert rows["vtmb:sound:step.wav"]["byteLength"] == len(on_disk)
 
 
+def die_on_rename(*_args, **_kwargs):
+    """A machine that goes down between the temporary sibling and the rename."""
+
+    raise OSError("the rename never happened")
+
+
+def test_a_back_fill_interrupted_before_the_rename_leaves_the_unit_it_rewrites(tmp_path,
+                                                                              monkeypatch):
+    # `seam_map_unit_contract.md` ("Validation") writes a unit to a temporary sibling and renames
+    # it over the destination. The back-fill rewrites an already-published unit whose bytes the
+    # index has recorded a hash for, so it lands the same way: a half-written unit is exactly
+    # what the rename rule exists to prevent.
+    export_root = tmp_path / "exports_v2"
+    export_root.mkdir()
+    unit = publish(export_root, "sounds/step.wav.glb", "vtmb:sound:step.wav")
+    before = unit.read_bytes()
+
+    monkeypatch.setattr(os, "replace", die_on_rename)
+    with pytest.raises(OSError):
+        backfill.rewrite(unit, "vtmb:sound:step.wav",
+                         [{"from": "vtmb:scene:talk", "role": "sound"}])
+
+    monkeypatch.undo()
+    assert unit.read_bytes() == before
+
+
 def test_a_second_run_over_one_corpus_rewrites_nothing(tmp_path):
     result, export_root = indexed(tmp_path)
     exporter.export(result, export_root)
@@ -1473,6 +1782,43 @@ def test_a_census_that_contradicts_the_unit_table_is_refused(tmp_path):
     published.write_bytes(encode_glb(document, binary))
     with pytest.raises(validation.CorpusIndexValidationError):
         validation.validate(published)
+
+
+def test_a_refresh_interrupted_before_the_rename_leaves_the_published_index(tmp_path,
+                                                                             monkeypatch):
+    # The refresh republishes the index, so it publishes the way the contract publishes: the
+    # file on disk holds either the index it held before or the whole refreshed one.
+    result, export_root = indexed(tmp_path)
+    published = exporter.export(result, export_root)
+    before = published.read_bytes()
+    added = publish(export_root, "textures/extra.glb", "vtmb:texture:extra")
+
+    monkeypatch.setattr(os, "replace", die_on_rename)
+    with pytest.raises(OSError):
+        exporter.refresh_unit(export_root, added)
+
+    monkeypatch.undo()
+    assert published.read_bytes() == before
+    validation.validate(published)
+
+
+def test_a_refresh_that_would_publish_an_incoherent_index_writes_nothing(tmp_path):
+    # Every other unit write is validated before it lands; the refresh is no exception, and its
+    # caller reports the refusal rather than publishing an index that contradicts its own tables.
+    result, export_root = indexed(tmp_path)
+    published = exporter.export(result, export_root)
+    document, binary = read_glb(published)
+    document["extensions"][CORPUS_INDEX_EXTENSION]["summary"]["members"] += 1
+    published.write_bytes(encode_glb(document, binary))
+    incoherent = published.read_bytes()
+
+    changed = publish(export_root, "textures/wall.glb", "vtmb:texture:wall",
+                      resolution={"width": 64},
+                      sources=source_rows(result, "materials/wall.tth", "materials/wall.ttz"))
+    with pytest.raises(validation.CorpusIndexValidationError):
+        exporter.refresh_unit(export_root, changed)
+
+    assert published.read_bytes() == incoherent
 
 
 def test_a_refresh_before_the_first_index_does_nothing(tmp_path):

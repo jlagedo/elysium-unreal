@@ -8,7 +8,7 @@ import tempfile
 import pytest
 
 from elysium_pipeline.exporters import sound_script_glb as exporter
-from elysium_pipeline.formats.sound_script_glb import decode, dsp_tree, kv_tree, lexer, source, symbols
+from elysium_pipeline.formats.sound_script_glb import decode, source, symbols
 from elysium_pipeline.formats.sound_script_glb.model import (
     SOUND_SCRIPT_EXTENSION,
     TABLE_PATHS,
@@ -291,9 +291,24 @@ def test_every_manifest_byte_is_claimed_exactly_once():
     _assert_gapless(model.byte_coverage[0])
 
 
+def test_sentence_and_dsp_preset_text_ranges_are_graded_mapped_text_not_mapped():
+    """`seam_map_unit_contract.md` reserves the ledger state `mapped` for a binary record or
+    payload; a sentence's name/path/length tokens and a DSP preset's header/processor tokens are
+    all text decoded into a structured record, so they must be graded `mapped-text`, never the
+    bare `mapped` this seam once used for them."""
+
+    sentence_model = _decode_sentence("spi_aggro0")
+    assert "mapped" not in sentence_model.byte_coverage[0]["stateBytes"]
+    assert sentence_model.byte_coverage[0]["stateBytes"]["mapped-text"] > 0
+
+    dsp_model = _decode_dsp(4)
+    assert "mapped" not in dsp_model.byte_coverage[0]["stateBytes"]
+    assert dsp_model.byte_coverage[0]["stateBytes"]["mapped-text"] > 0
+
+
 def test_whitespace_is_the_only_omission_in_a_keyvalues_table():
     model = _decode_game_sound("metal_barrel.impact")
-    assert set(model.byte_coverage[0]["stateBytes"]) <= {"mapped", "omitted-proven"}
+    assert set(model.byte_coverage[0]["stateBytes"]) <= {"mapped-text", "omitted-proven"}
     assert "omitted-proven" in model.byte_coverage[0]["stateBytes"]
 
 
@@ -673,10 +688,10 @@ def test_a_relabeled_ledger_range_fails_export_time_validation_via_independent_r
     extension = document["extensions"][SOUND_SCRIPT_EXTENSION]
     ledger = extension["coverage"]["byteLedger"][0]
 
-    # relabel one live-text `mapped` range as a false `omitted-proven` claim, keeping the range
-    # table internally self-consistent (contiguous, correct stateBytes/rangesSha256) so only the
-    # independent re-decode -- not `verify_ledger_row`'s self-check -- can catch it
-    victim = next(row for row in ledger["ranges"] if row["state"] == "mapped" and row["length"] > 0)
+    # relabel one live-text `mapped-text` range as a false `omitted-proven` claim, keeping the
+    # range table internally self-consistent (contiguous, correct stateBytes/rangesSha256) so only
+    # the independent re-decode -- not `verify_ledger_row`'s self-check -- can catch it
+    victim = next(row for row in ledger["ranges"] if row["state"] == "mapped-text" and row["length"] > 0)
     victim["state"] = "omitted-proven"
     victim["owner"] = "entry.dead-storage"
     from collections import Counter

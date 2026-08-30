@@ -22,9 +22,9 @@ from elysium_pipeline.formats.expression_table_glb import (
 )
 from elysium_pipeline.formats.expression_table_glb.decode import ExpressionTableDecodeError
 from elysium_pipeline.formats.unit_contract import (
-    ByteLedgerError,
     Origin,
     SourceMember,
+    UnitValidationError,
     container,
 )
 from elysium_pipeline.validation import expression_table_glb as validation
@@ -685,7 +685,7 @@ def test_a_tampered_ledger_is_refused_at_export_time():
     document, binary = exporter.build_document(model)
     root = document["extensions"][list(document["extensions"])[0]]
     root["coverage"]["byteLedger"][0]["ranges"][0]["length"] += 1
-    with pytest.raises(Exception):
+    with pytest.raises(UnitValidationError, match="byte range"):
         validation.validate_document(document, binary, source_members=model.members)
 
 
@@ -714,5 +714,5 @@ def test_export_fails_closed_when_a_source_byte_is_swapped_after_decode():
     model = decode_expression_table(closure)
     document, binary = exporter.build_document(model)
     tampered_vfe = _member("vfe", VFE_PATH, b"\xffXXX" + VFE[4:])
-    with pytest.raises(Exception):
+    with pytest.raises(UnitValidationError, match="digest disagrees"):
         validation.validate_document(document, binary, source_members=(tampered_vfe, closure.txt))

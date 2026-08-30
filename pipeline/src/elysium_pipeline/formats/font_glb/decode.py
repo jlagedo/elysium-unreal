@@ -27,7 +27,7 @@ from elysium_pipeline.formats.font_glb.model import (
 )
 from elysium_pipeline.formats.material_glb.model import asset_id as material_asset_id
 from elysium_pipeline.formats.texture_glb.model import asset_id as texture_asset_id
-from elysium_pipeline.formats.unit_contract import ByteLedger, dependency
+from elysium_pipeline.formats.unit_contract import ByteLedger, ByteLedgerError, dependency
 
 
 class FontDecodeError(RuntimeError):
@@ -229,6 +229,35 @@ def _decode_trailer(
     return {"byteLength": total, "unidentified": unidentified, "names": names}, typed_unidentified
 
 
+def _claim_pretable_gap(data: bytes, glyph_off: int, ledger: ByteLedger) -> list[dict[str, Any]]:
+    """The bytes, if any, between the fixed char map (ending at 292) and a glyph table the header
+    points further out.
+
+    Every shipped member has `glyphTableOffset == 292` (the seam note), so this region is normally
+    empty; the guard in `decode_font` only rejects `glyph_off` short of the char map, so a member
+    whose header names a later offset is admitted, and this claims the gap so the ledger stays
+    gapless instead of aborting with a raw `ByteLedgerError` (see `specDeviations`).
+    """
+
+    start = CHARMAP_OFFSET + CHARMAP_LENGTH
+    length = glyph_off - start
+    if length <= 0:
+        return []
+    chunk = data[start:glyph_off]
+    if any(chunk):
+        ledger.claim(start, length, "omitted-proven", "pad")
+        return [
+            {
+                "role": "pad-before-glyph-table",
+                "offset": start,
+                "length": length,
+                "hex": chunk.hex(),
+            }
+        ]
+    ledger.claim(start, length, "padding-zero", "pad")
+    return []
+
+
 def decode_font(closure, *, font_list_rows: list[dict[str, Any]] | None = None) -> FontModel:
     """The complete unit for one font source closure.
 
@@ -256,43 +285,47 @@ def decode_font(closure, *, font_list_rows: list[dict[str, Any]] | None = None) 
     ledger = ByteLedger(path, data)
     typed_unidentified: list[dict[str, Any]] = []
     anomalies: list[dict[str, Any]] = []
-
-    header, header_typed = _decode_header(data, ledger, table_end)
-    typed_unidentified.extend(header_typed)
-    ledger.claim(CHARMAP_OFFSET, CHARMAP_LENGTH, "mapped", "charMap")
-
-    pages_declared = header["pages"]
-    glyphs: list[dict[str, Any]] = []
-    used_pages: set[int] = set()
-    for index in range(count):
-        record, record_typed, record_anomalies = _decode_glyph(
-            data, glyph_off, index, pages_declared, ledger
-        )
-        glyphs.append(record)
-        typed_unidentified.extend(record_typed)
-        anomalies.extend(record_anomalies)
-        used_pages.add(record["page"])
-
-    # The seam note's `anomalies[] charmap-index-out-of-range` (a char-map entry >= the glyph
-    # count) is unreachable: `count` is definitionally `max(charmap) + 1` (the format carries no
-    # separate glyph-count field; see `formats/fnt.py`), so no entry can ever be >= `count`. Not
-    # implemented; see `specDeviations`.
-
-    # The seam note's `omissions[] unreferenced-glyphs` describes a table *longer* than a
-    # separately-stored glyph count, with the excess "still decoded into glyphs[]". That scenario
-    # is equally unreachable under the same `count` derivation, so this instead names the interior
-    # indices below `count` no code point reaches -- the achievable reading; see `specDeviations`.
-    unreferenced = sorted(set(range(count)) - set(charmap))
     omissions: list[dict[str, Any]] = []
-    if unreferenced:
-        omissions.append(
-            {"role": "unreferenced-glyphs", "count": len(unreferenced), "indices": unreferenced}
-        )
 
-    trailer, trailer_typed = _decode_trailer(data, table_end, ledger)
-    typed_unidentified.extend(trailer_typed)
+    try:
+        header, header_typed = _decode_header(data, ledger, table_end)
+        typed_unidentified.extend(header_typed)
+        ledger.claim(CHARMAP_OFFSET, CHARMAP_LENGTH, "mapped", "charMap")
+        omissions.extend(_claim_pretable_gap(data, glyph_off, ledger))
 
-    byte_ledger_row = ledger.finish()
+        pages_declared = header["pages"]
+        glyphs: list[dict[str, Any]] = []
+        used_pages: set[int] = set()
+        for index in range(count):
+            record, record_typed, record_anomalies = _decode_glyph(
+                data, glyph_off, index, pages_declared, ledger
+            )
+            glyphs.append(record)
+            typed_unidentified.extend(record_typed)
+            anomalies.extend(record_anomalies)
+            used_pages.add(record["page"])
+
+        # The seam note's `anomalies[] charmap-index-out-of-range` (a char-map entry >= the glyph
+        # count) is unreachable: `count` is definitionally `max(charmap) + 1` (the format carries no
+        # separate glyph-count field; see `formats/fnt.py`), so no entry can ever be >= `count`. Not
+        # implemented; see `specDeviations`.
+
+        # The seam note's `omissions[] unreferenced-glyphs` describes a table *longer* than a
+        # separately-stored glyph count, with the excess "still decoded into glyphs[]". That scenario
+        # is equally unreachable under the same `count` derivation, so this instead names the interior
+        # indices below `count` no code point reaches -- the achievable reading; see `specDeviations`.
+        unreferenced = sorted(set(range(count)) - set(charmap))
+        if unreferenced:
+            omissions.append(
+                {"role": "unreferenced-glyphs", "count": len(unreferenced), "indices": unreferenced}
+            )
+
+        trailer, trailer_typed = _decode_trailer(data, table_end, ledger)
+        typed_unidentified.extend(trailer_typed)
+
+        byte_ledger_row = ledger.finish()
+    except ByteLedgerError as error:
+        raise FontDecodeError(f"{path}: {error}") from error
 
     dependencies: list[dict[str, Any]] = []
     unresolved: list[dict[str, Any]] = []
@@ -321,11 +354,18 @@ def decode_font(closure, *, font_list_rows: list[dict[str, Any]] | None = None) 
                 {"role": "page-vmt-missing-basetexture", "page": page_index, "path": available.vmt_path}
             )
         if page_index in used_pages and not texture_present:
-            unresolved.append({
-                "role": "page-texture",
+            # `seam_map_font.md` reads this as the font's own structure and grades it
+            # `coverage.unresolved`; the real install ships members that reference a page it never
+            # shipped (neither the `.tth` nor its `.vmt`), which is exactly
+            # `seam_map_unit_contract.md`'s non-canonical-storage case instead -- a reference to
+            # another seam's data (the page's texture and material units) that merely fails to
+            # resolve, so the unit publishes what the install holds and warns. See `specDeviations`.
+            using_glyphs = sorted(g["index"] for g in glyphs if g["page"] == page_index)
+            anomalies.append({
+                "role": "page-missing",
                 "page": page_index,
                 "path": texture_path,
-                "reason": "the glyph table references a page the install does not ship",
+                "glyphs": using_glyphs,
             })
         if available is not None and page_index not in used_pages:
             omissions.append(
@@ -362,8 +402,11 @@ def decode_font(closure, *, font_list_rows: list[dict[str, Any]] | None = None) 
         dependencies.append(dependency("font-list", font_list_asset_id(), FONT_LIST_PATH, True))
     else:
         dependencies.append(dependency("font-list", font_list_asset_id(), FONT_LIST_PATH, False))
-        unresolved.append(
-            {"role": "font-list", "reason": "the install carries no fontlist.txt registry"}
+        # The registry is another seam's data, not this `.fnt`'s own structure -- the glyph table
+        # decodes completely without it -- so its absence is graded like the page case above:
+        # `anomalies[]` and a warning, not `coverage.unresolved`. See `specDeviations`.
+        anomalies.append(
+            {"role": "font-list-missing", "reason": "the install carries no fontlist.txt registry"}
         )
 
     name = parse_name(closure.key)

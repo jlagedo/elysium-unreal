@@ -13,8 +13,23 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from elysium_pipeline.formats.font_glb.model import (
+    FontModelError,
+    asset_id as font_asset_id,
+    font_path as font_source_path,
+    normalize_font_key,
+    registry_key as font_registry_key,
+)
+from elysium_pipeline.formats.material_glb.model import (
+    asset_id as material_asset_id,
+    normalize_material_path,
+)
+from elysium_pipeline.formats.particle_glb.model import (
+    asset_id as particle_asset_id,
+    normalize_particle_key,
+)
 from elysium_pipeline.formats.unit_contract.references import asset_id as _ref_asset_id
-from elysium_pipeline.formats.unit_contract.references import dependency
+from elysium_pipeline.formats.unit_contract.references import dependency, missing_sentinel
 from elysium_pipeline.formats.ui_resource_glb import grammars, lexer
 from elysium_pipeline.formats.ui_resource_glb import coverage as coverage_module
 from elysium_pipeline.formats.ui_resource_glb.coverage import new_ledger
@@ -42,8 +57,11 @@ class Resolvers:
     """
 
     material_exists: PathExists | None = None
+    #: Takes the `vtmb:font:` unit key a scheme tier composes (`<face>_<size>_<weight>_<flags>`),
+    #: not the tier's own `face:tall:weight:flags` spelling.
     font_exists: PathExists | None = None
     texture_exists: PathExists | None = None
+    #: Takes the `vtmb:particle:` unit key an emitter names.
     particle_exists: PathExists | None = None
     sound_exists: PathExists | None = None
     ui_resource_exists: PathExists | None = None
@@ -138,16 +156,22 @@ def _reshape(nodes: list[dict]) -> Any:
 
 def _material_dependency(raw: str) -> tuple[str, str] | None:
     """`(asset, normalizedPath)` for a `material`/`image`/`file` value naming art below
-    `materials/`, or `None` for an empty or already-symbolic value."""
+    `materials/`, or `None` for an empty, already-symbolic or unkeyable value.
+
+    The key spelling is the material seam's own (`material_glb.model.normalize_material_path`):
+    it collapses a doubled slash and drops a trailing `.vmt`, so a value spelled
+    `materials/vgui/hud/foo.vmt` names the same `vtmb:material:` unit a bare `vgui/hud/foo`
+    does. A value that seam's rules cannot key at all (empty, or escaping the root) names no
+    unit and produces no row.
+    """
 
     if not raw or raw.startswith("#"):
         return None
-    normalized = raw.replace("\\", "/").strip().lower()
-    if normalized.startswith("materials/"):
-        normalized = normalized[len("materials/"):]
-    if not normalized:
+    try:
+        normalized = normalize_material_path(raw.strip())
+    except ValueError:
         return None
-    return _ref_asset_id("material", normalized), normalized
+    return material_asset_id(normalized), normalized
 
 
 def _scan_material_and_token_references(
@@ -219,25 +243,61 @@ def _scan_directives(
 # --------------------------------------------------------------------------------------------
 
 
+#: VGUI's own `FONTFLAG_*` bits, the vocabulary a `.fnt` stem's trailing flags group counts in:
+#: the shipped `Marlett` tiers state `"symbol" "1"` and cache as `marlett_14_000_008`, the
+#: `DefaultUnderline` tiers state `"underline" "1"` and cache as `tahoma_16_500_002`.
+_FONT_FLAG_BITS = (("italic", 0x001), ("underline", 0x002), ("strikeout", 0x004), ("symbol", 0x008))
+
+
+def _font_flags(fields: dict[str, Any]) -> int:
+    flags = 0
+    for key, bit in _FONT_FLAG_BITS:
+        if str(fields.get(key) or "0").strip() not in ("", "0"):
+            flags |= bit
+    return flags
+
+
 def _font_join_key(fields: dict[str, Any]) -> str:
     """The face/size/weight/flags join key a scheme `Fonts` tier states
     (`seam_map_ui_resource.md`, "Dependencies": "joined to a `vtmb:font:` unit by face, size,
-    weight and flags")."""
+    weight and flags"), in the tier's own spelling."""
 
     face = str(fields.get("name") or "").strip().lower()
     tall = str(fields.get("tall") or "").strip()
     weight = str(fields.get("weight") or "").strip()
-    flags = "u" if str(fields.get("underline") or "0").strip() not in ("", "0") else ""
-    flags += "i" if str(fields.get("italic") or "0").strip() not in ("", "0") else ""
-    return f"{face}:{tall}:{weight}:{flags}"
+    return f"{face}:{tall}:{weight}:{_font_flags(fields)}"
+
+
+def _font_stem(fields: dict[str, Any]) -> str | None:
+    """The `vtmb:font:` unit key this tier joins to, or `None` when the font seam's own key rule
+    cannot compose one (an unnamed face, a non-numeric `tall`/`weight`).
+
+    `font_glb.model.registry_key` is that rule -- the same composition the font seam applies to a
+    `fontlist.txt` row -- so the identity published here is one a real `.fnt` unit can own.
+    """
+
+    face = str(fields.get("name") or "").strip()
+    if not face:
+        return None
+    try:
+        tall = int(str(fields.get("tall") or "").strip())
+        weight = int(str(fields.get("weight") or "0").strip())
+    except ValueError:
+        return None
+    stem = font_registry_key(face, tall, weight, _font_flags(fields))
+    try:
+        return normalize_font_key(stem)
+    except FontModelError:
+        return None
 
 
 def _project_scheme(
     top_nodes: list[dict], *, resolve_font: PathExists | None
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
     children = root_children(top_nodes, "scheme")
     blocks = blocks_by_key(children)
     dependencies: list[dict[str, Any]] = []
+    omitted_proven: list[dict[str, Any]] = []
 
     colors = []
     for scalar in (blocks.get("colors", [{"children": []}])[0]).get("children", []):
@@ -276,13 +336,27 @@ def _project_scheme(
                 continue
             fields = _reshape(tier_block["children"])
             join_key = _font_join_key(fields)
-            asset = _ref_asset_id("font", join_key)
-            resolved = bool(resolve_font(join_key)) if resolve_font else False
+            stem = _font_stem(fields)
+            if stem is None:
+                # `seam_map_unit_contract.md`, "References between units": a reference the
+                # referenced kind's own rules make unreachable keeps a `vtmb:missing-<kind>:`
+                # identity, produces no `dependencies` row and enters coverage as
+                # `omitted-proven` with the seam's reason.
+                tiers.append(
+                    {"tier": tier_block["sourceKey"], "fields": fields, "joinKey": join_key,
+                     "asset": missing_sentinel("font", join_key), "resolved": False}
+                )
+                omitted_proven.append(
+                    {"role": "fonts", "reason": "unkeyable-font-tier", "joinKey": join_key}
+                )
+                continue
+            asset = font_asset_id(stem)
+            resolved = bool(resolve_font(stem)) if resolve_font else False
             tiers.append(
-                {"tier": tier_block["sourceKey"], "fields": fields, "asset": asset,
-                 "resolved": resolved}
+                {"tier": tier_block["sourceKey"], "fields": fields, "joinKey": join_key,
+                 "asset": asset, "resolved": resolved}
             )
-            dependencies.append(dependency("font", asset, join_key, resolved))
+            dependencies.append(dependency("font", asset, font_source_path(stem), resolved))
         fonts.append({"alias": alias_block["sourceKey"], "tiers": tiers})
 
     borders = []
@@ -292,7 +366,7 @@ def _project_scheme(
         borders.append({"name": border_block["sourceKey"], "fields": _reshape(border_block["children"])})
 
     scheme = {"colors": colors, "baseSettings": base_settings, "fonts": fonts, "borders": borders}
-    return scheme, dependencies
+    return scheme, dependencies, omitted_proven
 
 
 def _control(node: dict) -> dict[str, Any]:
@@ -437,9 +511,11 @@ def _project_menu_scene(
             "angle": scalar_text(block_scalars.get("angle")),
             "offset": block["offset"],
         }
-        if emitter_raw:
-            normalized = emitter_raw.strip().lower()
-            asset = _ref_asset_id("particle", normalized)
+        # The particle seam's own key rule (`particle_glb.model.normalize_particle_key`), so an
+        # emitter spelled bare, with `particles/` or with `.txt` names the one unit.
+        normalized = normalize_particle_key(emitter_raw) if emitter_raw else ""
+        if normalized:
+            asset = particle_asset_id(normalized)
             resolved = bool(resolve_particle(normalized)) if resolve_particle else False
             entry["asset"] = asset
             dependencies.append(dependency("particle", asset, emitter_raw, resolved))
@@ -585,10 +661,14 @@ def _decode_keyvalues(
 
     scheme = layout = menu = hud = substitutions = strings = menu_scene = None
     unsupported: list[dict[str, Any]] = []
+    omitted_proven = coverage_module.omitted_proven_rows(whitespace_total)
 
     if closure.category == "scheme":
-        scheme, scheme_deps = _project_scheme(top_nodes, resolve_font=resolvers.font_exists)
+        scheme, scheme_deps, scheme_omitted = _project_scheme(
+            top_nodes, resolve_font=resolvers.font_exists
+        )
         dependencies = dependencies + scheme_deps
+        omitted_proven.extend(scheme_omitted)
     elif closure.category == "layout":
         layout = _project_layout(top_nodes)
     elif closure.category == "menu":
@@ -639,7 +719,7 @@ def _decode_keyvalues(
         unresolved=unresolved,
         unsupported=unsupported,
         ledger_row=ledger.finish(),
-        omitted_proven=coverage_module.omitted_proven_rows(whitespace_total),
+        omitted_proven=omitted_proven,
         dormant=closure.dormant,
         dormant_evidence=closure.dormant_evidence,
     )

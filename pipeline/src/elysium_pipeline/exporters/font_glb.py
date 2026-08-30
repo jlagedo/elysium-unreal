@@ -15,7 +15,9 @@ from typing import Any
 
 from elysium_pipeline.formats.font_glb import (
     FONT_EXTENSION,
+    FONT_GENERATOR_TITLE,
     FONT_LIST_EXTENSION,
+    FONT_LIST_GENERATOR_TITLE,
     FONT_LIST_KEY,
     FONT_LIST_PATH,
     SCHEMA_VERSION,
@@ -84,7 +86,7 @@ def build_document(model) -> tuple[dict, bytes]:
         omissions=model.omissions,
     )
     document = {
-        "asset": asset_block("Font"),
+        "asset": asset_block(FONT_GENERATOR_TITLE),
         "extensionsUsed": [FONT_EXTENSION],
         "extensionsRequired": [FONT_EXTENSION],
         "extensions": {FONT_EXTENSION: plain(root)},
@@ -118,7 +120,7 @@ def build_font_list_document(model) -> tuple[dict, bytes]:
         omissions=model.omissions,
     )
     document = {
-        "asset": asset_block("Font List"),
+        "asset": asset_block(FONT_LIST_GENERATOR_TITLE),
         "extensionsUsed": [FONT_LIST_EXTENSION],
         "extensionsRequired": [FONT_LIST_EXTENSION],
         "extensions": {FONT_LIST_EXTENSION: plain(root)},

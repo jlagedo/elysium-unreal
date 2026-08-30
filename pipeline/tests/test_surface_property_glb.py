@@ -183,6 +183,83 @@ def test_a_sound_script_absent_from_the_install_publishes_unresolved():
     assert model.unresolved == []
 
 
+#: The shape `gargoyle` and `quiet` ship: the physics keys spelling a wave path, not a script.
+NULL_WAV_TABLE = (
+    b'"quiet"\r\n{\r\n'
+    b'\t"impact"\t"null.wav"\r\n'
+    b'\t"scrape"\t"null.wav"\r\n'
+    b'}\r\n'
+)
+
+
+def _null_wav(*, shipped: bool):
+    table = _table(NULL_WAV_TABLE)
+    return decode_surface_property(
+        table.closure("quiet"),
+        sound_script_exists=lambda candidate: False,
+        sound_exists=lambda key: shipped and key == "sound/null.wav",
+    )
+
+
+def test_a_physics_key_spelling_a_wave_path_is_a_sound_reference_not_a_script():
+    """`gargoyle` and `quiet` write `"impact" "null.wav"`. No sound-script table declares an
+    entry called `null.wav`, and `sound/null.wav` is a member the sound seam publishes, so the
+    value takes the `vtmb:sound:` namespace the footstep and impact keys already use."""
+
+    model = _null_wav(shipped=True)
+    for key in ("impact", "scrape"):
+        record = model.sounds[key][0]
+        assert record == {
+            "path": "null.wav",
+            "asset": "vtmb:sound:null.wav",
+            "resolved": True,
+            "parameter": record["parameter"],
+        }
+    assert model.dependencies == [
+        {"role": "sound", "asset": "vtmb:sound:null.wav", "sourcePath": "null.wav",
+         "resolved": True}
+    ]
+    assert not any(row["role"] == "unreachable-sound-path" for row in model.omissions)
+
+
+def test_a_physics_key_naming_a_script_is_still_a_sound_script():
+    """The negative: the suffix is the whole rule, so an ordinary `<surface>.Impact` is
+    unchanged."""
+
+    model = _decode("default")
+    assert model.sounds["impact"][0]["asset"] == "vtmb:sound-script:default.impact"
+    assert any(row["role"] == "sound-script" for row in model.dependencies)
+
+
+def test_a_wave_path_the_install_does_not_ship_keeps_the_missing_sound_sentinel():
+    model = _null_wav(shipped=False)
+    record = model.sounds["impact"][0]
+    assert record["asset"] == "vtmb:missing-sound:null.wav"
+    assert record["resolved"] is False
+    # A sentinel names no unit, so it produces no dependency row; the reason is an omission.
+    assert model.dependencies == []
+    reasons = [row["role"] for row in model.omissions]
+    assert reasons.count("unreachable-sound-path") == 2
+
+
+def test_a_wave_path_in_a_physics_key_validates_in_both_states():
+    for shipped in (True, False):
+        model = _null_wav(shipped=shipped)
+        document, binary = surface_property_glb.build_document(model)
+        summary = validation.validate_document(document, binary)
+        assert summary["soundScripts"] == 0
+        assert summary["missingSoundScripts"] == []
+
+
+def test_validation_refuses_a_sentinel_that_claims_to_resolve():
+    model = _null_wav(shipped=False)
+    document, binary = surface_property_glb.build_document(model)
+    extension = document["extensions"][SURFACE_PROPERTY_EXTENSION]
+    extension["sounds"]["impact"][0]["resolved"] = True
+    with pytest.raises(validation.SurfacePropertyGlbValidationError, match="sentinel"):
+        validation.validate_document(document, binary)
+
+
 def test_an_entry_that_declares_only_its_name_is_a_complete_unit():
     model = _decode("weapon")
     assert model.parameters == []

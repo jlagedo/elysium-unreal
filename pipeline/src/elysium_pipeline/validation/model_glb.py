@@ -818,16 +818,52 @@ def _recheck_sources(
         if member.path not in disagreeing:
             _fail(f"{member.path}: the VTX checksum disagrees with the MDL and is not an anomaly")
 
-    primary = members.get("vtx-dx80") or members.get("vtx-dx7-2bone")
+    comparison = root["vtx"].get("comparison") or {}
+    primary = (
+        members.get(str(comparison.get("primary")))
+        or members.get("vtx-dx80")
+        or members.get("vtx-dx7-2bone")
+    )
     if primary is None:
         return
     sections = _vtx_sections(primary.data)
+    # A LOD the primary variant does not carry is published from the legacy twin, so the section
+    # it is held to is that twin's. Only the LODs `vtx.comparison` names are taken from it, so an
+    # overlapping LOD is still checked against the variant that published it.
+    alternate = members.get(str(comparison.get("alternate")))
+    alternate_only = {int(index) for index in comparison.get("alternateOnlyLods") or ()}
+    if alternate is not None and alternate_only:
+        for section_key, triangles in _vtx_sections(alternate.data).items():
+            if section_key[2] in alternate_only:
+                sections[section_key] = triangles
+    # Triangles the source vertex block cannot supply are dropped by the decode and named in
+    # `anomalies[]`; the index accessor is held to what the VTX declares minus exactly those.
+    dropped: dict[tuple[int, int, int, int], int] = {}
+    for row in root.get("anomalies") or []:
+        if row.get("row") != "vtx-vertex-outside-model":
+            continue
+        dropped[
+            (int(row["bodyPart"]), int(row["model"]), int(row["lod"]), int(row["mesh"]))
+        ] = int(row["droppedTriangles"])
     accessors = list(document.get("accessors") or [])
     views = list(document.get("bufferViews") or [])
     models: dict[tuple[int, int], int] = {}
     for bodypart in root["mdl"]["bodyParts"]:
         for body_model in bodypart["models"]:
             models[(bodypart["index"], body_model["index"])] = body_model["sourceOffset"]
+    # An anomaly that licenses a dropped triangle is itself held to the MDL: the model it names
+    # declares the vertex count it claims, and every vertex it calls stale is past that count.
+    for row in root.get("anomalies") or []:
+        if row.get("row") != "vtx-vertex-outside-model":
+            continue
+        record = models.get((int(row["bodyPart"]), int(row["model"])))
+        if record is None:
+            _fail(f"{row['row']} names a body-part model the extension does not declare")
+        declared = _i32(mdl.data, record + 144)
+        if int(row["vertexCount"]) != declared:
+            _fail(f"{row['row']} says {row['vertexCount']} vertices; the MDL says {declared}")
+        if any(int(vertex) < declared for vertex in row["staleVertices"]):
+            _fail(f"{row['row']} calls a vertex the MDL does hold stale")
     for row in root["vtx"]["lods"]:
         mesh = document["meshes"][row["mesh"]]
         for primitive in mesh["primitives"]:
@@ -836,8 +872,12 @@ def _recheck_sources(
             expected = sections.get(key)
             if expected is None:
                 _fail(f"the VTX declares no section for {key}")
-            if accessors[primitive["indices"]]["count"] != expected * 3:
-                _fail(f"section {key} carries {expected} triangles the index accessor disagrees with")
+            published = expected - dropped.get(key, 0)
+            if accessors[primitive["indices"]]["count"] != published * 3:
+                _fail(
+                    f"section {key} carries {published} triangles the index accessor "
+                    "disagrees with"
+                )
             source_vertices = identity["sourceVertices"]
             position = accessors[primitive["attributes"]["POSITION"]]
             if position["count"] != len(source_vertices):

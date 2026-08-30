@@ -95,11 +95,21 @@ def _material_resolver(index: dict) -> Callable[[str], bool]:
     return resolve
 
 
-def _font_resolver() -> Callable[[str], bool]:
-    # No install-side font-metrics table is wired into this seam's export; a join key is left
-    # unresolved (and warns) rather than asserted against an index this exporter does not search.
-    def resolve(_join_key: str) -> bool:
-        return False
+def _font_resolver(index: dict) -> Callable[[str], bool]:
+    """Whether the UP-first index holds the `.fnt` a scheme tier's composed `vtmb:font:` key names.
+
+    The font seam owns both the key rule and the file layout, so this asks it: a tier that matches
+    no `.fnt` is `resolved: false` and warns (`seam_map_ui_resource.md`, "Dependencies"), which is
+    the engine rasterizing from the installed system face.
+    """
+
+    from elysium_pipeline.formats.font_glb.model import FontModelError, font_path
+
+    def resolve(stem: str) -> bool:
+        try:
+            return font_path(stem) in index
+        except FontModelError:
+            return False
 
     return resolve
 
@@ -120,11 +130,12 @@ def _sound_resolver(index: dict) -> Callable[[str], bool]:
     return resolve
 
 
-def _particle_resolver() -> Callable[[str], bool]:
-    # No install-side particle name table is wired into this seam's export; a name is left
-    # unresolved (and warns) rather than asserted against an index this exporter does not search.
-    def resolve(_normalized: str) -> bool:
-        return False
+def _particle_resolver(index: dict) -> Callable[[str], bool]:
+    """Whether the UP-first index holds the `particles/<emitter>.txt` an emitter names -- the
+    particle seam's own source layout."""
+
+    def resolve(normalized: str) -> bool:
+        return bool(normalized) and f"particles/{normalized}.txt" in index
 
     return resolve
 
@@ -209,9 +220,9 @@ def _substitution_defs_resolver(index: dict, read_bytes) -> Callable[[str], dict
 def _resolvers(index: dict, read_bytes) -> Resolvers:
     return Resolvers(
         material_exists=_material_resolver(index),
-        font_exists=_font_resolver(),
+        font_exists=_font_resolver(index),
         texture_exists=_texture_resolver(index),
-        particle_exists=_particle_resolver(),
+        particle_exists=_particle_resolver(index),
         sound_exists=_sound_resolver(index),
         ui_resource_exists=_ui_resource_resolver(index),
         gameui_token_exists=_gameui_token_resolver(index, read_bytes),

@@ -211,18 +211,88 @@ def test_scheme_projects_colors_basesettings_resolved_and_a_font_dependency():
     assert resolved_to["name"] == "BaseText"
     font_deps = [d for d in model.dependencies if d["role"] == "font"]
     assert len(font_deps) == 1
-    assert font_deps[0]["asset"] == "vtmb:font:tahoma:16:500:"
+    # The identity is the font seam's own key rule (`<face>_<size>_<weight>_<flags>`), so it can
+    # name a real `vtmb:font:` unit; a colon-joined tier spelling never could.
+    assert font_deps[0]["asset"] == "vtmb:font:tahoma_16_500_000"
+    assert font_deps[0]["sourcePath"] == "materials/fonts/tahoma_16_500_000.fnt"
     assert font_deps[0]["resolved"] is False
+    assert model.scheme["fonts"][0]["tiers"][0]["joinKey"] == "tahoma:16:500:0"
     assert model.scheme["borders"][0]["name"] == "BaseBorder"
 
 
 def test_scheme_font_dependency_resolves_when_a_resolver_says_so():
     model = _decode(
         "resource/vampirescheme.res", _SCHEME_BODY,
-        resolvers=Resolvers(font_exists=lambda key: key == "tahoma:16:500:"),
+        resolvers=Resolvers(font_exists=lambda key: key == "tahoma_16_500_000"),
     )
     font_deps = [d for d in model.dependencies if d["role"] == "font"]
     assert font_deps[0]["resolved"] is True
+
+
+_SYMBOL_SCHEME_BODY = b"""Scheme
+{
+	Fonts
+	{
+		"Marlett"
+		{
+			"1"
+			{
+				"name"	"Marlett"
+				"tall"	"8"
+				"weight"	"0"
+				"symbol"	"1"
+			}
+		}
+		"DefaultUnderline"
+		{
+			"1"
+			{
+				"name"	"Tahoma"
+				"tall"	"10"
+				"weight"	"500"
+				"underline"	"1"
+			}
+		}
+	}
+}
+"""
+
+
+def test_scheme_font_flags_count_in_vguis_own_fontflag_bits():
+    """`symbol` is 0x8 and `underline` is 0x2, the bits the shipped `.fnt` stems spell:
+    `marlett_08_000_008`, `tahoma_10_500_002`."""
+
+    model = _decode("resource/vampirescheme.res", _SYMBOL_SCHEME_BODY)
+    assets = [d["asset"] for d in model.dependencies if d["role"] == "font"]
+    assert assets == ["vtmb:font:marlett_08_000_008", "vtmb:font:tahoma_10_500_002"]
+
+
+_UNKEYABLE_SCHEME_BODY = b"""Scheme
+{
+	Fonts
+	{
+		"Default"
+		{
+			"1"
+			{
+				"name"	"Tahoma"
+				"tall"	"large"
+				"weight"	"500"
+			}
+		}
+	}
+}
+"""
+
+
+def test_a_font_tier_the_font_seams_key_rule_cannot_compose_keeps_a_missing_sentinel():
+    model = _decode("resource/vampirescheme.res", _UNKEYABLE_SCHEME_BODY)
+    tier = model.scheme["fonts"][0]["tiers"][0]
+    assert tier["asset"] == "vtmb:missing-font:tahoma:large:500:0"
+    assert tier["resolved"] is False
+    assert [d for d in model.dependencies if d["role"] == "font"] == []
+    assert {"role": "fonts", "reason": "unkeyable-font-tier",
+            "joinKey": "tahoma:large:500:0"} in model.omitted_proven
 
 
 # --- layout ----------------------------------------------------------------------------------
@@ -258,6 +328,56 @@ def test_layout_projects_a_control_with_position_size_and_a_material_dependency(
         {"role": "material", "asset": "vtmb:material:launcher/background",
          "sourcePath": "launcher/background", "resolved": False}
     ]
+
+
+_VMT_SPELLED_LAYOUT_BODY = b"""\"Resource/Spelled.res\"
+{
+	\"Panel\"
+	{
+		\"image\"		\"materials//vgui/hud/Foo.vmt\"
+	}
+}
+"""
+
+
+def test_a_material_value_is_keyed_by_the_material_seams_own_rule():
+    """`materials//vgui/hud/Foo.vmt` and a bare `vgui/hud/foo` name one `vtmb:material:` unit:
+    the material seam's `normalize_material_path` collapses the doubled slash and drops `.vmt`.
+    """
+
+    model = _decode("resource/spelled.res", _VMT_SPELLED_LAYOUT_BODY)
+    material_deps = [d for d in model.dependencies if d["role"] == "material"]
+    assert [d["asset"] for d in material_deps] == ["vtmb:material:vgui/hud/foo"]
+    # `sourcePath` keeps the referrer's authored spelling.
+    assert material_deps[0]["sourcePath"] == "materials//vgui/hud/Foo.vmt"
+
+
+_UNKEYABLE_MATERIAL_BODY = b"""\"Resource/Escape.res\"
+{
+	\"Panel\"
+	{
+		\"image\"	\"materials/../foo\"
+	}
+}
+"""
+
+
+def test_a_material_value_the_material_seam_cannot_key_produces_no_row():
+    """`materials/../foo` escapes the material root, so the material seam's key rule rejects it;
+    a value that seam can never own names no unit and publishes no dependency row."""
+
+    model = _decode("resource/escape.res", _UNKEYABLE_MATERIAL_BODY)
+    assert [d for d in model.dependencies if d["role"] == "material"] == []
+
+def test_a_vmt_spelled_material_value_resolves_through_the_exporters_own_resolver(tmp_path):
+    index = _index("resource/spelled.res", "materials/vgui/hud/foo.vmt")
+    path = exporter.export(
+        index, "resource/spelled.res", tmp_path,
+        read_bytes=lambda idx, k: _VMT_SPELLED_LAYOUT_BODY if k == "resource/spelled.res" else None,
+    )
+    root = validation.read_glb(path)[0]["extensions"]["ELYSIUM_vtmb_ui_resource"]
+    material_deps = [d for d in root["dependencies"] if d["role"] == "material"]
+    assert material_deps[0]["resolved"] is True
 
 
 def test_layout_control_label_token_produces_a_ui_resource_dependency_on_the_string_table():
@@ -838,6 +958,62 @@ def test_export_builds_a_valid_scene_less_glb_and_validates(tmp_path):
     assert list(root)[:5] == ["schemaVersion", "identity", "sourceResolution", "dependencies", "coverage"]
     for core_key in ("scenes", "nodes", "meshes", "images", "textures", "samplers"):
         assert core_key not in document
+
+
+def test_export_answers_a_font_tier_from_the_index_it_already_holds(tmp_path):
+    """The production wiring, not an injected resolver: `export` builds the font resolver from the
+    UP-first index, so a tier whose `.fnt` the install holds publishes `resolved: true`."""
+
+    index = _index("resource/vampirescheme.res", "materials/fonts/tahoma_16_500_000.fnt")
+    path = exporter.export(
+        index, "resource/vampirescheme.res", tmp_path,
+        read_bytes=lambda idx, k: _SCHEME_BODY if k == "resource/vampirescheme.res" else None,
+    )
+    root = validation.read_glb(path)[0]["extensions"]["ELYSIUM_vtmb_ui_resource"]
+    font_deps = [row for row in root["dependencies"] if row["role"] == "font"]
+    assert font_deps == [
+        {"role": "font", "asset": "vtmb:font:tahoma_16_500_000",
+         "sourcePath": "materials/fonts/tahoma_16_500_000.fnt", "resolved": True}
+    ]
+    assert root["scheme"]["fonts"][0]["tiers"][0]["resolved"] is True
+    assert validation.warnings_for(validation.validate(path)) == []
+
+
+def test_export_leaves_a_font_tier_the_install_lacks_unresolved_and_warns(tmp_path):
+    index = _index("resource/vampirescheme.res")
+    path = exporter.export(
+        index, "resource/vampirescheme.res", tmp_path,
+        read_bytes=lambda idx, k: _SCHEME_BODY if k == "resource/vampirescheme.res" else None,
+    )
+    summary = validation.validate(path)
+    assert summary["unresolved"] == 0
+    warnings = validation.warnings_for(summary)
+    assert "unresolved reference: font 'materials/fonts/tahoma_16_500_000.fnt'" in warnings
+
+
+def test_export_answers_a_menu_scene_particle_from_the_index_it_already_holds(tmp_path):
+    index = _index("resource/mainmenuparticles.txt", "particles/m_clouds_emmiter.txt")
+    path = exporter.export(
+        index, "resource/mainmenuparticles.txt", tmp_path,
+        read_bytes=lambda idx, k: _MENU_SCENE_BODY if k == "resource/mainmenuparticles.txt" else None,
+    )
+    root = validation.read_glb(path)[0]["extensions"]["ELYSIUM_vtmb_ui_resource"]
+    particle_deps = [row for row in root["dependencies"] if row["role"] == "particle"]
+    assert particle_deps == [
+        {"role": "particle", "asset": "vtmb:particle:m_clouds_emmiter",
+         "sourcePath": "M_Clouds_Emmiter", "resolved": True}
+    ]
+
+
+def test_export_leaves_a_menu_scene_particle_the_install_lacks_unresolved(tmp_path):
+    index = _index("resource/mainmenuparticles.txt")
+    path = exporter.export(
+        index, "resource/mainmenuparticles.txt", tmp_path,
+        read_bytes=lambda idx, k: _MENU_SCENE_BODY if k == "resource/mainmenuparticles.txt" else None,
+    )
+    root = validation.read_glb(path)[0]["extensions"]["ELYSIUM_vtmb_ui_resource"]
+    particle_deps = [row for row in root["dependencies"] if row["role"] == "particle"]
+    assert particle_deps[0]["resolved"] is False
 
 
 def test_comments_are_claimed_mapped_text_not_mapped():

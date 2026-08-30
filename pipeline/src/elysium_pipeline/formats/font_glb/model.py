@@ -24,6 +24,13 @@ FONT_EXTENSION = extension_name("font")
 FONT_LIST_EXTENSION = extension_name("font-list")
 SCHEMA_VERSION = "1.0.0"
 
+#: The `asset.generator` title each kind signs its product with (`seam_map_unit_contract.md`:
+#: `Elysium <Kind> GLB Exporter`, hyphenating a multi-word kind to match its kind slug, e.g.
+#: `Expression-table`, `Nav-graph`, `Shader-source`). `font-list`'s own slug hyphenates the same
+#: way, so its title is `Font-list`, not `Font List`.
+FONT_GENERATOR_TITLE = "Font"
+FONT_LIST_GENERATOR_TITLE = "Font-list"
+
 FONTS_DIR = "materials/fonts"
 FONT_LIST_KEY = "fontlist"
 FONT_LIST_PATH = f"{FONTS_DIR}/fontlist.txt"

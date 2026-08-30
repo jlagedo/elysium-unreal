@@ -213,7 +213,12 @@ def decode_lods(
                     )
                 lod = lods.setdefault(
                     lod_index,
-                    {"index": lod_index, "switchPoints": [], "primitives": []},
+                    {
+                        "index": lod_index,
+                        "switchPoints": [],
+                        "primitives": [],
+                        "staleSections": [],
+                    },
                 )
                 lod["switchPoints"].append(float(switch_point))
 
@@ -244,6 +249,8 @@ def decode_lods(
                     triangles: list[tuple[int, int, int]] = []
                     remap: dict[int, int] = {}
                     stripgroups = []
+                    stale: set[int] = set()
+                    dropped = 0
 
                     for stripgroup_index in range(stripgroup_count):
                         stripgroup = (
@@ -309,24 +316,38 @@ def decode_lods(
                                 }
                             )
                             for corner in range(0, index_count, 3):
-                                triangle = []
+                                corners = []
                                 for ordinal in range(3):
                                     local = _u16(
                                         vtx_data,
                                         index_table
                                         + (first_index + corner + ordinal) * 2,
                                     )
-                                    global_vertex = vertex_offset + _u16(
-                                        vtx_data,
-                                        vertex_table
-                                        + local * table_stride
-                                        + table_vertex,
-                                    )
-                                    if not 0 <= global_vertex < vertex_count:
-                                        raise ModelTopologyError(
-                                            f"{variant} LOD {lod_index} vertex {global_vertex} "
-                                            f"outside 0..{vertex_count - 1}"
+                                    corners.append(
+                                        vertex_offset
+                                        + _u16(
+                                            vtx_data,
+                                            vertex_table
+                                            + local * table_stride
+                                            + table_vertex,
                                         )
+                                    )
+                                outside = [
+                                    value
+                                    for value in corners
+                                    if not 0 <= value < vertex_count
+                                ]
+                                if outside:
+                                    # A VTX built against a wider vertex block than the MDL
+                                    # ships. The triangle has no source vertex to read, so it is
+                                    # dropped and named rather than invented; the unit publishes
+                                    # the sections that do resolve and carries this one in
+                                    # `anomalies[]`.
+                                    stale.update(outside)
+                                    dropped += 1
+                                    continue
+                                triangle = []
+                                for global_vertex in corners:
                                     if global_vertex not in remap:
                                         remap[global_vertex] = len(positions)
                                         source_vertices.append(global_vertex)
@@ -382,6 +403,20 @@ def decode_lods(
                             }
                         )
 
+                    if dropped:
+                        # Named whether or not a triangle of this section survived, so a section
+                        # the stale VTX empties entirely is still visible in the unit.
+                        lod["staleSections"].append(
+                            {
+                                "variant": variant,
+                                "bodyPart": bodypart_index,
+                                "model": model_index,
+                                "mesh": mesh_index,
+                                "vertexCount": vertex_count,
+                                "staleVertices": sorted(stale),
+                                "droppedTriangles": dropped,
+                            }
+                        )
                     if triangles:
                         lod["primitives"].append(
                             {

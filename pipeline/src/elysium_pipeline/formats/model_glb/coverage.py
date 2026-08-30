@@ -989,9 +989,15 @@ def _cover_compiler_trailer(ledger: ModelLedger) -> None:
         )
 
 
+#: The owner an animation's own payload ends at: the last declared channel, or -- when a bone
+#: record declares no channel at all -- the bone-record table itself.
 _CHANNEL_OWNER = re.compile(
-    r"mdl\.localAnimations\[(\d+)\]\.frames\.bone\[\d+\]\.channel\[\d+\]"
+    r"mdl\.localAnimations\[(\d+)\]\."
+    r"(?:frames\.bone\[\d+\]\.channel\[\d+\]|boneRecords)"
 )
+
+#: Any owner inside one local animation's records or payload.
+_ANIMATION_OWNER = re.compile(r"mdl\.localAnimations\[\d+\]\.")
 
 
 def _cover_extra_animation_tracks(ledger: ModelLedger) -> None:
@@ -1017,6 +1023,60 @@ def _cover_extra_animation_tracks(ledger: ModelLedger) -> None:
             continue
         if leftover == 4 and data[offset:end] == b"ULDD":
             ledger.claim(offset, 4, "omitted-proven", f"{previous}.compilerPackingULDD")
+
+
+def _cover_superseded_animation_tracks(ledger: ModelLedger) -> None:
+    """RLE track heads a later compile pass wrote over: no bone-record offset addresses them.
+
+    The studio compiler emits an animation's channels once uncompressed and once run-length
+    coded, and the second pass starts inside the first. What survives between two declared
+    channels is the head of the superseded track: a well-formed `{valid,total}` run whose sample
+    array is longer than the bytes left before the next declared channel begins.
+    """
+
+    data = ledger.data
+    for start, end, previous, following in list(ledger.gaps()):
+        length = end - start
+        if length < 2 or not ledger.unclaimed(start, length) or not any(data[start:end]):
+            continue
+        if not (_ANIMATION_OWNER.match(previous) and _ANIMATION_OWNER.match(following)):
+            continue
+        valid, total = data[start], data[start + 1]
+        if total <= 0 or valid > total or 2 + valid * 2 <= length:
+            continue
+        ledger.claim(
+            start, length, "omitted-proven", f"mdl.supersededAnimationTrack@{start}"
+        )
+
+
+def _cover_retained_compiler_trailers(ledger: ModelLedger) -> None:
+    """`QnDbTm` trailers a superseded compile pass left inside the image.
+
+    The EOF trailer is `mdl.compilerTrailerQnDbTm` and reaches the extension. A second copy in
+    the middle of the image has the same ten-byte shape -- a `uint32` pointer at an already
+    claimed in-file path, then the magic -- and nothing in the header addresses it.
+    """
+
+    data = ledger.data
+    for start, end, _previous, _following in list(ledger.gaps()):
+        offset = data.find(COMPILER_TRAILER_MAGIC, start, end)
+        while offset >= 0:
+            record = offset - 4
+            pointer = (
+                struct.unpack_from("<I", data, record)[0] if record >= 0 else len(data)
+            )
+            if (
+                record >= start
+                and 0 <= pointer < record
+                and ledger.unclaimed(record, COMPILER_TRAILER_BYTES)
+            ):
+                ledger.claim(
+                    record,
+                    COMPILER_TRAILER_BYTES,
+                    "omitted-proven",
+                    f"mdl.retainedCompilerTrailerQnDbTm@{record}",
+                )
+            offset = data.find(COMPILER_TRAILER_MAGIC, offset + 1, end)
 
 
 def _cover_orphan_rle_samples(ledger: ModelLedger) -> None:
@@ -1045,6 +1105,7 @@ def _cover_orphan_rle_samples(ledger: ModelLedger) -> None:
             following == "<end>" or following.startswith("mdl.searchPaths")
         ):
             ledger.claim(start, length, "omitted-proven", f"{previous}.trailingPayload")
+    _cover_superseded_animation_tracks(ledger)
 
 
 def _looks_like_studio_mesh(data: bytes, offset: int) -> bool:
@@ -1060,6 +1121,163 @@ def _looks_like_studio_mesh(data: bytes, offset: int) -> bool:
     return 1 <= vertex_count <= 20000 and 0 <= flex_count <= 256
 
 
+#: The vertex strides a body-part model can name (`mdl.VSTRIDE`). A retained donor pool is
+#: written with the *donor's* stride, which need not be this model's.
+_DONOR_VERTEX_STRIDES = (44, 12, 8)
+
+#: How far past a retained material table its donor string pool may sit, and the longest tail the
+#: walk looks back over: 32 texture records, 16 search paths and a skin table.
+_RETAINED_POOL_REACH = 8192
+_RETAINED_TAIL_BYTES = 20 * 32 + 4 * 16 + 64
+
+
+def _pool_string(data: bytes, offset: int, pool_start: int) -> str | None:
+    """The printable ASCII string at `offset`, when `offset` is inside the pool at `pool_start`."""
+
+    if not pool_start <= offset < min(len(data), pool_start + _RETAINED_POOL_REACH):
+        return None
+    end = data.find(b"\0", offset, min(len(data), offset + 256))
+    if end <= offset:
+        return None
+    try:
+        text = data[offset:end].decode("ascii")
+    except UnicodeDecodeError:
+        return None
+    return text if all(32 <= ord(character) < 127 for character in text) else None
+
+
+def _retained_texture_record(data: bytes, offset: int, pool_start: int) -> bool:
+    """Whether `offset` holds a 20-byte `mstudiotexture_t` naming the pool at `pool_start`."""
+
+    if offset < 0 or offset + 20 > len(data):
+        return False
+    if _pool_string(data, offset + _i32(data, offset), pool_start) is None:
+        return False
+    if any(_i32(data, offset + field) for field in (4, 8, 12)):
+        return False
+    return math.isfinite(struct.unpack_from("<f", data, offset + 16)[0])
+
+
+def _retained_material_tables(
+    data: bytes, start: int, end: int
+) -> tuple[int, int, int] | None:
+    """`(offset, textures, paths)` of the material-table copy that fills `[offset, end)`.
+
+    The compiler writes the texture table, the search-path table and the skin table once beside
+    the geometry it had just emitted and again where the header points. The retained copy is
+    recognised from the far side: every texture name and search path it holds addresses the donor
+    string pool that begins at `end`, and its three tables close exactly on `end`.
+    """
+
+    first = max(start, end - _RETAINED_TAIL_BYTES)
+    first += (end - first) % 4
+    for offset in range(first, end - 19, 4):
+        cursor, textures = offset, 0
+        while cursor + 20 <= end and _retained_texture_record(data, cursor, end):
+            cursor += 20
+            textures += 1
+        if not textures:
+            continue
+        paths = 0
+        while cursor + 4 <= end and _pool_string(data, _i32(data, cursor), end) is not None:
+            cursor += 4
+            paths += 1
+        residue = end - cursor
+        if residue % 2 or residue > 64:
+            continue
+        return offset, textures, paths
+    return None
+
+
+def _cover_retained_material_tables(ledger: ModelLedger, data: bytes) -> None:
+    """Claim the texture/search-path/skin copy a superseded compile pass left before its pool."""
+
+    for start, end, _previous, _following in list(ledger.gaps()):
+        if end - start < 20 or not any(data[start:end]):
+            continue
+        found = _retained_material_tables(data, start, end)
+        if found is None:
+            continue
+        offset, textures, paths = found
+        if not ledger.unclaimed(offset, end - offset):
+            continue
+        ledger.array(
+            offset, textures, 20, "mdl.unindexedTextureDuplicate", state="omitted-proven"
+        )
+        cursor = offset + textures * 20
+        if paths:
+            ledger.array(
+                cursor, paths, 4, "mdl.unindexedSearchPathDuplicate", state="omitted-proven"
+            )
+            cursor += paths * 4
+        if cursor < end:
+            ledger.claim(
+                cursor, end - cursor, "omitted-proven", "mdl.unindexedSkinTableDuplicate"
+            )
+
+
+def _retained_mesh_chain(data: bytes, start: int, end: int) -> tuple[list[int], int, int]:
+    """The consecutive retained `mstudiomesh_t` records at `start`, their vertex total and end.
+
+    A donor model image keeps every mesh of the pass that wrote it. The records chain on their
+    own arithmetic: each names the same model record and opens at the vertex the previous one
+    ended on.
+    """
+
+    offsets: list[int] = []
+    total = 0
+    cursor = start
+    model = start + _i32(data, start + 4)
+    while cursor + mdl_skel.MESH_STRIDE <= end and _looks_like_studio_mesh(data, cursor):
+        if cursor + _i32(data, cursor + 4) != model:
+            break
+        if offsets and _i32(data, cursor + 12) != _i32(data, start + 12) + total:
+            break
+        offsets.append(cursor)
+        total += _i32(data, cursor + 8)
+        cursor += mdl_skel.MESH_STRIDE
+    return offsets, total, cursor
+
+
+def _claim_retained_model_pool(
+    ledger: ModelLedger, data: bytes, meshes: list[int], total: int, body: int, end: int
+) -> bool:
+    """Claim `[meshes[0], end)` as one donor model image when its arithmetic closes on `end`.
+
+    The pool's stride is the donor model's, not this one's, and the compiler opens the pool on an
+    alignment lead it never rewrote. The split is therefore read back from the far end: the
+    region is claimed only when one `(stride, tangents)` pair from `mdl.VSTRIDE` leaves a lead
+    shorter than a single vertex, and that lead is zero.
+    """
+
+    if not meshes or total <= 0:
+        return False
+    available = end - body
+    for stride in _DONOR_VERTEX_STRIDES:
+        for tangents in (16, 0):
+            span = stride + tangents
+            lead = available - total * span
+            if not 0 <= lead < min(span, 65) or any(data[body:body + lead]):
+                continue
+            owner = f"mdl.unindexedMesh@{meshes[0]}"
+            for offset in meshes:
+                ledger.claim(
+                    offset, mdl_skel.MESH_STRIDE, "omitted-proven",
+                    f"mdl.unindexedMesh@{offset}",
+                )
+            if lead:
+                ledger.claim(body, lead, "padding-zero", ledger.padding_owner)
+            cursor = body + lead
+            ledger.array(cursor, total, stride, f"{owner}.vertices", state="omitted-proven")
+            cursor += total * stride
+            if tangents:
+                ledger.array(
+                    cursor, total, tangents, f"{owner}.tangents", state="omitted-proven"
+                )
+            return True
+    return False
+
+
 def _cover_unindexed_meshes(ledger: ModelLedger, data: bytes) -> None:
     for start, end, _previous, _following in list(ledger.gaps()):
         if end - start < mdl_skel.MESH_STRIDE:
@@ -1067,6 +1285,9 @@ def _cover_unindexed_meshes(ledger: ModelLedger, data: bytes) -> None:
         if not _looks_like_studio_mesh(data, start):
             continue
         if not ledger.unclaimed(start, mdl_skel.MESH_STRIDE):
+            continue
+        meshes, total, body = _retained_mesh_chain(data, start, end)
+        if _claim_retained_model_pool(ledger, data, meshes, total, body, end):
             continue
         vertex_count = _i32(data, start + 8)
         flex_count = _i32(data, start + 16)
@@ -1139,7 +1360,9 @@ def _cover_retained_mdl_payloads(ledger: ModelLedger, data: bytes, bone_count: i
         _cover_duplicate_texture_table(ledger, data)
     _cover_donor_animation_payloads(ledger, data, bone_count)
     _cover_orphan_rle_samples(ledger)
+    _cover_retained_material_tables(ledger, data)
     _cover_unindexed_meshes(ledger, data)
+    _cover_retained_compiler_trailers(ledger)
     _cover_unreferenced_strings(ledger, data)
     for start, end, previous, following in list(ledger.gaps()):
         length = end - start
@@ -1602,6 +1825,22 @@ OMISSION_REASONS: tuple[tuple[str, str], ...] = (
     (
         r"^mdl\.unindexedTextureDuplicate(\[\d+\]\.name)?$",
         "duplicate-texture-table-no-header-offset-addresses",
+    ),
+    (
+        r"^mdl\.unindexedSearchPathDuplicate$",
+        "duplicate-search-path-table-no-header-offset-addresses",
+    ),
+    (
+        r"^mdl\.unindexedSkinTableDuplicate$",
+        "duplicate-skin-table-no-header-offset-addresses",
+    ),
+    (
+        r"^mdl\.retainedCompilerTrailerQnDbTm@\d+$",
+        "compiler-trailer-a-superseded-compile-pass-left-inside-the-image",
+    ),
+    (
+        r"^mdl\.supersededAnimationTrack@\d+$",
+        "superseded-animation-track-head-no-bone-record-addresses",
     ),
     (
         r"^mdl\.unindexedAnimation\[\d+\](\..+)?$",

@@ -17,6 +17,7 @@ import zlib
 
 import pytest
 
+import elysium_pipeline.formats.map_glb.pakfile as pakfile
 import elysium_pipeline.formats.map_glb.partition as map_partition
 from elysium_pipeline.exporters import map_glb as exporter
 from elysium_pipeline.formats import map_glb
@@ -754,6 +755,36 @@ def test_bytes_no_pakfile_record_addresses_are_named_rather_than_left_as_a_gap()
     rows = [row for row in filled.omissions if row["role"] == "pakfile-container-fill"]
     assert rows and rows[0]["byteLength"] == 2 and rows[0]["bytesHex"] == "abcd"
     assert rows[0]["lump"] == 40
+
+
+def test_a_pakfile_offset_that_leaves_the_lump_is_refused_as_a_pakfile_error():
+    """A file-supplied offset is bounds-checked before it is read.
+
+    `struct.error` is not a `ValueError`, so a dereference of an unchecked offset would leave
+    this module past both `PakfileError` and the map seam's own error type.
+    """
+
+    blob = bytearray(_pakfile({"materials/one.vmt": b"data"}))
+    eocd = blob.rfind(struct.pack("<I", pakfile.EOCD_SIGNATURE))
+    central_offset = struct.unpack_from("<I", blob, eocd + 16)[0]
+    struct.pack_into("<I", blob, central_offset + 42, len(blob) + 1000)
+    with pytest.raises(pakfile.PakfileError, match="local header offset"):
+        pakfile.parse(bytes(blob), 0, len(blob))
+
+
+def test_a_truncated_end_of_central_directory_record_is_refused_as_a_pakfile_error():
+    blob = bytes(4) + struct.pack("<I", pakfile.EOCD_SIGNATURE) + bytes(5)
+    with pytest.raises(pakfile.PakfileError, match="end-of-central-directory"):
+        pakfile.parse(blob, 0, len(blob))
+
+
+def test_a_central_record_that_straddles_the_end_of_the_directory_is_refused():
+    body = bytes(8)
+    blob = body + struct.pack(
+        "<IHHHHIIH", pakfile.EOCD_SIGNATURE, 0, 0, 1, 1, 0, len(body) + pakfile.EOCD_BYTES - 2, 0
+    )
+    with pytest.raises(pakfile.PakfileError, match="runs past the directory"):
+        pakfile.parse(blob, 0, len(blob))
 
 
 def test_a_displacement_becomes_its_own_mesh_and_the_face_states_no_triangles_of_its_own():

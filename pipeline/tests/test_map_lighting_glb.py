@@ -330,12 +330,12 @@ def test_one_face_pays_for_one_range_per_set_and_style():
         "lighting.orphan[0]",
         "lighting.faces[0].set[0].style[0]",
         "lighting.faces[1].set[0].style[0]",
-        "lighting.faces[1].set[0].style[1]",
         "lighting.faces[1].set[1].style[0]",
-        "lighting.faces[1].set[1].style[1]",
         "lighting.faces[1].set[2].style[0]",
-        "lighting.faces[1].set[2].style[1]",
         "lighting.faces[1].set[3].style[0]",
+        "lighting.faces[1].set[0].style[1]",
+        "lighting.faces[1].set[1].style[1]",
+        "lighting.faces[1].set[2].style[1]",
         "lighting.faces[1].set[3].style[1]",
         "lighting.orphan[1]",
     ]
@@ -398,17 +398,47 @@ def test_the_bake_reaches_the_unit_as_one_accessor_over_the_whole_lump():
     assert root["samples"]["sha256"] == hashlib.sha256(LIGHTING_LUMP).hexdigest()
 
 
-def test_a_bumped_face_publishes_one_span_per_set_and_style_in_set_major_order():
+def test_a_bumped_face_publishes_one_span_per_set_and_style_in_style_major_order():
     _closure, document, _binary = built(build_bsp())
     face = extension_of(document)["faces"][1]
     assert face["bumped"] is True and face["lightmapSets"] == 4 and face["styleCount"] == 2
     assert face["byteLength"] == 4 * 4 * 2
     assert [(span["set"], span["styleIndex"], span["style"], span["offset"], span["length"])
             for span in face["spans"]] == [
-        (0, 0, 0, 20, 4), (0, 1, 6, 24, 4),
-        (1, 0, 0, 28, 4), (1, 1, 6, 32, 4),
-        (2, 0, 0, 36, 4), (2, 1, 6, 40, 4),
-        (3, 0, 0, 44, 4), (3, 1, 6, 48, 4),
+        (0, 0, 0, 20, 4), (1, 0, 0, 24, 4),
+        (2, 0, 0, 28, 4), (3, 0, 0, 32, 4),
+        (0, 1, 6, 36, 4), (1, 1, 6, 40, 4),
+        (2, 1, 6, 44, 4), (3, 1, 6, 48, 4),
+    ]
+
+
+def test_a_switched_off_style_owns_the_contiguous_run_of_zero_blocks():
+    """The four blocks of one style sit together, so a dark style is a contiguous dark run.
+
+    Over the 108 installed maps, 2,572 bumped two-style faces hold exactly four all-zero blocks
+    and every one of those runs is contiguous -- never the stride a set-major layout would put
+    them on. The fixture states that fact: style 6 contributes nothing to face 1, so the spans
+    labelled `styleIndex` 1 must be exactly the four zero blocks.
+    """
+
+    lit = bytes(range(0x20, 0x30))                     # style 0's four sets, no zero byte in them
+    dark = bytes(16)                                   # style 6 is off: four all-zero sets
+    lump = ORPHAN_HEAD + FACE0_SAMPLES + lit + dark + ORPHAN_TAIL
+    _closure, document, binary = built(build_bsp(lighting_lump=lump))
+    root = extension_of(document)
+    accessor = document["accessors"][root["samples"]["accessor"]]
+    view = document["bufferViews"][accessor["bufferView"]]
+    samples = binary[view["byteOffset"]:view["byteOffset"] + accessor["count"]]
+    face = root["faces"][1]
+    dark_spans = {
+        span["offset"] for span in face["spans"]
+        if not any(samples[span["offset"]:span["offset"] + span["length"]])
+    }
+    assert dark_spans == {36, 40, 44, 48}
+    assert {span["offset"] for span in face["spans"] if span["styleIndex"] == 1} == dark_spans
+    assert {span["style"] for span in face["spans"] if span["offset"] in dark_spans} == {6}
+    assert sorted(span["set"] for span in face["spans"] if span["offset"] in dark_spans) == [
+        0, 1, 2, 3
     ]
 
 

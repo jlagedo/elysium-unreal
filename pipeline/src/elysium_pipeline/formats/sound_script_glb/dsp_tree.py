@@ -61,7 +61,7 @@ def parse(tokens: list[Token]) -> tuple[list[Block], list[Token]]:
     with `#` instead of the file's own `//` (`\t#\ttype\tmix min\t\tdur fade dbmin dbdrop`); a
     stray bareword token at the top level -- outside any brace -- is table-owned annotation like
     that, not a reason to fail the whole table, so it is returned alongside the blocks rather than
-    raising. See `specDeviations`.
+    raising.
     """
 
     tokens = significant(tokens)

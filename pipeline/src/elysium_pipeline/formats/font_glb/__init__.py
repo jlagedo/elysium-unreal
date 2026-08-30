@@ -18,7 +18,9 @@ from elysium_pipeline.formats.font_glb.decode import (
 )
 from elysium_pipeline.formats.font_glb.model import (
     FONT_EXTENSION,
+    FONT_GENERATOR_TITLE,
     FONT_LIST_EXTENSION,
+    FONT_LIST_GENERATOR_TITLE,
     FONT_LIST_KEY,
     FONT_LIST_PATH,
     FONTS_DIR,
@@ -49,7 +51,9 @@ from elysium_pipeline.formats.font_glb.source import (
 
 __all__ = [
     "FONT_EXTENSION",
+    "FONT_GENERATOR_TITLE",
     "FONT_LIST_EXTENSION",
+    "FONT_LIST_GENERATOR_TITLE",
     "FONT_LIST_KEY",
     "FONT_LIST_MAPPED_SECTIONS",
     "FONT_LIST_PATH",

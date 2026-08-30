@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import json
 import os
@@ -121,6 +123,28 @@ def _read_owner(path: Path) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return value if isinstance(value, dict) else None
+
+
+@contextmanager
+def exclusive_path_lock(path: Path) -> Iterator[None]:
+    """Hold an OS lock on `path` for the duration of the block.
+
+    `WorkspaceLease` is keyed on one checkout's export root, so two checkouts never
+    exclude each other -- which is the point for generated content each owns alone. This
+    guards the opposite case: state every checkout on the machine shares, such as the
+    engine tree they all build against. The lock is released by the OS when the process
+    dies, so a killed command leaves nothing to clean up.
+    """
+
+    handle = _open_lock(path)
+    try:
+        _lock(handle, blocking=True)
+        try:
+            yield
+        finally:
+            _unlock(handle)
+    finally:
+        handle.close()
 
 
 class WorkspaceLease:

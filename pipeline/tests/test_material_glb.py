@@ -6,10 +6,12 @@ import json
 from pathlib import Path
 import struct
 import tempfile
+from unittest import mock
 
 import pytest
 
 from elysium_pipeline.exporters import material_glb
+from elysium_pipeline.formats.material_glb import coverage as material_coverage
 from elysium_pipeline.formats.material_glb import decode_material
 from elysium_pipeline.formats.material_glb import lexer
 from elysium_pipeline.formats.material_glb.model import MATERIAL_EXTENSION
@@ -47,6 +49,17 @@ def test_every_source_byte_is_claimed_exactly_once():
         assert row["offset"] == cursor
         cursor += row["length"]
     assert cursor == len(SIMPLE)
+
+
+def test_the_ranges_digest_delegates_to_the_shared_contract_helper():
+    # `unit_contract.ranges_sha256` is the single owner of the range-table digest formula; a
+    # reimplementation local to this seam would silently diverge if the contract's canonical form
+    # ever changed. Patching the shared helper and observing its sentinel land in the published
+    # row proves `coverage.ByteLedger.finish` actually calls it rather than recomputing the digest
+    # itself.
+    with mock.patch.object(material_coverage, "ranges_sha256", return_value="patched-digest"):
+        model = _decode(SIMPLE)
+    assert model.byte_coverage[0]["rangesSha256"] == "patched-digest"
 
 
 def test_whitespace_is_the_only_omission_and_comments_are_kept():
