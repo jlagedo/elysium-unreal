@@ -172,19 +172,31 @@ or a missing seam rule, and both are worth a query.
 | `font-list` | every `fontlist.txt` row matches a font unit |
 | `dialogue-line-audio` | every dialogue line whose audio the convention names resolves to a sound unit, `.mp3`-first |
 | `map-partition` | each map's four ledgers together claim every BSP byte once |
-| `texture-material-roles` | every texture unit is bound by at least one material or is an orphan |
-| `map-references-published` | every asset a map root names in `textures[]`, `cubemaps[]` or `pakfile.entries[].unit` is a unit the corpus actually publishes |
+| `texture-material-roles` | every texture unit is bound by at least one material, is a map's own reflection-probe placement, or is an orphan |
+| `map-references-published` | every asset a map root names in a *resolved* `textures[]`/`cubemaps[]` row, or in `pakfile.entries[].unit`, is a unit the corpus actually publishes |
 
 A failed check fails the corpus export like an unclaimed member does.
 
 `map-references-published` (SF-1.5, `graph.unpublished_map_references`) is the corpus-level half
 of a map's own resolution: a map unit's `resolved` flag on a dependency row only states whether
-the *install* holds the member a texture, cubemap or PAKFILE entry names, because the map's own
-export has no view of the published corpus. The index has the whole `units[]` table in hand, so
-this check asks the question the map unit cannot ask itself -- whether the corpus went on to
-publish a unit for that asset -- and fails a map that names one it does not, most usefully a
-patched material or reflection probe SF-1.3/1.4 export but the plural texture/material commands
-have not (yet) been rerun to publish.
+the *install* holds the member a texture or cubemap names, because the map's own export has no
+view of the published corpus. The index has the whole `units[]` table in hand, so this check asks
+the question the map unit cannot ask itself -- whether the corpus went on to publish a unit for
+that asset -- and fails a map that names one it does not, most usefully a patched material or
+reflection probe SF-1.3/1.4 export but the plural texture/material commands have not (yet) been
+rerun to publish. Exactly like `dialogue-line-audio`, an asset the *install* itself does not
+resolve is left to `danglingReferences[]` rather than reported here: a `textures[]` row names
+every TEXDATA name a level compiled with, whether or not its `.vmt` shipped (a `tools/*`
+compile-only material commonly does not), and a `cubemaps[]` row can carry `resolved: false` for
+a sample the map compiler placed but never baked. Only rows the map's own decode already marks
+resolved are checked; `pakfile.entries[].unit` carries no such flag because a PAKFILE entry is,
+by construction, bytes the BSP's own zip actually holds.
+
+`texture-material-roles` accepts a map's own `cubemaps[]` binding (`role: texture`, source kind
+`map`) as well as a material's: the owner call "Baked reflection probes are not reflection
+content" (`seam_migration.md`, 2026-08-31) is that a probe's pixels are never sampled by a
+surface, only its origin placed as a capture, so the 1,325 SF-1.3 probe texture units are
+legitimately bound only by the map that places them and never by a material.
 
 ## Census
 

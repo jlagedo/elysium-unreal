@@ -1480,10 +1480,32 @@ def test_a_texture_nothing_binds_is_an_orphan_rather_than_a_failure(tmp_path):
     assert named(run_checks(export_root), "texture-material-roles")["passed"]
 
 
+def test_a_reflection_probe_a_map_binds_by_its_cubemap_lump_is_not_a_failure(tmp_path):
+    """The owner call "Baked reflection probes are not reflection content" means a probe's own
+    map placement is as legitimate a binder as a material -- SF-1.5 -- so this must keep passing
+    once SF-1.3 publishes probe texture units no material ever binds."""
+
+    export_root = corpus(tmp_path / "exports_v2")
+    publish(export_root, "textures/maps_tutorial_c1_2_3.glb",
+            "vtmb:texture:maps/tutorial/c1_2_3")
+    publish(
+        export_root,
+        "maps/tutorial.glb",
+        "vtmb:map:tutorial",
+        header={"mapRevision": 7},
+        dependencies=[dependency("texture", "vtmb:texture:maps/tutorial/c1_2_3",
+                                 "materials/maps/tutorial/c1_2_3.tth", True)],
+        cubemaps=[{"asset": "vtmb:texture:maps/tutorial/c1_2_3", "resolved": True}],
+    )
+    assert named(run_checks(export_root), "texture-material-roles")["passed"]
+
+
 def test_map_references_published_fails_on_a_map_naming_an_unpublished_asset(tmp_path):
     """SF-1.5: the index has the whole unit set in hand, so it answers what a map's own export
     could not -- whether the corpus actually published the unit a texture, cubemap or PAKFILE
-    entry names."""
+    entry names. Only resolved rows are checked: `textures[]` and `cubemaps[]` both carry the
+    install's own gaps too (a `tools/*` compile-only material, a `cubemaps[]` sample the compiler
+    never baked), which are dangling references, not a corpus defect."""
 
     export_root = corpus(tmp_path / "exports_v2")
     publish(
@@ -1491,20 +1513,33 @@ def test_map_references_published_fails_on_a_map_naming_an_unpublished_asset(tmp
         "maps/tutorial.glb",
         "vtmb:map:tutorial",
         header={"mapRevision": 7},
-        textures=[{"asset": "vtmb:material:ghost"}],
-        cubemaps=[{"asset": "vtmb:texture:maps/tutorial/c1_2_3"}],
+        dependencies=[
+            dependency("material", "vtmb:material:ghost", "materials/ghost.vmt", True),
+            dependency("material", "vtmb:material:unresolved-ghost",
+                       "materials/unresolved-ghost.vmt", False),
+        ],
+        textures=[
+            {"asset": "vtmb:material:ghost"},
+            {"asset": "vtmb:material:unresolved-ghost"},
+        ],
+        cubemaps=[
+            {"asset": "vtmb:texture:maps/tutorial/c1_2_3", "resolved": True},
+            {"asset": "vtmb:texture:maps/tutorial/c9_9_9", "resolved": False},
+        ],
         pakfile={"entries": [{"unit": "vtmb:material:maps/tutorial/wall_1_2_3"}]},
     )
     row = named(run_checks(export_root), "map-references-published")
     assert not row["passed"]
     targets = {failure["to"] for failure in row["failures"]}
+    # Neither the unresolved material nor the unresolved cubemap sample is reported: the install
+    # itself never claims either, so there is nothing the corpus failed to publish.
     assert targets == {
         "vtmb:material:ghost",
         "vtmb:texture:maps/tutorial/c1_2_3",
         "vtmb:material:maps/tutorial/wall_1_2_3",
     }
     fields = {failure["field"] for failure in row["failures"]}
-    assert fields == {"textures", "cubemaps", "pakfile"}
+    assert fields == {"textures", "cubemaps", "pakfile.entries"}
 
 
 def test_map_references_published_passes_when_every_named_asset_is_published(tmp_path):
@@ -1518,11 +1553,32 @@ def test_map_references_published_passes_when_every_named_asset_is_published(tmp
         "maps/tutorial.glb",
         "vtmb:map:tutorial",
         header={"mapRevision": 7},
+        dependencies=[dependency("material", "vtmb:material:wall", "materials/wall.vmt", True)],
         textures=[{"asset": "vtmb:material:wall"}],
-        cubemaps=[{"asset": "vtmb:texture:maps/tutorial/c1_2_3"}],
+        cubemaps=[{"asset": "vtmb:texture:maps/tutorial/c1_2_3", "resolved": True}],
         pakfile={"entries": [{"unit": "vtmb:material:maps/tutorial/wall_1_2_3"}]},
     )
     # "vtmb:material:wall" is already published by the `corpus()` fixture.
+    assert named(run_checks(export_root), "map-references-published")["passed"]
+
+
+def test_map_references_published_ignores_an_asset_the_install_itself_does_not_resolve(tmp_path):
+    """A `tools/*` compile-only material and an unbaked `cubemaps[]` sample are both real, both
+    already carried as `resolved: false`; neither is this check's to report."""
+
+    export_root = corpus(tmp_path / "exports_v2")
+    publish(
+        export_root,
+        "maps/tutorial.glb",
+        "vtmb:map:tutorial",
+        header={"mapRevision": 7},
+        dependencies=[
+            dependency("material", "vtmb:material:tools/toolsblocklight",
+                       "materials/tools/toolsblocklight.vmt", False),
+        ],
+        textures=[{"asset": "vtmb:material:tools/toolsblocklight"}],
+        cubemaps=[{"asset": "vtmb:texture:maps/tutorial/c9_9_9", "resolved": False}],
+    )
     assert named(run_checks(export_root), "map-references-published")["passed"]
 
 

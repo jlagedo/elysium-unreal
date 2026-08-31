@@ -424,10 +424,16 @@ def map_partition(roots: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
 
 
 def texture_material_roles(units: Sequence[Unit], edges: Sequence[Reference]) -> dict[str, Any]:
-    """Every texture unit is bound by at least one material or is an orphan.
+    """Every texture unit is bound by at least one material, is a map's own reflection-probe
+    placement, or is an orphan.
 
     A texture some other kind reaches without any material binding it is the failure: it means a
-    referrer composed a texture path the material layer never declares.
+    referrer composed a texture path the material layer never declares. A baked reflection probe
+    (SF-1.3, `maps/<map>/c<x>_<y>_<z>`) is the one named exception -- the owner call "Baked
+    reflection probes are not reflection content" (`seam_migration.md`, 2026-08-31) is that a
+    probe's pixels are never sampled by a surface, only its origin placed as a capture, so a map
+    binding one by its own `cubemaps[]` lump (role `texture`, source kind `map`) is exactly as
+    legitimate a binder as a material and is not the gap this check exists to catch.
     """
 
     binders: dict[str, set[str]] = {}
@@ -439,7 +445,7 @@ def texture_material_roles(units: Sequence[Unit], edges: Sequence[Reference]) ->
         if unit.kind != "texture":
             continue
         bound = binders.get(unit.asset)
-        if bound and "material" not in bound:
+        if bound and "material" not in bound and "map" not in bound:
             failures.append(
                 {"to": unit.asset, "boundBy": sorted(bound),
                  "reason": "no material binds this texture"}

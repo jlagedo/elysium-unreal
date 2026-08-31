@@ -143,26 +143,38 @@ def references(roots: Mapping[str, Mapping[str, Any]]) -> list[Reference]:
     return edges
 
 
-#: The three places one map root names an asset outside its own `dependencies` rows: the texture
-#: seam's material identities, the cubemap probes, and the PAKFILE entries it routed to the
-#: material or texture seam. Each tuple is `(field, nested "entries" key or None, asset key)`.
-_MAP_REFERENCE_FIELDS = (
-    ("textures", None, "asset"),
-    ("cubemaps", None, "asset"),
-    ("pakfile", "entries", "unit"),
-)
+def _resolved_material_assets(root: Mapping[str, Any]) -> set[str]:
+    """Every material identity one map root's own `dependencies` say the install resolves.
+
+    `textures[]` names one row per TEXDATA name unconditionally -- a texture the level geometry
+    names but the install ships no `.vmt` for is still a row, same spelling VtMB itself shipped
+    -- so only the identities the map's own `material` dependency rows mark `resolved: true` are
+    a claim this check can hold the corpus to; the rest are the install's own gap, which
+    `danglingReferences[]` already reports.
+    """
+
+    return {
+        str(row.get("asset"))
+        for row in root.get("dependencies") or ()
+        if isinstance(row, Mapping) and row.get("role") == "material" and row.get("resolved")
+    }
 
 
 def unpublished_map_references(
     roots: Mapping[str, Mapping[str, Any]], units: Sequence[Unit]
 ) -> list[dict[str, Any]]:
     """Every asset a map root names in `textures[]`, `cubemaps[]` or `pakfile.entries[].unit`
-    that the corpus does not publish as a unit.
+    that the install itself resolves but the corpus does not publish as a unit.
 
-    A map unit's own export only knows whether the *install* holds the member it names --
-    `resolved` on its dependency rows -- not whether the corpus went on to publish a unit for it.
-    The index has the whole unit set in hand, so this is the question the map unit cannot ask
-    itself: SF-1.3/1.4 add the PAKFILE-embedded texture and material units this now checks for.
+    A map unit's own export only knows whether the *install* holds the member it names -- this
+    is the question the map unit cannot ask itself: whether the corpus went on to publish a unit
+    for that asset. SF-1.3/1.4 add the PAKFILE-embedded texture and material units this checks
+    for. Exactly like `dialogue_line_audio`, an asset the install itself does not resolve is a
+    dangling reference rather than a corpus defect -- a `tools/*` compile-only material with no
+    shipped `.vmt`, or a `cubemaps[]` sample the map compiler placed but never baked (both real,
+    both already carried as `resolved: false`) -- so only the resolved case is checked here.
+    `pakfile.entries[].unit` carries no such flag because a PAKFILE entry is, by construction,
+    bytes the BSP's own zip actually holds: there is no unresolved state to skip.
     """
 
     published = {unit.asset for unit in units}
@@ -172,27 +184,34 @@ def unpublished_map_references(
         if not asset.startswith("vtmb:map:"):
             continue
         root = roots[asset]
-        for field, nested, asset_key in _MAP_REFERENCE_FIELDS:
-            block = root.get(field)
-            rows = (block.get(nested) if isinstance(block, Mapping) else None) if nested else block
-            for row in rows or ():
-                if not isinstance(row, Mapping):
-                    continue
-                target = row.get(asset_key)
-                if not target or target in published:
-                    continue
-                key = (asset, field, str(target))
-                if key in seen:
-                    continue
-                seen.add(key)
-                failures.append(
-                    {
-                        "from": asset,
-                        "to": str(target),
-                        "field": field,
-                        "reason": "the map names a unit the corpus does not publish",
-                    }
-                )
+
+        def add(target: Any, field: str) -> None:
+            if not target or target in published:
+                return
+            key = (asset, field, str(target))
+            if key in seen:
+                return
+            seen.add(key)
+            failures.append(
+                {
+                    "from": asset,
+                    "to": str(target),
+                    "field": field,
+                    "reason": "the map names a unit the corpus does not publish",
+                }
+            )
+
+        resolved_materials = _resolved_material_assets(root)
+        for row in root.get("textures") or ():
+            if isinstance(row, Mapping) and row.get("asset") in resolved_materials:
+                add(row.get("asset"), "textures")
+        for row in root.get("cubemaps") or ():
+            if isinstance(row, Mapping) and row.get("resolved"):
+                add(row.get("asset"), "cubemaps")
+        entries = (root.get("pakfile") or {}).get("entries") if isinstance(root.get("pakfile"), Mapping) else None
+        for row in entries or ():
+            if isinstance(row, Mapping) and row.get("unit"):
+                add(row.get("unit"), "pakfile.entries")
     return failures
 
 
