@@ -8,8 +8,15 @@ members it re-read -- so a seam cannot be strict in one path and lax in the othe
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Mapping, Sequence
 
+from elysium_pipeline.formats.unit_contract.capsule import (
+    CAPSULE_ENCODING,
+    CapsuleError,
+    declares_capsule,
+    extract_source_member,
+)
 from elysium_pipeline.formats.unit_contract.coverage import ROOT_KEYS
 from elysium_pipeline.formats.unit_contract.ledger import ByteLedgerError, verify_ledger_row
 from elysium_pipeline.formats.unit_contract.origin import SOURCE_POLICY, SourceMember
@@ -29,16 +36,6 @@ FORBIDDEN_CORE = ("scenes", "nodes", "meshes", "images", "textures", "samplers")
 #: `animations` and `skins` are core glTF a spatial kind is entitled to; a scene-less unit has no
 #: node for either to address, so declaring one there is a decode that leaked into the core.
 SCENELESS_FORBIDDEN = FORBIDDEN_CORE + ("animations", "skins")
-
-#: Key spellings that would smuggle an opaque copy of the source into the product.
-OPAQUE_KEYS = frozenset(
-    {"rawdata", "sourcebytes", "opaquebytes", "base64", "sourcetext", "rawbytes"}
-)
-
-#: Below this a member's bytes are short enough to occur inside an unrelated JSON string by
-#: coincidence, so containment there proves nothing; the BIN chunk is still checked.
-OPAQUE_JSON_MINIMUM = 64
-
 
 #: The two keys of one row the corpus index writes into a field no unit can fill about itself --
 #: `identity.referencedBy`, `selectedBy[]` -- naming the referring unit and the role it named
@@ -254,55 +251,50 @@ def validate_ledgers(
             raise UnitValidationError(str(error)) from error
 
 
-def _forbid_opaque_keys(value: Any, path: str = "$") -> None:
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            if str(key).lower().replace("_", "").replace("-", "") in OPAQUE_KEYS:
-                raise UnitValidationError(f"opaque source payload is forbidden at {path}.{key}")
-            _forbid_opaque_keys(item, f"{path}.{key}")
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            _forbid_opaque_keys(item, f"{path}[{index}]")
-
-
-def _strings(value: Any, path: str = "$"):
-    if isinstance(value, Mapping):
-        for key, item in value.items():
-            yield from _strings(item, f"{path}.{key}")
-    elif isinstance(value, list):
-        for index, item in enumerate(value):
-            yield from _strings(item, f"{path}[{index}]")
-    elif isinstance(value, str):
-        yield path, value
-
-
-def reject_opaque_source(
+def validate_capsules(
     document: Mapping[str, Any],
     binary: bytes,
+    root: Mapping[str, Any],
     source_members: Sequence[SourceMember] | None = None,
 ) -> None:
-    """No part of the product is a verbatim copy of a whole source member.
+    """Every capsuled member's bytes are present, the declared length, and the declared digest.
 
-    The ledger is what makes the absence of a source mirror safe, so the mirror has to actually be
-    absent: neither the BIN chunk nor any JSON string may contain a member end to end.
+    A seam that has not adopted the capsule publishes no `sourceResolution.capsule` and passes
+    here untouched -- but it may not sneak a capsule onto a member without declaring one, because
+    a reader decides whether the unit is self-contained by reading the declaration.
+
+    With `source_members` -- export time -- the capsule is additionally weighed against the bytes
+    the exporter actually read, which is the only place a capsule and its member can be proven the
+    same object rather than merely the same digest.
     """
 
-    _forbid_opaque_keys(document)
-    for member in source_members or ():
-        data = member.data
-        if not data:
-            continue
-        if binary and data in binary:
+    resolution = root.get("sourceResolution") or {}
+    members = list(resolution.get("members") or [])
+    if not declares_capsule(resolution):
+        if any(isinstance(member, Mapping) and "capsule" in member for member in members):
+            raise UnitValidationError("a member carries a capsule the unit does not declare")
+        return
+    declaration = resolution.get("capsule")
+    if not isinstance(declaration, Mapping) or declaration.get("encoding") != CAPSULE_ENCODING:
+        raise UnitValidationError(f"the unit declares an unknown source capsule {declaration!r}")
+    provided = {member.path: member.data for member in source_members or ()}
+    for member in members:
+        path = str(member.get("path", "?"))
+        try:
+            data = extract_source_member(document, binary, member)
+        except CapsuleError as error:
+            raise UnitValidationError(str(error)) from error
+        if len(data) != int(member.get("byteLength", -1)):
             raise UnitValidationError(
-                f"the BIN chunk embeds the whole of {member.path} ({len(data)} bytes)"
+                f"{path}: the capsule holds {len(data)} of "
+                f"{member.get('byteLength')} declared bytes"
             )
-        if len(data) < OPAQUE_JSON_MINIMUM:
-            continue
-        for where, text in _strings(document):
-            if data in text.encode("utf-8", "surrogatepass"):
-                raise UnitValidationError(
-                    f"{where} embeds the whole of {member.path} ({len(data)} bytes)"
-                )
+        if hashlib.sha256(data).hexdigest() != str(member.get("sha256", "")):
+            raise UnitValidationError(f"{path}: the capsule's bytes are not the member it names")
+        if path in provided and data != provided[path]:
+            raise UnitValidationError(
+                f"{path}: the capsule disagrees with the member it was cut from"
+            )
 
 
 def completeness(root: Mapping[str, Any]) -> dict[str, int]:

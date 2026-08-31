@@ -41,15 +41,23 @@ not members of this unit.
 
 ## GLB structure
 
-The unit is scene-less and has no BIN chunk.
+The unit is scene-less and declares no accessor. The BIN chunk it does carry is the **source
+capsule** alone (`seam_map_unit_contract.md`, "Source capsule"): buffer 0 holds the `.txt` file's
+own bytes, one `bufferView` addresses them, and `sourceResolution` declares
+`"capsule": {"encoding": "raw"}` with the member row naming that view. An empty source file
+capsules to nothing and that unit carries no BIN chunk at all. `uv run elysium import vdata`
+deploys those bytes to `Content/ElysiumCorpus/vdata/**` reading nothing but the units, except for
+the `signs/` subtree: it is excluded and left on the legacy flat export until its own slice.
 
 ```json
 {
   "extensionsUsed": ["ELYSIUM_vtmb_vdata"],
   "extensionsRequired": ["ELYSIUM_vtmb_vdata"],
+  "buffers": [{"byteLength": 4096}],
+  "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 4096}],
   "extensions": {
     "ELYSIUM_vtmb_vdata": {
-      "schemaVersion": "1.0.0",
+      "schemaVersion": "1.1.0",
       "identity": {},
       "sourceResolution": {},
       "grammar": "keyvalues",
@@ -183,9 +191,9 @@ advisory `Total Experience Value` lines, each with its byte span.
 
 | Key | Kind | Contents |
 |---|---|---|
-| `schemaVersion` | string | `1.0.0` |
+| `schemaVersion` | string | `1.1.0` — 1.1.0 added the source capsule |
 | `identity` | object | `asset`, `vdataPath`, `subtree`, `variant` (`base`, `vampire`, `hunter` or null), `sourcePolicy` |
-| `sourceResolution` | object | the member table |
+| `sourceResolution` | object | the member table, its `capsule` declaration, and each member's `capsule` view |
 | `grammar` | string | `keyvalues` or `delimited` |
 | `rootKey` | string | the declared root key as spelled |
 | `tree` | object | the KeyValues document |

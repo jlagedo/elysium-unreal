@@ -1,7 +1,7 @@
 """Independent validator for Map-entities GLB products.
 
 Structural checks (container shape, extension-root key order, the byte ledger, the absence of an
-opaque source mirror) run through `elysium_pipeline.formats.unit_contract`, the shared owner of
+source capsule) run through `elysium_pipeline.formats.unit_contract`, the shared owner of
 those rules. Everything semantic to the ENTITIES lump -- which blocks it holds, which pairs each
 block authors, where each pair's bytes are, what an output's value splits into and which brush
 model a `*N` names -- is re-derived here from a fresh tokenize-and-walk of the source bytes,
@@ -40,7 +40,7 @@ from elysium_pipeline.formats.unit_contract import (
     completeness,
     generator,
     read_glb,
-    reject_opaque_source,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -727,7 +727,7 @@ def validate_document(
         validate_container(document, binary)
         validate_sceneless(document)
         validate_ledgers(root, source_members)
-        reject_opaque_source(document, binary, source_members)
+        validate_capsules(document, binary, root, source_members)
     except UnitValidationError as error:
         raise MapEntitiesGlbValidationError(str(error)) from error
     if document.get("asset", {}).get("generator") != generator(KIND_TITLE):

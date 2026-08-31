@@ -25,7 +25,7 @@ from elysium_pipeline.formats.unit_contract import (
     completeness,
     plain,
     read_glb,
-    reject_opaque_source,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -384,7 +384,7 @@ def validate_document(
         document, SOUND_SCRIPT_EXTENSION, asset_prefix="vtmb:", schema_version=SCHEMA_VERSION
     )
     validate_ledgers(root, source_members)
-    reject_opaque_source(document, binary, source_members)
+    validate_capsules(document, binary, root, source_members)
 
     kind = root.get("kind")
     if kind not in KINDS:

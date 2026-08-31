@@ -1,7 +1,9 @@
 """Isolated one-file/one-GLB vdata product writer.
 
-Every unit is scene-less and carries no BIN chunk: a vdata table names strings, flags and numbers,
-all of which the source wrote as text (`docs/architecture/seam_map_vdata.md`).
+Every unit is scene-less and declares no accessor: a vdata table names strings, flags and numbers,
+all of which the source wrote as text (`docs/architecture/seam_map_vdata.md`). The BIN chunk it
+does carry is the source capsule alone -- the member's own bytes, so the unit is everything a
+reader needs to reproduce the install file (`seam_map_unit_contract.md`, "Source capsule").
 """
 
 from __future__ import annotations
@@ -11,10 +13,11 @@ from typing import Callable
 
 from elysium_pipeline.formats.unit_contract import (
     asset_block,
+    buffer_table,
+    encapsulate,
     extension_root,
     identity_block,
     plain,
-    source_resolution,
     write_glb,
 )
 from elysium_pipeline.formats.vdata_glb import (
@@ -48,10 +51,11 @@ def build_document(model: VdataModel) -> tuple[dict, bytes]:
         subtree=model.subtree,
         variant=model.variant,
     )
+    resolution, buffer_views, binary = encapsulate([model.member])
     root = extension_root(
         schema_version=SCHEMA_VERSION,
         identity=identity,
-        source_resolution=source_resolution([model.member]),
+        source_resolution=resolution,
         dependencies=model.dependencies,
         coverage=coverage_block(
             model=model,
@@ -70,15 +74,19 @@ def build_document(model: VdataModel) -> tuple[dict, bytes]:
         anomalies=model.anomalies,
         omissions=model.omissions,
     )
-    document = {
+    document: dict = {
         "asset": asset_block(KIND_TITLE),
         "extensionsUsed": [VDATA_EXTENSION],
         "extensionsRequired": [VDATA_EXTENSION],
-        "extensions": {VDATA_EXTENSION: plain(root)},
     }
-    # A vdata unit carries no binary payload: every datum it owns is a name, a flag or a number
-    # the source wrote as text. One JSON chunk, no BIN chunk.
-    return document, b""
+    # The whole BIN chunk is the capsule: one buffer holding the member's own bytes, addressed by
+    # the one view `sourceResolution.members[0].capsule` names. An empty source file capsules to
+    # nothing, and that unit carries no BIN chunk at all.
+    if binary:
+        document["buffers"] = buffer_table(binary)
+        document["bufferViews"] = buffer_views
+    document["extensions"] = {VDATA_EXTENSION: plain(root)}
+    return document, binary
 
 
 def _model_resolver(index: dict) -> Callable[[str], bool]:

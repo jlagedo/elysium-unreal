@@ -20,18 +20,23 @@ from elysium_pipeline.formats.unit_contract import (
     ROOT_KEYS,
     ByteLedger,
     ByteLedgerError,
+    CapsuleError,
     GlbContainerError,
     Origin,
     SourceMember,
     UnitValidationError,
     asset_block,
     asset_id,
+    buffer_table,
     completeness,
     coverage_block,
+    decode_glb,
     dependency,
+    encapsulate,
     encode_glb,
     extension_name,
     extension_root,
+    extract_source_member,
     generator,
     identity_block,
     missing_sentinel,
@@ -41,9 +46,10 @@ from elysium_pipeline.formats.unit_contract import (
     ranges_sha256,
     read_glb,
     reference_extension,
-    reject_opaque_source,
+    source_capsules,
     source_resolution,
     validate_accessors,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -506,7 +512,7 @@ def test_a_well_formed_unit_passes_every_kind_independent_check():
     validate_container(document, b"")
     validate_sceneless(document)
     validate_ledgers(root, [_member()])
-    reject_opaque_source(document, b"", [_member()])
+    validate_capsules(document, b"", root, [_member()])
     assert completeness(root) == {"unresolved": 0, "unsupported": 0, "typedUnidentified": 0}
 
 
@@ -629,36 +635,135 @@ def test_export_time_validation_weighs_the_ledger_against_the_member_bytes():
         validate_ledgers(root, [_member(data=MEMBER[:4] + b"\x01\0\0\0" + MEMBER[8:])])
 
 
-def test_an_embedded_source_member_in_the_bin_chunk_is_caught():
-    member = _member(data=bytes(range(64, 192)))
-    binary = b"\0" * 16 + member.data + b"\0" * 16
-    with pytest.raises(UnitValidationError, match="BIN chunk embeds the whole of"):
-        reject_opaque_source(_document(), binary, [member])
+# --- source capsule --------------------------------------------------------------------------
 
 
-def test_an_embedded_source_member_in_a_json_string_is_caught():
-    text = "".join(chr(index) for index in range(65, 65 + 80))
-    member = _member(data=text.encode("utf-8"))
+def _capsuled(members=None, **overrides):
+    """A document whose members travel in its BIN chunk, plus that chunk and its root.
+
+    The root carries no byte ledger: the capsule is checked on its own, which is what lets a seam
+    be judged on carrying the bytes separately from being judged on decoding them.
+    """
+
+    members = list(members if members is not None else [_member()])
+    resolution, views, binary = encapsulate(members)
+    fields = {
+        "schema_version": "1.0.0",
+        "identity": identity_block(ASSET_PREFIX + "lacroix", MEMBER_PATH),
+        "source_resolution": resolution,
+        "dependencies": [],
+        "coverage": coverage_block(mapped=["identity"]),
+    }
+    fields.update(overrides)
+    root = extension_root(**fields, demo={"records": 1})
+    document = _document(root)
+    if binary:
+        document["buffers"] = buffer_table(binary)
+        document["bufferViews"] = views
+    return document, binary, root
+
+
+def test_a_capsule_round_trips_the_member_bytes_exactly():
+    tricky = b"\xef\xbb\xbfKey\t\"a b \"\r\n  trailing   \r\n\x93quoted\x94\n"
+    document, binary, root = _capsuled([_member(data=tricky)])
+    assert document["buffers"] == [{"byteLength": len(tricky)}]
+    assert document["bufferViews"] == [
+        {"buffer": 0, "byteOffset": 0, "byteLength": len(tricky)}
+    ]
+    member = root["sourceResolution"]["members"][0]
+    assert member["capsule"] == {"bufferView": 0, "byteLength": len(tricky)}
+    assert extract_source_member(document, binary, member) == tricky
+    assert source_capsules(document, binary, root) == {MEMBER_PATH: tricky}
+    validate_capsules(document, binary, root, [_member(data=tricky)])
+
+
+def test_several_members_are_packed_four_byte_aligned_and_stay_separable():
+    first = _member(role="mdl", path="a/one.txt", data=b"one" * 7)      # 21 bytes, unaligned
+    second = _member(role="vtx", path="a/two.txt", data=b"two" * 5)
+    document, binary, root = _capsuled([first, second])
+    views = document["bufferViews"]
+    assert [view["byteOffset"] % 4 for view in views] == [0, 0]
+    assert views[1]["byteOffset"] == 24                                 # 21 padded up to 24
+    assert source_capsules(document, binary, root) == {
+        "a/one.txt": first.data, "a/two.txt": second.data
+    }
+    validate_capsules(document, binary, root, [first, second])
+
+
+def test_an_empty_member_capsules_to_no_buffer_view_and_no_bin_chunk():
+    empty = _member(data=b"")
+    document, binary, root = _capsuled([empty])
+    assert binary == b"" and "buffers" not in document and "bufferViews" not in document
+    assert root["sourceResolution"]["members"][0]["capsule"] == {"byteLength": 0}
+    assert source_capsules(document, binary, root) == {MEMBER_PATH: b""}
+    validate_container(document, binary)
+    validate_capsules(document, binary, root, [empty])
+
+
+def test_a_capsule_the_bin_chunk_does_not_carry_is_refused():
+    document, binary, root = _capsuled()
+    document["bufferViews"][0]["byteLength"] -= 4
+    with pytest.raises(UnitValidationError, match="declares .* bytes and its view offers"):
+        validate_capsules(document, binary, root)
+
+
+def test_a_member_with_no_capsule_at_all_is_refused_once_the_seam_declares_one():
+    document, binary, root = _capsuled()
+    root["sourceResolution"]["members"][0].pop("capsule")
+    with pytest.raises(UnitValidationError, match="carries no source capsule"):
+        validate_capsules(document, binary, root)
+
+
+def test_a_capsule_whose_bytes_are_not_the_member_it_names_is_refused():
+    document, binary, root = _capsuled()
+    tampered = b"beckett" + binary[7:]
+    with pytest.raises(UnitValidationError, match="not the member it names"):
+        validate_capsules(document, tampered, root)
+
+
+def test_a_capsule_that_disagrees_with_the_bytes_the_exporter_read_is_refused():
+    """The unit can be self-consistent and still not be the file the exporter actually read."""
+
+    document, binary, root = _capsuled()
+    other = _member(data=b"lacroix" + MEMBER[7:])
+    assert len(other.data) == len(MEMBER) and other.data != MEMBER
+    validate_capsules(document, binary, root)                    # standalone: self-consistent
+    with pytest.raises(UnitValidationError, match="disagrees with the member it was cut from"):
+        validate_capsules(document, binary, root, [other])
+
+
+def test_a_seam_that_declares_no_capsule_still_validates_and_may_not_smuggle_one():
     document = _document()
-    document["extensions"][EXTENSION]["demo"] = {"mirror": text}
-    with pytest.raises(UnitValidationError, match="embeds the whole of"):
-        reject_opaque_source(document, b"", [member])
+    root = document["extensions"][EXTENSION]
+    validate_capsules(document, b"", root, [_member()])
+    root["sourceResolution"]["members"][0]["capsule"] = {"byteLength": 0}
+    with pytest.raises(UnitValidationError, match="does not declare"):
+        validate_capsules(document, b"", root, [_member()])
 
 
-def test_a_short_member_is_not_read_as_an_accidental_json_mirror():
-    member = _member(data=b"lacroix")
-    document = _document()
-    document["extensions"][EXTENSION]["demo"] = {"name": "lacroix"}
-    reject_opaque_source(document, b"", [member])
-    with pytest.raises(UnitValidationError, match="BIN chunk embeds"):
-        reject_opaque_source(document, b"\0\0lacroix\0\0", [member])
+def test_an_unknown_capsule_encoding_is_refused():
+    document, binary, root = _capsuled()
+    root["sourceResolution"]["capsule"] = {"encoding": "zlib"}
+    with pytest.raises(UnitValidationError, match="unknown source capsule"):
+        validate_capsules(document, binary, root)
 
 
-def test_an_opaque_payload_key_is_refused_whatever_it_holds():
-    document = _document()
-    document["extensions"][EXTENSION]["demo"] = {"source_bytes": "AAAA"}
-    with pytest.raises(UnitValidationError, match="opaque source payload"):
-        reject_opaque_source(document, b"", [])
+def test_extracting_from_a_row_that_is_not_a_capsule_is_an_error_not_an_empty_result():
+    document, binary, _root_ = _capsuled()
+    with pytest.raises(CapsuleError, match="carries no source capsule"):
+        extract_source_member(document, binary, {"path": MEMBER_PATH})
+    with pytest.raises(CapsuleError, match="names no bufferView of this unit"):
+        extract_source_member(
+            document, binary, {"path": MEMBER_PATH, "capsule": {"bufferView": 9, "byteLength": 4}}
+        )
+
+
+def test_a_capsuled_unit_survives_the_container_it_is_published_through():
+    document, binary, _root_ = _capsuled()
+    validate_container(document, binary)
+    read_document, read_binary = decode_glb(encode_glb(document, binary))
+    read_root = read_document["extensions"][EXTENSION]
+    assert source_capsules(read_document, read_binary, read_root) == {MEMBER_PATH: MEMBER}
 
 
 def test_completeness_and_warnings_report_every_incomplete_row():

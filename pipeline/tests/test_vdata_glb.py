@@ -731,3 +731,105 @@ def test_export_wraps_a_missing_member_as_a_vdata_glb_error(tmp_path):
 def test_ws_fix_value_extracts_the_residual_number():
     assert projection_module.ws_fix_value("//1, ws-fix") == "1"
     assert projection_module.ws_fix_value("// added by wesp") is None
+
+
+# --- source capsule ----------------------------------------------------------------------------
+
+
+#: Bytes a vdata file actually carries that a re-encode would quietly change: DOS terminators,
+#: tab-separated pairs, trailing spaces before the newline, cp1252 punctuation and accents above
+#: 0x7f, a UTF-8 BOM the engine reads straight past, and a quoted value spanning two lines
+#: (`clandoc000.txt` opens one that way). The capsule is the unaltered file, so each of these
+#: must come back out of the GLB byte for byte.
+_TRICKY = {
+    "crlf-tabs-and-trailing-space": b'Foo\r\n{\r\n\t"a"\t"1"   \r\n}\r\n',
+    "cp1252-high-bytes": b'Foo\n{\n\t"name" "Caf\xe9 \x93Nosferatu\x94 \x96 Santa Monica"\n}\n',
+    "utf8-bom": b'\xef\xbb\xbfFoo\n{\n\t"a" "1"\n}\n',
+    "multi-line-quoted-value": b'Foo\n{\n\t"desc" "line one\r\n\r\nline two"\n}\n',
+    "no-terminator-at-eof": b'Foo\n{\n\t"a" "1"\n}',
+    "empty-file": b"",
+}
+
+
+def _capsule_of(destination):
+    from elysium_pipeline.formats.unit_contract import read_glb, source_capsules
+
+    document, binary = read_glb(destination)
+    root = document["extensions"][model_module.VDATA_EXTENSION]
+    return document, binary, root, source_capsules(document, binary, root)
+
+
+@pytest.mark.parametrize("name", sorted(_TRICKY))
+def test_the_capsule_returns_the_source_file_byte_for_byte(tmp_path, name):
+    body = _TRICKY[name]
+    path = "vdata/system/synthetic.txt"
+    index = _index(path)
+    destination = exporter.export(
+        index, "system/synthetic", tmp_path, read_bytes=lambda idx, key: body
+    )
+    _document, _binary, root, capsules = _capsule_of(destination)
+    assert capsules == {path: body}
+    assert root["schemaVersion"] == "1.1.0"
+    assert validation.validate(destination)["byteCoveragePercent"] == 100.0
+
+
+def test_a_published_unit_declares_its_capsule_and_addresses_it_through_buffer_zero(tmp_path):
+    body = _KATANA
+    index = _index("vdata/items/item_w_katana.txt")
+    destination = exporter.export(
+        index, "items/item_w_katana", tmp_path, read_bytes=lambda idx, key: body
+    )
+    document, binary, root, _capsules = _capsule_of(destination)
+    assert root["sourceResolution"]["capsule"] == {"encoding": "raw"}
+    member = root["sourceResolution"]["members"][0]
+    assert member["capsule"] == {"bufferView": 0, "byteLength": len(body)}
+    assert document["buffers"] == [{"byteLength": len(body)}]
+    assert document["bufferViews"][0]["buffer"] == 0
+    # The BIN chunk is the payload padded to four bytes and nothing else.
+    assert len(binary) - len(body) == -len(body) % 4
+    assert binary[: len(body)] == body
+
+
+def test_an_empty_vdata_file_publishes_no_bin_chunk_and_an_empty_capsule(tmp_path):
+    index = _index("vdata/system/blank.txt")
+    destination = exporter.export(
+        index, "system/blank", tmp_path, read_bytes=lambda idx, key: b""
+    )
+    document, binary, root, capsules = _capsule_of(destination)
+    assert binary == b"" and "buffers" not in document
+    assert root["sourceResolution"]["members"][0]["capsule"] == {"byteLength": 0}
+    assert capsules == {"vdata/system/blank.txt": b""}
+
+
+def test_the_validator_refuses_a_vdata_unit_that_dropped_its_capsule():
+    model = _decode("system/synthetic", b'Foo\n{\n\t"a" "1"\n}\n')
+    document, binary = exporter.build_document(model)
+    document["extensions"][model_module.VDATA_EXTENSION]["sourceResolution"]["members"][0].pop(
+        "capsule"
+    )
+    with pytest.raises(UnitValidationError, match="carries no source capsule"):
+        validation.validate_document(document, binary, source_members=[model.member])
+
+
+def test_the_validator_refuses_a_vdata_unit_that_never_declared_a_capsule():
+    # Capsule is REQUIRED for vdata (schema 1.1.0), unlike a seam that has not adopted it --
+    # `validate_capsules` alone returns early on a missing `sourceResolution.capsule`, so this must
+    # be caught by the vdata seam's own explicit check, not the generic one.
+    model = _decode("system/synthetic", b'Foo\n{\n\t"a" "1"\n}\n')
+    document, binary = exporter.build_document(model)
+    root = document["extensions"][model_module.VDATA_EXTENSION]
+    root["sourceResolution"].pop("capsule")
+    for member in root["sourceResolution"]["members"]:
+        member.pop("capsule", None)
+    document.pop("buffers", None)
+    document.pop("bufferViews", None)
+    with pytest.raises(UnitValidationError, match="declares no source capsule"):
+        validation.validate_document(document, b"", source_members=[model.member])
+
+
+def test_the_validator_refuses_a_vdata_capsule_whose_bytes_were_tampered_with():
+    model = _decode("system/synthetic", b'Foo\n{\n\t"a" "1"\n}\n')
+    document, binary = exporter.build_document(model)
+    tampered = b"B" + binary[1:]
+    with pytest.raises(UnitValidationError, match="not the member it names"):
+        validation.validate_document(document, tampered, source_members=[model.member])

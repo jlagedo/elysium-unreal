@@ -36,6 +36,23 @@ struct FElysiumContentPaths
 		return Value;
 	}
 	static bool IsConfigured() { return !Root().IsEmpty(); }
+
+	// The deployed, gitignored, runtime-parsed corpus written by `uv run elysium import` --
+	// distinct from Root(), which is the offline pipeline's loose export tree. vdata is the first
+	// family imported onto it (docs/project/seam_migration.md "Settled"); more follow as the
+	// migration converges the runtime onto one resolution mechanism. `-ElysiumCorpusRoot=` mirrors
+	// Root()'s `-ElysiumContentRoot=` pin so tests/dev can redirect the corpus independently.
+	static FString CorpusRoot()
+	{
+		FString Value;
+		if (!FParse::Value(FCommandLine::Get(), TEXT("ElysiumCorpusRoot="), Value))
+		{
+			Value = FPaths::ProjectContentDir() / TEXT("ElysiumCorpus");
+		}
+		Value = FPaths::ConvertRelativePathToFull(Value);
+		FPaths::NormalizeDirectoryName(Value);
+		return Value;
+	}
 	// Offline/content-test completeness signal only. Gameplay reads the artifacts that are present
 	// and must never refuse to boot solely because this marker exists.
 	//
@@ -460,9 +477,13 @@ struct FElysiumContentPaths
 	static FString CfgDir() { return Root() / TEXT("cfg"); }
 	static FString CfgFile(const FString& File) { return CfgDir() / File; }
 
-	// VtMB's whole RPG/rules layer is Valve-KeyValues text under `vdata/`, mirrored verbatim by
-	// pipeline/src/elysium_pipeline/exporters/UE_extract_vdata.py. Per-table consumer map: `docs/vtmb/vdata-catalog.md`.
-	static FString VdataDir() { return Root() / TEXT("vdata"); }
+	// VtMB's whole RPG/rules layer is Valve-KeyValues text under `vdata/`, now sourced from the
+	// export_v2 capsule import (`uv run elysium import vdata`) onto CorpusRoot() rather than from
+	// Root(). Per-table consumer map: `docs/vtmb/vdata-catalog.md`. Signs stay on the legacy
+	// export root (SignsDir() below) -- a deliberate divergence, not yet migrated. See
+	// docs/project/seam_migration.md "Settled": rulebook tables read corpus-only, terminal
+	// definitions stay overlay-first over this same directory.
+	static FString VdataDir() { return CorpusRoot() / TEXT("vdata"); }
 	static FString VdataFile(const FString& Rel) { return VdataDir() / Rel; }
 
 	// The script filesystem's writable overlay (FElysiumScriptFS). VtMB's scripts write as well as

@@ -1,7 +1,7 @@
 """Independent structural validator for ui-resource GLB products.
 
-The kind-independent checks (container, scene-less rule, extension root, byte ledger, opaque
-source) are `elysium_pipeline.formats.unit_contract`'s. What is specific here is: the grammar's
+The kind-independent checks (container, scene-less rule, extension root, byte ledger, source
+capsule) are `elysium_pipeline.formats.unit_contract`'s. What is specific here is: the grammar's
 own field shape, and -- when `source_members` is supplied, i.e. at export time -- an independent
 re-decode of the member bytes, compared against what the document actually published. This
 re-decode calls `formats.ui_resource_glb.decode`/`grammars` directly rather than
@@ -21,7 +21,7 @@ from elysium_pipeline.formats.unit_contract import (
     UnitValidationError,
     completeness,
     read_glb as _read_glb,
-    reject_opaque_source,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -213,7 +213,7 @@ def validate_document(
     validate_container(document, binary)
     validate_sceneless(document)
     validate_ledgers(root, source_members)
-    reject_opaque_source(document, binary, source_members)
+    validate_capsules(document, binary, root, source_members)
 
     # `seam_map_ui_resource.md`, "GLB structure": "Every unit is scene-less with no BIN chunk".
     # `validate_container` permits a *consistent* BIN chunk (buffer/view/binary agree); this seam

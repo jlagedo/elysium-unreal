@@ -30,14 +30,13 @@ from elysium_pipeline.formats.map_lighting_glb.model import (
     UNUSED_STYLE,
     WORLD_LIGHT_BYTES,
 )
-from elysium_pipeline.formats.unit_contract.validate import OPAQUE_JSON_MINIMUM
 from elysium_pipeline.formats.unit_contract import (
     UnitValidationError,
     completeness,
     generator,
     read_glb,
-    reject_opaque_source,
     validate_accessors,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -57,30 +56,11 @@ FACE_LUMP = 7
 TEXINFO_LUMP = 6
 DISPINFO_LUMP = 26
 
-#: The roles whose member is copied into an accessor byte for byte. The contract's opaque-source
-#: rule forbids a *mirror* of a member -- a copy the unit does not describe -- and licenses this
-#: one explicitly: "copied verbatim into a BIN payload whose every byte the extension describes".
-#: `faces[]`, `displacements[]` and the ledger are that description, so these three members are
-#: held to it here instead of to the containment test.
+#: The roles whose member is copied into an accessor byte for byte -- "copied verbatim into a BIN
+#: payload whose every byte the extension describes", the contract's `mapped` case. `faces[]`,
+#: `displacements[]` and the ledger are that description, and the accessor-digest check below is
+#: what holds these three members to it.
 VERBATIM_ROLES = frozenset({"lighting", "disp-lightmap-alphas", "disp-lightmap-sample-positions"})
-
-
-def _mirror_candidates(source_members: Sequence[Any] | None) -> list[Any]:
-    """The members whose presence in the product would be an opaque copy.
-
-    Two kinds are held to the accessor-digest check instead of the containment one: the three
-    lumps the extension describes byte for byte, and any member short enough to occur inside an
-    unrelated payload by coincidence -- `sm_hub_1` publishes a four-byte `dplt` payload of an
-    integer zero, which every BIN chunk with a zero luxel in it contains. That is the same
-    threshold the contract already applies to a JSON string.
-    """
-
-    return [
-        member
-        for member in source_members or ()
-        if getattr(member, "role", "") not in VERBATIM_ROLES
-        and len(getattr(member, "data", b"")) >= OPAQUE_JSON_MINIMUM
-    ]
 
 #: How a lump 8 range a face paid for is spelled, and the parse that reads it back.
 FACE_RANGE_PREFIX = "lighting.faces["
@@ -535,7 +515,7 @@ def validate_document(
         validate_container(document, binary)
         validate_accessors(document, binary)
         validate_ledgers(root, source_members)
-        reject_opaque_source(document, binary, _mirror_candidates(source_members))
+        validate_capsules(document, binary, root, source_members)
     except UnitValidationError as error:
         raise MapLightingGlbValidationError(str(error)) from error
     counts = completeness(root)

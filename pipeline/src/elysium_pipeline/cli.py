@@ -43,6 +43,9 @@ app = typer.Typer(
 deps_app = typer.Typer(help="Restore and verify locked project dependencies.")
 export_app = typer.Typer(help="Export VtMB sources and generate Unreal packages.")
 export_v2_app = typer.Typer(help="Run isolated lossless GLB export pipelines.")
+# `import` is a Python keyword, so the sub-app object cannot be named after the command it
+# registers; the command surface is still `uv run elysium import <family>`.
+import_app = typer.Typer(help="Deploy published export_v2 units into the runtime corpus.")
 verify_app = typer.Typer(help="Check baked packages against what the export declares.")
 run_app = typer.Typer(help="Launch the Unreal editor or standalone game.")
 debug_app = typer.Typer(help="Run development and acceptance harnesses.")
@@ -51,6 +54,7 @@ blender_app = typer.Typer(help="Package and drive the Blender GLB review add-on.
 app.add_typer(deps_app, name="deps")
 app.add_typer(export_app, name="export")
 app.add_typer(export_v2_app, name="export_v2")
+app.add_typer(import_app, name="import")
 app.add_typer(verify_app, name="verify")
 app.add_typer(run_app, name="run")
 app.add_typer(debug_app, name="debug")
@@ -1569,6 +1573,32 @@ def export_v2_vdatas_glb(ctx: typer.Context) -> None:
         require_game=True,
         activity=True,
     )
+
+
+@import_app.command("vdata")
+def import_vdata(ctx: typer.Context) -> None:
+    """Deploy the vdata corpus from the published GLB units into Content/ElysiumCorpus."""
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import vdata as importer
+
+        if config.export_v2_root is None:
+            raise ConfigError(
+                "ELYSIUM_EXPORT_V2_ROOT is not configured; copy dev/paths.example.env to "
+                ".elysium.local.env and set the local path"
+            )
+        result = importer.import_vdata(
+            config.export_v2_root, importer.corpus_root(config.repo_root)
+        )
+        console.print(result.summary())
+        if result.failures:
+            for key, detail in result.failures[:10]:
+                console.print(f"[yellow]  {key}: {detail}[/yellow]", markup=True)
+            raise RuntimeError(f"{len(result.failures)} vdata unit(s) could not be imported")
+
+    # No install, no engine and no generated-state lease: the units are self-contained and the
+    # destination is loose text nothing bakes from, so the deploy is a file copy and nothing more.
+    _execute(_state(ctx), "import vdata", ExitCode.OFFLINE_EXPORT, action, require_work=False)
 
 
 @export_v2_app.command("ui-resource-glb")

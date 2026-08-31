@@ -177,8 +177,8 @@ class ModelUnit:
     `mdl_data` is the selecting member's bytes the decode already holds. The animation sampler
     accessors are built from them at write time rather than materialised here, because a body's
     hundred local animations expand to hundreds of megabytes of Python floats when they are all
-    resident at once. Nothing of it reaches the product: the ledger is what accounts for those
-    bytes, and `validation.reject_opaque_source` proves no copy was written.
+    resident at once. Nothing of the expansion reaches the product: the ledger is what accounts
+    for those bytes.
     """
 
     key: str

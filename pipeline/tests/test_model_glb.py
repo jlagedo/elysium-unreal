@@ -736,14 +736,6 @@ def test_a_scene_less_unit_that_declares_a_node_is_refused() -> None:
         validation.validate_document(document, binary)
 
 
-def test_the_validator_refuses_an_opaque_source_blob() -> None:
-    _closure, unit = _unit()
-    document, binary = model_glb.build_document(unit)
-    document["extensions"][EXTENSION]["mdl"]["rawData"] = "SUQ="
-    with pytest.raises(validation.ModelGlbValidationError, match="opaque source payload"):
-        validation.validate_document(document, binary)
-
-
 def test_the_validator_refuses_a_tampered_byte_ledger() -> None:
     _closure, unit = _unit()
     document, binary = model_glb.build_document(unit)

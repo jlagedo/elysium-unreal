@@ -30,7 +30,7 @@ from elysium_pipeline.formats.unit_contract import asset_id as _stable_asset_id
 from elysium_pipeline.formats.unit_contract import read_glb as _read_glb
 from elysium_pipeline.formats.unit_contract import (
     completeness,
-    reject_opaque_source,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -430,7 +430,7 @@ def validate_document(
         validate_sceneless(document)
         _require(not binary, "a dialogue unit carries no BIN chunk")
         validate_ledgers(root, source_members)
-        reject_opaque_source(document, binary, source_members)
+        validate_capsules(document, binary, root, source_members)
     except UnitValidationError as error:
         raise DialogueGlbValidationError(str(error)) from error
 

@@ -1,8 +1,10 @@
 """The byte ledger every export_v2 unit publishes.
 
-A unit never embeds an opaque copy of its source member, so the ledger is what makes that
-absence safe: it partitions the member -- or the span the unit was cut from -- into ranges, each
-naming the record that paid for it, and it fails publication when one byte is left over.
+The ledger is what proves the decode is complete: it partitions the member -- or the span the
+unit was cut from -- into ranges, each naming the record that paid for it, and it fails
+publication when one byte is left over. A unit also carries the member verbatim in its source
+capsule (`capsule.py`), and that copy never excuses a range: a capsule says what the bytes were,
+the ledger says what the decode made of every one of them.
 """
 
 from __future__ import annotations

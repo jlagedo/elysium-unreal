@@ -59,7 +59,8 @@ def asset_block(kind_title: str) -> dict[str, str]:
 
 
 def encode_glb(document: dict, binary: bytes = b"") -> bytes:
-    """Serialize one unit. The BIN chunk is omitted when the unit has no accessor."""
+    """Serialize one unit. The BIN chunk is omitted when `binary` is empty -- true for a unit with
+    no accessor, but also for a capsule-adopting unit whose members are all zero bytes."""
 
     json_data = json.dumps(
         plain(document), separators=(",", ":"), ensure_ascii=False, allow_nan=False

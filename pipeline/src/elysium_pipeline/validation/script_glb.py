@@ -43,8 +43,8 @@ from elysium_pipeline.formats.unit_contract import (
     UnitValidationError,
     completeness,
     read_glb as _read_glb,
-    reject_opaque_source,
     validate_accessors,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -431,7 +431,7 @@ def validate_document(
             schema_version=SCHEMA_VERSION,
         )
         validate_ledgers(root, source_members)
-        reject_opaque_source(document, binary, source_members)
+        validate_capsules(document, binary, root, source_members)
     except UnitValidationError as error:
         raise ScriptGlbValidationError(str(error)) from error
     if binary:

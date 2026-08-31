@@ -41,7 +41,7 @@ from elysium_pipeline.formats.unit_contract import (
     completeness,
     generator,
     missing_sentinel,
-    reject_opaque_source,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_index_rows,
@@ -621,7 +621,7 @@ def validate_document(
         validate_container(document, binary)
         validate_sceneless(document)
         validate_ledgers(root, source_members)
-        reject_opaque_source(document, binary, source_members)
+        validate_capsules(document, binary, root, source_members)
     except UnitValidationError as error:
         raise ShaderProgramGlbValidationError(str(error)) from error
     _check_no_binary(binary)

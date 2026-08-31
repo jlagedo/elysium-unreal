@@ -23,7 +23,12 @@ from elysium_pipeline.formats.nav_graph_glb.source import (
     load_source_closure,
     loc_path,
 )
-from elysium_pipeline.formats.unit_contract import ByteLedgerError, Origin, SourceMember
+from elysium_pipeline.formats.unit_contract import (
+    ByteLedgerError,
+    Origin,
+    SourceMember,
+    UnitValidationError,
+)
 from elysium_pipeline.validation import nav_graph_glb as validation
 
 # Two 2-hull nodes (a fixed origin/yaw/hullOffsets pair, then a variable "tail" plus the fixed
@@ -765,11 +770,11 @@ def test_the_validator_notices_a_tampered_node_source_offset():
         validation.validate_document(document, binary, source_members=closure.members())
 
 
-def test_the_validator_rejects_an_embedded_opaque_source_member():
+def test_the_validator_rejects_a_member_capsule_the_unit_never_declared():
     closure = _closure()
     model = decode_nav_graph(closure)
     document, binary = exporter.build_document(model)
     root = document["extensions"]["ELYSIUM_vtmb_nav_graph"]
-    root["demoOpaque"] = AIN_BYTES.decode("ascii")
-    with pytest.raises(Exception):
+    root["sourceResolution"]["members"][0]["capsule"] = {"byteLength": 0}
+    with pytest.raises(UnitValidationError, match="does not declare"):
         validation.validate_document(document, binary, source_members=closure.members())

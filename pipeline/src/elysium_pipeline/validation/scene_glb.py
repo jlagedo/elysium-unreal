@@ -1,7 +1,7 @@
 """Independent validator for Scene GLB products.
 
 Structural checks (container shape, extension-root key order, the byte ledger, the absence of an
-opaque source mirror) run through `elysium_pipeline.formats.unit_contract`, the shared owner of
+source capsule) run through `elysium_pipeline.formats.unit_contract`, the shared owner of
 those rules. Everything semantic to the scene format -- what an actor, a channel and an event say,
 and whether a `speak`'s dependency or a `firetrigger`'s `trigger` actually follows from its own
 raw `param` -- is re-derived here from a fresh tokenize-and-walk of the source bytes, written
@@ -28,7 +28,7 @@ from elysium_pipeline.formats.unit_contract import (
     asset_id as _asset_id,
     completeness,
     read_glb,
-    reject_opaque_source,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -585,7 +585,7 @@ def validate_document(
     validate_container(document, binary)
     validate_sceneless(document)
     validate_ledgers(root, source_members)
-    reject_opaque_source(document, binary, source_members)
+    validate_capsules(document, binary, root, source_members)
 
     identity = root.get("identity") or {}
     key = identity.get("key")

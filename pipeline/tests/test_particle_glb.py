@@ -610,15 +610,17 @@ def test_a_comment_inside_the_unparsed_region_still_appears_in_comments():
     assert row["coveragePercent"] == 100.0
 
 
-# --- a definition unparseable from byte zero must not embed the whole member ----------------------
+# --- a definition unparseable from byte zero still publishes its raw text whole -------------------
 
 
-def test_a_definition_unparseable_from_byte_zero_does_not_embed_the_whole_member(tmp_path):
+def test_a_definition_unparseable_from_byte_zero_keeps_its_raw_text_whole(tmp_path):
+    # The capsule doctrine already carries the exact source bytes -- `omissions[].raw` truncating
+    # under the old opaque-source rule was pure fidelity loss with no reader left to protect.
     model, document, binary = _publish(data=WHOLE_MEMBER_UNPARSED)
     omission = next(row for row in model.omissions if row["role"] == "unparsed-region")
     assert omission["offset"] == 0
     assert omission["length"] == len(WHOLE_MEMBER_UNPARSED)
-    assert len(omission["raw"]) < len(WHOLE_MEMBER_UNPARSED)
+    assert omission["raw"] == WHOLE_MEMBER_UNPARSED.decode("latin-1")
     assert model.byte_ledger[0]["coveragePercent"] == 100.0
     closure = _closure(data=WHOLE_MEMBER_UNPARSED)
     summary = validation.validate_document(document, binary, source_members=closure.members())

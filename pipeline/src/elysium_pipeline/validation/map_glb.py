@@ -24,8 +24,8 @@ from elysium_pipeline.formats.unit_contract import (
     completeness,
     generator,
     read_glb,
-    reject_opaque_source,
     validate_accessors,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -617,7 +617,7 @@ def validate_document(
         validate_container(document, binary)
         validate_accessors(document, binary)
         validate_ledgers(root, source_members)
-        reject_opaque_source(document, binary, source_members)
+        validate_capsules(document, binary, root, source_members)
     except UnitValidationError as error:
         raise MapGlbValidationError(str(error)) from error
     ledgers = (root.get("coverage") or {}).get("byteLedger") or []

@@ -35,8 +35,11 @@ struct FElysiumScratchContentRoot
 		FPlatformMisc::SetEnvironmentVar(TEXT("ELYSIUM_EXPORT_ROOT"), *Root);
 		// The pin wins over the environment, so it is what has to move. Appending is enough:
 		// `FParse::Value` takes the first match, so the replacement is written to the front.
-		FCommandLine::Set(*FString::Printf(TEXT("-ElysiumContentRoot=\"%s\" %s"),
-			*Root, *SavedCommandLine));
+		// `FElysiumContentPaths::CorpusRoot()` takes its own separate `-ElysiumCorpusRoot=` pin
+		// with no environment fallback, so a reader through `VdataDir()`/`VdataFile()` is immune
+		// to the override above unless that pin moves too -- moved onto the same scratch tree.
+		FCommandLine::Set(*FString::Printf(TEXT("-ElysiumContentRoot=\"%s\" -ElysiumCorpusRoot=\"%s\" %s"),
+			*Root, *Root, *SavedCommandLine));
 	}
 
 	~FElysiumScratchContentRoot()

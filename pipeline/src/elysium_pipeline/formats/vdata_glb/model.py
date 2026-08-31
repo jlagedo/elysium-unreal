@@ -19,7 +19,8 @@ from elysium_pipeline.formats.unit_contract.origin import SourceMember
 
 KIND = "vdata"
 KIND_TITLE = "Vdata"
-SCHEMA_VERSION = "1.0.0"
+#: 1.1.0 added the source capsule: the member's exact bytes travel in the unit's BIN chunk.
+SCHEMA_VERSION = "1.1.0"
 VDATA_EXTENSION = extension_name(KIND)
 
 #: The install directory every unit is cut from, and the extension every one of its files carries.

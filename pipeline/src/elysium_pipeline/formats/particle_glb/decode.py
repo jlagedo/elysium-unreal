@@ -28,8 +28,6 @@ from elysium_pipeline.formats.particle_glb.model import (
     sprite_asset_id,
     sprite_source_path,
 )
-from elysium_pipeline.formats.unit_contract.validate import OPAQUE_JSON_MINIMUM
-
 _NUMBER = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 
 #: Emitter-lifetime keys directly on the root.
@@ -356,12 +354,6 @@ def decode_particle(
         if length > 0:
             ledger.claim(doc.unparsed_offset, length, "omitted-proven", "unparsed[0]")
         raw = text[doc.unparsed_offset:end]
-        if doc.unparsed_offset == 0 and len(raw) >= OPAQUE_JSON_MINIMUM:
-            # The whole member is unparsed (a malformed file with no root at all); publishing it
-            # verbatim would embed a full source member end to end in the GLB's JSON, which the
-            # shared contract's opaque-source rule forbids. The evidence stays -- `offset`/`length`
-            # still name the exact span -- but `raw` is a bounded excerpt, not a source mirror.
-            raw = raw[: OPAQUE_JSON_MINIMUM - 1]
         omissions.append({
             "role": "unparsed-region", "offset": doc.unparsed_offset, "length": max(length, 0),
             "raw": raw,

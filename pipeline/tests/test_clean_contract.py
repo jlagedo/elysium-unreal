@@ -41,6 +41,9 @@ def test_clean_deletes_only_generated_targets_and_marks_corpus_incomplete() -> N
         baked = repo / "Plugins" / "ElysiumBaked" / "Content"
         baked.mkdir(parents=True)
         (baked / "generated.umap").write_text("derived")
+        corpus = repo / "Content" / "ElysiumCorpus" / "vdata" / "system"
+        corpus.mkdir(parents=True)
+        (corpus / "feats.txt").write_text("derived")
         external = repo / "Plugins" / "External" / "Cog"
         external.mkdir(parents=True)
         (external / "source.cpp").write_text("managed dependency")
@@ -56,6 +59,7 @@ def test_clean_deletes_only_generated_targets_and_marks_corpus_incomplete() -> N
 
         assert not (repo / "Content" / "ElysiumGenerated").exists()
         assert not baked.exists()
+        assert not (repo / "Content" / "ElysiumCorpus").exists()
         assert (repo / "Content" / "Fonts" / "source.ttf").is_file()
         assert (repo / "Content" / "InputPrompts" / "Kenney" / "glyph.png").is_file()
         assert (external / "source.cpp").is_file()

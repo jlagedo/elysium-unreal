@@ -512,7 +512,7 @@ bool FElysiumScriptFSTest::RunTest(const FString&)
 		.EndsWith(TEXT("/cfg/config.cfg")));
 	TestTrue(TEXT("vdata is mounted"),
 		FElysiumScriptFS::MapToMirror(TEXT("vdata/system/stats.txt"), Real));
-	TestTrue(TEXT("vdata maps under the export root"), Real.Replace(TEXT("\\"), TEXT("/"))
+	TestTrue(TEXT("vdata maps under the corpus"), Real.Replace(TEXT("\\"), TEXT("/"))
 		.EndsWith(TEXT("/vdata/system/stats.txt")));
 	TestTrue(TEXT("vdata/signs is mounted ahead of vdata"),
 		FElysiumScriptFS::MapToMirror(TEXT("vdata/signs/death.txt"), Real));

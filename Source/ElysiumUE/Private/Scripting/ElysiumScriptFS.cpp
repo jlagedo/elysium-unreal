@@ -32,10 +32,13 @@ namespace
 	// Sandbox-relative tree prefix -> the mirror directory it is served from. Ordered: the first
 	// match wins, so `vdata/signs/` must precede `vdata/`.
 	//
-	// The mounts are exactly the trees the offline pipeline mirrors. `python/` lands on out/scripts
-	// because that is where UE_extract_scripts.py puts VtMB's `Vampire/python/` tree; VtMB's own
-	// `Vampire/scripts/` (kb_act.lst and the Valve script files) is a different tree and has no
-	// mirror, which is why hunter mode's keybinding copy resolves to nothing and says so.
+	// Most mounts are the trees the offline pipeline mirrors under Root(). `vdata/` is the
+	// exception: it now serves from FElysiumContentPaths::VdataDir(), the export_v2 capsule import
+	// onto CorpusRoot() (docs/project/seam_migration.md "Settled"); `vdata/signs/` stays on Root()'s
+	// legacy `signs/` mirror, not yet migrated. `python/` lands on out/scripts because that is where
+	// UE_extract_scripts.py puts VtMB's `Vampire/python/` tree; VtMB's own `Vampire/scripts/`
+	// (kb_act.lst and the Valve script files) is a different tree and has no mirror, which is why
+	// hunter mode's keybinding copy resolves to nothing and says so.
 	const TArray<TPair<FString, FString>>& Mounts()
 	{
 		static const TArray<TPair<FString, FString>> Table = []()
@@ -44,7 +47,7 @@ namespace
 			TArray<TPair<FString, FString>> T;
 			T.Emplace(TEXT("cfg/"),         Root / TEXT("cfg"));
 			T.Emplace(TEXT("vdata/signs/"), Root / TEXT("signs")); // extracted flat + lowercased
-			T.Emplace(TEXT("vdata/"),       Root / TEXT("vdata"));
+			T.Emplace(TEXT("vdata/"),       FElysiumContentPaths::VdataDir());
 			T.Emplace(TEXT("python/"),      Root / TEXT("scripts"));
 			T.Emplace(TEXT("dlg/"),         Root / TEXT("dlg"));
 			T.Emplace(TEXT("sound/"),       Root / TEXT("sound"));

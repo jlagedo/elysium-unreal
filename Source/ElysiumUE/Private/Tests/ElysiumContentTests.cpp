@@ -1572,12 +1572,12 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumPlayerBodiesTest,
 	"Elysium.Content.PlayerBodies", GElysiumContentTestFlags)
 bool FElysiumPlayerBodiesTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("npc"), TEXT("vdata") })) return true;
+	if (SkipIncompleteCorpus(*this, { TEXT("npc") })) return true;
 	const FString ClanDoc = FElysiumContentPaths::VdataFile(TEXT("system/clandoc000.txt"));
 	if (!IFileManager::Get().FileExists(*ClanDoc) ||
 		!IFileManager::Get().FileExists(*FElysiumContentPaths::NpcIndex()))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata + npc data (run: uv run elysium export grid)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata + npc data (run: uv run elysium export_v2 vdatas-glb && uv run elysium import vdata, then uv run elysium export bundle npc)"));
 		return true;
 	}
 
@@ -3038,10 +3038,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumRulebookContentTest,
 	"Elysium.Content.Rulebook", GElysiumContentTestFlags)
 bool FElysiumRulebookContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export_v2 vdatas-glb, then uv run elysium import vdata)"));
 		return true;
 	}
 
@@ -3610,10 +3609,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumDiceContentTest,
 	"Elysium.Content.Dice", GElysiumContentTestFlags)
 bool FElysiumDiceContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/dicerolls.txt"))))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export_v2 vdatas-glb, then uv run elysium import vdata)"));
 		return true;
 	}
 
@@ -3747,11 +3745,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSoundVolumeContentTest,
 	"Elysium.Content.SoundVolumes", GElysiumContentTestFlags)
 bool FElysiumSoundVolumeContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(
 		*FElysiumContentPaths::VdataFile(TEXT("system/sound_volume_table.txt"))))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export_v2 vdatas-glb, then uv run elysium import vdata)"));
 		return true;
 	}
 
@@ -3844,10 +3841,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetContentTest,
 	"Elysium.Content.Sheet", GElysiumContentTestFlags)
 bool FElysiumSheetContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export_v2 vdatas-glb, then uv run elysium import vdata)"));
 		return true;
 	}
 
@@ -3992,10 +3988,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumSheetMathContentTest,
 	"Elysium.Content.SheetMath", GElysiumContentTestFlags)
 bool FElysiumSheetMathContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/feats.txt"))))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export_v2 vdatas-glb, then uv run elysium import vdata)"));
 		return true;
 	}
 
@@ -4147,11 +4142,10 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumQuestContentTest,
 
 bool FElysiumQuestContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(
 			*FElysiumContentPaths::VdataFile(TEXT("system/quests_santamonica.txt"))))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export_v2 vdatas-glb, then uv run elysium import vdata)"));
 		return true;
 	}
 
@@ -4301,10 +4295,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumChargenContentTest,
 	"Elysium.Content.Chargen", GElysiumContentTestFlags)
 bool FElysiumChargenContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/stats.txt"))))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export_v2 vdatas-glb, then uv run elysium import vdata)"));
 		return true;
 	}
 
@@ -5441,10 +5434,9 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumItemsContentTest,
 	"Elysium.Content.Items", GElysiumContentTestFlags)
 bool FElysiumItemsContentTest::RunTest(const FString&)
 {
-	if (SkipIncompleteCorpus(*this, { TEXT("vdata") })) return true;
 	if (!IFileManager::Get().FileExists(*FElysiumContentPaths::VdataFile(TEXT("system/items.txt"))))
 	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export bundle vdata)"));
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no exported vdata (run: uv run elysium export_v2 vdatas-glb, then uv run elysium import vdata)"));
 		return true;
 	}
 

@@ -58,6 +58,7 @@ compile_commands.json
 # Generated project packages. The virtual package paths remain /Game and
 # /ElysiumBaked; only their Git posture changes.
 Content/ElysiumGenerated/
+Content/ElysiumCorpus/
 Plugins/ElysiumBaked/Content/
 
 # Pinned third-party plugins are restored by `uv run elysium deps sync`.

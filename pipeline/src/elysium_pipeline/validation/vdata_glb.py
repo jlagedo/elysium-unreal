@@ -1,7 +1,7 @@
 """Independent structural validator for vdata GLB products.
 
-The kind-independent checks (container, scene-less rule, extension root, byte ledger, opaque
-source) are `elysium_pipeline.formats.unit_contract`'s. What is specific here is: the grammar
+The kind-independent checks (container, scene-less rule, extension root, byte ledger, source
+capsule) are `elysium_pipeline.formats.unit_contract`'s. What is specific here is: the grammar
 shape (`tree` xor `rows`), and -- when `source_members` is supplied, i.e. at export time -- an
 independent re-tokenize and re-parse of the member bytes, compared field-for-field against what
 the document actually published. This re-decode calls the seam's own lexer and its own
@@ -24,12 +24,13 @@ from elysium_pipeline.formats.unit_contract import (
     UnitValidationError,
     completeness,
     read_glb as _read_glb,
-    reject_opaque_source,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
     validate_sceneless,
 )
+from elysium_pipeline.formats.unit_contract.capsule import declares_capsule
 from elysium_pipeline.formats.vdata_glb import lexer
 from elysium_pipeline.formats.vdata_glb import projection as projection_module
 from elysium_pipeline.formats.vdata_glb.model import SCHEMA_VERSION, VDATA_EXTENSION
@@ -215,7 +216,12 @@ def validate_document(
     validate_container(document, binary)
     validate_sceneless(document)
     validate_ledgers(root, source_members)
-    reject_opaque_source(document, binary, source_members)
+    validate_capsules(document, binary, root, source_members)
+    # `validate_capsules` returns early when `sourceResolution.capsule` is absent -- correct for a
+    # seam that has not adopted the capsule (`capsule.py`'s own docstring), but vdata (schema
+    # 1.1.0) is REQUIRED to carry one. A unit that dropped it is a defect, not an unadopted seam.
+    if not declares_capsule(root.get("sourceResolution")):
+        raise VdataGlbValidationError("vdata unit declares no source capsule")
 
     grammar = root.get("grammar")
     if grammar not in _GRAMMARS:

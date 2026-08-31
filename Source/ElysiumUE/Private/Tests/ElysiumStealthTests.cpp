@@ -945,16 +945,12 @@ bool FElysiumStealthContentTest::RunTest(const FString&)
 {
 	// A missing prerequisite abstains; a prerequisite that is present and will not parse fails.
 	// Gating on the root alone conflated the two, so a maps-only export reported a red suite for
-	// the ordinary development state of not having exported vdata yet.
-	if (FElysiumContentPaths::Root().IsEmpty() || FElysiumContentPaths::IsIncomplete(TEXT("vdata")))
-	{
-		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: the vdata export domain is unavailable"));
-		return true;
-	}
+	// the ordinary development state of not having deployed the vdata corpus yet.
 	const FString StealthPath = FElysiumContentPaths::VdataFile(TEXT("system/stealth.txt"));
 	if (!IFileManager::Get().FileExists(*StealthPath))
 	{
-		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: stealth.txt not exported: %s"),
+		AddInfo(FString::Printf(TEXT("ELYSIUM_TEST_ABSTAIN: stealth.txt not exported: %s "
+			"(run: uv run elysium export_v2 vdatas-glb, then uv run elysium import vdata)"),
 			*StealthPath));
 		return true;
 	}

@@ -21,7 +21,7 @@ from elysium_pipeline.formats.unit_contract import (
     UnitValidationError,
     completeness,
     read_glb,
-    reject_opaque_source,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_index_rows,
@@ -197,7 +197,7 @@ def validate_document(document: dict, binary: bytes, *, source_members=None) -> 
 
     members = (root.get("sourceResolution") or {}).get("members") or []
     validate_ledgers(root, source_members)
-    reject_opaque_source(document, binary, source_members)
+    validate_capsules(document, binary, root, source_members)
 
     if source_members is not None:
         _check_independent_decode(root, source_members)

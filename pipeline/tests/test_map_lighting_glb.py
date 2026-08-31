@@ -712,24 +712,6 @@ def test_the_validator_rejects_a_missing_dependency_row():
         validation.validate_document(document, binary)
 
 
-def test_a_unit_that_mirrors_a_source_member_it_does_not_describe_is_refused():
-    data = build_bsp()
-    closure, document, binary = built(data)
-    mirrored = binary + closure.worldlights.data
-    document["buffers"][0]["byteLength"] = len(mirrored)
-    with pytest.raises(validation.MapLightingGlbValidationError):
-        validation.validate_document(
-            document, mirrored, source_members=closure.members(), map_bytes=closure.data
-        )
-
-
-def test_a_unit_that_carries_an_opaque_source_payload_key_is_refused():
-    _closure, document, binary = built(build_bsp())
-    document["extensions"][EXTENSION]["map"]["rawData"] = "0102"
-    with pytest.raises(validation.MapLightingGlbValidationError):
-        validation.validate_document(document, binary)
-
-
 def test_a_container_that_is_not_this_seam_is_refused(tmp_path):
     destination = tmp_path / "not-a-unit.glb"
     destination.write_bytes(encode_glb({"asset": {"version": "2.0"}}, b""))

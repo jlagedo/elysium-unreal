@@ -19,6 +19,7 @@ def test_root_help_exposes_the_single_public_command_families() -> None:
         "build",
         "export",
         "export_v2",
+        "import",
         "test",
         "run",
         "debug",
@@ -94,6 +95,25 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
     result = RUNNER.invoke(app, ["export_v2", "--help"], env={"COLUMNS": "200"})
     assert result.exit_code == 0, result.output
     for command in EXPORT_V2_COMMANDS:
+        assert command in result.output, command
+
+
+#: Every command the corpus-import family registers. One per export_v2 family whose slice has
+#: migrated to `Content/ElysiumCorpus`; `seam_migration.md` owns which those are.
+IMPORT_COMMANDS = ("vdata",)
+
+
+def test_import_registers_exactly_the_migrated_corpus_families() -> None:
+    from elysium_pipeline.cli import import_app
+
+    registered = {command.name for command in import_app.registered_commands}
+    assert registered == set(IMPORT_COMMANDS)
+
+
+def test_import_help_names_every_corpus_family() -> None:
+    result = RUNNER.invoke(app, ["import", "--help"], env={"COLUMNS": "200"})
+    assert result.exit_code == 0, result.output
+    for command in IMPORT_COMMANDS:
         assert command in result.output, command
 
 

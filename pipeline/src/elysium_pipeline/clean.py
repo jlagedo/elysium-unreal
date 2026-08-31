@@ -118,6 +118,7 @@ class CleanTargets:
     export_v2_root: Path
     generated_content: Path
     baked_content: Path
+    corpus_content: Path
 
 
 def validate_clean_targets(
@@ -145,14 +146,16 @@ def validate_clean_targets(
             raise UnsafeClean(f"refusing dangerous export_v2 root: {export_v2}")
     generated_content = (repo / "Content" / "ElysiumGenerated").resolve()
     baked_content = (repo / "Plugins" / "ElysiumBaked" / "Content").resolve()
+    corpus_content = (repo / "Content" / "ElysiumCorpus").resolve()
     expected = (
         repo / "Content" / "ElysiumGenerated",
         repo / "Plugins" / "ElysiumBaked" / "Content",
+        repo / "Content" / "ElysiumCorpus",
     )
-    actual = (generated_content, baked_content)
+    actual = (generated_content, baked_content, corpus_content)
     if any(not _same(left, right) for left, right in zip(expected, actual, strict=True)):
         raise UnsafeClean("generated Unreal targets did not resolve to the exact project paths")
-    return CleanTargets(export, export_v2, generated_content, baked_content)
+    return CleanTargets(export, export_v2, generated_content, baked_content, corpus_content)
 
 
 def _empty_owned_root(root: Path) -> None:
@@ -178,6 +181,8 @@ def clean_generated(targets: CleanTargets) -> Path:
         shutil.rmtree(targets.generated_content)
     if targets.baked_content.exists():
         shutil.rmtree(targets.baked_content)
+    if targets.corpus_content.exists():
+        shutil.rmtree(targets.corpus_content)
     return mark_incomplete(targets.export_root)
 
 

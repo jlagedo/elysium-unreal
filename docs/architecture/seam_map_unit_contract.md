@@ -10,7 +10,8 @@ owner and the restatement is a copy.
 
 A unit is one binary glTF 2.0 file that is the complete inspectable projection of one VtMB
 source identity. One identity produces one file; one file carries one identity. A unit never
-embeds an opaque copy of its source member and never carries data another unit owns.
+carries data another unit owns, and — where its seam has adopted the source capsule — it carries
+the exact bytes of its own source members beside the decode of them.
 
 ```text
 vtmb:<kind>:<key>
@@ -82,13 +83,58 @@ named non-unit bytes before it publishes any unit from it.
 An empty member (zero bytes) is recorded with `byteLength: 0`, the SHA-256 of the empty string and
 an `omissions` row `empty-member`; a unit whose selecting member is empty publishes with a warning.
 
+## Source capsule
+
+A unit is a **self-contained capsule**: alongside the decode it carries, byte for byte, the source
+members the UP-first policy selected. A reader holding one GLB holds everything the exporter read
+and can reproduce the install file without the install, which is what lets the corpus deploy
+(`uv run elysium import <family>`) read `exports_v2` alone.
+
+The encoding is the plainest one glTF admits. Each member's bytes go into buffer 0 — the BIN chunk
+— at a 4-byte aligned offset, one `bufferView` addresses them, and the member's row in
+`sourceResolution.members[]` names that view:
+
+```json
+{
+  "sourceResolution": {
+    "policy": "up-first",
+    "capsule": {"encoding": "raw"},
+    "members": [
+      {"role": "unit-selecting", "path": "vdata/items/item_w_katana.txt",
+       "origin": {"kind": "vpk", "container": "pack002.vpk", "offset": 1, "size": 2},
+       "byteLength": 4096, "sha256": "…",
+       "capsule": {"bufferView": 0, "byteLength": 4096}}
+    ]
+  }
+}
+```
+
+A zero-byte member declares `{"byteLength": 0}` and no view, because glTF has no zero-length
+`bufferView`; a unit all of whose members are empty therefore still carries no BIN chunk.
+`sourceResolution.capsule` is what says the seam has adopted the rule — a seam that has not
+publishes no such key, and a member row may not carry a capsule the unit does not declare.
+
+**The capsule never excuses the decode.** The byte ledger, the independent re-decode and every
+completeness rule below apply unchanged; a unit that carries its source and does not account for
+it is refused exactly as before. What the capsule adds is that the bytes the ledger partitions are
+*in the file*, so validation compares the capsule against the member's own `byteLength` and
+`sha256` on every read, and at export time against the bytes the exporter actually read.
+
+Rollout is per slice, tracked in `docs/project/seam_migration.md`:
+
+| Seam | Capsule |
+|---|---|
+| `vtmb:vdata:` | required, schema 1.1.0 |
+| every other kind | adopts when its slice migrates; until then it publishes no `capsule` key |
+
 ## Container
 
 ```text
 unit.glb
 |- header      magic 'glTF', version 2, total length
 |- chunk 0     JSON  (0x4E4F534A), UTF-8, padded to 4 bytes with 0x20
-`- chunk 1     BIN   (0x004E4942), padded to 4 bytes with 0x00; absent when the unit has no accessor
+`- chunk 1     BIN   (0x004E4942), padded to 4 bytes with 0x00; absent when the unit has neither an
+               accessor nor a non-empty source capsule
 ```
 
 The JSON chunk is serialized with compact separators, sorted-key-free (writer order) and rejects
@@ -234,9 +280,9 @@ json.dumps({"path": sourcePath, "byteLength": byteLength, "ranges": ranges},
 
 `reserved-zero` and `padding-zero` are verified: claiming either over a non-zero source byte aborts
 publication. Publication also fails when ranges overlap, leave one byte unclaimed, disagree with
-the source hash or length, or when a member has no ledger row. This is **100% byte accountability
-without an opaque source mirror**: a unit never embeds its source member, and the ledger is what
-makes that absence safe.
+the source hash or length, or when a member has no ledger row. This is **100% byte
+accountability**: the capsule says what the bytes were, the ledger says what the decode made of
+every one of them, and carrying the first is never an answer for the second.
 
 A byte the format stores as text is claimed by the record its token belongs to; comments and
 insignificant whitespace between records are claimed by the enclosing table's `comments[]` and
@@ -255,14 +301,16 @@ recoverable only in part publishes what the install holds and warns.
 
 **Export-time validation** receives the selected source members, runs before the destination is
 written, and is the only place `-zero` claims can be proven: it re-reads the members, re-hashes
-them against the declared identities, verifies every zero-state range, re-decodes the source
-independently of the writer and compares the result against the emitted core and extension. Only
+them against the declared identities, verifies every zero-state range, proves each capsule holds
+exactly the bytes it was cut from, re-decodes the source independently of the writer and compares
+the result against the emitted core and extension. Only
 then is the GLB written to a temporary sibling and atomically renamed over the destination.
 
 **Standalone validation** reads a published unit with no install present and verifies the
 container, chunk order, the scene-less rule where it applies, the extension's presence and
 version, the identity prefix, every accessor's extent and digest, the ledger's continuity, state
-totals, source identities and range-table digest, and the absence of any embedded source payload.
+totals, source identities and range-table digest, and — for a seam that declares one — that every
+member's capsule is present, the declared length and the declared digest.
 
 Cross-unit consistency — an inheritance chain, a model's include tree, a map's material closure —
 is a corpus property checked by the corpus index (`seam_map_corpus_index.md`), not something one

@@ -180,7 +180,7 @@ const FElysiumCameraShotDef* ElysiumCameraShots::Load(const FString& ShotFile)
 		return Hit->Get();   // a null entry is a remembered miss
 	}
 
-	const FString Path = FElysiumContentPaths::Root() / TEXT("vdata/camerashots") / (Key + TEXT(".txt"));
+	const FString Path = FElysiumContentPaths::VdataFile(TEXT("camerashots") / (Key + TEXT(".txt")));
 	FString Text;
 	TSharedPtr<FElysiumCameraShotDef> Def;
 	if (FFileHelper::LoadFileToString(Text, *Path))

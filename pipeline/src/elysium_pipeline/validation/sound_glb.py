@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping
 
 from elysium_pipeline.formats.sound_glb import adpcm, lip, mpeg, riff
 from elysium_pipeline.formats.sound_glb.riff import CHUNK_HEADER_BYTES
@@ -68,43 +68,13 @@ def _contract(call, *args, **kwargs):
         raise SoundGlbValidationError(str(error)) from error
 
 
-def _reject_opaque_source(
-    document: Mapping[str, Any],
-    binary: bytes,
-    root: Mapping[str, Any],
-    source_members: Sequence[Any] | None,
-    partitions: bool,
-) -> None:
-    """No member is mirrored into the product except the frame stream the seam describes.
-
-    An untagged `.mp3` is exactly its own frame sequence, so its payload is byte-for-byte the
-    member. That is the contract's `mapped` case -- "copied verbatim into a BIN payload whose
-    every byte the extension describes" -- and it is admitted only when `frames[]` actually
-    partitions the payload. Every other containment is an opaque mirror and fails.
-    """
-
-    described = (
-        partitions and str(root.get("payload", {}).get("sampleFormat")) == "mpeg-frames"
-    )
-    audio_paths = {
-        str(member.get("path"))
-        for member in (root.get("sourceResolution") or {}).get("members") or []
-        if str(member.get("role")) in ("wav", "mp3")
-    }
-    keep = []
-    for member in source_members or ():
-        if described and member.path in audio_paths:
-            continue
-        keep.append(member)
-    _contract(contract_validate.reject_opaque_source, document, binary, keep)
-
-
 def _frames_partition_payload(root: Mapping[str, Any], binary: bytes) -> bool:
     """True only when every declared frame is an MPEG frame the payload bytes actually hold.
 
-    This is the gate the mp3 exemption from the no-opaque-mirror rule rests on, so it re-parses
-    each row's header out of the BIN chunk. Arithmetic alone would let one fabricated row claim
-    the whole payload and carry an arbitrary blob through as "the frame stream".
+    An untagged `.mp3` payload is byte-for-byte its own member, so `frames[]` is the whole of
+    what says the BIN chunk is a described frame stream rather than an undescribed blob. It is
+    re-parsed out of the chunk here: arithmetic alone would let one fabricated row claim the
+    whole payload and carry anything through as "the frame stream".
     """
 
     declared = int(root.get("payload", {}).get("byteLength", -1))
@@ -589,8 +559,8 @@ def validate_document(document: dict, binary: bytes, *, source_members=None) -> 
     _check_references(root, asset)
     _check_records(root)
     _contract(contract_validate.validate_ledgers, root, source_members)
+    _contract(contract_validate.validate_capsules, document, binary, root, source_members)
     partitions = _frames_partition_payload(root, binary)
-    _reject_opaque_source(document, binary, root, source_members, partitions)
 
     if not partitions and key.endswith(".mp3") and binary:
         _fail("the frame table does not partition the payload")

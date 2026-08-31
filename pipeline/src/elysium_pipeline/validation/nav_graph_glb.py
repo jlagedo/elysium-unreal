@@ -18,8 +18,8 @@ from elysium_pipeline.formats.unit_contract import (
     UnitValidationError,
     completeness,
     read_glb,
-    reject_opaque_source,
     validate_accessors,
+    validate_capsules,
     validate_container,
     validate_extension_root,
     validate_ledgers,
@@ -299,7 +299,7 @@ def validate_document(
     validate_accessors(document, binary)
     _check_core_geometry(document, binary, root)
     validate_ledgers(root, source_members)
-    reject_opaque_source(document, binary, source_members)
+    validate_capsules(document, binary, root, source_members)
 
     incomplete = completeness(root)
     if incomplete["unresolved"] or incomplete["unsupported"]:

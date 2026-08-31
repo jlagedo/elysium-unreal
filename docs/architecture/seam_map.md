@@ -17,8 +17,10 @@ other's authoritative data.
 
 These seams use glTF core objects plus documented `ELYSIUM_*` extensions as their canonical
 inspectable projection. Every understood source datum maps to glTF core, an extension, or a
-documented equivalent transformation; the original source binaries are not embedded. Unreal assets
-remain generated bake outputs.
+documented equivalent transformation. A unit also carries its own source bytes verbatim in its
+**source capsule** (`seam_map_unit_contract.md`), which never excuses the decode: required for
+`vtmb:vdata:` now, adopted by every other kind as its slice migrates. Unreal assets remain
+generated bake outputs.
 
 The `export_v2` GLB units are specified one per kind. `seam_map_unit_contract.md` owns the rules
 they share; each seam file owns one unit kind:

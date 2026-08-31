@@ -832,13 +832,16 @@ def test_the_validator_refuses_a_declared_scene():
         validation.validate_document(tampered, binary)
 
 
-def test_no_part_of_the_product_is_a_verbatim_copy_of_a_member():
+def test_a_member_capsule_the_seam_never_declared_is_refused():
+    """The script seam has not adopted the source capsule, so it may not carry one unannounced."""
+
     closure, _, document, binary = document_for()
     validation.validate_document(document, binary, source_members=closure.members(), member_exists=resolver()
     )
     tampered = copy.deepcopy(document)
-    extension_of(tampered)["source"]["text"] = SOURCE.decode("latin-1")
-    with pytest.raises(validation.ScriptGlbValidationError):
+    members = extension_of(tampered)["sourceResolution"]["members"]
+    members[0]["capsule"] = {"byteLength": 0}
+    with pytest.raises(validation.ScriptGlbValidationError, match="does not declare"):
         validation.validate_document(tampered, binary, source_members=closure.members(), member_exists=resolver()
     )
 
