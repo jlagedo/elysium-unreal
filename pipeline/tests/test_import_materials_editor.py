@@ -199,11 +199,14 @@ class FakeEditor:
 
     # -- MaterialEditingLibrary --
     def clear_all_material_instance_parameters(self, mic):
+        # Matches the real `clear_all_material_instance_parameters`, which the whole review pass
+        # (finding 2) is about: it clears non-static parameters only. A static switch a previous
+        # run set survives this call untouched -- `mic.switches` is deliberately NOT cleared here,
+        # so a test that reuses `mic` across two `module.run` calls can prove the entry's own
+        # full-state `switches` dict is what actually clears a stale value, not this call.
         mic.textures.clear()
         mic.scalars.clear()
         mic.vectors.clear()
-        mic.switches.clear()
-        mic.pending_switches.clear()
 
     def set_material_instance_parent(self, mic, parent):
         self.parent_calls.append((mic.path, getattr(parent, "path", parent)))
@@ -221,6 +224,14 @@ class FakeEditor:
 
     def set_material_instance_vector_parameter_value(self, mic, name, value):
         mic.vectors[name] = value
+
+    def get_material_instance_static_switch_parameter_value(self, mic, name):
+        # The effective value: a pending (not-yet-applied) write wins, else whatever the last
+        # `update_material_instance` landed, else the fake's own "nothing set yet" default
+        # (`False`, matching every master's own switches in this test file).
+        if name in mic.pending_switches:
+            return mic.pending_switches[name]
+        return mic.switches.get(name, False)
 
     def set_material_instance_static_switch_parameter_value(self, mic, name, value,
                                                              update_material_instance=True):
@@ -306,6 +317,8 @@ def _fake_unreal(editor):
             editor.set_material_instance_scalar_parameter_value),
         set_material_instance_vector_parameter_value=(
             editor.set_material_instance_vector_parameter_value),
+        get_material_instance_static_switch_parameter_value=(
+            editor.get_material_instance_static_switch_parameter_value),
         set_material_instance_static_switch_parameter_value=(
             editor.set_material_instance_static_switch_parameter_value),
         update_material_instance=editor.update_material_instance,
@@ -631,6 +644,12 @@ def test_an_unknown_parameter_name_fails_the_entry_on_read_back(tmp_path):
 
 
 def test_switches_are_set_unbatched_then_applied_in_one_update_call(tmp_path):
+    """`UseNormalMap: False` never gets a `set_...` call at all: a fresh instance's own effective
+    value is already `False` (this fake's default, matching a fresh `MaterialInstanceConstant`'s
+    inherited-from-master resolution), so the perf optimization -- read the effective value first,
+    only write when it disagrees -- skips it. `UseEnvMap: True` genuinely differs, so it is
+    written. Both still resolve correctly either way (`get_material_instance_static_switch_
+    parameter_value` reads `False` for a name mic.switches never carried)."""
     editor = _base_editor()
     _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
     module = _load(editor)
@@ -641,7 +660,8 @@ def test_switches_are_set_unbatched_then_applied_in_one_update_call(tmp_path):
 
     assert report.failures == []
     mic = editor.assets[ROOT + "/art/MI_brick"]
-    assert mic.switches == {"UseEnvMap": True, "UseNormalMap": False}
+    assert mic.switches == {"UseEnvMap": True}
+    assert editor.get_material_instance_static_switch_parameter_value(mic, "UseNormalMap") is False
     assert mic.update_calls == 1
 
 
@@ -826,7 +846,11 @@ def test_the_permutation_key_distinguishes_two_sided_and_clip_value(tmp_path):
     assert len(report.compiled_permutations) == 2
 
 
-def test_compile_probe_fails_without_a_hit_proxy_or_depth_shader(tmp_path):
+def test_a_missing_hit_proxy_or_depth_shader_is_recorded_not_fatal(tmp_path):
+    """Production evidence (a real full-corpus run, 2026-08-31): a headless commandlet import
+    never compiles a hit-proxy or depth-only shader through this path -- ~90 real entries,
+    including `cable/MI_cable` itself, failed hard on an earlier version of this check that
+    required them. They are recorded in `missingShaderTypes` and never fail the entry."""
     editor = _base_editor()
     _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
     editor.shader_type_names[ROOT + "/art/MI_brick"] = ("TBasePassPS",)  # no hit-proxy/depth
@@ -835,8 +859,22 @@ def test_compile_probe_fails_without_a_hit_proxy_or_depth_shader(tmp_path):
 
     report = module.run(manifest)
 
+    assert report.failures == []
+    row = report.compiled_permutations[0]
+    assert sorted(row["missingShaderTypes"]) == ["depthonly", "hitproxy"]
+
+
+def test_compile_probe_fails_without_a_base_pass_shader(tmp_path):
+    editor = _base_editor()
+    _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
+    editor.shader_type_names[ROOT + "/art/MI_brick"] = ("FHitProxyPS", "FDepthOnlyPS")  # no base pass
+    module = _load(editor)
+    manifest = _stage(tmp_path, [_entry("brick")])
+
+    report = module.run(manifest)
+
     assert report.built == 0
-    assert "hitproxy" in report.failures[0]["reason"] or "depthonly" in report.failures[0]["reason"]
+    assert "basepass" in report.failures[0]["reason"]
 
 
 def test_compiled_permutations_record_probed_shader_types(tmp_path):
@@ -851,6 +889,7 @@ def test_compiled_permutations_record_probed_shader_types(tmp_path):
     row = report.compiled_permutations[0]
     assert row["probedShaderTypes"]
     assert row["numShaderTypes"] == len(row["probedShaderTypes"])
+    assert row["missingShaderTypes"] == []  # the default fixture carries hit-proxy/depth/base-pass
 
 
 # --- pruning ---------------------------------------------------------------------------------------

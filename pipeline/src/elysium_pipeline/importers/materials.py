@@ -426,7 +426,11 @@ SCALAR_PARAM_MAP = {
 #: and `$maxlight` left the masters (no Lumen formula, a named divergence) and are promoted to
 #: their own structured provenance fields (`_MISC_PROVENANCE_SCALAR_KEYS`), not written here.
 SCALAR_PROVENANCE_KEYS = frozenset({
-    "$bumpframe", "$detailscale", "$detailscale2", "$contrast", "$wave",
+    # `$frame`/`$bumpframe` select which frame of a multi-frame texture Source samples when
+    # nothing animates it (default 0); the static frame-0 fallback (`_apply_static_frame_fallback`)
+    # reads the raw value back out of `provenance_rows` itself, so beyond not being an unmapped key
+    # this is a plain provenance-only leaf like the rest of the table.
+    "$frame", "$bumpframe", "$detailscale", "$detailscale2", "$contrast", "$wave",
     "$wetbrightnessfactor", "$maxbrightlevel", "$leakamount", "$leakforce",
     "$fuzzoffset", "$fuzzedgeopacity", "$fuzzfaceopacity", "$j_basescale", "$halfwidth", "$mean",
 })
@@ -817,6 +821,10 @@ class _Params:
     is_decal_surface: bool = False
     ignorez_truthy: bool = False
     misc_provenance: dict = field(default_factory=dict)
+    #: Required-slot parameter names (`BaseTexture`, `NormalMap`) a `textureClassMismatch` on the
+    #: slot did not actually leave unbound -- `_apply_static_frame_fallback` resolved them onto the
+    #: static frame-0 array binding instead, so `_check_required_slots` must not count them missing.
+    static_frame_resolved: set[str] = field(default_factory=set)
 
 
 def _dependency_lookup(document: dict) -> dict[str, tuple[str, bool]]:
@@ -1250,6 +1258,83 @@ REQUIRED_TEXTURE_SLOTS: dict[str, frozenset[str]] = {
 }
 
 
+#: `texture parameter -> (frames-array parameter, frame-count scalar, frame-rate scalar, the
+#: frames switch, the slot's own gate switch)`. Source draws frame `$frame`/`$bumpframe` (default
+#: 0) of a multi-frame texture when no `animatedtexture` proxy animates it -- so a `$basetexture`/
+#: `$bumpmap`(`NormalMap` lane only)/`$normalmap` that resolved but staged as a `Texture2DArray`
+#: (a multi-frame VTF) is not actually unbindable, it just needs the array bound statically rather
+#: than a plain `T_` sibling that was never written. Only a master exposing the matching lane
+#: (`BaseTextureFrames` on Lit/LitTranslucent/Unlit/Sprite, `NormalMapFrames` on Lit/
+#: LitTranslucent/Water) takes this fallback; Eyes/Decal/Refract/Water's `BaseTexture`/TwoTexture
+#: expose neither lane and keep the loud failure.
+_STATIC_FRAME_LANES: dict[str, tuple[str, str, str, str, str]] = {
+    "BaseTexture": ("BaseTextureFrames", "FrameCount", "FrameRate", "UseAnimatedFrames", "UseBaseTexture"),
+    "NormalMap": (
+        "NormalMapFrames", "NormalFrameCount", "NormalFrameRate", "UseAnimatedNormalFrames",
+        "UseNormalMap",
+    ),
+}
+#: The VMT key that authors each slot's fixed frame index -- `seam_migration.md`'s ruling: a
+#: non-zero authored value is a real divergence from the frame this fallback samples (always 0),
+#: recorded as `staticFrameOffsetUnsupported` rather than silently honoured or silently dropped.
+_STATIC_FRAME_OFFSET_KEYS = {"BaseTexture": "$frame", "NormalMap": "$bumpframe"}
+
+
+def _apply_static_frame_fallback(params: _Params, master: str, texture_staging_root: Path | None) -> None:
+    """Resolve a `textureClassMismatch` on `BaseTexture`/`NormalMap` onto a static frame-0 array
+    binding when the master exposes the matching frames lane and no `animatedtexture` proxy has
+    already claimed it (`params.switches[switch_name]` already `True`). Mutates `params` in place;
+    marks the slot in `params.static_frame_resolved` so `_check_required_slots` does not also fail
+    the unit over the same mismatch."""
+
+    exposed = EXPOSED_PARAMS[master]
+    mismatched = {
+        anomaly["parameter"]: anomaly for anomaly in params.anomalies
+        if anomaly.get("kind") == "textureClassMismatch"
+    }
+    for param_name, (frames_param, count_name, rate_name, switch_name, gate_switch) in (
+        _STATIC_FRAME_LANES.items()
+    ):
+        if param_name not in mismatched or param_name in params.textures:
+            continue
+        if frames_param not in exposed or switch_name not in exposed:
+            continue  # master has no lane for this slot -- the loud failure stands
+        if params.switches.get(switch_name):
+            continue  # an animatedtexture proxy already bound this frames array
+        asset_id = params.texture_deps.get(param_name)
+        texture_key = (
+            asset_id[len("vtmb:texture:"):]
+            if isinstance(asset_id, str) and asset_id.startswith("vtmb:texture:") else None
+        )
+        frame_count = _texture_frame_count(texture_staging_root, texture_key)
+        if not frame_count:
+            continue  # not actually a multi-frame array -- leave the mismatch/failure as is
+        params.textures[frames_param] = _texture_array_asset_path(texture_key)
+        params.scalars[count_name] = float(frame_count)
+        params.scalars[rate_name] = 0.0  # static: Source samples one fixed frame, never animates
+        params.switches[switch_name] = True
+        if gate_switch in exposed:
+            params.switches[gate_switch] = True
+        params.static_frame_resolved.add(param_name)
+
+        offset_key = _STATIC_FRAME_OFFSET_KEYS.get(param_name)
+        raw = next(
+            (row.get("value") for row in params.provenance_rows
+             if str(row.get("key") or "").lower() == offset_key and not row.get("block")),
+            None,
+        ) if offset_key else None
+        if raw is not None:
+            try:
+                offset = _parse_scalar(str(raw))
+            except ValueError:
+                offset = 0.0
+            if offset:
+                params.omissions.append({
+                    "kind": "staticFrameOffsetUnsupported", "parameter": param_name,
+                    "key": offset_key, "value": raw,
+                })
+
+
 def _check_required_slots(params: _Params, master: str) -> None:
     """Raise when a required slot's only candidate texture was a `textureClassMismatch` -- the
     unit authored the key, it resolved, but the referenced texture staged as the wrong class, so
@@ -1261,7 +1346,7 @@ def _check_required_slots(params: _Params, master: str) -> None:
         anomaly["parameter"] for anomaly in params.anomalies
         if anomaly.get("kind") == "textureClassMismatch"
     }
-    missing = (required & mismatched) - set(params.textures)
+    missing = (required & mismatched) - set(params.textures) - params.static_frame_resolved
     if missing:
         raise MaterialImportError(
             f"{master} requires {sorted(missing)}, but its referenced texture(s) staged as the "
@@ -1436,6 +1521,12 @@ def _apply_proxies(
                 params.textures[frames_param] = _texture_array_asset_path(texture_key)
                 params.scalars[count_name] = float(frame_count)
                 params.switches[switch_name] = True
+                # A required slot (`BaseTexture`) whose only candidate staged as a `Texture2DArray`
+                # is resolved once the array itself is bound here -- `_check_required_slots` must
+                # not also fail the unit over the same `textureClassMismatch` this proxy just
+                # answered (same bookkeeping the static frame-0 fallback uses when no proxy claims
+                # the slot at all).
+                params.static_frame_resolved.add(bound_param)
             else:
                 params.omissions.append({
                     "kind": "animatedFramesArrayUnavailable", "proxy": "animatedtexture",
@@ -1592,6 +1683,7 @@ def stage_unit(
             if master in _USE_BASE_TEXTURE_MASTERS:
                 params.switches["UseBaseTexture"] = _resolve_use_base_texture(params, document)
             _apply_texture_switch_pairs(params, master)
+            _apply_static_frame_fallback(params, master, texture_staging_root)
             _check_required_slots(params, master)
         # Review finding 2: state every switch the resolved master exposes, not only the ones a
         # rule above happened to turn on -- an entry re-imported after a corpus/design change that

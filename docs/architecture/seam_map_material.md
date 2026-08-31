@@ -424,12 +424,15 @@ of each (parent, switch-combination, blend mode, `TwoSided`, `OpacityMaskClipVal
 (review finding 3 — the base-property overrides select their own shader map exactly like a static
 switch does, so folding only `blendMode` in under-measured the corpus: 963 keys against 1,000 real
 permutations) and records `compiledPermutations` so the number is measured on every run rather
-than assumed. The probe itself checks more than a non-zero base-pass instruction count: it also
-requires `MaterialEditingLibrary.get_num_shader_types` to report at least one shader type and
-`list_shaders` to include a hit-proxy, a depth-only and a base-pass shader among them, failing the
-entry (naming the missing kind) rather than accepting a shader map with a real base pass but a
-silently-missing editor-only permutation. `probedShaderTypes` (every compiled type's name) rides in
-`import_report.json` beside `numPixelShaderInstructions`.
+than assumed. The probe also requires `MaterialEditingLibrary.get_num_shader_types` to report at
+least one shader type. `list_shaders`' compiled-type names ride in `compiledPermutations[]` as
+`probedShaderTypes`, alongside `missingShaderTypes` for a hit-proxy/depth-only shader that never
+showed up -- **recorded, never fatal**: a real full-corpus run (2026-08-31) proved a headless
+`-run=pythonscript` commandlet never compiles either through this path (both are populated on
+demand by an actual viewport/hit-test, not by `get_statistics`/`update_material_instance` alone),
+so an earlier version of this check that required them failed ~90 real entries — including
+`cable/MI_cable`, the very unit the `TwoSided`-ordering defect above was reproduced on — on a
+condition that was never true for any entry a headless import actually builds.
 
 #### Program pairs to masters
 
@@ -1729,6 +1732,32 @@ an optional slot (`EnvMap`, `EnvMapMask`, `NormalMap`, …) stays a recorded ano
 still stages. `StageResult.summary()` and `import_report.json` both roll every anomaly/omission up
 by `kind`, so `textureClassMismatch=N`/`animatedFramesArrayUnavailable=N`/etc. are visible without
 walking every provenance sidecar by hand.
+
+**A `textureClassMismatch` on `BaseTexture`/`NormalMap` binds the frame-0 array instead of failing,
+on a master that exposes the frames lane (closing verification, 2026-08-31).** Source itself draws
+a fixed frame (`$frame`/`$bumpframe`, default 0) of a multi-frame texture when no `animatedtexture`
+proxy animates it, so a `$basetexture`/`$bumpmap`(`NormalMap` lane)/`$normalmap` that resolved but
+staged as a `Texture2DArray` (`textures.py`'s own `frames > 1` rule) is not actually unbindable —
+`_apply_static_frame_fallback` (`importers/materials.py`) binds the unit's own `TA_` sibling onto
+`BaseTextureFrames`/`NormalMapFrames`, sets `FrameCount`/`NormalFrameCount` from the texture's own
+sidecar, `FrameRate`/`NormalFrameRate = 0` (static — never animates), and turns on
+`UseAnimatedFrames`/`UseAnimatedNormalFrames` plus the slot's own gate switch
+(`UseBaseTexture`/`UseNormalMap`). This only fires on a master that exposes the matching lane —
+`BaseTextureFrames` on Lit/LitTranslucent/Unlit/Sprite, `NormalMapFrames` on Lit/LitTranslucent/
+Water — and only when no `animatedtexture` proxy already claimed the slot (an existing proxy that
+found its own array wins outright, and now also marks the slot resolved for the required-slot
+check below, closing a gap where a proxy-bound `BaseTexture` on a *required* slot still failed the
+unit). A master with no lane for the mismatched slot (Eyes, Decal, Refract, Water's own
+`BaseTexture`, TwoTexture) is untouched — the `textureClassMismatch` anomaly, and any
+required-slot failure it causes, stands exactly as before, and so does a `TextureCube` mismatch
+(no frames array exists to fall back onto — `envmap/gioint`/`skybox/hav_env`, the literal-cubemap-
+as-plain-texture break-glass pair). The `textureClassMismatch` anomaly itself is still recorded on
+every bound-via-fallback unit — the mismatch is real, only its consequence changed — so the anomaly
+rollup count rises by exactly the number of units this rule rescues. An authored `$frame`/
+`$bumpframe` other than the default `0` is a genuine divergence from the frame this fallback always
+samples: recorded as a `staticFrameOffsetUnsupported` omission (`parameter`, `key`, `value`) rather
+than honoured (no per-instance frame-offset parameter exists) or silently dropped; no unit in the
+current corpus authors either key non-zero.
 
 **A patched instance's `ElysiumMaster` registry tag is the root master, not empty (review finding
 7).** A patched unit's own provenance carries no master of its own (its parent is another `MI_`,

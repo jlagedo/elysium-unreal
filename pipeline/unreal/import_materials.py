@@ -28,8 +28,10 @@ editor:
   * compile-probe (`MaterialEditingLibrary.get_statistics`, `get_num_shader_types`, `list_shaders`)
     only the first instance of each `(parent, switch-combination, blend override, two-sided,
     opacity-clip)` tuple this run actually built, and fail it when the probe reports zero
-    pixel-shader instructions, zero shader types, or no hit-proxy/depth-only/base-pass shader
-    among the compiled types (review finding 3);
+    pixel-shader instructions or zero shader types (review finding 3); a hit-proxy/depth-only
+    shader is recorded when present but never required -- a headless commandlet run never
+    compiles either through this path (production evidence, 2026-08-31), so requiring them failed
+    ~90 real entries including `cable/MI_cable` itself;
   * attach the provenance record (`UElysiumMaterialProvenance.apply_json`), publish its registry
     tags, stamp the recipe, save;
   * prune every asset inside the manifest's `pruneScope` folder that the manifest neither names
@@ -317,7 +319,19 @@ class Report(object):
         # second time.
         self.anomaly_counts = dict(anomaly_counts or {})
         self.omission_counts = dict(omission_counts or {})
+        # Perf investigation (2026-08-31, "the running full import is at ~1 instance/s"): wall
+        # time spent in each `_finish_entry` phase, summed across every built entry, so a
+        # regression shows up as a number instead of a guess. Keys mirror the phase order in
+        # `_finish_entry`.
+        self.phase_seconds = {
+            "textures": 0.0, "scalarsVectors": 0.0, "switches": 0.0,
+            "basePropertyOverrides": 0.0, "updateMaterialInstance": 0.0, "readBack": 0.0,
+            "probe": 0.0, "physMaterial": 0.0, "provenance": 0.0, "save": 0.0,
+        }
         self.started = time.time()
+
+    def add_phase(self, name, seconds):
+        self.phase_seconds[name] = self.phase_seconds.get(name, 0.0) + seconds
 
     def failed(self, entry, reason):
         self.failures.append({"assetPath": entry["assetPath"], "unit": entry.get("unit", ""), "reason": reason})
@@ -339,6 +353,7 @@ class Report(object):
             "compiledPermutations": self.compiled_permutations,
             "anomalyCounts": self.anomaly_counts,
             "omissionCounts": self.omission_counts,
+            "phaseSeconds": {k: round(v, 3) for k, v in sorted(self.phase_seconds.items())},
             "seconds": round(time.time() - self.started, 1),
         }
 
@@ -360,32 +375,78 @@ def _apply_base_property_overrides(mic, overrides):
     clip decision of its own) clears all three explicitly rather than leaving whatever a previous
     run's stamp left behind; `materials.py::_resolve_blend` always states `blendMode`/`twoSided`
     for a non-patched entry, and `opacityMaskClipValue` only for a `Masked` blend (absent, not
-    `None`, on every other blend mode -- both read the same way here)."""
+    `None`, on every other blend mode -- both read the same way here).
+
+    Perf (2026-08-31): `mic.set_editor_property("base_property_overrides", bpo)` runs the
+    property's full `PostEditChangeProperty` path on a `UMaterialInstanceConstant` (a resource
+    update, same cost class as the static-switch allocation below) every time it is called, so it
+    is only called when the desired struct actually differs from what is already on the asset --
+    the resolved state ends up identical either way, "every flag is stated explicitly" describes
+    the manifest's own full-state contract, not a requirement to always re-write unchanged UE
+    state."""
     bpo = mic.get_editor_property("base_property_overrides")
 
     blend_mode = overrides.get("blendMode")
-    bpo.set_editor_property("override_blend_mode", blend_mode is not None)
-    if blend_mode is not None:
-        bpo.set_editor_property("blend_mode", _blend_mode_value(blend_mode))
-
-    bpo.set_editor_property("override_two_sided", "twoSided" in overrides)
-    if "twoSided" in overrides:
-        bpo.set_editor_property("two_sided", bool(overrides["twoSided"]))
-
+    want_override_blend = blend_mode is not None
+    want_blend_value = _blend_mode_value(blend_mode) if blend_mode is not None else None
+    want_override_two_sided = "twoSided" in overrides
+    want_two_sided = bool(overrides["twoSided"]) if "twoSided" in overrides else None
     clip = overrides.get("opacityMaskClipValue")
-    bpo.set_editor_property("override_opacity_mask_clip_value", clip is not None)
-    if clip is not None:
-        bpo.set_editor_property("opacity_mask_clip_value", float(clip))
+    want_override_clip = clip is not None
+    want_clip = float(clip) if clip is not None else None
+
+    changed = (
+        bool(bpo.get_editor_property("override_blend_mode")) != want_override_blend
+        or (want_override_blend and bpo.get_editor_property("blend_mode") != want_blend_value)
+        or bool(bpo.get_editor_property("override_two_sided")) != want_override_two_sided
+        or (want_override_two_sided and bool(bpo.get_editor_property("two_sided")) != want_two_sided)
+        or bool(bpo.get_editor_property("override_opacity_mask_clip_value")) != want_override_clip
+        or (want_override_clip
+            and float(bpo.get_editor_property("opacity_mask_clip_value")) != want_clip)
+    )
+    if not changed:
+        return False
+
+    bpo.set_editor_property("override_blend_mode", want_override_blend)
+    if want_override_blend:
+        bpo.set_editor_property("blend_mode", want_blend_value)
+
+    bpo.set_editor_property("override_two_sided", want_override_two_sided)
+    if want_override_two_sided:
+        bpo.set_editor_property("two_sided", want_two_sided)
+
+    bpo.set_editor_property("override_opacity_mask_clip_value", want_override_clip)
+    if want_override_clip:
+        bpo.set_editor_property("opacity_mask_clip_value", want_clip)
 
     mic.set_editor_property("base_property_overrides", bpo)
+    return True
 
 
 def _apply_switches(mic, switches):
     # `update_material_instance=False` on every switch: the one instance-wide refresh happens in
     # `_finish_entry`, after `_apply_base_property_overrides` too -- see the comment there.
+    #
+    # Perf (2026-08-31): `set_material_instance_static_switch_parameter_value` allocates a fresh
+    # `UMaterialEditorInstanceConstant` on *every* call regardless of `bUpdateMaterialInstance`
+    # (`MaterialEditingLibrary.cpp`) -- with every one of a master's 13-15 switches now stated
+    # explicitly per instance (review finding 2's full-state rule), that is 13-15 UObject
+    # allocations x 19,125 instances, the actual cost behind the ~1 instance/s regression this
+    # investigation found. `get_material_instance_static_switch_parameter_value` resolves the
+    # same way `IsMaterialInstanceParameterOverridden` would but with no allocation, so reading
+    # the effective value first and only calling the setter when it disagrees keeps the same
+    # resolved state (every switch still ends up at its manifest value, explicitly or via the
+    # master's own matching default) for a fraction of the allocations.
+    changed = 0
     for name, value in switches.items():
+        want = bool(value)
+        current = bool(_mel.get_material_instance_static_switch_parameter_value(mic, name))
+        if current == want:
+            continue
         _mel.set_material_instance_static_switch_parameter_value(
-            mic, name, bool(value), update_material_instance=False)
+            mic, name, want, update_material_instance=False)
+        changed += 1
+    return changed
 
 
 def _permutation_key(entry):
@@ -400,11 +461,19 @@ def _permutation_key(entry):
             overrides.get("opacityMaskClipValue"))
 
 
-#: Substrings (case-insensitive) `list_shaders`' `shader_type_name` is checked against: the probe
-#: must find at least one hit-proxy shader (editor selection/outlining -- `SceneHitProxyRendering.cpp`)
-#: and one depth shader (`FDepthOnlyVS`/`FDepthOnlyPS` and friends) among the compiled types, not
-#: only a non-zero base-pass instruction count.
-_REQUIRED_SHADER_TYPE_SUBSTRINGS = ("hitproxy", "depthonly", "basepass")
+#: Substrings (case-insensitive) `list_shaders`' `shader_type_name` is checked against. Production
+#: evidence (a real full-corpus run, 2026-08-31) shows a headless `-run=pythonscript` commandlet
+#: never compiles a hit-proxy or depth-only shader type through this path -- both are populated on
+#: demand by an actual viewport/hit-test, not by `get_statistics`/`update_material_instance` alone
+#: -- so `cable/MI_cable` (the unit the `TwoSided`-ordering defect above was reproduced on) and
+#: ~90 others failed hard on a check that was never true for *any* entry in a real run. Only
+#: `basepass` (which is always present -- it is what `numPixelShaderInstructions` itself already
+#: measures) stays a hard requirement; hit-proxy/depth-only are recorded in
+#: `compiledPermutations[].probedShaderTypes`/`missingShaderTypes` for a human to look at, never a
+#: reason to fail the entry.
+_REQUIRED_SHADER_TYPE_SUBSTRINGS = ("basepass",)
+#: Recorded, not enforced -- see the comment above.
+_INFORMATIONAL_SHADER_TYPE_SUBSTRINGS = ("hitproxy", "depthonly")
 
 
 def _compile_probe(mic, entry, report, probed):
@@ -427,6 +496,10 @@ def _compile_probe(mic, entry, report, probed):
         needle for needle in _REQUIRED_SHADER_TYPE_SUBSTRINGS
         if not any(needle in name for name in lowered)
     ]
+    missing_informational = [
+        needle for needle in _INFORMATIONAL_SHADER_TYPE_SUBSTRINGS
+        if not any(needle in name for name in lowered)
+    ]
 
     report.compiled_permutations.append({
         "assetPath": entry["assetPath"],
@@ -438,6 +511,7 @@ def _compile_probe(mic, entry, report, probed):
         "numPixelShaderInstructions": instructions,
         "numShaderTypes": num_shader_types,
         "probedShaderTypes": shader_type_names,
+        "missingShaderTypes": missing_informational,
     })
     if instructions <= 0:
         raise RuntimeError(
@@ -451,7 +525,9 @@ def _compile_probe(mic, entry, report, probed):
 
 
 def _finish_entry(entry, staging_root, tracker, report, textures, probed):
-    """Everything one entry needs, from parenting to save; raises on a defect."""
+    """Everything one entry needs, from parenting to save; raises on a defect. Timed per phase
+    into report.phase_seconds (perf investigation, 2026-08-31: the roughly 1 instance/s
+    regression measured on the full re-import)."""
     parent_path = entry["parent"]
     parent = unreal.load_asset(parent_path)
     if parent is None:
@@ -462,21 +538,31 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
     if mic is None:
         raise RuntimeError("make_material_instance produced no asset")
 
+    t0 = time.perf_counter()
     for param, texture_path in entry["textures"].items():
         texture = textures.load(texture_path)
         if texture is None:
             raise RuntimeError("texture not found: %s (parameter %s)" % (texture_path, param))
         bl.set_tex_param(mic, param, texture)
+    t1 = time.perf_counter()
+    report.add_phase("textures", t1 - t0)
 
     for param, value in entry["scalars"].items():
         bl.set_scalar_param(mic, param, float(value))
-
     for param, value in entry["vectors"].items():
         components = list(value) + [1.0] * (4 - len(value)) if len(value) < 4 else list(value)
         bl.set_vector_param(mic, param, unreal.LinearColor(*components[:4]))
+    t2 = time.perf_counter()
+    report.add_phase("scalarsVectors", t2 - t1)
 
     _apply_switches(mic, entry["switches"])
+    t3 = time.perf_counter()
+    report.add_phase("switches", t3 - t2)
+
     _apply_base_property_overrides(mic, entry["basePropertyOverrides"])
+    t4 = time.perf_counter()
+    report.add_phase("basePropertyOverrides", t4 - t3)
+
     # One refresh, after every static-switch and base-property-override write: `TwoSided` (like
     # any base-property override) is not part of the static parameter set the switches' own
     # update would have rebuilt against, so an instance whose *only* reason to need the editor's
@@ -486,16 +572,26 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
     # shader type FHitProxyVS") rather than silently recompiling. Refreshing once here, after both
     # switches and overrides have landed and before the compile probe touches the resource, keeps
     # the shader map's cache key and its live `ShouldCache` evaluation looking at the same state.
+    # Kept unconditional, even when both phases above changed nothing: it is the one call this
+    # lane makes no allocation-storm claim about, and skipping it on a reused-but-stamped-stale
+    # asset risks resurrecting the exact assert the comment above describes.
     _mel.update_material_instance(mic)
+    t5 = time.perf_counter()
+    report.add_phase("updateMaterialInstance", t5 - t4)
 
     # Review finding 2: always explicit, even when the entry's own is `None` (a patched instance,
     # or a unit whose physical material fallback resolved to nothing) -- a stale `PhysMaterial`
-    # from a prior recipe would otherwise survive a re-import that no longer wants one.
+    # from a prior recipe would otherwise survive a re-import that no longer wants one. Perf: the
+    # write is skipped when it would be a no-op (`set_editor_property` here also runs a full
+    # `PostEditChangeProperty`); the resolved value stays exactly what the entry wants either way.
     phys_material_path = entry.get("physMaterial")
     phys_material = unreal.load_asset(phys_material_path) if phys_material_path else None
     if phys_material_path and phys_material is None:
         raise RuntimeError("phys material not found: %s" % phys_material_path)
-    mic.set_editor_property("phys_material", phys_material)
+    if mic.get_editor_property("phys_material") != phys_material:
+        mic.set_editor_property("phys_material", phys_material)
+    t6 = time.perf_counter()
+    report.add_phase("physMaterial", t6 - t5)
 
     # Read-back: the parent is the manifest's, and every texture parameter reads back the asset
     # this entry bound -- a parameter name the master (or, for a patched unit, the base instance)
@@ -508,8 +604,12 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
         expected = textures.load(texture_path)
         if bound != expected:
             raise RuntimeError("unknown or unbound texture parameter %r" % (param,))
+    t7 = time.perf_counter()
+    report.add_phase("readBack", t7 - t6)
 
     _compile_probe(mic, entry, report, probed)
+    t8 = time.perf_counter()
+    report.add_phase("probe", t8 - t7)
 
     with open(os.path.join(staging_root, entry["provenance"].replace("/", os.sep)), "r",
               encoding="utf-8") as handle:
@@ -532,10 +632,13 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
     stamped, error = unreal.ElysiumMaterialProvenance.stamp_registry_tags(mic)
     if not stamped:
         raise RuntimeError("registry tags: %s" % error)
-
     bl.stamp_recipe(mic, tracker.fingerprint(entry))
+    t9 = time.perf_counter()
+    report.add_phase("provenance", t9 - t8)
+
     if not bl.save(entry["assetPath"]):
         raise RuntimeError("save failed")
+    report.add_phase("save", time.perf_counter() - t9)
 
     if entry.get("provenanceOnly"):
         report.provenance_only += 1

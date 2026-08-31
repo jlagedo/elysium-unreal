@@ -1487,6 +1487,114 @@ def test_basetexture_class_mismatch_on_an_optional_slot_stays_an_anomaly(tmp_pat
               for row in provenance["anomalies"])
 
 
+# --- static frame-0 fallback for a multi-frame BaseTexture/NormalMap --------------------------------
+
+
+def test_basetexture_multiframe_array_binds_as_static_frame_zero_on_lit(tmp_path):
+    """`$basetexture` resolving to a unit that staged as a `Texture2DArray` (`frames > 1`) is not a
+    dead end on a master that exposes the `BaseTextureFrames` lane (Lit here): Source itself draws
+    frame 0 of a multi-frame texture when nothing animates it, so the stage binds the array
+    statically -- `FrameRate=0`, `FrameCount` from the sidecar, `UseAnimatedFrames`/`UseBaseTexture`
+    both on -- instead of failing the unit."""
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    sidecar = texture_staging / "sprites" / ("mflash_colt" + importer.TEXTURE_PROVENANCE_SUFFIX)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"frames": 6}), encoding="utf-8")  # staged as a Texture2DArray
+    _publish(export, "sprites/mflash_colt", _unit(
+        "sprites/mflash_colt",
+        parameters=[_param(0, "$basetexture", "sprites/mflash_colt")],
+        dependencies=[_texture_dep("$basetexture", "sprites/mflash_colt")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/sprites/MI_mflash_colt"]
+    assert entry["textures"]["BaseTextureFrames"] == "/ElysiumBaked/Textures/sprites/TA_mflash_colt"
+    assert "BaseTexture" not in entry["textures"]
+    assert entry["scalars"]["FrameCount"] == 6.0
+    assert entry["scalars"]["FrameRate"] == 0.0
+    assert entry["switches"]["UseAnimatedFrames"] is True
+    assert entry["switches"]["UseBaseTexture"] is True
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(row["kind"] == "textureClassMismatch" and row["parameter"] == "BaseTexture"
+              for row in provenance["anomalies"])
+    assert not any(row.get("kind") == "staticFrameOffsetUnsupported" for row in provenance["omissions"])
+
+
+def test_basetexture_multiframe_array_records_divergence_when_frame_is_authored_nonzero(tmp_path):
+    """An authored `$frame` other than the default (0) is a real divergence from the frame the
+    static fallback samples -- recorded as `staticFrameOffsetUnsupported`, never silently honoured
+    or silently dropped."""
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    sidecar = texture_staging / "sprites" / ("mflash_colt" + importer.TEXTURE_PROVENANCE_SUFFIX)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"frames": 6}), encoding="utf-8")
+    _publish(export, "sprites/mflash_colt", _unit(
+        "sprites/mflash_colt",
+        parameters=[_param(0, "$basetexture", "sprites/mflash_colt"), _param(1, "$frame", "2")],
+        dependencies=[_texture_dep("$basetexture", "sprites/mflash_colt")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/sprites/MI_mflash_colt"]
+    assert entry["switches"]["UseAnimatedFrames"] is True
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(
+        row.get("kind") == "staticFrameOffsetUnsupported" and row.get("parameter") == "BaseTexture"
+        and row.get("value") == "2"
+        for row in provenance["omissions"]
+    )
+
+
+def test_basetexture_multiframe_array_stays_a_failure_on_water(tmp_path):
+    """Water exposes no `BaseTextureFrames` lane, so the same `frames > 1` mismatch on its
+    `BaseTexture` (a required slot) keeps failing the unit exactly as before -- the static frame-0
+    fallback never applies where the master has no lane to bind onto."""
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    sidecar = texture_staging / "dev" / ("ocean" + importer.TEXTURE_PROVENANCE_SUFFIX)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"frames": 4}), encoding="utf-8")
+    _publish(export, "dev/ocean", _unit(
+        "dev/ocean", shader="water",
+        parameters=[_param(0, "$basetexture", "dev/ocean")],
+        dependencies=[_texture_dep("$basetexture", "dev/ocean")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert len(result.failures) == 1
+    key, reason = result.failures[0]
+    assert key == "dev/ocean"
+    assert "BaseTexture" in reason
+
+
+def test_normalmap_multiframe_array_binds_as_static_frame_zero_on_lit(tmp_path):
+    """The same fallback applies to `NormalMap` -> `NormalMapFrames` on a master that exposes that
+    lane (Lit); `NormalMap` is only an optional slot, so before this fallback the mismatch would
+    already have staged (as an anomaly, `BaseTexture` still bound) -- this asserts the array itself
+    is now bound rather than the parameter left at the master's inert default."""
+    export = tmp_path / "v2"
+    texture_staging = tmp_path / "texture-stage"
+    sidecar = texture_staging / "brick" / ("wall_bump" + importer.TEXTURE_PROVENANCE_SUFFIX)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"frames": 3}), encoding="utf-8")
+    _publish(export, "brick/wall", _unit(
+        "brick/wall",
+        parameters=[_param(0, "$basetexture", "brick/wall"), _param(1, "$bumpmap", "brick/wall_bump")],
+        dependencies=[_texture_dep("$basetexture", "brick/wall"),
+                      _texture_dep("$bumpmap", "brick/wall_bump")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/brick/MI_wall"]
+    assert entry["textures"]["NormalMapFrames"] == "/ElysiumBaked/Textures/brick/TA_wall_bump"
+    assert "NormalMap" not in entry["textures"]
+    assert entry["scalars"]["NormalFrameCount"] == 3.0
+    assert entry["scalars"]["NormalFrameRate"] == 0.0
+    assert entry["switches"]["UseAnimatedNormalFrames"] is True
+    assert entry["switches"]["UseNormalMap"] is True
+
+
 # --- review finding 2: full-state switches ------------------------------------------------------------
 
 
