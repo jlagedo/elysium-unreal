@@ -359,6 +359,12 @@ bool FElysiumV2MasterParamsTest::RunTest(const FString&)
 				Master->GetVectorParameterValue(Param, Value));
 		}
 
+		// `GetAllStaticSwitchParameterInfo` is `WITH_EDITORONLY_DATA`-gated
+		// (`MaterialInterface.cpp`) -- static-switch parameter metadata is editor-only, unlike the
+		// texture/scalar/vector getters above, which are compiled for every configuration. This
+		// tier otherwise runs in the editor process, where the guard is always true, but the
+		// minor is one line and removes the assumption.
+#if WITH_EDITORONLY_DATA
 		TArray<FMaterialParameterInfo> Switches;
 		TArray<FGuid> SwitchIds;
 		Master->GetAllStaticSwitchParameterInfo(Switches, SwitchIds);
@@ -370,6 +376,7 @@ bool FElysiumV2MasterParamsTest::RunTest(const FString&)
 					return Info.Name == Param;
 				}));
 		}
+#endif // WITH_EDITORONLY_DATA
 
 		// A second, independent compile-error check via `GetMaterialResource` was tried here
 		// (SF-4.3 part 3, run live for the first time) and removed: every tier in this project

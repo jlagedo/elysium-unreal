@@ -58,7 +58,7 @@ DEFAULT_CUBE = "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
 #: it up through the recipe stamp even when nothing on disk changed. `_source_hash()` below is the
 #: exhaustive safety net (it catches an edit this constant was not bumped for); this constant
 #: stays as the human-readable marker of the shape revision.
-GRAPH_VERSION = 2
+GRAPH_VERSION = 3
 
 #: `MPC_ElysiumSurfaces` (SF-4.1, C++, landed) owns every one of these rows and their defaults --
 #: `make_surface_knobs.py` (`build_content.py` runs it before this file). This generator is a
@@ -117,10 +117,28 @@ def _fresh(name, *, ism=False, nanite=False, skeletal=False, morph=False, niagar
     flag UE compiles no permutation outside the editor and the affected primitives fall back to
     the default grey material in a packaged build. `M_V2_Decal` (not authored here) must NOT set
     Nanite -- BLEND_Modulate is not Nanite-compatible -- which is why this is opt-in per call site
-    rather than a blanket default."""
+    rather than a blanket default.
+
+    M8 review fix: `delete_asset`'s return is now checked -- a failed delete used to fall through
+    silently into `create_asset` at the same path, and whatever `MI_` instances the stage already
+    parented to the stale master in this same editor session stay parented to the object that
+    *was* at that path (Unreal reparents nothing on a failed delete; the in-memory `UMaterial` the
+    stale `MI_`s still reference is not the fresh one this call is about to author). This function
+    cannot itself fix that -- the deletion genuinely failed -- so it fails loudly instead of
+    authoring a second, disconnected master silently. See the module docstring's idempotency note:
+    a rebuild of any master orphans its `MI_` children in-session regardless (this function's own
+    delete-then-recreate always swaps the `UMaterial` object under the same path, which the editor
+    session's already-loaded `MI_` instances do not automatically re-resolve against), so
+    `uv run elysium import materials` must re-run after any `make_v2_materials.py` rebuild to
+    re-parent them, and `build_content.py` (which runs this generator) must never share a process
+    with `import_materials.py` (which parents the `MI_`s) for exactly that reason."""
     asset = "%s/%s" % (PKG, name)
     if unreal.EditorAssetLibrary.does_asset_exist(asset):
-        unreal.EditorAssetLibrary.delete_asset(asset)
+        if not unreal.EditorAssetLibrary.delete_asset(asset):
+            _fail("could not delete stale %s before rebuilding -- rerun once the asset is free "
+                  "(no other editor session/reference holding it), then re-run "
+                  "`uv run elysium import materials` afterwards to re-parent its MI_ children"
+                  % asset)
     mat = tools.create_asset(name, PKG, unreal.Material, unreal.MaterialFactoryNew())
     if not mat:
         _fail("create_asset failed: %s" % asset)
@@ -348,6 +366,64 @@ def _make_default_frames_array(force=False):
     return texture
 
 
+def _make_default_normal_frames_array(force=False):
+    """`T_V2_DefaultNormalFrames` -- the `NormalMapFrames` default (H3 review fix). Every normal
+    flipbook lane now samples its `TextureObjectParameter` through `SAMPLERTYPE_NORMAL`
+    (`_flipbook_sample(..., sampler="normal")`), so `HLSLMaterialTranslator.cpp`'s
+    `UnpackNormalMap` (only emitted for `SAMPLERTYPE_Normal`, ~line 6951) now actually runs on
+    whatever this slot samples -- including the default, for any instance that turns
+    `UseAnimatedNormalFrames` on without binding a real animated normal array. `T_V2_DefaultFrames`
+    (the base/colour lane's own default, still `sampler="linear"`) is pure white
+    (`0xff,0xff,0xff,0xff`); unpacked (`2*x - 1`) that is `(1,1,1)`, not the flat `(0,0,1)` a
+    "no perturbation" default must decode to. This is therefore its own asset, not a second binding
+    of the same texture: `(128, 128, 255, 255)` packed -- the identical flat-normal byte triple
+    `/Engine/EngineMaterials/DefaultNormal` itself carries -- with `TC_Normalmap` compression,
+    matching every other `NormalMap` default in this file. Same two-slice DX10 DDS shape as
+    `_make_default_frames_array` (the `arraySize = 1` collapse-to-`Texture2D` finding documented
+    there applies identically here), and the same existing-asset re-verify / `-PolicyForce`
+    contract."""
+    asset = "%s/T_V2_DefaultNormalFrames" % PKG
+    existing = unreal.load_asset(asset)
+    if existing:
+        if not force and existing.get_class().get_name() == "Texture2DArray":
+            return existing
+        if not force:
+            unreal.log_warning(
+                "[make_v2_materials] %s is a %s, not Texture2DArray -- rebuilding"
+                % (asset, existing.get_class().get_name()))
+        unreal.EditorAssetLibrary.delete_asset(asset)
+    pixel = b"\x80\x80\xff\xff" * 2  # two identical flat-normal RGBA8 texels, one per slice
+    dds = b"DDS " + _dds_header(1, 1, 4) + _dds_dx10_header(2) + pixel
+    source = _policy_scratch_dir() / "v2_default_normal_frames.dds"
+    source.write_bytes(dds)
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", str(source))
+    task.set_editor_property("destination_path", PKG)
+    task.set_editor_property("destination_name", "T_V2_DefaultNormalFrames")
+    task.set_editor_property("automated", True)
+    task.set_editor_property("replace_existing", True)
+    task.set_editor_property("save", False)
+    tools.import_asset_tasks([task])
+    texture = unreal.load_asset(asset)
+    if not texture:
+        unreal.log_warning(
+            "[make_v2_materials] could not author T_V2_DefaultNormalFrames; "
+            "NormalMapFrames ships with no default texture")
+        return None
+    if texture.get_class().get_name() != "Texture2DArray":
+        unreal.log_warning(
+            "[make_v2_materials] T_V2_DefaultNormalFrames imported as %s, not Texture2DArray -- "
+            "NormalMapFrames ships with no default texture (doc gap, see this file's module "
+            "docstring)" % texture.get_class().get_name())
+        return None
+    texture.set_editor_property("srgb", False)
+    texture.set_editor_property(
+        "compression_settings", unreal.TextureCompressionSettings.TC_NORMALMAP)
+    texture.set_editor_property("mip_gen_settings", unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS)
+    unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False)
+    return texture
+
+
 def _load_surfaces_collection():
     """`MPC_ElysiumSurfaces` is SF-4.1's own asset (`UElysiumSurfaceSettings::PushToCollection` is
     its values' sole writer); this generator reads it and never seeds a row -- a row this file's
@@ -438,7 +514,10 @@ def _uv_lanes(g, tex_scale_offset_name, *, base_scroll_names, bump_scroll_names=
     """`TexScaleOffset` transform (shared by every UV-consuming slot on the material), then one
     independent `Panner` per lane it is asked for. `(0, 0)` scroll rates are an exact `Panner`
     no-op, so no static switch gates them (design doc "The animation and scroll lanes"). Returns
-    `(base_uv, bump_uv_or_None, tex_scale_offset_param)`."""
+    `(base_uv, bump_uv_or_None, tex_scale_offset_param, uv0)` -- `uv0` (M5 review fix) is the raw,
+    untransformed `TextureCoordinate` node, for a caller (`M_V2_TwoTexture`'s `BaseTexture2` layer)
+    whose own scale/offset vector must be independent of `TexScaleOffset`'s, not composed on top of
+    the already-scaled/panned `base_uv`."""
     uv0 = g.node(unreal.MaterialExpressionTextureCoordinate, -1900, 0)
     tex_scale_offset = g.node(unreal.MaterialExpressionVectorParameter, -1900, 200)
     tex_scale_offset.set_editor_property("parameter_name", tex_scale_offset_name)
@@ -463,16 +542,23 @@ def _uv_lanes(g, tex_scale_offset_name, *, base_scroll_names, bump_scroll_names=
 
     base_uv = _panner(base_scroll_names, 500)
     bump_uv = _panner(bump_scroll_names, 620) if bump_scroll_names else None
-    return base_uv, bump_uv, tex_scale_offset
+    return base_uv, bump_uv, tex_scale_offset, uv0
 
 
 def _sine_lane(g, *, min_name, max_name, period_name, offset_name, target_mask_name,
-               channel_mask_name, x=-1900, y=700):
+               channel_mask_name, x=-2900, y=700):
     """Shader-time sine modulation (design doc "The sine lane"), neutral by construction:
     `SineMin == SineMax == 1` and `SineTargetMask == (0,0,0,0)` by default make every apply() call
     an exact no-op. Returns a dict with the raw `SineValue` node and an `apply(node, node_out,
     target_channel, out_channels, x, y)` helper that gates `node`'s `out_channels` by
-    `lerp(1, SineValue, SineTargetMask.<target_channel> * SineChannelMask)`."""
+    `lerp(1, SineValue, SineTargetMask.<target_channel> * SineChannelMask)`.
+
+    `x` defaults to its own column (`-2900`, review fix), clear of `_class_lut_influenced`'s fixed
+    `-1900` column every master that also calls this lane places its class-LUT read at -- the two
+    used to land on top of each other in the material editor (this lane's own `one4`/`channel_mask`
+    nodes at `y+640..720` sat directly under `_class_lut_influenced`'s first row at its callers'
+    `y=1400`, close enough to visually overlap). Purely a node-graph layout fix; neither lane reads
+    the other's nodes."""
     sine_min = g.scalar(min_name, 1.0, x, y)
     sine_max = g.scalar(max_name, 1.0, x, y + 80)
     sine_period = g.scalar(period_name, 1.0, x, y + 160)
@@ -493,16 +579,34 @@ def _sine_lane(g, *, min_name, max_name, period_name, offset_name, target_mask_n
 
     target_mask = g.vec4(target_mask_name, (0.0, 0.0, 0.0, 0.0), x, y + 560)
     channel_mask = g.vec4(channel_mask_name, (1.0, 1.0, 1.0, 1.0), x, y + 640)
-    one4 = g.const4(1.0, 1.0, 1.0, 1.0, x, y + 720)
+    # H2 review fix: the identity side of the `Lerp` must match the *result* width the caller
+    # actually wants, not a blanket float4 -- `MaterialExpressionConstant4Vector`'s output is
+    # float4 (`MaterialExpressions.cpp`'s own `Constant4Vector` compile path), and lerping that
+    # against a float3 `Alpha` (`scaled`, below, for every vector target) makes the translator
+    # coerce `Alpha` down to its first component instead of masking per-channel -- `$color[1]`
+    # masks nothing, `$color[0]` modulates every channel, and the non-analytic path is a real HLSL
+    # type error. `one3` keeps the vector-target lerp float3-in/float3-out/float3-alpha throughout;
+    # `one` is the separate float1 identity for a scalar target (`Alpha` -- `out_channels == "r"`
+    # length 1), where every term of the lerp is a true 1-wide scalar instead.
+    one3 = g.const3(1.0, 1.0, 1.0, x, y + 720)
+    one = g.const(1.0, x, y + 800)
 
     def apply(node, node_out, target_channel, out_channels, ax, ay):
         # `target_mask` is a raw VectorParameter; its default output is RGB only, so reading its
         # `.w`/alpha component (the EnvMapTint target) needs the explicit "RGBA" output. Always
         # requesting it here is simplest and correct for every channel, not just the 4th.
         target_component = g.mask(target_mask, target_channel, ax, ay, src_out="RGBA")
+        if len(out_channels) == 1:
+            # Scalar target (`Alpha`): keep every lerp term float1 so `Alpha` and the result stay
+            # width-matched throughout -- a float3 `scaled` term into a float1 result is exactly
+            # the H2 defect the vector branch below fixes, just on the other side of the mismatch.
+            mask_component = g.mask(channel_mask, out_channels, ax + 220, ay + 40)
+            scaled = g.mul(mask_component, "", target_component, "", ax + 220, ay)
+            factor = g.lerp(one, "", sine_value, "", scaled, "", ax + 440, ay)
+            return g.mul(node, node_out, factor, "", ax + 880, ay)
         scaled = g.mul(channel_mask, "", target_component, "", ax + 220, ay)
-        factor4 = g.lerp(one4, "", sine_value, "", scaled, "", ax + 440, ay)
-        factor = g.mask(factor4, out_channels, ax + 660, ay)
+        factor3 = g.lerp(one3, "", sine_value, "", scaled, "", ax + 440, ay)
+        factor = g.mask(factor3, out_channels, ax + 660, ay)
         return g.mul(node, node_out, factor, "", ax + 880, ay)
 
     return {"value": sine_value, "apply": apply}
@@ -525,18 +629,29 @@ def _flipbook_sample(g, sample2d, frames_param_name, uv, rate_name, count_name, 
                      default_frames_texture, x, y, *, sampler):
     """The flipbook lane for one texture slot: a `Texture2DArray` `TextureObjectParameter` sampled
     at `Append(uv, SliceIndex)`, selected over the plain 2D sample by `use_switch_name`. Every
-    caller passes `sampler="linear"` -- both `BaseTextureFrames` and `NormalMapFrames` bind
-    `T_V2_DefaultFrames`, a non-sRGB `TC_Default` `Texture2DArray` (`_make_default_frames_array`),
-    and `TextureObjectParameter` never auto-derives a sampler type from the bound texture asset
-    (see `Graph.tex_object`'s docstring), unlike `tex`. A base-lane object explicitly typed
+    *base* caller passes `sampler="linear"` -- `BaseTextureFrames` binds `T_V2_DefaultFrames`, a
+    non-sRGB `TC_Default` `Texture2DArray` (`_make_default_frames_array`), and
+    `TextureObjectParameter` never auto-derives a sampler type from the bound texture asset (see
+    `Graph.tex_object`'s docstring), unlike `tex`. A base-lane object explicitly typed
     `SAMPLERTYPE_COLOR` against that non-sRGB source is a real compile error ("Sampler type is
     Color, should be Linear Color") on every `UseAnimatedFrames=true` permutation -- the one
     `recompile_material`'s own default-false compile never visits, which is why the all-switches
-    compile probe (`_probe_all_switches_true`) exists. Both switch branches are connected through
-    the explicit `"RGBA"` output: `sample2d` is a bare `TextureSampleParameter2D` and
-    `array_sample` a bare `TextureSample`, and both node types' *default* output is RGB only --
-    feeding the switch through it would silently drop alpha for everything downstream of the
-    returned node, including its own default output (see `Graph.switch`'s docstring)."""
+    compile probe (`_probe_all_switches_true`) exists.
+
+    Every *normal* caller (`NormalMapFrames`) passes `sampler="normal"` instead (H3 review fix):
+    `SAMPLERTYPE_NORMAL` is what makes `HLSLMaterialTranslator.cpp` emit `UnpackNormalMap` for this
+    sample at all (only for that sampler type, ~line 6951) -- sampled as `SAMPLERTYPE_LINEAR_COLOR`
+    like the base lane, the tangent-normal texel never left `[0,1]` and every animated normal
+    frame read as a washed-out, un-unpacked normal. `NormalMapFrames` binds its own default,
+    `T_V2_DefaultNormalFrames` (`_make_default_normal_frames_array`), a flat-normal-packed
+    `Texture2DArray` distinct from `T_V2_DefaultFrames` -- the base lane's all-white default would
+    unpack to `(1,1,1)`, not flat `(0,0,1)`, if it were ever bound to a `SAMPLERTYPE_NORMAL` object.
+
+    Both switch branches are connected through the explicit `"RGBA"` output: `sample2d` is a bare
+    `TextureSampleParameter2D` and `array_sample` a bare `TextureSample`, and both node types'
+    *default* output is RGB only -- feeding the switch through it would silently drop alpha for
+    everything downstream of the returned node, including its own default output (see
+    `Graph.switch`'s docstring)."""
     frames_object = g.tex_object(frames_param_name, x, y, default_frames_texture, sampler=sampler)
     slice_index = _flipbook_slice(g, rate_name, count_name, x, y + 160)
     array_uv = g.append(uv, "", slice_index, "", x + 220, y + 320)
@@ -656,14 +771,14 @@ Params = LitParams
 PARAM_TABLE = LIT_PARAM_TABLE
 
 
-def _build_lit(mat, collection, lut_texture, default_frames, *, translucent):
+def _build_lit(mat, collection, lut_texture, default_frames, default_normal_frames, *, translucent):
     """The shared M_V2_Lit / M_V2_LitTranslucent shading graph. `translucent` only changes how
     Opacity is wired (design doc: blend mode itself is a per-instance override, not a
     material-only property, so the two masters share every other pin)."""
     g = Graph(mat, collection=collection)
     P = LitParams
 
-    base_uv, bump_uv, _ = _uv_lanes(
+    base_uv, bump_uv, _, _ = _uv_lanes(
         g, P.Vectors.TexScaleOffset,
         base_scroll_names=(P.Scalars.BaseScrollRateU, P.Scalars.BaseScrollRateV),
         bump_scroll_names=(P.Scalars.BumpScrollRateU, P.Scalars.BumpScrollRateV))
@@ -720,7 +835,7 @@ def _build_lit(mat, collection, lut_texture, default_frames, *, translucent):
     normal_tex = _flipbook_sample(
         g, normal_tex_2d, P.Textures.NormalMapFrames, bump_uv,
         P.Scalars.NormalFrameRate, P.Scalars.NormalFrameCount,
-        P.Switches.UseAnimatedNormalFrames, default_frames, -1100, 260, sampler="linear")
+        P.Switches.UseAnimatedNormalFrames, default_normal_frames, -1100, 260, sampler="normal")
     normal_tex_rgb = g.mask(normal_tex, "rgb", -900, 60)
     normal_tex_a = g.mask(normal_tex, "a", -900, 140)
     envmapmask_tex = g.tex(P.Textures.EnvMapMask, -1100, 460, kind="mask",
@@ -886,6 +1001,7 @@ def _make_lit_master(name, *, translucent):
 
     _make_linear_white_mask(force=force)
     default_frames = _make_default_frames_array(force=force)
+    default_normal_frames = _make_default_normal_frames_array(force=force)
 
     mat, asset = _fresh(name, ism=True, nanite=True, skeletal=True, morph=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
@@ -898,7 +1014,8 @@ def _make_lit_master(name, *, translucent):
         mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
     mat.set_editor_property("two_sided", False)
 
-    _build_lit(mat, collection, lut_texture, default_frames, translucent=translucent)
+    _build_lit(mat, collection, lut_texture, default_frames, default_normal_frames,
+              translucent=translucent)
 
     errors = mel.recompile_material(mat)
     if errors:
@@ -981,7 +1098,7 @@ def _build_unlit(mat, collection, lut_texture, default_frames):
     g = Graph(mat, collection=collection)
     P = UnlitParams
 
-    base_uv, _, _ = _uv_lanes(
+    base_uv, _, _, _ = _uv_lanes(
         g, P.Vectors.TexScaleOffset,
         base_scroll_names=(P.Scalars.BaseScrollRateU, P.Scalars.BaseScrollRateV))
     sine = _sine_lane(
@@ -1071,8 +1188,11 @@ def _build_unlit(mat, collection, lut_texture, default_frames):
     opacity_with_vc = g.mul(opacity_base, "", vertex_color, "A", 2300, 80)
     opacity_final = g.switch(P.Switches.UseVertexAlpha, opacity_with_vc, opacity_base,
                              2500, 60, default=False)
-    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
-    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY_MASK)
+    # Minor review fix: the plain `g.to(opacity_final, ...)` pair used to land here, then get
+    # immediately overridden by the cloud-gated pair below on every master build (a dead double
+    # connect -- `MP_OPACITY`/`MP_OPACITY_MASK` end up wired to `opacity_with_cloud` regardless).
+    # `opacity_final` still feeds `opacity_with_cloud`'s `False` branch, so nothing about the
+    # result changes; only the redundant first connect is gone.
 
     # -- CloudAlphaTexture / CloudScale: $cloudalphatexture drives opacity, $cloudscale the UV
     # scale (design doc "The eight real unresolved families" -> cloud). Declared and sampled so
@@ -1082,7 +1202,15 @@ def _build_unlit(mat, collection, lut_texture, default_frames):
     cloud_tex = g.tex(P.Textures.CloudAlphaTexture, -1100, 1020, kind="mask",
                       default="%s/T_LinearWhiteMask" % PKG)
     connect(cloud_uv, "", cloud_tex, "UVs")
-    cloud_alpha = g.mask(cloud_tex, "r", -700, 1020)
+    # Minor review fix: the corpus's own two `cloud` sidecars (`import/textures/shadertest/
+    # cloudalpha*.provenance.json`) stage `$cloudalphatexture` as DXT5/BC3 -- a format chosen for
+    # its real per-pixel alpha, not for RGB -- and the name is "cloud**alpha**texture", not
+    # "cloudmasktexture": the payload this slot exists to carry is the texture's Alpha channel, not
+    # its Red. `.r` was never verified against either shipped unit and silently read the wrong
+    # channel. `TextureSampleParameter2D`'s default output is RGB-only (real-editor fact repeated
+    # throughout this file), so reading `.a` needs the explicit `"RGBA"` output, same as every
+    # other alpha read in this module.
+    cloud_alpha = g.mask(cloud_tex, "a", -700, 1020, src_out="RGBA")
     cloud_gated_opacity = g.mul(opacity_final, "", cloud_alpha, "", 2700, 60)
     opacity_with_cloud = g.switch(P.Switches.UseCloudAlpha, cloud_gated_opacity, opacity_final,
                                   2900, 40, default=False)
@@ -1118,7 +1246,19 @@ def make_unlit():
     _make_linear_white_mask(force=force)
     default_frames = _make_default_frames_array(force=force)
 
-    mat, asset = _fresh(name, ism=True, nanite=True, niagara_sprites=True)
+    # H4 review fix: the stage routes every model family with no master of its own (
+    # `vertexlitgeneric_dx6`, `eyeball`, `shadowmodel`, `camo`, `burnpeel`, `redvision`,
+    # `gooinglass` and the rest of `NO_MASTER_FAMILIES`, `importers/materials.py`) onto
+    # `M_V2_Unlit` -- several of those are character/prop model geometry, so this master needs
+    # `used_with_skeletal_mesh`/`used_with_morph_targets` the same as `M_V2_Lit`/`M_V2_Eyes`, not
+    # only the world/ISM flags it already carried. Checked read-only against `importers/
+    # materials.py`'s own routing (owned by another agent, not edited here): no `NO_MASTER_FAMILIES`
+    # or model-family unit routes to `M_V2_TwoTexture` (its own routing is `worldvertextransition`/
+    # `worldtwotextureblend` only), so that master does not need the same flags added.
+    # `used_with_niagara_sprites` is dropped -- `M_V2_Sprite` is the design's own Niagara-sprite
+    # master (doc "M_V2_Sprite" -> `used_with_instanced_static_meshes`), and nothing in the doc's
+    # usage-flag notes requires it on Unlit as well.
+    mat, asset = _fresh(name, ism=True, nanite=True, skeletal=True, morph=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
     mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
@@ -1189,7 +1329,7 @@ def _build_two_texture(mat, collection, lut_texture):
     g = Graph(mat, collection=collection)
     P = TwoTextureParams
 
-    base_uv, _, _ = _uv_lanes(
+    base_uv, _, _, uv0 = _uv_lanes(
         g, P.Vectors.TexScaleOffset,
         base_scroll_names=(P.Scalars.BaseScrollRateU, P.Scalars.BaseScrollRateV))
     sine = _sine_lane(
@@ -1197,14 +1337,18 @@ def _build_two_texture(mat, collection, lut_texture):
         period_name=P.Scalars.SinePeriod, offset_name=P.Scalars.SineTimeOffset,
         target_mask_name=P.Vectors.SineTargetMask, channel_mask_name=P.Vectors.SineChannelMask)
 
-    # BaseTexture2 rides its own TexScaleOffset-shaped transform (Texture2ScaleOffset), on the
-    # same scrolled UV lane -- worldvertextransition has one lightmap-alpha blend, not two
-    # independently scrolling layers.
-    tex2_scale_offset = g.vec4(P.Vectors.Texture2ScaleOffset, (1.0, 1.0, 0.0, 0.0), -1900, 260)
-    tex2_scale = g.mask(tex2_scale_offset, "rg", -1700, 220)
-    tex2_offset = g.mask(tex2_scale_offset, "ba", -1700, 320, src_out="RGBA")
-    base_uv2 = g.add(g.mul(base_uv, "", tex2_scale, "", -1500, 260), "", tex2_offset, "",
-                     -1300, 300)
+    # M5 review fix: BaseTexture2 rides its own TexScaleOffset-shaped transform
+    # (Texture2ScaleOffset), independent of TexScaleOffset -- derived from the raw, untransformed
+    # `uv0` (`_uv_lanes`'s 4th return), not composed on top of `base_uv` (which already carries
+    # TexScaleOffset's own scale/offset plus its scroll panner). Composing the two made layer 2's
+    # UV a function of layer 1's transform, contradicting the design doc's "two independent
+    # vectors" framing for `TexScaleOffset`/`Texture2ScaleOffset`. Laid out on its own row
+    # (`y=900`, review fix), clear of the UV lane's own scale/offset/panner nodes above it.
+    tex2_scale_offset = g.vec4(P.Vectors.Texture2ScaleOffset, (1.0, 1.0, 0.0, 0.0), -1900, 900)
+    tex2_scale = g.mask(tex2_scale_offset, "rg", -1700, 860)
+    tex2_offset = g.mask(tex2_scale_offset, "ba", -1700, 960, src_out="RGBA")
+    base_uv2 = g.add(g.mul(uv0, "", tex2_scale, "", -1500, 900), "", tex2_offset, "",
+                     -1300, 940)
 
     base_tex = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
     connect(base_uv, "", base_tex, "UVs")
@@ -1230,17 +1374,18 @@ def _build_two_texture(mat, collection, lut_texture):
     overbright_base = g.mul(vc_selected, "", overbright, "", 560, -360)
     g.to(overbright_base, "", unreal.MaterialProperty.MP_BASE_COLOR)
 
-    # -- Normal: one slot, shared by both layers (`UseBumpOnBaseTexture2` is declared per the
-    # exposed-parameter table but has no second slot to switch onto -- "the second layer is
-    # sampled through the same tangent normal as the first", design doc "M_V2_TwoTexture") ----
+    # -- Normal: one shared NormalMap slot, but which layer's UV feeds it is now real (minor
+    # review fix: `UseBumpOnBaseTexture2` used to be declared and never wired to anything --
+    # a no-op switch node with no consumer). `true`: sample through `base_uv2` (BaseTexture2's own
+    # transform); `false` (default): sample through `base_uv`, the prior unconditional behaviour.
+    normal_uv = g.switch(P.Switches.UseBumpOnBaseTexture2, base_uv2, base_uv, -1300, 0,
+                         default=False)
     normal_tex = g.tex(P.Textures.NormalMap, -1100, 60, kind="normal")
-    connect(base_uv, "", normal_tex, "UVs")
+    connect(normal_uv, "", normal_tex, "UVs")
     flat_normal = g.const3(0.0, 0.0, 1.0, -700, 140)
     normal_final = g.switch(P.Switches.UseNormalMap, g.mask(normal_tex, "rgb", -700, 60),
                             flat_normal, -500, 100, default=False)
     g.to(normal_final, "", unreal.MaterialProperty.MP_NORMAL)
-    g.switch(P.Switches.UseBumpOnBaseTexture2, g.const(1.0, -300, 60), g.const(0.0, -300, 140),
-            -100, 100, default=False)  # declared, not wired -- see the docstring above.
 
     # -- surface class lookup, unwired past declaration (this master's Specular/Roughness/
     # Metallic follow the same class-LUT-alone convention M_V2_Lit's non-$envmap branch already
@@ -1251,18 +1396,24 @@ def _build_two_texture(mat, collection, lut_texture):
     g.to(class_specular, "", unreal.MaterialProperty.MP_SPECULAR)
     g.to(class_metallic, "", unreal.MaterialProperty.MP_METALLIC)
 
-    # -- Opacity: Alpha + AlphaBias (x VertexColor.a under UseVertexAlpha) -- see the module
-    # docstring's doc-gap note #2 -----------------------------------------------------------
+    # -- Opacity / OpacityMask: Alpha + AlphaBias (x VertexColor.a under UseVertexAlpha), saturated
+    # -- see the module docstring's doc-gap note #2. M6 review fix: the unsaturated sum could push
+    # past `[0, 1]` (`AlphaBias` is an additive bias, not a fraction), and OpacityMask had no source
+    # at all -- a masked-override instance of this master clipped nothing regardless of Alpha. Both
+    # property sinks now read the same saturated term, the same pattern every other Unlit-shaded
+    # master in this file (Unlit/Sprite/Eyes) already uses for its own Opacity/OpacityMask pair. --
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
     alpha_bias = g.scalar(P.Scalars.AlphaBias, 0.0, 1700, 80)
     alpha_with_sine = sine["apply"](alpha_param, "", "r", "r", 1900, 0)
     alpha_biased = g.add(alpha_with_sine, "", alpha_bias, "", 2100, 40)
+    alpha_biased_sat = g.sat(alpha_biased, "", 2100, 120)
     # `VertexColor`'s outputs are all unnamed FNames -- connect straight to its own "A" output
     # (already 1-wide) rather than through a ComponentMask; see M_V2_Lit's Opacity section.
-    alpha_with_vc = g.mul(alpha_biased, "", vertex_color, "A", 2300, 100)
-    opacity_final = g.switch(P.Switches.UseVertexAlpha, alpha_with_vc, alpha_biased, 2500, 80,
+    alpha_with_vc = g.mul(alpha_biased_sat, "", vertex_color, "A", 2300, 100)
+    opacity_final = g.switch(P.Switches.UseVertexAlpha, alpha_with_vc, alpha_biased_sat, 2500, 80,
                              default=False)
     g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
+    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY_MASK)
 
 
 def make_two_texture():
@@ -1550,7 +1701,7 @@ WATER_PARAM_TABLE = {
 }
 
 
-def _build_water(mat, collection, lut_texture, default_frames):
+def _build_water(mat, collection, lut_texture, default_normal_frames):
     """`waterrefract.psh`/`waterreflect.psh` (design doc "M_V2_Water" post-lighting math) are both
     render-target passes over `_rt_WaterRefraction`/`_rt_WaterReflection`, and the design states
     both are **replaced**, not transcribed: Unreal `Refraction` (`RM_PIXEL_NORMAL_OFFSET`, the same
@@ -1664,7 +1815,7 @@ def _build_water(mat, collection, lut_texture, default_frames):
     normal_tex = _flipbook_sample(
         g, normal_tex_2d, P.Textures.NormalMapFrames, bump_uv,
         P.Scalars.NormalFrameRate, P.Scalars.NormalFrameCount,
-        P.Switches.UseAnimatedNormalFrames, default_frames, -1100, 340, sampler="linear")
+        P.Switches.UseAnimatedNormalFrames, default_normal_frames, -1100, 340, sampler="normal")
     flat_normal = g.const3(0.0, 0.0, 1.0, -700, 140)
     normal_lit = g.switch(P.Switches.UseNormalMap, g.mask(normal_tex, "rgb", -700, 260),
                           flat_normal, -500, 220, default=False)
@@ -1809,7 +1960,10 @@ def make_water():
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
-    default_frames = _make_default_frames_array(force=force)
+    # Water has no BaseTextureFrames slot at all -- only NormalMapFrames -- so its only default
+    # flipbook array is the normal one (H3 review fix: sampled `sampler="normal"`, so it needs the
+    # flat-normal-packed default, not the all-white `T_V2_DefaultFrames`).
+    default_normal_frames = _make_default_normal_frames_array(force=force)
 
     # BLEND_Modulate/Translucent surfaces are not Nanite-compatible -- this master
     # deliberately does not set used_with_nanite (review fix, matches M_V2_Decal's own
@@ -1824,7 +1978,7 @@ def make_water():
     mat.set_editor_property("refraction_method", unreal.RefractionMode.RM_PIXEL_NORMAL_OFFSET)
     mat.set_editor_property("two_sided", False)
 
-    _build_water(mat, collection, lut_texture, default_frames)
+    _build_water(mat, collection, lut_texture, default_normal_frames)
 
     errors = mel.recompile_material(mat)
     if errors:

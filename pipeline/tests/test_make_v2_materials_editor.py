@@ -90,6 +90,21 @@ class FakeMel:
         "MaterialExpressionVertexColor",
     ])
 
+    #: H2 review fix: output-width model for the node classes `_sine_lane`'s `Lerp` actually feeds.
+    _FIXED_WIDTH_CLASSES = {
+        "MaterialExpressionConstant": 1,
+        "MaterialExpressionScalarParameter": 1,
+        "MaterialExpressionConstant3Vector": 3,
+        "MaterialExpressionConstant4Vector": 4,
+    }
+    #: These four broadcast their (up to two) operands' width the ordinary HLSL way -- the widest
+    #: known operand, a scalar operand broadcasting into a wider one -- so a chain of them
+    #: propagates a known width through instead of going opaque at the first arithmetic node.
+    _BROADCAST_CLASSES = frozenset([
+        "MaterialExpressionMultiply", "MaterialExpressionAdd", "MaterialExpressionSubtract",
+        "MaterialExpressionDivide",
+    ])
+
     def __init__(self, editor):
         self.editor = editor
         self.connections = []
@@ -103,6 +118,37 @@ class FakeMel:
         mat.expressions.append(node)
         return node
 
+    def _output_width(self, node, out_name, _seen=None):
+        """Best-effort output width of `node`'s `out_name` output, `None` if not modeled. Direct
+        classes resolve immediately; `_BROADCAST_CLASSES` recurse into their own `A`/`B`/`""` input
+        connections (already recorded in `self.connections` by the time this runs, since a node's
+        inputs connect before it is handed downstream) so a width propagates through an ordinary
+        arithmetic chain instead of going opaque at the first `Multiply`/`Add`."""
+        _seen = _seen or frozenset()
+        if id(node) in _seen:
+            return None  # cycle guard; never expected in a DAG
+        cls_name = getattr(getattr(node, "cls", None), "__name__", "")
+        if cls_name in self._FIXED_WIDTH_CLASSES:
+            return self._FIXED_WIDTH_CLASSES[cls_name]
+        if cls_name in self._RGB_ONLY_DEFAULT_CLASSES:
+            if out_name == "RGBA":
+                return 4
+            if out_name in ("A", "a"):
+                return 1
+            return 3  # bare default output is RGB-only, real-editor fact (see the class above)
+        if cls_name == "MaterialExpressionComponentMask":
+            return sum(1 for ch in "rgba" if node.props.get(ch))
+        if cls_name in self._BROADCAST_CLASSES:
+            seen_with_self = _seen | {id(node)}
+            widths = [
+                self._output_width(src, src_out, seen_with_self)
+                for src, src_out, dst, dst_in in self.connections
+                if dst is node and dst_in in ("A", "B", "")
+            ]
+            widths = [w for w in widths if w is not None]
+            return max(widths) if widths else None
+        return None
+
     def connect_material_expressions(self, src, src_out, dst, dst_in):
         self.connections.append((src, src_out, dst, dst_in))
         if src is None or dst is None:
@@ -115,6 +161,22 @@ class FakeMel:
                 and dst_cls_name == "MaterialExpressionComponentMask"
                 and dst.props.get("a")):
             return False
+        # H2 review fix: `MaterialExpressionLinearInterpolate`'s `Alpha` must agree in width with
+        # its own `A` result side -- a modeled, non-scalar (>1-wide) `Alpha` that disagrees with a
+        # modeled, non-scalar `A` is exactly the `SineChannelMask`-truncated-to-`.r` defect the
+        # review found (`Constant4Vector` result / float3 alpha coerces the alpha to float1 instead
+        # of masking per-channel; `HLSLMaterialTranslator`'s lerp-alpha coercion, per the review). A
+        # true scalar (1-wide) `Alpha`/`A` is always legal (the ordinary "lerp two colours by one
+        # scalar" shape), so only a >1-wide vs >1-wide mismatch is refused.
+        if dst_cls_name == "MaterialExpressionLinearInterpolate" and dst_in in ("A", "Alpha"):
+            width = self._output_width(src, src_out)
+            widths = dst.props.setdefault("_lerp_widths", {})
+            if width is not None:
+                widths[dst_in] = width
+            a_width, alpha_width = widths.get("A"), widths.get("Alpha")
+            if (a_width is not None and alpha_width is not None
+                    and a_width > 1 and alpha_width > 1 and a_width != alpha_width):
+                return False
         return True
 
     def connect_material_property(self, src, src_out, prop):
@@ -289,7 +351,8 @@ def _fake_unreal(editor):
             "SAMPLERTYPE", "SAMPLERTYPE_COLOR", "SAMPLERTYPE_MASKS", "SAMPLERTYPE_NORMAL",
             "SAMPLERTYPE_LINEAR_COLOR"),
         TextureMipValueMode=_enum("TMVM", "TMVM_MIP_LEVEL"),
-        TextureCompressionSettings=_enum("TC", "TC_MASKS", "TC_VECTOR_DISPLACEMENTMAP", "TC_DEFAULT"),
+        TextureCompressionSettings=_enum(
+            "TC", "TC_MASKS", "TC_VECTOR_DISPLACEMENTMAP", "TC_DEFAULT", "TC_NORMALMAP"),
         TextureMipGenSettings=_enum("TMGS", "TMGS_NO_MIPMAPS"),
         TextureFilter=_enum("TF", "TF_NEAREST"),
         TextureAddress=_enum("TA", "TA_CLAMP"),
@@ -402,11 +465,82 @@ def test_a_fresh_run_authors_all_compiling_masters(tmp_path, monkeypatch):
 def test_mask_width_bug_is_caught_offline():
     """Regression guard for the review that found `M_V2_Lit` did not actually compile: masking the
     alpha channel off a bare `VectorParameter`/`TextureSample`(`Parameter`)/`VertexColor` node's
-    default output is refused by `FakeMel` the same way the real editor's compile refuses it (see
-    `FakeMel.connect_material_expressions`'s docstring). If a future edit reintroduces that
-    pattern, `test_a_fresh_run_authors_all_compiling_masters` raises `SystemExit` from
-    `matgraph.connect`'s refused-pin contract instead of silently producing a broken graph -- this
-    test only documents why, since the mechanism is exercised by that test, not by a call here."""
+    default output, and lerping a wide (`>1`) result against a differently-wide, non-scalar `Alpha`
+    (the H2 `SineChannelMask`-truncated-to-`.r` defect), are both refused directly by `FakeMel` --
+    not just exercised indirectly through `test_a_fresh_run_authors_all_compiling_masters` (which
+    would raise `SystemExit` from `matgraph.connect`'s refused-pin contract if either pattern were
+    reintroduced, since neither is present in the graph any master actually builds today)."""
+    editor = FakeEditor()
+    mel = editor.mel
+
+    vector_param = FakeNode(type("MaterialExpressionVectorParameter", (), {}), 0, 0)
+    full_mask = FakeNode(type("MaterialExpressionComponentMask", (), {}), 0, 0)
+    full_mask.props.update(r=True, g=True, b=True, a=True)
+    assert mel.connect_material_expressions(vector_param, "", full_mask, "") is False
+    rgb_mask = FakeNode(type("MaterialExpressionComponentMask", (), {}), 0, 0)
+    rgb_mask.props.update(r=True, g=True, b=True, a=False)
+    assert mel.connect_material_expressions(vector_param, "", rgb_mask, "") is True
+
+    result4 = FakeNode(type("MaterialExpressionConstant4Vector", (), {}), 0, 0)
+    alpha3 = FakeNode(type("MaterialExpressionConstant3Vector", (), {}), 0, 0)
+    lerp_mismatched = FakeNode(type("MaterialExpressionLinearInterpolate", (), {}), 0, 0)
+    assert mel.connect_material_expressions(result4, "", lerp_mismatched, "A") is True
+    assert mel.connect_material_expressions(alpha3, "", lerp_mismatched, "Alpha") is False
+
+    result3 = FakeNode(type("MaterialExpressionConstant3Vector", (), {}), 0, 0)
+    lerp_matched = FakeNode(type("MaterialExpressionLinearInterpolate", (), {}), 0, 0)
+    assert mel.connect_material_expressions(result3, "", lerp_matched, "A") is True
+    assert mel.connect_material_expressions(alpha3, "", lerp_matched, "Alpha") is True
+
+    scalar_alpha = FakeNode(type("MaterialExpressionScalarParameter", (), {}), 0, 0)
+    lerp_scalar_alpha = FakeNode(type("MaterialExpressionLinearInterpolate", (), {}), 0, 0)
+    assert mel.connect_material_expressions(result4, "", lerp_scalar_alpha, "A") is True
+    assert mel.connect_material_expressions(scalar_alpha, "", lerp_scalar_alpha, "Alpha") is True
+
+
+def test_sine_lane_lerp_widths_agree_for_every_apply_call_site(tmp_path, monkeypatch):
+    """H2 regression: loading every master under `FakeMel`'s lerp-width guard (above) already
+    proves no `_sine_lane.apply` call site reintroduces the `SineChannelMask`-truncated-to-`.r`
+    shape -- a mismatched `Lerp` would refuse the connection, `matgraph.connect` would raise
+    `SystemExit`, and `_load` below would propagate it instead of returning a module. This test
+    names that guarantee explicitly rather than leaving it implicit in
+    `test_a_fresh_run_authors_all_compiling_masters`."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)  # raises if any sine-lane Lerp width mismatches
+
+
+def test_param_tables_are_pinned_against_the_stages_exposed_params(tmp_path, monkeypatch):
+    """M7 review fix: this generator's own `*_PARAM_TABLE`s (the binding contract's Python-side
+    half) were never checked against `EXPOSED_PARAMS` (`elysium_pipeline.importers.materials`, the
+    stage's own half) -- only `ElysiumV2MaterialTests.cpp`'s `Elysium.Policy.V2MasterParams` checks
+    the *compiled* graph against `ElysiumSurfaceParams.h`, and nothing offline checked the two
+    Python sides agree with each other before it. A name or kind drifting between them is exactly
+    the silent-stage-failure `importers/materials.py`'s own "No silent drop" module-docstring rule
+    exists to prevent -- this pins it so a drift fails a fast, editor-free pytest run instead."""
+    editor = FakeEditor()
+    module = _load(editor, tmp_path, monkeypatch)
+    from elysium_pipeline.importers import materials as importer
+
+    kind_by_category = {"textures": "T", "scalars": "S", "vectors": "V", "switches": "#"}
+    table_by_master = {
+        "M_V2_Lit": module.LIT_PARAM_TABLE,
+        "M_V2_LitTranslucent": module.LIT_PARAM_TABLE,
+        "M_V2_Unlit": module.UNLIT_PARAM_TABLE,
+        "M_V2_TwoTexture": module.TWOTEXTURE_PARAM_TABLE,
+        "M_V2_Eyes": module.EYES_PARAM_TABLE,
+        "M_V2_Water": module.WATER_PARAM_TABLE,
+        "M_V2_Sprite": module.SPRITE_PARAM_TABLE,
+        "M_V2_Refract": module.REFRACT_PARAM_TABLE,
+        "M_V2_Decal": module.DECAL_PARAM_TABLE,
+    }
+    assert set(table_by_master) == set(importer.EXPOSED_PARAMS)
+    for master, table in table_by_master.items():
+        generator_kinds = {
+            name: kind
+            for category, kind in kind_by_category.items()
+            for name in table[category]
+        }
+        assert generator_kinds == importer.EXPOSED_PARAMS[master], master
 
 
 def test_declared_parameters_all_land_on_the_graph(tmp_path, monkeypatch):

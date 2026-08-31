@@ -576,13 +576,25 @@ the texture lane whenever the referenced unit's own `frames` exceeds 1), and `Fr
 default `1.0`. `UseAnimatedFrames`/`UseAnimatedNormalFrames` are only set `true` when that binding
 actually resolves; when the animated texture never staged as an array (unresolved dependency, or
 `frames <= 1`), the switch stays off rather than sampling `T_V2_DefaultFrames` and the unit's
-provenance names the gap (`animatedFramesArrayUnavailable`). Both flipbook object slots
-(`TextureObjectParameter`) sample through `SAMPLERTYPE_LINEAR_COLOR`, matching
-`T_V2_DefaultFrames`'s own non-sRGB `TC_Default` compression — a `SAMPLERTYPE_COLOR` object bound
-to that texture is a real compile error on every `UseAnimatedFrames=true` permutation, one the
-default-false compile `mel.recompile_material` runs never visits (see "Ordering, concurrency,
-tests, risks" -> the all-switches-true compile probe, `pipeline/unreal/make_v2_materials.py`'s
-`_probe_all_switches_true`).
+provenance names the gap (`animatedFramesArrayUnavailable`). `BaseTextureFrames` samples through
+`SAMPLERTYPE_LINEAR_COLOR`, matching `T_V2_DefaultFrames`'s own non-sRGB `TC_Default` compression
+— a `SAMPLERTYPE_COLOR` object bound to that texture is a real compile error on every
+`UseAnimatedFrames=true` permutation, one the default-false compile `mel.recompile_material` runs
+never visits (see "Ordering, concurrency, tests, risks" -> the all-switches-true compile probe,
+`pipeline/unreal/make_v2_materials.py`'s `_probe_all_switches_true`).
+
+**`NormalMapFrames` samples through `SAMPLERTYPE_NORMAL` instead** (H3 review fix, corrected from
+an earlier draft of this section that had it on `SAMPLERTYPE_LINEAR_COLOR` like the base lane):
+`HLSLMaterialTranslator.cpp` only emits `UnpackNormalMap` (`2*x - 1`) for a `SAMPLERTYPE_Normal`
+sample (~line 6951) — sampled linear, an animated normal frame's packed tangent normal never left
+`[0,1]`, so `UseAnimatedNormalFrames=true` silently shipped a washed-out, un-unpacked normal on
+every unit that set it. `NormalMapFrames` therefore binds its own default array,
+`T_V2_DefaultNormalFrames` (`_make_default_normal_frames_array`, authored beside
+`T_V2_DefaultFrames`/`T_LinearWhiteMask`) — a `Texture2DArray` packed `(128, 128, 255, 255)`, the
+same flat-normal byte triple `/Engine/EngineMaterials/DefaultNormal` itself carries, with
+`TC_Normalmap` compression — rather than a second binding of the all-white `T_V2_DefaultFrames`:
+unpacked, all-white decodes to `(1, 1, 1)`, not the flat `(0, 0, 1)` a "no perturbation" default
+must produce.
 
 **The sine lane**, shared by every master that hosts a `sine` proxy, needs no static switch because
 it is **neutral by construction** — at the defaults every factor below is exactly `1`:
@@ -666,6 +678,17 @@ Static switches: `UseBaseTexture` `true`; `UseVertexColor`, `UseVertexAlpha`, `U
 `UseEnvMapMask`, `UseBaseAlphaEnvMapMask`, `UseFixedCube`, `MetallicTint`, `UseAnimatedFrames`,
 `UseCloudAlpha` — all `false`. `$selfillum` on an unlit surface (9 units) is meaningless — the
 surface is already pure emissive — and is recorded as an anomaly, not a switch.
+
+**Usage flags** (H4 review fix, corrected from an earlier draft that carried only the world/ISM
+flags): `used_with_instanced_static_meshes`, `used_with_nanite`, `used_with_skeletal_mesh` and
+`used_with_morph_targets`. The last two were missing — the stage routes every model family with no
+master of its own onto this one (`vertexlitgeneric_dx6`, `eyeball`, `shadowmodel`, `camo`,
+`burnpeel`, `redvision`, `gooinglass` and the rest of `importers/materials.py`'s
+`NO_MASTER_FAMILIES`, "No master, provenance only" above), several of which are character/prop
+model geometry, so without them UE compiles no skeletal-mesh permutation and those primitives fall
+back to the default grey material in a packaged build. `used_with_niagara_sprites` is dropped —
+checked read-only against `importers/materials.py`'s own routing, no `NO_MASTER_FAMILIES` or
+model-family unit lands on `M_V2_TwoTexture` either, so that master needs neither addition.
 
 ##### `M_V2_Eyes`
 
@@ -824,8 +847,24 @@ completeness with the other eight masters), simply with nothing downstream of it
 | the base-scroll and sine lanes | | | | `Texture2ScaleOffset` | `(1, 1, 0, 0)` | `$tex2scale` (4, **scalar**) and `$texture2scale` (1, **scalar** `10.0`) → `.xy`; `$tex2offset` (4, **vector**) → `.zw`. The proxy component targets land here too: `$tex2offset[1]` → `.w`, `$texture2offset[0]` → `.z`, `$texture2transform` → the whole vector |
 
 Static switches: `UseBaseTexture2` (`false`), `UseNormalMap` (`false`), **`UseBumpOnBaseTexture2`**
-(`false` — `$bumpbasetexture2withbumpmap`, 4 units: the second layer is sampled through the same
-tangent normal as the first), `UseVertexColor` (`false`), `UseVertexAlpha` (`false`).
+(`false` — `$bumpbasetexture2withbumpmap`, 4 units, now wired: `true` samples the shared `NormalMap`
+through `BaseTexture2`'s own UV [`Texture2ScaleOffset` on the raw, untransformed coordinate — see
+below], `false` keeps sampling it through `BaseTexture`'s; M6 review fix, corrected from an earlier
+draft that declared the switch and never connected it to anything), `UseVertexColor` (`false`),
+`UseVertexAlpha` (`false`).
+
+**`Texture2ScaleOffset` is independent of `TexScaleOffset`, not composed on top of it** (M5 review
+fix, corrected from an earlier draft that derived `BaseTexture2`'s UV from `TexScaleOffset`'s own
+already-scaled/panned `base_uv`): both apply to the same raw, untransformed texture coordinate, so
+scaling or offsetting one layer never drags the other's transform along with it, matching this
+table's own framing of the two as independent vectors.
+
+**`Opacity`/`OpacityMask` are saturated and share one source** (M6 review fix, corrected from an
+earlier draft that left `Alpha + AlphaBias` unsaturated and wired no `MP_OPACITY_MASK` source at
+all — a masked-override instance of this master clipped nothing regardless of `Alpha`): both
+property sinks now read `saturate(Alpha + AlphaBias)` (times `VertexColor.a` under
+`UseVertexAlpha`), the same shared-Opacity/OpacityMask-term pattern `M_V2_Unlit`/`M_V2_Sprite`/
+`M_V2_Eyes` already use for their own Unlit-shaded outputs.
 
 `$j_basescale` (4, integer `2`) is a `add`-proxy operand, not a shader value; it stays a proxy
 scratch register. `$detail` on the one `worldtwotextureblend` unit is provenance only (see
@@ -1619,3 +1658,63 @@ version, the master, and the resolved parameter set, so a unit whose GLB changes
 and fails the unit — not the run — when a parameter name it sets does not exist on the master.
 The first run is the full corpus; failures are isolated, named with their reason, counted in
 `import_report.json`, and the command exits non-zero when any unit failed.
+
+**A master rebuild orphans its `MI_` children in-session** (M8 review fix, `_fresh`'s own
+docstring in `make_v2_materials.py`): `_fresh` deletes and recreates the `UMaterial` asset at each
+master's path, and the editor session's already-loaded `MI_` instances do not automatically
+re-resolve against the fresh object underneath the same path. `uv run elysium import materials`
+must therefore re-run after any `make_v2_materials.py` rebuild to re-parent them — and
+`build_content.py` (which runs the masters generator) must never share a process with
+`import_materials.py` (which parents the `MI_`s) for exactly that reason, the same
+never-share-a-process rule the concurrency note above already states for two agents' own editor
+launches.
+
+**The recipe states the full instance, not the parameters alone (review finding 2/4).** Two
+findings surfaced against the first full run: `bake_lib.make_material_instance`'s
+`clear_all_material_instance_parameters` on a reused asset clears non-static parameters only — a
+static switch, a base-property override or a `PhysMaterial` set by an earlier recipe survives a
+later run that no longer wants it, unless the entry states its *whole* decision every time, not
+only what changed. So every entry now carries:
+
+- **`switches` is full state, not "what turned on".** `allSwitches` (also mirrored into
+  `recipe.params.allSwitches`) is the sorted list of every static-switch name the entry's master
+  exposes (empty for a patched instance, which has no master and no switch of its own); `switches`
+  states `True`/`False` for every one of those names, so the editor phase's per-switch
+  `set_material_instance_static_switch_parameter_value` call always runs, never merely for the
+  names a rule happened to set.
+- **`basePropertyOverrides` always carries `blendMode`/`twoSided`/`opacityMaskClipValue`.**
+  `twoSided` is always a real bool (never omitted); `opacityMaskClipValue` is the clip value only
+  on a `Masked` blend, `null` otherwise. The editor phase reads absence-vs-presence the same way
+  either side of the pair: `override_two_sided`/`override_opacity_mask_clip_value` are set
+  `True`-with-a-value or explicitly `False` every entry, never left at whatever the asset already
+  carried. A patched instance's `basePropertyOverrides` is `{}` (it authors no blend/two-sided/clip
+  decision of its own), which clears all three explicitly too.
+- **`physMaterial` is always applied, `None` clears it.** The editor phase always calls
+  `mic.set_editor_property("phys_material", ...)`, with the loaded asset or `None`.
+- **`recipe` covers the sidecar and the physical material, not only the bound parameters.**
+  `recipe.physMaterial` mirrors the entry's `physMaterial`, and `recipe.provenanceSha256` is a
+  sha256 of the exact bytes the provenance sidecar is written as. Any change to what the instance
+  or its provenance carries — a corrected anomaly, an added omission row, a `physMaterial` no
+  longer wanted, a switch that no longer turns on — changes this hash and re-imports the entry, so
+  a `settingsVersion` bump is the coarse, whole-corpus lever and the recipe hash is the fine one;
+  either covers a given change, and a change belongs to whichever one is cheaper to state.
+
+**A `textureClassMismatch` on a required slot is a stage failure, not only an anomaly (review
+finding 5).** `REQUIRED_TEXTURE_SLOTS` names `BaseTexture` as required on every one of the nine
+masters — the one slot with no other colour source — so a unit whose only `$basetexture` resolved
+to a texture that staged as the wrong class (typically an `$envmapsphere`/flipbook texture that
+landed as a `TextureCube`/`Texture2DArray` where a plain `Texture2D` is wanted) fails the unit
+loudly instead of authoring an instance with a silently-white `BaseTexture`. The same mismatch on
+an optional slot (`EnvMap`, `EnvMapMask`, `NormalMap`, …) stays a recorded anomaly and the unit
+still stages. `StageResult.summary()` and `import_report.json` both roll every anomaly/omission up
+by `kind`, so `textureClassMismatch=N`/`animatedFramesArrayUnavailable=N`/etc. are visible without
+walking every provenance sidecar by hand.
+
+**A patched instance's `ElysiumMaster` registry tag is the root master, not empty (review finding
+7).** A patched unit's own provenance carries no master of its own (its parent is another `MI_`,
+never a `M_V2_*` asset), so its `master` field used to serialize as `null` and the
+`ElysiumMaster` tag stamped empty, dropping every one of the corpus's 7,499 patched instances out
+of a Content Browser filter on that tag. `stage_materials` now walks a patched entry's `parent`
+chain, inside the same run, to the non-patched base unit and writes *that* unit's own master onto
+the patched provenance's `master` field before the sidecar is written, so the tag covers every
+instance.
