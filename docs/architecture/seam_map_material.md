@@ -357,6 +357,13 @@ no separate "Additive" master, and why `M_V2_Lit` covers opaque and masked alike
 | `M_V2_Decal` | Unlit | Modulate | off | `decalmodulate` | 38 |
 | `M_V2_TwoTexture` | Default Lit | Opaque | off | `unlittwotexture`, `worldvertextransition`, `worldtwotextureblend` | 95 |
 
+The **Default blend** column is the master asset's own property, not a prediction about its
+instances: every instance sets its own from the table below. It matters only for an instance the
+table leaves alone, so each master carries the cheapest mode its family admits. `M_V2_Unlit` is the
+one worth calling out — 1,381 of its 1,865 instances override to Translucent (1,150), Additive
+(204) or Masked (27), and the master still ships Opaque, because the 484 that do not override are
+the ones that should pay nothing.
+
 11,544 of 11,624 units take a master. The remaining **80** are debug and tool families listed at
 the end of this section as "no master, provenance only".
 
@@ -537,13 +544,13 @@ Four parameters are on **every** master and are not repeated in the tables below
 |---|---|---|---|
 | `BaseScrollRateU`, `BaseScrollRateV` | S | `0.0` | `Panner(Speed = Append(U, V))` on the base-texture UV. `0,0` is an exact no-op, so no switch |
 | `BumpScrollRateU`, `BumpScrollRateV` | S | `0.0` | the same `Panner` on the normal/DuDv UV — an **independent** UV chain |
-| `FrameRate`, `FrameCount` | S | `0.0`, `1.0` | base flipbook: `SliceIndex = floor(frac((Time + SineTimeOffset·0) · FrameRate) · FrameCount)` |
+| `FrameRate`, `FrameCount` | S | `0.0`, `1.0` | base flipbook: `SliceIndex = floor(frac(Time * FrameRate) * FrameCount)`; `animationnowrap` (1 unit) clamps instead of wrapping |
 | `BaseTextureFrames` | T (`TextureObjectParameter`, `Texture2DArray`) | `T_V2_DefaultFrames` (one white slice, authored by `make_v2_materials.py` beside `T_LinearWhiteMask`) | sampled by a `TextureSample` with the slice index above |
 | `UseAnimatedFrames` | # | `false` | selects the array sample over `BaseTexture` |
 | `NormalFrameRate`, `NormalFrameCount`, `NormalMapFrames`, `UseAnimatedNormalFrames` | S/S/T/# | `0.0`, `1.0`, `T_V2_DefaultFrames`, `false` | the same three nodes on the normal/DuDv lane |
 
 A flipbook needs an *array-typed* slot, so it is a second parameter rather than a mode on the 2D
-slot; `UseAnimatedFrames` is the only thing that decides which of the two is sampled. All 71
+slot; `UseAnimatedFrames` is the only thing that decides which of the two is sampled. All 72
 `animatedtexture` materials drive exactly one lane (measured: no material animates both), and the
 two lanes are separate because 12 materials scroll base UVs and normal UVs at different rates.
 
@@ -677,8 +684,8 @@ provenance material reference, exactly like `$crackmaterial` and `$modelmaterial
 | `TexScaleOffset` | `(1, 1, 0, 0)` | `$scale` (20 units) → `.xy`; `$bumpoffset` (13) → `.zw`, and it is also the `texturescroll` target |
 
 Static switches: `CheapWater` (`$forcecheap`, 2 units), `UseFogEnable` (`$fogenable`, 23),
-`UseEnvMap`, `UseFixedCube`, `UseBaseTexture`, `UseAnimatedNormalFrames`, `UseNormalMap` — all
-`false` except none. Two water keys are **housed outside the material**: `$bumpframe` (20) is the
+`UseEnvMap`, `UseFixedCube`, `UseBaseTexture`, `UseAnimatedNormalFrames`, `UseNormalMap` — every
+one of them defaulting `false`. Two water keys are **housed outside the material**: `$bumpframe` (20) is the
 `animatedtexture` proxy's frame-number variable and becomes the flipbook slice index rather than a
 parameter of its own, and `$subdivsize` (13, values 64 and 16) is Source's water-surface
 tessellation size — geometry, owned by the map lane, provenance only here.
@@ -1227,7 +1234,8 @@ uses are resolved by master choice rather than by a property — see "Master inv
 *(provisional owner call)*.
 
 **Master choice, patched units only (1).** `include` — the 230th key, authored by every one of the
-7,501 patched map units and by none of the 11,624 install units. It names the base material, which
+7,499 **patched** map units, by neither of the 2 standalone `maps/sm_tattoo/…` units, and by none
+of the 11,624 install units. It names the base material, which
 is the patched instance's parent; it never becomes a material parameter.
 
 **Physical material and class index (1).** `$surfaceprop` 4605, plus the derived top-directory and
@@ -1326,13 +1334,21 @@ writes, `srcvar1`/`srcvar2` name what it reads, and a chain is expressible in a 
 when every link's inputs are literals or other shader-time proxies **in the same material** and the
 final `resultvar` is a parameter the master exposes.
 
+**`resultvar` values are matched case-insensitively.** VMT keys are case-insensitive and the corpus
+proves it: the 116 `sine` `resultvar` rows spell their targets 18 distinct ways raw, **15**
+case-folded (`$selfIllumTint`, `$ALPHA`, `$COLOR` and `$Alpha` fold onto four of the others) and 9
+once the `[i]` component suffix is also collapsed. **The normalisation this design uses everywhere
+is case-folded with the index preserved — 15 —** because the index is meaning (`$color[1]` writes
+one channel) and the case is not. The stage lower-cases the value, splits a trailing `[i]`, and
+resolves the remainder against the parameter table.
+
 | Proxy | Mats | Inst | Destination | Keys it reads | Notes |
 |---|---|---|---|---|---|
-| `sine` | 87 | 114 | shader-time: `Time` → `Sine` | `sinemin`, `sinemax`, `sineperiod`, `timeoffset`, `resultvar` | 37 distinct `resultvar` targets, led by `$alpha` 28, `$selfillumtint` 21, `$color[i]` 22, `$envmaptint[i]`. A `[i]` component target writes one channel of the vector parameter. A target of `$temp1`/`$temp2` is a chain link, not an output |
+| `sine` | 87 | 114 | shader-time: the sine lane | `sinemin`, `sinemax`, `sineperiod`, `timeoffset`, `resultvar` | **15** distinct case-folded `resultvar` targets over 116 rows: `$alpha` 35, `$color[*]` 31, `$selfillumtint[*]` 25, `$envmaptint[*]` 10, `$temp*` 7, `$detailscale` 2, `$tempvec[1]` 1. A `[i]` component target writes one channel, through `SineChannelMask`; `$temp*`/`$tempvec` are chain links, not outputs; `$detailscale` is provenance-only, so those two rows emit nothing and record `proxyTargetProvenanceOnly` |
 | `animatedtexture` | 72 | 72 | shader-time: frame index | `animatedtexturevar`, `animatedtextureframenumvar`, `animatedtextureframerate`, `animationnowrap` | `animatedtexturevar` is `$basetexture` / `$bumpmap` / `$normalmap` and `animatedtextureframenumvar` is `$frame` or `$bumpframe` — `$frame` is never declared as a VMT key, so the stage creates the scalar. The slot binds the slice-2 `TA_` array asset and `FrameRate` drives the slice index; `animationnowrap` (1) clamps instead of wrapping |
-| `texturescroll` | 48 | 55 | shader-time: `Panner` | `texturescrollvar`, `texturescrollrate`, `texturescrollangle` | the stage precomputes `ScrollRateU = rate·cos θ`, `ScrollRateV = rate·sin θ`, so the master needs no trig |
-| `texturetransform` | 12 | 16 | shader-time **when its inputs are** | `resultvar`, `translatevar`, `rotatevar` | writes `$basetexturetransform` (12) or `$texture2transform` (4) from another proxy's output. Expressible only when `translatevar`/`rotatevar` resolve to a shader-time source; otherwise runtime |
-| `linearramp` | 5 | 5 | shader-time: `Time × rate` | `rate`, `resultvar` | targets `$tex2offset[1]` / `$texture2offset[1]` — a scrolling second layer |
+| `texturescroll` | 48 | 55 | shader-time: `Panner`, on one of **two** independent lanes | `texturescrollvar`, `texturescrollrate`, `texturescrollangle` | the stage precomputes `rate·cos θ` and `rate·sin θ`, so the master needs no trig. The lane comes from `texturescrollvar`: `$basetexturetransform` 17 and `$basetextureoffset` 3 → **`BaseScrollRateU/V`**; `$bumpoffset` 23 and `$bumptransform` 12 → **`BumpScrollRateU/V`**. 12 materials scroll both lanes at different rates, which is why they are two parameters and not one. Two proxies on the same lane (6 materials) **sum** their rates — exact, since two translations of one UV are one panner |
+| `texturetransform` | 12 | 16 | shader-time **when its inputs are** | `resultvar`, `translatevar`, `rotatevar` | writes `$basetexturetransform` (12) → `TexScaleOffset` or `$texture2transform` (4) → `Texture2ScaleOffset`, from another proxy's output; `translatevar` names `$texoffset` 4, `$tex2offset` 4, `$temp` 4, `$translate` 1, `$tempvec` 1 and `rotatevar` names `$temp` 2. Expressible only when `translatevar`/`rotatevar` resolve to a shader-time source; otherwise runtime |
+| `linearramp` | 5 | 5 | shader-time: `Time × rate` | `rate`, `resultvar` | targets `$tex2offset[1]` (4) and `$texture2offset[1]` (1) — both `Texture2ScaleOffset.w`, a scrolling second layer |
 | `add` | 7 | 7 | shader-time arithmetic | `srcvar1`, `srcvar2`, `resultvar` | |
 | `subtract` | 14 | 18 | shader-time arithmetic | `srcvar1`, `srcvar2`, `resultvar` | |
 | `multiply` | 2 | 3 | shader-time arithmetic | `srcvar1`, `srcvar2`, `resultvar` | |
@@ -1382,7 +1398,8 @@ packaged game reads it), attached the way `UElysiumTextureProvenance` is (SF-4.2
 | `Blocks[]` (`Name`, `SourceName`, `Path`, `Parent`) | `blocks` |
 | `Proxies[]` (`Name`, `SourceName`, `ParameterIndices`, `Destination`) | `proxies` plus the proxy table's destination |
 | `ResolvedFamily`, `ResolvedPrograms[]` (`PixelShader`, `VertexShader`, `Condition`, `DrawPass`), `ResolutionInputs[]`, `ResolutionReason` | `shaderResolution` |
-| `Master`, `BlendMode`, `TwoSided`, `SurfaceClass`, `SurfaceClassIndex` | this lane's decisions |
+| `Master`, `BlendMode`, `TwoSided`, `SurfaceClass` (the class **name**), `SurfaceClassIndex` (the row's fixed `Index`), `SurfaceClassSource` (`surfaceprop`/`topdir`/`familyDefault`), `PhysMaterialFallback` | this lane's decisions |
+| `IsDecalSurface`, `IgnoreZ`, `SpriteOrigin`, `SpriteOrientation`, `MinLight`, `MaxLight`, `WetnessScale`, `SubdivSize`, `Curve` | keys with a home outside the material — the placement, map and runtime-factory lanes read them here |
 | `EnvMapSymbol`, `EnvMapAssetId`, `EnvMapProbePath` | `$envmap` and the reflection contract; the probe path is a soft path, never a bound parameter |
 | `TextureBindings[]` (`Parameter`, `Value`, `Kind`, `Asset`, `Resolved`, `UsedLinearTwin`) | `textureBindings` plus the twin choice |
 | `Dependencies[]` (`Role`, `Parameter`, `Asset`, `Resolved`) | `dependencies` |
@@ -1406,16 +1423,19 @@ Python or C++ literal (`seam_migration.md`, "Calibration happens on knobs inside
 |---|---|---|---|
 | `DefaultSpecular`, `DefaultRoughness`, `DefaultMetallic` | settings scalar | `UElysiumSurfaceSettings` → `MPC_ElysiumSurfaces` | every master, for non-`$envmap` surfaces |
 | `MaskRoughnessMin`, `MaskRoughnessMax`, `MaskSpecularScale` | settings scalar | same | the mask term of the reflection contract |
+| `MaskMetallicMax` | settings scalar | same | the chromatic branch's `Metallic = mask * MaskMetallicMax` |
+| `ChromaticTintStrength` | settings scalar | same | how far the chromatic branch tints Base Color; `0` disables the metal hypothesis without a re-import |
+| `ChromaThreshold` | settings scalar, default **0.02** | same, and read **by the stage from the ini** | the grey/chromatic split of `$envmaptint`; never a literal in the stage |
 | `EnvTintScale` | settings scalar | same | the grey-tint specular scale |
 | `FixedCubeStrength` | settings scalar | same | the 342 authored-cube instances |
-| `Overbright` | settings scalar | same | `mul_x2 c0` in every lit program |
-| `DecalDepthOffset` | settings scalar | same | `$decal` surfaces and `M_V2_Decal` |
+| `Overbright` | settings scalar, default **2.0** | same | `mul_x2 c0` in every lit program — the `_x2` and the `overbrightFactor/2` constant together |
+| `DecalDepthOffset` | settings scalar | same | the **decal component** the placement lane spawns over an `isDecalSurface` instance; not a material parameter (no `MP_PIXEL_DEPTH_OFFSET` in this build's Python API) |
 | `LightSpecularScale` | settings scalar | same | the light rig (SF-6.2), one global, no per-map override |
 | `CaptureRadius` | settings scalar | same | the reflection-capture placement (SF-6.2) |
-| roughness / specular / metallic per surface class | class-table row | `UElysiumSurfaceCalibration` (`UDataAsset`) → a 64×1 lookup texture | every master, indexed by `SurfaceClassIndex` |
-| `BaseTexture`, `Detail`, `NormalMap`, `EnvMap`, `EnvMapMask`, … | per-instance texture | the VMT, via the stage | the master's texture slots |
-| `Color`, `SelfIllumTint`, `EnvMapTint`, `RefractTint`, `ReflectTint`, `WaterColor`, `FogColor`, `TexScaleOffset` | per-instance vector | the VMT | as named |
-| `Alpha`, `SelfIllumAmount`, `DetailScale`, `EnvMapMaskScale`, `BumpScale`, `MinLight`, `MaxLight`, `RefractAmount`, `ReflectAmount`, `Water*`, `FrameRate`, `ScrollRateU/V`, `Sine*`, `WetnessScale`, `CloudScale`, `SpriteRenderMode`, `Texture2Scale` | per-instance scalar | the VMT | as named |
+| roughness / specular / metallic per surface class | class-table row (72 seeded, each with a fixed `Index`) | `UElysiumSurfaceCalibration` (`UDataAsset`) → a **128×1** lookup texture `T_SurfaceClassLUT` | every master, through `SurfaceClassLUT` at `SurfaceClassIndex` |
+| `BaseTexture`, `BaseTexture2`, `NormalMap`, `DuDvMap`, `EnvMap`, `EnvMapMask`, `Iris`, `Glint`, `CloudAlphaTexture`, `*Frames` | per-instance texture | the VMT, via the stage | the master's texture slots |
+| `Color`, `SelfIllumTint`, `EnvMapTint`, `RefractTint`, `ReflectTint`, `WaterColor`, `FogColor`, `CloudScale`, `TexScaleOffset`, `Texture2ScaleOffset`, `SineTargetMask`, `SineChannelMask` | per-instance vector | the VMT | as named |
+| `Alpha`, `SelfIllumAmount`, `EnvMapMaskScale`, `BumpScale`, `AlphaBias`, `RefractAmount`, `ReflectAmount`, `BaseReflectFract`, `Water*`, `Fog*`, `FrameRate`/`FrameCount`, `NormalFrameRate`/`NormalFrameCount`, `BaseScrollRateU/V`, `BumpScrollRateU/V`, `Sine*`, `IrisFrame`, `SurfaceClassIndex` | per-instance scalar | the VMT | as named |
 | `BlendMode`, `TwoSided`, `OpacityMaskClipValue` | per-instance base-property override | the VMT flags | the instance |
 | every `Use*` / `MetallicTint` / `VampireEyes` / `CheapWater` switch | per-instance static switch | the VMT and the resolved program | the master |
 

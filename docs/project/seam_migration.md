@@ -305,6 +305,68 @@ or `dev/` and the other two are one break-glass pair, one of which has no `$envm
 Non-`$envmap` surfaces take `DefaultSpecular`/`DefaultRoughness`/`DefaultMetallic` modulated by
 their class-table row — the repudiated three-zeroes rule's replacement.
 
+**Revised after review (2026-08-31).** An independent review of the design found holes; the
+revision is in place in `seam_map_material.md` → "Import" and the rulings it encodes are:
+**names** — the design doc's spellings are the contract (`NormalMap`, `EnvMapMask`, `EnvMap`,
+`EnvMapTint`, `SelfIllumAmount`, `Use…` switches, `M_V2_Lit` with no `_Opaque` suffix), and the
+build-mechanics note was corrected to match, together with its patched path
+(`maps/<map>/<dir…>/MI_<stem>` — flattening the subdirectories collides on 113 names and loses 115
+units), its `$alphatest` clip (**0.5**, transcribing Source's `AlphaFunc GEQUAL 0.5`;
+`$alphatestreference` is a registered parameter with no corpus author, so it is a latent key mapped
+to `OpacityMaskClipValue`), and three withdrawn claims: `$additive` sets a blend override and never
+`MSM_UNLIT`, `texkill` is a clip plane and never `BLEND_MASKED`, and
+`MaterialInstanceBasePropertyOverrides.h` lives under `Runtime/Engine/Public/Materials/`.
+**Static switches are not capped** — the corpus realizes 61 combinations on Lit and 31 on Unlit,
+and the cook pays per realized combination, which SF-4.5 measures rather than assumes.
+**Five knobs added** to `UElysiumSurfaceSettings` → `MPC_ElysiumSurfaces`: `MaskMetallicMax`,
+`ChromaticTintStrength`, `ChromaThreshold` (0.02, the grey/chromatic split, read by the stage from
+the ini and never a literal), `Overbright` (2.0) and `DecalDepthOffset` — which is a knob *only*,
+and left the per-instance parameter list.
+**`SurfaceClassIndex` is stable**: each calibration row carries a fixed `Index` assigned at seeding
+from the pinned `SURFACE_CLASSES` list (`importers/materials.py`, `default` at 0, **72 rows**, so
+the LUT is 128×1), the texel is the row's `Index` and not its array position, every master exposes
+`SurfaceClassLUT` and the three reads are named `ClassRoughness`/`ClassSpecular`/`ClassMetallic`.
+**Class fallback** is `$surfaceprop` lower-cased (with `cloth` 30, `bone` 9, `asphalt` 2 and
+`leather` 1 getting class rows of their own, their `PhysMaterial` still falling back to
+`PM_default`), else the VMT top directory when it is on a **curated 16-name allowlist**
+(`grass` added), else a **per-family default row** — `default` for Lit/Unlit/Sprite/Decal/
+TwoTexture, `flesh` for Eyes, `water` for Water, `glass` for Refract — with `surfaceClassSource`
+recorded. Tiers now measure 4,605 / 559 / 6,460.
+**`env_cubemap` is not a runtime bind** — Lumen and SF-6.2's captures supply the image with nothing
+bound — and patched concrete cubes, `cubemapdefault` copies, `$crackmaterial` and `$bottommaterial`
+are provenance only; the `BottomMaterial` texture slot was deleted from `M_V2_Water`.
+**Precedence**: an authored `envmap/*` unit takes the fixed-cube add (× `EnvMapTint` ×
+`FixedCubeStrength`) and **not** the chromatic branch, which is `Metallic = mask * MaskMetallicMax`
+and `BaseColor = lerp(BaseColor, BaseColor * EnvMapTint, ChromaticTintStrength)`.
+**Self-illum is a named divergence**: the master implements the plain spelling
+(`BaseColor *= 1 - BaseTexture.a`, `Emissive = BaseTexture.rgb * SelfIllumTint * BaseTexture.a *
+SelfIllumAmount`), while the V2 masked spelling multiplies and squares the base; both instruction
+lists are printed.
+**Patched-corpus counts corrected**: 7,499 patches plus 2 standalone `maps/sm_tattoo/…`
+`lightmappedgeneric` materials (the "2 pure aliases" claim is withdrawn), `patchOf` filename-derived
+from the coordinate suffix, 7,450 `$envmap` rows, 7,431 instances overriding nothing — a considered
+cost — and only the 49 `$waterdepth` rows of the 68 non-`$envmap` rows changing a material
+parameter.
+The revision also filled the holes the review named: water and TwoTexture now host their proxies
+and keys, `M_V2_Unlit`'s normal-map rule is retracted (0 users), scroll splits into independent
+base and normal lanes, `ForceRefract` is dropped (0 users), **every parameter on every master has a
+stated default and a `_linear`-twin classification**, `VampireEyes` is exposed with a graph
+identical to the non-vampire path pending decompilation, and `$spriterendermode` becomes blend
+rows.
+
+Provisional owner calls now open, all listed in the design: the `$alphatest` clip of **0.5**;
+`decalmodulate` → `BLEND_Modulate` instead of retail's wireframe fallback (Unlit, out of the Lumen
+surface cache, not Nanite-compatible; and the `Ray Tracing Quality Switch` does not gate the path
+tracer, so the path tracer sees the fixed-cube add); the fixed cube going to **Emissive** behind
+that switch rather than VtMB's pre-lighting composite point; **`$envmapsphere` gets nothing** — 10
+of its 12 users select a `*_EnvMapSphere*` vertex program but ten are `shadertest/`/`dev/` and the
+two shipped users are one break-glass pair; **`$ignorez`** — the 5 `unlitgeneric` world users
+re-route to `M_V2_Sprite` (already Unlit, two-sided, depth-test-off), the 3 `sprite` ones are
+already there, the 9 `wireframe` ones are no-master, and the 1 `vertexlitgeneric` keeps `M_V2_Lit`
+with the flag as a named divergence — no `M_V2_UnlitNoDepth`; and **`Detail` is dropped** — all 28
+`$detail` authors are `shadertest/*` or a `shatteredglass` crack-material path, and this build's
+`VertexLitGeneric` registers no `$detail` parameter at all.
+
 **Surface properties import (2026-08-31).** SF-2.1–2.4. The lane is
 `uv run elysium import surface-properties` and its contract is
 `docs/architecture/seam_map_surface_property.md` → "Import". It mirrors the texture lane: an
