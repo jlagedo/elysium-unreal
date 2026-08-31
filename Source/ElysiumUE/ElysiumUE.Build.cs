@@ -19,7 +19,10 @@ public class ElysiumUE : ModuleRules
 			// UElysiumPhysicalMaterial derives from UPhysicalMaterial and stores an
 			// EPhysicalSurface, both PhysicsCore types named in a Public/ header, so the
 			// dependency is public rather than private (Engine re-exports it either way).
-			"PhysicsCore"
+			"PhysicsCore",
+			// UElysiumSurfaceSettings derives from UDeveloperSettings, a Public/ header type
+			// (SF-4.1); moved here from the UMG/CommonUI-adjacent private list below.
+			"DeveloperSettings"
 		});
 
 		// Used only inside Private/*.cpp — kept off the public API so downstream modules
@@ -70,9 +73,10 @@ public class ElysiumUE : ModuleRules
 			// UCommonActivatableWidget subclasses. Back/Accept defaults come from the native
 			// CommonUIInputData class, so the source-authored foundation requires no Widget
 			// Blueprint or data assets.
-			// DeveloperSettings owns UPlatformSettingsManager, read directly by the generated-glyph
-			// regression to prove the Windows CommonInput controller-data configuration resolves.
-			"UMG", "CommonUI", "CommonInput", "DeveloperSettings",
+			// DeveloperSettings (now a public dependency above) owns UPlatformSettingsManager,
+			// read directly by the generated-glyph regression to prove the Windows CommonInput
+			// controller-data configuration resolves.
+			"UMG", "CommonUI", "CommonInput",
 			// The loading screen. The engine's own movie player is the only thing that can
 			// draw while the game thread is blocked inside LoadMap. It resolves to
 			// FNullGameMoviePlayer in the editor and under -nullrhi, so the hook is an automatic
