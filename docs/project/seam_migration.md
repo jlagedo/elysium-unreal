@@ -305,6 +305,55 @@ or `dev/` and the other two are one break-glass pair, one of which has no `$envm
 Non-`$envmap` surfaces take `DefaultSpecular`/`DefaultRoughness`/`DefaultMetallic` modulated by
 their class-table row — the repudiated three-zeroes rule's replacement.
 
+**Surface properties import (2026-08-31).** SF-2.1–2.4. The lane is
+`uv run elysium import surface-properties` and its contract is
+`docs/architecture/seam_map_surface_property.md` → "Import". It mirrors the texture lane: an
+offline Python stage over the published units writes a manifest plus one sidecar per unit, and a
+headless editor phase authors the assets, stamps recipes and prunes. First run 63 imported,
+0 failed; rerun 63 reused. The owner calls it rests on:
+
+- **`SurfaceType` maps the compact material class, not the entry.** One
+  `UElysiumPhysicalMaterial` exists per entry at `/ElysiumBaked/SurfaceProperties/PM_<name>`, and
+  a hit's `PhysMaterial` *is* that asset, so entry identity needs no `EPhysicalSurface` slot — and
+  could not have one, since the engine has 62 rows and the table has 63 entries. The 17 rows added
+  to `Config/DefaultEngine.ini` are the distinct `gamematerial` letters (`VtmbGameMaterial_A` …
+  `_Y`), assigned by alphabetical order of the letter so the mapping is derivable. After
+  inheritance 56 of the 63 assets carry a letter (26 entries declare one); 7 keep
+  `SurfaceType_Default`.
+- **Inheritance is flattened at the stage, and the walk is recorded.** The seam deliberately
+  publishes only what each entry declares, so resolving the chain is the consumer's job and this
+  lane is the consumer. Root-first walk; a child's declared scalar overrides the parent's; a
+  child's declared **pool replaces** the parent's pool *for that slot*, because Source copies the
+  parent `surfacedata_t` and re-parses the child's keys — so an entry that names one `stepleft`
+  supplies the whole left-footstep pool rather than appending to the four it inherited. Per field,
+  the unit that supplied it is recorded in the provenance's `FieldOrigins`; that map is what makes
+  a flattened asset auditable. A cycle or a dangling base refuses the unit and every descendant of
+  it, naming the ancestor. Measured: 21 roots, 42 inheriting, deepest chain 4 units.
+- **`default` is not an implicit parent.** No entry bases on it, so the movement fields it alone
+  declares are not inherited; the asset class's defaults happen to equal `default`'s values, and
+  the provenance shows no origin for them rather than claiming `default` authored them.
+- **Asset naming is `PM_<safe_name(unit key)>` and is load-bearing.** Phase 4's material import
+  resolves a VMT's `$surfaceprop` to that exact path by folding the name the same way.
+- **Sound references stay strings** (`vtmb:sound:*`, `vtmb:sound-script:*`) on the asset. The
+  sound slice flips them to hard `USoundWave` references; nothing downstream can bind audio yet.
+- **The recipe hashes the whole chain, not just the unit.** A flattened asset's values change when
+  an *ancestor's* GLB changes and its own bytes do not, so the recipe carries a `chainSha256` over
+  every unit in the chain beside the unit's own hash. Editing `metal` re-authors `metalgrate`,
+  `metalpanel` and `canister` and nothing else.
+- **Provenance rides as `UElysiumSurfacePropertyProvenance : UAssetUserData`**, with `AssetId`,
+  `GameMaterial` and `SourceName` published as asset-registry tags. `UPhysicalMaterial` implements
+  no asset-user-data interface, so `UElysiumPhysicalMaterial` implements `IInterface_AssetUserData`
+  itself the way `UTexture` does — which is also what gives a re-import its replace-rather-than-
+  accumulate behaviour.
+- **`elasticity` is carried twice.** The shipped range is 0.001–2 and Unreal's `Restitution` is a
+  0–1 bounciness, so the asset holds the clamp *and* `RawElasticity`. `friction` is **not** clamped
+  despite running to 100: Unreal's friction is not a 0–1 quantity, and clamping it would quietly
+  change a surface the table meant to be extreme.
+- **A `gamematerial` letter with no row is a stage failure**, not a silent default: the ini row has
+  to exist for the class to mean anything, and a corpus that grew a letter should say so once
+  rather than land 63 assets with one quietly wrong. A pytest pins the ini rows against the staging
+  table.
+
 ## Plan — surfaces track (export gap, surface properties, materials, reflections)
 
 Owner instructions (2026-08-31): plan the whole surface chain in the smallest possible tasks;
