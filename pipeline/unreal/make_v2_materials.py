@@ -3,14 +3,14 @@
 # exposed-parameter table, post-lighting math, reflection contract, knob contract, class
 # fallback). Build mechanics: import/design/phase4_mechanics.md section 3.
 #
-# Part 2 of SF-4.3 (commit series): the two previous commits reconciled `M_V2_Lit` to the revised
-# design (2026-08-31 "Revise the material import design after review" -- binding contract,
-# defaults, class fallback) and added `M_V2_LitTranslucent`; this commit adds `M_V2_Unlit`
-# (`unlitgeneric`, `cloud`). `M_V2_TwoTexture` lands in the commit that follows. Part 1
-# (`9daae29b`) authored `M_V2_Lit` against the pre-revision design; the header notes it left below
-# (Clamp's unnamed primary pin, `connect_material_property`'s three-argument signature,
-# `MaterialExpressionSine.Period` not being connectable, and the absent `MP_PIXEL_DEPTH_OFFSET`)
-# are still the facts this file builds against.
+# Part 2 of SF-4.3 (commit series, now complete): the three previous commits reconciled
+# `M_V2_Lit` to the revised design (2026-08-31 "Revise the material import design after review"
+# -- binding contract, defaults, class fallback) and added `M_V2_LitTranslucent` and `M_V2_Unlit`;
+# this commit adds `M_V2_TwoTexture` (`worldvertextransition`, `worldtwotextureblend`,
+# `unlittwotexture`). Part 1 (`9daae29b`) authored `M_V2_Lit` against the pre-revision design; the
+# header notes it left below (Clamp's unnamed primary pin, `connect_material_property`'s
+# three-argument signature, `MaterialExpressionSine.Period` not being connectable, and the absent
+# `MP_PIXEL_DEPTH_OFFSET`) are still the facts this file builds against.
 #
 # --- Doc gaps hit while reconciling, flagged for the owner --------------------------------
 #
@@ -997,6 +997,169 @@ def make_unlit():
     return mat
 
 
+# ============================================================================================
+# M_V2_TwoTexture
+# ============================================================================================
+
+
+class TwoTextureParams:
+    class Textures:
+        BaseTexture = "BaseTexture"
+        BaseTexture2 = "BaseTexture2"
+        NormalMap = "NormalMap"
+        SurfaceClassLUT = "SurfaceClassLUT"
+
+    class Scalars:
+        Alpha = "Alpha"
+        SurfaceClassIndex = "SurfaceClassIndex"
+        AlphaBias = "AlphaBias"
+        BaseScrollRateU = "BaseScrollRateU"
+        BaseScrollRateV = "BaseScrollRateV"
+        SineMin = "SineMin"
+        SineMax = "SineMax"
+        SinePeriod = "SinePeriod"
+        SineTimeOffset = "SineTimeOffset"
+
+    class Vectors:
+        Color = "Color"
+        TexScaleOffset = "TexScaleOffset"
+        Texture2ScaleOffset = "Texture2ScaleOffset"
+        SineTargetMask = "SineTargetMask"
+        SineChannelMask = "SineChannelMask"
+
+    class Switches:
+        UseBaseTexture2 = "UseBaseTexture2"
+        UseNormalMap = "UseNormalMap"
+        UseBumpOnBaseTexture2 = "UseBumpOnBaseTexture2"
+        UseVertexColor = "UseVertexColor"
+        UseVertexAlpha = "UseVertexAlpha"
+
+
+TWOTEXTURE_PARAM_TABLE = {
+    "textures": sorted(vars(TwoTextureParams.Textures)[k] for k in vars(TwoTextureParams.Textures) if not k.startswith("_")),
+    "scalars": sorted(vars(TwoTextureParams.Scalars)[k] for k in vars(TwoTextureParams.Scalars) if not k.startswith("_")),
+    "vectors": sorted(vars(TwoTextureParams.Vectors)[k] for k in vars(TwoTextureParams.Vectors) if not k.startswith("_")),
+    "switches": sorted(vars(TwoTextureParams.Switches)[k] for k in vars(TwoTextureParams.Switches) if not k.startswith("_")),
+}
+
+
+def _build_two_texture(mat, collection, lut_texture):
+    g = Graph(mat, collection=collection)
+    P = TwoTextureParams
+
+    base_uv, _, _ = _uv_lanes(
+        g, P.Vectors.TexScaleOffset,
+        base_scroll_names=(P.Scalars.BaseScrollRateU, P.Scalars.BaseScrollRateV))
+    sine = _sine_lane(
+        g, min_name=P.Scalars.SineMin, max_name=P.Scalars.SineMax,
+        period_name=P.Scalars.SinePeriod, offset_name=P.Scalars.SineTimeOffset,
+        target_mask_name=P.Vectors.SineTargetMask, channel_mask_name=P.Vectors.SineChannelMask)
+
+    # BaseTexture2 rides its own TexScaleOffset-shaped transform (Texture2ScaleOffset), on the
+    # same scrolled UV lane -- worldvertextransition has one lightmap-alpha blend, not two
+    # independently scrolling layers.
+    tex2_scale_offset = g.vec4(P.Vectors.Texture2ScaleOffset, (1.0, 1.0, 0.0, 0.0), -1900, 260)
+    tex2_scale = g.mask(tex2_scale_offset, "rg", -1700, 220)
+    tex2_offset = g.mask(tex2_scale_offset, "ba", -1700, 320, src_out="RGBA")
+    base_uv2 = g.add(g.mul(base_uv, "", tex2_scale, "", -1500, 260), "", tex2_offset, "",
+                     -1300, 300)
+
+    base_tex = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
+    connect(base_uv, "", base_tex, "UVs")
+    base_tex2 = g.tex(P.Textures.BaseTexture2, -1100, -180, kind="color")
+    connect(base_uv2, "", base_tex2, "UVs")
+
+    vertex_color = g.vertex_color(-1100, -680)
+    # `VertexColor`'s outputs are all unnamed FNames -- connect straight to its own "A" output
+    # (already 1-wide) rather than through a ComponentMask; see M_V2_Lit's Opacity section.
+    blend_alpha = g.one_minus(vertex_color, "A", -700, -680)
+    blended = g.lerp(base_tex, "RGB", base_tex2, "RGB", blend_alpha, "", -500, -300)
+    base_selected = g.switch(P.Switches.UseBaseTexture2, blended, g.mask(base_tex, "rgb", -700, -420),
+                             -300, -360, default=False)
+
+    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
+    color = sine["apply"](color, "", "g", "rgb", -1100, -500)
+    tinted = g.mul(base_selected, "", color, "", -40, -360)
+    vc_rgb = g.mask(vertex_color, "rgb", -900, -600)
+    with_vc = g.mul(tinted, "", vc_rgb, "", 160, -400)
+    vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, 360, -360, default=False)
+
+    overbright = g.mpc("Overbright", -1100, -820)
+    overbright_base = g.mul(vc_selected, "", overbright, "", 560, -360)
+    g.to(overbright_base, "", unreal.MaterialProperty.MP_BASE_COLOR)
+
+    # -- Normal: one slot, shared by both layers (`UseBumpOnBaseTexture2` is declared per the
+    # exposed-parameter table but has no second slot to switch onto -- "the second layer is
+    # sampled through the same tangent normal as the first", design doc "M_V2_TwoTexture") ----
+    normal_tex = g.tex(P.Textures.NormalMap, -1100, 60, kind="normal")
+    connect(base_uv, "", normal_tex, "UVs")
+    flat_normal = g.const3(0.0, 0.0, 1.0, -700, 140)
+    normal_final = g.switch(P.Switches.UseNormalMap, g.mask(normal_tex, "rgb", -700, 60),
+                            flat_normal, -500, 100, default=False)
+    g.to(normal_final, "", unreal.MaterialProperty.MP_NORMAL)
+    g.switch(P.Switches.UseBumpOnBaseTexture2, g.const(1.0, -300, 60), g.const(0.0, -300, 140),
+            -100, 100, default=False)  # declared, not wired -- see the docstring above.
+
+    # -- surface class lookup, unwired past declaration (this master's Specular/Roughness/
+    # Metallic follow the same class-LUT-alone convention M_V2_Lit's non-$envmap branch already
+    # uses; see the module docstring's doc-gap note #1) ---------------------------------------
+    class_roughness, class_specular, class_metallic = _class_lut(
+        g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+    g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    g.to(class_specular, "", unreal.MaterialProperty.MP_SPECULAR)
+    g.to(class_metallic, "", unreal.MaterialProperty.MP_METALLIC)
+
+    # -- Opacity: Alpha + AlphaBias (x VertexColor.a under UseVertexAlpha) -- see the module
+    # docstring's doc-gap note #2 -----------------------------------------------------------
+    alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
+    alpha_bias = g.scalar(P.Scalars.AlphaBias, 0.0, 1700, 80)
+    alpha_with_sine = sine["apply"](alpha_param, "", "r", "r", 1900, 0)
+    alpha_biased = g.add(alpha_with_sine, "", alpha_bias, "", 2100, 40)
+    # `VertexColor`'s outputs are all unnamed FNames -- connect straight to its own "A" output
+    # (already 1-wide) rather than through a ComponentMask; see M_V2_Lit's Opacity section.
+    alpha_with_vc = g.mul(alpha_biased, "", vertex_color, "A", 2300, 100)
+    opacity_final = g.switch(P.Switches.UseVertexAlpha, alpha_with_vc, alpha_biased, 2500, 80,
+                             default=False)
+    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
+
+
+def make_two_texture():
+    name = "M_V2_TwoTexture"
+    asset = "%s/%s" % (PKG, name)
+    collection = _load_surfaces_collection()
+    lut_texture = _load_class_lut()
+    recipe = {
+        "graphVersion": GRAPH_VERSION,
+        "sourceHash": _source_hash(),
+        "citedUnits": _cited_unit_hashes(TWOTEXTURE_CITED_SHADER_UNITS),
+        "params": TWOTEXTURE_PARAM_TABLE,
+        "mpcScalars": REQUIRED_MPC_SCALARS,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    mat, asset = _fresh(name, ism=True, nanite=True)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
+    mat.set_editor_property("two_sided", False)
+
+    _build_two_texture(mat, collection, lut_texture)
+
+    errors = mel.recompile_material(mat)
+    if errors:
+        _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    bl.stamp_recipe(mat, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mat
+
+
 def _cmdline_arg(key, default=""):
     needle = "-%s=" % key
     for token in unreal.SystemLibrary.get_command_line().split():
@@ -1013,3 +1176,4 @@ def _flag(value):
 make_lit()
 make_lit_translucent()
 make_unlit()
+make_two_texture()

@@ -140,6 +140,38 @@ namespace
 		ElysiumSurfaceParamsUnlit::Switches::UseCloudAlpha,
 	};
 
+	static const FName TwoTextureTextures[] = {
+		ElysiumSurfaceParamsShared::Textures::SurfaceClassLUT,
+		ElysiumSurfaceParamsTwoTexture::Textures::BaseTexture,
+		ElysiumSurfaceParamsTwoTexture::Textures::BaseTexture2,
+		ElysiumSurfaceParamsTwoTexture::Textures::NormalMap,
+	};
+	static const FName TwoTextureScalars[] = {
+		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
+		ElysiumSurfaceParamsShared::Scalars::Alpha,
+		ElysiumSurfaceParamsTwoTexture::Scalars::AlphaBias,
+		ElysiumSurfaceParamsTwoTexture::Scalars::BaseScrollRateU,
+		ElysiumSurfaceParamsTwoTexture::Scalars::BaseScrollRateV,
+		ElysiumSurfaceParamsTwoTexture::Scalars::SineMin,
+		ElysiumSurfaceParamsTwoTexture::Scalars::SineMax,
+		ElysiumSurfaceParamsTwoTexture::Scalars::SinePeriod,
+		ElysiumSurfaceParamsTwoTexture::Scalars::SineTimeOffset,
+	};
+	static const FName TwoTextureVectors[] = {
+		ElysiumSurfaceParamsShared::Vectors::Color,
+		ElysiumSurfaceParamsTwoTexture::Vectors::TexScaleOffset,
+		ElysiumSurfaceParamsTwoTexture::Vectors::Texture2ScaleOffset,
+		ElysiumSurfaceParamsTwoTexture::Vectors::SineTargetMask,
+		ElysiumSurfaceParamsTwoTexture::Vectors::SineChannelMask,
+	};
+	static const FName TwoTextureSwitches[] = {
+		ElysiumSurfaceParamsTwoTexture::Switches::UseBaseTexture2,
+		ElysiumSurfaceParamsTwoTexture::Switches::UseNormalMap,
+		ElysiumSurfaceParamsTwoTexture::Switches::UseBumpOnBaseTexture2,
+		ElysiumSurfaceParamsTwoTexture::Switches::UseVertexColor,
+		ElysiumSurfaceParamsTwoTexture::Switches::UseVertexAlpha,
+	};
+
 	// `M_V2_LitTranslucent` is the same graph under a different material-only property set
 	// (mechanics doc / design "Master inventory" -- blend mode, two-sidedness and the opacity
 	// clip value are per-instance overrides, so they never multiply masters).
@@ -150,6 +182,8 @@ namespace
 			LitTextures, LitScalars, LitVectors, LitSwitches},
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Unlit.M_V2_Unlit"),
 			UnlitTextures, UnlitScalars, UnlitVectors, UnlitSwitches},
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_TwoTexture.M_V2_TwoTexture"),
+			TwoTextureTextures, TwoTextureScalars, TwoTextureVectors, TwoTextureSwitches},
 	};
 }
 

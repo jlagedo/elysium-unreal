@@ -12,10 +12,9 @@
 // `Elysium.Policy.V2MasterParams` (Private/Tests/ElysiumV2MaterialTests.cpp) read the same FNames.
 //
 // This revision (SF-4.3 part 2) reconciles M_V2_Lit to the design revision 2026-08-31 ("Revise
-// the material import design after review") and adds M_V2_LitTranslucent and M_V2_Unlit.
-// M_V2_TwoTexture lands in the commit that follows this one; M_V2_Eyes, M_V2_Water, M_V2_Sprite,
-// M_V2_Refract and M_V2_Decal are not authored yet and land family-by-family (mechanics doc
-// "Ordering, concurrency, tests, risks").
+// the material import design after review") and adds M_V2_LitTranslucent, M_V2_Unlit and
+// M_V2_TwoTexture. M_V2_Eyes, M_V2_Water, M_V2_Sprite, M_V2_Refract and M_V2_Decal are not
+// authored yet and land family-by-family (mechanics doc "Ordering, concurrency, tests, risks").
 //
 // Every V2 master exposes SurfaceClassIndex, SurfaceClassLUT, Alpha and Color -- the four
 // parameters the design doc states once, "on every master", rather than repeating in each
@@ -158,5 +157,48 @@ namespace ElysiumSurfaceParamsUnlit
 		inline const FName MetallicTint(TEXT("MetallicTint"));
 		inline const FName UseAnimatedFrames(TEXT("UseAnimatedFrames"));
 		inline const FName UseCloudAlpha(TEXT("UseCloudAlpha"));
+	}
+}
+
+// `M_V2_TwoTexture` -- `worldvertextransition`/`worldtwotextureblend`/`unlittwotexture`. One
+// NormalMap slot shared by both texture layers (UseBumpOnBaseTexture2 is declared, per the
+// design's table, but has no second slot to switch onto). No envmap/reflection lane at all (not
+// in the design's table for this master) and no flipbook/normal-animation lane either -- only the
+// base-scroll and sine lanes.
+namespace ElysiumSurfaceParamsTwoTexture
+{
+	namespace Textures
+	{
+		inline const FName BaseTexture(TEXT("BaseTexture"));
+		inline const FName BaseTexture2(TEXT("BaseTexture2"));
+		inline const FName NormalMap(TEXT("NormalMap"));
+	}
+
+	namespace Scalars
+	{
+		inline const FName AlphaBias(TEXT("AlphaBias"));
+		inline const FName BaseScrollRateU(TEXT("BaseScrollRateU"));
+		inline const FName BaseScrollRateV(TEXT("BaseScrollRateV"));
+		inline const FName SineMin(TEXT("SineMin"));
+		inline const FName SineMax(TEXT("SineMax"));
+		inline const FName SinePeriod(TEXT("SinePeriod"));
+		inline const FName SineTimeOffset(TEXT("SineTimeOffset"));
+	}
+
+	namespace Vectors
+	{
+		inline const FName TexScaleOffset(TEXT("TexScaleOffset"));
+		inline const FName Texture2ScaleOffset(TEXT("Texture2ScaleOffset"));
+		inline const FName SineTargetMask(TEXT("SineTargetMask"));
+		inline const FName SineChannelMask(TEXT("SineChannelMask"));
+	}
+
+	namespace Switches
+	{
+		inline const FName UseBaseTexture2(TEXT("UseBaseTexture2"));
+		inline const FName UseNormalMap(TEXT("UseNormalMap"));
+		inline const FName UseBumpOnBaseTexture2(TEXT("UseBumpOnBaseTexture2"));
+		inline const FName UseVertexColor(TEXT("UseVertexColor"));
+		inline const FName UseVertexAlpha(TEXT("UseVertexAlpha"));
 	}
 }

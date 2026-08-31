@@ -1112,3 +1112,80 @@ def test_lit_master_exposed_params_pinned_against_cpp_header():
 def test_unlit_master_exposed_params_pinned_against_cpp_header():
     parsed = _header_params_for("ElysiumSurfaceParamsUnlit", _parse_surface_params_header(_HEADER_PATH))
     assert parsed == importer.EXPOSED_PARAMS["M_V2_Unlit"]
+
+
+# --- provenance sidecar <-> UElysiumMaterialProvenance::FromJson (C2) -----------------------------
+
+_PROVENANCE_CPP = (
+    Path(__file__).resolve().parents[2] / "Source/ElysiumUE/Private/ElysiumMaterialProvenance.cpp"
+)
+
+#: Top-level sidecar keys `FromJson` intentionally does not read: `patched` and `patchOf` (the
+#: `{x, y, z}` map-patch coordinate, distinct from `PatchOf`/`patchBase`) are redundant with data
+#: the record already carries or does not need; `runtime` restates the scalar/vector side effects
+#: `proxies[]` already carries the resolved arguments for; `ignoreZNamedDivergence` is a named
+#: deliberate-divergence flag for the placement lane's own bookkeeping, not part of the record a
+#: packaged game or the Content Browser needs. Named here so this test states the omission rather
+#: than silently passing it (mirrors the C++-side Substrate test's own list).
+_KNOWINGLY_UNCOVERED = frozenset({"patched", "patchOf", "runtime", "ignoreZNamedDivergence"})
+
+
+def _cpp_top_level_keys() -> set[str]:
+    """Every `TEXT("...")` literal `ElysiumMaterialProvenance.cpp` reads directly off the sidecar's
+    top-level JSON object `O` (via `Str`/`Bool`/`Int`/`Float`/`Arr`/`Obj`), parsed as text rather
+    than introspected from C++ -- the same approach `test_make_surface_knobs.py` uses against the
+    Unreal headers it pins."""
+    text = _PROVENANCE_CPP.read_text(encoding="utf-8")
+    return set(re.findall(r'\(O, TEXT\("(\w+)"\)', text))
+
+
+def test_material_provenance_sidecar_keys_are_covered_by_fromjson(tmp_path):
+    """Stage one synthetic unit exercising most of the sidecar's top-level shape (a proxy, a
+    material reference, the placement/map fields, an $envmap), merge in the four manifest-entry
+    keys `import_materials.py` adds, and assert every top-level key in the resulting sidecar object
+    is one `UElysiumMaterialProvenance::FromJson` actually reads (its literal `TEXT("...")` keys) --
+    a key the stage writes that the C++ reader silently ignores is exactly C2's defect."""
+    export = tmp_path / "v2"
+    parameters = [
+        _param(0, "$basetexture", "brick/floora"),
+        _param(1, "$surfaceprop", "brick"),
+        _param(2, "$envmap", "env_cubemap"),
+        _param(3, "$crackmaterial", "crack/basic"),
+        _param(4, "$spriteorigin", "[1 2]"),
+        _param(5, "$minlight", "0.1"),
+        _param(6, "$decal", "1"),
+        _param(7, "resultvar", "$envmaptint[0]", block="proxies#1/globalwetness#0"),
+        _param(8, "scale", "0.5", block="proxies#1/globalwetness#0"),
+    ]
+    _publish(export, "brick/floora", _unit(
+        "brick/floora", parameters=parameters,
+        proxies=[{"index": 0, "name": "globalwetness", "sourceName": "GlobalWetness", "parameters": [7, 8]}],
+        dependencies=[
+            _texture_dep("$basetexture", "brick/floora"),
+            {"role": "material", "parameter": "$crackmaterial", "asset": "vtmb:material:crack/basic",
+             "sourcePath": "materials/crack/basic.vmt", "resolved": True},
+        ],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/brick/MI_floora"]
+    sidecar = _provenance(tmp_path / "stage", entry)
+
+    # The four fields import_materials.py merges into the sidecar object as top-level keys before
+    # calling ApplyJson (see FromJson's "--- identity ---" comment).
+    for key in ("assetPath", "unitGlb", "sourceSha256", "physMaterial"):
+        sidecar[key] = entry.get(key, "")
+
+    sidecar_keys = set(sidecar.keys())
+    cpp_keys = _cpp_top_level_keys()
+    uncovered = sidecar_keys - cpp_keys - _KNOWINGLY_UNCOVERED
+    assert not uncovered, (
+        "sidecar top-level key(s) %r are not read by UElysiumMaterialProvenance::FromJson "
+        "(ElysiumMaterialProvenance.cpp)" % sorted(uncovered)
+    )
+
+
+def test_two_texture_master_exposed_params_pinned_against_cpp_header():
+    parsed = _header_params_for(
+        "ElysiumSurfaceParamsTwoTexture", _parse_surface_params_header(_HEADER_PATH))
+    assert parsed == importer.EXPOSED_PARAMS["M_V2_TwoTexture"]
