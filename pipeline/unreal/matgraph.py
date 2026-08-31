@@ -1,0 +1,270 @@
+# The shared graph-authoring helper layer for the V2 material masters (SF-4.3a,
+# `import/design/phase4_mechanics.md` -> section 3a).
+#
+# Every V2 master (`make_v2_materials.py`) is built from the same small vocabulary of node
+# constructors so the nine families read the same way and a reviewer checks the algebra, not the
+# `unreal.MaterialEditingLibrary` boilerplate around it. This module is import-safe: importing it
+# does no editor work and creates no asset, so `pipeline/tests/test_matgraph.py` exercises it
+# against a fake `unreal` module exactly the way `test_import_textures_editor.py` exercises
+# `import_textures.py`.
+#
+# `connect` is `mat_fog.connect` re-exported, not reimplemented: a refused pin
+# (`connect_material_expressions` returning False for a pin name a node does not have) is a build
+# error here too, never a silently-wrong default.
+from __future__ import annotations
+
+import unreal
+
+from pipeline.unreal import mat_fog
+
+#: A refused connection is a hard error -- see `mat_fog.connect`'s docstring.
+connect = mat_fog.connect
+
+#: Default horizontal/vertical spacing between hand-placed graph nodes (mechanics doc 3a).
+LAYOUT_COL = 220
+LAYOUT_ROW = 90
+
+#: Texture-parameter "kind" -> (sampler type, default texture object path). `mask` has no
+# universal default -- some slots want a neutral black mask, most want linear white -- so callers
+# of `Graph.tex(..., kind="mask")` pass `default=` explicitly; see `make_v2_materials.py`.
+_SAMPLER_DEFAULTS = {
+    "color": (
+        "SAMPLERTYPE_COLOR", "/Engine/EngineResources/DefaultTexture.DefaultTexture"),
+    "mask": ("SAMPLERTYPE_MASKS", None),
+    "normal": (
+        "SAMPLERTYPE_NORMAL", "/Engine/EngineMaterials/DefaultNormal.DefaultNormal"),
+    "linear": (
+        "SAMPLERTYPE_LINEAR_COLOR", "/Engine/EngineResources/DefaultTexture.DefaultTexture"),
+}
+
+
+def _sampler_type(name):
+    return getattr(unreal.MaterialSamplerType, name)
+
+
+class Graph:
+    """Node-authoring surface bound to one `unreal.Material`.
+
+    `collection` is the `MPC_ElysiumSurfaces` asset (or `None` while it does not exist yet --
+    `Graph.mpc` raises rather than authoring a dangling CollectionParameter)."""
+
+    def __init__(self, material, collection=None):
+        self.mat = material
+        self.collection = collection
+        self.mel = unreal.MaterialEditingLibrary
+
+    # -- raw node creation ------------------------------------------------------------------
+    def node(self, cls, x, y):
+        return self.mel.create_material_expression(self.mat, cls, x, y)
+
+    # -- parameters ---------------------------------------------------------------------------
+    def tex(self, name, x, y, *, kind="color", default=None):
+        """A `TextureSampleParameter2D`. `kind` picks the sampler type and, unless `default`
+        overrides it, the fallback texture a fresh instance samples before anything binds it."""
+        sampler_name, default_path = _SAMPLER_DEFAULTS[kind]
+        n = self.node(unreal.MaterialExpressionTextureSampleParameter2D, x, y)
+        n.set_editor_property("parameter_name", name)
+        n.set_editor_property("sampler_type", _sampler_type(sampler_name))
+        path = default if default is not None else default_path
+        if path:
+            texture = unreal.load_asset(path)
+            if texture:
+                n.set_editor_property("texture", texture)
+        return n
+
+    def cube(self, name, x, y, *, default=None):
+        n = self.node(unreal.MaterialExpressionTextureSampleParameterCube, x, y)
+        n.set_editor_property("parameter_name", name)
+        n.set_editor_property("sampler_type", _sampler_type("SAMPLERTYPE_COLOR"))
+        path = default or "/Engine/EngineResources/DefaultTextureCube.DefaultTextureCube"
+        texture = unreal.load_asset(path)
+        if texture:
+            n.set_editor_property("texture", texture)
+        return n
+
+    def tex_object(self, name, x, y, texture):
+        """A `TextureObjectParameter` -- a texture handed to a `TextureSample` node rather than
+        sampled directly (the class LUT, read at a computed UV with a fixed mip)."""
+        n = self.node(unreal.MaterialExpressionTextureObjectParameter, x, y)
+        n.set_editor_property("parameter_name", name)
+        if texture:
+            n.set_editor_property("texture", texture)
+        return n
+
+    def sample(self, tex_object, uv, x, y, *, mip=None):
+        """A `TextureSample` fed by a `TextureObjectParameter` (see `tex_object`). `mip`, when
+        given, is a constant mip level (`TMVM_MipLevel`) -- used for the class LUT, never
+        filtered across its 64 texel rows."""
+        n = self.node(unreal.MaterialExpressionTextureSample, x, y)
+        connect(tex_object, "", n, "Tex")
+        if uv is not None:
+            connect(uv, "", n, "UVs")
+        if mip is not None:
+            n.set_editor_property(
+                "mip_value_mode", unreal.TextureMipValueMode.TMVM_MIP_LEVEL)
+            n.set_editor_property("const_mip_value", float(mip))
+        return n
+
+    def scalar(self, name, default, x, y, *, cpd=None):
+        n = self.node(unreal.MaterialExpressionScalarParameter, x, y)
+        n.set_editor_property("parameter_name", name)
+        n.set_editor_property("default_value", default)
+        if cpd is not None:
+            n.set_editor_property("use_custom_primitive_data", True)
+            n.set_editor_property("primitive_data_index", cpd)
+        return n
+
+    def vec3(self, name, default, x, y):
+        """A `VectorParameter` masked to RGB -- the float4 parameter has no float3 output of its
+        own, so every consumer downstream gets the masked node."""
+        n = self.node(unreal.MaterialExpressionVectorParameter, x, y)
+        n.set_editor_property("parameter_name", name)
+        n.set_editor_property(
+            "default_value", unreal.LinearColor(default[0], default[1], default[2],
+                                                 default[3] if len(default) > 3 else 1.0))
+        m = self.node(unreal.MaterialExpressionComponentMask, x + LAYOUT_COL, y)
+        for channel, on in (("r", True), ("g", True), ("b", True), ("a", False)):
+            m.set_editor_property(channel, on)
+        connect(n, "", m, "")
+        return m
+
+    def switch(self, name, true_node, false_node, x, y, default=False):
+        n = self.node(unreal.MaterialExpressionStaticSwitchParameter, x, y)
+        n.set_editor_property("parameter_name", name)
+        n.set_editor_property("default_value", default)
+        connect(true_node, "", n, "True")
+        connect(false_node, "", n, "False")
+        return n
+
+    def mpc(self, name, x, y):
+        if self.collection is None:
+            raise SystemExit("[matgraph] no MPC_ElysiumSurfaces bound; cannot read %s" % name)
+        n = self.node(unreal.MaterialExpressionCollectionParameter, x, y)
+        n.set_editor_property("collection", self.collection)
+        n.set_editor_property("parameter_name", name)
+        return n
+
+    # -- constants ------------------------------------------------------------------------------
+    def const(self, value, x, y):
+        n = self.node(unreal.MaterialExpressionConstant, x, y)
+        n.set_editor_property("r", value)
+        return n
+
+    def const3(self, r, g, b, x, y):
+        n = self.node(unreal.MaterialExpressionConstant3Vector, x, y)
+        n.set_editor_property("constant", unreal.LinearColor(r, g, b, 0.0))
+        return n
+
+    # -- binary / unary algebra -------------------------------------------------------------
+    def _binop(self, cls, a, a_out, b, b_out, x, y):
+        n = self.node(cls, x, y)
+        connect(a, a_out, n, "A")
+        connect(b, b_out, n, "B")
+        return n
+
+    def mul(self, a, a_out, b, b_out, x, y):
+        return self._binop(unreal.MaterialExpressionMultiply, a, a_out, b, b_out, x, y)
+
+    def add(self, a, a_out, b, b_out, x, y):
+        return self._binop(unreal.MaterialExpressionAdd, a, a_out, b, b_out, x, y)
+
+    def sub(self, a, a_out, b, b_out, x, y):
+        return self._binop(unreal.MaterialExpressionSubtract, a, a_out, b, b_out, x, y)
+
+    def div(self, a, a_out, b, b_out, x, y):
+        return self._binop(unreal.MaterialExpressionDivide, a, a_out, b, b_out, x, y)
+
+    def dot(self, a, a_out, b, b_out, x, y):
+        return self._binop(unreal.MaterialExpressionDotProduct, a, a_out, b, b_out, x, y)
+
+    def pow(self, a, a_out, b, b_out, x, y):
+        return self._binop(unreal.MaterialExpressionPower, a, a_out, b, b_out, x, y)
+
+    def lerp(self, a, a_out, b, b_out, alpha, alpha_out, x, y):
+        n = self.node(unreal.MaterialExpressionLinearInterpolate, x, y)
+        connect(a, a_out, n, "A")
+        connect(b, b_out, n, "B")
+        connect(alpha, alpha_out, n, "Alpha")
+        return n
+
+    def sat(self, a, a_out, x, y):
+        n = self.node(unreal.MaterialExpressionSaturate, x, y)
+        connect(a, a_out, n, "")
+        return n
+
+    def one_minus(self, a, a_out, x, y):
+        n = self.node(unreal.MaterialExpressionOneMinus, x, y)
+        connect(a, a_out, n, "")
+        return n
+
+    def clamp(self, a, a_out, lo, lo_out, hi, hi_out, x, y):
+        n = self.node(unreal.MaterialExpressionClamp, x, y)
+        connect(a, a_out, n, "Input")
+        connect(lo, lo_out, n, "Min")
+        connect(hi, hi_out, n, "Max")
+        return n
+
+    def append(self, a, a_out, b, b_out, x, y):
+        n = self.node(unreal.MaterialExpressionAppendVector, x, y)
+        connect(a, a_out, n, "A")
+        connect(b, b_out, n, "B")
+        return n
+
+    def mask(self, a, channels, x, y):
+        n = self.node(unreal.MaterialExpressionComponentMask, x, y)
+        for ch in ("r", "g", "b", "a"):
+            n.set_editor_property(ch, ch in channels)
+        connect(a, "", n, "")
+        return n
+
+    # -- time / motion / surface terms -------------------------------------------------------
+    def time(self, x, y):
+        return self.node(unreal.MaterialExpressionTime, x, y)
+
+    def sine(self, a, a_out, x, y):
+        n = self.node(unreal.MaterialExpressionSine, x, y)
+        connect(a, a_out, n, "")
+        return n
+
+    def panner(self, time_node, speed, x, y):
+        n = self.node(unreal.MaterialExpressionPanner, x, y)
+        connect(time_node, "", n, "Time")
+        connect(speed, "", n, "Speed")
+        return n
+
+    def vertex_color(self, x, y):
+        return self.node(unreal.MaterialExpressionVertexColor, x, y)
+
+    def fresnel(self, x, y, *, exponent=None):
+        n = self.node(unreal.MaterialExpressionFresnel, x, y)
+        if exponent is not None:
+            n.set_editor_property("exponent_in", exponent)
+        return n
+
+    def reflection_ws(self, x, y):
+        return self.node(unreal.MaterialExpressionReflectionVectorWS, x, y)
+
+    # -- material property sink -------------------------------------------------------------
+    def to(self, node, out, prop):
+        """Connect `node.out` to a `MaterialProperty` pin. A refused connection is an error --
+        exactly the same contract as `connect`, just for the property sinks instead of an
+        expression's own input pins."""
+        if not self.mel.connect_material_property(self.mat, node, out, prop):
+            raise SystemExit("[matgraph] refused material property %s" % prop)
+
+
+def class_lut_uv(graph, index_param, x, y):
+    """`Append((SurfaceClassIndex + 0.5) / 64, 0.5)` -- the class-LUT texel centre for a 64-row,
+    1-tall lookup texture (mechanics doc 1b; design doc "Class index and physical material")."""
+    half = graph.const(0.5, x, y + LAYOUT_ROW)
+    rows = graph.const(64.0, x, y + 2 * LAYOUT_ROW)
+    offset = graph.add(index_param, "", half, "", x + LAYOUT_COL, y)
+    u = graph.div(offset, "", rows, "", x + 2 * LAYOUT_COL, y)
+    v = graph.const(0.5, x + 2 * LAYOUT_COL, y + LAYOUT_ROW)
+    return graph.append(u, "", v, "", x + 3 * LAYOUT_COL, y)
+
+
+def read_class_lut(graph, lut_texture_object, uv, x, y):
+    """Sample the class LUT at `uv` with a hard-pinned mip 0 (`TMVM_MipLevel`), so its 64 texel
+    rows never blend into each other regardless of what mip chain the texture carries."""
+    return graph.sample(lut_texture_object, uv, x, y, mip=0)

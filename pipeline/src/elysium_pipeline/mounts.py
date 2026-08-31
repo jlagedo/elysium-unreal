@@ -8,6 +8,9 @@ site derives from the same value instead of restating it.
 from __future__ import annotations
 
 MATERIALS = "/Game/ElysiumGenerated/Materials"
+# The V2 material-import masters (SF-4.3), a package below MATERIALS rather than beside the
+# legacy make_*_materials.py masters -- the two sets are never mixed on one asset.
+MATERIALS_V2 = MATERIALS + "/V2"
 AUDIO = "/Game/ElysiumGenerated/Audio"
 UI_FONTS = "/Game/ElysiumGenerated/UI/Fonts"
 INPUT = "/Game/ElysiumGenerated/Input"
