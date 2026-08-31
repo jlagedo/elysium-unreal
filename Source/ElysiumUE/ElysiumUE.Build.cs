@@ -12,10 +12,14 @@ public class ElysiumUE : ModuleRules
 		IWYUSupport = IWYUSupport.Full;
 
 		// Public API surface. Every Public/ header only inherits from and forward-declares
-		// Engine framework types, so nothing beyond these three belongs on the public deps.
+		// Engine framework types, plus the one physics type below.
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
-			"Core", "CoreUObject", "Engine"
+			"Core", "CoreUObject", "Engine",
+			// UElysiumPhysicalMaterial derives from UPhysicalMaterial and stores an
+			// EPhysicalSurface, both PhysicsCore types named in a Public/ header, so the
+			// dependency is public rather than private (Engine re-exports it either way).
+			"PhysicsCore"
 		});
 
 		// Used only inside Private/*.cpp — kept off the public API so downstream modules
@@ -37,7 +41,7 @@ public class ElysiumUE : ModuleRules
 			"ChaosClothAssetEngine",
 			// Static props: build UStaticMesh at runtime from mesh descriptions
 			// (BuildFromMeshDescriptions) with manual convex collision for solid props.
-			"MeshDescription", "StaticMeshDescription", "PhysicsCore",
+			"MeshDescription", "StaticMeshDescription",
 			// The character bake authors skeletal assets through the engine's own mesh-description
 			// path -- geometry, skin weights and morph deltas -- which is what every shipped
 			// importer writes into. SkeletalMeshDescription carries FSkeletalMeshAttributes;
@@ -122,12 +126,13 @@ public class ElysiumUE : ModuleRules
 				// UElysiumClothBuildLibrary turns VtMB's authored garment payload into a
 				// UChaosClothAsset. `Chaos` carries FManagedArrayCollection, which the cloth
 				// collection IS; the two ChaosClothAsset modules carry the facades that write it
-				// and the asset that consumes it; PhysicsCore carries the body setups the
-				// authored capsules and spheres become; `ChaosCloth` carries UChaosClothConfig and
+				// and the asset that consumes it; the body setups the authored capsules and
+				// spheres become come from PhysicsCore, a public dependency above;
+				// `ChaosCloth` carries UChaosClothConfig and
 				// FClothingSimulationConfig, which is how a complete solver property set is
 				// produced rather than hand-written. Editor-only: an asset is generated once
 				// and the running game only ever loads the result.
-				"Chaos", "ChaosCloth", "ChaosClothAsset", "PhysicsCore"
+				"Chaos", "ChaosCloth", "ChaosClothAsset"
 			});
 			// Lumen card baking (docs/architecture/uasset-bake-spike.md). IMeshUtilities::GenerateCardRepresentationData
 			// is the real surfel-fitted card builder; it ray-traces the mesh through Embree, so it only
