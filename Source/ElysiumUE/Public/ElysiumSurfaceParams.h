@@ -14,8 +14,8 @@
 // This revision (SF-4.3 part 2) reconciled M_V2_Lit to the design revision 2026-08-31 ("Revise
 // the material import design after review") and added M_V2_LitTranslucent, M_V2_Unlit and
 // M_V2_TwoTexture. Part 3 adds the remaining five masters family-by-family (mechanics doc
-// "Ordering, concurrency, tests, risks"): this revision adds M_V2_Sprite (M_V2_Eyes and
-// M_V2_Water already landed).
+// "Ordering, concurrency, tests, risks"): this revision adds M_V2_Refract (M_V2_Eyes, M_V2_Water
+// and M_V2_Sprite already landed).
 //
 // Every V2 master exposes SurfaceClassIndex, SurfaceClassLUT, Alpha and Color -- the four
 // parameters the design doc states once, "on every master", rather than repeating in each
@@ -318,5 +318,39 @@ namespace ElysiumSurfaceParamsSprite
 		inline const FName UseVertexColor(TEXT("UseVertexColor"));
 		inline const FName UseVertexAlpha(TEXT("UseVertexAlpha"));
 		inline const FName UseAnimatedFrames(TEXT("UseAnimatedFrames"));
+	}
+}
+
+// `M_V2_Refract` -- `refract`/`heatglow` families (11 units). No shipped source and no
+// transcribed selector; the master is a reconstruction (design doc "M_V2_Refract"). No
+// `ForceRefract` parameter -- `$forcerefract` has zero corpus authors and no proxy, so there is
+// nothing to expose it for.
+namespace ElysiumSurfaceParamsRefract
+{
+	namespace Textures
+	{
+		inline const FName BaseTexture(TEXT("BaseTexture"));
+		inline const FName DuDvMap(TEXT("DuDvMap"));
+		inline const FName NormalMap(TEXT("NormalMap"));
+		inline const FName EnvMap(TEXT("EnvMap"));
+	}
+
+	namespace Scalars
+	{
+		inline const FName RefractAmount(TEXT("RefractAmount"));
+	}
+
+	namespace Vectors
+	{
+		inline const FName RefractTint(TEXT("RefractTint"));
+		inline const FName EnvMapTint(TEXT("EnvMapTint"));
+	}
+
+	namespace Switches
+	{
+		inline const FName UseBaseTexture(TEXT("UseBaseTexture"));
+		inline const FName UseNormalMap(TEXT("UseNormalMap"));
+		inline const FName UseEnvMap(TEXT("UseEnvMap"));
+		inline const FName UseFixedCube(TEXT("UseFixedCube"));
 	}
 }

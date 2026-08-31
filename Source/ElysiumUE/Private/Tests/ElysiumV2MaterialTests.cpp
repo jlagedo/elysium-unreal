@@ -264,6 +264,30 @@ namespace
 		ElysiumSurfaceParamsSprite::Switches::UseAnimatedFrames,
 	};
 
+	static const FName RefractTextures[] = {
+		ElysiumSurfaceParamsShared::Textures::SurfaceClassLUT,
+		ElysiumSurfaceParamsRefract::Textures::BaseTexture,
+		ElysiumSurfaceParamsRefract::Textures::DuDvMap,
+		ElysiumSurfaceParamsRefract::Textures::NormalMap,
+		ElysiumSurfaceParamsRefract::Textures::EnvMap,
+	};
+	static const FName RefractScalars[] = {
+		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
+		ElysiumSurfaceParamsShared::Scalars::Alpha,
+		ElysiumSurfaceParamsRefract::Scalars::RefractAmount,
+	};
+	static const FName RefractVectors[] = {
+		ElysiumSurfaceParamsShared::Vectors::Color,
+		ElysiumSurfaceParamsRefract::Vectors::RefractTint,
+		ElysiumSurfaceParamsRefract::Vectors::EnvMapTint,
+	};
+	static const FName RefractSwitches[] = {
+		ElysiumSurfaceParamsRefract::Switches::UseBaseTexture,
+		ElysiumSurfaceParamsRefract::Switches::UseNormalMap,
+		ElysiumSurfaceParamsRefract::Switches::UseEnvMap,
+		ElysiumSurfaceParamsRefract::Switches::UseFixedCube,
+	};
+
 	// `M_V2_LitTranslucent` is the same graph under a different material-only property set
 	// (mechanics doc / design "Master inventory" -- blend mode, two-sidedness and the opacity
 	// clip value are per-instance overrides, so they never multiply masters).
@@ -282,6 +306,8 @@ namespace
 			WaterTextures, WaterScalars, WaterVectors, WaterSwitches},
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Sprite.M_V2_Sprite"),
 			SpriteTextures, SpriteScalars, SpriteVectors, SpriteSwitches},
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Refract.M_V2_Refract"),
+			RefractTextures, RefractScalars, RefractVectors, RefractSwitches},
 	};
 }
 

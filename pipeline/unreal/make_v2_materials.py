@@ -1765,6 +1765,182 @@ def make_sprite():
     return mat
 
 
+# ============================================================================================
+# M_V2_Refract
+# ============================================================================================
+
+
+class RefractParams:
+    class Textures:
+        BaseTexture = "BaseTexture"
+        DuDvMap = "DuDvMap"
+        NormalMap = "NormalMap"
+        EnvMap = "EnvMap"
+        SurfaceClassLUT = "SurfaceClassLUT"
+
+    class Scalars:
+        Alpha = "Alpha"
+        SurfaceClassIndex = "SurfaceClassIndex"
+        RefractAmount = "RefractAmount"
+
+    class Vectors:
+        Color = "Color"
+        RefractTint = "RefractTint"
+        EnvMapTint = "EnvMapTint"
+
+    class Switches:
+        UseBaseTexture = "UseBaseTexture"
+        UseNormalMap = "UseNormalMap"
+        UseEnvMap = "UseEnvMap"
+        UseFixedCube = "UseFixedCube"
+
+
+REFRACT_PARAM_TABLE = {
+    "textures": sorted(vars(RefractParams.Textures)[k] for k in vars(RefractParams.Textures) if not k.startswith("_")),
+    "scalars": sorted(vars(RefractParams.Scalars)[k] for k in vars(RefractParams.Scalars) if not k.startswith("_")),
+    "vectors": sorted(vars(RefractParams.Vectors)[k] for k in vars(RefractParams.Vectors) if not k.startswith("_")),
+    "switches": sorted(vars(RefractParams.Switches)[k] for k in vars(RefractParams.Switches) if not k.startswith("_")),
+}
+
+
+def _build_refract(mat, collection, lut_texture):
+    """No shipped source and no transcribed selector for this family (design doc "M_V2_Refract"):
+    "the master is Unreal `Refraction` from `$dudvmap`/`$normalmap` scaled by `RefractAmount`,
+    tinted by `RefractTint`. Stated as a reconstruction, not a transcription." This reuses the
+    legacy `M_Refract`'s (`make_world_materials.py::make_refract`) own Pixel Normal Offset
+    technique and its "1.0 is neutral, `$refractamount` is added to one" convention verbatim,
+    rather than `M_V2_Water`'s different (normal-perturbation) wiring -- `M_Refract` is the closer
+    precedent here since this master has no `CheapWater`-style bypass switch to route around.
+
+    `DuDvMap` and `NormalMap` both feed the one shared `MP_NORMAL` -- `NormalMap` is the lit bump
+    (gated `UseNormalMap`, matching every other master's normal lane) and `DuDvMap` contributes an
+    unconditional additive ripple, sampled through the same UV, on top; DuDvMap's own default
+    (`DefaultNormal`, flat) makes an unbound slot an exact no-op the same way `M_V2_Water`'s does.
+
+    `UseEnvMap` is declared per the exposed-parameter table but not separately wired: this master's
+    per-family table states no reflection-mask/specular formula at all (unlike Lit/Water), so
+    `UseEnvMap`'s only real effect is Lumen's own implicit reflection off the class-LUT Specular/
+    Roughness -- nothing here to connect it to. `UseFixedCube` gates the literal authored-cube
+    emissive add, identical in shape to `M_V2_Lit`'s and `M_V2_Water`'s.
+
+    `ForceRefract` is dropped (design doc: `$forcerefract` has zero corpus authors and no proxy) --
+    there is accordingly no such parameter in this master's table at all, not even declared.
+    """
+    g = Graph(mat, collection=collection)
+    P = RefractParams
+
+    uv0 = g.node(unreal.MaterialExpressionTextureCoordinate, -1100, -600)
+
+    base_tex = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
+    connect(uv0, "", base_tex, "UVs")
+    base_rgb = g.mask(base_tex, "rgb", -900, -400)
+    base_a = g.mask(base_tex, "a", -900, -320, src_out="RGBA")
+    white3 = g.const3(1.0, 1.0, 1.0, -900, -240)
+    base_selected = g.switch(P.Switches.UseBaseTexture, base_rgb, white3, -700, -360, default=True)
+    base_a_selected = g.switch(P.Switches.UseBaseTexture, base_a, g.const(1.0, -900, -160),
+                               -700, -200, default=True)
+
+    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
+    refract_tint = g.vec3(P.Vectors.RefractTint, (1.0, 1.0, 1.0, 1.0), -1100, -680)
+    base_color_final = g.mul(g.mul(base_selected, "", color, "", -500, -420), "", refract_tint, "",
+                             -300, -460)
+    g.to(base_color_final, "", unreal.MaterialProperty.MP_BASE_COLOR)
+
+    # -- Normal: NormalMap (lit bump, gated UseNormalMap) plus DuDvMap's unconditional ripple ----
+    dudv_tex = g.tex(P.Textures.DuDvMap, -1100, 60, kind="normal")
+    connect(uv0, "", dudv_tex, "UVs")
+    dudv_rgb = g.mask(dudv_tex, "rgb", -900, 60)
+    normal_tex = g.tex(P.Textures.NormalMap, -1100, 260, kind="normal")
+    connect(uv0, "", normal_tex, "UVs")
+    flat_normal = g.const3(0.0, 0.0, 1.0, -700, 140)
+    normal_lit = g.switch(P.Switches.UseNormalMap, g.mask(normal_tex, "rgb", -700, 260),
+                          flat_normal, -500, 220, default=False)
+    dudv_delta = g.sub(dudv_rgb, "", flat_normal, "", -700, 340)
+    combined_normal = g.add(normal_lit, "", dudv_delta, "", -300, 300)
+    g.to(combined_normal, "", unreal.MaterialProperty.MP_NORMAL)
+
+    # -- Refraction: `M_Refract`'s own "1.0 is neutral" convention -- `RefractAmount` is added to
+    # one rather than interpreted as glass IOR --------------------------------------------------
+    refract_amount = g.scalar(P.Scalars.RefractAmount, 20.0, -1100, 620)
+    neutral = g.const(1.0, -1100, 700)
+    refraction_magnitude = g.add(neutral, "", g.div(refract_amount, "", g.const(100.0, -900, 780),
+                                                     "", -900, 700), "", -700, 700)
+    g.to(refraction_magnitude, "", unreal.MaterialProperty.MP_REFRACTION)
+
+    # -- surface class lookup: no reflection-mask formula for this master, so Roughness/Specular/
+    # Metallic are always the class row (like M_V2_Eyes/M_V2_TwoTexture) -----------------------
+    class_roughness, class_specular, class_metallic = _class_lut(
+        g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+    g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    g.to(class_specular, "", unreal.MaterialProperty.MP_SPECULAR)
+    g.to(class_metallic, "", unreal.MaterialProperty.MP_METALLIC)
+
+    # `UseEnvMap` is declared but not wired -- see the function docstring -----------------------
+    g.switch(P.Switches.UseEnvMap, g.const(1.0, -900, 2000), g.const(0.0, -900, 2080),
+            -700, 2040, default=False)
+
+    # -- Emissive: the authored fixed cube add, identical shape to M_V2_Lit's/M_V2_Water's -------
+    env_tint = g.vec3(P.Vectors.EnvMapTint, (1.0, 1.0, 1.0, 1.0), -1900, 2240)
+    fixed_cube_strength = g.mpc("FixedCubeStrength", -1900, 2320)
+    reflect_dir = g.reflection_ws(-1900, 2400)
+    envcube = g.cube(P.Textures.EnvMap, -1700, 2400, default=DEFAULT_CUBE)
+    connect(reflect_dir, "", envcube, "UVs")
+    fixed_raw = g.mul(g.mul(envcube, "RGB", env_tint, "", -1500, 2400), "", fixed_cube_strength, "",
+                      -1300, 2440)
+    lumen_safe_fixed = g.node(unreal.MaterialExpressionRayTracingQualitySwitch, -1100, 2400)
+    connect(fixed_raw, "", lumen_safe_fixed, "Normal")
+    connect(g.const3(0.0, 0.0, 0.0, -1100, 2480), "", lumen_safe_fixed, "RayTraced")
+    fixed_emissive = g.switch(P.Switches.UseFixedCube, lumen_safe_fixed,
+                              g.const3(0.0, 0.0, 0.0, -900, 2400), -900, 2360, default=False)
+    g.to(fixed_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # -- Opacity: Alpha x BaseTexture.a (translucent, no vertex-color/alpha lane on this master) -
+    alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
+    opacity = g.mul(alpha_param, "", base_a_selected, "", 1900, 0)
+    g.to(opacity, "", unreal.MaterialProperty.MP_OPACITY)
+
+
+def make_refract():
+    name = "M_V2_Refract"
+    asset = "%s/%s" % (PKG, name)
+    collection = _load_surfaces_collection()
+    lut_texture = _load_class_lut()
+    recipe = {
+        "graphVersion": GRAPH_VERSION,
+        "sourceHash": _source_hash(),
+        "citedUnits": {},  # no shipped source and no transcribed selector for this family
+        "params": REFRACT_PARAM_TABLE,
+        "mpcScalars": REQUIRED_MPC_SCALARS,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    mat, asset = _fresh(name, ism=True, nanite=True)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property(
+        "translucency_lighting_mode",
+        unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
+    mat.set_editor_property("refraction_method", unreal.RefractionMode.RM_PIXEL_NORMAL_OFFSET)
+    mat.set_editor_property("two_sided", False)
+
+    _build_refract(mat, collection, lut_texture)
+
+    errors = mel.recompile_material(mat)
+    if errors:
+        _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    bl.stamp_recipe(mat, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mat
+
+
 def _cmdline_arg(key, default=""):
     needle = "-%s=" % key
     for token in unreal.SystemLibrary.get_command_line().split():
@@ -1785,3 +1961,4 @@ make_two_texture()
 make_eyes()
 make_water()
 make_sprite()
+make_refract()
