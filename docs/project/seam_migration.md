@@ -167,7 +167,7 @@ for the material slice. The lane, `uv run elysium import textures`, is specified
 - **Every authored mip is imported**, including the 65 short chains; what Unreal does with a
   chain that ends above 1×1 is observed on the first run and recorded, not assumed.
 - **sRGB is decided from the material bindings**, read from the material units directly (the
-  corpus index carries the edge but not the parameter — extending it is a follow-up): a texture is
+  corpus index carries the edge and, since SF-1.5, the `parameter` it was read from): a texture is
   colour unless every binding is a data read (`$bumpmap`, `$normalmap`, `$dudvmap`,
   `$envmapmask`, `$masktexture`…) or it has no binding (461 units, recorded as `no evidence`).
 - **Conflict textures get a linear twin.** 590 textures are bound as colour by one material and
@@ -192,6 +192,10 @@ for the material slice. The lane, `uv run elysium import textures`, is specified
 - **The first run is the full corpus.** The lane isolates per-unit failures, resumes from recipe
   stamps and reports every failed unit with its reason, so a defect late in the run costs a
   relaunch, not the run.
+- **The 1,325 SF-1.3 reflection probes land in the same slice.** Once SF-1.5/1.6 claim and
+  publish them, `uv run elysium import textures` picks them up as `TC_` under
+  `/ElysiumBaked/Textures/maps/<map>/` alongside the rest: 1,325 imported, 11,825 reused, 0
+  pruned, 0 failed (`import_report.json`), 13,150 texture assets on disk in total.
 
 **Baked reflection probes are not reflection content (owner call, 2026-08-31).** The 1,325
 per-map `maps/<map>/c<x>_<y>_<z>` probes are renders of the 2004 lightmapped world; adding them
@@ -432,7 +436,10 @@ the corpus index under each map's `embedded[]` with `asset: null` ("became nothi
 `seam_map_map.md` → "PAKFILE routing" states they become ordinary units and
 `unit_contract/origin.py` already defines the `bsp-pakfile` origin. The map root's
 `cubemaps[].resolved` and `pakfile.entries[].unit` resolve against the zip, not against a unit on
-disk, so nothing failed. The contract exists; the exporter half was never built.
+disk, so nothing failed. The contract exists; the exporter half was never built. Phase 1 closes
+this finding: SF-1.3/1.4 publish the 1,325 probe and 7,501 patched-material units and SF-1.5
+claims every one of them in the corpus index's `embedded[]`, driving `summary.embeddedUnclaimed`
+to 0.
 
 ### Phase 1 — export layer complete (export_v2)
 
