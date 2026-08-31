@@ -718,7 +718,11 @@ deliberately **after** this roadmap — see "Wire first, tune later" below.
   with the `-1.0` shadow rows dropped, submodel 0 for static props, collision cooked per model
   from VPhysics with the **placement** selecting the mode (and the bbox rule for VPHYSICS-without-
   `.phy`), surfaceprop fallback to default (recorded anomaly), Lumen-only lighting (no
-  `TEXCOORD_1`), scope = the 3,677 referenced units. → lands: the binding contract.
+  `TEXCOORD_1`), scope = the 3,677 referenced units. Written (R1.1's own call, matching the V2
+  masters' beside-not-over principle) to the **V2 sibling root `/ElysiumBaked/Meshes`** — not over
+  `/ElysiumBaked/Shared/Meshes` — with stems, asset names and slot names preserved exactly, so the
+  runtime resolver's flip is one accessor and is a named wiring task of its own (R5.1).
+  → lands: the binding contract.
 - **R1.2 Validator sees the invisible.** `warnings_for` (or a new cross-unit check) surfaces
   `vtmb:missing-material:` sentinel slots; the corpus-index first-reason-per-label under-reporting
   is fixed; pytest pins both. → lands: sentinel counts in `doctor`.
@@ -727,8 +731,9 @@ deliberately **after** this roadmap — see "Wire first, tune later" below.
   manifest for 3,677 units + report.
 - **R1.4 Import.** Editor commandlet writes the `SM_` corpus: named slots bound to V2 `MI_`,
   cooked convex collision, Nanite per the opacity rule, provenance `UAssetUserData`, recipe
-  idempotency, `import_report.json`. → lands: the shared prop meshes on the new pipeline, at the
-  exact paths the four substrate call sites already resolve.
+  idempotency, `import_report.json`. → lands: the shared prop meshes on the new pipeline under
+  `/ElysiumBaked/Meshes`, with the stems and slot names the four substrate call sites already
+  compute, so the flip to them is a root change and nothing else.
 - **R1.5 Skins asset.** The corpus skin table regenerated from `skinFamilies` (successor of
   `DA_ElysiumPropSkins`), slot-name parity with `ApplyPropSkin`/`ApplyAnimatedPropSkin`.
   → lands: skin swaps work on the new meshes.
@@ -797,8 +802,11 @@ deliberately **after** this roadmap — see "Wire first, tune later" below.
 
 - **R5.1 Geometry and props from the root unit** [MP-4.1]. World/sky/brush meshes from the
   root scenes; props placed from `staticProps[]` referencing the R1 meshes with per-placement
-  solid/skin/fade applied; the `.obj` gate flips to the R2.4 artifact. Closes the "Where do the
-  props go?" open question. → lands: a map authored wholly from GLB.
+  solid/skin/fade applied; the `.obj` gate flips to the R2.4 artifact.
+  `FElysiumContentPaths::BakedSharedMeshes()` flips from `/ElysiumBaked/Shared/Meshes` to R1's
+  `/ElysiumBaked/Meshes` here — one accessor, since `BakedPropMesh`/`BakedItemMesh`/
+  `BakedPropSkins` all compose from it and the stems and slot names are identical. Closes the
+  "Where do the props go?" open question. → lands: a map authored wholly from GLB.
 - **R5.2 Sky baked.** Cube imported per sky name (six), `SLS_SpecifiedCubemap` assigned, the
   intensity join computed at bake, the sky-dome mesh authored; the runtime sky assembly deleted.
   → lands: editor shows the true sky.
