@@ -137,9 +137,63 @@ def references(roots: Mapping[str, Mapping[str, Any]]) -> list[Reference]:
                     target=str(row.get("asset", "")),
                     source_path=str(row.get("sourcePath", "")),
                     resolved=bool(row.get("resolved", False)),
+                    parameter=row.get("parameter"),
                 )
             )
     return edges
+
+
+#: The three places one map root names an asset outside its own `dependencies` rows: the texture
+#: seam's material identities, the cubemap probes, and the PAKFILE entries it routed to the
+#: material or texture seam. Each tuple is `(field, nested "entries" key or None, asset key)`.
+_MAP_REFERENCE_FIELDS = (
+    ("textures", None, "asset"),
+    ("cubemaps", None, "asset"),
+    ("pakfile", "entries", "unit"),
+)
+
+
+def unpublished_map_references(
+    roots: Mapping[str, Mapping[str, Any]], units: Sequence[Unit]
+) -> list[dict[str, Any]]:
+    """Every asset a map root names in `textures[]`, `cubemaps[]` or `pakfile.entries[].unit`
+    that the corpus does not publish as a unit.
+
+    A map unit's own export only knows whether the *install* holds the member it names --
+    `resolved` on its dependency rows -- not whether the corpus went on to publish a unit for it.
+    The index has the whole unit set in hand, so this is the question the map unit cannot ask
+    itself: SF-1.3/1.4 add the PAKFILE-embedded texture and material units this now checks for.
+    """
+
+    published = {unit.asset for unit in units}
+    seen: set[tuple[str, str, str]] = set()
+    failures: list[dict[str, Any]] = []
+    for asset in sorted(roots):
+        if not asset.startswith("vtmb:map:"):
+            continue
+        root = roots[asset]
+        for field, nested, asset_key in _MAP_REFERENCE_FIELDS:
+            block = root.get(field)
+            rows = (block.get(nested) if isinstance(block, Mapping) else None) if nested else block
+            for row in rows or ():
+                if not isinstance(row, Mapping):
+                    continue
+                target = row.get(asset_key)
+                if not target or target in published:
+                    continue
+                key = (asset, field, str(target))
+                if key in seen:
+                    continue
+                seen.add(key)
+                failures.append(
+                    {
+                        "from": asset,
+                        "to": str(target),
+                        "field": field,
+                        "reason": "the map names a unit the corpus does not publish",
+                    }
+                )
+    return failures
 
 
 def inverse(edges: Sequence[Reference]) -> dict[str, list[dict[str, str]]]:

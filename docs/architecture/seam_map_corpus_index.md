@@ -94,7 +94,15 @@ One `members[]` row per winning member:
 | `unclaimed` | no seam claims the member |
 
 PAKFILE members are not install members; they appear under their map's `embedded[]` with their
-`bsp-pakfile` origin and the material or texture unit each became.
+`bsp-pakfile` origin and the material or texture unit each became. Claiming an embedded member
+needs no selecting install member: the texture and material seams' own `source_keys()`
+enumerate every BSP's PAKFILE `.tth`/`.ttz` and `.vmt` (SF-1.3/SF-1.4), and the walk's claim
+table (`walk.py::_claims`) records the asset every such key resolves to whether or not that key
+also selects a member below `materials/` on disk. A `.vmt`/`.tth`/`.ttz` embedded member's
+`asset` is therefore null only when the corpus genuinely publishes no such unit; export-time
+validation still requires that unit to exist on disk (`embedded[].asset` must name a published
+unit, the same rule a `unit`/`companion` member's `asset` is held to). A member of any other
+kind a BSP happens to pack is not routed by the map seam at all and stays `asset: null`.
 
 ### Residue categories
 
@@ -129,8 +137,10 @@ a row whose file is missing or whose hash differs, fails the index.
 ## References
 
 `references[]` is every `dependencies` row of every unit as an edge: `from`, `role`, `to`,
-`sourcePath`, `resolved`. `inverse` is the same graph keyed by target, and it is what fills the
-fields no unit can write about itself:
+`sourcePath`, `resolved`, and `parameter` where the row carries one -- the VMT key a material's
+texture binding was read from, published only when set (a material unit already writes
+`parameter` on its texture dependency rows; SF-1.5 carries it through to the edge). `inverse` is
+the same graph keyed by target, and it is what fills the fields no unit can write about itself:
 
 | Written into | From |
 |---|---|
@@ -163,8 +173,18 @@ or a missing seam rule, and both are worth a query.
 | `dialogue-line-audio` | every dialogue line whose audio the convention names resolves to a sound unit, `.mp3`-first |
 | `map-partition` | each map's four ledgers together claim every BSP byte once |
 | `texture-material-roles` | every texture unit is bound by at least one material or is an orphan |
+| `map-references-published` | every asset a map root names in `textures[]`, `cubemaps[]` or `pakfile.entries[].unit` is a unit the corpus actually publishes |
 
 A failed check fails the corpus export like an unclaimed member does.
+
+`map-references-published` (SF-1.5, `graph.unpublished_map_references`) is the corpus-level half
+of a map's own resolution: a map unit's `resolved` flag on a dependency row only states whether
+the *install* holds the member a texture, cubemap or PAKFILE entry names, because the map's own
+export has no view of the published corpus. The index has the whole `units[]` table in hand, so
+this check asks the question the map unit cannot ask itself -- whether the corpus went on to
+publish a unit for that asset -- and fails a map that names one it does not, most usefully a
+patched material or reflection probe SF-1.3/1.4 export but the plural texture/material commands
+have not (yet) been rerun to publish.
 
 ## Census
 
@@ -180,11 +200,16 @@ the other per-disposition and per-check totals, it carries the PAKFILE embedding
 BSP's `embedded[]` rows are members of no seam's own count, so they get their own three fields.
 `embeddedMembers` is the total row count over every map's `embedded[]`; `embeddedUnclaimed` is
 how many of those rows carry `asset: null` — no seam claims the PAKFILE member yet;
-`embeddedUnclaimedByExtension` breaks the unclaimed count down by the member's extension (today
-`.vmt`, `.tth`, `.ttz`). `uv run elysium doctor` reports `embeddedUnclaimed` as a warning, not a
-failure — unlike `summary.unclaimed`, an unclaimed PAKFILE member does not fail the corpus
-export, because no seam claims PAKFILE members yet (`seam_migration.md` → "Plan — surfaces
-track" → SF-1.1). SF-1.5 is the task that drives `embeddedUnclaimed` to zero.
+`embeddedUnclaimedByExtension` breaks the unclaimed count down by the member's extension. `uv run
+elysium doctor` reports `embeddedUnclaimed` as a warning, not a failure — unlike
+`summary.unclaimed`, an unclaimed PAKFILE member does not fail the corpus export
+(`seam_migration.md` → "Plan — surfaces track" → SF-1.1). SF-1.5 is the task that drives
+`embeddedUnclaimed` to zero: the texture and material seams' `source_keys()` now claim every
+`.vmt`/`.tth`/`.ttz` PAKFILE key regardless of whether it also selects an install member, so
+`embeddedUnclaimed` is 0 whenever the plural texture and material exports have published every
+key those two seams enumerate. Only a member of a kind the map seam's own PAKFILE routing does
+not recognise at all (today never seen in a real install; `.vmt`/`.tth`/`.ttz` are the only
+extensions the 108 BSPs pack) can still leave a row unclaimed.
 
 ## Dependencies
 

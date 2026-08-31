@@ -38,7 +38,7 @@ RESIDUE_CATEGORIES = (
     "excluded-by-decision",
 )
 
-#: The nine properties no single unit can validate, in the order the seam map tabulates them.
+#: The ten properties no single unit can validate, in the order the seam map tabulates them.
 CHECK_NAMES = (
     "surface-property-inheritance",
     "model-include-tree",
@@ -49,6 +49,7 @@ CHECK_NAMES = (
     "dialogue-line-audio",
     "map-partition",
     "texture-material-roles",
+    "map-references-published",
 )
 
 #: The only two things the walk leaves out, each with the reason it is not a member.
@@ -224,15 +225,21 @@ class Reference:
     target: str
     source_path: str
     resolved: bool
+    #: The VMT key this edge was read from, where the row carries one (a material's texture
+    #: bindings do); `None` for a row whose dependency kind has no such key.
+    parameter: str | None = None
 
     def to_json(self) -> dict[str, Any]:
-        return {
+        row: dict[str, Any] = {
             "from": self.source,
             "role": self.role,
             "to": self.target,
             "sourcePath": self.source_path,
             "resolved": bool(self.resolved),
         }
+        if self.parameter is not None:
+            row["parameter"] = self.parameter
+        return row
 
 
 #: The three install roots the walk covers, as the seam map's own identity block spells them.

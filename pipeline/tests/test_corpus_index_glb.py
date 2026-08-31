@@ -581,11 +581,18 @@ def test_pakfile_members_are_embedded_rather_than_install_members(tmp_path):
         "materials/maps/tutorial/cubemap.tth",
         "readme.md",
     }
-    # "the unit it became" is a claim about a published unit, so it is made only where a seam
-    # claims that key. The install ships neither of these two below `materials/`, so nothing
-    # decoded them and both rows say so.
-    assert embedded["materials/maps/tutorial/patched.vmt"]["asset"] is None
-    assert embedded["materials/maps/tutorial/cubemap.tth"]["asset"] is None
+    # SF-1.5: the texture and material seams' own `source_keys()` enumerate every BSP's PAKFILE
+    # `.vmt`/`.tth`/`.ttz`, so both are claimed even though the install ships neither of them
+    # below `materials/` at all -- "the unit it became" no longer needs a selecting install
+    # member, only a key the seam's own plural export would publish.
+    assert embedded["materials/maps/tutorial/patched.vmt"]["asset"] == (
+        "vtmb:material:maps/tutorial/patched"
+    )
+    assert embedded["materials/maps/tutorial/cubemap.tth"]["asset"] == (
+        "vtmb:texture:maps/tutorial/cubemap"
+    )
+    # `readme.md` is neither kind the map seam's own PAKFILE routing recognises, so it names no
+    # unit regardless of what the seams claim.
     assert embedded["readme.md"]["asset"] is None
     origin = embedded["readme.md"]["origin"]
     assert origin["kind"] == "bsp-pakfile" and origin["map"] == "tutorial"
@@ -868,6 +875,34 @@ def test_references_are_every_dependency_row_and_inverse_is_their_transpose(tmp_
     ]
 
 
+def test_references_carry_the_parameter_a_material_texture_binding_names(tmp_path):
+    """SF-1.5: `graph.references()` passes a dependency row's `parameter` through to the edge,
+    published only where the row carries one -- material units already write it on their texture
+    dependency rows."""
+
+    export_root = tmp_path / "exports_v2"
+    export_root.mkdir()
+    publish(export_root, "textures/wall.glb", "vtmb:texture:wall")
+    publish(export_root, "models/prop.glb", "vtmb:model:prop")
+    publish(
+        export_root,
+        "materials/wall.glb",
+        "vtmb:material:wall",
+        dependencies=[
+            {"role": "texture", "parameter": "$basetexture", "asset": "vtmb:texture:wall",
+             "sourcePath": "materials/wall.tth", "resolved": True},
+            dependency("model", "vtmb:model:prop", "materials/wall.vmt", True),
+        ],
+    )
+    units, roots = graph.read_corpus(export_root)
+    texture_edge = next(edge for edge in graph.references(roots) if edge.role == "texture")
+    assert texture_edge.parameter == "$basetexture"
+    assert texture_edge.to_json()["parameter"] == "$basetexture"
+    model_edge = next(edge for edge in graph.references(roots) if edge.role == "model")
+    assert model_edge.parameter is None
+    assert "parameter" not in model_edge.to_json()
+
+
 def test_dangling_references_are_grouped_by_role(tmp_path):
     result, export_root = indexed(tmp_path)
     publish(export_root, "materials/floor.glb", "vtmb:material:floor",
@@ -905,10 +940,15 @@ def test_the_census_restates_the_walk_and_the_corpus(tmp_path):
 
 
 def test_summary_counts_embedded_pakfile_members_unclaimed_by_extension(tmp_path):
-    """SF-1.1: the gap no seam claims PAKFILE members yet is visible in `summary`, not silent.
+    """SF-1.1/SF-1.5: the gap of PAKFILE members no seam claims is visible in `summary`, not
+    silent -- and SF-1.5 drives it to (near) zero for the three extensions a BSP ever packs.
 
-    `materials/wall.vmt` is claimed (the install ships it, so a `vtmb:material:wall` unit
-    exists); the other two rows name keys no seam publishes and stay `asset: null`.
+    `materials/wall.vmt` is claimed the ordinary way (the install ships it too, so a
+    `vtmb:material:wall` unit exists); the texture and material seams' own `source_keys()` now
+    also claim `.vmt`/`.tth`/`.ttz` PAKFILE keys with no install member at all, so
+    `materials/probe.tth` is claimed too (`vtmb:texture:probe`, published below). Only
+    `readme.md` -- a kind the map seam's own PAKFILE routing does not recognise at all -- stays
+    unclaimed.
     """
 
     result, export_root = indexed(
@@ -916,16 +956,17 @@ def test_summary_counts_embedded_pakfile_members_unclaimed_by_extension(tmp_path
         pakfile=zip_pakfile(
             {
                 "materials/wall.vmt": b"packed wall",
-                "materials/unclaimed.vmt": b"no seam claims this",
-                "materials/probe.tth": b"no seam claims this either",
+                "materials/probe.tth": b"packed probe",
+                "readme.md": b"no seam claims this",
             }
         ),
     )
+    publish(export_root, "textures/probe.glb", "vtmb:texture:probe")
     root = root_of(exporter.export(result, export_root))
     summary = root["summary"]
     assert summary["embeddedMembers"] == 3
-    assert summary["embeddedUnclaimed"] == 2
-    assert summary["embeddedUnclaimedByExtension"] == {".vmt": 1, ".tth": 1}
+    assert summary["embeddedUnclaimed"] == 1
+    assert summary["embeddedUnclaimedByExtension"] == {".md": 1}
 
 
 def test_summary_embedded_counters_are_zero_with_no_pakfile_members(tmp_path):
@@ -935,6 +976,34 @@ def test_summary_embedded_counters_are_zero_with_no_pakfile_members(tmp_path):
     assert summary["embeddedMembers"] == 0
     assert summary["embeddedUnclaimed"] == 0
     assert summary["embeddedUnclaimedByExtension"] == {}
+
+
+def test_a_pakfile_only_vmt_and_tth_are_claimed_by_the_texture_and_material_seams(tmp_path):
+    """SF-1.5: `_claims` computes an asset for a key even where it selects no install member, so
+    a PAKFILE-embedded `.vmt`/`.tth` the texture and material seams' own `source_keys()` publish
+    is claimed even though the install carries no `materials/maps/**` member at all."""
+
+    result, export_root = indexed(
+        tmp_path,
+        pakfile=zip_pakfile(
+            {
+                "materials/maps/tutorial/wall_1_2_3.vmt": b'"LightmappedGeneric"{}',
+                "materials/maps/tutorial/c1_2_3.tth": b"tth",
+            }
+        ),
+    )
+    member = result.by_path()["maps/tutorial.bsp"]
+    embedded = {row["member"]: row["asset"] for row in member.embedded}
+    assert embedded["materials/maps/tutorial/wall_1_2_3.vmt"] == (
+        "vtmb:material:maps/tutorial/wall_1_2_3"
+    )
+    assert embedded["materials/maps/tutorial/c1_2_3.tth"] == "vtmb:texture:maps/tutorial/c1_2_3"
+    publish(export_root, "materials/maps_tutorial_wall_1_2_3.glb",
+            "vtmb:material:maps/tutorial/wall_1_2_3")
+    publish(export_root, "textures/maps_tutorial_c1_2_3.glb",
+            "vtmb:texture:maps/tutorial/c1_2_3")
+    root = root_of(exporter.export(result, export_root))
+    assert root["summary"]["embeddedUnclaimed"] == 0
 
 
 def test_the_index_declares_one_corpus_unit_dependency_per_unit(tmp_path):
@@ -1409,6 +1478,52 @@ def test_a_texture_nothing_binds_is_an_orphan_rather_than_a_failure(tmp_path):
     export_root = corpus(tmp_path / "exports_v2")
     publish(export_root, "textures/floor.glb", "vtmb:texture:floor")
     assert named(run_checks(export_root), "texture-material-roles")["passed"]
+
+
+def test_map_references_published_fails_on_a_map_naming_an_unpublished_asset(tmp_path):
+    """SF-1.5: the index has the whole unit set in hand, so it answers what a map's own export
+    could not -- whether the corpus actually published the unit a texture, cubemap or PAKFILE
+    entry names."""
+
+    export_root = corpus(tmp_path / "exports_v2")
+    publish(
+        export_root,
+        "maps/tutorial.glb",
+        "vtmb:map:tutorial",
+        header={"mapRevision": 7},
+        textures=[{"asset": "vtmb:material:ghost"}],
+        cubemaps=[{"asset": "vtmb:texture:maps/tutorial/c1_2_3"}],
+        pakfile={"entries": [{"unit": "vtmb:material:maps/tutorial/wall_1_2_3"}]},
+    )
+    row = named(run_checks(export_root), "map-references-published")
+    assert not row["passed"]
+    targets = {failure["to"] for failure in row["failures"]}
+    assert targets == {
+        "vtmb:material:ghost",
+        "vtmb:texture:maps/tutorial/c1_2_3",
+        "vtmb:material:maps/tutorial/wall_1_2_3",
+    }
+    fields = {failure["field"] for failure in row["failures"]}
+    assert fields == {"textures", "cubemaps", "pakfile"}
+
+
+def test_map_references_published_passes_when_every_named_asset_is_published(tmp_path):
+    export_root = corpus(tmp_path / "exports_v2")
+    publish(export_root, "textures/maps_tutorial_c1_2_3.glb",
+            "vtmb:texture:maps/tutorial/c1_2_3")
+    publish(export_root, "materials/maps_tutorial_wall_1_2_3.glb",
+            "vtmb:material:maps/tutorial/wall_1_2_3")
+    publish(
+        export_root,
+        "maps/tutorial.glb",
+        "vtmb:map:tutorial",
+        header={"mapRevision": 7},
+        textures=[{"asset": "vtmb:material:wall"}],
+        cubemaps=[{"asset": "vtmb:texture:maps/tutorial/c1_2_3"}],
+        pakfile={"entries": [{"unit": "vtmb:material:maps/tutorial/wall_1_2_3"}]},
+    )
+    # "vtmb:material:wall" is already published by the `corpus()` fixture.
+    assert named(run_checks(export_root), "map-references-published")["passed"]
 
 
 # --- the back-fill ----------------------------------------------------------------------------

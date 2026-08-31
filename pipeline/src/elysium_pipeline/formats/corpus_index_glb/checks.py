@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Mapping, Sequence
 
+from elysium_pipeline.formats.corpus_index_glb.graph import unpublished_map_references
 from elysium_pipeline.formats.corpus_index_glb.model import CHECK_NAMES, Reference, Unit
 
 
@@ -446,6 +447,15 @@ def texture_material_roles(units: Sequence[Unit], edges: Sequence[Reference]) ->
     return _row("texture-material-roles", failures)
 
 
+def map_references_published(
+    roots: Mapping[str, Mapping[str, Any]], units: Sequence[Unit]
+) -> dict[str, Any]:
+    """Every unit a map root names in `textures[]`, `cubemaps[]` or `pakfile.entries[].unit` is
+    published by the corpus (`seam_migration.md` -> "Plan -- surfaces track" -> SF-1.5)."""
+
+    return _row("map-references-published", unpublished_map_references(roots, units))
+
+
 def run(
     units: Sequence[Unit],
     edges: Sequence[Reference],
@@ -464,6 +474,7 @@ def run(
         dialogue_line_audio(edges, published),
         map_partition(roots),
         texture_material_roles(units, edges),
+        map_references_published(roots, units),
     ]
     assert [row["name"] for row in rows] == list(CHECK_NAMES)
     return rows

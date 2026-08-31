@@ -627,21 +627,32 @@ def _pakfile_members(
     return rows
 
 
-def _claims(index: dict, seams: Sequence[str] | None) -> tuple[dict[str, list[str]], dict[str, str]]:
-    """`(path -> owning unit assets)` for selecting members, and `(path -> owning unit)` for
-    companions, by asking each seam its own `source_keys()`."""
+def _claims(
+    index: dict, seams: Sequence[str] | None
+) -> tuple[dict[str, list[str]], dict[str, str], set[str]]:
+    """`(path -> owning unit assets)` for selecting members, `(path -> owning unit)` for
+    companions, and the set of every asset a seam claims, by asking each seam its own
+    `source_keys()`.
+
+    A key a seam publishes need not select an install member -- the PAKFILE-only texture and
+    material units SF-1.3/1.4 add have no member below `materials/` at all, only bytes inside a
+    BSP's own zip -- so `claimed` is built from every key's asset unconditionally, while the
+    `units`/`own` install-member bookkeeping is kept only where a selecting member exists.
+    """
 
     units: dict[str, list[str]] = {}
     companions: dict[str, str] = {}
+    claimed: set[str] = set()
     for claim in SEAM_CLAIMS:
         if seams is not None and claim.kind not in seams:
             continue
         own: dict[str, str] = {}
         for key in claim.keys(index):
+            asset = claim.asset_of(key)
+            claimed.add(asset)
             selecting = claim.member_of(key, index)
             if selecting is None:
                 continue
-            asset = claim.asset_of(key)
             owners = units.setdefault(selecting, [])
             if asset not in owners:
                 owners.append(asset)
@@ -653,7 +664,7 @@ def _claims(index: dict, seams: Sequence[str] | None) -> tuple[dict[str, list[st
     # both the font's page and the texture seam's own `.tth` unit is published as the unit it is.
     for path in units:
         companions.pop(path, None)
-    return units, companions
+    return units, companions, claimed
 
 
 def collect(
@@ -690,11 +701,11 @@ def collect(
     shadow = shadow or {}
     containers = list(containers or ())
 
-    unit_claims, companion_claims = _claims(index, seams)
+    unit_claims, companion_claims, claimed = _claims(index, seams)
     facts = _facts(index, read)
     #: Every identity some seam claims, so a PAKFILE member names the unit it became only where
-    #: a seam publishes that key and null otherwise.
-    claimed = {asset for owners in unit_claims.values() for asset in owners}
+    #: a seam publishes that key and null otherwise -- including a PAKFILE-only key, which
+    #: selects no install member and so never reaches `unit_claims`.
 
     members: list[Member] = []
     for path in sorted(index):
