@@ -55,6 +55,7 @@ class MaterialModel:
     proxies: list[ProxyRecord]
     texture_bindings: list[dict[str, Any]]
     patch: dict[str, Any] | None
+    patch_of: dict[str, Any] | None
     surface_property: str | None
     environment: dict[str, Any] | None
     shader_resolution: dict[str, Any]

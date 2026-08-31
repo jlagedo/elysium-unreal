@@ -10,12 +10,14 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from elysium_pipeline.formats.map_glb.model import split_patched_name
 from elysium_pipeline.formats.material_glb import lexer, shaders
 from elysium_pipeline.formats.material_glb.coverage import ByteLedger
 from elysium_pipeline.formats.material_glb.model import (
     MaterialModel,
     Parameter,
     ProxyRecord,
+    asset_id,
     surface_property_asset_id,
     texture_asset_id,
 )
@@ -46,6 +48,21 @@ RENDER_TARGET_PREFIX = "_rt_"
 
 #: The block that holds material proxies, whatever its source casing.
 PROXY_BLOCK = "proxies"
+
+#: The `Patch` shader's own top-level blocks: every pair inside one is applied to the base
+#: material directly (an override, or an addition where the base lacks the key), not a proxy
+#: operand. Every compiler-generated patched map material is a real `Patch` shader whose
+#: `replace` block carries the `$envmap` override to the baked probe, so a pair here is read the
+#: same way a top-level pair is.
+PATCH_OVERRIDE_BLOCKS = frozenset({"replace", "insert"})
+
+
+def _is_patch_override(block_path: str) -> bool:
+    """Whether a parameter's block path is a `Patch` shader's own top-level override block."""
+
+    if not block_path or "/" in block_path:
+        return False
+    return block_path.split("#", 1)[0] in PATCH_OVERRIDE_BLOCKS
 
 
 def normalize_value_path(value: str) -> str:
@@ -204,7 +221,7 @@ def decode_material(
     unresolved: list[dict[str, Any]] = []
 
     for parameter in parameters:
-        if parameter.block:
+        if parameter.block and not _is_patch_override(parameter.block):
             continue                       # a proxy's operands are variables, not material inputs
         if parameter.key == "$surfaceprop" and parameter.value.strip():
             surface_property = parameter.value.strip().strip('"').lower()
@@ -284,6 +301,31 @@ def decode_material(
                 "sourcePath": f"materials/{base}.vmt",
             })
 
+    # A map's PAKFILE holds one cubemap-patched copy of a material per baked probe that lit it,
+    # named `maps/<map>/<base>_<x>_<y>_<z>`. The compiler writes every one of these as a real
+    # `Patch` shader (`include` the base, `replace` block overriding `$envmap` to the probe), so
+    # the `patch` branch above already states the base edge for them; `patchOf` additionally
+    # states the *name's* join -- the cubemap origin the filename itself encodes -- independent of
+    # what the VMT's own shader happens to be, so a future patched copy that is not a literal
+    # `Patch` shader is still joined to its base and its probe.
+    patch_of: dict[str, Any] | None = None
+    split = split_patched_name(closure.material_path)
+    if split is not None:
+        base_name, cubemap_origin = split
+        patch_of = {
+            "asset": asset_id(base_name),
+            "cubemapOrigin": list(cubemap_origin),
+        }
+        dependency_key = ("material", patch_of["asset"])
+        if not any(
+            (row.get("role"), row.get("asset")) == dependency_key for row in dependencies
+        ):
+            dependencies.append({
+                "role": "material",
+                "asset": patch_of["asset"],
+                "sourcePath": f"materials/{base_name}.vmt",
+            })
+
     # Which shipped program the parameters select. A family whose selector has not been
     # transcribed from the binary publishes unresolved rather than guessing from the name.
     bound = {
@@ -330,6 +372,7 @@ def decode_material(
         proxies=proxies,
         texture_bindings=texture_bindings,
         patch=patch,
+        patch_of=patch_of,
         surface_property=surface_property,
         environment=environment,
         shader_resolution=shader_resolution,

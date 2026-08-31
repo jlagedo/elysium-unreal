@@ -12,6 +12,7 @@ from elysium_pipeline.formats.material_glb import (
     SCHEMA_VERSION,
     decode_material,
     load_source_closure,
+    normalize_material_path,
     output_relative_path,
 )
 from elysium_pipeline.formats.material_glb.model import plain
@@ -154,6 +155,7 @@ def build_document(model) -> tuple[dict, bytes]:
         "proxies": proxies,
         "textureBindings": model.texture_bindings,
         "patch": model.patch,
+        "patchOf": model.patch_of,
         "surfaceProperty": model.surface_property,
         "environment": model.environment,
         "dependencies": model.dependencies,
@@ -164,7 +166,7 @@ def build_document(model) -> tuple[dict, bytes]:
             "mapped": [
                 "identity", "sourceResolution", "shader", "parameters", "blocks", "proxies",
                 "shaderResolution", "textureBindings", "dependencies", "comments", "anomalies",
-                "omissions",
+                "omissions", "patchOf",
             ],
             "byteLedger": model.byte_coverage,
             "unresolved": model.unresolved,
@@ -207,6 +209,25 @@ def write_glb(document: dict, binary: bytes, destination: Path) -> None:
     os.replace(temporary, destination)
 
 
+def _map_probe_stems(index: dict, map_name: str, read_bytes) -> frozenset[str]:
+    """Every `.tth` stem one map's PAKFILE carries, as `$envmap` values name them.
+
+    A patched material's own `$envmap` override names its baked probe the same way the texture
+    seam's `source_keys` does -- `maps/<map>/<stem>`, no `materials/` prefix -- so this is that
+    same PAKFILE enumeration, filtered to one map and to stems alone.
+    """
+
+    from elysium_pipeline.formats.map_glb.pakfile_index import pakfile_members
+
+    suffix = ".tth"
+    members = pakfile_members(index, read_bytes=read_bytes).get(map_name, ())
+    return frozenset(
+        f"maps/{map_name}/{member.name.rsplit('/', 1)[-1][:-len(suffix)]}"
+        for member in members
+        if member.name.lower().endswith(suffix)
+    )
+
+
 def export(
     index: dict,
     material_path: str,
@@ -217,8 +238,16 @@ def export(
 ) -> Path:
     closure = load_source_closure(index, material_path, read_bytes=read_bytes)
     if texture_exists is None:
-        def texture_exists(path: str) -> bool:
-            return f"materials/{path}.tth" in index
+        normalized = normalize_material_path(material_path)
+        if normalized.startswith("maps/"):
+            map_name = normalized[len("maps/"):].split("/", 1)[0]
+            probe_stems = _map_probe_stems(index, map_name, read_bytes)
+
+            def texture_exists(path: str) -> bool:
+                return f"materials/{path}.tth" in index or path in probe_stems
+        else:
+            def texture_exists(path: str) -> bool:
+                return f"materials/{path}.tth" in index
 
     model = decode_material(closure, texture_exists=texture_exists)
     document, binary = build_document(model)

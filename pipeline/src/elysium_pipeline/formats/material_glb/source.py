@@ -13,27 +13,46 @@ from elysium_pipeline.formats.material_glb.model import (
     asset_id,
     normalize_material_path,
 )
+from elysium_pipeline.formats.unit_contract.origin import pakfile_origin
 
 
 class MaterialSourceError(RuntimeError):
     """The selected material source is absent or incoherent."""
 
 
-def source_keys(index: dict) -> list[str]:
+def source_keys(
+    index: dict,
+    *,
+    read_bytes: Callable[[dict, str], bytes | None] | None = None,
+) -> list[str]:
     """Every VMT identity the engine can address, in key order.
 
     The engine composes `materials/<search path><name>.vmt`, so a VMT packed outside `materials/`
     names no material and is not a unit. This is the one selection rule: the plural export
     command and the corpus index's member dispositions both call it, so neither can drift from
-    the other.
+    the other. Every map's PAKFILE lump adds its own patched-material copies -- cubemap-patched
+    duplicates of a base material, one per baked probe that lit it -- under
+    `maps/<map>/<mat>_<x>_<y>_<z>`; the install carries no `materials/maps/**` member today, so
+    these keys are never install duplicates. `read_bytes` is the same test injection point every
+    seam's closure loader takes.
     """
 
+    from elysium_pipeline.formats.map_glb.pakfile_index import pakfile_members
+
     prefix, suffix = "materials/", ".vmt"
-    return sorted(
+    keys = {
         path[len(prefix):-len(suffix)]
         for path in index
         if path.startswith(prefix) and path.endswith(suffix)
-    )
+    }
+    for members in pakfile_members(index, read_bytes=read_bytes).values():
+        for member in members:
+            name = member.name.replace("\\", "/").lower()
+            if not name.endswith(suffix):
+                continue
+            stem = name[len(prefix):] if name.startswith(prefix) else name
+            keys.add(stem[:-len(suffix)])
+    return sorted(keys)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +108,33 @@ def origin_of(entry) -> dict[str, object]:
     }
 
 
+def _pakfile_vmt(
+    index: dict,
+    map_name: str,
+    stem: str,
+    read_bytes: Callable[[dict, str], bytes | None] | None,
+) -> SourceMember:
+    from elysium_pipeline.formats.map_glb.pakfile_index import (
+        bsp_origin,
+        pakfile_member_bytes,
+        pakfile_members,
+    )
+
+    member_name = f"materials/maps/{map_name}/{stem}.vmt"
+    members = pakfile_members(index, read_bytes=read_bytes).get(map_name, ())
+    member = next(
+        (candidate for candidate in members if candidate.name.lower() == member_name.lower()),
+        None,
+    )
+    if member is None:
+        raise MaterialSourceError(f"missing required vmt: {member_name}")
+    data = pakfile_member_bytes(index, map_name, member.name, read_bytes=read_bytes)
+    origin = pakfile_origin(
+        map_name, member.name, bsp_origin(index, map_name, read_bytes=read_bytes)
+    ).to_json()
+    return SourceMember("vmt", member.name, data, origin)
+
+
 def load_source_closure(
     index: dict,
     material_path: str,
@@ -100,6 +146,10 @@ def load_source_closure(
 
         read_bytes = install.read
     normalized = normalize_material_path(material_path)
+    if normalized.startswith("maps/"):
+        map_name, _, stem = normalized[len("maps/"):].partition("/")
+        member = _pakfile_vmt(index, map_name, stem, read_bytes)
+        return MaterialSourceClosure(normalized, asset_id(normalized), member)
     key = f"materials/{normalized}.vmt"
     entry = index.get(key)
     data = read_bytes(index, key) if entry else None

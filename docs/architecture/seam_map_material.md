@@ -85,6 +85,51 @@ material.glb
 }
 ```
 
+### Patched map materials
+
+SF-1.4. Every map's PAKFILE lump carries cubemap-patched copies of the materials it lights, one
+per baked probe: a real `Patch` shader whose `include` names the base and whose `replace` block
+overrides `$envmap` to the probe. Their identity is `vtmb:material:maps/<map>/<mat>_<x>_<y>_<z>`
+(`seam_map_map.md` → "PAKFILE routing"), sourced from the BSP's own `bsp-pakfile` origin the same
+way `seam_map_texture.md` sources the probe it binds to. Where the filename encodes a probe origin,
+the extension states the join by name, independent of what the VMT's own shader happens to be:
+
+```json
+{
+  "identity": {"asset": "vtmb:material:maps/sp_tutorial_1/plaster/socwndwd_-7831_3759_6441"},
+  "patchOf": {"asset": "vtmb:material:plaster/socwndwd", "cubemapOrigin": [-7831, 3759, 6441]}
+}
+```
+
+`patchOf` is `null` for a patched copy the compiler names for the map's `cubemapdefault` fallback
+rather than a positioned probe (no coordinate suffix to join on); the base edge is still stated,
+through `patch` (below) rather than `patchOf`. Every real corpus case is the literal `Patch`
+shader, so the base material dependency the `patch` field already states and the one `patchOf`
+would add are the same row; the decode adds it once. `$envmap`'s value is a concrete probe path
+(`maps/<map>/c<x>_<y>_<z>` or `maps/<map>/cubemapdefault`), never the `env_cubemap` placeholder, so
+it resolves the ordinary texture-binding way to the SF-1.3 texture unit:
+
+```json
+{
+  "textureBindings": [
+    {"parameter": "$envmap", "value": "maps/sp_tutorial_1/c-7831_3759_6441", "kind": "texture",
+     "asset": "vtmb:texture:maps/sp_tutorial_1/c-7831_3759_6441", "resolved": true}
+  ],
+  "dependencies": [
+    {"role": "material", "asset": "vtmb:material:plaster/socwndwd",
+     "sourcePath": "materials/plaster/socwndwd.vmt"},
+    {"role": "texture", "parameter": "$envmap",
+     "asset": "vtmb:texture:maps/sp_tutorial_1/c-7831_3759_6441",
+     "sourcePath": "materials/maps/sp_tutorial_1/c-7831_3759_6441.tth", "resolved": true}
+  ]
+}
+```
+
+Resolving that binding needs a map-aware `texture_exists`: the probe is a PAKFILE member, not an
+install member, so the exporter's default (`materials/<path>.tth in index`) never sees it. The
+patched material's own `export()` call substitutes one that also answers true for its map's own
+PAKFILE `.tth` stems.
+
 ## Shader resolution
 
 The VMT names a shader *family*; the engine draws with one of that family's shipped combos, chosen

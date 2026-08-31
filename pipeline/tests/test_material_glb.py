@@ -10,13 +10,71 @@ from unittest import mock
 
 import pytest
 
+import zlib
+
 from elysium_pipeline.exporters import material_glb
 from elysium_pipeline.formats.material_glb import coverage as material_coverage
 from elysium_pipeline.formats.material_glb import decode_material
 from elysium_pipeline.formats.material_glb import lexer
+from elysium_pipeline.formats.material_glb import source as material_source
 from elysium_pipeline.formats.material_glb.model import MATERIAL_EXTENSION
 from elysium_pipeline.formats.material_glb.source import MaterialSourceClosure, SourceMember
 from elysium_pipeline.validation import material_glb as validation
+
+_BSP_HEADER_BYTES = 8 + 64 * 16 + 4
+
+
+def _zip_member(name: str, payload: bytes) -> tuple[bytes, bytes, int]:
+    """One stored ZIP member: its local record, its encoded name, and its length."""
+
+    raw = name.encode("latin-1")
+    local = struct.pack(
+        "<IHHHHHIIIHH", 0x04034B50, 20, 0, 0, 0, 0, zlib.crc32(payload), len(payload),
+        len(payload), len(raw), 0,
+    ) + raw + payload
+    return local, raw, len(payload)
+
+
+def _pakfile_zip(members: dict[str, bytes]) -> bytes:
+    """A minimal stored-only ZIP, the same layout the compiler writes into BSP lump 40."""
+
+    body = bytearray()
+    central = bytearray()
+    for name, payload in members.items():
+        offset = len(body)
+        local, raw, size = _zip_member(name, payload)
+        body.extend(local)
+        central.extend(
+            struct.pack(
+                "<IHHHHHHIIIHHHHHII", 0x02014B50, 20, 20, 0, 0, 0, 0, zlib.crc32(payload),
+                size, size, len(raw), 0, 0, 0, 0, 0, offset,
+            )
+            + raw
+        )
+    central_offset = len(body)
+    body.extend(central)
+    body.extend(
+        struct.pack(
+            "<IHHHHIIH", 0x06054B50, 0, 0, len(members), len(members), len(central),
+            central_offset, 0,
+        )
+    )
+    return bytes(body)
+
+
+def _bsp_with_pakfile(members: dict[str, bytes]) -> bytes:
+    """A synthetic BSP whose only populated lump is PAKFILE (lump 40)."""
+
+    payload = _pakfile_zip(members)
+    header = bytearray(struct.pack("<4si", b"VBSP", 17))
+    for index in range(64):
+        if index == 40:
+            header.extend(struct.pack("<iii4s", _BSP_HEADER_BYTES, len(payload), 0, b"\0\0\0\0"))
+        else:
+            header.extend(struct.pack("<iii4s", 0, 0, 0, b"\0\0\0\0"))
+    header.extend(struct.pack("<i", 7))
+    assert len(header) == _BSP_HEADER_BYTES
+    return bytes(header) + payload
 SIMPLE = b'"VertexLitGeneric"\r\n{\r\n\t"$basetexture" "models/teeth"\r\n}\r\n'
 #: A family whose selector is transcribed from the binary, so it resolves to a program.
 RESOLVED = b'"LightmappedGeneric"\r\n{\r\n\t"$basetexture" "models/teeth"\r\n}\r\n'
@@ -549,3 +607,98 @@ def test_an_untranscribed_selector_warns():
     warnings = validation.warnings_for(validation.validate_document(document, binary))
     assert len(warnings) == 1
     assert "no transcribed selector" in warnings[0]
+
+
+# --------------------------------------------------------------------------------------------
+# SF-1.4: PAKFILE patched map materials as units resolving $envmap to their probe.
+# --------------------------------------------------------------------------------------------
+
+#: The exact shape every compiler-generated patched map material carries in the real corpus
+#: (confirmed against `sp_tutorial_1`'s PAKFILE): a real `Patch` shader, `include` the base, and a
+#: `replace` block overriding `$envmap` to the baked probe's texture identity.
+PATCHED_BODY = (
+    b'"patch"\r\n{\r\n\t"include"\t\t"materials/plaster/wall.vmt"\r\n\t"replace"\r\n\t{\r\n'
+    b'\t\t"$envmap"\t\t"maps/testmap/c1_2_3"\r\n\t}\r\n}\r\n'
+)
+BASE_BODY = b'"LightmappedGeneric"\r\n{\r\n\t"$basetexture" "plaster/wall"\r\n}\r\n'
+
+
+def _patched_material_install():
+    """A synthetic install: a loose base material and one map BSP with its patched copy.
+
+    The PAKFILE's probe `c1_2_3.tth` is present so `$envmap` has something to resolve against;
+    its bytes are never decoded by the material seam, only its presence is asked about.
+    """
+
+    bsp = _bsp_with_pakfile(
+        {
+            "materials/maps/testmap/plaster/wall_1_2_3.vmt": PATCHED_BODY,
+            "materials/maps/testmap/c1_2_3.tth": b"probe-bytes",
+        }
+    )
+    index = {
+        "maps/testmap.bsp": ("loose", "synthetic/maps/testmap.bsp"),
+        "materials/plaster/wall.vmt": ("loose", "synthetic/plaster/wall.vmt"),
+    }
+    files = {
+        "maps/testmap.bsp": bsp,
+        "materials/plaster/wall.vmt": BASE_BODY,
+    }
+    return index, files
+
+
+def test_source_keys_lists_install_materials_and_pakfile_patched_copies():
+    index, files = _patched_material_install()
+    keys = material_source.source_keys(index, read_bytes=lambda _index, key: files.get(key))
+    assert "plaster/wall" in keys
+    assert "maps/testmap/plaster/wall_1_2_3" in keys
+    assert keys == sorted(keys)
+
+
+def test_patched_material_round_trips_and_resolves_its_envmap(tmp_path):
+    index, files = _patched_material_install()
+    destination = material_glb.export(
+        index,
+        "maps/testmap/plaster/wall_1_2_3",
+        tmp_path,
+        read_bytes=lambda _index, key: files.get(key),
+    )
+    summary = validation.validate(destination)
+    assert summary["asset"] == "vtmb:material:maps/testmap/plaster/wall_1_2_3"
+    assert summary["missingTextures"] == []
+
+    raw = destination.read_bytes()
+    size = struct.unpack_from("<I", raw, 12)[0]
+    document = json.loads(raw[20:20 + size].decode("utf-8").rstrip(" "))
+    extension = document["extensions"][MATERIAL_EXTENSION]
+
+    member = extension["sourceResolution"]["members"][0]
+    assert member["origin"]["kind"] == "bsp-pakfile"
+    assert member["origin"]["map"] == "testmap"
+    assert member["origin"]["member"] == "materials/maps/testmap/plaster/wall_1_2_3.vmt"
+    assert member["origin"]["origin"] == {"kind": "loose", "root": "loose"}
+
+    envmap = next(
+        row for row in extension["textureBindings"] if row["parameter"] == "$envmap"
+    )
+    assert envmap["resolved"] is True
+    assert envmap["asset"] == "vtmb:texture:maps/testmap/c1_2_3"
+
+    envmap_dependency = next(
+        row for row in extension["dependencies"]
+        if row.get("role") == "texture" and row.get("parameter") == "$envmap"
+    )
+    assert envmap_dependency["asset"] == "vtmb:texture:maps/testmap/c1_2_3"
+    assert envmap_dependency["resolved"] is True
+
+    assert extension["patchOf"] == {
+        "asset": "vtmb:material:plaster/wall",
+        "cubemapOrigin": [1, 2, 3],
+    }
+    assert any(
+        row.get("role") == "material" and row.get("asset") == "vtmb:material:plaster/wall"
+        for row in extension["dependencies"]
+    )
+    # The patched copy is a real `Patch` shader, so the base edge is stated once, not twice.
+    material_rows = [row for row in extension["dependencies"] if row.get("role") == "material"]
+    assert len(material_rows) == 1

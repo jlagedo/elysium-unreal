@@ -326,6 +326,22 @@ def validate_document(document: dict, binary: bytes, *, source_members=None) -> 
     patch = extension.get("patch")
     if patch is not None and not str(patch.get("asset", "")).startswith("vtmb:material:"):
         raise MaterialGlbValidationError("a patch edge names no base material")
+    patch_of = extension.get("patchOf")
+    if patch_of is not None:
+        if not str(patch_of.get("asset", "")).startswith("vtmb:material:"):
+            raise MaterialGlbValidationError("a patchOf edge names no base material")
+        origin = patch_of.get("cubemapOrigin")
+        if (
+            not isinstance(origin, list)
+            or len(origin) != 3
+            or not all(isinstance(value, int) for value in origin)
+        ):
+            raise MaterialGlbValidationError("a patchOf edge carries no integer cubemap origin")
+        if not any(
+            isinstance(row, dict) and row.get("role") == "material" and row.get("asset") == patch_of.get("asset")
+            for row in extension.get("dependencies") or []
+        ):
+            raise MaterialGlbValidationError("a patchOf edge names no dependency row")
     return {
         "asset": asset,
         "materialPath": identity.get("materialPath"),
