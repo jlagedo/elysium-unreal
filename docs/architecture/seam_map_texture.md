@@ -86,6 +86,36 @@ the referencing material, not of the texture identity.
 
 Both rows resolve through the UP-first policy independently.
 
+### Probes without a `.ttz`
+
+SF-1.2 investigation (read-only, 2026-08-31), against the 108 map BSPs' PAKFILE zips ahead of
+SF-1.3. The 1,325 baked reflection probes embedded there (108 `cubemapdefault` fallback probes +
+1,217 positioned `c<x>_<y>_<z>` probes) are ordinary VtMB cubemap textures, decoded the same way
+as any other `.tth`/`.ttz` pair (`texture_format.md` → "Cubemaps"); 575 of them ship as `.tth`-only
+members with no `.ttz` twin. They are not header-only stubs and not a distinct member kind: each
+one's whole admitted mip pyramid — all 7 VTF faces (6 axes plus the dropped low-end spheremap),
+down to 1×1 — already fits inside the `.tth`'s inline image range, so the map compiler wrote no
+external `.ttz` stream at all. Confirmed on all 575: the outer mip table's declared total `.ttz`
+length is `0`; the bytes available after the embedded VTF header already exceed `7 ×` the full-res
+face size; and `tex_to_png.decode_cubemap(tth, ttz=None)` decodes all six kept faces into valid,
+equal-sized, square RGBA images for every one — zero failures, zero short reads.
+
+Numbers: 552/575 are uncompressed `BGR888` (enum 3) — 32×32 (503), 64×64 (41), 128×128 (8) — and
+23/575 are `DXT5` (enum 15), all 32×32 `cubemapdefault` probes. It is not a clean format split: 27
+positioned `BGR888` probes (2 in `sm_diner_1`, 23 in `sp_giovanni_2a`, one each in
+`sp_giovanni_3`/`sp_giovanni_4`) carry a `.ttz` despite being uncompressed, and 78 of the 108
+`cubemapdefault` probes (mostly `DXT5`, same format as the 23 that don't) spill their larger mips
+into a `.ttz`. Whether one probe's pyramid lands wholly inline or splits across a `.ttz` is the
+ordinary per-texture inline/external size threshold the map compiler applies to every VtMB
+texture, not a property of "probe" as a kind.
+
+What SF-1.3 must do: nothing special. The "Texture unit" section above already states the `.ttz`
+is optional, and `texture_glb.decode` already carries `closure.ttz` as `Optional[SourceMember]`
+throughout (`has_external_file = closure.ttz is not None`). SF-1.3's PAKFILE enumeration only
+needs to pair each probe's `.tth` member with its `.ttz` sibling when the zip carries one, and
+pass `None` when it does not — the same source closure a loose or VPK texture with no `.ttz`
+already produces today.
+
 ### LaCroix examples
 
 ```text

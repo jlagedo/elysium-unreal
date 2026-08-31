@@ -227,6 +227,19 @@ taste living in a Python or C++ literal. `validation/shots_diff.py` may record b
 never the tuning method. PIE is the viewing window (`debug-tooling.md`: PIE is a viewer, and it
 picks up settings and collection edits without restart).
 
+**The 575 ttz-less probes are ordinary small inline textures (2026-08-31).** SF-1.2 investigated,
+read-only, ahead of SF-1.3. Of the 1,325 baked reflection probes embedded in the 108 map BSPs'
+PAKFILE zips, 575 carry no `.ttz` twin because each one's whole admitted mip pyramid — all 7 VTF
+faces down to 1×1 — already fits inside the `.tth`'s inline image range; the map compiler simply
+wrote no external `.ttz` stream for them. Confirmed on all 575: the outer mip table's declared
+`.ttz` length is `0`, the inline bytes already exceed 7 full-res faces, and
+`tex_to_png.decode_cubemap(tth, ttz=None)` decodes all six kept faces cleanly. 552 are uncompressed
+`BGR888`, 23 are small `DXT5` `cubemapdefault` probes; the split is the ordinary per-texture
+inline/external size threshold every VtMB texture uses, not a clean format rule — 27 `BGR888`
+positioned probes and 78 `DXT5` `cubemapdefault` probes still carry a `.ttz`. Detail:
+`seam_map_texture.md` → "Probes without a `.ttz`". SF-1.3 needs no special handling: the texture
+unit contract's `.ttz` is already optional and `texture_glb.decode` already carries it as such.
+
 Owner answers on the knob set (2026-08-31): **no per-material tuning layer** — the global
 settings and the class table are the whole authoring surface, and an edit to an imported `MI_`
 is a throwaway experiment the next import overwrites; **class key** is `$surfaceprop` when
@@ -384,10 +397,6 @@ disk, so nothing failed. The contract exists; the exporter half was never built.
   to retired.
 
 ## Open questions
-
-**575 probe `.tth` members with no `.ttz`.** Of the 1,325 PAKFILE probe textures, 750 have the
-`.ttz` payload twin and 575 do not. Before SF-A2 emits them: header-only probes, mip-less small
-cubes, or something the map seam should own? Answer belongs in `seam_map_texture.md`.
 
 **Where do the props go?** A map's geometry, materials and textures already bake to `.uasset`, but
 static-prop placement still travels as the `<map>.props` sidecar that
