@@ -607,7 +607,12 @@ def test_switches_are_set_unbatched_then_applied_in_one_update_call(tmp_path):
     assert mic.update_calls == 1
 
 
-def test_no_switches_means_no_update_call(tmp_path):
+def test_no_switches_still_gets_the_one_post_override_update_call(tmp_path):
+    # `update_material_instance` is called exactly once per entry regardless of switch count --
+    # after base-property overrides land too, not per-switch -- so the static-permutation
+    # resource is rebuilt against the entry's final state before the compile probe touches it
+    # (see the comment in `_finish_entry`: a `TwoSided`-only trigger for the editor's hit-proxy
+    # shader permutation crashes UE 5.8 if probed against a stale snapshot).
     editor = _base_editor()
     _add_texture(editor, "/ElysiumBaked/Textures/art/T_brick")
     module = _load(editor)
@@ -615,7 +620,7 @@ def test_no_switches_means_no_update_call(tmp_path):
 
     module.run(manifest)
 
-    assert editor.assets[ROOT + "/art/MI_brick"].update_calls == 0
+    assert editor.assets[ROOT + "/art/MI_brick"].update_calls == 1
 
 
 # --- blend override mapping -------------------------------------------------------------------------

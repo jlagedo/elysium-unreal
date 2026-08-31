@@ -357,11 +357,11 @@ def _apply_base_property_overrides(mic, overrides):
 
 
 def _apply_switches(mic, switches):
+    # `update_material_instance=False` on every switch: the one instance-wide refresh happens in
+    # `_finish_entry`, after `_apply_base_property_overrides` too -- see the comment there.
     for name, value in switches.items():
         _mel.set_material_instance_static_switch_parameter_value(
             mic, name, bool(value), update_material_instance=False)
-    if switches:
-        _mel.update_material_instance(mic)
 
 
 def _permutation_key(entry):
@@ -417,6 +417,16 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
 
     _apply_switches(mic, entry["switches"])
     _apply_base_property_overrides(mic, entry["basePropertyOverrides"])
+    # One refresh, after every static-switch and base-property-override write: `TwoSided` (like
+    # any base-property override) is not part of the static parameter set the switches' own
+    # update would have rebuilt against, so an instance whose *only* reason to need the editor's
+    # hit-proxy shader permutation is its `TwoSided` override -- opaque, writes every pixel,
+    # nothing else forcing it -- would otherwise probe a shader map built from a snapshot older
+    # than the override, and UE 5.8 asserts (`ShaderMapId.ContainsShaderType`, "missing expected
+    # shader type FHitProxyVS") rather than silently recompiling. Refreshing once here, after both
+    # switches and overrides have landed and before the compile probe touches the resource, keeps
+    # the shader map's cache key and its live `ShouldCache` evaluation looking at the same state.
+    _mel.update_material_instance(mic)
 
     phys_material_path = entry.get("physMaterial")
     if phys_material_path:
