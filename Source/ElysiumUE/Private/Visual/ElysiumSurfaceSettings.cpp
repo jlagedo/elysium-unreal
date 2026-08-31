@@ -185,7 +185,11 @@ void UElysiumSurfaceSettings::PushToWorldInstances(UMaterialParameterCollection*
 void UElysiumSurfaceSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
 {
 	Super::PostEditChangeProperty(PropertyChangedEvent);
-	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive)
+	// `EPropertyChangeType::Type` is a plain bitmask (UnrealType.h), not an exclusive enum: an
+	// interactive drag can arrive combined with another flag, so testing equality against the
+	// single `Interactive` value would miss those and push the expensive asset-defaults path on
+	// every tick of the drag after all.
+	if ((PropertyChangedEvent.ChangeType & EPropertyChangeType::Interactive) != 0)
 	{
 		// A slider mid-drag: PIE should still follow it live, but the collection's asset defaults
 		// (Collection->Modify()/PreEditChange()/PostEditChange(), a transaction and a material-

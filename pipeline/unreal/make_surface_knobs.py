@@ -18,6 +18,8 @@
 # Normally rebuilt by the umbrella (uv run elysium export bundle policy ->
 # pipeline/unreal/build_content.py, which the export runs); also runnable standalone:
 #   UnrealEditor-Cmd.exe ElysiumUE.uproject -run=pythonscript -script="pipeline/unreal/make_surface_knobs.py" -unattended -nosplash -nopause
+import re
+
 import unreal
 
 from pipeline.unreal import _bootstrap  # noqa: F401, E402
@@ -69,18 +71,47 @@ def make_collection():
         _fail("could not create %s" % asset)
 
     existing = list(collection.get_editor_property("scalar_parameters"))
-    have = {p.get_editor_property("parameter_name") for p in existing}
+
+    # C-1: heal duplicate/suffixed rows from an earlier buggy run of this generator. `have` used
+    # to build a set of raw `unreal.Name` values -- `unreal.Name.__hash__` does not agree with
+    # `str.__hash__`, so `name not in have` (`name` a plain Python str from `SCALAR_NAMES`) was
+    # never true and every run appended all 16 rows again, regardless of what already existed
+    # (on disk `MPC_ElysiumSurfaces` accumulated ~311 rows this way: `DefaultSpecular`,
+    # `DefaultSpecular1`, `DefaultSpecular2`, ... for all 16 knobs). Coercing to `str` here fixes
+    # `have`'s membership test going forward; the loop below is what heals an asset that already
+    # has the duplicates on disk, by rebuilding the scalar list to exactly one row per known knob
+    # (keeping the *first* matching row's value -- a human's tuned edit, or a prior legitimate
+    # push) plus every row this generator does not own, untouched.
+    suffix_pattern = re.compile(r"^(?:%s)\d+$" % "|".join(re.escape(name) for name in SCALAR_NAMES))
+    healed = []
+    seen_known_names = set()
+    dropped_any = False
+    for parameter in existing:
+        name = str(parameter.get_editor_property("parameter_name"))
+        if name in SCALAR_NAMES:
+            if name in seen_known_names:
+                dropped_any = True  # duplicate row for a known knob: drop it, first one wins
+                continue
+            seen_known_names.add(name)
+            healed.append(parameter)
+        elif suffix_pattern.match(name):
+            dropped_any = True  # a numbered-suffix ghost row for a known knob: drop it
+        else:
+            healed.append(parameter)  # not one of ours; leave it alone
+
+    have = seen_known_names
     missing = [name for name in SCALAR_NAMES if name not in have]
-    if missing:
-        for name in missing:
-            parameter = unreal.CollectionScalarParameter()
-            parameter.set_editor_property("parameter_name", name)
-            # A placeholder, not a class default: main() unconditionally calls
-            # settings.push_to_collection() right after this function returns, which overwrites
-            # every row (missing or pre-existing alike) with UElysiumSurfaceSettings's real value.
-            parameter.set_editor_property("default_value", 0.0)
-            existing.append(parameter)
-        collection.set_editor_property("scalar_parameters", existing)
+    for name in missing:
+        parameter = unreal.CollectionScalarParameter()
+        parameter.set_editor_property("parameter_name", name)
+        # A placeholder, not a class default: main() unconditionally calls
+        # settings.push_to_collection() right after this function returns, which overwrites
+        # every row (missing or pre-existing alike) with UElysiumSurfaceSettings's real value.
+        parameter.set_editor_property("default_value", 0.0)
+        healed.append(parameter)
+
+    if missing or dropped_any:
+        collection.set_editor_property("scalar_parameters", healed)
         if not unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False):
             _fail("could not save %s" % asset)
     return collection
@@ -117,6 +148,19 @@ def make_calibration():
     # calibration asset saves the LUT along with it, so there is no second asset path to save.
     if not unreal.EditorAssetLibrary.save_asset(asset, only_if_is_dirty=False):
         _fail("could not save %s" % asset)
+
+    # C-3: an asset saved before RegenerateLut moved the texture in-package still points `Lut` at
+    # the old sibling package (`%s/T_SurfaceClassLUT` % PKG); RegenerateLut's own `if (!Lut)` guard
+    # only creates the in-package texture when `Lut` is null, so the orphan sibling asset is never
+    # touched by that call. Once the migrated DA has been saved (above), the sibling is dead
+    # weight -- an editor Python snippet or a stray reference could still resolve it -- so delete
+    # it here, after the DA it used to belong to no longer needs it.
+    orphan = "%s/T_SurfaceClassLUT" % PKG
+    if unreal.EditorAssetLibrary.does_asset_exist(orphan):
+        if unreal.EditorAssetLibrary.delete_asset(orphan):
+            unreal.log("[make_surface_knobs] deleted orphan sibling LUT asset %s" % orphan)
+        else:
+            unreal.log_warning("[make_surface_knobs] could not delete orphan sibling LUT asset %s" % orphan)
     return calibration
 
 

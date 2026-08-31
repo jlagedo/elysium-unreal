@@ -49,10 +49,12 @@ struct FElysiumSurfaceClassRow
  * `docs/project/seam_migration.md` 2026-08-31, "Calibration happens on knobs inside the editor").
  *
  * A saved asset, not transient: `/Game/ElysiumGenerated/Materials/V2/DA_SurfaceCalibration`, with
- * its `Lut` texture saved beside it at `T_SurfaceClassLUT` and hard-referenced from `Lut`, so
- * neither can go stale relative to the other. `RegenerateLut` is editor-only (`FTextureSource` is
- * C++-only, `Texture.h:197`) and creates the LUT package on first run when the data asset predates
- * a texture, so `pipeline/unreal/make_surface_knobs.py` can call it right after seeding the rows.
+ * its `Lut` texture created *inside* this asset's own package (object name `T_SurfaceClassLUT`,
+ * outer `this`), never a sibling `/T_SurfaceClassLUT` package, so saving the data asset saves the
+ * LUT along with it and neither can go stale relative to the other. `RegenerateLut` is editor-only
+ * (`FTextureSource` is C++-only, `Texture.h:1268`) and creates the in-package texture on first run
+ * (or migrates `Lut` in-package when it still points at an older sibling asset, C-3), so
+ * `pipeline/unreal/make_surface_knobs.py` can call it right after seeding the rows.
  */
 UCLASS(BlueprintType)
 class ELYSIUMUE_API UElysiumSurfaceCalibration : public UDataAsset
@@ -66,7 +68,7 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Elysium|Surface", meta = (TitleProperty = "Name"))
 	TArray<FElysiumSurfaceClassRow> Rows;
 
-	/** The baked 128x1 BGRA8 lookup, saved beside this asset. */
+	/** The baked 128x1 BGRA8 lookup, created inside this asset's own package (never a sibling asset). */
 	UPROPERTY(VisibleAnywhere, Category = "Elysium|Surface")
 	TObjectPtr<UTexture2D> Lut;
 
@@ -87,6 +89,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Elysium|Surfaces")
 	void RegenerateLut(bool& bOutOk, FString& OutError);
 
+	/**
+	 * H-4 (owner call, not implemented): a slider drag on one row's Roughness/Specular/Metallic
+	 * currently shows no live preview at all -- `PostEditChangeProperty` below skips
+	 * `RegenerateLut` entirely on an interactive change and only bakes on the terminal ValueSet
+	 * (mouse-up). A cheap mid-drag path is possible in principle (resolve the dragged row from
+	 * `PropertyChangedEvent.GetPropertyNode()`/`MemberProperty`, write that one texel via
+	 * `Lut->Source.LockMip`/`UnlockMip` and `Lut->UpdateResource()`, skipping the full
+	 * `Source.Init` + `PreEditChange`/`PostEditChange` this function does on ValueSet) but doing
+	 * it correctly needs the changed row's array index out of `PropertyChangedEvent` -- which
+	 * struct/array element actually moved under a `TArray<FElysiumSurfaceClassRow>` edit is not
+	 * trivial to resolve robustly from the event alone, and a wrong-row write during a drag is a
+	 * worse bug than no preview. Left as a follow-up rather than risked here.
+	 */
 #if WITH_EDITOR
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
 #endif

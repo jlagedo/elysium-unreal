@@ -160,3 +160,122 @@ def test_materials_reexports_surface_classes():
         assert getattr(materials, name) is getattr(surface_classes, name), (
             "materials.%s is not the same object as surface_classes.%s" % (name, name)
         )
+
+
+# --- C-1: make_collection() heals duplicate rows against a fake unreal.Name hash bug ------------
+
+
+def _fake_name_hash_unreal():
+    """A minimal fake `unreal` module: a `Name`-like value whose `__hash__` deliberately diverges
+    from `hash(str(self))`, the same shape of divergence a real `unreal.Name` has against a plain
+    Python str (`unreal.Name.__hash__` is not `str.__hash__`). Building `have` from these objects
+    directly (the pre-C-1 code) makes `name not in have` always true for a `SCALAR_NAMES` str, so
+    every run appended all 16 rows again regardless of what already existed on disk."""
+    from types import SimpleNamespace
+
+    class FakeName:
+        def __init__(self, text):
+            self._text = text
+
+        def __str__(self):
+            return self._text
+
+        def __eq__(self, other):
+            return str(other) == self._text
+
+        def __hash__(self):
+            return id(self)  # deliberately never equal to hash(str(self))
+
+    class FakeScalarParameter:
+        def __init__(self, name=None, value=0.0):
+            self.props = {}
+            if name is not None:
+                self.props["parameter_name"] = FakeName(name)
+                self.props["default_value"] = value
+
+        def get_editor_property(self, key):
+            return self.props[key]
+
+        def set_editor_property(self, key, value):
+            self.props[key] = value
+
+    class FakeCollection:
+        def __init__(self, rows):
+            self.props = {"scalar_parameters": list(rows)}
+
+        def get_editor_property(self, key):
+            return self.props[key]
+
+        def set_editor_property(self, key, value):
+            self.props[key] = value
+
+    saves = []
+    fake = SimpleNamespace(
+        log=lambda *a, **k: None,
+        log_warning=lambda *a, **k: None,
+        log_error=lambda *a, **k: None,
+        AssetToolsHelpers=SimpleNamespace(get_asset_tools=lambda: SimpleNamespace(create_asset=None)),
+        CollectionScalarParameter=FakeScalarParameter,
+        EditorAssetLibrary=SimpleNamespace(
+            save_asset=lambda path, only_if_is_dirty=False: (saves.append(path) or True),
+            does_asset_exist=lambda path: False,
+            delete_asset=lambda path: True,
+        ),
+    )
+    return fake, FakeName, FakeScalarParameter, FakeCollection, saves
+
+
+def _load_make_surface_knobs(fake_unreal):
+    import importlib.util
+    import sys
+    from unittest import mock
+
+    spec = importlib.util.spec_from_file_location(
+        "elysium_test_make_surface_knobs", GENERATOR)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    with mock.patch.dict(sys.modules, {"unreal": fake_unreal}):
+        spec.loader.exec_module(module)  # guarded by `if __name__ == "__main__":`; main() does not run
+    module.unreal = fake_unreal
+    return module
+
+
+def test_c1_make_collection_heals_duplicate_and_suffixed_rows():
+    fake, FakeName, FakeScalarParameter, FakeCollection, saves = _fake_name_hash_unreal()
+    module = _load_make_surface_knobs(fake)
+
+    rows = []
+    for name in module.SCALAR_NAMES:
+        rows.append(FakeScalarParameter(name, 1.0))
+    # A duplicate row for a known knob, from an earlier buggy run -- first occurrence's value
+    # (1.0) must survive, this later duplicate's (9.0) must not.
+    rows.append(FakeScalarParameter(module.SCALAR_NAMES[0], 9.0))
+    # A numbered-suffix ghost row for a different known knob.
+    rows.append(FakeScalarParameter(module.SCALAR_NAMES[1] + "1", 5.0))
+    # A row this generator does not own -- must survive untouched.
+    rows.append(FakeScalarParameter("SomeUnrelatedScalar", 42.0))
+
+    collection = FakeCollection(rows)
+    asset_path = "%s/%s" % (module.PKG, module.COLLECTION_NAME)
+    fake.load_asset = lambda path: collection if path == asset_path else None
+
+    result = module.make_collection()
+    assert result is collection
+
+    healed = list(collection.get_editor_property("scalar_parameters"))
+    names = [str(p.get_editor_property("parameter_name")) for p in healed]
+
+    # Exactly one row per known knob, no duplicates and no numbered-suffix ghosts.
+    for name in module.SCALAR_NAMES:
+        assert names.count(name) == 1, "expected exactly one row for %s, found %r" % (name, names)
+    assert (module.SCALAR_NAMES[1] + "1") not in names
+
+    # The first occurrence's value survived, the duplicate's did not.
+    first_row = healed[names.index(module.SCALAR_NAMES[0])]
+    assert first_row.get_editor_property("default_value") == 1.0
+
+    # An unrelated row is untouched.
+    assert "SomeUnrelatedScalar" in names
+
+    # The heal pass actually saved the asset (there was something to heal).
+    assert asset_path in saves

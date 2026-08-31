@@ -5,10 +5,6 @@
 #include "UObject/Package.h"
 #include "UObject/UObjectGlobals.h"
 
-#if WITH_EDITOR
-#include "AssetRegistry/AssetRegistryModule.h"
-#endif
-
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumSurfaceCalibration, Log, All);
 
 namespace
@@ -76,7 +72,7 @@ void UElysiumSurfaceCalibration::RegenerateLut(bool& bOutOk, FString& OutError)
 		}
 	}
 
-	if (!Lut)
+	if (!Lut || Lut->GetOuter() != this)
 	{
 		// Created inside this data asset's own package (outer `this`), never a sibling package at
 		// a hand-guessed path: a transient calibration (a Substrate test's NewObject'd instance)
@@ -84,13 +80,26 @@ void UElysiumSurfaceCalibration::RegenerateLut(bool& bOutOk, FString& OutError)
 		// via a LoadObject/CreatePackage fallback, and a saved calibration's LUT living in its own
 		// package is what makes Ctrl+S on the data asset save the LUT along with it -- no second
 		// asset to remember to save, no sibling-package divergence.
-		Lut = NewObject<UTexture2D>(this, LutObjectName(), RF_Public | RF_Standalone);
+		//
+		// C-3: `Lut && Lut->GetOuter() != this` is the migration case -- an existing calibration
+		// asset authored before the LUT moved in-package still points at the sibling
+		// `T_SurfaceClassLUT` package this generator no longer saves, so that texture is stale the
+		// moment this call runs. Nothing about the old object is copied forward (its payload is
+		// regenerated from `Rows` below regardless); this just replaces the pointer with a fresh
+		// in-package texture and logs the migration so it shows up in a generator run's log.
+		const bool bMigrating = Lut != nullptr;
+		Lut = NewObject<UTexture2D>(this, LutObjectName(), RF_Public);
 		if (!Lut)
 		{
 			OutError = TEXT("could not create the LUT texture object");
 			return;
 		}
-		FAssetRegistryModule::AssetCreated(Lut);
+		if (bMigrating)
+		{
+			UE_LOG(LogElysiumSurfaceCalibration, Log,
+				TEXT("migrated the surface-class LUT into %s's own package (was a sibling asset)"),
+				*GetName());
+		}
 	}
 
 	// One texel per row, written at that row's own Index. A texel no row claims holds the struct's
@@ -115,7 +124,8 @@ void UElysiumSurfaceCalibration::RegenerateLut(bool& bOutOk, FString& OutError)
 	}
 
 	// PreEditChange/PostEditChange around a source replacement is the engine's own idiom
-	// (Texture.h:219): it invalidates the texture's render-thread resource and any cached
+	// (Texture.h:36, "All changes to Texture properties must be wrapped in PreEditChange/
+	// PostEditChange"): it invalidates the texture's render-thread resource and any cached
 	// derived data before Source.Init rewrites the payload, rather than leaving UpdateResource
 	// alone to reconcile a source that changed size or format out from under a live resource.
 	Lut->PreEditChange(nullptr);
@@ -144,7 +154,10 @@ void UElysiumSurfaceCalibration::PostEditChangeProperty(FPropertyChangedEvent& P
 	// tick of the drag; regenerating and re-uploading a 128-texel source on every one of those
 	// ticks is wasted work the drag never needs to see finished until it lets go. Regenerate on
 	// the terminal ValueSet (mouse-up, or a typed value committed) only.
-	if (PropertyChangedEvent.ChangeType == EPropertyChangeType::Interactive)
+	// `EPropertyChangeType::Type` is a plain bitmask (UnrealType.h), not an exclusive enum: an
+	// interactive drag can arrive combined with another flag, so testing equality against the
+	// single `Interactive` value misses those and would bake mid-drag after all.
+	if ((PropertyChangedEvent.ChangeType & EPropertyChangeType::Interactive) != 0)
 	{
 		return;
 	}

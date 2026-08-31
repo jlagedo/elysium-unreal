@@ -152,7 +152,17 @@ bool FElysiumSurfaceSettingsCollectionPushTest::RunTest(const FString&)
 	}
 
 	UElysiumSurfaceSettings* Settings = GetMutableDefault<UElysiumSurfaceSettings>();
+
+	// The cheap branch (PreEditChange/PostEditChange bracketing a same-size mutation) is what the
+	// class comment above `PushToCollectionDefaults` in the header promises: this push only ever
+	// changes a scalar's DefaultValue, never adds or removes a row, so the storage layout never
+	// differs and ParameterCollection.cpp's PostEditChangeProperty must not regenerate `StateId`
+	// (that only happens on an actual layout change). Pin it: capture StateId before the push and
+	// assert it is unchanged after.
+	const FGuid StateIdBeforePush = Collection->StateId;
 	Settings->PushToCollectionDefaults(Collection);
+	TestEqual(TEXT("PushToCollectionDefaults takes the cheap branch (StateId unchanged)"),
+		Collection->StateId, StateIdBeforePush);
 
 	bool bPassed = true;
 	for (const TPair<FName, float UElysiumSurfaceSettings::*>& Binding : Bindings)
