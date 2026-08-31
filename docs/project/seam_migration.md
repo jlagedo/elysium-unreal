@@ -193,7 +193,147 @@ for the material slice. The lane, `uv run elysium import textures`, is specified
   stamps and reports every failed unit with its reason, so a defect late in the run costs a
   relaunch, not the run.
 
+**Baked reflection probes are not reflection content (owner call, 2026-08-31).** The 1,325
+per-map `maps/<map>/c<x>_<y>_<z>` probes are renders of the 2004 lightmapped world; adding them
+back as Source's additive cube term would put 2004 lighting into Lumen reflections, and every wet
+floor would reflect a room Lumen is not lighting. They are exported and imported as units for
+fidelity and provenance, and their **origins** (1,228 lump-42 samples) place Unreal reflection
+captures; their **pixels** are never sampled by a surface. The ~340 materials that name an
+authored fixed cube (`envmap/blood`, `envmap/specmap`, `envmap/asylum`, `envmap/hav`, …) are an
+art choice of image rather than a room, and keep a literal cube sample.
+
+**The matte-world premise is repudiated (owner call, 2026-08-31).** The legacy masters set every
+non-`$envmap` surface to Specular 0 / Roughness 1 and every light to `specular_scale = 0`, on the
+reading that "VtMB's world is METALLIC 0, SPECULAR 0, ROUGHNESS 1". That is a fact about Source's
+lightmapped Lambert renderer, which had no specular term and made `$envmap` the only way to
+shine; it is not a fact about the surfaces. Under Lumen every surface reflects by physics
+(Specular, Roughness, Metallic) and the renderer supplies the image. Consequence: the three
+zeroes flip; VtMB's cube data becomes the *how shiny / where* input — `$envmap` presence, the
+per-texel masks, `$envmaptint` — never the *what is reflected*. The calibration values (default
+specular, the roughness prior per surface class, the mask mapping) are open until measured
+against reference shots (plan SF-C1..C4). Old Unreal-side translations in `docs/vtmb/reflections.md`
+→ "The Unreal translation" and the legacy bake are inputs to that measurement, not decisions.
+
+## Plan — surfaces track (export gap, surface properties, reflections, materials)
+
+Owner instruction (2026-08-31): review the whole surface chain and plan it in the smallest
+possible tasks. This section is the plan; scheduling and status go to `roadmap.md` when a task is
+picked up. IDs are `SF-<track><n>`. Tracks A and C are independent and can run together; B is
+small and precedes D; D is the material slice proper.
+
+**Finding that reorders everything.** The full export_v2 run is complete for install members, but
+the texture and material seams enumerate VPK and loose files only. The 9,576 files embedded in the
+108 BSPs' PAKFILE zips — 7,501 patched `.vmt`, 1,325 probe `.tth`, 750 `.ttz` — are recorded by
+the corpus index under each map's `embedded[]` with `asset: null` ("became nothing"), while
+`seam_map_map.md` → "PAKFILE routing" states they become ordinary units and
+`unit_contract/origin.py` already defines the `bsp-pakfile` origin. The map root's
+`cubemaps[].resolved` and `pakfile.entries[].unit` resolve against the zip, not against a unit on
+disk, so nothing failed. The contract exists; the exporter half was never built.
+
+### Track A — close the PAKFILE export gap (export_v2)
+
+- **SF-A1 Make the gap visible.** Corpus index `summary` counts embedded members with
+  `asset: null`; `uv run elysium doctor` reports the number. Done when the count (9,576) prints and
+  a test pins it. No behaviour change.
+- **SF-A2 Probe textures as units.** The texture seam takes a second enumeration over each BSP's
+  PAKFILE `.tth`/`.ttz` pairs and emits `textures/maps/<map>/c<x>_<y>_<z>.glb` with the
+  `bsp-pakfile` origin, capsule bytes included. First establish what the 575 `.tth` without a
+  `.ttz` are (header-only? mip-less?) and record it in `seam_map_texture.md`. Done when 1,325
+  units exist and validate.
+- **SF-A3 Patched materials as units.** The material seam does the same for PAKFILE `.vmt`,
+  emitting `materials/maps/<map>/<mat>_<x>_<y>_<z>.glb`; `$envmap` resolves to the A2 texture unit;
+  the base material and the probe origin are recorded as dependencies (`role: material`,
+  `patchOf`; `cubemapOrigin`). Done when 7,501 units exist and validate.
+- **SF-A4 Index claims them.** `_pakfile_members` finds every embedded key claimed; the A1 count
+  goes to 0; the map validator fails a map whose `cubemaps[]`/`textures[]`/`pakfile.entries[]`
+  names a unit that is not on disk. Same task: texture edges in `index.glb` carry `parameter`
+  (slice-2 follow-up).
+- **SF-A5 Re-export and re-import textures.** Full `export_v2` run, doctor, then
+  `uv run elysium import textures` picks up the 1,325 probes as `TC_` under
+  `/ElysiumBaked/Textures/maps/<map>/`. Ledger rows and counts in this file updated.
+
+### Track B — surface properties import (slice 3, tiny)
+
+- **SF-B1 Asset class.** `UElysiumPhysicalMaterial : UPhysicalMaterial` with the fields Unreal
+  lacks (movement, footstep pools, impact matrix, sound-script IDs, `gameMaterial`), a provenance
+  `UAssetUserData`, and `EPhysicalSurface` entries in `DefaultEngine.ini` for the compact classes.
+  Substrate test for the JSON apply.
+- **SF-B2 Stage.** Python resolves each unit's `base` chain to flat values (the doc says
+  inheritance is the consumer's), writes a manifest + sidecar. Test: `weapon` root, a three-deep
+  chain, a repeated-scalar anomaly.
+- **SF-B3 Import.** Editor script writes `/ElysiumBaked/SurfaceProperties/PM_<name>` (63), recipe
+  stamps, registry tags, idempotent rerun. Sound references stored as asset IDs; they flip to
+  hard `USoundWave` refs in the sound slice.
+- **SF-B4 Docs.** `seam_map_surface_property.md` gains "## Import"; ledger row here.
+
+### Track C — reflections: decide by measurement, not by rule
+
+- **SF-C1 Flip the three zeroes, look.** On the legacy path (no new pipeline): `SPEC_BASE` 0.5,
+  `ROUGH_BASE` 0.8, light `specular_scale` 1.0; rebake one map; capture three reference shots
+  (Santa Monica street at night, Asylum bar, Venture Tower lobby) beside the retail game with
+  `validation/shots_diff.py`. Deliverable is the shots and the owner's call on the default policy.
+- **SF-C2 Roughness prior table.** One table, 63 rows keyed by `$surfaceprop` class (plaster,
+  concrete, tile, metal, wood, glass, carpet, flesh, …) → roughness, specular, metallic. Authored
+  in `docs/vtmb/surface_properties.md` beside the facts, tuned from C1's shots. Materials with no
+  `$surfaceprop` take a shader-family default.
+- **SF-C3 Probe origins → reflection captures.** `bake_map.py` reads the export_v2 map unit's
+  `cubemaps[]` origins and places one `SphereReflectionCapture` per origin (radius from map scale).
+  Faithful placement, modern content. Independent of A2/A3 — origins are in the map root already.
+- **SF-C4 Mask and tint mapping.** Settle `$envmapmask`/`$normalmapalphaenvmapmask`/base-alpha →
+  roughness and specular, and the `$envmaptint` grey-vs-chromatic split, against C1 shots of two
+  masked surfaces. Written as a Settled entry here and as the `EnvMap` feature spec for D1.
+- **SF-C5 Authored fixed cubes.** Confirm the literal additive sample for the ~340
+  `envmap/*`-naming materials, and the `$envmapmode` sphere variant (80). Owner looks at the
+  Asylum cube once under C1's rig.
+
+### Track D — materials import (slice 4)
+
+- **SF-D1 Master inventory.** Table: 42 resolved programs + the 8 real unresolved families
+  (`worldvertextransition`, `decalmodulate`, `refract`, `cable`, `shatteredglass`, `cloud`,
+  `heatglow`, `worldtwotextureblend`) → master → blend mode → parameters. Each row cites its
+  shader-program unit. Debug/tool families listed as "no master, provenance only".
+- **SF-D2 Parameter table.** All 229 VMT keys → destination (texture / scalar / vector / static
+  switch / master choice / physical material / runtime / provenance-only). Rule: a key with no
+  destination fails staging.
+- **SF-D3 Proxy policy.** The 20 proxy kinds → shader-time node (`Sine`, `TextureScroll`,
+  `AnimatedTexture`, `TextureTransform`, noise), runtime C++ (`PlayerProximity`, `PlayerPosition`,
+  `PlayerSpeed`, `GlobalWetness`, `TextConsole`), or provenance-only. One table.
+- **SF-D4 Naming and identity.** `/ElysiumBaked/Materials/<dir>/MI_<stem>`; patched map materials
+  under `maps/<map>/`; masters stay in `Content/ElysiumGenerated/Materials/`. Settled entry.
+- **SF-D5 Provenance class.** `UElysiumMaterialProvenance : UAssetUserData` (raw ordered
+  parameters, source SHA, resolved program, proxies, anomalies, coverage) + registry tags
+  (`ElysiumShaderProgram`, `ElysiumMaster`). Substrate test.
+- **SF-D6 Masters, one task per family, transcribed from the shader units:** D6a Lit
+  (opaque/masked/translucent; selfillum, envmap, bump switches), D6b Unlit (+`$ignorez`,
+  `$vertexcolor`/`$vertexalpha`), D6c Eyes, D6d Water, D6e Sprite, D6f Refract, D6g Decal,
+  D6h Additive, D6i TwoTexture/VertexTransition. Each rewrites its `make_*_materials.py` graph
+  and cites the program it transcribes; lighting terms (`v0`, lightmap) are Lumen's.
+- **SF-D7 Stage.** GLB → manifest: master by resolved program; texture params →
+  `/ElysiumBaked/Textures` (`_linear` twin for data-class bindings); scalars/vectors/switches by
+  D2; `PhysMaterial` by `$surfaceprop`; `$envmap` concrete → `TC_`, symbol → runtime bind; proxies
+  by D3. Every unmapped key is a listed stage failure.
+- **SF-D8 Import.** Editor script writes the `MI_` assets, applies provenance, stamps, saves;
+  compile check per instance; `import_report.json`; full corpus first run; idempotent rerun.
+- **SF-D9 Parity oracle.** A numpy ps.1.x interpreter over `shader-programs/source/*` units, run
+  against one master's post-lighting terms on fixed inputs; extend per D6 family. Lighting terms
+  excluded by design.
+- **SF-D10 Consumers, one task each:** D10a `bake_map.material_for` → `MI_`; D10b character bake
+  slots and skin families; D10c `FElysiumMaterialFactory::Create(MI_)` with runtime binds
+  (`env_cubemap` symbol, D3 runtime proxies, fog primitive data); D10d wield/UI sprites.
+- **SF-D11 Retire.** Per-map material packages, `/ElysiumBaked/Shared/Textures`, the legacy
+  `SourceCube` wetness path (owner decision under C4), `tex/cube/` sidecars. Ledger rows here
+  move to retired.
+
+### Deferred from slice 2, unchanged
+
+Sky cube faces, rope/cable materials and eye irises still read loose files (`shared/tex`,
+`npc/tex`, `retex_dds`, `tex_hi`); they flip after D10c since they are material consumers.
+
 ## Open questions
+
+**575 probe `.tth` members with no `.ttz`.** Of the 1,325 PAKFILE probe textures, 750 have the
+`.ttz` payload twin and 575 do not. Before SF-A2 emits them: header-only probes, mip-less small
+cubes, or something the map seam should own? Answer belongs in `seam_map_texture.md`.
 
 **Where do the props go?** A map's geometry, materials and textures already bake to `.uasset`, but
 static-prop placement still travels as the `<map>.props` sidecar that
