@@ -199,7 +199,9 @@ class Graph:
 
     def clamp(self, a, a_out, lo, lo_out, hi, hi_out, x, y):
         n = self.node(unreal.MaterialExpressionClamp, x, y)
-        connect(a, a_out, n, "Input")
+        # `Clamp`'s primary input pin has no name (`""`) -- confirmed against the real editor's
+        # `get_material_expression_input_names`, not guessed from the C++ field name `Input`.
+        connect(a, a_out, n, "")
         connect(lo, lo_out, n, "Min")
         connect(hi, hi_out, n, "Max")
         return n
@@ -249,7 +251,7 @@ class Graph:
         """Connect `node.out` to a `MaterialProperty` pin. A refused connection is an error --
         exactly the same contract as `connect`, just for the property sinks instead of an
         expression's own input pins."""
-        if not self.mel.connect_material_property(self.mat, node, out, prop):
+        if not self.mel.connect_material_property(node, out, prop):
             raise SystemExit("[matgraph] refused material property %s" % prop)
 
 

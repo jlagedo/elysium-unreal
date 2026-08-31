@@ -44,7 +44,7 @@ class FakeMaterialEditingLibrary:
         self.connections.append((src, src_out, dst, dst_in))
         return dst_in not in self.refuse_pins
 
-    def connect_material_property(self, mat, src, src_out, prop):
+    def connect_material_property(self, src, src_out, prop):
         self.property_connections.append((src, src_out, prop))
         return prop not in self.refuse_properties
 

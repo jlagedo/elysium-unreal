@@ -21,6 +21,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # local generated package.
 GENERATORS = [
     "make_world_materials.py",      # M_World_{Opaque,Masked,Translucent,Glass} + M_Refract/M_Additive
+    "make_surface_knobs.py",        # MPC_ElysiumSurfaces + DA_SurfaceCalibration (SF-4.1): the knobs
+    "make_v2_materials.py",         # M_V2_Lit (SF-4.3 part 1): the material-import master set
     "make_player_body_material.py", # M_PlayerBody.uasset: masked/dithered glTF player body
     "make_wield_materials.py",      # M_Wield{,_Masked,_Translucent,_Additive}: wielded-weapon masters
     "make_eye_material.py",         # M_Eyes.uasset: the `Eyes` shader — gaze-driven iris planes

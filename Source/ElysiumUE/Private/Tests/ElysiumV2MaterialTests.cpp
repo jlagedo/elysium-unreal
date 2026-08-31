@@ -1,0 +1,162 @@
+// Elysium.Policy.V2MasterParams -- SF-4.3's binding-contract check for the V2 material-import
+// masters (`pipeline/unreal/make_v2_materials.py`,
+// docs/architecture/seam_map_material.md -> "Import" -> "Exposed parameters, by master"). The
+// stage (SF-4.4) writes exactly the names in `ElysiumSurfaceParams.h` onto an imported MI_
+// instance; a master that drifts off one of them fails an import silently at runtime unless
+// something asserts the binding here, in a generated-content tier that needs no corpus export.
+//
+// Deliberately its own translation unit, not folded into ElysiumContentTests.cpp: SF-4.3
+// (this file) and other in-flight work land in the same window and touch that file for unrelated
+// reasons, so a new file is the low-conflict surface. Not yet wired into a CMake/Build.cs list
+// change beyond what UBT's glob already covers, and NOT built or run by the agent that wrote it
+// -- see `docs/project/seam_migration.md` for the concurrency rule (no editor/engine build runs
+// alongside another agent's). The next agent to touch Source/ builds and runs this tier.
+//
+// Masters land family-by-family (mechanics doc "Ordering, concurrency, tests, risks"); this test
+// loads whichever of the nine V2 masters already exists and abstains on the rest, so it grows
+// coverage as `make_v2_materials.py` grows without needing a matching edit here.
+#include "Misc/AutomationTest.h"
+
+#if WITH_DEV_AUTOMATION_TESTS
+
+#include "ElysiumSurfaceParams.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstance.h"
+
+static constexpr EAutomationTestFlags GElysiumV2MaterialTestFlags =
+	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
+
+namespace
+{
+	struct FElysiumV2MasterCase
+	{
+		const TCHAR* Path;
+		TArrayView<const FName> TextureParams;
+		TArrayView<const FName> ScalarParams;
+		TArrayView<const FName> VectorParams;
+		TArrayView<const FName> SwitchParams;
+	};
+
+	// Every declared name for M_V2_Lit / M_V2_LitTranslucent, read off ElysiumSurfaceParams.h
+	// rather than restated as string literals -- a rename there is a compile error here, not a
+	// silently stale test.
+	static const FName LitTextures[] = {
+		ElysiumSurfaceParamsLit::Textures::BaseTexture,
+		ElysiumSurfaceParamsLit::Textures::Detail,
+		ElysiumSurfaceParamsLit::Textures::NormalMap,
+		ElysiumSurfaceParamsLit::Textures::EnvMapMask,
+		ElysiumSurfaceParamsLit::Textures::EnvMap,
+	};
+	static const FName LitScalars[] = {
+		ElysiumSurfaceParamsLit::Scalars::Alpha,
+		ElysiumSurfaceParamsLit::Scalars::SelfIllumAmount,
+		ElysiumSurfaceParamsLit::Scalars::DetailScale,
+		ElysiumSurfaceParamsLit::Scalars::EnvMapMaskScale,
+		ElysiumSurfaceParamsLit::Scalars::BumpScale,
+		ElysiumSurfaceParamsLit::Scalars::MinLight,
+		ElysiumSurfaceParamsLit::Scalars::MaxLight,
+		ElysiumSurfaceParamsLit::Scalars::FrameRate,
+		ElysiumSurfaceParamsLit::Scalars::ScrollRateU,
+		ElysiumSurfaceParamsLit::Scalars::ScrollRateV,
+		ElysiumSurfaceParamsLit::Scalars::SineMin,
+		ElysiumSurfaceParamsLit::Scalars::SineMax,
+		ElysiumSurfaceParamsLit::Scalars::SinePeriod,
+		ElysiumSurfaceParamsLit::Scalars::SineTimeOffset,
+		ElysiumSurfaceParamsLit::Scalars::WetnessScale,
+		ElysiumSurfaceParamsLit::Scalars::DecalDepthOffset,
+		ElysiumSurfaceParamsShared::SurfaceClassIndex,
+	};
+	static const FName LitVectors[] = {
+		ElysiumSurfaceParamsLit::Vectors::Color,
+		ElysiumSurfaceParamsLit::Vectors::SelfIllumTint,
+		ElysiumSurfaceParamsLit::Vectors::EnvMapTint,
+		ElysiumSurfaceParamsLit::Vectors::TexScaleOffset,
+	};
+	static const FName LitSwitches[] = {
+		ElysiumSurfaceParamsLit::Switches::UseBaseTexture,
+		ElysiumSurfaceParamsLit::Switches::UseDetail,
+		ElysiumSurfaceParamsLit::Switches::UseNormalMap,
+		ElysiumSurfaceParamsLit::Switches::UseSelfIllum,
+		ElysiumSurfaceParamsLit::Switches::UseVertexColor,
+		ElysiumSurfaceParamsLit::Switches::UseVertexAlpha,
+		ElysiumSurfaceParamsLit::Switches::UseEnvMap,
+		ElysiumSurfaceParamsLit::Switches::UseEnvMapMask,
+		ElysiumSurfaceParamsLit::Switches::UseBaseAlphaEnvMapMask,
+		ElysiumSurfaceParamsLit::Switches::UseNormalMapAlphaEnvMapMask,
+		ElysiumSurfaceParamsLit::Switches::UseFixedCube,
+		ElysiumSurfaceParamsLit::Switches::MetallicTint,
+		ElysiumSurfaceParamsLit::Switches::UseAnimatedFrames,
+		ElysiumSurfaceParamsLit::Switches::UseScroll,
+		ElysiumSurfaceParamsLit::Switches::IsDecalSurface,
+	};
+
+	// `M_V2_LitTranslucent` is the same graph under a different material-only property set
+	// (mechanics doc / design "Master inventory" -- blend mode, two-sidedness and the opacity
+	// clip value are per-instance overrides, so they never multiply masters) and is not yet
+	// authored; it is listed so this test picks it up the day `make_v2_materials.py` grows it,
+	// with no edit required here.
+	static const FElysiumV2MasterCase Cases[] = {
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Lit.M_V2_Lit"),
+			LitTextures, LitScalars, LitVectors, LitSwitches},
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_LitTranslucent.M_V2_LitTranslucent"),
+			LitTextures, LitScalars, LitVectors, LitSwitches},
+	};
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumV2MasterParamsTest,
+	"Elysium.Policy.V2MasterParams", GElysiumV2MaterialTestFlags)
+bool FElysiumV2MasterParamsTest::RunTest(const FString&)
+{
+	int32 MastersChecked = 0;
+	for (const FElysiumV2MasterCase& Case : Cases)
+	{
+		UMaterialInterface* Master = LoadObject<UMaterialInterface>(nullptr, Case.Path);
+		if (!Master)
+		{
+			// Not every family lands in the same slice; a master that does not exist yet is
+			// not this test's failure. See the file header.
+			continue;
+		}
+		++MastersChecked;
+
+		for (const FName& Param : Case.TextureParams)
+		{
+			UTexture* Texture = nullptr;
+			TestTrue(*FString::Printf(TEXT("%s carries texture %s"), Case.Path, *Param.ToString()),
+				Master->GetTextureParameterValue(Param, Texture));
+		}
+		for (const FName& Param : Case.ScalarParams)
+		{
+			float Value = 0.f;
+			TestTrue(*FString::Printf(TEXT("%s carries scalar %s"), Case.Path, *Param.ToString()),
+				Master->GetScalarParameterValue(Param, Value));
+		}
+		for (const FName& Param : Case.VectorParams)
+		{
+			FLinearColor Value = FLinearColor::Black;
+			TestTrue(*FString::Printf(TEXT("%s carries vector %s"), Case.Path, *Param.ToString()),
+				Master->GetVectorParameterValue(Param, Value));
+		}
+
+		TArray<FMaterialParameterInfo> Switches;
+		TArray<FGuid> SwitchIds;
+		Master->GetAllStaticSwitchParameterInfo(Switches, SwitchIds);
+		for (const FName& Param : Case.SwitchParams)
+		{
+			TestTrue(*FString::Printf(TEXT("%s carries static switch %s"), Case.Path, *Param.ToString()),
+				Switches.ContainsByPredicate([&Param](const FMaterialParameterInfo& Info)
+				{
+					return Info.Name == Param;
+				}));
+		}
+	}
+
+	if (MastersChecked == 0)
+	{
+		AddInfo(TEXT("ELYSIUM_TEST_ABSTAIN: no V2 master is generated yet "
+			"(run make_v2_materials.py via uv run elysium export bundle policy)"));
+	}
+	return true;
+}
+
+#endif // WITH_DEV_AUTOMATION_TESTS
