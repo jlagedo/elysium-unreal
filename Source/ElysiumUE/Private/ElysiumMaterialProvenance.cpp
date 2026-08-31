@@ -20,6 +20,40 @@ const FName UElysiumMaterialProvenance::TagSurfaceClass(TEXT("ElysiumSurfaceClas
 
 namespace
 {
+	/**
+	 * A JSON field's value as text regardless of its JSON type: `pipeline/importers/materials.py`'s
+	 * `parameters[].value` carries the VMT's own scalar/string value straight through
+	 * (`str(row.get("value") or "")` on the Python stage side becomes whatever JSON type the
+	 * original value parsed as -- a bare number for `"0.5"`, a string for `"brick/floora"`), and
+	 * `Value` here is a provenance record, not a typed binding: it stores the text either way.
+	 */
+	FString StringifyField(const TSharedRef<FJsonObject>& Object, const TCHAR* Key)
+	{
+		const TSharedPtr<FJsonValue> Value = Object->TryGetField(Key);
+		if (!Value.IsValid())
+		{
+			return FString();
+		}
+		FString Out;
+		if (Value->TryGetString(Out))
+		{
+			return Out;
+		}
+		double Number = 0.0;
+		if (Value->TryGetNumber(Number))
+		{
+			return FString::SanitizeFloat(Number);
+		}
+		bool bBool = false;
+		if (Value->TryGetBool(bBool))
+		{
+			return bBool ? TEXT("true") : TEXT("false");
+		}
+		return FString();
+	}
+
+	/** Every row of `parameters[]`: `index`, `block`, `key`, `sourceKey`, `value`, `valueType`, in
+	 * source order, exactly as `stage_unit` writes them. No `offset` field in this stage's sidecar. */
 	void ReadParameters(const TSharedRef<FJsonObject>& O, TArray<FElysiumMaterialParameter>& Out)
 	{
 		Out.Reset();
@@ -41,36 +75,14 @@ namespace
 			Parameter.Block = Str(Row, TEXT("block"));
 			Parameter.Key = Str(Row, TEXT("key"));
 			Parameter.SourceKey = Str(Row, TEXT("sourceKey"));
-			Parameter.Value = Str(Row, TEXT("value"));
+			Parameter.Value = StringifyField(Row, TEXT("value"));
 			Parameter.ValueType = Str(Row, TEXT("valueType"));
 			Parameter.Offset = static_cast<int32>(Int(Row, TEXT("offset")));
 		}
 	}
 
-	void ReadBlocks(const TSharedRef<FJsonObject>& O, TArray<FElysiumMaterialBlock>& Out)
-	{
-		Out.Reset();
-		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(O, TEXT("blocks"));
-		if (!Rows)
-		{
-			return;
-		}
-		for (const TSharedPtr<FJsonValue>& Value : *Rows)
-		{
-			const TSharedPtr<FJsonObject>* RowPtr = nullptr;
-			if (!Value.IsValid() || !Value->TryGetObject(RowPtr) || !RowPtr)
-			{
-				continue;
-			}
-			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
-			FElysiumMaterialBlock& Block = Out.AddDefaulted_GetRef();
-			Block.Name = Str(Row, TEXT("name"));
-			Block.SourceName = Str(Row, TEXT("sourceName"));
-			Block.Path = Str(Row, TEXT("path"));
-			Block.Parent = Str(Row, TEXT("parent"));
-		}
-	}
-
+	/** `proxies[]`: `{index, kind, sourceName, arguments, destination}`, exactly as `_apply_proxies`
+	 * writes them. `name` and `parameterIndices` are not part of this stage's sidecar. */
 	void ReadProxies(const TSharedRef<FJsonObject>& O, TArray<FElysiumMaterialProxy>& Out)
 	{
 		Out.Reset();
@@ -89,19 +101,7 @@ namespace
 			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
 			FElysiumMaterialProxy& Proxy = Out.AddDefaulted_GetRef();
 			Proxy.Kind = Str(Row, TEXT("kind"));
-			Proxy.Name = Str(Row, TEXT("name"));
 			Proxy.SourceName = Str(Row, TEXT("sourceName"));
-			if (const TArray<TSharedPtr<FJsonValue>>* Indices = Arr(Row, TEXT("parameterIndices")))
-			{
-				for (const TSharedPtr<FJsonValue>& IndexValue : *Indices)
-				{
-					double Number = 0.0;
-					if (IndexValue.IsValid() && IndexValue->TryGetNumber(Number))
-					{
-						Proxy.ParameterIndices.Add(static_cast<int32>(Number));
-					}
-				}
-			}
 			if (TSharedPtr<FJsonObject> Arguments = Obj(Row, TEXT("arguments")))
 			{
 				for (const auto& Field : Arguments->Values)
@@ -117,35 +117,7 @@ namespace
 		}
 	}
 
-	void ReadResolvedPrograms(const TSharedRef<FJsonObject>& O, TArray<FElysiumMaterialProgram>& Out)
-	{
-		Out.Reset();
-		TSharedPtr<FJsonObject> Resolution = Obj(O, TEXT("shaderResolution"));
-		if (!Resolution)
-		{
-			return;
-		}
-		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(Resolution.ToSharedRef(), TEXT("resolvedPrograms"));
-		if (!Rows)
-		{
-			return;
-		}
-		for (const TSharedPtr<FJsonValue>& Value : *Rows)
-		{
-			const TSharedPtr<FJsonObject>* RowPtr = nullptr;
-			if (!Value.IsValid() || !Value->TryGetObject(RowPtr) || !RowPtr)
-			{
-				continue;
-			}
-			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
-			FElysiumMaterialProgram& Program = Out.AddDefaulted_GetRef();
-			Program.PixelShader = Str(Row, TEXT("pixelShader"));
-			Program.VertexShader = Str(Row, TEXT("vertexShader"));
-			Program.Condition = Str(Row, TEXT("condition"), TEXT("default"));
-			Program.DrawPass = Str(Row, TEXT("drawPass"));
-		}
-	}
-
+	/** `textureBindings[]`: `{parameter, asset}`, exactly as `stage_unit` writes them. */
 	void ReadTextureBindings(const TSharedRef<FJsonObject>& O, TArray<FElysiumMaterialTextureBinding>& Out)
 	{
 		Out.Reset();
@@ -164,18 +136,16 @@ namespace
 			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
 			FElysiumMaterialTextureBinding& Binding = Out.AddDefaulted_GetRef();
 			Binding.Parameter = Str(Row, TEXT("parameter"));
-			Binding.Value = Str(Row, TEXT("value"));
-			Binding.Kind = Str(Row, TEXT("kind"));
 			Binding.Asset = Str(Row, TEXT("asset"));
-			Binding.Resolved = Bool(Row, TEXT("resolved"));
-			Binding.UsedLinearTwin = Bool(Row, TEXT("usedLinearTwin"));
 		}
 	}
 
-	void ReadDependencies(const TSharedRef<FJsonObject>& O, TArray<FElysiumMaterialDependency>& Out)
+	/** `materialReferences[]`: `{parameter, asset}`, exactly as `stage_unit` writes them -- this
+	 * stage's sidecar carries no `dependencies` key at all. */
+	void ReadMaterialReferences(const TSharedRef<FJsonObject>& O, TArray<FElysiumMaterialDependency>& Out)
 	{
 		Out.Reset();
-		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(O, TEXT("dependencies"));
+		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(O, TEXT("materialReferences"));
 		if (!Rows)
 		{
 			return;
@@ -189,17 +159,18 @@ namespace
 			}
 			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
 			FElysiumMaterialDependency& Dependency = Out.AddDefaulted_GetRef();
-			Dependency.Role = Str(Row, TEXT("role"));
 			Dependency.Parameter = Str(Row, TEXT("parameter"));
 			Dependency.Asset = Str(Row, TEXT("asset"));
-			Dependency.Resolved = Bool(Row, TEXT("resolved"));
 		}
 	}
 }
 
 void UElysiumMaterialProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 {
-	// --- identity ---
+	// --- identity --- AssetPath, UnitGlb, SourceSha256 and (further below) SurfacePropertyAsset
+	// are not part of the provenance sidecar `stage_unit` writes -- they live on the manifest
+	// entry, and `pipeline/unreal/import_materials.py` merges them into this same JSON object as
+	// top-level keys before calling ApplyJson, so they read exactly like every other field here.
 	AssetId = Str(O, TEXT("assetId"));
 	MaterialPath = Str(O, TEXT("materialPath"));
 	AssetPath = Str(O, TEXT("assetPath"));
@@ -209,17 +180,12 @@ void UElysiumMaterialProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 	SourceSha256 = Str(O, TEXT("sourceSha256"));
 	SettingsVersion = Str(O, TEXT("settingsVersion"));
 
-	// --- shader ---
+	// --- shader --- top-level `shaderFamily`/`shaderResolved`, not a nested `shaderResolution`
+	// object (this stage's sidecar carries no `resolvedPrograms`/`resolutionInputs`/`resolutionReason`).
 	Shader = Str(O, TEXT("shader"));
 	SourceShader = Str(O, TEXT("sourceShader"));
-	if (TSharedPtr<FJsonObject> Resolution = Obj(O, TEXT("shaderResolution")))
-	{
-		const TSharedRef<FJsonObject> ResolutionRef = Resolution.ToSharedRef();
-		ResolvedFamily = Str(ResolutionRef, TEXT("family"));
-		ResolutionInputs = Strings(ResolutionRef, TEXT("resolutionInputs"));
-		ResolutionReason = Str(ResolutionRef, TEXT("resolutionReason"));
-	}
-	ReadResolvedPrograms(O, ResolvedPrograms);
+	ResolvedFamily = Str(O, TEXT("shaderFamily"));
+	ShaderResolved = Bool(O, TEXT("shaderResolved"));
 
 	// --- build decisions ---
 	Master = Str(O, TEXT("master"));
@@ -227,29 +193,61 @@ void UElysiumMaterialProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 	TwoSided = Bool(O, TEXT("twoSided"));
 	SurfaceClass = FName(*Str(O, TEXT("surfaceClass")));
 	SurfaceClassIndex = static_cast<int32>(Int(O, TEXT("surfaceClassIndex")));
-	EnvMapSymbol = Str(O, TEXT("envMapSymbol"));
-	EnvMapAssetId = Str(O, TEXT("envMapAssetId"));
-	EnvMapProbePath = FSoftObjectPath(Str(O, TEXT("envMapProbePath")));
-	SurfacePropertyAsset = Str(O, TEXT("surfacePropertyAsset"));
-	if (TSharedPtr<FJsonObject> Patch = Obj(O, TEXT("patch")))
+	SurfaceClassSource = Str(O, TEXT("surfaceClassSource"));
+	PhysMaterialFallback = Bool(O, TEXT("physMaterialFallback"));
+	if (TSharedPtr<FJsonObject> Environment = Obj(O, TEXT("environment")))
 	{
-		const TSharedRef<FJsonObject> PatchRef = Patch.ToSharedRef();
-		PatchOf = Str(PatchRef, TEXT("asset"));
-		PatchKind = Str(PatchRef, TEXT("kind"));
+		const TSharedRef<FJsonObject> EnvironmentRef = Environment.ToSharedRef();
+		EnvMapSymbol = Str(EnvironmentRef, TEXT("envMapSymbol"));
+		EnvMapAssetId = Str(EnvironmentRef, TEXT("envMapAssetId"));
+		EnvMapProbePath = FSoftObjectPath(Str(EnvironmentRef, TEXT("envMapProbePath")));
+	}
+	SurfacePropertyAsset = Str(O, TEXT("physMaterial"));
+	// `patchBase` (the base's own `vtmb:material:` id) is what PatchOf has always documented
+	// itself as; `patchOf` in this stage's sidecar is a different thing entirely (a map-patched
+	// copy's `{x, y, z}` probe-origin coordinate), so PatchOf reads patchBase, not patchOf.
+	PatchOf = Str(O, TEXT("patchBase"));
+	{
+		TArray<FString> Operations = Strings(O, TEXT("patchKind"));
+		PatchKind = FString::Join(Operations, TEXT(","));
 	}
 
-	// --- content ---
+	// --- placement / map / runtime-factory ---
+	IsDecalSurface = Bool(O, TEXT("isDecalSurface"));
+	IgnoreZ = Bool(O, TEXT("ignoreZ"));
+	if (const TArray<TSharedPtr<FJsonValue>>* Origin = Arr(O, TEXT("spriteOrigin")))
+	{
+		double X = 0.0, Y = 0.0;
+		if (Origin->IsValidIndex(0) && (*Origin)[0].IsValid())
+		{
+			(*Origin)[0]->TryGetNumber(X);
+		}
+		if (Origin->IsValidIndex(1) && (*Origin)[1].IsValid())
+		{
+			(*Origin)[1]->TryGetNumber(Y);
+		}
+		SpriteOrigin = FVector2D(X, Y);
+	}
+	SpriteOrientation = Float(O, TEXT("spriteOrientation"));
+	MinLight = Float(O, TEXT("minLight"));
+	MaxLight = Float(O, TEXT("maxLight"));
+	WetnessScale = Float(O, TEXT("wetnessScale"));
+	SubdivSize = Float(O, TEXT("subdivSize"));
+	Curve = Float(O, TEXT("curve"));
+
+	// --- content --- `Blocks` is not part of this stage's sidecar; it stays empty.
 	ReadParameters(O, Parameters);
-	ReadBlocks(O, Blocks);
 	ReadProxies(O, Proxies);
 	ReadTextureBindings(O, TextureBindings);
-	ReadDependencies(O, Dependencies);
+	ReadMaterialReferences(O, Dependencies);
 	Anomalies = Strings(O, TEXT("anomalies"));
 	Omissions = Strings(O, TEXT("omissions"));
 	Comments = Strings(O, TEXT("comments"));
 	if (TSharedPtr<FJsonObject> Coverage = Obj(O, TEXT("coverage")))
 	{
-		CoveragePercent = Float(Coverage.ToSharedRef(), TEXT("percent"));
+		const TSharedRef<FJsonObject> CoverageRef = Coverage.ToSharedRef();
+		CoverageTotalKeys = static_cast<int32>(Int(CoverageRef, TEXT("totalKeys")));
+		CoverageUnmappedKeys = Strings(CoverageRef, TEXT("unmappedKeys"));
 	}
 }
 
@@ -317,8 +315,10 @@ void UElysiumMaterialProvenance::StampRegistryTags(UMaterialInterface* Material,
 		OutError = TEXT("material has no package");
 		return;
 	}
-	// The default-condition pixel program's name, or the resolved family when the shader did not
-	// resolve to a concrete program pair (docs/architecture/seam_map_material.md -> "Provenance").
+	// The default-condition pixel program's name, when the stage published one, or the resolved
+	// family otherwise -- today's sidecar carries no `resolvedPrograms`, so this always falls
+	// through to ResolvedFamily, exactly as the "shader did not resolve to a concrete pair" case
+	// always did.
 	FString ShaderProgram = Record->ResolvedFamily;
 	for (const FElysiumMaterialProgram& Program : Record->ResolvedPrograms)
 	{

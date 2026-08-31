@@ -223,7 +223,7 @@ Every value that needs a human eye is exposed as something the owner edits in th
 sees change live in PIE, and saves with Ctrl+S — and the saved file is the file the pipeline
 reads. Three native surfaces, no Blueprint, no MCP, no debug window as the authoring path:
 a `UDeveloperSettings` page (Project Settings → Elysium → Surfaces, saved to a git-tracked
-`Config/DefaultElysium.ini`) for global scalars, mirrored into `MPC_ElysiumEnvironment` on edit;
+`Config/DefaultElysium.ini`) for global scalars, mirrored into `MPC_ElysiumSurfaces` on edit;
 a `UDataAsset` edited as a grid for per-class tables, regenerating a lookup texture on edit; and
 the Material Instance editor for one material. Forbidden: an agent tuning values in a
 build–launch–look cycle, an agent capturing frames to "calibrate", and any constant that needs
@@ -250,9 +250,12 @@ is a throwaway experiment the next import overwrites; **class key** is `$surface
 present, else the VMT's top directory (`brick/`, `concrete/`, `metal/`, `glass/`, `wood/`, …),
 else the shader-family default row; **light specular scale is one global knob**, no per-map
 override; SF-C0-before-Track-A was superseded the same day by "new pipeline first" (see the Plan). The settings object is the single writer of
-`MPC_ElysiumEnvironment`'s surface scalars — the Cog Environment window's sliders become views
+`MPC_ElysiumSurfaces`'s surface scalars — the Cog Environment window's sliders become views
 onto the same settings object rather than a second writer. Knobs are editor-only; a packaged build
-reads the saved ini.
+never re-runs the editor push, it reads whatever values were cooked into `MPC_ElysiumSurfaces` as
+of the last editor push (`UElysiumSurfaceSettings::PushToCollection`, re-run automatically on every
+editor boot so the cooked collection cannot drift from the tracked ini between an edit and the next
+cook).
 
 **Material import design (2026-08-31).** SF-3.1–3.4, docs only. The whole design is
 `docs/architecture/seam_map_material.md` → "Import"; the numbers come from a corrected scan of all

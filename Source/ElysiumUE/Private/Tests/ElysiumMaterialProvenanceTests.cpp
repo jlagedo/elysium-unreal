@@ -18,59 +18,73 @@ static constexpr EAutomationTestFlags GElysiumMaterialProvenanceTestFlags =
 
 namespace
 {
-	// A sidecar in the shape the offline stage writes: every section present so each parser
-	// branch is exercised, with values that are not the struct defaults.
+	// Trimmed from a real staged sidecar -- brick/floorasan.provenance.json, a Lit unit with a
+	// non-empty proxies[] and an $envmap -- copied out of a real `uv run elysium import materials`
+	// stage run (E:\elysium-work\import\materials\brick\floorasan.provenance.json) rather than
+	// hand-authored, so the shape here is exactly what `stage_unit` writes, not what the reader
+	// used to assume it wrote (C2). `assetPath`/`unitGlb`/`sourceSha256`/`physMaterial` are added
+	// as the top-level keys `pipeline/unreal/import_materials.py` merges in from the manifest
+	// entry before calling `ApplyJson` -- see `FromJson`'s "--- identity ---" comment.
 	const TCHAR* GSidecar = TEXT(R"json({
-  "assetId": "vtmb:material:brick/brickwall001a",
-  "materialPath": "brick/brickwall001a",
-  "assetPath": "/ElysiumBaked/Materials/brick/MI_brickwall001a",
-  "unitGlb": "materials/brick/brickwall001a.glb",
-  "unitSchemaVersion": "1.0.0",
-  "unitSha256": "unit-sha",
-  "sourceSha256": "source-sha",
-  "settingsVersion": "elysium-material-import-v1",
-  "shader": "vertexlitgeneric_maskedenvmapv2",
-  "sourceShader": "",
-  "shaderResolution": {
-    "family": "vertexlitgeneric",
-    "resolutionInputs": ["$envmapmask", "$bumpmap"],
-    "resolutionReason": "static switch bUseEnvMapMask=true, bUseBumpMap=false",
-    "resolvedPrograms": [
-      {"pixelShader": "ps_maskedenvmapv2", "vertexShader": "vs_generic", "condition": "default", "drawPass": "opaque"},
-      {"pixelShader": "ps_maskedenvmapv2_bump", "vertexShader": "vs_generic_bump", "condition": "bUseBumpMap=true", "drawPass": "opaque"}
-    ]
-  },
+  "anomalies": [],
+  "assetId": "vtmb:material:brick/floorasan",
+  "assetPath": "/ElysiumBaked/Materials/brick/MI_floorasan",
+  "blendMode": "Opaque",
+  "comments": [],
+  "coverage": {"totalKeys": 4, "unmappedKeys": []},
+  "curve": null,
+  "environment": {"envMapSymbol": "env_cubemap", "envMapTintChromatic": false},
+  "ignoreZ": false,
+  "ignoreZNamedDivergence": false,
+  "isDecalSurface": false,
   "master": "/Game/ElysiumGenerated/Materials/V2/M_V2_Lit",
-  "blendMode": "opaque",
-  "twoSided": false,
-  "surfaceClass": "brick",
-  "surfaceClassIndex": 3,
-  "envMapSymbol": "env_cubemap",
-  "envMapAssetId": "vtmb:texture:maps/sm_hub_1/c1_2_0",
-  "envMapProbePath": "/ElysiumBaked/Textures/maps/sm_hub_1/TC_c1_2_0.TC_c1_2_0",
-  "surfacePropertyAsset": "/ElysiumBaked/SurfaceProperties/PM_brick",
-  "patch": {"asset": "", "kind": ""},
+  "materialPath": "brick/floorasan",
+  "materialReferences": [],
+  "maxLight": null,
+  "minLight": null,
+  "omissions": [
+    {"reason": "separator-bytes-carry-no-keyvalues-meaning", "role": "keyvalues-insignificant-whitespace"}
+  ],
   "parameters": [
-    {"index": 0, "block": "root", "key": "BaseTexture", "sourceKey": "$basetexture", "value": "brick/brickwall001a", "valueType": "string", "offset": 12},
-    {"index": 1, "block": "root", "key": "SurfaceClassIndex", "sourceKey": "$surfaceprop", "value": "brick", "valueType": "string", "offset": 48}
+    {"block": "", "index": 0, "key": "$basetexture", "sourceKey": "$basetexture", "value": "brick/floora", "valueType": "string"},
+    {"block": "", "index": 1, "key": "$surfaceprop", "sourceKey": "$surfaceprop", "value": "brick", "valueType": "string"},
+    {"block": "", "index": 2, "key": "$envmap", "sourceKey": "$envmap", "value": "env_cubemap", "valueType": "string"},
+    {"block": "", "index": 3, "key": "$envmapmask", "sourceKey": "$envmapmask", "value": "brick/floora_ref", "valueType": "string"}
   ],
-  "blocks": [
-    {"name": "root", "sourceName": "VertexLitGeneric", "path": "brick/brickwall001a.vmt", "parent": ""}
-  ],
+  "patchBase": null,
+  "patchKind": null,
+  "patchOf": null,
+  "patched": false,
+  "physMaterial": "/ElysiumBaked/SurfaceProperties/PM_brick",
+  "physMaterialFallback": false,
   "proxies": [
-    {"kind": "sine", "name": "GlowPulse", "sourceName": "Sine", "parameterIndices": [1], "arguments": {"sinemin": "0.1", "sinemax": "0.9"}, "destination": "graph-node"}
+    {"arguments": {"resultvar": "$envmaptint[0]", "scale": "1.0"}, "destination": "runtime", "index": 0, "kind": "globalwetness", "sourceName": "GlobalWetness"},
+    {"arguments": {"resultvar": "$envmaptint[1]", "scale": "1.0"}, "destination": "runtime", "index": 1, "kind": "globalwetness", "sourceName": "GlobalWetness"}
   ],
+  "runtime": [
+    {"arguments": {"resultvar": "$envmaptint[0]", "scale": "1.0"}, "kind": "globalwetness"}
+  ],
+  "settingsVersion": "elysium-material-import-v2",
+  "shader": "lightmappedgeneric",
+  "shaderFamily": "lightmappedgeneric",
+  "shaderResolved": true,
+  "sourceShader": "LightmappedGeneric",
+  "sourceSha256": "source-sha",
+  "spriteOrientation": null,
+  "spriteOrigin": null,
+  "subdivSize": null,
+  "surfaceClass": "brick",
+  "surfaceClassIndex": 7,
+  "surfaceClassSource": "surfaceprop",
   "textureBindings": [
-    {"parameter": "BaseTexture", "value": "brick/brickwall001a", "kind": "color", "asset": "vtmb:texture:brick/brickwall001a", "resolved": true, "usedLinearTwin": false},
-    {"parameter": "EnvMask", "value": "brick/brickwall001a_mask", "kind": "mask", "asset": "vtmb:texture:brick/brickwall001a_mask", "resolved": true, "usedLinearTwin": true}
+    {"asset": "vtmb:texture:brick/floora", "parameter": "BaseTexture"},
+    {"asset": "vtmb:texture:brick/floora_ref", "parameter": "EnvMapMask"}
   ],
-  "dependencies": [
-    {"role": "surface-property", "parameter": "$surfaceprop", "asset": "vtmb:surface-property:brick", "resolved": true}
-  ],
-  "anomalies": ["repeated-scalar-key key=basetexture offset=12"],
-  "omissions": ["v0 lightmap stage dropped -- Lumen owns lighting"],
-  "comments": ["worked example, mirrors seam_map_material.md"],
-  "coverage": {"percent": 100.0, "unresolved": [], "unsupported": []}
+  "twoSided": false,
+  "unitGlb": "materials/brick/floorasan.glb",
+  "unitSchemaVersion": "1.1.0",
+  "unitSha256": "73ea5df0614356dabd15cad310024a6b36de7bfe3419fd7f0152855f62ed80fd",
+  "wetnessScale": 1.0
 })json");
 
 	UMaterialInstanceConstant* NewInstance()
@@ -95,56 +109,78 @@ bool FElysiumMaterialProvenanceApplyJsonTest::RunTest(const FString&)
 	TestTrue(TEXT("no error on success"), Error.IsEmpty());
 	TestTrue(TEXT("the record is outered to the material"), Record->GetOuter() == Instance);
 
-	TestEqual(TEXT("AssetId"), Record->AssetId, FString(TEXT("vtmb:material:brick/brickwall001a")));
-	TestEqual(TEXT("UnitSha256"), Record->UnitSha256, FString(TEXT("unit-sha")));
-	TestEqual(TEXT("SourceSha256"), Record->SourceSha256, FString(TEXT("source-sha")));
-	TestEqual(TEXT("Shader"), Record->Shader, FString(TEXT("vertexlitgeneric_maskedenvmapv2")));
-	TestEqual(TEXT("ResolvedFamily"), Record->ResolvedFamily, FString(TEXT("vertexlitgeneric")));
-	TestEqual(TEXT("ResolutionInputs count"), Record->ResolutionInputs.Num(), 2);
+	// --- identity: AssetId/MaterialPath/UnitSchemaVersion/UnitSha256/SettingsVersion come from the
+	// sidecar proper; AssetPath/UnitGlb/SourceSha256 come from the manifest-entry keys the importer
+	// merges in.
+	TestEqual(TEXT("AssetId"), Record->AssetId, FString(TEXT("vtmb:material:brick/floorasan")));
+	TestEqual(TEXT("MaterialPath"), Record->MaterialPath, FString(TEXT("brick/floorasan")));
+	TestEqual(TEXT("AssetPath (merged from the manifest entry)"), Record->AssetPath,
+		FString(TEXT("/ElysiumBaked/Materials/brick/MI_floorasan")));
+	TestEqual(TEXT("UnitGlb (merged from the manifest entry)"), Record->UnitGlb,
+		FString(TEXT("materials/brick/floorasan.glb")));
+	TestEqual(TEXT("UnitSha256"), Record->UnitSha256,
+		FString(TEXT("73ea5df0614356dabd15cad310024a6b36de7bfe3419fd7f0152855f62ed80fd")));
+	TestEqual(TEXT("SourceSha256 (merged from the manifest entry)"), Record->SourceSha256, FString(TEXT("source-sha")));
+	TestEqual(TEXT("SettingsVersion"), Record->SettingsVersion, FString(TEXT("elysium-material-import-v2")));
+
+	// --- shader: top-level shaderFamily/shaderResolved, not a nested shaderResolution object.
+	TestEqual(TEXT("Shader"), Record->Shader, FString(TEXT("lightmappedgeneric")));
+	TestEqual(TEXT("SourceShader"), Record->SourceShader, FString(TEXT("LightmappedGeneric")));
+	TestEqual(TEXT("ResolvedFamily (from top-level shaderFamily)"), Record->ResolvedFamily, FString(TEXT("lightmappedgeneric")));
+	TestTrue(TEXT("ShaderResolved"), Record->ShaderResolved);
+
+	// --- build decisions ---
 	TestEqual(TEXT("Master"), Record->Master, FString(TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Lit")));
+	TestEqual(TEXT("BlendMode"), Record->BlendMode, FString(TEXT("Opaque")));
+	TestFalse(TEXT("TwoSided"), Record->TwoSided);
 	TestEqual(TEXT("SurfaceClass"), Record->SurfaceClass, FName(TEXT("brick")));
-	TestEqual(TEXT("SurfaceClassIndex"), Record->SurfaceClassIndex, 3);
-	TestEqual(TEXT("EnvMapSymbol"), Record->EnvMapSymbol, FString(TEXT("env_cubemap")));
-	TestEqual(TEXT("EnvMapAssetId"), Record->EnvMapAssetId, FString(TEXT("vtmb:texture:maps/sm_hub_1/c1_2_0")));
+	TestEqual(TEXT("SurfaceClassIndex"), Record->SurfaceClassIndex, 7);
+	TestEqual(TEXT("SurfaceClassSource"), Record->SurfaceClassSource, FString(TEXT("surfaceprop")));
+	TestFalse(TEXT("PhysMaterialFallback"), Record->PhysMaterialFallback);
+	TestEqual(TEXT("EnvMapSymbol (from the environment{} object)"), Record->EnvMapSymbol, FString(TEXT("env_cubemap")));
+	TestEqual(TEXT("SurfacePropertyAsset (merged from the manifest entry's physMaterial)"),
+		Record->SurfacePropertyAsset, FString(TEXT("/ElysiumBaked/SurfaceProperties/PM_brick")));
 	TestTrue(TEXT("PatchOf empty (install unit)"), Record->PatchOf.IsEmpty());
+	TestTrue(TEXT("PatchKind empty (install unit)"), Record->PatchKind.IsEmpty());
 
-	if (TestEqual(TEXT("ResolvedPrograms count"), Record->ResolvedPrograms.Num(), 2))
+	// --- placement / map / runtime-factory ---
+	TestFalse(TEXT("IsDecalSurface"), Record->IsDecalSurface);
+	TestFalse(TEXT("IgnoreZ"), Record->IgnoreZ);
+	TestEqual(TEXT("WetnessScale"), Record->WetnessScale, 1.0f);
+
+	// --- content ---
+	if (TestEqual(TEXT("Parameters count"), Record->Parameters.Num(), 4))
 	{
-		TestEqual(TEXT("first program condition"), Record->ResolvedPrograms[0].Condition, FString(TEXT("default")));
-		TestEqual(TEXT("first program pixel shader"), Record->ResolvedPrograms[0].PixelShader, FString(TEXT("ps_maskedenvmapv2")));
+		TestEqual(TEXT("parameter 0 key"), Record->Parameters[0].Key, FString(TEXT("$basetexture")));
+		TestEqual(TEXT("parameter 0 value"), Record->Parameters[0].Value, FString(TEXT("brick/floora")));
+		TestEqual(TEXT("parameter 1 sourceKey"), Record->Parameters[1].SourceKey, FString(TEXT("$surfaceprop")));
 	}
+	TestEqual(TEXT("Blocks count (not part of this stage's sidecar)"), Record->Blocks.Num(), 0);
 
-	if (TestEqual(TEXT("Parameters count"), Record->Parameters.Num(), 2))
+	if (TestEqual(TEXT("Proxies count"), Record->Proxies.Num(), 2))
 	{
-		TestEqual(TEXT("parameter 0 key"), Record->Parameters[0].Key, FString(TEXT("BaseTexture")));
-		TestEqual(TEXT("parameter 0 source key"), Record->Parameters[0].SourceKey, FString(TEXT("$basetexture")));
-		TestEqual(TEXT("parameter 1 offset"), Record->Parameters[1].Offset, 48);
-	}
-	TestEqual(TEXT("Blocks count"), Record->Blocks.Num(), 1);
-
-	if (TestEqual(TEXT("Proxies count"), Record->Proxies.Num(), 1))
-	{
-		TestEqual(TEXT("proxy kind"), Record->Proxies[0].Kind, FString(TEXT("sine")));
-		TestEqual(TEXT("proxy destination"), Record->Proxies[0].Destination, FString(TEXT("graph-node")));
-		if (const FString* SineMin = Record->Proxies[0].Arguments.Find(TEXT("sinemin")))
+		TestEqual(TEXT("proxy 0 kind"), Record->Proxies[0].Kind, FString(TEXT("globalwetness")));
+		TestEqual(TEXT("proxy 0 sourceName"), Record->Proxies[0].SourceName, FString(TEXT("GlobalWetness")));
+		TestEqual(TEXT("proxy 0 destination"), Record->Proxies[0].Destination, FString(TEXT("runtime")));
+		if (const FString* Scale = Record->Proxies[0].Arguments.Find(TEXT("scale")))
 		{
-			TestEqual(TEXT("proxy argument sinemin"), *SineMin, FString(TEXT("0.1")));
+			TestEqual(TEXT("proxy 0 argument scale"), *Scale, FString(TEXT("1.0")));
 		}
 		else
 		{
-			AddError(TEXT("proxy 0 has no sinemin argument"));
+			AddError(TEXT("proxy 0 has no scale argument"));
 		}
 	}
 
 	if (TestEqual(TEXT("TextureBindings count"), Record->TextureBindings.Num(), 2))
 	{
-		TestTrue(TEXT("second binding used its linear twin"), Record->TextureBindings[1].UsedLinearTwin);
+		TestEqual(TEXT("binding 0 parameter"), Record->TextureBindings[0].Parameter, FString(TEXT("BaseTexture")));
+		TestEqual(TEXT("binding 0 asset"), Record->TextureBindings[0].Asset, FString(TEXT("vtmb:texture:brick/floora")));
 	}
-	TestEqual(TEXT("Dependencies count"), Record->Dependencies.Num(), 1);
-	TestEqual(TEXT("Anomalies count"), Record->Anomalies.Num(), 1);
+	TestEqual(TEXT("Dependencies count (materialReferences[] was empty)"), Record->Dependencies.Num(), 0);
 	TestEqual(TEXT("Omissions count"), Record->Omissions.Num(), 1);
-	TestEqual(TEXT("Comments count"), Record->Comments.Num(), 1);
-	TestEqual(TEXT("CoveragePercent"), Record->CoveragePercent, 100.0f);
+	TestEqual(TEXT("CoverageTotalKeys"), Record->CoverageTotalKeys, 4);
+	TestTrue(TEXT("CoverageUnmappedKeys empty"), Record->CoverageUnmappedKeys.IsEmpty());
 
 	return true;
 }
@@ -164,12 +200,12 @@ bool FElysiumMaterialProvenanceReapplyReplacesTest::RunTest(const FString&)
 	}
 
 	const TCHAR* SecondSidecar = TEXT(R"json({
-  "assetId": "vtmb:material:brick/brickwall001a",
+  "assetId": "vtmb:material:brick/floorasan",
   "master": "/Game/ElysiumGenerated/Materials/V2/M_V2_LitTranslucent",
   "surfaceClass": "wood",
-  "surfaceClassIndex": 7,
+  "surfaceClassIndex": 70,
   "parameters": [
-    {"index": 0, "block": "root", "key": "BaseTexture", "sourceKey": "$basetexture", "value": "wood/plank", "valueType": "string", "offset": 0}
+    {"index": 0, "block": "", "key": "$basetexture", "sourceKey": "$basetexture", "value": "wood/plank", "valueType": "string"}
   ]
 })json");
 
@@ -245,9 +281,11 @@ bool FElysiumMaterialProvenanceRegistryTagsTest::RunTest(const FString&)
 	}
 	FMetaData& Meta = Instance->GetPackage()->GetMetaData();
 	TestEqual(TEXT("ElysiumAssetId"), Meta.GetValue(Instance, UElysiumMaterialProvenance::TagAssetId),
-		FString(TEXT("vtmb:material:brick/brickwall001a")));
-	TestEqual(TEXT("ElysiumShaderProgram (default-condition pixel program)"),
-		Meta.GetValue(Instance, UElysiumMaterialProvenance::TagShaderProgram), FString(TEXT("ps_maskedenvmapv2")));
+		FString(TEXT("vtmb:material:brick/floorasan")));
+	// This stage's sidecar carries no `resolvedPrograms`, so the published tag falls back to
+	// ResolvedFamily (the sidecar's `shaderFamily`).
+	TestEqual(TEXT("ElysiumShaderProgram (falls back to ResolvedFamily)"),
+		Meta.GetValue(Instance, UElysiumMaterialProvenance::TagShaderProgram), FString(TEXT("lightmappedgeneric")));
 	TestEqual(TEXT("ElysiumMaster"), Meta.GetValue(Instance, UElysiumMaterialProvenance::TagMaster),
 		FString(TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Lit")));
 	TestEqual(TEXT("ElysiumSurfaceClass"), Meta.GetValue(Instance, UElysiumMaterialProvenance::TagSurfaceClass),
@@ -261,6 +299,72 @@ bool FElysiumMaterialProvenanceRegistryTagsTest::RunTest(const FString&)
 	UElysiumMaterialProvenance::StampRegistryTags(Instance, bStamped, Error);
 	TestFalse(TEXT("editor-only outside the editor"), bStamped);
 #endif
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FElysiumMaterialProvenanceSidecarKeysAreCoveredTest,
+	"Elysium.Substrate.MaterialProvenance.SidecarKeysAreCovered", GElysiumMaterialProvenanceTestFlags)
+bool FElysiumMaterialProvenanceSidecarKeysAreCoveredTest::RunTest(const FString&)
+{
+	// C2: every top-level key GSidecar carries must be one `FromJson` actually reads (a key
+	// present in a real staged sidecar that the reader silently ignores is exactly the class of
+	// defect this test exists to catch); "manifest" is not a real sidecar key, it never appears
+	// (the merge adds flat top-level keys, not a nested object -- see FromJson's comment).
+	static const TCHAR* SidecarTopLevelKeys[] = {
+		TEXT("anomalies"), TEXT("assetId"), TEXT("assetPath"), TEXT("blendMode"), TEXT("comments"),
+		TEXT("coverage"), TEXT("curve"), TEXT("environment"), TEXT("ignoreZ"),
+		TEXT("ignoreZNamedDivergence"), TEXT("isDecalSurface"), TEXT("master"), TEXT("materialPath"),
+		TEXT("materialReferences"), TEXT("maxLight"), TEXT("minLight"), TEXT("omissions"),
+		TEXT("parameters"), TEXT("patchBase"), TEXT("patchKind"), TEXT("patchOf"), TEXT("patched"),
+		TEXT("physMaterial"), TEXT("physMaterialFallback"), TEXT("proxies"), TEXT("runtime"),
+		TEXT("settingsVersion"), TEXT("shader"), TEXT("shaderFamily"), TEXT("shaderResolved"),
+		TEXT("sourceShader"), TEXT("sourceSha256"), TEXT("spriteOrientation"), TEXT("spriteOrigin"),
+		TEXT("subdivSize"), TEXT("surfaceClass"), TEXT("surfaceClassIndex"), TEXT("surfaceClassSource"),
+		TEXT("textureBindings"), TEXT("twoSided"), TEXT("unitGlb"), TEXT("unitSchemaVersion"),
+		TEXT("unitSha256"), TEXT("wetnessScale"),
+	};
+	// Keys FromJson reads, grepped from ElysiumMaterialProvenance.cpp's own Str/Bool/Int/Float/Arr/
+	// Obj/Strings calls against O (or a sub-object of O) -- kept in sync by hand, the same
+	// discipline the pipeline test file uses in the other direction.
+	static const TCHAR* ReadByFromJson[] = {
+		TEXT("assetId"), TEXT("materialPath"), TEXT("assetPath"), TEXT("unitGlb"),
+		TEXT("unitSchemaVersion"), TEXT("unitSha256"), TEXT("sourceSha256"), TEXT("settingsVersion"),
+		TEXT("shader"), TEXT("sourceShader"), TEXT("shaderFamily"), TEXT("shaderResolved"),
+		TEXT("master"), TEXT("blendMode"), TEXT("twoSided"), TEXT("surfaceClass"), TEXT("surfaceClassIndex"),
+		TEXT("surfaceClassSource"), TEXT("physMaterialFallback"), TEXT("environment"), TEXT("physMaterial"),
+		TEXT("patchBase"), TEXT("patchKind"), TEXT("isDecalSurface"), TEXT("ignoreZ"), TEXT("spriteOrigin"),
+		TEXT("spriteOrientation"), TEXT("minLight"), TEXT("maxLight"), TEXT("wetnessScale"), TEXT("subdivSize"),
+		TEXT("curve"), TEXT("proxies"), TEXT("textureBindings"), TEXT("materialReferences"), TEXT("anomalies"),
+		TEXT("omissions"), TEXT("comments"), TEXT("coverage"), TEXT("parameters"),
+	};
+
+	TSet<FString> Covered;
+	for (const TCHAR* Key : ReadByFromJson)
+	{
+		Covered.Add(Key);
+	}
+	// `patched`, `patchOf` (the {x,y,z} coordinate, distinct from PatchOf/patchBase), `runtime` and
+	// `ignoreZNamedDivergence` are intentionally not read into any FElysiumMaterialProvenance field
+	// today (the first two are redundant with data this record already carries or does not need;
+	// `runtime` restates the scalar/vector side effects proxies[] already carries the arguments
+	// for; `ignoreZNamedDivergence` is a named-divergence flag for the placement lane's own
+	// bookkeeping) -- named here so the test states the omission rather than silently passing it.
+	static const TCHAR* KnowinglyUncovered[] = {
+		TEXT("patched"), TEXT("patchOf"), TEXT("runtime"), TEXT("ignoreZNamedDivergence"),
+	};
+	for (const TCHAR* Key : KnowinglyUncovered)
+	{
+		Covered.Add(Key);
+	}
+
+	for (const TCHAR* Key : SidecarTopLevelKeys)
+	{
+		if (!Covered.Contains(Key))
+		{
+			AddError(FString::Printf(TEXT("sidecar key %s is not read by FromJson"), Key));
+		}
+	}
+
 	return true;
 }
 

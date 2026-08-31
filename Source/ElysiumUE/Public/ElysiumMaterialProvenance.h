@@ -50,22 +50,25 @@ struct FElysiumMaterialBlock
 /**
  * One row of the unit's `proxies` (`docs/architecture/seam_map_material.md` → "Import" → "Proxy
  * policy"): a Source proxy chain instance and where it landed -- a material-graph node, a
- * runtime-factory binding, or provenance only.
+ * runtime-factory binding, or provenance only. `Name` and `ParameterIndices` are not published by
+ * the stage today (it writes `sourceName` and pre-resolved `arguments`, not raw parameter
+ * indices); they stay at their defaults.
  */
 USTRUCT(BlueprintType)
 struct FElysiumMaterialProxy
 {
 	GENERATED_BODY()
 
-	/** The proxy kind (`sine`, `texturescroll`, `animatedtexture`, ...) as this lane resolved it. */
+	/** The proxy kind (`sine`, `texturescroll`, `globalwetness`, ...) as this lane resolved it. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Kind;
+	/** Not published by the stage today; stays empty. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Name;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString SourceName;
-	/** Indices into `Parameters` this proxy instance reads or writes. */
+	/** Not published by the stage today; stays empty. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") TArray<int32> ParameterIndices;
-	/** Free-form proxy arguments not carried as ordinary parameters (`camoboundingboxmin`, ...). */
+	/** The proxy's resolved `key -> value` arguments (`sinemin`, `scale`, `resultvar`, ...). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") TMap<FString, FString> Arguments;
-	/** `graph-node`, `runtime-factory` or `provenance-only` (the proxy policy's three destinations). */
+	/** `runtime`, `graph`, `provenance` or `scalar` (the proxy policy's destinations). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Destination;
 };
 
@@ -82,35 +85,47 @@ struct FElysiumMaterialProgram
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString DrawPass;
 };
 
-/** One row of `textureBindings`: a texture parameter's resolution, plus the linear-twin choice. */
+/**
+ * One row of `textureBindings`: `{parameter, asset}` exactly as `stage_unit` writes it. `Value`,
+ * `Kind`, `Resolved` and `UsedLinearTwin` are carried for a future stage revision that writes them
+ * but stay at their defaults against today's sidecar -- `FromJson` never invents data the stage did
+ * not publish.
+ */
 USTRUCT(BlueprintType)
 struct FElysiumMaterialTextureBinding
 {
 	GENERATED_BODY()
 
-	/** The master's texture parameter this binds (`BaseTexture`, `EnvMask`, ...). */
+	/** The master's texture parameter this binds (`BaseTexture`, `EnvMapMask`, ...). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Parameter;
-	/** The VMT's own texture path value. */
+	/** The VMT's own texture path value. Not published by the stage today; stays empty. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Value;
-	/** `color`, `mask`, `normal` or `linear`: the role this binding was resolved under. */
+	/** `color`, `mask`, `normal` or `linear`. Not published by the stage today; stays empty. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Kind;
-	/** The resolved `vtmb:texture:` asset id, or empty when unresolved. */
+	/** The resolved `vtmb:texture:` asset id. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Asset;
+	/** Not published by the stage today; stays false. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") bool Resolved = false;
-	/** Whether the `_linear` twin was bound instead of the colour asset (a role-conflict texture). */
+	/** Not published by the stage today; stays false. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") bool UsedLinearTwin = false;
 };
 
-/** One row of `dependencies`: a non-texture asset reference this unit carries (a phys material, a crack material, ...). */
+/**
+ * One row of `materialReferences`: `{parameter, asset}` exactly as `stage_unit` writes it -- a
+ * non-texture asset reference this unit carries (a crack material, a cubemap origin, ...). `Role`
+ * and `Resolved` mirror the surface-property lane's dependency shape but are not published by this
+ * stage today; they stay at their defaults.
+ */
 USTRUCT(BlueprintType)
 struct FElysiumMaterialDependency
 {
 	GENERATED_BODY()
 
-	/** `material`, `surface-property`, `cubemap-origin`, ... */
+	/** Not published by the stage today; stays empty. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Role;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Parameter;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Asset;
+	/** Not published by the stage today; stays false. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") bool Resolved = false;
 };
 
@@ -144,9 +159,14 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Identity") FString UnitSchemaVersion;
 	/** sha256 of the whole GLB file: the back-pointer from asset to unit. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Identity") FString UnitSha256;
-	/** sha256 over `sourceResolution.members[].sha256`: the install bytes this unit was read from. */
+	/**
+	 * sha256 over `sourceResolution.members[].sha256`: the install bytes this unit was read from.
+	 * Not part of the provenance sidecar itself -- the manifest entry's own `sourceSha256`, which
+	 * `pipeline/unreal/import_materials.py` merges into the sidecar object as a top-level key
+	 * before calling `ApplyJson`, alongside `AssetPath`, `UnitGlb` and `SurfacePropertyAsset`.
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Identity") FString SourceSha256;
-	/** The import lane's settings version the asset was authored under (`elysium-material-import-v1`). */
+	/** The import lane's settings version the asset was authored under (`elysium-material-import-v2`). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Identity") FString SettingsVersion;
 
 	// --- shader -------------------------------------------------------------------------------
@@ -154,44 +174,80 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Shader") FString Shader;
 	/** A patched unit's base `sourceShader`; empty for an install unit. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Shader") FString SourceShader;
-	/** `shaderResolution.family`. */
+	/** The sidecar's top-level `shaderFamily` (`shaderResolution.family` in the design doc's older shape). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Shader") FString ResolvedFamily;
+	/** Not published by the stage today (no `shaderResolution.resolvedPrograms` in the sidecar); stays empty. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Shader") TArray<FElysiumMaterialProgram> ResolvedPrograms;
-	/** The static-switch keys the resolution branched on. */
+	/** Not published by the stage today; stays empty. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Shader") TArray<FString> ResolutionInputs;
+	/** Not published by the stage today; stays empty. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Shader") FString ResolutionReason;
+	/** The sidecar's top-level `shaderResolved`: whether the shader mapped to a known master. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Shader") bool ShaderResolved = false;
 
 	// --- build decisions ------------------------------------------------------------------------
-	/** The V2 master this instance is parented to, or a patched unit's base instance. */
+	/** The V2 master this instance is parented to; empty for a patched unit (its `Parent` is the base instance). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString Master;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString BlendMode;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") bool TwoSided = false;
 	/** The resolved class key (`$surfaceprop`, else top directory, else family default). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FName SurfaceClass;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") int32 SurfaceClassIndex = 0;
-	/** `$envmap`'s literal value (`env_cubemap`, a concrete cube path, ...). */
+	/** `surfaceprop`, `topdir` or `familyDefault`: which tier of the class-key fallback resolved `SurfaceClass`. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString SurfaceClassSource;
+	/** Whether `SurfaceClass` fell outside the 63-name `$surfaceprop` table (so `PhysMaterial` fell back to `PM_default`). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") bool PhysMaterialFallback = false;
+	/** `$envmap`'s literal value (`env_cubemap`, a concrete cube path, ...), from the sidecar's `environment` object. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString EnvMapSymbol;
 	/** The resolved `vtmb:texture:` probe asset id; never bound to a texture parameter (reflection contract). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString EnvMapAssetId;
 	/** Soft object path of the probe asset, for inspection without resolving the asset id again. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FSoftObjectPath EnvMapProbePath;
-	/** `/ElysiumBaked/SurfaceProperties/PM_<name>`, mirroring `PhysMaterial`. */
+	/**
+	 * `/ElysiumBaked/SurfaceProperties/PM_<name>`, mirroring `PhysMaterial`. Not part of the
+	 * provenance sidecar itself -- the manifest entry's own `physMaterial`, merged in the same way
+	 * as `SourceSha256`.
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString SurfacePropertyAsset;
-	/** A patched unit's base: `vtmb:material:<dir>/<stem>`; empty for an install unit. */
+	/** A patched unit's base: `vtmb:material:<dir>/<stem>` (the sidecar's `patchBase`); empty for an install unit. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString PatchOf;
-	/** `replace` or `insert`; empty for an install unit. */
+	/** The sidecar's `patchKind` array (`["replace"]`, `["insert"]`, ...), joined with `,`; empty for an install unit. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString PatchKind;
+
+	// --- placement / map / runtime-factory (keys with a home outside the material) --------------
+	/** `$decal`: the placement lane spawns a decal component over this instance instead of a material switch. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Placement") bool IsDecalSurface = false;
+	/** `$ignorez`: `bDisableDepthTest`, read by the placement lane; no material property for it. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Placement") bool IgnoreZ = false;
+	/** `$spriteorigin`'s `(x, y)`, when the unit authored one. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Placement") FVector2D SpriteOrigin = FVector2D::ZeroVector;
+	/** `$spriteorientation`; the stage never populates this today (always null in the sidecar). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Placement") float SpriteOrientation = 0.0f;
+	/** `$minlight`. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Placement") float MinLight = 0.0f;
+	/** `$maxlight`. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Placement") float MaxLight = 0.0f;
+	/** The `globalwetness` proxy's `scale`, read by `FElysiumMaterialFactory` at runtime, never sampled in the graph. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Placement") float WetnessScale = 0.0f;
+	/** `$subdivsize`. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Placement") float SubdivSize = 0.0f;
+	/** `$curve`. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Placement") float Curve = 0.0f;
 
 	// --- content --------------------------------------------------------------------------------
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumMaterialParameter> Parameters;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumMaterialBlock> Blocks;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumMaterialProxy> Proxies;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumMaterialTextureBinding> TextureBindings;
+	/** From the sidecar's `materialReferences[]`, not `dependencies` (the latter is not part of this stage's sidecar). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumMaterialDependency> Dependencies;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FString> Anomalies;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FString> Omissions;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FString> Comments;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") float CoveragePercent = 0.0f;
+	/** `coverage.totalKeys`: the unit's own parameter count the stage walked. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") int32 CoverageTotalKeys = 0;
+	/** `coverage.unmappedKeys`: always empty in a staged sidecar (an unmapped key is a stage failure, not a warning). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FString> CoverageUnmappedKeys;
 
 	/**
 	 * Parse a provenance sidecar (the JSON `uv run elysium import materials` stages beside each

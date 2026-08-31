@@ -441,8 +441,19 @@ def _finish_entry(entry, staging_root, tracker, report, textures, probed):
 
     with open(os.path.join(staging_root, entry["provenance"].replace("/", os.sep)), "r",
               encoding="utf-8") as handle:
-        sidecar = handle.read()
-    record, error = unreal.ElysiumMaterialProvenance.apply_json(mic, sidecar)
+        sidecar = json.loads(handle.read())
+
+    # Four fields `UElysiumMaterialProvenance::FromJson` reads live in the manifest entry, not the
+    # provenance sidecar itself: `assetPath` and `unitGlb` are staged only once, on the entry, not
+    # duplicated onto every unit's sidecar; `sourceSha256` sits beside `unitSha256` on the entry;
+    # `physMaterial` is the entry's resolved phys-material asset path (`SurfacePropertyAsset`,
+    # mirroring `PhysMaterial`). Added as top-level keys on the object `apply_json` parses, not a
+    # nested `"manifest"` object, so `FromJson` reads them exactly like every other top-level field.
+    for key in ("assetPath", "unitGlb", "sourceSha256", "physMaterial"):
+        if key in entry:
+            sidecar[key] = entry[key]
+
+    record, error = unreal.ElysiumMaterialProvenance.apply_json(mic, json.dumps(sidecar))
     if record is None:
         raise RuntimeError("provenance rejected: %s" % error)
     stamped, error = unreal.ElysiumMaterialProvenance.stamp_registry_tags(mic)

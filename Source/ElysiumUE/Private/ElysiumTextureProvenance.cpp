@@ -1,6 +1,7 @@
 #include "ElysiumTextureProvenance.h"
 
 #include "DDSFile.h"
+#include "ElysiumJsonField.h"
 #include "Dom/JsonObject.h"
 #include "Engine/Texture.h"
 #include "Engine/Texture2D.h"
@@ -20,6 +21,8 @@
 
 DEFINE_LOG_CATEGORY_STATIC(LogElysiumTextureProvenance, Log, All);
 
+using namespace ElysiumJson;
+
 const FName UElysiumTextureProvenance::TagAssetId(TEXT("ElysiumAssetId"));
 const FName UElysiumTextureProvenance::TagSourceFormat(TEXT("ElysiumSourceFormat"));
 const FName UElysiumTextureProvenance::TagRole(TEXT("ElysiumRole"));
@@ -27,49 +30,12 @@ const FName UElysiumTextureProvenance::TagRoleConflict(TEXT("ElysiumRoleConflict
 
 namespace
 {
-	// Tolerant readers: a sidecar key that is absent, null or of another type leaves the default.
-	FString Str(const TSharedRef<FJsonObject>& O, const TCHAR* Key, const FString& Default = FString())
-	{
-		FString Out;
-		return O->TryGetStringField(Key, Out) ? Out : Default;
-	}
-
-	// The int64 overload keeps a VPK offset exact past 2^53 and rejects a fractional value.
-	int64 Int(const TSharedRef<FJsonObject>& O, const TCHAR* Key, int64 Default = 0)
-	{
-		int64 Out = 0;
-		return O->TryGetNumberField(Key, Out) ? Out : Default;
-	}
-
 	// An array element read as a number, or false: a wrong-typed element never reaches AsNumber,
-	// which would log a LogJson error for a sidecar this parser is meant to tolerate.
+	// which would log a LogJson error for a sidecar this parser is meant to tolerate. Not part of
+	// ElysiumJsonField.h's shared readers: unique to this lane's fixed-length reflectivity array.
 	bool ElementNumber(const TSharedPtr<FJsonValue>& Value, double& Out)
 	{
 		return Value.IsValid() && Value->TryGetNumber(Out);
-	}
-
-	double Num(const TSharedRef<FJsonObject>& O, const TCHAR* Key, double Default = 0.0)
-	{
-		double Out = 0.0;
-		return O->TryGetNumberField(Key, Out) ? Out : Default;
-	}
-
-	bool Bool(const TSharedRef<FJsonObject>& O, const TCHAR* Key, bool Default = false)
-	{
-		bool Out = false;
-		return O->TryGetBoolField(Key, Out) ? Out : Default;
-	}
-
-	const TArray<TSharedPtr<FJsonValue>>* Arr(const TSharedRef<FJsonObject>& O, const TCHAR* Key)
-	{
-		const TArray<TSharedPtr<FJsonValue>>* Out = nullptr;
-		return O->TryGetArrayField(Key, Out) ? Out : nullptr;
-	}
-
-	TSharedPtr<FJsonObject> Obj(const TSharedRef<FJsonObject>& O, const TCHAR* Key)
-	{
-		const TSharedPtr<FJsonObject>* Out = nullptr;
-		return O->TryGetObjectField(Key, Out) && Out ? *Out : nullptr;
 	}
 }
 
