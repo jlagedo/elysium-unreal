@@ -1972,6 +1972,72 @@ def import_materials(
     )
 
 
+@import_app.command("models")
+def import_models(
+    ctx: typer.Context,
+    maps: list[str] = typer.Option(
+        None, "--maps",
+        help="Map stem this run stages models for (repeatable: --maps sp_tutorial_1 --maps "
+             "sm_hub_1). Exactly one of --maps/--all is required -- the stage refuses to run "
+             "unscoped.",
+    ),
+    all_models: bool = typer.Option(
+        False, "--all",
+        help="Owner-approved whole-corpus run: every published, referenced model (R1.1's 3,661). "
+             "Long-running; --maps is the working mode.",
+    ),
+    stage_only: bool = typer.Option(
+        False, "--stage-only",
+        help="Write the manifest and provenance sidecars; launch no editor. Currently required -- "
+             "the editor import phase (R1.4) has not landed yet.",
+    ),
+) -> None:
+    """Stage the referenced model corpus from the published GLB units into a manifest under
+    `import/models/` (`docs/architecture/seam_map_model.md` -> "Import"). R1.3 of the props lane:
+    the offline stage phase only -- R1.4 lands the headless editor import this manifest feeds."""
+
+    def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
+        from elysium_pipeline.importers import materials as material_importer
+        from elysium_pipeline.importers import models as importer
+
+        if config.export_v2_root is None or config.work_root is None:
+            raise ConfigError(
+                "ELYSIUM_EXPORT_V2_ROOT and ELYSIUM_WORK_ROOT must be configured; copy "
+                "dev/paths.example.env to .elysium.local.env and set the local paths"
+            )
+        if not stage_only:
+            raise ConfigError(
+                "the model lane's editor import phase (R1.4) has not landed yet -- pass "
+                "--stage-only"
+            )
+        root = importer.staging_root(config.work_root)
+        materials_root = material_importer.staging_root(config.work_root)
+        materials_staging_root = materials_root if materials_root.is_dir() else None
+        staged = importer.stage_models(
+            config.export_v2_root, root, maps=maps or None, all_models=all_models,
+            materials_staging_root=materials_staging_root,
+        )
+        console.print(staged.summary())
+        for key, detail in staged.failures[:10]:
+            console.print(f"[yellow]  {key}: {detail}[/yellow]", markup=True)
+        for key, detail in staged.skips[:10]:
+            console.print(f"[yellow]  skipped {key}: {detail}[/yellow]", markup=True)
+        if staged.failures:
+            raise RuntimeError(f"{len(staged.failures)} model unit(s) could not be staged")
+
+    # The stage is a file transform over the published units; it needs no engine and no game
+    # install, only the export corpus and the work root the manifest and sidecars land under.
+    _execute(
+        _state(ctx),
+        "import models",
+        ExitCode.OFFLINE_EXPORT,
+        action,
+        require_work=True,
+        require_ue=False,
+        activity=False,
+    )
+
+
 def _read_json(path: Path) -> dict | None:
     """A JSON object a child process may have written, or None when absent or unreadable."""
 
