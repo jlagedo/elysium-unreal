@@ -1809,6 +1809,85 @@ def import_surface_properties(
     )
 
 
+@import_app.command("materials")
+def import_materials(
+    ctx: typer.Context,
+    force: bool = typer.Option(
+        False, "--force", help="Re-import every asset even when its recipe stamp is current."
+    ),
+    select: str | None = typer.Option(
+        None, "--select", help="Only units whose key starts with this prefix (e.g. brick)."
+    ),
+    stage_only: bool = typer.Option(
+        False, "--stage-only", help="Write the manifest and provenance sidecars; launch no editor."
+    ),
+) -> None:
+    """Import the material corpus from the published GLB units into /ElysiumBaked/Materials."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import unreal
+        from elysium_pipeline.importers import materials as importer
+        from elysium_pipeline.importers import textures as texture_importer
+
+        if config.export_v2_root is None or config.work_root is None:
+            raise ConfigError(
+                "ELYSIUM_EXPORT_V2_ROOT and ELYSIUM_WORK_ROOT must be configured; copy "
+                "dev/paths.example.env to .elysium.local.env and set the local paths"
+            )
+        root = importer.staging_root(config.work_root)
+        texture_root = texture_importer.staging_root(config.work_root)
+        texture_staging_root = texture_root if texture_root.is_dir() else None
+        staged = importer.stage_materials(
+            config.export_v2_root, root, select=select, texture_staging_root=texture_staging_root
+        )
+        console.print(staged.summary())
+        for key, detail in staged.failures[:10]:
+            console.print(f"[yellow]  {key}: {detail}[/yellow]", markup=True)
+        if stage_only:
+            if staged.failures:
+                raise RuntimeError(f"{len(staged.failures)} material unit(s) could not be staged")
+            return
+
+        editor_failure: Exception | None = None
+        try:
+            unreal.import_materials(config, runner, staged.manifest_path, force=force)
+        except unreal.UnrealFailure as error:
+            editor_failure = error
+        report = _read_json(root / importer.IMPORT_REPORT_NAME)
+        failed_assets = (report.get("failed") or []) if report else []
+        if report:
+            console.print(
+                "material import: "
+                f"{report.get('imported', 0)} imported, {report.get('reused', 0)} reused, "
+                f"{report.get('pruned', 0)} pruned, {len(failed_assets)} failed"
+            )
+            for row in failed_assets[:10]:
+                console.print(
+                    f"[yellow]  {row.get('assetPath')}: {row.get('reason')}[/yellow]", markup=True
+                )
+        problems = []
+        if staged.failures:
+            problems.append(f"{len(staged.failures)} unit(s) could not be staged")
+        if failed_assets:
+            problems.append(f"{len(failed_assets)} asset(s) failed to import")
+        if editor_failure is not None:
+            problems.append(str(editor_failure))
+        if problems:
+            raise RuntimeError("; ".join(problems))
+
+    # The stage is a file transform over the published units; the editor phase needs the engine
+    # and the work root, never the game install: the units are self-contained.
+    _execute(
+        _state(ctx),
+        "import materials",
+        ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
+        action,
+        require_work=True,
+        require_ue=not stage_only,
+        activity=not stage_only,
+    )
+
+
 def _read_json(path: Path) -> dict | None:
     """A JSON object a child process may have written, or None when absent or unreadable."""
 

@@ -399,6 +399,47 @@ def import_surface_properties(config, runner, manifest_path, *, force: bool = Fa
     )
 
 
+#: The whole material corpus (19,125 instances, 9 masters, a compile-check per unique
+#: parent/switch permutation) through one editor process. Sized like the texture import for the
+#: same reason: cold DDC, first full run.
+MATERIAL_IMPORT_TIMEOUT_SECONDS = 4 * 3600.0
+
+
+def import_materials(config, runner, manifest_path, *, force: bool = False) -> None:
+    """Run the editor phase of `import materials` over one staged manifest.
+
+    `pipeline/unreal/import_materials.py` is SF-4.5's deliverable, not this one's, and does not
+    exist yet: this launcher gives `cli.py`'s `import materials` command a stable call site to
+    invoke once it lands. Until then it refuses clearly rather than launching an editor process
+    against a script that is not there.
+    """
+    script = config.repo_root / "pipeline/unreal/import_materials.py"
+    if not script.is_file():
+        raise UnrealFailure(
+            "the editor import phase for materials is not implemented yet; "
+            "editor import lands with SF-4.5. Use `--stage-only` for now."
+        )
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={script}",
+            f"-ImportMaterials={manifest_path}",
+            *(["-ImportForce=1"] if force else []),
+            "-AllowCommandletRendering",
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+        timeout=MATERIAL_IMPORT_TIMEOUT_SECONDS,
+    )
+
+
 #: Maps per editor process. The commandlet garbage-collects between maps, but loaded texture
 #: platform data and its RHI resources still accumulate across the loop -- one process reached
 #: 23 GB and the machine's commit limit at the fiftieth map -- so a profile bake runs in

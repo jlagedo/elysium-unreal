@@ -102,7 +102,7 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
 #: migrated off the legacy export; `seam_migration.md` owns which those are. The destination is
 #: per lane, not one tree: `vdata` deploys loose bytes to `Content/ElysiumCorpus`, while
 #: `textures` and `surface-properties` author `.uasset` content under `/ElysiumBaked`.
-IMPORT_COMMANDS = ("vdata", "textures", "surface-properties")
+IMPORT_COMMANDS = ("vdata", "textures", "surface-properties", "materials")
 
 
 def test_import_registers_exactly_the_migrated_corpus_families() -> None:
