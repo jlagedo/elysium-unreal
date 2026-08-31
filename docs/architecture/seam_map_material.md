@@ -227,6 +227,12 @@ the proxy table, or a resolved program pair that is not in the master inventory 
 failure** with the unit named and the reason printed — never an instance written with the unknown
 part quietly missing. That is the rule the three tables exist to make checkable.
 
+**Landed (2026-08-31).** `uv run elysium import materials` lands the full 19,125-instance corpus
+with 0 failures (11,141 imported, 7,984 reused, 681 s; a rerun for idempotency reuses all 19,125 in
+8 s), and `uv run elysium import materials --lookdev` places all 20 tracked review-set entries with
+0 placeholders. Real numbers: `docs/project/seam_migration.md` → "Material import landed
+(2026-08-31)".
+
 ### Identity and naming
 
 ```text

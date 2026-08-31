@@ -423,6 +423,42 @@ headless editor phase authors the assets, stamps recipes and prunes. First run 6
   rather than land 63 assets with one quietly wrong. A pytest pins the ini rows against the staging
   table.
 
+**Material import landed (2026-08-31).** SF-4.5/4.7. `uv run elysium import materials` lands the
+full 19,125-instance corpus with 0 failures; `--lookdev` builds the review map. Per-master counts:
+`M_V2_Lit` 7,926, `M_V2_Unlit` 1,945, `M_V2_LitTranslucent` 1,114, `M_V2_Eyes` 406, `M_V2_TwoTexture`
+95, `M_V2_Sprite` 67, `M_V2_Decal` 38, `M_V2_Water` 24, `M_V2_Refract` 11 — 11,626 ordinary units,
+plus 7,499 patched map instances parented to their base instance rather than a master. 80 units
+(36 debug/tool families) landed provenance-only. 159 distinct `(parent, switch-combination, blend
+override)` permutations were compile-probed this run — none reported zero pixel-shader
+instructions. First full run: 11,141 imported, 7,984 reused (from an earlier partial/smoke run),
+0 failed, 681 s wall time. Rerun for idempotency: 0 imported, 19,125 reused, 0 failed, 8 s.
+Lookdev: all 20 review-set entries placed (0 missing), 32 `StaticMeshActor`s all resolved to a real
+`MI_` instance (0 placeholders).
+
+Two editor-only defects surfaced and were fixed:
+- `import_materials.py` called `MaterialEditingLibrary.get_statistics` (the compile probe) on an
+  instance whose static-switch `update_material_instance()` had already run *before* its
+  `TwoSided` base-property override was applied, so the probed shader resource's cache key
+  reflected a snapshot older than the override. Whenever `TwoSided` alone is the reason the
+  editor's hit-proxy shader permutation is needed (opaque, writes every pixel, nothing else
+  forcing it), UE 5.8 asserts rather than recompiles:
+  `Assertion failed: ShaderMapId.ContainsShaderType(ShaderType, kUniqueShaderPermutationId)` /
+  `"missing expected shader type FHitProxyVS"`. Reproduced deterministically on `cable/MI_cable`.
+  Fixed by moving the one `update_material_instance()` call to after both switches and
+  base-property overrides land.
+- The offline stage (`importers/materials.py`) guessed a texture parameter's asset prefix
+  (`T_`/`TC_`) from the parameter name alone, never checking what class the referenced texture
+  unit actually staged as. Three corpus patterns broke that guess and produced 169 "texture not
+  found" failures on the first full run: an `animatedtexture` unit's `frames > 1` source stages
+  only as a `Texture2DArray` (`TA_`), never a plain `T_`, so its own static `BaseTexture`/
+  `NormalMap`/`DuDvMap` slot named a `T_` asset nothing ever wrote (70 units); the `$envmapsphere`
+  family (mostly `shadertest`/`dev`) points `EnvMap` at a flat `T_` sphere-map where a `TC_` cube
+  is expected (9 units); and the `envmap/gioint`/`skybox/hav_env` break-glass pair do the reverse,
+  a literal cubemap bound as a plain `BaseTexture` (2 units). Fixed by reading the texture's own
+  sidecar (`faces`/`frames`, mirroring `textures.py::_texture_class`) and skipping the bind —
+  leaving the master's default, recording a `textureClassMismatch` anomaly — when the staged class
+  disagrees with what the parameter expects.
+
 ## Plan — surfaces track (export gap, surface properties, materials, reflections)
 
 Owner instructions (2026-08-31): plan the whole surface chain in the smallest possible tasks;
