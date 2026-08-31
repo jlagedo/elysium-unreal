@@ -173,6 +173,19 @@ A failed check fails the corpus export like an unclaimed member does.
 total and warning count; `census.byDisposition` the member totals. This is the table the seams
 were designed against, restated from the walk that built the index.
 
+## Summary
+
+`summary` is what one line of a report needs. Besides `unclaimed` ("The guarantee", above) and
+the other per-disposition and per-check totals, it carries the PAKFILE embedding gap: every
+BSP's `embedded[]` rows are members of no seam's own count, so they get their own three fields.
+`embeddedMembers` is the total row count over every map's `embedded[]`; `embeddedUnclaimed` is
+how many of those rows carry `asset: null` — no seam claims the PAKFILE member yet;
+`embeddedUnclaimedByExtension` breaks the unclaimed count down by the member's extension (today
+`.vmt`, `.tth`, `.ttz`). `uv run elysium doctor` reports `embeddedUnclaimed` as a warning, not a
+failure — unlike `summary.unclaimed`, an unclaimed PAKFILE member does not fail the corpus
+export, because no seam claims PAKFILE members yet (`seam_migration.md` → "Plan — surfaces
+track" → SF-1.1). SF-1.5 is the task that drives `embeddedUnclaimed` to zero.
+
 ## Dependencies
 
 The index declares one `corpus-unit` dependency per unit, pinning kind, path and hash; that is

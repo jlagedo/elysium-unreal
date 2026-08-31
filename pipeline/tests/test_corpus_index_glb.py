@@ -904,6 +904,39 @@ def test_the_census_restates_the_walk_and_the_corpus(tmp_path):
     assert root["census"]["byDisposition"] == result.counts()
 
 
+def test_summary_counts_embedded_pakfile_members_unclaimed_by_extension(tmp_path):
+    """SF-1.1: the gap no seam claims PAKFILE members yet is visible in `summary`, not silent.
+
+    `materials/wall.vmt` is claimed (the install ships it, so a `vtmb:material:wall` unit
+    exists); the other two rows name keys no seam publishes and stay `asset: null`.
+    """
+
+    result, export_root = indexed(
+        tmp_path,
+        pakfile=zip_pakfile(
+            {
+                "materials/wall.vmt": b"packed wall",
+                "materials/unclaimed.vmt": b"no seam claims this",
+                "materials/probe.tth": b"no seam claims this either",
+            }
+        ),
+    )
+    root = root_of(exporter.export(result, export_root))
+    summary = root["summary"]
+    assert summary["embeddedMembers"] == 3
+    assert summary["embeddedUnclaimed"] == 2
+    assert summary["embeddedUnclaimedByExtension"] == {".vmt": 1, ".tth": 1}
+
+
+def test_summary_embedded_counters_are_zero_with_no_pakfile_members(tmp_path):
+    result, export_root = indexed(tmp_path)
+    root = root_of(exporter.export(result, export_root))
+    summary = root["summary"]
+    assert summary["embeddedMembers"] == 0
+    assert summary["embeddedUnclaimed"] == 0
+    assert summary["embeddedUnclaimedByExtension"] == {}
+
+
 def test_the_index_declares_one_corpus_unit_dependency_per_unit(tmp_path):
     result, export_root = indexed(tmp_path)
     root = root_of(exporter.export(result, export_root))

@@ -352,6 +352,50 @@ def _load_policy(config: ProjectConfig):
     return module
 
 
+def _corpus_index_unclaimed_report(config: ProjectConfig) -> str | None:
+    """One warning line naming how many embedded PAKFILE members no seam has claimed yet.
+
+    Counts `members[].embedded[]` rows directly rather than trusting a published `summary`, so
+    the line prints against an index built before `summary` carried `embeddedUnclaimed` (an
+    index this old lacks the counter; a fresh export always agrees with it). Returns `None` when
+    no index exists yet, or it carries no embedded rows to report on.
+    """
+
+    if config.export_v2_root is None:
+        return None
+    from elysium_pipeline.exporters.corpus_index_glb import index_path
+    from elysium_pipeline.formats.corpus_index_glb import CORPUS_INDEX_EXTENSION
+    from elysium_pipeline.formats.unit_contract import read_glb
+
+    published = index_path(config.export_v2_root)
+    if not published.is_file():
+        return None
+    document, _binary = read_glb(published)
+    root = (document.get("extensions") or {}).get(CORPUS_INDEX_EXTENSION)
+    if not isinstance(root, dict):
+        return None
+    members = root.get("members") or ()
+    total = 0
+    by_extension: dict[str, int] = {}
+    for member in members:
+        for entry in member.get("embedded") or ():
+            if entry.get("asset") is not None:
+                continue
+            total += 1
+            name = str(entry.get("member", "")).replace("\\", "/").rsplit("/", 1)[-1]
+            stem, dot, suffix = name.rpartition(".")
+            extension = ("." + suffix.lower()) if (dot and stem) else ""
+            by_extension[extension] = by_extension.get(extension, 0) + 1
+    if total == 0:
+        return None
+    breakdown = ", ".join(
+        f"{count:,} {extension}" for extension, count in sorted(
+            by_extension.items(), key=lambda item: -item[1]
+        )
+    )
+    return f"corpus index: {total:,} embedded PAKFILE members unclaimed ({breakdown})"
+
+
 @app.command("doctor")
 def doctor(
     ctx: typer.Context,
@@ -362,6 +406,10 @@ def doctor(
     def action(config: ProjectConfig, _runner: ProcessRunner) -> None:
         policy = _load_policy(config)
         errors, warnings = policy.audit(history=history, repo_only=repo_only)
+        if not repo_only:
+            corpus_warning = _corpus_index_unclaimed_report(config)
+            if corpus_warning is not None:
+                warnings = [*warnings, corpus_warning]
         if json_output:
             typer.echo(
                 json.dumps(

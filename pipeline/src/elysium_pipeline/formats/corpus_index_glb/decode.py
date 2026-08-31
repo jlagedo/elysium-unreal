@@ -78,6 +78,16 @@ def summary(
     counts = {"unit": 0, "companion": 0, "residue": 0, "unclaimed": 0}
     for member in members:
         counts[member.disposition] += 1
+    embedded_total = 0
+    embedded_unclaimed = 0
+    unclaimed_by_extension: dict[str, int] = {}
+    for member in members:
+        for entry in member.embedded:
+            embedded_total += 1
+            if entry.get("asset") is None:
+                embedded_unclaimed += 1
+                extension = _embedded_extension(str(entry.get("member", "")))
+                unclaimed_by_extension[extension] = unclaimed_by_extension.get(extension, 0) + 1
     return {
         "members": len(members),
         "units": len(units),
@@ -91,7 +101,18 @@ def summary(
         "warnings": sum(int(unit.warnings.get("count", 0)) for unit in units),
         "checksPassed": sum(1 for row in check_rows if row["passed"]),
         "checksFailed": sum(1 for row in check_rows if not row["passed"]),
+        "embeddedMembers": embedded_total,
+        "embeddedUnclaimed": embedded_unclaimed,
+        "embeddedUnclaimedByExtension": unclaimed_by_extension,
     }
+
+
+def _embedded_extension(member_path: str) -> str:
+    """The lower-case extension of one PAKFILE member's path, `""` if it has none."""
+
+    name = member_path.replace("\\", "/").rsplit("/", 1)[-1]
+    stem, dot, suffix = name.rpartition(".")
+    return ("." + suffix.lower()) if (dot and stem) else ""
 
 
 def decode_corpus_index(walk: InstallWalk, export_root: Path) -> CorpusIndexModel:
