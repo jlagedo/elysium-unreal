@@ -1601,6 +1601,104 @@ def import_vdata(ctx: typer.Context) -> None:
     _execute(_state(ctx), "import vdata", ExitCode.OFFLINE_EXPORT, action, require_work=False)
 
 
+@import_app.command("textures")
+def import_textures(
+    ctx: typer.Context,
+    force: bool = typer.Option(
+        False, "--force", help="Re-import every asset even when its recipe stamp is current."
+    ),
+    select: str | None = typer.Option(
+        None, "--select", help="Only units whose key starts with this prefix (e.g. hud/signs)."
+    ),
+    stage_only: bool = typer.Option(
+        False, "--stage-only", help="Write the DDS staging tree and manifest; launch no editor."
+    ),
+    measure: bool = typer.Option(
+        True, "--measure/--no-measure",
+        help="Write each built asset's mip 0 back and report the re-encode texel delta.",
+    ),
+) -> None:
+    """Import the texture corpus from the published GLB units into /ElysiumBaked/Textures."""
+
+    def action(config: ProjectConfig, runner: ProcessRunner) -> None:
+        from elysium_pipeline import unreal
+        from elysium_pipeline.importers import textures as importer
+
+        if config.export_v2_root is None or config.work_root is None:
+            raise ConfigError(
+                "ELYSIUM_EXPORT_V2_ROOT and ELYSIUM_WORK_ROOT must be configured; copy "
+                "dev/paths.example.env to .elysium.local.env and set the local paths"
+            )
+        root = importer.staging_root(config.work_root)
+        staged = importer.stage_textures(config.export_v2_root, root, select=select)
+        console.print(staged.summary())
+        for key, detail in staged.failures[:10]:
+            console.print(f"[yellow]  {key}: {detail}[/yellow]", markup=True)
+        for key, detail in staged.material_failures[:5]:
+            console.print(f"[yellow]  material {key}: {detail}[/yellow]", markup=True)
+        if stage_only:
+            if staged.failures:
+                raise RuntimeError(f"{len(staged.failures)} texture unit(s) could not be staged")
+            return
+
+        editor_failure: Exception | None = None
+        try:
+            unreal.import_textures(config, runner, staged.manifest_path, force=force,
+                                   measure=measure)
+        except unreal.UnrealFailure as error:
+            editor_failure = error
+        report = _read_json(root / importer.IMPORT_REPORT_NAME)
+        failed_assets = (report.get("failed") or []) if report else []
+        if report:
+            console.print(
+                "texture import: "
+                f"{report.get('imported', 0)} imported, {report.get('reused', 0)} reused, "
+                f"{report.get('pruned', 0)} pruned, {len(failed_assets)} failed"
+            )
+            for row in failed_assets[:10]:
+                console.print(
+                    f"[yellow]  {row.get('assetPath')}: {row.get('reason')}[/yellow]", markup=True
+                )
+        if measure:
+            measured = importer.measure_textures(root)
+            console.print(measured.summary())
+            for row in measured.worst[:10]:
+                console.print(
+                    f"  {row['unit']}: max {row['maxDelta']} mean {row['meanDelta']:.3f}"
+                )
+        problems = []
+        if staged.failures:
+            problems.append(f"{len(staged.failures)} unit(s) could not be staged")
+        if failed_assets:
+            problems.append(f"{len(failed_assets)} asset(s) failed to import")
+        if editor_failure is not None:
+            problems.append(str(editor_failure))
+        if problems:
+            raise RuntimeError("; ".join(problems))
+
+    # The stage is a file transform over the published units; the editor phase needs the engine
+    # and the work root, never the game install: the units are self-contained.
+    _execute(
+        _state(ctx),
+        "import textures",
+        ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
+        action,
+        require_work=True,
+        require_ue=not stage_only,
+        activity=not stage_only,
+    )
+
+
+def _read_json(path: Path) -> dict | None:
+    """A JSON object a child process may have written, or None when absent or unreadable."""
+
+    try:
+        content = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return content if isinstance(content, dict) else None
+
+
 @export_v2_app.command("ui-resource-glb")
 def export_v2_ui_resource_glb(
     ctx: typer.Context,

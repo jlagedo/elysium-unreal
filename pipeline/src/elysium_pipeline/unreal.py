@@ -327,6 +327,43 @@ def bake_corpus(config, runner, *, force: bool = False) -> None:
     )
 
 
+#: The whole texture corpus through one editor process: 11k DDS imports, each an Oodle encode on
+#: a cold DDC, plus a save. Sized like the corpus bake with room for the first, coldest run.
+TEXTURE_IMPORT_TIMEOUT_SECONDS = 4 * 3600.0
+
+
+def import_textures(config, runner, manifest_path, *, force: bool = False,
+                    measure: bool = True) -> None:
+    """Run the editor phase of `import textures` over one staged manifest.
+
+    `pipeline/unreal/import_textures.py` reads the manifest, imports each staged DDS, attaches
+    the provenance record, stamps the recipe and prunes; with `measure` it also writes each built
+    asset's mip 0 back beside its staged DDS for the offline delta. Per-asset reuse is the
+    commandlet's own decision off the recipe stamp, so a current corpus launches, reports every
+    asset reused, and exits.
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/import_textures.py'}",
+            f"-ImportTextures={manifest_path}",
+            *(["-ImportForce=1"] if force else []),
+            *(["-ImportMeasure=1"] if measure else []),
+            "-AllowCommandletRendering",
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+        timeout=TEXTURE_IMPORT_TIMEOUT_SECONDS,
+    )
+
+
 #: Maps per editor process. The commandlet garbage-collects between maps, but loaded texture
 #: platform data and its RHI resources still accumulate across the loop -- one process reached
 #: 23 GB and the machine's commit limit at the fiftieth map -- so a profile bake runs in

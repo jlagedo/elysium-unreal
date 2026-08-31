@@ -69,7 +69,7 @@ runtime (the set `Content/ElysiumCorpus` must carry until that slice migrates); 
 | `<map>.hulls`, `.dispcol`, `.spawn`, `.ropes` | UE_bsp_to_scene | runtime |
 | `<map>.props`, `.decals`, `.water`, `.materials.json`, `.weather.json`, `.particles.json`, `tex/cube/*` | UE_bsp_to_scene | bake |
 | `<map>.sprites` | UE_bsp_to_scene | none |
-| `shared/tex/*` (+ `tex_hi/`) | UE_extract_corpus | **both** (runtime: sky cube only) |
+| `shared/tex/*` (+ `tex_hi/`), `npc/tex/*` | UE_extract_corpus, npc_export | **both** (runtime: sky cube faces, rope/cable materials via `FElysiumTextureCache`, eye irises) |
 | `shared/props/*`, `manifest.json`, `materials.json` | UE_extract_corpus | bake |
 | `items/ground_models.json` | UE_extract_items | runtime |
 | `items/wield/**`, `wield_models.json` | UE_extract_wield | bake |
@@ -141,6 +141,58 @@ plugin; the export trees are build/review areas with no runtime reads. Slice 1 m
 import vdata` deploys capsule bytes to `Content/ElysiumCorpus/vdata/**`, `VdataDir()` and the
 ScriptFS `vdata/` mount flip to it.
 
+**Slice 2 is textures (owner calls, 2026-08-30).** Signs were the obvious next vdata step, but a
+sign's only non-text dependency is a material whose only dependency is a texture, and every
+material, mesh and map consumer sits on the same foundation — so textures go first and signs wait
+for the material slice. The lane, `uv run elysium import textures`, is specified in
+`docs/architecture/seam_map_texture.md` → "Import". The owner calls it rests on:
+
+- **Namespace mirrors the unit identity.** `vtmb:texture:hud/signs/notepad_yellow` →
+  `/ElysiumBaked/Textures/hud/signs/T_notepad_yellow` (`TC_` cubemap, `TA_` frame array). No
+  flattening: the legacy `Shared/Textures` bake drops stem collisions as "ambiguous source", which
+  is a fidelity loss the new namespace removes. `/ElysiumBaked/Shared/Textures` stays untouched
+  until the material slice re-points every material and deletes it.
+- **Standard import, re-encode loss accepted.** `FTextureSource` holds no block-compressed format,
+  and Unreal 5.8 refuses a block-compressed DDS outright on both import paths (Interchange and the
+  legacy factory both map DXGI through `DXGIFormatGetClosestRawFormat`, which has no BC row — the
+  first full run failed every BC unit with `DDS DXGIFormat not supported : 71 : BC1_UNORM`). So
+  the lane decodes the KTX2 blocks itself with its own spec-exact BC1/BC2/BC3 decoder, stages
+  uncompressed BGRA8, and Oodle re-encodes at build; bit-identity would need a custom `UTexture`
+  subclass outside the DDC path. Accepted, on the condition that the lane reports the measured
+  texel delta per unit (the staged decode against the built mip 0, both read by the same decoder,
+  so the number is Unreal's re-encode alone) so the loss is a number, and the GLB stays the
+  bit-exact record. Compression is source-preserving: BC stays
+  `TC_Default` (never `TC_Normalmap`, which discards a channel the source had); uncompressed
+  sources stay uncompressed.
+- **Every authored mip is imported**, including the 65 short chains; what Unreal does with a
+  chain that ends above 1×1 is observed on the first run and recorded, not assumed.
+- **sRGB is decided from the material bindings**, read from the material units directly (the
+  corpus index carries the edge but not the parameter — extending it is a follow-up): a texture is
+  colour unless every binding is a data read (`$bumpmap`, `$normalmap`, `$dudvmap`,
+  `$envmapmask`, `$masktexture`…) or it has no binding (461 units, recorded as `no evidence`).
+- **Conflict textures get a linear twin.** 590 textures are bound as colour by one material and
+  as data by another. Source filters the raw bytes; an sRGB asset is linearised before filtering,
+  so a material-side `LinearToSrgb` is only exact on flat regions. Rejected: doubling all 11,243
+  (95% waste) and a formula-only fix (inexact at edges and mips). Accepted: one asset per texture
+  plus a `_linear` twin for the conflict set only, both carrying the same unit id.
+- **Cubemaps (43) are included**, accepted headlessly: parity of every face against the cube the
+  runtime builds today from the legacy PNG faces (`SkySlices`), which is the visually accepted sky,
+  plus an edge-seam continuity check that needs no reference. A rendered frame is a courtesy check
+  when the sky reader flips, not the gate.
+- **Provenance rides as `UElysiumTextureProvenance : UAssetUserData`** — the one carrier that
+  survives cook, reads at runtime and attaches from editor Python — with a few fields published as
+  asset-registry tags for Content Browser search. Rejected: package metadata tags and
+  `AssetImportData` (editor-only), one `UDataAsset` per texture (11k objects for nothing).
+- **Hard references by default**, tuned to soft later only if boot time or hitches show it.
+- **Reflectivity's consumer flips in the material slice**, when materials reach the new assets;
+  this slice only carries the value faithfully.
+- **The three loose-file readers** (sky cube faces, rope/cable materials, eye irises) flip in the
+  next slice together with the `tex_hi` decision; `shared/tex`, `npc/tex` and `retex_dds` retire
+  then.
+- **The first run is the full corpus.** The lane isolates per-unit failures, resumes from recipe
+  stamps and reports every failed unit with its reason, so a defect late in the run costs a
+  relaunch, not the run.
+
 ## Open questions
 
 **Where do the props go?** A map's geometry, materials and textures already bake to `.uasset`, but
@@ -156,6 +208,14 @@ bake side, and there are two candidate answers:
 What would settle it: whether anything needs to change prop placement without rebaking the level
 (a debug surface, a live tweak, a per-session variation), and whether folding them in breaks the
 shared-vs-per-map split the corpus bake depends on. Needs a test, not an argument.
+
+**Cubemap block rotation below 4×4.** The texture exporter rotates a BC-compressed cube face
+into glTF orientation by permuting its 4×4 blocks and rewriting selector bits, which is exact only
+while a level is at least 4×4: at 2×2 and 1×1 the valid texels move out of the valid region. The
+import lane applies the exact inverse, so the staged DDS round-trips byte-for-byte and no asset is
+affected, but the published payload's own orientation at those levels is wrong and
+`seam_map_texture.md` → "faces" overstates it as exact. Owner call pending on whether to fix the
+exporter (rotate the decoded texels of a sub-4×4 level instead) or document the bound.
 
 **What happens to the resources that cannot become Unreal assets?** VtMB's level scripts and
 dialogue are loose `.py` and `.dlg` text imported into an embedded CPython VM at map load; `cfg/`

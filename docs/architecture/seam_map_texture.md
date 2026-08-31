@@ -1,8 +1,9 @@
 # Texture GLB Exporter seam
 
 This document defines the isolated Texture GLB Exporter's complete binary glTF 2.0 (`.glb`) unit
-for one VtMB texture identity. This offline product does not replace the baked texture corpus and
-participates in no runtime loading.
+for one VtMB texture identity. The unit is the sole input of `uv run elysium import textures`,
+which lands it as an Unreal texture asset ("Import" below); the runtime reaches it through that
+asset, never through the GLB.
 
 The source-format facts referenced by this contract remain owned by
 `docs/vtmb/texture_format.md`; the colour-space facts remain owned by `docs/vtmb/color_gamma.md`.
@@ -484,3 +485,231 @@ of any embedded opaque source payload.
 
 Zero-range honesty is the one ledger claim it cannot re-check: proving a `padding-zero` range is
 zero needs the source bytes, so that check runs only in the export-time path above.
+
+## Import
+
+`uv run elysium import textures` turns every published texture unit into one Unreal texture asset
+below `/ElysiumBaked/Textures`. It is the second slice of the seam migration
+(`docs/project/seam_migration.md` → "Settled", "Slice 2 is textures"), and the template the
+material, model and map lanes follow: the unit is the only input, the asset carries everything
+the unit knows, and nothing here reads the install.
+
+### Identity and naming
+
+```text
+vtmb:texture:<dir>/<stem>  ->  /ElysiumBaked/Textures/<dir>/T_<safe stem>          2D
+                           ->  /ElysiumBaked/Textures/<dir>/TC_<safe stem>         cubemap
+                           ->  /ElysiumBaked/Textures/<dir>/TA_<safe stem>         2D array (frames > 1)
+                           ->  /ElysiumBaked/Textures/<dir>/T_<safe stem>_linear   the linear twin, when one exists
+```
+
+`<dir>` is the unit's directory below `materials/`, kept as package folders; `<safe stem>` is
+`asset_names.safe_name` over the file stem. The exact original path lives in the provenance, so
+folding is never a loss. The legacy `/ElysiumBaked/Shared/Textures` package is not touched by
+this lane; the material slice deletes it once no material references it.
+
+### Two phases, one command
+
+**Phase 1 — stage (offline Python, `importers/textures.py`).** For every unit under
+`$ELYSIUM_EXPORT_V2_ROOT/textures/**` the lane parses the KTX2 payload, decodes every
+block-compressed level to 8-bit pixels with its own BC1/BC2/BC3 decoder, and writes one
+**uncompressed** DX10 DDS (`B8G8R8A8_UNORM`, every authored level, frames as array slices, cube
+faces in Unreal order — rotated block-exactly first, decoded after), a provenance sidecar and one
+`manifest.json` under `$ELYSIUM_WORK_ROOT/import/textures/`. An already-uncompressed source is
+staged as it is (see the compression table). Phase 1 also scans every material unit's
+`dependencies[]` to learn each texture's binding parameters, which decide the colour/data role
+below. Phase 1 is pure Python and is what the pytest suite exercises with synthetic units.
+
+*Why the staged DDS is uncompressed.* Unreal 5.8 cannot import a block-compressed DDS at all:
+both import paths — the Interchange translator
+(`Engine/Plugins/Interchange/Runtime/Source/Import/Private/Texture/InterchangeDDSTranslator.cpp`,
+`GetTexturePayloadData`) and the legacy factory
+(`Engine/Source/Editor/UnrealEd/Private/Factories/EditorFactories.cpp`, the DDS branch of
+`UTextureFactory`) — map the file's DXGI format through `UE::DDS::DXGIFormatGetClosestRawFormat`,
+whose table carries no BC entry, and refuse the file with `DDS DXGIFormat not supported : 71 :
+BC1_UNORM`. `FTextureSource` holds only uncompressed formats anyway, so nothing is lost by
+decoding before import that would not have been lost by Unreal decoding after it; the difference
+is that the decode is now the lane's, spec-exact and shared with phase 3, so the measured delta is
+Unreal's re-encode alone. The KTX2 in the unit remains the block-exact record.
+
+**Phase 2 — import (headless editor, `pipeline/unreal/import_textures.py`).** Launched like the
+corpus bake (`-run=pythonscript`), it reads the manifest, imports each DDS with an
+`AssetImportTask`, applies the settings the manifest states, attaches the provenance record,
+stamps the recipe (`bake_lib.RECIPE_TAG`), saves, and prunes every asset under
+`/ElysiumBaked/Textures` the manifest does not name. It also writes each built asset's mip 0 back
+beside its staged DDS (`<stem>.built.dds`) so phase 3 can measure the re-encode.
+
+**Phase 3 — measure (offline Python).** For each unit with a `.built.dds` (BC or BGRA8, whatever
+Unreal built), decode both sides with the same decoder and record the max and mean per-channel
+texel delta in the run report. The loss is accepted; it is reported so it stays a number rather
+than a belief.
+
+### The staging manifest
+
+`manifest.json` is the contract between the two phases. One entry per asset (a twin is its own
+entry pointing at the same DDS):
+
+```json
+{
+  "schemaVersion": "1.0.0",
+  "settingsVersion": "elysium-texture-import-v2",
+  "packageRoot": "/ElysiumBaked/Textures",
+  "select": null,
+  "pruneScope": "/ElysiumBaked/Textures/",
+  "keep": [],
+  "stageFailures": [],
+  "assets": [
+    {
+      "assetPath": "/ElysiumBaked/Textures/hud/signs/T_notepad_yellow",
+      "class": "Texture2D",
+      "dds": "hud/signs/notepad_yellow.dds",
+      "stagedFormat": "bgra8",
+      "provenance": "hud/signs/notepad_yellow.provenance.json",
+      "unit": "vtmb:texture:hud/signs/notepad_yellow",
+      "unitGlb": "textures/hud/signs/notepad_yellow.glb",
+      "unitSha256": "…",
+      "twinOf": null,
+      "role": "colour",
+      "roleEvidence": ["$basetexture"],
+      "roleConflict": false,
+      "srgb": true,
+      "compression": "default",
+      "mipGen": "leave-existing",
+      "addressX": "wrap", "addressY": "wrap",
+      "filter": "default",
+      "neverStream": true,
+      "expected": {"width": 512, "height": 1024, "mips": 11, "faces": 1, "slices": 1},
+      "recipe": {"unitSha256": "…", "settingsVersion": "elysium-texture-import-v2",
+                 "role": "colour", "srgb": true, "compression": "default", "twin": false}
+    }
+  ]
+}
+```
+
+`class` is `Texture2D`, `TextureCube` or `Texture2DArray`. `dds` and `provenance` are relative to
+the staging root. The recipe stamp is `bake_lib.recipe_fingerprint("textures", assetPath, recipe)`
+— the sha256 of the canonical JSON of `["textures", assetPath, recipe]` — so a unit whose GLB
+changes, or a settings-version bump, re-imports; nothing else does.
+
+`select` is the `--select` **directory** of unit keys the stage ran under (`hud/signs`; `hud`
+selects `hud/**` and nothing under `hudson/`), lower-cased, or `null` for the whole corpus.
+`pruneScope` is the package folder the editor phase may prune, always with a trailing slash: the
+root, or the selected directory folded component by component the way asset paths are folded
+(`odd dir` → `/ElysiumBaked/Textures/odd_dir/`). The editor phase uses it verbatim and compares
+case-insensitively, so a scoped run never deletes the rest of the mount.
+
+`keep` protects assets: for every unit the stage could not read or plan, every asset path its key
+could own (`T_`, `TC_`, `TA_`, each with its `_linear` twin) is listed, and the editor phase never
+prunes a path in `keep`; `stageFailures` names those units with their reasons. A transient read
+error therefore costs one relaunch, never a previously good asset — and the staging prune likewise
+leaves a failed unit's own staged files in place. A stem that folds to an asset path another unit
+already owns fails both units by name rather than letting either win, and protects the shared
+path the same way.
+
+Every staged file is written to a temporary sibling and renamed into place, and the sidecar
+records `ddsSha256`; a unit counts as current only when the sidecar names the GLB hash, the
+settings version **and** the hash the staged DDS still has, so a truncated product is rebuilt
+rather than trusted.
+
+### Role, sRGB and compression
+
+A texture unit does not own its meaning; the material binding does (`seam_map_material.md`). The
+lane derives one role per texture from the set of parameters that bind it across every material
+unit:
+
+| Bindings | Role | `srgb` |
+|---|---|---|
+| any colour parameter (`$basetexture`, `$basetexture2`, `$detail`, `$detail2`, `$iris`, `$selfillumtexture`, `$texture2`, `$envmap`, `$lightwarptexture`, `%tooltexture`) | `colour` | on |
+| none at all | `colour` (`roleEvidence: []`) | on |
+| only normal-class (`$bumpmap`, `$bumpmap2`, `$normalmap`, `$dudvmap`, `$dudvtexture`) | `data-normal` | off |
+| only mask-class (`$envmapmask`, `$masktexture`, `$basealphaenvmapmask`, `$spotlightmask`, `$cloudalphatexture`, `$blendmodulatetexture`) or any other data-only set | `data-mask` | off |
+
+A texture with both a colour binding and a data binding is a **conflict**: its asset is `colour`
+with `roleConflict: true`, and the lane emits a `_linear` twin (`role` = the data role, `srgb`
+off, `twinOf` = the colour asset). Source filtered the raw bytes; only an sRGB-off asset filters
+the same way, so the twin is the exact reading and a material-side `LinearToSrgb` is not used.
+
+`compression` preserves the source format rather than re-choosing by role:
+
+| Source `vkFormat` | staged DDS | `compression` | Unreal setting |
+|---|---|---|---|
+| BC1, BC2, BC3 | decoded, `B8G8R8A8_UNORM` (DXGI 87), `stagedFormat: bgra8` | `default` | `TC_Default`, so Unreal re-encodes to BC1 or BC3 by alpha (BC2 has no Unreal output and builds as BC3; a BC1 punch-through alpha builds as BC3; both recorded in `builtFormats`) |
+| BGRA8 | as is, DXGI 87 | `uncompressed` | `TC_EditorIcon` when `srgb`, else `TC_VectorDisplacementmap` |
+| RGBA8, RGB8 | as is, DXGI 28 (RGB8 widened with an opaque alpha), `stagedFormat: rgba8` | `uncompressed` | `TC_EditorIcon` when `srgb`, else `TC_VectorDisplacementmap` |
+| RGBA8_UINT (`UVWQ8888`) | as is, DXGI 28 | `uncompressed` | `TC_VectorDisplacementmap`, `srgb` off; staged as DXGI 28 (`R8G8B8A8_UNORM`, bytes untouched) because Unreal's DDS reader does not swizzle `R8G8B8A8_UINT` into its BGRA8 source and would swap U and W; the sidecar keeps `vkFormat` 41. Always a data role whatever binds it, never a twin |
+
+`LossyCompressionAmount` is `TLCA_None`. Never `TC_Normalmap`: it rebuilds a channel the source
+had.
+
+### Mips, sampling and streaming
+
+| Unit | Asset |
+|---|---|
+| every KTX2 level | imported as-is, `TMGS_LeaveExistingMips`; a single level is `TMGS_NoMipmaps` |
+| a chain ending above 1×1 (65 units) | imported as-is; Unreal warns and what it builds for the tail is recorded on the first run |
+| `sampling.clampS` / `clampT` | `AddressX` / `AddressY` = `TA_Clamp`, else `TA_Wrap` |
+| `sampling.pointSample` | `Filter = TF_Nearest` |
+| `sampling.trilinear` | `Filter = TF_Trilinear` |
+| `sampling.noLod` / `allMips` | `NeverStream = true` |
+| `sampling.noMip`, `anisotropic` | no per-asset slot; carried in provenance |
+
+### Cubemaps and frame arrays
+
+A `2d-array` unit (`dimensions.frames > 1`) stages as a DX10 DDS with `arraySize = frames` and
+imports as `UTexture2DArray`; playback rate belongs to the material (`$animatedtexture`).
+
+A `cubemap` unit stages as a DX10 cube DDS. Its payload faces are in glTF order and orientation;
+the lane puts them back into **VTF/D3D order with their source orientation** by inverting the
+unit's own `faces[]` rows (DDS face `s` is the KTX2 face whose row names `sourceFace == s`,
+rotated by the inverse of that row's `transform`; block rotation reuses
+`texture_glb.decode.transform_cubemap_face`). That is the layout Unreal's `UTextureCube` samples
+through the plain D3D face table and the one the legacy bake already imports for the map-baked
+env cubes (`tex_to_png.cubemap_dds`: VTF order, no rotation; the material owns the one
+handedness correction). The runtime's `SkySlices` table is *not* involved: it assembles a sky from
+six separate 2D `skybox/*` textures, which are 2D units in this corpus, not cubemap units. The
+mapping is accepted by two headless checks, not by eye: **parity** — each staged face of an
+`envmap/<name>` unit decodes equal to the same face of the legacy `<map>/tex/cube/envmap_<name>.dds`
+the game draws today; and **seam continuity** — across the twelve cube edges the emitted
+orientation scores lower than every other per-face rotation (`texture_cube.seam_error`). The
+sidecar records the applied `faceMapping`. A rendered frame is a courtesy when a reader flips.
+The exporter's in-face block rotation is exact only for levels of at least 4×4; import applies the
+exact inverse, so a 2×2 or 1×1 BC face round-trips byte-for-byte, but the payload's own
+orientation at those levels is an open exporter defect (tracked in `seam_migration.md` open
+questions).
+
+### Provenance
+
+Every asset carries one `UElysiumTextureProvenance` (`UAssetUserData`, runtime module, so a
+packaged game reads it) attached through the texture's `asset_user_data` property:
+
+| Field | From |
+|---|---|
+| `AssetId`, `TexturePath`, `UnitSchemaVersion`, `UnitSha256`, `PayloadSha256` | `identity`, the GLB file, `payload.sha256` |
+| `SourceFormat`, `SourceFormatEnum`, `VkFormat`, `VtfVersion`, `TthVersion`, `Flags` | `sourceFormat` |
+| `Reflectivity` (linear RGB), `BumpScale`, `StartFrame` | `sourceFormat` |
+| `Width`, `Height`, `Frames`, `Faces`, `MipCount`, `SourceMipCount` | `dimensions`, `sourceFormat` |
+| `Sampling` (the eight booleans) | `sampling` |
+| `Members[]` (`Role`, `Path`, `OriginKind`, `Container`, `Offset`, `Size`, `ByteLength`, `Sha256`) | `sourceResolution.members` |
+| `Role`, `RoleEvidence[]`, `RoleConflict`, `TwinOf` | the manifest |
+| `FaceMapping[]` (cubemaps) | the computed glTF→Unreal permutation and rotations |
+
+The sidecar is a JSON object whose keys are the field names above in camelCase (`assetId`,
+`sourceFormat`, `reflectivity` as a three-number array, `sampling` as an object of the eight
+booleans, `members` as rows of `role`, `path`, `originKind`, `container`, `offset`, `size`,
+`byteLength`, `sha256`, `faceMapping` as rows of `unrealFace`, `ktxFace`, `sourceFace`,
+`transform`). `UElysiumTextureProvenance::ApplyJson` tolerates a missing key, leaving that field
+at its default, and refuses only a body that is not a JSON object.
+
+`SourceFormat`, `Role`, `RoleConflict` and `AssetId` are also published as asset-registry tags
+(`ElysiumSourceFormat`, `ElysiumRole`, `ElysiumRoleConflict`, `ElysiumAssetId`, listed under
+`MetaDataTagsForAssetRegistry` in `Config/DefaultGame.ini` beside `ElysiumRecipe`), so the
+Content Browser can filter on them without loading the asset. Ledgers, omissions and per-mip
+digests are not copied: they are the export's proof and live in the unit.
+
+### Idempotency, pruning and failure
+
+The recipe stamp decides per asset; a current corpus launches, reports every asset reused, and
+exits. Assets under `/ElysiumBaked/Textures` the manifest does not name are deleted, directories
+emptied by pruning with them. A unit that fails to stage or import is counted and named with its
+reason and the run continues; the command exits non-zero when any unit failed, and a relaunch
+resumes from the stamps.
