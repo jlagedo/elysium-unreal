@@ -269,6 +269,7 @@ PKG = "/Game/ElysiumGenerated/Materials/V2"
 REQUIRED_MPC_SCALARS = [
     "Overbright", "MaskRoughnessMin", "MaskRoughnessMax", "MaskSpecularScale",
     "MaskMetallicMax", "ChromaticTintStrength", "EnvTintScale", "FixedCubeStrength",
+    "DefaultRoughness", "DefaultSpecular", "DefaultMetallic", "ClassInfluence",
 ]
 
 

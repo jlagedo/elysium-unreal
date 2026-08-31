@@ -1445,6 +1445,39 @@ is a throwaway experiment the next import overwrites; the settings page and the 
 whole authoring surface. The `UElysiumSurfaceSettings` object is the single writer of the surface
 scalars in the collection — the Cog Environment window becomes a view onto it, not a second writer.
 
+### Per-unit divergences
+
+SF-4.3 part 3's cross-cutting ruling over the 13 stage failures the "No silent drop" rule surfaced
+once all nine masters existed and every parameter table was final. Each is a unit whose own VMT
+authors a key that resolves to a named parameter on *some* master, but not on the master *that
+unit* takes — never a gap in the parameter table itself. `UNIT_DIVERGENCES`
+(`pipeline/src/elysium_pipeline/importers/materials.py`) is the allowlist: `unit key -> {VMT key ->
+reason}`, checked before classification, so an allowlisted key is recorded in provenance
+(`unitDivergenceProvenanceOnly`) instead of failing the stage.
+
+| Unit | Key(s) | Ruling |
+|---|---|---|
+| `models/character/npc/common/raver/males/male_raver_3/eyeball` | `$iris` | a `vertexlitgeneric` unit authoring an eyes-family key; `M_V2_Lit` has no `Iris` slot — provenance-only |
+| `models/character/npc/unique/chinatown/ming-xiao/eyeball_r` | `$selfillum` | `eyes.psh` has no self-illum term and `M_V2_Eyes` exposes neither `SelfIllumAmount` nor `UseSelfIllum` — provenance-only |
+| `models/character/npc/unique/santa_monica/ghost/eyeball_l` | `$selfillum` | same as above |
+| `models/character/npc/unique/santa_monica/ghost/eyeball_r` | `$selfillum` | same as above |
+| `stone/dincountertp` | `$envmapmask`, `$envmap` | `worldvertextransition`'s `InitShaderParams` deletes `$envmap` without `$bumpmap` (this unit has none), so `UseEnvMap` is forced off on `M_V2_TwoTexture`, which has no reflection lane at all — both provenance-only |
+| `water/cheap_water` | `$forcecheap`, `$fogenable`, `$fogcolor`, `$fogstart`, `$fogend` | a non-water unit (family `lightmappedgeneric`, takes `M_V2_LitTranslucent`) authoring water-only keys despite not being a water surface; `M_V2_LitTranslucent` has no `CheapWater` switch or fog lane — provenance-only |
+| `water/invisible_water` | `$fogenable`, `$fogcolor`, `$fogstart`, `$fogend` | a non-water unit (family `unlitgeneric`, takes `M_V2_Unlit`) authoring the same water-only fog keys; `M_V2_Unlit` has no fog lane — provenance-only |
+
+`$vertexalpha` on the rerouted sprite unit (`engine/vertexcolorblend`, one of the 5 `unlitgeneric`
+`$ignorez` units re-routed to `M_V2_Sprite`) is **not** in this table: `M_V2_Sprite` now exposes
+`UseVertexAlpha` (this same ruling), so that key has a real destination and stages cleanly rather
+than diverging.
+
+The remaining 5 of the original 13 stage failures were never divergences of their own — they were
+the 5 patched map units (`maps/ch_fulab_1/water/cheap_water`,
+`maps/ch_fulab_1/water/cheap_water_1318_1990_273`, `maps/sm_diner_1/stone/dincountertp`,
+`maps/sm_diner_1/stone/dincountertp_401_162_38`, `maps/sm_pier_1/water/invisible_water_depth_33`)
+whose *base* material (`water/cheap_water`, `stone/dincountertp`, `water/invisible_water`) failed
+to stage; once the base units above stage cleanly, so do their patches, with no divergence entry
+of their own needed.
+
 ### Idempotency, pruning and failure
 
 Identical to the texture lane. `manifest.json` carries `packageRoot`

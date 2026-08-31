@@ -142,6 +142,83 @@ IGNOREZ_SPRITE_REROUTE_UNITS = frozenset({
 IGNOREZ_NAMED_DIVERGENCE_UNITS = frozenset({"models/scenery/furniture/displaytable/floating"})
 
 
+#: SF-4.3-part-3 cross-cutting ruling (d): the 13 stage failures the design's "No silent drop"
+#: rule surfaced, ruled per unit rather than fixed generically -- each one authors a key that
+#: genuinely has no destination on *that* unit's own master, not a bug in the parameter table.
+#: `unit key -> {vmt key (lower-cased) -> reason}`; every key named here is dropped from
+#: classification (never bound to a parameter) and recorded in provenance as
+#: `unitDivergenceProvenanceOnly` instead of failing the stage. See
+#: `docs/architecture/seam_map_material.md` -> "Import" -> "Per-unit divergences" for the
+#: narrative form of this table. `$vertexalpha` on the rerouted sprite unit
+#: (`engine/vertexcolorblend`) is deliberately **not** here any more: `M_V2_Sprite` now exposes
+#: `UseVertexAlpha`, so that key has a real destination and stages cleanly.
+UNIT_DIVERGENCES: dict[str, dict[str, str]] = {
+    "models/character/npc/common/raver/males/male_raver_3/eyeball": {
+        "$iris": (
+            "this one vertexlitgeneric unit authors $iris, an eyes-family key; M_V2_Lit has no "
+            "Iris slot (Iris is M_V2_Eyes-only) -- provenance-only, named divergence"
+        ),
+    },
+    "models/character/npc/unique/chinatown/ming-xiao/eyeball_r": {
+        "$selfillum": (
+            "eyes.psh has no self-illum term (every stage is a texture read; the eyes register "
+            "legend carries no c-register self-illum path) and M_V2_Eyes exposes neither "
+            "SelfIllumAmount nor UseSelfIllum -- provenance-only"
+        ),
+    },
+    "models/character/npc/unique/santa_monica/ghost/eyeball_l": {
+        "$selfillum": (
+            "eyes.psh has no self-illum term and M_V2_Eyes exposes neither SelfIllumAmount nor "
+            "UseSelfIllum -- provenance-only"
+        ),
+    },
+    "models/character/npc/unique/santa_monica/ghost/eyeball_r": {
+        "$selfillum": (
+            "eyes.psh has no self-illum term and M_V2_Eyes exposes neither SelfIllumAmount nor "
+            "UseSelfIllum -- provenance-only"
+        ),
+    },
+    "stone/dincountertp": {
+        "$envmapmask": (
+            "worldvertextransition's InitShaderParams deletes $envmap without $bumpmap (and "
+            "outright under $envmapsphere); M_V2_TwoTexture has no reflection lane at all, so a "
+            "mask authored for a reflection this unit never gets is provenance-only"
+        ),
+        "$envmap": (
+            "same InitShaderParams rule as $envmapmask on this unit ('InitShaderParams deletes "
+            "$envmap without $bumpmap ... so UseEnvMap is forced off on this master', design doc "
+            "'The eight real unresolved families' -> worldvertextransition): this unit has no "
+            "$bumpmap, M_V2_TwoTexture has no EnvMap/UseEnvMap slot at all -- provenance-only"
+        ),
+    },
+    "water/cheap_water": {
+        "$forcecheap": (
+            "non-water unit (family lightmappedgeneric, takes M_V2_LitTranslucent) authors "
+            "$forcecheap (a water-only key -> CheapWater) despite not being a water surface; "
+            "M_V2_LitTranslucent has no CheapWater switch -- provenance-only"
+        ),
+        "$fogenable": (
+            "non-water unit (family lightmappedgeneric, takes M_V2_LitTranslucent) authors water "
+            "fog parameters despite not being a water surface; M_V2_LitTranslucent has no fog "
+            "lane at all -- provenance-only"
+        ),
+        "$fogcolor": "same as $fogenable on this unit -- M_V2_LitTranslucent has no FogColor slot",
+        "$fogstart": "same as $fogenable on this unit -- M_V2_LitTranslucent has no FogStart slot",
+        "$fogend": "same as $fogenable on this unit -- M_V2_LitTranslucent has no FogEnd slot",
+    },
+    "water/invisible_water": {
+        "$fogenable": (
+            "non-water unit (family unlitgeneric, takes M_V2_Unlit) authors water fog parameters "
+            "despite not being a water surface; M_V2_Unlit has no fog lane at all -- "
+            "provenance-only"
+        ),
+        "$fogcolor": "same as $fogenable on this unit -- M_V2_Unlit has no FogColor slot",
+        "$fogstart": "same as $fogenable on this unit -- M_V2_Unlit has no FogStart slot",
+        "$fogend": "same as $fogenable on this unit -- M_V2_Unlit has no FogEnd slot",
+    },
+}
+
+
 def resolve_master(family: str, blend_mode: str) -> str | None:
     """The master an install unit's resolved shader family takes, or `None` when unrecognised."""
 
@@ -1177,6 +1254,11 @@ def stage_unit(
     family = str((document.get("shaderResolution") or {}).get("family")
                  or document.get("shader") or "").lower()
 
+    #: SF-4.3-part-3 ruling (d): a unit-specific allowlist of VMT keys treated as provenance-only
+    #: even though the key itself resolves to a named parameter -- that parameter just is not on
+    #: *this* unit's own master. See `UNIT_DIVERGENCES`.
+    divergent_keys = UNIT_DIVERGENCES.get(key, {})
+
     params = _Params()
     for row in parameters:
         block = str(row.get("block") or "")
@@ -1197,6 +1279,12 @@ def stage_unit(
         })
         if patched and key_lower != PATCH_ONLY_KEY and not block.startswith(("replace#", "insert#")):
             continue  # a patched unit's non-override top-level rows are patch bookkeeping only
+        if key_lower in divergent_keys:
+            params.omissions.append({
+                "kind": "unitDivergenceProvenanceOnly", "key": raw_key,
+                "reason": divergent_keys[key_lower],
+            })
+            continue
         unmapped = _classify_and_apply(
             params, key_lower, raw_key, value, block, document, deps,
             family=family, texture_staging_root=texture_staging_root,

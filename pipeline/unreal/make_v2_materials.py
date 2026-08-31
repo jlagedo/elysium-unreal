@@ -65,9 +65,15 @@ GRAPH_VERSION = 2
 #: *reader*, never a second writer: `_load_surfaces_collection` fails hard if the collection or
 #: any row this file's masters read is missing, rather than seeding a value SF-4.1 already owns.
 SURFACES_COLLECTION = "MPC_ElysiumSurfaces"
+#: `DefaultRoughness`/`DefaultSpecular`/`DefaultMetallic`/`ClassInfluence` closed doc gap #1 (this
+#: file's own module docstring, part 2): the pre-revision `M_V2_Lit` never read the `Default*` rows
+#: for a non-`$envmap` surface, and `ClassInfluence` (added to `MPC_ElysiumSurfaces` by the
+#: concurrent C++ fixer named in the SF-4.3-part-3 task) did not exist yet. Part 3's cross-cutting
+#: ruling (a) closes both: `_class_lut_influenced` reads all four.
 REQUIRED_MPC_SCALARS = sorted([
     "Overbright", "MaskRoughnessMin", "MaskRoughnessMax", "MaskSpecularScale",
     "MaskMetallicMax", "ChromaticTintStrength", "EnvTintScale", "FixedCubeStrength",
+    "DefaultRoughness", "DefaultSpecular", "DefaultMetallic", "ClassInfluence",
 ])
 
 # The shader-source units each master's post-lighting math transcribes (design doc "Post-lighting
@@ -467,6 +473,34 @@ def _class_lut(g, lut_param_name, lut_texture, index_name, x, y):
             g.mask(lut_sample, "b", x + 880, y + 40))
 
 
+def _class_lut_influenced(g, lut_param_name, lut_texture, index_name, x, y):
+    """SF-4.3-part-3 cross-cutting ruling (a): every master's Roughness/Specular/Metallic
+    computation becomes `lerp(DefaultRoughness, ClassRoughness, ClassInfluence)` and the same
+    shape for Specular/Metallic, replacing the raw `_class_lut` triple at its source so every
+    downstream user (the reflection-contract mask math, the envmap switch, the final `g.to()`)
+    inherits the lerped values automatically. `ClassInfluence` is an `MPC_ElysiumSurfaces` scalar
+    (default `1.0`) -- at the default the lerp is an exact identity, collapsing to the raw class
+    row exactly as before this ruling landed. Used by every master whose shading model actually
+    reads Roughness/Specular/Metallic (the five Default Lit masters: `M_V2_Lit`/
+    `M_V2_LitTranslucent`, `M_V2_TwoTexture`, `M_V2_Eyes`, `M_V2_Water`, `M_V2_Refract`); the four
+    Unlit masters (`M_V2_Unlit`, `M_V2_Sprite`, `M_V2_Decal`) still call the plain `_class_lut`
+    (or, for `M_V2_Unlit`, declare it unwired) because an Unlit shading model ignores those pins
+    entirely, per each function's own docstring."""
+    class_roughness, class_specular, class_metallic = _class_lut(
+        g, lut_param_name, lut_texture, index_name, x, y)
+    class_influence = g.mpc("ClassInfluence", x, y + 900)
+    default_roughness = g.mpc("DefaultRoughness", x, y + 980)
+    default_specular = g.mpc("DefaultSpecular", x, y + 1060)
+    default_metallic = g.mpc("DefaultMetallic", x, y + 1140)
+    roughness = g.lerp(default_roughness, "", class_roughness, "", class_influence, "",
+                       x + 1100, y + 980)
+    specular = g.lerp(default_specular, "", class_specular, "", class_influence, "",
+                      x + 1100, y + 1060)
+    metallic = g.lerp(default_metallic, "", class_metallic, "", class_influence, "",
+                      x + 1100, y + 1140)
+    return roughness, specular, metallic
+
+
 # ============================================================================================
 # M_V2_Lit / M_V2_LitTranslucent
 # ============================================================================================
@@ -594,7 +628,7 @@ def _build_lit(mat, collection, lut_texture, default_frames, *, translucent):
     overbright_base = g.mul(vc_selected, "", overbright, "", 560, -360)
 
     # -- surface class lookup ------------------------------------------------------------------
-    class_roughness, class_specular, class_metallic = _class_lut(
+    class_roughness, class_specular, class_metallic = _class_lut_influenced(
         g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
 
     # -- reflection contract: mask term -------------------------------------------------------
@@ -1120,7 +1154,7 @@ def _build_two_texture(mat, collection, lut_texture):
     # -- surface class lookup, unwired past declaration (this master's Specular/Roughness/
     # Metallic follow the same class-LUT-alone convention M_V2_Lit's non-$envmap branch already
     # uses; see the module docstring's doc-gap note #1) ---------------------------------------
-    class_roughness, class_specular, class_metallic = _class_lut(
+    class_roughness, class_specular, class_metallic = _class_lut_influenced(
         g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
     g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
     g.to(class_specular, "", unreal.MaterialProperty.MP_SPECULAR)
@@ -1259,7 +1293,7 @@ def _build_eyes(mat, collection, lut_texture):
 
     # -- surface class lookup: Eyes has no $envmap lane at all (not in the design's exposed-
     # parameter table for this master), so Roughness/Specular/Metallic are always the class row --
-    class_roughness, class_specular, class_metallic = _class_lut(
+    class_roughness, class_specular, class_metallic = _class_lut_influenced(
         g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
     g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
     g.to(class_specular, "", unreal.MaterialProperty.MP_SPECULAR)
@@ -1518,7 +1552,7 @@ def _build_water(mat, collection, lut_texture, default_frames):
 
     # -- surface class lookup + reflection: BaseReflectFract -> Fresnel -> ReflectAmount/
     # ReflectTint into Specular, gated UseEnvMap (mirrors every other master's envmap branch) ---
-    class_roughness, class_specular, class_metallic = _class_lut(
+    class_roughness, class_specular, class_metallic = _class_lut_influenced(
         g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
 
     base_reflect_fract = g.scalar(P.Scalars.BaseReflectFract, 0.2, -1900, 1900)
@@ -1869,7 +1903,7 @@ def _build_refract(mat, collection, lut_texture):
 
     # -- surface class lookup: no reflection-mask formula for this master, so Roughness/Specular/
     # Metallic are always the class row (like M_V2_Eyes/M_V2_TwoTexture) -----------------------
-    class_roughness, class_specular, class_metallic = _class_lut(
+    class_roughness, class_specular, class_metallic = _class_lut_influenced(
         g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
     g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
     g.to(class_specular, "", unreal.MaterialProperty.MP_SPECULAR)
