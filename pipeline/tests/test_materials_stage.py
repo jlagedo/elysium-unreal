@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from elysium_pipeline import paths
 from elysium_pipeline.formats.unit_contract.container import encode_glb
 from elysium_pipeline.importers import materials as importer
 
@@ -941,8 +942,7 @@ def test_texturescroll_two_proxies_on_the_same_lane_sum_rates(tmp_path):
 # --- animatedtexture: base vs normal lane -----------------------------------------------------------
 
 
-def test_animatedtexture_targets_normal_lane_when_animating_bumpmap(tmp_path):
-    export = tmp_path / "v2"
+def _animatedtexture_unit_kwargs():
     parameters = [
         _param(0, "$basetexture", "water/anim"),
         _param(1, "$bumpmap", "water/anim_bump"),
@@ -950,19 +950,53 @@ def test_animatedtexture_targets_normal_lane_when_animating_bumpmap(tmp_path):
         _param(3, "animatedtextureframenumvar", "$bumpframe", block="proxies#1/animatedtexture#0"),
         _param(4, "animatedtextureframerate", "10", block="proxies#1/animatedtexture#0"),
     ]
-    _publish(export, "water/anim", _unit(
-        "water/anim", shader="water", parameters=parameters,
+    return dict(
+        shader="water", parameters=parameters,
         proxies=[{"index": 0, "name": "animatedtexture", "sourceName": "AnimatedTexture",
                  "parameters": [2, 3, 4]}],
         dependencies=[_texture_dep("$basetexture", "water/anim"),
                       _texture_dep("$bumpmap", "water/anim_bump")],
-    ))
-    result = importer.stage_materials(export, tmp_path / "stage")
+    )
+
+
+def test_animatedtexture_binds_frames_array_when_the_texture_staged_as_one(tmp_path):
+    """The `TA_` sibling `textures.py` stages for a `frames > 1` unit is bound to
+    `NormalMapFrames`, `NormalFrameCount` is read from the same sidecar, and the switch only then
+    turns on (review fix, finding 2)."""
+    export = tmp_path / "v2"
+    _publish(export, "water/anim", _unit("water/anim", **_animatedtexture_unit_kwargs()))
+    texture_staging = tmp_path / "texture-stage"
+    sidecar = texture_staging / "water" / ("anim_bump" + importer.TEXTURE_PROVENANCE_SUFFIX)
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
+    sidecar.write_text(json.dumps({"frames": 4}), encoding="utf-8")
+
+    result = importer.stage_materials(export, tmp_path / "stage", texture_staging_root=texture_staging)
+
     assert result.failures == []
     entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_anim"]
     assert entry["scalars"]["NormalFrameRate"] == 10.0
+    assert entry["scalars"]["NormalFrameCount"] == 4.0
     assert entry["switches"]["UseAnimatedNormalFrames"] is True
+    assert entry["textures"]["NormalMapFrames"] == "/ElysiumBaked/Textures/water/TA_anim_bump"
     assert "FrameRate" not in entry["scalars"]
+
+
+def test_animatedtexture_leaves_the_switch_off_without_a_staged_frames_array(tmp_path):
+    """No texture-staging root (or a texture that never staged as a `Texture2DArray`) means
+    `UseAnimatedNormalFrames` stays off rather than sampling the master's inert default frames
+    array -- named in `omissions`, not silently dropped (review fix, finding 2)."""
+    export = tmp_path / "v2"
+    _publish(export, "water/anim", _unit("water/anim", **_animatedtexture_unit_kwargs()))
+
+    result = importer.stage_materials(export, tmp_path / "stage")
+
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_anim"]
+    assert entry["scalars"]["NormalFrameRate"] == 10.0
+    assert "UseAnimatedNormalFrames" not in entry["switches"]
+    assert "NormalMapFrames" not in entry["textures"]
+    provenance = _provenance(tmp_path / "stage", entry)
+    assert any(row.get("kind") == "animatedFramesArrayUnavailable" for row in provenance["omissions"])
 
 
 # --- sine proxy: SineTargetMask/SineChannelMask, case-fold, provenance-only targets -----------------
@@ -1189,3 +1223,84 @@ def test_two_texture_master_exposed_params_pinned_against_cpp_header():
     parsed = _header_params_for(
         "ElysiumSurfaceParamsTwoTexture", _parse_surface_params_header(_HEADER_PATH))
     assert parsed == importer.EXPOSED_PARAMS["M_V2_TwoTexture"]
+
+
+def test_eyes_master_exposed_params_pinned_against_cpp_header():
+    parsed = _header_params_for("ElysiumSurfaceParamsEyes", _parse_surface_params_header(_HEADER_PATH))
+    assert parsed == importer.EXPOSED_PARAMS["M_V2_Eyes"]
+
+
+def test_water_master_exposed_params_pinned_against_cpp_header():
+    parsed = _header_params_for("ElysiumSurfaceParamsWater", _parse_surface_params_header(_HEADER_PATH))
+    assert parsed == importer.EXPOSED_PARAMS["M_V2_Water"]
+
+
+def test_sprite_master_exposed_params_pinned_against_cpp_header():
+    parsed = _header_params_for("ElysiumSurfaceParamsSprite", _parse_surface_params_header(_HEADER_PATH))
+    assert parsed == importer.EXPOSED_PARAMS["M_V2_Sprite"]
+
+
+def test_refract_master_exposed_params_pinned_against_cpp_header():
+    parsed = _header_params_for("ElysiumSurfaceParamsRefract", _parse_surface_params_header(_HEADER_PATH))
+    assert parsed == importer.EXPOSED_PARAMS["M_V2_Refract"]
+
+
+def test_decal_master_exposed_params_pinned_against_cpp_header():
+    parsed = _header_params_for("ElysiumSurfaceParamsDecal", _parse_surface_params_header(_HEADER_PATH))
+    assert parsed == importer.EXPOSED_PARAMS["M_V2_Decal"]
+
+
+# --- UNIT_DIVERGENCES stays honest against the real corpus -----------------------------------------
+
+
+def test_unit_divergences_key_every_real_unit_and_are_actually_used():
+    """Every `UNIT_DIVERGENCES` key names a real corpus unit, and every one of its per-unit VMT
+    keys was actually consumed (recorded in that unit's own `omissions`) the last time the real
+    corpus was staged -- an entry that no longer matches a shipped unit, or whose key the unit no
+    longer authors, is a stale allowlist row hiding a real regression instead of a real divergence.
+    Skipped outright when the export corpus (or its staged manifest) is not present locally."""
+
+    try:
+        export_v2_root = paths.export_v2_root()
+    except Exception:
+        pytest.skip("no export_v2 root configured")
+    if not importer.unit_root(export_v2_root).is_dir():
+        pytest.skip("material corpus not exported locally")
+
+    corpus_keys = {
+        importer.unit_key(export_v2_root, unit) for unit in importer.units(export_v2_root)
+    }
+    missing_units = sorted(set(importer.UNIT_DIVERGENCES) - corpus_keys)
+    assert not missing_units, (
+        "UNIT_DIVERGENCES names unit(s) not in the real corpus: %r" % missing_units
+    )
+
+    staging_root = importer.staging_root(paths.work_root())
+    manifest_path = staging_root / importer.MANIFEST_NAME
+    if not manifest_path.is_file():
+        pytest.skip("material corpus not staged locally -- run `uv run elysium import materials`")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    by_asset_path = {entry["assetPath"]: entry for entry in manifest["assets"]}
+
+    for key, divergent_keys in importer.UNIT_DIVERGENCES.items():
+        try:
+            asset_path = importer.asset_path_for(key)
+        except importer.MaterialImportError:
+            continue
+        entry = by_asset_path.get(asset_path)
+        if entry is None:
+            continue  # covered by the missing_units assertion above
+        provenance_path = staging_root / entry["provenance"]
+        if not provenance_path.is_file():
+            continue
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+        used_keys = {
+            str(row.get("key") or "").lower()
+            for row in provenance.get("omissions") or ()
+            if row.get("kind") == "unitDivergenceProvenanceOnly"
+        }
+        stale = sorted(set(divergent_keys) - used_keys)
+        assert not stale, (
+            "UNIT_DIVERGENCES[%r] names key(s) not recorded as unitDivergenceProvenanceOnly in "
+            "the real staged run: %r" % (key, stale)
+        )

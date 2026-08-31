@@ -835,6 +835,68 @@ def _texture_role_conflict(texture_staging_root: Path | None, texture_key: str) 
     return bool(content.get("roleConflict")), True
 
 
+def _texture_array_asset_path(texture_key: str) -> str:
+    """`/ElysiumBaked/Textures/<dir>/TA_<stem>` -- the `Texture2DArray` sibling `textures.py` stages
+    for a unit whose `frames` (or KTX layer count) exceeds one (`_texture_class`'s own rule).
+    Reused by the `animatedtexture`-proxy frames-array binding (`_apply_proxies` below, review
+    finding 2): `BaseTextureFrames`/`NormalMapFrames` have no stated asset-path formula of their
+    own in the design, so this is `_texture_asset_path`'s `TC_`/`T_` shape with the `TA_` prefix
+    `textures.py::CLASS_PREFIX` actually uses for that class."""
+
+    parts = PurePosixPath(texture_key).parts
+    directories, stem = list(parts[:-1]), parts[-1]
+    folded = "/".join(safe_name(part) for part in directories)
+    name = "TA_" + safe_name(stem)
+    return f"/ElysiumBaked/Textures/{folded}/{name}" if folded else f"/ElysiumBaked/Textures/{name}"
+
+
+def _texture_frame_count(texture_staging_root: Path | None, texture_key: str | None) -> int | None:
+    """The referenced texture unit's own staged `frames` count (its sidecar's `frames` field,
+    `textures.py`'s own `_texture_class`: `frames > 1` is exactly the `Texture2DArray` rule), or
+    `None` when the sidecar is unavailable, unreadable, or the texture is a plain `Texture2D`
+    (`frames <= 1`). Reuses the same per-unit sidecar `_texture_role_conflict` already reads."""
+
+    if texture_staging_root is None or not texture_key:
+        return None
+    parts = PurePosixPath(texture_key).parts
+    sidecar = Path(texture_staging_root).joinpath(*parts[:-1], parts[-1] + TEXTURE_PROVENANCE_SUFFIX)
+    try:
+        content = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(content, dict):
+        return None
+    frames = content.get("frames")
+    if not isinstance(frames, int) or frames <= 1:
+        return None
+    return frames
+
+
+def _texture_staged_class(texture_staging_root: Path | None, texture_key: str | None) -> str | None:
+    """The referenced texture unit's actual staged Unreal class -- `TextureCube`, `Texture2DArray`
+    or `Texture2D` -- read from its sidecar's `faces`/`frames` fields, mirroring `textures.py`'s
+    own `_texture_class` rule (`faces == 6` wins over `frames`). `None` when the sidecar is
+    unavailable or unreadable, so a caller with no texture-staging context falls back to the
+    parameter-name guess `_texture_asset_path` makes rather than refusing every binding."""
+
+    if texture_staging_root is None or not texture_key:
+        return None
+    parts = PurePosixPath(texture_key).parts
+    sidecar = Path(texture_staging_root).joinpath(*parts[:-1], parts[-1] + TEXTURE_PROVENANCE_SUFFIX)
+    try:
+        content = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(content, dict):
+        return None
+    if content.get("faces") == 6:
+        return "TextureCube"
+    frames = content.get("frames")
+    if isinstance(frames, int) and frames > 1:
+        return "Texture2DArray"
+    return "Texture2D"
+
+
 def _bind_texture(
     params: _Params, key: str, param_name: str, document: dict, deps: dict[str, tuple[str, bool]],
     *, cube: bool, texture_staging_root: Path | None,
@@ -844,7 +906,26 @@ def _bind_texture(
         return  # unresolved: recorded in provenance's textureBindings, never bound to a parameter
     asset_id, _resolved = resolution
     texture_key = asset_id[len("vtmb:texture:"):] if asset_id.startswith("vtmb:texture:") else asset_id
+    # Recorded regardless of the class check below: the `animatedtexture` proxy handler
+    # (`_classify_and_apply`) looks the dependency up by parameter name to find its own frames-array
+    # sibling even when this function declines to bind the plain parameter to it.
     params.texture_deps[param_name] = asset_id
+    # A texture parameter expects a `TextureCube` (EnvMap-family params) or a `Texture2D`; when the
+    # unit it resolves to actually staged as the other -- or as a `Texture2DArray`, the `frames > 1`
+    # rule leaves no plain `T_`/`TC_` sibling at all -- `_texture_asset_path`'s guess names an asset
+    # that was never written (a `$envmapsphere` user's flat sphere-map bound where a cubemap is
+    # wanted, the `envmap/gioint`/`skybox/hav_env` break-glass pair the other way, or any
+    # `animatedtexture` unit's own static slot). Leaving the parameter unbound -- the master's
+    # default -- rather than emitting a dangling reference is the same call already made for an
+    # unresolved dependency just above.
+    staged_class = _texture_staged_class(texture_staging_root, texture_key)
+    expected_class = "TextureCube" if cube else "Texture2D"
+    if staged_class is not None and staged_class != expected_class:
+        params.anomalies.append({
+            "kind": "textureClassMismatch", "parameter": param_name, "key": key,
+            "expected": expected_class, "staged": staged_class,
+        })
+        return
     twin = False
     verified = True
     if param_name in DATA_CLASS_TEXTURE_PARAMS:
@@ -1079,6 +1160,57 @@ def _apply_envmapmask_precedence(params: _Params) -> None:
         params.anomalies.append({"kind": "envMapMaskPrecedenceLoser", "switch": loser})
 
 
+#: Masters whose `UseBaseTexture` this stage resolves explicitly (review finding 4): every master
+#: that exposes the switch. `EnvMap`/`EnvMapMask` are deliberately excluded from the generic
+#: `_TEXTURE_SWITCH_PAIRS` table below because `_resolve_envmap`/`_apply_envmapmask_precedence`
+#: already give them their own precedence-aware rules; `UseBaseTexture` has no such bespoke logic
+#: anywhere in this module, so it gets one here instead.
+_USE_BASE_TEXTURE_MASTERS = frozenset({
+    "M_V2_Lit", "M_V2_LitTranslucent", "M_V2_Unlit", "M_V2_Water", "M_V2_Refract",
+})
+
+
+def _resolve_use_base_texture(params: _Params, document: dict) -> bool:
+    """`False` when the unit authors no `$basetexture` at all, or when its resolved default
+    (`condition == ""`) pixel program is a `*_NoTexture` variant (`shader-programs/psh/*notexture*`,
+    e.g. `lightmappedgeneric_notexture`) -- both cases the design's "Import" section states get
+    `UseBaseTexture=False` explicitly rather than left to the master's own static-switch default.
+    `True` otherwise. Review fix (finding 4): this switch was never set by the stage at all before
+    this fix, on any of the five masters that expose it."""
+
+    if "BaseTexture" not in params.textures:
+        return False
+    programs = (document.get("shaderResolution") or {}).get("programs") or ()
+    for program in programs:
+        if not isinstance(program, dict):
+            continue
+        pixel_shader = str(program.get("pixelShader") or "").lower()
+        if "notexture" in pixel_shader:
+            return False
+    return True
+
+
+#: `texture parameter -> gating switch parameter`, for slots whose switch is a plain "bound =>
+#: True" rule with no precedence or fallback logic of its own (review finding 6's audit of every
+#: texture-slot/switch pair in `EXPOSED_PARAMS`). `EnvMap`/`EnvMapMask` are handled by
+#: `_resolve_envmap`/`_apply_envmapmask_precedence` instead (their switches interact with each
+#: other and with `UseFixedCube`); `Iris`/`Glint`/`DuDvMap` have no paired switch on any master at
+#: all (an eyes unit's Iris is always sampled when bound, and `UseGlint`/`DuDvMap` are declared and
+#: gated by proxy/design rules of their own, not "bound => on").
+_TEXTURE_SWITCH_PAIRS = {
+    "NormalMap": "UseNormalMap",
+    "BaseTexture2": "UseBaseTexture2",
+    "CloudAlphaTexture": "UseCloudAlpha",
+}
+
+
+def _apply_texture_switch_pairs(params: _Params, master: str) -> None:
+    exposed = EXPOSED_PARAMS[master]
+    for texture_name, switch_name in _TEXTURE_SWITCH_PAIRS.items():
+        if texture_name in params.textures and switch_name in exposed:
+            params.switches[switch_name] = True
+
+
 _SPRITE_BLEND_ROWS = {
     0: "Opaque", 1: "Translucent", 2: "Translucent", 3: "Translucent", 4: "Translucent",
     9: "Translucent", 5: "Additive", 7: "Additive", 8: "Additive",
@@ -1141,7 +1273,10 @@ def _resolve_surface_class(
     return default_row, SURFACE_CLASS_INDEX[default_row], "familyDefault"
 
 
-def _apply_proxies(params: _Params, document: dict, parameters: list[dict]) -> list[dict]:
+def _apply_proxies(
+    params: _Params, document: dict, parameters: list[dict], *,
+    family: str = "", texture_staging_root: Path | None = None,
+) -> list[dict]:
     """Every proxy's provenance row, plus the direct scalar/vector side effects this lane places."""
 
     rows: list[dict] = []
@@ -1205,13 +1340,50 @@ def _apply_proxies(params: _Params, document: dict, parameters: list[dict]) -> l
             var = args.get("animatedtexturevar", "").strip().lower()
             normal_lane = var in ("$bumpmap", "$normalmap")
             rate_name = "NormalFrameRate" if normal_lane else "FrameRate"
+            count_name = "NormalFrameCount" if normal_lane else "FrameCount"
+            frames_param = "NormalMapFrames" if normal_lane else "BaseTextureFrames"
             switch_name = "UseAnimatedNormalFrames" if normal_lane else "UseAnimatedFrames"
+            # `$bumpmap` itself binds `DuDvMap` on Water/Refract/heatglow and `NormalMap`
+            # elsewhere (`_classify_and_apply`'s own family-aware rule) -- the animated texture's
+            # dependency has to be looked up under whichever of the two it actually landed on, or
+            # a water/refract unit animating its DuDvMap would never find its own bound texture.
+            bound_param = (
+                ("DuDvMap" if family in ("water", "refract", "heatglow") else "NormalMap")
+                if normal_lane else "BaseTexture"
+            )
             if "animatedtextureframerate" in args:
                 try:
                     params.scalars[rate_name] = _parse_scalar(args["animatedtextureframerate"])
                 except ValueError:
                     pass
-            params.switches[switch_name] = True
+            # Review fix (finding 2): the switch alone used to be set with neither the frames
+            # array nor FrameCount ever bound -- turning it on rendered white (or broke the
+            # normal) because BaseTextureFrames/NormalMapFrames stayed on the master's inert
+            # `T_V2_DefaultFrames` default. Bind the unit's own `TA_` sibling (the texture lane's
+            # `Texture2DArray` twin, when the referenced texture actually staged as one) and set
+            # the switch only when there is a real array to sample; otherwise the switch stays off
+            # and the omission is named, so a flipbook unit that lost its array does not silently
+            # animate over a single frame either.
+            asset_id = params.texture_deps.get(bound_param)
+            texture_key = (
+                asset_id[len("vtmb:texture:"):]
+                if isinstance(asset_id, str) and asset_id.startswith("vtmb:texture:") else None
+            )
+            frame_count = _texture_frame_count(texture_staging_root, texture_key)
+            if frame_count:
+                params.textures[frames_param] = _texture_array_asset_path(texture_key)
+                params.scalars[count_name] = float(frame_count)
+                params.switches[switch_name] = True
+            else:
+                params.omissions.append({
+                    "kind": "animatedFramesArrayUnavailable", "proxy": "animatedtexture",
+                    "variable": var,
+                    "reason": (
+                        f"{bound_param} did not stage as a Texture2DArray (unresolved, or "
+                        f"frames <= 1) -- {switch_name} left off rather than sampling an unbound "
+                        f"flipbook array"
+                    ),
+                })
         elif kind == "texturescroll":
             var = args.get("texturescrollvar", "").strip().lower()
             bump_lane = var in ("$bumpoffset", "$bumptransform")
@@ -1311,7 +1483,8 @@ def stage_unit(
         if unmapped is not None:
             raise MaterialImportError(f"unmapped parameter key {unmapped!r}")
 
-    proxy_rows = _apply_proxies(params, document, parameters)
+    proxy_rows = _apply_proxies(params, document, parameters,
+                                family=family, texture_staging_root=texture_staging_root)
     environment = _resolve_envmap(params, document, deps, patched=patched,
                                   texture_staging_root=texture_staging_root)
     _apply_chromatic_tint(params, environment, patched=patched, family=family,
@@ -1349,6 +1522,14 @@ def stage_unit(
             params.vectors = {}
             params.switches = {"UseBaseTexture": "BaseTexture" in keep_textures}
             base_property_overrides = {"blendMode": "Opaque"}
+        else:
+            # Review fixes (findings 4 and 6): the switch side of every plain "bound => on"
+            # texture slot, resolved here rather than left to the master's own static-switch
+            # default. Not run on the provenance-only path above, which already resolves its own
+            # (reduced) `UseBaseTexture` a few lines up.
+            if master in _USE_BASE_TEXTURE_MASTERS:
+                params.switches["UseBaseTexture"] = _resolve_use_base_texture(params, document)
+            _apply_texture_switch_pairs(params, master)
         surface_class, surface_class_index, class_source = _resolve_surface_class(
             params.surfaceprop_value, directories, master)
         physmat_fallback = surface_class not in _SURFACEPROP_NAMES
