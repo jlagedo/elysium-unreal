@@ -1821,11 +1821,23 @@ def import_materials(
     stage_only: bool = typer.Option(
         False, "--stage-only", help="Write the manifest and provenance sidecars; launch no editor."
     ),
+    lookdev: bool = typer.Option(
+        False, "--lookdev",
+        help="Run only SF-4.7's lookdev map generator; skip staging and instance import.",
+    ),
 ) -> None:
     """Import the material corpus from the published GLB units into /ElysiumBaked/Materials."""
 
     def action(config: ProjectConfig, runner: ProcessRunner) -> None:
         from elysium_pipeline import unreal
+
+        if lookdev:
+            # SF-4.7's generator needs the engine and the work root (for logs) but neither the
+            # published GLB corpus nor a texture staging tree: it only lays out and saves a map.
+            unreal.make_lookdev_map(config, runner)
+            console.print("lookdev map generated")
+            return
+
         from elysium_pipeline.importers import materials as importer
         from elysium_pipeline.importers import textures as texture_importer
 
@@ -1876,15 +1888,16 @@ def import_materials(
             raise RuntimeError("; ".join(problems))
 
     # The stage is a file transform over the published units; the editor phase needs the engine
-    # and the work root, never the game install: the units are self-contained.
+    # and the work root, never the game install: the units are self-contained. --lookdev always
+    # needs the engine (it launches an editor process), regardless of --stage-only.
     _execute(
         _state(ctx),
         "import materials",
-        ExitCode.OFFLINE_EXPORT if stage_only else ExitCode.UNREAL_OR_BAKE,
+        ExitCode.OFFLINE_EXPORT if (stage_only and not lookdev) else ExitCode.UNREAL_OR_BAKE,
         action,
         require_work=True,
-        require_ue=not stage_only,
-        activity=not stage_only,
+        require_ue=lookdev or not stage_only,
+        activity=lookdev or not stage_only,
     )
 
 

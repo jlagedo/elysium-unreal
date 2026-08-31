@@ -1,0 +1,125 @@
+{
+  "schemaVersion": "1.0.0",
+  "entries": [
+    {
+      "label": "Plaster wall",
+      "unit": "vtmb:material:plaster/609stuc",
+      "material": "/ElysiumBaked/Materials/plaster/MI_609stuc",
+      "shape": "both"
+    },
+    {
+      "label": "Brick wall",
+      "unit": "vtmb:material:brick/bldg261la",
+      "material": "/ElysiumBaked/Materials/brick/MI_bldg261la",
+      "shape": "both"
+    },
+    {
+      "label": "Tiled floor",
+      "unit": "vtmb:material:tile/apaflra",
+      "material": "/ElysiumBaked/Materials/tile/MI_apaflra",
+      "shape": "plane"
+    },
+    {
+      "label": "Wet asphalt street",
+      "unit": "vtmb:material:ground/streeta",
+      "material": "/ElysiumBaked/Materials/ground/MI_streeta",
+      "shape": "plane"
+    },
+    {
+      "label": "Chrome fixture (EnvMapMask)",
+      "unit": "vtmb:material:metal/609fridge",
+      "material": "/ElysiumBaked/Materials/metal/MI_609fridge",
+      "shape": "sphere"
+    },
+    {
+      "label": "Chromatic-tint metal",
+      "unit": "vtmb:material:metal/brushed",
+      "material": "/ElysiumBaked/Materials/metal/MI_brushed",
+      "shape": "sphere"
+    },
+    {
+      "label": "Authored fixed cube (envmap/hav)",
+      "unit": "vtmb:material:brick/building1windowa",
+      "material": "/ElysiumBaked/Materials/brick/MI_building1windowa",
+      "shape": "both"
+    },
+    {
+      "label": "Glass (translucent)",
+      "unit": "vtmb:material:glass/glass01",
+      "material": "/ElysiumBaked/Materials/glass/MI_glass01",
+      "shape": "plane"
+    },
+    {
+      "label": "Masked fence/grate (alphatest)",
+      "unit": "vtmb:material:grates/cemfencea",
+      "material": "/ElysiumBaked/Materials/grates/MI_cemfencea",
+      "shape": "plane"
+    },
+    {
+      "label": "Additive neon beam",
+      "unit": "vtmb:material:sprites/beama",
+      "material": "/ElysiumBaked/Materials/sprites/MI_beama",
+      "shape": "plane"
+    },
+    {
+      "label": "Self-illum sign",
+      "unit": "vtmb:material:decals/signs/redspot",
+      "material": "/ElysiumBaked/Materials/decals/signs/MI_redspot",
+      "shape": "plane"
+    },
+    {
+      "label": "Worldvertextransition blend",
+      "unit": "vtmb:material:blends/asphalt_blend",
+      "material": "/ElysiumBaked/Materials/blends/MI_asphalt_blend",
+      "shape": "plane"
+    },
+    {
+      "label": "Eye material",
+      "unit": "vtmb:material:models/character/eyes/eyeball",
+      "material": "/ElysiumBaked/Materials/models/character/eyes/MI_eyeball",
+      "shape": "sphere"
+    },
+    {
+      "label": "Water",
+      "unit": "vtmb:material:water/mazewater",
+      "material": "/ElysiumBaked/Materials/water/MI_mazewater",
+      "shape": "plane"
+    },
+    {
+      "label": "Refract (rain dudv)",
+      "unit": "vtmb:material:models/scenery/structural/santamonica/rain_refract_dudv",
+      "material": "/ElysiumBaked/Materials/models/scenery/structural/santamonica/MI_rain_refract_dudv",
+      "shape": "plane"
+    },
+    {
+      "label": "Decal (concrete impact)",
+      "unit": "vtmb:material:decals/hits/concrete/impact1",
+      "material": "/ElysiumBaked/Materials/decals/hits/concrete/MI_impact1",
+      "shape": "plane"
+    },
+    {
+      "label": "Sprite (coplights)",
+      "unit": "vtmb:material:sprites/coplights",
+      "material": "/ElysiumBaked/Materials/sprites/MI_coplights",
+      "shape": "plane"
+    },
+    {
+      "label": "Skin/flesh (manbat)",
+      "unit": "vtmb:material:models/character/monster/manbat/manbatbody",
+      "material": "/ElysiumBaked/Materials/models/character/monster/manbat/MI_manbatbody",
+      "shape": "sphere"
+    },
+    {
+      "label": "Concrete (Lit baseline)",
+      "unit": "vtmb:material:concrete/concrete5",
+      "material": "/ElysiumBaked/Materials/concrete/MI_concrete5",
+      "shape": "both"
+    },
+    {
+      "label": "Wood floor",
+      "unit": "vtmb:material:wood/aspflra",
+      "material": "/ElysiumBaked/Materials/wood/MI_aspflra",
+      "shape": "plane"
+    }
+  ]
+}
