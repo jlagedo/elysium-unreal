@@ -36,6 +36,7 @@ def _unit(
     proxies=(),
     dependencies=(),
     patch: dict | None = None,
+    programs=(),
 ) -> dict:
     family = family if family is not None else shader
     return {
@@ -43,8 +44,8 @@ def _unit(
         "identity": {"asset": f"vtmb:material:{key}", "materialPath": key},
         "shader": shader,
         "sourceShader": shader,
-        "shaderResolution": {"family": family, "resolved": resolved, "programs": [], "inputs": [],
-                             "reason": ""},
+        "shaderResolution": {"family": family, "resolved": resolved, "programs": list(programs),
+                             "inputs": [], "reason": ""},
         "parameters": list(parameters),
         "blocks": [],
         "proxies": list(proxies),
@@ -1304,3 +1305,119 @@ def test_unit_divergences_key_every_real_unit_and_are_actually_used():
             "UNIT_DIVERGENCES[%r] names key(s) not recorded as unitDivergenceProvenanceOnly in "
             "the real staged run: %r" % (key, stale)
         )
+
+
+# --- UseBaseTexture: NoTexture programs and no-$basetexture units get it explicitly false ----------
+
+
+def test_use_base_texture_is_true_when_basetexture_is_bound_and_no_notexture_program(tmp_path):
+    export = tmp_path / "v2"
+    _publish(export, "brick/plain", _unit(
+        "brick/plain",
+        parameters=[_param(0, "$basetexture", "brick/plain")],
+        dependencies=[_texture_dep("$basetexture", "brick/plain")],
+        programs=[{"pixelShader": "lightmappedgeneric_envmap_ps11", "vertexShader": "v",
+                  "condition": "", "drawPass": 0}],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/brick/MI_plain"]
+    assert entry["switches"]["UseBaseTexture"] is True
+
+
+def test_use_base_texture_is_false_with_no_basetexture_authored(tmp_path):
+    export = tmp_path / "v2"
+    _publish(export, "brick/notex", _unit("brick/notex", parameters=[]))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/brick/MI_notex"]
+    assert entry["switches"]["UseBaseTexture"] is False
+
+
+def test_use_base_texture_is_false_when_the_resolved_program_is_a_notexture_variant(tmp_path):
+    export = tmp_path / "v2"
+    _publish(export, "brick/degenerate", _unit(
+        "brick/degenerate",
+        parameters=[_param(0, "$basetexture", "brick/degenerate")],
+        dependencies=[_texture_dep("$basetexture", "brick/degenerate")],
+        programs=[{"pixelShader": "lightmappedgeneric_notexture", "vertexShader": "v",
+                  "condition": "", "drawPass": 0}],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/brick/MI_degenerate"]
+    assert entry["switches"]["UseBaseTexture"] is False
+    # BaseTexture is still recorded (provenance/reproduction of the binding), only the switch
+    # that would sample it stays off.
+    assert entry["textures"]["BaseTexture"] == "/ElysiumBaked/Textures/brick/T_degenerate"
+
+
+def test_use_base_texture_defaults_false_on_water_and_refract_masters(tmp_path):
+    """Water and Refract expose `UseBaseTexture` too, and it resolves the same way as Lit/Unlit
+    (review finding 4's second half): most water/refract units bind no `$basetexture` at all, so
+    the switch should read `False`, not silently vanish from the switches dict."""
+    export = tmp_path / "v2"
+    _publish(export, "water/plain", _unit("water/plain", shader="water", parameters=[]))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entry = _entries(tmp_path / "stage")["/ElysiumBaked/Materials/water/MI_plain"]
+    assert entry["parent"] == f"{importer.MASTER_ROOT}/M_V2_Water"
+    assert entry["switches"]["UseBaseTexture"] is False
+
+
+# --- table-driven texture-slot / paired-switch audit (review finding 6) ----------------------------
+
+
+def test_every_bound_texture_slot_with_a_paired_switch_sets_it(tmp_path):
+    """`NormalMap`/`BaseTexture2`/`CloudAlphaTexture`, each bound on a master that also exposes
+    its paired switch, must set that switch -- the same "bound texture with nothing gating it"
+    defect finding 6 named for `NormalMap` (294 unsampled normal maps). One unit per pair,
+    exercised through the real stage rather than calling the private helper directly."""
+    export = tmp_path / "v2"
+    _publish(export, "brick/bumped", _unit(
+        "brick/bumped",
+        parameters=[_param(0, "$basetexture", "brick/bumped"),
+                    _param(1, "$bumpmap", "brick/bumped_bump")],
+        dependencies=[_texture_dep("$basetexture", "brick/bumped"),
+                      _texture_dep("$bumpmap", "brick/bumped_bump")],
+    ))
+    _publish(export, "world/blend", _unit(
+        "world/blend", shader="worldvertextransition",
+        parameters=[_param(0, "$basetexture", "world/blend"),
+                    _param(1, "$basetexture2", "world/blend2")],
+        dependencies=[_texture_dep("$basetexture", "world/blend"),
+                      _texture_dep("$basetexture2", "world/blend2")],
+    ))
+    _publish(export, "sky/cloudy", _unit(
+        "sky/cloudy", shader="cloud",
+        parameters=[_param(0, "$basetexture", "sky/cloudy"),
+                    _param(1, "$cloudalphatexture", "sky/cloudy_alpha")],
+        dependencies=[_texture_dep("$basetexture", "sky/cloudy"),
+                      _texture_dep("$cloudalphatexture", "sky/cloudy_alpha")],
+    ))
+    result = importer.stage_materials(export, tmp_path / "stage")
+    assert result.failures == []
+    entries = _entries(tmp_path / "stage")
+
+    for asset_path, texture_name, switch_name in (
+        ("/ElysiumBaked/Materials/brick/MI_bumped", "NormalMap", "UseNormalMap"),
+        ("/ElysiumBaked/Materials/world/MI_blend", "BaseTexture2", "UseBaseTexture2"),
+        ("/ElysiumBaked/Materials/sky/MI_cloudy", "CloudAlphaTexture", "UseCloudAlpha"),
+    ):
+        entry = entries[asset_path]
+        assert texture_name in entry["textures"], asset_path
+        assert entry["switches"].get(switch_name) is True, (asset_path, switch_name)
+
+
+def test_texture_switch_pairs_table_only_names_exposed_switches():
+    """Every switch `_TEXTURE_SWITCH_PAIRS` names is a real switch on at least one master's
+    `EXPOSED_PARAMS`, and every texture it pairs one with is real too -- a typo in the table would
+    otherwise silently never fire (`_apply_texture_switch_pairs` only acts when both the texture is
+    bound *and* the switch is in that master's own exposed set)."""
+    all_switches = {name for exposed in importer.EXPOSED_PARAMS.values()
+                    for name, kind in exposed.items() if kind == "#"}
+    all_textures = {name for exposed in importer.EXPOSED_PARAMS.values()
+                    for name, kind in exposed.items() if kind == "T"}
+    for texture_name, switch_name in importer._TEXTURE_SWITCH_PAIRS.items():
+        assert texture_name in all_textures, texture_name
+        assert switch_name in all_switches, switch_name
