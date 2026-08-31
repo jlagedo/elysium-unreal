@@ -288,6 +288,21 @@ namespace
 		ElysiumSurfaceParamsRefract::Switches::UseFixedCube,
 	};
 
+	static const FName DecalTextures[] = {
+		ElysiumSurfaceParamsShared::Textures::SurfaceClassLUT,
+		ElysiumSurfaceParamsDecal::Textures::BaseTexture,
+	};
+	static const FName DecalScalars[] = {
+		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
+		ElysiumSurfaceParamsShared::Scalars::Alpha,
+	};
+	static const FName DecalVectors[] = {
+		ElysiumSurfaceParamsShared::Vectors::Color,
+	};
+	static const FName DecalSwitches[] = {
+		ElysiumSurfaceParamsDecal::Switches::UseVertexColor,
+	};
+
 	// `M_V2_LitTranslucent` is the same graph under a different material-only property set
 	// (mechanics doc / design "Master inventory" -- blend mode, two-sidedness and the opacity
 	// clip value are per-instance overrides, so they never multiply masters).
@@ -308,6 +323,8 @@ namespace
 			SpriteTextures, SpriteScalars, SpriteVectors, SpriteSwitches},
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Refract.M_V2_Refract"),
 			RefractTextures, RefractScalars, RefractVectors, RefractSwitches},
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Decal.M_V2_Decal"),
+			DecalTextures, DecalScalars, DecalVectors, DecalSwitches},
 	};
 }
 

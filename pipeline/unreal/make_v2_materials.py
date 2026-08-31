@@ -1941,6 +1941,120 @@ def make_refract():
     return mat
 
 
+# ============================================================================================
+# M_V2_Decal
+# ============================================================================================
+
+
+class DecalParams:
+    class Textures:
+        BaseTexture = "BaseTexture"
+        SurfaceClassLUT = "SurfaceClassLUT"
+
+    class Scalars:
+        Alpha = "Alpha"
+        SurfaceClassIndex = "SurfaceClassIndex"
+
+    class Vectors:
+        Color = "Color"
+
+    class Switches:
+        UseVertexColor = "UseVertexColor"
+
+
+DECAL_PARAM_TABLE = {
+    "textures": sorted(vars(DecalParams.Textures)[k] for k in vars(DecalParams.Textures) if not k.startswith("_")),
+    "scalars": sorted(vars(DecalParams.Scalars)[k] for k in vars(DecalParams.Scalars) if not k.startswith("_")),
+    "vectors": sorted(vars(DecalParams.Vectors)[k] for k in vars(DecalParams.Vectors) if not k.startswith("_")),
+    "switches": sorted(vars(DecalParams.Switches)[k] for k in vars(DecalParams.Switches) if not k.startswith("_")),
+}
+
+
+def _build_decal(mat, collection, lut_texture):
+    """`decalmodulate` ships no program at all -- the string is absent from `stdshader_dx8.dll`
+    and the 38 materials fell back to `wireframe` in retail (design doc "M_V2_Decal", "The eight
+    real unresolved families"). Imported as `BLEND_Modulate` of `BaseTexture` over the receiver --
+    a **named deliberate divergence** from retail, which drew them as wireframe.
+
+    `DecalDepthOffset` is not on this master -- it is a knob only, in `MPC_ElysiumSurfaces`
+    (design doc "Four parameters that left the masters": `MP_PIXEL_DEPTH_OFFSET` is not reachable
+    from `unreal.MaterialProperty` in this build), applied by the decal component the placement
+    lane spawns, not by this graph.
+
+    A `BLEND_Modulate` Unlit surface has no `MP_BASE_COLOR`/`MP_OPACITY` distinction the renderer
+    reads separately -- the final `MP_EMISSIVE_COLOR` output *is* what gets multiplied onto the
+    receiver, exactly like every other Unlit master in this file wires both property sinks to the
+    same value. There is no Opacity pin to wire at all for this blend mode.
+    """
+    g = Graph(mat, collection=collection)
+    P = DecalParams
+
+    uv0 = g.node(unreal.MaterialExpressionTextureCoordinate, -1100, -600)
+    base_tex = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
+    connect(uv0, "", base_tex, "UVs")
+    base_rgb = g.mask(base_tex, "rgb", -900, -400)
+
+    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
+    tinted = g.mul(base_rgb, "", color, "", -700, -440)
+    vertex_color = g.vertex_color(-1100, -680)
+    vc_rgb = g.mask(vertex_color, "rgb", -900, -680)
+    with_vc = g.mul(tinted, "", vc_rgb, "", -500, -480)
+    vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, -300, -440, default=False)
+
+    # `Alpha` is declared (the shared four-parameter table) but a modulate-blend Unlit surface has
+    # no opacity pin to feed -- declared, not wired, like every other master's genuinely inert knob.
+    g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
+
+    g.to(vc_selected, "", unreal.MaterialProperty.MP_BASE_COLOR)
+    g.to(vc_selected, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # -- class LUT declared for contract completeness; Unlit ignores Roughness/Specular/Metallic -
+    _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+
+
+def make_decal():
+    name = "M_V2_Decal"
+    asset = "%s/%s" % (PKG, name)
+    collection = _load_surfaces_collection()
+    lut_texture = _load_class_lut()
+    recipe = {
+        "graphVersion": GRAPH_VERSION,
+        "sourceHash": _source_hash(),
+        "citedUnits": {},  # decalmodulate ships no program at all
+        "params": DECAL_PARAM_TABLE,
+        "mpcScalars": REQUIRED_MPC_SCALARS,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    # Modulated surfaces are excluded from the Lumen surface cache (they contribute nothing to
+    # global illumination and cannot themselves be seen in a Lumen reflection) and BLEND_Modulate
+    # is not Nanite-compatible -- this master deliberately does NOT set used_with_nanite, unlike
+    # every other world/ISM master in this file. A decal surface the map lane wants Nanite on is a
+    # placement error, not a material one (design doc "M_V2_Decal").
+    mat, asset = _fresh(name, ism=True)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_MODULATE)
+    mat.set_editor_property("two_sided", False)
+
+    _build_decal(mat, collection, lut_texture)
+
+    errors = mel.recompile_material(mat)
+    if errors:
+        _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    bl.stamp_recipe(mat, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mat
+
+
 def _cmdline_arg(key, default=""):
     needle = "-%s=" % key
     for token in unreal.SystemLibrary.get_command_line().split():
@@ -1962,3 +2076,4 @@ make_eyes()
 make_water()
 make_sprite()
 make_refract()
+make_decal()

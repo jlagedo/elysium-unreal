@@ -323,6 +323,7 @@ MASTERS = [
     ("M_V2_Water", "WaterParams", "BLEND.BLEND_TRANSLUCENT"),
     ("M_V2_Sprite", "SpriteParams", "BLEND.BLEND_TRANSLUCENT"),
     ("M_V2_Refract", "RefractParams", "BLEND.BLEND_TRANSLUCENT"),
+    ("M_V2_Decal", "DecalParams", "BLEND.BLEND_MODULATE"),
 ]
 
 

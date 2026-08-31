@@ -13,9 +13,9 @@
 //
 // This revision (SF-4.3 part 2) reconciled M_V2_Lit to the design revision 2026-08-31 ("Revise
 // the material import design after review") and added M_V2_LitTranslucent, M_V2_Unlit and
-// M_V2_TwoTexture. Part 3 adds the remaining five masters family-by-family (mechanics doc
-// "Ordering, concurrency, tests, risks"): this revision adds M_V2_Refract (M_V2_Eyes, M_V2_Water
-// and M_V2_Sprite already landed).
+// M_V2_TwoTexture. Part 3 added the remaining five masters family-by-family (mechanics doc
+// "Ordering, concurrency, tests, risks"): M_V2_Eyes, M_V2_Water, M_V2_Sprite, M_V2_Refract and,
+// this revision, M_V2_Decal -- the ninth and last master.
 //
 // Every V2 master exposes SurfaceClassIndex, SurfaceClassLUT, Alpha and Color -- the four
 // parameters the design doc states once, "on every master", rather than repeating in each
@@ -352,5 +352,25 @@ namespace ElysiumSurfaceParamsRefract
 		inline const FName UseNormalMap(TEXT("UseNormalMap"));
 		inline const FName UseEnvMap(TEXT("UseEnvMap"));
 		inline const FName UseFixedCube(TEXT("UseFixedCube"));
+	}
+}
+
+// `M_V2_Decal` -- `decalmodulate` (38 units, no shipped program at all -- retail fell back to
+// wireframe). Unlit, `BLEND_Modulate` on the master. `DecalDepthOffset` is not on this master (a
+// knob only, in `MPC_ElysiumSurfaces`, applied by the placement lane's decal component -- design
+// doc "Four parameters that left the masters"). Two known UE limitations worth stating rather
+// than working around: modulate-blend surfaces are excluded from the Lumen surface cache (no GI
+// contribution, invisible in a Lumen reflection), and `BLEND_Modulate` is not Nanite-compatible,
+// so this master does not set `used_with_nanite`.
+namespace ElysiumSurfaceParamsDecal
+{
+	namespace Textures
+	{
+		inline const FName BaseTexture(TEXT("BaseTexture"));
+	}
+
+	namespace Switches
+	{
+		inline const FName UseVertexColor(TEXT("UseVertexColor"));
 	}
 }
