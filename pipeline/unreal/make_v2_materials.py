@@ -3,14 +3,18 @@
 # exposed-parameter table, post-lighting math, reflection contract, knob contract, class
 # fallback). Build mechanics: import/design/phase4_mechanics.md section 3.
 #
-# Part 2 of SF-4.3 (commit series, now complete): the three previous commits reconciled
-# `M_V2_Lit` to the revised design (2026-08-31 "Revise the material import design after review"
-# -- binding contract, defaults, class fallback) and added `M_V2_LitTranslucent` and `M_V2_Unlit`;
-# this commit adds `M_V2_TwoTexture` (`worldvertextransition`, `worldtwotextureblend`,
-# `unlittwotexture`). Part 1 (`9daae29b`) authored `M_V2_Lit` against the pre-revision design; the
+# Part 2 of SF-4.3 (commit series, complete): the three previous commits reconciled `M_V2_Lit` to
+# the revised design (2026-08-31 "Revise the material import design after review" -- binding
+# contract, defaults, class fallback) and added `M_V2_LitTranslucent`, `M_V2_Unlit` and
+# `M_V2_TwoTexture`. Part 1 (`9daae29b`) authored `M_V2_Lit` against the pre-revision design; the
 # header notes it left below (Clamp's unnamed primary pin, `connect_material_property`'s
 # three-argument signature, `MaterialExpressionSine.Period` not being connectable, and the absent
 # `MP_PIXEL_DEPTH_OFFSET`) are still the facts this file builds against.
+#
+# Part 3 (this commit series) adds the remaining five masters -- `M_V2_Eyes`, `M_V2_Water`,
+# `M_V2_Sprite`, `M_V2_Refract`, `M_V2_Decal` -- one commit each, plus a closing cross-cutting
+# ruling commit (design doc "Import" -> the reflection-contract knob contract, the LUT default,
+# `T_V2_DefaultFrames`, and the per-unit divergence allowlist).
 #
 # --- Doc gaps hit while reconciling, flagged for the owner --------------------------------
 #
@@ -80,6 +84,10 @@ UNLIT_CITED_SHADER_UNITS = [
 ]
 TWOTEXTURE_CITED_SHADER_UNITS = [
     "worldvertextransition",
+]
+EYES_CITED_SHADER_UNITS = [
+    "eyes",
+    "eyes_overbright2",
 ]
 
 
@@ -1160,6 +1168,155 @@ def make_two_texture():
     return mat
 
 
+# ============================================================================================
+# M_V2_Eyes
+# ============================================================================================
+
+
+class EyesParams:
+    class Textures:
+        BaseTexture = "BaseTexture"
+        Iris = "Iris"
+        Glint = "Glint"
+        SurfaceClassLUT = "SurfaceClassLUT"
+
+    class Scalars:
+        Alpha = "Alpha"
+        SurfaceClassIndex = "SurfaceClassIndex"
+        IrisFrame = "IrisFrame"
+
+    class Vectors:
+        Color = "Color"
+
+    class Switches:
+        VampireEyes = "VampireEyes"
+        UseGlint = "UseGlint"
+
+
+EYES_PARAM_TABLE = {
+    "textures": sorted(vars(EyesParams.Textures)[k] for k in vars(EyesParams.Textures) if not k.startswith("_")),
+    "scalars": sorted(vars(EyesParams.Scalars)[k] for k in vars(EyesParams.Scalars) if not k.startswith("_")),
+    "vectors": sorted(vars(EyesParams.Vectors)[k] for k in vars(EyesParams.Vectors) if not k.startswith("_")),
+    "switches": sorted(vars(EyesParams.Switches)[k] for k in vars(EyesParams.Switches) if not k.startswith("_")),
+}
+
+
+def _build_eyes(mat, collection, lut_texture):
+    """`eyes.psh` (design doc "M_V2_Eyes" post-lighting math):
+
+        tex t0 / tex t1 / tex t2
+        lrp r0, t1.a, t1, t0      ; ps.1.x lrp d,t,a,b -> LinearInterpolate(A=b, B=a, Alpha=t):
+                                   ; BaseColor = Lerp(A=BaseTexture(sclera, t0), B=Iris(t1),
+                                   ;             Alpha=Iris.a) -- the task's own transcription
+        mad r0.rgb, r0, v0, t2    ; v0 (vertex lighting) dropped -- Lumen's; t2 (Glint) is additive
+                                   ; Emissive, gated by UseGlint
+        mov r0.a, t0.a            ; Opacity(Mask) = BaseTexture.a
+
+    `IrisFrame` (design doc: "the iris slot the character lane writes at runtime when it swaps eye
+    colour; 0 means the $iris the VMT bound") has no shipped-source formula -- SF-6's runtime lane
+    writes it on the MID, and this generator has nothing in the corpus to wire it to. Declared, not
+    wired, exactly like `M_V2_Unlit`'s `UseFixedCube`/`MetallicTint` or `M_V2_TwoTexture`'s
+    `UseBumpOnBaseTexture2`.
+
+    `VampireEyes` is a switch with a deliberately empty body (design doc, **named divergence**):
+    the `Eyes_Vampire`/`Eyes_Vampire_Overbright2` programs (12 materials) ship compiled-only, with
+    no readable `.psh` and no other family's source revealing what they do, so the graph behind the
+    switch is identical to the non-vampire path pending decompilation of `psh/eyes_vampire*`.
+
+    `Color` (`$color`'s VtMB `c3.rgb`) is multiplied into BaseColor for the same reason every other
+    master multiplies it in, even though `eyes.psh`'s own register legend has no `c3` term at all
+    ("no constants; everything is a texture stage") -- the parameter is one of the four exposed on
+    every master, its default is an exact no-op, and no shipped eyes material authors `$color`, so
+    wiring it costs nothing and keeps the knob live if one ever does.
+    """
+    g = Graph(mat, collection=collection)
+    P = EyesParams
+
+    base_tex = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
+    iris_tex = g.tex(P.Textures.Iris, -1100, -160, kind="color")
+    glint_tex = g.tex(P.Textures.Glint, -1100, 100, kind="color",
+                      default="/Engine/EngineResources/Black.Black")
+
+    base_rgb = g.mask(base_tex, "rgb", -900, -400)
+    base_a = g.mask(base_tex, "a", -900, -320, src_out="RGBA")
+    iris_rgb = g.mask(iris_tex, "rgb", -900, -160)
+    iris_a = g.mask(iris_tex, "a", -900, -80, src_out="RGBA")
+
+    blended = g.lerp(base_rgb, "", iris_rgb, "", iris_a, "", -700, -280)
+
+    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
+    tinted = g.mul(blended, "", color, "", -500, -320)
+    g.to(tinted, "", unreal.MaterialProperty.MP_BASE_COLOR)
+
+    # -- surface class lookup: Eyes has no $envmap lane at all (not in the design's exposed-
+    # parameter table for this master), so Roughness/Specular/Metallic are always the class row --
+    class_roughness, class_specular, class_metallic = _class_lut(
+        g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+    g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    g.to(class_specular, "", unreal.MaterialProperty.MP_SPECULAR)
+    g.to(class_metallic, "", unreal.MaterialProperty.MP_METALLIC)
+
+    # -- Emissive: Glint is additive, gated by UseGlint. Set by no shipped material (406/406 off);
+    # the slot exists for completeness (design doc "M_V2_Eyes") ---------------------------------
+    glint_rgb = g.mask(glint_tex, "rgb", -900, 100)
+    black3 = g.const3(0.0, 0.0, 0.0, -900, 180)
+    glint_emissive = g.switch(P.Switches.UseGlint, glint_rgb, black3, -700, 140, default=False)
+    g.to(glint_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # `IrisFrame`/`VampireEyes` are declared per the exposed-parameter table but have nothing in
+    # the corpus to wire (see the function docstring) -- declared, not wired.
+    g.scalar(P.Scalars.IrisFrame, 0.0, -1100, 300)
+    g.switch(P.Switches.VampireEyes, g.const(1.0, -900, 340), g.const(0.0, -900, 420),
+            -700, 380, default=False)
+
+    # -- Opacity / OpacityMask: eyes.psh's `mov r0.a, t0.a` -- BaseTexture.a, times the shared
+    # Alpha knob (the four-parameter shared table: "Alpha ... feeds MP_OPACITY") ----------------
+    alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
+    opacity = g.mul(alpha_param, "", base_a, "", 1900, 0)
+    g.to(opacity, "", unreal.MaterialProperty.MP_OPACITY)
+    g.to(opacity, "", unreal.MaterialProperty.MP_OPACITY_MASK)
+
+
+def make_eyes():
+    name = "M_V2_Eyes"
+    asset = "%s/%s" % (PKG, name)
+    collection = _load_surfaces_collection()
+    lut_texture = _load_class_lut()
+    recipe = {
+        "graphVersion": GRAPH_VERSION,
+        "sourceHash": _source_hash(),
+        "citedUnits": _cited_unit_hashes(EYES_CITED_SHADER_UNITS),
+        "params": EYES_PARAM_TABLE,
+        "mpcScalars": REQUIRED_MPC_SCALARS,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    # Usage flags: skeletal mesh + morph targets only (design doc "Master inventory": eyes are
+    # always a character part, and morph targets drive the eye blend shapes) -- no ISM/Nanite/
+    # Niagara flags, unlike the world-and-character masters above.
+    mat, asset = _fresh(name, skeletal=True, morph=True)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
+    mat.set_editor_property("two_sided", False)
+
+    _build_eyes(mat, collection, lut_texture)
+
+    errors = mel.recompile_material(mat)
+    if errors:
+        _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    bl.stamp_recipe(mat, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mat
+
+
 def _cmdline_arg(key, default=""):
     needle = "-%s=" % key
     for token in unreal.SystemLibrary.get_command_line().split():
@@ -1177,3 +1334,4 @@ make_lit()
 make_lit_translucent()
 make_unlit()
 make_two_texture()
+make_eyes()

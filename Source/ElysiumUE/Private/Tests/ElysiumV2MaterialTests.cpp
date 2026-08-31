@@ -172,6 +172,25 @@ namespace
 		ElysiumSurfaceParamsTwoTexture::Switches::UseVertexAlpha,
 	};
 
+	static const FName EyesTextures[] = {
+		ElysiumSurfaceParamsShared::Textures::SurfaceClassLUT,
+		ElysiumSurfaceParamsEyes::Textures::BaseTexture,
+		ElysiumSurfaceParamsEyes::Textures::Iris,
+		ElysiumSurfaceParamsEyes::Textures::Glint,
+	};
+	static const FName EyesScalars[] = {
+		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
+		ElysiumSurfaceParamsShared::Scalars::Alpha,
+		ElysiumSurfaceParamsEyes::Scalars::IrisFrame,
+	};
+	static const FName EyesVectors[] = {
+		ElysiumSurfaceParamsShared::Vectors::Color,
+	};
+	static const FName EyesSwitches[] = {
+		ElysiumSurfaceParamsEyes::Switches::VampireEyes,
+		ElysiumSurfaceParamsEyes::Switches::UseGlint,
+	};
+
 	// `M_V2_LitTranslucent` is the same graph under a different material-only property set
 	// (mechanics doc / design "Master inventory" -- blend mode, two-sidedness and the opacity
 	// clip value are per-instance overrides, so they never multiply masters).
@@ -184,6 +203,8 @@ namespace
 			UnlitTextures, UnlitScalars, UnlitVectors, UnlitSwitches},
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_TwoTexture.M_V2_TwoTexture"),
 			TwoTextureTextures, TwoTextureScalars, TwoTextureVectors, TwoTextureSwitches},
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Eyes.M_V2_Eyes"),
+			EyesTextures, EyesScalars, EyesVectors, EyesSwitches},
 	};
 }
 
@@ -244,7 +265,7 @@ bool FElysiumV2MasterParamsTest::RunTest(const FString&)
 		// having been present when the asset was generated.
 		if (UMaterial* MasterMaterial = Cast<UMaterial>(Master))
 		{
-			const FMaterialResource* Resource = MasterMaterial->GetMaterialResource(GMaxRHIFeatureLevel);
+			const FMaterialResource* Resource = MasterMaterial->GetMaterialResource(GMaxRHIShaderPlatform);
 			if (TestNotNull(*FString::Printf(TEXT("%s has a material resource"), Case.Path), Resource))
 			{
 				TestTrue(*FString::Printf(TEXT("%s compiles with no errors"), Case.Path),

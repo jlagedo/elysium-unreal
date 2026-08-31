@@ -11,10 +11,10 @@
 // at each call site, so the generator, the runtime importer (SF-4.5) and
 // `Elysium.Policy.V2MasterParams` (Private/Tests/ElysiumV2MaterialTests.cpp) read the same FNames.
 //
-// This revision (SF-4.3 part 2) reconciles M_V2_Lit to the design revision 2026-08-31 ("Revise
-// the material import design after review") and adds M_V2_LitTranslucent, M_V2_Unlit and
-// M_V2_TwoTexture. M_V2_Eyes, M_V2_Water, M_V2_Sprite, M_V2_Refract and M_V2_Decal are not
-// authored yet and land family-by-family (mechanics doc "Ordering, concurrency, tests, risks").
+// This revision (SF-4.3 part 2) reconciled M_V2_Lit to the design revision 2026-08-31 ("Revise
+// the material import design after review") and added M_V2_LitTranslucent, M_V2_Unlit and
+// M_V2_TwoTexture. Part 3 adds the remaining five masters family-by-family (mechanics doc
+// "Ordering, concurrency, tests, risks"): this revision adds M_V2_Eyes.
 //
 // Every V2 master exposes SurfaceClassIndex, SurfaceClassLUT, Alpha and Color -- the four
 // parameters the design doc states once, "on every master", rather than repeating in each
@@ -200,5 +200,31 @@ namespace ElysiumSurfaceParamsTwoTexture
 		inline const FName UseBumpOnBaseTexture2(TEXT("UseBumpOnBaseTexture2"));
 		inline const FName UseVertexColor(TEXT("UseVertexColor"));
 		inline const FName UseVertexAlpha(TEXT("UseVertexAlpha"));
+	}
+}
+
+// `M_V2_Eyes` -- `eyes` family only (406 units). No NormalMap, no reflection lane at all (not in
+// the design's exposed-parameter table for this master): Roughness/Specular/Metallic are always
+// the class-LUT row. `IrisFrame` and `VampireEyes` are declared per the design's table but have
+// nothing in the corpus to wire (see `make_v2_materials.py::_build_eyes`'s docstring) --
+// declared, not wired.
+namespace ElysiumSurfaceParamsEyes
+{
+	namespace Textures
+	{
+		inline const FName BaseTexture(TEXT("BaseTexture"));
+		inline const FName Iris(TEXT("Iris"));
+		inline const FName Glint(TEXT("Glint"));
+	}
+
+	namespace Scalars
+	{
+		inline const FName IrisFrame(TEXT("IrisFrame"));
+	}
+
+	namespace Switches
+	{
+		inline const FName VampireEyes(TEXT("VampireEyes"));
+		inline const FName UseGlint(TEXT("UseGlint"));
 	}
 }

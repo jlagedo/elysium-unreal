@@ -311,16 +311,18 @@ def _load(editor, tmp_path, monkeypatch, *, seed=True):
 
 # Grew by one master per commit in the SF-4.3 part-2 series: M_V2_Lit and M_V2_LitTranslucent
 # landed together (the same graph, and M_V2_LitTranslucent needs no Params class of its own),
-# then M_V2_Unlit, then M_V2_TwoTexture.
+# then M_V2_Unlit, then M_V2_TwoTexture. Part 3 grows this by one more master per commit,
+# starting with M_V2_Eyes.
 MASTERS = [
     ("M_V2_Lit", "Params", "BLEND.BLEND_OPAQUE"),
     ("M_V2_LitTranslucent", "LitParams", "BLEND.BLEND_TRANSLUCENT"),
     ("M_V2_Unlit", "UnlitParams", "BLEND.BLEND_OPAQUE"),
     ("M_V2_TwoTexture", "TwoTextureParams", "BLEND.BLEND_OPAQUE"),
+    ("M_V2_Eyes", "EyesParams", "BLEND.BLEND_OPAQUE"),
 ]
 
 
-def test_a_fresh_run_authors_all_four_compiling_masters(tmp_path, monkeypatch):
+def test_a_fresh_run_authors_all_compiling_masters(tmp_path, monkeypatch):
     editor = FakeEditor()
     module = _load(editor, tmp_path, monkeypatch)
 
@@ -339,7 +341,7 @@ def test_mask_width_bug_is_caught_offline():
     alpha channel off a bare `VectorParameter`/`TextureSample`(`Parameter`)/`VertexColor` node's
     default output is refused by `FakeMel` the same way the real editor's compile refuses it (see
     `FakeMel.connect_material_expressions`'s docstring). If a future edit reintroduces that
-    pattern, `test_a_fresh_run_authors_all_four_compiling_masters` raises `SystemExit` from
+    pattern, `test_a_fresh_run_authors_all_compiling_masters` raises `SystemExit` from
     `matgraph.connect`'s refused-pin contract instead of silently producing a broken graph -- this
     test only documents why, since the mechanism is exercised by that test, not by a call here."""
 
