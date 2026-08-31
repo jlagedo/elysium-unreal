@@ -219,6 +219,48 @@ Zero bytes between or after combos are `padding-zero`.
 Every PSH byte is `mapped-text`; every VCS byte is `mapped`, `padding-zero` or an evidence-backed
 omission.
 
+### Parity oracle (ps.1.x interpreter)
+
+`pipeline/src/elysium_pipeline/validation/ps1x.py` is SF-4.6's parity oracle: a pure-numpy
+ps.1.1 / ps.1.4 interpreter over `source.instructions[]` (this document's schema above), run over
+`(N, 4)` float32 register arrays. `Program.from_glb` parses one `source/*.glb` unit into a closed
+instruction list at construction time -- an opcode outside the modelled vocabulary, a
+register-file index past the version's bounds, or a co-issued pair that writes overlapping
+channels of the same destination all fail there, before `evaluate` ever runs. `evaluate` runs the
+parsed program over caller-supplied `textures`/`constants`/`vertex`/`texcoords` and returns `r0`,
+with the `texkill` mask attached as a `.killed` array alongside it.
+
+What it proves: that a given ps.1.x program's colour-producing algebra -- the register reads,
+swizzles, source modifiers, ALU ops and texture-stage plumbing the `.psh` assembly states --
+evaluates to a specific numeric result on fixed synthetic inputs. It is the algebra this seam
+publishes, not the compiled `.vcs` token stream (`shaders/psh/*.vcs`'s tokens are covered by
+export-time reassembly and the `sourceComparison` in this document's "Source comparison"
+section instead).
+
+**Excluded by design:** the `texm3x2*` / `texm3x3*` / `texreg2*` / `texdp3*` register-combiner
+family -- reading one stage's sampled colour as a matrix row needs cross-instruction state this
+interpreter does not track -- raises `Ps1xUnsupported`, naming the opcode and the unit. Across
+the 112-unit `shader-programs/source/` corpus this excludes 10 units (`texm3x3pad` in 8,
+`texm3x2pad` in 2); the other 102 parse in full. `sub`, `dp4`, `cnd`, `cmp`, `texbem` and
+`texbeml` are implemented but appear in none of the shipped units, so only the hand-built tests
+in `pipeline/tests/test_ps1x.py` exercise them.
+
+**Version clamp:** every register write is clamped to the declared shader model's range --
+`[-1, 1]` for `ps.1.1`, `[-8, 8]` for `ps.1.4` -- in addition to whatever `_sat` (`[0, 1]`) or
+scale (`_x2 _x4 _x8 _d2 _d4 _d8`) modifiers the instruction itself carries.
+
+**Honest limits:** this interpreter compares algebra, not compiled HLSL or the DirectX 9 runtime
+that actually executed these programs. Lighting terms (`v0`/`v1` vertex-colour inputs feeding
+into the final blend) are part of the algebra it evaluates when a program reads them, but nothing
+here reproduces Unreal's own lighting model -- a graph-parity check built on this oracle compares
+post-lighting *terms*, with lighting itself out of scope by design. Texture sampling is a
+caller-supplied callable, not a real sampler -- no filtering, no mip selection, no addressing
+mode. `evaluate_graph(dag, inputs)` -- comparing this interpreter's result against a dumped
+Unreal material graph -- is a documented stub (`NotImplementedError`) until SF-4.3's material-
+graph dumper lands; the intended tolerance for that comparison, once it exists, is `1e-4`, looser
+than this module's own `1e-6` unit-test tolerance because a dumped Unreal graph carries its own
+floating-point path through the material compiler.
+
 ## Coverage and validation
 
 A complete unit has zero `unresolved` and zero `unsupported` rows; the header words listed in
