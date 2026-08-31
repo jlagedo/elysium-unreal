@@ -12,10 +12,10 @@
 // `Elysium.Policy.V2MasterParams` (Private/Tests/ElysiumV2MaterialTests.cpp) read the same FNames.
 //
 // This revision (SF-4.3 part 2) reconciles M_V2_Lit to the design revision 2026-08-31 ("Revise
-// the material import design after review"). M_V2_Unlit and M_V2_TwoTexture land in the two
-// commits that follow this one; M_V2_Eyes, M_V2_Water, M_V2_Sprite, M_V2_Refract and M_V2_Decal
-// are not authored yet and land family-by-family (mechanics doc "Ordering, concurrency, tests,
-// risks").
+// the material import design after review") and adds M_V2_LitTranslucent and M_V2_Unlit.
+// M_V2_TwoTexture lands in the commit that follows this one; M_V2_Eyes, M_V2_Water, M_V2_Sprite,
+// M_V2_Refract and M_V2_Decal are not authored yet and land family-by-family (mechanics doc
+// "Ordering, concurrency, tests, risks").
 //
 // Every V2 master exposes SurfaceClassIndex, SurfaceClassLUT, Alpha and Color -- the four
 // parameters the design doc states once, "on every master", rather than repeating in each
@@ -110,3 +110,53 @@ namespace ElysiumSurfaceParamsLit
 	}
 }
 
+// `M_V2_Unlit` -- no NormalMap/bump lane (design doc "M_V2_Unlit": "The two-slot rule ... is
+// retracted for Unlit rather than a dead slot added"). CloudAlphaTexture/CloudScale/UseCloudAlpha
+// are the `cloud` family's slots.
+namespace ElysiumSurfaceParamsUnlit
+{
+	namespace Textures
+	{
+		inline const FName BaseTexture(TEXT("BaseTexture"));
+		inline const FName EnvMapMask(TEXT("EnvMapMask"));
+		inline const FName EnvMap(TEXT("EnvMap"));
+		inline const FName CloudAlphaTexture(TEXT("CloudAlphaTexture"));
+		inline const FName BaseTextureFrames(TEXT("BaseTextureFrames"));
+	}
+
+	namespace Scalars
+	{
+		inline const FName EnvMapMaskScale(TEXT("EnvMapMaskScale"));
+		inline const FName BaseScrollRateU(TEXT("BaseScrollRateU"));
+		inline const FName BaseScrollRateV(TEXT("BaseScrollRateV"));
+		inline const FName FrameRate(TEXT("FrameRate"));
+		inline const FName FrameCount(TEXT("FrameCount"));
+		inline const FName SineMin(TEXT("SineMin"));
+		inline const FName SineMax(TEXT("SineMax"));
+		inline const FName SinePeriod(TEXT("SinePeriod"));
+		inline const FName SineTimeOffset(TEXT("SineTimeOffset"));
+	}
+
+	namespace Vectors
+	{
+		inline const FName EnvMapTint(TEXT("EnvMapTint"));
+		inline const FName TexScaleOffset(TEXT("TexScaleOffset"));
+		inline const FName CloudScale(TEXT("CloudScale"));
+		inline const FName SineTargetMask(TEXT("SineTargetMask"));
+		inline const FName SineChannelMask(TEXT("SineChannelMask"));
+	}
+
+	namespace Switches
+	{
+		inline const FName UseBaseTexture(TEXT("UseBaseTexture"));
+		inline const FName UseVertexColor(TEXT("UseVertexColor"));
+		inline const FName UseVertexAlpha(TEXT("UseVertexAlpha"));
+		inline const FName UseEnvMap(TEXT("UseEnvMap"));
+		inline const FName UseEnvMapMask(TEXT("UseEnvMapMask"));
+		inline const FName UseBaseAlphaEnvMapMask(TEXT("UseBaseAlphaEnvMapMask"));
+		inline const FName UseFixedCube(TEXT("UseFixedCube"));
+		inline const FName MetallicTint(TEXT("MetallicTint"));
+		inline const FName UseAnimatedFrames(TEXT("UseAnimatedFrames"));
+		inline const FName UseCloudAlpha(TEXT("UseCloudAlpha"));
+	}
+}

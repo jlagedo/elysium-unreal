@@ -3,15 +3,12 @@
 # exposed-parameter table, post-lighting math, reflection contract, knob contract, class
 # fallback). Build mechanics: import/design/phase4_mechanics.md section 3.
 #
-# Part 2 of SF-4.3 (commit series): the previous commit reconciled `M_V2_Lit` to the revised
+# Part 2 of SF-4.3 (commit series): the two previous commits reconciled `M_V2_Lit` to the revised
 # design (2026-08-31 "Revise the material import design after review" -- binding contract,
-# defaults, class fallback); this commit adds `M_V2_LitTranslucent`, the same shading graph
-# (`_build_lit`) under a different material-domain/blend-mode/translucency-lighting-mode property
-# set -- design doc "Master inventory": blend mode, two-sidedness and the opacity clip value are
-# per-instance overrides, not per-master, so the two masters share every graph pin.
-# `M_V2_Unlit` and `M_V2_TwoTexture` land in the two commits that follow. Part 1 (`9daae29b`)
-# authored `M_V2_Lit` against the pre-revision design; the header notes it left below (Clamp's
-# unnamed primary pin, `connect_material_property`'s three-argument signature,
+# defaults, class fallback) and added `M_V2_LitTranslucent`; this commit adds `M_V2_Unlit`
+# (`unlitgeneric`, `cloud`). `M_V2_TwoTexture` lands in the commit that follows. Part 1
+# (`9daae29b`) authored `M_V2_Lit` against the pre-revision design; the header notes it left below
+# (Clamp's unnamed primary pin, `connect_material_property`'s three-argument signature,
 # `MaterialExpressionSine.Period` not being connectable, and the absent `MP_PIXEL_DEPTH_OFFSET`)
 # are still the facts this file builds against.
 #
@@ -788,6 +785,218 @@ def make_lit_translucent():
     return _make_lit_master("M_V2_LitTranslucent", translucent=True)
 
 
+# ============================================================================================
+# M_V2_Unlit
+# ============================================================================================
+
+
+class UnlitParams:
+    class Textures:
+        BaseTexture = "BaseTexture"
+        EnvMapMask = "EnvMapMask"
+        EnvMap = "EnvMap"
+        CloudAlphaTexture = "CloudAlphaTexture"
+        BaseTextureFrames = "BaseTextureFrames"
+        SurfaceClassLUT = "SurfaceClassLUT"
+
+    class Scalars:
+        Alpha = "Alpha"
+        SurfaceClassIndex = "SurfaceClassIndex"
+        EnvMapMaskScale = "EnvMapMaskScale"
+        BaseScrollRateU = "BaseScrollRateU"
+        BaseScrollRateV = "BaseScrollRateV"
+        FrameRate = "FrameRate"
+        FrameCount = "FrameCount"
+        SineMin = "SineMin"
+        SineMax = "SineMax"
+        SinePeriod = "SinePeriod"
+        SineTimeOffset = "SineTimeOffset"
+
+    class Vectors:
+        Color = "Color"
+        EnvMapTint = "EnvMapTint"
+        TexScaleOffset = "TexScaleOffset"
+        CloudScale = "CloudScale"
+        SineTargetMask = "SineTargetMask"
+        SineChannelMask = "SineChannelMask"
+
+    class Switches:
+        UseBaseTexture = "UseBaseTexture"
+        UseVertexColor = "UseVertexColor"
+        UseVertexAlpha = "UseVertexAlpha"
+        UseEnvMap = "UseEnvMap"
+        UseEnvMapMask = "UseEnvMapMask"
+        UseBaseAlphaEnvMapMask = "UseBaseAlphaEnvMapMask"
+        UseFixedCube = "UseFixedCube"
+        MetallicTint = "MetallicTint"
+        UseAnimatedFrames = "UseAnimatedFrames"
+        UseCloudAlpha = "UseCloudAlpha"
+
+
+UNLIT_PARAM_TABLE = {
+    "textures": sorted(vars(UnlitParams.Textures)[k] for k in vars(UnlitParams.Textures) if not k.startswith("_")),
+    "scalars": sorted(vars(UnlitParams.Scalars)[k] for k in vars(UnlitParams.Scalars) if not k.startswith("_")),
+    "vectors": sorted(vars(UnlitParams.Vectors)[k] for k in vars(UnlitParams.Vectors) if not k.startswith("_")),
+    "switches": sorted(vars(UnlitParams.Switches)[k] for k in vars(UnlitParams.Switches) if not k.startswith("_")),
+}
+
+
+def _build_unlit(mat, collection, lut_texture, default_frames):
+    g = Graph(mat, collection=collection)
+    P = UnlitParams
+
+    base_uv, _, _ = _uv_lanes(
+        g, P.Vectors.TexScaleOffset,
+        base_scroll_names=(P.Scalars.BaseScrollRateU, P.Scalars.BaseScrollRateV))
+    sine = _sine_lane(
+        g, min_name=P.Scalars.SineMin, max_name=P.Scalars.SineMax,
+        period_name=P.Scalars.SinePeriod, offset_name=P.Scalars.SineTimeOffset,
+        target_mask_name=P.Vectors.SineTargetMask, channel_mask_name=P.Vectors.SineChannelMask)
+
+    base_tex_2d = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
+    connect(base_uv, "", base_tex_2d, "UVs")
+    base_tex = _flipbook_sample(
+        g, base_tex_2d, P.Textures.BaseTextureFrames, base_uv,
+        P.Scalars.FrameRate, P.Scalars.FrameCount, P.Switches.UseAnimatedFrames, default_frames,
+        -1100, -600, sampler="color")
+    base_tex_rgb = g.mask(base_tex, "rgb", -900, -420)
+    base_tex_a = g.mask(base_tex, "a", -900, -340)
+    white3 = g.const3(1.0, 1.0, 1.0, -900, -260)
+    base_selected = g.switch(P.Switches.UseBaseTexture, base_tex_rgb, white3, -700, -360,
+                             default=True)
+
+    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
+    color = sine["apply"](color, "", "g", "rgb", -1100, -500)
+    tinted = g.mul(base_selected, "", color, "", -40, -360)
+    vertex_color = g.vertex_color(-1100, -680)
+    vc_rgb = g.mask(vertex_color, "rgb", -900, -680)
+    with_vc = g.mul(tinted, "", vc_rgb, "", 160, -400)
+    vc_selected = g.switch(P.Switches.UseVertexColor, with_vc, tinted, 360, -360, default=False)
+
+    # -- reflection contract mask term (no NormalMap on this master) -------------------------
+    envmapmask_tex = g.tex(P.Textures.EnvMapMask, -1100, 260, kind="mask",
+                           default="%s/T_LinearWhiteMask" % PKG)
+    connect(base_uv, "", envmapmask_tex, "UVs")
+    luma_weights = g.const3(0.299, 0.587, 0.114, -900, 300)
+    envmapmask_luma = g.dot(envmapmask_tex, "RGB", luma_weights, "", -700, 300)
+    mask_none = g.const(1.0, -900, 380)
+    mask_basealpha = g.one_minus(base_tex_a, "", -700, 380)
+    mask_step1 = g.switch(P.Switches.UseBaseAlphaEnvMapMask, mask_basealpha, mask_none,
+                          -500, 380, default=False)
+    mask_step2 = g.switch(P.Switches.UseEnvMapMask, envmapmask_luma, mask_step1, -300, 380,
+                          default=False)
+    env_mask_scale = g.scalar(P.Scalars.EnvMapMaskScale, 1.0, -900, 460)
+    mask_scaled = g.mul(mask_step2, "", env_mask_scale, "", -100, 400)
+    mask_sat = g.sat(mask_scaled, "", 100, 400)
+
+    env_tint = g.vec3(P.Vectors.EnvMapTint, (1.0, 1.0, 1.0, 1.0), -1900, 1880)
+    env_tint = sine["apply"](env_tint, "", "a", "rgb", -1900, 1960)
+
+    # -- unlit surface: the cube term IS transcribed as the literal additive Emissive of the
+    # reflection contract whenever a cube exists (design doc "M_V2_Unlit" post-lighting math --
+    # there is no Lumen lighting for an unlit surface to replace, so no RayTracingQualitySwitch
+    # gate is needed here either) --------------------------------------------------------------
+    reflect_dir = g.reflection_ws(-1900, 2000)
+    envcube = g.cube(P.Textures.EnvMap, -1700, 2000, default=DEFAULT_CUBE)
+    connect(reflect_dir, "", envcube, "UVs")
+    cube_add = g.mul(g.mul(envcube, "RGB", mask_sat, "", -1500, 2040), "",
+                     env_tint, "", -1300, 2080)
+    cube_emissive = g.switch(P.Switches.UseEnvMap, cube_add, g.const3(0.0, 0.0, 0.0, -1100, 2040),
+                             -900, 2000, default=False)
+    # UseFixedCube is declared per the exposed-parameter table but this master has no second cube
+    # path to switch onto (a single EnvMap slot covers both the concrete-image and env_cubemap
+    # cases; there is no Lit-style Fresnel/RayTracingQualitySwitch split here) -- UseEnvMap alone
+    # gates the cube term above, and this is a declared-not-wired node like
+    # M_V2_TwoTexture's UseBumpOnBaseTexture2.
+    g.switch(P.Switches.UseFixedCube, g.const(1.0, -900, 2120), g.const(0.0, -900, 2200),
+            -700, 2160, default=False)
+    # MetallicTint: declared per the exposed-parameter table; this master has no Metallic pin at
+    # all (Unlit shading model), so like UseFixedCube above it is declared, not wired.
+    g.switch(P.Switches.MetallicTint, g.const(1.0, -500, 2120), g.const(0.0, -500, 2200),
+            -300, 2160, default=False)
+
+    total_emissive = g.add(vc_selected, "", cube_emissive, "", 560, -200)
+    g.to(total_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    g.to(vc_selected, "", unreal.MaterialProperty.MP_BASE_COLOR)
+
+    # -- Opacity: BaseTexture.a x VertexColor.a (design doc "M_V2_Unlit" post-lighting math --
+    # unlitgeneric_envmapmask.psh's co-issued `mul r0.a, t0, v0`), gated by Alpha and the sine
+    # lane like every other master -------------------------------------------------------------
+    alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
+    alpha_with_sine = sine["apply"](alpha_param, "", "r", "r", 1900, 0)
+    opacity_base = g.mul(alpha_with_sine, "", base_tex_a, "", 2100, 40)
+    # `VertexColor`'s outputs are all unnamed FNames -- connect straight to its own "A" output
+    # (already 1-wide) rather than through a ComponentMask; see M_V2_Lit's Opacity section for
+    # why that combination is a "not enough components" error either way it is broken.
+    opacity_with_vc = g.mul(opacity_base, "", vertex_color, "A", 2300, 80)
+    opacity_final = g.switch(P.Switches.UseVertexAlpha, opacity_with_vc, opacity_base,
+                             2500, 60, default=False)
+    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
+    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY_MASK)
+
+    # -- CloudAlphaTexture / CloudScale: $cloudalphatexture drives opacity, $cloudscale the UV
+    # scale (design doc "The eight real unresolved families" -> cloud). Declared and sampled so
+    # UseCloudAlpha has a real term to gate even though only 2 corpus materials use it. --------
+    cloud_scale = g.vec3(P.Vectors.CloudScale, (1.0, 1.0, 1.0, 0.0), -1100, 900)
+    cloud_uv = g.mul(base_uv, "", g.mask(cloud_scale, "rg", -900, 940), "", -700, 900)
+    cloud_tex = g.tex(P.Textures.CloudAlphaTexture, -1100, 1020, kind="mask",
+                      default="%s/T_LinearWhiteMask" % PKG)
+    connect(cloud_uv, "", cloud_tex, "UVs")
+    cloud_alpha = g.mask(cloud_tex, "r", -700, 1020)
+    cloud_gated_opacity = g.mul(opacity_final, "", cloud_alpha, "", 2700, 60)
+    opacity_with_cloud = g.switch(P.Switches.UseCloudAlpha, cloud_gated_opacity, opacity_final,
+                                  2900, 40, default=False)
+    # UseCloudAlpha overrides the plain opacity wiring above -- reconnect both property sinks to
+    # the cloud-gated result rather than leaving the two switches racing each other.
+    g.to(opacity_with_cloud, "", unreal.MaterialProperty.MP_OPACITY)
+    g.to(opacity_with_cloud, "", unreal.MaterialProperty.MP_OPACITY_MASK)
+
+    # class LUT declared for contract completeness ("every master exposes SurfaceClassLUT"); an
+    # Unlit shading model ignores MP_ROUGHNESS/SPECULAR/METALLIC, so it is not wired to anything.
+    _class_lut(g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+
+
+def make_unlit():
+    name = "M_V2_Unlit"
+    asset = "%s/%s" % (PKG, name)
+    collection = _load_surfaces_collection()
+    lut_texture = _load_class_lut()
+    recipe = {
+        "graphVersion": GRAPH_VERSION,
+        "sourceHash": _source_hash(),
+        "citedUnits": _cited_unit_hashes(UNLIT_CITED_SHADER_UNITS),
+        "params": UNLIT_PARAM_TABLE,
+        "mpcScalars": REQUIRED_MPC_SCALARS,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    _make_linear_white_mask()
+    default_frames = _make_default_frames_array()
+
+    mat, asset = _fresh(name, ism=True, nanite=True, niagara_sprites=True)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_OPAQUE)
+    mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
+    mat.set_editor_property("two_sided", False)
+
+    _build_unlit(mat, collection, lut_texture, default_frames)
+
+    errors = mel.recompile_material(mat)
+    if errors:
+        _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    bl.stamp_recipe(mat, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mat
+
+
 def _cmdline_arg(key, default=""):
     needle = "-%s=" % key
     for token in unreal.SystemLibrary.get_command_line().split():
@@ -803,3 +1012,4 @@ def _flag(value):
 
 make_lit()
 make_lit_translucent()
+make_unlit()

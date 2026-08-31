@@ -98,6 +98,48 @@ namespace
 		ElysiumSurfaceParamsLit::Switches::UseAnimatedNormalFrames,
 	};
 
+	static const FName UnlitTextures[] = {
+		ElysiumSurfaceParamsShared::Textures::SurfaceClassLUT,
+		ElysiumSurfaceParamsUnlit::Textures::BaseTexture,
+		ElysiumSurfaceParamsUnlit::Textures::EnvMapMask,
+		ElysiumSurfaceParamsUnlit::Textures::EnvMap,
+		ElysiumSurfaceParamsUnlit::Textures::CloudAlphaTexture,
+		ElysiumSurfaceParamsUnlit::Textures::BaseTextureFrames,
+	};
+	static const FName UnlitScalars[] = {
+		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
+		ElysiumSurfaceParamsShared::Scalars::Alpha,
+		ElysiumSurfaceParamsUnlit::Scalars::EnvMapMaskScale,
+		ElysiumSurfaceParamsUnlit::Scalars::BaseScrollRateU,
+		ElysiumSurfaceParamsUnlit::Scalars::BaseScrollRateV,
+		ElysiumSurfaceParamsUnlit::Scalars::FrameRate,
+		ElysiumSurfaceParamsUnlit::Scalars::FrameCount,
+		ElysiumSurfaceParamsUnlit::Scalars::SineMin,
+		ElysiumSurfaceParamsUnlit::Scalars::SineMax,
+		ElysiumSurfaceParamsUnlit::Scalars::SinePeriod,
+		ElysiumSurfaceParamsUnlit::Scalars::SineTimeOffset,
+	};
+	static const FName UnlitVectors[] = {
+		ElysiumSurfaceParamsShared::Vectors::Color,
+		ElysiumSurfaceParamsUnlit::Vectors::EnvMapTint,
+		ElysiumSurfaceParamsUnlit::Vectors::TexScaleOffset,
+		ElysiumSurfaceParamsUnlit::Vectors::CloudScale,
+		ElysiumSurfaceParamsUnlit::Vectors::SineTargetMask,
+		ElysiumSurfaceParamsUnlit::Vectors::SineChannelMask,
+	};
+	static const FName UnlitSwitches[] = {
+		ElysiumSurfaceParamsUnlit::Switches::UseBaseTexture,
+		ElysiumSurfaceParamsUnlit::Switches::UseVertexColor,
+		ElysiumSurfaceParamsUnlit::Switches::UseVertexAlpha,
+		ElysiumSurfaceParamsUnlit::Switches::UseEnvMap,
+		ElysiumSurfaceParamsUnlit::Switches::UseEnvMapMask,
+		ElysiumSurfaceParamsUnlit::Switches::UseBaseAlphaEnvMapMask,
+		ElysiumSurfaceParamsUnlit::Switches::UseFixedCube,
+		ElysiumSurfaceParamsUnlit::Switches::MetallicTint,
+		ElysiumSurfaceParamsUnlit::Switches::UseAnimatedFrames,
+		ElysiumSurfaceParamsUnlit::Switches::UseCloudAlpha,
+	};
+
 	// `M_V2_LitTranslucent` is the same graph under a different material-only property set
 	// (mechanics doc / design "Master inventory" -- blend mode, two-sidedness and the opacity
 	// clip value are per-instance overrides, so they never multiply masters).
@@ -106,6 +148,8 @@ namespace
 			LitTextures, LitScalars, LitVectors, LitSwitches},
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_LitTranslucent.M_V2_LitTranslucent"),
 			LitTextures, LitScalars, LitVectors, LitSwitches},
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Unlit.M_V2_Unlit"),
+			UnlitTextures, UnlitScalars, UnlitVectors, UnlitSwitches},
 	};
 }
 

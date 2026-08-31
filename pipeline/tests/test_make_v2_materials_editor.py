@@ -310,11 +310,12 @@ def _load(editor, tmp_path, monkeypatch, *, seed=True):
 
 
 # Grows by one master per commit in the SF-4.3 part-2 series: M_V2_Lit and M_V2_LitTranslucent
-# here (the same graph, added together since M_V2_LitTranslucent needs no Params class of its
-# own); M_V2_Unlit / M_V2_TwoTexture in the two commits that follow.
+# landed together (the same graph, and M_V2_LitTranslucent needs no Params class of its own);
+# M_V2_Unlit here; M_V2_TwoTexture in the commit that follows.
 MASTERS = [
     ("M_V2_Lit", "Params", "BLEND.BLEND_OPAQUE"),
     ("M_V2_LitTranslucent", "LitParams", "BLEND.BLEND_TRANSLUCENT"),
+    ("M_V2_Unlit", "UnlitParams", "BLEND.BLEND_OPAQUE"),
 ]
 
 
