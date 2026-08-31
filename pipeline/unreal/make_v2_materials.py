@@ -3,10 +3,13 @@
 # exposed-parameter table, post-lighting math, reflection contract, knob contract, class
 # fallback). Build mechanics: import/design/phase4_mechanics.md section 3.
 #
-# Part 2 of SF-4.3 (commit series): this commit reconciles `M_V2_Lit` to the revised design
-# (2026-08-31 "Revise the material import design after review" -- binding contract, defaults,
-# class fallback). `M_V2_LitTranslucent`, `M_V2_Unlit` and `M_V2_TwoTexture` land in the three
-# commits that follow, reusing the shared graph lanes this commit introduces. Part 1 (`9daae29b`)
+# Part 2 of SF-4.3 (commit series): the previous commit reconciled `M_V2_Lit` to the revised
+# design (2026-08-31 "Revise the material import design after review" -- binding contract,
+# defaults, class fallback); this commit adds `M_V2_LitTranslucent`, the same shading graph
+# (`_build_lit`) under a different material-domain/blend-mode/translucency-lighting-mode property
+# set -- design doc "Master inventory": blend mode, two-sidedness and the opacity clip value are
+# per-instance overrides, not per-master, so the two masters share every graph pin.
+# `M_V2_Unlit` and `M_V2_TwoTexture` land in the two commits that follow. Part 1 (`9daae29b`)
 # authored `M_V2_Lit` against the pre-revision design; the header notes it left below (Clamp's
 # unnamed primary pin, `connect_material_property`'s three-argument signature,
 # `MaterialExpressionSine.Period` not being connectable, and the absent `MP_PIXEL_DEPTH_OFFSET`)
@@ -781,6 +784,10 @@ def make_lit():
     return _make_lit_master("M_V2_Lit", translucent=False)
 
 
+def make_lit_translucent():
+    return _make_lit_master("M_V2_LitTranslucent", translucent=True)
+
+
 def _cmdline_arg(key, default=""):
     needle = "-%s=" % key
     for token in unreal.SystemLibrary.get_command_line().split():
@@ -795,3 +802,4 @@ def _flag(value):
 
 
 make_lit()
+make_lit_translucent()
