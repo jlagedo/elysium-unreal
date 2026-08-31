@@ -693,11 +693,18 @@ asset grid, or a direct actor edit, and nothing else. Cutover is gated per map, 
 Each task is one small deliverable; a landed task moves its result to Settled and comes off this
 list.
 
+**Wire first, tune later (owner, 2026-08-31).** This roadmap makes things go live — appear,
+move, work. Exposure, brightness, look-tuning of any kind are **not in it**: nothing can be
+judged until everything is live, so every knob and settings surface built here ships with the
+faithful VtMB-derived value and is left alone. Agents never read screenshots to tune — shots are
+a did-it-appear / did-it-regress witness only. The tuning sessions (the old SF-5.x lookdev pass
+and the real-map second pass) happen after the roadmap, on the editor surfaces it builds.
+
 **Landed and closed (was surfaces Phases 1–5):** textures including the 1,325 PAKFILE probes;
 surface properties (63 `PM_`); the nine V2 masters and 19,121 `MI_` with provenance and
 idempotency; the 16-knob settings page + `DA_SurfaceCalibration`; the lookdev map. Full record in
-the Settled entries above. The owner's lookdev tuning session (was SF-5.1–5.3) is open-ended and
-runs whenever — the second pass on real maps is R7.8.
+the Settled entries above. The owner's tuning sessions (was SF-5.1–5.3 and SF-6.7) are
+deliberately **after** this roadmap — see "Wire first, tune later" below.
 
 ### R1 — props (the models lane; first, everything downstream places these)
 
@@ -732,7 +739,8 @@ runs whenever — the second pass on real maps is R7.8.
 ### R2 — instruments and guards (nothing else moves first) [MP-1]
 
 - **R2.1 Baseline shots** [MP-1.1]. `shots_diff.py` reference frames, every hub + one of each
-  district type. → lands: the only instrument the rendered half has.
+  district type. A regression witness only — did it appear, did it vanish, did an untouched map
+  change; never a tuning judge. → lands: the only regression instrument the rendered half has.
 - **R2.2 Censuses** [MP-1.2]. Per-map entity/light/effects-class censuses pinned as JSON.
   → lands: the differ's and R7's ground truth.
 - **R2.3 Recipe closes over what it absorbs** [MP-1.3]. `level_sidecar_recipe` extended to
@@ -802,9 +810,10 @@ runs whenever — the second pass on real maps is R7.8.
 - **R5.5 Reflection captures** [MP-4.4, SF-6.2]. Per `cubemaps[]` origin, radius from settings,
   built under `-AllowCommandletRendering`; `LightSpecularScale` flip rides along. → lands: the
   Lumen fallback lane.
-- **R5.6 Lights final** [MP-4.5]. The bake writes calibrated values from `worldLights[]` plus the
-  MegaLights properties; the runtime derivation deleted (the rig applies only the R4.3 asset and
-  lightstyles); `.lights` reader deleted. → lands: the editor level is the truth.
+- **R5.6 Lights final** [MP-4.5]. The bake writes the VtMB-derived values from `worldLights[]`
+  plus the MegaLights properties; the runtime derivation deleted (the rig applies only the R4.3
+  asset and lightstyles); `.lights` reader deleted. No look-tuning — the derivation is the same
+  math, computed once at bake. → lands: the editor level is the truth.
 
 ### R6 — consumers beyond maps [SF-6.3–6.6]
 
@@ -829,9 +838,8 @@ runs whenever — the second pass on real maps is R7.8.
   beams, `env_steam`, `env_embers`, `env_fire`, `env_lightglow`, `env_sun`. → lands: the ambient
   set.
 - **R7.6 Decals on the V2 Decal master** [MP-5.6]. → lands: legacy `M_Decal` retired.
-- **R7.7 3D-skybox composition pass** [MP-5.7]. → lands: miniature richness reviewed.
-- **R7.8 Owner tuning pass on real maps** [SF-6.7]. In the editor, on the converted hubs; ini and
-  assets committed. → lands: the look, signed.
+- **R7.7 3D-skybox wiring pass** [MP-5.7]. Miniature props/fog wired so the skybox composes with
+  everything the earlier stages made live; no look judgement. → lands: the miniature complete.
 
 ### R8 — retire [MP-6, SF-7.1]
 
