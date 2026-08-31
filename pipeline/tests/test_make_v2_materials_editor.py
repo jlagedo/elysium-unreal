@@ -164,10 +164,10 @@ class FakeEditor:
             package = task.get_editor_property("destination_path")
             path = "%s/%s" % (package, name)
             filename = task.get_editor_property("filename") or ""
-            # The real DDS importer's behaviour on a 1-slice DX10-array header is unverified
-            # (make_v2_materials.py's own docstring for `_make_default_frames_array`); the fake
-            # assumes success so the generator's happy path is exercised, and the real editor run
-            # is what settles whether that assumption holds.
+            # `_make_default_frames_array` writes a 2-slice DX10-array DDS -- confirmed live
+            # against the real editor (SF-4.3-part-3 cross-cutting ruling (c)) that this imports
+            # as a real Texture2DArray, where a 1-slice array header collapsed to a plain
+            # Texture2D. The fake mirrors that real-editor-verified outcome.
             cls = "Texture2DArray" if filename.lower().endswith(".dds") else "Texture2D"
             self.assets[path] = FakeAsset(name, package, cls)
 

@@ -20,11 +20,7 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumSurfaceParams.h"
-#include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
-#include "Materials/MaterialInstance.h"
-#include "MaterialShared.h"
-#include "RHIDefinitions.h"
 
 static constexpr EAutomationTestFlags GElysiumV2MaterialTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -375,23 +371,19 @@ bool FElysiumV2MasterParamsTest::RunTest(const FString&)
 				}));
 		}
 
-		// The compile gate this test closes: `UMaterialEditingLibrary::RecompileMaterial` only
-		// ever returns a real error list when the editor process that authored the asset was
-		// launched with `-AllowCommandletRendering` (an independent review of
-		// `make_v2_materials.py` found the umbrella launch was missing it, since fixed in
-		// `pipeline/src/elysium_pipeline/unreal.py`'s `generate_policy_content`). This tier runs
-		// with rendering, so asserting the saved master's own compiled resource carries no
-		// compile error is a second, independent check that does not depend on that launch flag
-		// having been present when the asset was generated.
-		if (UMaterial* MasterMaterial = Cast<UMaterial>(Master))
-		{
-			const FMaterialResource* Resource = MasterMaterial->GetMaterialResource(GMaxRHIShaderPlatform);
-			if (TestNotNull(*FString::Printf(TEXT("%s has a material resource"), Case.Path), Resource))
-			{
-				TestTrue(*FString::Printf(TEXT("%s compiles with no errors"), Case.Path),
-					Resource->GetCompileErrors().IsEmpty());
-			}
-		}
+		// A second, independent compile-error check via `GetMaterialResource` was tried here
+		// (SF-4.3 part 3, run live for the first time) and removed: every tier in this project
+		// runs `-nullrhi` (`Source/ElysiumUE/CLAUDE.md` -> "Tests": "no test covers a rendered
+		// frame"), under which `GetMaterialResource` returns null for every master uniformly,
+		// confirmed live -- not a defect in any one master's graph, and not something this tier
+		// can ever observe. Emitting an abstain marker per master here tripped the runner's own
+		// "a tier that abstained entirely" rule (`.claude/rules/tests.md`) even though the
+		// parameter-presence checks above, which do not depend on a compiled resource, ran and
+		// passed for all nine -- so the compile-error half of the gate is not reproduced in this
+		// tier at all. Compile-error coverage for the V2 masters comes from the editor build log
+		// during generation instead (`mel.recompile_material` inside `make_v2_materials.py`,
+		// which does return a real error list when the umbrella launch carries
+		// `-AllowCommandletRendering`, already fixed in `unreal.py`'s `generate_policy_content`).
 	}
 
 	if (MastersChecked == 0)

@@ -226,7 +226,7 @@ def _load_class_lut():
     return texture
 
 
-# --- T_V2_DefaultFrames: a 1-slice Texture2DArray, white -----------------------------------
+# --- T_V2_DefaultFrames: a 2-slice Texture2DArray, white -----------------------------------
 
 
 def _dds_header(width, height, pitch):
@@ -262,20 +262,35 @@ def _dds_dx10_header(array_size):
 
 
 def _make_default_frames_array():
-    """A real 1x1, one-slice, white `Texture2DArray` -- the `BaseTextureFrames`/`NormalMapFrames`
-    default (design doc "The animation and scroll lanes"), authored from a hand-built minimal DX10
-    DDS the same way `_make_linear_white_mask` hand-builds a PNG. Whether editor Python's DDS
-    importer classifies a 1-slice DX10-array header as `Texture2DArray` (rather than folding a
-    single slice down to a plain `Texture2D`, which some importers do) is unverified before a real
-    editor run; if it does not, this returns `None`, the two `TextureObjectParameter`s bind no
-    default texture, and that is recorded as a doc/implementation gap in the commit report rather
-    than silently accepted."""
+    """A real, white `Texture2DArray` -- the `BaseTextureFrames`/`NormalMapFrames` default (design
+    doc "The animation and scroll lanes"), authored from a hand-built minimal DX10 DDS the same way
+    `_make_linear_white_mask` hand-builds a PNG.
+
+    SF-4.3-part-3 cross-cutting ruling (c), two real-editor findings in order:
+
+    1. `AssetTools.create_asset` with a real `unreal.Texture2DArrayFactory` -- the design doc's
+       other named route -- does **not** work from Python in this engine build:
+       `UTexture2DArrayFactory::InitialTextures` carries no `EditAnywhere`/`BlueprintReadWrite`
+       specifier (`Texture2DArrayFactory.h`), so it is not part of the Python property surface at
+       all (`Failed to find property 'initial_textures'`, confirmed live).
+    2. The DDS-import route (`AssetImportTask`, matching the real texture lane's own
+       `import_textures.py::_import_chunk`) **does** work, but not at `arraySize = 1`: a DX10 DDS
+       array header with exactly one slice collapses to a plain `Texture2D` on import (confirmed
+       live: `T_V2_DefaultFrames imported as Texture2D, not Texture2DArray` at `arraySize = 1`),
+       the same "a one-element array is ambiguous with a plain 2D texture" heuristic several DDS
+       importers use. **Two** identical white slices (`arraySize = 2`) is therefore the smallest
+       DDS that reliably imports as a real `Texture2DArray` -- semantically identical to "one white
+       slice" for this default (every consumer clamps `SliceIndex` via `floor(frac(...) *
+       FrameCount)` with the shipped default `FrameCount = 1.0`, so slice 1 is never sampled by any
+       default-configured material; it exists purely so the importer classifies the asset
+       correctly). The class is still verified after creation, and a genuine failure logs and
+       returns `None` rather than raising, so a content build never blocks on this one texture."""
     asset = "%s/T_V2_DefaultFrames" % PKG
     existing = unreal.load_asset(asset)
     if existing:
         return existing
-    pixel = b"\xff\xff\xff\xff"
-    dds = b"DDS " + _dds_header(1, 1, 4) + _dds_dx10_header(1) + pixel
+    pixel = b"\xff\xff\xff\xff" * 2  # two identical white RGBA8 texels, one per slice
+    dds = b"DDS " + _dds_header(1, 1, 4) + _dds_dx10_header(2) + pixel
     source = _policy_scratch_dir() / "v2_default_frames.dds"
     source.write_bytes(dds)
     task = unreal.AssetImportTask()
@@ -295,8 +310,7 @@ def _make_default_frames_array():
     if texture.get_class().get_name() != "Texture2DArray":
         unreal.log_warning(
             "[make_v2_materials] T_V2_DefaultFrames imported as %s, not Texture2DArray -- "
-            "editor Python's DDS importer did not build a 1-slice DX10 array as an array "
-            "texture; BaseTextureFrames/NormalMapFrames ship with no default texture "
+            "BaseTextureFrames/NormalMapFrames ship with no default texture "
             "(doc gap, see this file's module docstring)" % texture.get_class().get_name())
         return None
     texture.set_editor_property("srgb", False)
@@ -1557,8 +1571,12 @@ def _build_water(mat, collection, lut_texture, default_frames):
 
     base_reflect_fract = g.scalar(P.Scalars.BaseReflectFract, 0.2, -1900, 1900)
     fresnel_node = g.node(unreal.MaterialExpressionFresnel, -1700, 1900)
-    fresnel_node.set_editor_property("exponent_in", 5.0)
-    connect(base_reflect_fract, "", fresnel_node, "BaseReflectFraction")
+    # `MaterialExpressionFresnel`'s static exponent property is `exponent` (real-editor fact --
+    # `Exponent`, C++ `UMaterialExpressionFresnel.h`); `ExponentIn`/`BaseReflectFractionIn` are the
+    # two *connectable* `FExpressionInput` pins, named for their C++ field verbatim (Unreal's
+    # default `GetInputName` reflects the field name -- neither is overridden on this node).
+    fresnel_node.set_editor_property("exponent", 5.0)
+    connect(base_reflect_fract, "", fresnel_node, "BaseReflectFractionIn")
 
     reflect_amount = g.scalar(P.Scalars.ReflectAmount, 50.0, -1900, 2000)
     reflect_tint = g.vec3(P.Vectors.ReflectTint, (1.0, 1.0, 1.0, 1.0), -1900, 2080)

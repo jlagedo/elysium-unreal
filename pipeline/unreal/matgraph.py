@@ -281,9 +281,15 @@ class Graph:
         return self.node(unreal.MaterialExpressionVertexColor, x, y)
 
     def fresnel(self, x, y, *, exponent=None):
+        """`exponent`, not `exponent_in` -- real-editor fact, confirmed against
+        `MaterialExpressionFresnel.h`: the static property is `Exponent`, and `ExponentIn` (like
+        `BaseReflectFractionIn`) is a separate *connectable* `FExpressionInput` pin, named for its
+        C++ field verbatim, not a property `set_editor_property` can reach. To drive either from a
+        parameter node, `connect(param, "", fresnel_node, "ExponentIn")` /
+        `"BaseReflectFractionIn"` directly, bypassing this static-only helper."""
         n = self.node(unreal.MaterialExpressionFresnel, x, y)
         if exponent is not None:
-            n.set_editor_property("exponent_in", exponent)
+            n.set_editor_property("exponent", exponent)
         return n
 
     def reflection_ws(self, x, y):
