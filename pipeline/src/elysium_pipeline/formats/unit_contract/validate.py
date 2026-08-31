@@ -322,6 +322,12 @@ def warnings_for(root: Mapping[str, Any]) -> list[str]:
 
     A unit that is recoverable only in part publishes what the install holds and warns, so every
     incomplete row and every named departure from the format is spoken once here.
+
+    A `vtmb:missing-<kind>:` sentinel (`references.missing_sentinel`) is graded `omitted-proven`
+    with its own reason and produces no dependency row by contract -- that absence is exactly
+    what makes it invisible everywhere else a reader looks for a gap, so it is spoken here too,
+    under its own `sentinel:` label, rather than folded into the generic byte-ledger residue that
+    also lives in `coverage.omittedProven`.
     """
 
     coverage = root.get("coverage") or {}
@@ -333,6 +339,9 @@ def warnings_for(root: Mapping[str, Any]) -> list[str]:
     ):
         for row in coverage.get(key) or []:
             warnings.append(f"{label}: {_phrase(row)}")
+    for row in coverage.get("omittedProven") or []:
+        if isinstance(row, Mapping) and str(row.get("asset", "")).startswith("vtmb:missing-"):
+            warnings.append(f"sentinel: {_phrase(row)}")
     for key, label in (("omissions", "omitted"), ("anomalies", "anomaly")):
         for row in root.get(key) or []:
             warnings.append(f"{label}: {_phrase(row)}")

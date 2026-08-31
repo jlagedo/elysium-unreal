@@ -49,18 +49,34 @@ def extension_root(document: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
 
 
 def _warnings(root: Mapping[str, Any]) -> dict[str, Any]:
-    """The count of every warning the unit publishes, and the first reason of each kind.
+    """The count of every warning the unit publishes, and each distinct one, once.
 
     A published unit that warned is still a unit the corpus is weaker for, and the whole list of
-    a thousand identical reasons would drown the index; the first of each is what identifies it.
+    a thousand identical reasons would drown the index -- but deduplicating by the generic label
+    before a message's first ':' kept only the *first* reason of each kind and silently dropped
+    the rest, so a reason genuinely carried by thousands of units (a second, later-listed omission
+    sharing the "omitted" label with whichever omission a unit happened to list first) could
+    summarize as carried by a handful. Deduplicating by the whole message instead keeps one row
+    per distinct reason while still folding away the run of identical rows one unit repeats.
     """
 
     messages = warnings_for(root)
-    first: dict[str, str] = {}
-    for message in messages:
-        label, _, _ = message.partition(":")
-        first.setdefault(label, message)
-    return {"count": len(messages), "reasons": [first[label] for label in sorted(first)]}
+    return {"count": len(messages), "reasons": sorted(set(messages))}
+
+
+def _sentinel_count(coverage: Mapping[str, Any]) -> int:
+    """How many `coverage.omittedProven` rows name a `vtmb:missing-<kind>:` sentinel.
+
+    A sentinel is `resolved: false` by contract and produces no dependency row -- `references[]`
+    and every check built over it never see one -- so this is the only place in the index that
+    counts them.
+    """
+
+    return sum(
+        1
+        for row in coverage.get("omittedProven") or ()
+        if isinstance(row, Mapping) and str(row.get("asset", "")).startswith("vtmb:missing-")
+    )
 
 
 def read_unit(path: Path, export_root: Path) -> tuple[Unit, dict[str, Any]]:
@@ -88,6 +104,7 @@ def read_unit(path: Path, export_root: Path) -> tuple[Unit, dict[str, Any]]:
         dependency_count=len(root.get("dependencies") or ()),
         unresolved_count=len(coverage.get("unresolved") or ()),
         unsupported_count=len(coverage.get("unsupported") or ()),
+        sentinel_count=_sentinel_count(coverage),
     )
     return unit, root
 

@@ -638,6 +638,40 @@ def publish(export_root: Path, relative: str, asset: str, *, dependencies=(),
     return path
 
 
+def publish_with_sentinels(export_root: Path, relative: str, asset: str, slots: int) -> Path:
+    """One published unit whose `coverage.omittedProven` carries `slots` material sentinels,
+    each `vtmb:missing-material:` -- the shape `formats/model_glb/decode.py` writes for a studio
+    texture name that resolves to no `.vmt`, and produces no dependency row by contract."""
+
+    kind = asset.split(":")[1]
+    name = "ELYSIUM_vtmb_" + kind.replace("-", "_")
+    omitted = [
+        {
+            "path": f"materialBindings.slots[{index}]",
+            "reason": "studio-texture-name-has-no-vmt",
+            "asset": f"vtmb:missing-material:{index}:body",
+        }
+        for index in range(slots)
+    ]
+    root = extension_root(
+        schema_version="1.0.0",
+        identity=identity_block(asset, f"{kind}/source"),
+        source_resolution={"policy": "up-first", "members": []},
+        dependencies=[],
+        coverage=coverage_block(mapped=["identity"], omitted_proven=omitted),
+    )
+    document = {
+        "asset": asset_block(kind.title()),
+        "extensionsUsed": [name],
+        "extensionsRequired": [name],
+        "extensions": {name: root},
+    }
+    path = export_root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(encode_glb(document, b""))
+    return path
+
+
 def source_rows(walk, *paths) -> list[dict]:
     """`sourceResolution.members[]` for one unit, as the walk hashed the members it names.
 
@@ -836,6 +870,41 @@ def test_units_are_hashed_from_the_files_on_disk(tmp_path):
     on_disk = (export_root / "textures/wall.glb").read_bytes()
     assert rows["vtmb:texture:wall"]["sha256"] == hashlib.sha256(on_disk).hexdigest()
     assert rows["vtmb:texture:wall"]["byteLength"] == len(on_disk)
+
+
+def test_read_unit_counts_every_sentinel_slot_and_names_it_a_warning(tmp_path):
+    """A `vtmb:missing-material:` sentinel carries no dependency row by contract, so `sentinel_count`
+    and `warnings` are the only places `read_unit` makes it visible."""
+
+    export_root = tmp_path / "exports_v2"
+    export_root.mkdir()
+    unit = publish_with_sentinels(export_root, "models/broken.glb", "vtmb:model:broken", slots=3)
+    row, _root = graph.read_unit(unit, export_root)
+    assert row.sentinel_count == 3
+    assert row.warnings["count"] == 3
+    assert row.warnings["reasons"] == ["sentinel: studio-texture-name-has-no-vmt"]
+
+
+def test_distinct_reasons_sharing_a_label_both_survive_one_units_reasons(tmp_path):
+    """Two distinct omissions in one unit both spoken as `"omitted: ..."` used to collapse to
+    whichever the decode listed first because `_warnings` deduplicated on the generic label; it
+    now deduplicates on the whole message, so both survive."""
+
+    export_root = tmp_path / "exports_v2"
+    export_root.mkdir()
+    unit = publish(
+        export_root, "models/prop.glb", "vtmb:model:prop",
+        omissions=[
+            {"reason": "legacy-vtx-equivalent"},
+            {"reason": "v2531-has-no-header-keyvalues-region"},
+        ],
+    )
+    row, _root = graph.read_unit(unit, export_root)
+    assert row.warnings["count"] == 2
+    assert row.warnings["reasons"] == [
+        "omitted: legacy-vtx-equivalent",
+        "omitted: v2531-has-no-header-keyvalues-region",
+    ]
 
 
 def test_a_published_unit_is_read_once_to_hash_and_parse_it(tmp_path, monkeypatch):
@@ -2044,6 +2113,19 @@ def test_the_summary_counts_what_a_report_line_needs(tmp_path):
     assert model.summary["checksPassed"] == len(CHECK_NAMES)
     assert model.summary["units"] == len(model.units)
     assert model.summary["references"] == len(model.references)
+
+
+def test_the_summary_totals_sentinel_references_across_the_corpus(tmp_path):
+    """A `vtmb:missing-<kind>:` sentinel names no dependency row, so `references[]` and every
+    `crossUnitChecks[]` row built over it never see one -- `summary.sentinelReferences` and
+    `summary.sentinelReferenceUnits` are what makes the corpus-wide gap visible instead."""
+
+    result, export_root = indexed(tmp_path)
+    publish_with_sentinels(export_root, "models/broken-a.glb", "vtmb:model:broken-a", slots=2)
+    publish_with_sentinels(export_root, "models/broken-b.glb", "vtmb:model:broken-b", slots=1)
+    model = decode_corpus_index(result, export_root)
+    assert model.summary["sentinelReferences"] == 3
+    assert model.summary["sentinelReferenceUnits"] == 2
 
 
 def test_one_corpus_yields_one_byte_identical_index(tmp_path):

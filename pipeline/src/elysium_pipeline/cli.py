@@ -396,6 +396,41 @@ def _corpus_index_unclaimed_report(config: ProjectConfig) -> str | None:
     return f"corpus index: {total:,} embedded PAKFILE members unclaimed ({breakdown})"
 
 
+def _corpus_index_sentinel_report(config: ProjectConfig) -> str | None:
+    """One warning line naming how many `vtmb:missing-<kind>:` sentinel references the corpus
+    carries -- a reference the referenced kind's own rules make unreachable, resolved `false` and
+    carrying no dependency row by contract, so it is invisible to `references[]`,
+    `danglingReferences[]` and every cross-unit check built over the graph.
+
+    Reads `summary.sentinelReferences`/`summary.sentinelReferenceUnits` directly rather than
+    re-deriving them, so the line prints against an index built before the summary carried the
+    counters (an index this old lacks them; a fresh export always agrees with it). These are
+    retail data facts, not a corpus defect -- the line is a warning, never a failure.
+    """
+
+    if config.export_v2_root is None:
+        return None
+    from elysium_pipeline.exporters.corpus_index_glb import index_path
+    from elysium_pipeline.formats.corpus_index_glb import CORPUS_INDEX_EXTENSION
+    from elysium_pipeline.formats.unit_contract import read_glb
+
+    published = index_path(config.export_v2_root)
+    if not published.is_file():
+        return None
+    document, _binary = read_glb(published)
+    root = (document.get("extensions") or {}).get(CORPUS_INDEX_EXTENSION)
+    if not isinstance(root, dict):
+        return None
+    summary = root.get("summary") or {}
+    total = int(summary.get("sentinelReferences", 0))
+    if total == 0:
+        return None
+    units = int(summary.get("sentinelReferenceUnits", 0))
+    return (
+        f"corpus index: {total:,} vtmb:missing-* sentinel reference(s) across {units:,} unit(s)"
+    )
+
+
 @app.command("doctor")
 def doctor(
     ctx: typer.Context,
@@ -410,6 +445,9 @@ def doctor(
             corpus_warning = _corpus_index_unclaimed_report(config)
             if corpus_warning is not None:
                 warnings = [*warnings, corpus_warning]
+            sentinel_warning = _corpus_index_sentinel_report(config)
+            if sentinel_warning is not None:
+                warnings = [*warnings, sentinel_warning]
         if json_output:
             typer.echo(
                 json.dumps(

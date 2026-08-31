@@ -197,6 +197,10 @@ class Unit:
     dependency_count: int = 0
     unresolved_count: int = 0
     unsupported_count: int = 0
+    #: `coverage.omittedProven` rows whose `asset` is a `vtmb:missing-<kind>:` sentinel -- a
+    #: reference the referenced kind's own rules make unreachable, resolved `false`, and carrying
+    #: no dependency row by contract, so this is the only table that counts it.
+    sentinel_count: int = 0
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -213,6 +217,7 @@ class Unit:
             "dependencyCount": int(self.dependency_count),
             "unresolvedCount": int(self.unresolved_count),
             "unsupportedCount": int(self.unsupported_count),
+            "sentinelCount": int(self.sentinel_count),
         }
 
 

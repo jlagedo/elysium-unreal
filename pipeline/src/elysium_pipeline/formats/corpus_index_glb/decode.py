@@ -104,6 +104,13 @@ def summary(
         "embeddedMembers": embedded_total,
         "embeddedUnclaimed": embedded_unclaimed,
         "embeddedUnclaimedByExtension": unclaimed_by_extension,
+        # A `vtmb:missing-<kind>:` sentinel is `resolved: false` and carries no dependency row by
+        # contract (`references.missing_sentinel`), so it is invisible to `references[]`,
+        # `danglingReferences[]` and every check built over the graph; this is the corpus-wide
+        # count of the retail gaps it stands in for -- a fact, not a defect, so it lands in the
+        # summary rather than a `crossUnitChecks[]` failure.
+        "sentinelReferences": sum(int(unit.sentinel_count) for unit in units),
+        "sentinelReferenceUnits": sum(1 for unit in units if unit.sentinel_count),
     }
 
 

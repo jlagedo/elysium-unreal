@@ -792,3 +792,67 @@ def test_completeness_and_warnings_report_every_incomplete_row():
         "omitted: empty-member",
         "anomaly: repeated-scalar-key",
     ]
+
+
+def test_a_sentinel_reference_in_omitted_proven_becomes_a_warning():
+    """A `vtmb:missing-<kind>:` sentinel produces no dependency row by contract and is graded
+    `coverage.omittedProven` instead; `warnings_for` is the only reader that speaks it."""
+
+    from elysium_pipeline.formats.unit_contract import warnings_for
+
+    root = _root(
+        coverage=coverage_block(
+            mapped=["identity"],
+            omitted_proven=[
+                {
+                    "path": "materialBindings.slots[0]",
+                    "reason": "studio-texture-name-has-no-vmt",
+                    "asset": missing_sentinel("material", "0:body"),
+                    "candidates": ["materials/body.vmt"],
+                }
+            ],
+        )
+    )
+    assert warnings_for(root) == ["sentinel: studio-texture-name-has-no-vmt"]
+
+
+def test_omitted_proven_rows_with_no_sentinel_asset_stay_silent():
+    """Byte-ledger residue is graded `omitted-proven` too, at a volume that would drown the
+    operator if every row became a warning; only a sentinel reference is carved out."""
+
+    from elysium_pipeline.formats.unit_contract import warnings_for
+
+    root = _root(
+        coverage=coverage_block(
+            mapped=["identity"],
+            omitted_proven=[
+                {"path": "mdl.padding", "reason": "compiler-trailer-residue"},
+                {"path": "vtx.comparison.overlap", "reason": "legacy-vtx-equivalent"},
+            ],
+        )
+    )
+    assert warnings_for(root) == []
+
+
+def test_sentinel_warnings_sit_between_coverage_and_root_level_warnings():
+    from elysium_pipeline.formats.unit_contract import warnings_for
+
+    root = _root(
+        coverage=coverage_block(
+            mapped=["identity"],
+            unresolved=[{"field": "flags"}],
+            omitted_proven=[
+                {
+                    "path": "materialBindings.slots[0]",
+                    "reason": "studio-texture-name-has-no-vmt",
+                    "asset": missing_sentinel("material", "0:body"),
+                }
+            ],
+        )
+    )
+    root["omissions"] = [{"reason": "empty-member"}]
+    assert warnings_for(root) == [
+        "unresolved: flags",
+        "sentinel: studio-texture-name-has-no-vmt",
+        "omitted: empty-member",
+    ]
