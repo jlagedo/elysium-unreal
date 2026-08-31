@@ -318,6 +318,7 @@ def class_lut_uv(graph, index_param, x, y, *, rows=128):
 
 
 def read_class_lut(graph, lut_texture_object, uv, x, y):
-    """Sample the class LUT at `uv` with a hard-pinned mip 0 (`TMVM_MipLevel`), so its 64 texel
-    rows never blend into each other regardless of what mip chain the texture carries."""
+    """Sample the class LUT at `uv` with a hard-pinned mip 0 (`TMVM_MipLevel`), so its 128 texel
+    rows (`MaxRows`, see `class_lut_uv`) never blend into each other regardless of what mip chain
+    the texture carries."""
     return graph.sample(lut_texture_object, uv, x, y, mip=0)

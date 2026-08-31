@@ -206,9 +206,11 @@ namespace ElysiumSurfaceParamsTwoTexture
 
 // `M_V2_Eyes` -- `eyes` family only (406 units). No NormalMap, no reflection lane at all (not in
 // the design's exposed-parameter table for this master): Roughness/Specular/Metallic are always
-// the class-LUT row. `IrisFrame` and `VampireEyes` are declared per the design's table but have
-// nothing in the corpus to wire (see `make_v2_materials.py::_build_eyes`'s docstring) --
-// declared, not wired.
+// the class-LUT row. `IrisFrame` is declared per the design's table but has nothing in the corpus
+// to wire (SF-6's runtime lane writes it on the MID) -- declared, not wired. `VampireEyes` is
+// wired against the `psh/eyes_vampire` disassembly (docs/vtmb/facial_animation.md:503): the iris
+// term moves to Emissive (self-illuminated) and BaseColor keeps only the sclera, darkened by the
+// iris coverage it lost -- see `make_v2_materials.py::_build_eyes`'s docstring.
 namespace ElysiumSurfaceParamsEyes
 {
 	namespace Textures
@@ -232,10 +234,13 @@ namespace ElysiumSurfaceParamsEyes
 
 // `M_V2_Water` -- `water` family only (24 units). No `BottomMaterial` slot (`$bottommaterial`
 // names a material, not a texture -- provenance only, design doc "M_V2_Water"). `UseFogEnable`/
-// `FogColor`/`FogStart`/`FogEnd` and the wave-animation scalars are declared per the design's
-// table but have no pixel-graph formula stated anywhere in the design (fog is a distance/height
-// effect and the wave terms are vertex/World-Position-Offset concerns, both out of this master's
-// scope) -- declared, not wired (see `make_v2_materials.py::_build_water`'s docstring).
+// `FogColor`/`FogStart`/`FogEnd` are wired (the shipped cheap program's own tail,
+// `watercheap_ps11`/`watercheap_ps20_old`): Emissive += FogColor.rgb x a PixelDepth-based
+// distance term, Opacity blended toward FogColor.a, both gated `UseFogEnable`. The wave-animation
+// scalars (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`, `WaterTimeFreq1/2`, `WaterWaveHeight/
+// Length`, `WaterSpecularMin/Max`, `CheapWaterStartDistance/EndDistance`, `WaterDepth`) remain
+// declared, not wired -- vertex/World-Position-Offset concerns, out of this master's scope (see
+// `make_v2_materials.py::_build_water`'s docstring).
 namespace ElysiumSurfaceParamsWater
 {
 	namespace Textures

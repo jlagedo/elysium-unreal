@@ -152,20 +152,36 @@ def _policy_scratch_dir():
 
 
 def _source_hash():
-    """sha256 of this file plus `matgraph.py`'s own text -- the exhaustive half of the recipe
-    stamp: any edit to either file invalidates every master's stamp even when `GRAPH_VERSION` was
-    not bumped for it."""
+    """sha256 of this file plus `matgraph.py`'s and `mat_fog.py`'s own text -- the exhaustive half
+    of the recipe stamp: any edit to any of the three files invalidates every master's stamp even
+    when `GRAPH_VERSION` was not bumped for it. `mat_fog.py` is in scope (review fix) because
+    `matgraph.connect` is `mat_fog.connect` re-exported, not reimplemented -- a change to its
+    refused-pin behaviour changes every master's graph exactly as much as a `matgraph.py` edit
+    does."""
     digest = hashlib.sha256()
-    for name in ("make_v2_materials.py", "matgraph.py"):
+    for name in ("make_v2_materials.py", "matgraph.py", "mat_fog.py"):
         digest.update(Path(__file__).with_name(name).read_bytes())
     return digest.hexdigest()
 
 
-def _import_png(name, png_bytes, *, srgb, compression, filter_nearest=False):
+def _import_png(name, png_bytes, *, srgb, compression, filter_nearest=False, force=False,
+                expected_class="Texture2D"):
+    """Review fix: the early-return path used to hand back whatever asset already sat at `name`
+    with no class check at all -- a stray non-`Texture2D` object left over from a prior defect (or
+    a hand-authored asset colliding with the generated name) would be silently reused forever. The
+    existing asset's class is now checked on every call, and `-PolicyForce` (`force=True`) always
+    deletes and re-creates regardless of what is already there, exactly like every generated
+    master itself."""
     asset = "%s/%s" % (PKG, name)
     existing = unreal.load_asset(asset)
     if existing:
-        return existing
+        if not force and existing.get_class().get_name() == expected_class:
+            return existing
+        if not force:
+            unreal.log_warning(
+                "[make_v2_materials] %s is a %s, not %s -- rebuilding"
+                % (asset, existing.get_class().get_name(), expected_class))
+        unreal.EditorAssetLibrary.delete_asset(asset)
     source = _policy_scratch_dir() / ("%s.png" % name)
     source.write_bytes(png_bytes)
     task = unreal.AssetImportTask()
@@ -192,7 +208,7 @@ def _import_png(name, png_bytes, *, srgb, compression, filter_nearest=False):
     return texture
 
 
-def _make_linear_white_mask():
+def _make_linear_white_mask(force=False):
     """A real linear 1x1 white mask -- the same trick `make_world_materials.py` uses, kept as its
     own V2-package copy rather than a cross-package reference."""
     png = (b"\x89PNG\r\n\x1a\n"
@@ -200,7 +216,7 @@ def _make_linear_white_mask():
            + _png_chunk(b"IDAT", zlib.compress(b"\x00\xff"))
            + _png_chunk(b"IEND", b""))
     return _import_png("T_LinearWhiteMask", png, srgb=False,
-                       compression=unreal.TextureCompressionSettings.TC_MASKS)
+                       compression=unreal.TextureCompressionSettings.TC_MASKS, force=force)
 
 
 def _load_class_lut():
@@ -261,7 +277,7 @@ def _dds_dx10_header(array_size):
     )
 
 
-def _make_default_frames_array():
+def _make_default_frames_array(force=False):
     """A real, white `Texture2DArray` -- the `BaseTextureFrames`/`NormalMapFrames` default (design
     doc "The animation and scroll lanes"), authored from a hand-built minimal DX10 DDS the same way
     `_make_linear_white_mask` hand-builds a PNG.
@@ -284,11 +300,23 @@ def _make_default_frames_array():
        FrameCount)` with the shipped default `FrameCount = 1.0`, so slice 1 is never sampled by any
        default-configured material; it exists purely so the importer classifies the asset
        correctly). The class is still verified after creation, and a genuine failure logs and
-       returns `None` rather than raising, so a content build never blocks on this one texture."""
+       returns `None` rather than raising, so a content build never blocks on this one texture.
+
+    Review fix: the class was previously verified only on the *first* run's creation path -- a
+    later run that found an already-existing (possibly wrongly-classed, from an earlier defect or
+    a hand-authored collision) asset at this name returned it unchecked. The existing asset's
+    class is now re-verified on every call, and `-PolicyForce` (`force=True`) always deletes and
+    rebuilds regardless of what is already there."""
     asset = "%s/T_V2_DefaultFrames" % PKG
     existing = unreal.load_asset(asset)
     if existing:
-        return existing
+        if not force and existing.get_class().get_name() == "Texture2DArray":
+            return existing
+        if not force:
+            unreal.log_warning(
+                "[make_v2_materials] %s is a %s, not Texture2DArray -- rebuilding"
+                % (asset, existing.get_class().get_name()))
+        unreal.EditorAssetLibrary.delete_asset(asset)
     pixel = b"\xff\xff\xff\xff" * 2  # two identical white RGBA8 texels, one per slice
     dds = b"DDS " + _dds_header(1, 1, 4) + _dds_dx10_header(2) + pixel
     source = _policy_scratch_dir() / "v2_default_frames.dds"
@@ -363,6 +391,42 @@ def _cited_unit_hashes(stems):
         sha = _unit_sha256(stem)
         hashes[stem] = sha if sha else "unavailable"
     return hashes
+
+
+def _probe_all_switches_true(mat, asset, switch_names):
+    """Compile-prove every static-switch branch, not just the all-false default
+    `recompile_material` already checks. A throwaway `MaterialInstanceConstant` parented to `mat`
+    with *every* switch in `switch_names` forced `True`, one shader compile
+    (`update_material_instance`), and a real-instruction-count assertion (`get_statistics`,
+    `import_materials.py::_compile_probe`'s own pattern) -- this is exactly the permutation the
+    flipbook-sampler defect needed to surface (`UseAnimatedFrames=true` is the one branch that
+    ever visits the `Texture2DArray` array-sample node; the same is true of `UseFixedCube` on
+    Lit/Unlit/Water/Refract, whose `RayTracingQualitySwitch`-gated cube-reflection branch
+    `recompile_material`'s default-false compile never reaches either). Deleted again immediately
+    after the probe, so it never lingers as a stray asset in the package."""
+    if not switch_names:
+        return
+    probe_name = "MI_V2CompileProbe_%s" % asset.rsplit("/", 1)[-1]
+    probe_asset = "%s/%s" % (PKG, probe_name)
+    if unreal.EditorAssetLibrary.does_asset_exist(probe_asset):
+        unreal.EditorAssetLibrary.delete_asset(probe_asset)
+    probe = bl.make_material_instance(probe_name, PKG, mat)
+    if probe is None:
+        _fail("%s: could not create the all-switches-true compile probe" % asset)
+    for name in sorted(set(switch_names)):
+        mel.set_material_instance_static_switch_parameter_value(
+            probe, name, True, update_material_instance=False)
+    mel.update_material_instance(probe)
+    stats = mel.get_statistics(probe)
+    instructions = getattr(stats, "num_pixel_shader_instructions", None)
+    if instructions is None:
+        instructions = stats.get_editor_property("num_pixel_shader_instructions")
+    unreal.EditorAssetLibrary.delete_asset(probe_asset)
+    if not instructions or instructions <= 0:
+        _fail("%s: all-switches-true compile probe reports %s pixel-shader instructions"
+              % (asset, instructions))
+    unreal.log("[make_v2_materials] %s all-switches-true probe: %s pixel-shader instructions"
+              % (asset, instructions))
 
 
 # ============================================================================================
@@ -460,14 +524,19 @@ def _flipbook_slice(g, rate_name, count_name, x, y):
 def _flipbook_sample(g, sample2d, frames_param_name, uv, rate_name, count_name, use_switch_name,
                      default_frames_texture, x, y, *, sampler):
     """The flipbook lane for one texture slot: a `Texture2DArray` `TextureObjectParameter` sampled
-    at `Append(uv, SliceIndex)`, selected over the plain 2D sample by `use_switch_name`. `sampler`
-    is `"color"` (`BaseTextureFrames`) or `"linear"` (`NormalMapFrames`) --
-    `TextureObjectParameter` never auto-derives a sampler type (see `Graph.tex_object`'s
-    docstring), unlike `tex`. Both switch branches are connected through the explicit `"RGBA"`
-    output: `sample2d` is a bare `TextureSampleParameter2D` and `array_sample` a bare
-    `TextureSample`, and both node types' *default* output is RGB only -- feeding the switch
-    through it would silently drop alpha for everything downstream of the returned node, including
-    its own default output (see `Graph.switch`'s docstring)."""
+    at `Append(uv, SliceIndex)`, selected over the plain 2D sample by `use_switch_name`. Every
+    caller passes `sampler="linear"` -- both `BaseTextureFrames` and `NormalMapFrames` bind
+    `T_V2_DefaultFrames`, a non-sRGB `TC_Default` `Texture2DArray` (`_make_default_frames_array`),
+    and `TextureObjectParameter` never auto-derives a sampler type from the bound texture asset
+    (see `Graph.tex_object`'s docstring), unlike `tex`. A base-lane object explicitly typed
+    `SAMPLERTYPE_COLOR` against that non-sRGB source is a real compile error ("Sampler type is
+    Color, should be Linear Color") on every `UseAnimatedFrames=true` permutation -- the one
+    `recompile_material`'s own default-false compile never visits, which is why the all-switches
+    compile probe (`_probe_all_switches_true`) exists. Both switch branches are connected through
+    the explicit `"RGBA"` output: `sample2d` is a bare `TextureSampleParameter2D` and
+    `array_sample` a bare `TextureSample`, and both node types' *default* output is RGB only --
+    feeding the switch through it would silently drop alpha for everything downstream of the
+    returned node, including its own default output (see `Graph.switch`'s docstring)."""
     frames_object = g.tex_object(frames_param_name, x, y, default_frames_texture, sampler=sampler)
     slice_index = _flipbook_slice(g, rate_name, count_name, x, y + 160)
     array_uv = g.append(uv, "", slice_index, "", x + 220, y + 320)
@@ -609,7 +678,7 @@ def _build_lit(mat, collection, lut_texture, default_frames, *, translucent):
     base_tex = _flipbook_sample(
         g, base_tex_2d, P.Textures.BaseTextureFrames, base_uv,
         P.Scalars.FrameRate, P.Scalars.FrameCount, P.Switches.UseAnimatedFrames, default_frames,
-        -1100, -600, sampler="color")
+        -1100, -600, sampler="linear")
     # `base_tex` is now a Switch node, not a bare TextureSample -- it has no named "RGB"/"A"
     # sub-pins of its own (those exist only on the two node types it switches between), so every
     # downstream read goes through these two masked values rather than a named-output access on
@@ -815,8 +884,8 @@ def _make_lit_master(name, *, translucent):
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
-    _make_linear_white_mask()
-    default_frames = _make_default_frames_array()
+    _make_linear_white_mask(force=force)
+    default_frames = _make_default_frames_array(force=force)
 
     mat, asset = _fresh(name, ism=True, nanite=True, skeletal=True, morph=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
@@ -834,6 +903,8 @@ def _make_lit_master(name, *, translucent):
     errors = mel.recompile_material(mat)
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    _probe_all_switches_true(mat, asset, LIT_PARAM_TABLE["switches"])
 
     bl.stamp_recipe(mat, fingerprint)
     if not bl.save(asset):
@@ -923,7 +994,7 @@ def _build_unlit(mat, collection, lut_texture, default_frames):
     base_tex = _flipbook_sample(
         g, base_tex_2d, P.Textures.BaseTextureFrames, base_uv,
         P.Scalars.FrameRate, P.Scalars.FrameCount, P.Switches.UseAnimatedFrames, default_frames,
-        -1100, -600, sampler="color")
+        -1100, -600, sampler="linear")
     base_tex_rgb = g.mask(base_tex, "rgb", -900, -420)
     base_tex_a = g.mask(base_tex, "a", -900, -340)
     white3 = g.const3(1.0, 1.0, 1.0, -900, -260)
@@ -964,8 +1035,12 @@ def _build_unlit(mat, collection, lut_texture, default_frames):
     reflect_dir = g.reflection_ws(-1900, 2000)
     envcube = g.cube(P.Textures.EnvMap, -1700, 2000, default=DEFAULT_CUBE)
     connect(reflect_dir, "", envcube, "UVs")
-    cube_add = g.mul(g.mul(envcube, "RGB", mask_sat, "", -1500, 2040), "",
-                     env_tint, "", -1300, 2080)
+    # `cube x mask x EnvMapTint x FixedCubeStrength` -- the reflection contract's full triple
+    # (review fix: FixedCubeStrength was not read at all on this master).
+    fixed_cube_strength = g.mpc("FixedCubeStrength", -1900, 2280)
+    cube_add = g.mul(
+        g.mul(g.mul(envcube, "RGB", mask_sat, "", -1500, 2040), "", env_tint, "", -1300, 2080),
+        "", fixed_cube_strength, "", -1100, 2120)
     cube_emissive = g.switch(P.Switches.UseEnvMap, cube_add, g.const3(0.0, 0.0, 0.0, -1100, 2040),
                              -900, 2000, default=False)
     # UseFixedCube is declared per the exposed-parameter table but this master has no second cube
@@ -1040,8 +1115,8 @@ def make_unlit():
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
-    _make_linear_white_mask()
-    default_frames = _make_default_frames_array()
+    _make_linear_white_mask(force=force)
+    default_frames = _make_default_frames_array(force=force)
 
     mat, asset = _fresh(name, ism=True, nanite=True, niagara_sprites=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
@@ -1054,6 +1129,8 @@ def make_unlit():
     errors = mel.recompile_material(mat)
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    _probe_all_switches_true(mat, asset, UNLIT_PARAM_TABLE["switches"])
 
     bl.stamp_recipe(mat, fingerprint)
     if not bl.save(asset):
@@ -1218,6 +1295,8 @@ def make_two_texture():
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
 
+    _probe_all_switches_true(mat, asset, TWOTEXTURE_PARAM_TABLE["switches"])
+
     bl.stamp_recipe(mat, fingerprint)
     if not bl.save(asset):
         _fail("save failed: %s" % asset)
@@ -1275,10 +1354,24 @@ def _build_eyes(mat, collection, lut_texture):
     wired, exactly like `M_V2_Unlit`'s `UseFixedCube`/`MetallicTint` or `M_V2_TwoTexture`'s
     `UseBumpOnBaseTexture2`.
 
-    `VampireEyes` is a switch with a deliberately empty body (design doc, **named divergence**):
-    the `Eyes_Vampire`/`Eyes_Vampire_Overbright2` programs (12 materials) ship compiled-only, with
-    no readable `.psh` and no other family's source revealing what they do, so the graph behind the
-    switch is identical to the non-vampire path pending decompilation of `psh/eyes_vampire*`.
+    `VampireEyes` (review fix -- `psh/eyes_vampire`, compiled-only, disassembled by the review):
+
+        mul r0, t0, v0            ; BaseColor(lit) = BaseTexture(sclera, t0) x vertex lighting v0
+        lrp r0, t1.w, t1, r0      ; ps.1.x lrp d,t,a,b -> LinearInterpolate(A=b, B=a, Alpha=t):
+                                   ; result = Lerp(A=r0 (lit sclera), B=Iris(t1), Alpha=Iris.a)
+        add r0.xyz, r0, t2        ; + Glint (t2), additive
+        mov r0.w, t0.w            ; Opacity(Mask) = BaseTexture.a
+
+    Read against the non-vampire `eyes.psh` above, the only real difference is *where* lighting
+    applies: the non-vampire program lights the whole lerped result (`BaseColor = Lerp(sclera,
+    iris, iris.a)`, lit uniformly by Lumen once it leaves this graph); the vampire program lights
+    the sclera *before* the lerp and the iris never receives `v0` at all -- the iris is
+    self-illuminated (unlit), the sclera alone is lit. There is no post-lighting `mul` by `v0` a
+    node graph can reproduce (Lumen lights whatever lands in `MP_BASE_COLOR` uniformly), so the
+    equivalent split under this pipeline routes the iris term to Emissive (bypassing lighting
+    entirely, the node-graph meaning of "unlit") and leaves only the sclera, darkened by the iris
+    coverage it lost, in BaseColor: `BaseColor = (1 - Iris.a) x BaseTexture`, `Emissive += Iris.rgb
+    x Iris.a`. `docs/vtmb/facial_animation.md:503` documents the vampire eye program pair by name.
 
     `Color` (`$color`'s VtMB `c3.rgb`) is multiplied into BaseColor for the same reason every other
     master multiplies it in, even though `eyes.psh`'s own register legend has no `c3` term at all
@@ -1303,7 +1396,16 @@ def _build_eyes(mat, collection, lut_texture):
 
     color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
     tinted = g.mul(blended, "", color, "", -500, -320)
-    g.to(tinted, "", unreal.MaterialProperty.MP_BASE_COLOR)
+
+    # `VampireEyes`: the sclera alone (darkened by the iris coverage it lost, `1 - Iris.a`) in
+    # BaseColor -- lit, like every other master's BaseColor -- with the iris term moved to
+    # Emissive below (self-illuminated, matching the disassembly). See the function docstring.
+    sclera_coverage = g.one_minus(iris_a, "", -700, -160)
+    sclera_only = g.mul(base_rgb, "", sclera_coverage, "", -500, -200)
+    base_color_vampire = g.mul(sclera_only, "", color, "", -300, -240)
+    base_color_final = g.switch(P.Switches.VampireEyes, base_color_vampire, tinted, -100, -280,
+                                default=False)
+    g.to(base_color_final, "", unreal.MaterialProperty.MP_BASE_COLOR)
 
     # -- surface class lookup: Eyes has no $envmap lane at all (not in the design's exposed-
     # parameter table for this master), so Roughness/Specular/Metallic are always the class row --
@@ -1318,13 +1420,18 @@ def _build_eyes(mat, collection, lut_texture):
     glint_rgb = g.mask(glint_tex, "rgb", -900, 100)
     black3 = g.const3(0.0, 0.0, 0.0, -900, 180)
     glint_emissive = g.switch(P.Switches.UseGlint, glint_rgb, black3, -700, 140, default=False)
-    g.to(glint_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 
-    # `IrisFrame`/`VampireEyes` are declared per the exposed-parameter table but have nothing in
-    # the corpus to wire (see the function docstring) -- declared, not wired.
+    # `VampireEyes`: the iris term the switch above moved out of BaseColor, self-illuminated
+    # (`Iris.rgb x Iris.a`, additive alongside Glint) -- see the function docstring.
+    iris_emissive_raw = g.mul(iris_rgb, "", iris_a, "", -700, 260)
+    iris_emissive = g.switch(P.Switches.VampireEyes, iris_emissive_raw, black3, -500, 300,
+                             default=False)
+    total_emissive = g.add(glint_emissive, "", iris_emissive, "", -300, 200)
+    g.to(total_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # `IrisFrame` is declared per the exposed-parameter table but has nothing in the corpus to
+    # wire (see the function docstring) -- declared, not wired.
     g.scalar(P.Scalars.IrisFrame, 0.0, -1100, 300)
-    g.switch(P.Switches.VampireEyes, g.const(1.0, -900, 340), g.const(0.0, -900, 420),
-            -700, 380, default=False)
 
     # -- Opacity / OpacityMask: eyes.psh's `mov r0.a, t0.a` -- BaseTexture.a, times the shared
     # Alpha knob (the four-parameter shared table: "Alpha ... feeds MP_OPACITY") ----------------
@@ -1366,6 +1473,8 @@ def make_eyes():
     errors = mel.recompile_material(mat)
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    _probe_all_switches_true(mat, asset, EYES_PARAM_TABLE["switches"])
 
     bl.stamp_recipe(mat, fingerprint)
     if not bl.save(asset):
@@ -1463,31 +1572,40 @@ def _build_water(mat, collection, lut_texture, default_frames):
       that deviation -- and therefore the whole perturbation -- is an exact `(0,0,0)` no-op
       regardless of `RefractAmount`, the same "default makes the knob inert" shape every other
       lane in this file uses.
-    - `MP_REFRACTION` is a flat `1.0` (`M_Refract`'s "1.0 is neutral" convention) -- `RefractAmount`
-      does not drive the refraction *magnitude* pin at all. It drives the `DuDvMap` perturbation
-      above instead, so refraction strength and the DuDv ripple share one coherent knob rather than
-      splitting across two overlapping pins. `CheapWater` "drops the refraction pass": it zeroes
-      that perturbation outright (a `Switch` ahead of the `Add`), leaving the plain `NormalMap` (or
-      flat) normal and no distortion.
+    - `MP_REFRACTION = 1 + RefractAmount/100`, the same "1.0 is neutral, `RefractAmount` is added
+      to one" convention `M_V2_Refract`'s own refraction pin uses (review fix: this master's
+      `MP_REFRACTION` was a flat `1.0` -- `RefractAmount` drove only the `DuDvMap` perturbation
+      below, never the refraction pin itself, so the knob never actually bent light).
+      `RefractAmount` still drives the `DuDvMap` perturbation too, so refraction strength and the
+      DuDv ripple share one coherent knob. `CheapWater` "drops the refraction pass" for both: it
+      zeroes the perturbation outright (a `Switch` ahead of the `Add`) *and* forces `MP_REFRACTION`
+      back to the flat neutral `1.0`, so a cheap-water instance is genuinely undistorted, not just
+      unrippled.
     - `BaseReflectFract` feeds the Fresnel node; its output scales `ReflectAmount/100` into
       `MP_SPECULAR` (gated `UseEnvMap`, mirroring every other master's envmap-gated specular
       branch) rather than a literal reflection-image blend, since Lumen already supplies the
       reflection image once Specular/Roughness are physically plausible. `ReflectTint`'s luma
       scales that same specular term, the same "grey tint scales Specular" shape `M_V2_Lit`'s own
-      reflection contract uses for a non-chromatic `$envmaptint`.
+      reflection contract uses for a non-chromatic `$envmaptint`. `BaseReflectFract`'s own default
+      is `0.0` and the Fresnel node's static `exponent` is `5.0` -- the shipped binary's own
+      values, not the design-era readable source's: `waterreflect_old`/`waterreflect_ps20_old`
+      read no `c3` register at all (register legend review: "`c3.a` is in the unshipped
+      `waterreflect.psh` source only"), which is R0 = 0 at Schlick's ps.1.1 exponent 5 (ps.2.0/
+      cheap use exponent 4, not reproduced here -- one exponent, matching the ps.1.1 default pass).
     - `WaterColor`/`WaterMurkiness`/`RefractTint`/`Color` combine into BaseColor: `BaseTexture ×
       Color × RefractTint` (the un-murky look, `RefractTint` transcribing `waterrefract.psh`'s
       `mul r0, t2, c1`) `Lerp`'d toward the flat `WaterColor` by `WaterMurkiness` -- an exact no-op
       at the shipped default (`WaterMurkiness` 0.0), same shape as every other neutral-by-default
       lane in this file.
-    - `UseFogEnable`/`FogColor`/`FogStart`/`FogEnd` and the wave-animation scalars
-      (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`, `WaterTimeFreq1/2`, `WaterWaveHeight/
-      Length`, `WaterSpecularMin/Max`, `CheapWaterStartDistance/EndDistance`, `WaterDepth`) are
-      **declared, not wired**: the design's post-lighting section states no pixel-graph formula for
-      any of them (fog is a distance/height effect and the wave terms are vertex/World-Position-
-      Offset concerns, both out of this generator's scope, the same way the sprite lane owns
-      `$spriteorigin`), and wiring an invented formula for a knob the design never states one for
-      would be a guess dressed as a transcription. Flagged here rather than silently absent.
+    - `UseFogEnable` -> `Emissive += FogColor.rgb * saturate((PixelDepth - FogStart) / (FogEnd -
+      FogStart))`, `Opacity` blended toward `FogColor.a` by the same distance term when enabled --
+      the transcription of the shipped cheap program's tail (`watercheap_ps11`/
+      `watercheap_ps20_old`: `mad r0.xyz, F, reflect, c0(g_FogColor)` / `mov r0.w, c0.w`, review
+      fix). The wave-animation scalars (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`,
+      `WaterTimeFreq1/2`, `WaterWaveHeight/Length`, `WaterSpecularMin/Max`,
+      `CheapWaterStartDistance/EndDistance`, `WaterDepth`) remain **declared, not wired**: they are
+      vertex/World-Position-Offset concerns, out of this generator's scope, the same way the sprite
+      lane owns `$spriteorigin`.
     """
     g = Graph(mat, collection=collection)
     P = WaterParams
@@ -1516,10 +1634,13 @@ def _build_water(mat, collection, lut_texture, default_frames):
     base_tex_rgb = g.mask(base_tex, "rgb", -900, -400)
     base_tex_a = g.mask(base_tex, "a", -900, -320, src_out="RGBA")
     white3 = g.const3(1.0, 1.0, 1.0, -900, -240)
+    # `default=False` (review fix): the shipped water corpus is mostly untextured (18/24 units),
+    # so a grey-checker default on the missing-parameter path is the wrong failure mode here --
+    # unlike Lit/Unlit, where most units do bind BaseTexture.
     base_selected = g.switch(P.Switches.UseBaseTexture, base_tex_rgb, white3, -700, -360,
-                             default=True)
+                             default=False)
     base_a_selected = g.switch(P.Switches.UseBaseTexture, base_tex_a, g.const(1.0, -900, -160),
-                               -700, -200, default=True)
+                               -700, -200, default=False)
 
     color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
     refract_tint = g.vec3(P.Vectors.RefractTint, (1.0, 1.0, 1.0, 1.0), -1100, -680)
@@ -1562,14 +1683,24 @@ def _build_water(mat, collection, lut_texture, default_frames):
                                        dudv_perturbation, -300, 640, default=False)
     combined_normal = g.add(normal_lit, "", dudv_perturbation_gated, "", -100, 400)
     g.to(combined_normal, "", unreal.MaterialProperty.MP_NORMAL)
-    g.to(g.const(1.0, -300, 760), "", unreal.MaterialProperty.MP_REFRACTION)
+
+    # `MP_REFRACTION = 1 + RefractAmount/100` (review fix -- see the function docstring), zeroed
+    # back to the flat neutral 1.0 under CheapWater, the same "drops the refraction pass" gate the
+    # DuDv perturbation above already uses.
+    refraction_from_amount = g.add(g.const(1.0, -300, 780), "", refract_scale, "", -100, 780)
+    refraction_final = g.switch(P.Switches.CheapWater, g.const(1.0, -300, 860),
+                                refraction_from_amount, 100, 820, default=False)
+    g.to(refraction_final, "", unreal.MaterialProperty.MP_REFRACTION)
 
     # -- surface class lookup + reflection: BaseReflectFract -> Fresnel -> ReflectAmount/
     # ReflectTint into Specular, gated UseEnvMap (mirrors every other master's envmap branch) ---
     class_roughness, class_specular, class_metallic = _class_lut_influenced(
         g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
 
-    base_reflect_fract = g.scalar(P.Scalars.BaseReflectFract, 0.2, -1900, 1900)
+    # Default 0.0 (review fix): the shipped `waterreflect_old`/`_ps20_old` binaries read no `c3`
+    # register at all -- R0 = 0 in the shipped game, not the 0.2 the design-era readable source
+    # implied. See the function docstring's Fresnel bullet.
+    base_reflect_fract = g.scalar(P.Scalars.BaseReflectFract, 0.0, -1900, 1900)
     fresnel_node = g.node(unreal.MaterialExpressionFresnel, -1700, 1900)
     # `MaterialExpressionFresnel`'s static exponent property is `exponent` (real-editor fact --
     # `Exponent`, C++ `UMaterialExpressionFresnel.h`); `ExponentIn`/`BaseReflectFractionIn` are the
@@ -1596,24 +1727,55 @@ def _build_water(mat, collection, lut_texture, default_frames):
     # authored fixed cube ... beats the chromatic branch" -- Water has no chromatic branch at all,
     # so there is nothing to beat, just the literal cube add gated UseFixedCube) ----------------
     env_tint = g.vec3(P.Vectors.EnvMapTint, (1.0, 1.0, 1.0, 1.0), -1900, 2240)
+    fixed_cube_strength = g.mpc("FixedCubeStrength", -1900, 2320)
     reflect_dir = g.reflection_ws(-1900, 2400)
     envcube = g.cube(P.Textures.EnvMap, -1700, 2400, default=DEFAULT_CUBE)
     connect(reflect_dir, "", envcube, "UVs")
-    fixed_raw = g.mul(g.mul(envcube, "RGB", env_tint, "", -1500, 2400), "", reflect_tint, "",
-                      -1300, 2440)
+    # `cube x EnvMapTint x FixedCubeStrength` (review fix: FixedCubeStrength was not read at all on
+    # this master) -- Water has no separate reflection-mask texture to fold in (unlike M_V2_Lit's
+    # mask_sat), so this is the reflection contract's cube/tint/strength triple without a mask
+    # term; ReflectTint keeps scaling the authored cube on top, unchanged from before this fix.
+    fixed_raw = g.mul(
+        g.mul(g.mul(envcube, "RGB", env_tint, "", -1500, 2400), "", fixed_cube_strength, "",
+             -1400, 2420),
+        "", reflect_tint, "", -1300, 2440)
     lumen_safe_fixed = g.node(unreal.MaterialExpressionRayTracingQualitySwitch, -1100, 2400)
     connect(fixed_raw, "", lumen_safe_fixed, "Normal")
     connect(g.const3(0.0, 0.0, 0.0, -1100, 2480), "", lumen_safe_fixed, "RayTraced")
     fixed_emissive = g.switch(P.Switches.UseFixedCube, lumen_safe_fixed,
                               g.const3(0.0, 0.0, 0.0, -900, 2400), -900, 2360, default=False)
-    g.to(fixed_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
 
-    # -- Opacity: Alpha x BaseTexture.a (translucent, no vertex-color/alpha lane on this master) -
+    # -- Fog: the shipped cheap program's own tail (`watercheap_ps11`/`watercheap_ps20_old`:
+    # `mad r0.xyz, F, reflect, c0(g_FogColor)` / `mov r0.w, c0.w`, review fix) -- `F` is the
+    # distance term `saturate((PixelDepth - FogStart) / (FogEnd - FogStart))`, additive on
+    # Emissive and blending Opacity toward FogColor.a, both gated UseFogEnable ------------------
+    fog_color = g.vec4(P.Vectors.FogColor, (0.0, 0.0, 0.0, 0.0), -1900, 4120)
+    fog_start = g.scalar(P.Scalars.FogStart, 1.0, -1900, 3960)
+    fog_end = g.scalar(P.Scalars.FogEnd, 400.0, -1900, 4040)
+    pixel_depth = g.node(unreal.MaterialExpressionPixelDepth, -1900, 4200)
+    fog_span = g.sub(fog_end, "", fog_start, "", -1700, 4000)
+    fog_numerator = g.sub(pixel_depth, "", fog_start, "", -1700, 4200)
+    fog_ratio = g.div(fog_numerator, "", fog_span, "", -1500, 4100)
+    fog_factor = g.sat(fog_ratio, "", -1300, 4100)
+    fog_color_rgb = g.mask(fog_color, "rgb", -1700, 4280, src_out="RGBA")
+    fog_color_a = g.mask(fog_color, "a", -1700, 4360, src_out="RGBA")
+    fog_emissive_raw = g.mul(fog_color_rgb, "", fog_factor, "", -1100, 4200)
+    fog_emissive = g.switch(P.Switches.UseFogEnable, fog_emissive_raw,
+                            g.const3(0.0, 0.0, 0.0, -900, 4280), -900, 4240, default=False)
+    total_emissive = g.add(fixed_emissive, "", fog_emissive, "", -700, 2400)
+    g.to(total_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # -- Opacity: Alpha x BaseTexture.a (translucent, no vertex-color/alpha lane on this master),
+    # blended toward FogColor.a by the same distance term when UseFogEnable is set -------------
     alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
-    opacity = g.mul(alpha_param, "", base_a_selected, "", 1900, 0)
-    g.to(opacity, "", unreal.MaterialProperty.MP_OPACITY)
+    opacity_base = g.mul(alpha_param, "", base_a_selected, "", 1900, 0)
+    opacity_fogged = g.lerp(opacity_base, "", fog_color_a, "", fog_factor, "", 2100, 40)
+    opacity_final = g.switch(P.Switches.UseFogEnable, opacity_fogged, opacity_base, 2300, 20,
+                             default=False)
+    g.to(opacity_final, "", unreal.MaterialProperty.MP_OPACITY)
 
-    # -- Declared, not wired -- see the function docstring's last bullet ------------------------
+    # -- Declared, not wired -- vertex/World-Position-Offset concerns, out of this generator's
+    # scope; see the function docstring's fog bullet ------------------------------------------
     g.scalar(P.Scalars.WaterDepth, 64.0, -1900, 3000)
     g.scalar(P.Scalars.WaterBaseFactor, 0.0, -1900, 3080)
     g.scalar(P.Scalars.WaterBaseMovementDist, 0.0, -1900, 3160)
@@ -1626,11 +1788,6 @@ def _build_water(mat, collection, lut_texture, default_frames):
     g.scalar(P.Scalars.WaterWaveLength, 0.0, -1900, 3720)
     g.scalar(P.Scalars.CheapWaterStartDistance, 0.0, -1900, 3800)
     g.scalar(P.Scalars.CheapWaterEndDistance, 0.0, -1900, 3880)
-    g.scalar(P.Scalars.FogStart, 1.0, -1900, 3960)
-    g.scalar(P.Scalars.FogEnd, 400.0, -1900, 4040)
-    g.vec4(P.Vectors.FogColor, (0.0, 0.0, 0.0, 0.0), -1900, 4120)
-    g.switch(P.Switches.UseFogEnable, g.const(1.0, -1700, 4200), g.const(0.0, -1700, 4280),
-            -1500, 4240, default=False)
 
 
 def make_water():
@@ -1652,9 +1809,13 @@ def make_water():
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
-    default_frames = _make_default_frames_array()
+    default_frames = _make_default_frames_array(force=force)
 
-    mat, asset = _fresh(name, ism=True, nanite=True)
+    # BLEND_Modulate/Translucent surfaces are not Nanite-compatible -- this master
+    # deliberately does not set used_with_nanite (review fix, matches M_V2_Decal's own
+    # note below). used_with_instanced_static_meshes stays on (the placement lane may use
+    # ISM for water planes).
+    mat, asset = _fresh(name, ism=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
     mat.set_editor_property(
@@ -1668,6 +1829,8 @@ def make_water():
     errors = mel.recompile_material(mat)
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    _probe_all_switches_true(mat, asset, WATER_PARAM_TABLE["switches"])
 
     bl.stamp_recipe(mat, fingerprint)
     if not bl.save(asset):
@@ -1747,7 +1910,7 @@ def _build_sprite(mat, collection, lut_texture, default_frames):
     base_tex = _flipbook_sample(
         g, base_tex_2d, P.Textures.BaseTextureFrames, uv0,
         P.Scalars.FrameRate, P.Scalars.FrameCount, P.Switches.UseAnimatedFrames, default_frames,
-        -1100, -600, sampler="color")
+        -1100, -600, sampler="linear")
     base_rgb = g.mask(base_tex, "rgb", -900, -420)
     base_a = g.mask(base_tex, "a", -900, -340)
 
@@ -1795,9 +1958,11 @@ def make_sprite():
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
-    default_frames = _make_default_frames_array()
+    default_frames = _make_default_frames_array(force=force)
 
-    mat, asset = _fresh(name, niagara_sprites=True)
+    # used_with_instanced_static_meshes (review fix): the placement lane may use ISM for
+    # sprite-shaped world geometry, not only Niagara particles.
+    mat, asset = _fresh(name, ism=True, niagara_sprites=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_UNLIT)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
@@ -1809,6 +1974,8 @@ def make_sprite():
     errors = mel.recompile_material(mat)
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    _probe_all_switches_true(mat, asset, SPRITE_PARAM_TABLE["switches"])
 
     bl.stamp_recipe(mat, fingerprint)
     if not bl.save(asset):
@@ -1866,8 +2033,10 @@ def _build_refract(mat, collection, lut_texture):
 
     `DuDvMap` and `NormalMap` both feed the one shared `MP_NORMAL` -- `NormalMap` is the lit bump
     (gated `UseNormalMap`, matching every other master's normal lane) and `DuDvMap` contributes an
-    unconditional additive ripple, sampled through the same UV, on top; DuDvMap's own default
-    (`DefaultNormal`, flat) makes an unbound slot an exact no-op the same way `M_V2_Water`'s does.
+    additive ripple, sampled through the same UV, scaled by `NormalMap.a x RefractAmount` (review
+    fix: `fxc/refract_ps20`'s own `scale = normalMap.a x RefractAmount`, not wired at all before
+    this fix). DuDvMap's own default (`DefaultNormal`, flat) makes its delta from flat an exact
+    `(0,0,0)` no-op regardless of the scale for an unbound slot, the same way `M_V2_Water`'s does.
 
     `UseEnvMap` is declared per the exposed-parameter table but not separately wired: this master's
     per-family table states no reflection-mask/specular formula at all (unlike Lit/Water), so
@@ -1888,9 +2057,12 @@ def _build_refract(mat, collection, lut_texture):
     base_rgb = g.mask(base_tex, "rgb", -900, -400)
     base_a = g.mask(base_tex, "a", -900, -320, src_out="RGBA")
     white3 = g.const3(1.0, 1.0, 1.0, -900, -240)
-    base_selected = g.switch(P.Switches.UseBaseTexture, base_rgb, white3, -700, -360, default=True)
+    # `default=False` (review fix, matching M_V2_Water): the shipped Refract/heatglow corpus is
+    # mostly untextured (both heatglow units and most refract units) -- a grey-checker default on
+    # the missing-parameter path is the wrong failure mode here.
+    base_selected = g.switch(P.Switches.UseBaseTexture, base_rgb, white3, -700, -360, default=False)
     base_a_selected = g.switch(P.Switches.UseBaseTexture, base_a, g.const(1.0, -900, -160),
-                               -700, -200, default=True)
+                               -700, -200, default=False)
 
     color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
     refract_tint = g.vec3(P.Vectors.RefractTint, (1.0, 1.0, 1.0, 1.0), -1100, -680)
@@ -1898,22 +2070,28 @@ def _build_refract(mat, collection, lut_texture):
                              -300, -460)
     g.to(base_color_final, "", unreal.MaterialProperty.MP_BASE_COLOR)
 
-    # -- Normal: NormalMap (lit bump, gated UseNormalMap) plus DuDvMap's unconditional ripple ----
+    # -- Normal: NormalMap (lit bump, gated UseNormalMap) plus DuDvMap's ripple, scaled by
+    # `NormalMap.a x RefractAmount` -- `fxc/refract_ps20`'s own `scale = normalMap.a x
+    # RefractAmount` (review fix: this master's DuDv delta was previously unconditional and
+    # unscaled, wired to neither NormalMap.a nor RefractAmount at all) ---------------------------
+    refract_amount = g.scalar(P.Scalars.RefractAmount, 20.0, -1100, 620)
     dudv_tex = g.tex(P.Textures.DuDvMap, -1100, 60, kind="normal")
     connect(uv0, "", dudv_tex, "UVs")
     dudv_rgb = g.mask(dudv_tex, "rgb", -900, 60)
     normal_tex = g.tex(P.Textures.NormalMap, -1100, 260, kind="normal")
     connect(uv0, "", normal_tex, "UVs")
+    normal_tex_a = g.mask(normal_tex, "a", -900, 340, src_out="RGBA")
     flat_normal = g.const3(0.0, 0.0, 1.0, -700, 140)
     normal_lit = g.switch(P.Switches.UseNormalMap, g.mask(normal_tex, "rgb", -700, 260),
                           flat_normal, -500, 220, default=False)
-    dudv_delta = g.sub(dudv_rgb, "", flat_normal, "", -700, 340)
-    combined_normal = g.add(normal_lit, "", dudv_delta, "", -300, 300)
+    dudv_delta = g.sub(dudv_rgb, "", flat_normal, "", -700, 400)
+    dudv_scale = g.mul(normal_tex_a, "", refract_amount, "", -700, 480)
+    dudv_perturbation = g.mul(dudv_delta, "", dudv_scale, "", -500, 440)
+    combined_normal = g.add(normal_lit, "", dudv_perturbation, "", -300, 300)
     g.to(combined_normal, "", unreal.MaterialProperty.MP_NORMAL)
 
     # -- Refraction: `M_Refract`'s own "1.0 is neutral" convention -- `RefractAmount` is added to
     # one rather than interpreted as glass IOR --------------------------------------------------
-    refract_amount = g.scalar(P.Scalars.RefractAmount, 20.0, -1100, 620)
     neutral = g.const(1.0, -1100, 700)
     refraction_magnitude = g.add(neutral, "", g.div(refract_amount, "", g.const(100.0, -900, 780),
                                                      "", -900, 700), "", -700, 700)
@@ -1971,7 +2149,9 @@ def make_refract():
         unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
         return unreal.load_asset(asset)
 
-    mat, asset = _fresh(name, ism=True, nanite=True)
+    # BLEND_Translucent is not Nanite-compatible -- this master deliberately does not set
+    # used_with_nanite (review fix). used_with_instanced_static_meshes stays on.
+    mat, asset = _fresh(name, ism=True)
     mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
     mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
     mat.set_editor_property(
@@ -1985,6 +2165,8 @@ def make_refract():
     errors = mel.recompile_material(mat)
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    _probe_all_switches_true(mat, asset, REFRACT_PARAM_TABLE["switches"])
 
     bl.stamp_recipe(mat, fingerprint)
     if not bl.save(asset):
@@ -2099,6 +2281,8 @@ def make_decal():
     errors = mel.recompile_material(mat)
     if errors:
         _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    _probe_all_switches_true(mat, asset, DECAL_PARAM_TABLE["switches"])
 
     bl.stamp_recipe(mat, fingerprint)
     if not bl.save(asset):

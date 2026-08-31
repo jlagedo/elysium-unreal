@@ -528,6 +528,15 @@ exactly these names; a name on one side and not the other is a build error, not 
 `T` texture, `S` scalar, `V` vector (a `VectorParameter` is a float4), `#` static switch. **Every
 default is stated**, because the default is what an instance the stage never touches renders as.
 
+**Every texture slot with a paired switch sets that switch when the texture is bound.**
+`NormalMap` → `UseNormalMap`, `BaseTexture2` → `UseBaseTexture2`, `CloudAlphaTexture` →
+`UseCloudAlpha` follow a plain "bound ⇒ on" rule; `EnvMap`/`EnvMapMask` have their own
+precedence-aware rules instead (the reflection contract, below), and `BaseTexture` follows the
+`UseBaseTexture` rule stated per master (a bound `$basetexture` whose resolved default pixel
+program is *not* a `*_NoTexture` variant). `Iris`/`Glint`/`DuDvMap` have no paired switch on any
+master — an eyes unit's `Iris` is always sampled when bound, `UseGlint` and the `DuDvMap` ripple
+are gated by proxy/design rules of their own.
+
 Four parameters are on **every** master and are not repeated in the tables below:
 
 | Name | Kind | Default | Meaning |
@@ -553,6 +562,21 @@ A flipbook needs an *array-typed* slot, so it is a second parameter rather than 
 slot; `UseAnimatedFrames` is the only thing that decides which of the two is sampled. All 72
 `animatedtexture` materials drive exactly one lane (measured: no material animates both), and the
 two lanes are separate because 12 materials scroll base UVs and normal UVs at different rates.
+
+**The stage binds the array.** `BaseTextureFrames`/`NormalMapFrames` bind the animated texture's
+own `TA_`-prefixed `Texture2DArray` sibling (`/ElysiumBaked/Textures/<dir>/TA_<stem>`, staged by
+the texture lane whenever the referenced unit's own `frames` exceeds 1), and `FrameCount`/
+`NormalFrameCount` are read from that same texture's staged slice count — not left at the inert
+default `1.0`. `UseAnimatedFrames`/`UseAnimatedNormalFrames` are only set `true` when that binding
+actually resolves; when the animated texture never staged as an array (unresolved dependency, or
+`frames <= 1`), the switch stays off rather than sampling `T_V2_DefaultFrames` and the unit's
+provenance names the gap (`animatedFramesArrayUnavailable`). Both flipbook object slots
+(`TextureObjectParameter`) sample through `SAMPLERTYPE_LINEAR_COLOR`, matching
+`T_V2_DefaultFrames`'s own non-sRGB `TC_Default` compression — a `SAMPLERTYPE_COLOR` object bound
+to that texture is a real compile error on every `UseAnimatedFrames=true` permutation, one the
+default-false compile `mel.recompile_material` runs never visits (see "Ordering, concurrency,
+tests, risks" -> the all-switches-true compile probe, `pipeline/unreal/make_v2_materials.py`'s
+`_probe_all_switches_true`).
 
 **The sine lane**, shared by every master that hosts a `sine` proxy, needs no static switch because
 it is **neutral by construction** — at the defaults every factor below is exactly `1`:
@@ -648,6 +672,21 @@ surface is already pure emissive — and is recorded as an anomaly, not a switch
 | `VampireEyes` | # | `false` | `$vampire` (12 units) |
 | `UseGlint` | # | `false` | `$glint` — set by **no** shipped material, so `false` on all 406 |
 
+**`VampireEyes` is wired**, against the `psh/eyes_vampire` disassembly
+(`docs/vtmb/facial_animation.md:503`, cited there by name):
+
+    mul r0, t0, v0            ; BaseColor(lit) = BaseTexture(sclera, t0) x vertex lighting v0
+    lrp r0, t1.w, t1, r0      ; result = Lerp(A=r0 (lit sclera), B=Iris(t1), Alpha=Iris.a)
+    add r0.xyz, r0, t2        ; + Glint (t2), additive
+    mov r0.w, t0.w            ; Opacity(Mask) = BaseTexture.a
+
+Read against the non-vampire `eyes.psh` above, the difference is *where* lighting applies: the
+non-vampire program lights the whole lerped result; the vampire program lights the sclera *before*
+the lerp, so the iris is self-illuminated (unlit) while the sclera alone is lit. There is no
+post-lighting `mul` a node graph can reproduce (Lumen lights whatever lands in `MP_BASE_COLOR`
+uniformly), so the equivalent split routes the iris term to Emissive and darkens BaseColor by the
+iris coverage it lost: `BaseColor = (1 - Iris.a) x BaseTexture`, `Emissive += Iris.rgb x Iris.a`.
+
 ##### `M_V2_Water`
 
 There is **no `BottomMaterial` texture slot.** `$bottommaterial` (24 units, 22 of them water)
@@ -665,7 +704,7 @@ provenance material reference, exactly like `$crackmaterial` and `$modelmaterial
 |---|---|---|---|---|---|---|
 | `RefractAmount` | `20.0` | `$refractamount` | | `WaterTimeFreq1` | `0.0` | `$watertimefreq1` |
 | `ReflectAmount` | `50.0` | `$reflectamount` | | `WaterTimeFreq2` | `0.0` | `$watertimefreq2` |
-| `BaseReflectFract` | `0.2` | `c3.a` — feeds the `Fresnel` node input of the same name | | `WaterWaveHeight` | `0.0` | `$waterwaveheight` |
+| `BaseReflectFract` | `0.0` | feeds the `Fresnel` node input of the same name — the *shipped binary's* default, not the design-era source's: `waterreflect_old`/`waterreflect_ps20_old` read no `c3` register at all, so R0 = 0 in the shipped game; `c3.a` is a real read in the unshipped `waterreflect.psh` source only | | `WaterWaveHeight` | `0.0` | `$waterwaveheight` |
 | `WaterDepth` | `64.0` | `$waterdepth` | | `WaterWaveLength` | `0.0` | `$waterwavelength` |
 | `WaterMurkiness` | `0.0` | `$watermurkiness` | | `CheapWaterStartDistance` | `0.0` | `$cheapwaterstartdistance` |
 | `WaterBaseFactor` | `0.0` | `$waterbasefactor` | | `CheapWaterEndDistance` | `0.0` | `$cheapwaterenddistance` |
@@ -685,10 +724,27 @@ provenance material reference, exactly like `$crackmaterial` and `$modelmaterial
 
 Static switches: `CheapWater` (`$forcecheap`, 2 units), `UseFogEnable` (`$fogenable`, 23),
 `UseEnvMap`, `UseFixedCube`, `UseBaseTexture`, `UseAnimatedNormalFrames`, `UseNormalMap` — every
-one of them defaulting `false`. Two water keys are **housed outside the material**: `$bumpframe` (20) is the
+one of them defaulting `false` on the master (18 of 24 water units bind no `$basetexture` at all,
+so a `true` default would grey-checker the majority; the stage resolves `UseBaseTexture` per unit
+the same way Lit/Unlit/Refract do). Two water keys are **housed outside the material**:
+`$bumpframe` (20) is the
 `animatedtexture` proxy's frame-number variable and becomes the flipbook slice index rather than a
 parameter of its own, and `$subdivsize` (13, values 64 and 16) is Source's water-surface
 tessellation size — geometry, owned by the map lane, provenance only here.
+
+`MP_REFRACTION = 1 + RefractAmount/100` (the same "1.0 is neutral" convention `M_V2_Refract` uses),
+zeroed back to `1.0` under `CheapWater` alongside the `DuDvMap` perturbation it already zeroes.
+`FixedCubeStrength` (an `MPC_ElysiumSurfaces` knob, not a per-instance parameter) scales the
+authored fixed-cube add here the same way it scales `M_V2_Lit`'s and `M_V2_Refract`'s — Water has
+no separate reflection-mask texture to fold in, so the term is `cube x EnvMapTint x
+FixedCubeStrength x ReflectTint`. `UseFogEnable` is now wired: the shipped cheap program's own
+tail (`watercheap_ps11`/`watercheap_ps20_old`: `mad r0.xyz, F, reflect, c0(g_FogColor)` / `mov
+r0.w, c0.w`) becomes `Emissive += FogColor.rgb x saturate((PixelDepth - FogStart) / (FogEnd -
+FogStart))`, with `Opacity` blended toward `FogColor.a` by the same distance term. The
+wave-animation scalars (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`, `WaterTimeFreq1/2`,
+`WaterWaveHeight/Length`, `WaterSpecularMin/Max`, `CheapWaterStartDistance/EndDistance`,
+`WaterDepth`) remain declared, not wired — vertex/World-Position-Offset concerns, out of this
+master's scope.
 
 ##### `M_V2_Sprite`
 
@@ -705,6 +761,13 @@ per-instance override. `$spriteorigin` (54 units) is **not** a parameter either 
 `$curve` (3 units, `0.2`) is read by a `subtract` inside a `playerproximity` chain, so it is a
 runtime-factory operand carried in provenance, not a master parameter.
 
+`bDisableDepthTest` (from `$ignorez`) is set unconditionally on the `M_V2_Sprite` master itself —
+material-only, never a per-instance override — but it only actually changes the visible result for
+a *translucent* sprite instance: an opaque sprite still writes and tests depth through its own
+opaque pass regardless of this flag (the render state that flag actually gates only applies to the
+translucent pass). `used_with_instanced_static_meshes` is also set (a placement-lane world sprite
+may use ISM, not only Niagara particles).
+
 ##### `M_V2_Refract`
 
 | Name | Kind | Default | Notes |
@@ -716,10 +779,16 @@ runtime-factory operand carried in provenance, not a master parameter.
 | `RefractAmount` | S | `20.0` | `$refractamount` |
 | `RefractTint` | V | `(1, 1, 1, 1)` | `$refracttint` |
 | `EnvMapTint` | V | `(1, 1, 1, 1)` | `$envmaptint` (7) |
-| `UseBaseTexture`, `UseNormalMap`, `UseEnvMap`, `UseFixedCube` | # | `false` | |
+| `UseBaseTexture`, `UseNormalMap`, `UseEnvMap`, `UseFixedCube` | # | `false` | `UseBaseTexture` defaults `false` on the master (both heatglow units and most refract units bind no `$basetexture`); the stage resolves it explicitly per unit, same rule as Lit/Unlit/Water |
 
 `ForceRefract` is **dropped**: `$forcerefract` is set by **0** of the 11,624 units and by no
 proxy, so the switch had no source.
+
+The `DuDvMap` ripple is scaled by `NormalMap.a x RefractAmount` (`fxc/refract_ps20`'s own `scale =
+normalMap.a x RefractAmount`), not an unconditional additive delta — an unbound `DuDvMap` still
+makes the whole perturbation an exact no-op regardless of the scale, the same "default makes the
+knob inert" shape every other lane uses. `FixedCubeStrength` (an `MPC_ElysiumSurfaces` knob)
+already scaled this master's fixed-cube add.
 
 ##### `M_V2_Decal`
 
@@ -728,6 +797,12 @@ proxy, so the switch had no source.
 the depth bias is applied by the decal component the placement lane spawns, because
 `unreal.MaterialProperty` in this 5.8 build exposes no `MP_PIXEL_DEPTH_OFFSET` for a Python-authored
 graph to connect.
+
+**`Alpha` is declared, not wired.** It is one of the four shared parameters every master exposes
+(the design's "on every master" table), but a `BLEND_Modulate` Unlit surface has no `MP_OPACITY`
+pin at all for this master to feed — the final `MP_EMISSIVE_COLOR` output *is* what the renderer
+multiplies onto the receiver. The parameter is still authored on the graph (for contract
+completeness with the other eight masters), simply with nothing downstream of it.
 
 ##### `M_V2_TwoTexture`
 
@@ -821,7 +896,7 @@ staging:
 | `vertexlitgeneric_envmappedbumpmapv2*` (pass 1) | **the constant reflection colour** — `mul r0.rgb, t3, c0` and `mov r0.a, c0.a`; *not* the overbright factor | — | — | — |
 | `cable` | the hemispheric ambient bias added to the `dp3` | — | — | — |
 | `waterrefract*` | — | **the refract tint** (`mul r0, t2, c1`) → `RefractTint` | — | — |
-| `waterreflect*` | — | — | — | **`c3.a` is the Fresnel R0** (`mad r0.a, r0.a, 1-c3.a, c3.a`) → the `Fresnel` node's `BaseReflectFract` |
+| `waterreflect*` (design-era `waterreflect.psh` source only) | — | — | — | **`c3.a` is the Fresnel R0** (`mad r0.a, r0.a, 1-c3.a, c3.a`) → the `Fresnel` node's `BaseReflectFract` — but the *shipped* `waterreflect_old`/`waterreflect_ps20_old` binaries read no `c3` register at all, so R0 = 0 (`BaseReflectFract` default `0.0`) in the shipped game; this row describes the unshipped source's intent, not what ships |
 | `eyes*` | — | — | — | — (no constants; everything is a texture stage) |
 
 **`M_V2_Lit` / `M_V2_LitTranslucent`** — `lightmappedgeneric.psh`, plus the envmap and self-illum
@@ -917,7 +992,10 @@ mul r0.a, t0, v0            ; co-issued -- Unlit opacity is BaseTexture.a * Vert
 ```
 
 An unlit surface has no lighting for Lumen to replace, so on this master the cube term **is**
-transcribed as the literal additive Emissive of the reflection contract whenever a cube exists.
+transcribed as the literal additive Emissive of the reflection contract whenever a cube exists,
+including `FixedCubeStrength` — the same `cube x mask x EnvMapTint x FixedCubeStrength` product
+`M_V2_Lit`'s own fixed-cube branch uses, gated `UseEnvMap` here (this master has no separate
+`UseFixedCube` path to switch onto).
 
 **`M_V2_Eyes`** — `eyes.psh`:
 
@@ -939,13 +1017,25 @@ glint as a **separate instruction** rather than folding it into a `mad` —
 Both reduce to "iris over eyeball, times lighting, plus glint" once the lighting term leaves, so
 the two rows collapse to one instance.
 
-**`VampireEyes` is a switch with a deliberately empty body *(named divergence)*.** The
-`Eyes_Vampire` and `Eyes_Vampire_Overbright2` programs (12 materials, `$vampire 1`) ship
-**compiled-only** — the install carries no readable `.psh` for either, and no other family's source
-reveals what they do. So: the switch **is** exposed and the stage **does** set it from `$vampire`,
-so the 12 materials are identifiable and re-skinnable later without a re-import; the graph behind
-it is **identical to the non-vampire path**. The divergence is named here and stays open pending
-decompilation of `psh/eyes_vampire*`; that decompilation is the evidence that would close it.
+**`VampireEyes` is wired.** The `Eyes_Vampire`/`Eyes_Vampire_Overbright2` programs (12 materials,
+`$vampire 1`) ship compiled-only, but the compiled `psh/eyes_vampire` disassembles cleanly
+(cited by name at `docs/vtmb/facial_animation.md:503`):
+
+```text
+mul r0, t0, v0            ; BaseColor(lit) = BaseTexture(sclera, t0) x vertex lighting v0
+lrp r0, t1.w, t1, r0      ; result = Lerp(A=r0 (lit sclera), B=Iris(t1), Alpha=Iris.a)
+add r0.xyz, r0, t2        ; + Glint (t2), additive
+mov r0.w, t0.w            ; Opacity(Mask) = BaseTexture.a
+```
+
+Read against the non-vampire `eyes.psh` above, the only real difference is *where* lighting
+applies: the non-vampire program lights the whole lerped result (Lumen lights whatever lands in
+`MP_BASE_COLOR`, uniformly); the vampire program lights the sclera *before* the lerp, so the iris
+never receives `v0` at all — a self-illuminated iris over a normally lit sclera. There is no
+post-lighting `mul` a node graph can reproduce, so the equivalent split routes the iris term to
+Emissive (self-illuminated) and darkens BaseColor by the iris coverage it lost:
+`BaseColor = (1 - Iris.a) x BaseTexture`, `Emissive += Iris.rgb x Iris.a`. Alpha comes from the
+sclera in both variants (`mov r0.w, t0.w` either way).
 
 **`M_V2_Water`** — the shipped pair is compiled-only, but `waterrefract.psh` and `waterreflect.psh`
 carry the shape. Refract is `texm3x2pad`/`texm3x2tex` through a DUDV map into a screen render
@@ -961,12 +1051,27 @@ mul r0, r0.a, t2
 ```
 
 The last `mad` is Schlick with R0 = `c3.a`, which is exactly Unreal's `Fresnel` node with
-`BaseReflectFract` = `BaseReflectFract` and `ExponentIn` = 5. Both render-target passes are
-**replaced**: `_rt_WaterRefraction` and `_rt_WaterReflection` become Unreal `Refraction` and Lumen
-reflection on one translucent surface, with the authored constants (`$waterdepth`,
-`$watermurkiness`, `$waterwaveheight`, …) carried as scalars driving the same shapes. The Fresnel
-is the one place VtMB *has* one, so it is transcribed rather than flattened. `$forcecheap` sets
-`CheapWater`, which drops the refraction pass.
+`BaseReflectFract` = `BaseReflectFract` and `ExponentIn` = 5 — but see the register-legend note
+above: the shipped binary reads no `c3` at all, so R0 = 0 (`BaseReflectFract` default `0.0`)
+ships, and this transcription is the unshipped source's stated intent, kept live as a knob. Both
+render-target passes are **replaced**: `_rt_WaterRefraction` and `_rt_WaterReflection` become
+Unreal `Refraction` and Lumen reflection on one translucent surface, with the authored constants
+(`$waterdepth`, `$watermurkiness`, `$waterwaveheight`, …) carried as scalars driving the same
+shapes. The Fresnel is the one place VtMB *has* one, so it is transcribed rather than flattened.
+`$forcecheap` sets `CheapWater`, which drops the refraction pass — both the `DuDvMap` perturbation
+feeding `MP_NORMAL` and `MP_REFRACTION` itself, which reverts to the flat neutral `1.0`.
+`MP_REFRACTION = 1 + RefractAmount/100` otherwise (`M_V2_Refract`'s own convention).
+
+The shipped cheap program's own tail (no readable source at all, but `watercheap_ps11`/
+`watercheap_ps20_old` both end identically) is also transcribed:
+
+```text
+mad r0.xyz, F, reflect, c0(g_FogColor)   ; Emissive += FogColor.rgb * a distance term F
+mov r0.w, c0.w                            ; Opacity -> FogColor.a
+```
+
+`F` is `saturate((PixelDepth - FogStart) / (FogEnd - FogStart))`; both effects are gated
+`UseFogEnable`.
 
 Water hosts two proxies and the master hosts their parameters: `animatedtexture` on **20** of the
 24 units (19 animating `$bumpmap` → `DuDvMap`, 1 animating `$normalmap` → `NormalMap`, all with
@@ -993,7 +1098,10 @@ colour, blend from the row.
 
 **`M_V2_Refract`** — no shipped source and no transcribed selector; the master is Unreal
 `Refraction` from `$dudvmap`/`$normalmap` scaled by `RefractAmount`, tinted by `RefractTint`.
-Stated as a reconstruction, not a transcription.
+Stated as a reconstruction, not a transcription. One real precedent is folded in, though:
+`fxc/refract_ps20`'s own perturbation scale, `scale = normalMap.a x RefractAmount`, so the
+`DuDvMap` ripple is not an unconditional additive delta but scaled by the bound `NormalMap`'s own
+alpha channel times the knob.
 
 **`M_V2_Decal`** — no program at all (the 38 materials fell back to `wireframe` in retail).
 `BLEND_Modulate` of `BaseTexture` over the receiver. Three consequences of that blend mode, stated
@@ -1120,6 +1228,21 @@ The Emissive placement is `docs/vtmb/reflections.md`'s translation carried forwa
 the visible additive term on a dark street, at the cost of not being VtMB's pre-lighting composite
 point *(provisional owner call)*. `FixedCubeStrength` is a settings knob; SF-5.3 tunes it. The
 cube's face order and handedness are the slice-2 `TC_` asset's, already proven headlessly.
+
+**The `cube × mask × EnvMapTint × FixedCubeStrength` add is uniform across every master with a
+fixed-cube lane** (`M_V2_Lit`, `M_V2_Water`, `M_V2_Unlit`, `M_V2_Refract`), gated `UseFixedCube` on
+each (Water/Refract; Lit's own `UseFixedCube` branch) or `UseEnvMap` (Unlit, which has no separate
+`UseFixedCube` path to switch onto). `mask` is `mask_sat` (the reflection-mask term above) where a
+master computes one at all — Lit and Unlit — and dropped from the product on Water and Refract,
+neither of which exposes a separate reflection-mask texture slot.
+
+**Fresnel default: `BaseReflectFract = 0.0`, `Exponent = 5`.** These are the *shipped binary's*
+values, not the design-era readable source's: `waterreflect_old`/`waterreflect_ps20_old` (and
+their `_ps11`/`_ps20`-suffixed siblings) read no `c3` register at all in the compiled programs, so
+R0 = 0 in the shipped game regardless of what `c3.a` the unshipped `waterreflect.psh` source reads.
+The register legend elsewhere in this document that cites `c3.a` as the Fresnel R0 input describes
+that unshipped source only — the shipped exponent is 5 (ps.1.1); the owner may raise
+`BaseReflectFract` on the knob or a per-instance override once a reference render calls for it.
 
 **The sphere variant needs nothing.** `$envmapsphere` is set on 11 units and `$envmapcameraspace`
 on 1. Of those 12, **10 do select a `*_EnvMapSphere*` vertex program** (`UnlitGeneric_EnvMapSphere`,

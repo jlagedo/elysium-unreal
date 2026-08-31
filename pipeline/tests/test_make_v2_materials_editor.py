@@ -20,6 +20,15 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 
 
+#: `MaterialExpressionFresnel`'s only two *static* (`set_editor_property`-reachable) properties --
+#: `ExponentIn`/`BaseReflectFractionIn` are connectable `FExpressionInput` pins instead
+#: (`connect(..., "ExponentIn")`/`"BaseReflectFractionIn"`, real-editor fact, `matgraph.Graph.
+#: fresnel`'s own docstring). Regression guard for the `d698166d` fixes (review finding 12): a
+#: caller that reached for `set_editor_property("exponent_in", ...)` -- the wrong, pin-shaped name
+#: -- used to succeed silently against this fake and fail only in the real editor.
+_FRESNEL_STATIC_PROPERTIES = frozenset({"exponent", "base_reflect_fraction"})
+
+
 class FakeNode:
     _next_id = [0]
 
@@ -31,6 +40,11 @@ class FakeNode:
         self.id = FakeNode._next_id[0]
 
     def set_editor_property(self, name, value):
+        if (getattr(self.cls, "__name__", "") == "MaterialExpressionFresnel"
+                and name not in _FRESNEL_STATIC_PROPERTIES):
+            raise AttributeError(
+                "MaterialExpressionFresnel has no static property %r -- ExponentIn/"
+                "BaseReflectFractionIn are connectable pins, not set_editor_property names" % name)
         self.props[name] = value
 
     def get_editor_property(self, name):
@@ -110,6 +124,27 @@ class FakeMel:
     def recompile_material(self, mat):
         return list(self.recompile_errors)
 
+    # -- MaterialInstanceConstant surface (`_probe_all_switches_true`) --------------------------
+    def set_material_instance_parent(self, mic, parent):
+        mic.props["parent"] = parent
+
+    def clear_all_material_instance_parameters(self, mic):
+        mic.props["switches"] = {}
+
+    def set_material_instance_static_switch_parameter_value(
+        self, mic, name, value, update_material_instance=True):
+        mic.props.setdefault("switches", {})[name] = value
+
+    def update_material_instance(self, mic):
+        mic.props["updated"] = True
+
+    def get_statistics(self, mic):
+        # A real compile counts real pixel-shader instructions; the fake reports a positive,
+        # deterministic count so `_probe_all_switches_true`'s own `instructions <= 0` check has
+        # something real to pass, and a test can still monkeypatch `mel.get_statistics` to force
+        # the zero-instruction failure path.
+        return SimpleNamespace(num_pixel_shader_instructions=42)
+
 
 class FakeEditor:
     def __init__(self):
@@ -124,6 +159,12 @@ class FakeEditor:
     # EditorAssetLibrary
     def does_asset_exist(self, path):
         return path in self.assets
+
+    def does_directory_exist(self, path):
+        return True
+
+    def make_directory(self, path):
+        pass
 
     def delete_asset(self, path):
         self.deleted.append(path)
@@ -164,11 +205,24 @@ class FakeEditor:
             package = task.get_editor_property("destination_path")
             path = "%s/%s" % (package, name)
             filename = task.get_editor_property("filename") or ""
-            # `_make_default_frames_array` writes a 2-slice DX10-array DDS -- confirmed live
-            # against the real editor (SF-4.3-part-3 cross-cutting ruling (c)) that this imports
-            # as a real Texture2DArray, where a 1-slice array header collapsed to a plain
-            # Texture2D. The fake mirrors that real-editor-verified outcome.
-            cls = "Texture2DArray" if filename.lower().endswith(".dds") else "Texture2D"
+            cls = "Texture2D"
+            if filename.lower().endswith(".dds"):
+                # `_make_default_frames_array` writes a DX10-array DDS -- confirmed live against
+                # the real editor (SF-4.3-part-3 cross-cutting ruling (c)) that this imports as a
+                # real Texture2DArray *only* when the DX10 header's own `arraySize` exceeds one; a
+                # 1-slice array header collapses to a plain Texture2D (review fix, finding 12: the
+                # fake used to always report Texture2DArray for any `.dds`, which could not have
+                # caught that collapse if a future edit reintroduced it). `arraySize` is the DX10
+                # header's 4th little-endian uint32, starting right after the 4-byte "DDS " magic
+                # and the fixed 124-byte legacy header (`_dds_header`/`_dds_dx10_header`'s own
+                # layout in `make_v2_materials.py`).
+                try:
+                    data = Path(filename).read_bytes()
+                    array_size = int.from_bytes(data[4 + 124 + 12:4 + 124 + 16], "little")
+                except (OSError, IndexError):
+                    array_size = 0
+                if array_size > 1:
+                    cls = "Texture2DArray"
             self.assets[path] = FakeAsset(name, package, cls)
 
     def load_asset(self, path):
@@ -208,6 +262,7 @@ def _fake_unreal(editor):
         "MaterialExpressionPanner", "MaterialExpressionVertexColor", "MaterialExpressionFresnel",
         "MaterialExpressionReflectionVectorWS", "MaterialExpressionTextureCoordinate",
         "MaterialExpressionRayTracingQualitySwitch", "MaterialExpressionIf",
+        "MaterialExpressionPixelDepth",
     ]
 
     ns = SimpleNamespace(
@@ -228,6 +283,8 @@ def _fake_unreal(editor):
         MaterialFactoryNew=type("MaterialFactoryNew", (), {}),
         MaterialParameterCollection=type("MaterialParameterCollection", (), {}),
         MaterialParameterCollectionFactoryNew=type("MaterialParameterCollectionFactoryNew", (), {}),
+        MaterialInstanceConstant=type("MaterialInstanceConstant", (), {}),
+        MaterialInstanceConstantFactoryNew=type("MaterialInstanceConstantFactoryNew", (), {}),
         MaterialSamplerType=_enum(
             "SAMPLERTYPE", "SAMPLERTYPE_COLOR", "SAMPLERTYPE_MASKS", "SAMPLERTYPE_NORMAL",
             "SAMPLERTYPE_LINEAR_COLOR"),
@@ -402,6 +459,63 @@ def test_policy_force_rebuilds_even_when_current(tmp_path, monkeypatch):
     assert asset.metadata["ElysiumRecipe"] == stamped
     for name, _params_attr, _blend in MASTERS:
         assert "%s/%s" % (PKG, name) in editor2.saved
+
+
+def test_wrongly_classed_default_frames_array_is_rebuilt_not_reused(tmp_path, monkeypatch):
+    """Review fix (finding 5): a prior run's `T_V2_DefaultFrames` that ended up a plain `Texture2D`
+    (the `arraySize = 1` collapse the module docstring names, or any other stale-asset defect) is
+    re-verified and rebuilt the next time any master's own build actually runs (not skipped by the
+    recipe-stamp early return), not returned unchecked because an asset already sits at that name.
+    `M_V2_Lit`'s own asset is dropped here so its build genuinely re-runs without `-PolicyForce`,
+    isolating the re-verify behaviour from the force-always-rebuilds path."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    frames_path = "%s/T_V2_DefaultFrames" % PKG
+    assert editor.assets[frames_path].cls == "Texture2DArray"
+    editor.assets[frames_path].cls = "Texture2D"  # simulate the sticky wrong-class defect
+    del editor.assets["%s/M_V2_Lit" % PKG]  # force M_V2_Lit's own build to actually re-run
+
+    editor2 = FakeEditor()
+    editor2.assets = editor.assets
+    editor2.command_line = ""
+    _load(editor2, tmp_path, monkeypatch, seed=False)
+
+    assert editor2.assets[frames_path].cls == "Texture2DArray"
+    assert any("not Texture2DArray" in message for message in editor2.warnings)
+
+
+def test_wrongly_classed_linear_white_mask_is_rebuilt_not_reused(tmp_path, monkeypatch):
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    mask_path = "%s/T_LinearWhiteMask" % PKG
+    assert editor.assets[mask_path].cls == "Texture2D"
+    editor.assets[mask_path].cls = "TextureCube"  # simulate a stray wrongly-classed asset
+    del editor.assets["%s/M_V2_Lit" % PKG]  # force M_V2_Lit's own build to actually re-run
+
+    editor2 = FakeEditor()
+    editor2.assets = editor.assets
+    editor2.command_line = ""
+    _load(editor2, tmp_path, monkeypatch, seed=False)
+
+    assert editor2.assets[mask_path].cls == "Texture2D"
+    assert any("not Texture2D" in message for message in editor2.warnings)
+
+
+def test_policy_force_rebuilds_the_default_frames_array_regardless_of_its_class(tmp_path, monkeypatch):
+    """`-PolicyForce` always deletes and recreates the shared helper textures too, independent of
+    the recipe-stamp skip -- distinct from the re-verify path above, which only fires when a
+    master's own build actually runs."""
+    editor = FakeEditor()
+    _load(editor, tmp_path, monkeypatch)
+    frames_path = "%s/T_V2_DefaultFrames" % PKG
+
+    editor2 = FakeEditor()
+    editor2.assets = editor.assets
+    editor2.command_line = "-PolicyForce=1"
+    _load(editor2, tmp_path, monkeypatch, seed=False)
+
+    assert editor2.assets[frames_path].cls == "Texture2DArray"
+    assert frames_path in editor2.deleted
 
 
 def test_missing_surfaces_collection_fails_loudly_rather_than_seeding_one(tmp_path, monkeypatch):
