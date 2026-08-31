@@ -210,9 +210,22 @@ shine; it is not a fact about the surfaces. Under Lumen every surface reflects b
 (Specular, Roughness, Metallic) and the renderer supplies the image. Consequence: the three
 zeroes flip; VtMB's cube data becomes the *how shiny / where* input — `$envmap` presence, the
 per-texel masks, `$envmaptint` — never the *what is reflected*. The calibration values (default
-specular, the roughness prior per surface class, the mask mapping) are open until measured
-against reference shots (plan SF-C1..C4). Old Unreal-side translations in `docs/vtmb/reflections.md`
-→ "The Unreal translation" and the legacy bake are inputs to that measurement, not decisions.
+specular, the roughness prior per surface class, the mask mapping) are open until the owner tunes
+them on editor knobs (plan SF-C0..C4). Old Unreal-side translations in `docs/vtmb/reflections.md`
+→ "The Unreal translation" and the legacy bake are starting values for those knobs, not decisions.
+
+**Calibration happens on knobs inside the editor, never in a loop (owner call, 2026-08-31).**
+Every value that needs a human eye is exposed as something the owner edits in the Unreal editor,
+sees change live in PIE, and saves with Ctrl+S — and the saved file is the file the pipeline
+reads. Three native surfaces, no Blueprint, no MCP, no debug window as the authoring path:
+a `UDeveloperSettings` page (Project Settings → Elysium → Surfaces, saved to a git-tracked
+`Config/DefaultElysium.ini`) for global scalars, mirrored into `MPC_ElysiumEnvironment` on edit;
+a `UDataAsset` edited as a grid for per-class tables, regenerating a lookup texture on edit; and
+the Material Instance editor for one material. Forbidden: an agent tuning values in a
+build–launch–look cycle, an agent capturing frames to "calibrate", and any constant that needs
+taste living in a Python or C++ literal. `validation/shots_diff.py` may record before/after; it is
+never the tuning method. PIE is the viewing window (`debug-tooling.md`: PIE is a viewer, and it
+picks up settings and collection edits without restart).
 
 ## Plan — surfaces track (export gap, surface properties, reflections, materials)
 
@@ -266,25 +279,34 @@ disk, so nothing failed. The contract exists; the exporter half was never built.
   hard `USoundWave` refs in the sound slice.
 - **SF-B4 Docs.** `seam_map_surface_property.md` gains "## Import"; ledger row here.
 
-### Track C — reflections: decide by measurement, not by rule
+### Track C — reflections: knobs first, then the owner tunes in PIE
 
-- **SF-C1 Flip the three zeroes, look.** On the legacy path (no new pipeline): `SPEC_BASE` 0.5,
-  `ROUGH_BASE` 0.8, light `specular_scale` 1.0; rebake one map; capture three reference shots
-  (Santa Monica street at night, Asylum bar, Venture Tower lobby) beside the retail game with
-  `validation/shots_diff.py`. Deliverable is the shots and the owner's call on the default policy.
-- **SF-C2 Roughness prior table.** One table, 63 rows keyed by `$surfaceprop` class (plaster,
-  concrete, tile, metal, wood, glass, carpet, flesh, …) → roughness, specular, metallic. Authored
-  in `docs/vtmb/surface_properties.md` beside the facts, tuned from C1's shots. Materials with no
-  `$surfaceprop` take a shader-family default.
+- **SF-C0 Knobs.** (1) `UElysiumSurfaceSettings : UDeveloperSettings` — `DefaultSpecular`,
+  `DefaultRoughness`, `DefaultMetallic`, `LightSpecularScale`, `MaskRoughnessMin/Max`,
+  `MaskSpecularScale`, `EnvTintScale`, `FixedCubeStrength`; `PostEditChangeProperty` writes them
+  into `MPC_ElysiumEnvironment` and the map light rig, so a PIE session follows the slider.
+  (2) `UElysiumSurfaceCalibration : UDataAsset` — one row per surface class (roughness, specular,
+  metallic), regenerating a 64×1 lookup texture on edit; masters sample it by a class index the
+  instance carries. (3) The legacy world masters read the collection and the LUT instead of
+  `ROUGH_BASE`/`SPEC_BASE`/`ROUGH_REFLECT`/`SPEC_REFLECT`; `bake_map.py` reads the settings class
+  for `specular_scale` instead of the literal. Done when dragging `DefaultSpecular` in Project
+  Settings changes a running PIE map and Ctrl+S persists it to `Config/DefaultElysium.ini`.
+- **SF-C1 Owner tunes the defaults.** Open a baked map in PIE, tune the C0 globals, save. No agent
+  in the loop; the committed ini is the deliverable. Optional: `shots_diff.py` before/after as a
+  record.
+- **SF-C2 Owner tunes the class table.** Fill the C0 data asset (classes keyed by `$surfaceprop`;
+  materials with none fall back to the shader-family default row), tune in PIE, save. The asset
+  is the deliverable; `docs/vtmb/surface_properties.md` only points at it.
 - **SF-C3 Probe origins → reflection captures.** `bake_map.py` reads the export_v2 map unit's
-  `cubemaps[]` origins and places one `SphereReflectionCapture` per origin (radius from map scale).
-  Faithful placement, modern content. Independent of A2/A3 — origins are in the map root already.
-- **SF-C4 Mask and tint mapping.** Settle `$envmapmask`/`$normalmapalphaenvmapmask`/base-alpha →
-  roughness and specular, and the `$envmaptint` grey-vs-chromatic split, against C1 shots of two
-  masked surfaces. Written as a Settled entry here and as the `EnvMap` feature spec for D1.
-- **SF-C5 Authored fixed cubes.** Confirm the literal additive sample for the ~340
-  `envmap/*`-naming materials, and the `$envmapmode` sphere variant (80). Owner looks at the
-  Asylum cube once under C1's rig.
+  `cubemaps[]` origins and places one `SphereReflectionCapture` per origin; the capture radius is
+  a C0 setting. Faithful placement, modern content. Independent of A2/A3 — origins are in the map
+  root already.
+- **SF-C4 Mask and tint mapping.** The mask → roughness/specular curve and the `$envmaptint`
+  grey-vs-chromatic split are C0 settings; the owner tunes them on two masked surfaces in PIE and
+  the result is written as a Settled entry here and as the `EnvMap` feature spec for D1.
+- **SF-C5 Authored fixed cubes.** `FixedCubeStrength` from C0 on the ~340 `envmap/*`-naming
+  materials and the `$envmapmode` sphere variant (80); the owner looks at the Asylum cube once in
+  PIE and settles literal-sample-or-not.
 
 ### Track D — materials import (slice 4)
 
