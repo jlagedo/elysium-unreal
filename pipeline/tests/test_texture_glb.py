@@ -14,6 +14,7 @@ from elysium_pipeline.formats.texture_glb import decode_texture, source as textu
 from elysium_pipeline.formats.texture_glb.decode import (
     ENVMAP,
     FORMATS,
+    TextureDecodeError,
     image_size,
     transform_cubemap_face,
 )
@@ -241,6 +242,64 @@ def test_a_repeated_full_resolution_stream_admits_one_level():
     assert row["byteLength"] == len(full)
     assert row["streamFullResolutionImages"] == 2.0
     assert row["admittedFullResolutionImageOnly"]
+
+
+def _closure_with_superfluous_ttz(raw_ttz: bytes):
+    """A texture whose declared inline chain is complete on its own, plus a superfluous `.ttz`.
+
+    `_pair` leaves `closure.ttz` `None` once every mip is inline, so this builds the TTH the same
+    way and then attaches a `.ttz` by hand -- the shape SF-1.2 found in 2 of the shipped
+    reflection probes: a pyramid that fits wholly inline yet still ships a TTZ neither the mip
+    table nor the image walk needs.
+    """
+
+    tth, _ttz = _pair(15, width=16, height=16, mips=3, inline=3)
+    base = "materials/synthetic/texture"
+    return TextureSourceClosure(
+        "synthetic/texture",
+        "vtmb:texture:synthetic/texture",
+        _source("tth", base + ".tth", tth),
+        _source("ttz", base + ".ttz", raw_ttz),
+    )
+
+
+def test_a_declared_inline_chain_superfluous_ttz_exports_and_validates():
+    """Finding 1: a TTH whose inline chain is already complete plus a superfluous `.ttz` must
+    export a unit that validates -- not one `admittedFullResolutionImageOnly` mislabels as
+    single-level when it actually admits the whole declared chain."""
+    raw_external = bytes([0xAB]) * 300
+    closure = _closure_with_superfluous_ttz(zlib.compress(raw_external))
+    model = decode_texture(closure)
+    assert model.mip_count == 3
+    row = _omission(model, "unexplained-leading-image-storage")
+    assert row is not None
+    assert row["admittedDeclaredInlineChain"] is True
+    assert row["admittedLevels"] == 3
+    assert row["sourceMips"] == [0, 1, 2]
+    assert not row["admittedFullResolutionImageOnly"]
+    # The `.ttz` span contributed nothing to the emitted image: it is proven-redundant storage,
+    # not `derived` content.
+    ttz_ledger = model.byte_coverage[1]
+    assert ttz_ledger["stateBytes"].get("derived", 0) == 0
+    assert ttz_ledger["stateBytes"]["omitted-proven"] == ttz_ledger["byteLength"]
+
+    from elysium_pipeline.exporters import texture_glb as texture_exporter
+
+    document, binary = texture_exporter.build_document(model)
+    summary = validation.validate_document(document, binary, source_members=closure.members())
+    assert summary["mips"] == 3
+
+
+def test_a_truncated_superfluous_ttz_is_not_admitted_silently():
+    """Finding 3: a truncated `.ttz` behind an already-complete inline chain must raise, not
+    publish a unit that silently treats the corrupt stream as proven-redundant."""
+    raw_external = bytes([0xAB]) * 300
+    complete = zlib.compress(raw_external)
+    # Drop only the trailer, the same "corrupt tail" shape `_inflate_with_recovery` is written to
+    # tolerate: almost every byte still decodes, but the stream never reaches `eof`.
+    closure = _closure_with_superfluous_ttz(complete[:-2])
+    with pytest.raises(TextureDecodeError, match="truncated"):
+        decode_texture(closure)
 
 
 def test_a_blob_larger_than_the_declared_colour_sample_is_not_the_colour_sample():
@@ -480,3 +539,124 @@ def test_pakfile_members_are_parsed_once_per_index():
     second = pakfile_index.pakfile_members(index, read_bytes=counting_read)
     assert first is second
     assert reads == ["maps/testmap.bsp"]
+
+
+def test_pakfile_members_returns_an_immutable_mapping():
+    """Finding 2: a caller must not be able to mutate the shared per-process memo."""
+
+    from types import MappingProxyType
+
+    from elysium_pipeline.formats.map_glb import pakfile_index
+
+    index, files = _pakfile_probe_install()
+    members = pakfile_index.pakfile_members(index, read_bytes=lambda _i, k: files.get(k))
+    assert isinstance(members, MappingProxyType)
+    with pytest.raises(TypeError):
+        members["testmap"] = ()
+
+
+def test_pakfile_members_key_on_read_bytes_identity_too():
+    """Finding 2: two different `read_bytes` injections over the same index do not share a memo,
+    even though nothing about the index itself changed."""
+
+    from elysium_pipeline.formats.map_glb import pakfile_index
+
+    index, files = _pakfile_probe_install()
+    read_one = lambda _index, key: files.get(key)
+    read_two = lambda _index, key: files.get(key)
+    first = pakfile_index.pakfile_members(index, read_bytes=read_one)
+    second = pakfile_index.pakfile_members(index, read_bytes=read_two)
+    assert first is not second
+    assert dict(first) == dict(second)
+
+
+def test_pakfile_members_do_not_collide_across_index_identity_reuse():
+    """Finding 2: a memo keyed on `id(index)` alone answers for the wrong index once the first
+    one is freed and CPython reuses its address. Two sequential, unrelated indexes -- the second
+    built only after the first is dropped -- must each get their own members regardless of
+    whether the allocator actually reused the address."""
+
+    import gc
+
+    from elysium_pipeline.formats.map_glb import pakfile_index
+
+    bsp_a = _bsp_with_pakfile({"materials/maps/mapa/stem.tth": b"aaaa"})
+    index_a = {"maps/mapa.bsp": ("loose", "synthetic/maps/mapa.bsp")}
+    files_a = {"maps/mapa.bsp": bsp_a}
+    members_a = pakfile_index.pakfile_members(
+        index_a, read_bytes=lambda _index, key: files_a.get(key)
+    )
+    assert set(members_a) == {"mapa"}
+    del index_a
+    gc.collect()
+
+    bsp_b = _bsp_with_pakfile({"materials/maps/mapb/stem.tth": b"bbbb"})
+    index_b = {"maps/mapb.bsp": ("loose", "synthetic/maps/mapb.bsp")}
+    files_b = {"maps/mapb.bsp": bsp_b}
+    members_b = pakfile_index.pakfile_members(
+        index_b, read_bytes=lambda _index, key: files_b.get(key)
+    )
+    assert set(members_b) == {"mapb"}
+
+
+def test_pakfile_failures_names_a_map_whose_pakfile_could_not_be_parsed():
+    """Finding 4: an unparseable BSP is not silent -- it is named by `pakfile_failures`."""
+
+    from elysium_pipeline.formats.map_glb import pakfile_index
+
+    index = {"maps/brokenmap.bsp": ("loose", "synthetic/maps/brokenmap.bsp")}
+    files = {"maps/brokenmap.bsp": b"too-short-to-be-a-bsp"}
+    read = lambda _index, key: files.get(key)
+    members = pakfile_index.pakfile_members(index, read_bytes=read)
+    assert members.get("brokenmap") is None
+    failures = pakfile_index.pakfile_failures(index, read_bytes=read)
+    assert "brokenmap" in failures
+    assert failures["brokenmap"]
+
+
+def test_pakfile_members_skip_a_member_outside_its_own_maps_prefix():
+    """Finding 5: a member whose key does not belong to the BSP it came from is a per-member
+    warning and a skip, not a silent cross-map leak."""
+
+    from elysium_pipeline.formats.map_glb import pakfile_index
+
+    bsp = _bsp_with_pakfile(
+        {
+            "materials/maps/testmap/good.tth": b"1234",
+            "materials/maps/othermap/bad.tth": b"5678",
+        }
+    )
+    index = {"maps/testmap.bsp": ("loose", "synthetic/maps/testmap.bsp")}
+    files = {"maps/testmap.bsp": bsp}
+    members = pakfile_index.pakfile_members(
+        index, read_bytes=lambda _index, key: files.get(key)
+    )
+    names = {member.name.lower() for member in members["testmap"]}
+    assert names == {"materials/maps/testmap/good.tth"}
+
+
+def test_load_source_closure_prefers_an_install_member_over_the_pakfile_probe():
+    """Finding 5: an install member under `materials/maps/**` wins over the PAKFILE probe of the
+    same spelling."""
+
+    index, files = _pakfile_probe_install()
+    index = dict(index)
+    files = dict(files)
+    index["materials/maps/testmap/c0_0_0.tth"] = ("loose", "synthetic/install-probe.tth")
+    files["materials/maps/testmap/c0_0_0.tth"] = b"install-wins-bytes"
+    closure = texture_source.load_source_closure(
+        index, "maps/testmap/c0_0_0", read_bytes=lambda _index, key: files.get(key)
+    )
+    assert closure.tth.data == b"install-wins-bytes"
+    assert closure.tth.path == "materials/maps/testmap/c0_0_0.tth"
+    assert closure.tth.origin["kind"] == "loose"
+
+
+def test_load_source_closure_rejects_a_flat_maps_key_with_no_stem():
+    """Finding 5: `maps/<name>` with nothing after it names no map-relative stem to resolve."""
+
+    index, files = _pakfile_probe_install()
+    with pytest.raises(texture_source.TextureSourceError, match="stem"):
+        texture_source.load_source_closure(
+            index, "maps/overview", read_bytes=lambda _index, key: files.get(key)
+        )

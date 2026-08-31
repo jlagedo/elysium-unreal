@@ -702,3 +702,31 @@ def test_patched_material_round_trips_and_resolves_its_envmap(tmp_path):
     # The patched copy is a real `Patch` shader, so the base edge is stated once, not twice.
     material_rows = [row for row in extension["dependencies"] if row.get("role") == "material"]
     assert len(material_rows) == 1
+
+
+def test_load_source_closure_prefers_an_install_member_over_the_pakfile_patched_copy():
+    """Finding 5: an install member under `materials/maps/**` wins over the PAKFILE patched
+    copy of the same spelling."""
+
+    index, files = _patched_material_install()
+    index = dict(index)
+    files = dict(files)
+    key = "materials/maps/testmap/plaster/wall_1_2_3.vmt"
+    index[key] = ("loose", "synthetic/install-patch.vmt")
+    files[key] = b'"LightmappedGeneric"\r\n{\r\n\t"$basetexture" "install/wins"\r\n}\r\n'
+    closure = material_source.load_source_closure(
+        index, "maps/testmap/plaster/wall_1_2_3", read_bytes=lambda _index, k: files.get(k)
+    )
+    assert closure.vmt.data == files[key]
+    assert closure.vmt.path == key
+    assert closure.vmt.origin["kind"] == "loose"
+
+
+def test_load_source_closure_rejects_a_flat_maps_key_with_no_stem():
+    """Finding 5: `maps/<name>` with nothing after it names no map-relative stem to resolve."""
+
+    index, files = _patched_material_install()
+    with pytest.raises(material_source.MaterialSourceError, match="stem"):
+        material_source.load_source_closure(
+            index, "maps/testmap", read_bytes=lambda _index, key: files.get(key)
+        )

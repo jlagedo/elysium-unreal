@@ -1430,6 +1430,29 @@ def _finalize_glb_corpus(
     return destinations
 
 
+def _print_pakfile_failures(label: str, index: dict) -> None:
+    """Warn about every map whose PAKFILE this run's shared index reader could not parse.
+
+    `pakfile_index.pakfile_members` skips an unparseable BSP silently by design (a map's own
+    seam is where that failure belongs), so a plural export is the seam that has to print it --
+    otherwise a whole map's PAKFILE-origin units go missing from the corpus with nothing in the
+    run's own output saying why.
+    """
+
+    from elysium_pipeline.formats.map_glb.pakfile_index import pakfile_failures
+
+    failures = pakfile_failures(index)
+    if not failures:
+        return
+    print(
+        f"! {label}: {len(failures)} map(s)' PAKFILE could not be parsed and contributed no "
+        "PAKFILE-origin units:",
+        flush=True,
+    )
+    for map_name in sorted(failures):
+        print(f"    {map_name}: {failures[map_name]}", flush=True)
+
+
 def _run_glb_pool(label: str, worker, items: list[str], output_root: Path, jobs: int) -> list[dict]:
     print(f"  {label}: {len(items)} unit(s) across {jobs} worker(s)", flush=True)
     rows = []
@@ -1507,6 +1530,7 @@ def export_all_texture_glbs(config, runner, *, jobs=None) -> list[Path]:
 
     index = install.build_index()
     textures = _texture_glb_sources(index)
+    _print_pakfile_failures("texture GLB", index)
     if not textures:
         raise OfflineExportFailure("texture GLB corpus has no selected TTH members")
     output_root = _export_v2_root(config, "textures")
@@ -1595,6 +1619,7 @@ def export_all_material_glbs(config, runner, *, jobs=None) -> list[Path]:
 
     index = install.build_index()
     materials = _material_glb_sources(index)
+    _print_pakfile_failures("material GLB", index)
     if not materials:
         raise OfflineExportFailure("material GLB corpus has no selected VMT members")
     output_root = _export_v2_root(config, "materials")

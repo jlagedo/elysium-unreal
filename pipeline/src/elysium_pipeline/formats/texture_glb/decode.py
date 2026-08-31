@@ -273,6 +273,7 @@ def decode_texture(closure) -> TextureModel:
     selected_end = image_mip_count
     incomplete_mips = []
     unexplained_stream = False
+    admitted_declared_inline_chain = False
     if len(compressed) < expected_external:
         tail_size = 0
         tail_start = image_mip_count
@@ -301,15 +302,29 @@ def decode_texture(closure) -> TextureModel:
         # pyramid, and sliding the chain onto the tail would compose every level below the first
         # out of unrelated bytes. Admit the full-resolution image alone.
         top = source_level_sizes[-1][3]
-        if actual_inline >= image_mip_count:
+        if actual_inline >= image_mip_count and not compressed_complete:
+            # The inline blob alone would already complete the chain, but the stream that makes
+            # it superfluous is itself truncated (`_inflate_with_recovery` returned a partial
+            # buffer). A partial stream cannot be proven redundant -- it might be a corrupt
+            # *primary* stream this shape coincidentally resembles -- so this is not the silent
+            # inline-chain shortcut below; raise like every other unexplained-shape failure.
+            raise TextureDecodeError(
+                f"{closure.texture_path}: a superfluous external stream of "
+                f"{len(compressed)} bytes is truncated and cannot be proven redundant"
+            )
+        elif actual_inline >= image_mip_count:
             # The admitted chain is already complete from the inline blob alone -- the shape
-            # SF-1.2 found in 27 of the shipped reflection probes, whose pyramid fits wholly
-            # inline yet still ships a TTZ. There is no level left for the external stream to
-            # supply, so none of it is selected; it is unexplained storage in full below.
+            # SF-1.2 found in 2 of the shipped reflection probes, whose pyramid fits wholly
+            # inline (`image_mip_count`, the outer TTH table's own mip count, not `vtf_mips`)
+            # yet still ships a `.ttz`. There is no level left for the external stream to
+            # supply, so none of it is selected; it is unexplained storage in full below, kept
+            # distinct from the single-full-resolution-image shape so a reader can tell a
+            # multi-level admitted chain from a one-level one.
             selected_start, selected_end = 0, actual_inline
             external_auxiliary = len(compressed)
             stream = trailing
             unexplained_stream = True
+            admitted_declared_inline_chain = True
         elif len(compressed) < top:
             raise TextureDecodeError(
                 f"{closure.texture_path}: a TTZ stream of {len(compressed)} bytes matches neither "
@@ -433,6 +448,17 @@ def decode_texture(closure) -> TextureModel:
                         else f"ttz.mip[{source_mip}].zlib"
                     ),
                 )
+        elif ttz_meaningful_length and admitted_declared_inline_chain:
+            # The declared chain is already complete from the inline blob alone, so no emitted
+            # level draws a byte from this stream: it is proven-redundant storage, not something
+            # `derived` represents. Its evidence is the `unexplained-leading-image-storage`
+            # omission row this shape always publishes.
+            ttz_ledger.claim(
+                0,
+                ttz_meaningful_length,
+                "omitted-proven",
+                "ttz.superfluous-zlib-stream (see omissions.unexplained-leading-image-storage)",
+            )
         elif ttz_meaningful_length:
             ttz_ledger.claim(0, ttz_meaningful_length, "derived", "zlib-primary-mip-stream")
         ttz_fill = closure.ttz.data[ttz_meaningful_length:]
@@ -468,14 +494,20 @@ def decode_texture(closure) -> TextureModel:
         })
     if unexplained_external:
         top = source_level_sizes[-1][3]
-        omissions.append({
+        row = {
             "role": "unexplained-leading-image-storage",
             "reason": "source image storage the declared mip chain does not account for",
             "byteLength": unexplained_external,
-            "sourceMips": list(range(selected_start)) if unexplained_stream else [],
+            "sourceMips": list(range(actual_inline)) if admitted_declared_inline_chain else [],
             "streamFullResolutionImages": round(len(compressed) / top, 4),
-            "admittedFullResolutionImageOnly": unexplained_stream,
-        })
+            "admittedFullResolutionImageOnly": (
+                unexplained_stream and not admitted_declared_inline_chain
+            ),
+        }
+        if admitted_declared_inline_chain:
+            row["admittedDeclaredInlineChain"] = True
+            row["admittedLevels"] = actual_inline
+        omissions.append(row)
     if levels[0].width != width or levels[0].height != height:
         omissions.append({
             "role": "primary-image-not-recoverable",

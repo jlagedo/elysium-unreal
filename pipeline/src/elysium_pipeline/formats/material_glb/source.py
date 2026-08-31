@@ -147,7 +147,22 @@ def load_source_closure(
         read_bytes = install.read
     normalized = normalize_material_path(material_path)
     if normalized.startswith("maps/"):
+        # An install member under `materials/maps/**` wins over the PAKFILE patched copy of the
+        # same spelling (`source_keys`'s dedup rule); today the install carries none, so this is
+        # only ever exercised by a synthetic install, but a real one that started shipping one
+        # must not silently keep routing to the BSP copy.
+        install_key = f"materials/{normalized}.vmt"
+        entry = index.get(install_key)
+        if entry is not None:
+            data = read_bytes(index, install_key)
+            if data is not None:
+                member = SourceMember("vmt", install_key, data, origin_of(entry))
+                return MaterialSourceClosure(normalized, asset_id(normalized), member)
         map_name, _, stem = normalized[len("maps/"):].partition("/")
+        if not stem:
+            raise MaterialSourceError(
+                f"{normalized!r} names no map-relative stem to resolve in a PAKFILE"
+            )
         member = _pakfile_vmt(index, map_name, stem, read_bytes)
         return MaterialSourceClosure(normalized, asset_id(normalized), member)
     key = f"materials/{normalized}.vmt"

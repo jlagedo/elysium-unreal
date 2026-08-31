@@ -155,7 +155,20 @@ def load_source_closure(
         read_bytes = install.read
     normalized = normalize_texture_path(texture_path)
     if normalized.startswith("maps/"):
+        # An install member under `materials/maps/**` wins over the PAKFILE probe of the same
+        # spelling (`source_keys`'s dedup rule); today the install carries none, so this is only
+        # ever exercised by a synthetic install, but a real one that started shipping one must not
+        # silently keep routing to the BSP copy.
+        base = f"materials/{normalized}"
+        if base + ".tth" in index:
+            tth = _member(index, base + ".tth", "tth", read_bytes, required=True)
+            ttz = _member(index, base + ".ttz", "ttz", read_bytes)
+            return TextureSourceClosure(normalized, asset_id(normalized), tth, ttz)
         map_name, _, stem = normalized[len("maps/"):].partition("/")
+        if not stem:
+            raise TextureSourceError(
+                f"{normalized!r} names no map-relative stem to resolve in a PAKFILE"
+            )
         tth = _pakfile_member(index, map_name, stem, ".tth", "tth", read_bytes, required=True)
         ttz = _pakfile_member(index, map_name, stem, ".ttz", "ttz", read_bytes, required=False)
         return TextureSourceClosure(normalized, asset_id(normalized), tth, ttz)

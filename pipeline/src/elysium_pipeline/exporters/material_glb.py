@@ -219,13 +219,21 @@ def _map_probe_stems(index: dict, map_name: str, read_bytes) -> frozenset[str]:
 
     from elysium_pipeline.formats.map_glb.pakfile_index import pakfile_members
 
-    suffix = ".tth"
+    # The same stem rule `texture_glb.source_keys` applies to every PAKFILE member: lower-case
+    # the whole name and drop the `materials/` prefix, keeping every subdirectory below it (a
+    # patched material's own directory, e.g. `plaster/`, is part of its stem). `rsplit('/', 1)`
+    # flattened those subdirectories away and skipped the lower-casing, so it could produce a stem
+    # `$envmap` never actually binds to.
+    prefix, suffix = "materials/", ".tth"
     members = pakfile_members(index, read_bytes=read_bytes).get(map_name, ())
-    return frozenset(
-        f"maps/{map_name}/{member.name.rsplit('/', 1)[-1][:-len(suffix)]}"
-        for member in members
-        if member.name.lower().endswith(suffix)
-    )
+    stems = set()
+    for member in members:
+        name = member.name.replace("\\", "/").lower()
+        if not name.endswith(suffix):
+            continue
+        stem = name[len(prefix):] if name.startswith(prefix) else name
+        stems.add(stem[:-len(suffix)])
+    return frozenset(stems)
 
 
 def export(

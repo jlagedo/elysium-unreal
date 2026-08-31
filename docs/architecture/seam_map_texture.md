@@ -56,7 +56,9 @@ uv run elysium export_v2 textures-glb
 ```
 
 The argument tolerates a `materials/` prefix and a `.tth`/`.ttz` suffix. The corpus form selects
-every `materials/**.tth` member the UP-first install index resolves.
+every install `materials/**.tth` member the UP-first install index resolves, **plus** every map
+BSP's own PAKFILE `.tth` members (`source_keys`; "Probes without a `.ttz`" below) — an install
+member of the same spelling wins where one exists, today never observed.
 
 The feature's code is isolated from `formats/tex_to_png.py` and from the map and character texture
 bakes: format aggregation lives below `elysium_pipeline.formats.texture_glb`, the product writer is
@@ -86,6 +88,26 @@ the referencing material, not of the texture identity.
 
 Both rows resolve through the UP-first policy independently.
 
+### PAKFILE-origin units
+
+A map's PAKFILE lump contributes texture units the install never carries: baked reflection
+probes, one `.tth` (plus a `.ttz` when the zip carries one — always optional, same as the
+install-origin row above) per probe. Their identity and destination follow the same shape as any
+other unit:
+
+```text
+maps/<map>.bsp -> PAKFILE -> materials/maps/<map>/<stem>.tth
+                              materials/maps/<map>/<stem>.ttz  (optional)
+  -> vtmb:texture:maps/<map>/<stem>
+  -> $ELYSIUM_EXPORT_V2_ROOT/textures/maps/<map>/<stem>.glb
+```
+
+Each member's `origin` is `bsp-pakfile`, nesting the winning `maps/<map>.bsp` install entry's own
+origin (`pakfile_origin`, `formats/unit_contract/origin.py`) — the probe did not resolve UP-first
+on its own; it rides inside the BSP that did. `sourceResolution.policy` still reads `"up-first"`
+for a PAKFILE-origin unit: the policy describes how the *carrying* BSP was selected, and the BSP
+resolved UP-first the ordinary way before its PAKFILE lump was ever opened.
+
 ### Probes without a `.ttz`
 
 SF-1.2 investigation (read-only, 2026-08-31), against the 108 map BSPs' PAKFILE zips ahead of
@@ -109,12 +131,16 @@ into a `.ttz`. Whether one probe's pyramid lands wholly inline or splits across 
 ordinary per-texture inline/external size threshold the map compiler applies to every VtMB
 texture, not a property of "probe" as a kind.
 
-What SF-1.3 must do: nothing special. The "Texture unit" section above already states the `.ttz`
-is optional, and `texture_glb.decode` already carries `closure.ttz` as `Optional[SourceMember]`
-throughout (`has_external_file = closure.ttz is not None`). SF-1.3's PAKFILE enumeration only
-needs to pair each probe's `.tth` member with its `.ttz` sibling when the zip carries one, and
-pass `None` when it does not — the same source closure a loose or VPK texture with no `.ttz`
-already produces today.
+What SF-1.3 did: nothing special. The "Texture unit" section above already stated the `.ttz` was
+optional, and `texture_glb.decode` already carried `closure.ttz` as `Optional[SourceMember]`
+throughout (`has_external_file = closure.ttz is not None`). SF-1.3's PAKFILE enumeration paired
+each probe's `.tth` member with its `.ttz` sibling when the zip carried one, and passed `None`
+when it did not — the same source closure a loose or VPK texture with no `.ttz` already produced.
+One shape neither this investigation nor SF-1.3's first pass covered: 2 of the 1,325 probes ship a
+`.ttz` alongside an already-complete inline pyramid, a superfluous stream `decode_texture` admits
+as `admittedDeclaredInlineChain` rather than mis-describing as a single-level
+`admittedFullResolutionImageOnly` admission (fixed after an independent review; see
+`test_a_declared_inline_chain_superfluous_ttz_exports_and_validates`).
 
 ### LaCroix examples
 

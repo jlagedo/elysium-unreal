@@ -278,6 +278,12 @@ def _check_omissions(extension: dict[str, Any], dimensions: dict[str, Any], ktx)
             raise TextureGlbValidationError(
                 "a stream the declared mip chain does not explain admits one level only"
             )
+        if unexplained.get("admittedDeclaredInlineChain"):
+            levels = unexplained.get("admittedLevels")
+            if not isinstance(levels, int) or levels != ktx["levelCount"]:
+                raise TextureGlbValidationError(
+                    "an admitted declared inline chain must match the emitted level count"
+                )
     return degraded
 
 
