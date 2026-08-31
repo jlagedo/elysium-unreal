@@ -82,11 +82,19 @@ class Graph:
             n.set_editor_property("texture", texture)
         return n
 
-    def tex_object(self, name, x, y, texture):
+    def tex_object(self, name, x, y, texture, *, sampler=None):
         """A `TextureObjectParameter` -- a texture handed to a `TextureSample` node rather than
-        sampled directly (the class LUT, read at a computed UV with a fixed mip)."""
+        sampled directly (the class LUT, read at a computed UV with a fixed mip; the animation
+        lane's `BaseTextureFrames`/`NormalMapFrames`). Unlike `tex`/`cube`,
+        `MaterialExpressionTextureObjectParameter` never auto-derives a sampler type from the
+        bound texture asset (confirmed against the real editor: it stays `SAMPLERTYPE_Color`
+        regardless of what is assigned) -- `sampler` (one of `_SAMPLER_DEFAULTS`'s keys) sets it
+        explicitly. Left `None` only where the caller does not care (there is currently no such
+        caller)."""
         n = self.node(unreal.MaterialExpressionTextureObjectParameter, x, y)
         n.set_editor_property("parameter_name", name)
+        if sampler is not None:
+            n.set_editor_property("sampler_type", _sampler_type(_SAMPLER_DEFAULTS[sampler][0]))
         if texture:
             n.set_editor_property("texture", texture)
         return n
@@ -128,12 +136,29 @@ class Graph:
         connect(n, "", m, "")
         return m
 
-    def switch(self, name, true_node, false_node, x, y, default=False):
+    def vec4(self, name, default, x, y):
+        """The raw `VectorParameter`, unmasked -- for a parameter whose `.a`/4th channel is read
+        downstream (`SineTargetMask`, `SineChannelMask`), where `vec3`'s RGB mask would drop it."""
+        n = self.node(unreal.MaterialExpressionVectorParameter, x, y)
+        n.set_editor_property("parameter_name", name)
+        n.set_editor_property(
+            "default_value", unreal.LinearColor(default[0], default[1], default[2],
+                                                 default[3] if len(default) > 3 else 1.0))
+        return n
+
+    def switch(self, name, true_node, false_node, x, y, default=False, *,
+               true_out="", false_out=""):
+        """`true_out`/`false_out` name the source output on each branch -- pass `"RGBA"` when a
+        branch is fed straight from a `VectorParameter`/`TextureSample`(`Parameter`)/`VertexColor`
+        node and a downstream consumer needs the 4th (alpha) channel: those three node types'
+        default (`""`) output is RGB only (real-editor fact, not the C++ field name), so a `Switch`
+        fed through the bare default output silently drops alpha for everything downstream of it,
+        including its own default output."""
         n = self.node(unreal.MaterialExpressionStaticSwitchParameter, x, y)
         n.set_editor_property("parameter_name", name)
         n.set_editor_property("default_value", default)
-        connect(true_node, "", n, "True")
-        connect(false_node, "", n, "False")
+        connect(true_node, true_out, n, "True")
+        connect(false_node, false_out, n, "False")
         return n
 
     def mpc(self, name, x, y):
@@ -153,6 +178,11 @@ class Graph:
     def const3(self, r, g, b, x, y):
         n = self.node(unreal.MaterialExpressionConstant3Vector, x, y)
         n.set_editor_property("constant", unreal.LinearColor(r, g, b, 0.0))
+        return n
+
+    def const4(self, r, g, b, a, x, y):
+        n = self.node(unreal.MaterialExpressionConstant4Vector, x, y)
+        n.set_editor_property("constant", unreal.LinearColor(r, g, b, a))
         return n
 
     # -- binary / unary algebra -------------------------------------------------------------
@@ -197,6 +227,16 @@ class Graph:
         connect(a, a_out, n, "")
         return n
 
+    def floor(self, a, a_out, x, y):
+        n = self.node(unreal.MaterialExpressionFloor, x, y)
+        connect(a, a_out, n, "")
+        return n
+
+    def frac(self, a, a_out, x, y):
+        n = self.node(unreal.MaterialExpressionFrac, x, y)
+        connect(a, a_out, n, "")
+        return n
+
     def clamp(self, a, a_out, lo, lo_out, hi, hi_out, x, y):
         n = self.node(unreal.MaterialExpressionClamp, x, y)
         # `Clamp`'s primary input pin has no name (`""`) -- confirmed against the real editor's
@@ -212,11 +252,14 @@ class Graph:
         connect(b, b_out, n, "B")
         return n
 
-    def mask(self, a, channels, x, y):
+    def mask(self, a, channels, x, y, *, src_out=""):
+        """`src_out` names `a`'s source output; pass `"RGBA"` when `a` is a bare
+        `VectorParameter`/`TextureSample`(`Parameter`)/`VertexColor` node and `channels` needs the
+        4th component -- see `switch`'s docstring for why the plain default output is not enough."""
         n = self.node(unreal.MaterialExpressionComponentMask, x, y)
         for ch in ("r", "g", "b", "a"):
             n.set_editor_property(ch, ch in channels)
-        connect(a, "", n, "")
+        connect(a, src_out, n, "")
         return n
 
     # -- time / motion / surface terms -------------------------------------------------------
@@ -255,11 +298,13 @@ class Graph:
             raise SystemExit("[matgraph] refused material property %s" % prop)
 
 
-def class_lut_uv(graph, index_param, x, y):
-    """`Append((SurfaceClassIndex + 0.5) / 64, 0.5)` -- the class-LUT texel centre for a 64-row,
-    1-tall lookup texture (mechanics doc 1b; design doc "Class index and physical material")."""
+def class_lut_uv(graph, index_param, x, y, *, rows=128):
+    """`Append((SurfaceClassIndex + 0.5) / rows, 0.5)` -- the class-LUT texel centre for a
+    `rows`-row, 1-tall lookup texture. `rows` is 128 (`MaxRows`,
+    `UElysiumSurfaceCalibration::MaxRows`) -- the 72 seeded class rows already exceed the earlier
+    64-row placeholder (mechanics doc 1b; design doc "Class index and physical material")."""
     half = graph.const(0.5, x, y + LAYOUT_ROW)
-    rows = graph.const(64.0, x, y + 2 * LAYOUT_ROW)
+    rows = graph.const(float(rows), x, y + 2 * LAYOUT_ROW)
     offset = graph.add(index_param, "", half, "", x + LAYOUT_COL, y)
     u = graph.div(offset, "", rows, "", x + 2 * LAYOUT_COL, y)
     v = graph.const(0.5, x + 2 * LAYOUT_COL, y + LAYOUT_ROW)

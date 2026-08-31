@@ -7,10 +7,10 @@
 //
 // Deliberately its own translation unit, not folded into ElysiumContentTests.cpp: SF-4.3
 // (this file) and other in-flight work land in the same window and touch that file for unrelated
-// reasons, so a new file is the low-conflict surface. Not yet wired into a CMake/Build.cs list
-// change beyond what UBT's glob already covers, and NOT built or run by the agent that wrote it
-// -- see `docs/project/seam_migration.md` for the concurrency rule (no editor/engine build runs
-// alongside another agent's). The next agent to touch Source/ builds and runs this tier.
+// reasons, so a new file is the low-conflict surface. Not built or run by the agent that wrote
+// this revision either -- see `docs/project/seam_migration.md` for the concurrency rule (no
+// editor/engine build runs alongside another agent's). The next agent to touch Source/ builds
+// and runs this tier; the parameter lists below are unverified against a real compile until then.
 //
 // Masters land family-by-family (mechanics doc "Ordering, concurrency, tests, risks"); this test
 // loads whichever of the nine V2 masters already exists and abstains on the rest, so it grows
@@ -20,8 +20,11 @@
 #if WITH_DEV_AUTOMATION_TESTS
 
 #include "ElysiumSurfaceParams.h"
+#include "Materials/Material.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstance.h"
+#include "MaterialShared.h"
+#include "RHIDefinitions.h"
 
 static constexpr EAutomationTestFlags GElysiumV2MaterialTestFlags =
 	EAutomationTestFlags_ApplicationContextMask | EAutomationTestFlags::ProductFilter;
@@ -39,42 +42,48 @@ namespace
 
 	// Every declared name for M_V2_Lit / M_V2_LitTranslucent, read off ElysiumSurfaceParams.h
 	// rather than restated as string literals -- a rename there is a compile error here, not a
-	// silently stale test.
+	// silently stale test. Each master's own array below inlines the four
+	// ElysiumSurfaceParamsShared names ("on every master") directly rather than concatenating a
+	// separate shared array, since TArrayView gives no cheap way to concatenate two fixed arrays
+	// at file scope.
 	static const FName LitTextures[] = {
+		ElysiumSurfaceParamsShared::Textures::SurfaceClassLUT,
 		ElysiumSurfaceParamsLit::Textures::BaseTexture,
-		ElysiumSurfaceParamsLit::Textures::Detail,
 		ElysiumSurfaceParamsLit::Textures::NormalMap,
 		ElysiumSurfaceParamsLit::Textures::EnvMapMask,
 		ElysiumSurfaceParamsLit::Textures::EnvMap,
+		ElysiumSurfaceParamsLit::Textures::BaseTextureFrames,
+		ElysiumSurfaceParamsLit::Textures::NormalMapFrames,
 	};
 	static const FName LitScalars[] = {
-		ElysiumSurfaceParamsLit::Scalars::Alpha,
+		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
+		ElysiumSurfaceParamsShared::Scalars::Alpha,
 		ElysiumSurfaceParamsLit::Scalars::SelfIllumAmount,
-		ElysiumSurfaceParamsLit::Scalars::DetailScale,
 		ElysiumSurfaceParamsLit::Scalars::EnvMapMaskScale,
 		ElysiumSurfaceParamsLit::Scalars::BumpScale,
-		ElysiumSurfaceParamsLit::Scalars::MinLight,
-		ElysiumSurfaceParamsLit::Scalars::MaxLight,
+		ElysiumSurfaceParamsLit::Scalars::BaseScrollRateU,
+		ElysiumSurfaceParamsLit::Scalars::BaseScrollRateV,
+		ElysiumSurfaceParamsLit::Scalars::BumpScrollRateU,
+		ElysiumSurfaceParamsLit::Scalars::BumpScrollRateV,
 		ElysiumSurfaceParamsLit::Scalars::FrameRate,
-		ElysiumSurfaceParamsLit::Scalars::ScrollRateU,
-		ElysiumSurfaceParamsLit::Scalars::ScrollRateV,
+		ElysiumSurfaceParamsLit::Scalars::FrameCount,
+		ElysiumSurfaceParamsLit::Scalars::NormalFrameRate,
+		ElysiumSurfaceParamsLit::Scalars::NormalFrameCount,
 		ElysiumSurfaceParamsLit::Scalars::SineMin,
 		ElysiumSurfaceParamsLit::Scalars::SineMax,
 		ElysiumSurfaceParamsLit::Scalars::SinePeriod,
 		ElysiumSurfaceParamsLit::Scalars::SineTimeOffset,
-		ElysiumSurfaceParamsLit::Scalars::WetnessScale,
-		ElysiumSurfaceParamsLit::Scalars::DecalDepthOffset,
-		ElysiumSurfaceParamsShared::SurfaceClassIndex,
 	};
 	static const FName LitVectors[] = {
-		ElysiumSurfaceParamsLit::Vectors::Color,
+		ElysiumSurfaceParamsShared::Vectors::Color,
 		ElysiumSurfaceParamsLit::Vectors::SelfIllumTint,
 		ElysiumSurfaceParamsLit::Vectors::EnvMapTint,
 		ElysiumSurfaceParamsLit::Vectors::TexScaleOffset,
+		ElysiumSurfaceParamsLit::Vectors::SineTargetMask,
+		ElysiumSurfaceParamsLit::Vectors::SineChannelMask,
 	};
 	static const FName LitSwitches[] = {
 		ElysiumSurfaceParamsLit::Switches::UseBaseTexture,
-		ElysiumSurfaceParamsLit::Switches::UseDetail,
 		ElysiumSurfaceParamsLit::Switches::UseNormalMap,
 		ElysiumSurfaceParamsLit::Switches::UseSelfIllum,
 		ElysiumSurfaceParamsLit::Switches::UseVertexColor,
@@ -86,15 +95,12 @@ namespace
 		ElysiumSurfaceParamsLit::Switches::UseFixedCube,
 		ElysiumSurfaceParamsLit::Switches::MetallicTint,
 		ElysiumSurfaceParamsLit::Switches::UseAnimatedFrames,
-		ElysiumSurfaceParamsLit::Switches::UseScroll,
-		ElysiumSurfaceParamsLit::Switches::IsDecalSurface,
+		ElysiumSurfaceParamsLit::Switches::UseAnimatedNormalFrames,
 	};
 
 	// `M_V2_LitTranslucent` is the same graph under a different material-only property set
 	// (mechanics doc / design "Master inventory" -- blend mode, two-sidedness and the opacity
-	// clip value are per-instance overrides, so they never multiply masters) and is not yet
-	// authored; it is listed so this test picks it up the day `make_v2_materials.py` grows it,
-	// with no edit required here.
+	// clip value are per-instance overrides, so they never multiply masters).
 	static const FElysiumV2MasterCase Cases[] = {
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Lit.M_V2_Lit"),
 			LitTextures, LitScalars, LitVectors, LitSwitches},
@@ -148,6 +154,24 @@ bool FElysiumV2MasterParamsTest::RunTest(const FString&)
 				{
 					return Info.Name == Param;
 				}));
+		}
+
+		// The compile gate this test closes: `UMaterialEditingLibrary::RecompileMaterial` only
+		// ever returns a real error list when the editor process that authored the asset was
+		// launched with `-AllowCommandletRendering` (an independent review of
+		// `make_v2_materials.py` found the umbrella launch was missing it, since fixed in
+		// `pipeline/src/elysium_pipeline/unreal.py`'s `generate_policy_content`). This tier runs
+		// with rendering, so asserting the saved master's own compiled resource carries no
+		// compile error is a second, independent check that does not depend on that launch flag
+		// having been present when the asset was generated.
+		if (UMaterial* MasterMaterial = Cast<UMaterial>(Master))
+		{
+			const FMaterialResource* Resource = MasterMaterial->GetMaterialResource(GMaxRHIFeatureLevel);
+			if (TestNotNull(*FString::Printf(TEXT("%s has a material resource"), Case.Path), Resource))
+			{
+				TestTrue(*FString::Printf(TEXT("%s compiles with no errors"), Case.Path),
+					Resource->GetCompileErrors().IsEmpty());
+			}
 		}
 	}
 

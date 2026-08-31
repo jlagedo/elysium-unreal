@@ -79,6 +79,9 @@ def _classes():
         "MaterialExpressionVertexColor",
         "MaterialExpressionFresnel",
         "MaterialExpressionReflectionVectorWS",
+        "MaterialExpressionConstant4Vector",
+        "MaterialExpressionFloor",
+        "MaterialExpressionFrac",
     ]
     return {name: type(name, (), {}) for name in names}
 
@@ -178,6 +181,18 @@ def test_switch_wires_both_branches_and_carries_the_default():
     assert (false_n, "", n, "False") in mel.connections
 
 
+def test_vec4_is_unmasked_unlike_vec3():
+    mel = FakeMaterialEditingLibrary()
+    module = _load(mel)
+    g = module.Graph(object())
+
+    n = g.vec4("SineTargetMask", (0.0, 0.0, 0.0, 0.0), 0, 0)
+
+    assert n.cls.__name__ == "MaterialExpressionVectorParameter"
+    assert n.props["parameter_name"] == "SineTargetMask"
+    assert not any(c[2] is not n and c[0] is n for c in mel.connections)
+
+
 def test_mpc_raises_without_a_bound_collection():
     mel = FakeMaterialEditingLibrary()
     module = _load(mel)
@@ -237,7 +252,7 @@ def test_to_succeeds_and_records_the_property_connection():
 # --- class LUT sampling (SF-4.1 knobs, mechanics doc 1b) --------------------------------------
 
 
-def test_class_lut_uv_is_the_texel_centre_of_a_64_row_lut():
+def test_class_lut_uv_is_the_texel_centre_of_a_128_row_lut():
     mel = FakeMaterialEditingLibrary()
     module = _load(mel)
     g = module.Graph(object())
@@ -246,7 +261,7 @@ def test_class_lut_uv_is_the_texel_centre_of_a_64_row_lut():
     uv = module.class_lut_uv(g, index, 0, 0)
 
     assert uv.cls.__name__ == "MaterialExpressionAppendVector"
-    # walk back: uv <- (u, v); u <- Divide(Add(index, 0.5), 64)
+    # walk back: uv <- (u, v); u <- Divide(Add(index, 0.5), 128)
     u_conn = next(c for c in mel.connections if c[2] is uv and c[3] == "A")
     divide = u_conn[0]
     assert divide.cls.__name__ == "MaterialExpressionDivide"
@@ -255,7 +270,7 @@ def test_class_lut_uv_is_the_texel_centre_of_a_64_row_lut():
     assert add.cls.__name__ == "MaterialExpressionAdd"
     assert any(c[0] is index for c in mel.connections if c[2] is add)
     rows_conn = next(c for c in mel.connections if c[2] is divide and c[3] == "B")
-    assert rows_conn[0].props["r"] == 64.0
+    assert rows_conn[0].props["r"] == 128.0
     half_conn = next(c for c in mel.connections if c[2] is add and c[3] == "B")
     assert half_conn[0].props["r"] == 0.5
 

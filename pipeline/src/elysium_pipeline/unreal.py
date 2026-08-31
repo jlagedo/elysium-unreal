@@ -237,6 +237,12 @@ def generate_policy_content(config, runner, generators: Sequence[str] | None = N
         str(config.project),
         "-run=pythonscript",
         f"-script={config.repo_root / 'pipeline/unreal/build_content.py'}",
+        # Without this, FApp::CanEverRender() is false, no FMaterialResource is ever allocated,
+        # and UMaterialEditingLibrary::RecompileMaterial() returns an empty error list
+        # unconditionally -- the V2 material masters' own compile gate (make_v2_materials.py)
+        # would silently accept a broken graph. Every other -run=pythonscript launch in this
+        # file already carries this flag; this one was the outlier.
+        "-AllowCommandletRendering",
     ]
     if generators is not None:
         content_arguments.append("-PolicyGenerators=" + ",".join(dict.fromkeys(generators)))

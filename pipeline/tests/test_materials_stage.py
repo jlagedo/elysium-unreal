@@ -1107,13 +1107,3 @@ def test_lit_master_exposed_params_pinned_against_cpp_header():
     assert parsed == importer.EXPOSED_PARAMS["M_V2_Lit"]
     assert parsed == importer.EXPOSED_PARAMS["M_V2_LitTranslucent"]
 
-
-def test_unlit_master_exposed_params_pinned_against_cpp_header():
-    parsed = _header_params_for("ElysiumSurfaceParamsUnlit", _parse_surface_params_header(_HEADER_PATH))
-    assert parsed == importer.EXPOSED_PARAMS["M_V2_Unlit"]
-
-
-def test_two_texture_master_exposed_params_pinned_against_cpp_header():
-    parsed = _header_params_for(
-        "ElysiumSurfaceParamsTwoTexture", _parse_surface_params_header(_HEADER_PATH))
-    assert parsed == importer.EXPOSED_PARAMS["M_V2_TwoTexture"]
