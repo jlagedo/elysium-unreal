@@ -228,11 +228,12 @@ failure** with the unit named and the reason printed — never an instance writt
 part quietly missing. That is the rule the three tables exist to make checkable.
 
 **Landed (2026-08-31), revised the same day (review pass — findings 1-9).** `uv run elysium import
-materials` lands the corpus with the required-slot rule (below) now enforced: 19,077 of the
-19,125 units stage (48 fail loudly, `textureClassMismatch` on the one slot with no other colour
-source), and `uv run elysium import materials --lookdev` places every tracked review-set entry
-still named in `lookdev_set.json`. Real numbers: `docs/project/seam_migration.md` → "Material
-import landed (2026-08-31)".
+materials` lands the corpus with the required-slot rule (below) now enforced: 19,121 of the
+19,125 units stage (4 fail loudly — `dev/ocean`, `dev/oceanbeneath`, `envmap/gioint`,
+`skybox/hav_env`, every one a `textureClassMismatch` the static frame-0 fallback cannot resolve
+either, since none is a multi-frame array), and `uv run elysium import materials --lookdev` places
+every tracked review-set entry still named in `lookdev_set.json`. Real numbers:
+`docs/project/seam_migration.md` → "Material import landed (2026-08-31)".
 
 ### Identity and naming
 

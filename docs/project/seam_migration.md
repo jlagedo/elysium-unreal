@@ -437,39 +437,44 @@ instructions. First full run: 11,141 imported, 7,984 reused (from an earlier par
 Lookdev: all 20 review-set entries placed (0 missing), 32 `StaticMeshActor`s all resolved to a real
 `MI_` instance (0 placeholders).
 
-**Revised the same day — the review pass closing findings 1-9.** The offline stage
-(`--stage-only`) against the same corpus, with every finding above applied, now stages **19,077**
-of the 19,125 units and **fails 48 loudly** — `REQUIRED_TEXTURE_SLOTS` (finding 5) turns a
-`textureClassMismatch` on `BaseTexture` from a silent anomaly into a per-unit stage failure
-whenever the slot is the surface's only colour source (mostly `sprites/`, `particle/` and
-`objects/` flipbook/UI units whose referenced texture staged as a `Texture2DArray`/`TextureCube`
-instead of a plain `Texture2D`, plus a handful of `M_V2_Lit`/`M_V2_Water` units with the same
-defect) — named per-unit in `manifest.json`'s `stageFailures`. Anomaly rollup over the 19,077
-staged units: `textureClassMismatch` 53, `selfIllumOnUnlitSurface` 9, `misspelledKey` 4,
-`translucentValue` 2. Omission rollup: `unitDivergenceProvenanceOnly` 15,
-`proxyTargetProvenanceOnly` 13, `animatedFramesArrayUnavailable` 12 — the same 12 units this
-finding's "known-stale" list names (`sprites/mflash_{colt,mac10,shotgun}`,
-`models/scenery/structural/controlpanel/screenf`,
+**Revised the same day — the review pass closing findings 1-9, then a closing-verification fix
+round.** The first `--stage-only` pass against findings 1-9 stated **48** loud stage failures
+(`REQUIRED_TEXTURE_SLOTS`, finding 5, turning a `textureClassMismatch` on the one slot with no
+other colour source into a per-unit failure) — mostly `sprites/`/`particle/`/`objects/` flipbook
+units whose referenced texture staged as a `Texture2DArray` where a plain `Texture2D` was
+expected. The first real full-corpus editor import under that state exposed two live defects (the
+compile probe's hit-proxy/depth-only requirement was never true for a headless commandlet, and
+`set_material_instance_static_switch_parameter_value`/the base-property-override write both
+allocate on every call regardless of `bUpdateMaterialInstance`, the actual cost behind an observed
+~1 instance/s import rate) — both fixed, and closing the loop on the 48 failures at the same time:
+44 of them are exactly the `Texture2DArray`-where-`Texture2D`-was-wanted shape a static frame-0
+fallback resolves (Source itself samples frame 0 of a multi-frame texture when nothing animates
+it), so the stage now binds the array instead of failing the unit. **Final `--stage-only` numbers:
+19,121 of the 19,125 units stage, 4 fail** — `dev/ocean`, `dev/oceanbeneath`, `envmap/gioint`,
+`skybox/hav_env`, each a `TextureCube`-where-`Texture2D`-(or vice versa)-was-wanted mismatch with
+no frames array to fall back onto (the `$envmapsphere`/break-glass pair the design already named).
+Anomaly rollup over the 19,121 staged units: `textureClassMismatch` 97 (up from 53 — every
+fallback-rescued unit still records the real mismatch, only its consequence changed),
+`selfIllumOnUnlitSurface` 9, `misspelledKey` 4, `translucentValue` 2. Omission rollup:
+`unitDivergenceProvenanceOnly` 15, `proxyTargetProvenanceOnly` 13,
+`animatedFramesArrayUnavailable` 12 — the same 12 units the "known-stale" list names
+(`sprites/mflash_{colt,mac10,shotgun}`, `models/scenery/structural/controlpanel/screenf`,
 `models/scenery/structural/sewerparts/water_fall_{big,small}`,
 `models/scenery/structural/temple/water_fall_small`,
 `models/scenery/structural/plaguebearer_sewer/plague_waterfall{,01}`,
 `models/scenery/structural/warrens/warr01_waterslide`,
-`models/scenery/structural/bradbury/blood_pool`), spot-checked directly in the manifest: every one
-now stages with `UseAnimatedFrames`/`UseAnimatedNormalFrames` explicit `False`, not merely absent.
-A 500-unit sample of the corpus's 7,499 patched instances resolves a non-empty root `master` in
-every case (finding 7). `uv run elysium import materials` (the full editor pass, re-landing all
-19,077 staged instances against the new recipe shape — every entry's recipe hash changed, since
-`switches`/`basePropertyOverrides` are now full-state and `recipe` now covers `physMaterial` and a
-sidecar digest, so this is a one-time full re-import) was launched the same session; it takes
-noticeably longer per instance than the 681 s baseline above (the compile probe now runs per
-`(parent, switch-combination, blend, two-sided, opacity-clip)` tuple instead of per
-`(parent, switch-combination, blend)`, and additionally calls `get_num_shader_types`/`list_shaders`
-per probed instance) — see the commit history for the final imported/reused/failed/seconds count
-once that run's `import_report.json` is captured. One cross-cutting consequence for the lookdev
-lane (owned by another agent, not touched here): `lookdev_set.json`'s `"Sprite (coplights)"` entry
-names `sprites/coplights`, one of the 48 newly-loud failures, so `--lookdev` will not find that
-asset in the manifest until the review set is pointed at a unit whose `BaseTexture` actually
-stages.
+`models/scenery/structural/bradbury/blood_pool`) — those aren't flipbook-array-unavailable
+themselves (their own textures did stage), but every one of the 12 units this omission was
+originally measured against still spot-checks with `UseAnimatedFrames`/`UseAnimatedNormalFrames`
+explicit `False`, not merely absent. A 500-unit sample of the corpus's 7,499 patched instances
+resolves a non-empty root `master` in every case (finding 7). `uv run elysium import materials`
+(the full editor pass, re-landing all 19,121 staged instances against the new recipe shape) was
+re-launched with both live fixes applied; see the commit history for the final
+imported/reused/failed/seconds count once that run's `import_report.json` is captured. One
+cross-cutting consequence for the lookdev lane (owned by another agent, not touched here):
+`lookdev_set.json`'s `"Sprite (coplights)"` entry names `sprites/coplights`, which the static
+frame-0 fallback now resolves cleanly, so that particular cross-reference risk did not
+materialize.
 
 **Closing verification run confirmed the masters against a real editor pass (2026-08-31).** The
 numbers above were recorded from an import that ran against the *old* on-disk masters — the
@@ -521,6 +526,39 @@ Two editor-only defects surfaced and were fixed:
   sidecar (`faces`/`frames`, mirroring `textures.py::_texture_class`) and skipping the bind —
   leaving the master's default, recording a `textureClassMismatch` anomaly — when the staged class
   disagrees with what the parameter expects.
+
+**Final verification run, after the static frame-0 fallback and the perf fix (2026-08-31).**
+Closes the loop the two entries above left open: the nine masters' `b4576d12` graph edits (sine
+lane widths, animated normal unpack, usage flags, TwoTexture UVs/opacity mask, `GRAPH_VERSION` 3)
+still needed the same real `-PolicyForce=1` commandlet rebuild (`docs/project/seam_migration.md`'s
+own recorded invocation, above) run again on top of `73814227`'s fixes. That run: all nine masters
+recompiled clean, 0 errors, 7 warnings (the same benign linker/reference-gathering notices), the
+all-switches-true probe passing for every one (pixel-shader instruction counts: `M_V2_Lit` 298,
+`M_V2_LitTranslucent` 1,889, `M_V2_Unlit` 174, `M_V2_TwoTexture` 251, `M_V2_Eyes` 221, `M_V2_Water`
+1,864, `M_V2_Sprite` 164, `M_V2_Refract` 1,839, `M_V2_Decal` 150). `uv run elysium build` (0
+errors), `uv run elysium test Elysium.Policy.V2MasterParams` (1 of 1) and `uv run elysium test
+Substrate` (408 of 408) all passed. A master-graph rebuild does not change any instance's own
+recipe, so `uv run elysium import materials --force` (a from-scratch rebuild of all 19,121 staged
+instances, to measure the perf fix at full scale) landed 19,121 imported, 0 reused, 0 pruned, 0
+failed, 660 s (983 distinct permutations compile-probed) — roughly 29 instances/s overall, against
+the ~1 instance/s the unoptimized full-state switch/override writes measured before `73814227`;
+`phaseSeconds` in `import_report.json` puts `switches` at 0.8 s and `basePropertyOverrides` at
+0.7 s total across all 19,121 instances (was the dominant cost), with the real per-instance work —
+`probe` 248 s, `save` 79 s, `updateMaterialInstance` 76 s, `textures` 45 s, `scalarsVectors` 43 s —
+now what the wall clock actually measures. An immediate unforced rerun confirmed idempotency: 0
+imported, 19,121 reused, 0 failed, 8.5 s. Spot-checks: `sprites/mflash_colt` (one of the 12
+`animatedFramesArrayUnavailable` units, whose own texture never staged as an array) carries no
+stray `UseAnimatedFrames` override beyond what the manifest states (`False`, `FrameRate` 30 —
+its `animatedtexture` proxy's own authored rate, recorded but never sampled); `sprites/coplights`
+(one of the original 48) turned out to carry a real `animatedtexture` proxy of its own
+(`animatedtextureframerate=4`), so it resolved through that proxy path rather than the static
+fallback — `BaseTextureFrames` bound, `UseAnimatedFrames` on, `FrameRate` **4**, not 0. Units that
+actually took the static frame-0 fallback (no proxy of their own) do show `FrameRate` 0 exactly —
+confirmed on `sprites/candle` and `particle/smokeb`: `UseAnimatedFrames` on and overridden,
+`FrameRate` 0.0, `BaseTextureFrames` bound to their own `TA_` sibling. `--lookdev` regenerated
+`/ElysiumBaked/Lookdev/Materials`: 22 of 22 entries placed, 0 missing (`lookdev_set.json` grew from
+20 to 22 entries in the same window as the frame-0 fix, unrelated to it). `uv run pytest`: 3,045
+passed. `uv run elysium doctor`: repository policy passed, 22 pre-existing warnings (unchanged).
 
 ## Plan — surfaces track (export gap, surface properties, materials, reflections)
 
