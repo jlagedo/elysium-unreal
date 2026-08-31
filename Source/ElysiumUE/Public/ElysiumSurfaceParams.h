@@ -14,7 +14,8 @@
 // This revision (SF-4.3 part 2) reconciled M_V2_Lit to the design revision 2026-08-31 ("Revise
 // the material import design after review") and added M_V2_LitTranslucent, M_V2_Unlit and
 // M_V2_TwoTexture. Part 3 adds the remaining five masters family-by-family (mechanics doc
-// "Ordering, concurrency, tests, risks"): this revision adds M_V2_Eyes.
+// "Ordering, concurrency, tests, risks"): this revision adds M_V2_Water (M_V2_Eyes already
+// landed).
 //
 // Every V2 master exposes SurfaceClassIndex, SurfaceClassLUT, Alpha and Color -- the four
 // parameters the design doc states once, "on every master", rather than repeating in each
@@ -226,5 +227,70 @@ namespace ElysiumSurfaceParamsEyes
 	{
 		inline const FName VampireEyes(TEXT("VampireEyes"));
 		inline const FName UseGlint(TEXT("UseGlint"));
+	}
+}
+
+// `M_V2_Water` -- `water` family only (24 units). No `BottomMaterial` slot (`$bottommaterial`
+// names a material, not a texture -- provenance only, design doc "M_V2_Water"). `UseFogEnable`/
+// `FogColor`/`FogStart`/`FogEnd` and the wave-animation scalars are declared per the design's
+// table but have no pixel-graph formula stated anywhere in the design (fog is a distance/height
+// effect and the wave terms are vertex/World-Position-Offset concerns, both out of this master's
+// scope) -- declared, not wired (see `make_v2_materials.py::_build_water`'s docstring).
+namespace ElysiumSurfaceParamsWater
+{
+	namespace Textures
+	{
+		inline const FName BaseTexture(TEXT("BaseTexture"));
+		inline const FName DuDvMap(TEXT("DuDvMap"));
+		inline const FName NormalMap(TEXT("NormalMap"));
+		inline const FName EnvMap(TEXT("EnvMap"));
+		inline const FName NormalMapFrames(TEXT("NormalMapFrames"));
+	}
+
+	namespace Scalars
+	{
+		inline const FName RefractAmount(TEXT("RefractAmount"));
+		inline const FName ReflectAmount(TEXT("ReflectAmount"));
+		inline const FName BaseReflectFract(TEXT("BaseReflectFract"));
+		inline const FName WaterDepth(TEXT("WaterDepth"));
+		inline const FName WaterMurkiness(TEXT("WaterMurkiness"));
+		inline const FName WaterBaseFactor(TEXT("WaterBaseFactor"));
+		inline const FName WaterBaseMovementDist(TEXT("WaterBaseMovementDist"));
+		inline const FName WaterBaseMovementFreq(TEXT("WaterBaseMovementFreq"));
+		inline const FName WaterSpecularMin(TEXT("WaterSpecularMin"));
+		inline const FName WaterSpecularMax(TEXT("WaterSpecularMax"));
+		inline const FName WaterTimeFreq1(TEXT("WaterTimeFreq1"));
+		inline const FName WaterTimeFreq2(TEXT("WaterTimeFreq2"));
+		inline const FName WaterWaveHeight(TEXT("WaterWaveHeight"));
+		inline const FName WaterWaveLength(TEXT("WaterWaveLength"));
+		inline const FName CheapWaterStartDistance(TEXT("CheapWaterStartDistance"));
+		inline const FName CheapWaterEndDistance(TEXT("CheapWaterEndDistance"));
+		inline const FName FogStart(TEXT("FogStart"));
+		inline const FName FogEnd(TEXT("FogEnd"));
+		inline const FName BumpScrollRateU(TEXT("BumpScrollRateU"));
+		inline const FName BumpScrollRateV(TEXT("BumpScrollRateV"));
+		inline const FName NormalFrameRate(TEXT("NormalFrameRate"));
+		inline const FName NormalFrameCount(TEXT("NormalFrameCount"));
+	}
+
+	namespace Vectors
+	{
+		inline const FName WaterColor(TEXT("WaterColor"));
+		inline const FName RefractTint(TEXT("RefractTint"));
+		inline const FName ReflectTint(TEXT("ReflectTint"));
+		inline const FName FogColor(TEXT("FogColor"));
+		inline const FName EnvMapTint(TEXT("EnvMapTint"));
+		inline const FName TexScaleOffset(TEXT("TexScaleOffset"));
+	}
+
+	namespace Switches
+	{
+		inline const FName CheapWater(TEXT("CheapWater"));
+		inline const FName UseFogEnable(TEXT("UseFogEnable"));
+		inline const FName UseEnvMap(TEXT("UseEnvMap"));
+		inline const FName UseFixedCube(TEXT("UseFixedCube"));
+		inline const FName UseBaseTexture(TEXT("UseBaseTexture"));
+		inline const FName UseNormalMap(TEXT("UseNormalMap"));
+		inline const FName UseAnimatedNormalFrames(TEXT("UseAnimatedNormalFrames"));
 	}
 }

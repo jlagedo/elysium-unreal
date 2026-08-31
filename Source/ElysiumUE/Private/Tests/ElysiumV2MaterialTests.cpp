@@ -191,6 +191,59 @@ namespace
 		ElysiumSurfaceParamsEyes::Switches::UseGlint,
 	};
 
+	static const FName WaterTextures[] = {
+		ElysiumSurfaceParamsShared::Textures::SurfaceClassLUT,
+		ElysiumSurfaceParamsWater::Textures::BaseTexture,
+		ElysiumSurfaceParamsWater::Textures::DuDvMap,
+		ElysiumSurfaceParamsWater::Textures::NormalMap,
+		ElysiumSurfaceParamsWater::Textures::EnvMap,
+		ElysiumSurfaceParamsWater::Textures::NormalMapFrames,
+	};
+	static const FName WaterScalars[] = {
+		ElysiumSurfaceParamsShared::Scalars::SurfaceClassIndex,
+		ElysiumSurfaceParamsShared::Scalars::Alpha,
+		ElysiumSurfaceParamsWater::Scalars::RefractAmount,
+		ElysiumSurfaceParamsWater::Scalars::ReflectAmount,
+		ElysiumSurfaceParamsWater::Scalars::BaseReflectFract,
+		ElysiumSurfaceParamsWater::Scalars::WaterDepth,
+		ElysiumSurfaceParamsWater::Scalars::WaterMurkiness,
+		ElysiumSurfaceParamsWater::Scalars::WaterBaseFactor,
+		ElysiumSurfaceParamsWater::Scalars::WaterBaseMovementDist,
+		ElysiumSurfaceParamsWater::Scalars::WaterBaseMovementFreq,
+		ElysiumSurfaceParamsWater::Scalars::WaterSpecularMin,
+		ElysiumSurfaceParamsWater::Scalars::WaterSpecularMax,
+		ElysiumSurfaceParamsWater::Scalars::WaterTimeFreq1,
+		ElysiumSurfaceParamsWater::Scalars::WaterTimeFreq2,
+		ElysiumSurfaceParamsWater::Scalars::WaterWaveHeight,
+		ElysiumSurfaceParamsWater::Scalars::WaterWaveLength,
+		ElysiumSurfaceParamsWater::Scalars::CheapWaterStartDistance,
+		ElysiumSurfaceParamsWater::Scalars::CheapWaterEndDistance,
+		ElysiumSurfaceParamsWater::Scalars::FogStart,
+		ElysiumSurfaceParamsWater::Scalars::FogEnd,
+		ElysiumSurfaceParamsWater::Scalars::BumpScrollRateU,
+		ElysiumSurfaceParamsWater::Scalars::BumpScrollRateV,
+		ElysiumSurfaceParamsWater::Scalars::NormalFrameRate,
+		ElysiumSurfaceParamsWater::Scalars::NormalFrameCount,
+	};
+	static const FName WaterVectors[] = {
+		ElysiumSurfaceParamsShared::Vectors::Color,
+		ElysiumSurfaceParamsWater::Vectors::WaterColor,
+		ElysiumSurfaceParamsWater::Vectors::RefractTint,
+		ElysiumSurfaceParamsWater::Vectors::ReflectTint,
+		ElysiumSurfaceParamsWater::Vectors::FogColor,
+		ElysiumSurfaceParamsWater::Vectors::EnvMapTint,
+		ElysiumSurfaceParamsWater::Vectors::TexScaleOffset,
+	};
+	static const FName WaterSwitches[] = {
+		ElysiumSurfaceParamsWater::Switches::CheapWater,
+		ElysiumSurfaceParamsWater::Switches::UseFogEnable,
+		ElysiumSurfaceParamsWater::Switches::UseEnvMap,
+		ElysiumSurfaceParamsWater::Switches::UseFixedCube,
+		ElysiumSurfaceParamsWater::Switches::UseBaseTexture,
+		ElysiumSurfaceParamsWater::Switches::UseNormalMap,
+		ElysiumSurfaceParamsWater::Switches::UseAnimatedNormalFrames,
+	};
+
 	// `M_V2_LitTranslucent` is the same graph under a different material-only property set
 	// (mechanics doc / design "Master inventory" -- blend mode, two-sidedness and the opacity
 	// clip value are per-instance overrides, so they never multiply masters).
@@ -205,6 +258,8 @@ namespace
 			TwoTextureTextures, TwoTextureScalars, TwoTextureVectors, TwoTextureSwitches},
 		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Eyes.M_V2_Eyes"),
 			EyesTextures, EyesScalars, EyesVectors, EyesSwitches},
+		{TEXT("/Game/ElysiumGenerated/Materials/V2/M_V2_Water.M_V2_Water"),
+			WaterTextures, WaterScalars, WaterVectors, WaterSwitches},
 	};
 }
 

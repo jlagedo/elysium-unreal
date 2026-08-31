@@ -89,6 +89,15 @@ EYES_CITED_SHADER_UNITS = [
     "eyes",
     "eyes_overbright2",
 ]
+#: Both shipped water pixel programs (`WaterRefract_old`/`WaterReflect_old` and their `_ps20_old`
+#: spellings) are compiled-only -- no readable `.psh` ships for any of them -- but `waterrefract.psh`
+#: and `waterreflect.psh` (a design-era readable pair the doc cites by name, "M_V2_Water" post-
+#: lighting math) carry the shape this master transcribes. `watercheap` ships no readable source at
+#: all and is not cited.
+WATER_CITED_SHADER_UNITS = [
+    "waterrefract",
+    "waterreflect",
+]
 
 
 def _fail(msg):
@@ -1317,6 +1326,304 @@ def make_eyes():
     return mat
 
 
+# ============================================================================================
+# M_V2_Water
+# ============================================================================================
+
+
+class WaterParams:
+    class Textures:
+        BaseTexture = "BaseTexture"
+        DuDvMap = "DuDvMap"
+        NormalMap = "NormalMap"
+        EnvMap = "EnvMap"
+        NormalMapFrames = "NormalMapFrames"
+        SurfaceClassLUT = "SurfaceClassLUT"
+
+    class Scalars:
+        Alpha = "Alpha"
+        SurfaceClassIndex = "SurfaceClassIndex"
+        RefractAmount = "RefractAmount"
+        ReflectAmount = "ReflectAmount"
+        BaseReflectFract = "BaseReflectFract"
+        WaterDepth = "WaterDepth"
+        WaterMurkiness = "WaterMurkiness"
+        WaterBaseFactor = "WaterBaseFactor"
+        WaterBaseMovementDist = "WaterBaseMovementDist"
+        WaterBaseMovementFreq = "WaterBaseMovementFreq"
+        WaterSpecularMin = "WaterSpecularMin"
+        WaterSpecularMax = "WaterSpecularMax"
+        WaterTimeFreq1 = "WaterTimeFreq1"
+        WaterTimeFreq2 = "WaterTimeFreq2"
+        WaterWaveHeight = "WaterWaveHeight"
+        WaterWaveLength = "WaterWaveLength"
+        CheapWaterStartDistance = "CheapWaterStartDistance"
+        CheapWaterEndDistance = "CheapWaterEndDistance"
+        FogStart = "FogStart"
+        FogEnd = "FogEnd"
+        BumpScrollRateU = "BumpScrollRateU"
+        BumpScrollRateV = "BumpScrollRateV"
+        NormalFrameRate = "NormalFrameRate"
+        NormalFrameCount = "NormalFrameCount"
+
+    class Vectors:
+        Color = "Color"
+        WaterColor = "WaterColor"
+        RefractTint = "RefractTint"
+        ReflectTint = "ReflectTint"
+        FogColor = "FogColor"
+        EnvMapTint = "EnvMapTint"
+        TexScaleOffset = "TexScaleOffset"
+
+    class Switches:
+        CheapWater = "CheapWater"
+        UseFogEnable = "UseFogEnable"
+        UseEnvMap = "UseEnvMap"
+        UseFixedCube = "UseFixedCube"
+        UseBaseTexture = "UseBaseTexture"
+        UseNormalMap = "UseNormalMap"
+        UseAnimatedNormalFrames = "UseAnimatedNormalFrames"
+
+
+WATER_PARAM_TABLE = {
+    "textures": sorted(vars(WaterParams.Textures)[k] for k in vars(WaterParams.Textures) if not k.startswith("_")),
+    "scalars": sorted(vars(WaterParams.Scalars)[k] for k in vars(WaterParams.Scalars) if not k.startswith("_")),
+    "vectors": sorted(vars(WaterParams.Vectors)[k] for k in vars(WaterParams.Vectors) if not k.startswith("_")),
+    "switches": sorted(vars(WaterParams.Switches)[k] for k in vars(WaterParams.Switches) if not k.startswith("_")),
+}
+
+
+def _build_water(mat, collection, lut_texture, default_frames):
+    """`waterrefract.psh`/`waterreflect.psh` (design doc "M_V2_Water" post-lighting math) are both
+    render-target passes over `_rt_WaterRefraction`/`_rt_WaterReflection`, and the design states
+    both are **replaced**, not transcribed: Unreal `Refraction` (`RM_PIXEL_NORMAL_OFFSET`, the same
+    technique `make_world_materials.py::make_refract` uses for its legacy `M_Refract`) and Lumen
+    reflection on one translucent surface, with the authored constants carried as scalars driving
+    the same shapes. What *is* transcribed literally is the one place VtMB has a real Fresnel term:
+    `waterreflect.psh`'s quintic `mad r0.a, r0.a, 1-c3.a, c3.a` is Schlick with R0 = `c3.a`, exactly
+    Unreal's `Fresnel` node with `BaseReflectFraction` = `BaseReflectFract` and `ExponentIn` = 5.
+
+    Reconstruction decisions, named as such (this master has no shipped pixel source for either
+    final program -- `WaterRefract_old`/`WaterReflect_old` and their `_ps20_old` twins are all
+    compiled-only; only the design-era `waterrefract.psh`/`waterreflect.psh` pair is readable):
+
+    - Two independent bump slots feed one `MP_NORMAL` (Pixel Normal Offset refraction has no
+      second normal channel to offset against): `NormalMap` is the lit bump (reflections/specular,
+      gated `UseNormalMap`, matching every other master's normal lane); `DuDvMap` contributes only
+      its own *deviation from flat* (`DuDvMap.rgb - (0,0,1)`), scaled by `RefractAmount/100` and
+      added on top. An unbound `DuDvMap` samples its default (`DefaultNormal`, already flat), so
+      that deviation -- and therefore the whole perturbation -- is an exact `(0,0,0)` no-op
+      regardless of `RefractAmount`, the same "default makes the knob inert" shape every other
+      lane in this file uses.
+    - `MP_REFRACTION` is a flat `1.0` (`M_Refract`'s "1.0 is neutral" convention) -- `RefractAmount`
+      does not drive the refraction *magnitude* pin at all. It drives the `DuDvMap` perturbation
+      above instead, so refraction strength and the DuDv ripple share one coherent knob rather than
+      splitting across two overlapping pins. `CheapWater` "drops the refraction pass": it zeroes
+      that perturbation outright (a `Switch` ahead of the `Add`), leaving the plain `NormalMap` (or
+      flat) normal and no distortion.
+    - `BaseReflectFract` feeds the Fresnel node; its output scales `ReflectAmount/100` into
+      `MP_SPECULAR` (gated `UseEnvMap`, mirroring every other master's envmap-gated specular
+      branch) rather than a literal reflection-image blend, since Lumen already supplies the
+      reflection image once Specular/Roughness are physically plausible. `ReflectTint`'s luma
+      scales that same specular term, the same "grey tint scales Specular" shape `M_V2_Lit`'s own
+      reflection contract uses for a non-chromatic `$envmaptint`.
+    - `WaterColor`/`WaterMurkiness`/`RefractTint`/`Color` combine into BaseColor: `BaseTexture ×
+      Color × RefractTint` (the un-murky look, `RefractTint` transcribing `waterrefract.psh`'s
+      `mul r0, t2, c1`) `Lerp`'d toward the flat `WaterColor` by `WaterMurkiness` -- an exact no-op
+      at the shipped default (`WaterMurkiness` 0.0), same shape as every other neutral-by-default
+      lane in this file.
+    - `UseFogEnable`/`FogColor`/`FogStart`/`FogEnd` and the wave-animation scalars
+      (`WaterBaseFactor`, `WaterBaseMovementDist/Freq`, `WaterTimeFreq1/2`, `WaterWaveHeight/
+      Length`, `WaterSpecularMin/Max`, `CheapWaterStartDistance/EndDistance`, `WaterDepth`) are
+      **declared, not wired**: the design's post-lighting section states no pixel-graph formula for
+      any of them (fog is a distance/height effect and the wave terms are vertex/World-Position-
+      Offset concerns, both out of this generator's scope, the same way the sprite lane owns
+      `$spriteorigin`), and wiring an invented formula for a knob the design never states one for
+      would be a guess dressed as a transcription. Flagged here rather than silently absent.
+    """
+    g = Graph(mat, collection=collection)
+    P = WaterParams
+
+    # -- UV: TexScaleOffset transform (shared by every UV-consuming slot), then one Panner on the
+    # bump lane only -- Water has no BaseScrollRateU/V (not in the exposed-parameter table) -----
+    uv0 = g.node(unreal.MaterialExpressionTextureCoordinate, -1900, 0)
+    tex_scale_offset = g.node(unreal.MaterialExpressionVectorParameter, -1900, 200)
+    tex_scale_offset.set_editor_property("parameter_name", P.Vectors.TexScaleOffset)
+    tex_scale_offset.set_editor_property("default_value", unreal.LinearColor(1.0, 1.0, 0.0, 0.0))
+    scale = g.mask(tex_scale_offset, "rg", -1700, 160)
+    offset = g.mask(tex_scale_offset, "ba", -1700, 260, src_out="RGBA")
+    scaled_uv = g.mul(uv0, "", scale, "", -1500, 0)
+    base_uv = g.add(scaled_uv, "", offset, "", -1300, 40)
+
+    time_node = g.time(-1900, 420)
+    bump_u = g.scalar(P.Scalars.BumpScrollRateU, 0.0, -1900, 500)
+    bump_v = g.scalar(P.Scalars.BumpScrollRateV, 0.0, -1900, 560)
+    bump_speed = g.append(bump_u, "", bump_v, "", -1700, 530)
+    bump_uv = g.panner(time_node, bump_speed, -1500, 530)
+    connect(base_uv, "", bump_uv, "Coordinate")
+
+    # -- BaseTexture -----------------------------------------------------------------------------
+    base_tex = g.tex(P.Textures.BaseTexture, -1100, -400, kind="color")
+    connect(base_uv, "", base_tex, "UVs")
+    base_tex_rgb = g.mask(base_tex, "rgb", -900, -400)
+    base_tex_a = g.mask(base_tex, "a", -900, -320, src_out="RGBA")
+    white3 = g.const3(1.0, 1.0, 1.0, -900, -240)
+    base_selected = g.switch(P.Switches.UseBaseTexture, base_tex_rgb, white3, -700, -360,
+                             default=True)
+    base_a_selected = g.switch(P.Switches.UseBaseTexture, base_tex_a, g.const(1.0, -900, -160),
+                               -700, -200, default=True)
+
+    color = g.vec3(P.Vectors.Color, (1.0, 1.0, 1.0, 1.0), -1100, -560)
+    refract_tint = g.vec3(P.Vectors.RefractTint, (1.0, 1.0, 1.0, 1.0), -1100, -680)
+    tinted = g.mul(g.mul(base_selected, "", color, "", -500, -420), "", refract_tint, "",
+                   -300, -460)
+
+    water_color = g.vec3(P.Vectors.WaterColor, (0.0, 0.0, 0.0, 0.0), -1100, -800)
+    murkiness = g.scalar(P.Scalars.WaterMurkiness, 0.0, -1100, -880)
+    base_color_final = g.lerp(tinted, "", water_color, "", murkiness, "", -100, -600)
+    g.to(base_color_final, "", unreal.MaterialProperty.MP_BASE_COLOR)
+
+    # -- Normal / refraction: NormalMap (lit bump) plus DuDvMap's own deviation from flat
+    # (unconditional ripple perturbation, its DefaultNormal default already flat) -- see the
+    # function docstring --------------------------------------------------------------------
+    dudv_tex = g.tex(P.Textures.DuDvMap, -1100, 60, kind="normal")
+    connect(bump_uv, "", dudv_tex, "UVs")
+    dudv_rgb = g.mask(dudv_tex, "rgb", -900, 60)
+
+    normal_tex_2d = g.tex(P.Textures.NormalMap, -1100, 260, kind="normal")
+    connect(bump_uv, "", normal_tex_2d, "UVs")
+    normal_tex = _flipbook_sample(
+        g, normal_tex_2d, P.Textures.NormalMapFrames, bump_uv,
+        P.Scalars.NormalFrameRate, P.Scalars.NormalFrameCount,
+        P.Switches.UseAnimatedNormalFrames, default_frames, -1100, 340, sampler="linear")
+    flat_normal = g.const3(0.0, 0.0, 1.0, -700, 140)
+    normal_lit = g.switch(P.Switches.UseNormalMap, g.mask(normal_tex, "rgb", -700, 260),
+                          flat_normal, -500, 220, default=False)
+
+    # `RefractAmount` scales how far DuDvMap's own deviation from flat perturbs the shared normal
+    # -- an unbound DuDvMap (flat DefaultNormal) makes this delta exactly (0,0,0) regardless of
+    # RefractAmount, and CheapWater zeroes it outright ("drops the refraction pass"). Pixel Normal
+    # Offset reads its offset direction from this same MP_NORMAL, so the perturbation is what
+    # actually drives the refraction distortion; MP_REFRACTION itself stays the flat M_Refract-style
+    # neutral 1.0 (see the function docstring) ---------------------------------------------------
+    refract_amount = g.scalar(P.Scalars.RefractAmount, 20.0, -1100, 620)
+    refract_scale = g.div(refract_amount, "", g.const(100.0, -900, 700), "", -700, 660)
+    dudv_delta = g.sub(dudv_rgb, "", flat_normal, "", -700, 580)
+    dudv_perturbation = g.mul(dudv_delta, "", refract_scale, "", -500, 620)
+    dudv_perturbation_gated = g.switch(P.Switches.CheapWater, g.const3(0.0, 0.0, 0.0, -300, 700),
+                                       dudv_perturbation, -300, 640, default=False)
+    combined_normal = g.add(normal_lit, "", dudv_perturbation_gated, "", -100, 400)
+    g.to(combined_normal, "", unreal.MaterialProperty.MP_NORMAL)
+    g.to(g.const(1.0, -300, 760), "", unreal.MaterialProperty.MP_REFRACTION)
+
+    # -- surface class lookup + reflection: BaseReflectFract -> Fresnel -> ReflectAmount/
+    # ReflectTint into Specular, gated UseEnvMap (mirrors every other master's envmap branch) ---
+    class_roughness, class_specular, class_metallic = _class_lut(
+        g, P.Textures.SurfaceClassLUT, lut_texture, P.Scalars.SurfaceClassIndex, -1900, 1400)
+
+    base_reflect_fract = g.scalar(P.Scalars.BaseReflectFract, 0.2, -1900, 1900)
+    fresnel_node = g.node(unreal.MaterialExpressionFresnel, -1700, 1900)
+    fresnel_node.set_editor_property("exponent_in", 5.0)
+    connect(base_reflect_fract, "", fresnel_node, "BaseReflectFraction")
+
+    reflect_amount = g.scalar(P.Scalars.ReflectAmount, 50.0, -1900, 2000)
+    reflect_tint = g.vec3(P.Vectors.ReflectTint, (1.0, 1.0, 1.0, 1.0), -1900, 2080)
+    luma_weights = g.const3(0.299, 0.587, 0.114, -1900, 2160)
+    reflect_tint_luma = g.dot(reflect_tint, "", luma_weights, "", -1700, 2080)
+    specular_water = g.mul(
+        g.mul(fresnel_node, "", g.div(reflect_amount, "", g.const(100.0, -1500, 2000), "",
+                                      -1500, 2040), "", -1300, 2000),
+        "", reflect_tint_luma, "", -1100, 2000)
+    specular_final = g.switch(P.Switches.UseEnvMap, specular_water, class_specular, -900, 1960,
+                              default=False)
+    g.to(specular_final, "", unreal.MaterialProperty.MP_SPECULAR)
+    g.to(class_roughness, "", unreal.MaterialProperty.MP_ROUGHNESS)
+    g.to(class_metallic, "", unreal.MaterialProperty.MP_METALLIC)
+
+    # -- Emissive: the authored fixed cube add, identical shape to M_V2_Lit's (design doc "The
+    # authored fixed cube ... beats the chromatic branch" -- Water has no chromatic branch at all,
+    # so there is nothing to beat, just the literal cube add gated UseFixedCube) ----------------
+    env_tint = g.vec3(P.Vectors.EnvMapTint, (1.0, 1.0, 1.0, 1.0), -1900, 2240)
+    reflect_dir = g.reflection_ws(-1900, 2400)
+    envcube = g.cube(P.Textures.EnvMap, -1700, 2400, default=DEFAULT_CUBE)
+    connect(reflect_dir, "", envcube, "UVs")
+    fixed_raw = g.mul(g.mul(envcube, "RGB", env_tint, "", -1500, 2400), "", reflect_tint, "",
+                      -1300, 2440)
+    lumen_safe_fixed = g.node(unreal.MaterialExpressionRayTracingQualitySwitch, -1100, 2400)
+    connect(fixed_raw, "", lumen_safe_fixed, "Normal")
+    connect(g.const3(0.0, 0.0, 0.0, -1100, 2480), "", lumen_safe_fixed, "RayTraced")
+    fixed_emissive = g.switch(P.Switches.UseFixedCube, lumen_safe_fixed,
+                              g.const3(0.0, 0.0, 0.0, -900, 2400), -900, 2360, default=False)
+    g.to(fixed_emissive, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+
+    # -- Opacity: Alpha x BaseTexture.a (translucent, no vertex-color/alpha lane on this master) -
+    alpha_param = g.scalar(P.Scalars.Alpha, 1.0, 1700, 0)
+    opacity = g.mul(alpha_param, "", base_a_selected, "", 1900, 0)
+    g.to(opacity, "", unreal.MaterialProperty.MP_OPACITY)
+
+    # -- Declared, not wired -- see the function docstring's last bullet ------------------------
+    g.scalar(P.Scalars.WaterDepth, 64.0, -1900, 3000)
+    g.scalar(P.Scalars.WaterBaseFactor, 0.0, -1900, 3080)
+    g.scalar(P.Scalars.WaterBaseMovementDist, 0.0, -1900, 3160)
+    g.scalar(P.Scalars.WaterBaseMovementFreq, 0.0, -1900, 3240)
+    g.scalar(P.Scalars.WaterSpecularMin, 0.0, -1900, 3320)
+    g.scalar(P.Scalars.WaterSpecularMax, 1.0, -1900, 3400)
+    g.scalar(P.Scalars.WaterTimeFreq1, 0.0, -1900, 3480)
+    g.scalar(P.Scalars.WaterTimeFreq2, 0.0, -1900, 3560)
+    g.scalar(P.Scalars.WaterWaveHeight, 0.0, -1900, 3640)
+    g.scalar(P.Scalars.WaterWaveLength, 0.0, -1900, 3720)
+    g.scalar(P.Scalars.CheapWaterStartDistance, 0.0, -1900, 3800)
+    g.scalar(P.Scalars.CheapWaterEndDistance, 0.0, -1900, 3880)
+    g.scalar(P.Scalars.FogStart, 1.0, -1900, 3960)
+    g.scalar(P.Scalars.FogEnd, 400.0, -1900, 4040)
+    g.vec4(P.Vectors.FogColor, (0.0, 0.0, 0.0, 0.0), -1900, 4120)
+    g.switch(P.Switches.UseFogEnable, g.const(1.0, -1700, 4200), g.const(0.0, -1700, 4280),
+            -1500, 4240, default=False)
+
+
+def make_water():
+    name = "M_V2_Water"
+    asset = "%s/%s" % (PKG, name)
+    collection = _load_surfaces_collection()
+    lut_texture = _load_class_lut()
+    recipe = {
+        "graphVersion": GRAPH_VERSION,
+        "sourceHash": _source_hash(),
+        "citedUnits": _cited_unit_hashes(WATER_CITED_SHADER_UNITS),
+        "params": WATER_PARAM_TABLE,
+        "mpcScalars": REQUIRED_MPC_SCALARS,
+    }
+    fingerprint = bl.recipe_fingerprint("materials-v2", asset, recipe)
+    force = _flag(_cmdline_arg("PolicyForce", ""))
+    if not force and unreal.EditorAssetLibrary.does_asset_exist(asset) \
+            and bl.stored_recipe(asset) == fingerprint:
+        unreal.log("[make_v2_materials] %s up to date, skipping" % asset)
+        return unreal.load_asset(asset)
+
+    default_frames = _make_default_frames_array()
+
+    mat, asset = _fresh(name, ism=True, nanite=True)
+    mat.set_editor_property("material_domain", unreal.MaterialDomain.MD_SURFACE)
+    mat.set_editor_property("blend_mode", unreal.BlendMode.BLEND_TRANSLUCENT)
+    mat.set_editor_property(
+        "translucency_lighting_mode",
+        unreal.TranslucencyLightingMode.TLM_SURFACE_PER_PIXEL_LIGHTING)
+    mat.set_editor_property("refraction_method", unreal.RefractionMode.RM_PIXEL_NORMAL_OFFSET)
+    mat.set_editor_property("two_sided", False)
+
+    _build_water(mat, collection, lut_texture, default_frames)
+
+    errors = mel.recompile_material(mat)
+    if errors:
+        _fail("%s failed to compile:\n%s" % (asset, "\n".join(errors)))
+
+    bl.stamp_recipe(mat, fingerprint)
+    if not bl.save(asset):
+        _fail("save failed: %s" % asset)
+    unreal.log("[make_v2_materials] saved %s" % asset)
+    return mat
+
+
 def _cmdline_arg(key, default=""):
     needle = "-%s=" % key
     for token in unreal.SystemLibrary.get_command_line().split():
@@ -1335,3 +1642,4 @@ make_lit_translucent()
 make_unlit()
 make_two_texture()
 make_eyes()
+make_water()
