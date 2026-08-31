@@ -1401,13 +1401,13 @@ packaged game reads it), attached the way `UElysiumTextureProvenance` is (SF-4.2
 | `ResolvedFamily`, `ResolvedPrograms[]` (`PixelShader`, `VertexShader`, `Condition`, `DrawPass`), `ResolutionInputs[]`, `ResolutionReason` | `shaderResolution` |
 | `Master`, `BlendMode`, `TwoSided`, `SurfaceClass` (the class **name**), `SurfaceClassIndex` (the row's fixed `Index`), `SurfaceClassSource` (`surfaceprop`/`topdir`/`familyDefault`), `PhysMaterialFallback` | this lane's decisions |
 | `IsDecalSurface`, `IgnoreZ`, `SpriteOrigin`, `SpriteOrientation`, `MinLight`, `MaxLight`, `WetnessScale`, `SubdivSize`, `Curve` | keys with a home outside the material — the placement, map and runtime-factory lanes read them here |
-| `EnvMapSymbol`, `EnvMapAssetId`, `EnvMapProbePath` | `$envmap` and the reflection contract; the probe path is a soft path, never a bound parameter |
+| `EnvMapSymbol`, `EnvMapAssetId`, `EnvMapAsset`, `EnvMapProbePath`, `bEnvMapTintChromatic`, `bPatchedProbe` | `environment` — `EnvMapAssetId`/`EnvMapProbePath` are a patched unit's un-bound probe id/path, `EnvMapAsset` is an authored-fixed-cube instance's own bound `EnvMap` asset path; neither pair is ever set together |
 | `TextureBindings[]` (`Parameter`, `Value`, `Kind`, `Asset`, `Resolved`, `UsedLinearTwin`) | `textureBindings` plus the twin choice |
 | `Dependencies[]` (`Role`, `Parameter`, `Asset`, `Resolved`) | `dependencies` |
 | `SurfacePropertyAsset` | the surface-property dependency |
 | `PatchOf`, `PatchKind` | `patch` (`vtmb:material:` of the base, and `replace`/`insert`) |
-| `Anomalies[]`, `Omissions[]`, `Coverage` | as published |
-| `Comments[]` | `comments` |
+| `Anomalies[]` (`Kind`, `Extra`), `Omissions[]` (`Reason`, `Extra`), `Coverage` | as published — `Extra` is every field besides `Kind`/`Reason`, since a real sidecar's row shape varies by kind (`value`, `proxy`, `switch`, `key`, `role`, ...) |
+| `Comments[]` (`Offset`, `Text`) | `comments` |
 
 `ApplyJson` tolerates a missing key and refuses only a body that is not a JSON object, exactly as
 the texture provenance does. Three fields are published as asset-registry tags in

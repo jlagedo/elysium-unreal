@@ -52,8 +52,9 @@ namespace
 		return FString();
 	}
 
-	/** Every row of `parameters[]`: `index`, `block`, `key`, `sourceKey`, `value`, `valueType`, in
-	 * source order, exactly as `stage_unit` writes them. No `offset` field in this stage's sidecar. */
+	/** Every row of `parameters[]`: `index`, `block`, `key`, `sourceKey`, `value`, `valueType`,
+	 * `offset`, in source order, exactly as `stage_unit` writes them (`offset` wired through
+	 * H-3; absent on a row the unit's own exporter did not carry one for, reading as 0). */
 	void ReadParameters(const TSharedRef<FJsonObject>& O, TArray<FElysiumMaterialParameter>& Out)
 	{
 		Out.Reset();
@@ -163,6 +164,93 @@ namespace
 			Dependency.Asset = Str(Row, TEXT("asset"));
 		}
 	}
+
+	/** Every field of `Row` besides `SkipKey`, stringified the same tolerant way `Value` fields
+	 * are (`StringifyField`) -- C-2's catch-all for an omission/anomaly row shape this reader has
+	 * not been taught a dedicated field for yet. */
+	void ReadExtraFields(const TSharedRef<FJsonObject>& Row, const TCHAR* SkipKey, TMap<FString, FString>& Out)
+	{
+		for (const auto& Field : Row->Values)
+		{
+			const FString Key(Field.Key);
+			if (Key == SkipKey)
+			{
+				continue;
+			}
+			Out.Add(Key, StringifyField(Row, *Key));
+		}
+	}
+
+	/** `omissions[]`: every row carries `reason`; every other field (`role`, `key`, `kind`, ...)
+	 * lands in `Extra` (C-2). */
+	void ReadOmissions(const TSharedRef<FJsonObject>& O, TArray<FElysiumProvenanceNote>& Out)
+	{
+		Out.Reset();
+		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(O, TEXT("omissions"));
+		if (!Rows)
+		{
+			return;
+		}
+		for (const TSharedPtr<FJsonValue>& Value : *Rows)
+		{
+			const TSharedPtr<FJsonObject>* RowPtr = nullptr;
+			if (!Value.IsValid() || !Value->TryGetObject(RowPtr) || !RowPtr)
+			{
+				continue;
+			}
+			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
+			FElysiumProvenanceNote& Note = Out.AddDefaulted_GetRef();
+			Note.Reason = Str(Row, TEXT("reason"));
+			ReadExtraFields(Row, TEXT("reason"), Note.Extra);
+		}
+	}
+
+	/** `anomalies[]`: every row carries `kind`; every other field (`value`, `proxy`, `switch`,
+	 * `target`, ...) lands in `Extra` (C-2). */
+	void ReadAnomalies(const TSharedRef<FJsonObject>& O, TArray<FElysiumProvenanceAnomaly>& Out)
+	{
+		Out.Reset();
+		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(O, TEXT("anomalies"));
+		if (!Rows)
+		{
+			return;
+		}
+		for (const TSharedPtr<FJsonValue>& Value : *Rows)
+		{
+			const TSharedPtr<FJsonObject>* RowPtr = nullptr;
+			if (!Value.IsValid() || !Value->TryGetObject(RowPtr) || !RowPtr)
+			{
+				continue;
+			}
+			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
+			FElysiumProvenanceAnomaly& Anomaly = Out.AddDefaulted_GetRef();
+			Anomaly.Kind = Str(Row, TEXT("kind"));
+			ReadExtraFields(Row, TEXT("kind"), Anomaly.Extra);
+		}
+	}
+
+	/** `comments[]`: `{offset, text}`, exactly as `stage_unit` writes them. */
+	void ReadComments(const TSharedRef<FJsonObject>& O, TArray<FElysiumProvenanceComment>& Out)
+	{
+		Out.Reset();
+		const TArray<TSharedPtr<FJsonValue>>* Rows = Arr(O, TEXT("comments"));
+		if (!Rows)
+		{
+			return;
+		}
+		for (const TSharedPtr<FJsonValue>& Value : *Rows)
+		{
+			const TSharedPtr<FJsonObject>* RowPtr = nullptr;
+			if (!Value.IsValid() || !Value->TryGetObject(RowPtr) || !RowPtr)
+			{
+				continue;
+			}
+			const TSharedRef<FJsonObject> Row = (*RowPtr).ToSharedRef();
+			FElysiumProvenanceComment& Comment = Out.AddDefaulted_GetRef();
+			Comment.Offset = static_cast<int32>(Int(Row, TEXT("offset")));
+			Comment.Text = Str(Row, TEXT("text"));
+		}
+	}
 }
 
 void UElysiumMaterialProvenance::FromJson(const TSharedRef<FJsonObject>& O)
@@ -201,6 +289,12 @@ void UElysiumMaterialProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 		EnvMapSymbol = Str(EnvironmentRef, TEXT("envMapSymbol"));
 		EnvMapAssetId = Str(EnvironmentRef, TEXT("envMapAssetId"));
 		EnvMapProbePath = FSoftObjectPath(Str(EnvironmentRef, TEXT("envMapProbePath")));
+		// H-2: `envMapAsset` (an authored-fixed-cube instance's own bound EnvMap asset path) is a
+		// different key from `envMapAssetId` (a patched unit's un-bound probe id) -- both live
+		// under `environment`, never together on the same unit.
+		EnvMapAsset = Str(EnvironmentRef, TEXT("envMapAsset"));
+		bEnvMapTintChromatic = Bool(EnvironmentRef, TEXT("envMapTintChromatic"));
+		bPatchedProbe = Bool(EnvironmentRef, TEXT("patchedProbe"));
 	}
 	SurfacePropertyAsset = Str(O, TEXT("physMaterial"));
 	// `patchBase` (the base's own `vtmb:material:` id) is what PatchOf has always documented
@@ -240,9 +334,14 @@ void UElysiumMaterialProvenance::FromJson(const TSharedRef<FJsonObject>& O)
 	ReadProxies(O, Proxies);
 	ReadTextureBindings(O, TextureBindings);
 	ReadMaterialReferences(O, Dependencies);
-	Anomalies = Strings(O, TEXT("anomalies"));
-	Omissions = Strings(O, TEXT("omissions"));
-	Comments = Strings(O, TEXT("comments"));
+	// C-2: `omissions`/`anomalies`/`comments` are arrays of objects (`{reason, role}`,
+	// `{kind, value}`, `{offset, text}`, ...), not arrays of strings -- `ElysiumJson::Strings`
+	// silently skips every non-string element, so the old `TArray<FString>` fields always read
+	// empty against a real sidecar. `ReadOmissions`/`ReadAnomalies`/`ReadComments` above parse the
+	// row shapes these stages actually write.
+	ReadAnomalies(O, Anomalies);
+	ReadOmissions(O, Omissions);
+	ReadComments(O, Comments);
 	if (TSharedPtr<FJsonObject> Coverage = Obj(O, TEXT("coverage")))
 	{
 		const TSharedRef<FJsonObject> CoverageRef = Coverage.ToSharedRef();

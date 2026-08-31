@@ -518,7 +518,10 @@ PROVENANCE_ONLY_KEYS = frozenset({
     "$multipass", "$nooverbright", "$no_fullbright", "$nofog", "$polyoffset", "$trilinear",
     "$nomip", "nomip", "$noclip", "$noztest", "$comparez", "$writez", "$decalscale",
     "$animatedtexturevar", "$animatedtextureframenumvar", "$animatedtextureframerate",
-    "$spriteorientation",
+    # `$spriteorientation` moved to an explicit handler in `_classify_and_apply` (H-3): it is
+    # still provenance only (no master destination), but is now actually read into
+    # `misc_provenance["spriteOrientation"]` when a unit authors it, rather than silently
+    # discarded despite counting as "mapped".
     "additive", "translucent", "selfillum",
     "// added by psycho-a\r\n}", "// added by psycho-a\n}",
     # Proxy scratch registers (26): declared at top level so a proxy chain has somewhere to write,
@@ -913,6 +916,17 @@ def _classify_and_apply(
         except ValueError:
             pass
         return None
+    if key_lower == "$spriteorientation":
+        # H-3: a component-lane key ("Provenance" -> the placement/map/runtime rows) that used to
+        # be a plain provenance-only leaf -- recorded as covered (mapped) but never actually read
+        # into a structured field, so `spriteOrientation` was always null in the sidecar even on a
+        # unit that authored it. Promoted alongside `$spriteorigin`/`$minlight`/etc: parsed when
+        # authored, left absent (null) otherwise.
+        try:
+            params.misc_provenance["spriteOrientation"] = _parse_scalar(value)
+        except ValueError:
+            pass
+        return None
 
     if key_lower in SCALE_XY_KEYS:
         name = SCALE_XY_KEYS[key_lower]
@@ -1276,6 +1290,11 @@ def stage_unit(
             "index": row.get("index"), "block": block, "key": raw_key,
             "sourceKey": row.get("sourceKey"), "value": row.get("value"),
             "valueType": row.get("valueType"),
+            # H-3: `material_glb.py` writes `offset` on every unit parameter row (the VMT source
+            # byte this key was authored at); wired through so `UElysiumMaterialProvenance`'s own
+            # `Offset` read (already live -- `ElysiumMaterialProvenance.cpp`'s `ReadParameters`)
+            # has something real to read instead of always defaulting to 0.
+            "offset": row.get("offset"),
         })
         if patched and key_lower != PATCH_ONLY_KEY and not block.startswith(("replace#", "insert#")):
             continue  # a patched unit's non-override top-level rows are patch bookkeeping only
@@ -1420,6 +1439,13 @@ def stage_unit(
         "comments": list(document.get("comments") or ()),
         "coverage": {
             "totalKeys": len(parameters),
+            # H-3: always empty by construction, not a stand-in for "not computed yet" -- every
+            # top-level key this loop walks (above) either resolves through `_classify_and_apply`
+            # or raises `MaterialImportError(f"unmapped parameter key {unmapped!r}")` and aborts
+            # the unit entirely ("No silent drop" rule). A unit that failed to stage never reaches
+            # this dict, let alone gets a sidecar written, so a staged sidecar's `unmappedKeys` can
+            # only ever be `[]`; a divergent-key allowlist entry (`UNIT_DIVERGENCES`) is not an
+            # exception to that -- it is recorded in `omissions`, still zero unmapped keys.
             "unmappedKeys": [],
         },
     }

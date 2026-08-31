@@ -24,13 +24,23 @@ namespace
 	// hand-authored, so the shape here is exactly what `stage_unit` writes, not what the reader
 	// used to assume it wrote (C2). `assetPath`/`unitGlb`/`sourceSha256`/`physMaterial` are added
 	// as the top-level keys `pipeline/unreal/import_materials.py` merges in from the manifest
-	// entry before calling `ApplyJson` -- see `FromJson`'s "--- identity ---" comment.
+	// entry before calling `ApplyJson` -- see `FromJson`'s "--- identity ---" comment. The real
+	// floorasan sidecar's own `anomalies`/`comments` are both empty; one row of each is folded in
+	// here (from decals/details/window_light.provenance.json's anomaly shape and
+	// a_basetexture.provenance.json's comment shape, both real staged sidecars) so this test
+	// exercises the C-2 struct reads with real row shapes rather than an empty array either way.
+	// `parameters[0]`'s `offset` similarly comes from that same a_basetexture sidecar's own
+	// `$basetexture` row (H-3).
 	const TCHAR* GSidecar = TEXT(R"json({
-  "anomalies": [],
+  "anomalies": [
+    {"kind": "selfIllumOnUnlitSurface", "value": "0.2"}
+  ],
   "assetId": "vtmb:material:brick/floorasan",
   "assetPath": "/ElysiumBaked/Materials/brick/MI_floorasan",
   "blendMode": "Opaque",
-  "comments": [],
+  "comments": [
+    {"offset": 26, "text": "// Original shader: BaseTexture\r"}
+  ],
   "coverage": {"totalKeys": 4, "unmappedKeys": []},
   "curve": null,
   "environment": {"envMapSymbol": "env_cubemap", "envMapTintChromatic": false},
@@ -46,7 +56,7 @@ namespace
     {"reason": "separator-bytes-carry-no-keyvalues-meaning", "role": "keyvalues-insignificant-whitespace"}
   ],
   "parameters": [
-    {"block": "", "index": 0, "key": "$basetexture", "sourceKey": "$basetexture", "value": "brick/floora", "valueType": "string"},
+    {"block": "", "index": 0, "key": "$basetexture", "sourceKey": "$basetexture", "value": "brick/floora", "valueType": "string", "offset": 26},
     {"block": "", "index": 1, "key": "$surfaceprop", "sourceKey": "$surfaceprop", "value": "brick", "valueType": "string"},
     {"block": "", "index": 2, "key": "$envmap", "sourceKey": "$envmap", "value": "env_cubemap", "valueType": "string"},
     {"block": "", "index": 3, "key": "$envmapmask", "sourceKey": "$envmapmask", "value": "brick/floora_ref", "valueType": "string"}
@@ -138,6 +148,8 @@ bool FElysiumMaterialProvenanceApplyJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("SurfaceClassSource"), Record->SurfaceClassSource, FString(TEXT("surfaceprop")));
 	TestFalse(TEXT("PhysMaterialFallback"), Record->PhysMaterialFallback);
 	TestEqual(TEXT("EnvMapSymbol (from the environment{} object)"), Record->EnvMapSymbol, FString(TEXT("env_cubemap")));
+	TestFalse(TEXT("bEnvMapTintChromatic (H-2)"), Record->bEnvMapTintChromatic);
+	TestFalse(TEXT("bPatchedProbe (H-2, install unit)"), Record->bPatchedProbe);
 	TestEqual(TEXT("SurfacePropertyAsset (merged from the manifest entry's physMaterial)"),
 		Record->SurfacePropertyAsset, FString(TEXT("/ElysiumBaked/SurfaceProperties/PM_brick")));
 	TestTrue(TEXT("PatchOf empty (install unit)"), Record->PatchOf.IsEmpty());
@@ -153,6 +165,7 @@ bool FElysiumMaterialProvenanceApplyJsonTest::RunTest(const FString&)
 	{
 		TestEqual(TEXT("parameter 0 key"), Record->Parameters[0].Key, FString(TEXT("$basetexture")));
 		TestEqual(TEXT("parameter 0 value"), Record->Parameters[0].Value, FString(TEXT("brick/floora")));
+		TestEqual(TEXT("parameter 0 offset (H-3)"), Record->Parameters[0].Offset, 26);
 		TestEqual(TEXT("parameter 1 sourceKey"), Record->Parameters[1].SourceKey, FString(TEXT("$surfaceprop")));
 	}
 	TestEqual(TEXT("Blocks count (not part of this stage's sidecar)"), Record->Blocks.Num(), 0);
@@ -178,7 +191,36 @@ bool FElysiumMaterialProvenanceApplyJsonTest::RunTest(const FString&)
 		TestEqual(TEXT("binding 0 asset"), Record->TextureBindings[0].Asset, FString(TEXT("vtmb:texture:brick/floora")));
 	}
 	TestEqual(TEXT("Dependencies count (materialReferences[] was empty)"), Record->Dependencies.Num(), 0);
-	TestEqual(TEXT("Omissions count"), Record->Omissions.Num(), 1);
+	if (TestEqual(TEXT("Omissions count"), Record->Omissions.Num(), 1))
+	{
+		TestEqual(TEXT("omission 0 reason"), Record->Omissions[0].Reason,
+			FString(TEXT("separator-bytes-carry-no-keyvalues-meaning")));
+		if (const FString* Role = Record->Omissions[0].Extra.Find(TEXT("role")))
+		{
+			TestEqual(TEXT("omission 0 extra.role"), *Role, FString(TEXT("keyvalues-insignificant-whitespace")));
+		}
+		else
+		{
+			AddError(TEXT("omission 0 has no role in Extra"));
+		}
+	}
+	if (TestEqual(TEXT("Anomalies count (C-2)"), Record->Anomalies.Num(), 1))
+	{
+		TestEqual(TEXT("anomaly 0 kind"), Record->Anomalies[0].Kind, FString(TEXT("selfIllumOnUnlitSurface")));
+		if (const FString* Value = Record->Anomalies[0].Extra.Find(TEXT("value")))
+		{
+			TestEqual(TEXT("anomaly 0 extra.value"), *Value, FString(TEXT("0.2")));
+		}
+		else
+		{
+			AddError(TEXT("anomaly 0 has no value in Extra"));
+		}
+	}
+	if (TestEqual(TEXT("Comments count (C-2)"), Record->Comments.Num(), 1))
+	{
+		TestEqual(TEXT("comment 0 offset"), Record->Comments[0].Offset, 26);
+		TestEqual(TEXT("comment 0 text"), Record->Comments[0].Text, FString(TEXT("// Original shader: BaseTexture\r")));
+	}
 	TestEqual(TEXT("CoverageTotalKeys"), Record->CoverageTotalKeys, 4);
 	TestTrue(TEXT("CoverageUnmappedKeys empty"), Record->CoverageUnmappedKeys.IsEmpty());
 

@@ -72,6 +72,52 @@ struct FElysiumMaterialProxy
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Destination;
 };
 
+/**
+ * One row of `omissions[]`: a VMT key or a keyvalues-shape note this lane recorded but applied
+ * nowhere (`docs/architecture/seam_map_material.md` -> "Import" -> "Provenance"; C-2). A real
+ * staged sidecar carries at least two shapes -- a blanket `{reason, role}` insignificant-
+ * whitespace note on every unit, and a named `{key, kind, reason}` row for a per-unit divergence
+ * (`UNIT_DIVERGENCES`) -- both always carry `reason`; every other field lands in `Extra`
+ * (stringified the same tolerant way `FElysiumMaterialParameter::Value` is), so a shape this
+ * reader has not seen yet is carried, not dropped.
+ */
+USTRUCT(BlueprintType)
+struct FElysiumProvenanceNote
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Reason;
+	/** Every field besides `reason` (`role`, `key`, `kind`, ...), keyed by its own JSON key. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") TMap<FString, FString> Extra;
+};
+
+/**
+ * One row of `anomalies[]`: something this lane noticed but could not (or should not) resolve into
+ * a binding (C-2). Every row carries `kind` (`selfIllumOnUnlitSurface`, `unknownProxy`,
+ * `envMapMaskPrecedenceLoser`, ...); the remaining field differs per kind (`value`, `proxy`,
+ * `switch`, `target`, ...) and lands in `Extra`, stringified the same way `Omissions`' does.
+ */
+USTRUCT(BlueprintType)
+struct FElysiumProvenanceAnomaly
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Kind;
+	/** Every field besides `kind`, keyed by its own JSON key. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") TMap<FString, FString> Extra;
+};
+
+/** One row of `comments[]`: a VMT source comment, carried verbatim with its byte offset. */
+USTRUCT(BlueprintType)
+struct FElysiumProvenanceComment
+{
+	GENERATED_BODY()
+
+	/** The unit's own byte offset for this comment, mirroring `FElysiumMaterialParameter::Offset`. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") int32 Offset = 0;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Material") FString Text;
+};
+
 /** One row of `shaderResolution.resolvedPrograms`: a concrete pixel+vertex program pair this unit admits. */
 USTRUCT(BlueprintType)
 struct FElysiumMaterialProgram
@@ -204,6 +250,25 @@ public:
 	/** Soft object path of the probe asset, for inspection without resolving the asset id again. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FSoftObjectPath EnvMapProbePath;
 	/**
+	 * H-2: the sidecar's `environment.envMapAsset` -- the authored-fixed-cube instance's own bound
+	 * `EnvMap` texture asset path (`/ElysiumBaked/Textures/...`), distinct from `EnvMapAssetId`
+	 * (a patched unit's un-bound probe asset id, a `vtmb:texture:` id rather than a baked path).
+	 * Only ever set together with `UseFixedCube`; empty for `env_cubemap` and for a patched unit.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") FString EnvMapAsset;
+	/**
+	 * H-2: the sidecar's `environment.envMapTintChromatic` -- whether `$envmaptint` split
+	 * chromatic (`ChromaticTintStrength` applies) rather than grey (`EnvTintScale` applies).
+	 * Recorded for every `$envmap` unit regardless of which master exposes `MetallicTint`.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") bool bEnvMapTintChromatic = false;
+	/**
+	 * H-2: the sidecar's `environment.patchedProbe` -- true when a map-patched unit's `$envmap`
+	 * resolved to a concrete per-instance probe (`EnvMapAssetId`/`EnvMapProbePath`) rather than
+	 * the shared `env_cubemap` capture.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Build") bool bPatchedProbe = false;
+	/**
 	 * `/ElysiumBaked/SurfaceProperties/PM_<name>`, mirroring `PhysMaterial`. Not part of the
 	 * provenance sidecar itself -- the manifest entry's own `physMaterial`, merged in the same way
 	 * as `SourceSha256`.
@@ -241,9 +306,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumMaterialTextureBinding> TextureBindings;
 	/** From the sidecar's `materialReferences[]`, not `dependencies` (the latter is not part of this stage's sidecar). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumMaterialDependency> Dependencies;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FString> Anomalies;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FString> Omissions;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FString> Comments;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumProvenanceAnomaly> Anomalies;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumProvenanceNote> Omissions;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") TArray<FElysiumProvenanceComment> Comments;
 	/** `coverage.totalKeys`: the unit's own parameter count the stage walked. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Elysium|Content") int32 CoverageTotalKeys = 0;
 	/** `coverage.unmappedKeys`: always empty in a staged sidecar (an unmapped key is a stage failure, not a warning). */
