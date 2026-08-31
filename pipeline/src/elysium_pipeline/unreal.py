@@ -364,6 +364,41 @@ def import_textures(config, runner, manifest_path, *, force: bool = False,
     )
 
 
+#: 63 physical materials through one editor process: no import, no build, no encode -- an object
+#: created, filled from a JSON sidecar and saved. The whole run is editor boot plus a second, so
+#: this is a short leash: anything past it is a hang, not a long run.
+SURFACE_PROPERTY_IMPORT_TIMEOUT_SECONDS = 15 * 60.0
+
+
+def import_surface_properties(config, runner, manifest_path, *, force: bool = False) -> None:
+    """Run the editor phase of `import surface-properties` over one staged manifest.
+
+    `pipeline/unreal/import_surface_properties.py` reads the manifest, creates or reuses one
+    `UElysiumPhysicalMaterial` per unit, applies the staged sidecar (values and provenance),
+    stamps the recipe and prunes. Per-asset reuse is the commandlet's own decision off the recipe
+    stamp, so a current corpus launches, reports every asset reused, and exits.
+    """
+    _run(
+        config,
+        runner,
+        editor_executable(config, commandlet=True),
+        [
+            str(config.project),
+            "-run=pythonscript",
+            f"-script={config.repo_root / 'pipeline/unreal/import_surface_properties.py'}",
+            f"-ImportSurfaceProperties={manifest_path}",
+            *(["-ImportForce=1"] if force else []),
+            "-AllowCommandletRendering",
+            "-unattended",
+            "-nosplash",
+            "-nopause",
+            "-stdout",
+            "-FullStdOutLogOutput",
+        ],
+        timeout=SURFACE_PROPERTY_IMPORT_TIMEOUT_SECONDS,
+    )
+
+
 #: Maps per editor process. The commandlet garbage-collects between maps, but loaded texture
 #: platform data and its RHI resources still accumulate across the loop -- one process reached
 #: 23 GB and the machine's commit limit at the fiftieth map -- so a profile bake runs in

@@ -98,9 +98,11 @@ def test_export_v2_help_names_every_isolated_glb_command() -> None:
         assert command in result.output, command
 
 
-#: Every command the corpus-import family registers. One per export_v2 family whose slice has
-#: migrated to `Content/ElysiumCorpus`; `seam_migration.md` owns which those are.
-IMPORT_COMMANDS = ("vdata",)
+#: Every command the corpus-import family registers, one per export_v2 family whose slice has
+#: migrated off the legacy export; `seam_migration.md` owns which those are. The destination is
+#: per lane, not one tree: `vdata` deploys loose bytes to `Content/ElysiumCorpus`, while
+#: `textures` and `surface-properties` author `.uasset` content under `/ElysiumBaked`.
+IMPORT_COMMANDS = ("vdata", "textures", "surface-properties")
 
 
 def test_import_registers_exactly_the_migrated_corpus_families() -> None:
